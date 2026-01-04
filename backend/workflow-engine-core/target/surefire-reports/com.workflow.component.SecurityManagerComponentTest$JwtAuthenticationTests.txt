@@ -1,0 +1,4 @@
+-------------------------------------------------------------------------------
+Test set: com.workflow.component.SecurityManagerComponentTest$JwtAuthenticationTests
+-------------------------------------------------------------------------------
+Tests run: 8, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.078 s -- in com.workflow.component.SecurityManagerComponentTest$JwtAuthenticationTests

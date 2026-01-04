@@ -1,0 +1,4 @@
+-------------------------------------------------------------------------------
+Test set: com.workflow.component.DataTableManagerComponentTest
+-------------------------------------------------------------------------------
+Tests run: 34, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.500 s -- in com.workflow.component.DataTableManagerComponentTest

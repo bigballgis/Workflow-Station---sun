@@ -1,0 +1,990 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report-3.0.xsd" version="3.0" name="com.workflow.integration.PerformanceIntegrationTest$NotificationPerformanceTests" time="0.071" tests="2" errors="0" skipped="0" failures="0">
+  <properties>
+    <property name="java.specification.version" value="21"/>
+    <property name="sun.cpu.isalist" value="amd64"/>
+    <property name="sun.jnu.encoding" value="GBK"/>
+    <property name="java.class.path" value="D:\working\Workflow Station\Workflow-Station---sun\backend\workflow-engine-core\target\test-classes;D:\working\Workflow Station\Workflow-Station---sun\backend\workflow-engine-core\target\classes;C:\Users\孙豫龙\.m2\repository\org\springframework\boot\spring-boot-starter-web\3.2.1\spring-boot-starter-web-3.2.1.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\boot\spring-boot-starter\3.2.1\spring-boot-starter-3.2.1.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\boot\spring-boot\3.2.1\spring-boot-3.2.1.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\boot\spring-boot-autoconfigure\3.2.1\spring-boot-autoconfigure-3.2.1.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\boot\spring-boot-starter-logging\3.2.1\spring-boot-starter-logging-3.2.1.jar;C:\Users\孙豫龙\.m2\repository\ch\qos\logback\logback-classic\1.4.14\logback-classic-1.4.14.jar;C:\Users\孙豫龙\.m2\repository\ch\qos\logback\logback-core\1.4.14\logback-core-1.4.14.jar;C:\Users\孙豫龙\.m2\repository\org\apache\logging\log4j\log4j-to-slf4j\2.21.1\log4j-to-slf4j-2.21.1.jar;C:\Users\孙豫龙\.m2\repository\org\apache\logging\log4j\log4j-api\2.21.1\log4j-api-2.21.1.jar;C:\Users\孙豫龙\.m2\repository\org\slf4j\jul-to-slf4j\2.0.9\jul-to-slf4j-2.0.9.jar;C:\Users\孙豫龙\.m2\repository\jakarta\annotation\jakarta.annotation-api\2.1.1\jakarta.annotation-api-2.1.1.jar;C:\Users\孙豫龙\.m2\repository\org\yaml\snakeyaml\2.2\snakeyaml-2.2.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\boot\spring-boot-starter-json\3.2.1\spring-boot-starter-json-3.2.1.jar;C:\Users\孙豫龙\.m2\repository\com\fasterxml\jackson\datatype\jackson-datatype-jdk8\2.15.3\jackson-datatype-jdk8-2.15.3.jar;C:\Users\孙豫龙\.m2\repository\com\fasterxml\jackson\module\jackson-module-parameter-names\2.15.3\jackson-module-parameter-names-2.15.3.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\boot\spring-boot-starter-tomcat\3.2.1\spring-boot-starter-tomcat-3.2.1.jar;C:\Users\孙豫龙\.m2\repository\org\apache\tomcat\embed\tomcat-embed-core\10.1.17\tomcat-embed-core-10.1.17.jar;C:\Users\孙豫龙\.m2\repository\org\apache\tomcat\embed\tomcat-embed-websocket\10.1.17\tomcat-embed-websocket-10.1.17.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\spring-web\6.1.2\spring-web-6.1.2.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\spring-beans\6.1.2\spring-beans-6.1.2.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\spring-webmvc\6.1.2\spring-webmvc-6.1.2.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\spring-expression\6.1.2\spring-expression-6.1.2.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\boot\spring-boot-starter-data-jpa\3.2.1\spring-boot-starter-data-jpa-3.2.1.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\boot\spring-boot-starter-aop\3.2.1\spring-boot-starter-aop-3.2.1.jar;C:\Users\孙豫龙\.m2\repository\org\aspectj\aspectjweaver\1.9.21\aspectjweaver-1.9.21.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\boot\spring-boot-starter-jdbc\3.2.1\spring-boot-starter-jdbc-3.2.1.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\spring-jdbc\6.1.2\spring-jdbc-6.1.2.jar;C:\Users\孙豫龙\.m2\repository\org\hibernate\orm\hibernate-core\6.4.1.Final\hibernate-core-6.4.1.Final.jar;C:\Users\孙豫龙\.m2\repository\jakarta\persistence\jakarta.persistence-api\3.1.0\jakarta.persistence-api-3.1.0.jar;C:\Users\孙豫龙\.m2\repository\jakarta\transaction\jakarta.transaction-api\2.0.1\jakarta.transaction-api-2.0.1.jar;C:\Users\孙豫龙\.m2\repository\org\jboss\logging\jboss-logging\3.5.3.Final\jboss-logging-3.5.3.Final.jar;C:\Users\孙豫龙\.m2\repository\org\hibernate\common\hibernate-commons-annotations\6.0.6.Final\hibernate-commons-annotations-6.0.6.Final.jar;C:\Users\孙豫龙\.m2\repository\io\smallrye\jandex\3.1.2\jandex-3.1.2.jar;C:\Users\孙豫龙\.m2\repository\com\fasterxml\classmate\1.6.0\classmate-1.6.0.jar;C:\Users\孙豫龙\.m2\repository\net\bytebuddy\byte-buddy\1.14.10\byte-buddy-1.14.10.jar;C:\Users\孙豫龙\.m2\repository\org\glassfish\jaxb\jaxb-runtime\4.0.4\jaxb-runtime-4.0.4.jar;C:\Users\孙豫龙\.m2\repository\org\glassfish\jaxb\jaxb-core\4.0.4\jaxb-core-4.0.4.jar;C:\Users\孙豫龙\.m2\repository\org\eclipse\angus\angus-activation\2.0.1\angus-activation-2.0.1.jar;C:\Users\孙豫龙\.m2\repository\org\glassfish\jaxb\txw2\4.0.4\txw2-4.0.4.jar;C:\Users\孙豫龙\.m2\repository\com\sun\istack\istack-commons-runtime\4.1.2\istack-commons-runtime-4.1.2.jar;C:\Users\孙豫龙\.m2\repository\jakarta\inject\jakarta.inject-api\2.0.1\jakarta.inject-api-2.0.1.jar;C:\Users\孙豫龙\.m2\repository\org\antlr\antlr4-runtime\4.13.0\antlr4-runtime-4.13.0.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\data\spring-data-jpa\3.2.1\spring-data-jpa-3.2.1.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\data\spring-data-commons\3.2.1\spring-data-commons-3.2.1.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\spring-orm\6.1.2\spring-orm-6.1.2.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\spring-aspects\6.1.2\spring-aspects-6.1.2.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\boot\spring-boot-starter-security\3.2.1\spring-boot-starter-security-3.2.1.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\spring-aop\6.1.2\spring-aop-6.1.2.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\security\spring-security-config\6.2.1\spring-security-config-6.2.1.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\security\spring-security-core\6.2.1\spring-security-core-6.2.1.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\security\spring-security-crypto\6.2.1\spring-security-crypto-6.2.1.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\security\spring-security-web\6.2.1\spring-security-web-6.2.1.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\boot\spring-boot-starter-validation\3.2.1\spring-boot-starter-validation-3.2.1.jar;C:\Users\孙豫龙\.m2\repository\org\apache\tomcat\embed\tomcat-embed-el\10.1.17\tomcat-embed-el-10.1.17.jar;C:\Users\孙豫龙\.m2\repository\org\hibernate\validator\hibernate-validator\8.0.1.Final\hibernate-validator-8.0.1.Final.jar;C:\Users\孙豫龙\.m2\repository\jakarta\validation\jakarta.validation-api\3.0.2\jakarta.validation-api-3.0.2.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\boot\spring-boot-starter-data-redis\3.2.1\spring-boot-starter-data-redis-3.2.1.jar;C:\Users\孙豫龙\.m2\repository\io\lettuce\lettuce-core\6.3.0.RELEASE\lettuce-core-6.3.0.RELEASE.jar;C:\Users\孙豫龙\.m2\repository\io\netty\netty-common\4.1.104.Final\netty-common-4.1.104.Final.jar;C:\Users\孙豫龙\.m2\repository\io\netty\netty-handler\4.1.104.Final\netty-handler-4.1.104.Final.jar;C:\Users\孙豫龙\.m2\repository\io\netty\netty-resolver\4.1.104.Final\netty-resolver-4.1.104.Final.jar;C:\Users\孙豫龙\.m2\repository\io\netty\netty-buffer\4.1.104.Final\netty-buffer-4.1.104.Final.jar;C:\Users\孙豫龙\.m2\repository\io\netty\netty-transport-native-unix-common\4.1.104.Final\netty-transport-native-unix-common-4.1.104.Final.jar;C:\Users\孙豫龙\.m2\repository\io\netty\netty-codec\4.1.104.Final\netty-codec-4.1.104.Final.jar;C:\Users\孙豫龙\.m2\repository\io\netty\netty-transport\4.1.104.Final\netty-transport-4.1.104.Final.jar;C:\Users\孙豫龙\.m2\repository\io\projectreactor\reactor-core\3.6.1\reactor-core-3.6.1.jar;C:\Users\孙豫龙\.m2\repository\org\reactivestreams\reactive-streams\1.0.4\reactive-streams-1.0.4.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\data\spring-data-redis\3.2.1\spring-data-redis-3.2.1.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\data\spring-data-keyvalue\3.2.1\spring-data-keyvalue-3.2.1.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\spring-oxm\6.1.2\spring-oxm-6.1.2.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\spring-context-support\6.1.2\spring-context-support-6.1.2.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\boot\spring-boot-starter-websocket\3.2.1\spring-boot-starter-websocket-3.2.1.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\spring-messaging\6.1.2\spring-messaging-6.1.2.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\spring-websocket\6.1.2\spring-websocket-6.1.2.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-spring-boot-starter\7.0.0\flowable-spring-boot-starter-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-spring-boot-autoconfigure\7.0.0\flowable-spring-boot-autoconfigure-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-spring-security\7.0.0\flowable-spring-security-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-engine-common-api\7.0.0\flowable-engine-common-api-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-spring-boot-starter-app\7.0.0\flowable-spring-boot-starter-app-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-app-engine\7.0.0\flowable-app-engine-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-app-engine-api\7.0.0\flowable-app-engine-api-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-idm-engine\7.0.0\flowable-idm-engine-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\commons-codec\commons-codec\1.16.0\commons-codec-1.16.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-event-registry-configurator\7.0.0\flowable-event-registry-configurator-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-variable-service\7.0.0\flowable-variable-service-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-identitylink-service\7.0.0\flowable-identitylink-service-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-identitylink-service-api\7.0.0\flowable-identitylink-service-api-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\liquibase\liquibase-core\4.24.0\liquibase-core-4.24.0.jar;C:\Users\孙豫龙\.m2\repository\com\opencsv\opencsv\5.8\opencsv-5.8.jar;C:\Users\孙豫龙\.m2\repository\org\apache\commons\commons-text\1.10.0\commons-text-1.10.0.jar;C:\Users\孙豫龙\.m2\repository\org\apache\commons\commons-collections4\4.4\commons-collections4-4.4.jar;C:\Users\孙豫龙\.m2\repository\com\fasterxml\uuid\java-uuid-generator\3.3.0\java-uuid-generator-3.3.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-dmn-api\7.0.0\flowable-dmn-api-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-app-engine-spring\7.0.0\flowable-app-engine-spring-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-event-registry-spring-configurator\7.0.0\flowable-event-registry-spring-configurator-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-event-registry-spring\7.0.0\flowable-event-registry-spring-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\slf4j\jcl-over-slf4j\2.0.9\jcl-over-slf4j-2.0.9.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-spring-boot-starter-process\7.0.0\flowable-spring-boot-starter-process-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-engine\7.0.0\flowable-engine-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-bpmn-converter\7.0.0\flowable-bpmn-converter-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-bpmn-model\7.0.0\flowable-bpmn-model-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-process-validation\7.0.0\flowable-process-validation-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-image-generator\7.0.0\flowable-image-generator-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-entitylink-service\7.0.0\flowable-entitylink-service-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-entitylink-service-api\7.0.0\flowable-entitylink-service-api-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-eventsubscription-service\7.0.0\flowable-eventsubscription-service-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-task-service\7.0.0\flowable-task-service-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-task-service-api\7.0.0\flowable-task-service-api-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-job-service\7.0.0\flowable-job-service-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-job-service-api\7.0.0\flowable-job-service-api-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-batch-service\7.0.0\flowable-batch-service-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-batch-service-api\7.0.0\flowable-batch-service-api-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-cmmn-api\7.0.0\flowable-cmmn-api-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-cmmn-model\7.0.0\flowable-cmmn-model-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-form-model\7.0.0\flowable-form-model-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-form-api\7.0.0\flowable-form-api-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-content-api\7.0.0\flowable-content-api-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-http-common\7.0.0\flowable-http-common-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-mail\7.0.0\flowable-mail-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\eclipse\angus\angus-mail\2.0.2\angus-mail-2.0.2.jar;C:\Users\孙豫龙\.m2\repository\jakarta\mail\jakarta.mail-api\2.1.2\jakarta.mail-api-2.1.2.jar;C:\Users\孙豫龙\.m2\repository\org\mybatis\mybatis\3.5.11\mybatis-3.5.11.jar;C:\Users\孙豫龙\.m2\repository\joda-time\joda-time\2.11.1\joda-time-2.11.1.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-spring\7.0.0\flowable-spring-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-job-spring-service\7.0.0\flowable-job-spring-service-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-spring-boot-starter-cmmn\7.0.0\flowable-spring-boot-starter-cmmn-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-cmmn-engine\7.0.0\flowable-cmmn-engine-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-cmmn-image-generator\7.0.0\flowable-cmmn-image-generator-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-cmmn-converter\7.0.0\flowable-cmmn-converter-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-case-validation\7.0.0\flowable-case-validation-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-cmmn-spring\7.0.0\flowable-cmmn-spring-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-spring-boot-starter-dmn\7.0.0\flowable-spring-boot-starter-dmn-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-dmn-engine\7.0.0\flowable-dmn-engine-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-dmn-model\7.0.0\flowable-dmn-model-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-dmn-xml-converter\7.0.0\flowable-dmn-xml-converter-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-dmn-image-generator\7.0.0\flowable-dmn-image-generator-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-dmn-spring\7.0.0\flowable-dmn-spring-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-spring-configurator\7.0.0\flowable-spring-configurator-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-engine-configurator\7.0.0\flowable-engine-configurator-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-cmmn-spring-configurator\7.0.0\flowable-cmmn-spring-configurator-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-cmmn-engine-configurator\7.0.0\flowable-cmmn-engine-configurator-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-dmn-spring-configurator\7.0.0\flowable-dmn-spring-configurator-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-dmn-engine-configurator\7.0.0\flowable-dmn-engine-configurator-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-idm-spring-configurator\7.0.0\flowable-idm-spring-configurator-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-engine-common\7.0.0\flowable-engine-common-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-variable-service-api\7.0.0\flowable-variable-service-api-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-event-registry-api\7.0.0\flowable-event-registry-api-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-spring-common\7.0.0\flowable-spring-common-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-idm-spring\7.0.0\flowable-idm-spring-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-idm-engine-configurator\7.0.0\flowable-idm-engine-configurator-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-spring-boot-starter-rest\7.0.0\flowable-spring-boot-starter-rest-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-spring-boot-starter-process-rest\7.0.0\flowable-spring-boot-starter-process-rest-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-rest\7.0.0\flowable-rest-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-idm-rest\7.0.0\flowable-idm-rest-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-external-job-rest\7.0.0\flowable-external-job-rest-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-spring-boot-starter-app-rest\7.0.0\flowable-spring-boot-starter-app-rest-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-app-engine-rest\7.0.0\flowable-app-engine-rest-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-spring-boot-starter-cmmn-rest\7.0.0\flowable-spring-boot-starter-cmmn-rest-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-cmmn-rest\7.0.0\flowable-cmmn-rest-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-spring-boot-starter-dmn-rest\7.0.0\flowable-spring-boot-starter-dmn-rest-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-dmn-rest\7.0.0\flowable-dmn-rest-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-event-registry-rest\7.0.0\flowable-event-registry-rest-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-event-registry\7.0.0\flowable-event-registry-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-event-registry-model\7.0.0\flowable-event-registry-model-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-event-registry-json-converter\7.0.0\flowable-event-registry-json-converter-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-eventsubscription-service-api\7.0.0\flowable-eventsubscription-service-api-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-idm-api\7.0.0\flowable-idm-api-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-common-rest\7.0.0\flowable-common-rest-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\commons-io\commons-io\2.11.0\commons-io-2.11.0.jar;C:\Users\孙豫龙\.m2\repository\org\apache\httpcomponents\httpcore\4.4.16\httpcore-4.4.16.jar;C:\Users\孙豫龙\.m2\repository\io\swagger\swagger-annotations\1.6.2\swagger-annotations-1.6.2.jar;C:\Users\孙豫龙\.m2\repository\io\swagger\swagger-models\1.6.2\swagger-models-1.6.2.jar;C:\Users\孙豫龙\.m2\repository\org\postgresql\postgresql\42.6.0\postgresql-42.6.0.jar;C:\Users\孙豫龙\.m2\repository\org\checkerframework\checker-qual\3.31.0\checker-qual-3.31.0.jar;C:\Users\孙豫龙\.m2\repository\com\zaxxer\HikariCP\5.0.1\HikariCP-5.0.1.jar;C:\Users\孙豫龙\.m2\repository\org\slf4j\slf4j-api\2.0.9\slf4j-api-2.0.9.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\kafka\spring-kafka\3.1.1\spring-kafka-3.1.1.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\spring-context\6.1.2\spring-context-6.1.2.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\spring-tx\6.1.2\spring-tx-6.1.2.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\retry\spring-retry\2.0.5\spring-retry-2.0.5.jar;C:\Users\孙豫龙\.m2\repository\org\apache\kafka\kafka-clients\3.6.1\kafka-clients-3.6.1.jar;C:\Users\孙豫龙\.m2\repository\com\github\luben\zstd-jni\1.5.5-1\zstd-jni-1.5.5-1.jar;C:\Users\孙豫龙\.m2\repository\org\lz4\lz4-java\1.8.0\lz4-java-1.8.0.jar;C:\Users\孙豫龙\.m2\repository\org\xerial\snappy\snappy-java\1.1.10.5\snappy-java-1.1.10.5.jar;C:\Users\孙豫龙\.m2\repository\io\micrometer\micrometer-observation\1.12.1\micrometer-observation-1.12.1.jar;C:\Users\孙豫龙\.m2\repository\io\micrometer\micrometer-commons\1.12.1\micrometer-commons-1.12.1.jar;C:\Users\孙豫龙\.m2\repository\com\google\code\findbugs\jsr305\3.0.2\jsr305-3.0.2.jar;C:\Users\孙豫龙\.m2\repository\com\fasterxml\jackson\core\jackson-databind\2.15.3\jackson-databind-2.15.3.jar;C:\Users\孙豫龙\.m2\repository\com\fasterxml\jackson\core\jackson-annotations\2.15.3\jackson-annotations-2.15.3.jar;C:\Users\孙豫龙\.m2\repository\com\fasterxml\jackson\core\jackson-core\2.15.3\jackson-core-2.15.3.jar;C:\Users\孙豫龙\.m2\repository\com\fasterxml\jackson\datatype\jackson-datatype-jsr310\2.15.3\jackson-datatype-jsr310-2.15.3.jar;C:\Users\孙豫龙\.m2\repository\org\springdoc\springdoc-openapi-starter-webmvc-ui\2.3.0\springdoc-openapi-starter-webmvc-ui-2.3.0.jar;C:\Users\孙豫龙\.m2\repository\org\springdoc\springdoc-openapi-starter-webmvc-api\2.3.0\springdoc-openapi-starter-webmvc-api-2.3.0.jar;C:\Users\孙豫龙\.m2\repository\org\springdoc\springdoc-openapi-starter-common\2.3.0\springdoc-openapi-starter-common-2.3.0.jar;C:\Users\孙豫龙\.m2\repository\io\swagger\core\v3\swagger-core-jakarta\2.2.19\swagger-core-jakarta-2.2.19.jar;C:\Users\孙豫龙\.m2\repository\io\swagger\core\v3\swagger-annotations-jakarta\2.2.19\swagger-annotations-jakarta-2.2.19.jar;C:\Users\孙豫龙\.m2\repository\io\swagger\core\v3\swagger-models-jakarta\2.2.19\swagger-models-jakarta-2.2.19.jar;C:\Users\孙豫龙\.m2\repository\com\fasterxml\jackson\dataformat\jackson-dataformat-yaml\2.15.3\jackson-dataformat-yaml-2.15.3.jar;C:\Users\孙豫龙\.m2\repository\org\webjars\swagger-ui\5.10.3\swagger-ui-5.10.3.jar;C:\Users\孙豫龙\.m2\repository\org\apache\commons\commons-lang3\3.13.0\commons-lang3-3.13.0.jar;C:\Users\孙豫龙\.m2\repository\org\projectlombok\lombok\1.18.30\lombok-1.18.30.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\boot\spring-boot-starter-test\3.2.1\spring-boot-starter-test-3.2.1.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\boot\spring-boot-test\3.2.1\spring-boot-test-3.2.1.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\boot\spring-boot-test-autoconfigure\3.2.1\spring-boot-test-autoconfigure-3.2.1.jar;C:\Users\孙豫龙\.m2\repository\com\jayway\jsonpath\json-path\2.8.0\json-path-2.8.0.jar;C:\Users\孙豫龙\.m2\repository\jakarta\xml\bind\jakarta.xml.bind-api\4.0.1\jakarta.xml.bind-api-4.0.1.jar;C:\Users\孙豫龙\.m2\repository\jakarta\activation\jakarta.activation-api\2.1.2\jakarta.activation-api-2.1.2.jar;C:\Users\孙豫龙\.m2\repository\net\minidev\json-smart\2.5.0\json-smart-2.5.0.jar;C:\Users\孙豫龙\.m2\repository\net\minidev\accessors-smart\2.5.0\accessors-smart-2.5.0.jar;C:\Users\孙豫龙\.m2\repository\org\ow2\asm\asm\9.3\asm-9.3.jar;C:\Users\孙豫龙\.m2\repository\org\assertj\assertj-core\3.24.2\assertj-core-3.24.2.jar;C:\Users\孙豫龙\.m2\repository\org\awaitility\awaitility\4.2.0\awaitility-4.2.0.jar;C:\Users\孙豫龙\.m2\repository\org\hamcrest\hamcrest\2.2\hamcrest-2.2.jar;C:\Users\孙豫龙\.m2\repository\org\junit\jupiter\junit-jupiter\5.10.1\junit-jupiter-5.10.1.jar;C:\Users\孙豫龙\.m2\repository\org\junit\jupiter\junit-jupiter-api\5.10.1\junit-jupiter-api-5.10.1.jar;C:\Users\孙豫龙\.m2\repository\org\junit\jupiter\junit-jupiter-params\5.10.1\junit-jupiter-params-5.10.1.jar;C:\Users\孙豫龙\.m2\repository\org\junit\jupiter\junit-jupiter-engine\5.10.1\junit-jupiter-engine-5.10.1.jar;C:\Users\孙豫龙\.m2\repository\org\mockito\mockito-core\5.7.0\mockito-core-5.7.0.jar;C:\Users\孙豫龙\.m2\repository\net\bytebuddy\byte-buddy-agent\1.14.10\byte-buddy-agent-1.14.10.jar;C:\Users\孙豫龙\.m2\repository\org\objenesis\objenesis\3.3\objenesis-3.3.jar;C:\Users\孙豫龙\.m2\repository\org\mockito\mockito-junit-jupiter\5.7.0\mockito-junit-jupiter-5.7.0.jar;C:\Users\孙豫龙\.m2\repository\org\skyscreamer\jsonassert\1.5.1\jsonassert-1.5.1.jar;C:\Users\孙豫龙\.m2\repository\com\vaadin\external\google\android-json\0.0.20131108.vaadin1\android-json-0.0.20131108.vaadin1.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\spring-core\6.1.2\spring-core-6.1.2.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\spring-jcl\6.1.2\spring-jcl-6.1.2.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\spring-test\6.1.2\spring-test-6.1.2.jar;C:\Users\孙豫龙\.m2\repository\org\xmlunit\xmlunit-core\2.9.1\xmlunit-core-2.9.1.jar;C:\Users\孙豫龙\.m2\repository\com\h2database\h2\2.2.224\h2-2.2.224.jar;C:\Users\孙豫龙\.m2\repository\net\jqwik\jqwik\1.8.2\jqwik-1.8.2.jar;C:\Users\孙豫龙\.m2\repository\org\apiguardian\apiguardian-api\1.1.2\apiguardian-api-1.1.2.jar;C:\Users\孙豫龙\.m2\repository\net\jqwik\jqwik-api\1.8.2\jqwik-api-1.8.2.jar;C:\Users\孙豫龙\.m2\repository\org\opentest4j\opentest4j\1.3.0\opentest4j-1.3.0.jar;C:\Users\孙豫龙\.m2\repository\org\junit\platform\junit-platform-commons\1.10.1\junit-platform-commons-1.10.1.jar;C:\Users\孙豫龙\.m2\repository\net\jqwik\jqwik-web\1.8.2\jqwik-web-1.8.2.jar;C:\Users\孙豫龙\.m2\repository\net\jqwik\jqwik-time\1.8.2\jqwik-time-1.8.2.jar;C:\Users\孙豫龙\.m2\repository\net\jqwik\jqwik-engine\1.8.2\jqwik-engine-1.8.2.jar;C:\Users\孙豫龙\.m2\repository\org\junit\platform\junit-platform-engine\1.10.1\junit-platform-engine-1.10.1.jar;C:\Users\孙豫龙\.m2\repository\org\testcontainers\junit-jupiter\1.19.3\junit-jupiter-1.19.3.jar;C:\Users\孙豫龙\.m2\repository\org\testcontainers\testcontainers\1.19.3\testcontainers-1.19.3.jar;C:\Users\孙豫龙\.m2\repository\junit\junit\4.13.2\junit-4.13.2.jar;C:\Users\孙豫龙\.m2\repository\org\hamcrest\hamcrest-core\2.2\hamcrest-core-2.2.jar;C:\Users\孙豫龙\.m2\repository\org\apache\commons\commons-compress\1.24.0\commons-compress-1.24.0.jar;C:\Users\孙豫龙\.m2\repository\org\rnorth\duct-tape\duct-tape\1.0.8\duct-tape-1.0.8.jar;C:\Users\孙豫龙\.m2\repository\org\jetbrains\annotations\17.0.0\annotations-17.0.0.jar;C:\Users\孙豫龙\.m2\repository\com\github\docker-java\docker-java-api\3.3.4\docker-java-api-3.3.4.jar;C:\Users\孙豫龙\.m2\repository\com\github\docker-java\docker-java-transport-zerodep\3.3.4\docker-java-transport-zerodep-3.3.4.jar;C:\Users\孙豫龙\.m2\repository\com\github\docker-java\docker-java-transport\3.3.4\docker-java-transport-3.3.4.jar;C:\Users\孙豫龙\.m2\repository\net\java\dev\jna\jna\5.13.0\jna-5.13.0.jar;C:\Users\孙豫龙\.m2\repository\org\testcontainers\postgresql\1.19.3\postgresql-1.19.3.jar;C:\Users\孙豫龙\.m2\repository\org\testcontainers\jdbc\1.19.3\jdbc-1.19.3.jar;C:\Users\孙豫龙\.m2\repository\org\testcontainers\database-commons\1.19.3\database-commons-1.19.3.jar;C:\Users\孙豫龙\.m2\repository\org\testcontainers\kafka\1.19.3\kafka-1.19.3.jar;"/>
+    <property name="java.vm.vendor" value="Microsoft"/>
+    <property name="sun.arch.data.model" value="64"/>
+    <property name="user.variant" value=""/>
+    <property name="java.vendor.url" value="https://www.microsoft.com"/>
+    <property name="user.timezone" value="Asia/Shanghai"/>
+    <property name="os.name" value="Windows 11"/>
+    <property name="java.vm.specification.version" value="21"/>
+    <property name="sun.java.launcher" value="SUN_STANDARD"/>
+    <property name="user.country" value="CN"/>
+    <property name="sun.boot.library.path" value="D:\Program Files\Microsoft\jdk-21.0.9.10-hotspot\bin"/>
+    <property name="sun.java.command" value="C:\Users\孙豫龙\AppData\Local\Temp\surefire2191582016771895079\surefirebooter-20260104224349206_3.jar C:\Users\孙豫龙\AppData\Local\Temp\surefire2191582016771895079 2026-01-04T22-43-48_976-jvmRun1 surefire-20260104224349206_1tmp surefire_0-20260104224349206_2tmp"/>
+    <property name="jdk.debug" value="release"/>
+    <property name="test" value="com.workflow.component.*Test,com.workflow.integration.*Test"/>
+    <property name="surefire.test.class.path" value="D:\working\Workflow Station\Workflow-Station---sun\backend\workflow-engine-core\target\test-classes;D:\working\Workflow Station\Workflow-Station---sun\backend\workflow-engine-core\target\classes;C:\Users\孙豫龙\.m2\repository\org\springframework\boot\spring-boot-starter-web\3.2.1\spring-boot-starter-web-3.2.1.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\boot\spring-boot-starter\3.2.1\spring-boot-starter-3.2.1.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\boot\spring-boot\3.2.1\spring-boot-3.2.1.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\boot\spring-boot-autoconfigure\3.2.1\spring-boot-autoconfigure-3.2.1.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\boot\spring-boot-starter-logging\3.2.1\spring-boot-starter-logging-3.2.1.jar;C:\Users\孙豫龙\.m2\repository\ch\qos\logback\logback-classic\1.4.14\logback-classic-1.4.14.jar;C:\Users\孙豫龙\.m2\repository\ch\qos\logback\logback-core\1.4.14\logback-core-1.4.14.jar;C:\Users\孙豫龙\.m2\repository\org\apache\logging\log4j\log4j-to-slf4j\2.21.1\log4j-to-slf4j-2.21.1.jar;C:\Users\孙豫龙\.m2\repository\org\apache\logging\log4j\log4j-api\2.21.1\log4j-api-2.21.1.jar;C:\Users\孙豫龙\.m2\repository\org\slf4j\jul-to-slf4j\2.0.9\jul-to-slf4j-2.0.9.jar;C:\Users\孙豫龙\.m2\repository\jakarta\annotation\jakarta.annotation-api\2.1.1\jakarta.annotation-api-2.1.1.jar;C:\Users\孙豫龙\.m2\repository\org\yaml\snakeyaml\2.2\snakeyaml-2.2.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\boot\spring-boot-starter-json\3.2.1\spring-boot-starter-json-3.2.1.jar;C:\Users\孙豫龙\.m2\repository\com\fasterxml\jackson\datatype\jackson-datatype-jdk8\2.15.3\jackson-datatype-jdk8-2.15.3.jar;C:\Users\孙豫龙\.m2\repository\com\fasterxml\jackson\module\jackson-module-parameter-names\2.15.3\jackson-module-parameter-names-2.15.3.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\boot\spring-boot-starter-tomcat\3.2.1\spring-boot-starter-tomcat-3.2.1.jar;C:\Users\孙豫龙\.m2\repository\org\apache\tomcat\embed\tomcat-embed-core\10.1.17\tomcat-embed-core-10.1.17.jar;C:\Users\孙豫龙\.m2\repository\org\apache\tomcat\embed\tomcat-embed-websocket\10.1.17\tomcat-embed-websocket-10.1.17.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\spring-web\6.1.2\spring-web-6.1.2.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\spring-beans\6.1.2\spring-beans-6.1.2.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\spring-webmvc\6.1.2\spring-webmvc-6.1.2.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\spring-expression\6.1.2\spring-expression-6.1.2.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\boot\spring-boot-starter-data-jpa\3.2.1\spring-boot-starter-data-jpa-3.2.1.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\boot\spring-boot-starter-aop\3.2.1\spring-boot-starter-aop-3.2.1.jar;C:\Users\孙豫龙\.m2\repository\org\aspectj\aspectjweaver\1.9.21\aspectjweaver-1.9.21.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\boot\spring-boot-starter-jdbc\3.2.1\spring-boot-starter-jdbc-3.2.1.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\spring-jdbc\6.1.2\spring-jdbc-6.1.2.jar;C:\Users\孙豫龙\.m2\repository\org\hibernate\orm\hibernate-core\6.4.1.Final\hibernate-core-6.4.1.Final.jar;C:\Users\孙豫龙\.m2\repository\jakarta\persistence\jakarta.persistence-api\3.1.0\jakarta.persistence-api-3.1.0.jar;C:\Users\孙豫龙\.m2\repository\jakarta\transaction\jakarta.transaction-api\2.0.1\jakarta.transaction-api-2.0.1.jar;C:\Users\孙豫龙\.m2\repository\org\jboss\logging\jboss-logging\3.5.3.Final\jboss-logging-3.5.3.Final.jar;C:\Users\孙豫龙\.m2\repository\org\hibernate\common\hibernate-commons-annotations\6.0.6.Final\hibernate-commons-annotations-6.0.6.Final.jar;C:\Users\孙豫龙\.m2\repository\io\smallrye\jandex\3.1.2\jandex-3.1.2.jar;C:\Users\孙豫龙\.m2\repository\com\fasterxml\classmate\1.6.0\classmate-1.6.0.jar;C:\Users\孙豫龙\.m2\repository\net\bytebuddy\byte-buddy\1.14.10\byte-buddy-1.14.10.jar;C:\Users\孙豫龙\.m2\repository\org\glassfish\jaxb\jaxb-runtime\4.0.4\jaxb-runtime-4.0.4.jar;C:\Users\孙豫龙\.m2\repository\org\glassfish\jaxb\jaxb-core\4.0.4\jaxb-core-4.0.4.jar;C:\Users\孙豫龙\.m2\repository\org\eclipse\angus\angus-activation\2.0.1\angus-activation-2.0.1.jar;C:\Users\孙豫龙\.m2\repository\org\glassfish\jaxb\txw2\4.0.4\txw2-4.0.4.jar;C:\Users\孙豫龙\.m2\repository\com\sun\istack\istack-commons-runtime\4.1.2\istack-commons-runtime-4.1.2.jar;C:\Users\孙豫龙\.m2\repository\jakarta\inject\jakarta.inject-api\2.0.1\jakarta.inject-api-2.0.1.jar;C:\Users\孙豫龙\.m2\repository\org\antlr\antlr4-runtime\4.13.0\antlr4-runtime-4.13.0.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\data\spring-data-jpa\3.2.1\spring-data-jpa-3.2.1.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\data\spring-data-commons\3.2.1\spring-data-commons-3.2.1.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\spring-orm\6.1.2\spring-orm-6.1.2.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\spring-aspects\6.1.2\spring-aspects-6.1.2.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\boot\spring-boot-starter-security\3.2.1\spring-boot-starter-security-3.2.1.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\spring-aop\6.1.2\spring-aop-6.1.2.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\security\spring-security-config\6.2.1\spring-security-config-6.2.1.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\security\spring-security-core\6.2.1\spring-security-core-6.2.1.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\security\spring-security-crypto\6.2.1\spring-security-crypto-6.2.1.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\security\spring-security-web\6.2.1\spring-security-web-6.2.1.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\boot\spring-boot-starter-validation\3.2.1\spring-boot-starter-validation-3.2.1.jar;C:\Users\孙豫龙\.m2\repository\org\apache\tomcat\embed\tomcat-embed-el\10.1.17\tomcat-embed-el-10.1.17.jar;C:\Users\孙豫龙\.m2\repository\org\hibernate\validator\hibernate-validator\8.0.1.Final\hibernate-validator-8.0.1.Final.jar;C:\Users\孙豫龙\.m2\repository\jakarta\validation\jakarta.validation-api\3.0.2\jakarta.validation-api-3.0.2.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\boot\spring-boot-starter-data-redis\3.2.1\spring-boot-starter-data-redis-3.2.1.jar;C:\Users\孙豫龙\.m2\repository\io\lettuce\lettuce-core\6.3.0.RELEASE\lettuce-core-6.3.0.RELEASE.jar;C:\Users\孙豫龙\.m2\repository\io\netty\netty-common\4.1.104.Final\netty-common-4.1.104.Final.jar;C:\Users\孙豫龙\.m2\repository\io\netty\netty-handler\4.1.104.Final\netty-handler-4.1.104.Final.jar;C:\Users\孙豫龙\.m2\repository\io\netty\netty-resolver\4.1.104.Final\netty-resolver-4.1.104.Final.jar;C:\Users\孙豫龙\.m2\repository\io\netty\netty-buffer\4.1.104.Final\netty-buffer-4.1.104.Final.jar;C:\Users\孙豫龙\.m2\repository\io\netty\netty-transport-native-unix-common\4.1.104.Final\netty-transport-native-unix-common-4.1.104.Final.jar;C:\Users\孙豫龙\.m2\repository\io\netty\netty-codec\4.1.104.Final\netty-codec-4.1.104.Final.jar;C:\Users\孙豫龙\.m2\repository\io\netty\netty-transport\4.1.104.Final\netty-transport-4.1.104.Final.jar;C:\Users\孙豫龙\.m2\repository\io\projectreactor\reactor-core\3.6.1\reactor-core-3.6.1.jar;C:\Users\孙豫龙\.m2\repository\org\reactivestreams\reactive-streams\1.0.4\reactive-streams-1.0.4.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\data\spring-data-redis\3.2.1\spring-data-redis-3.2.1.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\data\spring-data-keyvalue\3.2.1\spring-data-keyvalue-3.2.1.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\spring-oxm\6.1.2\spring-oxm-6.1.2.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\spring-context-support\6.1.2\spring-context-support-6.1.2.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\boot\spring-boot-starter-websocket\3.2.1\spring-boot-starter-websocket-3.2.1.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\spring-messaging\6.1.2\spring-messaging-6.1.2.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\spring-websocket\6.1.2\spring-websocket-6.1.2.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-spring-boot-starter\7.0.0\flowable-spring-boot-starter-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-spring-boot-autoconfigure\7.0.0\flowable-spring-boot-autoconfigure-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-spring-security\7.0.0\flowable-spring-security-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-engine-common-api\7.0.0\flowable-engine-common-api-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-spring-boot-starter-app\7.0.0\flowable-spring-boot-starter-app-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-app-engine\7.0.0\flowable-app-engine-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-app-engine-api\7.0.0\flowable-app-engine-api-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-idm-engine\7.0.0\flowable-idm-engine-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\commons-codec\commons-codec\1.16.0\commons-codec-1.16.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-event-registry-configurator\7.0.0\flowable-event-registry-configurator-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-variable-service\7.0.0\flowable-variable-service-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-identitylink-service\7.0.0\flowable-identitylink-service-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-identitylink-service-api\7.0.0\flowable-identitylink-service-api-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\liquibase\liquibase-core\4.24.0\liquibase-core-4.24.0.jar;C:\Users\孙豫龙\.m2\repository\com\opencsv\opencsv\5.8\opencsv-5.8.jar;C:\Users\孙豫龙\.m2\repository\org\apache\commons\commons-text\1.10.0\commons-text-1.10.0.jar;C:\Users\孙豫龙\.m2\repository\org\apache\commons\commons-collections4\4.4\commons-collections4-4.4.jar;C:\Users\孙豫龙\.m2\repository\com\fasterxml\uuid\java-uuid-generator\3.3.0\java-uuid-generator-3.3.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-dmn-api\7.0.0\flowable-dmn-api-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-app-engine-spring\7.0.0\flowable-app-engine-spring-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-event-registry-spring-configurator\7.0.0\flowable-event-registry-spring-configurator-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-event-registry-spring\7.0.0\flowable-event-registry-spring-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\slf4j\jcl-over-slf4j\2.0.9\jcl-over-slf4j-2.0.9.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-spring-boot-starter-process\7.0.0\flowable-spring-boot-starter-process-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-engine\7.0.0\flowable-engine-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-bpmn-converter\7.0.0\flowable-bpmn-converter-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-bpmn-model\7.0.0\flowable-bpmn-model-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-process-validation\7.0.0\flowable-process-validation-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-image-generator\7.0.0\flowable-image-generator-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-entitylink-service\7.0.0\flowable-entitylink-service-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-entitylink-service-api\7.0.0\flowable-entitylink-service-api-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-eventsubscription-service\7.0.0\flowable-eventsubscription-service-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-task-service\7.0.0\flowable-task-service-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-task-service-api\7.0.0\flowable-task-service-api-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-job-service\7.0.0\flowable-job-service-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-job-service-api\7.0.0\flowable-job-service-api-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-batch-service\7.0.0\flowable-batch-service-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-batch-service-api\7.0.0\flowable-batch-service-api-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-cmmn-api\7.0.0\flowable-cmmn-api-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-cmmn-model\7.0.0\flowable-cmmn-model-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-form-model\7.0.0\flowable-form-model-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-form-api\7.0.0\flowable-form-api-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-content-api\7.0.0\flowable-content-api-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-http-common\7.0.0\flowable-http-common-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-mail\7.0.0\flowable-mail-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\eclipse\angus\angus-mail\2.0.2\angus-mail-2.0.2.jar;C:\Users\孙豫龙\.m2\repository\jakarta\mail\jakarta.mail-api\2.1.2\jakarta.mail-api-2.1.2.jar;C:\Users\孙豫龙\.m2\repository\org\mybatis\mybatis\3.5.11\mybatis-3.5.11.jar;C:\Users\孙豫龙\.m2\repository\joda-time\joda-time\2.11.1\joda-time-2.11.1.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-spring\7.0.0\flowable-spring-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-job-spring-service\7.0.0\flowable-job-spring-service-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-spring-boot-starter-cmmn\7.0.0\flowable-spring-boot-starter-cmmn-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-cmmn-engine\7.0.0\flowable-cmmn-engine-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-cmmn-image-generator\7.0.0\flowable-cmmn-image-generator-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-cmmn-converter\7.0.0\flowable-cmmn-converter-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-case-validation\7.0.0\flowable-case-validation-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-cmmn-spring\7.0.0\flowable-cmmn-spring-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-spring-boot-starter-dmn\7.0.0\flowable-spring-boot-starter-dmn-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-dmn-engine\7.0.0\flowable-dmn-engine-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-dmn-model\7.0.0\flowable-dmn-model-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-dmn-xml-converter\7.0.0\flowable-dmn-xml-converter-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-dmn-image-generator\7.0.0\flowable-dmn-image-generator-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-dmn-spring\7.0.0\flowable-dmn-spring-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-spring-configurator\7.0.0\flowable-spring-configurator-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-engine-configurator\7.0.0\flowable-engine-configurator-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-cmmn-spring-configurator\7.0.0\flowable-cmmn-spring-configurator-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-cmmn-engine-configurator\7.0.0\flowable-cmmn-engine-configurator-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-dmn-spring-configurator\7.0.0\flowable-dmn-spring-configurator-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-dmn-engine-configurator\7.0.0\flowable-dmn-engine-configurator-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-idm-spring-configurator\7.0.0\flowable-idm-spring-configurator-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-engine-common\7.0.0\flowable-engine-common-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-variable-service-api\7.0.0\flowable-variable-service-api-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-event-registry-api\7.0.0\flowable-event-registry-api-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-spring-common\7.0.0\flowable-spring-common-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-idm-spring\7.0.0\flowable-idm-spring-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-idm-engine-configurator\7.0.0\flowable-idm-engine-configurator-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-spring-boot-starter-rest\7.0.0\flowable-spring-boot-starter-rest-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-spring-boot-starter-process-rest\7.0.0\flowable-spring-boot-starter-process-rest-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-rest\7.0.0\flowable-rest-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-idm-rest\7.0.0\flowable-idm-rest-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-external-job-rest\7.0.0\flowable-external-job-rest-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-spring-boot-starter-app-rest\7.0.0\flowable-spring-boot-starter-app-rest-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-app-engine-rest\7.0.0\flowable-app-engine-rest-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-spring-boot-starter-cmmn-rest\7.0.0\flowable-spring-boot-starter-cmmn-rest-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-cmmn-rest\7.0.0\flowable-cmmn-rest-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-spring-boot-starter-dmn-rest\7.0.0\flowable-spring-boot-starter-dmn-rest-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-dmn-rest\7.0.0\flowable-dmn-rest-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-event-registry-rest\7.0.0\flowable-event-registry-rest-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-event-registry\7.0.0\flowable-event-registry-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-event-registry-model\7.0.0\flowable-event-registry-model-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-event-registry-json-converter\7.0.0\flowable-event-registry-json-converter-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-eventsubscription-service-api\7.0.0\flowable-eventsubscription-service-api-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-idm-api\7.0.0\flowable-idm-api-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\org\flowable\flowable-common-rest\7.0.0\flowable-common-rest-7.0.0.jar;C:\Users\孙豫龙\.m2\repository\commons-io\commons-io\2.11.0\commons-io-2.11.0.jar;C:\Users\孙豫龙\.m2\repository\org\apache\httpcomponents\httpcore\4.4.16\httpcore-4.4.16.jar;C:\Users\孙豫龙\.m2\repository\io\swagger\swagger-annotations\1.6.2\swagger-annotations-1.6.2.jar;C:\Users\孙豫龙\.m2\repository\io\swagger\swagger-models\1.6.2\swagger-models-1.6.2.jar;C:\Users\孙豫龙\.m2\repository\org\postgresql\postgresql\42.6.0\postgresql-42.6.0.jar;C:\Users\孙豫龙\.m2\repository\org\checkerframework\checker-qual\3.31.0\checker-qual-3.31.0.jar;C:\Users\孙豫龙\.m2\repository\com\zaxxer\HikariCP\5.0.1\HikariCP-5.0.1.jar;C:\Users\孙豫龙\.m2\repository\org\slf4j\slf4j-api\2.0.9\slf4j-api-2.0.9.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\kafka\spring-kafka\3.1.1\spring-kafka-3.1.1.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\spring-context\6.1.2\spring-context-6.1.2.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\spring-tx\6.1.2\spring-tx-6.1.2.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\retry\spring-retry\2.0.5\spring-retry-2.0.5.jar;C:\Users\孙豫龙\.m2\repository\org\apache\kafka\kafka-clients\3.6.1\kafka-clients-3.6.1.jar;C:\Users\孙豫龙\.m2\repository\com\github\luben\zstd-jni\1.5.5-1\zstd-jni-1.5.5-1.jar;C:\Users\孙豫龙\.m2\repository\org\lz4\lz4-java\1.8.0\lz4-java-1.8.0.jar;C:\Users\孙豫龙\.m2\repository\org\xerial\snappy\snappy-java\1.1.10.5\snappy-java-1.1.10.5.jar;C:\Users\孙豫龙\.m2\repository\io\micrometer\micrometer-observation\1.12.1\micrometer-observation-1.12.1.jar;C:\Users\孙豫龙\.m2\repository\io\micrometer\micrometer-commons\1.12.1\micrometer-commons-1.12.1.jar;C:\Users\孙豫龙\.m2\repository\com\google\code\findbugs\jsr305\3.0.2\jsr305-3.0.2.jar;C:\Users\孙豫龙\.m2\repository\com\fasterxml\jackson\core\jackson-databind\2.15.3\jackson-databind-2.15.3.jar;C:\Users\孙豫龙\.m2\repository\com\fasterxml\jackson\core\jackson-annotations\2.15.3\jackson-annotations-2.15.3.jar;C:\Users\孙豫龙\.m2\repository\com\fasterxml\jackson\core\jackson-core\2.15.3\jackson-core-2.15.3.jar;C:\Users\孙豫龙\.m2\repository\com\fasterxml\jackson\datatype\jackson-datatype-jsr310\2.15.3\jackson-datatype-jsr310-2.15.3.jar;C:\Users\孙豫龙\.m2\repository\org\springdoc\springdoc-openapi-starter-webmvc-ui\2.3.0\springdoc-openapi-starter-webmvc-ui-2.3.0.jar;C:\Users\孙豫龙\.m2\repository\org\springdoc\springdoc-openapi-starter-webmvc-api\2.3.0\springdoc-openapi-starter-webmvc-api-2.3.0.jar;C:\Users\孙豫龙\.m2\repository\org\springdoc\springdoc-openapi-starter-common\2.3.0\springdoc-openapi-starter-common-2.3.0.jar;C:\Users\孙豫龙\.m2\repository\io\swagger\core\v3\swagger-core-jakarta\2.2.19\swagger-core-jakarta-2.2.19.jar;C:\Users\孙豫龙\.m2\repository\io\swagger\core\v3\swagger-annotations-jakarta\2.2.19\swagger-annotations-jakarta-2.2.19.jar;C:\Users\孙豫龙\.m2\repository\io\swagger\core\v3\swagger-models-jakarta\2.2.19\swagger-models-jakarta-2.2.19.jar;C:\Users\孙豫龙\.m2\repository\com\fasterxml\jackson\dataformat\jackson-dataformat-yaml\2.15.3\jackson-dataformat-yaml-2.15.3.jar;C:\Users\孙豫龙\.m2\repository\org\webjars\swagger-ui\5.10.3\swagger-ui-5.10.3.jar;C:\Users\孙豫龙\.m2\repository\org\apache\commons\commons-lang3\3.13.0\commons-lang3-3.13.0.jar;C:\Users\孙豫龙\.m2\repository\org\projectlombok\lombok\1.18.30\lombok-1.18.30.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\boot\spring-boot-starter-test\3.2.1\spring-boot-starter-test-3.2.1.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\boot\spring-boot-test\3.2.1\spring-boot-test-3.2.1.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\boot\spring-boot-test-autoconfigure\3.2.1\spring-boot-test-autoconfigure-3.2.1.jar;C:\Users\孙豫龙\.m2\repository\com\jayway\jsonpath\json-path\2.8.0\json-path-2.8.0.jar;C:\Users\孙豫龙\.m2\repository\jakarta\xml\bind\jakarta.xml.bind-api\4.0.1\jakarta.xml.bind-api-4.0.1.jar;C:\Users\孙豫龙\.m2\repository\jakarta\activation\jakarta.activation-api\2.1.2\jakarta.activation-api-2.1.2.jar;C:\Users\孙豫龙\.m2\repository\net\minidev\json-smart\2.5.0\json-smart-2.5.0.jar;C:\Users\孙豫龙\.m2\repository\net\minidev\accessors-smart\2.5.0\accessors-smart-2.5.0.jar;C:\Users\孙豫龙\.m2\repository\org\ow2\asm\asm\9.3\asm-9.3.jar;C:\Users\孙豫龙\.m2\repository\org\assertj\assertj-core\3.24.2\assertj-core-3.24.2.jar;C:\Users\孙豫龙\.m2\repository\org\awaitility\awaitility\4.2.0\awaitility-4.2.0.jar;C:\Users\孙豫龙\.m2\repository\org\hamcrest\hamcrest\2.2\hamcrest-2.2.jar;C:\Users\孙豫龙\.m2\repository\org\junit\jupiter\junit-jupiter\5.10.1\junit-jupiter-5.10.1.jar;C:\Users\孙豫龙\.m2\repository\org\junit\jupiter\junit-jupiter-api\5.10.1\junit-jupiter-api-5.10.1.jar;C:\Users\孙豫龙\.m2\repository\org\junit\jupiter\junit-jupiter-params\5.10.1\junit-jupiter-params-5.10.1.jar;C:\Users\孙豫龙\.m2\repository\org\junit\jupiter\junit-jupiter-engine\5.10.1\junit-jupiter-engine-5.10.1.jar;C:\Users\孙豫龙\.m2\repository\org\mockito\mockito-core\5.7.0\mockito-core-5.7.0.jar;C:\Users\孙豫龙\.m2\repository\net\bytebuddy\byte-buddy-agent\1.14.10\byte-buddy-agent-1.14.10.jar;C:\Users\孙豫龙\.m2\repository\org\objenesis\objenesis\3.3\objenesis-3.3.jar;C:\Users\孙豫龙\.m2\repository\org\mockito\mockito-junit-jupiter\5.7.0\mockito-junit-jupiter-5.7.0.jar;C:\Users\孙豫龙\.m2\repository\org\skyscreamer\jsonassert\1.5.1\jsonassert-1.5.1.jar;C:\Users\孙豫龙\.m2\repository\com\vaadin\external\google\android-json\0.0.20131108.vaadin1\android-json-0.0.20131108.vaadin1.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\spring-core\6.1.2\spring-core-6.1.2.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\spring-jcl\6.1.2\spring-jcl-6.1.2.jar;C:\Users\孙豫龙\.m2\repository\org\springframework\spring-test\6.1.2\spring-test-6.1.2.jar;C:\Users\孙豫龙\.m2\repository\org\xmlunit\xmlunit-core\2.9.1\xmlunit-core-2.9.1.jar;C:\Users\孙豫龙\.m2\repository\com\h2database\h2\2.2.224\h2-2.2.224.jar;C:\Users\孙豫龙\.m2\repository\net\jqwik\jqwik\1.8.2\jqwik-1.8.2.jar;C:\Users\孙豫龙\.m2\repository\org\apiguardian\apiguardian-api\1.1.2\apiguardian-api-1.1.2.jar;C:\Users\孙豫龙\.m2\repository\net\jqwik\jqwik-api\1.8.2\jqwik-api-1.8.2.jar;C:\Users\孙豫龙\.m2\repository\org\opentest4j\opentest4j\1.3.0\opentest4j-1.3.0.jar;C:\Users\孙豫龙\.m2\repository\org\junit\platform\junit-platform-commons\1.10.1\junit-platform-commons-1.10.1.jar;C:\Users\孙豫龙\.m2\repository\net\jqwik\jqwik-web\1.8.2\jqwik-web-1.8.2.jar;C:\Users\孙豫龙\.m2\repository\net\jqwik\jqwik-time\1.8.2\jqwik-time-1.8.2.jar;C:\Users\孙豫龙\.m2\repository\net\jqwik\jqwik-engine\1.8.2\jqwik-engine-1.8.2.jar;C:\Users\孙豫龙\.m2\repository\org\junit\platform\junit-platform-engine\1.10.1\junit-platform-engine-1.10.1.jar;C:\Users\孙豫龙\.m2\repository\org\testcontainers\junit-jupiter\1.19.3\junit-jupiter-1.19.3.jar;C:\Users\孙豫龙\.m2\repository\org\testcontainers\testcontainers\1.19.3\testcontainers-1.19.3.jar;C:\Users\孙豫龙\.m2\repository\junit\junit\4.13.2\junit-4.13.2.jar;C:\Users\孙豫龙\.m2\repository\org\hamcrest\hamcrest-core\2.2\hamcrest-core-2.2.jar;C:\Users\孙豫龙\.m2\repository\org\apache\commons\commons-compress\1.24.0\commons-compress-1.24.0.jar;C:\Users\孙豫龙\.m2\repository\org\rnorth\duct-tape\duct-tape\1.0.8\duct-tape-1.0.8.jar;C:\Users\孙豫龙\.m2\repository\org\jetbrains\annotations\17.0.0\annotations-17.0.0.jar;C:\Users\孙豫龙\.m2\repository\com\github\docker-java\docker-java-api\3.3.4\docker-java-api-3.3.4.jar;C:\Users\孙豫龙\.m2\repository\com\github\docker-java\docker-java-transport-zerodep\3.3.4\docker-java-transport-zerodep-3.3.4.jar;C:\Users\孙豫龙\.m2\repository\com\github\docker-java\docker-java-transport\3.3.4\docker-java-transport-3.3.4.jar;C:\Users\孙豫龙\.m2\repository\net\java\dev\jna\jna\5.13.0\jna-5.13.0.jar;C:\Users\孙豫龙\.m2\repository\org\testcontainers\postgresql\1.19.3\postgresql-1.19.3.jar;C:\Users\孙豫龙\.m2\repository\org\testcontainers\jdbc\1.19.3\jdbc-1.19.3.jar;C:\Users\孙豫龙\.m2\repository\org\testcontainers\database-commons\1.19.3\database-commons-1.19.3.jar;C:\Users\孙豫龙\.m2\repository\org\testcontainers\kafka\1.19.3\kafka-1.19.3.jar;"/>
+    <property name="sun.cpu.endian" value="little"/>
+    <property name="user.home" value="C:\Users\孙豫龙"/>
+    <property name="user.language" value="zh"/>
+    <property name="java.specification.vendor" value="Oracle Corporation"/>
+    <property name="java.version.date" value="2025-10-21"/>
+    <property name="java.home" value="D:\Program Files\Microsoft\jdk-21.0.9.10-hotspot"/>
+    <property name="file.separator" value="\"/>
+    <property name="basedir" value="D:\working\Workflow Station\Workflow-Station---sun\backend\workflow-engine-core"/>
+    <property name="java.vm.compressedOopsMode" value="Zero based"/>
+    <property name="line.separator" value="&#10;"/>
+    <property name="java.vm.specification.vendor" value="Oracle Corporation"/>
+    <property name="java.specification.name" value="Java Platform API Specification"/>
+    <property name="surefire.real.class.path" value="C:\Users\孙豫龙\AppData\Local\Temp\surefire2191582016771895079\surefirebooter-20260104224349206_3.jar"/>
+    <property name="user.script" value=""/>
+    <property name="sun.management.compiler" value="HotSpot 64-Bit Tiered Compilers"/>
+    <property name="java.runtime.version" value="21.0.9+10-LTS"/>
+    <property name="user.name" value="孙豫龙"/>
+    <property name="stdout.encoding" value="GBK"/>
+    <property name="path.separator" value=";"/>
+    <property name="os.version" value="10.0"/>
+    <property name="java.runtime.name" value="OpenJDK Runtime Environment"/>
+    <property name="file.encoding" value="UTF-8"/>
+    <property name="java.vm.name" value="OpenJDK 64-Bit Server VM"/>
+    <property name="java.vendor.version" value="Microsoft-12574459"/>
+    <property name="localRepository" value="C:\Users\孙豫龙\.m2\repository"/>
+    <property name="java.vendor.url.bug" value="https://github.com/microsoft/openjdk/issues"/>
+    <property name="java.io.tmpdir" value="C:\Users\孙豫龙\AppData\Local\Temp\"/>
+    <property name="java.version" value="21.0.9"/>
+    <property name="user.dir" value="D:\working\Workflow Station\Workflow-Station---sun\backend\workflow-engine-core"/>
+    <property name="os.arch" value="amd64"/>
+    <property name="java.vm.specification.name" value="Java Virtual Machine Specification"/>
+    <property name="sun.os.patch.level" value=""/>
+    <property name="native.encoding" value="GBK"/>
+    <property name="java.library.path" value="D:\Program Files\Microsoft\jdk-21.0.9.10-hotspot\bin;C:\WINDOWS\Sun\Java\bin;C:\WINDOWS\system32;C:\WINDOWS;D:\Program Files\Microsoft\jdk-21.0.9.10-hotspot\bin;C:\Program Files (x86)\Microsoft SDKs\Azure\CLI2\wbin;C:\WINDOWS\system32;C:\WINDOWS;C:\WINDOWS\System32\Wbem;C:\WINDOWS\System32\WindowsPowerShell\v1.0\;C:\WINDOWS\System32\OpenSSH\;C:\Program Files\dotnet\;D:\Program Files (x86)\terraform_1.14.0_windows_386;D:\Program Files\apache-maven-3.9.11\bin;D:\Program Files\OpenRPA\;D:\Program Files\Git\cmd;D:\Program Files\nodejs\;C:\Program Files\Docker\Docker\resources\bin;C:\Users\孙豫龙\AppData\Local\Microsoft\WindowsApps;C:\Users\孙豫龙\AppData\Local\Programs\Microsoft VS Code\bin;D:\Users\孙豫龙\AppData\Local\Programs\Antigravity\bin;C:\Users\孙豫龙\AppData\Roaming\npm;D:\Program Files\Kiro\bin;."/>
+    <property name="java.vm.info" value="mixed mode, sharing"/>
+    <property name="stderr.encoding" value="GBK"/>
+    <property name="java.vendor" value="Microsoft"/>
+    <property name="java.vm.version" value="21.0.9+10-LTS"/>
+    <property name="sun.io.unicode.encoding" value="UnicodeLittle"/>
+    <property name="java.class.version" value="65.0"/>
+  </properties>
+  <testcase name="notificationHistoryQueryPerformance" classname="com.workflow.integration.PerformanceIntegrationTest$NotificationPerformanceTests" time="0.031">
+    <system-out><![CDATA[22:44:00.000 [main] INFO com.workflow.component.SecurityManagerComponent -- 定义角色权限: role=ADMIN, permissions=[*:*]
+22:44:00.001 [main] INFO com.workflow.component.SecurityManagerComponent -- 定义角色权限: role=MANAGER, permissions=[TASK:*, REPORT:*, PROCESS:*, USER:VIEW]
+22:44:00.001 [main] INFO com.workflow.component.SecurityManagerComponent -- 定义角色权限: role=USER, permissions=[TASK:VIEW, TASK:COMPLETE, PROCESS:START, PROCESS:VIEW, TASK:CLAIM]
+22:44:00.002 [main] INFO com.workflow.component.SecurityManagerComponent -- 默认角色权限初始化完成
+22:44:00.002 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-history-perf, userId=history-perf-user
+22:44:00.002 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-history-perf
+22:44:00.003 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=TASK_ASSIGNED, userId=history-perf-user, filters=null
+22:44:00.003 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-0, assignee=history-perf-user
+22:44:00.004 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-0
+22:44:00.004 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-0 (分配给: history-perf-user)
+22:44:00.004 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.004 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-1, assignee=history-perf-user
+22:44:00.004 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-1
+22:44:00.004 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-1 (分配给: history-perf-user)
+22:44:00.004 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.004 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-2, assignee=history-perf-user
+22:44:00.004 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-2
+22:44:00.004 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-2 (分配给: history-perf-user)
+22:44:00.004 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.004 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-3, assignee=history-perf-user
+22:44:00.004 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-3
+22:44:00.004 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-3 (分配给: history-perf-user)
+22:44:00.004 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.004 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-4, assignee=history-perf-user
+22:44:00.004 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-4
+22:44:00.004 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-4 (分配给: history-perf-user)
+22:44:00.004 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.004 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-5, assignee=history-perf-user
+22:44:00.004 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-5
+22:44:00.004 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-5 (分配给: history-perf-user)
+22:44:00.004 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.004 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-6, assignee=history-perf-user
+22:44:00.004 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-6
+22:44:00.004 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-6 (分配给: history-perf-user)
+22:44:00.004 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.004 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-7, assignee=history-perf-user
+22:44:00.004 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-7
+22:44:00.004 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-7 (分配给: history-perf-user)
+22:44:00.004 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.004 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-8, assignee=history-perf-user
+22:44:00.004 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-8
+22:44:00.004 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-8 (分配给: history-perf-user)
+22:44:00.004 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.004 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-9, assignee=history-perf-user
+22:44:00.004 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-9
+22:44:00.004 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-9 (分配给: history-perf-user)
+22:44:00.004 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.004 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-10, assignee=history-perf-user
+22:44:00.004 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-10
+22:44:00.004 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-10 (分配给: history-perf-user)
+22:44:00.005 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.005 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-11, assignee=history-perf-user
+22:44:00.005 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-11
+22:44:00.005 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-11 (分配给: history-perf-user)
+22:44:00.005 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.005 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-12, assignee=history-perf-user
+22:44:00.005 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-12
+22:44:00.005 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-12 (分配给: history-perf-user)
+22:44:00.005 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.005 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-13, assignee=history-perf-user
+22:44:00.005 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-13
+22:44:00.005 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-13 (分配给: history-perf-user)
+22:44:00.005 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.005 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-14, assignee=history-perf-user
+22:44:00.005 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-14
+22:44:00.005 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-14 (分配给: history-perf-user)
+22:44:00.005 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.005 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-15, assignee=history-perf-user
+22:44:00.005 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-15
+22:44:00.005 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-15 (分配给: history-perf-user)
+22:44:00.005 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.005 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-16, assignee=history-perf-user
+22:44:00.005 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-16
+22:44:00.005 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-16 (分配给: history-perf-user)
+22:44:00.005 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.005 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-17, assignee=history-perf-user
+22:44:00.006 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-17
+22:44:00.006 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-17 (分配给: history-perf-user)
+22:44:00.006 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.006 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-18, assignee=history-perf-user
+22:44:00.006 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-18
+22:44:00.006 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-18 (分配给: history-perf-user)
+22:44:00.006 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.006 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-19, assignee=history-perf-user
+22:44:00.006 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-19
+22:44:00.006 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-19 (分配给: history-perf-user)
+22:44:00.008 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.008 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-20, assignee=history-perf-user
+22:44:00.008 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-20
+22:44:00.008 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-20 (分配给: history-perf-user)
+22:44:00.009 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.009 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-21, assignee=history-perf-user
+22:44:00.009 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-21
+22:44:00.009 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-21 (分配给: history-perf-user)
+22:44:00.009 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.009 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-22, assignee=history-perf-user
+22:44:00.009 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-22
+22:44:00.009 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-22 (分配给: history-perf-user)
+22:44:00.009 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.009 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-23, assignee=history-perf-user
+22:44:00.009 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-23
+22:44:00.010 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-23 (分配给: history-perf-user)
+22:44:00.010 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.010 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-24, assignee=history-perf-user
+22:44:00.010 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-24
+22:44:00.010 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-24 (分配给: history-perf-user)
+22:44:00.010 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.010 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-25, assignee=history-perf-user
+22:44:00.010 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-25
+22:44:00.010 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-25 (分配给: history-perf-user)
+22:44:00.010 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.010 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-26, assignee=history-perf-user
+22:44:00.010 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-26
+22:44:00.010 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-26 (分配给: history-perf-user)
+22:44:00.010 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.010 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-27, assignee=history-perf-user
+22:44:00.010 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-27
+22:44:00.010 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-27 (分配给: history-perf-user)
+22:44:00.010 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.010 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-28, assignee=history-perf-user
+22:44:00.010 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-28
+22:44:00.010 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-28 (分配给: history-perf-user)
+22:44:00.010 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.010 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-29, assignee=history-perf-user
+22:44:00.010 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-29
+22:44:00.011 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-29 (分配给: history-perf-user)
+22:44:00.011 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.011 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-30, assignee=history-perf-user
+22:44:00.011 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-30
+22:44:00.011 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-30 (分配给: history-perf-user)
+22:44:00.011 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.011 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-31, assignee=history-perf-user
+22:44:00.011 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-31
+22:44:00.011 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-31 (分配给: history-perf-user)
+22:44:00.011 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.011 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-32, assignee=history-perf-user
+22:44:00.011 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-32
+22:44:00.011 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-32 (分配给: history-perf-user)
+22:44:00.011 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.011 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-33, assignee=history-perf-user
+22:44:00.011 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-33
+22:44:00.011 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-33 (分配给: history-perf-user)
+22:44:00.012 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.012 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-34, assignee=history-perf-user
+22:44:00.012 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-34
+22:44:00.012 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-34 (分配给: history-perf-user)
+22:44:00.012 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.012 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-35, assignee=history-perf-user
+22:44:00.012 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-35
+22:44:00.012 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-35 (分配给: history-perf-user)
+22:44:00.012 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.012 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-36, assignee=history-perf-user
+22:44:00.012 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-36
+22:44:00.012 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-36 (分配给: history-perf-user)
+22:44:00.012 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.012 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-37, assignee=history-perf-user
+22:44:00.012 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-37
+22:44:00.012 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-37 (分配给: history-perf-user)
+22:44:00.012 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.012 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-38, assignee=history-perf-user
+22:44:00.012 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-38
+22:44:00.012 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-38 (分配给: history-perf-user)
+22:44:00.012 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.012 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-39, assignee=history-perf-user
+22:44:00.012 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-39
+22:44:00.012 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-39 (分配给: history-perf-user)
+22:44:00.012 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.012 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-40, assignee=history-perf-user
+22:44:00.012 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-40
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-40 (分配给: history-perf-user)
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-41, assignee=history-perf-user
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-41
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-41 (分配给: history-perf-user)
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-42, assignee=history-perf-user
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-42
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-42 (分配给: history-perf-user)
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-43, assignee=history-perf-user
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-43
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-43 (分配给: history-perf-user)
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-44, assignee=history-perf-user
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-44
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-44 (分配给: history-perf-user)
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-45, assignee=history-perf-user
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-45
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-45 (分配给: history-perf-user)
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-46, assignee=history-perf-user
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-46
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-46 (分配给: history-perf-user)
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-47, assignee=history-perf-user
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-47
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-47 (分配给: history-perf-user)
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-48, assignee=history-perf-user
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-48
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-48 (分配给: history-perf-user)
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-49, assignee=history-perf-user
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-49
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-49 (分配给: history-perf-user)
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-50, assignee=history-perf-user
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-50
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-50 (分配给: history-perf-user)
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-51, assignee=history-perf-user
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-51
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-51 (分配给: history-perf-user)
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-52, assignee=history-perf-user
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-52
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-52 (分配给: history-perf-user)
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-53, assignee=history-perf-user
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-53
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-53 (分配给: history-perf-user)
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-54, assignee=history-perf-user
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-54
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-54 (分配给: history-perf-user)
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-55, assignee=history-perf-user
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-55
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-55 (分配给: history-perf-user)
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-56, assignee=history-perf-user
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-56
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-56 (分配给: history-perf-user)
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-57, assignee=history-perf-user
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-57
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-57 (分配给: history-perf-user)
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-58, assignee=history-perf-user
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-58
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-58 (分配给: history-perf-user)
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-59, assignee=history-perf-user
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-59
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-59 (分配给: history-perf-user)
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-60, assignee=history-perf-user
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-60
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-60 (分配给: history-perf-user)
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-61, assignee=history-perf-user
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-61
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-61 (分配给: history-perf-user)
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.013 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-62, assignee=history-perf-user
+22:44:00.014 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-62
+22:44:00.014 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-62 (分配给: history-perf-user)
+22:44:00.014 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.014 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-63, assignee=history-perf-user
+22:44:00.014 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-63
+22:44:00.014 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-63 (分配给: history-perf-user)
+22:44:00.014 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.014 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-64, assignee=history-perf-user
+22:44:00.014 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-64
+22:44:00.014 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-64 (分配给: history-perf-user)
+22:44:00.014 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.014 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-65, assignee=history-perf-user
+22:44:00.014 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-65
+22:44:00.014 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-65 (分配给: history-perf-user)
+22:44:00.014 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.014 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-66, assignee=history-perf-user
+22:44:00.014 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-66
+22:44:00.014 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-66 (分配给: history-perf-user)
+22:44:00.014 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.014 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-67, assignee=history-perf-user
+22:44:00.014 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-67
+22:44:00.014 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-67 (分配给: history-perf-user)
+22:44:00.014 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.014 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-68, assignee=history-perf-user
+22:44:00.014 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-68
+22:44:00.014 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-68 (分配给: history-perf-user)
+22:44:00.014 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.014 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-69, assignee=history-perf-user
+22:44:00.014 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-69
+22:44:00.014 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-69 (分配给: history-perf-user)
+22:44:00.014 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.014 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-70, assignee=history-perf-user
+22:44:00.014 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-70
+22:44:00.014 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-70 (分配给: history-perf-user)
+22:44:00.014 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.014 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-71, assignee=history-perf-user
+22:44:00.014 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-71
+22:44:00.015 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-71 (分配给: history-perf-user)
+22:44:00.015 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.015 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-72, assignee=history-perf-user
+22:44:00.015 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-72
+22:44:00.015 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-72 (分配给: history-perf-user)
+22:44:00.015 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.015 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-73, assignee=history-perf-user
+22:44:00.016 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-73
+22:44:00.016 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-73 (分配给: history-perf-user)
+22:44:00.016 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.016 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-74, assignee=history-perf-user
+22:44:00.016 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-74
+22:44:00.016 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-74 (分配给: history-perf-user)
+22:44:00.016 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.016 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-75, assignee=history-perf-user
+22:44:00.016 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-75
+22:44:00.016 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-75 (分配给: history-perf-user)
+22:44:00.016 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.016 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-76, assignee=history-perf-user
+22:44:00.016 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-76
+22:44:00.016 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-76 (分配给: history-perf-user)
+22:44:00.016 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.016 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-77, assignee=history-perf-user
+22:44:00.016 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-77
+22:44:00.016 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-77 (分配给: history-perf-user)
+22:44:00.016 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.016 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-78, assignee=history-perf-user
+22:44:00.016 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-78
+22:44:00.016 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-78 (分配给: history-perf-user)
+22:44:00.016 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.016 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-79, assignee=history-perf-user
+22:44:00.016 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-79
+22:44:00.016 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-79 (分配给: history-perf-user)
+22:44:00.016 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.016 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-80, assignee=history-perf-user
+22:44:00.016 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-80
+22:44:00.016 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-80 (分配给: history-perf-user)
+22:44:00.016 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.016 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-81, assignee=history-perf-user
+22:44:00.016 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-81
+22:44:00.016 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-81 (分配给: history-perf-user)
+22:44:00.016 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.017 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-82, assignee=history-perf-user
+22:44:00.017 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-82
+22:44:00.017 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-82 (分配给: history-perf-user)
+22:44:00.017 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.017 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-83, assignee=history-perf-user
+22:44:00.017 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-83
+22:44:00.017 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-83 (分配给: history-perf-user)
+22:44:00.017 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.017 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-84, assignee=history-perf-user
+22:44:00.017 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-84
+22:44:00.017 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-84 (分配给: history-perf-user)
+22:44:00.017 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.017 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-85, assignee=history-perf-user
+22:44:00.017 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-85
+22:44:00.017 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-85 (分配给: history-perf-user)
+22:44:00.017 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.017 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-86, assignee=history-perf-user
+22:44:00.017 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-86
+22:44:00.017 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-86 (分配给: history-perf-user)
+22:44:00.017 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.017 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-87, assignee=history-perf-user
+22:44:00.017 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-87
+22:44:00.017 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-87 (分配给: history-perf-user)
+22:44:00.017 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.017 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-88, assignee=history-perf-user
+22:44:00.018 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-88
+22:44:00.018 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-88 (分配给: history-perf-user)
+22:44:00.018 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.018 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-89, assignee=history-perf-user
+22:44:00.018 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-89
+22:44:00.018 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-89 (分配给: history-perf-user)
+22:44:00.018 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.018 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-90, assignee=history-perf-user
+22:44:00.018 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-90
+22:44:00.018 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-90 (分配给: history-perf-user)
+22:44:00.018 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.018 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-91, assignee=history-perf-user
+22:44:00.018 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-91
+22:44:00.018 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-91 (分配给: history-perf-user)
+22:44:00.018 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.018 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-92, assignee=history-perf-user
+22:44:00.018 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-92
+22:44:00.018 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-92 (分配给: history-perf-user)
+22:44:00.018 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.018 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-93, assignee=history-perf-user
+22:44:00.018 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-93
+22:44:00.018 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-93 (分配给: history-perf-user)
+22:44:00.018 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.018 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-94, assignee=history-perf-user
+22:44:00.018 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-94
+22:44:00.018 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-94 (分配给: history-perf-user)
+22:44:00.018 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.018 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-95, assignee=history-perf-user
+22:44:00.018 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-95
+22:44:00.018 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-95 (分配给: history-perf-user)
+22:44:00.018 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.018 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-96, assignee=history-perf-user
+22:44:00.018 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-96
+22:44:00.018 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-96 (分配给: history-perf-user)
+22:44:00.018 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.018 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-97, assignee=history-perf-user
+22:44:00.019 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-97
+22:44:00.019 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-97 (分配给: history-perf-user)
+22:44:00.019 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.019 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-98, assignee=history-perf-user
+22:44:00.019 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-98
+22:44:00.019 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-98 (分配给: history-perf-user)
+22:44:00.019 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.019 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布任务分配事件: taskId=task-history-99, assignee=history-perf-user
+22:44:00.019 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=TASK_ASSIGNED, sourceId=task-history-99
+22:44:00.019 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-history-perf: 任务已分配: 任务-99 (分配给: history-perf-user)
+22:44:00.019 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=history-perf-user, eventType=TASK_ASSIGNED, delivered=true
+22:44:00.019 [main] INFO com.workflow.component.NotificationManagerComponent -- 获取通知历史记录: userId=history-perf-user, limit=50
+=== 通知历史查询性能 ===
+历史记录数: 50
+查询耗时: 0ms
+]]></system-out>
+  </testcase>
+  <testcase name="largeSubscriberNotificationPerformance" classname="com.workflow.integration.PerformanceIntegrationTest$NotificationPerformanceTests" time="0.037">
+    <system-out><![CDATA[22:44:00.032 [main] INFO com.workflow.component.SecurityManagerComponent -- 定义角色权限: role=ADMIN, permissions=[*:*]
+22:44:00.033 [main] INFO com.workflow.component.SecurityManagerComponent -- 定义角色权限: role=MANAGER, permissions=[TASK:*, REPORT:*, PROCESS:*, USER:VIEW]
+22:44:00.033 [main] INFO com.workflow.component.SecurityManagerComponent -- 定义角色权限: role=USER, permissions=[TASK:VIEW, TASK:COMPLETE, PROCESS:START, PROCESS:VIEW, TASK:CLAIM]
+22:44:00.033 [main] INFO com.workflow.component.SecurityManagerComponent -- 默认角色权限初始化完成
+22:44:00.034 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-0, userId=subscriber-0
+22:44:00.034 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-0
+22:44:00.034 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-0, filters=null
+22:44:00.034 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-1, userId=subscriber-1
+22:44:00.034 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-1
+22:44:00.034 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-1, filters=null
+22:44:00.034 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-2, userId=subscriber-2
+22:44:00.034 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-2
+22:44:00.034 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-2, filters=null
+22:44:00.034 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-3, userId=subscriber-3
+22:44:00.035 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-3
+22:44:00.035 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-3, filters=null
+22:44:00.035 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-4, userId=subscriber-4
+22:44:00.035 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-4
+22:44:00.035 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-4, filters=null
+22:44:00.035 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-5, userId=subscriber-5
+22:44:00.035 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-5
+22:44:00.035 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-5, filters=null
+22:44:00.035 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-6, userId=subscriber-6
+22:44:00.035 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-6
+22:44:00.035 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-6, filters=null
+22:44:00.035 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-7, userId=subscriber-7
+22:44:00.035 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-7
+22:44:00.035 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-7, filters=null
+22:44:00.035 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-8, userId=subscriber-8
+22:44:00.035 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-8
+22:44:00.036 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-8, filters=null
+22:44:00.036 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-9, userId=subscriber-9
+22:44:00.036 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-9
+22:44:00.036 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-9, filters=null
+22:44:00.036 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-10, userId=subscriber-10
+22:44:00.036 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-10
+22:44:00.036 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-10, filters=null
+22:44:00.036 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-11, userId=subscriber-11
+22:44:00.036 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-11
+22:44:00.036 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-11, filters=null
+22:44:00.036 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-12, userId=subscriber-12
+22:44:00.036 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-12
+22:44:00.036 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-12, filters=null
+22:44:00.036 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-13, userId=subscriber-13
+22:44:00.036 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-13
+22:44:00.036 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-13, filters=null
+22:44:00.036 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-14, userId=subscriber-14
+22:44:00.036 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-14
+22:44:00.036 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-14, filters=null
+22:44:00.036 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-15, userId=subscriber-15
+22:44:00.036 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-15
+22:44:00.036 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-15, filters=null
+22:44:00.036 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-16, userId=subscriber-16
+22:44:00.036 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-16
+22:44:00.036 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-16, filters=null
+22:44:00.036 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-17, userId=subscriber-17
+22:44:00.036 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-17
+22:44:00.036 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-17, filters=null
+22:44:00.036 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-18, userId=subscriber-18
+22:44:00.036 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-18
+22:44:00.036 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-18, filters=null
+22:44:00.036 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-19, userId=subscriber-19
+22:44:00.036 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-19
+22:44:00.036 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-19, filters=null
+22:44:00.036 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-20, userId=subscriber-20
+22:44:00.036 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-20
+22:44:00.036 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-20, filters=null
+22:44:00.036 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-21, userId=subscriber-21
+22:44:00.036 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-21
+22:44:00.036 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-21, filters=null
+22:44:00.036 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-22, userId=subscriber-22
+22:44:00.036 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-22
+22:44:00.038 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-22, filters=null
+22:44:00.039 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-23, userId=subscriber-23
+22:44:00.039 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-23
+22:44:00.039 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-23, filters=null
+22:44:00.039 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-24, userId=subscriber-24
+22:44:00.039 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-24
+22:44:00.039 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-24, filters=null
+22:44:00.039 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-25, userId=subscriber-25
+22:44:00.039 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-25
+22:44:00.039 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-25, filters=null
+22:44:00.039 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-26, userId=subscriber-26
+22:44:00.039 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-26
+22:44:00.039 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-26, filters=null
+22:44:00.039 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-27, userId=subscriber-27
+22:44:00.040 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-27
+22:44:00.040 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-27, filters=null
+22:44:00.040 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-28, userId=subscriber-28
+22:44:00.040 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-28
+22:44:00.040 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-28, filters=null
+22:44:00.040 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-29, userId=subscriber-29
+22:44:00.040 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-29
+22:44:00.040 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-29, filters=null
+22:44:00.040 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-30, userId=subscriber-30
+22:44:00.040 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-30
+22:44:00.040 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-30, filters=null
+22:44:00.040 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-31, userId=subscriber-31
+22:44:00.040 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-31
+22:44:00.040 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-31, filters=null
+22:44:00.040 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-32, userId=subscriber-32
+22:44:00.040 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-32
+22:44:00.041 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-32, filters=null
+22:44:00.041 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-33, userId=subscriber-33
+22:44:00.041 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-33
+22:44:00.041 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-33, filters=null
+22:44:00.041 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-34, userId=subscriber-34
+22:44:00.041 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-34
+22:44:00.041 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-34, filters=null
+22:44:00.041 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-35, userId=subscriber-35
+22:44:00.041 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-35
+22:44:00.041 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-35, filters=null
+22:44:00.041 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-36, userId=subscriber-36
+22:44:00.041 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-36
+22:44:00.041 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-36, filters=null
+22:44:00.041 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-37, userId=subscriber-37
+22:44:00.041 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-37
+22:44:00.041 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-37, filters=null
+22:44:00.041 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-38, userId=subscriber-38
+22:44:00.041 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-38
+22:44:00.041 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-38, filters=null
+22:44:00.041 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-39, userId=subscriber-39
+22:44:00.041 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-39
+22:44:00.041 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-39, filters=null
+22:44:00.042 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-40, userId=subscriber-40
+22:44:00.042 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-40
+22:44:00.042 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-40, filters=null
+22:44:00.042 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-41, userId=subscriber-41
+22:44:00.042 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-41
+22:44:00.042 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-41, filters=null
+22:44:00.042 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-42, userId=subscriber-42
+22:44:00.042 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-42
+22:44:00.042 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-42, filters=null
+22:44:00.042 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-43, userId=subscriber-43
+22:44:00.042 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-43
+22:44:00.042 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-43, filters=null
+22:44:00.042 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-44, userId=subscriber-44
+22:44:00.042 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-44
+22:44:00.042 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-44, filters=null
+22:44:00.042 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-45, userId=subscriber-45
+22:44:00.042 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-45
+22:44:00.042 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-45, filters=null
+22:44:00.042 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-46, userId=subscriber-46
+22:44:00.042 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-46
+22:44:00.042 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-46, filters=null
+22:44:00.042 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-47, userId=subscriber-47
+22:44:00.042 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-47
+22:44:00.042 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-47, filters=null
+22:44:00.042 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-48, userId=subscriber-48
+22:44:00.043 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-48
+22:44:00.043 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-48, filters=null
+22:44:00.043 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-49, userId=subscriber-49
+22:44:00.043 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-49
+22:44:00.043 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-49, filters=null
+22:44:00.043 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-50, userId=subscriber-50
+22:44:00.043 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-50
+22:44:00.043 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-50, filters=null
+22:44:00.043 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-51, userId=subscriber-51
+22:44:00.043 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-51
+22:44:00.043 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-51, filters=null
+22:44:00.043 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-52, userId=subscriber-52
+22:44:00.043 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-52
+22:44:00.043 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-52, filters=null
+22:44:00.043 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-53, userId=subscriber-53
+22:44:00.043 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-53
+22:44:00.043 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-53, filters=null
+22:44:00.043 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-54, userId=subscriber-54
+22:44:00.043 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-54
+22:44:00.043 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-54, filters=null
+22:44:00.043 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-55, userId=subscriber-55
+22:44:00.043 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-55
+22:44:00.043 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-55, filters=null
+22:44:00.043 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-56, userId=subscriber-56
+22:44:00.043 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-56
+22:44:00.043 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-56, filters=null
+22:44:00.043 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-57, userId=subscriber-57
+22:44:00.043 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-57
+22:44:00.043 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-57, filters=null
+22:44:00.043 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-58, userId=subscriber-58
+22:44:00.043 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-58
+22:44:00.043 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-58, filters=null
+22:44:00.043 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-59, userId=subscriber-59
+22:44:00.043 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-59
+22:44:00.043 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-59, filters=null
+22:44:00.043 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-60, userId=subscriber-60
+22:44:00.044 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-60
+22:44:00.044 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-60, filters=null
+22:44:00.044 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-61, userId=subscriber-61
+22:44:00.044 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-61
+22:44:00.044 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-61, filters=null
+22:44:00.044 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-62, userId=subscriber-62
+22:44:00.044 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-62
+22:44:00.044 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-62, filters=null
+22:44:00.044 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-63, userId=subscriber-63
+22:44:00.044 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-63
+22:44:00.044 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-63, filters=null
+22:44:00.044 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-64, userId=subscriber-64
+22:44:00.044 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-64
+22:44:00.044 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-64, filters=null
+22:44:00.044 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-65, userId=subscriber-65
+22:44:00.045 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-65
+22:44:00.045 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-65, filters=null
+22:44:00.045 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-66, userId=subscriber-66
+22:44:00.045 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-66
+22:44:00.045 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-66, filters=null
+22:44:00.045 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-67, userId=subscriber-67
+22:44:00.045 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-67
+22:44:00.045 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-67, filters=null
+22:44:00.045 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-68, userId=subscriber-68
+22:44:00.045 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-68
+22:44:00.045 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-68, filters=null
+22:44:00.045 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-69, userId=subscriber-69
+22:44:00.045 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-69
+22:44:00.045 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-69, filters=null
+22:44:00.045 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-70, userId=subscriber-70
+22:44:00.045 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-70
+22:44:00.045 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-70, filters=null
+22:44:00.046 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-71, userId=subscriber-71
+22:44:00.046 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-71
+22:44:00.046 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-71, filters=null
+22:44:00.046 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-72, userId=subscriber-72
+22:44:00.046 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-72
+22:44:00.046 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-72, filters=null
+22:44:00.046 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-73, userId=subscriber-73
+22:44:00.046 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-73
+22:44:00.046 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-73, filters=null
+22:44:00.046 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-74, userId=subscriber-74
+22:44:00.046 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-74
+22:44:00.046 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-74, filters=null
+22:44:00.046 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-75, userId=subscriber-75
+22:44:00.046 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-75
+22:44:00.046 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-75, filters=null
+22:44:00.046 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-76, userId=subscriber-76
+22:44:00.046 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-76
+22:44:00.046 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-76, filters=null
+22:44:00.046 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-77, userId=subscriber-77
+22:44:00.046 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-77
+22:44:00.046 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-77, filters=null
+22:44:00.046 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-78, userId=subscriber-78
+22:44:00.046 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-78
+22:44:00.046 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-78, filters=null
+22:44:00.046 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-79, userId=subscriber-79
+22:44:00.046 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-79
+22:44:00.046 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-79, filters=null
+22:44:00.046 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-80, userId=subscriber-80
+22:44:00.046 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-80
+22:44:00.046 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-80, filters=null
+22:44:00.046 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-81, userId=subscriber-81
+22:44:00.046 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-81
+22:44:00.046 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-81, filters=null
+22:44:00.046 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-82, userId=subscriber-82
+22:44:00.048 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-82
+22:44:00.048 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-82, filters=null
+22:44:00.048 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-83, userId=subscriber-83
+22:44:00.048 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-83
+22:44:00.048 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-83, filters=null
+22:44:00.048 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-84, userId=subscriber-84
+22:44:00.048 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-84
+22:44:00.048 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-84, filters=null
+22:44:00.048 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-85, userId=subscriber-85
+22:44:00.048 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-85
+22:44:00.048 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-85, filters=null
+22:44:00.048 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-86, userId=subscriber-86
+22:44:00.048 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-86
+22:44:00.048 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-86, filters=null
+22:44:00.048 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-87, userId=subscriber-87
+22:44:00.048 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-87
+22:44:00.048 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-87, filters=null
+22:44:00.048 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-88, userId=subscriber-88
+22:44:00.048 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-88
+22:44:00.048 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-88, filters=null
+22:44:00.048 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-89, userId=subscriber-89
+22:44:00.048 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-89
+22:44:00.048 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-89, filters=null
+22:44:00.048 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-90, userId=subscriber-90
+22:44:00.048 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-90
+22:44:00.048 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-90, filters=null
+22:44:00.048 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-91, userId=subscriber-91
+22:44:00.048 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-91
+22:44:00.048 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-91, filters=null
+22:44:00.048 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-92, userId=subscriber-92
+22:44:00.048 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-92
+22:44:00.048 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-92, filters=null
+22:44:00.048 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-93, userId=subscriber-93
+22:44:00.048 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-93
+22:44:00.048 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-93, filters=null
+22:44:00.048 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-94, userId=subscriber-94
+22:44:00.048 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-94
+22:44:00.048 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-94, filters=null
+22:44:00.048 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-95, userId=subscriber-95
+22:44:00.049 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-95
+22:44:00.049 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-95, filters=null
+22:44:00.049 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-96, userId=subscriber-96
+22:44:00.049 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-96
+22:44:00.049 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-96, filters=null
+22:44:00.049 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-97, userId=subscriber-97
+22:44:00.049 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-97
+22:44:00.049 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-97, filters=null
+22:44:00.049 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-98, userId=subscriber-98
+22:44:00.049 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-98
+22:44:00.049 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-98, filters=null
+22:44:00.049 [main] INFO com.workflow.component.NotificationManagerComponent -- 注册WebSocket会话: sessionId=session-99, userId=subscriber-99
+22:44:00.049 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=SESSION_CONNECTED, sourceId=session-99
+22:44:00.049 [main] INFO com.workflow.component.NotificationManagerComponent -- 订阅事件: eventType=PROCESS_COMPLETED, userId=subscriber-99, filters=null
+22:44:00.049 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布流程完成事件: processInstanceId=proc-notify-001, processDefinitionKey=test-process
+22:44:00.049 [main] INFO com.workflow.component.NotificationManagerComponent -- 发布事件: eventType=PROCESS_COMPLETED, sourceId=proc-notify-001
+22:44:00.050 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-0: 流程已完成: test-process (业务键: business-001)
+22:44:00.050 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-0, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.050 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-1: 流程已完成: test-process (业务键: business-001)
+22:44:00.050 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-1, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.050 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-2: 流程已完成: test-process (业务键: business-001)
+22:44:00.050 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-2, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.050 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-3: 流程已完成: test-process (业务键: business-001)
+22:44:00.050 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-3, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.050 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-4: 流程已完成: test-process (业务键: business-001)
+22:44:00.050 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-4, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.050 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-5: 流程已完成: test-process (业务键: business-001)
+22:44:00.050 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-5, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.050 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-6: 流程已完成: test-process (业务键: business-001)
+22:44:00.050 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-6, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.050 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-7: 流程已完成: test-process (业务键: business-001)
+22:44:00.050 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-7, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.050 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-8: 流程已完成: test-process (业务键: business-001)
+22:44:00.050 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-8, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.050 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-9: 流程已完成: test-process (业务键: business-001)
+22:44:00.050 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-9, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.050 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-10: 流程已完成: test-process (业务键: business-001)
+22:44:00.050 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-10, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.050 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-11: 流程已完成: test-process (业务键: business-001)
+22:44:00.050 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-11, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.050 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-12: 流程已完成: test-process (业务键: business-001)
+22:44:00.050 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-12, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.050 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-13: 流程已完成: test-process (业务键: business-001)
+22:44:00.050 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-13, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.050 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-14: 流程已完成: test-process (业务键: business-001)
+22:44:00.050 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-14, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.050 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-15: 流程已完成: test-process (业务键: business-001)
+22:44:00.050 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-15, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.050 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-16: 流程已完成: test-process (业务键: business-001)
+22:44:00.050 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-16, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.051 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-17: 流程已完成: test-process (业务键: business-001)
+22:44:00.051 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-17, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.051 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-18: 流程已完成: test-process (业务键: business-001)
+22:44:00.051 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-18, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.051 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-19: 流程已完成: test-process (业务键: business-001)
+22:44:00.051 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-19, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.051 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-20: 流程已完成: test-process (业务键: business-001)
+22:44:00.051 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-20, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.051 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-21: 流程已完成: test-process (业务键: business-001)
+22:44:00.051 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-21, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.051 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-22: 流程已完成: test-process (业务键: business-001)
+22:44:00.051 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-22, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.051 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-23: 流程已完成: test-process (业务键: business-001)
+22:44:00.051 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-23, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.051 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-24: 流程已完成: test-process (业务键: business-001)
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-24, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-25: 流程已完成: test-process (业务键: business-001)
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-25, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-26: 流程已完成: test-process (业务键: business-001)
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-26, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-27: 流程已完成: test-process (业务键: business-001)
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-27, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-28: 流程已完成: test-process (业务键: business-001)
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-28, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-29: 流程已完成: test-process (业务键: business-001)
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-29, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-30: 流程已完成: test-process (业务键: business-001)
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-30, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-31: 流程已完成: test-process (业务键: business-001)
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-31, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-32: 流程已完成: test-process (业务键: business-001)
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-32, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-33: 流程已完成: test-process (业务键: business-001)
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-33, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-34: 流程已完成: test-process (业务键: business-001)
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-34, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-35: 流程已完成: test-process (业务键: business-001)
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-35, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-36: 流程已完成: test-process (业务键: business-001)
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-36, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-37: 流程已完成: test-process (业务键: business-001)
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-37, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-38: 流程已完成: test-process (业务键: business-001)
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-38, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-39: 流程已完成: test-process (业务键: business-001)
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-39, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-40: 流程已完成: test-process (业务键: business-001)
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-40, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-41: 流程已完成: test-process (业务键: business-001)
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-41, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-42: 流程已完成: test-process (业务键: business-001)
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-42, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-43: 流程已完成: test-process (业务键: business-001)
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-43, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-44: 流程已完成: test-process (业务键: business-001)
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-44, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-45: 流程已完成: test-process (业务键: business-001)
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-45, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-46: 流程已完成: test-process (业务键: business-001)
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-46, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-47: 流程已完成: test-process (业务键: business-001)
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-47, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-48: 流程已完成: test-process (业务键: business-001)
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-48, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-49: 流程已完成: test-process (业务键: business-001)
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-49, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-50: 流程已完成: test-process (业务键: business-001)
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-50, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-51: 流程已完成: test-process (业务键: business-001)
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-51, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-52: 流程已完成: test-process (业务键: business-001)
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-52, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-53: 流程已完成: test-process (业务键: business-001)
+22:44:00.052 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-53, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.053 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-54: 流程已完成: test-process (业务键: business-001)
+22:44:00.053 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-54, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.053 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-55: 流程已完成: test-process (业务键: business-001)
+22:44:00.053 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-55, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.053 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-56: 流程已完成: test-process (业务键: business-001)
+22:44:00.053 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-56, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.053 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-57: 流程已完成: test-process (业务键: business-001)
+22:44:00.053 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-57, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.053 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-58: 流程已完成: test-process (业务键: business-001)
+22:44:00.053 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-58, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.053 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-59: 流程已完成: test-process (业务键: business-001)
+22:44:00.053 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-59, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.053 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-60: 流程已完成: test-process (业务键: business-001)
+22:44:00.053 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-60, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.055 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-61: 流程已完成: test-process (业务键: business-001)
+22:44:00.055 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-61, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.055 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-62: 流程已完成: test-process (业务键: business-001)
+22:44:00.055 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-62, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.055 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-63: 流程已完成: test-process (业务键: business-001)
+22:44:00.055 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-63, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.056 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-64: 流程已完成: test-process (业务键: business-001)
+22:44:00.056 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-64, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.056 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-65: 流程已完成: test-process (业务键: business-001)
+22:44:00.056 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-65, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.056 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-66: 流程已完成: test-process (业务键: business-001)
+22:44:00.056 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-66, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.056 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-67: 流程已完成: test-process (业务键: business-001)
+22:44:00.056 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-67, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.056 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-68: 流程已完成: test-process (业务键: business-001)
+22:44:00.056 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-68, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.056 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-69: 流程已完成: test-process (业务键: business-001)
+22:44:00.056 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-69, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.056 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-70: 流程已完成: test-process (业务键: business-001)
+22:44:00.056 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-70, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.057 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-71: 流程已完成: test-process (业务键: business-001)
+22:44:00.057 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-71, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.058 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-72: 流程已完成: test-process (业务键: business-001)
+22:44:00.058 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-72, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.058 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-73: 流程已完成: test-process (业务键: business-001)
+22:44:00.058 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-73, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.058 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-74: 流程已完成: test-process (业务键: business-001)
+22:44:00.058 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-74, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.058 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-75: 流程已完成: test-process (业务键: business-001)
+22:44:00.058 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-75, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.058 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-76: 流程已完成: test-process (业务键: business-001)
+22:44:00.058 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-76, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.058 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-77: 流程已完成: test-process (业务键: business-001)
+22:44:00.058 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-77, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.058 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-78: 流程已完成: test-process (业务键: business-001)
+22:44:00.058 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-78, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.058 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-79: 流程已完成: test-process (业务键: business-001)
+22:44:00.058 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-79, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.058 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-80: 流程已完成: test-process (业务键: business-001)
+22:44:00.058 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-80, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.058 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-81: 流程已完成: test-process (业务键: business-001)
+22:44:00.058 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-81, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.058 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-82: 流程已完成: test-process (业务键: business-001)
+22:44:00.058 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-82, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.058 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-83: 流程已完成: test-process (业务键: business-001)
+22:44:00.058 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-83, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.058 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-84: 流程已完成: test-process (业务键: business-001)
+22:44:00.058 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-84, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.058 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-85: 流程已完成: test-process (业务键: business-001)
+22:44:00.058 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-85, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.058 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-86: 流程已完成: test-process (业务键: business-001)
+22:44:00.058 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-86, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.058 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-87: 流程已完成: test-process (业务键: business-001)
+22:44:00.059 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-87, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.059 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-88: 流程已完成: test-process (业务键: business-001)
+22:44:00.059 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-88, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.059 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-89: 流程已完成: test-process (业务键: business-001)
+22:44:00.059 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-89, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.059 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-90: 流程已完成: test-process (业务键: business-001)
+22:44:00.060 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-90, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.060 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-91: 流程已完成: test-process (业务键: business-001)
+22:44:00.060 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-91, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.060 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-92: 流程已完成: test-process (业务键: business-001)
+22:44:00.060 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-92, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.060 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-93: 流程已完成: test-process (业务键: business-001)
+22:44:00.060 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-93, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.060 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-94: 流程已完成: test-process (业务键: business-001)
+22:44:00.060 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-94, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.060 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-95: 流程已完成: test-process (业务键: business-001)
+22:44:00.060 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-95, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.061 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-96: 流程已完成: test-process (业务键: business-001)
+22:44:00.061 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-96, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.061 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-97: 流程已完成: test-process (业务键: business-001)
+22:44:00.061 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-97, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.061 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-98: 流程已完成: test-process (业务键: business-001)
+22:44:00.061 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-98, eventType=PROCESS_COMPLETED, delivered=true
+22:44:00.061 [main] INFO com.workflow.component.NotificationManagerComponent -- 发送WebSocket消息到会话 session-99: 流程已完成: test-process (业务键: business-001)
+22:44:00.061 [main] INFO com.workflow.component.NotificationManagerComponent -- 向用户发送通知: userId=subscriber-99, eventType=PROCESS_COMPLETED, delivered=true
+=== 通知分发性能 ===
+订阅者数量: 100
+通知分发耗时: 12ms
+平均每订阅者: 0.12ms
+]]></system-out>
+  </testcase>
+</testsuite>

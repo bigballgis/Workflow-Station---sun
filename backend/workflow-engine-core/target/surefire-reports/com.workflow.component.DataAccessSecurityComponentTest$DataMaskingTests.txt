@@ -1,0 +1,4 @@
+-------------------------------------------------------------------------------
+Test set: com.workflow.component.DataAccessSecurityComponentTest$DataMaskingTests
+-------------------------------------------------------------------------------
+Tests run: 11, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.167 s -- in com.workflow.component.DataAccessSecurityComponentTest$DataMaskingTests

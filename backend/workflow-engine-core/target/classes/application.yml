@@ -1,0 +1,149 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /api/v1
+
+spring:
+  application:
+    name: workflow-engine-core
+  
+  # PostgreSQL 16.5 数据库配置
+  datasource:
+    url: jdbc:postgresql://localhost:5432/workflow_engine
+    username: ${DB_USERNAME:workflow_user}
+    password: ${DB_PASSWORD:workflow_pass}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      leak-detection-threshold: 60000
+      connection-test-query: SELECT 1
+      pool-name: WorkflowHikariCP
+
+  # JPA配置
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        jdbc:
+          batch_size: 20
+        order_inserts: true
+        order_updates: true
+
+  # Redis缓存配置
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: 0
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+          max-wait: -1ms
+
+  # Kafka配置
+  kafka:
+    bootstrap-servers: ${KAFKA_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      retries: 3
+      batch-size: 16384
+      linger-ms: 1
+      buffer-memory: 33554432
+    consumer:
+      group-id: workflow-engine-group
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      properties:
+        spring.json.trusted.packages: "com.workflow.dto.event"
+
+# Flowable配置
+flowable:
+  # 数据库配置
+  database-schema-update: true
+  db-history-used: true
+  
+  # 异步执行器配置
+  async-executor-activate: true
+  async-executor:
+    default-async-job-acquire-wait-time: 10000
+    default-timer-job-acquire-wait-time: 10000
+    max-async-jobs-due-per-acquisition: 1
+    
+  # 流程引擎配置
+  process:
+    definition-cache-limit: 100
+    enable-safe-xml-parsing: true
+    
+  # REST API配置
+  rest:
+    app:
+      authentication-mode: verify-privilege
+
+# 日志配置
+logging:
+  level:
+    com.workflow: INFO
+    org.flowable: INFO
+    org.springframework.security: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/workflow-engine.log
+
+# 管理端点配置
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+# 自定义配置
+workflow:
+  # 性能配置
+  performance:
+    max-concurrent-processes: 100
+    process-start-timeout: 1000
+    task-query-timeout: 500
+    cache-hit-rate-threshold: 0.8
+    
+  # 安全配置
+  security:
+    jwt:
+      secret: ${JWT_SECRET:workflow-engine-secret-key-change-in-production}
+      expiration: 86400000 # 24小时
+    
+  # 通知配置
+  notification:
+    email:
+      enabled: ${EMAIL_ENABLED:false}
+      smtp-host: ${SMTP_HOST:}
+      smtp-port: ${SMTP_PORT:587}
+      username: ${SMTP_USERNAME:}
+      password: ${SMTP_PASSWORD:}
+    websocket:
+      enabled: true
+      endpoint: /ws/notifications

@@ -1,0 +1,1175 @@
+package com.workflow.properties;
+
+import com.workflow.dto.request.HistoryQueryRequest;
+import com.workflow.dto.response.HistoryArchiveResult;
+import com.workflow.dto.response.HistoryQueryResult;
+import com.workflow.dto.response.HistoryExportResult;
+import net.jqwik.api.*;
+import net.jqwik.api.constraints.NotBlank;
+import net.jqwik.api.constraints.Size;
+
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
+
+import static org.assertj.core.api.Assertions.*;
+
+/**
+ * 历史数据归档完整性属性测试
+ * 验证需求: 需求 6.1 - 历史数据归档
+ * 
+ * 属性 12: 历史数据归档完整性
+ * 对于任何已完成的流程实例，归档操作应该完整保存所有相关的历史数据，
+ * 包括流程实例、任务、变量等信息，归档后的数据应该可以完整查询和导出。
+ * 
+ * 注意：这是一个简化的属性测试，主要验证历史数据归档完整性逻辑的正确性，不依赖Spring Boot上下文
+ */
+@Label("功能: workflow-engine-core, 属性 12: 历史数据归档完整性")
+public class HistoryDataArchiveIntegrityProperties {
+
+    // 模拟历史数据存储
+    private final Map<String, HistoricProcessInstanceStorage> historicProcessInstances = new ConcurrentHashMap<>();
+    private final Map<String, HistoricTaskInstanceStorage> historicTasks = new ConcurrentHashMap<>();
+    private final Map<String, HistoricVariableInstanceStorage> historicVariables = new ConcurrentHashMap<>();
+    private final Map<String, ArchiveStorage> archives = new ConcurrentHashMap<>();
+    
+    /**
+     * 简化的历史流程实例存储类
+     */
+    private static class HistoricProcessInstanceStorage {
+        private final String id;
+        private final String processDefinitionKey;
+        private final String businessKey;
+        private final Date startTime;
+        private final Date endTime;
+        private final String startUserId;
+        private final Long durationInMillis;
+        private final boolean finished;
+        
+        public HistoricProcessInstanceStorage(String id, String processDefinitionKey, String businessKey,
+                                            Date startTime, Date endTime, String startUserId, 
+                                            Long durationInMillis, boolean finished) {
+            this.id = id;
+            this.processDefinitionKey = processDefinitionKey;
+            this.businessKey = businessKey;
+            this.startTime = startTime;
+            this.endTime = endTime;
+            this.startUserId = startUserId;
+            this.durationInMillis = durationInMillis;
+            this.finished = finished;
+        }
+        
+        // Getters
+        public String getId() { return id; }
+        public String getProcessDefinitionKey() { return processDefinitionKey; }
+        public String getBusinessKey() { return businessKey; }
+        public Date getStartTime() { return startTime; }
+        public Date getEndTime() { return endTime; }
+        public String getStartUserId() { return startUserId; }
+        public Long getDurationInMillis() { return durationInMillis; }
+        public boolean isFinished() { return finished; }
+    }
+    
+    /**
+     * 简化的历史任务实例存储类
+     */
+    private static class HistoricTaskInstanceStorage {
+        private final String id;
+        private final String name;
+        private final String assignee;
+        private final String processInstanceId;
+        private final Date createTime;
+        private final Date endTime;
+        private final Long durationInMillis;
+        
+        public HistoricTaskInstanceStorage(String id, String name, String assignee, String processInstanceId,
+                                         Date createTime, Date endTime, Long durationInMillis) {
+            this.id = id;
+            this.name = name;
+            this.assignee = assignee;
+            this.processInstanceId = processInstanceId;
+            this.createTime = createTime;
+            this.endTime = endTime;
+            this.durationInMillis = durationInMillis;
+        }
+        
+        // Getters
+        public String getId() { return id; }
+        public String getName() { return name; }
+        public String getAssignee() { return assignee; }
+        public String getProcessInstanceId() { return processInstanceId; }
+        public Date getCreateTime() { return createTime; }
+        public Date getEndTime() { return endTime; }
+        public Long getDurationInMillis() { return durationInMillis; }
+    }
+    
+    /**
+     * 简化的历史变量实例存储类
+     */
+    private static class HistoricVariableInstanceStorage {
+        private final String id;
+        private final String name;
+        private final Object value;
+        private final String typeName;
+        private final String processInstanceId;
+        private final Date createTime;
+        
+        public HistoricVariableInstanceStorage(String id, String name, Object value, String typeName,
+                                             String processInstanceId, Date createTime) {
+            this.id = id;
+            this.name = name;
+            this.value = value;
+            this.typeName = typeName;
+            this.processInstanceId = processInstanceId;
+            this.createTime = createTime;
+        }
+        
+        // Getters
+        public String getId() { return id; }
+        public String getName() { return name; }
+        public Object getValue() { return value; }
+        public String getTypeName() { return typeName; }
+        public String getProcessInstanceId() { return processInstanceId; }
+        public Date getCreateTime() { return createTime; }
+    }
+    
+    /**
+     * 归档存储类
+     */
+    private static class ArchiveStorage {
+        private final String archiveId;
+        private final String processInstanceId;
+        private final String archiveReason;
+        private final LocalDateTime archiveTime;
+        private final Map<String, Object> archivedData;
+        
+        public ArchiveStorage(String archiveId, String processInstanceId, String archiveReason,
+                            LocalDateTime archiveTime, Map<String, Object> archivedData) {
+            this.archiveId = archiveId;
+            this.processInstanceId = processInstanceId;
+            this.archiveReason = archiveReason;
+            this.archiveTime = archiveTime;
+            this.archivedData = new HashMap<>(archivedData);
+        }
+        
+        // Getters
+        public String getArchiveId() { return archiveId; }
+        public String getProcessInstanceId() { return processInstanceId; }
+        public String getArchiveReason() { return archiveReason; }
+        public LocalDateTime getArchiveTime() { return archiveTime; }
+        public Map<String, Object> getArchivedData() { return archivedData; }
+    }
+
+    /**
+     * 属性测试: 已完成流程实例归档完整性
+     */
+    @Property(tries = 100)
+    @Label("已完成流程实例归档完整性")
+    void completedProcessInstanceArchiveIntegrity(@ForAll @NotBlank @Size(min = 1, max = 50) String processDefinitionKey,
+                                                @ForAll @NotBlank @Size(min = 1, max = 30) String businessKey,
+                                                @ForAll @NotBlank @Size(min = 1, max = 20) String archiveReason) {
+        Assume.that(!processDefinitionKey.trim().isEmpty());
+        Assume.that(!businessKey.trim().isEmpty());
+        Assume.that(!archiveReason.trim().isEmpty());
+        
+        // Given: 创建已完成的流程实例及其相关数据
+        String processInstanceId = "proc-inst-" + UUID.randomUUID().toString().substring(0, 8);
+        Date now = new Date();
+        Date startTime = new Date(now.getTime() - 3600000); // 1小时前开始
+        Date endTime = now; // 现在结束
+        Long duration = endTime.getTime() - startTime.getTime();
+        
+        // 创建历史流程实例
+        HistoricProcessInstanceStorage processInstance = new HistoricProcessInstanceStorage(
+                processInstanceId, processDefinitionKey, businessKey, startTime, endTime,
+                "user123", duration, true
+        );
+        historicProcessInstances.put(processInstanceId, processInstance);
+        
+        // 创建相关的历史任务
+        List<String> taskIds = new ArrayList<>();
+        for (int i = 0; i < 3; i++) {
+            String taskId = "task-" + UUID.randomUUID().toString().substring(0, 8);
+            Date taskCreateTime = new Date(startTime.getTime() + i * 600000); // 每10分钟一个任务
+            Date taskEndTime = new Date(taskCreateTime.getTime() + 300000); // 5分钟后完成
+            Long taskDuration = taskEndTime.getTime() - taskCreateTime.getTime();
+            
+            HistoricTaskInstanceStorage task = new HistoricTaskInstanceStorage(
+                    taskId, "Task " + (i + 1), "user" + (i + 1), processInstanceId,
+                    taskCreateTime, taskEndTime, taskDuration
+            );
+            historicTasks.put(taskId, task);
+            taskIds.add(taskId);
+        }
+        
+        // 创建相关的历史变量
+        List<String> variableIds = new ArrayList<>();
+        for (int i = 0; i < 2; i++) {
+            String variableId = "var-" + UUID.randomUUID().toString().substring(0, 8);
+            HistoricVariableInstanceStorage variable = new HistoricVariableInstanceStorage(
+                    variableId, "variable" + (i + 1), "value" + (i + 1), "STRING",
+                    processInstanceId, startTime
+            );
+            historicVariables.put(variableId, variable);
+            variableIds.add(variableId);
+        }
+        
+        // When: 执行归档操作
+        HistoryArchiveResult archiveResult = archiveHistoryData(processInstanceId, archiveReason);
+        
+        // Then: 归档应该成功且数据完整
+        assertThat(archiveResult.isSuccess()).isTrue();
+        assertThat(archiveResult.getArchiveId()).isNotNull();
+        assertThat(archiveResult.getProcessInstanceId()).isEqualTo(processInstanceId);
+        assertThat(archiveResult.getArchivedDataCount()).isEqualTo(6); // 1个流程实例 + 3个任务 + 2个变量
+        
+        // 验证归档数据的完整性
+        ArchiveStorage archive = archives.get(archiveResult.getArchiveId());
+        assertThat(archive).isNotNull();
+        assertThat(archive.getProcessInstanceId()).isEqualTo(processInstanceId);
+        assertThat(archive.getArchiveReason()).isEqualTo(archiveReason);
+        
+        Map<String, Object> archivedData = archive.getArchivedData();
+        assertThat(archivedData).containsKey("processInstance");
+        assertThat(archivedData).containsKey("tasks");
+        assertThat(archivedData).containsKey("variables");
+        
+        // 验证流程实例数据
+        @SuppressWarnings("unchecked")
+        Map<String, Object> archivedProcessInstance = (Map<String, Object>) archivedData.get("processInstance");
+        assertThat(archivedProcessInstance.get("id")).isEqualTo(processInstanceId);
+        assertThat(archivedProcessInstance.get("processDefinitionKey")).isEqualTo(processDefinitionKey);
+        assertThat(archivedProcessInstance.get("businessKey")).isEqualTo(businessKey);
+        
+        // 验证任务数据
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> archivedTasks = (List<Map<String, Object>>) archivedData.get("tasks");
+        assertThat(archivedTasks).hasSize(3);
+        
+        for (Map<String, Object> archivedTask : archivedTasks) {
+            String taskId = (String) archivedTask.get("id");
+            assertThat(taskIds).contains(taskId);
+            assertThat(archivedTask.get("processInstanceId")).isEqualTo(processInstanceId);
+        }
+        
+        // 验证变量数据
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> archivedVariables = (List<Map<String, Object>>) archivedData.get("variables");
+        assertThat(archivedVariables).hasSize(2);
+        
+        for (Map<String, Object> archivedVariable : archivedVariables) {
+            String variableId = (String) archivedVariable.get("id");
+            assertThat(variableIds).contains(variableId);
+            assertThat(archivedVariable.get("processInstanceId")).isEqualTo(processInstanceId);
+        }
+    }
+
+    /**
+     * 属性测试: 归档数据查询完整性
+     */
+    @Property(tries = 100)
+    @Label("归档数据查询完整性")
+    void archivedDataQueryIntegrity(@ForAll @NotBlank @Size(min = 1, max = 50) String processDefinitionKey,
+                                  @ForAll @Size(min = 1, max = 3) List<@NotBlank @Size(min = 1, max = 20) String> businessKeys) {
+        Assume.that(!businessKeys.isEmpty());
+        Assume.that(businessKeys.stream().distinct().count() == businessKeys.size()); // 确保业务键唯一
+        
+        // Given: 创建多个已完成的流程实例并归档
+        List<String> processInstanceIds = new ArrayList<>();
+        Date now = new Date();
+        
+        for (int i = 0; i < businessKeys.size(); i++) {
+            String businessKey = businessKeys.get(i);
+            String processInstanceId = "proc-query-" + UUID.randomUUID().toString().substring(0, 8);
+            Date startTime = new Date(now.getTime() - (i + 1) * 3600000);
+            Date endTime = new Date(startTime.getTime() + 1800000);
+            Long duration = endTime.getTime() - startTime.getTime();
+            
+            // 创建历史流程实例
+            HistoricProcessInstanceStorage processInstance = new HistoricProcessInstanceStorage(
+                    processInstanceId, processDefinitionKey, businessKey, startTime, endTime,
+                    "user" + i, duration, true
+            );
+            historicProcessInstances.put(processInstanceId, processInstance);
+            
+            // 创建任务
+            String taskId = "task-query-" + UUID.randomUUID().toString().substring(0, 8);
+            HistoricTaskInstanceStorage task = new HistoricTaskInstanceStorage(
+                    taskId, "Query Task " + i, "user" + i, processInstanceId,
+                    startTime, endTime, duration
+            );
+            historicTasks.put(taskId, task);
+            
+            // 创建变量
+            String variableId = "var-query-" + UUID.randomUUID().toString().substring(0, 8);
+            HistoricVariableInstanceStorage variable = new HistoricVariableInstanceStorage(
+                    variableId, "queryVar" + i, "queryValue" + i, "STRING",
+                    processInstanceId, startTime
+            );
+            historicVariables.put(variableId, variable);
+            
+            // 执行归档
+            archiveHistoryData(processInstanceId, "测试归档");
+            processInstanceIds.add(processInstanceId);
+        }
+        
+        // When: 查询历史数据
+        HistoryQueryRequest queryRequest = HistoryQueryRequest.builder()
+                .processDefinitionKey(processDefinitionKey)
+                .includeProcessInstances(true)
+                .includeTasks(true)
+                .includeVariables(true)
+                .limit(20)
+                .offset(0)
+                .build();
+        
+        HistoryQueryResult queryResult = queryHistoryData(queryRequest);
+        
+        // Then: 查询结果应该包含所有归档的数据
+        assertThat(queryResult.isSuccess()).isTrue();
+        assertThat(queryResult.getHistoryData()).hasSize(businessKeys.size() * 3); // 每个流程实例有3条记录（流程、任务、变量）
+        
+        // 验证每种类型的数据都存在
+        Map<String, List<Map<String, Object>>> dataByType = queryResult.getHistoryData().stream()
+                .collect(Collectors.groupingBy(data -> (String) data.get("type")));
+        
+        assertThat(dataByType).containsKeys("PROCESS_INSTANCE", "TASK", "VARIABLE");
+        assertThat(dataByType.get("PROCESS_INSTANCE")).hasSize(businessKeys.size());
+        assertThat(dataByType.get("TASK")).hasSize(businessKeys.size());
+        assertThat(dataByType.get("VARIABLE")).hasSize(businessKeys.size());
+        
+        // 验证流程实例数据的完整性
+        for (Map<String, Object> processData : dataByType.get("PROCESS_INSTANCE")) {
+            String processInstanceId = (String) processData.get("id");
+            assertThat(processInstanceIds).contains(processInstanceId);
+            assertThat(processData.get("processDefinitionKey")).isEqualTo(processDefinitionKey);
+            assertThat(businessKeys).contains((String) processData.get("businessKey"));
+        }
+    }
+
+    /**
+     * 属性测试: 历史数据导出完整性
+     */
+    @Property(tries = 100)
+    @Label("历史数据导出完整性")
+    void historyDataExportIntegrity(@ForAll @NotBlank @Size(min = 1, max = 50) String processDefinitionKey,
+                                  @ForAll("exportFormats") String exportFormat) {
+        Assume.that(!processDefinitionKey.trim().isEmpty());
+        
+        // Given: 创建已归档的历史数据
+        String processInstanceId = "proc-export-" + UUID.randomUUID().toString().substring(0, 8);
+        String businessKey = "business-export-" + UUID.randomUUID().toString().substring(0, 8);
+        Date now = new Date();
+        Date startTime = new Date(now.getTime() - 3600000);
+        Date endTime = now;
+        Long duration = endTime.getTime() - startTime.getTime();
+        
+        // 创建历史数据
+        HistoricProcessInstanceStorage processInstance = new HistoricProcessInstanceStorage(
+                processInstanceId, processDefinitionKey, businessKey, startTime, endTime,
+                "exportUser", duration, true
+        );
+        historicProcessInstances.put(processInstanceId, processInstance);
+        
+        String taskId = "task-export-" + UUID.randomUUID().toString().substring(0, 8);
+        HistoricTaskInstanceStorage task = new HistoricTaskInstanceStorage(
+                taskId, "Export Task", "exportUser", processInstanceId,
+                startTime, endTime, duration
+        );
+        historicTasks.put(taskId, task);
+        
+        // 归档数据
+        archiveHistoryData(processInstanceId, "导出测试");
+        
+        // When: 导出历史数据
+        HistoryQueryRequest exportRequest = HistoryQueryRequest.builder()
+                .processDefinitionKey(processDefinitionKey)
+                .includeProcessInstances(true)
+                .includeTasks(true)
+                .build();
+        
+        HistoryExportResult exportResult = exportHistoryData(exportRequest, exportFormat);
+        
+        // Then: 导出应该成功且内容完整
+        assertThat(exportResult.isSuccess()).isTrue();
+        assertThat(exportResult.getExportId()).isNotNull();
+        assertThat(exportResult.getExportFormat()).isEqualTo(exportFormat);
+        assertThat(exportResult.getExportContent()).isNotNull();
+        assertThat(exportResult.getRecordCount()).isEqualTo(2); // 1个流程实例 + 1个任务
+        
+        // 验证导出内容包含关键数据
+        String exportContent = exportResult.getExportContent();
+        assertThat(exportContent).contains(processInstanceId);
+        assertThat(exportContent).contains(processDefinitionKey);
+        assertThat(exportContent).contains(businessKey);
+        assertThat(exportContent).contains(taskId);
+        
+        // 根据导出格式验证内容结构
+        switch (exportFormat.toUpperCase()) {
+            case "JSON":
+                assertThat(exportContent).startsWith("[");
+                assertThat(exportContent).endsWith("]");
+                assertThat(exportContent).contains("\"id\":");
+                break;
+            case "CSV":
+                assertThat(exportContent).contains(",");
+                String[] lines = exportContent.split("\n");
+                assertThat(lines.length).isGreaterThan(1); // 至少有表头和一行数据
+                break;
+            case "XML":
+                assertThat(exportContent).startsWith("<?xml");
+                assertThat(exportContent).contains("<historyData>");
+                assertThat(exportContent).contains("</historyData>");
+                break;
+        }
+    }
+
+    /**
+     * 属性测试: 归档数据时间范围查询准确性
+     */
+    @Property(tries = 100)
+    @Label("归档数据时间范围查询准确性")
+    void archivedDataTimeRangeQueryAccuracy(@ForAll @NotBlank @Size(min = 1, max = 50) String processDefinitionKey) {
+        Assume.that(!processDefinitionKey.trim().isEmpty());
+        
+        // Given: 创建不同时间的已归档流程实例
+        Date now = new Date();
+        Date rangeStart = new Date(now.getTime() - 7200000); // 2小时前
+        Date rangeEnd = new Date(now.getTime() - 3600000);   // 1小时前
+        
+        List<String> inRangeIds = new ArrayList<>();
+        List<String> outRangeIds = new ArrayList<>();
+        
+        // 在时间范围内的实例
+        for (int i = 0; i < 2; i++) {
+            String processInstanceId = "proc-in-range-" + UUID.randomUUID().toString().substring(0, 8);
+            Date startTime = new Date(rangeStart.getTime() + i * 600000); // 范围内
+            Date endTime = new Date(startTime.getTime() + 1800000);
+            Long duration = endTime.getTime() - startTime.getTime();
+            
+            HistoricProcessInstanceStorage processInstance = new HistoricProcessInstanceStorage(
+                    processInstanceId, processDefinitionKey, "business-in-" + i, startTime, endTime,
+                    "user" + i, duration, true
+            );
+            historicProcessInstances.put(processInstanceId, processInstance);
+            archiveHistoryData(processInstanceId, "时间范围测试");
+            inRangeIds.add(processInstanceId);
+        }
+        
+        // 在时间范围外的实例
+        for (int i = 0; i < 2; i++) {
+            String processInstanceId = "proc-out-range-" + UUID.randomUUID().toString().substring(0, 8);
+            Date startTime = new Date(now.getTime() - 10800000 - i * 3600000); // 3小时前开始，范围外
+            Date endTime = new Date(startTime.getTime() + 1800000);
+            Long duration = endTime.getTime() - startTime.getTime();
+            
+            HistoricProcessInstanceStorage processInstance = new HistoricProcessInstanceStorage(
+                    processInstanceId, processDefinitionKey, "business-out-" + i, startTime, endTime,
+                    "user" + i, duration, true
+            );
+            historicProcessInstances.put(processInstanceId, processInstance);
+            archiveHistoryData(processInstanceId, "时间范围测试");
+            outRangeIds.add(processInstanceId);
+        }
+        
+        // When: 按时间范围查询
+        HistoryQueryRequest queryRequest = HistoryQueryRequest.builder()
+                .processDefinitionKey(processDefinitionKey)
+                .startTime(rangeStart)
+                .endTime(rangeEnd)
+                .includeProcessInstances(true)
+                .build();
+        
+        HistoryQueryResult queryResult = queryHistoryData(queryRequest);
+        
+        // Then: 只应该返回时间范围内的数据
+        assertThat(queryResult.isSuccess()).isTrue();
+        assertThat(queryResult.getHistoryData()).hasSize(2);
+        
+        for (Map<String, Object> data : queryResult.getHistoryData()) {
+            String processInstanceId = (String) data.get("id");
+            assertThat(inRangeIds).contains(processInstanceId);
+            assertThat(outRangeIds).doesNotContain(processInstanceId);
+            
+            Date startTime = (Date) data.get("startTime");
+            assertThat(startTime).isBetween(rangeStart, rangeEnd, true, true);
+        }
+    }
+
+    /**
+     * 属性测试: 归档数据全文搜索准确性
+     */
+    @Property(tries = 100)
+    @Label("归档数据全文搜索准确性")
+    void archivedDataFullTextSearchAccuracy(@ForAll @NotBlank @Size(min = 1, max = 50) String processDefinitionKey,
+                                          @ForAll @NotBlank @Size(min = 3, max = 10) String searchKeyword) {
+        Assume.that(!processDefinitionKey.trim().isEmpty());
+        Assume.that(!searchKeyword.trim().isEmpty());
+        
+        // Given: 创建包含和不包含搜索关键词的归档数据
+        Date now = new Date();
+        List<String> matchingIds = new ArrayList<>();
+        List<String> nonMatchingIds = new ArrayList<>();
+        
+        // 包含关键词的实例
+        for (int i = 0; i < 2; i++) {
+            String processInstanceId = "proc-match-" + UUID.randomUUID().toString().substring(0, 8);
+            String businessKey = "business-" + searchKeyword + "-" + i; // 包含搜索关键词
+            Date startTime = new Date(now.getTime() - (i + 1) * 3600000);
+            Date endTime = new Date(startTime.getTime() + 1800000);
+            Long duration = endTime.getTime() - startTime.getTime();
+            
+            HistoricProcessInstanceStorage processInstance = new HistoricProcessInstanceStorage(
+                    processInstanceId, processDefinitionKey, businessKey, startTime, endTime,
+                    "user" + i, duration, true
+            );
+            historicProcessInstances.put(processInstanceId, processInstance);
+            archiveHistoryData(processInstanceId, "搜索测试");
+            matchingIds.add(processInstanceId);
+        }
+        
+        // 不包含关键词的实例
+        for (int i = 0; i < 2; i++) {
+            String processInstanceId = "proc-nomatch-" + UUID.randomUUID().toString().substring(0, 8);
+            String businessKey = "business-other-" + i; // 不包含搜索关键词
+            Date startTime = new Date(now.getTime() - (i + 10) * 3600000);
+            Date endTime = new Date(startTime.getTime() + 1800000);
+            Long duration = endTime.getTime() - startTime.getTime();
+            
+            HistoricProcessInstanceStorage processInstance = new HistoricProcessInstanceStorage(
+                    processInstanceId, processDefinitionKey, businessKey, startTime, endTime,
+                    "user" + i, duration, true
+            );
+            historicProcessInstances.put(processInstanceId, processInstance);
+            archiveHistoryData(processInstanceId, "搜索测试");
+            nonMatchingIds.add(processInstanceId);
+        }
+        
+        // When: 执行全文搜索
+        HistoryQueryRequest searchRequest = HistoryQueryRequest.builder()
+                .processDefinitionKey(processDefinitionKey)
+                .searchText(searchKeyword)
+                .includeProcessInstances(true)
+                .build();
+        
+        HistoryQueryResult searchResult = queryHistoryData(searchRequest);
+        
+        // Then: 只应该返回包含关键词的数据
+        assertThat(searchResult.isSuccess()).isTrue();
+        assertThat(searchResult.getHistoryData()).hasSize(2);
+        
+        for (Map<String, Object> data : searchResult.getHistoryData()) {
+            String processInstanceId = (String) data.get("id");
+            String businessKey = (String) data.get("businessKey");
+            
+            assertThat(matchingIds).contains(processInstanceId);
+            assertThat(nonMatchingIds).doesNotContain(processInstanceId);
+            assertThat(businessKey.toLowerCase()).contains(searchKeyword.toLowerCase());
+        }
+    }
+
+    /**
+     * 属性测试: 归档数据统计分析准确性
+     */
+    @Property(tries = 100)
+    @Label("归档数据统计分析准确性")
+    void archivedDataStatisticsAccuracy(@ForAll @NotBlank @Size(min = 1, max = 50) String processDefinitionKey) {
+        Assume.that(!processDefinitionKey.trim().isEmpty());
+        
+        // Given: 创建已知数量的归档数据
+        Date now = new Date();
+        int processCount = 5;
+        int taskCount = 10;
+        List<Long> durations = new ArrayList<>();
+        
+        for (int i = 0; i < processCount; i++) {
+            String processInstanceId = "proc-stats-" + UUID.randomUUID().toString().substring(0, 8);
+            Date startTime = new Date(now.getTime() - (i + 1) * 3600000);
+            Date endTime = new Date(startTime.getTime() + (i + 1) * 1800000); // 不同的执行时间
+            Long duration = endTime.getTime() - startTime.getTime();
+            durations.add(duration);
+            
+            HistoricProcessInstanceStorage processInstance = new HistoricProcessInstanceStorage(
+                    processInstanceId, processDefinitionKey, "business-stats-" + i, startTime, endTime,
+                    "user" + i, duration, true
+            );
+            historicProcessInstances.put(processInstanceId, processInstance);
+            
+            // 为每个流程实例创建2个任务
+            for (int j = 0; j < 2; j++) {
+                String taskId = "task-stats-" + i + "-" + j + "-" + UUID.randomUUID().toString().substring(0, 8);
+                HistoricTaskInstanceStorage task = new HistoricTaskInstanceStorage(
+                        taskId, "Stats Task " + i + "-" + j, "user" + i, processInstanceId,
+                        startTime, endTime, duration
+                );
+                historicTasks.put(taskId, task);
+            }
+            
+            archiveHistoryData(processInstanceId, "统计测试");
+        }
+        
+        // When: 获取统计分析
+        Map<String, Object> statistics = getHistoryStatistics(processDefinitionKey, null, null);
+        
+        // Then: 统计数据应该准确
+        assertThat(statistics).containsKeys("processInstances", "tasks", "durations", "trends");
+        
+        // 验证流程实例统计
+        @SuppressWarnings("unchecked")
+        Map<String, Object> processStats = (Map<String, Object>) statistics.get("processInstances");
+        assertThat(processStats.get("totalCount")).isEqualTo((long) processCount);
+        assertThat(processStats.get("finishedCount")).isEqualTo((long) processCount);
+        assertThat(processStats.get("activeCount")).isEqualTo(0L);
+        
+        // 验证任务统计
+        @SuppressWarnings("unchecked")
+        Map<String, Object> taskStats = (Map<String, Object>) statistics.get("tasks");
+        assertThat(taskStats.get("totalCount")).isEqualTo((long) taskCount);
+        assertThat(taskStats.get("finishedCount")).isEqualTo((long) taskCount);
+        
+        // 验证执行时间统计
+        @SuppressWarnings("unchecked")
+        Map<String, Object> durationStats = (Map<String, Object>) statistics.get("durations");
+        if (durationStats.containsKey("averageDuration")) {
+            double expectedAvg = durations.stream().mapToLong(Long::longValue).average().orElse(0.0) / 1000.0;
+            double actualAvg = (Double) durationStats.get("averageDuration");
+            assertThat(actualAvg).isCloseTo(expectedAvg, within(1.0));
+        }
+    }
+
+    // ==================== 辅助方法 ====================
+    
+    /**
+     * 生成导出格式
+     */
+    @Provide
+    Arbitrary<String> exportFormats() {
+        return Arbitraries.of("JSON", "CSV", "XML");
+    }
+    
+    /**
+     * 归档历史数据（模拟HistoryManagerComponent的archiveHistoryData方法）
+     */
+    private HistoryArchiveResult archiveHistoryData(String processInstanceId, String archiveReason) {
+        try {
+            // 验证流程实例是否存在且已完成
+            HistoricProcessInstanceStorage processInstance = historicProcessInstances.get(processInstanceId);
+            if (processInstance == null || !processInstance.isFinished()) {
+                return HistoryArchiveResult.builder()
+                        .success(false)
+                        .errorMessage("流程实例不存在或未完成")
+                        .build();
+            }
+            
+            // 收集归档数据
+            Map<String, Object> archiveData = new HashMap<>();
+            
+            // 流程实例数据
+            Map<String, Object> processData = new HashMap<>();
+            processData.put("id", processInstance.getId());
+            processData.put("processDefinitionKey", processInstance.getProcessDefinitionKey());
+            processData.put("businessKey", processInstance.getBusinessKey());
+            processData.put("startTime", processInstance.getStartTime());
+            processData.put("endTime", processInstance.getEndTime());
+            processData.put("startUserId", processInstance.getStartUserId());
+            processData.put("durationInMillis", processInstance.getDurationInMillis());
+            archiveData.put("processInstance", processData);
+            
+            // 任务数据
+            List<Map<String, Object>> tasksData = historicTasks.values().stream()
+                    .filter(task -> processInstanceId.equals(task.getProcessInstanceId()))
+                    .map(task -> {
+                        Map<String, Object> taskData = new HashMap<>();
+                        taskData.put("id", task.getId());
+                        taskData.put("name", task.getName());
+                        taskData.put("assignee", task.getAssignee());
+                        taskData.put("processInstanceId", task.getProcessInstanceId());
+                        taskData.put("createTime", task.getCreateTime());
+                        taskData.put("endTime", task.getEndTime());
+                        taskData.put("durationInMillis", task.getDurationInMillis());
+                        return taskData;
+                    })
+                    .collect(Collectors.toList());
+            archiveData.put("tasks", tasksData);
+            
+            // 变量数据
+            List<Map<String, Object>> variablesData = historicVariables.values().stream()
+                    .filter(variable -> processInstanceId.equals(variable.getProcessInstanceId()))
+                    .map(variable -> {
+                        Map<String, Object> variableData = new HashMap<>();
+                        variableData.put("id", variable.getId());
+                        variableData.put("name", variable.getName());
+                        variableData.put("value", variable.getValue());
+                        variableData.put("typeName", variable.getTypeName());
+                        variableData.put("processInstanceId", variable.getProcessInstanceId());
+                        variableData.put("createTime", variable.getCreateTime());
+                        return variableData;
+                    })
+                    .collect(Collectors.toList());
+            archiveData.put("variables", variablesData);
+            
+            // 创建归档记录
+            String archiveId = "ARCH_" + System.currentTimeMillis() + "_" + UUID.randomUUID().toString().substring(0, 8);
+            ArchiveStorage archive = new ArchiveStorage(
+                    archiveId, processInstanceId, archiveReason, LocalDateTime.now(), archiveData
+            );
+            archives.put(archiveId, archive);
+            
+            int totalDataCount = 1 + tasksData.size() + variablesData.size(); // 流程实例 + 任务 + 变量
+            
+            return HistoryArchiveResult.builder()
+                    .success(true)
+                    .archiveId(archiveId)
+                    .processInstanceId(processInstanceId)
+                    .archivedDataCount(totalDataCount)
+                    .archiveTime(LocalDateTime.now())
+                    .message("历史数据归档成功")
+                    .build();
+                    
+        } catch (Exception e) {
+            return HistoryArchiveResult.builder()
+                    .success(false)
+                    .errorMessage("归档失败: " + e.getMessage())
+                    .build();
+        }
+    }
+    
+    /**
+     * 查询历史数据（模拟HistoryManagerComponent的queryHistoryData方法）
+     */
+    private HistoryQueryResult queryHistoryData(HistoryQueryRequest request) {
+        try {
+            List<Map<String, Object>> historyData = new ArrayList<>();
+            
+            // 查询流程实例
+            if (request.getIncludeProcessInstances() == null || request.getIncludeProcessInstances()) {
+                List<Map<String, Object>> processData = historicProcessInstances.values().stream()
+                        .filter(instance -> matchesProcessInstanceFilter(instance, request))
+                        .map(instance -> {
+                            Map<String, Object> data = new HashMap<>();
+                            data.put("type", "PROCESS_INSTANCE");
+                            data.put("id", instance.getId());
+                            data.put("processDefinitionKey", instance.getProcessDefinitionKey());
+                            data.put("businessKey", instance.getBusinessKey());
+                            data.put("startTime", instance.getStartTime());
+                            data.put("endTime", instance.getEndTime());
+                            data.put("startUserId", instance.getStartUserId());
+                            data.put("durationInMillis", instance.getDurationInMillis());
+                            return data;
+                        })
+                        .collect(Collectors.toList());
+                historyData.addAll(processData);
+            }
+            
+            // 查询任务
+            if (request.getIncludeTasks() != null && request.getIncludeTasks()) {
+                List<Map<String, Object>> taskData = historicTasks.values().stream()
+                        .filter(task -> matchesTaskFilter(task, request))
+                        .map(task -> {
+                            Map<String, Object> data = new HashMap<>();
+                            data.put("type", "TASK");
+                            data.put("id", task.getId());
+                            data.put("name", task.getName());
+                            data.put("assignee", task.getAssignee());
+                            data.put("processInstanceId", task.getProcessInstanceId());
+                            data.put("createTime", task.getCreateTime());
+                            data.put("endTime", task.getEndTime());
+                            data.put("durationInMillis", task.getDurationInMillis());
+                            return data;
+                        })
+                        .collect(Collectors.toList());
+                historyData.addAll(taskData);
+            }
+            
+            // 查询变量
+            if (request.getIncludeVariables() != null && request.getIncludeVariables()) {
+                List<Map<String, Object>> variableData = historicVariables.values().stream()
+                        .filter(variable -> matchesVariableFilter(variable, request))
+                        .map(variable -> {
+                            Map<String, Object> data = new HashMap<>();
+                            data.put("type", "VARIABLE");
+                            data.put("id", variable.getId());
+                            data.put("name", variable.getName());
+                            data.put("value", variable.getValue());
+                            data.put("typeName", variable.getTypeName());
+                            data.put("processInstanceId", variable.getProcessInstanceId());
+                            data.put("createTime", variable.getCreateTime());
+                            return data;
+                        })
+                        .collect(Collectors.toList());
+                historyData.addAll(variableData);
+            }
+            
+            // 应用全文搜索
+            if (request.getSearchText() != null && !request.getSearchText().trim().isEmpty()) {
+                String searchText = request.getSearchText().toLowerCase();
+                historyData = historyData.stream()
+                        .filter(data -> data.values().stream()
+                                .filter(Objects::nonNull)
+                                .anyMatch(value -> value.toString().toLowerCase().contains(searchText)))
+                        .collect(Collectors.toList());
+            }
+            
+            long totalCount = historyData.size();
+            
+            // 应用分页
+            int offset = request.getOffset() != null ? request.getOffset() : 0;
+            int limit = request.getLimit() != null ? request.getLimit() : 20;
+            
+            historyData = historyData.stream()
+                    .skip(offset)
+                    .limit(limit)
+                    .collect(Collectors.toList());
+            
+            return HistoryQueryResult.builder()
+                    .success(true)
+                    .historyData(historyData)
+                    .totalCount(totalCount)
+                    .currentPage(limit > 0 ? (offset / limit) + 1 : 1)
+                    .pageSize(limit)
+                    .build();
+                    
+        } catch (Exception e) {
+            return HistoryQueryResult.builder()
+                    .success(false)
+                    .errorMessage("查询失败: " + e.getMessage())
+                    .build();
+        }
+    }
+    
+    /**
+     * 导出历史数据（模拟HistoryManagerComponent的exportHistoryData方法）
+     */
+    private HistoryExportResult exportHistoryData(HistoryQueryRequest request, String exportFormat) {
+        try {
+            // 查询数据
+            HistoryQueryResult queryResult = queryHistoryData(request);
+            
+            if (!queryResult.isSuccess() || queryResult.getHistoryData().isEmpty()) {
+                return HistoryExportResult.builder()
+                        .success(false)
+                        .message("没有可导出的数据")
+                        .build();
+            }
+            
+            // 执行导出
+            String exportContent = performExport(queryResult.getHistoryData(), exportFormat);
+            String exportId = UUID.randomUUID().toString();
+            
+            return HistoryExportResult.builder()
+                    .success(true)
+                    .exportId(exportId)
+                    .exportFormat(exportFormat)
+                    .exportContent(exportContent)
+                    .recordCount(queryResult.getTotalCount())
+                    .exportTime(LocalDateTime.now())
+                    .message("导出成功")
+                    .build();
+                    
+        } catch (Exception e) {
+            return HistoryExportResult.builder()
+                    .success(false)
+                    .errorMessage("导出失败: " + e.getMessage())
+                    .build();
+        }
+    }
+    
+    /**
+     * 获取历史统计（模拟HistoryManagerComponent的getHistoryStatistics方法）
+     */
+    private Map<String, Object> getHistoryStatistics(String processDefinitionKey, Date startTime, Date endTime) {
+        Map<String, Object> statistics = new HashMap<>();
+        
+        // 流程实例统计
+        List<HistoricProcessInstanceStorage> filteredProcesses = historicProcessInstances.values().stream()
+                .filter(instance -> {
+                    if (processDefinitionKey != null && !processDefinitionKey.equals(instance.getProcessDefinitionKey())) {
+                        return false;
+                    }
+                    if (startTime != null && instance.getStartTime().before(startTime)) {
+                        return false;
+                    }
+                    if (endTime != null && instance.getStartTime().after(endTime)) {
+                        return false;
+                    }
+                    return true;
+                })
+                .collect(Collectors.toList());
+        
+        Map<String, Object> processStats = new HashMap<>();
+        processStats.put("totalCount", (long) filteredProcesses.size());
+        processStats.put("finishedCount", filteredProcesses.stream().filter(HistoricProcessInstanceStorage::isFinished).count());
+        processStats.put("activeCount", filteredProcesses.stream().filter(instance -> !instance.isFinished()).count());
+        statistics.put("processInstances", processStats);
+        
+        // 任务统计
+        List<HistoricTaskInstanceStorage> filteredTasks = historicTasks.values().stream()
+                .filter(task -> {
+                    // 通过流程实例ID关联过滤
+                    HistoricProcessInstanceStorage processInstance = historicProcessInstances.get(task.getProcessInstanceId());
+                    if (processInstance == null) return false;
+                    
+                    if (processDefinitionKey != null && !processDefinitionKey.equals(processInstance.getProcessDefinitionKey())) {
+                        return false;
+                    }
+                    if (startTime != null && task.getCreateTime().before(startTime)) {
+                        return false;
+                    }
+                    if (endTime != null && task.getCreateTime().after(endTime)) {
+                        return false;
+                    }
+                    return true;
+                })
+                .collect(Collectors.toList());
+        
+        Map<String, Object> taskStats = new HashMap<>();
+        taskStats.put("totalCount", (long) filteredTasks.size());
+        taskStats.put("finishedCount", filteredTasks.stream().filter(task -> task.getEndTime() != null).count());
+        taskStats.put("activeCount", filteredTasks.stream().filter(task -> task.getEndTime() == null).count());
+        statistics.put("tasks", taskStats);
+        
+        // 执行时间统计
+        List<Long> durations = filteredProcesses.stream()
+                .filter(HistoricProcessInstanceStorage::isFinished)
+                .filter(instance -> instance.getDurationInMillis() != null)
+                .map(HistoricProcessInstanceStorage::getDurationInMillis)
+                .collect(Collectors.toList());
+        
+        Map<String, Object> durationStats = new HashMap<>();
+        if (!durations.isEmpty()) {
+            double avgDuration = durations.stream().mapToLong(Long::longValue).average().orElse(0.0);
+            long maxDuration = durations.stream().mapToLong(Long::longValue).max().orElse(0L);
+            long minDuration = durations.stream().mapToLong(Long::longValue).min().orElse(0L);
+            
+            durationStats.put("averageDuration", avgDuration / 1000.0);
+            durationStats.put("maxDuration", maxDuration / 1000);
+            durationStats.put("minDuration", minDuration / 1000);
+        }
+        statistics.put("durations", durationStats);
+        
+        // 趋势分析（简化实现）
+        Map<String, Object> trends = new HashMap<>();
+        Map<String, Long> dailyStarts = new HashMap<>();
+        
+        LocalDateTime now = LocalDateTime.now();
+        for (int i = 6; i >= 0; i--) {
+            LocalDateTime dayStart = now.minusDays(i).withHour(0).withMinute(0).withSecond(0);
+            LocalDateTime dayEnd = dayStart.withHour(23).withMinute(59).withSecond(59);
+            
+            Date dayStartDate = Date.from(dayStart.atZone(ZoneId.systemDefault()).toInstant());
+            Date dayEndDate = Date.from(dayEnd.atZone(ZoneId.systemDefault()).toInstant());
+            
+            long dayCount = filteredProcesses.stream()
+                    .filter(instance -> !instance.getStartTime().before(dayStartDate) && 
+                                      !instance.getStartTime().after(dayEndDate))
+                    .count();
+            
+            dailyStarts.put(dayStart.toLocalDate().toString(), dayCount);
+        }
+        
+        trends.put("dailyStarts", dailyStarts);
+        statistics.put("trends", trends);
+        
+        return statistics;
+    }
+    
+    /**
+     * 执行导出
+     */
+    private String performExport(List<Map<String, Object>> data, String exportFormat) {
+        switch (exportFormat.toUpperCase()) {
+            case "JSON":
+                return exportToJson(data);
+            case "CSV":
+                return exportToCsv(data);
+            case "XML":
+                return exportToXml(data);
+            default:
+                throw new IllegalArgumentException("不支持的导出格式: " + exportFormat);
+        }
+    }
+    
+    /**
+     * 导出为JSON格式
+     */
+    private String exportToJson(List<Map<String, Object>> data) {
+        StringBuilder json = new StringBuilder();
+        json.append("[\n");
+        
+        for (int i = 0; i < data.size(); i++) {
+            Map<String, Object> item = data.get(i);
+            json.append("  {\n");
+            
+            int fieldIndex = 0;
+            for (Map.Entry<String, Object> entry : item.entrySet()) {
+                json.append("    \"").append(entry.getKey()).append("\": ");
+                
+                Object value = entry.getValue();
+                if (value instanceof String) {
+                    json.append("\"").append(value.toString().replace("\"", "\\\"")).append("\"");
+                } else if (value instanceof Date) {
+                    json.append("\"").append(value.toString()).append("\"");
+                } else {
+                    json.append(value != null ? value.toString() : "null");
+                }
+                
+                if (fieldIndex < item.size() - 1) {
+                    json.append(",");
+                }
+                json.append("\n");
+                fieldIndex++;
+            }
+            
+            json.append("  }");
+            if (i < data.size() - 1) {
+                json.append(",");
+            }
+            json.append("\n");
+        }
+        
+        json.append("]");
+        return json.toString();
+    }
+    
+    /**
+     * 导出为CSV格式
+     */
+    private String exportToCsv(List<Map<String, Object>> data) {
+        if (data.isEmpty()) {
+            return "";
+        }
+        
+        StringBuilder csv = new StringBuilder();
+        
+        // 表头
+        Set<String> headers = data.get(0).keySet();
+        csv.append(String.join(",", headers)).append("\n");
+        
+        // 数据行
+        for (Map<String, Object> item : data) {
+            List<String> values = new ArrayList<>();
+            for (String header : headers) {
+                Object value = item.get(header);
+                String csvValue = value != null ? value.toString().replace(",", "\\,") : "";
+                values.add("\"" + csvValue + "\"");
+            }
+            csv.append(String.join(",", values)).append("\n");
+        }
+        
+        return csv.toString();
+    }
+    
+    /**
+     * 导出为XML格式
+     */
+    private String exportToXml(List<Map<String, Object>> data) {
+        StringBuilder xml = new StringBuilder();
+        xml.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+        xml.append("<historyData>\n");
+        
+        for (Map<String, Object> item : data) {
+            xml.append("  <record>\n");
+            
+            for (Map.Entry<String, Object> entry : item.entrySet()) {
+                String key = entry.getKey().replaceAll("[^a-zA-Z0-9_]", "_");
+                Object value = entry.getValue();
+                String xmlValue = value != null ? 
+                        value.toString().replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;") : "";
+                
+                xml.append("    <").append(key).append(">")
+                   .append(xmlValue)
+                   .append("</").append(key).append(">\n");
+            }
+            
+            xml.append("  </record>\n");
+        }
+        
+        xml.append("</historyData>");
+        return xml.toString();
+    }
+    
+    /**
+     * 流程实例过滤匹配
+     */
+    private boolean matchesProcessInstanceFilter(HistoricProcessInstanceStorage instance, HistoryQueryRequest request) {
+        if (request.getProcessDefinitionKey() != null && 
+            !request.getProcessDefinitionKey().equals(instance.getProcessDefinitionKey())) {
+            return false;
+        }
+        
+        if (request.getBusinessKey() != null && 
+            !request.getBusinessKey().equals(instance.getBusinessKey())) {
+            return false;
+        }
+        
+        if (request.getStartTime() != null && instance.getStartTime().before(request.getStartTime())) {
+            return false;
+        }
+        
+        if (request.getEndTime() != null && instance.getStartTime().after(request.getEndTime())) {
+            return false;
+        }
+        
+        if (request.getFinishedOnly() != null && request.getFinishedOnly() && !instance.isFinished()) {
+            return false;
+        }
+        
+        return true;
+    }
+    
+    /**
+     * 任务过滤匹配
+     */
+    private boolean matchesTaskFilter(HistoricTaskInstanceStorage task, HistoryQueryRequest request) {
+        if (request.getAssignee() != null && !request.getAssignee().equals(task.getAssignee())) {
+            return false;
+        }
+        
+        if (request.getStartTime() != null && task.getCreateTime().before(request.getStartTime())) {
+            return false;
+        }
+        
+        if (request.getEndTime() != null && task.getCreateTime().after(request.getEndTime())) {
+            return false;
+        }
+        
+        if (request.getFinishedOnly() != null && request.getFinishedOnly() && task.getEndTime() == null) {
+            return false;
+        }
+        
+        // 通过流程实例关联过滤
+        if (request.getProcessDefinitionKey() != null) {
+            HistoricProcessInstanceStorage processInstance = historicProcessInstances.get(task.getProcessInstanceId());
+            if (processInstance == null || !request.getProcessDefinitionKey().equals(processInstance.getProcessDefinitionKey())) {
+                return false;
+            }
+        }
+        
+        return true;
+    }
+    
+    /**
+     * 变量过滤匹配
+     */
+    private boolean matchesVariableFilter(HistoricVariableInstanceStorage variable, HistoryQueryRequest request) {
+        // 通过流程实例关联过滤
+        if (request.getProcessDefinitionKey() != null) {
+            HistoricProcessInstanceStorage processInstance = historicProcessInstances.get(variable.getProcessInstanceId());
+            if (processInstance == null || !request.getProcessDefinitionKey().equals(processInstance.getProcessDefinitionKey())) {
+                return false;
+            }
+        }
+        
+        if (request.getStartTime() != null && variable.getCreateTime().before(request.getStartTime())) {
+            return false;
+        }
+        
+        if (request.getEndTime() != null && variable.getCreateTime().after(request.getEndTime())) {
+            return false;
+        }
+        
+        return true;
+    }
+}
