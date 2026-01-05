@@ -1,5 +1,0 @@
-# Created at 2026-01-04T22:02:35.221
-Boot Manifest-JAR contains absolute paths in classpath 'D:\working\Workflow Station\Workflow-Station---sun\backend\workflow-engine-core\target\test-classes'
-Hint: <argLine>-Djdk.net.URLClassPath.disableClassPathURLCheck=true</argLine>
-'other' has different root
-

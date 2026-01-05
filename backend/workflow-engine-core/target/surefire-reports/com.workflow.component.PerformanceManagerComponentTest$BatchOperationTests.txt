@@ -1,4 +1,0 @@
--------------------------------------------------------------------------------
-Test set: com.workflow.component.PerformanceManagerComponentTest$BatchOperationTests
--------------------------------------------------------------------------------
-Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.044 s -- in com.workflow.component.PerformanceManagerComponentTest$BatchOperationTests
