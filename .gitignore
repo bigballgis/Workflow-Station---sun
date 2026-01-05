@@ -1,0 +1,274 @@
+# =============================================================================
+# Platform .gitignore - Ensure only source code is committed
+# =============================================================================
+
+# =============================================================================
+# Build outputs
+# =============================================================================
+target/
+build/
+out/
+dist/
+*.class
+*.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# =============================================================================
+# IDE and Editor files
+# =============================================================================
+# IntelliJ IDEA
+.idea/
+*.iml
+*.ipr
+*.iws
+.idea_modules/
+
+# Eclipse
+.project
+.classpath
+.settings/
+.metadata/
+bin/
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# NetBeans
+nbproject/
+nbbuild/
+nbdist/
+nb-configuration.xml
+
+# =============================================================================
+# Maven
+# =============================================================================
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# =============================================================================
+# Gradle
+# =============================================================================
+.gradle/
+gradle-app.setting
+!gradle-wrapper.jar
+.gradletasknamecache
+
+# =============================================================================
+# Node.js / Frontend
+# =============================================================================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Vue / Vite
+.nuxt/
+.output/
+.vite/
+
+# =============================================================================
+# Logs
+# =============================================================================
+logs/
+*.log
+*.log.*
+log/
+
+# =============================================================================
+# Temporary files
+# =============================================================================
+tmp/
+temp/
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+.cache/
+
+# =============================================================================
+# OS generated files
+# =============================================================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# =============================================================================
+# SENSITIVE FILES - NEVER COMMIT
+# =============================================================================
+# Environment files with secrets
+.env
+.env.local
+.env.*.local
+.env.development
+.env.test
+.env.production
+*.env
+
+# Secret/credential files
+secrets/
+credentials/
+*.pem
+*.key
+*.crt
+*.p12
+*.jks
+*.keystore
+*.truststore
+
+# AWS credentials
+.aws/
+aws-credentials*
+
+# SSH keys
+id_rsa
+id_rsa.pub
+id_dsa
+id_dsa.pub
+id_ecdsa
+id_ecdsa.pub
+id_ed25519
+id_ed25519.pub
+*.ppk
+
+# API keys and tokens
+api-keys.txt
+api-keys.json
+tokens.txt
+tokens.json
+*-secret.yml
+*-secret.yaml
+*-secrets.yml
+*-secrets.yaml
+
+# Database credentials
+database.yml
+database.properties
+db-credentials*
+
+# Application secrets
+application-secrets.yml
+application-secrets.yaml
+application-secrets.properties
+bootstrap-secrets.yml
+bootstrap-secrets.yaml
+
+# JWT secrets
+jwt-secret*
+jwt.key
+
+# Encryption keys
+encryption-key*
+master-key*
+aes-key*
+
+# =============================================================================
+# Configuration files with potential secrets
+# =============================================================================
+# Keep templates, ignore actual configs
+!*-template.yml
+!*-template.yaml
+!*-template.properties
+!*-example.yml
+!*-example.yaml
+!*-example.properties
+
+# Local configuration overrides
+application-local.yml
+application-local.yaml
+application-local.properties
+*-local.yml
+*-local.yaml
+*-local.properties
+
+# =============================================================================
+# Docker
+# =============================================================================
+.docker/
+docker-compose.override.yml
+docker-compose.local.yml
+
+# =============================================================================
+# Kubernetes secrets (actual secrets, not templates)
+# =============================================================================
+*-secret.yaml
+*-secret.yml
+secrets.yaml
+secrets.yml
+!*-secret-template.yaml
+!*-secret-template.yml
+
+# =============================================================================
+# Test outputs
+# =============================================================================
+test-output/
+test-results/
+coverage/
+*.coverage
+.nyc_output/
+htmlcov/
+.tox/
+.pytest_cache/
+.jqwik-database
+
+# =============================================================================
+# Database files
+# =============================================================================
+*.db
+*.sqlite
+*.sqlite3
+*.h2.db
+*.mv.db
+*.trace.db
+data/
+
+# =============================================================================
+# Backup files
+# =============================================================================
+*.bak
+*.backup
+*.old
+*.orig
+
+# =============================================================================
+# Generated documentation
+# =============================================================================
+docs/generated/
+site/
+javadoc/
+apidocs/
+
+# =============================================================================
+# Heap dumps and profiling
+# =============================================================================
+*.hprof
+*.heap
+hs_err_pid*
+replay_pid*
+
+# =============================================================================
+# Spring Boot
+# =============================================================================
+HELP.md
+.spring-boot-devtools.properties

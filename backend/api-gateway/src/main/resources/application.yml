@@ -1,0 +1,132 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  
+  # Cloud Gateway Configuration
+  cloud:
+    gateway:
+      routes:
+        - id: workflow-engine
+          uri: lb://workflow-engine
+          predicates:
+            - Path=/api/workflow/**
+          filters:
+            - StripPrefix=1
+        - id: admin-center
+          uri: lb://admin-center
+          predicates:
+            - Path=/api/admin/**
+          filters:
+            - StripPrefix=1
+        - id: developer-workstation
+          uri: lb://developer-workstation
+          predicates:
+            - Path=/api/dev/**
+          filters:
+            - StripPrefix=1
+        - id: user-portal
+          uri: lb://user-portal
+          predicates:
+            - Path=/api/portal/**
+          filters:
+            - StripPrefix=1
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins: "*"
+            allowedMethods: "*"
+            allowedHeaders: "*"
+
+  # Redis Configuration
+  data:
+    redis:
+      host: ${SPRING_REDIS_HOST:localhost}
+      port: ${SPRING_REDIS_PORT:6379}
+      password: ${SPRING_REDIS_PASSWORD:}
+      timeout: 5000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+
+# Rate Limiting Configuration
+platform:
+  gateway:
+    rate-limit:
+      enabled: true
+      default-limit: 100
+      default-duration: 60
+      endpoints:
+        /api/auth/login: 10
+        /api/auth/register: 5
+
+# JWT Configuration
+jwt:
+  secret: ${JWT_SECRET:your-256-bit-secret-key-for-development-only}
+  expiration: 86400000
+  refresh-expiration: 604800000
+
+# Actuator Configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when_authorized
+  health:
+    redis:
+      enabled: true
+
+# Logging Configuration
+logging:
+  level:
+    root: INFO
+    com.platform: DEBUG
+    org.springframework.cloud.gateway: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] [%X{traceId}] %-5level %logger{36} - %msg%n"
+
+---
+# Development Profile
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+logging:
+  level:
+    com.platform: DEBUG
+
+---
+# Docker Profile
+spring:
+  config:
+    activate:
+      on-profile: docker
+
+---
+# Production Profile
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+logging:
+  level:
+    root: WARN
+    com.platform: INFO
+
+management:
+  endpoint:
+    health:
+      show-details: never

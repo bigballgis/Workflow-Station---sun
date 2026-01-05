@@ -1,29 +1,25 @@
 server:
-  port: 8080
-  servlet:
-    context-path: /api/v1
+  port: 8081
 
 spring:
   application:
-    name: workflow-engine-core
-  
-  # PostgreSQL 16.5 数据库配置
+    name: workflow-engine
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+
+  # Database Configuration
   datasource:
-    url: jdbc:postgresql://localhost:5432/workflow_engine
-    username: ${DB_USERNAME:workflow_user}
-    password: ${DB_PASSWORD:workflow_pass}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/workflow_platform}
+    username: ${SPRING_DATASOURCE_USERNAME:platform}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 20
       minimum-idle: 5
-      connection-timeout: 30000
-      idle-timeout: 600000
-      max-lifetime: 1800000
-      leak-detection-threshold: 60000
-      connection-test-query: SELECT 1
-      pool-name: WorkflowHikariCP
+      idle-timeout: 300000
+      connection-timeout: 20000
 
-  # JPA配置
+  # JPA Configuration
   jpa:
     hibernate:
       ddl-auto: validate
@@ -32,118 +28,111 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
-        jdbc:
-          batch_size: 20
-        order_inserts: true
-        order_updates: true
 
-  # Redis缓存配置
+  # Flyway Configuration
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+  # Redis Configuration
   data:
     redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD:}
-      database: 0
-      timeout: 2000ms
-      lettuce:
-        pool:
-          max-active: 8
-          max-idle: 8
-          min-idle: 0
-          max-wait: -1ms
+      host: ${SPRING_REDIS_HOST:localhost}
+      port: ${SPRING_REDIS_PORT:6379}
+      password: ${SPRING_REDIS_PASSWORD:}
+      timeout: 5000ms
 
-  # Kafka配置
+  # Kafka Configuration
   kafka:
-    bootstrap-servers: ${KAFKA_SERVERS:localhost:9092}
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
       acks: all
       retries: 3
-      batch-size: 16384
-      linger-ms: 1
-      buffer-memory: 33554432
     consumer:
-      group-id: workflow-engine-group
+      group-id: workflow-engine
+      auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
-      auto-offset-reset: earliest
-      enable-auto-commit: false
       properties:
-        spring.json.trusted.packages: "com.workflow.dto.event"
+        spring.json.trusted.packages: com.platform.*
 
-# Flowable配置
+# Flowable Configuration
 flowable:
-  # 数据库配置
   database-schema-update: true
-  db-history-used: true
-  
-  # 异步执行器配置
   async-executor-activate: true
-  async-executor:
-    default-async-job-acquire-wait-time: 10000
-    default-timer-job-acquire-wait-time: 10000
-    max-async-jobs-due-per-acquisition: 1
-    
-  # 流程引擎配置
-  process:
-    definition-cache-limit: 100
-    enable-safe-xml-parsing: true
-    
-  # REST API配置
-  rest:
-    app:
-      authentication-mode: verify-privilege
+  history-level: full
 
-# 日志配置
-logging:
-  level:
-    com.workflow: INFO
-    org.flowable: INFO
-    org.springframework.security: DEBUG
-  pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
-    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
-  file:
-    name: logs/workflow-engine.log
+# JWT Configuration
+jwt:
+  secret: ${JWT_SECRET:your-256-bit-secret-key-for-development-only}
+  expiration: 86400000
 
-# 管理端点配置
+# Platform Configuration
+platform:
+  encryption:
+    secret-key: ${ENCRYPTION_SECRET_KEY:your-32-byte-aes-256-secret-key!!}
+
+# Actuator Configuration
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,prometheus
+        include: health,info,metrics,prometheus,flowable
   endpoint:
     health:
-      show-details: when-authorized
-  metrics:
-    export:
-      prometheus:
-        enabled: true
-
-# 自定义配置
-workflow:
-  # 性能配置
-  performance:
-    max-concurrent-processes: 100
-    process-start-timeout: 1000
-    task-query-timeout: 500
-    cache-hit-rate-threshold: 0.8
-    
-  # 安全配置
-  security:
-    jwt:
-      secret: ${JWT_SECRET:workflow-engine-secret-key-change-in-production}
-      expiration: 86400000 # 24小时
-    
-  # 通知配置
-  notification:
-    email:
-      enabled: ${EMAIL_ENABLED:false}
-      smtp-host: ${SMTP_HOST:}
-      smtp-port: ${SMTP_PORT:587}
-      username: ${SMTP_USERNAME:}
-      password: ${SMTP_PASSWORD:}
-    websocket:
+      show-details: when_authorized
+  health:
+    db:
       enabled: true
-      endpoint: /ws/notifications
+    redis:
+      enabled: true
+
+# Logging Configuration
+logging:
+  level:
+    root: INFO
+    com.platform: DEBUG
+    org.flowable: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] [%X{traceId}] %-5level %logger{36} - %msg%n"
+
+---
+# Development Profile
+spring:
+  config:
+    activate:
+      on-profile: dev
+  jpa:
+    show-sql: true
+
+logging:
+  level:
+    com.platform: DEBUG
+    org.hibernate.SQL: DEBUG
+
+---
+# Docker Profile
+spring:
+  config:
+    activate:
+      on-profile: docker
+
+---
+# Production Profile
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+logging:
+  level:
+    root: WARN
+    com.platform: INFO
+
+management:
+  endpoint:
+    health:
+      show-details: never

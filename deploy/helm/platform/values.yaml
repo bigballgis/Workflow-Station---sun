@@ -1,0 +1,102 @@
+# Default values for platform
+replicaCount:
+  apiGateway: 2
+  workflowEngine: 3
+  adminCenter: 2
+  developerWorkstation: 2
+  userPortal: 2
+
+image:
+  registry: docker.io
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+# API Gateway configuration
+apiGateway:
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilization: 70
+
+# Workflow Engine configuration
+workflowEngine:
+  resources:
+    requests:
+      memory: "512Mi"
+      cpu: "200m"
+    limits:
+      memory: "1024Mi"
+      cpu: "1000m"
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 15
+    targetCPUUtilization: 70
+
+# Database configuration
+postgresql:
+  enabled: true
+  auth:
+    database: platform
+    username: platform
+    existingSecret: platform-secrets
+  primary:
+    persistence:
+      size: 50Gi
+
+# Redis configuration
+redis:
+  enabled: true
+  architecture: replication
+  auth:
+    existingSecret: platform-secrets
+  replica:
+    replicaCount: 2
+
+# Kafka configuration
+kafka:
+  enabled: true
+  replicaCount: 3
+  persistence:
+    size: 20Gi
+
+# Ingress configuration
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  hosts:
+    - host: platform.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: platform-tls
+      hosts:
+        - platform.example.com
+
+# Deployment strategy
+deploymentStrategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
+
+# Blue-Green deployment support
+blueGreen:
+  enabled: false
+  activeService: blue
+
+# Canary deployment support
+canary:
+  enabled: false
+  weight: 10
