@@ -1,0 +1,45 @@
+package com.admin.enums;
+
+/**
+ * 审计操作类型
+ */
+public enum AuditAction {
+    // 用户操作
+    USER_LOGIN,
+    USER_LOGOUT,
+    USER_LOGIN_FAILED,
+    USER_CREATED,
+    USER_UPDATED,
+    USER_DELETED,
+    USER_LOCKED,
+    USER_UNLOCKED,
+    PASSWORD_CHANGED,
+    PASSWORD_RESET,
+    
+    // 权限操作
+    ROLE_CREATED,
+    ROLE_UPDATED,
+    ROLE_DELETED,
+    PERMISSION_GRANTED,
+    PERMISSION_REVOKED,
+    ROLE_ASSIGNED,
+    ROLE_UNASSIGNED,
+    
+    // 数据操作
+    DATA_CREATED,
+    DATA_UPDATED,
+    DATA_DELETED,
+    DATA_EXPORTED,
+    DATA_IMPORTED,
+    
+    // 配置操作
+    CONFIG_CREATED,
+    CONFIG_UPDATED,
+    CONFIG_DELETED,
+    
+    // 系统操作
+    SYSTEM_STARTUP,
+    SYSTEM_SHUTDOWN,
+    BACKUP_CREATED,
+    BACKUP_RESTORED
+}

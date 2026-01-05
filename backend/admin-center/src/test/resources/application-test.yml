@@ -1,0 +1,61 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+    username: sa
+    password: 
+    driver-class-name: org.h2.Driver
+  
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+        format_sql: true
+  
+  flyway:
+    enabled: false
+  
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+  kafka:
+    bootstrap-servers: localhost:9092
+
+logging:
+  level:
+    root: WARN
+    com.admin: DEBUG
+    org.hibernate.SQL: DEBUG
+
+security:
+  password:
+    min-length: 8
+    max-length: 128
+    require-uppercase: true
+    require-lowercase: true
+    require-digit: true
+    require-special: true
+    history-count: 5
+    expiry-days: 90
+  
+  login:
+    max-failed-attempts: 5
+    lockout-duration-minutes: 30
+  
+  session:
+    timeout-minutes: 30
+    max-concurrent-sessions: 3
+
+admin:
+  audit:
+    enabled: true
+    retention-days: 365
+  
+  cache:
+    user-ttl-minutes: 30
+    permission-ttl-minutes: 60
+    dictionary-ttl-minutes: 120

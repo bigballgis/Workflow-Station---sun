@@ -1,0 +1,82 @@
+// 全局样式
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #app {
+  height: 100%;
+  font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif;
+}
+
+// 汇丰主题色
+:root {
+  --primary-color: #db0011;
+  --primary-light: #ff4d4f;
+  --primary-dark: #a8000d;
+}
+
+// Element Plus 主题覆盖
+.el-button--primary {
+  --el-button-bg-color: var(--primary-color);
+  --el-button-border-color: var(--primary-color);
+  --el-button-hover-bg-color: var(--primary-light);
+  --el-button-hover-border-color: var(--primary-light);
+  --el-button-active-bg-color: var(--primary-dark);
+  --el-button-active-border-color: var(--primary-dark);
+}
+
+// 布局样式
+.admin-layout {
+  height: 100%;
+  
+  .el-aside {
+    background-color: #304156;
+    transition: width 0.3s;
+  }
+  
+  .el-header {
+    background-color: #fff;
+    border-bottom: 1px solid #e6e6e6;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+  }
+  
+  .el-main {
+    background-color: #f5f7fa;
+    padding: 20px;
+  }
+}
+
+// 表格样式
+.page-container {
+  background-color: #fff;
+  padding: 20px;
+  border-radius: 4px;
+  
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    
+    .page-title {
+      font-size: 18px;
+      font-weight: 600;
+      color: #303133;
+    }
+  }
+  
+  .search-form {
+    margin-bottom: 20px;
+  }
+  
+  .pagination-container {
+    margin-top: 20px;
+    display: flex;
+    justify-content: flex-end;
+  }
+}
