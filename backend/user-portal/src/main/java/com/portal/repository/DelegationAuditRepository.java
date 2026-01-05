@@ -1,0 +1,28 @@
+package com.portal.repository;
+
+import com.portal.entity.DelegationAudit;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+/**
+ * 委托审计记录Repository
+ */
+@Repository
+public interface DelegationAuditRepository extends JpaRepository<DelegationAudit, Long> {
+
+    List<DelegationAudit> findByDelegatorId(String delegatorId);
+
+    List<DelegationAudit> findByDelegateId(String delegateId);
+
+    List<DelegationAudit> findByTaskId(String taskId);
+
+    Page<DelegationAudit> findByDelegatorIdOrDelegateIdOrderByCreatedAtDesc(
+            String delegatorId, String delegateId, Pageable pageable);
+
+    List<DelegationAudit> findByCreatedAtBetween(LocalDateTime start, LocalDateTime end);
+}

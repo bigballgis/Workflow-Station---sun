@@ -1,0 +1,101 @@
+import { request } from './request'
+
+export interface TaskQueryRequest {
+  userId?: string
+  assignmentTypes?: string[]
+  priorities?: string[]
+  processTypes?: string[]
+  statuses?: string[]
+  startTime?: string
+  endTime?: string
+  includeOverdue?: boolean
+  keyword?: string
+  sortBy?: string
+  sortDirection?: string
+  page?: number
+  size?: number
+}
+
+export interface TaskInfo {
+  taskId: string
+  taskName: string
+  description?: string
+  processInstanceId: string
+  processDefinitionKey: string
+  processDefinitionName: string
+  assignmentType: string
+  assignee: string
+  assigneeName?: string
+  delegatorId?: string
+  delegatorName?: string
+  initiatorId: string
+  initiatorName?: string
+  priority: string
+  status: string
+  createTime: string
+  dueDate?: string
+  isOverdue: boolean
+  formKey?: string
+  variables?: Record<string, any>
+}
+
+export interface PageResponse<T> {
+  content: T[]
+  page: number
+  size: number
+  totalElements: number
+  totalPages: number
+  hasNext: boolean
+  hasPrevious: boolean
+}
+
+export interface TaskCompleteRequest {
+  taskId: string
+  action: string
+  comment?: string
+  formData?: Record<string, any>
+  variables?: Record<string, any>
+  targetUserId?: string
+  returnActivityId?: string
+}
+
+// 查询待办任务
+export function queryTasks(params: TaskQueryRequest) {
+  return request.post<{ data: PageResponse<TaskInfo> }>('/tasks/query', params)
+}
+
+// 获取任务详情
+export function getTaskDetail(taskId: string) {
+  return request.get<{ data: TaskInfo }>(`/tasks/${taskId}`)
+}
+
+// 认领任务
+export function claimTask(taskId: string) {
+  return request.post<{ data: TaskInfo }>(`/tasks/${taskId}/claim`)
+}
+
+// 取消认领
+export function unclaimTask(taskId: string, originalAssignmentType: string, originalAssignee: string) {
+  return request.post<{ data: TaskInfo }>(`/tasks/${taskId}/unclaim`, null, {
+    params: { originalAssignmentType, originalAssignee }
+  })
+}
+
+// 完成任务
+export function completeTask(taskId: string, data: TaskCompleteRequest) {
+  return request.post(`/tasks/${taskId}/complete`, data)
+}
+
+// 委托任务
+export function delegateTask(taskId: string, delegateId: string, reason?: string) {
+  return request.post(`/tasks/${taskId}/delegate`, null, {
+    params: { delegateId, reason }
+  })
+}
+
+// 转办任务
+export function transferTask(taskId: string, toUserId: string, reason?: string) {
+  return request.post(`/tasks/${taskId}/transfer`, null, {
+    params: { toUserId, reason }
+  })
+}

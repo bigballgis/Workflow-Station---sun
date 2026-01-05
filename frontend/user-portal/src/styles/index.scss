@@ -1,0 +1,183 @@
+// 汇丰主题变量
+:root {
+  // 主色调
+  --hsbc-red: #DB0011;
+  --hsbc-red-light: #FF1A2C;
+  --hsbc-red-dark: #B8000E;
+  
+  // 辅助色
+  --success-green: #00A651;
+  --warning-orange: #FF6600;
+  --error-red: #CC0000;
+  --info-blue: #1890FF;
+  
+  // 中性色
+  --text-primary: #333333;
+  --text-secondary: #666666;
+  --text-placeholder: #999999;
+  --border-color: #E5E5E5;
+  --background-light: #F5F5F5;
+  --background-white: #FFFFFF;
+  
+  // 布局尺寸
+  --header-height: 60px;
+  --sidebar-width: 240px;
+  --sidebar-collapsed-width: 64px;
+}
+
+// 全局样式
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-size: 14px;
+  color: var(--text-primary);
+  background-color: var(--background-light);
+}
+
+// Element Plus 主题覆盖
+.el-button--primary {
+  --el-button-bg-color: var(--hsbc-red);
+  --el-button-border-color: var(--hsbc-red);
+  --el-button-hover-bg-color: var(--hsbc-red-light);
+  --el-button-hover-border-color: var(--hsbc-red-light);
+  --el-button-active-bg-color: var(--hsbc-red-dark);
+  --el-button-active-border-color: var(--hsbc-red-dark);
+}
+
+.el-menu--horizontal > .el-menu-item.is-active {
+  border-bottom-color: var(--hsbc-red);
+  color: var(--hsbc-red);
+}
+
+.el-menu-item.is-active {
+  color: var(--hsbc-red);
+  background-color: rgba(219, 0, 17, 0.1);
+}
+
+// 卡片样式
+.portal-card {
+  background: var(--background-white);
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  padding: 20px;
+  
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    
+    .card-title {
+      font-size: 18px;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+  }
+}
+
+// 统计数字样式
+.stat-number {
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--hsbc-red);
+  
+  &.success {
+    color: var(--success-green);
+  }
+  
+  &.warning {
+    color: var(--warning-orange);
+  }
+  
+  &.error {
+    color: var(--error-red);
+  }
+}
+
+// 优先级标签
+.priority-tag {
+  &.urgent {
+    --el-tag-bg-color: rgba(255, 77, 79, 0.1);
+    --el-tag-border-color: #ff4d4f;
+    --el-tag-text-color: #ff4d4f;
+  }
+  
+  &.high {
+    --el-tag-bg-color: rgba(255, 122, 69, 0.1);
+    --el-tag-border-color: #ff7a45;
+    --el-tag-text-color: #ff7a45;
+  }
+  
+  &.normal {
+    --el-tag-bg-color: rgba(24, 144, 255, 0.1);
+    --el-tag-border-color: #1890ff;
+    --el-tag-text-color: #1890ff;
+  }
+  
+  &.low {
+    --el-tag-bg-color: rgba(82, 196, 26, 0.1);
+    --el-tag-border-color: #52c41a;
+    --el-tag-text-color: #52c41a;
+  }
+}
+
+// 分配类型标签
+.assignment-tag {
+  &.user {
+    --el-tag-bg-color: rgba(24, 144, 255, 0.1);
+    --el-tag-border-color: #1890ff;
+    --el-tag-text-color: #1890ff;
+  }
+  
+  &.virtual-group {
+    --el-tag-bg-color: rgba(82, 196, 26, 0.1);
+    --el-tag-border-color: #52c41a;
+    --el-tag-text-color: #52c41a;
+  }
+  
+  &.dept-role {
+    --el-tag-bg-color: rgba(255, 122, 69, 0.1);
+    --el-tag-border-color: #ff7a45;
+    --el-tag-text-color: #ff7a45;
+  }
+  
+  &.delegated {
+    --el-tag-bg-color: rgba(114, 46, 209, 0.1);
+    --el-tag-border-color: #722ed1;
+    --el-tag-text-color: #722ed1;
+  }
+}
+
+// 页面过渡动画
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+// 滚动条样式
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #c1c1c1;
+  border-radius: 3px;
+  
+  &:hover {
+    background-color: #a8a8a8;
+  }
+}
+
+::-webkit-scrollbar-track {
+  background-color: #f1f1f1;
+}
