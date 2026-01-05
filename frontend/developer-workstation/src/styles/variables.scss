@@ -1,0 +1,36 @@
+// HSBC Theme Colors
+$primary-color: #DB0011;
+$success-color: #00A651;
+$warning-color: #FF6600;
+$danger-color: #DB0011;
+$info-color: #333333;
+
+// Text Colors
+$text-primary: #333333;
+$text-regular: #606266;
+$text-secondary: #909399;
+$text-placeholder: #C0C4CC;
+
+// Border Colors
+$border-base: #DCDFE6;
+$border-light: #E4E7ED;
+$border-lighter: #EBEEF5;
+$border-extra-light: #F2F6FC;
+
+// Background Colors
+$bg-base: #FFFFFF;
+$bg-page: #F5F7FA;
+$bg-hover: #F5F7FA;
+
+// Layout
+$header-height: 60px;
+$sidebar-width: 240px;
+$sidebar-collapsed-width: 64px;
+
+// Element Plus Overrides
+:root {
+  --el-color-primary: #{$primary-color};
+  --el-color-success: #{$success-color};
+  --el-color-warning: #{$warning-color};
+  --el-color-danger: #{$danger-color};
+}

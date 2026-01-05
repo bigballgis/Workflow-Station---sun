@@ -1,0 +1,362 @@
+package com.developer.component.impl;
+
+import com.developer.component.FunctionUnitComponent;
+import com.developer.dto.FunctionUnitRequest;
+import com.developer.dto.FunctionUnitResponse;
+import com.developer.dto.ValidationResult;
+import com.developer.entity.*;
+import com.developer.enums.FunctionUnitStatus;
+import com.developer.exception.BusinessException;
+import com.developer.exception.ResourceNotFoundException;
+import com.developer.repository.*;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * 功能单元组件实现
+ */
+@Component
+@Slf4j
+public class FunctionUnitComponentImpl implements FunctionUnitComponent {
+    
+    private final FunctionUnitRepository functionUnitRepository;
+    private final ProcessDefinitionRepository processDefinitionRepository;
+    private final TableDefinitionRepository tableDefinitionRepository;
+    private final FormDefinitionRepository formDefinitionRepository;
+    private final ActionDefinitionRepository actionDefinitionRepository;
+    private final VersionRepository versionRepository;
+    private final IconRepository iconRepository;
+    private final ObjectMapper objectMapper;
+    
+    /**
+     * 简化构造函数，用于测试
+     */
+    public FunctionUnitComponentImpl(FunctionUnitRepository functionUnitRepository) {
+        this(functionUnitRepository, null, null, null, null, null, null, new ObjectMapper());
+    }
+    
+    /**
+     * 完整构造函数
+     */
+    public FunctionUnitComponentImpl(
+            FunctionUnitRepository functionUnitRepository,
+            ProcessDefinitionRepository processDefinitionRepository,
+            TableDefinitionRepository tableDefinitionRepository,
+            FormDefinitionRepository formDefinitionRepository,
+            ActionDefinitionRepository actionDefinitionRepository,
+            VersionRepository versionRepository,
+            IconRepository iconRepository,
+            ObjectMapper objectMapper) {
+        this.functionUnitRepository = functionUnitRepository;
+        this.processDefinitionRepository = processDefinitionRepository;
+        this.tableDefinitionRepository = tableDefinitionRepository;
+        this.formDefinitionRepository = formDefinitionRepository;
+        this.actionDefinitionRepository = actionDefinitionRepository;
+        this.versionRepository = versionRepository;
+        this.iconRepository = iconRepository;
+        this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper();
+    }
+    
+    @Override
+    @Transactional
+    public FunctionUnit create(FunctionUnitRequest request) {
+        if (functionUnitRepository.existsByName(request.getName())) {
+            throw new BusinessException("CONFLICT_NAME_EXISTS", 
+                    "功能单元名称已存在: " + request.getName(),
+                    "请使用其他名称");
+        }
+        
+        FunctionUnit functionUnit = FunctionUnit.builder()
+                .name(request.getName())
+                .description(request.getDescription())
+                .status(FunctionUnitStatus.DRAFT)
+                .build();
+        
+        if (request.getIconId() != null) {
+            Icon icon = iconRepository.findById(request.getIconId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Icon", request.getIconId()));
+            functionUnit.setIcon(icon);
+        }
+        
+        return functionUnitRepository.save(functionUnit);
+    }
+    
+    @Override
+    @Transactional
+    public FunctionUnit update(Long id, FunctionUnitRequest request) {
+        FunctionUnit functionUnit = getById(id);
+        
+        if (functionUnitRepository.existsByNameAndIdNot(request.getName(), id)) {
+            throw new BusinessException("CONFLICT_NAME_EXISTS", 
+                    "功能单元名称已存在: " + request.getName(),
+                    "请使用其他名称");
+        }
+        
+        functionUnit.setName(request.getName());
+        functionUnit.setDescription(request.getDescription());
+        
+        if (request.getIconId() != null) {
+            Icon icon = iconRepository.findById(request.getIconId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Icon", request.getIconId()));
+            functionUnit.setIcon(icon);
+        } else {
+            functionUnit.setIcon(null);
+        }
+        
+        return functionUnitRepository.save(functionUnit);
+    }
+    
+    @Override
+    @Transactional
+    public void delete(Long id) {
+        FunctionUnit functionUnit = getById(id);
+        functionUnitRepository.delete(functionUnit);
+    }
+    
+    @Override
+    @Transactional(readOnly = true)
+    public FunctionUnit getById(Long id) {
+        return functionUnitRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("FunctionUnit", id));
+    }
+    
+    @Override
+    @Transactional(readOnly = true)
+    public Page<FunctionUnitResponse> list(String name, String status, Pageable pageable) {
+        FunctionUnitStatus statusEnum = status != null ? FunctionUnitStatus.valueOf(status) : null;
+        return functionUnitRepository.findByQuery(name, statusEnum, pageable)
+                .map(this::toResponse);
+    }
+    
+    @Override
+    @Transactional
+    public FunctionUnit publish(Long id, String changeLog) {
+        FunctionUnit functionUnit = getById(id);
+        
+        // 验证功能单元完整性
+        ValidationResult validationResult = validate(id);
+        if (!validationResult.isValid()) {
+            throw new BusinessException("BIZ_INVALID_FUNCTION_UNIT", 
+                    "功能单元验证失败，无法发布",
+                    "请修复验证错误后重试");
+        }
+        
+        // 计算新版本号
+        String newVersion = calculateNextVersion(functionUnit.getCurrentVersion());
+        
+        // 创建版本快照
+        try {
+            byte[] snapshotData = createSnapshot(functionUnit);
+            Version version = Version.builder()
+                    .functionUnit(functionUnit)
+                    .versionNumber(newVersion)
+                    .changeLog(changeLog)
+                    .snapshotData(snapshotData)
+                    .publishedBy("system") // TODO: 从安全上下文获取
+                    .build();
+            versionRepository.save(version);
+        } catch (Exception e) {
+            throw new BusinessException("SYS_SNAPSHOT_ERROR", "创建版本快照失败");
+        }
+        
+        // 更新功能单元状态
+        functionUnit.setStatus(FunctionUnitStatus.PUBLISHED);
+        functionUnit.setCurrentVersion(newVersion);
+        
+        return functionUnitRepository.save(functionUnit);
+    }
+    
+    @Override
+    @Transactional
+    public FunctionUnit clone(Long id, String newName) {
+        if (functionUnitRepository.existsByName(newName)) {
+            throw new BusinessException("CONFLICT_NAME_EXISTS", 
+                    "功能单元名称已存在: " + newName,
+                    "请使用其他名称");
+        }
+        
+        FunctionUnit source = getById(id);
+        
+        // 创建新的功能单元
+        FunctionUnit cloned = FunctionUnit.builder()
+                .name(newName)
+                .description(source.getDescription())
+                .icon(source.getIcon())
+                .status(FunctionUnitStatus.DRAFT)
+                .build();
+        cloned = functionUnitRepository.save(cloned);
+        
+        // 克隆流程定义
+        if (source.getProcessDefinition() != null) {
+            ProcessDefinition clonedProcess = ProcessDefinition.builder()
+                    .functionUnit(cloned)
+                    .bpmnXml(source.getProcessDefinition().getBpmnXml())
+                    .build();
+            processDefinitionRepository.save(clonedProcess);
+        }
+        
+        // 克隆表定义
+        Map<Long, TableDefinition> tableMapping = new HashMap<>();
+        for (TableDefinition sourceTable : source.getTableDefinitions()) {
+            TableDefinition clonedTable = cloneTable(sourceTable, cloned);
+            tableMapping.put(sourceTable.getId(), clonedTable);
+        }
+        
+        // 克隆表单定义
+        for (FormDefinition sourceForm : source.getFormDefinitions()) {
+            cloneForm(sourceForm, cloned, tableMapping);
+        }
+        
+        // 克隆动作定义
+        for (ActionDefinition sourceAction : source.getActionDefinitions()) {
+            cloneAction(sourceAction, cloned);
+        }
+        
+        return cloned;
+    }
+    
+    @Override
+    @Transactional(readOnly = true)
+    public ValidationResult validate(Long id) {
+        FunctionUnit functionUnit = getById(id);
+        ValidationResult result = new ValidationResult();
+        
+        // 检查是否有流程定义
+        if (functionUnit.getProcessDefinition() == null) {
+            result.addWarning("MISSING_PROCESS", "功能单元没有流程定义", null);
+        }
+        
+        // 检查是否有主表
+        boolean hasMainTable = functionUnit.getTableDefinitions().stream()
+                .anyMatch(t -> t.getTableType() == com.developer.enums.TableType.MAIN);
+        if (!hasMainTable) {
+            result.addWarning("MISSING_MAIN_TABLE", "功能单元没有主表", null);
+        }
+        
+        // 检查是否有主表单
+        boolean hasMainForm = functionUnit.getFormDefinitions().stream()
+                .anyMatch(f -> f.getFormType() == com.developer.enums.FormType.MAIN);
+        if (!hasMainForm) {
+            result.addWarning("MISSING_MAIN_FORM", "功能单元没有主表单", null);
+        }
+        
+        return result;
+    }
+    
+    @Override
+    public boolean existsByName(String name) {
+        return functionUnitRepository.existsByName(name);
+    }
+    
+    @Override
+    public boolean existsByNameAndIdNot(String name, Long id) {
+        return functionUnitRepository.existsByNameAndIdNot(name, id);
+    }
+    
+    private FunctionUnitResponse toResponse(FunctionUnit entity) {
+        return FunctionUnitResponse.builder()
+                .id(entity.getId())
+                .name(entity.getName())
+                .description(entity.getDescription())
+                .iconId(entity.getIcon() != null ? entity.getIcon().getId() : null)
+                .status(entity.getStatus())
+                .currentVersion(entity.getCurrentVersion())
+                .createdBy(entity.getCreatedBy())
+                .createdAt(entity.getCreatedAt())
+                .updatedBy(entity.getUpdatedBy())
+                .updatedAt(entity.getUpdatedAt())
+                .tableCount(entity.getTableDefinitions().size())
+                .formCount(entity.getFormDefinitions().size())
+                .actionCount(entity.getActionDefinitions().size())
+                .hasProcess(entity.getProcessDefinition() != null)
+                .build();
+    }
+    
+    private String calculateNextVersion(String currentVersion) {
+        if (currentVersion == null || currentVersion.isEmpty()) {
+            return "1.0.0";
+        }
+        String[] parts = currentVersion.split("\\.");
+        int patch = Integer.parseInt(parts[2]) + 1;
+        return parts[0] + "." + parts[1] + "." + patch;
+    }
+    
+    private byte[] createSnapshot(FunctionUnit functionUnit) throws Exception {
+        Map<String, Object> snapshot = new HashMap<>();
+        snapshot.put("name", functionUnit.getName());
+        snapshot.put("description", functionUnit.getDescription());
+        snapshot.put("processXml", functionUnit.getProcessDefinition() != null ? 
+                functionUnit.getProcessDefinition().getBpmnXml() : null);
+        // 添加更多快照数据...
+        return objectMapper.writeValueAsBytes(snapshot);
+    }
+    
+    private TableDefinition cloneTable(TableDefinition source, FunctionUnit target) {
+        TableDefinition cloned = TableDefinition.builder()
+                .functionUnit(target)
+                .tableName(source.getTableName())
+                .tableType(source.getTableType())
+                .description(source.getDescription())
+                .build();
+        cloned = tableDefinitionRepository.save(cloned);
+        
+        // 克隆字段
+        for (FieldDefinition sourceField : source.getFieldDefinitions()) {
+            FieldDefinition clonedField = FieldDefinition.builder()
+                    .tableDefinition(cloned)
+                    .fieldName(sourceField.getFieldName())
+                    .dataType(sourceField.getDataType())
+                    .length(sourceField.getLength())
+                    .precision(sourceField.getPrecision())
+                    .scale(sourceField.getScale())
+                    .nullable(sourceField.getNullable())
+                    .defaultValue(sourceField.getDefaultValue())
+                    .isPrimaryKey(sourceField.getIsPrimaryKey())
+                    .isUnique(sourceField.getIsUnique())
+                    .description(sourceField.getDescription())
+                    .sortOrder(sourceField.getSortOrder())
+                    .build();
+            cloned.getFieldDefinitions().add(clonedField);
+        }
+        
+        return tableDefinitionRepository.save(cloned);
+    }
+    
+    private void cloneForm(FormDefinition source, FunctionUnit target, Map<Long, TableDefinition> tableMapping) {
+        FormDefinition cloned = FormDefinition.builder()
+                .functionUnit(target)
+                .formName(source.getFormName())
+                .formType(source.getFormType())
+                .configJson(new HashMap<>(source.getConfigJson()))
+                .description(source.getDescription())
+                .build();
+        
+        if (source.getBoundTable() != null && tableMapping.containsKey(source.getBoundTable().getId())) {
+            cloned.setBoundTable(tableMapping.get(source.getBoundTable().getId()));
+        }
+        
+        formDefinitionRepository.save(cloned);
+    }
+    
+    private void cloneAction(ActionDefinition source, FunctionUnit target) {
+        ActionDefinition cloned = ActionDefinition.builder()
+                .functionUnit(target)
+                .actionName(source.getActionName())
+                .actionType(source.getActionType())
+                .configJson(new HashMap<>(source.getConfigJson()))
+                .icon(source.getIcon())
+                .buttonColor(source.getButtonColor())
+                .description(source.getDescription())
+                .isDefault(source.getIsDefault())
+                .build();
+        actionDefinitionRepository.save(cloned);
+    }
+}

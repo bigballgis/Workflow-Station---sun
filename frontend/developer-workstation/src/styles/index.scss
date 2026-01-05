@@ -1,0 +1,72 @@
+@use './variables.scss' as *;
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #app {
+  height: 100%;
+  font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif;
+}
+
+// Scrollbar
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #C0C4CC;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-track {
+  background-color: #F5F7FA;
+}
+
+// Common Classes
+.flex {
+  display: flex;
+}
+
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.text-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// Page Container
+.page-container {
+  padding: 20px;
+  background-color: $bg-page;
+  min-height: calc(100vh - #{$header-height});
+}
+
+// Card
+.card {
+  background-color: $bg-base;
+  border-radius: 4px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+// Table Actions
+.table-actions {
+  .el-button + .el-button {
+    margin-left: 8px;
+  }
+}

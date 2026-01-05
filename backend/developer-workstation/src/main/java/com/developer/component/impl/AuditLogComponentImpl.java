@@ -1,0 +1,73 @@
+package com.developer.component.impl;
+
+import com.developer.component.AuditLogComponent;
+import com.developer.entity.OperationLog;
+import com.developer.repository.OperationLogRepository;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+
+/**
+ * 审计日志组件实现
+ */
+@Component
+@Slf4j
+public class AuditLogComponentImpl implements AuditLogComponent {
+    
+    private final OperationLogRepository operationLogRepository;
+    
+    /**
+     * 构造函数
+     */
+    public AuditLogComponentImpl(OperationLogRepository operationLogRepository) {
+        this.operationLogRepository = operationLogRepository;
+    }
+    
+    @Override
+    @Transactional
+    public void log(String operationType, String targetType, Long targetId, String description) {
+        log(operationType, targetType, targetId, description, null);
+    }
+    
+    @Override
+    @Transactional
+    public void log(String operationType, String targetType, Long targetId, 
+                    String description, String details) {
+        OperationLog operationLog = OperationLog.builder()
+                .operationType(operationType)
+                .targetType(targetType)
+                .targetId(targetId)
+                .description(description)
+                .details(details)
+                .operator("system") // TODO: 从安全上下文获取
+                .operationTime(LocalDateTime.now())
+                .build();
+        operationLogRepository.save(operationLog);
+        log.debug("Audit log: {} {} {} - {}", operationType, targetType, targetId, description);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<OperationLog> query(String operationType, String targetType, Long targetId,
+                                     LocalDateTime startTime, LocalDateTime endTime, Pageable pageable) {
+        return operationLogRepository.findByQuery(operationType, targetType, targetId, 
+                startTime, endTime, pageable);
+    }
+    
+    @Override
+    @Transactional(readOnly = true)
+    public Page<OperationLog> getByOperator(String operator, Pageable pageable) {
+        return operationLogRepository.findByOperator(operator, pageable);
+    }
+    
+    @Override
+    @Transactional(readOnly = true)
+    public Page<OperationLog> getByTarget(String targetType, Long targetId, Pageable pageable) {
+        return operationLogRepository.findByTargetTypeAndTargetId(targetType, targetId, pageable);
+    }
+}

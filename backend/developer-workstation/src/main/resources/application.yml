@@ -1,0 +1,60 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: developer-workstation
+  
+  datasource:
+    url: jdbc:postgresql://localhost:5432/developer_workstation
+    username: postgres
+    password: postgres
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      idle-timeout: 300000
+      connection-timeout: 20000
+  
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+  
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+  
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+
+# Security
+security:
+  jwt:
+    secret: ${JWT_SECRET:developer-workstation-secret-key-for-jwt-token-generation-min-256-bits}
+    expiration: 86400000  # 24 hours
+  
+  rate-limit:
+    requests-per-minute: 100
+
+# OpenAPI
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+
+# Logging
+logging:
+  level:
+    com.developer: DEBUG
+    org.springframework.security: INFO
+    org.hibernate.SQL: DEBUG
