@@ -1,6 +1,6 @@
 package com.platform.gateway.filter;
 
-import com.platform.gateway.config.GatewayProperties;
+import com.platform.gateway.config.PlatformGatewayProperties;
 import com.platform.security.service.JwtTokenService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,7 +29,7 @@ public class AuthenticationFilter implements GatewayFilter, Ordered {
     private static final String USER_ROLES_HEADER = "X-User-Roles";
     
     private final JwtTokenService jwtTokenService;
-    private final GatewayProperties gatewayProperties;
+    private final PlatformGatewayProperties gatewayProperties;
     private final AntPathMatcher pathMatcher = new AntPathMatcher();
     
     @Override

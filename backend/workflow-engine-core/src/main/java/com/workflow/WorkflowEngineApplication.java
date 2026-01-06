@@ -10,7 +10,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
  * 工作流引擎核心应用程序
  * 基于Flowable 7.0.0 + Spring Boot 3.x + PostgreSQL 16.5
  */
-@SpringBootApplication
+@SpringBootApplication(scanBasePackages = {"com.workflow", "com.platform.cache"})
 @EnableKafka
 @EnableAsync
 @EnableTransactionManagement

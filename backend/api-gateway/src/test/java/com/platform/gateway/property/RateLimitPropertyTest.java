@@ -1,6 +1,6 @@
 package com.platform.gateway.property;
 
-import com.platform.gateway.config.GatewayProperties;
+import com.platform.gateway.config.PlatformGatewayProperties;
 import net.jqwik.api.*;
 import net.jqwik.api.constraints.IntRange;
 import net.jqwik.api.constraints.Positive;
@@ -100,7 +100,7 @@ class RateLimitPropertyTest {
             @ForAll @IntRange(min = 10, max = 100) int defaultLimit,
             @ForAll @IntRange(min = 1, max = 9) int pathLimit) {
         
-        GatewayProperties.RateLimitConfig config = new GatewayProperties.RateLimitConfig();
+        PlatformGatewayProperties.RateLimitConfig config = new PlatformGatewayProperties.RateLimitConfig();
         config.setDefaultLimit(defaultLimit);
         config.setPathLimits(Map.of("/api/auth/login", pathLimit));
         
@@ -115,7 +115,7 @@ class RateLimitPropertyTest {
     void wildcardPathPatternsShouldMatch(
             @ForAll @IntRange(min = 1, max = 50) int limit) {
         
-        GatewayProperties.RateLimitConfig config = new GatewayProperties.RateLimitConfig();
+        PlatformGatewayProperties.RateLimitConfig config = new PlatformGatewayProperties.RateLimitConfig();
         config.setDefaultLimit(100);
         config.setPathLimits(Map.of("/api/workflow/**", limit));
         
@@ -147,7 +147,7 @@ class RateLimitPropertyTest {
         }
     }
     
-    private int getEffectiveLimit(GatewayProperties.RateLimitConfig config, String path) {
+    private int getEffectiveLimit(PlatformGatewayProperties.RateLimitConfig config, String path) {
         for (Map.Entry<String, Integer> entry : config.getPathLimits().entrySet()) {
             if (matchesPathPattern(entry.getKey(), path)) {
                 return entry.getValue();

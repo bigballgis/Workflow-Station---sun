@@ -1,6 +1,6 @@
 package com.platform.gateway.filter;
 
-import com.platform.gateway.config.GatewayProperties;
+import com.platform.gateway.config.PlatformGatewayProperties;
 import io.micrometer.tracing.Tracer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,7 +28,7 @@ public class RequestLoggingFilter implements GatewayFilter, Ordered {
     private static final String TRACE_ID_HEADER = "X-Trace-Id";
     private static final String REQUEST_START_TIME = "requestStartTime";
     
-    private final GatewayProperties gatewayProperties;
+    private final PlatformGatewayProperties gatewayProperties;
     private final Tracer tracer;
     
     @Override

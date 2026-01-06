@@ -15,7 +15,7 @@ public class PlatformException extends RuntimeException {
     private final Map<String, Object> details;
     
     public PlatformException(ErrorCode errorCode) {
-        super(errorCode.getDefaultMessage());
+        super(errorCode.getMessage());
         this.errorCode = errorCode;
         this.details = null;
     }

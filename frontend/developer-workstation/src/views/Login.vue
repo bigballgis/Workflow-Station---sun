@@ -2,6 +2,32 @@
   <div class="login-container">
     <div class="login-card">
       <h2 class="login-title">开发者工作站</h2>
+      
+      <!-- 测试用户快速选择 (仅开发环境) -->
+      <div v-if="isDev" class="test-user-section">
+        <el-divider content-position="center">
+          <span class="test-user-label">测试用户快速登录</span>
+        </el-divider>
+        <el-select 
+          v-model="selectedTestUser" 
+          placeholder="选择测试用户" 
+          @change="onTestUserSelect"
+          class="test-user-select"
+        >
+          <el-option
+            v-for="user in testUsers"
+            :key="user.username"
+            :label="`${user.name} (${user.role})`"
+            :value="user.username"
+          >
+            <div class="test-user-option">
+              <span class="user-name">{{ user.name }}</span>
+              <el-tag size="small" :type="user.tagType">{{ user.role }}</el-tag>
+            </div>
+          </el-option>
+        </el-select>
+      </div>
+
       <el-form ref="formRef" :model="form" :rules="rules" @submit.prevent="handleLogin">
         <el-form-item prop="username">
           <el-input v-model="form.username" placeholder="用户名" prefix-icon="User" />
@@ -24,11 +50,24 @@
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, type FormInstance } from 'element-plus'
-import api from '@/api'
 
 const router = useRouter()
 const formRef = ref<FormInstance>()
 const loading = ref(false)
+
+// 开发环境检测
+const isDev = import.meta.env.DEV
+
+// 测试用户数据 (仅开发环境使用)
+const testUsers = [
+  { username: 'dev_lead', password: 'dev123', name: '开发组长', role: '开发组长', tagType: 'danger' as const },
+  { username: 'senior_dev', password: 'dev123', name: '高级开发', role: '高级开发', tagType: 'warning' as const },
+  { username: 'developer', password: 'dev123', name: '开发人员', role: '开发人员', tagType: 'success' as const },
+  { username: 'designer', password: 'dev123', name: '流程设计师', role: '设计师', tagType: 'info' as const },
+  { username: 'tester', password: 'dev123', name: '测试人员', role: '测试', tagType: 'primary' as const },
+]
+
+const selectedTestUser = ref('')
 
 const form = reactive({
   username: '',
@@ -40,16 +79,28 @@ const rules = {
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }]
 }
 
+// 选择测试用户时自动填充
+const onTestUserSelect = (username: string) => {
+  const user = testUsers.find(u => u.username === username)
+  if (user) {
+    form.username = user.username
+    form.password = user.password
+    ElMessage.info(`已选择: ${user.name}`)
+  }
+}
+
 async function handleLogin() {
   await formRef.value?.validate()
   loading.value = true
   try {
-    const res = await api.post('/auth/login', form)
-    localStorage.setItem('token', res.data.token)
+    // Mock login for development
+    await new Promise(resolve => setTimeout(resolve, 500))
+    localStorage.setItem('token', 'mock_token_' + Date.now())
+    localStorage.setItem('userId', form.username)
     router.push('/')
     ElMessage.success('登录成功')
   } catch (e) {
-    // Error handled by interceptor
+    ElMessage.error('登录失败')
   } finally {
     loading.value = false
   }
@@ -81,5 +132,30 @@ async function handleLogin() {
 
 .login-btn {
   width: 100%;
+}
+
+.test-user-section {
+  margin-bottom: 10px;
+}
+
+.test-user-label {
+  font-size: 12px;
+  color: #909399;
+}
+
+.test-user-select {
+  width: 100%;
+  margin-bottom: 16px;
+}
+
+.test-user-option {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.user-name {
+  font-size: 14px;
 }
 </style>

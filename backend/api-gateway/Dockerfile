@@ -1,23 +1,4 @@
-# Multi-stage build for API Gateway
-FROM eclipse-temurin:17-jdk-alpine AS builder
-
-WORKDIR /app
-
-# Copy Maven wrapper and pom.xml
-COPY mvnw .
-COPY .mvn .mvn
-COPY pom.xml .
-
-# Download dependencies
-RUN ./mvnw dependency:go-offline -B
-
-# Copy source code
-COPY src src
-
-# Build the application
-RUN ./mvnw package -DskipTests -B
-
-# Runtime stage
+# Runtime image for API Gateway (uses pre-built JAR)
 FROM eclipse-temurin:17-jre-alpine
 
 WORKDIR /app
@@ -25,8 +6,8 @@ WORKDIR /app
 # Add non-root user
 RUN addgroup -S platform && adduser -S platform -G platform
 
-# Copy the built artifact
-COPY --from=builder /app/target/*.jar app.jar
+# Copy the pre-built artifact
+COPY target/api-gateway-*.jar app.jar
 
 # Set ownership
 RUN chown -R platform:platform /app

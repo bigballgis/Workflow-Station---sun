@@ -10,12 +10,12 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Gateway configuration properties.
+ * Platform Gateway configuration properties.
  */
 @Data
 @Configuration
 @ConfigurationProperties(prefix = "gateway")
-public class GatewayProperties {
+public class PlatformGatewayProperties {
     
     /**
      * Rate limiting configuration.

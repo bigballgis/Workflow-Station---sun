@@ -45,7 +45,7 @@ public class GlobalErrorHandler implements ErrorWebExceptionHandler {
         
         ErrorResponse errorResponse = ErrorResponse.builder()
                 .errorCode(errorCode.getCode())
-                .message(ex.getMessage() != null ? ex.getMessage() : errorCode.getDefaultMessage())
+                .message(ex.getMessage() != null ? ex.getMessage() : errorCode.getMessage())
                 .traceId(traceId)
                 .timestamp(LocalDateTime.now())
                 .path(exchange.getRequest().getPath().value())

@@ -14,8 +14,8 @@
 
     <modules>
         <module>backend/platform-common</module>
-        <module>backend/platform-security</module>
         <module>backend/platform-cache</module>
+        <module>backend/platform-security</module>
         <module>backend/platform-messaging</module>
         <module>backend/api-gateway</module>
         <module>backend/workflow-engine-core</module>

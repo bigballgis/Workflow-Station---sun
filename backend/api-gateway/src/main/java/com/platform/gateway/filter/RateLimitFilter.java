@@ -1,6 +1,6 @@
 package com.platform.gateway.filter;
 
-import com.platform.gateway.config.GatewayProperties;
+import com.platform.gateway.config.PlatformGatewayProperties;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cloud.gateway.filter.GatewayFilter;
@@ -34,7 +34,7 @@ public class RateLimitFilter implements GatewayFilter, Ordered {
     private static final String RATE_LIMIT_RESET_HEADER = "X-RateLimit-Reset";
     
     private final ReactiveRedisTemplate<String, String> redisTemplate;
-    private final GatewayProperties gatewayProperties;
+    private final PlatformGatewayProperties gatewayProperties;
     private final AntPathMatcher pathMatcher = new AntPathMatcher();
     
     // Lua script for atomic rate limiting
@@ -88,10 +88,9 @@ public class RateLimitFilter implements GatewayFilter, Ordered {
     
     private Mono<Long> checkRateLimit(String key, int limit, int windowSeconds) {
         RedisScript<Long> script = RedisScript.of(RATE_LIMIT_SCRIPT, Long.class);
-        return redisTemplate.execute(script, 
-                Collections.singletonList(key),
-                String.valueOf(limit),
-                String.valueOf(windowSeconds))
+        java.util.List<String> keys = Collections.singletonList(key);
+        java.util.List<String> args = java.util.List.of(String.valueOf(limit), String.valueOf(windowSeconds));
+        return redisTemplate.execute(script, keys, args)
                 .next()
                 .defaultIfEmpty(1L);
     }

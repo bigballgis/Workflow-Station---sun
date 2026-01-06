@@ -11,6 +11,7 @@ const routes: RouteRecordRaw[] = [
     path: '/',
     component: () => import('@/layouts/MainLayout.vue'),
     redirect: '/function-units',
+    meta: { requiresAuth: true },
     children: [
       {
         path: 'function-units',
@@ -37,6 +38,19 @@ const routes: RouteRecordRaw[] = [
 const router = createRouter({
   history: createWebHistory(),
   routes
+})
+
+// 路由守卫
+router.beforeEach((to, _from, next) => {
+  document.title = `${(to.meta as any)?.title || '开发者工作站'} - Developer Workstation`
+  
+  // 检查登录状态
+  const token = localStorage.getItem('token')
+  if (to.path !== '/login' && !token) {
+    next('/login')
+  } else {
+    next()
+  }
 })
 
 export default router

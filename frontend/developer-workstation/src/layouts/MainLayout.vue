@@ -7,7 +7,7 @@
       <div class="header-right">
         <el-dropdown @command="handleLanguageChange">
           <span class="language-trigger">
-            <el-icon><Globe /></el-icon>
+            <el-icon><Connection /></el-icon>
             {{ currentLanguageLabel }}
           </span>
           <template #dropdown>
@@ -54,7 +54,7 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { Folder, Picture, Globe } from '@element-plus/icons-vue'
+import { Folder, Picture, Connection } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const router = useRouter()

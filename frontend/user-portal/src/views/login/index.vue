@@ -5,6 +5,33 @@
         <h1>工作流平台</h1>
         <p>用户门户</p>
       </div>
+      
+      <!-- 测试用户快速选择 (仅开发环境) -->
+      <div v-if="isDev" class="test-user-section">
+        <el-divider content-position="center">
+          <span class="test-user-label">测试用户快速登录</span>
+        </el-divider>
+        <el-select 
+          v-model="selectedTestUser" 
+          placeholder="选择测试用户" 
+          @change="onTestUserSelect"
+          size="large"
+          class="test-user-select"
+        >
+          <el-option
+            v-for="user in testUsers"
+            :key="user.username"
+            :label="`${user.name} (${user.role})`"
+            :value="user.username"
+          >
+            <div class="test-user-option">
+              <span class="user-name">{{ user.name }}</span>
+              <el-tag size="small" :type="user.tagType">{{ user.role }}</el-tag>
+            </div>
+          </el-option>
+        </el-select>
+      </div>
+
       <el-form ref="formRef" :model="form" :rules="rules" class="login-form">
         <el-form-item prop="username">
           <el-input
@@ -51,6 +78,21 @@ const router = useRouter()
 const formRef = ref<FormInstance>()
 const loading = ref(false)
 
+// 开发环境检测
+const isDev = import.meta.env.DEV
+
+// 测试用户数据 (仅开发环境使用)
+const testUsers = [
+  { username: 'manager', password: 'user123', name: '部门经理', role: '经理', tagType: 'danger' as const },
+  { username: 'team_lead', password: 'user123', name: '团队主管', role: '主管', tagType: 'warning' as const },
+  { username: 'employee_a', password: 'user123', name: '员工张三', role: '员工', tagType: 'success' as const },
+  { username: 'employee_b', password: 'user123', name: '员工李四', role: '员工', tagType: 'success' as const },
+  { username: 'hr_staff', password: 'user123', name: 'HR专员', role: 'HR', tagType: 'info' as const },
+  { username: 'finance', password: 'user123', name: '财务人员', role: '财务', tagType: 'primary' as const },
+]
+
+const selectedTestUser = ref('')
+
 const form = reactive({
   username: '',
   password: ''
@@ -59,6 +101,16 @@ const form = reactive({
 const rules = {
   username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }]
+}
+
+// 选择测试用户时自动填充
+const onTestUserSelect = (username: string) => {
+  const user = testUsers.find(u => u.username === username)
+  if (user) {
+    form.username = user.username
+    form.password = user.password
+    ElMessage.info(`已选择: ${user.name}`)
+  }
 }
 
 const handleLogin = async () => {
@@ -125,5 +177,30 @@ const handleLogin = async () => {
   .login-btn {
     width: 100%;
   }
+}
+
+.test-user-section {
+  margin-bottom: 10px;
+}
+
+.test-user-label {
+  font-size: 12px;
+  color: #909399;
+}
+
+.test-user-select {
+  width: 100%;
+  margin-bottom: 16px;
+}
+
+.test-user-option {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+}
+
+.user-name {
+  font-size: 14px;
 }
 </style>
