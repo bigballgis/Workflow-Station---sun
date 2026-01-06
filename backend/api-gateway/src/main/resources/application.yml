@@ -11,26 +11,33 @@ spring:
   cloud:
     gateway:
       routes:
+        # Authentication routes - handled by workflow-engine for now
+        - id: auth-service
+          uri: ${WORKFLOW_ENGINE_URL:http://workflow-engine:8080}
+          predicates:
+            - Path=/api/v1/auth/**
+          filters:
+            - StripPrefix=0
         - id: workflow-engine
-          uri: lb://workflow-engine
+          uri: ${WORKFLOW_ENGINE_URL:http://workflow-engine:8080}
           predicates:
             - Path=/api/workflow/**
           filters:
             - StripPrefix=1
         - id: admin-center
-          uri: lb://admin-center
+          uri: ${ADMIN_CENTER_URL:http://admin-center:8080}
           predicates:
             - Path=/api/admin/**
           filters:
             - StripPrefix=1
         - id: developer-workstation
-          uri: lb://developer-workstation
+          uri: ${DEVELOPER_WORKSTATION_URL:http://developer-workstation:8080}
           predicates:
             - Path=/api/dev/**
           filters:
             - StripPrefix=1
         - id: user-portal
-          uri: lb://user-portal
+          uri: ${USER_PORTAL_URL:http://user-portal:8080}
           predicates:
             - Path=/api/portal/**
           filters:
@@ -65,8 +72,17 @@ platform:
       default-limit: 100
       default-duration: 60
       endpoints:
+        /api/v1/auth/login: 10
+        /api/v1/auth/refresh: 20
         /api/auth/login: 10
         /api/auth/register: 5
+    # Public endpoints that don't require authentication
+    public-paths:
+      - /api/v1/auth/login
+      - /api/v1/auth/refresh
+      - /actuator/**
+      - /swagger-ui/**
+      - /v3/api-docs/**
 
 # JWT Configuration
 jwt:

@@ -102,10 +102,12 @@
 import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { ElMessage } from 'element-plus'
 import {
   HomeFilled, List, Plus, Document, Share, Key, Bell, Setting,
   ArrowDown, SwitchButton, Fold, Expand
 } from '@element-plus/icons-vue'
+import { logout as authLogout, clearAuth, getUser } from '@/api/auth'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -113,9 +115,12 @@ const router = useRouter()
 
 const isCollapsed = ref(false)
 const unreadCount = ref(5)
-const userName = ref('张三')
-const userAvatar = ref('')
 const cachedViews = ref(['Dashboard', 'Tasks', 'MyApplications'])
+
+// Get current user info
+const currentUser = computed(() => getUser())
+const userName = computed(() => currentUser.value?.displayName || currentUser.value?.username || '用户')
+const userAvatar = ref('')
 
 const activeMenu = computed(() => route.path)
 
@@ -127,13 +132,20 @@ const goToNotifications = () => {
   router.push('/notifications')
 }
 
-const handleCommand = (command: string) => {
+const handleCommand = async (command: string) => {
   if (command === 'settings') {
     router.push('/settings')
   } else if (command === 'logout') {
-    localStorage.removeItem('token')
-    localStorage.removeItem('userId')
-    router.push('/login')
+    try {
+      await authLogout()
+      ElMessage.success('已退出登录')
+    } catch (error) {
+      // Even if API fails, still clear local auth
+      console.error('Logout API error:', error)
+    } finally {
+      clearAuth()
+      router.push('/login')
+    }
   }
 }
 </script>

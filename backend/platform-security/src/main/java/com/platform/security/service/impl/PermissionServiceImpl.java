@@ -10,6 +10,7 @@ import com.platform.security.repository.PermissionRepository;
 import com.platform.security.service.PermissionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -23,6 +24,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@ConditionalOnBean(PermissionRepository.class)
 public class PermissionServiceImpl implements PermissionService {
     
     private static final String PERMISSION_CACHE_PREFIX = "permission:user:";

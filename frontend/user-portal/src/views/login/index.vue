@@ -73,6 +73,7 @@ import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, FormInstance } from 'element-plus'
 import { User, Lock } from '@element-plus/icons-vue'
+import { login as authLogin, saveTokens, saveUser } from '@/api/auth'
 
 const router = useRouter()
 const formRef = ref<FormInstance>()
@@ -120,17 +121,22 @@ const handleLogin = async () => {
     if (valid) {
       loading.value = true
       try {
-        // 模拟登录
-        await new Promise(resolve => setTimeout(resolve, 1000))
+        // Call real login API
+        const response = await authLogin({
+          username: form.username,
+          password: form.password
+        })
         
-        // 保存token和用户信息
-        localStorage.setItem('token', 'mock_token_' + Date.now())
-        localStorage.setItem('userId', form.username)
+        // Save tokens and user info
+        saveTokens(response.accessToken, response.refreshToken)
+        saveUser(response.user)
+        localStorage.setItem('userId', response.user.userId)
         
         ElMessage.success('登录成功')
         router.push('/dashboard')
-      } catch (error) {
-        ElMessage.error('登录失败')
+      } catch (error: any) {
+        const message = error.response?.data?.message || error.message || '登录失败'
+        ElMessage.error(message)
       } finally {
         loading.value = false
       }

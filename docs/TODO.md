@@ -9,24 +9,25 @@
 
 ## 认证与授权模块
 
-### TODO-001: 完善三个前端的登录功能使用真实API
+### ✅ TODO-001: 完善三个前端的登录功能使用真实API
 - **优先级**: 🔴 高
-- **状态**: ⬜ 待开始
+- **状态**: ✅ 已完成
+- **完成日期**: 2026-01-06
 - **描述**: 当前三个前端（管理员中心、开发者工作站、用户门户）使用 mock 登录，需要实现真实的后端认证 API
 - **涉及文件**:
   - `frontend/admin-center/src/views/login/index.vue`
   - `frontend/developer-workstation/src/views/Login.vue`
   - `frontend/user-portal/src/views/login/index.vue`
-  - `backend/platform-security/` (需新增认证模块)
-- **子任务**:
-  - [ ] 1.1 创建用户实体和数据库表
-  - [ ] 1.2 实现 JWT 认证服务
-  - [ ] 1.3 创建登录 API 端点 (`POST /api/v1/auth/login`)
-  - [ ] 1.4 创建登出 API 端点 (`POST /api/v1/auth/logout`)
-  - [ ] 1.5 创建刷新 Token API (`POST /api/v1/auth/refresh`)
-  - [ ] 1.6 更新前端登录组件调用真实 API
-  - [ ] 1.7 实现前端 Token 刷新机制
-  - [ ] 1.8 添加测试用户数据初始化脚本
+  - `backend/platform-security/` (认证模块)
+- **已完成子任务**:
+  - [x] 1.1 创建用户实体和数据库表
+  - [x] 1.2 实现 JWT 认证服务
+  - [x] 1.3 创建登录 API 端点 (`POST /api/v1/auth/login`)
+  - [x] 1.4 创建登出 API 端点 (`POST /api/v1/auth/logout`)
+  - [x] 1.5 创建刷新 Token API (`POST /api/v1/auth/refresh`)
+  - [x] 1.6 更新前端登录组件调用真实 API
+  - [x] 1.7 实现前端 Token 刷新机制
+  - [x] 1.8 添加测试用户数据初始化脚本
 
 ---
 
@@ -188,6 +189,10 @@
 
 ## 已完成任务
 
+### ✅ TODO-001: 完善三个前端的登录功能使用真实API
+- **完成日期**: 2026-01-06
+- **描述**: 实现完整的 JWT 认证系统，包括后端认证服务、前端登录/登出功能、Token 刷新机制
+
 ### ✅ DONE-001: 搭建基础项目框架
 - **完成日期**: 2026-01-06
 - **描述**: 完成前后端项目基础架构搭建
@@ -207,3 +212,4 @@
 | 日期 | 更新内容 |
 |------|----------|
 | 2026-01-06 | 创建待办任务清单 |
+| 2026-01-06 | 完成 TODO-001: 认证功能实现 |

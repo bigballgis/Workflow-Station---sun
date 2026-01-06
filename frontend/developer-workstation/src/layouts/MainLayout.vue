@@ -21,6 +21,7 @@
         <el-dropdown>
           <span class="user-trigger">
             <el-avatar :size="32" icon="User" />
+            <span class="username">{{ displayName }}</span>
           </span>
           <template #dropdown>
             <el-dropdown-menu>
@@ -54,13 +55,19 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { ElMessage } from 'element-plus'
 import { Folder, Picture, Connection } from '@element-plus/icons-vue'
+import { logout as authLogout, clearAuth, getUser } from '@/api/auth'
 
 const route = useRoute()
 const router = useRouter()
 const { locale } = useI18n()
 
 const activeMenu = computed(() => route.path)
+
+// Get current user info
+const currentUser = computed(() => getUser())
+const displayName = computed(() => currentUser.value?.displayName || currentUser.value?.username || 'Developer')
 
 const languageLabels: Record<string, string> = {
   'zh-CN': '简体中文',
@@ -75,9 +82,17 @@ function handleLanguageChange(lang: string) {
   localStorage.setItem('locale', lang)
 }
 
-function handleLogout() {
-  localStorage.removeItem('token')
-  router.push('/login')
+async function handleLogout() {
+  try {
+    await authLogout()
+    ElMessage.success('已退出登录')
+  } catch (error) {
+    // Even if API fails, still clear local auth
+    console.error('Logout API error:', error)
+  } finally {
+    clearAuth()
+    router.push('/login')
+  }
 }
 </script>
 
@@ -112,6 +127,14 @@ function handleLogout() {
   gap: 8px;
   cursor: pointer;
   color: white;
+}
+
+.username {
+  font-size: 14px;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .sidebar {

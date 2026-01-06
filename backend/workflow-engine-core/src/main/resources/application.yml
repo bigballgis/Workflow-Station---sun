@@ -6,6 +6,8 @@ spring:
     name: workflow-engine
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:dev}
+  main:
+    allow-bean-definition-overriding: true
 
   # Database Configuration
   datasource:
@@ -69,6 +71,7 @@ flowable:
 jwt:
   secret: ${JWT_SECRET:your-256-bit-secret-key-for-development-only}
   expiration: 86400000
+  refresh-expiration: 604800000
 
 # Platform Configuration
 platform:

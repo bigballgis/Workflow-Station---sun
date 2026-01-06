@@ -50,6 +50,7 @@
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, type FormInstance } from 'element-plus'
+import { login as authLogin, saveTokens, saveUser } from '@/api/auth'
 
 const router = useRouter()
 const formRef = ref<FormInstance>()
@@ -93,14 +94,22 @@ async function handleLogin() {
   await formRef.value?.validate()
   loading.value = true
   try {
-    // Mock login for development
-    await new Promise(resolve => setTimeout(resolve, 500))
-    localStorage.setItem('token', 'mock_token_' + Date.now())
-    localStorage.setItem('userId', form.username)
+    // Call real login API
+    const response = await authLogin({
+      username: form.username,
+      password: form.password
+    })
+    
+    // Save tokens and user info
+    saveTokens(response.accessToken, response.refreshToken)
+    saveUser(response.user)
+    localStorage.setItem('userId', response.user.userId)
+    
     router.push('/')
     ElMessage.success('登录成功')
-  } catch (e) {
-    ElMessage.error('登录失败')
+  } catch (error: any) {
+    const message = error.response?.data?.message || error.message || '登录失败'
+    ElMessage.error(message)
   } finally {
     loading.value = false
   }

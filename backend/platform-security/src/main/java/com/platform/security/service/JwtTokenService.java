@@ -95,4 +95,21 @@ public interface JwtTokenService {
      * @return Remaining validity time in seconds, or 0 if expired
      */
     long getRemainingValiditySeconds(String token);
+    
+    /**
+     * Add a token to the blacklist.
+     * Validates: Requirements 3.2
+     * 
+     * @param token JWT token to blacklist
+     */
+    void blacklistToken(String token);
+    
+    /**
+     * Check if a token is blacklisted.
+     * Validates: Requirements 3.3
+     * 
+     * @param token JWT token to check
+     * @return true if token is blacklisted, false otherwise
+     */
+    boolean isBlacklisted(String token);
 }

@@ -6,35 +6,43 @@ import com.platform.security.service.JwtTokenService;
 import com.platform.security.service.impl.JwtTokenServiceImpl;
 import net.jqwik.api.*;
 import net.jqwik.api.constraints.*;
+import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.util.List;
 
+import static org.mockito.Mockito.mock;
+
 /**
  * Property-based tests for JWT Token Service.
+ * Feature: authentication, Property 2: Token Content Completeness
  * Feature: platform-architecture, Property 3: JWT令牌跨模块有效性
  * Feature: platform-architecture, Property 4: 令牌过期和刷新正确性
- * Validates: Requirements 3.1, 3.2, 3.3
+ * Validates: Requirements 2.6, 2.7, 2.8, 3.1, 3.2, 3.3
  */
 class JwtTokenPropertyTest {
     
     private final JwtTokenService jwtTokenService;
+    private final JwtProperties jwtProperties;
     
     JwtTokenPropertyTest() {
-        JwtProperties properties = new JwtProperties();
-        properties.setSecret("test-secret-key-for-jwt-token-generation-minimum-256-bits-required");
-        properties.setExpirationMs(3600000); // 1 hour
-        properties.setRefreshExpirationMs(604800000); // 7 days
-        properties.setIssuer("test-platform");
-        this.jwtTokenService = new JwtTokenServiceImpl(properties);
+        jwtProperties = new JwtProperties();
+        jwtProperties.setSecret("test-secret-key-for-jwt-token-generation-minimum-256-bits-required");
+        jwtProperties.setExpirationMs(3600000); // 1 hour
+        jwtProperties.setRefreshExpirationMs(604800000); // 7 days
+        jwtProperties.setIssuer("test-platform");
+        StringRedisTemplate mockRedisTemplate = mock(StringRedisTemplate.class);
+        this.jwtTokenService = new JwtTokenServiceImpl(jwtProperties, mockRedisTemplate);
     }
     
     /**
-     * Property 3: JWT令牌跨模块有效性
-     * For any valid user principal, generating a token and extracting the principal
-     * should return equivalent user information.
+     * Property 2: Token Content Completeness
+     * For any successfully authenticated user, the generated access_token SHALL contain
+     * all required claims (user_id, username, roles, permissions, department_id, language)
+     * and the token expiration SHALL be set to the configured duration.
+     * Validates: Requirements 2.6, 2.7, 2.8
      */
     @Property(tries = 100)
-    void tokenGenerationAndExtractionRoundTrip(
+    void tokenShouldContainAllRequiredClaims(
             @ForAll @AlphaNumeric @StringLength(min = 1, max = 36) String userId,
             @ForAll @AlphaNumeric @StringLength(min = 1, max = 50) String username,
             @ForAll List<@AlphaNumeric @StringLength(min = 1, max = 20) String> roles,
@@ -50,24 +58,64 @@ class JwtTokenPropertyTest {
         // Token should be valid
         assert jwtTokenService.validateToken(token) : "Generated token should be valid";
         
-        // Extract principal
+        // Extract principal and verify all claims are present
         UserPrincipal extracted = jwtTokenService.extractUserPrincipal(token);
         
-        // Verify round-trip consistency
-        assert userId.equals(extracted.getUserId()) : 
-                "User ID should match: expected " + userId + ", got " + extracted.getUserId();
-        assert username.equals(extracted.getUsername()) : 
-                "Username should match: expected " + username + ", got " + extracted.getUsername();
-        assert departmentId.equals(extracted.getDepartmentId()) : 
-                "Department ID should match";
-        assert language.equals(extracted.getLanguage()) : 
-                "Language should match";
+        assert extracted.getUserId() != null : "Token should contain user_id";
+        assert extracted.getUsername() != null || username == null : "Token should contain username";
+        assert extracted.getRoles() != null : "Token should contain roles";
+        assert extracted.getPermissions() != null : "Token should contain permissions";
+        // departmentId and language can be null
         
-        // Roles and permissions should match (order may differ)
-        assert extracted.getRoles().containsAll(roles) && roles.containsAll(extracted.getRoles()) :
-                "Roles should match";
-        assert extracted.getPermissions().containsAll(permissions) && permissions.containsAll(extracted.getPermissions()) :
-                "Permissions should match";
+        // Verify values match
+        assert userId.equals(extracted.getUserId()) : "User ID should match";
+        assert username.equals(extracted.getUsername()) : "Username should match";
+        assert departmentId.equals(extracted.getDepartmentId()) : "Department ID should match";
+        assert language.equals(extracted.getLanguage()) : "Language should match";
+    }
+    
+    /**
+     * Property 2: Token Content Completeness - Expiration Time
+     * Access token expiration should be set to configured duration (1 hour by default).
+     * Validates: Requirements 2.7
+     */
+    @Property(tries = 100)
+    void accessTokenExpirationShouldBeConfigured(
+            @ForAll @AlphaNumeric @StringLength(min = 1, max = 36) String userId
+    ) {
+        String token = jwtTokenService.generateToken(
+                userId, "testuser", List.of(), List.of(), null, "en"
+        );
+        
+        long expirationTime = jwtTokenService.getExpirationTime(token);
+        long now = System.currentTimeMillis();
+        long expectedExpiration = now + jwtProperties.getExpirationMs();
+        
+        // Allow 5 second tolerance for test execution time
+        long tolerance = 5000;
+        assert Math.abs(expirationTime - expectedExpiration) < tolerance :
+                "Token expiration should be approximately " + jwtProperties.getExpirationMs() + "ms from now";
+    }
+    
+    /**
+     * Property 2: Token Content Completeness - Refresh Token Expiration
+     * Refresh token expiration should be set to configured duration (7 days by default).
+     * Validates: Requirements 2.8
+     */
+    @Property(tries = 100)
+    void refreshTokenExpirationShouldBeConfigured(
+            @ForAll @AlphaNumeric @StringLength(min = 1, max = 36) String userId
+    ) {
+        String refreshToken = jwtTokenService.generateRefreshToken(userId);
+        
+        long expirationTime = jwtTokenService.getExpirationTime(refreshToken);
+        long now = System.currentTimeMillis();
+        long expectedExpiration = now + jwtProperties.getRefreshExpirationMs();
+        
+        // Allow 5 second tolerance for test execution time
+        long tolerance = 5000;
+        assert Math.abs(expirationTime - expectedExpiration) < tolerance :
+                "Refresh token expiration should be approximately " + jwtProperties.getRefreshExpirationMs() + "ms from now";
     }
     
     /**

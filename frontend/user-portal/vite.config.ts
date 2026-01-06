@@ -26,6 +26,10 @@ export default defineConfig({
   server: {
     port: 3001,
     proxy: {
+      '/api/v1/auth': {
+        target: 'http://localhost:8080',
+        changeOrigin: true
+      },
       '/api/portal': {
         target: 'http://localhost:8082',
         changeOrigin: true

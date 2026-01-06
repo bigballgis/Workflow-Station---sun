@@ -8,6 +8,7 @@ import com.platform.security.repository.PermissionDelegationRepository;
 import com.platform.security.service.PermissionDelegationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,6 +24,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@ConditionalOnBean(PermissionDelegationRepository.class)
 public class PermissionDelegationServiceImpl implements PermissionDelegationService {
     
     private static final String DELEGATED_PERM_CACHE_PREFIX = "delegation:perm:";

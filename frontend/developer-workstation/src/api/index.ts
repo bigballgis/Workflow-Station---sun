@@ -1,6 +1,21 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import router from '@/router'
+import { refreshToken as refreshAuthToken, REFRESH_TOKEN_KEY, TOKEN_KEY, clearAuth } from './auth'
+
+let isRefreshing = false
+let failedQueue: Array<{ resolve: Function; reject: Function }> = []
+
+const processQueue = (error: any, token: string | null = null) => {
+  failedQueue.forEach(prom => {
+    if (error) {
+      prom.reject(error)
+    } else {
+      prom.resolve(token)
+    }
+  })
+  failedQueue = []
+}
 
 const api = axios.create({
   baseURL: '/api/v1',
@@ -9,7 +24,7 @@ const api = axios.create({
 
 api.interceptors.request.use(
   config => {
-    const token = localStorage.getItem('token')
+    const token = localStorage.getItem(TOKEN_KEY)
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
@@ -20,14 +35,51 @@ api.interceptors.request.use(
 
 api.interceptors.response.use(
   response => response.data,
-  error => {
+  async error => {
+    const originalRequest = error.config
     const { response } = error
+    
+    if (response?.status === 401 && !originalRequest._retry) {
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          failedQueue.push({ resolve, reject })
+        }).then(token => {
+          originalRequest.headers.Authorization = `Bearer ${token}`
+          return api(originalRequest)
+        }).catch(err => Promise.reject(err))
+      }
+
+      originalRequest._retry = true
+      isRefreshing = true
+
+      const storedRefreshToken = localStorage.getItem(REFRESH_TOKEN_KEY)
+      
+      if (storedRefreshToken) {
+        try {
+          const tokenResponse = await refreshAuthToken(storedRefreshToken)
+          const newToken = tokenResponse.accessToken
+          localStorage.setItem(TOKEN_KEY, newToken)
+          
+          processQueue(null, newToken)
+          originalRequest.headers.Authorization = `Bearer ${newToken}`
+          return api(originalRequest)
+        } catch (refreshError) {
+          processQueue(refreshError, null)
+          clearAuth()
+          router.push('/login')
+          return Promise.reject(refreshError)
+        } finally {
+          isRefreshing = false
+        }
+      } else {
+        clearAuth()
+        router.push('/login')
+        return Promise.reject(error)
+      }
+    }
+
     if (response) {
       switch (response.status) {
-        case 401:
-          localStorage.removeItem('token')
-          router.push('/login')
-          break
         case 403:
           ElMessage.error('没有权限执行此操作')
           break
