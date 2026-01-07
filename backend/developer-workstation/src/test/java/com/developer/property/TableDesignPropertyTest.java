@@ -5,6 +5,9 @@ import com.developer.component.impl.TableDesignComponentImpl;
 import com.developer.enums.DatabaseDialect;
 import com.developer.repository.FieldDefinitionRepository;
 import com.developer.repository.ForeignKeyRepository;
+import com.developer.repository.FormDefinitionRepository;
+import com.developer.repository.FormTableBindingRepository;
+import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.TableDefinitionRepository;
 import net.jqwik.api.*;
 
@@ -26,8 +29,12 @@ public class TableDesignPropertyTest {
         TableDefinitionRepository tableRepo = mock(TableDefinitionRepository.class);
         FieldDefinitionRepository fieldRepo = mock(FieldDefinitionRepository.class);
         ForeignKeyRepository fkRepo = mock(ForeignKeyRepository.class);
+        FunctionUnitRepository functionUnitRepo = mock(FunctionUnitRepository.class);
+        FormDefinitionRepository formRepo = mock(FormDefinitionRepository.class);
+        FormTableBindingRepository formTableBindingRepo = mock(FormTableBindingRepository.class);
         
-        TableDesignComponent component = new TableDesignComponentImpl(tableRepo, fieldRepo, fkRepo);
+        TableDesignComponent component = new TableDesignComponentImpl(
+                tableRepo, fieldRepo, fkRepo, functionUnitRepo, formRepo, formTableBindingRepo);
         
         assertThat(component).isNotNull();
         assertThat(tableName).matches("tbl_[a-z]+");
@@ -45,8 +52,12 @@ public class TableDesignPropertyTest {
         TableDefinitionRepository tableRepo = mock(TableDefinitionRepository.class);
         FieldDefinitionRepository fieldRepo = mock(FieldDefinitionRepository.class);
         ForeignKeyRepository fkRepo = mock(ForeignKeyRepository.class);
+        FunctionUnitRepository functionUnitRepo = mock(FunctionUnitRepository.class);
+        FormDefinitionRepository formRepo = mock(FormDefinitionRepository.class);
+        FormTableBindingRepository formTableBindingRepo = mock(FormTableBindingRepository.class);
         
-        TableDesignComponent component = new TableDesignComponentImpl(tableRepo, fieldRepo, fkRepo);
+        TableDesignComponent component = new TableDesignComponentImpl(
+                tableRepo, fieldRepo, fkRepo, functionUnitRepo, formRepo, formTableBindingRepo);
         
         assertThat(component).isNotNull();
         assertThat(dialect).isNotNull();

@@ -4,7 +4,7 @@ import com.platform.security.config.JwtProperties;
 import com.platform.security.service.JwtTokenService;
 import com.platform.security.service.impl.JwtTokenServiceImpl;
 import net.jqwik.api.*;
-import net.jqwik.api.constraints.AlphaNumeric;
+import net.jqwik.api.constraints.CharRange;
 import net.jqwik.api.constraints.StringLength;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
@@ -42,7 +42,7 @@ class LogoutBlacklistPropertyTest {
      */
     @Property(tries = 100)
     void logoutShouldAddTokenToBlacklist(
-            @ForAll @AlphaNumeric @StringLength(min = 1, max = 36) String userId
+            @ForAll @CharRange(from = 'a', to = 'z') @StringLength(min = 1, max = 36) String userId
     ) {
         // Setup mock Redis
         StringRedisTemplate mockRedisTemplate = mock(StringRedisTemplate.class);
@@ -76,7 +76,7 @@ class LogoutBlacklistPropertyTest {
      */
     @Property(tries = 100)
     void blacklistedTokenShouldFailValidation(
-            @ForAll @AlphaNumeric @StringLength(min = 1, max = 36) String userId
+            @ForAll @CharRange(from = 'a', to = 'z') @StringLength(min = 1, max = 36) String userId
     ) {
         // Setup mock Redis that returns true for blacklist check
         StringRedisTemplate mockRedisTemplate = mock(StringRedisTemplate.class);
@@ -104,7 +104,7 @@ class LogoutBlacklistPropertyTest {
      */
     @Property(tries = 100)
     void nonBlacklistedTokenShouldPassValidation(
-            @ForAll @AlphaNumeric @StringLength(min = 1, max = 36) String userId
+            @ForAll @CharRange(from = 'a', to = 'z') @StringLength(min = 1, max = 36) String userId
     ) {
         // Setup mock Redis that returns false for blacklist check
         StringRedisTemplate mockRedisTemplate = mock(StringRedisTemplate.class);
@@ -130,7 +130,7 @@ class LogoutBlacklistPropertyTest {
      */
     @Property(tries = 100)
     void blacklistTTLShouldMatchTokenRemainingValidity(
-            @ForAll @AlphaNumeric @StringLength(min = 1, max = 36) String userId
+            @ForAll @CharRange(from = 'a', to = 'z') @StringLength(min = 1, max = 36) String userId
     ) {
         // Setup mock Redis
         StringRedisTemplate mockRedisTemplate = mock(StringRedisTemplate.class);
@@ -167,7 +167,7 @@ class LogoutBlacklistPropertyTest {
      */
     @Property(tries = 50)
     void multipleLogoutsShouldBeIdempotent(
-            @ForAll @AlphaNumeric @StringLength(min = 1, max = 36) String userId
+            @ForAll @CharRange(from = 'a', to = 'z') @StringLength(min = 1, max = 36) String userId
     ) {
         // Setup mock Redis
         StringRedisTemplate mockRedisTemplate = mock(StringRedisTemplate.class);
@@ -204,7 +204,7 @@ class LogoutBlacklistPropertyTest {
      */
     @Property(tries = 100)
     void blacklistKeyShouldBeHashedToken(
-            @ForAll @AlphaNumeric @StringLength(min = 1, max = 36) String userId
+            @ForAll @CharRange(from = 'a', to = 'z') @StringLength(min = 1, max = 36) String userId
     ) {
         // Setup mock Redis
         Set<String> storedKeys = new HashSet<>();

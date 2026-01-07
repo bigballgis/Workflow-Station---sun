@@ -17,16 +17,10 @@ import java.time.LocalDateTime;
  */
 @Component
 @Slf4j
+@RequiredArgsConstructor
 public class AuditLogComponentImpl implements AuditLogComponent {
     
     private final OperationLogRepository operationLogRepository;
-    
-    /**
-     * 构造函数
-     */
-    public AuditLogComponentImpl(OperationLogRepository operationLogRepository) {
-        this.operationLogRepository = operationLogRepository;
-    }
     
     @Override
     @Transactional

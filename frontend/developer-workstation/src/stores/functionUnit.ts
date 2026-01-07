@@ -1,12 +1,19 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { functionUnitApi, type FunctionUnit, type FunctionUnitRequest } from '@/api/functionUnit'
+import { functionUnitApi, type FunctionUnit, type FunctionUnitResponse, type FunctionUnitRequest, type TableDefinition, type FormDefinition, type ActionDefinition, type ProcessDefinition, type Version, type ValidationResult } from '@/api/functionUnit'
 
 export const useFunctionUnitStore = defineStore('functionUnit', () => {
-  const list = ref<FunctionUnit[]>([])
+  const list = ref<FunctionUnitResponse[]>([])
   const current = ref<FunctionUnit | null>(null)
   const loading = ref(false)
   const total = ref(0)
+
+  // Tables, forms, actions for current function unit
+  const tables = ref<TableDefinition[]>([])
+  const forms = ref<FormDefinition[]>([])
+  const actions = ref<ActionDefinition[]>([])
+  const process = ref<ProcessDefinition | null>(null)
+  const versions = ref<Version[]>([])
 
   async function fetchList(params: { name?: string; status?: string; page?: number; size?: number }) {
     loading.value = true
@@ -53,5 +60,111 @@ export const useFunctionUnitStore = defineStore('functionUnit', () => {
     return res.data
   }
 
-  return { list, current, loading, total, fetchList, fetchById, create, update, remove, publish, clone }
+  async function validate(id: number): Promise<ValidationResult> {
+    const res = await functionUnitApi.validate(id)
+    return res.data
+  }
+
+  // Table operations
+  async function fetchTables(functionUnitId: number) {
+    const res = await functionUnitApi.getTables(functionUnitId)
+    tables.value = res.data
+    return res.data
+  }
+
+  async function createTable(functionUnitId: number, data: Partial<TableDefinition>) {
+    const res = await functionUnitApi.createTable(functionUnitId, data)
+    return res.data
+  }
+
+  async function updateTable(functionUnitId: number, tableId: number, data: Partial<TableDefinition>) {
+    const res = await functionUnitApi.updateTable(functionUnitId, tableId, data)
+    return res.data
+  }
+
+  async function deleteTable(functionUnitId: number, tableId: number) {
+    await functionUnitApi.deleteTable(functionUnitId, tableId)
+  }
+
+  // Form operations
+  async function fetchForms(functionUnitId: number) {
+    const res = await functionUnitApi.getForms(functionUnitId)
+    forms.value = res.data
+    return res.data
+  }
+
+  async function createForm(functionUnitId: number, data: Partial<FormDefinition>) {
+    const res = await functionUnitApi.createForm(functionUnitId, data)
+    return res.data
+  }
+
+  async function updateForm(functionUnitId: number, formId: number, data: Partial<FormDefinition>) {
+    const res = await functionUnitApi.updateForm(functionUnitId, formId, data)
+    return res.data
+  }
+
+  async function deleteForm(functionUnitId: number, formId: number) {
+    await functionUnitApi.deleteForm(functionUnitId, formId)
+  }
+
+  // Action operations
+  async function fetchActions(functionUnitId: number) {
+    const res = await functionUnitApi.getActions(functionUnitId)
+    actions.value = res.data
+    return res.data
+  }
+
+  async function createAction(functionUnitId: number, data: Partial<ActionDefinition>) {
+    const res = await functionUnitApi.createAction(functionUnitId, data)
+    return res.data
+  }
+
+  async function updateAction(functionUnitId: number, actionId: number, data: Partial<ActionDefinition>) {
+    const res = await functionUnitApi.updateAction(functionUnitId, actionId, data)
+    return res.data
+  }
+
+  async function deleteAction(functionUnitId: number, actionId: number) {
+    await functionUnitApi.deleteAction(functionUnitId, actionId)
+  }
+
+  // Process operations
+  async function fetchProcess(functionUnitId: number) {
+    try {
+      const res = await functionUnitApi.getProcess(functionUnitId)
+      process.value = res.data
+      return res.data
+    } catch {
+      process.value = null
+      return null
+    }
+  }
+
+  async function saveProcess(functionUnitId: number, data: Partial<ProcessDefinition>) {
+    const res = await functionUnitApi.saveProcess(functionUnitId, data)
+    process.value = res.data
+    return res.data
+  }
+
+  // Version operations
+  async function fetchVersions(functionUnitId: number) {
+    const res = await functionUnitApi.getVersions(functionUnitId)
+    versions.value = res.data
+    return res.data
+  }
+
+  async function rollback(functionUnitId: number, versionId: number) {
+    const res = await functionUnitApi.rollback(functionUnitId, versionId)
+    return res.data
+  }
+
+  return { 
+    list, current, loading, total, tables, forms, actions, process, versions,
+    fetchList, fetchById, create, update, remove, publish, clone, validate,
+    fetchTables, createTable, updateTable, deleteTable,
+    fetchForms, createForm, updateForm, deleteForm,
+    fetchActions, createAction, updateAction, deleteAction,
+    fetchProcess, saveProcess,
+    fetchVersions, rollback
+  }
 })

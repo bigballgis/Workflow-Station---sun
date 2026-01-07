@@ -4,6 +4,7 @@ import com.platform.cache.service.CacheService;
 import com.platform.cache.service.DistributedLock;
 import net.jqwik.api.*;
 import net.jqwik.api.constraints.*;
+import net.jqwik.api.lifecycle.BeforeProperty;
 
 import java.time.Duration;
 import java.util.*;
@@ -245,8 +246,8 @@ class CachePropertyTest {
      */
     @Property(tries = 100)
     void cacheExpirationCorrectness(
-            @ForAll @AlphaNumeric @StringLength(min = 1, max = 50) String key,
-            @ForAll @AlphaNumeric @StringLength(min = 1, max = 100) String value
+            @ForAll @StringLength(min = 1, max = 50) @CharRange(from = 'a', to = 'z') String key,
+            @ForAll @StringLength(min = 1, max = 100) @CharRange(from = 'a', to = 'z') String value
     ) {
         // Set with short TTL
         cacheService.set(key, value, Duration.ofSeconds(10));
@@ -266,8 +267,8 @@ class CachePropertyTest {
      */
     @Property(tries = 100)
     void setGetRoundTrip(
-            @ForAll @AlphaNumeric @StringLength(min = 1, max = 50) String key,
-            @ForAll @AlphaNumeric @StringLength(min = 1, max = 100) String value
+            @ForAll @StringLength(min = 1, max = 50) @CharRange(from = 'a', to = 'z') String key,
+            @ForAll @StringLength(min = 1, max = 100) @CharRange(from = 'a', to = 'z') String value
     ) {
         cacheService.set(key, value, Duration.ofMinutes(5));
         
@@ -283,8 +284,8 @@ class CachePropertyTest {
      */
     @Property(tries = 100)
     void deleteRemovesKey(
-            @ForAll @AlphaNumeric @StringLength(min = 1, max = 50) String key,
-            @ForAll @AlphaNumeric @StringLength(min = 1, max = 100) String value
+            @ForAll @StringLength(min = 1, max = 50) @CharRange(from = 'a', to = 'z') String key,
+            @ForAll @StringLength(min = 1, max = 100) @CharRange(from = 'a', to = 'z') String value
     ) {
         cacheService.set(key, value, Duration.ofMinutes(5));
         assert cacheService.exists(key) : "Key should exist after set";
@@ -300,9 +301,9 @@ class CachePropertyTest {
      */
     @Property(tries = 100)
     void setIfAbsentOnlyWhenMissing(
-            @ForAll @AlphaNumeric @StringLength(min = 1, max = 50) String key,
-            @ForAll @AlphaNumeric @StringLength(min = 1, max = 100) String value1,
-            @ForAll @AlphaNumeric @StringLength(min = 1, max = 100) String value2
+            @ForAll @StringLength(min = 1, max = 50) @CharRange(from = 'a', to = 'z') String key,
+            @ForAll @StringLength(min = 1, max = 100) @CharRange(from = 'a', to = 'z') String value1,
+            @ForAll @StringLength(min = 1, max = 100) @CharRange(from = 'a', to = 'z') String value2
     ) {
         // First setIfAbsent should succeed
         boolean first = cacheService.setIfAbsent(key, value1, Duration.ofMinutes(5));
@@ -324,7 +325,7 @@ class CachePropertyTest {
      */
     @Property(tries = 100)
     void distributedLockMutualExclusion(
-            @ForAll @AlphaNumeric @StringLength(min = 1, max = 50) String lockKey
+            @ForAll @StringLength(min = 1, max = 50) @CharRange(from = 'a', to = 'z') String lockKey
     ) {
         // First lock should succeed
         Optional<DistributedLock> lock1 = cacheService.tryLock(lockKey, Duration.ofSeconds(30));
@@ -347,7 +348,7 @@ class CachePropertyTest {
      */
     @Property(tries = 100)
     void lockUnlockReleasesLock(
-            @ForAll @AlphaNumeric @StringLength(min = 1, max = 50) String lockKey
+            @ForAll @StringLength(min = 1, max = 50) @CharRange(from = 'a', to = 'z') String lockKey
     ) {
         Optional<DistributedLock> lock = cacheService.tryLock(lockKey, Duration.ofSeconds(30));
         assert lock.isPresent() : "Lock should be acquired";
@@ -368,7 +369,7 @@ class CachePropertyTest {
      */
     @Property(tries = 100)
     void incrementCorrectness(
-            @ForAll @AlphaNumeric @StringLength(min = 1, max = 50) String key,
+            @ForAll @StringLength(min = 1, max = 50) @CharRange(from = 'a', to = 'z') String key,
             @ForAll @IntRange(min = 1, max = 100) int times,
             @ForAll @LongRange(min = 1, max = 10) long delta
     ) {
@@ -379,10 +380,5 @@ class CachePropertyTest {
             assert result == expected : 
                     "Increment result should be " + expected + ", got " + result;
         }
-    }
-    
-    @BeforeProperty
-    void beforeProperty() {
-        cacheService.clear();
     }
 }

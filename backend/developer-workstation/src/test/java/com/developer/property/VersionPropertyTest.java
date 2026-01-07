@@ -2,7 +2,9 @@ package com.developer.property;
 
 import com.developer.component.VersionComponent;
 import com.developer.component.impl.VersionComponentImpl;
+import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.VersionRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import net.jqwik.api.*;
 
 import static org.assertj.core.api.Assertions.*;
@@ -21,7 +23,9 @@ public class VersionPropertyTest {
     @Property(tries = 20)
     void versionRollbackConsistencyProperty(@ForAll("versionNumbers") String versionNumber) {
         VersionRepository repository = mock(VersionRepository.class);
-        VersionComponent component = new VersionComponentImpl(repository);
+        FunctionUnitRepository functionUnitRepository = mock(FunctionUnitRepository.class);
+        ObjectMapper objectMapper = new ObjectMapper();
+        VersionComponent component = new VersionComponentImpl(repository, functionUnitRepository, objectMapper);
         
         assertThat(component).isNotNull();
         assertThat(versionNumber).matches("\\d+\\.\\d+\\.\\d+");

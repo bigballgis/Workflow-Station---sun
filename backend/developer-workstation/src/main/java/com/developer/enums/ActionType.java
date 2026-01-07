@@ -22,6 +22,12 @@ public enum ActionType {
     FORM_POPUP,
     /** 自定义动作 - 脚本执行 */
     SCRIPT,
+    /** 自定义动作 - 自定义脚本 */
+    CUSTOM_SCRIPT,
+    /** 流程提交 */
+    PROCESS_SUBMIT,
+    /** 流程驳回 */
+    PROCESS_REJECT,
     /** 组合动作 */
     COMPOSITE
 }

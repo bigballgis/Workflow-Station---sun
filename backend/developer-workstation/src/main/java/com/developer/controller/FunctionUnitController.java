@@ -51,8 +51,8 @@ public class FunctionUnitController {
     
     @GetMapping("/{id}")
     @Operation(summary = "获取功能单元详情")
-    public ResponseEntity<ApiResponse<FunctionUnit>> getById(@PathVariable Long id) {
-        FunctionUnit result = functionUnitComponent.getById(id);
+    public ResponseEntity<ApiResponse<FunctionUnitResponse>> getById(@PathVariable Long id) {
+        FunctionUnitResponse result = functionUnitComponent.getByIdAsResponse(id);
         return ResponseEntity.ok(ApiResponse.success(result));
     }
     

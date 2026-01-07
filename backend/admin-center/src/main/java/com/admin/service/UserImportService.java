@@ -30,4 +30,9 @@ public interface UserImportService {
      * 验证导入数据
      */
     List<String> validateImportData(List<UserCreateRequest> users);
+    
+    /**
+     * 生成导入模板
+     */
+    byte[] generateImportTemplate();
 }

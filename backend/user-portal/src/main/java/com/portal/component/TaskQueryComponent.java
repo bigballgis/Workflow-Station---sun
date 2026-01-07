@@ -3,6 +3,8 @@ package com.portal.component;
 import com.portal.dto.PageResponse;
 import com.portal.dto.TaskInfo;
 import com.portal.dto.TaskQueryRequest;
+import com.portal.dto.TaskStatistics;
+import com.portal.dto.TaskHistoryInfo;
 import com.portal.entity.DelegationRule;
 import com.portal.enums.DelegationStatus;
 import com.portal.repository.DelegationRuleRepository;
@@ -10,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -287,5 +290,164 @@ public class TaskQueryComponent {
     private List<String> getUserDeptRoles(String userId) {
         // 模拟返回用户的部门角色
         return List.of("dept_role_" + userId, "common_role");
+    }
+
+    /**
+     * 获取任务统计信息
+     */
+    public TaskStatistics getTaskStatistics(String userId) {
+        List<TaskInfo> allTasks = new ArrayList<>();
+        allTasks.addAll(queryDirectAssignedTasks(userId));
+        allTasks.addAll(queryVirtualGroupTasks(userId));
+        allTasks.addAll(queryDeptRoleTasks(userId));
+        allTasks.addAll(queryDelegatedTasks(userId));
+
+        // 去重
+        allTasks = allTasks.stream()
+                .collect(Collectors.toMap(TaskInfo::getTaskId, t -> t, (t1, t2) -> t1))
+                .values()
+                .stream()
+                .collect(Collectors.toList());
+
+        LocalDate today = LocalDate.now();
+        LocalDateTime todayStart = today.atStartOfDay();
+
+        return TaskStatistics.builder()
+                .totalTasks(allTasks.size())
+                .directTasks(allTasks.stream().filter(t -> "USER".equals(t.getAssignmentType())).count())
+                .groupTasks(allTasks.stream().filter(t -> "VIRTUAL_GROUP".equals(t.getAssignmentType())).count())
+                .deptRoleTasks(allTasks.stream().filter(t -> "DEPT_ROLE".equals(t.getAssignmentType())).count())
+                .delegatedTasks(allTasks.stream().filter(t -> "DELEGATED".equals(t.getAssignmentType())).count())
+                .overdueTasks(allTasks.stream().filter(t -> Boolean.TRUE.equals(t.getIsOverdue())).count())
+                .urgentTasks(allTasks.stream().filter(t -> "URGENT".equals(t.getPriority())).count())
+                .highPriorityTasks(allTasks.stream().filter(t -> "HIGH".equals(t.getPriority())).count())
+                .todayNewTasks(allTasks.stream()
+                        .filter(t -> t.getCreateTime() != null && t.getCreateTime().isAfter(todayStart))
+                        .count())
+                .todayCompletedTasks(0L) // 需要从历史记录中统计
+                .build();
+    }
+
+    /**
+     * 获取任务流转历史
+     */
+    public List<TaskHistoryInfo> getTaskHistory(String taskId) {
+        // 模拟返回任务历史
+        List<TaskHistoryInfo> history = new ArrayList<>();
+        
+        TaskInfo task = taskStore.get(taskId);
+        if (task == null) {
+            return history;
+        }
+
+        // 模拟历史记录
+        history.add(TaskHistoryInfo.builder()
+                .id("history_1")
+                .taskId(taskId)
+                .taskName(task.getTaskName())
+                .activityId("start")
+                .activityName("提交申请")
+                .activityType("startEvent")
+                .operationType("SUBMIT")
+                .operatorId(task.getInitiatorId())
+                .operatorName(task.getInitiatorName())
+                .operationTime(task.getCreateTime() != null ? task.getCreateTime().minusHours(2) : LocalDateTime.now().minusHours(2))
+                .comment("提交申请")
+                .duration(0L)
+                .build());
+
+        history.add(TaskHistoryInfo.builder()
+                .id("history_2")
+                .taskId(taskId)
+                .taskName(task.getTaskName())
+                .activityId("userTask1")
+                .activityName("部门经理审批")
+                .activityType("userTask")
+                .operationType("APPROVE")
+                .operatorId("manager_1")
+                .operatorName("部门经理")
+                .operationTime(task.getCreateTime() != null ? task.getCreateTime().minusHours(1) : LocalDateTime.now().minusHours(1))
+                .comment("同意")
+                .duration(3600000L)
+                .build());
+
+        history.add(TaskHistoryInfo.builder()
+                .id("history_3")
+                .taskId(taskId)
+                .taskName(task.getTaskName())
+                .activityId("userTask2")
+                .activityName(task.getTaskName())
+                .activityType("userTask")
+                .operationType("PENDING")
+                .operatorId(task.getAssignee())
+                .operatorName(task.getAssigneeName())
+                .operationTime(task.getCreateTime())
+                .comment("待审批")
+                .duration(null)
+                .build());
+
+        return history;
+    }
+
+    /**
+     * 初始化测试数据
+     */
+    public void initTestData() {
+        // 添加一些测试任务
+        addTask(TaskInfo.builder()
+                .taskId("task_1")
+                .taskName("请假申请审批")
+                .description("员工请假申请，请审批")
+                .processInstanceId("PI_1")
+                .processDefinitionKey("leave_process")
+                .processDefinitionName("请假流程")
+                .assignmentType("USER")
+                .assignee("user_1")
+                .assigneeName("张三")
+                .initiatorId("user_2")
+                .initiatorName("李四")
+                .priority("NORMAL")
+                .status("PENDING")
+                .createTime(LocalDateTime.now().minusDays(1))
+                .isOverdue(false)
+                .build());
+
+        addTask(TaskInfo.builder()
+                .taskId("task_2")
+                .taskName("报销申请审批")
+                .description("差旅费报销申请")
+                .processInstanceId("PI_2")
+                .processDefinitionKey("expense_process")
+                .processDefinitionName("报销流程")
+                .assignmentType("VIRTUAL_GROUP")
+                .assignee("finance_group")
+                .assigneeName("财务组")
+                .initiatorId("user_3")
+                .initiatorName("王五")
+                .priority("HIGH")
+                .status("PENDING")
+                .createTime(LocalDateTime.now().minusDays(2))
+                .dueDate(LocalDateTime.now().plusDays(1))
+                .isOverdue(false)
+                .build());
+
+        addTask(TaskInfo.builder()
+                .taskId("task_3")
+                .taskName("采购申请审批")
+                .description("办公用品采购申请")
+                .processInstanceId("PI_3")
+                .processDefinitionKey("purchase_process")
+                .processDefinitionName("采购流程")
+                .assignmentType("DEPT_ROLE")
+                .assignee("dept_manager")
+                .assigneeName("部门经理")
+                .initiatorId("user_4")
+                .initiatorName("赵六")
+                .priority("URGENT")
+                .status("PENDING")
+                .createTime(LocalDateTime.now().minusDays(3))
+                .dueDate(LocalDateTime.now().minusDays(1))
+                .isOverdue(true)
+                .build());
     }
 }

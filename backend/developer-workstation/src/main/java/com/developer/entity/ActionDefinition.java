@@ -1,6 +1,7 @@
 package com.developer.entity;
 
 import com.developer.enums.ActionType;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -29,6 +30,7 @@ public class ActionDefinition {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     
+    @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "function_unit_id", nullable = false)
     private FunctionUnit functionUnit;

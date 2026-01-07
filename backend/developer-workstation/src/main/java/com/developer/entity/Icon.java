@@ -1,6 +1,7 @@
 package com.developer.entity;
 
 import com.developer.enums.IconCategory;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 import org.springframework.data.annotation.CreatedBy;
@@ -36,8 +37,8 @@ public class Icon {
     @Column(name = "file_type", nullable = false, length = 10)
     private String fileType;
     
-    @Lob
-    @Column(name = "file_data", nullable = false)
+    @JsonIgnore
+    @Column(name = "file_data", nullable = false, columnDefinition = "bytea")
     private byte[] fileData;
     
     @Column(name = "file_size", nullable = false)

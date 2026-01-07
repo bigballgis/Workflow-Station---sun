@@ -3,6 +3,7 @@ package com.developer.property;
 import com.developer.component.IconLibraryComponent;
 import com.developer.component.impl.IconLibraryComponentImpl;
 import com.developer.enums.IconCategory;
+import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.IconRepository;
 import net.jqwik.api.*;
 
@@ -22,7 +23,8 @@ public class IconLibraryPropertyTest {
     @Property(tries = 20)
     void iconFileValidationProperty(@ForAll("svgContents") String svgContent) {
         IconRepository repository = mock(IconRepository.class);
-        IconLibraryComponent component = new IconLibraryComponentImpl(repository);
+        FunctionUnitRepository functionUnitRepository = mock(FunctionUnitRepository.class);
+        IconLibraryComponent component = new IconLibraryComponentImpl(repository, functionUnitRepository);
         
         assertThat(component).isNotNull();
         // SVG应包含基本标签

@@ -24,10 +24,38 @@ export default defineConfig({
     }
   },
   server: {
-    port: 5173,
+    port: 3002,
     proxy: {
+      // Auth API routes directly to workflow-engine-core (port 8081)
+      // In production, this would go through api-gateway (port 8080)
+      '/api/v1/auth': {
+        target: 'http://localhost:8081',
+        changeOrigin: true
+      },
+      // Function units, icons, versions, export/import - developer-workstation
+      '/api/v1/function-units': {
+        target: 'http://localhost:8083',
+        changeOrigin: true
+      },
+      '/api/v1/icons': {
+        target: 'http://localhost:8083',
+        changeOrigin: true
+      },
+      '/api/v1/versions': {
+        target: 'http://localhost:8083',
+        changeOrigin: true
+      },
+      '/api/v1/export': {
+        target: 'http://localhost:8083',
+        changeOrigin: true
+      },
+      '/api/v1/import': {
+        target: 'http://localhost:8083',
+        changeOrigin: true
+      },
+      // Default: all other /api requests go to developer-workstation
       '/api': {
-        target: 'http://localhost:8080',
+        target: 'http://localhost:8083',
         changeOrigin: true
       }
     }

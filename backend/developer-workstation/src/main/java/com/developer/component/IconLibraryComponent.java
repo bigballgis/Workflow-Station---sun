@@ -6,6 +6,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
+
 /**
  * 图标库组件接口
  */
@@ -29,7 +31,12 @@ public interface IconLibraryComponent {
     /**
      * 搜索图标
      */
-    Page<Icon> search(String keyword, IconCategory category, Pageable pageable);
+    Page<Icon> search(String keyword, IconCategory category, String tag, Pageable pageable);
+    
+    /**
+     * 获取所有标签
+     */
+    List<String> getAllTags();
     
     /**
      * 获取图标数据

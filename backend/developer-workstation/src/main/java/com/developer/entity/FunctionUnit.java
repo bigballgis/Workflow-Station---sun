@@ -1,6 +1,7 @@
 package com.developer.entity;
 
 import com.developer.enums.FunctionUnitStatus;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 import org.springframework.data.annotation.CreatedBy;
@@ -64,21 +65,26 @@ public class FunctionUnit {
     @Column(name = "updated_at")
     private Instant updatedAt;
     
+    @JsonIgnore
     @OneToOne(mappedBy = "functionUnit", cascade = CascadeType.ALL, orphanRemoval = true)
     private ProcessDefinition processDefinition;
     
+    @JsonIgnore
     @OneToMany(mappedBy = "functionUnit", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<TableDefinition> tableDefinitions = new ArrayList<>();
     
+    @JsonIgnore
     @OneToMany(mappedBy = "functionUnit", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<FormDefinition> formDefinitions = new ArrayList<>();
     
+    @JsonIgnore
     @OneToMany(mappedBy = "functionUnit", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<ActionDefinition> actionDefinitions = new ArrayList<>();
     
+    @JsonIgnore
     @OneToMany(mappedBy = "functionUnit", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<Version> versions = new ArrayList<>();

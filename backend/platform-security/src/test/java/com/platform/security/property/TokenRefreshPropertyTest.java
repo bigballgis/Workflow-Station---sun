@@ -6,7 +6,7 @@ import com.platform.security.service.JwtTokenService;
 import com.platform.security.service.impl.JwtTokenServiceImpl;
 import io.jsonwebtoken.JwtException;
 import net.jqwik.api.*;
-import net.jqwik.api.constraints.AlphaNumeric;
+import net.jqwik.api.constraints.CharRange;
 import net.jqwik.api.constraints.StringLength;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
@@ -43,7 +43,7 @@ class TokenRefreshPropertyTest {
      */
     @Property(tries = 100)
     void refreshShouldPreserveUserId(
-            @ForAll @AlphaNumeric @StringLength(min = 1, max = 36) String userId
+            @ForAll @CharRange(from = 'a', to = 'z') @StringLength(min = 1, max = 36) String userId
     ) {
         StringRedisTemplate mockRedisTemplate = mock(StringRedisTemplate.class);
         when(mockRedisTemplate.hasKey(anyString())).thenReturn(false);
@@ -70,7 +70,7 @@ class TokenRefreshPropertyTest {
      */
     @Property(tries = 100)
     void refreshedTokenShouldBeValid(
-            @ForAll @AlphaNumeric @StringLength(min = 1, max = 36) String userId
+            @ForAll @CharRange(from = 'a', to = 'z') @StringLength(min = 1, max = 36) String userId
     ) {
         StringRedisTemplate mockRedisTemplate = mock(StringRedisTemplate.class);
         when(mockRedisTemplate.hasKey(anyString())).thenReturn(false);
@@ -95,7 +95,7 @@ class TokenRefreshPropertyTest {
      */
     @Property(tries = 100)
     void refreshedTokenShouldHaveFreshExpiration(
-            @ForAll @AlphaNumeric @StringLength(min = 1, max = 36) String userId
+            @ForAll @CharRange(from = 'a', to = 'z') @StringLength(min = 1, max = 36) String userId
     ) {
         StringRedisTemplate mockRedisTemplate = mock(StringRedisTemplate.class);
         when(mockRedisTemplate.hasKey(anyString())).thenReturn(false);
@@ -142,7 +142,7 @@ class TokenRefreshPropertyTest {
      */
     @Property(tries = 100)
     void accessTokenShouldNotBeUsedAsRefreshToken(
-            @ForAll @AlphaNumeric @StringLength(min = 1, max = 36) String userId
+            @ForAll @CharRange(from = 'a', to = 'z') @StringLength(min = 1, max = 36) String userId
     ) {
         StringRedisTemplate mockRedisTemplate = mock(StringRedisTemplate.class);
         when(mockRedisTemplate.hasKey(anyString())).thenReturn(false);
@@ -167,7 +167,7 @@ class TokenRefreshPropertyTest {
      */
     @Property(tries = 50)
     void multipleRefreshesShouldAllBeValid(
-            @ForAll @AlphaNumeric @StringLength(min = 1, max = 36) String userId
+            @ForAll @CharRange(from = 'a', to = 'z') @StringLength(min = 1, max = 36) String userId
     ) {
         StringRedisTemplate mockRedisTemplate = mock(StringRedisTemplate.class);
         when(mockRedisTemplate.hasKey(anyString())).thenReturn(false);

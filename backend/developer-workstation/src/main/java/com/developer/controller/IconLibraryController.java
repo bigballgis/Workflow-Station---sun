@@ -2,6 +2,7 @@ package com.developer.controller;
 
 import com.developer.component.IconLibraryComponent;
 import com.developer.dto.ApiResponse;
+import com.developer.dto.IconDTO;
 import com.developer.entity.Icon;
 import com.developer.enums.IconCategory;
 import io.swagger.v3.oas.annotations.Operation;
@@ -28,12 +29,20 @@ public class IconLibraryController {
     
     @GetMapping
     @Operation(summary = "分页查询图标")
-    public ResponseEntity<ApiResponse<Page<Icon>>> list(
+    public ResponseEntity<ApiResponse<Page<IconDTO>>> list(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) IconCategory category,
+            @RequestParam(required = false) String tag,
             Pageable pageable) {
-        Page<Icon> result = iconLibraryComponent.search(keyword, category, pageable);
-        return ResponseEntity.ok(ApiResponse.success(result));
+        Page<Icon> result = iconLibraryComponent.search(keyword, category, tag, pageable);
+        Page<IconDTO> dtoPage = result.map(IconDTO::fromEntity);
+        return ResponseEntity.ok(ApiResponse.success(dtoPage));
+    }
+    
+    @GetMapping("/tags")
+    @Operation(summary = "获取所有标签")
+    public ResponseEntity<ApiResponse<List<String>>> getTags() {
+        return ResponseEntity.ok(ApiResponse.success(iconLibraryComponent.getAllTags()));
     }
     
     @GetMapping("/categories")
@@ -44,13 +53,13 @@ public class IconLibraryController {
     
     @PostMapping
     @Operation(summary = "上传图标")
-    public ResponseEntity<ApiResponse<Icon>> upload(
+    public ResponseEntity<ApiResponse<IconDTO>> upload(
             @RequestParam("file") MultipartFile file,
             @RequestParam String name,
             @RequestParam IconCategory category,
             @RequestParam(required = false) String tags) {
         Icon result = iconLibraryComponent.upload(file, name, category, tags);
-        return ResponseEntity.ok(ApiResponse.success(result));
+        return ResponseEntity.ok(ApiResponse.success(IconDTO.fromEntity(result)));
     }
     
     @DeleteMapping("/{id}")
@@ -62,9 +71,9 @@ public class IconLibraryController {
     
     @GetMapping("/{id}")
     @Operation(summary = "获取图标详情")
-    public ResponseEntity<ApiResponse<Icon>> getById(@PathVariable Long id) {
+    public ResponseEntity<ApiResponse<IconDTO>> getById(@PathVariable Long id) {
         Icon result = iconLibraryComponent.getById(id);
-        return ResponseEntity.ok(ApiResponse.success(result));
+        return ResponseEntity.ok(ApiResponse.success(IconDTO.fromEntity(result)));
     }
     
     @GetMapping("/{id}/usage")

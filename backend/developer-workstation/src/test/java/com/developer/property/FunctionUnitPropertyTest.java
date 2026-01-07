@@ -5,7 +5,8 @@ import com.developer.component.impl.FunctionUnitComponentImpl;
 import com.developer.dto.FunctionUnitRequest;
 import com.developer.entity.FunctionUnit;
 import com.developer.enums.FunctionUnitStatus;
-import com.developer.repository.FunctionUnitRepository;
+import com.developer.repository.*;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import net.jqwik.api.*;
 import org.mockito.Mockito;
 
@@ -24,6 +25,18 @@ public class FunctionUnitPropertyTest {
     
     private final AtomicLong idGenerator = new AtomicLong(1);
     
+    private FunctionUnitComponent createComponent(FunctionUnitRepository repository) {
+        ProcessDefinitionRepository processRepo = mock(ProcessDefinitionRepository.class);
+        TableDefinitionRepository tableRepo = mock(TableDefinitionRepository.class);
+        FormDefinitionRepository formRepo = mock(FormDefinitionRepository.class);
+        ActionDefinitionRepository actionRepo = mock(ActionDefinitionRepository.class);
+        VersionRepository versionRepo = mock(VersionRepository.class);
+        IconRepository iconRepo = mock(IconRepository.class);
+        ObjectMapper objectMapper = new ObjectMapper();
+        return new FunctionUnitComponentImpl(
+                repository, processRepo, tableRepo, formRepo, actionRepo, versionRepo, iconRepo, objectMapper);
+    }
+    
     /**
      * Property 1: 功能单元名称唯一性
      * 对于任意有效名称，创建后再次创建相同名称应抛出异常
@@ -31,7 +44,7 @@ public class FunctionUnitPropertyTest {
     @Property(tries = 20)
     void nameUniquenessProperty(@ForAll("validNames") String name) {
         FunctionUnitRepository repository = mock(FunctionUnitRepository.class);
-        FunctionUnitComponent component = new FunctionUnitComponentImpl(repository);
+        FunctionUnitComponent component = createComponent(repository);
         
         // 第一次检查名称不存在
         when(repository.existsByName(name)).thenReturn(false);
@@ -63,7 +76,7 @@ public class FunctionUnitPropertyTest {
     @Property(tries = 20)
     void initialStatusProperty(@ForAll("validNames") String name) {
         FunctionUnitRepository repository = mock(FunctionUnitRepository.class);
-        FunctionUnitComponent component = new FunctionUnitComponentImpl(repository);
+        FunctionUnitComponent component = createComponent(repository);
         
         when(repository.existsByName(name)).thenReturn(false);
         when(repository.save(any(FunctionUnit.class))).thenAnswer(invocation -> {
@@ -92,7 +105,7 @@ public class FunctionUnitPropertyTest {
         Assume.that(!originalName.equals(cloneName));
         
         FunctionUnitRepository repository = mock(FunctionUnitRepository.class);
-        FunctionUnitComponent component = new FunctionUnitComponentImpl(repository);
+        FunctionUnitComponent component = createComponent(repository);
         
         // 创建原始功能单元
         FunctionUnit original = new FunctionUnit();

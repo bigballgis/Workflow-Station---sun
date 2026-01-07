@@ -4,7 +4,8 @@ import com.developer.component.ExportImportComponent;
 import com.developer.component.impl.ExportImportComponentImpl;
 import com.developer.entity.FunctionUnit;
 import com.developer.enums.FunctionUnitStatus;
-import com.developer.repository.FunctionUnitRepository;
+import com.developer.repository.*;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import net.jqwik.api.*;
 
 import java.util.Map;
@@ -26,7 +27,13 @@ public class ExportImportPropertyTest {
     @Property(tries = 20)
     void exportImportRoundTripProperty(@ForAll("validNames") String name) {
         FunctionUnitRepository repository = mock(FunctionUnitRepository.class);
-        ExportImportComponent component = new ExportImportComponentImpl(repository);
+        ProcessDefinitionRepository processRepo = mock(ProcessDefinitionRepository.class);
+        TableDefinitionRepository tableRepo = mock(TableDefinitionRepository.class);
+        FormDefinitionRepository formRepo = mock(FormDefinitionRepository.class);
+        ActionDefinitionRepository actionRepo = mock(ActionDefinitionRepository.class);
+        ObjectMapper objectMapper = new ObjectMapper();
+        ExportImportComponent component = new ExportImportComponentImpl(
+                repository, processRepo, tableRepo, formRepo, actionRepo, objectMapper);
         
         // 创建模拟功能单元
         FunctionUnit fu = new FunctionUnit();
@@ -50,7 +57,13 @@ public class ExportImportPropertyTest {
     @Property(tries = 20)
     void importConflictDetectionProperty(@ForAll("validNames") String name) {
         FunctionUnitRepository repository = mock(FunctionUnitRepository.class);
-        ExportImportComponent component = new ExportImportComponentImpl(repository);
+        ProcessDefinitionRepository processRepo = mock(ProcessDefinitionRepository.class);
+        TableDefinitionRepository tableRepo = mock(TableDefinitionRepository.class);
+        FormDefinitionRepository formRepo = mock(FormDefinitionRepository.class);
+        ActionDefinitionRepository actionRepo = mock(ActionDefinitionRepository.class);
+        ObjectMapper objectMapper = new ObjectMapper();
+        ExportImportComponent component = new ExportImportComponentImpl(
+                repository, processRepo, tableRepo, formRepo, actionRepo, objectMapper);
         
         // 模拟已存在同名功能单元
         when(repository.existsByName(name)).thenReturn(true);

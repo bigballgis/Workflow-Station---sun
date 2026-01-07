@@ -8,7 +8,6 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -18,17 +17,13 @@ import java.util.List;
 @Repository
 public interface OperationLogRepository extends JpaRepository<OperationLog, Long> {
     
-    Page<OperationLog> findByUserId(String userId, Pageable pageable);
-    
-    Page<OperationLog> findByResourceTypeAndResourceId(String resourceType, Long resourceId, Pageable pageable);
-    
-    List<OperationLog> findByCreatedAtBetween(Instant start, Instant end);
-    
-    Page<OperationLog> findByOperationType(String operationType, Pageable pageable);
-    
     Page<OperationLog> findByOperator(String operator, Pageable pageable);
     
     Page<OperationLog> findByTargetTypeAndTargetId(String targetType, Long targetId, Pageable pageable);
+    
+    List<OperationLog> findByOperationTimeBetween(LocalDateTime start, LocalDateTime end);
+    
+    Page<OperationLog> findByOperationType(String operationType, Pageable pageable);
     
     @Query("SELECT o FROM OperationLog o WHERE " +
            "(:operationType IS NULL OR o.operationType = :operationType) AND " +

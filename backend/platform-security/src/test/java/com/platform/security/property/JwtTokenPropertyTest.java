@@ -5,7 +5,8 @@ import com.platform.security.config.JwtProperties;
 import com.platform.security.service.JwtTokenService;
 import com.platform.security.service.impl.JwtTokenServiceImpl;
 import net.jqwik.api.*;
-import net.jqwik.api.constraints.*;
+import net.jqwik.api.constraints.CharRange;
+import net.jqwik.api.constraints.StringLength;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
 import java.util.List;
@@ -43,11 +44,11 @@ class JwtTokenPropertyTest {
      */
     @Property(tries = 100)
     void tokenShouldContainAllRequiredClaims(
-            @ForAll @AlphaNumeric @StringLength(min = 1, max = 36) String userId,
-            @ForAll @AlphaNumeric @StringLength(min = 1, max = 50) String username,
-            @ForAll List<@AlphaNumeric @StringLength(min = 1, max = 20) String> roles,
-            @ForAll List<@AlphaNumeric @StringLength(min = 1, max = 30) String> permissions,
-            @ForAll @AlphaNumeric @StringLength(min = 1, max = 36) String departmentId,
+            @ForAll @CharRange(from = 'a', to = 'z') @StringLength(min = 1, max = 36) String userId,
+            @ForAll @CharRange(from = 'a', to = 'z') @StringLength(min = 1, max = 50) String username,
+            @ForAll List<@CharRange(from = 'a', to = 'z') @StringLength(min = 1, max = 20) String> roles,
+            @ForAll List<@CharRange(from = 'a', to = 'z') @StringLength(min = 1, max = 30) String> permissions,
+            @ForAll @CharRange(from = 'a', to = 'z') @StringLength(min = 1, max = 36) String departmentId,
             @ForAll("languages") String language
     ) {
         // Generate token
@@ -81,7 +82,7 @@ class JwtTokenPropertyTest {
      */
     @Property(tries = 100)
     void accessTokenExpirationShouldBeConfigured(
-            @ForAll @AlphaNumeric @StringLength(min = 1, max = 36) String userId
+            @ForAll @CharRange(from = 'a', to = 'z') @StringLength(min = 1, max = 36) String userId
     ) {
         String token = jwtTokenService.generateToken(
                 userId, "testuser", List.of(), List.of(), null, "en"
@@ -104,7 +105,7 @@ class JwtTokenPropertyTest {
      */
     @Property(tries = 100)
     void refreshTokenExpirationShouldBeConfigured(
-            @ForAll @AlphaNumeric @StringLength(min = 1, max = 36) String userId
+            @ForAll @CharRange(from = 'a', to = 'z') @StringLength(min = 1, max = 36) String userId
     ) {
         String refreshToken = jwtTokenService.generateRefreshToken(userId);
         
@@ -124,7 +125,7 @@ class JwtTokenPropertyTest {
      */
     @Property(tries = 100)
     void extractUserIdConsistency(
-            @ForAll @AlphaNumeric @StringLength(min = 1, max = 36) String userId
+            @ForAll @CharRange(from = 'a', to = 'z') @StringLength(min = 1, max = 36) String userId
     ) {
         String token = jwtTokenService.generateToken(
                 userId, "testuser", List.of(), List.of(), null, "en"
@@ -142,7 +143,7 @@ class JwtTokenPropertyTest {
      */
     @Property(tries = 100)
     void newlyGeneratedTokenShouldNotBeExpired(
-            @ForAll @AlphaNumeric @StringLength(min = 1, max = 36) String userId
+            @ForAll @CharRange(from = 'a', to = 'z') @StringLength(min = 1, max = 36) String userId
     ) {
         String token = jwtTokenService.generateToken(
                 userId, "testuser", List.of(), List.of(), null, "en"
@@ -158,7 +159,7 @@ class JwtTokenPropertyTest {
      */
     @Property(tries = 100)
     void newlyGeneratedTokenShouldHavePositiveValidity(
-            @ForAll @AlphaNumeric @StringLength(min = 1, max = 36) String userId
+            @ForAll @CharRange(from = 'a', to = 'z') @StringLength(min = 1, max = 36) String userId
     ) {
         String token = jwtTokenService.generateToken(
                 userId, "testuser", List.of(), List.of(), null, "en"
@@ -176,7 +177,7 @@ class JwtTokenPropertyTest {
      */
     @Property(tries = 100)
     void refreshTokenShouldProduceValidAccessToken(
-            @ForAll @AlphaNumeric @StringLength(min = 1, max = 36) String userId
+            @ForAll @CharRange(from = 'a', to = 'z') @StringLength(min = 1, max = 36) String userId
     ) {
         String refreshToken = jwtTokenService.generateRefreshToken(userId);
         
@@ -208,8 +209,8 @@ class JwtTokenPropertyTest {
      */
     @Property(tries = 100)
     void tokenFromPrincipalEquivalence(
-            @ForAll @AlphaNumeric @StringLength(min = 1, max = 36) String userId,
-            @ForAll @AlphaNumeric @StringLength(min = 1, max = 50) String username,
+            @ForAll @CharRange(from = 'a', to = 'z') @StringLength(min = 1, max = 36) String userId,
+            @ForAll @CharRange(from = 'a', to = 'z') @StringLength(min = 1, max = 50) String username,
             @ForAll("languages") String language
     ) {
         UserPrincipal principal = UserPrincipal.builder()

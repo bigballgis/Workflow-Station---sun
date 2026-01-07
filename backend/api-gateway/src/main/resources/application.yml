@@ -18,6 +18,28 @@ spring:
             - Path=/api/v1/auth/**
           filters:
             - StripPrefix=0
+        # User management routes - admin-center
+        - id: user-management
+          uri: ${ADMIN_CENTER_URL:http://admin-center:8080}
+          predicates:
+            - Path=/api/v1/users/**
+          filters:
+            - RewritePath=/api/v1/users/(?<segment>.*), /users/${segment}
+            - RewritePath=/api/v1/users, /users
+        # Role management routes - admin-center
+        - id: role-management
+          uri: ${ADMIN_CENTER_URL:http://admin-center:8080}
+          predicates:
+            - Path=/api/v1/roles/**
+          filters:
+            - StripPrefix=0
+        # Permission routes - admin-center
+        - id: permission-management
+          uri: ${ADMIN_CENTER_URL:http://admin-center:8080}
+          predicates:
+            - Path=/api/v1/permissions/**
+          filters:
+            - StripPrefix=0
         - id: workflow-engine
           uri: ${WORKFLOW_ENGINE_URL:http://workflow-engine:8080}
           predicates:
@@ -36,12 +58,62 @@ spring:
             - Path=/api/dev/**
           filters:
             - StripPrefix=1
+        # Developer Workstation - Function Units
+        - id: function-units
+          uri: ${DEVELOPER_WORKSTATION_URL:http://developer-workstation:8080}
+          predicates:
+            - Path=/api/v1/function-units/**
+          filters:
+            - StripPrefix=0
+        # Developer Workstation - Icons
+        - id: icons
+          uri: ${DEVELOPER_WORKSTATION_URL:http://developer-workstation:8080}
+          predicates:
+            - Path=/api/v1/icons/**
+          filters:
+            - StripPrefix=0
+        # Developer Workstation - Versions
+        - id: versions
+          uri: ${DEVELOPER_WORKSTATION_URL:http://developer-workstation:8080}
+          predicates:
+            - Path=/api/v1/versions/**
+          filters:
+            - StripPrefix=0
+        # Developer Workstation - Export/Import
+        - id: export-import
+          uri: ${DEVELOPER_WORKSTATION_URL:http://developer-workstation:8080}
+          predicates:
+            - Path=/api/v1/export/**,/api/v1/import/**
+          filters:
+            - StripPrefix=0
         - id: user-portal
           uri: ${USER_PORTAL_URL:http://user-portal:8080}
           predicates:
             - Path=/api/portal/**
           filters:
             - StripPrefix=1
+        # User Portal - Tasks API
+        - id: user-portal-tasks
+          uri: ${USER_PORTAL_URL:http://user-portal:8080}
+          predicates:
+            - Path=/api/v1/tasks/**
+          filters:
+            - RewritePath=/api/v1/tasks/(?<segment>.*), /tasks/${segment}
+            - RewritePath=/api/v1/tasks, /tasks
+        # Admin Center - System Monitor API
+        - id: admin-monitor
+          uri: ${ADMIN_CENTER_URL:http://admin-center:8080}
+          predicates:
+            - Path=/api/v1/admin/monitor/**
+          filters:
+            - StripPrefix=0
+        # Admin Center - Security Audit API
+        - id: admin-security
+          uri: ${ADMIN_CENTER_URL:http://admin-center:8080}
+          predicates:
+            - Path=/api/v1/admin/security/**
+          filters:
+            - StripPrefix=0
       default-filters:
         - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
       globalcors:

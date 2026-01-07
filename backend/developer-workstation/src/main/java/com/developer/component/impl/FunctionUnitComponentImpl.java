@@ -10,14 +10,18 @@ import com.developer.exception.BusinessException;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -25,6 +29,7 @@ import java.util.Map;
  */
 @Component
 @Slf4j
+@RequiredArgsConstructor
 public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     
     private final FunctionUnitRepository functionUnitRepository;
@@ -35,35 +40,6 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     private final VersionRepository versionRepository;
     private final IconRepository iconRepository;
     private final ObjectMapper objectMapper;
-    
-    /**
-     * 简化构造函数，用于测试
-     */
-    public FunctionUnitComponentImpl(FunctionUnitRepository functionUnitRepository) {
-        this(functionUnitRepository, null, null, null, null, null, null, new ObjectMapper());
-    }
-    
-    /**
-     * 完整构造函数
-     */
-    public FunctionUnitComponentImpl(
-            FunctionUnitRepository functionUnitRepository,
-            ProcessDefinitionRepository processDefinitionRepository,
-            TableDefinitionRepository tableDefinitionRepository,
-            FormDefinitionRepository formDefinitionRepository,
-            ActionDefinitionRepository actionDefinitionRepository,
-            VersionRepository versionRepository,
-            IconRepository iconRepository,
-            ObjectMapper objectMapper) {
-        this.functionUnitRepository = functionUnitRepository;
-        this.processDefinitionRepository = processDefinitionRepository;
-        this.tableDefinitionRepository = tableDefinitionRepository;
-        this.formDefinitionRepository = formDefinitionRepository;
-        this.actionDefinitionRepository = actionDefinitionRepository;
-        this.versionRepository = versionRepository;
-        this.iconRepository = iconRepository;
-        this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper();
-    }
     
     @Override
     @Transactional
@@ -130,10 +106,29 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     
     @Override
     @Transactional(readOnly = true)
+    public FunctionUnitResponse getByIdAsResponse(Long id) {
+        FunctionUnit entity = getById(id);
+        return toResponse(entity);
+    }
+    
+    @Override
+    @Transactional(readOnly = true)
     public Page<FunctionUnitResponse> list(String name, String status, Pageable pageable) {
-        FunctionUnitStatus statusEnum = status != null ? FunctionUnitStatus.valueOf(status) : null;
-        return functionUnitRepository.findByQuery(name, statusEnum, pageable)
-                .map(this::toResponse);
+        Specification<FunctionUnit> spec = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            
+            if (name != null && !name.trim().isEmpty()) {
+                predicates.add(cb.like(cb.lower(root.get("name")), "%" + name.trim().toLowerCase() + "%"));
+            }
+            
+            if (status != null && !status.trim().isEmpty()) {
+                predicates.add(cb.equal(root.get("status"), FunctionUnitStatus.valueOf(status)));
+            }
+            
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+        
+        return functionUnitRepository.findAll(spec, pageable).map(this::toResponse);
     }
     
     @Override
@@ -262,11 +257,22 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     }
     
     private FunctionUnitResponse toResponse(FunctionUnit entity) {
+        FunctionUnitResponse.IconInfo iconInfo = null;
+        if (entity.getIcon() != null) {
+            Icon icon = entity.getIcon();
+            iconInfo = FunctionUnitResponse.IconInfo.builder()
+                    .id(icon.getId())
+                    .name(icon.getName())
+                    .svgContent(icon.getFileData() != null ? new String(icon.getFileData(), java.nio.charset.StandardCharsets.UTF_8) : null)
+                    .build();
+        }
+        
         return FunctionUnitResponse.builder()
                 .id(entity.getId())
                 .name(entity.getName())
                 .description(entity.getDescription())
                 .iconId(entity.getIcon() != null ? entity.getIcon().getId() : null)
+                .icon(iconInfo)
                 .status(entity.getStatus())
                 .currentVersion(entity.getCurrentVersion())
                 .createdBy(entity.getCreatedBy())

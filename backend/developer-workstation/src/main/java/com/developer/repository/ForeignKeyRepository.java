@@ -18,6 +18,6 @@ public interface ForeignKeyRepository extends JpaRepository<ForeignKey, Long> {
     
     List<ForeignKey> findByRefTableDefinitionId(Long refTableId);
     
-    @Query("SELECT fk FROM ForeignKey fk WHERE fk.tableDefinition.functionUnit.id = :functionUnitId")
+    @Query("SELECT f FROM ForeignKey f JOIN f.tableDefinition t WHERE t.functionUnit.id = :functionUnitId")
     List<ForeignKey> findByFunctionUnitId(@Param("functionUnitId") Long functionUnitId);
 }

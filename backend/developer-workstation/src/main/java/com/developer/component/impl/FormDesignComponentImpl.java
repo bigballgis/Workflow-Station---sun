@@ -2,13 +2,19 @@ package com.developer.component.impl;
 
 import com.developer.component.FormDesignComponent;
 import com.developer.dto.FormDefinitionRequest;
+import com.developer.dto.FormTableBindingRequest;
 import com.developer.dto.ValidationResult;
+import com.developer.entity.FieldDefinition;
 import com.developer.entity.FormDefinition;
+import com.developer.entity.FormTableBinding;
 import com.developer.entity.FunctionUnit;
 import com.developer.entity.TableDefinition;
+import com.developer.enums.BindingMode;
+import com.developer.enums.BindingType;
 import com.developer.exception.BusinessException;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.FormDefinitionRepository;
+import com.developer.repository.FormTableBindingRepository;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.TableDefinitionRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -18,7 +24,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -27,33 +32,14 @@ import java.util.Map;
  */
 @Component
 @Slf4j
+@RequiredArgsConstructor
 public class FormDesignComponentImpl implements FormDesignComponent {
     
     private final FormDefinitionRepository formDefinitionRepository;
     private final FunctionUnitRepository functionUnitRepository;
     private final TableDefinitionRepository tableDefinitionRepository;
+    private final FormTableBindingRepository formTableBindingRepository;
     private final ObjectMapper objectMapper;
-    
-    /**
-     * 简化构造函数，用于测试
-     */
-    public FormDesignComponentImpl(FormDefinitionRepository formDefinitionRepository) {
-        this(formDefinitionRepository, null, null, new ObjectMapper());
-    }
-    
-    /**
-     * 完整构造函数
-     */
-    public FormDesignComponentImpl(
-            FormDefinitionRepository formDefinitionRepository,
-            FunctionUnitRepository functionUnitRepository,
-            TableDefinitionRepository tableDefinitionRepository,
-            ObjectMapper objectMapper) {
-        this.formDefinitionRepository = formDefinitionRepository;
-        this.functionUnitRepository = functionUnitRepository;
-        this.tableDefinitionRepository = tableDefinitionRepository;
-        this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper();
-    }
     
     @Override
     @Transactional
@@ -123,14 +109,14 @@ public class FormDesignComponentImpl implements FormDesignComponent {
     @Override
     @Transactional(readOnly = true)
     public FormDefinition getById(Long id) {
-        return formDefinitionRepository.findById(id)
+        return formDefinitionRepository.findByIdWithBoundTable(id)
                 .orElseThrow(() -> new ResourceNotFoundException("FormDefinition", id));
     }
     
     @Override
     @Transactional(readOnly = true)
     public List<FormDefinition> getByFunctionUnitId(Long functionUnitId) {
-        return formDefinitionRepository.findByFunctionUnitId(functionUnitId);
+        return formDefinitionRepository.findByFunctionUnitIdWithBoundTable(functionUnitId);
     }
     
     @Override
@@ -172,5 +158,120 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         }
         
         return result;
+    }
+    
+    // ========== 表绑定管理方法实现 ==========
+    
+    @Override
+    @Transactional
+    public FormTableBinding createBinding(Long formId, FormTableBindingRequest request) {
+        FormDefinition form = getById(formId);
+        TableDefinition table = tableDefinitionRepository.findById(request.getTableId())
+                .orElseThrow(() -> new ResourceNotFoundException("TableDefinition", request.getTableId()));
+        
+        // 检查是否已绑定该表
+        if (formTableBindingRepository.existsByFormIdAndTableId(formId, request.getTableId())) {
+            throw new BusinessException("BINDING_EXISTS", 
+                    "该表已绑定到此表单",
+                    "请勿重复绑定");
+        }
+        
+        // 检查主表绑定唯一性
+        if (request.getBindingType() == BindingType.PRIMARY) {
+            if (formTableBindingRepository.existsByFormIdAndBindingType(formId, BindingType.PRIMARY)) {
+                throw new BusinessException("PRIMARY_BINDING_EXISTS", 
+                        "此表单已有主表绑定",
+                        "请先删除现有主表绑定");
+            }
+        }
+        
+        // 验证外键字段（子表和关联表需要）
+        if (request.getBindingType() != BindingType.PRIMARY && request.getForeignKeyField() != null) {
+            validateForeignKeyField(table, request.getForeignKeyField());
+        }
+        
+        // 设置默认绑定模式
+        BindingMode bindingMode = request.getBindingMode();
+        if (bindingMode == null) {
+            bindingMode = request.getBindingType() == BindingType.PRIMARY 
+                    ? BindingMode.EDITABLE 
+                    : BindingMode.READONLY;
+        }
+        
+        // 计算排序顺序
+        int sortOrder = request.getSortOrder() != null 
+                ? request.getSortOrder() 
+                : (int) formTableBindingRepository.countByFormId(formId);
+        
+        FormTableBinding binding = FormTableBinding.builder()
+                .form(form)
+                .table(table)
+                .bindingType(request.getBindingType())
+                .bindingMode(bindingMode)
+                .foreignKeyField(request.getForeignKeyField())
+                .sortOrder(sortOrder)
+                .build();
+        
+        return formTableBindingRepository.save(binding);
+    }
+    
+    @Override
+    @Transactional
+    public FormTableBinding updateBinding(Long bindingId, FormTableBindingRequest request) {
+        FormTableBinding binding = formTableBindingRepository.findById(bindingId)
+                .orElseThrow(() -> new ResourceNotFoundException("FormTableBinding", bindingId));
+        
+        // 如果更改了绑定类型为主表，检查唯一性
+        if (request.getBindingType() == BindingType.PRIMARY && binding.getBindingType() != BindingType.PRIMARY) {
+            if (formTableBindingRepository.existsByFormIdAndBindingType(binding.getFormId(), BindingType.PRIMARY)) {
+                throw new BusinessException("PRIMARY_BINDING_EXISTS", 
+                        "此表单已有主表绑定",
+                        "请先删除现有主表绑定");
+            }
+        }
+        
+        // 验证外键字段
+        if (request.getBindingType() != BindingType.PRIMARY && request.getForeignKeyField() != null) {
+            validateForeignKeyField(binding.getTable(), request.getForeignKeyField());
+        }
+        
+        binding.setBindingType(request.getBindingType());
+        if (request.getBindingMode() != null) {
+            binding.setBindingMode(request.getBindingMode());
+        }
+        binding.setForeignKeyField(request.getForeignKeyField());
+        if (request.getSortOrder() != null) {
+            binding.setSortOrder(request.getSortOrder());
+        }
+        
+        return formTableBindingRepository.save(binding);
+    }
+    
+    @Override
+    @Transactional
+    public void deleteBinding(Long bindingId) {
+        FormTableBinding binding = formTableBindingRepository.findById(bindingId)
+                .orElseThrow(() -> new ResourceNotFoundException("FormTableBinding", bindingId));
+        formTableBindingRepository.delete(binding);
+    }
+    
+    @Override
+    @Transactional(readOnly = true)
+    public List<FormTableBinding> getBindings(Long formId) {
+        return formTableBindingRepository.findByFormIdWithTable(formId);
+    }
+    
+    /**
+     * 验证外键字段是否存在于表中
+     */
+    private void validateForeignKeyField(TableDefinition table, String foreignKeyField) {
+        boolean fieldExists = table.getFieldDefinitions().stream()
+                .anyMatch(field -> field.getFieldName().equals(foreignKeyField));
+        
+        if (!fieldExists) {
+            throw new BusinessException("INVALID_FOREIGN_KEY", 
+                    "指定的外键字段在表中不存在: " + foreignKeyField,
+                    "请检查字段名是否正确");
+        }
     }
 }

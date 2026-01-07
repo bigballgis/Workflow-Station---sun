@@ -59,43 +59,93 @@ export interface TaskCompleteRequest {
   returnActivityId?: string
 }
 
+export interface TaskHistoryInfo {
+  id: string
+  taskId: string
+  taskName: string
+  activityId: string
+  activityName: string
+  activityType: string
+  operationType: string
+  operatorId: string
+  operatorName: string
+  operationTime: string
+  comment?: string
+  duration?: number
+}
+
+export interface TaskStatistics {
+  totalTasks: number
+  directTasks: number
+  groupTasks: number
+  deptRoleTasks: number
+  delegatedTasks: number
+  overdueTasks: number
+  urgentTasks: number
+  highPriorityTasks: number
+  todayNewTasks: number
+  todayCompletedTasks: number
+}
+
 // 查询待办任务
 export function queryTasks(params: TaskQueryRequest) {
-  return request.post<{ data: PageResponse<TaskInfo> }>('/tasks/query', params)
+  return request.post<{ data: PageResponse<TaskInfo> }>('/api/v1/tasks/query', params)
 }
 
 // 获取任务详情
 export function getTaskDetail(taskId: string) {
-  return request.get<{ data: TaskInfo }>(`/tasks/${taskId}`)
+  return request.get<{ data: TaskInfo }>(`/api/v1/tasks/${taskId}`)
+}
+
+// 获取任务流转历史
+export function getTaskHistory(taskId: string) {
+  return request.get<{ data: TaskHistoryInfo[] }>(`/api/v1/tasks/${taskId}/history`)
+}
+
+// 获取任务统计
+export function getTaskStatistics() {
+  return request.get<{ data: TaskStatistics }>('/api/v1/tasks/statistics')
 }
 
 // 认领任务
 export function claimTask(taskId: string) {
-  return request.post<{ data: TaskInfo }>(`/tasks/${taskId}/claim`)
+  return request.post<{ data: TaskInfo }>(`/api/v1/tasks/${taskId}/claim`)
 }
 
 // 取消认领
 export function unclaimTask(taskId: string, originalAssignmentType: string, originalAssignee: string) {
-  return request.post<{ data: TaskInfo }>(`/tasks/${taskId}/unclaim`, null, {
+  return request.post<{ data: TaskInfo }>(`/api/v1/tasks/${taskId}/unclaim`, null, {
     params: { originalAssignmentType, originalAssignee }
   })
 }
 
 // 完成任务
 export function completeTask(taskId: string, data: TaskCompleteRequest) {
-  return request.post(`/tasks/${taskId}/complete`, data)
+  return request.post(`/api/v1/tasks/${taskId}/complete`, data)
 }
 
 // 委托任务
 export function delegateTask(taskId: string, delegateId: string, reason?: string) {
-  return request.post(`/tasks/${taskId}/delegate`, null, {
+  return request.post(`/api/v1/tasks/${taskId}/delegate`, null, {
     params: { delegateId, reason }
   })
 }
 
 // 转办任务
 export function transferTask(taskId: string, toUserId: string, reason?: string) {
-  return request.post(`/tasks/${taskId}/transfer`, null, {
+  return request.post(`/api/v1/tasks/${taskId}/transfer`, null, {
     params: { toUserId, reason }
   })
+}
+
+// 催办任务
+export function urgeTask(taskId: string, message?: string) {
+  return request.post(`/api/v1/tasks/${taskId}/urge`, null, {
+    params: { message }
+  })
+}
+
+// 批量催办任务
+export function batchUrgeTasks(taskIds: string[], message?: string) {
+  return request.post('/api/v1/tasks/batch/urge', { taskIds, message })
 }

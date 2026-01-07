@@ -21,6 +21,7 @@ public class FunctionUnitResponse {
     private String name;
     private String description;
     private Long iconId;
+    private IconInfo icon;
     private FunctionUnitStatus status;
     private String currentVersion;
     private String createdBy;
@@ -31,4 +32,17 @@ public class FunctionUnitResponse {
     private int formCount;
     private int actionCount;
     private boolean hasProcess;
+    
+    /**
+     * 图标信息内部类
+     */
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class IconInfo {
+        private Long id;
+        private String name;
+        private String svgContent;
+    }
 }

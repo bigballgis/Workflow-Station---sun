@@ -1,8 +1,10 @@
 package com.developer.component;
 
 import com.developer.dto.FormDefinitionRequest;
+import com.developer.dto.FormTableBindingRequest;
 import com.developer.dto.ValidationResult;
 import com.developer.entity.FormDefinition;
+import com.developer.entity.FormTableBinding;
 
 import java.util.List;
 import java.util.Map;
@@ -51,4 +53,26 @@ public interface FormDesignComponent {
      * 验证表单定义
      */
     ValidationResult validate(Long id);
+    
+    // ========== 表绑定管理方法 ==========
+    
+    /**
+     * 创建表单表绑定
+     */
+    FormTableBinding createBinding(Long formId, FormTableBindingRequest request);
+    
+    /**
+     * 更新表单表绑定
+     */
+    FormTableBinding updateBinding(Long bindingId, FormTableBindingRequest request);
+    
+    /**
+     * 删除表单表绑定
+     */
+    void deleteBinding(Long bindingId);
+    
+    /**
+     * 获取表单的所有表绑定
+     */
+    List<FormTableBinding> getBindings(Long formId);
 }

@@ -8,6 +8,7 @@ import com.admin.dto.request.UserUpdateRequest;
 import com.admin.dto.response.BatchImportResult;
 import com.admin.dto.response.PageResult;
 import com.admin.dto.response.UserCreateResult;
+import com.admin.dto.response.UserDetailInfo;
 import com.admin.dto.response.UserInfo;
 import com.admin.entity.User;
 import com.admin.service.UserImportService;
@@ -76,10 +77,10 @@ public class UserController {
     }
     
     @GetMapping("/{userId}")
-    @Operation(summary = "获取用户详情", description = "根据用户ID获取用户详细信息")
-    public ResponseEntity<UserInfo> getUser(@PathVariable String userId) {
-        User user = userManager.getUser(userId);
-        return ResponseEntity.ok(UserInfo.fromEntity(user));
+    @Operation(summary = "获取用户详情", description = "根据用户ID获取用户详细信息，包含角色和登录历史")
+    public ResponseEntity<UserDetailInfo> getUser(@PathVariable String userId) {
+        UserDetailInfo userDetail = userManager.getUserDetail(userId);
+        return ResponseEntity.ok(userDetail);
     }
     
     @PutMapping("/{userId}")
@@ -112,5 +113,15 @@ public class UserController {
     public ResponseEntity<Void> deleteUser(@PathVariable String userId) {
         userManager.deleteUser(userId);
         return ResponseEntity.ok().build();
+    }
+    
+    @GetMapping("/export-template")
+    @Operation(summary = "下载导入模板", description = "下载用户批量导入的Excel模板")
+    public ResponseEntity<byte[]> exportTemplate() {
+        byte[] template = userImportService.generateImportTemplate();
+        return ResponseEntity.ok()
+                .header("Content-Disposition", "attachment; filename=user_import_template.xlsx")
+                .header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                .body(template);
     }
 }

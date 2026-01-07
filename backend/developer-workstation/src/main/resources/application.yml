@@ -6,9 +6,9 @@ spring:
     name: developer-workstation
   
   datasource:
-    url: jdbc:postgresql://localhost:5432/developer_workstation
-    username: postgres
-    password: postgres
+    url: jdbc:postgresql://localhost:5432/workflow_platform
+    username: platform
+    password: platform123
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 10

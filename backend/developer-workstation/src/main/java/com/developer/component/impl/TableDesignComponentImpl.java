@@ -25,6 +25,7 @@ import java.util.*;
  */
 @Component
 @Slf4j
+@RequiredArgsConstructor
 public class TableDesignComponentImpl implements TableDesignComponent {
     
     private final TableDefinitionRepository tableDefinitionRepository;
@@ -32,32 +33,7 @@ public class TableDesignComponentImpl implements TableDesignComponent {
     private final ForeignKeyRepository foreignKeyRepository;
     private final FunctionUnitRepository functionUnitRepository;
     private final FormDefinitionRepository formDefinitionRepository;
-    
-    /**
-     * 简化构造函数，用于测试
-     */
-    public TableDesignComponentImpl(
-            TableDefinitionRepository tableDefinitionRepository,
-            FieldDefinitionRepository fieldDefinitionRepository,
-            ForeignKeyRepository foreignKeyRepository) {
-        this(tableDefinitionRepository, fieldDefinitionRepository, foreignKeyRepository, null, null);
-    }
-    
-    /**
-     * 完整构造函数
-     */
-    public TableDesignComponentImpl(
-            TableDefinitionRepository tableDefinitionRepository,
-            FieldDefinitionRepository fieldDefinitionRepository,
-            ForeignKeyRepository foreignKeyRepository,
-            FunctionUnitRepository functionUnitRepository,
-            FormDefinitionRepository formDefinitionRepository) {
-        this.tableDefinitionRepository = tableDefinitionRepository;
-        this.fieldDefinitionRepository = fieldDefinitionRepository;
-        this.foreignKeyRepository = foreignKeyRepository;
-        this.functionUnitRepository = functionUnitRepository;
-        this.formDefinitionRepository = formDefinitionRepository;
-    }
+    private final FormTableBindingRepository formTableBindingRepository;
     
     @Override
     @Transactional
@@ -116,10 +92,17 @@ public class TableDesignComponentImpl implements TableDesignComponent {
     public void delete(Long id) {
         TableDefinition tableDefinition = getById(id);
         
-        // 检查是否被表单引用
-        if (formDefinitionRepository.existsByBoundTableId(id)) {
+        // 检查是否被表单引用（旧的单表绑定方式）
+        if (formDefinitionRepository.existsByBoundTable_Id(id)) {
             throw new BusinessException("BIZ_TABLE_IN_USE", 
                     "表被表单引用，无法删除",
+                    "请先解除表单绑定");
+        }
+        
+        // 检查是否被表单多表绑定引用
+        if (formTableBindingRepository.existsByTableId(id)) {
+            throw new BusinessException("BIZ_TABLE_IN_USE", 
+                    "表被表单绑定引用，无法删除",
                     "请先解除表单绑定");
         }
         

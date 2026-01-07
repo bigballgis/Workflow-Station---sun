@@ -3,6 +3,10 @@ package com.developer.property;
 import com.developer.component.FormDesignComponent;
 import com.developer.component.impl.FormDesignComponentImpl;
 import com.developer.repository.FormDefinitionRepository;
+import com.developer.repository.FormTableBindingRepository;
+import com.developer.repository.FunctionUnitRepository;
+import com.developer.repository.TableDefinitionRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import net.jqwik.api.*;
 
 import java.util.Map;
@@ -23,7 +27,12 @@ public class FormDesignPropertyTest {
     @Property(tries = 20)
     void formConfigRoundTripProperty(@ForAll("formConfigs") Map<String, Object> config) {
         FormDefinitionRepository repository = mock(FormDefinitionRepository.class);
-        FormDesignComponent component = new FormDesignComponentImpl(repository);
+        FunctionUnitRepository functionUnitRepository = mock(FunctionUnitRepository.class);
+        TableDefinitionRepository tableDefinitionRepository = mock(TableDefinitionRepository.class);
+        FormTableBindingRepository formTableBindingRepository = mock(FormTableBindingRepository.class);
+        ObjectMapper objectMapper = new ObjectMapper();
+        FormDesignComponent component = new FormDesignComponentImpl(
+                repository, functionUnitRepository, tableDefinitionRepository, formTableBindingRepository, objectMapper);
         
         assertThat(component).isNotNull();
         assertThat(config).isNotNull();

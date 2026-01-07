@@ -13,12 +13,18 @@ export default {
     error: '操作失敗',
     noData: '暫無資料'
   },
+  sidebar: {
+    collapse: '收起側邊欄',
+    expand: '展開側邊欄'
+  },
   functionUnit: {
     title: '功能單元',
     name: '名稱',
     description: '描述',
     status: '狀態',
     version: '版本',
+    icon: '圖示',
+    tags: '標籤',
     createTime: '建立時間',
     actions: '操作',
     create: '建立功能單元',
@@ -29,7 +35,13 @@ export default {
     process: '流程設計',
     tables: '表設計',
     forms: '表單設計',
-    actionDesign: '動作設計'
+    actionDesign: '動作設計',
+    filterByTags: '按標籤篩選',
+    selectTags: '選擇標籤',
+    noData: '暫無功能單元',
+    noResults: '沒有匹配的功能單元',
+    clearFilters: '清除篩選',
+    showingResults: '顯示 {count} / {total} 個結果'
   },
   process: {
     title: '流程設計器',
@@ -64,7 +76,27 @@ export default {
     title: '圖示庫',
     upload: '上傳圖示',
     category: '分類',
-    search: '搜尋圖示'
+    search: '搜尋圖示',
+    selectIcon: '選擇圖示',
+    searchPlaceholder: '搜尋圖示名稱',
+    clear: '清除',
+    file: '圖示檔案',
+    name: '名稱',
+    tags: '標籤',
+    selectFile: '選擇SVG檔案',
+    namePlaceholder: '請輸入圖示名稱',
+    tagsPlaceholder: '多個標籤用逗號分隔',
+    selectFileFirst: '請先選擇檔案',
+    enterName: '請輸入名稱',
+    uploadSuccess: '上傳成功',
+    uploadFailed: '上傳失敗',
+    clickToSelect: '點擊選擇圖示',
+    clickToChange: '點擊更換圖示',
+    categorySystem: '系統',
+    categoryBusiness: '業務',
+    categoryAction: '動作',
+    categoryStatus: '狀態',
+    categoryCustom: '自訂'
   },
   version: {
     title: '版本管理',

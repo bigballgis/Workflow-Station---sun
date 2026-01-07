@@ -39,7 +39,8 @@
 
     <!-- 任务列表 -->
     <div class="portal-card">
-      <el-table :data="taskList" v-loading="loading" stripe>
+      <el-table :data="taskList" v-loading="loading" stripe @selection-change="handleSelectionChange">
+        <el-table-column type="selection" width="55" />
         <el-table-column prop="taskName" :label="t('task.taskName')" min-width="200">
           <template #default="{ row }">
             <el-link type="primary" @click="viewTask(row)">{{ row.taskName }}</el-link>
@@ -75,7 +76,7 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column :label="t('task.actions')" width="200" fixed="right">
+        <el-table-column :label="t('task.actions')" width="220" fixed="right">
           <template #default="{ row }">
             <el-button
               v-if="canClaim(row)"
@@ -96,12 +97,19 @@
                 <el-dropdown-menu>
                   <el-dropdown-item command="delegate">{{ t('task.delegate') }}</el-dropdown-item>
                   <el-dropdown-item command="transfer">{{ t('task.transfer') }}</el-dropdown-item>
+                  <el-dropdown-item command="urge">{{ t('task.urge') }}</el-dropdown-item>
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
           </template>
         </el-table-column>
       </el-table>
+
+      <!-- 批量操作 -->
+      <div class="batch-actions" v-if="selectedTasks.length > 0">
+        <span>已选择 {{ selectedTasks.length }} 项</span>
+        <el-button size="small" @click="handleBatchUrge">批量催办</el-button>
+      </div>
 
       <el-pagination
         v-model:current-page="pagination.page"
@@ -115,18 +123,23 @@
       />
     </div>
 
-    <!-- 委托/转办对话框 -->
+    <!-- 委托/转办/催办对话框 -->
     <el-dialog v-model="actionDialogVisible" :title="actionDialogTitle" width="500px">
       <el-form :model="actionForm" label-width="80px">
-        <el-form-item label="目标用户">
+        <el-form-item label="目标用户" v-if="currentAction !== 'urge' && currentAction !== 'batchUrge'">
           <el-select v-model="actionForm.targetUserId" filterable placeholder="请选择用户" style="width: 100%;">
             <el-option label="李四" value="user_2" />
             <el-option label="王五" value="user_3" />
             <el-option label="赵六" value="user_4" />
           </el-select>
         </el-form-item>
-        <el-form-item label="原因说明">
-          <el-input v-model="actionForm.reason" type="textarea" :rows="3" placeholder="请输入原因" />
+        <el-form-item :label="currentAction === 'urge' || currentAction === 'batchUrge' ? '催办消息' : '原因说明'">
+          <el-input 
+            v-model="actionForm.reason" 
+            type="textarea" 
+            :rows="3" 
+            :placeholder="currentAction === 'urge' || currentAction === 'batchUrge' ? '请输入催办消息（可选）' : '请输入原因'" 
+          />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -143,7 +156,7 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { Search, ArrowDown } from '@element-plus/icons-vue'
-import { queryTasks, claimTask, delegateTask, transferTask, TaskInfo } from '@/api/task'
+import { queryTasks, claimTask, delegateTask, transferTask, urgeTask, batchUrgeTasks, TaskInfo } from '@/api/task'
 import dayjs from 'dayjs'
 
 const { t } = useI18n()
@@ -151,6 +164,7 @@ const router = useRouter()
 
 const loading = ref(false)
 const taskList = ref<TaskInfo[]>([])
+const selectedTasks = ref<TaskInfo[]>([])
 
 const filterForm = reactive({
   assignmentTypes: [] as string[],
@@ -265,6 +279,10 @@ const handlePageChange = () => {
   loadTasks()
 }
 
+const handleSelectionChange = (selection: TaskInfo[]) => {
+  selectedTasks.value = selection
+}
+
 const viewTask = (task: TaskInfo) => {
   router.push(`/tasks/${task.taskId}`)
 }
@@ -292,14 +310,27 @@ const handleProcess = (task: TaskInfo) => {
 const handleAction = (action: string, task: TaskInfo) => {
   currentAction.value = action
   currentTask.value = task
-  actionDialogTitle.value = action === 'delegate' ? t('task.delegate') : t('task.transfer')
+  
+  const titleMap: Record<string, string> = {
+    delegate: t('task.delegate'),
+    transfer: t('task.transfer'),
+    urge: t('task.urge')
+  }
+  actionDialogTitle.value = titleMap[action] || action
   actionForm.targetUserId = ''
   actionForm.reason = ''
   actionDialogVisible.value = true
 }
 
+const handleBatchUrge = () => {
+  currentAction.value = 'batchUrge'
+  actionDialogTitle.value = '批量催办'
+  actionForm.reason = ''
+  actionDialogVisible.value = true
+}
+
 const submitAction = async () => {
-  if (!actionForm.targetUserId) {
+  if (currentAction.value !== 'urge' && currentAction.value !== 'batchUrge' && !actionForm.targetUserId) {
     ElMessage.warning('请选择目标用户')
     return
   }
@@ -307,10 +338,18 @@ const submitAction = async () => {
   try {
     if (currentAction.value === 'delegate') {
       await delegateTask(currentTask.value!.taskId, actionForm.targetUserId, actionForm.reason)
-    } else {
+      ElMessage.success('委托成功')
+    } else if (currentAction.value === 'transfer') {
       await transferTask(currentTask.value!.taskId, actionForm.targetUserId, actionForm.reason)
+      ElMessage.success('转办成功')
+    } else if (currentAction.value === 'urge') {
+      await urgeTask(currentTask.value!.taskId, actionForm.reason)
+      ElMessage.success('催办成功')
+    } else if (currentAction.value === 'batchUrge') {
+      const taskIds = selectedTasks.value.map(t => t.taskId)
+      await batchUrgeTasks(taskIds, actionForm.reason)
+      ElMessage.success('批量催办成功')
     }
-    ElMessage.success('操作成功')
     actionDialogVisible.value = false
     loadTasks()
   } catch (error) {
@@ -366,6 +405,20 @@ onMounted(() => {
     
     .el-form {
       margin-bottom: -18px;
+    }
+  }
+  
+  .batch-actions {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-top: 16px;
+    padding: 12px 16px;
+    background: #f5f7fa;
+    border-radius: 4px;
+    
+    span {
+      color: var(--text-secondary);
     }
   }
   

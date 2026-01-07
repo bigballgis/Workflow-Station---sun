@@ -23,30 +23,12 @@ import java.util.Map;
  */
 @Component
 @Slf4j
+@RequiredArgsConstructor
 public class VersionComponentImpl implements VersionComponent {
     
     private final VersionRepository versionRepository;
     private final FunctionUnitRepository functionUnitRepository;
     private final ObjectMapper objectMapper;
-    
-    /**
-     * 简化构造函数，用于测试
-     */
-    public VersionComponentImpl(VersionRepository versionRepository) {
-        this(versionRepository, null, new ObjectMapper());
-    }
-    
-    /**
-     * 完整构造函数
-     */
-    public VersionComponentImpl(
-            VersionRepository versionRepository,
-            FunctionUnitRepository functionUnitRepository,
-            ObjectMapper objectMapper) {
-        this.versionRepository = versionRepository;
-        this.functionUnitRepository = functionUnitRepository;
-        this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper();
-    }
     
     @Override
     @Transactional

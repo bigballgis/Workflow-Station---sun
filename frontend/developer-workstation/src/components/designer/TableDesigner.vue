@@ -2,11 +2,16 @@
   <div class="table-designer">
     <div class="designer-toolbar">
       <el-button type="primary" @click="showCreateDialog = true">创建表</el-button>
-      <el-button @click="handleGenerateDDL">{{ $t('table.generateDDL') }}</el-button>
+      <el-button @click="loadTables" :loading="loading">
+        <el-icon><Refresh /></el-icon> 刷新
+      </el-button>
+      <el-button @click="handleGenerateDDL" :disabled="!selectedTable">{{ $t('table.generateDDL') }}</el-button>
+      <el-button @click="handleValidate">验证表结构</el-button>
+      <el-button @click="showRelationDialog = true" :disabled="store.tables.length < 2">配置关联</el-button>
     </div>
     
     <div class="table-list" v-if="!selectedTable">
-      <el-table :data="tables" v-loading="loading" stripe @row-click="handleSelectTable">
+      <el-table :data="store.tables" v-loading="loading" stripe @row-click="handleSelectTable">
         <el-table-column prop="tableName" :label="$t('table.tableName')" />
         <el-table-column prop="tableType" :label="$t('table.tableType')" width="120">
           <template #default="{ row }">
@@ -19,6 +24,14 @@
         <el-table-column label="字段数" width="80">
           <template #default="{ row }">{{ row.fieldDefinitions?.length || 0 }}</template>
         </el-table-column>
+        <el-table-column label="关联" width="100">
+          <template #default="{ row }">
+            <el-tag v-if="getTableRelations(row.id).length" type="success" size="small">
+              {{ getTableRelations(row.id).length }} 个
+            </el-tag>
+            <span v-else class="text-muted">无</span>
+          </template>
+        </el-table-column>
         <el-table-column label="操作" width="150">
           <template #default="{ row }">
             <el-button link type="primary" @click.stop="handleSelectTable(row)">编辑</el-button>
@@ -30,10 +43,11 @@
 
     <div class="table-editor" v-else>
       <div class="editor-header">
-        <el-button @click="selectedTable = null">
+        <el-button @click="handleBackToList">
           <el-icon><ArrowLeft /></el-icon> 返回列表
         </el-button>
         <span class="table-name">{{ selectedTable.tableName }}</span>
+        <el-button type="primary" @click="handleSaveTable">保存</el-button>
       </div>
       
       <el-form :model="selectedTable" label-width="100px" style="max-width: 600px; margin-bottom: 20px;">
@@ -44,6 +58,7 @@
           <el-select v-model="selectedTable.tableType">
             <el-option label="主表" value="MAIN" />
             <el-option label="子表" value="SUB" />
+            <el-option label="动作表" value="ACTION" />
             <el-option label="关联表" value="RELATION" />
           </el-select>
         </el-form-item>
@@ -89,6 +104,11 @@
             <el-checkbox v-model="row.isPrimaryKey" />
           </template>
         </el-table-column>
+        <el-table-column prop="description" label="描述" min-width="150">
+          <template #default="{ row }">
+            <el-input v-model="row.description" size="small" />
+          </template>
+        </el-table-column>
         <el-table-column label="操作" width="80">
           <template #default="{ $index }">
             <el-button link type="danger" @click="handleRemoveField($index)">删除</el-button>
@@ -107,6 +127,7 @@
           <el-select v-model="createForm.tableType">
             <el-option label="主表" value="MAIN" />
             <el-option label="子表" value="SUB" />
+            <el-option label="动作表" value="ACTION" />
             <el-option label="关联表" value="RELATION" />
           </el-select>
         </el-form-item>
@@ -119,73 +140,252 @@
         <el-button type="primary" @click="handleCreateTable">确定</el-button>
       </template>
     </el-dialog>
+
+    <!-- DDL Dialog -->
+    <el-dialog v-model="showDDLDialog" title="DDL 预览" width="700px">
+      <el-select v-model="ddlDialect" style="margin-bottom: 16px;">
+        <el-option label="PostgreSQL" value="POSTGRESQL" />
+        <el-option label="MySQL" value="MYSQL" />
+        <el-option label="Oracle" value="ORACLE" />
+      </el-select>
+      <el-input v-model="ddlContent" type="textarea" :rows="15" readonly />
+      <template #footer>
+        <el-button @click="handleCopyDDL">复制</el-button>
+        <el-button @click="showDDLDialog = false">关闭</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- Relation Config Dialog -->
+    <el-dialog v-model="showRelationDialog" title="数据模型关联配置" width="800px">
+      <div class="relation-config">
+        <el-alert type="info" :closable="false" style="margin-bottom: 16px;">
+          配置表之间的关联关系，支持一对一、一对多、多对多关联类型。
+        </el-alert>
+        
+        <div class="relation-list">
+          <div v-for="(rel, index) in relations" :key="index" class="relation-item">
+            <el-select v-model="rel.sourceTableId" placeholder="源表" style="width: 150px;">
+              <el-option v-for="t in store.tables" :key="t.id" :label="t.tableName" :value="t.id" />
+            </el-select>
+            <el-select v-model="rel.sourceFieldName" placeholder="源字段" style="width: 120px;" 
+                       :disabled="!rel.sourceTableId">
+              <el-option v-for="f in getTableFields(rel.sourceTableId)" :key="f.fieldName" 
+                         :label="f.fieldName" :value="f.fieldName" />
+            </el-select>
+            <el-select v-model="rel.relationType" placeholder="关联类型" style="width: 120px;">
+              <el-option label="一对一" value="ONE_TO_ONE" />
+              <el-option label="一对多" value="ONE_TO_MANY" />
+              <el-option label="多对多" value="MANY_TO_MANY" />
+            </el-select>
+            <el-select v-model="rel.targetTableId" placeholder="目标表" style="width: 150px;">
+              <el-option v-for="t in store.tables" :key="t.id" :label="t.tableName" :value="t.id" />
+            </el-select>
+            <el-select v-model="rel.targetFieldName" placeholder="目标字段" style="width: 120px;"
+                       :disabled="!rel.targetTableId">
+              <el-option v-for="f in getTableFields(rel.targetTableId)" :key="f.fieldName" 
+                         :label="f.fieldName" :value="f.fieldName" />
+            </el-select>
+            <el-button link type="danger" @click="removeRelation(index)">
+              <el-icon><Delete /></el-icon>
+            </el-button>
+          </div>
+        </div>
+        
+        <el-button @click="addRelation" style="margin-top: 12px;">
+          <el-icon><Plus /></el-icon> 添加关联
+        </el-button>
+      </div>
+      <template #footer>
+        <el-button @click="showRelationDialog = false">取消</el-button>
+        <el-button type="primary" @click="handleSaveRelations">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { ArrowLeft } from '@element-plus/icons-vue'
+import { ArrowLeft, Delete, Plus, Refresh } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import api from '@/api'
+import { useFunctionUnitStore } from '@/stores/functionUnit'
+import { functionUnitApi, type TableDefinition, type FieldDefinition } from '@/api/functionUnit'
+
+interface TableRelation {
+  id?: number
+  sourceTableId: number | null
+  sourceFieldName: string
+  relationType: string
+  targetTableId: number | null
+  targetFieldName: string
+}
 
 const props = defineProps<{ functionUnitId: number }>()
 
-const tables = ref<any[]>([])
+const store = useFunctionUnitStore()
 const loading = ref(false)
-const selectedTable = ref<any>(null)
+const selectedTable = ref<TableDefinition | null>(null)
 const showCreateDialog = ref(false)
+const showDDLDialog = ref(false)
+const showRelationDialog = ref(false)
+const ddlDialect = ref('POSTGRESQL')
+const ddlContent = ref('')
 const createForm = reactive({ tableName: '', tableType: 'MAIN', description: '' })
+const relations = ref<TableRelation[]>([])
 
 const tableTypeLabel = (type: string) => {
-  const map: Record<string, string> = { MAIN: '主表', SUB: '子表', RELATION: '关联表' }
+  const map: Record<string, string> = { MAIN: '主表', SUB: '子表', ACTION: '动作表', RELATION: '关联表' }
   return map[type] || type
+}
+
+function getTableFields(tableId: number | null): FieldDefinition[] {
+  if (!tableId) return []
+  const table = store.tables.find(t => t.id === tableId)
+  return table?.fieldDefinitions || []
+}
+
+function getTableRelations(tableId: number): TableRelation[] {
+  return relations.value.filter(r => r.sourceTableId === tableId || r.targetTableId === tableId)
 }
 
 async function loadTables() {
   loading.value = true
   try {
-    const res = await api.get(`/function-units/${props.functionUnitId}/tables`)
-    tables.value = res.data || []
+    await store.fetchTables(props.functionUnitId)
+    await loadRelations()
   } finally {
     loading.value = false
   }
 }
 
-function handleSelectTable(row: any) {
-  selectedTable.value = { ...row, fieldDefinitions: [...(row.fieldDefinitions || [])] }
+async function loadRelations() {
+  try {
+    // Load relations from localStorage for now (can be replaced with API call)
+    const stored = localStorage.getItem(`table_relations_${props.functionUnitId}`)
+    if (stored) {
+      relations.value = JSON.parse(stored)
+    }
+  } catch {
+    relations.value = []
+  }
+}
+
+function handleSelectTable(row: TableDefinition) {
+  selectedTable.value = { 
+    ...row, 
+    fieldDefinitions: [...(row.fieldDefinitions || []).map(f => ({ ...f }))] 
+  }
+}
+
+function handleBackToList() {
+  selectedTable.value = null
 }
 
 async function handleCreateTable() {
-  await api.post(`/function-units/${props.functionUnitId}/tables`, createForm)
-  ElMessage.success('创建成功')
-  showCreateDialog.value = false
-  Object.assign(createForm, { tableName: '', tableType: 'MAIN', description: '' })
-  loadTables()
+  try {
+    await store.createTable(props.functionUnitId, createForm)
+    ElMessage.success('创建成功')
+    showCreateDialog.value = false
+    Object.assign(createForm, { tableName: '', tableType: 'MAIN', description: '' })
+    loadTables()
+  } catch (e: any) {
+    ElMessage.error(e.response?.data?.message || '创建失败')
+  }
 }
 
-async function handleDeleteTable(row: any) {
+async function handleSaveTable() {
+  if (!selectedTable.value) return
+  try {
+    await store.updateTable(props.functionUnitId, selectedTable.value.id, selectedTable.value)
+    ElMessage.success('保存成功')
+    loadTables()
+  } catch (e: any) {
+    ElMessage.error(e.response?.data?.message || '保存失败')
+  }
+}
+
+async function handleDeleteTable(row: TableDefinition) {
   await ElMessageBox.confirm('确定要删除该表吗？', '提示', { type: 'warning' })
-  await api.delete(`/function-units/${props.functionUnitId}/tables/${row.id}`)
-  ElMessage.success('删除成功')
-  loadTables()
+  try {
+    await store.deleteTable(props.functionUnitId, row.id)
+    ElMessage.success('删除成功')
+    loadTables()
+  } catch (e: any) {
+    ElMessage.error(e.response?.data?.message || '删除失败')
+  }
 }
 
 function handleAddField() {
+  if (!selectedTable.value) return
   selectedTable.value.fieldDefinitions.push({
     fieldName: '',
     dataType: 'VARCHAR',
     length: 255,
     nullable: true,
-    isPrimaryKey: false
+    isPrimaryKey: false,
+    description: ''
   })
 }
 
 function handleRemoveField(index: number) {
+  if (!selectedTable.value) return
   selectedTable.value.fieldDefinitions.splice(index, 1)
 }
 
-function handleGenerateDDL() {
-  ElMessage.info('DDL生成功能开发中')
+async function handleGenerateDDL() {
+  if (!selectedTable.value) return
+  try {
+    const res = await functionUnitApi.generateDDL?.(props.functionUnitId, selectedTable.value.id, ddlDialect.value)
+    ddlContent.value = res?.data || ''
+    showDDLDialog.value = true
+  } catch {
+    ElMessage.info('DDL生成功能开发中')
+  }
+}
+
+async function handleValidate() {
+  try {
+    const res = await functionUnitApi.validateTables?.(props.functionUnitId)
+    if (res?.data?.valid) {
+      ElMessage.success('表结构验证通过')
+    } else {
+      ElMessage.warning(`验证发现问题: ${res?.data?.errors?.join(', ') || '未知错误'}`)
+    }
+  } catch {
+    ElMessage.info('验证功能开发中')
+  }
+}
+
+function handleCopyDDL() {
+  navigator.clipboard.writeText(ddlContent.value)
+  ElMessage.success('已复制到剪贴板')
+}
+
+function addRelation() {
+  relations.value.push({
+    sourceTableId: null,
+    sourceFieldName: '',
+    relationType: 'ONE_TO_MANY',
+    targetTableId: null,
+    targetFieldName: ''
+  })
+}
+
+function removeRelation(index: number) {
+  relations.value.splice(index, 1)
+}
+
+function handleSaveRelations() {
+  // Validate relations
+  const validRelations = relations.value.filter(r => 
+    r.sourceTableId && r.sourceFieldName && r.relationType && r.targetTableId && r.targetFieldName
+  )
+  
+  // Save to localStorage (can be replaced with API call)
+  localStorage.setItem(`table_relations_${props.functionUnitId}`, JSON.stringify(validRelations))
+  relations.value = validRelations
+  
+  ElMessage.success('关联配置已保存')
+  showRelationDialog.value = false
 }
 
 onMounted(loadTables)
@@ -212,5 +412,28 @@ onMounted(loadTables)
 .table-name {
   font-size: 18px;
   font-weight: bold;
+  flex: 1;
+}
+
+.text-muted {
+  color: #909399;
+  font-size: 12px;
+}
+
+.relation-config {
+  .relation-list {
+    max-height: 350px;
+    overflow-y: auto;
+  }
+  
+  .relation-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px;
+    margin-bottom: 8px;
+    background: #f5f7fa;
+    border-radius: 4px;
+  }
 }
 </style>

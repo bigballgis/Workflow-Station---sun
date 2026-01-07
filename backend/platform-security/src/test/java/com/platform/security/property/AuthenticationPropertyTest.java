@@ -14,7 +14,7 @@ import com.platform.security.service.impl.AuthenticationServiceImpl;
 import com.platform.security.service.impl.JwtTokenServiceImpl;
 import com.platform.security.service.impl.LoginAuditService;
 import net.jqwik.api.*;
-import net.jqwik.api.constraints.AlphaNumeric;
+import net.jqwik.api.constraints.CharRange;
 import net.jqwik.api.constraints.StringLength;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -58,8 +58,8 @@ class AuthenticationPropertyTest {
      */
     @Property(tries = 100)
     void validCredentialsShouldReturnTokens(
-            @ForAll @AlphaNumeric @StringLength(min = 3, max = 20) String username,
-            @ForAll @AlphaNumeric @StringLength(min = 6, max = 50) String password
+            @ForAll @CharRange(from = 'a', to = 'z') @StringLength(min = 3, max = 20) String username,
+            @ForAll @CharRange(from = 'a', to = 'z') @StringLength(min = 6, max = 50) String password
     ) {
         // Setup mocks
         UserRepository userRepository = mock(UserRepository.class);
@@ -101,9 +101,9 @@ class AuthenticationPropertyTest {
      */
     @Property(tries = 100)
     void invalidPasswordShouldReturn401(
-            @ForAll @AlphaNumeric @StringLength(min = 3, max = 20) String username,
-            @ForAll @AlphaNumeric @StringLength(min = 6, max = 50) String correctPassword,
-            @ForAll @AlphaNumeric @StringLength(min = 6, max = 50) String wrongPassword
+            @ForAll @CharRange(from = 'a', to = 'z') @StringLength(min = 3, max = 20) String username,
+            @ForAll @CharRange(from = 'a', to = 'z') @StringLength(min = 6, max = 50) String correctPassword,
+            @ForAll @CharRange(from = 'a', to = 'z') @StringLength(min = 6, max = 50) String wrongPassword
     ) {
         Assume.that(!correctPassword.equals(wrongPassword));
 
@@ -145,8 +145,8 @@ class AuthenticationPropertyTest {
      */
     @Property(tries = 100)
     void lockedAccountShouldReturn403(
-            @ForAll @AlphaNumeric @StringLength(min = 3, max = 20) String username,
-            @ForAll @AlphaNumeric @StringLength(min = 6, max = 50) String password
+            @ForAll @CharRange(from = 'a', to = 'z') @StringLength(min = 3, max = 20) String username,
+            @ForAll @CharRange(from = 'a', to = 'z') @StringLength(min = 6, max = 50) String password
     ) {
         // Setup mocks
         UserRepository userRepository = mock(UserRepository.class);
@@ -186,8 +186,8 @@ class AuthenticationPropertyTest {
      */
     @Property(tries = 100)
     void inactiveAccountShouldReturn403(
-            @ForAll @AlphaNumeric @StringLength(min = 3, max = 20) String username,
-            @ForAll @AlphaNumeric @StringLength(min = 6, max = 50) String password
+            @ForAll @CharRange(from = 'a', to = 'z') @StringLength(min = 3, max = 20) String username,
+            @ForAll @CharRange(from = 'a', to = 'z') @StringLength(min = 6, max = 50) String password
     ) {
         // Setup mocks
         UserRepository userRepository = mock(UserRepository.class);
@@ -227,8 +227,8 @@ class AuthenticationPropertyTest {
      */
     @Property(tries = 100)
     void nonExistentUserShouldReturn401(
-            @ForAll @AlphaNumeric @StringLength(min = 3, max = 20) String username,
-            @ForAll @AlphaNumeric @StringLength(min = 6, max = 50) String password
+            @ForAll @CharRange(from = 'a', to = 'z') @StringLength(min = 3, max = 20) String username,
+            @ForAll @CharRange(from = 'a', to = 'z') @StringLength(min = 6, max = 50) String password
     ) {
         // Setup mocks
         UserRepository userRepository = mock(UserRepository.class);

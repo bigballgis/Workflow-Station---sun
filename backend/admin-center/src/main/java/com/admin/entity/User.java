@@ -95,6 +95,16 @@ public class User {
     @Column(name = "updated_by", length = 64)
     private String updatedBy;
     
+    @Column(name = "deleted")
+    @Builder.Default
+    private Boolean deleted = false;
+    
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
+    
+    @Column(name = "deleted_by", length = 64)
+    private String deletedBy;
+    
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private Set<UserRole> userRoles = new HashSet<>();

@@ -4,6 +4,7 @@ import com.developer.component.ActionDesignComponent;
 import com.developer.component.impl.ActionDesignComponentImpl;
 import com.developer.enums.ActionType;
 import com.developer.repository.ActionDefinitionRepository;
+import com.developer.repository.FunctionUnitRepository;
 import net.jqwik.api.*;
 
 import static org.assertj.core.api.Assertions.*;
@@ -22,7 +23,8 @@ public class ActionDesignPropertyTest {
     @Property(tries = 20)
     void actionProcessStepBindingProperty(@ForAll("actionTypes") ActionType actionType) {
         ActionDefinitionRepository repository = mock(ActionDefinitionRepository.class);
-        ActionDesignComponent component = new ActionDesignComponentImpl(repository);
+        FunctionUnitRepository functionUnitRepository = mock(FunctionUnitRepository.class);
+        ActionDesignComponent component = new ActionDesignComponentImpl(repository, functionUnitRepository);
         
         assertThat(component).isNotNull();
         assertThat(actionType).isNotNull();

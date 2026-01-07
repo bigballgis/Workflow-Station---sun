@@ -47,32 +47,58 @@ export interface UpdateRoleRequest {
   description?: string
 }
 
+// 角色管理API - 使用独立的baseURL
+const ROLE_BASE = '/api/v1/roles'
+const PERMISSION_BASE = '/api/v1/permissions'
+
 export const roleApi = {
-  list: (params?: { type?: string; status?: string }) => get<Role[]>('/roles', { params }),
+  list: (params?: { type?: string; status?: string }) => 
+    get<Role[]>(ROLE_BASE, { params, baseURL: '' }),
   
-  getById: (id: string) => get<Role>(`/roles/${id}`),
+  getById: (id: string) => get<Role>(`${ROLE_BASE}/${id}`, { baseURL: '' }),
   
-  create: (data: CreateRoleRequest) => post<Role>('/roles', data),
+  create: (data: CreateRoleRequest) => post<Role>(ROLE_BASE, data, { baseURL: '' }),
   
-  update: (id: string, data: UpdateRoleRequest) => put<Role>(`/roles/${id}`, data),
+  update: (id: string, data: UpdateRoleRequest) => put<Role>(`${ROLE_BASE}/${id}`, data, { baseURL: '' }),
   
-  delete: (id: string) => del<void>(`/roles/${id}`),
+  delete: (id: string) => del<void>(`${ROLE_BASE}/${id}`, { baseURL: '' }),
   
-  getPermissions: (id: string) => get<RolePermission[]>(`/roles/${id}/permissions`),
+  getPermissions: (id: string) => get<RolePermission[]>(`${ROLE_BASE}/${id}/permissions`, { baseURL: '' }),
   
   updatePermissions: (id: string, permissions: RolePermission[]) => 
-    put<void>(`/roles/${id}/permissions`, permissions),
+    put<void>(`${ROLE_BASE}/${id}/permissions`, permissions, { baseURL: '' }),
   
   getMembers: (id: string, params?: { page?: number; size?: number }) => 
-    get<any>(`/roles/${id}/members`, { params }),
+    get<any>(`${ROLE_BASE}/${id}/members`, { params, baseURL: '' }),
   
-  addMembers: (id: string, userIds: string[]) => post<void>(`/roles/${id}/members`, { userIds }),
+  addMember: (roleId: string, userId: string, reason?: string) => 
+    post<void>(`${ROLE_BASE}/${roleId}/members/${userId}`, null, { 
+      params: { reason }, 
+      baseURL: '' 
+    }),
   
-  removeMembers: (id: string, userIds: string[]) => del<void>(`/roles/${id}/members`, { data: { userIds } })
+  removeMember: (roleId: string, userId: string, reason?: string) => 
+    del<void>(`${ROLE_BASE}/${roleId}/members/${userId}`, { 
+      params: { reason }, 
+      baseURL: '' 
+    }),
+  
+  batchAddMembers: (roleId: string, userIds: string[], reason?: string) => 
+    post<any>(`${ROLE_BASE}/${roleId}/members/batch`, { userIds, reason }, { baseURL: '' }),
+  
+  batchRemoveMembers: (roleId: string, userIds: string[], reason?: string) => 
+    del<any>(`${ROLE_BASE}/${roleId}/members/batch`, { 
+      data: { userIds, reason }, 
+      baseURL: '' 
+    }),
+  
+  getMemberCount: (id: string) => get<number>(`${ROLE_BASE}/${id}/members/count`, { baseURL: '' }),
+  
+  getHistory: (id: string) => get<any[]>(`${ROLE_BASE}/${id}/history`, { baseURL: '' })
 }
 
 export const permissionApi = {
-  getTree: () => get<Permission[]>('/permissions/tree'),
+  getTree: () => get<Permission[]>(`${PERMISSION_BASE}/tree`, { baseURL: '' }),
   
-  getByRole: (roleId: string) => get<Permission[]>(`/permissions/role/${roleId}`)
+  getByRole: (roleId: string) => get<Permission[]>(`${PERMISSION_BASE}/role/${roleId}`, { baseURL: '' })
 }

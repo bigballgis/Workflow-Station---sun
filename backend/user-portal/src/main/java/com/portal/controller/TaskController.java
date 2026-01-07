@@ -9,6 +9,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 /**
  * 任务管理API
  */
@@ -23,7 +25,13 @@ public class TaskController {
 
     @Operation(summary = "查询待办任务列表")
     @PostMapping("/query")
-    public ApiResponse<PageResponse<TaskInfo>> queryTasks(@RequestBody TaskQueryRequest request) {
+    public ApiResponse<PageResponse<TaskInfo>> queryTasks(
+            @RequestHeader(value = "X-User-Id", required = false) String userId,
+            @RequestBody TaskQueryRequest request) {
+        // 如果请求中没有userId，使用header中的
+        if (request.getUserId() == null && userId != null) {
+            request.setUserId(userId);
+        }
         PageResponse<TaskInfo> result = taskQueryComponent.queryTasks(request);
         return ApiResponse.success(result);
     }
@@ -34,6 +42,13 @@ public class TaskController {
         TaskInfo task = taskQueryComponent.getTaskById(taskId)
                 .orElseThrow(() -> new IllegalArgumentException("任务不存在: " + taskId));
         return ApiResponse.success(task);
+    }
+
+    @Operation(summary = "获取任务流转历史")
+    @GetMapping("/{taskId}/history")
+    public ApiResponse<List<TaskHistoryInfo>> getTaskHistory(@PathVariable String taskId) {
+        List<TaskHistoryInfo> history = taskQueryComponent.getTaskHistory(taskId);
+        return ApiResponse.success(history);
     }
 
     @Operation(summary = "认领任务")
@@ -87,5 +102,32 @@ public class TaskController {
             @RequestParam(required = false) String reason) {
         taskProcessComponent.transferTask(taskId, userId, toUserId, reason);
         return ApiResponse.success("任务转办成功", null);
+    }
+
+    @Operation(summary = "催办任务")
+    @PostMapping("/{taskId}/urge")
+    public ApiResponse<Void> urgeTask(
+            @PathVariable String taskId,
+            @RequestHeader("X-User-Id") String userId,
+            @RequestParam(required = false) String message) {
+        taskProcessComponent.urgeTask(taskId, userId, message);
+        return ApiResponse.success("催办成功", null);
+    }
+
+    @Operation(summary = "批量催办任务")
+    @PostMapping("/batch/urge")
+    public ApiResponse<Void> batchUrgeTasks(
+            @RequestHeader("X-User-Id") String userId,
+            @RequestBody TaskBatchUrgeRequest request) {
+        taskProcessComponent.batchUrgeTasks(request.getTaskIds(), userId, request.getMessage());
+        return ApiResponse.success("批量催办成功", null);
+    }
+
+    @Operation(summary = "获取任务统计")
+    @GetMapping("/statistics")
+    public ApiResponse<TaskStatistics> getTaskStatistics(
+            @RequestHeader("X-User-Id") String userId) {
+        TaskStatistics statistics = taskQueryComponent.getTaskStatistics(userId);
+        return ApiResponse.success(statistics);
     }
 }

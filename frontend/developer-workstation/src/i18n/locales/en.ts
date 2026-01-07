@@ -13,12 +13,18 @@ export default {
     error: 'Operation failed',
     noData: 'No data'
   },
+  sidebar: {
+    collapse: 'Collapse sidebar',
+    expand: 'Expand sidebar'
+  },
   functionUnit: {
     title: 'Function Units',
     name: 'Name',
     description: 'Description',
     status: 'Status',
     version: 'Version',
+    icon: 'Icon',
+    tags: 'Tags',
     createTime: 'Created At',
     actions: 'Actions',
     create: 'Create Function Unit',
@@ -29,7 +35,13 @@ export default {
     process: 'Process Design',
     tables: 'Table Design',
     forms: 'Form Design',
-    actionDesign: 'Action Design'
+    actionDesign: 'Action Design',
+    filterByTags: 'Filter by Tags',
+    selectTags: 'Select Tags',
+    noData: 'No function units',
+    noResults: 'No matching function units',
+    clearFilters: 'Clear Filters',
+    showingResults: 'Showing {count} / {total} results'
   },
   process: {
     title: 'Process Designer',
@@ -64,7 +76,27 @@ export default {
     title: 'Icon Library',
     upload: 'Upload Icon',
     category: 'Category',
-    search: 'Search Icons'
+    search: 'Search Icons',
+    selectIcon: 'Select Icon',
+    searchPlaceholder: 'Search icon name',
+    clear: 'Clear',
+    file: 'Icon File',
+    name: 'Name',
+    tags: 'Tags',
+    selectFile: 'Select SVG File',
+    namePlaceholder: 'Enter icon name',
+    tagsPlaceholder: 'Separate tags with commas',
+    selectFileFirst: 'Please select a file first',
+    enterName: 'Please enter a name',
+    uploadSuccess: 'Upload successful',
+    uploadFailed: 'Upload failed',
+    clickToSelect: 'Click to select icon',
+    clickToChange: 'Click to change icon',
+    categorySystem: 'System',
+    categoryBusiness: 'Business',
+    categoryAction: 'Action',
+    categoryStatus: 'Status',
+    categoryCustom: 'Custom'
   },
   version: {
     title: 'Version Management',

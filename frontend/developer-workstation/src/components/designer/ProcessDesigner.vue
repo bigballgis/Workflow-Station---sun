@@ -2,111 +2,300 @@
   <div class="process-designer">
     <div class="designer-toolbar">
       <el-button-group>
-        <el-button @click="handleZoomIn"><el-icon><ZoomIn /></el-icon></el-button>
-        <el-button @click="handleZoomOut"><el-icon><ZoomOut /></el-icon></el-button>
-        <el-button @click="handleFitViewport">适应画布</el-button>
+        <el-button @click="handleZoomIn" :disabled="!modelerReady">
+          <el-icon><ZoomIn /></el-icon>
+        </el-button>
+        <el-button @click="handleZoomOut" :disabled="!modelerReady">
+          <el-icon><ZoomOut /></el-icon>
+        </el-button>
+        <el-button @click="handleFitViewport" :disabled="!modelerReady">适应画布</el-button>
+        <el-button @click="handleUndo" :disabled="!modelerReady">
+          <el-icon><RefreshLeft /></el-icon>
+        </el-button>
+        <el-button @click="handleRedo" :disabled="!modelerReady">
+          <el-icon><RefreshRight /></el-icon>
+        </el-button>
       </el-button-group>
       <el-button-group>
-        <el-button @click="handleValidate">{{ $t('process.validate') }}</el-button>
-        <el-button @click="handleSimulate">{{ $t('process.simulate') }}</el-button>
+        <el-button @click="handleValidate" :disabled="!modelerReady">验证</el-button>
+        <el-button @click="handleExportSVG" :disabled="!modelerReady">导出SVG</el-button>
+        <el-button @click="handleExportXML" :disabled="!modelerReady">导出XML</el-button>
+        <el-button @click="showDebugPanel = !showDebugPanel" :type="showDebugPanel ? 'primary' : ''">
+          <el-icon><Monitor /></el-icon> 调试
+        </el-button>
+        <el-button type="primary" @click="handleSave" :loading="saving" :disabled="!modelerReady">
+          保存
+        </el-button>
       </el-button-group>
     </div>
+    
     <div class="designer-content">
-      <div class="toolbox">
-        <h4>{{ $t('process.toolbox') }}</h4>
-        <div class="tool-items">
-          <div class="tool-item" draggable="true" @dragstart="handleDragStart('startEvent')">
-            <div class="tool-icon start-event"></div>
-            <span>开始事件</span>
-          </div>
-          <div class="tool-item" draggable="true" @dragstart="handleDragStart('endEvent')">
-            <div class="tool-icon end-event"></div>
-            <span>结束事件</span>
-          </div>
-          <div class="tool-item" draggable="true" @dragstart="handleDragStart('userTask')">
-            <div class="tool-icon user-task"></div>
-            <span>用户任务</span>
-          </div>
-          <div class="tool-item" draggable="true" @dragstart="handleDragStart('exclusiveGateway')">
-            <div class="tool-icon gateway"></div>
-            <span>排他网关</span>
-          </div>
-          <div class="tool-item" draggable="true" @dragstart="handleDragStart('parallelGateway')">
-            <div class="tool-icon gateway parallel"></div>
-            <span>并行网关</span>
-          </div>
-        </div>
-      </div>
-      <div ref="canvasRef" class="canvas"></div>
-      <div class="properties-panel">
-        <h4>{{ $t('process.properties') }}</h4>
-        <div v-if="selectedElement" class="property-form">
-          <el-form label-position="top" size="small">
-            <el-form-item label="ID">
-              <el-input v-model="selectedElement.id" disabled />
-            </el-form-item>
-            <el-form-item label="名称">
-              <el-input v-model="selectedElement.name" @change="handlePropertyChange" />
-            </el-form-item>
-          </el-form>
-        </div>
-        <div v-else class="no-selection">请选择一个元素</div>
+      <div ref="canvasRef" class="bpmn-canvas"></div>
+      <div class="properties-panel-container">
+        <NodePropertiesPanel 
+          v-if="bpmnModelerRef" 
+          :modeler="bpmnModelerRef" 
+          :function-unit-id="functionUnitId" 
+        />
       </div>
     </div>
+    
+    <!-- Debug Panel Drawer -->
+    <el-drawer v-model="showDebugPanel" title="流程调试" direction="btt" size="50%">
+      <ProcessDebugPanel :function-unit-id="functionUnitId" />
+    </el-drawer>
+
+    <!-- Import XML Dialog -->
+    <el-dialog v-model="showImportDialog" title="导入BPMN XML" width="600px">
+      <el-input v-model="importXml" type="textarea" :rows="15" placeholder="粘贴BPMN XML内容..." />
+      <template #footer>
+        <el-button @click="showImportDialog = false">取消</el-button>
+        <el-button type="primary" @click="handleImportXML">导入</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
-import { ZoomIn, ZoomOut } from '@element-plus/icons-vue'
+import { ref, onMounted, onUnmounted, nextTick, shallowRef } from 'vue'
+import { ZoomIn, ZoomOut, Monitor, RefreshLeft, RefreshRight } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
+import { useFunctionUnitStore } from '@/stores/functionUnit'
+import { functionUnitApi } from '@/api/functionUnit'
+import ProcessDebugPanel from '@/components/debug/ProcessDebugPanel.vue'
+import NodePropertiesPanel from '@/components/designer/properties/NodePropertiesPanel.vue'
+import customModdleDescriptor from '@/utils/customModdle'
+
+// @ts-ignore - bpmn-js types
+import BpmnModeler from 'bpmn-js/lib/Modeler'
 
 const props = defineProps<{ functionUnitId: number }>()
 
+const store = useFunctionUnitStore()
 const canvasRef = ref<HTMLElement>()
-const selectedElement = ref<{ id: string; name: string } | null>(null)
+const modelerReady = ref(false)
+const bpmnModelerRef = shallowRef<any>(null)
+const showDebugPanel = ref(false)
+const showImportDialog = ref(false)
+const importXml = ref('')
+const saving = ref(false)
+const currentZoom = ref(1)
+
 let bpmnModeler: any = null
 
-function handleDragStart(type: string) {
-  // TODO: Implement drag start
+// Default empty BPMN diagram
+const defaultBpmnXml = `<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+  id="Definitions_1"
+  targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_1" isExecutable="true">
+    <bpmn:startEvent id="StartEvent_1" name="开始">
+      <bpmn:outgoing>Flow_1</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:endEvent id="EndEvent_1" name="结束">
+      <bpmn:incoming>Flow_1</bpmn:incoming>
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="EndEvent_1" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+    <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_1">
+      <bpmndi:BPMNShape id="StartEvent_1_di" bpmnElement="StartEvent_1">
+        <dc:Bounds x="180" y="160" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="187" y="203" width="22" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_1_di" bpmnElement="EndEvent_1">
+        <dc:Bounds x="400" y="160" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="407" y="203" width="22" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_1_di" bpmnElement="Flow_1">
+        <di:waypoint x="216" y="178" />
+        <di:waypoint x="400" y="178" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>`
+
+async function initModeler() {
+  if (!canvasRef.value) return
+  
+  try {
+    bpmnModeler = new BpmnModeler({
+      container: canvasRef.value,
+      keyboard: {
+        bindTo: document
+      },
+      moddleExtensions: {
+        custom: customModdleDescriptor
+      }
+    })
+
+    // Load existing process or default
+    await store.fetchProcess(props.functionUnitId)
+    const xml = store.process?.bpmnXml || defaultBpmnXml
+    
+    console.log('Loading BPMN XML:', xml)
+    
+    const result = await bpmnModeler.importXML(xml)
+    console.log('Import result:', result)
+    
+    // 检查连线是否存在
+    const elementRegistry = bpmnModeler.get('elementRegistry')
+    const connections = elementRegistry.filter((element: any) => element.type === 'bpmn:SequenceFlow')
+    console.log('Connections found:', connections.length, connections)
+    
+    bpmnModelerRef.value = bpmnModeler
+    modelerReady.value = true
+    
+    // Fit to viewport after import
+    const canvas = bpmnModeler.get('canvas')
+    canvas.zoom('fit-viewport')
+    
+    // Listen for changes
+    bpmnModeler.on('commandStack.changed', () => {
+      // Mark as dirty
+    })
+    
+  } catch (err: any) {
+    console.error('Failed to initialize BPMN modeler:', err)
+    ElMessage.error('流程设计器初始化失败: ' + (err.message || '未知错误'))
+  }
 }
 
 function handleZoomIn() {
-  // TODO: Implement zoom in
+  if (!bpmnModeler) return
+  const canvas = bpmnModeler.get('canvas')
+  currentZoom.value = Math.min(currentZoom.value + 0.1, 3)
+  canvas.zoom(currentZoom.value)
 }
 
 function handleZoomOut() {
-  // TODO: Implement zoom out
+  if (!bpmnModeler) return
+  const canvas = bpmnModeler.get('canvas')
+  currentZoom.value = Math.max(currentZoom.value - 0.1, 0.3)
+  canvas.zoom(currentZoom.value)
 }
 
 function handleFitViewport() {
-  // TODO: Implement fit viewport
+  if (!bpmnModeler) return
+  const canvas = bpmnModeler.get('canvas')
+  canvas.zoom('fit-viewport')
+  currentZoom.value = 1
 }
 
-function handleValidate() {
-  ElMessage.info('流程验证功能开发中')
+function handleUndo() {
+  if (!bpmnModeler) return
+  const commandStack = bpmnModeler.get('commandStack')
+  commandStack.undo()
 }
 
-function handleSimulate() {
-  ElMessage.info('流程模拟功能开发中')
+function handleRedo() {
+  if (!bpmnModeler) return
+  const commandStack = bpmnModeler.get('commandStack')
+  commandStack.redo()
 }
 
-function handlePropertyChange() {
-  // TODO: Update element property
+async function handleValidate() {
+  try {
+    const res = await functionUnitApi.validateProcess?.(props.functionUnitId)
+    if (res?.data?.valid) {
+      ElMessage.success('流程验证通过')
+    } else {
+      const errors = res?.data?.errors || []
+      const warnings = res?.data?.warnings || []
+      if (errors.length) {
+        ElMessage.error(`验证错误: ${errors.join(', ')}`)
+      } else if (warnings.length) {
+        ElMessage.warning(`验证警告: ${warnings.join(', ')}`)
+      }
+    }
+  } catch (e: any) {
+    ElMessage.error(e.response?.data?.message || '验证失败')
+  }
+}
+
+async function handleExportSVG() {
+  if (!bpmnModeler) return
+  try {
+    const { svg } = await bpmnModeler.saveSVG()
+    downloadFile(svg, 'process.svg', 'image/svg+xml')
+    ElMessage.success('SVG导出成功')
+  } catch (err) {
+    ElMessage.error('SVG导出失败')
+  }
+}
+
+async function handleExportXML() {
+  if (!bpmnModeler) return
+  try {
+    const { xml } = await bpmnModeler.saveXML({ format: true })
+    downloadFile(xml, 'process.bpmn', 'application/xml')
+    ElMessage.success('XML导出成功')
+  } catch (err) {
+    ElMessage.error('XML导出失败')
+  }
+}
+
+function downloadFile(content: string, filename: string, type: string) {
+  const blob = new Blob([content], { type })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+async function handleImportXML() {
+  if (!bpmnModeler || !importXml.value.trim()) return
+  try {
+    await bpmnModeler.importXML(importXml.value)
+    showImportDialog.value = false
+    importXml.value = ''
+    ElMessage.success('导入成功')
+  } catch (err: any) {
+    ElMessage.error('导入失败: ' + (err.message || '无效的BPMN XML'))
+  }
+}
+
+async function handleSave() {
+  if (!bpmnModeler) return
+  saving.value = true
+  try {
+    const { xml } = await bpmnModeler.saveXML({ format: true })
+    await store.saveProcess(props.functionUnitId, { bpmnXml: xml })
+    ElMessage.success('保存成功')
+  } catch (e: any) {
+    ElMessage.error(e.response?.data?.message || '保存失败')
+  } finally {
+    saving.value = false
+  }
 }
 
 onMounted(async () => {
-  // TODO: Initialize bpmn-js
+  await nextTick()
+  await initModeler()
 })
 
 onUnmounted(() => {
-  bpmnModeler?.destroy()
+  if (bpmnModeler) {
+    bpmnModeler.destroy()
+    bpmnModeler = null
+  }
 })
 </script>
 
 <style lang="scss" scoped>
 .process-designer {
-  height: 600px;
+  height: calc(100vh - 280px);
+  min-height: 500px;
   display: flex;
   flex-direction: column;
 }
@@ -116,67 +305,144 @@ onUnmounted(() => {
   justify-content: space-between;
   padding: 10px;
   border-bottom: 1px solid #e6e6e6;
+  background: #fff;
+  flex-shrink: 0;
 }
 
 .designer-content {
   flex: 1;
   display: flex;
   overflow: hidden;
+  position: relative;
+  min-height: 0;
 }
 
-.toolbox {
-  width: 200px;
-  padding: 10px;
-  border-right: 1px solid #e6e6e6;
-  overflow-y: auto;
-}
-
-.tool-items {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.tool-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px;
-  border: 1px solid #e6e6e6;
-  border-radius: 4px;
-  cursor: grab;
+.bpmn-canvas {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  background: #fafafa;
   
-  &:hover {
-    background-color: #f5f7fa;
+  :deep(.djs-container) {
+    width: 100% !important;
+    height: 100% !important;
+  }
+  
+  :deep(.djs-palette) {
+    background: #fff;
+    border: 1px solid #e6e6e6;
+    border-radius: 4px;
+    
+    .entry {
+      &:hover {
+        background: rgba(219, 0, 17, 0.1);
+      }
+    }
+  }
+  
+  :deep(.djs-context-pad) {
+    .entry {
+      &:hover {
+        background: rgba(219, 0, 17, 0.1);
+      }
+    }
+  }
+  
+  :deep(.bjs-powered-by) {
+    display: none;
   }
 }
 
-.tool-icon {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  
-  &.start-event { background-color: #00A651; }
-  &.end-event { background-color: #DB0011; }
-  &.user-task { background-color: #409EFF; border-radius: 4px; }
-  &.gateway { background-color: #FF6600; transform: rotate(45deg); border-radius: 0; }
-}
-
-.canvas {
-  flex: 1;
-  background-color: #fafafa;
-}
-
-.properties-panel {
-  width: 280px;
-  padding: 10px;
+.properties-panel-container {
+  width: 320px;
   border-left: 1px solid #e6e6e6;
+  background: #fff;
   overflow-y: auto;
+  flex-shrink: 0;
+}
+</style>
+
+<style>
+/* Global styles for bpmn-js */
+@import 'bpmn-js/dist/assets/diagram-js.css';
+@import 'bpmn-js/dist/assets/bpmn-js.css';
+@import 'bpmn-js/dist/assets/bpmn-font/css/bpmn-embedded.css';
+
+/* Palette styles */
+.djs-palette {
+  width: 48px !important;
+  left: 10px !important;
+  top: 10px !important;
+  background: #fff !important;
+  border: 1px solid #e6e6e6 !important;
+  border-radius: 4px !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
 }
 
-.no-selection {
-  color: #909399;
-  text-align: center;
-  padding: 20px;
+.djs-palette .entry {
+  width: 100% !important;
+  height: 40px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+.djs-palette .entry:hover {
+  background: rgba(219, 0, 17, 0.1) !important;
+}
+
+.djs-palette .group {
+  display: block !important;
+}
+
+.djs-palette .separator {
+  margin: 5px 0 !important;
+  border-bottom: 1px solid #e6e6e6 !important;
+}
+
+/* Context pad styles */
+.djs-context-pad {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: wrap !important;
+  width: auto !important;
+  max-width: 150px !important;
+  background: white !important;
+  border-radius: 4px !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
+  padding: 4px !important;
+}
+
+.djs-context-pad .entry {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 28px !important;
+  height: 28px !important;
+  margin: 2px !important;
+  border-radius: 3px !important;
+  cursor: pointer !important;
+}
+
+.djs-context-pad .entry:hover {
+  background: rgba(219, 0, 17, 0.1) !important;
+}
+
+/* Popup menu styles */
+.djs-popup {
+  background: white !important;
+  border-radius: 4px !important;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15) !important;
+  max-height: 400px !important;
+  overflow-y: auto !important;
+}
+
+.djs-popup .entry {
+  padding: 8px 12px !important;
+  cursor: pointer !important;
+}
+
+.djs-popup .entry:hover {
+  background: rgba(219, 0, 17, 0.1) !important;
 }
 </style>

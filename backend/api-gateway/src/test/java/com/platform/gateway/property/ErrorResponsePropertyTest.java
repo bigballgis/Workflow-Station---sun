@@ -61,7 +61,7 @@ class ErrorResponsePropertyTest {
         
         ErrorResponse response = ErrorResponse.builder()
                 .errorCode(errorCode.getCode())
-                .message(errorCode.getDefaultMessage())
+                .message(errorCode.getMessage())
                 .traceId(traceId)
                 .timestamp(LocalDateTime.now())
                 .path("/api/test")
@@ -78,7 +78,7 @@ class ErrorResponsePropertyTest {
         
         ErrorResponse response = ErrorResponse.builder()
                 .errorCode(errorCode.getCode())
-                .message(errorCode.getDefaultMessage())
+                .message(errorCode.getMessage())
                 .timestamp(LocalDateTime.now())
                 .path("/api/test")
                 .build();

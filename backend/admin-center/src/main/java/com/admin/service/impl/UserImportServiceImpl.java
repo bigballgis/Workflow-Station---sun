@@ -230,4 +230,46 @@ public class UserImportServiceImpl implements UserImportService {
             default -> null;
         };
     }
+    
+    @Override
+    public byte[] generateImportTemplate() {
+        try (Workbook workbook = new XSSFWorkbook()) {
+            Sheet sheet = workbook.createSheet("用户导入模板");
+            
+            // 创建标题行样式
+            CellStyle headerStyle = workbook.createCellStyle();
+            Font headerFont = workbook.createFont();
+            headerFont.setBold(true);
+            headerStyle.setFont(headerFont);
+            headerStyle.setFillForegroundColor(IndexedColors.GREY_25_PERCENT.getIndex());
+            headerStyle.setFillPattern(FillPatternType.SOLID_FOREGROUND);
+            
+            // 创建标题行
+            Row headerRow = sheet.createRow(0);
+            String[] headers = {"用户名*", "邮箱*", "姓名*", "手机号", "工号", "部门ID", "职位", "初始密码*"};
+            
+            for (int i = 0; i < headers.length; i++) {
+                Cell cell = headerRow.createCell(i);
+                cell.setCellValue(headers[i]);
+                cell.setCellStyle(headerStyle);
+                sheet.setColumnWidth(i, 4000);
+            }
+            
+            // 创建示例数据行
+            Row exampleRow = sheet.createRow(1);
+            String[] examples = {"zhangsan", "zhangsan@example.com", "张三", "13800138000", "EMP001", "", "工程师", "Password123!"};
+            for (int i = 0; i < examples.length; i++) {
+                exampleRow.createCell(i).setCellValue(examples[i]);
+            }
+            
+            // 写入字节数组
+            java.io.ByteArrayOutputStream outputStream = new java.io.ByteArrayOutputStream();
+            workbook.write(outputStream);
+            return outputStream.toByteArray();
+            
+        } catch (IOException e) {
+            log.error("Failed to generate import template", e);
+            throw new RuntimeException("生成导入模板失败: " + e.getMessage());
+        }
+    }
 }

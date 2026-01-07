@@ -2,6 +2,7 @@ package com.developer.property;
 
 import com.developer.component.ProcessDesignComponent;
 import com.developer.component.impl.ProcessDesignComponentImpl;
+import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.ProcessDefinitionRepository;
 import net.jqwik.api.*;
 
@@ -21,7 +22,8 @@ public class ProcessDesignPropertyTest {
     @Property(tries = 20)
     void bpmnValidationConsistencyProperty(@ForAll("validBpmnElements") String elementType) {
         ProcessDefinitionRepository repository = mock(ProcessDefinitionRepository.class);
-        ProcessDesignComponent component = new ProcessDesignComponentImpl(repository);
+        FunctionUnitRepository functionUnitRepository = mock(FunctionUnitRepository.class);
+        ProcessDesignComponent component = new ProcessDesignComponentImpl(repository, functionUnitRepository);
         
         assertThat(component).isNotNull();
         assertThat(elementType).isIn(

@@ -9,5 +9,7 @@ public enum TableType {
     /** 子表 */
     SUB,
     /** 动作表 */
-    ACTION
+    ACTION,
+    /** 关联表 */
+    RELATION
 }

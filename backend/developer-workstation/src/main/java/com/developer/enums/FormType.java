@@ -9,5 +9,7 @@ public enum FormType {
     /** 子表单 */
     SUB,
     /** 动作表单 */
-    ACTION
+    ACTION,
+    /** 弹出表单 */
+    POPUP
 }

@@ -281,4 +281,74 @@ public class TaskProcessComponent {
         // 模拟实现，实际应调用admin-center服务
         return deptRoleId.contains(userId) || "common_role".equals(deptRoleId);
     }
+
+    /**
+     * 催办任务
+     */
+    @Transactional
+    public void urgeTask(String taskId, String urgerId, String message) {
+        TaskInfo task = getTaskOrThrow(taskId);
+
+        // 验证催办人是否有权限（通常是流程发起人或管理员）
+        if (!canUrgeTask(task, urgerId)) {
+            throw new PortalException("403", "您没有权限催办此任务");
+        }
+
+        // 获取任务处理人
+        String assignee = task.getAssignee();
+        String assigneeName = task.getAssigneeName();
+
+        // 发送催办通知（实际应调用消息服务）
+        String urgeMessage = message != null ? message : "请尽快处理任务：" + task.getTaskName();
+        sendUrgeNotification(taskId, assignee, urgerId, urgeMessage);
+
+        // 记录催办日志
+        DelegationAudit audit = DelegationAudit.builder()
+                .delegatorId(urgerId)
+                .delegateId(assignee)
+                .taskId(taskId)
+                .operationType("URGE_TASK")
+                .operationResult("SUCCESS")
+                .operationDetail(urgeMessage)
+                .build();
+        delegationAuditRepository.save(audit);
+
+        log.info("用户 {} 催办了任务 {}，处理人: {}", urgerId, taskId, assignee);
+    }
+
+    /**
+     * 批量催办任务
+     */
+    @Transactional
+    public void batchUrgeTasks(List<String> taskIds, String urgerId, String message) {
+        for (String taskId : taskIds) {
+            try {
+                urgeTask(taskId, urgerId, message);
+            } catch (Exception e) {
+                log.warn("催办任务 {} 失败: {}", taskId, e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * 验证用户是否可以催办任务
+     */
+    private boolean canUrgeTask(TaskInfo task, String userId) {
+        // 流程发起人可以催办
+        if (userId.equals(task.getInitiatorId())) {
+            return true;
+        }
+        // 管理员可以催办（实际应检查用户角色）
+        // 这里简化处理，允许所有用户催办
+        return true;
+    }
+
+    /**
+     * 发送催办通知
+     */
+    private void sendUrgeNotification(String taskId, String assignee, String urgerId, String message) {
+        // 实际应调用消息服务发送通知
+        // 这里只记录日志
+        log.info("发送催办通知: 任务={}, 处理人={}, 催办人={}, 消息={}", taskId, assignee, urgerId, message);
+    }
 }

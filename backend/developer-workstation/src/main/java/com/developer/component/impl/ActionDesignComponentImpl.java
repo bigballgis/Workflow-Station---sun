@@ -22,27 +22,11 @@ import java.util.Map;
  */
 @Component
 @Slf4j
+@RequiredArgsConstructor
 public class ActionDesignComponentImpl implements ActionDesignComponent {
     
     private final ActionDefinitionRepository actionDefinitionRepository;
     private final FunctionUnitRepository functionUnitRepository;
-    
-    /**
-     * 简化构造函数，用于测试
-     */
-    public ActionDesignComponentImpl(ActionDefinitionRepository actionDefinitionRepository) {
-        this(actionDefinitionRepository, null);
-    }
-    
-    /**
-     * 完整构造函数
-     */
-    public ActionDesignComponentImpl(
-            ActionDefinitionRepository actionDefinitionRepository,
-            FunctionUnitRepository functionUnitRepository) {
-        this.actionDefinitionRepository = actionDefinitionRepository;
-        this.functionUnitRepository = functionUnitRepository;
-    }
     
     @Override
     @Transactional

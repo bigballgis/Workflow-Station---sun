@@ -53,7 +53,12 @@ html, body, #app {
 .page-container {
   padding: 20px;
   background-color: $bg-page;
-  min-height: calc(100vh - #{$header-height});
+  min-height: 100%;
+  height: 100%;
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
 }
 
 // Card
@@ -61,12 +66,36 @@ html, body, #app {
   background-color: $bg-base;
   border-radius: 4px;
   padding: 20px;
-  margin-bottom: 20px;
+  width: 100%;
+  box-sizing: border-box;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 // Table Actions
 .table-actions {
   .el-button + .el-button {
     margin-left: 8px;
+  }
+}
+
+// SVG 样式隔离 - 仅针对图标库，防止 SVG 内部样式泄漏到全局
+// 注意：不要影响 BPMN 流程图的 SVG
+.icon-grid,
+.icon-preview,
+.icon-large-preview,
+.icon-selector-grid {
+  svg {
+    defs,
+    style,
+    title {
+      display: none !important;
+      visibility: hidden !important;
+      position: absolute !important;
+      width: 0 !important;
+      height: 0 !important;
+      overflow: hidden !important;
+    }
   }
 }

@@ -5,6 +5,7 @@ import com.developer.entity.*;
 import com.developer.exception.BusinessException;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.*;
+import com.developer.util.XmlEncodingUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,6 +22,7 @@ import java.util.zip.*;
  */
 @Component
 @Slf4j
+@RequiredArgsConstructor
 public class ExportImportComponentImpl implements ExportImportComponent {
     
     private final FunctionUnitRepository functionUnitRepository;
@@ -29,31 +31,6 @@ public class ExportImportComponentImpl implements ExportImportComponent {
     private final FormDefinitionRepository formDefinitionRepository;
     private final ActionDefinitionRepository actionDefinitionRepository;
     private final ObjectMapper objectMapper;
-    
-    /**
-     * 简化构造函数，用于测试
-     */
-    public ExportImportComponentImpl(FunctionUnitRepository functionUnitRepository) {
-        this(functionUnitRepository, null, null, null, null, new ObjectMapper());
-    }
-    
-    /**
-     * 完整构造函数
-     */
-    public ExportImportComponentImpl(
-            FunctionUnitRepository functionUnitRepository,
-            ProcessDefinitionRepository processDefinitionRepository,
-            TableDefinitionRepository tableDefinitionRepository,
-            FormDefinitionRepository formDefinitionRepository,
-            ActionDefinitionRepository actionDefinitionRepository,
-            ObjectMapper objectMapper) {
-        this.functionUnitRepository = functionUnitRepository;
-        this.processDefinitionRepository = processDefinitionRepository;
-        this.tableDefinitionRepository = tableDefinitionRepository;
-        this.formDefinitionRepository = formDefinitionRepository;
-        this.actionDefinitionRepository = actionDefinitionRepository;
-        this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper();
-    }
 
     @Override
     @Transactional(readOnly = true)
@@ -72,10 +49,11 @@ public class ExportImportComponentImpl implements ExportImportComponent {
             metadata.put("exportTime", System.currentTimeMillis());
             addZipEntry(zos, "metadata.json", objectMapper.writeValueAsBytes(metadata));
             
-            // 导出流程定义
+            // 导出流程定义 - 解码Base64后导出原始XML
             if (functionUnit.getProcessDefinition() != null) {
-                addZipEntry(zos, "process.bpmn", 
-                        functionUnit.getProcessDefinition().getBpmnXml().getBytes());
+                String bpmnXml = XmlEncodingUtil.smartDecode(
+                        functionUnit.getProcessDefinition().getBpmnXml());
+                addZipEntry(zos, "process.bpmn", bpmnXml.getBytes());
             }
             
             // 导出表定义
@@ -145,11 +123,12 @@ public class ExportImportComponentImpl implements ExportImportComponent {
                 .build();
         functionUnit = functionUnitRepository.save(functionUnit);
         
-        // 导入流程
+        // 导入流程 - 使用Base64编码存储
         if (packageData.containsKey("process")) {
+            String bpmnXml = (String) packageData.get("process");
             ProcessDefinition process = ProcessDefinition.builder()
                     .functionUnit(functionUnit)
-                    .bpmnXml((String) packageData.get("process"))
+                    .bpmnXml(XmlEncodingUtil.encode(bpmnXml))
                     .build();
             processDefinitionRepository.save(process);
         }

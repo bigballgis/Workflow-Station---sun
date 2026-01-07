@@ -1,13 +1,17 @@
 <template>
-  <el-dialog :model-value="modelValue" @update:model-value="$emit('update:modelValue', $event)" :title="`${t('role.members')} - ${role?.name}`" width="700px">
+  <el-dialog :model-value="modelValue" @update:model-value="$emit('update:modelValue', $event)" :title="`成员管理 - ${role?.name}`" width="700px" destroy-on-close>
     <div class="members-header">
       <el-button type="primary" size="small" @click="showAddDialog = true">添加成员</el-button>
     </div>
     
     <el-table :data="members" v-loading="loading" max-height="400">
-      <el-table-column prop="realName" label="姓名" />
-      <el-table-column prop="username" label="用户名" />
-      <el-table-column prop="departmentName" label="部门" />
+      <el-table-column prop="userId" label="用户ID" width="200" />
+      <el-table-column prop="roleCode" label="角色编码" />
+      <el-table-column prop="assignedAt" label="分配时间">
+        <template #default="{ row }">
+          {{ row.assignedAt ? new Date(row.assignedAt).toLocaleString('zh-CN') : '-' }}
+        </template>
+      </el-table-column>
       <el-table-column label="操作" width="100">
         <template #default="{ row }">
           <el-button link type="danger" @click="handleRemove(row)">移除</el-button>
@@ -16,60 +20,85 @@
     </el-table>
     
     <el-dialog v-model="showAddDialog" title="添加成员" width="500px" append-to-body>
-      <el-transfer v-model="selectedUsers" :data="availableUsers" :titles="['可选用户', '已选用户']" :props="{ key: 'id', label: 'realName' }" filterable />
+      <el-form :model="addForm" label-width="80px">
+        <el-form-item label="用户ID">
+          <el-input v-model="addForm.userId" placeholder="请输入用户ID" />
+        </el-form-item>
+        <el-form-item label="原因">
+          <el-input v-model="addForm.reason" type="textarea" placeholder="请输入添加原因（可选）" />
+        </el-form-item>
+      </el-form>
       <template #footer>
         <el-button @click="showAddDialog = false">取消</el-button>
-        <el-button type="primary" @click="handleAdd">确定</el-button>
+        <el-button type="primary" :loading="addLoading" @click="handleAdd">确定</el-button>
       </template>
     </el-dialog>
   </el-dialog>
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
-import { useI18n } from 'vue-i18n'
+import { ref, reactive, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Role, roleApi } from '@/api/role'
+import { type Role, roleApi } from '@/api/role'
 
 const props = defineProps<{ modelValue: boolean; role: Role | null }>()
 const emit = defineEmits(['update:modelValue'])
 
-const { t } = useI18n()
-
 const loading = ref(false)
+const addLoading = ref(false)
 const members = ref<any[]>([])
 const showAddDialog = ref(false)
-const availableUsers = ref<any[]>([])
-const selectedUsers = ref<string[]>([])
+const addForm = reactive({ userId: '', reason: '' })
 
 watch(() => props.modelValue, async (val) => {
   if (val && props.role) {
-    loading.value = true
-    try {
-      const result = await roleApi.getMembers(props.role.id, { page: 0, size: 100 })
-      members.value = result.content || []
-    } finally {
-      loading.value = false
-    }
+    await loadMembers()
   }
 })
 
-const handleRemove = async (user: any) => {
-  await ElMessageBox.confirm('确定要移除该成员吗？', '提示', { type: 'warning' })
-  await roleApi.removeMembers(props.role!.id, [user.id])
-  members.value = members.value.filter(m => m.id !== user.id)
-  ElMessage.success(t('common.success'))
+const loadMembers = async () => {
+  if (!props.role) return
+  loading.value = true
+  try {
+    members.value = await roleApi.getMembers(props.role.id)
+  } catch (error: any) {
+    ElMessage.error(error.message || '加载成员失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+const handleRemove = async (member: any) => {
+  try {
+    await ElMessageBox.confirm('确定要移除该成员吗？', '提示', { type: 'warning' })
+    await roleApi.removeMember(props.role!.id, member.userId, '管理员移除')
+    members.value = members.value.filter(m => m.userId !== member.userId)
+    ElMessage.success('移除成功')
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error(error.message || '移除失败')
+    }
+  }
 }
 
 const handleAdd = async () => {
-  if (selectedUsers.value.length === 0) return
-  await roleApi.addMembers(props.role!.id, selectedUsers.value)
-  showAddDialog.value = false
-  selectedUsers.value = []
-  // Refresh members
-  const result = await roleApi.getMembers(props.role!.id, { page: 0, size: 100 })
-  members.value = result.content || []
-  ElMessage.success(t('common.success'))
+  if (!addForm.userId.trim()) {
+    ElMessage.warning('请输入用户ID')
+    return
+  }
+  addLoading.value = true
+  try {
+    await roleApi.addMember(props.role!.id, addForm.userId.trim(), addForm.reason || undefined)
+    showAddDialog.value = false
+    addForm.userId = ''
+    addForm.reason = ''
+    await loadMembers()
+    ElMessage.success('添加成功')
+  } catch (error: any) {
+    ElMessage.error(error.message || '添加失败')
+  } finally {
+    addLoading.value = false
+  }
 }
 </script>
 

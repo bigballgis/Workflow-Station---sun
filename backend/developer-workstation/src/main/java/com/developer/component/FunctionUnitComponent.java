@@ -33,6 +33,11 @@ public interface FunctionUnitComponent {
     FunctionUnit getById(Long id);
     
     /**
+     * 根据ID获取功能单元响应DTO
+     */
+    FunctionUnitResponse getByIdAsResponse(Long id);
+    
+    /**
      * 分页查询功能单元
      */
     Page<FunctionUnitResponse> list(String name, String status, Pageable pageable);

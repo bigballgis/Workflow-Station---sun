@@ -3,8 +3,11 @@ package com.developer.controller;
 import com.developer.component.FormDesignComponent;
 import com.developer.dto.ApiResponse;
 import com.developer.dto.FormDefinitionRequest;
+import com.developer.dto.FormTableBindingRequest;
+import com.developer.dto.FormTableBindingResponse;
 import com.developer.dto.ValidationResult;
 import com.developer.entity.FormDefinition;
+import com.developer.entity.FormTableBinding;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -86,5 +89,50 @@ public class FormDesignController {
             @PathVariable Long formId) {
         ValidationResult result = formDesignComponent.validate(formId);
         return ResponseEntity.ok(ApiResponse.success(result));
+    }
+    
+    // ========== 表绑定管理端点 ==========
+    
+    @GetMapping("/{formId}/bindings")
+    @Operation(summary = "获取表单的所有表绑定")
+    public ResponseEntity<ApiResponse<List<FormTableBindingResponse>>> getBindings(
+            @PathVariable Long functionUnitId,
+            @PathVariable Long formId) {
+        List<FormTableBinding> bindings = formDesignComponent.getBindings(formId);
+        List<FormTableBindingResponse> result = bindings.stream()
+                .map(FormTableBindingResponse::fromEntity)
+                .toList();
+        return ResponseEntity.ok(ApiResponse.success(result));
+    }
+    
+    @PostMapping("/{formId}/bindings")
+    @Operation(summary = "创建表绑定")
+    public ResponseEntity<ApiResponse<FormTableBindingResponse>> createBinding(
+            @PathVariable Long functionUnitId,
+            @PathVariable Long formId,
+            @Valid @RequestBody FormTableBindingRequest request) {
+        FormTableBinding binding = formDesignComponent.createBinding(formId, request);
+        return ResponseEntity.ok(ApiResponse.success(FormTableBindingResponse.fromEntity(binding)));
+    }
+    
+    @PutMapping("/{formId}/bindings/{bindingId}")
+    @Operation(summary = "更新表绑定")
+    public ResponseEntity<ApiResponse<FormTableBindingResponse>> updateBinding(
+            @PathVariable Long functionUnitId,
+            @PathVariable Long formId,
+            @PathVariable Long bindingId,
+            @Valid @RequestBody FormTableBindingRequest request) {
+        FormTableBinding binding = formDesignComponent.updateBinding(bindingId, request);
+        return ResponseEntity.ok(ApiResponse.success(FormTableBindingResponse.fromEntity(binding)));
+    }
+    
+    @DeleteMapping("/{formId}/bindings/{bindingId}")
+    @Operation(summary = "删除表绑定")
+    public ResponseEntity<ApiResponse<Void>> deleteBinding(
+            @PathVariable Long functionUnitId,
+            @PathVariable Long formId,
+            @PathVariable Long bindingId) {
+        formDesignComponent.deleteBinding(bindingId);
+        return ResponseEntity.ok(ApiResponse.success(null));
     }
 }

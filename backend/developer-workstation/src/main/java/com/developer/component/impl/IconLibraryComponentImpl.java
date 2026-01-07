@@ -7,15 +7,18 @@ import com.developer.exception.BusinessException;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.IconRepository;
+import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -24,6 +27,7 @@ import java.util.List;
  */
 @Component
 @Slf4j
+@RequiredArgsConstructor
 public class IconLibraryComponentImpl implements IconLibraryComponent {
     
     private static final List<String> ALLOWED_FILE_TYPES = Arrays.asList("svg", "png", "ico");
@@ -31,23 +35,6 @@ public class IconLibraryComponentImpl implements IconLibraryComponent {
     
     private final IconRepository iconRepository;
     private final FunctionUnitRepository functionUnitRepository;
-    
-    /**
-     * 简化构造函数，用于测试
-     */
-    public IconLibraryComponentImpl(IconRepository iconRepository) {
-        this(iconRepository, null);
-    }
-    
-    /**
-     * 完整构造函数
-     */
-    public IconLibraryComponentImpl(
-            IconRepository iconRepository,
-            FunctionUnitRepository functionUnitRepository) {
-        this.iconRepository = iconRepository;
-        this.functionUnitRepository = functionUnitRepository;
-    }
     
     @Override
     @Transactional
@@ -104,8 +91,44 @@ public class IconLibraryComponentImpl implements IconLibraryComponent {
     
     @Override
     @Transactional(readOnly = true)
-    public Page<Icon> search(String keyword, IconCategory category, Pageable pageable) {
-        return iconRepository.search(keyword, category, pageable);
+    public Page<Icon> search(String keyword, IconCategory category, String tag, Pageable pageable) {
+        Specification<Icon> spec = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            
+            if (keyword != null && !keyword.trim().isEmpty()) {
+                String kw = "%" + keyword.trim().toLowerCase() + "%";
+                Predicate nameLike = cb.like(cb.lower(root.get("name")), kw);
+                Predicate tagsLike = cb.like(cb.lower(root.get("tags")), kw);
+                predicates.add(cb.or(nameLike, tagsLike));
+            }
+            
+            if (category != null) {
+                predicates.add(cb.equal(root.get("category"), category));
+            }
+            
+            if (tag != null && !tag.trim().isEmpty()) {
+                String tagPattern = "%" + tag.trim().toLowerCase() + "%";
+                predicates.add(cb.like(cb.lower(root.get("tags")), tagPattern));
+            }
+            
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+        
+        return iconRepository.findAll(spec, pageable);
+    }
+    
+    @Override
+    @Transactional(readOnly = true)
+    public List<String> getAllTags() {
+        return iconRepository.findAll().stream()
+                .map(Icon::getTags)
+                .filter(tags -> tags != null && !tags.trim().isEmpty())
+                .flatMap(tags -> Arrays.stream(tags.split(",")))
+                .map(String::trim)
+                .filter(tag -> !tag.isEmpty())
+                .distinct()
+                .sorted()
+                .toList();
     }
     
     @Override

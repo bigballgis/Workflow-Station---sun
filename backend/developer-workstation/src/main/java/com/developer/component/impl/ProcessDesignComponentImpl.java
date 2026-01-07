@@ -7,6 +7,7 @@ import com.developer.entity.ProcessDefinition;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.ProcessDefinitionRepository;
+import com.developer.util.XmlEncodingUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -21,27 +22,11 @@ import java.util.regex.Pattern;
  */
 @Component
 @Slf4j
+@RequiredArgsConstructor
 public class ProcessDesignComponentImpl implements ProcessDesignComponent {
     
     private final ProcessDefinitionRepository processDefinitionRepository;
     private final FunctionUnitRepository functionUnitRepository;
-    
-    /**
-     * 简化构造函数，用于测试
-     */
-    public ProcessDesignComponentImpl(ProcessDefinitionRepository processDefinitionRepository) {
-        this(processDefinitionRepository, null);
-    }
-    
-    /**
-     * 完整构造函数
-     */
-    public ProcessDesignComponentImpl(
-            ProcessDefinitionRepository processDefinitionRepository,
-            FunctionUnitRepository functionUnitRepository) {
-        this.processDefinitionRepository = processDefinitionRepository;
-        this.functionUnitRepository = functionUnitRepository;
-    }
     
     @Override
     @Transactional
@@ -55,7 +40,9 @@ public class ProcessDesignComponentImpl implements ProcessDesignComponent {
                         .functionUnit(functionUnit)
                         .build());
         
-        processDefinition.setBpmnXml(bpmnXml);
+        // 使用Base64编码存储XML，避免特殊字符转义问题
+        String encodedXml = XmlEncodingUtil.encode(bpmnXml);
+        processDefinition.setBpmnXml(encodedXml);
         
         return processDefinitionRepository.save(processDefinition);
     }
@@ -63,8 +50,14 @@ public class ProcessDesignComponentImpl implements ProcessDesignComponent {
     @Override
     @Transactional(readOnly = true)
     public ProcessDefinition getByFunctionUnitId(Long functionUnitId) {
-        return processDefinitionRepository.findByFunctionUnitId(functionUnitId)
+        ProcessDefinition processDefinition = processDefinitionRepository.findByFunctionUnitId(functionUnitId)
                 .orElseThrow(() -> new ResourceNotFoundException("ProcessDefinition", "functionUnitId=" + functionUnitId));
+        
+        // 智能解码：兼容旧数据（未编码）和新数据（Base64编码）
+        String decodedXml = XmlEncodingUtil.smartDecode(processDefinition.getBpmnXml());
+        processDefinition.setBpmnXml(decodedXml);
+        
+        return processDefinition;
     }
     
     @Override
