@@ -16,7 +16,7 @@ public interface IconLibraryComponent {
     /**
      * 上传图标
      */
-    Icon upload(MultipartFile file, String name, IconCategory category, String tags);
+    Icon upload(MultipartFile file, String name, IconCategory category, String description);
     
     /**
      * 删除图标
@@ -34,7 +34,7 @@ public interface IconLibraryComponent {
     Page<Icon> search(String keyword, IconCategory category, String tag, Pageable pageable);
     
     /**
-     * 获取所有标签
+     * 获取所有标签（分类）
      */
     List<String> getAllTags();
     

@@ -7,8 +7,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.nio.charset.StandardCharsets;
-import java.time.Instant;
+import java.time.LocalDateTime;
 
 /**
  * 图标DTO - 用于前端展示
@@ -24,11 +23,9 @@ public class IconDTO {
     private IconCategory category;
     private String svgContent;
     private Integer fileSize;
-    private Integer width;
-    private Integer height;
-    private String tags;
+    private String description;
     private String createdBy;
-    private Instant createdAt;
+    private LocalDateTime createdAt;
     
     /**
      * 从实体转换为DTO
@@ -38,20 +35,13 @@ public class IconDTO {
             return null;
         }
         
-        String svgContent = null;
-        if (icon.getFileData() != null) {
-            svgContent = new String(icon.getFileData(), StandardCharsets.UTF_8);
-        }
-        
         return IconDTO.builder()
                 .id(icon.getId())
                 .name(icon.getName())
                 .category(icon.getCategory())
-                .svgContent(svgContent)
+                .svgContent(icon.getSvgContent())
                 .fileSize(icon.getFileSize())
-                .width(icon.getWidth())
-                .height(icon.getHeight())
-                .tags(icon.getTags())
+                .description(icon.getDescription())
                 .createdBy(icon.getCreatedBy())
                 .createdAt(icon.getCreatedAt())
                 .build();

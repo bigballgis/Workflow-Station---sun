@@ -263,7 +263,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
             iconInfo = FunctionUnitResponse.IconInfo.builder()
                     .id(icon.getId())
                     .name(icon.getName())
-                    .svgContent(icon.getFileData() != null ? new String(icon.getFileData(), java.nio.charset.StandardCharsets.UTF_8) : null)
+                    .svgContent(icon.getSvgContent())
                     .build();
         }
         

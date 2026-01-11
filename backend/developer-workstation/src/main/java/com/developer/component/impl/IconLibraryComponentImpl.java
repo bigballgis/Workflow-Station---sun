@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -38,20 +39,23 @@ public class IconLibraryComponentImpl implements IconLibraryComponent {
     
     @Override
     @Transactional
-    public Icon upload(MultipartFile file, String name, IconCategory category, String tags) {
+    public Icon upload(MultipartFile file, String name, IconCategory category, String description) {
         validateFile(file);
         
         String originalFilename = file.getOriginalFilename();
         String fileType = getFileExtension(originalFilename);
         
-        byte[] fileData;
+        String svgContent;
+        int fileSize;
         try {
-            fileData = file.getBytes();
+            byte[] fileData = file.getBytes();
+            fileSize = fileData.length;
             
             // 如果是SVG，进行优化
             if ("svg".equalsIgnoreCase(fileType)) {
                 fileData = optimizeSvg(fileData);
             }
+            svgContent = new String(fileData, StandardCharsets.UTF_8);
         } catch (IOException e) {
             throw new BusinessException("SYS_FILE_READ_ERROR", "读取文件失败");
         }
@@ -59,10 +63,9 @@ public class IconLibraryComponentImpl implements IconLibraryComponent {
         Icon icon = Icon.builder()
                 .name(name)
                 .category(category)
-                .fileType(fileType)
-                .fileData(fileData)
-                .fileSize(fileData.length)
-                .tags(tags)
+                .svgContent(svgContent)
+                .fileSize(fileSize)
+                .description(description)
                 .build();
         
         return iconRepository.save(icon);
@@ -98,17 +101,12 @@ public class IconLibraryComponentImpl implements IconLibraryComponent {
             if (keyword != null && !keyword.trim().isEmpty()) {
                 String kw = "%" + keyword.trim().toLowerCase() + "%";
                 Predicate nameLike = cb.like(cb.lower(root.get("name")), kw);
-                Predicate tagsLike = cb.like(cb.lower(root.get("tags")), kw);
-                predicates.add(cb.or(nameLike, tagsLike));
+                Predicate descLike = cb.like(cb.lower(root.get("description")), kw);
+                predicates.add(cb.or(nameLike, descLike));
             }
             
             if (category != null) {
                 predicates.add(cb.equal(root.get("category"), category));
-            }
-            
-            if (tag != null && !tag.trim().isEmpty()) {
-                String tagPattern = "%" + tag.trim().toLowerCase() + "%";
-                predicates.add(cb.like(cb.lower(root.get("tags")), tagPattern));
             }
             
             return cb.and(predicates.toArray(new Predicate[0]));
@@ -120,14 +118,9 @@ public class IconLibraryComponentImpl implements IconLibraryComponent {
     @Override
     @Transactional(readOnly = true)
     public List<String> getAllTags() {
-        return iconRepository.findAll().stream()
-                .map(Icon::getTags)
-                .filter(tags -> tags != null && !tags.trim().isEmpty())
-                .flatMap(tags -> Arrays.stream(tags.split(",")))
-                .map(String::trim)
-                .filter(tag -> !tag.isEmpty())
-                .distinct()
-                .sorted()
+        // 返回所有分类作为标签
+        return Arrays.stream(IconCategory.values())
+                .map(IconCategory::name)
                 .toList();
     }
     
@@ -135,7 +128,7 @@ public class IconLibraryComponentImpl implements IconLibraryComponent {
     @Transactional(readOnly = true)
     public byte[] getIconData(Long id) {
         Icon icon = getById(id);
-        return icon.getFileData();
+        return icon.getSvgContent() != null ? icon.getSvgContent().getBytes(StandardCharsets.UTF_8) : new byte[0];
     }
     
     @Override
@@ -167,7 +160,7 @@ public class IconLibraryComponentImpl implements IconLibraryComponent {
     
     @Override
     public byte[] optimizeSvg(byte[] svgData) {
-        String svg = new String(svgData);
+        String svg = new String(svgData, StandardCharsets.UTF_8);
         
         // 移除注释
         svg = svg.replaceAll("<!--[\\s\\S]*?-->", "");
@@ -179,7 +172,7 @@ public class IconLibraryComponentImpl implements IconLibraryComponent {
         // 移除空属性
         svg = svg.replaceAll("\\s+[a-zA-Z-]+=\"\"", "");
         
-        return svg.trim().getBytes();
+        return svg.trim().getBytes(StandardCharsets.UTF_8);
     }
     
     private String getFileExtension(String filename) {

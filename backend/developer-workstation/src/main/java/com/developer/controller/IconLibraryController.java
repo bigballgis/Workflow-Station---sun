@@ -57,8 +57,8 @@ public class IconLibraryController {
             @RequestParam("file") MultipartFile file,
             @RequestParam String name,
             @RequestParam IconCategory category,
-            @RequestParam(required = false) String tags) {
-        Icon result = iconLibraryComponent.upload(file, name, category, tags);
+            @RequestParam(required = false) String description) {
+        Icon result = iconLibraryComponent.upload(file, name, category, description);
         return ResponseEntity.ok(ApiResponse.success(IconDTO.fromEntity(result)));
     }
     
