@@ -6,6 +6,7 @@ import com.developer.dto.FunctionUnitRequest;
 import com.developer.dto.FunctionUnitResponse;
 import com.developer.dto.ValidationResult;
 import com.developer.entity.FunctionUnit;
+import com.developer.security.RequireDeveloperPermission;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -28,6 +29,7 @@ public class FunctionUnitController {
     
     @PostMapping
     @Operation(summary = "创建功能单元")
+    @RequireDeveloperPermission("FUNCTION_UNIT_CREATE")
     public ResponseEntity<ApiResponse<FunctionUnit>> create(@Valid @RequestBody FunctionUnitRequest request) {
         FunctionUnit result = functionUnitComponent.create(request);
         return ResponseEntity.ok(ApiResponse.success(result));
@@ -35,6 +37,7 @@ public class FunctionUnitController {
     
     @PutMapping("/{id}")
     @Operation(summary = "更新功能单元")
+    @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
     public ResponseEntity<ApiResponse<FunctionUnit>> update(
             @PathVariable Long id, 
             @Valid @RequestBody FunctionUnitRequest request) {
@@ -44,6 +47,7 @@ public class FunctionUnitController {
     
     @DeleteMapping("/{id}")
     @Operation(summary = "删除功能单元")
+    @RequireDeveloperPermission("FUNCTION_UNIT_DELETE")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
         functionUnitComponent.delete(id);
         return ResponseEntity.ok(ApiResponse.success(null));
@@ -51,6 +55,7 @@ public class FunctionUnitController {
     
     @GetMapping("/{id}")
     @Operation(summary = "获取功能单元详情")
+    @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<FunctionUnitResponse>> getById(@PathVariable Long id) {
         FunctionUnitResponse result = functionUnitComponent.getByIdAsResponse(id);
         return ResponseEntity.ok(ApiResponse.success(result));
@@ -58,6 +63,7 @@ public class FunctionUnitController {
     
     @GetMapping
     @Operation(summary = "分页查询功能单元")
+    @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<Page<FunctionUnitResponse>>> list(
             @RequestParam(required = false) String name,
             @RequestParam(required = false) String status,
@@ -68,6 +74,7 @@ public class FunctionUnitController {
     
     @PostMapping("/{id}/publish")
     @Operation(summary = "发布功能单元")
+    @RequireDeveloperPermission("FUNCTION_UNIT_PUBLISH")
     public ResponseEntity<ApiResponse<FunctionUnit>> publish(
             @PathVariable Long id,
             @RequestParam(required = false) String changeLog) {
@@ -77,6 +84,7 @@ public class FunctionUnitController {
     
     @PostMapping("/{id}/clone")
     @Operation(summary = "克隆功能单元")
+    @RequireDeveloperPermission("FUNCTION_UNIT_CREATE")
     public ResponseEntity<ApiResponse<FunctionUnit>> clone(
             @PathVariable Long id,
             @RequestParam String newName) {
@@ -86,6 +94,7 @@ public class FunctionUnitController {
     
     @GetMapping("/{id}/validate")
     @Operation(summary = "验证功能单元完整性")
+    @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<ValidationResult>> validate(@PathVariable Long id) {
         ValidationResult result = functionUnitComponent.validate(id);
         return ResponseEntity.ok(ApiResponse.success(result));

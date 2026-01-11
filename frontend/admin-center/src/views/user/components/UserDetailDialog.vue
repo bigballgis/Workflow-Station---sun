@@ -12,13 +12,14 @@
           <el-descriptions-item label="用户名">{{ user.username }}</el-descriptions-item>
           <el-descriptions-item label="姓名">{{ user.fullName }}</el-descriptions-item>
           <el-descriptions-item label="邮箱">{{ user.email }}</el-descriptions-item>
-          <el-descriptions-item label="手机号">{{ user.phone || '-' }}</el-descriptions-item>
           <el-descriptions-item label="工号">{{ user.employeeId || '-' }}</el-descriptions-item>
           <el-descriptions-item label="部门">{{ user.departmentName || '-' }}</el-descriptions-item>
           <el-descriptions-item label="职位">{{ user.position || '-' }}</el-descriptions-item>
           <el-descriptions-item label="状态">
             <el-tag :type="statusType(user.status)" size="small">{{ statusText(user.status) }}</el-tag>
           </el-descriptions-item>
+          <el-descriptions-item label="实体管理者">{{ user.entityManagerName || '未设置' }}</el-descriptions-item>
+          <el-descriptions-item label="职能管理者">{{ user.functionManagerName || '未设置' }}</el-descriptions-item>
           <el-descriptions-item label="创建时间">{{ formatDate(user.createdAt) }}</el-descriptions-item>
           <el-descriptions-item label="最后登录">{{ user.lastLoginAt ? formatDate(user.lastLoginAt) : '-' }}</el-descriptions-item>
           <el-descriptions-item label="最后登录IP" :span="2">{{ user.lastLoginIp || '-' }}</el-descriptions-item>

@@ -17,7 +17,7 @@ import java.util.List;
  * 部门实体
  */
 @Entity
-@Table(name = "admin_departments")
+@Table(name = "sys_departments")
 @EntityListeners(AuditingEntityListener.class)
 @Data
 @Builder
@@ -48,6 +48,9 @@ public class Department {
     
     @Column(name = "manager_id", length = 64)
     private String managerId;
+    
+    @Column(name = "secondary_manager_id", length = 64)
+    private String secondaryManagerId;
     
     @Column(name = "phone", length = 50)
     private String phone;

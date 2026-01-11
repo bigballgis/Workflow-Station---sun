@@ -7,14 +7,6 @@
       <el-form-item :label="t('role.roleCode')" prop="code">
         <el-input v-model="form.code" :disabled="isEdit" />
       </el-form-item>
-      <el-form-item :label="t('role.roleType')" prop="type">
-        <el-select v-model="form.type" :disabled="isEdit">
-          <el-option :label="t('role.systemRole')" value="SYSTEM" />
-          <el-option :label="t('role.businessRole')" value="BUSINESS" />
-          <el-option :label="t('role.functionRole')" value="FUNCTION" />
-          <el-option :label="t('role.tempRole')" value="TEMPORARY" />
-        </el-select>
-      </el-form-item>
       <el-form-item :label="t('role.description')">
         <el-input v-model="form.description" type="textarea" :rows="3" />
       </el-form-item>
@@ -43,19 +35,18 @@ const formRef = ref<FormInstance>()
 const loading = ref(false)
 const isEdit = computed(() => !!props.role)
 
-const form = reactive({ name: '', code: '', type: 'BUSINESS', description: '' })
+const form = reactive({ name: '', code: '', description: '' })
 
 const rules = {
   name: [{ required: true, message: '请输入角色名称', trigger: 'blur' }],
-  code: [{ required: true, message: '请输入角色编码', trigger: 'blur' }],
-  type: [{ required: true, message: '请选择角色类型', trigger: 'change' }]
+  code: [{ required: true, message: '请输入角色编码', trigger: 'blur' }]
 }
 
 watch(() => props.modelValue, (val) => {
   if (val && props.role) {
-    Object.assign(form, { name: props.role.name, code: props.role.code, type: props.role.type, description: props.role.description || '' })
+    Object.assign(form, { name: props.role.name, code: props.role.code, description: props.role.description || '' })
   } else if (val) {
-    Object.assign(form, { name: '', code: '', type: 'BUSINESS', description: '' })
+    Object.assign(form, { name: '', code: '', description: '' })
   }
 })
 
@@ -68,7 +59,8 @@ const handleSubmit = async () => {
     if (isEdit.value) {
       await roleStore.updateRole(props.role!.id, { name: form.name, description: form.description })
     } else {
-      await roleStore.createRole(form)
+      // 管理员只能创建业务角色
+      await roleStore.createRole({ ...form, type: 'BUSINESS' })
     }
     ElMessage.success(t('common.success'))
     emit('update:modelValue', false)

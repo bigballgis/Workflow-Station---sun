@@ -27,7 +27,7 @@ public class LoginAuditService {
      */
     @Async
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void recordLoginSuccess(UUID userId, String username, String ipAddress, String userAgent) {
+    public void recordLoginSuccess(String userId, String username, String ipAddress, String userAgent) {
         try {
             LoginAudit audit = LoginAudit.builder()
                     .userId(userId)
@@ -74,7 +74,7 @@ public class LoginAuditService {
     public void recordLogout(String userId, String ipAddress) {
         try {
             LoginAudit audit = LoginAudit.builder()
-                    .userId(UUID.fromString(userId))
+                    .userId(userId)
                     .username(userId) // Will be updated if we have username
                     .action(LoginAudit.AuditAction.LOGOUT)
                     .ipAddress(ipAddress)
@@ -95,7 +95,7 @@ public class LoginAuditService {
     public void recordTokenRefresh(String userId, String ipAddress) {
         try {
             LoginAudit audit = LoginAudit.builder()
-                    .userId(UUID.fromString(userId))
+                    .userId(userId)
                     .username(userId)
                     .action(LoginAudit.AuditAction.TOKEN_REFRESH)
                     .ipAddress(ipAddress)

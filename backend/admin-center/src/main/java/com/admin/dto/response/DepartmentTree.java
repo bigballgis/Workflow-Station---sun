@@ -23,10 +23,14 @@ public class DepartmentTree {
     private String name;
     private String code;
     private String parentId;
+    private String parentName;
     private Integer level;
     private String path;
     private String managerId;
     private String managerName;
+    private String leaderName;
+    private String secondaryManagerId;
+    private String secondaryManagerName;
     private DepartmentStatus status;
     private Integer sortOrder;
     private Long memberCount;
@@ -43,6 +47,7 @@ public class DepartmentTree {
                 .level(dept.getLevel())
                 .path(dept.getPath())
                 .managerId(dept.getManagerId())
+                .secondaryManagerId(dept.getSecondaryManagerId())
                 .status(dept.getStatus())
                 .sortOrder(dept.getSortOrder())
                 .memberCount(dept.getMemberCount())

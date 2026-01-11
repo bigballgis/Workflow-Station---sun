@@ -9,7 +9,7 @@ import java.time.Instant;
  * 角色权限关联实体
  */
 @Entity
-@Table(name = "admin_role_permissions")
+@Table(name = "sys_role_permissions")
 @Data
 @Builder
 @NoArgsConstructor

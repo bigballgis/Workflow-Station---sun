@@ -111,7 +111,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { Download } from '@element-plus/icons-vue'
-import { queryAuditLogs, type AuditLog, type AuditQueryRequest } from '@/api/audit'
+import { queryAuditLogs, exportAuditLogs, type AuditLog, type AuditQueryRequest } from '@/api/audit'
 
 const { t } = useI18n()
 
@@ -184,8 +184,24 @@ const showDetail = (log: AuditLog) => {
   detailDialogVisible.value = true
 }
 
-const handleExport = () => {
-  ElMessage.success('导出任务已提交，请稍后在下载中心查看')
+const handleExport = async () => {
+  try {
+    const request: AuditQueryRequest = { ...query }
+    if (dateRange.value && dateRange.value.length === 2) {
+      request.startTime = dateRange.value[0] + 'T00:00:00'
+      request.endTime = dateRange.value[1] + 'T23:59:59'
+    }
+    Object.keys(request).forEach(key => {
+      if (!request[key as keyof AuditQueryRequest]) {
+        delete request[key as keyof AuditQueryRequest]
+      }
+    })
+    await exportAuditLogs(request)
+    ElMessage.success('导出成功')
+  } catch (e) {
+    console.error('Failed to export:', e)
+    ElMessage.error('导出失败')
+  }
 }
 
 onMounted(handleSearch)

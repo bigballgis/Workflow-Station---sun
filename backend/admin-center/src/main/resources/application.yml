@@ -8,9 +8,9 @@ spring:
     name: admin-center
   
   datasource:
-    url: jdbc:postgresql://localhost:5432/admin_center
-    username: postgres
-    password: postgres
+    url: jdbc:postgresql://localhost:5432/workflow_platform
+    username: platform
+    password: platform123
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 20
@@ -22,7 +22,7 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: validate
+      ddl-auto: update
     show-sql: false
     properties:
       hibernate:
@@ -32,16 +32,16 @@ spring:
           time_zone: UTC
 
   flyway:
-    enabled: true
+    enabled: false
     locations: classpath:db/migration
     baseline-on-migrate: true
-    validate-on-migrate: true
+    validate-on-migrate: false
 
   data:
     redis:
       host: localhost
       port: 6379
-      password: 
+      password: redis123
       database: 1
       timeout: 5000ms
       lettuce:

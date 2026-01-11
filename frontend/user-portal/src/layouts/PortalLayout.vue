@@ -9,6 +9,19 @@
         </div>
       </div>
       <div class="header-right">
+        <el-dropdown @command="handleLanguage">
+          <span class="header-action">
+            <el-icon><Location /></el-icon>
+            <span class="action-text">{{ currentLang }}</span>
+          </span>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="zh-CN">简体中文</el-dropdown-item>
+              <el-dropdown-item command="zh-TW">繁體中文</el-dropdown-item>
+              <el-dropdown-item command="en">English</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
         <el-badge :value="unreadCount" :hidden="unreadCount === 0" class="notification-badge">
           <el-button :icon="Bell" circle @click="goToNotifications" />
         </el-badge>
@@ -105,11 +118,11 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import {
   HomeFilled, List, Plus, Document, Share, Key, Bell, Setting,
-  ArrowDown, SwitchButton, Fold, Expand
+  ArrowDown, SwitchButton, Fold, Expand, Location
 } from '@element-plus/icons-vue'
 import { logout as authLogout, clearAuth, getUser } from '@/api/auth'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const route = useRoute()
 const router = useRouter()
 
@@ -124,12 +137,20 @@ const userAvatar = ref('')
 
 const activeMenu = computed(() => route.path)
 
+const langMap: Record<string, string> = { 'zh-CN': '简体中文', 'zh-TW': '繁體中文', 'en': 'English' }
+const currentLang = computed(() => langMap[locale.value] || '简体中文')
+
 const toggleCollapse = () => {
   isCollapsed.value = !isCollapsed.value
 }
 
 const goToNotifications = () => {
   router.push('/notifications')
+}
+
+const handleLanguage = (lang: string) => {
+  locale.value = lang
+  localStorage.setItem('language', lang)
 }
 
 const handleCommand = async (command: string) => {
@@ -188,6 +209,25 @@ const handleCommand = async (command: string) => {
     display: flex;
     align-items: center;
     gap: 16px;
+    
+    .header-action {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+      color: white;
+
+      &:hover {
+        background-color: rgba(255, 255, 255, 0.15);
+      }
+
+      .action-text {
+        font-size: 14px;
+      }
+    }
     
     .notification-badge {
       :deep(.el-button) {

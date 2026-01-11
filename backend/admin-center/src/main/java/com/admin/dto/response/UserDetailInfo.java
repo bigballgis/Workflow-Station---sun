@@ -7,7 +7,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 
@@ -24,20 +24,24 @@ public class UserDetailInfo {
     private String id;
     private String username;
     private String email;
-    private String phone;
+    private String displayName;
     private String fullName;
     private String employeeId;
     private String departmentId;
     private String departmentName;
     private String position;
+    private String entityManagerId;
+    private String entityManagerName;
+    private String functionManagerId;
+    private String functionManagerName;
     private UserStatus status;
     private Boolean mustChangePassword;
-    private Instant passwordExpiredAt;
-    private Instant lastLoginAt;
+    private LocalDateTime passwordExpiredAt;
+    private LocalDateTime lastLoginAt;
     private String lastLoginIp;
-    private Instant createdAt;
+    private LocalDateTime createdAt;
     private String createdBy;
-    private Instant updatedAt;
+    private LocalDateTime updatedAt;
     private String updatedBy;
     
     /**
@@ -72,7 +76,7 @@ public class UserDetailInfo {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class LoginHistoryInfo {
-        private Instant loginTime;
+        private LocalDateTime loginTime;
         private String ipAddress;
         private String userAgent;
         private Boolean success;
@@ -81,14 +85,16 @@ public class UserDetailInfo {
     
     public static UserDetailInfo fromEntity(User user) {
         return UserDetailInfo.builder()
-                .id(user.getId())
+                .id(user.getId() != null ? user.getId().toString() : null)
                 .username(user.getUsername())
                 .email(user.getEmail())
-                .phone(user.getPhone())
+                .displayName(user.getDisplayName())
                 .fullName(user.getFullName())
                 .employeeId(user.getEmployeeId())
                 .departmentId(user.getDepartmentId())
                 .position(user.getPosition())
+                .entityManagerId(user.getEntityManagerId() != null ? user.getEntityManagerId().toString() : null)
+                .functionManagerId(user.getFunctionManagerId() != null ? user.getFunctionManagerId().toString() : null)
                 .status(user.getStatus())
                 .mustChangePassword(user.getMustChangePassword())
                 .passwordExpiredAt(user.getPasswordExpiredAt())

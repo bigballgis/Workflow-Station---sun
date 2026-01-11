@@ -2,7 +2,7 @@
   <div class="page-container">
     <div class="page-header">
       <span class="page-title">{{ t('menu.userList') }}</span>
-      <div class="header-actions">
+      <div class="header-actions" v-if="canWriteUser">
         <el-button @click="showImportDialog">
           <el-icon><Upload /></el-icon>批量导入
         </el-button>
@@ -41,28 +41,35 @@
     </el-card>
     
     <el-card class="table-card">
-      <el-table :data="users" v-loading="loading" stripe border>
-        <el-table-column prop="username" label="用户名" width="120" />
-        <el-table-column prop="fullName" label="姓名" width="100" />
-        <el-table-column prop="email" label="邮箱" min-width="180" />
-        <el-table-column prop="phone" label="手机号" width="130" />
-        <el-table-column prop="departmentName" label="部门" width="120" />
-        <el-table-column prop="position" label="职位" width="100" />
-        <el-table-column prop="status" label="状态" width="80" align="center">
+      <el-table :data="users" v-loading="loading" stripe border table-layout="fixed">
+        <el-table-column prop="employeeId" label="员工编号" min-width="100" show-overflow-tooltip />
+        <el-table-column prop="username" label="用户名" min-width="100" show-overflow-tooltip />
+        <el-table-column prop="fullName" label="姓名" min-width="80" show-overflow-tooltip />
+        <el-table-column prop="email" label="邮箱" min-width="160" show-overflow-tooltip />
+        <el-table-column prop="departmentName" label="部门" min-width="100" show-overflow-tooltip />
+        <el-table-column prop="position" label="职位" min-width="80" show-overflow-tooltip />
+        <el-table-column label="实体管理者" min-width="90" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span v-if="row.entityManagerName" class="manager-name">{{ row.entityManagerName }}</span>
+            <span v-else class="no-manager">-</span>
+          </template>
+        </el-table-column>
+        <el-table-column label="职能管理者" min-width="90" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span v-if="row.functionManagerName" class="manager-name">{{ row.functionManagerName }}</span>
+            <span v-else class="no-manager">-</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="status" label="状态" width="70" align="center">
           <template #default="{ row }">
             <el-tag :type="statusType(row.status)" size="small">{{ statusText(row.status) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="lastLoginAt" label="最后登录" width="160">
+        <el-table-column label="操作" width="150" fixed="right">
           <template #default="{ row }">
-            {{ row.lastLoginAt ? formatDate(row.lastLoginAt) : '-' }}
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="180" fixed="right">
-          <template #default="{ row }">
-            <el-button link type="primary" size="small" @click="showEditDialog(row)">编辑</el-button>
+            <el-button v-if="canWriteUser" link type="primary" size="small" @click="showEditDialog(row)">编辑</el-button>
             <el-button link type="primary" size="small" @click="showDetailDialog(row)">详情</el-button>
-            <el-dropdown @command="(cmd: string) => handleCommand(row, cmd)">
+            <el-dropdown v-if="canWriteUser" @command="(cmd: string) => handleCommand(row, cmd)">
               <el-button link type="primary" size="small">
                 更多<el-icon class="el-icon--right"><ArrowDown /></el-icon>
               </el-button>
@@ -80,7 +87,7 @@
                   <el-dropdown-item command="resetPassword">
                     <el-icon><Key /></el-icon>重置密码
                   </el-dropdown-item>
-                  <el-dropdown-item command="delete" divided>
+                  <el-dropdown-item v-if="canDeleteUser" command="delete" divided>
                     <el-icon><Delete /></el-icon>删除
                   </el-dropdown-item>
                 </el-dropdown-menu>
@@ -133,11 +140,17 @@ import {
   CircleCheck, CircleClose, Unlock, Key, Delete 
 } from '@element-plus/icons-vue'
 import { userApi, type User } from '@/api/user'
+import { organizationApi, type Department } from '@/api/organization'
+import { hasPermission, PERMISSIONS } from '@/utils/permission'
 import UserFormDialog from './components/UserFormDialog.vue'
 import UserDetailDialog from './components/UserDetailDialog.vue'
 import UserImportDialog from './components/UserImportDialog.vue'
 
 const { t } = useI18n()
+
+// Permission checks
+const canWriteUser = hasPermission(PERMISSIONS.USER_WRITE)
+const canDeleteUser = hasPermission(PERMISSIONS.USER_DELETE)
 
 // 状态
 const loading = ref(false)
@@ -162,8 +175,8 @@ const currentUser = ref<User | null>(null)
 const currentUserId = ref('')
 
 // 状态映射
-const statusType = (status: string) => {
-  const map: Record<string, string> = {
+const statusType = (status: string): 'success' | 'info' | 'danger' | 'warning' => {
+  const map: Record<string, 'success' | 'info' | 'danger' | 'warning'> = {
     ACTIVE: 'success',
     DISABLED: 'info',
     LOCKED: 'danger',
@@ -182,18 +195,7 @@ const statusText = (status: string) => {
   return map[status] || status
 }
 
-// 格式化日期
-const formatDate = (dateStr: string) => {
-  if (!dateStr) return '-'
-  const date = new Date(dateStr)
-  return date.toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
-}
+
 
 // 查询用户列表
 const handleSearch = async () => {
@@ -317,9 +319,30 @@ const handleDelete = async (user: User) => {
   }
 }
 
+// 扁平化部门树
+const flattenDepartments = (depts: Department[], result: { id: string; name: string }[] = []): { id: string; name: string }[] => {
+  depts.forEach(dept => {
+    result.push({ id: dept.id, name: dept.name })
+    if (dept.children && dept.children.length > 0) {
+      flattenDepartments(dept.children, result)
+    }
+  })
+  return result
+}
+
+// 加载部门列表
+const loadDepartments = async () => {
+  try {
+    const tree = await organizationApi.getTree()
+    departments.value = flattenDepartments(tree)
+  } catch (error) {
+    console.error('Failed to load departments:', error)
+  }
+}
+
 onMounted(() => {
   handleSearch()
-  // TODO: 加载部门列表
+  loadDepartments()
 })
 </script>
 
@@ -361,6 +384,14 @@ onMounted(() => {
     display: flex;
     justify-content: flex-end;
     margin-top: 20px;
+  }
+  
+  .manager-name {
+    color: #409eff;
+  }
+  
+  .no-manager {
+    color: #c0c4cc;
   }
 }
 </style>

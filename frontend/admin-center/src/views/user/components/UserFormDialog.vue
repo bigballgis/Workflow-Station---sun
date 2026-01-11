@@ -16,9 +16,6 @@
       <el-form-item label="邮箱" prop="email">
         <el-input v-model="form.email" placeholder="请输入邮箱" />
       </el-form-item>
-      <el-form-item label="手机号" prop="phone">
-        <el-input v-model="form.phone" placeholder="请输入手机号" />
-      </el-form-item>
       <el-form-item label="工号" prop="employeeId">
         <el-input v-model="form.employeeId" placeholder="请输入工号" />
       </el-form-item>
@@ -26,7 +23,8 @@
         <el-tree-select 
           v-model="form.departmentId" 
           :data="departmentTree" 
-          :props="{ label: 'name', value: 'id' }" 
+          :props="{ label: 'name', children: 'children' }" 
+          node-key="id"
           clearable 
           check-strictly 
           placeholder="请选择部门"
@@ -36,13 +34,46 @@
       <el-form-item label="职位" prop="position">
         <el-input v-model="form.position" placeholder="请输入职位" />
       </el-form-item>
+      <el-form-item label="实体管理者" prop="entityManagerId">
+        <el-select 
+          v-model="form.entityManagerId" 
+          filterable 
+          remote 
+          :remote-method="searchUsers"
+          clearable 
+          placeholder="搜索并选择实体管理者"
+          style="width: 100%"
+          :loading="userSearchLoading"
+        >
+          <el-option 
+            v-for="user in userOptions" 
+            :key="user.id" 
+            :label="`${user.fullName} (${user.username})`" 
+            :value="user.id" 
+          />
+        </el-select>
+      </el-form-item>
+      <el-form-item label="职能管理者" prop="functionManagerId">
+        <el-select 
+          v-model="form.functionManagerId" 
+          filterable 
+          remote 
+          :remote-method="searchUsers"
+          clearable 
+          placeholder="搜索并选择职能管理者"
+          style="width: 100%"
+          :loading="userSearchLoading"
+        >
+          <el-option 
+            v-for="user in userOptions" 
+            :key="user.id" 
+            :label="`${user.fullName} (${user.username})`" 
+            :value="user.id" 
+          />
+        </el-select>
+      </el-form-item>
       <el-form-item v-if="!isEdit" label="初始密码" prop="initialPassword">
         <el-input v-model="form.initialPassword" type="password" show-password placeholder="请输入初始密码" />
-      </el-form-item>
-      <el-form-item label="角色" prop="roleIds">
-        <el-select v-model="form.roleIds" multiple placeholder="请选择角色" style="width: 100%">
-          <el-option v-for="role in roles" :key="role.id" :label="role.name" :value="role.id" />
-        </el-select>
       </el-form-item>
     </el-form>
     <template #footer>
@@ -65,20 +96,21 @@ const orgStore = useOrganizationStore()
 
 const formRef = ref<FormInstance>()
 const loading = ref(false)
+const userSearchLoading = ref(false)
+const userOptions = ref<{ id: string; fullName: string; username: string }[]>([])
 const isEdit = computed(() => !!props.user)
 const departmentTree = computed(() => orgStore.departmentTree)
-const roles = ref<{ id: string; name: string }[]>([])
 
 const form = reactive({
   username: '',
   fullName: '',
   email: '',
-  phone: '',
   employeeId: '',
   departmentId: '',
   position: '',
-  initialPassword: '',
-  roleIds: [] as string[]
+  entityManagerId: '',
+  functionManagerId: '',
+  initialPassword: ''
 })
 
 const rules: FormRules = {
@@ -91,7 +123,6 @@ const rules: FormRules = {
     { required: true, message: '请输入邮箱', trigger: 'blur' },
     { type: 'email', message: '邮箱格式不正确', trigger: 'blur' }
   ],
-  phone: [{ pattern: /^1[3-9]\d{9}$/, message: '手机号格式不正确', trigger: 'blur' }],
   initialPassword: [
     { required: true, message: '请输入初始密码', trigger: 'blur' },
     { min: 8, message: '密码长度至少8位', trigger: 'blur' }
@@ -101,36 +132,99 @@ const rules: FormRules = {
 watch(() => props.modelValue, (val) => {
   if (val) {
     orgStore.fetchTree()
-    loadRoles()
+    loadDefaultUsers() // 加载默认用户列表
     if (props.user) {
       Object.assign(form, {
         username: props.user.username,
         fullName: props.user.fullName,
         email: props.user.email,
-        phone: props.user.phone || '',
         employeeId: props.user.employeeId || '',
         departmentId: props.user.departmentId || '',
         position: props.user.position || '',
-        initialPassword: '',
-        roleIds: []
+        entityManagerId: (props.user as any).entityManagerId || '',
+        functionManagerId: (props.user as any).functionManagerId || '',
+        initialPassword: ''
       })
+      // 加载已选管理者信息
+      loadSelectedManagers()
     } else {
       Object.assign(form, {
-        username: '', fullName: '', email: '', phone: '',
+        username: '', fullName: '', email: '',
         employeeId: '', departmentId: '', position: '',
-        initialPassword: '', roleIds: []
+        entityManagerId: '', functionManagerId: '',
+        initialPassword: ''
       })
     }
   }
 })
 
-const loadRoles = async () => {
-  // TODO: 从角色API加载角色列表
-  roles.value = [
-    { id: '1', name: '系统管理员' },
-    { id: '2', name: '普通用户' },
-    { id: '3', name: '审计员' }
-  ]
+const loadSelectedManagers = async () => {
+  const managerIds = [form.entityManagerId, form.functionManagerId].filter(Boolean)
+  if (managerIds.length === 0) return
+  
+  try {
+    const managers: { id: string; fullName: string; username: string }[] = []
+    for (const id of managerIds) {
+      const user = await userApi.getById(id)
+      if (user) {
+        managers.push({
+          id: user.id,
+          fullName: user.fullName,
+          username: user.username
+        })
+      }
+    }
+    // 合并已选管理者到选项列表（去重）
+    const existingIds = new Set(userOptions.value.map(u => u.id))
+    for (const mgr of managers) {
+      if (!existingIds.has(mgr.id)) {
+        userOptions.value.push(mgr)
+      }
+    }
+  } catch (error) {
+    console.error('Failed to load managers:', error)
+  }
+}
+
+// 加载默认用户列表（前3个）
+const loadDefaultUsers = async () => {
+  userSearchLoading.value = true
+  try {
+    const res = await userApi.list({ page: 0, size: 3 })
+    userOptions.value = (res.content || []).map((u) => ({
+      id: u.id,
+      fullName: u.fullName,
+      username: u.username
+    }))
+  } catch (error) {
+    console.error('Failed to load default users:', error)
+    userOptions.value = []
+  } finally {
+    userSearchLoading.value = false
+  }
+}
+
+const searchUsers = async (query: string) => {
+  // 如果没有输入，显示默认的前3个用户
+  if (!query) {
+    await loadDefaultUsers()
+    return
+  }
+  
+  userSearchLoading.value = true
+  try {
+    const res = await userApi.list({ keyword: query, page: 0, size: 20 })
+    userOptions.value = (res.content || []).map((u) => ({
+      id: u.id,
+      fullName: u.fullName,
+      username: u.username
+    }))
+  } catch (error) {
+    console.error('Failed to search users:', error)
+    userOptions.value = []
+  } finally {
+    userSearchLoading.value = false
+  }
 }
 
 const handleSubmit = async () => {
@@ -143,23 +237,23 @@ const handleSubmit = async () => {
       await userApi.update(props.user!.id, {
         fullName: form.fullName,
         email: form.email,
-        phone: form.phone || undefined,
         employeeId: form.employeeId || undefined,
         departmentId: form.departmentId || undefined,
         position: form.position || undefined,
-        roleIds: form.roleIds.length > 0 ? form.roleIds : undefined
+        entityManagerId: form.entityManagerId || undefined,
+        functionManagerId: form.functionManagerId || undefined
       })
     } else {
       await userApi.create({
         username: form.username,
         fullName: form.fullName,
         email: form.email,
-        phone: form.phone || undefined,
         employeeId: form.employeeId || undefined,
         departmentId: form.departmentId || undefined,
         position: form.position || undefined,
-        initialPassword: form.initialPassword,
-        roleIds: form.roleIds.length > 0 ? form.roleIds : undefined
+        entityManagerId: form.entityManagerId || undefined,
+        functionManagerId: form.functionManagerId || undefined,
+        initialPassword: form.initialPassword
       })
     }
     ElMessage.success(isEdit.value ? '更新成功' : '创建成功')

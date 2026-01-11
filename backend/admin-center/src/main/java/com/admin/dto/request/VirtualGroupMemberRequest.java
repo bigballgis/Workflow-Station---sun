@@ -1,6 +1,5 @@
 package com.admin.dto.request;
 
-import com.admin.enums.VirtualGroupMemberRole;
 import jakarta.validation.constraints.NotBlank;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -18,7 +17,4 @@ public class VirtualGroupMemberRequest {
     
     @NotBlank(message = "用户ID不能为空")
     private String userId;
-    
-    @Builder.Default
-    private VirtualGroupMemberRole role = VirtualGroupMemberRole.MEMBER;
 }

@@ -12,7 +12,7 @@ import java.time.Instant;
  * 功能单元依赖关系实体
  */
 @Entity
-@Table(name = "admin_function_unit_dependencies")
+@Table(name = "sys_function_unit_dependencies")
 @EntityListeners(AuditingEntityListener.class)
 @Data
 @Builder

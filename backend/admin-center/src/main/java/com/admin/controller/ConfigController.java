@@ -19,7 +19,7 @@ import java.util.List;
 
 @Slf4j
 @RestController
-@RequestMapping("/api/v1/admin/configs")
+@RequestMapping("/configs")
 @RequiredArgsConstructor
 @Tag(name = "系统配置", description = "系统配置CRUD、回滚和同步接口")
 public class ConfigController {

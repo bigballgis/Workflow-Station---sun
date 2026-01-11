@@ -188,11 +188,10 @@ public class UserImportServiceImpl implements UserImportService {
                     .username(getCellStringValue(row.getCell(0)))
                     .email(getCellStringValue(row.getCell(1)))
                     .fullName(getCellStringValue(row.getCell(2)))
-                    .phone(getCellStringValue(row.getCell(3)))
-                    .employeeId(getCellStringValue(row.getCell(4)))
-                    .departmentId(getCellStringValue(row.getCell(5)))
-                    .position(getCellStringValue(row.getCell(6)))
-                    .initialPassword(getCellStringValue(row.getCell(7)))
+                    .employeeId(getCellStringValue(row.getCell(3)))
+                    .departmentId(getCellStringValue(row.getCell(4)))
+                    .position(getCellStringValue(row.getCell(5)))
+                    .initialPassword(getCellStringValue(row.getCell(6)))
                     .build();
         } catch (Exception e) {
             log.warn("Failed to parse Excel row", e);
@@ -202,17 +201,16 @@ public class UserImportServiceImpl implements UserImportService {
     
     private UserCreateRequest parseCsvRow(String[] row) {
         try {
-            if (row.length < 8) return null;
+            if (row.length < 7) return null;
             
             return UserCreateRequest.builder()
                     .username(row[0].trim())
                     .email(row[1].trim())
                     .fullName(row[2].trim())
-                    .phone(row.length > 3 ? row[3].trim() : null)
-                    .employeeId(row.length > 4 ? row[4].trim() : null)
-                    .departmentId(row.length > 5 ? row[5].trim() : null)
-                    .position(row.length > 6 ? row[6].trim() : null)
-                    .initialPassword(row[7].trim())
+                    .employeeId(row.length > 3 ? row[3].trim() : null)
+                    .departmentId(row.length > 4 ? row[4].trim() : null)
+                    .position(row.length > 5 ? row[5].trim() : null)
+                    .initialPassword(row[6].trim())
                     .build();
         } catch (Exception e) {
             log.warn("Failed to parse CSV row", e);
@@ -246,7 +244,7 @@ public class UserImportServiceImpl implements UserImportService {
             
             // 创建标题行
             Row headerRow = sheet.createRow(0);
-            String[] headers = {"用户名*", "邮箱*", "姓名*", "手机号", "工号", "部门ID", "职位", "初始密码*"};
+            String[] headers = {"用户名*", "邮箱*", "姓名*", "工号", "部门ID", "职位", "初始密码*"};
             
             for (int i = 0; i < headers.length; i++) {
                 Cell cell = headerRow.createCell(i);
@@ -257,7 +255,7 @@ public class UserImportServiceImpl implements UserImportService {
             
             // 创建示例数据行
             Row exampleRow = sheet.createRow(1);
-            String[] examples = {"zhangsan", "zhangsan@example.com", "张三", "13800138000", "EMP001", "", "工程师", "Password123!"};
+            String[] examples = {"zhangsan", "zhangsan@example.com", "张三", "EMP001", "", "工程师", "Password123!"};
             for (int i = 0; i < examples.length; i++) {
                 exampleRow.createCell(i).setCellValue(examples[i]);
             }

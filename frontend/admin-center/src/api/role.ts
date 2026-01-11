@@ -1,16 +1,20 @@
 import { get, post, put, del } from './request'
 
+/** 角色类型 */
+export type RoleType = 'BUSINESS' | 'ADMIN' | 'DEVELOPER'
+
 export interface Role {
   id: string
   name: string
   code: string
-  type: 'SYSTEM' | 'BUSINESS' | 'FUNCTION' | 'TEMPORARY'
+  type: RoleType
   description?: string
-  parentId?: string
+  parentRoleId?: string
   status: 'ACTIVE' | 'INACTIVE'
-  memberCount: number
+  isSystem?: boolean
+  memberCount?: number
   createdAt: string
-  updatedAt: string
+  updatedAt?: string
 }
 
 export interface Permission {
@@ -37,9 +41,9 @@ export interface RolePermission {
 export interface CreateRoleRequest {
   name: string
   code: string
-  type: string
+  type: RoleType
   description?: string
-  parentId?: string
+  parentRoleId?: string
 }
 
 export interface UpdateRoleRequest {
@@ -52,8 +56,17 @@ const ROLE_BASE = '/api/v1/roles'
 const PERMISSION_BASE = '/api/v1/permissions'
 
 export const roleApi = {
-  list: (params?: { type?: string; status?: string }) => 
+  /** 获取角色列表，支持按类型筛选 */
+  list: (params?: { type?: RoleType; status?: string }) => 
     get<Role[]>(ROLE_BASE, { params, baseURL: '' }),
+  
+  /** 获取业务角色列表（用于功能单元访问配置） */
+  getBusinessRoles: () => 
+    get<Role[]>(`${ROLE_BASE}/business`, { baseURL: '' }),
+  
+  /** 获取开发角色列表 */
+  getDeveloperRoles: () => 
+    get<Role[]>(`${ROLE_BASE}/developer`, { baseURL: '' }),
   
   getById: (id: string) => get<Role>(`${ROLE_BASE}/${id}`, { baseURL: '' }),
   

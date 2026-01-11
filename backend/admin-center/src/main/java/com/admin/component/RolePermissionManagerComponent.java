@@ -13,6 +13,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -36,7 +37,7 @@ public class RolePermissionManagerComponent {
      * 创建角色
      */
     @Transactional
-    public Role createRole(String name, String code, RoleType type, String parentRoleId, String description) {
+    public Role createRole(String name, String code, RoleType type, String description) {
         log.info("Creating role: {}", code);
         
         // 验证编码唯一性
@@ -44,18 +45,11 @@ public class RolePermissionManagerComponent {
             throw new AdminBusinessException("CODE_EXISTS", "角色编码已存在: " + code);
         }
         
-        // 验证父角色存在
-        if (parentRoleId != null && !parentRoleId.isEmpty()) {
-            roleRepository.findById(parentRoleId)
-                    .orElseThrow(() -> new RoleNotFoundException(parentRoleId));
-        }
-        
         Role role = Role.builder()
                 .id(UUID.randomUUID().toString())
                 .name(name)
                 .code(code)
                 .type(type)
-                .parentRoleId(parentRoleId)
                 .description(description)
                 .status("ACTIVE")
                 .build();
@@ -160,20 +154,13 @@ public class RolePermissionManagerComponent {
     }
     
     /**
-     * 获取角色的有效权限（包括继承的）
+     * 获取角色的有效权限
      */
     public Set<Permission> getEffectivePermissions(String roleId) {
         Role role = roleRepository.findById(roleId)
                 .orElseThrow(() -> new RoleNotFoundException(roleId));
         
-        Set<Permission> permissions = new HashSet<>(permissionRepository.findByRoleId(roleId));
-        
-        // 递归获取继承的权限
-        if (role.getParentRoleId() != null && !role.getParentRoleId().isEmpty()) {
-            permissions.addAll(getEffectivePermissions(role.getParentRoleId()));
-        }
-        
-        return permissions;
+        return new HashSet<>(permissionRepository.findByRoleId(roleId));
     }
     
     /**
@@ -209,7 +196,7 @@ public class RolePermissionManagerComponent {
                 .id(UUID.randomUUID().toString())
                 .user(User.builder().id(userId).build())
                 .role(role)
-                .assignedAt(Instant.now())
+                .assignedAt(LocalDateTime.now())
                 .assignedBy(assignedBy)
                 .build();
         
@@ -249,6 +236,34 @@ public class RolePermissionManagerComponent {
     }
     
     /**
+     * 根据类型获取角色
+     */
+    public List<Role> getRolesByType(RoleType type) {
+        return roleRepository.findByType(type);
+    }
+    
+    /**
+     * 获取所有业务角色
+     */
+    public List<Role> getBusinessRoles() {
+        return roleRepository.findByType(RoleType.BUSINESS);
+    }
+    
+    /**
+     * 获取所有开发角色
+     */
+    public List<Role> getDeveloperRoles() {
+        return roleRepository.findByType(RoleType.DEVELOPER);
+    }
+    
+    /**
+     * 获取所有管理角色
+     */
+    public List<Role> getAdminRoles() {
+        return roleRepository.findByType(RoleType.ADMIN);
+    }
+    
+    /**
      * 获取角色的成员
      */
     public List<UserRole> getRoleMembers(String roleId) {
@@ -275,12 +290,6 @@ public class RolePermissionManagerComponent {
         // 系统角色不能删除
         if (role.isSystemRole()) {
             throw new AdminBusinessException("CANNOT_DELETE_SYSTEM_ROLE", "系统角色不能删除");
-        }
-        
-        // 检查是否有子角色
-        List<Role> children = roleRepository.findByParentRoleId(roleId);
-        if (!children.isEmpty()) {
-            throw new AdminBusinessException("ROLE_HAS_CHILDREN", "角色存在子角色，无法删除");
         }
         
         // 检查是否有用户

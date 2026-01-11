@@ -12,7 +12,7 @@
         <el-card>
           <template #header>字典列表</template>
           <el-input v-model="filterText" placeholder="搜索字典" clearable style="margin-bottom: 15px" />
-          <el-table :data="filteredDictionaries" highlight-current-row @current-change="handleDictSelect" max-height="500">
+          <el-table :data="filteredDictionaries" highlight-current-row @current-change="handleDictSelect" max-height="500" v-loading="loading">
             <el-table-column prop="name" label="名称" />
             <el-table-column prop="code" label="编码" width="120" />
             <el-table-column prop="type" label="类型" width="100">
@@ -38,7 +38,7 @@
             </div>
           </template>
           
-          <el-table :data="dictItems" row-key="id" default-expand-all :tree-props="{ children: 'children' }">
+          <el-table :data="dictItems" row-key="id" default-expand-all :tree-props="{ children: 'children' }" v-loading="itemsLoading">
             <el-table-column prop="label" label="显示名称" />
             <el-table-column prop="value" label="值" width="120" />
             <el-table-column prop="sortOrder" label="排序" width="80" />
@@ -71,56 +71,75 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import DictionaryFormDialog from './components/DictionaryFormDialog.vue'
 import DictionaryItemDialog from './components/DictionaryItemDialog.vue'
+import { dictionaryApi, type Dictionary, type DictionaryItem } from '@/api/dictionary'
 
 const { t } = useI18n()
 
 const filterText = ref('')
-const dictionaries = ref<any[]>([])
-const selectedDict = ref<any>(null)
-const dictItems = ref<any[]>([])
+const loading = ref(false)
+const itemsLoading = ref(false)
+const dictionaries = ref<Dictionary[]>([])
+const selectedDict = ref<Dictionary | null>(null)
+const dictItems = ref<DictionaryItem[]>([])
 const formDialogVisible = ref(false)
 const itemDialogVisible = ref(false)
-const currentDict = ref<any>(null)
-const currentItem = ref<any>(null)
-const parentItem = ref<any>(null)
+const currentDict = ref<Dictionary | null>(null)
+const currentItem = ref<DictionaryItem | null>(null)
+const parentItem = ref<DictionaryItem | null>(null)
 
-const filteredDictionaries = computed(() => dictionaries.value.filter(d => !filterText.value || d.name.includes(filterText.value) || d.code.includes(filterText.value)))
+const filteredDictionaries = computed(() => (dictionaries.value || []).filter(d => !filterText.value || d.name.includes(filterText.value) || d.code.includes(filterText.value)))
 const typeText = (type: string) => ({ SYSTEM: '系统', BUSINESS: '业务', CUSTOM: '自定义' }[type] || type)
 
-const fetchDictionaries = () => {
-  dictionaries.value = [
-    { id: '1', name: '用户状态', code: 'USER_STATUS', type: 'SYSTEM' },
-    { id: '2', name: '审批结果', code: 'APPROVAL_RESULT', type: 'BUSINESS' },
-    { id: '3', name: '优先级', code: 'PRIORITY', type: 'CUSTOM' }
-  ]
+const fetchDictionaries = async () => {
+  loading.value = true
+  try {
+    const result = await dictionaryApi.list()
+    dictionaries.value = Array.isArray(result) ? result : []
+  } catch (e) {
+    console.error('Failed to load dictionaries:', e)
+    dictionaries.value = []
+    ElMessage.error('加载字典列表失败')
+  } finally {
+    loading.value = false
+  }
 }
 
-const fetchDictItems = () => {
+const fetchDictItems = async () => {
   if (!selectedDict.value) return
-  dictItems.value = [
-    { id: '1', label: '启用', value: 'ENABLED', sortOrder: 1, status: 'ACTIVE' },
-    { id: '2', label: '禁用', value: 'DISABLED', sortOrder: 2, status: 'ACTIVE' },
-    { id: '3', label: '锁定', value: 'LOCKED', sortOrder: 3, status: 'ACTIVE' }
-  ]
+  itemsLoading.value = true
+  try {
+    dictItems.value = await dictionaryApi.getItems(selectedDict.value.id)
+  } catch (e) {
+    console.error('Failed to load dictionary items:', e)
+    ElMessage.error('加载字典项失败')
+  } finally {
+    itemsLoading.value = false
+  }
 }
 
-const handleDictSelect = (dict: any) => {
+const handleDictSelect = (dict: Dictionary | null) => {
   selectedDict.value = dict
-  fetchDictItems()
+  if (dict) fetchDictItems()
 }
 
 const showCreateDialog = () => { currentDict.value = null; formDialogVisible.value = true }
-const showEditDialog = (dict: any) => { currentDict.value = dict; formDialogVisible.value = true }
-const showItemDialog = (item?: any, parent?: any) => {
+const showEditDialog = (dict: Dictionary) => { currentDict.value = dict; formDialogVisible.value = true }
+const showItemDialog = (item?: DictionaryItem, parent?: DictionaryItem) => {
   currentItem.value = item || null
   parentItem.value = parent || null
   itemDialogVisible.value = true
 }
 
-const handleDeleteItem = async (item: any) => {
+const handleDeleteItem = async (item: DictionaryItem) => {
   await ElMessageBox.confirm('确定要删除该字典项吗？', '提示', { type: 'warning' })
-  dictItems.value = dictItems.value.filter(i => i.id !== item.id)
-  ElMessage.success('删除成功')
+  try {
+    await dictionaryApi.deleteItem(item.id)
+    ElMessage.success('删除成功')
+    fetchDictItems()
+  } catch (e) {
+    console.error('Failed to delete item:', e)
+    ElMessage.error('删除失败')
+  }
 }
 
 onMounted(fetchDictionaries)

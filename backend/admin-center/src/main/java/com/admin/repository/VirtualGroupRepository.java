@@ -96,12 +96,4 @@ public interface VirtualGroupRepository extends JpaRepository<VirtualGroup, Stri
            "JOIN vg.members m " +
            "WHERE m.user.id = :userId AND vg.status = 'ACTIVE'")
     List<VirtualGroup> findByUserId(@Param("userId") String userId);
-    
-    /**
-     * 查找用户作为组长的虚拟组
-     */
-    @Query("SELECT vg FROM VirtualGroup vg " +
-           "JOIN vg.members m " +
-           "WHERE m.user.id = :userId AND m.role = 'LEADER' AND vg.status = 'ACTIVE'")
-    List<VirtualGroup> findByLeaderId(@Param("userId") String userId);
 }

@@ -82,14 +82,14 @@ const loading = ref(false)
 // 开发环境检测
 const isDev = import.meta.env.DEV
 
-// 测试用户数据 (仅开发环境使用)
+// 测试用户数据 (仅开发环境使用) - HR和公司银行部门员工
 const testUsers = [
-  { username: 'manager', password: 'user123', name: '部门经理', role: '经理', tagType: 'danger' as const },
-  { username: 'team_lead', password: 'user123', name: '团队主管', role: '主管', tagType: 'warning' as const },
-  { username: 'employee_a', password: 'user123', name: '员工张三', role: '员工', tagType: 'success' as const },
-  { username: 'employee_b', password: 'user123', name: '员工李四', role: '员工', tagType: 'success' as const },
-  { username: 'hr_staff', password: 'user123', name: 'HR专员', role: 'HR', tagType: 'info' as const },
-  { username: 'finance', password: 'user123', name: '财务人员', role: '财务', tagType: 'primary' as const },
+  { username: 'hr.manager', password: 'admin123', name: 'Sarah Chen', role: 'HR经理', tagType: 'danger' as const },
+  { username: 'corp.director', password: 'admin123', name: 'James Zhang', role: '公司银行总监', tagType: 'danger' as const },
+  { username: 'corp.manager', password: 'admin123', name: 'Linda Li', role: '公司银行经理', tagType: 'warning' as const },
+  { username: 'hr.specialist', password: 'admin123', name: 'Michael Wang', role: 'HR专员', tagType: 'warning' as const },
+  { username: 'corp.analyst', password: 'admin123', name: 'David Wu', role: '业务分析师', tagType: 'success' as const },
+  { username: 'corp.officer', password: 'admin123', name: 'Amy Zhao', role: '客户经理', tagType: 'success' as const },
 ]
 
 const selectedTestUser = ref('')

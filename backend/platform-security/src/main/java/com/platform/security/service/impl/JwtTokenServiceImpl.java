@@ -24,6 +24,8 @@ public class JwtTokenServiceImpl implements JwtTokenService {
 
     private static final String CLAIM_USER_ID = "userId";
     private static final String CLAIM_USERNAME = "username";
+    private static final String CLAIM_EMAIL = "email";
+    private static final String CLAIM_DISPLAY_NAME = "displayName";
     private static final String CLAIM_ROLES = "roles";
     private static final String CLAIM_PERMISSIONS = "permissions";
     private static final String CLAIM_DEPARTMENT_ID = "departmentId";
@@ -48,6 +50,12 @@ public class JwtTokenServiceImpl implements JwtTokenService {
     @Override
     public String generateToken(String userId, String username, List<String> roles,
                                 List<String> permissions, String departmentId, String language) {
+        return generateToken(userId, username, null, null, roles, permissions, departmentId, language);
+    }
+
+    public String generateToken(String userId, String username, String email, String displayName,
+                                List<String> roles, List<String> permissions, 
+                                String departmentId, String language) {
         Date now = new Date();
         Date expiration = new Date(now.getTime() + jwtProperties.getExpirationMs());
 
@@ -56,6 +64,8 @@ public class JwtTokenServiceImpl implements JwtTokenService {
                 .subject(userId)
                 .claim(CLAIM_USER_ID, userId)
                 .claim(CLAIM_USERNAME, username)
+                .claim(CLAIM_EMAIL, email)
+                .claim(CLAIM_DISPLAY_NAME, displayName)
                 .claim(CLAIM_ROLES, roles != null ? roles : Collections.emptyList())
                 .claim(CLAIM_PERMISSIONS, permissions != null ? permissions : Collections.emptyList())
                 .claim(CLAIM_DEPARTMENT_ID, departmentId)
@@ -73,6 +83,8 @@ public class JwtTokenServiceImpl implements JwtTokenService {
         return generateToken(
                 principal.getUserId(),
                 principal.getUsername(),
+                principal.getEmail(),
+                principal.getDisplayName(),
                 principal.getRoles(),
                 principal.getPermissions(),
                 principal.getDepartmentId(),
@@ -138,6 +150,8 @@ public class JwtTokenServiceImpl implements JwtTokenService {
         return UserPrincipal.builder()
                 .userId(claims.get(CLAIM_USER_ID, String.class))
                 .username(claims.get(CLAIM_USERNAME, String.class))
+                .email(claims.get(CLAIM_EMAIL, String.class))
+                .displayName(claims.get(CLAIM_DISPLAY_NAME, String.class))
                 .roles(roles != null ? roles : Collections.emptyList())
                 .permissions(permissions != null ? permissions : Collections.emptyList())
                 .departmentId(claims.get(CLAIM_DEPARTMENT_ID, String.class))

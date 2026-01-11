@@ -24,7 +24,7 @@ import java.util.List;
  */
 @Slf4j
 @RestController
-@RequestMapping("/api/v1/admin/virtual-groups")
+@RequestMapping("/virtual-groups")
 @RequiredArgsConstructor
 @Tag(name = "虚拟组管理", description = "虚拟组的创建、成员管理和任务查询接口")
 public class VirtualGroupController {
@@ -110,18 +110,6 @@ public class VirtualGroupController {
             @Parameter(description = "用户ID") @PathVariable String userId) {
         log.info("Removing member {} from virtual group: {}", userId, groupId);
         VirtualGroupResult result = virtualGroupManager.removeMember(groupId, userId);
-        return ResponseEntity.ok(result);
-    }
-    
-    @PutMapping("/{groupId}/members/{userId}/role")
-    @Operation(summary = "更新成员角色", description = "更新虚拟组成员的角色")
-    public ResponseEntity<VirtualGroupResult> updateMemberRole(
-            @Parameter(description = "虚拟组ID") @PathVariable String groupId,
-            @Parameter(description = "用户ID") @PathVariable String userId,
-            @Valid @RequestBody VirtualGroupMemberRequest request) {
-        log.info("Updating role of member {} in virtual group: {}", userId, groupId);
-        request.setUserId(userId);
-        VirtualGroupResult result = virtualGroupManager.updateMemberRole(groupId, request);
         return ResponseEntity.ok(result);
     }
     

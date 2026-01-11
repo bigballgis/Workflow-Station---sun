@@ -24,7 +24,7 @@ import java.util.Map;
 
 @Slf4j
 @RestController
-@RequestMapping("/api/v1/admin/dictionaries")
+@RequestMapping("/dictionaries")
 @RequiredArgsConstructor
 @Tag(name = "数据字典管理", description = "字典CRUD、字典项查询和关联数据查询接口")
 public class DictionaryController {

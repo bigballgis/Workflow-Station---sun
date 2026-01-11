@@ -20,12 +20,14 @@ public interface UserRoleRepository extends JpaRepository<UserRole, String> {
     /**
      * 根据用户ID查找
      */
-    List<UserRole> findByUserId(String userId);
+    @Query("SELECT ur FROM UserRole ur WHERE ur.user.id = :userId")
+    List<UserRole> findByUserId(@Param("userId") String userId);
     
     /**
      * 根据角色ID查找
      */
-    List<UserRole> findByRoleId(String roleId);
+    @Query("SELECT ur FROM UserRole ur WHERE ur.role.id = :roleId")
+    List<UserRole> findByRoleId(@Param("roleId") String roleId);
     
     /**
      * 分页根据角色ID查找
@@ -36,25 +38,38 @@ public interface UserRoleRepository extends JpaRepository<UserRole, String> {
     /**
      * 根据用户ID和角色ID查找
      */
-    Optional<UserRole> findByUserIdAndRoleId(String userId, String roleId);
+    @Query("SELECT ur FROM UserRole ur WHERE ur.user.id = :userId AND ur.role.id = :roleId")
+    Optional<UserRole> findByUserIdAndRoleId(@Param("userId") String userId, @Param("roleId") String roleId);
     
     /**
      * 删除用户的所有角色
      */
-    void deleteByUserId(String userId);
+    @Query("DELETE FROM UserRole ur WHERE ur.user.id = :userId")
+    @org.springframework.data.jpa.repository.Modifying
+    void deleteByUserId(@Param("userId") String userId);
     
     /**
      * 删除角色的所有用户关联
      */
-    void deleteByRoleId(String roleId);
+    @Query("DELETE FROM UserRole ur WHERE ur.role.id = :roleId")
+    @org.springframework.data.jpa.repository.Modifying
+    void deleteByRoleId(@Param("roleId") String roleId);
     
     /**
      * 检查用户是否有指定角色
      */
-    boolean existsByUserIdAndRoleId(String userId, String roleId);
+    @Query("SELECT COUNT(ur) > 0 FROM UserRole ur WHERE ur.user.id = :userId AND ur.role.id = :roleId")
+    boolean existsByUserIdAndRoleId(@Param("userId") String userId, @Param("roleId") String roleId);
     
     /**
      * 统计角色的用户数量
      */
-    long countByRoleId(String roleId);
+    @Query("SELECT COUNT(ur) FROM UserRole ur WHERE ur.role.id = :roleId")
+    long countByRoleId(@Param("roleId") String roleId);
+    
+    /**
+     * 获取用户的所有角色ID
+     */
+    @Query("SELECT ur.role.id FROM UserRole ur WHERE ur.user.id = :userId")
+    List<String> findRoleIdsByUserId(@Param("userId") String userId);
 }

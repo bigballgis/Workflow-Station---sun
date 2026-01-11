@@ -237,36 +237,16 @@ const recentTasks = ref<any[]>([])
 const loadDashboardData = async () => {
   try {
     const res = await getDashboardOverview()
-    if (res.data) {
-      taskOverview.value = res.data.taskOverview
-      processOverview.value = res.data.processOverview
-      performanceOverview.value = res.data.performanceOverview
-      recentTasks.value = res.data.recentTasks || []
+    // API 返回格式: { success: true, data: { taskOverview, processOverview, performanceOverview, recentTasks } }
+    const data = res.data || res
+    if (data) {
+      taskOverview.value = data.taskOverview || taskOverview.value
+      processOverview.value = data.processOverview || processOverview.value
+      performanceOverview.value = data.performanceOverview || performanceOverview.value
+      recentTasks.value = data.recentTasks || []
     }
   } catch (error) {
-    // 使用模拟数据
-    taskOverview.value = {
-      pendingCount: 12,
-      overdueCount: 2,
-      completedTodayCount: 5,
-      avgProcessingHours: 2.5,
-      urgentCount: 3,
-      highPriorityCount: 4
-    }
-    processOverview.value = {
-      initiatedCount: 25,
-      inProgressCount: 8,
-      completedThisMonthCount: 17,
-      approvalRate: 0.88,
-      typeDistribution: {}
-    }
-    performanceOverview.value = {
-      efficiencyScore: 85,
-      qualityScore: 92,
-      collaborationScore: 78,
-      monthlyRank: 15,
-      totalUsers: 100
-    }
+    console.error('Failed to load dashboard data:', error)
   }
 }
 

@@ -59,13 +59,14 @@ const loading = ref(false)
 // 开发环境检测
 const isDev = import.meta.env.DEV
 
-// 测试用户数据 (仅开发环境使用)
+// 测试用户数据 (仅开发环境使用) - IT部门开发人员
 const testUsers = [
-  { username: 'dev_lead', password: 'dev123', name: '开发组长', role: '开发组长', tagType: 'danger' as const },
-  { username: 'senior_dev', password: 'dev123', name: '高级开发', role: '高级开发', tagType: 'warning' as const },
-  { username: 'developer', password: 'dev123', name: '开发人员', role: '开发人员', tagType: 'success' as const },
-  { username: 'designer', password: 'dev123', name: '流程设计师', role: '设计师', tagType: 'info' as const },
-  { username: 'tester', password: 'dev123', name: '测试人员', role: '测试', tagType: 'primary' as const },
+  { username: 'tech.director', password: 'admin123', name: 'Robert Sun', role: '技术总监', tagType: 'danger' as const },
+  { username: 'core.lead', password: 'admin123', name: 'Kevin Huang', role: '核心系统组长', tagType: 'warning' as const },
+  { username: 'channel.lead', password: 'admin123', name: 'Grace Lin', role: '渠道系统组长', tagType: 'warning' as const },
+  { username: 'risk.lead', password: 'admin123', name: 'Tony Chen', role: '风控系统组长', tagType: 'warning' as const },
+  { username: 'dev.john', password: 'admin123', name: 'John Smith', role: '高级开发', tagType: 'success' as const },
+  { username: 'dev.mary', password: 'admin123', name: 'Mary Johnson', role: '开发人员', tagType: 'success' as const },
 ]
 
 const selectedTestUser = ref('')

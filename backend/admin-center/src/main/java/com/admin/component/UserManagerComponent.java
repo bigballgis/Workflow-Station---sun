@@ -26,7 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -67,27 +67,26 @@ public class UserManagerComponent {
             throw new AdminBusinessException("EMAIL_EXISTS", "邮箱已被使用: " + request.getEmail());
         }
         
-        // 创建用户
-        String userId = UUID.randomUUID().toString();
+        // 创建用户 - 使用 String 类型 ID
         String encodedPassword = passwordEncoder.encode(request.getInitialPassword());
+        String userId = UUID.randomUUID().toString();
         
         User user = User.builder()
                 .id(userId)
                 .username(request.getUsername())
                 .passwordHash(encodedPassword)
                 .email(request.getEmail())
-                .phone(request.getPhone())
                 .fullName(request.getFullName())
                 .employeeId(request.getEmployeeId())
                 .departmentId(request.getDepartmentId())
                 .position(request.getPosition())
                 .status(UserStatus.ACTIVE)
                 .mustChangePassword(true)
-                .passwordExpiredAt(Instant.now().plus(90, ChronoUnit.DAYS))
+                .passwordExpiredAt(LocalDateTime.now().plusDays(90))
                 .failedLoginCount(0)
                 .build();
         
-        userRepository.save(user);
+        user = userRepository.save(user);
         
         // 保存密码历史
         savePasswordHistory(userId, encodedPassword);
@@ -112,7 +111,6 @@ public class UserManagerComponent {
         User oldUser = User.builder()
                 .email(user.getEmail())
                 .fullName(user.getFullName())
-                .phone(user.getPhone())
                 .departmentId(user.getDepartmentId())
                 .position(user.getPosition())
                 .build();
@@ -128,9 +126,6 @@ public class UserManagerComponent {
         if (request.getFullName() != null) {
             user.setFullName(request.getFullName());
         }
-        if (request.getPhone() != null) {
-            user.setPhone(request.getPhone());
-        }
         if (request.getEmployeeId() != null) {
             user.setEmployeeId(request.getEmployeeId());
         }
@@ -139,6 +134,32 @@ public class UserManagerComponent {
         }
         if (request.getPosition() != null) {
             user.setPosition(request.getPosition());
+        }
+        
+        // 更新实体管理者
+        if (request.getEntityManagerId() != null) {
+            if (!request.getEntityManagerId().isEmpty()) {
+                // 验证实体管理者存在
+                if (!userRepository.existsById(request.getEntityManagerId())) {
+                    throw new AdminBusinessException("ENTITY_MANAGER_NOT_FOUND", "实体管理者不存在");
+                }
+                user.setEntityManagerId(request.getEntityManagerId());
+            } else {
+                user.setEntityManagerId(null);
+            }
+        }
+        
+        // 更新职能管理者
+        if (request.getFunctionManagerId() != null) {
+            if (!request.getFunctionManagerId().isEmpty()) {
+                // 验证职能管理者存在
+                if (!userRepository.existsById(request.getFunctionManagerId())) {
+                    throw new AdminBusinessException("FUNCTION_MANAGER_NOT_FOUND", "职能管理者不存在");
+                }
+                user.setFunctionManagerId(request.getFunctionManagerId());
+            } else {
+                user.setFunctionManagerId(null);
+            }
         }
         
         userRepository.save(user);
@@ -196,7 +217,7 @@ public class UserManagerComponent {
         
         user.setPasswordHash(encodedPassword);
         user.setMustChangePassword(true);
-        user.setPasswordExpiredAt(Instant.now().plus(90, ChronoUnit.DAYS));
+        user.setPasswordExpiredAt(LocalDateTime.now().plusDays(90));
         
         userRepository.save(user);
         
@@ -212,7 +233,6 @@ public class UserManagerComponent {
     
     /**
      * 删除用户（软删除）
-     * Validates: Requirements 5.1, 5.4, 5.5
      */
     @Transactional
     public void deleteUser(String userId) {
@@ -228,7 +248,7 @@ public class UserManagerComponent {
         
         // 软删除
         user.setDeleted(true);
-        user.setDeletedAt(Instant.now());
+        user.setDeletedAt(LocalDateTime.now());
         user.setDeletedBy(getCurrentUserId());
         user.setStatus(UserStatus.DISABLED);
         
@@ -262,8 +282,6 @@ public class UserManagerComponent {
      * 获取当前用户ID
      */
     private String getCurrentUserId() {
-        // 从 SecurityContext 获取当前用户ID
-        // 简化实现，实际应该从 Spring Security 获取
         return "system";
     }
     
@@ -277,7 +295,6 @@ public class UserManagerComponent {
     
     /**
      * 获取用户详情（包含角色和登录历史）
-     * Validates: Requirements 7.1, 7.2, 7.3
      */
     public UserDetailInfo getUserDetail(String userId) {
         User user = userRepository.findById(userId)
@@ -295,8 +312,19 @@ public class UserManagerComponent {
                 .collect(java.util.stream.Collectors.toSet());
         detail.setRoles(roles);
         
+        // 获取实体管理者名称
+        if (user.getEntityManagerId() != null) {
+            userRepository.findById(user.getEntityManagerId())
+                    .ifPresent(manager -> detail.setEntityManagerName(manager.getFullName()));
+        }
+        
+        // 获取职能管理者名称
+        if (user.getFunctionManagerId() != null) {
+            userRepository.findById(user.getFunctionManagerId())
+                    .ifPresent(manager -> detail.setFunctionManagerName(manager.getFullName()));
+        }
+        
         // 获取登录历史（最近10条）
-        // 简化实现，实际应该从登录审计表查询
         detail.setLoginHistory(List.of());
         
         return detail;
@@ -325,7 +353,23 @@ public class UserManagerComponent {
                 request.getKeyword(),
                 pageable);
         
-        return users.map(UserInfo::fromEntity);
+        return users.map(user -> {
+            UserInfo info = UserInfo.fromEntity(user);
+            
+            // 填充实体管理者名称
+            if (user.getEntityManagerId() != null) {
+                userRepository.findById(user.getEntityManagerId())
+                        .ifPresent(manager -> info.setEntityManagerName(manager.getFullName()));
+            }
+            
+            // 填充职能管理者名称
+            if (user.getFunctionManagerId() != null) {
+                userRepository.findById(user.getFunctionManagerId())
+                        .ifPresent(manager -> info.setFunctionManagerName(manager.getFullName()));
+            }
+            
+            return info;
+        });
     }
     
     /**
@@ -340,7 +384,6 @@ public class UserManagerComponent {
                 .startTime(Instant.now());
         
         try {
-            // 解析文件
             List<UserCreateRequest> users = parseImportFile(file);
             
             int successCount = 0;
@@ -367,7 +410,6 @@ public class UserManagerComponent {
                     .success(failureCount == 0)
                     .build();
             
-            // 记录审计日志
             auditService.recordBatchImport(result);
             
             log.info("Batch import completed: {} success, {} failed", successCount, failureCount);
@@ -405,7 +447,6 @@ public class UserManagerComponent {
      * 验证状态转换
      */
     private void validateStatusTransition(UserStatus from, UserStatus to) {
-        // 定义有效的状态转换
         boolean valid = switch (from) {
             case ACTIVE -> to == UserStatus.DISABLED || to == UserStatus.LOCKED;
             case DISABLED -> to == UserStatus.ACTIVE;
@@ -449,8 +490,6 @@ public class UserManagerComponent {
      * 解析导入文件
      */
     private List<UserCreateRequest> parseImportFile(MultipartFile file) {
-        // 简化实现，实际应该使用 Apache POI 或 OpenCSV
-        // 这里返回空列表，实际实现需要解析 Excel/CSV 文件
         return List.of();
     }
 }

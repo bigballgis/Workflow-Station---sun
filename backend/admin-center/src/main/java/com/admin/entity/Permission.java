@@ -7,7 +7,7 @@ import lombok.*;
  * 权限实体
  */
 @Entity
-@Table(name = "admin_permissions")
+@Table(name = "sys_permissions")
 @Data
 @Builder
 @NoArgsConstructor

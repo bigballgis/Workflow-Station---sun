@@ -230,7 +230,10 @@ coverage/
 htmlcov/
 .tox/
 .pytest_cache/
+**/.jqwik-database
 .jqwik-database
+*/.jqwik-database
+*/*/.jqwik-database
 
 # =============================================================================
 # Database files

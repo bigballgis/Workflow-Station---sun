@@ -24,6 +24,7 @@ public class FunctionUnitInfo {
     private String version;
     private String description;
     private FunctionUnitStatus status;
+    private Boolean enabled;
     private Long packageSize;
     private String checksum;
     private Instant importedAt;
@@ -47,6 +48,7 @@ public class FunctionUnitInfo {
                 .version(entity.getVersion())
                 .description(entity.getDescription())
                 .status(entity.getStatus())
+                .enabled(entity.getEnabled())
                 .packageSize(entity.getPackageSize())
                 .checksum(entity.getChecksum())
                 .importedAt(entity.getImportedAt())

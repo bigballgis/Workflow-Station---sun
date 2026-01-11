@@ -12,7 +12,7 @@ import java.time.Instant;
  * 数据字典关联数据源实体
  */
 @Entity
-@Table(name = "admin_dictionary_data_sources", indexes = {
+@Table(name = "sys_dictionary_data_sources", indexes = {
         @Index(name = "idx_dict_ds_dict_id", columnList = "dictionary_id")
 })
 @Data

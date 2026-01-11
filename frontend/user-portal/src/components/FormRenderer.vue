@@ -60,6 +60,7 @@
               :filterable="field.filterable"
               clearable
               style="width: 100%"
+              popper-class="form-renderer-popper"
             >
               <el-option
                 v-for="opt in field.options"
@@ -113,6 +114,7 @@
               :placeholder="field.placeholder"
               value-format="YYYY-MM-DD"
               style="width: 100%"
+              popper-class="form-renderer-popper"
             />
 
             <!-- 日期时间选择 -->
@@ -123,6 +125,7 @@
               :placeholder="field.placeholder"
               value-format="YYYY-MM-DD HH:mm:ss"
               style="width: 100%"
+              popper-class="form-renderer-popper"
             />
 
             <!-- 日期范围 -->
@@ -135,6 +138,7 @@
               end-placeholder="结束日期"
               value-format="YYYY-MM-DD"
               style="width: 100%"
+              popper-class="form-renderer-popper"
             />
 
             <!-- 时间选择 -->
@@ -144,6 +148,7 @@
               :placeholder="field.placeholder"
               value-format="HH:mm:ss"
               style="width: 100%"
+              popper-class="form-renderer-popper"
             />
 
             <!-- 级联选择 -->
@@ -155,6 +160,7 @@
               :placeholder="field.placeholder"
               clearable
               style="width: 100%"
+              popper-class="form-renderer-popper"
             />
 
             <!-- 用户选择器 -->
@@ -168,6 +174,7 @@
               :remote-method="(query: string) => searchUsers(query, field)"
               clearable
               style="width: 100%"
+              popper-class="form-renderer-popper"
             >
               <el-option
                 v-for="user in field.userOptions || []"
@@ -187,6 +194,7 @@
               check-strictly
               clearable
               style="width: 100%"
+              popper-class="form-renderer-popper"
             />
 
             <!-- 金额输入 -->
@@ -276,6 +284,7 @@ const emit = defineEmits<{
 
 const formRef = ref<FormInstance>()
 const formData = ref<Record<string, any>>({})
+let isInternalUpdate = false
 
 // 初始化表单数据
 const initFormData = () => {
@@ -291,7 +300,12 @@ const initFormData = () => {
       data[field.key] = null
     }
   })
+  isInternalUpdate = true
   formData.value = data
+  // 使用 nextTick 确保更新完成后再重置标志
+  setTimeout(() => {
+    isInternalUpdate = false
+  }, 0)
 }
 
 // 生成表单验证规则
@@ -315,14 +329,19 @@ const formRules = computed<FormRules>(() => {
   return rules
 })
 
-// 监听表单数据变化
+// 监听表单数据变化 - 只在非内部更新时 emit
 watch(formData, (newVal) => {
-  emit('update:modelValue', newVal)
+  if (!isInternalUpdate) {
+    emit('update:modelValue', { ...newVal })
+  }
 }, { deep: true })
 
-// 监听外部数据变化
-watch(() => props.modelValue, () => {
-  initFormData()
+// 监听外部数据变化 - 只在有实际变化时更新
+watch(() => props.modelValue, (newVal, oldVal) => {
+  // 避免不必要的更新
+  if (JSON.stringify(newVal) !== JSON.stringify(oldVal)) {
+    initFormData()
+  }
 }, { deep: true })
 
 // 用户搜索
@@ -382,5 +401,12 @@ defineExpose({
   :deep(.el-form-item__label) {
     font-weight: 500;
   }
+}
+</style>
+
+<style lang="scss">
+/* 全局样式，确保弹出框正确显示 */
+.form-renderer-popper {
+  z-index: 3000 !important;
 }
 </style>

@@ -198,7 +198,7 @@ public class DepartmentRoleTaskServiceImpl implements DepartmentRoleTaskService 
     
     private DepartmentRoleUserInfo buildDepartmentRoleUserInfo(User user, Department department, Role role) {
         return DepartmentRoleUserInfo.builder()
-                .userId(user.getId())
+                .userId(user.getId().toString())
                 .username(user.getUsername())
                 .fullName(user.getFullName())
                 .departmentId(department.getId())

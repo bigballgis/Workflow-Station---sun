@@ -275,8 +275,8 @@ public class FunctionUnitManagerComponent {
      */
     private FunctionPackageContent parsePackageContent(FunctionUnitImportRequest request) {
         // 简化实现：从请求中提取元数据
-        // 实际实现中应该解压ZIP文件并解析manifest.json
-        String code = extractCodeFromFileName(request.getFileName());
+        // 优先使用请求中的 name 作为 code，否则从文件名提取
+        String code = request.getName() != null ? request.getName() : extractCodeFromFileName(request.getFileName());
         String version = request.getVersion() != null ? request.getVersion() : "1.0.0";
         String name = request.getName() != null ? request.getName() : code;
         String description = request.getDescription();
@@ -388,6 +388,31 @@ public class FunctionUnitManagerComponent {
     }
     
     /**
+     * 添加功能单元内容
+     */
+    @Transactional
+    public void addFunctionUnitContent(String functionUnitId, ContentType contentType, 
+                                       String contentName, String contentData) {
+        FunctionUnit functionUnit = getFunctionUnitById(functionUnitId);
+        
+        String contentChecksum = calculateChecksum(contentData);
+        String contentPath = "/" + contentType.name().toLowerCase() + "s/" + contentName;
+        
+        FunctionUnitContent unitContent = FunctionUnitContent.builder()
+                .id(UUID.randomUUID().toString())
+                .functionUnit(functionUnit)
+                .contentType(contentType)
+                .contentName(contentName)
+                .contentPath(contentPath)
+                .contentData(contentData)
+                .checksum(contentChecksum)
+                .build();
+        contentRepository.save(unitContent);
+        
+        log.info("Added content {} of type {} to function unit {}", contentName, contentType, functionUnitId);
+    }
+    
+    /**
      * 删除已存在的版本
      */
     @Transactional
@@ -401,6 +426,8 @@ public class FunctionUnitManagerComponent {
             dependencyRepository.deleteByFunctionUnitId(unit.getId());
             // 删除功能单元
             functionUnitRepository.delete(unit);
+            // 强制刷新，确保删除操作在后续插入之前完成
+            functionUnitRepository.flush();
             log.info("Deleted existing function unit version: {}:{}", code, version);
         }
     }
@@ -501,11 +528,26 @@ public class FunctionUnitManagerComponent {
     }
     
     /**
+     * 保存功能单元
+     */
+    @Transactional
+    public FunctionUnit saveFunctionUnit(FunctionUnit functionUnit) {
+        return functionUnitRepository.save(functionUnit);
+    }
+    
+    /**
      * 根据代码和版本获取功能单元
      */
     public FunctionUnit getFunctionUnitByCodeAndVersion(String code, String version) {
         return functionUnitRepository.findByCodeAndVersion(code, version)
                 .orElseThrow(() -> new FunctionUnitNotFoundException("功能单元不存在: " + code + ":" + version));
+    }
+    
+    /**
+     * 获取功能单元的所有内容
+     */
+    public List<FunctionUnitContent> getFunctionUnitContents(String functionUnitId) {
+        return contentRepository.findByFunctionUnitId(functionUnitId);
     }
     
     /**
@@ -954,5 +996,115 @@ public class FunctionUnitManagerComponent {
         private String contentName;
         private String contentPath;
         private String contentData;
+    }
+    
+    // ==================== 删除和启用/禁用功能 ====================
+    
+    /**
+     * 获取删除预览信息
+     * 统计将被删除的关联数据数量
+     */
+    @Transactional(readOnly = true)
+    public com.admin.dto.response.DeletePreviewResponse getDeletePreview(String functionUnitId) {
+        FunctionUnit unit = getFunctionUnitById(functionUnitId);
+        
+        // 统计各类关联数据
+        List<FunctionUnitContent> contents = contentRepository.findByFunctionUnitId(functionUnitId);
+        
+        int formCount = 0;
+        int processCount = 0;
+        int dataTableCount = 0;
+        
+        for (FunctionUnitContent content : contents) {
+            switch (content.getContentType()) {
+                case FORM:
+                    formCount++;
+                    break;
+                case PROCESS:
+                    processCount++;
+                    break;
+                case DATA_TABLE:
+                    dataTableCount++;
+                    break;
+                default:
+                    break;
+            }
+        }
+        
+        int dependencyCount = dependencyRepository.findByFunctionUnitId(functionUnitId).size();
+        int deploymentCount = unit.getDeployments() != null ? unit.getDeployments().size() : 0;
+        
+        // 检查运行中的流程实例（简化实现，实际需要调用流程引擎）
+        boolean hasRunningInstances = false;
+        int runningInstanceCount = 0;
+        
+        return com.admin.dto.response.DeletePreviewResponse.builder()
+                .functionUnitId(functionUnitId)
+                .functionUnitName(unit.getName())
+                .functionUnitCode(unit.getCode())
+                .formCount(formCount)
+                .processCount(processCount)
+                .dataTableCount(dataTableCount)
+                .accessConfigCount(0) // 将在后续查询
+                .deploymentCount(deploymentCount)
+                .dependencyCount(dependencyCount)
+                .hasRunningInstances(hasRunningInstances)
+                .runningInstanceCount(runningInstanceCount)
+                .build();
+    }
+    
+    /**
+     * 检查是否有运行中的流程实例
+     */
+    public boolean hasRunningInstances(String functionUnitId) {
+        // 简化实现：实际需要调用流程引擎检查
+        // 这里返回false，表示没有运行中的实例
+        return false;
+    }
+    
+    /**
+     * 级联删除功能单元及其所有关联内容
+     */
+    @Transactional
+    public void deleteFunctionUnitCascade(String functionUnitId) {
+        FunctionUnit unit = getFunctionUnitById(functionUnitId);
+        
+        // 检查是否有运行中的流程实例
+        if (hasRunningInstances(functionUnitId)) {
+            throw new AdminBusinessException("HAS_RUNNING_INSTANCES", 
+                    "无法删除：存在运行中的流程实例");
+        }
+        
+        log.info("Deleting function unit cascade: {} ({})", unit.getName(), functionUnitId);
+        
+        // 删除内容
+        contentRepository.deleteByFunctionUnitId(functionUnitId);
+        
+        // 删除依赖
+        dependencyRepository.deleteByFunctionUnitId(functionUnitId);
+        
+        // 删除功能单元（会级联删除deployments）
+        functionUnitRepository.delete(unit);
+        
+        log.info("Function unit deleted successfully: {}", functionUnitId);
+    }
+    
+    /**
+     * 设置功能单元启用状态
+     */
+    @Transactional
+    public FunctionUnit setEnabled(String functionUnitId, boolean enabled) {
+        FunctionUnit unit = getFunctionUnitById(functionUnitId);
+        unit.setEnabled(enabled);
+        FunctionUnit saved = functionUnitRepository.save(unit);
+        log.info("Function unit {} enabled status set to: {}", functionUnitId, enabled);
+        return saved;
+    }
+    
+    /**
+     * 获取已部署且启用的功能单元列表
+     */
+    public Page<FunctionUnit> listDeployedAndEnabledFunctionUnits(Pageable pageable) {
+        return functionUnitRepository.findByStatusAndEnabled(FunctionUnitStatus.DEPLOYED, true, pageable);
     }
 }

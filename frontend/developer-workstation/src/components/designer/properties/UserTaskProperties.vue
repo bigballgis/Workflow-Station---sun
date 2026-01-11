@@ -23,6 +23,12 @@
             <el-select v-model="assigneeType" @change="handleAssigneeTypeChange">
               <el-option label="流程发起人" value="initiator" />
               <el-option label="发起人的直属上级" value="manager" />
+              <el-option label="实体管理者" value="entityManager" />
+              <el-option label="职能管理者" value="functionManager" />
+              <el-option label="实体或职能管理者（或签）" value="eitherManager" />
+              <el-option label="实体+职能管理者（会签）" value="bothManagers" />
+              <el-option label="部门主经理" value="departmentManager" />
+              <el-option label="部门副经理" value="departmentSecondaryManager" />
               <el-option label="指定用户" value="user" />
               <el-option label="指定部门/组" value="group" />
               <el-option label="表达式" value="expression" />
@@ -169,7 +175,7 @@ const taskName = ref('')
 const taskDescription = ref('')
 
 // 处理人配置
-const assigneeType = ref<'initiator' | 'manager' | 'user' | 'group' | 'expression'>('user')
+const assigneeType = ref<'initiator' | 'manager' | 'entityManager' | 'functionManager' | 'eitherManager' | 'bothManagers' | 'departmentManager' | 'departmentSecondaryManager' | 'user' | 'group' | 'expression'>('user')
 const assigneeValue = ref('')
 const assigneeLabel = ref('')
 const candidateUsers = ref('')
@@ -248,6 +254,12 @@ function handleAssigneeTypeChange(type: string) {
   const labelMap: Record<string, string> = {
     initiator: '流程发起人',
     manager: '发起人的直属上级',
+    entityManager: '实体管理者',
+    functionManager: '职能管理者',
+    eitherManager: '实体或职能管理者（或签）',
+    bothManagers: '实体+职能管理者（会签）',
+    departmentManager: '部门主经理',
+    departmentSecondaryManager: '部门副经理',
     user: '',
     group: '',
     expression: ''
@@ -256,10 +268,32 @@ function handleAssigneeTypeChange(type: string) {
   assigneeLabel.value = labelMap[type] || ''
   updateExtProp('assigneeLabel', assigneeLabel.value)
   
-  // 清空值（除了 initiator 和 manager）
-  if (type === 'initiator' || type === 'manager') {
+  // 根据类型设置 assignee 或 candidateUsers
+  const managerTypes = ['initiator', 'manager', 'entityManager', 'functionManager', 'departmentManager', 'departmentSecondaryManager']
+  
+  if (type === 'eitherManager') {
+    // 或签模式：使用 candidateUsers，任一人审批即可
     assigneeValue.value = ''
     updateExtProp('assigneeValue', '')
+    candidateUsers.value = '${entityManager},${functionManager}'
+    updateExtProp('candidateUsers', candidateUsers.value)
+  } else if (type === 'bothManagers') {
+    // 会签模式：使用 candidateUsers + 多实例配置
+    assigneeValue.value = ''
+    updateExtProp('assigneeValue', '')
+    candidateUsers.value = '${entityManager},${functionManager}'
+    updateExtProp('candidateUsers', candidateUsers.value)
+    // 启用多实例（会签需要所有人审批）
+    multiInstance.value = true
+    updateExtProp('multiInstance', true)
+    sequential.value = false
+    updateExtProp('sequential', false)
+  } else if (managerTypes.includes(type)) {
+    // 单管理者模式：清空值，流程引擎会根据类型解析
+    assigneeValue.value = ''
+    updateExtProp('assigneeValue', '')
+    candidateUsers.value = ''
+    updateExtProp('candidateUsers', '')
   }
 }
 

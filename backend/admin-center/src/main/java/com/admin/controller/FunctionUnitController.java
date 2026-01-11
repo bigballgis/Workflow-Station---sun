@@ -2,7 +2,9 @@ package com.admin.controller;
 
 import com.admin.component.DeploymentManagerComponent;
 import com.admin.component.FunctionUnitManagerComponent;
+import com.admin.dto.request.FunctionUnitAccessRequest;
 import com.admin.dto.request.FunctionUnitImportRequest;
+import com.admin.dto.response.FunctionUnitAccessInfo;
 import com.admin.dto.response.FunctionUnitInfo;
 import com.admin.dto.response.ImportResult;
 import com.admin.dto.response.ValidationResult;
@@ -12,6 +14,7 @@ import com.admin.entity.FunctionUnitDeployment;
 import com.admin.enums.DeploymentEnvironment;
 import com.admin.enums.DeploymentStrategy;
 import com.admin.enums.FunctionUnitStatus;
+import com.admin.service.FunctionUnitAccessService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -31,13 +34,14 @@ import java.util.List;
  */
 @Slf4j
 @RestController
-@RequestMapping("/api/v1/admin/function-units")
+@RequestMapping("/function-units")
 @RequiredArgsConstructor
 @Tag(name = "功能单元管理", description = "功能包导入、部署管理和版本查询接口")
 public class FunctionUnitController {
     
     private final FunctionUnitManagerComponent functionUnitManager;
     private final DeploymentManagerComponent deploymentManager;
+    private final FunctionUnitAccessService accessService;
     
     // ==================== 功能包导入 ====================
     
@@ -75,6 +79,32 @@ public class FunctionUnitController {
         return ResponseEntity.ok(units.map(FunctionUnitInfo::fromEntity));
     }
     
+    @GetMapping("/deployed")
+    @Operation(summary = "获取已部署的功能单元", description = "获取所有已部署的功能单元列表（供用户门户使用）")
+    public ResponseEntity<java.util.Map<String, Object>> getDeployedFunctionUnits() {
+        log.info("Getting deployed function units");
+        
+        java.util.Map<String, Object> result = new java.util.HashMap<>();
+        
+        try {
+            var units = functionUnitManager.listFunctionUnitsByStatus(
+                    FunctionUnitStatus.DEPLOYED, 
+                    org.springframework.data.domain.Pageable.unpaged());
+            
+            result.put("content", units.map(FunctionUnitInfo::fromEntity).getContent());
+            result.put("totalElements", units.getTotalElements());
+            
+            return ResponseEntity.ok(result);
+            
+        } catch (Exception e) {
+            log.error("Failed to get deployed function units", e);
+            result.put("content", java.util.Collections.emptyList());
+            result.put("totalElements", 0);
+            result.put("error", e.getMessage());
+            return ResponseEntity.ok(result);
+        }
+    }
+    
     @GetMapping("/{id}")
     @Operation(summary = "获取功能单元详情", description = "根据ID获取功能单元详细信息")
     public ResponseEntity<FunctionUnitInfo> getFunctionUnit(
@@ -84,9 +114,51 @@ public class FunctionUnitController {
         return ResponseEntity.ok(FunctionUnitInfo.fromEntity(unit));
     }
     
+    @GetMapping("/{id}/delete-preview")
+    @Operation(summary = "获取删除预览", description = "获取功能单元删除预览，显示将被删除的关联数据统计")
+    public ResponseEntity<com.admin.dto.response.DeletePreviewResponse> getDeletePreview(
+            @Parameter(description = "功能单元ID") @PathVariable String id) {
+        log.info("Getting delete preview for function unit: {}", id);
+        com.admin.dto.response.DeletePreviewResponse preview = functionUnitManager.getDeletePreview(id);
+        // 补充访问配置数量
+        int accessConfigCount = accessService.getAccessConfigs(id).size();
+        preview.setAccessConfigCount(accessConfigCount);
+        return ResponseEntity.ok(preview);
+    }
+    
     @DeleteMapping("/{id}")
-    @Operation(summary = "删除功能单元", description = "删除指定的功能单元")
+    @Operation(summary = "删除功能单元", description = "级联删除功能单元及其所有关联内容")
     public ResponseEntity<Void> deleteFunctionUnit(
+            @Parameter(description = "功能单元ID") @PathVariable String id) {
+        log.info("Deleting function unit cascade: {}", id);
+        // 先删除访问配置
+        accessService.deleteAllAccessConfigs(id);
+        // 级联删除功能单元
+        functionUnitManager.deleteFunctionUnitCascade(id);
+        return ResponseEntity.noContent().build();
+    }
+    
+    @PutMapping("/{id}/enabled")
+    @Operation(summary = "切换启用状态", description = "切换功能单元的启用/禁用状态")
+    public ResponseEntity<java.util.Map<String, Object>> setEnabled(
+            @Parameter(description = "功能单元ID") @PathVariable String id,
+            @RequestBody java.util.Map<String, Boolean> request) {
+        log.info("Setting enabled status for function unit {}: {}", id, request.get("enabled"));
+        Boolean enabled = request.get("enabled");
+        if (enabled == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        FunctionUnit unit = functionUnitManager.setEnabled(id, enabled);
+        java.util.Map<String, Object> response = new java.util.HashMap<>();
+        response.put("id", unit.getId());
+        response.put("enabled", unit.getEnabled());
+        response.put("updatedAt", unit.getUpdatedAt());
+        return ResponseEntity.ok(response);
+    }
+    
+    @DeleteMapping("/{id}/legacy")
+    @Operation(summary = "删除功能单元（旧版）", description = "删除指定的功能单元（旧版API，保留兼容）")
+    public ResponseEntity<Void> deleteFunctionUnitLegacy(
             @Parameter(description = "功能单元ID") @PathVariable String id) {
         log.info("Deleting function unit: {}", id);
         FunctionUnit unit = functionUnitManager.getFunctionUnitById(id);
@@ -291,5 +363,122 @@ public class FunctionUnitController {
         FunctionUnitManagerComponent.VersionUpgradeCheck check = 
                 functionUnitManager.checkVersionUpgrade(code, fromVersion, toVersion);
         return ResponseEntity.ok(check);
+    }
+    
+    // ==================== 访问权限管理 ====================
+    
+    @GetMapping("/{id}/access")
+    @Operation(summary = "获取访问权限配置", description = "获取功能单元的访问权限配置列表")
+    public ResponseEntity<List<FunctionUnitAccessInfo>> getAccessConfigs(
+            @Parameter(description = "功能单元ID") @PathVariable String id) {
+        log.info("Getting access configs for function unit: {}", id);
+        List<FunctionUnitAccessInfo> configs = accessService.getAccessConfigs(id);
+        return ResponseEntity.ok(configs);
+    }
+    
+    @PostMapping("/{id}/access")
+    @Operation(summary = "添加访问权限配置", description = "为功能单元添加业务角色访问权限配置")
+    public ResponseEntity<FunctionUnitAccessInfo> addAccessConfig(
+            @Parameter(description = "功能单元ID") @PathVariable String id,
+            @Valid @RequestBody FunctionUnitAccessRequest request) {
+        log.info("Adding access config for function unit {}: roleId={}", 
+                id, request.getRoleId());
+        FunctionUnitAccessInfo config = accessService.addAccessConfig(id, request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(config);
+    }
+    
+    @DeleteMapping("/{id}/access/{accessId}")
+    @Operation(summary = "删除访问权限配置", description = "删除功能单元的指定访问权限配置")
+    public ResponseEntity<Void> removeAccessConfig(
+            @Parameter(description = "功能单元ID") @PathVariable String id,
+            @Parameter(description = "访问配置ID") @PathVariable String accessId) {
+        log.info("Removing access config {} from function unit {}", accessId, id);
+        accessService.removeAccessConfig(id, accessId);
+        return ResponseEntity.noContent().build();
+    }
+    
+    @PutMapping("/{id}/access")
+    @Operation(summary = "批量设置访问权限配置", description = "批量设置功能单元的访问权限配置（替换现有配置）")
+    public ResponseEntity<List<FunctionUnitAccessInfo>> setAccessConfigs(
+            @Parameter(description = "功能单元ID") @PathVariable String id,
+            @Valid @RequestBody List<FunctionUnitAccessRequest> requests) {
+        log.info("Setting {} access configs for function unit {}", requests.size(), id);
+        List<FunctionUnitAccessInfo> configs = accessService.setAccessConfigs(id, requests);
+        return ResponseEntity.ok(configs);
+    }
+    
+    @GetMapping("/{id}/access/check")
+    @Operation(summary = "检查用户访问权限", description = "检查指定用户是否有权限访问功能单元")
+    public ResponseEntity<Boolean> checkUserAccess(
+            @Parameter(description = "功能单元ID") @PathVariable String id,
+            @Parameter(description = "用户ID") @RequestParam String userId) {
+        log.info("Checking access for user {} to function unit {}", userId, id);
+        boolean hasAccess = accessService.hasAccess(id, userId);
+        return ResponseEntity.ok(hasAccess);
+    }
+    
+    // ==================== 功能单元内容获取（供用户门户使用） ====================
+    
+    @GetMapping("/{id}/content")
+    @Operation(summary = "获取功能单元完整内容", description = "获取功能单元的BPMN流程、表单定义、动作绑定等完整内容（供用户门户使用）")
+    public ResponseEntity<java.util.Map<String, Object>> getFunctionUnitContent(
+            @Parameter(description = "功能单元ID") @PathVariable String id) {
+        log.info("Getting function unit content for: {}", id);
+        
+        java.util.Map<String, Object> result = new java.util.HashMap<>();
+        
+        try {
+            FunctionUnit unit = functionUnitManager.getFunctionUnitById(id);
+            
+            // 基本信息
+            result.put("id", unit.getId());
+            result.put("name", unit.getName());
+            result.put("code", unit.getCode());
+            result.put("version", unit.getVersion());
+            result.put("description", unit.getDescription());
+            result.put("status", unit.getStatus().name());
+            
+            // 获取内容
+            java.util.List<com.admin.entity.FunctionUnitContent> contents = 
+                    functionUnitManager.getFunctionUnitContents(id);
+            
+            // 分类内容
+            java.util.List<java.util.Map<String, Object>> forms = new java.util.ArrayList<>();
+            java.util.List<java.util.Map<String, Object>> processes = new java.util.ArrayList<>();
+            java.util.List<java.util.Map<String, Object>> dataTables = new java.util.ArrayList<>();
+            
+            for (com.admin.entity.FunctionUnitContent content : contents) {
+                java.util.Map<String, Object> contentMap = new java.util.HashMap<>();
+                contentMap.put("id", content.getId());
+                contentMap.put("name", content.getContentName());
+                contentMap.put("data", content.getContentData());
+                contentMap.put("type", content.getContentType().name());
+                
+                switch (content.getContentType()) {
+                    case FORM:
+                        forms.add(contentMap);
+                        break;
+                    case PROCESS:
+                        processes.add(contentMap);
+                        break;
+                    case DATA_TABLE:
+                        dataTables.add(contentMap);
+                        break;
+                    default:
+                        break;
+                }
+            }
+            
+            result.put("forms", forms);
+            result.put("processes", processes);
+            result.put("dataTables", dataTables);
+            
+            return ResponseEntity.ok(result);
+            
+        } catch (Exception e) {
+            log.error("Failed to get function unit content for {}: {}", id, e.getMessage(), e);
+            result.put("error", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(result);
+        }
     }
 }

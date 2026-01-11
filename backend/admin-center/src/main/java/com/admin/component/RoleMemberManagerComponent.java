@@ -15,6 +15,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -58,7 +59,7 @@ public class RoleMemberManagerComponent {
                 .id(UUID.randomUUID().toString())
                 .user(user)
                 .role(role)
-                .assignedAt(Instant.now())
+                .assignedAt(LocalDateTime.now())
                 .assignedBy(assignedBy)
                 .build();
         
@@ -126,7 +127,7 @@ public class RoleMemberManagerComponent {
                         .id(UUID.randomUUID().toString())
                         .user(user)
                         .role(role)
-                        .assignedAt(Instant.now())
+                        .assignedAt(LocalDateTime.now())
                         .assignedBy(operatedBy)
                         .build();
                 
@@ -318,7 +319,7 @@ public class RoleMemberManagerComponent {
                     .id(UUID.randomUUID().toString())
                     .user(User.builder().id(userId).build())
                     .role(role)
-                    .assignedAt(Instant.now())
+                    .assignedAt(LocalDateTime.now())
                     .assignedBy(operatedBy)
                     .build();
             

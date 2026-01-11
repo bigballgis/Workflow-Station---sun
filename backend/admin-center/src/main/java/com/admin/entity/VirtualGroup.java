@@ -1,6 +1,7 @@
 package com.admin.entity;
 
 import com.admin.enums.VirtualGroupType;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 import org.springframework.data.annotation.CreatedBy;
@@ -16,9 +17,10 @@ import java.util.Set;
 /**
  * 虚拟组实体
  * 支持项目组、工作组、临时组和任务处理组等多种虚拟组类型
+ * 虚拟组是跨服务共享的，用户可以通过虚拟组获得角色权限
  */
 @Entity
-@Table(name = "admin_virtual_groups")
+@Table(name = "sys_virtual_groups")
 @EntityListeners(AuditingEntityListener.class)
 @Data
 @Builder
@@ -68,6 +70,7 @@ public class VirtualGroup {
     @Column(name = "updated_by", length = 64)
     private String updatedBy;
     
+    @JsonIgnore
     @OneToMany(mappedBy = "virtualGroup", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private Set<VirtualGroupMember> members = new HashSet<>();

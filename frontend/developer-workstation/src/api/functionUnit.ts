@@ -266,5 +266,42 @@ export const functionUnitApi = {
     functionUnitAxios.put<any, { data: TableBinding }>(`/api/v1/function-units/${functionUnitId}/forms/${formId}/bindings/${bindingId}`, data),
   
   deleteFormBinding: (functionUnitId: number, formId: number, bindingId: number) =>
-    functionUnitAxios.delete(`/api/v1/function-units/${functionUnitId}/forms/${formId}/bindings/${bindingId}`)
+    functionUnitAxios.delete(`/api/v1/function-units/${functionUnitId}/forms/${formId}/bindings/${bindingId}`),
+
+  // Export and Deploy
+  exportFunctionUnit: (functionUnitId: number) =>
+    functionUnitAxios.get(`/api/v1/function-units/${functionUnitId}/export`, { responseType: 'blob' }),
+  
+  deploy: (functionUnitId: number, request: DeployRequest) =>
+    functionUnitAxios.post<any, { data: DeployResponse }>(`/api/v1/function-units/${functionUnitId}/deploy`, request),
+  
+  getDeploymentStatus: (deploymentId: string) =>
+    functionUnitAxios.get<any, { data: DeployResponse }>(`/api/v1/function-units/deployments/${deploymentId}/status`),
+  
+  getDeploymentHistory: (functionUnitId: number) =>
+    functionUnitAxios.get<any, { data: DeployResponse[] }>(`/api/v1/function-units/${functionUnitId}/deployments`)
+}
+
+// Deploy types
+export interface DeployRequest {
+  targetUrl?: string
+  environment?: 'DEVELOPMENT' | 'TESTING' | 'PRODUCTION'
+  conflictStrategy?: string
+  autoEnable?: boolean
+}
+
+export interface DeployResponse {
+  deploymentId: string
+  status: 'PENDING' | 'DEPLOYING' | 'SUCCESS' | 'FAILED' | 'ROLLED_BACK'
+  message?: string
+  progress?: number
+  steps?: DeployStep[]
+  deployedAt?: string
+}
+
+export interface DeployStep {
+  name: string
+  status: string
+  message?: string
+  completedAt?: string
 }

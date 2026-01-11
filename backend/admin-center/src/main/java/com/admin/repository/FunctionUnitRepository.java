@@ -82,4 +82,14 @@ public interface FunctionUnitRepository extends JpaRepository<FunctionUnit, Stri
      * 根据名称模糊查询
      */
     List<FunctionUnit> findByNameContaining(String name);
+    
+    /**
+     * 根据状态和启用状态分页查找功能单元
+     */
+    Page<FunctionUnit> findByStatusAndEnabled(FunctionUnitStatus status, Boolean enabled, Pageable pageable);
+    
+    /**
+     * 根据状态和启用状态查找功能单元列表
+     */
+    List<FunctionUnit> findByStatusAndEnabled(FunctionUnitStatus status, Boolean enabled);
 }

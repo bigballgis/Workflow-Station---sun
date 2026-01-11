@@ -181,3 +181,15 @@ body {
 ::-webkit-scrollbar-track {
   background-color: #f1f1f1;
 }
+
+// 修复 Element Plus 弹出框定位问题
+.el-popper {
+  z-index: 3000 !important;
+}
+
+.el-select__popper,
+.el-date-picker__popper,
+.el-time-picker__popper,
+.el-cascader__dropdown {
+  z-index: 3000 !important;
+}

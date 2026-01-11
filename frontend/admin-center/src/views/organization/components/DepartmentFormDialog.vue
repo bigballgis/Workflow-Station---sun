@@ -8,11 +8,34 @@
         <el-input v-model="form.code" :disabled="isEdit" />
       </el-form-item>
       <el-form-item :label="t('organization.parentDepartment')">
-        <el-tree-select v-model="form.parentId" :data="orgStore.departmentTree" :props="{ label: 'name', value: 'id' }" clearable check-strictly :disabled="!!parent" />
+        <el-tree-select v-model="form.parentId" :data="orgStore.departmentTree" :props="{ label: 'name', children: 'children' }" node-key="id" clearable check-strictly :disabled="!!parent" style="width: 100%" />
       </el-form-item>
       <el-form-item :label="t('organization.leader')">
-        <el-select v-model="form.leaderId" clearable filterable>
-          <el-option v-for="user in users" :key="user.id" :label="user.realName" :value="user.id" />
+        <el-select 
+          v-model="form.leaderId" 
+          clearable 
+          filterable 
+          remote 
+          :remote-method="searchUsers"
+          :loading="userSearchLoading"
+          placeholder="搜索并选择部门主经理"
+          style="width: 100%"
+        >
+          <el-option v-for="user in userOptions" :key="user.id" :label="`${user.fullName} (${user.username})`" :value="user.id" />
+        </el-select>
+      </el-form-item>
+      <el-form-item label="副经理">
+        <el-select 
+          v-model="form.secondaryManagerId" 
+          clearable 
+          filterable 
+          remote 
+          :remote-method="searchUsers"
+          :loading="userSearchLoading"
+          placeholder="搜索并选择部门副经理"
+          style="width: 100%"
+        >
+          <el-option v-for="user in userOptions" :key="user.id" :label="`${user.fullName} (${user.username})`" :value="user.id" />
         </el-select>
       </el-form-item>
       <el-form-item label="排序">
@@ -32,6 +55,7 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage, FormInstance } from 'element-plus'
 import { useOrganizationStore } from '@/stores/organization'
 import { Department } from '@/api/organization'
+import { userApi } from '@/api/user'
 
 const props = defineProps<{ modelValue: boolean; department: Department | null; parent: Department | null }>()
 const emit = defineEmits(['update:modelValue', 'success'])
@@ -41,10 +65,11 @@ const orgStore = useOrganizationStore()
 
 const formRef = ref<FormInstance>()
 const loading = ref(false)
-const users = ref<any[]>([])
+const userSearchLoading = ref(false)
+const userOptions = ref<{ id: string; fullName: string; username: string }[]>([])
 const isEdit = computed(() => !!props.department)
 
-const form = reactive({ name: '', code: '', parentId: '', leaderId: '', sortOrder: 0 })
+const form = reactive({ name: '', code: '', parentId: '', leaderId: '', secondaryManagerId: '', sortOrder: 0 })
 
 const rules = {
   name: [{ required: true, message: '请输入部门名称', trigger: 'blur' }],
@@ -53,13 +78,87 @@ const rules = {
 
 watch(() => props.modelValue, (val) => {
   if (val) {
+    loadDefaultUsers() // 加载默认用户列表
     if (props.department) {
-      Object.assign(form, { name: props.department.name, code: props.department.code, parentId: props.department.parentId || '', leaderId: props.department.leaderId || '', sortOrder: props.department.sortOrder })
+      Object.assign(form, { 
+        name: props.department.name, 
+        code: props.department.code, 
+        parentId: props.department.parentId || '', 
+        leaderId: props.department.leaderId || '', 
+        secondaryManagerId: props.department.secondaryManagerId || '',
+        sortOrder: props.department.sortOrder 
+      })
+      loadSelectedManagers()
     } else {
-      Object.assign(form, { name: '', code: '', parentId: props.parent?.id || '', leaderId: '', sortOrder: 0 })
+      Object.assign(form, { name: '', code: '', parentId: props.parent?.id || '', leaderId: '', secondaryManagerId: '', sortOrder: 0 })
     }
   }
 })
+
+// 加载默认用户列表（前3个）
+const loadDefaultUsers = async () => {
+  userSearchLoading.value = true
+  try {
+    const res = await userApi.list({ page: 0, size: 3 })
+    userOptions.value = (res.content || []).map((u) => ({
+      id: u.id,
+      fullName: u.fullName,
+      username: u.username
+    }))
+  } catch (error) {
+    console.error('Failed to load default users:', error)
+    userOptions.value = []
+  } finally {
+    userSearchLoading.value = false
+  }
+}
+
+const loadSelectedManagers = async () => {
+  const managerIds = [form.leaderId, form.secondaryManagerId].filter(Boolean)
+  if (managerIds.length === 0) return
+  
+  try {
+    const managers: { id: string; fullName: string; username: string }[] = []
+    for (const id of managerIds) {
+      const user = await userApi.getById(id)
+      if (user) {
+        managers.push({ id: user.id, fullName: user.fullName, username: user.username })
+      }
+    }
+    // 合并已选管理者到选项列表（去重）
+    const existingIds = new Set(userOptions.value.map(u => u.id))
+    for (const mgr of managers) {
+      if (!existingIds.has(mgr.id)) {
+        userOptions.value.push(mgr)
+      }
+    }
+  } catch (error) {
+    console.error('Failed to load managers:', error)
+  }
+}
+
+const searchUsers = async (query: string) => {
+  // 如果没有输入，显示默认的前3个用户
+  if (!query) {
+    await loadDefaultUsers()
+    return
+  }
+  
+  userSearchLoading.value = true
+  try {
+    const res = await userApi.list({ keyword: query, page: 0, size: 20 })
+    userOptions.value = (res.content || []).map((u) => ({
+      id: u.id,
+      fullName: u.fullName,
+      username: u.username
+    }))
+  } catch (error) {
+    console.error('Failed to search users:', error)
+    userOptions.value = []
+  } finally {
+    userSearchLoading.value = false
+  }
+}
 
 const handleSubmit = async () => {
   const valid = await formRef.value?.validate()
@@ -68,9 +167,21 @@ const handleSubmit = async () => {
   loading.value = true
   try {
     if (isEdit.value) {
-      await orgStore.updateDepartment(props.department!.id, { name: form.name, leaderId: form.leaderId || undefined, sortOrder: form.sortOrder })
+      await orgStore.updateDepartment(props.department!.id, { 
+        name: form.name, 
+        leaderId: form.leaderId || undefined, 
+        secondaryManagerId: form.secondaryManagerId || undefined,
+        sortOrder: form.sortOrder 
+      })
     } else {
-      await orgStore.createDepartment(form)
+      await orgStore.createDepartment({
+        name: form.name,
+        code: form.code,
+        parentId: form.parentId || undefined,
+        leaderId: form.leaderId || undefined,
+        secondaryManagerId: form.secondaryManagerId || undefined,
+        sortOrder: form.sortOrder
+      })
     }
     ElMessage.success(t('common.success'))
     emit('update:modelValue', false)

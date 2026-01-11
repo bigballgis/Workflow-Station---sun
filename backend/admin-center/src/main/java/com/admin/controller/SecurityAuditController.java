@@ -19,7 +19,7 @@ import java.util.List;
 
 @Slf4j
 @RestController
-@RequestMapping("/api/v1/admin/security")
+@RequestMapping("/security")
 @RequiredArgsConstructor
 @Tag(name = "安全审计", description = "安全策略配置和审计日志管理接口")
 public class SecurityAuditController {

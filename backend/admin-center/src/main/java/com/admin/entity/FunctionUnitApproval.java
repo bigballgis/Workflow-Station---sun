@@ -13,7 +13,7 @@ import java.time.Instant;
  * 功能单元审批记录实体
  */
 @Entity
-@Table(name = "admin_function_unit_approvals")
+@Table(name = "sys_function_unit_approvals")
 @EntityListeners(AuditingEntityListener.class)
 @Data
 @Builder

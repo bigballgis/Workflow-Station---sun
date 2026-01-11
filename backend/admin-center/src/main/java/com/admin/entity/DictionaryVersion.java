@@ -10,7 +10,7 @@ import java.time.Instant;
  * 数据字典版本历史实体
  */
 @Entity
-@Table(name = "admin_dictionary_versions", indexes = {
+@Table(name = "sys_dictionary_versions", indexes = {
         @Index(name = "idx_dict_ver_dict_id", columnList = "dictionary_id"),
         @Index(name = "idx_dict_ver_version", columnList = "dictionary_id, version")
 })

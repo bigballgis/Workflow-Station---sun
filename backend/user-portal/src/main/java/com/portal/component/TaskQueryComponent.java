@@ -6,10 +6,16 @@ import com.portal.dto.TaskQueryRequest;
 import com.portal.dto.TaskStatistics;
 import com.portal.dto.TaskHistoryInfo;
 import com.portal.entity.DelegationRule;
+import com.portal.entity.ProcessInstance;
 import com.portal.enums.DelegationStatus;
 import com.portal.repository.DelegationRuleRepository;
+import com.portal.repository.ProcessInstanceRepository;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
@@ -27,9 +33,16 @@ import java.util.stream.Collectors;
 public class TaskQueryComponent {
 
     private final DelegationRuleRepository delegationRuleRepository;
+    private final ProcessInstanceRepository processInstanceRepository;
 
     // 模拟的任务数据存储（实际应集成workflow-engine-core）
     private final Map<String, TaskInfo> taskStore = new HashMap<>();
+
+    @PostConstruct
+    public void init() {
+        initTestData();
+        log.info("TaskQueryComponent initialized with {} test tasks", taskStore.size());
+    }
 
     /**
      * 查询用户的待办任务
@@ -40,22 +53,37 @@ public class TaskQueryComponent {
         
         List<TaskInfo> allTasks = new ArrayList<>();
 
-        // 1. 查询直接分配给用户的任务
+        // 1. 从数据库查询分配给用户或候选用户包含用户的流程实例
+        try {
+            Pageable pageable = PageRequest.of(0, 100); // 获取前100条
+            Page<ProcessInstance> processInstances = processInstanceRepository
+                    .findByAssigneeOrCandidateAndStatus(userId, "RUNNING", pageable);
+            
+            for (ProcessInstance instance : processInstances.getContent()) {
+                TaskInfo task = convertProcessInstanceToTask(instance, userId);
+                allTasks.add(task);
+            }
+            log.info("Found {} process instances for user {} from database", processInstances.getTotalElements(), userId);
+        } catch (Exception e) {
+            log.warn("Failed to query process instances from database: {}", e.getMessage());
+        }
+
+        // 2. 查询直接分配给用户的任务（模拟数据）
         if (assignmentTypes == null || assignmentTypes.isEmpty() || assignmentTypes.contains("USER")) {
             allTasks.addAll(queryDirectAssignedTasks(userId));
         }
 
-        // 2. 查询虚拟组任务
+        // 3. 查询虚拟组任务
         if (assignmentTypes == null || assignmentTypes.isEmpty() || assignmentTypes.contains("VIRTUAL_GROUP")) {
             allTasks.addAll(queryVirtualGroupTasks(userId));
         }
 
-        // 3. 查询部门角色任务
+        // 4. 查询部门角色任务
         if (assignmentTypes == null || assignmentTypes.isEmpty() || assignmentTypes.contains("DEPT_ROLE")) {
             allTasks.addAll(queryDeptRoleTasks(userId));
         }
 
-        // 4. 查询委托任务
+        // 5. 查询委托任务
         if (assignmentTypes == null || assignmentTypes.isEmpty() || assignmentTypes.contains("DELEGATED")) {
             allTasks.addAll(queryDelegatedTasks(userId));
         }
@@ -84,6 +112,41 @@ public class TaskQueryComponent {
                 : Collections.emptyList();
 
         return PageResponse.of(pagedTasks, page, size, allTasks.size());
+    }
+    
+    /**
+     * 将流程实例转换为任务信息
+     */
+    private TaskInfo convertProcessInstanceToTask(ProcessInstance instance, String userId) {
+        String assignmentType = "USER";
+        String assignee = instance.getCurrentAssignee();
+        
+        // 如果有候选用户，检查当前用户是否在候选列表中
+        if (instance.getCandidateUsers() != null && !instance.getCandidateUsers().isEmpty()) {
+            if (instance.getCandidateUsers().contains(userId)) {
+                assignmentType = "CANDIDATE";
+                assignee = userId;
+            }
+        }
+        
+        return TaskInfo.builder()
+                .taskId("task-" + instance.getId())
+                .taskName(instance.getCurrentNode())
+                .description(instance.getBusinessKey())
+                .processInstanceId(instance.getId())
+                .processDefinitionKey(instance.getProcessDefinitionKey())
+                .processDefinitionName(instance.getProcessDefinitionName())
+                .assignmentType(assignmentType)
+                .assignee(assignee)
+                .assigneeName(assignee)
+                .initiatorId(instance.getStartUserId())
+                .initiatorName(instance.getStartUserName())
+                .priority(instance.getPriority() != null ? instance.getPriority() : "NORMAL")
+                .status("PENDING")
+                .createTime(instance.getStartTime())
+                .isOverdue(false)
+                .variables(instance.getVariables())
+                .build();
     }
 
     /**

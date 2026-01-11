@@ -46,35 +46,44 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import VirtualGroupFormDialog from './components/VirtualGroupFormDialog.vue'
 import VirtualGroupMembersDialog from './components/VirtualGroupMembersDialog.vue'
+import { virtualGroupApi, type VirtualGroup } from '@/api/virtualGroup'
 
 const { t } = useI18n()
 
 const loading = ref(false)
-const groups = ref<any[]>([])
+const groups = ref<VirtualGroup[]>([])
 const formDialogVisible = ref(false)
 const membersDialogVisible = ref(false)
-const currentGroup = ref<any>(null)
+const currentGroup = ref<VirtualGroup | null>(null)
 
-const typeText = (type: string) => ({ PROJECT: '项目组', TEMPORARY: '临时组', CROSS_DEPT: '跨部门组' }[type] || type)
+const typeText = (type: string) => ({ PROJECT: '项目组', TEMPORARY: '临时组', WORK: '工作组', TASK_HANDLER: '任务处理组' }[type] || type)
 
 const fetchGroups = async () => {
   loading.value = true
-  // Mock data
-  groups.value = [
-    { id: '1', name: '项目A组', code: 'PROJECT_A', type: 'PROJECT', memberCount: 8, validFrom: '2026-01-01', validTo: '2026-12-31', status: 'ACTIVE' },
-    { id: '2', name: '临时审批组', code: 'TEMP_APPROVAL', type: 'TEMPORARY', memberCount: 3, validFrom: '2026-01-01', validTo: '2026-03-31', status: 'ACTIVE' }
-  ]
-  loading.value = false
+  try {
+    groups.value = await virtualGroupApi.list()
+  } catch (e) {
+    console.error('Failed to load virtual groups:', e)
+    ElMessage.error('加载虚拟组列表失败')
+  } finally {
+    loading.value = false
+  }
 }
 
 const showCreateDialog = () => { currentGroup.value = null; formDialogVisible.value = true }
-const showEditDialog = (group: any) => { currentGroup.value = group; formDialogVisible.value = true }
-const showMembersDialog = (group: any) => { currentGroup.value = group; membersDialogVisible.value = true }
+const showEditDialog = (group: VirtualGroup) => { currentGroup.value = group; formDialogVisible.value = true }
+const showMembersDialog = (group: VirtualGroup) => { currentGroup.value = group; membersDialogVisible.value = true }
 
-const handleDelete = async (group: any) => {
+const handleDelete = async (group: VirtualGroup) => {
   await ElMessageBox.confirm('确定要删除该虚拟组吗？', '提示', { type: 'warning' })
-  groups.value = groups.value.filter(g => g.id !== group.id)
-  ElMessage.success('删除成功')
+  try {
+    await virtualGroupApi.delete(group.id)
+    ElMessage.success('删除成功')
+    fetchGroups()
+  } catch (e) {
+    console.error('Failed to delete group:', e)
+    ElMessage.error('删除失败')
+  }
 }
 
 onMounted(fetchGroups)

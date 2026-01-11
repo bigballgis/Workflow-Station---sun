@@ -1,6 +1,8 @@
 package com.portal.properties;
 
 import com.portal.component.PermissionComponent;
+import com.portal.component.RoleAccessComponent;
+import com.portal.component.VirtualGroupAccessComponent;
 import com.portal.dto.PermissionRequestDto;
 import com.portal.entity.PermissionRequest;
 import com.portal.enums.PermissionRequestStatus;
@@ -28,17 +30,40 @@ class PermissionRequestProperties {
 
     private PermissionComponent permissionComponent;
     private PermissionRequestRepository permissionRequestRepository;
+    private RoleAccessComponent roleAccessComponent;
+    private VirtualGroupAccessComponent virtualGroupAccessComponent;
 
     @BeforeTry
     void setUp() {
         permissionRequestRepository = Mockito.mock(PermissionRequestRepository.class);
-        permissionComponent = new PermissionComponent(permissionRequestRepository);
+        roleAccessComponent = Mockito.mock(RoleAccessComponent.class);
+        virtualGroupAccessComponent = Mockito.mock(VirtualGroupAccessComponent.class);
+        permissionComponent = new PermissionComponent(permissionRequestRepository, roleAccessComponent, virtualGroupAccessComponent);
+        
+        // Mock default behavior for role and virtual group access
+        when(roleAccessComponent.getUserBusinessRoles(any())).thenReturn(Collections.emptyList());
+        when(virtualGroupAccessComponent.getUserVirtualGroups(any())).thenReturn(Collections.emptyList());
     }
 
     @Property(tries = 20)
     @Label("属性: 用户权限列表应包含有效权限")
     void userPermissionsShouldContainValidPermissions(
             @ForAll("validUserIds") String userId) {
+        // Mock role and virtual group data
+        List<Map<String, Object>> mockRoles = new ArrayList<>();
+        Map<String, Object> role = new HashMap<>();
+        role.put("id", "role-1");
+        role.put("name", "测试角色");
+        mockRoles.add(role);
+        when(roleAccessComponent.getUserBusinessRoles(userId)).thenReturn(mockRoles);
+        
+        List<Map<String, Object>> mockGroups = new ArrayList<>();
+        Map<String, Object> group = new HashMap<>();
+        group.put("groupId", "group-1");
+        group.put("groupName", "测试虚拟组");
+        mockGroups.add(group);
+        when(virtualGroupAccessComponent.getUserVirtualGroups(userId)).thenReturn(mockGroups);
+        
         List<Map<String, Object>> permissions = permissionComponent.getUserPermissions(userId);
         
         assertThat(permissions).isNotEmpty();
@@ -200,21 +225,15 @@ class PermissionRequestProperties {
     }
 
     @Property(tries = 20)
-    @Label("属性: 即将过期权限检查应返回正确结果")
-    void expiringPermissionsCheckShouldReturnCorrectResults(
+    @Label("属性: 即将过期权限检查应返回空列表（新模型不需要过期检查）")
+    void expiringPermissionsCheckShouldReturnEmptyList(
             @ForAll("validUserIds") String userId,
             @ForAll @IntRange(min = 1, max = 365) int days) {
         List<Map<String, Object>> expiring = permissionComponent.getExpiringPermissions(userId, days);
         
+        // 新的权限模型不需要过期检查，应返回空列表
         assertThat(expiring).isNotNull();
-        // 所有返回的权限都应该在指定天数内过期
-        LocalDateTime threshold = LocalDateTime.now().plusDays(days);
-        for (Map<String, Object> perm : expiring) {
-            LocalDateTime validTo = (LocalDateTime) perm.get("validTo");
-            if (validTo != null) {
-                assertThat(validTo).isBefore(threshold);
-            }
-        }
+        assertThat(expiring).isEmpty();
     }
 
     @Provide

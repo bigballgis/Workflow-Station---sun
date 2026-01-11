@@ -32,6 +32,7 @@
               {{ displayName.charAt(0) }}
             </el-avatar>
             <span class="user-name">{{ displayName }}</span>
+            <el-tag size="small" type="info" class="role-tag">{{ userRoleDisplay }}</el-tag>
             <el-icon><ArrowDown /></el-icon>
           </span>
           <template #dropdown>
@@ -39,7 +40,7 @@
               <el-dropdown-item command="profile">
                 <el-icon><User /></el-icon>个人信息
               </el-dropdown-item>
-              <el-dropdown-item command="settings">
+              <el-dropdown-item command="settings" v-if="canAccessConfig">
                 <el-icon><Setting /></el-icon>系统设置
               </el-dropdown-item>
               <el-dropdown-item divided command="logout">
@@ -62,63 +63,66 @@
             class="admin-menu"
             router
           >
+            <!-- Dashboard - everyone -->
             <el-menu-item index="/dashboard">
               <el-icon><Odometer /></el-icon>
               <template #title>{{ t('menu.dashboard') }}</template>
             </el-menu-item>
             
-            <el-sub-menu index="user">
+            <!-- User Management - requires user:read -->
+            <el-sub-menu index="user" v-if="canReadUser">
               <template #title>
                 <el-icon><User /></el-icon>
                 <span>{{ t('menu.userManagement') }}</span>
               </template>
               <el-menu-item index="/user/list">{{ t('menu.userList') }}</el-menu-item>
-              <el-menu-item index="/user/import">{{ t('menu.userImport') }}</el-menu-item>
+              <el-menu-item index="/user/import" v-if="canWriteUser">{{ t('menu.userImport') }}</el-menu-item>
             </el-sub-menu>
             
-            <el-sub-menu index="organization">
-              <template #title>
-                <el-icon><OfficeBuilding /></el-icon>
-                <span>{{ t('menu.organization') }}</span>
-              </template>
-              <el-menu-item index="/organization/department">{{ t('menu.department') }}</el-menu-item>
-            </el-sub-menu>
+            <!-- Organization - requires user:read -->
+            <el-menu-item index="/organization" v-if="canReadUser">
+              <el-icon><OfficeBuilding /></el-icon>
+              <template #title>{{ t('menu.organization') }}</template>
+            </el-menu-item>
             
-            <el-sub-menu index="role">
-              <template #title>
-                <el-icon><Key /></el-icon>
-                <span>{{ t('menu.roleManagement') }}</span>
-              </template>
-              <el-menu-item index="/role/list">{{ t('menu.roleList') }}</el-menu-item>
-              <el-menu-item index="/role/permission">{{ t('menu.permissionConfig') }}</el-menu-item>
-            </el-sub-menu>
-            
-            <el-menu-item index="/virtual-group">
+            <!-- Virtual Group - requires user:read -->
+            <el-menu-item index="/virtual-group" v-if="canReadUser">
               <el-icon><Connection /></el-icon>
               <template #title>{{ t('menu.virtualGroup') }}</template>
             </el-menu-item>
             
-            <el-menu-item index="/function-unit">
+            <!-- Role Management - requires role:read -->
+            <el-menu-item index="/role" v-if="canReadRole">
+              <el-icon><Key /></el-icon>
+              <template #title>{{ t('menu.roleManagement') }}</template>
+            </el-menu-item>
+            
+            <!-- Function Unit - requires system:admin -->
+            <el-menu-item index="/function-unit" v-if="isSystemAdmin">
               <el-icon><Box /></el-icon>
               <template #title>{{ t('menu.functionUnit') }}</template>
             </el-menu-item>
             
-            <el-menu-item index="/dictionary">
+            <!-- Dictionary - requires system:admin -->
+            <el-menu-item index="/dictionary" v-if="isSystemAdmin">
               <el-icon><Collection /></el-icon>
               <template #title>{{ t('menu.dictionary') }}</template>
             </el-menu-item>
             
-            <el-menu-item index="/monitor">
+            <!-- Monitor - requires system:admin -->
+            <el-menu-item index="/monitor" v-if="isSystemAdmin">
               <el-icon><Monitor /></el-icon>
               <template #title>{{ t('menu.monitor') }}</template>
             </el-menu-item>
             
-            <el-menu-item index="/audit">
+            <!-- Audit Log - requires audit:read -->
+            <el-menu-item index="/audit" v-if="canReadAudit">
               <el-icon><Document /></el-icon>
               <template #title>{{ t('menu.audit') }}</template>
             </el-menu-item>
             
-            <el-menu-item index="/config">
+            <!-- System Config - requires system:admin -->
+            <el-menu-item index="/config" v-if="isSystemAdmin">
               <el-icon><Setting /></el-icon>
               <template #title>{{ t('menu.config') }}</template>
             </el-menu-item>
@@ -128,9 +132,11 @@
 
       <!-- 主内容区 -->
       <el-main class="admin-main">
-        <router-view v-slot="{ Component }">
+        <router-view v-slot="{ Component, route }">
           <transition name="fade" mode="out-in">
-            <component :is="Component" />
+            <keep-alive>
+              <component :is="Component" :key="route.path" />
+            </keep-alive>
           </transition>
         </router-view>
       </el-main>
@@ -149,6 +155,7 @@ import {
   Monitor, Document, Location
 } from '@element-plus/icons-vue'
 import { logout as authLogout, clearAuth, getUser } from '@/api/auth'
+import { hasPermission, getUserRoleDisplay, PERMISSIONS } from '@/utils/permission'
 
 const route = useRoute()
 const router = useRouter()
@@ -160,6 +167,15 @@ const activeMenu = computed(() => route.path)
 // Get current user info
 const currentUser = computed(() => getUser())
 const displayName = computed(() => currentUser.value?.displayName || currentUser.value?.username || 'Admin')
+const userRoleDisplay = computed(() => getUserRoleDisplay())
+
+// Permission checks
+const isSystemAdmin = computed(() => hasPermission(PERMISSIONS.SYSTEM_ADMIN))
+const canReadUser = computed(() => hasPermission(PERMISSIONS.USER_READ))
+const canWriteUser = computed(() => hasPermission(PERMISSIONS.USER_WRITE))
+const canReadRole = computed(() => hasPermission(PERMISSIONS.ROLE_READ))
+const canReadAudit = computed(() => hasPermission(PERMISSIONS.AUDIT_READ))
+const canAccessConfig = computed(() => hasPermission(PERMISSIONS.SYSTEM_ADMIN))
 
 const langMap: Record<string, string> = { 'zh-CN': '简体中文', 'zh-TW': '繁體中文', 'en': 'English' }
 const currentLang = computed(() => langMap[locale.value] || '简体中文')
@@ -296,6 +312,13 @@ $main-bg: #f5f7fa;
       .user-name {
         font-size: 14px;
         font-weight: 500;
+      }
+
+      .role-tag {
+        background: rgba(255, 255, 255, 0.2);
+        border: none;
+        color: white;
+        font-size: 12px;
       }
     }
   }

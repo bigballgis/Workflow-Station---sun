@@ -1,0 +1,15 @@
+# Docker Compose Override: Schema Only
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.schema-only.yml up
+# 
+# This configuration only loads:
+# - Database schema (00-schema/)
+# 
+# Use for: Production-like environments where users are managed separately
+
+version: '3.8'
+
+services:
+  postgres:
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./deploy/init-scripts/00-schema:/docker-entrypoint-initdb.d/00-schema

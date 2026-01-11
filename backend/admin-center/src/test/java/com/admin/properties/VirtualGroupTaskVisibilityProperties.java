@@ -1,9 +1,6 @@
 package com.admin.properties;
 
-import com.admin.entity.User;
 import com.admin.entity.VirtualGroup;
-import com.admin.entity.VirtualGroupMember;
-import com.admin.enums.VirtualGroupMemberRole;
 import com.admin.enums.VirtualGroupType;
 import com.admin.exception.AdminBusinessException;
 import com.admin.repository.VirtualGroupMemberRepository;
@@ -11,8 +8,6 @@ import com.admin.repository.VirtualGroupRepository;
 import com.admin.repository.VirtualGroupTaskHistoryRepository;
 import com.admin.service.impl.VirtualGroupTaskServiceImpl;
 import net.jqwik.api.*;
-import net.jqwik.api.constraints.AlphaChars;
-import net.jqwik.api.constraints.StringLength;
 import net.jqwik.api.lifecycle.BeforeProperty;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
@@ -215,11 +210,7 @@ public class VirtualGroupTaskVisibilityProperties {
     
     @Provide
     Arbitrary<String> validUserIds() {
-        return Arbitraries.strings()
-                .alpha()
-                .ofMinLength(5)
-                .ofMaxLength(20)
-                .map(s -> "user-" + s.toLowerCase());
+        return Arbitraries.create(UUID::randomUUID).map(UUID::toString);
     }
     
     @Provide

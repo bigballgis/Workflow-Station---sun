@@ -50,12 +50,14 @@
           </template>
         </el-table-column>
         <el-table-column prop="description" label="描述" show-overflow-tooltip />
-        <el-table-column label="操作" width="250">
+        <el-table-column label="操作" width="320" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" @click.stop="handleSelectForm(row)">编辑</el-button>
-            <el-button link type="warning" @click.stop="handleManageBindings(row)">管理绑定</el-button>
-            <el-button link type="success" @click.stop="handleBindNode(row)">绑定节点</el-button>
-            <el-button link type="danger" @click.stop="handleDeleteForm(row)">删除</el-button>
+            <div class="action-buttons">
+              <el-button link type="primary" @click.stop="handleSelectForm(row)">编辑</el-button>
+              <el-button link type="warning" @click.stop="handleManageBindings(row)">管理绑定</el-button>
+              <el-button link type="success" @click.stop="handleBindNode(row)">绑定节点</el-button>
+              <el-button link type="danger" @click.stop="handleDeleteForm(row)">删除</el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -1174,6 +1176,13 @@ onMounted(loadForms)
 
 .bound-table-tag {
   margin-left: 8px;
+}
+
+.action-buttons {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+  white-space: nowrap;
 }
 
 .bind-table-dialog {

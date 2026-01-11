@@ -34,19 +34,55 @@ public class PermissionRequest {
     private String applicantId;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "request_type", nullable = false, length = 20)
+    @Column(name = "request_type", nullable = false, length = 30)
     private PermissionRequestType requestType;
 
+    // ========== 新字段 - 角色申请 ==========
+    
+    /** 申请的角色ID */
+    @Column(name = "role_id", length = 64)
+    private String roleId;
+    
+    /** 申请的角色名称（冗余存储，方便显示） */
+    @Column(name = "role_name", length = 100)
+    private String roleName;
+    
+    /** 目标组织单元ID */
+    @Column(name = "organization_unit_id", length = 64)
+    private String organizationUnitId;
+    
+    /** 目标组织单元名称（冗余存储，方便显示） */
+    @Column(name = "organization_unit_name", length = 200)
+    private String organizationUnitName;
+    
+    // ========== 新字段 - 虚拟组申请 ==========
+    
+    /** 申请加入的虚拟组ID */
+    @Column(name = "virtual_group_id", length = 64)
+    private String virtualGroupId;
+    
+    /** 申请加入的虚拟组名称（冗余存储，方便显示） */
+    @Column(name = "virtual_group_name", length = 200)
+    private String virtualGroupName;
+
+    // ========== 旧字段（已废弃，保留兼容） ==========
+    
+    /** @deprecated 使用 roleId/virtualGroupId 替代 */
+    @Deprecated
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "permissions", nullable = false, columnDefinition = "jsonb")
+    @Column(name = "permissions", columnDefinition = "jsonb")
     private List<String> permissions;
 
     @Column(name = "reason", nullable = false, columnDefinition = "TEXT")
     private String reason;
 
+    /** @deprecated 新的申请类型不需要有效期 */
+    @Deprecated
     @Column(name = "valid_from")
     private LocalDateTime validFrom;
 
+    /** @deprecated 新的申请类型不需要有效期 */
+    @Deprecated
     @Column(name = "valid_to")
     private LocalDateTime validTo;
 

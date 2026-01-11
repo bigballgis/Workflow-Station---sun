@@ -172,3 +172,20 @@ export const detectAnomalies = (days: number = 7): Promise<AnomalyDetectionResul
 
 export const generateComplianceReport = (days: number = 30): Promise<ComplianceReport> =>
   request.get(`/security/compliance-report?days=${days}`)
+
+// ==================== 导出 API ====================
+
+export const exportAuditLogs = async (query: AuditQueryRequest): Promise<void> => {
+  const response = await request.post('/security/audit-logs/export', query, {
+    responseType: 'blob'
+  })
+  const blob = new Blob([response as unknown as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  const url = window.URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `audit-logs-${new Date().toISOString().slice(0, 10)}.xlsx`
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  window.URL.revokeObjectURL(url)
+}

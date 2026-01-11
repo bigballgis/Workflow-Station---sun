@@ -47,17 +47,58 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
+import { configApi, type SystemConfig } from '@/api/config'
 
 const { t } = useI18n()
 const activeTab = ref('system')
+const loading = ref(false)
 
-const systemConfig = reactive({ sessionTimeout: 30, maxFileSize: 10, smtpServer: 'smtp.example.com' })
+const systemConfig = reactive({ sessionTimeout: 30, maxFileSize: 10, smtpServer: '' })
 const businessConfig = reactive({ processTimeout: 7, taskAssignRule: 'ROUND_ROBIN' })
 
-const saveConfig = (type: string) => { ElMessage.success(`${type === 'system' ? '系统' : '业务'}参数保存成功`) }
+const loadConfigs = async () => {
+  loading.value = true
+  try {
+    const configs = await configApi.getAll()
+    configs.forEach((config: SystemConfig) => {
+      if (config.configKey === 'session.timeout') systemConfig.sessionTimeout = parseInt(config.configValue) || 30
+      if (config.configKey === 'file.maxSize') systemConfig.maxFileSize = parseInt(config.configValue) || 10
+      if (config.configKey === 'smtp.server') systemConfig.smtpServer = config.configValue || ''
+      if (config.configKey === 'process.timeout') businessConfig.processTimeout = parseInt(config.configValue) || 7
+      if (config.configKey === 'task.assignRule') businessConfig.taskAssignRule = config.configValue || 'ROUND_ROBIN'
+    })
+  } catch (e) {
+    console.error('Failed to load configs:', e)
+  } finally {
+    loading.value = false
+  }
+}
+
+const saveConfig = async (type: string) => {
+  try {
+    if (type === 'system') {
+      await Promise.all([
+        configApi.update('session.timeout', { configValue: String(systemConfig.sessionTimeout) }),
+        configApi.update('file.maxSize', { configValue: String(systemConfig.maxFileSize) }),
+        configApi.update('smtp.server', { configValue: systemConfig.smtpServer })
+      ])
+    } else {
+      await Promise.all([
+        configApi.update('process.timeout', { configValue: String(businessConfig.processTimeout) }),
+        configApi.update('task.assignRule', { configValue: businessConfig.taskAssignRule })
+      ])
+    }
+    ElMessage.success(`${type === 'system' ? '系统' : '业务'}参数保存成功`)
+  } catch (e) {
+    console.error('Failed to save config:', e)
+    ElMessage.error('保存失败')
+  }
+}
+
+onMounted(loadConfigs)
 </script>
 
 <style scoped>

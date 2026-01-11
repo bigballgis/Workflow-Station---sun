@@ -240,16 +240,18 @@ class UserManagerComponentTest {
             User user = User.builder()
                     .id(userId)
                     .username("testuser")
+                    .userRoles(new java.util.HashSet<>())
                     .build();
             
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(userRepository.save(any(User.class))).thenAnswer(i -> i.getArgument(0));
             
             // When
             userManager.deleteUser(userId);
             
             // Then
-            verify(passwordHistoryRepository).deleteByUserId(userId);
-            verify(userRepository).delete(user);
+            assertThat(user.getDeleted()).isTrue();
+            verify(userRepository).save(user);
             verify(auditService).recordUserDeletion(user);
         }
     }

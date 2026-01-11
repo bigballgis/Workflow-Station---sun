@@ -3,20 +3,20 @@
     <div class="card">
       <div class="flex-between" style="margin-bottom: 16px;">
         <el-form :inline="true" class="filter-form">
-          <el-form-item>
-            <el-input v-model="searchKeyword" placeholder="搜索图标" clearable @change="loadIcons" />
+          <el-form-item class="no-margin">
+            <el-input v-model="searchKeyword" :placeholder="$t('icon.search')" clearable @change="loadIcons" />
           </el-form-item>
-          <el-form-item>
+          <el-form-item class="no-margin">
             <el-select v-model="selectedCategory" placeholder="选择分类" clearable @change="loadIcons" style="width: 140px">
               <el-option v-for="cat in categories" :key="cat" :label="categoryLabel(cat)" :value="cat" />
             </el-select>
           </el-form-item>
-          <el-form-item v-if="allTags.length" class="tag-filter-item">
+          <el-form-item v-if="allTags.length" class="tag-filter-item no-margin">
             <span class="tag-label">标签:</span>
             <el-tag
               v-for="tag in allTags"
               :key="tag"
-              :type="selectedTag === tag ? '' : 'info'"
+              :type="selectedTag === tag ? 'danger' : 'info'"
               :effect="selectedTag === tag ? 'dark' : 'plain'"
               class="tag-item"
               @click="handleTagClick(tag)"
@@ -152,12 +152,16 @@ function sanitizeSvg(svg: string): string {
   let result = svg
   // 移除 <title> 元素
   result = result.replace(/<title[^>]*>[\s\S]*?<\/title>/gi, '')
+  // 移除 <style> 元素（防止样式泄漏到全局）
+  result = result.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
   // 移除 <defs> 元素（包含 <style> 定义，防止样式泄漏）
   result = result.replace(/<defs[\s\S]*?<\/defs>/gi, '')
   // 将 class="cls-1" 替换为内联样式 fill="#fff"
   result = result.replace(/class="cls-1"/gi, 'fill="#fff"')
   // 将 class="cls-2" 替换为内联样式 fill="#db0011"
   result = result.replace(/class="cls-2"/gi, 'fill="#db0011"')
+  // 移除所有 class 属性，防止样式冲突
+  result = result.replace(/\s+class="[^"]*"/gi, '')
   return result
 }
 
@@ -270,11 +274,19 @@ onMounted(() => {
 </script>
 
 <style lang="scss" scoped>
+.no-margin {
+  margin-bottom: 0 !important;
+}
+
 .filter-form {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
+  
+  :deep(.el-input__inner) {
+    font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif !important;
+  }
 }
 
 .tag-filter-item {
@@ -305,6 +317,7 @@ onMounted(() => {
   gap: 12px;
   flex: 1;
   align-content: start;
+  min-height: 200px;
 }
 
 .icon-item {

@@ -56,20 +56,25 @@ CREATE INDEX idx_role_perm_perm ON admin_role_permissions(permission_id);
 -- 权限委托表
 CREATE TABLE admin_permission_delegations (
     id VARCHAR(64) PRIMARY KEY,
-    from_user_id VARCHAR(64) NOT NULL,
-    to_user_id VARCHAR(64) NOT NULL,
+    delegator_id VARCHAR(64) NOT NULL,
+    delegatee_id VARCHAR(64) NOT NULL,
     permission_id VARCHAR(64) NOT NULL,
-    reason TEXT,
+    delegation_type VARCHAR(20) NOT NULL,
     valid_from TIMESTAMP NOT NULL,
-    valid_to TIMESTAMP NOT NULL,
+    valid_to TIMESTAMP,
+    reason TEXT,
     status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+    conditions JSONB,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_by VARCHAR(64),
-    FOREIGN KEY (from_user_id) REFERENCES admin_users(id),
-    FOREIGN KEY (to_user_id) REFERENCES admin_users(id),
+    revoked_at TIMESTAMP,
+    revoked_by VARCHAR(64),
+    revoke_reason TEXT,
+    FOREIGN KEY (delegator_id) REFERENCES admin_users(id),
+    FOREIGN KEY (delegatee_id) REFERENCES admin_users(id),
     FOREIGN KEY (permission_id) REFERENCES admin_permissions(id)
 );
 
-CREATE INDEX idx_delegation_from ON admin_permission_delegations(from_user_id);
-CREATE INDEX idx_delegation_to ON admin_permission_delegations(to_user_id);
+CREATE INDEX idx_delegation_delegator ON admin_permission_delegations(delegator_id);
+CREATE INDEX idx_delegation_delegatee ON admin_permission_delegations(delegatee_id);
 CREATE INDEX idx_delegation_status ON admin_permission_delegations(status);

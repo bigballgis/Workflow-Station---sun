@@ -87,10 +87,7 @@ const loading = ref(false)
 const isDev = import.meta.env.DEV
 
 const testUsers = [
-  { username: 'super_admin', password: 'admin123', name: '超级管理员', role: '超级管理员', tagType: 'danger' as const },
-  { username: 'system_admin', password: 'admin123', name: '系统管理员', role: '系统管理员', tagType: 'warning' as const },
-  { username: 'tenant_admin', password: 'admin123', name: '租户管理员', role: '租户管理员', tagType: 'success' as const },
-  { username: 'auditor', password: 'admin123', name: '审计员', role: '审计员', tagType: 'info' as const },
+  { username: 'admin', password: 'admin123', name: '系统管理员', role: '系统管理员', tagType: 'danger' as const },
 ]
 
 const selectedTestUser = ref('')

@@ -22,9 +22,6 @@ public class UserUpdateRequest {
     @Size(max = 100, message = "姓名长度不能超过100")
     private String fullName;
     
-    @Size(max = 50, message = "手机号长度不能超过50")
-    private String phone;
-    
     @Size(max = 50, message = "工号长度不能超过50")
     private String employeeId;
     
@@ -32,4 +29,8 @@ public class UserUpdateRequest {
     
     @Size(max = 100, message = "职位长度不能超过100")
     private String position;
+    
+    private String entityManagerId;
+    
+    private String functionManagerId;
 }

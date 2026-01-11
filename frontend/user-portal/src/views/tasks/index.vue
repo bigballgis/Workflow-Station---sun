@@ -197,62 +197,14 @@ const loadTasks = async () => {
       page: pagination.page - 1,
       size: pagination.size
     })
-    if (res.data) {
-      taskList.value = res.data.content
-      pagination.total = res.data.totalElements
-    }
+    // API 返回格式: { success: true, data: { content: [], totalElements: 0 } }
+    const data = res.data || res
+    taskList.value = data.content || []
+    pagination.total = data.totalElements || 0
   } catch (error) {
-    // 使用模拟数据
-    taskList.value = [
-      {
-        taskId: 'task_1',
-        taskName: '请假申请审批',
-        processInstanceId: 'PI_1',
-        processDefinitionKey: 'leave_process',
-        processDefinitionName: '请假流程',
-        assignmentType: 'USER',
-        assignee: 'user_1',
-        initiatorId: 'user_2',
-        initiatorName: '李四',
-        priority: 'NORMAL',
-        status: 'PENDING',
-        createTime: new Date().toISOString(),
-        isOverdue: false
-      },
-      {
-        taskId: 'task_2',
-        taskName: '报销申请审批',
-        processInstanceId: 'PI_2',
-        processDefinitionKey: 'expense_process',
-        processDefinitionName: '报销流程',
-        assignmentType: 'VIRTUAL_GROUP',
-        assignee: 'finance_group',
-        initiatorId: 'user_3',
-        initiatorName: '王五',
-        priority: 'HIGH',
-        status: 'PENDING',
-        createTime: new Date(Date.now() - 86400000).toISOString(),
-        dueDate: new Date(Date.now() + 86400000).toISOString(),
-        isOverdue: false
-      },
-      {
-        taskId: 'task_3',
-        taskName: '采购申请审批',
-        processInstanceId: 'PI_3',
-        processDefinitionKey: 'purchase_process',
-        processDefinitionName: '采购流程',
-        assignmentType: 'DEPT_ROLE',
-        assignee: 'dept_manager',
-        initiatorId: 'user_4',
-        initiatorName: '赵六',
-        priority: 'URGENT',
-        status: 'PENDING',
-        createTime: new Date(Date.now() - 172800000).toISOString(),
-        dueDate: new Date(Date.now() - 86400000).toISOString(),
-        isOverdue: true
-      }
-    ]
-    pagination.total = 3
+    console.error('Failed to load tasks:', error)
+    taskList.value = []
+    pagination.total = 0
   } finally {
     loading.value = false
   }

@@ -68,7 +68,7 @@ class AuthenticationPropertyTest {
 
         String passwordHash = passwordEncoder.encode(password);
         User user = User.builder()
-                .id(UUID.randomUUID())
+                .id(UUID.randomUUID().toString())
                 .username(username)
                 .passwordHash(passwordHash)
                 .status(UserStatus.ACTIVE)
@@ -114,7 +114,7 @@ class AuthenticationPropertyTest {
 
         String passwordHash = passwordEncoder.encode(correctPassword);
         User user = User.builder()
-                .id(UUID.randomUUID())
+                .id(UUID.randomUUID().toString())
                 .username(username)
                 .passwordHash(passwordHash)
                 .status(UserStatus.ACTIVE)
@@ -155,7 +155,7 @@ class AuthenticationPropertyTest {
 
         String passwordHash = passwordEncoder.encode(password);
         User user = User.builder()
-                .id(UUID.randomUUID())
+                .id(UUID.randomUUID().toString())
                 .username(username)
                 .passwordHash(passwordHash)
                 .status(UserStatus.LOCKED)
@@ -196,7 +196,7 @@ class AuthenticationPropertyTest {
 
         String passwordHash = passwordEncoder.encode(password);
         User user = User.builder()
-                .id(UUID.randomUUID())
+                .id(UUID.randomUUID().toString())
                 .username(username)
                 .passwordHash(passwordHash)
                 .status(UserStatus.INACTIVE)

@@ -8,7 +8,7 @@
 
 html, body, #app {
   height: 100%;
-  font-family: 'Helvetica Neue', Helvetica, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', Arial, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
 }
 
 // Scrollbar
@@ -91,11 +91,52 @@ html, body, #app {
     style,
     title {
       display: none !important;
-      visibility: hidden !important;
-      position: absolute !important;
-      width: 0 !important;
-      height: 0 !important;
-      overflow: hidden !important;
     }
   }
+}
+
+// 全局隔离 SVG 内部样式，防止 .cls-1, .cls-2 等类名泄漏
+// 这些类名来自 SVG 图标文件，可能会影响页面其他元素
+svg style {
+  display: none !important;
+}
+
+// 重置可能被 SVG 样式影响的类名
+.cls-1, .cls-2, .cls-3, .cls-4, .cls-5 {
+  all: revert !important;
+}
+
+// 隐藏 Element Plus 表单项的错误占位
+.el-form-item {
+  .el-form-item__error {
+    display: none;
+  }
+  .el-form-item__content {
+    // 确保内容区域没有多余的空白
+    &:empty {
+      display: none;
+    }
+  }
+}
+
+// 隐藏空的 SVG 元素
+svg:empty {
+  display: none !important;
+}
+
+// 修复 inline form 的对齐问题
+.el-form--inline {
+  .el-form-item {
+    margin-right: 10px;
+    margin-bottom: 0;
+  }
+}
+
+
+// 确保 Element Plus 输入框使用正确的字体
+.el-input__inner,
+.el-input__wrapper,
+.el-select__placeholder,
+.el-input__inner::placeholder {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif !important;
 }

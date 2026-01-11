@@ -13,7 +13,7 @@ import java.time.Instant;
  * 存储功能包中的各类内容（流程定义、表单、数据表、脚本等）
  */
 @Entity
-@Table(name = "admin_function_unit_contents")
+@Table(name = "sys_function_unit_contents")
 @EntityListeners(AuditingEntityListener.class)
 @Data
 @Builder

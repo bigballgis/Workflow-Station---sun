@@ -4,10 +4,19 @@ package com.portal.enums;
  * 权限申请类型枚举
  */
 public enum PermissionRequestType {
-    /** 功能权限 */
+    /** 角色分配申请 - 申请某个组织单元的业务角色 */
+    ROLE_ASSIGNMENT,
+    /** 虚拟组加入申请 - 申请加入虚拟组 */
+    VIRTUAL_GROUP_JOIN,
+    
+    // ========== 以下为旧类型，已废弃 ==========
+    /** @deprecated 使用 ROLE_ASSIGNMENT 替代 */
+    @Deprecated
     FUNCTION,
-    /** 数据权限 */
+    /** @deprecated 使用 ROLE_ASSIGNMENT 替代 */
+    @Deprecated
     DATA,
-    /** 临时权限 */
+    /** @deprecated 使用 ROLE_ASSIGNMENT 替代 */
+    @Deprecated
     TEMPORARY
 }

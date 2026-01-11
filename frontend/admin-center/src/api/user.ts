@@ -5,11 +5,14 @@ export interface User {
   username: string
   fullName: string
   email: string
-  phone?: string
   employeeId?: string
   departmentId?: string
   departmentName?: string
   position?: string
+  entityManagerId?: string
+  entityManagerName?: string
+  functionManagerId?: string
+  functionManagerName?: string
   status: 'ACTIVE' | 'DISABLED' | 'LOCKED' | 'PENDING'
   lastLoginAt?: string
   createdAt: string
@@ -17,6 +20,8 @@ export interface User {
 }
 
 export interface UserDetail extends User {
+  entityManagerName?: string
+  functionManagerName?: string
   mustChangePassword?: boolean
   passwordExpiredAt?: string
   lastLoginIp?: string
@@ -61,10 +66,11 @@ export interface CreateUserRequest {
   username: string
   fullName: string
   email: string
-  phone?: string
   employeeId?: string
   departmentId?: string
   position?: string
+  entityManagerId?: string
+  functionManagerId?: string
   initialPassword: string
   roleIds?: string[]
 }
@@ -72,10 +78,11 @@ export interface CreateUserRequest {
 export interface UpdateUserRequest {
   fullName?: string
   email?: string
-  phone?: string
   employeeId?: string
   departmentId?: string
   position?: string
+  entityManagerId?: string
+  functionManagerId?: string
   roleIds?: string[]
 }
 

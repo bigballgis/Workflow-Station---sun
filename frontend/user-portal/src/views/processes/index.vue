@@ -35,24 +35,43 @@
               :placeholder="t('common.search')"
               clearable
               style="width: 200px;"
+              @input="handleSearch"
             >
               <template #prefix>
                 <el-icon><Search /></el-icon>
               </template>
             </el-input>
           </div>
-          <div class="process-grid">
-            <div
-              v-for="process in filteredProcesses"
-              :key="process.key"
-              class="process-card"
-              @click="startProcess(process)"
-            >
-              <el-icon :size="32" :color="process.color"><component :is="process.icon" /></el-icon>
-              <span class="process-name">{{ process.name }}</span>
-              <span class="process-desc">{{ process.description }}</span>
-            </div>
-          </div>
+          
+          <el-skeleton :loading="loading" animated :count="3">
+            <template #template>
+              <div class="process-grid">
+                <el-skeleton-item v-for="i in 6" :key="i" variant="rect" style="height: 120px; border-radius: 8px;" />
+              </div>
+            </template>
+            <template #default>
+              <div v-if="allProcesses.length === 0" class="empty-state">
+                <el-empty description="暂无可发起的流程" />
+              </div>
+              <div v-else class="process-grid">
+                <div
+                  v-for="process in allProcesses"
+                  :key="process.key"
+                  class="process-card"
+                  @click="startProcess(process)"
+                >
+                  <el-icon :size="32" :color="getProcessColor(process.category)">
+                    <component :is="getProcessIcon(process.category)" />
+                  </el-icon>
+                  <span class="process-name">{{ process.name }}</span>
+                  <span class="process-desc">{{ process.description }}</span>
+                  <el-tag v-if="process.isFavorite" size="small" type="warning" class="favorite-tag">
+                    <el-icon><Star /></el-icon>
+                  </el-tag>
+                </div>
+              </div>
+            </template>
+          </el-skeleton>
         </div>
       </el-col>
     </el-row>
@@ -60,40 +79,89 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { Document, Search, Calendar, Money, ShoppingCart, Plane, Clock, Files } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
+import { Document, Search, Calendar, Money, ShoppingCart, Location, Clock, Files, Star, Tickets } from '@element-plus/icons-vue'
+import { processApi, type ProcessDefinition } from '@/api/process'
 
 const { t } = useI18n()
 const router = useRouter()
 
 const searchKeyword = ref('')
+const loading = ref(false)
+const allProcesses = ref<ProcessDefinition[]>([])
 
-const favoriteProcesses = ref([
-  { key: 'leave', name: '请假申请', icon: Calendar, color: 'var(--hsbc-red)' },
-  { key: 'expense', name: '报销申请', icon: Money, color: 'var(--success-green)' }
-])
-
-const allProcesses = ref([
-  { key: 'leave', name: '请假申请', description: '员工请假审批流程', icon: Calendar, color: 'var(--hsbc-red)' },
-  { key: 'expense', name: '报销申请', description: '费用报销审批流程', icon: Money, color: 'var(--success-green)' },
-  { key: 'purchase', name: '采购申请', description: '物资采购审批流程', icon: ShoppingCart, color: 'var(--warning-orange)' },
-  { key: 'travel', name: '出差申请', description: '出差审批流程', icon: Plane, color: 'var(--info-blue)' },
-  { key: 'overtime', name: '加班申请', description: '加班审批流程', icon: Clock, color: '#722ed1' },
-  { key: 'contract', name: '合同审批', description: '合同签署审批流程', icon: Files, color: '#13c2c2' }
-])
-
-const filteredProcesses = computed(() => {
-  if (!searchKeyword.value) return allProcesses.value
-  return allProcesses.value.filter(p => 
-    p.name.includes(searchKeyword.value) || p.description.includes(searchKeyword.value)
-  )
+// 收藏的流程
+const favoriteProcesses = computed(() => {
+  return allProcesses.value.filter(p => p.isFavorite)
 })
 
-const startProcess = (process: any) => {
+// 根据分类获取图标
+const getProcessIcon = (category: string) => {
+  const iconMap: Record<string, any> = {
+    '人事': Calendar,
+    '财务': Money,
+    '采购': ShoppingCart,
+    '出差': Location,
+    '加班': Clock,
+    '合同': Files,
+    '业务流程': Tickets,
+  }
+  return iconMap[category] || Document
+}
+
+// 根据分类获取颜色
+const getProcessColor = (category: string) => {
+  const colorMap: Record<string, string> = {
+    '人事': 'var(--hsbc-red)',
+    '财务': 'var(--success-green)',
+    '采购': 'var(--warning-orange)',
+    '出差': 'var(--info-blue)',
+    '加班': '#722ed1',
+    '合同': '#13c2c2',
+    '业务流程': '#1890ff',
+  }
+  return colorMap[category] || 'var(--hsbc-red)'
+}
+
+// 加载流程定义列表
+const loadProcessDefinitions = async () => {
+  loading.value = true
+  try {
+    const response = await processApi.getDefinitions({
+      keyword: searchKeyword.value || undefined
+    })
+    // API 返回的是 { success: true, data: [...] } 格式
+    allProcesses.value = response.data || response || []
+  } catch (error: any) {
+    console.error('Failed to load process definitions:', error)
+    ElMessage.error('加载流程列表失败')
+    allProcesses.value = []
+  } finally {
+    loading.value = false
+  }
+}
+
+// 搜索防抖
+let searchTimer: ReturnType<typeof setTimeout> | null = null
+const handleSearch = () => {
+  if (searchTimer) {
+    clearTimeout(searchTimer)
+  }
+  searchTimer = setTimeout(() => {
+    loadProcessDefinitions()
+  }, 300)
+}
+
+const startProcess = (process: ProcessDefinition) => {
   router.push(`/processes/start/${process.key}`)
 }
+
+onMounted(() => {
+  loadProcessDefinitions()
+})
 </script>
 
 <style lang="scss" scoped>
@@ -116,6 +184,7 @@ const startProcess = (process: any) => {
   }
   
   .process-card {
+    position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -142,6 +211,16 @@ const startProcess = (process: any) => {
       color: var(--text-secondary);
       text-align: center;
     }
+    
+    .favorite-tag {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+    }
+  }
+  
+  .empty-state {
+    padding: 40px 0;
   }
 }
 </style>

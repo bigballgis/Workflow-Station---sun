@@ -8,6 +8,8 @@ export interface Department {
   parentName?: string
   leaderId?: string
   leaderName?: string
+  secondaryManagerId?: string
+  secondaryManagerName?: string
   level: number
   sortOrder: number
   status: 'ACTIVE' | 'INACTIVE'
@@ -22,12 +24,14 @@ export interface CreateDepartmentRequest {
   code: string
   parentId?: string
   leaderId?: string
+  secondaryManagerId?: string
   sortOrder?: number
 }
 
 export interface UpdateDepartmentRequest {
   name?: string
   leaderId?: string
+  secondaryManagerId?: string
   sortOrder?: number
 }
 

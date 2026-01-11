@@ -8,6 +8,7 @@ import com.portal.entity.DelegationRule;
 import com.portal.enums.DelegationStatus;
 import com.portal.enums.DelegationType;
 import com.portal.repository.DelegationRuleRepository;
+import com.portal.repository.ProcessInstanceRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
@@ -31,13 +32,16 @@ class TaskQueryProperties {
     @Mock
     private DelegationRuleRepository delegationRuleRepository;
 
+    @Mock
+    private ProcessInstanceRepository processInstanceRepository;
+
     private TaskQueryComponent taskQueryComponent;
     private Random random;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        taskQueryComponent = new TaskQueryComponent(delegationRuleRepository);
+        taskQueryComponent = new TaskQueryComponent(delegationRuleRepository, processInstanceRepository);
         taskQueryComponent.clearTasks();
         random = new Random();
         

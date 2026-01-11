@@ -1,6 +1,7 @@
 package com.admin.entity;
 
 import com.admin.enums.UserStatus;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 import org.springframework.data.annotation.CreatedBy;
@@ -9,15 +10,15 @@ import org.springframework.data.annotation.LastModifiedBy;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
 
 /**
- * 用户实体
+ * 用户实体 - 使用统一的 sys_users 表
  */
 @Entity
-@Table(name = "admin_users")
+@Table(name = "sys_users")
 @EntityListeners(AuditingEntityListener.class)
 @Data
 @Builder
@@ -33,16 +34,17 @@ public class User {
     @Column(name = "username", nullable = false, unique = true, length = 100)
     private String username;
     
+    @JsonIgnore
     @Column(name = "password_hash", nullable = false)
     private String passwordHash;
     
-    @Column(name = "email", nullable = false)
+    @Column(name = "email")
     private String email;
     
-    @Column(name = "phone", length = 50)
-    private String phone;
+    @Column(name = "display_name", length = 50)
+    private String displayName;
     
-    @Column(name = "full_name", nullable = false, length = 100)
+    @Column(name = "full_name", length = 100)
     private String fullName;
     
     @Column(name = "employee_id", length = 50)
@@ -54,20 +56,30 @@ public class User {
     @Column(name = "position", length = 100)
     private String position;
     
+    @Column(name = "entity_manager_id", length = 64)
+    private String entityManagerId;
+    
+    @Column(name = "function_manager_id", length = 64)
+    private String functionManagerId;
+    
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     @Builder.Default
     private UserStatus status = UserStatus.ACTIVE;
+    
+    @Column(name = "language", length = 10)
+    @Builder.Default
+    private String language = "zh_CN";
     
     @Column(name = "must_change_password")
     @Builder.Default
     private Boolean mustChangePassword = false;
     
     @Column(name = "password_expired_at")
-    private Instant passwordExpiredAt;
+    private LocalDateTime passwordExpiredAt;
     
     @Column(name = "last_login_at")
-    private Instant lastLoginAt;
+    private LocalDateTime lastLoginAt;
     
     @Column(name = "last_login_ip", length = 50)
     private String lastLoginIp;
@@ -77,11 +89,11 @@ public class User {
     private Integer failedLoginCount = 0;
     
     @Column(name = "locked_until")
-    private Instant lockedUntil;
+    private LocalDateTime lockedUntil;
     
     @CreatedDate
     @Column(name = "created_at", updatable = false)
-    private Instant createdAt;
+    private LocalDateTime createdAt;
     
     @CreatedBy
     @Column(name = "created_by", length = 64, updatable = false)
@@ -89,7 +101,7 @@ public class User {
     
     @LastModifiedDate
     @Column(name = "updated_at")
-    private Instant updatedAt;
+    private LocalDateTime updatedAt;
     
     @LastModifiedBy
     @Column(name = "updated_by", length = 64)
@@ -100,21 +112,29 @@ public class User {
     private Boolean deleted = false;
     
     @Column(name = "deleted_at")
-    private Instant deletedAt;
+    private LocalDateTime deletedAt;
     
     @Column(name = "deleted_by", length = 64)
     private String deletedBy;
     
+    @JsonIgnore
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private Set<UserRole> userRoles = new HashSet<>();
+    
+    /**
+     * 获取ID的字符串形式（兼容旧代码）
+     */
+    public String getIdAsString() {
+        return id != null ? id.toString() : null;
+    }
     
     /**
      * 检查用户是否被锁定
      */
     public boolean isLocked() {
         return status == UserStatus.LOCKED || 
-               (lockedUntil != null && lockedUntil.isAfter(Instant.now()));
+               (lockedUntil != null && lockedUntil.isAfter(LocalDateTime.now()));
     }
     
     /**

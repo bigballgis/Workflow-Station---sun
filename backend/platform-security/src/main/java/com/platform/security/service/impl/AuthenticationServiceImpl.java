@@ -67,9 +67,11 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         List<String> roles = new ArrayList<>(user.getRoles());
         List<String> permissions = getPermissionsForRoles(roles);
 
-        String accessToken = jwtTokenService.generateToken(
+        String accessToken = ((JwtTokenServiceImpl) jwtTokenService).generateToken(
                 user.getId().toString(),
                 user.getUsername(),
+                user.getEmail(),
+                user.getDisplayName(),
                 roles,
                 permissions,
                 user.getDepartmentId(),
@@ -118,7 +120,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
 
         // Extract user ID and fetch fresh user data
         String userId = jwtTokenService.extractUserId(refreshToken);
-        User user = userRepository.findById(java.util.UUID.fromString(userId))
+        User user = userRepository.findById(userId)
                 .orElseThrow(() -> new AuthenticationException(AuthErrorCode.AUTH_009));
 
         // Check account status
@@ -162,17 +164,24 @@ public class AuthenticationServiceImpl implements AuthenticationService {
             throw new AuthenticationException(AuthErrorCode.AUTH_005);
         }
 
-        UserPrincipal principal = jwtTokenService.extractUserPrincipal(token);
+        String userId = jwtTokenService.extractUserId(token);
+        
+        // Fetch fresh user data from database
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new AuthenticationException(AuthErrorCode.AUTH_001));
+        
+        List<String> roles = new ArrayList<>(user.getRoles());
+        List<String> permissions = getPermissionsForRoles(roles);
         
         return new UserInfo(
-                principal.getUserId(),
-                principal.getUsername(),
-                principal.getDisplayName(),
-                principal.getEmail(),
-                principal.getRoles(),
-                principal.getPermissions(),
-                principal.getDepartmentId(),
-                principal.getLanguage()
+                user.getId().toString(),
+                user.getUsername(),
+                user.getDisplayName(),
+                user.getEmail(),
+                roles,
+                permissions,
+                user.getDepartmentId(),
+                user.getLanguage()
         );
     }
 

@@ -30,8 +30,8 @@ public class LoginAudit {
     @Column(columnDefinition = "uuid")
     private UUID id;
 
-    @Column(name = "user_id")
-    private UUID userId;
+    @Column(name = "user_id", length = 64)
+    private String userId;
 
     @Column(nullable = false, length = 50)
     private String username;

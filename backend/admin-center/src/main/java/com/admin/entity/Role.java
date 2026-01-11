@@ -1,6 +1,7 @@
 package com.admin.entity;
 
 import com.admin.enums.RoleType;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 import org.springframework.data.annotation.CreatedBy;
@@ -17,7 +18,7 @@ import java.util.Set;
  * 角色实体
  */
 @Entity
-@Table(name = "admin_roles")
+@Table(name = "sys_roles")
 @EntityListeners(AuditingEntityListener.class)
 @Data
 @Builder
@@ -40,15 +41,17 @@ public class Role {
     @Column(name = "type", nullable = false, length = 20)
     private RoleType type;
     
-    @Column(name = "parent_role_id", length = 64)
-    private String parentRoleId;
-    
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
     
     @Column(name = "status", nullable = false, length = 20)
     @Builder.Default
     private String status = "ACTIVE";
+    
+    /** 是否为系统角色（系统角色不可删除） */
+    @Column(name = "is_system", nullable = false)
+    @Builder.Default
+    private Boolean isSystem = false;
     
     @CreatedDate
     @Column(name = "created_at", updatable = false)
@@ -66,10 +69,12 @@ public class Role {
     @Column(name = "updated_by", length = 64)
     private String updatedBy;
     
+    @JsonIgnore
     @OneToMany(mappedBy = "role", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private Set<RolePermission> rolePermissions = new HashSet<>();
     
+    @JsonIgnore
     @OneToMany(mappedBy = "role", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private Set<UserRole> userRoles = new HashSet<>();
@@ -78,13 +83,27 @@ public class Role {
      * 检查是否是系统角色
      */
     public boolean isSystemRole() {
-        return type == RoleType.SYSTEM;
+        return Boolean.TRUE.equals(isSystem);
     }
     
     /**
-     * 检查是否有父角色
+     * 检查是否是业务角色
      */
-    public boolean hasParent() {
-        return parentRoleId != null && !parentRoleId.isEmpty();
+    public boolean isBusinessRole() {
+        return type == RoleType.BUSINESS;
+    }
+    
+    /**
+     * 检查是否是管理角色
+     */
+    public boolean isAdminRole() {
+        return type == RoleType.ADMIN;
+    }
+    
+    /**
+     * 检查是否是开发角色
+     */
+    public boolean isDeveloperRole() {
+        return type == RoleType.DEVELOPER;
     }
 }

@@ -66,12 +66,16 @@ function sanitizeSvg(svg: string): string {
   let result = svg
   // 移除 <title> 元素
   result = result.replace(/<title[^>]*>[\s\S]*?<\/title>/gi, '')
+  // 移除 <style> 元素（防止样式泄漏到全局）
+  result = result.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
   // 移除 <defs> 元素（包含 <style> 定义，防止样式泄漏）
   result = result.replace(/<defs[\s\S]*?<\/defs>/gi, '')
   // 将 class="cls-1" 替换为内联样式 fill="#fff"
   result = result.replace(/class="cls-1"/gi, 'fill="#fff"')
   // 将 class="cls-2" 替换为内联样式 fill="#db0011"
   result = result.replace(/class="cls-2"/gi, 'fill="#db0011"')
+  // 移除所有 class 属性，防止样式冲突
+  result = result.replace(/\s+class="[^"]*"/gi, '')
   return result
 }
 

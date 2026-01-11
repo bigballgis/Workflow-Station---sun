@@ -44,7 +44,7 @@
           @click="handleSelectIcon(icon)"
           :title="icon.name"
         >
-          <div class="icon-item__preview" v-html="icon.svgContent"></div>
+          <div class="icon-item__preview" v-html="sanitizeSvg(icon.svgContent)"></div>
           <div class="icon-item__name">{{ icon.name }}</div>
         </div>
         <div v-if="!icons.length && !loading" class="icon-selector__empty">
@@ -146,6 +146,21 @@ const uploadForm = reactive({
 })
 
 const categories = ['APPROVAL', 'CREDIT', 'ACCOUNT', 'PAYMENT', 'CUSTOMER', 'COMPLIANCE', 'OPERATION', 'GENERAL']
+
+// 清理 SVG 内容，移除可能导致显示问题的元素
+function sanitizeSvg(svg: string): string {
+  if (!svg) return ''
+  let result = svg
+  // 移除 <title> 元素
+  result = result.replace(/<title[^>]*>[\s\S]*?<\/title>/gi, '')
+  // 移除 <style> 元素（防止样式泄漏到全局）
+  result = result.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+  // 移除 <defs> 元素（包含 <style> 定义，防止样式泄漏）
+  result = result.replace(/<defs[\s\S]*?<\/defs>/gi, '')
+  // 移除所有 class 属性，防止样式冲突
+  result = result.replace(/\s+class="[^"]*"/gi, '')
+  return result
+}
 
 const categoryLabel = (cat: string) => {
   const map: Record<string, string> = {

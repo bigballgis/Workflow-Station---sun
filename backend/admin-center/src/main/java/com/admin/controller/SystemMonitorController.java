@@ -18,7 +18,7 @@ import java.util.Map;
 
 @Slf4j
 @RestController
-@RequestMapping("/api/v1/admin/monitor")
+@RequestMapping("/monitor")
 @RequiredArgsConstructor
 @Tag(name = "系统监控", description = "系统指标查询和告警管理接口")
 public class SystemMonitorController {

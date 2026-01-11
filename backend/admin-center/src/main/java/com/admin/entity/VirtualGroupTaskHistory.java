@@ -11,9 +11,10 @@ import java.time.Instant;
 /**
  * 虚拟组任务处理历史实体
  * 记录任务的认领、委托、处理等历史
+ * 虚拟组是跨服务共享的
  */
 @Entity
-@Table(name = "admin_virtual_group_task_history")
+@Table(name = "sys_virtual_group_task_history")
 @EntityListeners(AuditingEntityListener.class)
 @Data
 @Builder

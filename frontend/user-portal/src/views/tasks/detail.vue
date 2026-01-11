@@ -172,74 +172,28 @@ const actionForm = reactive({
 const loadTaskDetail = async () => {
   try {
     const res = await getTaskDetail(taskId)
-    if (res.data) {
-      taskInfo.value = res.data
+    // API 返回格式: { success: true, data: {...} }
+    const data = res.data || res
+    if (data) {
+      taskInfo.value = data
     }
   } catch (error) {
-    // 使用模拟数据
-    taskInfo.value = {
-      taskId: taskId,
-      taskName: '请假申请审批',
-      processDefinitionName: '请假流程',
-      initiatorId: 'user_2',
-      initiatorName: '李四',
-      priority: 'NORMAL',
-      createTime: new Date().toISOString(),
-      assignmentType: 'USER',
-      assignee: 'user_1',
-      assigneeName: '张三'
-    }
+    console.error('Failed to load task detail:', error)
+    ElMessage.error('加载任务详情失败')
   }
 }
 
 const loadTaskHistory = async () => {
   try {
     const res = await getTaskHistory(taskId)
-    if (res.data) {
-      historyList.value = res.data
+    // API 返回格式: { success: true, data: [...] }
+    const data = res.data || res
+    if (data) {
+      historyList.value = data
     }
   } catch (error) {
-    // 使用模拟数据
-    historyList.value = [
-      { 
-        id: '1',
-        taskId: taskId,
-        taskName: '请假申请审批',
-        activityId: 'start',
-        activityName: '提交申请', 
-        activityType: 'startEvent',
-        operationType: 'SUBMIT',
-        operatorId: 'user_2',
-        operatorName: '李四', 
-        operationTime: new Date(Date.now() - 7200000).toISOString()
-      },
-      { 
-        id: '2',
-        taskId: taskId,
-        taskName: '请假申请审批',
-        activityId: 'userTask1',
-        activityName: '部门经理审批', 
-        activityType: 'userTask',
-        operationType: 'APPROVE',
-        operatorId: 'manager_1',
-        operatorName: '王五', 
-        operationTime: new Date(Date.now() - 3600000).toISOString(),
-        comment: '同意',
-        duration: 3600000
-      },
-      { 
-        id: '3',
-        taskId: taskId,
-        taskName: '请假申请审批',
-        activityId: 'userTask2',
-        activityName: '待审批', 
-        activityType: 'userTask',
-        operationType: 'PENDING',
-        operatorId: 'user_1',
-        operatorName: '当前节点',
-        operationTime: new Date().toISOString()
-      }
-    ]
+    console.error('Failed to load task history:', error)
+    historyList.value = []
   }
 }
 

@@ -14,4 +14,7 @@ const i18n = createI18n({
   }
 })
 
+// 如果当前语言显示有问题，可以重置为简体中文
+// localStorage.setItem('locale', 'zh-CN')
+
 export default i18n

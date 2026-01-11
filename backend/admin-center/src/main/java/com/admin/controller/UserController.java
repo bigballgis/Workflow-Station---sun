@@ -1,6 +1,8 @@
 package com.admin.controller;
 
+import com.admin.component.RolePermissionManagerComponent;
 import com.admin.component.UserManagerComponent;
+import com.admin.component.VirtualGroupManagerComponent;
 import com.admin.dto.request.StatusUpdateRequest;
 import com.admin.dto.request.UserCreateRequest;
 import com.admin.dto.request.UserQueryRequest;
@@ -10,7 +12,11 @@ import com.admin.dto.response.PageResult;
 import com.admin.dto.response.UserCreateResult;
 import com.admin.dto.response.UserDetailInfo;
 import com.admin.dto.response.UserInfo;
+import com.admin.entity.Role;
 import com.admin.entity.User;
+import com.admin.entity.VirtualGroupMember;
+import com.admin.enums.RoleType;
+import com.admin.repository.VirtualGroupMemberRepository;
 import com.admin.service.UserImportService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -20,6 +26,11 @@ import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * 用户管理控制器
@@ -32,6 +43,8 @@ public class UserController {
     
     private final UserManagerComponent userManager;
     private final UserImportService userImportService;
+    private final RolePermissionManagerComponent rolePermissionManager;
+    private final VirtualGroupMemberRepository virtualGroupMemberRepository;
     
     @PostMapping
     @Operation(summary = "创建用户", description = "创建新用户，立即激活")
@@ -123,5 +136,54 @@ public class UserController {
                 .header("Content-Disposition", "attachment; filename=user_import_template.xlsx")
                 .header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
                 .body(template);
+    }
+    
+    @GetMapping("/{userId}/roles")
+    @Operation(summary = "获取用户角色列表", description = "获取用户的角色列表，可按类型筛选")
+    public ResponseEntity<List<Map<String, Object>>> getUserRoles(
+            @PathVariable String userId,
+            @RequestParam(required = false) String type) {
+        List<Role> roles = rolePermissionManager.getUserRoles(userId);
+        
+        // 按类型筛选
+        if (type != null && !type.isEmpty()) {
+            RoleType roleType = RoleType.valueOf(type);
+            roles = roles.stream()
+                    .filter(r -> r.getType() == roleType)
+                    .collect(Collectors.toList());
+        }
+        
+        // 转换为简单的Map格式
+        List<Map<String, Object>> result = roles.stream()
+                .map(r -> Map.<String, Object>of(
+                        "id", r.getId(),
+                        "name", r.getName(),
+                        "code", r.getCode(),
+                        "type", r.getType().name()
+                ))
+                .collect(Collectors.toList());
+        
+        return ResponseEntity.ok(result);
+    }
+    
+    @GetMapping("/{userId}/virtual-groups")
+    @Operation(summary = "获取用户虚拟组列表", description = "获取用户所属的虚拟组列表")
+    public ResponseEntity<List<Map<String, Object>>> getUserVirtualGroups(
+            @PathVariable String userId) {
+        List<VirtualGroupMember> memberships = virtualGroupMemberRepository.findByUserId(userId);
+        
+        // 转换为简单的Map格式
+        List<Map<String, Object>> result = memberships.stream()
+                .map(m -> {
+                    Map<String, Object> groupInfo = new HashMap<>();
+                    groupInfo.put("groupId", m.getVirtualGroup().getId());
+                    groupInfo.put("groupName", m.getVirtualGroup().getName());
+                    groupInfo.put("groupDescription", m.getVirtualGroup().getDescription());
+                    groupInfo.put("joinedAt", m.getJoinedAt());
+                    return groupInfo;
+                })
+                .collect(Collectors.toList());
+        
+        return ResponseEntity.ok(result);
     }
 }

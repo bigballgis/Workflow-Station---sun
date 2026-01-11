@@ -2,18 +2,32 @@ version: '3.8'
 
 services:
   # PostgreSQL Database
+  # DB_INIT_MODE controls which init scripts are loaded:
+  #   - "schema-only": Only schema and system data (00-schema/)
+  #   - "with-admin": Schema + admin user (00-schema/ + 01-admin/)
+  #   - "full-test": All test data (00-schema/ + 01-admin/ + 02-test-data/ + 03-test-workflow/)
+  #   - "legacy": Use old flat init-scripts (for backward compatibility)
   postgres:
     image: postgres:16.5-alpine
     container_name: platform-postgres
     environment:
       POSTGRES_DB: workflow_platform
       POSTGRES_USER: platform
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-platform_dev_password}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-platform123}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./deploy/init-scripts:/docker-entrypoint-initdb.d
+      # Mount init scripts - PostgreSQL executes .sql files in alphabetical order
+      # Files are prefixed with numbers to ensure correct execution order
+      - ./deploy/init-scripts/00-schema/01-schema.sql:/docker-entrypoint-initdb.d/00-01-schema.sql
+      - ./deploy/init-scripts/00-schema/02-system-data.sql:/docker-entrypoint-initdb.d/00-02-system-data.sql
+      - ./deploy/init-scripts/01-admin/01-admin-user.sql:/docker-entrypoint-initdb.d/01-01-admin-user.sql
+      - ./deploy/init-scripts/02-test-data/01-organization.sql:/docker-entrypoint-initdb.d/02-01-organization.sql
+      - ./deploy/init-scripts/02-test-data/02-organization-detail.sql:/docker-entrypoint-initdb.d/02-02-organization-detail.sql
+      - ./deploy/init-scripts/02-test-data/03-users.sql:/docker-entrypoint-initdb.d/02-03-users.sql
+      - ./deploy/init-scripts/02-test-data/04-role-assignments.sql:/docker-entrypoint-initdb.d/02-04-role-assignments.sql
+      - ./deploy/init-scripts/02-test-data/05-virtual-groups.sql:/docker-entrypoint-initdb.d/02-05-virtual-groups.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U platform -d workflow_platform"]
       interval: 10s
@@ -26,13 +40,13 @@ services:
   redis:
     image: redis:7.2-alpine
     container_name: platform-redis
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_dev_password}
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis123}
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis_dev_password}", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis123}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -80,22 +94,118 @@ services:
     networks:
       - platform-network
 
-  # Kafka UI (optional, for development)
-  kafka-ui:
-    image: provectuslabs/kafka-ui:latest
-    container_name: platform-kafka-ui
+  # Workflow Engine Core (Auth Service)
+  workflow-engine:
+    build:
+      context: ./backend/workflow-engine-core
+      dockerfile: Dockerfile
+    container_name: platform-workflow-engine
     depends_on:
-      - kafka
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     ports:
-      - "8090:8080"
+      - "8081:8080"
     environment:
-      KAFKA_CLUSTERS_0_NAME: platform-kafka
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
-      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+      SERVER_PORT: 8080
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/workflow_platform
+      SPRING_DATASOURCE_USERNAME: platform
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-platform_dev_password}
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_dev_password}
     networks:
       - platform-network
     profiles:
-      - dev-tools
+      - backend
+      - full
+
+  # Admin Center Backend
+  admin-center:
+    build:
+      context: ./backend/admin-center
+      dockerfile: Dockerfile
+    container_name: platform-admin-center
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8090:8080"
+    environment:
+      SERVER_PORT: 8080
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/workflow_platform
+      SPRING_DATASOURCE_USERNAME: platform
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-platform_dev_password}
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_dev_password}
+    networks:
+      - platform-network
+    profiles:
+      - backend
+      - full
+
+
+  # User Portal Backend
+  user-portal:
+    build:
+      context: ./backend/user-portal
+      dockerfile: Dockerfile
+    container_name: platform-user-portal
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      workflow-engine:
+        condition: service_started
+    ports:
+      - "8082:8080"
+    environment:
+      SERVER_PORT: 8080
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/workflow_platform
+      SPRING_DATASOURCE_USERNAME: platform
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-platform_dev_password}
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_dev_password}
+      ADMIN_CENTER_URL: http://admin-center:8080
+    networks:
+      - platform-network
+    profiles:
+      - backend
+      - full
+
+  # Developer Workstation Backend
+  developer-workstation:
+    build:
+      context: ./backend/developer-workstation
+      dockerfile: Dockerfile
+    container_name: platform-developer-workstation
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8083:8080"
+    environment:
+      SERVER_PORT: 8080
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/workflow_platform
+      SPRING_DATASOURCE_USERNAME: platform
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-platform_dev_password}
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_dev_password}
+      ADMIN_CENTER_URL: http://admin-center:8080
+    networks:
+      - platform-network
+    profiles:
+      - backend
+      - full
 
   # API Gateway
   api-gateway:
@@ -108,8 +218,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      kafka:
-        condition: service_healthy
     ports:
       - "8080:8080"
     environment:
@@ -119,39 +227,61 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-platform_dev_password}
       SPRING_REDIS_HOST: redis
       SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_dev_password}
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
     networks:
       - platform-network
     profiles:
+      - backend
       - full
 
-  # Workflow Engine Core
-  workflow-engine:
+  # Frontend - Admin Center
+  frontend-admin:
     build:
-      context: ./backend/workflow-engine-core
+      context: ./frontend/admin-center
       dockerfile: Dockerfile
-    container_name: platform-workflow-engine
+    container_name: platform-frontend-admin
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
+      - admin-center
+      - workflow-engine
     ports:
-      - "8081:8080"
-    environment:
-      SERVER_PORT: 8080
-      SPRING_PROFILES_ACTIVE: docker
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/workflow_platform
-      SPRING_DATASOURCE_USERNAME: platform
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-platform_dev_password}
-      SPRING_REDIS_HOST: redis
-      SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_dev_password}
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      - "3000:80"
     networks:
       - platform-network
     profiles:
+      - frontend
+      - full
+
+  # Frontend - User Portal
+  frontend-portal:
+    build:
+      context: ./frontend/user-portal
+      dockerfile: Dockerfile
+    container_name: platform-frontend-portal
+    depends_on:
+      - user-portal
+      - api-gateway
+    ports:
+      - "3001:80"
+    networks:
+      - platform-network
+    profiles:
+      - frontend
+      - full
+
+  # Frontend - Developer Workstation
+  frontend-developer:
+    build:
+      context: ./frontend/developer-workstation
+      dockerfile: Dockerfile
+    container_name: platform-frontend-developer
+    depends_on:
+      - developer-workstation
+      - workflow-engine
+    ports:
+      - "3002:80"
+    networks:
+      - platform-network
+    profiles:
+      - frontend
       - full
 
 volumes:

@@ -22,7 +22,7 @@ import java.util.List;
 
 @Slf4j
 @RestController
-@RequestMapping("/api/v1/admin/logs")
+@RequestMapping("/logs")
 @RequiredArgsConstructor
 @Tag(name = "日志管理", description = "日志查询、分析和导出接口")
 public class LogController {

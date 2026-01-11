@@ -25,7 +25,7 @@ import java.util.Set;
  * 权限管理控制器
  */
 @RestController
-@RequestMapping("/api/v1/permissions")
+@RequestMapping("/permissions")
 @RequiredArgsConstructor
 @Tag(name = "权限管理", description = "权限查询、检查、委托、冲突解决等接口")
 public class PermissionController {

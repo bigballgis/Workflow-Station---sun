@@ -14,7 +14,7 @@ import java.util.List;
  * 数据字典项实体
  */
 @Entity
-@Table(name = "admin_dictionary_items", indexes = {
+@Table(name = "sys_dictionary_items", indexes = {
         @Index(name = "idx_dict_item_dict_id", columnList = "dictionary_id"),
         @Index(name = "idx_dict_item_code", columnList = "dictionary_id, item_code"),
         @Index(name = "idx_dict_item_parent", columnList = "parent_id"),

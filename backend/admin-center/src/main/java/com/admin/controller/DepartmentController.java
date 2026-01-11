@@ -50,8 +50,8 @@ public class DepartmentController {
     @GetMapping("/{deptId}")
     @Operation(summary = "获取部门详情", description = "根据部门ID获取部门详细信息")
     public ResponseEntity<DepartmentTree> getDepartment(@PathVariable String deptId) {
-        Department dept = organizationManager.getDepartment(deptId);
-        return ResponseEntity.ok(DepartmentTree.fromEntity(dept));
+        DepartmentTree dept = organizationManager.getDepartmentDetail(deptId);
+        return ResponseEntity.ok(dept);
     }
     
     @PutMapping("/{deptId}")

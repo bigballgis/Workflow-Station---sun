@@ -1,7 +1,6 @@
 package com.admin.dto.response;
 
 import com.admin.entity.VirtualGroupMember;
-import com.admin.enums.VirtualGroupMemberRole;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -19,25 +18,32 @@ import java.time.Instant;
 public class VirtualGroupMemberInfo {
     
     private String id;
+    private String groupId;
     private String userId;
     private String username;
     private String fullName;
+    private String employeeId;
     private String email;
-    private VirtualGroupMemberRole role;
+    private String departmentId;
+    private String departmentName;
+    private String role;
     private Instant joinedAt;
     
     public static VirtualGroupMemberInfo fromEntity(VirtualGroupMember member) {
         VirtualGroupMemberInfo info = VirtualGroupMemberInfo.builder()
                 .id(member.getId())
+                .groupId(member.getVirtualGroup() != null ? member.getVirtualGroup().getId() : null)
                 .userId(member.getUserId())
-                .role(member.getRole())
+                .role("MEMBER") // 默认为成员，暂无角色字段
                 .joinedAt(member.getJoinedAt())
                 .build();
         
         if (member.getUser() != null) {
             info.setUsername(member.getUser().getUsername());
             info.setFullName(member.getUser().getFullName());
+            info.setEmployeeId(member.getUser().getEmployeeId());
             info.setEmail(member.getUser().getEmail());
+            info.setDepartmentId(member.getUser().getDepartmentId());
         }
         
         return info;

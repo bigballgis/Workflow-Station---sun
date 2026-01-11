@@ -26,7 +26,7 @@ import java.util.Set;
  * 角色管理控制器
  */
 @RestController
-@RequestMapping("/api/v1/roles")
+@RequestMapping("/roles")
 @RequiredArgsConstructor
 @Tag(name = "角色管理", description = "角色的创建、配置、成员管理等接口")
 public class RoleController {
@@ -43,7 +43,6 @@ public class RoleController {
                 request.getName(),
                 request.getCode(),
                 request.getType(),
-                request.getParentRoleId(),
                 request.getDescription()
         );
         return ResponseEntity.ok(role);
@@ -57,9 +56,29 @@ public class RoleController {
     }
     
     @GetMapping
-    @Operation(summary = "获取所有角色")
-    public ResponseEntity<List<Role>> getAllRoles() {
-        List<Role> roles = rolePermissionManager.getAllRoles();
+    @Operation(summary = "获取角色列表", description = "支持按类型筛选角色")
+    public ResponseEntity<List<Role>> getRoles(
+            @RequestParam(required = false) RoleType type) {
+        List<Role> roles;
+        if (type != null) {
+            roles = rolePermissionManager.getRolesByType(type);
+        } else {
+            roles = rolePermissionManager.getAllRoles();
+        }
+        return ResponseEntity.ok(roles);
+    }
+    
+    @GetMapping("/business")
+    @Operation(summary = "获取业务角色列表", description = "获取所有业务角色，用于功能单元访问配置")
+    public ResponseEntity<List<Role>> getBusinessRoles() {
+        List<Role> roles = rolePermissionManager.getBusinessRoles();
+        return ResponseEntity.ok(roles);
+    }
+    
+    @GetMapping("/developer")
+    @Operation(summary = "获取开发角色列表", description = "获取所有开发角色")
+    public ResponseEntity<List<Role>> getDeveloperRoles() {
+        List<Role> roles = rolePermissionManager.getDeveloperRoles();
         return ResponseEntity.ok(roles);
     }
     
@@ -189,8 +208,6 @@ public class RoleController {
         
         @jakarta.validation.constraints.NotNull(message = "角色类型不能为空")
         private RoleType type;
-        
-        private String parentRoleId;
         
         private String description;
     }

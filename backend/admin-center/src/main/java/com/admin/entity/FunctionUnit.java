@@ -18,7 +18,7 @@ import java.util.Set;
  * 表示从开发工作站导入的功能包
  */
 @Entity
-@Table(name = "admin_function_units")
+@Table(name = "sys_function_units")
 @EntityListeners(AuditingEntityListener.class)
 @Data
 @Builder
@@ -59,6 +59,10 @@ public class FunctionUnit {
     @Column(name = "status", nullable = false, length = 20)
     @Builder.Default
     private FunctionUnitStatus status = FunctionUnitStatus.DRAFT;
+    
+    @Column(name = "enabled", nullable = false)
+    @Builder.Default
+    private Boolean enabled = true;
     
     @Column(name = "imported_at")
     private Instant importedAt;
@@ -113,6 +117,20 @@ public class FunctionUnit {
      */
     public boolean isDeprecated() {
         return status == FunctionUnitStatus.DEPRECATED;
+    }
+    
+    /**
+     * 检查功能单元是否启用
+     */
+    public boolean isEnabled() {
+        return enabled != null && enabled;
+    }
+    
+    /**
+     * 检查功能单元是否对用户可用（已部署且启用）
+     */
+    public boolean isAvailableToUsers() {
+        return status == FunctionUnitStatus.DEPLOYED && isEnabled();
     }
     
     /**

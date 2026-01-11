@@ -30,6 +30,8 @@ public class DepartmentCreateRequest {
     
     private String managerId;
     
+    private String secondaryManagerId;
+    
     @Size(max = 50, message = "电话长度不能超过50")
     private String phone;
     

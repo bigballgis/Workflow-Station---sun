@@ -17,7 +17,7 @@ import java.util.Set;
  * 功能单元部署记录实体
  */
 @Entity
-@Table(name = "admin_function_unit_deployments")
+@Table(name = "sys_function_unit_deployments")
 @EntityListeners(AuditingEntityListener.class)
 @Data
 @Builder

@@ -71,6 +71,7 @@ public class OrganizationManagerComponent {
                 .level(level)
                 .path(path)
                 .managerId(request.getManagerId())
+                .secondaryManagerId(request.getSecondaryManagerId())
                 .phone(request.getPhone())
                 .description(request.getDescription())
                 .costCenter(request.getCostCenter())
@@ -100,8 +101,17 @@ public class OrganizationManagerComponent {
             validateDepartmentNameUnique(request.getName(), department.getParentId(), deptId);
         }
         
+        // 验证副经理存在
+        if (request.getSecondaryManagerId() != null && !request.getSecondaryManagerId().isEmpty()) {
+            if (!userRepository.existsById(request.getSecondaryManagerId())) {
+                throw new AdminBusinessException("SECONDARY_MANAGER_NOT_FOUND", "副经理不存在");
+            }
+        }
+        
         department.setName(request.getName());
         department.setManagerId(request.getManagerId());
+        department.setSecondaryManagerId(request.getSecondaryManagerId() != null && request.getSecondaryManagerId().isEmpty() 
+                ? null : request.getSecondaryManagerId());
         department.setPhone(request.getPhone());
         department.setDescription(request.getDescription());
         department.setCostCenter(request.getCostCenter());
@@ -188,6 +198,49 @@ public class OrganizationManagerComponent {
     }
     
     /**
+     * 获取部门详情（包含父部门名称和管理者名称）
+     */
+    public DepartmentTree getDepartmentDetail(String deptId) {
+        log.info("Getting department detail for: {}", deptId);
+        
+        Department dept = departmentRepository.findById(deptId)
+                .orElseThrow(() -> new DepartmentNotFoundException(deptId));
+        
+        log.info("Department found: {}, parentId: {}", dept.getName(), dept.getParentId());
+        
+        DepartmentTree tree = DepartmentTree.fromEntity(dept);
+        tree.setMemberCount(userRepository.countByDepartmentId(deptId));
+        
+        // 获取父部门名称
+        if (dept.getParentId() != null && !dept.getParentId().isEmpty()) {
+            log.info("Looking up parent department: {}", dept.getParentId());
+            departmentRepository.findById(dept.getParentId())
+                    .ifPresent(parent -> {
+                        log.info("Parent department found: {}", parent.getName());
+                        tree.setParentName(parent.getName());
+                    });
+        }
+        
+        // 获取管理者名称
+        if (dept.getManagerId() != null) {
+            userRepository.findById(dept.getManagerId())
+                    .ifPresent(user -> {
+                        tree.setManagerName(user.getFullName());
+                        tree.setLeaderName(user.getFullName());
+                    });
+        }
+        
+        // 获取副经理名称
+        if (dept.getSecondaryManagerId() != null) {
+            userRepository.findById(dept.getSecondaryManagerId())
+                    .ifPresent(user -> tree.setSecondaryManagerName(user.getFullName()));
+        }
+        
+        log.info("Returning department tree with parentName: {}", tree.getParentName());
+        return tree;
+    }
+    
+    /**
      * 获取部门详情
      */
     public Department getDepartment(String deptId) {
@@ -207,8 +260,26 @@ public class OrganizationManagerComponent {
             memberCounts.put(dept.getId(), userRepository.countByDepartmentId(dept.getId()));
         }
         
+        // 收集所有管理者ID
+        Set<String> managerIds = new HashSet<>();
+        for (Department dept : allDepts) {
+            if (dept.getManagerId() != null) {
+                managerIds.add(dept.getManagerId());
+            }
+            if (dept.getSecondaryManagerId() != null) {
+                managerIds.add(dept.getSecondaryManagerId());
+            }
+        }
+        
+        // 批量获取管理者名称
+        Map<String, String> managerNames = new HashMap<>();
+        if (!managerIds.isEmpty()) {
+            userRepository.findAllById(managerIds).forEach(user -> 
+                managerNames.put(user.getId(), user.getFullName()));
+        }
+        
         // 构建树形结构
-        return buildDepartmentTree(allDepts, memberCounts);
+        return buildDepartmentTree(allDepts, memberCounts, managerNames);
     }
     
     /**
@@ -309,14 +380,36 @@ public class OrganizationManagerComponent {
      * 构建部门树形结构
      */
     private List<DepartmentTree> buildDepartmentTree(List<Department> departments, 
-                                                      Map<String, Long> memberCounts) {
+                                                      Map<String, Long> memberCounts,
+                                                      Map<String, String> managerNames) {
         Map<String, DepartmentTree> treeMap = new HashMap<>();
+        Map<String, String> deptNames = new HashMap<>();
         List<DepartmentTree> roots = new ArrayList<>();
+        
+        // 先收集所有部门名称用于查找父部门名称
+        for (Department dept : departments) {
+            deptNames.put(dept.getId(), dept.getName());
+        }
         
         // 创建所有节点
         for (Department dept : departments) {
             DepartmentTree tree = DepartmentTree.fromEntity(dept);
             tree.setMemberCount(memberCounts.getOrDefault(dept.getId(), 0L));
+            
+            // 设置父部门名称
+            if (dept.getParentId() != null && !dept.getParentId().isEmpty()) {
+                tree.setParentName(deptNames.get(dept.getParentId()));
+            }
+            
+            // 设置管理者名称 (leaderName 和 managerName 都指向同一个人)
+            if (dept.getManagerId() != null) {
+                String leaderName = managerNames.get(dept.getManagerId());
+                tree.setManagerName(leaderName);
+                tree.setLeaderName(leaderName);
+            }
+            if (dept.getSecondaryManagerId() != null) {
+                tree.setSecondaryManagerName(managerNames.get(dept.getSecondaryManagerId()));
+            }
             treeMap.put(dept.getId(), tree);
         }
         

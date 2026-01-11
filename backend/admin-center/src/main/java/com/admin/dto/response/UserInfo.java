@@ -7,7 +7,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.time.Instant;
+import java.time.LocalDateTime;
 
 /**
  * 用户信息DTO
@@ -21,26 +21,32 @@ public class UserInfo {
     private String id;
     private String username;
     private String email;
-    private String phone;
+    private String displayName;
     private String fullName;
     private String employeeId;
     private String departmentId;
     private String departmentName;
     private String position;
+    private String entityManagerId;
+    private String entityManagerName;
+    private String functionManagerId;
+    private String functionManagerName;
     private UserStatus status;
-    private Instant lastLoginAt;
-    private Instant createdAt;
+    private LocalDateTime lastLoginAt;
+    private LocalDateTime createdAt;
     
     public static UserInfo fromEntity(User user) {
         return UserInfo.builder()
-                .id(user.getId())
+                .id(user.getId() != null ? user.getId().toString() : null)
                 .username(user.getUsername())
                 .email(user.getEmail())
-                .phone(user.getPhone())
+                .displayName(user.getDisplayName())
                 .fullName(user.getFullName())
                 .employeeId(user.getEmployeeId())
                 .departmentId(user.getDepartmentId())
                 .position(user.getPosition())
+                .entityManagerId(user.getEntityManagerId() != null ? user.getEntityManagerId().toString() : null)
+                .functionManagerId(user.getFunctionManagerId() != null ? user.getFunctionManagerId().toString() : null)
                 .status(user.getStatus())
                 .lastLoginAt(user.getLastLoginAt())
                 .createdAt(user.getCreatedAt())

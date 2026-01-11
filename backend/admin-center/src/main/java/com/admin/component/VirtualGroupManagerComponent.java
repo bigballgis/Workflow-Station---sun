@@ -8,7 +8,6 @@ import com.admin.dto.response.VirtualGroupResult;
 import com.admin.entity.User;
 import com.admin.entity.VirtualGroup;
 import com.admin.entity.VirtualGroupMember;
-import com.admin.enums.VirtualGroupMemberRole;
 import com.admin.enums.VirtualGroupType;
 import com.admin.exception.AdminBusinessException;
 import com.admin.exception.UserNotFoundException;
@@ -20,11 +19,13 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -40,6 +41,7 @@ public class VirtualGroupManagerComponent {
     private final VirtualGroupRepository virtualGroupRepository;
     private final VirtualGroupMemberRepository virtualGroupMemberRepository;
     private final UserRepository userRepository;
+    private final JdbcTemplate jdbcTemplate;
 
     
     /**
@@ -200,7 +202,6 @@ public class VirtualGroupManagerComponent {
                 .id(memberId)
                 .virtualGroup(group)
                 .user(user)
-                .role(request.getRole() != null ? request.getRole() : VirtualGroupMemberRole.MEMBER)
                 .joinedAt(Instant.now())
                 .build();
         
@@ -251,27 +252,6 @@ public class VirtualGroupManagerComponent {
     }
     
     /**
-     * 更新成员角色
-     */
-    @Transactional
-    public VirtualGroupResult updateMemberRole(String groupId, VirtualGroupMemberRequest request) {
-        log.info("Updating member {} role to {} in group {}", request.getUserId(), request.getRole(), groupId);
-        
-        VirtualGroup group = virtualGroupRepository.findById(groupId)
-                .orElseThrow(() -> new VirtualGroupNotFoundException(groupId));
-        
-        VirtualGroupMember member = virtualGroupMemberRepository
-                .findByVirtualGroupIdAndUserId(groupId, request.getUserId())
-                .orElseThrow(() -> new AdminBusinessException("MEMBER_NOT_FOUND", "用户不是该虚拟组成员"));
-        
-        member.setRole(request.getRole());
-        virtualGroupMemberRepository.save(member);
-        
-        log.info("Member role updated successfully: {} to {} in group {}", request.getUserId(), request.getRole(), groupId);
-        return VirtualGroupResult.success(group);
-    }
-    
-    /**
      * 获取虚拟组成员列表
      */
     public List<VirtualGroupMemberInfo> getGroupMembers(String groupId) {
@@ -279,9 +259,34 @@ public class VirtualGroupManagerComponent {
             throw new VirtualGroupNotFoundException(groupId);
         }
         
+        // 获取部门名称映射
+        Map<String, String> deptNameMap = getDepartmentNameMap();
+        
         return virtualGroupMemberRepository.findByVirtualGroupId(groupId).stream()
-                .map(VirtualGroupMemberInfo::fromEntity)
+                .map(member -> {
+                    VirtualGroupMemberInfo info = VirtualGroupMemberInfo.fromEntity(member);
+                    // 填充部门名称
+                    if (info.getDepartmentId() != null) {
+                        info.setDepartmentName(deptNameMap.get(info.getDepartmentId()));
+                    }
+                    return info;
+                })
                 .collect(Collectors.toList());
+    }
+    
+    /**
+     * 获取部门ID到名称的映射
+     */
+    private Map<String, String> getDepartmentNameMap() {
+        try {
+            return jdbcTemplate.query(
+                "SELECT id, name FROM sys_departments",
+                (rs, rowNum) -> Map.entry(rs.getString("id"), rs.getString("name"))
+            ).stream().collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (a, b) -> a));
+        } catch (Exception e) {
+            log.warn("Failed to get department names", e);
+            return Map.of();
+        }
     }
     
     /**
@@ -301,15 +306,6 @@ public class VirtualGroupManagerComponent {
      */
     public boolean isGroupMember(String groupId, String userId) {
         return virtualGroupMemberRepository.existsByVirtualGroupIdAndUserId(groupId, userId);
-    }
-    
-    /**
-     * 获取虚拟组的组长列表
-     */
-    public List<VirtualGroupMemberInfo> getGroupLeaders(String groupId) {
-        return virtualGroupMemberRepository.findLeadersByGroupId(groupId).stream()
-                .map(VirtualGroupMemberInfo::fromEntity)
-                .collect(Collectors.toList());
     }
 
     
@@ -391,15 +387,6 @@ public class VirtualGroupManagerComponent {
      */
     public List<VirtualGroupInfo> getUserGroups(String userId) {
         return virtualGroupRepository.findByUserId(userId).stream()
-                .map(VirtualGroupInfo::fromEntity)
-                .collect(Collectors.toList());
-    }
-    
-    /**
-     * 获取用户作为组长的虚拟组
-     */
-    public List<VirtualGroupInfo> getUserLeadingGroups(String userId) {
-        return virtualGroupRepository.findByLeaderId(userId).stream()
                 .map(VirtualGroupInfo::fromEntity)
                 .collect(Collectors.toList());
     }

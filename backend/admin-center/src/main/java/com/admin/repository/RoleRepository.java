@@ -34,11 +34,6 @@ public interface RoleRepository extends JpaRepository<Role, String> {
     List<Role> findByType(RoleType type);
     
     /**
-     * 根据父角色ID查找子角色
-     */
-    List<Role> findByParentRoleId(String parentRoleId);
-    
-    /**
      * 查找所有活跃角色
      */
     @Query("SELECT r FROM Role r WHERE r.status = 'ACTIVE' ORDER BY r.type, r.name")

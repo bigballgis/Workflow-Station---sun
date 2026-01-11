@@ -149,11 +149,13 @@ const notificationSettings = reactive({
 const loadPreference = async () => {
   try {
     const res = await getUserPreference()
-    if (res.data) {
-      Object.assign(preferenceForm, res.data)
+    // API 返回格式: { success: true, data: {...} }
+    const data = res.data || res
+    if (data) {
+      Object.assign(preferenceForm, data)
     }
   } catch (error) {
-    // 使用默认值
+    console.error('Failed to load preference:', error)
   }
 }
 

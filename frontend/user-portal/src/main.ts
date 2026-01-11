@@ -17,7 +17,10 @@ for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
 
 app.use(createPinia())
 app.use(router)
-app.use(ElementPlus)
+app.use(ElementPlus, {
+  // 设置弹出层的 z-index 基础值
+  zIndex: 3000
+})
 app.use(i18n)
 
 app.mount('#app')

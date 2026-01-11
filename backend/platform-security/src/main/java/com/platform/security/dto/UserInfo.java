@@ -21,7 +21,7 @@ public record UserInfo(
      */
     public static UserInfo fromUser(com.platform.security.model.User user, List<String> permissions) {
         return new UserInfo(
-            user.getId().toString(),
+            user.getId(),
             user.getUsername(),
             user.getDisplayName(),
             user.getEmail(),

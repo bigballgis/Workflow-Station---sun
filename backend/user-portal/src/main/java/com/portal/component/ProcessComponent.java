@@ -5,39 +5,89 @@ import com.portal.dto.ProcessInstanceInfo;
 import com.portal.dto.ProcessStartRequest;
 import com.portal.entity.FavoriteProcess;
 import com.portal.entity.ProcessDraft;
+import com.portal.entity.ProcessInstance;
 import com.portal.repository.FavoriteProcessRepository;
 import com.portal.repository.ProcessDraftRepository;
+import com.portal.repository.ProcessInstanceRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDateTime;
 import java.util.*;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class ProcessComponent {
 
     private final FavoriteProcessRepository favoriteProcessRepository;
     private final ProcessDraftRepository processDraftRepository;
+    private final ProcessInstanceRepository processInstanceRepository;
+    private final FunctionUnitAccessComponent functionUnitAccessComponent;
+    
+    @Value("${admin-center.url:http://localhost:8090}")
+    private String adminCenterUrl;
 
     /**
      * 获取可发起的流程定义列表
+     * 从管理员中心获取已部署的功能单元，并根据用户的业务角色过滤
      */
     public List<ProcessDefinitionInfo> getAvailableProcessDefinitions(String userId, String category, String keyword) {
-        // 模拟流程定义数据
+        log.info("Getting available process definitions for user: {}", userId);
         List<ProcessDefinitionInfo> definitions = new ArrayList<>();
-        definitions.add(ProcessDefinitionInfo.builder()
-                .id("def-1").key("leave-request").name("请假申请")
-                .description("员工请假申请流程").category("人事").version(1).build());
-        definitions.add(ProcessDefinitionInfo.builder()
-                .id("def-2").key("expense-claim").name("费用报销")
-                .description("费用报销申请流程").category("财务").version(1).build());
-        definitions.add(ProcessDefinitionInfo.builder()
-                .id("def-3").key("purchase-request").name("采购申请")
-                .description("物资采购申请流程").category("采购").version(1).build());
+        
+        try {
+            // 尝试从管理员中心获取已部署的功能单元
+            RestTemplate restTemplate = new RestTemplate();
+            String url = adminCenterUrl + "/api/v1/admin/function-units/deployed";
+            log.info("Fetching deployed function units from: {}", url);
+            
+            @SuppressWarnings("unchecked")
+            Map<String, Object> response = restTemplate.getForObject(url, Map.class);
+            
+            if (response != null && response.containsKey("content")) {
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> units = (List<Map<String, Object>>) response.get("content");
+                log.info("Got {} deployed function units", units.size());
+                
+                // 根据用户的业务角色过滤可访问的功能单元
+                List<Map<String, Object>> accessibleUnits = functionUnitAccessComponent.filterAccessibleFunctionUnits(userId, units);
+                log.info("After filtering, {} function units are accessible to user {}", accessibleUnits.size(), userId);
+                
+                for (Map<String, Object> unit : accessibleUnits) {
+                    ProcessDefinitionInfo info = ProcessDefinitionInfo.builder()
+                            .id((String) unit.get("id"))
+                            .key((String) unit.get("code"))
+                            .name((String) unit.get("name"))
+                            .description((String) unit.get("description"))
+                            .category("业务流程")
+                            .version(1)
+                            .build();
+                    definitions.add(info);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to fetch deployed function units from admin center: {}", e.getMessage(), e);
+        }
+        
+        // 如果没有从管理员中心获取到数据，使用模拟数据
+        if (definitions.isEmpty()) {
+            definitions.add(ProcessDefinitionInfo.builder()
+                    .id("def-1").key("leave-request").name("请假申请")
+                    .description("员工请假申请流程").category("人事").version(1).build());
+            definitions.add(ProcessDefinitionInfo.builder()
+                    .id("def-2").key("expense-claim").name("费用报销")
+                    .description("费用报销申请流程").category("财务").version(1).build());
+            definitions.add(ProcessDefinitionInfo.builder()
+                    .id("def-3").key("purchase-request").name("采购申请")
+                    .description("物资采购申请流程").category("采购").version(1).build());
+        }
 
         // 过滤
         if (category != null && !category.isEmpty()) {
@@ -67,73 +117,558 @@ public class ProcessComponent {
             throw new IllegalArgumentException("用户ID不能为空");
         }
 
-        return ProcessInstanceInfo.builder()
+        // 获取流程定义名称和第一个任务信息
+        String processName = processKey;
+        String firstTaskName = "待审批";
+        String firstTaskAssignee = null;
+        String candidateUsers = null;
+        
+        try {
+            Map<String, Object> content = getFunctionUnitContent(processKey);
+            if (content != null) {
+                if (content.get("name") != null) {
+                    processName = (String) content.get("name");
+                }
+                // 解析 BPMN 获取第一个用户任务信息
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> processes = (List<Map<String, Object>>) content.get("processes");
+                if (processes != null && !processes.isEmpty()) {
+                    String bpmnXml = (String) processes.get(0).get("data");
+                    if (bpmnXml != null) {
+                        Map<String, String> taskInfo = parseFirstUserTask(bpmnXml, request.getFormData(), userId);
+                        if (taskInfo.get("name") != null) {
+                            firstTaskName = taskInfo.get("name");
+                        }
+                        if (taskInfo.get("assignee") != null) {
+                            firstTaskAssignee = taskInfo.get("assignee");
+                        }
+                        if (taskInfo.get("candidateUsers") != null) {
+                            candidateUsers = taskInfo.get("candidateUsers");
+                            log.info("Resolved candidate users for process: {}", candidateUsers);
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to get process info for {}: {}", processKey, e.getMessage());
+        }
+
+        // 创建流程实例
+        ProcessInstance instance = ProcessInstance.builder()
                 .id(UUID.randomUUID().toString())
                 .processDefinitionId("def-" + processKey)
-                .processDefinitionName(processKey)
+                .processDefinitionKey(processKey)
+                .processDefinitionName(processName)
                 .businessKey(request.getBusinessKey())
-                .startTime(LocalDateTime.now())
-                .status("RUNNING")
                 .startUserId(userId)
                 .startUserName(userId)
-                .currentNode("审批节点")
+                .currentNode(firstTaskName)
+                .currentAssignee(firstTaskAssignee)
+                .candidateUsers(candidateUsers)
+                .status("RUNNING")
+                .variables(request.getFormData())
+                .priority(request.getPriority())
+                .startTime(LocalDateTime.now())
                 .build();
+
+        // 保存到数据库
+        processInstanceRepository.save(instance);
+        log.info("Created process instance: {} for user: {}, assignee: {}, candidateUsers: {}", 
+                instance.getId(), userId, firstTaskAssignee, candidateUsers);
+
+        return ProcessInstanceInfo.builder()
+                .id(instance.getId())
+                .processDefinitionId(instance.getProcessDefinitionId())
+                .processDefinitionName(instance.getProcessDefinitionName())
+                .businessKey(instance.getBusinessKey())
+                .startTime(instance.getStartTime())
+                .status(instance.getStatus())
+                .startUserId(instance.getStartUserId())
+                .startUserName(instance.getStartUserName())
+                .currentNode(instance.getCurrentNode())
+                .currentAssignee(instance.getCurrentAssignee())
+                .build();
+    }
+    
+    /**
+     * 解析 BPMN XML 获取第一个需要审批的用户任务信息（跳过发起人任务）
+     */
+    private Map<String, String> parseFirstUserTask(String bpmnXml, Map<String, Object> formData, String initiatorId) {
+        Map<String, String> result = new HashMap<>();
+        try {
+            // 查找所有 userTask 标签
+            int searchStart = 0;
+            int taskCount = 0;
+            
+            while (true) {
+                int userTaskStart = bpmnXml.indexOf("<userTask", searchStart);
+                if (userTaskStart == -1) {
+                    userTaskStart = bpmnXml.indexOf("<bpmn:userTask", searchStart);
+                }
+                
+                if (userTaskStart == -1) {
+                    break;
+                }
+                
+                int userTaskEnd = bpmnXml.indexOf(">", userTaskStart);
+                if (userTaskEnd == -1) {
+                    break;
+                }
+                
+                String userTaskTag = bpmnXml.substring(userTaskStart, userTaskEnd + 1);
+                taskCount++;
+                
+                // 提取 assignee 属性
+                String assignee = extractAttribute(userTaskTag, "camunda:assignee");
+                if (assignee == null) {
+                    assignee = extractAttribute(userTaskTag, "flowable:assignee");
+                }
+                if (assignee == null) {
+                    assignee = extractAttribute(userTaskTag, "assignee");
+                }
+                
+                // 跳过发起人任务（第一个任务通常是发起人填写表单）
+                // 如果 assignee 是 ${initiator}，跳过这个任务
+                boolean isInitiatorTask = assignee != null && 
+                    (assignee.equals("${initiator}") || assignee.equals(initiatorId));
+                
+                if (!isInitiatorTask || taskCount > 1) {
+                    // 这是需要审批的任务
+                    String name = extractAttribute(userTaskTag, "name");
+                    if (name != null) {
+                        result.put("name", name);
+                    }
+                    
+                    // 解析 assignee 变量
+                    if (assignee != null) {
+                        if (assignee.startsWith("${") && assignee.endsWith("}")) {
+                            String varName = assignee.substring(2, assignee.length() - 1);
+                            assignee = resolveProcessVariable(varName, formData, initiatorId);
+                        }
+                        result.put("assignee", assignee);
+                    }
+                    
+                    // 检查是否有 candidateUsers（会签任务）
+                    String candidateUsers = extractAttribute(userTaskTag, "flowable:candidateUsers");
+                    if (candidateUsers == null) {
+                        candidateUsers = extractAttribute(userTaskTag, "camunda:candidateUsers");
+                    }
+                    if (candidateUsers != null) {
+                        // 解析候选用户表达式
+                        List<String> resolvedCandidates = resolveCandidateUsers(candidateUsers, formData, initiatorId);
+                        if (!resolvedCandidates.isEmpty()) {
+                            result.put("candidateUsers", String.join(",", resolvedCandidates));
+                            // 如果没有指定 assignee，使用第一个候选用户
+                            if (result.get("assignee") == null) {
+                                result.put("assignee", resolvedCandidates.get(0));
+                            }
+                        }
+                    }
+                    
+                    // 检查是否有 candidateGroups（组任务）
+                    String candidateGroups = extractAttribute(userTaskTag, "flowable:candidateGroups");
+                    if (candidateGroups == null) {
+                        candidateGroups = extractAttribute(userTaskTag, "camunda:candidateGroups");
+                    }
+                    if (candidateGroups != null && result.get("assignee") == null) {
+                        // 组任务，暂时不设置具体 assignee
+                        result.put("candidateGroups", candidateGroups);
+                    }
+                    
+                    break;
+                }
+                
+                searchStart = userTaskEnd + 1;
+            }
+        } catch (Exception e) {
+            log.warn("Failed to parse BPMN for first user task: {}", e.getMessage());
+        }
+        return result;
+    }
+    
+    /**
+     * 解析流程变量
+     */
+    private String resolveProcessVariable(String varName, Map<String, Object> formData, String initiatorId) {
+        // 首先检查表单数据
+        if (formData != null && formData.containsKey(varName)) {
+            return String.valueOf(formData.get(varName));
+        }
+        
+        // 处理特殊变量
+        if ("initiator".equals(varName)) {
+            return initiatorId;
+        }
+        
+        if ("initiatorManager".equals(varName) || "manager".equals(varName)) {
+            // 获取发起人的直属上级（部门经理）
+            return getInitiatorManager(initiatorId);
+        }
+        
+        if ("entityManager".equals(varName)) {
+            // 获取发起人的实体管理者
+            return getEntityManager(initiatorId);
+        }
+        
+        if ("functionManager".equals(varName)) {
+            // 获取发起人的职能管理者
+            return getFunctionManager(initiatorId);
+        }
+        
+        if ("departmentManager".equals(varName)) {
+            // 获取发起人的部门主经理
+            return getDepartmentManager(initiatorId);
+        }
+        
+        if ("departmentSecondaryManager".equals(varName)) {
+            // 获取发起人的部门副经理
+            return getDepartmentSecondaryManager(initiatorId);
+        }
+        
+        return null;
+    }
+    
+    /**
+     * 解析候选用户表达式（支持多个变量，如 ${entityManager},${functionManager}）
+     */
+    private List<String> resolveCandidateUsers(String candidateUsersExpr, Map<String, Object> formData, String initiatorId) {
+        List<String> result = new ArrayList<>();
+        
+        if (candidateUsersExpr == null || candidateUsersExpr.isEmpty()) {
+            return result;
+        }
+        
+        // 分割多个候选用户表达式
+        String[] expressions = candidateUsersExpr.split(",");
+        for (String expr : expressions) {
+            expr = expr.trim();
+            if (expr.startsWith("${") && expr.endsWith("}")) {
+                String varName = expr.substring(2, expr.length() - 1);
+                String resolved = resolveProcessVariable(varName, formData, initiatorId);
+                if (resolved != null && !resolved.isEmpty()) {
+                    result.add(resolved);
+                } else {
+                    log.warn("Failed to resolve candidate user variable: {}", varName);
+                }
+            } else if (!expr.isEmpty()) {
+                // 直接是用户ID
+                result.add(expr);
+            }
+        }
+        
+        return result;
+    }
+    
+    /**
+     * 获取发起人的实体管理者
+     */
+    private String getEntityManager(String initiatorId) {
+        try {
+            RestTemplate restTemplate = new RestTemplate();
+            
+            // 首先尝试通过用户ID查询
+            String userUrl = adminCenterUrl + "/api/v1/admin/users/" + initiatorId;
+            log.info("Fetching user info for entity manager from: {}", userUrl);
+            
+            Map<String, Object> userInfo = null;
+            try {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> response = restTemplate.getForObject(userUrl, Map.class);
+                userInfo = response;
+            } catch (Exception e) {
+                log.warn("Failed to get user by ID {}, trying by username: {}", initiatorId, e.getMessage());
+            }
+            
+            // 如果通过ID查询失败，尝试通过用户名查询
+            if (userInfo == null || userInfo.get("entityManagerId") == null) {
+                String searchUrl = adminCenterUrl + "/api/v1/admin/users?keyword=" + initiatorId + "&size=1";
+                log.info("Searching user by username from: {}", searchUrl);
+                try {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> searchResponse = restTemplate.getForObject(searchUrl, Map.class);
+                    if (searchResponse != null && searchResponse.get("content") != null) {
+                        @SuppressWarnings("unchecked")
+                        List<Map<String, Object>> users = (List<Map<String, Object>>) searchResponse.get("content");
+                        if (!users.isEmpty()) {
+                            // 找到用户后，获取详细信息
+                            String foundUserId = (String) users.get(0).get("id");
+                            String detailUrl = adminCenterUrl + "/api/v1/admin/users/" + foundUserId;
+                            @SuppressWarnings("unchecked")
+                            Map<String, Object> detailResponse = restTemplate.getForObject(detailUrl, Map.class);
+                            userInfo = detailResponse;
+                        }
+                    }
+                } catch (Exception e) {
+                    log.warn("Failed to search user by username {}: {}", initiatorId, e.getMessage());
+                }
+            }
+            
+            if (userInfo == null || userInfo.get("entityManagerId") == null) {
+                log.warn("User {} has no entity manager", initiatorId);
+                return null;
+            }
+            
+            String entityManagerId = (String) userInfo.get("entityManagerId");
+            log.info("Found entity manager {} for user {}", entityManagerId, initiatorId);
+            return entityManagerId;
+            
+        } catch (Exception e) {
+            log.error("Failed to get entity manager for {}: {}", initiatorId, e.getMessage());
+            return null;
+        }
+    }
+    
+    /**
+     * 获取发起人的职能管理者
+     */
+    private String getFunctionManager(String initiatorId) {
+        try {
+            RestTemplate restTemplate = new RestTemplate();
+            
+            // 首先尝试通过用户ID查询
+            String userUrl = adminCenterUrl + "/api/v1/admin/users/" + initiatorId;
+            log.info("Fetching user info for function manager from: {}", userUrl);
+            
+            Map<String, Object> userInfo = null;
+            try {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> response = restTemplate.getForObject(userUrl, Map.class);
+                userInfo = response;
+            } catch (Exception e) {
+                log.warn("Failed to get user by ID {}, trying by username: {}", initiatorId, e.getMessage());
+            }
+            
+            // 如果通过ID查询失败，尝试通过用户名查询
+            if (userInfo == null || userInfo.get("functionManagerId") == null) {
+                String searchUrl = adminCenterUrl + "/api/v1/admin/users?keyword=" + initiatorId + "&size=1";
+                log.info("Searching user by username from: {}", searchUrl);
+                try {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> searchResponse = restTemplate.getForObject(searchUrl, Map.class);
+                    if (searchResponse != null && searchResponse.get("content") != null) {
+                        @SuppressWarnings("unchecked")
+                        List<Map<String, Object>> users = (List<Map<String, Object>>) searchResponse.get("content");
+                        if (!users.isEmpty()) {
+                            // 找到用户后，获取详细信息
+                            String foundUserId = (String) users.get(0).get("id");
+                            String detailUrl = adminCenterUrl + "/api/v1/admin/users/" + foundUserId;
+                            @SuppressWarnings("unchecked")
+                            Map<String, Object> detailResponse = restTemplate.getForObject(detailUrl, Map.class);
+                            userInfo = detailResponse;
+                        }
+                    }
+                } catch (Exception e) {
+                    log.warn("Failed to search user by username {}: {}", initiatorId, e.getMessage());
+                }
+            }
+            
+            if (userInfo == null || userInfo.get("functionManagerId") == null) {
+                log.warn("User {} has no function manager", initiatorId);
+                return null;
+            }
+            
+            String functionManagerId = (String) userInfo.get("functionManagerId");
+            log.info("Found function manager {} for user {}", functionManagerId, initiatorId);
+            return functionManagerId;
+            
+        } catch (Exception e) {
+            log.error("Failed to get function manager for {}: {}", initiatorId, e.getMessage());
+            return null;
+        }
+    }
+    
+    /**
+     * 获取发起人的部门主经理
+     */
+    private String getDepartmentManager(String initiatorId) {
+        try {
+            RestTemplate restTemplate = new RestTemplate();
+            
+            // 1. 获取用户信息，包含部门ID
+            String userUrl = adminCenterUrl + "/api/v1/admin/users/" + initiatorId;
+            log.info("Fetching user info for department manager from: {}", userUrl);
+            
+            @SuppressWarnings("unchecked")
+            Map<String, Object> userInfo = restTemplate.getForObject(userUrl, Map.class);
+            
+            if (userInfo == null || userInfo.get("departmentId") == null) {
+                log.warn("User {} has no department", initiatorId);
+                return null;
+            }
+            
+            String departmentId = (String) userInfo.get("departmentId");
+            
+            // 2. 获取部门信息，包含主经理ID
+            String deptUrl = adminCenterUrl + "/api/v1/admin/departments/" + departmentId;
+            log.info("Fetching department info from: {}", deptUrl);
+            
+            @SuppressWarnings("unchecked")
+            Map<String, Object> deptInfo = restTemplate.getForObject(deptUrl, Map.class);
+            
+            if (deptInfo == null || deptInfo.get("managerId") == null) {
+                log.warn("Department {} has no manager", departmentId);
+                return null;
+            }
+            
+            String managerId = (String) deptInfo.get("managerId");
+            log.info("Found department manager {} for user {}", managerId, initiatorId);
+            return managerId;
+            
+        } catch (Exception e) {
+            log.error("Failed to get department manager for {}: {}", initiatorId, e.getMessage());
+            return null;
+        }
+    }
+    
+    /**
+     * 获取发起人的部门副经理
+     */
+    private String getDepartmentSecondaryManager(String initiatorId) {
+        try {
+            RestTemplate restTemplate = new RestTemplate();
+            
+            // 1. 获取用户信息，包含部门ID
+            String userUrl = adminCenterUrl + "/api/v1/admin/users/" + initiatorId;
+            log.info("Fetching user info for department secondary manager from: {}", userUrl);
+            
+            @SuppressWarnings("unchecked")
+            Map<String, Object> userInfo = restTemplate.getForObject(userUrl, Map.class);
+            
+            if (userInfo == null || userInfo.get("departmentId") == null) {
+                log.warn("User {} has no department", initiatorId);
+                return null;
+            }
+            
+            String departmentId = (String) userInfo.get("departmentId");
+            
+            // 2. 获取部门信息，包含副经理ID
+            String deptUrl = adminCenterUrl + "/api/v1/admin/departments/" + departmentId;
+            log.info("Fetching department info from: {}", deptUrl);
+            
+            @SuppressWarnings("unchecked")
+            Map<String, Object> deptInfo = restTemplate.getForObject(deptUrl, Map.class);
+            
+            if (deptInfo == null || deptInfo.get("secondaryManagerId") == null) {
+                log.warn("Department {} has no secondary manager", departmentId);
+                return null;
+            }
+            
+            String secondaryManagerId = (String) deptInfo.get("secondaryManagerId");
+            log.info("Found department secondary manager {} for user {}", secondaryManagerId, initiatorId);
+            return secondaryManagerId;
+            
+        } catch (Exception e) {
+            log.error("Failed to get department secondary manager for {}: {}", initiatorId, e.getMessage());
+            return null;
+        }
+    }
+    
+    /**
+     * 获取发起人的直属上级（部门经理）- 兼容旧版本
+     */
+    private String getInitiatorManager(String initiatorId) {
+        return getDepartmentManager(initiatorId);
+    }
+    
+    /**
+     * 从 XML 标签中提取属性值
+     */
+    private String extractAttribute(String tag, String attrName) {
+        String pattern1 = attrName + "=\"";
+        int start = tag.indexOf(pattern1);
+        if (start != -1) {
+            start += pattern1.length();
+            int end = tag.indexOf("\"", start);
+            if (end != -1) {
+                return tag.substring(start, end);
+            }
+        }
+        // 尝试单引号
+        String pattern2 = attrName + "='";
+        start = tag.indexOf(pattern2);
+        if (start != -1) {
+            start += pattern2.length();
+            int end = tag.indexOf("'", start);
+            if (end != -1) {
+                return tag.substring(start, end);
+            }
+        }
+        return null;
     }
 
     /**
      * 获取我的申请列表
      */
     public Page<ProcessInstanceInfo> getMyApplications(String userId, String status, Pageable pageable) {
-        // 模拟数据
-        List<ProcessInstanceInfo> instances = new ArrayList<>();
-        instances.add(ProcessInstanceInfo.builder()
-                .id("inst-1").processDefinitionName("请假申请")
-                .businessKey("LEAVE-2024-001").startTime(LocalDateTime.now().minusDays(1))
-                .status("RUNNING").startUserId(userId).currentNode("部门经理审批").build());
-        instances.add(ProcessInstanceInfo.builder()
-                .id("inst-2").processDefinitionName("费用报销")
-                .businessKey("EXPENSE-2024-001").startTime(LocalDateTime.now().minusDays(3))
-                .status("COMPLETED").startUserId(userId).endTime(LocalDateTime.now().minusDays(1)).build());
-
+        log.info("Getting applications for user: {}, status: {}", userId, status);
+        
+        Page<ProcessInstance> instancePage;
         if (status != null && !status.isEmpty()) {
-            instances.removeIf(i -> !i.getStatus().equals(status));
+            instancePage = processInstanceRepository.findByStartUserIdAndStatusOrderByStartTimeDesc(userId, status, pageable);
+        } else {
+            instancePage = processInstanceRepository.findByStartUserIdOrderByStartTimeDesc(userId, pageable);
         }
 
-        return new PageImpl<>(instances, pageable, instances.size());
+        List<ProcessInstanceInfo> instances = instancePage.getContent().stream()
+                .map(this::toProcessInstanceInfo)
+                .toList();
+
+        return new PageImpl<>(instances, pageable, instancePage.getTotalElements());
+    }
+    
+    /**
+     * 转换实体到DTO
+     */
+    private ProcessInstanceInfo toProcessInstanceInfo(ProcessInstance instance) {
+        return ProcessInstanceInfo.builder()
+                .id(instance.getId())
+                .processDefinitionId(instance.getProcessDefinitionId())
+                .processDefinitionKey(instance.getProcessDefinitionKey())
+                .processDefinitionName(instance.getProcessDefinitionName())
+                .businessKey(instance.getBusinessKey())
+                .startTime(instance.getStartTime())
+                .endTime(instance.getEndTime())
+                .status(instance.getStatus())
+                .startUserId(instance.getStartUserId())
+                .startUserName(instance.getStartUserName())
+                .currentNode(instance.getCurrentNode())
+                .currentAssignee(instance.getCurrentAssignee())
+                .candidateUsers(instance.getCandidateUsers())
+                .variables(instance.getVariables())
+                .build();
     }
 
     /**
      * 获取流程详情
      */
     public ProcessInstanceInfo getProcessDetail(String processId) {
-        return ProcessInstanceInfo.builder()
-                .id(processId)
-                .processDefinitionName("请假申请")
-                .businessKey("LEAVE-2024-001")
-                .startTime(LocalDateTime.now().minusDays(1))
-                .status("RUNNING")
-                .startUserId("user-1")
-                .startUserName("张三")
-                .currentNode("部门经理审批")
-                .currentAssignee("李四")
-                .build();
+        return processInstanceRepository.findById(processId)
+                .map(this::toProcessInstanceInfo)
+                .orElse(null);
     }
 
     /**
      * 撤回流程
      */
     public boolean withdrawProcess(String userId, String processId, String reason) {
-        // 验证流程是否可撤回
-        ProcessInstanceInfo process = getProcessDetail(processId);
-        if (process == null) {
+        Optional<ProcessInstance> optInstance = processInstanceRepository.findById(processId);
+        if (optInstance.isEmpty()) {
             return false;
         }
-        if (!process.getStartUserId().equals(userId)) {
+        
+        ProcessInstance instance = optInstance.get();
+        if (!instance.getStartUserId().equals(userId)) {
             return false;
         }
-        if (!"RUNNING".equals(process.getStatus())) {
+        if (!"RUNNING".equals(instance.getStatus())) {
             return false;
         }
+        
+        // 更新状态为已撤回
+        instance.setStatus("WITHDRAWN");
+        instance.setEndTime(LocalDateTime.now());
+        processInstanceRepository.save(instance);
+        
         return true;
     }
 
@@ -141,17 +676,20 @@ public class ProcessComponent {
      * 催办流程
      */
     public boolean urgeProcess(String userId, String processId) {
-        ProcessInstanceInfo process = getProcessDetail(processId);
-        if (process == null) {
+        Optional<ProcessInstance> optInstance = processInstanceRepository.findById(processId);
+        if (optInstance.isEmpty()) {
             return false;
         }
-        if (!process.getStartUserId().equals(userId)) {
+        
+        ProcessInstance instance = optInstance.get();
+        if (!instance.getStartUserId().equals(userId)) {
             return false;
         }
-        if (!"RUNNING".equals(process.getStatus())) {
+        if (!"RUNNING".equals(instance.getStatus())) {
             return false;
         }
-        // 发送催办通知
+        // 发送催办通知（TODO: 实现通知逻辑）
+        log.info("Urging process: {} by user: {}", processId, userId);
         return true;
     }
 
@@ -207,5 +745,120 @@ public class ProcessComponent {
     public void deleteDraft(String userId, String processKey) {
         processDraftRepository.findFirstByUserIdAndProcessDefinitionKeyOrderByUpdatedAtDesc(userId, processKey)
                 .ifPresent(processDraftRepository::delete);
+    }
+    
+    /**
+     * 获取用户的草稿列表
+     */
+    public List<Map<String, Object>> getDraftList(String userId) {
+        log.info("Getting draft list for user: {}", userId);
+        List<ProcessDraft> drafts = processDraftRepository.findByUserIdOrderByUpdatedAtDesc(userId);
+        List<Map<String, Object>> result = new ArrayList<>();
+        
+        for (ProcessDraft draft : drafts) {
+            Map<String, Object> draftInfo = new HashMap<>();
+            draftInfo.put("id", draft.getId());
+            draftInfo.put("processDefinitionKey", draft.getProcessDefinitionKey());
+            draftInfo.put("formData", draft.getFormData());
+            draftInfo.put("createdAt", draft.getCreatedAt());
+            draftInfo.put("updatedAt", draft.getUpdatedAt());
+            
+            // 尝试获取功能单元名称
+            try {
+                Map<String, Object> content = getFunctionUnitContent(draft.getProcessDefinitionKey());
+                if (content != null && content.get("name") != null) {
+                    draftInfo.put("processDefinitionName", content.get("name"));
+                } else {
+                    draftInfo.put("processDefinitionName", draft.getProcessDefinitionKey());
+                }
+            } catch (Exception e) {
+                log.warn("Failed to get function unit name for {}: {}", draft.getProcessDefinitionKey(), e.getMessage());
+                draftInfo.put("processDefinitionName", draft.getProcessDefinitionKey());
+            }
+            
+            result.add(draftInfo);
+        }
+        
+        return result;
+    }
+    
+    /**
+     * 根据ID删除草稿
+     */
+    public void deleteDraftById(String userId, Long draftId) {
+        processDraftRepository.findById(draftId).ifPresent(draft -> {
+            if (draft.getUserId().equals(userId)) {
+                processDraftRepository.delete(draft);
+            }
+        });
+    }
+    
+    /**
+     * 获取功能单元完整内容（BPMN、表单、动作绑定等）
+     * 会检查功能单元是否启用，禁用时抛出异常
+     */
+    public Map<String, Object> getFunctionUnitContent(String userId, String functionUnitIdOrCode) {
+        log.info("Getting function unit content for: {}, user: {}", functionUnitIdOrCode, userId);
+        
+        // 解析功能单元 ID（支持 code 或 ID）
+        String functionUnitId = functionUnitAccessComponent.resolveFunctionUnitId(functionUnitIdOrCode);
+        log.info("Resolved function unit ID: {}", functionUnitId);
+        
+        // 检查功能单元访问权限（包含启用状态检查）
+        functionUnitAccessComponent.checkFunctionUnitAccess(userId, functionUnitId);
+        
+        try {
+            RestTemplate restTemplate = new RestTemplate();
+            String url = adminCenterUrl + "/api/v1/admin/function-units/" + functionUnitId + "/content";
+            log.info("Fetching function unit content from: {}", url);
+            
+            @SuppressWarnings("unchecked")
+            Map<String, Object> response = restTemplate.getForObject(url, Map.class);
+            
+            if (response != null) {
+                log.info("Got function unit content: name={}", response.get("name"));
+                return response;
+            }
+            
+            return Collections.emptyMap();
+            
+        } catch (FunctionUnitAccessComponent.FunctionUnitDisabledException | 
+                 FunctionUnitAccessComponent.FunctionUnitAccessDeniedException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Failed to get function unit content for {}: {}", functionUnitId, e.getMessage(), e);
+            Map<String, Object> errorResult = new HashMap<>();
+            errorResult.put("error", e.getMessage());
+            return errorResult;
+        }
+    }
+    
+    /**
+     * 获取功能单元完整内容（不检查权限，用于内部调用）
+     */
+    public Map<String, Object> getFunctionUnitContent(String functionUnitId) {
+        log.info("Getting function unit content for: {}", functionUnitId);
+        
+        try {
+            RestTemplate restTemplate = new RestTemplate();
+            String url = adminCenterUrl + "/api/v1/admin/function-units/" + functionUnitId + "/content";
+            log.info("Fetching function unit content from: {}", url);
+            
+            @SuppressWarnings("unchecked")
+            Map<String, Object> response = restTemplate.getForObject(url, Map.class);
+            
+            if (response != null) {
+                log.info("Got function unit content: name={}", response.get("name"));
+                return response;
+            }
+            
+            return Collections.emptyMap();
+            
+        } catch (Exception e) {
+            log.error("Failed to get function unit content for {}: {}", functionUnitId, e.getMessage(), e);
+            Map<String, Object> errorResult = new HashMap<>();
+            errorResult.put("error", e.getMessage());
+            return errorResult;
+        }
     }
 }

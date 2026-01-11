@@ -36,4 +36,10 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, String>, Jpa
     long countByActionAndTimestampAfter(AuditAction action, Instant since);
     
     long countByUserIdAndActionAndTimestampAfter(String userId, AuditAction action, Instant since);
+    
+    /**
+     * 统计指定时间范围内某操作的不同用户数（活跃用户）
+     */
+    @Query("SELECT COUNT(DISTINCT a.userId) FROM AuditLog a WHERE a.action = :action AND a.timestamp >= :start AND a.timestamp < :end")
+    long countDistinctUsersByActionAndTimestampBetween(@Param("action") AuditAction action, @Param("start") Instant start, @Param("end") Instant end);
 }

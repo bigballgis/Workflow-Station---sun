@@ -339,14 +339,13 @@ public class PermissionCheckConsistencyProperties {
     
     @Provide
     Arbitrary<String> userId() {
-        return Arbitraries.strings().alpha().ofMinLength(8).ofMaxLength(16)
-                .map(s -> "user_" + s);
+        return Arbitraries.create(UUID::randomUUID).map(UUID::toString);
     }
     
     @Provide
     Arbitrary<UserWithPermissions> userWithPermissions() {
         return Combinators.combine(
-                Arbitraries.strings().alpha().ofMinLength(5).ofMaxLength(10),
+                Arbitraries.create(UUID::randomUUID),
                 Arbitraries.strings().alpha().ofMinLength(3).ofMaxLength(8),
                 Arbitraries.integers().between(1, 5)
         ).as((userId, roleCode, permCount) -> {
@@ -362,7 +361,7 @@ public class PermissionCheckConsistencyProperties {
             
             Set<Permission> permissions = generatePermissions("perm", permCount);
             
-            return new UserWithPermissions("user_" + userId, role, permissions);
+            return new UserWithPermissions(userId.toString(), role, permissions);
         });
     }
     
@@ -384,7 +383,7 @@ public class PermissionCheckConsistencyProperties {
     @Provide
     Arbitrary<UserWithWildcardPermission> userWithWildcardPermission() {
         return Combinators.combine(
-                Arbitraries.strings().alpha().ofMinLength(5).ofMaxLength(10),
+                Arbitraries.create(UUID::randomUUID),
                 Arbitraries.strings().alpha().ofMinLength(3).ofMaxLength(8),
                 Arbitraries.of(WildcardType.ALL_RESOURCES, WildcardType.ALL_ACTIONS),
                 Arbitraries.strings().alpha().ofMinLength(5).ofMaxLength(10)
@@ -395,7 +394,7 @@ public class PermissionCheckConsistencyProperties {
                     .id(roleId)
                     .name("Wildcard Role " + roleCode)
                     .code("WILDCARD_" + roleCode.toUpperCase())
-                    .type(RoleType.SYSTEM)
+                    .type(RoleType.ADMIN)
                     .status("ACTIVE")
                     .build();
             
@@ -420,14 +419,14 @@ public class PermissionCheckConsistencyProperties {
                         .build());
             }
             
-            return new UserWithWildcardPermission("user_" + userId, role, permissions, 
+            return new UserWithWildcardPermission(userId.toString(), role, permissions, 
                     wildcardType, targetResource);
         });
     }
     
     @Provide
     Arbitrary<UserWithMultipleRoles> userWithMultipleRoles() {
-        return Arbitraries.strings().alpha().ofMinLength(5).ofMaxLength(10)
+        return Arbitraries.create(UUID::randomUUID)
                 .flatMap(userId -> 
                         Arbitraries.integers().between(2, 4).flatMap(roleCount -> {
                             List<Arbitrary<RoleWithPermissions>> roleArbitraries = new ArrayList<>();
@@ -453,7 +452,7 @@ public class PermissionCheckConsistencyProperties {
                             }
                             
                             return Combinators.combine(roleArbitraries).as(roles -> 
-                                    new UserWithMultipleRoles("user_" + userId, new ArrayList<>(roles)));
+                                    new UserWithMultipleRoles(userId.toString(), new ArrayList<>(roles)));
                         })
                 );
     }

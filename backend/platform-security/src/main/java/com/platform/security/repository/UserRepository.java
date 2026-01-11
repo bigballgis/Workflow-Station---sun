@@ -9,14 +9,14 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.UUID;
 
 /**
  * Repository for User entity operations.
+ * Uses String ID to match sys_users table.
  * Validates: Requirements 1.1
  */
 @Repository
-public interface UserRepository extends JpaRepository<User, UUID> {
+public interface UserRepository extends JpaRepository<User, String> {
 
     /**
      * Find user by username.

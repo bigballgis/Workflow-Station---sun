@@ -16,7 +16,7 @@ import java.util.List;
  * 数据字典实体
  */
 @Entity
-@Table(name = "admin_dictionaries", indexes = {
+@Table(name = "sys_dictionaries", indexes = {
         @Index(name = "idx_dict_code", columnList = "code", unique = true),
         @Index(name = "idx_dict_type", columnList = "type"),
         @Index(name = "idx_dict_status", columnList = "status")

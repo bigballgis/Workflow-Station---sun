@@ -106,13 +106,9 @@ const { t } = useI18n()
 const activeTab = ref('my')
 const createDialogVisible = ref(false)
 
-const delegationList = ref([
-  { id: 1, delegateId: '李四', delegationType: 'ALL', startTime: '2026-01-01', endTime: '2026-01-31', status: 'ACTIVE', reason: '出差' }
-])
+const delegationList = ref<any[]>([])
 
-const auditList = ref([
-  { operationType: 'CREATE_DELEGATION', delegatorId: '张三', delegateId: '李四', operationResult: 'SUCCESS', createdAt: '2026-01-01 10:00' }
-])
+const auditList = ref<any[]>([])
 
 const createForm = reactive({
   delegateId: '',
@@ -193,11 +189,14 @@ const handleDelete = async (row: any) => {
 const loadDelegations = async () => {
   try {
     const res = await getDelegationRules()
-    if (res.data) {
-      delegationList.value = res.data
+    // API 返回格式: { success: true, data: [...] }
+    const data = res.data || res
+    if (Array.isArray(data)) {
+      delegationList.value = data
     }
   } catch (error) {
-    // 使用模拟数据
+    console.error('Failed to load delegations:', error)
+    delegationList.value = []
   }
 }
 

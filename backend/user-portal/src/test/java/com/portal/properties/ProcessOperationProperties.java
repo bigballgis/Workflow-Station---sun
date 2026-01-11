@@ -1,5 +1,6 @@
 package com.portal.properties;
 
+import com.portal.component.FunctionUnitAccessComponent;
 import com.portal.component.ProcessComponent;
 import com.portal.dto.ProcessDefinitionInfo;
 import com.portal.dto.ProcessInstanceInfo;
@@ -8,6 +9,7 @@ import com.portal.entity.FavoriteProcess;
 import com.portal.entity.ProcessDraft;
 import com.portal.repository.FavoriteProcessRepository;
 import com.portal.repository.ProcessDraftRepository;
+import com.portal.repository.ProcessInstanceRepository;
 import net.jqwik.api.*;
 import net.jqwik.api.lifecycle.BeforeTry;
 import org.mockito.Mockito;
@@ -25,12 +27,16 @@ class ProcessOperationProperties {
     private ProcessComponent processComponent;
     private FavoriteProcessRepository favoriteProcessRepository;
     private ProcessDraftRepository processDraftRepository;
+    private ProcessInstanceRepository processInstanceRepository;
+    private FunctionUnitAccessComponent functionUnitAccessComponent;
 
     @BeforeTry
     void setUp() {
         favoriteProcessRepository = Mockito.mock(FavoriteProcessRepository.class);
         processDraftRepository = Mockito.mock(ProcessDraftRepository.class);
-        processComponent = new ProcessComponent(favoriteProcessRepository, processDraftRepository);
+        processInstanceRepository = Mockito.mock(ProcessInstanceRepository.class);
+        functionUnitAccessComponent = Mockito.mock(FunctionUnitAccessComponent.class);
+        processComponent = new ProcessComponent(favoriteProcessRepository, processDraftRepository, processInstanceRepository, functionUnitAccessComponent);
     }
 
     @Property(tries = 20)
