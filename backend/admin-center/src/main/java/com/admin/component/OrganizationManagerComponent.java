@@ -1,6 +1,7 @@
 package com.admin.component;
 
 import com.admin.dto.request.DepartmentCreateRequest;
+import com.admin.dto.request.DepartmentUpdateRequest;
 import com.admin.dto.response.DepartmentResult;
 import com.admin.dto.response.DepartmentTree;
 import com.admin.entity.Department;
@@ -90,7 +91,7 @@ public class OrganizationManagerComponent {
      * 更新部门
      */
     @Transactional
-    public void updateDepartment(String deptId, DepartmentCreateRequest request) {
+    public void updateDepartment(String deptId, DepartmentUpdateRequest request) {
         log.info("Updating department: {}", deptId);
         
         Department department = departmentRepository.findById(deptId)

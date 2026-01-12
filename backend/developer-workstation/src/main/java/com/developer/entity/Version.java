@@ -37,8 +37,7 @@ public class Version {
     private String changeLog;
     
     @JsonIgnore
-    @Lob
-    @Column(name = "snapshot_data", nullable = false)
+    @Column(name = "snapshot_data", nullable = false, columnDefinition = "BYTEA")
     private byte[] snapshotData;
     
     @Column(name = "published_by", nullable = false, length = 50)

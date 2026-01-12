@@ -46,6 +46,11 @@ public class FunctionUnitImportRequest {
     private String name;
     
     /**
+     * 功能单元代码（唯一标识符）
+     */
+    private String code;
+    
+    /**
      * 功能单元版本（可选，默认从包中解析）
      */
     private String version;

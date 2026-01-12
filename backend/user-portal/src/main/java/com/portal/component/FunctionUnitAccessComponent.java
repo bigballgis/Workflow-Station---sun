@@ -96,7 +96,7 @@ public class FunctionUnitAccessComponent {
     }
     
     /**
-     * 根据 ID 或 code 获取功能单元的实际 ID
+     * 根据 ID、code 或名称获取功能单元的实际 ID
      */
     public String resolveFunctionUnitId(String functionUnitIdOrCode) {
         log.info("Resolving function unit ID for: {}", functionUnitIdOrCode);
@@ -107,23 +107,62 @@ public class FunctionUnitAccessComponent {
         }
         
         try {
-            // 通过 code 查找功能单元
-            String url = adminCenterUrl + "/api/v1/admin/function-units/code/" + functionUnitIdOrCode + "/latest";
+            // 对参数进行 URL 编码（支持中文）
+            String encodedParam = java.net.URLEncoder.encode(functionUnitIdOrCode, java.nio.charset.StandardCharsets.UTF_8);
+            
+            // 首先尝试通过 code 查找功能单元
+            String url = adminCenterUrl + "/api/v1/admin/function-units/code/" + encodedParam + "/latest";
             log.info("Fetching function unit by code from: {}", url);
             
-            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                    url,
+            try {
+                ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                        url,
+                        HttpMethod.GET,
+                        null,
+                        new ParameterizedTypeReference<Map<String, Object>>() {}
+                );
+                
+                if (response.getBody() != null) {
+                    String id = (String) response.getBody().get("id");
+                    log.info("Resolved function unit code {} to ID {}", functionUnitIdOrCode, id);
+                    return id;
+                }
+            } catch (Exception e) {
+                log.warn("Failed to find function unit by code {}, trying by name: {}", functionUnitIdOrCode, e.getMessage());
+            }
+            
+            // 如果通过 code 找不到，尝试通过名称搜索
+            String searchUrl = adminCenterUrl + "/api/v1/admin/function-units?keyword=" + encodedParam + "&size=1";
+            log.info("Searching function unit by name from: {}", searchUrl);
+            
+            ResponseEntity<Map<String, Object>> searchResponse = restTemplate.exchange(
+                    searchUrl,
                     HttpMethod.GET,
                     null,
                     new ParameterizedTypeReference<Map<String, Object>>() {}
             );
             
-            if (response.getBody() != null) {
-                String id = (String) response.getBody().get("id");
-                log.info("Resolved function unit code {} to ID {}", functionUnitIdOrCode, id);
-                return id;
+            if (searchResponse.getBody() != null) {
+                @SuppressWarnings("unchecked")
+                java.util.List<Map<String, Object>> content = (java.util.List<Map<String, Object>>) searchResponse.getBody().get("content");
+                if (content != null && !content.isEmpty()) {
+                    // 找到精确匹配名称的功能单元
+                    for (Map<String, Object> unit : content) {
+                        String name = (String) unit.get("name");
+                        if (functionUnitIdOrCode.equals(name)) {
+                            String id = (String) unit.get("id");
+                            log.info("Resolved function unit name {} to ID {}", functionUnitIdOrCode, id);
+                            return id;
+                        }
+                    }
+                    // 如果没有精确匹配，返回第一个结果
+                    String id = (String) content.get(0).get("id");
+                    log.info("Resolved function unit (first match) {} to ID {}", functionUnitIdOrCode, id);
+                    return id;
+                }
             }
             
+            log.warn("Could not resolve function unit ID for: {}", functionUnitIdOrCode);
             return functionUnitIdOrCode;
             
         } catch (Exception e) {

@@ -8,6 +8,7 @@ import com.admin.exception.AdminBusinessException;
 import com.admin.exception.InvalidEmailException;
 import com.admin.exception.UserNotFoundException;
 import com.admin.exception.UsernameAlreadyExistsException;
+import com.admin.repository.DepartmentRepository;
 import com.admin.repository.PasswordHistoryRepository;
 import com.admin.repository.UserRepository;
 import com.admin.service.AuditService;
@@ -40,6 +41,9 @@ class UserManagerComponentTest {
     private UserRepository userRepository;
     
     @Mock
+    private DepartmentRepository departmentRepository;
+    
+    @Mock
     private PasswordHistoryRepository passwordHistoryRepository;
     
     @Mock
@@ -53,6 +57,7 @@ class UserManagerComponentTest {
         passwordEncoder = new BCryptPasswordEncoder();
         userManager = new UserManagerComponent(
                 userRepository,
+                departmentRepository,
                 passwordHistoryRepository,
                 passwordEncoder,
                 auditService);

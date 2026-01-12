@@ -86,6 +86,7 @@ public class FunctionUnitImportController {
             FunctionUnitImportRequest importRequest = FunctionUnitImportRequest.builder()
                     .fileName(file.getOriginalFilename())
                     .name(name)
+                    .code(code)
                     .version(version != null ? version : "1.0.0")
                     .description(description)
                     .fileContent((String) packageData.get("process"))

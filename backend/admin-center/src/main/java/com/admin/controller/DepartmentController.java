@@ -3,6 +3,7 @@ package com.admin.controller;
 import com.admin.component.OrganizationManagerComponent;
 import com.admin.dto.request.DepartmentCreateRequest;
 import com.admin.dto.request.DepartmentMoveRequest;
+import com.admin.dto.request.DepartmentUpdateRequest;
 import com.admin.dto.response.DepartmentResult;
 import com.admin.dto.response.DepartmentTree;
 import com.admin.dto.response.PageResult;
@@ -58,7 +59,7 @@ public class DepartmentController {
     @Operation(summary = "更新部门信息", description = "更新部门的基本信息")
     public ResponseEntity<Void> updateDepartment(
             @PathVariable String deptId,
-            @RequestBody @Valid DepartmentCreateRequest request) {
+            @RequestBody @Valid DepartmentUpdateRequest request) {
         organizationManager.updateDepartment(deptId, request);
         return ResponseEntity.ok().build();
     }

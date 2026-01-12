@@ -4,6 +4,7 @@ import com.admin.component.UserManagerComponent;
 import com.admin.dto.request.UserCreateRequest;
 import com.admin.exception.InvalidEmailException;
 import com.admin.exception.UsernameAlreadyExistsException;
+import com.admin.repository.DepartmentRepository;
 import com.admin.repository.PasswordHistoryRepository;
 import com.admin.repository.UserRepository;
 import com.admin.service.AuditService;
@@ -33,6 +34,9 @@ public class UserDataValidationProperties {
     private UserRepository userRepository;
     
     @Mock
+    private DepartmentRepository departmentRepository;
+    
+    @Mock
     private PasswordHistoryRepository passwordHistoryRepository;
     
     @Mock
@@ -46,7 +50,8 @@ public class UserDataValidationProperties {
         MockitoAnnotations.openMocks(this);
         passwordEncoder = new BCryptPasswordEncoder();
         userManager = new UserManagerComponent(
-                userRepository, 
+                userRepository,
+                departmentRepository,
                 passwordHistoryRepository, 
                 passwordEncoder, 
                 auditService);

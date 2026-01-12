@@ -25,7 +25,10 @@ import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.zip.*;
 
@@ -121,7 +124,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
             
             ExportManifest manifest = ExportManifest.builder()
                     .name(functionUnit.getName())
-                    .code(functionUnit.getName().replaceAll("\\s+", "_").toLowerCase()) // Generate code from name
+                    .code(functionUnit.getCode()) // Use actual code field
                     .version(functionUnit.getCurrentVersion())
                     .description(functionUnit.getDescription())
                     .exportedAt(LocalDateTime.now())
@@ -233,6 +236,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
         // 创建功能单元
         FunctionUnit functionUnit = FunctionUnit.builder()
                 .name(name)
+                .code(code != null ? code : generateImportCode()) // Use code from manifest or generate new one
                 .description(description)
                 .currentVersion(version)
                 .build();
@@ -494,6 +498,27 @@ public class ExportImportComponentImpl implements ExportImportComponent {
         map.put("description", table.getDescription());
         map.put("fields", table.getFieldDefinitions().stream().map(this::serializeField).toList());
         return map;
+    }
+    
+    /**
+     * 生成导入时的唯一编码
+     */
+    private String generateImportCode() {
+        String datePart = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
+        SecureRandom random = new SecureRandom();
+        String chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+        
+        for (int attempt = 0; attempt < 10; attempt++) {
+            StringBuilder randomPart = new StringBuilder();
+            for (int i = 0; i < 6; i++) {
+                randomPart.append(chars.charAt(random.nextInt(chars.length())));
+            }
+            String code = "fu-" + datePart + "-" + randomPart;
+            if (!functionUnitRepository.existsByCode(code)) {
+                return code;
+            }
+        }
+        return "fu-" + datePart + "-" + System.currentTimeMillis() % 1000000;
     }
     
     private Map<String, Object> serializeField(FieldDefinition field) {

@@ -31,6 +31,13 @@ public class FunctionUnit {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     
+    /**
+     * 功能单元唯一编码（英文标识符，用于系统间交互）
+     * 格式：fu-{timestamp}-{random}，如 fu-20260112-a1b2c3
+     */
+    @Column(name = "code", nullable = false, unique = true, length = 50)
+    private String code;
+    
     @Column(name = "name", nullable = false, unique = true, length = 100)
     private String name;
     

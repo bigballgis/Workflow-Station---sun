@@ -6,8 +6,10 @@ export interface Department {
   code: string
   parentId?: string
   parentName?: string
-  leaderId?: string
-  leaderName?: string
+  managerId?: string
+  managerName?: string
+  leaderId?: string  // alias for managerId (for backward compatibility)
+  leaderName?: string  // alias for managerName (for backward compatibility)
   secondaryManagerId?: string
   secondaryManagerName?: string
   level: number
@@ -23,14 +25,14 @@ export interface CreateDepartmentRequest {
   name: string
   code: string
   parentId?: string
-  leaderId?: string
+  managerId?: string
   secondaryManagerId?: string
   sortOrder?: number
 }
 
 export interface UpdateDepartmentRequest {
   name?: string
-  leaderId?: string
+  managerId?: string
   secondaryManagerId?: string
   sortOrder?: number
 }

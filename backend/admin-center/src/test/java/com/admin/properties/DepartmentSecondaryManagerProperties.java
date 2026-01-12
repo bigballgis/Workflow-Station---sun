@@ -1,7 +1,7 @@
 package com.admin.properties;
 
 import com.admin.component.OrganizationManagerComponent;
-import com.admin.dto.request.DepartmentCreateRequest;
+import com.admin.dto.request.DepartmentUpdateRequest;
 import com.admin.entity.Department;
 import com.admin.enums.DepartmentStatus;
 import com.admin.exception.AdminBusinessException;
@@ -59,9 +59,8 @@ public class DepartmentSecondaryManagerProperties {
         when(departmentRepository.existsByNameAndParentIdExcluding(any(), any(), any())).thenReturn(false);
         when(departmentRepository.save(any(Department.class))).thenAnswer(i -> i.getArgument(0));
         
-        DepartmentCreateRequest request = DepartmentCreateRequest.builder()
+        DepartmentUpdateRequest request = DepartmentUpdateRequest.builder()
                 .name(existingDept.getName())
-                .code(existingDept.getCode())
                 .secondaryManagerId(secondaryManagerId)
                 .build();
         
@@ -87,9 +86,8 @@ public class DepartmentSecondaryManagerProperties {
         when(userRepository.existsById(nonExistentManagerId)).thenReturn(false);
         when(departmentRepository.existsByNameAndParentIdExcluding(any(), any(), any())).thenReturn(false);
         
-        DepartmentCreateRequest request = DepartmentCreateRequest.builder()
+        DepartmentUpdateRequest request = DepartmentUpdateRequest.builder()
                 .name(existingDept.getName())
-                .code(existingDept.getCode())
                 .secondaryManagerId(nonExistentManagerId)
                 .build();
         
@@ -114,9 +112,8 @@ public class DepartmentSecondaryManagerProperties {
         when(departmentRepository.existsByNameAndParentIdExcluding(any(), any(), any())).thenReturn(false);
         when(departmentRepository.save(any(Department.class))).thenAnswer(i -> i.getArgument(0));
         
-        DepartmentCreateRequest request = DepartmentCreateRequest.builder()
+        DepartmentUpdateRequest request = DepartmentUpdateRequest.builder()
                 .name(existingDept.getName())
-                .code(existingDept.getCode())
                 .secondaryManagerId("")
                 .build();
         
@@ -141,9 +138,8 @@ public class DepartmentSecondaryManagerProperties {
         when(departmentRepository.existsByNameAndParentIdExcluding(any(), any(), any())).thenReturn(false);
         when(departmentRepository.save(any(Department.class))).thenAnswer(i -> i.getArgument(0));
         
-        DepartmentCreateRequest request = DepartmentCreateRequest.builder()
+        DepartmentUpdateRequest request = DepartmentUpdateRequest.builder()
                 .name(existingDept.getName())
-                .code(existingDept.getCode())
                 .secondaryManagerId(null)
                 .build();
         

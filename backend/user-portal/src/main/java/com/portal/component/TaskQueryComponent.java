@@ -6,9 +6,11 @@ import com.portal.dto.TaskQueryRequest;
 import com.portal.dto.TaskStatistics;
 import com.portal.dto.TaskHistoryInfo;
 import com.portal.entity.DelegationRule;
+import com.portal.entity.ProcessHistory;
 import com.portal.entity.ProcessInstance;
 import com.portal.enums.DelegationStatus;
 import com.portal.repository.DelegationRuleRepository;
+import com.portal.repository.ProcessHistoryRepository;
 import com.portal.repository.ProcessInstanceRepository;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +36,7 @@ public class TaskQueryComponent {
 
     private final DelegationRuleRepository delegationRuleRepository;
     private final ProcessInstanceRepository processInstanceRepository;
+    private final ProcessHistoryRepository processHistoryRepository;
 
     // 模拟的任务数据存储（实际应集成workflow-engine-core）
     private final Map<String, TaskInfo> taskStore = new HashMap<>();
@@ -237,7 +240,35 @@ public class TaskQueryComponent {
      * 获取任务详情
      */
     public Optional<TaskInfo> getTaskById(String taskId) {
-        return Optional.ofNullable(taskStore.get(taskId));
+        // 首先从内存存储中查找
+        TaskInfo task = taskStore.get(taskId);
+        if (task != null) {
+            return Optional.of(task);
+        }
+        
+        // 如果是从流程实例转换的任务ID（格式：task-{processInstanceId}）
+        if (taskId.startsWith("task-")) {
+            String processInstanceId = taskId.substring(5); // 移除 "task-" 前缀
+            try {
+                Optional<ProcessInstance> instanceOpt = processInstanceRepository.findById(processInstanceId);
+                if (instanceOpt.isPresent()) {
+                    ProcessInstance instance = instanceOpt.get();
+                    String userId = instance.getCurrentAssignee();
+                    if (userId == null && instance.getCandidateUsers() != null) {
+                        // 如果没有直接分配人，使用第一个候选人
+                        String[] candidates = instance.getCandidateUsers().split(",");
+                        if (candidates.length > 0) {
+                            userId = candidates[0].trim();
+                        }
+                    }
+                    return Optional.of(convertProcessInstanceToTask(instance, userId != null ? userId : ""));
+                }
+            } catch (Exception e) {
+                log.warn("Failed to get process instance by id {}: {}", processInstanceId, e.getMessage());
+            }
+        }
+        
+        return Optional.empty();
     }
 
     /**
@@ -395,15 +426,70 @@ public class TaskQueryComponent {
      * 获取任务流转历史
      */
     public List<TaskHistoryInfo> getTaskHistory(String taskId) {
-        // 模拟返回任务历史
         List<TaskHistoryInfo> history = new ArrayList<>();
         
+        // 如果是从数据库流程实例转换的任务，从数据库读取历史
+        if (taskId.startsWith("task-")) {
+            String processInstanceId = taskId.substring(5);
+            try {
+                List<ProcessHistory> dbHistory = processHistoryRepository
+                        .findByProcessInstanceIdOrderByOperationTimeAsc(processInstanceId);
+                
+                for (int i = 0; i < dbHistory.size(); i++) {
+                    ProcessHistory ph = dbHistory.get(i);
+                    Long duration = null;
+                    if (i > 0 && ph.getOperationTime() != null && dbHistory.get(i-1).getOperationTime() != null) {
+                        duration = java.time.Duration.between(
+                                dbHistory.get(i-1).getOperationTime(), 
+                                ph.getOperationTime()
+                        ).toMillis();
+                    }
+                    
+                    history.add(TaskHistoryInfo.builder()
+                            .id("history_" + ph.getId())
+                            .taskId(ph.getTaskId())
+                            .taskName(ph.getActivityName())
+                            .activityId(ph.getActivityId())
+                            .activityName(ph.getActivityName())
+                            .activityType(ph.getActivityType())
+                            .operationType(ph.getOperationType())
+                            .operatorId(ph.getOperatorId())
+                            .operatorName(ph.getOperatorName())
+                            .operationTime(ph.getOperationTime())
+                            .comment(ph.getComment())
+                            .duration(duration)
+                            .build());
+                }
+                
+                if (!history.isEmpty()) {
+                    return history;
+                }
+            } catch (Exception e) {
+                log.warn("Failed to get process history from database: {}", e.getMessage());
+            }
+        }
+        
+        // 如果数据库没有历史，返回模拟数据
         TaskInfo task = taskStore.get(taskId);
+        if (task == null && taskId.startsWith("task-")) {
+            String processInstanceId = taskId.substring(5);
+            try {
+                Optional<ProcessInstance> instanceOpt = processInstanceRepository.findById(processInstanceId);
+                if (instanceOpt.isPresent()) {
+                    ProcessInstance instance = instanceOpt.get();
+                    String userId = instance.getCurrentAssignee();
+                    task = convertProcessInstanceToTask(instance, userId != null ? userId : "");
+                }
+            } catch (Exception e) {
+                log.warn("Failed to get process instance for history: {}", e.getMessage());
+            }
+        }
+        
         if (task == null) {
             return history;
         }
 
-        // 模拟历史记录
+        // 模拟历史记录（仅当数据库没有记录时）
         history.add(TaskHistoryInfo.builder()
                 .id("history_1")
                 .taskId(taskId)
@@ -414,39 +500,9 @@ public class TaskQueryComponent {
                 .operationType("SUBMIT")
                 .operatorId(task.getInitiatorId())
                 .operatorName(task.getInitiatorName())
-                .operationTime(task.getCreateTime() != null ? task.getCreateTime().minusHours(2) : LocalDateTime.now().minusHours(2))
+                .operationTime(task.getCreateTime() != null ? task.getCreateTime() : LocalDateTime.now())
                 .comment("提交申请")
                 .duration(0L)
-                .build());
-
-        history.add(TaskHistoryInfo.builder()
-                .id("history_2")
-                .taskId(taskId)
-                .taskName(task.getTaskName())
-                .activityId("userTask1")
-                .activityName("部门经理审批")
-                .activityType("userTask")
-                .operationType("APPROVE")
-                .operatorId("manager_1")
-                .operatorName("部门经理")
-                .operationTime(task.getCreateTime() != null ? task.getCreateTime().minusHours(1) : LocalDateTime.now().minusHours(1))
-                .comment("同意")
-                .duration(3600000L)
-                .build());
-
-        history.add(TaskHistoryInfo.builder()
-                .id("history_3")
-                .taskId(taskId)
-                .taskName(task.getTaskName())
-                .activityId("userTask2")
-                .activityName(task.getTaskName())
-                .activityType("userTask")
-                .operationType("PENDING")
-                .operatorId(task.getAssignee())
-                .operatorName(task.getAssigneeName())
-                .operationTime(task.getCreateTime())
-                .comment("待审批")
-                .duration(null)
                 .build());
 
         return history;

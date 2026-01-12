@@ -152,14 +152,18 @@ public class DeveloperPermissionService {
      * 解析用户ID（支持 username 或 userId）
      */
     private String resolveUserId(String userIdOrUsername) {
-        // 如果是 UUID 格式，直接返回
-        if (userIdOrUsername != null && userIdOrUsername.matches("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")) {
+        if (userIdOrUsername == null || userIdOrUsername.isEmpty()) {
+            return null;
+        }
+        
+        // 首先尝试直接作为 userId 查找
+        if (userRepository.existsById(userIdOrUsername)) {
             return userIdOrUsername;
         }
         
         // 否则尝试通过 username 查找
         return userRepository.findByUsername(userIdOrUsername)
-            .map(user -> user.getId().toString())
+            .map(User::getId)
             .orElse(null);
     }
     

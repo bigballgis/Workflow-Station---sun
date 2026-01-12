@@ -11,6 +11,7 @@ import com.admin.entity.PasswordHistory;
 import com.admin.entity.User;
 import com.admin.enums.UserStatus;
 import com.admin.exception.*;
+import com.admin.repository.DepartmentRepository;
 import com.admin.repository.PasswordHistoryRepository;
 import com.admin.repository.UserRepository;
 import com.admin.service.AuditService;
@@ -42,6 +43,7 @@ import java.util.regex.Pattern;
 public class UserManagerComponent {
     
     private final UserRepository userRepository;
+    private final DepartmentRepository departmentRepository;
     private final PasswordHistoryRepository passwordHistoryRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuditService auditService;
@@ -355,6 +357,12 @@ public class UserManagerComponent {
         
         return users.map(user -> {
             UserInfo info = UserInfo.fromEntity(user);
+            
+            // 填充部门名称
+            if (user.getDepartmentId() != null) {
+                departmentRepository.findById(user.getDepartmentId())
+                        .ifPresent(dept -> info.setDepartmentName(dept.getName()));
+            }
             
             // 填充实体管理者名称
             if (user.getEntityManagerId() != null) {

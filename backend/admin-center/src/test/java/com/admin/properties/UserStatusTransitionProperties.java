@@ -4,6 +4,7 @@ import com.admin.component.UserManagerComponent;
 import com.admin.entity.User;
 import com.admin.enums.UserStatus;
 import com.admin.exception.AdminBusinessException;
+import com.admin.repository.DepartmentRepository;
 import com.admin.repository.PasswordHistoryRepository;
 import com.admin.repository.UserRepository;
 import com.admin.service.AuditService;
@@ -35,6 +36,9 @@ public class UserStatusTransitionProperties {
     private UserRepository userRepository;
     
     @Mock
+    private DepartmentRepository departmentRepository;
+    
+    @Mock
     private PasswordHistoryRepository passwordHistoryRepository;
     
     @Mock
@@ -48,7 +52,8 @@ public class UserStatusTransitionProperties {
         MockitoAnnotations.openMocks(this);
         passwordEncoder = new BCryptPasswordEncoder();
         userManager = new UserManagerComponent(
-                userRepository, 
+                userRepository,
+                departmentRepository,
                 passwordHistoryRepository, 
                 passwordEncoder, 
                 auditService);

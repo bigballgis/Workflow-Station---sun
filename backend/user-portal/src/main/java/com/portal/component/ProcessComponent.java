@@ -5,9 +5,11 @@ import com.portal.dto.ProcessInstanceInfo;
 import com.portal.dto.ProcessStartRequest;
 import com.portal.entity.FavoriteProcess;
 import com.portal.entity.ProcessDraft;
+import com.portal.entity.ProcessHistory;
 import com.portal.entity.ProcessInstance;
 import com.portal.repository.FavoriteProcessRepository;
 import com.portal.repository.ProcessDraftRepository;
+import com.portal.repository.ProcessHistoryRepository;
 import com.portal.repository.ProcessInstanceRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,6 +31,7 @@ public class ProcessComponent {
     private final FavoriteProcessRepository favoriteProcessRepository;
     private final ProcessDraftRepository processDraftRepository;
     private final ProcessInstanceRepository processInstanceRepository;
+    private final ProcessHistoryRepository processHistoryRepository;
     private final FunctionUnitAccessComponent functionUnitAccessComponent;
     
     @Value("${admin-center.url:http://localhost:8090}")
@@ -176,6 +179,19 @@ public class ProcessComponent {
         log.info("Created process instance: {} for user: {}, assignee: {}, candidateUsers: {}", 
                 instance.getId(), userId, firstTaskAssignee, candidateUsers);
 
+        // 记录流程启动历史
+        ProcessHistory startHistory = ProcessHistory.builder()
+                .processInstanceId(instance.getId())
+                .activityId("startEvent")
+                .activityName("提交申请")
+                .activityType("startEvent")
+                .operationType("SUBMIT")
+                .operatorId(userId)
+                .operatorName(userId)
+                .comment("发起流程")
+                .build();
+        processHistoryRepository.save(startHistory);
+
         return ProcessInstanceInfo.builder()
                 .id(instance.getId())
                 .processDefinitionId(instance.getProcessDefinitionId())
@@ -195,6 +211,9 @@ public class ProcessComponent {
      */
     private Map<String, String> parseFirstUserTask(String bpmnXml, Map<String, Object> formData, String initiatorId) {
         Map<String, String> result = new HashMap<>();
+        log.info("Parsing BPMN XML for first user task, initiatorId: {}", initiatorId);
+        log.info("BPMN XML length: {}", bpmnXml != null ? bpmnXml.length() : 0);
+        
         try {
             // 查找所有 userTask 标签
             int searchStart = 0;
@@ -210,36 +229,121 @@ public class ProcessComponent {
                     break;
                 }
                 
-                int userTaskEnd = bpmnXml.indexOf(">", userTaskStart);
+                // 找到完整的 userTask 元素（包括子元素）
+                int userTaskEnd = findClosingTag(bpmnXml, userTaskStart, "userTask");
                 if (userTaskEnd == -1) {
-                    break;
+                    userTaskEnd = findClosingTag(bpmnXml, userTaskStart, "bpmn:userTask");
+                }
+                if (userTaskEnd == -1) {
+                    // 自闭合标签
+                    userTaskEnd = bpmnXml.indexOf("/>", userTaskStart);
+                    if (userTaskEnd == -1) {
+                        break;
+                    }
+                    userTaskEnd += 2;
                 }
                 
-                String userTaskTag = bpmnXml.substring(userTaskStart, userTaskEnd + 1);
+                String userTaskElement = bpmnXml.substring(userTaskStart, userTaskEnd);
                 taskCount++;
                 
-                // 提取 assignee 属性
-                String assignee = extractAttribute(userTaskTag, "camunda:assignee");
-                if (assignee == null) {
-                    assignee = extractAttribute(userTaskTag, "flowable:assignee");
-                }
-                if (assignee == null) {
-                    assignee = extractAttribute(userTaskTag, "assignee");
+                // 提取任务名称
+                String name = extractAttribute(userTaskElement, "name");
+                
+                // 首先尝试从 custom:properties 中解析 assigneeType
+                String assigneeType = extractCustomProperty(userTaskElement, "assigneeType");
+                String assignee = null;
+                String candidateUsers = null;
+                
+                if (assigneeType != null) {
+                    // 根据 assigneeType 解析处理人
+                    log.info("Found assigneeType: {} for task: {}", assigneeType, name);
+                    
+                    switch (assigneeType) {
+                        case "initiator":
+                            assignee = initiatorId;
+                            break;
+                        case "manager":
+                            assignee = getInitiatorManager(initiatorId);
+                            break;
+                        case "entityManager":
+                            assignee = getEntityManager(initiatorId);
+                            break;
+                        case "functionManager":
+                            assignee = getFunctionManager(initiatorId);
+                            break;
+                        case "departmentManager":
+                            assignee = getDepartmentManager(initiatorId);
+                            break;
+                        case "departmentSecondaryManager":
+                            assignee = getDepartmentSecondaryManager(initiatorId);
+                            break;
+                        case "eitherManager":
+                            // 实体或职能管理者（或签）
+                            String entityMgr = getEntityManager(initiatorId);
+                            String funcMgr = getFunctionManager(initiatorId);
+                            List<String> managers = new ArrayList<>();
+                            if (entityMgr != null) managers.add(entityMgr);
+                            if (funcMgr != null && !funcMgr.equals(entityMgr)) managers.add(funcMgr);
+                            if (!managers.isEmpty()) {
+                                candidateUsers = String.join(",", managers);
+                                assignee = managers.get(0);
+                            }
+                            break;
+                        case "bothManagers":
+                            // 实体+职能管理者（会签）
+                            String entityMgr2 = getEntityManager(initiatorId);
+                            String funcMgr2 = getFunctionManager(initiatorId);
+                            List<String> bothManagers = new ArrayList<>();
+                            if (entityMgr2 != null) bothManagers.add(entityMgr2);
+                            if (funcMgr2 != null && !funcMgr2.equals(entityMgr2)) bothManagers.add(funcMgr2);
+                            if (!bothManagers.isEmpty()) {
+                                candidateUsers = String.join(",", bothManagers);
+                            }
+                            break;
+                        case "user":
+                            // 指定用户
+                            assignee = extractCustomProperty(userTaskElement, "assigneeValue");
+                            break;
+                        case "group":
+                            // 指定部门/组
+                            String groupValue = extractCustomProperty(userTaskElement, "assigneeValue");
+                            if (groupValue != null) {
+                                result.put("candidateGroups", groupValue);
+                            }
+                            break;
+                        case "expression":
+                            // 表达式
+                            String expr = extractCustomProperty(userTaskElement, "assigneeValue");
+                            if (expr != null && expr.startsWith("${") && expr.endsWith("}")) {
+                                String varName = expr.substring(2, expr.length() - 1);
+                                assignee = resolveProcessVariable(varName, formData, initiatorId);
+                            }
+                            break;
+                        default:
+                            log.warn("Unknown assigneeType: {}", assigneeType);
+                    }
+                } else {
+                    // 回退到标准属性解析
+                    assignee = extractAttribute(userTaskElement, "camunda:assignee");
+                    if (assignee == null) {
+                        assignee = extractAttribute(userTaskElement, "flowable:assignee");
+                    }
+                    if (assignee == null) {
+                        assignee = extractAttribute(userTaskElement, "assignee");
+                    }
                 }
                 
                 // 跳过发起人任务（第一个任务通常是发起人填写表单）
-                // 如果 assignee 是 ${initiator}，跳过这个任务
-                boolean isInitiatorTask = assignee != null && 
-                    (assignee.equals("${initiator}") || assignee.equals(initiatorId));
+                boolean isInitiatorTask = "initiator".equals(assigneeType) || 
+                    (assignee != null && (assignee.equals("${initiator}") || assignee.equals(initiatorId)));
                 
                 if (!isInitiatorTask || taskCount > 1) {
                     // 这是需要审批的任务
-                    String name = extractAttribute(userTaskTag, "name");
                     if (name != null) {
                         result.put("name", name);
                     }
                     
-                    // 解析 assignee 变量
+                    // 解析 assignee 变量（如果还没解析）
                     if (assignee != null) {
                         if (assignee.startsWith("${") && assignee.endsWith("}")) {
                             String varName = assignee.substring(2, assignee.length() - 1);
@@ -248,42 +352,92 @@ public class ProcessComponent {
                         result.put("assignee", assignee);
                     }
                     
-                    // 检查是否有 candidateUsers（会签任务）
-                    String candidateUsers = extractAttribute(userTaskTag, "flowable:candidateUsers");
-                    if (candidateUsers == null) {
-                        candidateUsers = extractAttribute(userTaskTag, "camunda:candidateUsers");
-                    }
+                    // 设置候选用户
                     if (candidateUsers != null) {
-                        // 解析候选用户表达式
-                        List<String> resolvedCandidates = resolveCandidateUsers(candidateUsers, formData, initiatorId);
-                        if (!resolvedCandidates.isEmpty()) {
-                            result.put("candidateUsers", String.join(",", resolvedCandidates));
-                            // 如果没有指定 assignee，使用第一个候选用户
-                            if (result.get("assignee") == null) {
-                                result.put("assignee", resolvedCandidates.get(0));
+                        result.put("candidateUsers", candidateUsers);
+                        if (result.get("assignee") == null) {
+                            result.put("assignee", candidateUsers.split(",")[0]);
+                        }
+                    }
+                    
+                    // 检查是否有标准的 candidateUsers（会签任务）
+                    if (candidateUsers == null) {
+                        candidateUsers = extractAttribute(userTaskElement, "flowable:candidateUsers");
+                        if (candidateUsers == null) {
+                            candidateUsers = extractAttribute(userTaskElement, "camunda:candidateUsers");
+                        }
+                        if (candidateUsers != null) {
+                            List<String> resolvedCandidates = resolveCandidateUsers(candidateUsers, formData, initiatorId);
+                            if (!resolvedCandidates.isEmpty()) {
+                                result.put("candidateUsers", String.join(",", resolvedCandidates));
+                                if (result.get("assignee") == null) {
+                                    result.put("assignee", resolvedCandidates.get(0));
+                                }
                             }
                         }
                     }
                     
                     // 检查是否有 candidateGroups（组任务）
-                    String candidateGroups = extractAttribute(userTaskTag, "flowable:candidateGroups");
+                    String candidateGroups = extractAttribute(userTaskElement, "flowable:candidateGroups");
                     if (candidateGroups == null) {
-                        candidateGroups = extractAttribute(userTaskTag, "camunda:candidateGroups");
+                        candidateGroups = extractAttribute(userTaskElement, "camunda:candidateGroups");
                     }
                     if (candidateGroups != null && result.get("assignee") == null) {
-                        // 组任务，暂时不设置具体 assignee
                         result.put("candidateGroups", candidateGroups);
                     }
                     
                     break;
                 }
                 
-                searchStart = userTaskEnd + 1;
+                searchStart = userTaskEnd;
             }
         } catch (Exception e) {
-            log.warn("Failed to parse BPMN for first user task: {}", e.getMessage());
+            log.warn("Failed to parse BPMN for first user task: {}", e.getMessage(), e);
         }
         return result;
+    }
+    
+    /**
+     * 从 custom:properties 中提取属性值
+     */
+    private String extractCustomProperty(String element, String propertyName) {
+        try {
+            // 查找 custom:property 标签
+            String searchPattern = "name=\"" + propertyName + "\"";
+            int propIndex = element.indexOf(searchPattern);
+            if (propIndex == -1) {
+                return null;
+            }
+            
+            // 找到这个 property 标签的 value 属性
+            int lineStart = element.lastIndexOf("<", propIndex);
+            int lineEnd = element.indexOf("/>", propIndex);
+            if (lineEnd == -1) {
+                lineEnd = element.indexOf(">", propIndex);
+            }
+            
+            if (lineStart == -1 || lineEnd == -1) {
+                return null;
+            }
+            
+            String propertyTag = element.substring(lineStart, lineEnd);
+            return extractAttribute(propertyTag, "value");
+        } catch (Exception e) {
+            log.warn("Failed to extract custom property {}: {}", propertyName, e.getMessage());
+            return null;
+        }
+    }
+    
+    /**
+     * 找到闭合标签的位置
+     */
+    private int findClosingTag(String xml, int startIndex, String tagName) {
+        String closingTag = "</" + tagName + ">";
+        int closingIndex = xml.indexOf(closingTag, startIndex);
+        if (closingIndex != -1) {
+            return closingIndex + closingTag.length();
+        }
+        return -1;
     }
     
     /**
@@ -485,11 +639,42 @@ public class ProcessComponent {
             RestTemplate restTemplate = new RestTemplate();
             
             // 1. 获取用户信息，包含部门ID
+            // 首先尝试通过用户ID查询
             String userUrl = adminCenterUrl + "/api/v1/admin/users/" + initiatorId;
             log.info("Fetching user info for department manager from: {}", userUrl);
             
-            @SuppressWarnings("unchecked")
-            Map<String, Object> userInfo = restTemplate.getForObject(userUrl, Map.class);
+            Map<String, Object> userInfo = null;
+            try {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> response = restTemplate.getForObject(userUrl, Map.class);
+                userInfo = response;
+            } catch (Exception e) {
+                log.warn("Failed to get user by ID {}, trying by username: {}", initiatorId, e.getMessage());
+            }
+            
+            // 如果通过ID查询失败，尝试通过用户名查询
+            if (userInfo == null || userInfo.get("departmentId") == null) {
+                String searchUrl = adminCenterUrl + "/api/v1/admin/users?keyword=" + initiatorId + "&size=1";
+                log.info("Searching user by username from: {}", searchUrl);
+                try {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> searchResponse = restTemplate.getForObject(searchUrl, Map.class);
+                    if (searchResponse != null && searchResponse.get("content") != null) {
+                        @SuppressWarnings("unchecked")
+                        List<Map<String, Object>> users = (List<Map<String, Object>>) searchResponse.get("content");
+                        if (!users.isEmpty()) {
+                            // 找到用户后，获取详细信息
+                            String foundUserId = (String) users.get(0).get("id");
+                            String detailUrl = adminCenterUrl + "/api/v1/admin/users/" + foundUserId;
+                            @SuppressWarnings("unchecked")
+                            Map<String, Object> detailResponse = restTemplate.getForObject(detailUrl, Map.class);
+                            userInfo = detailResponse;
+                        }
+                    }
+                } catch (Exception e) {
+                    log.warn("Failed to search user by username {}: {}", initiatorId, e.getMessage());
+                }
+            }
             
             if (userInfo == null || userInfo.get("departmentId") == null) {
                 log.warn("User {} has no department", initiatorId);
@@ -528,11 +713,42 @@ public class ProcessComponent {
             RestTemplate restTemplate = new RestTemplate();
             
             // 1. 获取用户信息，包含部门ID
+            // 首先尝试通过用户ID查询
             String userUrl = adminCenterUrl + "/api/v1/admin/users/" + initiatorId;
             log.info("Fetching user info for department secondary manager from: {}", userUrl);
             
-            @SuppressWarnings("unchecked")
-            Map<String, Object> userInfo = restTemplate.getForObject(userUrl, Map.class);
+            Map<String, Object> userInfo = null;
+            try {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> response = restTemplate.getForObject(userUrl, Map.class);
+                userInfo = response;
+            } catch (Exception e) {
+                log.warn("Failed to get user by ID {}, trying by username: {}", initiatorId, e.getMessage());
+            }
+            
+            // 如果通过ID查询失败，尝试通过用户名查询
+            if (userInfo == null || userInfo.get("departmentId") == null) {
+                String searchUrl = adminCenterUrl + "/api/v1/admin/users?keyword=" + initiatorId + "&size=1";
+                log.info("Searching user by username from: {}", searchUrl);
+                try {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> searchResponse = restTemplate.getForObject(searchUrl, Map.class);
+                    if (searchResponse != null && searchResponse.get("content") != null) {
+                        @SuppressWarnings("unchecked")
+                        List<Map<String, Object>> users = (List<Map<String, Object>>) searchResponse.get("content");
+                        if (!users.isEmpty()) {
+                            // 找到用户后，获取详细信息
+                            String foundUserId = (String) users.get(0).get("id");
+                            String detailUrl = adminCenterUrl + "/api/v1/admin/users/" + foundUserId;
+                            @SuppressWarnings("unchecked")
+                            Map<String, Object> detailResponse = restTemplate.getForObject(detailUrl, Map.class);
+                            userInfo = detailResponse;
+                        }
+                    }
+                } catch (Exception e) {
+                    log.warn("Failed to search user by username {}: {}", initiatorId, e.getMessage());
+                }
+            }
             
             if (userInfo == null || userInfo.get("departmentId") == null) {
                 log.warn("User {} has no department", initiatorId);
@@ -564,10 +780,11 @@ public class ProcessComponent {
     }
     
     /**
-     * 获取发起人的直属上级（部门经理）- 兼容旧版本
+     * 获取发起人的直属上级（实体管理者）
+     * 注意：直属上级是 entityManagerId，不是部门经理
      */
     private String getInitiatorManager(String initiatorId) {
-        return getDepartmentManager(initiatorId);
+        return getEntityManager(initiatorId);
     }
     
     /**
@@ -836,10 +1053,14 @@ public class ProcessComponent {
     /**
      * 获取功能单元完整内容（不检查权限，用于内部调用）
      */
-    public Map<String, Object> getFunctionUnitContent(String functionUnitId) {
-        log.info("Getting function unit content for: {}", functionUnitId);
+    public Map<String, Object> getFunctionUnitContent(String functionUnitIdOrCode) {
+        log.info("Getting function unit content for: {}", functionUnitIdOrCode);
         
         try {
+            // 先解析功能单元 ID（支持 code 或名称）
+            String functionUnitId = functionUnitAccessComponent.resolveFunctionUnitId(functionUnitIdOrCode);
+            log.info("Resolved function unit ID: {}", functionUnitId);
+            
             RestTemplate restTemplate = new RestTemplate();
             String url = adminCenterUrl + "/api/v1/admin/function-units/" + functionUnitId + "/content";
             log.info("Fetching function unit content from: {}", url);
@@ -855,7 +1076,7 @@ public class ProcessComponent {
             return Collections.emptyMap();
             
         } catch (Exception e) {
-            log.error("Failed to get function unit content for {}: {}", functionUnitId, e.getMessage(), e);
+            log.error("Failed to get function unit content for {}: {}", functionUnitIdOrCode, e.getMessage(), e);
             Map<String, Object> errorResult = new HashMap<>();
             errorResult.put("error", e.getMessage());
             return errorResult;

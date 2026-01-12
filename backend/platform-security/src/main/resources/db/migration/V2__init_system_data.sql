@@ -172,3 +172,93 @@ ON CONFLICT (id) DO NOTHING;
 
 COMMENT ON TABLE sys_roles IS 'System roles initialized';
 COMMENT ON TABLE sys_permissions IS 'System permissions initialized';
+
+-- =====================================================
+-- 5. Developer Role Permissions (for developer-workstation)
+-- =====================================================
+
+-- TECH_DIRECTOR: All developer permissions
+INSERT INTO sys_developer_role_permissions (id, role_id, permission, created_at)
+SELECT 
+    gen_random_uuid()::varchar,
+    'TECH_DIRECTOR_ROLE',
+    p.permission,
+    CURRENT_TIMESTAMP
+FROM (VALUES 
+    ('FUNCTION_UNIT_CREATE'),
+    ('FUNCTION_UNIT_UPDATE'),
+    ('FUNCTION_UNIT_DELETE'),
+    ('FUNCTION_UNIT_VIEW'),
+    ('FUNCTION_UNIT_DEVELOP'),
+    ('FUNCTION_UNIT_PUBLISH'),
+    ('FORM_CREATE'),
+    ('FORM_UPDATE'),
+    ('FORM_DELETE'),
+    ('FORM_VIEW'),
+    ('PROCESS_CREATE'),
+    ('PROCESS_UPDATE'),
+    ('PROCESS_DELETE'),
+    ('PROCESS_VIEW'),
+    ('TABLE_CREATE'),
+    ('TABLE_UPDATE'),
+    ('TABLE_DELETE'),
+    ('TABLE_VIEW'),
+    ('ACTION_CREATE'),
+    ('ACTION_UPDATE'),
+    ('ACTION_DELETE'),
+    ('ACTION_VIEW')
+) AS p(permission)
+ON CONFLICT (role_id, permission) DO NOTHING;
+
+-- TEAM_LEADER: Most permissions (same as TECH_DIRECTOR for now)
+INSERT INTO sys_developer_role_permissions (id, role_id, permission, created_at)
+SELECT 
+    gen_random_uuid()::varchar,
+    'TEAM_LEADER_ROLE',
+    p.permission,
+    CURRENT_TIMESTAMP
+FROM (VALUES 
+    ('FUNCTION_UNIT_CREATE'),
+    ('FUNCTION_UNIT_UPDATE'),
+    ('FUNCTION_UNIT_DELETE'),
+    ('FUNCTION_UNIT_VIEW'),
+    ('FUNCTION_UNIT_DEVELOP'),
+    ('FUNCTION_UNIT_PUBLISH'),
+    ('FORM_CREATE'),
+    ('FORM_UPDATE'),
+    ('FORM_DELETE'),
+    ('FORM_VIEW'),
+    ('PROCESS_CREATE'),
+    ('PROCESS_UPDATE'),
+    ('PROCESS_DELETE'),
+    ('PROCESS_VIEW'),
+    ('TABLE_CREATE'),
+    ('TABLE_UPDATE'),
+    ('TABLE_DELETE'),
+    ('TABLE_VIEW'),
+    ('ACTION_CREATE'),
+    ('ACTION_UPDATE'),
+    ('ACTION_DELETE'),
+    ('ACTION_VIEW')
+) AS p(permission)
+ON CONFLICT (role_id, permission) DO NOTHING;
+
+-- DEVELOPER: View and develop permissions only
+INSERT INTO sys_developer_role_permissions (id, role_id, permission, created_at)
+SELECT 
+    gen_random_uuid()::varchar,
+    'DEVELOPER_ROLE',
+    p.permission,
+    CURRENT_TIMESTAMP
+FROM (VALUES 
+    ('FUNCTION_UNIT_VIEW'),
+    ('FUNCTION_UNIT_DEVELOP'),
+    ('FORM_VIEW'),
+    ('FORM_UPDATE'),
+    ('PROCESS_VIEW'),
+    ('PROCESS_UPDATE'),
+    ('TABLE_VIEW'),
+    ('ACTION_VIEW'),
+    ('ACTION_UPDATE')
+) AS p(permission)
+ON CONFLICT (role_id, permission) DO NOTHING;

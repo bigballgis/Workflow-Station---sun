@@ -12,7 +12,7 @@
       </el-form-item>
       <el-form-item :label="t('organization.leader')">
         <el-select 
-          v-model="form.leaderId" 
+          v-model="form.managerId" 
           clearable 
           filterable 
           remote 
@@ -69,7 +69,7 @@ const userSearchLoading = ref(false)
 const userOptions = ref<{ id: string; fullName: string; username: string }[]>([])
 const isEdit = computed(() => !!props.department)
 
-const form = reactive({ name: '', code: '', parentId: '', leaderId: '', secondaryManagerId: '', sortOrder: 0 })
+const form = reactive({ name: '', code: '', parentId: '', managerId: '', secondaryManagerId: '', sortOrder: 0 })
 
 const rules = {
   name: [{ required: true, message: '请输入部门名称', trigger: 'blur' }],
@@ -84,13 +84,13 @@ watch(() => props.modelValue, (val) => {
         name: props.department.name, 
         code: props.department.code, 
         parentId: props.department.parentId || '', 
-        leaderId: props.department.leaderId || '', 
+        managerId: props.department.managerId || '', 
         secondaryManagerId: props.department.secondaryManagerId || '',
         sortOrder: props.department.sortOrder 
       })
       loadSelectedManagers()
     } else {
-      Object.assign(form, { name: '', code: '', parentId: props.parent?.id || '', leaderId: '', secondaryManagerId: '', sortOrder: 0 })
+      Object.assign(form, { name: '', code: '', parentId: props.parent?.id || '', managerId: '', secondaryManagerId: '', sortOrder: 0 })
     }
   }
 })
@@ -114,7 +114,7 @@ const loadDefaultUsers = async () => {
 }
 
 const loadSelectedManagers = async () => {
-  const managerIds = [form.leaderId, form.secondaryManagerId].filter(Boolean)
+  const managerIds = [form.managerId, form.secondaryManagerId].filter(Boolean)
   if (managerIds.length === 0) return
   
   try {
@@ -169,7 +169,7 @@ const handleSubmit = async () => {
     if (isEdit.value) {
       await orgStore.updateDepartment(props.department!.id, { 
         name: form.name, 
-        leaderId: form.leaderId || undefined, 
+        managerId: form.managerId || undefined, 
         secondaryManagerId: form.secondaryManagerId || undefined,
         sortOrder: form.sortOrder 
       })
@@ -178,7 +178,7 @@ const handleSubmit = async () => {
         name: form.name,
         code: form.code,
         parentId: form.parentId || undefined,
-        leaderId: form.leaderId || undefined,
+        managerId: form.managerId || undefined,
         secondaryManagerId: form.secondaryManagerId || undefined,
         sortOrder: form.sortOrder
       })

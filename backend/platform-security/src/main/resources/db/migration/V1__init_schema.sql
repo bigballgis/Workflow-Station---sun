@@ -479,6 +479,23 @@ CREATE TABLE IF NOT EXISTS sys_function_unit_access (
 
 CREATE INDEX IF NOT EXISTS idx_fu_access_func_unit ON sys_function_unit_access(function_unit_id);
 
+-- =====================================================
+-- 22. Developer Role Permissions (sys_developer_role_permissions)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS sys_developer_role_permissions (
+    id VARCHAR(64) PRIMARY KEY,
+    role_id VARCHAR(64) NOT NULL,
+    permission VARCHAR(50) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_by VARCHAR(64),
+    CONSTRAINT fk_dev_role_perm_role FOREIGN KEY (role_id) REFERENCES sys_roles(id) ON DELETE CASCADE,
+    CONSTRAINT uk_dev_role_permission UNIQUE (role_id, permission)
+);
+
+CREATE INDEX IF NOT EXISTS idx_dev_role_perm_role ON sys_developer_role_permissions(role_id);
+
+COMMENT ON TABLE sys_developer_role_permissions IS 'Developer role permission mappings';
+
 -- Additional Comments
 COMMENT ON TABLE sys_dictionaries IS 'Data dictionaries';
 COMMENT ON TABLE sys_dictionary_items IS 'Dictionary items';

@@ -451,7 +451,21 @@ public class FunctionUnitController {
                 java.util.Map<String, Object> contentMap = new java.util.HashMap<>();
                 contentMap.put("id", content.getId());
                 contentMap.put("name", content.getContentName());
-                contentMap.put("data", content.getContentData());
+                
+                // 对于流程定义，尝试解码 Base64
+                String data = content.getContentData();
+                if (content.getContentType() == com.admin.enums.ContentType.PROCESS && data != null) {
+                    try {
+                        // 尝试 Base64 解码
+                        byte[] decoded = java.util.Base64.getDecoder().decode(data);
+                        data = new String(decoded, java.nio.charset.StandardCharsets.UTF_8);
+                        log.info("Decoded BPMN XML, length: {}", data.length());
+                    } catch (IllegalArgumentException e) {
+                        // 不是 Base64 编码，使用原始数据
+                        log.info("BPMN data is not Base64 encoded, using raw data");
+                    }
+                }
+                contentMap.put("data", data);
                 contentMap.put("type", content.getContentType().name());
                 
                 switch (content.getContentType()) {

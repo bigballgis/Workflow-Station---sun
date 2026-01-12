@@ -20,7 +20,11 @@ public interface FunctionUnitRepository extends JpaRepository<FunctionUnit, Long
     
     boolean existsByNameAndIdNot(String name, Long id);
     
+    boolean existsByCode(String code);
+    
     Optional<FunctionUnit> findByName(String name);
+    
+    Optional<FunctionUnit> findByCode(String code);
     
     Page<FunctionUnit> findByStatus(FunctionUnitStatus status, Pageable pageable);
 }

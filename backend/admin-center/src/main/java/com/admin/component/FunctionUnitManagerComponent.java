@@ -274,9 +274,10 @@ public class FunctionUnitManagerComponent {
      * 解析功能包内容
      */
     private FunctionPackageContent parsePackageContent(FunctionUnitImportRequest request) {
-        // 简化实现：从请求中提取元数据
-        // 优先使用请求中的 name 作为 code，否则从文件名提取
-        String code = request.getName() != null ? request.getName() : extractCodeFromFileName(request.getFileName());
+        // 优先使用请求中的code，如果没有则从文件名提取
+        String code = request.getCode() != null && !request.getCode().isEmpty() 
+                ? request.getCode() 
+                : extractCodeFromFileName(request.getFileName());
         String version = request.getVersion() != null ? request.getVersion() : "1.0.0";
         String name = request.getName() != null ? request.getName() : code;
         String description = request.getDescription();

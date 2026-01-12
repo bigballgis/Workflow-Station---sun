@@ -88,7 +88,7 @@
       </el-col>
     </el-row>
     
-    <DepartmentFormDialog v-model="dialogVisible" :department="currentDepartment" :parent="parentDepartment" @success="orgStore.fetchTree" />
+    <DepartmentFormDialog v-model="dialogVisible" :department="currentDepartment" :parent="parentDepartment" @success="handleFormSuccess" />
   </div>
 </template>
 
@@ -140,10 +140,30 @@ const showCreateDialog = (parent?: Department) => {
   dialogVisible.value = true
 }
 
-const showEditDialog = (dept: Department) => {
-  currentDepartment.value = dept
+const showEditDialog = async (dept: Department) => {
+  // 获取部门详情（包含managerId等完整信息）
+  try {
+    const detail = await organizationApi.getById(dept.id)
+    currentDepartment.value = detail
+  } catch (e) {
+    currentDepartment.value = dept
+  }
   parentDepartment.value = null
   dialogVisible.value = true
+}
+
+const handleFormSuccess = async () => {
+  await orgStore.fetchTree()
+  // 如果当前有选中的部门，刷新其详情
+  if (selectedDepartment.value) {
+    try {
+      const detail = await organizationApi.getById(selectedDepartment.value.id)
+      selectedDepartment.value = detail
+    } catch (e) {
+      // 部门可能已被删除
+      selectedDepartment.value = null
+    }
+  }
 }
 
 const handleDelete = async (dept: Department) => {

@@ -64,8 +64,7 @@ public class FunctionUnitIconPropertyTest {
                 .id(iconId)
                 .name("test-icon-" + iconId)
                 .category(IconCategory.GENERAL)
-                .fileType("svg")
-                .fileData("<svg></svg>".getBytes())
+                .svgContent("<svg></svg>")
                 .fileSize(11)
                 .build();
         
@@ -258,8 +257,7 @@ public class FunctionUnitIconPropertyTest {
                 .id(id)
                 .name(name)
                 .category(category)
-                .fileType("svg")
-                .fileData("<svg></svg>".getBytes())
+                .svgContent("<svg></svg>")
                 .fileSize(11)
                 .build());
     }

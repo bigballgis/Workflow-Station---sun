@@ -19,6 +19,9 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.security.SecureRandom;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -50,8 +53,12 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
                     "请使用其他名称");
         }
         
+        // 生成唯一编码
+        String code = generateUniqueCode();
+        
         FunctionUnit functionUnit = FunctionUnit.builder()
                 .name(request.getName())
+                .code(code)
                 .description(request.getDescription())
                 .status(FunctionUnitStatus.DRAFT)
                 .build();
@@ -63,6 +70,29 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         }
         
         return functionUnitRepository.save(functionUnit);
+    }
+    
+    /**
+     * 生成唯一的功能单元编码
+     * 格式：fu-{yyyyMMdd}-{random6chars}
+     */
+    private String generateUniqueCode() {
+        String datePart = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
+        SecureRandom random = new SecureRandom();
+        String chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+        
+        for (int attempt = 0; attempt < 10; attempt++) {
+            StringBuilder randomPart = new StringBuilder();
+            for (int i = 0; i < 6; i++) {
+                randomPart.append(chars.charAt(random.nextInt(chars.length())));
+            }
+            String code = "fu-" + datePart + "-" + randomPart;
+            if (!functionUnitRepository.existsByCode(code)) {
+                return code;
+            }
+        }
+        // 极端情况下使用时间戳
+        return "fu-" + datePart + "-" + System.currentTimeMillis() % 1000000;
     }
     
     @Override
@@ -180,9 +210,10 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         
         FunctionUnit source = getById(id);
         
-        // 创建新的功能单元
+        // 创建新的功能单元（生成新的唯一编码）
         FunctionUnit cloned = FunctionUnit.builder()
                 .name(newName)
+                .code(generateUniqueCode())
                 .description(source.getDescription())
                 .icon(source.getIcon())
                 .status(FunctionUnitStatus.DRAFT)
@@ -269,6 +300,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         
         return FunctionUnitResponse.builder()
                 .id(entity.getId())
+                .code(entity.getCode())
                 .name(entity.getName())
                 .description(entity.getDescription())
                 .iconId(entity.getIcon() != null ? entity.getIcon().getId() : null)

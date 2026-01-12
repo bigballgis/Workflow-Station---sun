@@ -4,9 +4,13 @@ import com.portal.dto.TaskCompleteRequest;
 import com.portal.dto.TaskInfo;
 import com.portal.entity.DelegationAudit;
 import com.portal.entity.DelegationRule;
+import com.portal.entity.ProcessHistory;
+import com.portal.entity.ProcessInstance;
 import com.portal.exception.PortalException;
 import com.portal.repository.DelegationAuditRepository;
 import com.portal.repository.DelegationRuleRepository;
+import com.portal.repository.ProcessHistoryRepository;
+import com.portal.repository.ProcessInstanceRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -29,6 +33,8 @@ public class TaskProcessComponent {
     private final TaskQueryComponent taskQueryComponent;
     private final DelegationRuleRepository delegationRuleRepository;
     private final DelegationAuditRepository delegationAuditRepository;
+    private final ProcessInstanceRepository processInstanceRepository;
+    private final ProcessHistoryRepository processHistoryRepository;
 
     /**
      * 认领任务
@@ -231,9 +237,71 @@ public class TaskProcessComponent {
      * 处理审批操作
      */
     private void handleApproval(TaskInfo task, TaskCompleteRequest request, String userId) {
-        // 实际应调用workflow-engine-core完成任务
-        taskQueryComponent.removeTask(task.getTaskId());
-        log.info("用户 {} {} 了任务 {}", userId, request.getAction(), task.getTaskId());
+        String taskId = task.getTaskId();
+        String action = request.getAction();
+        
+        // 如果是从数据库流程实例转换的任务，更新流程实例状态
+        if (taskId.startsWith("task-")) {
+            String processInstanceId = taskId.substring(5);
+            Optional<ProcessInstance> instanceOpt = processInstanceRepository.findById(processInstanceId);
+            
+            if (instanceOpt.isPresent()) {
+                ProcessInstance instance = instanceOpt.get();
+                
+                if ("APPROVE".equals(action)) {
+                    // 同意 - 流程完成
+                    instance.setStatus("COMPLETED");
+                    instance.setEndTime(LocalDateTime.now());
+                    instance.setCurrentNode("已完成");
+                    instance.setCurrentAssignee(null);
+                    instance.setCandidateUsers(null);
+                    log.info("流程实例 {} 已完成，审批人: {}", processInstanceId, userId);
+                } else if ("REJECT".equals(action)) {
+                    // 拒绝 - 流程被拒绝
+                    instance.setStatus("REJECTED");
+                    instance.setEndTime(LocalDateTime.now());
+                    instance.setCurrentNode("已拒绝");
+                    instance.setCurrentAssignee(null);
+                    instance.setCandidateUsers(null);
+                    log.info("流程实例 {} 已被拒绝，审批人: {}", processInstanceId, userId);
+                }
+                
+                processInstanceRepository.save(instance);
+                
+                // 记录审批历史
+                ProcessHistory approvalHistory = ProcessHistory.builder()
+                        .processInstanceId(processInstanceId)
+                        .taskId(taskId)
+                        .activityId(task.getTaskName())
+                        .activityName(task.getTaskName())
+                        .activityType("userTask")
+                        .operationType(action)
+                        .operatorId(userId)
+                        .operatorName(userId)
+                        .comment(request.getComment())
+                        .build();
+                processHistoryRepository.save(approvalHistory);
+                
+                // 如果流程结束，记录结束历史
+                if ("COMPLETED".equals(instance.getStatus()) || "REJECTED".equals(instance.getStatus())) {
+                    ProcessHistory endHistory = ProcessHistory.builder()
+                            .processInstanceId(processInstanceId)
+                            .activityId("endEvent")
+                            .activityName("流程结束")
+                            .activityType("endEvent")
+                            .operationType(instance.getStatus())
+                            .operatorId(userId)
+                            .operatorName(userId)
+                            .comment("APPROVE".equals(action) ? "审批通过" : "审批拒绝")
+                            .build();
+                    processHistoryRepository.save(endHistory);
+                }
+            }
+        }
+        
+        // 从内存中移除任务
+        taskQueryComponent.removeTask(taskId);
+        log.info("用户 {} {} 了任务 {}", userId, action, taskId);
     }
 
     /**
