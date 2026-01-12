@@ -1,0 +1,29 @@
+# Docker profile configuration for admin-center
+# Overrides default settings for Docker environment
+
+spring:
+  datasource:
+    url: jdbc:postgresql://postgres:5432/workflow_platform
+    username: platform
+    password: ${POSTGRES_PASSWORD:platform123}
+
+  data:
+    redis:
+      host: redis
+      password: ${REDIS_PASSWORD:redis123}
+
+  kafka:
+    bootstrap-servers: kafka:29092
+
+# Workflow Engine Configuration for Docker network
+# In Docker, use service name and internal port
+workflow-engine:
+  url: http://platform-workflow-engine:8080
+  enabled: true
+
+# Logging - reduce verbosity in Docker
+logging:
+  level:
+    root: INFO
+    com.admin: INFO
+    org.hibernate.SQL: WARN

@@ -26,6 +26,7 @@ public enum AuditOperationType {
     CLAIM_TASK("认领任务"),
     DELEGATE_TASK("委托任务"),
     COMPLETE_TASK("完成任务"),
+    RETURN_TASK("回退任务"),
     DELETE_TASK("删除任务"),
     UPDATE_TASK("更新任务"),
     

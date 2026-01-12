@@ -145,3 +145,8 @@ admin:
     user-ttl-minutes: 30
     permission-ttl-minutes: 60
     dictionary-ttl-minutes: 120
+
+# Workflow Engine Configuration
+workflow-engine:
+  url: http://localhost:8091
+  enabled: true

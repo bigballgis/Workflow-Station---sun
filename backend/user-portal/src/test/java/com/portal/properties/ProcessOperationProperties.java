@@ -1,5 +1,6 @@
 package com.portal.properties;
 
+import com.portal.client.WorkflowEngineClient;
 import com.portal.component.FunctionUnitAccessComponent;
 import com.portal.component.ProcessComponent;
 import com.portal.dto.ProcessDefinitionInfo;
@@ -9,6 +10,7 @@ import com.portal.entity.FavoriteProcess;
 import com.portal.entity.ProcessDraft;
 import com.portal.repository.FavoriteProcessRepository;
 import com.portal.repository.ProcessDraftRepository;
+import com.portal.repository.ProcessHistoryRepository;
 import com.portal.repository.ProcessInstanceRepository;
 import net.jqwik.api.*;
 import net.jqwik.api.lifecycle.BeforeTry;
@@ -21,22 +23,63 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
-
 class ProcessOperationProperties {
 
     private ProcessComponent processComponent;
     private FavoriteProcessRepository favoriteProcessRepository;
     private ProcessDraftRepository processDraftRepository;
     private ProcessInstanceRepository processInstanceRepository;
+    private ProcessHistoryRepository processHistoryRepository;
     private FunctionUnitAccessComponent functionUnitAccessComponent;
+    private WorkflowEngineClient workflowEngineClient;
 
     @BeforeTry
     void setUp() {
         favoriteProcessRepository = Mockito.mock(FavoriteProcessRepository.class);
         processDraftRepository = Mockito.mock(ProcessDraftRepository.class);
         processInstanceRepository = Mockito.mock(ProcessInstanceRepository.class);
+        processHistoryRepository = Mockito.mock(ProcessHistoryRepository.class);
         functionUnitAccessComponent = Mockito.mock(FunctionUnitAccessComponent.class);
-        processComponent = new ProcessComponent(favoriteProcessRepository, processDraftRepository, processInstanceRepository, functionUnitAccessComponent);
+        workflowEngineClient = Mockito.mock(WorkflowEngineClient.class);
+        
+        // 使用 Spy 来 mock getFunctionUnitContent 方法
+        processComponent = Mockito.spy(new ProcessComponent(favoriteProcessRepository, processDraftRepository, processInstanceRepository, processHistoryRepository, functionUnitAccessComponent, workflowEngineClient));
+        
+        // Mock getFunctionUnitContent 返回包含 BPMN XML 的内容
+        String mockBpmnXml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><bpmn:definitions></bpmn:definitions>";
+        Map<String, Object> mockContent = new HashMap<>();
+        mockContent.put("name", "测试流程");
+        mockContent.put("processes", List.of(Map.of("data", mockBpmnXml)));
+        doReturn(mockContent).when(processComponent).getFunctionUnitContent(any(String.class));
+        
+        // Mock WorkflowEngineClient 为可用状态
+        when(workflowEngineClient.isAvailable()).thenReturn(true);
+        
+        // Mock 部署流程成功
+        when(workflowEngineClient.deployProcess(any(), any(), any()))
+                .thenReturn(Optional.of(Map.of("success", true, "deploymentId", "deploy-123")));
+        
+        // Mock 启动流程成功
+        when(workflowEngineClient.startProcess(any(), any(), any(), any()))
+                .thenAnswer(invocation -> {
+                    String processKey = invocation.getArgument(0);
+                    String businessKey = invocation.getArgument(1);
+                    String startUserId = invocation.getArgument(2);
+                    return Optional.of(Map.of(
+                            "success", true,
+                            "data", Map.of(
+                                    "processInstanceId", "pi-" + System.currentTimeMillis(),
+                                    "processDefinitionId", "pd-" + processKey,
+                                    "processDefinitionKey", processKey,
+                                    "businessKey", businessKey,
+                                    "startUserId", startUserId
+                            )
+                    ));
+                });
+        
+        // Mock FunctionUnitAccessComponent 返回功能单元内容（包含 BPMN XML）
+        when(functionUnitAccessComponent.resolveFunctionUnitId(any()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
     }
 
     @Property(tries = 20)

@@ -12,6 +12,7 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * Data initializer for test users in development environment.
@@ -33,39 +34,39 @@ public class DataInitializer {
             
             // Admin Center users (password: admin123)
             createUserIfNotExists("super_admin", "admin123", "超级管理员", "super_admin@example.com", 
-                    "ADMIN", Set.of("SUPER_ADMIN"));
+                    "DEPT-IT", Set.of("SUPER_ADMIN"));
             createUserIfNotExists("system_admin", "admin123", "系统管理员", "system_admin@example.com", 
-                    "ADMIN", Set.of("SYSTEM_ADMIN"));
+                    "DEPT-IT", Set.of("SYSTEM_ADMIN"));
             createUserIfNotExists("tenant_admin", "admin123", "租户管理员", "tenant_admin@example.com", 
-                    "ADMIN", Set.of("TENANT_ADMIN"));
+                    "DEPT-IT", Set.of("TENANT_ADMIN"));
             createUserIfNotExists("auditor", "admin123", "审计员", "auditor@example.com", 
-                    "ADMIN", Set.of("AUDITOR"));
+                    "DEPT-COMPLIANCE", Set.of("AUDITOR"));
 
             // Developer Workstation users (password: dev123)
             createUserIfNotExists("dev_lead", "dev123", "开发组长", "dev_lead@example.com", 
-                    "DEV", Set.of("DEV_LEAD", "DEVELOPER"));
+                    "DEPT-IT", Set.of("DEV_LEAD", "DEVELOPER"));
             createUserIfNotExists("senior_dev", "dev123", "高级开发", "senior_dev@example.com", 
-                    "DEV", Set.of("DEVELOPER"));
+                    "DEPT-IT", Set.of("DEVELOPER"));
             createUserIfNotExists("developer", "dev123", "开发人员", "developer@example.com", 
-                    "DEV", Set.of("DEVELOPER"));
+                    "DEPT-IT", Set.of("DEVELOPER"));
             createUserIfNotExists("designer", "dev123", "流程设计师", "designer@example.com", 
-                    "DEV", Set.of("DESIGNER"));
+                    "DEPT-IT", Set.of("DESIGNER"));
             createUserIfNotExists("tester", "dev123", "测试人员", "tester@example.com", 
-                    "QA", Set.of("TESTER"));
+                    "DEPT-IT", Set.of("TESTER"));
 
             // User Portal users (password: user123)
             createUserIfNotExists("manager", "user123", "部门经理", "manager@example.com", 
-                    "SALES", Set.of("MANAGER", "USER"));
+                    "DEPT-OPERATIONS", Set.of("MANAGER", "USER"));
             createUserIfNotExists("team_lead", "user123", "团队主管", "team_lead@example.com", 
-                    "SALES", Set.of("TEAM_LEAD", "USER"));
+                    "DEPT-OPERATIONS", Set.of("TEAM_LEAD", "USER"));
             createUserIfNotExists("employee_a", "user123", "员工张三", "employee_a@example.com", 
-                    "SALES", Set.of("USER"));
+                    "DEPT-OPERATIONS", Set.of("USER"));
             createUserIfNotExists("employee_b", "user123", "员工李四", "employee_b@example.com", 
-                    "SALES", Set.of("USER"));
+                    "DEPT-OPERATIONS", Set.of("USER"));
             createUserIfNotExists("hr_staff", "user123", "HR专员", "hr_staff@example.com", 
-                    "HR", Set.of("HR", "USER"));
+                    "DEPT-HQ", Set.of("HR", "USER"));
             createUserIfNotExists("finance", "user123", "财务人员", "finance@example.com", 
-                    "FINANCE", Set.of("FINANCE", "USER"));
+                    "DEPT-TREASURY", Set.of("FINANCE", "USER"));
 
             log.info("Test users initialization completed. Total users: {}", userRepository.count());
         };
@@ -75,17 +76,19 @@ public class DataInitializer {
                                         String email, String departmentId, Set<String> roles) {
         if (!userRepository.existsByUsername(username)) {
             User user = User.builder()
+                    .id(UUID.randomUUID().toString())
                     .username(username)
                     .passwordHash(passwordEncoder.encode(password))
                     .displayName(displayName)
+                    .fullName(displayName)
                     .email(email)
                     .departmentId(departmentId)
                     .status(UserStatus.ACTIVE)
                     .language("zh_CN")
-                    .roles(roles)
+                    // Don't set roles here - the sys_user_roles table has a different structure
                     .build();
             userRepository.save(user);
-            log.debug("Created test user: {} with roles: {}", username, roles);
+            log.debug("Created test user: {} (roles should be assigned separately)", username);
         } else {
             log.debug("User {} already exists, skipping", username);
         }

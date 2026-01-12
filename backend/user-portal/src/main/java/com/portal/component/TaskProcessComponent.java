@@ -1,22 +1,20 @@
 package com.portal.component;
 
+import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.TaskCompleteRequest;
 import com.portal.dto.TaskInfo;
 import com.portal.entity.DelegationAudit;
 import com.portal.entity.DelegationRule;
-import com.portal.entity.ProcessHistory;
-import com.portal.entity.ProcessInstance;
 import com.portal.exception.PortalException;
 import com.portal.repository.DelegationAuditRepository;
 import com.portal.repository.DelegationRuleRepository;
-import com.portal.repository.ProcessHistoryRepository;
-import com.portal.repository.ProcessInstanceRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -24,6 +22,8 @@ import java.util.Optional;
 /**
  * 任务处理组件
  * 支持任务认领、完成、转办、委托等操作
+ * 
+ * 通过 WorkflowEngineClient 调用 Flowable 引擎
  */
 @Slf4j
 @Component
@@ -33,53 +33,65 @@ public class TaskProcessComponent {
     private final TaskQueryComponent taskQueryComponent;
     private final DelegationRuleRepository delegationRuleRepository;
     private final DelegationAuditRepository delegationAuditRepository;
-    private final ProcessInstanceRepository processInstanceRepository;
-    private final ProcessHistoryRepository processHistoryRepository;
+    private final WorkflowEngineClient workflowEngineClient;
 
     /**
      * 认领任务
+     * 通过 WorkflowEngineClient 调用 Flowable 引擎
      */
     @Transactional
     public TaskInfo claimTask(String taskId, String userId) {
+        if (!workflowEngineClient.isAvailable()) {
+            throw new IllegalStateException("Flowable 引擎不可用，请检查 workflow-engine-core 服务是否启动");
+        }
+        
+        log.info("Using Flowable engine to claim task: {} by user: {}", taskId, userId);
+        Optional<Map<String, Object>> result = workflowEngineClient.claimTask(taskId, userId);
+        
+        if (result.isEmpty()) {
+            throw new PortalException("500", "认领任务失败: " + taskId);
+        }
+        
+        Map<String, Object> data = result.get();
+        if (!Boolean.TRUE.equals(data.get("success"))) {
+            String message = data.get("message") != null ? (String) data.get("message") : "认领任务失败";
+            throw new PortalException("500", message);
+        }
+        
+        // 任务状态已在 Flowable 中更新，重新获取最新状态
         TaskInfo task = getTaskOrThrow(taskId);
-
-        // 验证任务是否可以被认领
-        if ("USER".equals(task.getAssignmentType())) {
-            throw new PortalException("400", "直接分配的任务不需要认领");
-        }
-
-        // 验证用户是否有权限认领
-        if (!canClaimTask(task, userId)) {
-            throw new PortalException("403", "您没有权限认领此任务");
-        }
-
-        // 更新任务分配
-        task.setAssignmentType("USER");
-        task.setAssignee(userId);
-        taskQueryComponent.addTask(task);
-
-        log.info("用户 {} 认领了任务 {}", userId, taskId);
+        
+        log.info("Task {} claimed via Flowable by user {}", taskId, userId);
         return task;
     }
 
     /**
      * 取消认领任务
+     * 通过 WorkflowEngineClient 调用 Flowable 引擎
      */
     @Transactional
     public TaskInfo unclaimTask(String taskId, String userId, String originalAssignmentType, String originalAssignee) {
+        if (!workflowEngineClient.isAvailable()) {
+            throw new IllegalStateException("Flowable 引擎不可用，请检查 workflow-engine-core 服务是否启动");
+        }
+        
+        log.info("Using Flowable engine to unclaim task: {} by user: {}", taskId, userId);
+        Optional<Map<String, Object>> result = workflowEngineClient.unclaimTask(taskId, userId);
+        
+        if (result.isEmpty()) {
+            throw new PortalException("500", "取消认领任务失败: " + taskId);
+        }
+        
+        Map<String, Object> data = result.get();
+        if (!Boolean.TRUE.equals(data.get("success"))) {
+            String message = data.get("message") != null ? (String) data.get("message") : "取消认领任务失败";
+            throw new PortalException("500", message);
+        }
+        
+        // 任务状态已在 Flowable 中更新，重新获取最新状态
         TaskInfo task = getTaskOrThrow(taskId);
 
-        // 验证是否是当前处理人
-        if (!userId.equals(task.getAssignee())) {
-            throw new PortalException("403", "只有当前处理人才能取消认领");
-        }
-
-        // 恢复原始分配
-        task.setAssignmentType(originalAssignmentType);
-        task.setAssignee(originalAssignee);
-        taskQueryComponent.addTask(task);
-
-        log.info("用户 {} 取消认领了任务 {}", userId, taskId);
+        log.info("Task {} unclaimed via Flowable by user {}", taskId, userId);
         return task;
     }
 
@@ -108,23 +120,27 @@ public class TaskProcessComponent {
 
     /**
      * 委托任务
+     * 通过 WorkflowEngineClient 调用 Flowable 引擎
      */
     @Transactional
     public void delegateTask(String taskId, String delegatorId, String delegateId, String reason) {
-        TaskInfo task = getTaskOrThrow(taskId);
-
-        // 验证委托人是否有权限
-        if (!canProcessTask(task, delegatorId)) {
-            throw new PortalException("403", "您没有权限委托此任务");
+        if (!workflowEngineClient.isAvailable()) {
+            throw new IllegalStateException("Flowable 引擎不可用，请检查 workflow-engine-core 服务是否启动");
         }
-
-        // 更新任务
-        task.setDelegatorId(delegatorId);
-        task.setDelegatorName(delegatorId); // 实际应查询用户名
-        task.setAssignee(delegateId);
-        task.setAssignmentType("DELEGATED");
-        taskQueryComponent.addTask(task);
-
+        
+        log.info("Using Flowable engine to delegate task: {} from {} to {}", taskId, delegatorId, delegateId);
+        Optional<Map<String, Object>> result = workflowEngineClient.delegateTask(taskId, delegatorId, delegateId, reason);
+        
+        if (result.isEmpty()) {
+            throw new PortalException("500", "委托任务失败: " + taskId);
+        }
+        
+        Map<String, Object> data = result.get();
+        if (!Boolean.TRUE.equals(data.get("success"))) {
+            String message = data.get("message") != null ? (String) data.get("message") : "委托任务失败";
+            throw new PortalException("500", message);
+        }
+        
         // 记录审计日志
         DelegationAudit audit = DelegationAudit.builder()
                 .delegatorId(delegatorId)
@@ -135,28 +151,32 @@ public class TaskProcessComponent {
                 .operationDetail(reason)
                 .build();
         delegationAuditRepository.save(audit);
-
-        log.info("用户 {} 将任务 {} 委托给 {}", delegatorId, taskId, delegateId);
+        
+        log.info("Task {} delegated via Flowable from {} to {}", taskId, delegatorId, delegateId);
     }
 
     /**
      * 转办任务
+     * 通过 WorkflowEngineClient 调用 Flowable 引擎
      */
     @Transactional
     public void transferTask(String taskId, String fromUserId, String toUserId, String reason) {
-        TaskInfo task = getTaskOrThrow(taskId);
-
-        // 验证转办人是否有权限
-        if (!canProcessTask(task, fromUserId)) {
-            throw new PortalException("403", "您没有权限转办此任务");
+        if (!workflowEngineClient.isAvailable()) {
+            throw new IllegalStateException("Flowable 引擎不可用，请检查 workflow-engine-core 服务是否启动");
         }
-
-        // 更新任务
-        task.setAssignee(toUserId);
-        task.setAssignmentType("USER");
-        task.setDelegatorId(null);
-        task.setDelegatorName(null);
-        taskQueryComponent.addTask(task);
+        
+        log.info("Using Flowable engine to transfer task: {} from {} to {}", taskId, fromUserId, toUserId);
+        Optional<Map<String, Object>> result = workflowEngineClient.transferTask(taskId, fromUserId, toUserId, reason);
+        
+        if (result.isEmpty()) {
+            throw new PortalException("500", "转办任务失败: " + taskId);
+        }
+        
+        Map<String, Object> data = result.get();
+        if (!Boolean.TRUE.equals(data.get("success"))) {
+            String message = data.get("message") != null ? (String) data.get("message") : "转办任务失败";
+            throw new PortalException("500", message);
+        }
 
         // 记录审计日志
         DelegationAudit audit = DelegationAudit.builder()
@@ -169,7 +189,7 @@ public class TaskProcessComponent {
                 .build();
         delegationAuditRepository.save(audit);
 
-        log.info("用户 {} 将任务 {} 转办给 {}", fromUserId, taskId, toUserId);
+        log.info("Task {} transferred via Flowable from {} to {}", taskId, fromUserId, toUserId);
     }
 
     /**
@@ -235,73 +255,38 @@ public class TaskProcessComponent {
 
     /**
      * 处理审批操作
+     * 通过 WorkflowEngineClient 调用 Flowable 引擎
      */
     private void handleApproval(TaskInfo task, TaskCompleteRequest request, String userId) {
         String taskId = task.getTaskId();
         String action = request.getAction();
         
-        // 如果是从数据库流程实例转换的任务，更新流程实例状态
-        if (taskId.startsWith("task-")) {
-            String processInstanceId = taskId.substring(5);
-            Optional<ProcessInstance> instanceOpt = processInstanceRepository.findById(processInstanceId);
-            
-            if (instanceOpt.isPresent()) {
-                ProcessInstance instance = instanceOpt.get();
-                
-                if ("APPROVE".equals(action)) {
-                    // 同意 - 流程完成
-                    instance.setStatus("COMPLETED");
-                    instance.setEndTime(LocalDateTime.now());
-                    instance.setCurrentNode("已完成");
-                    instance.setCurrentAssignee(null);
-                    instance.setCandidateUsers(null);
-                    log.info("流程实例 {} 已完成，审批人: {}", processInstanceId, userId);
-                } else if ("REJECT".equals(action)) {
-                    // 拒绝 - 流程被拒绝
-                    instance.setStatus("REJECTED");
-                    instance.setEndTime(LocalDateTime.now());
-                    instance.setCurrentNode("已拒绝");
-                    instance.setCurrentAssignee(null);
-                    instance.setCandidateUsers(null);
-                    log.info("流程实例 {} 已被拒绝，审批人: {}", processInstanceId, userId);
-                }
-                
-                processInstanceRepository.save(instance);
-                
-                // 记录审批历史
-                ProcessHistory approvalHistory = ProcessHistory.builder()
-                        .processInstanceId(processInstanceId)
-                        .taskId(taskId)
-                        .activityId(task.getTaskName())
-                        .activityName(task.getTaskName())
-                        .activityType("userTask")
-                        .operationType(action)
-                        .operatorId(userId)
-                        .operatorName(userId)
-                        .comment(request.getComment())
-                        .build();
-                processHistoryRepository.save(approvalHistory);
-                
-                // 如果流程结束，记录结束历史
-                if ("COMPLETED".equals(instance.getStatus()) || "REJECTED".equals(instance.getStatus())) {
-                    ProcessHistory endHistory = ProcessHistory.builder()
-                            .processInstanceId(processInstanceId)
-                            .activityId("endEvent")
-                            .activityName("流程结束")
-                            .activityType("endEvent")
-                            .operationType(instance.getStatus())
-                            .operatorId(userId)
-                            .operatorName(userId)
-                            .comment("APPROVE".equals(action) ? "审批通过" : "审批拒绝")
-                            .build();
-                    processHistoryRepository.save(endHistory);
-                }
-            }
+        if (!workflowEngineClient.isAvailable()) {
+            throw new IllegalStateException("Flowable 引擎不可用，请检查 workflow-engine-core 服务是否启动");
         }
         
-        // 从内存中移除任务
-        taskQueryComponent.removeTask(taskId);
-        log.info("用户 {} {} 了任务 {}", userId, action, taskId);
+        log.info("Using Flowable engine to complete task: {} with action: {}", taskId, action);
+        
+        Map<String, Object> variables = new HashMap<>();
+        variables.put("action", action);
+        variables.put("comment", request.getComment());
+        if (request.getFormData() != null) {
+            variables.putAll(request.getFormData());
+        }
+        
+        Optional<Map<String, Object>> result = workflowEngineClient.completeTask(taskId, userId, action, variables);
+        
+        if (result.isEmpty()) {
+            throw new PortalException("500", "完成任务失败: " + taskId);
+        }
+        
+        Map<String, Object> data = result.get();
+        if (!Boolean.TRUE.equals(data.get("success"))) {
+            String message = data.get("message") != null ? (String) data.get("message") : "完成任务失败";
+            throw new PortalException("500", message);
+        }
+        
+        log.info("Task {} completed via Flowable by user {} with action {}", taskId, userId, action);
     }
 
     /**
@@ -328,26 +313,105 @@ public class TaskProcessComponent {
 
     /**
      * 处理回退操作
+     * 通过 WorkflowEngineClient 调用 Flowable 引擎
      */
     private void handleReturn(TaskInfo task, TaskCompleteRequest request, String userId) {
-        // 实际应调用workflow-engine-core回退任务
-        log.info("用户 {} 回退了任务 {} 到节点 {}", userId, task.getTaskId(), request.getReturnActivityId());
+        String taskId = task.getTaskId();
+        String targetActivityId = request.getReturnActivityId();
+        
+        if (targetActivityId == null || targetActivityId.isEmpty()) {
+            throw new PortalException("400", "回退目标节点不能为空");
+        }
+        
+        if (!workflowEngineClient.isAvailable()) {
+            throw new IllegalStateException("Flowable 引擎不可用，请检查 workflow-engine-core 服务是否启动");
+        }
+        
+        log.info("Using Flowable engine to return task: {} to activity: {}", taskId, targetActivityId);
+        Optional<Map<String, Object>> result = workflowEngineClient.returnTask(
+            taskId, targetActivityId, userId, request.getComment());
+        
+        if (result.isEmpty()) {
+            throw new PortalException("500", "回退任务失败: " + taskId);
+        }
+        
+        Map<String, Object> data = result.get();
+        if (!Boolean.TRUE.equals(data.get("success"))) {
+            String message = data.get("message") != null ? (String) data.get("message") : "回退任务失败";
+            throw new PortalException("500", message);
+        }
+        
+        // 记录审计日志
+        DelegationAudit audit = DelegationAudit.builder()
+                .delegatorId(userId)
+                .delegateId(targetActivityId)
+                .taskId(taskId)
+                .operationType("RETURN_TASK")
+                .operationResult("SUCCESS")
+                .operationDetail(request.getComment())
+                .build();
+        delegationAuditRepository.save(audit);
+        
+        log.info("Task {} returned via Flowable to activity {} by user {}", taskId, targetActivityId, userId);
     }
 
     /**
-     * 检查用户是否在虚拟组中（模拟实现）
+     * 检查用户是否在虚拟组中
+     * 通过 WorkflowEngineClient 调用 workflow-engine-core 验证
      */
     private boolean isUserInVirtualGroup(String userId, String groupId) {
-        // 模拟实现，实际应调用admin-center服务
-        return groupId.contains(userId) || "common_group".equals(groupId);
+        if (!workflowEngineClient.isAvailable()) {
+            log.warn("Workflow engine not available, cannot verify virtual group membership");
+            return false;
+        }
+        
+        try {
+            Optional<Boolean> result = workflowEngineClient.checkTaskPermission(groupId, userId);
+            if (result.isPresent()) {
+                return result.get();
+            }
+            
+            // 如果无法通过任务权限检查，尝试获取用户的虚拟组列表
+            Optional<Map<String, Object>> permissions = workflowEngineClient.getUserTaskPermissions(userId);
+            if (permissions.isPresent()) {
+                @SuppressWarnings("unchecked")
+                List<String> groupIds = (List<String>) permissions.get().get("virtualGroupIds");
+                if (groupIds != null) {
+                    return groupIds.contains(groupId);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to check virtual group membership: {}", e.getMessage());
+        }
+        
+        return false;
     }
 
     /**
-     * 检查用户是否有部门角色（模拟实现）
+     * 检查用户是否有部门角色
+     * 通过 WorkflowEngineClient 调用 workflow-engine-core 验证
      */
     private boolean isUserHasDeptRole(String userId, String deptRoleId) {
-        // 模拟实现，实际应调用admin-center服务
-        return deptRoleId.contains(userId) || "common_role".equals(deptRoleId);
+        if (!workflowEngineClient.isAvailable()) {
+            log.warn("Workflow engine not available, cannot verify department role");
+            return false;
+        }
+        
+        try {
+            // 获取用户的部门角色列表
+            Optional<Map<String, Object>> permissions = workflowEngineClient.getUserTaskPermissions(userId);
+            if (permissions.isPresent()) {
+                @SuppressWarnings("unchecked")
+                List<String> deptRoles = (List<String>) permissions.get().get("departmentRoles");
+                if (deptRoles != null) {
+                    return deptRoles.contains(deptRoleId);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to check department role: {}", e.getMessage());
+        }
+        
+        return false;
     }
 
     /**

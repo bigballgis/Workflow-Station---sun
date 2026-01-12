@@ -1,5 +1,6 @@
 package com.portal.component;
 
+import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.PageResponse;
 import com.portal.dto.TaskInfo;
 import com.portal.dto.TaskQueryRequest;
@@ -28,6 +29,8 @@ import java.util.stream.Collectors;
 /**
  * 任务查询组件
  * 支持多维度任务查询：直接分配、虚拟组、部门角色、委托任务
+ * 
+ * 注意：所有任务查询必须通过 Flowable 引擎完成，不允许本地回退实现
  */
 @Slf4j
 @Component
@@ -37,58 +40,73 @@ public class TaskQueryComponent {
     private final DelegationRuleRepository delegationRuleRepository;
     private final ProcessInstanceRepository processInstanceRepository;
     private final ProcessHistoryRepository processHistoryRepository;
-
-    // 模拟的任务数据存储（实际应集成workflow-engine-core）
-    private final Map<String, TaskInfo> taskStore = new HashMap<>();
+    private final WorkflowEngineClient workflowEngineClient;
 
     @PostConstruct
     public void init() {
-        initTestData();
-        log.info("TaskQueryComponent initialized with {} test tasks", taskStore.size());
+        log.info("TaskQueryComponent initialized, workflow engine available: {}", workflowEngineClient.isAvailable());
     }
 
     /**
      * 查询用户的待办任务
+     * 
+     * 通过 Flowable 引擎获取任务列表，支持多维度查询
      */
     public PageResponse<TaskInfo> queryTasks(TaskQueryRequest request) {
+        // 检查 Flowable 引擎是否可用
+        if (!workflowEngineClient.isAvailable()) {
+            throw new IllegalStateException("Flowable 引擎不可用，请检查 workflow-engine-core 服务是否启动");
+        }
+        
         String userId = request.getUserId();
         List<String> assignmentTypes = request.getAssignmentTypes();
+        int page = request.getPage() != null ? request.getPage() : 0;
+        int size = request.getSize() != null ? request.getSize() : 20;
         
         List<TaskInfo> allTasks = new ArrayList<>();
 
-        // 1. 从数据库查询分配给用户或候选用户包含用户的流程实例
+        // 1. 从 Flowable 获取任务
         try {
-            Pageable pageable = PageRequest.of(0, 100); // 获取前100条
-            Page<ProcessInstance> processInstances = processInstanceRepository
-                    .findByAssigneeOrCandidateAndStatus(userId, "RUNNING", pageable);
+            // 获取用户所属的虚拟组和部门角色
+            List<String> groupIds = getUserVirtualGroups(userId);
+            List<String> deptRoles = getUserDeptRoles(userId);
             
-            for (ProcessInstance instance : processInstances.getContent()) {
-                TaskInfo task = convertProcessInstanceToTask(instance, userId);
-                allTasks.add(task);
+            // 根据分配类型筛选决定查询方式
+            boolean includeGroups = assignmentTypes == null || assignmentTypes.isEmpty() 
+                || assignmentTypes.contains("VIRTUAL_GROUP") || assignmentTypes.contains("DEPT_ROLE");
+            
+            Optional<Map<String, Object>> result;
+            if (includeGroups) {
+                result = workflowEngineClient.getUserAllVisibleTasks(userId, groupIds, deptRoles, 0, 1000);
+            } else {
+                result = workflowEngineClient.getUserTasks(userId, 0, 1000);
             }
-            log.info("Found {} process instances for user {} from database", processInstances.getTotalElements(), userId);
+            
+            if (result.isPresent()) {
+                Map<String, Object> responseBody = result.get();
+                @SuppressWarnings("unchecked")
+                Map<String, Object> data = (Map<String, Object>) responseBody.get("data");
+                if (data != null) {
+                    @SuppressWarnings("unchecked")
+                    List<Map<String, Object>> tasks = (List<Map<String, Object>>) data.get("tasks");
+                    if (tasks != null) {
+                        for (Map<String, Object> taskMap : tasks) {
+                            TaskInfo taskInfo = convertMapToTaskInfo(taskMap);
+                            allTasks.add(taskInfo);
+                        }
+                    }
+                }
+                log.info("Found {} tasks from Flowable for user {}", allTasks.size(), userId);
+            }
         } catch (Exception e) {
-            log.warn("Failed to query process instances from database: {}", e.getMessage());
+            log.error("Failed to query tasks from Flowable: {}", e.getMessage(), e);
+            throw new IllegalStateException("从 Flowable 查询任务失败: " + e.getMessage(), e);
         }
 
-        // 2. 查询直接分配给用户的任务（模拟数据）
-        if (assignmentTypes == null || assignmentTypes.isEmpty() || assignmentTypes.contains("USER")) {
-            allTasks.addAll(queryDirectAssignedTasks(userId));
-        }
-
-        // 3. 查询虚拟组任务
-        if (assignmentTypes == null || assignmentTypes.isEmpty() || assignmentTypes.contains("VIRTUAL_GROUP")) {
-            allTasks.addAll(queryVirtualGroupTasks(userId));
-        }
-
-        // 4. 查询部门角色任务
-        if (assignmentTypes == null || assignmentTypes.isEmpty() || assignmentTypes.contains("DEPT_ROLE")) {
-            allTasks.addAll(queryDeptRoleTasks(userId));
-        }
-
-        // 5. 查询委托任务
+        // 2. 查询委托任务（委托信息存储在本地）
         if (assignmentTypes == null || assignmentTypes.isEmpty() || assignmentTypes.contains("DELEGATED")) {
-            allTasks.addAll(queryDelegatedTasks(userId));
+            List<TaskInfo> delegatedTasks = queryDelegatedTasks(userId);
+            allTasks.addAll(delegatedTasks);
         }
 
         // 去重
@@ -105,8 +123,6 @@ public class TaskQueryComponent {
         allTasks = applySorting(allTasks, request);
 
         // 分页
-        int page = request.getPage() != null ? request.getPage() : 0;
-        int size = request.getSize() != null ? request.getSize() : 20;
         int start = page * size;
         int end = Math.min(start + size, allTasks.size());
 
@@ -118,80 +134,60 @@ public class TaskQueryComponent {
     }
     
     /**
-     * 将流程实例转换为任务信息
+     * 将 Map 转换为 TaskInfo
      */
-    private TaskInfo convertProcessInstanceToTask(ProcessInstance instance, String userId) {
-        String assignmentType = "USER";
-        String assignee = instance.getCurrentAssignee();
-        
-        // 如果有候选用户，检查当前用户是否在候选列表中
-        if (instance.getCandidateUsers() != null && !instance.getCandidateUsers().isEmpty()) {
-            if (instance.getCandidateUsers().contains(userId)) {
-                assignmentType = "CANDIDATE";
-                assignee = userId;
-            }
-        }
-        
+    private TaskInfo convertMapToTaskInfo(Map<String, Object> taskMap) {
         return TaskInfo.builder()
-                .taskId("task-" + instance.getId())
-                .taskName(instance.getCurrentNode())
-                .description(instance.getBusinessKey())
-                .processInstanceId(instance.getId())
-                .processDefinitionKey(instance.getProcessDefinitionKey())
-                .processDefinitionName(instance.getProcessDefinitionName())
-                .assignmentType(assignmentType)
-                .assignee(assignee)
-                .assigneeName(assignee)
-                .initiatorId(instance.getStartUserId())
-                .initiatorName(instance.getStartUserName())
-                .priority(instance.getPriority() != null ? instance.getPriority() : "NORMAL")
-                .status("PENDING")
-                .createTime(instance.getStartTime())
-                .isOverdue(false)
-                .variables(instance.getVariables())
+                .taskId((String) taskMap.get("taskId"))
+                .taskName((String) taskMap.get("taskName"))
+                .description((String) taskMap.get("taskDescription"))
+                .processInstanceId((String) taskMap.get("processInstanceId"))
+                .processDefinitionKey((String) taskMap.get("processDefinitionId"))
+                .processDefinitionName((String) taskMap.get("processDefinitionId"))
+                .assignmentType(taskMap.get("assignmentType") != null ? taskMap.get("assignmentType").toString() : "USER")
+                .assignee((String) taskMap.get("currentAssignee"))
+                .assigneeName((String) taskMap.get("currentAssignee"))
+                .priority(taskMap.get("priority") != null ? taskMap.get("priority").toString() : "NORMAL")
+                .status((String) taskMap.get("status"))
+                .createTime(parseDateTime(taskMap.get("createdTime")))
+                .dueDate(parseDateTime(taskMap.get("dueDate")))
+                .isOverdue(taskMap.get("isOverdue") != null ? (Boolean) taskMap.get("isOverdue") : false)
+                .formKey((String) taskMap.get("formKey"))
                 .build();
     }
-
+    
     /**
-     * 查询直接分配给用户的任务
+     * 解析日期时间
      */
-    public List<TaskInfo> queryDirectAssignedTasks(String userId) {
-        return taskStore.values().stream()
-                .filter(t -> "USER".equals(t.getAssignmentType()))
-                .filter(t -> userId.equals(t.getAssignee()))
-                .collect(Collectors.toList());
-    }
-
-    /**
-     * 查询虚拟组任务
-     */
-    public List<TaskInfo> queryVirtualGroupTasks(String userId) {
-        // 获取用户所属的虚拟组
-        List<String> userGroups = getUserVirtualGroups(userId);
-        
-        return taskStore.values().stream()
-                .filter(t -> "VIRTUAL_GROUP".equals(t.getAssignmentType()))
-                .filter(t -> userGroups.contains(t.getAssignee()))
-                .collect(Collectors.toList());
-    }
-
-    /**
-     * 查询部门角色任务
-     */
-    public List<TaskInfo> queryDeptRoleTasks(String userId) {
-        // 获取用户的部门角色
-        List<String> userDeptRoles = getUserDeptRoles(userId);
-        
-        return taskStore.values().stream()
-                .filter(t -> "DEPT_ROLE".equals(t.getAssignmentType()))
-                .filter(t -> userDeptRoles.contains(t.getAssignee()))
-                .collect(Collectors.toList());
+    private LocalDateTime parseDateTime(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof LocalDateTime) {
+            return (LocalDateTime) value;
+        }
+        if (value instanceof String) {
+            try {
+                return LocalDateTime.parse((String) value);
+            } catch (Exception e) {
+                log.warn("Failed to parse datetime: {}", value);
+                return null;
+            }
+        }
+        return null;
     }
 
     /**
      * 查询委托给用户的任务
+     * 
+     * 委托信息存储在本地数据库，需要结合 Flowable 任务信息
      */
     public List<TaskInfo> queryDelegatedTasks(String userId) {
+        // 检查 Flowable 引擎是否可用
+        if (!workflowEngineClient.isAvailable()) {
+            throw new IllegalStateException("Flowable 引擎不可用，请检查 workflow-engine-core 服务是否启动");
+        }
+        
         // 获取委托给当前用户的有效委托规则
         List<DelegationRule> delegations = delegationRuleRepository
                 .findActiveDelegationsForDelegate(userId, LocalDateTime.now());
@@ -205,91 +201,80 @@ public class TaskQueryComponent {
                 .map(DelegationRule::getDelegatorId)
                 .collect(Collectors.toSet());
 
-        // 查询委托人的任务
-        return taskStore.values().stream()
-                .filter(t -> delegatorIds.contains(t.getAssignee()) || 
-                            delegatorIds.contains(t.getDelegatorId()))
-                .map(t -> {
-                    TaskInfo delegatedTask = TaskInfo.builder()
-                            .taskId(t.getTaskId())
-                            .taskName(t.getTaskName())
-                            .description(t.getDescription())
-                            .processInstanceId(t.getProcessInstanceId())
-                            .processDefinitionKey(t.getProcessDefinitionKey())
-                            .processDefinitionName(t.getProcessDefinitionName())
-                            .assignmentType("DELEGATED")
-                            .assignee(userId)
-                            .delegatorId(t.getAssignee())
-                            .delegatorName(t.getAssigneeName())
-                            .initiatorId(t.getInitiatorId())
-                            .initiatorName(t.getInitiatorName())
-                            .priority(t.getPriority())
-                            .status(t.getStatus())
-                            .createTime(t.getCreateTime())
-                            .dueDate(t.getDueDate())
-                            .isOverdue(t.getIsOverdue())
-                            .formKey(t.getFormKey())
-                            .variables(t.getVariables())
-                            .build();
-                    return delegatedTask;
-                })
-                .collect(Collectors.toList());
+        // 从 Flowable 获取委托人的任务
+        List<TaskInfo> delegatedTasks = new ArrayList<>();
+        for (String delegatorId : delegatorIds) {
+            try {
+                Optional<Map<String, Object>> result = workflowEngineClient.getUserTasks(delegatorId, 0, 100);
+                if (result.isPresent()) {
+                    Map<String, Object> responseBody = result.get();
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> data = (Map<String, Object>) responseBody.get("data");
+                    if (data != null) {
+                        @SuppressWarnings("unchecked")
+                        List<Map<String, Object>> tasks = (List<Map<String, Object>>) data.get("tasks");
+                        if (tasks != null) {
+                            for (Map<String, Object> taskMap : tasks) {
+                                TaskInfo taskInfo = convertMapToTaskInfo(taskMap);
+                                // 标记为委托任务
+                                TaskInfo delegatedTask = TaskInfo.builder()
+                                        .taskId(taskInfo.getTaskId())
+                                        .taskName(taskInfo.getTaskName())
+                                        .description(taskInfo.getDescription())
+                                        .processInstanceId(taskInfo.getProcessInstanceId())
+                                        .processDefinitionKey(taskInfo.getProcessDefinitionKey())
+                                        .processDefinitionName(taskInfo.getProcessDefinitionName())
+                                        .assignmentType("DELEGATED")
+                                        .assignee(userId)
+                                        .delegatorId(delegatorId)
+                                        .delegatorName(delegatorId)
+                                        .initiatorId(taskInfo.getInitiatorId())
+                                        .initiatorName(taskInfo.getInitiatorName())
+                                        .priority(taskInfo.getPriority())
+                                        .status(taskInfo.getStatus())
+                                        .createTime(taskInfo.getCreateTime())
+                                        .dueDate(taskInfo.getDueDate())
+                                        .isOverdue(taskInfo.getIsOverdue())
+                                        .formKey(taskInfo.getFormKey())
+                                        .variables(taskInfo.getVariables())
+                                        .build();
+                                delegatedTasks.add(delegatedTask);
+                            }
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Failed to get delegated tasks for delegator {}: {}", delegatorId, e.getMessage());
+            }
+        }
+        
+        return delegatedTasks;
     }
 
     /**
      * 获取任务详情
      */
     public Optional<TaskInfo> getTaskById(String taskId) {
-        // 首先从内存存储中查找
-        TaskInfo task = taskStore.get(taskId);
-        if (task != null) {
-            return Optional.of(task);
+        // 检查 Flowable 引擎是否可用
+        if (!workflowEngineClient.isAvailable()) {
+            throw new IllegalStateException("Flowable 引擎不可用，请检查 workflow-engine-core 服务是否启动");
         }
         
-        // 如果是从流程实例转换的任务ID（格式：task-{processInstanceId}）
-        if (taskId.startsWith("task-")) {
-            String processInstanceId = taskId.substring(5); // 移除 "task-" 前缀
-            try {
-                Optional<ProcessInstance> instanceOpt = processInstanceRepository.findById(processInstanceId);
-                if (instanceOpt.isPresent()) {
-                    ProcessInstance instance = instanceOpt.get();
-                    String userId = instance.getCurrentAssignee();
-                    if (userId == null && instance.getCandidateUsers() != null) {
-                        // 如果没有直接分配人，使用第一个候选人
-                        String[] candidates = instance.getCandidateUsers().split(",");
-                        if (candidates.length > 0) {
-                            userId = candidates[0].trim();
-                        }
-                    }
-                    return Optional.of(convertProcessInstanceToTask(instance, userId != null ? userId : ""));
+        try {
+            Optional<Map<String, Object>> result = workflowEngineClient.getTaskById(taskId);
+            if (result.isPresent()) {
+                Map<String, Object> responseBody = result.get();
+                @SuppressWarnings("unchecked")
+                Map<String, Object> data = (Map<String, Object>) responseBody.get("data");
+                if (data != null) {
+                    return Optional.of(convertMapToTaskInfo(data));
                 }
-            } catch (Exception e) {
-                log.warn("Failed to get process instance by id {}: {}", processInstanceId, e.getMessage());
             }
+        } catch (Exception e) {
+            log.warn("Failed to get task by id {} from Flowable: {}", taskId, e.getMessage());
         }
         
         return Optional.empty();
-    }
-
-    /**
-     * 添加任务（用于测试）
-     */
-    public void addTask(TaskInfo task) {
-        taskStore.put(task.getTaskId(), task);
-    }
-
-    /**
-     * 移除任务（用于测试）
-     */
-    public void removeTask(String taskId) {
-        taskStore.remove(taskId);
-    }
-
-    /**
-     * 清空任务（用于测试）
-     */
-    public void clearTasks() {
-        taskStore.clear();
     }
 
     /**
@@ -371,37 +356,83 @@ public class TaskQueryComponent {
     }
 
     /**
-     * 获取用户所属的虚拟组（模拟实现，实际应调用admin-center服务）
+     * 获取用户所属的虚拟组
+     * 通过 workflow-engine-core 调用 admin-center 获取
      */
+    @SuppressWarnings("unchecked")
     private List<String> getUserVirtualGroups(String userId) {
-        // 模拟返回用户所属的虚拟组
-        return List.of("group_" + userId, "common_group");
+        try {
+            Optional<Map<String, Object>> result = workflowEngineClient.getUserTaskPermissions(userId);
+            if (result.isPresent()) {
+                Map<String, Object> data = result.get();
+                List<String> groupIds = (List<String>) data.get("virtualGroupIds");
+                if (groupIds != null && !groupIds.isEmpty()) {
+                    return groupIds;
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to get user virtual groups from workflow engine: {}", e.getMessage());
+        }
+        // 返回空列表，不使用模拟数据
+        return Collections.emptyList();
     }
 
     /**
-     * 获取用户的部门角色（模拟实现，实际应调用admin-center服务）
+     * 获取用户的部门角色
+     * 通过 workflow-engine-core 调用 admin-center 获取
      */
+    @SuppressWarnings("unchecked")
     private List<String> getUserDeptRoles(String userId) {
-        // 模拟返回用户的部门角色
-        return List.of("dept_role_" + userId, "common_role");
+        try {
+            Optional<Map<String, Object>> result = workflowEngineClient.getUserTaskPermissions(userId);
+            if (result.isPresent()) {
+                Map<String, Object> data = result.get();
+                List<String> deptRoles = (List<String>) data.get("departmentRoles");
+                if (deptRoles != null && !deptRoles.isEmpty()) {
+                    return deptRoles;
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to get user department roles from workflow engine: {}", e.getMessage());
+        }
+        // 返回空列表，不使用模拟数据
+        return Collections.emptyList();
     }
 
     /**
      * 获取任务统计信息
      */
     public TaskStatistics getTaskStatistics(String userId) {
-        List<TaskInfo> allTasks = new ArrayList<>();
-        allTasks.addAll(queryDirectAssignedTasks(userId));
-        allTasks.addAll(queryVirtualGroupTasks(userId));
-        allTasks.addAll(queryDeptRoleTasks(userId));
-        allTasks.addAll(queryDelegatedTasks(userId));
-
-        // 去重
-        allTasks = allTasks.stream()
-                .collect(Collectors.toMap(TaskInfo::getTaskId, t -> t, (t1, t2) -> t1))
-                .values()
-                .stream()
-                .collect(Collectors.toList());
+        // 检查 Flowable 引擎是否可用
+        if (!workflowEngineClient.isAvailable()) {
+            throw new IllegalStateException("Flowable 引擎不可用，请检查 workflow-engine-core 服务是否启动");
+        }
+        
+        // 从 Flowable 获取任务统计
+        Optional<Map<String, Object>> countResult = workflowEngineClient.countUserTasks(userId);
+        
+        long totalCount = 0;
+        long overdueCount = 0;
+        
+        if (countResult.isPresent()) {
+            Map<String, Object> responseBody = countResult.get();
+            @SuppressWarnings("unchecked")
+            Map<String, Object> data = (Map<String, Object>) responseBody.get("data");
+            if (data != null) {
+                totalCount = data.get("totalCount") != null ? ((Number) data.get("totalCount")).longValue() : 0;
+                overdueCount = data.get("overdueCount") != null ? ((Number) data.get("overdueCount")).longValue() : 0;
+            }
+        }
+        
+        // 查询所有任务以获取详细统计
+        TaskQueryRequest request = TaskQueryRequest.builder()
+                .userId(userId)
+                .page(0)
+                .size(1000)
+                .build();
+        
+        PageResponse<TaskInfo> tasksResponse = queryTasks(request);
+        List<TaskInfo> allTasks = tasksResponse.getContent();
 
         LocalDate today = LocalDate.now();
         LocalDateTime todayStart = today.atStartOfDay();
@@ -412,7 +443,7 @@ public class TaskQueryComponent {
                 .groupTasks(allTasks.stream().filter(t -> "VIRTUAL_GROUP".equals(t.getAssignmentType())).count())
                 .deptRoleTasks(allTasks.stream().filter(t -> "DEPT_ROLE".equals(t.getAssignmentType())).count())
                 .delegatedTasks(allTasks.stream().filter(t -> "DELEGATED".equals(t.getAssignmentType())).count())
-                .overdueTasks(allTasks.stream().filter(t -> Boolean.TRUE.equals(t.getIsOverdue())).count())
+                .overdueTasks(overdueCount > 0 ? overdueCount : allTasks.stream().filter(t -> Boolean.TRUE.equals(t.getIsOverdue())).count())
                 .urgentTasks(allTasks.stream().filter(t -> "URGENT".equals(t.getPriority())).count())
                 .highPriorityTasks(allTasks.stream().filter(t -> "HIGH".equals(t.getPriority())).count())
                 .todayNewTasks(allTasks.stream()
@@ -426,12 +457,56 @@ public class TaskQueryComponent {
      * 获取任务流转历史
      */
     public List<TaskHistoryInfo> getTaskHistory(String taskId) {
+        // 检查 Flowable 引擎是否可用
+        if (!workflowEngineClient.isAvailable()) {
+            throw new IllegalStateException("Flowable 引擎不可用，请检查 workflow-engine-core 服务是否启动");
+        }
+        
         List<TaskHistoryInfo> history = new ArrayList<>();
         
-        // 如果是从数据库流程实例转换的任务，从数据库读取历史
-        if (taskId.startsWith("task-")) {
-            String processInstanceId = taskId.substring(5);
+        // 首先尝试从 Flowable 获取任务信息以获取 processInstanceId
+        Optional<TaskInfo> taskInfoOpt = getTaskById(taskId);
+        if (taskInfoOpt.isPresent()) {
+            String processInstanceId = taskInfoOpt.get().getProcessInstanceId();
+            
+            // 从 Flowable 获取任务历史
+            Optional<List<Map<String, Object>>> historyResult = workflowEngineClient.getTaskHistory(processInstanceId);
+            if (historyResult.isPresent()) {
+                List<Map<String, Object>> historyList = historyResult.get();
+                for (int i = 0; i < historyList.size(); i++) {
+                    Map<String, Object> historyMap = historyList.get(i);
+                    Long duration = null;
+                    if (i > 0) {
+                        // 计算持续时间
+                        LocalDateTime prevTime = parseDateTime(historyList.get(i-1).get("endTime"));
+                        LocalDateTime currTime = parseDateTime(historyMap.get("startTime"));
+                        if (prevTime != null && currTime != null) {
+                            duration = java.time.Duration.between(prevTime, currTime).toMillis();
+                        }
+                    }
+                    
+                    history.add(TaskHistoryInfo.builder()
+                            .id((String) historyMap.get("id"))
+                            .taskId((String) historyMap.get("taskId"))
+                            .taskName((String) historyMap.get("name"))
+                            .activityId((String) historyMap.get("activityId"))
+                            .activityName((String) historyMap.get("activityName"))
+                            .activityType((String) historyMap.get("activityType"))
+                            .operationType((String) historyMap.get("deleteReason"))
+                            .operatorId((String) historyMap.get("assignee"))
+                            .operatorName((String) historyMap.get("assignee"))
+                            .operationTime(parseDateTime(historyMap.get("endTime")))
+                            .duration(duration)
+                            .build());
+                }
+            }
+        }
+        
+        // 如果 Flowable 没有历史记录，尝试从本地数据库获取
+        if (history.isEmpty()) {
             try {
+                // 尝试从本地数据库获取历史
+                String processInstanceId = taskId.startsWith("task-") ? taskId.substring(5) : taskId;
                 List<ProcessHistory> dbHistory = processHistoryRepository
                         .findByProcessInstanceIdOrderByOperationTimeAsc(processInstanceId);
                 
@@ -460,113 +535,11 @@ public class TaskQueryComponent {
                             .duration(duration)
                             .build());
                 }
-                
-                if (!history.isEmpty()) {
-                    return history;
-                }
             } catch (Exception e) {
                 log.warn("Failed to get process history from database: {}", e.getMessage());
             }
         }
         
-        // 如果数据库没有历史，返回模拟数据
-        TaskInfo task = taskStore.get(taskId);
-        if (task == null && taskId.startsWith("task-")) {
-            String processInstanceId = taskId.substring(5);
-            try {
-                Optional<ProcessInstance> instanceOpt = processInstanceRepository.findById(processInstanceId);
-                if (instanceOpt.isPresent()) {
-                    ProcessInstance instance = instanceOpt.get();
-                    String userId = instance.getCurrentAssignee();
-                    task = convertProcessInstanceToTask(instance, userId != null ? userId : "");
-                }
-            } catch (Exception e) {
-                log.warn("Failed to get process instance for history: {}", e.getMessage());
-            }
-        }
-        
-        if (task == null) {
-            return history;
-        }
-
-        // 模拟历史记录（仅当数据库没有记录时）
-        history.add(TaskHistoryInfo.builder()
-                .id("history_1")
-                .taskId(taskId)
-                .taskName(task.getTaskName())
-                .activityId("start")
-                .activityName("提交申请")
-                .activityType("startEvent")
-                .operationType("SUBMIT")
-                .operatorId(task.getInitiatorId())
-                .operatorName(task.getInitiatorName())
-                .operationTime(task.getCreateTime() != null ? task.getCreateTime() : LocalDateTime.now())
-                .comment("提交申请")
-                .duration(0L)
-                .build());
-
         return history;
-    }
-
-    /**
-     * 初始化测试数据
-     */
-    public void initTestData() {
-        // 添加一些测试任务
-        addTask(TaskInfo.builder()
-                .taskId("task_1")
-                .taskName("请假申请审批")
-                .description("员工请假申请，请审批")
-                .processInstanceId("PI_1")
-                .processDefinitionKey("leave_process")
-                .processDefinitionName("请假流程")
-                .assignmentType("USER")
-                .assignee("user_1")
-                .assigneeName("张三")
-                .initiatorId("user_2")
-                .initiatorName("李四")
-                .priority("NORMAL")
-                .status("PENDING")
-                .createTime(LocalDateTime.now().minusDays(1))
-                .isOverdue(false)
-                .build());
-
-        addTask(TaskInfo.builder()
-                .taskId("task_2")
-                .taskName("报销申请审批")
-                .description("差旅费报销申请")
-                .processInstanceId("PI_2")
-                .processDefinitionKey("expense_process")
-                .processDefinitionName("报销流程")
-                .assignmentType("VIRTUAL_GROUP")
-                .assignee("finance_group")
-                .assigneeName("财务组")
-                .initiatorId("user_3")
-                .initiatorName("王五")
-                .priority("HIGH")
-                .status("PENDING")
-                .createTime(LocalDateTime.now().minusDays(2))
-                .dueDate(LocalDateTime.now().plusDays(1))
-                .isOverdue(false)
-                .build());
-
-        addTask(TaskInfo.builder()
-                .taskId("task_3")
-                .taskName("采购申请审批")
-                .description("办公用品采购申请")
-                .processInstanceId("PI_3")
-                .processDefinitionKey("purchase_process")
-                .processDefinitionName("采购流程")
-                .assignmentType("DEPT_ROLE")
-                .assignee("dept_manager")
-                .assigneeName("部门经理")
-                .initiatorId("user_4")
-                .initiatorName("赵六")
-                .priority("URGENT")
-                .status("PENDING")
-                .createTime(LocalDateTime.now().minusDays(3))
-                .dueDate(LocalDateTime.now().minusDays(1))
-                .isOverdue(true)
-                .build());
     }
 }

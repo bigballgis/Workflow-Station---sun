@@ -1,5 +1,6 @@
 package com.portal.component;
 
+import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.ProcessDefinitionInfo;
 import com.portal.dto.ProcessInstanceInfo;
 import com.portal.dto.ProcessStartRequest;
@@ -33,6 +34,7 @@ public class ProcessComponent {
     private final ProcessInstanceRepository processInstanceRepository;
     private final ProcessHistoryRepository processHistoryRepository;
     private final FunctionUnitAccessComponent functionUnitAccessComponent;
+    private final WorkflowEngineClient workflowEngineClient;
     
     @Value("${admin-center.url:http://localhost:8090}")
     private String adminCenterUrl;
@@ -111,6 +113,7 @@ public class ProcessComponent {
 
     /**
      * 发起流程
+     * 通过 WorkflowEngineClient 调用 Flowable 引擎
      */
     public ProcessInstanceInfo startProcess(String userId, String processKey, ProcessStartRequest request) {
         if (processKey == null || processKey.isEmpty()) {
@@ -120,11 +123,9 @@ public class ProcessComponent {
             throw new IllegalArgumentException("用户ID不能为空");
         }
 
-        // 获取流程定义名称和第一个任务信息
+        // 获取流程定义名称和 BPMN XML
         String processName = processKey;
-        String firstTaskName = "待审批";
-        String firstTaskAssignee = null;
-        String candidateUsers = null;
+        String bpmnXml = null;
         
         try {
             Map<String, Object> content = getFunctionUnitContent(processKey);
@@ -132,56 +133,154 @@ public class ProcessComponent {
                 if (content.get("name") != null) {
                     processName = (String) content.get("name");
                 }
-                // 解析 BPMN 获取第一个用户任务信息
                 @SuppressWarnings("unchecked")
                 List<Map<String, Object>> processes = (List<Map<String, Object>>) content.get("processes");
                 if (processes != null && !processes.isEmpty()) {
-                    String bpmnXml = (String) processes.get(0).get("data");
-                    if (bpmnXml != null) {
-                        Map<String, String> taskInfo = parseFirstUserTask(bpmnXml, request.getFormData(), userId);
-                        if (taskInfo.get("name") != null) {
-                            firstTaskName = taskInfo.get("name");
-                        }
-                        if (taskInfo.get("assignee") != null) {
-                            firstTaskAssignee = taskInfo.get("assignee");
-                        }
-                        if (taskInfo.get("candidateUsers") != null) {
-                            candidateUsers = taskInfo.get("candidateUsers");
-                            log.info("Resolved candidate users for process: {}", candidateUsers);
-                        }
-                    }
+                    bpmnXml = (String) processes.get(0).get("data");
                 }
             }
         } catch (Exception e) {
             log.warn("Failed to get process info for {}: {}", processKey, e.getMessage());
         }
 
-        // 创建流程实例
-        ProcessInstance instance = ProcessInstance.builder()
-                .id(UUID.randomUUID().toString())
-                .processDefinitionId("def-" + processKey)
+        if (bpmnXml == null) {
+            throw new IllegalStateException("无法获取流程定义 BPMN: " + processKey);
+        }
+
+        // 检查 Flowable 引擎是否可用
+        if (!workflowEngineClient.isAvailable()) {
+            throw new IllegalStateException("Flowable 引擎不可用，请检查 workflow-engine-core 服务是否启动");
+        }
+
+        log.info("Using Flowable engine to start process: {}", processKey);
+        
+        // 先部署流程定义（如果尚未部署）
+        String actualProcessKey = processKey; // 默认使用传入的 key
+        Optional<Map<String, Object>> deployResult = workflowEngineClient.deployProcess(processKey, bpmnXml, processName);
+        if (deployResult.isPresent()) {
+            log.info("Process definition deployed: {}", deployResult.get());
+            // 使用部署后返回的实际 processDefinitionKey
+            @SuppressWarnings("unchecked")
+            Map<String, Object> deployData = (Map<String, Object>) deployResult.get().get("data");
+            if (deployData != null && deployData.get("processDefinitionKey") != null) {
+                actualProcessKey = (String) deployData.get("processDefinitionKey");
+                log.info("Using actual process definition key from deployment: {}", actualProcessKey);
+            }
+        }
+        
+        // 启动流程实例
+        Map<String, Object> variables = request.getFormData() != null ? new HashMap<>(request.getFormData()) : new HashMap<>();
+        variables.put("initiator", userId);
+        
+        Optional<Map<String, Object>> startResult = workflowEngineClient.startProcess(
+                actualProcessKey, request.getBusinessKey(), userId, variables);
+        
+        if (startResult.isEmpty()) {
+            throw new IllegalStateException("启动流程失败: " + processKey);
+        }
+        
+        Map<String, Object> result = startResult.get();
+        @SuppressWarnings("unchecked")
+        Map<String, Object> data = (Map<String, Object>) result.get("data");
+        if (data == null) {
+            throw new IllegalStateException("启动流程返回数据为空: " + processKey);
+        }
+        
+        String flowableProcessInstanceId = (String) data.get("processInstanceId");
+        log.info("Process started via Flowable: {}", flowableProcessInstanceId);
+        
+        // 自动完成第一个任务（发起人任务）
+        // 流程启动后，第一个任务通常是发起人填写表单的任务，需要自动完成以流转到下一个审批节点
+        String currentNodeName = null;
+        String currentAssigneeId = null;
+        
+        try {
+            // 查询流程实例的任务
+            Optional<Map<String, Object>> tasksResult = workflowEngineClient.getProcessInstanceTasks(flowableProcessInstanceId);
+            if (tasksResult.isPresent()) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> tasksData = (Map<String, Object>) tasksResult.get().get("data");
+                if (tasksData != null) {
+                    @SuppressWarnings("unchecked")
+                    List<Map<String, Object>> tasks = (List<Map<String, Object>>) tasksData.get("tasks");
+                    if (tasks != null && !tasks.isEmpty()) {
+                        // 获取第一个任务
+                        Map<String, Object> firstTask = tasks.get(0);
+                        String taskId = (String) firstTask.get("taskId");
+                        log.info("Auto-completing first task: {} for process: {}", taskId, flowableProcessInstanceId);
+                        
+                        // 先认领任务（设置 assignee）
+                        Optional<Map<String, Object>> claimResult = workflowEngineClient.claimTask(taskId, userId);
+                        if (claimResult.isPresent()) {
+                            log.info("First task claimed successfully: {} by user: {}", taskId, userId);
+                        } else {
+                            log.warn("Failed to claim first task: {}, trying to complete anyway", taskId);
+                        }
+                        
+                        // 完成第一个任务
+                        Optional<Map<String, Object>> completeResult = workflowEngineClient.completeTask(
+                                taskId, userId, "SUBMIT", variables);
+                        if (completeResult.isPresent()) {
+                            log.info("First task completed successfully: {}", taskId);
+                            
+                            // 完成第一个任务后，查询当前任务（下一个审批节点）
+                            Optional<Map<String, Object>> nextTasksResult = workflowEngineClient.getProcessInstanceTasks(flowableProcessInstanceId);
+                            if (nextTasksResult.isPresent()) {
+                                @SuppressWarnings("unchecked")
+                                Map<String, Object> nextTasksData = (Map<String, Object>) nextTasksResult.get().get("data");
+                                if (nextTasksData != null) {
+                                    @SuppressWarnings("unchecked")
+                                    List<Map<String, Object>> nextTasks = (List<Map<String, Object>>) nextTasksData.get("tasks");
+                                    if (nextTasks != null && !nextTasks.isEmpty()) {
+                                        Map<String, Object> currentTask = nextTasks.get(0);
+                                        currentNodeName = (String) currentTask.get("taskName");
+                                        // 使用 currentAssignee 或 assignmentTarget 字段
+                                        currentAssigneeId = (String) currentTask.get("currentAssignee");
+                                        if (currentAssigneeId == null) {
+                                            currentAssigneeId = (String) currentTask.get("assignmentTarget");
+                                        }
+                                        
+                                        log.info("Current task after auto-complete: node={}, assignee={}", 
+                                                currentNodeName, currentAssigneeId);
+                                    }
+                                }
+                            }
+                        } else {
+                            log.warn("Failed to complete first task: {}", taskId);
+                        }
+                    } else {
+                        log.warn("No tasks found for process instance: {}", flowableProcessInstanceId);
+                    }
+                }
+            } else {
+                log.warn("Failed to get tasks for process instance: {}", flowableProcessInstanceId);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to auto-complete first task: {}", e.getMessage());
+            // 不抛出异常，流程已经启动成功
+        }
+        
+        // 保存流程实例到本地数据库（包含当前节点和处理人信息）
+        ProcessInstance processInstance = ProcessInstance.builder()
+                .id(flowableProcessInstanceId)
+                .processDefinitionId((String) data.get("processDefinitionId"))
                 .processDefinitionKey(processKey)
                 .processDefinitionName(processName)
                 .businessKey(request.getBusinessKey())
                 .startUserId(userId)
                 .startUserName(userId)
-                .currentNode(firstTaskName)
-                .currentAssignee(firstTaskAssignee)
-                .candidateUsers(candidateUsers)
                 .status("RUNNING")
-                .variables(request.getFormData())
-                .priority(request.getPriority())
-                .startTime(LocalDateTime.now())
+                .currentNode(currentNodeName)
+                .currentAssignee(currentAssigneeId)
+                .variables(variables)
                 .build();
-
-        // 保存到数据库
-        processInstanceRepository.save(instance);
-        log.info("Created process instance: {} for user: {}, assignee: {}, candidateUsers: {}", 
-                instance.getId(), userId, firstTaskAssignee, candidateUsers);
-
+        processInstanceRepository.save(processInstance);
+        log.info("Process instance saved to local database: {} with currentNode={}, currentAssignee={}", 
+                flowableProcessInstanceId, currentNodeName, currentAssigneeId);
+        
         // 记录流程启动历史
         ProcessHistory startHistory = ProcessHistory.builder()
-                .processInstanceId(instance.getId())
+                .processInstanceId(flowableProcessInstanceId)
                 .activityId("startEvent")
                 .activityName("提交申请")
                 .activityType("startEvent")
@@ -191,18 +290,19 @@ public class ProcessComponent {
                 .comment("发起流程")
                 .build();
         processHistoryRepository.save(startHistory);
-
+        
         return ProcessInstanceInfo.builder()
-                .id(instance.getId())
-                .processDefinitionId(instance.getProcessDefinitionId())
-                .processDefinitionName(instance.getProcessDefinitionName())
-                .businessKey(instance.getBusinessKey())
-                .startTime(instance.getStartTime())
-                .status(instance.getStatus())
-                .startUserId(instance.getStartUserId())
-                .startUserName(instance.getStartUserName())
-                .currentNode(instance.getCurrentNode())
-                .currentAssignee(instance.getCurrentAssignee())
+                .id(flowableProcessInstanceId)
+                .processDefinitionId((String) data.get("processDefinitionId"))
+                .processDefinitionKey(processKey)
+                .processDefinitionName(processName)
+                .businessKey(request.getBusinessKey())
+                .startTime(LocalDateTime.now())
+                .status("RUNNING")
+                .startUserId(userId)
+                .startUserName(userId)
+                .currentNode(currentNodeName)
+                .currentAssignee(currentAssigneeId)
                 .build();
     }
     
@@ -857,11 +957,58 @@ public class ProcessComponent {
 
     /**
      * 获取流程详情
+     * 如果本地数据库中没有当前节点信息，从 Flowable 实时获取
      */
     public ProcessInstanceInfo getProcessDetail(String processId) {
-        return processInstanceRepository.findById(processId)
-                .map(this::toProcessInstanceInfo)
-                .orElse(null);
+        Optional<ProcessInstance> optInstance = processInstanceRepository.findById(processId);
+        if (optInstance.isEmpty()) {
+            return null;
+        }
+        
+        ProcessInstance instance = optInstance.get();
+        ProcessInstanceInfo info = toProcessInstanceInfo(instance);
+        
+        // 如果流程正在运行且没有当前节点信息，从 Flowable 实时获取
+        if ("RUNNING".equals(instance.getStatus()) && 
+            (info.getCurrentNode() == null || info.getCurrentAssignee() == null)) {
+            try {
+                if (workflowEngineClient.isAvailable()) {
+                    Optional<Map<String, Object>> tasksResult = workflowEngineClient.getProcessInstanceTasks(processId);
+                    if (tasksResult.isPresent()) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> tasksData = (Map<String, Object>) tasksResult.get().get("data");
+                        if (tasksData != null) {
+                            @SuppressWarnings("unchecked")
+                            List<Map<String, Object>> tasks = (List<Map<String, Object>>) tasksData.get("tasks");
+                            if (tasks != null && !tasks.isEmpty()) {
+                                Map<String, Object> currentTask = tasks.get(0);
+                                String currentNodeName = (String) currentTask.get("taskName");
+                                String currentAssigneeId = (String) currentTask.get("currentAssignee");
+                                if (currentAssigneeId == null) {
+                                    currentAssigneeId = (String) currentTask.get("assignmentTarget");
+                                }
+                                
+                                // 更新返回的信息
+                                info.setCurrentNode(currentNodeName);
+                                info.setCurrentAssignee(currentAssigneeId);
+                                
+                                // 同时更新本地数据库
+                                instance.setCurrentNode(currentNodeName);
+                                instance.setCurrentAssignee(currentAssigneeId);
+                                processInstanceRepository.save(instance);
+                                
+                                log.info("Updated process instance {} with currentNode={}, currentAssignee={}", 
+                                        processId, currentNodeName, currentAssigneeId);
+                            }
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Failed to get current task info from Flowable for process {}: {}", processId, e.getMessage());
+            }
+        }
+        
+        return info;
     }
 
     /**

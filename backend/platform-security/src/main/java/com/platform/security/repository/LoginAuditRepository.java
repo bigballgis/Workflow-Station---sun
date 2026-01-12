@@ -20,7 +20,7 @@ public interface LoginAuditRepository extends JpaRepository<LoginAudit, UUID> {
     /**
      * Find audit records by user ID.
      */
-    List<LoginAudit> findByUserIdOrderByCreatedAtDesc(UUID userId);
+    List<LoginAudit> findByUserIdOrderByCreatedAtDesc(String userId);
 
     /**
      * Find audit records by username.

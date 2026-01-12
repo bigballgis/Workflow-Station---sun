@@ -1,5 +1,6 @@
 package com.portal.properties;
 
+import com.portal.client.WorkflowEngineClient;
 import com.portal.component.TaskQueryComponent;
 import com.portal.dto.PageResponse;
 import com.portal.dto.TaskInfo;
@@ -8,6 +9,7 @@ import com.portal.entity.DelegationRule;
 import com.portal.enums.DelegationStatus;
 import com.portal.enums.DelegationType;
 import com.portal.repository.DelegationRuleRepository;
+import com.portal.repository.ProcessHistoryRepository;
 import com.portal.repository.ProcessInstanceRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.RepeatedTest;
@@ -20,12 +22,17 @@ import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 /**
  * 多维度任务查询属性测试
  * 验证任务查询结果的完整性和正确性
+ * 
+ * 注意：TaskQueryComponent 现在通过 WorkflowEngineClient 从 Flowable 获取任务
  */
 class TaskQueryProperties {
 
@@ -34,6 +41,12 @@ class TaskQueryProperties {
 
     @Mock
     private ProcessInstanceRepository processInstanceRepository;
+    
+    @Mock
+    private ProcessHistoryRepository processHistoryRepository;
+    
+    @Mock
+    private WorkflowEngineClient workflowEngineClient;
 
     private TaskQueryComponent taskQueryComponent;
     private Random random;
@@ -41,13 +54,33 @@ class TaskQueryProperties {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        taskQueryComponent = new TaskQueryComponent(delegationRuleRepository, processInstanceRepository);
-        taskQueryComponent.clearTasks();
+        taskQueryComponent = new TaskQueryComponent(
+            delegationRuleRepository, 
+            processInstanceRepository, 
+            processHistoryRepository,
+            workflowEngineClient
+        );
         random = new Random();
+        
+        // 默认 Flowable 引擎可用
+        when(workflowEngineClient.isAvailable()).thenReturn(true);
         
         // 默认返回空委托列表
         when(delegationRuleRepository.findActiveDelegationsForDelegate(any(), any()))
                 .thenReturn(Collections.emptyList());
+        
+        // Mock 用户权限查询 - 返回包含虚拟组和部门角色的权限信息
+        // 使用 Answer 动态生成权限数据，使虚拟组和部门角色与用户ID关联
+        when(workflowEngineClient.getUserTaskPermissions(anyString()))
+                .thenAnswer(invocation -> {
+                    String userId = invocation.getArgument(0);
+                    Map<String, Object> permissions = new HashMap<>();
+                    // 虚拟组ID格式: group_<userId>
+                    permissions.put("virtualGroupIds", List.of("group_" + userId));
+                    // 部门角色ID格式: dept_role_<userId>
+                    permissions.put("departmentRoles", List.of("dept_role_" + userId));
+                    return Optional.of(permissions);
+                });
     }
 
     /**
@@ -58,17 +91,14 @@ class TaskQueryProperties {
         String userId = "user_" + random.nextInt(1000);
         int taskCount = 1 + random.nextInt(10);
 
-        // 创建直接分配的任务
+        // 创建直接分配的任务数据
+        List<Map<String, Object>> tasks = new ArrayList<>();
         for (int i = 0; i < taskCount; i++) {
-            TaskInfo task = createTask("task_" + i, "USER", userId);
-            taskQueryComponent.addTask(task);
+            tasks.add(createTaskMap("task_" + i, "USER", userId));
         }
-
-        // 创建其他用户的任务
-        for (int i = 0; i < 5; i++) {
-            TaskInfo task = createTask("other_task_" + i, "USER", "other_user");
-            taskQueryComponent.addTask(task);
-        }
+        
+        // Mock Flowable 返回
+        mockFlowableTasksResponse(tasks);
 
         TaskQueryRequest request = TaskQueryRequest.builder()
                 .userId(userId)
@@ -91,11 +121,14 @@ class TaskQueryProperties {
         String groupId = "group_" + userId; // 模拟用户所属的组
         int taskCount = 1 + random.nextInt(10);
 
-        // 创建虚拟组任务
+        // 创建虚拟组任务数据
+        List<Map<String, Object>> tasks = new ArrayList<>();
         for (int i = 0; i < taskCount; i++) {
-            TaskInfo task = createTask("group_task_" + i, "VIRTUAL_GROUP", groupId);
-            taskQueryComponent.addTask(task);
+            tasks.add(createTaskMap("group_task_" + i, "VIRTUAL_GROUP", groupId));
         }
+        
+        // Mock Flowable 返回
+        mockFlowableTasksResponse(tasks);
 
         TaskQueryRequest request = TaskQueryRequest.builder()
                 .userId(userId)
@@ -118,11 +151,14 @@ class TaskQueryProperties {
         String deptRoleId = "dept_role_" + userId; // 模拟用户的部门角色
         int taskCount = 1 + random.nextInt(10);
 
-        // 创建部门角色任务
+        // 创建部门角色任务数据
+        List<Map<String, Object>> tasks = new ArrayList<>();
         for (int i = 0; i < taskCount; i++) {
-            TaskInfo task = createTask("dept_task_" + i, "DEPT_ROLE", deptRoleId);
-            taskQueryComponent.addTask(task);
+            tasks.add(createTaskMap("dept_task_" + i, "DEPT_ROLE", deptRoleId));
         }
+        
+        // Mock Flowable 返回
+        mockFlowableTasksResponse(tasks);
 
         TaskQueryRequest request = TaskQueryRequest.builder()
                 .userId(userId)
@@ -155,11 +191,22 @@ class TaskQueryProperties {
         when(delegationRuleRepository.findActiveDelegationsForDelegate(eq(delegateId), any()))
                 .thenReturn(List.of(rule));
 
-        // 创建委托人的任务
+        // 创建委托人的任务数据
+        List<Map<String, Object>> delegatorTasks = new ArrayList<>();
         for (int i = 0; i < taskCount; i++) {
-            TaskInfo task = createTask("delegated_task_" + i, "USER", delegatorId);
-            taskQueryComponent.addTask(task);
+            delegatorTasks.add(createTaskMap("delegated_task_" + i, "USER", delegatorId));
         }
+        
+        // Mock Flowable 返回 - 被委托人自己没有任务
+        mockFlowableTasksResponse(Collections.emptyList());
+        
+        // Mock 委托人的任务
+        Map<String, Object> delegatorResponse = new HashMap<>();
+        Map<String, Object> delegatorData = new HashMap<>();
+        delegatorData.put("tasks", delegatorTasks);
+        delegatorResponse.put("data", delegatorData);
+        when(workflowEngineClient.getUserTasks(eq(delegatorId), anyInt(), anyInt()))
+                .thenReturn(Optional.of(delegatorResponse));
 
         TaskQueryRequest request = TaskQueryRequest.builder()
                 .userId(delegateId)
@@ -180,14 +227,14 @@ class TaskQueryProperties {
     void multiDimensionalQueryShouldReturnAllTypes() {
         String userId = "user_" + random.nextInt(1000);
         
-        // 创建不同类型的任务
-        TaskInfo directTask = createTask("direct_task", "USER", userId);
-        TaskInfo groupTask = createTask("group_task", "VIRTUAL_GROUP", "group_" + userId);
-        TaskInfo deptTask = createTask("dept_task", "DEPT_ROLE", "dept_role_" + userId);
+        // 创建不同类型的任务数据
+        List<Map<String, Object>> tasks = new ArrayList<>();
+        tasks.add(createTaskMap("direct_task", "USER", userId));
+        tasks.add(createTaskMap("group_task", "VIRTUAL_GROUP", "group_" + userId));
+        tasks.add(createTaskMap("dept_task", "DEPT_ROLE", "dept_role_" + userId));
         
-        taskQueryComponent.addTask(directTask);
-        taskQueryComponent.addTask(groupTask);
-        taskQueryComponent.addTask(deptTask);
+        // Mock Flowable 返回
+        mockFlowableTasksResponse(tasks);
 
         TaskQueryRequest request = TaskQueryRequest.builder()
                 .userId(userId)
@@ -212,12 +259,16 @@ class TaskQueryProperties {
         String userId = "user_" + random.nextInt(1000);
         String[] priorities = {"URGENT", "HIGH", "NORMAL", "LOW"};
         
-        // 创建不同优先级的任务
+        // 创建不同优先级的任务数据
+        List<Map<String, Object>> tasks = new ArrayList<>();
         for (int i = 0; i < priorities.length; i++) {
-            TaskInfo task = createTask("task_" + i, "USER", userId);
-            task.setPriority(priorities[i]);
-            taskQueryComponent.addTask(task);
+            Map<String, Object> task = createTaskMap("task_" + i, "USER", userId);
+            task.put("priority", priorities[i]);
+            tasks.add(task);
         }
+        
+        // Mock Flowable 返回
+        mockFlowableTasksResponse(tasks);
 
         // 只查询紧急和高优先级任务
         TaskQueryRequest request = TaskQueryRequest.builder()
@@ -241,11 +292,14 @@ class TaskQueryProperties {
         int totalTasks = 25;
         int pageSize = 10;
 
-        // 创建任务
+        // 创建任务数据
+        List<Map<String, Object>> tasks = new ArrayList<>();
         for (int i = 0; i < totalTasks; i++) {
-            TaskInfo task = createTask("task_" + i, "USER", userId);
-            taskQueryComponent.addTask(task);
+            tasks.add(createTaskMap("task_" + i, "USER", userId));
         }
+        
+        // Mock Flowable 返回
+        mockFlowableTasksResponse(tasks);
 
         // 查询第一页
         TaskQueryRequest request1 = TaskQueryRequest.builder()
@@ -281,12 +335,16 @@ class TaskQueryProperties {
     void sortingShouldWorkCorrectly() {
         String userId = "user_" + random.nextInt(1000);
 
-        // 创建不同时间的任务
+        // 创建不同时间的任务数据
+        List<Map<String, Object>> tasks = new ArrayList<>();
         for (int i = 0; i < 5; i++) {
-            TaskInfo task = createTask("task_" + i, "USER", userId);
-            task.setCreateTime(LocalDateTime.now().minusDays(i));
-            taskQueryComponent.addTask(task);
+            Map<String, Object> task = createTaskMap("task_" + i, "USER", userId);
+            task.put("createdTime", LocalDateTime.now().minusDays(i));
+            tasks.add(task);
         }
+        
+        // Mock Flowable 返回
+        mockFlowableTasksResponse(tasks);
 
         // 按创建时间降序排序
         TaskQueryRequest request = TaskQueryRequest.builder()
@@ -297,10 +355,10 @@ class TaskQueryProperties {
 
         PageResponse<TaskInfo> result = taskQueryComponent.queryTasks(request);
 
-        List<TaskInfo> tasks = result.getContent();
-        for (int i = 0; i < tasks.size() - 1; i++) {
-            assertTrue(tasks.get(i).getCreateTime().isAfter(tasks.get(i + 1).getCreateTime()) ||
-                      tasks.get(i).getCreateTime().isEqual(tasks.get(i + 1).getCreateTime()));
+        List<TaskInfo> resultTasks = result.getContent();
+        for (int i = 0; i < resultTasks.size() - 1; i++) {
+            assertTrue(resultTasks.get(i).getCreateTime().isAfter(resultTasks.get(i + 1).getCreateTime()) ||
+                      resultTasks.get(i).getCreateTime().isEqual(resultTasks.get(i + 1).getCreateTime()));
         }
     }
 
@@ -312,18 +370,23 @@ class TaskQueryProperties {
         String userId = "user_" + random.nextInt(1000);
         String keyword = "请假";
 
-        // 创建包含关键词的任务
-        TaskInfo task1 = createTask("task_1", "USER", userId);
-        task1.setTaskName("请假申请审批");
-        taskQueryComponent.addTask(task1);
+        // 创建包含关键词的任务数据
+        List<Map<String, Object>> tasks = new ArrayList<>();
+        
+        Map<String, Object> task1 = createTaskMap("task_1", "USER", userId);
+        task1.put("taskName", "请假申请审批");
+        tasks.add(task1);
 
-        TaskInfo task2 = createTask("task_2", "USER", userId);
-        task2.setTaskName("报销申请审批");
-        taskQueryComponent.addTask(task2);
+        Map<String, Object> task2 = createTaskMap("task_2", "USER", userId);
+        task2.put("taskName", "报销申请审批");
+        tasks.add(task2);
 
-        TaskInfo task3 = createTask("task_3", "USER", userId);
-        task3.setDescription("员工请假流程");
-        taskQueryComponent.addTask(task3);
+        Map<String, Object> task3 = createTaskMap("task_3", "USER", userId);
+        task3.put("taskDescription", "员工请假流程");
+        tasks.add(task3);
+        
+        // Mock Flowable 返回
+        mockFlowableTasksResponse(tasks);
 
         TaskQueryRequest request = TaskQueryRequest.builder()
                 .userId(userId)
@@ -344,6 +407,9 @@ class TaskQueryProperties {
     @Test
     void emptyResultShouldBeHandledCorrectly() {
         String userId = "nonexistent_user";
+        
+        // Mock Flowable 返回空结果
+        mockFlowableTasksResponse(Collections.emptyList());
 
         TaskQueryRequest request = TaskQueryRequest.builder()
                 .userId(userId)
@@ -357,24 +423,55 @@ class TaskQueryProperties {
         assertFalse(result.isHasNext());
         assertFalse(result.isHasPrevious());
     }
+    
+    /**
+     * 属性11: Flowable 引擎不可用时应该抛出异常
+     */
+    @Test
+    void shouldThrowExceptionWhenFlowableUnavailable() {
+        when(workflowEngineClient.isAvailable()).thenReturn(false);
+        
+        TaskQueryRequest request = TaskQueryRequest.builder()
+                .userId("user_1")
+                .build();
+
+        IllegalStateException exception = assertThrows(IllegalStateException.class, 
+            () -> taskQueryComponent.queryTasks(request));
+        
+        assertTrue(exception.getMessage().contains("Flowable 引擎不可用"));
+    }
 
     /**
-     * 创建测试任务
+     * Mock Flowable 任务响应
      */
-    private TaskInfo createTask(String taskId, String assignmentType, String assignee) {
-        return TaskInfo.builder()
-                .taskId(taskId)
-                .taskName("测试任务 " + taskId)
-                .description("任务描述")
-                .processInstanceId("PI_" + taskId)
-                .processDefinitionKey("test_process")
-                .processDefinitionName("测试流程")
-                .assignmentType(assignmentType)
-                .assignee(assignee)
-                .priority("NORMAL")
-                .status("PENDING")
-                .createTime(LocalDateTime.now())
-                .isOverdue(false)
-                .build();
+    private void mockFlowableTasksResponse(List<Map<String, Object>> tasks) {
+        Map<String, Object> response = new HashMap<>();
+        Map<String, Object> data = new HashMap<>();
+        data.put("tasks", tasks);
+        response.put("data", data);
+        
+        when(workflowEngineClient.getUserAllVisibleTasks(anyString(), anyList(), anyList(), anyInt(), anyInt()))
+                .thenReturn(Optional.of(response));
+        when(workflowEngineClient.getUserTasks(anyString(), anyInt(), anyInt()))
+                .thenReturn(Optional.of(response));
+    }
+
+    /**
+     * 创建测试任务 Map
+     */
+    private Map<String, Object> createTaskMap(String taskId, String assignmentType, String assignee) {
+        Map<String, Object> task = new HashMap<>();
+        task.put("taskId", taskId);
+        task.put("taskName", "测试任务 " + taskId);
+        task.put("taskDescription", "任务描述");
+        task.put("processInstanceId", "PI_" + taskId);
+        task.put("processDefinitionId", "test_process");
+        task.put("assignmentType", assignmentType);
+        task.put("currentAssignee", assignee);
+        task.put("priority", "NORMAL");
+        task.put("status", "PENDING");
+        task.put("createdTime", LocalDateTime.now());
+        task.put("isOverdue", false);
+        return task;
     }
 }

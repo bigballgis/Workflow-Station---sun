@@ -8,6 +8,7 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -138,6 +139,114 @@ public class WorkflowEngineClient {
         }
         return Optional.empty();
     }
+    
+    /**
+     * 查询流程实例的任务
+     */
+    public Optional<Map<String, Object>> getProcessInstanceTasks(String processInstanceId) {
+        if (!isAvailable()) {
+            return Optional.empty();
+        }
+        try {
+            String url = workflowEngineUrl + "/api/v1/tasks?processInstanceId=" + processInstanceId + "&page=0&size=100";
+            
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                url, HttpMethod.GET, null,
+                new ParameterizedTypeReference<Map<String, Object>>() {});
+            
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                return Optional.of(response.getBody());
+            }
+        } catch (Exception e) {
+            log.warn("Failed to get process instance tasks from workflow engine: {}", e.getMessage());
+        }
+        return Optional.empty();
+    }
+    
+    /**
+     * 查询用户所有可见任务（包括虚拟组和部门角色任务）
+     */
+    public Optional<Map<String, Object>> getUserAllVisibleTasks(String userId, List<String> groupIds, 
+                                                                 List<String> deptRoles, int page, int size) {
+        if (!isAvailable()) {
+            return Optional.empty();
+        }
+        try {
+            StringBuilder urlBuilder = new StringBuilder(workflowEngineUrl)
+                .append("/api/v1/tasks?userId=").append(userId)
+                .append("&page=").append(page)
+                .append("&size=").append(size);
+            
+            if (groupIds != null && !groupIds.isEmpty()) {
+                for (String groupId : groupIds) {
+                    urlBuilder.append("&groupIds=").append(groupId);
+                }
+            }
+            
+            if (deptRoles != null && !deptRoles.isEmpty()) {
+                for (String deptRole : deptRoles) {
+                    urlBuilder.append("&deptRoles=").append(deptRole);
+                }
+            }
+            
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                urlBuilder.toString(), HttpMethod.GET, null,
+                new ParameterizedTypeReference<Map<String, Object>>() {});
+            
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                return Optional.of(response.getBody());
+            }
+        } catch (Exception e) {
+            log.warn("Failed to get user all visible tasks from workflow engine: {}", e.getMessage());
+        }
+        return Optional.empty();
+    }
+    
+    /**
+     * 获取任务详情
+     */
+    public Optional<Map<String, Object>> getTaskById(String taskId) {
+        if (!isAvailable()) {
+            return Optional.empty();
+        }
+        try {
+            String url = workflowEngineUrl + "/api/v1/tasks/" + taskId;
+            
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                url, HttpMethod.GET, null,
+                new ParameterizedTypeReference<Map<String, Object>>() {});
+            
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                return Optional.of(response.getBody());
+            }
+        } catch (Exception e) {
+            log.warn("Failed to get task by id from workflow engine: {}", e.getMessage());
+        }
+        return Optional.empty();
+    }
+    
+    /**
+     * 统计用户任务数量
+     */
+    public Optional<Map<String, Object>> countUserTasks(String userId) {
+        if (!isAvailable()) {
+            return Optional.empty();
+        }
+        try {
+            String url = workflowEngineUrl + "/api/v1/tasks/count?userId=" + userId;
+            
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                url, HttpMethod.GET, null,
+                new ParameterizedTypeReference<Map<String, Object>>() {});
+            
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                return Optional.of(response.getBody());
+            }
+        } catch (Exception e) {
+            log.warn("Failed to count user tasks from workflow engine: {}", e.getMessage());
+        }
+        return Optional.empty();
+    }
 
     /**
      * 完成任务
@@ -234,6 +343,127 @@ public class WorkflowEngineClient {
         }
         return Optional.empty();
     }
+    
+    /**
+     * 取消认领任务
+     */
+    public Optional<Map<String, Object>> unclaimTask(String taskId, String userId) {
+        if (!isAvailable()) {
+            return Optional.empty();
+        }
+        try {
+            String url = workflowEngineUrl + "/api/v1/tasks/" + taskId + "/unclaim";
+            
+            Map<String, Object> request = new HashMap<>();
+            request.put("userId", userId);
+            
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
+            
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                url, HttpMethod.POST, entity,
+                new ParameterizedTypeReference<Map<String, Object>>() {});
+            
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                return Optional.of(response.getBody());
+            }
+        } catch (Exception e) {
+            log.warn("Failed to unclaim task in workflow engine: {}", e.getMessage());
+        }
+        return Optional.empty();
+    }
+    
+    /**
+     * 转办任务
+     */
+    public Optional<Map<String, Object>> transferTask(String taskId, String fromUserId, 
+                                                       String toUserId, String reason) {
+        if (!isAvailable()) {
+            return Optional.empty();
+        }
+        try {
+            String url = workflowEngineUrl + "/api/v1/tasks/" + taskId + "/transfer";
+            
+            Map<String, Object> request = new HashMap<>();
+            request.put("fromUserId", fromUserId);
+            request.put("toUserId", toUserId);
+            request.put("reason", reason);
+            
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
+            
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                url, HttpMethod.POST, entity,
+                new ParameterizedTypeReference<Map<String, Object>>() {});
+            
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                return Optional.of(response.getBody());
+            }
+        } catch (Exception e) {
+            log.warn("Failed to transfer task in workflow engine: {}", e.getMessage());
+        }
+        return Optional.empty();
+    }
+    
+    /**
+     * 回退任务到指定的历史节点
+     */
+    public Optional<Map<String, Object>> returnTask(String taskId, String targetActivityId, 
+                                                     String userId, String reason) {
+        if (!isAvailable()) {
+            return Optional.empty();
+        }
+        try {
+            String url = workflowEngineUrl + "/api/v1/tasks/" + taskId + "/return";
+            
+            Map<String, Object> request = new HashMap<>();
+            request.put("targetActivityId", targetActivityId);
+            request.put("userId", userId);
+            request.put("reason", reason);
+            
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
+            
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                url, HttpMethod.POST, entity,
+                new ParameterizedTypeReference<Map<String, Object>>() {});
+            
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                return Optional.of(response.getBody());
+            }
+        } catch (Exception e) {
+            log.warn("Failed to return task in workflow engine: {}", e.getMessage());
+        }
+        return Optional.empty();
+    }
+    
+    /**
+     * 获取可回退的历史节点列表
+     */
+    public Optional<List<Map<String, Object>>> getReturnableActivities(String taskId) {
+        if (!isAvailable()) {
+            return Optional.empty();
+        }
+        try {
+            String url = workflowEngineUrl + "/api/v1/tasks/" + taskId + "/returnable-activities";
+            
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                url, HttpMethod.GET, null,
+                new ParameterizedTypeReference<Map<String, Object>>() {});
+            
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> activities = (List<Map<String, Object>>) response.getBody().get("data");
+                return Optional.ofNullable(activities);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to get returnable activities from workflow engine: {}", e.getMessage());
+        }
+        return Optional.empty();
+    }
 
     /**
      * 获取流程历史
@@ -279,6 +509,68 @@ public class WorkflowEngineClient {
             }
         } catch (Exception e) {
             log.warn("Failed to get task history from workflow engine: {}", e.getMessage());
+        }
+        return Optional.empty();
+    }
+    
+    /**
+     * 获取用户的任务权限信息（虚拟组和部门角色）
+     */
+    @SuppressWarnings("unchecked")
+    public Optional<Map<String, Object>> getUserTaskPermissions(String userId) {
+        if (!isAvailable()) {
+            return Optional.empty();
+        }
+        try {
+            String url = workflowEngineUrl + "/api/v1/tasks/user-permissions?userId=" + userId;
+            
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                url, HttpMethod.GET, null,
+                new ParameterizedTypeReference<Map<String, Object>>() {});
+            
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                Map<String, Object> body = response.getBody();
+                // 从 ApiResponse 中提取 data
+                if (body.containsKey("data")) {
+                    return Optional.of((Map<String, Object>) body.get("data"));
+                }
+                return Optional.of(body);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to get user task permissions from workflow engine: {}", e.getMessage());
+        }
+        return Optional.empty();
+    }
+    
+    /**
+     * 检查用户是否有任务操作权限
+     */
+    @SuppressWarnings("unchecked")
+    public Optional<Boolean> checkTaskPermission(String taskId, String userId) {
+        if (!isAvailable()) {
+            return Optional.empty();
+        }
+        try {
+            String url = workflowEngineUrl + "/api/v1/tasks/" + taskId + "/check-permission?userId=" + userId;
+            
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                url, HttpMethod.GET, null,
+                new ParameterizedTypeReference<Map<String, Object>>() {});
+            
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                Map<String, Object> body = response.getBody();
+                // 从 ApiResponse 中提取 data
+                Map<String, Object> data = body.containsKey("data") 
+                    ? (Map<String, Object>) body.get("data") 
+                    : body;
+                
+                Object hasPermission = data.get("hasPermission");
+                if (hasPermission instanceof Boolean) {
+                    return Optional.of((Boolean) hasPermission);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to check task permission from workflow engine: {}", e.getMessage());
         }
         return Optional.empty();
     }

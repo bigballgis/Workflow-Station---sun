@@ -1,6 +1,8 @@
 package com.workflow.entity;
 
+import com.workflow.config.JsonbType;
 import jakarta.persistence.*;
+import org.hibernate.annotations.Type;
 import java.time.LocalDateTime;
 
 /**
@@ -64,12 +66,14 @@ public class AuditLog {
     /**
      * 操作前数据（JSON格式，敏感数据已脱敏）
      */
+    @Type(JsonbType.class)
     @Column(name = "before_data", columnDefinition = "JSONB")
     private String beforeData;
     
     /**
      * 操作后数据（JSON格式，敏感数据已脱敏）
      */
+    @Type(JsonbType.class)
     @Column(name = "after_data", columnDefinition = "JSONB")
     private String afterData;
     
@@ -130,6 +134,7 @@ public class AuditLog {
     /**
      * 额外的上下文信息（JSON格式）
      */
+    @Type(JsonbType.class)
     @Column(name = "context_data", columnDefinition = "JSONB")
     private String contextData;
     

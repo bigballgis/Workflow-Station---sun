@@ -45,6 +45,13 @@ public class TaskAssignmentResult {
     private Boolean success;
     
     /**
+     * 检查是否成功
+     */
+    public boolean isSuccess() {
+        return Boolean.TRUE.equals(success);
+    }
+    
+    /**
      * 消息
      */
     private String message;

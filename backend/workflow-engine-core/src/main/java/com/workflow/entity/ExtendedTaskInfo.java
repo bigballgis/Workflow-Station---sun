@@ -323,6 +323,15 @@ public class ExtendedTaskInfo {
         this.claimedTime = LocalDateTime.now();
         updateStatus("CLAIMED", claimedBy);
     }
+    
+    /**
+     * 取消认领任务
+     */
+    public void unclaimTask() {
+        this.claimedBy = null;
+        this.claimedTime = null;
+        updateStatus("ASSIGNED", null);
+    }
 
     /**
      * 完成任务

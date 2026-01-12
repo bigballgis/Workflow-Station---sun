@@ -13,7 +13,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
  * 基于Flowable 7.0.0 + Spring Boot 3.x + PostgreSQL 16.5
  */
 @SpringBootApplication(scanBasePackages = {"com.workflow", "com.platform.cache", "com.platform.security"})
-@EntityScan(basePackages = {"com.workflow", "com.platform.security.model"})
+@EntityScan(basePackages = {"com.workflow", "com.platform.security.model", "com.platform.security.entity"})
 @EnableJpaRepositories(basePackages = {"com.workflow", "com.platform.security.repository"})
 @EnableKafka
 @EnableAsync

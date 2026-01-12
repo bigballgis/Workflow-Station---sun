@@ -46,6 +46,18 @@ public class FunctionUnitContent {
     @Column(name = "checksum", length = 64)
     private String checksum;
     
+    /**
+     * Flowable 流程定义ID（仅流程类型内容有效）
+     */
+    @Column(name = "flowable_process_definition_id", length = 64)
+    private String flowableProcessDefinitionId;
+    
+    /**
+     * Flowable 部署ID（仅流程类型内容有效）
+     */
+    @Column(name = "flowable_deployment_id", length = 64)
+    private String flowableDeploymentId;
+    
     @CreatedDate
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;

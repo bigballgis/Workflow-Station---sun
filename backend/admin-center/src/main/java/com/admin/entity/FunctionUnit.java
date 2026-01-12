@@ -91,6 +91,20 @@ public class FunctionUnit {
     @LastModifiedBy
     @Column(name = "updated_by", length = 64)
     private String updatedBy;
+    
+    /**
+     * 流程是否已部署到 Flowable 引擎
+     */
+    @Column(name = "process_deployed")
+    @Builder.Default
+    private Boolean processDeployed = false;
+    
+    /**
+     * 已部署的流程数量
+     */
+    @Column(name = "process_deployment_count")
+    @Builder.Default
+    private Integer processDeploymentCount = 0;
 
     
     @OneToMany(mappedBy = "functionUnit", cascade = CascadeType.ALL, orphanRemoval = true)

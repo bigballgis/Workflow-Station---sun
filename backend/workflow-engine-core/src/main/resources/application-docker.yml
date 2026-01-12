@@ -1,0 +1,18 @@
+# Docker Profile Configuration for workflow-engine-core
+# This file contains Docker-specific settings for running in Docker network
+
+spring:
+  config:
+    activate:
+      on-profile: docker
+
+# Admin Center Configuration - Docker network address
+admin-center:
+  url: http://admin-center:8080
+
+# Logging for Docker environment
+logging:
+  level:
+    root: INFO
+    com.workflow: DEBUG
+    org.flowable: INFO

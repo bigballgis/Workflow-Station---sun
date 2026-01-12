@@ -4,6 +4,7 @@ import com.workflow.aspect.AuditAspect.Auditable;
 import com.workflow.dto.request.TaskAssignmentRequest;
 import com.workflow.dto.request.TaskClaimRequest;
 import com.workflow.dto.request.TaskDelegationRequest;
+import com.workflow.dto.request.TaskReturnRequest;
 import com.workflow.dto.response.TaskAssignmentResult;
 import com.workflow.dto.response.TaskListResult;
 import com.workflow.entity.ExtendedTaskInfo;
@@ -13,8 +14,12 @@ import com.workflow.enums.AuditResourceType;
 import com.workflow.exception.WorkflowBusinessException;
 import com.workflow.exception.WorkflowValidationException;
 import com.workflow.repository.ExtendedTaskInfoRepository;
+import com.workflow.service.UserPermissionService;
 
+import org.flowable.engine.RuntimeService;
 import org.flowable.engine.TaskService;
+import org.flowable.engine.HistoryService;
+import org.flowable.engine.history.HistoricActivityInstance;
 import org.flowable.task.api.Task;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -44,37 +49,82 @@ public class TaskManagerComponent {
     private TaskService taskService;
     
     @Autowired
+    private RuntimeService runtimeService;
+    
+    @Autowired
+    private HistoryService historyService;
+    
+    @Autowired
     private ExtendedTaskInfoRepository extendedTaskInfoRepository;
+    
+    @Autowired
+    private UserPermissionService userPermissionService;
     
     /**
      * 查询用户的待办任务（包括直接分配、委托、认领的任务）
      * 支持多维度任务分配类型
+     * 
+     * 直接从 Flowable TaskService 查询任务，确保能看到所有任务
+     * 包括未分配的任务（可以被任何人认领）
      */
     public TaskListResult getUserTasks(String userId, int page, int size) {
         try {
             // 验证参数
             validateUserId(userId);
             
-            // 创建分页参数
-            Pageable pageable = PageRequest.of(page, size, 
-                Sort.by(Sort.Direction.DESC, "priority")
-                    .and(Sort.by(Sort.Direction.ASC, "createdTime")));
+            List<Task> allTasks = new ArrayList<>();
             
-            // 查询用户的直接待办任务
-            Page<ExtendedTaskInfo> taskPage = extendedTaskInfoRepository
-                .findUserTodoTasks(userId, pageable);
+            // 1. 查询直接分配给用户的任务
+            List<Task> assignedTasks = taskService.createTaskQuery()
+                .taskAssignee(userId)
+                .list();
+            allTasks.addAll(assignedTasks);
+            
+            // 2. 查询用户是候选人的任务
+            List<Task> candidateTasks = taskService.createTaskQuery()
+                .taskCandidateUser(userId)
+                .list();
+            allTasks.addAll(candidateTasks);
+            
+            // 3. 查询未分配的任务（可以被任何人认领）
+            List<Task> unassignedTasks = taskService.createTaskQuery()
+                .taskUnassigned()
+                .list();
+            allTasks.addAll(unassignedTasks);
+            
+            // 去重并排序
+            List<Task> uniqueTasks = allTasks.stream()
+                .collect(java.util.stream.Collectors.toMap(
+                    Task::getId, 
+                    t -> t, 
+                    (t1, t2) -> t1))
+                .values()
+                .stream()
+                .sorted((t1, t2) -> t2.getCreateTime().compareTo(t1.getCreateTime()))
+                .toList();
+            
+            long totalCount = uniqueTasks.size();
+            
+            // 分页
+            int start = page * size;
+            int end = Math.min(start + size, uniqueTasks.size());
+            List<Task> pagedTasks = start < uniqueTasks.size() 
+                ? uniqueTasks.subList(start, end) 
+                : Collections.emptyList();
             
             // 转换为结果对象
-            List<TaskListResult.TaskInfo> taskInfos = taskPage.getContent().stream()
-                .map(this::convertToTaskInfo)
+            List<TaskListResult.TaskInfo> taskInfos = pagedTasks.stream()
+                .map(this::convertFlowableTaskToTaskInfo)
                 .toList();
+            
+            int totalPages = (int) Math.ceil((double) totalCount / size);
             
             return TaskListResult.builder()
                 .tasks(taskInfos)
-                .totalCount(taskPage.getTotalElements())
+                .totalCount(totalCount)
                 .currentPage(page)
                 .pageSize(size)
-                .totalPages(taskPage.getTotalPages())
+                .totalPages(totalPages)
                 .build();
                 
         } catch (Exception e) {
@@ -82,8 +132,70 @@ public class TaskManagerComponent {
                 "查询用户待办任务失败: " + e.getMessage(), e);
         }
     }
+    
+    /**
+     * 将 Flowable Task 转换为 TaskInfo
+     */
+    private TaskListResult.TaskInfo convertFlowableTaskToTaskInfo(Task task) {
+        return TaskListResult.TaskInfo.builder()
+            .taskId(task.getId())
+            .taskName(task.getName())
+            .taskDescription(task.getDescription())
+            .processInstanceId(task.getProcessInstanceId())
+            .processDefinitionId(task.getProcessDefinitionId())
+            .assignmentType(task.getAssignee() != null ? AssignmentType.USER : AssignmentType.VIRTUAL_GROUP)
+            .assignmentTarget(task.getAssignee())
+            .currentAssignee(task.getAssignee())
+            .priority(task.getPriority())
+            .status("PENDING")
+            .createdTime(task.getCreateTime() != null ? 
+                LocalDateTime.ofInstant(task.getCreateTime().toInstant(), java.time.ZoneId.systemDefault()) : null)
+            .dueDate(task.getDueDate() != null ? 
+                LocalDateTime.ofInstant(task.getDueDate().toInstant(), java.time.ZoneId.systemDefault()) : null)
+            .formKey(task.getFormKey())
+            .build();
+    }
+    
+    /**
+     * 按流程实例ID查询任务
+     */
+    public TaskListResult getTasksByProcessInstance(String processInstanceId, int page, int size) {
+        try {
+            // 查询流程实例的所有任务
+            List<Task> tasks = taskService.createTaskQuery()
+                .processInstanceId(processInstanceId)
+                .orderByTaskCreateTime()
+                .desc()
+                .listPage(page * size, size);
+            
+            long totalCount = taskService.createTaskQuery()
+                .processInstanceId(processInstanceId)
+                .count();
+            
+            // 转换为结果对象
+            List<TaskListResult.TaskInfo> taskInfos = tasks.stream()
+                .map(this::convertFlowableTaskToTaskInfo)
+                .toList();
+            
+            int totalPages = (int) Math.ceil((double) totalCount / size);
+            
+            return TaskListResult.builder()
+                .tasks(taskInfos)
+                .totalCount(totalCount)
+                .currentPage(page)
+                .pageSize(size)
+                .totalPages(totalPages)
+                .build();
+                
+        } catch (Exception e) {
+            throw new WorkflowBusinessException("TASK_QUERY_ERROR", 
+                "按流程实例查询任务失败: " + e.getMessage(), e);
+        }
+    }
     /**
      * 查询用户的所有可见任务（包括虚拟组和部门角色任务）
+     * 
+     * 直接从 Flowable TaskService 查询任务
      */
     public TaskListResult getUserAllVisibleTasks(String userId, List<String> groupIds, 
                                                List<String> deptRoles, int page, int size) {
@@ -91,35 +203,69 @@ public class TaskManagerComponent {
             // 验证参数
             validateUserId(userId);
             
-            // 如果没有提供组和角色信息，则只查询直接任务
-            if ((groupIds == null || groupIds.isEmpty()) && 
-                (deptRoles == null || deptRoles.isEmpty())) {
-                return getUserTasks(userId, page, size);
+            List<Task> allTasks = new ArrayList<>();
+            
+            // 1. 查询直接分配给用户的任务
+            List<Task> assignedTasks = taskService.createTaskQuery()
+                .taskAssignee(userId)
+                .list();
+            allTasks.addAll(assignedTasks);
+            
+            // 2. 查询用户是候选人的任务
+            List<Task> candidateTasks = taskService.createTaskQuery()
+                .taskCandidateUser(userId)
+                .list();
+            allTasks.addAll(candidateTasks);
+            
+            // 3. 查询用户所属组的任务
+            if (groupIds != null && !groupIds.isEmpty()) {
+                for (String groupId : groupIds) {
+                    List<Task> groupTasks = taskService.createTaskQuery()
+                        .taskCandidateGroup(groupId)
+                        .list();
+                    allTasks.addAll(groupTasks);
+                }
             }
             
-            // 创建分页参数
-            Pageable pageable = PageRequest.of(page, size, 
-                Sort.by(Sort.Direction.DESC, "priority")
-                    .and(Sort.by(Sort.Direction.ASC, "createdTime")));
+            // 4. 查询未分配的任务（没有 assignee 的任务）
+            List<Task> unassignedTasks = taskService.createTaskQuery()
+                .taskUnassigned()
+                .list();
+            allTasks.addAll(unassignedTasks);
             
-            // 查询用户的所有可见任务
-            Page<ExtendedTaskInfo> taskPage = extendedTaskInfoRepository
-                .findUserAllVisibleTasks(userId, 
-                    groupIds != null ? groupIds : Collections.emptyList(),
-                    deptRoles != null ? deptRoles : Collections.emptyList(),
-                    pageable);
+            // 去重
+            List<Task> uniqueTasks = allTasks.stream()
+                .collect(java.util.stream.Collectors.toMap(
+                    Task::getId, 
+                    t -> t, 
+                    (t1, t2) -> t1))
+                .values()
+                .stream()
+                .sorted((t1, t2) -> t2.getCreateTime().compareTo(t1.getCreateTime()))
+                .toList();
+            
+            long totalCount = uniqueTasks.size();
+            
+            // 分页
+            int start = page * size;
+            int end = Math.min(start + size, uniqueTasks.size());
+            List<Task> pagedTasks = start < uniqueTasks.size() 
+                ? uniqueTasks.subList(start, end) 
+                : Collections.emptyList();
             
             // 转换为结果对象
-            List<TaskListResult.TaskInfo> taskInfos = taskPage.getContent().stream()
-                .map(this::convertToTaskInfo)
+            List<TaskListResult.TaskInfo> taskInfos = pagedTasks.stream()
+                .map(this::convertFlowableTaskToTaskInfo)
                 .toList();
+            
+            int totalPages = (int) Math.ceil((double) totalCount / size);
             
             return TaskListResult.builder()
                 .tasks(taskInfos)
-                .totalCount(taskPage.getTotalElements())
+                .totalCount(totalCount)
                 .currentPage(page)
                 .pageSize(size)
-                .totalPages(taskPage.getTotalPages())
+                .totalPages(totalPages)
                 .build();
                 
         } catch (Exception e) {
@@ -257,47 +403,61 @@ public class TaskManagerComponent {
     }
     /**
      * 认领任务（虚拟组和部门角色任务）
+     * 
+     * 优先从 Flowable TaskService 查询任务，确保能认领所有任务
+     * 即使任务没有在 ExtendedTaskInfo 表中也能认领
      */
     public TaskAssignmentResult claimTask(String taskId, TaskClaimRequest request) {
         try {
             // 验证请求参数
             validateTaskClaimRequest(request);
             
-            // 查找扩展任务信息
-            ExtendedTaskInfo extendedTaskInfo = extendedTaskInfoRepository
-                .findByTaskIdAndIsDeletedFalse(taskId)
-                .orElseThrow(() -> new WorkflowValidationException(Collections.singletonList(
-                    new WorkflowValidationException.ValidationError(
-                        "taskId", "任务不存在", taskId))));
+            // 首先从 Flowable 查询任务是否存在
+            Task flowableTask = taskService.createTaskQuery()
+                .taskId(taskId)
+                .singleResult();
             
-            // 验证认领权限
-            validateClaimPermission(extendedTaskInfo, request.getClaimedBy());
-            
-            // 检查任务是否已完成
-            if (extendedTaskInfo.isCompleted()) {
+            if (flowableTask == null) {
                 throw new WorkflowValidationException(Collections.singletonList(
                     new WorkflowValidationException.ValidationError(
-                        "taskId", "任务已完成，无法认领", taskId)));
+                        "taskId", "任务不存在", taskId)));
             }
             
-            // 检查任务是否已被认领
-            if (extendedTaskInfo.isClaimed()) {
+            // 检查任务是否已被认领（有 assignee）
+            if (flowableTask.getAssignee() != null && !flowableTask.getAssignee().isEmpty()) {
                 throw new WorkflowValidationException(Collections.singletonList(
                     new WorkflowValidationException.ValidationError(
                         "taskId", "任务已被认领", taskId)));
             }
             
-            // 执行认领操作
-            extendedTaskInfo.claimTask(request.getClaimedBy());
+            // 查找扩展任务信息（可选）
+            Optional<ExtendedTaskInfo> extendedTaskInfoOpt = extendedTaskInfoRepository
+                .findByTaskIdAndIsDeletedFalse(taskId);
+            
+            // 如果有扩展任务信息，进行额外验证
+            if (extendedTaskInfoOpt.isPresent()) {
+                ExtendedTaskInfo extendedTaskInfo = extendedTaskInfoOpt.get();
+                
+                // 验证认领权限
+                validateClaimPermission(extendedTaskInfo, request.getClaimedBy());
+                
+                // 检查任务是否已完成
+                if (extendedTaskInfo.isCompleted()) {
+                    throw new WorkflowValidationException(Collections.singletonList(
+                        new WorkflowValidationException.ValidationError(
+                            "taskId", "任务已完成，无法认领", taskId)));
+                }
+                
+                // 执行认领操作
+                extendedTaskInfo.claimTask(request.getClaimedBy());
+                extendedTaskInfoRepository.save(extendedTaskInfo);
+                
+                // 发布任务认领事件
+                publishTaskClaimEvent(extendedTaskInfo, request);
+            }
             
             // 更新Flowable任务的分配人
             taskService.claim(taskId, request.getClaimedBy());
-            
-            // 保存扩展任务信息
-            extendedTaskInfo = extendedTaskInfoRepository.save(extendedTaskInfo);
-            
-            // 发布任务认领事件
-            publishTaskClaimEvent(extendedTaskInfo, request);
             
             return TaskAssignmentResult.success(
                 taskId, 
@@ -315,10 +475,9 @@ public class TaskManagerComponent {
     }
     
     /**
-     * 完成任务（支持委托人代表原分配人完成）
+     * 取消认领任务
      */
-    public TaskAssignmentResult completeTask(String taskId, String userId, 
-                                           java.util.Map<String, Object> variables) {
+    public TaskAssignmentResult unclaimTask(String taskId, String userId) {
         try {
             // 验证参数
             validateUserId(userId);
@@ -330,14 +489,149 @@ public class TaskManagerComponent {
                     new WorkflowValidationException.ValidationError(
                         "taskId", "任务不存在", taskId))));
             
-            // 验证完成权限
-            validateCompletePermission(extendedTaskInfo, userId);
+            // 检查任务是否已完成
+            if (extendedTaskInfo.isCompleted()) {
+                throw new WorkflowValidationException(Collections.singletonList(
+                    new WorkflowValidationException.ValidationError(
+                        "taskId", "任务已完成，无法取消认领", taskId)));
+            }
+            
+            // 检查任务是否已被认领
+            if (!extendedTaskInfo.isClaimed()) {
+                throw new WorkflowValidationException(Collections.singletonList(
+                    new WorkflowValidationException.ValidationError(
+                        "taskId", "任务未被认领", taskId)));
+            }
+            
+            // 验证是否是当前认领人
+            if (!userId.equals(extendedTaskInfo.getClaimedBy())) {
+                throw new WorkflowValidationException(Collections.singletonList(
+                    new WorkflowValidationException.ValidationError(
+                        "userId", "只有认领人才能取消认领", userId)));
+            }
+            
+            // 执行取消认领操作
+            extendedTaskInfo.unclaimTask();
+            
+            // 更新Flowable任务的分配人
+            taskService.unclaim(taskId);
+            
+            // 保存扩展任务信息
+            extendedTaskInfo = extendedTaskInfoRepository.save(extendedTaskInfo);
+            
+            return TaskAssignmentResult.success(
+                taskId, 
+                extendedTaskInfo.getAssignmentType(),
+                extendedTaskInfo.getAssignmentTarget(),
+                userId,
+                "取消认领成功");
+                
+        } catch (WorkflowValidationException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new WorkflowBusinessException("TASK_UNCLAIM_ERROR", 
+                "取消认领失败: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * 转办任务
+     */
+    public TaskAssignmentResult transferTask(String taskId, String fromUserId, String toUserId, String reason) {
+        try {
+            // 验证参数
+            validateUserId(fromUserId);
+            validateUserId(toUserId);
+            
+            // 查找扩展任务信息
+            ExtendedTaskInfo extendedTaskInfo = extendedTaskInfoRepository
+                .findByTaskIdAndIsDeletedFalse(taskId)
+                .orElseThrow(() -> new WorkflowValidationException(Collections.singletonList(
+                    new WorkflowValidationException.ValidationError(
+                        "taskId", "任务不存在", taskId))));
             
             // 检查任务是否已完成
             if (extendedTaskInfo.isCompleted()) {
                 throw new WorkflowValidationException(Collections.singletonList(
                     new WorkflowValidationException.ValidationError(
-                        "taskId", "任务已完成", taskId)));
+                        "taskId", "任务已完成，无法转办", taskId)));
+            }
+            
+            // 验证转办权限
+            validateCompletePermission(extendedTaskInfo, fromUserId);
+            
+            // 执行转办操作 - 直接更改分配人
+            extendedTaskInfo.setAssignmentType(AssignmentType.USER);
+            extendedTaskInfo.setAssignmentTarget(toUserId);
+            extendedTaskInfo.setClaimedBy(null);
+            extendedTaskInfo.setClaimedTime(null);
+            extendedTaskInfo.setDelegatedTo(null);
+            extendedTaskInfo.setDelegatedBy(null);
+            extendedTaskInfo.setDelegatedTime(null);
+            extendedTaskInfo.setDelegationReason(null);
+            extendedTaskInfo.updateStatus("ASSIGNED", fromUserId);
+            
+            // 更新Flowable任务的分配人
+            taskService.setAssignee(taskId, toUserId);
+            
+            // 保存扩展任务信息
+            extendedTaskInfo = extendedTaskInfoRepository.save(extendedTaskInfo);
+            
+            return TaskAssignmentResult.success(
+                taskId, 
+                AssignmentType.USER,
+                toUserId,
+                fromUserId,
+                "任务转办成功");
+                
+        } catch (WorkflowValidationException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new WorkflowBusinessException("TASK_TRANSFER_ERROR", 
+                "任务转办失败: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * 完成任务（支持委托人代表原分配人完成）
+     * 
+     * 优先从 Flowable TaskService 查询任务，确保能完成所有任务
+     * 即使任务没有在 ExtendedTaskInfo 表中也能完成
+     */
+    public TaskAssignmentResult completeTask(String taskId, String userId, 
+                                           java.util.Map<String, Object> variables) {
+        try {
+            // 验证参数
+            validateUserId(userId);
+            
+            // 首先从 Flowable 查询任务是否存在
+            Task flowableTask = taskService.createTaskQuery()
+                .taskId(taskId)
+                .singleResult();
+            
+            if (flowableTask == null) {
+                throw new WorkflowValidationException(Collections.singletonList(
+                    new WorkflowValidationException.ValidationError(
+                        "taskId", "任务不存在", taskId)));
+            }
+            
+            // 查找扩展任务信息（可选，用于记录额外信息）
+            Optional<ExtendedTaskInfo> extendedTaskInfoOpt = extendedTaskInfoRepository
+                .findByTaskIdAndIsDeletedFalse(taskId);
+            
+            // 如果有扩展任务信息，验证权限和状态
+            if (extendedTaskInfoOpt.isPresent()) {
+                ExtendedTaskInfo extendedTaskInfo = extendedTaskInfoOpt.get();
+                
+                // 验证完成权限
+                validateCompletePermission(extendedTaskInfo, userId);
+                
+                // 检查任务是否已完成
+                if (extendedTaskInfo.isCompleted()) {
+                    throw new WorkflowValidationException(Collections.singletonList(
+                        new WorkflowValidationException.ValidationError(
+                            "taskId", "任务已完成", taskId)));
+                }
             }
             
             // 完成Flowable任务
@@ -347,17 +641,25 @@ public class TaskManagerComponent {
                 taskService.complete(taskId);
             }
             
-            // 更新扩展任务信息
-            extendedTaskInfo.completeTask(userId);
-            extendedTaskInfo = extendedTaskInfoRepository.save(extendedTaskInfo);
+            // 更新扩展任务信息（如果存在）
+            AssignmentType assignmentType = AssignmentType.USER;
+            String currentAssignee = userId;
             
-            // 发布任务完成事件
-            publishTaskCompleteEvent(extendedTaskInfo, userId, variables);
+            if (extendedTaskInfoOpt.isPresent()) {
+                ExtendedTaskInfo extendedTaskInfo = extendedTaskInfoOpt.get();
+                extendedTaskInfo.completeTask(userId);
+                extendedTaskInfoRepository.save(extendedTaskInfo);
+                assignmentType = extendedTaskInfo.getAssignmentType();
+                currentAssignee = extendedTaskInfo.getCurrentAssignee();
+                
+                // 发布任务完成事件
+                publishTaskCompleteEvent(extendedTaskInfo, userId, variables);
+            }
             
             return TaskAssignmentResult.success(
                 taskId, 
-                extendedTaskInfo.getAssignmentType(),
-                extendedTaskInfo.getCurrentAssignee(),
+                assignmentType,
+                currentAssignee,
                 userId,
                 "任务完成成功");
                 
@@ -366,6 +668,143 @@ public class TaskManagerComponent {
         } catch (Exception e) {
             throw new WorkflowBusinessException("TASK_COMPLETE_ERROR", 
                 "任务完成失败: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * 回退任务到指定的历史节点
+     * 使用 Flowable 的 createChangeActivityStateBuilder 实现任务回退
+     */
+    @Auditable(
+        operationType = AuditOperationType.RETURN_TASK,
+        resourceType = AuditResourceType.TASK,
+        description = "回退任务",
+        captureArgs = true,
+        captureResult = true
+    )
+    public TaskAssignmentResult returnTask(String taskId, TaskReturnRequest request) {
+        try {
+            // 验证请求参数
+            validateTaskReturnRequest(request);
+            
+            // 查找当前任务
+            Task currentTask = taskService.createTaskQuery()
+                .taskId(taskId)
+                .singleResult();
+            
+            if (currentTask == null) {
+                throw new WorkflowValidationException(Collections.singletonList(
+                    new WorkflowValidationException.ValidationError(
+                        "taskId", "任务不存在", taskId)));
+            }
+            
+            String processInstanceId = currentTask.getProcessInstanceId();
+            String currentActivityId = currentTask.getTaskDefinitionKey();
+            String targetActivityId = request.getTargetActivityId();
+            
+            // 验证目标节点是否为历史节点
+            List<HistoricActivityInstance> historicActivities = historyService
+                .createHistoricActivityInstanceQuery()
+                .processInstanceId(processInstanceId)
+                .activityId(targetActivityId)
+                .finished()
+                .orderByHistoricActivityInstanceEndTime()
+                .desc()
+                .list();
+            
+            if (historicActivities.isEmpty()) {
+                throw new WorkflowValidationException(Collections.singletonList(
+                    new WorkflowValidationException.ValidationError(
+                        "targetActivityId", "目标节点不是有效的历史节点", targetActivityId)));
+            }
+            
+            // 使用 Flowable 的 createChangeActivityStateBuilder 进行回退
+            runtimeService.createChangeActivityStateBuilder()
+                .processInstanceId(processInstanceId)
+                .moveActivityIdTo(currentActivityId, targetActivityId)
+                .changeState();
+            
+            // 查找扩展任务信息并更新状态
+            ExtendedTaskInfo extendedTaskInfo = extendedTaskInfoRepository
+                .findByTaskIdAndIsDeletedFalse(taskId)
+                .orElse(null);
+            
+            if (extendedTaskInfo != null) {
+                extendedTaskInfo.updateStatus("RETURNED", request.getUserId());
+                extendedTaskInfo.setIsDeleted(true);
+                extendedTaskInfoRepository.save(extendedTaskInfo);
+            }
+            
+            // 发布任务回退事件
+            publishTaskReturnEvent(taskId, processInstanceId, currentActivityId, targetActivityId, request);
+            
+            return TaskAssignmentResult.success(
+                taskId,
+                AssignmentType.USER,
+                targetActivityId,
+                request.getUserId(),
+                "任务回退成功，已回退到节点: " + targetActivityId);
+                
+        } catch (WorkflowValidationException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new WorkflowBusinessException("TASK_RETURN_ERROR", 
+                "任务回退失败: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * 获取可回退的历史节点列表
+     */
+    public List<TaskListResult.TaskInfo> getReturnableActivities(String taskId) {
+        try {
+            // 查找当前任务
+            Task currentTask = taskService.createTaskQuery()
+                .taskId(taskId)
+                .singleResult();
+            
+            if (currentTask == null) {
+                throw new WorkflowValidationException(Collections.singletonList(
+                    new WorkflowValidationException.ValidationError(
+                        "taskId", "任务不存在", taskId)));
+            }
+            
+            String processInstanceId = currentTask.getProcessInstanceId();
+            
+            // 查询历史用户任务节点
+            List<HistoricActivityInstance> historicActivities = historyService
+                .createHistoricActivityInstanceQuery()
+                .processInstanceId(processInstanceId)
+                .activityType("userTask")
+                .finished()
+                .orderByHistoricActivityInstanceEndTime()
+                .desc()
+                .list();
+            
+            // 转换为任务信息列表（去重）
+            List<TaskListResult.TaskInfo> returnableActivities = new ArrayList<>();
+            java.util.Set<String> seenActivityIds = new java.util.HashSet<>();
+            
+            for (HistoricActivityInstance activity : historicActivities) {
+                if (!seenActivityIds.contains(activity.getActivityId())) {
+                    seenActivityIds.add(activity.getActivityId());
+                    
+                    TaskListResult.TaskInfo taskInfo = TaskListResult.TaskInfo.builder()
+                        .taskId(activity.getActivityId())
+                        .taskName(activity.getActivityName())
+                        .processInstanceId(processInstanceId)
+                        .status("COMPLETED")
+                        .build();
+                    
+                    returnableActivities.add(taskInfo);
+                }
+            }
+            
+            return returnableActivities;
+            
+        } catch (Exception e) {
+            throw new WorkflowBusinessException("TASK_QUERY_ERROR", 
+                "查询可回退节点失败: " + e.getMessage(), e);
         }
     }
     
@@ -453,6 +892,29 @@ public class TaskManagerComponent {
     }
     
     /**
+     * 验证任务回退请求
+     */
+    private void validateTaskReturnRequest(TaskReturnRequest request) {
+        if (request == null) {
+            throw new WorkflowValidationException(Collections.singletonList(
+                new WorkflowValidationException.ValidationError(
+                    "request", "请求参数不能为空", null)));
+        }
+        
+        if (!StringUtils.hasText(request.getTargetActivityId())) {
+            throw new WorkflowValidationException(Collections.singletonList(
+                new WorkflowValidationException.ValidationError(
+                    "targetActivityId", "目标节点ID不能为空", null)));
+        }
+        
+        if (!StringUtils.hasText(request.getUserId())) {
+            throw new WorkflowValidationException(Collections.singletonList(
+                new WorkflowValidationException.ValidationError(
+                    "userId", "用户ID不能为空", null)));
+        }
+    }
+    
+    /**
      * 创建扩展任务信息
      */
     private ExtendedTaskInfo createExtendedTaskInfo(Task flowableTask, TaskAssignmentRequest request) {
@@ -532,26 +994,10 @@ public class TaskManagerComponent {
      */
     private void validateDelegationPermission(ExtendedTaskInfo task, String delegatedBy) {
         // 验证委托人是否有权限委托此任务
-        boolean hasPermission = false;
-        
-        switch (task.getAssignmentType()) {
-            case USER:
-                // 如果任务直接分配给用户，只有该用户可以委托
-                hasPermission = task.getAssignmentTarget().equals(delegatedBy);
-                break;
-            case VIRTUAL_GROUP:
-                // 如果任务分配给虚拟组，虚拟组成员可以委托
-                // 这里需要调用用户服务验证用户是否为虚拟组成员
-                // 暂时简化处理，假设有权限
-                hasPermission = true; // TODO: 实现虚拟组成员验证
-                break;
-            case DEPT_ROLE:
-                // 如果任务分配给部门角色，该部门该角色的用户可以委托
-                // 这里需要调用用户服务验证用户是否拥有该部门角色
-                // 暂时简化处理，假设有权限
-                hasPermission = true; // TODO: 实现部门角色验证
-                break;
-        }
+        boolean hasPermission = userPermissionService.hasTaskPermission(
+                delegatedBy, 
+                task.getAssignmentType(), 
+                task.getAssignmentTarget());
         
         if (!hasPermission) {
             throw new WorkflowValidationException(Collections.singletonList(
@@ -571,22 +1017,11 @@ public class TaskManagerComponent {
                     "taskId", "直接分配的任务不能被认领", task.getTaskId())));
         }
         
-        boolean hasPermission = false;
-        
-        switch (task.getAssignmentType()) {
-            case VIRTUAL_GROUP:
-                // 验证用户是否为虚拟组成员
-                // 这里需要调用用户服务验证
-                // 暂时简化处理，假设有权限
-                hasPermission = true; // TODO: 实现虚拟组成员验证
-                break;
-            case DEPT_ROLE:
-                // 验证用户是否拥有该部门角色
-                // 这里需要调用用户服务验证
-                // 暂时简化处理，假设有权限
-                hasPermission = true; // TODO: 实现部门角色验证
-                break;
-        }
+        // 验证用户是否有权限认领此任务
+        boolean hasPermission = userPermissionService.hasTaskPermission(
+                claimedBy, 
+                task.getAssignmentType(), 
+                task.getAssignmentTarget());
         
         if (!hasPermission) {
             throw new WorkflowValidationException(Collections.singletonList(
@@ -612,23 +1047,10 @@ public class TaskManagerComponent {
         }
         
         // 如果没有明确的当前处理人，根据分配类型验证权限
-        boolean hasPermission = false;
-        
-        switch (task.getAssignmentType()) {
-            case USER:
-                hasPermission = task.getAssignmentTarget().equals(userId);
-                break;
-            case VIRTUAL_GROUP:
-                // 虚拟组成员可以完成任务
-                // 这里需要调用用户服务验证
-                hasPermission = true; // TODO: 实现虚拟组成员验证
-                break;
-            case DEPT_ROLE:
-                // 拥有该部门角色的用户可以完成任务
-                // 这里需要调用用户服务验证
-                hasPermission = true; // TODO: 实现部门角色验证
-                break;
-        }
+        boolean hasPermission = userPermissionService.hasTaskPermission(
+                userId, 
+                task.getAssignmentType(), 
+                task.getAssignmentTarget());
         
         if (!hasPermission) {
             throw new WorkflowValidationException(Collections.singletonList(
@@ -701,6 +1123,18 @@ public class TaskManagerComponent {
         // TODO: 实现事件发布逻辑
         System.out.println("任务完成事件: 任务 " + task.getTaskId() + 
                           " 已被 " + userId + " 完成");
+    }
+    
+    /**
+     * 发布任务回退事件
+     */
+    private void publishTaskReturnEvent(String taskId, String processInstanceId, 
+                                        String fromActivityId, String toActivityId,
+                                        TaskReturnRequest request) {
+        // TODO: 实现事件发布逻辑
+        System.out.println("任务回退事件: 任务 " + taskId + 
+                          " 从节点 " + fromActivityId + " 回退到节点 " + toActivityId +
+                          " (操作人: " + request.getUserId() + ", 原因: " + request.getReason() + ")");
     }
     
     // ==================== 统计查询方法 ====================
