@@ -21,13 +21,25 @@ services:
       # Mount init scripts - PostgreSQL executes .sql files in alphabetical order
       # Files are prefixed with numbers to ensure correct execution order
       - ./deploy/init-scripts/00-schema/01-schema.sql:/docker-entrypoint-initdb.d/00-01-schema.sql
-      - ./deploy/init-scripts/00-schema/02-system-data.sql:/docker-entrypoint-initdb.d/00-02-system-data.sql
       - ./deploy/init-scripts/01-admin/01-admin-user.sql:/docker-entrypoint-initdb.d/01-01-admin-user.sql
       - ./deploy/init-scripts/02-test-data/01-organization.sql:/docker-entrypoint-initdb.d/02-01-organization.sql
       - ./deploy/init-scripts/02-test-data/02-organization-detail.sql:/docker-entrypoint-initdb.d/02-02-organization-detail.sql
       - ./deploy/init-scripts/02-test-data/03-users.sql:/docker-entrypoint-initdb.d/02-03-users.sql
       - ./deploy/init-scripts/02-test-data/04-role-assignments.sql:/docker-entrypoint-initdb.d/02-04-role-assignments.sql
-      - ./deploy/init-scripts/02-test-data/05-virtual-groups.sql:/docker-entrypoint-initdb.d/02-05-virtual-groups.sql
+      - ./deploy/init-scripts/02-test-data/04-department-managers.sql:/docker-entrypoint-initdb.d/02-05-department-managers.sql
+      - ./deploy/init-scripts/02-test-data/05-virtual-groups.sql:/docker-entrypoint-initdb.d/02-06-virtual-groups.sql
+      # Purchase Workflow Scripts
+      - ./deploy/init-scripts/04-purchase-workflow/04-01-function-unit.sql:/docker-entrypoint-initdb.d/04-01-function-unit.sql
+      - ./deploy/init-scripts/04-purchase-workflow/04-02-tables.sql:/docker-entrypoint-initdb.d/04-02-tables.sql
+      - ./deploy/init-scripts/04-purchase-workflow/04-03-fields-main-fixed.sql:/docker-entrypoint-initdb.d/04-03-fields-main-fixed.sql
+      - ./deploy/init-scripts/04-purchase-workflow/04-04-fields-sub-fixed.sql:/docker-entrypoint-initdb.d/04-04-fields-sub-fixed.sql
+      - ./deploy/init-scripts/04-purchase-workflow/04-05-fk-relations.sql:/docker-entrypoint-initdb.d/04-05-fk-relations.sql
+      - ./deploy/init-scripts/04-purchase-workflow/04-06-forms-fixed.sql:/docker-entrypoint-initdb.d/04-06-forms-fixed.sql
+      - ./deploy/init-scripts/04-purchase-workflow/04-07-actions-fixed.sql:/docker-entrypoint-initdb.d/04-07-actions-fixed.sql
+      - ./deploy/init-scripts/04-purchase-workflow/04-08-process-fixed-v2-corrected.sql:/docker-entrypoint-initdb.d/04-08-process-fixed-v2-corrected.sql
+      - ./deploy/init-scripts/04-purchase-workflow/04-09-form-bindings-fixed.sql:/docker-entrypoint-initdb.d/04-09-form-bindings-fixed.sql
+      - ./deploy/init-scripts/04-purchase-workflow/04-10-form-configs.sql:/docker-entrypoint-initdb.d/04-10-form-configs.sql
+      - ./deploy/init-scripts/04-purchase-workflow/04-11-action-configs.sql:/docker-entrypoint-initdb.d/04-11-action-configs.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U platform -d workflow_platform"]
       interval: 10s
