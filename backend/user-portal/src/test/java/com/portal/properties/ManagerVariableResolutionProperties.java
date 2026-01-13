@@ -8,172 +8,223 @@ import java.util.*;
 import static org.assertj.core.api.Assertions.*;
 
 /**
- * Property-based tests for manager variable resolution in process engine.
+ * Property-based tests for task assignee type resolution.
  * 
- * Property 4: Manager Variable Resolution
- * Property 5: Both Managers Candidate Resolution
- * Property 6: Null Manager Handling
+ * Tests the 7 standard assignment types:
+ * 1. FUNCTION_MANAGER - 职能经理（直接分配）
+ * 2. ENTITY_MANAGER - 实体经理（直接分配）
+ * 3. INITIATOR - 流程发起人（直接分配）
+ * 4. DEPT_OTHERS - 本部门其他人（需要认领）
+ * 5. PARENT_DEPT - 上级部门（需要认领）
+ * 6. FIXED_DEPT - 指定部门（需要认领）
+ * 7. VIRTUAL_GROUP - 虚拟组（需要认领）
  */
 class ManagerVariableResolutionProperties {
 
     /**
-     * Property 4: Manager Variable Resolution
-     * For any valid manager type variable, the resolution should return
-     * either a valid user ID or null (never throw exception).
+     * Property: Direct assignment types should resolve to a single assignee
+     * FUNCTION_MANAGER, ENTITY_MANAGER, INITIATOR are direct assignment types
      */
     @Property
-    void managerVariableResolutionNeverThrows(
-            @ForAll("managerVariableNames") String varName,
+    void directAssignmentTypesResolveSingleAssignee(
+            @ForAll("directAssignmentTypes") String assigneeType,
             @ForAll @StringLength(min = 1, max = 36) String initiatorId) {
         
-        // Simulate variable resolution
-        String result = simulateResolveVariable(varName, initiatorId);
+        // Simulate resolution for direct assignment types
+        AssigneeResult result = simulateResolveAssignee(assigneeType, null, initiatorId);
         
-        // Should either return a valid ID or null, never throw
-        assertThat(result == null || !result.isEmpty()).isTrue();
+        // Direct assignment types should not require claim
+        assertThat(result.requiresClaim).isFalse();
+        
+        // Should resolve to a single assignee (or null if manager not set)
+        assertThat(result.assignee == null || !result.assignee.isEmpty()).isTrue();
     }
 
     /**
-     * Property 5: Both Managers Candidate Resolution
-     * When resolving candidateUsers expression with multiple variables,
-     * the result should contain only non-null resolved values.
+     * Property: Claim-based assignment types should resolve to candidate users
+     * DEPT_OTHERS, PARENT_DEPT, FIXED_DEPT, VIRTUAL_GROUP require claim
      */
     @Property
-    void bothManagersCandidateResolutionFiltersNulls(
-            @ForAll @StringLength(min = 1, max = 36) String entityManagerId,
-            @ForAll @StringLength(min = 1, max = 36) String functionManagerId,
-            @ForAll boolean entityManagerExists,
-            @ForAll boolean functionManagerExists) {
+    void claimBasedAssignmentTypesResolveCandidates(
+            @ForAll("claimAssignmentTypes") String assigneeType,
+            @ForAll @StringLength(min = 1, max = 36) String initiatorId,
+            @ForAll @StringLength(min = 1, max = 36) String assigneeValue) {
         
-        String candidateUsersExpr = "${entityManager},${functionManager}";
+        // Simulate resolution for claim-based assignment types
+        AssigneeResult result = simulateResolveAssignee(assigneeType, assigneeValue, initiatorId);
         
-        // Simulate resolution
-        List<String> resolved = simulateResolveCandidateUsers(
-                candidateUsersExpr,
-                entityManagerExists ? entityManagerId : null,
-                functionManagerExists ? functionManagerId : null);
+        // Claim-based types should require claim
+        assertThat(result.requiresClaim).isTrue();
         
-        // Result should not contain null or empty strings
-        assertThat(resolved).allMatch(id -> id != null && !id.isEmpty());
-        
-        // Result size should match number of existing managers
-        int expectedSize = (entityManagerExists ? 1 : 0) + (functionManagerExists ? 1 : 0);
-        assertThat(resolved).hasSize(expectedSize);
+        // Should resolve to candidate users list (may be empty)
+        assertThat(result.candidateUsers).isNotNull();
     }
 
     /**
-     * Property 6: Null Manager Handling
-     * When a manager is null, the system should handle gracefully
-     * without causing process failure.
+     * Property: FIXED_DEPT and VIRTUAL_GROUP require assigneeValue
      */
     @Property
-    void nullManagerHandlingIsGraceful(
-            @ForAll("managerVariableNames") String varName,
+    void valueRequiredTypesNeedAssigneeValue(
+            @ForAll("valueRequiredTypes") String assigneeType,
             @ForAll @StringLength(min = 1, max = 36) String initiatorId) {
         
-        // Simulate null manager scenario
-        String result = simulateResolveVariableWithNullManager(varName, initiatorId);
+        // Simulate resolution without assigneeValue
+        AssigneeResult result = simulateResolveAssignee(assigneeType, null, initiatorId);
         
-        // Should return null gracefully
+        // Should have error when value is missing
+        assertThat(result.errorMessage).isNotNull();
+        assertThat(result.errorMessage).contains("未指定");
+    }
+
+    /**
+     * Property: Assignee type code parsing is case-insensitive
+     */
+    @Property
+    void assigneeTypeParsingIsCaseInsensitive(
+            @ForAll("assigneeTypeCodes") String typeCode) {
+        
+        String upperCase = typeCode.toUpperCase();
+        String lowerCase = typeCode.toLowerCase();
+        
+        AssigneeType upper = AssigneeType.fromCode(upperCase);
+        AssigneeType lower = AssigneeType.fromCode(lowerCase);
+        
+        assertThat(upper).isEqualTo(lower);
+    }
+
+    /**
+     * Property: Unknown assignee type returns null
+     */
+    @Property
+    void unknownAssigneeTypeReturnsNull(
+            @ForAll @StringLength(min = 1, max = 20) String randomCode) {
+        
+        // Skip if it happens to match a valid code
+        if (isValidAssigneeType(randomCode)) {
+            return;
+        }
+        
+        AssigneeType result = AssigneeType.fromCode(randomCode);
         assertThat(result).isNull();
     }
 
-    /**
-     * Property: Variable expression parsing is correct
-     */
-    @Property
-    void variableExpressionParsingIsCorrect(
-            @ForAll("managerVariableNames") String varName) {
-        
-        String expression = "${" + varName + "}";
-        String extracted = extractVariableName(expression);
-        
-        assertThat(extracted).isEqualTo(varName);
-    }
-
-    /**
-     * Property: Multiple candidate users expression parsing
-     */
-    @Property
-    void multipleCandidateUsersParsingIsCorrect(
-            @ForAll @Size(min = 1, max = 5) List<@StringLength(min = 1, max = 20) String> varNames) {
-        
-        // Build expression like ${var1},${var2},${var3}
-        String expression = varNames.stream()
-                .map(v -> "${" + v + "}")
-                .reduce((a, b) -> a + "," + b)
-                .orElse("");
-        
-        List<String> extracted = extractVariableNames(expression);
-        
-        assertThat(extracted).hasSize(varNames.size());
-        assertThat(extracted).containsExactlyElementsOf(varNames);
-    }
-
     @Provide
-    Arbitrary<String> managerVariableNames() {
+    Arbitrary<String> directAssignmentTypes() {
         return Arbitraries.of(
-                "entityManager",
-                "functionManager",
-                "departmentManager",
-                "departmentSecondaryManager",
-                "initiatorManager",
-                "manager"
+                "FUNCTION_MANAGER",
+                "ENTITY_MANAGER",
+                "INITIATOR"
         );
     }
 
-    // Helper methods to simulate the actual implementation
-
-    private String simulateResolveVariable(String varName, String initiatorId) {
-        // Simulate the resolution logic
-        Map<String, String> mockManagers = new HashMap<>();
-        mockManagers.put("entityManager", "entity-mgr-" + initiatorId.hashCode());
-        mockManagers.put("functionManager", "func-mgr-" + initiatorId.hashCode());
-        mockManagers.put("departmentManager", "dept-mgr-" + initiatorId.hashCode());
-        mockManagers.put("departmentSecondaryManager", "dept-sec-mgr-" + initiatorId.hashCode());
-        mockManagers.put("initiatorManager", "init-mgr-" + initiatorId.hashCode());
-        mockManagers.put("manager", "mgr-" + initiatorId.hashCode());
-        
-        return mockManagers.get(varName);
+    @Provide
+    Arbitrary<String> claimAssignmentTypes() {
+        return Arbitraries.of(
+                "DEPT_OTHERS",
+                "PARENT_DEPT",
+                "FIXED_DEPT",
+                "VIRTUAL_GROUP"
+        );
     }
 
-    private String simulateResolveVariableWithNullManager(String varName, String initiatorId) {
-        // Simulate scenario where manager is not set
-        return null;
+    @Provide
+    Arbitrary<String> valueRequiredTypes() {
+        return Arbitraries.of(
+                "FIXED_DEPT",
+                "VIRTUAL_GROUP"
+        );
     }
 
-    private List<String> simulateResolveCandidateUsers(String expr, String entityMgr, String funcMgr) {
-        List<String> result = new ArrayList<>();
-        
-        String[] parts = expr.split(",");
-        for (String part : parts) {
-            part = part.trim();
-            if (part.equals("${entityManager}") && entityMgr != null) {
-                result.add(entityMgr);
-            } else if (part.equals("${functionManager}") && funcMgr != null) {
-                result.add(funcMgr);
+    @Provide
+    Arbitrary<String> assigneeTypeCodes() {
+        return Arbitraries.of(
+                "FUNCTION_MANAGER",
+                "ENTITY_MANAGER",
+                "INITIATOR",
+                "DEPT_OTHERS",
+                "PARENT_DEPT",
+                "FIXED_DEPT",
+                "VIRTUAL_GROUP"
+        );
+    }
+
+    // Helper classes and methods
+
+    private static class AssigneeResult {
+        String assignee;
+        List<String> candidateUsers;
+        String candidateGroup;
+        boolean requiresClaim;
+        String errorMessage;
+    }
+
+    private enum AssigneeType {
+        FUNCTION_MANAGER, ENTITY_MANAGER, INITIATOR,
+        DEPT_OTHERS, PARENT_DEPT, FIXED_DEPT, VIRTUAL_GROUP;
+
+        static AssigneeType fromCode(String code) {
+            if (code == null) return null;
+            try {
+                return valueOf(code.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                return null;
             }
         }
+    }
+
+    private boolean isValidAssigneeType(String code) {
+        return AssigneeType.fromCode(code) != null;
+    }
+
+    private AssigneeResult simulateResolveAssignee(String assigneeTypeCode, String assigneeValue, String initiatorId) {
+        AssigneeResult result = new AssigneeResult();
+        AssigneeType type = AssigneeType.fromCode(assigneeTypeCode);
         
-        return result;
-    }
-
-    private String extractVariableName(String expression) {
-        if (expression.startsWith("${") && expression.endsWith("}")) {
-            return expression.substring(2, expression.length() - 1);
+        if (type == null) {
+            result.errorMessage = "未知的分配类型: " + assigneeTypeCode;
+            return result;
         }
-        return null;
-    }
 
-    private List<String> extractVariableNames(String expression) {
-        List<String> result = new ArrayList<>();
-        String[] parts = expression.split(",");
-        for (String part : parts) {
-            part = part.trim();
-            if (part.startsWith("${") && part.endsWith("}")) {
-                result.add(part.substring(2, part.length() - 1));
-            }
+        switch (type) {
+            case FUNCTION_MANAGER:
+                result.requiresClaim = false;
+                result.assignee = "func-mgr-" + initiatorId.hashCode();
+                break;
+            case ENTITY_MANAGER:
+                result.requiresClaim = false;
+                result.assignee = "entity-mgr-" + initiatorId.hashCode();
+                break;
+            case INITIATOR:
+                result.requiresClaim = false;
+                result.assignee = initiatorId;
+                break;
+            case DEPT_OTHERS:
+                result.requiresClaim = true;
+                result.candidateUsers = Arrays.asList("user1", "user2", "user3");
+                break;
+            case PARENT_DEPT:
+                result.requiresClaim = true;
+                result.candidateUsers = Arrays.asList("parent-user1", "parent-user2");
+                break;
+            case FIXED_DEPT:
+                result.requiresClaim = true;
+                if (assigneeValue == null || assigneeValue.isEmpty()) {
+                    result.errorMessage = "未指定部门ID";
+                } else {
+                    result.candidateUsers = Arrays.asList("dept-user1", "dept-user2");
+                }
+                break;
+            case VIRTUAL_GROUP:
+                result.requiresClaim = true;
+                if (assigneeValue == null || assigneeValue.isEmpty()) {
+                    result.errorMessage = "未指定虚拟组ID";
+                } else {
+                    result.candidateUsers = Arrays.asList("group-user1", "group-user2");
+                    result.candidateGroup = assigneeValue;
+                }
+                break;
         }
+        
         return result;
     }
 }

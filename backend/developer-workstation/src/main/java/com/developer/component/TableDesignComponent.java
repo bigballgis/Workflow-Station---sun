@@ -1,5 +1,6 @@
 package com.developer.component;
 
+import com.developer.dto.ForeignKeyDTO;
 import com.developer.dto.TableDefinitionRequest;
 import com.developer.dto.ValidationResult;
 import com.developer.entity.TableDefinition;
@@ -51,4 +52,9 @@ public interface TableDesignComponent {
      * 检测循环依赖
      */
     boolean hasCircularDependency(Long functionUnitId);
+    
+    /**
+     * 获取功能单元的所有外键关系
+     */
+    List<ForeignKeyDTO> getForeignKeys(Long functionUnitId);
 }

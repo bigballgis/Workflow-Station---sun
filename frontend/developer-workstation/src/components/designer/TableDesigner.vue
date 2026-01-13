@@ -208,7 +208,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { ArrowLeft, Delete, Plus, Refresh } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
-import { functionUnitApi, type TableDefinition, type FieldDefinition } from '@/api/functionUnit'
+import { functionUnitApi, type TableDefinition, type FieldDefinition, type ForeignKeyDTO } from '@/api/functionUnit'
 
 interface TableRelation {
   id?: number
@@ -231,6 +231,7 @@ const ddlDialect = ref('POSTGRESQL')
 const ddlContent = ref('')
 const createForm = reactive({ tableName: '', tableType: 'MAIN', description: '' })
 const relations = ref<TableRelation[]>([])
+const foreignKeys = ref<ForeignKeyDTO[]>([])
 
 const tableTypeLabel = (type: string) => {
   const map: Record<string, string> = { MAIN: '主表', SUB: '子表', ACTION: '动作表', RELATION: '关联表' }
@@ -243,8 +244,11 @@ function getTableFields(tableId: number | null): FieldDefinition[] {
   return table?.fieldDefinitions || []
 }
 
-function getTableRelations(tableId: number): TableRelation[] {
-  return relations.value.filter(r => r.sourceTableId === tableId || r.targetTableId === tableId)
+function getTableRelations(tableId: number): (TableRelation | ForeignKeyDTO)[] {
+  // Combine local relations and database foreign keys
+  const localRelations = relations.value.filter(r => r.sourceTableId === tableId || r.targetTableId === tableId)
+  const dbRelations = foreignKeys.value.filter(fk => fk.sourceTableId === tableId || fk.targetTableId === tableId)
+  return [...localRelations, ...dbRelations]
 }
 
 async function loadTables() {
@@ -259,12 +263,17 @@ async function loadTables() {
 
 async function loadRelations() {
   try {
-    // Load relations from localStorage for now (can be replaced with API call)
+    // Load foreign keys from database API
+    const res = await functionUnitApi.getForeignKeys(props.functionUnitId)
+    foreignKeys.value = res?.data || []
+    
+    // Also load local relations from localStorage (for backward compatibility)
     const stored = localStorage.getItem(`table_relations_${props.functionUnitId}`)
     if (stored) {
       relations.value = JSON.parse(stored)
     }
   } catch {
+    foreignKeys.value = []
     relations.value = []
   }
 }

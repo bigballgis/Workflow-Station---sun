@@ -25,10 +25,23 @@ public interface FormDefinitionRepository extends JpaRepository<FormDefinition, 
     List<FormDefinition> findByFunctionUnitIdWithBoundTable(@Param("functionUnitId") Long functionUnitId);
     
     /**
+     * 查询功能单元的所有表单，同时加载表绑定列表
+     * 注意：由于JPA的限制，需要分两步加载：先加载表单，再加载绑定
+     */
+    @Query("SELECT DISTINCT f FROM FormDefinition f LEFT JOIN FETCH f.boundTable LEFT JOIN FETCH f.tableBindings tb LEFT JOIN FETCH tb.table WHERE f.functionUnit.id = :functionUnitId")
+    List<FormDefinition> findByFunctionUnitIdWithBindings(@Param("functionUnitId") Long functionUnitId);
+    
+    /**
      * 根据ID查询表单，同时加载绑定的表信息
      */
     @Query("SELECT f FROM FormDefinition f LEFT JOIN FETCH f.boundTable WHERE f.id = :id")
     Optional<FormDefinition> findByIdWithBoundTable(@Param("id") Long id);
+    
+    /**
+     * 根据ID查询表单，同时加载表绑定列表
+     */
+    @Query("SELECT f FROM FormDefinition f LEFT JOIN FETCH f.boundTable LEFT JOIN FETCH f.tableBindings tb LEFT JOIN FETCH tb.table WHERE f.id = :id")
+    Optional<FormDefinition> findByIdWithBindings(@Param("id") Long id);
     
     List<FormDefinition> findByFunctionUnitIdAndFormType(Long functionUnitId, FormType formType);
     

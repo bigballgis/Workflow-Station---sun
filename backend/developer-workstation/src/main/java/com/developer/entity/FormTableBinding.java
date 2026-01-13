@@ -35,6 +35,7 @@ public class FormTableBinding {
     @JoinColumn(name = "form_id", nullable = false)
     private FormDefinition form;
     
+    @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "table_id", nullable = false)
     private TableDefinition table;

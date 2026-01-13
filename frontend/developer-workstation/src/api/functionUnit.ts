@@ -135,6 +135,20 @@ export interface ProcessDefinition {
   description?: string
 }
 
+export interface ForeignKeyDTO {
+  id: number
+  sourceTableId: number
+  sourceTableName: string
+  sourceFieldId: number
+  sourceFieldName: string
+  targetTableId: number
+  targetTableName: string
+  targetFieldId: number
+  targetFieldName: string
+  onDelete?: string
+  onUpdate?: string
+}
+
 export interface ValidationResult {
   valid: boolean
   errors: string[]
@@ -242,6 +256,10 @@ export const functionUnitApi = {
 
   validateTables: (functionUnitId: number) =>
     functionUnitAxios.get<any, { data: ValidationResult }>(`/api/v1/function-units/${functionUnitId}/tables/validate`),
+
+  // Foreign Keys
+  getForeignKeys: (functionUnitId: number) =>
+    functionUnitAxios.get<any, { data: ForeignKeyDTO[] }>(`/api/v1/function-units/${functionUnitId}/tables/foreign-keys`),
 
   // Action test
   testAction: (functionUnitId: number, actionId: number, testData: any) =>

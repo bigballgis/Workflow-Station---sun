@@ -335,4 +335,152 @@ public class AdminCenterClient {
             return false;
         }
     }
+    
+    /**
+     * 获取用户详细信息
+     * @param userId 用户ID（可以是ID或用户名）
+     * @return 用户信息Map，包含 id, username, departmentId, entityManagerId, functionManagerId 等
+     */
+    public Map<String, Object> getUserInfo(String userId) {
+        try {
+            // 首先尝试通过ID查询
+            String url = adminCenterUrl + "/api/v1/admin/users/" + userId;
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<Map<String, Object>>() {}
+            );
+            
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                return response.getBody();
+            }
+        } catch (Exception e) {
+            log.debug("Failed to get user by ID {}, trying by username: {}", userId, e.getMessage());
+        }
+        
+        // 尝试通过用户名搜索
+        try {
+            String searchUrl = adminCenterUrl + "/api/v1/admin/users?keyword=" + userId + "&size=1";
+            ResponseEntity<Map<String, Object>> searchResponse = restTemplate.exchange(
+                    searchUrl,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<Map<String, Object>>() {}
+            );
+            
+            Map<String, Object> searchResult = searchResponse.getBody();
+            if (searchResult != null && searchResult.get("content") != null) {
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> users = (List<Map<String, Object>>) searchResult.get("content");
+                if (!users.isEmpty()) {
+                    return users.get(0);
+                }
+            }
+        } catch (Exception e) {
+            log.error("Failed to search user by username {}: {}", userId, e.getMessage());
+        }
+        
+        return null;
+    }
+    
+    /**
+     * 获取部门信息
+     * @param departmentId 部门ID
+     * @return 部门信息Map，包含 id, name, parentId, managerId 等
+     */
+    public Map<String, Object> getDepartmentInfo(String departmentId) {
+        try {
+            String url = adminCenterUrl + "/api/v1/admin/departments/" + departmentId;
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<Map<String, Object>>() {}
+            );
+            
+            if (response.getStatusCode().is2xxSuccessful()) {
+                return response.getBody();
+            }
+        } catch (Exception e) {
+            log.error("Failed to get department info for {}: {}", departmentId, e.getMessage());
+        }
+        return null;
+    }
+    
+    /**
+     * 获取部门成员ID列表
+     * @param departmentId 部门ID
+     * @return 成员用户ID列表
+     */
+    public List<String> getDepartmentMembers(String departmentId) {
+        try {
+            String url = adminCenterUrl + "/api/v1/admin/departments/" + departmentId + "/members";
+            ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<List<Map<String, Object>>>() {}
+            );
+            
+            List<Map<String, Object>> members = response.getBody();
+            if (members == null || members.isEmpty()) {
+                return Collections.emptyList();
+            }
+            
+            List<String> memberIds = new ArrayList<>();
+            for (Map<String, Object> member : members) {
+                Object id = member.get("id");
+                if (id == null) {
+                    id = member.get("userId");
+                }
+                if (id != null) {
+                    memberIds.add(id.toString());
+                }
+            }
+            return memberIds;
+            
+        } catch (Exception e) {
+            log.error("Failed to get department members for {}: {}", departmentId, e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+    
+    /**
+     * 获取虚拟组成员ID列表
+     * @param groupId 虚拟组ID
+     * @return 成员用户ID列表
+     */
+    public List<String> getVirtualGroupMembers(String groupId) {
+        try {
+            String url = adminCenterUrl + "/api/v1/admin/virtual-groups/" + groupId + "/members";
+            ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<List<Map<String, Object>>>() {}
+            );
+            
+            List<Map<String, Object>> members = response.getBody();
+            if (members == null || members.isEmpty()) {
+                return Collections.emptyList();
+            }
+            
+            List<String> memberIds = new ArrayList<>();
+            for (Map<String, Object> member : members) {
+                Object id = member.get("userId");
+                if (id == null) {
+                    id = member.get("id");
+                }
+                if (id != null) {
+                    memberIds.add(id.toString());
+                }
+            }
+            return memberIds;
+            
+        } catch (Exception e) {
+            log.error("Failed to get virtual group members for {}: {}", groupId, e.getMessage());
+            return Collections.emptyList();
+        }
+    }
 }

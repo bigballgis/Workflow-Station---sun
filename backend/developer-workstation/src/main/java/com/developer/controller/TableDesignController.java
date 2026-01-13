@@ -2,6 +2,7 @@ package com.developer.controller;
 
 import com.developer.component.TableDesignComponent;
 import com.developer.dto.ApiResponse;
+import com.developer.dto.ForeignKeyDTO;
 import com.developer.dto.TableDefinitionRequest;
 import com.developer.dto.ValidationResult;
 import com.developer.entity.TableDefinition;
@@ -86,6 +87,14 @@ public class TableDesignController {
     @Operation(summary = "验证表结构")
     public ResponseEntity<ApiResponse<ValidationResult>> validate(@PathVariable Long functionUnitId) {
         ValidationResult result = tableDesignComponent.validateRelationships(functionUnitId);
+        return ResponseEntity.ok(ApiResponse.success(result));
+    }
+    
+    // 获取外键关系
+    @GetMapping("/foreign-keys")
+    @Operation(summary = "获取功能单元的所有外键关系")
+    public ResponseEntity<ApiResponse<List<ForeignKeyDTO>>> getForeignKeys(@PathVariable Long functionUnitId) {
+        List<ForeignKeyDTO> result = tableDesignComponent.getForeignKeys(functionUnitId);
         return ResponseEntity.ok(ApiResponse.success(result));
     }
 }

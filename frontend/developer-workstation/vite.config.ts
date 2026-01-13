@@ -32,6 +32,12 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => '/auth' + path.substring('/api/v1/auth'.length)
       },
+      // Admin Center API (departments, virtual-groups)
+      '/api/admin-center': {
+        target: 'http://localhost:8090',
+        changeOrigin: true,
+        rewrite: (path) => path.replace('/api/admin-center', '/api/v1/admin')
+      },
       // Function units, icons, versions, export/import - developer-workstation
       '/api/v1/function-units': {
         target: 'http://localhost:8083',

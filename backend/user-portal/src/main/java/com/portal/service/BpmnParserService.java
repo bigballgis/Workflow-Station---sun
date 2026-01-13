@@ -370,62 +370,49 @@ public class BpmnParserService {
 
     /**
      * 解析处理人信息
+     * 使用新的7种标准分配类型
      */
     public void resolveAssignee(UserTaskInfo taskInfo, Map<String, Object> variables, String initiatorId) {
         if (taskInfo == null || taskInfo.getAssigneeType() == null) {
             return;
         }
 
-        String assigneeType = taskInfo.getAssigneeType();
-        String resolvedAssignee = null;
-        String resolvedCandidates = null;
+        String assigneeType = taskInfo.getAssigneeType().toUpperCase();
 
         switch (assigneeType) {
-            case "initiator":
-                resolvedAssignee = initiatorId;
+            // 1. 流程发起人 - 直接分配
+            case "INITIATOR":
+                taskInfo.setAssigneeValue(initiatorId);
                 break;
-            case "manager":
-            case "entityManager":
-                // 需要调用外部服务获取，这里设置标记
-                taskInfo.setAssigneeValue("${entityManager}");
+            // 2. 实体经理 - 直接分配（由 workflow-engine-core 的 TaskAssigneeResolver 解析）
+            case "ENTITY_MANAGER":
+                // 标记需要由 workflow-engine-core 解析
                 break;
-            case "functionManager":
-                taskInfo.setAssigneeValue("${functionManager}");
+            // 3. 职能经理 - 直接分配（由 workflow-engine-core 的 TaskAssigneeResolver 解析）
+            case "FUNCTION_MANAGER":
+                // 标记需要由 workflow-engine-core 解析
                 break;
-            case "departmentManager":
-                taskInfo.setAssigneeValue("${departmentManager}");
+            // 4. 本部门其他人 - 需要认领（由 workflow-engine-core 的 TaskAssigneeResolver 解析）
+            case "DEPT_OTHERS":
+                // 标记需要认领
                 break;
-            case "departmentSecondaryManager":
-                taskInfo.setAssigneeValue("${departmentSecondaryManager}");
+            // 5. 上级部门 - 需要认领（由 workflow-engine-core 的 TaskAssigneeResolver 解析）
+            case "PARENT_DEPT":
+                // 标记需要认领
                 break;
-            case "eitherManager":
-                taskInfo.setAssigneeValue("${eitherManager}");
+            // 6. 指定部门 - 需要认领
+            case "FIXED_DEPT":
+                // assigneeValue 已经包含部门ID，标记需要认领
                 break;
-            case "bothManagers":
-                taskInfo.setAssigneeValue("${bothManagers}");
-                break;
-            case "user":
-                resolvedAssignee = taskInfo.getAssigneeValue();
-                break;
-            case "group":
-                // 组任务，设置候选组
-                break;
-            case "expression":
-                String expr = taskInfo.getAssigneeValue();
-                if (expr != null && expr.startsWith("${") && expr.endsWith("}")) {
-                    String varName = expr.substring(2, expr.length() - 1);
-                    if (variables != null && variables.containsKey(varName)) {
-                        resolvedAssignee = String.valueOf(variables.get(varName));
-                    }
+            // 7. 虚拟组 - 需要认领
+            case "VIRTUAL_GROUP":
+                // assigneeValue 已经包含虚拟组ID，设置为候选组
+                if (taskInfo.getAssigneeValue() != null) {
+                    taskInfo.setCandidateGroups(taskInfo.getAssigneeValue());
                 }
                 break;
-        }
-
-        if (resolvedAssignee != null) {
-            taskInfo.setAssigneeValue(resolvedAssignee);
-        }
-        if (resolvedCandidates != null) {
-            taskInfo.setCandidateUsers(resolvedCandidates);
+            default:
+                log.warn("Unknown assignee type: {}", assigneeType);
         }
     }
 
@@ -536,7 +523,9 @@ public class BpmnParserService {
      */
     public boolean isInitiatorTask(UserTaskInfo taskInfo) {
         if (taskInfo == null) return false;
-        return "initiator".equals(taskInfo.getAssigneeType());
+        String type = taskInfo.getAssigneeType();
+        if (type == null) return false;
+        return "INITIATOR".equalsIgnoreCase(type) || "initiator".equals(type);
     }
 
     /**

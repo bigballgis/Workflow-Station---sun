@@ -2,6 +2,7 @@ package com.developer.controller;
 
 import com.developer.component.ProcessDesignComponent;
 import com.developer.dto.ApiResponse;
+import com.developer.dto.ErrorResponse;
 import com.developer.dto.ValidationResult;
 import com.developer.entity.ProcessDefinition;
 import io.swagger.v3.oas.annotations.Operation;
@@ -34,7 +35,15 @@ public class ProcessDesignController {
     @Operation(summary = "保存流程定义")
     public ResponseEntity<ApiResponse<ProcessDefinition>> save(
             @PathVariable Long functionUnitId,
-            @RequestBody String bpmnXml) {
+            @RequestBody Map<String, String> request) {
+        String bpmnXml = request.get("bpmnXml");
+        if (bpmnXml == null || bpmnXml.trim().isEmpty()) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(
+                    ErrorResponse.builder()
+                            .code("400")
+                            .message("bpmnXml is required")
+                            .build()));
+        }
         ProcessDefinition result = processDesignComponent.save(functionUnitId, bpmnXml);
         return ResponseEntity.ok(ApiResponse.success(result));
     }

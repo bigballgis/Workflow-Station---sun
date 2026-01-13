@@ -21,17 +21,13 @@
         <el-form label-position="top" size="small">
           <el-form-item label="分配方式">
             <el-select v-model="assigneeType" @change="handleAssigneeTypeChange">
-              <el-option label="流程发起人" value="initiator" />
-              <el-option label="发起人的直属上级" value="manager" />
-              <el-option label="实体管理者" value="entityManager" />
-              <el-option label="职能管理者" value="functionManager" />
-              <el-option label="实体或职能管理者（或签）" value="eitherManager" />
-              <el-option label="实体+职能管理者（会签）" value="bothManagers" />
-              <el-option label="部门主经理" value="departmentManager" />
-              <el-option label="部门副经理" value="departmentSecondaryManager" />
-              <el-option label="指定用户" value="user" />
-              <el-option label="指定部门/组" value="group" />
-              <el-option label="表达式" value="expression" />
+              <el-option label="流程发起人" value="INITIATOR" />
+              <el-option label="实体经理" value="ENTITY_MANAGER" />
+              <el-option label="职能经理" value="FUNCTION_MANAGER" />
+              <el-option label="本部门其他人" value="DEPT_OTHERS" />
+              <el-option label="上级部门" value="PARENT_DEPT" />
+              <el-option label="指定部门" value="FIXED_DEPT" />
+              <el-option label="虚拟组" value="VIRTUAL_GROUP" />
             </el-select>
           </el-form-item>
           
@@ -40,19 +36,54 @@
             <el-tag type="info" size="small">{{ assigneeLabel }}</el-tag>
           </div>
           
-          <el-form-item v-if="assigneeType === 'user'" label="处理人">
-            <el-input v-model="assigneeValue" @change="handleAssigneeValueChange" placeholder="用户ID或用户名" />
+          <!-- 指定部门选择器 -->
+          <el-form-item v-if="assigneeType === 'FIXED_DEPT'" label="选择部门">
+            <el-tree-select
+              v-model="assigneeValue"
+              :data="departments"
+              node-key="id"
+              :props="{ label: 'name', children: 'children' }"
+              :loading="loadingDepartments"
+              placeholder="请选择部门"
+              check-strictly
+              filterable
+              @change="handleAssigneeValueChange"
+            />
+            <div class="form-tip">选择一个部门，该部门的所有成员都可以认领此任务</div>
           </el-form-item>
           
-          <el-form-item v-if="assigneeType === 'group'" label="部门/组">
-            <el-input v-model="assigneeValue" @change="handleAssigneeValueChange" placeholder="如: dept_hr, role_manager" />
-            <div class="form-tip">部门组以 dept_ 开头，角色组以 role_ 开头</div>
+          <!-- 虚拟组选择器 -->
+          <el-form-item v-if="assigneeType === 'VIRTUAL_GROUP'" label="选择虚拟组">
+            <el-select
+              v-model="assigneeValue"
+              :loading="loadingVirtualGroups"
+              placeholder="请选择虚拟组"
+              filterable
+              @change="handleAssigneeValueChange"
+            >
+              <el-option
+                v-for="group in virtualGroups"
+                :key="group.id"
+                :label="group.name"
+                :value="group.id"
+              >
+                <span>{{ group.name }}</span>
+                <span v-if="group.memberCount" style="color: #909399; margin-left: 8px;">
+                  ({{ group.memberCount }}人)
+                </span>
+              </el-option>
+            </el-select>
+            <div class="form-tip">选择一个虚拟组，该组的所有成员都可以认领此任务</div>
           </el-form-item>
           
-          <el-form-item v-if="assigneeType === 'expression'" label="表达式">
-            <el-input v-model="assigneeValue" @change="handleAssigneeValueChange" placeholder="${initiator}" />
-            <div class="form-tip">支持 JUEL 表达式，如 ${initiator}、${initiatorManager}</div>
-          </el-form-item>
+          <!-- 认领类型提示 -->
+          <div v-if="needsClaim" class="claim-tip">
+            <el-alert type="info" :closable="false" show-icon>
+              <template #title>
+                此分配方式需要用户认领任务
+              </template>
+            </el-alert>
+          </div>
           
           <el-form-item label="候选用户">
             <el-input v-model="candidateUsers" @change="updateExtProp('candidateUsers', candidateUsers)" placeholder="多个用户用逗号分隔" />
@@ -155,6 +186,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import type { BpmnElement, BpmnModeler } from '@/types/bpmn'
 import type { FormDefinition, ActionDefinition } from '@/api/functionUnit'
 import { functionUnitApi } from '@/api/functionUnit'
+import { adminCenterApi, type DepartmentTree, type VirtualGroupInfo } from '@/api/adminCenter'
 import {
   getBasicProperties,
   setBasicProperties,
@@ -174,12 +206,21 @@ const activeGroups = ref(['basic', 'assignee', 'form', 'actions'])
 const taskName = ref('')
 const taskDescription = ref('')
 
+// 7种标准分配类型
+type AssigneeTypeEnum = 'FUNCTION_MANAGER' | 'ENTITY_MANAGER' | 'INITIATOR' | 'DEPT_OTHERS' | 'PARENT_DEPT' | 'FIXED_DEPT' | 'VIRTUAL_GROUP'
+
 // 处理人配置
-const assigneeType = ref<'initiator' | 'manager' | 'entityManager' | 'functionManager' | 'eitherManager' | 'bothManagers' | 'departmentManager' | 'departmentSecondaryManager' | 'user' | 'group' | 'expression'>('user')
+const assigneeType = ref<AssigneeTypeEnum>('INITIATOR')
 const assigneeValue = ref('')
 const assigneeLabel = ref('')
 const candidateUsers = ref('')
 const candidateGroups = ref('')
+
+// 部门和虚拟组数据
+const departments = ref<DepartmentTree[]>([])
+const virtualGroups = ref<VirtualGroupInfo[]>([])
+const loadingDepartments = ref(false)
+const loadingVirtualGroups = ref(false)
 
 // 表单绑定
 const formId = ref<number | null>(null)
@@ -212,7 +253,7 @@ function loadProperties() {
   // 扩展属性
   const ext = getExtensionProperties(props.element)
   taskDescription.value = ext.description || ''
-  assigneeType.value = ext.assigneeType || 'user'
+  assigneeType.value = ext.assigneeType || 'INITIATOR'
   assigneeValue.value = ext.assigneeValue || ''
   assigneeLabel.value = ext.assigneeLabel || ''
   candidateUsers.value = ext.candidateUsers || ''
@@ -227,6 +268,13 @@ function loadProperties() {
   sequential.value = ext.sequential || false
   collection.value = ext.collection || ''
   completionCondition.value = ext.completionCondition || ''
+  
+  // 如果是 FIXED_DEPT 或 VIRTUAL_GROUP，加载对应数据
+  if (assigneeType.value === 'FIXED_DEPT') {
+    loadDepartments()
+  } else if (assigneeType.value === 'VIRTUAL_GROUP') {
+    loadVirtualGroups()
+  }
 }
 
 function updateBasicProp(name: string, value: any) {
@@ -247,67 +295,103 @@ function handleFormChange(id: number | null) {
   }
 }
 
-function handleAssigneeTypeChange(type: string) {
+function handleAssigneeTypeChange(type: AssigneeTypeEnum) {
   updateExtProp('assigneeType', type)
   
-  // 根据类型设置默认值和标签
-  const labelMap: Record<string, string> = {
-    initiator: '流程发起人',
-    manager: '发起人的直属上级',
-    entityManager: '实体管理者',
-    functionManager: '职能管理者',
-    eitherManager: '实体或职能管理者（或签）',
-    bothManagers: '实体+职能管理者（会签）',
-    departmentManager: '部门主经理',
-    departmentSecondaryManager: '部门副经理',
-    user: '',
-    group: '',
-    expression: ''
+  // 根据类型设置默认标签
+  const labelMap: Record<AssigneeTypeEnum, string> = {
+    INITIATOR: '流程发起人',
+    ENTITY_MANAGER: '实体经理',
+    FUNCTION_MANAGER: '职能经理',
+    DEPT_OTHERS: '本部门其他人',
+    PARENT_DEPT: '上级部门',
+    FIXED_DEPT: '',
+    VIRTUAL_GROUP: ''
   }
   
-  assigneeLabel.value = labelMap[type] || ''
-  updateExtProp('assigneeLabel', assigneeLabel.value)
-  
-  // 根据类型设置 assignee 或 candidateUsers
-  const managerTypes = ['initiator', 'manager', 'entityManager', 'functionManager', 'departmentManager', 'departmentSecondaryManager']
-  
-  if (type === 'eitherManager') {
-    // 或签模式：使用 candidateUsers，任一人审批即可
+  // 清空 assigneeValue（除非是 FIXED_DEPT 或 VIRTUAL_GROUP）
+  if (type !== 'FIXED_DEPT' && type !== 'VIRTUAL_GROUP') {
     assigneeValue.value = ''
     updateExtProp('assigneeValue', '')
-    candidateUsers.value = '${entityManager},${functionManager}'
-    updateExtProp('candidateUsers', candidateUsers.value)
-  } else if (type === 'bothManagers') {
-    // 会签模式：使用 candidateUsers + 多实例配置
-    assigneeValue.value = ''
-    updateExtProp('assigneeValue', '')
-    candidateUsers.value = '${entityManager},${functionManager}'
-    updateExtProp('candidateUsers', candidateUsers.value)
-    // 启用多实例（会签需要所有人审批）
-    multiInstance.value = true
-    updateExtProp('multiInstance', true)
-    sequential.value = false
-    updateExtProp('sequential', false)
-  } else if (managerTypes.includes(type)) {
-    // 单管理者模式：清空值，流程引擎会根据类型解析
-    assigneeValue.value = ''
-    updateExtProp('assigneeValue', '')
-    candidateUsers.value = ''
-    updateExtProp('candidateUsers', '')
+    assigneeLabel.value = labelMap[type] || ''
+    updateExtProp('assigneeLabel', assigneeLabel.value)
+  } else {
+    // 加载部门或虚拟组数据
+    if (type === 'FIXED_DEPT') {
+      loadDepartments()
+    } else if (type === 'VIRTUAL_GROUP') {
+      loadVirtualGroups()
+    }
   }
+  
+  // 清空候选用户/组
+  candidateUsers.value = ''
+  candidateGroups.value = ''
+  updateExtProp('candidateUsers', '')
+  updateExtProp('candidateGroups', '')
 }
 
 function handleAssigneeValueChange(value: string) {
   updateExtProp('assigneeValue', value)
   
   // 更新标签
-  if (assigneeType.value === 'group') {
-    // 可以根据组ID查找组名称
-    assigneeLabel.value = value
-    updateExtProp('assigneeLabel', value)
-  } else if (assigneeType.value === 'user') {
-    assigneeLabel.value = value
-    updateExtProp('assigneeLabel', value)
+  if (assigneeType.value === 'FIXED_DEPT') {
+    // 查找部门名称
+    const dept = findDepartmentById(departments.value, value)
+    assigneeLabel.value = dept?.name || value
+    updateExtProp('assigneeLabel', assigneeLabel.value)
+  } else if (assigneeType.value === 'VIRTUAL_GROUP') {
+    // 查找虚拟组名称
+    const group = virtualGroups.value.find(g => g.id === value)
+    assigneeLabel.value = group?.name || value
+    updateExtProp('assigneeLabel', assigneeLabel.value)
+  }
+}
+
+// 递归查找部门
+function findDepartmentById(depts: DepartmentTree[], id: string): DepartmentTree | null {
+  for (const dept of depts) {
+    if (dept.id === id) return dept
+    if (dept.children) {
+      const found = findDepartmentById(dept.children, id)
+      if (found) return found
+    }
+  }
+  return null
+}
+
+// 是否需要认领
+const needsClaim = computed(() => {
+  return ['DEPT_OTHERS', 'PARENT_DEPT', 'FIXED_DEPT', 'VIRTUAL_GROUP'].includes(assigneeType.value)
+})
+
+// 加载部门树
+async function loadDepartments() {
+  if (departments.value.length > 0) return
+  loadingDepartments.value = true
+  try {
+    const data = await adminCenterApi.getDepartmentTree()
+    departments.value = data || []
+  } catch (e) {
+    console.error('Failed to load departments:', e)
+    departments.value = []
+  } finally {
+    loadingDepartments.value = false
+  }
+}
+
+// 加载虚拟组
+async function loadVirtualGroups() {
+  if (virtualGroups.value.length > 0) return
+  loadingVirtualGroups.value = true
+  try {
+    const data = await adminCenterApi.getVirtualGroups()
+    virtualGroups.value = data || []
+  } catch (e) {
+    console.error('Failed to load virtual groups:', e)
+    virtualGroups.value = []
+  } finally {
+    loadingVirtualGroups.value = false
   }
 }
 
@@ -423,6 +507,18 @@ onMounted(() => {
   
   .selected-actions {
     margin-top: -8px;
+  }
+  
+  .claim-tip {
+    margin-bottom: 12px;
+    
+    :deep(.el-alert) {
+      padding: 8px 12px;
+      
+      .el-alert__title {
+        font-size: 12px;
+      }
+    }
   }
 }
 </style>

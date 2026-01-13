@@ -1,0 +1,38 @@
+package com.workflow.config;
+
+import com.workflow.listener.TaskAssignmentListener;
+import org.flowable.common.engine.api.delegate.event.FlowableEngineEventType;
+import org.flowable.spring.SpringProcessEngineConfiguration;
+import org.flowable.spring.boot.EngineConfigurationConfigurer;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * Flowable 引擎配置
+ * 注册自定义事件监听器
+ */
+@Configuration
+public class FlowableConfig {
+
+    @Autowired
+    private TaskAssignmentListener taskAssignmentListener;
+
+    @Bean
+    public EngineConfigurationConfigurer<SpringProcessEngineConfiguration> customProcessEngineConfigurer() {
+        return processEngineConfiguration -> {
+            // 注册任务创建事件监听器
+            Map<String, List<org.flowable.common.engine.api.delegate.event.FlowableEventListener>> typedListeners = 
+                    new HashMap<>();
+            typedListeners.put(FlowableEngineEventType.TASK_CREATED.name(), 
+                    Collections.singletonList(taskAssignmentListener));
+            
+            processEngineConfiguration.setTypedEventListeners(typedListeners);
+        };
+    }
+}

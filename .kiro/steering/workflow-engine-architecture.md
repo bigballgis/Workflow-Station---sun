@@ -121,12 +121,62 @@ public void someWorkflowOperation() {
 1. `TaskProcessComponent.handleReturn()` - 回退任务（需要实现 Flowable 回退逻辑）
 2. `TaskQueryComponent` - 任务查询（需要从 Flowable 获取任务列表）
 
+## 任务分配机制
+
+### 7种标准分配类型
+
+任务分配使用以下7种标准类型，定义在 `AssigneeType` 枚举中：
+
+| 类型 | 代码 | 说明 | 是否需要认领 |
+|------|------|------|-------------|
+| 职能经理 | `FUNCTION_MANAGER` | 当前人的职能经理 | 否（直接分配） |
+| 实体经理 | `ENTITY_MANAGER` | 当前人的实体经理 | 否（直接分配） |
+| 流程发起人 | `INITIATOR` | 流程发起人 | 否（直接分配） |
+| 本部门其他人 | `DEPT_OTHERS` | 当前人部门的非本人 | 是 |
+| 上级部门 | `PARENT_DEPT` | 当前人上级部门 | 是 |
+| 指定部门 | `FIXED_DEPT` | 某个部门的所有人 | 是 |
+| 虚拟组 | `VIRTUAL_GROUP` | 某个虚拟组 | 是 |
+
+### 核心组件
+
+- `AssigneeType` - 分配类型枚举 (`workflow-engine-core`)
+- `TaskAssigneeResolver` - 处理人解析服务 (`workflow-engine-core`)
+- `TaskAssignmentListener` - 任务创建监听器 (`workflow-engine-core`)
+- `AdminCenterClient` - 用户/部门信息查询客户端 (`workflow-engine-core`)
+
+### 分配流程
+
+1. 流程启动时，`initiator` 变量被设置为发起人ID
+2. 任务创建时，`TaskAssignmentListener` 监听 `TASK_CREATED` 事件
+3. 监听器从 BPMN 扩展属性中读取 `assigneeType` 和 `assigneeValue`
+4. `TaskAssigneeResolver` 根据分配类型解析实际处理人
+5. 直接分配类型：设置 `assignee`
+6. 认领类型：设置 `candidateUsers` 或 `candidateGroup`
+
+### BPMN 配置示例
+
+```xml
+<bpmn:userTask id="Task_Approval" name="主管审批">
+  <bpmn:extensionElements>
+    <custom:properties>
+      <custom:property name="assigneeType" value="ENTITY_MANAGER"/>
+      <custom:property name="assigneeLabel" value="实体经理"/>
+    </custom:properties>
+  </bpmn:extensionElements>
+</bpmn:userTask>
+```
+
 ## 参考文件
 
 - `backend/user-portal/src/main/java/com/portal/client/WorkflowEngineClient.java`
 - `backend/user-portal/src/main/java/com/portal/component/ProcessComponent.java`
 - `backend/user-portal/src/main/java/com/portal/component/TaskProcessComponent.java`
+- `backend/user-portal/src/main/java/com/portal/service/BpmnParserService.java`
 - `backend/workflow-engine-core/src/main/java/com/workflow/controller/ProcessController.java`
 - `backend/workflow-engine-core/src/main/java/com/workflow/controller/TaskController.java`
 - `backend/workflow-engine-core/src/main/java/com/workflow/component/ProcessEngineComponent.java`
 - `backend/workflow-engine-core/src/main/java/com/workflow/component/TaskManagerComponent.java`
+- `backend/workflow-engine-core/src/main/java/com/workflow/enums/AssigneeType.java`
+- `backend/workflow-engine-core/src/main/java/com/workflow/service/TaskAssigneeResolver.java`
+- `backend/workflow-engine-core/src/main/java/com/workflow/listener/TaskAssignmentListener.java`
+- `backend/workflow-engine-core/src/main/java/com/workflow/client/AdminCenterClient.java`

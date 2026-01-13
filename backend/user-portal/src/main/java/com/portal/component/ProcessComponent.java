@@ -349,78 +349,57 @@ public class ProcessComponent {
                 // 提取任务名称
                 String name = extractAttribute(userTaskElement, "name");
                 
-                // 首先尝试从 custom:properties 中解析 assigneeType
+                // 从 custom:properties 中解析 assigneeType（使用7种标准类型）
                 String assigneeType = extractCustomProperty(userTaskElement, "assigneeType");
+                String assigneeValue = extractCustomProperty(userTaskElement, "assigneeValue");
                 String assignee = null;
                 String candidateUsers = null;
                 
                 if (assigneeType != null) {
-                    // 根据 assigneeType 解析处理人
+                    // 根据新的7种标准 assigneeType 解析处理人
                     log.info("Found assigneeType: {} for task: {}", assigneeType, name);
                     
-                    switch (assigneeType) {
-                        case "initiator":
+                    String normalizedType = assigneeType.toUpperCase();
+                    switch (normalizedType) {
+                        case "INITIATOR":
+                            // 流程发起人 - 直接分配
                             assignee = initiatorId;
                             break;
-                        case "manager":
-                            assignee = getInitiatorManager(initiatorId);
-                            break;
-                        case "entityManager":
+                        case "ENTITY_MANAGER":
+                            // 实体经理 - 直接分配
                             assignee = getEntityManager(initiatorId);
                             break;
-                        case "functionManager":
+                        case "FUNCTION_MANAGER":
+                            // 职能经理 - 直接分配
                             assignee = getFunctionManager(initiatorId);
                             break;
-                        case "departmentManager":
-                            assignee = getDepartmentManager(initiatorId);
+                        case "DEPT_OTHERS":
+                            // 本部门其他人 - 需要认领（由 workflow-engine-core 处理）
+                            result.put("assigneeType", "DEPT_OTHERS");
+                            result.put("requiresClaim", "true");
                             break;
-                        case "departmentSecondaryManager":
-                            assignee = getDepartmentSecondaryManager(initiatorId);
+                        case "PARENT_DEPT":
+                            // 上级部门 - 需要认领（由 workflow-engine-core 处理）
+                            result.put("assigneeType", "PARENT_DEPT");
+                            result.put("requiresClaim", "true");
                             break;
-                        case "eitherManager":
-                            // 实体或职能管理者（或签）
-                            String entityMgr = getEntityManager(initiatorId);
-                            String funcMgr = getFunctionManager(initiatorId);
-                            List<String> managers = new ArrayList<>();
-                            if (entityMgr != null) managers.add(entityMgr);
-                            if (funcMgr != null && !funcMgr.equals(entityMgr)) managers.add(funcMgr);
-                            if (!managers.isEmpty()) {
-                                candidateUsers = String.join(",", managers);
-                                assignee = managers.get(0);
-                            }
+                        case "FIXED_DEPT":
+                            // 指定部门 - 需要认领
+                            result.put("assigneeType", "FIXED_DEPT");
+                            result.put("assigneeValue", assigneeValue);
+                            result.put("requiresClaim", "true");
                             break;
-                        case "bothManagers":
-                            // 实体+职能管理者（会签）
-                            String entityMgr2 = getEntityManager(initiatorId);
-                            String funcMgr2 = getFunctionManager(initiatorId);
-                            List<String> bothManagers = new ArrayList<>();
-                            if (entityMgr2 != null) bothManagers.add(entityMgr2);
-                            if (funcMgr2 != null && !funcMgr2.equals(entityMgr2)) bothManagers.add(funcMgr2);
-                            if (!bothManagers.isEmpty()) {
-                                candidateUsers = String.join(",", bothManagers);
-                            }
-                            break;
-                        case "user":
-                            // 指定用户
-                            assignee = extractCustomProperty(userTaskElement, "assigneeValue");
-                            break;
-                        case "group":
-                            // 指定部门/组
-                            String groupValue = extractCustomProperty(userTaskElement, "assigneeValue");
-                            if (groupValue != null) {
-                                result.put("candidateGroups", groupValue);
-                            }
-                            break;
-                        case "expression":
-                            // 表达式
-                            String expr = extractCustomProperty(userTaskElement, "assigneeValue");
-                            if (expr != null && expr.startsWith("${") && expr.endsWith("}")) {
-                                String varName = expr.substring(2, expr.length() - 1);
-                                assignee = resolveProcessVariable(varName, formData, initiatorId);
-                            }
+                        case "VIRTUAL_GROUP":
+                            // 虚拟组 - 需要认领
+                            result.put("assigneeType", "VIRTUAL_GROUP");
+                            result.put("assigneeValue", assigneeValue);
+                            result.put("candidateGroups", assigneeValue);
+                            result.put("requiresClaim", "true");
                             break;
                         default:
-                            log.warn("Unknown assigneeType: {}", assigneeType);
+                            log.warn("Unknown assigneeType: {}, treating as legacy type", assigneeType);
+                            // 兼容旧类型
+                            assignee = resolveLegacyAssigneeType(assigneeType, assigneeValue, initiatorId);
                     }
                 } else {
                     // 回退到标准属性解析
@@ -541,6 +520,19 @@ public class ProcessComponent {
     }
     
     /**
+     * 解析旧版分配类型（向后兼容）
+     */
+    private String resolveLegacyAssigneeType(String assigneeType, String assigneeValue, String initiatorId) {
+        return switch (assigneeType.toLowerCase()) {
+            case "initiator" -> initiatorId;
+            case "manager", "entitymanager" -> getEntityManager(initiatorId);
+            case "functionmanager" -> getFunctionManager(initiatorId);
+            case "user" -> assigneeValue;
+            default -> null;
+        };
+    }
+    
+    /**
      * 解析流程变量
      */
     private String resolveProcessVariable(String varName, Map<String, Object> formData, String initiatorId) {
@@ -549,37 +541,13 @@ public class ProcessComponent {
             return String.valueOf(formData.get(varName));
         }
         
-        // 处理特殊变量
-        if ("initiator".equals(varName)) {
-            return initiatorId;
-        }
-        
-        if ("initiatorManager".equals(varName) || "manager".equals(varName)) {
-            // 获取发起人的直属上级（部门经理）
-            return getInitiatorManager(initiatorId);
-        }
-        
-        if ("entityManager".equals(varName)) {
-            // 获取发起人的实体管理者
-            return getEntityManager(initiatorId);
-        }
-        
-        if ("functionManager".equals(varName)) {
-            // 获取发起人的职能管理者
-            return getFunctionManager(initiatorId);
-        }
-        
-        if ("departmentManager".equals(varName)) {
-            // 获取发起人的部门主经理
-            return getDepartmentManager(initiatorId);
-        }
-        
-        if ("departmentSecondaryManager".equals(varName)) {
-            // 获取发起人的部门副经理
-            return getDepartmentSecondaryManager(initiatorId);
-        }
-        
-        return null;
+        // 处理特殊变量（使用新的7种标准类型）
+        return switch (varName) {
+            case "initiator" -> initiatorId;
+            case "entityManager" -> getEntityManager(initiatorId);
+            case "functionManager" -> getFunctionManager(initiatorId);
+            default -> null;
+        };
     }
     
     /**
@@ -729,162 +697,6 @@ public class ProcessComponent {
             log.error("Failed to get function manager for {}: {}", initiatorId, e.getMessage());
             return null;
         }
-    }
-    
-    /**
-     * 获取发起人的部门主经理
-     */
-    private String getDepartmentManager(String initiatorId) {
-        try {
-            RestTemplate restTemplate = new RestTemplate();
-            
-            // 1. 获取用户信息，包含部门ID
-            // 首先尝试通过用户ID查询
-            String userUrl = adminCenterUrl + "/api/v1/admin/users/" + initiatorId;
-            log.info("Fetching user info for department manager from: {}", userUrl);
-            
-            Map<String, Object> userInfo = null;
-            try {
-                @SuppressWarnings("unchecked")
-                Map<String, Object> response = restTemplate.getForObject(userUrl, Map.class);
-                userInfo = response;
-            } catch (Exception e) {
-                log.warn("Failed to get user by ID {}, trying by username: {}", initiatorId, e.getMessage());
-            }
-            
-            // 如果通过ID查询失败，尝试通过用户名查询
-            if (userInfo == null || userInfo.get("departmentId") == null) {
-                String searchUrl = adminCenterUrl + "/api/v1/admin/users?keyword=" + initiatorId + "&size=1";
-                log.info("Searching user by username from: {}", searchUrl);
-                try {
-                    @SuppressWarnings("unchecked")
-                    Map<String, Object> searchResponse = restTemplate.getForObject(searchUrl, Map.class);
-                    if (searchResponse != null && searchResponse.get("content") != null) {
-                        @SuppressWarnings("unchecked")
-                        List<Map<String, Object>> users = (List<Map<String, Object>>) searchResponse.get("content");
-                        if (!users.isEmpty()) {
-                            // 找到用户后，获取详细信息
-                            String foundUserId = (String) users.get(0).get("id");
-                            String detailUrl = adminCenterUrl + "/api/v1/admin/users/" + foundUserId;
-                            @SuppressWarnings("unchecked")
-                            Map<String, Object> detailResponse = restTemplate.getForObject(detailUrl, Map.class);
-                            userInfo = detailResponse;
-                        }
-                    }
-                } catch (Exception e) {
-                    log.warn("Failed to search user by username {}: {}", initiatorId, e.getMessage());
-                }
-            }
-            
-            if (userInfo == null || userInfo.get("departmentId") == null) {
-                log.warn("User {} has no department", initiatorId);
-                return null;
-            }
-            
-            String departmentId = (String) userInfo.get("departmentId");
-            
-            // 2. 获取部门信息，包含主经理ID
-            String deptUrl = adminCenterUrl + "/api/v1/admin/departments/" + departmentId;
-            log.info("Fetching department info from: {}", deptUrl);
-            
-            @SuppressWarnings("unchecked")
-            Map<String, Object> deptInfo = restTemplate.getForObject(deptUrl, Map.class);
-            
-            if (deptInfo == null || deptInfo.get("managerId") == null) {
-                log.warn("Department {} has no manager", departmentId);
-                return null;
-            }
-            
-            String managerId = (String) deptInfo.get("managerId");
-            log.info("Found department manager {} for user {}", managerId, initiatorId);
-            return managerId;
-            
-        } catch (Exception e) {
-            log.error("Failed to get department manager for {}: {}", initiatorId, e.getMessage());
-            return null;
-        }
-    }
-    
-    /**
-     * 获取发起人的部门副经理
-     */
-    private String getDepartmentSecondaryManager(String initiatorId) {
-        try {
-            RestTemplate restTemplate = new RestTemplate();
-            
-            // 1. 获取用户信息，包含部门ID
-            // 首先尝试通过用户ID查询
-            String userUrl = adminCenterUrl + "/api/v1/admin/users/" + initiatorId;
-            log.info("Fetching user info for department secondary manager from: {}", userUrl);
-            
-            Map<String, Object> userInfo = null;
-            try {
-                @SuppressWarnings("unchecked")
-                Map<String, Object> response = restTemplate.getForObject(userUrl, Map.class);
-                userInfo = response;
-            } catch (Exception e) {
-                log.warn("Failed to get user by ID {}, trying by username: {}", initiatorId, e.getMessage());
-            }
-            
-            // 如果通过ID查询失败，尝试通过用户名查询
-            if (userInfo == null || userInfo.get("departmentId") == null) {
-                String searchUrl = adminCenterUrl + "/api/v1/admin/users?keyword=" + initiatorId + "&size=1";
-                log.info("Searching user by username from: {}", searchUrl);
-                try {
-                    @SuppressWarnings("unchecked")
-                    Map<String, Object> searchResponse = restTemplate.getForObject(searchUrl, Map.class);
-                    if (searchResponse != null && searchResponse.get("content") != null) {
-                        @SuppressWarnings("unchecked")
-                        List<Map<String, Object>> users = (List<Map<String, Object>>) searchResponse.get("content");
-                        if (!users.isEmpty()) {
-                            // 找到用户后，获取详细信息
-                            String foundUserId = (String) users.get(0).get("id");
-                            String detailUrl = adminCenterUrl + "/api/v1/admin/users/" + foundUserId;
-                            @SuppressWarnings("unchecked")
-                            Map<String, Object> detailResponse = restTemplate.getForObject(detailUrl, Map.class);
-                            userInfo = detailResponse;
-                        }
-                    }
-                } catch (Exception e) {
-                    log.warn("Failed to search user by username {}: {}", initiatorId, e.getMessage());
-                }
-            }
-            
-            if (userInfo == null || userInfo.get("departmentId") == null) {
-                log.warn("User {} has no department", initiatorId);
-                return null;
-            }
-            
-            String departmentId = (String) userInfo.get("departmentId");
-            
-            // 2. 获取部门信息，包含副经理ID
-            String deptUrl = adminCenterUrl + "/api/v1/admin/departments/" + departmentId;
-            log.info("Fetching department info from: {}", deptUrl);
-            
-            @SuppressWarnings("unchecked")
-            Map<String, Object> deptInfo = restTemplate.getForObject(deptUrl, Map.class);
-            
-            if (deptInfo == null || deptInfo.get("secondaryManagerId") == null) {
-                log.warn("Department {} has no secondary manager", departmentId);
-                return null;
-            }
-            
-            String secondaryManagerId = (String) deptInfo.get("secondaryManagerId");
-            log.info("Found department secondary manager {} for user {}", secondaryManagerId, initiatorId);
-            return secondaryManagerId;
-            
-        } catch (Exception e) {
-            log.error("Failed to get department secondary manager for {}: {}", initiatorId, e.getMessage());
-            return null;
-        }
-    }
-    
-    /**
-     * 获取发起人的直属上级（实体管理者）
-     * 注意：直属上级是 entityManagerId，不是部门经理
-     */
-    private String getInitiatorManager(String initiatorId) {
-        return getEntityManager(initiatorId);
     }
     
     /**

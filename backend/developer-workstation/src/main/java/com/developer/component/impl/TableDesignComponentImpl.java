@@ -2,6 +2,7 @@ package com.developer.component.impl;
 
 import com.developer.component.TableDesignComponent;
 import com.developer.dto.FieldDefinitionRequest;
+import com.developer.dto.ForeignKeyDTO;
 import com.developer.dto.TableDefinitionRequest;
 import com.developer.dto.ValidationResult;
 import com.developer.entity.FieldDefinition;
@@ -19,6 +20,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * 表设计组件实现
@@ -112,14 +114,14 @@ public class TableDesignComponentImpl implements TableDesignComponent {
     @Override
     @Transactional(readOnly = true)
     public TableDefinition getById(Long id) {
-        return tableDefinitionRepository.findById(id)
+        return tableDefinitionRepository.findByIdWithFields(id)
                 .orElseThrow(() -> new ResourceNotFoundException("TableDefinition", id));
     }
     
     @Override
     @Transactional(readOnly = true)
     public List<TableDefinition> getByFunctionUnitId(Long functionUnitId) {
-        return tableDefinitionRepository.findByFunctionUnitId(functionUnitId);
+        return tableDefinitionRepository.findByFunctionUnitIdWithFields(functionUnitId);
     }
     
     @Override
@@ -188,6 +190,15 @@ public class TableDesignComponentImpl implements TableDesignComponent {
         
         recursionStack.remove(node);
         return false;
+    }
+    
+    @Override
+    @Transactional(readOnly = true)
+    public List<ForeignKeyDTO> getForeignKeys(Long functionUnitId) {
+        List<ForeignKey> foreignKeys = foreignKeyRepository.findByFunctionUnitId(functionUnitId);
+        return foreignKeys.stream()
+                .map(ForeignKeyDTO::fromEntity)
+                .collect(Collectors.toList());
     }
     
     private FieldDefinition createField(TableDefinition tableDefinition, 

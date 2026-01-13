@@ -23,9 +23,17 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="boundTableId" label="绑定表" width="150">
+        <el-table-column prop="boundTableId" label="绑定表" width="180">
           <template #default="{ row }">
-            <el-tag v-if="row.boundTableId" type="success" size="small">
+            <template v-if="getPrimaryBinding(row)">
+              <el-tag type="success" size="small">
+                {{ getPrimaryBinding(row)!.tableName }}
+              </el-tag>
+              <el-tag v-if="getSubBindingsCount(row) > 0" type="info" size="small" style="margin-left: 4px;">
+                +{{ getSubBindingsCount(row) }}
+              </el-tag>
+            </template>
+            <el-tag v-else-if="row.boundTableId" type="success" size="small">
               {{ getTableName(row.boundTableId) }}
             </el-tag>
             <span v-else class="text-muted">未绑定</span>
@@ -410,6 +418,20 @@ function getImportTableBinding(): TableBinding | undefined {
 function getTableName(tableId: number): string {
   const table = store.tables.find(t => t.id === tableId)
   return table?.tableName || '未知表'
+}
+
+/**
+ * 获取表单的PRIMARY绑定
+ */
+function getPrimaryBinding(form: FormDefinition): TableBinding | undefined {
+  return form.tableBindings?.find(b => b.bindingType === 'PRIMARY')
+}
+
+/**
+ * 获取表单的子表/关联表绑定数量
+ */
+function getSubBindingsCount(form: FormDefinition): number {
+  return form.tableBindings?.filter(b => b.bindingType !== 'PRIMARY').length || 0
 }
 
 /**

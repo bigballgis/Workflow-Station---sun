@@ -109,14 +109,14 @@ public class FormDesignComponentImpl implements FormDesignComponent {
     @Override
     @Transactional(readOnly = true)
     public FormDefinition getById(Long id) {
-        return formDefinitionRepository.findByIdWithBoundTable(id)
+        return formDefinitionRepository.findByIdWithBindings(id)
                 .orElseThrow(() -> new ResourceNotFoundException("FormDefinition", id));
     }
     
     @Override
     @Transactional(readOnly = true)
     public List<FormDefinition> getByFunctionUnitId(Long functionUnitId) {
-        return formDefinitionRepository.findByFunctionUnitIdWithBoundTable(functionUnitId);
+        return formDefinitionRepository.findByFunctionUnitIdWithBindings(functionUnitId);
     }
     
     @Override

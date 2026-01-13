@@ -33,7 +33,7 @@ admin-center:
 
 # Workflow Engine Core URL for API calls
 workflow-engine:
-  url: http://localhost:8091
+  url: http://localhost:8081
   enabled: true  # 启用 Flowable 集成，通过 workflow-engine-core 调用 Flowable 引擎
 
 springdoc:
