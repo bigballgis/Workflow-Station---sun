@@ -1,0 +1,426 @@
+@startuml 工作流平台系统架构
+
+!define RECTANGLE class
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 12
+
+title 工作流平台解决方案架构
+
+package "前端层 Frontend Layer" #E1F5FF {
+  [管理员中心\nAdmin Center\nVue 3 + Element Plus] as AdminUI #BBDEFB
+  [开发者工作站\nDeveloper Workstation\nVue 3 + BPMN.js] as DevUI #BBDEFB
+  [用户门户\nUser Portal\nVue 3 + Element Plus] as UserUI #BBDEFB
+}
+
+package "API网关层 API Gateway Layer" #FFF4E6 {
+  [API Gateway\nSpring Cloud Gateway\n:8080] as Gateway #FFE0B2
+}
+
+package "微服务层 Microservices Layer" #E8F5E9 {
+  [管理员中心服务\nAdmin Center Service\n:8090] as AdminService #C8E6C9
+  [开发者工作站服务\nDeveloper Workstation\n:8083] as DevService #C8E6C9
+  [用户门户服务\nUser Portal Service\n:8092] as UserService #C8E6C9
+  [工作流引擎核心\nWorkflow Engine Core\n:8091] as WorkflowService #C8E6C9
+}
+
+package "工作流引擎 Workflow Engine" #FCE4EC {
+  [Flowable Engine\nBPMN 2.0] as Flowable #F8BBD0
+}
+
+package "数据层 Data Layer" #F3E5F5 {
+  database "PostgreSQL\nworkflow_platform" as PostgreSQL #E1BEE7
+  database "Redis\n缓存" as Redis #E1BEE7
+}
+
+' 前端到网关的连接
+AdminUI --> Gateway : HTTP
+DevUI --> Gateway : HTTP
+UserUI --> Gateway : HTTP
+
+' 网关到微服务的连接
+Gateway --> AdminService : REST API
+Gateway --> DevService : REST API
+Gateway --> UserService : REST API
+Gateway --> WorkflowService : REST API
+
+' 工作流服务到Flowable
+WorkflowService --> Flowable : Flowable API
+
+' 微服务到数据库
+AdminService ..> PostgreSQL : JDBC
+DevService ..> PostgreSQL : JDBC
+UserService ..> PostgreSQL : JDBC
+WorkflowService ..> PostgreSQL : JDBC
+
+' 微服务到Redis
+AdminService ..> Redis : Cache
+DevService ..> Redis : Cache
+UserService ..> Redis : Cache
+WorkflowService ..> Redis : Cache
+
+@enduml
+
+@startuml 工作流引擎架构
+
+!define RECTANGLE class
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 11
+
+title 工作流引擎详细架构
+
+package "用户门户 User Portal" #E1F5FF {
+  [ProcessComponent\n流程组件] as ProcessComp
+  [TaskProcessComponent\n任务处理组件] as TaskComp
+  [WorkflowEngineClient\n工作流客户端] as WFClient
+}
+
+package "工作流引擎核心 Workflow Engine Core" #E8F5E9 {
+  [ProcessController\n流程控制器] as ProcessCtrl
+  [TaskController\n任务控制器] as TaskCtrl
+  [ProcessEngineComponent\n流程引擎组件] as ProcessEngine
+  [TaskManagerComponent\n任务管理组件] as TaskManager
+  [TaskAssigneeResolver\n处理人解析器] as TaskResolver
+  [TaskAssignmentListener\n任务分配监听器] as TaskListener
+  [AdminCenterClient\n管理中心客户端] as AdminClient
+}
+
+package "Flowable 引擎" #FCE4EC {
+  [RuntimeService\n运行时服务] as RuntimeService
+  [TaskService\n任务服务] as TaskService
+  [RepositoryService\n仓库服务] as RepositoryService
+  [HistoryService\n历史服务] as HistoryService
+}
+
+' 用户门户内部调用
+ProcessComp --> WFClient
+TaskComp --> WFClient
+
+' 用户门户到工作流引擎
+WFClient --> ProcessCtrl : HTTP REST
+WFClient --> TaskCtrl : HTTP REST
+
+' 工作流引擎内部调用
+ProcessCtrl --> ProcessEngine
+TaskCtrl --> TaskManager
+
+' 工作流引擎到Flowable
+ProcessEngine --> RuntimeService
+ProcessEngine --> RepositoryService
+TaskManager --> TaskService
+TaskManager --> HistoryService
+
+' 任务分配机制
+TaskListener --> TaskResolver
+TaskResolver --> AdminClient
+TaskListener ..> TaskService : TASK_CREATED
+
+@enduml
+
+@startuml 任务分配机制
+
+!define RECTANGLE class
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 11
+
+title 任务分配机制流程
+
+start
+
+:流程启动;
+:设置 initiator 变量;
+:任务创建事件;
+:TaskAssignmentListener\n监听 TASK_CREATED;
+:读取 BPMN 扩展属性\nassigneeType\nassigneeValue;
+:TaskAssigneeResolver\n解析处理人;
+
+if (分配类型?) then (FUNCTION_MANAGER)
+  :查询职能经理;
+  :直接分配\nsetAssignee;
+  :任务就绪\n直接处理;
+elseif (ENTITY_MANAGER)
+  :查询实体经理;
+  :直接分配\nsetAssignee;
+  :任务就绪\n直接处理;
+elseif (INITIATOR)
+  :获取发起人;
+  :直接分配\nsetAssignee;
+  :任务就绪\n直接处理;
+elseif (DEPT_OTHERS)
+  :查询部门其他人;
+  :候选人分配\nsetCandidateUsers;
+  :任务待认领\n需要认领;
+elseif (PARENT_DEPT)
+  :查询上级部门;
+  :候选人分配\nsetCandidateUsers;
+  :任务待认领\n需要认领;
+elseif (FIXED_DEPT)
+  :查询指定部门;
+  :候选人分配\nsetCandidateUsers;
+  :任务待认领\n需要认领;
+else (VIRTUAL_GROUP)
+  :查询虚拟组;
+  :候选人分配\nsetCandidateGroup;
+  :任务待认领\n需要认领;
+endif
+
+stop
+
+@enduml
+
+@startuml 微服务交互
+
+!define RECTANGLE class
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 11
+
+title 微服务交互架构
+
+component "用户门户\nUser Portal\n:8092" as UP #C8E6C9
+component "工作流引擎\nWorkflow Engine Core\n:8091" as WF #C8E6C9
+component "管理员中心\nAdmin Center\n:8090" as AC #C8E6C9
+component "开发者工作站\nDeveloper Workstation\n:8083" as DW #C8E6C9
+component "Flowable Engine" as FL #F8BBD0
+
+UP --> WF : 启动流程\n完成任务\n查询任务
+WF --> FL : Flowable API
+WF --> AC : 查询用户信息\n查询部门信息\n查询虚拟组
+DW --> WF : 部署流程定义\n查询流程
+DW --> AC : 查询部门树\n查询虚拟组
+UP --> AC : 查询用户信息\n权限验证
+
+@enduml
+
+@startuml 部署架构
+
+!define RECTANGLE class
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 11
+
+title Kubernetes 部署架构
+
+cloud "Kubernetes Cluster" {
+  
+  package "Ingress Layer" #FFF4E6 {
+    [Ingress Controller\nNginx] as Ingress
+  }
+  
+  package "Frontend Pods" #E1F5FF {
+    [Admin Center Pod\nNginx + Vue] as AdminPod
+    [Developer Workstation Pod\nNginx + Vue] as DevPod
+    [User Portal Pod\nNginx + Vue] as UserPod
+  }
+  
+  package "Gateway Pod" #FFF4E6 {
+    [API Gateway Pod\nSpring Cloud Gateway] as GatewayPod
+  }
+  
+  package "Backend Pods" #E8F5E9 {
+    [Admin Center Service Pod] as AdminSvcPod
+    [Developer Workstation Pod] as DevSvcPod
+    [User Portal Service Pod] as UserSvcPod
+    [Workflow Engine Pod] as WorkflowPod
+  }
+  
+  package "Data Layer" #F3E5F5 {
+    database "PostgreSQL\nStatefulSet" as PostgresPod
+    database "Redis\nStatefulSet" as RedisPod
+  }
+  
+  package "Config & Discovery" #E0E0E0 {
+    [ConfigMap\n应用配置] as ConfigMap
+    [Secrets\n敏感信息] as Secrets
+  }
+}
+
+Ingress --> AdminPod
+Ingress --> DevPod
+Ingress --> UserPod
+Ingress --> GatewayPod
+
+GatewayPod --> AdminSvcPod
+GatewayPod --> DevSvcPod
+GatewayPod --> UserSvcPod
+GatewayPod --> WorkflowPod
+
+AdminSvcPod --> PostgresPod
+DevSvcPod --> PostgresPod
+UserSvcPod --> PostgresPod
+WorkflowPod --> PostgresPod
+
+AdminSvcPod --> RedisPod
+DevSvcPod --> RedisPod
+UserSvcPod --> RedisPod
+WorkflowPod --> RedisPod
+
+ConfigMap ..> AdminSvcPod
+ConfigMap ..> DevSvcPod
+ConfigMap ..> UserSvcPod
+ConfigMap ..> WorkflowPod
+
+Secrets ..> PostgresPod
+Secrets ..> RedisPod
+
+@enduml
+
+@startuml 数据库ER图
+
+!define RECTANGLE class
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 10
+
+title 数据库架构 ER 图
+
+' 管理员中心表
+entity "admin_organizations" as org {
+  * id : BIGINT <<PK>>
+  --
+  * code : VARCHAR(50) <<UK>>
+  * name : VARCHAR(200)
+  * type : VARCHAR(20)
+  created_at : TIMESTAMP
+}
+
+entity "admin_departments" as dept {
+  * id : BIGINT <<PK>>
+  --
+  * organization_id : BIGINT <<FK>>
+  parent_id : BIGINT <<FK>>
+  * code : VARCHAR(50) <<UK>>
+  * name : VARCHAR(200)
+  level : INTEGER
+}
+
+entity "admin_users" as user {
+  * id : BIGINT <<PK>>
+  --
+  * department_id : BIGINT <<FK>>
+  * username : VARCHAR(50) <<UK>>
+  email : VARCHAR(100)
+  phone : VARCHAR(20)
+  status : VARCHAR(20)
+}
+
+entity "admin_roles" as role {
+  * id : BIGINT <<PK>>
+  --
+  * code : VARCHAR(50) <<UK>>
+  * name : VARCHAR(100)
+}
+
+entity "admin_virtual_groups" as vgroup {
+  * id : BIGINT <<PK>>
+  --
+  * code : VARCHAR(50) <<UK>>
+  * name : VARCHAR(100)
+}
+
+' 开发者工作站表
+entity "dw_function_units" as fu {
+  * id : BIGINT <<PK>>
+  --
+  * code : VARCHAR(50) <<UK>>
+  * name : VARCHAR(200)
+  status : VARCHAR(20)
+  icon_id : BIGINT <<FK>>
+}
+
+entity "dw_table_definitions" as table {
+  * id : BIGINT <<PK>>
+  --
+  * function_unit_id : BIGINT <<FK>>
+  * table_name : VARCHAR(100)
+  * table_type : VARCHAR(20)
+  description : TEXT
+}
+
+entity "dw_field_definitions" as field {
+  * id : BIGINT <<PK>>
+  --
+  * table_id : BIGINT <<FK>>
+  * field_name : VARCHAR(100)
+  * data_type : VARCHAR(50)
+  length : INTEGER
+  nullable : BOOLEAN
+}
+
+entity "dw_form_definitions" as form {
+  * id : BIGINT <<PK>>
+  --
+  * function_unit_id : BIGINT <<FK>>
+  * form_name : VARCHAR(100)
+  * form_type : VARCHAR(20)
+  config_json : JSONB
+}
+
+entity "dw_action_definitions" as action {
+  * id : BIGINT <<PK>>
+  --
+  * function_unit_id : BIGINT <<FK>>
+  * action_name : VARCHAR(100)
+  * action_type : VARCHAR(20)
+  config_json : JSONB
+}
+
+entity "dw_process_definitions" as process {
+  * id : BIGINT <<PK>>
+  --
+  * function_unit_id : BIGINT <<FK>>
+  * bpmn_xml : TEXT
+}
+
+' 关系
+org ||--o{ dept : contains
+dept ||--o{ user : belongs_to
+user }o--o{ role : has
+user }o--o{ vgroup : member_of
+
+fu ||--o{ table : contains
+fu ||--o{ form : contains
+fu ||--o{ action : contains
+fu ||--o{ process : contains
+table ||--o{ field : contains
+
+@enduml
+
+@startuml 功能单元设计流程
+
+!define RECTANGLE class
+
+skinparam backgroundColor #FFFFFF
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 11
+
+title 功能单元设计流程
+
+start
+
+:创建功能单元;
+:设计表结构;
+:定义字段;
+:设置外键关系;
+:创建表单;
+:绑定表单-表关系;
+:配置表单规则\nform-create;
+:创建动作;
+:配置动作\nconfig_json;
+:设计流程\nBPMN;
+:绑定节点\n表单+动作;
+:配置处理人\n7种分配方式;
+:部署流程;
+:测试流程;
+
+stop
+
+@enduml
