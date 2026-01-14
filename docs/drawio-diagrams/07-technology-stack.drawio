@@ -1,0 +1,20 @@
+﻿<mxfile host="app.diagrams.net" modified="2026-01-14T00:00:00.000Z" agent="5.0" version="21.6.5" etag="drawio" type="device">
+  <diagram name="Technology Stack" id="technology-stack">
+    <mxGraphModel dx="1422" dy="794" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        
+        <!-- Title -->
+        <mxCell id="title" value="Technology Stack" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=24;fontStyle=1;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="400" y="20" width="600" height="40" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="placeholder" value="Technology Stack&#xa;&#xa;This diagram is a placeholder.&#xa;&#xa;To complete this diagram:&#xa;1. Open this file in Draw.io (https://app.diagrams.net/)&#xa;2. Add components based on the reference diagrams:&#xa;   - architecture-diagrams.md (Mermaid format)&#xa;   - architecture-plantuml.puml (PlantUML format)&#xa;3. Or convert existing diagrams using online tools:&#xa;   - Mermaid Live: https://mermaid.live/&#xa;   - PlantUML Web: https://www.plantuml.com/plantuml/uml/&#xa;4. Save and use in Confluence" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF9C4;strokeColor=#F57F17;fontSize=14;align=left;verticalAlign=top;spacingLeft=20;spacingTop=20;" vertex="1" parent="1">
+          <mxGeometry x="200" y="120" width="1000" height="700" as="geometry"/>
+        </mxCell>
+        
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
