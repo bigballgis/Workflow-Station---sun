@@ -108,6 +108,11 @@ public class TaskListResult {
         private String currentAssignee;
         
         /**
+         * 当前处理人名称
+         */
+        private String currentAssigneeName;
+        
+        /**
          * 优先级
          */
         private Integer priority;

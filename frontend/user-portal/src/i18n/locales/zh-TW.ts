@@ -133,7 +133,14 @@ export default {
     noProcessDefinition: '暫無流程定義',
     noFormData: '暫無表單資料',
     noFlowHistory: '暫無流轉記錄',
-    anyApprove: '任一審批'
+    anyApprove: '任一審批',
+    notFound: '任務不存在或已完成',
+    noPermission: '您沒有權限訪問此任務',
+    loadFailed: '載入失敗',
+    processLoadFailed: '流程圖載入失敗',
+    formLoadFailed: '表單載入失敗',
+    historyLoadFailed: '流轉記錄載入失敗',
+    serverError: '伺服器錯誤，請稍後重試'
   },
   process: {
     title: '發起流程',

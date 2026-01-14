@@ -230,6 +230,12 @@ public class TaskProcessComponent {
         String assignmentType = task.getAssignmentType();
         String assignee = task.getAssignee();
 
+        // 如果任务已分配给当前用户（包括认领后的任务），允许处理
+        // 这是最优先的检查，因为认领后 assignee 会被设置为认领人
+        if (userId.equals(assignee)) {
+            return true;
+        }
+
         // 直接分配给用户
         if ("USER".equals(assignmentType) && userId.equals(assignee)) {
             return true;
@@ -240,12 +246,12 @@ public class TaskProcessComponent {
             return true;
         }
 
-        // 虚拟组任务
+        // 虚拟组任务（未认领的情况）
         if ("VIRTUAL_GROUP".equals(assignmentType) && isUserInVirtualGroup(userId, assignee)) {
             return true;
         }
 
-        // 部门角色任务
+        // 部门角色任务（未认领的情况）
         if ("DEPT_ROLE".equals(assignmentType) && isUserHasDeptRole(userId, assignee)) {
             return true;
         }

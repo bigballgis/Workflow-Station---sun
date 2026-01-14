@@ -101,6 +101,12 @@ public interface UserRepository extends JpaRepository<User, String> {
     long countActiveAdmins();
     
     /**
+     * 根据ID查找用户并加载角色
+     */
+    @Query("SELECT DISTINCT u FROM User u LEFT JOIN FETCH u.userRoles ur LEFT JOIN FETCH ur.role WHERE u.id = :userId")
+    Optional<User> findByIdWithRoles(@Param("userId") String userId);
+    
+    /**
      * 检查邮箱是否被其他用户使用
      */
     @Query("SELECT COUNT(u) > 0 FROM User u WHERE u.email = :email AND u.id != :excludeUserId AND (u.deleted = false OR u.deleted IS NULL)")

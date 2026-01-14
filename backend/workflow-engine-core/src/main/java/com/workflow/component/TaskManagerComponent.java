@@ -34,6 +34,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -46,6 +48,7 @@ import java.util.Optional;
  * 负责多维度任务分配、查询、委托和完成功能
  * 支持用户、虚拟组、部门角色三种分配类型
  */
+@Slf4j
 @Component
 @Transactional
 public class TaskManagerComponent {
@@ -171,6 +174,13 @@ public class TaskManagerComponent {
             }
         }
         
+        // 获取当前处理人名称
+        String currentAssignee = task.getAssignee();
+        String currentAssigneeName = null;
+        if (currentAssignee != null && !currentAssignee.isEmpty()) {
+            currentAssigneeName = resolveUserDisplayName(currentAssignee);
+        }
+        
         return TaskListResult.TaskInfo.builder()
             .taskId(task.getId())
             .taskName(task.getName())
@@ -181,7 +191,8 @@ public class TaskManagerComponent {
             .processDefinitionName(processDefinitionName)
             .assignmentType(task.getAssignee() != null ? AssignmentType.USER : AssignmentType.VIRTUAL_GROUP)
             .assignmentTarget(task.getAssignee())
-            .currentAssignee(task.getAssignee())
+            .currentAssignee(currentAssignee)
+            .currentAssigneeName(currentAssigneeName)
             .priority(task.getPriority())
             .status("PENDING")
             .createdTime(task.getCreateTime() != null ? 
@@ -196,7 +207,7 @@ public class TaskManagerComponent {
     
     /**
      * 解析用户显示名称
-     * 优先返回 displayName，其次 username，最后返回 userId
+     * 优先返回 fullName，其次 displayName，再次 username，最后返回 userId
      */
     private String resolveUserDisplayName(String userId) {
         if (userId == null || userId.isEmpty()) {
@@ -205,19 +216,24 @@ public class TaskManagerComponent {
         try {
             Map<String, Object> userInfo = adminCenterClient.getUserInfo(userId);
             if (userInfo != null) {
-                // 优先使用 displayName
+                // 优先使用 fullName
+                String fullName = (String) userInfo.get("fullName");
+                if (fullName != null && !fullName.isEmpty()) {
+                    return fullName;
+                }
+                // 其次使用 displayName
                 String displayName = (String) userInfo.get("displayName");
                 if (displayName != null && !displayName.isEmpty()) {
                     return displayName;
                 }
-                // 其次使用 username
+                // 再次使用 username
                 String username = (String) userInfo.get("username");
                 if (username != null && !username.isEmpty()) {
                     return username;
                 }
             }
         } catch (Exception e) {
-            // 忽略异常，返回 userId 作为 fallback
+            log.warn("Failed to resolve user display name for {}: {}", userId, e.getMessage());
         }
         return userId;
     }
@@ -960,7 +976,7 @@ public class TaskManagerComponent {
         // 获取流程定义名称
         String processDefinitionName = getProcessDefinitionName(processDefinitionId);
         
-        // 确定分配类型
+        // 确定分配类型：如果有 assignee，则为 USER 类型（包括认领后的任务）
         AssignmentType assignmentType = AssignmentType.USER;
         String assignmentTarget = task.getAssignee();
         
@@ -968,6 +984,28 @@ public class TaskManagerComponent {
             // 没有直接分配，检查候选人/候选组
             assignmentType = AssignmentType.VIRTUAL_GROUP;
             assignmentTarget = null;
+        }
+        
+        // 获取流程发起人信息
+        String initiatorId = null;
+        String initiatorName = null;
+        if (task.getProcessInstanceId() != null) {
+            ProcessInstance processInstance = runtimeService.createProcessInstanceQuery()
+                .processInstanceId(task.getProcessInstanceId())
+                .singleResult();
+            if (processInstance != null) {
+                initiatorId = processInstance.getStartUserId();
+                if (initiatorId != null) {
+                    initiatorName = resolveUserDisplayName(initiatorId);
+                }
+            }
+        }
+        
+        // 获取当前处理人名称
+        String currentAssignee = task.getAssignee();
+        String currentAssigneeName = null;
+        if (currentAssignee != null && !currentAssignee.isEmpty()) {
+            currentAssigneeName = resolveUserDisplayName(currentAssignee);
         }
         
         return TaskListResult.TaskInfo.builder()
@@ -978,7 +1016,8 @@ public class TaskManagerComponent {
             .processDefinitionId(processDefinitionId)
             .processDefinitionKey(processDefinitionKey)
             .processDefinitionName(processDefinitionName)
-            .currentAssignee(task.getAssignee())
+            .currentAssignee(currentAssignee)
+            .currentAssigneeName(currentAssigneeName)
             .assignmentType(assignmentType)
             .assignmentTarget(assignmentTarget)
             .priority(task.getPriority())
@@ -988,6 +1027,8 @@ public class TaskManagerComponent {
                 LocalDateTime.ofInstant(task.getDueDate().toInstant(), java.time.ZoneId.systemDefault()) : null)
             .formKey(task.getFormKey())
             .status("ACTIVE")
+            .initiatorId(initiatorId)
+            .initiatorName(initiatorName)
             .build();
     }
     // ==================== 私有辅助方法 ====================

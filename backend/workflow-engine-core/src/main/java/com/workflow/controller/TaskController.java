@@ -1,11 +1,14 @@
 package com.workflow.controller;
 
+import com.workflow.component.HistoryManagerComponent;
 import com.workflow.component.TaskManagerComponent;
+import com.workflow.dto.request.HistoryQueryRequest;
 import com.workflow.dto.request.TaskAssignmentRequest;
 import com.workflow.dto.request.TaskClaimRequest;
 import com.workflow.dto.request.TaskDelegationRequest;
 import com.workflow.dto.request.TaskReturnRequest;
 import com.workflow.dto.response.ApiResponse;
+import com.workflow.dto.response.HistoryQueryResult;
 import com.workflow.dto.response.TaskAssignmentResult;
 import com.workflow.dto.response.TaskListResult;
 import com.workflow.enums.AssignmentType;
@@ -15,13 +18,17 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.flowable.engine.HistoryService;
+import org.flowable.engine.history.HistoricActivityInstance;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * 任务管理控制器
@@ -41,6 +48,7 @@ public class TaskController {
 
     private final TaskManagerComponent taskManagerComponent;
     private final UserPermissionService userPermissionService;
+    private final HistoryService historyService;
 
     /**
      * 查询任务列表
@@ -88,6 +96,68 @@ public class TaskController {
         log.info("Getting task details: {}", taskId);
         TaskListResult.TaskInfo taskInfo = taskManagerComponent.getTaskInfo(taskId);
         return ResponseEntity.ok(ApiResponse.success(taskInfo));
+    }
+    
+    /**
+     * 获取任务流转历史
+     */
+    @GetMapping("/{taskId}/history")
+    @Operation(summary = "获取任务流转历史", description = "获取任务所属流程实例的流转历史")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getTaskHistory(
+            @Parameter(description = "任务ID", required = true)
+            @PathVariable String taskId) {
+        
+        log.info("Getting task history for task: {}", taskId);
+        
+        // 先获取任务信息以获取流程实例ID
+        TaskListResult.TaskInfo taskInfo = taskManagerComponent.getTaskInfo(taskId);
+        String processInstanceId = taskInfo.getProcessInstanceId();
+        
+        // 查询流程实例的活动历史
+        List<HistoricActivityInstance> activities = historyService
+            .createHistoricActivityInstanceQuery()
+            .processInstanceId(processInstanceId)
+            .orderByHistoricActivityInstanceStartTime().asc()
+            .list();
+        
+        // 转换为前端期望的格式
+        List<Map<String, Object>> historyList = activities.stream()
+            .filter(activity -> "userTask".equals(activity.getActivityType()) || 
+                               "startEvent".equals(activity.getActivityType()) ||
+                               "endEvent".equals(activity.getActivityType()))
+            .map(activity -> {
+                Map<String, Object> item = new HashMap<>();
+                item.put("id", activity.getId());
+                item.put("taskId", activity.getTaskId());
+                item.put("taskName", activity.getActivityName());
+                item.put("activityId", activity.getActivityId());
+                item.put("activityName", activity.getActivityName());
+                item.put("activityType", activity.getActivityType());
+                
+                // 根据活动类型设置操作类型
+                String operationType = "PENDING";
+                if (activity.getEndTime() != null) {
+                    if ("startEvent".equals(activity.getActivityType())) {
+                        operationType = "SUBMIT";
+                    } else {
+                        operationType = "APPROVE";
+                    }
+                }
+                item.put("operationType", operationType);
+                
+                item.put("operatorId", activity.getAssignee());
+                item.put("operatorName", activity.getAssignee()); // TODO: 从用户服务获取用户名
+                item.put("operationTime", activity.getEndTime() != null ? 
+                    activity.getEndTime().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime().toString() :
+                    activity.getStartTime().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime().toString());
+                item.put("comment", null); // TODO: 从评论服务获取评论
+                item.put("duration", activity.getDurationInMillis());
+                
+                return item;
+            })
+            .collect(Collectors.toList());
+        
+        return ResponseEntity.ok(ApiResponse.success(historyList));
     }
 
     /**

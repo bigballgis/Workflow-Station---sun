@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS sys_users (
     deleted BOOLEAN NOT NULL DEFAULT false,
     deleted_at TIMESTAMP,
     deleted_by VARCHAR(64),
-    CONSTRAINT chk_sys_user_status CHECK (status IN ('ACTIVE', 'INACTIVE', 'LOCKED'))
+    CONSTRAINT chk_sys_user_status CHECK (status IN ('ACTIVE', 'INACTIVE', 'DISABLED', 'LOCKED', 'PENDING'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_sys_users_username ON sys_users(username);

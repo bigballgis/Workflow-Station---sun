@@ -133,7 +133,14 @@ export default {
     noProcessDefinition: '暂无流程定义',
     noFormData: '暂无表单数据',
     noFlowHistory: '暂无流转记录',
-    anyApprove: '任一审批'
+    anyApprove: '任一审批',
+    notFound: '任务不存在或已完成',
+    noPermission: '您没有权限访问此任务',
+    loadFailed: '加载失败',
+    processLoadFailed: '流程图加载失败',
+    formLoadFailed: '表单加载失败',
+    historyLoadFailed: '流转记录加载失败',
+    serverError: '服务器错误，请稍后重试'
   },
   process: {
     title: '发起流程',

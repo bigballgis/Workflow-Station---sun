@@ -154,6 +154,23 @@ public class TaskQueryComponent {
         String initiatorId = (String) taskMap.get("initiatorId");
         String initiatorName = (String) taskMap.get("initiatorName");
         
+        // 获取当前处理人
+        String currentAssignee = (String) taskMap.get("currentAssignee");
+        // 获取当前处理人名称，优先使用 currentAssigneeName，否则使用 currentAssignee
+        String currentAssigneeName = (String) taskMap.get("currentAssigneeName");
+        if (currentAssigneeName == null || currentAssigneeName.isEmpty()) {
+            currentAssigneeName = currentAssignee;
+        }
+        
+        // 确定分配类型：如果有 currentAssignee，则为 USER 类型（包括认领后的任务）
+        String assignmentType = taskMap.get("assignmentType") != null ? taskMap.get("assignmentType").toString() : null;
+        if (currentAssignee != null && !currentAssignee.isEmpty()) {
+            // 有处理人的任务，分配类型应该是 USER
+            assignmentType = "USER";
+        } else if (assignmentType == null) {
+            assignmentType = "VIRTUAL_GROUP";
+        }
+        
         return TaskInfo.builder()
                 .taskId((String) taskMap.get("taskId"))
                 .taskName((String) taskMap.get("taskName"))
@@ -161,9 +178,9 @@ public class TaskQueryComponent {
                 .processInstanceId((String) taskMap.get("processInstanceId"))
                 .processDefinitionKey(processDefinitionKey)
                 .processDefinitionName(processDefinitionName)
-                .assignmentType(taskMap.get("assignmentType") != null ? taskMap.get("assignmentType").toString() : "USER")
-                .assignee((String) taskMap.get("currentAssignee"))
-                .assigneeName((String) taskMap.get("currentAssignee"))
+                .assignmentType(assignmentType)
+                .assignee(currentAssignee)
+                .assigneeName(currentAssigneeName)
                 .initiatorId(initiatorId)
                 .initiatorName(initiatorName)
                 .priority(taskMap.get("priority") != null ? taskMap.get("priority").toString() : "NORMAL")

@@ -240,7 +240,8 @@ public class UserManagerComponent {
     public void deleteUser(String userId) {
         log.info("Deleting user: {}", userId);
         
-        User user = userRepository.findById(userId)
+        // 使用 findByIdWithRoles 加载用户及其角色，避免 LazyInitializationException
+        User user = userRepository.findByIdWithRoles(userId)
                 .orElseThrow(() -> new UserNotFoundException(userId));
         
         // 检查是否是最后一个管理员

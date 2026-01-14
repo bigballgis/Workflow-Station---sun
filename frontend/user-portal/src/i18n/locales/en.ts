@@ -133,7 +133,14 @@ export default {
     noProcessDefinition: 'No process definition',
     noFormData: 'No form data',
     noFlowHistory: 'No flow history',
-    anyApprove: 'Any approve'
+    anyApprove: 'Any approve',
+    notFound: 'Task not found or completed',
+    noPermission: 'You do not have permission to access this task',
+    loadFailed: 'Failed to load',
+    processLoadFailed: 'Failed to load process diagram',
+    formLoadFailed: 'Failed to load form',
+    historyLoadFailed: 'Failed to load flow history',
+    serverError: 'Server error, please try again later'
   },
   process: {
     title: 'Start Process',

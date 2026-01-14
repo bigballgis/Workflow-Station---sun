@@ -21,6 +21,16 @@
       </el-skeleton>
     </div>
 
+    <!-- 任务加载错误 -->
+    <div v-else-if="taskError" class="error-content">
+      <el-result icon="warning" :title="taskError">
+        <template #extra>
+          <el-button type="primary" @click="$router.back()">{{ t('common.back') }}</el-button>
+          <el-button @click="loadTaskDetail">{{ t('common.reset') }}</el-button>
+        </template>
+      </el-result>
+    </div>
+
     <!-- 正常内容 -->
     <div v-else class="content-sections">
       <!-- 第一部分：基本信息 -->
@@ -65,8 +75,9 @@
           </el-tag>
         </div>
         <div class="section-content">
+          <el-alert v-if="processError" :title="processError" type="warning" show-icon :closable="false" />
           <ProcessDiagram
-            v-if="processNodes.length > 0"
+            v-else-if="processNodes.length > 0"
             :nodes="processNodes"
             :flows="processFlows"
             :current-node-id="currentNodeId"
@@ -105,8 +116,9 @@
           <span>{{ t('task.flowHistory') }}</span>
         </div>
         <div class="section-content">
+          <el-alert v-if="historyError" :title="historyError" type="warning" show-icon :closable="false" />
           <ProcessHistory
-            v-if="historyRecords.length > 0"
+            v-else-if="historyRecords.length > 0"
             :records="historyRecords"
             :show-header="false"
             :show-refresh="false"
@@ -213,6 +225,11 @@ const loading = ref(true)
 const submitting = ref(false)
 const taskInfo = ref<Partial<TaskInfo>>({})
 
+// 错误状态
+const taskError = ref<string | null>(null)
+const processError = ref<string | null>(null)
+const historyError = ref<string | null>(null)
+
 // 流程图数据
 const processNodes = ref<ProcessNode[]>([])
 const processFlows = ref<ProcessFlow[]>([])
@@ -246,6 +263,7 @@ const actionForm = reactive({
 
 const loadTaskDetail = async () => {
   loading.value = true
+  taskError.value = null
   try {
     const res = await getTaskDetail(taskId)
     const data = res.data || res
@@ -259,15 +277,25 @@ const loadTaskDetail = async () => {
       // 加载流转历史
       await loadTaskHistory()
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Failed to load task detail:', error)
-    ElMessage.error('加载任务详情失败')
+    // 根据错误状态码显示不同的错误消息
+    const status = error.response?.status
+    if (status === 404) {
+      taskError.value = t('task.notFound')
+    } else if (status === 403) {
+      taskError.value = t('task.noPermission')
+    } else {
+      taskError.value = t('task.serverError')
+    }
+    ElMessage.error(taskError.value)
   } finally {
     loading.value = false
   }
 }
 
 const loadTaskHistory = async () => {
+  historyError.value = null
   try {
     const res = await getTaskHistory(taskId)
     const data = res.data || res
@@ -286,17 +314,20 @@ const loadTaskHistory = async () => {
     }
   } catch (error) {
     console.error('Failed to load task history:', error)
+    historyError.value = t('task.historyLoadFailed')
     historyRecords.value = []
   }
 }
 
 // 加载功能单元内容
 const loadFunctionUnitContent = async (processKey: string) => {
+  processError.value = null
   try {
     const response = await processApi.getFunctionUnitContent(processKey)
     const content = response.data || response
     if (content.error) {
       console.error('Function unit content error:', content.error)
+      processError.value = t('task.processLoadFailed')
       return
     }
     
@@ -342,8 +373,14 @@ const loadFunctionUnitContent = async (processKey: string) => {
       currentFormName.value = selectedForm.name
       parseFormConfig(selectedForm.data)
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Failed to load function unit content:', error)
+    // 403 错误表示功能单元被禁用或无权限
+    if (error.response?.status === 403) {
+      processError.value = t('task.noPermission')
+    } else {
+      processError.value = t('task.processLoadFailed')
+    }
   }
 }
 
@@ -743,6 +780,16 @@ onMounted(() => {
   .skeleton-content {
     display: flex;
     flex-direction: column;
+  }
+  
+  .error-content {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 400px;
+    background: white;
+    border-radius: 8px;
+    border: 1px solid var(--border-color, #e4e7ed);
   }
   
   .content-sections {
