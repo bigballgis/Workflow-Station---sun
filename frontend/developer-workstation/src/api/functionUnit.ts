@@ -16,8 +16,37 @@ functionUnitAxios.interceptors.request.use(config => {
 })
 
 functionUnitAxios.interceptors.response.use(
-  response => response.data,
-  error => Promise.reject(error)
+  response => {
+    console.log('[FunctionUnitAPI] Response:', response.status, response.data)
+    return response.data
+  },
+  async error => {
+    const { response } = error
+    
+    // 处理 401 未授权
+    if (response?.status === 401) {
+      const { clearAuth } = await import('./auth')
+      const router = (await import('@/router')).default
+      clearAuth()
+      router.push('/login')
+      return Promise.reject(error)
+    }
+    
+    // 处理 403 禁止访问
+    if (response?.status === 403) {
+      const { TOKEN_KEY, clearAuth } = await import('./auth')
+      const token = localStorage.getItem(TOKEN_KEY)
+      if (!token) {
+        // 没有 token，清除认证并重定向到登录页
+        clearAuth()
+        const router = (await import('@/router')).default
+        router.push('/login')
+      }
+      return Promise.reject(error)
+    }
+    
+    return Promise.reject(error)
+  }
 )
 
 export interface FunctionUnit {

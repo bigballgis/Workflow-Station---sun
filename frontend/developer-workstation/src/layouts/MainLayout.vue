@@ -63,7 +63,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { Folder, Picture, Connection, DArrowLeft, DArrowRight } from '@element-plus/icons-vue'
-import { logout as authLogout, clearAuth, getUser } from '@/api/auth'
+import { logout as authLogout, clearAuth, getUser, getCurrentUser } from '@/api/auth'
 
 const route = useRoute()
 const router = useRouter()
@@ -77,7 +77,16 @@ const sidebarWidth = computed(() => isCollapsed.value ? '64px' : '240px')
 
 // Get current user info
 const currentUser = computed(() => getUser())
-const displayName = computed(() => currentUser.value?.displayName || currentUser.value?.username || 'Developer')
+const displayName = computed(() => {
+  if (currentUser.value?.displayName) {
+    return currentUser.value.displayName
+  }
+  if (currentUser.value?.username) {
+    return currentUser.value.username
+  }
+  // 如果没有用户信息，可能是未登录，返回空字符串或提示
+  return '未登录'
+})
 
 const languageLabels: Record<string, string> = {
   'zh-CN': '简体中文',
@@ -113,8 +122,24 @@ function initSidebarState(): void {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   initSidebarState()
+  
+  // 如果用户信息不存在，尝试从 API 获取
+  if (!currentUser.value) {
+    try {
+      const user = await getCurrentUser()
+      if (user) {
+        const { saveUser } = await import('@/api/auth')
+        saveUser(user)
+      }
+    } catch (error) {
+      console.error('Failed to get current user:', error)
+      // 如果获取失败，可能是 token 无效，清除认证信息
+      clearAuth()
+      router.push('/login')
+    }
+  }
 })
 
 async function handleLogout() {

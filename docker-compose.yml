@@ -124,9 +124,9 @@ services:
       SPRING_PROFILES_ACTIVE: docker
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/workflow_platform
       SPRING_DATASOURCE_USERNAME: platform
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-platform_dev_password}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-platform123}
       SPRING_REDIS_HOST: redis
-      SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_dev_password}
+      SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD:-redis123}
       ADMIN_CENTER_URL: http://admin-center:8080
     networks:
       - platform-network
@@ -152,9 +152,9 @@ services:
       SPRING_PROFILES_ACTIVE: docker
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/workflow_platform
       SPRING_DATASOURCE_USERNAME: platform
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-platform_dev_password}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-platform123}
       SPRING_REDIS_HOST: redis
-      SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_dev_password}
+      SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD:-redis123}
     networks:
       - platform-network
     profiles:
@@ -182,9 +182,9 @@ services:
       SPRING_PROFILES_ACTIVE: docker
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/workflow_platform
       SPRING_DATASOURCE_USERNAME: platform
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-platform_dev_password}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-platform123}
       SPRING_REDIS_HOST: redis
-      SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_dev_password}
+      SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD:-redis123}
       ADMIN_CENTER_URL: http://admin-center:8080
     networks:
       - platform-network
@@ -210,9 +210,9 @@ services:
       SPRING_PROFILES_ACTIVE: docker
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/workflow_platform
       SPRING_DATASOURCE_USERNAME: platform
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-platform_dev_password}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-platform123}
       SPRING_REDIS_HOST: redis
-      SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_dev_password}
+      SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD:-redis123}
       ADMIN_CENTER_URL: http://admin-center:8080
     networks:
       - platform-network
@@ -237,9 +237,9 @@ services:
       SPRING_PROFILES_ACTIVE: docker
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/workflow_platform
       SPRING_DATASOURCE_USERNAME: platform
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-platform_dev_password}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-platform123}
       SPRING_REDIS_HOST: redis
-      SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_dev_password}
+      SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD:-redis123}
     networks:
       - platform-network
     profiles:

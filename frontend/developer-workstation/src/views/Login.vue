@@ -106,7 +106,13 @@ async function handleLogin() {
     saveUser(response.user)
     localStorage.setItem('userId', response.user.userId)
     
-    router.push('/')
+    // 检查是否有重定向路径
+    const redirect = router.currentRoute.value.query.redirect as string
+    if (redirect) {
+      router.push(redirect)
+    } else {
+      router.push('/')
+    }
     ElMessage.success('登录成功')
   } catch (error: any) {
     const message = error.response?.data?.message || error.message || '登录失败'
