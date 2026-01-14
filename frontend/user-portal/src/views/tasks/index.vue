@@ -8,7 +8,7 @@
     <div class="portal-card filter-card">
       <el-form :inline="true" :model="filterForm">
         <el-form-item :label="t('task.assignmentType')">
-          <el-select v-model="filterForm.assignmentTypes" multiple clearable placeholder="全部" style="width: 200px;">
+          <el-select v-model="filterForm.assignmentTypes" multiple clearable :placeholder="t('common.all')" style="width: 200px;">
             <el-option value="USER" :label="t('task.user')" />
             <el-option value="VIRTUAL_GROUP" :label="t('task.virtualGroup')" />
             <el-option value="DEPT_ROLE" :label="t('task.deptRole')" />
@@ -16,7 +16,7 @@
           </el-select>
         </el-form-item>
         <el-form-item :label="t('task.priority')">
-          <el-select v-model="filterForm.priorities" multiple clearable placeholder="全部" style="width: 160px;">
+          <el-select v-model="filterForm.priorities" multiple clearable :placeholder="t('common.all')" style="width: 160px;">
             <el-option value="URGENT" :label="t('task.urgent')" />
             <el-option value="HIGH" :label="t('task.high')" />
             <el-option value="NORMAL" :label="t('task.normal')" />
@@ -39,34 +39,39 @@
 
     <!-- 任务列表 -->
     <div class="portal-card">
-      <el-table :data="taskList" v-loading="loading" stripe @selection-change="handleSelectionChange">
-        <el-table-column type="selection" width="55" />
-        <el-table-column prop="taskName" :label="t('task.taskName')" min-width="200">
+      <el-table :data="taskList" v-loading="loading" stripe @selection-change="handleSelectionChange" table-layout="fixed">
+        <el-table-column type="selection" width="50" />
+        <el-table-column prop="taskName" :label="t('task.taskName')" min-width="160">
           <template #default="{ row }">
             <el-link type="primary" @click="viewTask(row)">{{ row.taskName }}</el-link>
           </template>
         </el-table-column>
-        <el-table-column prop="processDefinitionName" :label="t('task.processName')" width="150" />
-        <el-table-column prop="assignmentType" :label="t('task.assignmentType')" width="120">
+        <el-table-column prop="processDefinitionName" :label="t('task.processName')" min-width="140" show-overflow-tooltip />
+        <el-table-column prop="assignmentType" :label="t('task.assignmentType')" width="100">
           <template #default="{ row }">
             <el-tag :class="['assignment-tag', getAssignmentClass(row.assignmentType)]" size="small">
               {{ t(`task.${getAssignmentKey(row.assignmentType)}`) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="priority" :label="t('task.priority')" width="100">
+        <el-table-column prop="initiatorName" :label="t('task.initiator')" width="100" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ row.initiatorName || '-' }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="priority" :label="t('task.priority')" width="80">
           <template #default="{ row }">
             <el-tag :class="['priority-tag', row.priority.toLowerCase()]" size="small">
               {{ t(`task.${row.priority.toLowerCase()}`) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="createTime" :label="t('task.createTime')" width="160">
+        <el-table-column prop="createTime" :label="t('task.createTime')" width="150">
           <template #default="{ row }">
             {{ formatDate(row.createTime) }}
           </template>
         </el-table-column>
-        <el-table-column prop="dueDate" :label="t('task.dueDate')" width="160">
+        <el-table-column prop="dueDate" :label="t('task.dueDate')" width="130">
           <template #default="{ row }">
             <span :class="{ 'overdue': row.isOverdue }">
               {{ row.dueDate ? formatDate(row.dueDate) : '-' }}
@@ -76,7 +81,7 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column :label="t('task.actions')" width="220" fixed="right">
+        <el-table-column :label="t('task.actions')" width="200" fixed="right">
           <template #default="{ row }">
             <el-button
               v-if="canClaim(row)"
@@ -86,12 +91,20 @@
             >
               {{ t('task.claim') }}
             </el-button>
+            <el-button
+              v-if="canUnclaim(row)"
+              type="warning"
+              size="small"
+              @click="handleUnclaim(row)"
+            >
+              {{ t('task.unclaim') }}
+            </el-button>
             <el-button type="primary" size="small" @click="handleProcess(row)">
               {{ t('task.complete') }}
             </el-button>
             <el-dropdown trigger="click" @command="(cmd: string) => handleAction(cmd, row)">
               <el-button size="small">
-                更多<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+                {{ t('common.more') }}<el-icon class="el-icon--right"><ArrowDown /></el-icon>
               </el-button>
               <template #dropdown>
                 <el-dropdown-menu>
@@ -107,8 +120,8 @@
 
       <!-- 批量操作 -->
       <div class="batch-actions" v-if="selectedTasks.length > 0">
-        <span>已选择 {{ selectedTasks.length }} 项</span>
-        <el-button size="small" @click="handleBatchUrge">批量催办</el-button>
+        <span>{{ t('task.selected', { count: selectedTasks.length }) }}</span>
+        <el-button size="small" @click="handleBatchUrge">{{ t('task.batchUrge') }}</el-button>
       </div>
 
       <el-pagination
@@ -126,19 +139,19 @@
     <!-- 委托/转办/催办对话框 -->
     <el-dialog v-model="actionDialogVisible" :title="actionDialogTitle" width="500px">
       <el-form :model="actionForm" label-width="80px">
-        <el-form-item label="目标用户" v-if="currentAction !== 'urge' && currentAction !== 'batchUrge'">
-          <el-select v-model="actionForm.targetUserId" filterable placeholder="请选择用户" style="width: 100%;">
-            <el-option label="李四" value="user_2" />
-            <el-option label="王五" value="user_3" />
-            <el-option label="赵六" value="user_4" />
+        <el-form-item :label="t('task.targetUser')" v-if="currentAction !== 'urge' && currentAction !== 'batchUrge'">
+          <el-select v-model="actionForm.targetUserId" filterable :placeholder="t('task.selectUser')" style="width: 100%;">
+            <el-option label="Li Si" value="user_2" />
+            <el-option label="Wang Wu" value="user_3" />
+            <el-option label="Zhao Liu" value="user_4" />
           </el-select>
         </el-form-item>
-        <el-form-item :label="currentAction === 'urge' || currentAction === 'batchUrge' ? '催办消息' : '原因说明'">
+        <el-form-item :label="currentAction === 'urge' || currentAction === 'batchUrge' ? t('task.urgeMessage') : t('task.reasonDescription')">
           <el-input 
             v-model="actionForm.reason" 
             type="textarea" 
             :rows="3" 
-            :placeholder="currentAction === 'urge' || currentAction === 'batchUrge' ? '请输入催办消息（可选）' : '请输入原因'" 
+            :placeholder="currentAction === 'urge' || currentAction === 'batchUrge' ? t('task.urgeMessagePlaceholder') : t('task.reasonPlaceholder')" 
           />
         </el-form-item>
       </el-form>
@@ -156,7 +169,7 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { Search, ArrowDown } from '@element-plus/icons-vue'
-import { queryTasks, claimTask, delegateTask, transferTask, urgeTask, batchUrgeTasks, TaskInfo } from '@/api/task'
+import { queryTasks, claimTask, unclaimTask, delegateTask, transferTask, urgeTask, batchUrgeTasks, TaskInfo } from '@/api/task'
 import dayjs from 'dayjs'
 
 const { t } = useI18n()
@@ -240,18 +253,35 @@ const viewTask = (task: TaskInfo) => {
 }
 
 const canClaim = (task: TaskInfo) => {
-  return task.assignmentType === 'VIRTUAL_GROUP' || task.assignmentType === 'DEPT_ROLE'
+  // 只有虚拟组或部门角色任务且未被认领时才能认领
+  return (task.assignmentType === 'VIRTUAL_GROUP' || task.assignmentType === 'DEPT_ROLE') && !task.claimed
+}
+
+const canUnclaim = (task: TaskInfo) => {
+  // 已认领的任务可以取消认领
+  return task.claimed === true
 }
 
 const handleClaim = async (task: TaskInfo) => {
   try {
     await claimTask(task.taskId)
-    ElMessage.success('认领成功')
+    ElMessage.success(t('common.success'))
     loadTasks()
   } catch (error) {
-    // 模拟成功
-    ElMessage.success('认领成功')
+    // Mock success
+    ElMessage.success(t('common.success'))
+    task.claimed = true
     task.assignmentType = 'USER'
+  }
+}
+
+const handleUnclaim = async (task: TaskInfo) => {
+  try {
+    await unclaimTask(task.taskId, task.originalAssignmentType || task.assignmentType, task.originalAssignee || task.assignee)
+    ElMessage.success(t('common.success'))
+    loadTasks()
+  } catch (error) {
+    ElMessage.error(t('common.error'))
   }
 }
 
@@ -276,36 +306,36 @@ const handleAction = (action: string, task: TaskInfo) => {
 
 const handleBatchUrge = () => {
   currentAction.value = 'batchUrge'
-  actionDialogTitle.value = '批量催办'
+  actionDialogTitle.value = t('task.batchUrge')
   actionForm.reason = ''
   actionDialogVisible.value = true
 }
 
 const submitAction = async () => {
   if (currentAction.value !== 'urge' && currentAction.value !== 'batchUrge' && !actionForm.targetUserId) {
-    ElMessage.warning('请选择目标用户')
+    ElMessage.warning(t('task.selectUser'))
     return
   }
   
   try {
     if (currentAction.value === 'delegate') {
       await delegateTask(currentTask.value!.taskId, actionForm.targetUserId, actionForm.reason)
-      ElMessage.success('委托成功')
+      ElMessage.success(t('common.success'))
     } else if (currentAction.value === 'transfer') {
       await transferTask(currentTask.value!.taskId, actionForm.targetUserId, actionForm.reason)
-      ElMessage.success('转办成功')
+      ElMessage.success(t('common.success'))
     } else if (currentAction.value === 'urge') {
       await urgeTask(currentTask.value!.taskId, actionForm.reason)
-      ElMessage.success('催办成功')
+      ElMessage.success(t('common.success'))
     } else if (currentAction.value === 'batchUrge') {
       const taskIds = selectedTasks.value.map(t => t.taskId)
       await batchUrgeTasks(taskIds, actionForm.reason)
-      ElMessage.success('批量催办成功')
+      ElMessage.success(t('common.success'))
     }
     actionDialogVisible.value = false
     loadTasks()
   } catch (error) {
-    ElMessage.success('操作成功')
+    ElMessage.success(t('common.success'))
     actionDialogVisible.value = false
   }
 }

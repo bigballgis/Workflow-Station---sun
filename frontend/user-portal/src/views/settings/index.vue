@@ -45,31 +45,31 @@
           <el-tab-pane :label="t('settings.notifications')" name="notifications">
             <div class="portal-card">
               <el-form label-width="150px">
-                <el-form-item label="任务分配通知">
-                  <el-switch v-model="notificationSettings.taskAssigned.email" active-text="邮件" />
-                  <el-switch v-model="notificationSettings.taskAssigned.browser" active-text="浏览器" style="margin-left: 20px;" />
-                  <el-switch v-model="notificationSettings.taskAssigned.inApp" active-text="站内" style="margin-left: 20px;" />
+                <el-form-item :label="t('settings.taskAssignedNotification')">
+                  <el-switch v-model="notificationSettings.taskAssigned.email" :active-text="t('settings.email')" />
+                  <el-switch v-model="notificationSettings.taskAssigned.browser" :active-text="t('settings.browser')" style="margin-left: 20px;" />
+                  <el-switch v-model="notificationSettings.taskAssigned.inApp" :active-text="t('settings.inApp')" style="margin-left: 20px;" />
                 </el-form-item>
-                <el-form-item label="任务逾期提醒">
-                  <el-switch v-model="notificationSettings.taskOverdue.email" active-text="邮件" />
-                  <el-switch v-model="notificationSettings.taskOverdue.browser" active-text="浏览器" style="margin-left: 20px;" />
-                  <el-switch v-model="notificationSettings.taskOverdue.inApp" active-text="站内" style="margin-left: 20px;" />
+                <el-form-item :label="t('settings.taskOverdueReminder')">
+                  <el-switch v-model="notificationSettings.taskOverdue.email" :active-text="t('settings.email')" />
+                  <el-switch v-model="notificationSettings.taskOverdue.browser" :active-text="t('settings.browser')" style="margin-left: 20px;" />
+                  <el-switch v-model="notificationSettings.taskOverdue.inApp" :active-text="t('settings.inApp')" style="margin-left: 20px;" />
                 </el-form-item>
-                <el-form-item label="流程完成通知">
-                  <el-switch v-model="notificationSettings.processCompleted.email" active-text="邮件" />
-                  <el-switch v-model="notificationSettings.processCompleted.browser" active-text="浏览器" style="margin-left: 20px;" />
-                  <el-switch v-model="notificationSettings.processCompleted.inApp" active-text="站内" style="margin-left: 20px;" />
+                <el-form-item :label="t('settings.processCompletedNotification')">
+                  <el-switch v-model="notificationSettings.processCompleted.email" :active-text="t('settings.email')" />
+                  <el-switch v-model="notificationSettings.processCompleted.browser" :active-text="t('settings.browser')" style="margin-left: 20px;" />
+                  <el-switch v-model="notificationSettings.processCompleted.inApp" :active-text="t('settings.inApp')" style="margin-left: 20px;" />
                 </el-form-item>
                 <el-form-item :label="t('settings.quietHours')">
                   <el-time-picker
                     v-model="notificationSettings.quietStart"
-                    placeholder="开始时间"
+                    :placeholder="t('settings.startTime')"
                     format="HH:mm"
                   />
-                  <span style="margin: 0 10px;">至</span>
+                  <span style="margin: 0 10px;">{{ t('common.to') }}</span>
                   <el-time-picker
                     v-model="notificationSettings.quietEnd"
-                    placeholder="结束时间"
+                    :placeholder="t('settings.endTime')"
                     format="HH:mm"
                   />
                 </el-form-item>
@@ -100,10 +100,10 @@
                 </el-form-item>
                 <el-form-item :label="t('settings.pageSize')">
                   <el-select v-model="preferenceForm.pageSize" style="width: 300px;">
-                    <el-option :value="10" label="10条/页" />
-                    <el-option :value="20" label="20条/页" />
-                    <el-option :value="50" label="50条/页" />
-                    <el-option :value="100" label="100条/页" />
+                    <el-option :value="10" :label="t('settings.itemsPerPage', { count: 10 })" />
+                    <el-option :value="20" :label="t('settings.itemsPerPage', { count: 20 })" />
+                    <el-option :value="50" :label="t('settings.itemsPerPage', { count: 50 })" />
+                    <el-option :value="100" :label="t('settings.itemsPerPage', { count: 100 })" />
                   </el-select>
                 </el-form-item>
                 <el-form-item>
@@ -167,14 +167,14 @@ const changeLanguage = (lang: string) => {
 const savePreference = async () => {
   try {
     await updateUserPreference(preferenceForm)
-    ElMessage.success('保存成功')
+    ElMessage.success(t('settings.saveSuccess'))
   } catch (error) {
-    ElMessage.success('保存成功')
+    ElMessage.success(t('settings.saveSuccess'))
   }
 }
 
 const saveNotificationSettings = () => {
-  ElMessage.success('通知设置保存成功')
+  ElMessage.success(t('settings.notificationSaveSuccess'))
 }
 
 onMounted(() => {

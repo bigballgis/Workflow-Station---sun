@@ -2,24 +2,24 @@
   <el-dialog 
     :model-value="modelValue" 
     @update:model-value="$emit('update:modelValue', $event)" 
-    :title="isEdit ? '编辑用户' : '创建用户'" 
+    :title="isEdit ? t('user.editUser') : t('user.createUser')" 
     width="560px"
     destroy-on-close
   >
     <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
-      <el-form-item label="用户名" prop="username">
-        <el-input v-model="form.username" :disabled="isEdit" placeholder="请输入用户名" />
+      <el-form-item :label="t('user.username')" prop="username">
+        <el-input v-model="form.username" :disabled="isEdit" :placeholder="t('user.usernamePlaceholder')" />
       </el-form-item>
-      <el-form-item label="姓名" prop="fullName">
-        <el-input v-model="form.fullName" placeholder="请输入姓名" />
+      <el-form-item :label="t('user.fullName')" prop="fullName">
+        <el-input v-model="form.fullName" :placeholder="t('user.fullNamePlaceholder')" />
       </el-form-item>
-      <el-form-item label="邮箱" prop="email">
-        <el-input v-model="form.email" placeholder="请输入邮箱" />
+      <el-form-item :label="t('user.email')" prop="email">
+        <el-input v-model="form.email" :placeholder="t('user.emailPlaceholder')" />
       </el-form-item>
-      <el-form-item label="工号" prop="employeeId">
-        <el-input v-model="form.employeeId" placeholder="请输入工号" />
+      <el-form-item :label="t('user.employeeId')" prop="employeeId">
+        <el-input v-model="form.employeeId" :placeholder="t('user.employeeIdPlaceholder')" />
       </el-form-item>
-      <el-form-item label="部门" prop="departmentId">
+      <el-form-item :label="t('user.department')" prop="departmentId">
         <el-tree-select 
           v-model="form.departmentId" 
           :data="departmentTree" 
@@ -27,21 +27,21 @@
           node-key="id"
           clearable 
           check-strictly 
-          placeholder="请选择部门"
+          :placeholder="t('user.departmentPlaceholder')"
           style="width: 100%"
         />
       </el-form-item>
-      <el-form-item label="职位" prop="position">
-        <el-input v-model="form.position" placeholder="请输入职位" />
+      <el-form-item :label="t('user.position')" prop="position">
+        <el-input v-model="form.position" :placeholder="t('user.positionPlaceholder')" />
       </el-form-item>
-      <el-form-item label="实体管理者" prop="entityManagerId">
+      <el-form-item :label="t('user.entityManager')" prop="entityManagerId">
         <el-select 
           v-model="form.entityManagerId" 
           filterable 
           remote 
           :remote-method="searchUsers"
           clearable 
-          placeholder="搜索并选择实体管理者"
+          :placeholder="t('user.entityManagerPlaceholder')"
           style="width: 100%"
           :loading="userSearchLoading"
         >
@@ -53,14 +53,14 @@
           />
         </el-select>
       </el-form-item>
-      <el-form-item label="职能管理者" prop="functionManagerId">
+      <el-form-item :label="t('user.functionManager')" prop="functionManagerId">
         <el-select 
           v-model="form.functionManagerId" 
           filterable 
           remote 
           :remote-method="searchUsers"
           clearable 
-          placeholder="搜索并选择职能管理者"
+          :placeholder="t('user.functionManagerPlaceholder')"
           style="width: 100%"
           :loading="userSearchLoading"
         >
@@ -72,22 +72,25 @@
           />
         </el-select>
       </el-form-item>
-      <el-form-item v-if="!isEdit" label="初始密码" prop="initialPassword">
-        <el-input v-model="form.initialPassword" type="password" show-password placeholder="请输入初始密码" />
+      <el-form-item v-if="!isEdit" :label="t('user.initialPassword')" prop="initialPassword">
+        <el-input v-model="form.initialPassword" type="password" show-password :placeholder="t('user.initialPasswordPlaceholder')" />
       </el-form-item>
     </el-form>
     <template #footer>
-      <el-button @click="$emit('update:modelValue', false)">取消</el-button>
-      <el-button type="primary" :loading="loading" @click="handleSubmit">确定</el-button>
+      <el-button @click="$emit('update:modelValue', false)">{{ t('common.cancel') }}</el-button>
+      <el-button type="primary" :loading="loading" @click="handleSubmit">{{ t('common.confirm') }}</el-button>
     </template>
   </el-dialog>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { useOrganizationStore } from '@/stores/organization'
 import { userApi, type User } from '@/api/user'
+
+const { t } = useI18n()
 
 const props = defineProps<{ modelValue: boolean; user: User | null }>()
 const emit = defineEmits(['update:modelValue', 'success'])
@@ -113,21 +116,21 @@ const form = reactive({
   initialPassword: ''
 })
 
-const rules: FormRules = {
+const rules = computed<FormRules>(() => ({
   username: [
-    { required: true, message: '请输入用户名', trigger: 'blur' },
-    { min: 3, max: 50, message: '用户名长度为3-50个字符', trigger: 'blur' }
+    { required: true, message: t('user.usernamePlaceholder'), trigger: 'blur' },
+    { min: 3, max: 50, message: t('user.usernamePlaceholder'), trigger: 'blur' }
   ],
-  fullName: [{ required: true, message: '请输入姓名', trigger: 'blur' }],
+  fullName: [{ required: true, message: t('user.fullNamePlaceholder'), trigger: 'blur' }],
   email: [
-    { required: true, message: '请输入邮箱', trigger: 'blur' },
-    { type: 'email', message: '邮箱格式不正确', trigger: 'blur' }
+    { required: true, message: t('user.emailPlaceholder'), trigger: 'blur' },
+    { type: 'email', message: t('user.emailPlaceholder'), trigger: 'blur' }
   ],
   initialPassword: [
-    { required: true, message: '请输入初始密码', trigger: 'blur' },
-    { min: 8, message: '密码长度至少8位', trigger: 'blur' }
+    { required: true, message: t('user.initialPasswordPlaceholder'), trigger: 'blur' },
+    { min: 8, message: t('user.initialPasswordPlaceholder'), trigger: 'blur' }
   ]
-}
+}))
 
 watch(() => props.modelValue, (val) => {
   if (val) {
@@ -256,11 +259,11 @@ const handleSubmit = async () => {
         initialPassword: form.initialPassword
       })
     }
-    ElMessage.success(isEdit.value ? '更新成功' : '创建成功')
+    ElMessage.success(t('common.success'))
     emit('update:modelValue', false)
     emit('success')
   } catch (error: any) {
-    ElMessage.error(error.message || '操作失败')
+    ElMessage.error(error.message || t('common.failed'))
   } finally {
     loading.value = false
   }

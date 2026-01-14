@@ -6,14 +6,14 @@
 
     <div class="portal-card">
       <el-tabs v-model="activeTab" @tab-change="handleTabChange">
-        <el-tab-pane label="全部" name="all" />
-        <el-tab-pane label="进行中" name="RUNNING" />
-        <el-tab-pane label="已完成" name="COMPLETED" />
-        <el-tab-pane label="已撤回" name="WITHDRAWN" />
-        <el-tab-pane label="已拒绝" name="REJECTED" />
+        <el-tab-pane :label="t('common.all')" name="all" />
+        <el-tab-pane :label="t('application.running')" name="RUNNING" />
+        <el-tab-pane :label="t('application.completed')" name="COMPLETED" />
+        <el-tab-pane :label="t('application.withdrawn')" name="WITHDRAWN" />
+        <el-tab-pane :label="t('application.rejected')" name="REJECTED" />
         <el-tab-pane name="DRAFT">
           <template #label>
-            <span>草稿箱</span>
+            <span>{{ t('application.draftBox') }}</span>
             <el-badge v-if="draftCount > 0" :value="draftCount" :max="99" class="draft-badge" />
           </template>
         </el-tab-pane>
@@ -22,35 +22,35 @@
       <!-- 草稿列表 -->
       <template v-if="activeTab === 'DRAFT'">
         <el-table :data="draftList" v-loading="loading" stripe>
-          <el-table-column prop="processDefinitionName" label="流程类型" min-width="200">
+          <el-table-column prop="processDefinitionName" :label="t('application.processType')" min-width="200">
             <template #default="{ row }">
               <el-link type="primary" @click="continueDraft(row)">
                 {{ row.processDefinitionName }}
               </el-link>
             </template>
           </el-table-column>
-          <el-table-column prop="updatedAt" label="保存时间" width="180">
+          <el-table-column prop="updatedAt" :label="t('application.saveTime')" width="180">
             <template #default="{ row }">
               {{ formatDate(row.updatedAt) }}
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="180" fixed="right">
+          <el-table-column :label="t('common.actions')" width="180" fixed="right">
             <template #default="{ row }">
               <el-button type="primary" size="small" @click="continueDraft(row)">
-                继续填写
+                {{ t('application.continueFilling') }}
               </el-button>
               <el-button type="danger" size="small" @click="handleDeleteDraft(row)">
-                删除
+                {{ t('common.delete') }}
               </el-button>
             </template>
           </el-table-column>
         </el-table>
-        <el-empty v-if="!loading && draftList.length === 0" description="暂无草稿" />
+        <el-empty v-if="!loading && draftList.length === 0" :description="t('application.noDrafts')" />
       </template>
 
       <!-- 申请列表 -->
       <template v-else>
-        <el-table :data="applicationList" v-loading="loading" stripe>
+        <el-table :data="applicationList" v-loading="loading" stripe class="application-table" table-layout="fixed">
           <el-table-column prop="businessKey" :label="t('application.processTitle')" min-width="200">
             <template #default="{ row }">
               <el-link type="primary" @click="viewDetail(row)">
@@ -58,15 +58,15 @@
               </el-link>
             </template>
           </el-table-column>
-          <el-table-column prop="processDefinitionName" label="流程类型" width="120" />
-          <el-table-column prop="currentNode" :label="t('application.currentNode')" width="120">
+          <el-table-column prop="processDefinitionName" :label="t('application.processType')" min-width="120" show-overflow-tooltip />
+          <el-table-column prop="currentNode" :label="t('application.currentNode')" min-width="120" show-overflow-tooltip>
             <template #default="{ row }">
               {{ row.currentNode || '-' }}
             </template>
           </el-table-column>
-          <el-table-column prop="currentAssignee" label="当前处理人" width="120">
+          <el-table-column prop="currentAssignee" :label="t('application.currentAssignee')" min-width="100" show-overflow-tooltip>
             <template #default="{ row }">
-              {{ row.currentAssignee || '待分配' }}
+              {{ row.currentAssignee || t('application.unassigned') }}
             </template>
           </el-table-column>
           <el-table-column prop="startTime" :label="t('application.startTime')" width="160">
@@ -74,21 +74,25 @@
               {{ formatDate(row.startTime) }}
             </template>
           </el-table-column>
-          <el-table-column prop="status" :label="t('application.status')" width="100">
+          <el-table-column prop="status" :label="t('application.status')" width="90" align="center">
             <template #default="{ row }">
-              <el-tag :type="getStatusType(row.status)" size="small">
+              <el-tag :type="getStatusType(row.status)" size="small" effect="light">
                 {{ getStatusLabel(row.status) }}
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="150" fixed="right">
+          <el-table-column :label="t('common.actions')" width="120" fixed="right" align="center">
             <template #default="{ row }">
-              <el-button v-if="row.status === 'RUNNING'" type="warning" size="small" @click="handleUrge(row)">
-                {{ t('application.urge') }}
-              </el-button>
-              <el-button v-if="row.status === 'RUNNING'" type="danger" size="small" @click="handleWithdraw(row)">
-                {{ t('application.withdraw') }}
-              </el-button>
+              <div class="action-buttons" v-if="row.status === 'RUNNING'">
+                <el-button type="warning" size="small" link @click="handleUrge(row)">
+                  {{ t('application.urge') }}
+                </el-button>
+                <el-divider direction="vertical" />
+                <el-button type="danger" size="small" link @click="handleWithdraw(row)">
+                  {{ t('application.withdraw') }}
+                </el-button>
+              </div>
+              <span v-else class="no-action">-</span>
             </template>
           </el-table-column>
         </el-table>
@@ -142,10 +146,10 @@ const getStatusType = (status: string): 'success' | 'warning' | 'info' | 'danger
 
 const getStatusLabel = (status: string) => {
   const map: Record<string, string> = {
-    RUNNING: '进行中',
-    COMPLETED: '已完成',
-    WITHDRAWN: '已撤回',
-    REJECTED: '已拒绝'
+    RUNNING: t('application.running'),
+    COMPLETED: t('application.completed'),
+    WITHDRAWN: t('application.withdrawn'),
+    REJECTED: t('application.rejected')
   }
   return map[status] || status
 }
@@ -165,7 +169,7 @@ const loadApplications = async () => {
     pagination.total = data.totalElements || 0
   } catch (error) {
     console.error('Failed to load applications:', error)
-    ElMessage.error('加载申请列表失败')
+    ElMessage.error(t('application.loadFailed'))
     applicationList.value = []
   } finally {
     loading.value = false
@@ -181,7 +185,7 @@ const loadDrafts = async () => {
     draftCount.value = draftList.value.length
   } catch (error) {
     console.error('Failed to load drafts:', error)
-    ElMessage.error('加载草稿列表失败')
+    ElMessage.error(t('application.loadDraftsFailed'))
     draftList.value = []
   } finally {
     loading.value = false
@@ -222,13 +226,13 @@ const continueDraft = (row: any) => {
 
 const handleDeleteDraft = async (row: any) => {
   try {
-    await ElMessageBox.confirm('确定要删除该草稿吗？', '提示', { type: 'warning' })
+    await ElMessageBox.confirm(t('application.deleteDraftConfirm'), t('common.info'), { type: 'warning' })
     await processApi.deleteDraftById(row.id)
-    ElMessage.success('删除成功')
+    ElMessage.success(t('application.deleteSuccess'))
     loadDrafts()
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error('删除失败')
+      ElMessage.error(t('application.deleteFailed'))
     }
   }
 }
@@ -236,21 +240,21 @@ const handleDeleteDraft = async (row: any) => {
 const handleUrge = async (row: any) => {
   try {
     await processApi.urgeProcess(row.id)
-    ElMessage.success('催办成功')
+    ElMessage.success(t('application.urgeSuccess'))
   } catch (error) {
-    ElMessage.error('催办失败')
+    ElMessage.error(t('application.urgeFailed'))
   }
 }
 
 const handleWithdraw = async (row: any) => {
   try {
-    await ElMessageBox.confirm('确定要撤回该流程吗？', '提示', { type: 'warning' })
-    await processApi.withdrawProcess(row.id, '用户主动撤回')
-    ElMessage.success('撤回成功')
+    await ElMessageBox.confirm(t('application.withdrawConfirm'), t('common.info'), { type: 'warning' })
+    await processApi.withdrawProcess(row.id, t('application.userWithdraw'))
+    ElMessage.success(t('application.withdrawSuccess'))
     loadApplications()
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error('撤回失败')
+      ElMessage.error(t('application.withdrawFailed'))
     }
   }
 }
@@ -279,6 +283,34 @@ onMounted(() => {
     
     :deep(.el-badge__content) {
       font-size: 10px;
+    }
+  }
+  
+  .application-table {
+    :deep(.el-table__header th) {
+      background-color: #fafafa;
+      font-weight: 500;
+    }
+    
+    .action-buttons {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      
+      .el-button {
+        padding: 4px 8px;
+        font-size: 13px;
+      }
+      
+      .el-divider--vertical {
+        margin: 0 4px;
+        height: 14px;
+      }
+    }
+    
+    .no-action {
+      color: #c0c4cc;
     }
   }
 }

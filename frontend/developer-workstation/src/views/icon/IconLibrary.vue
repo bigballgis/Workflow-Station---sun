@@ -7,12 +7,12 @@
             <el-input v-model="searchKeyword" :placeholder="$t('icon.search')" clearable @change="loadIcons" />
           </el-form-item>
           <el-form-item class="no-margin">
-            <el-select v-model="selectedCategory" placeholder="选择分类" clearable @change="loadIcons" style="width: 140px">
+            <el-select v-model="selectedCategory" :placeholder="t('icon.selectCategory')" clearable @change="loadIcons" style="width: 140px">
               <el-option v-for="cat in categories" :key="cat" :label="categoryLabel(cat)" :value="cat" />
             </el-select>
           </el-form-item>
           <el-form-item v-if="allTags.length" class="tag-filter-item no-margin">
-            <span class="tag-label">标签:</span>
+            <span class="tag-label">{{ t('icon.tags') }}:</span>
             <el-tag
               v-for="tag in allTags"
               :key="tag"
@@ -24,7 +24,7 @@
               {{ tag }}
             </el-tag>
             <el-tag v-if="selectedTag" type="danger" effect="plain" class="tag-item" @click="clearTagFilter">
-              清除
+              {{ t('icon.clear') }}
             </el-tag>
           </el-form-item>
         </el-form>
@@ -54,9 +54,9 @@
     </div>
 
     <!-- Upload Dialog -->
-    <el-dialog v-model="showUploadDialog" title="上传图标" width="500px">
+    <el-dialog v-model="showUploadDialog" :title="t('icon.uploadIcon')" width="500px">
       <el-form :model="uploadForm" label-width="80px">
-        <el-form-item label="图标文件" required>
+        <el-form-item :label="t('icon.iconFile')" required>
           <el-upload
             ref="uploadRef"
             :auto-upload="false"
@@ -64,24 +64,24 @@
             accept=".svg"
             :on-change="handleFileChange"
           >
-            <el-button>选择SVG文件</el-button>
+            <el-button>{{ t('icon.selectFile') }}</el-button>
           </el-upload>
         </el-form-item>
-        <el-form-item label="名称" required>
-          <el-input v-model="uploadForm.name" placeholder="图标名称" />
+        <el-form-item :label="t('icon.name')" required>
+          <el-input v-model="uploadForm.name" :placeholder="t('icon.namePlaceholder')" />
         </el-form-item>
-        <el-form-item label="分类" required>
+        <el-form-item :label="t('icon.category')" required>
           <el-select v-model="uploadForm.category">
             <el-option v-for="cat in categories" :key="cat" :label="categoryLabel(cat)" :value="cat" />
           </el-select>
         </el-form-item>
-        <el-form-item label="标签">
-          <el-input v-model="uploadForm.tags" placeholder="多个标签用逗号分隔" />
+        <el-form-item :label="t('icon.tags')">
+          <el-input v-model="uploadForm.tags" :placeholder="t('icon.tagsPlaceholder')" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showUploadDialog = false">取消</el-button>
-        <el-button type="primary" @click="handleUpload" :loading="uploading">上传</el-button>
+        <el-button @click="showUploadDialog = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="handleUpload" :loading="uploading">{{ t('icon.upload') }}</el-button>
       </template>
     </el-dialog>
 
@@ -90,15 +90,15 @@
       <div v-if="selectedIcon" class="icon-detail">
         <div class="icon-large-preview" v-html="sanitizeSvg(selectedIcon.svgContent)"></div>
         <el-descriptions :column="1" border>
-          <el-descriptions-item label="名称">{{ selectedIcon.name }}</el-descriptions-item>
-          <el-descriptions-item label="分类">{{ categoryLabel(selectedIcon.category) }}</el-descriptions-item>
-          <el-descriptions-item label="大小">{{ selectedIcon.fileSize }} bytes</el-descriptions-item>
-          <el-descriptions-item label="标签">{{ selectedIcon.tags || '-' }}</el-descriptions-item>
+          <el-descriptions-item :label="t('icon.name')">{{ selectedIcon.name }}</el-descriptions-item>
+          <el-descriptions-item :label="t('icon.category')">{{ categoryLabel(selectedIcon.category) }}</el-descriptions-item>
+          <el-descriptions-item :label="t('icon.size')">{{ selectedIcon.fileSize }} bytes</el-descriptions-item>
+          <el-descriptions-item :label="t('icon.tags')">{{ selectedIcon.tags || '-' }}</el-descriptions-item>
         </el-descriptions>
       </div>
       <template #footer>
-        <el-button @click="showDetailDialog = false">关闭</el-button>
-        <el-button type="danger" @click="handleDeleteIcon" :loading="deleting">删除</el-button>
+        <el-button @click="showDetailDialog = false">{{ $t('common.close') }}</el-button>
+        <el-button type="danger" @click="handleDeleteIcon" :loading="deleting">{{ $t('common.delete') }}</el-button>
       </template>
     </el-dialog>
   </div>
@@ -106,8 +106,11 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox, type UploadFile } from 'element-plus'
 import { iconApi, type Icon } from '@/api/icon'
+
+const { t } = useI18n()
 
 const icons = ref<Icon[]>([])
 const loading = ref(false)
@@ -217,18 +220,18 @@ function handleFileChange(file: UploadFile) {
 
 async function handleUpload() {
   if (!uploadFile.value) {
-    ElMessage.warning('请选择文件')
+    ElMessage.warning(t('icon.selectFileFirst'))
     return
   }
   if (!uploadForm.name) {
-    ElMessage.warning('请输入名称')
+    ElMessage.warning(t('icon.enterName'))
     return
   }
   
   uploading.value = true
   try {
     await iconApi.upload(uploadFile.value, uploadForm.name, uploadForm.category, uploadForm.tags)
-    ElMessage.success('上传成功')
+    ElMessage.success(t('icon.uploadSuccess'))
     showUploadDialog.value = false
     uploadFile.value = null
     Object.assign(uploadForm, { name: '', category: 'GENERAL', tags: '' })
@@ -236,7 +239,7 @@ async function handleUpload() {
     loadIcons()
     loadTags()
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.message || '上传失败')
+    ElMessage.error(e.response?.data?.message || t('icon.uploadFailed'))
   } finally {
     uploading.value = false
   }
@@ -245,23 +248,23 @@ async function handleUpload() {
 async function handleDeleteIcon() {
   if (!selectedIcon.value) return
   
-  await ElMessageBox.confirm('确定要删除该图标吗？', '提示', { type: 'warning' })
+  await ElMessageBox.confirm(t('common.confirm'), t('common.confirm'), { type: 'warning' })
   
   deleting.value = true
   try {
     // Check if icon is in use
     const usageRes = await iconApi.checkUsage(selectedIcon.value.id)
     if (usageRes.data) {
-      ElMessage.warning('该图标正在被使用，无法删除')
+      ElMessage.warning(t('common.error'))
       return
     }
     
     await iconApi.delete(selectedIcon.value.id)
-    ElMessage.success('删除成功')
+    ElMessage.success(t('common.success'))
     showDetailDialog.value = false
     loadIcons()
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.message || '删除失败')
+    ElMessage.error(e.response?.data?.message || t('common.error'))
   } finally {
     deleting.value = false
   }

@@ -1,4 +1,8 @@
 export default {
+  app: {
+    name: 'User Portal',
+    title: 'Workflow Platform'
+  },
   common: {
     confirm: 'Confirm',
     cancel: 'Cancel',
@@ -13,7 +17,18 @@ export default {
     success: 'Success',
     error: 'Error',
     warning: 'Warning',
-    info: 'Info'
+    info: 'Info',
+    more: 'More',
+    clear: 'Clear',
+    attachments: 'Attachments',
+    all: 'All',
+    actions: 'Actions',
+    back: 'Back',
+    to: 'to',
+    startDate: 'Start Date',
+    endDate: 'End Date',
+    logout: 'Logout',
+    logoutSuccess: 'Logged out successfully'
   },
   menu: {
     dashboard: 'Dashboard',
@@ -45,7 +60,19 @@ export default {
     efficiencyScore: 'Efficiency Score',
     qualityScore: 'Quality Score',
     collaborationScore: 'Collaboration Score',
-    monthlyRank: 'Monthly Rank'
+    monthlyRank: 'Monthly Rank',
+    addWidget: 'Add Widget',
+    layoutSettings: 'Layout Settings',
+    selectWidget: 'Select Widget',
+    editWidget: 'Edit Widget',
+    widgetTitle: 'Widget Title',
+    widgetWidth: 'Widget Width',
+    widgetHeight: 'Widget Height',
+    columns: 'Columns',
+    rowHeight: 'Row Height',
+    gap: 'Gap',
+    confirmRemoveWidget: 'Are you sure to remove this widget?',
+    confirmResetLayout: 'Are you sure to reset layout? All custom settings will be lost.'
   },
   task: {
     title: 'Tasks',
@@ -64,10 +91,23 @@ export default {
     complete: 'Complete',
     delegate: 'Delegate',
     transfer: 'Transfer',
+    urge: 'Urge',
+    batchUrge: 'Batch Urge',
+    selected: '{count} selected',
     approve: 'Approve',
     reject: 'Reject',
     return: 'Return',
     comment: 'Comment',
+    commentPlaceholder: 'Please enter comment',
+    commentRequired: 'Comment is required',
+    signature: 'Signature',
+    transferTo: 'Transfer To',
+    selectUser: 'Please select user',
+    selectUserRequired: 'Please select user',
+    reason: 'Reason',
+    transferReasonPlaceholder: 'Please enter transfer reason',
+    action: 'Action',
+    duration: 'Duration',
     urgent: 'Urgent',
     high: 'High',
     normal: 'Normal',
@@ -77,7 +117,23 @@ export default {
     deptRole: 'Dept Role',
     delegated: 'Delegated',
     overdue: 'Overdue',
-    pending: 'Pending'
+    pending: 'Pending',
+    targetUser: 'Target User',
+    urgeMessage: 'Urge Message',
+    reasonDescription: 'Reason Description',
+    urgeMessagePlaceholder: 'Please enter urge message (optional)',
+    reasonPlaceholder: 'Please enter reason',
+    detail: 'Task Detail',
+    basicInfo: 'Basic Info',
+    workflowDiagram: 'Workflow Diagram',
+    taskForm: 'Task Form',
+    flowHistory: 'Flow History',
+    backToList: 'Back to List',
+    currentAssignee: 'Current Assignee',
+    noProcessDefinition: 'No process definition',
+    noFormData: 'No form data',
+    noFlowHistory: 'No flow history',
+    anyApprove: 'Any approve'
   },
   process: {
     title: 'Start Process',
@@ -96,7 +152,8 @@ export default {
     normal: 'Normal',
     general: 'General',
     urgent: 'Urgent',
-    critical: 'Critical'
+    critical: 'Critical',
+    history: 'Flow History'
   },
   application: {
     title: 'My Applications',
@@ -109,9 +166,27 @@ export default {
     withdrawn: 'Withdrawn',
     rejected: 'Rejected',
     draft: 'Draft',
+    draftBox: 'Drafts',
     withdraw: 'Withdraw',
     urge: 'Urge',
-    viewDetail: 'View Detail'
+    viewDetail: 'View Detail',
+    processType: 'Process Type',
+    saveTime: 'Save Time',
+    currentAssignee: 'Current Assignee',
+    unassigned: 'Unassigned',
+    continueFilling: 'Continue',
+    noDrafts: 'No drafts',
+    loadFailed: 'Failed to load applications',
+    loadDraftsFailed: 'Failed to load drafts',
+    deleteDraftConfirm: 'Are you sure to delete this draft?',
+    deleteSuccess: 'Deleted successfully',
+    deleteFailed: 'Delete failed',
+    urgeSuccess: 'Urge sent successfully',
+    urgeFailed: 'Urge failed',
+    withdrawConfirm: 'Are you sure to withdraw this process?',
+    withdrawSuccess: 'Withdrawn successfully',
+    withdrawFailed: 'Withdraw failed',
+    userWithdraw: 'User withdrawal'
   },
   delegation: {
     title: 'Delegations',
@@ -135,7 +210,19 @@ export default {
     suspended: 'Suspended',
     suspend: 'Suspend',
     resume: 'Resume',
-    create: 'Create Delegation'
+    create: 'Create Delegation',
+    operationType: 'Operation Type',
+    delegator: 'Delegator',
+    delegate: 'Delegate',
+    result: 'Result',
+    time: 'Time',
+    noProxyTasks: 'No proxy tasks',
+    selectDelegate: 'Please select delegate',
+    createSuccess: 'Created successfully',
+    suspendSuccess: 'Suspended successfully',
+    resumeSuccess: 'Resumed successfully',
+    deleteConfirm: 'Are you sure to delete this delegation rule?',
+    deleteSuccess: 'Deleted successfully'
   },
   permission: {
     title: 'Permissions',
@@ -156,7 +243,6 @@ export default {
     approved: 'Approved',
     rejected: 'Rejected',
     renew: 'Renew',
-    // New translations
     myRoles: 'My Roles',
     myVirtualGroups: 'My Virtual Groups',
     noRoles: 'No roles',
@@ -220,6 +306,58 @@ export default {
     emailNotification: 'Email Notification',
     browserNotification: 'Browser Notification',
     inAppNotification: 'In-App Notification',
-    quietHours: 'Quiet Hours'
+    quietHours: 'Quiet Hours',
+    taskAssignedNotification: 'Task Assigned Notification',
+    taskOverdueReminder: 'Task Overdue Reminder',
+    processCompletedNotification: 'Process Completed Notification',
+    email: 'Email',
+    browser: 'Browser',
+    inApp: 'In-App',
+    startTime: 'Start Time',
+    endTime: 'End Time',
+    itemsPerPage: '{count} items/page',
+    saveSuccess: 'Saved successfully',
+    notificationSaveSuccess: 'Notification settings saved'
+  },
+  login: {
+    title: 'Workflow Platform',
+    subtitle: 'User Portal',
+    testUserQuickLogin: 'Test User Quick Login',
+    selectTestUser: 'Select Test User',
+    username: 'Username',
+    password: 'Password',
+    login: 'Login',
+    rememberMe: 'Remember Me',
+    usernameRequired: 'Please enter username',
+    passwordRequired: 'Please enter password',
+    loginSuccess: 'Login successful',
+    loginFailed: 'Login failed',
+    selected: 'Selected'
+  },
+  status: {
+    completed: 'Completed',
+    processing: 'Processing',
+    pending: 'Pending',
+    rejected: 'Rejected',
+    cancelled: 'Cancelled'
+  },
+  action: {
+    approve: 'Approve',
+    reject: 'Reject',
+    transfer: 'Transfer',
+    delegate: 'Delegate',
+    withdraw: 'Withdraw',
+    submit: 'Submit'
+  },
+  upload: {
+    dragText: 'Drag file here, or',
+    clickText: 'click to upload',
+    selectFile: 'Select File',
+    tip: 'Supports {types} formats, max {size}MB per file',
+    sizeExceed: 'File size cannot exceed {size}MB',
+    typeError: 'Invalid file format',
+    limitExceed: 'Maximum {limit} files allowed',
+    success: 'Upload successful',
+    failed: 'Upload failed'
   }
 }

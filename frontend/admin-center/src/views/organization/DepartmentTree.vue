@@ -1,7 +1,7 @@
 <template>
   <div class="page-container">
     <div class="page-header">
-      <span class="page-title">组织架构</span>
+      <span class="page-title">{{ t('menu.organization') }}</span>
       <el-button type="primary" @click="showCreateDialog()">
         <el-icon><Plus /></el-icon>{{ t('organization.createDepartment') }}
       </el-button>
@@ -10,7 +10,7 @@
     <el-row :gutter="20">
       <el-col :span="10">
         <el-card class="tree-card">
-          <el-input v-model="filterText" placeholder="搜索部门" clearable class="search-input">
+          <el-input v-model="filterText" :placeholder="t('organization.searchDepartment')" clearable class="search-input">
             <template #prefix>
               <el-icon><Search /></el-icon>
             </template>
@@ -68,17 +68,17 @@
             <el-descriptions-item :label="t('organization.departmentCode')">{{ selectedDepartment.code }}</el-descriptions-item>
             <el-descriptions-item :label="t('organization.parentDepartment')">{{ selectedDepartment.parentName || '无' }}</el-descriptions-item>
             <el-descriptions-item :label="t('organization.leader')">{{ selectedDepartment.leaderName || '未设置' }}</el-descriptions-item>
-            <el-descriptions-item label="副经理">{{ selectedDepartment.secondaryManagerName || '未设置' }}</el-descriptions-item>
+            <el-descriptions-item label="副经理">{{ selectedDepartment.secondaryManagerName || t('user.notSet') }}</el-descriptions-item>
             <el-descriptions-item :label="t('organization.memberCount')">{{ selectedDepartment.memberCount || 0 }} 人</el-descriptions-item>
           </el-descriptions>
           
           <div class="members-section">
-            <h4>部门成员</h4>
+            <h4>{{ t('role.members') }}</h4>
             <el-table :data="departmentMembers" max-height="300" stripe>
-              <el-table-column prop="fullName" label="姓名" min-width="80" />
-              <el-table-column prop="employeeId" label="工号" min-width="100" />
-              <el-table-column prop="username" label="用户名" min-width="100" />
-              <el-table-column prop="email" label="邮箱" min-width="180" show-overflow-tooltip />
+              <el-table-column prop="fullName" :label="t('user.fullName')" min-width="80" />
+              <el-table-column prop="employeeId" :label="t('user.employeeId')" min-width="100" />
+              <el-table-column prop="username" :label="t('user.username')" min-width="100" />
+              <el-table-column prop="email" :label="t('user.email')" min-width="180" show-overflow-tooltip />
             </el-table>
           </div>
         </el-card>
@@ -167,7 +167,7 @@ const handleFormSuccess = async () => {
 }
 
 const handleDelete = async (dept: Department) => {
-  await ElMessageBox.confirm(t('organization.deleteConfirm'), '提示', { type: 'warning' })
+  await ElMessageBox.confirm(t('organization.deleteConfirm'), t('common.confirm'), { type: 'warning' })
   try {
     await orgStore.deleteDepartment(dept.id)
     ElMessage.success(t('common.success'))

@@ -7,8 +7,8 @@
     <el-row :gutter="20">
       <el-col :span="8">
         <el-card>
-          <template #header>角色列表</template>
-          <el-input v-model="roleFilter" placeholder="搜索角色" clearable style="margin-bottom: 15px" />
+          <template #header>{{ t('role.roleList') }}</template>
+          <el-input v-model="roleFilter" :placeholder="t('role.searchRole')" clearable style="margin-bottom: 15px" />
           <el-menu :default-active="selectedRoleId" @select="handleRoleSelect">
             <el-menu-item v-for="role in filteredRoles" :key="role.id" :index="role.id">
               <span>{{ role.name }}</span>

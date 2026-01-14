@@ -1,11 +1,12 @@
 import { createRouter, createWebHistory, RouteRecordRaw } from 'vue-router'
+import i18n from '@/i18n'
 
 const routes: RouteRecordRaw[] = [
   {
     path: '/login',
     name: 'Login',
     component: () => import('@/views/login/index.vue'),
-    meta: { title: '登录', requiresAuth: false }
+    meta: { titleKey: 'login.title', requiresAuth: false }
   },
   {
     path: '/',
@@ -17,67 +18,67 @@ const routes: RouteRecordRaw[] = [
         path: 'dashboard',
         name: 'Dashboard',
         component: () => import('@/views/dashboard/index.vue'),
-        meta: { title: '工作台', icon: 'HomeFilled' }
+        meta: { titleKey: 'menu.dashboard', icon: 'HomeFilled' }
       },
       {
         path: 'tasks',
         name: 'Tasks',
         component: () => import('@/views/tasks/index.vue'),
-        meta: { title: '待办任务', icon: 'List' }
+        meta: { titleKey: 'menu.tasks', icon: 'List' }
       },
       {
         path: 'tasks/:id',
         name: 'TaskDetail',
         component: () => import('@/views/tasks/detail.vue'),
-        meta: { title: '任务详情', hidden: true }
+        meta: { titleKey: 'task.detail', hidden: true }
       },
       {
         path: 'processes',
         name: 'Processes',
         component: () => import('@/views/processes/index.vue'),
-        meta: { title: '发起流程', icon: 'Plus' }
+        meta: { titleKey: 'menu.processes', icon: 'Plus' }
       },
       {
         path: 'processes/start/:key',
         name: 'ProcessStart',
         component: () => import('@/views/processes/start.vue'),
-        meta: { title: '发起流程', hidden: true }
+        meta: { titleKey: 'process.startProcess', hidden: true }
       },
       {
         path: 'my-applications',
         name: 'MyApplications',
         component: () => import('@/views/applications/index.vue'),
-        meta: { title: '我的申请', icon: 'Document' }
+        meta: { titleKey: 'menu.myApplications', icon: 'Document' }
       },
       {
         path: 'applications/:id',
         name: 'ApplicationDetail',
         component: () => import('@/views/applications/detail.vue'),
-        meta: { title: '申请详情', hidden: true }
+        meta: { titleKey: 'application.title', hidden: true }
       },
       {
         path: 'delegations',
         name: 'Delegations',
         component: () => import('@/views/delegations/index.vue'),
-        meta: { title: '委托管理', icon: 'Share' }
+        meta: { titleKey: 'menu.delegations', icon: 'Share' }
       },
       {
         path: 'permissions',
         name: 'Permissions',
         component: () => import('@/views/permissions/index.vue'),
-        meta: { title: '权限申请', icon: 'Key' }
+        meta: { titleKey: 'menu.permissions', icon: 'Key' }
       },
       {
         path: 'notifications',
         name: 'Notifications',
         component: () => import('@/views/notifications/index.vue'),
-        meta: { title: '消息中心', icon: 'Bell' }
+        meta: { titleKey: 'menu.notifications', icon: 'Bell' }
       },
       {
         path: 'settings',
         name: 'Settings',
         component: () => import('@/views/settings/index.vue'),
-        meta: { title: '个人设置', icon: 'Setting' }
+        meta: { titleKey: 'menu.settings', icon: 'Setting' }
       }
     ]
   },
@@ -96,7 +97,10 @@ const router = createRouter({
 // 路由守卫
 router.beforeEach((to, from, next) => {
   // 设置页面标题
-  document.title = `${to.meta.title || '用户门户'} - 工作流平台`
+  const t = i18n.global.t
+  const titleKey = to.meta.titleKey as string
+  const pageTitle = titleKey ? t(titleKey) : t('app.name')
+  document.title = `${pageTitle} - ${t('app.title')}`
   
   // 检查登录状态
   const token = localStorage.getItem('token')

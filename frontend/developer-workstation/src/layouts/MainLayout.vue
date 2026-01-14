@@ -2,7 +2,7 @@
   <el-container class="main-layout">
     <el-header class="header">
       <div class="logo">
-        <span class="logo-text">开发者工作站</span>
+        <span class="logo-text">{{ t('app.name') }}</span>
       </div>
       <div class="header-right">
         <el-dropdown @command="handleLanguageChange">
@@ -25,7 +25,7 @@
           </span>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item @click="handleLogout">退出登录</el-dropdown-item>
+              <el-dropdown-item @click="handleLogout">{{ t('common.logout') }}</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
@@ -64,10 +64,11 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { Folder, Picture, Connection, DArrowLeft, DArrowRight } from '@element-plus/icons-vue'
 import { logout as authLogout, clearAuth, getUser } from '@/api/auth'
+import i18n from '@/i18n'
 
 const route = useRoute()
 const router = useRouter()
-const { locale } = useI18n()
+const { t } = useI18n()
 
 const activeMenu = computed(() => route.path)
 
@@ -85,11 +86,11 @@ const languageLabels: Record<string, string> = {
   'en': 'English'
 }
 
-const currentLanguageLabel = computed(() => languageLabels[locale.value] || '简体中文')
+const currentLanguageLabel = computed(() => languageLabels[i18n.global.locale.value] || '简体中文')
 
 function handleLanguageChange(lang: string) {
-  locale.value = lang
-  localStorage.setItem('locale', lang)
+  i18n.global.locale.value = lang as 'zh-CN' | 'zh-TW' | 'en'
+  localStorage.setItem('language', lang)
 }
 
 // Toggle sidebar collapse state
@@ -120,7 +121,7 @@ onMounted(() => {
 async function handleLogout() {
   try {
     await authLogout()
-    ElMessage.success('已退出登录')
+    ElMessage.success(t('common.logoutSuccess'))
   } catch (error) {
     // Even if API fails, still clear local auth
     console.error('Logout API error:', error)

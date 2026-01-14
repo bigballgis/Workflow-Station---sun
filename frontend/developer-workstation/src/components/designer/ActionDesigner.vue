@@ -423,61 +423,82 @@ function parseActionBindingsFromBpmn() {
     const parser = new DOMParser()
     const xmlDoc = parser.parseFromString(processDefinition.bpmnXml, 'text/xml')
     
-    // 查找流程级别的全局动作
-    const processes = xmlDoc.querySelectorAll('process')
-    processes.forEach(proc => {
-      const properties = proc.querySelectorAll(':scope > extensionElements > properties > property')
-      properties.forEach(prop => {
-        const name = prop.getAttribute('name')
-        const value = prop.getAttribute('value')
-        
-        if (name === 'globalActionIds' && value) {
-          try {
-            const actionIds = JSON.parse(value) as number[]
-            actionIds.forEach(actionId => {
-              if (!bindings.has(actionId)) {
-                bindings.set(actionId, [])
+    // 查找流程级别的全局动作 - 支持带命名空间
+    const allElements = xmlDoc.getElementsByTagName('*')
+    
+    // 查找 process 元素
+    for (let i = 0; i < allElements.length; i++) {
+      const el = allElements[i]
+      const localName = el.localName || el.nodeName.split(':').pop()
+      
+      if (localName === 'process') {
+        // 查找 process 下的 property/values 元素
+        const procProps = el.getElementsByTagName('*')
+        for (let j = 0; j < procProps.length; j++) {
+          const prop = procProps[j]
+          const propLocalName = prop.localName || prop.nodeName.split(':').pop()
+          
+          if (propLocalName === 'property' || propLocalName === 'values') {
+            const name = prop.getAttribute('name')
+            const value = prop.getAttribute('value')
+            
+            if (name === 'globalActionIds' && value) {
+              try {
+                const actionIds = JSON.parse(value) as number[]
+                actionIds.forEach(actionId => {
+                  if (!bindings.has(actionId)) {
+                    bindings.set(actionId, [])
+                  }
+                  bindings.get(actionId)!.push({ id: 'process', name: '流程全局' })
+                })
+              } catch (e) {
+                console.warn('Failed to parse globalActionIds:', value)
               }
-              bindings.get(actionId)!.push({ id: 'process', name: '流程全局' })
-            })
-          } catch (e) {
-            console.warn('Failed to parse globalActionIds:', value)
+            }
           }
         }
-      })
-    })
+      }
+    }
     
-    // 查找所有userTask节点
-    const userTasks = xmlDoc.querySelectorAll('userTask')
-    
-    userTasks.forEach(task => {
-      const taskId = task.getAttribute('id') || ''
-      const taskName = task.getAttribute('name') || taskId
+    // 查找所有userTask节点 - 支持带命名空间
+    for (let i = 0; i < allElements.length; i++) {
+      const el = allElements[i]
+      const localName = el.localName || el.nodeName.split(':').pop()
       
-      // 添加到可用节点列表
-      nodes.push({ id: taskId, name: taskName })
-      
-      // 查找custom:property中的actionIds
-      const properties = task.querySelectorAll('property')
-      properties.forEach(prop => {
-        const name = prop.getAttribute('name')
-        const value = prop.getAttribute('value')
+      if (localName === 'userTask') {
+        const taskId = el.getAttribute('id') || ''
+        const taskName = el.getAttribute('name') || taskId
         
-        if (name === 'actionIds' && value) {
-          try {
-            const actionIds = JSON.parse(value) as number[]
-            actionIds.forEach(actionId => {
-              if (!bindings.has(actionId)) {
-                bindings.set(actionId, [])
+        // 添加到可用节点列表
+        nodes.push({ id: taskId, name: taskName })
+        
+        // 查找 property/values 中的 actionIds
+        const taskProps = el.getElementsByTagName('*')
+        for (let j = 0; j < taskProps.length; j++) {
+          const prop = taskProps[j]
+          const propLocalName = prop.localName || prop.nodeName.split(':').pop()
+          
+          if (propLocalName === 'property' || propLocalName === 'values') {
+            const name = prop.getAttribute('name')
+            const value = prop.getAttribute('value')
+            
+            if (name === 'actionIds' && value) {
+              try {
+                const actionIds = JSON.parse(value) as number[]
+                actionIds.forEach(actionId => {
+                  if (!bindings.has(actionId)) {
+                    bindings.set(actionId, [])
+                  }
+                  bindings.get(actionId)!.push({ id: taskId, name: taskName })
+                })
+              } catch (e) {
+                console.warn('Failed to parse actionIds:', value)
               }
-              bindings.get(actionId)!.push({ id: taskId, name: taskName })
-            })
-          } catch (e) {
-            console.warn('Failed to parse actionIds:', value)
+            }
           }
         }
-      })
-    })
+      }
+    }
   } catch (e) {
     console.error('Failed to parse BPMN XML:', e)
   }

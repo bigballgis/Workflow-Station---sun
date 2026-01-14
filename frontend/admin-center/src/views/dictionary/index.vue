@@ -3,15 +3,15 @@
     <div class="page-header">
       <span class="page-title">{{ t('menu.dictionary') }}</span>
       <el-button type="primary" @click="showCreateDialog">
-        <el-icon><Plus /></el-icon>创建字典
+        <el-icon><Plus /></el-icon>{{ t('dictionary.createDictionary') }}
       </el-button>
     </div>
     
     <el-row :gutter="20">
       <el-col :span="10">
         <el-card>
-          <template #header>字典列表</template>
-          <el-input v-model="filterText" placeholder="搜索字典" clearable style="margin-bottom: 15px" />
+          <template #header>{{ t('dictionary.title') }}</template>
+          <el-input v-model="filterText" :placeholder="t('dictionary.searchDictionary')" clearable style="margin-bottom: 15px" />
           <el-table :data="filteredDictionaries" highlight-current-row @current-change="handleDictSelect" max-height="500" v-loading="loading">
             <el-table-column prop="name" label="名称" />
             <el-table-column prop="code" label="编码" width="120" />

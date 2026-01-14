@@ -3,63 +3,63 @@
     <div class="page-header">
       <span class="page-title">{{ t('menu.audit') }}</span>
       <el-button @click="handleExport">
-        <el-icon><Download /></el-icon>导出日志
+        <el-icon><Download /></el-icon>{{ t('common.export') }}
       </el-button>
     </div>
     
     <el-form :inline="true" :model="query" class="search-form">
-      <el-form-item label="操作类型">
-        <el-select v-model="query.action" clearable placeholder="请选择">
-          <el-option label="登录" value="LOGIN" />
-          <el-option label="登出" value="LOGOUT" />
-          <el-option label="创建" value="CREATE" />
-          <el-option label="更新" value="UPDATE" />
-          <el-option label="删除" value="DELETE" />
-          <el-option label="权限变更" value="PERMISSION_CHANGE" />
+      <el-form-item :label="t('audit.actionType')">
+        <el-select v-model="query.action" clearable :placeholder="t('common.selectPlaceholder')">
+          <el-option :label="t('audit.login')" value="LOGIN" />
+          <el-option :label="t('audit.logout')" value="LOGOUT" />
+          <el-option :label="t('audit.create')" value="CREATE" />
+          <el-option :label="t('audit.update')" value="UPDATE" />
+          <el-option :label="t('audit.delete')" value="DELETE" />
+          <el-option :label="t('audit.permissionChange')" value="PERMISSION_CHANGE" />
         </el-select>
       </el-form-item>
-      <el-form-item label="操作人">
-        <el-input v-model="query.username" clearable placeholder="用户名" />
+      <el-form-item :label="t('audit.operator')">
+        <el-input v-model="query.username" clearable :placeholder="t('audit.usernamePlaceholder')" />
       </el-form-item>
-      <el-form-item label="结果">
-        <el-select v-model="query.result" clearable placeholder="请选择">
-          <el-option label="成功" value="SUCCESS" />
-          <el-option label="失败" value="FAILED" />
+      <el-form-item :label="t('audit.result')">
+        <el-select v-model="query.result" clearable :placeholder="t('common.selectPlaceholder')">
+          <el-option :label="t('audit.success')" value="SUCCESS" />
+          <el-option :label="t('audit.failed')" value="FAILED" />
         </el-select>
       </el-form-item>
-      <el-form-item label="时间范围">
-        <el-date-picker v-model="dateRange" type="daterange" start-placeholder="开始日期" end-placeholder="结束日期" value-format="YYYY-MM-DD" />
+      <el-form-item :label="t('audit.dateRange')">
+        <el-date-picker v-model="dateRange" type="daterange" :start-placeholder="t('common.startDate')" :end-placeholder="t('common.endDate')" value-format="YYYY-MM-DD" />
       </el-form-item>
       <el-form-item>
-        <el-button type="primary" @click="handleSearch">搜索</el-button>
-        <el-button @click="handleReset">重置</el-button>
+        <el-button type="primary" @click="handleSearch">{{ t('common.search') }}</el-button>
+        <el-button @click="handleReset">{{ t('common.reset') }}</el-button>
       </el-form-item>
     </el-form>
     
     <el-table :data="logs" v-loading="loading" stripe>
-      <el-table-column prop="action" label="操作类型" width="120">
+      <el-table-column prop="action" :label="t('audit.actionType')" width="120">
         <template #default="{ row }">
           <el-tag :type="actionType(row.action)" size="small">{{ actionText(row.action) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="resourceType" label="资源类型" width="100" />
-      <el-table-column prop="description" label="描述" show-overflow-tooltip />
-      <el-table-column prop="username" label="操作人" width="120" />
-      <el-table-column prop="ipAddress" label="IP地址" width="130" />
-      <el-table-column prop="result" label="结果" width="80">
+      <el-table-column prop="resourceType" :label="t('audit.resourceType')" width="100" />
+      <el-table-column prop="description" :label="t('common.description')" show-overflow-tooltip />
+      <el-table-column prop="username" :label="t('audit.operator')" width="120" />
+      <el-table-column prop="ipAddress" :label="t('audit.ipAddress')" width="130" />
+      <el-table-column prop="result" :label="t('audit.result')" width="80">
         <template #default="{ row }">
           <el-tag :type="row.result === 'SUCCESS' ? 'success' : 'danger'" size="small">
-            {{ row.result === 'SUCCESS' ? '成功' : '失败' }}
+            {{ row.result === 'SUCCESS' ? t('audit.success') : t('audit.failed') }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="duration" label="耗时" width="80">
+      <el-table-column prop="duration" :label="t('audit.duration')" width="80">
         <template #default="{ row }">{{ row.duration }}ms</template>
       </el-table-column>
-      <el-table-column prop="createdAt" label="时间" width="160" />
-      <el-table-column label="操作" width="80">
+      <el-table-column prop="createdAt" :label="t('audit.time')" width="160" />
+      <el-table-column :label="t('common.actions')" width="80">
         <template #default="{ row }">
-          <el-button link type="primary" @click="showDetail(row)">详情</el-button>
+          <el-button link type="primary" @click="showDetail(row)">{{ t('common.view') }}</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -76,29 +76,29 @@
       />
     </div>
     
-    <el-dialog v-model="detailDialogVisible" title="日志详情" width="600px">
+    <el-dialog v-model="detailDialogVisible" :title="t('audit.logDetail')" width="600px">
       <el-descriptions :column="2" border v-if="currentLog">
-        <el-descriptions-item label="操作类型">
+        <el-descriptions-item :label="t('audit.actionType')">
           <el-tag :type="actionType(currentLog.action)">{{ actionText(currentLog.action) }}</el-tag>
         </el-descriptions-item>
-        <el-descriptions-item label="操作人">{{ currentLog.username }}</el-descriptions-item>
-        <el-descriptions-item label="资源类型">{{ currentLog.resourceType }}</el-descriptions-item>
-        <el-descriptions-item label="资源ID">{{ currentLog.resourceId }}</el-descriptions-item>
-        <el-descriptions-item label="IP地址">{{ currentLog.ipAddress }}</el-descriptions-item>
-        <el-descriptions-item label="结果">
+        <el-descriptions-item :label="t('audit.operator')">{{ currentLog.username }}</el-descriptions-item>
+        <el-descriptions-item :label="t('audit.resourceType')">{{ currentLog.resourceType }}</el-descriptions-item>
+        <el-descriptions-item :label="t('audit.resourceId')">{{ currentLog.resourceId }}</el-descriptions-item>
+        <el-descriptions-item :label="t('audit.ipAddress')">{{ currentLog.ipAddress }}</el-descriptions-item>
+        <el-descriptions-item :label="t('audit.result')">
           <el-tag :type="currentLog.result === 'SUCCESS' ? 'success' : 'danger'">
-            {{ currentLog.result === 'SUCCESS' ? '成功' : '失败' }}
+            {{ currentLog.result === 'SUCCESS' ? t('audit.success') : t('audit.failed') }}
           </el-tag>
         </el-descriptions-item>
-        <el-descriptions-item label="请求方法">{{ currentLog.requestMethod }}</el-descriptions-item>
-        <el-descriptions-item label="请求路径">{{ currentLog.requestPath }}</el-descriptions-item>
-        <el-descriptions-item label="耗时">{{ currentLog.duration }}ms</el-descriptions-item>
-        <el-descriptions-item label="时间">{{ currentLog.createdAt }}</el-descriptions-item>
-        <el-descriptions-item label="描述" :span="2">{{ currentLog.description }}</el-descriptions-item>
-        <el-descriptions-item v-if="currentLog.errorMessage" label="错误信息" :span="2">
+        <el-descriptions-item :label="t('audit.requestMethod')">{{ currentLog.requestMethod }}</el-descriptions-item>
+        <el-descriptions-item :label="t('audit.requestPath')">{{ currentLog.requestPath }}</el-descriptions-item>
+        <el-descriptions-item :label="t('audit.duration')">{{ currentLog.duration }}ms</el-descriptions-item>
+        <el-descriptions-item :label="t('audit.time')">{{ currentLog.createdAt }}</el-descriptions-item>
+        <el-descriptions-item :label="t('common.description')" :span="2">{{ currentLog.description }}</el-descriptions-item>
+        <el-descriptions-item v-if="currentLog.errorMessage" :label="t('audit.errorMessage')" :span="2">
           <span style="color: #F56C6C">{{ currentLog.errorMessage }}</span>
         </el-descriptions-item>
-        <el-descriptions-item label="请求参数" :span="2">
+        <el-descriptions-item :label="t('audit.requestParams')" :span="2">
           <pre class="json-pre">{{ formatJson(currentLog.requestParams) }}</pre>
         </el-descriptions-item>
       </el-descriptions>
@@ -136,8 +136,8 @@ const actionType = (action: string) => ({
 }[action] || 'info')
 
 const actionText = (action: string) => ({
-  LOGIN: '登录', LOGOUT: '登出', CREATE: '创建',
-  UPDATE: '更新', DELETE: '删除', PERMISSION_CHANGE: '权限变更'
+  LOGIN: t('audit.login'), LOGOUT: t('audit.logout'), CREATE: t('audit.create'),
+  UPDATE: t('audit.update'), DELETE: t('audit.delete'), PERMISSION_CHANGE: t('audit.permissionChange')
 }[action] || action)
 
 const formatJson = (obj: any) => {
@@ -197,10 +197,10 @@ const handleExport = async () => {
       }
     })
     await exportAuditLogs(request)
-    ElMessage.success('导出成功')
+    ElMessage.success(t('common.success'))
   } catch (e) {
     console.error('Failed to export:', e)
-    ElMessage.error('导出失败')
+    ElMessage.error(t('common.failed'))
   }
 }
 

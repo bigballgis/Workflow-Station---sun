@@ -2,66 +2,69 @@
   <el-dialog 
     :model-value="modelValue" 
     @update:model-value="$emit('update:modelValue', $event)" 
-    title="用户详情" 
+    :title="t('common.view')" 
     width="700px"
     destroy-on-close
   >
     <div v-loading="loading" class="user-detail">
       <template v-if="user">
         <el-descriptions :column="2" border>
-          <el-descriptions-item label="用户名">{{ user.username }}</el-descriptions-item>
-          <el-descriptions-item label="姓名">{{ user.fullName }}</el-descriptions-item>
-          <el-descriptions-item label="邮箱">{{ user.email }}</el-descriptions-item>
-          <el-descriptions-item label="工号">{{ user.employeeId || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="部门">{{ user.departmentName || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="职位">{{ user.position || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="状态">
+          <el-descriptions-item :label="t('user.username')">{{ user.username }}</el-descriptions-item>
+          <el-descriptions-item :label="t('user.fullName')">{{ user.fullName }}</el-descriptions-item>
+          <el-descriptions-item :label="t('user.email')">{{ user.email }}</el-descriptions-item>
+          <el-descriptions-item :label="t('user.employeeId')">{{ user.employeeId || '-' }}</el-descriptions-item>
+          <el-descriptions-item :label="t('user.department')">{{ user.departmentName || '-' }}</el-descriptions-item>
+          <el-descriptions-item :label="t('user.position')">{{ user.position || '-' }}</el-descriptions-item>
+          <el-descriptions-item :label="t('user.status')">
             <el-tag :type="statusType(user.status)" size="small">{{ statusText(user.status) }}</el-tag>
           </el-descriptions-item>
-          <el-descriptions-item label="实体管理者">{{ user.entityManagerName || '未设置' }}</el-descriptions-item>
-          <el-descriptions-item label="职能管理者">{{ user.functionManagerName || '未设置' }}</el-descriptions-item>
-          <el-descriptions-item label="创建时间">{{ formatDate(user.createdAt) }}</el-descriptions-item>
-          <el-descriptions-item label="最后登录">{{ user.lastLoginAt ? formatDate(user.lastLoginAt) : '-' }}</el-descriptions-item>
-          <el-descriptions-item label="最后登录IP" :span="2">{{ user.lastLoginIp || '-' }}</el-descriptions-item>
+          <el-descriptions-item :label="t('user.entityManager')">{{ user.entityManagerName || t('user.notSet') }}</el-descriptions-item>
+          <el-descriptions-item :label="t('user.functionManager')">{{ user.functionManagerName || t('user.notSet') }}</el-descriptions-item>
+          <el-descriptions-item :label="t('common.createTime')">{{ formatDate(user.createdAt) }}</el-descriptions-item>
+          <el-descriptions-item :label="t('user.lastLogin')">{{ user.lastLoginAt ? formatDate(user.lastLoginAt) : '-' }}</el-descriptions-item>
+          <el-descriptions-item :label="t('user.lastLoginIp')" :span="2">{{ user.lastLoginIp || '-' }}</el-descriptions-item>
         </el-descriptions>
 
-        <div class="section-title">角色信息</div>
+        <div class="section-title">{{ t('user.roleInfo') }}</div>
         <el-table :data="user.roles" border size="small" v-if="user.roles?.length">
-          <el-table-column prop="roleName" label="角色名称" />
-          <el-table-column prop="roleCode" label="角色编码" />
-          <el-table-column prop="description" label="描述" />
+          <el-table-column prop="roleName" :label="t('user.roleName')" />
+          <el-table-column prop="roleCode" :label="t('user.roleCode')" />
+          <el-table-column prop="description" :label="t('common.description')" />
         </el-table>
-        <el-empty v-else description="暂无角色" :image-size="60" />
+        <el-empty v-else :description="t('user.noRoles')" :image-size="60" />
 
-        <div class="section-title">登录历史</div>
+        <div class="section-title">{{ t('user.loginHistory') }}</div>
         <el-table :data="user.loginHistory" border size="small" max-height="200" v-if="user.loginHistory?.length">
-          <el-table-column prop="loginTime" label="登录时间" width="170">
+          <el-table-column prop="loginTime" :label="t('user.loginTime')" width="170">
             <template #default="{ row }">{{ formatDate(row.loginTime) }}</template>
           </el-table-column>
-          <el-table-column prop="ipAddress" label="IP地址" width="140" />
-          <el-table-column prop="success" label="状态" width="80" align="center">
+          <el-table-column prop="ipAddress" :label="t('user.ipAddress')" width="140" />
+          <el-table-column prop="success" :label="t('user.loginStatus')" width="80" align="center">
             <template #default="{ row }">
               <el-tag :type="row.success ? 'success' : 'danger'" size="small">
-                {{ row.success ? '成功' : '失败' }}
+                {{ row.success ? t('common.success') : t('common.failed') }}
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column prop="failureReason" label="失败原因" />
+          <el-table-column prop="failureReason" :label="t('user.failureReason')" />
         </el-table>
-        <el-empty v-else description="暂无登录记录" :image-size="60" />
+        <el-empty v-else :description="t('user.noLoginHistory')" :image-size="60" />
       </template>
     </div>
     <template #footer>
-      <el-button @click="$emit('update:modelValue', false)">关闭</el-button>
-      <el-button type="warning" @click="handleResetPassword">重置密码</el-button>
+      <el-button @click="$emit('update:modelValue', false)">{{ t('common.close') }}</el-button>
+      <el-button type="warning" @click="handleResetPassword">{{ t('user.resetPassword') }}</el-button>
     </template>
   </el-dialog>
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { userApi, type UserDetail } from '@/api/user'
+
+const { t } = useI18n()
 
 const props = defineProps<{ modelValue: boolean; userId: string }>()
 const emit = defineEmits(['update:modelValue'])
@@ -75,7 +78,12 @@ const statusType = (status: string) => {
 }
 
 const statusText = (status: string) => {
-  const map: Record<string, string> = { ACTIVE: '活跃', DISABLED: '停用', LOCKED: '锁定', PENDING: '待激活' }
+  const map: Record<string, string> = { 
+    ACTIVE: t('user.active'), 
+    DISABLED: t('user.disabled'), 
+    LOCKED: t('user.locked'), 
+    PENDING: t('user.pending') 
+  }
   return map[status] || status
 }
 
@@ -92,7 +100,7 @@ watch(() => props.modelValue, async (val) => {
     try {
       user.value = await userApi.getById(props.userId)
     } catch (error: any) {
-      ElMessage.error(error.message || '加载用户详情失败')
+      ElMessage.error(error.message || t('common.failed'))
     } finally {
       loading.value = false
     }
@@ -102,17 +110,17 @@ watch(() => props.modelValue, async (val) => {
 const handleResetPassword = async () => {
   if (!user.value) return
   try {
-    await ElMessageBox.confirm(`确定要重置「${user.value.fullName}」的密码吗？`, '提示', { type: 'warning' })
+    await ElMessageBox.confirm(t('user.resetPassword') + ` - ${user.value.fullName}?`, t('common.confirm'), { type: 'warning' })
     const newPassword = await userApi.resetPassword(user.value.id)
-    ElMessageBox.alert(`新密码：${newPassword}`, '密码已重置', {
-      confirmButtonText: '复制密码',
+    ElMessageBox.alert(`${t('user.initialPassword')}: ${newPassword}`, t('common.success'), {
+      confirmButtonText: t('common.confirm'),
       callback: () => {
         navigator.clipboard.writeText(newPassword)
-        ElMessage.success('密码已复制到剪贴板')
+        ElMessage.success(t('common.success'))
       }
     })
   } catch (error: any) {
-    if (error !== 'cancel') ElMessage.error(error.message || '重置密码失败')
+    if (error !== 'cancel') ElMessage.error(error.message || t('common.failed'))
   }
 }
 </script>

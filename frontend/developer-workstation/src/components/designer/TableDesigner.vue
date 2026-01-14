@@ -1,13 +1,13 @@
 <template>
   <div class="table-designer">
     <div class="designer-toolbar">
-      <el-button type="primary" @click="showCreateDialog = true">创建表</el-button>
+      <el-button type="primary" @click="showCreateDialog = true">{{ $t('table.title') }}</el-button>
       <el-button @click="loadTables" :loading="loading">
-        <el-icon><Refresh /></el-icon> 刷新
+        <el-icon><Refresh /></el-icon> {{ $t('common.refresh') }}
       </el-button>
       <el-button @click="handleGenerateDDL" :disabled="!selectedTable">{{ $t('table.generateDDL') }}</el-button>
-      <el-button @click="handleValidate">验证表结构</el-button>
-      <el-button @click="showRelationDialog = true" :disabled="store.tables.length < 2">配置关联</el-button>
+      <el-button @click="handleValidate">{{ $t('functionUnit.validate') }}</el-button>
+      <el-button @click="showRelationDialog = true" :disabled="store.tables.length < 2">{{ $t('table.relations') }}</el-button>
     </div>
     
     <div class="table-list" v-if="!selectedTable">
@@ -20,22 +20,22 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="description" label="描述" show-overflow-tooltip />
-        <el-table-column label="字段数" width="80">
+        <el-table-column prop="description" :label="$t('table.description')" show-overflow-tooltip />
+        <el-table-column :label="$t('table.fieldCount')" width="80">
           <template #default="{ row }">{{ row.fieldDefinitions?.length || 0 }}</template>
         </el-table-column>
-        <el-table-column label="关联" width="100">
+        <el-table-column :label="$t('table.relations')" width="100">
           <template #default="{ row }">
             <el-tag v-if="getTableRelations(row.id).length" type="success" size="small">
-              {{ getTableRelations(row.id).length }} 个
+              {{ getTableRelations(row.id).length }}
             </el-tag>
-            <span v-else class="text-muted">无</span>
+            <span v-else class="text-muted">-</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="150">
+        <el-table-column :label="$t('common.actions')" width="150">
           <template #default="{ row }">
-            <el-button link type="primary" @click.stop="handleSelectTable(row)">编辑</el-button>
-            <el-button link type="danger" @click.stop="handleDeleteTable(row)">删除</el-button>
+            <el-button link type="primary" @click.stop="handleSelectTable(row)">{{ $t('common.edit') }}</el-button>
+            <el-button link type="danger" @click.stop="handleDeleteTable(row)">{{ $t('common.delete') }}</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -118,26 +118,26 @@
     </div>
 
     <!-- Create Table Dialog -->
-    <el-dialog v-model="showCreateDialog" title="创建表" width="500px">
+    <el-dialog v-model="showCreateDialog" :title="$t('table.title')" width="500px">
       <el-form :model="createForm" label-width="80px">
-        <el-form-item label="表名" required>
+        <el-form-item :label="$t('table.tableName')" required>
           <el-input v-model="createForm.tableName" />
         </el-form-item>
-        <el-form-item label="表类型">
+        <el-form-item :label="$t('table.tableType')">
           <el-select v-model="createForm.tableType">
-            <el-option label="主表" value="MAIN" />
-            <el-option label="子表" value="SUB" />
-            <el-option label="动作表" value="ACTION" />
-            <el-option label="关联表" value="RELATION" />
+            <el-option :label="$t('form.mainForm')" value="MAIN" />
+            <el-option :label="$t('form.subForm')" value="SUB" />
+            <el-option :label="$t('form.actionForm')" value="ACTION" />
+            <el-option :label="$t('table.relations')" value="RELATION" />
           </el-select>
         </el-form-item>
-        <el-form-item label="描述">
+        <el-form-item :label="$t('table.description')">
           <el-input v-model="createForm.description" type="textarea" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showCreateDialog = false">取消</el-button>
-        <el-button type="primary" @click="handleCreateTable">确定</el-button>
+        <el-button @click="showCreateDialog = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="handleCreateTable">{{ $t('common.confirm') }}</el-button>
       </template>
     </el-dialog>
 
@@ -205,10 +205,13 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ArrowLeft, Delete, Plus, Refresh } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
 import { functionUnitApi, type TableDefinition, type FieldDefinition, type ForeignKeyDTO } from '@/api/functionUnit'
+
+const { t } = useI18n()
 
 interface TableRelation {
   id?: number
@@ -234,7 +237,7 @@ const relations = ref<TableRelation[]>([])
 const foreignKeys = ref<ForeignKeyDTO[]>([])
 
 const tableTypeLabel = (type: string) => {
-  const map: Record<string, string> = { MAIN: '主表', SUB: '子表', ACTION: '动作表', RELATION: '关联表' }
+  const map: Record<string, string> = { MAIN: t('form.mainForm'), SUB: t('form.subForm'), ACTION: t('form.actionForm'), RELATION: t('table.relations') }
   return map[type] || type
 }
 

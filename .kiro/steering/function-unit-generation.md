@@ -420,26 +420,9 @@ SQL文件需要按顺序执行，因为存在外键依赖：
 
 **注意**：`03-09-process-bindings.sql`必须在表单和动作创建后执行，因为绑定中引用的formId和actionIds需要是数据库中实际存在的ID。
 
-## 数据库表归属
-- `dw_*` 表属于 developer-workstation 模块
-- `sys_*` 表属于 platform-security 模块
-- `admin_*` 表属于 admin-center 模块
+## 数据库相关规则
 
-## 数据库连接信息
-- 数据库名：`workflow_platform`
-- 用户名：`platform`
-- 密码：`platform123`
-- Docker容器名：`platform-postgres`
-
-**查询数据库表结构：**
-```bash
-docker exec -i platform-postgres psql -U platform -d workflow_platform -c "\d dw_process_definitions"
-```
-
-**执行SQL文件：**
-```bash
-Get-Content -Path "xxx.sql" -Encoding UTF8 | docker exec -i platform-postgres psql -U platform -d workflow_platform
-```
+> **注意**：数据库表归属、Flyway 迁移规则、数据库连接信息等通用开发规则已移至 `development-guidelines.md`。
 
 ## 实际表结构（重要！）
 

@@ -65,4 +65,10 @@ public interface FunctionUnitContentRepository extends JpaRepository<FunctionUni
      * 统计功能单元特定类型的内容数量
      */
     long countByFunctionUnitIdAndContentType(String functionUnitId, ContentType contentType);
+    
+    /**
+     * 根据流程定义Key查找内容（flowable_process_definition_id 以 processKey: 开头）
+     */
+    @Query("SELECT c FROM FunctionUnitContent c WHERE c.flowableProcessDefinitionId LIKE :processKey || ':%'")
+    Optional<FunctionUnitContent> findByProcessDefinitionKey(@Param("processKey") String processKey);
 }

@@ -18,13 +18,13 @@
           remote 
           :remote-method="searchUsers"
           :loading="userSearchLoading"
-          placeholder="搜索并选择部门主经理"
+          :placeholder="t('organization.primaryManagerPlaceholder')"
           style="width: 100%"
         >
           <el-option v-for="user in userOptions" :key="user.id" :label="`${user.fullName} (${user.username})`" :value="user.id" />
         </el-select>
       </el-form-item>
-      <el-form-item label="副经理">
+      <el-form-item :label="t('organization.deputyManager')">
         <el-select 
           v-model="form.secondaryManagerId" 
           clearable 
@@ -32,13 +32,13 @@
           remote 
           :remote-method="searchUsers"
           :loading="userSearchLoading"
-          placeholder="搜索并选择部门副经理"
+          :placeholder="t('organization.deputyManagerPlaceholder')"
           style="width: 100%"
         >
           <el-option v-for="user in userOptions" :key="user.id" :label="`${user.fullName} (${user.username})`" :value="user.id" />
         </el-select>
       </el-form-item>
-      <el-form-item label="排序">
+      <el-form-item :label="t('common.sort')">
         <el-input-number v-model="form.sortOrder" :min="0" />
       </el-form-item>
     </el-form>
@@ -71,10 +71,10 @@ const isEdit = computed(() => !!props.department)
 
 const form = reactive({ name: '', code: '', parentId: '', managerId: '', secondaryManagerId: '', sortOrder: 0 })
 
-const rules = {
-  name: [{ required: true, message: '请输入部门名称', trigger: 'blur' }],
-  code: [{ required: true, message: '请输入部门编码', trigger: 'blur' }]
-}
+const rules = computed(() => ({
+  name: [{ required: true, message: t('common.inputPlaceholder'), trigger: 'blur' }],
+  code: [{ required: true, message: t('common.inputPlaceholder'), trigger: 'blur' }]
+}))
 
 watch(() => props.modelValue, (val) => {
   if (val) {

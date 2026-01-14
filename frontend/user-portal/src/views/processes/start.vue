@@ -78,10 +78,11 @@
           <span>{{ currentFormName || '申请表单' }}</span>
         </div>
         <div class="section-content">
-          <div v-if="formFields.length > 0" class="form-container">
+          <div v-if="formFields.length > 0 || formTabs.length > 0" class="form-container">
             <FormRenderer
               ref="formRendererRef"
               :fields="formFields"
+              :tabs="formTabs"
               v-model="formData"
               label-width="120px"
             />
@@ -147,7 +148,7 @@ import { ArrowLeft, Share, Document, Clock, FolderOpened, Promotion } from '@ele
 import { processApi } from '@/api/process'
 import ProcessDiagram, { type ProcessNode, type ProcessFlow } from '@/components/ProcessDiagram.vue'
 import ProcessHistory, { type HistoryRecord } from '@/components/ProcessHistory.vue'
-import FormRenderer, { type FormField } from '@/components/FormRenderer.vue'
+import FormRenderer, { type FormField, type FormTab } from '@/components/FormRenderer.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -178,6 +179,7 @@ const bpmnXml = ref('')
 
 // 表单数据
 const formFields = ref<FormField[]>([])
+const formTabs = ref<FormTab[]>([])
 const formData = ref<Record<string, any>>({})
 const currentFormName = ref('')
 const formRendererRef = ref<InstanceType<typeof FormRenderer> | null>(null)
@@ -214,18 +216,49 @@ const loadFunctionUnitContent = async () => {
     functionUnitVersion.value = content.version || ''
     functionUnitCode.value = content.code || ''
     
+    let startFormInfo: { formId: string | null, formName: string | null } = { formId: null, formName: null }
+    
     // 解析流程定义
     if (content.processes && content.processes.length > 0) {
       const processData = content.processes[0]
       bpmnXml.value = processData.data
+      // 先获取开始节点后第一个用户任务的 formId 和 formName
+      startFormInfo = parseBpmnXmlAndGetStartFormId(processData.data)
       parseBpmnXml(processData.data)
     }
     
-    // 解析表单定义
+    // 解析表单定义 - 根据开始节点的 formId 选择正确的表单
     if (content.forms && content.forms.length > 0) {
-      const formContent = content.forms[0]
-      currentFormName.value = formContent.name
-      parseFormConfig(formContent.data)
+      let selectedForm = content.forms[0] // 默认第一个
+      
+      // 优先使用 formId 匹配 sourceId（原始表单ID）
+      if (startFormInfo.formId) {
+        const matchedForm = content.forms.find((f: any) => 
+          String(f.sourceId) === startFormInfo.formId
+        )
+        if (matchedForm) {
+          selectedForm = matchedForm
+          console.log('Matched form by sourceId:', startFormInfo.formId, '->', selectedForm.name)
+        } else {
+          // 如果 sourceId 匹配失败，尝试用 formName 匹配
+          if (startFormInfo.formName) {
+            const matchedByName = content.forms.find((f: any) => f.name === startFormInfo.formName)
+            if (matchedByName) {
+              selectedForm = matchedByName
+              console.log('Matched form by name:', startFormInfo.formName)
+            }
+          }
+        }
+      } else if (startFormInfo.formName) {
+        // 如果没有 formId，尝试用 formName 匹配
+        const matchedForm = content.forms.find((f: any) => f.name === startFormInfo.formName)
+        if (matchedForm) {
+          selectedForm = matchedForm
+        }
+      }
+      
+      currentFormName.value = selectedForm.name
+      parseFormConfig(selectedForm.data)
     }
     
     // 初始化流转记录（新流程，只有开始节点）
@@ -256,6 +289,90 @@ const loadFunctionUnitContent = async () => {
   } finally {
     loading.value = false
   }
+}
+
+// 解析 BPMN XML 并获取开始节点后第一个用户任务的 formId
+const parseBpmnXmlAndGetStartFormId = (xml: string): { formId: string | null, formName: string | null } => {
+  if (!xml) return { formId: null, formName: null }
+  
+  try {
+    const parser = new DOMParser()
+    const doc = parser.parseFromString(xml, 'text/xml')
+    
+    // 查找开始事件
+    const allElements = doc.getElementsByTagName('*')
+    let startEventId: string | null = null
+    
+    for (let i = 0; i < allElements.length; i++) {
+      const el = allElements[i]
+      const localName = el.localName || el.nodeName.split(':').pop()
+      
+      if (localName === 'startEvent') {
+        startEventId = el.getAttribute('id')
+        break
+      }
+    }
+    
+    if (!startEventId) return { formId: null, formName: null }
+    
+    // 查找从开始事件出发的顺序流
+    let firstTaskId: string | null = null
+    for (let i = 0; i < allElements.length; i++) {
+      const el = allElements[i]
+      const localName = el.localName || el.nodeName.split(':').pop()
+      
+      if (localName === 'sequenceFlow') {
+        const sourceRef = el.getAttribute('sourceRef')
+        if (sourceRef === startEventId) {
+          firstTaskId = el.getAttribute('targetRef')
+          break
+        }
+      }
+    }
+    
+    if (!firstTaskId) return { formId: null, formName: null }
+    
+    // 查找第一个用户任务的 formId 和 formName
+    let formId: string | null = null
+    let formName: string | null = null
+    
+    for (let i = 0; i < allElements.length; i++) {
+      const el = allElements[i]
+      const localName = el.localName || el.nodeName.split(':').pop()
+      
+      if (localName === 'userTask') {
+        const taskId = el.getAttribute('id')
+        
+        if (taskId === firstTaskId) {
+          // 查找 formId 和 formName 属性
+          const taskProps = el.getElementsByTagName('*')
+          for (let j = 0; j < taskProps.length; j++) {
+            const prop = taskProps[j]
+            const propLocalName = prop.localName || prop.nodeName.split(':').pop()
+            
+            if (propLocalName === 'property' || propLocalName === 'values') {
+              const name = prop.getAttribute('name')
+              const value = prop.getAttribute('value')
+              
+              if (name === 'formId' && value) {
+                formId = value
+              }
+              if (name === 'formName' && value) {
+                formName = value
+              }
+            }
+          }
+          break
+        }
+      }
+    }
+    
+    return { formId, formName }
+  } catch (error) {
+    console.error('Failed to parse BPMN for start formId:', error)
+  }
+  
+  return { formId: null, formName: null }
 }
 
 // 加载草稿数据
@@ -451,13 +568,69 @@ const parseFormConfig = (configStr: string) => {
     }
     
     if (rules) {
-      // 将 form-create 规则转换为 FormRenderer 字段格式
-      formFields.value = rules.map((rule: any) => convertFormCreateRule(rule)).filter(Boolean)
-      console.log('Parsed form fields:', formFields.value)
+      // 检查是否有 el-tabs 结构
+      const tabsRule = rules.find((r: any) => r.type === 'el-tabs')
+      
+      if (tabsRule && tabsRule.children && Array.isArray(tabsRule.children)) {
+        // 有 Tab 布局
+        const tabs: FormTab[] = []
+        
+        for (const tabPane of tabsRule.children) {
+          if (tabPane.type === 'el-tab-pane' && tabPane.props) {
+            const tabName = tabPane.props.name || `tab_${tabs.length}`
+            const tabLabel = tabPane.props.label || `Tab ${tabs.length + 1}`
+            
+            // 提取该 Tab 下的字段
+            const tabFields: FormField[] = []
+            if (tabPane.children && Array.isArray(tabPane.children)) {
+              for (const item of tabPane.children) {
+                if (item.field) {
+                  const field = convertFormCreateRule(item)
+                  if (field) tabFields.push(field)
+                }
+                // 递归处理嵌套的 children
+                if (item.children && Array.isArray(item.children)) {
+                  tabFields.push(...extractFieldsRecursive(item.children))
+                }
+              }
+            }
+            
+            tabs.push({
+              name: tabName,
+              label: tabLabel,
+              fields: tabFields
+            })
+          }
+        }
+        
+        formTabs.value = tabs
+        formFields.value = [] // 清空平铺字段
+        console.log('Parsed form tabs:', tabs)
+      } else {
+        // 无 Tab 布局，使用平铺模式
+        formTabs.value = []
+        formFields.value = extractFieldsRecursive(rules)
+        console.log('Parsed form fields (flat):', formFields.value)
+      }
     }
   } catch (error) {
     console.error('Failed to parse form config:', error)
   }
+}
+
+// 递归提取字段
+const extractFieldsRecursive = (items: any[]): FormField[] => {
+  const fields: FormField[] = []
+  for (const item of items) {
+    if (item.field) {
+      const field = convertFormCreateRule(item)
+      if (field) fields.push(field)
+    }
+    if (item.children && Array.isArray(item.children)) {
+      fields.push(...extractFieldsRecursive(item.children))
+    }
+  }
+  return fields
 }
 
 // 将 form-create 规则转换为 FormRenderer 字段
@@ -698,8 +871,7 @@ onMounted(() => {
   
   .form-section {
     .form-container {
-      max-width: 800px;
-      margin: 0 auto;
+      width: 100%;
     }
   }
   

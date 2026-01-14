@@ -457,6 +457,7 @@ CREATE TABLE IF NOT EXISTS sys_function_unit_contents (
     content_path VARCHAR(500),
     content_data TEXT,
     checksum VARCHAR(64),
+    source_id VARCHAR(64),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_content_func_unit FOREIGN KEY (function_unit_id) REFERENCES sys_function_units(id)
 );

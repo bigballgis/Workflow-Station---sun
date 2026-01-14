@@ -47,6 +47,13 @@ public class FunctionUnitContent {
     private String checksum;
     
     /**
+     * 原始内容ID（来自 developer-workstation 的 dw_form_definitions.id 等）
+     * 用于在 user-portal 中通过 BPMN 的 formId 匹配表单
+     */
+    @Column(name = "source_id", length = 64)
+    private String sourceId;
+    
+    /**
      * Flowable 流程定义ID（仅流程类型内容有效）
      */
     @Column(name = "flowable_process_definition_id", length = 64)

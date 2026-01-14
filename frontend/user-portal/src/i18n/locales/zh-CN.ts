@@ -1,4 +1,8 @@
 export default {
+  app: {
+    name: '用户门户',
+    title: '工作流平台'
+  },
   common: {
     confirm: '确定',
     cancel: '取消',
@@ -16,7 +20,15 @@ export default {
     info: '提示',
     more: '更多',
     clear: '清除',
-    attachments: '附件'
+    attachments: '附件',
+    all: '全部',
+    actions: '操作',
+    back: '返回',
+    to: '至',
+    startDate: '开始日期',
+    endDate: '结束日期',
+    logout: '退出登录',
+    logoutSuccess: '已退出登录'
   },
   menu: {
     dashboard: '工作台',
@@ -79,6 +91,9 @@ export default {
     complete: '完成',
     delegate: '委托',
     transfer: '转办',
+    urge: '催办',
+    batchUrge: '批量催办',
+    selected: '已选择 {count} 项',
     approve: '同意',
     reject: '拒绝',
     return: '回退',
@@ -102,7 +117,23 @@ export default {
     deptRole: '部门角色',
     delegated: '委托任务',
     overdue: '已逾期',
-    pending: '待处理'
+    pending: '待处理',
+    targetUser: '目标用户',
+    urgeMessage: '催办消息',
+    reasonDescription: '原因说明',
+    urgeMessagePlaceholder: '请输入催办消息（可选）',
+    reasonPlaceholder: '请输入原因',
+    detail: '任务详情',
+    basicInfo: '基本信息',
+    workflowDiagram: '工作流程图',
+    taskForm: '任务表单',
+    flowHistory: '流转记录',
+    backToList: '返回列表',
+    currentAssignee: '当前处理人',
+    noProcessDefinition: '暂无流程定义',
+    noFormData: '暂无表单数据',
+    noFlowHistory: '暂无流转记录',
+    anyApprove: '任一审批'
   },
   process: {
     title: '发起流程',
@@ -135,9 +166,27 @@ export default {
     withdrawn: '已撤回',
     rejected: '已拒绝',
     draft: '草稿',
+    draftBox: '草稿箱',
     withdraw: '撤回',
     urge: '催办',
-    viewDetail: '查看详情'
+    viewDetail: '查看详情',
+    processType: '流程类型',
+    saveTime: '保存时间',
+    currentAssignee: '当前处理人',
+    unassigned: '待分配',
+    continueFilling: '继续填写',
+    noDrafts: '暂无草稿',
+    loadFailed: '加载申请列表失败',
+    loadDraftsFailed: '加载草稿列表失败',
+    deleteDraftConfirm: '确定要删除该草稿吗？',
+    deleteSuccess: '删除成功',
+    deleteFailed: '删除失败',
+    urgeSuccess: '催办成功',
+    urgeFailed: '催办失败',
+    withdrawConfirm: '确定要撤回该流程吗？',
+    withdrawSuccess: '撤回成功',
+    withdrawFailed: '撤回失败',
+    userWithdraw: '用户主动撤回'
   },
   delegation: {
     title: '委托管理',
@@ -161,7 +210,19 @@ export default {
     suspended: '已暂停',
     suspend: '暂停',
     resume: '恢复',
-    create: '创建委托'
+    create: '创建委托',
+    operationType: '操作类型',
+    delegator: '委托人',
+    delegate: '被委托人',
+    result: '结果',
+    time: '时间',
+    noProxyTasks: '暂无代理任务',
+    selectDelegate: '请选择被委托人',
+    createSuccess: '创建成功',
+    suspendSuccess: '暂停成功',
+    resumeSuccess: '恢复成功',
+    deleteConfirm: '确定要删除该委托规则吗？',
+    deleteSuccess: '删除成功'
   },
   permission: {
     title: '权限申请',
@@ -182,7 +243,6 @@ export default {
     approved: '已批准',
     rejected: '已拒绝',
     renew: '续期',
-    // 新增翻译
     myRoles: '我的角色',
     myVirtualGroups: '我的虚拟组',
     noRoles: '暂无角色',
@@ -246,7 +306,18 @@ export default {
     emailNotification: '邮件通知',
     browserNotification: '浏览器通知',
     inAppNotification: '站内通知',
-    quietHours: '免打扰时间'
+    quietHours: '免打扰时间',
+    taskAssignedNotification: '任务分配通知',
+    taskOverdueReminder: '任务逾期提醒',
+    processCompletedNotification: '流程完成通知',
+    email: '邮件',
+    browser: '浏览器',
+    inApp: '站内',
+    startTime: '开始时间',
+    endTime: '结束时间',
+    itemsPerPage: '{count}条/页',
+    saveSuccess: '保存成功',
+    notificationSaveSuccess: '通知设置保存成功'
   },
   status: {
     completed: '已完成',
@@ -273,5 +344,20 @@ export default {
     limitExceed: '最多只能上传 {limit} 个文件',
     success: '上传成功',
     failed: '上传失败'
+  },
+  login: {
+    title: '工作流平台',
+    subtitle: '用户门户',
+    testUserQuickLogin: '测试用户快速登录',
+    selectTestUser: '选择测试用户',
+    username: '用户名',
+    password: '密码',
+    login: '登录',
+    rememberMe: '记住我',
+    usernameRequired: '请输入用户名',
+    passwordRequired: '请输入密码',
+    loginSuccess: '登录成功',
+    loginFailed: '登录失败',
+    selected: '已选择'
   }
 }

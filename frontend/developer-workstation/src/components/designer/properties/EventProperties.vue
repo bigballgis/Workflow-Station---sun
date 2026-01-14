@@ -2,19 +2,19 @@
   <div class="event-properties">
     <el-collapse v-model="activeGroups">
       <!-- 基本信息 -->
-      <el-collapse-item title="基本信息" name="basic">
+      <el-collapse-item :title="$t('properties.basic')" name="basic">
         <el-form label-position="top" size="small">
-          <el-form-item label="事件ID">
+          <el-form-item :label="$t('properties.eventId')">
             <el-input :model-value="basicProps.id" disabled />
           </el-form-item>
-          <el-form-item label="事件类型">
+          <el-form-item :label="$t('common.type')">
             <el-input :model-value="eventTypeLabel" disabled />
           </el-form-item>
-          <el-form-item label="触发类型">
+          <el-form-item :label="$t('common.type')">
             <el-input :model-value="eventDefinitionLabel" disabled />
           </el-form-item>
-          <el-form-item label="事件名称">
-            <el-input v-model="eventName" @change="updateBasicProp('name', eventName)" placeholder="事件名称" />
+          <el-form-item :label="$t('properties.eventName')">
+            <el-input v-model="eventName" @change="updateBasicProp('name', eventName)" :placeholder="$t('properties.eventName')" />
           </el-form-item>
         </el-form>
       </el-collapse-item>
@@ -156,6 +156,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { BpmnElement, BpmnModeler } from '@/types/bpmn'
 import type { FormDefinition } from '@/api/functionUnit'
 import { functionUnitApi } from '@/api/functionUnit'
@@ -166,6 +167,8 @@ import {
   setExtensionProperty,
   getElementType
 } from '@/utils/bpmnExtensions'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   modeler: BpmnModeler

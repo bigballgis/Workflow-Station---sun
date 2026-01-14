@@ -83,6 +83,16 @@ public class TaskListResult {
         private String processDefinitionId;
         
         /**
+         * 流程定义Key（从processDefinitionId中提取）
+         */
+        private String processDefinitionKey;
+        
+        /**
+         * 流程定义名称
+         */
+        private String processDefinitionName;
+        
+        /**
          * 分配类型
          */
         private AssignmentType assignmentType;
@@ -141,6 +151,16 @@ public class TaskListResult {
          * 业务键
          */
         private String businessKey;
+        
+        /**
+         * 流程发起人ID
+         */
+        private String initiatorId;
+        
+        /**
+         * 流程发起人名称
+         */
+        private String initiatorName;
         
         /**
          * 分配类型描述

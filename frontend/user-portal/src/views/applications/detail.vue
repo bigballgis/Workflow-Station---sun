@@ -80,9 +80,10 @@
           <span>{{ currentFormName || '申请表单' }}</span>
         </div>
         <div class="section-content">
-          <div v-if="formFields.length > 0" class="form-container">
+          <div v-if="formFields.length > 0 || formTabs.length > 0" class="form-container">
             <FormRenderer
               :fields="formFields"
+              :tabs="formTabs"
               v-model="formData"
               label-width="120px"
               :readonly="true"
@@ -135,7 +136,7 @@ import { ArrowLeft, InfoFilled, Share, Document, Clock, Bell, RefreshLeft } from
 import { processApi, type ProcessInstance } from '@/api/process'
 import ProcessDiagram, { type ProcessNode, type ProcessFlow } from '@/components/ProcessDiagram.vue'
 import ProcessHistory, { type HistoryRecord } from '@/components/ProcessHistory.vue'
-import FormRenderer, { type FormField } from '@/components/FormRenderer.vue'
+import FormRenderer, { type FormField, type FormTab } from '@/components/FormRenderer.vue'
 import dayjs from 'dayjs'
 
 const route = useRoute()
@@ -155,6 +156,7 @@ const completedNodeIds = ref<string[]>([])
 
 // 表单数据
 const formFields = ref<FormField[]>([])
+const formTabs = ref<FormTab[]>([])
 const formData = ref<Record<string, any>>({})
 const currentFormName = ref('')
 
@@ -229,16 +231,106 @@ const loadFunctionUnitContent = async (processKey: string) => {
       console.error('Function unit content error:', content.error)
       return
     }
+    
+    let currentFormInfo: { formId: string | null, formName: string | null } = { formId: null, formName: null }
+    
     if (content.processes?.length > 0) {
+      // 解析 BPMN 并获取当前节点的 formId 和 formName
+      currentFormInfo = parseBpmnXmlAndGetFormId(content.processes[0].data)
       parseBpmnXml(content.processes[0].data)
     }
+    
     if (content.forms?.length > 0) {
-      currentFormName.value = content.forms[0].name
-      parseFormConfig(content.forms[0].data)
+      // 根据当前节点的 formId 选择正确的表单
+      let selectedForm = content.forms[0] // 默认第一个
+      
+      // 优先使用 formId 匹配 sourceId（原始表单ID）
+      if (currentFormInfo.formId) {
+        const matchedForm = content.forms.find((f: any) => 
+          String(f.sourceId) === currentFormInfo.formId
+        )
+        if (matchedForm) {
+          selectedForm = matchedForm
+          console.log('Matched form by sourceId:', currentFormInfo.formId, '->', selectedForm.name)
+        } else {
+          // 如果 sourceId 匹配失败，尝试用 formName 匹配
+          if (currentFormInfo.formName) {
+            const matchedByName = content.forms.find((f: any) => f.name === currentFormInfo.formName)
+            if (matchedByName) {
+              selectedForm = matchedByName
+              console.log('Matched form by name:', currentFormInfo.formName)
+            }
+          }
+        }
+      } else if (currentFormInfo.formName) {
+        // 如果没有 formId，尝试用 formName 匹配
+        const matchedForm = content.forms.find((f: any) => f.name === currentFormInfo.formName)
+        if (matchedForm) {
+          selectedForm = matchedForm
+        }
+      }
+      
+      currentFormName.value = selectedForm.name
+      parseFormConfig(selectedForm.data)
     }
   } catch (error) {
     console.error('Failed to load function unit content:', error)
   }
+}
+
+// 解析 BPMN XML 并获取当前节点的 formId 和 formName
+const parseBpmnXmlAndGetFormId = (xml: string): { formId: string | null, formName: string | null } => {
+  if (!xml) return { formId: null, formName: null }
+  
+  try {
+    const parser = new DOMParser()
+    const doc = parser.parseFromString(xml, 'text/xml')
+    const currentNodeName = processInfo.value.currentNode || ''
+    
+    // 查找所有 userTask 节点
+    const allElements = doc.getElementsByTagName('*')
+    
+    for (let i = 0; i < allElements.length; i++) {
+      const el = allElements[i]
+      const localName = el.localName || el.nodeName.split(':').pop()
+      
+      if (localName === 'userTask') {
+        const taskId = el.getAttribute('id') || ''
+        const taskName = el.getAttribute('name') || ''
+        
+        // 检查是否是当前节点
+        if (taskName === currentNodeName || taskId === currentNodeName) {
+          // 查找 formId 和 formName 属性
+          let formId: string | null = null
+          let formName: string | null = null
+          
+          const taskProps = el.getElementsByTagName('*')
+          for (let j = 0; j < taskProps.length; j++) {
+            const prop = taskProps[j]
+            const propLocalName = prop.localName || prop.nodeName.split(':').pop()
+            
+            if (propLocalName === 'property' || propLocalName === 'values') {
+              const name = prop.getAttribute('name')
+              const value = prop.getAttribute('value')
+              
+              if (name === 'formId' && value) {
+                formId = value
+              }
+              if (name === 'formName' && value) {
+                formName = value
+              }
+            }
+          }
+          
+          return { formId, formName }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Failed to parse BPMN for formId:', error)
+  }
+  
+  return { formId: null, formName: null }
 }
 
 // 解析 BPMN XML
@@ -367,10 +459,62 @@ const parseFormConfig = (configStr: string) => {
   try {
     const config = typeof configStr === 'string' ? JSON.parse(configStr) : configStr
     const rules = config.rule && Array.isArray(config.rule) ? config.rule : (Array.isArray(config) ? config : null)
-    if (rules) formFields.value = rules.map((rule: any) => convertFormCreateRule(rule)).filter(Boolean)
+    if (rules) {
+      // 检查是否有 el-tabs 结构
+      const tabsRule = rules.find((r: any) => r.type === 'el-tabs')
+      
+      if (tabsRule && tabsRule.children && Array.isArray(tabsRule.children)) {
+        // 有 Tab 布局
+        const tabs: FormTab[] = []
+        
+        for (const tabPane of tabsRule.children) {
+          if (tabPane.type === 'el-tab-pane' && tabPane.props) {
+            const tabName = tabPane.props.name || `tab_${tabs.length}`
+            const tabLabel = tabPane.props.label || `Tab ${tabs.length + 1}`
+            
+            const tabFields: FormField[] = []
+            if (tabPane.children && Array.isArray(tabPane.children)) {
+              for (const item of tabPane.children) {
+                if (item.field) {
+                  const field = convertFormCreateRule(item)
+                  if (field) tabFields.push(field)
+                }
+                if (item.children && Array.isArray(item.children)) {
+                  tabFields.push(...extractFieldsRecursive(item.children))
+                }
+              }
+            }
+            
+            tabs.push({ name: tabName, label: tabLabel, fields: tabFields })
+          }
+        }
+        
+        formTabs.value = tabs
+        formFields.value = []
+      } else {
+        // 无 Tab 布局，使用平铺模式
+        formTabs.value = []
+        formFields.value = extractFieldsRecursive(rules)
+      }
+    }
   } catch (error) {
     console.error('Failed to parse form config:', error)
   }
+}
+
+// 递归提取字段
+const extractFieldsRecursive = (items: any[]): FormField[] => {
+  const fields: FormField[] = []
+  for (const item of items) {
+    if (item.field) {
+      const field = convertFormCreateRule(item)
+      if (field) fields.push(field)
+    }
+    if (item.children && Array.isArray(item.children)) {
+      fields.push(...extractFieldsRecursive(item.children))
+    }
+  }
+  return fields
 }
 
 // 转换表单规则
@@ -430,7 +574,7 @@ onMounted(() => { loadProcessDetail() })
     .section-content { padding: 20px; }
   }
   .workflow-section .section-content { min-height: 300px; }
-  .form-section .form-container { max-width: 800px; margin: 0 auto; }
+  .form-section .form-container { width: 100%; }
   .history-section .section-content { min-height: 100px; }
   .action-section { position: sticky; bottom: 0; z-index: 10;
     .action-buttons { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; .left-actions, .right-actions { display: flex; gap: 12px; } }

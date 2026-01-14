@@ -419,6 +419,21 @@ public class FunctionUnitController {
     
     // ==================== 功能单元内容获取（供用户门户使用） ====================
     
+    @GetMapping("/by-process-key/{processKey}")
+    @Operation(summary = "根据流程定义Key获取功能单元", description = "根据BPMN流程定义Key查找对应的功能单元")
+    public ResponseEntity<FunctionUnitInfo> getFunctionUnitByProcessKey(
+            @Parameter(description = "流程定义Key") @PathVariable String processKey) {
+        log.info("Getting function unit by process key: {}", processKey);
+        
+        try {
+            FunctionUnit unit = functionUnitManager.getFunctionUnitByProcessKey(processKey);
+            return ResponseEntity.ok(FunctionUnitInfo.fromEntity(unit));
+        } catch (Exception e) {
+            log.error("Failed to get function unit by process key {}: {}", processKey, e.getMessage());
+            return ResponseEntity.notFound().build();
+        }
+    }
+    
     @GetMapping("/{id}/content")
     @Operation(summary = "获取功能单元完整内容", description = "获取功能单元的BPMN流程、表单定义、动作绑定等完整内容（供用户门户使用）")
     public ResponseEntity<java.util.Map<String, Object>> getFunctionUnitContent(
@@ -451,6 +466,8 @@ public class FunctionUnitController {
                 java.util.Map<String, Object> contentMap = new java.util.HashMap<>();
                 contentMap.put("id", content.getId());
                 contentMap.put("name", content.getContentName());
+                // 添加原始ID（用于 BPMN 中的 formId 匹配）
+                contentMap.put("sourceId", content.getSourceId());
                 
                 // 对于流程定义，尝试解码 Base64
                 String data = content.getContentData();

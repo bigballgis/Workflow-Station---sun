@@ -4,7 +4,7 @@
       <span class="page-title">{{ t('menu.userList') }}</span>
       <div class="header-actions" v-if="canWriteUser">
         <el-button @click="showImportDialog">
-          <el-icon><Upload /></el-icon>批量导入
+          <el-icon><Upload /></el-icon>{{ t('user.batchImport') }}
         </el-button>
         <el-button type="primary" @click="showCreateDialog">
           <el-icon><Plus /></el-icon>{{ t('user.createUser') }}
@@ -14,27 +14,27 @@
     
     <el-card class="search-card">
       <el-form :inline="true" :model="query" class="search-form">
-        <el-form-item label="关键词">
-          <el-input v-model="query.keyword" placeholder="用户名/姓名/邮箱" clearable style="width: 200px" />
+        <el-form-item :label="t('user.keyword')">
+          <el-input v-model="query.keyword" :placeholder="t('user.keywordPlaceholder')" clearable style="width: 200px" />
         </el-form-item>
-        <el-form-item label="部门">
-          <el-select v-model="query.departmentId" placeholder="选择部门" clearable style="width: 150px">
+        <el-form-item :label="t('user.department')">
+          <el-select v-model="query.departmentId" :placeholder="t('user.selectDepartment')" clearable style="width: 150px">
             <el-option v-for="dept in departments" :key="dept.id" :label="dept.name" :value="dept.id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="状态">
-          <el-select v-model="query.status" placeholder="选择状态" clearable style="width: 120px">
-            <el-option label="活跃" value="ACTIVE" />
-            <el-option label="停用" value="DISABLED" />
-            <el-option label="锁定" value="LOCKED" />
+        <el-form-item :label="t('common.status')">
+          <el-select v-model="query.status" :placeholder="t('user.selectStatus')" clearable style="width: 120px">
+            <el-option :label="t('user.active')" value="ACTIVE" />
+            <el-option :label="t('user.disabled')" value="DISABLED" />
+            <el-option :label="t('user.locked')" value="LOCKED" />
           </el-select>
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleSearch">
-            <el-icon><Search /></el-icon>搜索
+            <el-icon><Search /></el-icon>{{ t('common.search') }}
           </el-button>
           <el-button @click="handleReset">
-            <el-icon><Refresh /></el-icon>重置
+            <el-icon><Refresh /></el-icon>{{ t('common.reset') }}
           </el-button>
         </el-form-item>
       </el-form>
@@ -42,53 +42,53 @@
     
     <el-card class="table-card">
       <el-table :data="users" v-loading="loading" stripe border table-layout="fixed">
-        <el-table-column prop="employeeId" label="员工编号" min-width="100" show-overflow-tooltip />
-        <el-table-column prop="username" label="用户名" min-width="100" show-overflow-tooltip />
-        <el-table-column prop="fullName" label="姓名" min-width="80" show-overflow-tooltip />
-        <el-table-column prop="email" label="邮箱" min-width="160" show-overflow-tooltip />
-        <el-table-column prop="departmentName" label="部门" min-width="100" show-overflow-tooltip />
-        <el-table-column prop="position" label="职位" min-width="80" show-overflow-tooltip />
-        <el-table-column label="实体管理者" min-width="90" show-overflow-tooltip>
+        <el-table-column prop="employeeId" :label="t('user.employeeId')" min-width="100" show-overflow-tooltip />
+        <el-table-column prop="username" :label="t('user.username')" min-width="100" show-overflow-tooltip />
+        <el-table-column prop="fullName" :label="t('user.fullName')" min-width="80" show-overflow-tooltip />
+        <el-table-column prop="email" :label="t('user.email')" min-width="160" show-overflow-tooltip />
+        <el-table-column prop="departmentName" :label="t('user.department')" min-width="100" show-overflow-tooltip />
+        <el-table-column prop="position" :label="t('user.position')" min-width="80" show-overflow-tooltip />
+        <el-table-column :label="t('user.entityManager')" min-width="90" show-overflow-tooltip>
           <template #default="{ row }">
             <span v-if="row.entityManagerName" class="manager-name">{{ row.entityManagerName }}</span>
             <span v-else class="no-manager">-</span>
           </template>
         </el-table-column>
-        <el-table-column label="职能管理者" min-width="90" show-overflow-tooltip>
+        <el-table-column :label="t('user.functionManager')" min-width="90" show-overflow-tooltip>
           <template #default="{ row }">
             <span v-if="row.functionManagerName" class="manager-name">{{ row.functionManagerName }}</span>
             <span v-else class="no-manager">-</span>
           </template>
         </el-table-column>
-        <el-table-column prop="status" label="状态" width="70" align="center">
+        <el-table-column prop="status" :label="t('common.status')" width="70" align="center">
           <template #default="{ row }">
             <el-tag :type="statusType(row.status)" size="small">{{ statusText(row.status) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="150" fixed="right">
+        <el-table-column :label="t('common.actions')" width="150" fixed="right">
           <template #default="{ row }">
-            <el-button v-if="canWriteUser" link type="primary" size="small" @click="showEditDialog(row)">编辑</el-button>
-            <el-button link type="primary" size="small" @click="showDetailDialog(row)">详情</el-button>
+            <el-button v-if="canWriteUser" link type="primary" size="small" @click="showEditDialog(row)">{{ t('common.edit') }}</el-button>
+            <el-button link type="primary" size="small" @click="showDetailDialog(row)">{{ t('common.view') }}</el-button>
             <el-dropdown v-if="canWriteUser" @command="(cmd: string) => handleCommand(row, cmd)">
               <el-button link type="primary" size="small">
-                更多<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+                {{ t('common.operation') }}<el-icon class="el-icon--right"><ArrowDown /></el-icon>
               </el-button>
               <template #dropdown>
                 <el-dropdown-menu>
                   <el-dropdown-item v-if="row.status !== 'ACTIVE'" command="enable">
-                    <el-icon><CircleCheck /></el-icon>启用
+                    <el-icon><CircleCheck /></el-icon>{{ t('common.enable') }}
                   </el-dropdown-item>
                   <el-dropdown-item v-if="row.status === 'ACTIVE'" command="disable">
-                    <el-icon><CircleClose /></el-icon>停用
+                    <el-icon><CircleClose /></el-icon>{{ t('common.disable') }}
                   </el-dropdown-item>
                   <el-dropdown-item v-if="row.status === 'LOCKED'" command="unlock">
-                    <el-icon><Unlock /></el-icon>解锁
+                    <el-icon><Unlock /></el-icon>{{ t('user.unlock') }}
                   </el-dropdown-item>
                   <el-dropdown-item command="resetPassword">
-                    <el-icon><Key /></el-icon>重置密码
+                    <el-icon><Key /></el-icon>{{ t('user.resetPassword') }}
                   </el-dropdown-item>
                   <el-dropdown-item v-if="canDeleteUser" command="delete" divided>
-                    <el-icon><Delete /></el-icon>删除
+                    <el-icon><Delete /></el-icon>{{ t('common.delete') }}
                   </el-dropdown-item>
                 </el-dropdown-menu>
               </template>
@@ -187,10 +187,10 @@ const statusType = (status: string): 'success' | 'info' | 'danger' | 'warning' =
 
 const statusText = (status: string) => {
   const map: Record<string, string> = {
-    ACTIVE: '活跃',
-    DISABLED: '停用',
-    LOCKED: '锁定',
-    PENDING: '待激活'
+    ACTIVE: t('user.active'),
+    DISABLED: t('user.disabled'),
+    LOCKED: t('user.locked'),
+    PENDING: t('user.pending')
   }
   return map[status] || status
 }

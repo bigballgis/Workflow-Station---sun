@@ -3,7 +3,7 @@
     <el-card class="profile-card">
       <template #header>
         <div class="card-header">
-          <span>个人信息</span>
+          <span>{{ t('profile.title') }}</span>
         </div>
       </template>
       
@@ -12,29 +12,29 @@
           <el-avatar :size="100" :src="userInfo?.avatar || defaultAvatar">
             {{ (userInfo?.displayName || userInfo?.username || 'U').charAt(0).toUpperCase() }}
           </el-avatar>
-          <h2>{{ userInfo?.displayName || userInfo?.username || '用户' }}</h2>
-          <p class="user-role">{{ userInfo?.roles?.join(', ') || '普通用户' }}</p>
+          <h2>{{ userInfo?.displayName || userInfo?.username || t('user.username') }}</h2>
+          <p class="user-role">{{ userInfo?.roles?.join(', ') || t('user.role') }}</p>
         </div>
         
         <el-divider />
         
         <el-descriptions :column="2" border>
-          <el-descriptions-item label="用户名">
+          <el-descriptions-item :label="t('user.username')">
             {{ userInfo?.username || '-' }}
           </el-descriptions-item>
-          <el-descriptions-item label="邮箱">
+          <el-descriptions-item :label="t('user.email')">
             {{ userInfo?.email || '-' }}
           </el-descriptions-item>
-          <el-descriptions-item label="用户ID">
+          <el-descriptions-item label="User ID">
             {{ userInfo?.userId || '-' }}
           </el-descriptions-item>
-          <el-descriptions-item label="部门ID">
+          <el-descriptions-item :label="t('user.department')">
             {{ userInfo?.departmentId || '-' }}
           </el-descriptions-item>
-          <el-descriptions-item label="语言">
+          <el-descriptions-item label="Language">
             {{ userInfo?.language || 'zh-CN' }}
           </el-descriptions-item>
-          <el-descriptions-item label="权限数">
+          <el-descriptions-item label="Permissions">
             {{ userInfo?.permissions?.length || 0 }}
           </el-descriptions-item>
         </el-descriptions>
@@ -44,7 +44,7 @@
     <el-card class="password-card">
       <template #header>
         <div class="card-header">
-          <span>修改密码</span>
+          <span>{{ t('profile.changePassword') }}</span>
         </div>
       </template>
       
@@ -54,33 +54,33 @@
         :rules="passwordRules" 
         label-width="100px"
       >
-        <el-form-item label="当前密码" prop="oldPassword">
+        <el-form-item :label="t('profile.currentPassword')" prop="oldPassword">
           <el-input 
             v-model="passwordForm.oldPassword" 
             type="password" 
             show-password
-            placeholder="请输入当前密码"
+            :placeholder="t('profile.currentPasswordPlaceholder')"
           />
         </el-form-item>
-        <el-form-item label="新密码" prop="newPassword">
+        <el-form-item :label="t('profile.newPassword')" prop="newPassword">
           <el-input 
             v-model="passwordForm.newPassword" 
             type="password" 
             show-password
-            placeholder="请输入新密码"
+            :placeholder="t('profile.newPasswordPlaceholder')"
           />
         </el-form-item>
-        <el-form-item label="确认密码" prop="confirmPassword">
+        <el-form-item :label="t('profile.confirmPassword')" prop="confirmPassword">
           <el-input 
             v-model="passwordForm.confirmPassword" 
             type="password" 
             show-password
-            placeholder="请再次输入新密码"
+            :placeholder="t('profile.confirmPasswordPlaceholder')"
           />
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleChangePassword" :loading="changingPassword">
-            修改密码
+            {{ t('profile.changePassword') }}
           </el-button>
         </el-form-item>
       </el-form>
@@ -89,9 +89,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, reactive } from 'vue'
+import { ref, onMounted, reactive, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, FormInstance, FormRules } from 'element-plus'
 import request from '@/api/request'
+
+const { t } = useI18n()
 
 const defaultAvatar = 'https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png'
 
@@ -120,25 +123,25 @@ const passwordForm = reactive({
 
 const validateConfirmPassword = (_rule: any, value: string, callback: any) => {
   if (value !== passwordForm.newPassword) {
-    callback(new Error('两次输入的密码不一致'))
+    callback(new Error(t('profile.passwordMismatch')))
   } else {
     callback()
   }
 }
 
-const passwordRules: FormRules = {
+const passwordRules = computed<FormRules>(() => ({
   oldPassword: [
-    { required: true, message: '请输入当前密码', trigger: 'blur' }
+    { required: true, message: t('profile.currentPasswordPlaceholder'), trigger: 'blur' }
   ],
   newPassword: [
-    { required: true, message: '请输入新密码', trigger: 'blur' },
-    { min: 6, message: '密码长度不能少于6位', trigger: 'blur' }
+    { required: true, message: t('profile.newPasswordPlaceholder'), trigger: 'blur' },
+    { min: 6, message: t('profile.passwordMinLength'), trigger: 'blur' }
   ],
   confirmPassword: [
-    { required: true, message: '请确认新密码', trigger: 'blur' },
+    { required: true, message: t('profile.confirmPasswordPlaceholder'), trigger: 'blur' },
     { validator: validateConfirmPassword, trigger: 'blur' }
   ]
-}
+}))
 
 const formatDate = (dateStr?: string) => {
   if (!dateStr) return '-'
@@ -191,10 +194,10 @@ const handleChangePassword = async () => {
         oldPassword: passwordForm.oldPassword,
         newPassword: passwordForm.newPassword
       }, { baseURL: '' })
-      ElMessage.success('密码修改成功')
+      ElMessage.success(t('profile.passwordChanged'))
       passwordFormRef.value?.resetFields()
     } catch (error: any) {
-      ElMessage.error(error.response?.data?.message || '密码修改失败')
+      ElMessage.error(error.response?.data?.message || t('common.failed'))
     } finally {
       changingPassword.value = false
     }

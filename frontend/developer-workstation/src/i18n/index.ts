@@ -5,7 +5,7 @@ import en from './locales/en'
 
 const i18n = createI18n({
   legacy: false,
-  locale: localStorage.getItem('locale') || 'zh-CN',
+  locale: localStorage.getItem('language') || 'zh-CN',
   fallbackLocale: 'zh-CN',
   messages: {
     'zh-CN': zhCN,

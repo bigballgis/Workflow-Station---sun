@@ -3,34 +3,34 @@
     <div class="page-header">
       <span class="page-title">{{ t('menu.virtualGroup') }}</span>
       <el-button type="primary" @click="showCreateDialog">
-        <el-icon><Plus /></el-icon>创建虚拟组
+        <el-icon><Plus /></el-icon>{{ t('virtualGroup.create') }}
       </el-button>
     </div>
     
     <el-table :data="groups" v-loading="loading" stripe>
-      <el-table-column prop="name" label="虚拟组名称" />
-      <el-table-column prop="code" label="编码" />
-      <el-table-column prop="type" label="类型">
+      <el-table-column prop="name" :label="t('virtualGroup.name')" />
+      <el-table-column prop="code" :label="t('virtualGroup.code')" />
+      <el-table-column prop="type" :label="t('virtualGroup.type')">
         <template #default="{ row }">
           <el-tag>{{ typeText(row.type) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="memberCount" label="成员数" width="100" />
-      <el-table-column prop="validFrom" label="有效期">
+      <el-table-column prop="memberCount" :label="t('virtualGroup.memberCount')" width="100" />
+      <el-table-column prop="validFrom" :label="t('virtualGroup.validityPeriod')">
         <template #default="{ row }">
-          {{ row.validFrom }} ~ {{ row.validTo || '永久' }}
+          {{ row.validFrom }} ~ {{ row.validTo || t('common.permanent') }}
         </template>
       </el-table-column>
-      <el-table-column prop="status" label="状态">
+      <el-table-column prop="status" :label="t('virtualGroup.status')">
         <template #default="{ row }">
-          <el-tag :type="row.status === 'ACTIVE' ? 'success' : 'info'">{{ row.status === 'ACTIVE' ? '启用' : '禁用' }}</el-tag>
+          <el-tag :type="row.status === 'ACTIVE' ? 'success' : 'info'">{{ row.status === 'ACTIVE' ? t('virtualGroup.active') : t('virtualGroup.inactive') }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="200">
+      <el-table-column :label="t('common.operation')" width="200">
         <template #default="{ row }">
-          <el-button link type="primary" @click="showEditDialog(row)">编辑</el-button>
-          <el-button link type="primary" @click="showMembersDialog(row)">成员</el-button>
-          <el-button link type="danger" @click="handleDelete(row)">删除</el-button>
+          <el-button link type="primary" @click="showEditDialog(row)">{{ t('virtualGroup.edit') }}</el-button>
+          <el-button link type="primary" @click="showMembersDialog(row)">{{ t('virtualGroup.members') }}</el-button>
+          <el-button link type="danger" @click="handleDelete(row)">{{ t('virtualGroup.delete') }}</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -56,7 +56,7 @@ const formDialogVisible = ref(false)
 const membersDialogVisible = ref(false)
 const currentGroup = ref<VirtualGroup | null>(null)
 
-const typeText = (type: string) => ({ PROJECT: '项目组', TEMPORARY: '临时组', WORK: '工作组', TASK_HANDLER: '任务处理组' }[type] || type)
+const typeText = (type: string) => ({ PROJECT: t('role.functionRole'), TEMPORARY: t('role.tempRole'), WORK: t('role.businessRole'), TASK_HANDLER: t('role.businessRole') }[type] || type)
 
 const fetchGroups = async () => {
   loading.value = true
@@ -64,7 +64,7 @@ const fetchGroups = async () => {
     groups.value = await virtualGroupApi.list()
   } catch (e) {
     console.error('Failed to load virtual groups:', e)
-    ElMessage.error('加载虚拟组列表失败')
+    ElMessage.error(t('common.failed'))
   } finally {
     loading.value = false
   }
@@ -75,14 +75,14 @@ const showEditDialog = (group: VirtualGroup) => { currentGroup.value = group; fo
 const showMembersDialog = (group: VirtualGroup) => { currentGroup.value = group; membersDialogVisible.value = true }
 
 const handleDelete = async (group: VirtualGroup) => {
-  await ElMessageBox.confirm('确定要删除该虚拟组吗？', '提示', { type: 'warning' })
+  await ElMessageBox.confirm(t('common.confirm'), t('common.confirm'), { type: 'warning' })
   try {
     await virtualGroupApi.delete(group.id)
-    ElMessage.success('删除成功')
+    ElMessage.success(t('common.success'))
     fetchGroups()
   } catch (e) {
     console.error('Failed to delete group:', e)
-    ElMessage.error('删除失败')
+    ElMessage.error(t('common.failed'))
   }
 }
 

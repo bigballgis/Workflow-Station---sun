@@ -137,16 +137,35 @@ public class TaskQueryComponent {
      * 将 Map 转换为 TaskInfo
      */
     private TaskInfo convertMapToTaskInfo(Map<String, Object> taskMap) {
+        // 优先使用 processDefinitionKey，如果没有则从 processDefinitionId 中提取
+        String processDefinitionKey = (String) taskMap.get("processDefinitionKey");
+        if (processDefinitionKey == null || processDefinitionKey.isEmpty()) {
+            String processDefinitionId = (String) taskMap.get("processDefinitionId");
+            processDefinitionKey = extractProcessDefinitionKey(processDefinitionId);
+        }
+        
+        // 获取流程定义名称，优先使用返回的 processDefinitionName，否则使用 processDefinitionKey
+        String processDefinitionName = (String) taskMap.get("processDefinitionName");
+        if (processDefinitionName == null || processDefinitionName.isEmpty()) {
+            processDefinitionName = processDefinitionKey;
+        }
+        
+        // 获取发起人信息
+        String initiatorId = (String) taskMap.get("initiatorId");
+        String initiatorName = (String) taskMap.get("initiatorName");
+        
         return TaskInfo.builder()
                 .taskId((String) taskMap.get("taskId"))
                 .taskName((String) taskMap.get("taskName"))
                 .description((String) taskMap.get("taskDescription"))
                 .processInstanceId((String) taskMap.get("processInstanceId"))
-                .processDefinitionKey((String) taskMap.get("processDefinitionId"))
-                .processDefinitionName((String) taskMap.get("processDefinitionId"))
+                .processDefinitionKey(processDefinitionKey)
+                .processDefinitionName(processDefinitionName)
                 .assignmentType(taskMap.get("assignmentType") != null ? taskMap.get("assignmentType").toString() : "USER")
                 .assignee((String) taskMap.get("currentAssignee"))
                 .assigneeName((String) taskMap.get("currentAssignee"))
+                .initiatorId(initiatorId)
+                .initiatorName(initiatorName)
                 .priority(taskMap.get("priority") != null ? taskMap.get("priority").toString() : "NORMAL")
                 .status((String) taskMap.get("status"))
                 .createTime(parseDateTime(taskMap.get("createdTime")))
@@ -154,6 +173,21 @@ public class TaskQueryComponent {
                 .isOverdue(taskMap.get("isOverdue") != null ? (Boolean) taskMap.get("isOverdue") : false)
                 .formKey((String) taskMap.get("formKey"))
                 .build();
+    }
+    
+    /**
+     * 从 processDefinitionId 中提取 processDefinitionKey
+     * 格式: key:version:uuid (例如: Process_PurchaseRequest:2:b550b1fe-f0b0-11f0-b82f-00ff197375e0)
+     */
+    private String extractProcessDefinitionKey(String processDefinitionId) {
+        if (processDefinitionId == null || processDefinitionId.isEmpty()) {
+            return null;
+        }
+        int colonIndex = processDefinitionId.indexOf(':');
+        if (colonIndex > 0) {
+            return processDefinitionId.substring(0, colonIndex);
+        }
+        return processDefinitionId;
     }
     
     /**
@@ -319,12 +353,13 @@ public class TaskQueryComponent {
                             return false;
                         }
                     }
-                    // 关键词搜索
+                    // 关键词搜索（包括发起人名称）
                     if (request.getKeyword() != null && !request.getKeyword().isEmpty()) {
                         String keyword = request.getKeyword().toLowerCase();
                         boolean matches = (t.getTaskName() != null && t.getTaskName().toLowerCase().contains(keyword))
                                 || (t.getDescription() != null && t.getDescription().toLowerCase().contains(keyword))
-                                || (t.getProcessDefinitionName() != null && t.getProcessDefinitionName().toLowerCase().contains(keyword));
+                                || (t.getProcessDefinitionName() != null && t.getProcessDefinitionName().toLowerCase().contains(keyword))
+                                || (t.getInitiatorName() != null && t.getInitiatorName().toLowerCase().contains(keyword));
                         if (!matches) {
                             return false;
                         }

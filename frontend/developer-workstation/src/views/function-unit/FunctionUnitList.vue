@@ -23,9 +23,9 @@
             style="width: 120px;"
             @change="handleSearch"
           >
-            <el-option label="草稿" value="DRAFT" />
-            <el-option label="已发布" value="PUBLISHED" />
-            <el-option label="已归档" value="ARCHIVED" />
+            <el-option :label="$t('functionUnit.draft')" value="DRAFT" />
+            <el-option :label="$t('functionUnit.published')" value="PUBLISHED" />
+            <el-option :label="$t('functionUnit.archived')" value="ARCHIVED" />
           </el-select>
           <el-select
             v-model="searchForm.tags"
@@ -173,6 +173,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox, type FormInstance } from 'element-plus'
 import { Search, Plus } from '@element-plus/icons-vue'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
@@ -182,6 +183,7 @@ import IconSelector from '@/components/icon/IconSelector.vue'
 import FunctionUnitCard from '@/components/function-unit/FunctionUnitCard.vue'
 import { getTags, setTags, getAllAvailableTags, matchesTags } from '@/utils/tagStorage'
 
+const { t } = useI18n()
 const router = useRouter()
 const store = useFunctionUnitStore()
 
@@ -198,9 +200,9 @@ const createForm = reactive({
 const showIconSelector = ref(false)
 const selectedIcon = ref<any>(null)
 
-const formRules = {
-  name: [{ required: true, message: '请输入名称', trigger: 'blur' }]
-}
+const formRules = computed(() => ({
+  name: [{ required: true, message: t('common.inputPlaceholder'), trigger: 'blur' }]
+}))
 
 // Get all available tags for filter dropdown
 const availableTags = computed(() => getAllAvailableTags())

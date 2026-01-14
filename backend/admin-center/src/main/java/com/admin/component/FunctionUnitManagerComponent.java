@@ -13,6 +13,7 @@ import com.admin.enums.FunctionUnitStatus;
 import com.admin.exception.AdminBusinessException;
 import com.admin.exception.FunctionUnitNotFoundException;
 import com.admin.exception.InvalidPackageException;
+import com.admin.repository.FunctionUnitAccessRepository;
 import com.admin.repository.FunctionUnitContentRepository;
 import com.admin.repository.FunctionUnitDependencyRepository;
 import com.admin.repository.FunctionUnitRepository;
@@ -42,6 +43,7 @@ public class FunctionUnitManagerComponent {
     private final FunctionUnitRepository functionUnitRepository;
     private final FunctionUnitDependencyRepository dependencyRepository;
     private final FunctionUnitContentRepository contentRepository;
+    private final FunctionUnitAccessRepository accessRepository;
     
     // 版本号正则表达式（语义化版本）
     private static final Pattern VERSION_PATTERN = Pattern.compile("^\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9]+)?$");
@@ -394,6 +396,16 @@ public class FunctionUnitManagerComponent {
     @Transactional
     public void addFunctionUnitContent(String functionUnitId, ContentType contentType, 
                                        String contentName, String contentData) {
+        addFunctionUnitContent(functionUnitId, contentType, contentName, contentData, null);
+    }
+    
+    /**
+     * 添加功能单元内容（带原始ID）
+     * @param sourceId 原始内容ID（来自 developer-workstation 的 dw_form_definitions.id 等）
+     */
+    @Transactional
+    public void addFunctionUnitContent(String functionUnitId, ContentType contentType, 
+                                       String contentName, String contentData, String sourceId) {
         FunctionUnit functionUnit = getFunctionUnitById(functionUnitId);
         
         String contentChecksum = calculateChecksum(contentData);
@@ -407,10 +419,11 @@ public class FunctionUnitManagerComponent {
                 .contentPath(contentPath)
                 .contentData(contentData)
                 .checksum(contentChecksum)
+                .sourceId(sourceId)
                 .build();
         contentRepository.save(unitContent);
         
-        log.info("Added content {} of type {} to function unit {}", contentName, contentType, functionUnitId);
+        log.info("Added content {} of type {} with sourceId {} to function unit {}", contentName, contentType, sourceId, functionUnitId);
     }
     
     /**
@@ -421,6 +434,8 @@ public class FunctionUnitManagerComponent {
         Optional<FunctionUnit> existing = functionUnitRepository.findByCodeAndVersion(code, version);
         if (existing.isPresent()) {
             FunctionUnit unit = existing.get();
+            // 删除相关访问权限配置
+            accessRepository.deleteByFunctionUnitId(unit.getId());
             // 删除相关内容
             contentRepository.deleteByFunctionUnitId(unit.getId());
             // 删除相关依赖
@@ -526,6 +541,16 @@ public class FunctionUnitManagerComponent {
     public FunctionUnit getFunctionUnitById(String id) {
         return functionUnitRepository.findById(id)
                 .orElseThrow(() -> new FunctionUnitNotFoundException("功能单元不存在: " + id));
+    }
+    
+    /**
+     * 根据流程定义Key获取功能单元
+     * 通过查找 flowable_process_definition_id 以 processKey: 开头的内容来定位功能单元
+     */
+    public FunctionUnit getFunctionUnitByProcessKey(String processKey) {
+        return contentRepository.findByProcessDefinitionKey(processKey)
+                .map(content -> content.getFunctionUnit())
+                .orElseThrow(() -> new FunctionUnitNotFoundException("未找到流程定义Key对应的功能单元: " + processKey));
     }
     
     /**
@@ -1077,6 +1102,9 @@ public class FunctionUnitManagerComponent {
         }
         
         log.info("Deleting function unit cascade: {} ({})", unit.getName(), functionUnitId);
+        
+        // 删除访问权限配置
+        accessRepository.deleteByFunctionUnitId(functionUnitId);
         
         // 删除内容
         contentRepository.deleteByFunctionUnitId(functionUnitId);
