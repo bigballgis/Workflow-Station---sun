@@ -25,6 +25,18 @@ functionUnitAxios.interceptors.request.use(config => {
 functionUnitAxios.interceptors.response.use(
   response => {
     console.log('[FunctionUnitAPI] Response:', response.status, response.data)
+    // 检查响应体中的 success 字段，确保是成功响应
+    if (response.data && typeof response.data === 'object' && 'success' in response.data) {
+      if (response.data.success === false) {
+        // 如果 success 为 false，即使 HTTP 状态码是 200，也应该作为错误处理
+        const error = new Error(response.data.error?.message || '请求失败')
+        ;(error as any).response = {
+          status: response.data.error?.code === '403' ? 403 : 500,
+          data: response.data
+        }
+        return Promise.reject(error)
+      }
+    }
     return response.data
   },
   async error => {
