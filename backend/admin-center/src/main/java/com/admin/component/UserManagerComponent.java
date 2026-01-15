@@ -240,45 +240,84 @@ public class UserManagerComponent {
     public void deleteUser(String userId) {
         log.info("Deleting user: {}", userId);
         
-        // 使用 findByIdWithRoles 加载用户及其角色，避免 LazyInitializationException
-        User user = userRepository.findByIdWithRoles(userId)
-                .orElseThrow(() -> new UserNotFoundException(userId));
-        
-        // 检查是否是最后一个管理员
-        if (isLastActiveAdmin(user)) {
-            throw new AdminBusinessException("USER_005", "不能删除最后一个管理员");
+        try {
+            // 使用 findByIdWithRoles 加载用户及其角色，避免 LazyInitializationException
+            User user = userRepository.findByIdWithRoles(userId)
+                    .orElseThrow(() -> new UserNotFoundException(userId));
+            
+            // 检查是否是最后一个管理员
+            if (isLastActiveAdmin(user)) {
+                throw new AdminBusinessException("USER_005", "不能删除最后一个管理员");
+            }
+            
+            // 软删除 - 不改变状态，只设置删除标记
+            // 如果必须改变状态，使用 INACTIVE（数据库约束允许）
+            // 但通常软删除只需要设置 deleted=true 即可
+            user.setDeleted(true);
+            user.setDeletedAt(LocalDateTime.now());
+            user.setDeletedBy(getCurrentUserId());
+            // 保持原有状态，不强制修改状态
+            // 如果需要禁用，可以单独调用状态更新接口
+            
+            userRepository.save(user);
+            
+            // 记录审计日志（在事务外执行，避免影响事务）
+            try {
+                auditService.recordUserDeletion(user);
+            } catch (Exception e) {
+                log.warn("Failed to record user deletion audit log: {}", e.getMessage());
+                // 审计日志失败不影响删除操作
+            }
+            
+            log.info("User soft deleted successfully: {}", userId);
+        } catch (AdminBusinessException e) {
+            // 业务异常（包括 UserNotFoundException）直接抛出
+            throw e;
+        } catch (Exception e) {
+            log.error("Failed to delete user: {}", userId, e);
+            throw new AdminBusinessException("USER_DELETE_FAILED", "删除用户失败: " + e.getMessage());
         }
-        
-        // 软删除
-        user.setDeleted(true);
-        user.setDeletedAt(LocalDateTime.now());
-        user.setDeletedBy(getCurrentUserId());
-        user.setStatus(UserStatus.DISABLED);
-        
-        userRepository.save(user);
-        
-        // 记录审计日志
-        auditService.recordUserDeletion(user);
-        
-        log.info("User soft deleted successfully: {}", userId);
     }
     
     /**
      * 检查是否是最后一个活跃管理员
      */
     private boolean isLastActiveAdmin(User user) {
-        // 检查用户是否有管理员角色
-        boolean isAdmin = user.getUserRoles().stream()
-                .anyMatch(ur -> ur.getRole() != null && 
-                        ("ADMIN".equals(ur.getRole().getCode()) || "SUPER_ADMIN".equals(ur.getRole().getCode())));
-        
-        if (!isAdmin) {
+        if (user == null || user.getUserRoles() == null) {
             return false;
         }
         
-        // 统计活跃管理员数量
-        long activeAdminCount = userRepository.countActiveAdmins();
-        return activeAdminCount <= 1;
+        try {
+            // 检查用户是否有管理员角色
+            // 使用 findByIdWithRoles 已经加载了 role，但需要安全访问
+            boolean isAdmin = user.getUserRoles().stream()
+                    .filter(ur -> ur != null)
+                    .map(ur -> {
+                        try {
+                            return ur.getRole();
+                        } catch (org.hibernate.LazyInitializationException e) {
+                            log.warn("LazyInitializationException when getting role for userRole: {}", ur.getId());
+                            return null;
+                        } catch (Exception e) {
+                            log.warn("Failed to get role for userRole: {}", ur.getId(), e);
+                            return null;
+                        }
+                    })
+                    .filter(role -> role != null && role.getCode() != null)
+                    .anyMatch(role -> "ADMIN".equals(role.getCode()) || "SUPER_ADMIN".equals(role.getCode()));
+            
+            if (!isAdmin) {
+                return false;
+            }
+            
+            // 统计活跃管理员数量
+            long activeAdminCount = userRepository.countActiveAdmins();
+            return activeAdminCount <= 1;
+        } catch (Exception e) {
+            log.error("Error checking if last active admin for user: {}", user.getId(), e);
+            // 如果检查失败，为了安全起见，不允许删除
+            return true;
+        }
     }
     
     /**
@@ -299,18 +338,21 @@ public class UserManagerComponent {
     /**
      * 获取用户详情（包含角色和登录历史）
      */
+    @Transactional(readOnly = true)
     public UserDetailInfo getUserDetail(String userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException(userId));
         
         UserDetailInfo detail = UserDetailInfo.fromEntity(user);
         
-        // 获取用户角色
+        // 获取用户角色 - 需要在事务内访问懒加载属性
         Set<UserDetailInfo.RoleInfo> roles = user.getUserRoles().stream()
                 .filter(ur -> ur.getRole() != null)
                 .map(ur -> UserDetailInfo.RoleInfo.builder()
+                        .roleId(ur.getRole().getId())
                         .roleCode(ur.getRole().getCode())
                         .roleName(ur.getRole().getName())
+                        .description(ur.getRole().getDescription())
                         .build())
                 .collect(java.util.stream.Collectors.toSet());
         detail.setRoles(roles);

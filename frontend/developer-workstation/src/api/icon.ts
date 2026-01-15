@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { TOKEN_KEY } from './auth'
+import { TOKEN_KEY, getUser } from './auth'
 
 const iconAxios = axios.create({
   baseURL: '',
@@ -11,6 +11,13 @@ iconAxios.interceptors.request.use(config => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
+  
+  // 添加 X-User-Id 请求头，用于后端权限检查
+  const user = getUser()
+  if (user && user.userId) {
+    config.headers['X-User-Id'] = user.userId
+  }
+  
   return config
 })
 
