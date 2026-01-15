@@ -233,8 +233,12 @@ export const functionUnitApi = {
   createTable: (functionUnitId: number, data: Partial<TableDefinition>) =>
     functionUnitAxios.post<any, { data: TableDefinition }>(`/api/v1/function-units/${functionUnitId}/tables`, data),
   
-  updateTable: (functionUnitId: number, tableId: number, data: Partial<TableDefinition>) =>
-    functionUnitAxios.put<any, { data: TableDefinition }>(`/api/v1/function-units/${functionUnitId}/tables/${tableId}`, data),
+  updateTable: (functionUnitId: number, tableId: number, data: Partial<TableDefinition>) => {
+    console.log('[FunctionUnitAPI] Updating table:', { functionUnitId, tableId, data })
+    console.log('[FunctionUnitAPI] Request data fields:', data.fields)
+    console.log('[FunctionUnitAPI] Request data JSON:', JSON.stringify(data, null, 2))
+    return functionUnitAxios.put<any, { data: TableDefinition }>(`/api/v1/function-units/${functionUnitId}/tables/${tableId}`, data)
+  },
   
   deleteTable: (functionUnitId: number, tableId: number) =>
     functionUnitAxios.delete(`/api/v1/function-units/${functionUnitId}/tables/${tableId}`),
