@@ -144,8 +144,10 @@
     <!-- 预览对话框 -->
     <el-dialog v-model="showPreviewDialog" title="表单预览" width="800px" destroy-on-close>
       <div class="preview-container">
-        <form-create v-if="previewRule.length" v-model="previewData" :rule="previewRule" :option="previewOption" />
-        <el-empty v-else description="暂无表单内容" />
+        <div class="form-preview-wrapper">
+          <form-create v-if="previewRule.length" v-model="previewData" :rule="previewRule" :option="previewOption" />
+          <el-empty v-else description="暂无表单内容" />
+        </div>
       </div>
     </el-dialog>
 
@@ -850,17 +852,42 @@ async function loadProcessNodes() {
 
 function handleSelectForm(row: FormDefinition) {
   selectedForm.value = { ...row }
+  // 等待设计器组件完全渲染后再加载配置
   nextTick(() => {
-    if (designerRef.value && row.configJson) {
-      // 加载已保存的表单配置到设计器
-      const config = row.configJson
-      if (config.rule) {
-        designerRef.value.setRule(config.rule)
+    // 使用 setTimeout 确保设计器组件完全初始化
+    setTimeout(() => {
+      if (designerRef.value) {
+        try {
+          // 加载已保存的表单配置到设计器
+          const config = row.configJson || {}
+          
+          // 如果配置中有规则，则加载；否则初始化为空数组
+          if (config.rule && Array.isArray(config.rule) && config.rule.length > 0) {
+            designerRef.value.setRule(config.rule)
+          } else {
+            // 初始化空表单
+            designerRef.value.setRule([])
+          }
+          
+          // 如果配置中有选项，则加载；否则使用默认选项
+          if (config.options && Object.keys(config.options).length > 0) {
+            designerRef.value.setOption(config.options)
+          } else {
+            // 使用默认选项
+            designerRef.value.setOption({})
+          }
+        } catch (error) {
+          console.error('Failed to load form config:', error)
+          // 如果加载失败，至少初始化一个空表单
+          try {
+            designerRef.value.setRule([])
+            designerRef.value.setOption({})
+          } catch (e) {
+            console.error('Failed to initialize empty form:', e)
+          }
+        }
       }
-      if (config.options) {
-        designerRef.value.setOption(config.options)
-      }
-    }
+    }, 100)
   })
 }
 
@@ -1111,11 +1138,54 @@ onMounted(loadForms)
   :deep(.fc-designer) {
     height: 100% !important;
   }
+  
+  // 确保 form-create 设计器内的样式正确应用
+  :deep(.form-create) {
+    width: 100%;
+  }
+  
+  // 确保设计器内的表单项样式正确
+  :deep(.el-form-item) {
+    margin-bottom: 18px;
+  }
+  
+  // 确保设计器内的输入框等组件样式正确
+  :deep(.el-input),
+  :deep(.el-select),
+  :deep(.el-date-picker),
+  :deep(.el-textarea) {
+    width: 100%;
+  }
 }
 
 .preview-container {
   min-height: 300px;
   padding: 20px;
+  
+  .form-preview-wrapper {
+    // 确保 form-create 样式能够正确应用
+    :deep(.form-create) {
+      width: 100%;
+    }
+    
+    // 确保表单项样式正确
+    :deep(.el-form-item) {
+      margin-bottom: 18px;
+    }
+    
+    // 确保输入框等组件样式正确
+    :deep(.el-input),
+    :deep(.el-select),
+    :deep(.el-date-picker),
+    :deep(.el-textarea) {
+      width: 100%;
+    }
+    
+    // 确保按钮样式正确
+    :deep(.el-button) {
+      margin-right: 10px;
+    }
+  }
 }
 
 .bind-dialog-content {

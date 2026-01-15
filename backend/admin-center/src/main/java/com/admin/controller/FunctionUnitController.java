@@ -485,18 +485,14 @@ public class FunctionUnitController {
                 contentMap.put("data", data);
                 contentMap.put("type", content.getContentType().name());
                 
-                switch (content.getContentType()) {
-                    case FORM:
-                        forms.add(contentMap);
-                        break;
-                    case PROCESS:
-                        processes.add(contentMap);
-                        break;
-                    case DATA_TABLE:
-                        dataTables.add(contentMap);
-                        break;
-                    default:
-                        break;
+                // 使用 if-else 替代 switch 避免 ClassNotFoundException
+                com.admin.enums.ContentType contentType = content.getContentType();
+                if (contentType == com.admin.enums.ContentType.FORM) {
+                    forms.add(contentMap);
+                } else if (contentType == com.admin.enums.ContentType.PROCESS) {
+                    processes.add(contentMap);
+                } else if (contentType == com.admin.enums.ContentType.DATA_TABLE) {
+                    dataTables.add(contentMap);
                 }
             }
             

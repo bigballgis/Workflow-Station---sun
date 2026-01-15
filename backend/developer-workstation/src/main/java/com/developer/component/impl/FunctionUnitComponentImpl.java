@@ -158,7 +158,32 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
             return cb.and(predicates.toArray(new Predicate[0]));
         };
         
-        return functionUnitRepository.findAll(spec, pageable).map(this::toResponse);
+        // 使用 Specification 查询，但需要手动处理关联加载
+        // 由于 Specification 不支持 EntityGraph，我们在 toResponse 中安全处理懒加载
+        Page<FunctionUnit> page = functionUnitRepository.findAll(spec, pageable);
+        
+        // 在事务内触发懒加载，确保所有关联数据都被加载
+        page.getContent().forEach(entity -> {
+            try {
+                // 触发懒加载
+                if (entity.getTableDefinitions() != null) {
+                    entity.getTableDefinitions().size();
+                }
+                if (entity.getFormDefinitions() != null) {
+                    entity.getFormDefinitions().size();
+                }
+                if (entity.getActionDefinitions() != null) {
+                    entity.getActionDefinitions().size();
+                }
+                if (entity.getProcessDefinition() != null) {
+                    entity.getProcessDefinition().getId();
+                }
+            } catch (Exception e) {
+                log.warn("Failed to eagerly load relations for function unit {}: {}", entity.getId(), e.getMessage());
+            }
+        });
+        
+        return page.map(this::toResponse);
     }
     
     @Override
@@ -289,13 +314,53 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     
     private FunctionUnitResponse toResponse(FunctionUnit entity) {
         FunctionUnitResponse.IconInfo iconInfo = null;
-        if (entity.getIcon() != null) {
-            Icon icon = entity.getIcon();
-            iconInfo = FunctionUnitResponse.IconInfo.builder()
-                    .id(icon.getId())
-                    .name(icon.getName())
-                    .svgContent(icon.getSvgContent())
-                    .build();
+        try {
+            if (entity.getIcon() != null) {
+                Icon icon = entity.getIcon();
+                iconInfo = FunctionUnitResponse.IconInfo.builder()
+                        .id(icon.getId())
+                        .name(icon.getName())
+                        .svgContent(icon.getSvgContent())
+                        .build();
+            }
+        } catch (Exception e) {
+            log.warn("Failed to load icon for function unit {}: {}", entity.getId(), e.getMessage());
+        }
+        
+        // 安全地获取集合大小，避免 LazyInitializationException
+        int tableCount = 0;
+        int formCount = 0;
+        int actionCount = 0;
+        boolean hasProcess = false;
+        
+        try {
+            if (entity.getTableDefinitions() != null) {
+                tableCount = entity.getTableDefinitions().size();
+            }
+        } catch (Exception e) {
+            log.warn("Failed to load table definitions for function unit {}: {}", entity.getId(), e.getMessage());
+        }
+        
+        try {
+            if (entity.getFormDefinitions() != null) {
+                formCount = entity.getFormDefinitions().size();
+            }
+        } catch (Exception e) {
+            log.warn("Failed to load form definitions for function unit {}: {}", entity.getId(), e.getMessage());
+        }
+        
+        try {
+            if (entity.getActionDefinitions() != null) {
+                actionCount = entity.getActionDefinitions().size();
+            }
+        } catch (Exception e) {
+            log.warn("Failed to load action definitions for function unit {}: {}", entity.getId(), e.getMessage());
+        }
+        
+        try {
+            hasProcess = entity.getProcessDefinition() != null;
+        } catch (Exception e) {
+            log.warn("Failed to load process definition for function unit {}: {}", entity.getId(), e.getMessage());
         }
         
         return FunctionUnitResponse.builder()
@@ -311,10 +376,10 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
                 .createdAt(entity.getCreatedAt())
                 .updatedBy(entity.getUpdatedBy())
                 .updatedAt(entity.getUpdatedAt())
-                .tableCount(entity.getTableDefinitions().size())
-                .formCount(entity.getFormDefinitions().size())
-                .actionCount(entity.getActionDefinitions().size())
-                .hasProcess(entity.getProcessDefinition() != null)
+                .tableCount(tableCount)
+                .formCount(formCount)
+                .actionCount(actionCount)
+                .hasProcess(hasProcess)
                 .build();
     }
     
