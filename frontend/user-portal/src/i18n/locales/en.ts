@@ -52,6 +52,7 @@ export default {
   menu: {
     dashboard: 'Dashboard',
     tasks: 'Tasks',
+    completedTasks: 'Completed Tasks',
     processes: 'Start Process',
     myApplications: 'My Applications',
     delegations: 'Delegations',
@@ -99,6 +100,8 @@ export default {
   },
   task: {
     title: 'Tasks',
+    completedTasks: 'Completed Tasks',
+    completedTime: 'Completed Time',
     taskName: 'Task Name',
     processName: 'Process Name',
     initiator: 'Initiator',
@@ -183,7 +186,9 @@ export default {
     general: 'General',
     urgent: 'Urgent',
     critical: 'Critical',
-    history: 'Flow History'
+    history: 'Flow History',
+    noAccessibleProcesses: 'No processes available',
+    contactAdminForAccess: 'Please join the corresponding AD Group to access function units'
   },
   application: {
     title: 'My Applications',
@@ -486,11 +491,16 @@ export default {
   },
   action: {
     approve: 'Approve',
+    approved: 'Approved',
     reject: 'Reject',
+    rejected: 'Rejected',
     transfer: 'Transfer',
+    transferred: 'Transferred',
     delegate: 'Delegate',
+    delegated: 'Delegated',
     withdraw: 'Withdraw',
-    submit: 'Submit'
+    submit: 'Submit',
+    completed: 'Completed'
   },
   upload: {
     dragText: 'Drag file here, or',

@@ -76,4 +76,13 @@ public class TaskInfo {
 
     /** 流程变量 */
     private Map<String, Object> variables;
+    
+    /** 完成时间（已处理任务） */
+    private LocalDateTime completedTime;
+    
+    /** 处理时长（毫秒） */
+    private Long durationInMillis;
+    
+    /** 操作类型（approved, rejected, transferred, delegated, completed） */
+    private String action;
 }

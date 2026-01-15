@@ -68,4 +68,10 @@ public interface VirtualGroupRoleRepository extends JpaRepository<VirtualGroupRo
      * 根据多个虚拟组ID批量查找角色绑定
      */
     List<VirtualGroupRole> findByVirtualGroupIdIn(List<String> virtualGroupIds);
+    
+    /**
+     * 根据角色ID查找所有绑定了该角色的虚拟组ID
+     */
+    @Query("SELECT vgr.virtualGroupId FROM VirtualGroupRole vgr WHERE vgr.roleId = :roleId")
+    List<String> findVirtualGroupIdsByRoleId(@Param("roleId") String roleId);
 }

@@ -92,12 +92,6 @@ const routes: RouteRecordRaw[] = [
         meta: { titleKey: 'menu.dictionary', icon: 'Collection', permissions: [PERMISSIONS.SYSTEM_ADMIN] }
       },
       {
-        path: 'monitor',
-        name: 'SystemMonitor',
-        component: () => import('@/views/monitor/index.vue'),
-        meta: { titleKey: 'menu.monitor', icon: 'Monitor', permissions: [PERMISSIONS.SYSTEM_ADMIN] }
-      },
-      {
         path: 'audit',
         name: 'AuditLog',
         component: () => import('@/views/audit/index.vue'),

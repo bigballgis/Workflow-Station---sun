@@ -483,4 +483,214 @@ public class AdminCenterClient {
             return Collections.emptyList();
         }
     }
+    
+    // ==================== 任务分配相关 API ====================
+    
+    /**
+     * 获取用户的业务单元ID
+     * @param userId 用户ID
+     * @return 业务单元ID，如果用户没有业务单元则返回null
+     */
+    public String getUserBusinessUnitId(String userId) {
+        try {
+            String url = adminCenterUrl + "/api/v1/admin/task-assignment/users/" + userId + "/business-unit";
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<Map<String, Object>>() {}
+            );
+            
+            Map<String, Object> result = response.getBody();
+            if (result != null) {
+                Object businessUnitId = result.get("businessUnitId");
+                if (businessUnitId != null && !businessUnitId.toString().isEmpty()) {
+                    return businessUnitId.toString();
+                }
+            }
+            return null;
+            
+        } catch (Exception e) {
+            log.error("Failed to get business unit ID for user {}: {}", userId, e.getMessage());
+            return null;
+        }
+    }
+    
+    /**
+     * 获取业务单元的父业务单元ID
+     * @param businessUnitId 业务单元ID
+     * @return 父业务单元ID，如果没有父级则返回null
+     */
+    public String getParentBusinessUnitId(String businessUnitId) {
+        try {
+            String url = adminCenterUrl + "/api/v1/admin/task-assignment/business-units/" + businessUnitId + "/parent";
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<Map<String, Object>>() {}
+            );
+            
+            Map<String, Object> result = response.getBody();
+            if (result != null) {
+                Object parentId = result.get("parentBusinessUnitId");
+                if (parentId != null && !parentId.toString().isEmpty()) {
+                    return parentId.toString();
+                }
+            }
+            return null;
+            
+        } catch (Exception e) {
+            log.error("Failed to get parent business unit ID for {}: {}", businessUnitId, e.getMessage());
+            return null;
+        }
+    }
+    
+    /**
+     * 获取业务单元中拥有指定角色的用户ID列表
+     * @param businessUnitId 业务单元ID
+     * @param roleId 角色ID（BU_BOUNDED类型）
+     * @return 用户ID列表
+     */
+    public List<String> getUsersByBusinessUnitAndRole(String businessUnitId, String roleId) {
+        try {
+            String url = adminCenterUrl + "/api/v1/admin/task-assignment/business-units/" + businessUnitId + "/roles/" + roleId + "/users";
+            ResponseEntity<List<String>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<List<String>>() {}
+            );
+            
+            List<String> userIds = response.getBody();
+            return userIds != null ? userIds : Collections.emptyList();
+            
+        } catch (Exception e) {
+            log.error("Failed to get users by business unit {} and role {}: {}", businessUnitId, roleId, e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+    
+    /**
+     * 获取拥有指定BU无关型角色的用户ID列表
+     * @param roleId 角色ID（BU_UNBOUNDED类型）
+     * @return 用户ID列表
+     */
+    public List<String> getUsersByUnboundedRole(String roleId) {
+        try {
+            String url = adminCenterUrl + "/api/v1/admin/task-assignment/roles/" + roleId + "/users";
+            ResponseEntity<List<String>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<List<String>>() {}
+            );
+            
+            List<String> userIds = response.getBody();
+            return userIds != null ? userIds : Collections.emptyList();
+            
+        } catch (Exception e) {
+            log.error("Failed to get users by unbounded role {}: {}", roleId, e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+    
+    /**
+     * 获取业务单元的准入角色ID列表
+     * @param businessUnitId 业务单元ID
+     * @return 角色ID列表
+     */
+    public List<String> getEligibleRoleIds(String businessUnitId) {
+        try {
+            String url = adminCenterUrl + "/api/v1/admin/task-assignment/business-units/" + businessUnitId + "/eligible-roles";
+            ResponseEntity<List<String>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<List<String>>() {}
+            );
+            
+            List<String> roleIds = response.getBody();
+            return roleIds != null ? roleIds : Collections.emptyList();
+            
+        } catch (Exception e) {
+            log.error("Failed to get eligible role IDs for business unit {}: {}", businessUnitId, e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+    
+    /**
+     * 检查角色是否是业务单元的准入角色
+     * @param businessUnitId 业务单元ID
+     * @param roleId 角色ID
+     * @return 是否是准入角色
+     */
+    public boolean isEligibleRole(String businessUnitId, String roleId) {
+        try {
+            String url = adminCenterUrl + "/api/v1/admin/task-assignment/business-units/" + businessUnitId + "/roles/" + roleId + "/eligible";
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<Map<String, Object>>() {}
+            );
+            
+            Map<String, Object> result = response.getBody();
+            if (result != null) {
+                Object eligible = result.get("eligible");
+                return Boolean.TRUE.equals(eligible);
+            }
+            return false;
+            
+        } catch (Exception e) {
+            log.error("Failed to check if role {} is eligible for business unit {}: {}", roleId, businessUnitId, e.getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * 获取所有BU绑定型角色
+     * @return 角色列表
+     */
+    public List<Map<String, Object>> getBuBoundedRoles() {
+        try {
+            String url = adminCenterUrl + "/api/v1/admin/task-assignment/roles/bu-bounded";
+            ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<List<Map<String, Object>>>() {}
+            );
+            
+            List<Map<String, Object>> roles = response.getBody();
+            return roles != null ? roles : Collections.emptyList();
+            
+        } catch (Exception e) {
+            log.error("Failed to get BU bounded roles: {}", e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+    
+    /**
+     * 获取所有BU无关型角色
+     * @return 角色列表
+     */
+    public List<Map<String, Object>> getBuUnboundedRoles() {
+        try {
+            String url = adminCenterUrl + "/api/v1/admin/task-assignment/roles/bu-unbounded";
+            ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<List<Map<String, Object>>>() {}
+            );
+            
+            List<Map<String, Object>> roles = response.getBody();
+            return roles != null ? roles : Collections.emptyList();
+            
+        } catch (Exception e) {
+            log.error("Failed to get BU unbounded roles: {}", e.getMessage());
+            return Collections.emptyList();
+        }
+    }
 }

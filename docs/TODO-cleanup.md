@@ -151,7 +151,39 @@
 
 ## 清理记录
 
+### 2026-01-16
+- 完成：移除 Admin Center 系统监控功能（后续将使用 Splunk/AppDynamics 等专业工具）
+  - 删除路由：`/monitor` (SystemMonitor)
+  - 删除视图：`frontend/admin-center/src/views/monitor/index.vue`
+  - i18n 中的 `menu.monitor` 翻译 key 保留（不影响功能）
+
 ### 2026-01-15
+- 完成：任务分配机制重构 - 从7种类型更新为9种标准类型
+  - 删除旧类型：DEPT_OTHERS, PARENT_DEPT, FIXED_DEPT, VIRTUAL_GROUP
+  - 新增类型：CURRENT_BU_ROLE, CURRENT_PARENT_BU_ROLE, INITIATOR_BU_ROLE, INITIATOR_PARENT_BU_ROLE, FIXED_BU_ROLE, BU_UNBOUNDED_ROLE
+  - 更新 `AssigneeType.java` 枚举
+  - 更新 `TaskAssigneeResolver.java` 解析服务
+  - 更新 `TaskAssignmentListener.java` 监听器
+  - 新增 `TaskAssignmentController.java` API 控制器
+  - 新增 `TaskAssignmentQueryService.java` 查询服务
+  - 更新 `AdminCenterClient.java` 客户端
+  - 更新 `UserTaskProperties.vue` 前端组件
+  - 更新 `adminCenter.ts` 前端 API
+  - 更新 i18n 翻译文件（zh-CN, zh-TW, en）
+  - 更新 steering 文件（workflow-engine-architecture.md, function-unit-generation.md）
+- 待清理：`AdminCenterClient.java` 中的废弃方法
+  - `getDepartmentMembers()` - 部门成员查询（已被业务单元角色查询替代）
+  - `getVirtualGroupMembers()` - 虚拟组成员查询（已被 BU_UNBOUNDED_ROLE 查询替代）
+  - `getDepartmentInfo()` - 部门信息查询
+  - `isUserInDepartmentHierarchy()` - 部门层级检查
+  - `isDepartmentDescendant()` - 部门后代检查
+  - `hasUserDepartmentRole()` - 部门角色检查
+  - `getUserDepartmentRoles()` - 用户部门角色查询
+- 待清理：`TaskAssigneeResolver.java` 中的废弃方法（已删除）
+  - `resolveDeptOthers()` - 本部门其他人解析
+  - `resolveParentDept()` - 上级部门解析
+  - `resolveFixedDept()` - 指定部门解析
+  - `resolveVirtualGroup()` - 虚拟组解析
 - 完成：重构 Department 相关前端代码为 BusinessUnit
   - `DepartmentTree.vue` → `BusinessUnitTree.vue`
   - `DepartmentFormDialog.vue` → `BusinessUnitFormDialog.vue`

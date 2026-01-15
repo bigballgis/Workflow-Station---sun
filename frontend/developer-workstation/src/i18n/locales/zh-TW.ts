@@ -225,9 +225,24 @@ export default {
     assigneeType: '分配方式',
     assigneeLabel: '分配標籤',
     assigneeValue: '分配值',
+    // 直接分配類型
+    directAssignment: '直接分配',
     functionManager: '職能經理',
     entityManager: '實體經理',
     initiator: '流程發起人',
+    // 基於當前人業務單元的角色分配
+    currentUserBuRole: '當前人業務單元角色',
+    currentBuRole: '當前人業務單元角色',
+    currentParentBuRole: '當前人上級業務單元角色',
+    // 基於發起人業務單元的角色分配
+    initiatorBuRole: '發起人業務單元角色',
+    initiatorBuRoleOption: '發起人業務單元角色',
+    initiatorParentBuRole: '發起人上級業務單元角色',
+    // 其他角色類型
+    otherRoleTypes: '其他角色類型',
+    fixedBuRole: '指定業務單元角色',
+    buUnboundedRole: 'BU無關型角色',
+    // 舊類型（已廢棄，保留相容）
     deptOthers: '本部門其他人',
     parentDept: '上級部門',
     fixedDept: '指定部門',
@@ -235,8 +250,18 @@ export default {
     user: '指定使用者',
     role: '指定角色',
     expression: '表達式',
+    // 選擇器
+    selectRole: '選擇角色',
+    selectBusinessUnit: '選擇業務單元',
+    selectBusinessUnitFirst: '請先選擇業務單元',
     selectDepartment: '請選擇部門',
     selectVirtualGroup: '請選擇虛擬群組',
+    // 提示
+    claimRequired: '此分配方式需要使用者認領任務',
+    selectBusinessUnitTip: '選擇業務單元後，將顯示該業務單元的準入角色',
+    buBoundedRoleTip: '選擇BU綁定型角色，任務將分配給該業務單元中擁有此角色的使用者',
+    buUnboundedRoleTip: '選擇BU無關型角色，任務將分配給擁有此角色的虛擬群組成員',
+    fixedBuRoleTip: '請先選擇業務單元，然後選擇該業務單元的準入角色',
     candidateUsers: '候選使用者',
     candidateGroups: '候選群組',
     candidateUsersPlaceholder: '多個使用者用逗號分隔',

@@ -52,6 +52,7 @@ export default {
   menu: {
     dashboard: '工作台',
     tasks: '待办任务',
+    completedTasks: '已处理任务',
     processes: '发起流程',
     myApplications: '我的申请',
     delegations: '委托管理',
@@ -99,6 +100,8 @@ export default {
   },
   task: {
     title: '待办任务',
+    completedTasks: '已处理任务',
+    completedTime: '完成时间',
     taskName: '任务名称',
     processName: '流程名称',
     initiator: '发起人',
@@ -183,7 +186,9 @@ export default {
     general: '一般',
     urgent: '紧急',
     critical: '特急',
-    history: '流转历史'
+    history: '流转历史',
+    noAccessibleProcesses: '您暂无可发起的流程',
+    contactAdminForAccess: '请加入对应的 AD Group 以获取功能单元的访问权限'
   },
   application: {
     title: '我的申请',
@@ -471,11 +476,16 @@ export default {
   },
   action: {
     approve: '同意',
+    approved: '已同意',
     reject: '拒绝',
+    rejected: '已拒绝',
     transfer: '转办',
+    transferred: '已转办',
     delegate: '委托',
+    delegated: '已委托',
     withdraw: '撤回',
-    submit: '提交'
+    submit: '提交',
+    completed: '已完成'
   },
   upload: {
     dragText: '将文件拖到此处，或',

@@ -46,6 +46,10 @@
             <el-icon><List /></el-icon>
             <template #title>{{ t('menu.tasks') }}</template>
           </el-menu-item>
+          <el-menu-item index="/tasks/completed">
+            <el-icon><Finished /></el-icon>
+            <template #title>{{ t('menu.completedTasks') }}</template>
+          </el-menu-item>
           <el-menu-item index="/processes">
             <el-icon><Plus /></el-icon>
             <template #title>{{ t('menu.processes') }}</template>
@@ -103,7 +107,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
   HomeFilled, List, Plus, Document, Share, Key, Bell, Setting,
-  Fold, Expand, Location, Checked
+  Fold, Expand, Location, Checked, Finished
 } from '@element-plus/icons-vue'
 import UserProfileDropdown from '@/components/UserProfileDropdown.vue'
 import i18n from '@/i18n'

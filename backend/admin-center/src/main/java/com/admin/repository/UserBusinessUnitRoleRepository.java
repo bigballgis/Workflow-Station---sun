@@ -89,4 +89,24 @@ public interface UserBusinessUnitRoleRepository extends JpaRepository<UserBusine
      */
     @Query("SELECT COUNT(DISTINCT ubur.userId) FROM UserBusinessUnitRole ubur WHERE ubur.businessUnitId = :businessUnitId")
     long countDistinctUsersByBusinessUnitId(@Param("businessUnitId") String businessUnitId);
+    
+    /**
+     * 根据业务单元ID和角色ID查找所有用户ID
+     * 用于任务分配时获取候选人列表
+     */
+    @Query("SELECT DISTINCT ubur.userId FROM UserBusinessUnitRole ubur WHERE ubur.businessUnitId = :businessUnitId AND ubur.roleId = :roleId")
+    List<String> findUserIdsByBusinessUnitIdAndRoleId(@Param("businessUnitId") String businessUnitId, @Param("roleId") String roleId);
+    
+    /**
+     * 根据业务单元ID和角色ID查找所有用户角色分配（包含用户信息）
+     */
+    @Query("SELECT ubur FROM UserBusinessUnitRole ubur " +
+           "LEFT JOIN FETCH ubur.user " +
+           "WHERE ubur.businessUnitId = :businessUnitId AND ubur.roleId = :roleId")
+    List<UserBusinessUnitRole> findByBusinessUnitIdAndRoleIdWithUser(@Param("businessUnitId") String businessUnitId, @Param("roleId") String roleId);
+    
+    /**
+     * 根据角色ID查找所有用户角色分配
+     */
+    List<UserBusinessUnitRole> findByRoleId(String roleId);
 }

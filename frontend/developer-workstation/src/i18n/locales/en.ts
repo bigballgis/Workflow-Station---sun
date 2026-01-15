@@ -225,9 +225,24 @@ export default {
     assigneeType: 'Assignee Type',
     assigneeLabel: 'Assignee Label',
     assigneeValue: 'Assignee Value',
+    // Direct assignment types
+    directAssignment: 'Direct Assignment',
     functionManager: 'Function Manager',
     entityManager: 'Entity Manager',
     initiator: 'Process Initiator',
+    // Current user BU role types
+    currentUserBuRole: 'Current User BU Role',
+    currentBuRole: 'Current User BU Role',
+    currentParentBuRole: 'Current User Parent BU Role',
+    // Initiator BU role types
+    initiatorBuRole: 'Initiator BU Role',
+    initiatorBuRoleOption: 'Initiator BU Role',
+    initiatorParentBuRole: 'Initiator Parent BU Role',
+    // Other role types
+    otherRoleTypes: 'Other Role Types',
+    fixedBuRole: 'Fixed BU Role',
+    buUnboundedRole: 'BU Unbounded Role',
+    // Legacy types (deprecated, kept for compatibility)
     deptOthers: 'Dept Others',
     parentDept: 'Parent Dept',
     fixedDept: 'Fixed Dept',
@@ -235,8 +250,18 @@ export default {
     user: 'Specific User',
     role: 'Specific Role',
     expression: 'Expression',
+    // Selectors
+    selectRole: 'Select Role',
+    selectBusinessUnit: 'Select Business Unit',
+    selectBusinessUnitFirst: 'Please select business unit first',
     selectDepartment: 'Select Department',
     selectVirtualGroup: 'Select Virtual Group',
+    // Tips
+    claimRequired: 'This assignment type requires task claiming',
+    selectBusinessUnitTip: 'After selecting a business unit, eligible roles will be displayed',
+    buBoundedRoleTip: 'Select a BU bounded role, task will be assigned to users with this role in the business unit',
+    buUnboundedRoleTip: 'Select a BU unbounded role, task will be assigned to virtual group members with this role',
+    fixedBuRoleTip: 'Please select a business unit first, then select an eligible role',
     candidateUsers: 'Candidate Users',
     candidateGroups: 'Candidate Groups',
     candidateUsersPlaceholder: 'Separate users with commas',

@@ -153,10 +153,17 @@ public class UserController {
         
         // 按类型筛选
         if (type != null && !type.isEmpty()) {
-            RoleType roleType = RoleType.valueOf(type);
-            roles = roles.stream()
-                    .filter(r -> r.getType() == roleType)
-                    .collect(Collectors.toList());
+            // 支持 BUSINESS 作为特殊值，返回所有业务角色（BU_BOUNDED 和 BU_UNBOUNDED）
+            if ("BUSINESS".equalsIgnoreCase(type)) {
+                roles = roles.stream()
+                        .filter(r -> r.getType().isBusinessRole())
+                        .collect(Collectors.toList());
+            } else {
+                RoleType roleType = RoleType.valueOf(type);
+                roles = roles.stream()
+                        .filter(r -> r.getType() == roleType)
+                        .collect(Collectors.toList());
+            }
         }
         
         // 转换为简单的Map格式

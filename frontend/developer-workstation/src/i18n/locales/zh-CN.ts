@@ -225,9 +225,24 @@ export default {
     assigneeType: '分配方式',
     assigneeLabel: '分配标签',
     assigneeValue: '分配值',
+    // 直接分配类型
+    directAssignment: '直接分配',
     functionManager: '职能经理',
     entityManager: '实体经理',
     initiator: '流程发起人',
+    // 基于当前人业务单元的角色分配
+    currentUserBuRole: '当前人业务单元角色',
+    currentBuRole: '当前人业务单元角色',
+    currentParentBuRole: '当前人上级业务单元角色',
+    // 基于发起人业务单元的角色分配
+    initiatorBuRole: '发起人业务单元角色',
+    initiatorBuRoleOption: '发起人业务单元角色',
+    initiatorParentBuRole: '发起人上级业务单元角色',
+    // 其他角色类型
+    otherRoleTypes: '其他角色类型',
+    fixedBuRole: '指定业务单元角色',
+    buUnboundedRole: 'BU无关型角色',
+    // 旧类型（已废弃，保留兼容）
     deptOthers: '本部门其他人',
     parentDept: '上级部门',
     fixedDept: '指定部门',
@@ -235,8 +250,18 @@ export default {
     user: '指定用户',
     role: '指定角色',
     expression: '表达式',
+    // 选择器
+    selectRole: '选择角色',
+    selectBusinessUnit: '选择业务单元',
+    selectBusinessUnitFirst: '请先选择业务单元',
     selectDepartment: '请选择部门',
     selectVirtualGroup: '请选择虚拟组',
+    // 提示
+    claimRequired: '此分配方式需要用户认领任务',
+    selectBusinessUnitTip: '选择业务单元后，将显示该业务单元的准入角色',
+    buBoundedRoleTip: '选择BU绑定型角色，任务将分配给该业务单元中拥有此角色的用户',
+    buUnboundedRoleTip: '选择BU无关型角色，任务将分配给拥有此角色的虚拟组成员',
+    fixedBuRoleTip: '请先选择业务单元，然后选择该业务单元的准入角色',
     candidateUsers: '候选用户',
     candidateGroups: '候选组',
     candidateUsersPlaceholder: '多个用户用逗号分隔',
