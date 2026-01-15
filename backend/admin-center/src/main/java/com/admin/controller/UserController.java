@@ -12,12 +12,15 @@ import com.admin.dto.response.PageResult;
 import com.admin.dto.response.UserCreateResult;
 import com.admin.dto.response.UserDetailInfo;
 import com.admin.dto.response.UserInfo;
+import com.admin.entity.BusinessUnit;
 import com.admin.entity.Role;
 import com.admin.entity.User;
 import com.admin.entity.VirtualGroupMember;
 import com.admin.enums.RoleType;
 import com.admin.repository.VirtualGroupMemberRepository;
+import com.admin.service.UserBusinessUnitService;
 import com.admin.service.UserImportService;
+import com.admin.service.UserPermissionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -45,6 +48,8 @@ public class UserController {
     private final UserImportService userImportService;
     private final RolePermissionManagerComponent rolePermissionManager;
     private final VirtualGroupMemberRepository virtualGroupMemberRepository;
+    private final UserBusinessUnitService userBusinessUnitService;
+    private final UserPermissionService userPermissionService;
     
     @PostMapping
     @Operation(summary = "创建用户", description = "创建新用户，立即激活")
@@ -66,14 +71,14 @@ public class UserController {
     @Operation(summary = "查询用户列表", description = "分页查询用户，支持关键词搜索和条件筛选")
     public ResponseEntity<PageResult<UserInfo>> listUsers(
             @RequestParam(required = false) String keyword,
-            @RequestParam(required = false) String departmentId,
+            @RequestParam(required = false) String businessUnitId,
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         
         UserQueryRequest request = UserQueryRequest.builder()
                 .keyword(keyword)
-                .departmentId(departmentId)
+                .businessUnitId(businessUnitId)
                 .status(status != null ? com.admin.enums.UserStatus.valueOf(status) : null)
                 .page(page)
                 .size(size)
@@ -139,11 +144,12 @@ public class UserController {
     }
     
     @GetMapping("/{userId}/roles")
-    @Operation(summary = "获取用户角色列表", description = "获取用户的角色列表，可按类型筛选")
+    @Operation(summary = "获取用户角色列表", description = "获取用户通过虚拟组继承的角色列表，可按类型筛选")
     public ResponseEntity<List<Map<String, Object>>> getUserRoles(
             @PathVariable String userId,
             @RequestParam(required = false) String type) {
-        List<Role> roles = rolePermissionManager.getUserRoles(userId);
+        // 通过虚拟组获取用户角色（角色只能分配给虚拟组，不能直接分配给用户）
+        List<Role> roles = userPermissionService.getUserRoles(userId);
         
         // 按类型筛选
         if (type != null && !type.isEmpty()) {
@@ -181,6 +187,27 @@ public class UserController {
                     groupInfo.put("groupDescription", m.getVirtualGroup().getDescription());
                     groupInfo.put("joinedAt", m.getJoinedAt());
                     return groupInfo;
+                })
+                .collect(Collectors.toList());
+        
+        return ResponseEntity.ok(result);
+    }
+    
+    @GetMapping("/{userId}/business-units")
+    @Operation(summary = "获取用户业务单元成员身份", description = "获取用户加入的所有业务单元")
+    public ResponseEntity<List<Map<String, Object>>> getUserBusinessUnits(
+            @PathVariable String userId) {
+        List<BusinessUnit> businessUnits = userBusinessUnitService.getUserBusinessUnits(userId);
+        
+        // 转换为简单的Map格式
+        List<Map<String, Object>> result = businessUnits.stream()
+                .map(bu -> {
+                    Map<String, Object> buInfo = new HashMap<>();
+                    buInfo.put("id", bu.getId());
+                    buInfo.put("name", bu.getName());
+                    buInfo.put("code", bu.getCode());
+                    buInfo.put("path", bu.getPath());
+                    return buInfo;
                 })
                 .collect(Collectors.toList());
         

@@ -157,7 +157,25 @@ private TableDefinition table;
 - [ ] 检查 actionIds 是否使用实际数据库 ID
 - [ ] 验证 BPMN XML 中的 ID 与数据库匹配
 
-## 9. 参考文件
+## 9. 代码清理任务
+
+**重要：开发过程中发现需要清理的代码，必须记录到清理任务表中！**
+
+清理任务表位置：#[[file:docs/TODO-cleanup.md]]
+
+### 何时记录
+- 发现废弃的 API 或组件
+- 移除某个功能后，相关代码未完全删除
+- 发现未使用的依赖或配置
+- 重构后遗留的旧代码
+
+### 记录格式
+在 `docs/TODO-cleanup.md` 中按分类添加待清理项：
+```markdown
+- [ ] `文件路径` - 清理原因说明
+```
+
+## 10. 参考文件
 
 ### 后端
 - Entity 定义：`backend/*/src/main/java/com/*/entity/`
@@ -168,3 +186,7 @@ private TableDefinition table;
 - API 定义：`frontend/*/src/api/`
 - 组件：`frontend/*/src/components/`
 - 视图：`frontend/*/src/views/`
+
+### 任务清单
+- 代码清理任务：`docs/TODO-cleanup.md`
+- 功能待办事项：`docs/TODO.md`

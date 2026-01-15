@@ -46,7 +46,6 @@
         <el-table-column prop="username" :label="t('user.username')" min-width="100" show-overflow-tooltip />
         <el-table-column prop="fullName" :label="t('user.fullName')" min-width="80" show-overflow-tooltip />
         <el-table-column prop="email" :label="t('user.email')" min-width="160" show-overflow-tooltip />
-        <el-table-column prop="departmentName" :label="t('user.department')" min-width="100" show-overflow-tooltip />
         <el-table-column prop="position" :label="t('user.position')" min-width="80" show-overflow-tooltip />
         <el-table-column :label="t('user.entityManager')" min-width="90" show-overflow-tooltip>
           <template #default="{ row }">

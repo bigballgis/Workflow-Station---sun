@@ -38,14 +38,14 @@ public class EffectiveUserResponse {
     private String employeeId;
     
     /**
-     * 部门ID
+     * 业务单元ID
      */
-    private String departmentId;
+    private String businessUnitId;
     
     /**
-     * 部门名称
+     * 业务单元名称
      */
-    private String departmentName;
+    private String businessUnitName;
     
     /**
      * 邮箱

@@ -3,6 +3,25 @@ export default {
     name: '開發工作站',
     title: '工作流平臺'
   },
+  profile: {
+    title: '個人中心',
+    businessUnits: '業務單元',
+    virtualGroups: '虛擬群組',
+    roles: '角色',
+    noBusinessUnits: '暫無業務單元',
+    noVirtualGroups: '暫無虛擬群組',
+    noRoles: '暫無角色',
+    changePassword: '修改密碼',
+    currentPassword: '當前密碼',
+    newPassword: '新密碼',
+    confirmPassword: '確認密碼',
+    currentPasswordPlaceholder: '請輸入當前密碼',
+    newPasswordPlaceholder: '請輸入新密碼',
+    confirmPasswordPlaceholder: '請再次輸入新密碼',
+    passwordMismatch: '兩次輸入的密碼不一致',
+    passwordChanged: '密碼修改成功',
+    passwordMinLength: '密碼長度不能少於6位'
+  },
   common: {
     save: '儲存',
     cancel: '取消',
@@ -267,5 +286,9 @@ export default {
     errorMessagePlaceholder: '處理失敗',
     userIdPlaceholder: '使用者ID或使用者名稱',
     roleIdPlaceholder: '角色ID或角色名稱'
+  },
+  user: {
+    username: '使用者名稱',
+    email: '電子郵件'
   }
 }

@@ -162,13 +162,16 @@ public class TaskQueryComponent {
             currentAssigneeName = currentAssignee;
         }
         
-        // 确定分配类型：如果有 currentAssignee，则为 USER 类型（包括认领后的任务）
+        // 确定分配类型：优先使用返回的 assignmentType，如果没有则根据 currentAssignee 判断
         String assignmentType = taskMap.get("assignmentType") != null ? taskMap.get("assignmentType").toString() : null;
-        if (currentAssignee != null && !currentAssignee.isEmpty()) {
-            // 有处理人的任务，分配类型应该是 USER
-            assignmentType = "USER";
-        } else if (assignmentType == null) {
-            assignmentType = "VIRTUAL_GROUP";
+        if (assignmentType == null || assignmentType.isEmpty()) {
+            if (currentAssignee != null && !currentAssignee.isEmpty()) {
+                // 有处理人但没有指定分配类型，默认为 USER
+                assignmentType = "USER";
+            } else {
+                // 没有处理人也没有分配类型，默认为 VIRTUAL_GROUP
+                assignmentType = "VIRTUAL_GROUP";
+            }
         }
         
         return TaskInfo.builder()

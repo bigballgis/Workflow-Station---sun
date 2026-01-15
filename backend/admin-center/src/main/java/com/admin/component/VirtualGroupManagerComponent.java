@@ -5,16 +5,20 @@ import com.admin.dto.request.VirtualGroupMemberRequest;
 import com.admin.dto.response.VirtualGroupInfo;
 import com.admin.dto.response.VirtualGroupMemberInfo;
 import com.admin.dto.response.VirtualGroupResult;
+import com.admin.entity.Role;
 import com.admin.entity.User;
 import com.admin.entity.VirtualGroup;
 import com.admin.entity.VirtualGroupMember;
+import com.admin.entity.VirtualGroupRole;
 import com.admin.enums.VirtualGroupType;
 import com.admin.exception.AdminBusinessException;
 import com.admin.exception.UserNotFoundException;
 import com.admin.exception.VirtualGroupNotFoundException;
+import com.admin.repository.RoleRepository;
 import com.admin.repository.UserRepository;
 import com.admin.repository.VirtualGroupMemberRepository;
 import com.admin.repository.VirtualGroupRepository;
+import com.admin.repository.VirtualGroupRoleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -40,6 +44,8 @@ public class VirtualGroupManagerComponent {
     
     private final VirtualGroupRepository virtualGroupRepository;
     private final VirtualGroupMemberRepository virtualGroupMemberRepository;
+    private final VirtualGroupRoleRepository virtualGroupRoleRepository;
+    private final RoleRepository roleRepository;
     private final UserRepository userRepository;
     private final JdbcTemplate jdbcTemplate;
 
@@ -56,18 +62,26 @@ public class VirtualGroupManagerComponent {
             throw new AdminBusinessException("NAME_EXISTS", "虚拟组名称已存在: " + request.getName());
         }
         
-        // 验证有效期
-        validateValidPeriod(request.getValidFrom(), request.getValidTo());
-        
         String groupId = UUID.randomUUID().toString();
+        
+        // 生成代码（如果未提供）
+        String code = request.getCode();
+        if (code == null || code.isBlank()) {
+            code = generateCode(request.getName());
+        }
+        
+        // 验证代码唯一性
+        if (virtualGroupRepository.existsByCode(code)) {
+            throw new AdminBusinessException("CODE_EXISTS", "虚拟组代码已存在: " + code);
+        }
         
         VirtualGroup group = VirtualGroup.builder()
                 .id(groupId)
                 .name(request.getName())
+                .code(code)
                 .type(request.getType())
                 .description(request.getDescription())
-                .validFrom(request.getValidFrom())
-                .validTo(request.getValidTo())
+                .adGroup(request.getAdGroup())
                 .status("ACTIVE")
                 .build();
         
@@ -75,6 +89,16 @@ public class VirtualGroupManagerComponent {
         
         log.info("Virtual group created successfully: {}", groupId);
         return VirtualGroupResult.success(group);
+    }
+    
+    /**
+     * 根据名称生成代码
+     */
+    private String generateCode(String name) {
+        return name.toUpperCase()
+                .replaceAll("[^A-Z0-9]", "_")
+                .replaceAll("_+", "_")
+                .replaceAll("^_|_$", "");
     }
     
     /**
@@ -87,20 +111,24 @@ public class VirtualGroupManagerComponent {
         VirtualGroup group = virtualGroupRepository.findById(groupId)
                 .orElseThrow(() -> new VirtualGroupNotFoundException(groupId));
         
+        // 系统内置虚拟组只能修改 AD Group
+        if (group.getType() == VirtualGroupType.SYSTEM) {
+            group.setAdGroup(request.getAdGroup());
+            virtualGroupRepository.save(group);
+            log.info("System virtual group AD group updated: {}", groupId);
+            return VirtualGroupResult.success(group);
+        }
+        
         // 验证名称唯一性（排除自身）
         if (!group.getName().equals(request.getName()) && 
             virtualGroupRepository.existsByName(request.getName())) {
             throw new AdminBusinessException("NAME_EXISTS", "虚拟组名称已存在: " + request.getName());
         }
         
-        // 验证有效期
-        validateValidPeriod(request.getValidFrom(), request.getValidTo());
-        
         group.setName(request.getName());
         group.setType(request.getType());
         group.setDescription(request.getDescription());
-        group.setValidFrom(request.getValidFrom());
-        group.setValidTo(request.getValidTo());
+        group.setAdGroup(request.getAdGroup());
         
         virtualGroupRepository.save(group);
         
@@ -110,6 +138,7 @@ public class VirtualGroupManagerComponent {
     
     /**
      * 删除虚拟组
+     * 系统内置虚拟组（type = SYSTEM）不可删除
      */
     @Transactional
     public void deleteVirtualGroup(String groupId) {
@@ -117,6 +146,12 @@ public class VirtualGroupManagerComponent {
         
         VirtualGroup group = virtualGroupRepository.findById(groupId)
                 .orElseThrow(() -> new VirtualGroupNotFoundException(groupId));
+        
+        // 系统内置虚拟组不可删除
+        if (group.getType() == VirtualGroupType.SYSTEM) {
+            throw new AdminBusinessException("SYSTEM_GROUP_CANNOT_DELETE", 
+                    "系统内置虚拟组不可删除: " + group.getName());
+        }
         
         // 删除所有成员关系
         virtualGroupMemberRepository.deleteByVirtualGroupId(groupId);
@@ -152,9 +187,49 @@ public class VirtualGroupManagerComponent {
         } else {
             groups = virtualGroupRepository.findAll();
         }
+        
+        // 获取所有虚拟组的角色绑定
+        List<String> groupIds = groups.stream().map(VirtualGroup::getId).collect(Collectors.toList());
+        Map<String, Role> roleBindings = getRoleBindingsForGroups(groupIds);
+        
         return groups.stream()
-                .map(VirtualGroupInfo::fromEntity)
+                .map(group -> {
+                    VirtualGroupInfo info = VirtualGroupInfo.fromEntity(group);
+                    Role boundRole = roleBindings.get(group.getId());
+                    if (boundRole != null) {
+                        info.setBoundRoleId(boundRole.getId());
+                        info.setBoundRoleName(boundRole.getName());
+                        info.setBoundRoleCode(boundRole.getCode());
+                        info.setBoundRoleType(boundRole.getType().name());
+                    }
+                    return info;
+                })
                 .collect(Collectors.toList());
+    }
+    
+    /**
+     * 获取多个虚拟组的角色绑定
+     */
+    private Map<String, Role> getRoleBindingsForGroups(List<String> groupIds) {
+        if (groupIds.isEmpty()) {
+            return Map.of();
+        }
+        
+        List<VirtualGroupRole> bindings = virtualGroupRoleRepository.findByVirtualGroupIdIn(groupIds);
+        List<String> roleIds = bindings.stream()
+                .map(VirtualGroupRole::getRoleId)
+                .distinct()
+                .collect(Collectors.toList());
+        
+        Map<String, Role> roleMap = roleRepository.findAllById(roleIds).stream()
+                .collect(Collectors.toMap(Role::getId, r -> r));
+        
+        return bindings.stream()
+                .collect(Collectors.toMap(
+                        VirtualGroupRole::getVirtualGroupId,
+                        binding -> roleMap.get(binding.getRoleId()),
+                        (a, b) -> a
+                ));
     }
     
     /**
@@ -170,7 +245,7 @@ public class VirtualGroupManagerComponent {
      * 获取有效的虚拟组列表
      */
     public List<VirtualGroupInfo> getValidGroups() {
-        return virtualGroupRepository.findValidGroups(Instant.now()).stream()
+        return virtualGroupRepository.findValidGroups().stream()
                 .map(VirtualGroupInfo::fromEntity)
                 .collect(Collectors.toList());
     }
@@ -233,6 +308,7 @@ public class VirtualGroupManagerComponent {
     
     /**
      * 移除成员
+     * System Administrators 组必须至少保留一个成员
      */
     @Transactional
     public VirtualGroupResult removeMember(String groupId, String userId) {
@@ -244,6 +320,15 @@ public class VirtualGroupManagerComponent {
         VirtualGroupMember member = virtualGroupMemberRepository
                 .findByVirtualGroupIdAndUserId(groupId, userId)
                 .orElseThrow(() -> new AdminBusinessException("MEMBER_NOT_FOUND", "用户不是该虚拟组成员"));
+        
+        // System Administrators 组必须至少保留一个成员
+        if (group.getType() == VirtualGroupType.SYSTEM && "SYS_ADMINS".equals(group.getCode())) {
+            long memberCount = virtualGroupMemberRepository.countByVirtualGroupId(groupId);
+            if (memberCount <= 1) {
+                throw new AdminBusinessException("LAST_ADMIN_CANNOT_REMOVE", 
+                        "System Administrators 组必须至少保留一个成员");
+            }
+        }
         
         virtualGroupMemberRepository.delete(member);
         
@@ -259,15 +344,15 @@ public class VirtualGroupManagerComponent {
             throw new VirtualGroupNotFoundException(groupId);
         }
         
-        // 获取部门名称映射
-        Map<String, String> deptNameMap = getDepartmentNameMap();
+        // 获取业务单元名称映射
+        Map<String, String> businessUnitNameMap = getBusinessUnitNameMap();
         
         return virtualGroupMemberRepository.findByVirtualGroupId(groupId).stream()
                 .map(member -> {
                     VirtualGroupMemberInfo info = VirtualGroupMemberInfo.fromEntity(member);
-                    // 填充部门名称
-                    if (info.getDepartmentId() != null) {
-                        info.setDepartmentName(deptNameMap.get(info.getDepartmentId()));
+                    // 填充业务单元名称
+                    if (info.getBusinessUnitId() != null) {
+                        info.setBusinessUnitName(businessUnitNameMap.get(info.getBusinessUnitId()));
                     }
                     return info;
                 })
@@ -275,16 +360,16 @@ public class VirtualGroupManagerComponent {
     }
     
     /**
-     * 获取部门ID到名称的映射
+     * 获取业务单元ID到名称的映射
      */
-    private Map<String, String> getDepartmentNameMap() {
+    private Map<String, String> getBusinessUnitNameMap() {
         try {
             return jdbcTemplate.query(
-                "SELECT id, name FROM sys_departments",
+                "SELECT id, name FROM sys_business_units",
                 (rs, rowNum) -> Map.entry(rs.getString("id"), rs.getString("name"))
             ).stream().collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (a, b) -> a));
         } catch (Exception e) {
-            log.warn("Failed to get department names", e);
+            log.warn("Failed to get business unit names", e);
             return Map.of();
         }
     }
@@ -362,43 +447,11 @@ public class VirtualGroupManagerComponent {
     }
     
     /**
-     * 处理过期的虚拟组
-     */
-    @Transactional
-    public int processExpiredGroups() {
-        log.info("Processing expired virtual groups");
-        
-        List<VirtualGroup> expiredGroups = virtualGroupRepository.findExpiredGroups(Instant.now());
-        
-        for (VirtualGroup group : expiredGroups) {
-            if ("ACTIVE".equals(group.getStatus())) {
-                group.setStatus("EXPIRED");
-                virtualGroupRepository.save(group);
-                log.info("Virtual group marked as expired: {}", group.getId());
-            }
-        }
-        
-        log.info("Processed {} expired virtual groups", expiredGroups.size());
-        return expiredGroups.size();
-    }
-    
-    /**
      * 获取用户所属的虚拟组
      */
     public List<VirtualGroupInfo> getUserGroups(String userId) {
         return virtualGroupRepository.findByUserId(userId).stream()
                 .map(VirtualGroupInfo::fromEntity)
                 .collect(Collectors.toList());
-    }
-    
-    // ==================== 私有方法 ====================
-    
-    /**
-     * 验证有效期
-     */
-    private void validateValidPeriod(Instant validFrom, Instant validTo) {
-        if (validFrom != null && validTo != null && validFrom.isAfter(validTo)) {
-            throw new AdminBusinessException("INVALID_PERIOD", "有效期开始时间不能晚于结束时间");
-        }
     }
 }

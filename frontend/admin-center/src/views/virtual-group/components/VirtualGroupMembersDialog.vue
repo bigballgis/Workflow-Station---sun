@@ -6,11 +6,10 @@
     
     <el-table :data="members" v-loading="loading" max-height="400">
       <el-table-column prop="employeeId" :label="t('user.employeeId')" width="100" />
-      <el-table-column prop="fullName" :label="t('user.fullName')" width="100" />
+      <el-table-column prop="fullName" :label="t('user.fullName')" width="120" />
       <el-table-column prop="username" :label="t('user.username')" width="120" />
-      <el-table-column prop="departmentName" :label="t('user.department')" width="120" />
-      <el-table-column prop="email" :label="t('user.email')" width="180" />
-      <el-table-column prop="role" :label="t('user.role')" width="80">
+      <el-table-column prop="email" :label="t('user.email')" width="200" />
+      <el-table-column prop="role" :label="t('user.role')" width="100">
         <template #default="{ row }">
           <el-tag :type="row.role === 'LEADER' ? 'warning' : 'info'" size="small">
             {{ row.role === 'LEADER' ? t('organization.leader') : t('role.members') }}

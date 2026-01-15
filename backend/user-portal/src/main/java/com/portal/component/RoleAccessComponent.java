@@ -71,7 +71,8 @@ public class RoleAccessComponent {
      */
     public List<Map<String, Object>> getUserBusinessRoles(String userId) {
         try {
-            String url = adminCenterUrl + "/api/v1/admin/users/" + userId + "/roles?type=BUSINESS";
+            // Get all user roles (no type filter - let frontend handle filtering)
+            String url = adminCenterUrl + "/api/v1/admin/users/" + userId + "/roles";
             ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
@@ -181,6 +182,27 @@ public class RoleAccessComponent {
             
         } catch (Exception e) {
             log.error("Failed to get department {}: {}", departmentId, e.getMessage());
+            return null;
+        }
+    }
+    
+    /**
+     * 获取用户详情
+     */
+    public Map<String, Object> getUserById(String userId) {
+        try {
+            String url = adminCenterUrl + "/api/v1/admin/users/" + userId;
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<Map<String, Object>>() {}
+            );
+            
+            return response.getBody();
+            
+        } catch (Exception e) {
+            log.error("Failed to get user {}: {}", userId, e.getMessage());
             return null;
         }
     }

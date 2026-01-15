@@ -25,7 +25,7 @@ public class UserUpdateRequest {
     @Size(max = 50, message = "工号长度不能超过50")
     private String employeeId;
     
-    private String departmentId;
+    private String businessUnitId;
     
     @Size(max = 100, message = "职位长度不能超过100")
     private String position;

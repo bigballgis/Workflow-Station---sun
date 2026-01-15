@@ -82,12 +82,17 @@ ALTER TABLE sys_users ADD CONSTRAINT fk_user_department
 
 -- =====================================================
 -- 3. Roles Table (sys_roles)
+-- Role types:
+--   ADMIN: 管理角色，用于 Admin Center 管理功能
+--   DEVELOPER: 开发角色，用于 Developer Workstation 功能权限控制
+--   BU_BOUNDED: 业务单元绑定型角色，需要配合业务单元使用才能生效
+--   BU_UNBOUNDED: 业务单元无关型角色，用户获得后直接拥有权限
 -- =====================================================
 CREATE TABLE IF NOT EXISTS sys_roles (
     id VARCHAR(64) PRIMARY KEY,
     code VARCHAR(50) NOT NULL UNIQUE,
     name VARCHAR(100) NOT NULL,
-    type VARCHAR(20) NOT NULL DEFAULT 'BUSINESS',
+    type VARCHAR(20) NOT NULL DEFAULT 'BU_UNBOUNDED',
     description TEXT,
     status VARCHAR(20) DEFAULT 'ACTIVE',
     is_system BOOLEAN DEFAULT false,
@@ -95,7 +100,7 @@ CREATE TABLE IF NOT EXISTS sys_roles (
     created_by VARCHAR(64),
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_by VARCHAR(64),
-    CONSTRAINT chk_role_type CHECK (type IN ('ADMIN', 'DEVELOPER', 'BUSINESS'))
+    CONSTRAINT chk_role_type CHECK (type IN ('ADMIN', 'DEVELOPER', 'BU_BOUNDED', 'BU_UNBOUNDED'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_sys_roles_code ON sys_roles(code);

@@ -69,6 +69,30 @@ const routes: RouteRecordRaw[] = [
         meta: { titleKey: 'menu.permissions', icon: 'Key' }
       },
       {
+        path: 'my-requests',
+        name: 'MyRequests',
+        component: () => import('@/views/permissions/my-requests.vue'),
+        meta: { titleKey: 'menu.myRequests', icon: 'Document' }
+      },
+      {
+        path: 'approvals',
+        name: 'Approvals',
+        component: () => import('@/views/permissions/approvals.vue'),
+        meta: { titleKey: 'menu.approvals', icon: 'Checked' }
+      },
+      {
+        path: 'member-management',
+        name: 'MemberManagement',
+        component: () => import('@/views/permissions/member-management.vue'),
+        meta: { titleKey: 'menu.memberManagement', icon: 'UserFilled' }
+      },
+      {
+        path: 'exit-role',
+        name: 'ExitRole',
+        component: () => import('@/views/permissions/exit-role.vue'),
+        meta: { titleKey: 'menu.exitRole', icon: 'SwitchButton' }
+      },
+      {
         path: 'notifications',
         name: 'Notifications',
         component: () => import('@/views/notifications/index.vue'),
@@ -79,6 +103,12 @@ const routes: RouteRecordRaw[] = [
         name: 'Settings',
         component: () => import('@/views/settings/index.vue'),
         meta: { titleKey: 'menu.settings', icon: 'Setting' }
+      },
+      {
+        path: 'profile',
+        name: 'Profile',
+        component: () => import('@/views/profile/index.vue'),
+        meta: { titleKey: 'profile.title', icon: 'User', hidden: true }
       }
     ]
   },

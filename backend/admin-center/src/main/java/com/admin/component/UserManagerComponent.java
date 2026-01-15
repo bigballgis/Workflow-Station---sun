@@ -11,7 +11,7 @@ import com.admin.entity.PasswordHistory;
 import com.admin.entity.User;
 import com.admin.enums.UserStatus;
 import com.admin.exception.*;
-import com.admin.repository.DepartmentRepository;
+import com.admin.repository.BusinessUnitRepository;
 import com.admin.repository.PasswordHistoryRepository;
 import com.admin.repository.UserRepository;
 import com.admin.service.AuditService;
@@ -43,7 +43,7 @@ import java.util.regex.Pattern;
 public class UserManagerComponent {
     
     private final UserRepository userRepository;
-    private final DepartmentRepository departmentRepository;
+    private final BusinessUnitRepository businessUnitRepository;
     private final PasswordHistoryRepository passwordHistoryRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuditService auditService;
@@ -80,7 +80,7 @@ public class UserManagerComponent {
                 .email(request.getEmail())
                 .fullName(request.getFullName())
                 .employeeId(request.getEmployeeId())
-                .departmentId(request.getDepartmentId())
+                .businessUnitId(request.getBusinessUnitId())
                 .position(request.getPosition())
                 .status(UserStatus.ACTIVE)
                 .mustChangePassword(true)
@@ -113,7 +113,7 @@ public class UserManagerComponent {
         User oldUser = User.builder()
                 .email(user.getEmail())
                 .fullName(user.getFullName())
-                .departmentId(user.getDepartmentId())
+                .businessUnitId(user.getBusinessUnitId())
                 .position(user.getPosition())
                 .build();
         
@@ -131,8 +131,8 @@ public class UserManagerComponent {
         if (request.getEmployeeId() != null) {
             user.setEmployeeId(request.getEmployeeId());
         }
-        if (request.getDepartmentId() != null) {
-            user.setDepartmentId(request.getDepartmentId());
+        if (request.getBusinessUnitId() != null) {
+            user.setBusinessUnitId(request.getBusinessUnitId());
         }
         if (request.getPosition() != null) {
             user.setPosition(request.getPosition());
@@ -351,7 +351,7 @@ public class UserManagerComponent {
                 Sort.by(Sort.Direction.DESC, "createdAt"));
         
         Page<User> users = userRepository.findByConditions(
-                request.getDepartmentId(),
+                request.getBusinessUnitId(),
                 request.getStatus(),
                 request.getKeyword(),
                 pageable);
@@ -359,10 +359,10 @@ public class UserManagerComponent {
         return users.map(user -> {
             UserInfo info = UserInfo.fromEntity(user);
             
-            // 填充部门名称
-            if (user.getDepartmentId() != null) {
-                departmentRepository.findById(user.getDepartmentId())
-                        .ifPresent(dept -> info.setDepartmentName(dept.getName()));
+            // 填充业务单元名称
+            if (user.getBusinessUnitId() != null) {
+                businessUnitRepository.findById(user.getBusinessUnitId())
+                        .ifPresent(unit -> info.setBusinessUnitName(unit.getName()));
             }
             
             // 填充实体管理者名称

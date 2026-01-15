@@ -177,10 +177,8 @@ public class VirtualGroupTaskVisibilityProperties {
         return VirtualGroup.builder()
                 .id(groupId)
                 .name("Test Group " + groupId)
-                .type(VirtualGroupType.PROJECT)
+                .type(VirtualGroupType.CUSTOM)
                 .status("ACTIVE")
-                .validFrom(Instant.now().minusSeconds(3600))
-                .validTo(Instant.now().plusSeconds(3600))
                 .members(new HashSet<>())
                 .build();
     }
@@ -189,10 +187,8 @@ public class VirtualGroupTaskVisibilityProperties {
         return VirtualGroup.builder()
                 .id(groupId)
                 .name("Expired Group " + groupId)
-                .type(VirtualGroupType.TEMPORARY)
-                .status("ACTIVE")
-                .validFrom(Instant.now().minusSeconds(7200))
-                .validTo(Instant.now().minusSeconds(3600))
+                .type(VirtualGroupType.CUSTOM)
+                .status("INACTIVE")
                 .members(new HashSet<>())
                 .build();
     }

@@ -153,8 +153,8 @@ public class RoleAssignmentComponent {
                             .username(resolvedUser.getUsername())
                             .displayName(resolvedUser.getDisplayName())
                             .employeeId(resolvedUser.getEmployeeId())
-                            .departmentId(resolvedUser.getDepartmentId())
-                            .departmentName(resolvedUser.getDepartmentName())
+                            .businessUnitId(resolvedUser.getDepartmentId())
+                            .businessUnitName(resolvedUser.getDepartmentName())
                             .email(resolvedUser.getEmail())
                             .sources(new ArrayList<>(List.of(source)))
                             .build();

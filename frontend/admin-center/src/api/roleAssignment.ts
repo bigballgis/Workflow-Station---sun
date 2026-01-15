@@ -1,7 +1,7 @@
 import { get, post, del } from './request'
 
 /** 分配目标类型 */
-export type AssignmentTargetType = 'USER' | 'DEPARTMENT' | 'DEPARTMENT_HIERARCHY' | 'VIRTUAL_GROUP'
+export type AssignmentTargetType = 'USER' | 'BUSINESS_UNIT' | 'BUSINESS_UNIT_HIERARCHY' | 'VIRTUAL_GROUP'
 
 /** 角色分配记录 */
 export interface RoleAssignment {
@@ -33,8 +33,8 @@ export interface EffectiveUser {
   username: string
   displayName: string
   employeeId?: string
-  departmentId?: string
-  departmentName?: string
+  businessUnitId?: string
+  businessUnitName?: string
   email?: string
   sources: RoleSource[]
 }
@@ -72,8 +72,8 @@ export const roleAssignmentApi = {
 export const getTargetTypeText = (type: AssignmentTargetType): string => {
   const texts: Record<AssignmentTargetType, string> = {
     USER: '用户',
-    DEPARTMENT: '部门',
-    DEPARTMENT_HIERARCHY: '部门及下级',
+    BUSINESS_UNIT: '业务单元',
+    BUSINESS_UNIT_HIERARCHY: '业务单元及下级',
     VIRTUAL_GROUP: '虚拟组'
   }
   return texts[type] || type
@@ -83,8 +83,8 @@ export const getTargetTypeText = (type: AssignmentTargetType): string => {
 export const getTargetTypeTagType = (type: AssignmentTargetType): string => {
   const types: Record<AssignmentTargetType, string> = {
     USER: 'primary',
-    DEPARTMENT: 'success',
-    DEPARTMENT_HIERARCHY: 'warning',
+    BUSINESS_UNIT: 'success',
+    BUSINESS_UNIT_HIERARCHY: 'warning',
     VIRTUAL_GROUP: 'info'
   }
   return types[type] || 'info'

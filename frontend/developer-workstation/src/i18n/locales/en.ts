@@ -3,6 +3,25 @@ export default {
     name: 'Developer Workstation',
     title: 'Workflow Platform'
   },
+  profile: {
+    title: 'Profile',
+    businessUnits: 'Business Units',
+    virtualGroups: 'Virtual Groups',
+    roles: 'Roles',
+    noBusinessUnits: 'No business units',
+    noVirtualGroups: 'No virtual groups',
+    noRoles: 'No roles',
+    changePassword: 'Change Password',
+    currentPassword: 'Current Password',
+    newPassword: 'New Password',
+    confirmPassword: 'Confirm Password',
+    currentPasswordPlaceholder: 'Enter current password',
+    newPasswordPlaceholder: 'Enter new password',
+    confirmPasswordPlaceholder: 'Enter new password again',
+    passwordMismatch: 'Passwords do not match',
+    passwordChanged: 'Password changed successfully',
+    passwordMinLength: 'Password must be at least 6 characters'
+  },
   common: {
     save: 'Save',
     cancel: 'Cancel',
@@ -267,5 +286,9 @@ export default {
     errorMessagePlaceholder: 'Processing failed',
     userIdPlaceholder: 'User ID or username',
     roleIdPlaceholder: 'Role ID or role name'
+  },
+  user: {
+    username: 'Username',
+    email: 'Email'
   }
 }

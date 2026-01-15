@@ -3,6 +3,25 @@ export default {
     name: '开发工作站',
     title: '工作流平台'
   },
+  profile: {
+    title: '个人中心',
+    businessUnits: '业务单元',
+    virtualGroups: '虚拟组',
+    roles: '角色',
+    noBusinessUnits: '暂无业务单元',
+    noVirtualGroups: '暂无虚拟组',
+    noRoles: '暂无角色',
+    changePassword: '修改密码',
+    currentPassword: '当前密码',
+    newPassword: '新密码',
+    confirmPassword: '确认密码',
+    currentPasswordPlaceholder: '请输入当前密码',
+    newPasswordPlaceholder: '请输入新密码',
+    confirmPasswordPlaceholder: '请再次输入新密码',
+    passwordMismatch: '两次输入的密码不一致',
+    passwordChanged: '密码修改成功',
+    passwordMinLength: '密码长度不能少于6位'
+  },
   common: {
     save: '保存',
     cancel: '取消',
@@ -267,5 +286,9 @@ export default {
     errorMessagePlaceholder: '处理失败',
     userIdPlaceholder: '用户ID或用户名',
     roleIdPlaceholder: '角色ID或角色名'
+  },
+  user: {
+    username: '用户名',
+    email: '邮箱'
   }
 }

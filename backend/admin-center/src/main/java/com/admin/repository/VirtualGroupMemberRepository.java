@@ -81,4 +81,17 @@ public interface VirtualGroupMemberRepository extends JpaRepository<VirtualGroup
      */
     @Query("SELECT m.virtualGroup.id FROM VirtualGroupMember m WHERE m.user.id = :userId")
     List<String> findVirtualGroupIdsByUserId(@Param("userId") String userId);
+    
+    /**
+     * 删除指定虚拟组和用户的成员关系
+     */
+    @Modifying
+    @Query("DELETE FROM VirtualGroupMember m WHERE m.virtualGroup.id = :groupId AND m.user.id = :userId")
+    void deleteByVirtualGroupIdAndUserId(@Param("groupId") String groupId, @Param("userId") String userId);
+    
+    /**
+     * 根据虚拟组ID查找成员（包含用户信息）
+     */
+    @Query("SELECT m FROM VirtualGroupMember m LEFT JOIN FETCH m.user WHERE m.virtualGroup.id = :groupId")
+    List<VirtualGroupMember> findByVirtualGroupIdWithUser(@Param("groupId") String groupId);
 }

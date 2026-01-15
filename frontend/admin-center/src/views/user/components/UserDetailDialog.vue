@@ -3,7 +3,7 @@
     :model-value="modelValue" 
     @update:model-value="$emit('update:modelValue', $event)" 
     :title="t('common.view')" 
-    width="700px"
+    width="750px"
     destroy-on-close
   >
     <div v-loading="loading" class="user-detail">
@@ -13,7 +13,6 @@
           <el-descriptions-item :label="t('user.fullName')">{{ user.fullName }}</el-descriptions-item>
           <el-descriptions-item :label="t('user.email')">{{ user.email }}</el-descriptions-item>
           <el-descriptions-item :label="t('user.employeeId')">{{ user.employeeId || '-' }}</el-descriptions-item>
-          <el-descriptions-item :label="t('user.department')">{{ user.departmentName || '-' }}</el-descriptions-item>
           <el-descriptions-item :label="t('user.position')">{{ user.position || '-' }}</el-descriptions-item>
           <el-descriptions-item :label="t('user.status')">
             <el-tag :type="statusType(user.status)" size="small">{{ statusText(user.status) }}</el-tag>
@@ -25,6 +24,29 @@
           <el-descriptions-item :label="t('user.lastLoginIp')" :span="2">{{ user.lastLoginIp || '-' }}</el-descriptions-item>
         </el-descriptions>
 
+        <!-- 虚拟组成员身份（角色通过虚拟组获取） -->
+        <div class="section-title">{{ t('user.virtualGroups') }}</div>
+        <el-table :data="virtualGroups" border size="small" v-if="virtualGroups.length">
+          <el-table-column prop="groupName" :label="t('virtualGroup.name')" />
+          <el-table-column prop="groupDescription" :label="t('common.description')" />
+          <el-table-column prop="joinedAt" :label="t('user.joinedAt')" width="170">
+            <template #default="{ row }">{{ formatDate(row.joinedAt) }}</template>
+          </el-table-column>
+        </el-table>
+        <el-empty v-else :description="t('user.noVirtualGroups')" :image-size="60" />
+        <div class="section-hint">{{ t('user.virtualGroupHint') }}</div>
+
+        <!-- 业务单元成员身份 -->
+        <div class="section-title">{{ t('user.businessUnits') }}</div>
+        <el-table :data="businessUnits" border size="small" v-if="businessUnits.length">
+          <el-table-column prop="name" :label="t('businessUnit.name')" />
+          <el-table-column prop="code" :label="t('businessUnit.code')" width="150" />
+          <el-table-column prop="path" :label="t('businessUnit.path')" show-overflow-tooltip />
+        </el-table>
+        <el-empty v-else :description="t('user.noBusinessUnits')" :image-size="60" />
+        <div class="section-hint">{{ t('user.businessUnitHint') }}</div>
+
+        <!-- 角色信息（通过虚拟组获取） -->
         <div class="section-title">{{ t('user.roleInfo') }}</div>
         <el-table :data="user.roles" border size="small" v-if="user.roles?.length">
           <el-table-column prop="roleName" :label="t('user.roleName')" />
@@ -33,6 +55,7 @@
         </el-table>
         <el-empty v-else :description="t('user.noRoles')" :image-size="60" />
 
+        <!-- 登录历史 -->
         <div class="section-title">{{ t('user.loginHistory') }}</div>
         <el-table :data="user.loginHistory" border size="small" max-height="200" v-if="user.loginHistory?.length">
           <el-table-column prop="loginTime" :label="t('user.loginTime')" width="170">
@@ -59,10 +82,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue'
+import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { userApi, type UserDetail } from '@/api/user'
+import { userApi, type UserDetail, type UserBusinessUnitMembership, type UserVirtualGroupMembership } from '@/api/user'
 
 const { t } = useI18n()
 
@@ -71,9 +94,11 @@ const emit = defineEmits(['update:modelValue'])
 
 const loading = ref(false)
 const user = ref<UserDetail | null>(null)
+const businessUnits = ref<UserBusinessUnitMembership[]>([])
+const virtualGroups = ref<UserVirtualGroupMembership[]>([])
 
-const statusType = (status: string) => {
-  const map: Record<string, string> = { ACTIVE: 'success', DISABLED: 'info', LOCKED: 'danger', PENDING: 'warning' }
+const statusType = (status: string): 'success' | 'info' | 'danger' | 'warning' => {
+  const map: Record<string, 'success' | 'info' | 'danger' | 'warning'> = { ACTIVE: 'success', DISABLED: 'info', LOCKED: 'danger', PENDING: 'warning' }
   return map[status] || 'info'
 }
 
@@ -98,7 +123,14 @@ watch(() => props.modelValue, async (val) => {
   if (val && props.userId) {
     loading.value = true
     try {
-      user.value = await userApi.getById(props.userId)
+      const [userData, buData, vgData] = await Promise.all([
+        userApi.getById(props.userId),
+        userApi.getBusinessUnits(props.userId),
+        userApi.getVirtualGroups(props.userId)
+      ])
+      user.value = userData
+      businessUnits.value = buData
+      virtualGroups.value = vgData
     } catch (error: any) {
       ElMessage.error(error.message || t('common.failed'))
     } finally {
@@ -135,6 +167,12 @@ const handleResetPassword = async () => {
     margin: 20px 0 12px;
     padding-left: 8px;
     border-left: 3px solid #DB0011;
+  }
+  .section-hint {
+    font-size: 12px;
+    color: #909399;
+    margin-top: 8px;
+    padding-left: 8px;
   }
 }
 </style>
