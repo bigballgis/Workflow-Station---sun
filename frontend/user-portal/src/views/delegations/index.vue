@@ -24,7 +24,7 @@
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="200">
+            <el-table-column :label="t('common.actions')" width="200">
               <template #default="{ row }">
                 <el-button v-if="row.status === 'ACTIVE'" size="small" @click="handleSuspend(row)">
                   {{ t('delegation.suspend') }}
@@ -43,18 +43,18 @@
 
       <el-tab-pane :label="t('delegation.proxyTasks')" name="proxy">
         <div class="portal-card">
-          <el-empty description="暂无代理任务" />
+          <el-empty :description="t('delegation.noProxyTasks')" />
         </div>
       </el-tab-pane>
 
       <el-tab-pane :label="t('delegation.auditRecords')" name="audit">
         <div class="portal-card">
           <el-table :data="auditList" stripe>
-            <el-table-column prop="operationType" label="操作类型" width="150" />
-            <el-table-column prop="delegatorId" label="委托人" width="120" />
-            <el-table-column prop="delegateId" label="被委托人" width="120" />
-            <el-table-column prop="operationResult" label="结果" width="100" />
-            <el-table-column prop="createdAt" label="时间" width="160" />
+            <el-table-column prop="operationType" :label="t('delegation.operationType')" width="150" />
+            <el-table-column prop="delegatorId" :label="t('delegation.delegator')" width="120" />
+            <el-table-column prop="delegateId" :label="t('delegation.delegate')" width="120" />
+            <el-table-column prop="operationResult" :label="t('delegation.result')" width="100" />
+            <el-table-column prop="createdAt" :label="t('delegation.time')" width="160" />
           </el-table>
         </div>
       </el-tab-pane>
@@ -64,9 +64,9 @@
     <el-dialog v-model="createDialogVisible" :title="t('delegation.create')" width="500px">
       <el-form :model="createForm" label-width="100px">
         <el-form-item :label="t('delegation.delegateTo')">
-          <el-select v-model="createForm.delegateId" filterable placeholder="请选择" style="width: 100%;">
-            <el-option label="李四" value="user_2" />
-            <el-option label="王五" value="user_3" />
+          <el-select v-model="createForm.delegateId" filterable :placeholder="t('delegation.selectDelegate')" style="width: 100%;">
+            <el-option label="Li Si" value="user_2" />
+            <el-option label="Wang Wu" value="user_3" />
           </el-select>
         </el-form-item>
         <el-form-item :label="t('delegation.delegationType')">
@@ -139,16 +139,16 @@ const showCreateDialog = () => {
 
 const submitCreate = async () => {
   if (!createForm.delegateId) {
-    ElMessage.warning('请选择被委托人')
+    ElMessage.warning(t('delegation.selectDelegate'))
     return
   }
   try {
     await createDelegationRule(createForm as any)
-    ElMessage.success('创建成功')
+    ElMessage.success(t('delegation.createSuccess'))
     createDialogVisible.value = false
     loadDelegations()
   } catch (error) {
-    ElMessage.success('创建成功')
+    ElMessage.success(t('delegation.createSuccess'))
     createDialogVisible.value = false
   }
 }
@@ -156,33 +156,33 @@ const submitCreate = async () => {
 const handleSuspend = async (row: any) => {
   try {
     await suspendDelegationRule(row.id)
-    ElMessage.success('暂停成功')
+    ElMessage.success(t('delegation.suspendSuccess'))
     row.status = 'SUSPENDED'
   } catch (error) {
     row.status = 'SUSPENDED'
-    ElMessage.success('暂停成功')
+    ElMessage.success(t('delegation.suspendSuccess'))
   }
 }
 
 const handleResume = async (row: any) => {
   try {
     await resumeDelegationRule(row.id)
-    ElMessage.success('恢复成功')
+    ElMessage.success(t('delegation.resumeSuccess'))
     row.status = 'ACTIVE'
   } catch (error) {
     row.status = 'ACTIVE'
-    ElMessage.success('恢复成功')
+    ElMessage.success(t('delegation.resumeSuccess'))
   }
 }
 
 const handleDelete = async (row: any) => {
-  await ElMessageBox.confirm('确定要删除该委托规则吗？', '提示', { type: 'warning' })
+  await ElMessageBox.confirm(t('delegation.deleteConfirm'), t('common.info'), { type: 'warning' })
   try {
     await deleteDelegationRule(row.id)
-    ElMessage.success('删除成功')
+    ElMessage.success(t('delegation.deleteSuccess'))
     loadDelegations()
   } catch (error) {
-    ElMessage.success('删除成功')
+    ElMessage.success(t('delegation.deleteSuccess'))
   }
 }
 

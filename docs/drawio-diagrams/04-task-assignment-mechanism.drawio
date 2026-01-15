@@ -1,0 +1,198 @@
+﻿<mxfile host="app.diagrams.net" modified="2026-01-14T00:00:00.000Z" agent="5.0" version="21.6.5" etag="drawio" type="device">
+  <diagram name="Task Assignment Mechanism" id="task-assignment">
+    <mxGraphModel dx="1422" dy="794" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1400" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        
+        <!-- Title -->
+        <mxCell id="title" value="Task Assignment Mechanism" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=24;fontStyle=1;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="400" y="20" width="600" height="40" as="geometry"/>
+        </mxCell>
+        
+        <!-- Start Event -->
+        <mxCell id="start" value="Process Start" style="ellipse;whiteSpace=wrap;html=1;fillColor=#E8F5E9;strokeColor=#388E3C;fontSize=12;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="100" y="100" width="120" height="60" as="geometry"/>
+        </mxCell>
+        
+        <!-- Set Initiator -->
+        <mxCell id="setInit" value="Set initiator Variable" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#BBDEFB;strokeColor=#0277BD;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="100" y="200" width="120" height="60" as="geometry"/>
+        </mxCell>
+        
+        <!-- Task Created -->
+        <mxCell id="taskCreated" value="Task Created Event" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFE0B2;strokeColor=#F57C00;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="100" y="300" width="120" height="60" as="geometry"/>
+        </mxCell>
+        
+        <!-- Listener -->
+        <mxCell id="listener" value="TaskAssignmentListener&#xa;Listen TASK_CREATED" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF9C4;strokeColor=#F57F17;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="300" y="300" width="160" height="60" as="geometry"/>
+        </mxCell>
+        
+        <!-- Read BPMN -->
+        <mxCell id="readBpmn" value="Read BPMN Properties&#xa;assigneeType&#xa;assigneeValue" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E1BEE7;strokeColor=#7B1FA2;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="540" y="300" width="160" height="60" as="geometry"/>
+        </mxCell>
+        
+        <!-- Resolver -->
+        <mxCell id="resolver" value="TaskAssigneeResolver&#xa;Resolve Assignee" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8BBD0;strokeColor=#C2185B;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="780" y="300" width="160" height="60" as="geometry"/>
+        </mxCell>
+        
+        <!-- Decision -->
+        <mxCell id="decision" value="Assignment Type?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#FFF4E6;strokeColor=#F57C00;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1020" y="280" width="140" height="100" as="geometry"/>
+        </mxCell>
+        
+        <!-- Direct Assignment Types -->
+        <mxCell id="funcMgr" value="FUNCTION_MANAGER&#xa;Query Function Manager" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#388E3C;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1020" y="100" width="140" height="50" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="entityMgr" value="ENTITY_MANAGER&#xa;Query Entity Manager" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#388E3C;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1200" y="100" width="140" height="50" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="initiator" value="INITIATOR&#xa;Get Process Initiator" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#388E3C;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1020" y="180" width="140" height="50" as="geometry"/>
+        </mxCell>
+        
+        <!-- Candidate Assignment Types -->
+        <mxCell id="deptOthers" value="DEPT_OTHERS&#xa;Query Department Others" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFCCBC;strokeColor=#E64A19;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1020" y="420" width="140" height="50" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="parentDept" value="PARENT_DEPT&#xa;Query Parent Department" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFCCBC;strokeColor=#E64A19;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1200" y="420" width="140" height="50" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="fixedDept" value="FIXED_DEPT&#xa;Query Fixed Department" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFCCBC;strokeColor=#E64A19;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1020" y="500" width="140" height="50" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="virtualGroup" value="VIRTUAL_GROUP&#xa;Query Virtual Group" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFCCBC;strokeColor=#E64A19;fontSize=10;" vertex="1" parent="1">
+          <mxGeometry x="1200" y="500" width="140" height="50" as="geometry"/>
+        </mxCell>
+        
+        <!-- Direct Assign -->
+        <mxCell id="directAssign" value="Direct Assignment&#xa;setAssignee()" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#388E3C;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1020" y="600" width="140" height="60" as="geometry"/>
+        </mxCell>
+        
+        <!-- Candidate Assign -->
+        <mxCell id="candidateAssign" value="Candidate Assignment&#xa;setCandidateUsers()&#xa;setCandidateGroup()" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFCCBC;strokeColor=#E64A19;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1200" y="600" width="160" height="70" as="geometry"/>
+        </mxCell>
+        
+        <!-- Task Ready -->
+        <mxCell id="taskReady" value="Task Ready&#xa;Direct Processing" style="ellipse;whiteSpace=wrap;html=1;fillColor=#C8E6C9;strokeColor=#388E3C;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1020" y="720" width="140" height="60" as="geometry"/>
+        </mxCell>
+        
+        <!-- Task Claim -->
+        <mxCell id="taskClaim" value="Task Pending&#xa;Need Claim" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFCCBC;strokeColor=#E64A19;fontSize=11;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry x="1200" y="720" width="140" height="60" as="geometry"/>
+        </mxCell>
+        
+        <!-- Connection Lines -->
+        <mxCell id="edge1" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#666666;strokeWidth=2;" edge="1" parent="1" source="start" target="setInit">
+          <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="edge2" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#666666;strokeWidth=2;" edge="1" parent="1" source="setInit" target="taskCreated">
+          <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="edge3" value="" style="endArrow=classic;html=1;rounded=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#666666;strokeWidth=2;" edge="1" parent="1" source="taskCreated" target="listener">
+          <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="edge4" value="" style="endArrow=classic;html=1;rounded=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#666666;strokeWidth=2;" edge="1" parent="1" source="listener" target="readBpmn">
+          <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="edge5" value="" style="endArrow=classic;html=1;rounded=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#666666;strokeWidth=2;" edge="1" parent="1" source="readBpmn" target="resolver">
+          <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="edge6" value="" style="endArrow=classic;html=1;rounded=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#666666;strokeWidth=2;" edge="1" parent="1" source="resolver" target="decision">
+          <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+        </mxCell>
+        
+        <!-- Decision to Types -->
+        <mxCell id="edge7" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;strokeColor=#388E3C;strokeWidth=1;" edge="1" parent="1" source="decision" target="funcMgr">
+          <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="edge8" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.75;exitY=0;exitDx=0;exitDy=0;entryX=0;entryY=1;entryDx=0;entryDy=0;strokeColor=#388E3C;strokeWidth=1;" edge="1" parent="1" source="decision" target="entityMgr">
+          <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="edge9" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.25;exitY=0;exitDx=0;exitDy=0;entryX=1;entryY=1;entryDx=0;entryDy=0;strokeColor=#388E3C;strokeWidth=1;" edge="1" parent="1" source="decision" target="initiator">
+          <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="edge10" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#E64A19;strokeWidth=1;" edge="1" parent="1" source="decision" target="deptOthers">
+          <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="edge11" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.75;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0;entryDx=0;entryDy=0;strokeColor=#E64A19;strokeWidth=1;" edge="1" parent="1" source="decision" target="parentDept">
+          <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="edge12" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.25;exitY=1;exitDx=0;exitDy=0;entryX=1;entryY=0;entryDx=0;entryDy=0;strokeColor=#E64A19;strokeWidth=1;" edge="1" parent="1" source="decision" target="fixedDept">
+          <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="edge13" value="" style="endArrow=classic;html=1;rounded=0;exitX=1;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#E64A19;strokeWidth=1;" edge="1" parent="1" source="decision" target="virtualGroup">
+          <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+        </mxCell>
+        
+        <!-- Types to Assignment -->
+        <mxCell id="edge14" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.25;entryY=0;entryDx=0;entryDy=0;strokeColor=#388E3C;strokeWidth=1;" edge="1" parent="1" source="funcMgr" target="directAssign">
+          <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="edge15" value="" style="endArrow=classic;html=1;rounded=0;exitX=0;exitY=1;exitDx=0;exitDy=0;entryX=0.75;entryY=0;entryDx=0;entryDy=0;strokeColor=#388E3C;strokeWidth=1;" edge="1" parent="1" source="entityMgr" target="directAssign">
+          <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="edge16" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#388E3C;strokeWidth=1;" edge="1" parent="1" source="initiator" target="directAssign">
+          <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="edge17" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.25;entryY=0;entryDx=0;entryDy=0;strokeColor=#E64A19;strokeWidth=1;" edge="1" parent="1" source="deptOthers" target="candidateAssign">
+          <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="edge18" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#E64A19;strokeWidth=1;" edge="1" parent="1" source="parentDept" target="candidateAssign">
+          <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="edge19" value="" style="endArrow=classic;html=1;rounded=0;exitX=1;exitY=1;exitDx=0;exitDy=0;entryX=0;entryY=0;entryDx=0;entryDy=0;strokeColor=#E64A19;strokeWidth=1;" edge="1" parent="1" source="fixedDept" target="candidateAssign">
+          <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="edge20" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.75;entryY=0;entryDx=0;entryDy=0;strokeColor=#E64A19;strokeWidth=1;" edge="1" parent="1" source="virtualGroup" target="candidateAssign">
+          <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+        </mxCell>
+        
+        <!-- Assignment to End -->
+        <mxCell id="edge21" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#388E3C;strokeWidth=2;" edge="1" parent="1" source="directAssign" target="taskReady">
+          <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+        </mxCell>
+        
+        <mxCell id="edge22" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#E64A19;strokeWidth=2;" edge="1" parent="1" source="candidateAssign" target="taskClaim">
+          <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+        </mxCell>
+        
+        <!-- Legend -->
+        <mxCell id="legend" value="Legend:&#xa;&#xa;Green = Direct Assignment (No claim needed)&#xa;Orange = Candidate Assignment (Claim required)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F5F5F5;strokeColor=#666666;fontSize=11;align=left;verticalAlign=top;spacingLeft=10;spacingTop=10;" vertex="1" parent="1">
+          <mxGeometry x="100" y="420" width="300" height="100" as="geometry"/>
+        </mxCell>
+        
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

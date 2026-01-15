@@ -1,19 +1,36 @@
 <template>
   <div class="login-container">
+    <!-- Language Switcher -->
+    <div class="language-switcher">
+      <el-dropdown @command="handleLanguage">
+        <span class="lang-trigger">
+          <el-icon><Location /></el-icon>
+          <span>{{ currentLang }}</span>
+          <el-icon><ArrowDown /></el-icon>
+        </span>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item command="zh-CN">简体中文</el-dropdown-item>
+            <el-dropdown-item command="zh-TW">繁體中文</el-dropdown-item>
+            <el-dropdown-item command="en">English</el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
+    </div>
     <div class="login-card">
       <div class="login-header">
-        <h1>工作流平台</h1>
-        <p>用户门户</p>
+        <h1>{{ t('login.title') }}</h1>
+        <p>{{ t('login.subtitle') }}</p>
       </div>
       
       <!-- 测试用户快速选择 (仅开发环境) -->
       <div v-if="isDev" class="test-user-section">
         <el-divider content-position="center">
-          <span class="test-user-label">测试用户快速登录</span>
+          <span class="test-user-label">{{ t('login.testUserQuickLogin') }}</span>
         </el-divider>
         <el-select 
           v-model="selectedTestUser" 
-          placeholder="选择测试用户" 
+          :placeholder="t('login.selectTestUser')" 
           @change="onTestUserSelect"
           size="large"
           class="test-user-select"
@@ -36,7 +53,7 @@
         <el-form-item prop="username">
           <el-input
             v-model="form.username"
-            placeholder="用户名"
+            :placeholder="t('login.username')"
             :prefix-icon="User"
             size="large"
           />
@@ -45,7 +62,7 @@
           <el-input
             v-model="form.password"
             type="password"
-            placeholder="密码"
+            :placeholder="t('login.password')"
             :prefix-icon="Lock"
             size="large"
             show-password
@@ -60,7 +77,7 @@
             class="login-btn"
             @click="handleLogin"
           >
-            登录
+            {{ t('login.login') }}
           </el-button>
         </el-form-item>
       </el-form>
@@ -69,12 +86,23 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, FormInstance } from 'element-plus'
-import { User, Lock } from '@element-plus/icons-vue'
+import { User, Lock, Location, ArrowDown } from '@element-plus/icons-vue'
 import { login as authLogin, saveTokens, saveUser } from '@/api/auth'
+import i18n from '@/i18n'
 
+const { t } = useI18n()
+
+const langMap: Record<string, string> = { 'zh-CN': '简体中文', 'zh-TW': '繁體中文', 'en': 'English' }
+const currentLang = computed(() => langMap[i18n.global.locale.value] || '简体中文')
+
+const handleLanguage = (lang: string) => {
+  i18n.global.locale.value = lang as 'zh-CN' | 'zh-TW' | 'en'
+  localStorage.setItem('language', lang)
+}
 const router = useRouter()
 const formRef = ref<FormInstance>()
 const loading = ref(false)
@@ -84,12 +112,12 @@ const isDev = import.meta.env.DEV
 
 // 测试用户数据 (仅开发环境使用) - HR和公司银行部门员工
 const testUsers = [
-  { username: 'hr.manager', password: 'admin123', name: 'Sarah Chen', role: 'HR经理', tagType: 'danger' as const },
-  { username: 'corp.director', password: 'admin123', name: 'James Zhang', role: '公司银行总监', tagType: 'danger' as const },
-  { username: 'corp.manager', password: 'admin123', name: 'Linda Li', role: '公司银行经理', tagType: 'warning' as const },
-  { username: 'hr.specialist', password: 'admin123', name: 'Michael Wang', role: 'HR专员', tagType: 'warning' as const },
-  { username: 'corp.analyst', password: 'admin123', name: 'David Wu', role: '业务分析师', tagType: 'success' as const },
-  { username: 'corp.officer', password: 'admin123', name: 'Amy Zhao', role: '客户经理', tagType: 'success' as const },
+  { username: 'hr.manager', password: 'admin123', name: 'Sarah Chen', role: 'HR Manager', tagType: 'danger' as const },
+  { username: 'corp.director', password: 'admin123', name: 'James Zhang', role: 'Corp Bank Director', tagType: 'danger' as const },
+  { username: 'corp.manager', password: 'admin123', name: 'Linda Li', role: 'Corp Bank Manager', tagType: 'warning' as const },
+  { username: 'hr.specialist', password: 'admin123', name: 'Michael Wang', role: 'HR Specialist', tagType: 'warning' as const },
+  { username: 'corp.analyst', password: 'admin123', name: 'David Wu', role: 'Business Analyst', tagType: 'success' as const },
+  { username: 'corp.officer', password: 'admin123', name: 'Amy Zhao', role: 'Account Manager', tagType: 'success' as const },
 ]
 
 const selectedTestUser = ref('')
@@ -99,10 +127,10 @@ const form = reactive({
   password: ''
 })
 
-const rules = {
-  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
-  password: [{ required: true, message: '请输入密码', trigger: 'blur' }]
-}
+const rules = computed(() => ({
+  username: [{ required: true, message: t('login.usernameRequired'), trigger: 'blur' }],
+  password: [{ required: true, message: t('login.passwordRequired'), trigger: 'blur' }]
+}))
 
 // 选择测试用户时自动填充
 const onTestUserSelect = (username: string) => {
@@ -110,7 +138,7 @@ const onTestUserSelect = (username: string) => {
   if (user) {
     form.username = user.username
     form.password = user.password
-    ElMessage.info(`已选择: ${user.name}`)
+    ElMessage.info(`${t('login.selected')}: ${user.name}`)
   }
 }
 
@@ -132,10 +160,10 @@ const handleLogin = async () => {
         saveUser(response.user)
         localStorage.setItem('userId', response.user.userId)
         
-        ElMessage.success('登录成功')
+        ElMessage.success(t('login.loginSuccess'))
         router.push('/dashboard')
       } catch (error: any) {
-        const message = error.response?.data?.message || error.message || '登录失败'
+        const message = error.response?.data?.message || error.message || t('login.loginFailed')
         ElMessage.error(message)
       } finally {
         loading.value = false
@@ -152,6 +180,31 @@ const handleLogin = async () => {
   justify-content: center;
   align-items: center;
   background: linear-gradient(135deg, var(--hsbc-red) 0%, #8B0000 100%);
+  position: relative;
+}
+
+.language-switcher {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  z-index: 10;
+
+  .lang-trigger {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 20px;
+    color: white;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.3s;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.25);
+    }
+  }
 }
 
 .login-card {

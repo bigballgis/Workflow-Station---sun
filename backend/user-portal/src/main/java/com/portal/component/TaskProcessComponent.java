@@ -5,9 +5,11 @@ import com.portal.dto.TaskCompleteRequest;
 import com.portal.dto.TaskInfo;
 import com.portal.entity.DelegationAudit;
 import com.portal.entity.DelegationRule;
+import com.portal.entity.ProcessInstance;
 import com.portal.exception.PortalException;
 import com.portal.repository.DelegationAuditRepository;
 import com.portal.repository.DelegationRuleRepository;
+import com.portal.repository.ProcessInstanceRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -34,6 +36,7 @@ public class TaskProcessComponent {
     private final DelegationRuleRepository delegationRuleRepository;
     private final DelegationAuditRepository delegationAuditRepository;
     private final WorkflowEngineClient workflowEngineClient;
+    private final ProcessInstanceRepository processInstanceRepository;
 
     /**
      * 认领任务
@@ -60,6 +63,9 @@ public class TaskProcessComponent {
         
         // 任务状态已在 Flowable 中更新，重新获取最新状态
         TaskInfo task = getTaskOrThrow(taskId);
+        
+        // 更新流程实例的当前处理人
+        updateProcessInstanceAssignee(task.getProcessInstanceId(), userId, task.getTaskName());
         
         log.info("Task {} claimed via Flowable by user {}", taskId, userId);
         return task;
@@ -90,6 +96,9 @@ public class TaskProcessComponent {
         
         // 任务状态已在 Flowable 中更新，重新获取最新状态
         TaskInfo task = getTaskOrThrow(taskId);
+        
+        // 取消认领后，清空流程实例的当前处理人
+        updateProcessInstanceAssignee(task.getProcessInstanceId(), null, task.getTaskName());
 
         log.info("Task {} unclaimed via Flowable by user {}", taskId, userId);
         return task;
@@ -141,6 +150,10 @@ public class TaskProcessComponent {
             throw new PortalException("500", message);
         }
         
+        // 更新流程实例的当前处理人
+        TaskInfo task = getTaskOrThrow(taskId);
+        updateProcessInstanceAssignee(task.getProcessInstanceId(), delegateId, task.getTaskName());
+        
         // 记录审计日志
         DelegationAudit audit = DelegationAudit.builder()
                 .delegatorId(delegatorId)
@@ -177,6 +190,10 @@ public class TaskProcessComponent {
             String message = data.get("message") != null ? (String) data.get("message") : "转办任务失败";
             throw new PortalException("500", message);
         }
+        
+        // 更新流程实例的当前处理人
+        TaskInfo task = getTaskOrThrow(taskId);
+        updateProcessInstanceAssignee(task.getProcessInstanceId(), toUserId, task.getTaskName());
 
         // 记录审计日志
         DelegationAudit audit = DelegationAudit.builder()
@@ -213,6 +230,12 @@ public class TaskProcessComponent {
         String assignmentType = task.getAssignmentType();
         String assignee = task.getAssignee();
 
+        // 如果任务已分配给当前用户（包括认领后的任务），允许处理
+        // 这是最优先的检查，因为认领后 assignee 会被设置为认领人
+        if (userId.equals(assignee)) {
+            return true;
+        }
+
         // 直接分配给用户
         if ("USER".equals(assignmentType) && userId.equals(assignee)) {
             return true;
@@ -223,12 +246,12 @@ public class TaskProcessComponent {
             return true;
         }
 
-        // 虚拟组任务
+        // 虚拟组任务（未认领的情况）
         if ("VIRTUAL_GROUP".equals(assignmentType) && isUserInVirtualGroup(userId, assignee)) {
             return true;
         }
 
-        // 部门角色任务
+        // 部门角色任务（未认领的情况）
         if ("DEPT_ROLE".equals(assignmentType) && isUserHasDeptRole(userId, assignee)) {
             return true;
         }
@@ -482,5 +505,30 @@ public class TaskProcessComponent {
         // 实际应调用消息服务发送通知
         // 这里只记录日志
         log.info("发送催办通知: 任务={}, 处理人={}, 催办人={}, 消息={}", taskId, assignee, urgerId, message);
+    }
+
+    /**
+     * 更新流程实例的当前处理人
+     */
+    private void updateProcessInstanceAssignee(String processInstanceId, String assignee, String currentNode) {
+        if (processInstanceId == null) {
+            return;
+        }
+        
+        try {
+            Optional<ProcessInstance> optInstance = processInstanceRepository.findById(processInstanceId);
+            if (optInstance.isPresent()) {
+                ProcessInstance instance = optInstance.get();
+                instance.setCurrentAssignee(assignee);
+                if (currentNode != null) {
+                    instance.setCurrentNode(currentNode);
+                }
+                processInstanceRepository.save(instance);
+                log.info("Updated process instance {} with currentAssignee={}, currentNode={}", 
+                        processInstanceId, assignee, currentNode);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to update process instance assignee: {}", e.getMessage());
+        }
     }
 }

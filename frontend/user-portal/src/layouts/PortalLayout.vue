@@ -5,7 +5,7 @@
       <div class="header-left">
         <div class="logo">
           <img src="/logo.svg" alt="Logo" class="logo-img" />
-          <span class="logo-text">工作流平台</span>
+          <span class="logo-text">{{ t('app.name') }}</span>
         </div>
       </div>
       <div class="header-right">
@@ -39,7 +39,7 @@
               </el-dropdown-item>
               <el-dropdown-item divided command="logout">
                 <el-icon><SwitchButton /></el-icon>
-                退出登录
+                {{ t('common.logout') }}
               </el-dropdown-item>
             </el-dropdown-menu>
           </template>
@@ -121,8 +121,9 @@ import {
   ArrowDown, SwitchButton, Fold, Expand, Location
 } from '@element-plus/icons-vue'
 import { logout as authLogout, clearAuth, getUser } from '@/api/auth'
+import i18n from '@/i18n'
 
-const { t, locale } = useI18n()
+const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 
@@ -138,7 +139,7 @@ const userAvatar = ref('')
 const activeMenu = computed(() => route.path)
 
 const langMap: Record<string, string> = { 'zh-CN': '简体中文', 'zh-TW': '繁體中文', 'en': 'English' }
-const currentLang = computed(() => langMap[locale.value] || '简体中文')
+const currentLang = computed(() => langMap[i18n.global.locale.value] || '简体中文')
 
 const toggleCollapse = () => {
   isCollapsed.value = !isCollapsed.value
@@ -149,7 +150,7 @@ const goToNotifications = () => {
 }
 
 const handleLanguage = (lang: string) => {
-  locale.value = lang
+  i18n.global.locale.value = lang as 'zh-CN' | 'zh-TW' | 'en'
   localStorage.setItem('language', lang)
 }
 
@@ -159,7 +160,7 @@ const handleCommand = async (command: string) => {
   } else if (command === 'logout') {
     try {
       await authLogout()
-      ElMessage.success('已退出登录')
+      ElMessage.success(t('common.logoutSuccess'))
     } catch (error) {
       // Even if API fails, still clear local auth
       console.error('Logout API error:', error)

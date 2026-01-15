@@ -4,26 +4,26 @@
     <div class="form-list-view" v-if="!selectedForm">
       <div class="designer-toolbar">
         <el-button type="primary" @click="showCreateDialog = true">
-          <el-icon><Plus /></el-icon> 创建表单
+          <el-icon><Plus /></el-icon> {{ $t('form.createForm') }}
         </el-button>
         <el-button @click="loadForms" :loading="loading">
-          <el-icon><Refresh /></el-icon> 刷新
+          <el-icon><Refresh /></el-icon> {{ $t('common.refresh') }}
         </el-button>
         <el-button @click="handleImportFromTable" :disabled="store.tables.length === 0">
-          <el-icon><Connection /></el-icon> 从表导入字段
+          <el-icon><Connection /></el-icon> {{ $t('form.importFields') }}
         </el-button>
       </div>
       
       <el-table :data="store.forms" v-loading="loading" stripe @row-click="handleSelectForm">
-        <el-table-column prop="formName" label="表单名称" />
-        <el-table-column prop="formType" label="表单类型" width="120">
+        <el-table-column prop="formName" :label="$t('form.formName')" />
+        <el-table-column prop="formType" :label="$t('form.formType')" width="120">
           <template #default="{ row }">
             <el-tag :type="row.formType === 'MAIN' ? 'primary' : 'info'">
               {{ formTypeLabel(row.formType) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="boundTableId" label="绑定表" width="180">
+        <el-table-column prop="boundTableId" :label="$t('form.boundTable')" width="180">
           <template #default="{ row }">
             <template v-if="getPrimaryBinding(row)">
               <el-tag type="success" size="small">
@@ -36,10 +36,10 @@
             <el-tag v-else-if="row.boundTableId" type="success" size="small">
               {{ getTableName(row.boundTableId) }}
             </el-tag>
-            <span v-else class="text-muted">未绑定</span>
+            <span v-else class="text-muted">{{ $t('form.notBound') }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="boundNodeId" label="绑定节点" min-width="180">
+        <el-table-column prop="boundNodeId" :label="$t('form.boundNode')" min-width="180">
           <template #default="{ row }">
             <div class="bound-nodes">
               <template v-if="getFormBoundNodes(row.id).length > 0">
@@ -53,18 +53,18 @@
                   {{ node.nodeName }}{{ node.readOnly ? '(只读)' : '' }}
                 </el-tag>
               </template>
-              <span v-else class="text-muted">未绑定</span>
+              <span v-else class="text-muted">{{ $t('form.notBound') }}</span>
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="description" label="描述" show-overflow-tooltip />
-        <el-table-column label="操作" width="320" fixed="right">
+        <el-table-column prop="description" :label="$t('table.description')" show-overflow-tooltip />
+        <el-table-column :label="$t('common.actions')" width="320" fixed="right">
           <template #default="{ row }">
             <div class="action-buttons">
-              <el-button link type="primary" @click.stop="handleSelectForm(row)">编辑</el-button>
-              <el-button link type="warning" @click.stop="handleManageBindings(row)">管理绑定</el-button>
-              <el-button link type="success" @click.stop="handleBindNode(row)">绑定节点</el-button>
-              <el-button link type="danger" @click.stop="handleDeleteForm(row)">删除</el-button>
+              <el-button link type="primary" @click.stop="handleSelectForm(row)">{{ $t('common.edit') }}</el-button>
+              <el-button link type="warning" @click.stop="handleManageBindings(row)">{{ $t('form.editBindings') }}</el-button>
+              <el-button link type="success" @click.stop="handleBindNode(row)">{{ $t('form.boundNode') }}</el-button>
+              <el-button link type="danger" @click.stop="handleDeleteForm(row)">{{ $t('common.delete') }}</el-button>
             </div>
           </template>
         </el-table-column>
@@ -301,12 +301,15 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, nextTick, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ArrowLeft, Plus, Refresh, Connection } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
 import type { FormDefinition, FieldDefinition, TableBinding, BindingType } from '@/api/functionUnit'
 import { functionUnitApi } from '@/api/functionUnit'
 import TableBindingManager from './TableBindingManager.vue'
+
+const { t } = useI18n()
 
 interface ProcessNode {
   id: string
@@ -377,7 +380,7 @@ const previewOption = {
 }
 
 const formTypeLabel = (type: string) => {
-  const map: Record<string, string> = { MAIN: '主表单', SUB: '子表单', POPUP: '弹出表单' }
+  const map: Record<string, string> = { MAIN: t('form.mainForm'), SUB: t('form.subForm'), POPUP: t('form.popupForm'), ACTION: t('form.actionForm') }
   return map[type] || type
 }
 
@@ -392,7 +395,7 @@ const nodeTypeLabel = (type: string) => {
 }
 
 const tableTypeLabel = (type: string) => {
-  const map: Record<string, string> = { MAIN: '主表', SUB: '子表', ACTION: '动作表', RELATION: '关联表' }
+  const map: Record<string, string> = { MAIN: t('form.mainForm'), SUB: t('form.subForm'), ACTION: t('form.actionForm'), RELATION: t('table.relations') }
   return map[type] || type
 }
 
@@ -714,29 +717,44 @@ function parseFormBindingsFromBpmn() {
     const parser = new DOMParser()
     const xmlDoc = parser.parseFromString(store.process.bpmnXml, 'text/xml')
     
-    // 查找所有任务节点
-    const tasks = xmlDoc.querySelectorAll('userTask, serviceTask')
+    // 查找所有任务节点 - 支持带命名空间和不带命名空间的情况
+    // querySelectorAll 不支持命名空间，使用 getElementsByTagNameNS 或正则匹配
+    const allElements = xmlDoc.getElementsByTagName('*')
+    const tasks: Element[] = []
+    
+    for (let i = 0; i < allElements.length; i++) {
+      const el = allElements[i]
+      const localName = el.localName || el.nodeName.split(':').pop()
+      if (localName === 'userTask' || localName === 'serviceTask') {
+        tasks.push(el)
+      }
+    }
     
     tasks.forEach(task => {
       const taskId = task.getAttribute('id') || ''
       const taskName = task.getAttribute('name') || taskId
       
-      // 查找formId和formReadOnly属性
-      const properties = task.querySelectorAll('property')
+      // 查找formId和formReadOnly属性 - 支持 property 和 values 两种格式
+      const allProps = task.getElementsByTagName('*')
       let formId: number | null = null
       let readOnly = false
       
-      properties.forEach(prop => {
-        const name = prop.getAttribute('name')
-        const value = prop.getAttribute('value')
+      for (let i = 0; i < allProps.length; i++) {
+        const prop = allProps[i]
+        const localName = prop.localName || prop.nodeName.split(':').pop()
         
-        if (name === 'formId' && value) {
-          formId = parseInt(value, 10)
+        if (localName === 'property' || localName === 'values') {
+          const name = prop.getAttribute('name')
+          const value = prop.getAttribute('value')
+          
+          if (name === 'formId' && value) {
+            formId = parseInt(value, 10)
+          }
+          if (name === 'formReadOnly' && value === 'true') {
+            readOnly = true
+          }
         }
-        if (name === 'formReadOnly' && value === 'true') {
-          readOnly = true
-        }
-      })
+      }
       
       if (formId !== null && !isNaN(formId)) {
         if (!bindings.has(formId)) {

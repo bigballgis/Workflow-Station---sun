@@ -3,6 +3,7 @@ package com.admin.properties;
 import com.admin.component.FunctionUnitManagerComponent;
 import com.admin.entity.FunctionUnit;
 import com.admin.enums.FunctionUnitStatus;
+import com.admin.repository.FunctionUnitAccessRepository;
 import com.admin.repository.FunctionUnitContentRepository;
 import com.admin.repository.FunctionUnitDependencyRepository;
 import com.admin.repository.FunctionUnitRepository;
@@ -30,6 +31,7 @@ class FunctionUnitEnabledProperties {
     private FunctionUnitRepository functionUnitRepository;
     private FunctionUnitDependencyRepository dependencyRepository;
     private FunctionUnitContentRepository contentRepository;
+    private FunctionUnitAccessRepository accessRepository;
     private FunctionUnitManagerComponent component;
 
     @BeforeTry
@@ -37,8 +39,9 @@ class FunctionUnitEnabledProperties {
         functionUnitRepository = Mockito.mock(FunctionUnitRepository.class);
         dependencyRepository = Mockito.mock(FunctionUnitDependencyRepository.class);
         contentRepository = Mockito.mock(FunctionUnitContentRepository.class);
+        accessRepository = Mockito.mock(FunctionUnitAccessRepository.class);
         component = new FunctionUnitManagerComponent(
-                functionUnitRepository, dependencyRepository, contentRepository);
+                functionUnitRepository, dependencyRepository, contentRepository, accessRepository);
     }
 
     // ==================== Property 5: 启用状态切换正确性 ====================

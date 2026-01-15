@@ -3,7 +3,7 @@
     <div class="page-header">
       <span class="page-title">{{ t('menu.functionUnit') }}</span>
       <el-button type="primary" @click="showImportDialog = true">
-        <el-icon><Upload /></el-icon>导入功能包
+        <el-icon><Upload /></el-icon>{{ t('common.import') }}
       </el-button>
     </div>
     
@@ -126,10 +126,10 @@
     </el-dialog>
     
     <!-- 添加业务角色对话框 -->
-    <el-dialog v-model="showAddAccessDialogVisible" title="添加业务角色" width="500px">
+    <el-dialog v-model="showAddAccessDialogVisible" :title="t('functionUnit.selectBusinessRole')" width="500px">
       <el-form :model="accessForm" label-width="100px">
-        <el-form-item label="业务角色" required>
-          <el-select v-model="accessForm.roleId" filterable placeholder="请选择业务角色" @change="handleRoleChange">
+        <el-form-item :label="t('functionUnit.businessRole')" required>
+          <el-select v-model="accessForm.roleId" filterable :placeholder="t('functionUnit.selectBusinessRole')" @change="handleRoleChange">
             <el-option v-for="role in businessRoles" :key="role.id" :label="role.name" :value="role.id" />
           </el-select>
         </el-form-item>

@@ -37,6 +37,9 @@ export interface TaskInfo {
   isOverdue: boolean
   formKey?: string
   variables?: Record<string, any>
+  claimed?: boolean
+  originalAssignmentType?: string
+  originalAssignee?: string
 }
 
 export interface PageResponse<T> {

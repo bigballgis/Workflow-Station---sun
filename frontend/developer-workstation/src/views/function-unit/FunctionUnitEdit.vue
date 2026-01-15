@@ -24,16 +24,16 @@
         <div>
           <el-button @click="openEditDialog">
             <el-icon><Setting /></el-icon>
-            设置
+            {{ $t('functionUnit.settings') }}
           </el-button>
           <el-button @click="handleExport" :loading="exporting">
             <el-icon><Download /></el-icon>
-            导出
+            {{ $t('common.export') }}
           </el-button>
           <el-button @click="handleValidate" :loading="validating">{{ $t('functionUnit.validate') }}</el-button>
           <el-button type="warning" @click="showDeployDialog = true">
             <el-icon><Upload /></el-icon>
-            一键部署
+            {{ $t('functionUnit.deploy') }}
           </el-button>
           <el-button type="primary" @click="handlePublish">{{ $t('functionUnit.publish') }}</el-button>
         </div>
@@ -59,25 +59,25 @@
     </div>
 
     <!-- Edit Function Unit Dialog -->
-    <el-dialog v-model="showEditDialog" title="功能单元设置" width="500px">
+    <el-dialog v-model="showEditDialog" :title="$t('functionUnit.settings')" width="500px">
       <el-form :model="editForm" label-width="80px">
-        <el-form-item label="图标">
+        <el-form-item :label="$t('functionUnit.icon')">
           <div class="icon-edit-row">
             <IconPreview :icon-id="editForm.iconId" size="large" />
-            <el-button @click="showIconSelectorForEdit = true">选择图标</el-button>
-            <el-button v-if="editForm.iconId" link type="danger" @click="editForm.iconId = undefined">清除</el-button>
+            <el-button @click="showIconSelectorForEdit = true">{{ $t('functionUnit.changeIcon') }}</el-button>
+            <el-button v-if="editForm.iconId" link type="danger" @click="editForm.iconId = undefined">{{ $t('icon.clear') }}</el-button>
           </div>
         </el-form-item>
-        <el-form-item label="名称" required>
-          <el-input v-model="editForm.name" placeholder="功能单元名称" />
+        <el-form-item :label="$t('functionUnit.name')" required>
+          <el-input v-model="editForm.name" :placeholder="$t('functionUnit.namePlaceholder')" />
         </el-form-item>
-        <el-form-item label="描述">
-          <el-input v-model="editForm.description" type="textarea" :rows="3" placeholder="功能单元描述" />
+        <el-form-item :label="$t('functionUnit.description')">
+          <el-input v-model="editForm.description" type="textarea" :rows="3" :placeholder="$t('functionUnit.descriptionPlaceholder')" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showEditDialog = false">取消</el-button>
-        <el-button type="primary" @click="handleSaveEdit" :loading="saving">保存</el-button>
+        <el-button @click="showEditDialog = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="handleSaveEdit" :loading="saving">{{ $t('common.save') }}</el-button>
       </template>
     </el-dialog>
 
@@ -114,11 +114,11 @@
     />
 
     <!-- Deploy Dialog -->
-    <el-dialog v-model="showDeployDialog" title="一键部署" width="500px">
+    <el-dialog v-model="showDeployDialog" :title="$t('functionUnit.deploy')" width="500px">
       <el-form :model="deployForm" label-width="100px">
-        <el-form-item label="自动启用">
+        <el-form-item :label="$t('functionUnit.autoEnable')">
           <el-switch v-model="deployForm.autoEnable" />
-          <span style="margin-left: 12px; color: #909399; font-size: 12px;">部署后自动启用功能单元</span>
+          <span style="margin-left: 12px; color: #909399; font-size: 12px;">{{ $t('functionUnit.autoEnableHint') }}</span>
         </el-form-item>
       </el-form>
       <el-alert type="info" :closable="false" style="margin-bottom: 16px;">
@@ -190,6 +190,7 @@
 <script setup lang="ts">
 import { ref, computed, reactive, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, Setting, Download, Upload, CircleCheck, CircleClose, Loading, Clock } from '@element-plus/icons-vue'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
@@ -203,6 +204,7 @@ import VersionManager from '@/components/version/VersionManager.vue'
 import IconPreview from '@/components/icon/IconPreview.vue'
 import IconSelector from '@/components/icon/IconSelector.vue'
 
+const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const store = useFunctionUnitStore()
@@ -237,7 +239,11 @@ const statusTagType = (status?: string): 'primary' | 'success' | 'warning' | 'in
 }
 
 const statusLabel = (status?: string) => {
-  const map: Record<string, string> = { DRAFT: '草稿', PUBLISHED: '已发布', ARCHIVED: '已归档' }
+  const map: Record<string, string> = { 
+    DRAFT: t('functionUnit.draft'), 
+    PUBLISHED: t('functionUnit.published'), 
+    ARCHIVED: t('functionUnit.archived') 
+  }
   return map[status || ''] || status
 }
 

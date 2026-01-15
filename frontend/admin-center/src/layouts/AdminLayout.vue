@@ -5,7 +5,7 @@
       <div class="header-left">
         <div class="logo">
           <span class="logo-icon">🛡️</span>
-          <span class="logo-text" v-if="!isCollapse">管理员中心</span>
+          <span class="logo-text" v-if="!isCollapse">{{ t('app.name') }}</span>
         </div>
         <el-icon class="collapse-btn" @click="toggleCollapse">
           <Fold v-if="!isCollapse" />
@@ -38,13 +38,13 @@
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item command="profile">
-                <el-icon><User /></el-icon>个人信息
+                <el-icon><User /></el-icon>{{ t('profile.title') }}
               </el-dropdown-item>
               <el-dropdown-item command="settings" v-if="canAccessConfig">
-                <el-icon><Setting /></el-icon>系统设置
+                <el-icon><Setting /></el-icon>{{ t('menu.config') }}
               </el-dropdown-item>
               <el-dropdown-item divided command="logout">
-                <el-icon><SwitchButton /></el-icon>退出登录
+                <el-icon><SwitchButton /></el-icon>{{ t('common.logout') }}
               </el-dropdown-item>
             </el-dropdown-menu>
           </template>
@@ -156,10 +156,11 @@ import {
 } from '@element-plus/icons-vue'
 import { logout as authLogout, clearAuth, getUser } from '@/api/auth'
 import { hasPermission, getUserRoleDisplay, PERMISSIONS } from '@/utils/permission'
+import i18n from '@/i18n'
 
 const route = useRoute()
 const router = useRouter()
-const { t, locale } = useI18n()
+const { t } = useI18n()
 
 const isCollapse = ref(false)
 const activeMenu = computed(() => route.path)
@@ -178,22 +179,22 @@ const canReadAudit = computed(() => hasPermission(PERMISSIONS.AUDIT_READ))
 const canAccessConfig = computed(() => hasPermission(PERMISSIONS.SYSTEM_ADMIN))
 
 const langMap: Record<string, string> = { 'zh-CN': '简体中文', 'zh-TW': '繁體中文', 'en': 'English' }
-const currentLang = computed(() => langMap[locale.value] || '简体中文')
+const currentLang = computed(() => langMap[i18n.global.locale.value] || '简体中文')
 
 const toggleCollapse = () => {
   isCollapse.value = !isCollapse.value
 }
 
 const handleLanguage = (lang: string) => {
-  locale.value = lang
-  localStorage.setItem('locale', lang)
+  i18n.global.locale.value = lang as 'zh-CN' | 'zh-TW' | 'en'
+  localStorage.setItem('language', lang)
 }
 
 const handleUserCommand = async (command: string) => {
   if (command === 'logout') {
     try {
       await authLogout()
-      ElMessage.success('已退出登录')
+      ElMessage.success(t('common.logoutSuccess'))
     } catch (error) {
       console.error('Logout API error:', error)
     } finally {

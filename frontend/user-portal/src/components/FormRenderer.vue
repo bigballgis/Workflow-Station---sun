@@ -8,231 +8,463 @@
       :disabled="readonly"
       :size="size"
     >
-      <el-row :gutter="20">
-        <el-col
-          v-for="field in fields"
-          :key="field.key"
-          :span="field.span || 24"
-        >
-          <el-form-item
-            :label="field.label"
-            :prop="field.key"
-            :required="field.required"
+      <!-- Tab 布局模式 -->
+      <template v-if="hasTabs">
+        <el-tabs v-model="activeTab" type="border-card">
+          <el-tab-pane
+            v-for="tab in tabs"
+            :key="tab.name"
+            :label="tab.label"
+            :name="tab.name"
           >
-            <!-- 文本输入 -->
-            <el-input
-              v-if="field.type === 'text' || field.type === 'input'"
-              v-model="formData[field.key]"
-              :placeholder="field.placeholder"
-              :maxlength="field.maxLength"
-              :show-word-limit="!!field.maxLength"
-              clearable
-            />
-
-            <!-- 多行文本 -->
-            <el-input
-              v-else-if="field.type === 'textarea'"
-              v-model="formData[field.key]"
-              type="textarea"
-              :rows="field.rows || 3"
-              :placeholder="field.placeholder"
-              :maxlength="field.maxLength"
-              :show-word-limit="!!field.maxLength"
-            />
-
-            <!-- 数字输入 -->
-            <el-input-number
-              v-else-if="field.type === 'number'"
-              v-model="formData[field.key]"
-              :min="field.min"
-              :max="field.max"
-              :step="field.step || 1"
-              :precision="field.precision"
-              style="width: 100%"
-            />
-
-            <!-- 下拉选择 -->
-            <el-select
-              v-else-if="field.type === 'select'"
-              v-model="formData[field.key]"
-              :placeholder="field.placeholder"
-              :multiple="field.multiple"
-              :filterable="field.filterable"
-              clearable
-              style="width: 100%"
-              popper-class="form-renderer-popper"
-            >
-              <el-option
-                v-for="opt in field.options"
-                :key="opt.value"
-                :label="opt.label"
-                :value="opt.value"
-              />
-            </el-select>
-
-            <!-- 单选框 -->
-            <el-radio-group
-              v-else-if="field.type === 'radio'"
-              v-model="formData[field.key]"
-            >
-              <el-radio
-                v-for="opt in field.options"
-                :key="opt.value"
-                :label="opt.value"
+            <el-row :gutter="20">
+              <el-col
+                v-for="field in tab.fields"
+                :key="field.key"
+                :span="field.span || 24"
               >
-                {{ opt.label }}
-              </el-radio>
-            </el-radio-group>
-
-            <!-- 复选框 -->
-            <el-checkbox-group
-              v-else-if="field.type === 'checkbox'"
-              v-model="formData[field.key]"
+                <el-form-item
+                  :label="field.label"
+                  :prop="field.key"
+                  :required="field.required"
+                >
+                  <!-- 渲染字段 -->
+                  <template v-if="field.type === 'text' || field.type === 'input'">
+                    <el-input
+                      v-model="formData[field.key]"
+                      :placeholder="field.placeholder"
+                      :maxlength="field.maxLength"
+                      :show-word-limit="!!field.maxLength"
+                      clearable
+                    />
+                  </template>
+                  <template v-else-if="field.type === 'textarea'">
+                    <el-input
+                      v-model="formData[field.key]"
+                      type="textarea"
+                      :rows="field.rows || 3"
+                      :placeholder="field.placeholder"
+                      :maxlength="field.maxLength"
+                      :show-word-limit="!!field.maxLength"
+                    />
+                  </template>
+                  <template v-else-if="field.type === 'number'">
+                    <el-input-number
+                      v-model="formData[field.key]"
+                      :min="field.min"
+                      :max="field.max"
+                      :step="field.step || 1"
+                      :precision="field.precision"
+                      style="width: 100%"
+                    />
+                  </template>
+                  <template v-else-if="field.type === 'select'">
+                    <el-select
+                      v-model="formData[field.key]"
+                      :placeholder="field.placeholder"
+                      :multiple="field.multiple"
+                      :filterable="field.filterable"
+                      clearable
+                      style="width: 100%"
+                      popper-class="form-renderer-popper"
+                    >
+                      <el-option
+                        v-for="opt in field.options"
+                        :key="opt.value"
+                        :label="opt.label"
+                        :value="opt.value"
+                      />
+                    </el-select>
+                  </template>
+                  <template v-else-if="field.type === 'radio'">
+                    <el-radio-group v-model="formData[field.key]">
+                      <el-radio
+                        v-for="opt in field.options"
+                        :key="opt.value"
+                        :label="opt.value"
+                      >
+                        {{ opt.label }}
+                      </el-radio>
+                    </el-radio-group>
+                  </template>
+                  <template v-else-if="field.type === 'checkbox'">
+                    <el-checkbox-group v-model="formData[field.key]">
+                      <el-checkbox
+                        v-for="opt in field.options"
+                        :key="opt.value"
+                        :label="opt.value"
+                      >
+                        {{ opt.label }}
+                      </el-checkbox>
+                    </el-checkbox-group>
+                  </template>
+                  <template v-else-if="field.type === 'switch'">
+                    <el-switch
+                      v-model="formData[field.key]"
+                      :active-text="field.activeText"
+                      :inactive-text="field.inactiveText"
+                    />
+                  </template>
+                  <template v-else-if="field.type === 'date'">
+                    <el-date-picker
+                      v-model="formData[field.key]"
+                      type="date"
+                      :placeholder="field.placeholder"
+                      value-format="YYYY-MM-DD"
+                      style="width: 100%"
+                      popper-class="form-renderer-popper"
+                    />
+                  </template>
+                  <template v-else-if="field.type === 'datetime'">
+                    <el-date-picker
+                      v-model="formData[field.key]"
+                      type="datetime"
+                      :placeholder="field.placeholder"
+                      value-format="YYYY-MM-DD HH:mm:ss"
+                      style="width: 100%"
+                      popper-class="form-renderer-popper"
+                    />
+                  </template>
+                  <template v-else-if="field.type === 'daterange'">
+                    <el-date-picker
+                      v-model="formData[field.key]"
+                      type="daterange"
+                      :range-separator="t('common.to')"
+                      :start-placeholder="t('common.startDate')"
+                      :end-placeholder="t('common.endDate')"
+                      value-format="YYYY-MM-DD"
+                      style="width: 100%"
+                      popper-class="form-renderer-popper"
+                    />
+                  </template>
+                  <template v-else-if="field.type === 'time'">
+                    <el-time-picker
+                      v-model="formData[field.key]"
+                      :placeholder="field.placeholder"
+                      value-format="HH:mm:ss"
+                      style="width: 100%"
+                      popper-class="form-renderer-popper"
+                    />
+                  </template>
+                  <template v-else-if="field.type === 'cascader'">
+                    <el-cascader
+                      v-model="formData[field.key]"
+                      :options="field.options"
+                      :props="field.cascaderProps"
+                      :placeholder="field.placeholder"
+                      clearable
+                      style="width: 100%"
+                      popper-class="form-renderer-popper"
+                    />
+                  </template>
+                  <template v-else-if="field.type === 'user'">
+                    <el-select
+                      v-model="formData[field.key]"
+                      :placeholder="field.placeholder"
+                      :multiple="field.multiple"
+                      filterable
+                      remote
+                      :remote-method="(query: string) => searchUsers(query, field)"
+                      clearable
+                      style="width: 100%"
+                      popper-class="form-renderer-popper"
+                    >
+                      <el-option
+                        v-for="user in field.userOptions || []"
+                        :key="user.id"
+                        :label="user.name"
+                        :value="user.id"
+                      />
+                    </el-select>
+                  </template>
+                  <template v-else-if="field.type === 'department'">
+                    <el-tree-select
+                      v-model="formData[field.key]"
+                      :data="field.deptOptions || []"
+                      :props="{ label: 'name', value: 'id', children: 'children' }"
+                      :placeholder="field.placeholder"
+                      check-strictly
+                      clearable
+                      style="width: 100%"
+                      popper-class="form-renderer-popper"
+                    />
+                  </template>
+                  <template v-else-if="field.type === 'money'">
+                    <el-input
+                      v-model="formData[field.key]"
+                      :placeholder="field.placeholder"
+                      clearable
+                    >
+                      <template #prepend>{{ field.currency || '¥' }}</template>
+                    </el-input>
+                  </template>
+                  <template v-else-if="field.type === 'readonly'">
+                    <span class="readonly-text">{{ formData[field.key] || '-' }}</span>
+                  </template>
+                  <template v-else-if="field.type === 'divider'">
+                    <el-divider />
+                  </template>
+                  <template v-else-if="field.type === 'alert'">
+                    <el-alert
+                      :title="field.alertTitle"
+                      :type="field.alertType || 'info'"
+                      :closable="false"
+                      show-icon
+                    />
+                  </template>
+                  <template v-else>
+                    <el-input
+                      v-model="formData[field.key]"
+                      :placeholder="field.placeholder"
+                      clearable
+                    />
+                  </template>
+                </el-form-item>
+              </el-col>
+            </el-row>
+          </el-tab-pane>
+        </el-tabs>
+      </template>
+      
+      <!-- 普通平铺模式 -->
+      <template v-else>
+        <el-row :gutter="20">
+          <el-col
+            v-for="field in fields"
+            :key="field.key"
+            :span="field.span || 24"
+          >
+            <el-form-item
+              :label="field.label"
+              :prop="field.key"
+              :required="field.required"
             >
-              <el-checkbox
-                v-for="opt in field.options"
-                :key="opt.value"
-                :label="opt.value"
-              >
-                {{ opt.label }}
-              </el-checkbox>
-            </el-checkbox-group>
-
-            <!-- 开关 -->
-            <el-switch
-              v-else-if="field.type === 'switch'"
-              v-model="formData[field.key]"
-              :active-text="field.activeText"
-              :inactive-text="field.inactiveText"
-            />
-
-            <!-- 日期选择 -->
-            <el-date-picker
-              v-else-if="field.type === 'date'"
-              v-model="formData[field.key]"
-              type="date"
-              :placeholder="field.placeholder"
-              value-format="YYYY-MM-DD"
-              style="width: 100%"
-              popper-class="form-renderer-popper"
-            />
-
-            <!-- 日期时间选择 -->
-            <el-date-picker
-              v-else-if="field.type === 'datetime'"
-              v-model="formData[field.key]"
-              type="datetime"
-              :placeholder="field.placeholder"
-              value-format="YYYY-MM-DD HH:mm:ss"
-              style="width: 100%"
-              popper-class="form-renderer-popper"
-            />
-
-            <!-- 日期范围 -->
-            <el-date-picker
-              v-else-if="field.type === 'daterange'"
-              v-model="formData[field.key]"
-              type="daterange"
-              range-separator="至"
-              start-placeholder="开始日期"
-              end-placeholder="结束日期"
-              value-format="YYYY-MM-DD"
-              style="width: 100%"
-              popper-class="form-renderer-popper"
-            />
-
-            <!-- 时间选择 -->
-            <el-time-picker
-              v-else-if="field.type === 'time'"
-              v-model="formData[field.key]"
-              :placeholder="field.placeholder"
-              value-format="HH:mm:ss"
-              style="width: 100%"
-              popper-class="form-renderer-popper"
-            />
-
-            <!-- 级联选择 -->
-            <el-cascader
-              v-else-if="field.type === 'cascader'"
-              v-model="formData[field.key]"
-              :options="field.options"
-              :props="field.cascaderProps"
-              :placeholder="field.placeholder"
-              clearable
-              style="width: 100%"
-              popper-class="form-renderer-popper"
-            />
-
-            <!-- 用户选择器 -->
-            <el-select
-              v-else-if="field.type === 'user'"
-              v-model="formData[field.key]"
-              :placeholder="field.placeholder"
-              :multiple="field.multiple"
-              filterable
-              remote
-              :remote-method="(query: string) => searchUsers(query, field)"
-              clearable
-              style="width: 100%"
-              popper-class="form-renderer-popper"
-            >
-              <el-option
-                v-for="user in field.userOptions || []"
-                :key="user.id"
-                :label="user.name"
-                :value="user.id"
+              <!-- 文本输入 -->
+              <el-input
+                v-if="field.type === 'text' || field.type === 'input'"
+                v-model="formData[field.key]"
+                :placeholder="field.placeholder"
+                :maxlength="field.maxLength"
+                :show-word-limit="!!field.maxLength"
+                clearable
               />
-            </el-select>
 
-            <!-- 部门选择器 -->
-            <el-tree-select
-              v-else-if="field.type === 'department'"
-              v-model="formData[field.key]"
-              :data="field.deptOptions || []"
-              :props="{ label: 'name', value: 'id', children: 'children' }"
-              :placeholder="field.placeholder"
-              check-strictly
-              clearable
-              style="width: 100%"
-              popper-class="form-renderer-popper"
-            />
+              <!-- 多行文本 -->
+              <el-input
+                v-else-if="field.type === 'textarea'"
+                v-model="formData[field.key]"
+                type="textarea"
+                :rows="field.rows || 3"
+                :placeholder="field.placeholder"
+                :maxlength="field.maxLength"
+                :show-word-limit="!!field.maxLength"
+              />
 
-            <!-- 金额输入 -->
-            <el-input
-              v-else-if="field.type === 'money'"
-              v-model="formData[field.key]"
-              :placeholder="field.placeholder"
-              clearable
-            >
-              <template #prepend>{{ field.currency || '¥' }}</template>
-            </el-input>
+              <!-- 数字输入 -->
+              <el-input-number
+                v-else-if="field.type === 'number'"
+                v-model="formData[field.key]"
+                :min="field.min"
+                :max="field.max"
+                :step="field.step || 1"
+                :precision="field.precision"
+                style="width: 100%"
+              />
 
-            <!-- 只读文本 -->
-            <span v-else-if="field.type === 'readonly'" class="readonly-text">
-              {{ formData[field.key] || '-' }}
-            </span>
+              <!-- 下拉选择 -->
+              <el-select
+                v-else-if="field.type === 'select'"
+                v-model="formData[field.key]"
+                :placeholder="field.placeholder"
+                :multiple="field.multiple"
+                :filterable="field.filterable"
+                clearable
+                style="width: 100%"
+                popper-class="form-renderer-popper"
+              >
+                <el-option
+                  v-for="opt in field.options"
+                  :key="opt.value"
+                  :label="opt.label"
+                  :value="opt.value"
+                />
+              </el-select>
 
-            <!-- 分隔线 -->
-            <el-divider v-else-if="field.type === 'divider'" />
+              <!-- 单选框 -->
+              <el-radio-group
+                v-else-if="field.type === 'radio'"
+                v-model="formData[field.key]"
+              >
+                <el-radio
+                  v-for="opt in field.options"
+                  :key="opt.value"
+                  :label="opt.value"
+                >
+                  {{ opt.label }}
+                </el-radio>
+              </el-radio-group>
 
-            <!-- 提示信息 -->
-            <el-alert
-              v-else-if="field.type === 'alert'"
-              :title="field.alertTitle"
-              :type="field.alertType || 'info'"
-              :closable="false"
-              show-icon
-            />
-          </el-form-item>
-        </el-col>
-      </el-row>
+              <!-- 复选框 -->
+              <el-checkbox-group
+                v-else-if="field.type === 'checkbox'"
+                v-model="formData[field.key]"
+              >
+                <el-checkbox
+                  v-for="opt in field.options"
+                  :key="opt.value"
+                  :label="opt.value"
+                >
+                  {{ opt.label }}
+                </el-checkbox>
+              </el-checkbox-group>
+
+              <!-- 开关 -->
+              <el-switch
+                v-else-if="field.type === 'switch'"
+                v-model="formData[field.key]"
+                :active-text="field.activeText"
+                :inactive-text="field.inactiveText"
+              />
+
+              <!-- 日期选择 -->
+              <el-date-picker
+                v-else-if="field.type === 'date'"
+                v-model="formData[field.key]"
+                type="date"
+                :placeholder="field.placeholder"
+                value-format="YYYY-MM-DD"
+                style="width: 100%"
+                popper-class="form-renderer-popper"
+              />
+
+              <!-- 日期时间选择 -->
+              <el-date-picker
+                v-else-if="field.type === 'datetime'"
+                v-model="formData[field.key]"
+                type="datetime"
+                :placeholder="field.placeholder"
+                value-format="YYYY-MM-DD HH:mm:ss"
+                style="width: 100%"
+                popper-class="form-renderer-popper"
+              />
+
+              <!-- 日期范围 -->
+              <el-date-picker
+                v-else-if="field.type === 'daterange'"
+                v-model="formData[field.key]"
+                type="daterange"
+                :range-separator="t('common.to')"
+                :start-placeholder="t('common.startDate')"
+                :end-placeholder="t('common.endDate')"
+                value-format="YYYY-MM-DD"
+                style="width: 100%"
+                popper-class="form-renderer-popper"
+              />
+
+              <!-- 时间选择 -->
+              <el-time-picker
+                v-else-if="field.type === 'time'"
+                v-model="formData[field.key]"
+                :placeholder="field.placeholder"
+                value-format="HH:mm:ss"
+                style="width: 100%"
+                popper-class="form-renderer-popper"
+              />
+
+              <!-- 级联选择 -->
+              <el-cascader
+                v-else-if="field.type === 'cascader'"
+                v-model="formData[field.key]"
+                :options="field.options"
+                :props="field.cascaderProps"
+                :placeholder="field.placeholder"
+                clearable
+                style="width: 100%"
+                popper-class="form-renderer-popper"
+              />
+
+              <!-- 用户选择器 -->
+              <el-select
+                v-else-if="field.type === 'user'"
+                v-model="formData[field.key]"
+                :placeholder="field.placeholder"
+                :multiple="field.multiple"
+                filterable
+                remote
+                :remote-method="(query: string) => searchUsers(query, field)"
+                clearable
+                style="width: 100%"
+                popper-class="form-renderer-popper"
+              >
+                <el-option
+                  v-for="user in field.userOptions || []"
+                  :key="user.id"
+                  :label="user.name"
+                  :value="user.id"
+                />
+              </el-select>
+
+              <!-- 部门选择器 -->
+              <el-tree-select
+                v-else-if="field.type === 'department'"
+                v-model="formData[field.key]"
+                :data="field.deptOptions || []"
+                :props="{ label: 'name', value: 'id', children: 'children' }"
+                :placeholder="field.placeholder"
+                check-strictly
+                clearable
+                style="width: 100%"
+                popper-class="form-renderer-popper"
+              />
+
+              <!-- 金额输入 -->
+              <el-input
+                v-else-if="field.type === 'money'"
+                v-model="formData[field.key]"
+                :placeholder="field.placeholder"
+                clearable
+              >
+                <template #prepend>{{ field.currency || '¥' }}</template>
+              </el-input>
+
+              <!-- 只读文本 -->
+              <span v-else-if="field.type === 'readonly'" class="readonly-text">
+                {{ formData[field.key] || '-' }}
+              </span>
+
+              <!-- 分隔线 -->
+              <el-divider v-else-if="field.type === 'divider'" />
+
+              <!-- 提示信息 -->
+              <el-alert
+                v-else-if="field.type === 'alert'"
+                :title="field.alertTitle"
+                :type="field.alertType || 'info'"
+                :closable="false"
+                show-icon
+              />
+              
+              <!-- 默认文本输入 -->
+              <el-input
+                v-else
+                v-model="formData[field.key]"
+                :placeholder="field.placeholder"
+                clearable
+              />
+            </el-form-item>
+          </el-col>
+        </el-row>
+      </template>
     </el-form>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { FormInstance, FormRules } from 'element-plus'
+
+const { t } = useI18n()
 
 export interface FormField {
   key: string
@@ -260,10 +492,18 @@ export interface FormField {
   deptOptions?: any[]
   rules?: any[]
   defaultValue?: any
+  tabName?: string  // 所属 Tab 名称
+}
+
+export interface FormTab {
+  name: string
+  label: string
+  fields: FormField[]
 }
 
 interface Props {
   fields: FormField[]
+  tabs?: FormTab[]  // Tab 配置
   modelValue?: Record<string, any>
   readonly?: boolean
   labelWidth?: string
@@ -272,10 +512,24 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   modelValue: () => ({}),
+  tabs: () => [],
   readonly: false,
   labelWidth: '120px',
   size: 'default'
 })
+
+// 是否有 Tab 布局
+const hasTabs = computed(() => props.tabs && props.tabs.length > 0)
+
+// 当前激活的 Tab
+const activeTab = ref('')
+
+// 初始化激活的 Tab
+watch(() => props.tabs, (newTabs) => {
+  if (newTabs && newTabs.length > 0 && !activeTab.value) {
+    activeTab.value = newTabs[0].name
+  }
+}, { immediate: true })
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: Record<string, any>): void
@@ -286,10 +540,18 @@ const formRef = ref<FormInstance>()
 const formData = ref<Record<string, any>>({})
 let isInternalUpdate = false
 
+// 获取所有字段（包括 tabs 中的字段）
+const allFields = computed(() => {
+  if (hasTabs.value && props.tabs) {
+    return props.tabs.flatMap(tab => tab.fields)
+  }
+  return props.fields
+})
+
 // 初始化表单数据
 const initFormData = () => {
   const data: Record<string, any> = {}
-  props.fields.forEach(field => {
+  allFields.value.forEach(field => {
     if (props.modelValue[field.key] !== undefined) {
       data[field.key] = props.modelValue[field.key]
     } else if (field.defaultValue !== undefined) {
@@ -311,7 +573,7 @@ const initFormData = () => {
 // 生成表单验证规则
 const formRules = computed<FormRules>(() => {
   const rules: FormRules = {}
-  props.fields.forEach(field => {
+  allFields.value.forEach(field => {
     if (field.required || field.rules) {
       rules[field.key] = []
       if (field.required) {
@@ -393,6 +655,8 @@ defineExpose({
 
 <style scoped lang="scss">
 .form-renderer {
+  width: 100%;
+  
   .readonly-text {
     color: #606266;
     line-height: 32px;
@@ -400,6 +664,23 @@ defineExpose({
 
   :deep(.el-form-item__label) {
     font-weight: 500;
+  }
+  
+  :deep(.el-tabs--border-card) {
+    border-radius: 4px;
+    width: 100%;
+    
+    .el-tabs__header {
+      background-color: #f5f7fa;
+    }
+    
+    .el-tabs__content {
+      padding: 20px;
+    }
+  }
+  
+  :deep(.el-form) {
+    width: 100%;
   }
 }
 </style>

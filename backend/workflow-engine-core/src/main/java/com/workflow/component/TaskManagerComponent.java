@@ -1,6 +1,7 @@
 package com.workflow.component;
 
 import com.workflow.aspect.AuditAspect.Auditable;
+import com.workflow.client.AdminCenterClient;
 import com.workflow.dto.request.TaskAssignmentRequest;
 import com.workflow.dto.request.TaskClaimRequest;
 import com.workflow.dto.request.TaskDelegationRequest;
@@ -16,10 +17,13 @@ import com.workflow.exception.WorkflowValidationException;
 import com.workflow.repository.ExtendedTaskInfoRepository;
 import com.workflow.service.UserPermissionService;
 
+import org.flowable.engine.RepositoryService;
 import org.flowable.engine.RuntimeService;
 import org.flowable.engine.TaskService;
 import org.flowable.engine.HistoryService;
 import org.flowable.engine.history.HistoricActivityInstance;
+import org.flowable.engine.repository.ProcessDefinition;
+import org.flowable.engine.runtime.ProcessInstance;
 import org.flowable.task.api.Task;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -30,10 +34,13 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -41,6 +48,7 @@ import java.util.Optional;
  * 负责多维度任务分配、查询、委托和完成功能
  * 支持用户、虚拟组、部门角色三种分配类型
  */
+@Slf4j
 @Component
 @Transactional
 public class TaskManagerComponent {
@@ -55,10 +63,16 @@ public class TaskManagerComponent {
     private HistoryService historyService;
     
     @Autowired
+    private RepositoryService repositoryService;
+    
+    @Autowired
     private ExtendedTaskInfoRepository extendedTaskInfoRepository;
     
     @Autowired
     private UserPermissionService userPermissionService;
+    
+    @Autowired
+    private AdminCenterClient adminCenterClient;
     
     /**
      * 查询用户的待办任务（包括直接分配、委托、认领的任务）
@@ -137,15 +151,48 @@ public class TaskManagerComponent {
      * 将 Flowable Task 转换为 TaskInfo
      */
     private TaskListResult.TaskInfo convertFlowableTaskToTaskInfo(Task task) {
+        // 从 processDefinitionId 中提取 processDefinitionKey
+        // 格式: key:version:uuid (例如: Process_PurchaseRequest:2:b550b1fe-f0b0-11f0-b82f-00ff197375e0)
+        String processDefinitionId = task.getProcessDefinitionId();
+        String processDefinitionKey = extractProcessDefinitionKey(processDefinitionId);
+        
+        // 获取流程定义名称
+        String processDefinitionName = getProcessDefinitionName(processDefinitionId);
+        
+        // 获取流程发起人信息
+        String initiatorId = null;
+        String initiatorName = null;
+        if (task.getProcessInstanceId() != null) {
+            ProcessInstance processInstance = runtimeService.createProcessInstanceQuery()
+                .processInstanceId(task.getProcessInstanceId())
+                .singleResult();
+            if (processInstance != null) {
+                initiatorId = processInstance.getStartUserId();
+                if (initiatorId != null) {
+                    initiatorName = resolveUserDisplayName(initiatorId);
+                }
+            }
+        }
+        
+        // 获取当前处理人名称
+        String currentAssignee = task.getAssignee();
+        String currentAssigneeName = null;
+        if (currentAssignee != null && !currentAssignee.isEmpty()) {
+            currentAssigneeName = resolveUserDisplayName(currentAssignee);
+        }
+        
         return TaskListResult.TaskInfo.builder()
             .taskId(task.getId())
             .taskName(task.getName())
             .taskDescription(task.getDescription())
             .processInstanceId(task.getProcessInstanceId())
-            .processDefinitionId(task.getProcessDefinitionId())
+            .processDefinitionId(processDefinitionId)
+            .processDefinitionKey(processDefinitionKey)
+            .processDefinitionName(processDefinitionName)
             .assignmentType(task.getAssignee() != null ? AssignmentType.USER : AssignmentType.VIRTUAL_GROUP)
             .assignmentTarget(task.getAssignee())
-            .currentAssignee(task.getAssignee())
+            .currentAssignee(currentAssignee)
+            .currentAssigneeName(currentAssigneeName)
             .priority(task.getPriority())
             .status("PENDING")
             .createdTime(task.getCreateTime() != null ? 
@@ -153,7 +200,77 @@ public class TaskManagerComponent {
             .dueDate(task.getDueDate() != null ? 
                 LocalDateTime.ofInstant(task.getDueDate().toInstant(), java.time.ZoneId.systemDefault()) : null)
             .formKey(task.getFormKey())
+            .initiatorId(initiatorId)
+            .initiatorName(initiatorName)
             .build();
+    }
+    
+    /**
+     * 解析用户显示名称
+     * 优先返回 fullName，其次 displayName，再次 username，最后返回 userId
+     */
+    private String resolveUserDisplayName(String userId) {
+        if (userId == null || userId.isEmpty()) {
+            return null;
+        }
+        try {
+            Map<String, Object> userInfo = adminCenterClient.getUserInfo(userId);
+            if (userInfo != null) {
+                // 优先使用 fullName
+                String fullName = (String) userInfo.get("fullName");
+                if (fullName != null && !fullName.isEmpty()) {
+                    return fullName;
+                }
+                // 其次使用 displayName
+                String displayName = (String) userInfo.get("displayName");
+                if (displayName != null && !displayName.isEmpty()) {
+                    return displayName;
+                }
+                // 再次使用 username
+                String username = (String) userInfo.get("username");
+                if (username != null && !username.isEmpty()) {
+                    return username;
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to resolve user display name for {}: {}", userId, e.getMessage());
+        }
+        return userId;
+    }
+    
+    /**
+     * 获取流程定义名称
+     */
+    private String getProcessDefinitionName(String processDefinitionId) {
+        if (processDefinitionId == null || processDefinitionId.isEmpty()) {
+            return null;
+        }
+        try {
+            ProcessDefinition processDefinition = repositoryService.createProcessDefinitionQuery()
+                .processDefinitionId(processDefinitionId)
+                .singleResult();
+            if (processDefinition != null) {
+                return processDefinition.getName();
+            }
+        } catch (Exception e) {
+            // 忽略异常，返回 null
+        }
+        return extractProcessDefinitionKey(processDefinitionId);
+    }
+    
+    /**
+     * 从 processDefinitionId 中提取 processDefinitionKey
+     * 格式: key:version:uuid (例如: Process_PurchaseRequest:2:b550b1fe-f0b0-11f0-b82f-00ff197375e0)
+     */
+    private String extractProcessDefinitionKey(String processDefinitionId) {
+        if (processDefinitionId == null || processDefinitionId.isEmpty()) {
+            return null;
+        }
+        int colonIndex = processDefinitionId.indexOf(':');
+        if (colonIndex > 0) {
+            return processDefinitionId.substring(0, colonIndex);
+        }
+        return processDefinitionId;
     }
     
     /**
@@ -810,22 +927,109 @@ public class TaskManagerComponent {
     
     /**
      * 获取任务详情
+     * 优先从 Flowable TaskService 查询，如果找不到再从扩展表查询
      */
     public TaskListResult.TaskInfo getTaskInfo(String taskId) {
         try {
-            // 查找扩展任务信息
-            ExtendedTaskInfo extendedTaskInfo = extendedTaskInfoRepository
-                .findByTaskIdAndIsDeletedFalse(taskId)
-                .orElseThrow(() -> new WorkflowValidationException(Collections.singletonList(
-                    new WorkflowValidationException.ValidationError(
-                        "taskId", "任务不存在", taskId))));
+            // 1. 首先尝试从 Flowable 直接查询任务
+            Task task = taskService.createTaskQuery()
+                .taskId(taskId)
+                .singleResult();
             
-            return convertToTaskInfo(extendedTaskInfo);
+            if (task != null) {
+                // 从 Flowable 任务构建 TaskInfo
+                return buildTaskInfoFromFlowableTask(task);
+            }
             
+            // 2. 如果 Flowable 中没有，尝试从扩展表查询（可能是已完成的任务）
+            Optional<ExtendedTaskInfo> extendedTaskInfoOpt = extendedTaskInfoRepository
+                .findByTaskIdAndIsDeletedFalse(taskId);
+            
+            if (extendedTaskInfoOpt.isPresent()) {
+                return convertToTaskInfo(extendedTaskInfoOpt.get());
+            }
+            
+            // 3. 都找不到，抛出异常
+            throw new WorkflowValidationException(Collections.singletonList(
+                new WorkflowValidationException.ValidationError(
+                    "taskId", "任务不存在", taskId)));
+            
+        } catch (WorkflowValidationException e) {
+            throw e;
         } catch (Exception e) {
             throw new WorkflowBusinessException("TASK_QUERY_ERROR", 
                 "查询任务详情失败: " + e.getMessage(), e);
         }
+    }
+    
+    /**
+     * 从 Flowable Task 构建 TaskInfo
+     */
+    private TaskListResult.TaskInfo buildTaskInfoFromFlowableTask(Task task) {
+        // 从 processDefinitionId 提取 processDefinitionKey
+        String processDefinitionKey = null;
+        String processDefinitionId = task.getProcessDefinitionId();
+        if (processDefinitionId != null && processDefinitionId.contains(":")) {
+            processDefinitionKey = processDefinitionId.substring(0, processDefinitionId.indexOf(':'));
+        }
+        
+        // 获取流程定义名称
+        String processDefinitionName = getProcessDefinitionName(processDefinitionId);
+        
+        // 确定分配类型：如果有 assignee，则为 USER 类型（包括认领后的任务）
+        AssignmentType assignmentType = AssignmentType.USER;
+        String assignmentTarget = task.getAssignee();
+        
+        if (task.getAssignee() == null || task.getAssignee().isEmpty()) {
+            // 没有直接分配，检查候选人/候选组
+            assignmentType = AssignmentType.VIRTUAL_GROUP;
+            assignmentTarget = null;
+        }
+        
+        // 获取流程发起人信息
+        String initiatorId = null;
+        String initiatorName = null;
+        if (task.getProcessInstanceId() != null) {
+            ProcessInstance processInstance = runtimeService.createProcessInstanceQuery()
+                .processInstanceId(task.getProcessInstanceId())
+                .singleResult();
+            if (processInstance != null) {
+                initiatorId = processInstance.getStartUserId();
+                if (initiatorId != null) {
+                    initiatorName = resolveUserDisplayName(initiatorId);
+                }
+            }
+        }
+        
+        // 获取当前处理人名称
+        String currentAssignee = task.getAssignee();
+        String currentAssigneeName = null;
+        if (currentAssignee != null && !currentAssignee.isEmpty()) {
+            currentAssigneeName = resolveUserDisplayName(currentAssignee);
+        }
+        
+        return TaskListResult.TaskInfo.builder()
+            .taskId(task.getId())
+            .taskName(task.getName())
+            .taskDescription(task.getDescription())
+            .processInstanceId(task.getProcessInstanceId())
+            .processDefinitionId(processDefinitionId)
+            .processDefinitionKey(processDefinitionKey)
+            .processDefinitionName(processDefinitionName)
+            .currentAssignee(currentAssignee)
+            .currentAssigneeName(currentAssigneeName)
+            .assignmentType(assignmentType)
+            .assignmentTarget(assignmentTarget)
+            .priority(task.getPriority())
+            .createdTime(task.getCreateTime() != null ? 
+                LocalDateTime.ofInstant(task.getCreateTime().toInstant(), java.time.ZoneId.systemDefault()) : null)
+            .dueDate(task.getDueDate() != null ? 
+                LocalDateTime.ofInstant(task.getDueDate().toInstant(), java.time.ZoneId.systemDefault()) : null)
+            .formKey(task.getFormKey())
+            .status("ACTIVE")
+            .initiatorId(initiatorId)
+            .initiatorName(initiatorName)
+            .build();
     }
     // ==================== 私有辅助方法 ====================
     
@@ -1063,12 +1267,16 @@ public class TaskManagerComponent {
      * 转换为任务信息DTO
      */
     private TaskListResult.TaskInfo convertToTaskInfo(ExtendedTaskInfo extendedTaskInfo) {
+        // 获取流程定义名称
+        String processDefinitionName = getProcessDefinitionName(extendedTaskInfo.getProcessDefinitionId());
+        
         return TaskListResult.TaskInfo.builder()
             .taskId(extendedTaskInfo.getTaskId())
             .taskName(extendedTaskInfo.getTaskName())
             .taskDescription(extendedTaskInfo.getTaskDescription())
             .processInstanceId(extendedTaskInfo.getProcessInstanceId())
             .processDefinitionId(extendedTaskInfo.getProcessDefinitionId())
+            .processDefinitionName(processDefinitionName)
             .assignmentType(extendedTaskInfo.getAssignmentType())
             .assignmentTarget(extendedTaskInfo.getAssignmentTarget())
             .currentAssignee(extendedTaskInfo.getCurrentAssignee())

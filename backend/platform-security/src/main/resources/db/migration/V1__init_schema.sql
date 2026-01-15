@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS sys_users (
     deleted BOOLEAN NOT NULL DEFAULT false,
     deleted_at TIMESTAMP,
     deleted_by VARCHAR(64),
-    CONSTRAINT chk_sys_user_status CHECK (status IN ('ACTIVE', 'INACTIVE', 'LOCKED'))
+    CONSTRAINT chk_sys_user_status CHECK (status IN ('ACTIVE', 'INACTIVE', 'DISABLED', 'LOCKED', 'PENDING'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_sys_users_username ON sys_users(username);
@@ -457,6 +457,7 @@ CREATE TABLE IF NOT EXISTS sys_function_unit_contents (
     content_path VARCHAR(500),
     content_data TEXT,
     checksum VARCHAR(64),
+    source_id VARCHAR(64),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_content_func_unit FOREIGN KEY (function_unit_id) REFERENCES sys_function_units(id)
 );

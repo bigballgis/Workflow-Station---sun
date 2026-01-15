@@ -33,6 +33,9 @@ public class FunctionUnitAccessComponent {
     // 缓存功能单元的访问配置
     private final ConcurrentHashMap<String, CachedData<Set<String>>> functionUnitAccessCache = new ConcurrentHashMap<>();
     
+    // 缓存 process key → function unit ID 映射
+    private final ConcurrentHashMap<String, CachedData<String>> processKeyCache = new ConcurrentHashMap<>();
+    
     private static final long CACHE_TTL = TimeUnit.MINUTES.toMillis(5);
     
     /**
@@ -96,7 +99,7 @@ public class FunctionUnitAccessComponent {
     }
     
     /**
-     * 根据 ID、code 或名称获取功能单元的实际 ID
+     * 根据 ID、code、名称或流程定义Key获取功能单元的实际 ID
      */
     public String resolveFunctionUnitId(String functionUnitIdOrCode) {
         log.info("Resolving function unit ID for: {}", functionUnitIdOrCode);
@@ -104,6 +107,13 @@ public class FunctionUnitAccessComponent {
         // 如果看起来像 UUID，直接返回
         if (functionUnitIdOrCode != null && functionUnitIdOrCode.matches("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")) {
             return functionUnitIdOrCode;
+        }
+        
+        // 检查 process key 缓存
+        CachedData<String> cachedResult = processKeyCache.get(functionUnitIdOrCode);
+        if (cachedResult != null && !cachedResult.isExpired()) {
+            log.info("Returning cached function unit ID for process key {}: {}", functionUnitIdOrCode, cachedResult.data);
+            return cachedResult.data;
         }
         
         try {
@@ -128,10 +138,33 @@ public class FunctionUnitAccessComponent {
                     return id;
                 }
             } catch (Exception e) {
-                log.warn("Failed to find function unit by code {}, trying by name: {}", functionUnitIdOrCode, e.getMessage());
+                log.warn("Failed to find function unit by code {}, trying by process key: {}", functionUnitIdOrCode, e.getMessage());
             }
             
-            // 如果通过 code 找不到，尝试通过名称搜索
+            // 如果通过 code 找不到，尝试通过流程定义Key查找
+            String processKeyUrl = adminCenterUrl + "/api/v1/admin/function-units/by-process-key/" + encodedParam;
+            log.info("Fetching function unit by process key from: {}", processKeyUrl);
+            
+            try {
+                ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                        processKeyUrl,
+                        HttpMethod.GET,
+                        null,
+                        new ParameterizedTypeReference<Map<String, Object>>() {}
+                );
+                
+                if (response.getBody() != null) {
+                    String id = (String) response.getBody().get("id");
+                    log.info("Resolved function unit by process key {} to ID {}", functionUnitIdOrCode, id);
+                    // 缓存 process key → function unit ID 映射
+                    processKeyCache.put(functionUnitIdOrCode, new CachedData<>(id));
+                    return id;
+                }
+            } catch (Exception e) {
+                log.warn("Failed to find function unit by process key {}, trying by name: {}", functionUnitIdOrCode, e.getMessage());
+            }
+            
+            // 如果通过流程Key找不到，尝试通过名称搜索
             String searchUrl = adminCenterUrl + "/api/v1/admin/function-units?keyword=" + encodedParam + "&size=1";
             log.info("Searching function unit by name from: {}", searchUrl);
             
@@ -348,11 +381,34 @@ public class FunctionUnitAccessComponent {
     }
     
     /**
+     * 清除 process key 缓存
+     */
+    public void clearProcessKeyCache(String processKey) {
+        processKeyCache.remove(processKey);
+    }
+    
+    /**
      * 清除所有缓存
      */
     public void clearAllCache() {
         userRolesCache.clear();
         functionUnitAccessCache.clear();
+        processKeyCache.clear();
+    }
+    
+    /**
+     * 获取 process key 缓存大小（用于测试）
+     */
+    public int getProcessKeyCacheSize() {
+        return processKeyCache.size();
+    }
+    
+    /**
+     * 检查 process key 是否在缓存中（用于测试）
+     */
+    public boolean isProcessKeyCached(String processKey) {
+        CachedData<String> cached = processKeyCache.get(processKey);
+        return cached != null && !cached.isExpired();
     }
     
     private boolean hasAnyRole(Set<String> userRoleIds, Set<String> allowedRoleIds) {

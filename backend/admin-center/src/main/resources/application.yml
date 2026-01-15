@@ -103,8 +103,8 @@ logging:
   file:
     name: logs/admin-center.log
   pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
-    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+    console: "%d{yyyy-MM-dd HH:mm:ss} [admin-center] [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [admin-center] [%thread] %-5level %logger{36} - %msg%n"
   logback:
     rollingpolicy:
       max-file-size: 10MB

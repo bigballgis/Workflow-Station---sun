@@ -1,7 +1,7 @@
 <template>
   <el-dialog
     v-model="visible"
-    title="⚠️ 危险操作"
+    :title="t('functionUnit.deleteConfirm')"
     width="550px"
     :close-on-click-modal="false"
     :close-on-press-escape="false"
@@ -10,17 +10,17 @@
     <div class="warning-content">
       <el-alert type="error" :closable="false" show-icon>
         <template #title>
-          <strong>您即将删除功能单元: {{ functionUnit?.name }}</strong>
+          <strong>{{ functionUnit?.name }}</strong>
         </template>
         <div class="alert-content">
-          <p>此操作<strong>不可撤销</strong>，将永久删除以下所有关联数据：</p>
+          <p>{{ t('functionUnit.deleteWarning') }}</p>
           <ul class="delete-list">
-            <li v-if="preview?.formCount"><el-icon><Document /></el-icon> {{ preview.formCount }} 个表单</li>
-            <li v-if="preview?.processCount"><el-icon><Connection /></el-icon> {{ preview.processCount }} 个流程</li>
-            <li v-if="preview?.dataTableCount"><el-icon><Grid /></el-icon> {{ preview.dataTableCount }} 个数据表</li>
-            <li v-if="preview?.accessConfigCount"><el-icon><Lock /></el-icon> {{ preview.accessConfigCount }} 个权限配置</li>
-            <li v-if="preview?.deploymentCount"><el-icon><Upload /></el-icon> {{ preview.deploymentCount }} 个部署记录</li>
-            <li v-if="preview?.dependencyCount"><el-icon><Link /></el-icon> {{ preview.dependencyCount }} 个依赖关系</li>
+            <li v-if="preview?.formCount"><el-icon><Document /></el-icon> {{ preview.formCount }} {{ t('form.title') }}</li>
+            <li v-if="preview?.processCount"><el-icon><Connection /></el-icon> {{ preview.processCount }} {{ t('process.title') }}</li>
+            <li v-if="preview?.dataTableCount"><el-icon><Grid /></el-icon> {{ preview.dataTableCount }} {{ t('table.title') }}</li>
+            <li v-if="preview?.accessConfigCount"><el-icon><Lock /></el-icon> {{ preview.accessConfigCount }} {{ t('functionUnit.accessConfig') }}</li>
+            <li v-if="preview?.deploymentCount"><el-icon><Upload /></el-icon> {{ preview.deploymentCount }} {{ t('functionUnit.deploy') }}</li>
+            <li v-if="preview?.dependencyCount"><el-icon><Link /></el-icon> {{ preview.dependencyCount }}</li>
           </ul>
         </div>
       </el-alert>
@@ -28,27 +28,27 @@
       <div v-if="preview?.hasRunningInstances" class="running-instances-warning">
         <el-alert type="warning" :closable="false" show-icon>
           <template #title>
-            <strong>无法删除</strong>
+            <strong>{{ t('common.error') }}</strong>
           </template>
-          <p>存在 {{ preview.runningInstanceCount }} 个运行中的流程实例，请先处理这些实例后再删除。</p>
+          <p>{{ preview.runningInstanceCount }}</p>
         </el-alert>
       </div>
       
       <div v-else class="confirm-input">
-        <p>请输入功能单元名称 <strong class="highlight-name">{{ functionUnit?.name }}</strong> 以确认删除：</p>
+        <p>{{ t('functionUnit.deleteWarning') }} <strong class="highlight-name">{{ functionUnit?.name }}</strong></p>
         <el-input
           v-model="confirmName"
-          placeholder="输入功能单元名称"
+          :placeholder="t('functionUnit.inputNameToConfirm')"
           @input="handleNameInput"
         />
         <p v-if="confirmName && !nameMatches" class="error-hint">
-          <el-icon><Warning /></el-icon> 名称不匹配
+          <el-icon><Warning /></el-icon> {{ t('common.error') }}
         </p>
       </div>
     </div>
     
     <template #footer>
-      <el-button @click="handleCancel">取消</el-button>
+      <el-button @click="handleCancel">{{ t('common.cancel') }}</el-button>
       <el-button
         type="danger"
         :disabled="!canDelete"
@@ -56,10 +56,10 @@
         @click="handleDelete"
       >
         <template v-if="countdown > 0">
-          删除 ({{ countdown }}s)
+          {{ t('common.delete') }} ({{ countdown }}s)
         </template>
         <template v-else>
-          确认删除
+          {{ t('common.confirm') }}
         </template>
       </el-button>
     </template>
@@ -68,8 +68,11 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Document, Connection, Grid, Lock, Upload, Link, Warning } from '@element-plus/icons-vue'
 import type { FunctionUnit, DeletePreviewResponse } from '@/api/functionUnit'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   modelValue: boolean

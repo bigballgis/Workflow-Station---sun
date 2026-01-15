@@ -2,32 +2,32 @@
   <div class="user-task-properties">
     <el-collapse v-model="activeGroups">
       <!-- 基本信息 -->
-      <el-collapse-item title="基本信息" name="basic">
+      <el-collapse-item :title="$t('properties.basic')" name="basic">
         <el-form label-position="top" size="small">
-          <el-form-item label="任务ID">
+          <el-form-item :label="$t('properties.taskId')">
             <el-input :model-value="basicProps.id" disabled />
           </el-form-item>
-          <el-form-item label="任务名称">
-            <el-input v-model="taskName" @change="updateBasicProp('name', taskName)" placeholder="任务名称" />
+          <el-form-item :label="$t('properties.taskName')">
+            <el-input v-model="taskName" @change="updateBasicProp('name', taskName)" :placeholder="$t('properties.taskName')" />
           </el-form-item>
-          <el-form-item label="任务描述">
-            <el-input v-model="taskDescription" type="textarea" :rows="2" @change="updateExtProp('description', taskDescription)" placeholder="任务描述" />
+          <el-form-item :label="$t('properties.taskDescription')">
+            <el-input v-model="taskDescription" type="textarea" :rows="2" @change="updateExtProp('description', taskDescription)" :placeholder="$t('properties.taskDescription')" />
           </el-form-item>
         </el-form>
       </el-collapse-item>
       
       <!-- 处理人配置 -->
-      <el-collapse-item title="处理人配置" name="assignee">
+      <el-collapse-item :title="$t('properties.assignee')" name="assignee">
         <el-form label-position="top" size="small">
-          <el-form-item label="分配方式">
+          <el-form-item :label="$t('properties.assigneeType')">
             <el-select v-model="assigneeType" @change="handleAssigneeTypeChange">
-              <el-option label="流程发起人" value="INITIATOR" />
-              <el-option label="实体经理" value="ENTITY_MANAGER" />
-              <el-option label="职能经理" value="FUNCTION_MANAGER" />
-              <el-option label="本部门其他人" value="DEPT_OTHERS" />
-              <el-option label="上级部门" value="PARENT_DEPT" />
-              <el-option label="指定部门" value="FIXED_DEPT" />
-              <el-option label="虚拟组" value="VIRTUAL_GROUP" />
+              <el-option :label="$t('properties.initiator')" value="INITIATOR" />
+              <el-option :label="$t('properties.entityManager')" value="ENTITY_MANAGER" />
+              <el-option :label="$t('properties.functionManager')" value="FUNCTION_MANAGER" />
+              <el-option :label="$t('properties.deptOthers')" value="DEPT_OTHERS" />
+              <el-option :label="$t('properties.parentDept')" value="PARENT_DEPT" />
+              <el-option :label="$t('properties.fixedDept')" value="FIXED_DEPT" />
+              <el-option :label="$t('properties.virtualGroup')" value="VIRTUAL_GROUP" />
             </el-select>
           </el-form-item>
           
@@ -37,27 +37,27 @@
           </div>
           
           <!-- 指定部门选择器 -->
-          <el-form-item v-if="assigneeType === 'FIXED_DEPT'" label="选择部门">
+          <el-form-item v-if="assigneeType === 'FIXED_DEPT'" :label="$t('properties.selectDepartment')">
             <el-tree-select
               v-model="assigneeValue"
               :data="departments"
               node-key="id"
               :props="{ label: 'name', children: 'children' }"
               :loading="loadingDepartments"
-              placeholder="请选择部门"
+              :placeholder="$t('properties.selectDepartment')"
               check-strictly
               filterable
               @change="handleAssigneeValueChange"
             />
-            <div class="form-tip">选择一个部门，该部门的所有成员都可以认领此任务</div>
+            <div class="form-tip">{{ $t('properties.selectDepartment') }}</div>
           </el-form-item>
           
           <!-- 虚拟组选择器 -->
-          <el-form-item v-if="assigneeType === 'VIRTUAL_GROUP'" label="选择虚拟组">
+          <el-form-item v-if="assigneeType === 'VIRTUAL_GROUP'" :label="$t('properties.selectVirtualGroup')">
             <el-select
               v-model="assigneeValue"
               :loading="loadingVirtualGroups"
-              placeholder="请选择虚拟组"
+              :placeholder="$t('properties.selectVirtualGroup')"
               filterable
               @change="handleAssigneeValueChange"
             >
@@ -69,11 +69,11 @@
               >
                 <span>{{ group.name }}</span>
                 <span v-if="group.memberCount" style="color: #909399; margin-left: 8px;">
-                  ({{ group.memberCount }}人)
+                  ({{ group.memberCount }})
                 </span>
               </el-option>
             </el-select>
-            <div class="form-tip">选择一个虚拟组，该组的所有成员都可以认领此任务</div>
+            <div class="form-tip">{{ $t('properties.selectVirtualGroup') }}</div>
           </el-form-item>
           
           <!-- 认领类型提示 -->
@@ -85,35 +85,35 @@
             </el-alert>
           </div>
           
-          <el-form-item label="候选用户">
-            <el-input v-model="candidateUsers" @change="updateExtProp('candidateUsers', candidateUsers)" placeholder="多个用户用逗号分隔" />
+          <el-form-item :label="$t('properties.candidateUsers')">
+            <el-input v-model="candidateUsers" @change="updateExtProp('candidateUsers', candidateUsers)" :placeholder="$t('properties.candidateUsersPlaceholder')" />
           </el-form-item>
           
-          <el-form-item label="候选组">
-            <el-input v-model="candidateGroups" @change="updateExtProp('candidateGroups', candidateGroups)" placeholder="多个组用逗号分隔" />
+          <el-form-item :label="$t('properties.candidateGroups')">
+            <el-input v-model="candidateGroups" @change="updateExtProp('candidateGroups', candidateGroups)" :placeholder="$t('properties.candidateGroupsPlaceholder')" />
           </el-form-item>
         </el-form>
       </el-collapse-item>
       
       <!-- 表单绑定 -->
-      <el-collapse-item title="表单绑定" name="form">
+      <el-collapse-item :title="$t('properties.form')" name="form">
         <el-form label-position="top" size="small">
-          <el-form-item label="绑定表单">
-            <el-select v-model="formId" @change="handleFormChange" placeholder="选择表单" clearable>
+          <el-form-item :label="$t('properties.bindForm')">
+            <el-select v-model="formId" @change="handleFormChange" :placeholder="$t('properties.selectForm')" clearable>
               <el-option v-for="form in forms" :key="form.id" :label="form.formName" :value="form.id" />
             </el-select>
           </el-form-item>
           <div v-if="formId" class="form-preview-link">
-            <el-button link type="primary" size="small">预览表单</el-button>
+            <el-button link type="primary" size="small">{{ $t('common.preview') }}</el-button>
           </div>
         </el-form>
       </el-collapse-item>
       
       <!-- 动作绑定 -->
-      <el-collapse-item title="动作绑定" name="actions">
+      <el-collapse-item :title="$t('properties.actions')" name="actions">
         <el-form label-position="top" size="small">
-          <el-form-item label="可用动作">
-            <el-select v-model="actionIds" @change="handleActionsChange" placeholder="选择动作" multiple clearable>
+          <el-form-item :label="$t('properties.availableActions')">
+            <el-select v-model="actionIds" @change="handleActionsChange" :placeholder="$t('properties.selectActions')" multiple clearable>
               <el-option v-for="action in actions" :key="action.id" :label="action.actionName" :value="action.id">
                 <span>{{ action.actionName }}</span>
                 <el-tag size="small" style="margin-left: 8px;">{{ actionTypeLabel(action.actionType) }}</el-tag>
@@ -121,29 +121,29 @@
             </el-select>
           </el-form-item>
           <div v-if="actionIds.length > 0" class="selected-actions">
-            <div class="form-tip">已选择 {{ actionIds.length }} 个动作</div>
+            <div class="form-tip">{{ actionIds.length }}</div>
           </div>
         </el-form>
       </el-collapse-item>
       
       <!-- 超时配置 -->
-      <el-collapse-item title="超时配置" name="timeout">
+      <el-collapse-item :title="$t('properties.timeout')" name="timeout">
         <el-form label-position="top" size="small">
-          <el-form-item label="启用超时">
+          <el-form-item :label="$t('properties.enableTimeout')">
             <el-switch v-model="timeoutEnabled" @change="updateExtProp('timeoutEnabled', timeoutEnabled)" />
           </el-form-item>
           
           <template v-if="timeoutEnabled">
-            <el-form-item label="超时时间">
-              <el-input v-model="timeoutDuration" @change="updateExtProp('timeoutDuration', timeoutDuration)" placeholder="PT24H (24小时)" />
-              <div class="form-tip">ISO 8601 格式：PT1H (1小时)、P1D (1天)</div>
+            <el-form-item :label="$t('properties.timeoutDuration')">
+              <el-input v-model="timeoutDuration" @change="updateExtProp('timeoutDuration', timeoutDuration)" :placeholder="$t('properties.timeoutDurationPlaceholder')" />
+              <div class="form-tip">{{ $t('properties.timeoutDurationHint') }}</div>
             </el-form-item>
             
-            <el-form-item label="超时动作">
+            <el-form-item :label="$t('properties.timeoutAction')">
               <el-select v-model="timeoutAction" @change="updateExtProp('timeoutAction', timeoutAction)">
-                <el-option label="发送提醒" value="remind" />
-                <el-option label="自动通过" value="approve" />
-                <el-option label="自动拒绝" value="reject" />
+                <el-option :label="$t('properties.notify')" value="remind" />
+                <el-option :label="$t('properties.autoComplete')" value="approve" />
+                <el-option :label="$t('properties.autoComplete')" value="reject" />
               </el-select>
             </el-form-item>
           </template>
@@ -183,6 +183,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { BpmnElement, BpmnModeler } from '@/types/bpmn'
 import type { FormDefinition, ActionDefinition } from '@/api/functionUnit'
 import { functionUnitApi } from '@/api/functionUnit'
@@ -193,6 +194,8 @@ import {
   getExtensionProperties,
   setExtensionProperty
 } from '@/utils/bpmnExtensions'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   modeler: BpmnModeler

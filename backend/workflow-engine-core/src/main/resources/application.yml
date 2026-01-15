@@ -24,7 +24,7 @@ spring:
   # JPA Configuration
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     show-sql: false
     properties:
       hibernate:
@@ -105,7 +105,7 @@ logging:
     com.platform: DEBUG
     org.flowable: INFO
   pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] [%X{traceId}] %-5level %logger{36} - %msg%n"
+    console: "%d{yyyy-MM-dd HH:mm:ss} [workflow-engine] [%thread] [%X{traceId}] %-5level %logger{36} - %msg%n"
 
 ---
 # Development Profile

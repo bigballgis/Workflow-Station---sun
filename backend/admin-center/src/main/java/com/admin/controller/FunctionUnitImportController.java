@@ -106,6 +106,10 @@ public class FunctionUnitImportController {
                     for (Map<String, Object> formData : forms) {
                         try {
                             String formName = (String) formData.get("formName");
+                            // 获取原始表单ID（来自 dw_form_definitions.id）
+                            Object formIdObj = formData.get("formId");
+                            String sourceId = formIdObj != null ? String.valueOf(formIdObj) : null;
+                            
                             @SuppressWarnings("unchecked")
                             Map<String, Object> configJson = (Map<String, Object>) formData.get("configJson");
                             
@@ -116,10 +120,11 @@ public class FunctionUnitImportController {
                                         importResult.getFunctionUnit().getId(),
                                         com.admin.enums.ContentType.FORM,
                                         formName,
-                                        formConfigStr
+                                        formConfigStr,
+                                        sourceId
                                 );
-                                log.info("Saved form content: {} for function unit: {}", 
-                                        formName, importResult.getFunctionUnit().getId());
+                                log.info("Saved form content: {} with sourceId: {} for function unit: {}", 
+                                        formName, sourceId, importResult.getFunctionUnit().getId());
                             }
                         } catch (Exception e) {
                             log.warn("Failed to save form content", e);

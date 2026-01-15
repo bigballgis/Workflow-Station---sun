@@ -1,22 +1,39 @@
 <template>
   <div class="login-container">
     <div class="login-bg-pattern"></div>
+    <!-- Language Switcher -->
+    <div class="language-switcher">
+      <el-dropdown @command="handleLanguage">
+        <span class="lang-trigger">
+          <el-icon><Location /></el-icon>
+          <span>{{ currentLang }}</span>
+          <el-icon><ArrowDown /></el-icon>
+        </span>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item command="zh-CN">简体中文</el-dropdown-item>
+            <el-dropdown-item command="zh-TW">繁體中文</el-dropdown-item>
+            <el-dropdown-item command="en">English</el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
+    </div>
     <div class="login-content">
       <div class="login-card">
         <div class="login-header">
           <span class="login-icon">🛡️</span>
-          <h2 class="login-title">管理员中心</h2>
-          <p class="login-subtitle">系统管理与配置平台</p>
+          <h2 class="login-title">{{ t('login.title') }}</h2>
+          <p class="login-subtitle">{{ t('login.subtitle') }}</p>
         </div>
         
         <!-- 测试用户快速选择 (仅开发环境) -->
         <div v-if="isDev" class="test-user-section">
           <el-divider content-position="center">
-            <span class="test-user-label">🚀 快速登录</span>
+            <span class="test-user-label">🚀 {{ t('login.testUserHint') }}</span>
           </el-divider>
           <el-select 
             v-model="selectedTestUser" 
-            placeholder="选择测试用户" 
+            :placeholder="t('login.selectTestUser')" 
             @change="onTestUserSelect"
             class="test-user-select"
           >
@@ -38,7 +55,7 @@
           <el-form-item prop="username">
             <el-input 
               v-model="form.username" 
-              placeholder="请输入用户名" 
+              :placeholder="t('login.usernamePlaceholder')" 
               prefix-icon="User"
               size="large"
             />
@@ -47,7 +64,7 @@
             <el-input 
               v-model="form.password" 
               type="password" 
-              placeholder="请输入密码" 
+              :placeholder="t('login.passwordPlaceholder')" 
               prefix-icon="Lock" 
               show-password
               size="large"
@@ -61,13 +78,13 @@
               class="login-btn"
               size="large"
             >
-              {{ loading ? '登录中...' : '登 录' }}
+              {{ loading ? t('common.loading') : t('login.login') }}
             </el-button>
           </el-form-item>
         </el-form>
 
         <div class="login-footer">
-          <span>© 2024 工作流平台 · 管理员中心</span>
+          <span>© 2024 {{ t('login.title') }}</span>
         </div>
       </div>
     </div>
@@ -75,11 +92,23 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, FormInstance } from 'element-plus'
-import { login as authLogin, saveTokens, saveUser, type LoginRequest } from '@/api/auth'
+import { Location, ArrowDown } from '@element-plus/icons-vue'
+import { login as authLogin, saveTokens, saveUser } from '@/api/auth'
+import i18n from '@/i18n'
 
+const { t } = useI18n()
+
+const langMap: Record<string, string> = { 'zh-CN': '简体中文', 'zh-TW': '繁體中文', 'en': 'English' }
+const currentLang = computed(() => langMap[i18n.global.locale.value] || '简体中文')
+
+const handleLanguage = (lang: string) => {
+  i18n.global.locale.value = lang as 'zh-CN' | 'zh-TW' | 'en'
+  localStorage.setItem('language', lang)
+}
 const router = useRouter()
 const formRef = ref<FormInstance>()
 const loading = ref(false)
@@ -87,22 +116,22 @@ const loading = ref(false)
 const isDev = import.meta.env.DEV
 
 const testUsers = [
-  { username: 'admin', password: 'admin123', name: '系统管理员', role: '系统管理员', tagType: 'danger' as const },
+  { username: 'admin', password: 'admin123', name: 'System Admin', role: 'Admin', tagType: 'danger' as const },
 ]
 
 const selectedTestUser = ref('')
 const form = reactive({ username: '', password: '' })
-const rules = {
-  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
-  password: [{ required: true, message: '请输入密码', trigger: 'blur' }]
-}
+const rules = computed(() => ({
+  username: [{ required: true, message: t('login.usernamePlaceholder'), trigger: 'blur' }],
+  password: [{ required: true, message: t('login.passwordPlaceholder'), trigger: 'blur' }]
+}))
 
 const onTestUserSelect = (username: string) => {
   const user = testUsers.find(u => u.username === username)
   if (user) {
     form.username = user.username
     form.password = user.password
-    ElMessage.info(`已选择: ${user.name}`)
+    ElMessage.info(`Selected: ${user.name}`)
   }
 }
 
@@ -121,10 +150,10 @@ const handleLogin = async () => {
     saveUser(response.user)
     localStorage.setItem('userId', response.user.userId)
     
-    ElMessage.success('登录成功')
+    ElMessage.success(t('common.success'))
     router.push('/dashboard')
   } catch (error: any) {
-    const message = error.response?.data?.message || error.message || '登录失败'
+    const message = error.response?.data?.message || error.message || t('common.failed')
     ElMessage.error(message)
   } finally {
     loading.value = false
@@ -157,6 +186,30 @@ $primary-dark: #8B0000;
     radial-gradient(circle at 80% 20%, rgba(255,255,255,0.08) 0%, transparent 50%),
     radial-gradient(circle at 40% 40%, rgba(255,255,255,0.05) 0%, transparent 30%);
   pointer-events: none;
+}
+
+.language-switcher {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  z-index: 10;
+
+  .lang-trigger {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 20px;
+    color: white;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.3s;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.25);
+    }
+  }
 }
 
 .login-content {

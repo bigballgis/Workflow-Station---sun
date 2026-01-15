@@ -503,9 +503,15 @@ public class WorkflowEngineClient {
                 new ParameterizedTypeReference<Map<String, Object>>() {});
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                Map<String, Object> body = response.getBody();
+                // 响应格式: { success: true, data: { taskInstances: [...] } }
                 @SuppressWarnings("unchecked")
-                List<Map<String, Object>> tasks = (List<Map<String, Object>>) response.getBody().get("taskInstances");
-                return Optional.ofNullable(tasks);
+                Map<String, Object> data = (Map<String, Object>) body.get("data");
+                if (data != null) {
+                    @SuppressWarnings("unchecked")
+                    List<Map<String, Object>> tasks = (List<Map<String, Object>>) data.get("taskInstances");
+                    return Optional.ofNullable(tasks);
+                }
             }
         } catch (Exception e) {
             log.warn("Failed to get task history from workflow engine: {}", e.getMessage());

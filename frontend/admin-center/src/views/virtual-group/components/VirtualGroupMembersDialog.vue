@@ -1,43 +1,43 @@
 <template>
-  <el-dialog :model-value="modelValue" @update:model-value="$emit('update:modelValue', $event)" :title="`成员管理 - ${group?.name}`" width="1100px">
+  <el-dialog :model-value="modelValue" @update:model-value="$emit('update:modelValue', $event)" :title="`${t('virtualGroup.members')} - ${group?.name}`" width="1100px">
     <div class="members-header">
-      <el-button type="primary" size="small" @click="openAddDialog">添加成员</el-button>
+      <el-button type="primary" size="small" @click="openAddDialog">{{ t('role.addMember') }}</el-button>
     </div>
     
     <el-table :data="members" v-loading="loading" max-height="400">
-      <el-table-column prop="employeeId" label="员工编号" width="100" />
-      <el-table-column prop="fullName" label="姓名" width="100" />
-      <el-table-column prop="username" label="用户名" width="120" />
-      <el-table-column prop="departmentName" label="部门" width="120" />
-      <el-table-column prop="email" label="邮箱" width="180" />
-      <el-table-column prop="role" label="组内角色" width="80">
+      <el-table-column prop="employeeId" :label="t('user.employeeId')" width="100" />
+      <el-table-column prop="fullName" :label="t('user.fullName')" width="100" />
+      <el-table-column prop="username" :label="t('user.username')" width="120" />
+      <el-table-column prop="departmentName" :label="t('user.department')" width="120" />
+      <el-table-column prop="email" :label="t('user.email')" width="180" />
+      <el-table-column prop="role" :label="t('user.role')" width="80">
         <template #default="{ row }">
           <el-tag :type="row.role === 'LEADER' ? 'warning' : 'info'" size="small">
-            {{ row.role === 'LEADER' ? '组长' : '成员' }}
+            {{ row.role === 'LEADER' ? t('organization.leader') : t('role.members') }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="joinedAt" label="加入时间" width="170">
+      <el-table-column prop="joinedAt" :label="t('common.createTime')" width="170">
         <template #default="{ row }">
           {{ row.joinedAt ? new Date(row.joinedAt).toLocaleString('zh-CN') : '-' }}
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="80">
+      <el-table-column :label="t('common.operation')" width="80">
         <template #default="{ row }">
-          <el-button link type="danger" @click="handleRemove(row)">移除</el-button>
+          <el-button link type="danger" @click="handleRemove(row)">{{ t('common.delete') }}</el-button>
         </template>
       </el-table-column>
     </el-table>
     
-    <el-dialog v-model="showAddDialog" title="添加成员" width="400px" append-to-body>
+    <el-dialog v-model="showAddDialog" :title="t('role.addMember')" width="400px" append-to-body>
       <el-form label-width="80px">
-        <el-form-item label="选择用户">
+        <el-form-item :label="t('role.selectUser')">
           <el-select 
             v-model="newMember.userId" 
             filterable 
             remote
             reserve-keyword
-            placeholder="搜索用户名或姓名"
+            :placeholder="t('virtualGroup.searchUserPlaceholder')"
             :remote-method="searchUsers"
             :loading="searchLoading"
             style="width: 100%"
@@ -51,16 +51,16 @@
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="组内角色">
+        <el-form-item :label="t('user.role')">
           <el-select v-model="newMember.role" style="width: 100%">
-            <el-option label="组长" value="LEADER" />
-            <el-option label="成员" value="MEMBER" />
+            <el-option :label="t('organization.leader')" value="LEADER" />
+            <el-option :label="t('role.members')" value="MEMBER" />
           </el-select>
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showAddDialog = false">取消</el-button>
-        <el-button type="primary" :loading="addLoading" @click="handleAdd">确定</el-button>
+        <el-button @click="showAddDialog = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" :loading="addLoading" @click="handleAdd">{{ t('common.confirm') }}</el-button>
       </template>
     </el-dialog>
   </el-dialog>
@@ -68,9 +68,12 @@
 
 <script setup lang="ts">
 import { ref, reactive, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { virtualGroupApi, type VirtualGroupMember } from '@/api/virtualGroup'
 import { userApi, type User } from '@/api/user'
+
+const { t } = useI18n()
 
 const props = defineProps<{ modelValue: boolean; group: any }>()
 const emit = defineEmits(['update:modelValue'])
@@ -140,20 +143,20 @@ const searchUsers = async (query: string) => {
 
 const handleRemove = async (member: VirtualGroupMember) => {
   try {
-    await ElMessageBox.confirm('确定要移除该成员吗？', '提示', { type: 'warning' })
+    await ElMessageBox.confirm(t('common.confirm'), t('common.confirm'), { type: 'warning' })
     await virtualGroupApi.removeMember(props.group.id, member.userId)
     await loadMembers()
-    ElMessage.success('移除成功')
+    ElMessage.success(t('common.success'))
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(error.message || '移除失败')
+      ElMessage.error(error.message || t('common.failed'))
     }
   }
 }
 
 const handleAdd = async () => {
   if (!newMember.userId) {
-    ElMessage.warning('请选择用户')
+    ElMessage.warning(t('role.selectUser'))
     return
   }
   addLoading.value = true
@@ -164,9 +167,9 @@ const handleAdd = async () => {
     })
     showAddDialog.value = false
     await loadMembers()
-    ElMessage.success('添加成功')
+    ElMessage.success(t('common.success'))
   } catch (error: any) {
-    ElMessage.error(error.message || '添加失败')
+    ElMessage.error(error.message || t('common.failed'))
   } finally {
     addLoading.value = false
   }

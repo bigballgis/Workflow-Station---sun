@@ -2,12 +2,12 @@
   <div class="task-detail-page">
     <!-- 页面头部 -->
     <div class="page-header">
-      <el-button :icon="ArrowLeft" @click="$router.back()">返回</el-button>
-      <h1>{{ taskInfo.taskName || '任务详情' }}</h1>
+      <el-button :icon="ArrowLeft" @click="$router.back()">{{ t('common.back') }}</el-button>
+      <h1>{{ taskInfo.taskName || t('task.detail') }}</h1>
       <el-tag :type="getPriorityType(taskInfo.priority)" size="small">
         {{ getPriorityLabel(taskInfo.priority) }}
       </el-tag>
-      <el-tag v-if="taskInfo.isOverdue" type="danger" size="small">逾期</el-tag>
+      <el-tag v-if="taskInfo.isOverdue" type="danger" size="small">{{ t('task.overdue') }}</el-tag>
     </div>
 
     <!-- 加载状态 -->
@@ -21,34 +21,44 @@
       </el-skeleton>
     </div>
 
+    <!-- 任务加载错误 -->
+    <div v-else-if="taskError" class="error-content">
+      <el-result icon="warning" :title="taskError">
+        <template #extra>
+          <el-button type="primary" @click="$router.back()">{{ t('common.back') }}</el-button>
+          <el-button @click="loadTaskDetail">{{ t('common.reset') }}</el-button>
+        </template>
+      </el-result>
+    </div>
+
     <!-- 正常内容 -->
     <div v-else class="content-sections">
       <!-- 第一部分：基本信息 -->
       <div class="section info-section">
         <div class="section-header">
           <el-icon><InfoFilled /></el-icon>
-          <span>基本信息</span>
+          <span>{{ t('task.basicInfo') }}</span>
         </div>
         <div class="section-content">
           <el-descriptions :column="3" border>
-            <el-descriptions-item label="任务名称">
+            <el-descriptions-item :label="t('task.taskName')">
               {{ taskInfo.taskName || '-' }}
             </el-descriptions-item>
-            <el-descriptions-item label="流程名称">
+            <el-descriptions-item :label="t('task.processName')">
               {{ taskInfo.processDefinitionName || '-' }}
             </el-descriptions-item>
-            <el-descriptions-item label="发起人">
+            <el-descriptions-item :label="t('task.initiator')">
               {{ taskInfo.initiatorName || '-' }}
             </el-descriptions-item>
-            <el-descriptions-item label="创建时间">
+            <el-descriptions-item :label="t('task.createTime')">
               {{ formatDate(taskInfo.createTime) }}
             </el-descriptions-item>
-            <el-descriptions-item label="截止时间">
+            <el-descriptions-item :label="t('task.dueDate')">
               <span :class="{ 'overdue': taskInfo.isOverdue }">
                 {{ taskInfo.dueDate ? formatDate(taskInfo.dueDate) : '-' }}
               </span>
             </el-descriptions-item>
-            <el-descriptions-item label="当前处理人">
+            <el-descriptions-item :label="t('task.currentAssignee')">
               {{ getCurrentAssigneeDisplay() }}
             </el-descriptions-item>
           </el-descriptions>
@@ -59,14 +69,15 @@
       <div class="section workflow-section">
         <div class="section-header">
           <el-icon><Share /></el-icon>
-          <span>工作流程图</span>
+          <span>{{ t('task.workflowDiagram') }}</span>
           <el-tag type="warning" size="small">
-            {{ taskInfo.taskName || '待处理' }}
+            {{ taskInfo.taskName || t('task.pending') }}
           </el-tag>
         </div>
         <div class="section-content">
+          <el-alert v-if="processError" :title="processError" type="warning" show-icon :closable="false" />
           <ProcessDiagram
-            v-if="processNodes.length > 0"
+            v-else-if="processNodes.length > 0"
             :nodes="processNodes"
             :flows="processFlows"
             :current-node-id="currentNodeId"
@@ -74,7 +85,7 @@
             :show-toolbar="true"
             :show-legend="true"
           />
-          <el-empty v-else description="暂无流程定义" />
+          <el-empty v-else :description="t('task.noProcessDefinition')" />
         </div>
       </div>
 
@@ -82,18 +93,19 @@
       <div class="section form-section">
         <div class="section-header">
           <el-icon><Document /></el-icon>
-          <span>{{ currentFormName || '任务表单' }}</span>
+          <span>{{ currentFormName || t('task.taskForm') }}</span>
         </div>
         <div class="section-content">
-          <div v-if="formFields.length > 0" class="form-container">
+          <div v-if="formFields.length > 0 || formTabs.length > 0" class="form-container">
             <FormRenderer
               :fields="formFields"
+              :tabs="formTabs"
               v-model="formData"
               label-width="120px"
               :readonly="formReadOnly"
             />
           </div>
-          <el-empty v-else description="暂无表单数据" />
+          <el-empty v-else :description="t('task.noFormData')" />
         </div>
       </div>
 
@@ -101,16 +113,17 @@
       <div class="section history-section">
         <div class="section-header">
           <el-icon><Clock /></el-icon>
-          <span>流转记录</span>
+          <span>{{ t('task.flowHistory') }}</span>
         </div>
         <div class="section-content">
+          <el-alert v-if="historyError" :title="historyError" type="warning" show-icon :closable="false" />
           <ProcessHistory
-            v-if="historyRecords.length > 0"
+            v-else-if="historyRecords.length > 0"
             :records="historyRecords"
             :show-header="false"
             :show-refresh="false"
           />
-          <el-empty v-else description="暂无流转记录" />
+          <el-empty v-else :description="t('task.noFlowHistory')" />
         </div>
       </div>
 
@@ -118,23 +131,23 @@
       <div class="section action-section">
         <div class="action-buttons">
           <div class="left-actions">
-            <el-button @click="$router.back()">返回列表</el-button>
+            <el-button @click="$router.back()">{{ t('task.backToList') }}</el-button>
           </div>
           <div class="right-actions">
             <el-button type="success" @click="handleApprove">
-              <el-icon><Check /></el-icon> 同意
+              <el-icon><Check /></el-icon> {{ t('task.approve') }}
             </el-button>
             <el-button type="danger" @click="handleReject">
-              <el-icon><Close /></el-icon> 拒绝
+              <el-icon><Close /></el-icon> {{ t('task.reject') }}
             </el-button>
             <el-button @click="handleDelegate">
-              <el-icon><User /></el-icon> 委托
+              <el-icon><User /></el-icon> {{ t('task.delegate') }}
             </el-button>
             <el-button @click="handleTransfer">
-              <el-icon><Switch /></el-icon> 转办
+              <el-icon><Switch /></el-icon> {{ t('task.transfer') }}
             </el-button>
             <el-button type="warning" @click="handleUrge">
-              <el-icon><Bell /></el-icon> 催办
+              <el-icon><Bell /></el-icon> {{ t('task.urge') }}
             </el-button>
           </div>
         </div>
@@ -144,38 +157,38 @@
     <!-- 审批对话框 -->
     <el-dialog v-model="approveDialogVisible" :title="approveDialogTitle" width="500px">
       <el-form :model="approveForm" label-width="80px">
-        <el-form-item label="处理意见">
-          <el-input v-model="approveForm.comment" type="textarea" :rows="4" placeholder="请输入处理意见" />
+        <el-form-item :label="t('task.comment')">
+          <el-input v-model="approveForm.comment" type="textarea" :rows="4" :placeholder="t('task.commentPlaceholder')" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="approveDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitApprove" :loading="submitting">确定</el-button>
+        <el-button @click="approveDialogVisible = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="submitApprove" :loading="submitting">{{ t('common.confirm') }}</el-button>
       </template>
     </el-dialog>
 
     <!-- 委托/转办对话框 -->
     <el-dialog v-model="actionDialogVisible" :title="actionDialogTitle" width="500px">
       <el-form :model="actionForm" label-width="80px">
-        <el-form-item label="目标用户" v-if="currentAction !== 'urge'">
-          <el-select v-model="actionForm.targetUserId" filterable placeholder="请选择用户" style="width: 100%;">
-            <el-option label="李四" value="user_2" />
-            <el-option label="王五" value="user_3" />
-            <el-option label="赵六" value="user_4" />
+        <el-form-item :label="t('task.targetUser')" v-if="currentAction !== 'urge'">
+          <el-select v-model="actionForm.targetUserId" filterable :placeholder="t('task.selectUser')" style="width: 100%;">
+            <el-option label="Li Si" value="user_2" />
+            <el-option label="Wang Wu" value="user_3" />
+            <el-option label="Zhao Liu" value="user_4" />
           </el-select>
         </el-form-item>
-        <el-form-item :label="currentAction === 'urge' ? '催办消息' : '原因说明'">
+        <el-form-item :label="currentAction === 'urge' ? t('task.urgeMessage') : t('task.reasonDescription')">
           <el-input 
             v-model="actionForm.reason" 
             type="textarea" 
             :rows="3" 
-            :placeholder="currentAction === 'urge' ? '请输入催办消息（可选）' : '请输入原因'" 
+            :placeholder="currentAction === 'urge' ? t('task.urgeMessagePlaceholder') : t('task.reasonPlaceholder')" 
           />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="actionDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitAction" :loading="submitting">确定</el-button>
+        <el-button @click="actionDialogVisible = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="submitAction" :loading="submitting">{{ t('common.confirm') }}</el-button>
       </template>
     </el-dialog>
   </div>
@@ -184,6 +197,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, InfoFilled, Share, Document, Clock, Bell, Check, Close, User, Switch } from '@element-plus/icons-vue'
 import { 
@@ -199,9 +213,10 @@ import {
 import { processApi } from '@/api/process'
 import ProcessDiagram, { type ProcessNode, type ProcessFlow } from '@/components/ProcessDiagram.vue'
 import ProcessHistory, { type HistoryRecord } from '@/components/ProcessHistory.vue'
-import FormRenderer, { type FormField } from '@/components/FormRenderer.vue'
+import FormRenderer, { type FormField, type FormTab } from '@/components/FormRenderer.vue'
 import dayjs from 'dayjs'
 
+const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 
@@ -209,6 +224,11 @@ const taskId = route.params.id as string
 const loading = ref(true)
 const submitting = ref(false)
 const taskInfo = ref<Partial<TaskInfo>>({})
+
+// 错误状态
+const taskError = ref<string | null>(null)
+const processError = ref<string | null>(null)
+const historyError = ref<string | null>(null)
 
 // 流程图数据
 const processNodes = ref<ProcessNode[]>([])
@@ -218,6 +238,7 @@ const completedNodeIds = ref<string[]>([])
 
 // 表单数据
 const formFields = ref<FormField[]>([])
+const formTabs = ref<FormTab[]>([])
 const formData = ref<Record<string, any>>({})
 const currentFormName = ref('')
 const formReadOnly = ref(false)
@@ -242,6 +263,7 @@ const actionForm = reactive({
 
 const loadTaskDetail = async () => {
   loading.value = true
+  taskError.value = null
   try {
     const res = await getTaskDetail(taskId)
     const data = res.data || res
@@ -255,15 +277,25 @@ const loadTaskDetail = async () => {
       // 加载流转历史
       await loadTaskHistory()
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Failed to load task detail:', error)
-    ElMessage.error('加载任务详情失败')
+    // 根据错误状态码显示不同的错误消息
+    const status = error.response?.status
+    if (status === 404) {
+      taskError.value = t('task.notFound')
+    } else if (status === 403) {
+      taskError.value = t('task.noPermission')
+    } else {
+      taskError.value = t('task.serverError')
+    }
+    ElMessage.error(taskError.value)
   } finally {
     loading.value = false
   }
 }
 
 const loadTaskHistory = async () => {
+  historyError.value = null
   try {
     const res = await getTaskHistory(taskId)
     const data = res.data || res
@@ -282,31 +314,129 @@ const loadTaskHistory = async () => {
     }
   } catch (error) {
     console.error('Failed to load task history:', error)
+    historyError.value = t('task.historyLoadFailed')
     historyRecords.value = []
   }
 }
 
 // 加载功能单元内容
 const loadFunctionUnitContent = async (processKey: string) => {
+  processError.value = null
   try {
     const response = await processApi.getFunctionUnitContent(processKey)
     const content = response.data || response
     if (content.error) {
       console.error('Function unit content error:', content.error)
+      processError.value = t('task.processLoadFailed')
       return
     }
+    
+    let currentFormInfo: { formId: string | null, formName: string | null } = { formId: null, formName: null }
+    
     // 解析流程图
     if (content.processes?.length > 0) {
+      // 先获取当前节点的 formId 和 formName
+      currentFormInfo = parseBpmnXmlAndGetFormId(content.processes[0].data)
       parseBpmnXml(content.processes[0].data)
     }
-    // 解析表单
+    
+    // 解析表单 - 根据当前节点的 formId 选择正确的表单
     if (content.forms?.length > 0) {
-      currentFormName.value = content.forms[0].name
-      parseFormConfig(content.forms[0].data)
+      let selectedForm = content.forms[0] // 默认第一个
+      
+      // 优先使用 formId 匹配 sourceId（原始表单ID）
+      if (currentFormInfo.formId) {
+        const matchedForm = content.forms.find((f: any) => 
+          String(f.sourceId) === currentFormInfo.formId
+        )
+        if (matchedForm) {
+          selectedForm = matchedForm
+          console.log('Matched form by sourceId:', currentFormInfo.formId, '->', selectedForm.name)
+        } else {
+          // 如果 sourceId 匹配失败，尝试用 formName 匹配
+          if (currentFormInfo.formName) {
+            const matchedByName = content.forms.find((f: any) => f.name === currentFormInfo.formName)
+            if (matchedByName) {
+              selectedForm = matchedByName
+              console.log('Matched form by name:', currentFormInfo.formName)
+            }
+          }
+        }
+      } else if (currentFormInfo.formName) {
+        // 如果没有 formId，尝试用 formName 匹配
+        const matchedForm = content.forms.find((f: any) => f.name === currentFormInfo.formName)
+        if (matchedForm) {
+          selectedForm = matchedForm
+        }
+      }
+      
+      currentFormName.value = selectedForm.name
+      parseFormConfig(selectedForm.data)
+    }
+  } catch (error: any) {
+    console.error('Failed to load function unit content:', error)
+    // 403 错误表示功能单元被禁用或无权限
+    if (error.response?.status === 403) {
+      processError.value = t('task.noPermission')
+    } else {
+      processError.value = t('task.processLoadFailed')
+    }
+  }
+}
+
+// 解析 BPMN XML 并获取当前节点的 formId 和 formName
+const parseBpmnXmlAndGetFormId = (xml: string): { formId: string | null, formName: string | null } => {
+  if (!xml) return { formId: null, formName: null }
+  
+  try {
+    const parser = new DOMParser()
+    const doc = parser.parseFromString(xml, 'text/xml')
+    const currentTaskName = taskInfo.value.taskName || ''
+    
+    // 查找所有 userTask 节点
+    const allElements = doc.getElementsByTagName('*')
+    
+    for (let i = 0; i < allElements.length; i++) {
+      const el = allElements[i]
+      const localName = el.localName || el.nodeName.split(':').pop()
+      
+      if (localName === 'userTask') {
+        const taskId = el.getAttribute('id') || ''
+        const taskName = el.getAttribute('name') || ''
+        
+        // 检查是否是当前任务节点
+        if (taskName === currentTaskName || taskId === currentTaskName) {
+          // 查找 formId 和 formName 属性
+          let formId: string | null = null
+          let formName: string | null = null
+          
+          const taskProps = el.getElementsByTagName('*')
+          for (let j = 0; j < taskProps.length; j++) {
+            const prop = taskProps[j]
+            const propLocalName = prop.localName || prop.nodeName.split(':').pop()
+            
+            if (propLocalName === 'property' || propLocalName === 'values') {
+              const name = prop.getAttribute('name')
+              const value = prop.getAttribute('value')
+              
+              if (name === 'formId' && value) {
+                formId = value
+              }
+              if (name === 'formName' && value) {
+                formName = value
+              }
+            }
+          }
+          
+          return { formId, formName }
+        }
+      }
     }
   } catch (error) {
-    console.error('Failed to load function unit content:', error)
+    console.error('Failed to parse BPMN for formId:', error)
   }
+  
+  return { formId: null, formName: null }
 }
 
 // 解析 BPMN XML
@@ -413,12 +543,64 @@ const parseFormConfig = (configStr: string) => {
   try {
     const config = typeof configStr === 'string' ? JSON.parse(configStr) : configStr
     const rules = config.rule && Array.isArray(config.rule) ? config.rule : (Array.isArray(config) ? config : null)
-    if (rules) formFields.value = rules.map((rule: any) => convertFormCreateRule(rule)).filter(Boolean)
+    if (rules) {
+      // 检查是否有 el-tabs 结构
+      const tabsRule = rules.find((r: any) => r.type === 'el-tabs')
+      
+      if (tabsRule && tabsRule.children && Array.isArray(tabsRule.children)) {
+        // 有 Tab 布局
+        const tabs: FormTab[] = []
+        
+        for (const tabPane of tabsRule.children) {
+          if (tabPane.type === 'el-tab-pane' && tabPane.props) {
+            const tabName = tabPane.props.name || `tab_${tabs.length}`
+            const tabLabel = tabPane.props.label || `Tab ${tabs.length + 1}`
+            
+            const tabFields: FormField[] = []
+            if (tabPane.children && Array.isArray(tabPane.children)) {
+              for (const item of tabPane.children) {
+                if (item.field) {
+                  const field = convertFormCreateRule(item)
+                  if (field) tabFields.push(field)
+                }
+                if (item.children && Array.isArray(item.children)) {
+                  tabFields.push(...extractFieldsRecursive(item.children))
+                }
+              }
+            }
+            
+            tabs.push({ name: tabName, label: tabLabel, fields: tabFields })
+          }
+        }
+        
+        formTabs.value = tabs
+        formFields.value = []
+      } else {
+        // 无 Tab 布局，使用平铺模式
+        formTabs.value = []
+        formFields.value = extractFieldsRecursive(rules)
+      }
+    }
     // 检查表单是否只读
     formReadOnly.value = config.formReadOnly === true || config.formReadOnly === 'true'
   } catch (error) {
     console.error('Failed to parse form config:', error)
   }
+}
+
+// 递归提取字段
+const extractFieldsRecursive = (items: any[]): FormField[] => {
+  const fields: FormField[] = []
+  for (const item of items) {
+    if (item.field) {
+      const field = convertFormCreateRule(item)
+      if (field) fields.push(field)
+    }
+    if (item.children && Array.isArray(item.children)) {
+      fields.push(...extractFieldsRecursive(item.children))
+    }
+  }
+  return fields
 }
 
 // 转换表单规则
@@ -463,19 +645,19 @@ const getCurrentAssigneeDisplay = () => {
     if (candidates.length === 1) {
       return candidates[0]
     }
-    return `${candidates.join(' / ')} (任一审批)`
+    return `${candidates.join(' / ')} (${t('task.anyApprove')})`
   }
   return '-'
 }
 
 const getPriorityLabel = (priority?: string) => {
   const map: Record<string, string> = {
-    'URGENT': '紧急',
-    'HIGH': '高',
-    'NORMAL': '普通',
-    'LOW': '低'
+    'URGENT': t('task.urgent'),
+    'HIGH': t('task.high'),
+    'NORMAL': t('task.normal'),
+    'LOW': t('task.low')
   }
-  return map[priority || ''] || priority || '普通'
+  return map[priority || ''] || priority || t('task.normal')
 }
 
 const getPriorityType = (priority?: string): 'danger' | 'warning' | 'info' | 'success' => {
@@ -545,7 +727,7 @@ const submitApprove = async () => {
 
 const submitAction = async () => {
   if (currentAction.value !== 'urge' && !actionForm.targetUserId) {
-    ElMessage.warning('请选择目标用户')
+    ElMessage.warning(t('task.selectUser'))
     return
   }
   
@@ -600,6 +782,16 @@ onMounted(() => {
     flex-direction: column;
   }
   
+  .error-content {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 400px;
+    background: white;
+    border-radius: 8px;
+    border: 1px solid var(--border-color, #e4e7ed);
+  }
+  
   .content-sections {
     display: flex;
     flex-direction: column;
@@ -640,8 +832,7 @@ onMounted(() => {
   
   .form-section {
     .form-container {
-      max-width: 800px;
-      margin: 0 auto;
+      width: 100%;
     }
   }
   

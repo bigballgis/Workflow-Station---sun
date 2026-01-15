@@ -6,6 +6,7 @@ import com.admin.dto.response.ImportResult;
 import com.admin.dto.response.ValidationResult;
 import com.admin.entity.FunctionUnit;
 import com.admin.enums.FunctionUnitStatus;
+import com.admin.repository.FunctionUnitAccessRepository;
 import com.admin.repository.FunctionUnitContentRepository;
 import com.admin.repository.FunctionUnitDependencyRepository;
 import com.admin.repository.FunctionUnitRepository;
@@ -31,6 +32,7 @@ class FunctionPackageValidationProperties {
     private FunctionUnitRepository functionUnitRepository;
     private FunctionUnitDependencyRepository dependencyRepository;
     private FunctionUnitContentRepository contentRepository;
+    private FunctionUnitAccessRepository accessRepository;
     private FunctionUnitManagerComponent component;
 
     @BeforeTry
@@ -38,8 +40,9 @@ class FunctionPackageValidationProperties {
         functionUnitRepository = Mockito.mock(FunctionUnitRepository.class);
         dependencyRepository = Mockito.mock(FunctionUnitDependencyRepository.class);
         contentRepository = Mockito.mock(FunctionUnitContentRepository.class);
+        accessRepository = Mockito.mock(FunctionUnitAccessRepository.class);
         component = new FunctionUnitManagerComponent(
-                functionUnitRepository, dependencyRepository, contentRepository);
+                functionUnitRepository, dependencyRepository, contentRepository, accessRepository);
     }
 
     // ==================== 属性 1: 空文件名验证失败 ====================

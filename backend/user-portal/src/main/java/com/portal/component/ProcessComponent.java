@@ -123,6 +123,11 @@ public class ProcessComponent {
             throw new IllegalArgumentException("用户ID不能为空");
         }
 
+        // 检查功能单元访问权限（发起流程时需要检查）
+        // 注意：任务处理不需要检查功能单元权限，因为任务分配机制已经控制了访问范围
+        String functionUnitId = functionUnitAccessComponent.resolveFunctionUnitId(processKey);
+        functionUnitAccessComponent.checkFunctionUnitAccess(userId, functionUnitId);
+
         // 获取流程定义名称和 BPMN XML
         String processName = processKey;
         String bpmnXml = null;
@@ -139,6 +144,9 @@ public class ProcessComponent {
                     bpmnXml = (String) processes.get(0).get("data");
                 }
             }
+        } catch (FunctionUnitAccessComponent.FunctionUnitDisabledException | 
+                 FunctionUnitAccessComponent.FunctionUnitAccessDeniedException e) {
+            throw e;
         } catch (Exception e) {
             log.warn("Failed to get process info for {}: {}", processKey, e.getMessage());
         }

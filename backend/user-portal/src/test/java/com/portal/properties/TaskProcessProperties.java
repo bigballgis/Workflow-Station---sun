@@ -70,7 +70,8 @@ class TaskProcessProperties {
             taskQueryComponent, 
             delegationRuleRepository, 
             delegationAuditRepository, 
-            workflowEngineClient
+            workflowEngineClient,
+            processInstanceRepository
         );
         random = new Random();
 

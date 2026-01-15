@@ -45,12 +45,15 @@ public class ProcessController {
     }
     
     @GetMapping("/function-units/{functionUnitId}/content")
-    @Operation(summary = "获取功能单元完整内容", description = "获取功能单元的BPMN流程、表单定义等完整内容")
+    @Operation(summary = "获取功能单元完整内容", description = "获取功能单元的BPMN流程、表单定义等完整内容。注意：此端点不检查功能单元访问权限，因为任务处理权限由任务分配机制控制")
     public ApiResponse<Map<String, Object>> getFunctionUnitContent(
             @RequestHeader(value = "X-User-Id", required = false) String userId,
             @PathVariable String functionUnitId) {
-        String effectiveUserId = userId != null ? userId : "anonymous";
-        Map<String, Object> content = processComponent.getFunctionUnitContent(effectiveUserId, functionUnitId);
+        // 不检查功能单元访问权限，因为：
+        // 1. 任务处理权限由 Flowable 的任务分配机制控制（assignee、候选人、候选组）
+        // 2. 功能单元权限只应控制"谁可以发起流程"，而不是"谁可以处理任务"
+        // 3. 用户能看到任务，说明任务已经分配给他或他所在的组
+        Map<String, Object> content = processComponent.getFunctionUnitContent(functionUnitId);
         return ApiResponse.success(content);
     }
     
