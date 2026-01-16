@@ -46,3 +46,13 @@ logging:
   level:
     com.portal: DEBUG
     org.springframework.web: INFO
+
+# Actuator Configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when_authorized

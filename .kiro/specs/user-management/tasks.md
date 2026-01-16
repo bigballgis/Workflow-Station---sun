@@ -54,11 +54,11 @@
     - 实现 resetPassword 方法
     - 生成临时密码并标记需要修改
     - _Requirements: 8.1, 8.2, 8.3_
-  - [ ] 3.7 编写用户 CRUD 属性测试
+  - [x] 3.7 编写用户 CRUD 属性测试
     - **Property 4: User Creation Round-Trip**
     - **Property 8: Update Persistence**
     - **Validates: Requirements 2.1, 2.5, 3.1, 3.4**
-  - [ ] 3.8 编写唯一性约束属性测试
+  - [x] 3.8 编写唯一性约束属性测试
     - **Property 5: Username Uniqueness**
     - **Property 6: Email Uniqueness**
     - **Validates: Requirements 2.2, 2.3**
@@ -72,7 +72,7 @@
     - 解析、验证、批量创建
     - 事务管理确保原子性
     - _Requirements: 6.2, 6.3, 6.4_
-  - [ ] 4.3 编写导入属性测试
+  - [x] 4.3 编写导入属性测试
     - **Property 12: Import Validation Consistency**
     - **Property 13: Import Atomicity**
     - **Validates: Requirements 6.2, 6.3, 6.4**
@@ -85,7 +85,7 @@
   - [x] 5.2 创建用户错误码和异常处理
     - 创建 UserErrorCode 枚举
     - _Requirements: 2.6, 2.7, 3.5, 4.5, 5.4_
-  - [ ] 5.3 编写分页和筛选属性测试
+  - [x] 5.3 编写分页和筛选属性测试
     - **Property 1: Pagination Consistency**
     - **Property 2: Filter Correctness**
     - **Property 3: Sort Order Correctness**
@@ -95,9 +95,10 @@
   - [x] 6.1 创建用户操作审计服务
     - AuditService 已实现记录状态变更、删除、密码重置操作
     - _Requirements: 4.4, 5.5, 8.4_
-  - [ ] 6.2 编写审计日志属性测试
+  - [x] 6.2 编写审计日志属性测试 ✅
     - **Property 15: Audit Trail Completeness**
     - **Validates: Requirements 4.4, 5.5, 8.4**
+    - 已创建 `UserAuditProperties.java`
 
 - [x] 7. Checkpoint - 后端完成
   - 后端功能已全部实现，包括用户 CRUD、批量导入、状态管理、密码重置等
@@ -173,10 +174,13 @@
     - 用户管理菜单项已正确配置
     - _Requirements: 1.4_
 
-- [x] 15. Final Checkpoint - 全部完成
+- [x] 15. Final Checkpoint - 全部完成 ✅
   - 用户管理功能已全部实现
   - 用户列表、创建、编辑、删除、导入功能正常
-  - 待完成：属性测试（3.7, 3.8, 4.3, 5.3, 6.2）
+  - 属性测试已全部完成并通过：
+    - `UserManagementProperties.java` - 用户CRUD、唯一性约束、分页筛选测试
+    - `UserImportProperties.java` - 导入验证和原子性测试
+    - `UserAuditProperties.java` - 审计日志完整性测试
 
 ## Notes
 

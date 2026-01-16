@@ -5,19 +5,6 @@
         <span class="logo-text">{{ t('app.name') }}</span>
       </div>
       <div class="header-right">
-        <el-dropdown @command="handleLanguageChange">
-          <span class="language-trigger">
-            <el-icon><Connection /></el-icon>
-            {{ currentLanguageLabel }}
-          </span>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="zh-CN">简体中文</el-dropdown-item>
-              <el-dropdown-item command="zh-TW">繁體中文</el-dropdown-item>
-              <el-dropdown-item command="en">English</el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
         <UserProfileDropdown />
       </div>
     </el-header>
@@ -51,9 +38,8 @@
 import { computed, ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { Folder, Picture, Connection, DArrowLeft, DArrowRight } from '@element-plus/icons-vue'
+import { Folder, Picture, DArrowLeft, DArrowRight } from '@element-plus/icons-vue'
 import UserProfileDropdown from '@/components/UserProfileDropdown.vue'
-import i18n from '@/i18n'
 
 const route = useRoute()
 const { t } = useI18n()
@@ -63,19 +49,6 @@ const activeMenu = computed(() => route.path)
 // Sidebar collapse state
 const isCollapsed = ref(false)
 const sidebarWidth = computed(() => isCollapsed.value ? '64px' : '240px')
-
-const languageLabels: Record<string, string> = {
-  'zh-CN': '简体中文',
-  'zh-TW': '繁體中文',
-  'en': 'English'
-}
-
-const currentLanguageLabel = computed(() => languageLabels[i18n.global.locale.value] || '简体中文')
-
-function handleLanguageChange(lang: string) {
-  i18n.global.locale.value = lang as 'zh-CN' | 'zh-TW' | 'en'
-  localStorage.setItem('language', lang)
-}
 
 // Toggle sidebar collapse state
 function toggleSidebar(): void {
@@ -132,14 +105,6 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 20px;
-}
-
-.language-trigger {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  color: white;
 }
 
 .sidebar {

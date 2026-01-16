@@ -9,22 +9,6 @@
         </div>
       </div>
       <div class="header-right">
-        <el-dropdown @command="handleLanguage">
-          <span class="header-action">
-            <el-icon><Location /></el-icon>
-            <span class="action-text">{{ currentLang }}</span>
-          </span>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="zh-CN">简体中文</el-dropdown-item>
-              <el-dropdown-item command="zh-TW">繁體中文</el-dropdown-item>
-              <el-dropdown-item command="en">English</el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
-        <el-badge :value="unreadCount" :hidden="unreadCount === 0" class="notification-badge">
-          <el-button :icon="Bell" circle @click="goToNotifications" />
-        </el-badge>
         <UserProfileDropdown />
       </div>
     </el-header>
@@ -70,14 +54,6 @@
             <el-icon><Checked /></el-icon>
             <template #title>{{ t('menu.approvals') }}</template>
           </el-menu-item>
-          <el-menu-item index="/notifications">
-            <el-icon><Bell /></el-icon>
-            <template #title>{{ t('menu.notifications') }}</template>
-          </el-menu-item>
-          <el-menu-item index="/settings">
-            <el-icon><Setting /></el-icon>
-            <template #title>{{ t('menu.settings') }}</template>
-          </el-menu-item>
         </el-menu>
         <div class="collapse-btn" @click="toggleCollapse">
           <el-icon :size="20">
@@ -103,22 +79,19 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
-  HomeFilled, List, Plus, Document, Share, Key, Bell, Setting,
-  Fold, Expand, Location, Checked, Finished
+  HomeFilled, List, Plus, Document, Share, Key,
+  Fold, Expand, Checked, Finished
 } from '@element-plus/icons-vue'
 import UserProfileDropdown from '@/components/UserProfileDropdown.vue'
-import i18n from '@/i18n'
 import { permissionApi } from '@/api/permission'
 
 const { t } = useI18n()
 const route = useRoute()
-const router = useRouter()
 
 const isCollapsed = ref(false)
-const unreadCount = ref(5)
 const cachedViews = ref(['Dashboard', 'Tasks', 'MyApplications'])
 const isApprover = ref(false)
 
@@ -143,20 +116,8 @@ onMounted(() => {
   checkApproverStatus()
 })
 
-const langMap: Record<string, string> = { 'zh-CN': '简体中文', 'zh-TW': '繁體中文', 'en': 'English' }
-const currentLang = computed(() => langMap[i18n.global.locale.value] || '简体中文')
-
 const toggleCollapse = () => {
   isCollapsed.value = !isCollapsed.value
-}
-
-const goToNotifications = () => {
-  router.push('/notifications')
-}
-
-const handleLanguage = (lang: string) => {
-  i18n.global.locale.value = lang as 'zh-CN' | 'zh-TW' | 'en'
-  localStorage.setItem('language', lang)
 }
 </script>
 
@@ -198,37 +159,6 @@ const handleLanguage = (lang: string) => {
     display: flex;
     align-items: center;
     gap: 16px;
-    
-    .header-action {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 8px 12px;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: background-color 0.3s;
-      color: white;
-
-      &:hover {
-        background-color: rgba(255, 255, 255, 0.15);
-      }
-
-      .action-text {
-        font-size: 14px;
-      }
-    }
-    
-    .notification-badge {
-      :deep(.el-button) {
-        background: transparent;
-        border: none;
-        color: white;
-        
-        &:hover {
-          background: rgba(255, 255, 255, 0.1);
-        }
-      }
-    }
   }
 }
 

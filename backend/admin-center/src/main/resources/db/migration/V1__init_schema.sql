@@ -1,7 +1,8 @@
 -- =====================================================
--- Admin Center V1: All Admin Tables
+-- Admin Center V1: All Admin Tables (Consolidated)
 -- Tables with admin_* prefix for admin-center specific features
 -- Note: sys_* tables are managed by platform-security
+-- Consolidated from V1-V14 migrations
 -- =====================================================
 
 -- =====================================================
@@ -89,7 +90,6 @@ CREATE TABLE IF NOT EXISTS admin_permission_change_history (
 CREATE INDEX IF NOT EXISTS idx_pch_target_user_id ON admin_permission_change_history(target_user_id);
 CREATE INDEX IF NOT EXISTS idx_pch_change_type ON admin_permission_change_history(change_type);
 CREATE INDEX IF NOT EXISTS idx_pch_changed_at ON admin_permission_change_history(changed_at);
-
 
 -- =====================================================
 -- 5. Alert Rules (admin_alert_rules)
@@ -298,7 +298,9 @@ CREATE TABLE IF NOT EXISTS admin_log_retention_policies (
     updated_by VARCHAR(64)
 );
 
+-- =====================================================
 -- Comments
+-- =====================================================
 COMMENT ON TABLE admin_password_history IS 'Password history for password policy enforcement';
 COMMENT ON TABLE admin_permission_delegations IS 'Permission delegation records';
 COMMENT ON TABLE admin_permission_conflicts IS 'Permission conflict tracking';

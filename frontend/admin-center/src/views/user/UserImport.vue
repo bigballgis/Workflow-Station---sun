@@ -6,9 +6,9 @@
     
     <el-card>
       <el-steps :active="step" finish-status="success" align-center>
-        <el-step title="上传文件" />
-        <el-step title="数据预览" />
-        <el-step title="导入结果" />
+        <el-step :title="t('user.stepUploadFile')" />
+        <el-step :title="t('user.stepDataPreview')" />
+        <el-step :title="t('user.stepImportResult')" />
       </el-steps>
       
       <div class="step-content">
@@ -22,9 +22,9 @@
               :on-change="handleFileChange"
             >
               <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
-              <div class="el-upload__text">拖拽文件到此处，或<em>点击上传</em></div>
+              <div class="el-upload__text">{{ t('user.dragFileHere') }}<em>{{ t('user.clickToUpload') }}</em></div>
               <template #tip>
-                <div class="el-upload__tip">支持 xlsx、xls、csv 格式，单次最多导入 1000 条</div>
+                <div class="el-upload__tip">{{ t('user.uploadFormatTip') }}</div>
               </template>
             </el-upload>
             <el-button type="primary" link @click="downloadTemplate">
@@ -35,13 +35,13 @@
         
         <template v-if="step === 1">
           <el-table :data="previewData" max-height="400">
-            <el-table-column type="index" label="行号" width="60" />
+            <el-table-column type="index" :label="t('common.rowNumber')" width="60" />
             <el-table-column prop="username" :label="t('user.username')" />
             <el-table-column prop="realName" :label="t('user.realName')" />
             <el-table-column prop="email" :label="t('user.email')" />
           </el-table>
           <div class="preview-info">
-            共 {{ previewData.length }} 条数据待导入
+            {{ t('user.pendingImportCount', { count: previewData.length }) }}
           </div>
         </template>
         
@@ -55,21 +55,21 @@
               </div>
             </template>
             <template #extra>
-              <el-button type="primary" @click="resetImport">继续导入</el-button>
+              <el-button type="primary" @click="resetImport">{{ t('user.continueImport') }}</el-button>
             </template>
           </el-result>
           
           <el-table v-if="importResult.errors.length" :data="importResult.errors" max-height="300">
-            <el-table-column prop="row" label="行号" width="80" />
-            <el-table-column prop="message" label="错误信息" />
+            <el-table-column prop="row" :label="t('common.rowNumber')" width="80" />
+            <el-table-column prop="message" :label="t('common.errorMessage')" />
           </el-table>
         </template>
       </div>
       
       <div class="step-actions" v-if="step < 2">
-        <el-button v-if="step > 0" @click="step--">上一步</el-button>
-        <el-button v-if="step === 0" type="primary" :disabled="!selectedFile" @click="parseFile">下一步</el-button>
-        <el-button v-if="step === 1" type="primary" :loading="importing" @click="handleImport">确认导入</el-button>
+        <el-button v-if="step > 0" @click="step--">{{ t('user.prevStep') }}</el-button>
+        <el-button v-if="step === 0" type="primary" :disabled="!selectedFile" @click="parseFile">{{ t('user.nextStep') }}</el-button>
+        <el-button v-if="step === 1" type="primary" :loading="importing" @click="handleImport">{{ t('user.confirmImport') }}</el-button>
       </div>
     </el-card>
   </div>
@@ -89,7 +89,7 @@ const previewData = ref<any[]>([])
 const importing = ref(false)
 const importResult = ref<ImportResult>({ totalCount: 0, successCount: 0, failedCount: 0, errors: [] })
 
-const resultTitle = computed(() => importResult.value.failedCount === 0 ? '导入成功' : '部分导入成功')
+const resultTitle = computed(() => importResult.value.failedCount === 0 ? t('user.importSuccess') : t('user.importPartialSuccess'))
 
 const handleFileChange = (file: any) => { selectedFile.value = file.raw }
 
@@ -106,8 +106,8 @@ const downloadTemplate = async () => {
 const parseFile = () => {
   // Mock parse - in real app, use xlsx library
   previewData.value = [
-    { username: 'user1', realName: '用户一', email: 'user1@example.com' },
-    { username: 'user2', realName: '用户二', email: 'user2@example.com' }
+    { username: 'user1', realName: 'User One', email: 'user1@example.com' },
+    { username: 'user2', realName: 'User Two', email: 'user2@example.com' }
   ]
   step.value = 1
 }

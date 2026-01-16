@@ -17,9 +17,9 @@ USER platform
 # JVM configuration
 ENV JAVA_OPTS="-Xms256m -Xmx512m -XX:+UseG1GC -XX:MaxGCPauseMillis=100"
 
-# Health check
+# Health check (context-path is /api/portal)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/actuator/health || exit 1
+    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/api/portal/actuator/health || exit 1
 
 EXPOSE 8080
 
