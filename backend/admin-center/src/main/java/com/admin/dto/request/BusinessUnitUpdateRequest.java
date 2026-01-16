@@ -20,10 +20,6 @@ public class BusinessUnitUpdateRequest {
     @Size(max = 100, message = "业务单元名称长度不能超过100")
     private String name;
     
-    private String managerId;
-    
-    private String secondaryManagerId;
-    
     @Size(max = 50, message = "电话长度不能超过50")
     private String phone;
     

@@ -13,7 +13,6 @@ public record UserInfo(
     String email,
     List<String> roles,
     List<String> permissions,
-    String departmentId,
     String language
 ) {
     /**
@@ -27,7 +26,6 @@ public record UserInfo(
             user.getEmail(),
             user.getRoles() != null ? List.copyOf(user.getRoles()) : List.of(),
             permissions != null ? permissions : List.of(),
-            user.getDepartmentId(),
             user.getLanguage()
         );
     }

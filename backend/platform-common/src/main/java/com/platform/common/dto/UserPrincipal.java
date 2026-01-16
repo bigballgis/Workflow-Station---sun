@@ -46,16 +46,6 @@ public class UserPrincipal implements Serializable {
     private List<String> permissions;
     
     /**
-     * User's department identifier
-     */
-    private String departmentId;
-    
-    /**
-     * User's department name
-     */
-    private String departmentName;
-    
-    /**
      * User's preferred language (en, zh-CN, zh-TW)
      */
     private String language;

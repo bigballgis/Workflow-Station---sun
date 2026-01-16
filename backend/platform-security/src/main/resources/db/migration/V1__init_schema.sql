@@ -19,7 +19,6 @@ CREATE TABLE IF NOT EXISTS sys_users (
     full_name VARCHAR(100) NOT NULL,
     phone VARCHAR(50),
     employee_id VARCHAR(50),
-    department_id VARCHAR(64),
     position VARCHAR(100),
     entity_manager_id VARCHAR(64),
     function_manager_id VARCHAR(64),
@@ -44,44 +43,10 @@ CREATE TABLE IF NOT EXISTS sys_users (
 CREATE INDEX IF NOT EXISTS idx_sys_users_username ON sys_users(username);
 CREATE INDEX IF NOT EXISTS idx_sys_users_email ON sys_users(email);
 CREATE INDEX IF NOT EXISTS idx_sys_users_status ON sys_users(status);
-CREATE INDEX IF NOT EXISTS idx_sys_users_department ON sys_users(department_id);
 CREATE INDEX IF NOT EXISTS idx_sys_users_employee_id ON sys_users(employee_id);
 CREATE INDEX IF NOT EXISTS idx_sys_users_deleted ON sys_users(deleted);
-
 -- =====================================================
--- 2. Departments Table (sys_departments)
--- =====================================================
-CREATE TABLE IF NOT EXISTS sys_departments (
-    id VARCHAR(64) PRIMARY KEY,
-    code VARCHAR(50) NOT NULL UNIQUE,
-    name VARCHAR(100) NOT NULL,
-    parent_id VARCHAR(64),
-    level INTEGER DEFAULT 1,
-    path VARCHAR(500),
-    sort_order INTEGER DEFAULT 0,
-    status VARCHAR(20) DEFAULT 'ACTIVE',
-    description TEXT,
-    cost_center VARCHAR(50),
-    location VARCHAR(200),
-    manager_id VARCHAR(64),
-    secondary_manager_id VARCHAR(64),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    created_by VARCHAR(64),
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_by VARCHAR(64),
-    CONSTRAINT fk_dept_parent FOREIGN KEY (parent_id) REFERENCES sys_departments(id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_sys_dept_parent ON sys_departments(parent_id);
-CREATE INDEX IF NOT EXISTS idx_sys_dept_code ON sys_departments(code);
-CREATE INDEX IF NOT EXISTS idx_sys_dept_path ON sys_departments(path);
-
-ALTER TABLE sys_users ADD CONSTRAINT fk_user_department 
-    FOREIGN KEY (department_id) REFERENCES sys_departments(id);
-
-
--- =====================================================
--- 3. Roles Table (sys_roles)
+-- 2. Roles Table (sys_roles)
 -- Role types:
 --   ADMIN: 管理角色，用于 Admin Center 管理功能
 --   DEVELOPER: 开发角色，用于 Developer Workstation 功能权限控制
@@ -264,7 +229,6 @@ CREATE INDEX IF NOT EXISTS idx_vg_task_history_created ON sys_virtual_group_task
 
 -- Comments
 COMMENT ON TABLE sys_users IS 'Unified user table for all services';
-COMMENT ON TABLE sys_departments IS 'Organization/Department hierarchy';
 COMMENT ON TABLE sys_roles IS 'Role definitions';
 COMMENT ON TABLE sys_user_roles IS 'User-Role associations';
 COMMENT ON TABLE sys_role_assignments IS 'Role assignments to users/departments/groups';

@@ -33,23 +33,20 @@ export interface MoveBusinessUnitRequest {
 }
 
 export const organizationApi = {
-  getTree: () => get<BusinessUnit[]>('/departments/tree'),
+  getTree: () => get<BusinessUnit[]>('/business-units/tree'),
   
-  getById: (id: string) => get<BusinessUnit>(`/departments/${id}`),
+  getById: (id: string) => get<BusinessUnit>(`/business-units/${id}`),
   
-  create: (data: CreateBusinessUnitRequest) => post<BusinessUnit>('/departments', data),
+  create: (data: CreateBusinessUnitRequest) => post<BusinessUnit>('/business-units', data),
   
-  update: (id: string, data: UpdateBusinessUnitRequest) => put<BusinessUnit>(`/departments/${id}`, data),
+  update: (id: string, data: UpdateBusinessUnitRequest) => put<BusinessUnit>(`/business-units/${id}`, data),
   
-  delete: (id: string) => del<void>(`/departments/${id}`),
+  delete: (id: string) => del<void>(`/business-units/${id}`),
   
-  move: (id: string, data: MoveBusinessUnitRequest) => post<BusinessUnit>(`/departments/${id}/move`, data),
+  move: (id: string, data: MoveBusinessUnitRequest) => post<BusinessUnit>(`/business-units/${id}/move`, data),
   
   getMembers: (id: string, params?: { page?: number; size?: number }) => 
-    get<any>(`/departments/${id}/members`, { params }),
+    get<any>(`/business-units/${id}/members`, { params }),
   
-  getStatistics: (id: string) => get<{ memberCount: number; childCount: number }>(`/departments/${id}/statistics`)
+  getStatistics: (id: string) => get<{ memberCount: number; childCount: number }>(`/business-units/${id}/statistics`)
 }
-
-// 为了向后兼容，保留 Department 类型别名
-export type Department = BusinessUnit

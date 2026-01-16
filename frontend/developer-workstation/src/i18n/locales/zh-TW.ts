@@ -254,7 +254,6 @@ export default {
     selectRole: '選擇角色',
     selectBusinessUnit: '選擇業務單元',
     selectBusinessUnitFirst: '請先選擇業務單元',
-    selectDepartment: '請選擇部門',
     selectVirtualGroup: '請選擇虛擬群組',
     // 提示
     claimRequired: '此分配方式需要使用者認領任務',

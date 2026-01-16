@@ -227,13 +227,13 @@ graph TB
 
 ```mermaid
 erDiagram
-    %% 管理员中心表
-    admin_organizations ||--o{ admin_departments : contains
-    admin_departments ||--o{ admin_users : belongs_to
-    admin_users ||--o{ admin_role_assignments : has
-    admin_roles ||--o{ admin_role_assignments : assigned_to
-    admin_virtual_groups ||--o{ admin_virtual_group_members : contains
-    admin_users ||--o{ admin_virtual_group_members : member_of
+    %% 系统表
+    sys_business_units ||--o{ sys_user_business_units : contains
+    sys_users ||--o{ sys_user_business_units : belongs_to
+    sys_users ||--o{ sys_user_roles : has
+    sys_roles ||--o{ sys_user_roles : assigned
+    sys_virtual_groups ||--o{ sys_virtual_group_members : contains
+    sys_users ||--o{ sys_virtual_group_members : member_of
 
     %% 开发者工作站表
     dw_function_units ||--o{ dw_table_definitions : contains
@@ -265,22 +265,27 @@ erDiagram
         timestamp created_at
     }
 
-    admin_departments {
-        bigint id PK
-        bigint organization_id FK
-        bigint parent_id FK
+    sys_business_units {
+        varchar id PK
+        varchar parent_id FK
         varchar code UK
         varchar name
+        varchar type
         int level
     }
 
-    admin_users {
-        bigint id PK
-        bigint department_id FK
+    sys_users {
+        varchar id PK
         varchar username UK
         varchar email
         varchar phone
         varchar status
+    }
+
+    sys_user_business_units {
+        varchar user_id FK
+        varchar business_unit_id FK
+        boolean is_primary
     }
 
     dw_function_units {

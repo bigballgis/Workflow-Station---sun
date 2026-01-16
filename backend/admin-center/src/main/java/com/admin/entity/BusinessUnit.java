@@ -47,12 +47,6 @@ public class BusinessUnit {
     @Column(name = "path", length = 500)
     private String path;
     
-    @Column(name = "manager_id", length = 64)
-    private String managerId;
-    
-    @Column(name = "secondary_manager_id", length = 64)
-    private String secondaryManagerId;
-    
     @Column(name = "phone", length = 50)
     private String phone;
     

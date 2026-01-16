@@ -3,14 +3,14 @@
     <div class="page-header">
       <span class="page-title">{{ t('menu.organization') }}</span>
       <el-button type="primary" @click="showCreateDialog()">
-        <el-icon><Plus /></el-icon>{{ t('organization.createDepartment') }}
+        <el-icon><Plus /></el-icon>{{ t('organization.createBusinessUnit') }}
       </el-button>
     </div>
     
     <el-row :gutter="20">
       <el-col :span="10">
         <el-card class="tree-card">
-          <el-input v-model="filterText" :placeholder="t('organization.searchDepartment')" clearable class="search-input">
+          <el-input v-model="filterText" :placeholder="t('organization.searchBusinessUnit')" clearable class="search-input">
             <template #prefix>
               <el-icon><Search /></el-icon>
             </template>
@@ -37,7 +37,7 @@
                     <el-tag v-if="data.memberCount" size="small" type="info" class="member-tag">{{ data.memberCount }} {{ t('role.people') }}</el-tag>
                   </div>
                   <div class="node-actions">
-                    <el-button link type="primary" size="small" @click.stop="showCreateDialog(data)" :title="t('organization.createDepartment')">
+                    <el-button link type="primary" size="small" @click.stop="showCreateDialog(data)" :title="t('organization.createBusinessUnit')">
                       <el-icon><Plus /></el-icon>
                     </el-button>
                     <el-button link type="primary" size="small" @click.stop="showEditDialog(data)" :title="t('common.edit')">
@@ -72,8 +72,8 @@
             </div>
           </template>
           <el-descriptions :column="2" border>
-            <el-descriptions-item :label="t('organization.departmentCode')">{{ selectedBusinessUnit.code }}</el-descriptions-item>
-            <el-descriptions-item :label="t('organization.parentDepartment')">{{ selectedBusinessUnit.parentName || t('common.noData') }}</el-descriptions-item>
+            <el-descriptions-item :label="t('organization.businessUnitCode')">{{ selectedBusinessUnit.code }}</el-descriptions-item>
+            <el-descriptions-item :label="t('organization.parentBusinessUnit')">{{ selectedBusinessUnit.parentName || t('common.noData') }}</el-descriptions-item>
             <el-descriptions-item :label="t('organization.memberCount')">{{ selectedBusinessUnit.memberCount || 0 }} {{ t('role.people') }}</el-descriptions-item>
           </el-descriptions>
           

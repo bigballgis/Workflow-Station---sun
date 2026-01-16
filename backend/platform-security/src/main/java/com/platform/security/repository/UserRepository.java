@@ -59,14 +59,6 @@ public interface UserRepository extends JpaRepository<User, String> {
     List<User> findByStatus(UserStatus status);
 
     /**
-     * Find all users in a specific department.
-     *
-     * @param departmentId the department ID
-     * @return list of users in the department
-     */
-    List<User> findByDepartmentId(String departmentId);
-
-    /**
      * Find all users with a specific role.
      *
      * @param roleCode the role code

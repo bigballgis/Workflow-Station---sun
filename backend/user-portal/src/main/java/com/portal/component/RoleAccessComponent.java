@@ -145,48 +145,6 @@ public class RoleAccessComponent {
     }
     
     /**
-     * 获取所有部门列表
-     */
-    public List<Map<String, Object>> getDepartments() {
-        try {
-            String url = adminCenterUrl + "/api/v1/admin/departments";
-            ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
-                    url,
-                    HttpMethod.GET,
-                    null,
-                    new ParameterizedTypeReference<List<Map<String, Object>>>() {}
-            );
-            
-            return response.getBody() != null ? response.getBody() : Collections.emptyList();
-            
-        } catch (Exception e) {
-            log.error("Failed to get departments: {}", e.getMessage());
-            return Collections.emptyList();
-        }
-    }
-    
-    /**
-     * 获取部门详情
-     */
-    public Map<String, Object> getDepartmentById(String departmentId) {
-        try {
-            String url = adminCenterUrl + "/api/v1/admin/departments/" + departmentId;
-            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                    url,
-                    HttpMethod.GET,
-                    null,
-                    new ParameterizedTypeReference<Map<String, Object>>() {}
-            );
-            
-            return response.getBody();
-            
-        } catch (Exception e) {
-            log.error("Failed to get department {}: {}", departmentId, e.getMessage());
-            return null;
-        }
-    }
-    
-    /**
      * 获取用户详情
      */
     public Map<String, Object> getUserById(String userId) {

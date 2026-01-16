@@ -60,9 +60,9 @@ public class HistoryStatisticsResult {
     private Map<String, Long> userStats;
 
     /**
-     * 按部门分组的统计
+     * 按业务单元分组的统计
      */
-    private Map<String, Long> departmentStats;
+    private Map<String, Long> businessUnitStats;
 
     /**
      * 按月份分组的统计

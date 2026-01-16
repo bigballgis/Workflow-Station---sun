@@ -141,13 +141,6 @@ public class PermissionController {
         return ApiResponse.success(groups);
     }
 
-    @GetMapping("/departments")
-    @Operation(summary = "获取部门列表", description = "获取所有部门列表，用于角色申请时选择组织单元")
-    public ApiResponse<List<Map<String, Object>>> getDepartments() {
-        List<Map<String, Object>> departments = permissionComponent.getDepartments();
-        return ApiResponse.success(departments);
-    }
-
     // ==================== 审批 API 端点 ====================
 
     @GetMapping("/approvals/pending")

@@ -36,26 +36,14 @@ export const useOrganizationStore = defineStore('organization', () => {
     await fetchTree()
   }
 
-  // 为了向后兼容，保留旧的别名
-  const departmentTree = businessUnitTree
-  const createDepartment = createBusinessUnit
-  const updateDepartment = updateBusinessUnit
-  const deleteDepartment = deleteBusinessUnit
-  const moveDepartment = moveBusinessUnit
-
   return { 
     businessUnitTree, 
-    departmentTree,
     loading, 
     currentBusinessUnit, 
     fetchTree, 
     createBusinessUnit, 
     updateBusinessUnit, 
     deleteBusinessUnit, 
-    moveBusinessUnit,
-    createDepartment,
-    updateDepartment,
-    deleteDepartment,
-    moveDepartment
+    moveBusinessUnit
   }
 })

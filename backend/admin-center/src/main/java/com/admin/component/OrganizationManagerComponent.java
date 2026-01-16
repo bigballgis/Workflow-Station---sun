@@ -71,8 +71,6 @@ public class OrganizationManagerComponent {
                 .parentId(request.getParentId())
                 .level(level)
                 .path(path)
-                .managerId(request.getManagerId())
-                .secondaryManagerId(request.getSecondaryManagerId())
                 .phone(request.getPhone())
                 .description(request.getDescription())
                 .costCenter(request.getCostCenter())
@@ -102,17 +100,7 @@ public class OrganizationManagerComponent {
             validateBusinessUnitNameUnique(request.getName(), businessUnit.getParentId(), unitId);
         }
         
-        // 验证副经理存在
-        if (request.getSecondaryManagerId() != null && !request.getSecondaryManagerId().isEmpty()) {
-            if (!userRepository.existsById(request.getSecondaryManagerId())) {
-                throw new AdminBusinessException("SECONDARY_MANAGER_NOT_FOUND", "副经理不存在");
-            }
-        }
-        
         businessUnit.setName(request.getName());
-        businessUnit.setManagerId(request.getManagerId());
-        businessUnit.setSecondaryManagerId(request.getSecondaryManagerId() != null && request.getSecondaryManagerId().isEmpty() 
-                ? null : request.getSecondaryManagerId());
         businessUnit.setPhone(request.getPhone());
         businessUnit.setDescription(request.getDescription());
         businessUnit.setCostCenter(request.getCostCenter());
@@ -222,21 +210,6 @@ public class OrganizationManagerComponent {
                     });
         }
         
-        // 获取管理者名称
-        if (unit.getManagerId() != null) {
-            userRepository.findById(unit.getManagerId())
-                    .ifPresent(user -> {
-                        tree.setManagerName(user.getFullName());
-                        tree.setLeaderName(user.getFullName());
-                    });
-        }
-        
-        // 获取副经理名称
-        if (unit.getSecondaryManagerId() != null) {
-            userRepository.findById(unit.getSecondaryManagerId())
-                    .ifPresent(user -> tree.setSecondaryManagerName(user.getFullName()));
-        }
-        
         log.info("Returning business unit tree with parentName: {}", tree.getParentName());
         return tree;
     }
@@ -261,26 +234,8 @@ public class OrganizationManagerComponent {
             memberCounts.put(unit.getId(), userRepository.countMembersByBusinessUnitId(unit.getId()));
         }
         
-        // 收集所有管理者ID
-        Set<String> managerIds = new HashSet<>();
-        for (BusinessUnit unit : allUnits) {
-            if (unit.getManagerId() != null) {
-                managerIds.add(unit.getManagerId());
-            }
-            if (unit.getSecondaryManagerId() != null) {
-                managerIds.add(unit.getSecondaryManagerId());
-            }
-        }
-        
-        // 批量获取管理者名称
-        Map<String, String> managerNames = new HashMap<>();
-        if (!managerIds.isEmpty()) {
-            userRepository.findAllById(managerIds).forEach(user -> 
-                managerNames.put(user.getId(), user.getFullName()));
-        }
-        
         // 构建树形结构
-        return buildBusinessUnitTree(allUnits, memberCounts, managerNames);
+        return buildBusinessUnitTree(allUnits, memberCounts);
     }
     
     /**
@@ -381,8 +336,7 @@ public class OrganizationManagerComponent {
      * 构建业务单元树形结构
      */
     private List<BusinessUnitTree> buildBusinessUnitTree(List<BusinessUnit> units, 
-                                                          Map<String, Long> memberCounts,
-                                                          Map<String, String> managerNames) {
+                                                          Map<String, Long> memberCounts) {
         Map<String, BusinessUnitTree> treeMap = new HashMap<>();
         Map<String, String> unitNames = new HashMap<>();
         List<BusinessUnitTree> roots = new ArrayList<>();
@@ -402,15 +356,6 @@ public class OrganizationManagerComponent {
                 tree.setParentName(unitNames.get(unit.getParentId()));
             }
             
-            // 设置管理者名称 (leaderName 和 managerName 都指向同一个人)
-            if (unit.getManagerId() != null) {
-                String leaderName = managerNames.get(unit.getManagerId());
-                tree.setManagerName(leaderName);
-                tree.setLeaderName(leaderName);
-            }
-            if (unit.getSecondaryManagerId() != null) {
-                tree.setSecondaryManagerName(managerNames.get(unit.getSecondaryManagerId()));
-            }
             treeMap.put(unit.getId(), tree);
         }
         

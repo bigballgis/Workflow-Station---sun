@@ -151,7 +151,7 @@ class TokenRefreshPropertyTest {
 
         // Generate access token (not refresh token)
         String accessToken = jwtTokenService.generateToken(
-                userId, "testuser", List.of("USER"), List.of(), null, "en"
+                userId, "testuser", List.of("USER"), List.of(), "en"
         );
 
         // Using access token as refresh token should throw exception

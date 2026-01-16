@@ -351,11 +351,6 @@ export const permissionApi = {
     return request.get<UserVirtualGroupMembership[]>('/permissions/my-virtual-groups')
   },
 
-  /** 获取部门列表 */
-  getDepartments() {
-    return request.get<OrganizationUnit[]>('/permissions/departments')
-  },
-
   /** 获取申请历史记录 */
   getRequestHistory(params?: { page?: number; size?: number; status?: string }) {
     return request.get<{ content: PermissionRequestRecord[]; totalElements: number }>('/permissions/requests', { params })

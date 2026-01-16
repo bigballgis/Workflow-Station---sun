@@ -12,6 +12,9 @@ import java.util.Optional;
 
 /**
  * 角色分配仓库接口
+ * 
+ * Note: Department-based assignment methods have been removed.
+ * Only USER and VIRTUAL_GROUP target types are now supported.
  */
 @Repository
 public interface RoleAssignmentRepository extends JpaRepository<RoleAssignment, String> {
@@ -49,24 +52,6 @@ public interface RoleAssignmentRepository extends JpaRepository<RoleAssignment, 
            "AND (ra.validFrom IS NULL OR ra.validFrom <= CURRENT_TIMESTAMP) " +
            "AND (ra.validTo IS NULL OR ra.validTo >= CURRENT_TIMESTAMP)")
     List<RoleAssignment> findValidUserAssignments(@Param("userId") String userId);
-    
-    /**
-     * 查找分配给特定部门的所有角色分配（DEPARTMENT类型）
-     */
-    @Query("SELECT ra FROM RoleAssignment ra WHERE ra.targetType = 'DEPARTMENT' AND ra.targetId = :departmentId " +
-           "AND (ra.validFrom IS NULL OR ra.validFrom <= CURRENT_TIMESTAMP) " +
-           "AND (ra.validTo IS NULL OR ra.validTo >= CURRENT_TIMESTAMP)")
-    List<RoleAssignment> findValidDepartmentAssignments(@Param("departmentId") String departmentId);
-    
-    /**
-     * 查找分配给部门层级的所有角色分配（DEPARTMENT_HIERARCHY类型）
-     * 需要传入用户所在部门的所有祖先部门ID列表
-     */
-    @Query("SELECT ra FROM RoleAssignment ra WHERE ra.targetType = 'DEPARTMENT_HIERARCHY' " +
-           "AND ra.targetId IN :departmentIds " +
-           "AND (ra.validFrom IS NULL OR ra.validFrom <= CURRENT_TIMESTAMP) " +
-           "AND (ra.validTo IS NULL OR ra.validTo >= CURRENT_TIMESTAMP)")
-    List<RoleAssignment> findValidDepartmentHierarchyAssignments(@Param("departmentIds") List<String> departmentIds);
     
     /**
      * 查找分配给虚拟组的所有角色分配（VIRTUAL_GROUP类型）

@@ -133,29 +133,19 @@ public class MultiDimensionalTaskQueryProperties {
     
     /**
      * 属性测试：认领任务识别准确性
-     * 验证用户认领的虚拟组和部门角色任务能够被正确识别
+     * 验证用户认领的虚拟组任务能够被正确识别
      */
     @Property(tries = 100)
     @Label("认领任务识别准确性")
     void claimedTasksIdentificationAccuracy(
-            @ForAll @Size(min = 1, max = 5) List<@NotBlank String> groupTaskIds,
-            @ForAll @Size(min = 1, max = 5) List<@NotBlank String> deptRoleTaskIds,
+            @ForAll @Size(min = 1, max = 10) List<@NotBlank String> groupTaskIds,
             @ForAll @NotBlank String userId,
-            @ForAll @NotBlank String groupId,
-            @ForAll @NotBlank String deptRole) {
+            @ForAll @NotBlank String groupId) {
         
         // 过滤掉空白字符串
         Assume.that(groupTaskIds.stream().allMatch(id -> id != null && !id.trim().isEmpty()));
-        Assume.that(deptRoleTaskIds.stream().allMatch(id -> id != null && !id.trim().isEmpty()));
         Assume.that(userId != null && !userId.trim().isEmpty());
         Assume.that(groupId != null && !groupId.trim().isEmpty());
-        Assume.that(deptRole != null && !deptRole.trim().isEmpty());
-        
-        // 确保任务ID唯一性
-        Set<String> allTaskIds = new HashSet<>();
-        allTaskIds.addAll(groupTaskIds);
-        allTaskIds.addAll(deptRoleTaskIds);
-        Assume.that(allTaskIds.size() == groupTaskIds.size() + deptRoleTaskIds.size());
         
         List<ExtendedTaskInfo> allTasks = new ArrayList<>();
         List<String> expectedTaskIds = new ArrayList<>();
@@ -166,14 +156,6 @@ public class MultiDimensionalTaskQueryProperties {
             task.claimTask(userId);
             allTasks.add(task);
             expectedTaskIds.add(taskId + "-group");
-        }
-        
-        // 创建部门角色任务并认领
-        for (String taskId : deptRoleTaskIds) {
-            ExtendedTaskInfo task = createTestTask(taskId + "-dept", AssignmentType.DEPT_ROLE, deptRole, 70);
-            task.claimTask(userId);
-            allTasks.add(task);
-            expectedTaskIds.add(taskId + "-dept");
         }
         
         // 模拟查询逻辑：过滤出用户认领的任务
@@ -195,7 +177,7 @@ public class MultiDimensionalTaskQueryProperties {
         for (ExtendedTaskInfo task : filteredTasks) {
             assertThat(task.getCurrentAssignee()).isEqualTo(userId);
             assertThat(task.isClaimed()).isTrue();
-            assertThat(task.getAssignmentType()).isIn(AssignmentType.VIRTUAL_GROUP, AssignmentType.DEPT_ROLE);
+            assertThat(task.getAssignmentType()).isEqualTo(AssignmentType.VIRTUAL_GROUP);
         }
     }
     
@@ -452,81 +434,6 @@ public class MultiDimensionalTaskQueryProperties {
         }
     }
     
-    /**
-     * 属性测试：部门角色任务可见性过滤准确性
-     * 验证用户可见的部门角色任务能够被正确过滤
-     */
-    @Property(tries = 100)
-    @Label("部门角色任务可见性过滤准确性")
-    void departmentRoleTasksVisibilityFilterAccuracy(
-            @ForAll @Size(min = 1, max = 10) List<@NotBlank String> visibleTaskIds,
-            @ForAll @Size(min = 1, max = 5) List<@NotBlank String> invisibleTaskIds,
-            @ForAll @NotBlank String userId,
-            @ForAll @NotBlank String userDeptRole,
-            @ForAll @NotBlank String otherDeptRole) {
-        
-        // 过滤掉空白字符串和相同的部门角色
-        Assume.that(visibleTaskIds.stream().allMatch(id -> id != null && !id.trim().isEmpty()));
-        Assume.that(invisibleTaskIds.stream().allMatch(id -> id != null && !id.trim().isEmpty()));
-        Assume.that(userId != null && !userId.trim().isEmpty());
-        Assume.that(userDeptRole != null && !userDeptRole.trim().isEmpty());
-        Assume.that(otherDeptRole != null && !otherDeptRole.trim().isEmpty());
-        Assume.that(!userDeptRole.equals(otherDeptRole));
-        
-        // 确保任务ID唯一性
-        Set<String> allTaskIds = new HashSet<>();
-        allTaskIds.addAll(visibleTaskIds);
-        allTaskIds.addAll(invisibleTaskIds);
-        Assume.that(allTaskIds.size() == visibleTaskIds.size() + invisibleTaskIds.size());
-        
-        List<ExtendedTaskInfo> allTasks = new ArrayList<>();
-        
-        // 创建用户可见的部门角色任务
-        for (String taskId : visibleTaskIds) {
-            ExtendedTaskInfo task = createTestTask(taskId + "-visible", AssignmentType.DEPT_ROLE, userDeptRole, 60);
-            allTasks.add(task);
-        }
-        
-        // 创建用户不可见的部门角色任务
-        for (String taskId : invisibleTaskIds) {
-            ExtendedTaskInfo task = createTestTask(taskId + "-invisible", AssignmentType.DEPT_ROLE, otherDeptRole, 60);
-            allTasks.add(task);
-        }
-        
-        // 模拟查询逻辑：过滤出用户可见的部门角色任务
-        List<String> userDeptRoles = Arrays.asList(userDeptRole);
-        List<ExtendedTaskInfo> filteredTasks = allTasks.stream()
-                .filter(task -> task.getAssignmentType() == AssignmentType.DEPT_ROLE)
-                .filter(task -> userDeptRoles.contains(task.getAssignmentTarget()))
-                .filter(task -> task.getClaimedBy() == null) // 未认领的任务
-                .filter(task -> !task.isCompleted())
-                .collect(Collectors.toList());
-        
-        // 验证过滤结果
-        assertThat(filteredTasks).hasSize(visibleTaskIds.size());
-        
-        // 验证只有可见的任务被查询到
-        Set<String> resultTaskIds = filteredTasks.stream()
-                .map(ExtendedTaskInfo::getTaskId)
-                .collect(Collectors.toSet());
-        
-        Set<String> expectedVisibleTaskIds = visibleTaskIds.stream()
-                .map(id -> id + "-visible")
-                .collect(Collectors.toSet());
-        assertThat(resultTaskIds).containsExactlyInAnyOrderElementsOf(expectedVisibleTaskIds);
-        
-        // 验证不可见的任务没有被查询到
-        for (String invisibleTaskId : invisibleTaskIds) {
-            assertThat(resultTaskIds).doesNotContain(invisibleTaskId + "-invisible");
-        }
-        
-        // 验证部门角色任务信息正确性
-        for (ExtendedTaskInfo task : filteredTasks) {
-            assertThat(task.getAssignmentType()).isEqualTo(AssignmentType.DEPT_ROLE);
-            assertThat(task.getAssignmentTarget()).isEqualTo(userDeptRole);
-            assertThat(task.getCurrentAssignee()).isNull(); // 未认领的部门角色任务没有具体处理人
-        }
-    }
     
     // ==================== 辅助方法 ====================
     

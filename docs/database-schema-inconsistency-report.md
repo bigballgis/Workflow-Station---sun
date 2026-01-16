@@ -11,7 +11,7 @@
 
 | 表名 | 差异类型 | 严重程度 | 状态 |
 |------|----------|----------|------|
-| sys_departments | 数据库多出字段 | 低 | ✅ 已修复 - 删除 phone 字段 |
+| sys_departments | 已废弃 | - | ✅ 已迁移到 sys_business_units |
 | sys_permissions | 数据库多出字段 | 中 | ✅ 已修复 - 更新 Flyway |
 | sys_role_permissions | 数据库多出字段 | 中 | ✅ 已修复 - 更新 Flyway |
 | sys_role_assignments | 字段长度不一致 | 低 | ✅ 已修复 - 改为 VARCHAR(20) |
@@ -24,14 +24,14 @@
 
 ## 修复详情
 
-### 1. sys_departments - ✅ 已修复
+### 1. sys_departments - ✅ 已废弃
 
-**决定**: 删除 `phone` 字段（不需要）
+**决定**: 该表已废弃，数据已迁移到 `sys_business_units` 表
 
-**修复脚本**: `platform-security/V4__cleanup_schema_inconsistencies.sql`
-```sql
-ALTER TABLE sys_departments DROP COLUMN IF EXISTS phone;
-```
+**说明**: 
+- 原 `sys_departments` 表已被 `sys_business_units` 表替代
+- 数据已通过 Flyway V3 迁移脚本迁移
+- 可通过 `deploy/init-scripts/99-utilities/01-cleanup-old-tables.sql` 删除旧表
 
 ---
 
@@ -119,7 +119,6 @@ CREATE INDEX IF NOT EXISTS idx_password_history_user ON admin_password_history(u
 ## 新增迁移脚本
 
 ### platform-security/V4__cleanup_schema_inconsistencies.sql
-- 删除 sys_departments.phone
 - 删除 sys_virtual_group_members.added_at
 - 添加索引和注释
 

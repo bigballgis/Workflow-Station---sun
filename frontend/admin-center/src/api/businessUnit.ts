@@ -7,10 +7,6 @@ export interface BusinessUnit {
   parentId?: string
   level: number
   path?: string
-  managerId?: string
-  managerName?: string
-  secondaryManagerId?: string
-  secondaryManagerName?: string
   phone?: string
   description?: string
   costCenter?: string
@@ -27,8 +23,6 @@ export interface CreateBusinessUnitRequest {
   name: string
   code: string
   parentId?: string
-  managerId?: string
-  secondaryManagerId?: string
   phone?: string
   description?: string
   costCenter?: string
@@ -38,8 +32,6 @@ export interface CreateBusinessUnitRequest {
 
 export interface UpdateBusinessUnitRequest {
   name?: string
-  managerId?: string
-  secondaryManagerId?: string
   phone?: string
   description?: string
   costCenter?: string
@@ -125,6 +117,3 @@ export const businessUnitApi = {
   // 移除审批人
   removeApprover: (approverId: string) => del<void>(`/approvers/${approverId}`)
 }
-
-// 为了向后兼容，导出 departmentApi 作为别名
-export const departmentApi = businessUnitApi

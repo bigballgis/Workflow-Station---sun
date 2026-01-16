@@ -24,21 +24,6 @@ adminCenterAxios.interceptors.response.use(
   error => Promise.reject(error)
 )
 
-/** 部门树节点 */
-export interface DepartmentTree {
-  id: string
-  name: string
-  code?: string
-  parentId?: string
-  level?: number
-  path?: string
-  managerId?: string
-  managerName?: string
-  secondaryManagerId?: string
-  secondaryManagerName?: string
-  children?: DepartmentTree[]
-}
-
 /** 虚拟组信息 */
 export interface VirtualGroupInfo {
   id: string
@@ -72,20 +57,6 @@ export interface RoleInfo {
 }
 
 export const adminCenterApi = {
-  // ==================== 部门相关 ====================
-  
-  /** 获取部门树 */
-  getDepartmentTree: async (): Promise<DepartmentTree[]> => {
-    const response = await adminCenterAxios.get('/departments/tree')
-    return Array.isArray(response) ? response : (response as any)?.data || []
-  },
-
-  /** 搜索部门 */
-  searchDepartments: async (keyword: string): Promise<DepartmentTree[]> => {
-    const response = await adminCenterAxios.get('/departments/search', { params: { keyword } })
-    return Array.isArray(response) ? response : (response as any)?.data || []
-  },
-
   // ==================== 虚拟组相关 ====================
   
   /** 获取虚拟组列表 */

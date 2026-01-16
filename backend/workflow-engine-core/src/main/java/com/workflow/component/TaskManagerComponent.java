@@ -1177,11 +1177,6 @@ public class TaskManagerComponent {
                 // 这里可以设置候选组，但Flowable的候选组概念与我们的虚拟组不完全一致
                 // 我们主要通过扩展表来管理虚拟组分配
                 break;
-            case DEPT_ROLE:
-                // 分配给部门角色，清除个人分配
-                taskService.setAssignee(flowableTask.getId(), null);
-                // 同样主要通过扩展表来管理部门角色分配
-                break;
         }
         
         // 设置优先级和到期时间

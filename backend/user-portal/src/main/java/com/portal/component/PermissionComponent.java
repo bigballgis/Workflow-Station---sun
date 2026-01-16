@@ -103,8 +103,8 @@ public class PermissionComponent {
             throw new IllegalArgumentException("角色不存在: " + roleId);
         }
         
-        // 获取组织单元信息
-        Map<String, Object> orgUnit = roleAccessComponent.getDepartmentById(organizationUnitId);
+        // 获取组织单元信息（使用 BusinessUnit API）
+        Map<String, Object> orgUnit = virtualGroupAccessComponent.getBusinessUnitById(organizationUnitId);
         if (orgUnit == null) {
             throw new IllegalArgumentException("组织单元不存在: " + organizationUnitId);
         }
@@ -441,13 +441,6 @@ public class PermissionComponent {
      */
     public List<Map<String, Object>> getUserCurrentVirtualGroups(String userId) {
         return virtualGroupAccessComponent.getUserVirtualGroups(userId);
-    }
-
-    /**
-     * 获取所有部门列表
-     */
-    public List<Map<String, Object>> getDepartments() {
-        return roleAccessComponent.getDepartments();
     }
 
     // ==================== 旧的方法（保留兼容） ====================

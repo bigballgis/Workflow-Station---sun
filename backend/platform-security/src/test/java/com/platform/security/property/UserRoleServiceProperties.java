@@ -22,6 +22,9 @@ import static org.mockito.Mockito.*;
 /**
  * Property-based tests for UserRoleService
  * Feature: role-assignment-targets
+ * 
+ * Note: Department-based role assignment tests have been removed.
+ * Only USER and VIRTUAL_GROUP target types are now supported.
  */
 class UserRoleServiceProperties {
 
@@ -37,7 +40,6 @@ class UserRoleServiceProperties {
             @ForAll @NotBlank @Size(max = 64) String roleId,
             @ForAll @NotBlank @Size(max = 50) String roleCode,
             @ForAll @NotBlank @Size(max = 100) String roleName,
-            @ForAll @NotBlank @Size(max = 64) String departmentId,
             @ForAll @NotBlank @Size(max = 64) String groupId
     ) {
         // Arrange
@@ -49,28 +51,11 @@ class UserRoleServiceProperties {
         
         // Create multiple assignments for the same role (user gets role from multiple sources)
         RoleAssignment userAssignment = createAssignment("assign-1", roleId, AssignmentTargetType.USER, userId);
-        RoleAssignment deptAssignment = createAssignment("assign-2", roleId, AssignmentTargetType.DEPARTMENT, departmentId);
-        RoleAssignment groupAssignment = createAssignment("assign-3", roleId, AssignmentTargetType.VIRTUAL_GROUP, groupId);
+        RoleAssignment groupAssignment = createAssignment("assign-2", roleId, AssignmentTargetType.VIRTUAL_GROUP, groupId);
         
         // Mock repository to return assignments from multiple sources
         when(repository.findValidUserAssignments(userId)).thenReturn(List.of(userAssignment));
-        when(repository.findValidDepartmentAssignments(departmentId)).thenReturn(List.of(deptAssignment));
-        when(repository.findValidDepartmentHierarchyAssignments(anyList())).thenReturn(Collections.emptyList());
         when(repository.findValidVirtualGroupAssignments(List.of(groupId))).thenReturn(List.of(groupAssignment));
-        
-        // Mock user department
-        when(jdbcTemplate.queryForObject(
-                contains("department_id FROM sys_users"),
-                eq(String.class),
-                eq(userId)
-        )).thenReturn(departmentId);
-        
-        // Mock ancestor departments (empty for simplicity)
-        when(jdbcTemplate.queryForObject(
-                contains("d.path FROM sys_users"),
-                eq(String.class),
-                eq(userId)
-        )).thenReturn(null);
         
         // Mock virtual groups
         when(jdbcTemplate.queryForList(
@@ -93,8 +78,6 @@ class UserRoleServiceProperties {
         // Mock display names
         when(jdbcTemplate.queryForObject(contains("display_name"), eq(String.class), eq(userId)))
                 .thenReturn("User Name");
-        when(jdbcTemplate.queryForObject(contains("FROM sys_departments"), eq(String.class), eq(departmentId)))
-                .thenReturn("Department Name");
         when(jdbcTemplate.queryForObject(contains("FROM sys_virtual_groups"), eq(String.class), eq(groupId)))
                 .thenReturn("Group Name");
         
@@ -117,7 +100,7 @@ class UserRoleServiceProperties {
 
     /**
      * Property 9: Dynamic Membership - User Gains Role
-     * For any user added to a department or virtual group that has a role assignment,
+     * For any user added to a virtual group that has a role assignment,
      * the user SHALL immediately be included in the effective users for that role.
      * Validates: Requirements 4.1, 4.3
      */
@@ -141,23 +124,7 @@ class UserRoleServiceProperties {
         
         // Mock - no direct user assignments
         when(repository.findValidUserAssignments(userId)).thenReturn(Collections.emptyList());
-        when(repository.findValidDepartmentAssignments(any())).thenReturn(Collections.emptyList());
-        when(repository.findValidDepartmentHierarchyAssignments(anyList())).thenReturn(Collections.emptyList());
         when(repository.findValidVirtualGroupAssignments(List.of(groupId))).thenReturn(List.of(groupAssignment));
-        
-        // Mock user has no department
-        when(jdbcTemplate.queryForObject(
-                contains("department_id FROM sys_users"),
-                eq(String.class),
-                eq(userId)
-        )).thenReturn(null);
-        
-        // Mock ancestor departments (empty)
-        when(jdbcTemplate.queryForObject(
-                contains("d.path FROM sys_users"),
-                eq(String.class),
-                eq(userId)
-        )).thenThrow(new org.springframework.dao.EmptyResultDataAccessException(1));
         
         // Mock user is member of the virtual group
         when(jdbcTemplate.queryForList(
@@ -198,7 +165,7 @@ class UserRoleServiceProperties {
 
     /**
      * Property 10: Dynamic Membership - User Loses Role
-     * For any user removed from a department or virtual group that has a role assignment,
+     * For any user removed from a virtual group that has a role assignment,
      * the user SHALL immediately be excluded from the effective users for that role
      * (unless matched by another assignment).
      * Validates: Requirements 4.2, 4.4
@@ -217,23 +184,7 @@ class UserRoleServiceProperties {
         
         // Mock - user has no assignments (removed from all groups)
         when(repository.findValidUserAssignments(userId)).thenReturn(Collections.emptyList());
-        when(repository.findValidDepartmentAssignments(any())).thenReturn(Collections.emptyList());
-        when(repository.findValidDepartmentHierarchyAssignments(anyList())).thenReturn(Collections.emptyList());
         when(repository.findValidVirtualGroupAssignments(anyList())).thenReturn(Collections.emptyList());
-        
-        // Mock user has no department
-        when(jdbcTemplate.queryForObject(
-                contains("department_id FROM sys_users"),
-                eq(String.class),
-                eq(userId)
-        )).thenReturn(null);
-        
-        // Mock ancestor departments (empty)
-        when(jdbcTemplate.queryForObject(
-                contains("d.path FROM sys_users"),
-                eq(String.class),
-                eq(userId)
-        )).thenThrow(new org.springframework.dao.EmptyResultDataAccessException(1));
         
         // Mock user is NOT member of any virtual group (removed)
         when(jdbcTemplate.queryForList(
@@ -265,21 +216,7 @@ class UserRoleServiceProperties {
         
         // Mock empty assignments
         when(repository.findValidUserAssignments(userId)).thenReturn(Collections.emptyList());
-        when(repository.findValidDepartmentAssignments(any())).thenReturn(Collections.emptyList());
-        when(repository.findValidDepartmentHierarchyAssignments(anyList())).thenReturn(Collections.emptyList());
         when(repository.findValidVirtualGroupAssignments(anyList())).thenReturn(Collections.emptyList());
-        
-        when(jdbcTemplate.queryForObject(
-                contains("department_id FROM sys_users"),
-                eq(String.class),
-                eq(userId)
-        )).thenReturn(null);
-        
-        when(jdbcTemplate.queryForObject(
-                contains("d.path FROM sys_users"),
-                eq(String.class),
-                eq(userId)
-        )).thenThrow(new org.springframework.dao.EmptyResultDataAccessException(1));
         
         when(jdbcTemplate.queryForList(
                 contains("group_id FROM sys_virtual_group_members"),

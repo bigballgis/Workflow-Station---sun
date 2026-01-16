@@ -67,17 +67,16 @@ public class TaskQueryComponent {
 
         // 1. 从 Flowable 获取任务
         try {
-            // 获取用户所属的虚拟组和部门角色
+            // 获取用户所属的虚拟组
             List<String> groupIds = getUserVirtualGroups(userId);
-            List<String> deptRoles = getUserDeptRoles(userId);
             
             // 根据分配类型筛选决定查询方式
             boolean includeGroups = assignmentTypes == null || assignmentTypes.isEmpty() 
-                || assignmentTypes.contains("VIRTUAL_GROUP") || assignmentTypes.contains("DEPT_ROLE");
+                || assignmentTypes.contains("VIRTUAL_GROUP");
             
             Optional<Map<String, Object>> result;
             if (includeGroups) {
-                result = workflowEngineClient.getUserAllVisibleTasks(userId, groupIds, deptRoles, 0, 1000);
+                result = workflowEngineClient.getUserAllVisibleTasks(userId, groupIds, Collections.emptyList(), 0, 1000);
             } else {
                 result = workflowEngineClient.getUserTasks(userId, 0, 1000);
             }
@@ -432,27 +431,7 @@ public class TaskQueryComponent {
         return Collections.emptyList();
     }
 
-    /**
-     * 获取用户的部门角色
-     * 通过 workflow-engine-core 调用 admin-center 获取
-     */
-    @SuppressWarnings("unchecked")
-    private List<String> getUserDeptRoles(String userId) {
-        try {
-            Optional<Map<String, Object>> result = workflowEngineClient.getUserTaskPermissions(userId);
-            if (result.isPresent()) {
-                Map<String, Object> data = result.get();
-                List<String> deptRoles = (List<String>) data.get("departmentRoles");
-                if (deptRoles != null && !deptRoles.isEmpty()) {
-                    return deptRoles;
-                }
-            }
-        } catch (Exception e) {
-            log.warn("Failed to get user department roles from workflow engine: {}", e.getMessage());
-        }
-        // 返回空列表，不使用模拟数据
-        return Collections.emptyList();
-    }
+
 
     /**
      * 获取任务统计信息

@@ -106,7 +106,6 @@ public class AuthController {
                             .roles(roles)
                             .permissions(permissions)
                             .rolesWithSources(rolesWithSources)
-                            .departmentId(user.getDepartmentId())
                             .language(user.getLanguage())
                             .build())
                     .build());
@@ -154,7 +153,6 @@ public class AuthController {
                     .roles(roles)
                     .permissions(getPermissionsForRoles(roles))
                     .rolesWithSources(rolesWithSources)
-                    .departmentId(user.getDepartmentId())
                     .language(user.getLanguage())
                     .build());
         } catch (Exception e) {

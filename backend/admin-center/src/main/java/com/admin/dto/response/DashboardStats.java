@@ -20,9 +20,9 @@ public class DashboardStats {
     private long totalUsers;
     
     /**
-     * 部门总数
+     * 业务单元总数
      */
-    private long totalDepartments;
+    private long totalBusinessUnits;
     
     /**
      * 角色总数

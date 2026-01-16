@@ -17,12 +17,11 @@ public interface JwtTokenService {
      * @param username User's username
      * @param roles List of role identifiers
      * @param permissions List of permission identifiers
-     * @param departmentId User's department ID
      * @param language User's preferred language
      * @return JWT token string
      */
     String generateToken(String userId, String username, List<String> roles, 
-                         List<String> permissions, String departmentId, String language);
+                         List<String> permissions, String language);
     
     /**
      * Generate a JWT access token from UserPrincipal.

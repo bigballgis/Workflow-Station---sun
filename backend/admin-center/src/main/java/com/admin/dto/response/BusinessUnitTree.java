@@ -26,11 +26,6 @@ public class BusinessUnitTree {
     private String parentName;
     private Integer level;
     private String path;
-    private String managerId;
-    private String managerName;
-    private String leaderName;
-    private String secondaryManagerId;
-    private String secondaryManagerName;
     private BusinessUnitStatus status;
     private Integer sortOrder;
     private Long memberCount;
@@ -46,8 +41,6 @@ public class BusinessUnitTree {
                 .parentId(unit.getParentId())
                 .level(unit.getLevel())
                 .path(unit.getPath())
-                .managerId(unit.getManagerId())
-                .secondaryManagerId(unit.getSecondaryManagerId())
                 .status(unit.getStatus())
                 .sortOrder(unit.getSortOrder())
                 .memberCount(unit.getMemberCount())

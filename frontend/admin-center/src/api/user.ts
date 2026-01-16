@@ -8,10 +8,6 @@ export interface User {
   employeeId?: string
   businessUnitId?: string
   businessUnitName?: string
-  /** @deprecated Use businessUnitId instead */
-  departmentId?: string
-  /** @deprecated Use businessUnitName instead */
-  departmentName?: string
   position?: string
   entityManagerId?: string
   entityManagerName?: string
@@ -53,8 +49,6 @@ export interface LoginHistory {
 export interface UserQuery {
   keyword?: string
   businessUnitId?: string
-  /** @deprecated Use businessUnitId instead */
-  departmentId?: string
   status?: string
   page?: number
   size?: number
@@ -74,8 +68,6 @@ export interface CreateUserRequest {
   email: string
   employeeId?: string
   businessUnitId?: string
-  /** @deprecated Use businessUnitId instead */
-  departmentId?: string
   position?: string
   entityManagerId?: string
   functionManagerId?: string
@@ -88,8 +80,6 @@ export interface UpdateUserRequest {
   email?: string
   employeeId?: string
   businessUnitId?: string
-  /** @deprecated Use businessUnitId instead */
-  departmentId?: string
   position?: string
   entityManagerId?: string
   functionManagerId?: string

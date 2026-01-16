@@ -7,7 +7,6 @@ export interface UserInfo {
   name: string
   email: string
   avatar?: string
-  department?: string
   roles: string[]
 }
 
@@ -37,7 +36,6 @@ export const useUserStore = defineStore('user', () => {
       username,
       name: username,
       email: `${username}@hsbc.com`,
-      department: '技术部',
       roles: ['user']
     })
     return true

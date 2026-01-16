@@ -254,7 +254,6 @@ export default {
     selectRole: 'Select Role',
     selectBusinessUnit: 'Select Business Unit',
     selectBusinessUnitFirst: 'Please select business unit first',
-    selectDepartment: 'Select Department',
     selectVirtualGroup: 'Select Virtual Group',
     // Tips
     claimRequired: 'This assignment type requires task claiming',
