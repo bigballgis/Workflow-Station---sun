@@ -152,16 +152,17 @@
     </el-dialog>
 
     <!-- 绑定节点对话框 -->
-    <el-dialog v-model="showBindDialog" title="绑定流程节点" width="650px">
+    <el-dialog v-model="showBindDialog" title="绑定流程节点" width="650px" :key="bindDialogKey">
       <div class="bind-dialog-content">
         <el-alert type="info" :closable="false" style="margin-bottom: 16px;">
           选择要绑定此表单的流程节点。可以选择多个节点，并设置是否为只读模式。
         </el-alert>
         <div v-if="processNodes.length" class="node-list">
-          <div v-for="node in processNodes" :key="node.id" class="node-item">
+          <div v-for="node in processNodes" :key="`${node.id}-${bindDialogKey}`" class="node-item">
             <el-checkbox 
               :model-value="isNodeSelected(node.id)"
               @change="toggleNodeSelection(node.id, node.name, $event as boolean)"
+              :key="`checkbox-${node.id}-${bindDialogKey}`"
             />
             <div class="node-icon" :class="node.type"></div>
             <div class="node-info">
@@ -365,6 +366,8 @@ const formNodeBindings = ref<Map<number, Array<{ nodeId: string; nodeName: strin
 
 // 绑定对话框中选中的节点
 const selectedBindNodes = ref<Array<{ nodeId: string; nodeName: string; readOnly: boolean }>>([])
+// 用于强制更新复选框的 key
+const bindDialogKey = ref(0)
 
 // form-create designer 配置
 const designerConfig = {
@@ -747,8 +750,14 @@ function parseFormBindingsFromBpmn() {
           const name = prop.getAttribute('name')
           const value = prop.getAttribute('value')
           
+          // 添加调试日志
+          if (name && ['formId', 'formName', 'formReadOnly'].includes(name)) {
+            console.log(`[FormDesigner] parseFormBindingsFromBpmn: task ${taskId}, property name=${name}, value=${value}, nodeName=${prop.nodeName}, localName=${localName}`)
+          }
+          
           if (name === 'formId' && value) {
             formId = parseInt(value, 10)
+            console.log(`[FormDesigner] parseFormBindingsFromBpmn: task ${taskId}, found formId=${formId}`)
           }
           if (name === 'formReadOnly' && value === 'true') {
             readOnly = true
@@ -761,6 +770,7 @@ function parseFormBindingsFromBpmn() {
           bindings.set(formId, [])
         }
         bindings.get(formId)!.push({ nodeId: taskId, nodeName: taskName, readOnly })
+        console.log(`[FormDesigner] parseFormBindingsFromBpmn: added binding for formId=${formId}, taskId=${taskId}`)
       }
     })
   } catch (e) {
@@ -781,7 +791,12 @@ function getFormBoundNodes(formId: number): Array<{ nodeId: string; nodeName: st
  * 检查节点是否被选中
  */
 function isNodeSelected(nodeId: string): boolean {
-  return selectedBindNodes.value.some(n => n.nodeId === nodeId)
+  const result = selectedBindNodes.value.some(n => n.nodeId === nodeId)
+  // 添加日志以便调试
+  if (processNodes.value.some(n => n.id === nodeId)) {
+    console.log(`[FormDesigner] isNodeSelected(${nodeId}):`, result, 'selectedBindNodes:', selectedBindNodes.value.map(n => n.nodeId))
+  }
+  return result
 }
 
 /**
@@ -958,6 +973,9 @@ function handlePreview() {
 
 async function handleBindNode(form: FormDefinition) {
   bindingForm.value = form
+  // 确保流程数据是最新的
+  await store.fetchProcess(props.functionUnitId)
+  parseFormBindingsFromBpmn()
   // 从BPMN中获取当前绑定信息
   const boundNodes = getFormBoundNodes(form.id)
   selectedBindNodes.value = boundNodes.map(n => ({ ...n }))
@@ -968,18 +986,45 @@ async function handleBindNode(form: FormDefinition) {
 async function handleConfirmBind() {
   if (!bindingForm.value) return
   try {
+    console.log('[FormDesigner] Saving bindings for form:', bindingForm.value.id, 'Selected nodes:', selectedBindNodes.value)
     // 更新BPMN XML中的节点formId属性
     if (store.process?.bpmnXml) {
       await updateBpmnFormBindings(bindingForm.value.id, bindingForm.value.formName, selectedBindNodes.value)
     }
     
-    ElMessage.success('绑定保存成功')
-    showBindDialog.value = false
-    
-    // 重新加载
+    // 重新加载流程数据，确保获取最新的 BPMN XML
     await store.fetchProcess(props.functionUnitId)
+    // 重新解析绑定信息
     parseFormBindingsFromBpmn()
+    
+    // 更新对话框中的选中状态，确保与保存后的数据一致
+    const boundNodes = getFormBoundNodes(bindingForm.value.id)
+    console.log('[FormDesigner] After save, bound nodes:', boundNodes)
+    console.log('[FormDesigner] Before update, selectedBindNodes:', selectedBindNodes.value.map(n => n.nodeId))
+    
+    // 创建一个新数组，确保 Vue 能够检测到变化
+    // 使用 splice 来替换整个数组，确保响应式更新
+    selectedBindNodes.value.splice(0, selectedBindNodes.value.length, ...boundNodes.map(n => ({ ...n })))
+    
+    console.log('[FormDesigner] After update, selectedBindNodes:', selectedBindNodes.value.map(n => n.nodeId))
+    
+    // 强制更新对话框，确保复选框状态正确更新
+    bindDialogKey.value++
+    
+    // 使用 nextTick 确保 Vue 能够检测到变化并更新 UI
+    await nextTick()
+    
+    // 验证更新后的状态
+    processNodes.value.forEach(node => {
+      const isSelected = isNodeSelected(node.id)
+      console.log(`[FormDesigner] Node ${node.id} isSelected:`, isSelected)
+    })
+    
+    ElMessage.success('绑定保存成功')
+    // 不关闭对话框，让用户看到更新后的状态
+    // showBindDialog.value = false
   } catch (e: any) {
+    console.error('[FormDesigner] Save binding failed:', e)
     ElMessage.error(e.response?.data?.message || '绑定失败')
   }
 }
@@ -994,61 +1039,237 @@ async function updateBpmnFormBindings(
 ) {
   if (!store.process?.bpmnXml) return
   
+  console.log('[FormDesigner] updateBpmnFormBindings called with:', { formId, formName, nodesCount: nodes.length, nodes })
+  
   const parser = new DOMParser()
   const xmlDoc = parser.parseFromString(store.process.bpmnXml, 'text/xml')
   
   // 先从所有节点中移除此表单的绑定
-  const allTasks = xmlDoc.querySelectorAll('userTask, serviceTask')
+  // 使用更通用的方式查找任务节点，支持命名空间
+  const allElements = xmlDoc.getElementsByTagName('*')
+  const allTasks: Element[] = []
+  for (let i = 0; i < allElements.length; i++) {
+    const el = allElements[i]
+    const localName = el.localName || el.nodeName.split(':').pop()
+    if (localName === 'userTask' || localName === 'serviceTask') {
+      allTasks.push(el)
+    }
+  }
+  
+  let removedCount = 0
   allTasks.forEach(task => {
-    const properties = task.querySelector('extensionElements > properties')
-    if (!properties) return
+    const taskId = task.getAttribute('id') || ''
+    console.log(`[FormDesigner] Processing task ${taskId} for formId ${formId}`)
     
-    const formIdProp = Array.from(properties.querySelectorAll('property')).find(
-      p => p.getAttribute('name') === 'formId'
-    )
-    if (formIdProp && formIdProp.getAttribute('value') === String(formId)) {
-      // 移除formId, formName, formReadOnly
-      const propsToRemove = Array.from(properties.querySelectorAll('property')).filter(
-        p => ['formId', 'formName', 'formReadOnly'].includes(p.getAttribute('name') || '')
-      )
-      propsToRemove.forEach(p => p.remove())
+    // 使用与 parseFormBindingsFromBpmn 相同的方法查找属性
+    // 查找所有后代元素中的 property，而不是只查找直接子元素
+    const allProps = task.getElementsByTagName('*')
+    const formIdProps: Element[] = []
+    const allPropertyElements: Element[] = []
+    
+    // 第一步：找到所有 property 或 values 元素并记录
+    // 注意：parseFormBindingsFromBpmn 检查的是 localName === 'property' || localName === 'values'
+    for (let i = 0; i < allProps.length; i++) {
+      const prop = allProps[i]
+      const localName = prop.localName || prop.nodeName.split(':').pop()
+      
+      // 与 parseFormBindingsFromBpmn 保持一致：检查 property 或 values
+      if (localName === 'property' || localName === 'values') {
+        allPropertyElements.push(prop)
+        const name = prop.getAttribute('name')
+        const value = prop.getAttribute('value')
+        console.log(`[FormDesigner] Found property/values in task ${taskId}: name=${name}, value=${value}, nodeName=${prop.nodeName}, localName=${localName}`)
+        
+        if (name === 'formId' && value === String(formId)) {
+          formIdProps.push(prop)
+          console.log(`[FormDesigner] ✓ Matched formId property in task ${taskId}: name=${name}, value=${value}`)
+        }
+      }
+    }
+    
+    console.log(`[FormDesigner] Task ${taskId}: found ${allPropertyElements.length} total properties, ${formIdProps.length} matching formId=${formId}`)
+    
+    if (formIdProps.length > 0) {
+      console.log(`[FormDesigner] Found ${formIdProps.length} formId properties in task ${taskId}, removing all related properties...`)
+      
+      // 对于每个找到的 formId property，找到它的父 properties 元素
+      const processedProperties = new Set<Element>()
+      
+      formIdProps.forEach(formIdProp => {
+        // 找到包含这个 property 的 properties 元素
+        let properties: Element | null = null
+        let current: Element | null = formIdProp as Element
+        
+        // 向上查找 properties 元素
+        while (current && current.parentElement) {
+          current = current.parentElement as Element
+          const localName = current.localName || current.nodeName.split(':').pop()
+          if (localName === 'properties') {
+            properties = current
+            break
+          }
+        }
+        
+        if (!properties || processedProperties.has(properties)) {
+          return
+        }
+        
+        processedProperties.add(properties)
+        
+        // 查找这个 properties 元素下的所有 property 或 values 元素
+        // 注意：需要同时查找 property 和 values，因为 XML 中可能使用 values
+        const allPropertyElements = properties.getElementsByTagName('*')
+        const propsToRemove: Element[] = []
+        
+        for (let i = 0; i < allPropertyElements.length; i++) {
+          const prop = allPropertyElements[i]
+          const propLocalName = prop.localName || prop.nodeName.split(':').pop()
+          
+          // 检查是否是 property 或 values 元素
+          if (propLocalName === 'property' || propLocalName === 'values') {
+            const name = prop.getAttribute('name')
+            if (name && ['formId', 'formName', 'formReadOnly'].includes(name)) {
+              // 检查这个 property/values 是否在当前 properties 元素下（直接或间接）
+              let parent: Element | null = prop.parentElement as Element
+              while (parent && parent !== properties) {
+                parent = parent.parentElement as Element
+              }
+              if (parent === properties) {
+                propsToRemove.push(prop)
+              }
+            }
+          }
+        }
+        
+        console.log(`[FormDesigner] Removing ${propsToRemove.length} properties from task ${taskId}`)
+        propsToRemove.forEach(p => {
+          p.remove()
+          removedCount++
+        })
+        
+        // 如果 properties 为空，移除它
+        if (properties.children.length === 0) {
+          properties.remove()
+          console.log(`[FormDesigner] Removed empty properties from task ${taskId}`)
+          
+          // 检查 extensionElements 是否为空
+          let extensionElements: Element | null = null
+          let current: Element | null = properties.parentElement as Element
+          while (current) {
+            const localName = current.localName || current.nodeName.split(':').pop()
+            if (localName === 'extensionElements') {
+              extensionElements = current
+              break
+            }
+            current = current.parentElement as Element
+          }
+          
+          if (extensionElements && extensionElements.children.length === 0) {
+            extensionElements.remove()
+            console.log(`[FormDesigner] Removed empty extensionElements from task ${taskId}`)
+          }
+        }
+      })
+    } else {
+      console.log(`[FormDesigner] No formId=${formId} property found in task ${taskId}`)
     }
   })
   
+  console.log(`[FormDesigner] Total removed ${removedCount} form binding properties`)
+  
   // 为选中的节点添加绑定
   for (const node of nodes) {
-    const task = xmlDoc.querySelector(`userTask[id="${node.nodeId}"], serviceTask[id="${node.nodeId}"]`)
-    if (!task) continue
+    // 使用更通用的方式查找任务节点，支持命名空间
+    const allElements = xmlDoc.getElementsByTagName('*')
+    let task: Element | null = null
+    for (let i = 0; i < allElements.length; i++) {
+      const el = allElements[i]
+      const localName = el.localName || el.nodeName.split(':').pop()
+      if ((localName === 'userTask' || localName === 'serviceTask') && el.getAttribute('id') === node.nodeId) {
+        task = el
+        break
+      }
+    }
+    if (!task) {
+      console.warn(`[FormDesigner] Task node not found: ${node.nodeId}`)
+      continue
+    }
     
     // 获取或创建extensionElements
-    let extensionElements = task.querySelector(':scope > extensionElements')
+    let extensionElements: Element | null = null
+    const taskChildren = Array.from(task.children)
+    for (const child of taskChildren) {
+      const localName = child.localName || child.nodeName.split(':').pop()
+      if (localName === 'extensionElements') {
+        extensionElements = child
+        break
+      }
+    }
+    
     if (!extensionElements) {
-      extensionElements = xmlDoc.createElementNS('http://www.omg.org/spec/BPMN/20100524/MODEL', 'bpmn:extensionElements')
+      // 创建 extensionElements，使用与现有元素相同的命名空间
+      const bpmnNamespace = task.namespaceURI || 'http://www.omg.org/spec/BPMN/20100524/MODEL'
+      extensionElements = xmlDoc.createElementNS(bpmnNamespace, 'extensionElements')
       task.insertBefore(extensionElements, task.firstChild)
     }
     
     // 获取或创建properties
-    let properties = extensionElements.querySelector('properties')
+    let properties: Element | null = null
+    const extChildren = Array.from(extensionElements.children)
+    for (const child of extChildren) {
+      const localName = child.localName || child.nodeName.split(':').pop()
+      if (localName === 'properties') {
+        properties = child
+        break
+      }
+    }
+    
     if (!properties) {
-      properties = xmlDoc.createElementNS('http://custom.bpmn.io/schema', 'custom:properties')
+      // 创建 properties，使用自定义命名空间
+      const customNamespace = 'http://custom.bpmn.io/schema'
+      properties = xmlDoc.createElementNS(customNamespace, 'properties')
       extensionElements.appendChild(properties)
     }
     
+    // 检查是否已存在 formId 属性，如果存在则先移除
+    const existingProps = Array.from(properties.children)
+    const existingFormId = existingProps.find(p => {
+      const localName = p.localName || p.nodeName.split(':').pop()
+      if (localName === 'property') {
+        return p.getAttribute('name') === 'formId' && p.getAttribute('value') === String(formId)
+      }
+      return false
+    })
+    
+    if (existingFormId) {
+      // 移除现有的 formId, formName, formReadOnly
+      const propsToRemove = existingProps.filter(p => {
+        const localName = p.localName || p.nodeName.split(':').pop()
+        if (localName === 'property') {
+          const name = p.getAttribute('name')
+          return name && ['formId', 'formName', 'formReadOnly'].includes(name)
+        }
+        return false
+      })
+      propsToRemove.forEach(p => p.remove())
+    }
+    
     // 添加formId
-    const formIdProp = xmlDoc.createElementNS('http://custom.bpmn.io/schema', 'custom:property')
+    const customNamespace = 'http://custom.bpmn.io/schema'
+    const formIdProp = xmlDoc.createElementNS(customNamespace, 'property')
     formIdProp.setAttribute('name', 'formId')
     formIdProp.setAttribute('value', String(formId))
     properties.appendChild(formIdProp)
     
     // 添加formName
-    const formNameProp = xmlDoc.createElementNS('http://custom.bpmn.io/schema', 'custom:property')
+    const formNameProp = xmlDoc.createElementNS(customNamespace, 'property')
     formNameProp.setAttribute('name', 'formName')
     formNameProp.setAttribute('value', formName)
     properties.appendChild(formNameProp)
     
     // 如果是只读，添加formReadOnly
     if (node.readOnly) {
-      const readOnlyProp = xmlDoc.createElementNS('http://custom.bpmn.io/schema', 'custom:property')
+      const readOnlyProp = xmlDoc.createElementNS(customNamespace, 'property')
       readOnlyProp.setAttribute('name', 'formReadOnly')
       readOnlyProp.setAttribute('value', 'true')
       properties.appendChild(readOnlyProp)
@@ -1059,10 +1280,15 @@ async function updateBpmnFormBindings(
   const serializer = new XMLSerializer()
   const newXml = serializer.serializeToString(xmlDoc)
   
+  console.log('[FormDesigner] Serialized XML length:', newXml.length)
+  console.log('[FormDesigner] Saving process with updated BPMN XML')
+  
   await store.saveProcess(props.functionUnitId, {
     ...store.process,
     bpmnXml: newXml
   })
+  
+  console.log('[FormDesigner] Process saved successfully')
 }
 
 onMounted(loadForms)
