@@ -19,8 +19,54 @@ export const useFunctionUnitStore = defineStore('functionUnit', () => {
     loading.value = true
     try {
       const res = await functionUnitApi.list(params)
-      list.value = res.data.content
-      total.value = res.data.totalElements
+      console.log('[FunctionUnitStore] API response:', res)
+      console.log('[FunctionUnitStore] Response type:', typeof res, 'isArray:', Array.isArray(res))
+      
+      // 后端返回格式: ApiResponse<Page<FunctionUnitResponse>>
+      // ApiResponse: { success: true, data: Page }
+      // Page: { content: [], totalElements: number, ... }
+      // 拦截器已经返回了 response.data，所以 res 就是 ApiResponse
+      
+      if (res && res.success && res.data) {
+        const pageData = res.data
+        // pageData 是 Spring Data Page 对象
+        if (pageData.content !== undefined) {
+          list.value = pageData.content || []
+          total.value = pageData.totalElements || 0
+          console.log('[FunctionUnitStore] Successfully parsed:', {
+            listCount: list.value.length,
+            total: total.value,
+            firstItem: list.value[0]
+          })
+        } else {
+          console.warn('[FunctionUnitStore] Page data missing content:', pageData)
+          list.value = []
+          total.value = 0
+        }
+      } else if (res && res.data) {
+        // 兼容处理：如果 data 直接是 Page 对象
+        const pageData = res.data
+        if (pageData.content !== undefined) {
+          list.value = pageData.content || []
+          total.value = pageData.totalElements || 0
+          console.log('[FunctionUnitStore] Parsed (no success field):', {
+            listCount: list.value.length,
+            total: total.value
+          })
+        } else {
+          console.warn('[FunctionUnitStore] Unexpected response format:', res)
+          list.value = []
+          total.value = 0
+        }
+      } else {
+        console.warn('[FunctionUnitStore] Invalid response:', res)
+        list.value = []
+        total.value = 0
+      }
+    } catch (error) {
+      console.error('[FunctionUnitStore] Error fetching list:', error)
+      list.value = []
+      total.value = 0
     } finally {
       loading.value = false
     }

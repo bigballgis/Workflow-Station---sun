@@ -257,8 +257,23 @@ function getTableRelations(tableId: number): (TableRelation | ForeignKeyDTO)[] {
 async function loadTables() {
   loading.value = true
   try {
-    await store.fetchTables(props.functionUnitId)
+    const tables = await store.fetchTables(props.functionUnitId)
+    console.log('[TableDesigner] Loaded tables:', tables)
+    tables.forEach(table => {
+      console.log(`[TableDesigner] Table ${table.tableName} has ${table.fieldDefinitions?.length || 0} fields`)
+    })
     await loadRelations()
+    // 如果当前选中的表还在，更新选中表的数据
+    if (selectedTable.value) {
+      const updatedTable = tables.find(t => t.id === selectedTable.value!.id)
+      if (updatedTable) {
+        selectedTable.value = { 
+          ...updatedTable, 
+          fieldDefinitions: [...(updatedTable.fieldDefinitions || []).map(f => ({ ...f }))] 
+        }
+        console.log('[TableDesigner] Updated selected table with', selectedTable.value.fieldDefinitions?.length || 0, 'fields')
+      }
+    }
   } finally {
     loading.value = false
   }
@@ -307,10 +322,64 @@ async function handleCreateTable() {
 async function handleSaveTable() {
   if (!selectedTable.value) return
   try {
-    await store.updateTable(props.functionUnitId, selectedTable.value.id, selectedTable.value)
+    // 转换数据格式：将 fieldDefinitions 转换为 fields
+    // 后端期望的是 TableDefinitionRequest，包含 fields 而不是 fieldDefinitions
+    const fields = (selectedTable.value.fieldDefinitions || [])
+      .filter(f => f.fieldName && f.fieldName.trim()) // 过滤空字段名
+      .map((f: any, index: number) => ({
+        fieldName: f.fieldName,
+        dataType: f.dataType, // 确保 dataType 是有效的枚举值
+        length: f.length,
+        precision: f.precision,
+        scale: f.scale,
+        nullable: f.nullable !== undefined ? f.nullable : true,
+        defaultValue: f.defaultValue,
+        isPrimaryKey: f.isPrimaryKey || false,
+        isUnique: (f as any).isUnique || false,
+        description: f.description,
+        sortOrder: (f as any).sortOrder !== undefined ? (f as any).sortOrder : index
+      }))
+    
+    const requestData = {
+      tableName: selectedTable.value.tableName,
+      tableType: selectedTable.value.tableType,
+      description: selectedTable.value.description,
+      fields: fields
+    }
+    
+    console.log('[TableDesigner] Saving table with fields:', {
+      tableId: selectedTable.value.id,
+      tableName: requestData.tableName,
+      fieldCount: fields.length,
+      fields: fields,
+      requestData: JSON.stringify(requestData, null, 2)
+    })
+    
+    const result = await store.updateTable(props.functionUnitId, selectedTable.value.id, requestData)
+    console.log('[TableDesigner] Save result:', result)
+    console.log('[TableDesigner] Result fieldDefinitions:', result?.fieldDefinitions?.length || 0)
+    console.log('[TableDesigner] Result fieldDefinitions array:', result?.fieldDefinitions)
+    
+    // 更新当前选中的表，使用返回的数据
+    // result 已经是 TableDefinition（store.updateTable 返回 res.data，而 res 是 ApiResponse）
+    if (result) {
+      selectedTable.value = { 
+        ...result, 
+        fieldDefinitions: [...(result.fieldDefinitions || []).map(f => ({ ...f }))] 
+      }
+      console.log('[TableDesigner] Updated selected table after save with', selectedTable.value.fieldDefinitions?.length || 0, 'fields')
+    } else {
+      console.warn('[TableDesigner] Save result is null or undefined')
+    }
+    
     ElMessage.success('保存成功')
-    loadTables()
+    
+    // 延迟加载列表，确保事务已提交
+    setTimeout(() => {
+      loadTables()
+    }, 500)
   } catch (e: any) {
+    console.error('[TableDesigner] Save failed:', e)
     ElMessage.error(e.response?.data?.message || '保存失败')
   }
 }

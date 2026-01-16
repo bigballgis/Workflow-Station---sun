@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -22,6 +23,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/v1/function-units/{functionUnitId}/tables")
 @RequiredArgsConstructor
+@Slf4j
 @Tag(name = "表设计", description = "数据表设计相关操作")
 public class TableDesignController {
     
@@ -49,7 +51,11 @@ public class TableDesignController {
             @PathVariable Long functionUnitId,
             @PathVariable Long tableId,
             @Valid @RequestBody TableDefinitionRequest request) {
+        log.info("Received update request for table {}: fields count = {}", 
+            tableId, request.getFields() != null ? request.getFields().size() : 0);
         TableDefinition result = tableDesignComponent.update(tableId, request);
+        log.info("Table updated successfully: {} fields in result", 
+            result.getFieldDefinitions() != null ? result.getFieldDefinitions().size() : 0);
         return ResponseEntity.ok(ApiResponse.success(result));
     }
     

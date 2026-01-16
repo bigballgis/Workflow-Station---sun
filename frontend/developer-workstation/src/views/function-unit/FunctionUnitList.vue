@@ -182,6 +182,7 @@ import IconPreview from '@/components/icon/IconPreview.vue'
 import IconSelector from '@/components/icon/IconSelector.vue'
 import FunctionUnitCard from '@/components/function-unit/FunctionUnitCard.vue'
 import { getTags, setTags, getAllAvailableTags, matchesTags } from '@/utils/tagStorage'
+import { isAuthenticated } from '@/api/auth'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -295,7 +296,15 @@ async function handleDelete(item: FunctionUnitResponse) {
   loadData()
 }
 
-onMounted(loadData)
+onMounted(() => {
+  // 检查是否已登录
+  if (isAuthenticated()) {
+    loadData()
+  } else {
+    // 未登录，路由守卫应该已经重定向，但以防万一
+    router.push('/login')
+  }
+})
 </script>
 
 
