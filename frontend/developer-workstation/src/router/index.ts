@@ -32,6 +32,12 @@ const routes: RouteRecordRaw[] = [
         name: 'IconLibrary',
         component: () => import('@/views/icon/IconLibrary.vue'),
         meta: { titleKey: 'icon.title' }
+      },
+      {
+        path: 'profile',
+        name: 'Profile',
+        component: () => import('@/views/profile/index.vue'),
+        meta: { titleKey: 'profile.title', hidden: true }
       }
     ]
   }

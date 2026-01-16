@@ -13,7 +13,7 @@ public enum AuditResourceType {
     FORM("表单"),
     USER("用户"),
     ROLE("角色"),
-    DEPARTMENT("部门"),
+    BUSINESS_UNIT("业务单元"),
     VIRTUAL_GROUP("虚拟组"),
     SYSTEM("系统"),
     DATA_TABLE("数据表"),

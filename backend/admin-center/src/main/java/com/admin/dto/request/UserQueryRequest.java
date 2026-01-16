@@ -16,7 +16,7 @@ import lombok.NoArgsConstructor;
 public class UserQueryRequest {
     
     private String keyword;
-    private String departmentId;
+    private String businessUnitId;
     private UserStatus status;
     
     @Builder.Default

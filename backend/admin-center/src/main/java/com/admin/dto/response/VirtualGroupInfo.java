@@ -20,29 +20,36 @@ public class VirtualGroupInfo {
     
     private String id;
     private String name;
+    private String code;
     private VirtualGroupType type;
     private String description;
-    private Instant validFrom;
-    private Instant validTo;
+    /**
+     * AD Group 名称，用于与 Active Directory 系统集成
+     */
+    private String adGroup;
     private String status;
     private int memberCount;
     private boolean valid;
-    private boolean expired;
     private Instant createdAt;
     private String createdBy;
+    
+    // 绑定的角色信息
+    private String boundRoleId;
+    private String boundRoleName;
+    private String boundRoleCode;
+    private String boundRoleType;
     
     public static VirtualGroupInfo fromEntity(VirtualGroup group) {
         return VirtualGroupInfo.builder()
                 .id(group.getId())
                 .name(group.getName())
+                .code(group.getCode())
                 .type(group.getType())
                 .description(group.getDescription())
-                .validFrom(group.getValidFrom())
-                .validTo(group.getValidTo())
+                .adGroup(group.getAdGroup())
                 .status(group.getStatus())
                 .memberCount(group.getMemberCount())
                 .valid(group.isValid())
-                .expired(group.isExpired())
                 .createdAt(group.getCreatedAt())
                 .createdBy(group.getCreatedBy())
                 .build();

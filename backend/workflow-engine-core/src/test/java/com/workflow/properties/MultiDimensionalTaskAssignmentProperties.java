@@ -42,10 +42,12 @@ import static org.assertj.core.api.Assertions.*;
  * 1. 正确创建或更新扩展任务信息
  * 2. 根据分配类型正确设置Flowable任务的分配信息
  * 3. 保证分配信息的一致性和完整性
- * 4. 支持用户、虚拟组、部门角色三种分配类型
+ * 4. 支持用户、虚拟组两种分配类型
  * 
  * 注意：由于jqwik与Spring Boot集成的复杂性，这里使用JUnit的@RepeatedTest来模拟属性测试
  * 每个测试方法会运行多次以验证属性的正确性
+ * 
+ * 注意：新的任务分配机制使用 AssigneeType 枚举和 TaskAssigneeResolver 服务
  */
 @SpringBootTest
 @ActiveProfiles("test")
@@ -183,54 +185,6 @@ public class MultiDimensionalTaskAssignmentProperties {
     }
 
     /**
-     * 属性测试: 部门角色分配类型的任务应该正确分配给部门角色
-     * 功能: workflow-engine-core, 属性 6: 多维度任务分配正确性
-     */
-    @RepeatedTest(20)
-    void deptRoleAssignmentShouldAssignTaskToDeptRole() {
-        // Given: 生成随机测试数据
-        String deptId = generateDeptId();
-        String roleId = generateRoleId();
-        String operatorId = generateUserId();
-        int priority = generatePriority();
-        
-        // Given: 创建一个流程实例和任务
-        String taskId = createTestTaskInstance();
-        String deptRoleTarget = deptId + ":" + roleId;
-        
-        TaskAssignmentRequest request = TaskAssignmentRequest.builder()
-                .taskId(taskId)
-                .assignmentType(AssignmentType.DEPT_ROLE)
-                .assignmentTarget(deptRoleTarget)
-                .operatorUserId(operatorId)
-                .priority(priority)
-                .build();
-        
-        // When: 分配任务给部门角色
-        TaskAssignmentResult result = taskManagerComponent.assignTask(taskId, request);
-        
-        // Then: 分配应该成功
-        assertThat(result.getSuccess()).isTrue();
-        assertThat(result.getAssignmentType()).isEqualTo(AssignmentType.DEPT_ROLE);
-        assertThat(result.getAssignmentTarget()).isEqualTo(deptRoleTarget);
-        
-        // 验证扩展任务信息
-        Optional<ExtendedTaskInfo> extendedTaskInfo = extendedTaskInfoRepository
-                .findByTaskIdAndIsDeletedFalse(taskId);
-        assertThat(extendedTaskInfo).isPresent();
-        assertThat(extendedTaskInfo.get().getAssignmentType()).isEqualTo(AssignmentType.DEPT_ROLE);
-        assertThat(extendedTaskInfo.get().getAssignmentTarget()).isEqualTo(deptRoleTarget);
-        assertThat(extendedTaskInfo.get().getPriority()).isEqualTo(priority);
-        assertThat(extendedTaskInfo.get().getCurrentAssignee()).isNull(); // 部门角色任务没有具体处理人
-        
-        // 验证Flowable任务分配（部门角色任务不应该有个人分配）
-        Task flowableTask = taskService.createTaskQuery().taskId(taskId).singleResult();
-        assertThat(flowableTask).isNotNull();
-        assertThat(flowableTask.getAssignee()).isNull(); // 部门角色任务清除个人分配
-        assertThat(flowableTask.getPriority()).isEqualTo(priority);
-    }
-
-    /**
      * 属性测试: 任务重新分配应该清除之前的委托和认领信息
      * 功能: workflow-engine-core, 属性 6: 多维度任务分配正确性
      */
@@ -356,65 +310,6 @@ public class MultiDimensionalTaskAssignmentProperties {
     }
 
     /**
-     * 属性测试: 部门角色任务认领后应该变为用户分配
-     * 功能: workflow-engine-core, 属性 6: 多维度任务分配正确性
-     */
-    @RepeatedTest(15)
-    void deptRoleTaskClaimShouldBecomeUserAssignment() {
-        // Given: 生成随机测试数据
-        String deptId = generateDeptId();
-        String roleId = generateRoleId();
-        String claimUserId = generateUserId();
-        String operatorId = generateUserId();
-        
-        // Given: 创建一个部门角色任务
-        String taskId = createTestTaskInstance();
-        String deptRoleTarget = deptId + ":" + roleId;
-        
-        TaskAssignmentRequest deptRoleRequest = TaskAssignmentRequest.builder()
-                .taskId(taskId)
-                .assignmentType(AssignmentType.DEPT_ROLE)
-                .assignmentTarget(deptRoleTarget)
-                .operatorUserId(operatorId)
-                .build();
-        
-        taskManagerComponent.assignTask(taskId, deptRoleRequest);
-        
-        // When: 用户认领任务
-        TaskClaimRequest claimRequest = TaskClaimRequest.builder()
-                .taskId(taskId)
-                .claimedBy(claimUserId)
-                .build();
-        
-        TaskAssignmentResult result = taskManagerComponent.claimTask(taskId, claimRequest);
-        
-        // Then: 认领应该成功，任务变为用户分配
-        assertThat(result.getSuccess()).isTrue();
-        assertThat(result.getAssignmentType()).isEqualTo(AssignmentType.USER);
-        assertThat(result.getAssignmentTarget()).isEqualTo(claimUserId);
-        
-        Optional<ExtendedTaskInfo> extendedTaskInfo = extendedTaskInfoRepository
-                .findByTaskIdAndIsDeletedFalse(taskId);
-        assertThat(extendedTaskInfo).isPresent();
-        
-        ExtendedTaskInfo taskInfo = extendedTaskInfo.get();
-        // 原始分配信息保持不变
-        assertThat(taskInfo.getAssignmentType()).isEqualTo(AssignmentType.DEPT_ROLE);
-        assertThat(taskInfo.getAssignmentTarget()).isEqualTo(deptRoleTarget);
-        
-        // 认领信息正确设置
-        assertThat(taskInfo.getClaimedBy()).isEqualTo(claimUserId);
-        assertThat(taskInfo.getClaimedTime()).isNotNull();
-        assertThat(taskInfo.getCurrentAssignee()).isEqualTo(claimUserId);
-        assertThat(taskInfo.isClaimed()).isTrue();
-        
-        // 验证Flowable任务分配
-        Task flowableTask = taskService.createTaskQuery().taskId(taskId).singleResult();
-        assertThat(flowableTask).isNotNull();
-        assertThat(flowableTask.getAssignee()).isEqualTo(claimUserId);
-    }
-
-    /**
      * 属性测试: 任务分配应该正确设置优先级和到期时间
      * 功能: workflow-engine-core, 属性 6: 多维度任务分配正确性
      */
@@ -484,18 +379,7 @@ public class MultiDimensionalTaskAssignmentProperties {
         assertThatThrownBy(() -> taskManagerComponent.assignTask(taskId, emptyTargetRequest))
                 .isInstanceOf(WorkflowValidationException.class);
         
-        // 2. 无效的部门角色格式
-        TaskAssignmentRequest invalidDeptRoleRequest = TaskAssignmentRequest.builder()
-                .taskId(taskId)
-                .assignmentType(AssignmentType.DEPT_ROLE)
-                .assignmentTarget("invalid_format")
-                .operatorUserId(operatorId)
-                .build();
-        
-        assertThatThrownBy(() -> taskManagerComponent.assignTask(taskId, invalidDeptRoleRequest))
-                .isInstanceOf(WorkflowValidationException.class);
-        
-        // 3. 无效的优先级
+        // 2. 无效的优先级
         TaskAssignmentRequest invalidPriorityRequest = TaskAssignmentRequest.builder()
                 .taskId(taskId)
                 .assignmentType(AssignmentType.USER)
@@ -592,20 +476,6 @@ public class MultiDimensionalTaskAssignmentProperties {
      */
     private String generateGroupId() {
         return "group_" + generateRandomString(8);
-    }
-
-    /**
-     * 生成随机部门ID
-     */
-    private String generateDeptId() {
-        return "dept_" + generateRandomString(8);
-    }
-
-    /**
-     * 生成随机角色ID
-     */
-    private String generateRoleId() {
-        return "role_" + generateRandomString(8);
     }
 
     /**

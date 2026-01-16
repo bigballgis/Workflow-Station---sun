@@ -218,7 +218,6 @@ public class TaskProcessComponent {
 
         return switch (assignmentType) {
             case "VIRTUAL_GROUP" -> isUserInVirtualGroup(userId, assignee);
-            case "DEPT_ROLE" -> isUserHasDeptRole(userId, assignee);
             default -> false;
         };
     }
@@ -248,11 +247,6 @@ public class TaskProcessComponent {
 
         // 虚拟组任务（未认领的情况）
         if ("VIRTUAL_GROUP".equals(assignmentType) && isUserInVirtualGroup(userId, assignee)) {
-            return true;
-        }
-
-        // 部门角色任务（未认领的情况）
-        if ("DEPT_ROLE".equals(assignmentType) && isUserHasDeptRole(userId, assignee)) {
             return true;
         }
 
@@ -405,33 +399,6 @@ public class TaskProcessComponent {
             }
         } catch (Exception e) {
             log.warn("Failed to check virtual group membership: {}", e.getMessage());
-        }
-        
-        return false;
-    }
-
-    /**
-     * 检查用户是否有部门角色
-     * 通过 WorkflowEngineClient 调用 workflow-engine-core 验证
-     */
-    private boolean isUserHasDeptRole(String userId, String deptRoleId) {
-        if (!workflowEngineClient.isAvailable()) {
-            log.warn("Workflow engine not available, cannot verify department role");
-            return false;
-        }
-        
-        try {
-            // 获取用户的部门角色列表
-            Optional<Map<String, Object>> permissions = workflowEngineClient.getUserTaskPermissions(userId);
-            if (permissions.isPresent()) {
-                @SuppressWarnings("unchecked")
-                List<String> deptRoles = (List<String>) permissions.get().get("departmentRoles");
-                if (deptRoles != null) {
-                    return deptRoles.contains(deptRoleId);
-                }
-            }
-        } catch (Exception e) {
-            log.warn("Failed to check department role: {}", e.getMessage());
         }
         
         return false;

@@ -17,11 +17,6 @@
         <el-form-item :label="t('user.keyword')">
           <el-input v-model="query.keyword" :placeholder="t('user.keywordPlaceholder')" clearable style="width: 200px" />
         </el-form-item>
-        <el-form-item :label="t('user.department')">
-          <el-select v-model="query.departmentId" :placeholder="t('user.selectDepartment')" clearable style="width: 150px">
-            <el-option v-for="dept in departments" :key="dept.id" :label="dept.name" :value="dept.id" />
-          </el-select>
-        </el-form-item>
         <el-form-item :label="t('common.status')">
           <el-select v-model="query.status" :placeholder="t('user.selectStatus')" clearable style="width: 120px">
             <el-option :label="t('user.active')" value="ACTIVE" />
@@ -46,7 +41,6 @@
         <el-table-column prop="username" :label="t('user.username')" min-width="100" show-overflow-tooltip />
         <el-table-column prop="fullName" :label="t('user.fullName')" min-width="80" show-overflow-tooltip />
         <el-table-column prop="email" :label="t('user.email')" min-width="160" show-overflow-tooltip />
-        <el-table-column prop="departmentName" :label="t('user.department')" min-width="100" show-overflow-tooltip />
         <el-table-column prop="position" :label="t('user.position')" min-width="80" show-overflow-tooltip />
         <el-table-column :label="t('user.entityManager')" min-width="90" show-overflow-tooltip>
           <template #default="{ row }">
@@ -140,7 +134,6 @@ import {
   CircleCheck, CircleClose, Unlock, Key, Delete 
 } from '@element-plus/icons-vue'
 import { userApi, type User } from '@/api/user'
-import { organizationApi, type Department } from '@/api/organization'
 import { hasPermission, PERMISSIONS } from '@/utils/permission'
 import UserFormDialog from './components/UserFormDialog.vue'
 import UserDetailDialog from './components/UserDetailDialog.vue'
@@ -156,12 +149,10 @@ const canDeleteUser = hasPermission(PERMISSIONS.USER_DELETE)
 const loading = ref(false)
 const users = ref<User[]>([])
 const total = ref(0)
-const departments = ref<{ id: string; name: string }[]>([])
 
 // 查询参数
 const query = reactive({
   keyword: '',
-  departmentId: '',
   status: '',
   page: 1,
   size: 20
@@ -203,7 +194,6 @@ const handleSearch = async () => {
   try {
     const params = {
       keyword: query.keyword || undefined,
-      departmentId: query.departmentId || undefined,
       status: query.status || undefined,
       page: query.page - 1,
       size: query.size
@@ -220,7 +210,7 @@ const handleSearch = async () => {
 
 // 重置查询
 const handleReset = () => {
-  Object.assign(query, { keyword: '', departmentId: '', status: '', page: 1 })
+  Object.assign(query, { keyword: '', status: '', page: 1 })
   handleSearch()
 }
 
@@ -319,30 +309,8 @@ const handleDelete = async (user: User) => {
   }
 }
 
-// 扁平化部门树
-const flattenDepartments = (depts: Department[], result: { id: string; name: string }[] = []): { id: string; name: string }[] => {
-  depts.forEach(dept => {
-    result.push({ id: dept.id, name: dept.name })
-    if (dept.children && dept.children.length > 0) {
-      flattenDepartments(dept.children, result)
-    }
-  })
-  return result
-}
-
-// 加载部门列表
-const loadDepartments = async () => {
-  try {
-    const tree = await organizationApi.getTree()
-    departments.value = flattenDepartments(tree)
-  } catch (error) {
-    console.error('Failed to load departments:', error)
-  }
-}
-
 onMounted(() => {
   handleSearch()
-  loadDepartments()
 })
 </script>
 

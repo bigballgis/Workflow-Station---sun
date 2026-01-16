@@ -127,57 +127,6 @@ public class TaskDelegationPermissionProperties {
     }
     
     /**
-     * 属性测试：部门角色任务委托权限验证
-     * 验证拥有相应部门角色的用户可以委托部门角色任务
-     */
-    @Property(tries = 100)
-    @Label("部门角色任务委托权限验证")
-    void departmentRoleTaskDelegationPermission(
-            @ForAll @NotBlank String taskId,
-            @ForAll @NotBlank String deptRole,
-            @ForAll @NotBlank String roleHolder,
-            @ForAll @NotBlank String delegatedTo,
-            @ForAll @NotBlank String nonRoleHolder,
-            @ForAll @NotBlank String delegationReason) {
-        
-        // 过滤掉空白字符串和重复用户
-        Assume.that(taskId != null && !taskId.trim().isEmpty());
-        Assume.that(deptRole != null && !deptRole.trim().isEmpty());
-        Assume.that(roleHolder != null && !roleHolder.trim().isEmpty());
-        Assume.that(delegatedTo != null && !delegatedTo.trim().isEmpty());
-        Assume.that(nonRoleHolder != null && !nonRoleHolder.trim().isEmpty());
-        Assume.that(delegationReason != null && !delegationReason.trim().isEmpty());
-        Assume.that(!roleHolder.equals(delegatedTo));
-        Assume.that(!roleHolder.equals(nonRoleHolder));
-        Assume.that(!delegatedTo.equals(nonRoleHolder));
-        
-        // 创建部门角色任务
-        ExtendedTaskInfo task = createTestTask(taskId, AssignmentType.DEPT_ROLE, deptRole, 70);
-        
-        // 模拟部门角色验证（简化处理，实际应该调用用户服务）
-        boolean roleHolderHasPermission = validateDeptRoleDelegationPermission(task, roleHolder, deptRole);
-        assertThat(roleHolderHasPermission).isTrue();
-        
-        // 验证非角色持有者没有委托权限
-        boolean nonRoleHolderPermission = validateDeptRoleDelegationPermission(task, nonRoleHolder, "other-role");
-        assertThat(nonRoleHolderPermission).isFalse();
-        
-        // 执行有权限的委托操作
-        task.delegateTask(delegatedTo, roleHolder, delegationReason);
-        
-        // 验证委托后的任务状态
-        assertThat(task.isDelegated()).isTrue();
-        assertThat(task.getDelegatedTo()).isEqualTo(delegatedTo);
-        assertThat(task.getDelegatedBy()).isEqualTo(roleHolder);
-        assertThat(task.getCurrentAssignee()).isEqualTo(delegatedTo);
-        assertThat(task.getStatus()).isEqualTo("DELEGATED");
-        
-        // 验证原始分配信息保持不变
-        assertThat(task.getAssignmentType()).isEqualTo(AssignmentType.DEPT_ROLE);
-        assertThat(task.getAssignmentTarget()).isEqualTo(deptRole);
-    }
-    
-    /**
      * 属性测试：已委托任务的再次委托权限验证
      * 验证已委托的任务只能由当前委托接收人进行再次委托
      */
@@ -398,9 +347,6 @@ public class TaskDelegationPermissionProperties {
             case VIRTUAL_GROUP:
                 // 简化处理：假设用户属于虚拟组（实际应该调用用户服务验证）
                 return true;
-            case DEPT_ROLE:
-                // 简化处理：假设用户拥有部门角色（实际应该调用用户服务验证）
-                return true;
             default:
                 return false;
         }
@@ -416,18 +362,6 @@ public class TaskDelegationPermissionProperties {
         
         // 简化处理：检查用户是否属于任务的虚拟组
         return task.getAssignmentTarget().equals(userGroupId);
-    }
-    
-    /**
-     * 验证部门角色委托权限
-     */
-    private boolean validateDeptRoleDelegationPermission(ExtendedTaskInfo task, String userId, String userDeptRole) {
-        if (task.getAssignmentType() != AssignmentType.DEPT_ROLE) {
-            return false;
-        }
-        
-        // 简化处理：检查用户是否拥有任务的部门角色
-        return task.getAssignmentTarget().equals(userDeptRole);
     }
     
     /**

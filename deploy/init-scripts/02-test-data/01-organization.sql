@@ -1,18 +1,19 @@
 -- =====================================================
 -- TEST DATA: Organization Structure
 -- Foreign Enterprise Bank Organization
+-- Uses sys_business_units table (migrated from sys_departments)
 -- =====================================================
 
--- Clear existing department data (except ROOT if exists)
-DELETE FROM sys_departments WHERE id NOT LIKE 'ROOT%';
+-- Clear existing business unit data (except ROOT if exists)
+DELETE FROM sys_business_units WHERE id NOT LIKE 'ROOT%';
 
 -- Level 1: Head Office
-INSERT INTO sys_departments (id, code, name, parent_id, level, path, sort_order, status, description, created_at, updated_at)
+INSERT INTO sys_business_units (id, code, name, parent_id, level, path, sort_order, status, description, created_at, updated_at)
 VALUES ('DEPT-HQ', 'HQ', 'Head Office', NULL, 1, '/HQ', 1, 'ACTIVE', 'Foreign Enterprise Bank Head Office', NOW(), NOW())
 ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, updated_at = NOW();
 
 -- Level 2: Front Office Departments
-INSERT INTO sys_departments (id, code, name, parent_id, level, path, sort_order, status, description, cost_center, created_at, updated_at) VALUES 
+INSERT INTO sys_business_units (id, code, name, parent_id, level, path, sort_order, status, description, cost_center, created_at, updated_at) VALUES 
 ('DEPT-CORP-BANKING', 'CORP_BANKING', 'Corporate Banking', 'DEPT-HQ', 2, '/HQ/CORP_BANKING', 1, 'ACTIVE', 'Corporate Banking Division', 'CC-100', NOW(), NOW()),
 ('DEPT-RETAIL-BANKING', 'RETAIL_BANKING', 'Retail Banking', 'DEPT-HQ', 2, '/HQ/RETAIL_BANKING', 2, 'ACTIVE', 'Retail Banking Division', 'CC-200', NOW(), NOW()),
 ('DEPT-TREASURY', 'TREASURY', 'Treasury and Markets', 'DEPT-HQ', 2, '/HQ/TREASURY', 3, 'ACTIVE', 'Treasury and Markets Division', 'CC-300', NOW(), NOW()),
@@ -21,7 +22,7 @@ INSERT INTO sys_departments (id, code, name, parent_id, level, path, sort_order,
 ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, updated_at = NOW();
 
 -- Level 2: Middle Office Departments
-INSERT INTO sys_departments (id, code, name, parent_id, level, path, sort_order, status, description, cost_center, created_at, updated_at) VALUES 
+INSERT INTO sys_business_units (id, code, name, parent_id, level, path, sort_order, status, description, cost_center, created_at, updated_at) VALUES 
 ('DEPT-RISK', 'RISK', 'Risk Management', 'DEPT-HQ', 2, '/HQ/RISK', 10, 'ACTIVE', 'Risk Management Division', 'CC-600', NOW(), NOW()),
 ('DEPT-COMPLIANCE', 'COMPLIANCE', 'Compliance', 'DEPT-HQ', 2, '/HQ/COMPLIANCE', 11, 'ACTIVE', 'Compliance Division', 'CC-610', NOW(), NOW()),
 ('DEPT-LEGAL', 'LEGAL', 'Legal Affairs', 'DEPT-HQ', 2, '/HQ/LEGAL', 12, 'ACTIVE', 'Legal Affairs Division', 'CC-620', NOW(), NOW()),
@@ -29,7 +30,7 @@ INSERT INTO sys_departments (id, code, name, parent_id, level, path, sort_order,
 ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, updated_at = NOW();
 
 -- Level 2: Back Office Departments
-INSERT INTO sys_departments (id, code, name, parent_id, level, path, sort_order, status, description, cost_center, created_at, updated_at) VALUES 
+INSERT INTO sys_business_units (id, code, name, parent_id, level, path, sort_order, status, description, cost_center, created_at, updated_at) VALUES 
 ('DEPT-OPERATIONS', 'OPERATIONS', 'Operations', 'DEPT-HQ', 2, '/HQ/OPERATIONS', 20, 'ACTIVE', 'Operations Division', 'CC-700', NOW(), NOW()),
 ('DEPT-IT', 'IT', 'Information Technology', 'DEPT-HQ', 2, '/HQ/IT', 21, 'ACTIVE', 'Information Technology Division', 'CC-710', NOW(), NOW()),
 ('DEPT-FINANCE', 'FINANCE', 'Finance', 'DEPT-HQ', 2, '/HQ/FINANCE', 22, 'ACTIVE', 'Finance Division', 'CC-720', NOW(), NOW()),

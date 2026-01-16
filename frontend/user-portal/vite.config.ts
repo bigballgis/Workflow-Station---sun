@@ -38,6 +38,11 @@ export default defineConfig({
       '/api/v1/admin': {
         target: 'http://localhost:8090',
         changeOrigin: true
+      },
+      '/api/admin-center': {
+        target: 'http://localhost:8090',
+        changeOrigin: true,
+        rewrite: (path) => '/api/v1/admin' + path.substring('/api/admin-center'.length)
       }
     }
   },

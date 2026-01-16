@@ -10,9 +10,10 @@
     <el-form :inline="true" :model="query" class="search-form">
       <el-form-item :label="t('role.roleType')">
         <el-select v-model="query.type" clearable style="width: 150px">
-          <el-option label="业务角色" value="BUSINESS" />
-          <el-option label="管理角色" value="ADMIN" />
-          <el-option label="开发角色" value="DEVELOPER" />
+          <el-option :label="t('role.buBounded')" value="BU_BOUNDED" />
+          <el-option :label="t('role.buUnbounded')" value="BU_UNBOUNDED" />
+          <el-option :label="t('role.adminRole')" value="ADMIN" />
+          <el-option :label="t('role.developerRole')" value="DEVELOPER" />
         </el-select>
       </el-form-item>
       <el-form-item>
@@ -22,40 +23,30 @@
     </el-form>
     
     <el-table :data="sortedRoles" v-loading="roleStore.loading" stripe>
-      <el-table-column prop="name" :label="t('role.roleName')" />
-      <el-table-column prop="code" :label="t('role.roleCode')" />
-      <el-table-column prop="type" :label="t('role.roleType')" width="120">
+      <el-table-column prop="name" :label="t('role.roleName')" min-width="140" />
+      <el-table-column prop="code" :label="t('role.roleCode')" min-width="120" />
+      <el-table-column prop="type" :label="t('role.roleType')" width="110">
         <template #default="{ row }">
-          <el-tag :type="typeTagType(row.type) as any">{{ typeText(row.type) }}</el-tag>
+          <el-tag :type="typeTagType(row.type) as any" size="small">{{ typeText(row.type) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="description" :label="t('role.description')" show-overflow-tooltip />
-      <el-table-column prop="memberCount" label="成员数" width="80" />
-      <el-table-column prop="status" :label="t('common.status')" width="80">
+      <el-table-column prop="description" :label="t('role.description')" min-width="150" show-overflow-tooltip />
+      <el-table-column prop="memberCount" :label="t('role.memberCount')" width="70" align="center" />
+      <el-table-column prop="status" :label="t('common.status')" width="70" align="center">
         <template #default="{ row }">
-          <el-tag :type="row.status === 'ACTIVE' ? 'success' : 'info'" size="small">{{ row.status === 'ACTIVE' ? '启用' : '禁用' }}</el-tag>
+          <el-tag :type="row.status === 'ACTIVE' ? 'success' : 'info'" size="small">{{ row.status === 'ACTIVE' ? t('common.enabled') : t('common.disabled') }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="系统角色" width="90" align="center">
+      <el-table-column :label="t('role.systemRole')" width="70" align="center">
         <template #default="{ row }">
-          <el-tag v-if="row.isSystem" type="warning" size="small">系统</el-tag>
+          <el-icon v-if="row.isSystem" color="#E6A23C"><Lock /></el-icon>
         </template>
       </el-table-column>
-      <el-table-column :label="t('common.operation')" width="180" min-width="180">
+      <el-table-column :label="t('common.operation')" width="180" fixed="right">
         <template #default="{ row }">
-          <div style="white-space: nowrap;">
-            <template v-if="!row.isSystem && canWriteRole">
-              <el-button link type="primary" @click="showEditDialog(row)">{{ t('common.edit') }}</el-button>
-              <el-button link type="primary" @click="showMembersDialog(row)">成员</el-button>
-              <el-button v-if="canDeleteRole" link type="danger" @click="handleDelete(row)">{{ t('common.delete') }}</el-button>
-            </template>
-            <template v-else-if="!row.isSystem">
-              <el-button link type="primary" @click="showMembersDialog(row)">成员</el-button>
-            </template>
-            <template v-else>
-              <el-button link type="primary" @click="showMembersDialog(row)">成员</el-button>
-            </template>
-          </div>
+          <el-button v-if="!row.isSystem && canWriteRole" link type="primary" @click="showEditDialog(row)">{{ t('common.edit') }}</el-button>
+          <el-button link type="primary" @click="showMembersDialog(row)">{{ t('role.members') }}</el-button>
+          <el-button v-if="!row.isSystem && canWriteRole && canDeleteRole" link type="danger" @click="handleDelete(row)">{{ t('common.delete') }}</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -69,6 +60,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Lock } from '@element-plus/icons-vue'
 import { useRoleStore } from '@/stores/role'
 import { Role } from '@/api/role'
 import { hasPermission, PERMISSIONS } from '@/utils/permission'
@@ -87,8 +79,20 @@ const formDialogVisible = ref(false)
 const membersDialogVisible = ref(false)
 const currentRole = ref<Role | null>(null)
 
-const typeText = (type: string) => ({ BUSINESS: '业务角色', ADMIN: '管理角色', DEVELOPER: '开发角色' }[type] || type)
-const typeTagType = (type: string) => ({ BUSINESS: 'success', ADMIN: 'danger', DEVELOPER: 'primary' }[type] || 'info')
+const typeText = (type: string) => ({ 
+  BU_BOUNDED: t('role.buBounded'), 
+  BU_UNBOUNDED: t('role.buUnbounded'), 
+  BUSINESS: t('role.businessRole'), 
+  ADMIN: t('role.adminRole'), 
+  DEVELOPER: t('role.developerRole') 
+}[type] || type)
+const typeTagType = (type: string) => ({ 
+  BU_BOUNDED: 'warning', 
+  BU_UNBOUNDED: 'success', 
+  BUSINESS: 'success', 
+  ADMIN: 'danger', 
+  DEVELOPER: 'primary' 
+}[type] || 'info')
 
 // 排序：非系统角色在前，系统角色在后
 const sortedRoles = computed(() => {

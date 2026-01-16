@@ -74,7 +74,6 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 user.getDisplayName(),
                 roles,
                 permissions,
-                user.getDepartmentId(),
                 user.getLanguage()
         );
 
@@ -139,7 +138,6 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 user.getUsername(),
                 roles,
                 permissions,
-                user.getDepartmentId(),
                 user.getLanguage()
         );
 
@@ -180,7 +178,6 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 user.getEmail(),
                 roles,
                 permissions,
-                user.getDepartmentId(),
                 user.getLanguage()
         );
     }

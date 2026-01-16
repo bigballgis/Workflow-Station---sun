@@ -1,5 +1,6 @@
 package com.portal.component;
 
+import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.DashboardOverview;
 import com.portal.dto.ProcessInfo;
 import com.portal.dto.TaskInfo;
@@ -22,6 +23,7 @@ import java.util.stream.Collectors;
 public class DashboardComponent {
 
     private final TaskQueryComponent taskQueryComponent;
+    private final WorkflowEngineClient workflowEngineClient;
 
     /**
      * 获取Dashboard概览数据
@@ -72,9 +74,43 @@ public class DashboardComponent {
                 .filter(t -> "HIGH".equals(t.getPriority()))
                 .count();
 
-        // 模拟今日完成数和平均处理时长
-        long completedTodayCount = new Random().nextInt(10);
-        double avgProcessingHours = 2.5 + new Random().nextDouble() * 2;
+        // 从 Flowable 获取今日完成数
+        long completedTodayCount = 0;
+        try {
+            Optional<Map<String, Object>> result = workflowEngineClient.getCompletedTasks(
+                userId, 0, 1000, null, 
+                LocalDate.now().atStartOfDay().toString(), 
+                LocalDateTime.now().toString());
+            if (result.isPresent()) {
+                Object totalElements = result.get().get("totalElements");
+                if (totalElements instanceof Number) {
+                    completedTodayCount = ((Number) totalElements).longValue();
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to get completed tasks count: {}", e.getMessage());
+        }
+        
+        // 平均处理时长（从已完成任务计算）
+        double avgProcessingHours = 2.5; // 默认值
+        try {
+            Optional<Map<String, Object>> result = workflowEngineClient.getCompletedTasks(
+                userId, 0, 100, null, null, null);
+            if (result.isPresent()) {
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> content = (List<Map<String, Object>>) result.get().get("content");
+                if (content != null && !content.isEmpty()) {
+                    double totalDuration = content.stream()
+                        .filter(t -> t.get("durationInMillis") != null)
+                        .mapToLong(t -> ((Number) t.get("durationInMillis")).longValue())
+                        .average()
+                        .orElse(0);
+                    avgProcessingHours = totalDuration / (1000 * 60 * 60); // 转换为小时
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to calculate avg processing hours: {}", e.getMessage());
+        }
 
         return DashboardOverview.TaskOverview.builder()
                 .pendingCount(pendingCount)
@@ -89,22 +125,53 @@ public class DashboardComponent {
     /**
      * 获取流程概览
      */
+    @SuppressWarnings("unchecked")
     public DashboardOverview.ProcessOverview getProcessOverview(String userId) {
-        // 模拟数据，实际应从workflow-engine-core获取
-        Random random = new Random();
+        // 从 workflow-engine-core 获取真实数据
+        try {
+            Optional<Map<String, Object>> result = workflowEngineClient.getProcessStatistics(userId);
+            if (result.isPresent()) {
+                Map<String, Object> data = result.get();
+                
+                long initiatedCount = data.get("initiatedCount") != null 
+                    ? ((Number) data.get("initiatedCount")).longValue() : 0;
+                long inProgressCount = data.get("inProgressCount") != null 
+                    ? ((Number) data.get("inProgressCount")).longValue() : 0;
+                long completedThisMonthCount = data.get("completedThisMonthCount") != null 
+                    ? ((Number) data.get("completedThisMonthCount")).longValue() : 0;
+                double approvalRate = data.get("approvalRate") != null 
+                    ? ((Number) data.get("approvalRate")).doubleValue() : 1.0;
+                
+                Map<String, Long> typeDistribution = new HashMap<>();
+                Object typeDistObj = data.get("typeDistribution");
+                if (typeDistObj instanceof Map) {
+                    Map<String, Object> typeDist = (Map<String, Object>) typeDistObj;
+                    for (Map.Entry<String, Object> entry : typeDist.entrySet()) {
+                        if (entry.getValue() instanceof Number) {
+                            typeDistribution.put(entry.getKey(), ((Number) entry.getValue()).longValue());
+                        }
+                    }
+                }
+                
+                return DashboardOverview.ProcessOverview.builder()
+                        .initiatedCount(initiatedCount)
+                        .inProgressCount(inProgressCount)
+                        .completedThisMonthCount(completedThisMonthCount)
+                        .approvalRate(approvalRate)
+                        .typeDistribution(typeDistribution)
+                        .build();
+            }
+        } catch (Exception e) {
+            log.warn("Failed to get process statistics from workflow engine: {}", e.getMessage());
+        }
         
-        Map<String, Long> typeDistribution = new HashMap<>();
-        typeDistribution.put("请假申请", (long) (10 + random.nextInt(20)));
-        typeDistribution.put("报销申请", (long) (5 + random.nextInt(15)));
-        typeDistribution.put("采购申请", (long) (3 + random.nextInt(10)));
-        typeDistribution.put("其他", (long) (2 + random.nextInt(5)));
-
+        // 如果获取失败，返回空数据
         return DashboardOverview.ProcessOverview.builder()
-                .initiatedCount((long) (20 + random.nextInt(30)))
-                .inProgressCount((long) (5 + random.nextInt(10)))
-                .completedThisMonthCount((long) (15 + random.nextInt(20)))
-                .approvalRate(0.85 + random.nextDouble() * 0.1)
-                .typeDistribution(typeDistribution)
+                .initiatedCount(0L)
+                .inProgressCount(0L)
+                .completedThisMonthCount(0L)
+                .approvalRate(1.0)
+                .typeDistribution(new HashMap<>())
                 .build();
     }
 

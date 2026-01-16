@@ -43,16 +43,6 @@ public class UserSecurityInfo {
     private Set<String> permissions;
     
     /**
-     * 部门ID
-     */
-    private String departmentId;
-    
-    /**
-     * 部门名称
-     */
-    private String departmentName;
-    
-    /**
      * 最后登录时间
      */
     private LocalDateTime lastLoginTime;

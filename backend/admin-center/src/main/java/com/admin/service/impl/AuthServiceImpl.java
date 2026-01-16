@@ -24,9 +24,6 @@ import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
-/**
- * 认证服务实现
- */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -51,45 +48,40 @@ public class AuthServiceImpl implements AuthService {
     public LoginResponse login(LoginRequest request, String ipAddress, String userAgent) {
         log.debug("Login attempt for user: {}", request.getUsername());
         
-        // 查找用户
         User user = userRepository.findByUsername(request.getUsername())
                 .orElseThrow(() -> {
                     log.warn("User not found: {}", request.getUsername());
-                    return new RuntimeException("用户名或密码错误");
+                    return new RuntimeException("Invalid username or password");
                 });
         
-        // 检查用户状态
         if (user.getStatus() == UserStatus.LOCKED) {
             log.warn("Account locked: {}", request.getUsername());
-            throw new RuntimeException("账户已被锁定");
+            throw new RuntimeException("Account is locked");
         }
         
         if (user.getStatus() == UserStatus.DISABLED) {
             log.warn("Account disabled: {}", request.getUsername());
-            throw new RuntimeException("账户已被禁用");
+            throw new RuntimeException("Account is disabled");
         }
         
-        // 验证密码
         if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
             log.warn("Invalid password for user: {}", request.getUsername());
             user.incrementFailedLoginCount();
             
-            // 如果失败次数超过5次，锁定账户
             if (user.getFailedLoginCount() >= 5) {
                 user.setStatus(UserStatus.LOCKED);
                 user.setLockedUntil(LocalDateTime.now().plusMinutes(30));
             }
             userRepository.save(user);
-            throw new RuntimeException("用户名或密码错误");
+            throw new RuntimeException("Invalid username or password");
         }
         
-        // 检查用户是否有 SYS_ADMIN 或 AUDITOR 角色（Admin Center 专用）
         List<String> userRoleCodes;
         try {
             userRoleCodes = getUserRoleCodes(user.getId());
         } catch (Exception e) {
             log.error("Failed to get user roles for {}: {}", request.getUsername(), e.getMessage());
-            throw new RuntimeException("获取用户角色失败，请稍后重试");
+            throw new RuntimeException("Failed to get user roles");
         }
         
         boolean hasAdminAccess = userRoleCodes.stream()
@@ -97,33 +89,27 @@ public class AuthServiceImpl implements AuthService {
         
         if (!hasAdminAccess) {
             log.warn("User {} does not have admin center access. Roles: {}", request.getUsername(), userRoleCodes);
-            throw new RuntimeException("您没有管理员中心的访问权限");
+            throw new RuntimeException("You do not have access to Admin Center");
         }
         
-        // 重置失败次数，更新登录信息
         user.resetFailedLoginCount();
         user.setLastLoginAt(LocalDateTime.now());
         user.setLastLoginIp(ipAddress);
         userRepository.save(user);
         
-        // 获取用户有效角色 - 使用简单查询避免复杂的 UserRoleService
         List<String> roles = userRoleCodes;
-        
-        // 获取权限
         List<String> permissions = getPermissionsForRoles(roles);
         
-        // 构建简单的 rolesWithSources
         List<LoginResponse.RoleWithSource> rolesWithSources = roles.stream()
                 .map(code -> LoginResponse.RoleWithSource.builder()
                         .roleCode(code)
                         .roleName(code)
                         .sourceType(null)
                         .sourceId(user.getId())
-                        .sourceName("直接分配")
+                        .sourceName("Direct Assignment")
                         .build())
                 .collect(Collectors.toList());
         
-        // 生成令牌
         String accessToken = generateToken(user, roles, permissions);
         String refreshToken = generateRefreshToken(user.getId());
         
@@ -141,17 +127,14 @@ public class AuthServiceImpl implements AuthService {
                         .roles(roles)
                         .permissions(permissions)
                         .rolesWithSources(rolesWithSources)
-                        .departmentId(user.getDepartmentId())
+                        .businessUnitId(user.getBusinessUnitId())
                         .language(user.getLanguage())
                         .build())
                 .build();
     }
 
-
     @Override
     public void logout(String token) {
-        // 简单实现：前端清除令牌即可
-        // 生产环境应该将令牌加入黑名单
         log.info("User logged out");
     }
 
@@ -162,7 +145,7 @@ public class AuthServiceImpl implements AuthService {
             String userId = claims.getSubject();
             
             User user = userRepository.findById(userId)
-                    .orElseThrow(() -> new RuntimeException("用户不存在"));
+                    .orElseThrow(() -> new RuntimeException("User not found"));
             
             List<UserEffectiveRole> effectiveRoles = userRoleService.getEffectiveRolesForUser(user.getId());
             List<String> roles = effectiveRoles.stream()
@@ -180,12 +163,12 @@ public class AuthServiceImpl implements AuthService {
                     .roles(roles)
                     .permissions(getPermissionsForRoles(roles))
                     .rolesWithSources(rolesWithSources)
-                    .departmentId(user.getDepartmentId())
+                    .businessUnitId(user.getBusinessUnitId())
                     .language(user.getLanguage())
                     .build();
         } catch (Exception e) {
             log.error("Failed to refresh token", e);
-            throw new RuntimeException("令牌刷新失败");
+            throw new RuntimeException("Token refresh failed");
         }
     }
 
@@ -196,7 +179,7 @@ public class AuthServiceImpl implements AuthService {
             String userId = claims.getSubject();
             
             User user = userRepository.findById(userId)
-                    .orElseThrow(() -> new RuntimeException("用户不存在"));
+                    .orElseThrow(() -> new RuntimeException("User not found"));
             
             List<UserEffectiveRole> effectiveRoles = userRoleService.getEffectiveRolesForUser(user.getId());
             List<String> roles = effectiveRoles.stream()
@@ -214,12 +197,12 @@ public class AuthServiceImpl implements AuthService {
                     .roles(roles)
                     .permissions(getPermissionsForRoles(roles))
                     .rolesWithSources(rolesWithSources)
-                    .departmentId(user.getDepartmentId())
+                    .businessUnitId(user.getBusinessUnitId())
                     .language(user.getLanguage())
                     .build();
         } catch (Exception e) {
             log.error("Failed to get current user", e);
-            throw new RuntimeException("获取用户信息失败");
+            throw new RuntimeException("Failed to get user info");
         }
     }
 
@@ -233,9 +216,6 @@ public class AuthServiceImpl implements AuthService {
         }
     }
     
-    /**
-     * 构建角色及来源信息列表
-     */
     private List<LoginResponse.RoleWithSource> buildRolesWithSources(List<UserEffectiveRole> effectiveRoles) {
         List<LoginResponse.RoleWithSource> result = new ArrayList<>();
         
@@ -265,7 +245,7 @@ public class AuthServiceImpl implements AuthService {
                 .claim("displayName", user.getDisplayName())
                 .claim("roles", roles)
                 .claim("permissions", permissions)
-                .claim("departmentId", user.getDepartmentId())
+                .claim("businessUnitId", user.getBusinessUnitId())
                 .claim("language", user.getLanguage())
                 .issuedAt(now)
                 .expiration(expiry)
@@ -331,10 +311,6 @@ public class AuthServiceImpl implements AuthService {
         return permissions.stream().distinct().toList();
     }
     
-    /**
-     * 获取用户的角色代码列表（用于登录权限检查）
-     * 使用 sys_role_assignments 表
-     */
     private List<String> getUserRoleCodes(String userId) {
         try {
             return jdbcTemplate.queryForList(

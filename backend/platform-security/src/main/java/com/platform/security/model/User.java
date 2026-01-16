@@ -54,9 +54,6 @@ public class User {
     @Builder.Default
     private UserStatus status = UserStatus.ACTIVE;
 
-    @Column(name = "department_id", length = 50)
-    private String departmentId;
-
     @Column(length = 100)
     private String position;
 

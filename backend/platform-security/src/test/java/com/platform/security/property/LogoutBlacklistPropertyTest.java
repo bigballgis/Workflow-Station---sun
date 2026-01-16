@@ -54,7 +54,7 @@ class LogoutBlacklistPropertyTest {
 
         // Generate a token
         String token = jwtTokenService.generateToken(
-                userId, "testuser", List.of("USER"), List.of(), null, "en"
+                userId, "testuser", List.of("USER"), List.of(), "en"
         );
 
         // Blacklist the token (simulating logout)
@@ -88,7 +88,7 @@ class LogoutBlacklistPropertyTest {
 
         // Generate a token
         String token = jwtTokenService.generateToken(
-                userId, "testuser", List.of("USER"), List.of(), null, "en"
+                userId, "testuser", List.of("USER"), List.of(), "en"
         );
 
         // Validate should return false because token is blacklisted
@@ -114,7 +114,7 @@ class LogoutBlacklistPropertyTest {
 
         // Generate a token
         String token = jwtTokenService.generateToken(
-                userId, "testuser", List.of("USER"), List.of(), null, "en"
+                userId, "testuser", List.of("USER"), List.of(), "en"
         );
 
         // Validate should return true because token is valid and not blacklisted
@@ -142,7 +142,7 @@ class LogoutBlacklistPropertyTest {
 
         // Generate a token
         String token = jwtTokenService.generateToken(
-                userId, "testuser", List.of("USER"), List.of(), null, "en"
+                userId, "testuser", List.of("USER"), List.of(), "en"
         );
 
         // Get remaining validity before blacklisting
@@ -179,7 +179,7 @@ class LogoutBlacklistPropertyTest {
 
         // Generate a token
         String token = jwtTokenService.generateToken(
-                userId, "testuser", List.of("USER"), List.of(), null, "en"
+                userId, "testuser", List.of("USER"), List.of(), "en"
         );
 
         // Blacklist the token multiple times
@@ -221,7 +221,7 @@ class LogoutBlacklistPropertyTest {
 
         // Generate a token
         String token = jwtTokenService.generateToken(
-                userId, "testuser", List.of("USER"), List.of(), null, "en"
+                userId, "testuser", List.of("USER"), List.of(), "en"
         );
 
         // Blacklist the token

@@ -24,4 +24,6 @@ public interface PermissionRequestRepository extends JpaRepository<PermissionReq
     List<PermissionRequest> findByStatus(PermissionRequestStatus status);
 
     Page<PermissionRequest> findByStatus(PermissionRequestStatus status, Pageable pageable);
+
+    Page<PermissionRequest> findByStatusIn(List<PermissionRequestStatus> statuses, Pageable pageable);
 }

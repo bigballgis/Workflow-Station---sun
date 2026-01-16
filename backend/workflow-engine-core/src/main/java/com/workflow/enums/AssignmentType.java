@@ -2,7 +2,12 @@ package com.workflow.enums;
 
 /**
  * 任务分配类型枚举
- * 支持多维度任务分配：用户、虚拟组、部门角色
+ * 支持多维度任务分配：用户、虚拟组
+ * 
+ * 注意：此枚举是旧的分配类型，新的任务分配机制使用 AssigneeType 枚举
+ * AssigneeType 定义了9种标准的任务分配方式，包括基于业务单元角色的分配
+ * 
+ * @see AssigneeType
  */
 public enum AssignmentType {
     
@@ -16,13 +21,7 @@ public enum AssignmentType {
      * 分配给虚拟组
      * 任务分配给虚拟组，虚拟组的所有成员都可以看到并认领处理
      */
-    VIRTUAL_GROUP("VIRTUAL_GROUP", "虚拟组分配"),
-    
-    /**
-     * 分配给部门角色
-     * 任务分配给部门的特定角色，该部门中拥有该角色的用户可以处理
-     */
-    DEPT_ROLE("DEPT_ROLE", "部门角色分配");
+    VIRTUAL_GROUP("VIRTUAL_GROUP", "虚拟组分配");
     
     private final String code;
     private final String description;

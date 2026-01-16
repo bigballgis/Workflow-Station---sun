@@ -580,4 +580,76 @@ public class WorkflowEngineClient {
         }
         return Optional.empty();
     }
+    
+    /**
+     * 获取用户已处理的任务列表
+     */
+    @SuppressWarnings("unchecked")
+    public Optional<Map<String, Object>> getCompletedTasks(String userId, int page, int size, 
+                                                           String keyword, String startTime, String endTime) {
+        if (!isAvailable()) {
+            return Optional.empty();
+        }
+        try {
+            StringBuilder urlBuilder = new StringBuilder(workflowEngineUrl)
+                .append("/api/v1/history/completed-tasks?userId=").append(userId)
+                .append("&page=").append(page)
+                .append("&size=").append(size);
+            
+            if (keyword != null && !keyword.isEmpty()) {
+                urlBuilder.append("&keyword=").append(keyword);
+            }
+            if (startTime != null && !startTime.isEmpty()) {
+                urlBuilder.append("&startTime=").append(startTime);
+            }
+            if (endTime != null && !endTime.isEmpty()) {
+                urlBuilder.append("&endTime=").append(endTime);
+            }
+            
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                urlBuilder.toString(), HttpMethod.GET, null,
+                new ParameterizedTypeReference<Map<String, Object>>() {});
+            
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                Map<String, Object> body = response.getBody();
+                // 从 ApiResponse 中提取 data
+                if (body.containsKey("data")) {
+                    return Optional.of((Map<String, Object>) body.get("data"));
+                }
+                return Optional.of(body);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to get completed tasks from workflow engine: {}", e.getMessage());
+        }
+        return Optional.empty();
+    }
+    
+    /**
+     * 获取用户流程统计数据
+     */
+    @SuppressWarnings("unchecked")
+    public Optional<Map<String, Object>> getProcessStatistics(String userId) {
+        if (!isAvailable()) {
+            return Optional.empty();
+        }
+        try {
+            String url = workflowEngineUrl + "/api/v1/history/process-statistics?userId=" + userId;
+            
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                url, HttpMethod.GET, null,
+                new ParameterizedTypeReference<Map<String, Object>>() {});
+            
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                Map<String, Object> body = response.getBody();
+                // 从 ApiResponse 中提取 data
+                if (body.containsKey("data")) {
+                    return Optional.of((Map<String, Object>) body.get("data"));
+                }
+                return Optional.of(body);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to get process statistics from workflow engine: {}", e.getMessage());
+        }
+        return Optional.empty();
+    }
 }

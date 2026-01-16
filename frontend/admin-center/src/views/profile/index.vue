@@ -28,13 +28,10 @@
           <el-descriptions-item label="User ID">
             {{ userInfo?.userId || '-' }}
           </el-descriptions-item>
-          <el-descriptions-item :label="t('user.department')">
-            {{ userInfo?.departmentId || '-' }}
-          </el-descriptions-item>
           <el-descriptions-item label="Language">
             {{ userInfo?.language || 'zh-CN' }}
           </el-descriptions-item>
-          <el-descriptions-item label="Permissions">
+          <el-descriptions-item label="Permissions" :span="2">
             {{ userInfo?.permissions?.length || 0 }}
           </el-descriptions-item>
         </el-descriptions>
@@ -105,7 +102,6 @@ interface UserInfo {
   email?: string
   roles?: string[]
   permissions?: string[]
-  departmentId?: string
   language?: string
   avatar?: string
 }

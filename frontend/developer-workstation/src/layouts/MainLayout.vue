@@ -18,17 +18,7 @@
             </el-dropdown-menu>
           </template>
         </el-dropdown>
-        <el-dropdown>
-          <span class="user-trigger">
-            <el-avatar :size="32" icon="User" />
-            <span class="username">{{ displayName }}</span>
-          </span>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item @click="handleLogout">{{ t('common.logout') }}</el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
+        <UserProfileDropdown />
       </div>
     </el-header>
     <el-container>
@@ -59,15 +49,13 @@
 
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ElMessage } from 'element-plus'
 import { Folder, Picture, Connection, DArrowLeft, DArrowRight } from '@element-plus/icons-vue'
-import { logout as authLogout, clearAuth, getUser } from '@/api/auth'
+import UserProfileDropdown from '@/components/UserProfileDropdown.vue'
 import i18n from '@/i18n'
 
 const route = useRoute()
-const router = useRouter()
 const { t } = useI18n()
 
 const activeMenu = computed(() => route.path)
@@ -142,19 +130,6 @@ onMounted(async () => {
     }
   }
 })
-
-async function handleLogout() {
-  try {
-    await authLogout()
-    ElMessage.success(t('common.logoutSuccess'))
-  } catch (error) {
-    // Even if API fails, still clear local auth
-    console.error('Logout API error:', error)
-  } finally {
-    clearAuth()
-    router.push('/login')
-  }
-}
 </script>
 
 <style lang="scss" scoped>
@@ -188,20 +163,12 @@ async function handleLogout() {
   gap: 20px;
 }
 
-.language-trigger, .user-trigger {
+.language-trigger {
   display: flex;
   align-items: center;
   gap: 8px;
   cursor: pointer;
   color: white;
-}
-
-.username {
-  font-size: 14px;
-  max-width: 120px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .sidebar {

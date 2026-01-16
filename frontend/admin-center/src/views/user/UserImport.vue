@@ -39,7 +39,6 @@
             <el-table-column prop="username" :label="t('user.username')" />
             <el-table-column prop="realName" :label="t('user.realName')" />
             <el-table-column prop="email" :label="t('user.email')" />
-            <el-table-column prop="departmentCode" label="部门编码" />
           </el-table>
           <div class="preview-info">
             共 {{ previewData.length }} 条数据待导入
@@ -107,8 +106,8 @@ const downloadTemplate = async () => {
 const parseFile = () => {
   // Mock parse - in real app, use xlsx library
   previewData.value = [
-    { username: 'user1', realName: '用户一', email: 'user1@example.com', departmentCode: 'TECH' },
-    { username: 'user2', realName: '用户二', email: 'user2@example.com', departmentCode: 'HR' }
+    { username: 'user1', realName: '用户一', email: 'user1@example.com' },
+    { username: 'user2', realName: '用户二', email: 'user2@example.com' }
   ]
   step.value = 1
 }

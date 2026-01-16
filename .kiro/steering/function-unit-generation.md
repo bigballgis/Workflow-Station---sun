@@ -274,37 +274,64 @@ xmlns:custom="http://custom.bpmn.io/schema"
 
 #### 处理人分配方式
 在`userTask`节点的`extensionElements`中添加：
-- `assigneeType` - 分配方式类型（必须使用下面7种标准类型之一）
+- `assigneeType` - 分配方式类型（必须使用下面9种标准类型之一）
 - `assigneeLabel` - 分配方式显示标签
-- `assigneeValue` - 分配值（仅 FIXED_DEPT 和 VIRTUAL_GROUP 类型需要，指定部门ID或虚拟组ID）
+- `roleId` - 角色ID（6种角色类型需要）
+- `businessUnitId` - 业务单元ID（仅 FIXED_BU_ROLE 类型需要）
 
-**分配方式类型枚举（7种标准方式）：**
+**分配方式类型枚举（9种标准方式）：**
 
-| 类型 | 代码 | 说明 | 是否需要认领 | 是否需要assigneeValue |
-|------|------|------|-------------|---------------------|
-| 职能经理 | `FUNCTION_MANAGER` | 当前人的职能经理 | 否（直接分配） | 否 |
-| 实体经理 | `ENTITY_MANAGER` | 当前人的实体经理 | 否（直接分配） | 否 |
-| 流程发起人 | `INITIATOR` | 流程发起人 | 否（直接分配） | 否 |
-| 本部门其他人 | `DEPT_OTHERS` | 当前人部门的非本人 | 是 | 否 |
-| 上级部门 | `PARENT_DEPT` | 当前人上级部门 | 是 | 否 |
-| 指定部门 | `FIXED_DEPT` | 某个部门的所有人 | 是 | 是（部门ID） |
-| 虚拟组 | `VIRTUAL_GROUP` | 某个虚拟组 | 是 | 是（虚拟组ID） |
+#### 直接分配类型（3种）
+
+| 类型 | 代码 | 说明 | 是否需要认领 | 需要参数 |
+|------|------|------|-------------|---------|
+| 职能经理 | `FUNCTION_MANAGER` | 发起人的职能经理 | 否（直接分配） | 无 |
+| 实体经理 | `ENTITY_MANAGER` | 发起人的实体经理 | 否（直接分配） | 无 |
+| 流程发起人 | `INITIATOR` | 流程发起人 | 否（直接分配） | 无 |
+
+#### 基于当前人业务单元的角色分配（2种）
+
+| 类型 | 代码 | 说明 | 是否需要认领 | 需要参数 |
+|------|------|------|-------------|---------|
+| 当前人业务单元角色 | `CURRENT_BU_ROLE` | 当前处理人所在业务单元中拥有指定角色的用户 | 是 | roleId |
+| 当前人上级业务单元角色 | `CURRENT_PARENT_BU_ROLE` | 当前处理人上级业务单元中拥有指定角色的用户 | 是 | roleId |
+
+#### 基于发起人业务单元的角色分配（2种）
+
+| 类型 | 代码 | 说明 | 是否需要认领 | 需要参数 |
+|------|------|------|-------------|---------|
+| 发起人业务单元角色 | `INITIATOR_BU_ROLE` | 发起人所在业务单元中拥有指定角色的用户 | 是 | roleId |
+| 发起人上级业务单元角色 | `INITIATOR_PARENT_BU_ROLE` | 发起人上级业务单元中拥有指定角色的用户 | 是 | roleId |
+
+#### 其他角色分配类型（2种）
+
+| 类型 | 代码 | 说明 | 是否需要认领 | 需要参数 |
+|------|------|------|-------------|---------|
+| 指定业务单元角色 | `FIXED_BU_ROLE` | 指定业务单元中拥有指定角色的用户 | 是 | businessUnitId, roleId |
+| BU无关型角色 | `BU_UNBOUNDED_ROLE` | 拥有指定BU无关型角色的用户（通过虚拟组） | 是 | roleId |
 
 **重要规则：非具体到人的分配都采用认领机制**
 
 - 直接分配类型（FUNCTION_MANAGER, ENTITY_MANAGER, INITIATOR）：任务直接分配给特定用户
-- 认领类型（DEPT_OTHERS, PARENT_DEPT, FIXED_DEPT, VIRTUAL_GROUP）：任务分配给候选人列表，需要用户主动认领
+- 认领类型（6种角色类型）：任务分配给候选人列表，需要用户主动认领
+
+**角色类型说明：**
+- **BU_BOUNDED 角色**：与业务单元绑定的角色，用于 CURRENT_BU_ROLE, CURRENT_PARENT_BU_ROLE, INITIATOR_BU_ROLE, INITIATOR_PARENT_BU_ROLE, FIXED_BU_ROLE
+- **BU_UNBOUNDED 角色**：与业务单元无关的角色，用于 BU_UNBOUNDED_ROLE，通过虚拟组分配给用户
 
 **前端实现说明：**
 - 处理人配置在 `UserTaskProperties.vue` 组件中实现
-- 选择 `FIXED_DEPT` 时，会显示部门树选择器（数据来自 admin-center `/departments/tree` API）
-- 选择 `VIRTUAL_GROUP` 时，会显示虚拟组下拉选择器（数据来自 admin-center `/virtual-groups` API）
+- 选择角色类型时，会显示角色下拉选择器
+- 选择 `FIXED_BU_ROLE` 时，会显示业务单元树选择器和准入角色下拉
+- 选择 `BU_UNBOUNDED_ROLE` 时，只显示 BU_UNBOUNDED 类型的角色
 - 前端通过 `/api/admin-center` 代理访问 admin-center 服务（端口 8090）
 
 **相关文件：**
 - `frontend/developer-workstation/src/components/designer/properties/UserTaskProperties.vue`
 - `frontend/developer-workstation/src/api/adminCenter.ts`
 - `frontend/developer-workstation/vite.config.ts`（代理配置）
+- `backend/admin-center/src/main/java/com/admin/controller/TaskAssignmentController.java`
+- `backend/admin-center/src/main/java/com/admin/service/TaskAssignmentQueryService.java`
 
 #### 全局动作绑定
 在`process`节点的`extensionElements`中添加：

@@ -65,6 +65,16 @@ public class PermissionRequest {
     @Column(name = "virtual_group_name", length = 200)
     private String virtualGroupName;
 
+    // ========== 新字段 - 业务单元申请 ==========
+    
+    /** 申请加入的业务单元ID */
+    @Column(name = "business_unit_id", length = 64)
+    private String businessUnitId;
+    
+    /** 申请加入的业务单元名称（冗余存储，方便显示） */
+    @Column(name = "business_unit_name", length = 200)
+    private String businessUnitName;
+
     // ========== 旧字段（已废弃，保留兼容） ==========
     
     /** @deprecated 使用 roleId/virtualGroupId 替代 */
