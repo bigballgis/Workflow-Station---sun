@@ -1,7 +1,7 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import router from '@/router'
-import { refreshToken as refreshAuthToken, REFRESH_TOKEN_KEY, TOKEN_KEY, clearAuth } from './auth'
+import { refreshToken as refreshAuthToken, REFRESH_TOKEN_KEY, TOKEN_KEY, clearAuth, getUser } from './auth'
 
 let isRefreshing = false
 let failedQueue: Array<{ resolve: Function; reject: Function }> = []
@@ -28,6 +28,13 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
+    
+    // 添加 X-User-Id 请求头，用于后端权限检查
+    const user = getUser()
+    if (user && user.userId) {
+      config.headers['X-User-Id'] = user.userId
+    }
+    
     return config
   },
   error => Promise.reject(error)
@@ -81,7 +88,16 @@ api.interceptors.response.use(
     if (response) {
       switch (response.status) {
         case 403:
-          ElMessage.error('没有权限执行此操作')
+          // 403 可能是未登录或权限不足
+          const token = localStorage.getItem(TOKEN_KEY)
+          if (!token) {
+            // 没有 token，清除认证并重定向到登录页
+            clearAuth()
+            router.push('/login')
+            ElMessage.warning('请先登录')
+          } else {
+            ElMessage.error('没有权限执行此操作')
+          }
           break
         case 429:
           ElMessage.warning('请求过于频繁，请稍后重试')
