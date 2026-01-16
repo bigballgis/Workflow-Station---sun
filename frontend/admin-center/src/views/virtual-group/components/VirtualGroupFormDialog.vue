@@ -2,23 +2,22 @@
   <el-dialog :model-value="modelValue" @update:model-value="$emit('update:modelValue', $event)" :title="isEdit ? t('virtualGroup.edit') : t('virtualGroup.create')" width="500px">
     <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
       <el-form-item :label="t('common.name')" prop="name">
-        <el-input v-model="form.name" />
+        <el-input v-model="form.name" :disabled="isSystemGroup" />
       </el-form-item>
       <el-form-item :label="t('common.code')" prop="code">
         <el-input v-model="form.code" :disabled="isEdit" />
       </el-form-item>
       <el-form-item :label="t('common.type')" prop="type">
-        <el-select v-model="form.type">
-          <el-option :label="t('role.functionRole')" value="PROJECT" />
-          <el-option :label="t('role.tempRole')" value="TEMPORARY" />
-          <el-option :label="t('role.businessRole')" value="CROSS_DEPT" />
+        <el-select v-model="form.type" :disabled="isSystemGroup">
+          <el-option :label="t('virtualGroup.typeCustom')" value="CUSTOM" />
+          <el-option v-if="isSystemGroup" :label="t('virtualGroup.typeSystem')" value="SYSTEM" />
         </el-select>
       </el-form-item>
-      <el-form-item :label="t('common.validityPeriod')">
-        <el-date-picker v-model="form.dateRange" type="daterange" :start-placeholder="t('virtualGroup.startDatePlaceholder')" :end-placeholder="t('virtualGroup.endDatePlaceholder')" />
+      <el-form-item :label="t('virtualGroup.adGroup')">
+        <el-input v-model="form.adGroup" :placeholder="t('virtualGroup.adGroupPlaceholder')" />
       </el-form-item>
       <el-form-item :label="t('common.description')">
-        <el-input v-model="form.description" type="textarea" :rows="3" />
+        <el-input v-model="form.description" type="textarea" :rows="3" :disabled="isSystemGroup" />
       </el-form-item>
     </el-form>
     <template #footer>
@@ -32,6 +31,7 @@
 import { ref, reactive, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, FormInstance } from 'element-plus'
+import { virtualGroupApi } from '@/api/virtualGroup'
 
 const { t } = useI18n()
 
@@ -41,8 +41,9 @@ const emit = defineEmits(['update:modelValue', 'success'])
 const formRef = ref<FormInstance>()
 const loading = ref(false)
 const isEdit = computed(() => !!props.group)
+const isSystemGroup = computed(() => props.group?.type === 'SYSTEM')
 
-const form = reactive({ name: '', code: '', type: 'PROJECT', dateRange: null as any, description: '' })
+const form = reactive({ name: '', code: '', type: 'CUSTOM', adGroup: '', description: '' })
 
 const rules = computed(() => ({
   name: [{ required: true, message: t('common.inputPlaceholder'), trigger: 'blur' }],
@@ -52,9 +53,9 @@ const rules = computed(() => ({
 
 watch(() => props.modelValue, (val) => {
   if (val && props.group) {
-    Object.assign(form, { name: props.group.name, code: props.group.code, type: props.group.type, dateRange: [props.group.validFrom, props.group.validTo], description: props.group.description || '' })
+    Object.assign(form, { name: props.group.name, code: props.group.code, type: props.group.type, adGroup: props.group.adGroup || '', description: props.group.description || '' })
   } else if (val) {
-    Object.assign(form, { name: '', code: '', type: 'PROJECT', dateRange: null, description: '' })
+    Object.assign(form, { name: '', code: '', type: 'CUSTOM', adGroup: '', description: '' })
   }
 })
 
@@ -63,11 +64,26 @@ const handleSubmit = async () => {
   if (!valid) return
   
   loading.value = true
-  setTimeout(() => {
-    loading.value = false
+  try {
+    const data = {
+      name: form.name,
+      type: form.type as any,
+      description: form.description,
+      adGroup: form.adGroup || undefined
+    }
+    if (isEdit.value) {
+      await virtualGroupApi.update(props.group.id, data)
+    } else {
+      await virtualGroupApi.create({ ...data, code: form.code } as any)
+    }
     ElMessage.success(t('common.success'))
     emit('update:modelValue', false)
     emit('success')
-  }, 500)
+  } catch (e) {
+    console.error('Failed to save virtual group:', e)
+    ElMessage.error(t('common.failed'))
+  } finally {
+    loading.value = false
+  }
 }
 </script>

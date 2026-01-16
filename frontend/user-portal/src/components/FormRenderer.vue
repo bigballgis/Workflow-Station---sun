@@ -177,10 +177,10 @@
                       />
                     </el-select>
                   </template>
-                  <template v-else-if="field.type === 'department'">
+                  <template v-else-if="field.type === 'businessUnit'">
                     <el-tree-select
                       v-model="formData[field.key]"
-                      :data="field.deptOptions || []"
+                      :data="field.buOptions || []"
                       :props="{ label: 'name', value: 'id', children: 'children' }"
                       :placeholder="field.placeholder"
                       check-strictly
@@ -404,11 +404,11 @@
                 />
               </el-select>
 
-              <!-- 部门选择器 -->
+              <!-- 业务单元选择器 -->
               <el-tree-select
-                v-else-if="field.type === 'department'"
+                v-else-if="field.type === 'businessUnit'"
                 v-model="formData[field.key]"
-                :data="field.deptOptions || []"
+                :data="field.buOptions || []"
                 :props="{ label: 'name', value: 'id', children: 'children' }"
                 :placeholder="field.placeholder"
                 check-strictly
@@ -489,7 +489,7 @@ export interface FormField {
   alertTitle?: string
   alertType?: 'success' | 'warning' | 'info' | 'error'
   userOptions?: Array<{ id: string; name: string }>
-  deptOptions?: any[]
+  buOptions?: any[]
   rules?: any[]
   defaultValue?: any
   tabName?: string  // 所属 Tab 名称

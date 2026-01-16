@@ -56,7 +56,7 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'organization',
         name: 'Organization',
-        component: () => import('@/views/organization/DepartmentTree.vue'),
+        component: () => import('@/views/organization/BusinessUnitTree.vue'),
         meta: { titleKey: 'menu.organization', icon: 'OfficeBuilding', permissions: [PERMISSIONS.USER_READ] }
       },
       {
@@ -92,16 +92,16 @@ const routes: RouteRecordRaw[] = [
         meta: { titleKey: 'menu.dictionary', icon: 'Collection', permissions: [PERMISSIONS.SYSTEM_ADMIN] }
       },
       {
-        path: 'monitor',
-        name: 'SystemMonitor',
-        component: () => import('@/views/monitor/index.vue'),
-        meta: { titleKey: 'menu.monitor', icon: 'Monitor', permissions: [PERMISSIONS.SYSTEM_ADMIN] }
-      },
-      {
         path: 'audit',
         name: 'AuditLog',
         component: () => import('@/views/audit/index.vue'),
         meta: { titleKey: 'menu.audit', icon: 'Document', permissions: [PERMISSIONS.AUDIT_READ] }
+      },
+      {
+        path: 'permission-request',
+        name: 'PermissionRequest',
+        component: () => import('@/views/permission-request/index.vue'),
+        meta: { titleKey: 'menu.permissionRequest', icon: 'Tickets', permissions: [PERMISSIONS.AUDIT_READ] }
       },
       {
         path: 'config',

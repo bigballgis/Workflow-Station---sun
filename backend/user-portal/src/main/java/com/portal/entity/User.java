@@ -27,9 +27,6 @@ public class User {
     @Column(name = "display_name")
     private String displayName;
     
-    @Column(name = "department_id")
-    private String departmentId;
-    
     @Column(name = "status")
     private String status;
     

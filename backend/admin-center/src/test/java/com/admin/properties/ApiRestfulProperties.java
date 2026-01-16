@@ -30,8 +30,8 @@ class ApiRestfulProperties {
         Arbitrary<String> uris = Arbitraries.of(
             "/api/v1/admin/users",
             "/api/v1/admin/users/{id}",
-            "/api/v1/admin/departments",
-            "/api/v1/admin/departments/{id}",
+            "/api/v1/admin/business-units",
+            "/api/v1/admin/business-units/{id}",
             "/api/v1/admin/roles",
             "/api/v1/admin/roles/{id}/permissions"
         );

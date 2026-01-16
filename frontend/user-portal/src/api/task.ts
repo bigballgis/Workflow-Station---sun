@@ -40,6 +40,10 @@ export interface TaskInfo {
   claimed?: boolean
   originalAssignmentType?: string
   originalAssignee?: string
+  // 已处理任务字段
+  completedTime?: string
+  durationInMillis?: number
+  action?: string
 }
 
 export interface PageResponse<T> {
@@ -151,4 +155,9 @@ export function urgeTask(taskId: string, message?: string) {
 // 批量催办任务
 export function batchUrgeTasks(taskIds: string[], message?: string) {
   return request.post('/tasks/batch/urge', { taskIds, message })
+}
+
+// 查询已处理任务
+export function queryCompletedTasks(params: TaskQueryRequest) {
+  return request.post<{ data: PageResponse<TaskInfo> }>('/tasks/completed/query', params)
 }

@@ -11,7 +11,7 @@
 | `sys_users` | 用户表 | varchar(64) | 全局共享 |
 | `sys_user_roles` | 用户角色关联 | varchar(64) | 全局共享 |
 | `sys_roles` | 角色定义 | varchar(64) | 全局共享 |
-| `sys_departments` | 组织/部门 | varchar(64) | 全局共享 |
+| `sys_business_units` | 业务单元 | varchar(64) | 全局共享 |
 | `sys_permissions` | 权限定义 | varchar(64) | 全局共享 |
 | `sys_role_permissions` | 角色权限关联 | varchar(64) | 全局共享 |
 | `sys_login_audit` | 登录审计 | UUID | 全局共享 |

@@ -123,39 +123,61 @@ public void someWorkflowOperation() {
 
 ## 任务分配机制
 
-### 7种标准分配类型
+### 9种标准分配类型
 
-任务分配使用以下7种标准类型，定义在 `AssigneeType` 枚举中：
+任务分配使用以下9种标准类型，定义在 `AssigneeType` 枚举中：
+
+#### 直接分配类型（3种）
 
 | 类型 | 代码 | 说明 | 是否需要认领 |
 |------|------|------|-------------|
-| 职能经理 | `FUNCTION_MANAGER` | 当前人的职能经理 | 否（直接分配） |
-| 实体经理 | `ENTITY_MANAGER` | 当前人的实体经理 | 否（直接分配） |
+| 职能经理 | `FUNCTION_MANAGER` | 发起人的职能经理 | 否（直接分配） |
+| 实体经理 | `ENTITY_MANAGER` | 发起人的实体经理 | 否（直接分配） |
 | 流程发起人 | `INITIATOR` | 流程发起人 | 否（直接分配） |
-| 本部门其他人 | `DEPT_OTHERS` | 当前人部门的非本人 | 是 |
-| 上级部门 | `PARENT_DEPT` | 当前人上级部门 | 是 |
-| 指定部门 | `FIXED_DEPT` | 某个部门的所有人 | 是 |
-| 虚拟组 | `VIRTUAL_GROUP` | 某个虚拟组 | 是 |
+
+#### 基于当前人业务单元的角色分配（2种）
+
+| 类型 | 代码 | 说明 | 是否需要认领 | 需要参数 |
+|------|------|------|-------------|---------|
+| 当前人业务单元角色 | `CURRENT_BU_ROLE` | 当前处理人所在业务单元中拥有指定角色的用户 | 是 | roleId |
+| 当前人上级业务单元角色 | `CURRENT_PARENT_BU_ROLE` | 当前处理人上级业务单元中拥有指定角色的用户 | 是 | roleId |
+
+#### 基于发起人业务单元的角色分配（2种）
+
+| 类型 | 代码 | 说明 | 是否需要认领 | 需要参数 |
+|------|------|------|-------------|---------|
+| 发起人业务单元角色 | `INITIATOR_BU_ROLE` | 发起人所在业务单元中拥有指定角色的用户 | 是 | roleId |
+| 发起人上级业务单元角色 | `INITIATOR_PARENT_BU_ROLE` | 发起人上级业务单元中拥有指定角色的用户 | 是 | roleId |
+
+#### 其他角色分配类型（2种）
+
+| 类型 | 代码 | 说明 | 是否需要认领 | 需要参数 |
+|------|------|------|-------------|---------|
+| 指定业务单元角色 | `FIXED_BU_ROLE` | 指定业务单元中拥有指定角色的用户 | 是 | businessUnitId, roleId |
+| BU无关型角色 | `BU_UNBOUNDED_ROLE` | 拥有指定BU无关型角色的用户（通过虚拟组） | 是 | roleId |
 
 ### 核心组件
 
 - `AssigneeType` - 分配类型枚举 (`workflow-engine-core`)
 - `TaskAssigneeResolver` - 处理人解析服务 (`workflow-engine-core`)
 - `TaskAssignmentListener` - 任务创建监听器 (`workflow-engine-core`)
-- `AdminCenterClient` - 用户/部门信息查询客户端 (`workflow-engine-core`)
+- `AdminCenterClient` - 用户/业务单元/角色信息查询客户端 (`workflow-engine-core`)
+- `TaskAssignmentQueryService` - 任务分配查询服务 (`admin-center`)
+- `TaskAssignmentController` - 任务分配查询API (`admin-center`)
 
 ### 分配流程
 
 1. 流程启动时，`initiator` 变量被设置为发起人ID
 2. 任务创建时，`TaskAssignmentListener` 监听 `TASK_CREATED` 事件
-3. 监听器从 BPMN 扩展属性中读取 `assigneeType` 和 `assigneeValue`
+3. 监听器从 BPMN 扩展属性中读取 `assigneeType`、`roleId`、`businessUnitId`
 4. `TaskAssigneeResolver` 根据分配类型解析实际处理人
 5. 直接分配类型：设置 `assignee`
-6. 认领类型：设置 `candidateUsers` 或 `candidateGroup`
+6. 认领类型：设置 `candidateUsers`
 
 ### BPMN 配置示例
 
 ```xml
+<!-- 直接分配类型 -->
 <bpmn:userTask id="Task_Approval" name="主管审批">
   <bpmn:extensionElements>
     <custom:properties>
@@ -164,7 +186,35 @@ public void someWorkflowOperation() {
     </custom:properties>
   </bpmn:extensionElements>
 </bpmn:userTask>
+
+<!-- 基于角色的分配类型 -->
+<bpmn:userTask id="Task_Review" name="财务审核">
+  <bpmn:extensionElements>
+    <custom:properties>
+      <custom:property name="assigneeType" value="INITIATOR_BU_ROLE"/>
+      <custom:property name="roleId" value="role-finance-reviewer"/>
+      <custom:property name="assigneeLabel" value="发起人业务单元角色: 财务审核员"/>
+    </custom:properties>
+  </bpmn:extensionElements>
+</bpmn:userTask>
+
+<!-- 指定业务单元角色 -->
+<bpmn:userTask id="Task_HQ_Approval" name="总部审批">
+  <bpmn:extensionElements>
+    <custom:properties>
+      <custom:property name="assigneeType" value="FIXED_BU_ROLE"/>
+      <custom:property name="businessUnitId" value="bu-headquarters"/>
+      <custom:property name="roleId" value="role-approver"/>
+      <custom:property name="assigneeLabel" value="指定业务单元角色: 总部审批员"/>
+    </custom:properties>
+  </bpmn:extensionElements>
+</bpmn:userTask>
 ```
+
+### 角色类型说明
+
+- **BU_BOUNDED 角色**：与业务单元绑定的角色，用户在特定业务单元中拥有该角色
+- **BU_UNBOUNDED 角色**：与业务单元无关的角色，通过虚拟组分配给用户
 
 ## 参考文件
 

@@ -54,7 +54,15 @@ DROP TABLE IF EXISTS admin_virtual_group_members CASCADE;
 DROP TABLE IF EXISTS admin_virtual_groups CASCADE;
 
 -- =====================================================
--- 5. Rename admin_roles to sys_roles if needed
+-- 5. Drop sys_departments table (migrated to sys_business_units)
+-- =====================================================
+
+-- Data has been migrated to sys_business_units
+-- Approvers are now managed via sys_approvers table instead of manager_id/secondary_manager_id
+DROP TABLE IF EXISTS sys_departments CASCADE;
+
+-- =====================================================
+-- 6. Rename admin_roles to sys_roles if needed
 -- =====================================================
 
 -- If admin_roles exists and sys_roles doesn't have the data

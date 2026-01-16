@@ -6,11 +6,15 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.Collections;
 import java.util.List;
 
 /**
  * 用户权限服务
  * 封装用户权限验证逻辑，用于任务分配和操作权限检查
+ * 
+ * 注意：此服务使用旧的 AssignmentType 枚举（USER, VIRTUAL_GROUP）
+ * 新的任务分配机制使用 AssigneeType 枚举和 TaskAssigneeResolver 服务
  */
 @Slf4j
 @Service
@@ -23,7 +27,7 @@ public class UserPermissionService {
      * 验证用户是否有权限操作指定分配类型的任务
      * @param userId 用户ID
      * @param assignmentType 分配类型
-     * @param assignmentTarget 分配目标（用户ID/虚拟组ID/部门角色）
+     * @param assignmentTarget 分配目标（用户ID/虚拟组ID）
      * @return 是否有权限
      */
     public boolean hasTaskPermission(String userId, AssignmentType assignmentType, String assignmentTarget) {
@@ -40,12 +44,8 @@ public class UserPermissionService {
                 // 分配给虚拟组的任务，虚拟组成员有权限
                 return isUserInVirtualGroup(userId, assignmentTarget);
                 
-            case DEPT_ROLE:
-                // 分配给部门角色的任务，拥有该部门角色的用户有权限
-                return hasUserDepartmentRole(userId, assignmentTarget);
-                
             default:
-                log.warn("Unknown assignment type: {}", assignmentType);
+                log.warn("Unknown or unsupported assignment type: {}", assignmentType);
                 return false;
         }
     }
@@ -66,31 +66,6 @@ public class UserPermissionService {
     }
     
     /**
-     * 检查用户是否拥有指定的部门角色
-     * 部门角色格式：departmentId:roleCode
-     * @param userId 用户ID
-     * @param deptRole 部门角色（格式：departmentId:roleCode）
-     * @return 是否拥有该部门角色
-     */
-    public boolean hasUserDepartmentRole(String userId, String deptRole) {
-        try {
-            if (deptRole == null || !deptRole.contains(":")) {
-                log.warn("Invalid department role format: {}", deptRole);
-                return false;
-            }
-            
-            String[] parts = deptRole.split(":", 2);
-            String departmentId = parts[0];
-            String roleCode = parts[1];
-            
-            return adminCenterClient.hasUserDepartmentRole(userId, departmentId, roleCode);
-        } catch (Exception e) {
-            log.error("Failed to check department role: {}", e.getMessage());
-            return false;
-        }
-    }
-    
-    /**
      * 获取用户所属的所有虚拟组ID
      * @param userId 用户ID
      * @return 虚拟组ID列表
@@ -100,30 +75,11 @@ public class UserPermissionService {
     }
     
     /**
-     * 获取用户的部门角色列表
-     * @param userId 用户ID
-     * @return 部门角色列表（格式：departmentId:roleCode）
-     */
-    public List<String> getUserDepartmentRoles(String userId) {
-        return adminCenterClient.getUserDepartmentRoles(userId);
-    }
-    
-    /**
      * 获取用户的角色列表
      * @param userId 用户ID
      * @return 角色编码列表
      */
     public List<String> getUserRoles(String userId) {
         return adminCenterClient.getUserRoles(userId);
-    }
-    
-    /**
-     * 检查用户是否在部门层级中
-     * @param userId 用户ID
-     * @param departmentId 部门ID
-     * @return 是否在部门层级中
-     */
-    public boolean isUserInDepartmentHierarchy(String userId, String departmentId) {
-        return adminCenterClient.isUserInDepartmentHierarchy(userId, departmentId);
     }
 }

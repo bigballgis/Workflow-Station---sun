@@ -5,16 +5,20 @@ import { get, post, put, del } from './request'
 export interface VirtualGroup {
   id: string
   name: string
-  type: 'PROJECT' | 'WORK' | 'TEMPORARY' | 'TASK_HANDLER'
+  type: 'SYSTEM' | 'CUSTOM'
   description?: string
-  validFrom?: string
-  validTo?: string
+  adGroup?: string
   status: 'ACTIVE' | 'INACTIVE' | 'EXPIRED'
   memberCount: number
   createdAt: string
   createdBy?: string
   updatedAt: string
   updatedBy?: string
+  // 绑定的角色信息
+  boundRoleId?: string
+  boundRoleName?: string
+  boundRoleCode?: string
+  boundRoleType?: string
 }
 
 export interface VirtualGroupMember {
@@ -25,10 +29,30 @@ export interface VirtualGroupMember {
   fullName: string
   employeeId?: string
   email?: string
-  departmentId?: string
-  departmentName?: string
+  businessUnitId?: string
+  businessUnitName?: string
   role: 'LEADER' | 'MEMBER'
   joinedAt: string
+}
+
+export interface VirtualGroupRole {
+  id: string
+  virtualGroupId: string
+  roleId: string
+  roleName?: string
+  roleCode?: string
+  roleType?: string
+  createdAt: string
+}
+
+export interface Approver {
+  id: string
+  targetType: 'VIRTUAL_GROUP' | 'BUSINESS_UNIT'
+  targetId: string
+  userId: string
+  userName?: string
+  userFullName?: string
+  createdAt: string
 }
 
 export interface GroupTask {
@@ -58,10 +82,9 @@ export interface TaskHistory {
 
 export interface VirtualGroupCreateRequest {
   name: string
-  type: 'PROJECT' | 'WORK' | 'TEMPORARY' | 'TASK_HANDLER'
+  type: 'SYSTEM' | 'CUSTOM'
   description?: string
-  validFrom?: string
-  validTo?: string
+  adGroup?: string
 }
 
 export interface MemberRequest {
@@ -156,5 +179,47 @@ export const virtualGroupApi = {
 
   // 获取任务历史
   getTaskHistory: (groupId: string, taskId: string) =>
-    get<TaskHistory[]>(`/virtual-groups/${groupId}/tasks/${taskId}/history`)
+    get<TaskHistory[]>(`/virtual-groups/${groupId}/tasks/${taskId}/history`),
+
+  // ==================== 角色绑定 API ====================
+
+  // 获取虚拟组绑定的角色（单角色绑定）
+  getBoundRoles: (groupId: string) =>
+    get<any>(`/virtual-groups/${groupId}/role`).then(role => {
+      if (role) {
+        // Transform Role to VirtualGroupRole format for compatibility
+        return [{
+          id: role.id,
+          virtualGroupId: groupId,
+          roleId: role.id,
+          roleName: role.name,
+          roleCode: role.code,
+          roleType: role.type,
+          createdAt: role.createdAt
+        } as VirtualGroupRole]
+      }
+      return []
+    }).catch(() => []),  // Return empty array if no role bound (204 No Content)
+
+  // 绑定角色到虚拟组（会替换现有绑定）
+  bindRole: (groupId: string, roleId: string) =>
+    post<void>(`/virtual-groups/${groupId}/role`, { roleId }),
+
+  // 解绑角色
+  unbindRole: (groupId: string, _roleId: string) =>
+    del<void>(`/virtual-groups/${groupId}/role`),
+
+  // ==================== 审批人 API ====================
+
+  // 获取虚拟组审批人
+  getApprovers: (groupId: string) =>
+    get<Approver[]>(`/approvers/virtual-groups/${groupId}`),
+
+  // 添加审批人
+  addApprover: (groupId: string, userId: string) =>
+    post<void>('/approvers', { targetType: 'VIRTUAL_GROUP', targetId: groupId, userId }),
+
+  // 移除审批人
+  removeApprover: (approverId: string) =>
+    del<void>(`/approvers/${approverId}`)
 }

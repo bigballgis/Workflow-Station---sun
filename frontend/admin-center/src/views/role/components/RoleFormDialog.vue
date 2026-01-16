@@ -7,6 +7,18 @@
       <el-form-item :label="t('role.roleCode')" prop="code">
         <el-input v-model="form.code" :disabled="isEdit" />
       </el-form-item>
+      <el-form-item :label="t('role.roleType')" prop="type">
+        <el-select v-model="form.type" :placeholder="t('role.selectRoleType')" style="width: 100%">
+          <el-option :label="t('role.buBounded')" value="BU_BOUNDED">
+            <span>{{ t('role.buBounded') }}</span>
+            <span style="color: #909399; font-size: 12px; margin-left: 8px;">{{ t('role.buBoundedDesc') }}</span>
+          </el-option>
+          <el-option :label="t('role.buUnbounded')" value="BU_UNBOUNDED">
+            <span>{{ t('role.buUnbounded') }}</span>
+            <span style="color: #909399; font-size: 12px; margin-left: 8px;">{{ t('role.buUnboundedDesc') }}</span>
+          </el-option>
+        </el-select>
+      </el-form-item>
       <el-form-item :label="t('role.description')">
         <el-input v-model="form.description" type="textarea" :rows="3" />
       </el-form-item>
@@ -35,18 +47,24 @@ const formRef = ref<FormInstance>()
 const loading = ref(false)
 const isEdit = computed(() => !!props.role)
 
-const form = reactive({ name: '', code: '', description: '' })
+const form = reactive({ name: '', code: '', type: 'BU_BOUNDED', description: '' })
 
-const rules = {
-  name: [{ required: true, message: '请输入角色名称', trigger: 'blur' }],
-  code: [{ required: true, message: '请输入角色编码', trigger: 'blur' }]
-}
+const rules = computed(() => ({
+  name: [{ required: true, message: t('common.inputPlaceholder'), trigger: 'blur' }],
+  code: [{ required: true, message: t('common.inputPlaceholder'), trigger: 'blur' }],
+  type: [{ required: true, message: t('role.selectRoleType'), trigger: 'change' }]
+}))
 
 watch(() => props.modelValue, (val) => {
   if (val && props.role) {
-    Object.assign(form, { name: props.role.name, code: props.role.code, description: props.role.description || '' })
+    Object.assign(form, { 
+      name: props.role.name, 
+      code: props.role.code, 
+      type: props.role.type || 'BU_BOUNDED',
+      description: props.role.description || '' 
+    })
   } else if (val) {
-    Object.assign(form, { name: '', code: '', description: '' })
+    Object.assign(form, { name: '', code: '', type: 'BU_BOUNDED', description: '' })
   }
 })
 
@@ -57,10 +75,9 @@ const handleSubmit = async () => {
   loading.value = true
   try {
     if (isEdit.value) {
-      await roleStore.updateRole(props.role!.id, { name: form.name, description: form.description })
+      await roleStore.updateRole(props.role!.id, { name: form.name, type: form.type, description: form.description })
     } else {
-      // 管理员只能创建业务角色
-      await roleStore.createRole({ ...form, type: 'BUSINESS' })
+      await roleStore.createRole({ ...form })
     }
     ElMessage.success(t('common.success'))
     emit('update:modelValue', false)

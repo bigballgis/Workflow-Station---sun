@@ -34,46 +34,46 @@ public class DataInitializer {
             
             // Admin Center users (password: admin123)
             createUserIfNotExists("super_admin", "admin123", "超级管理员", "super_admin@example.com", 
-                    "DEPT-IT", Set.of("SUPER_ADMIN"));
+                    Set.of("SUPER_ADMIN"));
             createUserIfNotExists("system_admin", "admin123", "系统管理员", "system_admin@example.com", 
-                    "DEPT-IT", Set.of("SYSTEM_ADMIN"));
+                    Set.of("SYSTEM_ADMIN"));
             createUserIfNotExists("tenant_admin", "admin123", "租户管理员", "tenant_admin@example.com", 
-                    "DEPT-IT", Set.of("TENANT_ADMIN"));
+                    Set.of("TENANT_ADMIN"));
             createUserIfNotExists("auditor", "admin123", "审计员", "auditor@example.com", 
-                    "DEPT-COMPLIANCE", Set.of("AUDITOR"));
+                    Set.of("AUDITOR"));
 
             // Developer Workstation users (password: dev123)
             createUserIfNotExists("dev_lead", "dev123", "开发组长", "dev_lead@example.com", 
-                    "DEPT-IT", Set.of("DEV_LEAD", "DEVELOPER"));
+                    Set.of("DEV_LEAD", "DEVELOPER"));
             createUserIfNotExists("senior_dev", "dev123", "高级开发", "senior_dev@example.com", 
-                    "DEPT-IT", Set.of("DEVELOPER"));
+                    Set.of("DEVELOPER"));
             createUserIfNotExists("developer", "dev123", "开发人员", "developer@example.com", 
-                    "DEPT-IT", Set.of("DEVELOPER"));
+                    Set.of("DEVELOPER"));
             createUserIfNotExists("designer", "dev123", "流程设计师", "designer@example.com", 
-                    "DEPT-IT", Set.of("DESIGNER"));
+                    Set.of("DESIGNER"));
             createUserIfNotExists("tester", "dev123", "测试人员", "tester@example.com", 
-                    "DEPT-IT", Set.of("TESTER"));
+                    Set.of("TESTER"));
 
             // User Portal users (password: user123)
             createUserIfNotExists("manager", "user123", "部门经理", "manager@example.com", 
-                    "DEPT-OPERATIONS", Set.of("MANAGER", "USER"));
+                    Set.of("MANAGER", "USER"));
             createUserIfNotExists("team_lead", "user123", "团队主管", "team_lead@example.com", 
-                    "DEPT-OPERATIONS", Set.of("TEAM_LEAD", "USER"));
+                    Set.of("TEAM_LEAD", "USER"));
             createUserIfNotExists("employee_a", "user123", "员工张三", "employee_a@example.com", 
-                    "DEPT-OPERATIONS", Set.of("USER"));
+                    Set.of("USER"));
             createUserIfNotExists("employee_b", "user123", "员工李四", "employee_b@example.com", 
-                    "DEPT-OPERATIONS", Set.of("USER"));
+                    Set.of("USER"));
             createUserIfNotExists("hr_staff", "user123", "HR专员", "hr_staff@example.com", 
-                    "DEPT-HQ", Set.of("HR", "USER"));
+                    Set.of("HR", "USER"));
             createUserIfNotExists("finance", "user123", "财务人员", "finance@example.com", 
-                    "DEPT-TREASURY", Set.of("FINANCE", "USER"));
+                    Set.of("FINANCE", "USER"));
 
             log.info("Test users initialization completed. Total users: {}", userRepository.count());
         };
     }
 
     private void createUserIfNotExists(String username, String password, String displayName, 
-                                        String email, String departmentId, Set<String> roles) {
+                                        String email, Set<String> roles) {
         if (!userRepository.existsByUsername(username)) {
             User user = User.builder()
                     .id(UUID.randomUUID().toString())
@@ -82,7 +82,6 @@ public class DataInitializer {
                     .displayName(displayName)
                     .fullName(displayName)
                     .email(email)
-                    .departmentId(departmentId)
                     .status(UserStatus.ACTIVE)
                     .language("zh_CN")
                     // Don't set roles here - the sys_user_roles table has a different structure

@@ -355,7 +355,7 @@ public class PermissionCheckConsistencyProperties {
                     .id(roleId)
                     .name("Role " + roleCode)
                     .code("ROLE_" + roleCode.toUpperCase())
-                    .type(RoleType.BUSINESS)
+                    .type(RoleType.BU_BOUNDED)
                     .status("ACTIVE")
                     .build();
             
@@ -442,7 +442,7 @@ public class PermissionCheckConsistencyProperties {
                                                     .id(roleId)
                                                     .name("Role " + index + " " + roleCode)
                                                     .code("ROLE_" + index + "_" + roleCode.toUpperCase())
-                                                    .type(RoleType.BUSINESS)
+                                                    .type(RoleType.BU_BOUNDED)
                                                     .status("ACTIVE")
                                                     .build();
                                             Set<Permission> permissions = generatePermissions("role" + index, permCount);

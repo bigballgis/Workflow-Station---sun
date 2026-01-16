@@ -51,7 +51,12 @@
             </template>
             <template #default>
               <div v-if="allProcesses.length === 0" class="empty-state">
-                <el-empty description="暂无可发起的流程" />
+                <el-empty :description="t('process.noAccessibleProcesses')">
+                  <template #image>
+                    <el-icon :size="60" color="#909399"><Lock /></el-icon>
+                  </template>
+                  <el-text type="info" size="small">{{ t('process.contactAdminForAccess') }}</el-text>
+                </el-empty>
               </div>
               <div v-else class="process-grid">
                 <div
@@ -83,7 +88,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
-import { Document, Search, Calendar, Money, ShoppingCart, Location, Clock, Files, Star, Tickets } from '@element-plus/icons-vue'
+import { Document, Search, Calendar, Money, ShoppingCart, Location, Clock, Files, Star, Tickets, Lock } from '@element-plus/icons-vue'
 import { processApi, type ProcessDefinition } from '@/api/process'
 
 const { t } = useI18n()

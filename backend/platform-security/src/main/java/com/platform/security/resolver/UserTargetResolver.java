@@ -45,19 +45,15 @@ public class UserTargetResolver implements TargetResolver {
     public List<ResolvedUser> resolveUsers(String targetId) {
         try {
             return jdbcTemplate.query(
-                "SELECT u.id, u.username, u.display_name, u.full_name, u.employee_id, u.department_id, u.email, " +
-                "d.name as department_name " +
-                "FROM sys_users u " +
-                "LEFT JOIN sys_departments d ON u.department_id = d.id " +
-                "WHERE u.id = ? AND u.deleted = false AND u.status = 'ACTIVE'",
+                "SELECT id, username, display_name, full_name, employee_id, email " +
+                "FROM sys_users " +
+                "WHERE id = ? AND deleted = false AND status = 'ACTIVE'",
                 (rs, rowNum) -> ResolvedUser.builder()
                     .userId(rs.getString("id"))
                     .username(rs.getString("username"))
                     .displayName(rs.getString("display_name") != null ? 
                         rs.getString("display_name") : rs.getString("full_name"))
                     .employeeId(rs.getString("employee_id"))
-                    .departmentId(rs.getString("department_id"))
-                    .departmentName(rs.getString("department_name"))
                     .email(rs.getString("email"))
                     .build(),
                 targetId

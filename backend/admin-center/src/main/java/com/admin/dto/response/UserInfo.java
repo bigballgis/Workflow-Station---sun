@@ -24,8 +24,8 @@ public class UserInfo {
     private String displayName;
     private String fullName;
     private String employeeId;
-    private String departmentId;
-    private String departmentName;
+    private String businessUnitId;
+    private String businessUnitName;
     private String position;
     private String entityManagerId;
     private String entityManagerName;
@@ -43,7 +43,7 @@ public class UserInfo {
                 .displayName(user.getDisplayName())
                 .fullName(user.getFullName())
                 .employeeId(user.getEmployeeId())
-                .departmentId(user.getDepartmentId())
+                .businessUnitId(user.getBusinessUnitId())
                 .position(user.getPosition())
                 .entityManagerId(user.getEntityManagerId() != null ? user.getEntityManagerId().toString() : null)
                 .functionManagerId(user.getFunctionManagerId() != null ? user.getFunctionManagerId().toString() : null)

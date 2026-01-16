@@ -8,6 +8,7 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     ActionButtons: typeof import('./components/ActionButtons.vue')['default']
+    BuBoundedRoleReminder: typeof import('./components/BuBoundedRoleReminder.vue')['default']
     CalendarWidget: typeof import('./components/widgets/CalendarWidget.vue')['default']
     DraggableDashboard: typeof import('./components/DraggableDashboard.vue')['default']
     ElAlert: typeof import('element-plus/es')['ElAlert']
@@ -60,12 +61,11 @@ declare module 'vue' {
     ElTabPane: typeof import('element-plus/es')['ElTabPane']
     ElTabs: typeof import('element-plus/es')['ElTabs']
     ElTag: typeof import('element-plus/es')['ElTag']
+    ElText: typeof import('element-plus/es')['ElText']
     ElTimeline: typeof import('element-plus/es')['ElTimeline']
     ElTimelineItem: typeof import('element-plus/es')['ElTimelineItem']
     ElTimePicker: typeof import('element-plus/es')['ElTimePicker']
-    ElTree: typeof import('element-plus/es')['ElTree']
     ElTreeSelect: typeof import('element-plus/es')['ElTreeSelect']
-    ElUpload: typeof import('element-plus/es')['ElUpload']
     FileUploader: typeof import('./components/FileUploader.vue')['default']
     FormRenderer: typeof import('./components/FormRenderer.vue')['default']
     NotificationsWidget: typeof import('./components/widgets/NotificationsWidget.vue')['default']
@@ -77,6 +77,7 @@ declare module 'vue' {
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     TaskOverviewWidget: typeof import('./components/widgets/TaskOverviewWidget.vue')['default']
+    UserProfileDropdown: typeof import('./components/UserProfileDropdown.vue')['default']
   }
   export interface ComponentCustomProperties {
     vLoading: typeof import('element-plus/es')['ElLoadingDirective']

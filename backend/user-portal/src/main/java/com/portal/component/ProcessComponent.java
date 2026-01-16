@@ -81,17 +81,10 @@ public class ProcessComponent {
             log.warn("Failed to fetch deployed function units from admin center: {}", e.getMessage(), e);
         }
         
-        // 如果没有从管理员中心获取到数据，使用模拟数据
+        // 如果没有可访问的流程，返回空列表（不再使用模拟数据）
+        // 前端会显示"暂无可发起的流程"提示
         if (definitions.isEmpty()) {
-            definitions.add(ProcessDefinitionInfo.builder()
-                    .id("def-1").key("leave-request").name("请假申请")
-                    .description("员工请假申请流程").category("人事").version(1).build());
-            definitions.add(ProcessDefinitionInfo.builder()
-                    .id("def-2").key("expense-claim").name("费用报销")
-                    .description("费用报销申请流程").category("财务").version(1).build());
-            definitions.add(ProcessDefinitionInfo.builder()
-                    .id("def-3").key("purchase-request").name("采购申请")
-                    .description("物资采购申请流程").category("采购").version(1).build());
+            log.info("No accessible process definitions found for user: {}", userId);
         }
 
         // 过滤

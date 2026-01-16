@@ -189,7 +189,7 @@ public class UserImportServiceImpl implements UserImportService {
                     .email(getCellStringValue(row.getCell(1)))
                     .fullName(getCellStringValue(row.getCell(2)))
                     .employeeId(getCellStringValue(row.getCell(3)))
-                    .departmentId(getCellStringValue(row.getCell(4)))
+                    .businessUnitId(getCellStringValue(row.getCell(4)))
                     .position(getCellStringValue(row.getCell(5)))
                     .initialPassword(getCellStringValue(row.getCell(6)))
                     .build();
@@ -208,7 +208,7 @@ public class UserImportServiceImpl implements UserImportService {
                     .email(row[1].trim())
                     .fullName(row[2].trim())
                     .employeeId(row.length > 3 ? row[3].trim() : null)
-                    .departmentId(row.length > 4 ? row[4].trim() : null)
+                    .businessUnitId(row.length > 4 ? row[4].trim() : null)
                     .position(row.length > 5 ? row[5].trim() : null)
                     .initialPassword(row[6].trim())
                     .build();
@@ -244,7 +244,7 @@ public class UserImportServiceImpl implements UserImportService {
             
             // 创建标题行
             Row headerRow = sheet.createRow(0);
-            String[] headers = {"用户名*", "邮箱*", "姓名*", "工号", "部门ID", "职位", "初始密码*"};
+            String[] headers = {"用户名*", "邮箱*", "姓名*", "工号", "业务单元ID", "职位", "初始密码*"};
             
             for (int i = 0; i < headers.length; i++) {
                 Cell cell = headerRow.createCell(i);

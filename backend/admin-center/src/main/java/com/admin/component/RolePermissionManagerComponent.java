@@ -243,10 +243,14 @@ public class RolePermissionManagerComponent {
     }
     
     /**
-     * 获取所有业务角色
+     * 获取所有业务角色（BU_BOUNDED 和 BU_UNBOUNDED）
      */
     public List<Role> getBusinessRoles() {
-        return roleRepository.findByType(RoleType.BUSINESS);
+        List<Role> buBounded = roleRepository.findByType(RoleType.BU_BOUNDED);
+        List<Role> buUnbounded = roleRepository.findByType(RoleType.BU_UNBOUNDED);
+        List<Role> result = new java.util.ArrayList<>(buBounded);
+        result.addAll(buUnbounded);
+        return result;
     }
     
     /**

@@ -57,14 +57,14 @@ const statsCards = computed(() => {
   if (!stats.value) {
     return [
       { title: '用户总数', value: '-', icon: 'User', color: '#409EFF' },
-      { title: '部门数量', value: '-', icon: 'OfficeBuilding', color: '#67C23A' },
+      { title: '业务单元数量', value: '-', icon: 'OfficeBuilding', color: '#67C23A' },
       { title: '角色数量', value: '-', icon: 'Key', color: '#E6A23C' },
       { title: '在线用户', value: '-', icon: 'Connection', color: '#F56C6C' }
     ]
   }
   return [
     { title: '用户总数', value: stats.value.totalUsers.toLocaleString(), icon: 'User', color: '#409EFF' },
-    { title: '部门数量', value: stats.value.totalDepartments.toLocaleString(), icon: 'OfficeBuilding', color: '#67C23A' },
+    { title: '业务单元数量', value: stats.value.totalBusinessUnits.toLocaleString(), icon: 'OfficeBuilding', color: '#67C23A' },
     { title: '角色数量', value: stats.value.totalRoles.toLocaleString(), icon: 'Key', color: '#E6A23C' },
     { title: '在线用户', value: stats.value.onlineUsers.toLocaleString(), icon: 'Connection', color: '#F56C6C' }
   ]

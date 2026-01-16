@@ -45,11 +45,9 @@ public class VirtualGroupTargetResolver implements TargetResolver {
     public List<ResolvedUser> resolveUsers(String targetId) {
         try {
             return jdbcTemplate.query(
-                "SELECT u.id, u.username, u.display_name, u.full_name, u.employee_id, u.department_id, u.email, " +
-                "d.name as department_name " +
+                "SELECT u.id, u.username, u.display_name, u.full_name, u.employee_id, u.email " +
                 "FROM sys_virtual_group_members vgm " +
                 "JOIN sys_users u ON vgm.user_id = u.id " +
-                "LEFT JOIN sys_departments d ON u.department_id = d.id " +
                 "WHERE vgm.group_id = ? " +
                 "AND u.deleted = false AND u.status = 'ACTIVE'",
                 (rs, rowNum) -> ResolvedUser.builder()
@@ -58,8 +56,6 @@ public class VirtualGroupTargetResolver implements TargetResolver {
                     .displayName(rs.getString("display_name") != null ? 
                         rs.getString("display_name") : rs.getString("full_name"))
                     .employeeId(rs.getString("employee_id"))
-                    .departmentId(rs.getString("department_id"))
-                    .departmentName(rs.getString("department_name"))
                     .email(rs.getString("email"))
                     .build(),
                 targetId

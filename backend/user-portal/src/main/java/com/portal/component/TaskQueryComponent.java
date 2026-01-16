@@ -67,17 +67,16 @@ public class TaskQueryComponent {
 
         // 1. 从 Flowable 获取任务
         try {
-            // 获取用户所属的虚拟组和部门角色
+            // 获取用户所属的虚拟组
             List<String> groupIds = getUserVirtualGroups(userId);
-            List<String> deptRoles = getUserDeptRoles(userId);
             
             // 根据分配类型筛选决定查询方式
             boolean includeGroups = assignmentTypes == null || assignmentTypes.isEmpty() 
-                || assignmentTypes.contains("VIRTUAL_GROUP") || assignmentTypes.contains("DEPT_ROLE");
+                || assignmentTypes.contains("VIRTUAL_GROUP");
             
             Optional<Map<String, Object>> result;
             if (includeGroups) {
-                result = workflowEngineClient.getUserAllVisibleTasks(userId, groupIds, deptRoles, 0, 1000);
+                result = workflowEngineClient.getUserAllVisibleTasks(userId, groupIds, Collections.emptyList(), 0, 1000);
             } else {
                 result = workflowEngineClient.getUserTasks(userId, 0, 1000);
             }
@@ -162,13 +161,16 @@ public class TaskQueryComponent {
             currentAssigneeName = currentAssignee;
         }
         
-        // 确定分配类型：如果有 currentAssignee，则为 USER 类型（包括认领后的任务）
+        // 确定分配类型：优先使用返回的 assignmentType，如果没有则根据 currentAssignee 判断
         String assignmentType = taskMap.get("assignmentType") != null ? taskMap.get("assignmentType").toString() : null;
-        if (currentAssignee != null && !currentAssignee.isEmpty()) {
-            // 有处理人的任务，分配类型应该是 USER
-            assignmentType = "USER";
-        } else if (assignmentType == null) {
-            assignmentType = "VIRTUAL_GROUP";
+        if (assignmentType == null || assignmentType.isEmpty()) {
+            if (currentAssignee != null && !currentAssignee.isEmpty()) {
+                // 有处理人但没有指定分配类型，默认为 USER
+                assignmentType = "USER";
+            } else {
+                // 没有处理人也没有分配类型，默认为 VIRTUAL_GROUP
+                assignmentType = "VIRTUAL_GROUP";
+            }
         }
         
         return TaskInfo.builder()
@@ -429,27 +431,7 @@ public class TaskQueryComponent {
         return Collections.emptyList();
     }
 
-    /**
-     * 获取用户的部门角色
-     * 通过 workflow-engine-core 调用 admin-center 获取
-     */
-    @SuppressWarnings("unchecked")
-    private List<String> getUserDeptRoles(String userId) {
-        try {
-            Optional<Map<String, Object>> result = workflowEngineClient.getUserTaskPermissions(userId);
-            if (result.isPresent()) {
-                Map<String, Object> data = result.get();
-                List<String> deptRoles = (List<String>) data.get("departmentRoles");
-                if (deptRoles != null && !deptRoles.isEmpty()) {
-                    return deptRoles;
-                }
-            }
-        } catch (Exception e) {
-            log.warn("Failed to get user department roles from workflow engine: {}", e.getMessage());
-        }
-        // 返回空列表，不使用模拟数据
-        return Collections.emptyList();
-    }
+
 
     /**
      * 获取任务统计信息
@@ -593,5 +575,76 @@ public class TaskQueryComponent {
         }
         
         return history;
+    }
+    
+    /**
+     * 查询用户已处理的任务列表
+     */
+    @SuppressWarnings("unchecked")
+    public PageResponse<TaskInfo> queryCompletedTasks(TaskQueryRequest request) {
+        // 检查 Flowable 引擎是否可用
+        if (!workflowEngineClient.isAvailable()) {
+            throw new IllegalStateException("Flowable 引擎不可用，请检查 workflow-engine-core 服务是否启动");
+        }
+        
+        String userId = request.getUserId();
+        int page = request.getPage() != null ? request.getPage() : 0;
+        int size = request.getSize() != null ? request.getSize() : 20;
+        String keyword = request.getKeyword();
+        String startTime = request.getStartTime() != null ? request.getStartTime().toString() : null;
+        String endTime = request.getEndTime() != null ? request.getEndTime().toString() : null;
+        
+        try {
+            Optional<Map<String, Object>> result = workflowEngineClient.getCompletedTasks(
+                userId, page, size, keyword, startTime, endTime);
+            
+            if (result.isPresent()) {
+                Map<String, Object> data = result.get();
+                List<Map<String, Object>> content = (List<Map<String, Object>>) data.get("content");
+                long totalElements = data.get("totalElements") != null 
+                    ? ((Number) data.get("totalElements")).longValue() : 0;
+                
+                List<TaskInfo> tasks = new ArrayList<>();
+                if (content != null) {
+                    for (Map<String, Object> taskMap : content) {
+                        tasks.add(convertCompletedTaskToTaskInfo(taskMap));
+                    }
+                }
+                
+                return PageResponse.of(tasks, page, size, totalElements);
+            }
+        } catch (Exception e) {
+            log.error("Failed to query completed tasks from Flowable: {}", e.getMessage(), e);
+            throw new IllegalStateException("查询已处理任务失败: " + e.getMessage(), e);
+        }
+        
+        return PageResponse.of(Collections.emptyList(), page, size, 0);
+    }
+    
+    /**
+     * 将已完成任务的 Map 转换为 TaskInfo
+     */
+    private TaskInfo convertCompletedTaskToTaskInfo(Map<String, Object> taskMap) {
+        String processDefinitionKey = (String) taskMap.get("processDefinitionKey");
+        String processDefinitionName = (String) taskMap.get("processDefinitionName");
+        if (processDefinitionName == null || processDefinitionName.isEmpty()) {
+            processDefinitionName = processDefinitionKey;
+        }
+        
+        return TaskInfo.builder()
+                .taskId((String) taskMap.get("taskId"))
+                .taskName((String) taskMap.get("taskName"))
+                .description((String) taskMap.get("taskDescription"))
+                .processInstanceId((String) taskMap.get("processInstanceId"))
+                .processDefinitionKey(processDefinitionKey)
+                .processDefinitionName(processDefinitionName)
+                .assignee((String) taskMap.get("assignee"))
+                .status("COMPLETED")
+                .createTime(parseDateTime(taskMap.get("startTime")))
+                .completedTime(parseDateTime(taskMap.get("endTime")))
+                .durationInMillis(taskMap.get("durationInMillis") != null 
+                    ? ((Number) taskMap.get("durationInMillis")).longValue() : null)
+                .action((String) taskMap.get("action"))
+                .build();
     }
 }

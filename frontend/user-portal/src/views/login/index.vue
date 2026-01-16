@@ -110,14 +110,18 @@ const loading = ref(false)
 // 开发环境检测
 const isDev = import.meta.env.DEV
 
-// 测试用户数据 (仅开发环境使用) - HR和公司银行部门员工
+// 测试用户数据 (仅开发环境使用) - 采购流程测试用户
 const testUsers = [
-  { username: 'hr.manager', password: 'admin123', name: 'Sarah Chen', role: 'HR Manager', tagType: 'danger' as const },
-  { username: 'corp.director', password: 'admin123', name: 'James Zhang', role: 'Corp Bank Director', tagType: 'danger' as const },
-  { username: 'corp.manager', password: 'admin123', name: 'Linda Li', role: 'Corp Bank Manager', tagType: 'warning' as const },
-  { username: 'hr.specialist', password: 'admin123', name: 'Michael Wang', role: 'HR Specialist', tagType: 'warning' as const },
-  { username: 'corp.analyst', password: 'admin123', name: 'David Wu', role: 'Business Analyst', tagType: 'success' as const },
-  { username: 'corp.officer', password: 'admin123', name: 'Amy Zhao', role: 'Account Manager', tagType: 'success' as const },
+  // Purchase Workflow Test Users
+  { username: 'purchase.requester', password: 'admin123', name: 'Tom Wilson', role: 'Initiator (IT-DEV)', tagType: 'primary' as const },
+  { username: 'dept.reviewer', password: 'admin123', name: 'Alice Johnson', role: 'Dept Reviewer (IT-DEV)', tagType: 'success' as const },
+  { username: 'parent.reviewer', password: 'admin123', name: 'Bob Smith', role: 'Senior Approver (IT)', tagType: 'warning' as const },
+  { username: 'finance.reviewer', password: 'admin123', name: 'Carol Davis', role: 'Finance Reviewer', tagType: 'danger' as const },
+  { username: 'countersign.approver1', password: 'admin123', name: 'Daniel Brown', role: 'Countersign Approver', tagType: 'info' as const },
+  { username: 'countersign.approver2', password: 'admin123', name: 'Eva Martinez', role: 'Countersign Approver', tagType: 'info' as const },
+  // Existing Manager Users
+  { username: 'core.lead', password: 'admin123', name: 'Kevin Huang', role: 'Entity Manager', tagType: 'warning' as const },
+  { username: 'tech.director', password: 'admin123', name: 'Robert Sun', role: 'Function Manager', tagType: 'danger' as const },
 ]
 
 const selectedTestUser = ref('')

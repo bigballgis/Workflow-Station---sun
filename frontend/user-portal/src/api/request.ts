@@ -33,9 +33,21 @@ service.interceptors.request.use(
       config.headers['Authorization'] = `Bearer ${token}`
     }
     
-    // 添加用户ID头
-    const userId = localStorage.getItem('userId') || 'user_1'
-    config.headers['X-User-Id'] = userId
+    // 添加用户ID头 - 从存储的用户对象中获取
+    let userId = localStorage.getItem('userId')
+    if (!userId) {
+      // 尝试从 user 对象中获取
+      const userStr = localStorage.getItem('user')
+      if (userStr) {
+        try {
+          const user = JSON.parse(userStr)
+          userId = user.userId || user.id
+        } catch (e) {
+          console.error('Failed to parse user from localStorage:', e)
+        }
+      }
+    }
+    config.headers['X-User-Id'] = userId || 'user_1'
     
     return config
   },

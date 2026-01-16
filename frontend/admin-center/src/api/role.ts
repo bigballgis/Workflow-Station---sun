@@ -1,7 +1,7 @@
 import { get, post, put, del } from './request'
 
 /** 角色类型 */
-export type RoleType = 'BUSINESS' | 'ADMIN' | 'DEVELOPER'
+export type RoleType = 'BU_BOUNDED' | 'BU_UNBOUNDED' | 'BUSINESS' | 'ADMIN' | 'DEVELOPER'
 
 export interface Role {
   id: string

@@ -18,6 +18,14 @@ import java.util.stream.Collectors;
 /**
  * 用户角色服务实现
  * 统一计算用户的有效角色，供三个前端后端使用
+ * 
+ * Note: Department-based role assignment has been removed.
+ * Roles are now assigned through:
+ * 1. Direct user assignment (USER type)
+ * 2. Virtual group membership (VIRTUAL_GROUP type)
+ * 
+ * For workflow task assignment, use the AssigneeType enum in workflow-engine-core
+ * which supports BusinessUnit-based role resolution.
  */
 @Slf4j
 @Service
@@ -41,28 +49,7 @@ public class UserRoleServiceImpl implements UserRoleService {
             addRoleFromAssignment(roleMap, assignment, AssignmentTargetType.USER, userId, "直接分配");
         }
         
-        // 2. 查询用户所在部门被分配的角色 (DEPARTMENT类型)
-        String departmentId = getUserDepartmentId(userId);
-        if (departmentId != null) {
-            List<RoleAssignment> deptAssignments = roleAssignmentRepository.findValidDepartmentAssignments(departmentId);
-            String deptName = getDepartmentName(departmentId);
-            for (RoleAssignment assignment : deptAssignments) {
-                addRoleFromAssignment(roleMap, assignment, AssignmentTargetType.DEPARTMENT, departmentId, deptName);
-            }
-        }
-        
-        // 3. 查询用户所在部门的祖先部门被分配的角色 (DEPARTMENT_HIERARCHY类型)
-        List<String> ancestorDeptIds = getAncestorDepartmentIds(userId);
-        if (!ancestorDeptIds.isEmpty()) {
-            List<RoleAssignment> hierarchyAssignments = roleAssignmentRepository.findValidDepartmentHierarchyAssignments(ancestorDeptIds);
-            for (RoleAssignment assignment : hierarchyAssignments) {
-                String deptName = getDepartmentName(assignment.getTargetId()) + " (及下级)";
-                addRoleFromAssignment(roleMap, assignment, AssignmentTargetType.DEPARTMENT_HIERARCHY, 
-                        assignment.getTargetId(), deptName);
-            }
-        }
-        
-        // 4. 查询用户所属虚拟组被分配的角色 (VIRTUAL_GROUP类型)
+        // 2. 查询用户所属虚拟组被分配的角色 (VIRTUAL_GROUP类型)
         List<String> groupIds = getUserVirtualGroupIds(userId);
         if (!groupIds.isEmpty()) {
             List<RoleAssignment> groupAssignments = roleAssignmentRepository.findValidVirtualGroupAssignments(groupIds);
@@ -167,116 +154,6 @@ public class UserRoleServiceImpl implements UserRoleService {
         } catch (Exception e) {
             log.warn("Failed to get role info: {}", roleId, e);
             return null;
-        }
-    }
-    
-    /**
-     * 获取用户显示名
-     */
-    private String getUserDisplayName(String userId) {
-        try {
-            return jdbcTemplate.queryForObject(
-                "SELECT COALESCE(display_name, full_name, username) FROM sys_users WHERE id = ?",
-                String.class,
-                userId
-            );
-        } catch (Exception e) {
-            return userId;
-        }
-    }
-    
-    /**
-     * 获取用户所在部门ID
-     */
-    private String getUserDepartmentId(String userId) {
-        try {
-            return jdbcTemplate.queryForObject(
-                "SELECT department_id FROM sys_users WHERE id = ? AND deleted = false",
-                String.class,
-                userId
-            );
-        } catch (Exception e) {
-            return null;
-        }
-    }
-    
-    /**
-     * 获取部门名称
-     */
-    private String getDepartmentName(String departmentId) {
-        try {
-            return jdbcTemplate.queryForObject(
-                "SELECT name FROM sys_departments WHERE id = ?",
-                String.class,
-                departmentId
-            );
-        } catch (Exception e) {
-            return departmentId;
-        }
-    }
-    
-    /**
-     * 获取用户所在部门的所有祖先部门ID（包括自己）
-     */
-    private List<String> getAncestorDepartmentIds(String userId) {
-        try {
-            // 先检查用户是否有部门
-            String departmentId = getUserDepartmentId(userId);
-            if (departmentId == null) {
-                return Collections.emptyList();
-            }
-            
-            // 获取用户所在部门的path
-            String path = null;
-            try {
-                path = jdbcTemplate.queryForObject(
-                    "SELECT path FROM sys_departments WHERE id = ?",
-                    String.class,
-                    departmentId
-                );
-            } catch (Exception e) {
-                return Collections.emptyList();
-            }
-            
-            if (path == null || path.isEmpty()) {
-                return Collections.emptyList();
-            }
-            
-            // 从path中提取所有祖先部门ID
-            // path格式: /root/parent/current
-            List<String> ancestorIds = new ArrayList<>();
-            String[] parts = path.split("/");
-            StringBuilder currentPath = new StringBuilder();
-            
-            for (String part : parts) {
-                if (part.isEmpty()) continue;
-                currentPath.append("/").append(part);
-                
-                // 根据path查找部门ID
-                try {
-                    String deptId = jdbcTemplate.queryForObject(
-                        "SELECT id FROM sys_departments WHERE path = ?",
-                        String.class,
-                        currentPath.toString()
-                    );
-                    if (deptId != null) {
-                        ancestorIds.add(deptId);
-                    }
-                } catch (Exception ignored) {
-                    // 部门可能不存在
-                }
-            }
-            
-            // 也添加用户直接所在的部门
-            String userDeptId = getUserDepartmentId(userId);
-            if (userDeptId != null && !ancestorIds.contains(userDeptId)) {
-                ancestorIds.add(userDeptId);
-            }
-            
-            return ancestorIds;
-        } catch (Exception e) {
-            log.warn("Failed to get ancestor department IDs for user: {}", userId, e);
-            return Collections.emptyList();
         }
     }
     

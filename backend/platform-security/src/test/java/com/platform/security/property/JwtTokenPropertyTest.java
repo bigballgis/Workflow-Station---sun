@@ -38,7 +38,7 @@ class JwtTokenPropertyTest {
     /**
      * Property 2: Token Content Completeness
      * For any successfully authenticated user, the generated access_token SHALL contain
-     * all required claims (user_id, username, roles, permissions, department_id, language)
+     * all required claims (user_id, username, roles, permissions, language)
      * and the token expiration SHALL be set to the configured duration.
      * Validates: Requirements 2.6, 2.7, 2.8
      */
@@ -48,12 +48,11 @@ class JwtTokenPropertyTest {
             @ForAll @CharRange(from = 'a', to = 'z') @StringLength(min = 1, max = 50) String username,
             @ForAll List<@CharRange(from = 'a', to = 'z') @StringLength(min = 1, max = 20) String> roles,
             @ForAll List<@CharRange(from = 'a', to = 'z') @StringLength(min = 1, max = 30) String> permissions,
-            @ForAll @CharRange(from = 'a', to = 'z') @StringLength(min = 1, max = 36) String departmentId,
             @ForAll("languages") String language
     ) {
         // Generate token
         String token = jwtTokenService.generateToken(
-                userId, username, roles, permissions, departmentId, language
+                userId, username, roles, permissions, language
         );
         
         // Token should be valid
@@ -66,12 +65,10 @@ class JwtTokenPropertyTest {
         assert extracted.getUsername() != null || username == null : "Token should contain username";
         assert extracted.getRoles() != null : "Token should contain roles";
         assert extracted.getPermissions() != null : "Token should contain permissions";
-        // departmentId and language can be null
         
         // Verify values match
         assert userId.equals(extracted.getUserId()) : "User ID should match";
         assert username.equals(extracted.getUsername()) : "Username should match";
-        assert departmentId.equals(extracted.getDepartmentId()) : "Department ID should match";
         assert language.equals(extracted.getLanguage()) : "Language should match";
     }
     
@@ -85,7 +82,7 @@ class JwtTokenPropertyTest {
             @ForAll @CharRange(from = 'a', to = 'z') @StringLength(min = 1, max = 36) String userId
     ) {
         String token = jwtTokenService.generateToken(
-                userId, "testuser", List.of(), List.of(), null, "en"
+                userId, "testuser", List.of(), List.of(), "en"
         );
         
         long expirationTime = jwtTokenService.getExpirationTime(token);
@@ -128,7 +125,7 @@ class JwtTokenPropertyTest {
             @ForAll @CharRange(from = 'a', to = 'z') @StringLength(min = 1, max = 36) String userId
     ) {
         String token = jwtTokenService.generateToken(
-                userId, "testuser", List.of(), List.of(), null, "en"
+                userId, "testuser", List.of(), List.of(), "en"
         );
         
         String extractedUserId = jwtTokenService.extractUserId(token);
@@ -146,7 +143,7 @@ class JwtTokenPropertyTest {
             @ForAll @CharRange(from = 'a', to = 'z') @StringLength(min = 1, max = 36) String userId
     ) {
         String token = jwtTokenService.generateToken(
-                userId, "testuser", List.of(), List.of(), null, "en"
+                userId, "testuser", List.of(), List.of(), "en"
         );
         
         assert !jwtTokenService.isTokenExpired(token) : 
@@ -162,7 +159,7 @@ class JwtTokenPropertyTest {
             @ForAll @CharRange(from = 'a', to = 'z') @StringLength(min = 1, max = 36) String userId
     ) {
         String token = jwtTokenService.generateToken(
-                userId, "testuser", List.of(), List.of(), null, "en"
+                userId, "testuser", List.of(), List.of(), "en"
         );
         
         long remainingSeconds = jwtTokenService.getRemainingValiditySeconds(token);
@@ -218,13 +215,12 @@ class JwtTokenPropertyTest {
                 .username(username)
                 .roles(List.of("USER"))
                 .permissions(List.of("READ"))
-                .departmentId("dept1")
                 .language(language)
                 .build();
         
         String tokenFromPrincipal = jwtTokenService.generateToken(principal);
         String tokenFromFields = jwtTokenService.generateToken(
-                userId, username, List.of("USER"), List.of("READ"), "dept1", language
+                userId, username, List.of("USER"), List.of("READ"), language
         );
         
         // Both tokens should be valid
