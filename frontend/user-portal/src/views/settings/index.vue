@@ -27,13 +27,6 @@
                     <el-radio value="large">{{ t('settings.large') }}</el-radio>
                   </el-radio-group>
                 </el-form-item>
-                <el-form-item :label="t('settings.language')">
-                  <el-select v-model="preferenceForm.language" @change="changeLanguage">
-                    <el-option value="zh-CN" label="简体中文" />
-                    <el-option value="zh-TW" label="繁體中文" />
-                    <el-option value="en" label="English" />
-                  </el-select>
-                </el-form-item>
                 <el-form-item>
                   <el-button type="primary" @click="savePreference">{{ t('common.save') }}</el-button>
                 </el-form-item>
@@ -124,7 +117,7 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { getUserPreference, updateUserPreference } from '@/api/preference'
 
-const { t, locale } = useI18n()
+const { t } = useI18n()
 
 const activeTab = ref('appearance')
 
@@ -132,7 +125,6 @@ const preferenceForm = reactive({
   theme: 'light',
   themeColor: '#DB0011',
   fontSize: 'medium',
-  language: 'zh-CN',
   timezone: 'Asia/Shanghai',
   dateFormat: 'YYYY-MM-DD',
   pageSize: 20
@@ -157,11 +149,6 @@ const loadPreference = async () => {
   } catch (error) {
     console.error('Failed to load preference:', error)
   }
-}
-
-const changeLanguage = (lang: string) => {
-  locale.value = lang
-  localStorage.setItem('language', lang)
 }
 
 const savePreference = async () => {

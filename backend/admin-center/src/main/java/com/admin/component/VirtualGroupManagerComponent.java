@@ -48,6 +48,7 @@ public class VirtualGroupManagerComponent {
     private final RoleRepository roleRepository;
     private final UserRepository userRepository;
     private final JdbcTemplate jdbcTemplate;
+    private final com.admin.repository.UserBusinessUnitRepository userBusinessUnitRepository;
 
     
     /**
@@ -350,9 +351,15 @@ public class VirtualGroupManagerComponent {
         return virtualGroupMemberRepository.findByVirtualGroupId(groupId).stream()
                 .map(member -> {
                     VirtualGroupMemberInfo info = VirtualGroupMemberInfo.fromEntity(member);
-                    // 填充业务单元名称
-                    if (info.getBusinessUnitId() != null) {
-                        info.setBusinessUnitName(businessUnitNameMap.get(info.getBusinessUnitId()));
+                    // 通过关联表获取用户的业务单元
+                    if (member.getUserId() != null) {
+                        List<com.admin.entity.UserBusinessUnit> userBusinessUnits = 
+                                userBusinessUnitRepository.findByUserId(member.getUserId());
+                        if (!userBusinessUnits.isEmpty()) {
+                            String businessUnitId = userBusinessUnits.get(0).getBusinessUnitId();
+                            info.setBusinessUnitId(businessUnitId);
+                            info.setBusinessUnitName(businessUnitNameMap.get(businessUnitId));
+                        }
                     }
                     return info;
                 })

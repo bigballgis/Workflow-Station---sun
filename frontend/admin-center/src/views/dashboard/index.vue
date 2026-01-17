@@ -1,13 +1,13 @@
 <template>
   <div class="dashboard">
     <el-row :gutter="20" v-loading="statsLoading">
-      <el-col :span="6" v-for="stat in statsCards" :key="stat.title">
+      <el-col :span="6" v-for="stat in statsCards" :key="stat.titleKey">
         <el-card shadow="hover">
           <div class="stat-card">
             <el-icon :size="40" :color="stat.color"><component :is="stat.icon" /></el-icon>
             <div class="stat-info">
               <div class="stat-value">{{ stat.value }}</div>
-              <div class="stat-title">{{ stat.title }}</div>
+              <div class="stat-title">{{ t(stat.titleKey) }}</div>
             </div>
           </div>
         </el-card>
@@ -17,18 +17,18 @@
     <el-row :gutter="20" style="margin-top: 20px">
       <el-col :span="12">
         <el-card>
-          <template #header>用户趋势</template>
+          <template #header>{{ t('dashboard.userTrends') }}</template>
           <div class="chart-container" ref="systemChartRef" v-loading="trendsLoading"></div>
         </el-card>
       </el-col>
       <el-col :span="12">
         <el-card>
-          <template #header>最近活动</template>
+          <template #header>{{ t('dashboard.recentActivities') }}</template>
           <el-timeline v-loading="activitiesLoading">
             <el-timeline-item v-for="activity in activities" :key="activity.id" :timestamp="activity.createdAt">
               {{ activity.description || `${activity.username} ${activity.action} ${activity.resourceName || activity.resourceType}` }}
             </el-timeline-item>
-            <el-empty v-if="!activitiesLoading && activities.length === 0" description="暂无活动记录" />
+            <el-empty v-if="!activitiesLoading && activities.length === 0" :description="t('dashboard.noActivities')" />
           </el-timeline>
         </el-card>
       </el-col>
@@ -38,8 +38,11 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import * as echarts from 'echarts'
 import { getStats, getRecentActivities, getUserTrends, type DashboardStats, type RecentActivity, type UserTrend } from '@/api/dashboard'
+
+const { t } = useI18n()
 
 const systemChartRef = ref<HTMLElement>()
 let chart: echarts.ECharts | null = null
@@ -56,17 +59,17 @@ const trends = ref<UserTrend[]>([])
 const statsCards = computed(() => {
   if (!stats.value) {
     return [
-      { title: '用户总数', value: '-', icon: 'User', color: '#409EFF' },
-      { title: '业务单元数量', value: '-', icon: 'OfficeBuilding', color: '#67C23A' },
-      { title: '角色数量', value: '-', icon: 'Key', color: '#E6A23C' },
-      { title: '在线用户', value: '-', icon: 'Connection', color: '#F56C6C' }
+      { titleKey: 'dashboard.totalUsers', value: '-', icon: 'User', color: '#409EFF' },
+      { titleKey: 'dashboard.totalBusinessUnits', value: '-', icon: 'OfficeBuilding', color: '#67C23A' },
+      { titleKey: 'dashboard.totalRoles', value: '-', icon: 'Key', color: '#E6A23C' },
+      { titleKey: 'dashboard.onlineUsers', value: '-', icon: 'Connection', color: '#F56C6C' }
     ]
   }
   return [
-    { title: '用户总数', value: stats.value.totalUsers.toLocaleString(), icon: 'User', color: '#409EFF' },
-    { title: '业务单元数量', value: stats.value.totalBusinessUnits.toLocaleString(), icon: 'OfficeBuilding', color: '#67C23A' },
-    { title: '角色数量', value: stats.value.totalRoles.toLocaleString(), icon: 'Key', color: '#E6A23C' },
-    { title: '在线用户', value: stats.value.onlineUsers.toLocaleString(), icon: 'Connection', color: '#F56C6C' }
+    { titleKey: 'dashboard.totalUsers', value: stats.value.totalUsers.toLocaleString(), icon: 'User', color: '#409EFF' },
+    { titleKey: 'dashboard.totalBusinessUnits', value: stats.value.totalBusinessUnits.toLocaleString(), icon: 'OfficeBuilding', color: '#67C23A' },
+    { titleKey: 'dashboard.totalRoles', value: stats.value.totalRoles.toLocaleString(), icon: 'Key', color: '#E6A23C' },
+    { titleKey: 'dashboard.onlineUsers', value: stats.value.onlineUsers.toLocaleString(), icon: 'Connection', color: '#F56C6C' }
   ]
 })
 
@@ -113,12 +116,12 @@ const updateChart = () => {
   
   chart.setOption({
     tooltip: { trigger: 'axis' },
-    legend: { data: ['活跃用户', '新增用户'] },
+    legend: { data: [t('dashboard.activeUsers'), t('dashboard.newUsers')] },
     xAxis: { type: 'category', data: dates },
     yAxis: { type: 'value' },
     series: [
-      { name: '活跃用户', type: 'line', data: activeUsers, smooth: true },
-      { name: '新增用户', type: 'bar', data: newUsers }
+      { name: t('dashboard.activeUsers'), type: 'line', data: activeUsers, smooth: true },
+      { name: t('dashboard.newUsers'), type: 'bar', data: newUsers }
     ]
   })
 }

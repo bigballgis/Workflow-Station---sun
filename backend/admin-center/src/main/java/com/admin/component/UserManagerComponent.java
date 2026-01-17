@@ -47,6 +47,7 @@ public class UserManagerComponent {
     private final PasswordHistoryRepository passwordHistoryRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuditService auditService;
+    private final com.admin.repository.UserBusinessUnitRepository userBusinessUnitRepository;
     
     private static final Pattern EMAIL_PATTERN = Pattern.compile(
             "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$");
@@ -80,7 +81,6 @@ public class UserManagerComponent {
                 .email(request.getEmail())
                 .fullName(request.getFullName())
                 .employeeId(request.getEmployeeId())
-                .businessUnitId(request.getBusinessUnitId())
                 .position(request.getPosition())
                 .status(UserStatus.ACTIVE)
                 .mustChangePassword(true)
@@ -89,6 +89,16 @@ public class UserManagerComponent {
                 .build();
         
         user = userRepository.save(user);
+        
+        // 如果指定了业务单元，创建用户-业务单元关联
+        if (request.getBusinessUnitId() != null && !request.getBusinessUnitId().isEmpty()) {
+            com.admin.entity.UserBusinessUnit userBusinessUnit = com.admin.entity.UserBusinessUnit.builder()
+                    .id(UUID.randomUUID().toString())
+                    .userId(userId)
+                    .businessUnitId(request.getBusinessUnitId())
+                    .build();
+            userBusinessUnitRepository.save(userBusinessUnit);
+        }
         
         // 保存密码历史
         savePasswordHistory(userId, encodedPassword);
@@ -113,7 +123,6 @@ public class UserManagerComponent {
         User oldUser = User.builder()
                 .email(user.getEmail())
                 .fullName(user.getFullName())
-                .businessUnitId(user.getBusinessUnitId())
                 .position(user.getPosition())
                 .build();
         
@@ -132,7 +141,16 @@ public class UserManagerComponent {
             user.setEmployeeId(request.getEmployeeId());
         }
         if (request.getBusinessUnitId() != null) {
-            user.setBusinessUnitId(request.getBusinessUnitId());
+            // 更新用户-业务单元关联（先删除旧的，再创建新的）
+            userBusinessUnitRepository.deleteByUserId(userId);
+            if (!request.getBusinessUnitId().isEmpty()) {
+                com.admin.entity.UserBusinessUnit userBusinessUnit = com.admin.entity.UserBusinessUnit.builder()
+                        .id(UUID.randomUUID().toString())
+                        .userId(userId)
+                        .businessUnitId(request.getBusinessUnitId())
+                        .build();
+                userBusinessUnitRepository.save(userBusinessUnit);
+            }
         }
         if (request.getPosition() != null) {
             user.setPosition(request.getPosition());
@@ -401,9 +419,12 @@ public class UserManagerComponent {
         return users.map(user -> {
             UserInfo info = UserInfo.fromEntity(user);
             
-            // 填充业务单元名称
-            if (user.getBusinessUnitId() != null) {
-                businessUnitRepository.findById(user.getBusinessUnitId())
+            // 通过关联表获取用户的业务单元
+            List<com.admin.entity.UserBusinessUnit> userBusinessUnits = userBusinessUnitRepository.findByUserId(user.getId());
+            if (!userBusinessUnits.isEmpty()) {
+                String businessUnitId = userBusinessUnits.get(0).getBusinessUnitId();
+                info.setBusinessUnitId(businessUnitId);
+                businessUnitRepository.findById(businessUnitId)
                         .ifPresent(unit -> info.setBusinessUnitName(unit.getName()));
             }
             

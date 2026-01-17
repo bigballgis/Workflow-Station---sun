@@ -99,18 +99,6 @@ const routes: RouteRecordRaw[] = [
         meta: { titleKey: 'menu.exitRole', icon: 'SwitchButton' }
       },
       {
-        path: 'notifications',
-        name: 'Notifications',
-        component: () => import('@/views/notifications/index.vue'),
-        meta: { titleKey: 'menu.notifications', icon: 'Bell' }
-      },
-      {
-        path: 'settings',
-        name: 'Settings',
-        component: () => import('@/views/settings/index.vue'),
-        meta: { titleKey: 'menu.settings', icon: 'Setting' }
-      },
-      {
         path: 'profile',
         name: 'Profile',
         component: () => import('@/views/profile/index.vue'),

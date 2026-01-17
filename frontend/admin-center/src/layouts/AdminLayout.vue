@@ -13,19 +13,6 @@
         </el-icon>
       </div>
       <div class="header-right">
-        <el-dropdown @command="handleLanguage">
-          <span class="header-action">
-            <el-icon><Location /></el-icon>
-            <span class="action-text">{{ currentLang }}</span>
-          </span>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="zh-CN">简体中文</el-dropdown-item>
-              <el-dropdown-item command="zh-TW">繁體中文</el-dropdown-item>
-              <el-dropdown-item command="en">English</el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
         <UserProfileDropdown />
       </div>
     </el-header>
@@ -80,30 +67,6 @@
               <el-icon><Box /></el-icon>
               <template #title>{{ t('menu.functionUnit') }}</template>
             </el-menu-item>
-            
-            <!-- Dictionary - requires system:admin -->
-            <el-menu-item index="/dictionary" v-if="isSystemAdmin">
-              <el-icon><Collection /></el-icon>
-              <template #title>{{ t('menu.dictionary') }}</template>
-            </el-menu-item>
-            
-            <!-- Monitor - requires system:admin -->
-            <el-menu-item index="/monitor" v-if="isSystemAdmin">
-              <el-icon><Monitor /></el-icon>
-              <template #title>{{ t('menu.monitor') }}</template>
-            </el-menu-item>
-            
-            <!-- Audit Log - requires audit:read -->
-            <el-menu-item index="/audit" v-if="canReadAudit">
-              <el-icon><Document /></el-icon>
-              <template #title>{{ t('menu.audit') }}</template>
-            </el-menu-item>
-            
-            <!-- System Config - requires system:admin -->
-            <el-menu-item index="/config" v-if="isSystemAdmin">
-              <el-icon><Setting /></el-icon>
-              <template #title>{{ t('menu.config') }}</template>
-            </el-menu-item>
           </el-menu>
         </el-scrollbar>
       </el-aside>
@@ -128,12 +91,10 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { 
   Fold, Expand,
-  Odometer, OfficeBuilding, Key, Connection, Box, Collection, 
-  Monitor, Document, Location, User
+  Odometer, OfficeBuilding, Key, Connection, Box, User
 } from '@element-plus/icons-vue'
 import UserProfileDropdown from '@/components/UserProfileDropdown.vue'
 import { hasPermission, PERMISSIONS } from '@/utils/permission'
-import i18n from '@/i18n'
 
 const route = useRoute()
 const { t } = useI18n()
@@ -146,18 +107,9 @@ const isSystemAdmin = computed(() => hasPermission(PERMISSIONS.SYSTEM_ADMIN))
 const canReadUser = computed(() => hasPermission(PERMISSIONS.USER_READ))
 const canWriteUser = computed(() => hasPermission(PERMISSIONS.USER_WRITE))
 const canReadRole = computed(() => hasPermission(PERMISSIONS.ROLE_READ))
-const canReadAudit = computed(() => hasPermission(PERMISSIONS.AUDIT_READ))
-
-const langMap: Record<string, string> = { 'zh-CN': '简体中文', 'zh-TW': '繁體中文', 'en': 'English' }
-const currentLang = computed(() => langMap[i18n.global.locale.value] || '简体中文')
 
 const toggleCollapse = () => {
   isCollapse.value = !isCollapse.value
-}
-
-const handleLanguage = (lang: string) => {
-  i18n.global.locale.value = lang as 'zh-CN' | 'zh-TW' | 'en'
-  localStorage.setItem('language', lang)
 }
 </script>
 
@@ -222,25 +174,6 @@ $main-bg: #f5f7fa;
     display: flex;
     align-items: center;
     gap: 24px;
-
-    .header-action {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 8px 12px;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: background-color 0.3s;
-      color: white;
-
-      &:hover {
-        background-color: rgba(255, 255, 255, 0.15);
-      }
-
-      .action-text {
-        font-size: 14px;
-      }
-    }
   }
 }
 

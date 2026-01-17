@@ -40,24 +40,9 @@ public interface UserRepository extends JpaRepository<User, String> {
     boolean existsByEmail(String email);
     
     /**
-     * 根据业务单元ID查找用户
-     */
-    List<User> findByBusinessUnitId(String businessUnitId);
-    
-    /**
-     * 根据业务单元ID分页查找用户
-     */
-    Page<User> findByBusinessUnitId(String businessUnitId, Pageable pageable);
-    
-    /**
      * 根据状态查找用户
      */
     List<User> findByStatus(UserStatus status);
-    
-    /**
-     * 统计业务单元用户数量
-     */
-    long countByBusinessUnitId(String businessUnitId);
     
     /**
      * 搜索用户（用户名、姓名、邮箱）
@@ -70,11 +55,11 @@ public interface UserRepository extends JpaRepository<User, String> {
     Page<User> searchUsers(@Param("keyword") String keyword, Pageable pageable);
     
     /**
-     * 根据条件查询用户
+     * 根据条件查询用户（不再使用 businessUnitId 字段，改用关联表）
      */
-    @Query("SELECT u FROM User u WHERE " +
+    @Query("SELECT DISTINCT u FROM User u WHERE " +
            "(u.deleted = false OR u.deleted IS NULL) AND " +
-           "(:businessUnitId IS NULL OR u.businessUnitId = :businessUnitId) AND " +
+           "(:businessUnitId IS NULL OR u.id IN (SELECT ub.userId FROM UserBusinessUnit ub WHERE ub.businessUnitId = :businessUnitId)) AND " +
            "(:status IS NULL OR u.status = :status) AND " +
            "(:keyword IS NULL OR :keyword = '' OR " +
            "u.username LIKE CONCAT('%', :keyword, '%') OR " +

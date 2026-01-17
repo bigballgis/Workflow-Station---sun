@@ -33,6 +33,7 @@ public class AuthServiceImpl implements AuthService {
     private final PasswordEncoder passwordEncoder;
     private final UserRoleService userRoleService;
     private final org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+    private final com.admin.service.TaskAssignmentQueryService taskAssignmentQueryService;
     
     @Value("${jwt.secret:my-super-secret-jwt-key-for-development-only-32chars}")
     private String jwtSecret;
@@ -127,7 +128,7 @@ public class AuthServiceImpl implements AuthService {
                         .roles(roles)
                         .permissions(permissions)
                         .rolesWithSources(rolesWithSources)
-                        .businessUnitId(user.getBusinessUnitId())
+                        .businessUnitId(taskAssignmentQueryService.getUserBusinessUnitId(user.getId()))
                         .language(user.getLanguage())
                         .build())
                 .build();
@@ -163,7 +164,7 @@ public class AuthServiceImpl implements AuthService {
                     .roles(roles)
                     .permissions(getPermissionsForRoles(roles))
                     .rolesWithSources(rolesWithSources)
-                    .businessUnitId(user.getBusinessUnitId())
+                    .businessUnitId(taskAssignmentQueryService.getUserBusinessUnitId(user.getId()))
                     .language(user.getLanguage())
                     .build();
         } catch (Exception e) {
@@ -197,7 +198,7 @@ public class AuthServiceImpl implements AuthService {
                     .roles(roles)
                     .permissions(getPermissionsForRoles(roles))
                     .rolesWithSources(rolesWithSources)
-                    .businessUnitId(user.getBusinessUnitId())
+                    .businessUnitId(taskAssignmentQueryService.getUserBusinessUnitId(user.getId()))
                     .language(user.getLanguage())
                     .build();
         } catch (Exception e) {
@@ -245,7 +246,7 @@ public class AuthServiceImpl implements AuthService {
                 .claim("displayName", user.getDisplayName())
                 .claim("roles", roles)
                 .claim("permissions", permissions)
-                .claim("businessUnitId", user.getBusinessUnitId())
+                .claim("businessUnitId", taskAssignmentQueryService.getUserBusinessUnitId(user.getId()))
                 .claim("language", user.getLanguage())
                 .issuedAt(now)
                 .expiration(expiry)

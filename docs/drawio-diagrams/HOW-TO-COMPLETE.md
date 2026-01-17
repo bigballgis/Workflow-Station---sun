@@ -1,1 +1,0 @@
-# How to Complete Diagrams 

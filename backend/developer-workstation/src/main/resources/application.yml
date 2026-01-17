@@ -31,6 +31,13 @@ spring:
     baseline-on-migrate: true
     validate-on-migrate: false
   
+  data:
+    redis:
+      host: ${SPRING_REDIS_HOST:localhost}
+      port: ${SPRING_REDIS_PORT:6379}
+      password: ${SPRING_REDIS_PASSWORD:redis123}
+      timeout: 5000ms
+  
   servlet:
     multipart:
       max-file-size: 10MB
@@ -59,3 +66,13 @@ logging:
     com.developer: DEBUG
     org.springframework.security: INFO
     org.hibernate.SQL: DEBUG
+
+# Actuator Configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when_authorized

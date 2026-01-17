@@ -36,6 +36,7 @@ public class DepartmentRoleTaskServiceImpl implements DepartmentRoleTaskService 
     private final UserRepository userRepository;
     private final UserRoleRepository userRoleRepository;
     private final VirtualGroupTaskHistoryRepository taskHistoryRepository;
+    private final com.admin.service.TaskAssignmentQueryService taskAssignmentQueryService;
     
     @Override
     public List<DepartmentRoleUserInfo> getMatchingUsers(String businessUnitId, String roleId) {
@@ -49,24 +50,15 @@ public class DepartmentRoleTaskServiceImpl implements DepartmentRoleTaskService 
         Role role = roleRepository.findById(roleId)
                 .orElseThrow(() -> new RoleNotFoundException(roleId));
         
-        // 获取该业务单元的所有用户
-        List<User> businessUnitUsers = userRepository.findByBusinessUnitId(businessUnitId);
+        // 通过关联表获取该业务单元的所有用户
+        List<String> userIds = taskAssignmentQueryService.getUsersByBusinessUnitAndRole(businessUnitId, roleId);
         
-        // 过滤出拥有该角色的活跃用户
+        // 过滤出活跃用户并构建结果
         List<DepartmentRoleUserInfo> matchingUsers = new ArrayList<>();
-        for (User user : businessUnitUsers) {
-            if (user.getStatus() != UserStatus.ACTIVE) {
-                continue;
-            }
-            
-            // 检查用户是否拥有该角色
-            boolean hasRole = userRoleRepository.existsByUserIdAndRoleId(user.getId(), roleId);
-            if (hasRole) {
-                // 检查角色分配是否有效
-                userRoleRepository.findByUserIdAndRoleId(user.getId(), roleId)
-                        .filter(UserRole::isValid)
-                        .ifPresent(ur -> matchingUsers.add(buildBusinessUnitRoleUserInfo(user, businessUnit, role)));
-            }
+        for (String userId : userIds) {
+            userRepository.findById(userId)
+                    .filter(user -> user.getStatus() == UserStatus.ACTIVE)
+                    .ifPresent(user -> matchingUsers.add(buildBusinessUnitRoleUserInfo(user, businessUnit, role)));
         }
         
         log.info("Found {} matching users for business unit {} and role {}", 
@@ -85,8 +77,9 @@ public class DepartmentRoleTaskServiceImpl implements DepartmentRoleTaskService 
             return false;
         }
         
-        // 检查用户是否属于该业务单元
-        if (!businessUnitId.equals(user.getBusinessUnitId())) {
+        // 检查用户是否属于该业务单元（通过关联表）
+        String userBusinessUnitId = taskAssignmentQueryService.getUserBusinessUnitId(userId);
+        if (!businessUnitId.equals(userBusinessUnitId)) {
             return false;
         }
         
@@ -131,7 +124,8 @@ public class DepartmentRoleTaskServiceImpl implements DepartmentRoleTaskService 
             return new ArrayList<>();
         }
         
-        String businessUnitId = user.getBusinessUnitId();
+        // 通过关联表获取用户的业务单元
+        String businessUnitId = taskAssignmentQueryService.getUserBusinessUnitId(userId);
         if (businessUnitId == null) {
             return new ArrayList<>();
         }

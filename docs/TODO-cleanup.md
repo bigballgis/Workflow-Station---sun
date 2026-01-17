@@ -632,3 +632,136 @@
 
 ### 可选优化（不影响功能）
 1. ✅ 重命名 i18n 中的 department key 为 businessUnit - 已完成
+
+
+---
+
+## Flyway 迁移文件整合
+
+### 2026-01-16 (续18)
+- 完成：Flyway 迁移文件整合
+  - 将所有模块的多版本迁移文件整合为单一 V1 文件
+  - 添加初始数据（用户、角色、虚拟组、业务单元）
+
+#### platform-security 模块
+- 整合前：V1-V5（5个文件）
+- 整合后：V1（schema）+ V2（init data）
+- 删除文件：
+  - `V2__init_system_data.sql`（旧版，已替换为新的 V2__init_data.sql）
+  - `V3__rename_department_to_business_unit.sql`
+  - `V4__drop_primary_business_unit_id.sql`
+  - `V5__drop_sys_departments_table.sql`
+- V1 包含：
+  - 30个 sys_* 表定义
+  - 包含 sys_business_units 表（无 manager_id/secondary_manager_id）
+  - 包含 sys_user_business_units 表（用户-业务单元多对多关系）
+  - 无 sys_departments 表
+- V2 包含：
+  - 5个系统角色（SYS_ADMIN, AUDITOR, DEVELOPER, TEAM_LEADER, TECH_DIRECTOR）
+  - 5个系统虚拟组（SYS_ADMINS, AUDITORS, DEVELOPERS, TEAM_LEADERS, TECH_DIRECTORS）
+  - 角色-虚拟组绑定
+  - 系统权限定义
+  - 角色-权限分配
+  - 开发者角色权限
+  - 系统字典
+  - 测试用户（admin, auditor, developer）
+  - 组织结构（业务单元）
+
+#### admin-center 模块
+- 整合前：V1-V14（15个文件，含重复的 V12）
+- 整合后：V1（schema only）
+- 删除文件：V2-V14 全部删除
+- V1 包含：14个 admin_* 表定义
+
+#### developer-workstation 模块
+- 整合前：V1-V2（2个文件）
+- 整合后：V1（schema with code column）
+- 删除文件：`V2__add_function_unit_code.sql`
+- V1 包含：
+  - 11个 dw_* 表定义
+  - dw_function_units 表已包含 code 列
+
+#### user-portal 模块
+- 整合前：V1-V2（2个文件）
+- 整合后：V1（schema）
+- 删除文件：
+  - `V1__create_user_portal_tables.sql`（旧版）
+  - `V2__add_permission_request_fields.sql`
+- V1 包含：
+  - 10个 up_* 表定义
+  - up_permission_request 表已包含所有字段
+  - up_process_instance 表
+  - up_process_history 表
+
+#### workflow-engine-core 模块
+- 整合前：V1-V3（4个文件，含 V2.1）
+- 整合后：V1（schema）
+- 删除文件：
+  - `V2__create_auth_tables.sql`
+  - `V2.1__init_test_users.sql`
+  - `V3__update_audit_logs_schema.sql`
+- V1 包含：
+  - 6个 wf_* 表定义
+  - wf_audit_logs 表已包含所有扩展字段
+
+#### 新增文件
+- `deploy/init-scripts/rebuild-database.ps1` - 数据库重建脚本
+
+#### 使用说明
+1. 删除现有数据库：运行 `rebuild-database.ps1`
+2. 启动服务让 Flyway 自动执行迁移
+3. 服务启动顺序：
+   - platform-security（创建 sys_* 表）
+   - admin-center（创建 admin_* 表）
+   - developer-workstation（创建 dw_* 表）
+   - user-portal（创建 up_* 表）
+   - workflow-engine-core（创建 wf_* 表）
+
+#### 初始用户
+| 用户名 | 密码 | 角色 | 虚拟组 |
+|--------|------|------|--------|
+| admin | password123 | SYS_ADMIN | System Administrators |
+| auditor | password123 | AUDITOR | Auditors |
+| developer | password123 | DEVELOPER | Developers |
+
+
+---
+
+## 7. 临时移除的功能（待后续恢复）
+
+### 7.1 user-portal 通知功能
+- [ ] `frontend/user-portal/src/views/notifications/index.vue` - 通知列表页面（功能未完全实现）
+- [ ] `frontend/user-portal/src/router/index.ts` - `/notifications` 路由（已移除）
+- [ ] `frontend/user-portal/src/layouts/PortalLayout.vue` - 顶部通知图标和侧边栏菜单项（已移除）
+- [ ] 后端通知 API 待实现
+
+### 7.2 user-portal 设置功能
+- [ ] `frontend/user-portal/src/views/settings/index.vue` - 设置页面（功能未完全实现）
+- [ ] `frontend/user-portal/src/router/index.ts` - `/settings` 路由（已移除）
+- [ ] `frontend/user-portal/src/layouts/PortalLayout.vue` - 侧边栏设置菜单项（已移除）
+- [ ] 后端用户偏好 API 待完善
+
+### 7.3 admin-center Dictionary 功能
+- [ ] `frontend/admin-center/src/views/dictionary/index.vue` - 数据字典页面（功能未完全实现）
+- [ ] `frontend/admin-center/src/router/index.ts` - `/dictionary` 路由（已移除）
+- [ ] `frontend/admin-center/src/layouts/AdminLayout.vue` - 侧边栏菜单项（已移除）
+
+### 7.4 admin-center System Monitor 功能
+- [ ] `frontend/admin-center/src/views/monitor/index.vue` - 系统监控页面（功能未完全实现）
+- [ ] `frontend/admin-center/src/router/index.ts` - `/monitor` 路由（已移除）
+- [ ] `frontend/admin-center/src/layouts/AdminLayout.vue` - 侧边栏菜单项（已移除）
+- [ ] 后续将使用 Splunk/AppDynamics 等专业监控工具
+
+### 7.5 admin-center Audit Log 功能
+- [ ] `frontend/admin-center/src/views/audit/index.vue` - 审计日志页面（功能未完全实现）
+- [ ] `frontend/admin-center/src/router/index.ts` - `/audit` 路由（已移除）
+- [ ] `frontend/admin-center/src/layouts/AdminLayout.vue` - 侧边栏菜单项（已移除）
+
+### 7.6 admin-center System Config 功能
+- [ ] `frontend/admin-center/src/views/config/index.vue` - 系统配置页面（功能未完全实现）
+- [ ] `frontend/admin-center/src/router/index.ts` - `/config` 路由（已移除）
+- [ ] `frontend/admin-center/src/layouts/AdminLayout.vue` - 侧边栏菜单项（已移除）
+
+### 移除记录
+- 2026-01-17：临时移除 notification 和 settings 功能，待后续完善后恢复
+- 2026-01-17：临时移除 admin-center 的 Dictionary、System Monitor、Audit Log、System Config 功能
