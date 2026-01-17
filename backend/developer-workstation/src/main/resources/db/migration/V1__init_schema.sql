@@ -28,6 +28,7 @@ CREATE INDEX IF NOT EXISTS idx_dw_icons_category ON dw_icons(category);
 -- =====================================================
 CREATE TABLE IF NOT EXISTS dw_function_units (
     id BIGSERIAL PRIMARY KEY,
+    code VARCHAR(50) NOT NULL UNIQUE,
     name VARCHAR(100) NOT NULL UNIQUE,
     description TEXT,
     icon_id BIGINT,
@@ -43,6 +44,7 @@ CREATE TABLE IF NOT EXISTS dw_function_units (
 
 CREATE INDEX IF NOT EXISTS idx_dw_function_units_name ON dw_function_units(name);
 CREATE INDEX IF NOT EXISTS idx_dw_function_units_status ON dw_function_units(status);
+CREATE INDEX IF NOT EXISTS idx_function_unit_code ON dw_function_units(code);
 
 -- =====================================================
 -- 3. Process Definitions Table (dw_process_definitions)

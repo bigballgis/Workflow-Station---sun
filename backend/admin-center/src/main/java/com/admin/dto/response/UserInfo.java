@@ -43,7 +43,7 @@ public class UserInfo {
                 .displayName(user.getDisplayName())
                 .fullName(user.getFullName())
                 .employeeId(user.getEmployeeId())
-                .businessUnitId(user.getBusinessUnitId())
+                // businessUnitId 需要通过关联表获取，在调用处设置
                 .position(user.getPosition())
                 .entityManagerId(user.getEntityManagerId() != null ? user.getEntityManagerId().toString() : null)
                 .functionManagerId(user.getFunctionManagerId() != null ? user.getFunctionManagerId().toString() : null)

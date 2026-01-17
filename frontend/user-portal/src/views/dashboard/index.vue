@@ -122,10 +122,6 @@
               <el-icon :size="24" color="#722ed1"><Key /></el-icon>
               <span>{{ t('menu.permissions') }}</span>
             </div>
-            <div class="action-item" @click="$router.push('/settings')">
-              <el-icon :size="24" color="var(--text-secondary)"><Setting /></el-icon>
-              <span>{{ t('menu.settings') }}</span>
-            </div>
           </div>
         </div>
       </el-col>
@@ -165,18 +161,18 @@
           <div class="rank-info">
             <span>{{ t('dashboard.monthlyRank') }}:</span>
             <span class="rank-value">
-              第 {{ performanceOverview.monthlyRank }} 名 / {{ performanceOverview.totalUsers }} 人
+              {{ t('dashboard.rankFormat', { rank: performanceOverview.monthlyRank, total: performanceOverview.totalUsers }) }}
             </span>
           </div>
         </div>
       </el-col>
 
-      <!-- 最近任务 -->
+      <!-- Recent Tasks -->
       <el-col :span="8">
         <div class="portal-card">
           <div class="card-header">
-            <span class="card-title">最近任务</span>
-            <el-button type="primary" link @click="$router.push('/tasks')">查看全部</el-button>
+            <span class="card-title">{{ t('dashboard.recentTasks') }}</span>
+            <el-button type="primary" link @click="$router.push('/tasks')">{{ t('dashboard.viewAll') }}</el-button>
           </div>
           <div class="recent-tasks">
             <div v-for="task in recentTasks" :key="task.taskId" class="task-item">
@@ -191,7 +187,7 @@
                 {{ t(`task.${task.priority.toLowerCase()}`) }}
               </el-tag>
             </div>
-            <el-empty v-if="recentTasks.length === 0" description="暂无待办任务" />
+            <el-empty v-if="recentTasks.length === 0" :description="t('dashboard.noTasks')" />
           </div>
         </div>
       </el-col>
@@ -202,7 +198,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Plus, List, Document, Share, Key, Setting } from '@element-plus/icons-vue'
+import { Plus, List, Document, Share, Key } from '@element-plus/icons-vue'
 import { getDashboardOverview, TaskOverview, ProcessOverview, PerformanceOverview } from '@/api/dashboard'
 
 const { t } = useI18n()
