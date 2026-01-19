@@ -4,7 +4,7 @@
       <div class="flex-between" style="margin-bottom: 16px;">
         <el-form :inline="true" class="filter-form">
           <el-form-item class="no-margin">
-            <el-input v-model="searchKeyword" :placeholder="$t('icon.search')" clearable @change="loadIcons" />
+            <el-input v-model="searchKeyword" :placeholder="t('icon.search')" clearable @change="loadIcons" />
           </el-form-item>
           <el-form-item class="no-margin">
             <el-select v-model="selectedCategory" :placeholder="t('icon.selectCategory')" clearable @change="loadIcons" style="width: 140px">
@@ -28,7 +28,7 @@
             </el-tag>
           </el-form-item>
         </el-form>
-        <el-button type="primary" @click="showUploadDialog = true">{{ $t('icon.upload') }}</el-button>
+        <el-button type="primary" @click="showUploadDialog = true">{{ t('icon.upload') }}</el-button>
       </div>
 
       <div class="icon-grid" v-loading="loading">
@@ -37,7 +37,7 @@
           <div class="icon-name">{{ icon.name }}</div>
         </div>
         <div v-if="!icons.length && !loading" class="no-data">
-          {{ $t('common.noData') }}
+          {{ t('common.noData') }}
         </div>
       </div>
 
@@ -80,7 +80,7 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showUploadDialog = false">{{ $t('common.cancel') }}</el-button>
+        <el-button @click="showUploadDialog = false">{{ t('common.cancel') }}</el-button>
         <el-button type="primary" @click="handleUpload" :loading="uploading">{{ t('icon.upload') }}</el-button>
       </template>
     </el-dialog>
@@ -97,8 +97,8 @@
         </el-descriptions>
       </div>
       <template #footer>
-        <el-button @click="showDetailDialog = false">{{ $t('common.close') }}</el-button>
-        <el-button type="danger" @click="handleDeleteIcon" :loading="deleting">{{ $t('common.delete') }}</el-button>
+        <el-button @click="showDetailDialog = false">{{ t('common.close') }}</el-button>
+        <el-button type="danger" @click="handleDeleteIcon" :loading="deleting">{{ t('common.delete') }}</el-button>
       </template>
     </el-dialog>
   </div>

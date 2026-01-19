@@ -6,7 +6,7 @@ declare module '*.vue' {
   export default component
 }
 
-declare module 'vue-grid-layout' {
+declare module 'vue-grid-layout-v3' {
   import { DefineComponent } from 'vue'
   export const GridLayout: DefineComponent<any, any, any>
   export const GridItem: DefineComponent<any, any, any>

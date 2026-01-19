@@ -2,41 +2,41 @@
   <div class="user-task-properties">
     <el-collapse v-model="activeGroups">
       <!-- 基本信息 -->
-      <el-collapse-item :title="$t('properties.basic')" name="basic">
+      <el-collapse-item :title="t('properties.basic')" name="basic">
         <el-form label-position="top" size="small">
-          <el-form-item :label="$t('properties.taskId')">
+          <el-form-item :label="t('properties.taskId')">
             <el-input :model-value="basicProps.id" disabled />
           </el-form-item>
-          <el-form-item :label="$t('properties.taskName')">
-            <el-input v-model="taskName" @change="updateBasicProp('name', taskName)" :placeholder="$t('properties.taskName')" />
+          <el-form-item :label="t('properties.taskName')">
+            <el-input v-model="taskName" @change="updateBasicProp('name', taskName)" :placeholder="t('properties.taskName')" />
           </el-form-item>
-          <el-form-item :label="$t('properties.taskDescription')">
-            <el-input v-model="taskDescription" type="textarea" :rows="2" @change="updateExtProp('description', taskDescription)" :placeholder="$t('properties.taskDescription')" />
+          <el-form-item :label="t('properties.taskDescription')">
+            <el-input v-model="taskDescription" type="textarea" :rows="2" @change="updateExtProp('description', taskDescription)" :placeholder="t('properties.taskDescription')" />
           </el-form-item>
         </el-form>
       </el-collapse-item>
       
       <!-- 处理人配置 -->
-      <el-collapse-item :title="$t('properties.assignee')" name="assignee">
+      <el-collapse-item :title="t('properties.assignee')" name="assignee">
         <el-form label-position="top" size="small">
-          <el-form-item :label="$t('properties.assigneeType')">
+          <el-form-item :label="t('properties.assigneeType')">
             <el-select v-model="assigneeType" @change="handleAssigneeTypeChange">
-              <el-option-group :label="$t('properties.directAssignment')">
-                <el-option :label="$t('properties.initiator')" value="INITIATOR" />
-                <el-option :label="$t('properties.entityManager')" value="ENTITY_MANAGER" />
-                <el-option :label="$t('properties.functionManager')" value="FUNCTION_MANAGER" />
+              <el-option-group :label="t('properties.directAssignment')">
+                <el-option :label="t('properties.initiator')" value="INITIATOR" />
+                <el-option :label="t('properties.entityManager')" value="ENTITY_MANAGER" />
+                <el-option :label="t('properties.functionManager')" value="FUNCTION_MANAGER" />
               </el-option-group>
-              <el-option-group :label="$t('properties.currentUserBuRole')">
-                <el-option :label="$t('properties.currentBuRole')" value="CURRENT_BU_ROLE" />
-                <el-option :label="$t('properties.currentParentBuRole')" value="CURRENT_PARENT_BU_ROLE" />
+              <el-option-group :label="t('properties.currentUserBuRole')">
+                <el-option :label="t('properties.currentBuRole')" value="CURRENT_BU_ROLE" />
+                <el-option :label="t('properties.currentParentBuRole')" value="CURRENT_PARENT_BU_ROLE" />
               </el-option-group>
-              <el-option-group :label="$t('properties.initiatorBuRole')">
-                <el-option :label="$t('properties.initiatorBuRoleOption')" value="INITIATOR_BU_ROLE" />
-                <el-option :label="$t('properties.initiatorParentBuRole')" value="INITIATOR_PARENT_BU_ROLE" />
+              <el-option-group :label="t('properties.initiatorBuRole')">
+                <el-option :label="t('properties.initiatorBuRoleOption')" value="INITIATOR_BU_ROLE" />
+                <el-option :label="t('properties.initiatorParentBuRole')" value="INITIATOR_PARENT_BU_ROLE" />
               </el-option-group>
-              <el-option-group :label="$t('properties.otherRoleTypes')">
-                <el-option :label="$t('properties.fixedBuRole')" value="FIXED_BU_ROLE" />
-                <el-option :label="$t('properties.buUnboundedRole')" value="BU_UNBOUNDED_ROLE" />
+              <el-option-group :label="t('properties.otherRoleTypes')">
+                <el-option :label="t('properties.fixedBuRole')" value="FIXED_BU_ROLE" />
+                <el-option :label="t('properties.buUnboundedRole')" value="BU_UNBOUNDED_ROLE" />
               </el-option-group>
             </el-select>
           </el-form-item>
@@ -47,24 +47,24 @@
           </div>
           
           <!-- 业务单元选择器（FIXED_BU_ROLE需要，放在角色选择器上面） -->
-          <el-form-item v-if="assigneeType === 'FIXED_BU_ROLE'" :label="$t('properties.selectBusinessUnit')">
+          <el-form-item v-if="assigneeType === 'FIXED_BU_ROLE'" :label="t('properties.selectBusinessUnit')">
             <el-tree-select
               v-model="businessUnitId"
               :data="businessUnits"
               node-key="id"
               :props="{ label: 'name', children: 'children' }"
               :loading="loadingBusinessUnits"
-              :placeholder="$t('properties.selectBusinessUnit')"
+              :placeholder="t('properties.selectBusinessUnit')"
               check-strictly
               filterable
               @change="handleBusinessUnitChange"
             />
-            <div class="form-tip">{{ $t('properties.selectBusinessUnitTip') }}</div>
+            <div class="form-tip">{{ t('properties.selectBusinessUnitTip') }}</div>
           </el-form-item>
           
           <!-- 角色选择器（6种角色类型需要） -->
           <!-- FIXED_BU_ROLE 需要先选择业务单元才能选择角色 -->
-          <el-form-item v-if="showRoleSelector" :label="$t('properties.selectRole')">
+          <el-form-item v-if="showRoleSelector" :label="t('properties.selectRole')">
             <el-select
               v-model="roleId"
               :loading="loadingRoles"
@@ -90,40 +90,40 @@
           <div v-if="needsClaim" class="claim-tip">
             <el-alert type="info" :closable="false" show-icon>
               <template #title>
-                {{ $t('properties.claimRequired') }}
+                {{ t('properties.claimRequired') }}
               </template>
             </el-alert>
           </div>
           
-          <el-form-item :label="$t('properties.candidateUsers')">
-            <el-input v-model="candidateUsers" @change="updateExtProp('candidateUsers', candidateUsers)" :placeholder="$t('properties.candidateUsersPlaceholder')" />
+          <el-form-item :label="t('properties.candidateUsers')">
+            <el-input v-model="candidateUsers" @change="updateExtProp('candidateUsers', candidateUsers)" :placeholder="t('properties.candidateUsersPlaceholder')" />
           </el-form-item>
           
-          <el-form-item :label="$t('properties.candidateGroups')">
-            <el-input v-model="candidateGroups" @change="updateExtProp('candidateGroups', candidateGroups)" :placeholder="$t('properties.candidateGroupsPlaceholder')" />
+          <el-form-item :label="t('properties.candidateGroups')">
+            <el-input v-model="candidateGroups" @change="updateExtProp('candidateGroups', candidateGroups)" :placeholder="t('properties.candidateGroupsPlaceholder')" />
           </el-form-item>
         </el-form>
       </el-collapse-item>
       
       <!-- 表单绑定 -->
-      <el-collapse-item :title="$t('properties.form')" name="form">
+      <el-collapse-item :title="t('properties.form')" name="form">
         <el-form label-position="top" size="small">
-          <el-form-item :label="$t('properties.bindForm')">
-            <el-select v-model="formId" @change="handleFormChange" :placeholder="$t('properties.selectForm')" clearable>
+          <el-form-item :label="t('properties.bindForm')">
+            <el-select v-model="formId" @change="handleFormChange" :placeholder="t('properties.selectForm')" clearable>
               <el-option v-for="form in forms" :key="form.id" :label="form.formName" :value="form.id" />
             </el-select>
           </el-form-item>
           <div v-if="formId" class="form-preview-link">
-            <el-button link type="primary" size="small">{{ $t('common.preview') }}</el-button>
+            <el-button link type="primary" size="small">{{ t('common.preview') }}</el-button>
           </div>
         </el-form>
       </el-collapse-item>
       
       <!-- 动作绑定 -->
-      <el-collapse-item :title="$t('properties.actions')" name="actions">
+      <el-collapse-item :title="t('properties.actions')" name="actions">
         <el-form label-position="top" size="small">
-          <el-form-item :label="$t('properties.availableActions')">
-            <el-select v-model="actionIds" @change="handleActionsChange" :placeholder="$t('properties.selectActions')" multiple clearable>
+          <el-form-item :label="t('properties.availableActions')">
+            <el-select v-model="actionIds" @change="handleActionsChange" :placeholder="t('properties.selectActions')" multiple clearable>
               <el-option v-for="action in actions" :key="action.id" :label="action.actionName" :value="action.id">
                 <span>{{ action.actionName }}</span>
                 <el-tag size="small" style="margin-left: 8px;">{{ actionTypeLabel(action.actionType) }}</el-tag>
@@ -137,23 +137,23 @@
       </el-collapse-item>
       
       <!-- 超时配置 -->
-      <el-collapse-item :title="$t('properties.timeout')" name="timeout">
+      <el-collapse-item :title="t('properties.timeout')" name="timeout">
         <el-form label-position="top" size="small">
-          <el-form-item :label="$t('properties.enableTimeout')">
+          <el-form-item :label="t('properties.enableTimeout')">
             <el-switch v-model="timeoutEnabled" @change="updateExtProp('timeoutEnabled', timeoutEnabled)" />
           </el-form-item>
           
           <template v-if="timeoutEnabled">
-            <el-form-item :label="$t('properties.timeoutDuration')">
-              <el-input v-model="timeoutDuration" @change="updateExtProp('timeoutDuration', timeoutDuration)" :placeholder="$t('properties.timeoutDurationPlaceholder')" />
-              <div class="form-tip">{{ $t('properties.timeoutDurationHint') }}</div>
+            <el-form-item :label="t('properties.timeoutDuration')">
+              <el-input v-model="timeoutDuration" @change="updateExtProp('timeoutDuration', timeoutDuration)" :placeholder="t('properties.timeoutDurationPlaceholder')" />
+              <div class="form-tip">{{ t('properties.timeoutDurationHint') }}</div>
             </el-form-item>
             
-            <el-form-item :label="$t('properties.timeoutAction')">
+            <el-form-item :label="t('properties.timeoutAction')">
               <el-select v-model="timeoutAction" @change="updateExtProp('timeoutAction', timeoutAction)">
-                <el-option :label="$t('properties.notify')" value="remind" />
-                <el-option :label="$t('properties.autoComplete')" value="approve" />
-                <el-option :label="$t('properties.autoComplete')" value="reject" />
+                <el-option :label="t('properties.notify')" value="remind" />
+                <el-option :label="t('properties.autoComplete')" value="approve" />
+                <el-option :label="t('properties.autoComplete')" value="reject" />
               </el-select>
             </el-form-item>
           </template>

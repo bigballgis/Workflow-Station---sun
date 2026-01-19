@@ -6,7 +6,7 @@
         <div class="filter-left">
           <el-input 
             v-model="searchForm.name" 
-            :placeholder="$t('functionUnit.name')" 
+            :placeholder="t('functionUnit.name')" 
             clearable 
             style="width: 200px;"
             @clear="handleSearch"
@@ -18,21 +18,21 @@
           </el-input>
           <el-select 
             v-model="searchForm.status" 
-            :placeholder="$t('functionUnit.status')" 
+            :placeholder="t('functionUnit.status')" 
             clearable
             style="width: 120px;"
             @change="handleSearch"
           >
-            <el-option :label="$t('functionUnit.draft')" value="DRAFT" />
-            <el-option :label="$t('functionUnit.published')" value="PUBLISHED" />
-            <el-option :label="$t('functionUnit.archived')" value="ARCHIVED" />
+            <el-option :label="t('functionUnit.draft')" value="DRAFT" />
+            <el-option :label="t('functionUnit.published')" value="PUBLISHED" />
+            <el-option :label="t('functionUnit.archived')" value="ARCHIVED" />
           </el-select>
           <el-select
             v-model="searchForm.tags"
             multiple
             collapse-tags
             collapse-tags-tooltip
-            :placeholder="$t('functionUnit.filterByTags')"
+            :placeholder="t('functionUnit.filterByTags')"
             style="width: 200px;"
             @change="handleSearch"
           >
@@ -43,14 +43,14 @@
               :value="tag" 
             />
           </el-select>
-          <el-button @click="handleSearch">{{ $t('common.search') }}</el-button>
+          <el-button @click="handleSearch">{{ t('common.search') }}</el-button>
           <span class="result-count" v-if="filteredList.length !== store.list.length">
-            {{ $t('functionUnit.showingResults', { count: filteredList.length, total: store.list.length }) }}
+            {{ t('functionUnit.showingResults', { count: filteredList.length, total: store.list.length }) }}
           </span>
         </div>
         <el-button type="primary" @click="showCreateDialog = true">
           <el-icon><Plus /></el-icon>
-          {{ $t('functionUnit.create') }}
+          {{ t('functionUnit.create') }}
         </el-button>
       </div>
 
@@ -72,17 +72,17 @@
 
       <!-- Empty State -->
       <div v-else-if="store.list.length === 0" class="empty-state">
-        <el-empty :description="$t('functionUnit.noData')">
+        <el-empty :description="t('functionUnit.noData')">
           <el-button type="primary" @click="showCreateDialog = true">
-            {{ $t('functionUnit.create') }}
+            {{ t('functionUnit.create') }}
           </el-button>
         </el-empty>
       </div>
 
       <!-- No Results State -->
       <div v-else-if="filteredList.length === 0" class="empty-state">
-        <el-empty :description="$t('functionUnit.noResults')">
-          <el-button @click="clearFilters">{{ $t('functionUnit.clearFilters') }}</el-button>
+        <el-empty :description="t('functionUnit.noResults')">
+          <el-button @click="clearFilters">{{ t('functionUnit.clearFilters') }}</el-button>
         </el-empty>
       </div>
 
@@ -115,9 +115,9 @@
     </div>
 
     <!-- Create Dialog -->
-    <el-dialog v-model="showCreateDialog" :title="$t('functionUnit.create')" width="500px">
+    <el-dialog v-model="showCreateDialog" :title="t('functionUnit.create')" width="500px">
       <el-form ref="createFormRef" :model="createForm" :rules="formRules" label-width="80px">
-        <el-form-item :label="$t('functionUnit.icon')">
+        <el-form-item :label="t('functionUnit.icon')">
           <div class="icon-select-wrapper" @click="showIconSelector = true">
             <IconPreview 
               :icon-id="createForm.iconId" 
@@ -125,23 +125,23 @@
               size="medium" 
               clickable 
             />
-            <span class="icon-select-hint">{{ createForm.iconId ? $t('icon.clickToChange') : $t('icon.clickToSelect') }}</span>
+            <span class="icon-select-hint">{{ createForm.iconId ? t('icon.clickToChange') : t('icon.clickToSelect') }}</span>
           </div>
         </el-form-item>
-        <el-form-item :label="$t('functionUnit.name')" prop="name">
+        <el-form-item :label="t('functionUnit.name')" prop="name">
           <el-input v-model="createForm.name" />
         </el-form-item>
-        <el-form-item :label="$t('functionUnit.description')" prop="description">
+        <el-form-item :label="t('functionUnit.description')" prop="description">
           <el-input v-model="createForm.description" type="textarea" :rows="3" />
         </el-form-item>
-        <el-form-item :label="$t('functionUnit.tags')">
+        <el-form-item :label="t('functionUnit.tags')">
           <el-select
             v-model="createForm.tags"
             multiple
             filterable
             allow-create
             default-first-option
-            :placeholder="$t('functionUnit.selectTags')"
+            :placeholder="t('functionUnit.selectTags')"
             style="width: 100%;"
           >
             <el-option 
@@ -154,8 +154,8 @@
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showCreateDialog = false">{{ $t('common.cancel') }}</el-button>
-        <el-button type="primary" @click="handleCreate">{{ $t('common.confirm') }}</el-button>
+        <el-button @click="showCreateDialog = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="handleCreate">{{ t('common.confirm') }}</el-button>
       </template>
     </el-dialog>
 

@@ -5,7 +5,7 @@
         <div class="flex" style="align-items: center; gap: 16px;">
           <el-button @click="router.back()">
             <el-icon><ArrowLeft /></el-icon>
-            {{ $t('common.back') }}
+            {{ t('common.back') }}
           </el-button>
           <el-tooltip :content="store.current?.description || '暂无描述'" placement="bottom">
             <IconPreview 
@@ -24,60 +24,60 @@
         <div>
           <el-button @click="openEditDialog">
             <el-icon><Setting /></el-icon>
-            {{ $t('functionUnit.settings') }}
+            {{ t('functionUnit.settings') }}
           </el-button>
           <el-button @click="handleExport" :loading="exporting">
             <el-icon><Download /></el-icon>
-            {{ $t('common.export') }}
+            {{ t('common.export') }}
           </el-button>
-          <el-button @click="handleValidate" :loading="validating">{{ $t('functionUnit.validate') }}</el-button>
+          <el-button @click="handleValidate" :loading="validating">{{ t('functionUnit.validate') }}</el-button>
           <el-button type="warning" @click="showDeployDialog = true">
             <el-icon><Upload /></el-icon>
-            {{ $t('functionUnit.deploy') }}
+            {{ t('functionUnit.deploy') }}
           </el-button>
-          <el-button type="primary" @click="handlePublish">{{ $t('functionUnit.publish') }}</el-button>
+          <el-button type="primary" @click="handlePublish">{{ t('functionUnit.publish') }}</el-button>
         </div>
       </div>
 
       <el-tabs v-model="activeTab" type="border-card">
-        <el-tab-pane :label="$t('functionUnit.process')" name="process">
+        <el-tab-pane :label="t('functionUnit.process')" name="process">
           <ProcessDesigner v-if="activeTab === 'process'" :function-unit-id="functionUnitId" />
         </el-tab-pane>
-        <el-tab-pane :label="$t('functionUnit.tables')" name="tables">
+        <el-tab-pane :label="t('functionUnit.tables')" name="tables">
           <TableDesigner v-if="activeTab === 'tables'" :function-unit-id="functionUnitId" />
         </el-tab-pane>
-        <el-tab-pane :label="$t('functionUnit.forms')" name="forms">
+        <el-tab-pane :label="t('functionUnit.forms')" name="forms">
           <FormDesigner v-if="activeTab === 'forms'" :function-unit-id="functionUnitId" />
         </el-tab-pane>
-        <el-tab-pane :label="$t('functionUnit.actionDesign')" name="actions">
+        <el-tab-pane :label="t('functionUnit.actionDesign')" name="actions">
           <ActionDesigner v-if="activeTab === 'actions'" :function-unit-id="functionUnitId" />
         </el-tab-pane>
-        <el-tab-pane :label="$t('version.title')" name="versions">
+        <el-tab-pane :label="t('version.title')" name="versions">
           <VersionManager v-if="activeTab === 'versions'" :function-unit-id="functionUnitId" />
         </el-tab-pane>
       </el-tabs>
     </div>
 
     <!-- Edit Function Unit Dialog -->
-    <el-dialog v-model="showEditDialog" :title="$t('functionUnit.settings')" width="500px">
+    <el-dialog v-model="showEditDialog" :title="t('functionUnit.settings')" width="500px">
       <el-form :model="editForm" label-width="80px">
-        <el-form-item :label="$t('functionUnit.icon')">
+        <el-form-item :label="t('functionUnit.icon')">
           <div class="icon-edit-row">
             <IconPreview :icon-id="editForm.iconId" size="large" />
-            <el-button @click="showIconSelectorForEdit = true">{{ $t('functionUnit.changeIcon') }}</el-button>
-            <el-button v-if="editForm.iconId" link type="danger" @click="editForm.iconId = undefined">{{ $t('icon.clear') }}</el-button>
+            <el-button @click="showIconSelectorForEdit = true">{{ t('functionUnit.changeIcon') }}</el-button>
+            <el-button v-if="editForm.iconId" link type="danger" @click="editForm.iconId = undefined">{{ t('icon.clear') }}</el-button>
           </div>
         </el-form-item>
-        <el-form-item :label="$t('functionUnit.name')" required>
-          <el-input v-model="editForm.name" :placeholder="$t('functionUnit.namePlaceholder')" />
+        <el-form-item :label="t('functionUnit.name')" required>
+          <el-input v-model="editForm.name" :placeholder="t('functionUnit.namePlaceholder')" />
         </el-form-item>
-        <el-form-item :label="$t('functionUnit.description')">
-          <el-input v-model="editForm.description" type="textarea" :rows="3" :placeholder="$t('functionUnit.descriptionPlaceholder')" />
+        <el-form-item :label="t('functionUnit.description')">
+          <el-input v-model="editForm.description" type="textarea" :rows="3" :placeholder="t('functionUnit.descriptionPlaceholder')" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showEditDialog = false">{{ $t('common.cancel') }}</el-button>
-        <el-button type="primary" @click="handleSaveEdit" :loading="saving">{{ $t('common.save') }}</el-button>
+        <el-button @click="showEditDialog = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="handleSaveEdit" :loading="saving">{{ t('common.save') }}</el-button>
       </template>
     </el-dialog>
 
@@ -114,11 +114,11 @@
     />
 
     <!-- Deploy Dialog -->
-    <el-dialog v-model="showDeployDialog" :title="$t('functionUnit.deploy')" width="500px">
+    <el-dialog v-model="showDeployDialog" :title="t('functionUnit.deploy')" width="500px">
       <el-form :model="deployForm" label-width="100px">
-        <el-form-item :label="$t('functionUnit.autoEnable')">
+        <el-form-item :label="t('functionUnit.autoEnable')">
           <el-switch v-model="deployForm.autoEnable" />
-          <span style="margin-left: 12px; color: #909399; font-size: 12px;">{{ $t('functionUnit.autoEnableHint') }}</span>
+          <span style="margin-left: 12px; color: #909399; font-size: 12px;">{{ t('functionUnit.autoEnableHint') }}</span>
         </el-form-item>
       </el-form>
       <el-alert type="info" :closable="false" style="margin-bottom: 16px;">
