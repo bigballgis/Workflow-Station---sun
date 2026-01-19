@@ -13,11 +13,11 @@
         <el-menu :default-active="activeMenu" :collapse="isCollapsed" router>
           <el-menu-item index="/function-units">
             <el-icon><Folder /></el-icon>
-            <span>{{ $t('functionUnit.title') }}</span>
+            <span>{{ t('functionUnit.title') }}</span>
           </el-menu-item>
           <el-menu-item index="/icons">
             <el-icon><Picture /></el-icon>
-            <span>{{ $t('icon.title') }}</span>
+            <span>{{ t('icon.title') }}</span>
           </el-menu-item>
         </el-menu>
         <div class="collapse-btn" @click="toggleSidebar">
