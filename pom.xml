@@ -35,7 +35,7 @@
         <spring-cloud.version>2023.0.0</spring-cloud.version>
         
         <!-- Database -->
-        <postgresql.version>42.7.1</postgresql.version>
+        <postgresql.version>42.7.2</postgresql.version>
         <flyway.version>10.4.1</flyway.version>
         
         <!-- Security -->
