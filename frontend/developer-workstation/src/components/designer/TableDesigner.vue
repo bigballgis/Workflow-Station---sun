@@ -376,7 +376,7 @@ async function handleSaveTable() {
     
     // 延迟加载列表，确保事务已提交
     setTimeout(() => {
-      loadTables()
+    loadTables()
     }, 500)
   } catch (e: any) {
     console.error('[TableDesigner] Save failed:', e)
