@@ -4,26 +4,26 @@
     <div class="form-list-view" v-if="!selectedForm">
       <div class="designer-toolbar">
         <el-button type="primary" @click="showCreateDialog = true">
-          <el-icon><Plus /></el-icon> {{ $t('form.createForm') }}
+          <el-icon><Plus /></el-icon> {{ t('form.createForm') }}
         </el-button>
         <el-button @click="loadForms" :loading="loading">
-          <el-icon><Refresh /></el-icon> {{ $t('common.refresh') }}
+          <el-icon><Refresh /></el-icon> {{ t('common.refresh') }}
         </el-button>
         <el-button @click="handleImportFromTable" :disabled="store.tables.length === 0">
-          <el-icon><Connection /></el-icon> {{ $t('form.importFields') }}
+          <el-icon><Connection /></el-icon> {{ t('form.importFields') }}
         </el-button>
       </div>
       
       <el-table :data="store.forms" v-loading="loading" stripe @row-click="handleSelectForm">
-        <el-table-column prop="formName" :label="$t('form.formName')" />
-        <el-table-column prop="formType" :label="$t('form.formType')" width="120">
+        <el-table-column prop="formName" :label="t('form.formName')" />
+        <el-table-column prop="formType" :label="t('form.formType')" width="120">
           <template #default="{ row }">
             <el-tag :type="row.formType === 'MAIN' ? 'primary' : 'info'">
               {{ formTypeLabel(row.formType) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="boundTableId" :label="$t('form.boundTable')" width="180">
+        <el-table-column prop="boundTableId" :label="t('form.boundTable')" width="180">
           <template #default="{ row }">
             <template v-if="getPrimaryBinding(row)">
               <el-tag type="success" size="small">
@@ -36,10 +36,10 @@
             <el-tag v-else-if="row.boundTableId" type="success" size="small">
               {{ getTableName(row.boundTableId) }}
             </el-tag>
-            <span v-else class="text-muted">{{ $t('form.notBound') }}</span>
+            <span v-else class="text-muted">{{ t('form.notBound') }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="boundNodeId" :label="$t('form.boundNode')" min-width="180">
+        <el-table-column prop="boundNodeId" :label="t('form.boundNode')" min-width="180">
           <template #default="{ row }">
             <div class="bound-nodes">
               <template v-if="getFormBoundNodes(row.id).length > 0">
@@ -53,18 +53,18 @@
                   {{ node.nodeName }}{{ node.readOnly ? '(只读)' : '' }}
                 </el-tag>
               </template>
-              <span v-else class="text-muted">{{ $t('form.notBound') }}</span>
+              <span v-else class="text-muted">{{ t('form.notBound') }}</span>
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="description" :label="$t('table.description')" show-overflow-tooltip />
-        <el-table-column :label="$t('common.actions')" width="320" fixed="right">
+        <el-table-column prop="description" :label="t('table.description')" show-overflow-tooltip />
+        <el-table-column :label="t('common.actions')" width="320" fixed="right">
           <template #default="{ row }">
             <div class="action-buttons">
-              <el-button link type="primary" @click.stop="handleSelectForm(row)">{{ $t('common.edit') }}</el-button>
-              <el-button link type="warning" @click.stop="handleManageBindings(row)">{{ $t('form.editBindings') }}</el-button>
-              <el-button link type="success" @click.stop="handleBindNode(row)">{{ $t('form.boundNode') }}</el-button>
-              <el-button link type="danger" @click.stop="handleDeleteForm(row)">{{ $t('common.delete') }}</el-button>
+              <el-button link type="primary" @click.stop="handleSelectForm(row)">{{ t('common.edit') }}</el-button>
+              <el-button link type="warning" @click.stop="handleManageBindings(row)">{{ t('form.editBindings') }}</el-button>
+              <el-button link type="success" @click.stop="handleBindNode(row)">{{ t('form.boundNode') }}</el-button>
+              <el-button link type="danger" @click.stop="handleDeleteForm(row)">{{ t('common.delete') }}</el-button>
             </div>
           </template>
         </el-table-column>
