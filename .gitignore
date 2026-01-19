@@ -297,10 +297,3 @@ scripts/
 
 # Ignore deploy/ directory but keep important scripts
 deploy/
-!deploy/
-!deploy/scripts/
-!deploy/scripts/**
-!deploy/scripts/**/*.sql
-!deploy/init-scripts/
-!deploy/init-scripts/**
-!deploy/init-scripts/**/*.sql
