@@ -130,6 +130,7 @@ desktop.ini
 .env.development
 .env.test
 .env.production
+.env.example
 *.env
 
 # Secret/credential files
@@ -214,6 +215,7 @@ application-local.properties
 .docker/
 docker-compose.override.yml
 docker-compose.local.yml
+*/*/Dockerfile
 
 # =============================================================================
 # Kubernetes secrets (actual secrets, not templates)
