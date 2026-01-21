@@ -1,3 +1,6 @@
+-- 临时禁用外键约束检查，允许按任意顺序插入数据
+SET session_replication_role = 'replica';
+
 CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public;
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA public;
@@ -3745,10 +3748,10 @@ INSERT INTO public.dw_form_table_bindings VALUES (9, 7, 7, 'PRIMARY', 'READONLY'
 
 TRUNCATE TABLE public.dw_function_units CASCADE;
 
-INSERT INTO public.dw_function_units VALUES (1, '采购申请', '采购申请流程，支持多级审批、金额分级、部门会签等功能，覆盖所有任务分配类型和8种动作类型', 1, 'DRAFT', NULL, 'system', '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', 'fu-purchase-request');
+INSERT INTO public.dw_function_units (id, name, description, icon_id, status, current_version, created_by, created_at, updated_by, updated_at, code) VALUES (1, '采购申请', '采购申请流程，支持多级审批、金额分级、部门会签等功能，覆盖所有任务分配类型和8种动作类型', 1, 'DRAFT', NULL, 'system', '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', 'fu-purchase-request');
 TRUNCATE TABLE public.dw_function_units CASCADE;
 
-INSERT INTO public.dw_function_units VALUES (2, 'Test0', '', 3, 'PUBLISHED', '1.0.6', 'tech-director-001', '2026-01-14 08:04:04.398815', 'tech-director-001', '2026-01-19 13:01:30.773663', 'fu-20260114-paed3z');
+INSERT INTO public.dw_function_units (id, name, description, icon_id, status, current_version, created_by, created_at, updated_by, updated_at, code) VALUES (2, 'Test0', '', 3, 'PUBLISHED', '1.0.6', 'tech-director-001', '2026-01-14 08:04:04.398815', 'tech-director-001', '2026-01-19 13:01:30.773663', 'fu-20260114-paed3z');
 
 TRUNCATE TABLE public.dw_icons CASCADE;
 
@@ -6484,3 +6487,7 @@ ALTER TABLE ONLY public.flw_ru_batch_part
 
 ALTER TABLE ONLY public.wf_saga_steps
     ADD CONSTRAINT wf_saga_steps_saga_id_fkey FOREIGN KEY (saga_id) REFERENCES public.wf_saga_transactions(id);
+
+
+-- 恢复外键约束检查
+SET session_replication_role = 'origin';
