@@ -3520,40 +3520,40 @@ INSERT INTO public.act_ru_variable VALUES ('14c1fff0-f537-11f0-83bf-1a46ed4020c1
 
 TRUNCATE TABLE public.dw_action_definitions CASCADE;
 
-INSERT INTO public.dw_action_definitions VALUES (1, 1, 'Submit', 'PROCESS_SUBMIT', '{}', NULL, 'primary', 'Submit purchase request', true, '2026-01-13 10:38:37.240844', '2026-01-13 10:38:37.240844');
+INSERT INTO public.dw_action_definitions (id, function_unit_id, action_name, action_type, config_json, icon, button_color, description, is_default, created_at, updated_at) VALUES (1, 1, 'Submit', 'PROCESS_SUBMIT', '{}', NULL, 'primary', 'Submit purchase request', true, '2026-01-13 10:38:37.240844', '2026-01-13 10:38:37.240844');
 TRUNCATE TABLE public.dw_action_definitions CASCADE;
 
-INSERT INTO public.dw_action_definitions VALUES (2, 1, 'Approve', 'APPROVE', '{}', NULL, 'success', 'Approve request', true, '2026-01-13 10:38:37.240844', '2026-01-13 10:38:37.240844');
+INSERT INTO public.dw_action_definitions (id, function_unit_id, action_name, action_type, config_json, icon, button_color, description, is_default, created_at, updated_at) VALUES (2, 1, 'Approve', 'APPROVE', '{}', NULL, 'success', 'Approve request', true, '2026-01-13 10:38:37.240844', '2026-01-13 10:38:37.240844');
 TRUNCATE TABLE public.dw_action_definitions CASCADE;
 
-INSERT INTO public.dw_action_definitions VALUES (3, 1, 'Reject', 'REJECT', '{}', NULL, 'danger', 'Reject request', false, '2026-01-13 10:38:37.240844', '2026-01-13 10:38:37.240844');
+INSERT INTO public.dw_action_definitions (id, function_unit_id, action_name, action_type, config_json, icon, button_color, description, is_default, created_at, updated_at) VALUES (3, 1, 'Reject', 'REJECT', '{}', NULL, 'danger', 'Reject request', false, '2026-01-13 10:38:37.240844', '2026-01-13 10:38:37.240844');
 TRUNCATE TABLE public.dw_action_definitions CASCADE;
 
-INSERT INTO public.dw_action_definitions VALUES (4, 1, 'Transfer', 'TRANSFER', '{}', NULL, 'warning', 'Transfer task', false, '2026-01-13 10:38:37.240844', '2026-01-13 10:38:37.240844');
+INSERT INTO public.dw_action_definitions (id, function_unit_id, action_name, action_type, config_json, icon, button_color, description, is_default, created_at, updated_at) VALUES (4, 1, 'Transfer', 'TRANSFER', '{}', NULL, 'warning', 'Transfer task', false, '2026-01-13 10:38:37.240844', '2026-01-13 10:38:37.240844');
 TRUNCATE TABLE public.dw_action_definitions CASCADE;
 
-INSERT INTO public.dw_action_definitions VALUES (5, 1, 'Delegate', 'DELEGATE', '{}', NULL, 'info', 'Delegate task', false, '2026-01-13 10:38:37.240844', '2026-01-13 10:38:37.240844');
+INSERT INTO public.dw_action_definitions (id, function_unit_id, action_name, action_type, config_json, icon, button_color, description, is_default, created_at, updated_at) VALUES (5, 1, 'Delegate', 'DELEGATE', '{}', NULL, 'info', 'Delegate task', false, '2026-01-13 10:38:37.240844', '2026-01-13 10:38:37.240844');
 TRUNCATE TABLE public.dw_action_definitions CASCADE;
 
-INSERT INTO public.dw_action_definitions VALUES (6, 1, 'Rollback', 'ROLLBACK', '{}', NULL, 'warning', 'Rollback to previous step', false, '2026-01-13 10:38:37.240844', '2026-01-13 10:38:37.240844');
+INSERT INTO public.dw_action_definitions (id, function_unit_id, action_name, action_type, config_json, icon, button_color, description, is_default, created_at, updated_at) VALUES (6, 1, 'Rollback', 'ROLLBACK', '{}', NULL, 'warning', 'Rollback to previous step', false, '2026-01-13 10:38:37.240844', '2026-01-13 10:38:37.240844');
 TRUNCATE TABLE public.dw_action_definitions CASCADE;
 
-INSERT INTO public.dw_action_definitions VALUES (7, 1, 'Withdraw', 'WITHDRAW', '{}', NULL, 'danger', 'Withdraw request', false, '2026-01-13 10:38:37.240844', '2026-01-13 10:38:37.240844');
+INSERT INTO public.dw_action_definitions (id, function_unit_id, action_name, action_type, config_json, icon, button_color, description, is_default, created_at, updated_at) VALUES (7, 1, 'Withdraw', 'WITHDRAW', '{}', NULL, 'danger', 'Withdraw request', false, '2026-01-13 10:38:37.240844', '2026-01-13 10:38:37.240844');
 TRUNCATE TABLE public.dw_action_definitions CASCADE;
 
-INSERT INTO public.dw_action_definitions VALUES (8, 1, 'Query Budget', 'API_CALL', '{}', NULL, 'info', 'Query budget information', false, '2026-01-13 10:38:37.240844', '2026-01-13 10:38:37.240844');
+INSERT INTO public.dw_action_definitions (id, function_unit_id, action_name, action_type, config_json, icon, button_color, description, is_default, created_at, updated_at) VALUES (8, 1, 'Query Budget', 'API_CALL', '{}', NULL, 'info', 'Query budget information', false, '2026-01-13 10:38:37.240844', '2026-01-13 10:38:37.240844');
 TRUNCATE TABLE public.dw_action_definitions CASCADE;
 
-INSERT INTO public.dw_action_definitions VALUES (9, 1, 'Select Supplier', 'FORM_POPUP', '{}', NULL, 'primary', 'Open supplier selection form', false, '2026-01-13 10:38:37.240844', '2026-01-13 10:38:37.240844');
+INSERT INTO public.dw_action_definitions (id, function_unit_id, action_name, action_type, config_json, icon, button_color, description, is_default, created_at, updated_at) VALUES (9, 1, 'Select Supplier', 'FORM_POPUP', '{}', NULL, 'primary', 'Open supplier selection form', false, '2026-01-13 10:38:37.240844', '2026-01-13 10:38:37.240844');
 TRUNCATE TABLE public.dw_action_definitions CASCADE;
 
-INSERT INTO public.dw_action_definitions VALUES (10, 1, 'Calculate Total', 'CUSTOM_SCRIPT', '{}', NULL, 'info', 'Calculate total amount', false, '2026-01-13 10:38:37.240844', '2026-01-13 10:38:37.240844');
+INSERT INTO public.dw_action_definitions (id, function_unit_id, action_name, action_type, config_json, icon, button_color, description, is_default, created_at, updated_at) VALUES (10, 1, 'Calculate Total', 'CUSTOM_SCRIPT', '{}', NULL, 'info', 'Calculate total amount', false, '2026-01-13 10:38:37.240844', '2026-01-13 10:38:37.240844');
 TRUNCATE TABLE public.dw_action_definitions CASCADE;
 
-INSERT INTO public.dw_action_definitions VALUES (11, 2, 'testAction', 'CUSTOM_SCRIPT', '{"url": "", "body": "", "formId": null, "method": "POST", "script": "console.alert(''!'')", "headers": "", "targetStep": "", "dialogTitle": "", "dialogWidth": "600px", "targetStatus": "", "confirmMessage": "", "requireComment": false, "requireAssignee": false}', NULL, NULL, '', false, '2026-01-14 08:49:55.586904', '2026-01-14 08:50:31.74478');
+INSERT INTO public.dw_action_definitions (id, function_unit_id, action_name, action_type, config_json, icon, button_color, description, is_default, created_at, updated_at) VALUES (11, 2, 'testAction', 'CUSTOM_SCRIPT', '{"url": "", "body": "", "formId": null, "method": "POST", "script": "console.alert(''!'')", "headers": "", "targetStep": "", "dialogTitle": "", "dialogWidth": "600px", "targetStatus": "", "confirmMessage": "", "requireComment": false, "requireAssignee": false}', NULL, NULL, '', false, '2026-01-14 08:49:55.586904', '2026-01-14 08:50:31.74478');
 TRUNCATE TABLE public.dw_action_definitions CASCADE;
 
-INSERT INTO public.dw_action_definitions VALUES (12, 2, 'l', 'APPROVE', '{}', NULL, NULL, '', true, '2026-01-15 11:43:34.338311', '2026-01-15 11:43:34.338311');
+INSERT INTO public.dw_action_definitions (id, function_unit_id, action_name, action_type, config_json, icon, button_color, description, is_default, created_at, updated_at) VALUES (12, 2, 'l', 'APPROVE', '{}', NULL, NULL, '', true, '2026-01-15 11:43:34.338311', '2026-01-15 11:43:34.338311');
 
 TRUNCATE TABLE public.dw_field_definitions CASCADE;
 
