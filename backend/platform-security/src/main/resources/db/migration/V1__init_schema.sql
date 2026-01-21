@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS sys_users (
     full_name VARCHAR(100),
     phone VARCHAR(50),
     employee_id VARCHAR(50),
+    department_id character varying(64),
     position VARCHAR(100),
     entity_manager_id VARCHAR(64),
     function_manager_id VARCHAR(64),

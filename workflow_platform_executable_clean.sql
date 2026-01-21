@@ -2007,8 +2007,6 @@ CREATE TABLE IF NOT EXISTS public.sys_virtual_groups (
     type character varying(50) DEFAULT 'CUSTOM'::character varying,
     rule_expression text,
     status character varying(20) DEFAULT 'ACTIVE'::character varying,
-    valid_from timestamp without time zone,
-    valid_to timestamp without time zone,
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
     created_by character varying(64),
     updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
