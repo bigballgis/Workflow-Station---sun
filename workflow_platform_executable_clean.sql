@@ -4851,19 +4851,19 @@ INSERT INTO public.sys_virtual_group_members (id, group_id, user_id, joined_at, 
 
 TRUNCATE TABLE public.sys_virtual_groups CASCADE;
 
-INSERT INTO public.sys_virtual_groups (id, name, code, description, type, rule_expression, status, valid_from, valid_to, created_at, created_by, updated_at, updated_by, ad_group) VALUES ('vg-all-managers', 'All Managers', 'ALL_MANAGERS', 'All department managers across the organization', 'SYSTEM', NULL, 'ACTIVE', NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+INSERT INTO public.sys_virtual_groups (id, name, code, description, type, rule_expression, status, created_at, created_by, updated_at, updated_by, ad_group) VALUES ('vg-all-managers', 'All Managers', 'ALL_MANAGERS', 'All department managers across the organization', 'SYSTEM', NULL, 'ACTIVE', '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
 TRUNCATE TABLE public.sys_virtual_groups CASCADE;
 
-INSERT INTO public.sys_virtual_groups (id, name, code, description, type, rule_expression, status, valid_from, valid_to, created_at, created_by, updated_at, updated_by, ad_group) VALUES ('vg-all-developers', 'All Developers', 'ALL_DEVELOPERS', 'All developers in IT department', 'SYSTEM', NULL, 'ACTIVE', NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+INSERT INTO public.sys_virtual_groups (id, name, code, description, type, rule_expression, status, created_at, created_by, updated_at, updated_by, ad_group) VALUES ('vg-all-developers', 'All Developers', 'ALL_DEVELOPERS', 'All developers in IT department', 'SYSTEM', NULL, 'ACTIVE', '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
 TRUNCATE TABLE public.sys_virtual_groups CASCADE;
 
-INSERT INTO public.sys_virtual_groups (id, name, code, description, type, rule_expression, status, valid_from, valid_to, created_at, created_by, updated_at, updated_by, ad_group) VALUES ('vg-team-leads', 'Team Leaders', 'TEAM_LEADS', 'All team leaders', 'SYSTEM', NULL, 'ACTIVE', NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+INSERT INTO public.sys_virtual_groups (id, name, code, description, type, rule_expression, status, created_at, created_by, updated_at, updated_by, ad_group) VALUES ('vg-team-leads', 'Team Leaders', 'TEAM_LEADS', 'All team leaders', 'SYSTEM', NULL, 'ACTIVE', '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
 TRUNCATE TABLE public.sys_virtual_groups CASCADE;
 
-INSERT INTO public.sys_virtual_groups (id, name, code, description, type, rule_expression, status, valid_from, valid_to, created_at, created_by, updated_at, updated_by, ad_group) VALUES ('vg-senior-devs', 'Senior Developers', 'SENIOR_DEVS', 'Senior developers with elevated permissions', 'SYSTEM', NULL, 'ACTIVE', NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+INSERT INTO public.sys_virtual_groups (id, name, code, description, type, rule_expression, status, created_at, created_by, updated_at, updated_by, ad_group) VALUES ('vg-senior-devs', 'Senior Developers', 'SENIOR_DEVS', 'Senior developers with elevated permissions', 'SYSTEM', NULL, 'ACTIVE', '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
 TRUNCATE TABLE public.sys_virtual_groups CASCADE;
 
-INSERT INTO public.sys_virtual_groups (id, name, code, description, type, rule_expression, status, valid_from, valid_to, created_at, created_by, updated_at, updated_by, ad_group) VALUES ('vg-approvers', 'Approvers', 'APPROVERS', 'Users who can approve workflow tasks', 'SYSTEM', NULL, 'ACTIVE', NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+INSERT INTO public.sys_virtual_groups (id, name, code, description, type, rule_expression, status, created_at, created_by, updated_at, updated_by, ad_group) VALUES ('vg-approvers', 'Approvers', 'APPROVERS', 'Users who can approve workflow tasks', 'SYSTEM', NULL, 'ACTIVE', '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
 
 TRUNCATE TABLE public.up_process_draft CASCADE;
 
