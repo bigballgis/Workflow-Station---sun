@@ -1,7 +1,7 @@
 CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public;
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA public;
-CREATE TABLE public.act_app_appdef (
+CREATE TABLE IF NOT EXISTS public.act_app_appdef (
     id_ character varying(255) NOT NULL,
     rev_ integer NOT NULL,
     name_ character varying(255),
@@ -14,7 +14,7 @@ CREATE TABLE public.act_app_appdef (
     tenant_id_ character varying(255) DEFAULT ''::character varying
 );
 
-CREATE TABLE public.act_app_databasechangelog (
+CREATE TABLE IF NOT EXISTS public.act_app_databasechangelog (
     id character varying(255) NOT NULL,
     author character varying(255) NOT NULL,
     filename character varying(255) NOT NULL,
@@ -31,14 +31,14 @@ CREATE TABLE public.act_app_databasechangelog (
     deployment_id character varying(10)
 );
 
-CREATE TABLE public.act_app_databasechangeloglock (
+CREATE TABLE IF NOT EXISTS public.act_app_databasechangeloglock (
     id integer NOT NULL,
     locked boolean NOT NULL,
     lockgranted timestamp without time zone,
     lockedby character varying(255)
 );
 
-CREATE TABLE public.act_app_deployment (
+CREATE TABLE IF NOT EXISTS public.act_app_deployment (
     id_ character varying(255) NOT NULL,
     name_ character varying(255),
     category_ character varying(255),
@@ -47,14 +47,14 @@ CREATE TABLE public.act_app_deployment (
     tenant_id_ character varying(255) DEFAULT ''::character varying
 );
 
-CREATE TABLE public.act_app_deployment_resource (
+CREATE TABLE IF NOT EXISTS public.act_app_deployment_resource (
     id_ character varying(255) NOT NULL,
     name_ character varying(255),
     deployment_id_ character varying(255),
     resource_bytes_ bytea
 );
 
-CREATE TABLE public.act_cmmn_casedef (
+CREATE TABLE IF NOT EXISTS public.act_cmmn_casedef (
     id_ character varying(255) NOT NULL,
     rev_ integer NOT NULL,
     name_ character varying(255),
@@ -70,7 +70,7 @@ CREATE TABLE public.act_cmmn_casedef (
     has_start_form_key_ boolean
 );
 
-CREATE TABLE public.act_cmmn_databasechangelog (
+CREATE TABLE IF NOT EXISTS public.act_cmmn_databasechangelog (
     id character varying(255) NOT NULL,
     author character varying(255) NOT NULL,
     filename character varying(255) NOT NULL,
@@ -87,14 +87,14 @@ CREATE TABLE public.act_cmmn_databasechangelog (
     deployment_id character varying(10)
 );
 
-CREATE TABLE public.act_cmmn_databasechangeloglock (
+CREATE TABLE IF NOT EXISTS public.act_cmmn_databasechangeloglock (
     id integer NOT NULL,
     locked boolean NOT NULL,
     lockgranted timestamp without time zone,
     lockedby character varying(255)
 );
 
-CREATE TABLE public.act_cmmn_deployment (
+CREATE TABLE IF NOT EXISTS public.act_cmmn_deployment (
     id_ character varying(255) NOT NULL,
     name_ character varying(255),
     category_ character varying(255),
@@ -104,7 +104,7 @@ CREATE TABLE public.act_cmmn_deployment (
     tenant_id_ character varying(255) DEFAULT ''::character varying
 );
 
-CREATE TABLE public.act_cmmn_deployment_resource (
+CREATE TABLE IF NOT EXISTS public.act_cmmn_deployment_resource (
     id_ character varying(255) NOT NULL,
     name_ character varying(255),
     deployment_id_ character varying(255),
@@ -112,7 +112,7 @@ CREATE TABLE public.act_cmmn_deployment_resource (
     generated_ boolean
 );
 
-CREATE TABLE public.act_cmmn_hi_case_inst (
+CREATE TABLE IF NOT EXISTS public.act_cmmn_hi_case_inst (
     id_ character varying(255) NOT NULL,
     rev_ integer NOT NULL,
     business_key_ character varying(255),
@@ -133,7 +133,7 @@ CREATE TABLE public.act_cmmn_hi_case_inst (
     business_status_ character varying(255)
 );
 
-CREATE TABLE public.act_cmmn_hi_mil_inst (
+CREATE TABLE IF NOT EXISTS public.act_cmmn_hi_mil_inst (
     id_ character varying(255) NOT NULL,
     rev_ integer NOT NULL,
     name_ character varying(255) NOT NULL,
@@ -144,7 +144,7 @@ CREATE TABLE public.act_cmmn_hi_mil_inst (
     tenant_id_ character varying(255) DEFAULT ''::character varying
 );
 
-CREATE TABLE public.act_cmmn_hi_plan_item_inst (
+CREATE TABLE IF NOT EXISTS public.act_cmmn_hi_plan_item_inst (
     id_ character varying(255) NOT NULL,
     rev_ integer NOT NULL,
     name_ character varying(255),
@@ -180,7 +180,7 @@ CREATE TABLE public.act_cmmn_hi_plan_item_inst (
     last_unavailable_time_ timestamp(3) without time zone
 );
 
-CREATE TABLE public.act_cmmn_ru_case_inst (
+CREATE TABLE IF NOT EXISTS public.act_cmmn_ru_case_inst (
     id_ character varying(255) NOT NULL,
     rev_ integer NOT NULL,
     business_key_ character varying(255),
@@ -203,7 +203,7 @@ CREATE TABLE public.act_cmmn_ru_case_inst (
     business_status_ character varying(255)
 );
 
-CREATE TABLE public.act_cmmn_ru_mil_inst (
+CREATE TABLE IF NOT EXISTS public.act_cmmn_ru_mil_inst (
     id_ character varying(255) NOT NULL,
     name_ character varying(255) NOT NULL,
     time_stamp_ timestamp without time zone NOT NULL,
@@ -213,7 +213,7 @@ CREATE TABLE public.act_cmmn_ru_mil_inst (
     tenant_id_ character varying(255) DEFAULT ''::character varying
 );
 
-CREATE TABLE public.act_cmmn_ru_plan_item_inst (
+CREATE TABLE IF NOT EXISTS public.act_cmmn_ru_plan_item_inst (
     id_ character varying(255) NOT NULL,
     rev_ integer NOT NULL,
     case_def_id_ character varying(255),
@@ -251,7 +251,7 @@ CREATE TABLE public.act_cmmn_ru_plan_item_inst (
     last_unavailable_time_ timestamp(3) without time zone
 );
 
-CREATE TABLE public.act_cmmn_ru_sentry_part_inst (
+CREATE TABLE IF NOT EXISTS public.act_cmmn_ru_sentry_part_inst (
     id_ character varying(255) NOT NULL,
     rev_ integer NOT NULL,
     case_def_id_ character varying(255),
@@ -262,7 +262,7 @@ CREATE TABLE public.act_cmmn_ru_sentry_part_inst (
     time_stamp_ timestamp without time zone
 );
 
-CREATE TABLE public.act_dmn_databasechangelog (
+CREATE TABLE IF NOT EXISTS public.act_dmn_databasechangelog (
     id character varying(255) NOT NULL,
     author character varying(255) NOT NULL,
     filename character varying(255) NOT NULL,
@@ -279,14 +279,14 @@ CREATE TABLE public.act_dmn_databasechangelog (
     deployment_id character varying(10)
 );
 
-CREATE TABLE public.act_dmn_databasechangeloglock (
+CREATE TABLE IF NOT EXISTS public.act_dmn_databasechangeloglock (
     id integer NOT NULL,
     locked boolean NOT NULL,
     lockgranted timestamp without time zone,
     lockedby character varying(255)
 );
 
-CREATE TABLE public.act_dmn_decision (
+CREATE TABLE IF NOT EXISTS public.act_dmn_decision (
     id_ character varying(255) NOT NULL,
     name_ character varying(255),
     version_ integer,
@@ -299,7 +299,7 @@ CREATE TABLE public.act_dmn_decision (
     decision_type_ character varying(255)
 );
 
-CREATE TABLE public.act_dmn_deployment (
+CREATE TABLE IF NOT EXISTS public.act_dmn_deployment (
     id_ character varying(255) NOT NULL,
     name_ character varying(255),
     category_ character varying(255),
@@ -308,14 +308,14 @@ CREATE TABLE public.act_dmn_deployment (
     parent_deployment_id_ character varying(255)
 );
 
-CREATE TABLE public.act_dmn_deployment_resource (
+CREATE TABLE IF NOT EXISTS public.act_dmn_deployment_resource (
     id_ character varying(255) NOT NULL,
     name_ character varying(255),
     deployment_id_ character varying(255),
     resource_bytes_ bytea
 );
 
-CREATE TABLE public.act_dmn_hi_decision_execution (
+CREATE TABLE IF NOT EXISTS public.act_dmn_hi_decision_execution (
     id_ character varying(255) NOT NULL,
     decision_definition_id_ character varying(255),
     deployment_id_ character varying(255),
@@ -330,7 +330,7 @@ CREATE TABLE public.act_dmn_hi_decision_execution (
     scope_type_ character varying(255)
 );
 
-CREATE TABLE public.act_evt_log (
+CREATE TABLE IF NOT EXISTS public.act_evt_log (
     log_nr_ integer NOT NULL,
     type_ character varying(64),
     proc_def_id_ character varying(64),
@@ -345,7 +345,7 @@ CREATE TABLE public.act_evt_log (
     is_processed_ smallint DEFAULT 0
 );
 
-CREATE SEQUENCE public.act_evt_log_log_nr__seq
+CREATE SEQUENCE IF NOT EXISTS public.act_evt_log_log_nr__seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -355,7 +355,7 @@ CREATE SEQUENCE public.act_evt_log_log_nr__seq
 
 ALTER SEQUENCE public.act_evt_log_log_nr__seq OWNED BY public.act_evt_log.log_nr_;
 
-CREATE TABLE public.act_ge_bytearray (
+CREATE TABLE IF NOT EXISTS public.act_ge_bytearray (
     id_ character varying(64) NOT NULL,
     rev_ integer,
     name_ character varying(255),
@@ -364,13 +364,13 @@ CREATE TABLE public.act_ge_bytearray (
     generated_ boolean
 );
 
-CREATE TABLE public.act_ge_property (
+CREATE TABLE IF NOT EXISTS public.act_ge_property (
     name_ character varying(64) NOT NULL,
     value_ character varying(300),
     rev_ integer
 );
 
-CREATE TABLE public.act_hi_actinst (
+CREATE TABLE IF NOT EXISTS public.act_hi_actinst (
     id_ character varying(64) NOT NULL,
     rev_ integer DEFAULT 1,
     proc_def_id_ character varying(64) NOT NULL,
@@ -390,7 +390,7 @@ CREATE TABLE public.act_hi_actinst (
     tenant_id_ character varying(255) DEFAULT ''::character varying
 );
 
-CREATE TABLE public.act_hi_attachment (
+CREATE TABLE IF NOT EXISTS public.act_hi_attachment (
     id_ character varying(64) NOT NULL,
     rev_ integer,
     user_id_ character varying(255),
@@ -404,7 +404,7 @@ CREATE TABLE public.act_hi_attachment (
     time_ timestamp without time zone
 );
 
-CREATE TABLE public.act_hi_comment (
+CREATE TABLE IF NOT EXISTS public.act_hi_comment (
     id_ character varying(64) NOT NULL,
     type_ character varying(255),
     time_ timestamp without time zone NOT NULL,
@@ -416,7 +416,7 @@ CREATE TABLE public.act_hi_comment (
     full_msg_ bytea
 );
 
-CREATE TABLE public.act_hi_detail (
+CREATE TABLE IF NOT EXISTS public.act_hi_detail (
     id_ character varying(64) NOT NULL,
     type_ character varying(255) NOT NULL,
     proc_inst_id_ character varying(64),
@@ -434,7 +434,7 @@ CREATE TABLE public.act_hi_detail (
     text2_ character varying(4000)
 );
 
-CREATE TABLE public.act_hi_entitylink (
+CREATE TABLE IF NOT EXISTS public.act_hi_entitylink (
     id_ character varying(64) NOT NULL,
     link_type_ character varying(255),
     create_time_ timestamp without time zone,
@@ -451,7 +451,7 @@ CREATE TABLE public.act_hi_entitylink (
     hierarchy_type_ character varying(255)
 );
 
-CREATE TABLE public.act_hi_identitylink (
+CREATE TABLE IF NOT EXISTS public.act_hi_identitylink (
     id_ character varying(64) NOT NULL,
     group_id_ character varying(255),
     type_ character varying(255),
@@ -465,7 +465,7 @@ CREATE TABLE public.act_hi_identitylink (
     scope_definition_id_ character varying(255)
 );
 
-CREATE TABLE public.act_hi_procinst (
+CREATE TABLE IF NOT EXISTS public.act_hi_procinst (
     id_ character varying(64) NOT NULL,
     rev_ integer DEFAULT 1,
     proc_inst_id_ character varying(64) NOT NULL,
@@ -489,7 +489,7 @@ CREATE TABLE public.act_hi_procinst (
     business_status_ character varying(255)
 );
 
-CREATE TABLE public.act_hi_taskinst (
+CREATE TABLE IF NOT EXISTS public.act_hi_taskinst (
     id_ character varying(64) NOT NULL,
     rev_ integer DEFAULT 1,
     proc_def_id_ character varying(64),
@@ -520,7 +520,7 @@ CREATE TABLE public.act_hi_taskinst (
     last_updated_time_ timestamp without time zone
 );
 
-CREATE TABLE public.act_hi_tsk_log (
+CREATE TABLE IF NOT EXISTS public.act_hi_tsk_log (
     id_ integer NOT NULL,
     type_ character varying(64),
     task_id_ character varying(64) NOT NULL,
@@ -537,7 +537,7 @@ CREATE TABLE public.act_hi_tsk_log (
     tenant_id_ character varying(255) DEFAULT ''::character varying
 );
 
-CREATE SEQUENCE public.act_hi_tsk_log_id__seq
+CREATE SEQUENCE IF NOT EXISTS public.act_hi_tsk_log_id__seq
     AS integer
     START WITH 1
     INCREMENT BY 1
@@ -547,7 +547,7 @@ CREATE SEQUENCE public.act_hi_tsk_log_id__seq
 
 ALTER SEQUENCE public.act_hi_tsk_log_id__seq OWNED BY public.act_hi_tsk_log.id_;
 
-CREATE TABLE public.act_hi_varinst (
+CREATE TABLE IF NOT EXISTS public.act_hi_varinst (
     id_ character varying(64) NOT NULL,
     rev_ integer DEFAULT 1,
     proc_inst_id_ character varying(64),
@@ -568,21 +568,21 @@ CREATE TABLE public.act_hi_varinst (
     last_updated_time_ timestamp without time zone
 );
 
-CREATE TABLE public.act_id_bytearray (
+CREATE TABLE IF NOT EXISTS public.act_id_bytearray (
     id_ character varying(64) NOT NULL,
     rev_ integer,
     name_ character varying(255),
     bytes_ bytea
 );
 
-CREATE TABLE public.act_id_group (
+CREATE TABLE IF NOT EXISTS public.act_id_group (
     id_ character varying(64) NOT NULL,
     rev_ integer,
     name_ character varying(255),
     type_ character varying(255)
 );
 
-CREATE TABLE public.act_id_info (
+CREATE TABLE IF NOT EXISTS public.act_id_info (
     id_ character varying(64) NOT NULL,
     rev_ integer,
     user_id_ character varying(64),
@@ -593,30 +593,30 @@ CREATE TABLE public.act_id_info (
     parent_id_ character varying(255)
 );
 
-CREATE TABLE public.act_id_membership (
+CREATE TABLE IF NOT EXISTS public.act_id_membership (
     user_id_ character varying(64) NOT NULL,
     group_id_ character varying(64) NOT NULL
 );
 
-CREATE TABLE public.act_id_priv (
+CREATE TABLE IF NOT EXISTS public.act_id_priv (
     id_ character varying(64) NOT NULL,
     name_ character varying(255) NOT NULL
 );
 
-CREATE TABLE public.act_id_priv_mapping (
+CREATE TABLE IF NOT EXISTS public.act_id_priv_mapping (
     id_ character varying(64) NOT NULL,
     priv_id_ character varying(64) NOT NULL,
     user_id_ character varying(255),
     group_id_ character varying(255)
 );
 
-CREATE TABLE public.act_id_property (
+CREATE TABLE IF NOT EXISTS public.act_id_property (
     name_ character varying(64) NOT NULL,
     value_ character varying(300),
     rev_ integer
 );
 
-CREATE TABLE public.act_id_token (
+CREATE TABLE IF NOT EXISTS public.act_id_token (
     id_ character varying(64) NOT NULL,
     rev_ integer,
     token_value_ character varying(255),
@@ -627,7 +627,7 @@ CREATE TABLE public.act_id_token (
     token_data_ character varying(2000)
 );
 
-CREATE TABLE public.act_id_user (
+CREATE TABLE IF NOT EXISTS public.act_id_user (
     id_ character varying(64) NOT NULL,
     rev_ integer,
     first_ character varying(255),
@@ -639,14 +639,14 @@ CREATE TABLE public.act_id_user (
     tenant_id_ character varying(255) DEFAULT ''::character varying
 );
 
-CREATE TABLE public.act_procdef_info (
+CREATE TABLE IF NOT EXISTS public.act_procdef_info (
     id_ character varying(64) NOT NULL,
     proc_def_id_ character varying(64) NOT NULL,
     rev_ integer,
     info_json_id_ character varying(64)
 );
 
-CREATE TABLE public.act_re_deployment (
+CREATE TABLE IF NOT EXISTS public.act_re_deployment (
     id_ character varying(64) NOT NULL,
     name_ character varying(255),
     category_ character varying(255),
@@ -659,7 +659,7 @@ CREATE TABLE public.act_re_deployment (
     engine_version_ character varying(255)
 );
 
-CREATE TABLE public.act_re_model (
+CREATE TABLE IF NOT EXISTS public.act_re_model (
     id_ character varying(64) NOT NULL,
     rev_ integer,
     name_ character varying(255),
@@ -675,7 +675,7 @@ CREATE TABLE public.act_re_model (
     tenant_id_ character varying(255) DEFAULT ''::character varying
 );
 
-CREATE TABLE public.act_re_procdef (
+CREATE TABLE IF NOT EXISTS public.act_re_procdef (
     id_ character varying(64) NOT NULL,
     rev_ integer,
     category_ character varying(255),
@@ -696,7 +696,7 @@ CREATE TABLE public.act_re_procdef (
     engine_version_ character varying(255)
 );
 
-CREATE TABLE public.act_ru_actinst (
+CREATE TABLE IF NOT EXISTS public.act_ru_actinst (
     id_ character varying(64) NOT NULL,
     rev_ integer DEFAULT 1,
     proc_def_id_ character varying(64) NOT NULL,
@@ -716,7 +716,7 @@ CREATE TABLE public.act_ru_actinst (
     tenant_id_ character varying(255) DEFAULT ''::character varying
 );
 
-CREATE TABLE public.act_ru_deadletter_job (
+CREATE TABLE IF NOT EXISTS public.act_ru_deadletter_job (
     id_ character varying(64) NOT NULL,
     rev_ integer,
     category_ character varying(255),
@@ -743,7 +743,7 @@ CREATE TABLE public.act_ru_deadletter_job (
     tenant_id_ character varying(255) DEFAULT ''::character varying
 );
 
-CREATE TABLE public.act_ru_entitylink (
+CREATE TABLE IF NOT EXISTS public.act_ru_entitylink (
     id_ character varying(64) NOT NULL,
     rev_ integer,
     create_time_ timestamp without time zone,
@@ -761,7 +761,7 @@ CREATE TABLE public.act_ru_entitylink (
     hierarchy_type_ character varying(255)
 );
 
-CREATE TABLE public.act_ru_event_subscr (
+CREATE TABLE IF NOT EXISTS public.act_ru_event_subscr (
     id_ character varying(64) NOT NULL,
     rev_ integer,
     event_type_ character varying(255) NOT NULL,
@@ -781,7 +781,7 @@ CREATE TABLE public.act_ru_event_subscr (
     tenant_id_ character varying(255) DEFAULT ''::character varying
 );
 
-CREATE TABLE public.act_ru_execution (
+CREATE TABLE IF NOT EXISTS public.act_ru_execution (
     id_ character varying(64) NOT NULL,
     rev_ integer,
     proc_inst_id_ character varying(64),
@@ -823,7 +823,7 @@ CREATE TABLE public.act_ru_execution (
     business_status_ character varying(255)
 );
 
-CREATE TABLE public.act_ru_external_job (
+CREATE TABLE IF NOT EXISTS public.act_ru_external_job (
     id_ character varying(64) NOT NULL,
     rev_ integer,
     category_ character varying(255),
@@ -853,7 +853,7 @@ CREATE TABLE public.act_ru_external_job (
     tenant_id_ character varying(255) DEFAULT ''::character varying
 );
 
-CREATE TABLE public.act_ru_history_job (
+CREATE TABLE IF NOT EXISTS public.act_ru_history_job (
     id_ character varying(64) NOT NULL,
     rev_ integer,
     lock_exp_time_ timestamp without time zone,
@@ -870,7 +870,7 @@ CREATE TABLE public.act_ru_history_job (
     tenant_id_ character varying(255) DEFAULT ''::character varying
 );
 
-CREATE TABLE public.act_ru_identitylink (
+CREATE TABLE IF NOT EXISTS public.act_ru_identitylink (
     id_ character varying(64) NOT NULL,
     rev_ integer,
     group_id_ character varying(255),
@@ -885,7 +885,7 @@ CREATE TABLE public.act_ru_identitylink (
     scope_definition_id_ character varying(255)
 );
 
-CREATE TABLE public.act_ru_job (
+CREATE TABLE IF NOT EXISTS public.act_ru_job (
     id_ character varying(64) NOT NULL,
     rev_ integer,
     category_ character varying(255),
@@ -915,7 +915,7 @@ CREATE TABLE public.act_ru_job (
     tenant_id_ character varying(255) DEFAULT ''::character varying
 );
 
-CREATE TABLE public.act_ru_suspended_job (
+CREATE TABLE IF NOT EXISTS public.act_ru_suspended_job (
     id_ character varying(64) NOT NULL,
     rev_ integer,
     category_ character varying(255),
@@ -943,7 +943,7 @@ CREATE TABLE public.act_ru_suspended_job (
     tenant_id_ character varying(255) DEFAULT ''::character varying
 );
 
-CREATE TABLE public.act_ru_task (
+CREATE TABLE IF NOT EXISTS public.act_ru_task (
     id_ character varying(64) NOT NULL,
     rev_ integer,
     execution_id_ character varying(64),
@@ -976,7 +976,7 @@ CREATE TABLE public.act_ru_task (
     sub_task_count_ integer
 );
 
-CREATE TABLE public.act_ru_timer_job (
+CREATE TABLE IF NOT EXISTS public.act_ru_timer_job (
     id_ character varying(64) NOT NULL,
     rev_ integer,
     category_ character varying(255),
@@ -1006,7 +1006,7 @@ CREATE TABLE public.act_ru_timer_job (
     tenant_id_ character varying(255) DEFAULT ''::character varying
 );
 
-CREATE TABLE public.act_ru_variable (
+CREATE TABLE IF NOT EXISTS public.act_ru_variable (
     id_ character varying(64) NOT NULL,
     rev_ integer,
     type_ character varying(255) NOT NULL,
@@ -1025,7 +1025,7 @@ CREATE TABLE public.act_ru_variable (
     meta_info_ character varying(4000)
 );
 
-CREATE TABLE public.admin_alert_rules (
+CREATE TABLE IF NOT EXISTS public.admin_alert_rules (
     id character varying(36) NOT NULL,
     created_at timestamp(6) with time zone NOT NULL,
     duration integer,
@@ -1039,7 +1039,7 @@ CREATE TABLE public.admin_alert_rules (
     CONSTRAINT admin_alert_rules_severity_check CHECK (((severity)::text = ANY ((ARRAY['INFO'::character varying, 'WARNING'::character varying, 'ERROR'::character varying, 'CRITICAL'::character varying])::text[])))
 );
 
-CREATE TABLE public.admin_alerts (
+CREATE TABLE IF NOT EXISTS public.admin_alerts (
     id character varying(36) NOT NULL,
     acknowledged_at timestamp(6) with time zone,
     acknowledged_by character varying(36),
@@ -1056,7 +1056,7 @@ CREATE TABLE public.admin_alerts (
     CONSTRAINT admin_alerts_status_check CHECK (((status)::text = ANY ((ARRAY['ACTIVE'::character varying, 'ACKNOWLEDGED'::character varying, 'RESOLVED'::character varying, 'ESCALATED'::character varying])::text[])))
 );
 
-CREATE TABLE public.admin_audit_logs (
+CREATE TABLE IF NOT EXISTS public.admin_audit_logs (
     id character varying(255) NOT NULL,
     action character varying(255) NOT NULL,
     change_details text,
@@ -1075,7 +1075,7 @@ CREATE TABLE public.admin_audit_logs (
     CONSTRAINT admin_audit_logs_action_check CHECK (((action)::text = ANY ((ARRAY['USER_LOGIN'::character varying, 'USER_LOGOUT'::character varying, 'USER_LOGIN_FAILED'::character varying, 'USER_CREATED'::character varying, 'USER_UPDATED'::character varying, 'USER_DELETED'::character varying, 'USER_LOCKED'::character varying, 'USER_UNLOCKED'::character varying, 'PASSWORD_CHANGED'::character varying, 'PASSWORD_RESET'::character varying, 'ROLE_CREATED'::character varying, 'ROLE_UPDATED'::character varying, 'ROLE_DELETED'::character varying, 'PERMISSION_GRANTED'::character varying, 'PERMISSION_REVOKED'::character varying, 'ROLE_ASSIGNED'::character varying, 'ROLE_UNASSIGNED'::character varying, 'DATA_CREATED'::character varying, 'DATA_UPDATED'::character varying, 'DATA_DELETED'::character varying, 'DATA_EXPORTED'::character varying, 'DATA_IMPORTED'::character varying, 'CONFIG_CREATED'::character varying, 'CONFIG_UPDATED'::character varying, 'CONFIG_DELETED'::character varying, 'SYSTEM_STARTUP'::character varying, 'SYSTEM_SHUTDOWN'::character varying, 'BACKUP_CREATED'::character varying, 'BACKUP_RESTORED'::character varying])::text[])))
 );
 
-CREATE TABLE public.admin_column_permissions (
+CREATE TABLE IF NOT EXISTS public.admin_column_permissions (
     id character varying(36) NOT NULL,
     column_name character varying(100) NOT NULL,
     created_at timestamp(6) with time zone NOT NULL,
@@ -1086,7 +1086,7 @@ CREATE TABLE public.admin_column_permissions (
     visible boolean
 );
 
-CREATE TABLE public.admin_config_history (
+CREATE TABLE IF NOT EXISTS public.admin_config_history (
     id character varying(255) NOT NULL,
     change_reason character varying(255),
     changed_at timestamp(6) with time zone,
@@ -1099,7 +1099,7 @@ CREATE TABLE public.admin_config_history (
     old_version integer
 );
 
-CREATE TABLE public.admin_data_permission_rules (
+CREATE TABLE IF NOT EXISTS public.admin_data_permission_rules (
     id character varying(36) NOT NULL,
     created_at timestamp(6) with time zone NOT NULL,
     custom_filter text,
@@ -1116,7 +1116,7 @@ CREATE TABLE public.admin_data_permission_rules (
     CONSTRAINT admin_data_permission_rules_permission_type_check CHECK (((permission_type)::text = ANY ((ARRAY['ROLE'::character varying, 'DEPARTMENT'::character varying, 'USER'::character varying, 'CUSTOM'::character varying])::text[])))
 );
 
-CREATE TABLE public.admin_log_retention_policies (
+CREATE TABLE IF NOT EXISTS public.admin_log_retention_policies (
     id character varying(255) NOT NULL,
     archive_after_days integer,
     archive_location character varying(255),
@@ -1130,14 +1130,14 @@ CREATE TABLE public.admin_log_retention_policies (
     CONSTRAINT admin_log_retention_policies_log_type_check CHECK (((log_type)::text = ANY ((ARRAY['SYSTEM'::character varying, 'BUSINESS'::character varying, 'ACCESS'::character varying, 'ERROR'::character varying, 'SECURITY'::character varying])::text[])))
 );
 
-CREATE TABLE public.admin_password_history (
+CREATE TABLE IF NOT EXISTS public.admin_password_history (
     id character varying(64) NOT NULL,
     created_at timestamp(6) with time zone,
     password_hash character varying(255) NOT NULL,
     user_id character varying(64) NOT NULL
 );
 
-CREATE TABLE public.admin_permission_change_history (
+CREATE TABLE IF NOT EXISTS public.admin_permission_change_history (
     id character varying(36) NOT NULL,
     change_type character varying(50) NOT NULL,
     changed_at timestamp(6) with time zone NOT NULL,
@@ -1152,7 +1152,7 @@ CREATE TABLE public.admin_permission_change_history (
     user_agent character varying(500)
 );
 
-CREATE TABLE public.admin_permission_conflicts (
+CREATE TABLE IF NOT EXISTS public.admin_permission_conflicts (
     id character varying(64) NOT NULL,
     conflict_description text,
     conflict_source1 character varying(100) NOT NULL,
@@ -1168,7 +1168,7 @@ CREATE TABLE public.admin_permission_conflicts (
     CONSTRAINT admin_permission_conflicts_resolution_strategy_check CHECK (((resolution_strategy)::text = ANY ((ARRAY['DENY'::character varying, 'ALLOW'::character varying, 'HIGHEST_PRIVILEGE'::character varying, 'LOWEST_PRIVILEGE'::character varying, 'LATEST'::character varying, 'MANUAL'::character varying])::text[])))
 );
 
-CREATE TABLE public.admin_permission_delegations (
+CREATE TABLE IF NOT EXISTS public.admin_permission_delegations (
     id character varying(64) NOT NULL,
     conditions jsonb,
     created_at timestamp(6) with time zone,
@@ -1187,7 +1187,7 @@ CREATE TABLE public.admin_permission_delegations (
     CONSTRAINT admin_permission_delegations_delegation_type_check CHECK (((delegation_type)::text = ANY ((ARRAY['TEMPORARY'::character varying, 'PROXY'::character varying, 'TRANSFER'::character varying])::text[])))
 );
 
-CREATE TABLE public.admin_security_policies (
+CREATE TABLE IF NOT EXISTS public.admin_security_policies (
     id character varying(255) NOT NULL,
     created_at timestamp(6) with time zone,
     enabled boolean,
@@ -1198,7 +1198,7 @@ CREATE TABLE public.admin_security_policies (
     updated_by character varying(255)
 );
 
-CREATE TABLE public.admin_system_configs (
+CREATE TABLE IF NOT EXISTS public.admin_system_configs (
     id character varying(255) NOT NULL,
     category character varying(255) NOT NULL,
     config_key character varying(255) NOT NULL,
@@ -1216,7 +1216,7 @@ CREATE TABLE public.admin_system_configs (
     version integer
 );
 
-CREATE TABLE public.admin_system_logs (
+CREATE TABLE IF NOT EXISTS public.admin_system_logs (
     id character varying(255) NOT NULL,
     action character varying(255),
     extra_data text,
@@ -1240,7 +1240,7 @@ CREATE TABLE public.admin_system_logs (
     CONSTRAINT admin_system_logs_log_type_check CHECK (((log_type)::text = ANY ((ARRAY['SYSTEM'::character varying, 'BUSINESS'::character varying, 'ACCESS'::character varying, 'ERROR'::character varying, 'SECURITY'::character varying])::text[])))
 );
 
-CREATE TABLE public.dw_action_definitions (
+CREATE TABLE IF NOT EXISTS public.dw_action_definitions (
     id bigint NOT NULL,
     function_unit_id bigint NOT NULL,
     action_name character varying(100) NOT NULL,
@@ -1254,7 +1254,7 @@ CREATE TABLE public.dw_action_definitions (
     updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE SEQUENCE public.dw_action_definitions_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.dw_action_definitions_id_seq
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -1263,7 +1263,7 @@ CREATE SEQUENCE public.dw_action_definitions_id_seq
 
 ALTER SEQUENCE public.dw_action_definitions_id_seq OWNED BY public.dw_action_definitions.id;
 
-CREATE TABLE public.dw_field_definitions (
+CREATE TABLE IF NOT EXISTS public.dw_field_definitions (
     id bigint NOT NULL,
     table_id bigint NOT NULL,
     field_name character varying(100) NOT NULL,
@@ -1279,7 +1279,7 @@ CREATE TABLE public.dw_field_definitions (
     sort_order integer DEFAULT 0 NOT NULL
 );
 
-CREATE SEQUENCE public.dw_field_definitions_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.dw_field_definitions_id_seq
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -1288,7 +1288,7 @@ CREATE SEQUENCE public.dw_field_definitions_id_seq
 
 ALTER SEQUENCE public.dw_field_definitions_id_seq OWNED BY public.dw_field_definitions.id;
 
-CREATE TABLE public.dw_foreign_keys (
+CREATE TABLE IF NOT EXISTS public.dw_foreign_keys (
     id bigint NOT NULL,
     table_id bigint NOT NULL,
     field_id bigint NOT NULL,
@@ -1298,7 +1298,7 @@ CREATE TABLE public.dw_foreign_keys (
     on_update character varying(20) DEFAULT 'NO ACTION'::character varying
 );
 
-CREATE SEQUENCE public.dw_foreign_keys_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.dw_foreign_keys_id_seq
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -1307,7 +1307,7 @@ CREATE SEQUENCE public.dw_foreign_keys_id_seq
 
 ALTER SEQUENCE public.dw_foreign_keys_id_seq OWNED BY public.dw_foreign_keys.id;
 
-CREATE TABLE public.dw_form_definitions (
+CREATE TABLE IF NOT EXISTS public.dw_form_definitions (
     id bigint NOT NULL,
     function_unit_id bigint NOT NULL,
     form_name character varying(100) NOT NULL,
@@ -1320,7 +1320,7 @@ CREATE TABLE public.dw_form_definitions (
     CONSTRAINT chk_form_type CHECK (((form_type)::text = ANY ((ARRAY['MAIN'::character varying, 'SUB'::character varying, 'ACTION'::character varying, 'POPUP'::character varying])::text[])))
 );
 
-CREATE SEQUENCE public.dw_form_definitions_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.dw_form_definitions_id_seq
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -1329,7 +1329,7 @@ CREATE SEQUENCE public.dw_form_definitions_id_seq
 
 ALTER SEQUENCE public.dw_form_definitions_id_seq OWNED BY public.dw_form_definitions.id;
 
-CREATE TABLE public.dw_form_table_bindings (
+CREATE TABLE IF NOT EXISTS public.dw_form_table_bindings (
     id bigint NOT NULL,
     form_id bigint NOT NULL,
     table_id bigint NOT NULL,
@@ -1343,7 +1343,7 @@ CREATE TABLE public.dw_form_table_bindings (
     CONSTRAINT chk_binding_type CHECK (((binding_type)::text = ANY ((ARRAY['PRIMARY'::character varying, 'SUB'::character varying, 'RELATED'::character varying])::text[])))
 );
 
-CREATE SEQUENCE public.dw_form_table_bindings_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.dw_form_table_bindings_id_seq
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -1352,7 +1352,7 @@ CREATE SEQUENCE public.dw_form_table_bindings_id_seq
 
 ALTER SEQUENCE public.dw_form_table_bindings_id_seq OWNED BY public.dw_form_table_bindings.id;
 
-CREATE TABLE public.dw_function_units (
+CREATE TABLE IF NOT EXISTS public.dw_function_units (
     id bigint NOT NULL,
     name character varying(100) NOT NULL,
     description text,
@@ -1367,7 +1367,7 @@ CREATE TABLE public.dw_function_units (
     CONSTRAINT chk_function_unit_status CHECK (((status)::text = ANY ((ARRAY['DRAFT'::character varying, 'PUBLISHED'::character varying, 'ARCHIVED'::character varying])::text[])))
 );
 
-CREATE SEQUENCE public.dw_function_units_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.dw_function_units_id_seq
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -1376,7 +1376,7 @@ CREATE SEQUENCE public.dw_function_units_id_seq
 
 ALTER SEQUENCE public.dw_function_units_id_seq OWNED BY public.dw_function_units.id;
 
-CREATE TABLE public.dw_icons (
+CREATE TABLE IF NOT EXISTS public.dw_icons (
     id bigint NOT NULL,
     name character varying(100) NOT NULL,
     category character varying(30) NOT NULL,
@@ -1389,7 +1389,7 @@ CREATE TABLE public.dw_icons (
     updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE SEQUENCE public.dw_icons_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.dw_icons_id_seq
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -1398,7 +1398,7 @@ CREATE SEQUENCE public.dw_icons_id_seq
 
 ALTER SEQUENCE public.dw_icons_id_seq OWNED BY public.dw_icons.id;
 
-CREATE TABLE public.dw_operation_logs (
+CREATE TABLE IF NOT EXISTS public.dw_operation_logs (
     id bigint NOT NULL,
     operator character varying(50) NOT NULL,
     operation_type character varying(50) NOT NULL,
@@ -1410,7 +1410,7 @@ CREATE TABLE public.dw_operation_logs (
     operation_time timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
-CREATE SEQUENCE public.dw_operation_logs_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.dw_operation_logs_id_seq
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -1419,7 +1419,7 @@ CREATE SEQUENCE public.dw_operation_logs_id_seq
 
 ALTER SEQUENCE public.dw_operation_logs_id_seq OWNED BY public.dw_operation_logs.id;
 
-CREATE TABLE public.dw_process_definitions (
+CREATE TABLE IF NOT EXISTS public.dw_process_definitions (
     id bigint NOT NULL,
     function_unit_id bigint NOT NULL,
     bpmn_xml text NOT NULL,
@@ -1427,7 +1427,7 @@ CREATE TABLE public.dw_process_definitions (
     updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE SEQUENCE public.dw_process_definitions_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.dw_process_definitions_id_seq
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -1436,7 +1436,7 @@ CREATE SEQUENCE public.dw_process_definitions_id_seq
 
 ALTER SEQUENCE public.dw_process_definitions_id_seq OWNED BY public.dw_process_definitions.id;
 
-CREATE TABLE public.dw_table_definitions (
+CREATE TABLE IF NOT EXISTS public.dw_table_definitions (
     id bigint NOT NULL,
     function_unit_id bigint NOT NULL,
     table_name character varying(100) NOT NULL,
@@ -1447,7 +1447,7 @@ CREATE TABLE public.dw_table_definitions (
     CONSTRAINT chk_table_type CHECK (((table_type)::text = ANY ((ARRAY['MAIN'::character varying, 'SUB'::character varying, 'ACTION'::character varying, 'RELATION'::character varying])::text[])))
 );
 
-CREATE SEQUENCE public.dw_table_definitions_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.dw_table_definitions_id_seq
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -1456,7 +1456,7 @@ CREATE SEQUENCE public.dw_table_definitions_id_seq
 
 ALTER SEQUENCE public.dw_table_definitions_id_seq OWNED BY public.dw_table_definitions.id;
 
-CREATE TABLE public.dw_versions (
+CREATE TABLE IF NOT EXISTS public.dw_versions (
     id bigint NOT NULL,
     function_unit_id bigint NOT NULL,
     version_number character varying(20) NOT NULL,
@@ -1466,7 +1466,7 @@ CREATE TABLE public.dw_versions (
     published_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
-CREATE SEQUENCE public.dw_versions_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.dw_versions_id_seq
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -1475,7 +1475,7 @@ CREATE SEQUENCE public.dw_versions_id_seq
 
 ALTER SEQUENCE public.dw_versions_id_seq OWNED BY public.dw_versions.id;
 
-CREATE TABLE public.flw_channel_definition (
+CREATE TABLE IF NOT EXISTS public.flw_channel_definition (
     id_ character varying(255) NOT NULL,
     name_ character varying(255),
     version_ integer,
@@ -1490,7 +1490,7 @@ CREATE TABLE public.flw_channel_definition (
     implementation_ character varying(255)
 );
 
-CREATE TABLE public.flw_ev_databasechangelog (
+CREATE TABLE IF NOT EXISTS public.flw_ev_databasechangelog (
     id character varying(255) NOT NULL,
     author character varying(255) NOT NULL,
     filename character varying(255) NOT NULL,
@@ -1507,14 +1507,14 @@ CREATE TABLE public.flw_ev_databasechangelog (
     deployment_id character varying(10)
 );
 
-CREATE TABLE public.flw_ev_databasechangeloglock (
+CREATE TABLE IF NOT EXISTS public.flw_ev_databasechangeloglock (
     id integer NOT NULL,
     locked boolean NOT NULL,
     lockgranted timestamp without time zone,
     lockedby character varying(255)
 );
 
-CREATE TABLE public.flw_event_definition (
+CREATE TABLE IF NOT EXISTS public.flw_event_definition (
     id_ character varying(255) NOT NULL,
     name_ character varying(255),
     version_ integer,
@@ -1526,7 +1526,7 @@ CREATE TABLE public.flw_event_definition (
     description_ character varying(255)
 );
 
-CREATE TABLE public.flw_event_deployment (
+CREATE TABLE IF NOT EXISTS public.flw_event_deployment (
     id_ character varying(255) NOT NULL,
     name_ character varying(255),
     category_ character varying(255),
@@ -1535,14 +1535,14 @@ CREATE TABLE public.flw_event_deployment (
     parent_deployment_id_ character varying(255)
 );
 
-CREATE TABLE public.flw_event_resource (
+CREATE TABLE IF NOT EXISTS public.flw_event_resource (
     id_ character varying(255) NOT NULL,
     name_ character varying(255),
     deployment_id_ character varying(255),
     resource_bytes_ bytea
 );
 
-CREATE TABLE public.flw_ru_batch (
+CREATE TABLE IF NOT EXISTS public.flw_ru_batch (
     id_ character varying(64) NOT NULL,
     rev_ integer,
     type_ character varying(64) NOT NULL,
@@ -1555,7 +1555,7 @@ CREATE TABLE public.flw_ru_batch (
     tenant_id_ character varying(255) DEFAULT ''::character varying
 );
 
-CREATE TABLE public.flw_ru_batch_part (
+CREATE TABLE IF NOT EXISTS public.flw_ru_batch_part (
     id_ character varying(64) NOT NULL,
     rev_ integer,
     batch_id_ character varying(64),
@@ -1572,7 +1572,7 @@ CREATE TABLE public.flw_ru_batch_part (
     tenant_id_ character varying(255) DEFAULT ''::character varying
 );
 
-CREATE TABLE public.sys_approvers (
+CREATE TABLE IF NOT EXISTS public.sys_approvers (
     id character varying(64) NOT NULL,
     created_at timestamp(6) with time zone,
     created_by character varying(64),
@@ -1582,7 +1582,7 @@ CREATE TABLE public.sys_approvers (
     CONSTRAINT sys_approvers_target_type_check CHECK (((target_type)::text = ANY ((ARRAY['VIRTUAL_GROUP'::character varying, 'BUSINESS_UNIT'::character varying])::text[])))
 );
 
-CREATE TABLE public.sys_business_unit_roles (
+CREATE TABLE IF NOT EXISTS public.sys_business_unit_roles (
     id character varying(64) NOT NULL,
     business_unit_id character varying(64) NOT NULL,
     created_at timestamp(6) with time zone,
@@ -1590,7 +1590,7 @@ CREATE TABLE public.sys_business_unit_roles (
     role_id character varying(64) NOT NULL
 );
 
-CREATE TABLE public.sys_business_units (
+CREATE TABLE IF NOT EXISTS public.sys_business_units (
     id character varying(64) NOT NULL,
     code character varying(50) NOT NULL,
     cost_center character varying(50),
@@ -1610,7 +1610,7 @@ CREATE TABLE public.sys_business_units (
     CONSTRAINT sys_business_units_status_check CHECK (((status)::text = ANY ((ARRAY['ACTIVE'::character varying, 'DISABLED'::character varying])::text[])))
 );
 
-CREATE TABLE public.sys_departments (
+CREATE TABLE IF NOT EXISTS public.sys_departments (
     id character varying(64) NOT NULL,
     code character varying(50) NOT NULL,
     name character varying(100) NOT NULL,
@@ -1631,7 +1631,7 @@ CREATE TABLE public.sys_departments (
     phone character varying(50)
 );
 
-CREATE TABLE public.sys_developer_role_permissions (
+CREATE TABLE IF NOT EXISTS public.sys_developer_role_permissions (
     id character varying(64) NOT NULL,
     role_id character varying(64) NOT NULL,
     permission character varying(50) NOT NULL,
@@ -1639,7 +1639,7 @@ CREATE TABLE public.sys_developer_role_permissions (
     created_by character varying(64)
 );
 
-CREATE TABLE public.sys_dictionaries (
+CREATE TABLE IF NOT EXISTS public.sys_dictionaries (
     id character varying(64) NOT NULL,
     code character varying(50) NOT NULL,
     name character varying(100) NOT NULL,
@@ -1658,7 +1658,7 @@ CREATE TABLE public.sys_dictionaries (
     CONSTRAINT chk_dict_data_source_type CHECK (((data_source_type)::text = ANY ((ARRAY['DATABASE'::character varying, 'API'::character varying, 'FILE'::character varying, 'STATIC'::character varying])::text[])))
 );
 
-CREATE TABLE public.sys_dictionary_data_sources (
+CREATE TABLE IF NOT EXISTS public.sys_dictionary_data_sources (
     id character varying(36) NOT NULL,
     dictionary_id character varying(36) NOT NULL,
     source_type character varying(20) NOT NULL,
@@ -1675,7 +1675,7 @@ CREATE TABLE public.sys_dictionary_data_sources (
     updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL
 );
 
-CREATE TABLE public.sys_dictionary_items (
+CREATE TABLE IF NOT EXISTS public.sys_dictionary_items (
     id character varying(64) NOT NULL,
     dictionary_id character varying(64) NOT NULL,
     parent_id character varying(64),
@@ -1697,7 +1697,7 @@ CREATE TABLE public.sys_dictionary_items (
     updated_by character varying(36)
 );
 
-CREATE TABLE public.sys_dictionary_versions (
+CREATE TABLE IF NOT EXISTS public.sys_dictionary_versions (
     id character varying(36) NOT NULL,
     dictionary_id character varying(36) NOT NULL,
     version integer NOT NULL,
@@ -1707,7 +1707,7 @@ CREATE TABLE public.sys_dictionary_versions (
     created_by character varying(36)
 );
 
-CREATE TABLE public.sys_function_unit_access (
+CREATE TABLE IF NOT EXISTS public.sys_function_unit_access (
     id character varying(64) NOT NULL,
     function_unit_id character varying(64) NOT NULL,
     access_type character varying(20) NOT NULL,
@@ -1719,7 +1719,7 @@ CREATE TABLE public.sys_function_unit_access (
     role_name character varying(100)
 );
 
-CREATE TABLE public.sys_function_unit_approvals (
+CREATE TABLE IF NOT EXISTS public.sys_function_unit_approvals (
     id character varying(64) NOT NULL,
     deployment_id character varying(64) NOT NULL,
     approval_type character varying(20) NOT NULL,
@@ -1732,7 +1732,7 @@ CREATE TABLE public.sys_function_unit_approvals (
     approval_order integer
 );
 
-CREATE TABLE public.sys_function_unit_contents (
+CREATE TABLE IF NOT EXISTS public.sys_function_unit_contents (
     id character varying(64) NOT NULL,
     function_unit_id character varying(64) NOT NULL,
     content_type character varying(20) NOT NULL,
@@ -1746,7 +1746,7 @@ CREATE TABLE public.sys_function_unit_contents (
     source_id character varying(64)
 );
 
-CREATE TABLE public.sys_function_unit_dependencies (
+CREATE TABLE IF NOT EXISTS public.sys_function_unit_dependencies (
     id character varying(64) NOT NULL,
     function_unit_id character varying(64) NOT NULL,
     dependency_code character varying(50) NOT NULL,
@@ -1755,7 +1755,7 @@ CREATE TABLE public.sys_function_unit_dependencies (
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE public.sys_function_unit_deployments (
+CREATE TABLE IF NOT EXISTS public.sys_function_unit_deployments (
     id character varying(64) NOT NULL,
     function_unit_id character varying(64) NOT NULL,
     environment character varying(20) NOT NULL,
@@ -1775,7 +1775,7 @@ CREATE TABLE public.sys_function_unit_deployments (
     started_at timestamp(6) with time zone
 );
 
-CREATE TABLE public.sys_function_units (
+CREATE TABLE IF NOT EXISTS public.sys_function_units (
     id character varying(64) NOT NULL,
     checksum character varying(64),
     code character varying(50) NOT NULL,
@@ -1800,7 +1800,7 @@ CREATE TABLE public.sys_function_units (
     CONSTRAINT chk_func_unit_status CHECK (((status)::text = ANY ((ARRAY['DRAFT'::character varying, 'VALIDATED'::character varying, 'DEPLOYED'::character varying, 'DEPRECATED'::character varying])::text[])))
 );
 
-CREATE TABLE public.sys_login_audit (
+CREATE TABLE IF NOT EXISTS public.sys_login_audit (
     id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
     user_id character varying(64),
     username character varying(50) NOT NULL,
@@ -1812,7 +1812,7 @@ CREATE TABLE public.sys_login_audit (
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE public.sys_member_change_logs (
+CREATE TABLE IF NOT EXISTS public.sys_member_change_logs (
     id character varying(64) NOT NULL,
     change_type character varying(20) NOT NULL,
     created_at timestamp(6) with time zone,
@@ -1826,7 +1826,7 @@ CREATE TABLE public.sys_member_change_logs (
     CONSTRAINT sys_member_change_logs_target_type_check CHECK (((target_type)::text = ANY ((ARRAY['VIRTUAL_GROUP'::character varying, 'BUSINESS_UNIT'::character varying])::text[])))
 );
 
-CREATE TABLE public.sys_permission_requests (
+CREATE TABLE IF NOT EXISTS public.sys_permission_requests (
     id character varying(64) NOT NULL,
     applicant_id character varying(64) NOT NULL,
     approved_at timestamp(6) with time zone,
@@ -1843,7 +1843,7 @@ CREATE TABLE public.sys_permission_requests (
     CONSTRAINT sys_permission_requests_status_check CHECK (((status)::text = ANY ((ARRAY['PENDING'::character varying, 'APPROVED'::character varying, 'REJECTED'::character varying, 'CANCELLED'::character varying])::text[])))
 );
 
-CREATE TABLE public.sys_permissions (
+CREATE TABLE IF NOT EXISTS public.sys_permissions (
     id character varying(64) NOT NULL,
     code character varying(100) NOT NULL,
     name character varying(100) NOT NULL,
@@ -1856,7 +1856,7 @@ CREATE TABLE public.sys_permissions (
     sort_order integer
 );
 
-CREATE TABLE public.sys_role_assignments (
+CREATE TABLE IF NOT EXISTS public.sys_role_assignments (
     id character varying(64) NOT NULL,
     role_id character varying(64) NOT NULL,
     target_type character varying(20) NOT NULL,
@@ -1870,7 +1870,7 @@ CREATE TABLE public.sys_role_assignments (
     updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE public.sys_role_permissions (
+CREATE TABLE IF NOT EXISTS public.sys_role_permissions (
     id character varying(64) NOT NULL,
     role_id character varying(64) NOT NULL,
     permission_id character varying(64) NOT NULL,
@@ -1881,7 +1881,7 @@ CREATE TABLE public.sys_role_permissions (
     granted_by character varying(64)
 );
 
-CREATE TABLE public.sys_roles (
+CREATE TABLE IF NOT EXISTS public.sys_roles (
     id character varying(64) NOT NULL,
     code character varying(50) NOT NULL,
     name character varying(100) NOT NULL,
@@ -1896,7 +1896,7 @@ CREATE TABLE public.sys_roles (
     CONSTRAINT chk_role_type CHECK (((type)::text = ANY ((ARRAY['ADMIN'::character varying, 'DEVELOPER'::character varying, 'BU_BOUNDED'::character varying, 'BU_UNBOUNDED'::character varying])::text[])))
 );
 
-CREATE TABLE public.sys_user_business_unit_roles (
+CREATE TABLE IF NOT EXISTS public.sys_user_business_unit_roles (
     id character varying(64) NOT NULL,
     business_unit_id character varying(64) NOT NULL,
     created_at timestamp(6) with time zone,
@@ -1905,7 +1905,7 @@ CREATE TABLE public.sys_user_business_unit_roles (
     user_id character varying(64) NOT NULL
 );
 
-CREATE TABLE public.sys_user_business_units (
+CREATE TABLE IF NOT EXISTS public.sys_user_business_units (
     id character varying(64) NOT NULL,
     business_unit_id character varying(64) NOT NULL,
     created_at timestamp(6) with time zone,
@@ -1913,7 +1913,7 @@ CREATE TABLE public.sys_user_business_units (
     user_id character varying(64) NOT NULL
 );
 
-CREATE TABLE public.sys_user_preferences (
+CREATE TABLE IF NOT EXISTS public.sys_user_preferences (
     id character varying(64) NOT NULL,
     created_at timestamp(6) with time zone,
     preference_key character varying(100) NOT NULL,
@@ -1922,7 +1922,7 @@ CREATE TABLE public.sys_user_preferences (
     user_id character varying(64) NOT NULL
 );
 
-CREATE TABLE public.sys_user_roles (
+CREATE TABLE IF NOT EXISTS public.sys_user_roles (
     id character varying(64) NOT NULL,
     user_id character varying(64) NOT NULL,
     role_id character varying(64) NOT NULL,
@@ -1932,7 +1932,7 @@ CREATE TABLE public.sys_user_roles (
     valid_to timestamp without time zone
 );
 
-CREATE TABLE public.sys_users (
+CREATE TABLE IF NOT EXISTS public.sys_users (
     id character varying(64) NOT NULL,
     username character varying(100) NOT NULL,
     password_hash character varying(255) NOT NULL,
@@ -1963,7 +1963,7 @@ CREATE TABLE public.sys_users (
     CONSTRAINT chk_sys_user_status CHECK (((status)::text = ANY ((ARRAY['ACTIVE'::character varying, 'INACTIVE'::character varying, 'LOCKED'::character varying])::text[])))
 );
 
-CREATE TABLE public.sys_virtual_group_members (
+CREATE TABLE IF NOT EXISTS public.sys_virtual_group_members (
     id character varying(64) NOT NULL,
     group_id character varying(64) NOT NULL,
     user_id character varying(64) NOT NULL,
@@ -1971,7 +1971,7 @@ CREATE TABLE public.sys_virtual_group_members (
     added_by character varying(64)
 );
 
-CREATE TABLE public.sys_virtual_group_roles (
+CREATE TABLE IF NOT EXISTS public.sys_virtual_group_roles (
     id character varying(64) NOT NULL,
     created_at timestamp(6) with time zone,
     created_by character varying(64),
@@ -1979,7 +1979,7 @@ CREATE TABLE public.sys_virtual_group_roles (
     virtual_group_id character varying(64) NOT NULL
 );
 
-CREATE TABLE public.sys_virtual_group_task_history (
+CREATE TABLE IF NOT EXISTS public.sys_virtual_group_task_history (
     id character varying(64) NOT NULL,
     group_id character varying(64) NOT NULL,
     task_id character varying(64) NOT NULL,
@@ -1996,7 +1996,7 @@ CREATE TABLE public.sys_virtual_group_task_history (
     CONSTRAINT chk_vg_task_action_type CHECK (((action_type)::text = ANY ((ARRAY['CREATED'::character varying, 'ASSIGNED'::character varying, 'CLAIMED'::character varying, 'DELEGATED'::character varying, 'COMPLETED'::character varying, 'CANCELLED'::character varying, 'RETURNED'::character varying])::text[])))
 );
 
-CREATE TABLE public.sys_virtual_groups (
+CREATE TABLE IF NOT EXISTS public.sys_virtual_groups (
     id character varying(64) NOT NULL,
     name character varying(100) NOT NULL,
     code character varying(50) NOT NULL,
@@ -2014,7 +2014,7 @@ CREATE TABLE public.sys_virtual_groups (
     CONSTRAINT chk_virtual_group_type CHECK (((type)::text = ANY ((ARRAY['SYSTEM'::character varying, 'CUSTOM'::character varying])::text[])))
 );
 
-CREATE TABLE public.up_dashboard_layout (
+CREATE TABLE IF NOT EXISTS public.up_dashboard_layout (
     id bigint NOT NULL,
     component_id character varying(50) NOT NULL,
     component_type character varying(50) NOT NULL,
@@ -2029,7 +2029,7 @@ CREATE TABLE public.up_dashboard_layout (
     user_id character varying(64) NOT NULL
 );
 
-CREATE SEQUENCE public.up_dashboard_layout_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.up_dashboard_layout_id_seq
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -2038,7 +2038,7 @@ CREATE SEQUENCE public.up_dashboard_layout_id_seq
 
 ALTER SEQUENCE public.up_dashboard_layout_id_seq OWNED BY public.up_dashboard_layout.id;
 
-CREATE TABLE public.up_delegation_audit (
+CREATE TABLE IF NOT EXISTS public.up_delegation_audit (
     id bigint NOT NULL,
     created_at timestamp(6) without time zone,
     delegate_id character varying(64) NOT NULL,
@@ -2051,7 +2051,7 @@ CREATE TABLE public.up_delegation_audit (
     user_agent character varying(500)
 );
 
-CREATE SEQUENCE public.up_delegation_audit_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.up_delegation_audit_id_seq
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -2060,7 +2060,7 @@ CREATE SEQUENCE public.up_delegation_audit_id_seq
 
 ALTER SEQUENCE public.up_delegation_audit_id_seq OWNED BY public.up_delegation_audit.id;
 
-CREATE TABLE public.up_delegation_rule (
+CREATE TABLE IF NOT EXISTS public.up_delegation_rule (
     id bigint NOT NULL,
     created_at timestamp(6) without time zone,
     delegate_id character varying(64) NOT NULL,
@@ -2077,7 +2077,7 @@ CREATE TABLE public.up_delegation_rule (
     CONSTRAINT up_delegation_rule_status_check CHECK (((status)::text = ANY ((ARRAY['ACTIVE'::character varying, 'INACTIVE'::character varying, 'EXPIRED'::character varying, 'SUSPENDED'::character varying])::text[])))
 );
 
-CREATE SEQUENCE public.up_delegation_rule_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.up_delegation_rule_id_seq
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -2086,7 +2086,7 @@ CREATE SEQUENCE public.up_delegation_rule_id_seq
 
 ALTER SEQUENCE public.up_delegation_rule_id_seq OWNED BY public.up_delegation_rule.id;
 
-CREATE TABLE public.up_favorite_process (
+CREATE TABLE IF NOT EXISTS public.up_favorite_process (
     id bigint NOT NULL,
     created_at timestamp(6) without time zone,
     display_order integer,
@@ -2094,7 +2094,7 @@ CREATE TABLE public.up_favorite_process (
     user_id character varying(64) NOT NULL
 );
 
-CREATE SEQUENCE public.up_favorite_process_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.up_favorite_process_id_seq
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -2103,7 +2103,7 @@ CREATE SEQUENCE public.up_favorite_process_id_seq
 
 ALTER SEQUENCE public.up_favorite_process_id_seq OWNED BY public.up_favorite_process.id;
 
-CREATE TABLE public.up_notification_preference (
+CREATE TABLE IF NOT EXISTS public.up_notification_preference (
     id bigint NOT NULL,
     browser_enabled boolean,
     created_at timestamp(6) without time zone,
@@ -2116,7 +2116,7 @@ CREATE TABLE public.up_notification_preference (
     user_id character varying(64) NOT NULL
 );
 
-CREATE SEQUENCE public.up_notification_preference_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.up_notification_preference_id_seq
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -2125,7 +2125,7 @@ CREATE SEQUENCE public.up_notification_preference_id_seq
 
 ALTER SEQUENCE public.up_notification_preference_id_seq OWNED BY public.up_notification_preference.id;
 
-CREATE TABLE public.up_permission_request (
+CREATE TABLE IF NOT EXISTS public.up_permission_request (
     id bigint NOT NULL,
     applicant_id character varying(64) NOT NULL,
     approve_comment text,
@@ -2151,7 +2151,7 @@ CREATE TABLE public.up_permission_request (
     CONSTRAINT up_permission_request_status_check CHECK (((status)::text = ANY ((ARRAY['PENDING'::character varying, 'APPROVED'::character varying, 'REJECTED'::character varying])::text[])))
 );
 
-CREATE SEQUENCE public.up_permission_request_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.up_permission_request_id_seq
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -2160,7 +2160,7 @@ CREATE SEQUENCE public.up_permission_request_id_seq
 
 ALTER SEQUENCE public.up_permission_request_id_seq OWNED BY public.up_permission_request.id;
 
-CREATE TABLE public.up_process_draft (
+CREATE TABLE IF NOT EXISTS public.up_process_draft (
     id bigint NOT NULL,
     attachments jsonb,
     created_at timestamp(6) without time zone,
@@ -2170,7 +2170,7 @@ CREATE TABLE public.up_process_draft (
     user_id character varying(64) NOT NULL
 );
 
-CREATE SEQUENCE public.up_process_draft_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.up_process_draft_id_seq
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -2179,7 +2179,7 @@ CREATE SEQUENCE public.up_process_draft_id_seq
 
 ALTER SEQUENCE public.up_process_draft_id_seq OWNED BY public.up_process_draft.id;
 
-CREATE TABLE public.up_process_history (
+CREATE TABLE IF NOT EXISTS public.up_process_history (
     id bigint NOT NULL,
     activity_id character varying(100),
     activity_name character varying(255),
@@ -2194,7 +2194,7 @@ CREATE TABLE public.up_process_history (
     task_id character varying(64)
 );
 
-CREATE SEQUENCE public.up_process_history_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.up_process_history_id_seq
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -2203,7 +2203,7 @@ CREATE SEQUENCE public.up_process_history_id_seq
 
 ALTER SEQUENCE public.up_process_history_id_seq OWNED BY public.up_process_history.id;
 
-CREATE TABLE public.up_process_instance (
+CREATE TABLE IF NOT EXISTS public.up_process_instance (
     id character varying(64) NOT NULL,
     business_key character varying(255),
     candidate_users character varying(500),
@@ -2222,7 +2222,7 @@ CREATE TABLE public.up_process_instance (
     variables jsonb
 );
 
-CREATE TABLE public.up_user_preference (
+CREATE TABLE IF NOT EXISTS public.up_user_preference (
     id bigint NOT NULL,
     created_at timestamp(6) without time zone,
     date_format character varying(20),
@@ -2237,7 +2237,7 @@ CREATE TABLE public.up_user_preference (
     user_id character varying(64) NOT NULL
 );
 
-CREATE SEQUENCE public.up_user_preference_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.up_user_preference_id_seq
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -2246,7 +2246,7 @@ CREATE SEQUENCE public.up_user_preference_id_seq
 
 ALTER SEQUENCE public.up_user_preference_id_seq OWNED BY public.up_user_preference.id;
 
-CREATE TABLE public.wf_audit_logs (
+CREATE TABLE IF NOT EXISTS public.wf_audit_logs (
     id character varying(64) NOT NULL,
     process_instance_id character varying(64),
     task_id character varying(64),
@@ -2274,7 +2274,7 @@ CREATE TABLE public.wf_audit_logs (
     user_agent character varying(500)
 );
 
-CREATE TABLE public.wf_exception_records (
+CREATE TABLE IF NOT EXISTS public.wf_exception_records (
     id character varying(64) NOT NULL,
     process_instance_id character varying(64),
     task_id character varying(64),
@@ -2316,7 +2316,7 @@ CREATE TABLE public.wf_exception_records (
     CONSTRAINT wf_exception_records_status_check CHECK (((status)::text = ANY ((ARRAY['PENDING'::character varying, 'PROCESSING'::character varying, 'RESOLVED'::character varying, 'IGNORED'::character varying])::text[])))
 );
 
-CREATE TABLE public.wf_extended_task_info (
+CREATE TABLE IF NOT EXISTS public.wf_extended_task_info (
     task_id character varying(64) NOT NULL,
     process_instance_id character varying(64),
     assignment_type character varying(20),
@@ -2355,7 +2355,7 @@ CREATE TABLE public.wf_extended_task_info (
     id bigint NOT NULL
 );
 
-CREATE SEQUENCE public.wf_extended_task_info_id_seq
+CREATE SEQUENCE IF NOT EXISTS public.wf_extended_task_info_id_seq
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -2364,7 +2364,7 @@ CREATE SEQUENCE public.wf_extended_task_info_id_seq
 
 ALTER SEQUENCE public.wf_extended_task_info_id_seq OWNED BY public.wf_extended_task_info.id;
 
-CREATE TABLE public.wf_process_variables (
+CREATE TABLE IF NOT EXISTS public.wf_process_variables (
     id character varying(64) NOT NULL,
     process_instance_id character varying(64) NOT NULL,
     name character varying(100) NOT NULL,
@@ -2395,7 +2395,7 @@ CREATE TABLE public.wf_process_variables (
     updated_time timestamp(6) without time zone NOT NULL
 );
 
-CREATE TABLE public.wf_saga_steps (
+CREATE TABLE IF NOT EXISTS public.wf_saga_steps (
     id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
     saga_id uuid NOT NULL,
     step_name character varying(100) NOT NULL,
@@ -2408,7 +2408,7 @@ CREATE TABLE public.wf_saga_steps (
     completed_at timestamp without time zone
 );
 
-CREATE TABLE public.wf_saga_transactions (
+CREATE TABLE IF NOT EXISTS public.wf_saga_transactions (
     id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
     saga_type character varying(100) NOT NULL,
     status character varying(20) NOT NULL,
@@ -2464,595 +2464,1727 @@ ALTER TABLE ONLY public.up_process_history ALTER COLUMN id SET DEFAULT nextval('
 ALTER TABLE ONLY public.up_user_preference ALTER COLUMN id SET DEFAULT nextval('public.up_user_preference_id_seq'::regclass);
 
 ALTER TABLE ONLY public.wf_extended_task_info ALTER COLUMN id SET DEFAULT nextval('public.wf_extended_task_info_id_seq'::regclass);
+TRUNCATE TABLE public.act_app_databasechangelog CASCADE;
+
 INSERT INTO public.act_app_databasechangelog VALUES ('1', 'flowable', 'org/flowable/app/db/liquibase/flowable-app-db-changelog.xml', '2026-01-14 17:11:36.881182', 1, 'EXECUTED', '9:959783069c0c7ce80320a0617aa48969', 'createTable tableName=ACT_APP_DEPLOYMENT; createTable tableName=ACT_APP_DEPLOYMENT_RESOURCE; addForeignKeyConstraint baseTableName=ACT_APP_DEPLOYMENT_RESOURCE, constraintName=ACT_FK_APP_RSRC_DPL, referencedTableName=ACT_APP_DEPLOYMENT; createIndex...', '', NULL, '4.24.0', NULL, NULL, '8381896797');
+TRUNCATE TABLE public.act_app_databasechangelog CASCADE;
+
 INSERT INTO public.act_app_databasechangelog VALUES ('3', 'flowable', 'org/flowable/app/db/liquibase/flowable-app-db-changelog.xml', '2026-01-14 17:11:36.897756', 2, 'EXECUTED', '9:c05b79a3b00e95136533085718361208', 'createIndex indexName=ACT_IDX_APP_DEF_UNIQ, tableName=ACT_APP_APPDEF', '', NULL, '4.24.0', NULL, NULL, '8381896797');
 
+TRUNCATE TABLE public.act_app_databasechangeloglock CASCADE;
+
 INSERT INTO public.act_app_databasechangeloglock VALUES (1, false, NULL, NULL);
+TRUNCATE TABLE public.act_cmmn_databasechangelog CASCADE;
+
 INSERT INTO public.act_cmmn_databasechangelog VALUES ('1', 'flowable', 'org/flowable/cmmn/db/liquibase/flowable-cmmn-db-changelog.xml', '2026-01-14 17:11:36.284078', 1, 'EXECUTED', '9:d0cc0aaadf0e4ef70c5b412cd05fadc4', 'createTable tableName=ACT_CMMN_DEPLOYMENT; createTable tableName=ACT_CMMN_DEPLOYMENT_RESOURCE; addForeignKeyConstraint baseTableName=ACT_CMMN_DEPLOYMENT_RESOURCE, constraintName=ACT_FK_CMMN_RSRC_DPL, referencedTableName=ACT_CMMN_DEPLOYMENT; create...', '', NULL, '4.24.0', NULL, NULL, '8381896015');
+TRUNCATE TABLE public.act_cmmn_databasechangelog CASCADE;
+
 INSERT INTO public.act_cmmn_databasechangelog VALUES ('2', 'flowable', 'org/flowable/cmmn/db/liquibase/flowable-cmmn-db-changelog.xml', '2026-01-14 17:11:36.316879', 2, 'EXECUTED', '9:8095a5a8a222a100c2d0310cacbda5e7', 'addColumn tableName=ACT_CMMN_CASEDEF; addColumn tableName=ACT_CMMN_DEPLOYMENT_RESOURCE; addColumn tableName=ACT_CMMN_RU_CASE_INST; addColumn tableName=ACT_CMMN_RU_PLAN_ITEM_INST', '', NULL, '4.24.0', NULL, NULL, '8381896015');
+TRUNCATE TABLE public.act_cmmn_databasechangelog CASCADE;
+
 INSERT INTO public.act_cmmn_databasechangelog VALUES ('3', 'flowable', 'org/flowable/cmmn/db/liquibase/flowable-cmmn-db-changelog.xml', '2026-01-14 17:11:36.372838', 3, 'EXECUTED', '9:f031b4f0ae67bc5a640736b379049b12', 'addColumn tableName=ACT_CMMN_RU_PLAN_ITEM_INST; addColumn tableName=ACT_CMMN_RU_CASE_INST; createIndex indexName=ACT_IDX_PLAN_ITEM_STAGE_INST, tableName=ACT_CMMN_RU_PLAN_ITEM_INST; addColumn tableName=ACT_CMMN_RU_PLAN_ITEM_INST; addColumn tableNam...', '', NULL, '4.24.0', NULL, NULL, '8381896015');
+TRUNCATE TABLE public.act_cmmn_databasechangelog CASCADE;
+
 INSERT INTO public.act_cmmn_databasechangelog VALUES ('4', 'flowable', 'org/flowable/cmmn/db/liquibase/flowable-cmmn-db-changelog.xml', '2026-01-14 17:11:36.44873', 4, 'EXECUTED', '9:c484ecfb08719feccac2f80fc962dda9', 'createTable tableName=ACT_CMMN_HI_PLAN_ITEM_INST; addColumn tableName=ACT_CMMN_RU_MIL_INST; addColumn tableName=ACT_CMMN_HI_MIL_INST', '', NULL, '4.24.0', NULL, NULL, '8381896015');
+TRUNCATE TABLE public.act_cmmn_databasechangelog CASCADE;
+
 INSERT INTO public.act_cmmn_databasechangelog VALUES ('6', 'flowable', 'org/flowable/cmmn/db/liquibase/flowable-cmmn-db-changelog.xml', '2026-01-14 17:11:36.469984', 5, 'EXECUTED', '9:7343ab247d959e5add9278b5386de833', 'createIndex indexName=ACT_IDX_CASE_DEF_UNIQ, tableName=ACT_CMMN_CASEDEF', '', NULL, '4.24.0', NULL, NULL, '8381896015');
+TRUNCATE TABLE public.act_cmmn_databasechangelog CASCADE;
+
 INSERT INTO public.act_cmmn_databasechangelog VALUES ('7', 'flowable', 'org/flowable/cmmn/db/liquibase/flowable-cmmn-db-changelog.xml', '2026-01-14 17:11:36.511524', 6, 'EXECUTED', '9:d73200db684b6cdb748cc03570d5d2e9', 'renameColumn newColumnName=CREATE_TIME_, oldColumnName=START_TIME_, tableName=ACT_CMMN_RU_PLAN_ITEM_INST; renameColumn newColumnName=CREATE_TIME_, oldColumnName=CREATED_TIME_, tableName=ACT_CMMN_HI_PLAN_ITEM_INST; addColumn tableName=ACT_CMMN_RU_P...', '', NULL, '4.24.0', NULL, NULL, '8381896015');
+TRUNCATE TABLE public.act_cmmn_databasechangelog CASCADE;
+
 INSERT INTO public.act_cmmn_databasechangelog VALUES ('8', 'flowable', 'org/flowable/cmmn/db/liquibase/flowable-cmmn-db-changelog.xml', '2026-01-14 17:11:36.52187', 7, 'EXECUTED', '9:eda5e43816221f2d8554bfcc90f1c37e', 'addColumn tableName=ACT_CMMN_HI_PLAN_ITEM_INST', '', NULL, '4.24.0', NULL, NULL, '8381896015');
+TRUNCATE TABLE public.act_cmmn_databasechangelog CASCADE;
+
 INSERT INTO public.act_cmmn_databasechangelog VALUES ('9', 'flowable', 'org/flowable/cmmn/db/liquibase/flowable-cmmn-db-changelog.xml', '2026-01-14 17:11:36.539497', 8, 'EXECUTED', '9:c34685611779075a73caf8c380f078ea', 'addColumn tableName=ACT_CMMN_RU_PLAN_ITEM_INST; addColumn tableName=ACT_CMMN_HI_PLAN_ITEM_INST', '', NULL, '4.24.0', NULL, NULL, '8381896015');
+TRUNCATE TABLE public.act_cmmn_databasechangelog CASCADE;
+
 INSERT INTO public.act_cmmn_databasechangelog VALUES ('10', 'flowable', 'org/flowable/cmmn/db/liquibase/flowable-cmmn-db-changelog.xml', '2026-01-14 17:11:36.56556', 9, 'EXECUTED', '9:368e9472ad2348206205170d6c52d58e', 'addColumn tableName=ACT_CMMN_RU_CASE_INST; addColumn tableName=ACT_CMMN_RU_CASE_INST; createIndex indexName=ACT_IDX_CASE_INST_REF_ID_, tableName=ACT_CMMN_RU_CASE_INST; addColumn tableName=ACT_CMMN_HI_CASE_INST; addColumn tableName=ACT_CMMN_HI_CASE...', '', NULL, '4.24.0', NULL, NULL, '8381896015');
+TRUNCATE TABLE public.act_cmmn_databasechangelog CASCADE;
+
 INSERT INTO public.act_cmmn_databasechangelog VALUES ('11', 'flowable', 'org/flowable/cmmn/db/liquibase/flowable-cmmn-db-changelog.xml', '2026-01-14 17:11:36.576827', 10, 'EXECUTED', '9:e54b50ceb2bcd5355ae4dfb56d9ff3ad', 'addColumn tableName=ACT_CMMN_RU_PLAN_ITEM_INST; addColumn tableName=ACT_CMMN_HI_PLAN_ITEM_INST', '', NULL, '4.24.0', NULL, NULL, '8381896015');
+TRUNCATE TABLE public.act_cmmn_databasechangelog CASCADE;
+
 INSERT INTO public.act_cmmn_databasechangelog VALUES ('12', 'flowable', 'org/flowable/cmmn/db/liquibase/flowable-cmmn-db-changelog.xml', '2026-01-14 17:11:36.587979', 11, 'EXECUTED', '9:f53f262768d04e74529f43fcd93429b0', 'addColumn tableName=ACT_CMMN_RU_CASE_INST', '', NULL, '4.24.0', NULL, NULL, '8381896015');
+TRUNCATE TABLE public.act_cmmn_databasechangelog CASCADE;
+
 INSERT INTO public.act_cmmn_databasechangelog VALUES ('13', 'flowable', 'org/flowable/cmmn/db/liquibase/flowable-cmmn-db-changelog.xml', '2026-01-14 17:11:36.602914', 12, 'EXECUTED', '9:64e7eafbe97997094654e83caea99895', 'addColumn tableName=ACT_CMMN_RU_PLAN_ITEM_INST; addColumn tableName=ACT_CMMN_HI_PLAN_ITEM_INST', '', NULL, '4.24.0', NULL, NULL, '8381896015');
+TRUNCATE TABLE public.act_cmmn_databasechangelog CASCADE;
+
 INSERT INTO public.act_cmmn_databasechangelog VALUES ('14', 'flowable', 'org/flowable/cmmn/db/liquibase/flowable-cmmn-db-changelog.xml', '2026-01-14 17:11:36.617188', 13, 'EXECUTED', '9:ab7d934abde497eac034701542e0a281', 'addColumn tableName=ACT_CMMN_RU_CASE_INST; addColumn tableName=ACT_CMMN_HI_CASE_INST', '', NULL, '4.24.0', NULL, NULL, '8381896015');
+TRUNCATE TABLE public.act_cmmn_databasechangelog CASCADE;
+
 INSERT INTO public.act_cmmn_databasechangelog VALUES ('16', 'flowable', 'org/flowable/cmmn/db/liquibase/flowable-cmmn-db-changelog.xml', '2026-01-14 17:11:36.631458', 14, 'EXECUTED', '9:03928d422e510959770e7a9daa5a993f', 'addColumn tableName=ACT_CMMN_RU_CASE_INST; addColumn tableName=ACT_CMMN_HI_CASE_INST', '', NULL, '4.24.0', NULL, NULL, '8381896015');
+TRUNCATE TABLE public.act_cmmn_databasechangelog CASCADE;
+
 INSERT INTO public.act_cmmn_databasechangelog VALUES ('17', 'flowable', 'org/flowable/cmmn/db/liquibase/flowable-cmmn-db-changelog.xml', '2026-01-14 17:11:36.643064', 15, 'EXECUTED', '9:f30304cf001d6eac78c793ea88cd5781', 'createIndex indexName=ACT_IDX_HI_CASE_INST_END, tableName=ACT_CMMN_HI_CASE_INST', '', NULL, '4.24.0', NULL, NULL, '8381896015');
 
+TRUNCATE TABLE public.act_cmmn_databasechangeloglock CASCADE;
+
 INSERT INTO public.act_cmmn_databasechangeloglock VALUES (1, false, NULL, NULL);
+TRUNCATE TABLE public.act_dmn_databasechangelog CASCADE;
+
 INSERT INTO public.act_dmn_databasechangelog VALUES ('1', 'activiti', 'org/flowable/dmn/db/liquibase/flowable-dmn-db-changelog.xml', '2026-01-14 17:11:35.504255', 1, 'EXECUTED', '9:5b36e70aee5a2e42f6e7a62ea5fa681b', 'createTable tableName=ACT_DMN_DEPLOYMENT; createTable tableName=ACT_DMN_DEPLOYMENT_RESOURCE; createTable tableName=ACT_DMN_DECISION_TABLE', '', NULL, '4.24.0', NULL, NULL, '8381895464');
+TRUNCATE TABLE public.act_dmn_databasechangelog CASCADE;
+
 INSERT INTO public.act_dmn_databasechangelog VALUES ('2', 'flowable', 'org/flowable/dmn/db/liquibase/flowable-dmn-db-changelog.xml', '2026-01-14 17:11:35.521245', 2, 'EXECUTED', '9:fd13fa3f7af55d2b72f763fc261da30d', 'createTable tableName=ACT_DMN_HI_DECISION_EXECUTION', '', NULL, '4.24.0', NULL, NULL, '8381895464');
+TRUNCATE TABLE public.act_dmn_databasechangelog CASCADE;
+
 INSERT INTO public.act_dmn_databasechangelog VALUES ('3', 'flowable', 'org/flowable/dmn/db/liquibase/flowable-dmn-db-changelog.xml', '2026-01-14 17:11:35.53143', 3, 'EXECUTED', '9:9f30e6a3557d4b4c713dbb2dcc141782', 'addColumn tableName=ACT_DMN_HI_DECISION_EXECUTION', '', NULL, '4.24.0', NULL, NULL, '8381895464');
+TRUNCATE TABLE public.act_dmn_databasechangelog CASCADE;
+
 INSERT INTO public.act_dmn_databasechangelog VALUES ('4', 'flowable', 'org/flowable/dmn/db/liquibase/flowable-dmn-db-changelog.xml', '2026-01-14 17:11:35.542009', 4, 'EXECUTED', '9:41085fbde807dba96104ee75a2fcc4cc', 'dropColumn columnName=PARENT_DEPLOYMENT_ID_, tableName=ACT_DMN_DECISION_TABLE', '', NULL, '4.24.0', NULL, NULL, '8381895464');
+TRUNCATE TABLE public.act_dmn_databasechangelog CASCADE;
+
 INSERT INTO public.act_dmn_databasechangelog VALUES ('6', 'flowable', 'org/flowable/dmn/db/liquibase/flowable-dmn-db-changelog.xml', '2026-01-14 17:11:35.552966', 5, 'EXECUTED', '9:f00f92f3ef1af3fc1604f0323630f9b1', 'createIndex indexName=ACT_IDX_DEC_TBL_UNIQ, tableName=ACT_DMN_DECISION_TABLE', '', NULL, '4.24.0', NULL, NULL, '8381895464');
+TRUNCATE TABLE public.act_dmn_databasechangelog CASCADE;
+
 INSERT INTO public.act_dmn_databasechangelog VALUES ('7', 'flowable', 'org/flowable/dmn/db/liquibase/flowable-dmn-db-changelog.xml', '2026-01-14 17:11:35.570229', 6, 'EXECUTED', '9:d24d4c5f44083b4edf1231a7a682a2cd', 'dropIndex indexName=ACT_IDX_DEC_TBL_UNIQ, tableName=ACT_DMN_DECISION_TABLE; renameTable newTableName=ACT_DMN_DECISION, oldTableName=ACT_DMN_DECISION_TABLE; createIndex indexName=ACT_IDX_DMN_DEC_UNIQ, tableName=ACT_DMN_DECISION', '', NULL, '4.24.0', NULL, NULL, '8381895464');
+TRUNCATE TABLE public.act_dmn_databasechangelog CASCADE;
+
 INSERT INTO public.act_dmn_databasechangelog VALUES ('8', 'flowable', 'org/flowable/dmn/db/liquibase/flowable-dmn-db-changelog.xml', '2026-01-14 17:11:35.578836', 7, 'EXECUTED', '9:3998ef0958b46fe9c19458183952d2a0', 'addColumn tableName=ACT_DMN_DECISION', '', NULL, '4.24.0', NULL, NULL, '8381895464');
+TRUNCATE TABLE public.act_dmn_databasechangelog CASCADE;
+
 INSERT INTO public.act_dmn_databasechangelog VALUES ('9', 'flowable', 'org/flowable/dmn/db/liquibase/flowable-dmn-db-changelog.xml', '2026-01-14 17:11:35.591222', 8, 'EXECUTED', '9:5c9dc65601456faa1aa12f8d3afe0e9e', 'createIndex indexName=ACT_IDX_DMN_INSTANCE_ID, tableName=ACT_DMN_HI_DECISION_EXECUTION', '', NULL, '4.24.0', NULL, NULL, '8381895464');
 
+TRUNCATE TABLE public.act_dmn_databasechangeloglock CASCADE;
+
 INSERT INTO public.act_dmn_databasechangeloglock VALUES (1, false, NULL, NULL);
+TRUNCATE TABLE public.act_ge_bytearray CASCADE;
+
 INSERT INTO public.act_ge_bytearray VALUES ('46d79886-f12a-11f0-a8df-f2dbc029a3c2', 1, 'Process_1.bpmn', '46d79885-f12a-11f0-a8df-f2dbc029a3c2', '\x3c3f786d6c2076657273696f6e3d22312e302220656e636f64696e673d225554462d38223f3e0a3c62706d6e3a646566696e6974696f6e7320786d6c6e733a7873693d22687474703a2f2f7777772e77332e6f72672f323030312f584d4c536368656d612d696e7374616e63652220786d6c6e733a62706d6e3d22687474703a2f2f7777772e6f6d672e6f72672f737065632f42504d4e2f32303130303532342f4d4f44454c2220786d6c6e733a62706d6e64693d22687474703a2f2f7777772e6f6d672e6f72672f737065632f42504d4e2f32303130303532342f44492220786d6c6e733a64633d22687474703a2f2f7777772e6f6d672e6f72672f737065632f44442f32303130303532342f44432220786d6c6e733a64693d22687474703a2f2f7777772e6f6d672e6f72672f737065632f44442f32303130303532342f44492220786d6c6e733a637573746f6d3d22687474703a2f2f637573746f6d2e62706d6e2e696f2f736368656d61222069643d22446566696e6974696f6e735f3122207461726765744e616d6573706163653d22687474703a2f2f62706d6e2e696f2f736368656d612f62706d6e223e0a20203c62706d6e3a70726f636573732069643d2250726f636573735f312220697345786563757461626c653d2274727565223e0a202020203c62706d6e3a73746172744576656e742069643d2253746172744576656e745f3122206e616d653d22e5bc80e5a78b223e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f313c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a73746172744576656e743e0a202020203c62706d6e3a656e644576656e742069643d22456e644576656e745f3122206e616d653d22e7bb93e69d9f223e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f3069336d7167613c2f62706d6e3a696e636f6d696e673e0a202020203c2f62706d6e3a656e644576656e743e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f312220736f757263655265663d2253746172744576656e745f3122207461726765745265663d2241637469766974795f30396468337a3922202f3e0a202020203c62706d6e3a757365725461736b2069643d2241637469766974795f30396468337a39223e0a2020202020203c62706d6e3a657874656e73696f6e456c656d656e74733e0a20202020202020203c637573746f6d3a70726f706572746965733e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656554797065222076616c75653d22494e49544941544f5222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656556616c7565222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e65654c6162656c222076616c75653d22e6b581e7a88be58f91e8b5b7e4baba22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e6469646174655573657273222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e64696461746547726f757073222076616c75653d2222202f3e0a20202020202020203c2f637573746f6d3a70726f706572746965733e0a2020202020203c2f62706d6e3a657874656e73696f6e456c656d656e74733e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f313c2f62706d6e3a696e636f6d696e673e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f30756e37686c683c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a757365725461736b3e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f30756e37686c682220736f757263655265663d2241637469766974795f30396468337a3922207461726765745265663d2241637469766974795f306d767635686322202f3e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f3069336d7167612220736f757263655265663d2241637469766974795f306d767635686322207461726765745265663d22456e644576656e745f3122202f3e0a202020203c62706d6e3a757365725461736b2069643d2241637469766974795f306d7676356863223e0a2020202020203c62706d6e3a657874656e73696f6e456c656d656e74733e0a20202020202020203c637573746f6d3a70726f706572746965733e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656554797065222076616c75653d22454e544954595f4d414e4147455222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656556616c7565222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e65654c6162656c222076616c75653d22e5ae9ee4bd93e7bb8fe7908622202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e6469646174655573657273222076616c75653d225361726168204368656e22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e64696461746547726f757073222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a20202020202020203c2f637573746f6d3a70726f706572746965733e0a2020202020203c2f62706d6e3a657874656e73696f6e456c656d656e74733e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f30756e37686c683c2f62706d6e3a696e636f6d696e673e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f3069336d7167613c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a757365725461736b3e0a20203c2f62706d6e3a70726f636573733e0a20203c62706d6e64693a42504d4e4469616772616d2069643d2242504d4e4469616772616d5f31223e0a202020203c62706d6e64693a42504d4e506c616e652069643d2242504d4e506c616e655f31222062706d6e456c656d656e743d2250726f636573735f31223e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2253746172744576656e745f315f6469222062706d6e456c656d656e743d2253746172744576656e745f31223e0a20202020202020203c64633a426f756e647320783d223138302220793d22313630222077696474683d22333622206865696768743d22333622202f3e0a20202020202020203c62706d6e64693a42504d4e4c6162656c3e0a202020202020202020203c64633a426f756e647320783d223138372220793d22323033222077696474683d22323222206865696768743d22313422202f3e0a20202020202020203c2f62706d6e64693a42504d4e4c6162656c3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d22456e644576656e745f315f6469222062706d6e456c656d656e743d22456e644576656e745f31223e0a20202020202020203c64633a426f756e647320783d223639322220793d22313630222077696474683d22333622206865696768743d22333622202f3e0a20202020202020203c62706d6e64693a42504d4e4c6162656c3e0a202020202020202020203c64633a426f756e647320783d223639392220793d22323033222077696474683d22323222206865696768743d22313422202f3e0a20202020202020203c2f62706d6e64693a42504d4e4c6162656c3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2241637469766974795f3131326a75366a5f6469222062706d6e456c656d656e743d2241637469766974795f30396468337a39223e0a20202020202020203c64633a426f756e647320783d223236302220793d22313338222077696474683d2231303022206865696768743d22383022202f3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2241637469766974795f30397962666d375f6469222062706d6e456c656d656e743d2241637469766974795f306d7676356863223e0a20202020202020203c64633a426f756e647320783d223431302220793d22313338222077696474683d2231303022206865696768743d22383022202f3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f315f6469222062706d6e456c656d656e743d22466c6f775f31223e0a20202020202020203c64693a776179706f696e7420783d223231362220793d2231373822202f3e0a20202020202020203c64693a776179706f696e7420783d223236302220793d2231373822202f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f30756e37686c685f6469222062706d6e456c656d656e743d22466c6f775f30756e37686c68223e0a20202020202020203c64693a776179706f696e7420783d223336302220793d2231373822202f3e0a20202020202020203c64693a776179706f696e7420783d223431302220793d2231373822202f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f3069336d7167615f6469222062706d6e456c656d656e743d22466c6f775f3069336d716761223e0a20202020202020203c64693a776179706f696e7420783d223531302220793d2231373822202f3e0a20202020202020203c64693a776179706f696e7420783d223639322220793d2231373822202f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a202020203c2f62706d6e64693a42504d4e506c616e653e0a20203c2f62706d6e64693a42504d4e4469616772616d3e0a3c2f62706d6e3a646566696e6974696f6e733e0a', false);
+TRUNCATE TABLE public.act_ge_bytearray CASCADE;
+
 INSERT INTO public.act_ge_bytearray VALUES ('46dc5377-f12a-11f0-a8df-f2dbc029a3c2', 1, 'Process_1.Process_1.png', '46d79885-f12a-11f0-a8df-f2dbc029a3c2', '\x89504e470d0a1a0a0000000d49484452000002e2000000e40806000000dd25410b000010f649444154785eeddddd6f54677e07f07d91aabdccb6bb97b9d9abfd17b6bde9c5ae5a3552762f00bf60909149204aa48002586d521527482d7749c806902a354058b541f18549a3a609845a4a431210091b52b12924e1b51888c16c01870dd3f3504f34796c60b0c1f3cccf9f8ff4958367e69c83e777e67c39399ef9ce7700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008082d46ab53f3a7af4e82befbefbee57bb76edaabdf9e69b32cba97eeed78787874feddebdfb97f9f3d3aecc55eb1371ae002094aa2ceda80ed6b53367ced4ae5cb9521b1f1f97594efab9a79fff9e3d7b2e5605ea81fc396a47e6aaf589385700104a3a63990ed6f9415c663fa74f9f3e5715a6f7f3e7a81d99ab721269ae00209474d980339665243d0f5561ba9a3f47edc85c959348730500a1a46b49f303b7b42ee9f9c89fa37664aeca4a94b90280509a2d4cbfbf70ba76f4837faa1d7aebe91b49ff9dbe97df4f66962885c95c959528730500a13453982e8d9eac7dfcc6dfd63efad7d5df4afa5eba2dbfbf4c3f510a93b92a2b51e60a004269a6301d3f3434a92cd573e2d0ce49f797e9274a6132576525ca5c014028cd14a6ff7a7bfda4a2544fba2dbfbf4c3f510a93b92a2b51e60a004269a6307dfce6da4945a99e745b7e7f997ea21426735556a2cc150084a23095952885c95c959528730500a1345398d2bb59e445a99e745b7e7f997ea21426735556a2cc150084d24c61faf49d172615a57ad26df9fd65fa895298cc555989325700104a3385e9fcc983b58ffffdef2695a5f4bd745b7e7f997ea21426735556a2cc150084d24c614af96cdfd64985297d2fbf9fcc2c510a93b92a2b51e60a004269aa305dbd5afbf43f374e2a4ce97be9b649f79769274a6132576525ca5c014028b72b4ce9130e7ff7ce864965a99e749b4f41bc7b895298cc55598932570010ca4d0bd3d5abb5d39feeaefdf6dffe665249ca93ee93eeeb2ce6cc13a53099abb21265ae002094a90ad3edce56de2cce62ce3c510a93b92a2b51e60a004299aa303573b6f266498fcd9727cd274a6132576525ca5c0140285315a6bc04dd69f2e549f3895298cc55598932570010ca5485495a972885c95c959528730533d1dbdb7b5f6767e7bc8e8e8ee7abafbbaa7c56e57295dac4d7f4e75d13b7cf4bf7cf9701ccd0c58b17ff786868e8e9175e78e1a381818173fdfdfd571e79e491eb69475cbe7cf9b555ab568d3df9e493c79e7efae99dab57affecbea21dfcd971189c25456a21426735556a2cc154c475757d72faa63fc6095f189d2dd6cd2fd07d3e3f3650277e8bdf7de5bfeecb3cf9e5cb66c59ad2adfb51d3b76d4f6efdf5f3b72e448edfcf9f3b5247d4d7f4edf4fb7af59b3e67a5f5fdf7855c8dfe8eeeefe49becc0814a6b212a53099abb21265aee04e5405fa675591de3b45c19e4ef6a6e5e5eb006ee3e0c1837ff5e28b2f9e7af8e1876bafbefa6aedecd9b3374a77b3d2fdd3e3aa42fed5ca952b5fa976c41fe5eb68670a5359895298cc5559893257d08cdedede1f747474fcba2acf37fe6f776356ac5851dbbe7dfb2d4fc4a5dbd3fdf2c7a6e5a5e5a6e5e7eb0432d57ef5fdd75f7f7d2815f02d5bb6d42e5dbaf4ed867d87d2e3d372aa1df0724f4fcfaff2f5b52b85a9ac44294ce6aaac44992bb89daa2cdfdfd5d5f5516381eeeeeeae6ddebcb976e2c489fcd07e4be9fee971e9f15921ff30ad275f3730a1da7feedbb66ddbef1e7df4d1dad1a347f37d6b46d2f2aa727fa5afaf6f205f6f3b5298ca4a94c264aeca4a94b9825ba90af84fab9c6c2ccdebd7afaf1d3f7e3c3f94df91f4f8b49cac8c1f4febcbb701e6bc6a9fb9eff9e79f1f7deaa9a76aa3a3a3f9fe7457a4e5f6f7f75f5ebc78f1d67cfded46612a2b510a93b92a2b51e60a6e66e24cf837253c9dc51e1a1aca0fdf339296979d1d3feecc3834a8f693ef6fdbb6edd354c2d3c1e75e4acb5fb56ad585850b173e996f473b5198ca4a94c264aeca4a94b982a9a46bb61b2f4759b26449edc08103f961fbae48cb4dcb6f28e31fba661c26a46bc21f7becb17b76263c97d6b374e9d2b16a477c30df9676a13095952885c95c95952873055399f8c5cc6fce84dfab125e9796df78663cad3fdf269873aa1de381f48b9977fb9af0db49ebebe9e9199d3f7ffe8ff36d6a070a5359895298cc5559893257909b788bc2afeba578e7ce9df961fa9e48eb69382bfeb5b73664ce4b6f5198ded5a415366edc78aada119fcbb7a91d284c65254a6132576525ca5c41aeb3e17dc2d32f54cea6ec1738f7e6db067346fab09e74367c6c6c2cdf4f66455aefa2458b2eb6e387fe284c65254a6132576525ca5c41a3050b16fcbc5e84d3a522337d77943b95d6d778894ada9e7c1b614e489f9839383898ef23b36aebd6ad47aa1d7173be6da55398ca4a94c264aeca4a94b982469dffffb1f5374a707abfef5648eb6d382b3e986f2384373636f627cb972faf8d8c8ce4fbc7acaad6ff87ea5fc667d6ae5dfbbd7c1b4ba63095952885c95c959528730575d5f1f68755f11daf97e0d93e1b5e97d6db50c4c7d376e5db0aa1bdf6da6b03fdfdfdf9bed1124b972efdbcda11ff34dfc656a8b6e3ed2a7f9e7f3fa7309595d20b93b96acf943e57d0a899d799eaf679f5029c3e8ebe95d2fa1bcaf8bc7c5b21b40d1b36fc76c78e1df97ed1129b366d4a1f7bfb0ff936b642c38bc22d5fd014a6b2527a613257ed99d2e70a1a35f33a537d7f43fd7e2fbffc727e389e5569fd0ddbbc21df56086d6060e0dcfefdfbf3fda2258687870f7674740ce5dbd80a0d2f0ab77c415398ca4ae985c95cb5674a9f2b68d4cceb4c5757d7eefaedfbf6edcb0fc7b32aadbfbe2d69bb1ab713c25bb366cd95d97eeff09b397cf870ba34e5837c1b5b618a17b2295fd014a6b2527a619a629ecc551ba4f4b9824653bcbe4c7a9da9be1eab7fbfd51d20adbf611b8f657f1d886df9f2e5d7bffcf2cb7cbf6889f3e7cf5faa76c293f936b6c2142f60796ebca0294c65a5f4c234c51ce5315705a6f4b9824653bcaee449af33ff5bff73ab3b405a7f7d5bbababac6f2bf0f84b668d1a2dab56bd7f2fda225aaed481f779fbf60141d85a9ace4cf4fbbc65c9595fcf9118994567780b4fe86edf943de5320b465cb965d6bf5bf86ebce9e3dfbdf9de59f117fbbd32504c5a6f4339753cc93b96a83943e57d0688ad79749af33e9cc73fdfbadee00ce8833a73df1c41363adbe3eacee934f3ed9d759ee35e2df2a4a750a535929bd3099abf64ce973058d9a799de9748d3894e1a9a79e3a5ecabba6bcf5d65bbb0a7cd794492f608d14a6b2527a613257ed99d2e70a1a35f33ae35d53a0106bd7aedd59cafb88af5bb72e7ddc6e29ef237ed317b0460a535929bd3099abf64ce973058d9a799de9f43ee25086fefefebf58b366cdf57cc768816bdddddd073b0bf964cd66294c65254a6132576525ca5c415d67419facf9f8e38f5f6f28e23e5993b965eddab5df5bba74e9f8c8c848be6fccaa13274ebc53ed80a7d3f6e4db583285a9ac44294ce6aaac44992ba8ebeeeefe6175cc1daf17e0e3c78fe787e55991d6db50c2c7d376e5db0ae1ad5ebdfa8dc1c1c17cff9855cf3cf3cc6faa9d7073be6da55398ca4a94c264aeca4a94b98246d531375d0e7aa3046fdebc393f2ccf8ab4de86223e986f23cc09d5bf407fd2d7d7f7d5d8d858be8fcc8ad1d1d1f7ab1d70246d47be6da55398ca4a94c264aeca4a94b982460b162cf879bd0457c7df593f2b9ed6d7d5d5f5cd6529697bf26d843963e5ca95af6cd9b225df4f6645b5ee7fa976c2e7f26d6a070a5359895298cc555989325790ab8ebd7beb4578fdfaf5f9e1f99e4aeb6b381bbe37df369853e6cf9fffe3dededecbb3fd7ea2fbf6ed4b97a48ca4f5e7dbd40e14a6b212a53099abb21265ae20d7d5d5f5b3ea18fc75bd10efdcb9333f4cdf13693d0d25fcebb41df9b6c19cd3d3d3f3ab65cb965d191d1dcdf7997b626464e43faa1df08b2a0fe6dbd22e14a6b212a53099abb21265ae602a1d1d1dbfae97e27489ca810307f2c3f55d9596df78494a5a7fbe4d3067f5f5f50df4f7f75f4e079f7be9ead5ab9f543bfc07d5cef8d7f936b41385a9ac44294ce6aaac44992b984a6f6fef0faa42fc61bd182f59b2e49e95f1b4dc6a7ddf9c814feb4debcfb709e6b4c58b176f5db56ad5857b75667c6464644f2ae1d50ef88ff9badb8dc25456a21426735556a2cc15dc4c753cbebfcaf1c633e3434343f9e17b46d2f21acf844faceffe7c5b80cac2850b9fecebeb1bbbdbd78c4f5c137eacddcf84d7294c65254a6132576525ca5cc1ad54c7e59f3696f194f40b95337d3795f4f8ec17336f94f0b4be7c1b8006d58ef2604f4fcfe8c68d1b4f5dba7429dfb7eec8850b17de9b78779491b4dc7c5ded4a612a2b510a93b92a2b51e60a6e279da1ee6cb84c25259d1d4feff77de2c489fcd07e4be9fee971d959f01b97a3a4f5e4eb06a650ed403faa7698e7162d5a74f1a5975e3a72f6ecd96bf9ce760bd74e9e3cf9cec0c0c08d774649cb49cbcbd7d1ce14a6b212a53099abb21265aea019e99aed895fe0cc0b746dc58a15b5eddbb7d7f6efdf5f3b72e448edfcf9f3370ef6e96bfa73fa7eba3dfbd8fa7aaea7e5ba261ca6217dd84eb5136dae8af4c8430f3df4c5a64d9b0e0c0f0f1f3c7cf8f0b173e7cefdbeda0f2f8d8c8c1c3d74e8d0beeaa0f5e6ba75eb06abc71cac1ef33fe971edf8613dcd5098ca4a94c264aeca4a94b9823b31f1d686dfbccff80cb3d75b14c2ddf1dd050b16fc59b543fd7df52fdba16ae74a9f8a59bfa62c7d7d3f7d3fdd9eee97ee9f2f201285a9ac44294ce6aaac44992b988eea78fe8bead83e58657c8a827daba4fb0fa6c7e7cb04b82b14a6b212a53099abb21265ae60267a7b7befab8af5bc8e8e8ee7abafbbaa7c56e5f244e94e5fd39f774ddc3e2fdd3f5f06c05da53095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1ecdab5ebfa952b57261db865f6533d0fa7aac274357f8eda91b92a2791e60a0042191e1e3e75e6cc9949076f99fd7cf1c517ff5c15a6f7f3e7a81d99ab721269ae002094ddbb77ff72cf9e3d174f9f3e7dce19ccd6a4fab99ffefcf3cf7f5395a563551ec89fa37664ae5a9f88730500e1a483743a6356653c5d4b2ab39ef4734f3fff506529fd7d26fe5ee6aa35093957000000000000000000000000000000000000000000000000000004f07f07178e4d89a3c38c0000000049454e44ae426082', true);
+TRUNCATE TABLE public.act_ge_bytearray CASCADE;
+
 INSERT INTO public.act_ge_bytearray VALUES ('2d5e787f-f132-11f0-bfbd-f2dbc029a3c2', 1, 'fu-20260114-paed3z.bpmn', '2d5e787e-f132-11f0-bfbd-f2dbc029a3c2', '\x3c3f786d6c2076657273696f6e3d22312e302220656e636f64696e673d225554462d38223f3e0a3c62706d6e3a646566696e6974696f6e7320786d6c6e733a7873693d22687474703a2f2f7777772e77332e6f72672f323030312f584d4c536368656d612d696e7374616e63652220786d6c6e733a62706d6e3d22687474703a2f2f7777772e6f6d672e6f72672f737065632f42504d4e2f32303130303532342f4d4f44454c2220786d6c6e733a62706d6e64693d22687474703a2f2f7777772e6f6d672e6f72672f737065632f42504d4e2f32303130303532342f44492220786d6c6e733a64633d22687474703a2f2f7777772e6f6d672e6f72672f737065632f44442f32303130303532342f44432220786d6c6e733a64693d22687474703a2f2f7777772e6f6d672e6f72672f737065632f44442f32303130303532342f44492220786d6c6e733a637573746f6d3d22687474703a2f2f637573746f6d2e62706d6e2e696f2f736368656d61222069643d22446566696e6974696f6e735f3122207461726765744e616d6573706163653d22687474703a2f2f62706d6e2e696f2f736368656d612f62706d6e223e0a20203c62706d6e3a70726f636573732069643d2250726f636573735f312220697345786563757461626c653d2274727565223e0a202020203c62706d6e3a73746172744576656e742069643d2253746172744576656e745f3122206e616d653d22e5bc80e5a78b223e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f313c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a73746172744576656e743e0a202020203c62706d6e3a656e644576656e742069643d22456e644576656e745f3122206e616d653d22e7bb93e69d9f223e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f3069336d7167613c2f62706d6e3a696e636f6d696e673e0a202020203c2f62706d6e3a656e644576656e743e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f312220736f757263655265663d2253746172744576656e745f3122207461726765745265663d2241637469766974795f30396468337a3922202f3e0a202020203c62706d6e3a757365725461736b2069643d2241637469766974795f30396468337a39223e0a2020202020203c62706d6e3a657874656e73696f6e456c656d656e74733e0a20202020202020203c637573746f6d3a70726f706572746965733e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656554797065222076616c75653d22494e49544941544f5222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656556616c7565222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e65654c6162656c222076616c75653d22e6b581e7a88be58f91e8b5b7e4baba22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e6469646174655573657273222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e64696461746547726f757073222076616c75653d2222202f3e0a20202020202020203c2f637573746f6d3a70726f706572746965733e0a2020202020203c2f62706d6e3a657874656e73696f6e456c656d656e74733e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f313c2f62706d6e3a696e636f6d696e673e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f30756e37686c683c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a757365725461736b3e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f30756e37686c682220736f757263655265663d2241637469766974795f30396468337a3922207461726765745265663d2241637469766974795f306d767635686322202f3e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f3069336d7167612220736f757263655265663d2241637469766974795f306d767635686322207461726765745265663d22456e644576656e745f3122202f3e0a202020203c62706d6e3a757365725461736b2069643d2241637469766974795f306d7676356863223e0a2020202020203c62706d6e3a657874656e73696f6e456c656d656e74733e0a20202020202020203c637573746f6d3a70726f706572746965733e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656554797065222076616c75653d22454e544954595f4d414e4147455222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656556616c7565222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e65654c6162656c222076616c75653d22e5ae9ee4bd93e7bb8fe7908622202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e6469646174655573657273222076616c75653d225361726168204368656e22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e64696461746547726f757073222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a20202020202020203c2f637573746f6d3a70726f706572746965733e0a2020202020203c2f62706d6e3a657874656e73696f6e456c656d656e74733e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f30756e37686c683c2f62706d6e3a696e636f6d696e673e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f3069336d7167613c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a757365725461736b3e0a20203c2f62706d6e3a70726f636573733e0a20203c62706d6e64693a42504d4e4469616772616d2069643d2242504d4e4469616772616d5f31223e0a202020203c62706d6e64693a42504d4e506c616e652069643d2242504d4e506c616e655f31222062706d6e456c656d656e743d2250726f636573735f31223e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2253746172744576656e745f315f6469222062706d6e456c656d656e743d2253746172744576656e745f31223e0a20202020202020203c64633a426f756e647320783d223138302220793d22313630222077696474683d22333622206865696768743d22333622202f3e0a20202020202020203c62706d6e64693a42504d4e4c6162656c3e0a202020202020202020203c64633a426f756e647320783d223138372220793d22323033222077696474683d22323222206865696768743d22313422202f3e0a20202020202020203c2f62706d6e64693a42504d4e4c6162656c3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d22456e644576656e745f315f6469222062706d6e456c656d656e743d22456e644576656e745f31223e0a20202020202020203c64633a426f756e647320783d223639322220793d22313630222077696474683d22333622206865696768743d22333622202f3e0a20202020202020203c62706d6e64693a42504d4e4c6162656c3e0a202020202020202020203c64633a426f756e647320783d223639392220793d22323033222077696474683d22323222206865696768743d22313422202f3e0a20202020202020203c2f62706d6e64693a42504d4e4c6162656c3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2241637469766974795f3131326a75366a5f6469222062706d6e456c656d656e743d2241637469766974795f30396468337a39223e0a20202020202020203c64633a426f756e647320783d223236302220793d22313338222077696474683d2231303022206865696768743d22383022202f3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2241637469766974795f30397962666d375f6469222062706d6e456c656d656e743d2241637469766974795f306d7676356863223e0a20202020202020203c64633a426f756e647320783d223431302220793d22313338222077696474683d2231303022206865696768743d22383022202f3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f315f6469222062706d6e456c656d656e743d22466c6f775f31223e0a20202020202020203c64693a776179706f696e7420783d223231362220793d2231373822202f3e0a20202020202020203c64693a776179706f696e7420783d223236302220793d2231373822202f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f30756e37686c685f6469222062706d6e456c656d656e743d22466c6f775f30756e37686c68223e0a20202020202020203c64693a776179706f696e7420783d223336302220793d2231373822202f3e0a20202020202020203c64693a776179706f696e7420783d223431302220793d2231373822202f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f3069336d7167615f6469222062706d6e456c656d656e743d22466c6f775f3069336d716761223e0a20202020202020203c64693a776179706f696e7420783d223531302220793d2231373822202f3e0a20202020202020203c64693a776179706f696e7420783d223639322220793d2231373822202f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a202020203c2f62706d6e64693a42504d4e506c616e653e0a20203c2f62706d6e64693a42504d4e4469616772616d3e0a3c2f62706d6e3a646566696e6974696f6e733e0a', false);
+TRUNCATE TABLE public.act_ge_bytearray CASCADE;
+
 INSERT INTO public.act_ge_bytearray VALUES ('2d6ca950-f132-11f0-bfbd-f2dbc029a3c2', 1, 'fu-20260114-paed3z.Process_1.png', '2d5e787e-f132-11f0-bfbd-f2dbc029a3c2', '\x89504e470d0a1a0a0000000d49484452000002e2000000e40806000000dd25410b000010f649444154785eeddddd6f54677e07f07d91aabdccb6bb97b9d9abfd17b6bde9c5ae5a3552762f00bf60909149204aa48002586d521527482d7749c806902a354058b541f18549a3a609845a4a431210091b52b12924e1b51888c16c01870dd3f3504f34796c60b0c1f3cccf9f8ff4958367e69c83e777e67c39399ef9ce7700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008082d46ab53f3a7af4e82befbefbee57bb76edaabdf9e69b32cba97eeed78787874feddebdfb97f9f3d3aecc55eb1371ae002094aa2ceda80ed6b53367ced4ae5cb9521b1f1f97594efab9a79fff9e3d7b2e5605ea81fc396a47e6aaf589385700104a3a63990ed6f9415c663fa74f9f3e5715a6f7f3e7a81d99ab721269ae00209474d980339665243d0f5561ba9a3f47edc85c959348730500a1a46b49f303b7b42ee9f9c89fa37664aeca4a94b90280509a2d4cbfbf70ba76f4837faa1d7aebe91b49ff9dbe97df4f66962885c95c959528730500a13453982e8d9eac7dfcc6dfd63efad7d5df4afa5eba2dbfbf4c3f510a93b92a2b51e60a004269a6301d3f3434a92cd573e2d0ce49f797e9274a6132576525ca5c014028cd14a6ff7a7bfda4a2544fba2dbfbf4c3f510a93b92a2b51e60a004269a6307dfce6da4945a99e745b7e7f997ea21426735556a2cc150084a23095952885c95c959528730500a1345398d2bb59e445a99e745b7e7f997ea21426735556a2cc150084d24c61faf49d172615a57ad26df9fd65fa895298cc555989325700104a3385e9fcc983b58ffffdef2695a5f4bd745b7e7f997ea21426735556a2cc150084d24c614af96cdfd64985297d2fbf9fcc2c510a93b92a2b51e60a004269aa305dbd5afbf43f374e2a4ce97be9b649f79769274a6132576525ca5c014028b72b4ce9130e7ff7ce864965a99e749b4f41bc7b895298cc55598932570010ca4d0bd3d5abb5d39feeaefdf6dffe665249ca93ee93eeeb2ce6cc13a53099abb21265ae002094a90ad3edce56de2cce62ce3c510a93b92a2b51e60a004299aa303573b6f266498fcd9727cd274a6132576525ca5c0140285315a6bc04dd69f2e549f3895298cc55598932570010ca5485495a972885c95c959528730533d1dbdb7b5f6767e7bc8e8e8ee7abafbbaa7c56e57295dac4d7f4e75d13b7cf4bf7cf9701ccd0c58b17ff786868e8e9175e78e1a381818173fdfdfd571e79e491eb69475cbe7cf9b555ab568d3df9e493c79e7efae99dab57affecbea21dfcd971189c25456a21426735556a2cc154c475757d72faa63fc6095f189d2dd6cd2fd07d3e3f3650277e8bdf7de5bfeecb3cf9e5cb66c59ad2adfb51d3b76d4f6efdf5f3b72e448edfcf9f3b5247d4d7f4edf4fb7af59b3e67a5f5fdf7855c8dfe8eeeefe49becc0814a6b212a53099abb21265aee04e5405fa675591de3b45c19e4ef6a6e5e5eb006ee3e0c1837ff5e28b2f9e7af8e1876bafbefa6aedecd9b3374a77b3d2fdd3e3aa42fed5ca952b5fa976c41fe5eb68670a5359895298cc5559893257d08cdedede1f747474fcba2acf37fe6f776356ac5851dbbe7dfb2d4fc4a5dbd3fdf2c7a6e5a5e5a6e5e7eb0432d57ef5fdd75f7f7d2815f02d5bb6d42e5dbaf4ed867d87d2e3d372aa1df0724f4fcfaff2f5b52b85a9ac44294ce6aaac44992bb89daa2cdfdfd5d5f5516381eeeeeeae6ddebcb976e2c489fcd07e4be9fee971e9f15921ff30ad275f3730a1da7feedbb66ddbef1e7df4d1dad1a347f37d6b46d2f2aa727fa5afaf6f205f6f3b5298ca4a94c264aeca4a94b9825ba90af84fab9c6c2ccdebd7afaf1d3f7e3c3f94df91f4f8b49cac8c1f4febcbb701e6bc6a9fb9eff9e79f1f7deaa9a76aa3a3a3f9fe7457a4e5f6f7f75f5ebc78f1d67cfded46612a2b510a93b92a2b51e60a6e66e24cf837253c9dc51e1a1aca0fdf339296979d1d3feecc3834a8f693ef6fdbb6edd354c2d3c1e75e4acb5fb56ad585850b173e996f473b5198ca4a94c264aeca4a94b982a9a46bb61b2f4759b26449edc08103f961fbae48cb4dcb6f28e31fba661c26a46bc21f7becb17b76263c97d6b374e9d2b16a477c30df9676a13095952885c95c95952873055399f8c5cc6fce84dfab125e9796df78663cad3fdf269873aa1de381f48b9977fb9af0db49ebebe9e9199d3f7ffe8ff36d6a070a5359895298cc5559893257909b788bc2afeba578e7ce9df961fa9e48eb69382bfeb5b73664ce4b6f5198ded5a415366edc78aada119fcbb7a91d284c65254a6132576525ca5c41aeb3e17dc2d32f54cea6ec1738f7e6db067346fab09e74367c6c6c2cdf4f66455aefa2458b2eb6e387fe284c65254a6132576525ca5c41a3050b16fcbc5e84d3a522337d77943b95d6d778894ada9e7c1b614e489f9839383898ef23b36aebd6ad47aa1d7173be6da55398ca4a94c264aeca4a94b982469dffffb1f5374a707abfef5648eb6d382b3e986f2384373636f627cb972faf8d8c8ce4fbc7acaad6ff87ea5fc667d6ae5dfbbd7c1b4ba63095952885c95c959528730575d5f1f68755f11daf97e0d93e1b5e97d6db50c4c7d376e5db0aa1bdf6da6b03fdfdfdf9bed1124b972efdbcda11ff34dfc656a8b6e3ed2a7f9e7f3fa7309595d20b93b96acf943e57d0a899d799eaf679f5029c3e8ebe95d2fa1bcaf8bc7c5b21b40d1b36fc76c78e1df97ed1129b366d4a1f7bfb0ff936b642c38bc22d5fd014a6b2527a613257ed99d2e70a1a35f33a537d7f43fd7e2fbffc727e389e5569fd0ddbbc21df56086d6060e0dcfefdfbf3fda2258687870f7674740ce5dbd80a0d2f0ab77c415398ca4ae985c95cb5674a9f2b68d4cceb4c5757d7eefaedfbf6edcb0fc7b32aadbfbe2d69bb1ab713c25bb366cd95d97eeff09b397cf870ba34e5837c1b5b618a17b2295fd014a6b2527a619a629ecc551ba4f4b9824653bcbe4c7a9da9be1eab7fbfd51d20adbf611b8f657f1d886df9f2e5d7bffcf2cb7cbf6889f3e7cf5faa76c293f936b6c2142f60796ebca0294c65a5f4c234c51ce5315705a6f4b9824653bcaee449af33ff5bff73ab3b405a7f7d5bbababac6f2bf0f84b668d1a2dab56bd7f2fda225aaed481f779fbf60141d85a9ace4cf4fbbc65c9595fcf9118994567780b4fe86edf943de5320b465cb965d6bf5bf86ebce9e3dfbdf9de59f117fbbd32504c5a6f4339753cc93b96a83943e57d0688ad79749af33e9cc73fdfbadee00ce8833a73df1c41363adbe3eacee934f3ed9d759ee35e2df2a4a750a535929bd3099abf64ce973058d9a799de9748d3894e1a9a79e3a5ecabba6bcf5d65bbb0a7cd794492f608d14a6b2527a613257ed99d2e70a1a35f33ae35d53a0106bd7aedd59cafb88af5bb72e7ddc6e29ef237ed317b0460a535929bd3099abf64ce973058d9a799de9f43ee25086fefefebf58b366cdf57cc768816bdddddd073b0bf964cd66294c65254a6132576525ca5c415d67419facf9f8e38f5f6f28e23e5993b965eddab5df5bba74e9f8c8c848be6fccaa13274ebc53ed80a7d3f6e4db583285a9ac44294ce6aaac44992ba8ebeeeefe6175cc1daf17e0e3c78fe787e55991d6db50c2c7d376e5db0ae1ad5ebdfa8dc1c1c17cff9855cf3cf3cc6faa9d7073be6da55398ca4a94c264aeca4a94b98246d531375d0e7aa3046fdebc393f2ccf8ab4de86223e986f23cc09d5bf407fd2d7d7f7d5d8d858be8fcc8ad1d1d1f7ab1d70246d47be6da55398ca4a94c264aeca4a94b982460b162cf879bd0457c7df593f2b9ed6d7d5d5f5cd6529697bf26d843963e5ca95af6cd9b225df4f6645b5ee7fa976c2e7f26d6a070a5359895298cc555989325790ab8ebd7beb4578fdfaf5f9e1f99e4aeb6b381bbe37df369853e6cf9fffe3dededecbb3fd7ea2fbf6ed4b97a48ca4f5e7dbd40e14a6b212a53099abb21265ae20d7d5d5f5b3ea18fc75bd10efdcb9333f4cdf13693d0d25fcebb41df9b6c19cd3d3d3f3ab65cb965d191d1dcdf7997b626464e43faa1df08b2a0fe6dbd22e14a6b212a53099abb21265ae602a1d1d1dbfae97e27489ca810307f2c3f55d9596df78494a5a7fbe4d3067f5f5f50df4f7f75f4e079f7be9ead5ab9f543bfc07d5cef8d7f936b41385a9ac44294ce6aaac44992b984a6f6fef0faa42fc61bd182f59b2e49e95f1b4dc6a7ddf9c814feb4debcfb709e6b4c58b176f5db56ad5857b75667c6464644f2ae1d50ef88ff9badb8dc25456a21426735556a2cc15dc4c753cbebfcaf1c633e3434343f9e17b46d2f21acf844faceffe7c5b80cac2850b9fecebeb1bbbdbd78c4f5c137eacddcf84d7294c65254a6132576525ca5cc1ad54c7e59f3696f194f40b95337d3795f4f8ec17336f94f0b4be7c1b8006d58ef2604f4fcfe8c68d1b4f5dba7429dfb7eec8850b17de9b78779491b4dc7c5ded4a612a2b510a93b92a2b51e60a6e279da1ee6cb84c25259d1d4feff77de2c489fcd07e4be9fee971d959f01b97a3a4f5e4eb06a650ed403faa7698e7162d5a74f1a5975e3a72f6ecd96bf9ce760bd74e9e3cf9cec0c0c08d774649cb49cbcbd7d1ce14a6b212a53099abb21265aea019e99aed895fe0cc0b746dc58a15b5eddbb7d7f6efdf5f3b72e448edfcf9f3370ef6e96bfa73fa7eba3dfbd8fa7aaea7e5ba261ca6217dd84eb5136dae8af4c8430f3df4c5a64d9b0e0c0f0f1f3c7cf8f0b173e7cefdbeda0f2f8d8c8c1c3d74e8d0beeaa0f5e6ba75eb06abc71cac1ef33fe971edf8613dcd5098ca4a94c264aeca4a94b9823b31f1d686dfbccff80cb3d75b14c2ddf1dd050b16fc59b543fd7df52fdba16ae74a9f8a59bfa62c7d7d3f7d3fdd9eee97ee9f2f201285a9ac44294ce6aaac44992b988eea78fe8bead83e58657c8a827daba4fb0fa6c7e7cb04b82b14a6b212a53099abb21265ae60267a7b7befab8af5bc8e8e8ee7abafbbaa7c56e5f244e94e5fd39f774ddc3e2fdd3f5f06c05da53095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1ecdab5ebfa952b57261db865f6533d0fa7aac274357f8eda91b92a2791e60a0042191e1e3e75e6cc9949076f99fd7cf1c517ff5c15a6f7f3e7a81d99ab721269ae002094ddbb77ff72cf9e3d174f9f3e7dce19ccd6a4fab99ffefcf3cf7f5395a563551ec89fa37664ae5a9f88730500e1a483743a6356653c5d4b2ab39ef4734f3fff506529fd7d26fe5ee6aa35093957000000000000000000000000000000000000000000000000000004f07f07178e4d89a3c38c0000000049454e44ae426082', true);
+TRUNCATE TABLE public.act_ge_bytearray CASCADE;
+
 INSERT INTO public.act_ge_bytearray VALUES ('80ec968b-f133-11f0-bfbd-f2dbc029a3c2', 1, 'fu-20260114-paed3z.bpmn', '80ec968a-f133-11f0-bfbd-f2dbc029a3c2', '\x3c3f786d6c2076657273696f6e3d22312e302220656e636f64696e673d225554462d38223f3e0a3c62706d6e3a646566696e6974696f6e7320786d6c6e733a7873693d22687474703a2f2f7777772e77332e6f72672f323030312f584d4c536368656d612d696e7374616e63652220786d6c6e733a62706d6e3d22687474703a2f2f7777772e6f6d672e6f72672f737065632f42504d4e2f32303130303532342f4d4f44454c2220786d6c6e733a62706d6e64693d22687474703a2f2f7777772e6f6d672e6f72672f737065632f42504d4e2f32303130303532342f44492220786d6c6e733a64633d22687474703a2f2f7777772e6f6d672e6f72672f737065632f44442f32303130303532342f44432220786d6c6e733a64693d22687474703a2f2f7777772e6f6d672e6f72672f737065632f44442f32303130303532342f44492220786d6c6e733a637573746f6d3d22687474703a2f2f637573746f6d2e62706d6e2e696f2f736368656d61222069643d22446566696e6974696f6e735f3122207461726765744e616d6573706163653d22687474703a2f2f62706d6e2e696f2f736368656d612f62706d6e223e0a20203c62706d6e3a70726f636573732069643d2250726f636573735f312220697345786563757461626c653d2274727565223e0a202020203c62706d6e3a73746172744576656e742069643d2253746172744576656e745f3122206e616d653d22e5bc80e5a78b223e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f313c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a73746172744576656e743e0a202020203c62706d6e3a656e644576656e742069643d22456e644576656e745f3122206e616d653d22e7bb93e69d9f223e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f3069336d7167613c2f62706d6e3a696e636f6d696e673e0a202020203c2f62706d6e3a656e644576656e743e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f312220736f757263655265663d2253746172744576656e745f3122207461726765745265663d2241637469766974795f30396468337a3922202f3e0a202020203c62706d6e3a757365725461736b2069643d2241637469766974795f30396468337a39223e0a2020202020203c62706d6e3a657874656e73696f6e456c656d656e74733e0a20202020202020203c637573746f6d3a70726f706572746965733e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656554797065222076616c75653d22494e49544941544f5222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656556616c7565222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e65654c6162656c222076616c75653d22e6b581e7a88be58f91e8b5b7e4baba22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e6469646174655573657273222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e64696461746547726f757073222076616c75653d2222202f3e0a20202020202020203c2f637573746f6d3a70726f706572746965733e0a2020202020203c2f62706d6e3a657874656e73696f6e456c656d656e74733e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f313c2f62706d6e3a696e636f6d696e673e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f30756e37686c683c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a757365725461736b3e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f30756e37686c682220736f757263655265663d2241637469766974795f30396468337a3922207461726765745265663d2241637469766974795f306d767635686322202f3e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f3069336d7167612220736f757263655265663d2241637469766974795f306d767635686322207461726765745265663d22456e644576656e745f3122202f3e0a202020203c62706d6e3a757365725461736b2069643d2241637469766974795f306d7676356863223e0a2020202020203c62706d6e3a657874656e73696f6e456c656d656e74733e0a20202020202020203c637573746f6d3a70726f706572746965733e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656554797065222076616c75653d22454e544954595f4d414e4147455222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656556616c7565222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e65654c6162656c222076616c75653d22e5ae9ee4bd93e7bb8fe7908622202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e6469646174655573657273222076616c75653d225361726168204368656e22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e64696461746547726f757073222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a20202020202020203c2f637573746f6d3a70726f706572746965733e0a2020202020203c2f62706d6e3a657874656e73696f6e456c656d656e74733e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f30756e37686c683c2f62706d6e3a696e636f6d696e673e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f3069336d7167613c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a757365725461736b3e0a20203c2f62706d6e3a70726f636573733e0a20203c62706d6e64693a42504d4e4469616772616d2069643d2242504d4e4469616772616d5f31223e0a202020203c62706d6e64693a42504d4e506c616e652069643d2242504d4e506c616e655f31222062706d6e456c656d656e743d2250726f636573735f31223e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2253746172744576656e745f315f6469222062706d6e456c656d656e743d2253746172744576656e745f31223e0a20202020202020203c64633a426f756e647320783d223138302220793d22313630222077696474683d22333622206865696768743d22333622202f3e0a20202020202020203c62706d6e64693a42504d4e4c6162656c3e0a202020202020202020203c64633a426f756e647320783d223138372220793d22323033222077696474683d22323222206865696768743d22313422202f3e0a20202020202020203c2f62706d6e64693a42504d4e4c6162656c3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d22456e644576656e745f315f6469222062706d6e456c656d656e743d22456e644576656e745f31223e0a20202020202020203c64633a426f756e647320783d223639322220793d22313630222077696474683d22333622206865696768743d22333622202f3e0a20202020202020203c62706d6e64693a42504d4e4c6162656c3e0a202020202020202020203c64633a426f756e647320783d223639392220793d22323033222077696474683d22323222206865696768743d22313422202f3e0a20202020202020203c2f62706d6e64693a42504d4e4c6162656c3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2241637469766974795f3131326a75366a5f6469222062706d6e456c656d656e743d2241637469766974795f30396468337a39223e0a20202020202020203c64633a426f756e647320783d223236302220793d22313338222077696474683d2231303022206865696768743d22383022202f3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2241637469766974795f30397962666d375f6469222062706d6e456c656d656e743d2241637469766974795f306d7676356863223e0a20202020202020203c64633a426f756e647320783d223431302220793d22313338222077696474683d2231303022206865696768743d22383022202f3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f315f6469222062706d6e456c656d656e743d22466c6f775f31223e0a20202020202020203c64693a776179706f696e7420783d223231362220793d2231373822202f3e0a20202020202020203c64693a776179706f696e7420783d223236302220793d2231373822202f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f30756e37686c685f6469222062706d6e456c656d656e743d22466c6f775f30756e37686c68223e0a20202020202020203c64693a776179706f696e7420783d223336302220793d2231373822202f3e0a20202020202020203c64693a776179706f696e7420783d223431302220793d2231373822202f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f3069336d7167615f6469222062706d6e456c656d656e743d22466c6f775f3069336d716761223e0a20202020202020203c64693a776179706f696e7420783d223531302220793d2231373822202f3e0a20202020202020203c64693a776179706f696e7420783d223639322220793d2231373822202f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a202020203c2f62706d6e64693a42504d4e506c616e653e0a20203c2f62706d6e64693a42504d4e4469616772616d3e0a3c2f62706d6e3a646566696e6974696f6e733e0a', false);
+TRUNCATE TABLE public.act_ge_bytearray CASCADE;
+
 INSERT INTO public.act_ge_bytearray VALUES ('80f1517c-f133-11f0-bfbd-f2dbc029a3c2', 1, 'fu-20260114-paed3z.Process_1.png', '80ec968a-f133-11f0-bfbd-f2dbc029a3c2', '\x89504e470d0a1a0a0000000d49484452000002e2000000e40806000000dd25410b000010f649444154785eeddddd6f54677e07f07d91aabdccb6bb97b9d9abfd17b6bde9c5ae5a3552762f00bf60909149204aa48002586d521527482d7749c806902a354058b541f18549a3a609845a4a431210091b52b12924e1b51888c16c01870dd3f3504f34796c60b0c1f3cccf9f8ff4958367e69c83e777e67c39399ef9ce7700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008082d46ab53f3a7af4e82befbefbee57bb76edaabdf9e69b32cba97eeed78787874feddebdfb97f9f3d3aecc55eb1371ae002094aa2ceda80ed6b53367ced4ae5cb9521b1f1f97594efab9a79fff9e3d7b2e5605ea81fc396a47e6aaf589385700104a3a63990ed6f9415c663fa74f9f3e5715a6f7f3e7a81d99ab721269ae00209474d980339665243d0f5561ba9a3f47edc85c959348730500a1a46b49f303b7b42ee9f9c89fa37664aeca4a94b90280509a2d4cbfbf70ba76f4837faa1d7aebe91b49ff9dbe97df4f66962885c95c959528730500a13453982e8d9eac7dfcc6dfd63efad7d5df4afa5eba2dbfbf4c3f510a93b92a2b51e60a004269a6301d3f3434a92cd573e2d0ce49f797e9274a6132576525ca5c014028cd14a6ff7a7bfda4a2544fba2dbfbf4c3f510a93b92a2b51e60a004269a6307dfce6da4945a99e745b7e7f997ea21426735556a2cc150084a23095952885c95c959528730500a1345398d2bb59e445a99e745b7e7f997ea21426735556a2cc150084d24c61faf49d172615a57ad26df9fd65fa895298cc555989325700104a3385e9fcc983b58ffffdef2695a5f4bd745b7e7f997ea21426735556a2cc150084d24c614af96cdfd64985297d2fbf9fcc2c510a93b92a2b51e60a004269aa305dbd5afbf43f374e2a4ce97be9b649f79769274a6132576525ca5c014028b72b4ce9130e7ff7ce864965a99e749b4f41bc7b895298cc55598932570010ca4d0bd3d5abb5d39feeaefdf6dffe665249ca93ee93eeeb2ce6cc13a53099abb21265ae002094a90ad3edce56de2cce62ce3c510a93b92a2b51e60a004299aa303573b6f266498fcd9727cd274a6132576525ca5c0140285315a6bc04dd69f2e549f3895298cc55598932570010ca5485495a972885c95c959528730533d1dbdb7b5f6767e7bc8e8e8ee7abafbbaa7c56e57295dac4d7f4e75d13b7cf4bf7cf9701ccd0c58b17ff786868e8e9175e78e1a381818173fdfdfd571e79e491eb69475cbe7cf9b555ab568d3df9e493c79e7efae99dab57affecbea21dfcd971189c25456a21426735556a2cc154c475757d72faa63fc6095f189d2dd6cd2fd07d3e3f3650277e8bdf7de5bfeecb3cf9e5cb66c59ad2adfb51d3b76d4f6efdf5f3b72e448edfcf9f3b5247d4d7f4edf4fb7af59b3e67a5f5fdf7855c8dfe8eeeefe49becc0814a6b212a53099abb21265aee04e5405fa675591de3b45c19e4ef6a6e5e5eb006ee3e0c1837ff5e28b2f9e7af8e1876bafbefa6aedecd9b3374a77b3d2fdd3e3aa42fed5ca952b5fa976c41fe5eb68670a5359895298cc5559893257d08cdedede1f747474fcba2acf37fe6f776356ac5851dbbe7dfb2d4fc4a5dbd3fdf2c7a6e5a5e5a6e5e7eb0432d57ef5fdd75f7f7d2815f02d5bb6d42e5dbaf4ed867d87d2e3d372aa1df0724f4fcfaff2f5b52b85a9ac44294ce6aaac44992bb89daa2cdfdfd5d5f5516381eeeeeeae6ddebcb976e2c489fcd07e4be9fee971e9f15921ff30ad275f3730a1da7feedbb66ddbef1e7df4d1dad1a347f37d6b46d2f2aa727fa5afaf6f205f6f3b5298ca4a94c264aeca4a94b9825ba90af84fab9c6c2ccdebd7afaf1d3f7e3c3f94df91f4f8b49cac8c1f4febcbb701e6bc6a9fb9eff9e79f1f7deaa9a76aa3a3a3f9fe7457a4e5f6f7f75f5ebc78f1d67cfded46612a2b510a93b92a2b51e60a6e66e24cf837253c9dc51e1a1aca0fdf339296979d1d3feecc3834a8f693ef6fdbb6edd354c2d3c1e75e4acb5fb56ad585850b173e996f473b5198ca4a94c264aeca4a94b982a9a46bb61b2f4759b26449edc08103f961fbae48cb4dcb6f28e31fba661c26a46bc21f7becb17b76263c97d6b374e9d2b16a477c30df9676a13095952885c95c95952873055399f8c5cc6fce84dfab125e9796df78663cad3fdf269873aa1de381f48b9977fb9af0db49ebebe9e9199d3f7ffe8ff36d6a070a5359895298cc5559893257909b788bc2afeba578e7ce9df961fa9e48eb69382bfeb5b73664ce4b6f5198ded5a415366edc78aada119fcbb7a91d284c65254a6132576525ca5c41aeb3e17dc2d32f54cea6ec1738f7e6db067346fab09e74367c6c6c2cdf4f66455aefa2458b2eb6e387fe284c65254a6132576525ca5c41a3050b16fcbc5e84d3a522337d77943b95d6d778894ada9e7c1b614e489f9839383898ef23b36aebd6ad47aa1d7173be6da55398ca4a94c264aeca4a94b982469dffffb1f5374a707abfef5648eb6d382b3e986f2384373636f627cb972faf8d8c8ce4fbc7acaad6ff87ea5fc667d6ae5dfbbd7c1b4ba63095952885c95c959528730575d5f1f68755f11daf97e0d93e1b5e97d6db50c4c7d376e5db0aa1bdf6da6b03fdfdfdf9bed1124b972efdbcda11ff34dfc656a8b6e3ed2a7f9e7f3fa7309595d20b93b96acf943e57d0a899d799eaf679f5029c3e8ebe95d2fa1bcaf8bc7c5b21b40d1b36fc76c78e1df97ed1129b366d4a1f7bfb0ff936b642c38bc22d5fd014a6b2527a613257ed99d2e70a1a35f33a537d7f43fd7e2fbffc727e389e5569fd0ddbbc21df56086d6060e0dcfefdfbf3fda2258687870f7674740ce5dbd80a0d2f0ab77c415398ca4ae985c95cb5674a9f2b68d4cceb4c5757d7eefaedfbf6edcb0fc7b32aadbfbe2d69bb1ab713c25bb366cd95d97eeff09b397cf870ba34e5837c1b5b618a17b2295fd014a6b2527a619a629ecc551ba4f4b9824653bcbe4c7a9da9be1eab7fbfd51d20adbf611b8f657f1d886df9f2e5d7bffcf2cb7cbf6889f3e7cf5faa76c293f936b6c2142f60796ebca0294c65a5f4c234c51ce5315705a6f4b9824653bcaee449af33ff5bff73ab3b405a7f7d5bbababac6f2bf0f84b668d1a2dab56bd7f2fda225aaed481f779fbf60141d85a9ace4cf4fbbc65c9595fcf9118994567780b4fe86edf943de5320b465cb965d6bf5bf86ebce9e3dfbdf9de59f117fbbd32504c5a6f4339753cc93b96a83943e57d0688ad79749af33e9cc73fdfbadee00ce8833a73df1c41363adbe3eacee934f3ed9d759ee35e2df2a4a750a535929bd3099abf64ce973058d9a799de9748d3894e1a9a79e3a5ecabba6bcf5d65bbb0a7cd794492f608d14a6b2527a613257ed99d2e70a1a35f33ae35d53a0106bd7aedd59cafb88af5bb72e7ddc6e29ef237ed317b0460a535929bd3099abf64ce973058d9a799de9f43ee25086fefefebf58b366cdf57cc768816bdddddd073b0bf964cd66294c65254a6132576525ca5c415d67419facf9f8e38f5f6f28e23e5993b965eddab5df5bba74e9f8c8c848be6fccaa13274ebc53ed80a7d3f6e4db583285a9ac44294ce6aaac44992ba8ebeeeefe6175cc1daf17e0e3c78fe787e55991d6db50c2c7d376e5db0ae1ad5ebdfa8dc1c1c17cff9855cf3cf3cc6faa9d7073be6da55398ca4a94c264aeca4a94b98246d531375d0e7aa3046fdebc393f2ccf8ab4de86223e986f23cc09d5bf407fd2d7d7f7d5d8d858be8fcc8ad1d1d1f7ab1d70246d47be6da55398ca4a94c264aeca4a94b982460b162cf879bd0457c7df593f2b9ed6d7d5d5f5cd6529697bf26d843963e5ca95af6cd9b225df4f6645b5ee7fa976c2e7f26d6a070a5359895298cc555989325790ab8ebd7beb4578fdfaf5f9e1f99e4aeb6b381bbe37df369853e6cf9fffe3dededecbb3fd7ea2fbf6ed4b97a48ca4f5e7dbd40e14a6b212a53099abb21265ae20d7d5d5f5b3ea18fc75bd10efdcb9333f4cdf13693d0d25fcebb41df9b6c19cd3d3d3f3ab65cb965d191d1dcdf7997b626464e43faa1df08b2a0fe6dbd22e14a6b212a53099abb21265ae602a1d1d1dbfae97e27489ca810307f2c3f55d9596df78494a5a7fbe4d3067f5f5f50df4f7f75f4e079f7be9ead5ab9f543bfc07d5cef8d7f936b41385a9ac44294ce6aaac44992b984a6f6fef0faa42fc61bd182f59b2e49e95f1b4dc6a7ddf9c814feb4debcfb709e6b4c58b176f5db56ad5857b75667c6464644f2ae1d50ef88ff9badb8dc25456a21426735556a2cc15dc4c753cbebfcaf1c633e3434343f9e17b46d2f21acf844faceffe7c5b80cac2850b9fecebeb1bbbdbd78c4f5c137eacddcf84d7294c65254a6132576525ca5cc1ad54c7e59f3696f194f40b95337d3795f4f8ec17336f94f0b4be7c1b8006d58ef2604f4fcfe8c68d1b4f5dba7429dfb7eec8850b17de9b78779491b4dc7c5ded4a612a2b510a93b92a2b51e60a6e279da1ee6cb84c25259d1d4feff77de2c489fcd07e4be9fee971d959f01b97a3a4f5e4eb06a650ed403faa7698e7162d5a74f1a5975e3a72f6ecd96bf9ce760bd74e9e3cf9cec0c0c08d774649cb49cbcbd7d1ce14a6b212a53099abb21265aea019e99aed895fe0cc0b746dc58a15b5eddbb7d7f6efdf5f3b72e448edfcf9f3370ef6e96bfa73fa7eba3dfbd8fa7aaea7e5ba261ca6217dd84eb5136dae8af4c8430f3df4c5a64d9b0e0c0f0f1f3c7cf8f0b173e7cefdbeda0f2f8d8c8c1c3d74e8d0beeaa0f5e6ba75eb06abc71cac1ef33fe971edf8613dcd5098ca4a94c264aeca4a94b9823b31f1d686dfbccff80cb3d75b14c2ddf1dd050b16fc59b543fd7df52fdba16ae74a9f8a59bfa62c7d7d3f7d3fdd9eee97ee9f2f201285a9ac44294ce6aaac44992b988eea78fe8bead83e58657c8a827daba4fb0fa6c7e7cb04b82b14a6b212a53099abb21265ae60267a7b7befab8af5bc8e8e8ee7abafbbaa7c56e5f244e94e5fd39f774ddc3e2fdd3f5f06c05da53095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1ecdab5ebfa952b57261db865f6533d0fa7aac274357f8eda91b92a2791e60a0042191e1e3e75e6cc9949076f99fd7cf1c517ff5c15a6f7f3e7a81d99ab721269ae002094ddbb77ff72cf9e3d174f9f3e7dce19ccd6a4fab99ffefcf3cf7f5395a563551ec89fa37664ae5a9f88730500e1a483743a6356653c5d4b2ab39ef4734f3fff506529fd7d26fe5ee6aa35093957000000000000000000000000000000000000000000000000000004f07f07178e4d89a3c38c0000000049454e44ae426082', true);
+TRUNCATE TABLE public.act_ge_bytearray CASCADE;
+
 INSERT INTO public.act_ge_bytearray VALUES ('1b564cc4-f1f4-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1.bpmn', '1b564cc3-f1f4-11f0-bfbd-f2dbc029a3c2', '\x3c3f786d6c2076657273696f6e3d22312e302220656e636f64696e673d225554462d38223f3e0a3c62706d6e3a646566696e6974696f6e7320786d6c6e733a7873693d22687474703a2f2f7777772e77332e6f72672f323030312f584d4c536368656d612d696e7374616e63652220786d6c6e733a62706d6e3d22687474703a2f2f7777772e6f6d672e6f72672f737065632f42504d4e2f32303130303532342f4d4f44454c2220786d6c6e733a62706d6e64693d22687474703a2f2f7777772e6f6d672e6f72672f737065632f42504d4e2f32303130303532342f44492220786d6c6e733a64633d22687474703a2f2f7777772e6f6d672e6f72672f737065632f44442f32303130303532342f44432220786d6c6e733a64693d22687474703a2f2f7777772e6f6d672e6f72672f737065632f44442f32303130303532342f44492220786d6c6e733a637573746f6d3d22687474703a2f2f637573746f6d2e62706d6e2e696f2f736368656d61222069643d22446566696e6974696f6e735f3122207461726765744e616d6573706163653d22687474703a2f2f62706d6e2e696f2f736368656d612f62706d6e223e0a20203c62706d6e3a70726f636573732069643d2250726f636573735f312220697345786563757461626c653d2274727565223e0a202020203c62706d6e3a73746172744576656e742069643d2253746172744576656e745f3122206e616d653d22e5bc80e5a78b223e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f313c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a73746172744576656e743e0a202020203c62706d6e3a656e644576656e742069643d22456e644576656e745f3122206e616d653d22e7bb93e69d9f223e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f3069336d7167613c2f62706d6e3a696e636f6d696e673e0a202020203c2f62706d6e3a656e644576656e743e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f312220736f757263655265663d2253746172744576656e745f3122207461726765745265663d2241637469766974795f30396468337a3922202f3e0a202020203c62706d6e3a757365725461736b2069643d2241637469766974795f30396468337a39223e0a2020202020203c62706d6e3a657874656e73696f6e456c656d656e74733e0a20202020202020203c637573746f6d3a70726f706572746965733e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656554797065222076616c75653d225649525455414c5f47524f555022202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656556616c7565222076616c75653d2276672d616c6c2d6d616e616765727322202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e65654c6162656c222076616c75653d22416c6c204d616e616765727322202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e6469646174655573657273222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e64696461746547726f757073222076616c75653d2222202f3e0a20202020202020203c2f637573746f6d3a70726f706572746965733e0a2020202020203c2f62706d6e3a657874656e73696f6e456c656d656e74733e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f313c2f62706d6e3a696e636f6d696e673e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f30756e37686c683c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a757365725461736b3e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f30756e37686c682220736f757263655265663d2241637469766974795f30396468337a3922207461726765745265663d2241637469766974795f306d767635686322202f3e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f3069336d7167612220736f757263655265663d2241637469766974795f306d767635686322207461726765745265663d22456e644576656e745f3122202f3e0a202020203c62706d6e3a757365725461736b2069643d2241637469766974795f306d7676356863223e0a2020202020203c62706d6e3a657874656e73696f6e456c656d656e74733e0a20202020202020203c637573746f6d3a70726f706572746965733e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656554797065222076616c75653d22454e544954595f4d414e4147455222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656556616c7565222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e65654c6162656c222076616c75653d22e5ae9ee4bd93e7bb8fe7908622202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e6469646174655573657273222076616c75653d225361726168204368656e22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e64696461746547726f757073222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a20202020202020203c2f637573746f6d3a70726f706572746965733e0a2020202020203c2f62706d6e3a657874656e73696f6e456c656d656e74733e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f30756e37686c683c2f62706d6e3a696e636f6d696e673e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f3069336d7167613c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a757365725461736b3e0a20203c2f62706d6e3a70726f636573733e0a20203c62706d6e64693a42504d4e4469616772616d2069643d2242504d4e4469616772616d5f31223e0a202020203c62706d6e64693a42504d4e506c616e652069643d2242504d4e506c616e655f31222062706d6e456c656d656e743d2250726f636573735f31223e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2253746172744576656e745f315f6469222062706d6e456c656d656e743d2253746172744576656e745f31223e0a20202020202020203c64633a426f756e647320783d223138302220793d22313630222077696474683d22333622206865696768743d22333622202f3e0a20202020202020203c62706d6e64693a42504d4e4c6162656c3e0a202020202020202020203c64633a426f756e647320783d223138372220793d22323033222077696474683d22323222206865696768743d22313422202f3e0a20202020202020203c2f62706d6e64693a42504d4e4c6162656c3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d22456e644576656e745f315f6469222062706d6e456c656d656e743d22456e644576656e745f31223e0a20202020202020203c64633a426f756e647320783d223639322220793d22313630222077696474683d22333622206865696768743d22333622202f3e0a20202020202020203c62706d6e64693a42504d4e4c6162656c3e0a202020202020202020203c64633a426f756e647320783d223639392220793d22323033222077696474683d22323222206865696768743d22313422202f3e0a20202020202020203c2f62706d6e64693a42504d4e4c6162656c3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2241637469766974795f3131326a75366a5f6469222062706d6e456c656d656e743d2241637469766974795f30396468337a39223e0a20202020202020203c64633a426f756e647320783d223236302220793d22313338222077696474683d2231303022206865696768743d22383022202f3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2241637469766974795f30397962666d375f6469222062706d6e456c656d656e743d2241637469766974795f306d7676356863223e0a20202020202020203c64633a426f756e647320783d223431302220793d22313338222077696474683d2231303022206865696768743d22383022202f3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f315f6469222062706d6e456c656d656e743d22466c6f775f31223e0a20202020202020203c64693a776179706f696e7420783d223231362220793d2231373822202f3e0a20202020202020203c64693a776179706f696e7420783d223236302220793d2231373822202f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f30756e37686c685f6469222062706d6e456c656d656e743d22466c6f775f30756e37686c68223e0a20202020202020203c64693a776179706f696e7420783d223336302220793d2231373822202f3e0a20202020202020203c64693a776179706f696e7420783d223431302220793d2231373822202f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f3069336d7167615f6469222062706d6e456c656d656e743d22466c6f775f3069336d716761223e0a20202020202020203c64693a776179706f696e7420783d223531302220793d2231373822202f3e0a20202020202020203c64693a776179706f696e7420783d223639322220793d2231373822202f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a202020203c2f62706d6e64693a42504d4e506c616e653e0a20203c2f62706d6e64693a42504d4e4469616772616d3e0a3c2f62706d6e3a646566696e6974696f6e733e0a', false);
+TRUNCATE TABLE public.act_ge_bytearray CASCADE;
+
 INSERT INTO public.act_ge_bytearray VALUES ('1b59cf35-f1f4-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1.Process_1.png', '1b564cc3-f1f4-11f0-bfbd-f2dbc029a3c2', '\x89504e470d0a1a0a0000000d49484452000002e2000000e40806000000dd25410b000010f649444154785eeddddd6f54677e07f07d91aabdccb6bb97b9d9abfd17b6bde9c5ae5a3552762f00bf60909149204aa48002586d521527482d7749c806902a354058b541f18549a3a609845a4a431210091b52b12924e1b51888c16c01870dd3f3504f34796c60b0c1f3cccf9f8ff4958367e69c83e777e67c39399ef9ce7700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008082d46ab53f3a7af4e82befbefbee57bb76edaabdf9e69b32cba97eeed78787874feddebdfb97f9f3d3aecc55eb1371ae002094aa2ceda80ed6b53367ced4ae5cb9521b1f1f97594efab9a79fff9e3d7b2e5605ea81fc396a47e6aaf589385700104a3a63990ed6f9415c663fa74f9f3e5715a6f7f3e7a81d99ab721269ae00209474d980339665243d0f5561ba9a3f47edc85c959348730500a1a46b49f303b7b42ee9f9c89fa37664aeca4a94b90280509a2d4cbfbf70ba76f4837faa1d7aebe91b49ff9dbe97df4f66962885c95c959528730500a13453982e8d9eac7dfcc6dfd63efad7d5df4afa5eba2dbfbf4c3f510a93b92a2b51e60a004269a6301d3f3434a92cd573e2d0ce49f797e9274a6132576525ca5c014028cd14a6ff7a7bfda4a2544fba2dbfbf4c3f510a93b92a2b51e60a004269a6307dfce6da4945a99e745b7e7f997ea21426735556a2cc150084a23095952885c95c959528730500a1345398d2bb59e445a99e745b7e7f997ea21426735556a2cc150084d24c61faf49d172615a57ad26df9fd65fa895298cc555989325700104a3385e9fcc983b58ffffdef2695a5f4bd745b7e7f997ea21426735556a2cc150084d24c614af96cdfd64985297d2fbf9fcc2c510a93b92a2b51e60a004269aa305dbd5afbf43f374e2a4ce97be9b649f79769274a6132576525ca5c014028b72b4ce9130e7ff7ce864965a99e749b4f41bc7b895298cc55598932570010ca4d0bd3d5abb5d39feeaefdf6dffe665249ca93ee93eeeb2ce6cc13a53099abb21265ae002094a90ad3edce56de2cce62ce3c510a93b92a2b51e60a004299aa303573b6f266498fcd9727cd274a6132576525ca5c0140285315a6bc04dd69f2e549f3895298cc55598932570010ca5485495a972885c95c959528730533d1dbdb7b5f6767e7bc8e8e8ee7abafbbaa7c56e57295dac4d7f4e75d13b7cf4bf7cf9701ccd0c58b17ff786868e8e9175e78e1a381818173fdfdfd571e79e491eb69475cbe7cf9b555ab568d3df9e493c79e7efae99dab57affecbea21dfcd971189c25456a21426735556a2cc154c475757d72faa63fc6095f189d2dd6cd2fd07d3e3f3650277e8bdf7de5bfeecb3cf9e5cb66c59ad2adfb51d3b76d4f6efdf5f3b72e448edfcf9f3b5247d4d7f4edf4fb7af59b3e67a5f5fdf7855c8dfe8eeeefe49becc0814a6b212a53099abb21265aee04e5405fa675591de3b45c19e4ef6a6e5e5eb006ee3e0c1837ff5e28b2f9e7af8e1876bafbefa6aedecd9b3374a77b3d2fdd3e3aa42fed5ca952b5fa976c41fe5eb68670a5359895298cc5559893257d08cdedede1f747474fcba2acf37fe6f776356ac5851dbbe7dfb2d4fc4a5dbd3fdf2c7a6e5a5e5a6e5e7eb0432d57ef5fdd75f7f7d2815f02d5bb6d42e5dbaf4ed867d87d2e3d372aa1df0724f4fcfaff2f5b52b85a9ac44294ce6aaac44992bb89daa2cdfdfd5d5f5516381eeeeeeae6ddebcb976e2c489fcd07e4be9fee971e9f15921ff30ad275f3730a1da7feedbb66ddbef1e7df4d1dad1a347f37d6b46d2f2aa727fa5afaf6f205f6f3b5298ca4a94c264aeca4a94b9825ba90af84fab9c6c2ccdebd7afaf1d3f7e3c3f94df91f4f8b49cac8c1f4febcbb701e6bc6a9fb9eff9e79f1f7deaa9a76aa3a3a3f9fe7457a4e5f6f7f75f5ebc78f1d67cfded46612a2b510a93b92a2b51e60a6e66e24cf837253c9dc51e1a1aca0fdf339296979d1d3feecc3834a8f693ef6fdbb6edd354c2d3c1e75e4acb5fb56ad585850b173e996f473b5198ca4a94c264aeca4a94b982a9a46bb61b2f4759b26449edc08103f961fbae48cb4dcb6f28e31fba661c26a46bc21f7becb17b76263c97d6b374e9d2b16a477c30df9676a13095952885c95c95952873055399f8c5cc6fce84dfab125e9796df78663cad3fdf269873aa1de381f48b9977fb9af0db49ebebe9e9199d3f7ffe8ff36d6a070a5359895298cc5559893257909b788bc2afeba578e7ce9df961fa9e48eb69382bfeb5b73664ce4b6f5198ded5a415366edc78aada119fcbb7a91d284c65254a6132576525ca5c41aeb3e17dc2d32f54cea6ec1738f7e6db067346fab09e74367c6c6c2cdf4f66455aefa2458b2eb6e387fe284c65254a6132576525ca5c41a3050b16fcbc5e84d3a522337d77943b95d6d778894ada9e7c1b614e489f9839383898ef23b36aebd6ad47aa1d7173be6da55398ca4a94c264aeca4a94b982469dffffb1f5374a707abfef5648eb6d382b3e986f2384373636f627cb972faf8d8c8ce4fbc7acaad6ff87ea5fc667d6ae5dfbbd7c1b4ba63095952885c95c959528730575d5f1f68755f11daf97e0d93e1b5e97d6db50c4c7d376e5db0aa1bdf6da6b03fdfdfdf9bed1124b972efdbcda11ff34dfc656a8b6e3ed2a7f9e7f3fa7309595d20b93b96acf943e57d0a899d799eaf679f5029c3e8ebe95d2fa1bcaf8bc7c5b21b40d1b36fc76c78e1df97ed1129b366d4a1f7bfb0ff936b642c38bc22d5fd014a6b2527a613257ed99d2e70a1a35f33a537d7f43fd7e2fbffc727e389e5569fd0ddbbc21df56086d6060e0dcfefdfbf3fda2258687870f7674740ce5dbd80a0d2f0ab77c415398ca4ae985c95cb5674a9f2b68d4cceb4c5757d7eefaedfbf6edcb0fc7b32aadbfbe2d69bb1ab713c25bb366cd95d97eeff09b397cf870ba34e5837c1b5b618a17b2295fd014a6b2527a619a629ecc551ba4f4b9824653bcbe4c7a9da9be1eab7fbfd51d20adbf611b8f657f1d886df9f2e5d7bffcf2cb7cbf6889f3e7cf5faa76c293f936b6c2142f60796ebca0294c65a5f4c234c51ce5315705a6f4b9824653bcaee449af33ff5bff73ab3b405a7f7d5bbababac6f2bf0f84b668d1a2dab56bd7f2fda225aaed481f779fbf60141d85a9ace4cf4fbbc65c9595fcf9118994567780b4fe86edf943de5320b465cb965d6bf5bf86ebce9e3dfbdf9de59f117fbbd32504c5a6f4339753cc93b96a83943e57d0688ad79749af33e9cc73fdfbadee00ce8833a73df1c41363adbe3eacee934f3ed9d759ee35e2df2a4a750a535929bd3099abf64ce973058d9a799de9748d3894e1a9a79e3a5ecabba6bcf5d65bbb0a7cd794492f608d14a6b2527a613257ed99d2e70a1a35f33ae35d53a0106bd7aedd59cafb88af5bb72e7ddc6e29ef237ed317b0460a535929bd3099abf64ce973058d9a799de9f43ee25086fefefebf58b366cdf57cc768816bdddddd073b0bf964cd66294c65254a6132576525ca5c415d67419facf9f8e38f5f6f28e23e5993b965eddab5df5bba74e9f8c8c848be6fccaa13274ebc53ed80a7d3f6e4db583285a9ac44294ce6aaac44992ba8ebeeeefe6175cc1daf17e0e3c78fe787e55991d6db50c2c7d376e5db0ae1ad5ebdfa8dc1c1c17cff9855cf3cf3cc6faa9d7073be6da55398ca4a94c264aeca4a94b98246d531375d0e7aa3046fdebc393f2ccf8ab4de86223e986f23cc09d5bf407fd2d7d7f7d5d8d858be8fcc8ad1d1d1f7ab1d70246d47be6da55398ca4a94c264aeca4a94b982460b162cf879bd0457c7df593f2b9ed6d7d5d5f5cd6529697bf26d843963e5ca95af6cd9b225df4f6645b5ee7fa976c2e7f26d6a070a5359895298cc555989325790ab8ebd7beb4578fdfaf5f9e1f99e4aeb6b381bbe37df369853e6cf9fffe3dededecbb3fd7ea2fbf6ed4b97a48ca4f5e7dbd40e14a6b212a53099abb21265ae20d7d5d5f5b3ea18fc75bd10efdcb9333f4cdf13693d0d25fcebb41df9b6c19cd3d3d3f3ab65cb965d191d1dcdf7997b626464e43faa1df08b2a0fe6dbd22e14a6b212a53099abb21265ae602a1d1d1dbfae97e27489ca810307f2c3f55d9596df78494a5a7fbe4d3067f5f5f50df4f7f75f4e079f7be9ead5ab9f543bfc07d5cef8d7f936b41385a9ac44294ce6aaac44992b984a6f6fef0faa42fc61bd182f59b2e49e95f1b4dc6a7ddf9c814feb4debcfb709e6b4c58b176f5db56ad5857b75667c6464644f2ae1d50ef88ff9badb8dc25456a21426735556a2cc15dc4c753cbebfcaf1c633e3434343f9e17b46d2f21acf844faceffe7c5b80cac2850b9fecebeb1bbbdbd78c4f5c137eacddcf84d7294c65254a6132576525ca5cc1ad54c7e59f3696f194f40b95337d3795f4f8ec17336f94f0b4be7c1b8006d58ef2604f4fcfe8c68d1b4f5dba7429dfb7eec8850b17de9b78779491b4dc7c5ded4a612a2b510a93b92a2b51e60a6e279da1ee6cb84c25259d1d4feff77de2c489fcd07e4be9fee971d959f01b97a3a4f5e4eb06a650ed403faa7698e7162d5a74f1a5975e3a72f6ecd96bf9ce760bd74e9e3cf9cec0c0c08d774649cb49cbcbd7d1ce14a6b212a53099abb21265aea019e99aed895fe0cc0b746dc58a15b5eddbb7d7f6efdf5f3b72e448edfcf9f3370ef6e96bfa73fa7eba3dfbd8fa7aaea7e5ba261ca6217dd84eb5136dae8af4c8430f3df4c5a64d9b0e0c0f0f1f3c7cf8f0b173e7cefdbeda0f2f8d8c8c1c3d74e8d0beeaa0f5e6ba75eb06abc71cac1ef33fe971edf8613dcd5098ca4a94c264aeca4a94b9823b31f1d686dfbccff80cb3d75b14c2ddf1dd050b16fc59b543fd7df52fdba16ae74a9f8a59bfa62c7d7d3f7d3fdd9eee97ee9f2f201285a9ac44294ce6aaac44992b988eea78fe8bead83e58657c8a827daba4fb0fa6c7e7cb04b82b14a6b212a53099abb21265ae60267a7b7befab8af5bc8e8e8ee7abafbbaa7c56e5f244e94e5fd39f774ddc3e2fdd3f5f06c05da53095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1ecdab5ebfa952b57261db865f6533d0fa7aac274357f8eda91b92a2791e60a0042191e1e3e75e6cc9949076f99fd7cf1c517ff5c15a6f7f3e7a81d99ab721269ae002094ddbb77ff72cf9e3d174f9f3e7dce19ccd6a4fab99ffefcf3cf7f5395a563551ec89fa37664ae5a9f88730500e1a483743a6356653c5d4b2ab39ef4734f3fff506529fd7d26fe5ee6aa35093957000000000000000000000000000000000000000000000000000004f07f07178e4d89a3c38c0000000049454e44ae426082', true);
+TRUNCATE TABLE public.act_ge_bytearray CASCADE;
+
 INSERT INTO public.act_ge_bytearray VALUES ('2b82026c-f1f4-11f0-bfbd-f2dbc029a3c2', 1, 'fu-20260114-paed3z.bpmn', '2b82026b-f1f4-11f0-bfbd-f2dbc029a3c2', '\x3c3f786d6c2076657273696f6e3d22312e302220656e636f64696e673d225554462d38223f3e0a3c62706d6e3a646566696e6974696f6e7320786d6c6e733a7873693d22687474703a2f2f7777772e77332e6f72672f323030312f584d4c536368656d612d696e7374616e63652220786d6c6e733a62706d6e3d22687474703a2f2f7777772e6f6d672e6f72672f737065632f42504d4e2f32303130303532342f4d4f44454c2220786d6c6e733a62706d6e64693d22687474703a2f2f7777772e6f6d672e6f72672f737065632f42504d4e2f32303130303532342f44492220786d6c6e733a64633d22687474703a2f2f7777772e6f6d672e6f72672f737065632f44442f32303130303532342f44432220786d6c6e733a64693d22687474703a2f2f7777772e6f6d672e6f72672f737065632f44442f32303130303532342f44492220786d6c6e733a637573746f6d3d22687474703a2f2f637573746f6d2e62706d6e2e696f2f736368656d61222069643d22446566696e6974696f6e735f3122207461726765744e616d6573706163653d22687474703a2f2f62706d6e2e696f2f736368656d612f62706d6e223e0a20203c62706d6e3a70726f636573732069643d2250726f636573735f312220697345786563757461626c653d2274727565223e0a202020203c62706d6e3a73746172744576656e742069643d2253746172744576656e745f3122206e616d653d22e5bc80e5a78b223e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f313c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a73746172744576656e743e0a202020203c62706d6e3a656e644576656e742069643d22456e644576656e745f3122206e616d653d22e7bb93e69d9f223e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f3069336d7167613c2f62706d6e3a696e636f6d696e673e0a202020203c2f62706d6e3a656e644576656e743e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f312220736f757263655265663d2253746172744576656e745f3122207461726765745265663d2241637469766974795f30396468337a3922202f3e0a202020203c62706d6e3a757365725461736b2069643d2241637469766974795f30396468337a39223e0a2020202020203c62706d6e3a657874656e73696f6e456c656d656e74733e0a20202020202020203c637573746f6d3a70726f706572746965733e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656554797065222076616c75653d225649525455414c5f47524f555022202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656556616c7565222076616c75653d2276672d616c6c2d6d616e616765727322202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e65654c6162656c222076616c75653d22416c6c204d616e616765727322202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e6469646174655573657273222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e64696461746547726f757073222076616c75653d2222202f3e0a20202020202020203c2f637573746f6d3a70726f706572746965733e0a2020202020203c2f62706d6e3a657874656e73696f6e456c656d656e74733e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f313c2f62706d6e3a696e636f6d696e673e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f30756e37686c683c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a757365725461736b3e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f30756e37686c682220736f757263655265663d2241637469766974795f30396468337a3922207461726765745265663d2241637469766974795f306d767635686322202f3e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f3069336d7167612220736f757263655265663d2241637469766974795f306d767635686322207461726765745265663d22456e644576656e745f3122202f3e0a202020203c62706d6e3a757365725461736b2069643d2241637469766974795f306d7676356863223e0a2020202020203c62706d6e3a657874656e73696f6e456c656d656e74733e0a20202020202020203c637573746f6d3a70726f706572746965733e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656554797065222076616c75653d22454e544954595f4d414e4147455222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656556616c7565222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e65654c6162656c222076616c75653d22e5ae9ee4bd93e7bb8fe7908622202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e6469646174655573657273222076616c75653d225361726168204368656e22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e64696461746547726f757073222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a20202020202020203c2f637573746f6d3a70726f706572746965733e0a2020202020203c2f62706d6e3a657874656e73696f6e456c656d656e74733e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f30756e37686c683c2f62706d6e3a696e636f6d696e673e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f3069336d7167613c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a757365725461736b3e0a20203c2f62706d6e3a70726f636573733e0a20203c62706d6e64693a42504d4e4469616772616d2069643d2242504d4e4469616772616d5f31223e0a202020203c62706d6e64693a42504d4e506c616e652069643d2242504d4e506c616e655f31222062706d6e456c656d656e743d2250726f636573735f31223e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2253746172744576656e745f315f6469222062706d6e456c656d656e743d2253746172744576656e745f31223e0a20202020202020203c64633a426f756e647320783d223138302220793d22313630222077696474683d22333622206865696768743d22333622202f3e0a20202020202020203c62706d6e64693a42504d4e4c6162656c3e0a202020202020202020203c64633a426f756e647320783d223138372220793d22323033222077696474683d22323222206865696768743d22313422202f3e0a20202020202020203c2f62706d6e64693a42504d4e4c6162656c3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d22456e644576656e745f315f6469222062706d6e456c656d656e743d22456e644576656e745f31223e0a20202020202020203c64633a426f756e647320783d223639322220793d22313630222077696474683d22333622206865696768743d22333622202f3e0a20202020202020203c62706d6e64693a42504d4e4c6162656c3e0a202020202020202020203c64633a426f756e647320783d223639392220793d22323033222077696474683d22323222206865696768743d22313422202f3e0a20202020202020203c2f62706d6e64693a42504d4e4c6162656c3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2241637469766974795f3131326a75366a5f6469222062706d6e456c656d656e743d2241637469766974795f30396468337a39223e0a20202020202020203c64633a426f756e647320783d223236302220793d22313338222077696474683d2231303022206865696768743d22383022202f3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2241637469766974795f30397962666d375f6469222062706d6e456c656d656e743d2241637469766974795f306d7676356863223e0a20202020202020203c64633a426f756e647320783d223431302220793d22313338222077696474683d2231303022206865696768743d22383022202f3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f315f6469222062706d6e456c656d656e743d22466c6f775f31223e0a20202020202020203c64693a776179706f696e7420783d223231362220793d2231373822202f3e0a20202020202020203c64693a776179706f696e7420783d223236302220793d2231373822202f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f30756e37686c685f6469222062706d6e456c656d656e743d22466c6f775f30756e37686c68223e0a20202020202020203c64693a776179706f696e7420783d223336302220793d2231373822202f3e0a20202020202020203c64693a776179706f696e7420783d223431302220793d2231373822202f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f3069336d7167615f6469222062706d6e456c656d656e743d22466c6f775f3069336d716761223e0a20202020202020203c64693a776179706f696e7420783d223531302220793d2231373822202f3e0a20202020202020203c64693a776179706f696e7420783d223639322220793d2231373822202f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a202020203c2f62706d6e64693a42504d4e506c616e653e0a20203c2f62706d6e64693a42504d4e4469616772616d3e0a3c2f62706d6e3a646566696e6974696f6e733e0a', false);
+TRUNCATE TABLE public.act_ge_bytearray CASCADE;
+
 INSERT INTO public.act_ge_bytearray VALUES ('2b85d2fd-f1f4-11f0-bfbd-f2dbc029a3c2', 1, 'fu-20260114-paed3z.Process_1.png', '2b82026b-f1f4-11f0-bfbd-f2dbc029a3c2', '\x89504e470d0a1a0a0000000d49484452000002e2000000e40806000000dd25410b000010f649444154785eeddddd6f54677e07f07d91aabdccb6bb97b9d9abfd17b6bde9c5ae5a3552762f00bf60909149204aa48002586d521527482d7749c806902a354058b541f18549a3a609845a4a431210091b52b12924e1b51888c16c01870dd3f3504f34796c60b0c1f3cccf9f8ff4958367e69c83e777e67c39399ef9ce7700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008082d46ab53f3a7af4e82befbefbee57bb76edaabdf9e69b32cba97eeed78787874feddebdfb97f9f3d3aecc55eb1371ae002094aa2ceda80ed6b53367ced4ae5cb9521b1f1f97594efab9a79fff9e3d7b2e5605ea81fc396a47e6aaf589385700104a3a63990ed6f9415c663fa74f9f3e5715a6f7f3e7a81d99ab721269ae00209474d980339665243d0f5561ba9a3f47edc85c959348730500a1a46b49f303b7b42ee9f9c89fa37664aeca4a94b90280509a2d4cbfbf70ba76f4837faa1d7aebe91b49ff9dbe97df4f66962885c95c959528730500a13453982e8d9eac7dfcc6dfd63efad7d5df4afa5eba2dbfbf4c3f510a93b92a2b51e60a004269a6301d3f3434a92cd573e2d0ce49f797e9274a6132576525ca5c014028cd14a6ff7a7bfda4a2544fba2dbfbf4c3f510a93b92a2b51e60a004269a6307dfce6da4945a99e745b7e7f997ea21426735556a2cc150084a23095952885c95c959528730500a1345398d2bb59e445a99e745b7e7f997ea21426735556a2cc150084d24c61faf49d172615a57ad26df9fd65fa895298cc555989325700104a3385e9fcc983b58ffffdef2695a5f4bd745b7e7f997ea21426735556a2cc150084d24c614af96cdfd64985297d2fbf9fcc2c510a93b92a2b51e60a004269aa305dbd5afbf43f374e2a4ce97be9b649f79769274a6132576525ca5c014028b72b4ce9130e7ff7ce864965a99e749b4f41bc7b895298cc55598932570010ca4d0bd3d5abb5d39feeaefdf6dffe665249ca93ee93eeeb2ce6cc13a53099abb21265ae002094a90ad3edce56de2cce62ce3c510a93b92a2b51e60a004299aa303573b6f266498fcd9727cd274a6132576525ca5c0140285315a6bc04dd69f2e549f3895298cc55598932570010ca5485495a972885c95c959528730533d1dbdb7b5f6767e7bc8e8e8ee7abafbbaa7c56e57295dac4d7f4e75d13b7cf4bf7cf9701ccd0c58b17ff786868e8e9175e78e1a381818173fdfdfd571e79e491eb69475cbe7cf9b555ab568d3df9e493c79e7efae99dab57affecbea21dfcd971189c25456a21426735556a2cc154c475757d72faa63fc6095f189d2dd6cd2fd07d3e3f3650277e8bdf7de5bfeecb3cf9e5cb66c59ad2adfb51d3b76d4f6efdf5f3b72e448edfcf9f3b5247d4d7f4edf4fb7af59b3e67a5f5fdf7855c8dfe8eeeefe49becc0814a6b212a53099abb21265aee04e5405fa675591de3b45c19e4ef6a6e5e5eb006ee3e0c1837ff5e28b2f9e7af8e1876bafbefa6aedecd9b3374a77b3d2fdd3e3aa42fed5ca952b5fa976c41fe5eb68670a5359895298cc5559893257d08cdedede1f747474fcba2acf37fe6f776356ac5851dbbe7dfb2d4fc4a5dbd3fdf2c7a6e5a5e5a6e5e7eb0432d57ef5fdd75f7f7d2815f02d5bb6d42e5dbaf4ed867d87d2e3d372aa1df0724f4fcfaff2f5b52b85a9ac44294ce6aaac44992bb89daa2cdfdfd5d5f5516381eeeeeeae6ddebcb976e2c489fcd07e4be9fee971e9f15921ff30ad275f3730a1da7feedbb66ddbef1e7df4d1dad1a347f37d6b46d2f2aa727fa5afaf6f205f6f3b5298ca4a94c264aeca4a94b9825ba90af84fab9c6c2ccdebd7afaf1d3f7e3c3f94df91f4f8b49cac8c1f4febcbb701e6bc6a9fb9eff9e79f1f7deaa9a76aa3a3a3f9fe7457a4e5f6f7f75f5ebc78f1d67cfded46612a2b510a93b92a2b51e60a6e66e24cf837253c9dc51e1a1aca0fdf339296979d1d3feecc3834a8f693ef6fdbb6edd354c2d3c1e75e4acb5fb56ad585850b173e996f473b5198ca4a94c264aeca4a94b982a9a46bb61b2f4759b26449edc08103f961fbae48cb4dcb6f28e31fba661c26a46bc21f7becb17b76263c97d6b374e9d2b16a477c30df9676a13095952885c95c95952873055399f8c5cc6fce84dfab125e9796df78663cad3fdf269873aa1de381f48b9977fb9af0db49ebebe9e9199d3f7ffe8ff36d6a070a5359895298cc5559893257909b788bc2afeba578e7ce9df961fa9e48eb69382bfeb5b73664ce4b6f5198ded5a415366edc78aada119fcbb7a91d284c65254a6132576525ca5c41aeb3e17dc2d32f54cea6ec1738f7e6db067346fab09e74367c6c6c2cdf4f66455aefa2458b2eb6e387fe284c65254a6132576525ca5c41a3050b16fcbc5e84d3a522337d77943b95d6d778894ada9e7c1b614e489f9839383898ef23b36aebd6ad47aa1d7173be6da55398ca4a94c264aeca4a94b982469dffffb1f5374a707abfef5648eb6d382b3e986f2384373636f627cb972faf8d8c8ce4fbc7acaad6ff87ea5fc667d6ae5dfbbd7c1b4ba63095952885c95c959528730575d5f1f68755f11daf97e0d93e1b5e97d6db50c4c7d376e5db0aa1bdf6da6b03fdfdfdf9bed1124b972efdbcda11ff34dfc656a8b6e3ed2a7f9e7f3fa7309595d20b93b96acf943e57d0a899d799eaf679f5029c3e8ebe95d2fa1bcaf8bc7c5b21b40d1b36fc76c78e1df97ed1129b366d4a1f7bfb0ff936b642c38bc22d5fd014a6b2527a613257ed99d2e70a1a35f33a537d7f43fd7e2fbffc727e389e5569fd0ddbbc21df56086d6060e0dcfefdfbf3fda2258687870f7674740ce5dbd80a0d2f0ab77c415398ca4ae985c95cb5674a9f2b68d4cceb4c5757d7eefaedfbf6edcb0fc7b32aadbfbe2d69bb1ab713c25bb366cd95d97eeff09b397cf870ba34e5837c1b5b618a17b2295fd014a6b2527a619a629ecc551ba4f4b9824653bcbe4c7a9da9be1eab7fbfd51d20adbf611b8f657f1d886df9f2e5d7bffcf2cb7cbf6889f3e7cf5faa76c293f936b6c2142f60796ebca0294c65a5f4c234c51ce5315705a6f4b9824653bcaee449af33ff5bff73ab3b405a7f7d5bbababac6f2bf0f84b668d1a2dab56bd7f2fda225aaed481f779fbf60141d85a9ace4cf4fbbc65c9595fcf9118994567780b4fe86edf943de5320b465cb965d6bf5bf86ebce9e3dfbdf9de59f117fbbd32504c5a6f4339753cc93b96a83943e57d0688ad79749af33e9cc73fdfbadee00ce8833a73df1c41363adbe3eacee934f3ed9d759ee35e2df2a4a750a535929bd3099abf64ce973058d9a799de9748d3894e1a9a79e3a5ecabba6bcf5d65bbb0a7cd794492f608d14a6b2527a613257ed99d2e70a1a35f33ae35d53a0106bd7aedd59cafb88af5bb72e7ddc6e29ef237ed317b0460a535929bd3099abf64ce973058d9a799de9f43ee25086fefefebf58b366cdf57cc768816bdddddd073b0bf964cd66294c65254a6132576525ca5c415d67419facf9f8e38f5f6f28e23e5993b965eddab5df5bba74e9f8c8c848be6fccaa13274ebc53ed80a7d3f6e4db583285a9ac44294ce6aaac44992ba8ebeeeefe6175cc1daf17e0e3c78fe787e55991d6db50c2c7d376e5db0ae1ad5ebdfa8dc1c1c17cff9855cf3cf3cc6faa9d7073be6da55398ca4a94c264aeca4a94b98246d531375d0e7aa3046fdebc393f2ccf8ab4de86223e986f23cc09d5bf407fd2d7d7f7d5d8d858be8fcc8ad1d1d1f7ab1d70246d47be6da55398ca4a94c264aeca4a94b982460b162cf879bd0457c7df593f2b9ed6d7d5d5f5cd6529697bf26d843963e5ca95af6cd9b225df4f6645b5ee7fa976c2e7f26d6a070a5359895298cc555989325790ab8ebd7beb4578fdfaf5f9e1f99e4aeb6b381bbe37df369853e6cf9fffe3dededecbb3fd7ea2fbf6ed4b97a48ca4f5e7dbd40e14a6b212a53099abb21265ae20d7d5d5f5b3ea18fc75bd10efdcb9333f4cdf13693d0d25fcebb41df9b6c19cd3d3d3f3ab65cb965d191d1dcdf7997b626464e43faa1df08b2a0fe6dbd22e14a6b212a53099abb21265ae602a1d1d1dbfae97e27489ca810307f2c3f55d9596df78494a5a7fbe4d3067f5f5f50df4f7f75f4e079f7be9ead5ab9f543bfc07d5cef8d7f936b41385a9ac44294ce6aaac44992b984a6f6fef0faa42fc61bd182f59b2e49e95f1b4dc6a7ddf9c814feb4debcfb709e6b4c58b176f5db56ad5857b75667c6464644f2ae1d50ef88ff9badb8dc25456a21426735556a2cc15dc4c753cbebfcaf1c633e3434343f9e17b46d2f21acf844faceffe7c5b80cac2850b9fecebeb1bbbdbd78c4f5c137eacddcf84d7294c65254a6132576525ca5cc1ad54c7e59f3696f194f40b95337d3795f4f8ec17336f94f0b4be7c1b8006d58ef2604f4fcfe8c68d1b4f5dba7429dfb7eec8850b17de9b78779491b4dc7c5ded4a612a2b510a93b92a2b51e60a6e279da1ee6cb84c25259d1d4feff77de2c489fcd07e4be9fee971d959f01b97a3a4f5e4eb06a650ed403faa7698e7162d5a74f1a5975e3a72f6ecd96bf9ce760bd74e9e3cf9cec0c0c08d774649cb49cbcbd7d1ce14a6b212a53099abb21265aea019e99aed895fe0cc0b746dc58a15b5eddbb7d7f6efdf5f3b72e448edfcf9f3370ef6e96bfa73fa7eba3dfbd8fa7aaea7e5ba261ca6217dd84eb5136dae8af4c8430f3df4c5a64d9b0e0c0f0f1f3c7cf8f0b173e7cefdbeda0f2f8d8c8c1c3d74e8d0beeaa0f5e6ba75eb06abc71cac1ef33fe971edf8613dcd5098ca4a94c264aeca4a94b9823b31f1d686dfbccff80cb3d75b14c2ddf1dd050b16fc59b543fd7df52fdba16ae74a9f8a59bfa62c7d7d3f7d3fdd9eee97ee9f2f201285a9ac44294ce6aaac44992b988eea78fe8bead83e58657c8a827daba4fb0fa6c7e7cb04b82b14a6b212a53099abb21265ae60267a7b7befab8af5bc8e8e8ee7abafbbaa7c56e5f244e94e5fd39f774ddc3e2fdd3f5f06c05da53095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1ecdab5ebfa952b57261db865f6533d0fa7aac274357f8eda91b92a2791e60a0042191e1e3e75e6cc9949076f99fd7cf1c517ff5c15a6f7f3e7a81d99ab721269ae002094ddbb77ff72cf9e3d174f9f3e7dce19ccd6a4fab99ffefcf3cf7f5395a563551ec89fa37664ae5a9f88730500e1a483743a6356653c5d4b2ab39ef4734f3fff506529fd7d26fe5ee6aa35093957000000000000000000000000000000000000000000000000000004f07f07178e4d89a3c38c0000000049454e44ae426082', true);
+TRUNCATE TABLE public.act_ge_bytearray CASCADE;
+
 INSERT INTO public.act_ge_bytearray VALUES ('5d2adeb5-f1f4-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1.bpmn', '5d2adeb4-f1f4-11f0-bfbd-f2dbc029a3c2', '\x3c3f786d6c2076657273696f6e3d22312e302220656e636f64696e673d225554462d38223f3e0a3c62706d6e3a646566696e6974696f6e7320786d6c6e733a7873693d22687474703a2f2f7777772e77332e6f72672f323030312f584d4c536368656d612d696e7374616e63652220786d6c6e733a62706d6e3d22687474703a2f2f7777772e6f6d672e6f72672f737065632f42504d4e2f32303130303532342f4d4f44454c2220786d6c6e733a62706d6e64693d22687474703a2f2f7777772e6f6d672e6f72672f737065632f42504d4e2f32303130303532342f44492220786d6c6e733a64633d22687474703a2f2f7777772e6f6d672e6f72672f737065632f44442f32303130303532342f44432220786d6c6e733a64693d22687474703a2f2f7777772e6f6d672e6f72672f737065632f44442f32303130303532342f44492220786d6c6e733a637573746f6d3d22687474703a2f2f637573746f6d2e62706d6e2e696f2f736368656d61222069643d22446566696e6974696f6e735f3122207461726765744e616d6573706163653d22687474703a2f2f62706d6e2e696f2f736368656d612f62706d6e223e0a20203c62706d6e3a70726f636573732069643d2250726f636573735f312220697345786563757461626c653d2274727565223e0a202020203c62706d6e3a73746172744576656e742069643d2253746172744576656e745f3122206e616d653d22e5bc80e5a78b223e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f313c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a73746172744576656e743e0a202020203c62706d6e3a656e644576656e742069643d22456e644576656e745f3122206e616d653d22e7bb93e69d9f223e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f3069336d7167613c2f62706d6e3a696e636f6d696e673e0a202020203c2f62706d6e3a656e644576656e743e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f312220736f757263655265663d2253746172744576656e745f3122207461726765745265663d2241637469766974795f30396468337a3922202f3e0a202020203c62706d6e3a757365725461736b2069643d2241637469766974795f30396468337a39223e0a2020202020203c62706d6e3a657874656e73696f6e456c656d656e74733e0a20202020202020203c637573746f6d3a70726f706572746965733e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656554797065222076616c75653d22494e49544941544f5222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656556616c7565222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e65654c6162656c222076616c75653d22e6b581e7a88be58f91e8b5b7e4baba22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e6469646174655573657273222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e64696461746547726f757073222076616c75653d2222202f3e0a20202020202020203c2f637573746f6d3a70726f706572746965733e0a2020202020203c2f62706d6e3a657874656e73696f6e456c656d656e74733e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f313c2f62706d6e3a696e636f6d696e673e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f30756e37686c683c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a757365725461736b3e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f30756e37686c682220736f757263655265663d2241637469766974795f30396468337a3922207461726765745265663d2241637469766974795f306d767635686322202f3e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f3069336d7167612220736f757263655265663d2241637469766974795f306d767635686322207461726765745265663d22456e644576656e745f3122202f3e0a202020203c62706d6e3a757365725461736b2069643d2241637469766974795f306d7676356863223e0a2020202020203c62706d6e3a657874656e73696f6e456c656d656e74733e0a20202020202020203c637573746f6d3a70726f706572746965733e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656554797065222076616c75653d22494e49544941544f5222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656556616c7565222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e65654c6162656c222076616c75653d22e6b581e7a88be58f91e8b5b7e4baba22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e6469646174655573657273222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e64696461746547726f757073222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a20202020202020203c2f637573746f6d3a70726f706572746965733e0a2020202020203c2f62706d6e3a657874656e73696f6e456c656d656e74733e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f30756e37686c683c2f62706d6e3a696e636f6d696e673e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f3069336d7167613c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a757365725461736b3e0a20203c2f62706d6e3a70726f636573733e0a20203c62706d6e64693a42504d4e4469616772616d2069643d2242504d4e4469616772616d5f31223e0a202020203c62706d6e64693a42504d4e506c616e652069643d2242504d4e506c616e655f31222062706d6e456c656d656e743d2250726f636573735f31223e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2253746172744576656e745f315f6469222062706d6e456c656d656e743d2253746172744576656e745f31223e0a20202020202020203c64633a426f756e647320783d223138302220793d22313630222077696474683d22333622206865696768743d22333622202f3e0a20202020202020203c62706d6e64693a42504d4e4c6162656c3e0a202020202020202020203c64633a426f756e647320783d223138372220793d22323033222077696474683d22323222206865696768743d22313422202f3e0a20202020202020203c2f62706d6e64693a42504d4e4c6162656c3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d22456e644576656e745f315f6469222062706d6e456c656d656e743d22456e644576656e745f31223e0a20202020202020203c64633a426f756e647320783d223639322220793d22313630222077696474683d22333622206865696768743d22333622202f3e0a20202020202020203c62706d6e64693a42504d4e4c6162656c3e0a202020202020202020203c64633a426f756e647320783d223639392220793d22323033222077696474683d22323222206865696768743d22313422202f3e0a20202020202020203c2f62706d6e64693a42504d4e4c6162656c3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2241637469766974795f3131326a75366a5f6469222062706d6e456c656d656e743d2241637469766974795f30396468337a39223e0a20202020202020203c64633a426f756e647320783d223236302220793d22313338222077696474683d2231303022206865696768743d22383022202f3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2241637469766974795f30397962666d375f6469222062706d6e456c656d656e743d2241637469766974795f306d7676356863223e0a20202020202020203c64633a426f756e647320783d223431302220793d22313338222077696474683d2231303022206865696768743d22383022202f3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f315f6469222062706d6e456c656d656e743d22466c6f775f31223e0a20202020202020203c64693a776179706f696e7420783d223231362220793d2231373822202f3e0a20202020202020203c64693a776179706f696e7420783d223236302220793d2231373822202f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f30756e37686c685f6469222062706d6e456c656d656e743d22466c6f775f30756e37686c68223e0a20202020202020203c64693a776179706f696e7420783d223336302220793d2231373822202f3e0a20202020202020203c64693a776179706f696e7420783d223431302220793d2231373822202f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f3069336d7167615f6469222062706d6e456c656d656e743d22466c6f775f3069336d716761223e0a20202020202020203c64693a776179706f696e7420783d223531302220793d2231373822202f3e0a20202020202020203c64693a776179706f696e7420783d223639322220793d2231373822202f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a202020203c2f62706d6e64693a42504d4e506c616e653e0a20203c2f62706d6e64693a42504d4e4469616772616d3e0a3c2f62706d6e3a646566696e6974696f6e733e0a', false);
+TRUNCATE TABLE public.act_ge_bytearray CASCADE;
+
 INSERT INTO public.act_ge_bytearray VALUES ('5d2e6126-f1f4-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1.Process_1.png', '5d2adeb4-f1f4-11f0-bfbd-f2dbc029a3c2', '\x89504e470d0a1a0a0000000d49484452000002e2000000e40806000000dd25410b000010f649444154785eeddddd6f54677e07f07d91aabdccb6bb97b9d9abfd17b6bde9c5ae5a3552762f00bf60909149204aa48002586d521527482d7749c806902a354058b541f18549a3a609845a4a431210091b52b12924e1b51888c16c01870dd3f3504f34796c60b0c1f3cccf9f8ff4958367e69c83e777e67c39399ef9ce7700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008082d46ab53f3a7af4e82befbefbee57bb76edaabdf9e69b32cba97eeed78787874feddebdfb97f9f3d3aecc55eb1371ae002094aa2ceda80ed6b53367ced4ae5cb9521b1f1f97594efab9a79fff9e3d7b2e5605ea81fc396a47e6aaf589385700104a3a63990ed6f9415c663fa74f9f3e5715a6f7f3e7a81d99ab721269ae00209474d980339665243d0f5561ba9a3f47edc85c959348730500a1a46b49f303b7b42ee9f9c89fa37664aeca4a94b90280509a2d4cbfbf70ba76f4837faa1d7aebe91b49ff9dbe97df4f66962885c95c959528730500a13453982e8d9eac7dfcc6dfd63efad7d5df4afa5eba2dbfbf4c3f510a93b92a2b51e60a004269a6301d3f3434a92cd573e2d0ce49f797e9274a6132576525ca5c014028cd14a6ff7a7bfda4a2544fba2dbfbf4c3f510a93b92a2b51e60a004269a6307dfce6da4945a99e745b7e7f997ea21426735556a2cc150084a23095952885c95c959528730500a1345398d2bb59e445a99e745b7e7f997ea21426735556a2cc150084d24c61faf49d172615a57ad26df9fd65fa895298cc555989325700104a3385e9fcc983b58ffffdef2695a5f4bd745b7e7f997ea21426735556a2cc150084d24c614af96cdfd64985297d2fbf9fcc2c510a93b92a2b51e60a004269aa305dbd5afbf43f374e2a4ce97be9b649f79769274a6132576525ca5c014028b72b4ce9130e7ff7ce864965a99e749b4f41bc7b895298cc55598932570010ca4d0bd3d5abb5d39feeaefdf6dffe665249ca93ee93eeeb2ce6cc13a53099abb21265ae002094a90ad3edce56de2cce62ce3c510a93b92a2b51e60a004299aa303573b6f266498fcd9727cd274a6132576525ca5c0140285315a6bc04dd69f2e549f3895298cc55598932570010ca5485495a972885c95c959528730533d1dbdb7b5f6767e7bc8e8e8ee7abafbbaa7c56e57295dac4d7f4e75d13b7cf4bf7cf9701ccd0c58b17ff786868e8e9175e78e1a381818173fdfdfd571e79e491eb69475cbe7cf9b555ab568d3df9e493c79e7efae99dab57affecbea21dfcd971189c25456a21426735556a2cc154c475757d72faa63fc6095f189d2dd6cd2fd07d3e3f3650277e8bdf7de5bfeecb3cf9e5cb66c59ad2adfb51d3b76d4f6efdf5f3b72e448edfcf9f3b5247d4d7f4edf4fb7af59b3e67a5f5fdf7855c8dfe8eeeefe49becc0814a6b212a53099abb21265aee04e5405fa675591de3b45c19e4ef6a6e5e5eb006ee3e0c1837ff5e28b2f9e7af8e1876bafbefa6aedecd9b3374a77b3d2fdd3e3aa42fed5ca952b5fa976c41fe5eb68670a5359895298cc5559893257d08cdedede1f747474fcba2acf37fe6f776356ac5851dbbe7dfb2d4fc4a5dbd3fdf2c7a6e5a5e5a6e5e7eb0432d57ef5fdd75f7f7d2815f02d5bb6d42e5dbaf4ed867d87d2e3d372aa1df0724f4fcfaff2f5b52b85a9ac44294ce6aaac44992bb89daa2cdfdfd5d5f5516381eeeeeeae6ddebcb976e2c489fcd07e4be9fee971e9f15921ff30ad275f3730a1da7feedbb66ddbef1e7df4d1dad1a347f37d6b46d2f2aa727fa5afaf6f205f6f3b5298ca4a94c264aeca4a94b9825ba90af84fab9c6c2ccdebd7afaf1d3f7e3c3f94df91f4f8b49cac8c1f4febcbb701e6bc6a9fb9eff9e79f1f7deaa9a76aa3a3a3f9fe7457a4e5f6f7f75f5ebc78f1d67cfded46612a2b510a93b92a2b51e60a6e66e24cf837253c9dc51e1a1aca0fdf339296979d1d3feecc3834a8f693ef6fdbb6edd354c2d3c1e75e4acb5fb56ad585850b173e996f473b5198ca4a94c264aeca4a94b982a9a46bb61b2f4759b26449edc08103f961fbae48cb4dcb6f28e31fba661c26a46bc21f7becb17b76263c97d6b374e9d2b16a477c30df9676a13095952885c95c95952873055399f8c5cc6fce84dfab125e9796df78663cad3fdf269873aa1de381f48b9977fb9af0db49ebebe9e9199d3f7ffe8ff36d6a070a5359895298cc5559893257909b788bc2afeba578e7ce9df961fa9e48eb69382bfeb5b73664ce4b6f5198ded5a415366edc78aada119fcbb7a91d284c65254a6132576525ca5c41aeb3e17dc2d32f54cea6ec1738f7e6db067346fab09e74367c6c6c2cdf4f66455aefa2458b2eb6e387fe284c65254a6132576525ca5c41a3050b16fcbc5e84d3a522337d77943b95d6d778894ada9e7c1b614e489f9839383898ef23b36aebd6ad47aa1d7173be6da55398ca4a94c264aeca4a94b982469dffffb1f5374a707abfef5648eb6d382b3e986f2384373636f627cb972faf8d8c8ce4fbc7acaad6ff87ea5fc667d6ae5dfbbd7c1b4ba63095952885c95c959528730575d5f1f68755f11daf97e0d93e1b5e97d6db50c4c7d376e5db0aa1bdf6da6b03fdfdfdf9bed1124b972efdbcda11ff34dfc656a8b6e3ed2a7f9e7f3fa7309595d20b93b96acf943e57d0a899d799eaf679f5029c3e8ebe95d2fa1bcaf8bc7c5b21b40d1b36fc76c78e1df97ed1129b366d4a1f7bfb0ff936b642c38bc22d5fd014a6b2527a613257ed99d2e70a1a35f33a537d7f43fd7e2fbffc727e389e5569fd0ddbbc21df56086d6060e0dcfefdfbf3fda2258687870f7674740ce5dbd80a0d2f0ab77c415398ca4ae985c95cb5674a9f2b68d4cceb4c5757d7eefaedfbf6edcb0fc7b32aadbfbe2d69bb1ab713c25bb366cd95d97eeff09b397cf870ba34e5837c1b5b618a17b2295fd014a6b2527a619a629ecc551ba4f4b9824653bcbe4c7a9da9be1eab7fbfd51d20adbf611b8f657f1d886df9f2e5d7bffcf2cb7cbf6889f3e7cf5faa76c293f936b6c2142f60796ebca0294c65a5f4c234c51ce5315705a6f4b9824653bcaee449af33ff5bff73ab3b405a7f7d5bbababac6f2bf0f84b668d1a2dab56bd7f2fda225aaed481f779fbf60141d85a9ace4cf4fbbc65c9595fcf9118994567780b4fe86edf943de5320b465cb965d6bf5bf86ebce9e3dfbdf9de59f117fbbd32504c5a6f4339753cc93b96a83943e57d0688ad79749af33e9cc73fdfbadee00ce8833a73df1c41363adbe3eacee934f3ed9d759ee35e2df2a4a750a535929bd3099abf64ce973058d9a799de9748d3894e1a9a79e3a5ecabba6bcf5d65bbb0a7cd794492f608d14a6b2527a613257ed99d2e70a1a35f33ae35d53a0106bd7aedd59cafb88af5bb72e7ddc6e29ef237ed317b0460a535929bd3099abf64ce973058d9a799de9f43ee25086fefefebf58b366cdf57cc768816bdddddd073b0bf964cd66294c65254a6132576525ca5c415d67419facf9f8e38f5f6f28e23e5993b965eddab5df5bba74e9f8c8c848be6fccaa13274ebc53ed80a7d3f6e4db583285a9ac44294ce6aaac44992ba8ebeeeefe6175cc1daf17e0e3c78fe787e55991d6db50c2c7d376e5db0ae1ad5ebdfa8dc1c1c17cff9855cf3cf3cc6faa9d7073be6da55398ca4a94c264aeca4a94b98246d531375d0e7aa3046fdebc393f2ccf8ab4de86223e986f23cc09d5bf407fd2d7d7f7d5d8d858be8fcc8ad1d1d1f7ab1d70246d47be6da55398ca4a94c264aeca4a94b982460b162cf879bd0457c7df593f2b9ed6d7d5d5f5cd6529697bf26d843963e5ca95af6cd9b225df4f6645b5ee7fa976c2e7f26d6a070a5359895298cc555989325790ab8ebd7beb4578fdfaf5f9e1f99e4aeb6b381bbe37df369853e6cf9fffe3dededecbb3fd7ea2fbf6ed4b97a48ca4f5e7dbd40e14a6b212a53099abb21265ae20d7d5d5f5b3ea18fc75bd10efdcb9333f4cdf13693d0d25fcebb41df9b6c19cd3d3d3f3ab65cb965d191d1dcdf7997b626464e43faa1df08b2a0fe6dbd22e14a6b212a53099abb21265ae602a1d1d1dbfae97e27489ca810307f2c3f55d9596df78494a5a7fbe4d3067f5f5f50df4f7f75f4e079f7be9ead5ab9f543bfc07d5cef8d7f936b41385a9ac44294ce6aaac44992b984a6f6fef0faa42fc61bd182f59b2e49e95f1b4dc6a7ddf9c814feb4debcfb709e6b4c58b176f5db56ad5857b75667c6464644f2ae1d50ef88ff9badb8dc25456a21426735556a2cc15dc4c753cbebfcaf1c633e3434343f9e17b46d2f21acf844faceffe7c5b80cac2850b9fecebeb1bbbdbd78c4f5c137eacddcf84d7294c65254a6132576525ca5cc1ad54c7e59f3696f194f40b95337d3795f4f8ec17336f94f0b4be7c1b8006d58ef2604f4fcfe8c68d1b4f5dba7429dfb7eec8850b17de9b78779491b4dc7c5ded4a612a2b510a93b92a2b51e60a6e279da1ee6cb84c25259d1d4feff77de2c489fcd07e4be9fee971d959f01b97a3a4f5e4eb06a650ed403faa7698e7162d5a74f1a5975e3a72f6ecd96bf9ce760bd74e9e3cf9cec0c0c08d774649cb49cbcbd7d1ce14a6b212a53099abb21265aea019e99aed895fe0cc0b746dc58a15b5eddbb7d7f6efdf5f3b72e448edfcf9f3370ef6e96bfa73fa7eba3dfbd8fa7aaea7e5ba261ca6217dd84eb5136dae8af4c8430f3df4c5a64d9b0e0c0f0f1f3c7cf8f0b173e7cefdbeda0f2f8d8c8c1c3d74e8d0beeaa0f5e6ba75eb06abc71cac1ef33fe971edf8613dcd5098ca4a94c264aeca4a94b9823b31f1d686dfbccff80cb3d75b14c2ddf1dd050b16fc59b543fd7df52fdba16ae74a9f8a59bfa62c7d7d3f7d3fdd9eee97ee9f2f201285a9ac44294ce6aaac44992b988eea78fe8bead83e58657c8a827daba4fb0fa6c7e7cb04b82b14a6b212a53099abb21265ae60267a7b7befab8af5bc8e8e8ee7abafbbaa7c56e5f244e94e5fd39f774ddc3e2fdd3f5f06c05da53095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1ecdab5ebfa952b57261db865f6533d0fa7aac274357f8eda91b92a2791e60a0042191e1e3e75e6cc9949076f99fd7cf1c517ff5c15a6f7f3e7a81d99ab721269ae002094ddbb77ff72cf9e3d174f9f3e7dce19ccd6a4fab99ffefcf3cf7f5395a563551ec89fa37664ae5a9f88730500e1a483743a6356653c5d4b2ab39ef4734f3fff506529fd7d26fe5ee6aa35093957000000000000000000000000000000000000000000000000000004f07f07178e4d89a3c38c0000000049454e44ae426082', true);
+TRUNCATE TABLE public.act_ge_bytearray CASCADE;
+
 INSERT INTO public.act_ge_bytearray VALUES ('6f5634ed-f1f4-11f0-bfbd-f2dbc029a3c2', 1, 'fu-20260114-paed3z.bpmn', '6f5634ec-f1f4-11f0-bfbd-f2dbc029a3c2', '\x3c3f786d6c2076657273696f6e3d22312e302220656e636f64696e673d225554462d38223f3e0a3c62706d6e3a646566696e6974696f6e7320786d6c6e733a7873693d22687474703a2f2f7777772e77332e6f72672f323030312f584d4c536368656d612d696e7374616e63652220786d6c6e733a62706d6e3d22687474703a2f2f7777772e6f6d672e6f72672f737065632f42504d4e2f32303130303532342f4d4f44454c2220786d6c6e733a62706d6e64693d22687474703a2f2f7777772e6f6d672e6f72672f737065632f42504d4e2f32303130303532342f44492220786d6c6e733a64633d22687474703a2f2f7777772e6f6d672e6f72672f737065632f44442f32303130303532342f44432220786d6c6e733a64693d22687474703a2f2f7777772e6f6d672e6f72672f737065632f44442f32303130303532342f44492220786d6c6e733a637573746f6d3d22687474703a2f2f637573746f6d2e62706d6e2e696f2f736368656d61222069643d22446566696e6974696f6e735f3122207461726765744e616d6573706163653d22687474703a2f2f62706d6e2e696f2f736368656d612f62706d6e223e0a20203c62706d6e3a70726f636573732069643d2250726f636573735f312220697345786563757461626c653d2274727565223e0a202020203c62706d6e3a73746172744576656e742069643d2253746172744576656e745f3122206e616d653d22e5bc80e5a78b223e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f313c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a73746172744576656e743e0a202020203c62706d6e3a656e644576656e742069643d22456e644576656e745f3122206e616d653d22e7bb93e69d9f223e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f3069336d7167613c2f62706d6e3a696e636f6d696e673e0a202020203c2f62706d6e3a656e644576656e743e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f312220736f757263655265663d2253746172744576656e745f3122207461726765745265663d2241637469766974795f30396468337a3922202f3e0a202020203c62706d6e3a757365725461736b2069643d2241637469766974795f30396468337a39223e0a2020202020203c62706d6e3a657874656e73696f6e456c656d656e74733e0a20202020202020203c637573746f6d3a70726f706572746965733e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656554797065222076616c75653d22494e49544941544f5222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656556616c7565222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e65654c6162656c222076616c75653d22e6b581e7a88be58f91e8b5b7e4baba22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e6469646174655573657273222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e64696461746547726f757073222076616c75653d2222202f3e0a20202020202020203c2f637573746f6d3a70726f706572746965733e0a2020202020203c2f62706d6e3a657874656e73696f6e456c656d656e74733e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f313c2f62706d6e3a696e636f6d696e673e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f30756e37686c683c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a757365725461736b3e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f30756e37686c682220736f757263655265663d2241637469766974795f30396468337a3922207461726765745265663d2241637469766974795f306d767635686322202f3e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f3069336d7167612220736f757263655265663d2241637469766974795f306d767635686322207461726765745265663d22456e644576656e745f3122202f3e0a202020203c62706d6e3a757365725461736b2069643d2241637469766974795f306d7676356863223e0a2020202020203c62706d6e3a657874656e73696f6e456c656d656e74733e0a20202020202020203c637573746f6d3a70726f706572746965733e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656554797065222076616c75653d22494e49544941544f5222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656556616c7565222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e65654c6162656c222076616c75653d22e6b581e7a88be58f91e8b5b7e4baba22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e6469646174655573657273222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e64696461746547726f757073222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a20202020202020203c2f637573746f6d3a70726f706572746965733e0a2020202020203c2f62706d6e3a657874656e73696f6e456c656d656e74733e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f30756e37686c683c2f62706d6e3a696e636f6d696e673e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f3069336d7167613c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a757365725461736b3e0a20203c2f62706d6e3a70726f636573733e0a20203c62706d6e64693a42504d4e4469616772616d2069643d2242504d4e4469616772616d5f31223e0a202020203c62706d6e64693a42504d4e506c616e652069643d2242504d4e506c616e655f31222062706d6e456c656d656e743d2250726f636573735f31223e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2253746172744576656e745f315f6469222062706d6e456c656d656e743d2253746172744576656e745f31223e0a20202020202020203c64633a426f756e647320783d223138302220793d22313630222077696474683d22333622206865696768743d22333622202f3e0a20202020202020203c62706d6e64693a42504d4e4c6162656c3e0a202020202020202020203c64633a426f756e647320783d223138372220793d22323033222077696474683d22323222206865696768743d22313422202f3e0a20202020202020203c2f62706d6e64693a42504d4e4c6162656c3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d22456e644576656e745f315f6469222062706d6e456c656d656e743d22456e644576656e745f31223e0a20202020202020203c64633a426f756e647320783d223639322220793d22313630222077696474683d22333622206865696768743d22333622202f3e0a20202020202020203c62706d6e64693a42504d4e4c6162656c3e0a202020202020202020203c64633a426f756e647320783d223639392220793d22323033222077696474683d22323222206865696768743d22313422202f3e0a20202020202020203c2f62706d6e64693a42504d4e4c6162656c3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2241637469766974795f3131326a75366a5f6469222062706d6e456c656d656e743d2241637469766974795f30396468337a39223e0a20202020202020203c64633a426f756e647320783d223236302220793d22313338222077696474683d2231303022206865696768743d22383022202f3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2241637469766974795f30397962666d375f6469222062706d6e456c656d656e743d2241637469766974795f306d7676356863223e0a20202020202020203c64633a426f756e647320783d223431302220793d22313338222077696474683d2231303022206865696768743d22383022202f3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f315f6469222062706d6e456c656d656e743d22466c6f775f31223e0a20202020202020203c64693a776179706f696e7420783d223231362220793d2231373822202f3e0a20202020202020203c64693a776179706f696e7420783d223236302220793d2231373822202f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f30756e37686c685f6469222062706d6e456c656d656e743d22466c6f775f30756e37686c68223e0a20202020202020203c64693a776179706f696e7420783d223336302220793d2231373822202f3e0a20202020202020203c64693a776179706f696e7420783d223431302220793d2231373822202f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f3069336d7167615f6469222062706d6e456c656d656e743d22466c6f775f3069336d716761223e0a20202020202020203c64693a776179706f696e7420783d223531302220793d2231373822202f3e0a20202020202020203c64693a776179706f696e7420783d223639322220793d2231373822202f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a202020203c2f62706d6e64693a42504d4e506c616e653e0a20203c2f62706d6e64693a42504d4e4469616772616d3e0a3c2f62706d6e3a646566696e6974696f6e733e0a', false);
+TRUNCATE TABLE public.act_ge_bytearray CASCADE;
+
 INSERT INTO public.act_ge_bytearray VALUES ('6f5a539e-f1f4-11f0-bfbd-f2dbc029a3c2', 1, 'fu-20260114-paed3z.Process_1.png', '6f5634ec-f1f4-11f0-bfbd-f2dbc029a3c2', '\x89504e470d0a1a0a0000000d49484452000002e2000000e40806000000dd25410b000010f649444154785eeddddd6f54677e07f07d91aabdccb6bb97b9d9abfd17b6bde9c5ae5a3552762f00bf60909149204aa48002586d521527482d7749c806902a354058b541f18549a3a609845a4a431210091b52b12924e1b51888c16c01870dd3f3504f34796c60b0c1f3cccf9f8ff4958367e69c83e777e67c39399ef9ce7700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008082d46ab53f3a7af4e82befbefbee57bb76edaabdf9e69b32cba97eeed78787874feddebdfb97f9f3d3aecc55eb1371ae002094aa2ceda80ed6b53367ced4ae5cb9521b1f1f97594efab9a79fff9e3d7b2e5605ea81fc396a47e6aaf589385700104a3a63990ed6f9415c663fa74f9f3e5715a6f7f3e7a81d99ab721269ae00209474d980339665243d0f5561ba9a3f47edc85c959348730500a1a46b49f303b7b42ee9f9c89fa37664aeca4a94b90280509a2d4cbfbf70ba76f4837faa1d7aebe91b49ff9dbe97df4f66962885c95c959528730500a13453982e8d9eac7dfcc6dfd63efad7d5df4afa5eba2dbfbf4c3f510a93b92a2b51e60a004269a6301d3f3434a92cd573e2d0ce49f797e9274a6132576525ca5c014028cd14a6ff7a7bfda4a2544fba2dbfbf4c3f510a93b92a2b51e60a004269a6307dfce6da4945a99e745b7e7f997ea21426735556a2cc150084a23095952885c95c959528730500a1345398d2bb59e445a99e745b7e7f997ea21426735556a2cc150084d24c61faf49d172615a57ad26df9fd65fa895298cc555989325700104a3385e9fcc983b58ffffdef2695a5f4bd745b7e7f997ea21426735556a2cc150084d24c614af96cdfd64985297d2fbf9fcc2c510a93b92a2b51e60a004269aa305dbd5afbf43f374e2a4ce97be9b649f79769274a6132576525ca5c014028b72b4ce9130e7ff7ce864965a99e749b4f41bc7b895298cc55598932570010ca4d0bd3d5abb5d39feeaefdf6dffe665249ca93ee93eeeb2ce6cc13a53099abb21265ae002094a90ad3edce56de2cce62ce3c510a93b92a2b51e60a004299aa303573b6f266498fcd9727cd274a6132576525ca5c0140285315a6bc04dd69f2e549f3895298cc55598932570010ca5485495a972885c95c959528730533d1dbdb7b5f6767e7bc8e8e8ee7abafbbaa7c56e57295dac4d7f4e75d13b7cf4bf7cf9701ccd0c58b17ff786868e8e9175e78e1a381818173fdfdfd571e79e491eb69475cbe7cf9b555ab568d3df9e493c79e7efae99dab57affecbea21dfcd971189c25456a21426735556a2cc154c475757d72faa63fc6095f189d2dd6cd2fd07d3e3f3650277e8bdf7de5bfeecb3cf9e5cb66c59ad2adfb51d3b76d4f6efdf5f3b72e448edfcf9f3b5247d4d7f4edf4fb7af59b3e67a5f5fdf7855c8dfe8eeeefe49becc0814a6b212a53099abb21265aee04e5405fa675591de3b45c19e4ef6a6e5e5eb006ee3e0c1837ff5e28b2f9e7af8e1876bafbefa6aedecd9b3374a77b3d2fdd3e3aa42fed5ca952b5fa976c41fe5eb68670a5359895298cc5559893257d08cdedede1f747474fcba2acf37fe6f776356ac5851dbbe7dfb2d4fc4a5dbd3fdf2c7a6e5a5e5a6e5e7eb0432d57ef5fdd75f7f7d2815f02d5bb6d42e5dbaf4ed867d87d2e3d372aa1df0724f4fcfaff2f5b52b85a9ac44294ce6aaac44992bb89daa2cdfdfd5d5f5516381eeeeeeae6ddebcb976e2c489fcd07e4be9fee971e9f15921ff30ad275f3730a1da7feedbb66ddbef1e7df4d1dad1a347f37d6b46d2f2aa727fa5afaf6f205f6f3b5298ca4a94c264aeca4a94b9825ba90af84fab9c6c2ccdebd7afaf1d3f7e3c3f94df91f4f8b49cac8c1f4febcbb701e6bc6a9fb9eff9e79f1f7deaa9a76aa3a3a3f9fe7457a4e5f6f7f75f5ebc78f1d67cfded46612a2b510a93b92a2b51e60a6e66e24cf837253c9dc51e1a1aca0fdf339296979d1d3feecc3834a8f693ef6fdbb6edd354c2d3c1e75e4acb5fb56ad585850b173e996f473b5198ca4a94c264aeca4a94b982a9a46bb61b2f4759b26449edc08103f961fbae48cb4dcb6f28e31fba661c26a46bc21f7becb17b76263c97d6b374e9d2b16a477c30df9676a13095952885c95c95952873055399f8c5cc6fce84dfab125e9796df78663cad3fdf269873aa1de381f48b9977fb9af0db49ebebe9e9199d3f7ffe8ff36d6a070a5359895298cc5559893257909b788bc2afeba578e7ce9df961fa9e48eb69382bfeb5b73664ce4b6f5198ded5a415366edc78aada119fcbb7a91d284c65254a6132576525ca5c41aeb3e17dc2d32f54cea6ec1738f7e6db067346fab09e74367c6c6c2cdf4f66455aefa2458b2eb6e387fe284c65254a6132576525ca5c41a3050b16fcbc5e84d3a522337d77943b95d6d778894ada9e7c1b614e489f9839383898ef23b36aebd6ad47aa1d7173be6da55398ca4a94c264aeca4a94b982469dffffb1f5374a707abfef5648eb6d382b3e986f2384373636f627cb972faf8d8c8ce4fbc7acaad6ff87ea5fc667d6ae5dfbbd7c1b4ba63095952885c95c959528730575d5f1f68755f11daf97e0d93e1b5e97d6db50c4c7d376e5db0aa1bdf6da6b03fdfdfdf9bed1124b972efdbcda11ff34dfc656a8b6e3ed2a7f9e7f3fa7309595d20b93b96acf943e57d0a899d799eaf679f5029c3e8ebe95d2fa1bcaf8bc7c5b21b40d1b36fc76c78e1df97ed1129b366d4a1f7bfb0ff936b642c38bc22d5fd014a6b2527a613257ed99d2e70a1a35f33a537d7f43fd7e2fbffc727e389e5569fd0ddbbc21df56086d6060e0dcfefdfbf3fda2258687870f7674740ce5dbd80a0d2f0ab77c415398ca4ae985c95cb5674a9f2b68d4cceb4c5757d7eefaedfbf6edcb0fc7b32aadbfbe2d69bb1ab713c25bb366cd95d97eeff09b397cf870ba34e5837c1b5b618a17b2295fd014a6b2527a619a629ecc551ba4f4b9824653bcbe4c7a9da9be1eab7fbfd51d20adbf611b8f657f1d886df9f2e5d7bffcf2cb7cbf6889f3e7cf5faa76c293f936b6c2142f60796ebca0294c65a5f4c234c51ce5315705a6f4b9824653bcaee449af33ff5bff73ab3b405a7f7d5bbababac6f2bf0f84b668d1a2dab56bd7f2fda225aaed481f779fbf60141d85a9ace4cf4fbbc65c9595fcf9118994567780b4fe86edf943de5320b465cb965d6bf5bf86ebce9e3dfbdf9de59f117fbbd32504c5a6f4339753cc93b96a83943e57d0688ad79749af33e9cc73fdfbadee00ce8833a73df1c41363adbe3eacee934f3ed9d759ee35e2df2a4a750a535929bd3099abf64ce973058d9a799de9748d3894e1a9a79e3a5ecabba6bcf5d65bbb0a7cd794492f608d14a6b2527a613257ed99d2e70a1a35f33ae35d53a0106bd7aedd59cafb88af5bb72e7ddc6e29ef237ed317b0460a535929bd3099abf64ce973058d9a799de9f43ee25086fefefebf58b366cdf57cc768816bdddddd073b0bf964cd66294c65254a6132576525ca5c415d67419facf9f8e38f5f6f28e23e5993b965eddab5df5bba74e9f8c8c848be6fccaa13274ebc53ed80a7d3f6e4db583285a9ac44294ce6aaac44992ba8ebeeeefe6175cc1daf17e0e3c78fe787e55991d6db50c2c7d376e5db0ae1ad5ebdfa8dc1c1c17cff9855cf3cf3cc6faa9d7073be6da55398ca4a94c264aeca4a94b98246d531375d0e7aa3046fdebc393f2ccf8ab4de86223e986f23cc09d5bf407fd2d7d7f7d5d8d858be8fcc8ad1d1d1f7ab1d70246d47be6da55398ca4a94c264aeca4a94b982460b162cf879bd0457c7df593f2b9ed6d7d5d5f5cd6529697bf26d843963e5ca95af6cd9b225df4f6645b5ee7fa976c2e7f26d6a070a5359895298cc555989325790ab8ebd7beb4578fdfaf5f9e1f99e4aeb6b381bbe37df369853e6cf9fffe3dededecbb3fd7ea2fbf6ed4b97a48ca4f5e7dbd40e14a6b212a53099abb21265ae20d7d5d5f5b3ea18fc75bd10efdcb9333f4cdf13693d0d25fcebb41df9b6c19cd3d3d3f3ab65cb965d191d1dcdf7997b626464e43faa1df08b2a0fe6dbd22e14a6b212a53099abb21265ae602a1d1d1dbfae97e27489ca810307f2c3f55d9596df78494a5a7fbe4d3067f5f5f50df4f7f75f4e079f7be9ead5ab9f543bfc07d5cef8d7f936b41385a9ac44294ce6aaac44992b984a6f6fef0faa42fc61bd182f59b2e49e95f1b4dc6a7ddf9c814feb4debcfb709e6b4c58b176f5db56ad5857b75667c6464644f2ae1d50ef88ff9badb8dc25456a21426735556a2cc15dc4c753cbebfcaf1c633e3434343f9e17b46d2f21acf844faceffe7c5b80cac2850b9fecebeb1bbbdbd78c4f5c137eacddcf84d7294c65254a6132576525ca5cc1ad54c7e59f3696f194f40b95337d3795f4f8ec17336f94f0b4be7c1b8006d58ef2604f4fcfe8c68d1b4f5dba7429dfb7eec8850b17de9b78779491b4dc7c5ded4a612a2b510a93b92a2b51e60a6e279da1ee6cb84c25259d1d4feff77de2c489fcd07e4be9fee971d959f01b97a3a4f5e4eb06a650ed403faa7698e7162d5a74f1a5975e3a72f6ecd96bf9ce760bd74e9e3cf9cec0c0c08d774649cb49cbcbd7d1ce14a6b212a53099abb21265aea019e99aed895fe0cc0b746dc58a15b5eddbb7d7f6efdf5f3b72e448edfcf9f3370ef6e96bfa73fa7eba3dfbd8fa7aaea7e5ba261ca6217dd84eb5136dae8af4c8430f3df4c5a64d9b0e0c0f0f1f3c7cf8f0b173e7cefdbeda0f2f8d8c8c1c3d74e8d0beeaa0f5e6ba75eb06abc71cac1ef33fe971edf8613dcd5098ca4a94c264aeca4a94b9823b31f1d686dfbccff80cb3d75b14c2ddf1dd050b16fc59b543fd7df52fdba16ae74a9f8a59bfa62c7d7d3f7d3fdd9eee97ee9f2f201285a9ac44294ce6aaac44992b988eea78fe8bead83e58657c8a827daba4fb0fa6c7e7cb04b82b14a6b212a53099abb21265ae60267a7b7befab8af5bc8e8e8ee7abafbbaa7c56e5f244e94e5fd39f774ddc3e2fdd3f5f06c05da53095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1ecdab5ebfa952b57261db865f6533d0fa7aac274357f8eda91b92a2791e60a0042191e1e3e75e6cc9949076f99fd7cf1c517ff5c15a6f7f3e7a81d99ab721269ae002094ddbb77ff72cf9e3d174f9f3e7dce19ccd6a4fab99ffefcf3cf7f5395a563551ec89fa37664ae5a9f88730500e1a483743a6356653c5d4b2ab39ef4734f3fff506529fd7d26fe5ee6aa35093957000000000000000000000000000000000000000000000000000004f07f07178e4d89a3c38c0000000049454e44ae426082', true);
+TRUNCATE TABLE public.act_ge_bytearray CASCADE;
+
 INSERT INTO public.act_ge_bytearray VALUES ('9c5df45f-f1f5-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1.bpmn', '9c5df45e-f1f5-11f0-bfbd-f2dbc029a3c2', '\x3c3f786d6c2076657273696f6e3d22312e302220656e636f64696e673d225554462d38223f3e0a3c62706d6e3a646566696e6974696f6e7320786d6c6e733a7873693d22687474703a2f2f7777772e77332e6f72672f323030312f584d4c536368656d612d696e7374616e63652220786d6c6e733a62706d6e3d22687474703a2f2f7777772e6f6d672e6f72672f737065632f42504d4e2f32303130303532342f4d4f44454c2220786d6c6e733a62706d6e64693d22687474703a2f2f7777772e6f6d672e6f72672f737065632f42504d4e2f32303130303532342f44492220786d6c6e733a64633d22687474703a2f2f7777772e6f6d672e6f72672f737065632f44442f32303130303532342f44432220786d6c6e733a64693d22687474703a2f2f7777772e6f6d672e6f72672f737065632f44442f32303130303532342f44492220786d6c6e733a637573746f6d3d22687474703a2f2f637573746f6d2e62706d6e2e696f2f736368656d61222069643d22446566696e6974696f6e735f3122207461726765744e616d6573706163653d22687474703a2f2f62706d6e2e696f2f736368656d612f62706d6e223e0a20203c62706d6e3a70726f636573732069643d2250726f636573735f312220697345786563757461626c653d2274727565223e0a202020203c62706d6e3a73746172744576656e742069643d2253746172744576656e745f3122206e616d653d22e5bc80e5a78b223e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f313c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a73746172744576656e743e0a202020203c62706d6e3a656e644576656e742069643d22456e644576656e745f3122206e616d653d22e7bb93e69d9f223e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f3069336d7167613c2f62706d6e3a696e636f6d696e673e0a202020203c2f62706d6e3a656e644576656e743e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f312220736f757263655265663d2253746172744576656e745f3122207461726765745265663d2241637469766974795f30396468337a3922202f3e0a202020203c62706d6e3a757365725461736b2069643d2241637469766974795f30396468337a39223e0a2020202020203c62706d6e3a657874656e73696f6e456c656d656e74733e0a20202020202020203c637573746f6d3a70726f706572746965733e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656554797065222076616c75653d2246495845445f4445505422202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656556616c7565222076616c75653d22444550542d485222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e65654c6162656c222076616c75653d2248756d616e205265736f757263657322202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e6469646174655573657273222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e64696461746547726f757073222076616c75653d2222202f3e0a20202020202020203c2f637573746f6d3a70726f706572746965733e0a2020202020203c2f62706d6e3a657874656e73696f6e456c656d656e74733e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f313c2f62706d6e3a696e636f6d696e673e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f30756e37686c683c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a757365725461736b3e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f30756e37686c682220736f757263655265663d2241637469766974795f30396468337a3922207461726765745265663d2241637469766974795f306d767635686322202f3e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f3069336d7167612220736f757263655265663d2241637469766974795f306d767635686322207461726765745265663d22456e644576656e745f3122202f3e0a202020203c62706d6e3a757365725461736b2069643d2241637469766974795f306d7676356863223e0a2020202020203c62706d6e3a657874656e73696f6e456c656d656e74733e0a20202020202020203c637573746f6d3a70726f706572746965733e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656554797065222076616c75653d2246495845445f4445505422202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656556616c7565222076616c75653d22444550542d434f52502d42414e4b494e4722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e65654c6162656c222076616c75653d22436f72706f726174652042616e6b696e6722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e6469646174655573657273222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e64696461746547726f757073222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a20202020202020203c2f637573746f6d3a70726f706572746965733e0a2020202020203c2f62706d6e3a657874656e73696f6e456c656d656e74733e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f30756e37686c683c2f62706d6e3a696e636f6d696e673e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f3069336d7167613c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a757365725461736b3e0a20203c2f62706d6e3a70726f636573733e0a20203c62706d6e64693a42504d4e4469616772616d2069643d2242504d4e4469616772616d5f31223e0a202020203c62706d6e64693a42504d4e506c616e652069643d2242504d4e506c616e655f31222062706d6e456c656d656e743d2250726f636573735f31223e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2253746172744576656e745f315f6469222062706d6e456c656d656e743d2253746172744576656e745f31223e0a20202020202020203c64633a426f756e647320783d223138302220793d22313630222077696474683d22333622206865696768743d22333622202f3e0a20202020202020203c62706d6e64693a42504d4e4c6162656c3e0a202020202020202020203c64633a426f756e647320783d223138372220793d22323033222077696474683d22323222206865696768743d22313422202f3e0a20202020202020203c2f62706d6e64693a42504d4e4c6162656c3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d22456e644576656e745f315f6469222062706d6e456c656d656e743d22456e644576656e745f31223e0a20202020202020203c64633a426f756e647320783d223639322220793d22313630222077696474683d22333622206865696768743d22333622202f3e0a20202020202020203c62706d6e64693a42504d4e4c6162656c3e0a202020202020202020203c64633a426f756e647320783d223639392220793d22323033222077696474683d22323222206865696768743d22313422202f3e0a20202020202020203c2f62706d6e64693a42504d4e4c6162656c3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2241637469766974795f3131326a75366a5f6469222062706d6e456c656d656e743d2241637469766974795f30396468337a39223e0a20202020202020203c64633a426f756e647320783d223236302220793d22313338222077696474683d2231303022206865696768743d22383022202f3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2241637469766974795f30397962666d375f6469222062706d6e456c656d656e743d2241637469766974795f306d7676356863223e0a20202020202020203c64633a426f756e647320783d223431302220793d22313338222077696474683d2231303022206865696768743d22383022202f3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f315f6469222062706d6e456c656d656e743d22466c6f775f31223e0a20202020202020203c64693a776179706f696e7420783d223231362220793d2231373822202f3e0a20202020202020203c64693a776179706f696e7420783d223236302220793d2231373822202f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f30756e37686c685f6469222062706d6e456c656d656e743d22466c6f775f30756e37686c68223e0a20202020202020203c64693a776179706f696e7420783d223336302220793d2231373822202f3e0a20202020202020203c64693a776179706f696e7420783d223431302220793d2231373822202f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f3069336d7167615f6469222062706d6e456c656d656e743d22466c6f775f3069336d716761223e0a20202020202020203c64693a776179706f696e7420783d223531302220793d2231373822202f3e0a20202020202020203c64693a776179706f696e7420783d223639322220793d2231373822202f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a202020203c2f62706d6e64693a42504d4e506c616e653e0a20203c2f62706d6e64693a42504d4e4469616772616d3e0a3c2f62706d6e3a646566696e6974696f6e733e0a', false);
+TRUNCATE TABLE public.act_ge_bytearray CASCADE;
+
 INSERT INTO public.act_ge_bytearray VALUES ('9c6101a0-f1f5-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1.Process_1.png', '9c5df45e-f1f5-11f0-bfbd-f2dbc029a3c2', '\x89504e470d0a1a0a0000000d49484452000002e2000000e40806000000dd25410b000010f649444154785eeddddd6f54677e07f07d91aabdccb6bb97b9d9abfd17b6bde9c5ae5a3552762f00bf60909149204aa48002586d521527482d7749c806902a354058b541f18549a3a609845a4a431210091b52b12924e1b51888c16c01870dd3f3504f34796c60b0c1f3cccf9f8ff4958367e69c83e777e67c39399ef9ce7700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008082d46ab53f3a7af4e82befbefbee57bb76edaabdf9e69b32cba97eeed78787874feddebdfb97f9f3d3aecc55eb1371ae002094aa2ceda80ed6b53367ced4ae5cb9521b1f1f97594efab9a79fff9e3d7b2e5605ea81fc396a47e6aaf589385700104a3a63990ed6f9415c663fa74f9f3e5715a6f7f3e7a81d99ab721269ae00209474d980339665243d0f5561ba9a3f47edc85c959348730500a1a46b49f303b7b42ee9f9c89fa37664aeca4a94b90280509a2d4cbfbf70ba76f4837faa1d7aebe91b49ff9dbe97df4f66962885c95c959528730500a13453982e8d9eac7dfcc6dfd63efad7d5df4afa5eba2dbfbf4c3f510a93b92a2b51e60a004269a6301d3f3434a92cd573e2d0ce49f797e9274a6132576525ca5c014028cd14a6ff7a7bfda4a2544fba2dbfbf4c3f510a93b92a2b51e60a004269a6307dfce6da4945a99e745b7e7f997ea21426735556a2cc150084a23095952885c95c959528730500a1345398d2bb59e445a99e745b7e7f997ea21426735556a2cc150084d24c61faf49d172615a57ad26df9fd65fa895298cc555989325700104a3385e9fcc983b58ffffdef2695a5f4bd745b7e7f997ea21426735556a2cc150084d24c614af96cdfd64985297d2fbf9fcc2c510a93b92a2b51e60a004269aa305dbd5afbf43f374e2a4ce97be9b649f79769274a6132576525ca5c014028b72b4ce9130e7ff7ce864965a99e749b4f41bc7b895298cc55598932570010ca4d0bd3d5abb5d39feeaefdf6dffe665249ca93ee93eeeb2ce6cc13a53099abb21265ae002094a90ad3edce56de2cce62ce3c510a93b92a2b51e60a004299aa303573b6f266498fcd9727cd274a6132576525ca5c0140285315a6bc04dd69f2e549f3895298cc55598932570010ca5485495a972885c95c959528730533d1dbdb7b5f6767e7bc8e8e8ee7abafbbaa7c56e57295dac4d7f4e75d13b7cf4bf7cf9701ccd0c58b17ff786868e8e9175e78e1a381818173fdfdfd571e79e491eb69475cbe7cf9b555ab568d3df9e493c79e7efae99dab57affecbea21dfcd971189c25456a21426735556a2cc154c475757d72faa63fc6095f189d2dd6cd2fd07d3e3f3650277e8bdf7de5bfeecb3cf9e5cb66c59ad2adfb51d3b76d4f6efdf5f3b72e448edfcf9f3b5247d4d7f4edf4fb7af59b3e67a5f5fdf7855c8dfe8eeeefe49becc0814a6b212a53099abb21265aee04e5405fa675591de3b45c19e4ef6a6e5e5eb006ee3e0c1837ff5e28b2f9e7af8e1876bafbefa6aedecd9b3374a77b3d2fdd3e3aa42fed5ca952b5fa976c41fe5eb68670a5359895298cc5559893257d08cdedede1f747474fcba2acf37fe6f776356ac5851dbbe7dfb2d4fc4a5dbd3fdf2c7a6e5a5e5a6e5e7eb0432d57ef5fdd75f7f7d2815f02d5bb6d42e5dbaf4ed867d87d2e3d372aa1df0724f4fcfaff2f5b52b85a9ac44294ce6aaac44992bb89daa2cdfdfd5d5f5516381eeeeeeae6ddebcb976e2c489fcd07e4be9fee971e9f15921ff30ad275f3730a1da7feedbb66ddbef1e7df4d1dad1a347f37d6b46d2f2aa727fa5afaf6f205f6f3b5298ca4a94c264aeca4a94b9825ba90af84fab9c6c2ccdebd7afaf1d3f7e3c3f94df91f4f8b49cac8c1f4febcbb701e6bc6a9fb9eff9e79f1f7deaa9a76aa3a3a3f9fe7457a4e5f6f7f75f5ebc78f1d67cfded46612a2b510a93b92a2b51e60a6e66e24cf837253c9dc51e1a1aca0fdf339296979d1d3feecc3834a8f693ef6fdbb6edd354c2d3c1e75e4acb5fb56ad585850b173e996f473b5198ca4a94c264aeca4a94b982a9a46bb61b2f4759b26449edc08103f961fbae48cb4dcb6f28e31fba661c26a46bc21f7becb17b76263c97d6b374e9d2b16a477c30df9676a13095952885c95c95952873055399f8c5cc6fce84dfab125e9796df78663cad3fdf269873aa1de381f48b9977fb9af0db49ebebe9e9199d3f7ffe8ff36d6a070a5359895298cc5559893257909b788bc2afeba578e7ce9df961fa9e48eb69382bfeb5b73664ce4b6f5198ded5a415366edc78aada119fcbb7a91d284c65254a6132576525ca5c41aeb3e17dc2d32f54cea6ec1738f7e6db067346fab09e74367c6c6c2cdf4f66455aefa2458b2eb6e387fe284c65254a6132576525ca5c41a3050b16fcbc5e84d3a522337d77943b95d6d778894ada9e7c1b614e489f9839383898ef23b36aebd6ad47aa1d7173be6da55398ca4a94c264aeca4a94b982469dffffb1f5374a707abfef5648eb6d382b3e986f2384373636f627cb972faf8d8c8ce4fbc7acaad6ff87ea5fc667d6ae5dfbbd7c1b4ba63095952885c95c959528730575d5f1f68755f11daf97e0d93e1b5e97d6db50c4c7d376e5db0aa1bdf6da6b03fdfdfdf9bed1124b972efdbcda11ff34dfc656a8b6e3ed2a7f9e7f3fa7309595d20b93b96acf943e57d0a899d799eaf679f5029c3e8ebe95d2fa1bcaf8bc7c5b21b40d1b36fc76c78e1df97ed1129b366d4a1f7bfb0ff936b642c38bc22d5fd014a6b2527a613257ed99d2e70a1a35f33a537d7f43fd7e2fbffc727e389e5569fd0ddbbc21df56086d6060e0dcfefdfbf3fda2258687870f7674740ce5dbd80a0d2f0ab77c415398ca4ae985c95cb5674a9f2b68d4cceb4c5757d7eefaedfbf6edcb0fc7b32aadbfbe2d69bb1ab713c25bb366cd95d97eeff09b397cf870ba34e5837c1b5b618a17b2295fd014a6b2527a619a629ecc551ba4f4b9824653bcbe4c7a9da9be1eab7fbfd51d20adbf611b8f657f1d886df9f2e5d7bffcf2cb7cbf6889f3e7cf5faa76c293f936b6c2142f60796ebca0294c65a5f4c234c51ce5315705a6f4b9824653bcaee449af33ff5bff73ab3b405a7f7d5bbababac6f2bf0f84b668d1a2dab56bd7f2fda225aaed481f779fbf60141d85a9ace4cf4fbbc65c9595fcf9118994567780b4fe86edf943de5320b465cb965d6bf5bf86ebce9e3dfbdf9de59f117fbbd32504c5a6f4339753cc93b96a83943e57d0688ad79749af33e9cc73fdfbadee00ce8833a73df1c41363adbe3eacee934f3ed9d759ee35e2df2a4a750a535929bd3099abf64ce973058d9a799de9748d3894e1a9a79e3a5ecabba6bcf5d65bbb0a7cd794492f608d14a6b2527a613257ed99d2e70a1a35f33ae35d53a0106bd7aedd59cafb88af5bb72e7ddc6e29ef237ed317b0460a535929bd3099abf64ce973058d9a799de9f43ee25086fefefebf58b366cdf57cc768816bdddddd073b0bf964cd66294c65254a6132576525ca5c415d67419facf9f8e38f5f6f28e23e5993b965eddab5df5bba74e9f8c8c848be6fccaa13274ebc53ed80a7d3f6e4db583285a9ac44294ce6aaac44992ba8ebeeeefe6175cc1daf17e0e3c78fe787e55991d6db50c2c7d376e5db0ae1ad5ebdfa8dc1c1c17cff9855cf3cf3cc6faa9d7073be6da55398ca4a94c264aeca4a94b98246d531375d0e7aa3046fdebc393f2ccf8ab4de86223e986f23cc09d5bf407fd2d7d7f7d5d8d858be8fcc8ad1d1d1f7ab1d70246d47be6da55398ca4a94c264aeca4a94b982460b162cf879bd0457c7df593f2b9ed6d7d5d5f5cd6529697bf26d843963e5ca95af6cd9b225df4f6645b5ee7fa976c2e7f26d6a070a5359895298cc555989325790ab8ebd7beb4578fdfaf5f9e1f99e4aeb6b381bbe37df369853e6cf9fffe3dededecbb3fd7ea2fbf6ed4b97a48ca4f5e7dbd40e14a6b212a53099abb21265ae20d7d5d5f5b3ea18fc75bd10efdcb9333f4cdf13693d0d25fcebb41df9b6c19cd3d3d3f3ab65cb965d191d1dcdf7997b626464e43faa1df08b2a0fe6dbd22e14a6b212a53099abb21265ae602a1d1d1dbfae97e27489ca810307f2c3f55d9596df78494a5a7fbe4d3067f5f5f50df4f7f75f4e079f7be9ead5ab9f543bfc07d5cef8d7f936b41385a9ac44294ce6aaac44992b984a6f6fef0faa42fc61bd182f59b2e49e95f1b4dc6a7ddf9c814feb4debcfb709e6b4c58b176f5db56ad5857b75667c6464644f2ae1d50ef88ff9badb8dc25456a21426735556a2cc15dc4c753cbebfcaf1c633e3434343f9e17b46d2f21acf844faceffe7c5b80cac2850b9fecebeb1bbbdbd78c4f5c137eacddcf84d7294c65254a6132576525ca5cc1ad54c7e59f3696f194f40b95337d3795f4f8ec17336f94f0b4be7c1b8006d58ef2604f4fcfe8c68d1b4f5dba7429dfb7eec8850b17de9b78779491b4dc7c5ded4a612a2b510a93b92a2b51e60a6e279da1ee6cb84c25259d1d4feff77de2c489fcd07e4be9fee971d959f01b97a3a4f5e4eb06a650ed403faa7698e7162d5a74f1a5975e3a72f6ecd96bf9ce760bd74e9e3cf9cec0c0c08d774649cb49cbcbd7d1ce14a6b212a53099abb21265aea019e99aed895fe0cc0b746dc58a15b5eddbb7d7f6efdf5f3b72e448edfcf9f3370ef6e96bfa73fa7eba3dfbd8fa7aaea7e5ba261ca6217dd84eb5136dae8af4c8430f3df4c5a64d9b0e0c0f0f1f3c7cf8f0b173e7cefdbeda0f2f8d8c8c1c3d74e8d0beeaa0f5e6ba75eb06abc71cac1ef33fe971edf8613dcd5098ca4a94c264aeca4a94b9823b31f1d686dfbccff80cb3d75b14c2ddf1dd050b16fc59b543fd7df52fdba16ae74a9f8a59bfa62c7d7d3f7d3fdd9eee97ee9f2f201285a9ac44294ce6aaac44992b988eea78fe8bead83e58657c8a827daba4fb0fa6c7e7cb04b82b14a6b212a53099abb21265ae60267a7b7befab8af5bc8e8e8ee7abafbbaa7c56e5f244e94e5fd39f774ddc3e2fdd3f5f06c05da53095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1ecdab5ebfa952b57261db865f6533d0fa7aac274357f8eda91b92a2791e60a0042191e1e3e75e6cc9949076f99fd7cf1c517ff5c15a6f7f3e7a81d99ab721269ae002094ddbb77ff72cf9e3d174f9f3e7dce19ccd6a4fab99ffefcf3cf7f5395a563551ec89fa37664ae5a9f88730500e1a483743a6356653c5d4b2ab39ef4734f3fff506529fd7d26fe5ee6aa35093957000000000000000000000000000000000000000000000000000004f07f07178e4d89a3c38c0000000049454e44ae426082', true);
+TRUNCATE TABLE public.act_ge_bytearray CASCADE;
+
 INSERT INTO public.act_ge_bytearray VALUES ('6259be07-f1f7-11f0-bfbd-f2dbc029a3c2', 1, 'fu-20260114-paed3z.bpmn', '6259be06-f1f7-11f0-bfbd-f2dbc029a3c2', '\x3c3f786d6c2076657273696f6e3d22312e302220656e636f64696e673d225554462d38223f3e0a3c62706d6e3a646566696e6974696f6e7320786d6c6e733a7873693d22687474703a2f2f7777772e77332e6f72672f323030312f584d4c536368656d612d696e7374616e63652220786d6c6e733a62706d6e3d22687474703a2f2f7777772e6f6d672e6f72672f737065632f42504d4e2f32303130303532342f4d4f44454c2220786d6c6e733a62706d6e64693d22687474703a2f2f7777772e6f6d672e6f72672f737065632f42504d4e2f32303130303532342f44492220786d6c6e733a64633d22687474703a2f2f7777772e6f6d672e6f72672f737065632f44442f32303130303532342f44432220786d6c6e733a64693d22687474703a2f2f7777772e6f6d672e6f72672f737065632f44442f32303130303532342f44492220786d6c6e733a637573746f6d3d22687474703a2f2f637573746f6d2e62706d6e2e696f2f736368656d61222069643d22446566696e6974696f6e735f3122207461726765744e616d6573706163653d22687474703a2f2f62706d6e2e696f2f736368656d612f62706d6e223e0a20203c62706d6e3a70726f636573732069643d2250726f636573735f312220697345786563757461626c653d2274727565223e0a202020203c62706d6e3a73746172744576656e742069643d2253746172744576656e745f3122206e616d653d22e5bc80e5a78b223e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f313c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a73746172744576656e743e0a202020203c62706d6e3a656e644576656e742069643d22456e644576656e745f3122206e616d653d22e7bb93e69d9f223e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f3069336d7167613c2f62706d6e3a696e636f6d696e673e0a202020203c2f62706d6e3a656e644576656e743e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f312220736f757263655265663d2253746172744576656e745f3122207461726765745265663d2241637469766974795f30396468337a3922202f3e0a202020203c62706d6e3a757365725461736b2069643d2241637469766974795f30396468337a39223e0a2020202020203c62706d6e3a657874656e73696f6e456c656d656e74733e0a20202020202020203c637573746f6d3a70726f706572746965733e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656554797065222076616c75653d2246495845445f4445505422202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656556616c7565222076616c75653d22444550542d485222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e65654c6162656c222076616c75653d2248756d616e205265736f757263657322202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e6469646174655573657273222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e64696461746547726f757073222076616c75653d2222202f3e0a20202020202020203c2f637573746f6d3a70726f706572746965733e0a2020202020203c2f62706d6e3a657874656e73696f6e456c656d656e74733e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f313c2f62706d6e3a696e636f6d696e673e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f30756e37686c683c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a757365725461736b3e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f30756e37686c682220736f757263655265663d2241637469766974795f30396468337a3922207461726765745265663d2241637469766974795f306d767635686322202f3e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f3069336d7167612220736f757263655265663d2241637469766974795f306d767635686322207461726765745265663d22456e644576656e745f3122202f3e0a202020203c62706d6e3a757365725461736b2069643d2241637469766974795f306d7676356863223e0a2020202020203c62706d6e3a657874656e73696f6e456c656d656e74733e0a20202020202020203c637573746f6d3a70726f706572746965733e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656554797065222076616c75653d2246495845445f4445505422202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656556616c7565222076616c75653d22444550542d434f52502d42414e4b494e4722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e65654c6162656c222076616c75653d22436f72706f726174652042616e6b696e6722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e6469646174655573657273222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e64696461746547726f757073222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a20202020202020203c2f637573746f6d3a70726f706572746965733e0a2020202020203c2f62706d6e3a657874656e73696f6e456c656d656e74733e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f30756e37686c683c2f62706d6e3a696e636f6d696e673e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f3069336d7167613c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a757365725461736b3e0a20203c2f62706d6e3a70726f636573733e0a20203c62706d6e64693a42504d4e4469616772616d2069643d2242504d4e4469616772616d5f31223e0a202020203c62706d6e64693a42504d4e506c616e652069643d2242504d4e506c616e655f31222062706d6e456c656d656e743d2250726f636573735f31223e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2253746172744576656e745f315f6469222062706d6e456c656d656e743d2253746172744576656e745f31223e0a20202020202020203c64633a426f756e647320783d223138302220793d22313630222077696474683d22333622206865696768743d22333622202f3e0a20202020202020203c62706d6e64693a42504d4e4c6162656c3e0a202020202020202020203c64633a426f756e647320783d223138372220793d22323033222077696474683d22323222206865696768743d22313422202f3e0a20202020202020203c2f62706d6e64693a42504d4e4c6162656c3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d22456e644576656e745f315f6469222062706d6e456c656d656e743d22456e644576656e745f31223e0a20202020202020203c64633a426f756e647320783d223639322220793d22313630222077696474683d22333622206865696768743d22333622202f3e0a20202020202020203c62706d6e64693a42504d4e4c6162656c3e0a202020202020202020203c64633a426f756e647320783d223639392220793d22323033222077696474683d22323222206865696768743d22313422202f3e0a20202020202020203c2f62706d6e64693a42504d4e4c6162656c3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2241637469766974795f3131326a75366a5f6469222062706d6e456c656d656e743d2241637469766974795f30396468337a39223e0a20202020202020203c64633a426f756e647320783d223236302220793d22313338222077696474683d2231303022206865696768743d22383022202f3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2241637469766974795f30397962666d375f6469222062706d6e456c656d656e743d2241637469766974795f306d7676356863223e0a20202020202020203c64633a426f756e647320783d223431302220793d22313338222077696474683d2231303022206865696768743d22383022202f3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f315f6469222062706d6e456c656d656e743d22466c6f775f31223e0a20202020202020203c64693a776179706f696e7420783d223231362220793d2231373822202f3e0a20202020202020203c64693a776179706f696e7420783d223236302220793d2231373822202f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f30756e37686c685f6469222062706d6e456c656d656e743d22466c6f775f30756e37686c68223e0a20202020202020203c64693a776179706f696e7420783d223336302220793d2231373822202f3e0a20202020202020203c64693a776179706f696e7420783d223431302220793d2231373822202f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f3069336d7167615f6469222062706d6e456c656d656e743d22466c6f775f3069336d716761223e0a20202020202020203c64693a776179706f696e7420783d223531302220793d2231373822202f3e0a20202020202020203c64693a776179706f696e7420783d223639322220793d2231373822202f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a202020203c2f62706d6e64693a42504d4e506c616e653e0a20203c2f62706d6e64693a42504d4e4469616772616d3e0a3c2f62706d6e3a646566696e6974696f6e733e0a', false);
+TRUNCATE TABLE public.act_ge_bytearray CASCADE;
+
 INSERT INTO public.act_ge_bytearray VALUES ('625d4078-f1f7-11f0-bfbd-f2dbc029a3c2', 1, 'fu-20260114-paed3z.Process_1.png', '6259be06-f1f7-11f0-bfbd-f2dbc029a3c2', '\x89504e470d0a1a0a0000000d49484452000002e2000000e40806000000dd25410b000010f649444154785eeddddd6f54677e07f07d91aabdccb6bb97b9d9abfd17b6bde9c5ae5a3552762f00bf60909149204aa48002586d521527482d7749c806902a354058b541f18549a3a609845a4a431210091b52b12924e1b51888c16c01870dd3f3504f34796c60b0c1f3cccf9f8ff4958367e69c83e777e67c39399ef9ce7700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008082d46ab53f3a7af4e82befbefbee57bb76edaabdf9e69b32cba97eeed78787874feddebdfb97f9f3d3aecc55eb1371ae002094aa2ceda80ed6b53367ced4ae5cb9521b1f1f97594efab9a79fff9e3d7b2e5605ea81fc396a47e6aaf589385700104a3a63990ed6f9415c663fa74f9f3e5715a6f7f3e7a81d99ab721269ae00209474d980339665243d0f5561ba9a3f47edc85c959348730500a1a46b49f303b7b42ee9f9c89fa37664aeca4a94b90280509a2d4cbfbf70ba76f4837faa1d7aebe91b49ff9dbe97df4f66962885c95c959528730500a13453982e8d9eac7dfcc6dfd63efad7d5df4afa5eba2dbfbf4c3f510a93b92a2b51e60a004269a6301d3f3434a92cd573e2d0ce49f797e9274a6132576525ca5c014028cd14a6ff7a7bfda4a2544fba2dbfbf4c3f510a93b92a2b51e60a004269a6307dfce6da4945a99e745b7e7f997ea21426735556a2cc150084a23095952885c95c959528730500a1345398d2bb59e445a99e745b7e7f997ea21426735556a2cc150084d24c61faf49d172615a57ad26df9fd65fa895298cc555989325700104a3385e9fcc983b58ffffdef2695a5f4bd745b7e7f997ea21426735556a2cc150084d24c614af96cdfd64985297d2fbf9fcc2c510a93b92a2b51e60a004269aa305dbd5afbf43f374e2a4ce97be9b649f79769274a6132576525ca5c014028b72b4ce9130e7ff7ce864965a99e749b4f41bc7b895298cc55598932570010ca4d0bd3d5abb5d39feeaefdf6dffe665249ca93ee93eeeb2ce6cc13a53099abb21265ae002094a90ad3edce56de2cce62ce3c510a93b92a2b51e60a004299aa303573b6f266498fcd9727cd274a6132576525ca5c0140285315a6bc04dd69f2e549f3895298cc55598932570010ca5485495a972885c95c959528730533d1dbdb7b5f6767e7bc8e8e8ee7abafbbaa7c56e57295dac4d7f4e75d13b7cf4bf7cf9701ccd0c58b17ff786868e8e9175e78e1a381818173fdfdfd571e79e491eb69475cbe7cf9b555ab568d3df9e493c79e7efae99dab57affecbea21dfcd971189c25456a21426735556a2cc154c475757d72faa63fc6095f189d2dd6cd2fd07d3e3f3650277e8bdf7de5bfeecb3cf9e5cb66c59ad2adfb51d3b76d4f6efdf5f3b72e448edfcf9f3b5247d4d7f4edf4fb7af59b3e67a5f5fdf7855c8dfe8eeeefe49becc0814a6b212a53099abb21265aee04e5405fa675591de3b45c19e4ef6a6e5e5eb006ee3e0c1837ff5e28b2f9e7af8e1876bafbefa6aedecd9b3374a77b3d2fdd3e3aa42fed5ca952b5fa976c41fe5eb68670a5359895298cc5559893257d08cdedede1f747474fcba2acf37fe6f776356ac5851dbbe7dfb2d4fc4a5dbd3fdf2c7a6e5a5e5a6e5e7eb0432d57ef5fdd75f7f7d2815f02d5bb6d42e5dbaf4ed867d87d2e3d372aa1df0724f4fcfaff2f5b52b85a9ac44294ce6aaac44992bb89daa2cdfdfd5d5f5516381eeeeeeae6ddebcb976e2c489fcd07e4be9fee971e9f15921ff30ad275f3730a1da7feedbb66ddbef1e7df4d1dad1a347f37d6b46d2f2aa727fa5afaf6f205f6f3b5298ca4a94c264aeca4a94b9825ba90af84fab9c6c2ccdebd7afaf1d3f7e3c3f94df91f4f8b49cac8c1f4febcbb701e6bc6a9fb9eff9e79f1f7deaa9a76aa3a3a3f9fe7457a4e5f6f7f75f5ebc78f1d67cfded46612a2b510a93b92a2b51e60a6e66e24cf837253c9dc51e1a1aca0fdf339296979d1d3feecc3834a8f693ef6fdbb6edd354c2d3c1e75e4acb5fb56ad585850b173e996f473b5198ca4a94c264aeca4a94b982a9a46bb61b2f4759b26449edc08103f961fbae48cb4dcb6f28e31fba661c26a46bc21f7becb17b76263c97d6b374e9d2b16a477c30df9676a13095952885c95c95952873055399f8c5cc6fce84dfab125e9796df78663cad3fdf269873aa1de381f48b9977fb9af0db49ebebe9e9199d3f7ffe8ff36d6a070a5359895298cc5559893257909b788bc2afeba578e7ce9df961fa9e48eb69382bfeb5b73664ce4b6f5198ded5a415366edc78aada119fcbb7a91d284c65254a6132576525ca5c41aeb3e17dc2d32f54cea6ec1738f7e6db067346fab09e74367c6c6c2cdf4f66455aefa2458b2eb6e387fe284c65254a6132576525ca5c41a3050b16fcbc5e84d3a522337d77943b95d6d778894ada9e7c1b614e489f9839383898ef23b36aebd6ad47aa1d7173be6da55398ca4a94c264aeca4a94b982469dffffb1f5374a707abfef5648eb6d382b3e986f2384373636f627cb972faf8d8c8ce4fbc7acaad6ff87ea5fc667d6ae5dfbbd7c1b4ba63095952885c95c959528730575d5f1f68755f11daf97e0d93e1b5e97d6db50c4c7d376e5db0aa1bdf6da6b03fdfdfdf9bed1124b972efdbcda11ff34dfc656a8b6e3ed2a7f9e7f3fa7309595d20b93b96acf943e57d0a899d799eaf679f5029c3e8ebe95d2fa1bcaf8bc7c5b21b40d1b36fc76c78e1df97ed1129b366d4a1f7bfb0ff936b642c38bc22d5fd014a6b2527a613257ed99d2e70a1a35f33a537d7f43fd7e2fbffc727e389e5569fd0ddbbc21df56086d6060e0dcfefdfbf3fda2258687870f7674740ce5dbd80a0d2f0ab77c415398ca4ae985c95cb5674a9f2b68d4cceb4c5757d7eefaedfbf6edcb0fc7b32aadbfbe2d69bb1ab713c25bb366cd95d97eeff09b397cf870ba34e5837c1b5b618a17b2295fd014a6b2527a619a629ecc551ba4f4b9824653bcbe4c7a9da9be1eab7fbfd51d20adbf611b8f657f1d886df9f2e5d7bffcf2cb7cbf6889f3e7cf5faa76c293f936b6c2142f60796ebca0294c65a5f4c234c51ce5315705a6f4b9824653bcaee449af33ff5bff73ab3b405a7f7d5bbababac6f2bf0f84b668d1a2dab56bd7f2fda225aaed481f779fbf60141d85a9ace4cf4fbbc65c9595fcf9118994567780b4fe86edf943de5320b465cb965d6bf5bf86ebce9e3dfbdf9de59f117fbbd32504c5a6f4339753cc93b96a83943e57d0688ad79749af33e9cc73fdfbadee00ce8833a73df1c41363adbe3eacee934f3ed9d759ee35e2df2a4a750a535929bd3099abf64ce973058d9a799de9748d3894e1a9a79e3a5ecabba6bcf5d65bbb0a7cd794492f608d14a6b2527a613257ed99d2e70a1a35f33ae35d53a0106bd7aedd59cafb88af5bb72e7ddc6e29ef237ed317b0460a535929bd3099abf64ce973058d9a799de9f43ee25086fefefebf58b366cdf57cc768816bdddddd073b0bf964cd66294c65254a6132576525ca5c415d67419facf9f8e38f5f6f28e23e5993b965eddab5df5bba74e9f8c8c848be6fccaa13274ebc53ed80a7d3f6e4db583285a9ac44294ce6aaac44992ba8ebeeeefe6175cc1daf17e0e3c78fe787e55991d6db50c2c7d376e5db0ae1ad5ebdfa8dc1c1c17cff9855cf3cf3cc6faa9d7073be6da55398ca4a94c264aeca4a94b98246d531375d0e7aa3046fdebc393f2ccf8ab4de86223e986f23cc09d5bf407fd2d7d7f7d5d8d858be8fcc8ad1d1d1f7ab1d70246d47be6da55398ca4a94c264aeca4a94b982460b162cf879bd0457c7df593f2b9ed6d7d5d5f5cd6529697bf26d843963e5ca95af6cd9b225df4f6645b5ee7fa976c2e7f26d6a070a5359895298cc555989325790ab8ebd7beb4578fdfaf5f9e1f99e4aeb6b381bbe37df369853e6cf9fffe3dededecbb3fd7ea2fbf6ed4b97a48ca4f5e7dbd40e14a6b212a53099abb21265ae20d7d5d5f5b3ea18fc75bd10efdcb9333f4cdf13693d0d25fcebb41df9b6c19cd3d3d3f3ab65cb965d191d1dcdf7997b626464e43faa1df08b2a0fe6dbd22e14a6b212a53099abb21265ae602a1d1d1dbfae97e27489ca810307f2c3f55d9596df78494a5a7fbe4d3067f5f5f50df4f7f75f4e079f7be9ead5ab9f543bfc07d5cef8d7f936b41385a9ac44294ce6aaac44992b984a6f6fef0faa42fc61bd182f59b2e49e95f1b4dc6a7ddf9c814feb4debcfb709e6b4c58b176f5db56ad5857b75667c6464644f2ae1d50ef88ff9badb8dc25456a21426735556a2cc15dc4c753cbebfcaf1c633e3434343f9e17b46d2f21acf844faceffe7c5b80cac2850b9fecebeb1bbbdbd78c4f5c137eacddcf84d7294c65254a6132576525ca5cc1ad54c7e59f3696f194f40b95337d3795f4f8ec17336f94f0b4be7c1b8006d58ef2604f4fcfe8c68d1b4f5dba7429dfb7eec8850b17de9b78779491b4dc7c5ded4a612a2b510a93b92a2b51e60a6e279da1ee6cb84c25259d1d4feff77de2c489fcd07e4be9fee971d959f01b97a3a4f5e4eb06a650ed403faa7698e7162d5a74f1a5975e3a72f6ecd96bf9ce760bd74e9e3cf9cec0c0c08d774649cb49cbcbd7d1ce14a6b212a53099abb21265aea019e99aed895fe0cc0b746dc58a15b5eddbb7d7f6efdf5f3b72e448edfcf9f3370ef6e96bfa73fa7eba3dfbd8fa7aaea7e5ba261ca6217dd84eb5136dae8af4c8430f3df4c5a64d9b0e0c0f0f1f3c7cf8f0b173e7cefdbeda0f2f8d8c8c1c3d74e8d0beeaa0f5e6ba75eb06abc71cac1ef33fe971edf8613dcd5098ca4a94c264aeca4a94b9823b31f1d686dfbccff80cb3d75b14c2ddf1dd050b16fc59b543fd7df52fdba16ae74a9f8a59bfa62c7d7d3f7d3fdd9eee97ee9f2f201285a9ac44294ce6aaac44992b988eea78fe8bead83e58657c8a827daba4fb0fa6c7e7cb04b82b14a6b212a53099abb21265ae60267a7b7befab8af5bc8e8e8ee7abafbbaa7c56e5f244e94e5fd39f774ddc3e2fdd3f5f06c05da53095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1ecdab5ebfa952b57261db865f6533d0fa7aac274357f8eda91b92a2791e60a0042191e1e3e75e6cc9949076f99fd7cf1c517ff5c15a6f7f3e7a81d99ab721269ae002094ddbb77ff72cf9e3d174f9f3e7dce19ccd6a4fab99ffefcf3cf7f5395a563551ec89fa37664ae5a9f88730500e1a483743a6356653c5d4b2ab39ef4734f3fff506529fd7d26fe5ee6aa35093957000000000000000000000000000000000000000000000000000004f07f07178e4d89a3c38c0000000049454e44ae426082', true);
+TRUNCATE TABLE public.act_ge_bytearray CASCADE;
+
 INSERT INTO public.act_ge_bytearray VALUES ('a8dffd1c-f45e-11f0-9035-568938879cb7', 1, 'fu-20260114-paed3z.bpmn', 'a8dffd1b-f45e-11f0-9035-568938879cb7', '\x3c3f786d6c2076657273696f6e3d22312e302220656e636f64696e673d225554462d38223f3e0a3c62706d6e3a646566696e6974696f6e7320786d6c6e733a7873693d22687474703a2f2f7777772e77332e6f72672f323030312f584d4c536368656d612d696e7374616e63652220786d6c6e733a62706d6e3d22687474703a2f2f7777772e6f6d672e6f72672f737065632f42504d4e2f32303130303532342f4d4f44454c2220786d6c6e733a62706d6e64693d22687474703a2f2f7777772e6f6d672e6f72672f737065632f42504d4e2f32303130303532342f44492220786d6c6e733a64633d22687474703a2f2f7777772e6f6d672e6f72672f737065632f44442f32303130303532342f44432220786d6c6e733a64693d22687474703a2f2f7777772e6f6d672e6f72672f737065632f44442f32303130303532342f44492220786d6c6e733a637573746f6d3d22687474703a2f2f637573746f6d2e62706d6e2e696f2f736368656d61222069643d22446566696e6974696f6e735f3122207461726765744e616d6573706163653d22687474703a2f2f62706d6e2e696f2f736368656d612f62706d6e223e0a20203c62706d6e3a70726f636573732069643d2250726f636573735f312220697345786563757461626c653d2274727565223e0a202020203c62706d6e3a73746172744576656e742069643d2253746172744576656e745f3122206e616d653d22e5bc80e5a78b223e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f313c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a73746172744576656e743e0a202020203c62706d6e3a656e644576656e742069643d22456e644576656e745f3122206e616d653d22e7bb93e69d9f223e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f3069336d7167613c2f62706d6e3a696e636f6d696e673e0a202020203c2f62706d6e3a656e644576656e743e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f312220736f757263655265663d2253746172744576656e745f3122207461726765745265663d2241637469766974795f30396468337a3922202f3e0a202020203c62706d6e3a757365725461736b2069643d2241637469766974795f30396468337a39223e0a2020202020203c62706d6e3a657874656e73696f6e456c656d656e74733e0a20202020202020203c637573746f6d3a70726f706572746965733e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656554797065222076616c75653d2246495845445f4445505422202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656556616c7565222076616c75653d22444550542d485222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e65654c6162656c222076616c75653d2248756d616e205265736f757263657322202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e6469646174655573657273222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e64696461746547726f757073222076616c75653d2222202f3e0a20202020202020203c2f637573746f6d3a70726f706572746965733e0a2020202020203c2f62706d6e3a657874656e73696f6e456c656d656e74733e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f313c2f62706d6e3a696e636f6d696e673e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f30756e37686c683c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a757365725461736b3e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f30756e37686c682220736f757263655265663d2241637469766974795f30396468337a3922207461726765745265663d2241637469766974795f306d767635686322202f3e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f3069336d7167612220736f757263655265663d2241637469766974795f306d767635686322207461726765745265663d22456e644576656e745f3122202f3e0a202020203c62706d6e3a757365725461736b2069643d2241637469766974795f306d7676356863223e0a2020202020203c62706d6e3a657874656e73696f6e456c656d656e74733e0a20202020202020203c637573746f6d3a70726f706572746965733e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656554797065222076616c75653d2246495845445f4445505422202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656556616c7565222076616c75653d22444550542d434f52502d42414e4b494e4722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e65654c6162656c222076616c75653d22436f72706f726174652042616e6b696e6722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e6469646174655573657273222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e64696461746547726f757073222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a20202020202020203c2f637573746f6d3a70726f706572746965733e0a2020202020203c2f62706d6e3a657874656e73696f6e456c656d656e74733e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f30756e37686c683c2f62706d6e3a696e636f6d696e673e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f3069336d7167613c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a757365725461736b3e0a20203c2f62706d6e3a70726f636573733e0a20203c62706d6e64693a42504d4e4469616772616d2069643d2242504d4e4469616772616d5f31223e0a202020203c62706d6e64693a42504d4e506c616e652069643d2242504d4e506c616e655f31222062706d6e456c656d656e743d2250726f636573735f31223e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2253746172744576656e745f315f6469222062706d6e456c656d656e743d2253746172744576656e745f31223e0a20202020202020203c64633a426f756e647320783d223138302220793d22313630222077696474683d22333622206865696768743d22333622202f3e0a20202020202020203c62706d6e64693a42504d4e4c6162656c3e0a202020202020202020203c64633a426f756e647320783d223138372220793d22323033222077696474683d22323222206865696768743d22313422202f3e0a20202020202020203c2f62706d6e64693a42504d4e4c6162656c3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d22456e644576656e745f315f6469222062706d6e456c656d656e743d22456e644576656e745f31223e0a20202020202020203c64633a426f756e647320783d223639322220793d22313630222077696474683d22333622206865696768743d22333622202f3e0a20202020202020203c62706d6e64693a42504d4e4c6162656c3e0a202020202020202020203c64633a426f756e647320783d223639392220793d22323033222077696474683d22323222206865696768743d22313422202f3e0a20202020202020203c2f62706d6e64693a42504d4e4c6162656c3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2241637469766974795f3131326a75366a5f6469222062706d6e456c656d656e743d2241637469766974795f30396468337a39223e0a20202020202020203c64633a426f756e647320783d223236302220793d22313338222077696474683d2231303022206865696768743d22383022202f3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2241637469766974795f30397962666d375f6469222062706d6e456c656d656e743d2241637469766974795f306d7676356863223e0a20202020202020203c64633a426f756e647320783d223431302220793d22313338222077696474683d2231303022206865696768743d22383022202f3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f315f6469222062706d6e456c656d656e743d22466c6f775f31223e0a20202020202020203c64693a776179706f696e7420783d223231362220793d2231373822202f3e0a20202020202020203c64693a776179706f696e7420783d223236302220793d2231373822202f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f30756e37686c685f6469222062706d6e456c656d656e743d22466c6f775f30756e37686c68223e0a20202020202020203c64693a776179706f696e7420783d223336302220793d2231373822202f3e0a20202020202020203c64693a776179706f696e7420783d223431302220793d2231373822202f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f3069336d7167615f6469222062706d6e456c656d656e743d22466c6f775f3069336d716761223e0a20202020202020203c64693a776179706f696e7420783d223531302220793d2231373822202f3e0a20202020202020203c64693a776179706f696e7420783d223639322220793d2231373822202f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a202020203c2f62706d6e64693a42504d4e506c616e653e0a20203c2f62706d6e64693a42504d4e4469616772616d3e0a3c2f62706d6e3a646566696e6974696f6e733e0a', false);
+TRUNCATE TABLE public.act_ge_bytearray CASCADE;
+
 INSERT INTO public.act_ge_bytearray VALUES ('a8e4b80d-f45e-11f0-9035-568938879cb7', 1, 'fu-20260114-paed3z.Process_1.png', 'a8dffd1b-f45e-11f0-9035-568938879cb7', '\x89504e470d0a1a0a0000000d49484452000002e2000000e40806000000dd25410b000010f649444154785eeddddd6f54677e07f07d91aabdccb6bb97b9d9abfd17b6bde9c5ae5a3552762f00bf60909149204aa48002586d521527482d7749c806902a354058b541f18549a3a609845a4a431210091b52b12924e1b51888c16c01870dd3f3504f34796c60b0c1f3cccf9f8ff4958367e69c83e777e67c39399ef9ce7700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008082d46ab53f3a7af4e82befbefbee57bb76edaabdf9e69b32cba97eeed78787874feddebdfb97f9f3d3aecc55eb1371ae002094aa2ceda80ed6b53367ced4ae5cb9521b1f1f97594efab9a79fff9e3d7b2e5605ea81fc396a47e6aaf589385700104a3a63990ed6f9415c663fa74f9f3e5715a6f7f3e7a81d99ab721269ae00209474d980339665243d0f5561ba9a3f47edc85c959348730500a1a46b49f303b7b42ee9f9c89fa37664aeca4a94b90280509a2d4cbfbf70ba76f4837faa1d7aebe91b49ff9dbe97df4f66962885c95c959528730500a13453982e8d9eac7dfcc6dfd63efad7d5df4afa5eba2dbfbf4c3f510a93b92a2b51e60a004269a6301d3f3434a92cd573e2d0ce49f797e9274a6132576525ca5c014028cd14a6ff7a7bfda4a2544fba2dbfbf4c3f510a93b92a2b51e60a004269a6307dfce6da4945a99e745b7e7f997ea21426735556a2cc150084a23095952885c95c959528730500a1345398d2bb59e445a99e745b7e7f997ea21426735556a2cc150084d24c61faf49d172615a57ad26df9fd65fa895298cc555989325700104a3385e9fcc983b58ffffdef2695a5f4bd745b7e7f997ea21426735556a2cc150084d24c614af96cdfd64985297d2fbf9fcc2c510a93b92a2b51e60a004269aa305dbd5afbf43f374e2a4ce97be9b649f79769274a6132576525ca5c014028b72b4ce9130e7ff7ce864965a99e749b4f41bc7b895298cc55598932570010ca4d0bd3d5abb5d39feeaefdf6dffe665249ca93ee93eeeb2ce6cc13a53099abb21265ae002094a90ad3edce56de2cce62ce3c510a93b92a2b51e60a004299aa303573b6f266498fcd9727cd274a6132576525ca5c0140285315a6bc04dd69f2e549f3895298cc55598932570010ca5485495a972885c95c959528730533d1dbdb7b5f6767e7bc8e8e8ee7abafbbaa7c56e57295dac4d7f4e75d13b7cf4bf7cf9701ccd0c58b17ff786868e8e9175e78e1a381818173fdfdfd571e79e491eb69475cbe7cf9b555ab568d3df9e493c79e7efae99dab57affecbea21dfcd971189c25456a21426735556a2cc154c475757d72faa63fc6095f189d2dd6cd2fd07d3e3f3650277e8bdf7de5bfeecb3cf9e5cb66c59ad2adfb51d3b76d4f6efdf5f3b72e448edfcf9f3b5247d4d7f4edf4fb7af59b3e67a5f5fdf7855c8dfe8eeeefe49becc0814a6b212a53099abb21265aee04e5405fa675591de3b45c19e4ef6a6e5e5eb006ee3e0c1837ff5e28b2f9e7af8e1876bafbefa6aedecd9b3374a77b3d2fdd3e3aa42fed5ca952b5fa976c41fe5eb68670a5359895298cc5559893257d08cdedede1f747474fcba2acf37fe6f776356ac5851dbbe7dfb2d4fc4a5dbd3fdf2c7a6e5a5e5a6e5e7eb0432d57ef5fdd75f7f7d2815f02d5bb6d42e5dbaf4ed867d87d2e3d372aa1df0724f4fcfaff2f5b52b85a9ac44294ce6aaac44992bb89daa2cdfdfd5d5f5516381eeeeeeae6ddebcb976e2c489fcd07e4be9fee971e9f15921ff30ad275f3730a1da7feedbb66ddbef1e7df4d1dad1a347f37d6b46d2f2aa727fa5afaf6f205f6f3b5298ca4a94c264aeca4a94b9825ba90af84fab9c6c2ccdebd7afaf1d3f7e3c3f94df91f4f8b49cac8c1f4febcbb701e6bc6a9fb9eff9e79f1f7deaa9a76aa3a3a3f9fe7457a4e5f6f7f75f5ebc78f1d67cfded46612a2b510a93b92a2b51e60a6e66e24cf837253c9dc51e1a1aca0fdf339296979d1d3feecc3834a8f693ef6fdbb6edd354c2d3c1e75e4acb5fb56ad585850b173e996f473b5198ca4a94c264aeca4a94b982a9a46bb61b2f4759b26449edc08103f961fbae48cb4dcb6f28e31fba661c26a46bc21f7becb17b76263c97d6b374e9d2b16a477c30df9676a13095952885c95c95952873055399f8c5cc6fce84dfab125e9796df78663cad3fdf269873aa1de381f48b9977fb9af0db49ebebe9e9199d3f7ffe8ff36d6a070a5359895298cc5559893257909b788bc2afeba578e7ce9df961fa9e48eb69382bfeb5b73664ce4b6f5198ded5a415366edc78aada119fcbb7a91d284c65254a6132576525ca5c41aeb3e17dc2d32f54cea6ec1738f7e6db067346fab09e74367c6c6c2cdf4f66455aefa2458b2eb6e387fe284c65254a6132576525ca5c41a3050b16fcbc5e84d3a522337d77943b95d6d778894ada9e7c1b614e489f9839383898ef23b36aebd6ad47aa1d7173be6da55398ca4a94c264aeca4a94b982469dffffb1f5374a707abfef5648eb6d382b3e986f2384373636f627cb972faf8d8c8ce4fbc7acaad6ff87ea5fc667d6ae5dfbbd7c1b4ba63095952885c95c959528730575d5f1f68755f11daf97e0d93e1b5e97d6db50c4c7d376e5db0aa1bdf6da6b03fdfdfdf9bed1124b972efdbcda11ff34dfc656a8b6e3ed2a7f9e7f3fa7309595d20b93b96acf943e57d0a899d799eaf679f5029c3e8ebe95d2fa1bcaf8bc7c5b21b40d1b36fc76c78e1df97ed1129b366d4a1f7bfb0ff936b642c38bc22d5fd014a6b2527a613257ed99d2e70a1a35f33a537d7f43fd7e2fbffc727e389e5569fd0ddbbc21df56086d6060e0dcfefdfbf3fda2258687870f7674740ce5dbd80a0d2f0ab77c415398ca4ae985c95cb5674a9f2b68d4cceb4c5757d7eefaedfbf6edcb0fc7b32aadbfbe2d69bb1ab713c25bb366cd95d97eeff09b397cf870ba34e5837c1b5b618a17b2295fd014a6b2527a619a629ecc551ba4f4b9824653bcbe4c7a9da9be1eab7fbfd51d20adbf611b8f657f1d886df9f2e5d7bffcf2cb7cbf6889f3e7cf5faa76c293f936b6c2142f60796ebca0294c65a5f4c234c51ce5315705a6f4b9824653bcaee449af33ff5bff73ab3b405a7f7d5bbababac6f2bf0f84b668d1a2dab56bd7f2fda225aaed481f779fbf60141d85a9ace4cf4fbbc65c9595fcf9118994567780b4fe86edf943de5320b465cb965d6bf5bf86ebce9e3dfbdf9de59f117fbbd32504c5a6f4339753cc93b96a83943e57d0688ad79749af33e9cc73fdfbadee00ce8833a73df1c41363adbe3eacee934f3ed9d759ee35e2df2a4a750a535929bd3099abf64ce973058d9a799de9748d3894e1a9a79e3a5ecabba6bcf5d65bbb0a7cd794492f608d14a6b2527a613257ed99d2e70a1a35f33ae35d53a0106bd7aedd59cafb88af5bb72e7ddc6e29ef237ed317b0460a535929bd3099abf64ce973058d9a799de9f43ee25086fefefebf58b366cdf57cc768816bdddddd073b0bf964cd66294c65254a6132576525ca5c415d67419facf9f8e38f5f6f28e23e5993b965eddab5df5bba74e9f8c8c848be6fccaa13274ebc53ed80a7d3f6e4db583285a9ac44294ce6aaac44992ba8ebeeeefe6175cc1daf17e0e3c78fe787e55991d6db50c2c7d376e5db0ae1ad5ebdfa8dc1c1c17cff9855cf3cf3cc6faa9d7073be6da55398ca4a94c264aeca4a94b98246d531375d0e7aa3046fdebc393f2ccf8ab4de86223e986f23cc09d5bf407fd2d7d7f7d5d8d858be8fcc8ad1d1d1f7ab1d70246d47be6da55398ca4a94c264aeca4a94b982460b162cf879bd0457c7df593f2b9ed6d7d5d5f5cd6529697bf26d843963e5ca95af6cd9b225df4f6645b5ee7fa976c2e7f26d6a070a5359895298cc555989325790ab8ebd7beb4578fdfaf5f9e1f99e4aeb6b381bbe37df369853e6cf9fffe3dededecbb3fd7ea2fbf6ed4b97a48ca4f5e7dbd40e14a6b212a53099abb21265ae20d7d5d5f5b3ea18fc75bd10efdcb9333f4cdf13693d0d25fcebb41df9b6c19cd3d3d3f3ab65cb965d191d1dcdf7997b626464e43faa1df08b2a0fe6dbd22e14a6b212a53099abb21265ae602a1d1d1dbfae97e27489ca810307f2c3f55d9596df78494a5a7fbe4d3067f5f5f50df4f7f75f4e079f7be9ead5ab9f543bfc07d5cef8d7f936b41385a9ac44294ce6aaac44992b984a6f6fef0faa42fc61bd182f59b2e49e95f1b4dc6a7ddf9c814feb4debcfb709e6b4c58b176f5db56ad5857b75667c6464644f2ae1d50ef88ff9badb8dc25456a21426735556a2cc15dc4c753cbebfcaf1c633e3434343f9e17b46d2f21acf844faceffe7c5b80cac2850b9fecebeb1bbbdbd78c4f5c137eacddcf84d7294c65254a6132576525ca5cc1ad54c7e59f3696f194f40b95337d3795f4f8ec17336f94f0b4be7c1b8006d58ef2604f4fcfe8c68d1b4f5dba7429dfb7eec8850b17de9b78779491b4dc7c5ded4a612a2b510a93b92a2b51e60a6e279da1ee6cb84c25259d1d4feff77de2c489fcd07e4be9fee971d959f01b97a3a4f5e4eb06a650ed403faa7698e7162d5a74f1a5975e3a72f6ecd96bf9ce760bd74e9e3cf9cec0c0c08d774649cb49cbcbd7d1ce14a6b212a53099abb21265aea019e99aed895fe0cc0b746dc58a15b5eddbb7d7f6efdf5f3b72e448edfcf9f3370ef6e96bfa73fa7eba3dfbd8fa7aaea7e5ba261ca6217dd84eb5136dae8af4c8430f3df4c5a64d9b0e0c0f0f1f3c7cf8f0b173e7cefdbeda0f2f8d8c8c1c3d74e8d0beeaa0f5e6ba75eb06abc71cac1ef33fe971edf8613dcd5098ca4a94c264aeca4a94b9823b31f1d686dfbccff80cb3d75b14c2ddf1dd050b16fc59b543fd7df52fdba16ae74a9f8a59bfa62c7d7d3f7d3fdd9eee97ee9f2f201285a9ac44294ce6aaac44992b988eea78fe8bead83e58657c8a827daba4fb0fa6c7e7cb04b82b14a6b212a53099abb21265ae60267a7b7befab8af5bc8e8e8ee7abafbbaa7c56e5f244e94e5fd39f774ddc3e2fdd3f5f06c05da53095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1ecdab5ebfa952b57261db865f6533d0fa7aac274357f8eda91b92a2791e60a0042191e1e3e75e6cc9949076f99fd7cf1c517ff5c15a6f7f3e7a81d99ab721269ae002094ddbb77ff72cf9e3d174f9f3e7dce19ccd6a4fab99ffefcf3cf7f5395a563551ec89fa37664ae5a9f88730500e1a483743a6356653c5d4b2ab39ef4734f3fff506529fd7d26fe5ee6aa35093957000000000000000000000000000000000000000000000000000004f07f07178e4d89a3c38c0000000049454e44ae426082', true);
+TRUNCATE TABLE public.act_ge_bytearray CASCADE;
+
 INSERT INTO public.act_ge_bytearray VALUES ('d94ac64e-f515-11f0-83bf-1a46ed4020c1', 1, 'fu-20260114-paed3z.bpmn', 'd94ac64d-f515-11f0-83bf-1a46ed4020c1', '\x3c3f786d6c2076657273696f6e3d22312e302220656e636f64696e673d225554462d38223f3e0a3c62706d6e3a646566696e6974696f6e7320786d6c6e733a7873693d22687474703a2f2f7777772e77332e6f72672f323030312f584d4c536368656d612d696e7374616e63652220786d6c6e733a62706d6e3d22687474703a2f2f7777772e6f6d672e6f72672f737065632f42504d4e2f32303130303532342f4d4f44454c2220786d6c6e733a62706d6e64693d22687474703a2f2f7777772e6f6d672e6f72672f737065632f42504d4e2f32303130303532342f44492220786d6c6e733a64633d22687474703a2f2f7777772e6f6d672e6f72672f737065632f44442f32303130303532342f44432220786d6c6e733a64693d22687474703a2f2f7777772e6f6d672e6f72672f737065632f44442f32303130303532342f44492220786d6c6e733a637573746f6d3d22687474703a2f2f637573746f6d2e62706d6e2e696f2f736368656d61222069643d22446566696e6974696f6e735f3122207461726765744e616d6573706163653d22687474703a2f2f62706d6e2e696f2f736368656d612f62706d6e223e0a20203c62706d6e3a70726f636573732069643d2250726f636573735f312220697345786563757461626c653d2274727565223e0a202020203c62706d6e3a73746172744576656e742069643d2253746172744576656e745f3122206e616d653d22e5bc80e5a78b223e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f313c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a73746172744576656e743e0a202020203c62706d6e3a656e644576656e742069643d22456e644576656e745f3122206e616d653d22e7bb93e69d9f223e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f3069336d7167613c2f62706d6e3a696e636f6d696e673e0a202020203c2f62706d6e3a656e644576656e743e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f312220736f757263655265663d2253746172744576656e745f3122207461726765745265663d2241637469766974795f30396468337a3922202f3e0a202020203c62706d6e3a757365725461736b2069643d2241637469766974795f30396468337a39223e0a2020202020203c62706d6e3a657874656e73696f6e456c656d656e74733e0a20202020202020203c637573746f6d3a70726f706572746965733e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656554797065222076616c75653d2246495845445f4445505422202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656556616c7565222076616c75653d22444550542d485222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e65654c6162656c222076616c75653d2248756d616e205265736f757263657322202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e6469646174655573657273222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e64696461746547726f757073222076616c75653d2222202f3e0a20202020202020203c2f637573746f6d3a70726f706572746965733e0a2020202020203c2f62706d6e3a657874656e73696f6e456c656d656e74733e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f313c2f62706d6e3a696e636f6d696e673e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f30756e37686c683c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a757365725461736b3e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f30756e37686c682220736f757263655265663d2241637469766974795f30396468337a3922207461726765745265663d2241637469766974795f306d767635686322202f3e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f3069336d7167612220736f757263655265663d2241637469766974795f306d767635686322207461726765745265663d22456e644576656e745f3122202f3e0a202020203c62706d6e3a757365725461736b2069643d2241637469766974795f306d7676356863223e0a2020202020203c62706d6e3a657874656e73696f6e456c656d656e74733e0a20202020202020203c637573746f6d3a70726f706572746965733e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656554797065222076616c75653d2246495845445f4445505422202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656556616c7565222076616c75653d22444550542d434f52502d42414e4b494e4722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e65654c6162656c222076616c75653d22436f72706f726174652042616e6b696e6722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e6469646174655573657273222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e64696461746547726f757073222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a20202020202020203c2f637573746f6d3a70726f706572746965733e0a2020202020203c2f62706d6e3a657874656e73696f6e456c656d656e74733e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f30756e37686c683c2f62706d6e3a696e636f6d696e673e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f3069336d7167613c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a757365725461736b3e0a20203c2f62706d6e3a70726f636573733e0a20203c62706d6e64693a42504d4e4469616772616d2069643d2242504d4e4469616772616d5f31223e0a202020203c62706d6e64693a42504d4e506c616e652069643d2242504d4e506c616e655f31222062706d6e456c656d656e743d2250726f636573735f31223e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2253746172744576656e745f315f6469222062706d6e456c656d656e743d2253746172744576656e745f31223e0a20202020202020203c64633a426f756e647320783d223138302220793d22313630222077696474683d22333622206865696768743d22333622202f3e0a20202020202020203c62706d6e64693a42504d4e4c6162656c3e0a202020202020202020203c64633a426f756e647320783d223138372220793d22323033222077696474683d22323222206865696768743d22313422202f3e0a20202020202020203c2f62706d6e64693a42504d4e4c6162656c3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d22456e644576656e745f315f6469222062706d6e456c656d656e743d22456e644576656e745f31223e0a20202020202020203c64633a426f756e647320783d223639322220793d22313630222077696474683d22333622206865696768743d22333622202f3e0a20202020202020203c62706d6e64693a42504d4e4c6162656c3e0a202020202020202020203c64633a426f756e647320783d223639392220793d22323033222077696474683d22323222206865696768743d22313422202f3e0a20202020202020203c2f62706d6e64693a42504d4e4c6162656c3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2241637469766974795f3131326a75366a5f6469222062706d6e456c656d656e743d2241637469766974795f30396468337a39223e0a20202020202020203c64633a426f756e647320783d223236302220793d22313338222077696474683d2231303022206865696768743d22383022202f3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2241637469766974795f30397962666d375f6469222062706d6e456c656d656e743d2241637469766974795f306d7676356863223e0a20202020202020203c64633a426f756e647320783d223431302220793d22313338222077696474683d2231303022206865696768743d22383022202f3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f315f6469222062706d6e456c656d656e743d22466c6f775f31223e0a20202020202020203c64693a776179706f696e7420783d223231362220793d2231373822202f3e0a20202020202020203c64693a776179706f696e7420783d223236302220793d2231373822202f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f30756e37686c685f6469222062706d6e456c656d656e743d22466c6f775f30756e37686c68223e0a20202020202020203c64693a776179706f696e7420783d223336302220793d2231373822202f3e0a20202020202020203c64693a776179706f696e7420783d223431302220793d2231373822202f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f3069336d7167615f6469222062706d6e456c656d656e743d22466c6f775f3069336d716761223e0a20202020202020203c64693a776179706f696e7420783d223531302220793d2231373822202f3e0a20202020202020203c64693a776179706f696e7420783d223639322220793d2231373822202f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a202020203c2f62706d6e64693a42504d4e506c616e653e0a20203c2f62706d6e64693a42504d4e4469616772616d3e0a3c2f62706d6e3a646566696e6974696f6e733e0a', false);
+TRUNCATE TABLE public.act_ge_bytearray CASCADE;
+
 INSERT INTO public.act_ge_bytearray VALUES ('d94f813f-f515-11f0-83bf-1a46ed4020c1', 1, 'fu-20260114-paed3z.Process_1.png', 'd94ac64d-f515-11f0-83bf-1a46ed4020c1', '\x89504e470d0a1a0a0000000d49484452000002e2000000e40806000000dd25410b000010f649444154785eeddddd6f54677e07f07d91aabdccb6bb97b9d9abfd17b6bde9c5ae5a3552762f00bf60909149204aa48002586d521527482d7749c806902a354058b541f18549a3a609845a4a431210091b52b12924e1b51888c16c01870dd3f3504f34796c60b0c1f3cccf9f8ff4958367e69c83e777e67c39399ef9ce7700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008082d46ab53f3a7af4e82befbefbee57bb76edaabdf9e69b32cba97eeed78787874feddebdfb97f9f3d3aecc55eb1371ae002094aa2ceda80ed6b53367ced4ae5cb9521b1f1f97594efab9a79fff9e3d7b2e5605ea81fc396a47e6aaf589385700104a3a63990ed6f9415c663fa74f9f3e5715a6f7f3e7a81d99ab721269ae00209474d980339665243d0f5561ba9a3f47edc85c959348730500a1a46b49f303b7b42ee9f9c89fa37664aeca4a94b90280509a2d4cbfbf70ba76f4837faa1d7aebe91b49ff9dbe97df4f66962885c95c959528730500a13453982e8d9eac7dfcc6dfd63efad7d5df4afa5eba2dbfbf4c3f510a93b92a2b51e60a004269a6301d3f3434a92cd573e2d0ce49f797e9274a6132576525ca5c014028cd14a6ff7a7bfda4a2544fba2dbfbf4c3f510a93b92a2b51e60a004269a6307dfce6da4945a99e745b7e7f997ea21426735556a2cc150084a23095952885c95c959528730500a1345398d2bb59e445a99e745b7e7f997ea21426735556a2cc150084d24c61faf49d172615a57ad26df9fd65fa895298cc555989325700104a3385e9fcc983b58ffffdef2695a5f4bd745b7e7f997ea21426735556a2cc150084d24c614af96cdfd64985297d2fbf9fcc2c510a93b92a2b51e60a004269aa305dbd5afbf43f374e2a4ce97be9b649f79769274a6132576525ca5c014028b72b4ce9130e7ff7ce864965a99e749b4f41bc7b895298cc55598932570010ca4d0bd3d5abb5d39feeaefdf6dffe665249ca93ee93eeeb2ce6cc13a53099abb21265ae002094a90ad3edce56de2cce62ce3c510a93b92a2b51e60a004299aa303573b6f266498fcd9727cd274a6132576525ca5c0140285315a6bc04dd69f2e549f3895298cc55598932570010ca5485495a972885c95c959528730533d1dbdb7b5f6767e7bc8e8e8ee7abafbbaa7c56e57295dac4d7f4e75d13b7cf4bf7cf9701ccd0c58b17ff786868e8e9175e78e1a381818173fdfdfd571e79e491eb69475cbe7cf9b555ab568d3df9e493c79e7efae99dab57affecbea21dfcd971189c25456a21426735556a2cc154c475757d72faa63fc6095f189d2dd6cd2fd07d3e3f3650277e8bdf7de5bfeecb3cf9e5cb66c59ad2adfb51d3b76d4f6efdf5f3b72e448edfcf9f3b5247d4d7f4edf4fb7af59b3e67a5f5fdf7855c8dfe8eeeefe49becc0814a6b212a53099abb21265aee04e5405fa675591de3b45c19e4ef6a6e5e5eb006ee3e0c1837ff5e28b2f9e7af8e1876bafbefa6aedecd9b3374a77b3d2fdd3e3aa42fed5ca952b5fa976c41fe5eb68670a5359895298cc5559893257d08cdedede1f747474fcba2acf37fe6f776356ac5851dbbe7dfb2d4fc4a5dbd3fdf2c7a6e5a5e5a6e5e7eb0432d57ef5fdd75f7f7d2815f02d5bb6d42e5dbaf4ed867d87d2e3d372aa1df0724f4fcfaff2f5b52b85a9ac44294ce6aaac44992bb89daa2cdfdfd5d5f5516381eeeeeeae6ddebcb976e2c489fcd07e4be9fee971e9f15921ff30ad275f3730a1da7feedbb66ddbef1e7df4d1dad1a347f37d6b46d2f2aa727fa5afaf6f205f6f3b5298ca4a94c264aeca4a94b9825ba90af84fab9c6c2ccdebd7afaf1d3f7e3c3f94df91f4f8b49cac8c1f4febcbb701e6bc6a9fb9eff9e79f1f7deaa9a76aa3a3a3f9fe7457a4e5f6f7f75f5ebc78f1d67cfded46612a2b510a93b92a2b51e60a6e66e24cf837253c9dc51e1a1aca0fdf339296979d1d3feecc3834a8f693ef6fdbb6edd354c2d3c1e75e4acb5fb56ad585850b173e996f473b5198ca4a94c264aeca4a94b982a9a46bb61b2f4759b26449edc08103f961fbae48cb4dcb6f28e31fba661c26a46bc21f7becb17b76263c97d6b374e9d2b16a477c30df9676a13095952885c95c95952873055399f8c5cc6fce84dfab125e9796df78663cad3fdf269873aa1de381f48b9977fb9af0db49ebebe9e9199d3f7ffe8ff36d6a070a5359895298cc5559893257909b788bc2afeba578e7ce9df961fa9e48eb69382bfeb5b73664ce4b6f5198ded5a415366edc78aada119fcbb7a91d284c65254a6132576525ca5c41aeb3e17dc2d32f54cea6ec1738f7e6db067346fab09e74367c6c6c2cdf4f66455aefa2458b2eb6e387fe284c65254a6132576525ca5c41a3050b16fcbc5e84d3a522337d77943b95d6d778894ada9e7c1b614e489f9839383898ef23b36aebd6ad47aa1d7173be6da55398ca4a94c264aeca4a94b982469dffffb1f5374a707abfef5648eb6d382b3e986f2384373636f627cb972faf8d8c8ce4fbc7acaad6ff87ea5fc667d6ae5dfbbd7c1b4ba63095952885c95c959528730575d5f1f68755f11daf97e0d93e1b5e97d6db50c4c7d376e5db0aa1bdf6da6b03fdfdfdf9bed1124b972efdbcda11ff34dfc656a8b6e3ed2a7f9e7f3fa7309595d20b93b96acf943e57d0a899d799eaf679f5029c3e8ebe95d2fa1bcaf8bc7c5b21b40d1b36fc76c78e1df97ed1129b366d4a1f7bfb0ff936b642c38bc22d5fd014a6b2527a613257ed99d2e70a1a35f33a537d7f43fd7e2fbffc727e389e5569fd0ddbbc21df56086d6060e0dcfefdfbf3fda2258687870f7674740ce5dbd80a0d2f0ab77c415398ca4ae985c95cb5674a9f2b68d4cceb4c5757d7eefaedfbf6edcb0fc7b32aadbfbe2d69bb1ab713c25bb366cd95d97eeff09b397cf870ba34e5837c1b5b618a17b2295fd014a6b2527a619a629ecc551ba4f4b9824653bcbe4c7a9da9be1eab7fbfd51d20adbf611b8f657f1d886df9f2e5d7bffcf2cb7cbf6889f3e7cf5faa76c293f936b6c2142f60796ebca0294c65a5f4c234c51ce5315705a6f4b9824653bcaee449af33ff5bff73ab3b405a7f7d5bbababac6f2bf0f84b668d1a2dab56bd7f2fda225aaed481f779fbf60141d85a9ace4cf4fbbc65c9595fcf9118994567780b4fe86edf943de5320b465cb965d6bf5bf86ebce9e3dfbdf9de59f117fbbd32504c5a6f4339753cc93b96a83943e57d0688ad79749af33e9cc73fdfbadee00ce8833a73df1c41363adbe3eacee934f3ed9d759ee35e2df2a4a750a535929bd3099abf64ce973058d9a799de9748d3894e1a9a79e3a5ecabba6bcf5d65bbb0a7cd794492f608d14a6b2527a613257ed99d2e70a1a35f33ae35d53a0106bd7aedd59cafb88af5bb72e7ddc6e29ef237ed317b0460a535929bd3099abf64ce973058d9a799de9f43ee25086fefefebf58b366cdf57cc768816bdddddd073b0bf964cd66294c65254a6132576525ca5c415d67419facf9f8e38f5f6f28e23e5993b965eddab5df5bba74e9f8c8c848be6fccaa13274ebc53ed80a7d3f6e4db583285a9ac44294ce6aaac44992ba8ebeeeefe6175cc1daf17e0e3c78fe787e55991d6db50c2c7d376e5db0ae1ad5ebdfa8dc1c1c17cff9855cf3cf3cc6faa9d7073be6da55398ca4a94c264aeca4a94b98246d531375d0e7aa3046fdebc393f2ccf8ab4de86223e986f23cc09d5bf407fd2d7d7f7d5d8d858be8fcc8ad1d1d1f7ab1d70246d47be6da55398ca4a94c264aeca4a94b982460b162cf879bd0457c7df593f2b9ed6d7d5d5f5cd6529697bf26d843963e5ca95af6cd9b225df4f6645b5ee7fa976c2e7f26d6a070a5359895298cc555989325790ab8ebd7beb4578fdfaf5f9e1f99e4aeb6b381bbe37df369853e6cf9fffe3dededecbb3fd7ea2fbf6ed4b97a48ca4f5e7dbd40e14a6b212a53099abb21265ae20d7d5d5f5b3ea18fc75bd10efdcb9333f4cdf13693d0d25fcebb41df9b6c19cd3d3d3f3ab65cb965d191d1dcdf7997b626464e43faa1df08b2a0fe6dbd22e14a6b212a53099abb21265ae602a1d1d1dbfae97e27489ca810307f2c3f55d9596df78494a5a7fbe4d3067f5f5f50df4f7f75f4e079f7be9ead5ab9f543bfc07d5cef8d7f936b41385a9ac44294ce6aaac44992b984a6f6fef0faa42fc61bd182f59b2e49e95f1b4dc6a7ddf9c814feb4debcfb709e6b4c58b176f5db56ad5857b75667c6464644f2ae1d50ef88ff9badb8dc25456a21426735556a2cc15dc4c753cbebfcaf1c633e3434343f9e17b46d2f21acf844faceffe7c5b80cac2850b9fecebeb1bbbdbd78c4f5c137eacddcf84d7294c65254a6132576525ca5cc1ad54c7e59f3696f194f40b95337d3795f4f8ec17336f94f0b4be7c1b8006d58ef2604f4fcfe8c68d1b4f5dba7429dfb7eec8850b17de9b78779491b4dc7c5ded4a612a2b510a93b92a2b51e60a6e279da1ee6cb84c25259d1d4feff77de2c489fcd07e4be9fee971d959f01b97a3a4f5e4eb06a650ed403faa7698e7162d5a74f1a5975e3a72f6ecd96bf9ce760bd74e9e3cf9cec0c0c08d774649cb49cbcbd7d1ce14a6b212a53099abb21265aea019e99aed895fe0cc0b746dc58a15b5eddbb7d7f6efdf5f3b72e448edfcf9f3370ef6e96bfa73fa7eba3dfbd8fa7aaea7e5ba261ca6217dd84eb5136dae8af4c8430f3df4c5a64d9b0e0c0f0f1f3c7cf8f0b173e7cefdbeda0f2f8d8c8c1c3d74e8d0beeaa0f5e6ba75eb06abc71cac1ef33fe971edf8613dcd5098ca4a94c264aeca4a94b9823b31f1d686dfbccff80cb3d75b14c2ddf1dd050b16fc59b543fd7df52fdba16ae74a9f8a59bfa62c7d7d3f7d3fdd9eee97ee9f2f201285a9ac44294ce6aaac44992b988eea78fe8bead83e58657c8a827daba4fb0fa6c7e7cb04b82b14a6b212a53099abb21265ae60267a7b7befab8af5bc8e8e8ee7abafbbaa7c56e5f244e94e5fd39f774ddc3e2fdd3f5f06c05da53095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1ecdab5ebfa952b57261db865f6533d0fa7aac274357f8eda91b92a2791e60a0042191e1e3e75e6cc9949076f99fd7cf1c517ff5c15a6f7f3e7a81d99ab721269ae002094ddbb77ff72cf9e3d174f9f3e7dce19ccd6a4fab99ffefcf3cf7f5395a563551ec89fa37664ae5a9f88730500e1a483743a6356653c5d4b2ab39ef4734f3fff506529fd7d26fe5ee6aa35093957000000000000000000000000000000000000000000000000000004f07f07178e4d89a3c38c0000000049454e44ae426082', true);
+TRUNCATE TABLE public.act_ge_bytearray CASCADE;
+
 INSERT INTO public.act_ge_bytearray VALUES ('022c2807-f537-11f0-83bf-1a46ed4020c1', 1, 'Process_1.bpmn', '022c2806-f537-11f0-83bf-1a46ed4020c1', '\x3c3f786d6c2076657273696f6e3d22312e302220656e636f64696e673d225554462d38223f3e3c62706d6e3a646566696e6974696f6e7320786d6c6e733a7873693d22687474703a2f2f7777772e77332e6f72672f323030312f584d4c536368656d612d696e7374616e63652220786d6c6e733a62706d6e3d22687474703a2f2f7777772e6f6d672e6f72672f737065632f42504d4e2f32303130303532342f4d4f44454c2220786d6c6e733a62706d6e64693d22687474703a2f2f7777772e6f6d672e6f72672f737065632f42504d4e2f32303130303532342f44492220786d6c6e733a64633d22687474703a2f2f7777772e6f6d672e6f72672f737065632f44442f32303130303532342f44432220786d6c6e733a64693d22687474703a2f2f7777772e6f6d672e6f72672f737065632f44442f32303130303532342f44492220786d6c6e733a637573746f6d3d22687474703a2f2f637573746f6d2e62706d6e2e696f2f736368656d61222069643d22446566696e6974696f6e735f3122207461726765744e616d6573706163653d22687474703a2f2f62706d6e2e696f2f736368656d612f62706d6e223e0a20203c62706d6e3a70726f636573732069643d2250726f636573735f312220697345786563757461626c653d2274727565223e0a202020203c62706d6e3a73746172744576656e742069643d2253746172744576656e745f3122206e616d653d22e5bc80e5a78b223e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f313c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a73746172744576656e743e0a202020203c62706d6e3a656e644576656e742069643d22456e644576656e745f3122206e616d653d22e7bb93e69d9f223e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f3069336d7167613c2f62706d6e3a696e636f6d696e673e0a202020203c2f62706d6e3a656e644576656e743e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f312220736f757263655265663d2253746172744576656e745f3122207461726765745265663d2241637469766974795f30396468337a39222f3e0a202020203c62706d6e3a757365725461736b2069643d2241637469766974795f30396468337a39223e0a2020202020203c62706d6e3a657874656e73696f6e456c656d656e74733e0a20202020202020203c637573746f6d3a70726f706572746965733e0a202020202020202020200a202020202020202020200a202020202020202020200a202020202020202020200a202020202020202020200a202020202020202020200a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656554797065222076616c75653d2246495845445f44455054222f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656556616c7565222076616c75653d22444550542d4852222f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e65654c6162656c222076616c75653d2248756d616e205265736f7572636573222f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e6469646174655573657273222076616c75653d22222f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e64696461746547726f757073222076616c75653d22222f3e0a20202020202020203c637573746f6d3a70726f7065727479206e616d653d22666f726d4964222076616c75653d2237222f3e3c637573746f6d3a70726f7065727479206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d222f3e3c2f637573746f6d3a70726f706572746965733e0a2020202020203c2f62706d6e3a657874656e73696f6e456c656d656e74733e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f313c2f62706d6e3a696e636f6d696e673e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f30756e37686c683c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a757365725461736b3e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f30756e37686c682220736f757263655265663d2241637469766974795f30396468337a3922207461726765745265663d2241637469766974795f306d7676356863222f3e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f3069336d7167612220736f757263655265663d2241637469766974795f306d767635686322207461726765745265663d22456e644576656e745f31222f3e0a202020203c62706d6e3a757365725461736b2069643d2241637469766974795f306d7676356863223e0a2020202020203c62706d6e3a657874656e73696f6e456c656d656e74733e0a20202020202020203c637573746f6d3a70726f706572746965733e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656554797065222076616c75653d2246495845445f44455054222f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656556616c7565222076616c75653d22444550542d434f52502d42414e4b494e47222f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e65654c6162656c222076616c75653d22436f72706f726174652042616e6b696e67222f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e6469646174655573657273222076616c75653d22222f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e64696461746547726f757073222076616c75653d22222f3e0a202020202020202020200a202020202020202020200a20202020202020203c2f637573746f6d3a70726f706572746965733e0a2020202020203c2f62706d6e3a657874656e73696f6e456c656d656e74733e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f30756e37686c683c2f62706d6e3a696e636f6d696e673e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f3069336d7167613c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a757365725461736b3e0a20203c2f62706d6e3a70726f636573733e0a20203c62706d6e64693a42504d4e4469616772616d2069643d2242504d4e4469616772616d5f31223e0a202020203c62706d6e64693a42504d4e506c616e652069643d2242504d4e506c616e655f31222062706d6e456c656d656e743d2250726f636573735f31223e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2253746172744576656e745f315f6469222062706d6e456c656d656e743d2253746172744576656e745f31223e0a20202020202020203c64633a426f756e647320783d223138302220793d22313630222077696474683d22333622206865696768743d223336222f3e0a20202020202020203c62706d6e64693a42504d4e4c6162656c3e0a202020202020202020203c64633a426f756e647320783d223138372220793d22323033222077696474683d22323222206865696768743d223134222f3e0a20202020202020203c2f62706d6e64693a42504d4e4c6162656c3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d22456e644576656e745f315f6469222062706d6e456c656d656e743d22456e644576656e745f31223e0a20202020202020203c64633a426f756e647320783d223639322220793d22313630222077696474683d22333622206865696768743d223336222f3e0a20202020202020203c62706d6e64693a42504d4e4c6162656c3e0a202020202020202020203c64633a426f756e647320783d223639392220793d22323033222077696474683d22323222206865696768743d223134222f3e0a20202020202020203c2f62706d6e64693a42504d4e4c6162656c3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2241637469766974795f3131326a75366a5f6469222062706d6e456c656d656e743d2241637469766974795f30396468337a39223e0a20202020202020203c64633a426f756e647320783d223236302220793d22313338222077696474683d2231303022206865696768743d223830222f3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2241637469766974795f30397962666d375f6469222062706d6e456c656d656e743d2241637469766974795f306d7676356863223e0a20202020202020203c64633a426f756e647320783d223431302220793d22313338222077696474683d2231303022206865696768743d223830222f3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f315f6469222062706d6e456c656d656e743d22466c6f775f31223e0a20202020202020203c64693a776179706f696e7420783d223231362220793d22313738222f3e0a20202020202020203c64693a776179706f696e7420783d223236302220793d22313738222f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f30756e37686c685f6469222062706d6e456c656d656e743d22466c6f775f30756e37686c68223e0a20202020202020203c64693a776179706f696e7420783d223336302220793d22313738222f3e0a20202020202020203c64693a776179706f696e7420783d223431302220793d22313738222f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f3069336d7167615f6469222062706d6e456c656d656e743d22466c6f775f3069336d716761223e0a20202020202020203c64693a776179706f696e7420783d223531302220793d22313738222f3e0a20202020202020203c64693a776179706f696e7420783d223639322220793d22313738222f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a202020203c2f62706d6e64693a42504d4e506c616e653e0a20203c2f62706d6e64693a42504d4e4469616772616d3e0a3c2f62706d6e3a646566696e6974696f6e733e', false);
+TRUNCATE TABLE public.act_ge_bytearray CASCADE;
+
 INSERT INTO public.act_ge_bytearray VALUES ('023094d8-f537-11f0-83bf-1a46ed4020c1', 1, 'Process_1.Process_1.png', '022c2806-f537-11f0-83bf-1a46ed4020c1', '\x89504e470d0a1a0a0000000d49484452000002e2000000e40806000000dd25410b000010f649444154785eeddddd6f54677e07f07d91aabdccb6bb97b9d9abfd17b6bde9c5ae5a3552762f00bf60909149204aa48002586d521527482d7749c806902a354058b541f18549a3a609845a4a431210091b52b12924e1b51888c16c01870dd3f3504f34796c60b0c1f3cccf9f8ff4958367e69c83e777e67c39399ef9ce7700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008082d46ab53f3a7af4e82befbefbee57bb76edaabdf9e69b32cba97eeed78787874feddebdfb97f9f3d3aecc55eb1371ae002094aa2ceda80ed6b53367ced4ae5cb9521b1f1f97594efab9a79fff9e3d7b2e5605ea81fc396a47e6aaf589385700104a3a63990ed6f9415c663fa74f9f3e5715a6f7f3e7a81d99ab721269ae00209474d980339665243d0f5561ba9a3f47edc85c959348730500a1a46b49f303b7b42ee9f9c89fa37664aeca4a94b90280509a2d4cbfbf70ba76f4837faa1d7aebe91b49ff9dbe97df4f66962885c95c959528730500a13453982e8d9eac7dfcc6dfd63efad7d5df4afa5eba2dbfbf4c3f510a93b92a2b51e60a004269a6301d3f3434a92cd573e2d0ce49f797e9274a6132576525ca5c014028cd14a6ff7a7bfda4a2544fba2dbfbf4c3f510a93b92a2b51e60a004269a6307dfce6da4945a99e745b7e7f997ea21426735556a2cc150084a23095952885c95c959528730500a1345398d2bb59e445a99e745b7e7f997ea21426735556a2cc150084d24c61faf49d172615a57ad26df9fd65fa895298cc555989325700104a3385e9fcc983b58ffffdef2695a5f4bd745b7e7f997ea21426735556a2cc150084d24c614af96cdfd64985297d2fbf9fcc2c510a93b92a2b51e60a004269aa305dbd5afbf43f374e2a4ce97be9b649f79769274a6132576525ca5c014028b72b4ce9130e7ff7ce864965a99e749b4f41bc7b895298cc55598932570010ca4d0bd3d5abb5d39feeaefdf6dffe665249ca93ee93eeeb2ce6cc13a53099abb21265ae002094a90ad3edce56de2cce62ce3c510a93b92a2b51e60a004299aa303573b6f266498fcd9727cd274a6132576525ca5c0140285315a6bc04dd69f2e549f3895298cc55598932570010ca5485495a972885c95c959528730533d1dbdb7b5f6767e7bc8e8e8ee7abafbbaa7c56e57295dac4d7f4e75d13b7cf4bf7cf9701ccd0c58b17ff786868e8e9175e78e1a381818173fdfdfd571e79e491eb69475cbe7cf9b555ab568d3df9e493c79e7efae99dab57affecbea21dfcd971189c25456a21426735556a2cc154c475757d72faa63fc6095f189d2dd6cd2fd07d3e3f3650277e8bdf7de5bfeecb3cf9e5cb66c59ad2adfb51d3b76d4f6efdf5f3b72e448edfcf9f3b5247d4d7f4edf4fb7af59b3e67a5f5fdf7855c8dfe8eeeefe49becc0814a6b212a53099abb21265aee04e5405fa675591de3b45c19e4ef6a6e5e5eb006ee3e0c1837ff5e28b2f9e7af8e1876bafbefa6aedecd9b3374a77b3d2fdd3e3aa42fed5ca952b5fa976c41fe5eb68670a5359895298cc5559893257d08cdedede1f747474fcba2acf37fe6f776356ac5851dbbe7dfb2d4fc4a5dbd3fdf2c7a6e5a5e5a6e5e7eb0432d57ef5fdd75f7f7d2815f02d5bb6d42e5dbaf4ed867d87d2e3d372aa1df0724f4fcfaff2f5b52b85a9ac44294ce6aaac44992bb89daa2cdfdfd5d5f5516381eeeeeeae6ddebcb976e2c489fcd07e4be9fee971e9f15921ff30ad275f3730a1da7feedbb66ddbef1e7df4d1dad1a347f37d6b46d2f2aa727fa5afaf6f205f6f3b5298ca4a94c264aeca4a94b9825ba90af84fab9c6c2ccdebd7afaf1d3f7e3c3f94df91f4f8b49cac8c1f4febcbb701e6bc6a9fb9eff9e79f1f7deaa9a76aa3a3a3f9fe7457a4e5f6f7f75f5ebc78f1d67cfded46612a2b510a93b92a2b51e60a6e66e24cf837253c9dc51e1a1aca0fdf339296979d1d3feecc3834a8f693ef6fdbb6edd354c2d3c1e75e4acb5fb56ad585850b173e996f473b5198ca4a94c264aeca4a94b982a9a46bb61b2f4759b26449edc08103f961fbae48cb4dcb6f28e31fba661c26a46bc21f7becb17b76263c97d6b374e9d2b16a477c30df9676a13095952885c95c95952873055399f8c5cc6fce84dfab125e9796df78663cad3fdf269873aa1de381f48b9977fb9af0db49ebebe9e9199d3f7ffe8ff36d6a070a5359895298cc5559893257909b788bc2afeba578e7ce9df961fa9e48eb69382bfeb5b73664ce4b6f5198ded5a415366edc78aada119fcbb7a91d284c65254a6132576525ca5c41aeb3e17dc2d32f54cea6ec1738f7e6db067346fab09e74367c6c6c2cdf4f66455aefa2458b2eb6e387fe284c65254a6132576525ca5c41a3050b16fcbc5e84d3a522337d77943b95d6d778894ada9e7c1b614e489f9839383898ef23b36aebd6ad47aa1d7173be6da55398ca4a94c264aeca4a94b982469dffffb1f5374a707abfef5648eb6d382b3e986f2384373636f627cb972faf8d8c8ce4fbc7acaad6ff87ea5fc667d6ae5dfbbd7c1b4ba63095952885c95c959528730575d5f1f68755f11daf97e0d93e1b5e97d6db50c4c7d376e5db0aa1bdf6da6b03fdfdfdf9bed1124b972efdbcda11ff34dfc656a8b6e3ed2a7f9e7f3fa7309595d20b93b96acf943e57d0a899d799eaf679f5029c3e8ebe95d2fa1bcaf8bc7c5b21b40d1b36fc76c78e1df97ed1129b366d4a1f7bfb0ff936b642c38bc22d5fd014a6b2527a613257ed99d2e70a1a35f33a537d7f43fd7e2fbffc727e389e5569fd0ddbbc21df56086d6060e0dcfefdfbf3fda2258687870f7674740ce5dbd80a0d2f0ab77c415398ca4ae985c95cb5674a9f2b68d4cceb4c5757d7eefaedfbf6edcb0fc7b32aadbfbe2d69bb1ab713c25bb366cd95d97eeff09b397cf870ba34e5837c1b5b618a17b2295fd014a6b2527a619a629ecc551ba4f4b9824653bcbe4c7a9da9be1eab7fbfd51d20adbf611b8f657f1d886df9f2e5d7bffcf2cb7cbf6889f3e7cf5faa76c293f936b6c2142f60796ebca0294c65a5f4c234c51ce5315705a6f4b9824653bcaee449af33ff5bff73ab3b405a7f7d5bbababac6f2bf0f84b668d1a2dab56bd7f2fda225aaed481f779fbf60141d85a9ace4cf4fbbc65c9595fcf9118994567780b4fe86edf943de5320b465cb965d6bf5bf86ebce9e3dfbdf9de59f117fbbd32504c5a6f4339753cc93b96a83943e57d0688ad79749af33e9cc73fdfbadee00ce8833a73df1c41363adbe3eacee934f3ed9d759ee35e2df2a4a750a535929bd3099abf64ce973058d9a799de9748d3894e1a9a79e3a5ecabba6bcf5d65bbb0a7cd794492f608d14a6b2527a613257ed99d2e70a1a35f33ae35d53a0106bd7aedd59cafb88af5bb72e7ddc6e29ef237ed317b0460a535929bd3099abf64ce973058d9a799de9f43ee25086fefefebf58b366cdf57cc768816bdddddd073b0bf964cd66294c65254a6132576525ca5c415d67419facf9f8e38f5f6f28e23e5993b965eddab5df5bba74e9f8c8c848be6fccaa13274ebc53ed80a7d3f6e4db583285a9ac44294ce6aaac44992ba8ebeeeefe6175cc1daf17e0e3c78fe787e55991d6db50c2c7d376e5db0ae1ad5ebdfa8dc1c1c17cff9855cf3cf3cc6faa9d7073be6da55398ca4a94c264aeca4a94b98246d531375d0e7aa3046fdebc393f2ccf8ab4de86223e986f23cc09d5bf407fd2d7d7f7d5d8d858be8fcc8ad1d1d1f7ab1d70246d47be6da55398ca4a94c264aeca4a94b982460b162cf879bd0457c7df593f2b9ed6d7d5d5f5cd6529697bf26d843963e5ca95af6cd9b225df4f6645b5ee7fa976c2e7f26d6a070a5359895298cc555989325790ab8ebd7beb4578fdfaf5f9e1f99e4aeb6b381bbe37df369853e6cf9fffe3dededecbb3fd7ea2fbf6ed4b97a48ca4f5e7dbd40e14a6b212a53099abb21265ae20d7d5d5f5b3ea18fc75bd10efdcb9333f4cdf13693d0d25fcebb41df9b6c19cd3d3d3f3ab65cb965d191d1dcdf7997b626464e43faa1df08b2a0fe6dbd22e14a6b212a53099abb21265ae602a1d1d1dbfae97e27489ca810307f2c3f55d9596df78494a5a7fbe4d3067f5f5f50df4f7f75f4e079f7be9ead5ab9f543bfc07d5cef8d7f936b41385a9ac44294ce6aaac44992b984a6f6fef0faa42fc61bd182f59b2e49e95f1b4dc6a7ddf9c814feb4debcfb709e6b4c58b176f5db56ad5857b75667c6464644f2ae1d50ef88ff9badb8dc25456a21426735556a2cc15dc4c753cbebfcaf1c633e3434343f9e17b46d2f21acf844faceffe7c5b80cac2850b9fecebeb1bbbdbd78c4f5c137eacddcf84d7294c65254a6132576525ca5cc1ad54c7e59f3696f194f40b95337d3795f4f8ec17336f94f0b4be7c1b8006d58ef2604f4fcfe8c68d1b4f5dba7429dfb7eec8850b17de9b78779491b4dc7c5ded4a612a2b510a93b92a2b51e60a6e279da1ee6cb84c25259d1d4feff77de2c489fcd07e4be9fee971d959f01b97a3a4f5e4eb06a650ed403faa7698e7162d5a74f1a5975e3a72f6ecd96bf9ce760bd74e9e3cf9cec0c0c08d774649cb49cbcbd7d1ce14a6b212a53099abb21265aea019e99aed895fe0cc0b746dc58a15b5eddbb7d7f6efdf5f3b72e448edfcf9f3370ef6e96bfa73fa7eba3dfbd8fa7aaea7e5ba261ca6217dd84eb5136dae8af4c8430f3df4c5a64d9b0e0c0f0f1f3c7cf8f0b173e7cefdbeda0f2f8d8c8c1c3d74e8d0beeaa0f5e6ba75eb06abc71cac1ef33fe971edf8613dcd5098ca4a94c264aeca4a94b9823b31f1d686dfbccff80cb3d75b14c2ddf1dd050b16fc59b543fd7df52fdba16ae74a9f8a59bfa62c7d7d3f7d3fdd9eee97ee9f2f201285a9ac44294ce6aaac44992b988eea78fe8bead83e58657c8a827daba4fb0fa6c7e7cb04b82b14a6b212a53099abb21265ae60267a7b7befab8af5bc8e8e8ee7abafbbaa7c56e5f244e94e5fd39f774ddc3e2fdd3f5f06c05da53095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1ecdab5ebfa952b57261db865f6533d0fa7aac274357f8eda91b92a2791e60a0042191e1e3e75e6cc9949076f99fd7cf1c517ff5c15a6f7f3e7a81d99ab721269ae002094ddbb77ff72cf9e3d174f9f3e7dce19ccd6a4fab99ffefcf3cf7f5395a563551ec89fa37664ae5a9f88730500e1a483743a6356653c5d4b2ab39ef4734f3fff506529fd7d26fe5ee6aa35093957000000000000000000000000000000000000000000000000000004f07f07178e4d89a3c38c0000000049454e44ae426082', true);
+TRUNCATE TABLE public.act_ge_bytearray CASCADE;
+
 INSERT INTO public.act_ge_bytearray VALUES ('09178c9f-f537-11f0-83bf-1a46ed4020c1', 1, 'Process_1.bpmn', '09178c9e-f537-11f0-83bf-1a46ed4020c1', '\x3c3f786d6c2076657273696f6e3d22312e302220656e636f64696e673d225554462d38223f3e3c62706d6e3a646566696e6974696f6e7320786d6c6e733a7873693d22687474703a2f2f7777772e77332e6f72672f323030312f584d4c536368656d612d696e7374616e63652220786d6c6e733a62706d6e3d22687474703a2f2f7777772e6f6d672e6f72672f737065632f42504d4e2f32303130303532342f4d4f44454c2220786d6c6e733a62706d6e64693d22687474703a2f2f7777772e6f6d672e6f72672f737065632f42504d4e2f32303130303532342f44492220786d6c6e733a64633d22687474703a2f2f7777772e6f6d672e6f72672f737065632f44442f32303130303532342f44432220786d6c6e733a64693d22687474703a2f2f7777772e6f6d672e6f72672f737065632f44442f32303130303532342f44492220786d6c6e733a637573746f6d3d22687474703a2f2f637573746f6d2e62706d6e2e696f2f736368656d61222069643d22446566696e6974696f6e735f3122207461726765744e616d6573706163653d22687474703a2f2f62706d6e2e696f2f736368656d612f62706d6e223e0a20203c62706d6e3a70726f636573732069643d2250726f636573735f312220697345786563757461626c653d2274727565223e0a202020203c62706d6e3a73746172744576656e742069643d2253746172744576656e745f3122206e616d653d22e5bc80e5a78b223e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f313c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a73746172744576656e743e0a202020203c62706d6e3a656e644576656e742069643d22456e644576656e745f3122206e616d653d22e7bb93e69d9f223e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f3069336d7167613c2f62706d6e3a696e636f6d696e673e0a202020203c2f62706d6e3a656e644576656e743e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f312220736f757263655265663d2253746172744576656e745f3122207461726765745265663d2241637469766974795f30396468337a39222f3e0a202020203c62706d6e3a757365725461736b2069643d2241637469766974795f30396468337a39223e0a2020202020203c62706d6e3a657874656e73696f6e456c656d656e74733e0a20202020202020203c637573746f6d3a70726f706572746965733e0a202020202020202020200a202020202020202020200a202020202020202020200a202020202020202020200a202020202020202020200a202020202020202020200a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656554797065222076616c75653d2246495845445f44455054222f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656556616c7565222076616c75653d22444550542d4852222f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e65654c6162656c222076616c75653d2248756d616e205265736f7572636573222f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e6469646174655573657273222076616c75653d22222f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e64696461746547726f757073222076616c75653d22222f3e0a20202020202020203c637573746f6d3a70726f7065727479206e616d653d22666f726d4964222076616c75653d2237222f3e3c637573746f6d3a70726f7065727479206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d222f3e3c2f637573746f6d3a70726f706572746965733e0a2020202020203c2f62706d6e3a657874656e73696f6e456c656d656e74733e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f313c2f62706d6e3a696e636f6d696e673e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f30756e37686c683c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a757365725461736b3e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f30756e37686c682220736f757263655265663d2241637469766974795f30396468337a3922207461726765745265663d2241637469766974795f306d7676356863222f3e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f3069336d7167612220736f757263655265663d2241637469766974795f306d767635686322207461726765745265663d22456e644576656e745f31222f3e0a202020203c62706d6e3a757365725461736b2069643d2241637469766974795f306d7676356863223e0a2020202020203c62706d6e3a657874656e73696f6e456c656d656e74733e0a20202020202020203c637573746f6d3a70726f706572746965733e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656554797065222076616c75653d2246495845445f44455054222f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656556616c7565222076616c75653d22444550542d434f52502d42414e4b494e47222f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e65654c6162656c222076616c75653d22436f72706f726174652042616e6b696e67222f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e6469646174655573657273222076616c75653d22222f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e64696461746547726f757073222076616c75653d22222f3e0a202020202020202020200a202020202020202020200a20202020202020203c2f637573746f6d3a70726f706572746965733e0a2020202020203c2f62706d6e3a657874656e73696f6e456c656d656e74733e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f30756e37686c683c2f62706d6e3a696e636f6d696e673e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f3069336d7167613c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a757365725461736b3e0a20203c2f62706d6e3a70726f636573733e0a20203c62706d6e64693a42504d4e4469616772616d2069643d2242504d4e4469616772616d5f31223e0a202020203c62706d6e64693a42504d4e506c616e652069643d2242504d4e506c616e655f31222062706d6e456c656d656e743d2250726f636573735f31223e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2253746172744576656e745f315f6469222062706d6e456c656d656e743d2253746172744576656e745f31223e0a20202020202020203c64633a426f756e647320783d223138302220793d22313630222077696474683d22333622206865696768743d223336222f3e0a20202020202020203c62706d6e64693a42504d4e4c6162656c3e0a202020202020202020203c64633a426f756e647320783d223138372220793d22323033222077696474683d22323222206865696768743d223134222f3e0a20202020202020203c2f62706d6e64693a42504d4e4c6162656c3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d22456e644576656e745f315f6469222062706d6e456c656d656e743d22456e644576656e745f31223e0a20202020202020203c64633a426f756e647320783d223639322220793d22313630222077696474683d22333622206865696768743d223336222f3e0a20202020202020203c62706d6e64693a42504d4e4c6162656c3e0a202020202020202020203c64633a426f756e647320783d223639392220793d22323033222077696474683d22323222206865696768743d223134222f3e0a20202020202020203c2f62706d6e64693a42504d4e4c6162656c3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2241637469766974795f3131326a75366a5f6469222062706d6e456c656d656e743d2241637469766974795f30396468337a39223e0a20202020202020203c64633a426f756e647320783d223236302220793d22313338222077696474683d2231303022206865696768743d223830222f3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2241637469766974795f30397962666d375f6469222062706d6e456c656d656e743d2241637469766974795f306d7676356863223e0a20202020202020203c64633a426f756e647320783d223431302220793d22313338222077696474683d2231303022206865696768743d223830222f3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f315f6469222062706d6e456c656d656e743d22466c6f775f31223e0a20202020202020203c64693a776179706f696e7420783d223231362220793d22313738222f3e0a20202020202020203c64693a776179706f696e7420783d223236302220793d22313738222f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f30756e37686c685f6469222062706d6e456c656d656e743d22466c6f775f30756e37686c68223e0a20202020202020203c64693a776179706f696e7420783d223336302220793d22313738222f3e0a20202020202020203c64693a776179706f696e7420783d223431302220793d22313738222f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f3069336d7167615f6469222062706d6e456c656d656e743d22466c6f775f3069336d716761223e0a20202020202020203c64693a776179706f696e7420783d223531302220793d22313738222f3e0a20202020202020203c64693a776179706f696e7420783d223639322220793d22313738222f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a202020203c2f62706d6e64693a42504d4e506c616e653e0a20203c2f62706d6e64693a42504d4e4469616772616d3e0a3c2f62706d6e3a646566696e6974696f6e733e', false);
+TRUNCATE TABLE public.act_ge_bytearray CASCADE;
+
 INSERT INTO public.act_ge_bytearray VALUES ('091b5d30-f537-11f0-83bf-1a46ed4020c1', 1, 'Process_1.Process_1.png', '09178c9e-f537-11f0-83bf-1a46ed4020c1', '\x89504e470d0a1a0a0000000d49484452000002e2000000e40806000000dd25410b000010f649444154785eeddddd6f54677e07f07d91aabdccb6bb97b9d9abfd17b6bde9c5ae5a3552762f00bf60909149204aa48002586d521527482d7749c806902a354058b541f18549a3a609845a4a431210091b52b12924e1b51888c16c01870dd3f3504f34796c60b0c1f3cccf9f8ff4958367e69c83e777e67c39399ef9ce7700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008082d46ab53f3a7af4e82befbefbee57bb76edaabdf9e69b32cba97eeed78787874feddebdfb97f9f3d3aecc55eb1371ae002094aa2ceda80ed6b53367ced4ae5cb9521b1f1f97594efab9a79fff9e3d7b2e5605ea81fc396a47e6aaf589385700104a3a63990ed6f9415c663fa74f9f3e5715a6f7f3e7a81d99ab721269ae00209474d980339665243d0f5561ba9a3f47edc85c959348730500a1a46b49f303b7b42ee9f9c89fa37664aeca4a94b90280509a2d4cbfbf70ba76f4837faa1d7aebe91b49ff9dbe97df4f66962885c95c959528730500a13453982e8d9eac7dfcc6dfd63efad7d5df4afa5eba2dbfbf4c3f510a93b92a2b51e60a004269a6301d3f3434a92cd573e2d0ce49f797e9274a6132576525ca5c014028cd14a6ff7a7bfda4a2544fba2dbfbf4c3f510a93b92a2b51e60a004269a6307dfce6da4945a99e745b7e7f997ea21426735556a2cc150084a23095952885c95c959528730500a1345398d2bb59e445a99e745b7e7f997ea21426735556a2cc150084d24c61faf49d172615a57ad26df9fd65fa895298cc555989325700104a3385e9fcc983b58ffffdef2695a5f4bd745b7e7f997ea21426735556a2cc150084d24c614af96cdfd64985297d2fbf9fcc2c510a93b92a2b51e60a004269aa305dbd5afbf43f374e2a4ce97be9b649f79769274a6132576525ca5c014028b72b4ce9130e7ff7ce864965a99e749b4f41bc7b895298cc55598932570010ca4d0bd3d5abb5d39feeaefdf6dffe665249ca93ee93eeeb2ce6cc13a53099abb21265ae002094a90ad3edce56de2cce62ce3c510a93b92a2b51e60a004299aa303573b6f266498fcd9727cd274a6132576525ca5c0140285315a6bc04dd69f2e549f3895298cc55598932570010ca5485495a972885c95c959528730533d1dbdb7b5f6767e7bc8e8e8ee7abafbbaa7c56e57295dac4d7f4e75d13b7cf4bf7cf9701ccd0c58b17ff786868e8e9175e78e1a381818173fdfdfd571e79e491eb69475cbe7cf9b555ab568d3df9e493c79e7efae99dab57affecbea21dfcd971189c25456a21426735556a2cc154c475757d72faa63fc6095f189d2dd6cd2fd07d3e3f3650277e8bdf7de5bfeecb3cf9e5cb66c59ad2adfb51d3b76d4f6efdf5f3b72e448edfcf9f3b5247d4d7f4edf4fb7af59b3e67a5f5fdf7855c8dfe8eeeefe49becc0814a6b212a53099abb21265aee04e5405fa675591de3b45c19e4ef6a6e5e5eb006ee3e0c1837ff5e28b2f9e7af8e1876bafbefa6aedecd9b3374a77b3d2fdd3e3aa42fed5ca952b5fa976c41fe5eb68670a5359895298cc5559893257d08cdedede1f747474fcba2acf37fe6f776356ac5851dbbe7dfb2d4fc4a5dbd3fdf2c7a6e5a5e5a6e5e7eb0432d57ef5fdd75f7f7d2815f02d5bb6d42e5dbaf4ed867d87d2e3d372aa1df0724f4fcfaff2f5b52b85a9ac44294ce6aaac44992bb89daa2cdfdfd5d5f5516381eeeeeeae6ddebcb976e2c489fcd07e4be9fee971e9f15921ff30ad275f3730a1da7feedbb66ddbef1e7df4d1dad1a347f37d6b46d2f2aa727fa5afaf6f205f6f3b5298ca4a94c264aeca4a94b9825ba90af84fab9c6c2ccdebd7afaf1d3f7e3c3f94df91f4f8b49cac8c1f4febcbb701e6bc6a9fb9eff9e79f1f7deaa9a76aa3a3a3f9fe7457a4e5f6f7f75f5ebc78f1d67cfded46612a2b510a93b92a2b51e60a6e66e24cf837253c9dc51e1a1aca0fdf339296979d1d3feecc3834a8f693ef6fdbb6edd354c2d3c1e75e4acb5fb56ad585850b173e996f473b5198ca4a94c264aeca4a94b982a9a46bb61b2f4759b26449edc08103f961fbae48cb4dcb6f28e31fba661c26a46bc21f7becb17b76263c97d6b374e9d2b16a477c30df9676a13095952885c95c95952873055399f8c5cc6fce84dfab125e9796df78663cad3fdf269873aa1de381f48b9977fb9af0db49ebebe9e9199d3f7ffe8ff36d6a070a5359895298cc5559893257909b788bc2afeba578e7ce9df961fa9e48eb69382bfeb5b73664ce4b6f5198ded5a415366edc78aada119fcbb7a91d284c65254a6132576525ca5c41aeb3e17dc2d32f54cea6ec1738f7e6db067346fab09e74367c6c6c2cdf4f66455aefa2458b2eb6e387fe284c65254a6132576525ca5c41a3050b16fcbc5e84d3a522337d77943b95d6d778894ada9e7c1b614e489f9839383898ef23b36aebd6ad47aa1d7173be6da55398ca4a94c264aeca4a94b982469dffffb1f5374a707abfef5648eb6d382b3e986f2384373636f627cb972faf8d8c8ce4fbc7acaad6ff87ea5fc667d6ae5dfbbd7c1b4ba63095952885c95c959528730575d5f1f68755f11daf97e0d93e1b5e97d6db50c4c7d376e5db0aa1bdf6da6b03fdfdfdf9bed1124b972efdbcda11ff34dfc656a8b6e3ed2a7f9e7f3fa7309595d20b93b96acf943e57d0a899d799eaf679f5029c3e8ebe95d2fa1bcaf8bc7c5b21b40d1b36fc76c78e1df97ed1129b366d4a1f7bfb0ff936b642c38bc22d5fd014a6b2527a613257ed99d2e70a1a35f33a537d7f43fd7e2fbffc727e389e5569fd0ddbbc21df56086d6060e0dcfefdfbf3fda2258687870f7674740ce5dbd80a0d2f0ab77c415398ca4ae985c95cb5674a9f2b68d4cceb4c5757d7eefaedfbf6edcb0fc7b32aadbfbe2d69bb1ab713c25bb366cd95d97eeff09b397cf870ba34e5837c1b5b618a17b2295fd014a6b2527a619a629ecc551ba4f4b9824653bcbe4c7a9da9be1eab7fbfd51d20adbf611b8f657f1d886df9f2e5d7bffcf2cb7cbf6889f3e7cf5faa76c293f936b6c2142f60796ebca0294c65a5f4c234c51ce5315705a6f4b9824653bcaee449af33ff5bff73ab3b405a7f7d5bbababac6f2bf0f84b668d1a2dab56bd7f2fda225aaed481f779fbf60141d85a9ace4cf4fbbc65c9595fcf9118994567780b4fe86edf943de5320b465cb965d6bf5bf86ebce9e3dfbdf9de59f117fbbd32504c5a6f4339753cc93b96a83943e57d0688ad79749af33e9cc73fdfbadee00ce8833a73df1c41363adbe3eacee934f3ed9d759ee35e2df2a4a750a535929bd3099abf64ce973058d9a799de9748d3894e1a9a79e3a5ecabba6bcf5d65bbb0a7cd794492f608d14a6b2527a613257ed99d2e70a1a35f33ae35d53a0106bd7aedd59cafb88af5bb72e7ddc6e29ef237ed317b0460a535929bd3099abf64ce973058d9a799de9f43ee25086fefefebf58b366cdf57cc768816bdddddd073b0bf964cd66294c65254a6132576525ca5c415d67419facf9f8e38f5f6f28e23e5993b965eddab5df5bba74e9f8c8c848be6fccaa13274ebc53ed80a7d3f6e4db583285a9ac44294ce6aaac44992ba8ebeeeefe6175cc1daf17e0e3c78fe787e55991d6db50c2c7d376e5db0ae1ad5ebdfa8dc1c1c17cff9855cf3cf3cc6faa9d7073be6da55398ca4a94c264aeca4a94b98246d531375d0e7aa3046fdebc393f2ccf8ab4de86223e986f23cc09d5bf407fd2d7d7f7d5d8d858be8fcc8ad1d1d1f7ab1d70246d47be6da55398ca4a94c264aeca4a94b982460b162cf879bd0457c7df593f2b9ed6d7d5d5f5cd6529697bf26d843963e5ca95af6cd9b225df4f6645b5ee7fa976c2e7f26d6a070a5359895298cc555989325790ab8ebd7beb4578fdfaf5f9e1f99e4aeb6b381bbe37df369853e6cf9fffe3dededecbb3fd7ea2fbf6ed4b97a48ca4f5e7dbd40e14a6b212a53099abb21265ae20d7d5d5f5b3ea18fc75bd10efdcb9333f4cdf13693d0d25fcebb41df9b6c19cd3d3d3f3ab65cb965d191d1dcdf7997b626464e43faa1df08b2a0fe6dbd22e14a6b212a53099abb21265ae602a1d1d1dbfae97e27489ca810307f2c3f55d9596df78494a5a7fbe4d3067f5f5f50df4f7f75f4e079f7be9ead5ab9f543bfc07d5cef8d7f936b41385a9ac44294ce6aaac44992b984a6f6fef0faa42fc61bd182f59b2e49e95f1b4dc6a7ddf9c814feb4debcfb709e6b4c58b176f5db56ad5857b75667c6464644f2ae1d50ef88ff9badb8dc25456a21426735556a2cc15dc4c753cbebfcaf1c633e3434343f9e17b46d2f21acf844faceffe7c5b80cac2850b9fecebeb1bbbdbd78c4f5c137eacddcf84d7294c65254a6132576525ca5cc1ad54c7e59f3696f194f40b95337d3795f4f8ec17336f94f0b4be7c1b8006d58ef2604f4fcfe8c68d1b4f5dba7429dfb7eec8850b17de9b78779491b4dc7c5ded4a612a2b510a93b92a2b51e60a6e279da1ee6cb84c25259d1d4feff77de2c489fcd07e4be9fee971d959f01b97a3a4f5e4eb06a650ed403faa7698e7162d5a74f1a5975e3a72f6ecd96bf9ce760bd74e9e3cf9cec0c0c08d774649cb49cbcbd7d1ce14a6b212a53099abb21265aea019e99aed895fe0cc0b746dc58a15b5eddbb7d7f6efdf5f3b72e448edfcf9f3370ef6e96bfa73fa7eba3dfbd8fa7aaea7e5ba261ca6217dd84eb5136dae8af4c8430f3df4c5a64d9b0e0c0f0f1f3c7cf8f0b173e7cefdbeda0f2f8d8c8c1c3d74e8d0beeaa0f5e6ba75eb06abc71cac1ef33fe971edf8613dcd5098ca4a94c264aeca4a94b9823b31f1d686dfbccff80cb3d75b14c2ddf1dd050b16fc59b543fd7df52fdba16ae74a9f8a59bfa62c7d7d3f7d3fdd9eee97ee9f2f201285a9ac44294ce6aaac44992b988eea78fe8bead83e58657c8a827daba4fb0fa6c7e7cb04b82b14a6b212a53099abb21265ae60267a7b7befab8af5bc8e8e8ee7abafbbaa7c56e5f244e94e5fd39f774ddc3e2fdd3f5f06c05da53095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1ecdab5ebfa952b57261db865f6533d0fa7aac274357f8eda91b92a2791e60a0042191e1e3e75e6cc9949076f99fd7cf1c517ff5c15a6f7f3e7a81d99ab721269ae002094ddbb77ff72cf9e3d174f9f3e7dce19ccd6a4fab99ffefcf3cf7f5395a563551ec89fa37664ae5a9f88730500e1a483743a6356653c5d4b2ab39ef4734f3fff506529fd7d26fe5ee6aa35093957000000000000000000000000000000000000000000000000000004f07f07178e4d89a3c38c0000000049454e44ae426082', true);
+TRUNCATE TABLE public.act_ge_bytearray CASCADE;
+
 INSERT INTO public.act_ge_bytearray VALUES ('14ba10a7-f537-11f0-83bf-1a46ed4020c1', 1, 'fu-20260114-paed3z.bpmn', '14ba10a6-f537-11f0-83bf-1a46ed4020c1', '\x3c3f786d6c2076657273696f6e3d22312e302220656e636f64696e673d225554462d38223f3e3c62706d6e3a646566696e6974696f6e7320786d6c6e733a7873693d22687474703a2f2f7777772e77332e6f72672f323030312f584d4c536368656d612d696e7374616e63652220786d6c6e733a62706d6e3d22687474703a2f2f7777772e6f6d672e6f72672f737065632f42504d4e2f32303130303532342f4d4f44454c2220786d6c6e733a62706d6e64693d22687474703a2f2f7777772e6f6d672e6f72672f737065632f42504d4e2f32303130303532342f44492220786d6c6e733a64633d22687474703a2f2f7777772e6f6d672e6f72672f737065632f44442f32303130303532342f44432220786d6c6e733a64693d22687474703a2f2f7777772e6f6d672e6f72672f737065632f44442f32303130303532342f44492220786d6c6e733a637573746f6d3d22687474703a2f2f637573746f6d2e62706d6e2e696f2f736368656d61222069643d22446566696e6974696f6e735f3122207461726765744e616d6573706163653d22687474703a2f2f62706d6e2e696f2f736368656d612f62706d6e223e0a20203c62706d6e3a70726f636573732069643d2250726f636573735f312220697345786563757461626c653d2274727565223e0a202020203c62706d6e3a73746172744576656e742069643d2253746172744576656e745f3122206e616d653d22e5bc80e5a78b223e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f313c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a73746172744576656e743e0a202020203c62706d6e3a656e644576656e742069643d22456e644576656e745f3122206e616d653d22e7bb93e69d9f223e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f3069336d7167613c2f62706d6e3a696e636f6d696e673e0a202020203c2f62706d6e3a656e644576656e743e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f312220736f757263655265663d2253746172744576656e745f3122207461726765745265663d2241637469766974795f30396468337a39222f3e0a202020203c62706d6e3a757365725461736b2069643d2241637469766974795f30396468337a39223e0a2020202020203c62706d6e3a657874656e73696f6e456c656d656e74733e0a20202020202020203c637573746f6d3a70726f706572746965733e0a202020202020202020200a202020202020202020200a202020202020202020200a202020202020202020200a202020202020202020200a202020202020202020200a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656554797065222076616c75653d2246495845445f44455054222f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656556616c7565222076616c75653d22444550542d4852222f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e65654c6162656c222076616c75653d2248756d616e205265736f7572636573222f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e6469646174655573657273222076616c75653d22222f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e64696461746547726f757073222076616c75653d22222f3e0a20202020202020203c637573746f6d3a70726f7065727479206e616d653d22666f726d4964222076616c75653d2237222f3e3c637573746f6d3a70726f7065727479206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d222f3e3c2f637573746f6d3a70726f706572746965733e0a2020202020203c2f62706d6e3a657874656e73696f6e456c656d656e74733e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f313c2f62706d6e3a696e636f6d696e673e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f30756e37686c683c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a757365725461736b3e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f30756e37686c682220736f757263655265663d2241637469766974795f30396468337a3922207461726765745265663d2241637469766974795f306d7676356863222f3e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f3069336d7167612220736f757263655265663d2241637469766974795f306d767635686322207461726765745265663d22456e644576656e745f31222f3e0a202020203c62706d6e3a757365725461736b2069643d2241637469766974795f306d7676356863223e0a2020202020203c62706d6e3a657874656e73696f6e456c656d656e74733e0a20202020202020203c637573746f6d3a70726f706572746965733e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656554797065222076616c75653d2246495845445f44455054222f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656556616c7565222076616c75653d22444550542d434f52502d42414e4b494e47222f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e65654c6162656c222076616c75653d22436f72706f726174652042616e6b696e67222f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e6469646174655573657273222076616c75653d22222f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e64696461746547726f757073222076616c75653d22222f3e0a202020202020202020200a202020202020202020200a20202020202020203c2f637573746f6d3a70726f706572746965733e0a2020202020203c2f62706d6e3a657874656e73696f6e456c656d656e74733e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f30756e37686c683c2f62706d6e3a696e636f6d696e673e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f3069336d7167613c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a757365725461736b3e0a20203c2f62706d6e3a70726f636573733e0a20203c62706d6e64693a42504d4e4469616772616d2069643d2242504d4e4469616772616d5f31223e0a202020203c62706d6e64693a42504d4e506c616e652069643d2242504d4e506c616e655f31222062706d6e456c656d656e743d2250726f636573735f31223e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2253746172744576656e745f315f6469222062706d6e456c656d656e743d2253746172744576656e745f31223e0a20202020202020203c64633a426f756e647320783d223138302220793d22313630222077696474683d22333622206865696768743d223336222f3e0a20202020202020203c62706d6e64693a42504d4e4c6162656c3e0a202020202020202020203c64633a426f756e647320783d223138372220793d22323033222077696474683d22323222206865696768743d223134222f3e0a20202020202020203c2f62706d6e64693a42504d4e4c6162656c3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d22456e644576656e745f315f6469222062706d6e456c656d656e743d22456e644576656e745f31223e0a20202020202020203c64633a426f756e647320783d223639322220793d22313630222077696474683d22333622206865696768743d223336222f3e0a20202020202020203c62706d6e64693a42504d4e4c6162656c3e0a202020202020202020203c64633a426f756e647320783d223639392220793d22323033222077696474683d22323222206865696768743d223134222f3e0a20202020202020203c2f62706d6e64693a42504d4e4c6162656c3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2241637469766974795f3131326a75366a5f6469222062706d6e456c656d656e743d2241637469766974795f30396468337a39223e0a20202020202020203c64633a426f756e647320783d223236302220793d22313338222077696474683d2231303022206865696768743d223830222f3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2241637469766974795f30397962666d375f6469222062706d6e456c656d656e743d2241637469766974795f306d7676356863223e0a20202020202020203c64633a426f756e647320783d223431302220793d22313338222077696474683d2231303022206865696768743d223830222f3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f315f6469222062706d6e456c656d656e743d22466c6f775f31223e0a20202020202020203c64693a776179706f696e7420783d223231362220793d22313738222f3e0a20202020202020203c64693a776179706f696e7420783d223236302220793d22313738222f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f30756e37686c685f6469222062706d6e456c656d656e743d22466c6f775f30756e37686c68223e0a20202020202020203c64693a776179706f696e7420783d223336302220793d22313738222f3e0a20202020202020203c64693a776179706f696e7420783d223431302220793d22313738222f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f3069336d7167615f6469222062706d6e456c656d656e743d22466c6f775f3069336d716761223e0a20202020202020203c64693a776179706f696e7420783d223531302220793d22313738222f3e0a20202020202020203c64693a776179706f696e7420783d223639322220793d22313738222f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a202020203c2f62706d6e64693a42504d4e506c616e653e0a20203c2f62706d6e64693a42504d4e4469616772616d3e0a3c2f62706d6e3a646566696e6974696f6e733e', false);
+TRUNCATE TABLE public.act_ge_bytearray CASCADE;
+
 INSERT INTO public.act_ge_bytearray VALUES ('14bdba28-f537-11f0-83bf-1a46ed4020c1', 1, 'fu-20260114-paed3z.Process_1.png', '14ba10a6-f537-11f0-83bf-1a46ed4020c1', '\x89504e470d0a1a0a0000000d49484452000002e2000000e40806000000dd25410b000010f649444154785eeddddd6f54677e07f07d91aabdccb6bb97b9d9abfd17b6bde9c5ae5a3552762f00bf60909149204aa48002586d521527482d7749c806902a354058b541f18549a3a609845a4a431210091b52b12924e1b51888c16c01870dd3f3504f34796c60b0c1f3cccf9f8ff4958367e69c83e777e67c39399ef9ce7700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008082d46ab53f3a7af4e82befbefbee57bb76edaabdf9e69b32cba97eeed78787874feddebdfb97f9f3d3aecc55eb1371ae002094aa2ceda80ed6b53367ced4ae5cb9521b1f1f97594efab9a79fff9e3d7b2e5605ea81fc396a47e6aaf589385700104a3a63990ed6f9415c663fa74f9f3e5715a6f7f3e7a81d99ab721269ae00209474d980339665243d0f5561ba9a3f47edc85c959348730500a1a46b49f303b7b42ee9f9c89fa37664aeca4a94b90280509a2d4cbfbf70ba76f4837faa1d7aebe91b49ff9dbe97df4f66962885c95c959528730500a13453982e8d9eac7dfcc6dfd63efad7d5df4afa5eba2dbfbf4c3f510a93b92a2b51e60a004269a6301d3f3434a92cd573e2d0ce49f797e9274a6132576525ca5c014028cd14a6ff7a7bfda4a2544fba2dbfbf4c3f510a93b92a2b51e60a004269a6307dfce6da4945a99e745b7e7f997ea21426735556a2cc150084a23095952885c95c959528730500a1345398d2bb59e445a99e745b7e7f997ea21426735556a2cc150084d24c61faf49d172615a57ad26df9fd65fa895298cc555989325700104a3385e9fcc983b58ffffdef2695a5f4bd745b7e7f997ea21426735556a2cc150084d24c614af96cdfd64985297d2fbf9fcc2c510a93b92a2b51e60a004269aa305dbd5afbf43f374e2a4ce97be9b649f79769274a6132576525ca5c014028b72b4ce9130e7ff7ce864965a99e749b4f41bc7b895298cc55598932570010ca4d0bd3d5abb5d39feeaefdf6dffe665249ca93ee93eeeb2ce6cc13a53099abb21265ae002094a90ad3edce56de2cce62ce3c510a93b92a2b51e60a004299aa303573b6f266498fcd9727cd274a6132576525ca5c0140285315a6bc04dd69f2e549f3895298cc55598932570010ca5485495a972885c95c959528730533d1dbdb7b5f6767e7bc8e8e8ee7abafbbaa7c56e57295dac4d7f4e75d13b7cf4bf7cf9701ccd0c58b17ff786868e8e9175e78e1a381818173fdfdfd571e79e491eb69475cbe7cf9b555ab568d3df9e493c79e7efae99dab57affecbea21dfcd971189c25456a21426735556a2cc154c475757d72faa63fc6095f189d2dd6cd2fd07d3e3f3650277e8bdf7de5bfeecb3cf9e5cb66c59ad2adfb51d3b76d4f6efdf5f3b72e448edfcf9f3b5247d4d7f4edf4fb7af59b3e67a5f5fdf7855c8dfe8eeeefe49becc0814a6b212a53099abb21265aee04e5405fa675591de3b45c19e4ef6a6e5e5eb006ee3e0c1837ff5e28b2f9e7af8e1876bafbefa6aedecd9b3374a77b3d2fdd3e3aa42fed5ca952b5fa976c41fe5eb68670a5359895298cc5559893257d08cdedede1f747474fcba2acf37fe6f776356ac5851dbbe7dfb2d4fc4a5dbd3fdf2c7a6e5a5e5a6e5e7eb0432d57ef5fdd75f7f7d2815f02d5bb6d42e5dbaf4ed867d87d2e3d372aa1df0724f4fcfaff2f5b52b85a9ac44294ce6aaac44992bb89daa2cdfdfd5d5f5516381eeeeeeae6ddebcb976e2c489fcd07e4be9fee971e9f15921ff30ad275f3730a1da7feedbb66ddbef1e7df4d1dad1a347f37d6b46d2f2aa727fa5afaf6f205f6f3b5298ca4a94c264aeca4a94b9825ba90af84fab9c6c2ccdebd7afaf1d3f7e3c3f94df91f4f8b49cac8c1f4febcbb701e6bc6a9fb9eff9e79f1f7deaa9a76aa3a3a3f9fe7457a4e5f6f7f75f5ebc78f1d67cfded46612a2b510a93b92a2b51e60a6e66e24cf837253c9dc51e1a1aca0fdf339296979d1d3feecc3834a8f693ef6fdbb6edd354c2d3c1e75e4acb5fb56ad585850b173e996f473b5198ca4a94c264aeca4a94b982a9a46bb61b2f4759b26449edc08103f961fbae48cb4dcb6f28e31fba661c26a46bc21f7becb17b76263c97d6b374e9d2b16a477c30df9676a13095952885c95c95952873055399f8c5cc6fce84dfab125e9796df78663cad3fdf269873aa1de381f48b9977fb9af0db49ebebe9e9199d3f7ffe8ff36d6a070a5359895298cc5559893257909b788bc2afeba578e7ce9df961fa9e48eb69382bfeb5b73664ce4b6f5198ded5a415366edc78aada119fcbb7a91d284c65254a6132576525ca5c41aeb3e17dc2d32f54cea6ec1738f7e6db067346fab09e74367c6c6c2cdf4f66455aefa2458b2eb6e387fe284c65254a6132576525ca5c41a3050b16fcbc5e84d3a522337d77943b95d6d778894ada9e7c1b614e489f9839383898ef23b36aebd6ad47aa1d7173be6da55398ca4a94c264aeca4a94b982469dffffb1f5374a707abfef5648eb6d382b3e986f2384373636f627cb972faf8d8c8ce4fbc7acaad6ff87ea5fc667d6ae5dfbbd7c1b4ba63095952885c95c959528730575d5f1f68755f11daf97e0d93e1b5e97d6db50c4c7d376e5db0aa1bdf6da6b03fdfdfdf9bed1124b972efdbcda11ff34dfc656a8b6e3ed2a7f9e7f3fa7309595d20b93b96acf943e57d0a899d799eaf679f5029c3e8ebe95d2fa1bcaf8bc7c5b21b40d1b36fc76c78e1df97ed1129b366d4a1f7bfb0ff936b642c38bc22d5fd014a6b2527a613257ed99d2e70a1a35f33a537d7f43fd7e2fbffc727e389e5569fd0ddbbc21df56086d6060e0dcfefdfbf3fda2258687870f7674740ce5dbd80a0d2f0ab77c415398ca4ae985c95cb5674a9f2b68d4cceb4c5757d7eefaedfbf6edcb0fc7b32aadbfbe2d69bb1ab713c25bb366cd95d97eeff09b397cf870ba34e5837c1b5b618a17b2295fd014a6b2527a619a629ecc551ba4f4b9824653bcbe4c7a9da9be1eab7fbfd51d20adbf611b8f657f1d886df9f2e5d7bffcf2cb7cbf6889f3e7cf5faa76c293f936b6c2142f60796ebca0294c65a5f4c234c51ce5315705a6f4b9824653bcaee449af33ff5bff73ab3b405a7f7d5bbababac6f2bf0f84b668d1a2dab56bd7f2fda225aaed481f779fbf60141d85a9ace4cf4fbbc65c9595fcf9118994567780b4fe86edf943de5320b465cb965d6bf5bf86ebce9e3dfbdf9de59f117fbbd32504c5a6f4339753cc93b96a83943e57d0688ad79749af33e9cc73fdfbadee00ce8833a73df1c41363adbe3eacee934f3ed9d759ee35e2df2a4a750a535929bd3099abf64ce973058d9a799de9748d3894e1a9a79e3a5ecabba6bcf5d65bbb0a7cd794492f608d14a6b2527a613257ed99d2e70a1a35f33ae35d53a0106bd7aedd59cafb88af5bb72e7ddc6e29ef237ed317b0460a535929bd3099abf64ce973058d9a799de9f43ee25086fefefebf58b366cdf57cc768816bdddddd073b0bf964cd66294c65254a6132576525ca5c415d67419facf9f8e38f5f6f28e23e5993b965eddab5df5bba74e9f8c8c848be6fccaa13274ebc53ed80a7d3f6e4db583285a9ac44294ce6aaac44992ba8ebeeeefe6175cc1daf17e0e3c78fe787e55991d6db50c2c7d376e5db0ae1ad5ebdfa8dc1c1c17cff9855cf3cf3cc6faa9d7073be6da55398ca4a94c264aeca4a94b98246d531375d0e7aa3046fdebc393f2ccf8ab4de86223e986f23cc09d5bf407fd2d7d7f7d5d8d858be8fcc8ad1d1d1f7ab1d70246d47be6da55398ca4a94c264aeca4a94b982460b162cf879bd0457c7df593f2b9ed6d7d5d5f5cd6529697bf26d843963e5ca95af6cd9b225df4f6645b5ee7fa976c2e7f26d6a070a5359895298cc555989325790ab8ebd7beb4578fdfaf5f9e1f99e4aeb6b381bbe37df369853e6cf9fffe3dededecbb3fd7ea2fbf6ed4b97a48ca4f5e7dbd40e14a6b212a53099abb21265ae20d7d5d5f5b3ea18fc75bd10efdcb9333f4cdf13693d0d25fcebb41df9b6c19cd3d3d3f3ab65cb965d191d1dcdf7997b626464e43faa1df08b2a0fe6dbd22e14a6b212a53099abb21265ae602a1d1d1dbfae97e27489ca810307f2c3f55d9596df78494a5a7fbe4d3067f5f5f50df4f7f75f4e079f7be9ead5ab9f543bfc07d5cef8d7f936b41385a9ac44294ce6aaac44992b984a6f6fef0faa42fc61bd182f59b2e49e95f1b4dc6a7ddf9c814feb4debcfb709e6b4c58b176f5db56ad5857b75667c6464644f2ae1d50ef88ff9badb8dc25456a21426735556a2cc15dc4c753cbebfcaf1c633e3434343f9e17b46d2f21acf844faceffe7c5b80cac2850b9fecebeb1bbbdbd78c4f5c137eacddcf84d7294c65254a6132576525ca5cc1ad54c7e59f3696f194f40b95337d3795f4f8ec17336f94f0b4be7c1b8006d58ef2604f4fcfe8c68d1b4f5dba7429dfb7eec8850b17de9b78779491b4dc7c5ded4a612a2b510a93b92a2b51e60a6e279da1ee6cb84c25259d1d4feff77de2c489fcd07e4be9fee971d959f01b97a3a4f5e4eb06a650ed403faa7698e7162d5a74f1a5975e3a72f6ecd96bf9ce760bd74e9e3cf9cec0c0c08d774649cb49cbcbd7d1ce14a6b212a53099abb21265aea019e99aed895fe0cc0b746dc58a15b5eddbb7d7f6efdf5f3b72e448edfcf9f3370ef6e96bfa73fa7eba3dfbd8fa7aaea7e5ba261ca6217dd84eb5136dae8af4c8430f3df4c5a64d9b0e0c0f0f1f3c7cf8f0b173e7cefdbeda0f2f8d8c8c1c3d74e8d0beeaa0f5e6ba75eb06abc71cac1ef33fe971edf8613dcd5098ca4a94c264aeca4a94b9823b31f1d686dfbccff80cb3d75b14c2ddf1dd050b16fc59b543fd7df52fdba16ae74a9f8a59bfa62c7d7d3f7d3fdd9eee97ee9f2f201285a9ac44294ce6aaac44992b988eea78fe8bead83e58657c8a827daba4fb0fa6c7e7cb04b82b14a6b212a53099abb21265ae60267a7b7befab8af5bc8e8e8ee7abafbbaa7c56e5f244e94e5fd39f774ddc3e2fdd3f5f06c05da53095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1ecdab5ebfa952b57261db865f6533d0fa7aac274357f8eda91b92a2791e60a0042191e1e3e75e6cc9949076f99fd7cf1c517ff5c15a6f7f3e7a81d99ab721269ae002094ddbb77ff72cf9e3d174f9f3e7dce19ccd6a4fab99ffefcf3cf7f5395a563551ec89fa37664ae5a9f88730500e1a483743a6356653c5d4b2ab39ef4734f3fff506529fd7d26fe5ee6aa35093957000000000000000000000000000000000000000000000000000004f07f07178e4d89a3c38c0000000049454e44ae426082', true);
 
+TRUNCATE TABLE public.act_ge_property CASCADE;
+
 INSERT INTO public.act_ge_property VALUES ('common.schema.version', '7.0.0.0', 1);
+TRUNCATE TABLE public.act_ge_property CASCADE;
+
 INSERT INTO public.act_ge_property VALUES ('next.dbid', '1', 1);
+TRUNCATE TABLE public.act_ge_property CASCADE;
+
 INSERT INTO public.act_ge_property VALUES ('identitylink.schema.version', '7.0.0.0', 1);
+TRUNCATE TABLE public.act_ge_property CASCADE;
+
 INSERT INTO public.act_ge_property VALUES ('entitylink.schema.version', '7.0.0.0', 1);
+TRUNCATE TABLE public.act_ge_property CASCADE;
+
 INSERT INTO public.act_ge_property VALUES ('eventsubscription.schema.version', '7.0.0.0', 1);
+TRUNCATE TABLE public.act_ge_property CASCADE;
+
 INSERT INTO public.act_ge_property VALUES ('task.schema.version', '7.0.0.0', 1);
+TRUNCATE TABLE public.act_ge_property CASCADE;
+
 INSERT INTO public.act_ge_property VALUES ('variable.schema.version', '7.0.0.0', 1);
+TRUNCATE TABLE public.act_ge_property CASCADE;
+
 INSERT INTO public.act_ge_property VALUES ('job.schema.version', '7.0.0.0', 1);
+TRUNCATE TABLE public.act_ge_property CASCADE;
+
 INSERT INTO public.act_ge_property VALUES ('batch.schema.version', '7.0.0.0', 1);
+TRUNCATE TABLE public.act_ge_property CASCADE;
+
 INSERT INTO public.act_ge_property VALUES ('schema.version', '7.0.0.0', 1);
+TRUNCATE TABLE public.act_ge_property CASCADE;
+
 INSERT INTO public.act_ge_property VALUES ('schema.history', 'create(7.0.0.0)', 1);
+TRUNCATE TABLE public.act_ge_property CASCADE;
+
 INSERT INTO public.act_ge_property VALUES ('cfg.execution-related-entities-count', 'true', 1);
+TRUNCATE TABLE public.act_ge_property CASCADE;
+
 INSERT INTO public.act_ge_property VALUES ('cfg.task-related-entities-count', 'true', 1);
 
+TRUNCATE TABLE public.act_hi_actinst CASCADE;
+
 INSERT INTO public.act_hi_actinst VALUES ('2d7a8c07-f132-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1:2:2d6cf771-f132-11f0-bfbd-f2dbc029a3c2', '2d7a16d2-f132-11f0-bfbd-f2dbc029a3c2', '2d7a8c06-f132-11f0-bfbd-f2dbc029a3c2', 'StartEvent_1', NULL, NULL, '开始', 'startEvent', NULL, '2026-01-14 18:17:06.215', '2026-01-14 18:17:06.219', 1, 4, NULL, '');
+TRUNCATE TABLE public.act_hi_actinst CASCADE;
+
 INSERT INTO public.act_hi_actinst VALUES ('2d7b4f58-f132-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1:2:2d6cf771-f132-11f0-bfbd-f2dbc029a3c2', '2d7a16d2-f132-11f0-bfbd-f2dbc029a3c2', '2d7a8c06-f132-11f0-bfbd-f2dbc029a3c2', 'Flow_1', NULL, NULL, NULL, 'sequenceFlow', NULL, '2026-01-14 18:17:06.22', '2026-01-14 18:17:06.22', 2, 0, NULL, '');
+TRUNCATE TABLE public.act_hi_actinst CASCADE;
+
 INSERT INTO public.act_hi_actinst VALUES ('6f7295a4-f1f4-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1:7:6f5a7aaf-f1f4-11f0-bfbd-f2dbc029a3c2', '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', '6f5f83c8-f1f4-11f0-bfbd-f2dbc029a3c2', 'Flow_0un7hlh', NULL, NULL, NULL, 'sequenceFlow', NULL, '2026-01-15 17:27:39.258', '2026-01-15 17:27:39.258', 1, 0, NULL, '');
+TRUNCATE TABLE public.act_hi_actinst CASCADE;
+
 INSERT INTO public.act_hi_actinst VALUES ('2d9518f0-f132-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1:2:2d6cf771-f132-11f0-bfbd-f2dbc029a3c2', '2d7a16d2-f132-11f0-bfbd-f2dbc029a3c2', '2d7a8c06-f132-11f0-bfbd-f2dbc029a3c2', 'Flow_0un7hlh', NULL, NULL, NULL, 'sequenceFlow', NULL, '2026-01-14 18:17:06.389', '2026-01-14 18:17:06.389', 1, 0, NULL, '');
+TRUNCATE TABLE public.act_hi_actinst CASCADE;
+
 INSERT INTO public.act_hi_actinst VALUES ('2d7b4f59-f132-11f0-bfbd-f2dbc029a3c2', 3, 'Process_1:2:2d6cf771-f132-11f0-bfbd-f2dbc029a3c2', '2d7a16d2-f132-11f0-bfbd-f2dbc029a3c2', '2d7a8c06-f132-11f0-bfbd-f2dbc029a3c2', 'Activity_09dh3z9', '2d7b766a-f132-11f0-bfbd-f2dbc029a3c2', NULL, NULL, 'userTask', 'hr-manager-001', '2026-01-14 18:17:06.22', '2026-01-14 18:17:06.388', 3, 168, NULL, '');
+TRUNCATE TABLE public.act_hi_actinst CASCADE;
+
 INSERT INTO public.act_hi_actinst VALUES ('2d954001-f132-11f0-bfbd-f2dbc029a3c2', 2, 'Process_1:2:2d6cf771-f132-11f0-bfbd-f2dbc029a3c2', '2d7a16d2-f132-11f0-bfbd-f2dbc029a3c2', '2d7a8c06-f132-11f0-bfbd-f2dbc029a3c2', 'Activity_0mvv5hc', '2d954002-f132-11f0-bfbd-f2dbc029a3c2', NULL, NULL, 'userTask', 'hr-specialist-001', '2026-01-14 18:17:06.39', NULL, 2, NULL, NULL, '');
+TRUNCATE TABLE public.act_hi_actinst CASCADE;
+
 INSERT INTO public.act_hi_actinst VALUES ('80f6cfc3-f133-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1:3:80f1788d-f133-11f0-bfbd-f2dbc029a3c2', '80f6a8ae-f133-11f0-bfbd-f2dbc029a3c2', '80f6cfc2-f133-11f0-bfbd-f2dbc029a3c2', 'StartEvent_1', NULL, NULL, '开始', 'startEvent', NULL, '2026-01-14 18:26:35.777', '2026-01-14 18:26:35.777', 1, 0, NULL, '');
+TRUNCATE TABLE public.act_hi_actinst CASCADE;
+
 INSERT INTO public.act_hi_actinst VALUES ('80f6cfc4-f133-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1:3:80f1788d-f133-11f0-bfbd-f2dbc029a3c2', '80f6a8ae-f133-11f0-bfbd-f2dbc029a3c2', '80f6cfc2-f133-11f0-bfbd-f2dbc029a3c2', 'Flow_1', NULL, NULL, NULL, 'sequenceFlow', NULL, '2026-01-14 18:26:35.777', '2026-01-14 18:26:35.777', 2, 0, NULL, '');
+TRUNCATE TABLE public.act_hi_actinst CASCADE;
+
 INSERT INTO public.act_hi_actinst VALUES ('8107237c-f133-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1:3:80f1788d-f133-11f0-bfbd-f2dbc029a3c2', '80f6a8ae-f133-11f0-bfbd-f2dbc029a3c2', '80f6cfc2-f133-11f0-bfbd-f2dbc029a3c2', 'Flow_0un7hlh', NULL, NULL, NULL, 'sequenceFlow', NULL, '2026-01-14 18:26:35.884', '2026-01-14 18:26:35.884', 1, 0, NULL, '');
+TRUNCATE TABLE public.act_hi_actinst CASCADE;
+
 INSERT INTO public.act_hi_actinst VALUES ('81074a8d-f133-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1:3:80f1788d-f133-11f0-bfbd-f2dbc029a3c2', '80f6a8ae-f133-11f0-bfbd-f2dbc029a3c2', '80f6cfc2-f133-11f0-bfbd-f2dbc029a3c2', 'Activity_0mvv5hc', '81074a8e-f133-11f0-bfbd-f2dbc029a3c2', NULL, NULL, 'userTask', NULL, '2026-01-14 18:26:35.885', NULL, 2, NULL, NULL, '');
+TRUNCATE TABLE public.act_hi_actinst CASCADE;
+
 INSERT INTO public.act_hi_actinst VALUES ('80f6cfc5-f133-11f0-bfbd-f2dbc029a3c2', 3, 'Process_1:3:80f1788d-f133-11f0-bfbd-f2dbc029a3c2', '80f6a8ae-f133-11f0-bfbd-f2dbc029a3c2', '80f6cfc2-f133-11f0-bfbd-f2dbc029a3c2', 'Activity_09dh3z9', '80f6cfc6-f133-11f0-bfbd-f2dbc029a3c2', NULL, NULL, 'userTask', 'hr-specialist-001', '2026-01-14 18:26:35.777', '2026-01-14 18:26:35.883', 3, 106, NULL, '');
+TRUNCATE TABLE public.act_hi_actinst CASCADE;
+
 INSERT INTO public.act_hi_actinst VALUES ('2b8a18c4-f1f4-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1:5:2b85fa0e-f1f4-11f0-bfbd-f2dbc029a3c2', '2b89f1af-f1f4-11f0-bfbd-f2dbc029a3c2', '2b8a18c3-f1f4-11f0-bfbd-f2dbc029a3c2', 'StartEvent_1', NULL, NULL, '开始', 'startEvent', NULL, '2026-01-15 17:25:45.327', '2026-01-15 17:25:45.327', 1, 0, NULL, '');
+TRUNCATE TABLE public.act_hi_actinst CASCADE;
+
 INSERT INTO public.act_hi_actinst VALUES ('2b8a18c5-f1f4-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1:5:2b85fa0e-f1f4-11f0-bfbd-f2dbc029a3c2', '2b89f1af-f1f4-11f0-bfbd-f2dbc029a3c2', '2b8a18c3-f1f4-11f0-bfbd-f2dbc029a3c2', 'Flow_1', NULL, NULL, NULL, 'sequenceFlow', NULL, '2026-01-15 17:25:45.327', '2026-01-15 17:25:45.327', 2, 0, NULL, '');
+TRUNCATE TABLE public.act_hi_actinst CASCADE;
+
 INSERT INTO public.act_hi_actinst VALUES ('6f5faadb-f1f4-11f0-bfbd-f2dbc029a3c2', 3, 'Process_1:7:6f5a7aaf-f1f4-11f0-bfbd-f2dbc029a3c2', '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', '6f5f83c8-f1f4-11f0-bfbd-f2dbc029a3c2', 'Activity_09dh3z9', '6f5faadc-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, NULL, 'userTask', 'corp-manager-001', '2026-01-15 17:27:39.134', '2026-01-15 17:27:39.257', 3, 123, NULL, '');
+TRUNCATE TABLE public.act_hi_actinst CASCADE;
+
 INSERT INTO public.act_hi_actinst VALUES ('2b99a92d-f1f4-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1:5:2b85fa0e-f1f4-11f0-bfbd-f2dbc029a3c2', '2b89f1af-f1f4-11f0-bfbd-f2dbc029a3c2', '2b8a18c3-f1f4-11f0-bfbd-f2dbc029a3c2', 'Flow_0un7hlh', NULL, NULL, NULL, 'sequenceFlow', NULL, '2026-01-15 17:25:45.429', '2026-01-15 17:25:45.429', 1, 0, NULL, '');
+TRUNCATE TABLE public.act_hi_actinst CASCADE;
+
 INSERT INTO public.act_hi_actinst VALUES ('2b99f74e-f1f4-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1:5:2b85fa0e-f1f4-11f0-bfbd-f2dbc029a3c2', '2b89f1af-f1f4-11f0-bfbd-f2dbc029a3c2', '2b8a18c3-f1f4-11f0-bfbd-f2dbc029a3c2', 'Activity_0mvv5hc', '2b99f74f-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, NULL, 'userTask', NULL, '2026-01-15 17:25:45.431', NULL, 2, NULL, NULL, '');
+TRUNCATE TABLE public.act_hi_actinst CASCADE;
+
 INSERT INTO public.act_hi_actinst VALUES ('2b8a18c6-f1f4-11f0-bfbd-f2dbc029a3c2', 3, 'Process_1:5:2b85fa0e-f1f4-11f0-bfbd-f2dbc029a3c2', '2b89f1af-f1f4-11f0-bfbd-f2dbc029a3c2', '2b8a18c3-f1f4-11f0-bfbd-f2dbc029a3c2', 'Activity_09dh3z9', '2b8a18c7-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, NULL, 'userTask', 'corp-manager-001', '2026-01-15 17:25:45.327', '2026-01-15 17:25:45.428', 3, 101, NULL, '');
+TRUNCATE TABLE public.act_hi_actinst CASCADE;
+
 INSERT INTO public.act_hi_actinst VALUES ('6f5f83c9-f1f4-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1:7:6f5a7aaf-f1f4-11f0-bfbd-f2dbc029a3c2', '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', '6f5f83c8-f1f4-11f0-bfbd-f2dbc029a3c2', 'StartEvent_1', NULL, NULL, '开始', 'startEvent', NULL, '2026-01-15 17:27:39.133', '2026-01-15 17:27:39.134', 1, 1, NULL, '');
+TRUNCATE TABLE public.act_hi_actinst CASCADE;
+
 INSERT INTO public.act_hi_actinst VALUES ('6f5faada-f1f4-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1:7:6f5a7aaf-f1f4-11f0-bfbd-f2dbc029a3c2', '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', '6f5f83c8-f1f4-11f0-bfbd-f2dbc029a3c2', 'Flow_1', NULL, NULL, NULL, 'sequenceFlow', NULL, '2026-01-15 17:27:39.134', '2026-01-15 17:27:39.134', 2, 0, NULL, '');
+TRUNCATE TABLE public.act_hi_actinst CASCADE;
+
 INSERT INTO public.act_hi_actinst VALUES ('62702c48-f1f7-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1:9:625d6789-f1f7-11f0-bfbd-f2dbc029a3c2', '6262709a-f1f7-11f0-bfbd-f2dbc029a3c2', '6262709e-f1f7-11f0-bfbd-f2dbc029a3c2', 'Flow_0un7hlh', NULL, NULL, NULL, 'sequenceFlow', NULL, '2026-01-15 17:48:45.922', '2026-01-15 17:48:45.922', 1, 0, NULL, '');
+TRUNCATE TABLE public.act_hi_actinst CASCADE;
+
 INSERT INTO public.act_hi_actinst VALUES ('6f72bcb5-f1f4-11f0-bfbd-f2dbc029a3c2', 2, 'Process_1:7:6f5a7aaf-f1f4-11f0-bfbd-f2dbc029a3c2', '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', '6f5f83c8-f1f4-11f0-bfbd-f2dbc029a3c2', 'Activity_0mvv5hc', '6f72bcb6-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, NULL, 'userTask', 'hr-manager-001', '2026-01-15 17:27:39.259', NULL, 2, NULL, NULL, '');
+TRUNCATE TABLE public.act_hi_actinst CASCADE;
+
 INSERT INTO public.act_hi_actinst VALUES ('6262709f-f1f7-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1:9:625d6789-f1f7-11f0-bfbd-f2dbc029a3c2', '6262709a-f1f7-11f0-bfbd-f2dbc029a3c2', '6262709e-f1f7-11f0-bfbd-f2dbc029a3c2', 'StartEvent_1', NULL, NULL, '开始', 'startEvent', NULL, '2026-01-15 17:48:45.832', '2026-01-15 17:48:45.832', 1, 0, NULL, '');
+TRUNCATE TABLE public.act_hi_actinst CASCADE;
+
 INSERT INTO public.act_hi_actinst VALUES ('626270a0-f1f7-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1:9:625d6789-f1f7-11f0-bfbd-f2dbc029a3c2', '6262709a-f1f7-11f0-bfbd-f2dbc029a3c2', '6262709e-f1f7-11f0-bfbd-f2dbc029a3c2', 'Flow_1', NULL, NULL, NULL, 'sequenceFlow', NULL, '2026-01-15 17:48:45.832', '2026-01-15 17:48:45.832', 2, 0, NULL, '');
+TRUNCATE TABLE public.act_hi_actinst CASCADE;
+
 INSERT INTO public.act_hi_actinst VALUES ('62705359-f1f7-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1:9:625d6789-f1f7-11f0-bfbd-f2dbc029a3c2', '6262709a-f1f7-11f0-bfbd-f2dbc029a3c2', '6262709e-f1f7-11f0-bfbd-f2dbc029a3c2', 'Activity_0mvv5hc', '6270535a-f1f7-11f0-bfbd-f2dbc029a3c2', NULL, NULL, 'userTask', NULL, '2026-01-15 17:48:45.923', NULL, 2, NULL, NULL, '');
+TRUNCATE TABLE public.act_hi_actinst CASCADE;
+
 INSERT INTO public.act_hi_actinst VALUES ('626270a1-f1f7-11f0-bfbd-f2dbc029a3c2', 3, 'Process_1:9:625d6789-f1f7-11f0-bfbd-f2dbc029a3c2', '6262709a-f1f7-11f0-bfbd-f2dbc029a3c2', '6262709e-f1f7-11f0-bfbd-f2dbc029a3c2', 'Activity_09dh3z9', '626270a2-f1f7-11f0-bfbd-f2dbc029a3c2', NULL, NULL, 'userTask', 'corp-manager-001', '2026-01-15 17:48:45.832', '2026-01-15 17:48:45.921', 3, 89, NULL, '');
+TRUNCATE TABLE public.act_hi_actinst CASCADE;
+
 INSERT INTO public.act_hi_actinst VALUES ('a8ef1854-f45e-11f0-9035-568938879cb7', 1, 'Process_1:10:a8e5062e-f45e-11f0-9035-568938879cb7', 'a8eeca2f-f45e-11f0-9035-568938879cb7', 'a8ef1853-f45e-11f0-9035-568938879cb7', 'StartEvent_1', NULL, NULL, '开始', 'startEvent', NULL, '2026-01-18 19:13:04.683', '2026-01-18 19:13:04.687', 1, 4, NULL, '');
+TRUNCATE TABLE public.act_hi_actinst CASCADE;
+
 INSERT INTO public.act_hi_actinst VALUES ('a8efdba5-f45e-11f0-9035-568938879cb7', 1, 'Process_1:10:a8e5062e-f45e-11f0-9035-568938879cb7', 'a8eeca2f-f45e-11f0-9035-568938879cb7', 'a8ef1853-f45e-11f0-9035-568938879cb7', 'Flow_1', NULL, NULL, NULL, 'sequenceFlow', NULL, '2026-01-18 19:13:04.688', '2026-01-18 19:13:04.688', 2, 0, NULL, '');
+TRUNCATE TABLE public.act_hi_actinst CASCADE;
+
 INSERT INTO public.act_hi_actinst VALUES ('a9038abd-f45e-11f0-9035-568938879cb7', 1, 'Process_1:10:a8e5062e-f45e-11f0-9035-568938879cb7', 'a8eeca2f-f45e-11f0-9035-568938879cb7', 'a8ef1853-f45e-11f0-9035-568938879cb7', 'Flow_0un7hlh', NULL, NULL, NULL, 'sequenceFlow', NULL, '2026-01-18 19:13:04.817', '2026-01-18 19:13:04.817', 1, 0, NULL, '');
+TRUNCATE TABLE public.act_hi_actinst CASCADE;
+
 INSERT INTO public.act_hi_actinst VALUES ('a903b1ce-f45e-11f0-9035-568938879cb7', 1, 'Process_1:10:a8e5062e-f45e-11f0-9035-568938879cb7', 'a8eeca2f-f45e-11f0-9035-568938879cb7', 'a8ef1853-f45e-11f0-9035-568938879cb7', 'Activity_0mvv5hc', 'a903b1cf-f45e-11f0-9035-568938879cb7', NULL, NULL, 'userTask', NULL, '2026-01-18 19:13:04.818', NULL, 2, NULL, NULL, '');
+TRUNCATE TABLE public.act_hi_actinst CASCADE;
+
 INSERT INTO public.act_hi_actinst VALUES ('a8efdba6-f45e-11f0-9035-568938879cb7', 3, 'Process_1:10:a8e5062e-f45e-11f0-9035-568938879cb7', 'a8eeca2f-f45e-11f0-9035-568938879cb7', 'a8ef1853-f45e-11f0-9035-568938879cb7', 'Activity_09dh3z9', 'a8f002b7-f45e-11f0-9035-568938879cb7', NULL, NULL, 'userTask', 'tech-director-001', '2026-01-18 19:13:04.688', '2026-01-18 19:13:04.816', 3, 128, NULL, '');
+TRUNCATE TABLE public.act_hi_actinst CASCADE;
+
 INSERT INTO public.act_hi_actinst VALUES ('d95d8b06-f515-11f0-83bf-1a46ed4020c1', 1, 'Process_1:11:d94fcf60-f515-11f0-83bf-1a46ed4020c1', 'd95d15d1-f515-11f0-83bf-1a46ed4020c1', 'd95d8b05-f515-11f0-83bf-1a46ed4020c1', 'StartEvent_1', NULL, NULL, '开始', 'startEvent', NULL, '2026-01-19 17:04:23.839', '2026-01-19 17:04:23.843', 1, 4, NULL, '');
+TRUNCATE TABLE public.act_hi_actinst CASCADE;
+
 INSERT INTO public.act_hi_actinst VALUES ('d95e4e57-f515-11f0-83bf-1a46ed4020c1', 1, 'Process_1:11:d94fcf60-f515-11f0-83bf-1a46ed4020c1', 'd95d15d1-f515-11f0-83bf-1a46ed4020c1', 'd95d8b05-f515-11f0-83bf-1a46ed4020c1', 'Flow_1', NULL, NULL, NULL, 'sequenceFlow', NULL, '2026-01-19 17:04:23.844', '2026-01-19 17:04:23.844', 2, 0, NULL, '');
+TRUNCATE TABLE public.act_hi_actinst CASCADE;
+
 INSERT INTO public.act_hi_actinst VALUES ('d97e597f-f515-11f0-83bf-1a46ed4020c1', 1, 'Process_1:11:d94fcf60-f515-11f0-83bf-1a46ed4020c1', 'd95d15d1-f515-11f0-83bf-1a46ed4020c1', 'd95d8b05-f515-11f0-83bf-1a46ed4020c1', 'Flow_0un7hlh', NULL, NULL, NULL, 'sequenceFlow', NULL, '2026-01-19 17:04:24.054', '2026-01-19 17:04:24.054', 1, 0, NULL, '');
+TRUNCATE TABLE public.act_hi_actinst CASCADE;
+
 INSERT INTO public.act_hi_actinst VALUES ('d97ea7a0-f515-11f0-83bf-1a46ed4020c1', 1, 'Process_1:11:d94fcf60-f515-11f0-83bf-1a46ed4020c1', 'd95d15d1-f515-11f0-83bf-1a46ed4020c1', 'd95d8b05-f515-11f0-83bf-1a46ed4020c1', 'Activity_0mvv5hc', 'd97ea7a1-f515-11f0-83bf-1a46ed4020c1', NULL, NULL, 'userTask', NULL, '2026-01-19 17:04:24.056', NULL, 2, NULL, NULL, '');
+TRUNCATE TABLE public.act_hi_actinst CASCADE;
+
 INSERT INTO public.act_hi_actinst VALUES ('d95e4e58-f515-11f0-83bf-1a46ed4020c1', 3, 'Process_1:11:d94fcf60-f515-11f0-83bf-1a46ed4020c1', 'd95d15d1-f515-11f0-83bf-1a46ed4020c1', 'd95d8b05-f515-11f0-83bf-1a46ed4020c1', 'Activity_09dh3z9', 'd95e7569-f515-11f0-83bf-1a46ed4020c1', NULL, NULL, 'userTask', 'purchase-requester-001', '2026-01-19 17:04:23.844', '2026-01-19 17:04:24.053', 3, 209, NULL, '');
+TRUNCATE TABLE public.act_hi_actinst CASCADE;
+
 INSERT INTO public.act_hi_actinst VALUES ('14c1fff3-f537-11f0-83bf-1a46ed4020c1', 1, 'Process_1:14:14bde139-f537-11f0-83bf-1a46ed4020c1', '14c1ffea-f537-11f0-83bf-1a46ed4020c1', '14c1fff2-f537-11f0-83bf-1a46ed4020c1', 'StartEvent_1', NULL, NULL, '开始', 'startEvent', NULL, '2026-01-19 21:02:16.875', '2026-01-19 21:02:16.875', 1, 0, NULL, '');
+TRUNCATE TABLE public.act_hi_actinst CASCADE;
+
 INSERT INTO public.act_hi_actinst VALUES ('14c1fff4-f537-11f0-83bf-1a46ed4020c1', 1, 'Process_1:14:14bde139-f537-11f0-83bf-1a46ed4020c1', '14c1ffea-f537-11f0-83bf-1a46ed4020c1', '14c1fff2-f537-11f0-83bf-1a46ed4020c1', 'Flow_1', NULL, NULL, NULL, 'sequenceFlow', NULL, '2026-01-19 21:02:16.875', '2026-01-19 21:02:16.875', 2, 0, NULL, '');
+TRUNCATE TABLE public.act_hi_actinst CASCADE;
+
 INSERT INTO public.act_hi_actinst VALUES ('14d4286e-f537-11f0-83bf-1a46ed4020c1', 1, 'Process_1:14:14bde139-f537-11f0-83bf-1a46ed4020c1', '14c1ffea-f537-11f0-83bf-1a46ed4020c1', '14c1fff2-f537-11f0-83bf-1a46ed4020c1', 'Flow_0un7hlh', NULL, NULL, NULL, 'sequenceFlow', NULL, '2026-01-19 21:02:16.994', '2026-01-19 21:02:16.994', 1, 0, NULL, '');
+TRUNCATE TABLE public.act_hi_actinst CASCADE;
+
 INSERT INTO public.act_hi_actinst VALUES ('14d44f7f-f537-11f0-83bf-1a46ed4020c1', 1, 'Process_1:14:14bde139-f537-11f0-83bf-1a46ed4020c1', '14c1ffea-f537-11f0-83bf-1a46ed4020c1', '14c1fff2-f537-11f0-83bf-1a46ed4020c1', 'Activity_0mvv5hc', '14d44f80-f537-11f0-83bf-1a46ed4020c1', NULL, NULL, 'userTask', NULL, '2026-01-19 21:02:16.995', NULL, 2, NULL, NULL, '');
+TRUNCATE TABLE public.act_hi_actinst CASCADE;
+
 INSERT INTO public.act_hi_actinst VALUES ('14c1fff5-f537-11f0-83bf-1a46ed4020c1', 3, 'Process_1:14:14bde139-f537-11f0-83bf-1a46ed4020c1', '14c1ffea-f537-11f0-83bf-1a46ed4020c1', '14c1fff2-f537-11f0-83bf-1a46ed4020c1', 'Activity_09dh3z9', '14c1fff6-f537-11f0-83bf-1a46ed4020c1', NULL, NULL, 'userTask', 'purchase-requester-001', '2026-01-19 21:02:16.875', '2026-01-19 21:02:16.993', 3, 118, NULL, '');
+TRUNCATE TABLE public.act_hi_comment CASCADE;
+
 INSERT INTO public.act_hi_comment VALUES ('2d8c665d-f132-11f0-bfbd-f2dbc029a3c2', 'event', '2026-01-14 18:17:06.332', 'anonymousUser', '2d7b766a-f132-11f0-bfbd-f2dbc029a3c2', NULL, 'AddUserLink', 'hr-manager-001_|_assignee', NULL);
+TRUNCATE TABLE public.act_hi_comment CASCADE;
+
 INSERT INTO public.act_hi_comment VALUES ('91797465-f132-11f0-bfbd-f2dbc029a3c2', 'event', '2026-01-14 18:19:53.98', 'anonymousUser', '2d954002-f132-11f0-bfbd-f2dbc029a3c2', NULL, 'AddUserLink', 'hr-specialist-001_|_assignee', NULL);
+TRUNCATE TABLE public.act_hi_comment CASCADE;
+
 INSERT INTO public.act_hi_comment VALUES ('810093c9-f133-11f0-bfbd-f2dbc029a3c2', 'event', '2026-01-14 18:26:35.841', 'anonymousUser', '80f6cfc6-f133-11f0-bfbd-f2dbc029a3c2', NULL, 'AddUserLink', 'hr-specialist-001_|_assignee', NULL);
+TRUNCATE TABLE public.act_hi_comment CASCADE;
+
 INSERT INTO public.act_hi_comment VALUES ('2b93b5ba-f1f4-11f0-bfbd-f2dbc029a3c2', 'event', '2026-01-15 17:25:45.39', 'anonymousUser', '2b8a18c7-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, 'AddUserLink', 'corp-manager-001_|_assignee', NULL);
+TRUNCATE TABLE public.act_hi_comment CASCADE;
+
 INSERT INTO public.act_hi_comment VALUES ('6f6b1c8f-f1f4-11f0-bfbd-f2dbc029a3c2', 'event', '2026-01-15 17:27:39.209', 'anonymousUser', '6f5faadc-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, 'AddUserLink', 'corp-manager-001_|_assignee', NULL);
+TRUNCATE TABLE public.act_hi_comment CASCADE;
+
 INSERT INTO public.act_hi_comment VALUES ('879ad1b9-f1f4-11f0-bfbd-f2dbc029a3c2', 'event', '2026-01-15 17:28:19.787', 'anonymousUser', '6f72bcb6-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, 'AddUserLink', 'hr-manager-001_|_assignee', NULL);
+TRUNCATE TABLE public.act_hi_comment CASCADE;
+
 INSERT INTO public.act_hi_comment VALUES ('626b2335-f1f7-11f0-bfbd-f2dbc029a3c2', 'event', '2026-01-15 17:48:45.889', 'anonymousUser', '626270a2-f1f7-11f0-bfbd-f2dbc029a3c2', NULL, 'AddUserLink', 'corp-manager-001_|_assignee', NULL);
+TRUNCATE TABLE public.act_hi_comment CASCADE;
+
 INSERT INTO public.act_hi_comment VALUES ('a8fd703a-f45e-11f0-9035-568938879cb7', 'event', '2026-01-18 19:13:04.777', 'anonymousUser', 'a8f002b7-f45e-11f0-9035-568938879cb7', NULL, 'AddUserLink', 'tech-director-001_|_assignee', NULL);
+TRUNCATE TABLE public.act_hi_comment CASCADE;
+
 INSERT INTO public.act_hi_comment VALUES ('d971af4c-f515-11f0-83bf-1a46ed4020c1', 'event', '2026-01-19 17:04:23.971', 'anonymousUser', 'd95e7569-f515-11f0-83bf-1a46ed4020c1', NULL, 'AddUserLink', 'purchase-requester-001_|_assignee', NULL);
+TRUNCATE TABLE public.act_hi_comment CASCADE;
+
 INSERT INTO public.act_hi_comment VALUES ('14ceaa29-f537-11f0-83bf-1a46ed4020c1', 'event', '2026-01-19 21:02:16.958', 'anonymousUser', '14c1fff6-f537-11f0-83bf-1a46ed4020c1', NULL, 'AddUserLink', 'purchase-requester-001_|_assignee', NULL);
 
+TRUNCATE TABLE public.act_hi_detail CASCADE;
+
 INSERT INTO public.act_hi_detail VALUES ('2d7a8c05-f132-11f0-bfbd-f2dbc029a3c2', 'VariableUpdate', '2d7a16d2-f132-11f0-bfbd-f2dbc029a3c2', '2d7a16d2-f132-11f0-bfbd-f2dbc029a3c2', NULL, NULL, 'initiator', 'string', 0, '2026-01-14 18:17:06.215', NULL, NULL, NULL, 'hr-manager-001', NULL);
+TRUNCATE TABLE public.act_hi_detail CASCADE;
+
 INSERT INTO public.act_hi_detail VALUES ('2d94077e-f132-11f0-bfbd-f2dbc029a3c2', 'VariableUpdate', '2d7a16d2-f132-11f0-bfbd-f2dbc029a3c2', '2d7a16d2-f132-11f0-bfbd-f2dbc029a3c2', NULL, '2d7b4f59-f132-11f0-bfbd-f2dbc029a3c2', 'initiator', 'string', 1, '2026-01-14 18:17:06.382', NULL, NULL, NULL, 'hr-manager-001', NULL);
+TRUNCATE TABLE public.act_hi_detail CASCADE;
+
 INSERT INTO public.act_hi_detail VALUES ('80f6cfc1-f133-11f0-bfbd-f2dbc029a3c2', 'VariableUpdate', '80f6a8ae-f133-11f0-bfbd-f2dbc029a3c2', '80f6a8ae-f133-11f0-bfbd-f2dbc029a3c2', NULL, NULL, 'initiator', 'string', 0, '2026-01-14 18:26:35.777', NULL, NULL, NULL, 'hr-specialist-001', NULL);
+TRUNCATE TABLE public.act_hi_detail CASCADE;
+
 INSERT INTO public.act_hi_detail VALUES ('8106391a-f133-11f0-bfbd-f2dbc029a3c2', 'VariableUpdate', '80f6a8ae-f133-11f0-bfbd-f2dbc029a3c2', '80f6a8ae-f133-11f0-bfbd-f2dbc029a3c2', NULL, '80f6cfc5-f133-11f0-bfbd-f2dbc029a3c2', 'initiator', 'string', 1, '2026-01-14 18:26:35.878', NULL, NULL, NULL, 'hr-specialist-001', NULL);
+TRUNCATE TABLE public.act_hi_detail CASCADE;
+
 INSERT INTO public.act_hi_detail VALUES ('2b8a18c2-f1f4-11f0-bfbd-f2dbc029a3c2', 'VariableUpdate', '2b89f1af-f1f4-11f0-bfbd-f2dbc029a3c2', '2b89f1af-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, NULL, 'initiator', 'string', 0, '2026-01-15 17:25:45.327', NULL, NULL, NULL, 'corp-manager-001', NULL);
+TRUNCATE TABLE public.act_hi_detail CASCADE;
+
 INSERT INTO public.act_hi_detail VALUES ('2b97fb7b-f1f4-11f0-bfbd-f2dbc029a3c2', 'VariableUpdate', '2b89f1af-f1f4-11f0-bfbd-f2dbc029a3c2', '2b89f1af-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, '2b8a18c6-f1f4-11f0-bfbd-f2dbc029a3c2', 'initiator', 'string', 1, '2026-01-15 17:25:45.418', NULL, NULL, NULL, 'corp-manager-001', NULL);
+TRUNCATE TABLE public.act_hi_detail CASCADE;
+
 INSERT INTO public.act_hi_detail VALUES ('6f5f83c3-f1f4-11f0-bfbd-f2dbc029a3c2', 'VariableUpdate', '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, NULL, 'Fq63mkdrn28vabc', 'string', 0, '2026-01-15 17:27:39.133', NULL, NULL, NULL, 'qqq', NULL);
+TRUNCATE TABLE public.act_hi_detail CASCADE;
+
 INSERT INTO public.act_hi_detail VALUES ('6f5f83c5-f1f4-11f0-bfbd-f2dbc029a3c2', 'VariableUpdate', '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, NULL, 'Fxe2mkdrrp95ahc', 'null', 0, '2026-01-15 17:27:39.133', NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_hi_detail CASCADE;
+
 INSERT INTO public.act_hi_detail VALUES ('6f5f83c7-f1f4-11f0-bfbd-f2dbc029a3c2', 'VariableUpdate', '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, NULL, 'initiator', 'string', 0, '2026-01-15 17:27:39.133', NULL, NULL, NULL, 'corp-manager-001', NULL);
+TRUNCATE TABLE public.act_hi_detail CASCADE;
+
 INSERT INTO public.act_hi_detail VALUES ('6f710f00-f1f4-11f0-bfbd-f2dbc029a3c2', 'VariableUpdate', '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, '6f5faadb-f1f4-11f0-bfbd-f2dbc029a3c2', 'Fq63mkdrn28vabc', 'string', 1, '2026-01-15 17:27:39.248', NULL, NULL, NULL, 'qqq', NULL);
+TRUNCATE TABLE public.act_hi_detail CASCADE;
+
 INSERT INTO public.act_hi_detail VALUES ('6f715d21-f1f4-11f0-bfbd-f2dbc029a3c2', 'VariableUpdate', '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, '6f5faadb-f1f4-11f0-bfbd-f2dbc029a3c2', 'Fxe2mkdrrp95ahc', 'null', 1, '2026-01-15 17:27:39.25', NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_hi_detail CASCADE;
+
 INSERT INTO public.act_hi_detail VALUES ('6f718432-f1f4-11f0-bfbd-f2dbc029a3c2', 'VariableUpdate', '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, '6f5faadb-f1f4-11f0-bfbd-f2dbc029a3c2', 'initiator', 'string', 1, '2026-01-15 17:27:39.251', NULL, NULL, NULL, 'corp-manager-001', NULL);
+TRUNCATE TABLE public.act_hi_detail CASCADE;
+
 INSERT INTO public.act_hi_detail VALUES ('6262709d-f1f7-11f0-bfbd-f2dbc029a3c2', 'VariableUpdate', '6262709a-f1f7-11f0-bfbd-f2dbc029a3c2', '6262709a-f1f7-11f0-bfbd-f2dbc029a3c2', NULL, NULL, 'initiator', 'string', 0, '2026-01-15 17:48:45.832', NULL, NULL, NULL, 'corp-manager-001', NULL);
+TRUNCATE TABLE public.act_hi_detail CASCADE;
+
 INSERT INTO public.act_hi_detail VALUES ('626f41e6-f1f7-11f0-bfbd-f2dbc029a3c2', 'VariableUpdate', '6262709a-f1f7-11f0-bfbd-f2dbc029a3c2', '6262709a-f1f7-11f0-bfbd-f2dbc029a3c2', NULL, '626270a1-f1f7-11f0-bfbd-f2dbc029a3c2', 'initiator', 'string', 1, '2026-01-15 17:48:45.916', NULL, NULL, NULL, 'corp-manager-001', NULL);
+TRUNCATE TABLE public.act_hi_detail CASCADE;
+
 INSERT INTO public.act_hi_detail VALUES ('a8ef1852-f45e-11f0-9035-568938879cb7', 'VariableUpdate', 'a8eeca2f-f45e-11f0-9035-568938879cb7', 'a8eeca2f-f45e-11f0-9035-568938879cb7', NULL, NULL, 'initiator', 'string', 0, '2026-01-18 19:13:04.683', NULL, NULL, NULL, 'tech-director-001', NULL);
+TRUNCATE TABLE public.act_hi_detail CASCADE;
+
 INSERT INTO public.act_hi_detail VALUES ('a902a05b-f45e-11f0-9035-568938879cb7', 'VariableUpdate', 'a8eeca2f-f45e-11f0-9035-568938879cb7', 'a8eeca2f-f45e-11f0-9035-568938879cb7', NULL, 'a8efdba6-f45e-11f0-9035-568938879cb7', 'initiator', 'string', 1, '2026-01-18 19:13:04.811', NULL, NULL, NULL, 'tech-director-001', NULL);
+TRUNCATE TABLE public.act_hi_detail CASCADE;
+
 INSERT INTO public.act_hi_detail VALUES ('d95d8b04-f515-11f0-83bf-1a46ed4020c1', 'VariableUpdate', 'd95d15d1-f515-11f0-83bf-1a46ed4020c1', 'd95d15d1-f515-11f0-83bf-1a46ed4020c1', NULL, NULL, 'initiator', 'string', 0, '2026-01-19 17:04:23.839', NULL, NULL, NULL, 'purchase-requester-001', NULL);
+TRUNCATE TABLE public.act_hi_detail CASCADE;
+
 INSERT INTO public.act_hi_detail VALUES ('d97d480d-f515-11f0-83bf-1a46ed4020c1', 'VariableUpdate', 'd95d15d1-f515-11f0-83bf-1a46ed4020c1', 'd95d15d1-f515-11f0-83bf-1a46ed4020c1', NULL, 'd95e4e58-f515-11f0-83bf-1a46ed4020c1', 'initiator', 'string', 1, '2026-01-19 17:04:24.047', NULL, NULL, NULL, 'purchase-requester-001', NULL);
+TRUNCATE TABLE public.act_hi_detail CASCADE;
+
 INSERT INTO public.act_hi_detail VALUES ('14c1ffed-f537-11f0-83bf-1a46ed4020c1', 'VariableUpdate', '14c1ffea-f537-11f0-83bf-1a46ed4020c1', '14c1ffea-f537-11f0-83bf-1a46ed4020c1', NULL, NULL, 'Fq63mkdrn28vabc', 'string', 0, '2026-01-19 21:02:16.875', NULL, NULL, NULL, 'ooo', NULL);
+TRUNCATE TABLE public.act_hi_detail CASCADE;
+
 INSERT INTO public.act_hi_detail VALUES ('14c1ffef-f537-11f0-83bf-1a46ed4020c1', 'VariableUpdate', '14c1ffea-f537-11f0-83bf-1a46ed4020c1', '14c1ffea-f537-11f0-83bf-1a46ed4020c1', NULL, NULL, 'Fxe2mkdrrp95ahc', 'null', 0, '2026-01-19 21:02:16.875', NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_hi_detail CASCADE;
+
 INSERT INTO public.act_hi_detail VALUES ('14c1fff1-f537-11f0-83bf-1a46ed4020c1', 'VariableUpdate', '14c1ffea-f537-11f0-83bf-1a46ed4020c1', '14c1ffea-f537-11f0-83bf-1a46ed4020c1', NULL, NULL, 'initiator', 'string', 0, '2026-01-19 21:02:16.875', NULL, NULL, NULL, 'purchase-requester-001', NULL);
+TRUNCATE TABLE public.act_hi_detail CASCADE;
+
 INSERT INTO public.act_hi_detail VALUES ('14d2c8da-f537-11f0-83bf-1a46ed4020c1', 'VariableUpdate', '14c1ffea-f537-11f0-83bf-1a46ed4020c1', '14c1ffea-f537-11f0-83bf-1a46ed4020c1', NULL, '14c1fff5-f537-11f0-83bf-1a46ed4020c1', 'Fq63mkdrn28vabc', 'string', 1, '2026-01-19 21:02:16.985', NULL, NULL, NULL, 'ooo', NULL);
+TRUNCATE TABLE public.act_hi_detail CASCADE;
+
 INSERT INTO public.act_hi_detail VALUES ('14d316fb-f537-11f0-83bf-1a46ed4020c1', 'VariableUpdate', '14c1ffea-f537-11f0-83bf-1a46ed4020c1', '14c1ffea-f537-11f0-83bf-1a46ed4020c1', NULL, '14c1fff5-f537-11f0-83bf-1a46ed4020c1', 'Fxe2mkdrrp95ahc', 'null', 1, '2026-01-19 21:02:16.986', NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_hi_detail CASCADE;
+
 INSERT INTO public.act_hi_detail VALUES ('14d33e0c-f537-11f0-83bf-1a46ed4020c1', 'VariableUpdate', '14c1ffea-f537-11f0-83bf-1a46ed4020c1', '14c1ffea-f537-11f0-83bf-1a46ed4020c1', NULL, '14c1fff5-f537-11f0-83bf-1a46ed4020c1', 'initiator', 'string', 1, '2026-01-19 21:02:16.988', NULL, NULL, NULL, 'purchase-requester-001', NULL);
+TRUNCATE TABLE public.act_hi_identitylink CASCADE;
+
 INSERT INTO public.act_hi_identitylink VALUES ('2d7a3de3-f132-11f0-bfbd-f2dbc029a3c2', NULL, 'starter', 'hr-manager-001', NULL, '2026-01-14 18:17:06.213', '2d7a16d2-f132-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_hi_identitylink CASCADE;
+
 INSERT INTO public.act_hi_identitylink VALUES ('2d8bf12b-f132-11f0-bfbd-f2dbc029a3c2', NULL, 'assignee', 'hr-manager-001', '2d7b766a-f132-11f0-bfbd-f2dbc029a3c2', '2026-01-14 18:17:06.329', NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_hi_identitylink CASCADE;
+
 INSERT INTO public.act_hi_identitylink VALUES ('2d8c665c-f132-11f0-bfbd-f2dbc029a3c2', NULL, 'participant', 'hr-manager-001', NULL, '2026-01-14 18:17:06.332', '2d7a16d2-f132-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_hi_identitylink CASCADE;
+
 INSERT INTO public.act_hi_identitylink VALUES ('2d942e8f-f132-11f0-bfbd-f2dbc029a3c2', NULL, 'participant', 'anonymousUser', NULL, '2026-01-14 18:17:06.383', '2d7a16d2-f132-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_hi_identitylink CASCADE;
+
 INSERT INTO public.act_hi_identitylink VALUES ('9178d823-f132-11f0-bfbd-f2dbc029a3c2', NULL, 'assignee', 'hr-specialist-001', '2d954002-f132-11f0-bfbd-f2dbc029a3c2', '2026-01-14 18:19:53.976', NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_hi_identitylink CASCADE;
+
 INSERT INTO public.act_hi_identitylink VALUES ('91797464-f132-11f0-bfbd-f2dbc029a3c2', NULL, 'participant', 'hr-specialist-001', NULL, '2026-01-14 18:19:53.98', '2d7a16d2-f132-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_hi_identitylink CASCADE;
+
 INSERT INTO public.act_hi_identitylink VALUES ('80f6a8af-f133-11f0-bfbd-f2dbc029a3c2', NULL, 'starter', 'hr-specialist-001', NULL, '2026-01-14 18:26:35.776', '80f6a8ae-f133-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_hi_identitylink CASCADE;
+
 INSERT INTO public.act_hi_identitylink VALUES ('81001e97-f133-11f0-bfbd-f2dbc029a3c2', NULL, 'assignee', 'hr-specialist-001', '80f6cfc6-f133-11f0-bfbd-f2dbc029a3c2', '2026-01-14 18:26:35.838', NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_hi_identitylink CASCADE;
+
 INSERT INTO public.act_hi_identitylink VALUES ('810093c8-f133-11f0-bfbd-f2dbc029a3c2', NULL, 'participant', 'hr-specialist-001', NULL, '2026-01-14 18:26:35.841', '80f6a8ae-f133-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_hi_identitylink CASCADE;
+
 INSERT INTO public.act_hi_identitylink VALUES ('8106602b-f133-11f0-bfbd-f2dbc029a3c2', NULL, 'participant', 'anonymousUser', NULL, '2026-01-14 18:26:35.879', '80f6a8ae-f133-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_hi_identitylink CASCADE;
+
 INSERT INTO public.act_hi_identitylink VALUES ('2b89f1b0-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, 'starter', 'corp-manager-001', NULL, '2026-01-15 17:25:45.327', '2b89f1af-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_hi_identitylink CASCADE;
+
 INSERT INTO public.act_hi_identitylink VALUES ('2b934088-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, 'assignee', 'corp-manager-001', '2b8a18c7-f1f4-11f0-bfbd-f2dbc029a3c2', '2026-01-15 17:25:45.387', NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_hi_identitylink CASCADE;
+
 INSERT INTO public.act_hi_identitylink VALUES ('2b93b5b9-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, 'participant', 'corp-manager-001', NULL, '2026-01-15 17:25:45.39', '2b89f1af-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_hi_identitylink CASCADE;
+
 INSERT INTO public.act_hi_identitylink VALUES ('2b9870ac-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, 'participant', 'anonymousUser', NULL, '2026-01-15 17:25:45.421', '2b89f1af-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_hi_identitylink CASCADE;
+
 INSERT INTO public.act_hi_identitylink VALUES ('6f5f83c1-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, 'starter', 'corp-manager-001', NULL, '2026-01-15 17:27:39.133', '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_hi_identitylink CASCADE;
+
 INSERT INTO public.act_hi_identitylink VALUES ('6f6a322d-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, 'assignee', 'corp-manager-001', '6f5faadc-f1f4-11f0-bfbd-f2dbc029a3c2', '2026-01-15 17:27:39.203', NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_hi_identitylink CASCADE;
+
 INSERT INTO public.act_hi_identitylink VALUES ('6f6b1c8e-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, 'participant', 'corp-manager-001', NULL, '2026-01-15 17:27:39.209', '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_hi_identitylink CASCADE;
+
 INSERT INTO public.act_hi_identitylink VALUES ('6f71ab43-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, 'participant', 'anonymousUser', NULL, '2026-01-15 17:27:39.253', '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_hi_identitylink CASCADE;
+
 INSERT INTO public.act_hi_identitylink VALUES ('87994b17-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, 'assignee', 'hr-manager-001', '6f72bcb6-f1f4-11f0-bfbd-f2dbc029a3c2', '2026-01-15 17:28:19.777', NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_hi_identitylink CASCADE;
+
 INSERT INTO public.act_hi_identitylink VALUES ('879ad1b8-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, 'participant', 'hr-manager-001', NULL, '2026-01-15 17:28:19.787', '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_hi_identitylink CASCADE;
+
 INSERT INTO public.act_hi_identitylink VALUES ('6262709b-f1f7-11f0-bfbd-f2dbc029a3c2', NULL, 'starter', 'corp-manager-001', NULL, '2026-01-15 17:48:45.832', '6262709a-f1f7-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_hi_identitylink CASCADE;
+
 INSERT INTO public.act_hi_identitylink VALUES ('626ad513-f1f7-11f0-bfbd-f2dbc029a3c2', NULL, 'assignee', 'corp-manager-001', '626270a2-f1f7-11f0-bfbd-f2dbc029a3c2', '2026-01-15 17:48:45.887', NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_hi_identitylink CASCADE;
+
 INSERT INTO public.act_hi_identitylink VALUES ('626b2334-f1f7-11f0-bfbd-f2dbc029a3c2', NULL, 'participant', 'corp-manager-001', NULL, '2026-01-15 17:48:45.889', '6262709a-f1f7-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_hi_identitylink CASCADE;
+
 INSERT INTO public.act_hi_identitylink VALUES ('626f68f7-f1f7-11f0-bfbd-f2dbc029a3c2', NULL, 'participant', 'anonymousUser', NULL, '2026-01-15 17:48:45.917', '6262709a-f1f7-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_hi_identitylink CASCADE;
+
 INSERT INTO public.act_hi_identitylink VALUES ('a8eef140-f45e-11f0-9035-568938879cb7', NULL, 'starter', 'tech-director-001', NULL, '2026-01-18 19:13:04.682', 'a8eeca2f-f45e-11f0-9035-568938879cb7', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_hi_identitylink CASCADE;
+
 INSERT INTO public.act_hi_identitylink VALUES ('a8fd2218-f45e-11f0-9035-568938879cb7', NULL, 'assignee', 'tech-director-001', 'a8f002b7-f45e-11f0-9035-568938879cb7', '2026-01-18 19:13:04.775', NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_hi_identitylink CASCADE;
+
 INSERT INTO public.act_hi_identitylink VALUES ('a8fd7039-f45e-11f0-9035-568938879cb7', NULL, 'participant', 'tech-director-001', NULL, '2026-01-18 19:13:04.777', 'a8eeca2f-f45e-11f0-9035-568938879cb7', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_hi_identitylink CASCADE;
+
 INSERT INTO public.act_hi_identitylink VALUES ('a902c76c-f45e-11f0-9035-568938879cb7', NULL, 'participant', 'anonymousUser', NULL, '2026-01-18 19:13:04.812', 'a8eeca2f-f45e-11f0-9035-568938879cb7', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_hi_identitylink CASCADE;
+
 INSERT INTO public.act_hi_identitylink VALUES ('d95d3ce2-f515-11f0-83bf-1a46ed4020c1', NULL, 'starter', 'purchase-requester-001', NULL, '2026-01-19 17:04:23.837', 'd95d15d1-f515-11f0-83bf-1a46ed4020c1', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_hi_identitylink CASCADE;
+
 INSERT INTO public.act_hi_identitylink VALUES ('d9713a1a-f515-11f0-83bf-1a46ed4020c1', NULL, 'assignee', 'purchase-requester-001', 'd95e7569-f515-11f0-83bf-1a46ed4020c1', '2026-01-19 17:04:23.968', NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_hi_identitylink CASCADE;
+
 INSERT INTO public.act_hi_identitylink VALUES ('d971af4b-f515-11f0-83bf-1a46ed4020c1', NULL, 'participant', 'purchase-requester-001', NULL, '2026-01-19 17:04:23.971', 'd95d15d1-f515-11f0-83bf-1a46ed4020c1', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_hi_identitylink CASCADE;
+
 INSERT INTO public.act_hi_identitylink VALUES ('d97d962e-f515-11f0-83bf-1a46ed4020c1', NULL, 'participant', 'anonymousUser', NULL, '2026-01-19 17:04:24.049', 'd95d15d1-f515-11f0-83bf-1a46ed4020c1', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_hi_identitylink CASCADE;
+
 INSERT INTO public.act_hi_identitylink VALUES ('14c1ffeb-f537-11f0-83bf-1a46ed4020c1', NULL, 'starter', 'purchase-requester-001', NULL, '2026-01-19 21:02:16.875', '14c1ffea-f537-11f0-83bf-1a46ed4020c1', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_hi_identitylink CASCADE;
+
 INSERT INTO public.act_hi_identitylink VALUES ('14ce5c07-f537-11f0-83bf-1a46ed4020c1', NULL, 'assignee', 'purchase-requester-001', '14c1fff6-f537-11f0-83bf-1a46ed4020c1', '2026-01-19 21:02:16.956', NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_hi_identitylink CASCADE;
+
 INSERT INTO public.act_hi_identitylink VALUES ('14ceaa28-f537-11f0-83bf-1a46ed4020c1', NULL, 'participant', 'purchase-requester-001', NULL, '2026-01-19 21:02:16.958', '14c1ffea-f537-11f0-83bf-1a46ed4020c1', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_hi_identitylink CASCADE;
+
 INSERT INTO public.act_hi_identitylink VALUES ('14d3651d-f537-11f0-83bf-1a46ed4020c1', NULL, 'participant', 'anonymousUser', NULL, '2026-01-19 21:02:16.989', '14c1ffea-f537-11f0-83bf-1a46ed4020c1', NULL, NULL, NULL, NULL);
 
+TRUNCATE TABLE public.act_hi_procinst CASCADE;
+
 INSERT INTO public.act_hi_procinst VALUES ('2d7a16d2-f132-11f0-bfbd-f2dbc029a3c2', 1, '2d7a16d2-f132-11f0-bfbd-f2dbc029a3c2', NULL, 'Process_1:2:2d6cf771-f132-11f0-bfbd-f2dbc029a3c2', '2026-01-14 18:17:06.212', NULL, NULL, 'hr-manager-001', 'StartEvent_1', NULL, NULL, NULL, '', NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_hi_procinst CASCADE;
+
 INSERT INTO public.act_hi_procinst VALUES ('80f6a8ae-f133-11f0-bfbd-f2dbc029a3c2', 1, '80f6a8ae-f133-11f0-bfbd-f2dbc029a3c2', NULL, 'Process_1:3:80f1788d-f133-11f0-bfbd-f2dbc029a3c2', '2026-01-14 18:26:35.776', NULL, NULL, 'hr-specialist-001', 'StartEvent_1', NULL, NULL, NULL, '', NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_hi_procinst CASCADE;
+
 INSERT INTO public.act_hi_procinst VALUES ('2b89f1af-f1f4-11f0-bfbd-f2dbc029a3c2', 1, '2b89f1af-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, 'Process_1:5:2b85fa0e-f1f4-11f0-bfbd-f2dbc029a3c2', '2026-01-15 17:25:45.326', NULL, NULL, 'corp-manager-001', 'StartEvent_1', NULL, NULL, NULL, '', NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_hi_procinst CASCADE;
+
 INSERT INTO public.act_hi_procinst VALUES ('6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', 1, '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, 'Process_1:7:6f5a7aaf-f1f4-11f0-bfbd-f2dbc029a3c2', '2026-01-15 17:27:39.133', NULL, NULL, 'corp-manager-001', 'StartEvent_1', NULL, NULL, NULL, '', NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_hi_procinst CASCADE;
+
 INSERT INTO public.act_hi_procinst VALUES ('6262709a-f1f7-11f0-bfbd-f2dbc029a3c2', 1, '6262709a-f1f7-11f0-bfbd-f2dbc029a3c2', NULL, 'Process_1:9:625d6789-f1f7-11f0-bfbd-f2dbc029a3c2', '2026-01-15 17:48:45.832', NULL, NULL, 'corp-manager-001', 'StartEvent_1', NULL, NULL, NULL, '', NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_hi_procinst CASCADE;
+
 INSERT INTO public.act_hi_procinst VALUES ('a8eeca2f-f45e-11f0-9035-568938879cb7', 1, 'a8eeca2f-f45e-11f0-9035-568938879cb7', NULL, 'Process_1:10:a8e5062e-f45e-11f0-9035-568938879cb7', '2026-01-18 19:13:04.681', NULL, NULL, 'tech-director-001', 'StartEvent_1', NULL, NULL, NULL, '', NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_hi_procinst CASCADE;
+
 INSERT INTO public.act_hi_procinst VALUES ('d95d15d1-f515-11f0-83bf-1a46ed4020c1', 1, 'd95d15d1-f515-11f0-83bf-1a46ed4020c1', NULL, 'Process_1:11:d94fcf60-f515-11f0-83bf-1a46ed4020c1', '2026-01-19 17:04:23.836', NULL, NULL, 'purchase-requester-001', 'StartEvent_1', NULL, NULL, NULL, '', NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_hi_procinst CASCADE;
+
 INSERT INTO public.act_hi_procinst VALUES ('14c1ffea-f537-11f0-83bf-1a46ed4020c1', 1, '14c1ffea-f537-11f0-83bf-1a46ed4020c1', NULL, 'Process_1:14:14bde139-f537-11f0-83bf-1a46ed4020c1', '2026-01-19 21:02:16.875', NULL, NULL, 'purchase-requester-001', 'StartEvent_1', NULL, NULL, NULL, '', NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 
+TRUNCATE TABLE public.act_hi_taskinst CASCADE;
+
 INSERT INTO public.act_hi_taskinst VALUES ('d97ea7a1-f515-11f0-83bf-1a46ed4020c1', 1, 'Process_1:11:d94fcf60-f515-11f0-83bf-1a46ed4020c1', NULL, 'Activity_0mvv5hc', 'd95d15d1-f515-11f0-83bf-1a46ed4020c1', 'd95d8b05-f515-11f0-83bf-1a46ed4020c1', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-01-19 17:04:24.056', NULL, NULL, NULL, NULL, 50, NULL, NULL, NULL, '', '2026-01-19 17:04:24.056');
+TRUNCATE TABLE public.act_hi_taskinst CASCADE;
+
 INSERT INTO public.act_hi_taskinst VALUES ('2d7b766a-f132-11f0-bfbd-f2dbc029a3c2', 3, 'Process_1:2:2d6cf771-f132-11f0-bfbd-f2dbc029a3c2', NULL, 'Activity_09dh3z9', '2d7a16d2-f132-11f0-bfbd-f2dbc029a3c2', '2d7a8c06-f132-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'hr-manager-001', '2026-01-14 18:17:06.22', '2026-01-14 18:17:06.324', '2026-01-14 18:17:06.384', 164, NULL, 50, NULL, NULL, NULL, '', '2026-01-14 18:17:06.384');
+TRUNCATE TABLE public.act_hi_taskinst CASCADE;
+
 INSERT INTO public.act_hi_taskinst VALUES ('2d954002-f132-11f0-bfbd-f2dbc029a3c2', 2, 'Process_1:2:2d6cf771-f132-11f0-bfbd-f2dbc029a3c2', NULL, 'Activity_0mvv5hc', '2d7a16d2-f132-11f0-bfbd-f2dbc029a3c2', '2d7a8c06-f132-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'hr-specialist-001', '2026-01-14 18:17:06.39', '2026-01-14 18:19:53.967', NULL, NULL, NULL, 50, NULL, NULL, NULL, '', '2026-01-14 18:19:53.967');
+TRUNCATE TABLE public.act_hi_taskinst CASCADE;
+
 INSERT INTO public.act_hi_taskinst VALUES ('d95e7569-f515-11f0-83bf-1a46ed4020c1', 3, 'Process_1:11:d94fcf60-f515-11f0-83bf-1a46ed4020c1', NULL, 'Activity_09dh3z9', 'd95d15d1-f515-11f0-83bf-1a46ed4020c1', 'd95d8b05-f515-11f0-83bf-1a46ed4020c1', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'purchase-requester-001', '2026-01-19 17:04:23.844', '2026-01-19 17:04:23.963', '2026-01-19 17:04:24.05', 206, NULL, 50, NULL, NULL, NULL, '', '2026-01-19 17:04:24.05');
+TRUNCATE TABLE public.act_hi_taskinst CASCADE;
+
 INSERT INTO public.act_hi_taskinst VALUES ('81074a8e-f133-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1:3:80f1788d-f133-11f0-bfbd-f2dbc029a3c2', NULL, 'Activity_0mvv5hc', '80f6a8ae-f133-11f0-bfbd-f2dbc029a3c2', '80f6cfc2-f133-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-01-14 18:26:35.885', NULL, NULL, NULL, NULL, 50, NULL, NULL, NULL, '', '2026-01-14 18:26:35.886');
+TRUNCATE TABLE public.act_hi_taskinst CASCADE;
+
 INSERT INTO public.act_hi_taskinst VALUES ('80f6cfc6-f133-11f0-bfbd-f2dbc029a3c2', 3, 'Process_1:3:80f1788d-f133-11f0-bfbd-f2dbc029a3c2', NULL, 'Activity_09dh3z9', '80f6a8ae-f133-11f0-bfbd-f2dbc029a3c2', '80f6cfc2-f133-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'hr-specialist-001', '2026-01-14 18:26:35.777', '2026-01-14 18:26:35.833', '2026-01-14 18:26:35.88', 103, NULL, 50, NULL, NULL, NULL, '', '2026-01-14 18:26:35.88');
+TRUNCATE TABLE public.act_hi_taskinst CASCADE;
+
 INSERT INTO public.act_hi_taskinst VALUES ('2b99f74f-f1f4-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1:5:2b85fa0e-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, 'Activity_0mvv5hc', '2b89f1af-f1f4-11f0-bfbd-f2dbc029a3c2', '2b8a18c3-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-01-15 17:25:45.431', NULL, NULL, NULL, NULL, 50, NULL, NULL, NULL, '', '2026-01-15 17:25:45.431');
+TRUNCATE TABLE public.act_hi_taskinst CASCADE;
+
 INSERT INTO public.act_hi_taskinst VALUES ('2b8a18c7-f1f4-11f0-bfbd-f2dbc029a3c2', 3, 'Process_1:5:2b85fa0e-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, 'Activity_09dh3z9', '2b89f1af-f1f4-11f0-bfbd-f2dbc029a3c2', '2b8a18c3-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'corp-manager-001', '2026-01-15 17:25:45.327', '2026-01-15 17:25:45.382', '2026-01-15 17:25:45.423', 96, NULL, 50, NULL, NULL, NULL, '', '2026-01-15 17:25:45.423');
+TRUNCATE TABLE public.act_hi_taskinst CASCADE;
+
 INSERT INTO public.act_hi_taskinst VALUES ('6f5faadc-f1f4-11f0-bfbd-f2dbc029a3c2', 3, 'Process_1:7:6f5a7aaf-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, 'Activity_09dh3z9', '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', '6f5f83c8-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'corp-manager-001', '2026-01-15 17:27:39.134', '2026-01-15 17:27:39.196', '2026-01-15 17:27:39.254', 120, NULL, 50, NULL, NULL, NULL, '', '2026-01-15 17:27:39.254');
+TRUNCATE TABLE public.act_hi_taskinst CASCADE;
+
 INSERT INTO public.act_hi_taskinst VALUES ('6f72bcb6-f1f4-11f0-bfbd-f2dbc029a3c2', 2, 'Process_1:7:6f5a7aaf-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, 'Activity_0mvv5hc', '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', '6f5f83c8-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'hr-manager-001', '2026-01-15 17:27:39.259', '2026-01-15 17:28:19.748', NULL, NULL, NULL, 50, NULL, NULL, NULL, '', '2026-01-15 17:28:19.749');
+TRUNCATE TABLE public.act_hi_taskinst CASCADE;
+
 INSERT INTO public.act_hi_taskinst VALUES ('14d44f80-f537-11f0-83bf-1a46ed4020c1', 1, 'Process_1:14:14bde139-f537-11f0-83bf-1a46ed4020c1', NULL, 'Activity_0mvv5hc', '14c1ffea-f537-11f0-83bf-1a46ed4020c1', '14c1fff2-f537-11f0-83bf-1a46ed4020c1', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-01-19 21:02:16.995', NULL, NULL, NULL, NULL, 50, NULL, NULL, NULL, '', '2026-01-19 21:02:16.995');
+TRUNCATE TABLE public.act_hi_taskinst CASCADE;
+
 INSERT INTO public.act_hi_taskinst VALUES ('6270535a-f1f7-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1:9:625d6789-f1f7-11f0-bfbd-f2dbc029a3c2', NULL, 'Activity_0mvv5hc', '6262709a-f1f7-11f0-bfbd-f2dbc029a3c2', '6262709e-f1f7-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-01-15 17:48:45.923', NULL, NULL, NULL, NULL, 50, NULL, NULL, NULL, '', '2026-01-15 17:48:45.923');
+TRUNCATE TABLE public.act_hi_taskinst CASCADE;
+
 INSERT INTO public.act_hi_taskinst VALUES ('626270a2-f1f7-11f0-bfbd-f2dbc029a3c2', 3, 'Process_1:9:625d6789-f1f7-11f0-bfbd-f2dbc029a3c2', NULL, 'Activity_09dh3z9', '6262709a-f1f7-11f0-bfbd-f2dbc029a3c2', '6262709e-f1f7-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'corp-manager-001', '2026-01-15 17:48:45.832', '2026-01-15 17:48:45.882', '2026-01-15 17:48:45.918', 86, NULL, 50, NULL, NULL, NULL, '', '2026-01-15 17:48:45.918');
+TRUNCATE TABLE public.act_hi_taskinst CASCADE;
+
 INSERT INTO public.act_hi_taskinst VALUES ('14c1fff6-f537-11f0-83bf-1a46ed4020c1', 3, 'Process_1:14:14bde139-f537-11f0-83bf-1a46ed4020c1', NULL, 'Activity_09dh3z9', '14c1ffea-f537-11f0-83bf-1a46ed4020c1', '14c1fff2-f537-11f0-83bf-1a46ed4020c1', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'purchase-requester-001', '2026-01-19 21:02:16.875', '2026-01-19 21:02:16.95', '2026-01-19 21:02:16.99', 115, NULL, 50, NULL, NULL, NULL, '', '2026-01-19 21:02:16.99');
+TRUNCATE TABLE public.act_hi_taskinst CASCADE;
+
 INSERT INTO public.act_hi_taskinst VALUES ('a903b1cf-f45e-11f0-9035-568938879cb7', 1, 'Process_1:10:a8e5062e-f45e-11f0-9035-568938879cb7', NULL, 'Activity_0mvv5hc', 'a8eeca2f-f45e-11f0-9035-568938879cb7', 'a8ef1853-f45e-11f0-9035-568938879cb7', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-01-18 19:13:04.818', NULL, NULL, NULL, NULL, 50, NULL, NULL, NULL, '', '2026-01-18 19:13:04.818');
+TRUNCATE TABLE public.act_hi_taskinst CASCADE;
+
 INSERT INTO public.act_hi_taskinst VALUES ('a8f002b7-f45e-11f0-9035-568938879cb7', 3, 'Process_1:10:a8e5062e-f45e-11f0-9035-568938879cb7', NULL, 'Activity_09dh3z9', 'a8eeca2f-f45e-11f0-9035-568938879cb7', 'a8ef1853-f45e-11f0-9035-568938879cb7', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'tech-director-001', '2026-01-18 19:13:04.688', '2026-01-18 19:13:04.768', '2026-01-18 19:13:04.813', 125, NULL, 50, NULL, NULL, NULL, '', '2026-01-18 19:13:04.813');
+TRUNCATE TABLE public.act_hi_varinst CASCADE;
+
 INSERT INTO public.act_hi_varinst VALUES ('2d7a64f4-f132-11f0-bfbd-f2dbc029a3c2', 1, '2d7a16d2-f132-11f0-bfbd-f2dbc029a3c2', '2d7a16d2-f132-11f0-bfbd-f2dbc029a3c2', NULL, 'initiator', 'string', NULL, NULL, NULL, NULL, NULL, NULL, 'hr-manager-001', NULL, NULL, '2026-01-14 18:17:06.215', '2026-01-14 18:17:06.382');
+TRUNCATE TABLE public.act_hi_varinst CASCADE;
+
 INSERT INTO public.act_hi_varinst VALUES ('80f6a8b0-f133-11f0-bfbd-f2dbc029a3c2', 1, '80f6a8ae-f133-11f0-bfbd-f2dbc029a3c2', '80f6a8ae-f133-11f0-bfbd-f2dbc029a3c2', NULL, 'initiator', 'string', NULL, NULL, NULL, NULL, NULL, NULL, 'hr-specialist-001', NULL, NULL, '2026-01-14 18:26:35.776', '2026-01-14 18:26:35.878');
+TRUNCATE TABLE public.act_hi_varinst CASCADE;
+
 INSERT INTO public.act_hi_varinst VALUES ('2b8a18c1-f1f4-11f0-bfbd-f2dbc029a3c2', 1, '2b89f1af-f1f4-11f0-bfbd-f2dbc029a3c2', '2b89f1af-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, 'initiator', 'string', NULL, NULL, NULL, NULL, NULL, NULL, 'corp-manager-001', NULL, NULL, '2026-01-15 17:25:45.327', '2026-01-15 17:25:45.418');
+TRUNCATE TABLE public.act_hi_varinst CASCADE;
+
 INSERT INTO public.act_hi_varinst VALUES ('6f5f83c6-f1f4-11f0-bfbd-f2dbc029a3c2', 1, '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, 'initiator', 'string', NULL, NULL, NULL, NULL, NULL, NULL, 'corp-manager-001', NULL, NULL, '2026-01-15 17:27:39.133', '2026-01-15 17:27:39.251');
+TRUNCATE TABLE public.act_hi_varinst CASCADE;
+
 INSERT INTO public.act_hi_varinst VALUES ('6f5f83c2-f1f4-11f0-bfbd-f2dbc029a3c2', 1, '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, 'Fq63mkdrn28vabc', 'string', NULL, NULL, NULL, NULL, NULL, NULL, 'qqq', NULL, NULL, '2026-01-15 17:27:39.133', '2026-01-15 17:27:39.248');
+TRUNCATE TABLE public.act_hi_varinst CASCADE;
+
 INSERT INTO public.act_hi_varinst VALUES ('6f5f83c4-f1f4-11f0-bfbd-f2dbc029a3c2', 1, '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, 'Fxe2mkdrrp95ahc', 'null', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-01-15 17:27:39.133', '2026-01-15 17:27:39.25');
+TRUNCATE TABLE public.act_hi_varinst CASCADE;
+
 INSERT INTO public.act_hi_varinst VALUES ('6262709c-f1f7-11f0-bfbd-f2dbc029a3c2', 1, '6262709a-f1f7-11f0-bfbd-f2dbc029a3c2', '6262709a-f1f7-11f0-bfbd-f2dbc029a3c2', NULL, 'initiator', 'string', NULL, NULL, NULL, NULL, NULL, NULL, 'corp-manager-001', NULL, NULL, '2026-01-15 17:48:45.832', '2026-01-15 17:48:45.916');
+TRUNCATE TABLE public.act_hi_varinst CASCADE;
+
 INSERT INTO public.act_hi_varinst VALUES ('a8eef141-f45e-11f0-9035-568938879cb7', 1, 'a8eeca2f-f45e-11f0-9035-568938879cb7', 'a8eeca2f-f45e-11f0-9035-568938879cb7', NULL, 'initiator', 'string', NULL, NULL, NULL, NULL, NULL, NULL, 'tech-director-001', NULL, NULL, '2026-01-18 19:13:04.683', '2026-01-18 19:13:04.811');
+TRUNCATE TABLE public.act_hi_varinst CASCADE;
+
 INSERT INTO public.act_hi_varinst VALUES ('d95d3ce3-f515-11f0-83bf-1a46ed4020c1', 1, 'd95d15d1-f515-11f0-83bf-1a46ed4020c1', 'd95d15d1-f515-11f0-83bf-1a46ed4020c1', NULL, 'initiator', 'string', NULL, NULL, NULL, NULL, NULL, NULL, 'purchase-requester-001', NULL, NULL, '2026-01-19 17:04:23.839', '2026-01-19 17:04:24.047');
+TRUNCATE TABLE public.act_hi_varinst CASCADE;
+
 INSERT INTO public.act_hi_varinst VALUES ('14c1fff0-f537-11f0-83bf-1a46ed4020c1', 1, '14c1ffea-f537-11f0-83bf-1a46ed4020c1', '14c1ffea-f537-11f0-83bf-1a46ed4020c1', NULL, 'initiator', 'string', NULL, NULL, NULL, NULL, NULL, NULL, 'purchase-requester-001', NULL, NULL, '2026-01-19 21:02:16.875', '2026-01-19 21:02:16.988');
+TRUNCATE TABLE public.act_hi_varinst CASCADE;
+
 INSERT INTO public.act_hi_varinst VALUES ('14c1ffec-f537-11f0-83bf-1a46ed4020c1', 1, '14c1ffea-f537-11f0-83bf-1a46ed4020c1', '14c1ffea-f537-11f0-83bf-1a46ed4020c1', NULL, 'Fq63mkdrn28vabc', 'string', NULL, NULL, NULL, NULL, NULL, NULL, 'ooo', NULL, NULL, '2026-01-19 21:02:16.875', '2026-01-19 21:02:16.985');
+TRUNCATE TABLE public.act_hi_varinst CASCADE;
+
 INSERT INTO public.act_hi_varinst VALUES ('14c1ffee-f537-11f0-83bf-1a46ed4020c1', 1, '14c1ffea-f537-11f0-83bf-1a46ed4020c1', '14c1ffea-f537-11f0-83bf-1a46ed4020c1', NULL, 'Fxe2mkdrrp95ahc', 'null', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-01-19 21:02:16.875', '2026-01-19 21:02:16.987');
 
+TRUNCATE TABLE public.act_id_property CASCADE;
+
 INSERT INTO public.act_id_property VALUES ('schema.version', '7.0.0.0', 1);
+TRUNCATE TABLE public.act_re_deployment CASCADE;
+
 INSERT INTO public.act_re_deployment VALUES ('46d79885-f12a-11f0-a8df-f2dbc029a3c2', 'Test - main-process.bpmn', NULL, 'Process_1', '', '2026-01-14 17:20:32.794', NULL, NULL, '46d79885-f12a-11f0-a8df-f2dbc029a3c2', NULL);
+TRUNCATE TABLE public.act_re_deployment CASCADE;
+
 INSERT INTO public.act_re_deployment VALUES ('2d5e787e-f132-11f0-bfbd-f2dbc029a3c2', 'Test', NULL, 'fu-20260114-paed3z', '', '2026-01-14 18:17:06.031', NULL, NULL, '2d5e787e-f132-11f0-bfbd-f2dbc029a3c2', NULL);
+TRUNCATE TABLE public.act_re_deployment CASCADE;
+
 INSERT INTO public.act_re_deployment VALUES ('80ec968a-f133-11f0-bfbd-f2dbc029a3c2', 'Test', NULL, 'fu-20260114-paed3z', '', '2026-01-14 18:26:35.71', NULL, NULL, '80ec968a-f133-11f0-bfbd-f2dbc029a3c2', NULL);
+TRUNCATE TABLE public.act_re_deployment CASCADE;
+
 INSERT INTO public.act_re_deployment VALUES ('1b564cc3-f1f4-11f0-bfbd-f2dbc029a3c2', 'Test - main-process.bpmn', NULL, 'Process_1', '', '2026-01-15 17:25:18.144', NULL, NULL, '1b564cc3-f1f4-11f0-bfbd-f2dbc029a3c2', NULL);
+TRUNCATE TABLE public.act_re_deployment CASCADE;
+
 INSERT INTO public.act_re_deployment VALUES ('2b82026b-f1f4-11f0-bfbd-f2dbc029a3c2', 'Test', NULL, 'fu-20260114-paed3z', '', '2026-01-15 17:25:45.274', NULL, NULL, '2b82026b-f1f4-11f0-bfbd-f2dbc029a3c2', NULL);
+TRUNCATE TABLE public.act_re_deployment CASCADE;
+
 INSERT INTO public.act_re_deployment VALUES ('5d2adeb4-f1f4-11f0-bfbd-f2dbc029a3c2', 'Test - main-process.bpmn', NULL, 'Process_1', '', '2026-01-15 17:27:08.589', NULL, NULL, '5d2adeb4-f1f4-11f0-bfbd-f2dbc029a3c2', NULL);
+TRUNCATE TABLE public.act_re_deployment CASCADE;
+
 INSERT INTO public.act_re_deployment VALUES ('6f5634ec-f1f4-11f0-bfbd-f2dbc029a3c2', 'Test', NULL, 'fu-20260114-paed3z', '', '2026-01-15 17:27:39.072', NULL, NULL, '6f5634ec-f1f4-11f0-bfbd-f2dbc029a3c2', NULL);
+TRUNCATE TABLE public.act_re_deployment CASCADE;
+
 INSERT INTO public.act_re_deployment VALUES ('9c5df45e-f1f5-11f0-bfbd-f2dbc029a3c2', 'Test - main-process.bpmn', NULL, 'Process_1', '', '2026-01-15 17:36:04.116', NULL, NULL, '9c5df45e-f1f5-11f0-bfbd-f2dbc029a3c2', NULL);
+TRUNCATE TABLE public.act_re_deployment CASCADE;
+
 INSERT INTO public.act_re_deployment VALUES ('6259be06-f1f7-11f0-bfbd-f2dbc029a3c2', 'Test', NULL, 'fu-20260114-paed3z', '', '2026-01-15 17:48:45.775', NULL, NULL, '6259be06-f1f7-11f0-bfbd-f2dbc029a3c2', NULL);
+TRUNCATE TABLE public.act_re_deployment CASCADE;
+
 INSERT INTO public.act_re_deployment VALUES ('a8dffd1b-f45e-11f0-9035-568938879cb7', 'Test', NULL, 'fu-20260114-paed3z', '', '2026-01-18 19:13:04.584', NULL, NULL, 'a8dffd1b-f45e-11f0-9035-568938879cb7', NULL);
+TRUNCATE TABLE public.act_re_deployment CASCADE;
+
 INSERT INTO public.act_re_deployment VALUES ('d94ac64d-f515-11f0-83bf-1a46ed4020c1', 'Test', NULL, 'fu-20260114-paed3z', '', '2026-01-19 17:04:23.716', NULL, NULL, 'd94ac64d-f515-11f0-83bf-1a46ed4020c1', NULL);
+TRUNCATE TABLE public.act_re_deployment CASCADE;
+
 INSERT INTO public.act_re_deployment VALUES ('022c2806-f537-11f0-83bf-1a46ed4020c1', 'Test0 - main-process.bpmn', NULL, 'Process_1', '', '2026-01-19 21:01:45.694', NULL, NULL, '022c2806-f537-11f0-83bf-1a46ed4020c1', NULL);
+TRUNCATE TABLE public.act_re_deployment CASCADE;
+
 INSERT INTO public.act_re_deployment VALUES ('09178c9e-f537-11f0-83bf-1a46ed4020c1', 'Test0 - main-process.bpmn', NULL, 'Process_1', '', '2026-01-19 21:01:57.303', NULL, NULL, '09178c9e-f537-11f0-83bf-1a46ed4020c1', NULL);
+TRUNCATE TABLE public.act_re_deployment CASCADE;
+
 INSERT INTO public.act_re_deployment VALUES ('14ba10a6-f537-11f0-83bf-1a46ed4020c1', 'Test0', NULL, 'fu-20260114-paed3z', '', '2026-01-19 21:02:16.823', NULL, NULL, '14ba10a6-f537-11f0-83bf-1a46ed4020c1', NULL);
+TRUNCATE TABLE public.act_re_procdef CASCADE;
+
 INSERT INTO public.act_re_procdef VALUES ('Process_1:1:46dca198-f12a-11f0-a8df-f2dbc029a3c2', 1, 'http://bpmn.io/schema/bpmn', NULL, 'Process_1', 1, '46d79885-f12a-11f0-a8df-f2dbc029a3c2', 'Process_1.bpmn', 'Process_1.Process_1.png', NULL, false, true, 1, '', NULL, NULL, 0, NULL);
+TRUNCATE TABLE public.act_re_procdef CASCADE;
+
 INSERT INTO public.act_re_procdef VALUES ('Process_1:2:2d6cf771-f132-11f0-bfbd-f2dbc029a3c2', 1, 'http://bpmn.io/schema/bpmn', NULL, 'Process_1', 2, '2d5e787e-f132-11f0-bfbd-f2dbc029a3c2', 'fu-20260114-paed3z.bpmn', 'fu-20260114-paed3z.Process_1.png', NULL, false, true, 1, '', NULL, NULL, 0, NULL);
+TRUNCATE TABLE public.act_re_procdef CASCADE;
+
 INSERT INTO public.act_re_procdef VALUES ('Process_1:3:80f1788d-f133-11f0-bfbd-f2dbc029a3c2', 1, 'http://bpmn.io/schema/bpmn', NULL, 'Process_1', 3, '80ec968a-f133-11f0-bfbd-f2dbc029a3c2', 'fu-20260114-paed3z.bpmn', 'fu-20260114-paed3z.Process_1.png', NULL, false, true, 1, '', NULL, NULL, 0, NULL);
+TRUNCATE TABLE public.act_re_procdef CASCADE;
+
 INSERT INTO public.act_re_procdef VALUES ('Process_1:4:1b5a1d56-f1f4-11f0-bfbd-f2dbc029a3c2', 1, 'http://bpmn.io/schema/bpmn', NULL, 'Process_1', 4, '1b564cc3-f1f4-11f0-bfbd-f2dbc029a3c2', 'Process_1.bpmn', 'Process_1.Process_1.png', NULL, false, true, 1, '', NULL, NULL, 0, NULL);
+TRUNCATE TABLE public.act_re_procdef CASCADE;
+
 INSERT INTO public.act_re_procdef VALUES ('Process_1:5:2b85fa0e-f1f4-11f0-bfbd-f2dbc029a3c2', 1, 'http://bpmn.io/schema/bpmn', NULL, 'Process_1', 5, '2b82026b-f1f4-11f0-bfbd-f2dbc029a3c2', 'fu-20260114-paed3z.bpmn', 'fu-20260114-paed3z.Process_1.png', NULL, false, true, 1, '', NULL, NULL, 0, NULL);
+TRUNCATE TABLE public.act_re_procdef CASCADE;
+
 INSERT INTO public.act_re_procdef VALUES ('Process_1:6:5d2e8837-f1f4-11f0-bfbd-f2dbc029a3c2', 1, 'http://bpmn.io/schema/bpmn', NULL, 'Process_1', 6, '5d2adeb4-f1f4-11f0-bfbd-f2dbc029a3c2', 'Process_1.bpmn', 'Process_1.Process_1.png', NULL, false, true, 1, '', NULL, NULL, 0, NULL);
+TRUNCATE TABLE public.act_re_procdef CASCADE;
+
 INSERT INTO public.act_re_procdef VALUES ('Process_1:7:6f5a7aaf-f1f4-11f0-bfbd-f2dbc029a3c2', 1, 'http://bpmn.io/schema/bpmn', NULL, 'Process_1', 7, '6f5634ec-f1f4-11f0-bfbd-f2dbc029a3c2', 'fu-20260114-paed3z.bpmn', 'fu-20260114-paed3z.Process_1.png', NULL, false, true, 1, '', NULL, NULL, 0, NULL);
+TRUNCATE TABLE public.act_re_procdef CASCADE;
+
 INSERT INTO public.act_re_procdef VALUES ('Process_1:8:9c614fc1-f1f5-11f0-bfbd-f2dbc029a3c2', 1, 'http://bpmn.io/schema/bpmn', NULL, 'Process_1', 8, '9c5df45e-f1f5-11f0-bfbd-f2dbc029a3c2', 'Process_1.bpmn', 'Process_1.Process_1.png', NULL, false, true, 1, '', NULL, NULL, 0, NULL);
+TRUNCATE TABLE public.act_re_procdef CASCADE;
+
 INSERT INTO public.act_re_procdef VALUES ('Process_1:9:625d6789-f1f7-11f0-bfbd-f2dbc029a3c2', 1, 'http://bpmn.io/schema/bpmn', NULL, 'Process_1', 9, '6259be06-f1f7-11f0-bfbd-f2dbc029a3c2', 'fu-20260114-paed3z.bpmn', 'fu-20260114-paed3z.Process_1.png', NULL, false, true, 1, '', NULL, NULL, 0, NULL);
+TRUNCATE TABLE public.act_re_procdef CASCADE;
+
 INSERT INTO public.act_re_procdef VALUES ('Process_1:10:a8e5062e-f45e-11f0-9035-568938879cb7', 1, 'http://bpmn.io/schema/bpmn', NULL, 'Process_1', 10, 'a8dffd1b-f45e-11f0-9035-568938879cb7', 'fu-20260114-paed3z.bpmn', 'fu-20260114-paed3z.Process_1.png', NULL, false, true, 1, '', NULL, NULL, 0, NULL);
+TRUNCATE TABLE public.act_re_procdef CASCADE;
+
 INSERT INTO public.act_re_procdef VALUES ('Process_1:11:d94fcf60-f515-11f0-83bf-1a46ed4020c1', 1, 'http://bpmn.io/schema/bpmn', NULL, 'Process_1', 11, 'd94ac64d-f515-11f0-83bf-1a46ed4020c1', 'fu-20260114-paed3z.bpmn', 'fu-20260114-paed3z.Process_1.png', NULL, false, true, 1, '', NULL, NULL, 0, NULL);
+TRUNCATE TABLE public.act_re_procdef CASCADE;
+
 INSERT INTO public.act_re_procdef VALUES ('Process_1:12:0230e2f9-f537-11f0-83bf-1a46ed4020c1', 1, 'http://bpmn.io/schema/bpmn', NULL, 'Process_1', 12, '022c2806-f537-11f0-83bf-1a46ed4020c1', 'Process_1.bpmn', 'Process_1.Process_1.png', NULL, false, true, 1, '', NULL, NULL, 0, NULL);
+TRUNCATE TABLE public.act_re_procdef CASCADE;
+
 INSERT INTO public.act_re_procdef VALUES ('Process_1:13:091b8441-f537-11f0-83bf-1a46ed4020c1', 1, 'http://bpmn.io/schema/bpmn', NULL, 'Process_1', 13, '09178c9e-f537-11f0-83bf-1a46ed4020c1', 'Process_1.bpmn', 'Process_1.Process_1.png', NULL, false, true, 1, '', NULL, NULL, 0, NULL);
+TRUNCATE TABLE public.act_re_procdef CASCADE;
+
 INSERT INTO public.act_re_procdef VALUES ('Process_1:14:14bde139-f537-11f0-83bf-1a46ed4020c1', 1, 'http://bpmn.io/schema/bpmn', NULL, 'Process_1', 14, '14ba10a6-f537-11f0-83bf-1a46ed4020c1', 'fu-20260114-paed3z.bpmn', 'fu-20260114-paed3z.Process_1.png', NULL, false, true, 1, '', NULL, NULL, 0, NULL);
 
+TRUNCATE TABLE public.act_ru_actinst CASCADE;
+
 INSERT INTO public.act_ru_actinst VALUES ('2d7a8c07-f132-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1:2:2d6cf771-f132-11f0-bfbd-f2dbc029a3c2', '2d7a16d2-f132-11f0-bfbd-f2dbc029a3c2', '2d7a8c06-f132-11f0-bfbd-f2dbc029a3c2', 'StartEvent_1', NULL, NULL, '开始', 'startEvent', NULL, '2026-01-14 18:17:06.215', '2026-01-14 18:17:06.219', 4, 1, NULL, '');
+TRUNCATE TABLE public.act_ru_actinst CASCADE;
+
 INSERT INTO public.act_ru_actinst VALUES ('2d7b4f58-f132-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1:2:2d6cf771-f132-11f0-bfbd-f2dbc029a3c2', '2d7a16d2-f132-11f0-bfbd-f2dbc029a3c2', '2d7a8c06-f132-11f0-bfbd-f2dbc029a3c2', 'Flow_1', NULL, NULL, NULL, 'sequenceFlow', NULL, '2026-01-14 18:17:06.22', '2026-01-14 18:17:06.22', 0, 2, NULL, '');
+TRUNCATE TABLE public.act_ru_actinst CASCADE;
+
 INSERT INTO public.act_ru_actinst VALUES ('6f7295a4-f1f4-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1:7:6f5a7aaf-f1f4-11f0-bfbd-f2dbc029a3c2', '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', '6f5f83c8-f1f4-11f0-bfbd-f2dbc029a3c2', 'Flow_0un7hlh', NULL, NULL, NULL, 'sequenceFlow', NULL, '2026-01-15 17:27:39.258', '2026-01-15 17:27:39.258', 0, 1, NULL, '');
+TRUNCATE TABLE public.act_ru_actinst CASCADE;
+
 INSERT INTO public.act_ru_actinst VALUES ('2d9518f0-f132-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1:2:2d6cf771-f132-11f0-bfbd-f2dbc029a3c2', '2d7a16d2-f132-11f0-bfbd-f2dbc029a3c2', '2d7a8c06-f132-11f0-bfbd-f2dbc029a3c2', 'Flow_0un7hlh', NULL, NULL, NULL, 'sequenceFlow', NULL, '2026-01-14 18:17:06.389', '2026-01-14 18:17:06.389', 0, 1, NULL, '');
+TRUNCATE TABLE public.act_ru_actinst CASCADE;
+
 INSERT INTO public.act_ru_actinst VALUES ('2d7b4f59-f132-11f0-bfbd-f2dbc029a3c2', 3, 'Process_1:2:2d6cf771-f132-11f0-bfbd-f2dbc029a3c2', '2d7a16d2-f132-11f0-bfbd-f2dbc029a3c2', '2d7a8c06-f132-11f0-bfbd-f2dbc029a3c2', 'Activity_09dh3z9', '2d7b766a-f132-11f0-bfbd-f2dbc029a3c2', NULL, NULL, 'userTask', 'hr-manager-001', '2026-01-14 18:17:06.22', '2026-01-14 18:17:06.388', 168, 3, NULL, '');
+TRUNCATE TABLE public.act_ru_actinst CASCADE;
+
 INSERT INTO public.act_ru_actinst VALUES ('2d954001-f132-11f0-bfbd-f2dbc029a3c2', 2, 'Process_1:2:2d6cf771-f132-11f0-bfbd-f2dbc029a3c2', '2d7a16d2-f132-11f0-bfbd-f2dbc029a3c2', '2d7a8c06-f132-11f0-bfbd-f2dbc029a3c2', 'Activity_0mvv5hc', '2d954002-f132-11f0-bfbd-f2dbc029a3c2', NULL, NULL, 'userTask', 'hr-specialist-001', '2026-01-14 18:17:06.39', NULL, NULL, 2, NULL, '');
+TRUNCATE TABLE public.act_ru_actinst CASCADE;
+
 INSERT INTO public.act_ru_actinst VALUES ('80f6cfc3-f133-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1:3:80f1788d-f133-11f0-bfbd-f2dbc029a3c2', '80f6a8ae-f133-11f0-bfbd-f2dbc029a3c2', '80f6cfc2-f133-11f0-bfbd-f2dbc029a3c2', 'StartEvent_1', NULL, NULL, '开始', 'startEvent', NULL, '2026-01-14 18:26:35.777', '2026-01-14 18:26:35.777', 0, 1, NULL, '');
+TRUNCATE TABLE public.act_ru_actinst CASCADE;
+
 INSERT INTO public.act_ru_actinst VALUES ('80f6cfc4-f133-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1:3:80f1788d-f133-11f0-bfbd-f2dbc029a3c2', '80f6a8ae-f133-11f0-bfbd-f2dbc029a3c2', '80f6cfc2-f133-11f0-bfbd-f2dbc029a3c2', 'Flow_1', NULL, NULL, NULL, 'sequenceFlow', NULL, '2026-01-14 18:26:35.777', '2026-01-14 18:26:35.777', 0, 2, NULL, '');
+TRUNCATE TABLE public.act_ru_actinst CASCADE;
+
 INSERT INTO public.act_ru_actinst VALUES ('8107237c-f133-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1:3:80f1788d-f133-11f0-bfbd-f2dbc029a3c2', '80f6a8ae-f133-11f0-bfbd-f2dbc029a3c2', '80f6cfc2-f133-11f0-bfbd-f2dbc029a3c2', 'Flow_0un7hlh', NULL, NULL, NULL, 'sequenceFlow', NULL, '2026-01-14 18:26:35.884', '2026-01-14 18:26:35.884', 0, 1, NULL, '');
+TRUNCATE TABLE public.act_ru_actinst CASCADE;
+
 INSERT INTO public.act_ru_actinst VALUES ('81074a8d-f133-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1:3:80f1788d-f133-11f0-bfbd-f2dbc029a3c2', '80f6a8ae-f133-11f0-bfbd-f2dbc029a3c2', '80f6cfc2-f133-11f0-bfbd-f2dbc029a3c2', 'Activity_0mvv5hc', '81074a8e-f133-11f0-bfbd-f2dbc029a3c2', NULL, NULL, 'userTask', NULL, '2026-01-14 18:26:35.885', NULL, NULL, 2, NULL, '');
+TRUNCATE TABLE public.act_ru_actinst CASCADE;
+
 INSERT INTO public.act_ru_actinst VALUES ('80f6cfc5-f133-11f0-bfbd-f2dbc029a3c2', 3, 'Process_1:3:80f1788d-f133-11f0-bfbd-f2dbc029a3c2', '80f6a8ae-f133-11f0-bfbd-f2dbc029a3c2', '80f6cfc2-f133-11f0-bfbd-f2dbc029a3c2', 'Activity_09dh3z9', '80f6cfc6-f133-11f0-bfbd-f2dbc029a3c2', NULL, NULL, 'userTask', 'hr-specialist-001', '2026-01-14 18:26:35.777', '2026-01-14 18:26:35.883', 106, 3, NULL, '');
+TRUNCATE TABLE public.act_ru_actinst CASCADE;
+
 INSERT INTO public.act_ru_actinst VALUES ('2b8a18c4-f1f4-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1:5:2b85fa0e-f1f4-11f0-bfbd-f2dbc029a3c2', '2b89f1af-f1f4-11f0-bfbd-f2dbc029a3c2', '2b8a18c3-f1f4-11f0-bfbd-f2dbc029a3c2', 'StartEvent_1', NULL, NULL, '开始', 'startEvent', NULL, '2026-01-15 17:25:45.327', '2026-01-15 17:25:45.327', 0, 1, NULL, '');
+TRUNCATE TABLE public.act_ru_actinst CASCADE;
+
 INSERT INTO public.act_ru_actinst VALUES ('2b8a18c5-f1f4-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1:5:2b85fa0e-f1f4-11f0-bfbd-f2dbc029a3c2', '2b89f1af-f1f4-11f0-bfbd-f2dbc029a3c2', '2b8a18c3-f1f4-11f0-bfbd-f2dbc029a3c2', 'Flow_1', NULL, NULL, NULL, 'sequenceFlow', NULL, '2026-01-15 17:25:45.327', '2026-01-15 17:25:45.327', 0, 2, NULL, '');
+TRUNCATE TABLE public.act_ru_actinst CASCADE;
+
 INSERT INTO public.act_ru_actinst VALUES ('6f5faadb-f1f4-11f0-bfbd-f2dbc029a3c2', 3, 'Process_1:7:6f5a7aaf-f1f4-11f0-bfbd-f2dbc029a3c2', '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', '6f5f83c8-f1f4-11f0-bfbd-f2dbc029a3c2', 'Activity_09dh3z9', '6f5faadc-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, NULL, 'userTask', 'corp-manager-001', '2026-01-15 17:27:39.134', '2026-01-15 17:27:39.257', 123, 3, NULL, '');
+TRUNCATE TABLE public.act_ru_actinst CASCADE;
+
 INSERT INTO public.act_ru_actinst VALUES ('2b99a92d-f1f4-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1:5:2b85fa0e-f1f4-11f0-bfbd-f2dbc029a3c2', '2b89f1af-f1f4-11f0-bfbd-f2dbc029a3c2', '2b8a18c3-f1f4-11f0-bfbd-f2dbc029a3c2', 'Flow_0un7hlh', NULL, NULL, NULL, 'sequenceFlow', NULL, '2026-01-15 17:25:45.429', '2026-01-15 17:25:45.429', 0, 1, NULL, '');
+TRUNCATE TABLE public.act_ru_actinst CASCADE;
+
 INSERT INTO public.act_ru_actinst VALUES ('2b99f74e-f1f4-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1:5:2b85fa0e-f1f4-11f0-bfbd-f2dbc029a3c2', '2b89f1af-f1f4-11f0-bfbd-f2dbc029a3c2', '2b8a18c3-f1f4-11f0-bfbd-f2dbc029a3c2', 'Activity_0mvv5hc', '2b99f74f-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, NULL, 'userTask', NULL, '2026-01-15 17:25:45.431', NULL, NULL, 2, NULL, '');
+TRUNCATE TABLE public.act_ru_actinst CASCADE;
+
 INSERT INTO public.act_ru_actinst VALUES ('2b8a18c6-f1f4-11f0-bfbd-f2dbc029a3c2', 3, 'Process_1:5:2b85fa0e-f1f4-11f0-bfbd-f2dbc029a3c2', '2b89f1af-f1f4-11f0-bfbd-f2dbc029a3c2', '2b8a18c3-f1f4-11f0-bfbd-f2dbc029a3c2', 'Activity_09dh3z9', '2b8a18c7-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, NULL, 'userTask', 'corp-manager-001', '2026-01-15 17:25:45.327', '2026-01-15 17:25:45.428', 101, 3, NULL, '');
+TRUNCATE TABLE public.act_ru_actinst CASCADE;
+
 INSERT INTO public.act_ru_actinst VALUES ('6f5f83c9-f1f4-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1:7:6f5a7aaf-f1f4-11f0-bfbd-f2dbc029a3c2', '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', '6f5f83c8-f1f4-11f0-bfbd-f2dbc029a3c2', 'StartEvent_1', NULL, NULL, '开始', 'startEvent', NULL, '2026-01-15 17:27:39.133', '2026-01-15 17:27:39.134', 1, 1, NULL, '');
+TRUNCATE TABLE public.act_ru_actinst CASCADE;
+
 INSERT INTO public.act_ru_actinst VALUES ('6f5faada-f1f4-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1:7:6f5a7aaf-f1f4-11f0-bfbd-f2dbc029a3c2', '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', '6f5f83c8-f1f4-11f0-bfbd-f2dbc029a3c2', 'Flow_1', NULL, NULL, NULL, 'sequenceFlow', NULL, '2026-01-15 17:27:39.134', '2026-01-15 17:27:39.134', 0, 2, NULL, '');
+TRUNCATE TABLE public.act_ru_actinst CASCADE;
+
 INSERT INTO public.act_ru_actinst VALUES ('626270a1-f1f7-11f0-bfbd-f2dbc029a3c2', 3, 'Process_1:9:625d6789-f1f7-11f0-bfbd-f2dbc029a3c2', '6262709a-f1f7-11f0-bfbd-f2dbc029a3c2', '6262709e-f1f7-11f0-bfbd-f2dbc029a3c2', 'Activity_09dh3z9', '626270a2-f1f7-11f0-bfbd-f2dbc029a3c2', NULL, NULL, 'userTask', 'corp-manager-001', '2026-01-15 17:48:45.832', '2026-01-15 17:48:45.921', 89, 3, NULL, '');
+TRUNCATE TABLE public.act_ru_actinst CASCADE;
+
 INSERT INTO public.act_ru_actinst VALUES ('6f72bcb5-f1f4-11f0-bfbd-f2dbc029a3c2', 2, 'Process_1:7:6f5a7aaf-f1f4-11f0-bfbd-f2dbc029a3c2', '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', '6f5f83c8-f1f4-11f0-bfbd-f2dbc029a3c2', 'Activity_0mvv5hc', '6f72bcb6-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, NULL, 'userTask', 'hr-manager-001', '2026-01-15 17:27:39.259', NULL, NULL, 2, NULL, '');
+TRUNCATE TABLE public.act_ru_actinst CASCADE;
+
 INSERT INTO public.act_ru_actinst VALUES ('6262709f-f1f7-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1:9:625d6789-f1f7-11f0-bfbd-f2dbc029a3c2', '6262709a-f1f7-11f0-bfbd-f2dbc029a3c2', '6262709e-f1f7-11f0-bfbd-f2dbc029a3c2', 'StartEvent_1', NULL, NULL, '开始', 'startEvent', NULL, '2026-01-15 17:48:45.832', '2026-01-15 17:48:45.832', 0, 1, NULL, '');
+TRUNCATE TABLE public.act_ru_actinst CASCADE;
+
 INSERT INTO public.act_ru_actinst VALUES ('626270a0-f1f7-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1:9:625d6789-f1f7-11f0-bfbd-f2dbc029a3c2', '6262709a-f1f7-11f0-bfbd-f2dbc029a3c2', '6262709e-f1f7-11f0-bfbd-f2dbc029a3c2', 'Flow_1', NULL, NULL, NULL, 'sequenceFlow', NULL, '2026-01-15 17:48:45.832', '2026-01-15 17:48:45.832', 0, 2, NULL, '');
+TRUNCATE TABLE public.act_ru_actinst CASCADE;
+
 INSERT INTO public.act_ru_actinst VALUES ('62702c48-f1f7-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1:9:625d6789-f1f7-11f0-bfbd-f2dbc029a3c2', '6262709a-f1f7-11f0-bfbd-f2dbc029a3c2', '6262709e-f1f7-11f0-bfbd-f2dbc029a3c2', 'Flow_0un7hlh', NULL, NULL, NULL, 'sequenceFlow', NULL, '2026-01-15 17:48:45.922', '2026-01-15 17:48:45.922', 0, 1, NULL, '');
+TRUNCATE TABLE public.act_ru_actinst CASCADE;
+
 INSERT INTO public.act_ru_actinst VALUES ('62705359-f1f7-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1:9:625d6789-f1f7-11f0-bfbd-f2dbc029a3c2', '6262709a-f1f7-11f0-bfbd-f2dbc029a3c2', '6262709e-f1f7-11f0-bfbd-f2dbc029a3c2', 'Activity_0mvv5hc', '6270535a-f1f7-11f0-bfbd-f2dbc029a3c2', NULL, NULL, 'userTask', NULL, '2026-01-15 17:48:45.923', NULL, NULL, 2, NULL, '');
+TRUNCATE TABLE public.act_ru_actinst CASCADE;
+
 INSERT INTO public.act_ru_actinst VALUES ('a8ef1854-f45e-11f0-9035-568938879cb7', 1, 'Process_1:10:a8e5062e-f45e-11f0-9035-568938879cb7', 'a8eeca2f-f45e-11f0-9035-568938879cb7', 'a8ef1853-f45e-11f0-9035-568938879cb7', 'StartEvent_1', NULL, NULL, '开始', 'startEvent', NULL, '2026-01-18 19:13:04.683', '2026-01-18 19:13:04.687', 4, 1, NULL, '');
+TRUNCATE TABLE public.act_ru_actinst CASCADE;
+
 INSERT INTO public.act_ru_actinst VALUES ('a8efdba5-f45e-11f0-9035-568938879cb7', 1, 'Process_1:10:a8e5062e-f45e-11f0-9035-568938879cb7', 'a8eeca2f-f45e-11f0-9035-568938879cb7', 'a8ef1853-f45e-11f0-9035-568938879cb7', 'Flow_1', NULL, NULL, NULL, 'sequenceFlow', NULL, '2026-01-18 19:13:04.688', '2026-01-18 19:13:04.688', 0, 2, NULL, '');
+TRUNCATE TABLE public.act_ru_actinst CASCADE;
+
 INSERT INTO public.act_ru_actinst VALUES ('a9038abd-f45e-11f0-9035-568938879cb7', 1, 'Process_1:10:a8e5062e-f45e-11f0-9035-568938879cb7', 'a8eeca2f-f45e-11f0-9035-568938879cb7', 'a8ef1853-f45e-11f0-9035-568938879cb7', 'Flow_0un7hlh', NULL, NULL, NULL, 'sequenceFlow', NULL, '2026-01-18 19:13:04.817', '2026-01-18 19:13:04.817', 0, 1, NULL, '');
+TRUNCATE TABLE public.act_ru_actinst CASCADE;
+
 INSERT INTO public.act_ru_actinst VALUES ('a903b1ce-f45e-11f0-9035-568938879cb7', 1, 'Process_1:10:a8e5062e-f45e-11f0-9035-568938879cb7', 'a8eeca2f-f45e-11f0-9035-568938879cb7', 'a8ef1853-f45e-11f0-9035-568938879cb7', 'Activity_0mvv5hc', 'a903b1cf-f45e-11f0-9035-568938879cb7', NULL, NULL, 'userTask', NULL, '2026-01-18 19:13:04.818', NULL, NULL, 2, NULL, '');
+TRUNCATE TABLE public.act_ru_actinst CASCADE;
+
 INSERT INTO public.act_ru_actinst VALUES ('a8efdba6-f45e-11f0-9035-568938879cb7', 3, 'Process_1:10:a8e5062e-f45e-11f0-9035-568938879cb7', 'a8eeca2f-f45e-11f0-9035-568938879cb7', 'a8ef1853-f45e-11f0-9035-568938879cb7', 'Activity_09dh3z9', 'a8f002b7-f45e-11f0-9035-568938879cb7', NULL, NULL, 'userTask', 'tech-director-001', '2026-01-18 19:13:04.688', '2026-01-18 19:13:04.816', 128, 3, NULL, '');
+TRUNCATE TABLE public.act_ru_actinst CASCADE;
+
 INSERT INTO public.act_ru_actinst VALUES ('d95d8b06-f515-11f0-83bf-1a46ed4020c1', 1, 'Process_1:11:d94fcf60-f515-11f0-83bf-1a46ed4020c1', 'd95d15d1-f515-11f0-83bf-1a46ed4020c1', 'd95d8b05-f515-11f0-83bf-1a46ed4020c1', 'StartEvent_1', NULL, NULL, '开始', 'startEvent', NULL, '2026-01-19 17:04:23.839', '2026-01-19 17:04:23.843', 4, 1, NULL, '');
+TRUNCATE TABLE public.act_ru_actinst CASCADE;
+
 INSERT INTO public.act_ru_actinst VALUES ('d95e4e57-f515-11f0-83bf-1a46ed4020c1', 1, 'Process_1:11:d94fcf60-f515-11f0-83bf-1a46ed4020c1', 'd95d15d1-f515-11f0-83bf-1a46ed4020c1', 'd95d8b05-f515-11f0-83bf-1a46ed4020c1', 'Flow_1', NULL, NULL, NULL, 'sequenceFlow', NULL, '2026-01-19 17:04:23.844', '2026-01-19 17:04:23.844', 0, 2, NULL, '');
+TRUNCATE TABLE public.act_ru_actinst CASCADE;
+
 INSERT INTO public.act_ru_actinst VALUES ('d97e597f-f515-11f0-83bf-1a46ed4020c1', 1, 'Process_1:11:d94fcf60-f515-11f0-83bf-1a46ed4020c1', 'd95d15d1-f515-11f0-83bf-1a46ed4020c1', 'd95d8b05-f515-11f0-83bf-1a46ed4020c1', 'Flow_0un7hlh', NULL, NULL, NULL, 'sequenceFlow', NULL, '2026-01-19 17:04:24.054', '2026-01-19 17:04:24.054', 0, 1, NULL, '');
+TRUNCATE TABLE public.act_ru_actinst CASCADE;
+
 INSERT INTO public.act_ru_actinst VALUES ('d97ea7a0-f515-11f0-83bf-1a46ed4020c1', 1, 'Process_1:11:d94fcf60-f515-11f0-83bf-1a46ed4020c1', 'd95d15d1-f515-11f0-83bf-1a46ed4020c1', 'd95d8b05-f515-11f0-83bf-1a46ed4020c1', 'Activity_0mvv5hc', 'd97ea7a1-f515-11f0-83bf-1a46ed4020c1', NULL, NULL, 'userTask', NULL, '2026-01-19 17:04:24.056', NULL, NULL, 2, NULL, '');
+TRUNCATE TABLE public.act_ru_actinst CASCADE;
+
 INSERT INTO public.act_ru_actinst VALUES ('d95e4e58-f515-11f0-83bf-1a46ed4020c1', 3, 'Process_1:11:d94fcf60-f515-11f0-83bf-1a46ed4020c1', 'd95d15d1-f515-11f0-83bf-1a46ed4020c1', 'd95d8b05-f515-11f0-83bf-1a46ed4020c1', 'Activity_09dh3z9', 'd95e7569-f515-11f0-83bf-1a46ed4020c1', NULL, NULL, 'userTask', 'purchase-requester-001', '2026-01-19 17:04:23.844', '2026-01-19 17:04:24.053', 209, 3, NULL, '');
+TRUNCATE TABLE public.act_ru_actinst CASCADE;
+
 INSERT INTO public.act_ru_actinst VALUES ('14c1fff3-f537-11f0-83bf-1a46ed4020c1', 1, 'Process_1:14:14bde139-f537-11f0-83bf-1a46ed4020c1', '14c1ffea-f537-11f0-83bf-1a46ed4020c1', '14c1fff2-f537-11f0-83bf-1a46ed4020c1', 'StartEvent_1', NULL, NULL, '开始', 'startEvent', NULL, '2026-01-19 21:02:16.875', '2026-01-19 21:02:16.875', 0, 1, NULL, '');
+TRUNCATE TABLE public.act_ru_actinst CASCADE;
+
 INSERT INTO public.act_ru_actinst VALUES ('14c1fff4-f537-11f0-83bf-1a46ed4020c1', 1, 'Process_1:14:14bde139-f537-11f0-83bf-1a46ed4020c1', '14c1ffea-f537-11f0-83bf-1a46ed4020c1', '14c1fff2-f537-11f0-83bf-1a46ed4020c1', 'Flow_1', NULL, NULL, NULL, 'sequenceFlow', NULL, '2026-01-19 21:02:16.875', '2026-01-19 21:02:16.875', 0, 2, NULL, '');
+TRUNCATE TABLE public.act_ru_actinst CASCADE;
+
 INSERT INTO public.act_ru_actinst VALUES ('14d4286e-f537-11f0-83bf-1a46ed4020c1', 1, 'Process_1:14:14bde139-f537-11f0-83bf-1a46ed4020c1', '14c1ffea-f537-11f0-83bf-1a46ed4020c1', '14c1fff2-f537-11f0-83bf-1a46ed4020c1', 'Flow_0un7hlh', NULL, NULL, NULL, 'sequenceFlow', NULL, '2026-01-19 21:02:16.994', '2026-01-19 21:02:16.994', 0, 1, NULL, '');
+TRUNCATE TABLE public.act_ru_actinst CASCADE;
+
 INSERT INTO public.act_ru_actinst VALUES ('14d44f7f-f537-11f0-83bf-1a46ed4020c1', 1, 'Process_1:14:14bde139-f537-11f0-83bf-1a46ed4020c1', '14c1ffea-f537-11f0-83bf-1a46ed4020c1', '14c1fff2-f537-11f0-83bf-1a46ed4020c1', 'Activity_0mvv5hc', '14d44f80-f537-11f0-83bf-1a46ed4020c1', NULL, NULL, 'userTask', NULL, '2026-01-19 21:02:16.995', NULL, NULL, 2, NULL, '');
+TRUNCATE TABLE public.act_ru_actinst CASCADE;
+
 INSERT INTO public.act_ru_actinst VALUES ('14c1fff5-f537-11f0-83bf-1a46ed4020c1', 3, 'Process_1:14:14bde139-f537-11f0-83bf-1a46ed4020c1', '14c1ffea-f537-11f0-83bf-1a46ed4020c1', '14c1fff2-f537-11f0-83bf-1a46ed4020c1', 'Activity_09dh3z9', '14c1fff6-f537-11f0-83bf-1a46ed4020c1', NULL, NULL, 'userTask', 'purchase-requester-001', '2026-01-19 21:02:16.875', '2026-01-19 21:02:16.993', 118, 3, NULL, '');
+TRUNCATE TABLE public.act_ru_execution CASCADE;
+
 INSERT INTO public.act_ru_execution VALUES ('2d7a16d2-f132-11f0-bfbd-f2dbc029a3c2', 1, '2d7a16d2-f132-11f0-bfbd-f2dbc029a3c2', NULL, NULL, 'Process_1:2:2d6cf771-f132-11f0-bfbd-f2dbc029a3c2', NULL, '2d7a16d2-f132-11f0-bfbd-f2dbc029a3c2', NULL, true, false, true, false, false, 1, NULL, '', NULL, 'StartEvent_1', '2026-01-14 18:17:06.212', 'hr-manager-001', NULL, NULL, true, 0, 0, 0, 0, 0, 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_ru_execution CASCADE;
+
 INSERT INTO public.act_ru_execution VALUES ('2d7a8c06-f132-11f0-bfbd-f2dbc029a3c2', 2, '2d7a16d2-f132-11f0-bfbd-f2dbc029a3c2', NULL, '2d7a16d2-f132-11f0-bfbd-f2dbc029a3c2', 'Process_1:2:2d6cf771-f132-11f0-bfbd-f2dbc029a3c2', NULL, '2d7a16d2-f132-11f0-bfbd-f2dbc029a3c2', 'Activity_0mvv5hc', true, false, false, false, false, 1, NULL, '', NULL, NULL, '2026-01-14 18:17:06.215', NULL, NULL, NULL, true, 0, 1, 0, 0, 0, 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_ru_execution CASCADE;
+
 INSERT INTO public.act_ru_execution VALUES ('80f6a8ae-f133-11f0-bfbd-f2dbc029a3c2', 1, '80f6a8ae-f133-11f0-bfbd-f2dbc029a3c2', NULL, NULL, 'Process_1:3:80f1788d-f133-11f0-bfbd-f2dbc029a3c2', NULL, '80f6a8ae-f133-11f0-bfbd-f2dbc029a3c2', NULL, true, false, true, false, false, 1, NULL, '', NULL, 'StartEvent_1', '2026-01-14 18:26:35.776', 'hr-specialist-001', NULL, NULL, true, 0, 0, 0, 0, 0, 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_ru_execution CASCADE;
+
 INSERT INTO public.act_ru_execution VALUES ('80f6cfc2-f133-11f0-bfbd-f2dbc029a3c2', 2, '80f6a8ae-f133-11f0-bfbd-f2dbc029a3c2', NULL, '80f6a8ae-f133-11f0-bfbd-f2dbc029a3c2', 'Process_1:3:80f1788d-f133-11f0-bfbd-f2dbc029a3c2', NULL, '80f6a8ae-f133-11f0-bfbd-f2dbc029a3c2', 'Activity_0mvv5hc', true, false, false, false, false, 1, NULL, '', NULL, NULL, '2026-01-14 18:26:35.777', NULL, NULL, NULL, true, 0, 1, 0, 0, 0, 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_ru_execution CASCADE;
+
 INSERT INTO public.act_ru_execution VALUES ('2b89f1af-f1f4-11f0-bfbd-f2dbc029a3c2', 1, '2b89f1af-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, NULL, 'Process_1:5:2b85fa0e-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, '2b89f1af-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, true, false, true, false, false, 1, NULL, '', NULL, 'StartEvent_1', '2026-01-15 17:25:45.326', 'corp-manager-001', NULL, NULL, true, 0, 0, 0, 0, 0, 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_ru_execution CASCADE;
+
 INSERT INTO public.act_ru_execution VALUES ('2b8a18c3-f1f4-11f0-bfbd-f2dbc029a3c2', 2, '2b89f1af-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, '2b89f1af-f1f4-11f0-bfbd-f2dbc029a3c2', 'Process_1:5:2b85fa0e-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, '2b89f1af-f1f4-11f0-bfbd-f2dbc029a3c2', 'Activity_0mvv5hc', true, false, false, false, false, 1, NULL, '', NULL, NULL, '2026-01-15 17:25:45.327', NULL, NULL, NULL, true, 0, 1, 0, 0, 0, 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_ru_execution CASCADE;
+
 INSERT INTO public.act_ru_execution VALUES ('6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', 1, '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, NULL, 'Process_1:7:6f5a7aaf-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, true, false, true, false, false, 1, NULL, '', NULL, 'StartEvent_1', '2026-01-15 17:27:39.133', 'corp-manager-001', NULL, NULL, true, 0, 0, 0, 0, 0, 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_ru_execution CASCADE;
+
 INSERT INTO public.act_ru_execution VALUES ('6f5f83c8-f1f4-11f0-bfbd-f2dbc029a3c2', 2, '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', 'Process_1:7:6f5a7aaf-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', 'Activity_0mvv5hc', true, false, false, false, false, 1, NULL, '', NULL, NULL, '2026-01-15 17:27:39.133', NULL, NULL, NULL, true, 0, 1, 0, 0, 0, 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_ru_execution CASCADE;
+
 INSERT INTO public.act_ru_execution VALUES ('6262709a-f1f7-11f0-bfbd-f2dbc029a3c2', 1, '6262709a-f1f7-11f0-bfbd-f2dbc029a3c2', NULL, NULL, 'Process_1:9:625d6789-f1f7-11f0-bfbd-f2dbc029a3c2', NULL, '6262709a-f1f7-11f0-bfbd-f2dbc029a3c2', NULL, true, false, true, false, false, 1, NULL, '', NULL, 'StartEvent_1', '2026-01-15 17:48:45.832', 'corp-manager-001', NULL, NULL, true, 0, 0, 0, 0, 0, 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_ru_execution CASCADE;
+
 INSERT INTO public.act_ru_execution VALUES ('6262709e-f1f7-11f0-bfbd-f2dbc029a3c2', 2, '6262709a-f1f7-11f0-bfbd-f2dbc029a3c2', NULL, '6262709a-f1f7-11f0-bfbd-f2dbc029a3c2', 'Process_1:9:625d6789-f1f7-11f0-bfbd-f2dbc029a3c2', NULL, '6262709a-f1f7-11f0-bfbd-f2dbc029a3c2', 'Activity_0mvv5hc', true, false, false, false, false, 1, NULL, '', NULL, NULL, '2026-01-15 17:48:45.832', NULL, NULL, NULL, true, 0, 1, 0, 0, 0, 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_ru_execution CASCADE;
+
 INSERT INTO public.act_ru_execution VALUES ('a8eeca2f-f45e-11f0-9035-568938879cb7', 1, 'a8eeca2f-f45e-11f0-9035-568938879cb7', NULL, NULL, 'Process_1:10:a8e5062e-f45e-11f0-9035-568938879cb7', NULL, 'a8eeca2f-f45e-11f0-9035-568938879cb7', NULL, true, false, true, false, false, 1, NULL, '', NULL, 'StartEvent_1', '2026-01-18 19:13:04.681', 'tech-director-001', NULL, NULL, true, 0, 0, 0, 0, 0, 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_ru_execution CASCADE;
+
 INSERT INTO public.act_ru_execution VALUES ('a8ef1853-f45e-11f0-9035-568938879cb7', 2, 'a8eeca2f-f45e-11f0-9035-568938879cb7', NULL, 'a8eeca2f-f45e-11f0-9035-568938879cb7', 'Process_1:10:a8e5062e-f45e-11f0-9035-568938879cb7', NULL, 'a8eeca2f-f45e-11f0-9035-568938879cb7', 'Activity_0mvv5hc', true, false, false, false, false, 1, NULL, '', NULL, NULL, '2026-01-18 19:13:04.683', NULL, NULL, NULL, true, 0, 1, 0, 0, 0, 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_ru_execution CASCADE;
+
 INSERT INTO public.act_ru_execution VALUES ('d95d15d1-f515-11f0-83bf-1a46ed4020c1', 1, 'd95d15d1-f515-11f0-83bf-1a46ed4020c1', NULL, NULL, 'Process_1:11:d94fcf60-f515-11f0-83bf-1a46ed4020c1', NULL, 'd95d15d1-f515-11f0-83bf-1a46ed4020c1', NULL, true, false, true, false, false, 1, NULL, '', NULL, 'StartEvent_1', '2026-01-19 17:04:23.836', 'purchase-requester-001', NULL, NULL, true, 0, 0, 0, 0, 0, 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_ru_execution CASCADE;
+
 INSERT INTO public.act_ru_execution VALUES ('d95d8b05-f515-11f0-83bf-1a46ed4020c1', 2, 'd95d15d1-f515-11f0-83bf-1a46ed4020c1', NULL, 'd95d15d1-f515-11f0-83bf-1a46ed4020c1', 'Process_1:11:d94fcf60-f515-11f0-83bf-1a46ed4020c1', NULL, 'd95d15d1-f515-11f0-83bf-1a46ed4020c1', 'Activity_0mvv5hc', true, false, false, false, false, 1, NULL, '', NULL, NULL, '2026-01-19 17:04:23.839', NULL, NULL, NULL, true, 0, 1, 0, 0, 0, 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_ru_execution CASCADE;
+
 INSERT INTO public.act_ru_execution VALUES ('14c1ffea-f537-11f0-83bf-1a46ed4020c1', 1, '14c1ffea-f537-11f0-83bf-1a46ed4020c1', NULL, NULL, 'Process_1:14:14bde139-f537-11f0-83bf-1a46ed4020c1', NULL, '14c1ffea-f537-11f0-83bf-1a46ed4020c1', NULL, true, false, true, false, false, 1, NULL, '', NULL, 'StartEvent_1', '2026-01-19 21:02:16.875', 'purchase-requester-001', NULL, NULL, true, 0, 0, 0, 0, 0, 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_ru_execution CASCADE;
+
 INSERT INTO public.act_ru_execution VALUES ('14c1fff2-f537-11f0-83bf-1a46ed4020c1', 2, '14c1ffea-f537-11f0-83bf-1a46ed4020c1', NULL, '14c1ffea-f537-11f0-83bf-1a46ed4020c1', 'Process_1:14:14bde139-f537-11f0-83bf-1a46ed4020c1', NULL, '14c1ffea-f537-11f0-83bf-1a46ed4020c1', 'Activity_0mvv5hc', true, false, false, false, false, 1, NULL, '', NULL, NULL, '2026-01-19 21:02:16.875', NULL, NULL, NULL, true, 0, 1, 0, 0, 0, 0, 0, 0, 0, NULL, NULL, NULL, NULL, NULL, NULL);
 
+TRUNCATE TABLE public.act_ru_identitylink CASCADE;
+
 INSERT INTO public.act_ru_identitylink VALUES ('2d7a3de3-f132-11f0-bfbd-f2dbc029a3c2', 1, NULL, 'starter', 'hr-manager-001', NULL, '2d7a16d2-f132-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_ru_identitylink CASCADE;
+
 INSERT INTO public.act_ru_identitylink VALUES ('2d8c665c-f132-11f0-bfbd-f2dbc029a3c2', 1, NULL, 'participant', 'hr-manager-001', NULL, '2d7a16d2-f132-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_ru_identitylink CASCADE;
+
 INSERT INTO public.act_ru_identitylink VALUES ('2d942e8f-f132-11f0-bfbd-f2dbc029a3c2', 1, NULL, 'participant', 'anonymousUser', NULL, '2d7a16d2-f132-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_ru_identitylink CASCADE;
+
 INSERT INTO public.act_ru_identitylink VALUES ('91797464-f132-11f0-bfbd-f2dbc029a3c2', 1, NULL, 'participant', 'hr-specialist-001', NULL, '2d7a16d2-f132-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_ru_identitylink CASCADE;
+
 INSERT INTO public.act_ru_identitylink VALUES ('80f6a8af-f133-11f0-bfbd-f2dbc029a3c2', 1, NULL, 'starter', 'hr-specialist-001', NULL, '80f6a8ae-f133-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_ru_identitylink CASCADE;
+
 INSERT INTO public.act_ru_identitylink VALUES ('810093c8-f133-11f0-bfbd-f2dbc029a3c2', 1, NULL, 'participant', 'hr-specialist-001', NULL, '80f6a8ae-f133-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_ru_identitylink CASCADE;
+
 INSERT INTO public.act_ru_identitylink VALUES ('8106602b-f133-11f0-bfbd-f2dbc029a3c2', 1, NULL, 'participant', 'anonymousUser', NULL, '80f6a8ae-f133-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_ru_identitylink CASCADE;
+
 INSERT INTO public.act_ru_identitylink VALUES ('2b89f1b0-f1f4-11f0-bfbd-f2dbc029a3c2', 1, NULL, 'starter', 'corp-manager-001', NULL, '2b89f1af-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_ru_identitylink CASCADE;
+
 INSERT INTO public.act_ru_identitylink VALUES ('2b93b5b9-f1f4-11f0-bfbd-f2dbc029a3c2', 1, NULL, 'participant', 'corp-manager-001', NULL, '2b89f1af-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_ru_identitylink CASCADE;
+
 INSERT INTO public.act_ru_identitylink VALUES ('2b9870ac-f1f4-11f0-bfbd-f2dbc029a3c2', 1, NULL, 'participant', 'anonymousUser', NULL, '2b89f1af-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_ru_identitylink CASCADE;
+
 INSERT INTO public.act_ru_identitylink VALUES ('6f5f83c1-f1f4-11f0-bfbd-f2dbc029a3c2', 1, NULL, 'starter', 'corp-manager-001', NULL, '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_ru_identitylink CASCADE;
+
 INSERT INTO public.act_ru_identitylink VALUES ('6f6b1c8e-f1f4-11f0-bfbd-f2dbc029a3c2', 1, NULL, 'participant', 'corp-manager-001', NULL, '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_ru_identitylink CASCADE;
+
 INSERT INTO public.act_ru_identitylink VALUES ('6f71ab43-f1f4-11f0-bfbd-f2dbc029a3c2', 1, NULL, 'participant', 'anonymousUser', NULL, '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_ru_identitylink CASCADE;
+
 INSERT INTO public.act_ru_identitylink VALUES ('879ad1b8-f1f4-11f0-bfbd-f2dbc029a3c2', 1, NULL, 'participant', 'hr-manager-001', NULL, '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_ru_identitylink CASCADE;
+
 INSERT INTO public.act_ru_identitylink VALUES ('6262709b-f1f7-11f0-bfbd-f2dbc029a3c2', 1, NULL, 'starter', 'corp-manager-001', NULL, '6262709a-f1f7-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_ru_identitylink CASCADE;
+
 INSERT INTO public.act_ru_identitylink VALUES ('626b2334-f1f7-11f0-bfbd-f2dbc029a3c2', 1, NULL, 'participant', 'corp-manager-001', NULL, '6262709a-f1f7-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_ru_identitylink CASCADE;
+
 INSERT INTO public.act_ru_identitylink VALUES ('626f68f7-f1f7-11f0-bfbd-f2dbc029a3c2', 1, NULL, 'participant', 'anonymousUser', NULL, '6262709a-f1f7-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_ru_identitylink CASCADE;
+
 INSERT INTO public.act_ru_identitylink VALUES ('a8eef140-f45e-11f0-9035-568938879cb7', 1, NULL, 'starter', 'tech-director-001', NULL, 'a8eeca2f-f45e-11f0-9035-568938879cb7', NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_ru_identitylink CASCADE;
+
 INSERT INTO public.act_ru_identitylink VALUES ('a8fd7039-f45e-11f0-9035-568938879cb7', 1, NULL, 'participant', 'tech-director-001', NULL, 'a8eeca2f-f45e-11f0-9035-568938879cb7', NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_ru_identitylink CASCADE;
+
 INSERT INTO public.act_ru_identitylink VALUES ('a902c76c-f45e-11f0-9035-568938879cb7', 1, NULL, 'participant', 'anonymousUser', NULL, 'a8eeca2f-f45e-11f0-9035-568938879cb7', NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_ru_identitylink CASCADE;
+
 INSERT INTO public.act_ru_identitylink VALUES ('d95d3ce2-f515-11f0-83bf-1a46ed4020c1', 1, NULL, 'starter', 'purchase-requester-001', NULL, 'd95d15d1-f515-11f0-83bf-1a46ed4020c1', NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_ru_identitylink CASCADE;
+
 INSERT INTO public.act_ru_identitylink VALUES ('d971af4b-f515-11f0-83bf-1a46ed4020c1', 1, NULL, 'participant', 'purchase-requester-001', NULL, 'd95d15d1-f515-11f0-83bf-1a46ed4020c1', NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_ru_identitylink CASCADE;
+
 INSERT INTO public.act_ru_identitylink VALUES ('d97d962e-f515-11f0-83bf-1a46ed4020c1', 1, NULL, 'participant', 'anonymousUser', NULL, 'd95d15d1-f515-11f0-83bf-1a46ed4020c1', NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_ru_identitylink CASCADE;
+
 INSERT INTO public.act_ru_identitylink VALUES ('14c1ffeb-f537-11f0-83bf-1a46ed4020c1', 1, NULL, 'starter', 'purchase-requester-001', NULL, '14c1ffea-f537-11f0-83bf-1a46ed4020c1', NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_ru_identitylink CASCADE;
+
 INSERT INTO public.act_ru_identitylink VALUES ('14ceaa28-f537-11f0-83bf-1a46ed4020c1', 1, NULL, 'participant', 'purchase-requester-001', NULL, '14c1ffea-f537-11f0-83bf-1a46ed4020c1', NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_ru_identitylink CASCADE;
+
 INSERT INTO public.act_ru_identitylink VALUES ('14d3651d-f537-11f0-83bf-1a46ed4020c1', 1, NULL, 'participant', 'anonymousUser', NULL, '14c1ffea-f537-11f0-83bf-1a46ed4020c1', NULL, NULL, NULL, NULL, NULL);
 
+TRUNCATE TABLE public.act_ru_task CASCADE;
+
 INSERT INTO public.act_ru_task VALUES ('2d954002-f132-11f0-bfbd-f2dbc029a3c2', 2, '2d7a8c06-f132-11f0-bfbd-f2dbc029a3c2', '2d7a16d2-f132-11f0-bfbd-f2dbc029a3c2', 'Process_1:2:2d6cf771-f132-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'Activity_0mvv5hc', NULL, 'hr-specialist-001', NULL, 50, '2026-01-14 18:17:06.39', NULL, NULL, 1, '', NULL, '2026-01-14 18:19:53.967', true, 0, 0, 0);
+TRUNCATE TABLE public.act_ru_task CASCADE;
+
 INSERT INTO public.act_ru_task VALUES ('81074a8e-f133-11f0-bfbd-f2dbc029a3c2', 1, '80f6cfc2-f133-11f0-bfbd-f2dbc029a3c2', '80f6a8ae-f133-11f0-bfbd-f2dbc029a3c2', 'Process_1:3:80f1788d-f133-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'Activity_0mvv5hc', NULL, NULL, NULL, 50, '2026-01-14 18:26:35.885', NULL, NULL, 1, '', NULL, NULL, true, 0, 0, 0);
+TRUNCATE TABLE public.act_ru_task CASCADE;
+
 INSERT INTO public.act_ru_task VALUES ('2b99f74f-f1f4-11f0-bfbd-f2dbc029a3c2', 1, '2b8a18c3-f1f4-11f0-bfbd-f2dbc029a3c2', '2b89f1af-f1f4-11f0-bfbd-f2dbc029a3c2', 'Process_1:5:2b85fa0e-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'Activity_0mvv5hc', NULL, NULL, NULL, 50, '2026-01-15 17:25:45.431', NULL, NULL, 1, '', NULL, NULL, true, 0, 0, 0);
+TRUNCATE TABLE public.act_ru_task CASCADE;
+
 INSERT INTO public.act_ru_task VALUES ('6f72bcb6-f1f4-11f0-bfbd-f2dbc029a3c2', 2, '6f5f83c8-f1f4-11f0-bfbd-f2dbc029a3c2', '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', 'Process_1:7:6f5a7aaf-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'Activity_0mvv5hc', NULL, 'hr-manager-001', NULL, 50, '2026-01-15 17:27:39.259', NULL, NULL, 1, '', NULL, '2026-01-15 17:28:19.748', true, 0, 0, 0);
+TRUNCATE TABLE public.act_ru_task CASCADE;
+
 INSERT INTO public.act_ru_task VALUES ('6270535a-f1f7-11f0-bfbd-f2dbc029a3c2', 1, '6262709e-f1f7-11f0-bfbd-f2dbc029a3c2', '6262709a-f1f7-11f0-bfbd-f2dbc029a3c2', 'Process_1:9:625d6789-f1f7-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'Activity_0mvv5hc', NULL, NULL, NULL, 50, '2026-01-15 17:48:45.923', NULL, NULL, 1, '', NULL, NULL, true, 0, 0, 0);
+TRUNCATE TABLE public.act_ru_task CASCADE;
+
 INSERT INTO public.act_ru_task VALUES ('a903b1cf-f45e-11f0-9035-568938879cb7', 1, 'a8ef1853-f45e-11f0-9035-568938879cb7', 'a8eeca2f-f45e-11f0-9035-568938879cb7', 'Process_1:10:a8e5062e-f45e-11f0-9035-568938879cb7', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'Activity_0mvv5hc', NULL, NULL, NULL, 50, '2026-01-18 19:13:04.818', NULL, NULL, 1, '', NULL, NULL, true, 0, 0, 0);
+TRUNCATE TABLE public.act_ru_task CASCADE;
+
 INSERT INTO public.act_ru_task VALUES ('d97ea7a1-f515-11f0-83bf-1a46ed4020c1', 1, 'd95d8b05-f515-11f0-83bf-1a46ed4020c1', 'd95d15d1-f515-11f0-83bf-1a46ed4020c1', 'Process_1:11:d94fcf60-f515-11f0-83bf-1a46ed4020c1', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'Activity_0mvv5hc', NULL, NULL, NULL, 50, '2026-01-19 17:04:24.056', NULL, NULL, 1, '', NULL, NULL, true, 0, 0, 0);
+TRUNCATE TABLE public.act_ru_task CASCADE;
+
 INSERT INTO public.act_ru_task VALUES ('14d44f80-f537-11f0-83bf-1a46ed4020c1', 1, '14c1fff2-f537-11f0-83bf-1a46ed4020c1', '14c1ffea-f537-11f0-83bf-1a46ed4020c1', 'Process_1:14:14bde139-f537-11f0-83bf-1a46ed4020c1', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'Activity_0mvv5hc', NULL, NULL, NULL, 50, '2026-01-19 21:02:16.995', NULL, NULL, 1, '', NULL, NULL, true, 0, 0, 0);
+TRUNCATE TABLE public.act_ru_variable CASCADE;
+
 INSERT INTO public.act_ru_variable VALUES ('2d7a64f4-f132-11f0-bfbd-f2dbc029a3c2', 1, 'string', 'initiator', '2d7a16d2-f132-11f0-bfbd-f2dbc029a3c2', '2d7a16d2-f132-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'hr-manager-001', NULL, NULL);
+TRUNCATE TABLE public.act_ru_variable CASCADE;
+
 INSERT INTO public.act_ru_variable VALUES ('80f6a8b0-f133-11f0-bfbd-f2dbc029a3c2', 1, 'string', 'initiator', '80f6a8ae-f133-11f0-bfbd-f2dbc029a3c2', '80f6a8ae-f133-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'hr-specialist-001', NULL, NULL);
+TRUNCATE TABLE public.act_ru_variable CASCADE;
+
 INSERT INTO public.act_ru_variable VALUES ('2b8a18c1-f1f4-11f0-bfbd-f2dbc029a3c2', 1, 'string', 'initiator', '2b89f1af-f1f4-11f0-bfbd-f2dbc029a3c2', '2b89f1af-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'corp-manager-001', NULL, NULL);
+TRUNCATE TABLE public.act_ru_variable CASCADE;
+
 INSERT INTO public.act_ru_variable VALUES ('6f5f83c2-f1f4-11f0-bfbd-f2dbc029a3c2', 1, 'string', 'Fq63mkdrn28vabc', '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'qqq', NULL, NULL);
+TRUNCATE TABLE public.act_ru_variable CASCADE;
+
 INSERT INTO public.act_ru_variable VALUES ('6f5f83c4-f1f4-11f0-bfbd-f2dbc029a3c2', 1, 'null', 'Fxe2mkdrrp95ahc', '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_ru_variable CASCADE;
+
 INSERT INTO public.act_ru_variable VALUES ('6f5f83c6-f1f4-11f0-bfbd-f2dbc029a3c2', 1, 'string', 'initiator', '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'corp-manager-001', NULL, NULL);
+TRUNCATE TABLE public.act_ru_variable CASCADE;
+
 INSERT INTO public.act_ru_variable VALUES ('6262709c-f1f7-11f0-bfbd-f2dbc029a3c2', 1, 'string', 'initiator', '6262709a-f1f7-11f0-bfbd-f2dbc029a3c2', '6262709a-f1f7-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'corp-manager-001', NULL, NULL);
+TRUNCATE TABLE public.act_ru_variable CASCADE;
+
 INSERT INTO public.act_ru_variable VALUES ('a8eef141-f45e-11f0-9035-568938879cb7', 1, 'string', 'initiator', 'a8eeca2f-f45e-11f0-9035-568938879cb7', 'a8eeca2f-f45e-11f0-9035-568938879cb7', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'tech-director-001', NULL, NULL);
+TRUNCATE TABLE public.act_ru_variable CASCADE;
+
 INSERT INTO public.act_ru_variable VALUES ('d95d3ce3-f515-11f0-83bf-1a46ed4020c1', 1, 'string', 'initiator', 'd95d15d1-f515-11f0-83bf-1a46ed4020c1', 'd95d15d1-f515-11f0-83bf-1a46ed4020c1', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'purchase-requester-001', NULL, NULL);
+TRUNCATE TABLE public.act_ru_variable CASCADE;
+
 INSERT INTO public.act_ru_variable VALUES ('14c1ffec-f537-11f0-83bf-1a46ed4020c1', 1, 'string', 'Fq63mkdrn28vabc', '14c1ffea-f537-11f0-83bf-1a46ed4020c1', '14c1ffea-f537-11f0-83bf-1a46ed4020c1', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'ooo', NULL, NULL);
+TRUNCATE TABLE public.act_ru_variable CASCADE;
+
 INSERT INTO public.act_ru_variable VALUES ('14c1ffee-f537-11f0-83bf-1a46ed4020c1', 1, 'null', 'Fxe2mkdrrp95ahc', '14c1ffea-f537-11f0-83bf-1a46ed4020c1', '14c1ffea-f537-11f0-83bf-1a46ed4020c1', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.act_ru_variable CASCADE;
+
 INSERT INTO public.act_ru_variable VALUES ('14c1fff0-f537-11f0-83bf-1a46ed4020c1', 1, 'string', 'initiator', '14c1ffea-f537-11f0-83bf-1a46ed4020c1', '14c1ffea-f537-11f0-83bf-1a46ed4020c1', NULL, NULL, NULL, NULL, NULL, NULL, NULL, 'purchase-requester-001', NULL, NULL);
 
+TRUNCATE TABLE public.dw_action_definitions CASCADE;
+
 INSERT INTO public.dw_action_definitions VALUES (1, 1, 'Submit', 'PROCESS_SUBMIT', '{}', NULL, 'primary', 'Submit purchase request', true, '2026-01-13 10:38:37.240844', '2026-01-13 10:38:37.240844');
+TRUNCATE TABLE public.dw_action_definitions CASCADE;
+
 INSERT INTO public.dw_action_definitions VALUES (2, 1, 'Approve', 'APPROVE', '{}', NULL, 'success', 'Approve request', true, '2026-01-13 10:38:37.240844', '2026-01-13 10:38:37.240844');
+TRUNCATE TABLE public.dw_action_definitions CASCADE;
+
 INSERT INTO public.dw_action_definitions VALUES (3, 1, 'Reject', 'REJECT', '{}', NULL, 'danger', 'Reject request', false, '2026-01-13 10:38:37.240844', '2026-01-13 10:38:37.240844');
+TRUNCATE TABLE public.dw_action_definitions CASCADE;
+
 INSERT INTO public.dw_action_definitions VALUES (4, 1, 'Transfer', 'TRANSFER', '{}', NULL, 'warning', 'Transfer task', false, '2026-01-13 10:38:37.240844', '2026-01-13 10:38:37.240844');
+TRUNCATE TABLE public.dw_action_definitions CASCADE;
+
 INSERT INTO public.dw_action_definitions VALUES (5, 1, 'Delegate', 'DELEGATE', '{}', NULL, 'info', 'Delegate task', false, '2026-01-13 10:38:37.240844', '2026-01-13 10:38:37.240844');
+TRUNCATE TABLE public.dw_action_definitions CASCADE;
+
 INSERT INTO public.dw_action_definitions VALUES (6, 1, 'Rollback', 'ROLLBACK', '{}', NULL, 'warning', 'Rollback to previous step', false, '2026-01-13 10:38:37.240844', '2026-01-13 10:38:37.240844');
+TRUNCATE TABLE public.dw_action_definitions CASCADE;
+
 INSERT INTO public.dw_action_definitions VALUES (7, 1, 'Withdraw', 'WITHDRAW', '{}', NULL, 'danger', 'Withdraw request', false, '2026-01-13 10:38:37.240844', '2026-01-13 10:38:37.240844');
+TRUNCATE TABLE public.dw_action_definitions CASCADE;
+
 INSERT INTO public.dw_action_definitions VALUES (8, 1, 'Query Budget', 'API_CALL', '{}', NULL, 'info', 'Query budget information', false, '2026-01-13 10:38:37.240844', '2026-01-13 10:38:37.240844');
+TRUNCATE TABLE public.dw_action_definitions CASCADE;
+
 INSERT INTO public.dw_action_definitions VALUES (9, 1, 'Select Supplier', 'FORM_POPUP', '{}', NULL, 'primary', 'Open supplier selection form', false, '2026-01-13 10:38:37.240844', '2026-01-13 10:38:37.240844');
+TRUNCATE TABLE public.dw_action_definitions CASCADE;
+
 INSERT INTO public.dw_action_definitions VALUES (10, 1, 'Calculate Total', 'CUSTOM_SCRIPT', '{}', NULL, 'info', 'Calculate total amount', false, '2026-01-13 10:38:37.240844', '2026-01-13 10:38:37.240844');
+TRUNCATE TABLE public.dw_action_definitions CASCADE;
+
 INSERT INTO public.dw_action_definitions VALUES (11, 2, 'testAction', 'CUSTOM_SCRIPT', '{"url": "", "body": "", "formId": null, "method": "POST", "script": "console.alert(''!'')", "headers": "", "targetStep": "", "dialogTitle": "", "dialogWidth": "600px", "targetStatus": "", "confirmMessage": "", "requireComment": false, "requireAssignee": false}', NULL, NULL, '', false, '2026-01-14 08:49:55.586904', '2026-01-14 08:50:31.74478');
+TRUNCATE TABLE public.dw_action_definitions CASCADE;
+
 INSERT INTO public.dw_action_definitions VALUES (12, 2, 'l', 'APPROVE', '{}', NULL, NULL, '', true, '2026-01-15 11:43:34.338311', '2026-01-15 11:43:34.338311');
 
+TRUNCATE TABLE public.dw_field_definitions CASCADE;
+
 INSERT INTO public.dw_field_definitions VALUES (1, 1, 'request_no', 'VARCHAR', 50, NULL, NULL, false, NULL, false, true, 'Request Number', 1);
+TRUNCATE TABLE public.dw_field_definitions CASCADE;
+
 INSERT INTO public.dw_field_definitions VALUES (2, 1, 'title', 'VARCHAR', 200, NULL, NULL, false, NULL, false, false, 'Request Title', 2);
+TRUNCATE TABLE public.dw_field_definitions CASCADE;
+
 INSERT INTO public.dw_field_definitions VALUES (3, 1, 'applicant', 'VARCHAR', 50, NULL, NULL, false, NULL, false, false, 'Applicant', 3);
+TRUNCATE TABLE public.dw_field_definitions CASCADE;
+
 INSERT INTO public.dw_field_definitions VALUES (4, 1, 'department', 'VARCHAR', 100, NULL, NULL, false, NULL, false, false, 'Department', 4);
+TRUNCATE TABLE public.dw_field_definitions CASCADE;
+
 INSERT INTO public.dw_field_definitions VALUES (5, 1, 'apply_date', 'DATE', NULL, NULL, NULL, false, NULL, false, false, 'Apply Date', 5);
+TRUNCATE TABLE public.dw_field_definitions CASCADE;
+
 INSERT INTO public.dw_field_definitions VALUES (6, 1, 'purchase_type', 'VARCHAR', 50, NULL, NULL, false, NULL, false, false, 'Purchase Type', 6);
+TRUNCATE TABLE public.dw_field_definitions CASCADE;
+
 INSERT INTO public.dw_field_definitions VALUES (7, 1, 'urgency', 'VARCHAR', 20, NULL, NULL, false, NULL, false, false, 'Urgency Level', 7);
+TRUNCATE TABLE public.dw_field_definitions CASCADE;
+
 INSERT INTO public.dw_field_definitions VALUES (8, 1, 'total_amount', 'DECIMAL', NULL, 18, 2, false, NULL, false, false, 'Total Amount', 8);
+TRUNCATE TABLE public.dw_field_definitions CASCADE;
+
 INSERT INTO public.dw_field_definitions VALUES (9, 1, 'currency', 'VARCHAR', 10, NULL, NULL, true, 'CNY', false, false, 'Currency', 9);
+TRUNCATE TABLE public.dw_field_definitions CASCADE;
+
 INSERT INTO public.dw_field_definitions VALUES (10, 1, 'reason', 'TEXT', 2000, NULL, NULL, false, NULL, false, false, 'Purchase Reason', 10);
+TRUNCATE TABLE public.dw_field_definitions CASCADE;
+
 INSERT INTO public.dw_field_definitions VALUES (11, 1, 'expected_delivery_date', 'DATE', NULL, NULL, NULL, true, NULL, false, false, 'Expected Delivery Date', 11);
+TRUNCATE TABLE public.dw_field_definitions CASCADE;
+
 INSERT INTO public.dw_field_definitions VALUES (12, 1, 'delivery_address', 'VARCHAR', 500, NULL, NULL, true, NULL, false, false, 'Delivery Address', 12);
+TRUNCATE TABLE public.dw_field_definitions CASCADE;
+
 INSERT INTO public.dw_field_definitions VALUES (13, 1, 'contact_person', 'VARCHAR', 50, NULL, NULL, true, NULL, false, false, 'Contact Person', 13);
+TRUNCATE TABLE public.dw_field_definitions CASCADE;
+
 INSERT INTO public.dw_field_definitions VALUES (14, 1, 'contact_phone', 'VARCHAR', 20, NULL, NULL, true, NULL, false, false, 'Contact Phone', 14);
+TRUNCATE TABLE public.dw_field_definitions CASCADE;
+
 INSERT INTO public.dw_field_definitions VALUES (15, 1, 'attachments', 'TEXT', NULL, NULL, NULL, true, NULL, false, false, 'Attachments', 15);
+TRUNCATE TABLE public.dw_field_definitions CASCADE;
+
 INSERT INTO public.dw_field_definitions VALUES (16, 1, 'remarks', 'TEXT', 1000, NULL, NULL, true, NULL, false, false, 'Remarks', 16);
+TRUNCATE TABLE public.dw_field_definitions CASCADE;
+
 INSERT INTO public.dw_field_definitions VALUES (17, 1, 'status', 'VARCHAR', 20, NULL, NULL, true, 'DRAFT', false, false, 'Status', 17);
+TRUNCATE TABLE public.dw_field_definitions CASCADE;
+
 INSERT INTO public.dw_field_definitions VALUES (18, 2, 'item_name', 'VARCHAR', 200, NULL, NULL, false, NULL, false, false, 'Item Name', 1);
+TRUNCATE TABLE public.dw_field_definitions CASCADE;
+
 INSERT INTO public.dw_field_definitions VALUES (19, 2, 'specification', 'VARCHAR', 200, NULL, NULL, true, NULL, false, false, 'Specification', 2);
+TRUNCATE TABLE public.dw_field_definitions CASCADE;
+
 INSERT INTO public.dw_field_definitions VALUES (20, 2, 'unit', 'VARCHAR', 20, NULL, NULL, true, NULL, false, false, 'Unit', 3);
+TRUNCATE TABLE public.dw_field_definitions CASCADE;
+
 INSERT INTO public.dw_field_definitions VALUES (21, 2, 'quantity', 'INTEGER', NULL, NULL, NULL, false, NULL, false, false, 'Quantity', 4);
+TRUNCATE TABLE public.dw_field_definitions CASCADE;
+
 INSERT INTO public.dw_field_definitions VALUES (22, 2, 'unit_price', 'DECIMAL', NULL, 18, 2, true, NULL, false, false, 'Unit Price', 5);
+TRUNCATE TABLE public.dw_field_definitions CASCADE;
+
 INSERT INTO public.dw_field_definitions VALUES (23, 2, 'amount', 'DECIMAL', NULL, 18, 2, true, NULL, false, false, 'Amount', 6);
+TRUNCATE TABLE public.dw_field_definitions CASCADE;
+
 INSERT INTO public.dw_field_definitions VALUES (24, 2, 'item_remarks', 'TEXT', 500, NULL, NULL, true, NULL, false, false, 'Remarks', 7);
+TRUNCATE TABLE public.dw_field_definitions CASCADE;
+
 INSERT INTO public.dw_field_definitions VALUES (25, 3, 'supplier_name', 'VARCHAR', 200, NULL, NULL, false, NULL, false, false, 'Supplier Name', 1);
+TRUNCATE TABLE public.dw_field_definitions CASCADE;
+
 INSERT INTO public.dw_field_definitions VALUES (26, 3, 'supplier_code', 'VARCHAR', 50, NULL, NULL, true, NULL, false, false, 'Supplier Code', 2);
+TRUNCATE TABLE public.dw_field_definitions CASCADE;
+
 INSERT INTO public.dw_field_definitions VALUES (27, 3, 'supplier_contact', 'VARCHAR', 50, NULL, NULL, true, NULL, false, false, 'Contact Person', 3);
+TRUNCATE TABLE public.dw_field_definitions CASCADE;
+
 INSERT INTO public.dw_field_definitions VALUES (28, 3, 'supplier_phone', 'VARCHAR', 20, NULL, NULL, true, NULL, false, false, 'Contact Phone', 4);
+TRUNCATE TABLE public.dw_field_definitions CASCADE;
+
 INSERT INTO public.dw_field_definitions VALUES (29, 3, 'supplier_address', 'VARCHAR', 500, NULL, NULL, true, NULL, false, false, 'Address', 5);
+TRUNCATE TABLE public.dw_field_definitions CASCADE;
+
 INSERT INTO public.dw_field_definitions VALUES (30, 4, 'budget_code', 'VARCHAR', 50, NULL, NULL, false, NULL, false, false, 'Budget Code', 1);
+TRUNCATE TABLE public.dw_field_definitions CASCADE;
+
 INSERT INTO public.dw_field_definitions VALUES (31, 4, 'budget_name', 'VARCHAR', 200, NULL, NULL, true, NULL, false, false, 'Budget Name', 2);
+TRUNCATE TABLE public.dw_field_definitions CASCADE;
+
 INSERT INTO public.dw_field_definitions VALUES (32, 4, 'budget_amount', 'DECIMAL', NULL, 18, 2, true, NULL, false, false, 'Budget Amount', 3);
+TRUNCATE TABLE public.dw_field_definitions CASCADE;
+
 INSERT INTO public.dw_field_definitions VALUES (33, 4, 'used_amount', 'DECIMAL', NULL, 18, 2, true, NULL, false, false, 'Used Amount', 4);
+TRUNCATE TABLE public.dw_field_definitions CASCADE;
+
 INSERT INTO public.dw_field_definitions VALUES (34, 4, 'available_amount', 'DECIMAL', NULL, 18, 2, true, NULL, false, false, 'Available Amount', 5);
+TRUNCATE TABLE public.dw_field_definitions CASCADE;
+
 INSERT INTO public.dw_field_definitions VALUES (35, 5, 'approver', 'VARCHAR', 50, NULL, NULL, false, NULL, false, false, 'Approver', 1);
+TRUNCATE TABLE public.dw_field_definitions CASCADE;
+
 INSERT INTO public.dw_field_definitions VALUES (36, 5, 'approve_time', 'TIMESTAMP', NULL, NULL, NULL, false, NULL, false, false, 'Approve Time', 2);
+TRUNCATE TABLE public.dw_field_definitions CASCADE;
+
 INSERT INTO public.dw_field_definitions VALUES (37, 5, 'approve_result', 'VARCHAR', 20, NULL, NULL, false, NULL, false, false, 'Approve Result', 3);
+TRUNCATE TABLE public.dw_field_definitions CASCADE;
+
 INSERT INTO public.dw_field_definitions VALUES (38, 5, 'approve_comment', 'TEXT', 1000, NULL, NULL, true, NULL, false, false, 'Approve Comment', 4);
+TRUNCATE TABLE public.dw_field_definitions CASCADE;
+
 INSERT INTO public.dw_field_definitions VALUES (39, 5, 'task_name', 'VARCHAR', 100, NULL, NULL, true, NULL, false, false, 'Task Name', 5);
+TRUNCATE TABLE public.dw_field_definitions CASCADE;
+
 INSERT INTO public.dw_field_definitions VALUES (40, 6, 'signer', 'VARCHAR', 50, NULL, NULL, false, NULL, false, false, 'Signer', 1);
+TRUNCATE TABLE public.dw_field_definitions CASCADE;
+
 INSERT INTO public.dw_field_definitions VALUES (41, 6, 'signer_dept', 'VARCHAR', 100, NULL, NULL, true, NULL, false, false, 'Signer Department', 2);
+TRUNCATE TABLE public.dw_field_definitions CASCADE;
+
 INSERT INTO public.dw_field_definitions VALUES (42, 6, 'sign_time', 'TIMESTAMP', NULL, NULL, NULL, true, NULL, false, false, 'Sign Time', 3);
+TRUNCATE TABLE public.dw_field_definitions CASCADE;
+
 INSERT INTO public.dw_field_definitions VALUES (43, 6, 'sign_result', 'VARCHAR', 20, NULL, NULL, true, NULL, false, false, 'Sign Result', 4);
+TRUNCATE TABLE public.dw_field_definitions CASCADE;
+
 INSERT INTO public.dw_field_definitions VALUES (44, 6, 'sign_comment', 'TEXT', 1000, NULL, NULL, true, NULL, false, false, 'Sign Comment', 5);
+TRUNCATE TABLE public.dw_field_definitions CASCADE;
+
 INSERT INTO public.dw_field_definitions VALUES (62, 7, 'aaa', 'VARCHAR', 255, NULL, NULL, true, NULL, false, false, '', 0);
+TRUNCATE TABLE public.dw_field_definitions CASCADE;
+
 INSERT INTO public.dw_field_definitions VALUES (63, 7, 'bbbb', 'VARCHAR', 255, NULL, NULL, true, NULL, false, false, '', 1);
+TRUNCATE TABLE public.dw_field_definitions CASCADE;
+
 INSERT INTO public.dw_field_definitions VALUES (64, 7, 'jjj', 'VARCHAR', 255, NULL, NULL, true, NULL, false, false, '', 2);
+TRUNCATE TABLE public.dw_form_definitions CASCADE;
+
 INSERT INTO public.dw_form_definitions VALUES (1, 1, 'Purchase Request Main Form', 'MAIN', '{}', 'Main form for purchase request with basic information', NULL, '2026-01-13 10:38:37.240844', '2026-01-13 10:38:37.240844');
+TRUNCATE TABLE public.dw_form_definitions CASCADE;
+
 INSERT INTO public.dw_form_definitions VALUES (2, 1, 'Purchase Items Form', 'SUB', '{}', 'Sub form for purchase item details', NULL, '2026-01-13 10:38:37.240844', '2026-01-13 10:38:37.240844');
+TRUNCATE TABLE public.dw_form_definitions CASCADE;
+
 INSERT INTO public.dw_form_definitions VALUES (3, 1, 'Approval Form', 'ACTION', '{}', 'Action form for approval operations', NULL, '2026-01-13 10:38:37.240844', '2026-01-13 10:38:37.240844');
+TRUNCATE TABLE public.dw_form_definitions CASCADE;
+
 INSERT INTO public.dw_form_definitions VALUES (4, 1, 'Supplier Selection Form', 'POPUP', '{}', 'Popup form for supplier selection', NULL, '2026-01-13 10:38:37.240844', '2026-01-13 10:38:37.240844');
+TRUNCATE TABLE public.dw_form_definitions CASCADE;
+
 INSERT INTO public.dw_form_definitions VALUES (5, 1, 'Budget Query Form', 'ACTION', '{}', 'Action form for budget query', NULL, '2026-01-13 10:38:37.240844', '2026-01-13 10:38:37.240844');
+TRUNCATE TABLE public.dw_form_definitions CASCADE;
+
 INSERT INTO public.dw_form_definitions VALUES (6, 1, 'Countersign Form', 'ACTION', '{}', 'Action form for countersign operations', NULL, '2026-01-13 10:38:37.240844', '2026-01-13 10:38:37.240844');
+TRUNCATE TABLE public.dw_form_definitions CASCADE;
+
 INSERT INTO public.dw_form_definitions VALUES (7, 2, 'testForm', 'MAIN', '{"rule": [{"info": "", "name": "ref_Fnvimkdrn28vadc", "type": "input", "field": "Fq63mkdrn28vabc", "props": {"type": "text", "clearable": true, "maxlength": 5}, "title": "输入框", "_fc_id": "id_Foanmkdrn28vacc", "hidden": false, "display": true, "$required": false, "_fc_drag_tag": "input"}, {"info": "", "name": "ref_F4m8mkdrrp95ajc", "type": "colorPicker", "field": "Fxe2mkdrrp95ahc", "title": "颜色选择器", "_fc_id": "id_Fuxfmkdrrp95aic", "hidden": false, "display": true, "$required": false, "_fc_drag_tag": "colorPicker"}], "options": {"form": {"size": "default", "inline": false, "labelWidth": "125px", "labelPosition": "right", "hideRequiredAsterisk": false}, "resetBtn": {"show": false, "innerText": "重置"}, "submitBtn": {"show": true, "innerText": "提交"}}}', '', NULL, '2026-01-14 08:05:50.854036', '2026-01-14 08:39:25.565246');
 
+TRUNCATE TABLE public.dw_form_table_bindings CASCADE;
+
 INSERT INTO public.dw_form_table_bindings VALUES (1, 1, 1, 'PRIMARY', 'EDITABLE', NULL, 0, '2026-01-13 10:38:37.240844', NULL);
+TRUNCATE TABLE public.dw_form_table_bindings CASCADE;
+
 INSERT INTO public.dw_form_table_bindings VALUES (2, 1, 2, 'SUB', 'EDITABLE', 'request_id', 1, '2026-01-13 10:38:37.240844', NULL);
+TRUNCATE TABLE public.dw_form_table_bindings CASCADE;
+
 INSERT INTO public.dw_form_table_bindings VALUES (3, 1, 3, 'RELATED', 'EDITABLE', 'request_id', 2, '2026-01-13 10:38:37.240844', NULL);
+TRUNCATE TABLE public.dw_form_table_bindings CASCADE;
+
 INSERT INTO public.dw_form_table_bindings VALUES (4, 2, 2, 'PRIMARY', 'EDITABLE', NULL, 0, '2026-01-13 10:38:37.240844', NULL);
+TRUNCATE TABLE public.dw_form_table_bindings CASCADE;
+
 INSERT INTO public.dw_form_table_bindings VALUES (5, 3, 1, 'PRIMARY', 'READONLY', NULL, 0, '2026-01-13 10:38:37.240844', NULL);
+TRUNCATE TABLE public.dw_form_table_bindings CASCADE;
+
 INSERT INTO public.dw_form_table_bindings VALUES (6, 3, 5, 'SUB', 'EDITABLE', 'request_id', 1, '2026-01-13 10:38:37.240844', NULL);
+TRUNCATE TABLE public.dw_form_table_bindings CASCADE;
+
 INSERT INTO public.dw_form_table_bindings VALUES (7, 6, 1, 'PRIMARY', 'READONLY', NULL, 0, '2026-01-13 10:38:37.240844', NULL);
+TRUNCATE TABLE public.dw_form_table_bindings CASCADE;
+
 INSERT INTO public.dw_form_table_bindings VALUES (8, 6, 6, 'SUB', 'EDITABLE', 'request_id', 1, '2026-01-13 10:38:37.240844', NULL);
+TRUNCATE TABLE public.dw_form_table_bindings CASCADE;
+
 INSERT INTO public.dw_form_table_bindings VALUES (9, 7, 7, 'PRIMARY', 'READONLY', NULL, 0, '2026-01-14 08:21:45.643529', '2026-01-15 11:53:16.965536');
 
+TRUNCATE TABLE public.dw_function_units CASCADE;
+
 INSERT INTO public.dw_function_units VALUES (1, '采购申请', '采购申请流程，支持多级审批、金额分级、部门会签等功能，覆盖所有任务分配类型和8种动作类型', 1, 'DRAFT', NULL, 'system', '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', 'fu-purchase-request');
+TRUNCATE TABLE public.dw_function_units CASCADE;
+
 INSERT INTO public.dw_function_units VALUES (2, 'Test0', '', 3, 'PUBLISHED', '1.0.6', 'tech-director-001', '2026-01-14 08:04:04.398815', 'tech-director-001', '2026-01-19 13:01:30.773663', 'fu-20260114-paed3z');
 
+TRUNCATE TABLE public.dw_icons CASCADE;
+
 INSERT INTO public.dw_icons VALUES (2, 'accessibility-svgrepo-com', 'GENERAL', '<?xml version="1.0" encoding="utf-8"?><svg width="800px" height="800px" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M16 8C16 12.4183 12.4183 16 8 16C3.58172 16 0 12.4183 0 8C0 3.58172 3.58172 0 8 0C12.4183 0 16 3.58172 16 8ZM9.25 3.75C9.25 4.44036 8.69036 5 8 5C7.30964 5 6.75 4.44036 6.75 3.75C6.75 3.05964 7.30964 2.5 8 2.5C8.69036 2.5 9.25 3.05964 9.25 3.75ZM12 8H9.41901L11.2047 13H9.081L8 9.97321L6.91901 13H4.79528L6.581 8H4V6H12V8Z" fill="#000000"/></svg>', 620, NULL, 'system', '2026-01-13 18:49:50.185451', 'system', '2026-01-13 18:49:50.185451');
+TRUNCATE TABLE public.dw_icons CASCADE;
+
 INSERT INTO public.dw_icons VALUES (3, 'chef-man-cap-svgrepo-com', 'GENERAL', '<?xml version="1.0" ?><svg fill="#000000" width="800px" height="800px" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" id="Layer_1" data-name="Layer 1"><path d="M8.49,12.68v4.61c0,.34,.23,.61,.53,.71v5.48c0,.13-.14,3.21,1.88,5.34,1.22,1.28,2.93,1.94,5.09,1.94s3.88-.65,5.09-1.94c2.02-2.13,1.89-5.21,1.88-5.3v-5.52c.3-.1,.53-.37,.53-.71v-4.61c1.71-.69,2.92-2.36,2.92-4.32,0-2.57-2.09-4.67-4.67-4.67-.49,0-.98,.08-1.46,.23-1.09-1.67-2.93-2.68-4.94-2.68s-3.68,.91-4.79,2.46c-2.74-.22-5.01,1.96-5.01,4.65,0,1.96,1.21,3.63,2.92,4.32Zm11.51,15.11c-.92,.97-2.27,1.46-4,1.46s-3.07-.49-4-1.46c-1.58-1.66-1.48-4.21-1.48-4.28v-5.48h10.96v5.51s.1,2.58-1.48,4.24Zm2.01-14.77v3.51H9.99v-3.51h12.02ZM10.23,5.19c.21,0,.4,.02,.59,.05,.3,.05,.61-.09,.77-.35,.81-1.34,2.22-2.15,3.78-2.15,1.68,0,3.19,.94,3.95,2.45,.09,.18,.25,.31,.43,.38,.19,.06,.39,.05,.57-.04,.45-.23,.95-.35,1.44-.35,1.75,0,3.17,1.42,3.17,3.17s-1.42,3.17-3.17,3.17H10.23c-1.75,0-3.17-1.42-3.17-3.17s1.42-3.17,3.17-3.17Z"/><path d="M14.26,5.25c1.5,.28,2.59,1.59,2.59,3.11,0,.41,.34,.75,.75,.75s.75-.34,.75-.75c0-2.24-1.6-4.17-3.81-4.59-.4-.07-.8,.19-.88,.6-.08,.41,.19,.8,.6,.88Z"/><circle cx="13.32" cy="20.07" r="1.25"/><circle cx="18.68" cy="20.07" r="1.25"/><path d="M17.56,24.5h-3.12c-.41,0-.75,.34-.75,.75s.34,.75,.75,.75h3.12c.41,0,.75-.34,.75-.75s-.34-.75-.75-.75Z"/></svg>', 1420, NULL, 'tech-director-001', '2026-01-14 15:49:10.477524', 'tech-director-001', '2026-01-14 15:49:10.477524');
+TRUNCATE TABLE public.dw_icons CASCADE;
+
 INSERT INTO public.dw_icons VALUES (1, 'credit-card', 'PAYMENT', '<svg></svg>', NULL, NULL, NULL, '2026-01-13 10:38:35.507055', NULL, '2026-01-13 10:38:35.507055');
+TRUNCATE TABLE public.dw_process_definitions CASCADE;
+
 INSERT INTO public.dw_process_definitions VALUES (1, 1, 'PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4NCjxicG1uOmRlZmluaXRpb25zIA0KICAgIHhtbG5zOmJwbW49Imh0dHA6Ly93d3cub21nLm9yZy9zcGVjL0JQTU4vMjAxMDA1MjQvTU9ERUwiIA0KICAgIHhtbG5zOmJwbW5kaT0iaHR0cDovL3d3dy5vbWcub3JnL3NwZWMvQlBNTi8yMDEwMDUyNC9ESSINCiAgICB4bWxuczpkYz0iaHR0cDovL3d3dy5vbWcub3JnL3NwZWMvREQvMjAxMDA1MjQvREMiDQogICAgeG1sbnM6ZGk9Imh0dHA6Ly93d3cub21nLm9yZy9zcGVjL0RELzIwMTAwNTI0L0RJIg0KICAgIHhtbG5zOnhzaT0iaHR0cDovL3d3dy53My5vcmcvMjAwMS9YTUxTY2hlbWEtaW5zdGFuY2UiDQogICAgeG1sbnM6Y3VzdG9tPSJodHRwOi8vY3VzdG9tLmJwbW4uaW8vc2NoZW1hIg0KICAgIGlkPSJEZWZpbml0aW9uc19QdXJjaGFzZVJlcXVlc3QiIA0KICAgIHRhcmdldE5hbWVzcGFjZT0iaHR0cDovL3dvcmtmbG93LmV4YW1wbGUuY29tL3B1cmNoYXNlLXJlcXVlc3QiPg0KICA8YnBtbjpwcm9jZXNzIGlkPSJQcm9jZXNzX1B1cmNoYXNlUmVxdWVzdCIgbmFtZT0iUHVyY2hhc2UgUmVxdWVzdCBQcm9jZXNzIiBpc0V4ZWN1dGFibGU9InRydWUiPg0KICAgIDxicG1uOmV4dGVuc2lvbkVsZW1lbnRzPg0KICAgICAgPGN1c3RvbTpwcm9wZXJ0aWVzPg0KICAgICAgICA8Y3VzdG9tOnByb3BlcnR5IG5hbWU9Imdsb2JhbEFjdGlvbklkcyIgdmFsdWU9IlsyNiwyOV0iLz4NCiAgICAgIDwvY3VzdG9tOnByb3BlcnRpZXM+DQogICAgPC9icG1uOmV4dGVuc2lvbkVsZW1lbnRzPg0KICAgIA0KICAgIDxicG1uOnN0YXJ0RXZlbnQgaWQ9IlN0YXJ0RXZlbnRfMSIgbmFtZT0iU3RhcnQiPg0KICAgICAgPGJwbW46b3V0Z29pbmc+Rmxvd18xPC9icG1uOm91dGdvaW5nPg0KICAgIDwvYnBtbjpzdGFydEV2ZW50Pg0KICAgIA0KICAgIDxicG1uOnVzZXJUYXNrIGlkPSJUYXNrX1N1Ym1pdCIgbmFtZT0iU3VibWl0IFJlcXVlc3QiPg0KICAgICAgPGJwbW46ZXh0ZW5zaW9uRWxlbWVudHM+DQogICAgICAgIDxjdXN0b206cHJvcGVydGllcz4NCiAgICAgICAgICA8Y3VzdG9tOnByb3BlcnR5IG5hbWU9ImZvcm1JZCIgdmFsdWU9IjExIi8+DQogICAgICAgICAgPGN1c3RvbTpwcm9wZXJ0eSBuYW1lPSJmb3JtTmFtZSIgdmFsdWU9IlB1cmNoYXNlIFJlcXVlc3QgTWFpbiBGb3JtIi8+DQogICAgICAgICAgPGN1c3RvbTpwcm9wZXJ0eSBuYW1lPSJmb3JtUmVhZE9ubHkiIHZhbHVlPSJmYWxzZSIvPg0KICAgICAgICAgIDxjdXN0b206cHJvcGVydHkgbmFtZT0iYWN0aW9uSWRzIiB2YWx1ZT0iWzIxLDI5XSIvPg0KICAgICAgICAgIDxjdXN0b206cHJvcGVydHkgbmFtZT0iYXNzaWduZWVUeXBlIiB2YWx1ZT0iSU5JVElBVE9SIi8+DQogICAgICAgICAgPGN1c3RvbTpwcm9wZXJ0eSBuYW1lPSJhc3NpZ25lZUxhYmVsIiB2YWx1ZT0iSW5pdGlhdG9yIi8+DQogICAgICAgIDwvY3VzdG9tOnByb3BlcnRpZXM+DQogICAgICA8L2JwbW46ZXh0ZW5zaW9uRWxlbWVudHM+DQogICAgICA8YnBtbjppbmNvbWluZz5GbG93XzE8L2JwbW46aW5jb21pbmc+DQogICAgICA8YnBtbjpvdXRnb2luZz5GbG93XzI8L2JwbW46b3V0Z29pbmc+DQogICAgPC9icG1uOnVzZXJUYXNrPg0KICAgIA0KICAgIDxicG1uOnVzZXJUYXNrIGlkPSJUYXNrX0RlcHRSZXZpZXciIG5hbWU9IkRlcGFydG1lbnQgUmV2aWV3Ij4NCiAgICAgIDxicG1uOmV4dGVuc2lvbkVsZW1lbnRzPg0KICAgICAgICA8Y3VzdG9tOnByb3BlcnRpZXM+DQogICAgICAgICAgPGN1c3RvbTpwcm9wZXJ0eSBuYW1lPSJmb3JtSWQiIHZhbHVlPSIxMyIvPg0KICAgICAgICAgIDxjdXN0b206cHJvcGVydHkgbmFtZT0iZm9ybU5hbWUiIHZhbHVlPSJBcHByb3ZhbCBGb3JtIi8+DQogICAgICAgICAgPGN1c3RvbTpwcm9wZXJ0eSBuYW1lPSJmb3JtUmVhZE9ubHkiIHZhbHVlPSJmYWxzZSIvPg0KICAgICAgICAgIDxjdXN0b206cHJvcGVydHkgbmFtZT0iYWN0aW9uSWRzIiB2YWx1ZT0iWzIyLDIzLDI0LDI1XSIvPg0KICAgICAgICAgIDxjdXN0b206cHJvcGVydHkgbmFtZT0iYXNzaWduZWVUeXBlIiB2YWx1ZT0iREVQVF9PVEhFUlMiLz4NCiAgICAgICAgICA8Y3VzdG9tOnByb3BlcnR5IG5hbWU9ImFzc2lnbmVlTGFiZWwiIHZhbHVlPSJEZXBhcnRtZW50IE90aGVycyIvPg0KICAgICAgICA8L2N1c3RvbTpwcm9wZXJ0aWVzPg0KICAgICAgPC9icG1uOmV4dGVuc2lvbkVsZW1lbnRzPg0KICAgICAgPGJwbW46aW5jb21pbmc+Rmxvd18yPC9icG1uOmluY29taW5nPg0KICAgICAgPGJwbW46b3V0Z29pbmc+Rmxvd18zPC9icG1uOm91dGdvaW5nPg0KICAgIDwvYnBtbjp1c2VyVGFzaz4NCiAgICANCiAgICA8YnBtbjp1c2VyVGFzayBpZD0iVGFza19NYW5hZ2VyQXBwcm92YWwiIG5hbWU9Ik1hbmFnZXIgQXBwcm92YWwiPg0KICAgICAgPGJwbW46ZXh0ZW5zaW9uRWxlbWVudHM+DQogICAgICAgIDxjdXN0b206cHJvcGVydGllcz4NCiAgICAgICAgICA8Y3VzdG9tOnByb3BlcnR5IG5hbWU9ImZvcm1JZCIgdmFsdWU9IjEzIi8+DQogICAgICAgICAgPGN1c3RvbTpwcm9wZXJ0eSBuYW1lPSJmb3JtTmFtZSIgdmFsdWU9IkFwcHJvdmFsIEZvcm0iLz4NCiAgICAgICAgICA8Y3VzdG9tOnByb3BlcnR5IG5hbWU9ImZvcm1SZWFkT25seSIgdmFsdWU9ImZhbHNlIi8+DQogICAgICAgICAgPGN1c3RvbTpwcm9wZXJ0eSBuYW1lPSJhY3Rpb25JZHMiIHZhbHVlPSJbMjIsMjMsMjQsMjVdIi8+DQogICAgICAgICAgPGN1c3RvbTpwcm9wZXJ0eSBuYW1lPSJhc3NpZ25lZVR5cGUiIHZhbHVlPSJFTlRJVFlfTUFOQUdFUiIvPg0KICAgICAgICAgIDxjdXN0b206cHJvcGVydHkgbmFtZT0iYXNzaWduZWVMYWJlbCIgdmFsdWU9IkVudGl0eSBNYW5hZ2VyIi8+DQogICAgICAgIDwvY3VzdG9tOnByb3BlcnRpZXM+DQogICAgICA8L2JwbW46ZXh0ZW5zaW9uRWxlbWVudHM+DQogICAgICA8YnBtbjppbmNvbWluZz5GbG93XzM8L2JwbW46aW5jb21pbmc+DQogICAgICA8YnBtbjpvdXRnb2luZz5GbG93XzQ8L2JwbW46b3V0Z29pbmc+DQogICAgPC9icG1uOnVzZXJUYXNrPg0KICAgIA0KICAgIDxicG1uOmV4Y2x1c2l2ZUdhdGV3YXkgaWQ9IkdhdGV3YXlfQW1vdW50IiBuYW1lPSJBbW91bnQgQ2hlY2siPg0KICAgICAgPGJwbW46aW5jb21pbmc+Rmxvd180PC9icG1uOmluY29taW5nPg0KICAgICAgPGJwbW46b3V0Z29pbmc+Rmxvd181PC9icG1uOm91dGdvaW5nPg0KICAgICAgPGJwbW46b3V0Z29pbmc+Rmxvd182PC9icG1uOm91dGdvaW5nPg0KICAgIDwvYnBtbjpleGNsdXNpdmVHYXRld2F5Pg0KICAgIA0KICAgIDxicG1uOnVzZXJUYXNrIGlkPSJUYXNrX0Z1bmN0aW9uTWFuYWdlckFwcHJvdmFsIiBuYW1lPSJGdW5jdGlvbiBNYW5hZ2VyIEFwcHJvdmFsIj4NCiAgICAgIDxicG1uOmV4dGVuc2lvbkVsZW1lbnRzPg0KICAgICAgICA8Y3VzdG9tOnByb3BlcnRpZXM+DQogICAgICAgICAgPGN1c3RvbTpwcm9wZXJ0eSBuYW1lPSJmb3JtSWQiIHZhbHVlPSIxMyIvPg0KICAgICAgICAgIDxjdXN0b206cHJvcGVydHkgbmFtZT0iZm9ybU5hbWUiIHZhbHVlPSJBcHByb3ZhbCBGb3JtIi8+DQogICAgICAgICAgPGN1c3RvbTpwcm9wZXJ0eSBuYW1lPSJmb3JtUmVhZE9ubHkiIHZhbHVlPSJmYWxzZSIvPg0KICAgICAgICAgIDxjdXN0b206cHJvcGVydHkgbmFtZT0iYWN0aW9uSWRzIiB2YWx1ZT0iWzIyLDIzLDI0LDI1XSIvPg0KICAgICAgICAgIDxjdXN0b206cHJvcGVydHkgbmFtZT0iYXNzaWduZWVUeXBlIiB2YWx1ZT0iRlVOQ1RJT05fTUFOQUdFUiIvPg0KICAgICAgICAgIDxjdXN0b206cHJvcGVydHkgbmFtZT0iYXNzaWduZWVMYWJlbCIgdmFsdWU9IkZ1bmN0aW9uIE1hbmFnZXIiLz4NCiAgICAgICAgPC9jdXN0b206cHJvcGVydGllcz4NCiAgICAgIDwvYnBtbjpleHRlbnNpb25FbGVtZW50cz4NCiAgICAgIDxicG1uOmluY29taW5nPkZsb3dfNTwvYnBtbjppbmNvbWluZz4NCiAgICAgIDxicG1uOm91dGdvaW5nPkZsb3dfNzwvYnBtbjpvdXRnb2luZz4NCiAgICA8L2JwbW46dXNlclRhc2s+DQogICAgDQogICAgPGJwbW46dXNlclRhc2sgaWQ9IlRhc2tfUGFyZW50RGVwdFJldmlldyIgbmFtZT0iUGFyZW50IERlcGFydG1lbnQgUmV2aWV3Ij4NCiAgICAgIDxicG1uOmV4dGVuc2lvbkVsZW1lbnRzPg0KICAgICAgICA8Y3VzdG9tOnByb3BlcnRpZXM+DQogICAgICAgICAgPGN1c3RvbTpwcm9wZXJ0eSBuYW1lPSJmb3JtSWQiIHZhbHVlPSIxMyIvPg0KICAgICAgICAgIDxjdXN0b206cHJvcGVydHkgbmFtZT0iZm9ybU5hbWUiIHZhbHVlPSJBcHByb3ZhbCBGb3JtIi8+DQogICAgICAgICAgPGN1c3RvbTpwcm9wZXJ0eSBuYW1lPSJmb3JtUmVhZE9ubHkiIHZhbHVlPSJmYWxzZSIvPg0KICAgICAgICAgIDxjdXN0b206cHJvcGVydHkgbmFtZT0iYWN0aW9uSWRzIiB2YWx1ZT0iWzIyLDIzLDI0LDI1XSIvPg0KICAgICAgICAgIDxjdXN0b206cHJvcGVydHkgbmFtZT0iYXNzaWduZWVUeXBlIiB2YWx1ZT0iUEFSRU5UX0RFUFQiLz4NCiAgICAgICAgICA8Y3VzdG9tOnByb3BlcnR5IG5hbWU9ImFzc2lnbmVlTGFiZWwiIHZhbHVlPSJQYXJlbnQgRGVwYXJ0bWVudCIvPg0KICAgICAgICA8L2N1c3RvbTpwcm9wZXJ0aWVzPg0KICAgICAgPC9icG1uOmV4dGVuc2lvbkVsZW1lbnRzPg0KICAgICAgPGJwbW46aW5jb21pbmc+Rmxvd183PC9icG1uOmluY29taW5nPg0KICAgICAgPGJwbW46b3V0Z29pbmc+Rmxvd184PC9icG1uOm91dGdvaW5nPg0KICAgIDwvYnBtbjp1c2VyVGFzaz4NCiAgICANCiAgICA8YnBtbjp1c2VyVGFzayBpZD0iVGFza19GaW5hbmNlUmV2aWV3IiBuYW1lPSJGaW5hbmNlIFJldmlldyI+DQogICAgICA8YnBtbjpleHRlbnNpb25FbGVtZW50cz4NCiAgICAgICAgPGN1c3RvbTpwcm9wZXJ0aWVzPg0KICAgICAgICAgIDxjdXN0b206cHJvcGVydHkgbmFtZT0iZm9ybUlkIiB2YWx1ZT0iMTMiLz4NCiAgICAgICAgICA8Y3VzdG9tOnByb3BlcnR5IG5hbWU9ImZvcm1OYW1lIiB2YWx1ZT0iQXBwcm92YWwgRm9ybSIvPg0KICAgICAgICAgIDxjdXN0b206cHJvcGVydHkgbmFtZT0iZm9ybVJlYWRPbmx5IiB2YWx1ZT0iZmFsc2UiLz4NCiAgICAgICAgICA8Y3VzdG9tOnByb3BlcnR5IG5hbWU9ImFjdGlvbklkcyIgdmFsdWU9IlsyMiwyMywyN10iLz4NCiAgICAgICAgICA8Y3VzdG9tOnByb3BlcnR5IG5hbWU9ImFzc2lnbmVlVHlwZSIgdmFsdWU9IkZJWEVEX0RFUFQiLz4NCiAgICAgICAgICA8Y3VzdG9tOnByb3BlcnR5IG5hbWU9ImFzc2lnbmVlTGFiZWwiIHZhbHVlPSJGaW5hbmNlIERlcGFydG1lbnQiLz4NCiAgICAgICAgICA8Y3VzdG9tOnByb3BlcnR5IG5hbWU9ImFzc2lnbmVlVmFsdWUiIHZhbHVlPSJkZXB0LWZpbmFuY2UtMDAxIi8+DQogICAgICAgIDwvY3VzdG9tOnByb3BlcnRpZXM+DQogICAgICA8L2JwbW46ZXh0ZW5zaW9uRWxlbWVudHM+DQogICAgICA8YnBtbjppbmNvbWluZz5GbG93Xzg8L2JwbW46aW5jb21pbmc+DQogICAgICA8YnBtbjppbmNvbWluZz5GbG93XzY8L2JwbW46aW5jb21pbmc+DQogICAgICA8YnBtbjpvdXRnb2luZz5GbG93Xzk8L2JwbW46b3V0Z29pbmc+DQogICAgPC9icG1uOnVzZXJUYXNrPg0KICAgIA0KICAgIDxicG1uOnVzZXJUYXNrIGlkPSJUYXNrX0NvdW50ZXJzaWduIiBuYW1lPSJNdWx0aS1EZXBhcnRtZW50IENvdW50ZXJzaWduIj4NCiAgICAgIDxicG1uOmV4dGVuc2lvbkVsZW1lbnRzPg0KICAgICAgICA8Y3VzdG9tOnByb3BlcnRpZXM+DQogICAgICAgICAgPGN1c3RvbTpwcm9wZXJ0eSBuYW1lPSJmb3JtSWQiIHZhbHVlPSIxNiIvPg0KICAgICAgICAgIDxjdXN0b206cHJvcGVydHkgbmFtZT0iZm9ybU5hbWUiIHZhbHVlPSJDb3VudGVyc2lnbiBGb3JtIi8+DQogICAgICAgICAgPGN1c3RvbTpwcm9wZXJ0eSBuYW1lPSJmb3JtUmVhZE9ubHkiIHZhbHVlPSJmYWxzZSIvPg0KICAgICAgICAgIDxjdXN0b206cHJvcGVydHkgbmFtZT0iYWN0aW9uSWRzIiB2YWx1ZT0iWzIyLDIzLDMwXSIvPg0KICAgICAgICAgIDxjdXN0b206cHJvcGVydHkgbmFtZT0iYXNzaWduZWVUeXBlIiB2YWx1ZT0iVklSVFVBTF9HUk9VUCIvPg0KICAgICAgICAgIDxjdXN0b206cHJvcGVydHkgbmFtZT0iYXNzaWduZWVMYWJlbCIgdmFsdWU9IkNvdW50ZXJzaWduIEdyb3VwIi8+DQogICAgICAgICAgPGN1c3RvbTpwcm9wZXJ0eSBuYW1lPSJhc3NpZ25lZVZhbHVlIiB2YWx1ZT0idmctY291bnRlcnNpZ24tMDAxIi8+DQogICAgICAgIDwvY3VzdG9tOnByb3BlcnRpZXM+DQogICAgICA8L2JwbW46ZXh0ZW5zaW9uRWxlbWVudHM+DQogICAgICA8YnBtbjppbmNvbWluZz5GbG93Xzk8L2JwbW46aW5jb21pbmc+DQogICAgICA8YnBtbjpvdXRnb2luZz5GbG93XzEwPC9icG1uOm91dGdvaW5nPg0KICAgIDwvYnBtbjp1c2VyVGFzaz4NCiAgICANCiAgICA8YnBtbjplbmRFdmVudCBpZD0iRW5kRXZlbnRfMSIgbmFtZT0iRW5kIj4NCiAgICAgIDxicG1uOmluY29taW5nPkZsb3dfMTA8L2JwbW46aW5jb21pbmc+DQogICAgPC9icG1uOmVuZEV2ZW50Pg0KICAgIA0KICAgIDxicG1uOnNlcXVlbmNlRmxvdyBpZD0iRmxvd18xIiBzb3VyY2VSZWY9IlN0YXJ0RXZlbnRfMSIgdGFyZ2V0UmVmPSJUYXNrX1N1Ym1pdCIvPg0KICAgIDxicG1uOnNlcXVlbmNlRmxvdyBpZD0iRmxvd18yIiBzb3VyY2VSZWY9IlRhc2tfU3VibWl0IiB0YXJnZXRSZWY9IlRhc2tfRGVwdFJldmlldyIvPg0KICAgIDxicG1uOnNlcXVlbmNlRmxvdyBpZD0iRmxvd18zIiBzb3VyY2VSZWY9IlRhc2tfRGVwdFJldmlldyIgdGFyZ2V0UmVmPSJUYXNrX01hbmFnZXJBcHByb3ZhbCIvPg0KICAgIDxicG1uOnNlcXVlbmNlRmxvdyBpZD0iRmxvd180IiBzb3VyY2VSZWY9IlRhc2tfTWFuYWdlckFwcHJvdmFsIiB0YXJnZXRSZWY9IkdhdGV3YXlfQW1vdW50Ii8+DQogICAgPGJwbW46c2VxdWVuY2VGbG93IGlkPSJGbG93XzUiIG5hbWU9IkFtb3VudCA+PSAxMDAwMCIgc291cmNlUmVmPSJHYXRld2F5X0Ftb3VudCIgdGFyZ2V0UmVmPSJUYXNrX0Z1bmN0aW9uTWFuYWdlckFwcHJvdmFsIj4NCiAgICAgIDxicG1uOmNvbmRpdGlvbkV4cHJlc3Npb24geHNpOnR5cGU9ImJwbW46dEZvcm1hbEV4cHJlc3Npb24iPjwhW0NEQVRBWyR7dG90YWxfYW1vdW50ID49IDEwMDAwfV1dPjwvYnBtbjpjb25kaXRpb25FeHByZXNzaW9uPg0KICAgIDwvYnBtbjpzZXF1ZW5jZUZsb3c+DQogICAgPGJwbW46c2VxdWVuY2VGbG93IGlkPSJGbG93XzYiIG5hbWU9IkFtb3VudCAmbHQ7IDEwMDAwIiBzb3VyY2VSZWY9IkdhdGV3YXlfQW1vdW50IiB0YXJnZXRSZWY9IlRhc2tfRmluYW5jZVJldmlldyI+DQogICAgICA8YnBtbjpjb25kaXRpb25FeHByZXNzaW9uIHhzaTp0eXBlPSJicG1uOnRGb3JtYWxFeHByZXNzaW9uIj48IVtDREFUQVske3RvdGFsX2Ftb3VudCA8IDEwMDAwfV1dPjwvYnBtbjpjb25kaXRpb25FeHByZXNzaW9uPg0KICAgIDwvYnBtbjpzZXF1ZW5jZUZsb3c+DQogICAgPGJwbW46c2VxdWVuY2VGbG93IGlkPSJGbG93XzciIHNvdXJjZVJlZj0iVGFza19GdW5jdGlvbk1hbmFnZXJBcHByb3ZhbCIgdGFyZ2V0UmVmPSJUYXNrX1BhcmVudERlcHRSZXZpZXciLz4NCiAgICA8YnBtbjpzZXF1ZW5jZUZsb3cgaWQ9IkZsb3dfOCIgc291cmNlUmVmPSJUYXNrX1BhcmVudERlcHRSZXZpZXciIHRhcmdldFJlZj0iVGFza19GaW5hbmNlUmV2aWV3Ii8+DQogICAgPGJwbW46c2VxdWVuY2VGbG93IGlkPSJGbG93XzkiIHNvdXJjZVJlZj0iVGFza19GaW5hbmNlUmV2aWV3IiB0YXJnZXRSZWY9IlRhc2tfQ291bnRlcnNpZ24iLz4NCiAgICA8YnBtbjpzZXF1ZW5jZUZsb3cgaWQ9IkZsb3dfMTAiIHNvdXJjZVJlZj0iVGFza19Db3VudGVyc2lnbiIgdGFyZ2V0UmVmPSJFbmRFdmVudF8xIi8+DQogIDwvYnBtbjpwcm9jZXNzPg0KICANCiAgPGJwbW5kaTpCUE1ORGlhZ3JhbSBpZD0iQlBNTkRpYWdyYW1fMSI+DQogICAgPGJwbW5kaTpCUE1OUGxhbmUgaWQ9IkJQTU5QbGFuZV8xIiBicG1uRWxlbWVudD0iUHJvY2Vzc19QdXJjaGFzZVJlcXVlc3QiPg0KICAgICAgPGJwbW5kaTpCUE1OU2hhcGUgaWQ9IlN0YXJ0RXZlbnRfMV9kaSIgYnBtbkVsZW1lbnQ9IlN0YXJ0RXZlbnRfMSI+DQogICAgICAgIDxkYzpCb3VuZHMgeD0iMTAwIiB5PSIyMDAiIHdpZHRoPSIzNiIgaGVpZ2h0PSIzNiIvPg0KICAgICAgPC9icG1uZGk6QlBNTlNoYXBlPg0KICAgICAgPGJwbW5kaTpCUE1OU2hhcGUgaWQ9IlRhc2tfU3VibWl0X2RpIiBicG1uRWxlbWVudD0iVGFza19TdWJtaXQiPg0KICAgICAgICA8ZGM6Qm91bmRzIHg9IjIwMCIgeT0iMTc4IiB3aWR0aD0iMTAwIiBoZWlnaHQ9IjgwIi8+DQogICAgICA8L2JwbW5kaTpCUE1OU2hhcGU+DQogICAgICA8YnBtbmRpOkJQTU5TaGFwZSBpZD0iVGFza19EZXB0UmV2aWV3X2RpIiBicG1uRWxlbWVudD0iVGFza19EZXB0UmV2aWV3Ij4NCiAgICAgICAgPGRjOkJvdW5kcyB4PSIzNjAiIHk9IjE3OCIgd2lkdGg9IjEwMCIgaGVpZ2h0PSI4MCIvPg0KICAgICAgPC9icG1uZGk6QlBNTlNoYXBlPg0KICAgICAgPGJwbW5kaTpCUE1OU2hhcGUgaWQ9IlRhc2tfTWFuYWdlckFwcHJvdmFsX2RpIiBicG1uRWxlbWVudD0iVGFza19NYW5hZ2VyQXBwcm92YWwiPg0KICAgICAgICA8ZGM6Qm91bmRzIHg9IjUyMCIgeT0iMTc4IiB3aWR0aD0iMTAwIiBoZWlnaHQ9IjgwIi8+DQogICAgICA8L2JwbW5kaTpCUE1OU2hhcGU+DQogICAgICA8YnBtbmRpOkJQTU5TaGFwZSBpZD0iR2F0ZXdheV9BbW91bnRfZGkiIGJwbW5FbGVtZW50PSJHYXRld2F5X0Ftb3VudCIgaXNNYXJrZXJWaXNpYmxlPSJ0cnVlIj4NCiAgICAgICAgPGRjOkJvdW5kcyB4PSI2ODAiIHk9IjE5MyIgd2lkdGg9IjUwIiBoZWlnaHQ9IjUwIi8+DQogICAgICA8L2JwbW5kaTpCUE1OU2hhcGU+DQogICAgICA8YnBtbmRpOkJQTU5TaGFwZSBpZD0iVGFza19GdW5jdGlvbk1hbmFnZXJBcHByb3ZhbF9kaSIgYnBtbkVsZW1lbnQ9IlRhc2tfRnVuY3Rpb25NYW5hZ2VyQXBwcm92YWwiPg0KICAgICAgICA8ZGM6Qm91bmRzIHg9IjgwMCIgeT0iODAiIHdpZHRoPSIxMDAiIGhlaWdodD0iODAiLz4NCiAgICAgIDwvYnBtbmRpOkJQTU5TaGFwZT4NCiAgICAgIDxicG1uZGk6QlBNTlNoYXBlIGlkPSJUYXNrX1BhcmVudERlcHRSZXZpZXdfZGkiIGJwbW5FbGVtZW50PSJUYXNrX1BhcmVudERlcHRSZXZpZXciPg0KICAgICAgICA8ZGM6Qm91bmRzIHg9Ijk2MCIgeT0iODAiIHdpZHRoPSIxMDAiIGhlaWdodD0iODAiLz4NCiAgICAgIDwvYnBtbmRpOkJQTU5TaGFwZT4NCiAgICAgIDxicG1uZGk6QlBNTlNoYXBlIGlkPSJUYXNrX0ZpbmFuY2VSZXZpZXdfZGkiIGJwbW5FbGVtZW50PSJUYXNrX0ZpbmFuY2VSZXZpZXciPg0KICAgICAgICA8ZGM6Qm91bmRzIHg9IjExMjAiIHk9IjE3OCIgd2lkdGg9IjEwMCIgaGVpZ2h0PSI4MCIvPg0KICAgICAgPC9icG1uZGk6QlBNTlNoYXBlPg0KICAgICAgPGJwbW5kaTpCUE1OU2hhcGUgaWQ9IlRhc2tfQ291bnRlcnNpZ25fZGkiIGJwbW5FbGVtZW50PSJUYXNrX0NvdW50ZXJzaWduIj4NCiAgICAgICAgPGRjOkJvdW5kcyB4PSIxMjgwIiB5PSIxNzgiIHdpZHRoPSIxMDAiIGhlaWdodD0iODAiLz4NCiAgICAgIDwvYnBtbmRpOkJQTU5TaGFwZT4NCiAgICAgIDxicG1uZGk6QlBNTlNoYXBlIGlkPSJFbmRFdmVudF8xX2RpIiBicG1uRWxlbWVudD0iRW5kRXZlbnRfMSI+DQogICAgICAgIDxkYzpCb3VuZHMgeD0iMTQ0MCIgeT0iMjAwIiB3aWR0aD0iMzYiIGhlaWdodD0iMzYiLz4NCiAgICAgIDwvYnBtbmRpOkJQTU5TaGFwZT4NCiAgICAgIDxicG1uZGk6QlBNTkVkZ2UgaWQ9IkZsb3dfMV9kaSIgYnBtbkVsZW1lbnQ9IkZsb3dfMSI+DQogICAgICAgIDxkaTp3YXlwb2ludCB4PSIxMzYiIHk9IjIxOCIvPg0KICAgICAgICA8ZGk6d2F5cG9pbnQgeD0iMjAwIiB5PSIyMTgiLz4NCiAgICAgIDwvYnBtbmRpOkJQTU5FZGdlPg0KICAgICAgPGJwbW5kaTpCUE1ORWRnZSBpZD0iRmxvd18yX2RpIiBicG1uRWxlbWVudD0iRmxvd18yIj4NCiAgICAgICAgPGRpOndheXBvaW50IHg9IjMwMCIgeT0iMjE4Ii8+DQogICAgICAgIDxkaTp3YXlwb2ludCB4PSIzNjAiIHk9IjIxOCIvPg0KICAgICAgPC9icG1uZGk6QlBNTkVkZ2U+DQogICAgICA8YnBtbmRpOkJQTU5FZGdlIGlkPSJGbG93XzNfZGkiIGJwbW5FbGVtZW50PSJGbG93XzMiPg0KICAgICAgICA8ZGk6d2F5cG9pbnQgeD0iNDYwIiB5PSIyMTgiLz4NCiAgICAgICAgPGRpOndheXBvaW50IHg9IjUyMCIgeT0iMjE4Ii8+DQogICAgICA8L2JwbW5kaTpCUE1ORWRnZT4NCiAgICAgIDxicG1uZGk6QlBNTkVkZ2UgaWQ9IkZsb3dfNF9kaSIgYnBtbkVsZW1lbnQ9IkZsb3dfNCI+DQogICAgICAgIDxkaTp3YXlwb2ludCB4PSI2MjAiIHk9IjIxOCIvPg0KICAgICAgICA8ZGk6d2F5cG9pbnQgeD0iNjgwIiB5PSIyMTgiLz4NCiAgICAgIDwvYnBtbmRpOkJQTU5FZGdlPg0KICAgICAgPGJwbW5kaTpCUE1ORWRnZSBpZD0iRmxvd181X2RpIiBicG1uRWxlbWVudD0iRmxvd181Ij4NCiAgICAgICAgPGRpOndheXBvaW50IHg9IjcwNSIgeT0iMTkzIi8+DQogICAgICAgIDxkaTp3YXlwb2ludCB4PSI3MDUiIHk9IjEyMCIvPg0KICAgICAgICA8ZGk6d2F5cG9pbnQgeD0iODAwIiB5PSIxMjAiLz4NCiAgICAgIDwvYnBtbmRpOkJQTU5FZGdlPg0KICAgICAgPGJwbW5kaTpCUE1ORWRnZSBpZD0iRmxvd182X2RpIiBicG1uRWxlbWVudD0iRmxvd182Ij4NCiAgICAgICAgPGRpOndheXBvaW50IHg9IjczMCIgeT0iMjE4Ii8+DQogICAgICAgIDxkaTp3YXlwb2ludCB4PSIxMTIwIiB5PSIyMTgiLz4NCiAgICAgIDwvYnBtbmRpOkJQTU5FZGdlPg0KICAgICAgPGJwbW5kaTpCUE1ORWRnZSBpZD0iRmxvd183X2RpIiBicG1uRWxlbWVudD0iRmxvd183Ij4NCiAgICAgICAgPGRpOndheXBvaW50IHg9IjkwMCIgeT0iMTIwIi8+DQogICAgICAgIDxkaTp3YXlwb2ludCB4PSI5NjAiIHk9IjEyMCIvPg0KICAgICAgPC9icG1uZGk6QlBNTkVkZ2U+DQogICAgICA8YnBtbmRpOkJQTU5FZGdlIGlkPSJGbG93XzhfZGkiIGJwbW5FbGVtZW50PSJGbG93XzgiPg0KICAgICAgICA8ZGk6d2F5cG9pbnQgeD0iMTA2MCIgeT0iMTIwIi8+DQogICAgICAgIDxkaTp3YXlwb2ludCB4PSIxMDkwIiB5PSIxMjAiLz4NCiAgICAgICAgPGRpOndheXBvaW50IHg9IjEwOTAiIHk9IjIxOCIvPg0KICAgICAgICA8ZGk6d2F5cG9pbnQgeD0iMTEyMCIgeT0iMjE4Ii8+DQogICAgICA8L2JwbW5kaTpCUE1ORWRnZT4NCiAgICAgIDxicG1uZGk6QlBNTkVkZ2UgaWQ9IkZsb3dfOV9kaSIgYnBtbkVsZW1lbnQ9IkZsb3dfOSI+DQogICAgICAgIDxkaTp3YXlwb2ludCB4PSIxMjIwIiB5PSIyMTgiLz4NCiAgICAgICAgPGRpOndheXBvaW50IHg9IjEyODAiIHk9IjIxOCIvPg0KICAgICAgPC9icG1uZGk6QlBNTkVkZ2U+DQogICAgICA8YnBtbmRpOkJQTU5FZGdlIGlkPSJGbG93XzEwX2RpIiBicG1uRWxlbWVudD0iRmxvd18xMCI+DQogICAgICAgIDxkaTp3YXlwb2ludCB4PSIxMzgwIiB5PSIyMTgiLz4NCiAgICAgICAgPGRpOndheXBvaW50IHg9IjE0NDAiIHk9IjIxOCIvPg0KICAgICAgPC9icG1uZGk6QlBNTkVkZ2U+DQogICAgPC9icG1uZGk6QlBNTlBsYW5lPg0KICA8L2JwbW5kaTpCUE1ORGlhZ3JhbT4NCjwvYnBtbjpkZWZpbml0aW9ucz4=', '2026-01-13 10:38:37.240844', '2026-01-13 10:38:37.240844');
+TRUNCATE TABLE public.dw_process_definitions CASCADE;
+
 INSERT INTO public.dw_process_definitions VALUES (2, 2, 'PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz48YnBtbjpkZWZpbml0aW9ucyB4bWxuczp4c2k9Imh0dHA6Ly93d3cudzMub3JnLzIwMDEvWE1MU2NoZW1hLWluc3RhbmNlIiB4bWxuczpicG1uPSJodHRwOi8vd3d3Lm9tZy5vcmcvc3BlYy9CUE1OLzIwMTAwNTI0L01PREVMIiB4bWxuczpicG1uZGk9Imh0dHA6Ly93d3cub21nLm9yZy9zcGVjL0JQTU4vMjAxMDA1MjQvREkiIHhtbG5zOmRjPSJodHRwOi8vd3d3Lm9tZy5vcmcvc3BlYy9ERC8yMDEwMDUyNC9EQyIgeG1sbnM6ZGk9Imh0dHA6Ly93d3cub21nLm9yZy9zcGVjL0RELzIwMTAwNTI0L0RJIiB4bWxuczpjdXN0b209Imh0dHA6Ly9jdXN0b20uYnBtbi5pby9zY2hlbWEiIGlkPSJEZWZpbml0aW9uc18xIiB0YXJnZXROYW1lc3BhY2U9Imh0dHA6Ly9icG1uLmlvL3NjaGVtYS9icG1uIj4KICA8YnBtbjpwcm9jZXNzIGlkPSJQcm9jZXNzXzEiIGlzRXhlY3V0YWJsZT0idHJ1ZSI+CiAgICA8YnBtbjpzdGFydEV2ZW50IGlkPSJTdGFydEV2ZW50XzEiIG5hbWU9IuW8gOWniyI+CiAgICAgIDxicG1uOm91dGdvaW5nPkZsb3dfMTwvYnBtbjpvdXRnb2luZz4KICAgIDwvYnBtbjpzdGFydEV2ZW50PgogICAgPGJwbW46ZW5kRXZlbnQgaWQ9IkVuZEV2ZW50XzEiIG5hbWU9Iue7k+adnyI+CiAgICAgIDxicG1uOmluY29taW5nPkZsb3dfMGkzbXFnYTwvYnBtbjppbmNvbWluZz4KICAgIDwvYnBtbjplbmRFdmVudD4KICAgIDxicG1uOnNlcXVlbmNlRmxvdyBpZD0iRmxvd18xIiBzb3VyY2VSZWY9IlN0YXJ0RXZlbnRfMSIgdGFyZ2V0UmVmPSJBY3Rpdml0eV8wOWRoM3o5Ii8+CiAgICA8YnBtbjp1c2VyVGFzayBpZD0iQWN0aXZpdHlfMDlkaDN6OSI+CiAgICAgIDxicG1uOmV4dGVuc2lvbkVsZW1lbnRzPgogICAgICAgIDxjdXN0b206cHJvcGVydGllcz4KICAgICAgICAgIAogICAgICAgICAgCiAgICAgICAgICAKICAgICAgICAgIAogICAgICAgICAgCiAgICAgICAgICAKICAgICAgICAgIDxjdXN0b206dmFsdWVzIG5hbWU9ImFzc2lnbmVlVHlwZSIgdmFsdWU9IkZJWEVEX0RFUFQiLz4KICAgICAgICAgIDxjdXN0b206dmFsdWVzIG5hbWU9ImFzc2lnbmVlVmFsdWUiIHZhbHVlPSJERVBULUhSIi8+CiAgICAgICAgICA8Y3VzdG9tOnZhbHVlcyBuYW1lPSJhc3NpZ25lZUxhYmVsIiB2YWx1ZT0iSHVtYW4gUmVzb3VyY2VzIi8+CiAgICAgICAgICA8Y3VzdG9tOnZhbHVlcyBuYW1lPSJjYW5kaWRhdGVVc2VycyIgdmFsdWU9IiIvPgogICAgICAgICAgPGN1c3RvbTp2YWx1ZXMgbmFtZT0iY2FuZGlkYXRlR3JvdXBzIiB2YWx1ZT0iIi8+CiAgICAgICAgPGN1c3RvbTpwcm9wZXJ0eSBuYW1lPSJmb3JtSWQiIHZhbHVlPSI3Ii8+PGN1c3RvbTpwcm9wZXJ0eSBuYW1lPSJmb3JtTmFtZSIgdmFsdWU9InRlc3RGb3JtIi8+PC9jdXN0b206cHJvcGVydGllcz4KICAgICAgPC9icG1uOmV4dGVuc2lvbkVsZW1lbnRzPgogICAgICA8YnBtbjppbmNvbWluZz5GbG93XzE8L2JwbW46aW5jb21pbmc+CiAgICAgIDxicG1uOm91dGdvaW5nPkZsb3dfMHVuN2hsaDwvYnBtbjpvdXRnb2luZz4KICAgIDwvYnBtbjp1c2VyVGFzaz4KICAgIDxicG1uOnNlcXVlbmNlRmxvdyBpZD0iRmxvd18wdW43aGxoIiBzb3VyY2VSZWY9IkFjdGl2aXR5XzA5ZGgzejkiIHRhcmdldFJlZj0iQWN0aXZpdHlfMG12djVoYyIvPgogICAgPGJwbW46c2VxdWVuY2VGbG93IGlkPSJGbG93XzBpM21xZ2EiIHNvdXJjZVJlZj0iQWN0aXZpdHlfMG12djVoYyIgdGFyZ2V0UmVmPSJFbmRFdmVudF8xIi8+CiAgICA8YnBtbjp1c2VyVGFzayBpZD0iQWN0aXZpdHlfMG12djVoYyI+CiAgICAgIDxicG1uOmV4dGVuc2lvbkVsZW1lbnRzPgogICAgICAgIDxjdXN0b206cHJvcGVydGllcz4KICAgICAgICAgIDxjdXN0b206dmFsdWVzIG5hbWU9ImFzc2lnbmVlVHlwZSIgdmFsdWU9IkZJWEVEX0RFUFQiLz4KICAgICAgICAgIDxjdXN0b206dmFsdWVzIG5hbWU9ImFzc2lnbmVlVmFsdWUiIHZhbHVlPSJERVBULUNPUlAtQkFOS0lORyIvPgogICAgICAgICAgPGN1c3RvbTp2YWx1ZXMgbmFtZT0iYXNzaWduZWVMYWJlbCIgdmFsdWU9IkNvcnBvcmF0ZSBCYW5raW5nIi8+CiAgICAgICAgICA8Y3VzdG9tOnZhbHVlcyBuYW1lPSJjYW5kaWRhdGVVc2VycyIgdmFsdWU9IiIvPgogICAgICAgICAgPGN1c3RvbTp2YWx1ZXMgbmFtZT0iY2FuZGlkYXRlR3JvdXBzIiB2YWx1ZT0iIi8+CiAgICAgICAgICAKICAgICAgICAgIAogICAgICAgIDwvY3VzdG9tOnByb3BlcnRpZXM+CiAgICAgIDwvYnBtbjpleHRlbnNpb25FbGVtZW50cz4KICAgICAgPGJwbW46aW5jb21pbmc+Rmxvd18wdW43aGxoPC9icG1uOmluY29taW5nPgogICAgICA8YnBtbjpvdXRnb2luZz5GbG93XzBpM21xZ2E8L2JwbW46b3V0Z29pbmc+CiAgICA8L2JwbW46dXNlclRhc2s+CiAgPC9icG1uOnByb2Nlc3M+CiAgPGJwbW5kaTpCUE1ORGlhZ3JhbSBpZD0iQlBNTkRpYWdyYW1fMSI+CiAgICA8YnBtbmRpOkJQTU5QbGFuZSBpZD0iQlBNTlBsYW5lXzEiIGJwbW5FbGVtZW50PSJQcm9jZXNzXzEiPgogICAgICA8YnBtbmRpOkJQTU5TaGFwZSBpZD0iU3RhcnRFdmVudF8xX2RpIiBicG1uRWxlbWVudD0iU3RhcnRFdmVudF8xIj4KICAgICAgICA8ZGM6Qm91bmRzIHg9IjE4MCIgeT0iMTYwIiB3aWR0aD0iMzYiIGhlaWdodD0iMzYiLz4KICAgICAgICA8YnBtbmRpOkJQTU5MYWJlbD4KICAgICAgICAgIDxkYzpCb3VuZHMgeD0iMTg3IiB5PSIyMDMiIHdpZHRoPSIyMiIgaGVpZ2h0PSIxNCIvPgogICAgICAgIDwvYnBtbmRpOkJQTU5MYWJlbD4KICAgICAgPC9icG1uZGk6QlBNTlNoYXBlPgogICAgICA8YnBtbmRpOkJQTU5TaGFwZSBpZD0iRW5kRXZlbnRfMV9kaSIgYnBtbkVsZW1lbnQ9IkVuZEV2ZW50XzEiPgogICAgICAgIDxkYzpCb3VuZHMgeD0iNjkyIiB5PSIxNjAiIHdpZHRoPSIzNiIgaGVpZ2h0PSIzNiIvPgogICAgICAgIDxicG1uZGk6QlBNTkxhYmVsPgogICAgICAgICAgPGRjOkJvdW5kcyB4PSI2OTkiIHk9IjIwMyIgd2lkdGg9IjIyIiBoZWlnaHQ9IjE0Ii8+CiAgICAgICAgPC9icG1uZGk6QlBNTkxhYmVsPgogICAgICA8L2JwbW5kaTpCUE1OU2hhcGU+CiAgICAgIDxicG1uZGk6QlBNTlNoYXBlIGlkPSJBY3Rpdml0eV8xMTJqdTZqX2RpIiBicG1uRWxlbWVudD0iQWN0aXZpdHlfMDlkaDN6OSI+CiAgICAgICAgPGRjOkJvdW5kcyB4PSIyNjAiIHk9IjEzOCIgd2lkdGg9IjEwMCIgaGVpZ2h0PSI4MCIvPgogICAgICA8L2JwbW5kaTpCUE1OU2hhcGU+CiAgICAgIDxicG1uZGk6QlBNTlNoYXBlIGlkPSJBY3Rpdml0eV8wOXliZm03X2RpIiBicG1uRWxlbWVudD0iQWN0aXZpdHlfMG12djVoYyI+CiAgICAgICAgPGRjOkJvdW5kcyB4PSI0MTAiIHk9IjEzOCIgd2lkdGg9IjEwMCIgaGVpZ2h0PSI4MCIvPgogICAgICA8L2JwbW5kaTpCUE1OU2hhcGU+CiAgICAgIDxicG1uZGk6QlBNTkVkZ2UgaWQ9IkZsb3dfMV9kaSIgYnBtbkVsZW1lbnQ9IkZsb3dfMSI+CiAgICAgICAgPGRpOndheXBvaW50IHg9IjIxNiIgeT0iMTc4Ii8+CiAgICAgICAgPGRpOndheXBvaW50IHg9IjI2MCIgeT0iMTc4Ii8+CiAgICAgIDwvYnBtbmRpOkJQTU5FZGdlPgogICAgICA8YnBtbmRpOkJQTU5FZGdlIGlkPSJGbG93XzB1bjdobGhfZGkiIGJwbW5FbGVtZW50PSJGbG93XzB1bjdobGgiPgogICAgICAgIDxkaTp3YXlwb2ludCB4PSIzNjAiIHk9IjE3OCIvPgogICAgICAgIDxkaTp3YXlwb2ludCB4PSI0MTAiIHk9IjE3OCIvPgogICAgICA8L2JwbW5kaTpCUE1ORWRnZT4KICAgICAgPGJwbW5kaTpCUE1ORWRnZSBpZD0iRmxvd18waTNtcWdhX2RpIiBicG1uRWxlbWVudD0iRmxvd18waTNtcWdhIj4KICAgICAgICA8ZGk6d2F5cG9pbnQgeD0iNTEwIiB5PSIxNzgiLz4KICAgICAgICA8ZGk6d2F5cG9pbnQgeD0iNjkyIiB5PSIxNzgiLz4KICAgICAgPC9icG1uZGk6QlBNTkVkZ2U+CiAgICA8L2JwbW5kaTpCUE1OUGxhbmU+CiAgPC9icG1uZGk6QlBNTkRpYWdyYW0+CjwvYnBtbjpkZWZpbml0aW9ucz4=', '2026-01-14 08:35:32.250916', '2026-01-15 12:29:05.930778');
 
+TRUNCATE TABLE public.dw_table_definitions CASCADE;
+
 INSERT INTO public.dw_table_definitions VALUES (1, 1, 'purchase_request', 'MAIN', '采购申请主表，存储申请基本信息', '2026-01-13 10:38:37.240844', '2026-01-13 10:38:37.240844');
+TRUNCATE TABLE public.dw_table_definitions CASCADE;
+
 INSERT INTO public.dw_table_definitions VALUES (2, 1, 'purchase_item', 'SUB', '采购物品明细子表', '2026-01-13 10:38:37.240844', '2026-01-13 10:38:37.240844');
+TRUNCATE TABLE public.dw_table_definitions CASCADE;
+
 INSERT INTO public.dw_table_definitions VALUES (3, 1, 'supplier_info', 'RELATION', '供应商信息关联表', '2026-01-13 10:38:37.240844', '2026-01-13 10:38:37.240844');
+TRUNCATE TABLE public.dw_table_definitions CASCADE;
+
 INSERT INTO public.dw_table_definitions VALUES (4, 1, 'budget_info', 'RELATION', '预算信息关联表', '2026-01-13 10:38:37.240844', '2026-01-13 10:38:37.240844');
+TRUNCATE TABLE public.dw_table_definitions CASCADE;
+
 INSERT INTO public.dw_table_definitions VALUES (5, 1, 'purchase_approval', 'ACTION', '审批操作记录表', '2026-01-13 10:38:37.240844', '2026-01-13 10:38:37.240844');
+TRUNCATE TABLE public.dw_table_definitions CASCADE;
+
 INSERT INTO public.dw_table_definitions VALUES (6, 1, 'countersign_record', 'ACTION', '会签操作记录表', '2026-01-13 10:38:37.240844', '2026-01-13 10:38:37.240844');
+TRUNCATE TABLE public.dw_table_definitions CASCADE;
+
 INSERT INTO public.dw_table_definitions VALUES (7, 2, 'ADAM', 'MAIN', 'kkk', '2026-01-14 08:04:33.119237', '2026-01-15 11:16:59.56147');
 
+TRUNCATE TABLE public.dw_versions CASCADE;
+
 INSERT INTO public.dw_versions VALUES (1, 2, '1.0.0', 'test publish', '\x7b2270726f63657373586d6c223a225044393462577767646d567963326c76626a30694d5334774969426c626d4e765a476c755a7a3069565652474c546769507a344b50474a77625734365a47566d6157357064476c76626e4d6765473173626e4d3665484e7050534a6f644852774f693876643364334c6e637a4c6d39795a7938794d4441784c31684e54464e6a6147567459533170626e4e305957356a5a53496765473173626e4d36596e4274626a30696148523063446f764c336433647935766257637562334a6e4c334e775a574d76516c424e546938794d4445774d4455794e43394e543052465443496765473173626e4d36596e4274626d527050534a6f644852774f693876643364334c6d39745a793576636d63766333426c597939435545314f4c7a49774d5441774e5449304c30524a4969423462577875637a706b597a30696148523063446f764c336433647935766257637562334a6e4c334e775a574d76524551764d6a41784d4441314d6a517652454d69494868746247357a4f6d527050534a6f644852774f693876643364334c6d39745a793576636d63766333426c59793945524338794d4445774d4455794e4339455353496765473173626e4d365933567a6447397450534a6f644852774f6938765933567a644739744c6d4a77625734756157387663324e6f5a573168496942705a4430695247566d6157357064476c76626e4e664d534967644746795a325630546d46745a584e7759574e6c50534a6f644852774f693876596e4274626935706279397a5932686c62574576596e42746269492b4369416750474a776257343663484a765932567a637942705a44306955484a765932567a6331387849694270633056345a574e316447466962475539496e52796457556950676f674943416750474a776257343663335268636e5246646d5675644342705a44306955335268636e5246646d567564463878496942755957316c50534c6c7649446c7034736950676f674943416749434138596e4274626a70766458526e62326c755a7a354762473933587a45384c324a7762573436623356305a323970626d632b43694167494341384c324a776257343663335268636e5246646d56756444344b4943416749447869634731754f6d56755a4556325a57353049476c6b50534a46626d5246646d567564463878496942755957316c50534c6e7535506d6e5a386950676f674943416749434138596e4274626a7070626d4e7662576c755a7a354762473933587a42704d3231785a3245384c324a77625734366157356a62323170626d632b43694167494341384c324a77625734365a57356b52585a6c626e512b4369416749434138596e4274626a707a5a5846315a57356a5a555a736233636761575139496b5a73623364664d53496763323931636d4e6c556d566d50534a5464474679644556325a573530587a456949485268636d646c64464a6c5a6a306951574e3061585a7064486c664d446c6b61444e364f5349674c7a344b4943416749447869634731754f6e567a5a584a5559584e7249476c6b50534a4259335270646d6c30655638774f57526f4d336f35496a344b494341674943416750474a77625734365a5868305a57357a615739755257786c6257567564484d2b43694167494341674943416750474e316333527662547077636d39775a584a306157567a50676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a5430695a6d397962556c6b49694232595778315a5430694e7949674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d5a76636d314f5957316c49694232595778315a5430696447567a64455a76636d30694943382b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6d62334a745357516949485a686248566c505349334969417650676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a5430695a6d3979625535686257556949485a686248566c50534a305a584e30526d3979625349674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d5a76636d314a5a434967646d467364575539496a63694943382b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6d62334a74546d46745a534967646d467364575539496e526c6333524762334a744969417650676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a54306959584e7a615764755a5756556558426c49694232595778315a5430695355354a56456c42564539534969417650676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a54306959584e7a615764755a575657595778315a534967646d467364575539496949674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d467a63326c6e626d566c544746695a57776949485a686248566c50534c6d7459486e7149766c6a35486f7462666b75726f694943382b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6a5957356b61575268644756566332567963794967646d467364575539496949674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d4e68626d52705a4746305a5564796233567763794967646d467364575539496949674c7a344b4943416749434167494341384c324e316333527662547077636d39775a584a306157567a50676f6749434167494341384c324a77625734365a5868305a57357a615739755257786c6257567564484d2b436941674943416749447869634731754f6d6c75593239746157356e506b5a73623364664d547776596e4274626a7070626d4e7662576c755a7a344b494341674943416750474a7762573436623356305a323970626d632b526d787664313877645734336147786f50433969634731754f6d3931644764766157356e50676f674943416750433969634731754f6e567a5a584a5559584e7250676f674943416750474a77625734366332567864575675593256476247393349476c6b50534a4762473933587a4231626a646f6247676949484e7664584a6a5a564a6c5a6a306951574e3061585a7064486c664d446c6b61444e364f534967644746795a325630556d566d50534a4259335270646d6c306556387762585a324e57686a4969417650676f674943416750474a77625734366332567864575675593256476247393349476c6b50534a4762473933587a42704d3231785a32456949484e7664584a6a5a564a6c5a6a306951574e3061585a7064486c664d473132646a566f59794967644746795a325630556d566d50534a46626d5246646d5675644638784969417650676f674943416750474a776257343664584e6c636c52686332736761575139496b466a64476c3261585235587a4274646e593161474d6950676f674943416749434138596e4274626a706c6548526c626e4e7062323546624756745a573530637a344b4943416749434167494341385933567a644739744f6e42796233426c636e52705a584d2b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6863334e705a32356c5a5652356347556949485a686248566c50534a46546c524a56466c665455464f51556446556949674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d467a63326c6e626d566c566d46736457556949485a686248566c505349694943382b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6863334e705a32356c5a557868596d567349694232595778315a54306935613665354c325435377550353543474969417650676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a543069593246755a476c6b5958526c56584e6c636e4d6949485a686248566c50534a4c5a585a7062694249645746755a7949674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d4e68626d52705a4746305a5564796233567763794967646d467364575539496949674c7a344b4943416749434167494341384c324e316333527662547077636d39775a584a306157567a50676f6749434167494341384c324a77625734365a5868305a57357a615739755257786c6257567564484d2b436941674943416749447869634731754f6d6c75593239746157356e506b5a73623364664d4856754e32687361447776596e4274626a7070626d4e7662576c755a7a344b494341674943416750474a7762573436623356305a323970626d632b526d78766431387761544e746357646850433969634731754f6d3931644764766157356e50676f674943416750433969634731754f6e567a5a584a5559584e7250676f6749447776596e4274626a7077636d396a5a584e7a50676f6749447869634731755a476b36516c424e546b5270595764795957306761575139496b4a51545535456157466e636d4674587a456950676f674943416750474a776257356b615470435545314f55477868626d556761575139496b4a5154553551624746755a56387849694269634731755257786c625756756444306955484a765932567a63313878496a344b494341674943416750474a776257356b615470435545314f553268686347556761575139496c4e3059584a3052585a6c626e52664d56396b61534967596e4274626b56735a57316c626e5139496c4e3059584a3052585a6c626e52664d53492b4369416749434167494341675047526a4f6b4a766457356b63794234505349784f44416949486b39496a45324d43496764326c6b64476739496a4d324969426f5a576c6e61485139496a4d324969417650676f67494341674943416749447869634731755a476b36516c424e546b7868596d567350676f674943416749434167494341675047526a4f6b4a766457356b63794234505349784f44636949486b39496a49774d79496764326c6b64476739496a49794969426f5a576c6e61485139496a45304969417650676f67494341674943416749447776596e4274626d52704f6b4a515455354d59574a6c6244344b494341674943416750433969634731755a476b36516c424e546c4e6f5958426c50676f674943416749434138596e4274626d52704f6b4a5154553554614746775a5342705a44306951574e3061585a7064486c664d544579616e5532616c396b61534967596e4274626b56735a57316c626e5139496b466a64476c3261585235587a41355a47677a656a6b6950676f6749434167494341674944786b597a7043623356755a484d67654430694d6a597749694235505349784d7a6769494864705a48526f505349784d4441694947686c6157646f644430694f4441694943382b436941674943416749447776596e4274626d52704f6b4a5154553554614746775a54344b494341674943416750474a776257356b615470435545314f553268686347556761575139496b56755a4556325a573530587a46665a476b6949474a7762573546624756745a57353050534a46626d5246646d567564463878496a344b4943416749434167494341385a474d36516d3931626d527a49486739496a59354d694967655430694d5459774969423361575230614430694d7a59694947686c6157646f644430694d7a59694943382b43694167494341674943416750474a776257356b615470435545314f544746695a57772b436941674943416749434167494341385a474d36516d3931626d527a49486739496a59354f534967655430694d6a417a4969423361575230614430694d6a49694947686c6157646f644430694d5451694943382b43694167494341674943416750433969634731755a476b36516c424e546b7868596d567350676f6749434167494341384c324a776257356b615470435545314f553268686347552b436941674943416749447869634731755a476b36516c424e546c4e6f5958426c49476c6b50534a4259335270646d6c30655638774f586c695a6d30335832527049694269634731755257786c625756756444306951574e3061585a7064486c664d473132646a566f5979492b4369416749434167494341675047526a4f6b4a766457356b63794234505349304d54416949486b39496a457a4f43496764326c6b64476739496a45774d434967614756705a326830505349344d4349674c7a344b494341674943416750433969634731755a476b36516c424e546c4e6f5958426c50676f674943416749434138596e4274626d52704f6b4a51545535465a47646c49476c6b50534a4762473933587a46665a476b6949474a7762573546624756745a57353050534a4762473933587a456950676f6749434167494341674944786b6154703359586c7762326c7564434234505349794d54596949486b39496a45334f4349674c7a344b4943416749434167494341385a476b366432463563473970626e5167654430694d6a597749694235505349784e7a67694943382b436941674943416749447776596e4274626d52704f6b4a51545535465a47646c50676f674943416749434138596e4274626d52704f6b4a51545535465a47646c49476c6b50534a4762473933587a4231626a646f624768665a476b6949474a7762573546624756745a57353050534a4762473933587a4231626a646f6247676950676f6749434167494341674944786b6154703359586c7762326c75644342345053497a4e6a416949486b39496a45334f4349674c7a344b4943416749434167494341385a476b366432463563473970626e5167654430694e44457749694235505349784e7a67694943382b436941674943416749447776596e4274626d52704f6b4a51545535465a47646c50676f674943416749434138596e4274626d52704f6b4a51545535465a47646c49476c6b50534a4762473933587a42704d3231785a3246665a476b6949474a7762573546624756745a57353050534a4762473933587a42704d3231785a32456950676f6749434167494341674944786b6154703359586c7762326c7564434234505349314d54416949486b39496a45334f4349674c7a344b4943416749434167494341385a476b366432463563473970626e5167654430694e6a6b7949694235505349784e7a67694943382b436941674943416749447776596e4274626d52704f6b4a51545535465a47646c50676f674943416750433969634731755a476b36516c424e546c42735957356c50676f6749447776596e4274626d52704f6b4a51545535456157466e636d467450676f384c324a77625734365a47566d6157357064476c76626e4d2b43673d3d222c226e616d65223a2254657374222c226465736372697074696f6e223a22227d', 'system', '2026-01-14 08:57:26.474823');
+TRUNCATE TABLE public.dw_versions CASCADE;
+
 INSERT INTO public.dw_versions VALUES (2, 2, '1.0.1', '', '\x7b2270726f63657373586d6c223a225044393462577767646d567963326c76626a30694d5334774969426c626d4e765a476c755a7a3069565652474c546769507a344b50474a77625734365a47566d6157357064476c76626e4d6765473173626e4d3665484e7050534a6f644852774f693876643364334c6e637a4c6d39795a7938794d4441784c31684e54464e6a6147567459533170626e4e305957356a5a53496765473173626e4d36596e4274626a30696148523063446f764c336433647935766257637562334a6e4c334e775a574d76516c424e546938794d4445774d4455794e43394e543052465443496765473173626e4d36596e4274626d527050534a6f644852774f693876643364334c6d39745a793576636d63766333426c597939435545314f4c7a49774d5441774e5449304c30524a4969423462577875637a706b597a30696148523063446f764c336433647935766257637562334a6e4c334e775a574d76524551764d6a41784d4441314d6a517652454d69494868746247357a4f6d527050534a6f644852774f693876643364334c6d39745a793576636d63766333426c59793945524338794d4445774d4455794e4339455353496765473173626e4d365933567a6447397450534a6f644852774f6938765933567a644739744c6d4a77625734756157387663324e6f5a573168496942705a4430695247566d6157357064476c76626e4e664d534967644746795a325630546d46745a584e7759574e6c50534a6f644852774f693876596e4274626935706279397a5932686c62574576596e42746269492b4369416750474a776257343663484a765932567a637942705a44306955484a765932567a6331387849694270633056345a574e316447466962475539496e52796457556950676f674943416750474a776257343663335268636e5246646d5675644342705a44306955335268636e5246646d567564463878496942755957316c50534c6c7649446c7034736950676f674943416749434138596e4274626a70766458526e62326c755a7a354762473933587a45384c324a7762573436623356305a323970626d632b43694167494341384c324a776257343663335268636e5246646d56756444344b4943416749447869634731754f6d56755a4556325a57353049476c6b50534a46626d5246646d567564463878496942755957316c50534c6e7535506d6e5a386950676f674943416749434138596e4274626a7070626d4e7662576c755a7a354762473933587a42704d3231785a3245384c324a77625734366157356a62323170626d632b43694167494341384c324a77625734365a57356b52585a6c626e512b4369416749434138596e4274626a707a5a5846315a57356a5a555a736233636761575139496b5a73623364664d53496763323931636d4e6c556d566d50534a5464474679644556325a573530587a456949485268636d646c64464a6c5a6a306951574e3061585a7064486c664d446c6b61444e364f5349674c7a344b4943416749447869634731754f6e567a5a584a5559584e7249476c6b50534a4259335270646d6c30655638774f57526f4d336f35496a344b494341674943416750474a77625734365a5868305a57357a615739755257786c6257567564484d2b43694167494341674943416750474e316333527662547077636d39775a584a306157567a50676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a5430695a6d397962556c6b49694232595778315a5430694e7949674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d5a76636d314f5957316c49694232595778315a5430696447567a64455a76636d30694943382b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6d62334a745357516949485a686248566c505349334969417650676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a5430695a6d3979625535686257556949485a686248566c50534a305a584e30526d3979625349674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d5a76636d314a5a434967646d467364575539496a63694943382b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6d62334a74546d46745a534967646d467364575539496e526c6333524762334a744969417650676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a54306959584e7a615764755a5756556558426c49694232595778315a5430695355354a56456c42564539534969417650676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a54306959584e7a615764755a575657595778315a534967646d467364575539496949674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d467a63326c6e626d566c544746695a57776949485a686248566c50534c6d7459486e7149766c6a35486f7462666b75726f694943382b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6a5957356b61575268644756566332567963794967646d467364575539496949674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d4e68626d52705a4746305a5564796233567763794967646d467364575539496949674c7a344b4943416749434167494341384c324e316333527662547077636d39775a584a306157567a50676f6749434167494341384c324a77625734365a5868305a57357a615739755257786c6257567564484d2b436941674943416749447869634731754f6d6c75593239746157356e506b5a73623364664d547776596e4274626a7070626d4e7662576c755a7a344b494341674943416750474a7762573436623356305a323970626d632b526d787664313877645734336147786f50433969634731754f6d3931644764766157356e50676f674943416750433969634731754f6e567a5a584a5559584e7250676f674943416750474a77625734366332567864575675593256476247393349476c6b50534a4762473933587a4231626a646f6247676949484e7664584a6a5a564a6c5a6a306951574e3061585a7064486c664d446c6b61444e364f534967644746795a325630556d566d50534a4259335270646d6c306556387762585a324e57686a4969417650676f674943416750474a77625734366332567864575675593256476247393349476c6b50534a4762473933587a42704d3231785a32456949484e7664584a6a5a564a6c5a6a306951574e3061585a7064486c664d473132646a566f59794967644746795a325630556d566d50534a46626d5246646d5675644638784969417650676f674943416750474a776257343664584e6c636c52686332736761575139496b466a64476c3261585235587a4274646e593161474d6950676f674943416749434138596e4274626a706c6548526c626e4e7062323546624756745a573530637a344b4943416749434167494341385933567a644739744f6e42796233426c636e52705a584d2b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6863334e705a32356c5a5652356347556949485a686248566c50534a46546c524a56466c665455464f51556446556949674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d467a63326c6e626d566c566d46736457556949485a686248566c505349694943382b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6863334e705a32356c5a557868596d567349694232595778315a54306935613665354c325435377550353543474969417650676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a543069593246755a476c6b5958526c56584e6c636e4d6949485a686248566c50534a5459584a6861434244614756754969417650676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a543069593246755a476c6b5958526c52334a766458427a49694232595778315a5430694969417650676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a5430695a6d397962556c6b49694232595778315a5430694e7949674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d5a76636d314f5957316c49694232595778315a5430696447567a64455a76636d30694943382b4369416749434167494341675043396a64584e306232303663484a766347567964476c6c637a344b494341674943416750433969634731754f6d56346447567563326c76626b56735a57316c626e527a50676f674943416749434138596e4274626a7070626d4e7662576c755a7a354762473933587a4231626a646f624767384c324a77625734366157356a62323170626d632b436941674943416749447869634731754f6d3931644764766157356e506b5a73623364664d476b7a6258466e59547776596e4274626a70766458526e62326c755a7a344b4943416749447776596e4274626a7031633256795647467a617a344b494341384c324a776257343663484a765932567a637a344b49434138596e4274626d52704f6b4a51545535456157466e636d467449476c6b50534a435545314f52476c685a334a6862563878496a344b4943416749447869634731755a476b36516c424e546c42735957356c49476c6b50534a435545314f55477868626d56664d534967596e4274626b56735a57316c626e5139496c427962324e6c63334e664d53492b436941674943416749447869634731755a476b36516c424e546c4e6f5958426c49476c6b50534a5464474679644556325a573530587a46665a476b6949474a7762573546624756745a57353050534a5464474679644556325a573530587a456950676f6749434167494341674944786b597a7043623356755a484d67654430694d54677749694235505349784e6a4169494864705a48526f5053497a4e694967614756705a3268305053497a4e6949674c7a344b494341674943416749434138596e4274626d52704f6b4a515455354d59574a6c6244344b4943416749434167494341674944786b597a7043623356755a484d67654430694d54673349694235505349794d444d69494864705a48526f505349794d694967614756705a326830505349784e4349674c7a344b4943416749434167494341384c324a776257356b615470435545314f544746695a57772b436941674943416749447776596e4274626d52704f6b4a5154553554614746775a54344b494341674943416750474a776257356b615470435545314f553268686347556761575139496b56755a4556325a573530587a46665a476b6949474a7762573546624756745a57353050534a46626d5246646d567564463878496a344b4943416749434167494341385a474d36516d3931626d527a49486739496a59354d694967655430694d5459774969423361575230614430694d7a59694947686c6157646f644430694d7a59694943382b43694167494341674943416750474a776257356b615470435545314f544746695a57772b436941674943416749434167494341385a474d36516d3931626d527a49486739496a59354f534967655430694d6a417a4969423361575230614430694d6a49694947686c6157646f644430694d5451694943382b43694167494341674943416750433969634731755a476b36516c424e546b7868596d567350676f6749434167494341384c324a776257356b615470435545314f553268686347552b436941674943416749447869634731755a476b36516c424e546c4e6f5958426c49476c6b50534a4259335270646d6c30655638784d544a7164545a715832527049694269634731755257786c625756756444306951574e3061585a7064486c664d446c6b61444e364f53492b4369416749434167494341675047526a4f6b4a766457356b63794234505349794e6a416949486b39496a457a4f43496764326c6b64476739496a45774d434967614756705a326830505349344d4349674c7a344b494341674943416750433969634731755a476b36516c424e546c4e6f5958426c50676f674943416749434138596e4274626d52704f6b4a5154553554614746775a5342705a44306951574e3061585a7064486c664d446c35596d5a744e31396b61534967596e4274626b56735a57316c626e5139496b466a64476c3261585235587a4274646e593161474d6950676f6749434167494341674944786b597a7043623356755a484d67654430694e44457749694235505349784d7a6769494864705a48526f505349784d4441694947686c6157646f644430694f4441694943382b436941674943416749447776596e4274626d52704f6b4a5154553554614746775a54344b494341674943416750474a776257356b615470435545314f5257526e5a5342705a443069526d7876643138785832527049694269634731755257786c6257567564443069526d787664313878496a344b4943416749434167494341385a476b366432463563473970626e5167654430694d6a453249694235505349784e7a67694943382b436941674943416749434167504752704f6e6468655842766157353049486739496a49324d434967655430694d5463344969417650676f6749434167494341384c324a776257356b615470435545314f5257526e5a54344b494341674943416750474a776257356b615470435545314f5257526e5a5342705a443069526d787664313877645734336147786f5832527049694269634731755257786c6257567564443069526d787664313877645734336147786f496a344b4943416749434167494341385a476b366432463563473970626e5167654430694d7a597749694235505349784e7a67694943382b436941674943416749434167504752704f6e6468655842766157353049486739496a51784d434967655430694d5463344969417650676f6749434167494341384c324a776257356b615470435545314f5257526e5a54344b494341674943416750474a776257356b615470435545314f5257526e5a5342705a443069526d78766431387761544e74635764685832527049694269634731755257786c6257567564443069526d78766431387761544e7463576468496a344b4943416749434167494341385a476b366432463563473970626e5167654430694e54457749694235505349784e7a67694943382b436941674943416749434167504752704f6e6468655842766157353049486739496a59354d694967655430694d5463344969417650676f6749434167494341384c324a776257356b615470435545314f5257526e5a54344b4943416749447776596e4274626d52704f6b4a5154553551624746755a54344b494341384c324a776257356b615470435545314f52476c685a334a686254344b50433969634731754f6d526c5a6d6c75615852706232357a50676f3d222c226e616d65223a2254657374222c226465736372697074696f6e223a22227d', 'system', '2026-01-14 09:19:24.815438');
+TRUNCATE TABLE public.dw_versions CASCADE;
+
 INSERT INTO public.dw_versions VALUES (3, 2, '1.0.2', 'aa', '\x7b2270726f63657373586d6c223a225044393462577767646d567963326c76626a30694d5334774969426c626d4e765a476c755a7a3069565652474c546769507a344b50474a77625734365a47566d6157357064476c76626e4d6765473173626e4d3665484e7050534a6f644852774f693876643364334c6e637a4c6d39795a7938794d4441784c31684e54464e6a6147567459533170626e4e305957356a5a53496765473173626e4d36596e4274626a30696148523063446f764c336433647935766257637562334a6e4c334e775a574d76516c424e546938794d4445774d4455794e43394e543052465443496765473173626e4d36596e4274626d527050534a6f644852774f693876643364334c6d39745a793576636d63766333426c597939435545314f4c7a49774d5441774e5449304c30524a4969423462577875637a706b597a30696148523063446f764c336433647935766257637562334a6e4c334e775a574d76524551764d6a41784d4441314d6a517652454d69494868746247357a4f6d527050534a6f644852774f693876643364334c6d39745a793576636d63766333426c59793945524338794d4445774d4455794e4339455353496765473173626e4d365933567a6447397450534a6f644852774f6938765933567a644739744c6d4a77625734756157387663324e6f5a573168496942705a4430695247566d6157357064476c76626e4e664d534967644746795a325630546d46745a584e7759574e6c50534a6f644852774f693876596e4274626935706279397a5932686c62574576596e42746269492b4369416750474a776257343663484a765932567a637942705a44306955484a765932567a6331387849694270633056345a574e316447466962475539496e52796457556950676f674943416750474a776257343663335268636e5246646d5675644342705a44306955335268636e5246646d567564463878496942755957316c50534c6c7649446c7034736950676f674943416749434138596e4274626a70766458526e62326c755a7a354762473933587a45384c324a7762573436623356305a323970626d632b43694167494341384c324a776257343663335268636e5246646d56756444344b4943416749447869634731754f6d56755a4556325a57353049476c6b50534a46626d5246646d567564463878496942755957316c50534c6e7535506d6e5a386950676f674943416749434138596e4274626a7070626d4e7662576c755a7a354762473933587a42704d3231785a3245384c324a77625734366157356a62323170626d632b43694167494341384c324a77625734365a57356b52585a6c626e512b4369416749434138596e4274626a707a5a5846315a57356a5a555a736233636761575139496b5a73623364664d53496763323931636d4e6c556d566d50534a5464474679644556325a573530587a456949485268636d646c64464a6c5a6a306951574e3061585a7064486c664d446c6b61444e364f5349674c7a344b4943416749447869634731754f6e567a5a584a5559584e7249476c6b50534a4259335270646d6c30655638774f57526f4d336f35496a344b494341674943416750474a77625734365a5868305a57357a615739755257786c6257567564484d2b43694167494341674943416750474e316333527662547077636d39775a584a306157567a50676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a5430695a6d397962556c6b49694232595778315a5430694e7949674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d5a76636d314f5957316c49694232595778315a5430696447567a64455a76636d30694943382b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6d62334a745357516949485a686248566c505349334969417650676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a5430695a6d3979625535686257556949485a686248566c50534a305a584e30526d3979625349674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d5a76636d314a5a434967646d467364575539496a63694943382b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6d62334a74546d46745a534967646d467364575539496e526c6333524762334a744969417650676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a54306959584e7a615764755a5756556558426c49694232595778315a5430695355354a56456c42564539534969417650676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a54306959584e7a615764755a575657595778315a534967646d467364575539496949674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d467a63326c6e626d566c544746695a57776949485a686248566c50534c6d7459486e7149766c6a35486f7462666b75726f694943382b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6a5957356b61575268644756566332567963794967646d467364575539496949674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d4e68626d52705a4746305a5564796233567763794967646d467364575539496949674c7a344b4943416749434167494341384c324e316333527662547077636d39775a584a306157567a50676f6749434167494341384c324a77625734365a5868305a57357a615739755257786c6257567564484d2b436941674943416749447869634731754f6d6c75593239746157356e506b5a73623364664d547776596e4274626a7070626d4e7662576c755a7a344b494341674943416750474a7762573436623356305a323970626d632b526d787664313877645734336147786f50433969634731754f6d3931644764766157356e50676f674943416750433969634731754f6e567a5a584a5559584e7250676f674943416750474a77625734366332567864575675593256476247393349476c6b50534a4762473933587a4231626a646f6247676949484e7664584a6a5a564a6c5a6a306951574e3061585a7064486c664d446c6b61444e364f534967644746795a325630556d566d50534a4259335270646d6c306556387762585a324e57686a4969417650676f674943416750474a77625734366332567864575675593256476247393349476c6b50534a4762473933587a42704d3231785a32456949484e7664584a6a5a564a6c5a6a306951574e3061585a7064486c664d473132646a566f59794967644746795a325630556d566d50534a46626d5246646d5675644638784969417650676f674943416750474a776257343664584e6c636c52686332736761575139496b466a64476c3261585235587a4274646e593161474d6950676f674943416749434138596e4274626a706c6548526c626e4e7062323546624756745a573530637a344b4943416749434167494341385933567a644739744f6e42796233426c636e52705a584d2b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6863334e705a32356c5a5652356347556949485a686248566c50534a46546c524a56466c665455464f51556446556949674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d467a63326c6e626d566c566d46736457556949485a686248566c505349694943382b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6863334e705a32356c5a557868596d567349694232595778315a54306935613665354c325435377550353543474969417650676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a543069593246755a476c6b5958526c56584e6c636e4d6949485a686248566c50534a5459584a6861434244614756754969417650676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a543069593246755a476c6b5958526c52334a766458427a49694232595778315a5430694969417650676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a5430695a6d397962556c6b49694232595778315a5430694e7949674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d5a76636d314f5957316c49694232595778315a5430696447567a64455a76636d30694943382b4369416749434167494341675043396a64584e306232303663484a766347567964476c6c637a344b494341674943416750433969634731754f6d56346447567563326c76626b56735a57316c626e527a50676f674943416749434138596e4274626a7070626d4e7662576c755a7a354762473933587a4231626a646f624767384c324a77625734366157356a62323170626d632b436941674943416749447869634731754f6d3931644764766157356e506b5a73623364664d476b7a6258466e59547776596e4274626a70766458526e62326c755a7a344b4943416749447776596e4274626a7031633256795647467a617a344b494341384c324a776257343663484a765932567a637a344b49434138596e4274626d52704f6b4a51545535456157466e636d467449476c6b50534a435545314f52476c685a334a6862563878496a344b4943416749447869634731755a476b36516c424e546c42735957356c49476c6b50534a435545314f55477868626d56664d534967596e4274626b56735a57316c626e5139496c427962324e6c63334e664d53492b436941674943416749447869634731755a476b36516c424e546c4e6f5958426c49476c6b50534a5464474679644556325a573530587a46665a476b6949474a7762573546624756745a57353050534a5464474679644556325a573530587a456950676f6749434167494341674944786b597a7043623356755a484d67654430694d54677749694235505349784e6a4169494864705a48526f5053497a4e694967614756705a3268305053497a4e6949674c7a344b494341674943416749434138596e4274626d52704f6b4a515455354d59574a6c6244344b4943416749434167494341674944786b597a7043623356755a484d67654430694d54673349694235505349794d444d69494864705a48526f505349794d694967614756705a326830505349784e4349674c7a344b4943416749434167494341384c324a776257356b615470435545314f544746695a57772b436941674943416749447776596e4274626d52704f6b4a5154553554614746775a54344b494341674943416750474a776257356b615470435545314f553268686347556761575139496b56755a4556325a573530587a46665a476b6949474a7762573546624756745a57353050534a46626d5246646d567564463878496a344b4943416749434167494341385a474d36516d3931626d527a49486739496a59354d694967655430694d5459774969423361575230614430694d7a59694947686c6157646f644430694d7a59694943382b43694167494341674943416750474a776257356b615470435545314f544746695a57772b436941674943416749434167494341385a474d36516d3931626d527a49486739496a59354f534967655430694d6a417a4969423361575230614430694d6a49694947686c6157646f644430694d5451694943382b43694167494341674943416750433969634731755a476b36516c424e546b7868596d567350676f6749434167494341384c324a776257356b615470435545314f553268686347552b436941674943416749447869634731755a476b36516c424e546c4e6f5958426c49476c6b50534a4259335270646d6c30655638784d544a7164545a715832527049694269634731755257786c625756756444306951574e3061585a7064486c664d446c6b61444e364f53492b4369416749434167494341675047526a4f6b4a766457356b63794234505349794e6a416949486b39496a457a4f43496764326c6b64476739496a45774d434967614756705a326830505349344d4349674c7a344b494341674943416750433969634731755a476b36516c424e546c4e6f5958426c50676f674943416749434138596e4274626d52704f6b4a5154553554614746775a5342705a44306951574e3061585a7064486c664d446c35596d5a744e31396b61534967596e4274626b56735a57316c626e5139496b466a64476c3261585235587a4274646e593161474d6950676f6749434167494341674944786b597a7043623356755a484d67654430694e44457749694235505349784d7a6769494864705a48526f505349784d4441694947686c6157646f644430694f4441694943382b436941674943416749447776596e4274626d52704f6b4a5154553554614746775a54344b494341674943416750474a776257356b615470435545314f5257526e5a5342705a443069526d7876643138785832527049694269634731755257786c6257567564443069526d787664313878496a344b4943416749434167494341385a476b366432463563473970626e5167654430694d6a453249694235505349784e7a67694943382b436941674943416749434167504752704f6e6468655842766157353049486739496a49324d434967655430694d5463344969417650676f6749434167494341384c324a776257356b615470435545314f5257526e5a54344b494341674943416750474a776257356b615470435545314f5257526e5a5342705a443069526d787664313877645734336147786f5832527049694269634731755257786c6257567564443069526d787664313877645734336147786f496a344b4943416749434167494341385a476b366432463563473970626e5167654430694d7a597749694235505349784e7a67694943382b436941674943416749434167504752704f6e6468655842766157353049486739496a51784d434967655430694d5463344969417650676f6749434167494341384c324a776257356b615470435545314f5257526e5a54344b494341674943416750474a776257356b615470435545314f5257526e5a5342705a443069526d78766431387761544e74635764685832527049694269634731755257786c6257567564443069526d78766431387761544e7463576468496a344b4943416749434167494341385a476b366432463563473970626e5167654430694e54457749694235505349784e7a67694943382b436941674943416749434167504752704f6e6468655842766157353049486739496a59354d694967655430694d5463344969417650676f6749434167494341384c324a776257356b615470435545314f5257526e5a54344b4943416749447776596e4274626d52704f6b4a5154553551624746755a54344b494341384c324a776257356b615470435545314f52476c685a334a686254344b50433969634731754f6d526c5a6d6c75615852706232357a50676f3d222c226e616d65223a2254657374222c226465736372697074696f6e223a22227d', 'system', '2026-01-14 09:20:09.63227');
+TRUNCATE TABLE public.dw_versions CASCADE;
+
 INSERT INTO public.dw_versions VALUES (4, 2, '1.0.3', '‘’‘
 ', '\x7b2270726f63657373586d6c223a225044393462577767646d567963326c76626a30694d5334774969426c626d4e765a476c755a7a3069565652474c546769507a344b50474a77625734365a47566d6157357064476c76626e4d6765473173626e4d3665484e7050534a6f644852774f693876643364334c6e637a4c6d39795a7938794d4441784c31684e54464e6a6147567459533170626e4e305957356a5a53496765473173626e4d36596e4274626a30696148523063446f764c336433647935766257637562334a6e4c334e775a574d76516c424e546938794d4445774d4455794e43394e543052465443496765473173626e4d36596e4274626d527050534a6f644852774f693876643364334c6d39745a793576636d63766333426c597939435545314f4c7a49774d5441774e5449304c30524a4969423462577875637a706b597a30696148523063446f764c336433647935766257637562334a6e4c334e775a574d76524551764d6a41784d4441314d6a517652454d69494868746247357a4f6d527050534a6f644852774f693876643364334c6d39745a793576636d63766333426c59793945524338794d4445774d4455794e4339455353496765473173626e4d365933567a6447397450534a6f644852774f6938765933567a644739744c6d4a77625734756157387663324e6f5a573168496942705a4430695247566d6157357064476c76626e4e664d534967644746795a325630546d46745a584e7759574e6c50534a6f644852774f693876596e4274626935706279397a5932686c62574576596e42746269492b4369416750474a776257343663484a765932567a637942705a44306955484a765932567a6331387849694270633056345a574e316447466962475539496e52796457556950676f674943416750474a776257343663335268636e5246646d5675644342705a44306955335268636e5246646d567564463878496942755957316c50534c6c7649446c7034736950676f674943416749434138596e4274626a70766458526e62326c755a7a354762473933587a45384c324a7762573436623356305a323970626d632b43694167494341384c324a776257343663335268636e5246646d56756444344b4943416749447869634731754f6d56755a4556325a57353049476c6b50534a46626d5246646d567564463878496942755957316c50534c6e7535506d6e5a386950676f674943416749434138596e4274626a7070626d4e7662576c755a7a354762473933587a42704d3231785a3245384c324a77625734366157356a62323170626d632b43694167494341384c324a77625734365a57356b52585a6c626e512b4369416749434138596e4274626a707a5a5846315a57356a5a555a736233636761575139496b5a73623364664d53496763323931636d4e6c556d566d50534a5464474679644556325a573530587a456949485268636d646c64464a6c5a6a306951574e3061585a7064486c664d446c6b61444e364f5349674c7a344b4943416749447869634731754f6e567a5a584a5559584e7249476c6b50534a4259335270646d6c30655638774f57526f4d336f35496a344b494341674943416750474a77625734365a5868305a57357a615739755257786c6257567564484d2b43694167494341674943416750474e316333527662547077636d39775a584a306157567a50676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a5430695a6d397962556c6b49694232595778315a5430694e7949674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d5a76636d314f5957316c49694232595778315a5430696447567a64455a76636d30694943382b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6d62334a745357516949485a686248566c505349334969417650676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a5430695a6d3979625535686257556949485a686248566c50534a305a584e30526d3979625349674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d5a76636d314a5a434967646d467364575539496a63694943382b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6d62334a74546d46745a534967646d467364575539496e526c6333524762334a744969417650676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a54306959584e7a615764755a5756556558426c49694232595778315a5430695355354a56456c42564539534969417650676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a54306959584e7a615764755a575657595778315a534967646d467364575539496949674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d467a63326c6e626d566c544746695a57776949485a686248566c50534c6d7459486e7149766c6a35486f7462666b75726f694943382b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6a5957356b61575268644756566332567963794967646d467364575539496949674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d4e68626d52705a4746305a5564796233567763794967646d467364575539496949674c7a344b4943416749434167494341384c324e316333527662547077636d39775a584a306157567a50676f6749434167494341384c324a77625734365a5868305a57357a615739755257786c6257567564484d2b436941674943416749447869634731754f6d6c75593239746157356e506b5a73623364664d547776596e4274626a7070626d4e7662576c755a7a344b494341674943416750474a7762573436623356305a323970626d632b526d787664313877645734336147786f50433969634731754f6d3931644764766157356e50676f674943416750433969634731754f6e567a5a584a5559584e7250676f674943416750474a77625734366332567864575675593256476247393349476c6b50534a4762473933587a4231626a646f6247676949484e7664584a6a5a564a6c5a6a306951574e3061585a7064486c664d446c6b61444e364f534967644746795a325630556d566d50534a4259335270646d6c306556387762585a324e57686a4969417650676f674943416750474a77625734366332567864575675593256476247393349476c6b50534a4762473933587a42704d3231785a32456949484e7664584a6a5a564a6c5a6a306951574e3061585a7064486c664d473132646a566f59794967644746795a325630556d566d50534a46626d5246646d5675644638784969417650676f674943416750474a776257343664584e6c636c52686332736761575139496b466a64476c3261585235587a4274646e593161474d6950676f674943416749434138596e4274626a706c6548526c626e4e7062323546624756745a573530637a344b4943416749434167494341385933567a644739744f6e42796233426c636e52705a584d2b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6863334e705a32356c5a5652356347556949485a686248566c50534a46546c524a56466c665455464f51556446556949674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d467a63326c6e626d566c566d46736457556949485a686248566c505349694943382b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6863334e705a32356c5a557868596d567349694232595778315a54306935613665354c325435377550353543474969417650676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a543069593246755a476c6b5958526c56584e6c636e4d6949485a686248566c50534a5459584a6861434244614756754969417650676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a543069593246755a476c6b5958526c52334a766458427a49694232595778315a5430694969417650676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a5430695a6d397962556c6b49694232595778315a5430694e7949674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d5a76636d314f5957316c49694232595778315a5430696447567a64455a76636d30694943382b4369416749434167494341675043396a64584e306232303663484a766347567964476c6c637a344b494341674943416750433969634731754f6d56346447567563326c76626b56735a57316c626e527a50676f674943416749434138596e4274626a7070626d4e7662576c755a7a354762473933587a4231626a646f624767384c324a77625734366157356a62323170626d632b436941674943416749447869634731754f6d3931644764766157356e506b5a73623364664d476b7a6258466e59547776596e4274626a70766458526e62326c755a7a344b4943416749447776596e4274626a7031633256795647467a617a344b494341384c324a776257343663484a765932567a637a344b49434138596e4274626d52704f6b4a51545535456157466e636d467449476c6b50534a435545314f52476c685a334a6862563878496a344b4943416749447869634731755a476b36516c424e546c42735957356c49476c6b50534a435545314f55477868626d56664d534967596e4274626b56735a57316c626e5139496c427962324e6c63334e664d53492b436941674943416749447869634731755a476b36516c424e546c4e6f5958426c49476c6b50534a5464474679644556325a573530587a46665a476b6949474a7762573546624756745a57353050534a5464474679644556325a573530587a456950676f6749434167494341674944786b597a7043623356755a484d67654430694d54677749694235505349784e6a4169494864705a48526f5053497a4e694967614756705a3268305053497a4e6949674c7a344b494341674943416749434138596e4274626d52704f6b4a515455354d59574a6c6244344b4943416749434167494341674944786b597a7043623356755a484d67654430694d54673349694235505349794d444d69494864705a48526f505349794d694967614756705a326830505349784e4349674c7a344b4943416749434167494341384c324a776257356b615470435545314f544746695a57772b436941674943416749447776596e4274626d52704f6b4a5154553554614746775a54344b494341674943416750474a776257356b615470435545314f553268686347556761575139496b56755a4556325a573530587a46665a476b6949474a7762573546624756745a57353050534a46626d5246646d567564463878496a344b4943416749434167494341385a474d36516d3931626d527a49486739496a59354d694967655430694d5459774969423361575230614430694d7a59694947686c6157646f644430694d7a59694943382b43694167494341674943416750474a776257356b615470435545314f544746695a57772b436941674943416749434167494341385a474d36516d3931626d527a49486739496a59354f534967655430694d6a417a4969423361575230614430694d6a49694947686c6157646f644430694d5451694943382b43694167494341674943416750433969634731755a476b36516c424e546b7868596d567350676f6749434167494341384c324a776257356b615470435545314f553268686347552b436941674943416749447869634731755a476b36516c424e546c4e6f5958426c49476c6b50534a4259335270646d6c30655638784d544a7164545a715832527049694269634731755257786c625756756444306951574e3061585a7064486c664d446c6b61444e364f53492b4369416749434167494341675047526a4f6b4a766457356b63794234505349794e6a416949486b39496a457a4f43496764326c6b64476739496a45774d434967614756705a326830505349344d4349674c7a344b494341674943416750433969634731755a476b36516c424e546c4e6f5958426c50676f674943416749434138596e4274626d52704f6b4a5154553554614746775a5342705a44306951574e3061585a7064486c664d446c35596d5a744e31396b61534967596e4274626b56735a57316c626e5139496b466a64476c3261585235587a4274646e593161474d6950676f6749434167494341674944786b597a7043623356755a484d67654430694e44457749694235505349784d7a6769494864705a48526f505349784d4441694947686c6157646f644430694f4441694943382b436941674943416749447776596e4274626d52704f6b4a5154553554614746775a54344b494341674943416750474a776257356b615470435545314f5257526e5a5342705a443069526d7876643138785832527049694269634731755257786c6257567564443069526d787664313878496a344b4943416749434167494341385a476b366432463563473970626e5167654430694d6a453249694235505349784e7a67694943382b436941674943416749434167504752704f6e6468655842766157353049486739496a49324d434967655430694d5463344969417650676f6749434167494341384c324a776257356b615470435545314f5257526e5a54344b494341674943416750474a776257356b615470435545314f5257526e5a5342705a443069526d787664313877645734336147786f5832527049694269634731755257786c6257567564443069526d787664313877645734336147786f496a344b4943416749434167494341385a476b366432463563473970626e5167654430694d7a597749694235505349784e7a67694943382b436941674943416749434167504752704f6e6468655842766157353049486739496a51784d434967655430694d5463344969417650676f6749434167494341384c324a776257356b615470435545314f5257526e5a54344b494341674943416750474a776257356b615470435545314f5257526e5a5342705a443069526d78766431387761544e74635764685832527049694269634731755257786c6257567564443069526d78766431387761544e7463576468496a344b4943416749434167494341385a476b366432463563473970626e5167654430694e54457749694235505349784e7a67694943382b436941674943416749434167504752704f6e6468655842766157353049486739496a59354d694967655430694d5463344969417650676f6749434167494341384c324a776257356b615470435545314f5257526e5a54344b4943416749447776596e4274626d52704f6b4a5154553551624746755a54344b494341384c324a776257356b615470435545314f52476c685a334a686254344b50433969634731754f6d526c5a6d6c75615852706232357a50676f3d222c226e616d65223a2254657374222c226465736372697074696f6e223a22227d', 'system', '2026-01-14 10:32:56.025212');
+TRUNCATE TABLE public.dw_versions CASCADE;
+
 INSERT INTO public.dw_versions VALUES (5, 2, '1.0.4', '', '\x7b2270726f63657373586d6c223a225044393462577767646d567963326c76626a30694d5334774969426c626d4e765a476c755a7a3069565652474c546769507a344b50474a77625734365a47566d6157357064476c76626e4d6765473173626e4d3665484e7050534a6f644852774f693876643364334c6e637a4c6d39795a7938794d4441784c31684e54464e6a6147567459533170626e4e305957356a5a53496765473173626e4d36596e4274626a30696148523063446f764c336433647935766257637562334a6e4c334e775a574d76516c424e546938794d4445774d4455794e43394e543052465443496765473173626e4d36596e4274626d527050534a6f644852774f693876643364334c6d39745a793576636d63766333426c597939435545314f4c7a49774d5441774e5449304c30524a4969423462577875637a706b597a30696148523063446f764c336433647935766257637562334a6e4c334e775a574d76524551764d6a41784d4441314d6a517652454d69494868746247357a4f6d527050534a6f644852774f693876643364334c6d39745a793576636d63766333426c59793945524338794d4445774d4455794e4339455353496765473173626e4d365933567a6447397450534a6f644852774f6938765933567a644739744c6d4a77625734756157387663324e6f5a573168496942705a4430695247566d6157357064476c76626e4e664d534967644746795a325630546d46745a584e7759574e6c50534a6f644852774f693876596e4274626935706279397a5932686c62574576596e42746269492b4369416750474a776257343663484a765932567a637942705a44306955484a765932567a6331387849694270633056345a574e316447466962475539496e52796457556950676f674943416750474a776257343663335268636e5246646d5675644342705a44306955335268636e5246646d567564463878496942755957316c50534c6c7649446c7034736950676f674943416749434138596e4274626a70766458526e62326c755a7a354762473933587a45384c324a7762573436623356305a323970626d632b43694167494341384c324a776257343663335268636e5246646d56756444344b4943416749447869634731754f6d56755a4556325a57353049476c6b50534a46626d5246646d567564463878496942755957316c50534c6e7535506d6e5a386950676f674943416749434138596e4274626a7070626d4e7662576c755a7a354762473933587a42704d3231785a3245384c324a77625734366157356a62323170626d632b43694167494341384c324a77625734365a57356b52585a6c626e512b4369416749434138596e4274626a707a5a5846315a57356a5a555a736233636761575139496b5a73623364664d53496763323931636d4e6c556d566d50534a5464474679644556325a573530587a456949485268636d646c64464a6c5a6a306951574e3061585a7064486c664d446c6b61444e364f5349674c7a344b4943416749447869634731754f6e567a5a584a5559584e7249476c6b50534a4259335270646d6c30655638774f57526f4d336f35496a344b494341674943416750474a77625734365a5868305a57357a615739755257786c6257567564484d2b43694167494341674943416750474e316333527662547077636d39775a584a306157567a50676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a5430695a6d397962556c6b49694232595778315a5430694e7949674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d5a76636d314f5957316c49694232595778315a5430696447567a64455a76636d30694943382b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6d62334a745357516949485a686248566c505349334969417650676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a5430695a6d3979625535686257556949485a686248566c50534a305a584e30526d3979625349674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d5a76636d314a5a434967646d467364575539496a63694943382b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6d62334a74546d46745a534967646d467364575539496e526c6333524762334a744969417650676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a54306959584e7a615764755a5756556558426c49694232595778315a543069566b6c535646564254463948556b3956554349674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d467a63326c6e626d566c566d46736457556949485a686248566c50534a325a79316862477774625746755957646c636e4d694943382b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6863334e705a32356c5a557868596d567349694232595778315a5430695157787349453168626d466e5a584a7a4969417650676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a543069593246755a476c6b5958526c56584e6c636e4d6949485a686248566c505349694943382b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6a5957356b6157526864475648636d393163484d6949485a686248566c505349694943382b4369416749434167494341675043396a64584e306232303663484a766347567964476c6c637a344b494341674943416750433969634731754f6d56346447567563326c76626b56735a57316c626e527a50676f674943416749434138596e4274626a7070626d4e7662576c755a7a354762473933587a45384c324a77625734366157356a62323170626d632b436941674943416749447869634731754f6d3931644764766157356e506b5a73623364664d4856754e32687361447776596e4274626a70766458526e62326c755a7a344b4943416749447776596e4274626a7031633256795647467a617a344b4943416749447869634731754f6e4e6c6358566c626d4e6c526d7876647942705a443069526d787664313877645734336147786f4969427a62335679593256535a575939496b466a64476c3261585235587a41355a47677a656a6b6949485268636d646c64464a6c5a6a306951574e3061585a7064486c664d473132646a566f597949674c7a344b4943416749447869634731754f6e4e6c6358566c626d4e6c526d7876647942705a443069526d78766431387761544e74635764684969427a62335679593256535a575939496b466a64476c3261585235587a4274646e593161474d6949485268636d646c64464a6c5a6a30695257356b52585a6c626e52664d5349674c7a344b4943416749447869634731754f6e567a5a584a5559584e7249476c6b50534a4259335270646d6c306556387762585a324e57686a496a344b494341674943416750474a77625734365a5868305a57357a615739755257786c6257567564484d2b43694167494341674943416750474e316333527662547077636d39775a584a306157567a50676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a54306959584e7a615764755a5756556558426c49694232595778315a543069525535555356525a58303142546b4648525649694943382b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6863334e705a32356c5a565a686248566c49694232595778315a5430694969417650676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a54306959584e7a615764755a57564d59574a6c62434967646d467364575539497557756e7553396b2b65376a2b6551686949674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d4e68626d52705a4746305a56567a5a584a7a49694232595778315a54306955324679595767675132686c626949674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d4e68626d52705a4746305a5564796233567763794967646d467364575539496949674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d5a76636d314a5a434967646d467364575539496a63694943382b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6d62334a74546d46745a534967646d467364575539496e526c6333524762334a744969417650676f674943416749434167494477765933567a644739744f6e42796233426c636e52705a584d2b436941674943416749447776596e4274626a706c6548526c626e4e7062323546624756745a573530637a344b494341674943416750474a77625734366157356a62323170626d632b526d787664313877645734336147786f50433969634731754f6d6c75593239746157356e50676f674943416749434138596e4274626a70766458526e62326c755a7a354762473933587a42704d3231785a3245384c324a7762573436623356305a323970626d632b43694167494341384c324a776257343664584e6c636c52686332732b4369416750433969634731754f6e427962324e6c63334d2b4369416750474a776257356b615470435545314f52476c685a334a68625342705a443069516c424e546b527059576479595731664d53492b4369416749434138596e4274626d52704f6b4a5154553551624746755a5342705a443069516c424e546c42735957356c587a456949474a7762573546624756745a57353050534a51636d396a5a584e7a587a456950676f674943416749434138596e4274626d52704f6b4a5154553554614746775a5342705a44306955335268636e5246646d5675644638785832527049694269634731755257786c625756756444306955335268636e5246646d567564463878496a344b4943416749434167494341385a474d36516d3931626d527a49486739496a45344d434967655430694d5459774969423361575230614430694d7a59694947686c6157646f644430694d7a59694943382b43694167494341674943416750474a776257356b615470435545314f544746695a57772b436941674943416749434167494341385a474d36516d3931626d527a49486739496a45344e794967655430694d6a417a4969423361575230614430694d6a49694947686c6157646f644430694d5451694943382b43694167494341674943416750433969634731755a476b36516c424e546b7868596d567350676f6749434167494341384c324a776257356b615470435545314f553268686347552b436941674943416749447869634731755a476b36516c424e546c4e6f5958426c49476c6b50534a46626d5246646d5675644638785832527049694269634731755257786c62575675644430695257356b52585a6c626e52664d53492b4369416749434167494341675047526a4f6b4a766457356b63794234505349324f54496949486b39496a45324d43496764326c6b64476739496a4d324969426f5a576c6e61485139496a4d324969417650676f67494341674943416749447869634731755a476b36516c424e546b7868596d567350676f674943416749434167494341675047526a4f6b4a766457356b63794234505349324f546b6949486b39496a49774d79496764326c6b64476739496a49794969426f5a576c6e61485139496a45304969417650676f67494341674943416749447776596e4274626d52704f6b4a515455354d59574a6c6244344b494341674943416750433969634731755a476b36516c424e546c4e6f5958426c50676f674943416749434138596e4274626d52704f6b4a5154553554614746775a5342705a44306951574e3061585a7064486c664d544579616e5532616c396b61534967596e4274626b56735a57316c626e5139496b466a64476c3261585235587a41355a47677a656a6b6950676f6749434167494341674944786b597a7043623356755a484d67654430694d6a597749694235505349784d7a6769494864705a48526f505349784d4441694947686c6157646f644430694f4441694943382b436941674943416749447776596e4274626d52704f6b4a5154553554614746775a54344b494341674943416750474a776257356b615470435545314f553268686347556761575139496b466a64476c3261585235587a413565574a6d625464665a476b6949474a7762573546624756745a57353050534a4259335270646d6c306556387762585a324e57686a496a344b4943416749434167494341385a474d36516d3931626d527a49486739496a51784d434967655430694d544d344969423361575230614430694d5441774969426f5a576c6e61485139496a67774969417650676f6749434167494341384c324a776257356b615470435545314f553268686347552b436941674943416749447869634731755a476b36516c424e546b566b5a32556761575139496b5a73623364664d56396b61534967596e4274626b56735a57316c626e5139496b5a73623364664d53492b436941674943416749434167504752704f6e6468655842766157353049486739496a49784e694967655430694d5463344969417650676f6749434167494341674944786b6154703359586c7762326c7564434234505349794e6a416949486b39496a45334f4349674c7a344b494341674943416750433969634731755a476b36516c424e546b566b5a32552b436941674943416749447869634731755a476b36516c424e546b566b5a32556761575139496b5a73623364664d4856754e3268736146396b61534967596e4274626b56735a57316c626e5139496b5a73623364664d4856754e3268736143492b436941674943416749434167504752704f6e6468655842766157353049486739496a4d324d434967655430694d5463344969417650676f6749434167494341674944786b6154703359586c7762326c7564434234505349304d54416949486b39496a45334f4349674c7a344b494341674943416750433969634731755a476b36516c424e546b566b5a32552b436941674943416749447869634731755a476b36516c424e546b566b5a32556761575139496b5a73623364664d476b7a6258466e5956396b61534967596e4274626b56735a57316c626e5139496b5a73623364664d476b7a6258466e5953492b436941674943416749434167504752704f6e6468655842766157353049486739496a55784d434967655430694d5463344969417650676f6749434167494341674944786b6154703359586c7762326c7564434234505349324f54496949486b39496a45334f4349674c7a344b494341674943416750433969634731755a476b36516c424e546b566b5a32552b43694167494341384c324a776257356b615470435545314f55477868626d552b4369416750433969634731755a476b36516c424e546b5270595764795957302b436a7776596e4274626a706b5a575a70626d6c3061573975637a344b222c226e616d65223a2254657374222c226465736372697074696f6e223a22227d', 'system', '2026-01-15 09:25:04.468569');
+TRUNCATE TABLE public.dw_versions CASCADE;
+
 INSERT INTO public.dw_versions VALUES (6, 2, '1.0.5', '', '\x7b2270726f63657373586d6c223a225044393462577767646d567963326c76626a30694d5334774969426c626d4e765a476c755a7a3069565652474c546769507a344b50474a77625734365a47566d6157357064476c76626e4d6765473173626e4d3665484e7050534a6f644852774f693876643364334c6e637a4c6d39795a7938794d4441784c31684e54464e6a6147567459533170626e4e305957356a5a53496765473173626e4d36596e4274626a30696148523063446f764c336433647935766257637562334a6e4c334e775a574d76516c424e546938794d4445774d4455794e43394e543052465443496765473173626e4d36596e4274626d527050534a6f644852774f693876643364334c6d39745a793576636d63766333426c597939435545314f4c7a49774d5441774e5449304c30524a4969423462577875637a706b597a30696148523063446f764c336433647935766257637562334a6e4c334e775a574d76524551764d6a41784d4441314d6a517652454d69494868746247357a4f6d527050534a6f644852774f693876643364334c6d39745a793576636d63766333426c59793945524338794d4445774d4455794e4339455353496765473173626e4d365933567a6447397450534a6f644852774f6938765933567a644739744c6d4a77625734756157387663324e6f5a573168496942705a4430695247566d6157357064476c76626e4e664d534967644746795a325630546d46745a584e7759574e6c50534a6f644852774f693876596e4274626935706279397a5932686c62574576596e42746269492b4369416750474a776257343663484a765932567a637942705a44306955484a765932567a6331387849694270633056345a574e316447466962475539496e52796457556950676f674943416750474a776257343663335268636e5246646d5675644342705a44306955335268636e5246646d567564463878496942755957316c50534c6c7649446c7034736950676f674943416749434138596e4274626a70766458526e62326c755a7a354762473933587a45384c324a7762573436623356305a323970626d632b43694167494341384c324a776257343663335268636e5246646d56756444344b4943416749447869634731754f6d56755a4556325a57353049476c6b50534a46626d5246646d567564463878496942755957316c50534c6e7535506d6e5a386950676f674943416749434138596e4274626a7070626d4e7662576c755a7a354762473933587a42704d3231785a3245384c324a77625734366157356a62323170626d632b43694167494341384c324a77625734365a57356b52585a6c626e512b4369416749434138596e4274626a707a5a5846315a57356a5a555a736233636761575139496b5a73623364664d53496763323931636d4e6c556d566d50534a5464474679644556325a573530587a456949485268636d646c64464a6c5a6a306951574e3061585a7064486c664d446c6b61444e364f5349674c7a344b4943416749447869634731754f6e567a5a584a5559584e7249476c6b50534a4259335270646d6c30655638774f57526f4d336f35496a344b494341674943416750474a77625734365a5868305a57357a615739755257786c6257567564484d2b43694167494341674943416750474e316333527662547077636d39775a584a306157567a50676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a5430695a6d397962556c6b49694232595778315a5430694e7949674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d5a76636d314f5957316c49694232595778315a5430696447567a64455a76636d30694943382b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6d62334a745357516949485a686248566c505349334969417650676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a5430695a6d3979625535686257556949485a686248566c50534a305a584e30526d3979625349674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d5a76636d314a5a434967646d467364575539496a63694943382b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6d62334a74546d46745a534967646d467364575539496e526c6333524762334a744969417650676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a54306959584e7a615764755a5756556558426c49694232595778315a543069526b6c595255526652455651564349674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d467a63326c6e626d566c566d46736457556949485a686248566c50534a45525642554c5568534969417650676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a54306959584e7a615764755a57564d59574a6c62434967646d467364575539496b68316257467549464a6c63323931636d4e6c637949674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d4e68626d52705a4746305a56567a5a584a7a49694232595778315a5430694969417650676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a543069593246755a476c6b5958526c52334a766458427a49694232595778315a5430694969417650676f674943416749434167494477765933567a644739744f6e42796233426c636e52705a584d2b436941674943416749447776596e4274626a706c6548526c626e4e7062323546624756745a573530637a344b494341674943416750474a77625734366157356a62323170626d632b526d78766431387850433969634731754f6d6c75593239746157356e50676f674943416749434138596e4274626a70766458526e62326c755a7a354762473933587a4231626a646f624767384c324a7762573436623356305a323970626d632b43694167494341384c324a776257343664584e6c636c52686332732b4369416749434138596e4274626a707a5a5846315a57356a5a555a736233636761575139496b5a73623364664d4856754e3268736143496763323931636d4e6c556d566d50534a4259335270646d6c30655638774f57526f4d336f354969423059584a6e5a5852535a575939496b466a64476c3261585235587a4274646e593161474d694943382b4369416749434138596e4274626a707a5a5846315a57356a5a555a736233636761575139496b5a73623364664d476b7a6258466e5953496763323931636d4e6c556d566d50534a4259335270646d6c306556387762585a324e57686a4969423059584a6e5a5852535a575939496b56755a4556325a573530587a45694943382b4369416749434138596e4274626a7031633256795647467a617942705a44306951574e3061585a7064486c664d473132646a566f5979492b436941674943416749447869634731754f6d56346447567563326c76626b56735a57316c626e527a50676f6749434167494341674944786a64584e306232303663484a766347567964476c6c637a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d467a63326c6e626d566c56486c775a534967646d467364575539496b5a4a5745564558305246554651694943382b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6863334e705a32356c5a565a686248566c49694232595778315a543069524556515643314454314a514c554a42546b744a546b63694943382b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6863334e705a32356c5a557868596d567349694232595778315a54306951323979634739795958526c49454a68626d7470626d63694943382b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6a5957356b61575268644756566332567963794967646d467364575539496949674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d4e68626d52705a4746305a5564796233567763794967646d467364575539496949674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d5a76636d314a5a434967646d467364575539496a63694943382b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6d62334a74546d46745a534967646d467364575539496e526c6333524762334a744969417650676f674943416749434167494477765933567a644739744f6e42796233426c636e52705a584d2b436941674943416749447776596e4274626a706c6548526c626e4e7062323546624756745a573530637a344b494341674943416750474a77625734366157356a62323170626d632b526d787664313877645734336147786f50433969634731754f6d6c75593239746157356e50676f674943416749434138596e4274626a70766458526e62326c755a7a354762473933587a42704d3231785a3245384c324a7762573436623356305a323970626d632b43694167494341384c324a776257343664584e6c636c52686332732b4369416750433969634731754f6e427962324e6c63334d2b4369416750474a776257356b615470435545314f52476c685a334a68625342705a443069516c424e546b527059576479595731664d53492b4369416749434138596e4274626d52704f6b4a5154553551624746755a5342705a443069516c424e546c42735957356c587a456949474a7762573546624756745a57353050534a51636d396a5a584e7a587a456950676f674943416749434138596e4274626d52704f6b4a5154553554614746775a5342705a44306955335268636e5246646d5675644638785832527049694269634731755257786c625756756444306955335268636e5246646d567564463878496a344b4943416749434167494341385a474d36516d3931626d527a49486739496a45344d434967655430694d5459774969423361575230614430694d7a59694947686c6157646f644430694d7a59694943382b43694167494341674943416750474a776257356b615470435545314f544746695a57772b436941674943416749434167494341385a474d36516d3931626d527a49486739496a45344e794967655430694d6a417a4969423361575230614430694d6a49694947686c6157646f644430694d5451694943382b43694167494341674943416750433969634731755a476b36516c424e546b7868596d567350676f6749434167494341384c324a776257356b615470435545314f553268686347552b436941674943416749447869634731755a476b36516c424e546c4e6f5958426c49476c6b50534a46626d5246646d5675644638785832527049694269634731755257786c62575675644430695257356b52585a6c626e52664d53492b4369416749434167494341675047526a4f6b4a766457356b63794234505349324f54496949486b39496a45324d43496764326c6b64476739496a4d324969426f5a576c6e61485139496a4d324969417650676f67494341674943416749447869634731755a476b36516c424e546b7868596d567350676f674943416749434167494341675047526a4f6b4a766457356b63794234505349324f546b6949486b39496a49774d79496764326c6b64476739496a49794969426f5a576c6e61485139496a45304969417650676f67494341674943416749447776596e4274626d52704f6b4a515455354d59574a6c6244344b494341674943416750433969634731755a476b36516c424e546c4e6f5958426c50676f674943416749434138596e4274626d52704f6b4a5154553554614746775a5342705a44306951574e3061585a7064486c664d544579616e5532616c396b61534967596e4274626b56735a57316c626e5139496b466a64476c3261585235587a41355a47677a656a6b6950676f6749434167494341674944786b597a7043623356755a484d67654430694d6a597749694235505349784d7a6769494864705a48526f505349784d4441694947686c6157646f644430694f4441694943382b436941674943416749447776596e4274626d52704f6b4a5154553554614746775a54344b494341674943416750474a776257356b615470435545314f553268686347556761575139496b466a64476c3261585235587a413565574a6d625464665a476b6949474a7762573546624756745a57353050534a4259335270646d6c306556387762585a324e57686a496a344b4943416749434167494341385a474d36516d3931626d527a49486739496a51784d434967655430694d544d344969423361575230614430694d5441774969426f5a576c6e61485139496a67774969417650676f6749434167494341384c324a776257356b615470435545314f553268686347552b436941674943416749447869634731755a476b36516c424e546b566b5a32556761575139496b5a73623364664d56396b61534967596e4274626b56735a57316c626e5139496b5a73623364664d53492b436941674943416749434167504752704f6e6468655842766157353049486739496a49784e694967655430694d5463344969417650676f6749434167494341674944786b6154703359586c7762326c7564434234505349794e6a416949486b39496a45334f4349674c7a344b494341674943416750433969634731755a476b36516c424e546b566b5a32552b436941674943416749447869634731755a476b36516c424e546b566b5a32556761575139496b5a73623364664d4856754e3268736146396b61534967596e4274626b56735a57316c626e5139496b5a73623364664d4856754e3268736143492b436941674943416749434167504752704f6e6468655842766157353049486739496a4d324d434967655430694d5463344969417650676f6749434167494341674944786b6154703359586c7762326c7564434234505349304d54416949486b39496a45334f4349674c7a344b494341674943416750433969634731755a476b36516c424e546b566b5a32552b436941674943416749447869634731755a476b36516c424e546b566b5a32556761575139496b5a73623364664d476b7a6258466e5956396b61534967596e4274626b56735a57316c626e5139496b5a73623364664d476b7a6258466e5953492b436941674943416749434167504752704f6e6468655842766157353049486739496a55784d434967655430694d5463344969417650676f6749434167494341674944786b6154703359586c7762326c7564434234505349324f54496949486b39496a45334f4349674c7a344b494341674943416750433969634731755a476b36516c424e546b566b5a32552b43694167494341384c324a776257356b615470435545314f55477868626d552b4369416750433969634731755a476b36516c424e546b5270595764795957302b436a7776596e4274626a706b5a575a70626d6c3061573975637a344b222c226e616d65223a2254657374222c226465736372697074696f6e223a22227d', 'system', '2026-01-15 09:36:20.621888');
+TRUNCATE TABLE public.dw_versions CASCADE;
+
 INSERT INTO public.dw_versions VALUES (7, 2, '1.0.6', '', '\x7b2270726f63657373586d6c223a225044393462577767646d567963326c76626a30694d5334774969426c626d4e765a476c755a7a3069565652474c546769507a3438596e4274626a706b5a575a70626d6c30615739756379423462577875637a703463326b39496d6830644841364c79393364336375647a4d7562334a6e4c7a49774d4445765745314d55324e6f5a5731684c576c7563335268626d4e6c4969423462577875637a70696347317550534a6f644852774f693876643364334c6d39745a793576636d63766333426c597939435545314f4c7a49774d5441774e5449304c3031505245564d4969423462577875637a7069634731755a476b39496d6830644841364c793933643363756232316e4c6d39795a79397a6347566a4c304a51545534764d6a41784d4441314d6a517652456b69494868746247357a4f6d526a50534a6f644852774f693876643364334c6d39745a793576636d63766333426c59793945524338794d4445774d4455794e4339455179496765473173626e4d365a476b39496d6830644841364c793933643363756232316e4c6d39795a79397a6347566a4c3052454c7a49774d5441774e5449304c30524a4969423462577875637a706a64584e3062323039496d6830644841364c79396a64584e3062323075596e4274626935706279397a5932686c6257456949476c6b50534a455a575a70626d6c3061573975633138784969423059584a6e5a58524f5957316c6333426859325539496d6830644841364c793969634731754c6d6c764c334e6a614756745953396963473175496a344b49434138596e4274626a7077636d396a5a584e7a49476c6b50534a51636d396a5a584e7a587a456949476c7a5258686c5933563059574a735a54306964484a315a53492b4369416749434138596e4274626a707a64474679644556325a57353049476c6b50534a5464474679644556325a573530587a4569494735686257553949755738674f576e6979492b436941674943416749447869634731754f6d3931644764766157356e506b5a73623364664d547776596e4274626a70766458526e62326c755a7a344b4943416749447776596e4274626a707a64474679644556325a57353050676f674943416750474a77625734365a57356b52585a6c626e516761575139496b56755a4556325a573530587a45694947356862575539497565376b2b61646e79492b436941674943416749447869634731754f6d6c75593239746157356e506b5a73623364664d476b7a6258466e59547776596e4274626a7070626d4e7662576c755a7a344b4943416749447776596e4274626a706c626d5246646d56756444344b4943416749447869634731754f6e4e6c6358566c626d4e6c526d7876647942705a443069526d7876643138784969427a62335679593256535a575939496c4e3059584a3052585a6c626e52664d534967644746795a325630556d566d50534a4259335270646d6c30655638774f57526f4d336f354969382b4369416749434138596e4274626a7031633256795647467a617942705a44306951574e3061585a7064486c664d446c6b61444e364f53492b436941674943416749447869634731754f6d56346447567563326c76626b56735a57316c626e527a50676f6749434167494341674944786a64584e306232303663484a766347567964476c6c637a344b49434167494341674943416749416f674943416749434167494341674369416749434167494341674943414b49434167494341674943416749416f674943416749434167494341674369416749434167494341674943414b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d467a63326c6e626d566c56486c775a534967646d467364575539496b5a4a5745564558305246554651694c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d467a63326c6e626d566c566d46736457556949485a686248566c50534a45525642554c5568534969382b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6863334e705a32356c5a557868596d567349694232595778315a5430695348567459573467556d567a623356795932567a4969382b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6a5957356b61575268644756566332567963794967646d4673645755394969497650676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a543069593246755a476c6b5958526c52334a766458427a49694232595778315a5430694969382b43694167494341674943416750474e316333527662547077636d39775a584a30655342755957316c50534a6d62334a745357516949485a686248566c505349334969382b50474e316333527662547077636d39775a584a30655342755957316c50534a6d62334a74546d46745a534967646d467364575539496e526c6333524762334a744969382b5043396a64584e306232303663484a766347567964476c6c637a344b494341674943416750433969634731754f6d56346447567563326c76626b56735a57316c626e527a50676f674943416749434138596e4274626a7070626d4e7662576c755a7a354762473933587a45384c324a77625734366157356a62323170626d632b436941674943416749447869634731754f6d3931644764766157356e506b5a73623364664d4856754e32687361447776596e4274626a70766458526e62326c755a7a344b4943416749447776596e4274626a7031633256795647467a617a344b4943416749447869634731754f6e4e6c6358566c626d4e6c526d7876647942705a443069526d787664313877645734336147786f4969427a62335679593256535a575939496b466a64476c3261585235587a41355a47677a656a6b6949485268636d646c64464a6c5a6a306951574e3061585a7064486c664d473132646a566f5979497650676f674943416750474a77625734366332567864575675593256476247393349476c6b50534a4762473933587a42704d3231785a32456949484e7664584a6a5a564a6c5a6a306951574e3061585a7064486c664d473132646a566f59794967644746795a325630556d566d50534a46626d5246646d5675644638784969382b4369416749434138596e4274626a7031633256795647467a617942705a44306951574e3061585a7064486c664d473132646a566f5979492b436941674943416749447869634731754f6d56346447567563326c76626b56735a57316c626e527a50676f6749434167494341674944786a64584e306232303663484a766347567964476c6c637a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d467a63326c6e626d566c56486c775a534967646d467364575539496b5a4a5745564558305246554651694c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d467a63326c6e626d566c566d46736457556949485a686248566c50534a45525642554c554e50556c4174516b464f53306c4f5279497650676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a54306959584e7a615764755a57564d59574a6c62434967646d467364575539496b4e76636e4276636d46305a534243595735726157356e4969382b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6a5957356b61575268644756566332567963794967646d4673645755394969497650676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a543069593246755a476c6b5958526c52334a766458427a49694232595778315a5430694969382b4369416749434167494341674943414b49434167494341674943416749416f674943416749434167494477765933567a644739744f6e42796233426c636e52705a584d2b436941674943416749447776596e4274626a706c6548526c626e4e7062323546624756745a573530637a344b494341674943416750474a77625734366157356a62323170626d632b526d787664313877645734336147786f50433969634731754f6d6c75593239746157356e50676f674943416749434138596e4274626a70766458526e62326c755a7a354762473933587a42704d3231785a3245384c324a7762573436623356305a323970626d632b43694167494341384c324a776257343664584e6c636c52686332732b4369416750433969634731754f6e427962324e6c63334d2b4369416750474a776257356b615470435545314f52476c685a334a68625342705a443069516c424e546b527059576479595731664d53492b4369416749434138596e4274626d52704f6b4a5154553551624746755a5342705a443069516c424e546c42735957356c587a456949474a7762573546624756745a57353050534a51636d396a5a584e7a587a456950676f674943416749434138596e4274626d52704f6b4a5154553554614746775a5342705a44306955335268636e5246646d5675644638785832527049694269634731755257786c625756756444306955335268636e5246646d567564463878496a344b4943416749434167494341385a474d36516d3931626d527a49486739496a45344d434967655430694d5459774969423361575230614430694d7a59694947686c6157646f644430694d7a59694c7a344b494341674943416749434138596e4274626d52704f6b4a515455354d59574a6c6244344b4943416749434167494341674944786b597a7043623356755a484d67654430694d54673349694235505349794d444d69494864705a48526f505349794d694967614756705a326830505349784e43497650676f67494341674943416749447776596e4274626d52704f6b4a515455354d59574a6c6244344b494341674943416750433969634731755a476b36516c424e546c4e6f5958426c50676f674943416749434138596e4274626d52704f6b4a5154553554614746775a5342705a4430695257356b52585a6c626e52664d56396b61534967596e4274626b56735a57316c626e5139496b56755a4556325a573530587a456950676f6749434167494341674944786b597a7043623356755a484d67654430694e6a6b7949694235505349784e6a4169494864705a48526f5053497a4e694967614756705a3268305053497a4e69497650676f67494341674943416749447869634731755a476b36516c424e546b7868596d567350676f674943416749434167494341675047526a4f6b4a766457356b63794234505349324f546b6949486b39496a49774d79496764326c6b64476739496a49794969426f5a576c6e61485139496a45304969382b43694167494341674943416750433969634731755a476b36516c424e546b7868596d567350676f6749434167494341384c324a776257356b615470435545314f553268686347552b436941674943416749447869634731755a476b36516c424e546c4e6f5958426c49476c6b50534a4259335270646d6c30655638784d544a7164545a715832527049694269634731755257786c625756756444306951574e3061585a7064486c664d446c6b61444e364f53492b4369416749434167494341675047526a4f6b4a766457356b63794234505349794e6a416949486b39496a457a4f43496764326c6b64476739496a45774d434967614756705a326830505349344d43497650676f6749434167494341384c324a776257356b615470435545314f553268686347552b436941674943416749447869634731755a476b36516c424e546c4e6f5958426c49476c6b50534a4259335270646d6c30655638774f586c695a6d30335832527049694269634731755257786c625756756444306951574e3061585a7064486c664d473132646a566f5979492b4369416749434167494341675047526a4f6b4a766457356b63794234505349304d54416949486b39496a457a4f43496764326c6b64476739496a45774d434967614756705a326830505349344d43497650676f6749434167494341384c324a776257356b615470435545314f553268686347552b436941674943416749447869634731755a476b36516c424e546b566b5a32556761575139496b5a73623364664d56396b61534967596e4274626b56735a57316c626e5139496b5a73623364664d53492b436941674943416749434167504752704f6e6468655842766157353049486739496a49784e694967655430694d5463344969382b436941674943416749434167504752704f6e6468655842766157353049486739496a49324d434967655430694d5463344969382b436941674943416749447776596e4274626d52704f6b4a51545535465a47646c50676f674943416749434138596e4274626d52704f6b4a51545535465a47646c49476c6b50534a4762473933587a4231626a646f624768665a476b6949474a7762573546624756745a57353050534a4762473933587a4231626a646f6247676950676f6749434167494341674944786b6154703359586c7762326c75644342345053497a4e6a416949486b39496a45334f43497650676f6749434167494341674944786b6154703359586c7762326c7564434234505349304d54416949486b39496a45334f43497650676f6749434167494341384c324a776257356b615470435545314f5257526e5a54344b494341674943416750474a776257356b615470435545314f5257526e5a5342705a443069526d78766431387761544e74635764685832527049694269634731755257786c6257567564443069526d78766431387761544e7463576468496a344b4943416749434167494341385a476b366432463563473970626e5167654430694e54457749694235505349784e7a67694c7a344b4943416749434167494341385a476b366432463563473970626e5167654430694e6a6b7949694235505349784e7a67694c7a344b494341674943416750433969634731755a476b36516c424e546b566b5a32552b43694167494341384c324a776257356b615470435545314f55477868626d552b4369416750433969634731755a476b36516c424e546b5270595764795957302b436a7776596e4274626a706b5a575a70626d6c3061573975637a343d222c226e616d65223a2254657374222c226465736372697074696f6e223a22227d', 'system', '2026-01-19 12:42:17.760512');
+TRUNCATE TABLE public.flw_ev_databasechangelog CASCADE;
+
 INSERT INTO public.flw_ev_databasechangelog VALUES ('1', 'flowable', 'org/flowable/eventregistry/db/liquibase/flowable-eventregistry-db-changelog.xml', '2026-01-14 17:11:35.18681', 1, 'EXECUTED', '9:63268f536c469325acef35970312551b', 'createTable tableName=FLW_EVENT_DEPLOYMENT; createTable tableName=FLW_EVENT_RESOURCE; createTable tableName=FLW_EVENT_DEFINITION; createIndex indexName=ACT_IDX_EVENT_DEF_UNIQ, tableName=FLW_EVENT_DEFINITION; createTable tableName=FLW_CHANNEL_DEFIN...', '', NULL, '4.24.0', NULL, NULL, '8381895121');
+TRUNCATE TABLE public.flw_ev_databasechangelog CASCADE;
+
 INSERT INTO public.flw_ev_databasechangelog VALUES ('2', 'flowable', 'org/flowable/eventregistry/db/liquibase/flowable-eventregistry-db-changelog.xml', '2026-01-14 17:11:35.19909', 2, 'EXECUTED', '9:dcb58b7dfd6dbda66939123a96985536', 'addColumn tableName=FLW_CHANNEL_DEFINITION; addColumn tableName=FLW_CHANNEL_DEFINITION', '', NULL, '4.24.0', NULL, NULL, '8381895121');
+TRUNCATE TABLE public.flw_ev_databasechangelog CASCADE;
+
 INSERT INTO public.flw_ev_databasechangelog VALUES ('3', 'flowable', 'org/flowable/eventregistry/db/liquibase/flowable-eventregistry-db-changelog.xml', '2026-01-14 17:11:35.211701', 3, 'EXECUTED', '9:d0c05678d57af23ad93699991e3bf4f6', 'customChange', '', NULL, '4.24.0', NULL, NULL, '8381895121');
+
+TRUNCATE TABLE public.flw_ev_databasechangeloglock CASCADE;
 
 INSERT INTO public.flw_ev_databasechangeloglock VALUES (1, false, NULL, NULL);
 
+TRUNCATE TABLE public.sys_departments CASCADE;
+
 INSERT INTO public.sys_departments VALUES ('DEPT-HQ', 'HQ', 'Head Office', NULL, 1, '/HQ', 1, 'ACTIVE', 'Foreign Enterprise Bank Head Office', NULL, NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+TRUNCATE TABLE public.sys_departments CASCADE;
+
 INSERT INTO public.sys_departments VALUES ('DEPT-RETAIL-BANKING', 'RETAIL_BANKING', 'Retail Banking', 'DEPT-HQ', 2, '/HQ/RETAIL_BANKING', 2, 'ACTIVE', 'Retail Banking Division', 'CC-200', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+TRUNCATE TABLE public.sys_departments CASCADE;
+
 INSERT INTO public.sys_departments VALUES ('DEPT-TREASURY', 'TREASURY', 'Treasury and Markets', 'DEPT-HQ', 2, '/HQ/TREASURY', 3, 'ACTIVE', 'Treasury and Markets Division', 'CC-300', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+TRUNCATE TABLE public.sys_departments CASCADE;
+
 INSERT INTO public.sys_departments VALUES ('DEPT-WEALTH-MGMT', 'WEALTH_MGMT', 'Wealth Management', 'DEPT-HQ', 2, '/HQ/WEALTH_MGMT', 4, 'ACTIVE', 'Wealth Management Division', 'CC-400', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+TRUNCATE TABLE public.sys_departments CASCADE;
+
 INSERT INTO public.sys_departments VALUES ('DEPT-INTL-BANKING', 'INTL_BANKING', 'International Banking', 'DEPT-HQ', 2, '/HQ/INTL_BANKING', 5, 'ACTIVE', 'International Banking Division', 'CC-500', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+TRUNCATE TABLE public.sys_departments CASCADE;
+
 INSERT INTO public.sys_departments VALUES ('DEPT-RISK', 'RISK', 'Risk Management', 'DEPT-HQ', 2, '/HQ/RISK', 10, 'ACTIVE', 'Risk Management Division', 'CC-600', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+TRUNCATE TABLE public.sys_departments CASCADE;
+
 INSERT INTO public.sys_departments VALUES ('DEPT-COMPLIANCE', 'COMPLIANCE', 'Compliance', 'DEPT-HQ', 2, '/HQ/COMPLIANCE', 11, 'ACTIVE', 'Compliance Division', 'CC-610', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+TRUNCATE TABLE public.sys_departments CASCADE;
+
 INSERT INTO public.sys_departments VALUES ('DEPT-LEGAL', 'LEGAL', 'Legal Affairs', 'DEPT-HQ', 2, '/HQ/LEGAL', 12, 'ACTIVE', 'Legal Affairs Division', 'CC-620', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+TRUNCATE TABLE public.sys_departments CASCADE;
+
 INSERT INTO public.sys_departments VALUES ('DEPT-CREDIT', 'CREDIT', 'Credit Approval', 'DEPT-HQ', 2, '/HQ/CREDIT', 13, 'ACTIVE', 'Credit Approval Division', 'CC-630', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+TRUNCATE TABLE public.sys_departments CASCADE;
+
 INSERT INTO public.sys_departments VALUES ('DEPT-OPERATIONS', 'OPERATIONS', 'Operations', 'DEPT-HQ', 2, '/HQ/OPERATIONS', 20, 'ACTIVE', 'Operations Division', 'CC-700', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+TRUNCATE TABLE public.sys_departments CASCADE;
+
 INSERT INTO public.sys_departments VALUES ('DEPT-FINANCE', 'FINANCE', 'Finance', 'DEPT-HQ', 2, '/HQ/FINANCE', 22, 'ACTIVE', 'Finance Division', 'CC-720', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+TRUNCATE TABLE public.sys_departments CASCADE;
+
 INSERT INTO public.sys_departments VALUES ('DEPT-ADMIN', 'ADMIN', 'Administration', 'DEPT-HQ', 2, '/HQ/ADMIN', 24, 'ACTIVE', 'Administration Division', 'CC-740', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+TRUNCATE TABLE public.sys_departments CASCADE;
+
 INSERT INTO public.sys_departments VALUES ('DEPT-AUDIT', 'AUDIT', 'Internal Audit', 'DEPT-HQ', 2, '/HQ/AUDIT', 25, 'ACTIVE', 'Internal Audit Division', 'CC-750', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+TRUNCATE TABLE public.sys_departments CASCADE;
+
 INSERT INTO public.sys_departments VALUES ('DEPT-IT-DEV', 'IT_DEV', 'Application Development', 'DEPT-IT', 3, '/HQ/IT/IT_DEV', 1, 'ACTIVE', 'Application Development', 'CC-711', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+TRUNCATE TABLE public.sys_departments CASCADE;
+
 INSERT INTO public.sys_departments VALUES ('DEPT-IT-INFRA', 'IT_INFRA', 'Infrastructure', 'DEPT-IT', 3, '/HQ/IT/IT_INFRA', 2, 'ACTIVE', 'Infrastructure Department', 'CC-712', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+TRUNCATE TABLE public.sys_departments CASCADE;
+
 INSERT INTO public.sys_departments VALUES ('DEPT-IT-SECURITY', 'IT_SECURITY', 'Information Security', 'DEPT-IT', 3, '/HQ/IT/IT_SECURITY', 3, 'ACTIVE', 'Information Security', 'CC-713', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+TRUNCATE TABLE public.sys_departments CASCADE;
+
 INSERT INTO public.sys_departments VALUES ('DEPT-IT-DATA', 'IT_DATA', 'Data Management', 'DEPT-IT', 3, '/HQ/IT/IT_DATA', 4, 'ACTIVE', 'Data Management', 'CC-714', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+TRUNCATE TABLE public.sys_departments CASCADE;
+
 INSERT INTO public.sys_departments VALUES ('DEPT-IT-ARCH', 'IT_ARCH', 'Enterprise Architecture', 'DEPT-IT', 3, '/HQ/IT/IT_ARCH', 5, 'ACTIVE', 'Enterprise Architecture', 'CC-715', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+TRUNCATE TABLE public.sys_departments CASCADE;
+
 INSERT INTO public.sys_departments VALUES ('DEPT-IT-PMO', 'IT_PMO', 'Project Management Office', 'DEPT-IT', 3, '/HQ/IT/IT_PMO', 6, 'ACTIVE', 'Project Management Office', 'CC-716', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+TRUNCATE TABLE public.sys_departments CASCADE;
+
 INSERT INTO public.sys_departments VALUES ('DEPT-IT-OPS', 'IT_OPS', 'IT Operations Center', 'DEPT-IT', 3, '/HQ/IT/IT_OPS', 7, 'ACTIVE', 'IT Operations Center', 'CC-717', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+TRUNCATE TABLE public.sys_departments CASCADE;
+
 INSERT INTO public.sys_departments VALUES ('DEPT-IT-TEST', 'IT_TEST', 'Testing Center', 'DEPT-IT', 3, '/HQ/IT/IT_TEST', 8, 'ACTIVE', 'Testing Center', 'CC-718', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+TRUNCATE TABLE public.sys_departments CASCADE;
+
 INSERT INTO public.sys_departments VALUES ('DEPT-IT-BA', 'IT_BA', 'Business Analysis Dept', 'DEPT-IT', 3, '/HQ/IT/IT_BA', 9, 'ACTIVE', 'Business Analysis Department', 'CC-719', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+TRUNCATE TABLE public.sys_departments CASCADE;
+
 INSERT INTO public.sys_departments VALUES ('DEPT-IT-DEVOPS', 'IT_DEVOPS', 'DevOps Center', 'DEPT-IT', 3, '/HQ/IT/IT_DEVOPS', 10, 'ACTIVE', 'DevOps Center', 'CC-720', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+TRUNCATE TABLE public.sys_departments CASCADE;
+
 INSERT INTO public.sys_departments VALUES ('DEPT-DEV-DATA', 'DEV_DATA', 'Data Platform Dev Team', 'DEPT-IT-DEV', 4, '/HQ/IT/IT_DEV/DEV_DATA', 4, 'ACTIVE', 'Data Platform Development Team', 'CC-711-4', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+TRUNCATE TABLE public.sys_departments CASCADE;
+
 INSERT INTO public.sys_departments VALUES ('DEPT-DEV-QA', 'DEV_QA', 'Quality Assurance Team', 'DEPT-IT-DEV', 4, '/HQ/IT/IT_DEV/DEV_QA', 5, 'ACTIVE', 'Quality Assurance Team', 'CC-711-5', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+TRUNCATE TABLE public.sys_departments CASCADE;
+
 INSERT INTO public.sys_departments VALUES ('DEPT-DEV-MOBILE', 'DEV_MOBILE', 'Mobile Dev Team', 'DEPT-IT-DEV', 4, '/HQ/IT/IT_DEV/DEV_MOBILE', 6, 'ACTIVE', 'Mobile Development Team', 'CC-711-6', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+TRUNCATE TABLE public.sys_departments CASCADE;
+
 INSERT INTO public.sys_departments VALUES ('DEPT-DEV-WEB', 'DEV_WEB', 'Web Frontend Team', 'DEPT-IT-DEV', 4, '/HQ/IT/IT_DEV/DEV_WEB', 7, 'ACTIVE', 'Web Frontend Development Team', 'CC-711-7', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+TRUNCATE TABLE public.sys_departments CASCADE;
+
 INSERT INTO public.sys_departments VALUES ('DEPT-DEV-API', 'DEV_API', 'API Platform Team', 'DEPT-IT-DEV', 4, '/HQ/IT/IT_DEV/DEV_API', 8, 'ACTIVE', 'API Platform Development Team', 'CC-711-8', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+TRUNCATE TABLE public.sys_departments CASCADE;
+
 INSERT INTO public.sys_departments VALUES ('DEPT-DEV-AI', 'DEV_AI', 'AI/ML Team', 'DEPT-IT-DEV', 4, '/HQ/IT/IT_DEV/DEV_AI', 9, 'ACTIVE', 'AI/ML Development Team', 'CC-711-9', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+TRUNCATE TABLE public.sys_departments CASCADE;
+
 INSERT INTO public.sys_departments VALUES ('DEPT-BRANCH-SH', 'BRANCH_SH', 'Shanghai Branch', 'DEPT-HQ', 2, '/HQ/BRANCH_SH', 100, 'ACTIVE', 'Shanghai Branch', NULL, 'Shanghai Pudong Lujiazui', NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+TRUNCATE TABLE public.sys_departments CASCADE;
+
 INSERT INTO public.sys_departments VALUES ('DEPT-BRANCH-BJ', 'BRANCH_BJ', 'Beijing Branch', 'DEPT-HQ', 2, '/HQ/BRANCH_BJ', 101, 'ACTIVE', 'Beijing Branch', NULL, 'Beijing Chaoyang Financial Street', NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+TRUNCATE TABLE public.sys_departments CASCADE;
+
 INSERT INTO public.sys_departments VALUES ('DEPT-BRANCH-GZ', 'BRANCH_GZ', 'Guangzhou Branch', 'DEPT-HQ', 2, '/HQ/BRANCH_GZ', 102, 'ACTIVE', 'Guangzhou Branch', NULL, 'Guangzhou Tianhe Zhujiang New Town', NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+TRUNCATE TABLE public.sys_departments CASCADE;
+
 INSERT INTO public.sys_departments VALUES ('DEPT-BRANCH-SZ', 'BRANCH_SZ', 'Shenzhen Branch', 'DEPT-HQ', 2, '/HQ/BRANCH_SZ', 103, 'ACTIVE', 'Shenzhen Branch', NULL, 'Shenzhen Futian CBD', NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+TRUNCATE TABLE public.sys_departments CASCADE;
+
 INSERT INTO public.sys_departments VALUES ('DEPT-CORP-BANKING', 'CORP_BANKING', 'Corporate Banking', 'DEPT-HQ', 2, '/HQ/CORP_BANKING', 1, 'ACTIVE', 'Corporate Banking Division', 'CC-100', NULL, 'corp-director-001', 'corp-manager-001', '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+TRUNCATE TABLE public.sys_departments CASCADE;
+
 INSERT INTO public.sys_departments VALUES ('DEPT-HR', 'HR', 'Human Resources', 'DEPT-HQ', 2, '/HQ/HR', 23, 'ACTIVE', 'Human Resources Division', 'CC-730', NULL, 'hr-manager-001', NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+TRUNCATE TABLE public.sys_departments CASCADE;
+
 INSERT INTO public.sys_departments VALUES ('DEPT-IT', 'IT', 'Information Technology', 'DEPT-HQ', 2, '/HQ/IT', 21, 'ACTIVE', 'Information Technology Division', 'CC-710', NULL, 'tech-director-001', NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+TRUNCATE TABLE public.sys_departments CASCADE;
+
 INSERT INTO public.sys_departments VALUES ('DEPT-DEV-CORE', 'DEV_CORE', 'Core Banking Dev Team', 'DEPT-IT-DEV', 4, '/HQ/IT/IT_DEV/DEV_CORE', 1, 'ACTIVE', 'Core Banking Development Team', 'CC-711-1', NULL, 'core-lead-001', NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+TRUNCATE TABLE public.sys_departments CASCADE;
+
 INSERT INTO public.sys_departments VALUES ('DEPT-DEV-CHANNEL', 'DEV_CHANNEL', 'Channel Dev Team', 'DEPT-IT-DEV', 4, '/HQ/IT/IT_DEV/DEV_CHANNEL', 2, 'ACTIVE', 'Channel Development Team', 'CC-711-2', NULL, 'channel-lead-001', NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+TRUNCATE TABLE public.sys_departments CASCADE;
+
 INSERT INTO public.sys_departments VALUES ('DEPT-DEV-RISK', 'DEV_RISK', 'Risk System Dev Team', 'DEPT-IT-DEV', 4, '/HQ/IT/IT_DEV/DEV_RISK', 3, 'ACTIVE', 'Risk System Development Team', 'CC-711-3', NULL, 'risk-lead-001', NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+TRUNCATE TABLE public.sys_departments CASCADE;
+
 INSERT INTO public.sys_departments VALUES ('DEPT-CORP-CLIENT', 'CORP_CLIENT', 'Corporate Client Dept', 'DEPT-CORP-BANKING', 3, '/HQ/CORP_BANKING/CORP_CLIENT', 1, 'ACTIVE', 'Corporate Client Department', 'CC-101', NULL, 'corp-manager-001', NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+TRUNCATE TABLE public.sys_departments CASCADE;
+
 INSERT INTO public.sys_departments VALUES ('DEPT-CORP-CREDIT', 'CORP_CREDIT', 'Corporate Credit Dept', 'DEPT-CORP-BANKING', 3, '/HQ/CORP_BANKING/CORP_CREDIT', 2, 'ACTIVE', 'Corporate Credit Department', 'CC-102', NULL, 'corp-manager-001', NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+TRUNCATE TABLE public.sys_departments CASCADE;
+
 INSERT INTO public.sys_departments VALUES ('DEPT-TRADE-FINANCE', 'TRADE_FINANCE', 'Trade Finance Dept', 'DEPT-CORP-BANKING', 3, '/HQ/CORP_BANKING/TRADE_FINANCE', 3, 'ACTIVE', 'Trade Finance Department', 'CC-103', NULL, 'corp-manager-001', NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+TRUNCATE TABLE public.sys_departments CASCADE;
+
 INSERT INTO public.sys_departments VALUES ('DEPT-CASH-MGMT', 'CASH_MGMT', 'Cash Management Dept', 'DEPT-CORP-BANKING', 3, '/HQ/CORP_BANKING/CASH_MGMT', 4, 'ACTIVE', 'Cash Management Department', 'CC-104', NULL, 'corp-manager-001', NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+TRUNCATE TABLE public.sys_departments CASCADE;
+
 INSERT INTO public.sys_departments VALUES ('DEPT-TRANSACTION', 'TRANSACTION', 'Transaction Banking', 'DEPT-CORP-BANKING', 3, '/HQ/CORP_BANKING/TRANSACTION', 5, 'ACTIVE', 'Transaction Banking Department', 'CC-105', NULL, 'corp-manager-001', NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
 
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('57725b4e-2980-4cac-86cc-21187b8d3a26', 'TECH_DIRECTOR_ROLE', 'FUNCTION_UNIT_CREATE', '2026-01-13 09:37:39.760054', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('abe4b672-d6f5-4ebc-93e7-07a0cacaea8a', 'TECH_DIRECTOR_ROLE', 'FUNCTION_UNIT_UPDATE', '2026-01-13 09:37:39.760054', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('15050b6e-e2a8-49bc-a800-ab4fb73ae996', 'TECH_DIRECTOR_ROLE', 'FUNCTION_UNIT_DELETE', '2026-01-13 09:37:39.760054', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('aa7ff1e0-19cf-45cc-a86b-2b97aa9b2939', 'TECH_DIRECTOR_ROLE', 'FUNCTION_UNIT_VIEW', '2026-01-13 09:37:39.760054', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('47e79af0-f58c-4403-b34e-a5f37a4618d2', 'TECH_DIRECTOR_ROLE', 'FUNCTION_UNIT_DEVELOP', '2026-01-13 09:37:39.760054', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('70301f71-4767-465c-a610-84e112a5ee73', 'TECH_DIRECTOR_ROLE', 'FUNCTION_UNIT_PUBLISH', '2026-01-13 09:37:39.760054', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('edc9766e-07f2-4b24-a059-ecc89f2e17ae', 'TECH_DIRECTOR_ROLE', 'FORM_CREATE', '2026-01-13 09:37:39.760054', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('e87a0c08-6dc7-445d-bfb5-651535d8ad5b', 'TECH_DIRECTOR_ROLE', 'FORM_UPDATE', '2026-01-13 09:37:39.760054', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('3fc6d949-f57a-4980-91e2-1ddc838c62e5', 'TECH_DIRECTOR_ROLE', 'FORM_DELETE', '2026-01-13 09:37:39.760054', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('1bb3e144-66bb-4fb3-a131-34eaf4a611e6', 'TECH_DIRECTOR_ROLE', 'FORM_VIEW', '2026-01-13 09:37:39.760054', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('ac7e6230-aca5-448c-8295-ade9fe0d6e18', 'TECH_DIRECTOR_ROLE', 'PROCESS_CREATE', '2026-01-13 09:37:39.760054', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('c3ebade8-6f3d-4098-88ce-859d38741080', 'TECH_DIRECTOR_ROLE', 'PROCESS_UPDATE', '2026-01-13 09:37:39.760054', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('353272f6-dcd4-4796-8c8c-513d6c677403', 'TECH_DIRECTOR_ROLE', 'PROCESS_DELETE', '2026-01-13 09:37:39.760054', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('30c085fc-cae5-4b68-b5b8-8d89684dc4e0', 'TECH_DIRECTOR_ROLE', 'PROCESS_VIEW', '2026-01-13 09:37:39.760054', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('31433ba3-f9fb-42ce-abae-0b6af4802387', 'TECH_DIRECTOR_ROLE', 'TABLE_CREATE', '2026-01-13 09:37:39.760054', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('03783e21-3e2b-44c6-b3ba-f06517d78feb', 'TECH_DIRECTOR_ROLE', 'TABLE_UPDATE', '2026-01-13 09:37:39.760054', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('b3f18577-1f0f-4dab-9927-146a1b9fc663', 'TECH_DIRECTOR_ROLE', 'TABLE_DELETE', '2026-01-13 09:37:39.760054', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('11048a79-82ed-4bff-85b0-0c8892d74526', 'TECH_DIRECTOR_ROLE', 'TABLE_VIEW', '2026-01-13 09:37:39.760054', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('290b658b-732e-4536-ac9d-8a783696a497', 'TECH_DIRECTOR_ROLE', 'ACTION_CREATE', '2026-01-13 09:37:39.760054', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('6277ff37-6105-429f-a8b5-139f57b51b1e', 'TECH_DIRECTOR_ROLE', 'ACTION_UPDATE', '2026-01-13 09:37:39.760054', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('76ad3c96-1695-4d6c-a2fb-bff54e9d7bb8', 'TECH_DIRECTOR_ROLE', 'ACTION_DELETE', '2026-01-13 09:37:39.760054', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('b244513c-8a61-44d0-bbc2-4622e5a95b9f', 'TECH_DIRECTOR_ROLE', 'ACTION_VIEW', '2026-01-13 09:37:39.760054', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('e6e329ca-8477-4681-9d7d-d02f9a0e3959', 'TEAM_LEADER_ROLE', 'FUNCTION_UNIT_CREATE', '2026-01-13 09:37:39.763499', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('8a61b918-e4fb-4ca4-aaf0-08ed78ab15a5', 'TEAM_LEADER_ROLE', 'FUNCTION_UNIT_UPDATE', '2026-01-13 09:37:39.763499', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('7cfffd68-de15-42d0-a4c6-a6361656a127', 'TEAM_LEADER_ROLE', 'FUNCTION_UNIT_DELETE', '2026-01-13 09:37:39.763499', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('fa5bdfd7-1bb9-4145-9e9e-351a41c796dd', 'TEAM_LEADER_ROLE', 'FUNCTION_UNIT_VIEW', '2026-01-13 09:37:39.763499', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('8402d0d5-3c83-49a6-af5d-3764a17f1e32', 'TEAM_LEADER_ROLE', 'FUNCTION_UNIT_DEVELOP', '2026-01-13 09:37:39.763499', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('1fae2527-11fb-4097-ad66-296ea42df72a', 'TEAM_LEADER_ROLE', 'FUNCTION_UNIT_PUBLISH', '2026-01-13 09:37:39.763499', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('263c4ec5-5d32-4d8c-b739-81d86fcb7cf2', 'TEAM_LEADER_ROLE', 'FORM_CREATE', '2026-01-13 09:37:39.763499', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('9b0944bc-4fa9-4183-b55f-f4a979519224', 'TEAM_LEADER_ROLE', 'FORM_UPDATE', '2026-01-13 09:37:39.763499', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('e04c1399-7db0-4ba5-aa59-6557b854c82e', 'TEAM_LEADER_ROLE', 'FORM_DELETE', '2026-01-13 09:37:39.763499', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('19ce043c-9887-4dfe-ad62-df22cf695626', 'TEAM_LEADER_ROLE', 'FORM_VIEW', '2026-01-13 09:37:39.763499', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('101df290-f706-4dcb-aa96-35f6bfb8c500', 'TEAM_LEADER_ROLE', 'PROCESS_CREATE', '2026-01-13 09:37:39.763499', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('76551367-88bc-42d2-b75a-26c28da2a62e', 'TEAM_LEADER_ROLE', 'PROCESS_UPDATE', '2026-01-13 09:37:39.763499', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('e4d4cc7a-816b-4541-98e3-01613c31133c', 'TEAM_LEADER_ROLE', 'PROCESS_DELETE', '2026-01-13 09:37:39.763499', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('8571f99a-6b75-4643-b53a-ad763478c350', 'TEAM_LEADER_ROLE', 'PROCESS_VIEW', '2026-01-13 09:37:39.763499', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('02b9c75b-64af-42ce-92d9-dc42a5f8ba04', 'TEAM_LEADER_ROLE', 'TABLE_CREATE', '2026-01-13 09:37:39.763499', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('c202f6d2-485f-4d17-ab52-dd11f3bbfa21', 'TEAM_LEADER_ROLE', 'TABLE_UPDATE', '2026-01-13 09:37:39.763499', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('f066d82f-4517-419e-9b28-a3622174a7ee', 'TEAM_LEADER_ROLE', 'TABLE_DELETE', '2026-01-13 09:37:39.763499', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('5705012f-c6e4-454b-9163-3419586c4f8b', 'TEAM_LEADER_ROLE', 'TABLE_VIEW', '2026-01-13 09:37:39.763499', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('999beeb8-0c06-47bd-b1cb-b5fe4a88f34b', 'TEAM_LEADER_ROLE', 'ACTION_CREATE', '2026-01-13 09:37:39.763499', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('fa7c543a-8d2d-4efd-8040-4fbed3d35255', 'TEAM_LEADER_ROLE', 'ACTION_UPDATE', '2026-01-13 09:37:39.763499', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('b1ca0af3-5224-4eb5-bfc8-8d6a90c3efa7', 'TEAM_LEADER_ROLE', 'ACTION_DELETE', '2026-01-13 09:37:39.763499', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('0f460aba-9949-46c3-ade4-d547a879251d', 'TEAM_LEADER_ROLE', 'ACTION_VIEW', '2026-01-13 09:37:39.763499', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('b2ed5670-8e81-4f4b-aed2-f6d4d71dd340', 'DEVELOPER_ROLE', 'FUNCTION_UNIT_VIEW', '2026-01-13 09:37:39.765351', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('bab6eceb-5680-436a-9fe5-429683663794', 'DEVELOPER_ROLE', 'FUNCTION_UNIT_DEVELOP', '2026-01-13 09:37:39.765351', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('7c867210-163a-4130-94cd-c148a6c24517', 'DEVELOPER_ROLE', 'FORM_VIEW', '2026-01-13 09:37:39.765351', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('57ae809c-da64-4ae2-a463-f091f7d76644', 'DEVELOPER_ROLE', 'FORM_UPDATE', '2026-01-13 09:37:39.765351', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('c2ec92e2-bf26-4cf9-a1fb-14e23e0cb58c', 'DEVELOPER_ROLE', 'PROCESS_VIEW', '2026-01-13 09:37:39.765351', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('3cc9f348-ba78-4dfa-b298-94d0f2e1fb2e', 'DEVELOPER_ROLE', 'PROCESS_UPDATE', '2026-01-13 09:37:39.765351', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('654e552d-726f-4f40-a01b-ea5e533f8384', 'DEVELOPER_ROLE', 'TABLE_VIEW', '2026-01-13 09:37:39.765351', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('87d576ae-aebf-48c7-9b28-91fe5accf94d', 'DEVELOPER_ROLE', 'ACTION_VIEW', '2026-01-13 09:37:39.765351', NULL);
+TRUNCATE TABLE public.sys_developer_role_permissions CASCADE;
+
 INSERT INTO public.sys_developer_role_permissions VALUES ('f6535ac6-1b08-42e6-949d-ef84f2cbc9d5', 'DEVELOPER_ROLE', 'ACTION_UPDATE', '2026-01-13 09:37:39.765351', NULL);
 
+TRUNCATE TABLE public.sys_dictionaries CASCADE;
+
 INSERT INTO public.sys_dictionaries VALUES ('sys-dict-001', 'USER_STATUS', '用户状态', 'SYSTEM', '用户账户状态字典', 'ACTIVE', '2026-01-13 09:37:39.75064', '2026-01-13 09:37:39.75064', NULL, NULL, NULL, NULL, 1, NULL, 1);
+TRUNCATE TABLE public.sys_dictionaries CASCADE;
+
 INSERT INTO public.sys_dictionaries VALUES ('sys-dict-002', 'GENDER', '性别', 'SYSTEM', '性别字典', 'ACTIVE', '2026-01-13 09:37:39.75064', '2026-01-13 09:37:39.75064', NULL, NULL, NULL, NULL, 2, NULL, 1);
+TRUNCATE TABLE public.sys_dictionaries CASCADE;
+
 INSERT INTO public.sys_dictionaries VALUES ('sys-dict-003', 'LANGUAGE', '语言', 'SYSTEM', '系统支持的语言', 'ACTIVE', '2026-01-13 09:37:39.75064', '2026-01-13 09:37:39.75064', NULL, NULL, NULL, NULL, 3, NULL, 1);
+TRUNCATE TABLE public.sys_dictionaries CASCADE;
+
 INSERT INTO public.sys_dictionaries VALUES ('sys-dict-004', 'ROLE_TYPE', '角色类型', 'SYSTEM', '系统角色类型', 'ACTIVE', '2026-01-13 09:37:39.75064', '2026-01-13 09:37:39.75064', NULL, NULL, NULL, NULL, 4, NULL, 1);
+TRUNCATE TABLE public.sys_dictionaries CASCADE;
+
 INSERT INTO public.sys_dictionaries VALUES ('sys-dict-005', 'PERMISSION_TYPE', '权限类型', 'SYSTEM', '权限分类', 'ACTIVE', '2026-01-13 09:37:39.75064', '2026-01-13 09:37:39.75064', NULL, NULL, NULL, NULL, 5, NULL, 1);
+TRUNCATE TABLE public.sys_dictionary_items CASCADE;
+
 INSERT INTO public.sys_dictionary_items VALUES ('sys-item-001', 'sys-dict-001', NULL, 'ACTIVE', '启用', 'Active', '启用', NULL, 'ACTIVE', NULL, 'ACTIVE', 1, NULL, NULL, NULL, '2026-01-13 09:37:39.75373', NULL, '2026-01-13 09:37:39.75373', NULL);
+TRUNCATE TABLE public.sys_dictionary_items CASCADE;
+
 INSERT INTO public.sys_dictionary_items VALUES ('sys-item-002', 'sys-dict-001', NULL, 'INACTIVE', '禁用', 'Inactive', '禁用', NULL, 'INACTIVE', NULL, 'ACTIVE', 2, NULL, NULL, NULL, '2026-01-13 09:37:39.75373', NULL, '2026-01-13 09:37:39.75373', NULL);
+TRUNCATE TABLE public.sys_dictionary_items CASCADE;
+
 INSERT INTO public.sys_dictionary_items VALUES ('sys-item-003', 'sys-dict-001', NULL, 'LOCKED', '锁定', 'Locked', '锁定', NULL, 'LOCKED', NULL, 'ACTIVE', 3, NULL, NULL, NULL, '2026-01-13 09:37:39.75373', NULL, '2026-01-13 09:37:39.75373', NULL);
+TRUNCATE TABLE public.sys_dictionary_items CASCADE;
+
 INSERT INTO public.sys_dictionary_items VALUES ('sys-item-004', 'sys-dict-002', NULL, 'MALE', '男', 'Male', '男', NULL, 'M', NULL, 'ACTIVE', 1, NULL, NULL, NULL, '2026-01-13 09:37:39.75373', NULL, '2026-01-13 09:37:39.75373', NULL);
+TRUNCATE TABLE public.sys_dictionary_items CASCADE;
+
 INSERT INTO public.sys_dictionary_items VALUES ('sys-item-005', 'sys-dict-002', NULL, 'FEMALE', '女', 'Female', '女', NULL, 'F', NULL, 'ACTIVE', 2, NULL, NULL, NULL, '2026-01-13 09:37:39.75373', NULL, '2026-01-13 09:37:39.75373', NULL);
+TRUNCATE TABLE public.sys_dictionary_items CASCADE;
+
 INSERT INTO public.sys_dictionary_items VALUES ('sys-item-006', 'sys-dict-002', NULL, 'OTHER', '其他', 'Other', '其他', NULL, 'O', NULL, 'ACTIVE', 3, NULL, NULL, NULL, '2026-01-13 09:37:39.75373', NULL, '2026-01-13 09:37:39.75373', NULL);
+TRUNCATE TABLE public.sys_dictionary_items CASCADE;
+
 INSERT INTO public.sys_dictionary_items VALUES ('sys-item-007', 'sys-dict-003', NULL, 'EN', '英文', 'English', '英文', NULL, 'en', NULL, 'ACTIVE', 1, NULL, NULL, NULL, '2026-01-13 09:37:39.75373', NULL, '2026-01-13 09:37:39.75373', NULL);
+TRUNCATE TABLE public.sys_dictionary_items CASCADE;
+
 INSERT INTO public.sys_dictionary_items VALUES ('sys-item-008', 'sys-dict-003', NULL, 'ZH_CN', '简体中文', 'Simplified Chinese', '简体中文', NULL, 'zh-CN', NULL, 'ACTIVE', 2, NULL, NULL, NULL, '2026-01-13 09:37:39.75373', NULL, '2026-01-13 09:37:39.75373', NULL);
+TRUNCATE TABLE public.sys_dictionary_items CASCADE;
+
 INSERT INTO public.sys_dictionary_items VALUES ('sys-item-009', 'sys-dict-003', NULL, 'ZH_TW', '繁体中文', 'Traditional Chinese', '繁体中文', NULL, 'zh-TW', NULL, 'ACTIVE', 3, NULL, NULL, NULL, '2026-01-13 09:37:39.75373', NULL, '2026-01-13 09:37:39.75373', NULL);
+TRUNCATE TABLE public.sys_dictionary_items CASCADE;
+
 INSERT INTO public.sys_dictionary_items VALUES ('sys-item-010', 'sys-dict-004', NULL, 'ADMIN', '管理员', 'Admin', '管理员', NULL, 'ADMIN', NULL, 'ACTIVE', 1, NULL, NULL, NULL, '2026-01-13 09:37:39.75373', NULL, '2026-01-13 09:37:39.75373', NULL);
+TRUNCATE TABLE public.sys_dictionary_items CASCADE;
+
 INSERT INTO public.sys_dictionary_items VALUES ('sys-item-011', 'sys-dict-004', NULL, 'DEVELOPER', '开发者', 'Developer', '开发者', NULL, 'DEVELOPER', NULL, 'ACTIVE', 2, NULL, NULL, NULL, '2026-01-13 09:37:39.75373', NULL, '2026-01-13 09:37:39.75373', NULL);
+TRUNCATE TABLE public.sys_dictionary_items CASCADE;
+
 INSERT INTO public.sys_dictionary_items VALUES ('sys-item-012', 'sys-dict-004', NULL, 'BUSINESS', '业务用户', 'Business', '业务用户', NULL, 'BUSINESS', NULL, 'ACTIVE', 3, NULL, NULL, NULL, '2026-01-13 09:37:39.75373', NULL, '2026-01-13 09:37:39.75373', NULL);
+TRUNCATE TABLE public.sys_dictionary_items CASCADE;
+
 INSERT INTO public.sys_dictionary_items VALUES ('sys-item-013', 'sys-dict-005', NULL, 'ADMIN', '管理权限', 'Admin Permission', '管理权限', NULL, 'ADMIN', NULL, 'ACTIVE', 1, NULL, NULL, NULL, '2026-01-13 09:37:39.75373', NULL, '2026-01-13 09:37:39.75373', NULL);
+TRUNCATE TABLE public.sys_dictionary_items CASCADE;
+
 INSERT INTO public.sys_dictionary_items VALUES ('sys-item-014', 'sys-dict-005', NULL, 'DEVELOPER', '开发权限', 'Developer Permission', '开发权限', NULL, 'DEVELOPER', NULL, 'ACTIVE', 2, NULL, NULL, NULL, '2026-01-13 09:37:39.75373', NULL, '2026-01-13 09:37:39.75373', NULL);
+TRUNCATE TABLE public.sys_dictionary_items CASCADE;
+
 INSERT INTO public.sys_dictionary_items VALUES ('sys-item-015', 'sys-dict-005', NULL, 'BUSINESS', '业务权限', 'Business Permission', '业务权限', NULL, 'BUSINESS', NULL, 'ACTIVE', 3, NULL, NULL, NULL, '2026-01-13 09:37:39.75373', NULL, '2026-01-13 09:37:39.75373', NULL);
+TRUNCATE TABLE public.sys_function_unit_contents CASCADE;
+
 INSERT INTO public.sys_function_unit_contents VALUES ('48ce4230-3138-4612-a8f2-d15473810755', '46ec97c3-fe7c-4e76-bcbc-99fe38f8fcb4', 'FORM', 'ada', '/forms/ada', '{"rule":[],"options":{}}', '390758a05511b81224379b6a3ffc16219bfa3d64cd582e8642a878d27d57972e', '2026-01-14 09:20:30.764747', NULL, NULL, NULL);
+TRUNCATE TABLE public.sys_function_unit_contents CASCADE;
+
 INSERT INTO public.sys_function_unit_contents VALUES ('5c60a4e9-2b44-4656-8e5a-7828d92ca948', '46ec97c3-fe7c-4e76-bcbc-99fe38f8fcb4', 'FORM', 'testForm', '/forms/testForm', '{"rule":[{"info":"","name":"ref_Fnvimkdrn28vadc","type":"input","field":"Fq63mkdrn28vabc","props":{"type":"text","clearable":true,"maxlength":5},"title":"输入框","_fc_id":"id_Foanmkdrn28vacc","hidden":false,"display":true,"$required":false,"_fc_drag_tag":"input"},{"info":"","name":"ref_F4m8mkdrrp95ajc","type":"colorPicker","field":"Fxe2mkdrrp95ahc","title":"颜色选择器","_fc_id":"id_Fuxfmkdrrp95aic","hidden":false,"display":true,"$required":false,"_fc_drag_tag":"colorPicker"}],"options":{"form":{"size":"default","inline":false,"labelWidth":"125px","labelPosition":"right","hideRequiredAsterisk":false},"resetBtn":{"show":false,"innerText":"重置"},"submitBtn":{"show":true,"innerText":"提交"}}}', 'e0841524e6a963ee278ebb8df11a9f39fef746a53de516645f5bb5469d7e55c0', '2026-01-14 09:20:30.769927', NULL, NULL, NULL);
+TRUNCATE TABLE public.sys_function_unit_contents CASCADE;
+
 INSERT INTO public.sys_function_unit_contents VALUES ('d7dad7b4-7baa-4fe2-b325-92dc13375b7f', '46ec97c3-fe7c-4e76-bcbc-99fe38f8fcb4', 'PROCESS', 'main-process.bpmn', '/processes/main-process.bpmn', '<?xml version="1.0" encoding="UTF-8"?>
 <bpmn:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:custom="http://custom.bpmn.io/schema" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
   <bpmn:process id="Process_1" isExecutable="true">
@@ -3136,6 +4268,8 @@ INSERT INTO public.sys_function_unit_contents VALUES ('d7dad7b4-7baa-4fe2-b325-9
   </bpmndi:BPMNDiagram>
 </bpmn:definitions>
 ', 'f47851ec8af91a8b99d1e2c5bf8ae2ba7f9bc09678454cdfb4cc78813dbfdcfa', '2026-01-14 09:20:30.732018', '46d79885-f12a-11f0-a8df-f2dbc029a3c2', 'Process_1:1:46dca198-f12a-11f0-a8df-f2dbc029a3c2', NULL);
+TRUNCATE TABLE public.sys_function_unit_contents CASCADE;
+
 INSERT INTO public.sys_function_unit_contents VALUES ('b480123b-5047-4878-8339-1b24b1a9433a', '6bc9e6b7-af72-4ed8-9f8c-283703aa94d8', 'PROCESS', 'main-process.bpmn', '/processes/main-process.bpmn', '<?xml version="1.0" encoding="UTF-8"?>
 <bpmn:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:custom="http://custom.bpmn.io/schema" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
   <bpmn:process id="Process_1" isExecutable="true">
@@ -3219,8 +4353,14 @@ INSERT INTO public.sys_function_unit_contents VALUES ('b480123b-5047-4878-8339-1
   </bpmndi:BPMNDiagram>
 </bpmn:definitions>
 ', 'db2d58d7d010a1ee6e52645191bf67c2d70d329802cd0d9af6333e76e7f9f93f', '2026-01-15 09:36:03.894531', '9c5df45e-f1f5-11f0-bfbd-f2dbc029a3c2', 'Process_1:8:9c614fc1-f1f5-11f0-bfbd-f2dbc029a3c2', NULL);
+TRUNCATE TABLE public.sys_function_unit_contents CASCADE;
+
 INSERT INTO public.sys_function_unit_contents VALUES ('ba6c51f2-fa10-4a1c-9c16-04b55a113612', '6bc9e6b7-af72-4ed8-9f8c-283703aa94d8', 'FORM', 'ada', '/forms/ada', '{"rule":[],"options":{}}', '390758a05511b81224379b6a3ffc16219bfa3d64cd582e8642a878d27d57972e', '2026-01-15 09:36:03.908805', NULL, NULL, NULL);
+TRUNCATE TABLE public.sys_function_unit_contents CASCADE;
+
 INSERT INTO public.sys_function_unit_contents VALUES ('99b71df7-efb1-40c2-be96-ed9e12657f7c', '6bc9e6b7-af72-4ed8-9f8c-283703aa94d8', 'FORM', 'testForm', '/forms/testForm', '{"rule":[{"info":"","name":"ref_Fnvimkdrn28vadc","type":"input","field":"Fq63mkdrn28vabc","props":{"type":"text","clearable":true,"maxlength":5},"title":"输入框","_fc_id":"id_Foanmkdrn28vacc","hidden":false,"display":true,"$required":false,"_fc_drag_tag":"input"},{"info":"","name":"ref_F4m8mkdrrp95ajc","type":"colorPicker","field":"Fxe2mkdrrp95ahc","title":"颜色选择器","_fc_id":"id_Fuxfmkdrrp95aic","hidden":false,"display":true,"$required":false,"_fc_drag_tag":"colorPicker"}],"options":{"form":{"size":"default","inline":false,"labelWidth":"125px","labelPosition":"right","hideRequiredAsterisk":false},"resetBtn":{"show":false,"innerText":"重置"},"submitBtn":{"show":true,"innerText":"提交"}}}', 'e0841524e6a963ee278ebb8df11a9f39fef746a53de516645f5bb5469d7e55c0', '2026-01-15 09:36:03.916265', NULL, NULL, NULL);
+TRUNCATE TABLE public.sys_function_unit_contents CASCADE;
+
 INSERT INTO public.sys_function_unit_contents VALUES ('188eb5c8-0c1e-4af1-b47e-134062419ff6', '88675d4c-e8d8-4a70-8e90-41c866f2cb24', 'PROCESS', 'main-process.bpmn', '/processes/main-process.bpmn', '<?xml version="1.0" encoding="UTF-8"?><bpmn:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:custom="http://custom.bpmn.io/schema" id="Definitions_1" targetNamespace="http://bpmn.io/schema/bpmn">
   <bpmn:process id="Process_1" isExecutable="true">
     <bpmn:startEvent id="StartEvent_1" name="开始">
@@ -3302,223 +4442,635 @@ INSERT INTO public.sys_function_unit_contents VALUES ('188eb5c8-0c1e-4af1-b47e-1
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>
 </bpmn:definitions>', '05830d7364b9aa3c72490eeb9c9ffe2284ec86f02481fb0ab31bfe46912d5b89', '2026-01-19 13:01:57.159236', '09178c9e-f537-11f0-83bf-1a46ed4020c1', 'Process_1:13:091b8441-f537-11f0-83bf-1a46ed4020c1', NULL);
+TRUNCATE TABLE public.sys_function_unit_contents CASCADE;
+
 INSERT INTO public.sys_function_unit_contents VALUES ('3cc04508-e38b-4662-9e85-0d45ad14ce82', '88675d4c-e8d8-4a70-8e90-41c866f2cb24', 'FORM', 'testForm', '/forms/testForm', '{"rule":[{"info":"","name":"ref_Fnvimkdrn28vadc","type":"input","field":"Fq63mkdrn28vabc","props":{"type":"text","clearable":true,"maxlength":5},"title":"输入框","_fc_id":"id_Foanmkdrn28vacc","hidden":false,"display":true,"$required":false,"_fc_drag_tag":"input"},{"info":"","name":"ref_F4m8mkdrrp95ajc","type":"colorPicker","field":"Fxe2mkdrrp95ahc","title":"颜色选择器","_fc_id":"id_Fuxfmkdrrp95aic","hidden":false,"display":true,"$required":false,"_fc_drag_tag":"colorPicker"}],"options":{"form":{"size":"default","inline":false,"labelWidth":"125px","labelPosition":"right","hideRequiredAsterisk":false},"resetBtn":{"show":false,"innerText":"重置"},"submitBtn":{"show":true,"innerText":"提交"}}}', 'e0841524e6a963ee278ebb8df11a9f39fef746a53de516645f5bb5469d7e55c0', '2026-01-19 13:01:57.17113', NULL, NULL, NULL);
 
+TRUNCATE TABLE public.sys_function_units CASCADE;
+
 INSERT INTO public.sys_function_units VALUES ('46ec97c3-fe7c-4e76-bcbc-99fe38f8fcb4', 'f47851ec8af91a8b99d1e2c5bf8ae2ba7f9bc09678454cdfb4cc78813dbfdcfa', 'fu-20260114-paed3z', '2026-01-14 09:20:30.718464+00', NULL, '', NULL, true, '2026-01-14 09:20:30.648049+00', 'system', 'Test', NULL, 4248, 'DEPLOYED', '2026-01-14 09:20:32.967313+00', NULL, '2026-01-14 09:20:30.787088+00', 'system', '1.0.2', true, 1);
+TRUNCATE TABLE public.sys_function_units CASCADE;
+
 INSERT INTO public.sys_function_units VALUES ('6bc9e6b7-af72-4ed8-9f8c-283703aa94d8', 'db2d58d7d010a1ee6e52645191bf67c2d70d329802cd0d9af6333e76e7f9f93f', 'fu-20260114-paed3z', '2026-01-15 09:36:03.890915+00', NULL, '', NULL, true, '2026-01-15 09:36:03.887126+00', 'system', 'Test', NULL, 4282, 'DEPLOYED', '2026-01-15 09:36:04.161796+00', NULL, '2026-01-15 09:36:03.955894+00', 'system', '1.0.4', true, 1);
+TRUNCATE TABLE public.sys_function_units CASCADE;
+
 INSERT INTO public.sys_function_units VALUES ('88675d4c-e8d8-4a70-8e90-41c866f2cb24', '05830d7364b9aa3c72490eeb9c9ffe2284ec86f02481fb0ab31bfe46912d5b89', 'fu-20260114-paed3z', '2026-01-19 13:01:57.155868+00', NULL, '', NULL, true, '2026-01-19 13:01:57.145812+00', 'system', 'Test0', NULL, 3984, 'DEPLOYED', '2026-01-19 13:01:57.350022+00', NULL, '2026-01-19 13:01:57.193103+00', 'system', '1.0.6', true, 1);
+TRUNCATE TABLE public.sys_permissions CASCADE;
+
 INSERT INTO public.sys_permissions VALUES ('perm-admin-user-read', 'ADMIN:USER:READ', 'View Users', 'ADMIN', 'user', 'read', 'View user list and details', '2026-01-13 09:37:39.734856', NULL, NULL);
+TRUNCATE TABLE public.sys_permissions CASCADE;
+
 INSERT INTO public.sys_permissions VALUES ('perm-admin-user-write', 'ADMIN:USER:WRITE', 'Manage Users', 'ADMIN', 'user', 'write', 'Create, update, delete users', '2026-01-13 09:37:39.734856', NULL, NULL);
+TRUNCATE TABLE public.sys_permissions CASCADE;
+
 INSERT INTO public.sys_permissions VALUES ('perm-admin-role-read', 'ADMIN:ROLE:READ', 'View Roles', 'ADMIN', 'role', 'read', 'View role list and details', '2026-01-13 09:37:39.734856', NULL, NULL);
+TRUNCATE TABLE public.sys_permissions CASCADE;
+
 INSERT INTO public.sys_permissions VALUES ('perm-admin-role-write', 'ADMIN:ROLE:WRITE', 'Manage Roles', 'ADMIN', 'role', 'write', 'Create, update, delete roles', '2026-01-13 09:37:39.734856', NULL, NULL);
+TRUNCATE TABLE public.sys_permissions CASCADE;
+
 INSERT INTO public.sys_permissions VALUES ('perm-admin-dept-read', 'ADMIN:DEPT:READ', 'View Departments', 'ADMIN', 'department', 'read', 'View department structure', '2026-01-13 09:37:39.734856', NULL, NULL);
+TRUNCATE TABLE public.sys_permissions CASCADE;
+
 INSERT INTO public.sys_permissions VALUES ('perm-admin-dept-write', 'ADMIN:DEPT:WRITE', 'Manage Departments', 'ADMIN', 'department', 'write', 'Create, update, delete departments', '2026-01-13 09:37:39.734856', NULL, NULL);
+TRUNCATE TABLE public.sys_permissions CASCADE;
+
 INSERT INTO public.sys_permissions VALUES ('perm-admin-audit-read', 'ADMIN:AUDIT:READ', 'View Audit Logs', 'ADMIN', 'audit', 'read', 'View audit logs', '2026-01-13 09:37:39.734856', NULL, NULL);
+TRUNCATE TABLE public.sys_permissions CASCADE;
+
 INSERT INTO public.sys_permissions VALUES ('perm-admin-config-read', 'ADMIN:CONFIG:READ', 'View System Config', 'ADMIN', 'config', 'read', 'View system configuration', '2026-01-13 09:37:39.734856', NULL, NULL);
+TRUNCATE TABLE public.sys_permissions CASCADE;
+
 INSERT INTO public.sys_permissions VALUES ('perm-admin-config-write', 'ADMIN:CONFIG:WRITE', 'Manage System Config', 'ADMIN', 'config', 'write', 'Modify system configuration', '2026-01-13 09:37:39.734856', NULL, NULL);
+TRUNCATE TABLE public.sys_permissions CASCADE;
+
 INSERT INTO public.sys_permissions VALUES ('perm-dev-fu-create', 'DEV:FU:CREATE', 'Create Function Unit', 'DEVELOPER', 'function_unit', 'create', 'Create new function units', '2026-01-13 09:37:39.734856', NULL, NULL);
+TRUNCATE TABLE public.sys_permissions CASCADE;
+
 INSERT INTO public.sys_permissions VALUES ('perm-dev-fu-edit', 'DEV:FU:EDIT', 'Edit Function Unit', 'DEVELOPER', 'function_unit', 'edit', 'Edit function units', '2026-01-13 09:37:39.734856', NULL, NULL);
+TRUNCATE TABLE public.sys_permissions CASCADE;
+
 INSERT INTO public.sys_permissions VALUES ('perm-dev-fu-delete', 'DEV:FU:DELETE', 'Delete Function Unit', 'DEVELOPER', 'function_unit', 'delete', 'Delete function units', '2026-01-13 09:37:39.734856', NULL, NULL);
+TRUNCATE TABLE public.sys_permissions CASCADE;
+
 INSERT INTO public.sys_permissions VALUES ('perm-dev-fu-deploy', 'DEV:FU:DEPLOY', 'Deploy Function Unit', 'DEVELOPER', 'function_unit', 'deploy', 'Deploy function units', '2026-01-13 09:37:39.734856', NULL, NULL);
+TRUNCATE TABLE public.sys_permissions CASCADE;
+
 INSERT INTO public.sys_permissions VALUES ('perm-dev-fu-approve', 'DEV:FU:APPROVE', 'Approve Function Unit', 'DEVELOPER', 'function_unit', 'approve', 'Approve function unit deployments', '2026-01-13 09:37:39.734856', NULL, NULL);
+TRUNCATE TABLE public.sys_permissions CASCADE;
+
 INSERT INTO public.sys_permissions VALUES ('perm-dev-process-design', 'DEV:PROCESS:DESIGN', 'Design Process', 'DEVELOPER', 'process', 'design', 'Design workflow processes', '2026-01-13 09:37:39.734856', NULL, NULL);
+TRUNCATE TABLE public.sys_permissions CASCADE;
+
 INSERT INTO public.sys_permissions VALUES ('perm-dev-form-design', 'DEV:FORM:DESIGN', 'Design Form', 'DEVELOPER', 'form', 'design', 'Design forms', '2026-01-13 09:37:39.734856', NULL, NULL);
+TRUNCATE TABLE public.sys_permissions CASCADE;
+
 INSERT INTO public.sys_permissions VALUES ('perm-dev-table-design', 'DEV:TABLE:DESIGN', 'Design Table', 'DEVELOPER', 'table', 'design', 'Design data tables', '2026-01-13 09:37:39.734856', NULL, NULL);
+TRUNCATE TABLE public.sys_permissions CASCADE;
+
 INSERT INTO public.sys_permissions VALUES ('perm-portal-task-view', 'PORTAL:TASK:VIEW', 'View Tasks', 'BUSINESS', 'task', 'view', 'View assigned tasks', '2026-01-13 09:37:39.734856', NULL, NULL);
+TRUNCATE TABLE public.sys_permissions CASCADE;
+
 INSERT INTO public.sys_permissions VALUES ('perm-portal-task-process', 'PORTAL:TASK:PROCESS', 'Process Tasks', 'BUSINESS', 'task', 'process', 'Process and complete tasks', '2026-01-13 09:37:39.734856', NULL, NULL);
+TRUNCATE TABLE public.sys_permissions CASCADE;
+
 INSERT INTO public.sys_permissions VALUES ('perm-portal-process-start', 'PORTAL:PROCESS:START', 'Start Process', 'BUSINESS', 'process', 'start', 'Start new process instances', '2026-01-13 09:37:39.734856', NULL, NULL);
+TRUNCATE TABLE public.sys_permissions CASCADE;
+
 INSERT INTO public.sys_permissions VALUES ('perm-portal-process-view', 'PORTAL:PROCESS:VIEW', 'View Process', 'BUSINESS', 'process', 'view', 'View process instances', '2026-01-13 09:37:39.734856', NULL, NULL);
 
+TRUNCATE TABLE public.sys_role_assignments CASCADE;
+
 INSERT INTO public.sys_role_assignments VALUES ('ra-user-admin-sysadmin', 'SYS_ADMIN_ROLE', 'USER', 'admin-001', '2026-01-13 10:38:37.240844', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844');
+TRUNCATE TABLE public.sys_role_assignments CASCADE;
+
 INSERT INTO public.sys_role_assignments VALUES ('ra-user-hr-mgr', 'MANAGER_ROLE', 'USER', 'hr-manager-001', '2026-01-13 10:38:37.240844', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844');
+TRUNCATE TABLE public.sys_role_assignments CASCADE;
+
 INSERT INTO public.sys_role_assignments VALUES ('ra-user-hr-spec', 'USER_ROLE', 'USER', 'hr-specialist-001', '2026-01-13 10:38:37.240844', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844');
+TRUNCATE TABLE public.sys_role_assignments CASCADE;
+
 INSERT INTO public.sys_role_assignments VALUES ('ra-user-hr-rec', 'USER_ROLE', 'USER', 'hr-recruiter-001', '2026-01-13 10:38:37.240844', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844');
+TRUNCATE TABLE public.sys_role_assignments CASCADE;
+
 INSERT INTO public.sys_role_assignments VALUES ('ra-user-corp-dir', 'MANAGER_ROLE', 'USER', 'corp-director-001', '2026-01-13 10:38:37.240844', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844');
+TRUNCATE TABLE public.sys_role_assignments CASCADE;
+
 INSERT INTO public.sys_role_assignments VALUES ('ra-user-corp-mgr', 'MANAGER_ROLE', 'USER', 'corp-manager-001', '2026-01-13 10:38:37.240844', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844');
+TRUNCATE TABLE public.sys_role_assignments CASCADE;
+
 INSERT INTO public.sys_role_assignments VALUES ('ra-user-corp-ana', 'USER_ROLE', 'USER', 'corp-analyst-001', '2026-01-13 10:38:37.240844', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844');
+TRUNCATE TABLE public.sys_role_assignments CASCADE;
+
 INSERT INTO public.sys_role_assignments VALUES ('ra-user-corp-off', 'USER_ROLE', 'USER', 'corp-officer-001', '2026-01-13 10:38:37.240844', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844');
+TRUNCATE TABLE public.sys_role_assignments CASCADE;
+
 INSERT INTO public.sys_role_assignments VALUES ('ra-user-tech-dir', 'TECH_DIRECTOR_ROLE', 'USER', 'tech-director-001', '2026-01-13 10:38:37.240844', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844');
+TRUNCATE TABLE public.sys_role_assignments CASCADE;
+
 INSERT INTO public.sys_role_assignments VALUES ('ra-user-core-lead', 'TEAM_LEADER_ROLE', 'USER', 'core-lead-001', '2026-01-13 10:38:37.240844', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844');
+TRUNCATE TABLE public.sys_role_assignments CASCADE;
+
 INSERT INTO public.sys_role_assignments VALUES ('ra-user-channel-lead', 'TEAM_LEADER_ROLE', 'USER', 'channel-lead-001', '2026-01-13 10:38:37.240844', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844');
+TRUNCATE TABLE public.sys_role_assignments CASCADE;
+
 INSERT INTO public.sys_role_assignments VALUES ('ra-user-risk-lead', 'TEAM_LEADER_ROLE', 'USER', 'risk-lead-001', '2026-01-13 10:38:37.240844', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844');
+TRUNCATE TABLE public.sys_role_assignments CASCADE;
+
 INSERT INTO public.sys_role_assignments VALUES ('ra-user-dev-john', 'DEVELOPER_ROLE', 'USER', 'dev-john-001', '2026-01-13 10:38:37.240844', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844');
+TRUNCATE TABLE public.sys_role_assignments CASCADE;
+
 INSERT INTO public.sys_role_assignments VALUES ('ra-user-dev-mary', 'DEVELOPER_ROLE', 'USER', 'dev-mary-001', '2026-01-13 10:38:37.240844', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844');
+TRUNCATE TABLE public.sys_role_assignments CASCADE;
+
 INSERT INTO public.sys_role_assignments VALUES ('ra-user-dev-peter', 'DEVELOPER_ROLE', 'USER', 'dev-peter-001', '2026-01-13 10:38:37.240844', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844');
+TRUNCATE TABLE public.sys_role_assignments CASCADE;
+
 INSERT INTO public.sys_role_assignments VALUES ('ra-user-dev-lisa', 'DEVELOPER_ROLE', 'USER', 'dev-lisa-001', '2026-01-13 10:38:37.240844', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844');
+TRUNCATE TABLE public.sys_role_assignments CASCADE;
+
 INSERT INTO public.sys_role_assignments VALUES ('ra-user-dev-alex', 'DEVELOPER_ROLE', 'USER', 'dev-alex-001', '2026-01-13 10:38:37.240844', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844');
+TRUNCATE TABLE public.sys_role_assignments CASCADE;
+
 INSERT INTO public.sys_role_assignments VALUES ('ra-user-dev-emma', 'DEVELOPER_ROLE', 'USER', 'dev-emma-001', '2026-01-13 10:38:37.240844', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844');
+TRUNCATE TABLE public.sys_role_assignments CASCADE;
+
 INSERT INTO public.sys_role_assignments VALUES ('ra-vg-managers', 'MANAGER_ROLE', 'VIRTUAL_GROUP', 'vg-all-managers', '2026-01-13 10:38:37.240844', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844');
+TRUNCATE TABLE public.sys_role_assignments CASCADE;
+
 INSERT INTO public.sys_role_assignments VALUES ('ra-vg-developers', 'DEVELOPER_ROLE', 'VIRTUAL_GROUP', 'vg-all-developers', '2026-01-13 10:38:37.240844', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844');
+TRUNCATE TABLE public.sys_role_assignments CASCADE;
+
 INSERT INTO public.sys_role_assignments VALUES ('ra-vg-team-leads', 'TEAM_LEADER_ROLE', 'VIRTUAL_GROUP', 'vg-team-leads', '2026-01-13 10:38:37.240844', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844');
 
+TRUNCATE TABLE public.sys_role_permissions CASCADE;
+
 INSERT INTO public.sys_role_permissions VALUES ('rp-sysadmin-perm-admin-user-read', 'SYS_ADMIN_ROLE', 'perm-admin-user-read', '2026-01-13 09:37:39.737033', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.sys_role_permissions CASCADE;
+
 INSERT INTO public.sys_role_permissions VALUES ('rp-sysadmin-perm-admin-user-write', 'SYS_ADMIN_ROLE', 'perm-admin-user-write', '2026-01-13 09:37:39.737033', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.sys_role_permissions CASCADE;
+
 INSERT INTO public.sys_role_permissions VALUES ('rp-sysadmin-perm-admin-role-read', 'SYS_ADMIN_ROLE', 'perm-admin-role-read', '2026-01-13 09:37:39.737033', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.sys_role_permissions CASCADE;
+
 INSERT INTO public.sys_role_permissions VALUES ('rp-sysadmin-perm-admin-role-write', 'SYS_ADMIN_ROLE', 'perm-admin-role-write', '2026-01-13 09:37:39.737033', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.sys_role_permissions CASCADE;
+
 INSERT INTO public.sys_role_permissions VALUES ('rp-sysadmin-perm-admin-dept-read', 'SYS_ADMIN_ROLE', 'perm-admin-dept-read', '2026-01-13 09:37:39.737033', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.sys_role_permissions CASCADE;
+
 INSERT INTO public.sys_role_permissions VALUES ('rp-sysadmin-perm-admin-dept-write', 'SYS_ADMIN_ROLE', 'perm-admin-dept-write', '2026-01-13 09:37:39.737033', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.sys_role_permissions CASCADE;
+
 INSERT INTO public.sys_role_permissions VALUES ('rp-sysadmin-perm-admin-audit-read', 'SYS_ADMIN_ROLE', 'perm-admin-audit-read', '2026-01-13 09:37:39.737033', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.sys_role_permissions CASCADE;
+
 INSERT INTO public.sys_role_permissions VALUES ('rp-sysadmin-perm-admin-config-read', 'SYS_ADMIN_ROLE', 'perm-admin-config-read', '2026-01-13 09:37:39.737033', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.sys_role_permissions CASCADE;
+
 INSERT INTO public.sys_role_permissions VALUES ('rp-sysadmin-perm-admin-config-write', 'SYS_ADMIN_ROLE', 'perm-admin-config-write', '2026-01-13 09:37:39.737033', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.sys_role_permissions CASCADE;
+
 INSERT INTO public.sys_role_permissions VALUES ('rp-auditor-perm-admin-user-read', 'AUDITOR_ROLE', 'perm-admin-user-read', '2026-01-13 09:37:39.740807', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.sys_role_permissions CASCADE;
+
 INSERT INTO public.sys_role_permissions VALUES ('rp-auditor-perm-admin-role-read', 'AUDITOR_ROLE', 'perm-admin-role-read', '2026-01-13 09:37:39.740807', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.sys_role_permissions CASCADE;
+
 INSERT INTO public.sys_role_permissions VALUES ('rp-auditor-perm-admin-dept-read', 'AUDITOR_ROLE', 'perm-admin-dept-read', '2026-01-13 09:37:39.740807', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.sys_role_permissions CASCADE;
+
 INSERT INTO public.sys_role_permissions VALUES ('rp-auditor-perm-admin-audit-read', 'AUDITOR_ROLE', 'perm-admin-audit-read', '2026-01-13 09:37:39.740807', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.sys_role_permissions CASCADE;
+
 INSERT INTO public.sys_role_permissions VALUES ('rp-auditor-perm-admin-config-read', 'AUDITOR_ROLE', 'perm-admin-config-read', '2026-01-13 09:37:39.740807', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.sys_role_permissions CASCADE;
+
 INSERT INTO public.sys_role_permissions VALUES ('rp-techdir-perm-dev-fu-create', 'TECH_DIRECTOR_ROLE', 'perm-dev-fu-create', '2026-01-13 09:37:39.742396', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.sys_role_permissions CASCADE;
+
 INSERT INTO public.sys_role_permissions VALUES ('rp-techdir-perm-dev-fu-edit', 'TECH_DIRECTOR_ROLE', 'perm-dev-fu-edit', '2026-01-13 09:37:39.742396', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.sys_role_permissions CASCADE;
+
 INSERT INTO public.sys_role_permissions VALUES ('rp-techdir-perm-dev-fu-delete', 'TECH_DIRECTOR_ROLE', 'perm-dev-fu-delete', '2026-01-13 09:37:39.742396', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.sys_role_permissions CASCADE;
+
 INSERT INTO public.sys_role_permissions VALUES ('rp-techdir-perm-dev-fu-deploy', 'TECH_DIRECTOR_ROLE', 'perm-dev-fu-deploy', '2026-01-13 09:37:39.742396', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.sys_role_permissions CASCADE;
+
 INSERT INTO public.sys_role_permissions VALUES ('rp-techdir-perm-dev-fu-approve', 'TECH_DIRECTOR_ROLE', 'perm-dev-fu-approve', '2026-01-13 09:37:39.742396', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.sys_role_permissions CASCADE;
+
 INSERT INTO public.sys_role_permissions VALUES ('rp-techdir-perm-dev-process-design', 'TECH_DIRECTOR_ROLE', 'perm-dev-process-design', '2026-01-13 09:37:39.742396', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.sys_role_permissions CASCADE;
+
 INSERT INTO public.sys_role_permissions VALUES ('rp-techdir-perm-dev-form-design', 'TECH_DIRECTOR_ROLE', 'perm-dev-form-design', '2026-01-13 09:37:39.742396', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.sys_role_permissions CASCADE;
+
 INSERT INTO public.sys_role_permissions VALUES ('rp-techdir-perm-dev-table-design', 'TECH_DIRECTOR_ROLE', 'perm-dev-table-design', '2026-01-13 09:37:39.742396', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.sys_role_permissions CASCADE;
+
 INSERT INTO public.sys_role_permissions VALUES ('rp-teamlead-perm-dev-fu-create', 'TEAM_LEADER_ROLE', 'perm-dev-fu-create', '2026-01-13 09:37:39.744109', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.sys_role_permissions CASCADE;
+
 INSERT INTO public.sys_role_permissions VALUES ('rp-teamlead-perm-dev-fu-edit', 'TEAM_LEADER_ROLE', 'perm-dev-fu-edit', '2026-01-13 09:37:39.744109', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.sys_role_permissions CASCADE;
+
 INSERT INTO public.sys_role_permissions VALUES ('rp-teamlead-perm-dev-fu-delete', 'TEAM_LEADER_ROLE', 'perm-dev-fu-delete', '2026-01-13 09:37:39.744109', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.sys_role_permissions CASCADE;
+
 INSERT INTO public.sys_role_permissions VALUES ('rp-teamlead-perm-dev-process-design', 'TEAM_LEADER_ROLE', 'perm-dev-process-design', '2026-01-13 09:37:39.744109', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.sys_role_permissions CASCADE;
+
 INSERT INTO public.sys_role_permissions VALUES ('rp-teamlead-perm-dev-form-design', 'TEAM_LEADER_ROLE', 'perm-dev-form-design', '2026-01-13 09:37:39.744109', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.sys_role_permissions CASCADE;
+
 INSERT INTO public.sys_role_permissions VALUES ('rp-teamlead-perm-dev-table-design', 'TEAM_LEADER_ROLE', 'perm-dev-table-design', '2026-01-13 09:37:39.744109', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.sys_role_permissions CASCADE;
+
 INSERT INTO public.sys_role_permissions VALUES ('rp-dev-perm-dev-fu-create', 'DEVELOPER_ROLE', 'perm-dev-fu-create', '2026-01-13 09:37:39.746184', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.sys_role_permissions CASCADE;
+
 INSERT INTO public.sys_role_permissions VALUES ('rp-dev-perm-dev-fu-edit', 'DEVELOPER_ROLE', 'perm-dev-fu-edit', '2026-01-13 09:37:39.746184', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.sys_role_permissions CASCADE;
+
 INSERT INTO public.sys_role_permissions VALUES ('rp-dev-perm-dev-process-design', 'DEVELOPER_ROLE', 'perm-dev-process-design', '2026-01-13 09:37:39.746184', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.sys_role_permissions CASCADE;
+
 INSERT INTO public.sys_role_permissions VALUES ('rp-dev-perm-dev-form-design', 'DEVELOPER_ROLE', 'perm-dev-form-design', '2026-01-13 09:37:39.746184', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.sys_role_permissions CASCADE;
+
 INSERT INTO public.sys_role_permissions VALUES ('rp-dev-perm-dev-table-design', 'DEVELOPER_ROLE', 'perm-dev-table-design', '2026-01-13 09:37:39.746184', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.sys_role_permissions CASCADE;
+
 INSERT INTO public.sys_role_permissions VALUES ('rp-bizuser-perm-portal-task-view', 'BUSINESS_USER_ROLE', 'perm-portal-task-view', '2026-01-13 09:37:39.748926', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.sys_role_permissions CASCADE;
+
 INSERT INTO public.sys_role_permissions VALUES ('rp-bizuser-perm-portal-task-process', 'BUSINESS_USER_ROLE', 'perm-portal-task-process', '2026-01-13 09:37:39.748926', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.sys_role_permissions CASCADE;
+
 INSERT INTO public.sys_role_permissions VALUES ('rp-bizuser-perm-portal-process-start', 'BUSINESS_USER_ROLE', 'perm-portal-process-start', '2026-01-13 09:37:39.748926', NULL, NULL, NULL, NULL);
+TRUNCATE TABLE public.sys_role_permissions CASCADE;
+
 INSERT INTO public.sys_role_permissions VALUES ('rp-bizuser-perm-portal-process-view', 'BUSINESS_USER_ROLE', 'perm-portal-process-view', '2026-01-13 09:37:39.748926', NULL, NULL, NULL, NULL);
 
+TRUNCATE TABLE public.sys_roles CASCADE;
+
 INSERT INTO public.sys_roles VALUES ('SYS_ADMIN_ROLE', 'SYS_ADMIN', 'System Administrator', 'ADMIN', 'Full system access', 'ACTIVE', true, '2026-01-13 09:37:39.727852', NULL, '2026-01-13 09:37:39.727852', NULL);
+TRUNCATE TABLE public.sys_roles CASCADE;
+
 INSERT INTO public.sys_roles VALUES ('AUDITOR_ROLE', 'AUDITOR', 'Auditor', 'ADMIN', 'Read-only access to audit logs', 'ACTIVE', true, '2026-01-13 09:37:39.727852', NULL, '2026-01-13 09:37:39.727852', NULL);
+TRUNCATE TABLE public.sys_roles CASCADE;
+
 INSERT INTO public.sys_roles VALUES ('TECH_DIRECTOR_ROLE', 'TECH_DIRECTOR', 'Technical Director', 'DEVELOPER', 'Full development access with approval rights', 'ACTIVE', true, '2026-01-13 09:37:39.731155', NULL, '2026-01-13 09:37:39.731155', NULL);
+TRUNCATE TABLE public.sys_roles CASCADE;
+
 INSERT INTO public.sys_roles VALUES ('TEAM_LEADER_ROLE', 'TEAM_LEADER', 'Team Leader', 'DEVELOPER', 'Team management and code review', 'ACTIVE', true, '2026-01-13 09:37:39.731155', NULL, '2026-01-13 09:37:39.731155', NULL);
+TRUNCATE TABLE public.sys_roles CASCADE;
+
 INSERT INTO public.sys_roles VALUES ('DEVELOPER_ROLE', 'DEVELOPER', 'Developer', 'DEVELOPER', 'Development and testing access', 'ACTIVE', true, '2026-01-13 09:37:39.731155', NULL, '2026-01-13 09:37:39.731155', NULL);
+TRUNCATE TABLE public.sys_roles CASCADE;
+
 INSERT INTO public.sys_roles VALUES ('BUSINESS_USER_ROLE', 'BUSINESS_USER', 'Business User', 'BU_UNBOUNDED', 'Standard business user access', 'ACTIVE', true, '2026-01-13 09:37:39.7329', NULL, '2026-01-13 09:37:39.7329', NULL);
+TRUNCATE TABLE public.sys_roles CASCADE;
+
 INSERT INTO public.sys_roles VALUES ('MANAGER_ROLE', 'MANAGER', 'Manager', 'BU_UNBOUNDED', 'Department manager with approval permissions', 'ACTIVE', false, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL);
+TRUNCATE TABLE public.sys_roles CASCADE;
+
 INSERT INTO public.sys_roles VALUES ('USER_ROLE', 'USER', 'User', 'BU_UNBOUNDED', 'Regular user with basic permissions', 'ACTIVE', false, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL);
+TRUNCATE TABLE public.sys_user_roles CASCADE;
+
 INSERT INTO public.sys_user_roles VALUES ('ur-tech-director-001', 'tech-director-001', 'TECH_DIRECTOR_ROLE', '2026-01-13 11:17:10.48595', 'system', NULL, NULL);
+TRUNCATE TABLE public.sys_user_roles CASCADE;
+
 INSERT INTO public.sys_user_roles VALUES ('ur-core-lead-001', 'core-lead-001', 'TEAM_LEADER_ROLE', '2026-01-13 11:17:10.48595', 'system', NULL, NULL);
+TRUNCATE TABLE public.sys_user_roles CASCADE;
+
 INSERT INTO public.sys_user_roles VALUES ('ur-dev-john-001', 'dev-john-001', 'DEVELOPER_ROLE', '2026-01-13 11:17:10.48595', 'system', NULL, NULL);
 
+TRUNCATE TABLE public.sys_users CASCADE;
+
 INSERT INTO public.sys_users VALUES ('hr-recruiter-001', 'hr.recruiter', '$2a$10$bTB3yyVtzpJw17uMI9pShOzAkm07MKZa2EyQhc4izBO1MdXXEiUiO', 'hr.recruiter@bank.com', 'Emily Liu', 'Emily Liu', NULL, 'EMP-HR-003', 'DEPT-HR', 'Recruiter', 'hr-manager-001', 'hr-manager-001', 'ACTIVE', 'zh_CN', false, NULL, NULL, NULL, 0, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, false, NULL, NULL);
+TRUNCATE TABLE public.sys_users CASCADE;
+
 INSERT INTO public.sys_users VALUES ('corp-analyst-001', 'corp.analyst', '$2a$10$bTB3yyVtzpJw17uMI9pShOzAkm07MKZa2EyQhc4izBO1MdXXEiUiO', 'corp.analyst@bank.com', 'David Wu', 'David Wu', NULL, 'EMP-CORP-003', 'DEPT-CORP-BANKING', 'Business Analyst', 'corp-manager-001', 'corp-director-001', 'ACTIVE', 'zh_CN', false, NULL, NULL, NULL, 0, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, false, NULL, NULL);
+TRUNCATE TABLE public.sys_users CASCADE;
+
 INSERT INTO public.sys_users VALUES ('corp-officer-001', 'corp.officer', '$2a$10$bTB3yyVtzpJw17uMI9pShOzAkm07MKZa2EyQhc4izBO1MdXXEiUiO', 'corp.officer@bank.com', 'Amy Zhao', 'Amy Zhao', NULL, 'EMP-CORP-004', 'DEPT-CORP-BANKING', 'Relationship Officer', 'corp-manager-001', 'corp-director-001', 'ACTIVE', 'zh_CN', false, NULL, NULL, NULL, 0, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, false, NULL, NULL);
+TRUNCATE TABLE public.sys_users CASCADE;
+
 INSERT INTO public.sys_users VALUES ('channel-lead-001', 'channel.lead', '$2a$10$bTB3yyVtzpJw17uMI9pShOzAkm07MKZa2EyQhc4izBO1MdXXEiUiO', 'channel.lead@bank.com', 'Grace Lin', 'Grace Lin', NULL, 'EMP-IT-003', 'DEPT-DEV-CHANNEL', 'Team Leader', 'tech-director-001', 'tech-director-001', 'ACTIVE', 'zh_CN', false, NULL, NULL, NULL, 0, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, false, NULL, NULL);
+TRUNCATE TABLE public.sys_users CASCADE;
+
 INSERT INTO public.sys_users VALUES ('risk-lead-001', 'risk.lead', '$2a$10$bTB3yyVtzpJw17uMI9pShOzAkm07MKZa2EyQhc4izBO1MdXXEiUiO', 'risk.lead@bank.com', 'Tony Chen', 'Tony Chen', NULL, 'EMP-IT-004', 'DEPT-DEV-RISK', 'Team Leader', 'tech-director-001', 'tech-director-001', 'ACTIVE', 'zh_CN', false, NULL, NULL, NULL, 0, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, false, NULL, NULL);
+TRUNCATE TABLE public.sys_users CASCADE;
+
 INSERT INTO public.sys_users VALUES ('dev-john-001', 'dev.john', '$2a$10$bTB3yyVtzpJw17uMI9pShOzAkm07MKZa2EyQhc4izBO1MdXXEiUiO', 'john.dev@bank.com', 'John Developer', 'John Smith', NULL, 'EMP-IT-005', 'DEPT-DEV-CORE', 'Senior Developer', 'core-lead-001', 'tech-director-001', 'ACTIVE', 'zh_CN', false, NULL, NULL, NULL, 0, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, false, NULL, NULL);
+TRUNCATE TABLE public.sys_users CASCADE;
+
 INSERT INTO public.sys_users VALUES ('dev-mary-001', 'dev.mary', '$2a$10$bTB3yyVtzpJw17uMI9pShOzAkm07MKZa2EyQhc4izBO1MdXXEiUiO', 'mary.dev@bank.com', 'Mary Johnson', 'Mary Johnson', NULL, 'EMP-IT-006', 'DEPT-DEV-CORE', 'Developer', 'core-lead-001', 'tech-director-001', 'ACTIVE', 'zh_CN', false, NULL, NULL, NULL, 0, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, false, NULL, NULL);
+TRUNCATE TABLE public.sys_users CASCADE;
+
 INSERT INTO public.sys_users VALUES ('dev-peter-001', 'dev.peter', '$2a$10$bTB3yyVtzpJw17uMI9pShOzAkm07MKZa2EyQhc4izBO1MdXXEiUiO', 'peter.dev@bank.com', 'Peter Lee', 'Peter Lee', NULL, 'EMP-IT-007', 'DEPT-DEV-CHANNEL', 'Senior Developer', 'channel-lead-001', 'tech-director-001', 'ACTIVE', 'zh_CN', false, NULL, NULL, NULL, 0, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, false, NULL, NULL);
+TRUNCATE TABLE public.sys_users CASCADE;
+
 INSERT INTO public.sys_users VALUES ('dev-lisa-001', 'dev.lisa', '$2a$10$bTB3yyVtzpJw17uMI9pShOzAkm07MKZa2EyQhc4izBO1MdXXEiUiO', 'lisa.dev@bank.com', 'Lisa Wang', 'Lisa Wang', NULL, 'EMP-IT-008', 'DEPT-DEV-CHANNEL', 'Developer', 'channel-lead-001', 'tech-director-001', 'ACTIVE', 'zh_CN', false, NULL, NULL, NULL, 0, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, false, NULL, NULL);
+TRUNCATE TABLE public.sys_users CASCADE;
+
 INSERT INTO public.sys_users VALUES ('dev-alex-001', 'dev.alex', '$2a$10$bTB3yyVtzpJw17uMI9pShOzAkm07MKZa2EyQhc4izBO1MdXXEiUiO', 'alex.dev@bank.com', 'Alex Zhou', 'Alex Zhou', NULL, 'EMP-IT-009', 'DEPT-DEV-RISK', 'Senior Developer', 'risk-lead-001', 'tech-director-001', 'ACTIVE', 'zh_CN', false, NULL, NULL, NULL, 0, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, false, NULL, NULL);
+TRUNCATE TABLE public.sys_users CASCADE;
+
 INSERT INTO public.sys_users VALUES ('dev-emma-001', 'dev.emma', '$2a$10$bTB3yyVtzpJw17uMI9pShOzAkm07MKZa2EyQhc4izBO1MdXXEiUiO', 'emma.dev@bank.com', 'Emma Liu', 'Emma Liu', NULL, 'EMP-IT-010', 'DEPT-DEV-RISK', 'Developer', 'risk-lead-001', 'tech-director-001', 'ACTIVE', 'zh_CN', false, NULL, NULL, NULL, 0, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, false, NULL, NULL);
+TRUNCATE TABLE public.sys_users CASCADE;
+
 INSERT INTO public.sys_users VALUES ('0faaa488-803a-43d2-9c08-1d3b58df8e6d', 'super_admin', 'admin123', 'super_admin@example.com', '超级管理员', '超级管理员', NULL, NULL, 'DEPT-IT', NULL, NULL, NULL, 'ACTIVE', 'zh_CN', false, NULL, NULL, NULL, 0, NULL, '2026-01-14 17:14:46.73286', NULL, '2026-01-14 17:14:46.732895', NULL, false, NULL, NULL);
+TRUNCATE TABLE public.sys_users CASCADE;
+
 INSERT INTO public.sys_users VALUES ('747328d2-e566-4c0d-bc4e-0e318b1ddb94', 'system_admin', 'admin123', 'system_admin@example.com', '系统管理员', '系统管理员', NULL, NULL, 'DEPT-IT', NULL, NULL, NULL, 'ACTIVE', 'zh_CN', false, NULL, NULL, NULL, 0, NULL, '2026-01-14 17:14:46.790015', NULL, '2026-01-14 17:14:46.790036', NULL, false, NULL, NULL);
+TRUNCATE TABLE public.sys_users CASCADE;
+
 INSERT INTO public.sys_users VALUES ('46e83c06-3c35-4538-90a3-0b58eede02ba', 'tenant_admin', 'admin123', 'tenant_admin@example.com', '租户管理员', '租户管理员', NULL, NULL, 'DEPT-IT', NULL, NULL, NULL, 'ACTIVE', 'zh_CN', false, NULL, NULL, NULL, 0, NULL, '2026-01-14 17:14:46.800673', NULL, '2026-01-14 17:14:46.800701', NULL, false, NULL, NULL);
+TRUNCATE TABLE public.sys_users CASCADE;
+
 INSERT INTO public.sys_users VALUES ('9625938d-ee73-4d91-97e3-58b0e208ea5f', 'auditor', 'admin123', 'auditor@example.com', '审计员', '审计员', NULL, NULL, 'DEPT-COMPLIANCE', NULL, NULL, NULL, 'ACTIVE', 'zh_CN', false, NULL, NULL, NULL, 0, NULL, '2026-01-14 17:14:46.80934', NULL, '2026-01-14 17:14:46.809353', NULL, false, NULL, NULL);
+TRUNCATE TABLE public.sys_users CASCADE;
+
 INSERT INTO public.sys_users VALUES ('291b1d55-d01f-4753-b07c-5ff0fca137da', 'finance', 'user123', 'finance@example.com', '财务人员', '财务人员', NULL, NULL, 'DEPT-TREASURY', NULL, NULL, NULL, 'ACTIVE', 'zh_CN', false, NULL, NULL, NULL, 0, NULL, '2026-01-14 17:14:46.891087', NULL, '2026-01-15 10:15:36.164959', NULL, true, '2026-01-15 10:15:36.149787', 'system');
+TRUNCATE TABLE public.sys_users CASCADE;
+
 INSERT INTO public.sys_users VALUES ('a35c972b-95a5-4b6e-82cb-a598017d58bb', 'dev_lead', 'dev123', 'dev_lead@example.com', '开发组长', '开发组长', NULL, NULL, 'DEPT-IT', NULL, NULL, NULL, 'ACTIVE', 'zh_CN', false, NULL, NULL, NULL, 0, NULL, '2026-01-14 17:14:46.817876', NULL, '2026-01-14 17:14:46.817888', NULL, false, NULL, NULL);
+TRUNCATE TABLE public.sys_users CASCADE;
+
 INSERT INTO public.sys_users VALUES ('3e67bb11-5d06-4a69-9db2-1886fa43f80c', 'senior_dev', 'dev123', 'senior_dev@example.com', '高级开发', '高级开发', NULL, NULL, 'DEPT-IT', NULL, NULL, NULL, 'ACTIVE', 'zh_CN', false, NULL, NULL, NULL, 0, NULL, '2026-01-14 17:14:46.825056', NULL, '2026-01-14 17:14:46.825072', NULL, false, NULL, NULL);
+TRUNCATE TABLE public.sys_users CASCADE;
+
 INSERT INTO public.sys_users VALUES ('07d58b2e-8621-418a-9b8a-95c0e6f52a4b', 'developer', 'dev123', 'developer@example.com', '开发人员', '开发人员', NULL, NULL, 'DEPT-IT', NULL, NULL, NULL, 'ACTIVE', 'zh_CN', false, NULL, NULL, NULL, 0, NULL, '2026-01-14 17:14:46.832925', NULL, '2026-01-14 17:14:46.832938', NULL, false, NULL, NULL);
+TRUNCATE TABLE public.sys_users CASCADE;
+
 INSERT INTO public.sys_users VALUES ('b072df65-f9dc-44f3-ae50-a6a12521d7a1', 'designer', 'dev123', 'designer@example.com', '流程设计师', '流程设计师', NULL, NULL, 'DEPT-IT', NULL, NULL, NULL, 'ACTIVE', 'zh_CN', false, NULL, NULL, NULL, 0, NULL, '2026-01-14 17:14:46.840685', NULL, '2026-01-14 17:14:46.840696', NULL, false, NULL, NULL);
+TRUNCATE TABLE public.sys_users CASCADE;
+
 INSERT INTO public.sys_users VALUES ('corp-director-001', 'corp.director', '$2a$10$bTB3yyVtzpJw17uMI9pShOzAkm07MKZa2EyQhc4izBO1MdXXEiUiO', 'corp.director@bank.com', 'James Zhang', 'James Zhang', NULL, 'EMP-CORP-001', 'DEPT-CORP-BANKING', 'Director', NULL, NULL, 'ACTIVE', 'zh_CN', false, NULL, '2026-01-14 17:02:02.279672', '0:0:0:0:0:0:0:1', 0, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, false, NULL, NULL);
+TRUNCATE TABLE public.sys_users CASCADE;
+
 INSERT INTO public.sys_users VALUES ('corp-manager-001', 'corp.manager', '$2a$10$bTB3yyVtzpJw17uMI9pShOzAkm07MKZa2EyQhc4izBO1MdXXEiUiO', 'corp.manager@bank.com', 'Linda Li', 'Linda Li', NULL, 'EMP-CORP-002', 'DEPT-CORP-BANKING', 'Senior Manager', 'corp-director-001', 'corp-director-001', 'ACTIVE', 'zh_CN', false, NULL, '2026-01-15 17:36:59.382234', '0:0:0:0:0:0:0:1', 0, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, false, NULL, NULL);
+TRUNCATE TABLE public.sys_users CASCADE;
+
 INSERT INTO public.sys_users VALUES ('dba1fc33-0f8e-4767-a89d-efd0612a2308', 'tester', 'dev123', 'tester@example.com', '测试人员', '测试人员', NULL, NULL, 'DEPT-IT', NULL, NULL, NULL, 'ACTIVE', 'zh_CN', false, NULL, NULL, NULL, 0, NULL, '2026-01-14 17:14:46.847529', NULL, '2026-01-14 17:14:46.847542', NULL, false, NULL, NULL);
+TRUNCATE TABLE public.sys_users CASCADE;
+
 INSERT INTO public.sys_users VALUES ('a49f5109-a35e-4624-8a78-2bcedaa006d0', 'manager', 'user123', 'manager@example.com', '部门经理', '部门经理', NULL, NULL, 'DEPT-OPERATIONS', NULL, NULL, NULL, 'ACTIVE', 'zh_CN', false, NULL, NULL, NULL, 0, NULL, '2026-01-14 17:14:46.854968', NULL, '2026-01-14 17:14:46.854985', NULL, false, NULL, NULL);
+TRUNCATE TABLE public.sys_users CASCADE;
+
 INSERT INTO public.sys_users VALUES ('6fe95275-b957-4ccb-a2c2-dd4c31717404', 'team_lead', 'user123', 'team_lead@example.com', '团队主管', '团队主管', NULL, NULL, 'DEPT-OPERATIONS', NULL, NULL, NULL, 'ACTIVE', 'zh_CN', false, NULL, NULL, NULL, 0, NULL, '2026-01-14 17:14:46.862148', NULL, '2026-01-14 17:14:46.862167', NULL, false, NULL, NULL);
+TRUNCATE TABLE public.sys_users CASCADE;
+
 INSERT INTO public.sys_users VALUES ('56a324f3-e24c-49f5-9108-fdf1bfb05954', 'hr_staff', 'user123', 'hr_staff@example.com', 'HR专员', 'HR专员', NULL, NULL, 'DEPT-HQ', NULL, NULL, NULL, 'ACTIVE', 'zh_CN', false, NULL, NULL, NULL, 0, NULL, '2026-01-14 17:14:46.884576', NULL, '2026-01-14 17:14:46.884587', NULL, false, NULL, NULL);
+TRUNCATE TABLE public.sys_users CASCADE;
+
 INSERT INTO public.sys_users VALUES ('hr-specialist-001', 'hr.specialist', '$2a$10$bTB3yyVtzpJw17uMI9pShOzAkm07MKZa2EyQhc4izBO1MdXXEiUiO', 'hr.specialist@bank.com', 'Michael Wang', 'Michael Wang', NULL, 'EMP-HR-002', 'DEPT-HR', 'HR Specialist', 'hr-manager-001', 'hr-manager-001', 'ACTIVE', 'zh_CN', false, NULL, '2026-01-14 18:26:29.006292', '0:0:0:0:0:0:0:1', 0, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, false, NULL, NULL);
+TRUNCATE TABLE public.sys_users CASCADE;
+
 INSERT INTO public.sys_users VALUES ('core-lead-001', 'core.lead', '$2a$10$U8RY1nXkphRLpUyqzy1fOe3W64/nfRmG3ara8YHK2yrWfYMugCKxK', 'core.lead@bank.com', 'Kevin Huang', 'Kevin Huang', NULL, 'EMP-IT-002', 'DEPT-DEV-CORE', 'Team Leader', 'tech-director-001', 'tech-director-001', 'ACTIVE', 'zh_CN', false, NULL, '2026-01-19 08:35:59.225043', '0:0:0:0:0:0:0:1', 0, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, false, NULL, NULL);
+TRUNCATE TABLE public.sys_users CASCADE;
+
 INSERT INTO public.sys_users VALUES ('db5dc674-a482-4dce-ba4e-c89d07061779', 'employee_b', 'user123', 'employee_b@example.com', '员工李四', '员工李四', NULL, NULL, 'DEPT-OPERATIONS', NULL, NULL, NULL, 'ACTIVE', 'zh_CN', false, NULL, NULL, NULL, 0, NULL, '2026-01-14 17:14:46.877375', NULL, '2026-01-15 10:15:47.316337', NULL, true, '2026-01-15 10:15:47.314853', 'system');
+TRUNCATE TABLE public.sys_users CASCADE;
+
 INSERT INTO public.sys_users VALUES ('b6d3066b-27c5-4f51-8e34-175012528378', 'employee_a', 'user123', 'employee_a@example.com', '员工张三', '员工张三', NULL, NULL, 'DEPT-OPERATIONS', NULL, NULL, NULL, 'ACTIVE', 'zh_CN', false, NULL, NULL, NULL, 0, NULL, '2026-01-14 17:14:46.86908', NULL, '2026-01-15 10:15:53.314038', NULL, true, '2026-01-15 10:15:53.313141', 'system');
+TRUNCATE TABLE public.sys_users CASCADE;
+
 INSERT INTO public.sys_users VALUES ('admin-001', 'admin', '$2a$10$bTB3yyVtzpJw17uMI9pShOzAkm07MKZa2EyQhc4izBO1MdXXEiUiO', 'admin@example.com', 'System Admin', 'System Administrator', NULL, NULL, NULL, 'System Administrator', NULL, NULL, 'ACTIVE', 'zh_CN', false, NULL, '2026-01-19 04:42:22.673658', '0:0:0:0:0:0:0:1', 0, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-19 04:42:22.817783', NULL, false, NULL, NULL);
+TRUNCATE TABLE public.sys_users CASCADE;
+
 INSERT INTO public.sys_users VALUES ('countersign-002', 'countersign.approver2', '$2a$10$U8RY1nXkphRLpUyqzy1fOe3W64/nfRmG3ara8YHK2yrWfYMugCKxK', 'eva.martinez@example.com', 'Eva', 'Eva Martinez', NULL, NULL, NULL, NULL, NULL, NULL, 'ACTIVE', 'zh_CN', false, NULL, '2026-01-18 19:21:36.12132', '0:0:0:0:0:0:0:1', 0, NULL, '2026-01-18 11:17:33.817146', NULL, '2026-01-18 11:17:33.817146', NULL, false, NULL, NULL);
+TRUNCATE TABLE public.sys_users CASCADE;
+
 INSERT INTO public.sys_users VALUES ('hr-manager-001', 'hr.manager', '$2a$10$bTB3yyVtzpJw17uMI9pShOzAkm07MKZa2EyQhc4izBO1MdXXEiUiO', 'hr.manager@bank.com', 'Sarah Chen', 'Sarah Chen', NULL, 'EMP-HR-001', 'DEPT-HR', 'HR Manager', NULL, NULL, 'ACTIVE', 'zh_CN', false, NULL, '2026-01-15 17:28:11.332344', '0:0:0:0:0:0:0:1', 0, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, false, NULL, NULL);
+TRUNCATE TABLE public.sys_users CASCADE;
+
 INSERT INTO public.sys_users VALUES ('dept-reviewer-001', 'dept.reviewer', '$2a$10$U8RY1nXkphRLpUyqzy1fOe3W64/nfRmG3ara8YHK2yrWfYMugCKxK', 'alice.johnson@example.com', 'Alice', 'Alice Johnson', NULL, NULL, NULL, NULL, NULL, NULL, 'ACTIVE', 'zh_CN', false, NULL, '2026-01-19 08:07:14.169613', '0:0:0:0:0:0:0:1', 0, NULL, '2026-01-18 11:17:33.817146', NULL, '2026-01-18 11:17:33.817146', NULL, false, NULL, NULL);
+TRUNCATE TABLE public.sys_users CASCADE;
+
 INSERT INTO public.sys_users VALUES ('tech-director-001', 'tech.director', '$2a$10$U8RY1nXkphRLpUyqzy1fOe3W64/nfRmG3ara8YHK2yrWfYMugCKxK', 'tech.director@bank.com', 'Robert Sun', 'Robert Sun', NULL, 'EMP-IT-001', 'DEPT-IT', 'Technical Director', NULL, NULL, 'ACTIVE', 'zh_CN', false, NULL, '2026-01-19 12:42:56.118117', '0:0:0:0:0:0:0:1', 0, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, false, NULL, NULL);
+TRUNCATE TABLE public.sys_users CASCADE;
+
 INSERT INTO public.sys_users VALUES ('countersign-001', 'countersign.approver1', '$2a$10$U8RY1nXkphRLpUyqzy1fOe3W64/nfRmG3ara8YHK2yrWfYMugCKxK', 'daniel.brown@example.com', 'Daniel', 'Daniel Brown', NULL, NULL, NULL, NULL, NULL, NULL, 'ACTIVE', 'zh_CN', false, NULL, NULL, NULL, 0, NULL, '2026-01-18 11:17:33.817146', NULL, '2026-01-18 11:17:33.817146', NULL, false, NULL, NULL);
+TRUNCATE TABLE public.sys_users CASCADE;
+
 INSERT INTO public.sys_users VALUES ('finance-reviewer-001', 'finance.reviewer', '$2a$10$U8RY1nXkphRLpUyqzy1fOe3W64/nfRmG3ara8YHK2yrWfYMugCKxK', 'carol.davis@example.com', 'Carol', 'Carol Davis', NULL, NULL, NULL, NULL, NULL, NULL, 'ACTIVE', 'zh_CN', false, NULL, NULL, NULL, 0, NULL, '2026-01-18 11:17:33.817146', NULL, '2026-01-18 11:17:33.817146', NULL, false, NULL, NULL);
+TRUNCATE TABLE public.sys_users CASCADE;
+
 INSERT INTO public.sys_users VALUES ('parent-reviewer-001', 'parent.reviewer', '$2a$10$U8RY1nXkphRLpUyqzy1fOe3W64/nfRmG3ara8YHK2yrWfYMugCKxK', 'bob.smith@example.com', 'Bob', 'Bob Smith', NULL, NULL, NULL, NULL, NULL, NULL, 'ACTIVE', 'zh_CN', false, NULL, NULL, NULL, 0, NULL, '2026-01-18 11:17:33.817146', NULL, '2026-01-18 11:17:33.817146', NULL, false, NULL, NULL);
+TRUNCATE TABLE public.sys_users CASCADE;
+
 INSERT INTO public.sys_users VALUES ('purchase-requester-001', 'purchase.requester', '$2a$10$U8RY1nXkphRLpUyqzy1fOe3W64/nfRmG3ara8YHK2yrWfYMugCKxK', 'tom.wilson@example.com', 'Tom', 'Tom Wilson', NULL, NULL, NULL, NULL, NULL, NULL, 'ACTIVE', 'zh_CN', false, NULL, '2026-01-19 12:42:34.189068', '0:0:0:0:0:0:0:1', 0, NULL, '2026-01-18 11:17:33.817146', NULL, '2026-01-18 11:17:33.817146', NULL, false, NULL, NULL);
 
+TRUNCATE TABLE public.sys_virtual_group_members CASCADE;
+
 INSERT INTO public.sys_virtual_group_members VALUES ('vgm-mgr-hr', 'vg-all-managers', 'hr-manager-001', '2026-01-13 10:38:37.240844', NULL);
+TRUNCATE TABLE public.sys_virtual_group_members CASCADE;
+
 INSERT INTO public.sys_virtual_group_members VALUES ('vgm-mgr-corp-dir', 'vg-all-managers', 'corp-director-001', '2026-01-13 10:38:37.240844', NULL);
+TRUNCATE TABLE public.sys_virtual_group_members CASCADE;
+
 INSERT INTO public.sys_virtual_group_members VALUES ('vgm-mgr-corp-mgr', 'vg-all-managers', 'corp-manager-001', '2026-01-13 10:38:37.240844', NULL);
+TRUNCATE TABLE public.sys_virtual_group_members CASCADE;
+
 INSERT INTO public.sys_virtual_group_members VALUES ('vgm-mgr-tech', 'vg-all-managers', 'tech-director-001', '2026-01-13 10:38:37.240844', NULL);
+TRUNCATE TABLE public.sys_virtual_group_members CASCADE;
+
 INSERT INTO public.sys_virtual_group_members VALUES ('vgm-dev-john', 'vg-all-developers', 'dev-john-001', '2026-01-13 10:38:37.240844', NULL);
+TRUNCATE TABLE public.sys_virtual_group_members CASCADE;
+
 INSERT INTO public.sys_virtual_group_members VALUES ('vgm-dev-mary', 'vg-all-developers', 'dev-mary-001', '2026-01-13 10:38:37.240844', NULL);
+TRUNCATE TABLE public.sys_virtual_group_members CASCADE;
+
 INSERT INTO public.sys_virtual_group_members VALUES ('vgm-dev-peter', 'vg-all-developers', 'dev-peter-001', '2026-01-13 10:38:37.240844', NULL);
+TRUNCATE TABLE public.sys_virtual_group_members CASCADE;
+
 INSERT INTO public.sys_virtual_group_members VALUES ('vgm-dev-lisa', 'vg-all-developers', 'dev-lisa-001', '2026-01-13 10:38:37.240844', NULL);
+TRUNCATE TABLE public.sys_virtual_group_members CASCADE;
+
 INSERT INTO public.sys_virtual_group_members VALUES ('vgm-dev-alex', 'vg-all-developers', 'dev-alex-001', '2026-01-13 10:38:37.240844', NULL);
+TRUNCATE TABLE public.sys_virtual_group_members CASCADE;
+
 INSERT INTO public.sys_virtual_group_members VALUES ('vgm-dev-emma', 'vg-all-developers', 'dev-emma-001', '2026-01-13 10:38:37.240844', NULL);
+TRUNCATE TABLE public.sys_virtual_group_members CASCADE;
+
 INSERT INTO public.sys_virtual_group_members VALUES ('vgm-dev-core-lead', 'vg-all-developers', 'core-lead-001', '2026-01-13 10:38:37.240844', NULL);
+TRUNCATE TABLE public.sys_virtual_group_members CASCADE;
+
 INSERT INTO public.sys_virtual_group_members VALUES ('vgm-dev-channel-lead', 'vg-all-developers', 'channel-lead-001', '2026-01-13 10:38:37.240844', NULL);
+TRUNCATE TABLE public.sys_virtual_group_members CASCADE;
+
 INSERT INTO public.sys_virtual_group_members VALUES ('vgm-dev-risk-lead', 'vg-all-developers', 'risk-lead-001', '2026-01-13 10:38:37.240844', NULL);
+TRUNCATE TABLE public.sys_virtual_group_members CASCADE;
+
 INSERT INTO public.sys_virtual_group_members VALUES ('vgm-lead-core', 'vg-team-leads', 'core-lead-001', '2026-01-13 10:38:37.240844', NULL);
+TRUNCATE TABLE public.sys_virtual_group_members CASCADE;
+
 INSERT INTO public.sys_virtual_group_members VALUES ('vgm-lead-channel', 'vg-team-leads', 'channel-lead-001', '2026-01-13 10:38:37.240844', NULL);
+TRUNCATE TABLE public.sys_virtual_group_members CASCADE;
+
 INSERT INTO public.sys_virtual_group_members VALUES ('vgm-lead-risk', 'vg-team-leads', 'risk-lead-001', '2026-01-13 10:38:37.240844', NULL);
+TRUNCATE TABLE public.sys_virtual_group_members CASCADE;
+
 INSERT INTO public.sys_virtual_group_members VALUES ('vgm-sr-john', 'vg-senior-devs', 'dev-john-001', '2026-01-13 10:38:37.240844', NULL);
+TRUNCATE TABLE public.sys_virtual_group_members CASCADE;
+
 INSERT INTO public.sys_virtual_group_members VALUES ('vgm-sr-peter', 'vg-senior-devs', 'dev-peter-001', '2026-01-13 10:38:37.240844', NULL);
+TRUNCATE TABLE public.sys_virtual_group_members CASCADE;
+
 INSERT INTO public.sys_virtual_group_members VALUES ('vgm-sr-alex', 'vg-senior-devs', 'dev-alex-001', '2026-01-13 10:38:37.240844', NULL);
+TRUNCATE TABLE public.sys_virtual_group_members CASCADE;
+
 INSERT INTO public.sys_virtual_group_members VALUES ('vgm-appr-hr', 'vg-approvers', 'hr-manager-001', '2026-01-13 10:38:37.240844', NULL);
+TRUNCATE TABLE public.sys_virtual_group_members CASCADE;
+
 INSERT INTO public.sys_virtual_group_members VALUES ('vgm-appr-corp-dir', 'vg-approvers', 'corp-director-001', '2026-01-13 10:38:37.240844', NULL);
+TRUNCATE TABLE public.sys_virtual_group_members CASCADE;
+
 INSERT INTO public.sys_virtual_group_members VALUES ('vgm-appr-corp-mgr', 'vg-approvers', 'corp-manager-001', '2026-01-13 10:38:37.240844', NULL);
+TRUNCATE TABLE public.sys_virtual_group_members CASCADE;
+
 INSERT INTO public.sys_virtual_group_members VALUES ('vgm-appr-tech', 'vg-approvers', 'tech-director-001', '2026-01-13 10:38:37.240844', NULL);
+TRUNCATE TABLE public.sys_virtual_group_members CASCADE;
+
 INSERT INTO public.sys_virtual_group_members VALUES ('vgm-appr-core-lead', 'vg-approvers', 'core-lead-001', '2026-01-13 10:38:37.240844', NULL);
+TRUNCATE TABLE public.sys_virtual_group_members CASCADE;
+
 INSERT INTO public.sys_virtual_group_members VALUES ('vgm-appr-channel-lead', 'vg-approvers', 'channel-lead-001', '2026-01-13 10:38:37.240844', NULL);
+TRUNCATE TABLE public.sys_virtual_group_members CASCADE;
+
 INSERT INTO public.sys_virtual_group_members VALUES ('vgm-appr-risk-lead', 'vg-approvers', 'risk-lead-001', '2026-01-13 10:38:37.240844', NULL);
 
+TRUNCATE TABLE public.sys_virtual_groups CASCADE;
+
 INSERT INTO public.sys_virtual_groups VALUES ('vg-all-managers', 'All Managers', 'ALL_MANAGERS', 'All department managers across the organization', 'SYSTEM', NULL, 'ACTIVE', NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+TRUNCATE TABLE public.sys_virtual_groups CASCADE;
+
 INSERT INTO public.sys_virtual_groups VALUES ('vg-all-developers', 'All Developers', 'ALL_DEVELOPERS', 'All developers in IT department', 'SYSTEM', NULL, 'ACTIVE', NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+TRUNCATE TABLE public.sys_virtual_groups CASCADE;
+
 INSERT INTO public.sys_virtual_groups VALUES ('vg-team-leads', 'Team Leaders', 'TEAM_LEADS', 'All team leaders', 'SYSTEM', NULL, 'ACTIVE', NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+TRUNCATE TABLE public.sys_virtual_groups CASCADE;
+
 INSERT INTO public.sys_virtual_groups VALUES ('vg-senior-devs', 'Senior Developers', 'SENIOR_DEVS', 'Senior developers with elevated permissions', 'SYSTEM', NULL, 'ACTIVE', NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+TRUNCATE TABLE public.sys_virtual_groups CASCADE;
+
 INSERT INTO public.sys_virtual_groups VALUES ('vg-approvers', 'Approvers', 'APPROVERS', 'Users who can approve workflow tasks', 'SYSTEM', NULL, 'ACTIVE', NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, NULL);
+
+TRUNCATE TABLE public.up_process_draft CASCADE;
 
 INSERT INTO public.up_process_draft VALUES (1, NULL, '2026-01-14 18:28:52.890224', '{}', 'fu-20260114-paed3z', '2026-01-14 18:28:58.058951', 'hr-specialist-001');
 
+TRUNCATE TABLE public.up_process_history CASCADE;
+
 INSERT INTO public.up_process_history VALUES (1, 'startEvent', '提交申请', 'startEvent', '发起流程', NULL, '2026-01-14 18:17:06.482421', 'SUBMIT', 'hr-manager-001', 'hr-manager-001', '2d7a16d2-f132-11f0-bfbd-f2dbc029a3c2', NULL);
+TRUNCATE TABLE public.up_process_history CASCADE;
+
 INSERT INTO public.up_process_history VALUES (2, 'startEvent', '提交申请', 'startEvent', '发起流程', NULL, '2026-01-14 18:26:35.943935', 'SUBMIT', 'hr-specialist-001', 'hr-specialist-001', '80f6a8ae-f133-11f0-bfbd-f2dbc029a3c2', NULL);
+TRUNCATE TABLE public.up_process_history CASCADE;
+
 INSERT INTO public.up_process_history VALUES (3, 'startEvent', '提交申请', 'startEvent', '发起流程', NULL, '2026-01-15 17:25:45.484127', 'SUBMIT', 'corp-manager-001', 'corp-manager-001', '2b89f1af-f1f4-11f0-bfbd-f2dbc029a3c2', NULL);
+TRUNCATE TABLE public.up_process_history CASCADE;
+
 INSERT INTO public.up_process_history VALUES (4, 'startEvent', '提交申请', 'startEvent', '发起流程', NULL, '2026-01-15 17:27:39.306082', 'SUBMIT', 'corp-manager-001', 'corp-manager-001', '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', NULL);
+TRUNCATE TABLE public.up_process_history CASCADE;
+
 INSERT INTO public.up_process_history VALUES (5, 'startEvent', '提交申请', 'startEvent', '发起流程', NULL, '2026-01-15 17:48:45.959692', 'SUBMIT', 'corp-manager-001', 'corp-manager-001', '6262709a-f1f7-11f0-bfbd-f2dbc029a3c2', NULL);
+TRUNCATE TABLE public.up_process_history CASCADE;
+
 INSERT INTO public.up_process_history VALUES (6, 'startEvent', '提交申请', 'startEvent', '发起流程', NULL, '2026-01-18 19:13:04.890486', 'SUBMIT', 'tech-director-001', 'tech-director-001', 'a8eeca2f-f45e-11f0-9035-568938879cb7', NULL);
+TRUNCATE TABLE public.up_process_history CASCADE;
+
 INSERT INTO public.up_process_history VALUES (7, 'startEvent', '提交申请', 'startEvent', '发起流程', NULL, '2026-01-19 17:04:24.144891', 'SUBMIT', 'purchase-requester-001', 'purchase-requester-001', 'd95d15d1-f515-11f0-83bf-1a46ed4020c1', NULL);
+TRUNCATE TABLE public.up_process_history CASCADE;
+
 INSERT INTO public.up_process_history VALUES (8, 'startEvent', '提交申请', 'startEvent', '发起流程', NULL, '2026-01-19 21:02:17.040895', 'SUBMIT', 'purchase-requester-001', 'purchase-requester-001', '14c1ffea-f537-11f0-83bf-1a46ed4020c1', NULL);
 
+TRUNCATE TABLE public.up_process_instance CASCADE;
+
 INSERT INTO public.up_process_instance VALUES ('80f6a8ae-f133-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL, NULL, NULL, 'Process_1:3:80f1788d-f133-11f0-bfbd-f2dbc029a3c2', 'fu-20260114-paed3z', 'Test', '2026-01-14 18:26:35.938646', 'hr-specialist-001', 'hr-specialist-001', 'RUNNING', '2026-01-14 18:26:35.938677', '{"initiator": "hr-specialist-001"}');
+TRUNCATE TABLE public.up_process_instance CASCADE;
+
 INSERT INTO public.up_process_instance VALUES ('2b89f1af-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL, '2026-01-15 17:26:04.377435', NULL, 'Process_1:5:2b85fa0e-f1f4-11f0-bfbd-f2dbc029a3c2', 'fu-20260114-paed3z', 'Test', '2026-01-15 17:25:45.474647', 'corp-manager-001', 'corp-manager-001', 'WITHDRAWN', '2026-01-15 17:26:04.378152', '{"initiator": "corp-manager-001"}');
+TRUNCATE TABLE public.up_process_instance CASCADE;
+
 INSERT INTO public.up_process_instance VALUES ('6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL, NULL, NULL, 'Process_1:7:6f5a7aaf-f1f4-11f0-bfbd-f2dbc029a3c2', 'fu-20260114-paed3z', 'Test', '2026-01-15 17:27:39.29767', 'corp-manager-001', 'corp-manager-001', 'RUNNING', '2026-01-15 17:27:39.297683', '{"initiator": "corp-manager-001", "Fq63mkdrn28vabc": "qqq", "Fxe2mkdrrp95ahc": null}');
+TRUNCATE TABLE public.up_process_instance CASCADE;
+
 INSERT INTO public.up_process_instance VALUES ('2d7a16d2-f132-11f0-bfbd-f2dbc029a3c2', NULL, NULL, 'hr-specialist-001', NULL, NULL, NULL, 'Process_1:2:2d6cf771-f132-11f0-bfbd-f2dbc029a3c2', 'fu-20260114-paed3z', 'Test', '2026-01-14 18:17:06.465951', 'hr-manager-001', 'hr-manager-001', 'RUNNING', '2026-01-15 17:29:28.664709', '{"initiator": "hr-manager-001"}');
+TRUNCATE TABLE public.up_process_instance CASCADE;
+
 INSERT INTO public.up_process_instance VALUES ('6262709a-f1f7-11f0-bfbd-f2dbc029a3c2', NULL, NULL, NULL, NULL, NULL, NULL, 'Process_1:9:625d6789-f1f7-11f0-bfbd-f2dbc029a3c2', 'fu-20260114-paed3z', 'Test', '2026-01-15 17:48:45.954394', 'corp-manager-001', 'corp-manager-001', 'RUNNING', '2026-01-15 17:48:45.954408', '{"initiator": "corp-manager-001"}');
+TRUNCATE TABLE public.up_process_instance CASCADE;
+
 INSERT INTO public.up_process_instance VALUES ('a8eeca2f-f45e-11f0-9035-568938879cb7', NULL, NULL, NULL, NULL, NULL, NULL, 'Process_1:10:a8e5062e-f45e-11f0-9035-568938879cb7', 'fu-20260114-paed3z', 'Test', '2026-01-18 19:13:04.874988', 'tech-director-001', 'tech-director-001', 'RUNNING', '2026-01-18 19:13:04.875028', '{"initiator": "tech-director-001"}');
+TRUNCATE TABLE public.up_process_instance CASCADE;
+
 INSERT INTO public.up_process_instance VALUES ('d95d15d1-f515-11f0-83bf-1a46ed4020c1', NULL, NULL, NULL, NULL, NULL, NULL, 'Process_1:11:d94fcf60-f515-11f0-83bf-1a46ed4020c1', 'fu-20260114-paed3z', 'Test', '2026-01-19 17:04:24.127749', 'purchase-requester-001', 'purchase-requester-001', 'RUNNING', '2026-01-19 17:04:24.127793', '{"initiator": "purchase-requester-001"}');
+TRUNCATE TABLE public.up_process_instance CASCADE;
+
 INSERT INTO public.up_process_instance VALUES ('14c1ffea-f537-11f0-83bf-1a46ed4020c1', NULL, NULL, NULL, NULL, NULL, NULL, 'Process_1:14:14bde139-f537-11f0-83bf-1a46ed4020c1', 'fu-20260114-paed3z', 'Test0', '2026-01-19 21:02:17.037053', 'purchase-requester-001', 'purchase-requester-001', 'RUNNING', '2026-01-19 21:02:17.037062', '{"initiator": "purchase-requester-001", "Fq63mkdrn28vabc": "ooo", "Fxe2mkdrrp95ahc": null}');
 
+TRUNCATE TABLE public.up_user_preference CASCADE;
+
 INSERT INTO public.up_user_preference VALUES (2, '2026-01-14 18:36:41.416461', 'YYYY-MM-DD', 'medium', 'zh-CN', 'normal', 20, 'light', '#DB0011', 'Asia/Shanghai', '2026-01-14 18:36:41.416484', 'hr-specialist-001');
+TRUNCATE TABLE public.up_user_preference CASCADE;
+
 INSERT INTO public.up_user_preference VALUES (3, '2026-01-15 17:58:54.449964', 'YYYY-MM-DD', 'medium', 'zh-CN', 'normal', 20, 'light', '#DB0011', 'Asia/Shanghai', '2026-01-15 17:58:54.45', 'corp-manager-001');
+TRUNCATE TABLE public.up_user_preference CASCADE;
+
 INSERT INTO public.up_user_preference VALUES (1, '2026-01-13 19:16:40.287002', 'YYYY-MM-DD', 'medium', 'zh-CN', 'normal', 20, 'light', '#0bdb00', 'Asia/Shanghai', '2026-01-16 18:15:59.757849', 'hr-manager-001');
 
+TRUNCATE TABLE public.wf_audit_logs CASCADE;
+
 INSERT INTO public.wf_audit_logs VALUES ('3281ca59-a268-4c84-94e9-751036554c12', NULL, NULL, 'ANONYMOUS', 'DEPLOY_PROCESS', NULL, '2026-01-14 17:20:32.742323', '{"name": null, "message": "流程部署成功", "success": true, "version": 1, "deploymentId": "46d79885-f12a-11f0-a8df-f2dbc029a3c2", "deploymentTime": "2026-01-14T17:20:32.83779", "processDefinitionId": "Process_1:1:46dca198-f12a-11f0-a8df-f2dbc029a3c2", "processDefinitionKey": "Pr*****_1"}', '{"arg0": {"key": "Pr*****_1", "name": "Test - main-process.bpmn", "bpmnXml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<bpmn:definitions xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:custom=\"http://custom.bpmn.io/schema\" id=\"Definitions_1\" targetNamespace=\"http://bpmn.io/schema/bpmn\">\n  <bpmn:process id=\"Process_1\" isExecutable=\"true\">\n    <bpmn:startEvent id=\"StartEvent_1\" name=\"开始\">\n      <bpmn:outgoing>Flow_1</bpmn:outgoing>\n    </bpmn:startEvent>\n    <bpmn:endEvent id=\"EndEvent_1\" name=\"结束\">\n      <bpmn:incoming>Flow_0i3mqga</bpmn:incoming>\n    </bpmn:endEvent>\n    <bpmn:sequenceFlow id=\"Flow_1\" sourceRef=\"StartEvent_1\" targetRef=\"Activity_09dh3z9\" />\n    <bpmn:userTask id=\"Activity_09dh3z9\">\n      <bpmn:extensionElements>\n        <custom:properties>\n          <custom:values name=\"formId\" value=\"7\" />\n          <custom:values name=\"formName\" value=\"testForm\" />\n          <custom:values name=\"formId\" value=\"7\" />\n          <custom:values name=\"formName\" value=\"testForm\" />\n          <custom:values name=\"formId\" value=\"7\" />\n          <custom:values name=\"formName\" value=\"testForm\" />\n          <custom:values name=\"assigneeType\" value=\"INITIATOR\" />\n          <custom:values name=\"assigneeValue\" value=\"\" />\n          <custom:values name=\"assigneeLabel\" value=\"流程发起人\" />\n          <custom:values name=\"candidateUsers\" value=\"\" />\n          <custom:values name=\"candidateGroups\" value=\"\" />\n        </custom:properties>\n      </bpmn:extensionElements>\n      <bpmn:incoming>Flow_1</bpmn:incoming>\n      <bpmn:outgoing>Flow_0un7hlh</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:sequenceFlow id=\"Flow_0un7hlh\" sourceRef=\"Activity_09dh3z9\" targetRef=\"Activity_0mvv5hc\" />\n    <bpmn:sequenceFlow id=\"Flow_0i3mqga\" sourceRef=\"Activity_0mvv5hc\" targetRef=\"EndEvent_1\" />\n    <bpmn:userTask id=\"Activity_0mvv5hc\">\n      <bpmn:extensionElements>\n        <custom:properties>\n          <custom:values name=\"assigneeType\" value=\"ENTITY_MANAGER\" />\n          <custom:values name=\"assigneeValue\" value=\"\" />\n          <custom:values name=\"assigneeLabel\" value=\"实体经理\" />\n          <custom:values name=\"candidateUsers\" value=\"Sarah Chen\" />\n          <custom:values name=\"candidateGroups\" value=\"\" />\n          <custom:values name=\"formId\" value=\"7\" />\n          <custom:values name=\"formName\" value=\"testForm\" />\n        </custom:properties>\n      </bpmn:extensionElements>\n      <bpmn:incoming>Flow_0un7hlh</bpmn:incoming>\n      <bpmn:outgoing>Flow_0i3mqga</bpmn:outgoing>\n    </bpmn:userTask>\n  </bpmn:process>\n  <bpmndi:BPMNDiagram id=\"BPMNDiagram_1\">\n    <bpmndi:BPMNPlane id=\"BPMNPlane_1\" bpmnElement=\"Process_1\">\n      <bpmndi:BPMNShape id=\"StartEvent_1_di\" bpmnElement=\"StartEvent_1\">\n        <dc:Bounds x=\"180\" y=\"160\" width=\"36\" height=\"36\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"187\" y=\"203\" width=\"22\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"EndEvent_1_di\" bpmnElement=\"EndEvent_1\">\n        <dc:Bounds x=\"692\" y=\"160\" width=\"36\" height=\"36\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"699\" y=\"203\" width=\"22\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Activity_112ju6j_di\" bpmnElement=\"Activity_09dh3z9\">\n        <dc:Bounds x=\"260\" y=\"138\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Activity_09ybfm7_di\" bpmnElement=\"Activity_0mvv5hc\">\n        <dc:Bounds x=\"410\" y=\"138\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNEdge id=\"Flow_1_di\" bpmnElement=\"Flow_1\">\n        <di:waypoint x=\"216\" y=\"178\" />\n        <di:waypoint x=\"260\" y=\"178\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_0un7hlh_di\" bpmnElement=\"Flow_0un7hlh\">\n        <di:waypoint x=\"360\" y=\"178\" />\n        <di:waypoint x=\"410\" y=\"178\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_0i3mqga_di\" bpmnElement=\"Flow_0i3mqga\">\n        <di:waypoint x=\"510\" y=\"178\" />\n        <di:waypoint x=\"692\" y=\"178\" />\n      </bpmndi:BPMNEdge>\n    </bpmndi:BPMNPlane>\n  </bpmndi:BPMNDiagram>\n</bpmn:definitions>\n", "activate": true, "category": null, "tenantId": null, "description": null}}', '{"className": "Pr******************nt", "methodName": "deployProcess"}', 1943, NULL, '127.0.0.1', false, '部署流程定义', 'SUCCESS', '9486e576-3fe6-488c-b98f-8e3aa0856895', 'UNKNOWN', NULL, 'PROCESS_DEFINITION', 'MEDIUM', NULL, NULL, '2026-01-14 17:20:32.838415', 'okhttp/4.12.0');
+TRUNCATE TABLE public.wf_audit_logs CASCADE;
+
 INSERT INTO public.wf_audit_logs VALUES ('d51379c3-8f5d-447f-950c-a8dba49c8804', NULL, NULL, 'ANONYMOUS', 'DEPLOY_PROCESS', NULL, '2026-01-14 18:17:05.952298', '{"name": null, "message": "流程部署成功", "success": true, "version": 2, "deploymentId": "2d5e787e-f132-11f0-bfbd-f2dbc029a3c2", "deploymentTime": "2026-01-14T18:17:06.138151", "processDefinitionId": "Process_1:2:2d6cf771-f132-11f0-bfbd-f2dbc029a3c2", "processDefinitionKey": "Pr*****_1"}', '{"arg0": {"key": "fu**************3z", "name": "Test", "bpmnXml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<bpmn:definitions xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:custom=\"http://custom.bpmn.io/schema\" id=\"Definitions_1\" targetNamespace=\"http://bpmn.io/schema/bpmn\">\n  <bpmn:process id=\"Process_1\" isExecutable=\"true\">\n    <bpmn:startEvent id=\"StartEvent_1\" name=\"开始\">\n      <bpmn:outgoing>Flow_1</bpmn:outgoing>\n    </bpmn:startEvent>\n    <bpmn:endEvent id=\"EndEvent_1\" name=\"结束\">\n      <bpmn:incoming>Flow_0i3mqga</bpmn:incoming>\n    </bpmn:endEvent>\n    <bpmn:sequenceFlow id=\"Flow_1\" sourceRef=\"StartEvent_1\" targetRef=\"Activity_09dh3z9\" />\n    <bpmn:userTask id=\"Activity_09dh3z9\">\n      <bpmn:extensionElements>\n        <custom:properties>\n          <custom:values name=\"formId\" value=\"7\" />\n          <custom:values name=\"formName\" value=\"testForm\" />\n          <custom:values name=\"formId\" value=\"7\" />\n          <custom:values name=\"formName\" value=\"testForm\" />\n          <custom:values name=\"formId\" value=\"7\" />\n          <custom:values name=\"formName\" value=\"testForm\" />\n          <custom:values name=\"assigneeType\" value=\"INITIATOR\" />\n          <custom:values name=\"assigneeValue\" value=\"\" />\n          <custom:values name=\"assigneeLabel\" value=\"流程发起人\" />\n          <custom:values name=\"candidateUsers\" value=\"\" />\n          <custom:values name=\"candidateGroups\" value=\"\" />\n        </custom:properties>\n      </bpmn:extensionElements>\n      <bpmn:incoming>Flow_1</bpmn:incoming>\n      <bpmn:outgoing>Flow_0un7hlh</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:sequenceFlow id=\"Flow_0un7hlh\" sourceRef=\"Activity_09dh3z9\" targetRef=\"Activity_0mvv5hc\" />\n    <bpmn:sequenceFlow id=\"Flow_0i3mqga\" sourceRef=\"Activity_0mvv5hc\" targetRef=\"EndEvent_1\" />\n    <bpmn:userTask id=\"Activity_0mvv5hc\">\n      <bpmn:extensionElements>\n        <custom:properties>\n          <custom:values name=\"assigneeType\" value=\"ENTITY_MANAGER\" />\n          <custom:values name=\"assigneeValue\" value=\"\" />\n          <custom:values name=\"assigneeLabel\" value=\"实体经理\" />\n          <custom:values name=\"candidateUsers\" value=\"Sarah Chen\" />\n          <custom:values name=\"candidateGroups\" value=\"\" />\n          <custom:values name=\"formId\" value=\"7\" />\n          <custom:values name=\"formName\" value=\"testForm\" />\n        </custom:properties>\n      </bpmn:extensionElements>\n      <bpmn:incoming>Flow_0un7hlh</bpmn:incoming>\n      <bpmn:outgoing>Flow_0i3mqga</bpmn:outgoing>\n    </bpmn:userTask>\n  </bpmn:process>\n  <bpmndi:BPMNDiagram id=\"BPMNDiagram_1\">\n    <bpmndi:BPMNPlane id=\"BPMNPlane_1\" bpmnElement=\"Process_1\">\n      <bpmndi:BPMNShape id=\"StartEvent_1_di\" bpmnElement=\"StartEvent_1\">\n        <dc:Bounds x=\"180\" y=\"160\" width=\"36\" height=\"36\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"187\" y=\"203\" width=\"22\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"EndEvent_1_di\" bpmnElement=\"EndEvent_1\">\n        <dc:Bounds x=\"692\" y=\"160\" width=\"36\" height=\"36\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"699\" y=\"203\" width=\"22\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Activity_112ju6j_di\" bpmnElement=\"Activity_09dh3z9\">\n        <dc:Bounds x=\"260\" y=\"138\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Activity_09ybfm7_di\" bpmnElement=\"Activity_0mvv5hc\">\n        <dc:Bounds x=\"410\" y=\"138\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNEdge id=\"Flow_1_di\" bpmnElement=\"Flow_1\">\n        <di:waypoint x=\"216\" y=\"178\" />\n        <di:waypoint x=\"260\" y=\"178\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_0un7hlh_di\" bpmnElement=\"Flow_0un7hlh\">\n        <di:waypoint x=\"360\" y=\"178\" />\n        <di:waypoint x=\"410\" y=\"178\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_0i3mqga_di\" bpmnElement=\"Flow_0i3mqga\">\n        <di:waypoint x=\"510\" y=\"178\" />\n        <di:waypoint x=\"692\" y=\"178\" />\n      </bpmndi:BPMNEdge>\n    </bpmndi:BPMNPlane>\n  </bpmndi:BPMNDiagram>\n</bpmn:definitions>\n", "activate": true, "category": null, "tenantId": null, "description": null}}', '{"className": "Pr******************nt", "methodName": "deployProcess"}', 1007, NULL, '127.0.0.1', false, '部署流程定义', 'SUCCESS', 'db4d261c-7b96-4feb-9bdf-1c94698086d8', 'UNKNOWN', NULL, 'PROCESS_DEFINITION', 'MEDIUM', NULL, NULL, '2026-01-14 18:17:06.138666', 'Java/17.0.17');
+TRUNCATE TABLE public.wf_audit_logs CASCADE;
+
 INSERT INTO public.wf_audit_logs VALUES ('5001f53c-b706-47c2-93a0-0183af2b7221', NULL, NULL, 'ANONYMOUS', 'START_PROCESS', NULL, '2026-01-14 18:17:06.215425', '{"name": null, "message": "流程实例启动成功", "success": true, "startTime": "2026-01-14T18:17:06.212", "variables": {"initiator": "hr-manager-001"}, "businessKey": null, "startUserId": "hr-manager-001", "processInstanceId": "2d7a16d2-f132-11f0-bfbd-f2dbc029a3c2", "processDefinitionId": "Process_1:2:2d6cf771-f132-11f0-bfbd-f2dbc029a3c2", "processDefinitionKey": "Pr*****_1"}', '{"arg0": {"tenantId": null, "variables": {"initiator": "hr-manager-001"}, "businessKey": null, "startUserId": "hr-manager-001", "processInstanceName": null, "processDefinitionKey": "Pr*****_1"}}', '{"className": "Pr******************nt", "methodName": "startProcess"}', 40, NULL, '127.0.0.1', false, '启动流程实例', 'SUCCESS', '361a5de7-a2f6-41f8-ab55-78dc9de0a9b0', 'UNKNOWN', NULL, 'PROCESS_INSTANCE', 'LOW', NULL, NULL, '2026-01-14 18:17:06.246257', 'Java/17.0.17');
+TRUNCATE TABLE public.wf_audit_logs CASCADE;
+
 INSERT INTO public.wf_audit_logs VALUES ('d845c616-0e43-4124-a6d2-ee1cc48854ee', NULL, NULL, 'ANONYMOUS', 'DEPLOY_PROCESS', NULL, '2026-01-14 18:26:35.680483', '{"name": null, "message": "流程部署成功", "success": true, "version": 3, "deploymentId": "80ec968a-f133-11f0-bfbd-f2dbc029a3c2", "deploymentTime": "2026-01-14T18:26:35.75205", "processDefinitionId": "Process_1:3:80f1788d-f133-11f0-bfbd-f2dbc029a3c2", "processDefinitionKey": "Pr*****_1"}', '{"arg0": {"key": "fu**************3z", "name": "Test", "bpmnXml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<bpmn:definitions xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:custom=\"http://custom.bpmn.io/schema\" id=\"Definitions_1\" targetNamespace=\"http://bpmn.io/schema/bpmn\">\n  <bpmn:process id=\"Process_1\" isExecutable=\"true\">\n    <bpmn:startEvent id=\"StartEvent_1\" name=\"开始\">\n      <bpmn:outgoing>Flow_1</bpmn:outgoing>\n    </bpmn:startEvent>\n    <bpmn:endEvent id=\"EndEvent_1\" name=\"结束\">\n      <bpmn:incoming>Flow_0i3mqga</bpmn:incoming>\n    </bpmn:endEvent>\n    <bpmn:sequenceFlow id=\"Flow_1\" sourceRef=\"StartEvent_1\" targetRef=\"Activity_09dh3z9\" />\n    <bpmn:userTask id=\"Activity_09dh3z9\">\n      <bpmn:extensionElements>\n        <custom:properties>\n          <custom:values name=\"formId\" value=\"7\" />\n          <custom:values name=\"formName\" value=\"testForm\" />\n          <custom:values name=\"formId\" value=\"7\" />\n          <custom:values name=\"formName\" value=\"testForm\" />\n          <custom:values name=\"formId\" value=\"7\" />\n          <custom:values name=\"formName\" value=\"testForm\" />\n          <custom:values name=\"assigneeType\" value=\"INITIATOR\" />\n          <custom:values name=\"assigneeValue\" value=\"\" />\n          <custom:values name=\"assigneeLabel\" value=\"流程发起人\" />\n          <custom:values name=\"candidateUsers\" value=\"\" />\n          <custom:values name=\"candidateGroups\" value=\"\" />\n        </custom:properties>\n      </bpmn:extensionElements>\n      <bpmn:incoming>Flow_1</bpmn:incoming>\n      <bpmn:outgoing>Flow_0un7hlh</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:sequenceFlow id=\"Flow_0un7hlh\" sourceRef=\"Activity_09dh3z9\" targetRef=\"Activity_0mvv5hc\" />\n    <bpmn:sequenceFlow id=\"Flow_0i3mqga\" sourceRef=\"Activity_0mvv5hc\" targetRef=\"EndEvent_1\" />\n    <bpmn:userTask id=\"Activity_0mvv5hc\">\n      <bpmn:extensionElements>\n        <custom:properties>\n          <custom:values name=\"assigneeType\" value=\"ENTITY_MANAGER\" />\n          <custom:values name=\"assigneeValue\" value=\"\" />\n          <custom:values name=\"assigneeLabel\" value=\"实体经理\" />\n          <custom:values name=\"candidateUsers\" value=\"Sarah Chen\" />\n          <custom:values name=\"candidateGroups\" value=\"\" />\n          <custom:values name=\"formId\" value=\"7\" />\n          <custom:values name=\"formName\" value=\"testForm\" />\n        </custom:properties>\n      </bpmn:extensionElements>\n      <bpmn:incoming>Flow_0un7hlh</bpmn:incoming>\n      <bpmn:outgoing>Flow_0i3mqga</bpmn:outgoing>\n    </bpmn:userTask>\n  </bpmn:process>\n  <bpmndi:BPMNDiagram id=\"BPMNDiagram_1\">\n    <bpmndi:BPMNPlane id=\"BPMNPlane_1\" bpmnElement=\"Process_1\">\n      <bpmndi:BPMNShape id=\"StartEvent_1_di\" bpmnElement=\"StartEvent_1\">\n        <dc:Bounds x=\"180\" y=\"160\" width=\"36\" height=\"36\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"187\" y=\"203\" width=\"22\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"EndEvent_1_di\" bpmnElement=\"EndEvent_1\">\n        <dc:Bounds x=\"692\" y=\"160\" width=\"36\" height=\"36\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"699\" y=\"203\" width=\"22\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Activity_112ju6j_di\" bpmnElement=\"Activity_09dh3z9\">\n        <dc:Bounds x=\"260\" y=\"138\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Activity_09ybfm7_di\" bpmnElement=\"Activity_0mvv5hc\">\n        <dc:Bounds x=\"410\" y=\"138\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNEdge id=\"Flow_1_di\" bpmnElement=\"Flow_1\">\n        <di:waypoint x=\"216\" y=\"178\" />\n        <di:waypoint x=\"260\" y=\"178\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_0un7hlh_di\" bpmnElement=\"Flow_0un7hlh\">\n        <di:waypoint x=\"360\" y=\"178\" />\n        <di:waypoint x=\"410\" y=\"178\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_0i3mqga_di\" bpmnElement=\"Flow_0i3mqga\">\n        <di:waypoint x=\"510\" y=\"178\" />\n        <di:waypoint x=\"692\" y=\"178\" />\n      </bpmndi:BPMNEdge>\n    </bpmndi:BPMNPlane>\n  </bpmndi:BPMNDiagram>\n</bpmn:definitions>\n", "activate": true, "category": null, "tenantId": null, "description": null}}', '{"className": "Pr******************nt", "methodName": "deployProcess"}', 126, NULL, '127.0.0.1', false, '部署流程定义', 'SUCCESS', '393145b4-ed81-41b9-ae40-7cee578fa4b7', 'UNKNOWN', NULL, 'PROCESS_DEFINITION', 'MEDIUM', NULL, NULL, '2026-01-14 18:26:35.752213', 'Java/17.0.17');
+TRUNCATE TABLE public.wf_audit_logs CASCADE;
+
 INSERT INTO public.wf_audit_logs VALUES ('0dfd7a66-a734-4168-81a2-c315bb41ffdd', NULL, NULL, 'ANONYMOUS', 'START_PROCESS', NULL, '2026-01-14 18:26:35.781841', '{"name": null, "message": "流程实例启动成功", "success": true, "startTime": "2026-01-14T18:26:35.776", "variables": {"initiator": "hr-specialist-001"}, "businessKey": null, "startUserId": "hr-specialist-001", "processInstanceId": "80f6a8ae-f133-11f0-bfbd-f2dbc029a3c2", "processDefinitionId": "Process_1:3:80f1788d-f133-11f0-bfbd-f2dbc029a3c2", "processDefinitionKey": "Pr*****_1"}', '{"arg0": {"tenantId": null, "variables": {"initiator": "hr-specialist-001"}, "businessKey": null, "startUserId": "hr-specialist-001", "processInstanceName": null, "processDefinitionKey": "Pr*****_1"}}', '{"className": "Pr******************nt", "methodName": "startProcess"}', 21, NULL, '127.0.0.1', false, '启动流程实例', 'SUCCESS', '03b4b826-d3b4-49a5-9f59-f373b82e6a9a', 'UNKNOWN', NULL, 'PROCESS_INSTANCE', 'LOW', NULL, NULL, '2026-01-14 18:26:35.793882', 'Java/17.0.17');
+TRUNCATE TABLE public.wf_audit_logs CASCADE;
+
 INSERT INTO public.wf_audit_logs VALUES ('b19724cb-977b-4aee-a628-9b947f358ba9', NULL, NULL, 'ANONYMOUS', 'DEPLOY_PROCESS', NULL, '2026-01-15 17:25:18.09932', '{"name": null, "message": "流程部署成功", "success": true, "version": 4, "deploymentId": "1b564cc3-f1f4-11f0-bfbd-f2dbc029a3c2", "deploymentTime": "2026-01-15T17:25:18.176975", "processDefinitionId": "Process_1:4:1b5a1d56-f1f4-11f0-bfbd-f2dbc029a3c2", "processDefinitionKey": "Pr*****_1"}', '{"arg0": {"key": "Pr*****_1", "name": "Test - main-process.bpmn", "bpmnXml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<bpmn:definitions xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:custom=\"http://custom.bpmn.io/schema\" id=\"Definitions_1\" targetNamespace=\"http://bpmn.io/schema/bpmn\">\n  <bpmn:process id=\"Process_1\" isExecutable=\"true\">\n    <bpmn:startEvent id=\"StartEvent_1\" name=\"开始\">\n      <bpmn:outgoing>Flow_1</bpmn:outgoing>\n    </bpmn:startEvent>\n    <bpmn:endEvent id=\"EndEvent_1\" name=\"结束\">\n      <bpmn:incoming>Flow_0i3mqga</bpmn:incoming>\n    </bpmn:endEvent>\n    <bpmn:sequenceFlow id=\"Flow_1\" sourceRef=\"StartEvent_1\" targetRef=\"Activity_09dh3z9\" />\n    <bpmn:userTask id=\"Activity_09dh3z9\">\n      <bpmn:extensionElements>\n        <custom:properties>\n          <custom:values name=\"formId\" value=\"7\" />\n          <custom:values name=\"formName\" value=\"testForm\" />\n          <custom:values name=\"formId\" value=\"7\" />\n          <custom:values name=\"formName\" value=\"testForm\" />\n          <custom:values name=\"formId\" value=\"7\" />\n          <custom:values name=\"formName\" value=\"testForm\" />\n          <custom:values name=\"assigneeType\" value=\"VIRTUAL_GROUP\" />\n          <custom:values name=\"assigneeValue\" value=\"vg-all-managers\" />\n          <custom:values name=\"assigneeLabel\" value=\"All Managers\" />\n          <custom:values name=\"candidateUsers\" value=\"\" />\n          <custom:values name=\"candidateGroups\" value=\"\" />\n        </custom:properties>\n      </bpmn:extensionElements>\n      <bpmn:incoming>Flow_1</bpmn:incoming>\n      <bpmn:outgoing>Flow_0un7hlh</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:sequenceFlow id=\"Flow_0un7hlh\" sourceRef=\"Activity_09dh3z9\" targetRef=\"Activity_0mvv5hc\" />\n    <bpmn:sequenceFlow id=\"Flow_0i3mqga\" sourceRef=\"Activity_0mvv5hc\" targetRef=\"EndEvent_1\" />\n    <bpmn:userTask id=\"Activity_0mvv5hc\">\n      <bpmn:extensionElements>\n        <custom:properties>\n          <custom:values name=\"assigneeType\" value=\"ENTITY_MANAGER\" />\n          <custom:values name=\"assigneeValue\" value=\"\" />\n          <custom:values name=\"assigneeLabel\" value=\"实体经理\" />\n          <custom:values name=\"candidateUsers\" value=\"Sarah Chen\" />\n          <custom:values name=\"candidateGroups\" value=\"\" />\n          <custom:values name=\"formId\" value=\"7\" />\n          <custom:values name=\"formName\" value=\"testForm\" />\n        </custom:properties>\n      </bpmn:extensionElements>\n      <bpmn:incoming>Flow_0un7hlh</bpmn:incoming>\n      <bpmn:outgoing>Flow_0i3mqga</bpmn:outgoing>\n    </bpmn:userTask>\n  </bpmn:process>\n  <bpmndi:BPMNDiagram id=\"BPMNDiagram_1\">\n    <bpmndi:BPMNPlane id=\"BPMNPlane_1\" bpmnElement=\"Process_1\">\n      <bpmndi:BPMNShape id=\"StartEvent_1_di\" bpmnElement=\"StartEvent_1\">\n        <dc:Bounds x=\"180\" y=\"160\" width=\"36\" height=\"36\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"187\" y=\"203\" width=\"22\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"EndEvent_1_di\" bpmnElement=\"EndEvent_1\">\n        <dc:Bounds x=\"692\" y=\"160\" width=\"36\" height=\"36\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"699\" y=\"203\" width=\"22\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Activity_112ju6j_di\" bpmnElement=\"Activity_09dh3z9\">\n        <dc:Bounds x=\"260\" y=\"138\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Activity_09ybfm7_di\" bpmnElement=\"Activity_0mvv5hc\">\n        <dc:Bounds x=\"410\" y=\"138\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNEdge id=\"Flow_1_di\" bpmnElement=\"Flow_1\">\n        <di:waypoint x=\"216\" y=\"178\" />\n        <di:waypoint x=\"260\" y=\"178\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_0un7hlh_di\" bpmnElement=\"Flow_0un7hlh\">\n        <di:waypoint x=\"360\" y=\"178\" />\n        <di:waypoint x=\"410\" y=\"178\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_0i3mqga_di\" bpmnElement=\"Flow_0i3mqga\">\n        <di:waypoint x=\"510\" y=\"178\" />\n        <di:waypoint x=\"692\" y=\"178\" />\n      </bpmndi:BPMNEdge>\n    </bpmndi:BPMNPlane>\n  </bpmndi:BPMNDiagram>\n</bpmn:definitions>\n", "activate": true, "category": null, "tenantId": null, "description": null}}', '{"className": "Pr******************nt", "methodName": "deployProcess"}', 112, NULL, '127.0.0.1', false, '部署流程定义', 'SUCCESS', 'ac1fa646-4338-4744-bb8d-fdbffac46287', 'UNKNOWN', NULL, 'PROCESS_DEFINITION', 'MEDIUM', NULL, NULL, '2026-01-15 17:25:18.177114', 'okhttp/4.12.0');
+TRUNCATE TABLE public.wf_audit_logs CASCADE;
+
 INSERT INTO public.wf_audit_logs VALUES ('f266dee0-e60e-4a74-b01e-27e10b357803', NULL, NULL, 'ANONYMOUS', 'DEPLOY_PROCESS', NULL, '2026-01-15 17:25:45.241655', '{"name": null, "message": "流程部署成功", "success": true, "version": 5, "deploymentId": "2b82026b-f1f4-11f0-bfbd-f2dbc029a3c2", "deploymentTime": "2026-01-15T17:25:45.31163", "processDefinitionId": "Process_1:5:2b85fa0e-f1f4-11f0-bfbd-f2dbc029a3c2", "processDefinitionKey": "Pr*****_1"}', '{"arg0": {"key": "fu**************3z", "name": "Test", "bpmnXml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<bpmn:definitions xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:custom=\"http://custom.bpmn.io/schema\" id=\"Definitions_1\" targetNamespace=\"http://bpmn.io/schema/bpmn\">\n  <bpmn:process id=\"Process_1\" isExecutable=\"true\">\n    <bpmn:startEvent id=\"StartEvent_1\" name=\"开始\">\n      <bpmn:outgoing>Flow_1</bpmn:outgoing>\n    </bpmn:startEvent>\n    <bpmn:endEvent id=\"EndEvent_1\" name=\"结束\">\n      <bpmn:incoming>Flow_0i3mqga</bpmn:incoming>\n    </bpmn:endEvent>\n    <bpmn:sequenceFlow id=\"Flow_1\" sourceRef=\"StartEvent_1\" targetRef=\"Activity_09dh3z9\" />\n    <bpmn:userTask id=\"Activity_09dh3z9\">\n      <bpmn:extensionElements>\n        <custom:properties>\n          <custom:values name=\"formId\" value=\"7\" />\n          <custom:values name=\"formName\" value=\"testForm\" />\n          <custom:values name=\"formId\" value=\"7\" />\n          <custom:values name=\"formName\" value=\"testForm\" />\n          <custom:values name=\"formId\" value=\"7\" />\n          <custom:values name=\"formName\" value=\"testForm\" />\n          <custom:values name=\"assigneeType\" value=\"VIRTUAL_GROUP\" />\n          <custom:values name=\"assigneeValue\" value=\"vg-all-managers\" />\n          <custom:values name=\"assigneeLabel\" value=\"All Managers\" />\n          <custom:values name=\"candidateUsers\" value=\"\" />\n          <custom:values name=\"candidateGroups\" value=\"\" />\n        </custom:properties>\n      </bpmn:extensionElements>\n      <bpmn:incoming>Flow_1</bpmn:incoming>\n      <bpmn:outgoing>Flow_0un7hlh</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:sequenceFlow id=\"Flow_0un7hlh\" sourceRef=\"Activity_09dh3z9\" targetRef=\"Activity_0mvv5hc\" />\n    <bpmn:sequenceFlow id=\"Flow_0i3mqga\" sourceRef=\"Activity_0mvv5hc\" targetRef=\"EndEvent_1\" />\n    <bpmn:userTask id=\"Activity_0mvv5hc\">\n      <bpmn:extensionElements>\n        <custom:properties>\n          <custom:values name=\"assigneeType\" value=\"ENTITY_MANAGER\" />\n          <custom:values name=\"assigneeValue\" value=\"\" />\n          <custom:values name=\"assigneeLabel\" value=\"实体经理\" />\n          <custom:values name=\"candidateUsers\" value=\"Sarah Chen\" />\n          <custom:values name=\"candidateGroups\" value=\"\" />\n          <custom:values name=\"formId\" value=\"7\" />\n          <custom:values name=\"formName\" value=\"testForm\" />\n        </custom:properties>\n      </bpmn:extensionElements>\n      <bpmn:incoming>Flow_0un7hlh</bpmn:incoming>\n      <bpmn:outgoing>Flow_0i3mqga</bpmn:outgoing>\n    </bpmn:userTask>\n  </bpmn:process>\n  <bpmndi:BPMNDiagram id=\"BPMNDiagram_1\">\n    <bpmndi:BPMNPlane id=\"BPMNPlane_1\" bpmnElement=\"Process_1\">\n      <bpmndi:BPMNShape id=\"StartEvent_1_di\" bpmnElement=\"StartEvent_1\">\n        <dc:Bounds x=\"180\" y=\"160\" width=\"36\" height=\"36\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"187\" y=\"203\" width=\"22\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"EndEvent_1_di\" bpmnElement=\"EndEvent_1\">\n        <dc:Bounds x=\"692\" y=\"160\" width=\"36\" height=\"36\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"699\" y=\"203\" width=\"22\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Activity_112ju6j_di\" bpmnElement=\"Activity_09dh3z9\">\n        <dc:Bounds x=\"260\" y=\"138\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Activity_09ybfm7_di\" bpmnElement=\"Activity_0mvv5hc\">\n        <dc:Bounds x=\"410\" y=\"138\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNEdge id=\"Flow_1_di\" bpmnElement=\"Flow_1\">\n        <di:waypoint x=\"216\" y=\"178\" />\n        <di:waypoint x=\"260\" y=\"178\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_0un7hlh_di\" bpmnElement=\"Flow_0un7hlh\">\n        <di:waypoint x=\"360\" y=\"178\" />\n        <di:waypoint x=\"410\" y=\"178\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_0i3mqga_di\" bpmnElement=\"Flow_0i3mqga\">\n        <di:waypoint x=\"510\" y=\"178\" />\n        <di:waypoint x=\"692\" y=\"178\" />\n      </bpmndi:BPMNEdge>\n    </bpmndi:BPMNPlane>\n  </bpmndi:BPMNDiagram>\n</bpmn:definitions>\n", "activate": true, "category": null, "tenantId": null, "description": null}}', '{"className": "Pr******************nt", "methodName": "deployProcess"}', 115, NULL, '127.0.0.1', false, '部署流程定义', 'SUCCESS', '07e0169b-c0f6-40ac-8ce0-53258e99e280', 'UNKNOWN', NULL, 'PROCESS_DEFINITION', 'MEDIUM', NULL, NULL, '2026-01-15 17:25:45.311711', 'Java/17.0.17');
+TRUNCATE TABLE public.wf_audit_logs CASCADE;
+
 INSERT INTO public.wf_audit_logs VALUES ('3a732f03-44b9-438d-8ed5-dd0f55fd4c31', NULL, NULL, 'ANONYMOUS', 'START_PROCESS', NULL, '2026-01-15 17:25:45.326757', '{"name": null, "message": "流程实例启动成功", "success": true, "startTime": "2026-01-15T17:25:45.326", "variables": {"initiator": "corp-manager-001"}, "businessKey": null, "startUserId": "corp-manager-001", "processInstanceId": "2b89f1af-f1f4-11f0-bfbd-f2dbc029a3c2", "processDefinitionId": "Process_1:5:2b85fa0e-f1f4-11f0-bfbd-f2dbc029a3c2", "processDefinitionKey": "Pr*****_1"}', '{"arg0": {"tenantId": null, "variables": {"initiator": "corp-manager-001"}, "businessKey": null, "startUserId": "corp-manager-001", "processInstanceName": null, "processDefinitionKey": "Pr*****_1"}}', '{"className": "Pr******************nt", "methodName": "startProcess"}', 27, NULL, '127.0.0.1', false, '启动流程实例', 'SUCCESS', 'ac9d763d-7b6b-4fb8-a43d-12dc39e1ec01', 'UNKNOWN', NULL, 'PROCESS_INSTANCE', 'LOW', NULL, NULL, '2026-01-15 17:25:45.351225', 'Java/17.0.17');
+TRUNCATE TABLE public.wf_audit_logs CASCADE;
+
 INSERT INTO public.wf_audit_logs VALUES ('20780d2b-45c9-4cf4-a8b8-99192dfeef5f', NULL, NULL, 'ANONYMOUS', 'DEPLOY_PROCESS', NULL, '2026-01-15 17:27:08.564207', '{"name": null, "message": "流程部署成功", "success": true, "version": 6, "deploymentId": "5d2adeb4-f1f4-11f0-bfbd-f2dbc029a3c2", "deploymentTime": "2026-01-15T17:27:08.620264", "processDefinitionId": "Process_1:6:5d2e8837-f1f4-11f0-bfbd-f2dbc029a3c2", "processDefinitionKey": "Pr*****_1"}', '{"arg0": {"key": "Pr*****_1", "name": "Test - main-process.bpmn", "bpmnXml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<bpmn:definitions xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:custom=\"http://custom.bpmn.io/schema\" id=\"Definitions_1\" targetNamespace=\"http://bpmn.io/schema/bpmn\">\n  <bpmn:process id=\"Process_1\" isExecutable=\"true\">\n    <bpmn:startEvent id=\"StartEvent_1\" name=\"开始\">\n      <bpmn:outgoing>Flow_1</bpmn:outgoing>\n    </bpmn:startEvent>\n    <bpmn:endEvent id=\"EndEvent_1\" name=\"结束\">\n      <bpmn:incoming>Flow_0i3mqga</bpmn:incoming>\n    </bpmn:endEvent>\n    <bpmn:sequenceFlow id=\"Flow_1\" sourceRef=\"StartEvent_1\" targetRef=\"Activity_09dh3z9\" />\n    <bpmn:userTask id=\"Activity_09dh3z9\">\n      <bpmn:extensionElements>\n        <custom:properties>\n          <custom:values name=\"formId\" value=\"7\" />\n          <custom:values name=\"formName\" value=\"testForm\" />\n          <custom:values name=\"formId\" value=\"7\" />\n          <custom:values name=\"formName\" value=\"testForm\" />\n          <custom:values name=\"formId\" value=\"7\" />\n          <custom:values name=\"formName\" value=\"testForm\" />\n          <custom:values name=\"assigneeType\" value=\"INITIATOR\" />\n          <custom:values name=\"assigneeValue\" value=\"\" />\n          <custom:values name=\"assigneeLabel\" value=\"流程发起人\" />\n          <custom:values name=\"candidateUsers\" value=\"\" />\n          <custom:values name=\"candidateGroups\" value=\"\" />\n        </custom:properties>\n      </bpmn:extensionElements>\n      <bpmn:incoming>Flow_1</bpmn:incoming>\n      <bpmn:outgoing>Flow_0un7hlh</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:sequenceFlow id=\"Flow_0un7hlh\" sourceRef=\"Activity_09dh3z9\" targetRef=\"Activity_0mvv5hc\" />\n    <bpmn:sequenceFlow id=\"Flow_0i3mqga\" sourceRef=\"Activity_0mvv5hc\" targetRef=\"EndEvent_1\" />\n    <bpmn:userTask id=\"Activity_0mvv5hc\">\n      <bpmn:extensionElements>\n        <custom:properties>\n          <custom:values name=\"assigneeType\" value=\"INITIATOR\" />\n          <custom:values name=\"assigneeValue\" value=\"\" />\n          <custom:values name=\"assigneeLabel\" value=\"流程发起人\" />\n          <custom:values name=\"candidateUsers\" value=\"\" />\n          <custom:values name=\"candidateGroups\" value=\"\" />\n          <custom:values name=\"formId\" value=\"7\" />\n          <custom:values name=\"formName\" value=\"testForm\" />\n        </custom:properties>\n      </bpmn:extensionElements>\n      <bpmn:incoming>Flow_0un7hlh</bpmn:incoming>\n      <bpmn:outgoing>Flow_0i3mqga</bpmn:outgoing>\n    </bpmn:userTask>\n  </bpmn:process>\n  <bpmndi:BPMNDiagram id=\"BPMNDiagram_1\">\n    <bpmndi:BPMNPlane id=\"BPMNPlane_1\" bpmnElement=\"Process_1\">\n      <bpmndi:BPMNShape id=\"StartEvent_1_di\" bpmnElement=\"StartEvent_1\">\n        <dc:Bounds x=\"180\" y=\"160\" width=\"36\" height=\"36\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"187\" y=\"203\" width=\"22\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"EndEvent_1_di\" bpmnElement=\"EndEvent_1\">\n        <dc:Bounds x=\"692\" y=\"160\" width=\"36\" height=\"36\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"699\" y=\"203\" width=\"22\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Activity_112ju6j_di\" bpmnElement=\"Activity_09dh3z9\">\n        <dc:Bounds x=\"260\" y=\"138\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Activity_09ybfm7_di\" bpmnElement=\"Activity_0mvv5hc\">\n        <dc:Bounds x=\"410\" y=\"138\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNEdge id=\"Flow_1_di\" bpmnElement=\"Flow_1\">\n        <di:waypoint x=\"216\" y=\"178\" />\n        <di:waypoint x=\"260\" y=\"178\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_0un7hlh_di\" bpmnElement=\"Flow_0un7hlh\">\n        <di:waypoint x=\"360\" y=\"178\" />\n        <di:waypoint x=\"410\" y=\"178\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_0i3mqga_di\" bpmnElement=\"Flow_0i3mqga\">\n        <di:waypoint x=\"510\" y=\"178\" />\n        <di:waypoint x=\"692\" y=\"178\" />\n      </bpmndi:BPMNEdge>\n    </bpmndi:BPMNPlane>\n  </bpmndi:BPMNDiagram>\n</bpmn:definitions>\n", "activate": true, "category": null, "tenantId": null, "description": null}}', '{"className": "Pr******************nt", "methodName": "deployProcess"}', 86, NULL, '127.0.0.1', false, '部署流程定义', 'SUCCESS', '3f4f992e-2db8-43f2-abef-3c0b6cbe32b1', 'UNKNOWN', NULL, 'PROCESS_DEFINITION', 'MEDIUM', NULL, NULL, '2026-01-15 17:27:08.620339', 'okhttp/4.12.0');
+TRUNCATE TABLE public.wf_audit_logs CASCADE;
+
 INSERT INTO public.wf_audit_logs VALUES ('32923204-0689-4848-8a3d-7051c2510b61', NULL, NULL, 'ANONYMOUS', 'DEPLOY_PROCESS', NULL, '2026-01-15 17:27:39.216743', '{"name": null, "message": "流程部署成功", "success": true, "version": 7, "deploymentId": "6f5634ec-f1f4-11f0-bfbd-f2dbc029a3c2", "deploymentTime": "2026-01-15T17:27:39.108842", "processDefinitionId": "Process_1:7:6f5a7aaf-f1f4-11f0-bfbd-f2dbc029a3c2", "processDefinitionKey": "Pr*****_1"}', '{"arg0": {"key": "fu**************3z", "name": "Test", "bpmnXml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<bpmn:definitions xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:custom=\"http://custom.bpmn.io/schema\" id=\"Definitions_1\" targetNamespace=\"http://bpmn.io/schema/bpmn\">\n  <bpmn:process id=\"Process_1\" isExecutable=\"true\">\n    <bpmn:startEvent id=\"StartEvent_1\" name=\"开始\">\n      <bpmn:outgoing>Flow_1</bpmn:outgoing>\n    </bpmn:startEvent>\n    <bpmn:endEvent id=\"EndEvent_1\" name=\"结束\">\n      <bpmn:incoming>Flow_0i3mqga</bpmn:incoming>\n    </bpmn:endEvent>\n    <bpmn:sequenceFlow id=\"Flow_1\" sourceRef=\"StartEvent_1\" targetRef=\"Activity_09dh3z9\" />\n    <bpmn:userTask id=\"Activity_09dh3z9\">\n      <bpmn:extensionElements>\n        <custom:properties>\n          <custom:values name=\"formId\" value=\"7\" />\n          <custom:values name=\"formName\" value=\"testForm\" />\n          <custom:values name=\"formId\" value=\"7\" />\n          <custom:values name=\"formName\" value=\"testForm\" />\n          <custom:values name=\"formId\" value=\"7\" />\n          <custom:values name=\"formName\" value=\"testForm\" />\n          <custom:values name=\"assigneeType\" value=\"INITIATOR\" />\n          <custom:values name=\"assigneeValue\" value=\"\" />\n          <custom:values name=\"assigneeLabel\" value=\"流程发起人\" />\n          <custom:values name=\"candidateUsers\" value=\"\" />\n          <custom:values name=\"candidateGroups\" value=\"\" />\n        </custom:properties>\n      </bpmn:extensionElements>\n      <bpmn:incoming>Flow_1</bpmn:incoming>\n      <bpmn:outgoing>Flow_0un7hlh</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:sequenceFlow id=\"Flow_0un7hlh\" sourceRef=\"Activity_09dh3z9\" targetRef=\"Activity_0mvv5hc\" />\n    <bpmn:sequenceFlow id=\"Flow_0i3mqga\" sourceRef=\"Activity_0mvv5hc\" targetRef=\"EndEvent_1\" />\n    <bpmn:userTask id=\"Activity_0mvv5hc\">\n      <bpmn:extensionElements>\n        <custom:properties>\n          <custom:values name=\"assigneeType\" value=\"INITIATOR\" />\n          <custom:values name=\"assigneeValue\" value=\"\" />\n          <custom:values name=\"assigneeLabel\" value=\"流程发起人\" />\n          <custom:values name=\"candidateUsers\" value=\"\" />\n          <custom:values name=\"candidateGroups\" value=\"\" />\n          <custom:values name=\"formId\" value=\"7\" />\n          <custom:values name=\"formName\" value=\"testForm\" />\n        </custom:properties>\n      </bpmn:extensionElements>\n      <bpmn:incoming>Flow_0un7hlh</bpmn:incoming>\n      <bpmn:outgoing>Flow_0i3mqga</bpmn:outgoing>\n    </bpmn:userTask>\n  </bpmn:process>\n  <bpmndi:BPMNDiagram id=\"BPMNDiagram_1\">\n    <bpmndi:BPMNPlane id=\"BPMNPlane_1\" bpmnElement=\"Process_1\">\n      <bpmndi:BPMNShape id=\"StartEvent_1_di\" bpmnElement=\"StartEvent_1\">\n        <dc:Bounds x=\"180\" y=\"160\" width=\"36\" height=\"36\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"187\" y=\"203\" width=\"22\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"EndEvent_1_di\" bpmnElement=\"EndEvent_1\">\n        <dc:Bounds x=\"692\" y=\"160\" width=\"36\" height=\"36\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"699\" y=\"203\" width=\"22\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Activity_112ju6j_di\" bpmnElement=\"Activity_09dh3z9\">\n        <dc:Bounds x=\"260\" y=\"138\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Activity_09ybfm7_di\" bpmnElement=\"Activity_0mvv5hc\">\n        <dc:Bounds x=\"410\" y=\"138\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNEdge id=\"Flow_1_di\" bpmnElement=\"Flow_1\">\n        <di:waypoint x=\"216\" y=\"178\" />\n        <di:waypoint x=\"260\" y=\"178\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_0un7hlh_di\" bpmnElement=\"Flow_0un7hlh\">\n        <di:waypoint x=\"360\" y=\"178\" />\n        <di:waypoint x=\"410\" y=\"178\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_0i3mqga_di\" bpmnElement=\"Flow_0i3mqga\">\n        <di:waypoint x=\"510\" y=\"178\" />\n        <di:waypoint x=\"692\" y=\"178\" />\n      </bpmndi:BPMNEdge>\n    </bpmndi:BPMNPlane>\n  </bpmndi:BPMNDiagram>\n</bpmn:definitions>\n", "activate": true, "category": null, "tenantId": null, "description": null}}', '{"className": "Pr******************nt", "methodName": "deployProcess"}', 127, NULL, '127.0.0.1', false, '部署流程定义', 'SUCCESS', '156dbdbd-334f-4e12-a0be-bc2fc9043f18', 'UNKNOWN', NULL, 'PROCESS_DEFINITION', 'MEDIUM', NULL, NULL, '2026-01-15 17:27:39.108938', 'Java/17.0.17');
+TRUNCATE TABLE public.wf_audit_logs CASCADE;
+
 INSERT INTO public.wf_audit_logs VALUES ('6e9e94db-2e9a-43d8-9769-1aaddf63d70e', NULL, NULL, 'ANONYMOUS', 'START_PROCESS', NULL, '2026-01-15 17:27:39.323691', '{"name": null, "message": "流程实例启动成功", "success": true, "startTime": "2026-01-15T17:27:39.133", "variables": {"initiator": "corp-manager-001", "Fq63mkdrn28vabc": "qqq", "Fxe2mkdrrp95ahc": null}, "businessKey": null, "startUserId": "corp-manager-001", "processInstanceId": "6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2", "processDefinitionId": "Process_1:7:6f5a7aaf-f1f4-11f0-bfbd-f2dbc029a3c2", "processDefinitionKey": "Pr*****_1"}', '{"arg0": {"tenantId": null, "variables": {"initiator": "corp-manager-001", "Fq63mkdrn28vabc": "qqq", "Fxe2mkdrrp95ahc": null}, "businessKey": null, "startUserId": "corp-manager-001", "processInstanceName": null, "processDefinitionKey": "Pr*****_1"}}', '{"className": "Pr******************nt", "methodName": "startProcess"}', 32, NULL, '127.0.0.1', false, '启动流程实例', 'SUCCESS', '31b8c1b9-2111-4f27-9d35-6400d33ea3d9', 'UNKNOWN', NULL, 'PROCESS_INSTANCE', 'LOW', NULL, NULL, '2026-01-15 17:27:39.161541', 'Java/17.0.17');
+TRUNCATE TABLE public.wf_audit_logs CASCADE;
+
 INSERT INTO public.wf_audit_logs VALUES ('5d1b3e99-efc0-45e7-b229-fe9ea48962d1', NULL, NULL, 'ANONYMOUS', 'DEPLOY_PROCESS', NULL, '2026-01-15 17:36:04.061697', '{"name": null, "message": "流程部署成功", "success": true, "version": 8, "deploymentId": "9c5df45e-f1f5-11f0-bfbd-f2dbc029a3c2", "deploymentTime": "2026-01-15T17:36:04.147301", "processDefinitionId": "Process_1:8:9c614fc1-f1f5-11f0-bfbd-f2dbc029a3c2", "processDefinitionKey": "Pr*****_1"}', '{"arg0": {"key": "Pr*****_1", "name": "Test - main-process.bpmn", "bpmnXml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<bpmn:definitions xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:custom=\"http://custom.bpmn.io/schema\" id=\"Definitions_1\" targetNamespace=\"http://bpmn.io/schema/bpmn\">\n  <bpmn:process id=\"Process_1\" isExecutable=\"true\">\n    <bpmn:startEvent id=\"StartEvent_1\" name=\"开始\">\n      <bpmn:outgoing>Flow_1</bpmn:outgoing>\n    </bpmn:startEvent>\n    <bpmn:endEvent id=\"EndEvent_1\" name=\"结束\">\n      <bpmn:incoming>Flow_0i3mqga</bpmn:incoming>\n    </bpmn:endEvent>\n    <bpmn:sequenceFlow id=\"Flow_1\" sourceRef=\"StartEvent_1\" targetRef=\"Activity_09dh3z9\" />\n    <bpmn:userTask id=\"Activity_09dh3z9\">\n      <bpmn:extensionElements>\n        <custom:properties>\n          <custom:values name=\"formId\" value=\"7\" />\n          <custom:values name=\"formName\" value=\"testForm\" />\n          <custom:values name=\"formId\" value=\"7\" />\n          <custom:values name=\"formName\" value=\"testForm\" />\n          <custom:values name=\"formId\" value=\"7\" />\n          <custom:values name=\"formName\" value=\"testForm\" />\n          <custom:values name=\"assigneeType\" value=\"FIXED_DEPT\" />\n          <custom:values name=\"assigneeValue\" value=\"DEPT-HR\" />\n          <custom:values name=\"assigneeLabel\" value=\"Human Resources\" />\n          <custom:values name=\"candidateUsers\" value=\"\" />\n          <custom:values name=\"candidateGroups\" value=\"\" />\n        </custom:properties>\n      </bpmn:extensionElements>\n      <bpmn:incoming>Flow_1</bpmn:incoming>\n      <bpmn:outgoing>Flow_0un7hlh</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:sequenceFlow id=\"Flow_0un7hlh\" sourceRef=\"Activity_09dh3z9\" targetRef=\"Activity_0mvv5hc\" />\n    <bpmn:sequenceFlow id=\"Flow_0i3mqga\" sourceRef=\"Activity_0mvv5hc\" targetRef=\"EndEvent_1\" />\n    <bpmn:userTask id=\"Activity_0mvv5hc\">\n      <bpmn:extensionElements>\n        <custom:properties>\n          <custom:values name=\"assigneeType\" value=\"FIXED_DEPT\" />\n          <custom:values name=\"assigneeValue\" value=\"DEPT-CORP-BANKING\" />\n          <custom:values name=\"assigneeLabel\" value=\"Corporate Banking\" />\n          <custom:values name=\"candidateUsers\" value=\"\" />\n          <custom:values name=\"candidateGroups\" value=\"\" />\n          <custom:values name=\"formId\" value=\"7\" />\n          <custom:values name=\"formName\" value=\"testForm\" />\n        </custom:properties>\n      </bpmn:extensionElements>\n      <bpmn:incoming>Flow_0un7hlh</bpmn:incoming>\n      <bpmn:outgoing>Flow_0i3mqga</bpmn:outgoing>\n    </bpmn:userTask>\n  </bpmn:process>\n  <bpmndi:BPMNDiagram id=\"BPMNDiagram_1\">\n    <bpmndi:BPMNPlane id=\"BPMNPlane_1\" bpmnElement=\"Process_1\">\n      <bpmndi:BPMNShape id=\"StartEvent_1_di\" bpmnElement=\"StartEvent_1\">\n        <dc:Bounds x=\"180\" y=\"160\" width=\"36\" height=\"36\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"187\" y=\"203\" width=\"22\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"EndEvent_1_di\" bpmnElement=\"EndEvent_1\">\n        <dc:Bounds x=\"692\" y=\"160\" width=\"36\" height=\"36\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"699\" y=\"203\" width=\"22\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Activity_112ju6j_di\" bpmnElement=\"Activity_09dh3z9\">\n        <dc:Bounds x=\"260\" y=\"138\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Activity_09ybfm7_di\" bpmnElement=\"Activity_0mvv5hc\">\n        <dc:Bounds x=\"410\" y=\"138\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNEdge id=\"Flow_1_di\" bpmnElement=\"Flow_1\">\n        <di:waypoint x=\"216\" y=\"178\" />\n        <di:waypoint x=\"260\" y=\"178\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_0un7hlh_di\" bpmnElement=\"Flow_0un7hlh\">\n        <di:waypoint x=\"360\" y=\"178\" />\n        <di:waypoint x=\"410\" y=\"178\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_0i3mqga_di\" bpmnElement=\"Flow_0i3mqga\">\n        <di:waypoint x=\"510\" y=\"178\" />\n        <di:waypoint x=\"692\" y=\"178\" />\n      </bpmndi:BPMNEdge>\n    </bpmndi:BPMNPlane>\n  </bpmndi:BPMNDiagram>\n</bpmn:definitions>\n", "activate": true, "category": null, "tenantId": null, "description": null}}', '{"className": "Pr******************nt", "methodName": "deployProcess"}', 124, NULL, '127.0.0.1', false, '部署流程定义', 'SUCCESS', '03f315e5-c9d1-43f3-b816-f77113aab267', 'UNKNOWN', NULL, 'PROCESS_DEFINITION', 'MEDIUM', NULL, NULL, '2026-01-15 17:36:04.147408', 'okhttp/4.12.0');
+TRUNCATE TABLE public.wf_audit_logs CASCADE;
+
 INSERT INTO public.wf_audit_logs VALUES ('357087ae-858d-49d9-bd9b-e0c48b88b0c4', NULL, NULL, 'ANONYMOUS', 'DEPLOY_PROCESS', NULL, '2026-01-15 17:48:45.716062', '{"name": null, "message": "流程部署成功", "success": true, "version": 9, "deploymentId": "6259be06-f1f7-11f0-bfbd-f2dbc029a3c2", "deploymentTime": "2026-01-15T17:48:45.811015", "processDefinitionId": "Process_1:9:625d6789-f1f7-11f0-bfbd-f2dbc029a3c2", "processDefinitionKey": "Pr*****_1"}', '{"arg0": {"key": "fu**************3z", "name": "Test", "bpmnXml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<bpmn:definitions xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:custom=\"http://custom.bpmn.io/schema\" id=\"Definitions_1\" targetNamespace=\"http://bpmn.io/schema/bpmn\">\n  <bpmn:process id=\"Process_1\" isExecutable=\"true\">\n    <bpmn:startEvent id=\"StartEvent_1\" name=\"开始\">\n      <bpmn:outgoing>Flow_1</bpmn:outgoing>\n    </bpmn:startEvent>\n    <bpmn:endEvent id=\"EndEvent_1\" name=\"结束\">\n      <bpmn:incoming>Flow_0i3mqga</bpmn:incoming>\n    </bpmn:endEvent>\n    <bpmn:sequenceFlow id=\"Flow_1\" sourceRef=\"StartEvent_1\" targetRef=\"Activity_09dh3z9\" />\n    <bpmn:userTask id=\"Activity_09dh3z9\">\n      <bpmn:extensionElements>\n        <custom:properties>\n          <custom:values name=\"formId\" value=\"7\" />\n          <custom:values name=\"formName\" value=\"testForm\" />\n          <custom:values name=\"formId\" value=\"7\" />\n          <custom:values name=\"formName\" value=\"testForm\" />\n          <custom:values name=\"formId\" value=\"7\" />\n          <custom:values name=\"formName\" value=\"testForm\" />\n          <custom:values name=\"assigneeType\" value=\"FIXED_DEPT\" />\n          <custom:values name=\"assigneeValue\" value=\"DEPT-HR\" />\n          <custom:values name=\"assigneeLabel\" value=\"Human Resources\" />\n          <custom:values name=\"candidateUsers\" value=\"\" />\n          <custom:values name=\"candidateGroups\" value=\"\" />\n        </custom:properties>\n      </bpmn:extensionElements>\n      <bpmn:incoming>Flow_1</bpmn:incoming>\n      <bpmn:outgoing>Flow_0un7hlh</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:sequenceFlow id=\"Flow_0un7hlh\" sourceRef=\"Activity_09dh3z9\" targetRef=\"Activity_0mvv5hc\" />\n    <bpmn:sequenceFlow id=\"Flow_0i3mqga\" sourceRef=\"Activity_0mvv5hc\" targetRef=\"EndEvent_1\" />\n    <bpmn:userTask id=\"Activity_0mvv5hc\">\n      <bpmn:extensionElements>\n        <custom:properties>\n          <custom:values name=\"assigneeType\" value=\"FIXED_DEPT\" />\n          <custom:values name=\"assigneeValue\" value=\"DEPT-CORP-BANKING\" />\n          <custom:values name=\"assigneeLabel\" value=\"Corporate Banking\" />\n          <custom:values name=\"candidateUsers\" value=\"\" />\n          <custom:values name=\"candidateGroups\" value=\"\" />\n          <custom:values name=\"formId\" value=\"7\" />\n          <custom:values name=\"formName\" value=\"testForm\" />\n        </custom:properties>\n      </bpmn:extensionElements>\n      <bpmn:incoming>Flow_0un7hlh</bpmn:incoming>\n      <bpmn:outgoing>Flow_0i3mqga</bpmn:outgoing>\n    </bpmn:userTask>\n  </bpmn:process>\n  <bpmndi:BPMNDiagram id=\"BPMNDiagram_1\">\n    <bpmndi:BPMNPlane id=\"BPMNPlane_1\" bpmnElement=\"Process_1\">\n      <bpmndi:BPMNShape id=\"StartEvent_1_di\" bpmnElement=\"StartEvent_1\">\n        <dc:Bounds x=\"180\" y=\"160\" width=\"36\" height=\"36\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"187\" y=\"203\" width=\"22\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"EndEvent_1_di\" bpmnElement=\"EndEvent_1\">\n        <dc:Bounds x=\"692\" y=\"160\" width=\"36\" height=\"36\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"699\" y=\"203\" width=\"22\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Activity_112ju6j_di\" bpmnElement=\"Activity_09dh3z9\">\n        <dc:Bounds x=\"260\" y=\"138\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Activity_09ybfm7_di\" bpmnElement=\"Activity_0mvv5hc\">\n        <dc:Bounds x=\"410\" y=\"138\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNEdge id=\"Flow_1_di\" bpmnElement=\"Flow_1\">\n        <di:waypoint x=\"216\" y=\"178\" />\n        <di:waypoint x=\"260\" y=\"178\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_0un7hlh_di\" bpmnElement=\"Flow_0un7hlh\">\n        <di:waypoint x=\"360\" y=\"178\" />\n        <di:waypoint x=\"410\" y=\"178\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_0i3mqga_di\" bpmnElement=\"Flow_0i3mqga\">\n        <di:waypoint x=\"510\" y=\"178\" />\n        <di:waypoint x=\"692\" y=\"178\" />\n      </bpmndi:BPMNEdge>\n    </bpmndi:BPMNPlane>\n  </bpmndi:BPMNDiagram>\n</bpmn:definitions>\n", "activate": true, "category": null, "tenantId": null, "description": null}}', '{"className": "Pr******************nt", "methodName": "deployProcess"}', 125, NULL, '127.0.0.1', false, '部署流程定义', 'SUCCESS', '552b88ff-cf37-4052-9e96-2dbd23b3c14a', 'UNKNOWN', NULL, 'PROCESS_DEFINITION', 'MEDIUM', NULL, NULL, '2026-01-15 17:48:45.81118', 'Java/17.0.17');
+TRUNCATE TABLE public.wf_audit_logs CASCADE;
+
 INSERT INTO public.wf_audit_logs VALUES ('58c7ac8b-3860-45ef-a5d2-09a946e51ff6', NULL, NULL, 'ANONYMOUS', 'START_PROCESS', NULL, '2026-01-15 17:48:45.829987', '{"name": null, "message": "流程实例启动成功", "success": true, "startTime": "2026-01-15T17:48:45.832", "variables": {"initiator": "corp-manager-001"}, "businessKey": null, "startUserId": "corp-manager-001", "processInstanceId": "6262709a-f1f7-11f0-bfbd-f2dbc029a3c2", "processDefinitionId": "Process_1:9:625d6789-f1f7-11f0-bfbd-f2dbc029a3c2", "processDefinitionKey": "Pr*****_1"}', '{"arg0": {"tenantId": null, "variables": {"initiator": "corp-manager-001"}, "businessKey": null, "startUserId": "corp-manager-001", "processInstanceName": null, "processDefinitionKey": "Pr*****_1"}}', '{"className": "Pr******************nt", "methodName": "startProcess"}', 24, NULL, '127.0.0.1', false, '启动流程实例', 'SUCCESS', 'c9a1bcd5-5b0d-4e4d-a483-1360b8dbf601', 'UNKNOWN', NULL, 'PROCESS_INSTANCE', 'LOW', NULL, NULL, '2026-01-15 17:48:45.853196', 'Java/17.0.17');
+TRUNCATE TABLE public.wf_audit_logs CASCADE;
+
 INSERT INTO public.wf_audit_logs VALUES ('d505e78e-ef00-40f9-b554-5a2843a3ae80', NULL, NULL, 'ANONYMOUS', 'DEPLOY_PROCESS', NULL, '2026-01-18 19:13:04.510975', '{"name": null, "message": "流程部署成功", "success": true, "version": 10, "deploymentId": "a8dffd1b-f45e-11f0-9035-568938879cb7", "deploymentTime": "2026-01-18T19:13:04.626201", "processDefinitionId": "Process_1:10:a8e5062e-f45e-11f0-9035-568938879cb7", "processDefinitionKey": "Pr*****_1"}', '{"arg0": {"key": "fu**************3z", "name": "Test", "bpmnXml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<bpmn:definitions xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:custom=\"http://custom.bpmn.io/schema\" id=\"Definitions_1\" targetNamespace=\"http://bpmn.io/schema/bpmn\">\n  <bpmn:process id=\"Process_1\" isExecutable=\"true\">\n    <bpmn:startEvent id=\"StartEvent_1\" name=\"开始\">\n      <bpmn:outgoing>Flow_1</bpmn:outgoing>\n    </bpmn:startEvent>\n    <bpmn:endEvent id=\"EndEvent_1\" name=\"结束\">\n      <bpmn:incoming>Flow_0i3mqga</bpmn:incoming>\n    </bpmn:endEvent>\n    <bpmn:sequenceFlow id=\"Flow_1\" sourceRef=\"StartEvent_1\" targetRef=\"Activity_09dh3z9\" />\n    <bpmn:userTask id=\"Activity_09dh3z9\">\n      <bpmn:extensionElements>\n        <custom:properties>\n          <custom:values name=\"formId\" value=\"7\" />\n          <custom:values name=\"formName\" value=\"testForm\" />\n          <custom:values name=\"formId\" value=\"7\" />\n          <custom:values name=\"formName\" value=\"testForm\" />\n          <custom:values name=\"formId\" value=\"7\" />\n          <custom:values name=\"formName\" value=\"testForm\" />\n          <custom:values name=\"assigneeType\" value=\"FIXED_DEPT\" />\n          <custom:values name=\"assigneeValue\" value=\"DEPT-HR\" />\n          <custom:values name=\"assigneeLabel\" value=\"Human Resources\" />\n          <custom:values name=\"candidateUsers\" value=\"\" />\n          <custom:values name=\"candidateGroups\" value=\"\" />\n        </custom:properties>\n      </bpmn:extensionElements>\n      <bpmn:incoming>Flow_1</bpmn:incoming>\n      <bpmn:outgoing>Flow_0un7hlh</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:sequenceFlow id=\"Flow_0un7hlh\" sourceRef=\"Activity_09dh3z9\" targetRef=\"Activity_0mvv5hc\" />\n    <bpmn:sequenceFlow id=\"Flow_0i3mqga\" sourceRef=\"Activity_0mvv5hc\" targetRef=\"EndEvent_1\" />\n    <bpmn:userTask id=\"Activity_0mvv5hc\">\n      <bpmn:extensionElements>\n        <custom:properties>\n          <custom:values name=\"assigneeType\" value=\"FIXED_DEPT\" />\n          <custom:values name=\"assigneeValue\" value=\"DEPT-CORP-BANKING\" />\n          <custom:values name=\"assigneeLabel\" value=\"Corporate Banking\" />\n          <custom:values name=\"candidateUsers\" value=\"\" />\n          <custom:values name=\"candidateGroups\" value=\"\" />\n          <custom:values name=\"formId\" value=\"7\" />\n          <custom:values name=\"formName\" value=\"testForm\" />\n        </custom:properties>\n      </bpmn:extensionElements>\n      <bpmn:incoming>Flow_0un7hlh</bpmn:incoming>\n      <bpmn:outgoing>Flow_0i3mqga</bpmn:outgoing>\n    </bpmn:userTask>\n  </bpmn:process>\n  <bpmndi:BPMNDiagram id=\"BPMNDiagram_1\">\n    <bpmndi:BPMNPlane id=\"BPMNPlane_1\" bpmnElement=\"Process_1\">\n      <bpmndi:BPMNShape id=\"StartEvent_1_di\" bpmnElement=\"StartEvent_1\">\n        <dc:Bounds x=\"180\" y=\"160\" width=\"36\" height=\"36\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"187\" y=\"203\" width=\"22\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"EndEvent_1_di\" bpmnElement=\"EndEvent_1\">\n        <dc:Bounds x=\"692\" y=\"160\" width=\"36\" height=\"36\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"699\" y=\"203\" width=\"22\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Activity_112ju6j_di\" bpmnElement=\"Activity_09dh3z9\">\n        <dc:Bounds x=\"260\" y=\"138\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Activity_09ybfm7_di\" bpmnElement=\"Activity_0mvv5hc\">\n        <dc:Bounds x=\"410\" y=\"138\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNEdge id=\"Flow_1_di\" bpmnElement=\"Flow_1\">\n        <di:waypoint x=\"216\" y=\"178\" />\n        <di:waypoint x=\"260\" y=\"178\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_0un7hlh_di\" bpmnElement=\"Flow_0un7hlh\">\n        <di:waypoint x=\"360\" y=\"178\" />\n        <di:waypoint x=\"410\" y=\"178\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_0i3mqga_di\" bpmnElement=\"Flow_0i3mqga\">\n        <di:waypoint x=\"510\" y=\"178\" />\n        <di:waypoint x=\"692\" y=\"178\" />\n      </bpmndi:BPMNEdge>\n    </bpmndi:BPMNPlane>\n  </bpmndi:BPMNDiagram>\n</bpmn:definitions>\n", "activate": true, "category": null, "tenantId": null, "description": null}}', '{"className": "Pr******************nt", "methodName": "deployProcess"}', 850, NULL, '127.0.0.1', false, '部署流程定义', 'SUCCESS', 'cfa87dab-a1c4-47a3-89fa-d45a4259e576', 'UNKNOWN', NULL, 'PROCESS_DEFINITION', 'MEDIUM', NULL, NULL, '2026-01-18 19:13:04.626685', 'Java/17.0.17');
+TRUNCATE TABLE public.wf_audit_logs CASCADE;
+
 INSERT INTO public.wf_audit_logs VALUES ('e6ce6652-385b-4573-88d9-48964f8c44dd', NULL, NULL, 'ANONYMOUS', 'START_PROCESS', NULL, '2026-01-18 19:13:04.677331', '{"name": null, "message": "流程实例启动成功", "success": true, "startTime": "2026-01-18T19:13:04.681", "variables": {"initiator": "tech-director-001"}, "businessKey": null, "startUserId": "tech-director-001", "processInstanceId": "a8eeca2f-f45e-11f0-9035-568938879cb7", "processDefinitionId": "Process_1:10:a8e5062e-f45e-11f0-9035-568938879cb7", "processDefinitionKey": "Pr*****_1"}', '{"arg0": {"tenantId": null, "variables": {"initiator": "tech-director-001"}, "businessKey": null, "startUserId": "tech-director-001", "processInstanceName": null, "processDefinitionKey": "Pr*****_1"}}', '{"className": "Pr******************nt", "methodName": "startProcess"}', 35, NULL, '127.0.0.1', false, '启动流程实例', 'SUCCESS', 'dca6e51a-53a0-478f-8bfb-c9485cfd1fc2', 'UNKNOWN', NULL, 'PROCESS_INSTANCE', 'LOW', NULL, NULL, '2026-01-18 19:13:04.710944', 'Java/17.0.17');
+TRUNCATE TABLE public.wf_audit_logs CASCADE;
+
 INSERT INTO public.wf_audit_logs VALUES ('9dacf126-15b2-4fad-9155-766bbc02a98c', NULL, NULL, 'ANONYMOUS', 'DEPLOY_PROCESS', NULL, '2026-01-19 17:04:23.637554', '{"name": null, "message": "流程部署成功", "success": true, "version": 11, "deploymentId": "d94ac64d-f515-11f0-83bf-1a46ed4020c1", "deploymentTime": "2026-01-19T17:04:23.760089", "processDefinitionId": "Process_1:11:d94fcf60-f515-11f0-83bf-1a46ed4020c1", "processDefinitionKey": "Pr*****_1"}', '{"arg0": {"key": "fu**************3z", "name": "Test", "bpmnXml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<bpmn:definitions xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:custom=\"http://custom.bpmn.io/schema\" id=\"Definitions_1\" targetNamespace=\"http://bpmn.io/schema/bpmn\">\n  <bpmn:process id=\"Process_1\" isExecutable=\"true\">\n    <bpmn:startEvent id=\"StartEvent_1\" name=\"开始\">\n      <bpmn:outgoing>Flow_1</bpmn:outgoing>\n    </bpmn:startEvent>\n    <bpmn:endEvent id=\"EndEvent_1\" name=\"结束\">\n      <bpmn:incoming>Flow_0i3mqga</bpmn:incoming>\n    </bpmn:endEvent>\n    <bpmn:sequenceFlow id=\"Flow_1\" sourceRef=\"StartEvent_1\" targetRef=\"Activity_09dh3z9\" />\n    <bpmn:userTask id=\"Activity_09dh3z9\">\n      <bpmn:extensionElements>\n        <custom:properties>\n          <custom:values name=\"formId\" value=\"7\" />\n          <custom:values name=\"formName\" value=\"testForm\" />\n          <custom:values name=\"formId\" value=\"7\" />\n          <custom:values name=\"formName\" value=\"testForm\" />\n          <custom:values name=\"formId\" value=\"7\" />\n          <custom:values name=\"formName\" value=\"testForm\" />\n          <custom:values name=\"assigneeType\" value=\"FIXED_DEPT\" />\n          <custom:values name=\"assigneeValue\" value=\"DEPT-HR\" />\n          <custom:values name=\"assigneeLabel\" value=\"Human Resources\" />\n          <custom:values name=\"candidateUsers\" value=\"\" />\n          <custom:values name=\"candidateGroups\" value=\"\" />\n        </custom:properties>\n      </bpmn:extensionElements>\n      <bpmn:incoming>Flow_1</bpmn:incoming>\n      <bpmn:outgoing>Flow_0un7hlh</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:sequenceFlow id=\"Flow_0un7hlh\" sourceRef=\"Activity_09dh3z9\" targetRef=\"Activity_0mvv5hc\" />\n    <bpmn:sequenceFlow id=\"Flow_0i3mqga\" sourceRef=\"Activity_0mvv5hc\" targetRef=\"EndEvent_1\" />\n    <bpmn:userTask id=\"Activity_0mvv5hc\">\n      <bpmn:extensionElements>\n        <custom:properties>\n          <custom:values name=\"assigneeType\" value=\"FIXED_DEPT\" />\n          <custom:values name=\"assigneeValue\" value=\"DEPT-CORP-BANKING\" />\n          <custom:values name=\"assigneeLabel\" value=\"Corporate Banking\" />\n          <custom:values name=\"candidateUsers\" value=\"\" />\n          <custom:values name=\"candidateGroups\" value=\"\" />\n          <custom:values name=\"formId\" value=\"7\" />\n          <custom:values name=\"formName\" value=\"testForm\" />\n        </custom:properties>\n      </bpmn:extensionElements>\n      <bpmn:incoming>Flow_0un7hlh</bpmn:incoming>\n      <bpmn:outgoing>Flow_0i3mqga</bpmn:outgoing>\n    </bpmn:userTask>\n  </bpmn:process>\n  <bpmndi:BPMNDiagram id=\"BPMNDiagram_1\">\n    <bpmndi:BPMNPlane id=\"BPMNPlane_1\" bpmnElement=\"Process_1\">\n      <bpmndi:BPMNShape id=\"StartEvent_1_di\" bpmnElement=\"StartEvent_1\">\n        <dc:Bounds x=\"180\" y=\"160\" width=\"36\" height=\"36\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"187\" y=\"203\" width=\"22\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"EndEvent_1_di\" bpmnElement=\"EndEvent_1\">\n        <dc:Bounds x=\"692\" y=\"160\" width=\"36\" height=\"36\" />\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"699\" y=\"203\" width=\"22\" height=\"14\" />\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Activity_112ju6j_di\" bpmnElement=\"Activity_09dh3z9\">\n        <dc:Bounds x=\"260\" y=\"138\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Activity_09ybfm7_di\" bpmnElement=\"Activity_0mvv5hc\">\n        <dc:Bounds x=\"410\" y=\"138\" width=\"100\" height=\"80\" />\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNEdge id=\"Flow_1_di\" bpmnElement=\"Flow_1\">\n        <di:waypoint x=\"216\" y=\"178\" />\n        <di:waypoint x=\"260\" y=\"178\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_0un7hlh_di\" bpmnElement=\"Flow_0un7hlh\">\n        <di:waypoint x=\"360\" y=\"178\" />\n        <di:waypoint x=\"410\" y=\"178\" />\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_0i3mqga_di\" bpmnElement=\"Flow_0i3mqga\">\n        <di:waypoint x=\"510\" y=\"178\" />\n        <di:waypoint x=\"692\" y=\"178\" />\n      </bpmndi:BPMNEdge>\n    </bpmndi:BPMNPlane>\n  </bpmndi:BPMNDiagram>\n</bpmn:definitions>\n", "activate": true, "category": null, "tenantId": null, "description": null}}', '{"className": "Pr******************nt", "methodName": "deployProcess"}', 946, NULL, '127.0.0.1', false, '部署流程定义', 'SUCCESS', '62c273f9-3492-4add-8b0f-7884f881f5a2', 'UNKNOWN', NULL, 'PROCESS_DEFINITION', 'MEDIUM', NULL, NULL, '2026-01-19 17:04:23.76063', 'Java/17.0.17');
+TRUNCATE TABLE public.wf_audit_logs CASCADE;
+
 INSERT INTO public.wf_audit_logs VALUES ('0f73c6fa-8fc4-43c3-9422-3d047de5453b', NULL, NULL, 'ANONYMOUS', 'START_PROCESS', NULL, '2026-01-19 17:04:23.835466', '{"name": null, "message": "流程实例启动成功", "success": true, "startTime": "2026-01-19T17:04:23.836", "variables": {"initiator": "purchase-requester-001"}, "businessKey": null, "startUserId": "purchase-requester-001", "processInstanceId": "d95d15d1-f515-11f0-83bf-1a46ed4020c1", "processDefinitionId": "Process_1:11:d94fcf60-f515-11f0-83bf-1a46ed4020c1", "processDefinitionKey": "Pr*****_1"}', '{"arg0": {"tenantId": null, "variables": {"initiator": "purchase-requester-001"}, "businessKey": null, "startUserId": "purchase-requester-001", "processInstanceName": null, "processDefinitionKey": "Pr*****_1"}}', '{"className": "Pr******************nt", "methodName": "startProcess"}', 60, NULL, '127.0.0.1', false, '启动流程实例', 'SUCCESS', '3da52f2e-2ce4-44ec-9eb2-0b2b81c93603', 'UNKNOWN', NULL, 'PROCESS_INSTANCE', 'LOW', NULL, NULL, '2026-01-19 17:04:23.889367', 'Java/17.0.17');
+TRUNCATE TABLE public.wf_audit_logs CASCADE;
+
 INSERT INTO public.wf_audit_logs VALUES ('33329bb0-ab3b-4383-844d-1a59e54ae5d1', NULL, NULL, 'ANONYMOUS', 'DEPLOY_PROCESS', NULL, '2026-01-19 21:01:45.63335', '{"name": null, "message": "流程部署成功", "success": true, "version": 12, "deploymentId": "022c2806-f537-11f0-83bf-1a46ed4020c1", "deploymentTime": "2026-01-19T21:01:45.735113", "processDefinitionId": "Process_1:12:0230e2f9-f537-11f0-83bf-1a46ed4020c1", "processDefinitionKey": "Pr*****_1"}', '{"arg0": {"key": "Pr*****_1", "name": "Test0 - main-process.bpmn", "bpmnXml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><bpmn:definitions xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:custom=\"http://custom.bpmn.io/schema\" id=\"Definitions_1\" targetNamespace=\"http://bpmn.io/schema/bpmn\">\n  <bpmn:process id=\"Process_1\" isExecutable=\"true\">\n    <bpmn:startEvent id=\"StartEvent_1\" name=\"开始\">\n      <bpmn:outgoing>Flow_1</bpmn:outgoing>\n    </bpmn:startEvent>\n    <bpmn:endEvent id=\"EndEvent_1\" name=\"结束\">\n      <bpmn:incoming>Flow_0i3mqga</bpmn:incoming>\n    </bpmn:endEvent>\n    <bpmn:sequenceFlow id=\"Flow_1\" sourceRef=\"StartEvent_1\" targetRef=\"Activity_09dh3z9\"/>\n    <bpmn:userTask id=\"Activity_09dh3z9\">\n      <bpmn:extensionElements>\n        <custom:properties>\n          \n          \n          \n          \n          \n          \n          <custom:values name=\"assigneeType\" value=\"FIXED_DEPT\"/>\n          <custom:values name=\"assigneeValue\" value=\"DEPT-HR\"/>\n          <custom:values name=\"assigneeLabel\" value=\"Human Resources\"/>\n          <custom:values name=\"candidateUsers\" value=\"\"/>\n          <custom:values name=\"candidateGroups\" value=\"\"/>\n        <custom:property name=\"formId\" value=\"7\"/><custom:property name=\"formName\" value=\"testForm\"/></custom:properties>\n      </bpmn:extensionElements>\n      <bpmn:incoming>Flow_1</bpmn:incoming>\n      <bpmn:outgoing>Flow_0un7hlh</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:sequenceFlow id=\"Flow_0un7hlh\" sourceRef=\"Activity_09dh3z9\" targetRef=\"Activity_0mvv5hc\"/>\n    <bpmn:sequenceFlow id=\"Flow_0i3mqga\" sourceRef=\"Activity_0mvv5hc\" targetRef=\"EndEvent_1\"/>\n    <bpmn:userTask id=\"Activity_0mvv5hc\">\n      <bpmn:extensionElements>\n        <custom:properties>\n          <custom:values name=\"assigneeType\" value=\"FIXED_DEPT\"/>\n          <custom:values name=\"assigneeValue\" value=\"DEPT-CORP-BANKING\"/>\n          <custom:values name=\"assigneeLabel\" value=\"Corporate Banking\"/>\n          <custom:values name=\"candidateUsers\" value=\"\"/>\n          <custom:values name=\"candidateGroups\" value=\"\"/>\n          \n          \n        </custom:properties>\n      </bpmn:extensionElements>\n      <bpmn:incoming>Flow_0un7hlh</bpmn:incoming>\n      <bpmn:outgoing>Flow_0i3mqga</bpmn:outgoing>\n    </bpmn:userTask>\n  </bpmn:process>\n  <bpmndi:BPMNDiagram id=\"BPMNDiagram_1\">\n    <bpmndi:BPMNPlane id=\"BPMNPlane_1\" bpmnElement=\"Process_1\">\n      <bpmndi:BPMNShape id=\"StartEvent_1_di\" bpmnElement=\"StartEvent_1\">\n        <dc:Bounds x=\"180\" y=\"160\" width=\"36\" height=\"36\"/>\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"187\" y=\"203\" width=\"22\" height=\"14\"/>\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"EndEvent_1_di\" bpmnElement=\"EndEvent_1\">\n        <dc:Bounds x=\"692\" y=\"160\" width=\"36\" height=\"36\"/>\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"699\" y=\"203\" width=\"22\" height=\"14\"/>\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Activity_112ju6j_di\" bpmnElement=\"Activity_09dh3z9\">\n        <dc:Bounds x=\"260\" y=\"138\" width=\"100\" height=\"80\"/>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Activity_09ybfm7_di\" bpmnElement=\"Activity_0mvv5hc\">\n        <dc:Bounds x=\"410\" y=\"138\" width=\"100\" height=\"80\"/>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNEdge id=\"Flow_1_di\" bpmnElement=\"Flow_1\">\n        <di:waypoint x=\"216\" y=\"178\"/>\n        <di:waypoint x=\"260\" y=\"178\"/>\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_0un7hlh_di\" bpmnElement=\"Flow_0un7hlh\">\n        <di:waypoint x=\"360\" y=\"178\"/>\n        <di:waypoint x=\"410\" y=\"178\"/>\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_0i3mqga_di\" bpmnElement=\"Flow_0i3mqga\">\n        <di:waypoint x=\"510\" y=\"178\"/>\n        <di:waypoint x=\"692\" y=\"178\"/>\n      </bpmndi:BPMNEdge>\n    </bpmndi:BPMNPlane>\n  </bpmndi:BPMNDiagram>\n</bpmn:definitions>", "activate": true, "category": null, "tenantId": null, "description": null}}', '{"className": "Pr******************nt", "methodName": "deployProcess"}', 146, NULL, '127.0.0.1', false, '部署流程定义', 'SUCCESS', '998efc95-adea-4f21-bda0-a956f3b1d6fb', 'UNKNOWN', NULL, 'PROCESS_DEFINITION', 'MEDIUM', NULL, NULL, '2026-01-19 21:01:45.73528', 'okhttp/4.12.0');
+TRUNCATE TABLE public.wf_audit_logs CASCADE;
+
 INSERT INTO public.wf_audit_logs VALUES ('e0e33d7a-13cf-46f7-a224-66822af08f4b', NULL, NULL, 'ANONYMOUS', 'DEPLOY_PROCESS', NULL, '2026-01-19 21:01:57.2716', '{"name": null, "message": "流程部署成功", "success": true, "version": 13, "deploymentId": "09178c9e-f537-11f0-83bf-1a46ed4020c1", "deploymentTime": "2026-01-19T21:01:57.338302", "processDefinitionId": "Process_1:13:091b8441-f537-11f0-83bf-1a46ed4020c1", "processDefinitionKey": "Pr*****_1"}', '{"arg0": {"key": "Pr*****_1", "name": "Test0 - main-process.bpmn", "bpmnXml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><bpmn:definitions xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:custom=\"http://custom.bpmn.io/schema\" id=\"Definitions_1\" targetNamespace=\"http://bpmn.io/schema/bpmn\">\n  <bpmn:process id=\"Process_1\" isExecutable=\"true\">\n    <bpmn:startEvent id=\"StartEvent_1\" name=\"开始\">\n      <bpmn:outgoing>Flow_1</bpmn:outgoing>\n    </bpmn:startEvent>\n    <bpmn:endEvent id=\"EndEvent_1\" name=\"结束\">\n      <bpmn:incoming>Flow_0i3mqga</bpmn:incoming>\n    </bpmn:endEvent>\n    <bpmn:sequenceFlow id=\"Flow_1\" sourceRef=\"StartEvent_1\" targetRef=\"Activity_09dh3z9\"/>\n    <bpmn:userTask id=\"Activity_09dh3z9\">\n      <bpmn:extensionElements>\n        <custom:properties>\n          \n          \n          \n          \n          \n          \n          <custom:values name=\"assigneeType\" value=\"FIXED_DEPT\"/>\n          <custom:values name=\"assigneeValue\" value=\"DEPT-HR\"/>\n          <custom:values name=\"assigneeLabel\" value=\"Human Resources\"/>\n          <custom:values name=\"candidateUsers\" value=\"\"/>\n          <custom:values name=\"candidateGroups\" value=\"\"/>\n        <custom:property name=\"formId\" value=\"7\"/><custom:property name=\"formName\" value=\"testForm\"/></custom:properties>\n      </bpmn:extensionElements>\n      <bpmn:incoming>Flow_1</bpmn:incoming>\n      <bpmn:outgoing>Flow_0un7hlh</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:sequenceFlow id=\"Flow_0un7hlh\" sourceRef=\"Activity_09dh3z9\" targetRef=\"Activity_0mvv5hc\"/>\n    <bpmn:sequenceFlow id=\"Flow_0i3mqga\" sourceRef=\"Activity_0mvv5hc\" targetRef=\"EndEvent_1\"/>\n    <bpmn:userTask id=\"Activity_0mvv5hc\">\n      <bpmn:extensionElements>\n        <custom:properties>\n          <custom:values name=\"assigneeType\" value=\"FIXED_DEPT\"/>\n          <custom:values name=\"assigneeValue\" value=\"DEPT-CORP-BANKING\"/>\n          <custom:values name=\"assigneeLabel\" value=\"Corporate Banking\"/>\n          <custom:values name=\"candidateUsers\" value=\"\"/>\n          <custom:values name=\"candidateGroups\" value=\"\"/>\n          \n          \n        </custom:properties>\n      </bpmn:extensionElements>\n      <bpmn:incoming>Flow_0un7hlh</bpmn:incoming>\n      <bpmn:outgoing>Flow_0i3mqga</bpmn:outgoing>\n    </bpmn:userTask>\n  </bpmn:process>\n  <bpmndi:BPMNDiagram id=\"BPMNDiagram_1\">\n    <bpmndi:BPMNPlane id=\"BPMNPlane_1\" bpmnElement=\"Process_1\">\n      <bpmndi:BPMNShape id=\"StartEvent_1_di\" bpmnElement=\"StartEvent_1\">\n        <dc:Bounds x=\"180\" y=\"160\" width=\"36\" height=\"36\"/>\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"187\" y=\"203\" width=\"22\" height=\"14\"/>\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"EndEvent_1_di\" bpmnElement=\"EndEvent_1\">\n        <dc:Bounds x=\"692\" y=\"160\" width=\"36\" height=\"36\"/>\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"699\" y=\"203\" width=\"22\" height=\"14\"/>\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Activity_112ju6j_di\" bpmnElement=\"Activity_09dh3z9\">\n        <dc:Bounds x=\"260\" y=\"138\" width=\"100\" height=\"80\"/>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Activity_09ybfm7_di\" bpmnElement=\"Activity_0mvv5hc\">\n        <dc:Bounds x=\"410\" y=\"138\" width=\"100\" height=\"80\"/>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNEdge id=\"Flow_1_di\" bpmnElement=\"Flow_1\">\n        <di:waypoint x=\"216\" y=\"178\"/>\n        <di:waypoint x=\"260\" y=\"178\"/>\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_0un7hlh_di\" bpmnElement=\"Flow_0un7hlh\">\n        <di:waypoint x=\"360\" y=\"178\"/>\n        <di:waypoint x=\"410\" y=\"178\"/>\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_0i3mqga_di\" bpmnElement=\"Flow_0i3mqga\">\n        <di:waypoint x=\"510\" y=\"178\"/>\n        <di:waypoint x=\"692\" y=\"178\"/>\n      </bpmndi:BPMNEdge>\n    </bpmndi:BPMNPlane>\n  </bpmndi:BPMNDiagram>\n</bpmn:definitions>", "activate": true, "category": null, "tenantId": null, "description": null}}', '{"className": "Pr******************nt", "methodName": "deployProcess"}', 104, NULL, '127.0.0.1', false, '部署流程定义', 'SUCCESS', 'd898f05a-e887-46ad-8298-94ead92b4312', 'UNKNOWN', NULL, 'PROCESS_DEFINITION', 'MEDIUM', NULL, NULL, '2026-01-19 21:01:57.338367', 'okhttp/4.12.0');
+TRUNCATE TABLE public.wf_audit_logs CASCADE;
+
 INSERT INTO public.wf_audit_logs VALUES ('c4e9ab04-7d94-411f-84db-fb052b50b9c0', NULL, NULL, 'ANONYMOUS', 'DEPLOY_PROCESS', NULL, '2026-01-19 21:02:16.790788', '{"name": null, "message": "流程部署成功", "success": true, "version": 14, "deploymentId": "14ba10a6-f537-11f0-83bf-1a46ed4020c1", "deploymentTime": "2026-01-19T21:02:16.859004", "processDefinitionId": "Process_1:14:14bde139-f537-11f0-83bf-1a46ed4020c1", "processDefinitionKey": "Pr*****_1"}', '{"arg0": {"key": "fu**************3z", "name": "Test0", "bpmnXml": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><bpmn:definitions xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:bpmn=\"http://www.omg.org/spec/BPMN/20100524/MODEL\" xmlns:bpmndi=\"http://www.omg.org/spec/BPMN/20100524/DI\" xmlns:dc=\"http://www.omg.org/spec/DD/20100524/DC\" xmlns:di=\"http://www.omg.org/spec/DD/20100524/DI\" xmlns:custom=\"http://custom.bpmn.io/schema\" id=\"Definitions_1\" targetNamespace=\"http://bpmn.io/schema/bpmn\">\n  <bpmn:process id=\"Process_1\" isExecutable=\"true\">\n    <bpmn:startEvent id=\"StartEvent_1\" name=\"开始\">\n      <bpmn:outgoing>Flow_1</bpmn:outgoing>\n    </bpmn:startEvent>\n    <bpmn:endEvent id=\"EndEvent_1\" name=\"结束\">\n      <bpmn:incoming>Flow_0i3mqga</bpmn:incoming>\n    </bpmn:endEvent>\n    <bpmn:sequenceFlow id=\"Flow_1\" sourceRef=\"StartEvent_1\" targetRef=\"Activity_09dh3z9\"/>\n    <bpmn:userTask id=\"Activity_09dh3z9\">\n      <bpmn:extensionElements>\n        <custom:properties>\n          \n          \n          \n          \n          \n          \n          <custom:values name=\"assigneeType\" value=\"FIXED_DEPT\"/>\n          <custom:values name=\"assigneeValue\" value=\"DEPT-HR\"/>\n          <custom:values name=\"assigneeLabel\" value=\"Human Resources\"/>\n          <custom:values name=\"candidateUsers\" value=\"\"/>\n          <custom:values name=\"candidateGroups\" value=\"\"/>\n        <custom:property name=\"formId\" value=\"7\"/><custom:property name=\"formName\" value=\"testForm\"/></custom:properties>\n      </bpmn:extensionElements>\n      <bpmn:incoming>Flow_1</bpmn:incoming>\n      <bpmn:outgoing>Flow_0un7hlh</bpmn:outgoing>\n    </bpmn:userTask>\n    <bpmn:sequenceFlow id=\"Flow_0un7hlh\" sourceRef=\"Activity_09dh3z9\" targetRef=\"Activity_0mvv5hc\"/>\n    <bpmn:sequenceFlow id=\"Flow_0i3mqga\" sourceRef=\"Activity_0mvv5hc\" targetRef=\"EndEvent_1\"/>\n    <bpmn:userTask id=\"Activity_0mvv5hc\">\n      <bpmn:extensionElements>\n        <custom:properties>\n          <custom:values name=\"assigneeType\" value=\"FIXED_DEPT\"/>\n          <custom:values name=\"assigneeValue\" value=\"DEPT-CORP-BANKING\"/>\n          <custom:values name=\"assigneeLabel\" value=\"Corporate Banking\"/>\n          <custom:values name=\"candidateUsers\" value=\"\"/>\n          <custom:values name=\"candidateGroups\" value=\"\"/>\n          \n          \n        </custom:properties>\n      </bpmn:extensionElements>\n      <bpmn:incoming>Flow_0un7hlh</bpmn:incoming>\n      <bpmn:outgoing>Flow_0i3mqga</bpmn:outgoing>\n    </bpmn:userTask>\n  </bpmn:process>\n  <bpmndi:BPMNDiagram id=\"BPMNDiagram_1\">\n    <bpmndi:BPMNPlane id=\"BPMNPlane_1\" bpmnElement=\"Process_1\">\n      <bpmndi:BPMNShape id=\"StartEvent_1_di\" bpmnElement=\"StartEvent_1\">\n        <dc:Bounds x=\"180\" y=\"160\" width=\"36\" height=\"36\"/>\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"187\" y=\"203\" width=\"22\" height=\"14\"/>\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"EndEvent_1_di\" bpmnElement=\"EndEvent_1\">\n        <dc:Bounds x=\"692\" y=\"160\" width=\"36\" height=\"36\"/>\n        <bpmndi:BPMNLabel>\n          <dc:Bounds x=\"699\" y=\"203\" width=\"22\" height=\"14\"/>\n        </bpmndi:BPMNLabel>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Activity_112ju6j_di\" bpmnElement=\"Activity_09dh3z9\">\n        <dc:Bounds x=\"260\" y=\"138\" width=\"100\" height=\"80\"/>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNShape id=\"Activity_09ybfm7_di\" bpmnElement=\"Activity_0mvv5hc\">\n        <dc:Bounds x=\"410\" y=\"138\" width=\"100\" height=\"80\"/>\n      </bpmndi:BPMNShape>\n      <bpmndi:BPMNEdge id=\"Flow_1_di\" bpmnElement=\"Flow_1\">\n        <di:waypoint x=\"216\" y=\"178\"/>\n        <di:waypoint x=\"260\" y=\"178\"/>\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_0un7hlh_di\" bpmnElement=\"Flow_0un7hlh\">\n        <di:waypoint x=\"360\" y=\"178\"/>\n        <di:waypoint x=\"410\" y=\"178\"/>\n      </bpmndi:BPMNEdge>\n      <bpmndi:BPMNEdge id=\"Flow_0i3mqga_di\" bpmnElement=\"Flow_0i3mqga\">\n        <di:waypoint x=\"510\" y=\"178\"/>\n        <di:waypoint x=\"692\" y=\"178\"/>\n      </bpmndi:BPMNEdge>\n    </bpmndi:BPMNPlane>\n  </bpmndi:BPMNDiagram>\n</bpmn:definitions>", "activate": true, "category": null, "tenantId": null, "description": null}}', '{"className": "Pr******************nt", "methodName": "deployProcess"}', 102, NULL, '127.0.0.1', false, '部署流程定义', 'SUCCESS', '5c2ba4b1-c96f-4a8b-9392-b1ef30282b84', 'UNKNOWN', NULL, 'PROCESS_DEFINITION', 'MEDIUM', NULL, NULL, '2026-01-19 21:02:16.859067', 'Java/17.0.17');
+TRUNCATE TABLE public.wf_audit_logs CASCADE;
+
 INSERT INTO public.wf_audit_logs VALUES ('5d088892-3b14-437b-8036-a31fe2f2fa8a', NULL, NULL, 'ANONYMOUS', 'START_PROCESS', NULL, '2026-01-19 21:02:16.87329', '{"name": null, "message": "流程实例启动成功", "success": true, "startTime": "2026-01-19T21:02:16.875", "variables": {"initiator": "purchase-requester-001", "Fq63mkdrn28vabc": "ooo", "Fxe2mkdrrp95ahc": null}, "businessKey": null, "startUserId": "purchase-requester-001", "processInstanceId": "14c1ffea-f537-11f0-83bf-1a46ed4020c1", "processDefinitionId": "Process_1:14:14bde139-f537-11f0-83bf-1a46ed4020c1", "processDefinitionKey": "Pr*****_1"}', '{"arg0": {"tenantId": null, "variables": {"initiator": "purchase-requester-001", "Fq63mkdrn28vabc": "ooo", "Fxe2mkdrrp95ahc": null}, "businessKey": null, "startUserId": "purchase-requester-001", "processInstanceName": null, "processDefinitionKey": "Pr*****_1"}}', '{"className": "Pr******************nt", "methodName": "startProcess"}', 31, NULL, '127.0.0.1', false, '启动流程实例', 'SUCCESS', '8440b934-6c71-43ed-8074-967a8576d8cc', 'UNKNOWN', NULL, 'PROCESS_INSTANCE', 'LOW', NULL, NULL, '2026-01-19 21:02:16.902306', 'Java/17.0.17');
 
 ALTER TABLE ONLY public.act_app_appdef
@@ -4070,547 +5622,547 @@ ALTER TABLE ONLY public.wf_saga_steps
 ALTER TABLE ONLY public.wf_saga_transactions
     ADD CONSTRAINT wf_saga_transactions_pkey PRIMARY KEY (id);
 
-CREATE INDEX act_idx_app_def_dply ON public.act_app_appdef USING btree (deployment_id_);
+CREATE INDEX IF NOT EXISTS act_idx_app_def_dply ON public.act_app_appdef USING btree (deployment_id_);
 
 CREATE UNIQUE INDEX act_idx_app_def_uniq ON public.act_app_appdef USING btree (key_, version_, tenant_id_);
 
-CREATE INDEX act_idx_app_rsrc_dpl ON public.act_app_deployment_resource USING btree (deployment_id_);
+CREATE INDEX IF NOT EXISTS act_idx_app_rsrc_dpl ON public.act_app_deployment_resource USING btree (deployment_id_);
 
-CREATE INDEX act_idx_athrz_procedef ON public.act_ru_identitylink USING btree (proc_def_id_);
+CREATE INDEX IF NOT EXISTS act_idx_athrz_procedef ON public.act_ru_identitylink USING btree (proc_def_id_);
 
-CREATE INDEX act_idx_bytear_depl ON public.act_ge_bytearray USING btree (deployment_id_);
+CREATE INDEX IF NOT EXISTS act_idx_bytear_depl ON public.act_ge_bytearray USING btree (deployment_id_);
 
-CREATE INDEX act_idx_case_def_dply ON public.act_cmmn_casedef USING btree (deployment_id_);
+CREATE INDEX IF NOT EXISTS act_idx_case_def_dply ON public.act_cmmn_casedef USING btree (deployment_id_);
 
 CREATE UNIQUE INDEX act_idx_case_def_uniq ON public.act_cmmn_casedef USING btree (key_, version_, tenant_id_);
 
-CREATE INDEX act_idx_case_inst_case_def ON public.act_cmmn_ru_case_inst USING btree (case_def_id_);
+CREATE INDEX IF NOT EXISTS act_idx_case_inst_case_def ON public.act_cmmn_ru_case_inst USING btree (case_def_id_);
 
-CREATE INDEX act_idx_case_inst_parent ON public.act_cmmn_ru_case_inst USING btree (parent_id_);
+CREATE INDEX IF NOT EXISTS act_idx_case_inst_parent ON public.act_cmmn_ru_case_inst USING btree (parent_id_);
 
-CREATE INDEX act_idx_case_inst_ref_id_ ON public.act_cmmn_ru_case_inst USING btree (reference_id_);
+CREATE INDEX IF NOT EXISTS act_idx_case_inst_ref_id_ ON public.act_cmmn_ru_case_inst USING btree (reference_id_);
 
 CREATE UNIQUE INDEX act_idx_channel_def_uniq ON public.flw_channel_definition USING btree (key_, version_, tenant_id_);
 
-CREATE INDEX act_idx_cmmn_rsrc_dpl ON public.act_cmmn_deployment_resource USING btree (deployment_id_);
+CREATE INDEX IF NOT EXISTS act_idx_cmmn_rsrc_dpl ON public.act_cmmn_deployment_resource USING btree (deployment_id_);
 
-CREATE INDEX act_idx_deadletter_job_correlation_id ON public.act_ru_deadletter_job USING btree (correlation_id_);
+CREATE INDEX IF NOT EXISTS act_idx_deadletter_job_correlation_id ON public.act_ru_deadletter_job USING btree (correlation_id_);
 
-CREATE INDEX act_idx_deadletter_job_custom_values_id ON public.act_ru_deadletter_job USING btree (custom_values_id_);
+CREATE INDEX IF NOT EXISTS act_idx_deadletter_job_custom_values_id ON public.act_ru_deadletter_job USING btree (custom_values_id_);
 
-CREATE INDEX act_idx_deadletter_job_exception_stack_id ON public.act_ru_deadletter_job USING btree (exception_stack_id_);
+CREATE INDEX IF NOT EXISTS act_idx_deadletter_job_exception_stack_id ON public.act_ru_deadletter_job USING btree (exception_stack_id_);
 
-CREATE INDEX act_idx_deadletter_job_execution_id ON public.act_ru_deadletter_job USING btree (execution_id_);
+CREATE INDEX IF NOT EXISTS act_idx_deadletter_job_execution_id ON public.act_ru_deadletter_job USING btree (execution_id_);
 
-CREATE INDEX act_idx_deadletter_job_proc_def_id ON public.act_ru_deadletter_job USING btree (proc_def_id_);
+CREATE INDEX IF NOT EXISTS act_idx_deadletter_job_proc_def_id ON public.act_ru_deadletter_job USING btree (proc_def_id_);
 
-CREATE INDEX act_idx_deadletter_job_process_instance_id ON public.act_ru_deadletter_job USING btree (process_instance_id_);
+CREATE INDEX IF NOT EXISTS act_idx_deadletter_job_process_instance_id ON public.act_ru_deadletter_job USING btree (process_instance_id_);
 
-CREATE INDEX act_idx_djob_scope ON public.act_ru_deadletter_job USING btree (scope_id_, scope_type_);
+CREATE INDEX IF NOT EXISTS act_idx_djob_scope ON public.act_ru_deadletter_job USING btree (scope_id_, scope_type_);
 
-CREATE INDEX act_idx_djob_scope_def ON public.act_ru_deadletter_job USING btree (scope_definition_id_, scope_type_);
+CREATE INDEX IF NOT EXISTS act_idx_djob_scope_def ON public.act_ru_deadletter_job USING btree (scope_definition_id_, scope_type_);
 
-CREATE INDEX act_idx_djob_sub_scope ON public.act_ru_deadletter_job USING btree (sub_scope_id_, scope_type_);
+CREATE INDEX IF NOT EXISTS act_idx_djob_sub_scope ON public.act_ru_deadletter_job USING btree (sub_scope_id_, scope_type_);
 
 CREATE UNIQUE INDEX act_idx_dmn_dec_uniq ON public.act_dmn_decision USING btree (key_, version_, tenant_id_);
 
-CREATE INDEX act_idx_dmn_instance_id ON public.act_dmn_hi_decision_execution USING btree (instance_id_);
+CREATE INDEX IF NOT EXISTS act_idx_dmn_instance_id ON public.act_dmn_hi_decision_execution USING btree (instance_id_);
 
-CREATE INDEX act_idx_ejob_scope ON public.act_ru_external_job USING btree (scope_id_, scope_type_);
+CREATE INDEX IF NOT EXISTS act_idx_ejob_scope ON public.act_ru_external_job USING btree (scope_id_, scope_type_);
 
-CREATE INDEX act_idx_ejob_scope_def ON public.act_ru_external_job USING btree (scope_definition_id_, scope_type_);
+CREATE INDEX IF NOT EXISTS act_idx_ejob_scope_def ON public.act_ru_external_job USING btree (scope_definition_id_, scope_type_);
 
-CREATE INDEX act_idx_ejob_sub_scope ON public.act_ru_external_job USING btree (sub_scope_id_, scope_type_);
+CREATE INDEX IF NOT EXISTS act_idx_ejob_sub_scope ON public.act_ru_external_job USING btree (sub_scope_id_, scope_type_);
 
-CREATE INDEX act_idx_ent_lnk_ref_scope ON public.act_ru_entitylink USING btree (ref_scope_id_, ref_scope_type_, link_type_);
+CREATE INDEX IF NOT EXISTS act_idx_ent_lnk_ref_scope ON public.act_ru_entitylink USING btree (ref_scope_id_, ref_scope_type_, link_type_);
 
-CREATE INDEX act_idx_ent_lnk_root_scope ON public.act_ru_entitylink USING btree (root_scope_id_, root_scope_type_, link_type_);
+CREATE INDEX IF NOT EXISTS act_idx_ent_lnk_root_scope ON public.act_ru_entitylink USING btree (root_scope_id_, root_scope_type_, link_type_);
 
-CREATE INDEX act_idx_ent_lnk_scope ON public.act_ru_entitylink USING btree (scope_id_, scope_type_, link_type_);
+CREATE INDEX IF NOT EXISTS act_idx_ent_lnk_scope ON public.act_ru_entitylink USING btree (scope_id_, scope_type_, link_type_);
 
-CREATE INDEX act_idx_ent_lnk_scope_def ON public.act_ru_entitylink USING btree (scope_definition_id_, scope_type_, link_type_);
+CREATE INDEX IF NOT EXISTS act_idx_ent_lnk_scope_def ON public.act_ru_entitylink USING btree (scope_definition_id_, scope_type_, link_type_);
 
 CREATE UNIQUE INDEX act_idx_event_def_uniq ON public.flw_event_definition USING btree (key_, version_, tenant_id_);
 
-CREATE INDEX act_idx_event_subscr ON public.act_ru_event_subscr USING btree (execution_id_);
+CREATE INDEX IF NOT EXISTS act_idx_event_subscr ON public.act_ru_event_subscr USING btree (execution_id_);
 
-CREATE INDEX act_idx_event_subscr_config_ ON public.act_ru_event_subscr USING btree (configuration_);
+CREATE INDEX IF NOT EXISTS act_idx_event_subscr_config_ ON public.act_ru_event_subscr USING btree (configuration_);
 
-CREATE INDEX act_idx_event_subscr_scoperef_ ON public.act_ru_event_subscr USING btree (scope_id_, scope_type_);
+CREATE INDEX IF NOT EXISTS act_idx_event_subscr_scoperef_ ON public.act_ru_event_subscr USING btree (scope_id_, scope_type_);
 
-CREATE INDEX act_idx_exe_parent ON public.act_ru_execution USING btree (parent_id_);
+CREATE INDEX IF NOT EXISTS act_idx_exe_parent ON public.act_ru_execution USING btree (parent_id_);
 
-CREATE INDEX act_idx_exe_procdef ON public.act_ru_execution USING btree (proc_def_id_);
+CREATE INDEX IF NOT EXISTS act_idx_exe_procdef ON public.act_ru_execution USING btree (proc_def_id_);
 
-CREATE INDEX act_idx_exe_procinst ON public.act_ru_execution USING btree (proc_inst_id_);
+CREATE INDEX IF NOT EXISTS act_idx_exe_procinst ON public.act_ru_execution USING btree (proc_inst_id_);
 
-CREATE INDEX act_idx_exe_root ON public.act_ru_execution USING btree (root_proc_inst_id_);
+CREATE INDEX IF NOT EXISTS act_idx_exe_root ON public.act_ru_execution USING btree (root_proc_inst_id_);
 
-CREATE INDEX act_idx_exe_super ON public.act_ru_execution USING btree (super_exec_);
+CREATE INDEX IF NOT EXISTS act_idx_exe_super ON public.act_ru_execution USING btree (super_exec_);
 
-CREATE INDEX act_idx_exec_buskey ON public.act_ru_execution USING btree (business_key_);
+CREATE INDEX IF NOT EXISTS act_idx_exec_buskey ON public.act_ru_execution USING btree (business_key_);
 
-CREATE INDEX act_idx_exec_ref_id_ ON public.act_ru_execution USING btree (reference_id_);
+CREATE INDEX IF NOT EXISTS act_idx_exec_ref_id_ ON public.act_ru_execution USING btree (reference_id_);
 
-CREATE INDEX act_idx_external_job_correlation_id ON public.act_ru_external_job USING btree (correlation_id_);
+CREATE INDEX IF NOT EXISTS act_idx_external_job_correlation_id ON public.act_ru_external_job USING btree (correlation_id_);
 
-CREATE INDEX act_idx_external_job_custom_values_id ON public.act_ru_external_job USING btree (custom_values_id_);
+CREATE INDEX IF NOT EXISTS act_idx_external_job_custom_values_id ON public.act_ru_external_job USING btree (custom_values_id_);
 
-CREATE INDEX act_idx_external_job_exception_stack_id ON public.act_ru_external_job USING btree (exception_stack_id_);
+CREATE INDEX IF NOT EXISTS act_idx_external_job_exception_stack_id ON public.act_ru_external_job USING btree (exception_stack_id_);
 
-CREATE INDEX act_idx_hi_act_inst_end ON public.act_hi_actinst USING btree (end_time_);
+CREATE INDEX IF NOT EXISTS act_idx_hi_act_inst_end ON public.act_hi_actinst USING btree (end_time_);
 
-CREATE INDEX act_idx_hi_act_inst_exec ON public.act_hi_actinst USING btree (execution_id_, act_id_);
+CREATE INDEX IF NOT EXISTS act_idx_hi_act_inst_exec ON public.act_hi_actinst USING btree (execution_id_, act_id_);
 
-CREATE INDEX act_idx_hi_act_inst_procinst ON public.act_hi_actinst USING btree (proc_inst_id_, act_id_);
+CREATE INDEX IF NOT EXISTS act_idx_hi_act_inst_procinst ON public.act_hi_actinst USING btree (proc_inst_id_, act_id_);
 
-CREATE INDEX act_idx_hi_act_inst_start ON public.act_hi_actinst USING btree (start_time_);
+CREATE INDEX IF NOT EXISTS act_idx_hi_act_inst_start ON public.act_hi_actinst USING btree (start_time_);
 
-CREATE INDEX act_idx_hi_case_inst_end ON public.act_cmmn_hi_case_inst USING btree (end_time_);
+CREATE INDEX IF NOT EXISTS act_idx_hi_case_inst_end ON public.act_cmmn_hi_case_inst USING btree (end_time_);
 
-CREATE INDEX act_idx_hi_detail_act_inst ON public.act_hi_detail USING btree (act_inst_id_);
+CREATE INDEX IF NOT EXISTS act_idx_hi_detail_act_inst ON public.act_hi_detail USING btree (act_inst_id_);
 
-CREATE INDEX act_idx_hi_detail_name ON public.act_hi_detail USING btree (name_);
+CREATE INDEX IF NOT EXISTS act_idx_hi_detail_name ON public.act_hi_detail USING btree (name_);
 
-CREATE INDEX act_idx_hi_detail_proc_inst ON public.act_hi_detail USING btree (proc_inst_id_);
+CREATE INDEX IF NOT EXISTS act_idx_hi_detail_proc_inst ON public.act_hi_detail USING btree (proc_inst_id_);
 
-CREATE INDEX act_idx_hi_detail_task_id ON public.act_hi_detail USING btree (task_id_);
+CREATE INDEX IF NOT EXISTS act_idx_hi_detail_task_id ON public.act_hi_detail USING btree (task_id_);
 
-CREATE INDEX act_idx_hi_detail_time ON public.act_hi_detail USING btree (time_);
+CREATE INDEX IF NOT EXISTS act_idx_hi_detail_time ON public.act_hi_detail USING btree (time_);
 
-CREATE INDEX act_idx_hi_ent_lnk_ref_scope ON public.act_hi_entitylink USING btree (ref_scope_id_, ref_scope_type_, link_type_);
+CREATE INDEX IF NOT EXISTS act_idx_hi_ent_lnk_ref_scope ON public.act_hi_entitylink USING btree (ref_scope_id_, ref_scope_type_, link_type_);
 
-CREATE INDEX act_idx_hi_ent_lnk_root_scope ON public.act_hi_entitylink USING btree (root_scope_id_, root_scope_type_, link_type_);
+CREATE INDEX IF NOT EXISTS act_idx_hi_ent_lnk_root_scope ON public.act_hi_entitylink USING btree (root_scope_id_, root_scope_type_, link_type_);
 
-CREATE INDEX act_idx_hi_ent_lnk_scope ON public.act_hi_entitylink USING btree (scope_id_, scope_type_, link_type_);
+CREATE INDEX IF NOT EXISTS act_idx_hi_ent_lnk_scope ON public.act_hi_entitylink USING btree (scope_id_, scope_type_, link_type_);
 
-CREATE INDEX act_idx_hi_ent_lnk_scope_def ON public.act_hi_entitylink USING btree (scope_definition_id_, scope_type_, link_type_);
+CREATE INDEX IF NOT EXISTS act_idx_hi_ent_lnk_scope_def ON public.act_hi_entitylink USING btree (scope_definition_id_, scope_type_, link_type_);
 
-CREATE INDEX act_idx_hi_ident_lnk_procinst ON public.act_hi_identitylink USING btree (proc_inst_id_);
+CREATE INDEX IF NOT EXISTS act_idx_hi_ident_lnk_procinst ON public.act_hi_identitylink USING btree (proc_inst_id_);
 
-CREATE INDEX act_idx_hi_ident_lnk_scope ON public.act_hi_identitylink USING btree (scope_id_, scope_type_);
+CREATE INDEX IF NOT EXISTS act_idx_hi_ident_lnk_scope ON public.act_hi_identitylink USING btree (scope_id_, scope_type_);
 
-CREATE INDEX act_idx_hi_ident_lnk_scope_def ON public.act_hi_identitylink USING btree (scope_definition_id_, scope_type_);
+CREATE INDEX IF NOT EXISTS act_idx_hi_ident_lnk_scope_def ON public.act_hi_identitylink USING btree (scope_definition_id_, scope_type_);
 
-CREATE INDEX act_idx_hi_ident_lnk_sub_scope ON public.act_hi_identitylink USING btree (sub_scope_id_, scope_type_);
+CREATE INDEX IF NOT EXISTS act_idx_hi_ident_lnk_sub_scope ON public.act_hi_identitylink USING btree (sub_scope_id_, scope_type_);
 
-CREATE INDEX act_idx_hi_ident_lnk_task ON public.act_hi_identitylink USING btree (task_id_);
+CREATE INDEX IF NOT EXISTS act_idx_hi_ident_lnk_task ON public.act_hi_identitylink USING btree (task_id_);
 
-CREATE INDEX act_idx_hi_ident_lnk_user ON public.act_hi_identitylink USING btree (user_id_);
+CREATE INDEX IF NOT EXISTS act_idx_hi_ident_lnk_user ON public.act_hi_identitylink USING btree (user_id_);
 
-CREATE INDEX act_idx_hi_pro_i_buskey ON public.act_hi_procinst USING btree (business_key_);
+CREATE INDEX IF NOT EXISTS act_idx_hi_pro_i_buskey ON public.act_hi_procinst USING btree (business_key_);
 
-CREATE INDEX act_idx_hi_pro_inst_end ON public.act_hi_procinst USING btree (end_time_);
+CREATE INDEX IF NOT EXISTS act_idx_hi_pro_inst_end ON public.act_hi_procinst USING btree (end_time_);
 
-CREATE INDEX act_idx_hi_pro_super_procinst ON public.act_hi_procinst USING btree (super_process_instance_id_);
+CREATE INDEX IF NOT EXISTS act_idx_hi_pro_super_procinst ON public.act_hi_procinst USING btree (super_process_instance_id_);
 
-CREATE INDEX act_idx_hi_procvar_exe ON public.act_hi_varinst USING btree (execution_id_);
+CREATE INDEX IF NOT EXISTS act_idx_hi_procvar_exe ON public.act_hi_varinst USING btree (execution_id_);
 
-CREATE INDEX act_idx_hi_procvar_name_type ON public.act_hi_varinst USING btree (name_, var_type_);
+CREATE INDEX IF NOT EXISTS act_idx_hi_procvar_name_type ON public.act_hi_varinst USING btree (name_, var_type_);
 
-CREATE INDEX act_idx_hi_procvar_proc_inst ON public.act_hi_varinst USING btree (proc_inst_id_);
+CREATE INDEX IF NOT EXISTS act_idx_hi_procvar_proc_inst ON public.act_hi_varinst USING btree (proc_inst_id_);
 
-CREATE INDEX act_idx_hi_procvar_task_id ON public.act_hi_varinst USING btree (task_id_);
+CREATE INDEX IF NOT EXISTS act_idx_hi_procvar_task_id ON public.act_hi_varinst USING btree (task_id_);
 
-CREATE INDEX act_idx_hi_task_inst_procinst ON public.act_hi_taskinst USING btree (proc_inst_id_);
+CREATE INDEX IF NOT EXISTS act_idx_hi_task_inst_procinst ON public.act_hi_taskinst USING btree (proc_inst_id_);
 
-CREATE INDEX act_idx_hi_task_scope ON public.act_hi_taskinst USING btree (scope_id_, scope_type_);
+CREATE INDEX IF NOT EXISTS act_idx_hi_task_scope ON public.act_hi_taskinst USING btree (scope_id_, scope_type_);
 
-CREATE INDEX act_idx_hi_task_scope_def ON public.act_hi_taskinst USING btree (scope_definition_id_, scope_type_);
+CREATE INDEX IF NOT EXISTS act_idx_hi_task_scope_def ON public.act_hi_taskinst USING btree (scope_definition_id_, scope_type_);
 
-CREATE INDEX act_idx_hi_task_sub_scope ON public.act_hi_taskinst USING btree (sub_scope_id_, scope_type_);
+CREATE INDEX IF NOT EXISTS act_idx_hi_task_sub_scope ON public.act_hi_taskinst USING btree (sub_scope_id_, scope_type_);
 
-CREATE INDEX act_idx_hi_var_scope_id_type ON public.act_hi_varinst USING btree (scope_id_, scope_type_);
+CREATE INDEX IF NOT EXISTS act_idx_hi_var_scope_id_type ON public.act_hi_varinst USING btree (scope_id_, scope_type_);
 
-CREATE INDEX act_idx_hi_var_sub_id_type ON public.act_hi_varinst USING btree (sub_scope_id_, scope_type_);
+CREATE INDEX IF NOT EXISTS act_idx_hi_var_sub_id_type ON public.act_hi_varinst USING btree (sub_scope_id_, scope_type_);
 
-CREATE INDEX act_idx_ident_lnk_group ON public.act_ru_identitylink USING btree (group_id_);
+CREATE INDEX IF NOT EXISTS act_idx_ident_lnk_group ON public.act_ru_identitylink USING btree (group_id_);
 
-CREATE INDEX act_idx_ident_lnk_scope ON public.act_ru_identitylink USING btree (scope_id_, scope_type_);
+CREATE INDEX IF NOT EXISTS act_idx_ident_lnk_scope ON public.act_ru_identitylink USING btree (scope_id_, scope_type_);
 
-CREATE INDEX act_idx_ident_lnk_scope_def ON public.act_ru_identitylink USING btree (scope_definition_id_, scope_type_);
+CREATE INDEX IF NOT EXISTS act_idx_ident_lnk_scope_def ON public.act_ru_identitylink USING btree (scope_definition_id_, scope_type_);
 
-CREATE INDEX act_idx_ident_lnk_sub_scope ON public.act_ru_identitylink USING btree (sub_scope_id_, scope_type_);
+CREATE INDEX IF NOT EXISTS act_idx_ident_lnk_sub_scope ON public.act_ru_identitylink USING btree (sub_scope_id_, scope_type_);
 
-CREATE INDEX act_idx_ident_lnk_user ON public.act_ru_identitylink USING btree (user_id_);
+CREATE INDEX IF NOT EXISTS act_idx_ident_lnk_user ON public.act_ru_identitylink USING btree (user_id_);
 
-CREATE INDEX act_idx_idl_procinst ON public.act_ru_identitylink USING btree (proc_inst_id_);
+CREATE INDEX IF NOT EXISTS act_idx_idl_procinst ON public.act_ru_identitylink USING btree (proc_inst_id_);
 
-CREATE INDEX act_idx_job_correlation_id ON public.act_ru_job USING btree (correlation_id_);
+CREATE INDEX IF NOT EXISTS act_idx_job_correlation_id ON public.act_ru_job USING btree (correlation_id_);
 
-CREATE INDEX act_idx_job_custom_values_id ON public.act_ru_job USING btree (custom_values_id_);
+CREATE INDEX IF NOT EXISTS act_idx_job_custom_values_id ON public.act_ru_job USING btree (custom_values_id_);
 
-CREATE INDEX act_idx_job_exception_stack_id ON public.act_ru_job USING btree (exception_stack_id_);
+CREATE INDEX IF NOT EXISTS act_idx_job_exception_stack_id ON public.act_ru_job USING btree (exception_stack_id_);
 
-CREATE INDEX act_idx_job_execution_id ON public.act_ru_job USING btree (execution_id_);
+CREATE INDEX IF NOT EXISTS act_idx_job_execution_id ON public.act_ru_job USING btree (execution_id_);
 
-CREATE INDEX act_idx_job_proc_def_id ON public.act_ru_job USING btree (proc_def_id_);
+CREATE INDEX IF NOT EXISTS act_idx_job_proc_def_id ON public.act_ru_job USING btree (proc_def_id_);
 
-CREATE INDEX act_idx_job_process_instance_id ON public.act_ru_job USING btree (process_instance_id_);
+CREATE INDEX IF NOT EXISTS act_idx_job_process_instance_id ON public.act_ru_job USING btree (process_instance_id_);
 
-CREATE INDEX act_idx_job_scope ON public.act_ru_job USING btree (scope_id_, scope_type_);
+CREATE INDEX IF NOT EXISTS act_idx_job_scope ON public.act_ru_job USING btree (scope_id_, scope_type_);
 
-CREATE INDEX act_idx_job_scope_def ON public.act_ru_job USING btree (scope_definition_id_, scope_type_);
+CREATE INDEX IF NOT EXISTS act_idx_job_scope_def ON public.act_ru_job USING btree (scope_definition_id_, scope_type_);
 
-CREATE INDEX act_idx_job_sub_scope ON public.act_ru_job USING btree (sub_scope_id_, scope_type_);
+CREATE INDEX IF NOT EXISTS act_idx_job_sub_scope ON public.act_ru_job USING btree (sub_scope_id_, scope_type_);
 
-CREATE INDEX act_idx_memb_group ON public.act_id_membership USING btree (group_id_);
+CREATE INDEX IF NOT EXISTS act_idx_memb_group ON public.act_id_membership USING btree (group_id_);
 
-CREATE INDEX act_idx_memb_user ON public.act_id_membership USING btree (user_id_);
+CREATE INDEX IF NOT EXISTS act_idx_memb_user ON public.act_id_membership USING btree (user_id_);
 
-CREATE INDEX act_idx_mil_case_def ON public.act_cmmn_ru_mil_inst USING btree (case_def_id_);
+CREATE INDEX IF NOT EXISTS act_idx_mil_case_def ON public.act_cmmn_ru_mil_inst USING btree (case_def_id_);
 
-CREATE INDEX act_idx_mil_case_inst ON public.act_cmmn_ru_mil_inst USING btree (case_inst_id_);
+CREATE INDEX IF NOT EXISTS act_idx_mil_case_inst ON public.act_cmmn_ru_mil_inst USING btree (case_inst_id_);
 
-CREATE INDEX act_idx_model_deployment ON public.act_re_model USING btree (deployment_id_);
+CREATE INDEX IF NOT EXISTS act_idx_model_deployment ON public.act_re_model USING btree (deployment_id_);
 
-CREATE INDEX act_idx_model_source ON public.act_re_model USING btree (editor_source_value_id_);
+CREATE INDEX IF NOT EXISTS act_idx_model_source ON public.act_re_model USING btree (editor_source_value_id_);
 
-CREATE INDEX act_idx_model_source_extra ON public.act_re_model USING btree (editor_source_extra_value_id_);
+CREATE INDEX IF NOT EXISTS act_idx_model_source_extra ON public.act_re_model USING btree (editor_source_extra_value_id_);
 
-CREATE INDEX act_idx_plan_item_case_def ON public.act_cmmn_ru_plan_item_inst USING btree (case_def_id_);
+CREATE INDEX IF NOT EXISTS act_idx_plan_item_case_def ON public.act_cmmn_ru_plan_item_inst USING btree (case_def_id_);
 
-CREATE INDEX act_idx_plan_item_case_inst ON public.act_cmmn_ru_plan_item_inst USING btree (case_inst_id_);
+CREATE INDEX IF NOT EXISTS act_idx_plan_item_case_inst ON public.act_cmmn_ru_plan_item_inst USING btree (case_inst_id_);
 
-CREATE INDEX act_idx_plan_item_stage_inst ON public.act_cmmn_ru_plan_item_inst USING btree (stage_inst_id_);
+CREATE INDEX IF NOT EXISTS act_idx_plan_item_stage_inst ON public.act_cmmn_ru_plan_item_inst USING btree (stage_inst_id_);
 
-CREATE INDEX act_idx_priv_group ON public.act_id_priv_mapping USING btree (group_id_);
+CREATE INDEX IF NOT EXISTS act_idx_priv_group ON public.act_id_priv_mapping USING btree (group_id_);
 
-CREATE INDEX act_idx_priv_mapping ON public.act_id_priv_mapping USING btree (priv_id_);
+CREATE INDEX IF NOT EXISTS act_idx_priv_mapping ON public.act_id_priv_mapping USING btree (priv_id_);
 
-CREATE INDEX act_idx_priv_user ON public.act_id_priv_mapping USING btree (user_id_);
+CREATE INDEX IF NOT EXISTS act_idx_priv_user ON public.act_id_priv_mapping USING btree (user_id_);
 
-CREATE INDEX act_idx_procdef_info_json ON public.act_procdef_info USING btree (info_json_id_);
+CREATE INDEX IF NOT EXISTS act_idx_procdef_info_json ON public.act_procdef_info USING btree (info_json_id_);
 
-CREATE INDEX act_idx_procdef_info_proc ON public.act_procdef_info USING btree (proc_def_id_);
+CREATE INDEX IF NOT EXISTS act_idx_procdef_info_proc ON public.act_procdef_info USING btree (proc_def_id_);
 
-CREATE INDEX act_idx_ru_acti_end ON public.act_ru_actinst USING btree (end_time_);
+CREATE INDEX IF NOT EXISTS act_idx_ru_acti_end ON public.act_ru_actinst USING btree (end_time_);
 
-CREATE INDEX act_idx_ru_acti_exec ON public.act_ru_actinst USING btree (execution_id_);
+CREATE INDEX IF NOT EXISTS act_idx_ru_acti_exec ON public.act_ru_actinst USING btree (execution_id_);
 
-CREATE INDEX act_idx_ru_acti_exec_act ON public.act_ru_actinst USING btree (execution_id_, act_id_);
+CREATE INDEX IF NOT EXISTS act_idx_ru_acti_exec_act ON public.act_ru_actinst USING btree (execution_id_, act_id_);
 
-CREATE INDEX act_idx_ru_acti_proc ON public.act_ru_actinst USING btree (proc_inst_id_);
+CREATE INDEX IF NOT EXISTS act_idx_ru_acti_proc ON public.act_ru_actinst USING btree (proc_inst_id_);
 
-CREATE INDEX act_idx_ru_acti_proc_act ON public.act_ru_actinst USING btree (proc_inst_id_, act_id_);
+CREATE INDEX IF NOT EXISTS act_idx_ru_acti_proc_act ON public.act_ru_actinst USING btree (proc_inst_id_, act_id_);
 
-CREATE INDEX act_idx_ru_acti_start ON public.act_ru_actinst USING btree (start_time_);
+CREATE INDEX IF NOT EXISTS act_idx_ru_acti_start ON public.act_ru_actinst USING btree (start_time_);
 
-CREATE INDEX act_idx_ru_acti_task ON public.act_ru_actinst USING btree (task_id_);
+CREATE INDEX IF NOT EXISTS act_idx_ru_acti_task ON public.act_ru_actinst USING btree (task_id_);
 
-CREATE INDEX act_idx_ru_var_scope_id_type ON public.act_ru_variable USING btree (scope_id_, scope_type_);
+CREATE INDEX IF NOT EXISTS act_idx_ru_var_scope_id_type ON public.act_ru_variable USING btree (scope_id_, scope_type_);
 
-CREATE INDEX act_idx_ru_var_sub_id_type ON public.act_ru_variable USING btree (sub_scope_id_, scope_type_);
+CREATE INDEX IF NOT EXISTS act_idx_ru_var_sub_id_type ON public.act_ru_variable USING btree (sub_scope_id_, scope_type_);
 
-CREATE INDEX act_idx_sentry_case_def ON public.act_cmmn_ru_sentry_part_inst USING btree (case_def_id_);
+CREATE INDEX IF NOT EXISTS act_idx_sentry_case_def ON public.act_cmmn_ru_sentry_part_inst USING btree (case_def_id_);
 
-CREATE INDEX act_idx_sentry_case_inst ON public.act_cmmn_ru_sentry_part_inst USING btree (case_inst_id_);
+CREATE INDEX IF NOT EXISTS act_idx_sentry_case_inst ON public.act_cmmn_ru_sentry_part_inst USING btree (case_inst_id_);
 
-CREATE INDEX act_idx_sentry_plan_item ON public.act_cmmn_ru_sentry_part_inst USING btree (plan_item_inst_id_);
+CREATE INDEX IF NOT EXISTS act_idx_sentry_plan_item ON public.act_cmmn_ru_sentry_part_inst USING btree (plan_item_inst_id_);
 
-CREATE INDEX act_idx_sjob_scope ON public.act_ru_suspended_job USING btree (scope_id_, scope_type_);
+CREATE INDEX IF NOT EXISTS act_idx_sjob_scope ON public.act_ru_suspended_job USING btree (scope_id_, scope_type_);
 
-CREATE INDEX act_idx_sjob_scope_def ON public.act_ru_suspended_job USING btree (scope_definition_id_, scope_type_);
+CREATE INDEX IF NOT EXISTS act_idx_sjob_scope_def ON public.act_ru_suspended_job USING btree (scope_definition_id_, scope_type_);
 
-CREATE INDEX act_idx_sjob_sub_scope ON public.act_ru_suspended_job USING btree (sub_scope_id_, scope_type_);
+CREATE INDEX IF NOT EXISTS act_idx_sjob_sub_scope ON public.act_ru_suspended_job USING btree (sub_scope_id_, scope_type_);
 
-CREATE INDEX act_idx_suspended_job_correlation_id ON public.act_ru_suspended_job USING btree (correlation_id_);
+CREATE INDEX IF NOT EXISTS act_idx_suspended_job_correlation_id ON public.act_ru_suspended_job USING btree (correlation_id_);
 
-CREATE INDEX act_idx_suspended_job_custom_values_id ON public.act_ru_suspended_job USING btree (custom_values_id_);
+CREATE INDEX IF NOT EXISTS act_idx_suspended_job_custom_values_id ON public.act_ru_suspended_job USING btree (custom_values_id_);
 
-CREATE INDEX act_idx_suspended_job_exception_stack_id ON public.act_ru_suspended_job USING btree (exception_stack_id_);
+CREATE INDEX IF NOT EXISTS act_idx_suspended_job_exception_stack_id ON public.act_ru_suspended_job USING btree (exception_stack_id_);
 
-CREATE INDEX act_idx_suspended_job_execution_id ON public.act_ru_suspended_job USING btree (execution_id_);
+CREATE INDEX IF NOT EXISTS act_idx_suspended_job_execution_id ON public.act_ru_suspended_job USING btree (execution_id_);
 
-CREATE INDEX act_idx_suspended_job_proc_def_id ON public.act_ru_suspended_job USING btree (proc_def_id_);
+CREATE INDEX IF NOT EXISTS act_idx_suspended_job_proc_def_id ON public.act_ru_suspended_job USING btree (proc_def_id_);
 
-CREATE INDEX act_idx_suspended_job_process_instance_id ON public.act_ru_suspended_job USING btree (process_instance_id_);
+CREATE INDEX IF NOT EXISTS act_idx_suspended_job_process_instance_id ON public.act_ru_suspended_job USING btree (process_instance_id_);
 
-CREATE INDEX act_idx_task_create ON public.act_ru_task USING btree (create_time_);
+CREATE INDEX IF NOT EXISTS act_idx_task_create ON public.act_ru_task USING btree (create_time_);
 
-CREATE INDEX act_idx_task_exec ON public.act_ru_task USING btree (execution_id_);
+CREATE INDEX IF NOT EXISTS act_idx_task_exec ON public.act_ru_task USING btree (execution_id_);
 
-CREATE INDEX act_idx_task_procdef ON public.act_ru_task USING btree (proc_def_id_);
+CREATE INDEX IF NOT EXISTS act_idx_task_procdef ON public.act_ru_task USING btree (proc_def_id_);
 
-CREATE INDEX act_idx_task_procinst ON public.act_ru_task USING btree (proc_inst_id_);
+CREATE INDEX IF NOT EXISTS act_idx_task_procinst ON public.act_ru_task USING btree (proc_inst_id_);
 
-CREATE INDEX act_idx_task_scope ON public.act_ru_task USING btree (scope_id_, scope_type_);
+CREATE INDEX IF NOT EXISTS act_idx_task_scope ON public.act_ru_task USING btree (scope_id_, scope_type_);
 
-CREATE INDEX act_idx_task_scope_def ON public.act_ru_task USING btree (scope_definition_id_, scope_type_);
+CREATE INDEX IF NOT EXISTS act_idx_task_scope_def ON public.act_ru_task USING btree (scope_definition_id_, scope_type_);
 
-CREATE INDEX act_idx_task_sub_scope ON public.act_ru_task USING btree (sub_scope_id_, scope_type_);
+CREATE INDEX IF NOT EXISTS act_idx_task_sub_scope ON public.act_ru_task USING btree (sub_scope_id_, scope_type_);
 
-CREATE INDEX act_idx_timer_job_correlation_id ON public.act_ru_timer_job USING btree (correlation_id_);
+CREATE INDEX IF NOT EXISTS act_idx_timer_job_correlation_id ON public.act_ru_timer_job USING btree (correlation_id_);
 
-CREATE INDEX act_idx_timer_job_custom_values_id ON public.act_ru_timer_job USING btree (custom_values_id_);
+CREATE INDEX IF NOT EXISTS act_idx_timer_job_custom_values_id ON public.act_ru_timer_job USING btree (custom_values_id_);
 
-CREATE INDEX act_idx_timer_job_duedate ON public.act_ru_timer_job USING btree (duedate_);
+CREATE INDEX IF NOT EXISTS act_idx_timer_job_duedate ON public.act_ru_timer_job USING btree (duedate_);
 
-CREATE INDEX act_idx_timer_job_exception_stack_id ON public.act_ru_timer_job USING btree (exception_stack_id_);
+CREATE INDEX IF NOT EXISTS act_idx_timer_job_exception_stack_id ON public.act_ru_timer_job USING btree (exception_stack_id_);
 
-CREATE INDEX act_idx_timer_job_execution_id ON public.act_ru_timer_job USING btree (execution_id_);
+CREATE INDEX IF NOT EXISTS act_idx_timer_job_execution_id ON public.act_ru_timer_job USING btree (execution_id_);
 
-CREATE INDEX act_idx_timer_job_proc_def_id ON public.act_ru_timer_job USING btree (proc_def_id_);
+CREATE INDEX IF NOT EXISTS act_idx_timer_job_proc_def_id ON public.act_ru_timer_job USING btree (proc_def_id_);
 
-CREATE INDEX act_idx_timer_job_process_instance_id ON public.act_ru_timer_job USING btree (process_instance_id_);
+CREATE INDEX IF NOT EXISTS act_idx_timer_job_process_instance_id ON public.act_ru_timer_job USING btree (process_instance_id_);
 
-CREATE INDEX act_idx_tjob_scope ON public.act_ru_timer_job USING btree (scope_id_, scope_type_);
+CREATE INDEX IF NOT EXISTS act_idx_tjob_scope ON public.act_ru_timer_job USING btree (scope_id_, scope_type_);
 
-CREATE INDEX act_idx_tjob_scope_def ON public.act_ru_timer_job USING btree (scope_definition_id_, scope_type_);
+CREATE INDEX IF NOT EXISTS act_idx_tjob_scope_def ON public.act_ru_timer_job USING btree (scope_definition_id_, scope_type_);
 
-CREATE INDEX act_idx_tjob_sub_scope ON public.act_ru_timer_job USING btree (sub_scope_id_, scope_type_);
+CREATE INDEX IF NOT EXISTS act_idx_tjob_sub_scope ON public.act_ru_timer_job USING btree (sub_scope_id_, scope_type_);
 
-CREATE INDEX act_idx_tskass_task ON public.act_ru_identitylink USING btree (task_id_);
+CREATE INDEX IF NOT EXISTS act_idx_tskass_task ON public.act_ru_identitylink USING btree (task_id_);
 
-CREATE INDEX act_idx_var_bytearray ON public.act_ru_variable USING btree (bytearray_id_);
+CREATE INDEX IF NOT EXISTS act_idx_var_bytearray ON public.act_ru_variable USING btree (bytearray_id_);
 
-CREATE INDEX act_idx_var_exe ON public.act_ru_variable USING btree (execution_id_);
+CREATE INDEX IF NOT EXISTS act_idx_var_exe ON public.act_ru_variable USING btree (execution_id_);
 
-CREATE INDEX act_idx_var_procinst ON public.act_ru_variable USING btree (proc_inst_id_);
+CREATE INDEX IF NOT EXISTS act_idx_var_procinst ON public.act_ru_variable USING btree (proc_inst_id_);
 
-CREATE INDEX act_idx_variable_task_id ON public.act_ru_variable USING btree (task_id_);
+CREATE INDEX IF NOT EXISTS act_idx_variable_task_id ON public.act_ru_variable USING btree (task_id_);
 
-CREATE INDEX flw_idx_batch_part ON public.flw_ru_batch_part USING btree (batch_id_);
+CREATE INDEX IF NOT EXISTS flw_idx_batch_part ON public.flw_ru_batch_part USING btree (batch_id_);
 
-CREATE INDEX idx_alert_severity ON public.admin_alerts USING btree (severity);
+CREATE INDEX IF NOT EXISTS idx_alert_severity ON public.admin_alerts USING btree (severity);
 
-CREATE INDEX idx_alert_status ON public.admin_alerts USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_alert_status ON public.admin_alerts USING btree (status);
 
-CREATE INDEX idx_assignment_target ON public.wf_extended_task_info USING btree (assignment_target);
+CREATE INDEX IF NOT EXISTS idx_assignment_target ON public.wf_extended_task_info USING btree (assignment_target);
 
-CREATE INDEX idx_assignment_type ON public.wf_extended_task_info USING btree (assignment_type);
+CREATE INDEX IF NOT EXISTS idx_assignment_type ON public.wf_extended_task_info USING btree (assignment_type);
 
-CREATE INDEX idx_audit_action ON public.admin_audit_logs USING btree (action);
+CREATE INDEX IF NOT EXISTS idx_audit_action ON public.admin_audit_logs USING btree (action);
 
-CREATE INDEX idx_audit_composite ON public.wf_audit_logs USING btree (user_id, operation_type, "timestamp");
+CREATE INDEX IF NOT EXISTS idx_audit_composite ON public.wf_audit_logs USING btree (user_id, operation_type, "timestamp");
 
-CREATE INDEX idx_audit_ip_address ON public.wf_audit_logs USING btree (ip_address);
+CREATE INDEX IF NOT EXISTS idx_audit_ip_address ON public.wf_audit_logs USING btree (ip_address);
 
-CREATE INDEX idx_audit_operation_type ON public.wf_audit_logs USING btree (operation_type);
+CREATE INDEX IF NOT EXISTS idx_audit_operation_type ON public.wf_audit_logs USING btree (operation_type);
 
-CREATE INDEX idx_audit_resource ON public.admin_audit_logs USING btree (resource_type, resource_id);
+CREATE INDEX IF NOT EXISTS idx_audit_resource ON public.admin_audit_logs USING btree (resource_type, resource_id);
 
-CREATE INDEX idx_audit_resource_id ON public.wf_audit_logs USING btree (resource_id);
+CREATE INDEX IF NOT EXISTS idx_audit_resource_id ON public.wf_audit_logs USING btree (resource_id);
 
-CREATE INDEX idx_audit_resource_type ON public.wf_audit_logs USING btree (resource_type);
+CREATE INDEX IF NOT EXISTS idx_audit_resource_type ON public.wf_audit_logs USING btree (resource_type);
 
-CREATE INDEX idx_audit_session_id ON public.wf_audit_logs USING btree (session_id);
+CREATE INDEX IF NOT EXISTS idx_audit_session_id ON public.wf_audit_logs USING btree (session_id);
 
-CREATE INDEX idx_audit_tenant_id ON public.wf_audit_logs USING btree (tenant_id);
+CREATE INDEX IF NOT EXISTS idx_audit_tenant_id ON public.wf_audit_logs USING btree (tenant_id);
 
-CREATE INDEX idx_audit_timestamp ON public.admin_audit_logs USING btree ("timestamp");
+CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON public.admin_audit_logs USING btree ("timestamp");
 
-CREATE INDEX idx_audit_user ON public.admin_audit_logs USING btree (user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_user ON public.admin_audit_logs USING btree (user_id);
 
-CREATE INDEX idx_audit_user_id ON public.wf_audit_logs USING btree (user_id);
+CREATE INDEX IF NOT EXISTS idx_audit_user_id ON public.wf_audit_logs USING btree (user_id);
 
-CREATE INDEX idx_claimed_by ON public.wf_extended_task_info USING btree (claimed_by);
+CREATE INDEX IF NOT EXISTS idx_claimed_by ON public.wf_extended_task_info USING btree (claimed_by);
 
-CREATE INDEX idx_col_perm_column ON public.admin_column_permissions USING btree (column_name);
+CREATE INDEX IF NOT EXISTS idx_col_perm_column ON public.admin_column_permissions USING btree (column_name);
 
-CREATE INDEX idx_col_perm_rule ON public.admin_column_permissions USING btree (rule_id);
+CREATE INDEX IF NOT EXISTS idx_col_perm_rule ON public.admin_column_permissions USING btree (rule_id);
 
-CREATE INDEX idx_config_category ON public.admin_system_configs USING btree (category);
+CREATE INDEX IF NOT EXISTS idx_config_category ON public.admin_system_configs USING btree (category);
 
-CREATE INDEX idx_config_history_key ON public.admin_config_history USING btree (config_key);
+CREATE INDEX IF NOT EXISTS idx_config_history_key ON public.admin_config_history USING btree (config_key);
 
-CREATE INDEX idx_config_history_time ON public.admin_config_history USING btree (changed_at);
+CREATE INDEX IF NOT EXISTS idx_config_history_time ON public.admin_config_history USING btree (changed_at);
 
-CREATE INDEX idx_config_key ON public.admin_system_configs USING btree (config_key);
+CREATE INDEX IF NOT EXISTS idx_config_key ON public.admin_system_configs USING btree (config_key);
 
-CREATE INDEX idx_created_time ON public.wf_extended_task_info USING btree (created_time);
+CREATE INDEX IF NOT EXISTS idx_created_time ON public.wf_extended_task_info USING btree (created_time);
 
-CREATE INDEX idx_delegated_to ON public.wf_extended_task_info USING btree (delegated_to);
+CREATE INDEX IF NOT EXISTS idx_delegated_to ON public.wf_extended_task_info USING btree (delegated_to);
 
-CREATE INDEX idx_dev_role_perm_role ON public.sys_developer_role_permissions USING btree (role_id);
+CREATE INDEX IF NOT EXISTS idx_dev_role_perm_role ON public.sys_developer_role_permissions USING btree (role_id);
 
-CREATE INDEX idx_dict_code ON public.sys_dictionaries USING btree (code);
+CREATE INDEX IF NOT EXISTS idx_dict_code ON public.sys_dictionaries USING btree (code);
 
-CREATE INDEX idx_dict_ds_dict_id ON public.sys_dictionary_data_sources USING btree (dictionary_id);
+CREATE INDEX IF NOT EXISTS idx_dict_ds_dict_id ON public.sys_dictionary_data_sources USING btree (dictionary_id);
 
-CREATE INDEX idx_dict_item_code ON public.sys_dictionary_items USING btree (dictionary_id, item_code);
+CREATE INDEX IF NOT EXISTS idx_dict_item_code ON public.sys_dictionary_items USING btree (dictionary_id, item_code);
 
-CREATE INDEX idx_dict_item_dict_id ON public.sys_dictionary_items USING btree (dictionary_id);
+CREATE INDEX IF NOT EXISTS idx_dict_item_dict_id ON public.sys_dictionary_items USING btree (dictionary_id);
 
-CREATE INDEX idx_dict_item_parent ON public.sys_dictionary_items USING btree (parent_id);
+CREATE INDEX IF NOT EXISTS idx_dict_item_parent ON public.sys_dictionary_items USING btree (parent_id);
 
-CREATE INDEX idx_dict_item_status ON public.sys_dictionary_items USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_dict_item_status ON public.sys_dictionary_items USING btree (status);
 
-CREATE INDEX idx_dict_status ON public.sys_dictionaries USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_dict_status ON public.sys_dictionaries USING btree (status);
 
-CREATE INDEX idx_dict_type ON public.sys_dictionaries USING btree (type);
+CREATE INDEX IF NOT EXISTS idx_dict_type ON public.sys_dictionaries USING btree (type);
 
-CREATE INDEX idx_dict_ver_dict_id ON public.sys_dictionary_versions USING btree (dictionary_id);
+CREATE INDEX IF NOT EXISTS idx_dict_ver_dict_id ON public.sys_dictionary_versions USING btree (dictionary_id);
 
-CREATE INDEX idx_dict_ver_version ON public.sys_dictionary_versions USING btree (dictionary_id, version);
+CREATE INDEX IF NOT EXISTS idx_dict_ver_version ON public.sys_dictionary_versions USING btree (dictionary_id, version);
 
-CREATE INDEX idx_dp_rule_target ON public.admin_data_permission_rules USING btree (target_type, target_id);
+CREATE INDEX IF NOT EXISTS idx_dp_rule_target ON public.admin_data_permission_rules USING btree (target_type, target_id);
 
-CREATE INDEX idx_dp_rule_type ON public.admin_data_permission_rules USING btree (permission_type);
+CREATE INDEX IF NOT EXISTS idx_dp_rule_type ON public.admin_data_permission_rules USING btree (permission_type);
 
-CREATE INDEX idx_due_date ON public.wf_extended_task_info USING btree (due_date);
+CREATE INDEX IF NOT EXISTS idx_due_date ON public.wf_extended_task_info USING btree (due_date);
 
-CREATE INDEX idx_dw_action_definitions_fu ON public.dw_action_definitions USING btree (function_unit_id);
+CREATE INDEX IF NOT EXISTS idx_dw_action_definitions_fu ON public.dw_action_definitions USING btree (function_unit_id);
 
-CREATE INDEX idx_dw_field_definitions_table ON public.dw_field_definitions USING btree (table_id);
+CREATE INDEX IF NOT EXISTS idx_dw_field_definitions_table ON public.dw_field_definitions USING btree (table_id);
 
-CREATE INDEX idx_dw_foreign_keys_table ON public.dw_foreign_keys USING btree (table_id);
+CREATE INDEX IF NOT EXISTS idx_dw_foreign_keys_table ON public.dw_foreign_keys USING btree (table_id);
 
-CREATE INDEX idx_dw_form_definitions_fu ON public.dw_form_definitions USING btree (function_unit_id);
+CREATE INDEX IF NOT EXISTS idx_dw_form_definitions_fu ON public.dw_form_definitions USING btree (function_unit_id);
 
-CREATE INDEX idx_dw_form_table_bindings_form ON public.dw_form_table_bindings USING btree (form_id);
+CREATE INDEX IF NOT EXISTS idx_dw_form_table_bindings_form ON public.dw_form_table_bindings USING btree (form_id);
 
-CREATE INDEX idx_dw_form_table_bindings_table ON public.dw_form_table_bindings USING btree (table_id);
+CREATE INDEX IF NOT EXISTS idx_dw_form_table_bindings_table ON public.dw_form_table_bindings USING btree (table_id);
 
-CREATE INDEX idx_dw_function_units_name ON public.dw_function_units USING btree (name);
+CREATE INDEX IF NOT EXISTS idx_dw_function_units_name ON public.dw_function_units USING btree (name);
 
-CREATE INDEX idx_dw_function_units_status ON public.dw_function_units USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_dw_function_units_status ON public.dw_function_units USING btree (status);
 
-CREATE INDEX idx_dw_icons_category ON public.dw_icons USING btree (category);
+CREATE INDEX IF NOT EXISTS idx_dw_icons_category ON public.dw_icons USING btree (category);
 
-CREATE INDEX idx_dw_icons_name ON public.dw_icons USING btree (name);
+CREATE INDEX IF NOT EXISTS idx_dw_icons_name ON public.dw_icons USING btree (name);
 
-CREATE INDEX idx_dw_operation_logs_operator ON public.dw_operation_logs USING btree (operator);
+CREATE INDEX IF NOT EXISTS idx_dw_operation_logs_operator ON public.dw_operation_logs USING btree (operator);
 
-CREATE INDEX idx_dw_operation_logs_target ON public.dw_operation_logs USING btree (target_type, target_id);
+CREATE INDEX IF NOT EXISTS idx_dw_operation_logs_target ON public.dw_operation_logs USING btree (target_type, target_id);
 
-CREATE INDEX idx_dw_operation_logs_time ON public.dw_operation_logs USING btree (operation_time);
+CREATE INDEX IF NOT EXISTS idx_dw_operation_logs_time ON public.dw_operation_logs USING btree (operation_time);
 
-CREATE INDEX idx_dw_process_definitions_fu ON public.dw_process_definitions USING btree (function_unit_id);
+CREATE INDEX IF NOT EXISTS idx_dw_process_definitions_fu ON public.dw_process_definitions USING btree (function_unit_id);
 
-CREATE INDEX idx_dw_table_definitions_fu ON public.dw_table_definitions USING btree (function_unit_id);
+CREATE INDEX IF NOT EXISTS idx_dw_table_definitions_fu ON public.dw_table_definitions USING btree (function_unit_id);
 
-CREATE INDEX idx_dw_versions_fu ON public.dw_versions USING btree (function_unit_id);
+CREATE INDEX IF NOT EXISTS idx_dw_versions_fu ON public.dw_versions USING btree (function_unit_id);
 
-CREATE INDEX idx_exception_occurred_time ON public.wf_exception_records USING btree (occurred_time);
+CREATE INDEX IF NOT EXISTS idx_exception_occurred_time ON public.wf_exception_records USING btree (occurred_time);
 
-CREATE INDEX idx_exception_process_instance ON public.wf_exception_records USING btree (process_instance_id);
+CREATE INDEX IF NOT EXISTS idx_exception_process_instance ON public.wf_exception_records USING btree (process_instance_id);
 
-CREATE INDEX idx_exception_resolved ON public.wf_exception_records USING btree (resolved);
+CREATE INDEX IF NOT EXISTS idx_exception_resolved ON public.wf_exception_records USING btree (resolved);
 
-CREATE INDEX idx_exception_severity ON public.wf_exception_records USING btree (severity);
+CREATE INDEX IF NOT EXISTS idx_exception_severity ON public.wf_exception_records USING btree (severity);
 
-CREATE INDEX idx_exception_status ON public.wf_exception_records USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_exception_status ON public.wf_exception_records USING btree (status);
 
-CREATE INDEX idx_exception_task_id ON public.wf_exception_records USING btree (task_id);
+CREATE INDEX IF NOT EXISTS idx_exception_task_id ON public.wf_exception_records USING btree (task_id);
 
-CREATE INDEX idx_exception_type ON public.wf_exception_records USING btree (exception_type);
+CREATE INDEX IF NOT EXISTS idx_exception_type ON public.wf_exception_records USING btree (exception_type);
 
-CREATE INDEX idx_fu_access_func_unit ON public.sys_function_unit_access USING btree (function_unit_id);
+CREATE INDEX IF NOT EXISTS idx_fu_access_func_unit ON public.sys_function_unit_access USING btree (function_unit_id);
 
-CREATE INDEX idx_fu_approval_deployment ON public.sys_function_unit_approvals USING btree (deployment_id);
+CREATE INDEX IF NOT EXISTS idx_fu_approval_deployment ON public.sys_function_unit_approvals USING btree (deployment_id);
 
-CREATE INDEX idx_fu_content_func_unit ON public.sys_function_unit_contents USING btree (function_unit_id);
+CREATE INDEX IF NOT EXISTS idx_fu_content_func_unit ON public.sys_function_unit_contents USING btree (function_unit_id);
 
-CREATE INDEX idx_fu_dependency_func_unit ON public.sys_function_unit_dependencies USING btree (function_unit_id);
+CREATE INDEX IF NOT EXISTS idx_fu_dependency_func_unit ON public.sys_function_unit_dependencies USING btree (function_unit_id);
 
-CREATE INDEX idx_fu_deployment_func_unit ON public.sys_function_unit_deployments USING btree (function_unit_id);
+CREATE INDEX IF NOT EXISTS idx_fu_deployment_func_unit ON public.sys_function_unit_deployments USING btree (function_unit_id);
 
-CREATE INDEX idx_fu_deployment_status ON public.sys_function_unit_deployments USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_fu_deployment_status ON public.sys_function_unit_deployments USING btree (status);
 
-CREATE INDEX idx_function_unit_code ON public.dw_function_units USING btree (code);
+CREATE INDEX IF NOT EXISTS idx_function_unit_code ON public.dw_function_units USING btree (code);
 
-CREATE INDEX idx_log_level ON public.admin_system_logs USING btree (log_level);
+CREATE INDEX IF NOT EXISTS idx_log_level ON public.admin_system_logs USING btree (log_level);
 
-CREATE INDEX idx_log_module ON public.admin_system_logs USING btree (module);
+CREATE INDEX IF NOT EXISTS idx_log_module ON public.admin_system_logs USING btree (module);
 
-CREATE INDEX idx_log_timestamp ON public.admin_system_logs USING btree ("timestamp");
+CREATE INDEX IF NOT EXISTS idx_log_timestamp ON public.admin_system_logs USING btree ("timestamp");
 
-CREATE INDEX idx_log_type ON public.admin_system_logs USING btree (log_type);
+CREATE INDEX IF NOT EXISTS idx_log_type ON public.admin_system_logs USING btree (log_type);
 
-CREATE INDEX idx_log_user ON public.admin_system_logs USING btree (user_id);
+CREATE INDEX IF NOT EXISTS idx_log_user ON public.admin_system_logs USING btree (user_id);
 
-CREATE INDEX idx_login_audit_action ON public.sys_login_audit USING btree (action);
+CREATE INDEX IF NOT EXISTS idx_login_audit_action ON public.sys_login_audit USING btree (action);
 
-CREATE INDEX idx_login_audit_created ON public.sys_login_audit USING btree (created_at);
+CREATE INDEX IF NOT EXISTS idx_login_audit_created ON public.sys_login_audit USING btree (created_at);
 
-CREATE INDEX idx_login_audit_user ON public.sys_login_audit USING btree (user_id);
+CREATE INDEX IF NOT EXISTS idx_login_audit_user ON public.sys_login_audit USING btree (user_id);
 
-CREATE INDEX idx_login_audit_username ON public.sys_login_audit USING btree (username);
+CREATE INDEX IF NOT EXISTS idx_login_audit_username ON public.sys_login_audit USING btree (username);
 
-CREATE INDEX idx_priority ON public.wf_extended_task_info USING btree (priority);
+CREATE INDEX IF NOT EXISTS idx_priority ON public.wf_extended_task_info USING btree (priority);
 
-CREATE INDEX idx_process_instance ON public.wf_extended_task_info USING btree (process_instance_id);
+CREATE INDEX IF NOT EXISTS idx_process_instance ON public.wf_extended_task_info USING btree (process_instance_id);
 
-CREATE INDEX idx_role_assignments_role ON public.sys_role_assignments USING btree (role_id);
+CREATE INDEX IF NOT EXISTS idx_role_assignments_role ON public.sys_role_assignments USING btree (role_id);
 
-CREATE INDEX idx_role_assignments_target ON public.sys_role_assignments USING btree (target_type, target_id);
+CREATE INDEX IF NOT EXISTS idx_role_assignments_target ON public.sys_role_assignments USING btree (target_type, target_id);
 
-CREATE INDEX idx_role_assignments_valid ON public.sys_role_assignments USING btree (valid_from, valid_to);
+CREATE INDEX IF NOT EXISTS idx_role_assignments_valid ON public.sys_role_assignments USING btree (valid_from, valid_to);
 
-CREATE INDEX idx_status ON public.wf_extended_task_info USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_status ON public.wf_extended_task_info USING btree (status);
 
-CREATE INDEX idx_sys_dept_code ON public.sys_departments USING btree (code);
+CREATE INDEX IF NOT EXISTS idx_sys_dept_code ON public.sys_departments USING btree (code);
 
-CREATE INDEX idx_sys_dept_parent ON public.sys_departments USING btree (parent_id);
+CREATE INDEX IF NOT EXISTS idx_sys_dept_parent ON public.sys_departments USING btree (parent_id);
 
-CREATE INDEX idx_sys_dept_path ON public.sys_departments USING btree (path);
+CREATE INDEX IF NOT EXISTS idx_sys_dept_path ON public.sys_departments USING btree (path);
 
-CREATE INDEX idx_sys_permissions_parent ON public.sys_permissions USING btree (parent_id);
+CREATE INDEX IF NOT EXISTS idx_sys_permissions_parent ON public.sys_permissions USING btree (parent_id);
 
-CREATE INDEX idx_sys_roles_code ON public.sys_roles USING btree (code);
+CREATE INDEX IF NOT EXISTS idx_sys_roles_code ON public.sys_roles USING btree (code);
 
-CREATE INDEX idx_sys_roles_type ON public.sys_roles USING btree (type);
+CREATE INDEX IF NOT EXISTS idx_sys_roles_type ON public.sys_roles USING btree (type);
 
-CREATE INDEX idx_sys_user_roles_role ON public.sys_user_roles USING btree (role_id);
+CREATE INDEX IF NOT EXISTS idx_sys_user_roles_role ON public.sys_user_roles USING btree (role_id);
 
-CREATE INDEX idx_sys_user_roles_user ON public.sys_user_roles USING btree (user_id);
+CREATE INDEX IF NOT EXISTS idx_sys_user_roles_user ON public.sys_user_roles USING btree (user_id);
 
-CREATE INDEX idx_sys_users_deleted ON public.sys_users USING btree (deleted);
+CREATE INDEX IF NOT EXISTS idx_sys_users_deleted ON public.sys_users USING btree (deleted);
 
-CREATE INDEX idx_sys_users_department ON public.sys_users USING btree (department_id);
+CREATE INDEX IF NOT EXISTS idx_sys_users_department ON public.sys_users USING btree (department_id);
 
-CREATE INDEX idx_sys_users_email ON public.sys_users USING btree (email);
+CREATE INDEX IF NOT EXISTS idx_sys_users_email ON public.sys_users USING btree (email);
 
-CREATE INDEX idx_sys_users_employee_id ON public.sys_users USING btree (employee_id);
+CREATE INDEX IF NOT EXISTS idx_sys_users_employee_id ON public.sys_users USING btree (employee_id);
 
-CREATE INDEX idx_sys_users_status ON public.sys_users USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_sys_users_status ON public.sys_users USING btree (status);
 
-CREATE INDEX idx_sys_users_username ON public.sys_users USING btree (username);
+CREATE INDEX IF NOT EXISTS idx_sys_users_username ON public.sys_users USING btree (username);
 
-CREATE INDEX idx_user_email ON public.sys_users USING btree (email);
+CREATE INDEX IF NOT EXISTS idx_user_email ON public.sys_users USING btree (email);
 
-CREATE INDEX idx_user_status ON public.sys_users USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_user_status ON public.sys_users USING btree (status);
 
-CREATE INDEX idx_user_username ON public.sys_users USING btree (username);
+CREATE INDEX IF NOT EXISTS idx_user_username ON public.sys_users USING btree (username);
 
-CREATE INDEX idx_variable_created_time ON public.wf_process_variables USING btree (created_time);
+CREATE INDEX IF NOT EXISTS idx_variable_created_time ON public.wf_process_variables USING btree (created_time);
 
-CREATE INDEX idx_variable_name ON public.wf_process_variables USING btree (name);
+CREATE INDEX IF NOT EXISTS idx_variable_name ON public.wf_process_variables USING btree (name);
 
-CREATE INDEX idx_variable_proc_inst ON public.wf_process_variables USING btree (process_instance_id);
+CREATE INDEX IF NOT EXISTS idx_variable_proc_inst ON public.wf_process_variables USING btree (process_instance_id);
 
-CREATE INDEX idx_variable_task ON public.wf_process_variables USING btree (task_id);
+CREATE INDEX IF NOT EXISTS idx_variable_task ON public.wf_process_variables USING btree (task_id);
 
-CREATE INDEX idx_vg_task_history_action ON public.sys_virtual_group_task_history USING btree (action_type);
+CREATE INDEX IF NOT EXISTS idx_vg_task_history_action ON public.sys_virtual_group_task_history USING btree (action_type);
 
-CREATE INDEX idx_vg_task_history_created ON public.sys_virtual_group_task_history USING btree (created_at);
+CREATE INDEX IF NOT EXISTS idx_vg_task_history_created ON public.sys_virtual_group_task_history USING btree (created_at);
 
-CREATE INDEX idx_vg_task_history_group ON public.sys_virtual_group_task_history USING btree (group_id);
+CREATE INDEX IF NOT EXISTS idx_vg_task_history_group ON public.sys_virtual_group_task_history USING btree (group_id);
 
-CREATE INDEX idx_vg_task_history_task ON public.sys_virtual_group_task_history USING btree (task_id);
+CREATE INDEX IF NOT EXISTS idx_vg_task_history_task ON public.sys_virtual_group_task_history USING btree (task_id);
 
-CREATE INDEX idx_wf_audit_process ON public.wf_audit_logs USING btree (process_instance_id);
+CREATE INDEX IF NOT EXISTS idx_wf_audit_process ON public.wf_audit_logs USING btree (process_instance_id);
 
-CREATE INDEX idx_wf_audit_user ON public.wf_audit_logs USING btree (user_id);
+CREATE INDEX IF NOT EXISTS idx_wf_audit_user ON public.wf_audit_logs USING btree (user_id);
 
-CREATE INDEX idx_wf_exception_handled ON public.wf_exception_records USING btree (handled);
+CREATE INDEX IF NOT EXISTS idx_wf_exception_handled ON public.wf_exception_records USING btree (handled);
 
-CREATE INDEX idx_wf_exception_process ON public.wf_exception_records USING btree (process_instance_id);
+CREATE INDEX IF NOT EXISTS idx_wf_exception_process ON public.wf_exception_records USING btree (process_instance_id);
 
-CREATE INDEX idx_wf_saga_status ON public.wf_saga_transactions USING btree (status);
+CREATE INDEX IF NOT EXISTS idx_wf_saga_status ON public.wf_saga_transactions USING btree (status);
 
-CREATE INDEX idx_wf_saga_steps_saga ON public.wf_saga_steps USING btree (saga_id);
+CREATE INDEX IF NOT EXISTS idx_wf_saga_steps_saga ON public.wf_saga_steps USING btree (saga_id);
 
-CREATE INDEX idx_wf_saga_type ON public.wf_saga_transactions USING btree (saga_type);
+CREATE INDEX IF NOT EXISTS idx_wf_saga_type ON public.wf_saga_transactions USING btree (saga_type);
 
-CREATE INDEX idx_wf_task_id ON public.wf_extended_task_info USING btree (task_id);
+CREATE INDEX IF NOT EXISTS idx_wf_task_id ON public.wf_extended_task_info USING btree (task_id);
 
-CREATE INDEX idx_wf_task_process ON public.wf_extended_task_info USING btree (process_instance_id);
+CREATE INDEX IF NOT EXISTS idx_wf_task_process ON public.wf_extended_task_info USING btree (process_instance_id);
 
-CREATE INDEX idx_wf_var_name ON public.wf_process_variables USING btree (name);
+CREATE INDEX IF NOT EXISTS idx_wf_var_name ON public.wf_process_variables USING btree (name);
 
-CREATE INDEX idx_wf_var_process ON public.wf_process_variables USING btree (process_instance_id);
+CREATE INDEX IF NOT EXISTS idx_wf_var_process ON public.wf_process_variables USING btree (process_instance_id);
 
 ALTER TABLE ONLY public.act_app_appdef
     ADD CONSTRAINT act_fk_app_def_dply FOREIGN KEY (deployment_id_) REFERENCES public.act_app_deployment(id_);
