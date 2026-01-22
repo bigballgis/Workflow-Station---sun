@@ -213,7 +213,6 @@ application-local.properties
 .docker/
 docker-compose.override.yml
 docker-compose.local.yml
-*/*/Dockerfile
 
 # =============================================================================
 # Kubernetes secrets (actual secrets, not templates)
