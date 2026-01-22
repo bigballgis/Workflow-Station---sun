@@ -111,6 +111,8 @@ services:
     build:
       context: ./backend/workflow-engine-core
       dockerfile: Dockerfile
+      platforms:
+        - linux/amd64
     container_name: platform-workflow-engine
     depends_on:
       postgres:
@@ -139,6 +141,8 @@ services:
     build:
       context: ./backend/admin-center
       dockerfile: Dockerfile
+      platforms:
+        - linux/amd64
     container_name: platform-admin-center
     depends_on:
       postgres:
@@ -167,6 +171,8 @@ services:
     build:
       context: ./backend/user-portal
       dockerfile: Dockerfile
+      platforms:
+        - linux/amd64
     container_name: platform-user-portal
     depends_on:
       postgres:
@@ -197,6 +203,8 @@ services:
     build:
       context: ./backend/developer-workstation
       dockerfile: Dockerfile
+      platforms:
+        - linux/amd64
     container_name: platform-developer-workstation
     depends_on:
       postgres:
@@ -225,6 +233,8 @@ services:
     build:
       context: ./backend/api-gateway
       dockerfile: Dockerfile
+      platforms:
+        - linux/amd64
     container_name: platform-api-gateway
     depends_on:
       postgres:
@@ -251,6 +261,8 @@ services:
     build:
       context: ./frontend/admin-center
       dockerfile: Dockerfile
+      platforms:
+        - linux/amd64
     container_name: platform-frontend-admin
     depends_on:
       - admin-center
@@ -268,6 +280,8 @@ services:
     build:
       context: ./frontend/user-portal
       dockerfile: Dockerfile
+      platforms:
+        - linux/amd64
     container_name: platform-frontend-portal
     depends_on:
       - user-portal
@@ -285,6 +299,8 @@ services:
     build:
       context: ./frontend/developer-workstation
       dockerfile: Dockerfile
+      platforms:
+        - linux/amd64
     container_name: platform-frontend-developer
     depends_on:
       - developer-workstation
