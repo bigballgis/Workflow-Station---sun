@@ -153,8 +153,8 @@ public class ProcessVariable {
     /**
      * 二进制数据（文件等）
      */
-    @Lob
-    @Column(name = "binary_value")
+    @Column(name = "binary_value", columnDefinition = "bytea")
+    @JdbcTypeCode(SqlTypes.BINARY)
     private byte[] binaryValue;
 
     /**

@@ -6,7 +6,7 @@
 
 -- Drop the JPA auto-generated constraint (if exists)
 -- Keep the manually defined uk_form_table_binding constraint
-DO $
+DO $$
 BEGIN
     -- Check if the auto-generated constraint exists
     IF EXISTS (
@@ -20,10 +20,10 @@ BEGIN
     ELSE
         RAISE NOTICE 'Constraint ukn5x4ip72yh1fmc3hth36r953d does not exist, skipping';
     END IF;
-END $;
+END $$;
 
 -- Verify only one unique constraint remains
-DO $
+DO $$
 DECLARE
     constraint_count INTEGER;
 BEGIN
@@ -37,4 +37,4 @@ BEGIN
     ELSE
         RAISE WARNING 'Warning: Expected 1 unique constraint, found %', constraint_count;
     END IF;
-END $;
+END $$;
