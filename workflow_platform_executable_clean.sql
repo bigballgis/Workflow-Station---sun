@@ -9,6 +9,8 @@
 --   3. 移除重复索引 (idx_user_username, idx_user_email, idx_user_status)
 --   4. 添加 sys_users 缺失索引 (idx_sys_users_entity_manager, idx_sys_users_function_manager)
 --   5. dw_form_table_bindings 添加 uk_form_table_binding 唯一约束
+--   6. 更新 sys_role_assignments 中的角色分配 ID (ra-admin-sys-admin, ra-tech-director-tech-director)
+--   7. 添加 sys_user_roles 同步逻辑，确保所有用户角色分配都同步到 sys_user_roles 表
 -- =====================================================
 
 SET session_replication_role = 'replica';
@@ -3055,7 +3057,7 @@ INSERT INTO public.sys_permissions (id, code, name, type, resource, action, desc
 INSERT INTO public.sys_permissions (id, code, name, type, resource, action, description, created_at, parent_id, sort_order) VALUES ('perm-portal-task-process', 'PORTAL:TASK:PROCESS', 'Process Tasks', 'BUSINESS', 'task', 'process', 'Process and complete tasks', '2026-01-13 09:37:39.734856', NULL, NULL);
 INSERT INTO public.sys_permissions (id, code, name, type, resource, action, description, created_at, parent_id, sort_order) VALUES ('perm-portal-process-start', 'PORTAL:PROCESS:START', 'Start Process', 'BUSINESS', 'process', 'start', 'Start new process instances', '2026-01-13 09:37:39.734856', NULL, NULL);
 INSERT INTO public.sys_permissions (id, code, name, type, resource, action, description, created_at, parent_id, sort_order) VALUES ('perm-portal-process-view', 'PORTAL:PROCESS:VIEW', 'View Process', 'BUSINESS', 'process', 'view', 'View process instances', '2026-01-13 09:37:39.734856', NULL, NULL);
-INSERT INTO public.sys_role_assignments (id, role_id, target_type, target_id, assigned_at, assigned_by, valid_from, valid_to, created_at, created_by, updated_at) VALUES ('ra-user-admin-sysadmin', 'SYS_ADMIN_ROLE', 'USER', 'admin-001', '2026-01-13 10:38:37.240844', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844');
+INSERT INTO public.sys_role_assignments (id, role_id, target_type, target_id, assigned_at, assigned_by, valid_from, valid_to, created_at, created_by, updated_at) VALUES ('ra-admin-sys-admin', 'SYS_ADMIN_ROLE', 'USER', 'admin-001', '2026-01-13 10:38:37.240844', 'system', NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844');
 INSERT INTO public.sys_role_assignments (id, role_id, target_type, target_id, assigned_at, assigned_by, valid_from, valid_to, created_at, created_by, updated_at) VALUES ('ra-user-hr-mgr', 'MANAGER_ROLE', 'USER', 'hr-manager-001', '2026-01-13 10:38:37.240844', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844');
 INSERT INTO public.sys_role_assignments (id, role_id, target_type, target_id, assigned_at, assigned_by, valid_from, valid_to, created_at, created_by, updated_at) VALUES ('ra-user-hr-spec', 'USER_ROLE', 'USER', 'hr-specialist-001', '2026-01-13 10:38:37.240844', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844');
 INSERT INTO public.sys_role_assignments (id, role_id, target_type, target_id, assigned_at, assigned_by, valid_from, valid_to, created_at, created_by, updated_at) VALUES ('ra-user-hr-rec', 'USER_ROLE', 'USER', 'hr-recruiter-001', '2026-01-13 10:38:37.240844', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844');
@@ -3063,7 +3065,7 @@ INSERT INTO public.sys_role_assignments (id, role_id, target_type, target_id, as
 INSERT INTO public.sys_role_assignments (id, role_id, target_type, target_id, assigned_at, assigned_by, valid_from, valid_to, created_at, created_by, updated_at) VALUES ('ra-user-corp-mgr', 'MANAGER_ROLE', 'USER', 'corp-manager-001', '2026-01-13 10:38:37.240844', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844');
 INSERT INTO public.sys_role_assignments (id, role_id, target_type, target_id, assigned_at, assigned_by, valid_from, valid_to, created_at, created_by, updated_at) VALUES ('ra-user-corp-ana', 'USER_ROLE', 'USER', 'corp-analyst-001', '2026-01-13 10:38:37.240844', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844');
 INSERT INTO public.sys_role_assignments (id, role_id, target_type, target_id, assigned_at, assigned_by, valid_from, valid_to, created_at, created_by, updated_at) VALUES ('ra-user-corp-off', 'USER_ROLE', 'USER', 'corp-officer-001', '2026-01-13 10:38:37.240844', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844');
-INSERT INTO public.sys_role_assignments (id, role_id, target_type, target_id, assigned_at, assigned_by, valid_from, valid_to, created_at, created_by, updated_at) VALUES ('ra-user-tech-dir', 'TECH_DIRECTOR_ROLE', 'USER', 'tech-director-001', '2026-01-13 10:38:37.240844', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844');
+INSERT INTO public.sys_role_assignments (id, role_id, target_type, target_id, assigned_at, assigned_by, valid_from, valid_to, created_at, created_by, updated_at) VALUES ('ra-tech-director-tech-director', 'TECH_DIRECTOR_ROLE', 'USER', 'tech-director-001', '2026-01-13 10:38:37.240844', 'system', NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844');
 INSERT INTO public.sys_role_assignments (id, role_id, target_type, target_id, assigned_at, assigned_by, valid_from, valid_to, created_at, created_by, updated_at) VALUES ('ra-user-core-lead', 'TEAM_LEADER_ROLE', 'USER', 'core-lead-001', '2026-01-13 10:38:37.240844', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844');
 INSERT INTO public.sys_role_assignments (id, role_id, target_type, target_id, assigned_at, assigned_by, valid_from, valid_to, created_at, created_by, updated_at) VALUES ('ra-user-channel-lead', 'TEAM_LEADER_ROLE', 'USER', 'channel-lead-001', '2026-01-13 10:38:37.240844', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844');
 INSERT INTO public.sys_role_assignments (id, role_id, target_type, target_id, assigned_at, assigned_by, valid_from, valid_to, created_at, created_by, updated_at) VALUES ('ra-user-risk-lead', 'TEAM_LEADER_ROLE', 'USER', 'risk-lead-001', '2026-01-13 10:38:37.240844', NULL, NULL, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844');
@@ -3121,7 +3123,8 @@ INSERT INTO public.sys_roles (id, code, name, type, description, status, is_syst
 INSERT INTO public.sys_roles (id, code, name, type, description, status, is_system, created_at, created_by, updated_at, updated_by) VALUES ('BUSINESS_USER_ROLE', 'BUSINESS_USER', 'Business User', 'BU_UNBOUNDED', 'Standard business user access', 'ACTIVE', true, '2026-01-13 09:37:39.7329', NULL, '2026-01-13 09:37:39.7329', NULL);
 INSERT INTO public.sys_roles (id, code, name, type, description, status, is_system, created_at, created_by, updated_at, updated_by) VALUES ('MANAGER_ROLE', 'MANAGER', 'Manager', 'BU_UNBOUNDED', 'Department manager with approval permissions', 'ACTIVE', false, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL);
 INSERT INTO public.sys_roles (id, code, name, type, description, status, is_system, created_at, created_by, updated_at, updated_by) VALUES ('USER_ROLE', 'USER', 'User', 'BU_UNBOUNDED', 'Regular user with basic permissions', 'ACTIVE', false, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL);
-INSERT INTO public.sys_user_roles (id, user_id, role_id, assigned_at, assigned_by, valid_from, valid_to) VALUES ('ur-tech-director-001', 'tech-director-001', 'TECH_DIRECTOR_ROLE', '2026-01-13 11:17:10.48595', 'system', NULL, NULL);
+INSERT INTO public.sys_user_roles (id, user_id, role_id, assigned_at, assigned_by, valid_from, valid_to) VALUES ('ur-admin-001-SYS_ADMIN_ROLE', 'admin-001', 'SYS_ADMIN_ROLE', '2026-01-13 10:38:37.240844', 'system', NULL, NULL);
+INSERT INTO public.sys_user_roles (id, user_id, role_id, assigned_at, assigned_by, valid_from, valid_to) VALUES ('ur-tech-director-001-TECH_DIRECTOR_ROLE', 'tech-director-001', 'TECH_DIRECTOR_ROLE', '2026-01-13 10:38:37.240844', 'system', NULL, NULL);
 INSERT INTO public.sys_user_roles (id, user_id, role_id, assigned_at, assigned_by, valid_from, valid_to) VALUES ('ur-core-lead-001', 'core-lead-001', 'TEAM_LEADER_ROLE', '2026-01-13 11:17:10.48595', 'system', NULL, NULL);
 INSERT INTO public.sys_user_roles (id, user_id, role_id, assigned_at, assigned_by, valid_from, valid_to) VALUES ('ur-dev-john-001', 'dev-john-001', 'DEVELOPER_ROLE', '2026-01-13 11:17:10.48595', 'system', NULL, NULL);
 INSERT INTO public.sys_users (id, username, password_hash, email, display_name, full_name, phone, employee_id, , position, entity_manager_id, function_manager_id, status, language, must_change_password, password_expired_at, last_login_at, last_login_ip, failed_login_count, locked_until, created_at, created_by, updated_at, updated_by, deleted, deleted_at, deleted_by) VALUES ('hr-recruiter-001', 'hr.recruiter', '$2a$10$bTB3yyVtzpJw17uMI9pShOzAkm07MKZa2EyQhc4izBO1MdXXEiUiO', 'hr.recruiter@bank.com', 'Emily Liu', 'Emily Liu', NULL, 'EMP-HR-003', 'Recruiter', 'hr-manager-001', 'hr-manager-001', 'ACTIVE', 'zh_CN', false, NULL, NULL, NULL, 0, NULL, '2026-01-13 10:38:37.240844', NULL, '2026-01-13 10:38:37.240844', NULL, false, NULL, NULL);
@@ -3263,5 +3266,26 @@ ALTER TABLE ONLY public.up_process_draft ALTER COLUMN id SET DEFAULT nextval('pu
 ALTER TABLE ONLY public.up_process_history ALTER COLUMN id SET DEFAULT nextval('public.up_process_history_id_seq'::regclass);
 ALTER TABLE ONLY public.up_user_preference ALTER COLUMN id SET DEFAULT nextval('public.up_user_preference_id_seq'::regclass);
 ALTER TABLE ONLY public.wf_extended_task_info ALTER COLUMN id SET DEFAULT nextval('public.wf_extended_task_info_id_seq'::regclass);
+
+-- =====================================================
+-- 同步 sys_role_assignments 到 sys_user_roles
+-- 确保所有用户角色分配都同步到 sys_user_roles 表
+-- =====================================================
+INSERT INTO public.sys_user_roles (id, user_id, role_id, assigned_at, assigned_by, valid_from, valid_to)
+SELECT 
+    'ur-' || sra.target_id || '-' || sra.role_id,
+    sra.target_id,
+    sra.role_id,
+    sra.assigned_at,
+    COALESCE(sra.assigned_by, 'system'),
+    sra.valid_from,
+    sra.valid_to
+FROM public.sys_role_assignments sra
+WHERE sra.target_type = 'USER'
+AND NOT EXISTS (
+    SELECT 1 FROM public.sys_user_roles sur
+    WHERE sur.user_id = sra.target_id
+    AND sur.role_id = sra.role_id
+);
 
 SET session_replication_role = 'origin';

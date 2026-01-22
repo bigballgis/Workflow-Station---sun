@@ -1,8 +1,28 @@
 
 -- ============================================
 -- 删除所有数据库对象脚本
--- 警告：此脚本将删除所有表、索引、序列、约束和 schema
+-- 警告：此脚本将删除 workflow_platform 数据库中 public schema 的所有对象
+-- 包括：表、索引、序列、视图、函数、类型和约束
+-- 
+-- 安全措施：
+-- 1. 仅删除 public schema 中的对象
+-- 2. 仅在工作流平台数据库 (workflow_platform) 中执行
+-- 3. 不会删除其他数据库或 schema 中的对象
 -- ============================================
+
+-- 0. 安全检查：确保当前连接的数据库是 workflow_platform
+DO $$
+DECLARE
+    current_db TEXT;
+BEGIN
+    SELECT current_database() INTO current_db;
+    
+    IF current_db != 'workflow_platform' THEN
+        RAISE EXCEPTION '安全错误：当前数据库是 "%"，但此脚本只能在工作流平台数据库 (workflow_platform) 中执行。请先连接到正确的数据库。', current_db;
+    END IF;
+    
+    RAISE NOTICE '安全检查通过：当前数据库是 workflow_platform';
+END $$;
 
 -- 1. 禁用外键约束检查（PostgreSQL 不支持，但我们可以先删除外键）
 SET session_replication_role = 'replica';
