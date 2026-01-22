@@ -1,6 +1,7 @@
 package com.admin.controller;
 
 import com.admin.dto.request.LoginRequest;
+import com.admin.dto.response.ErrorResponse;
 import com.admin.dto.response.LoginResponse;
 import com.admin.service.AuthService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -10,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Instant;
 import java.util.Map;
 
 /**
@@ -27,7 +29,7 @@ public class AuthController {
      * 用户登录
      */
     @PostMapping("/login")
-    public ResponseEntity<LoginResponse> login(
+    public ResponseEntity<?> login(
             @Valid @RequestBody LoginRequest request,
             HttpServletRequest httpRequest) {
         
@@ -41,12 +43,13 @@ public class AuthController {
             return ResponseEntity.ok(response);
         } catch (RuntimeException e) {
             log.warn("Login failed: {}", e.getMessage());
-            return ResponseEntity.badRequest().body(
-                    LoginResponse.builder()
-                            .accessToken(null)
-                            .user(null)
-                            .build()
-            );
+            ErrorResponse error = ErrorResponse.builder()
+                    .code("LOGIN_FAILED")
+                    .message(e.getMessage())
+                    .timestamp(Instant.now())
+                    .path(httpRequest.getRequestURI())
+                    .build();
+            return ResponseEntity.badRequest().body(error);
         }
     }
 

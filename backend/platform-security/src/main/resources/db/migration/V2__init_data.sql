@@ -498,3 +498,34 @@ VALUES
     ('vgm-corpofficer-riskanalysts', 'vg-risk-analysts', 'corp-officer-001', 'system', NOW()),
     ('vgm-risklead-riskanalysts', 'vg-risk-analysts', 'risk-lead-001', 'system', NOW())
 ON CONFLICT (group_id, user_id) DO NOTHING;
+
+-- =====================================================
+-- 12. Direct Role Assignments to Users
+-- Assign roles directly to users (in addition to virtual group memberships)
+-- =====================================================
+INSERT INTO sys_role_assignments (id, role_id, target_type, target_id, assigned_at, assigned_by)
+VALUES 
+    -- Admin user gets SYS_ADMIN role for Admin Center access
+    ('ra-admin-sys-admin', 'SYS_ADMIN_ROLE', 'USER', 'admin-001', NOW(), 'system'),
+    -- Tech Director gets TECH_DIRECTOR role for Developer Workstation access
+    ('ra-tech-director-tech-director', 'TECH_DIRECTOR_ROLE', 'USER', 'tech-director-001', NOW(), 'system')
+ON CONFLICT (role_id, target_type, target_id) DO NOTHING;
+
+-- =====================================================
+-- 13. Sync Role Assignments to sys_user_roles Table
+-- Sync sys_role_assignments to sys_user_roles for admin-center compatibility
+-- =====================================================
+INSERT INTO sys_user_roles (id, user_id, role_id, assigned_at, assigned_by)
+SELECT 
+    'ur-' || sra.target_id || '-' || sra.role_id,
+    sra.target_id,
+    sra.role_id,
+    sra.assigned_at,
+    COALESCE(sra.assigned_by, 'system')
+FROM sys_role_assignments sra
+WHERE sra.target_type = 'USER'
+AND NOT EXISTS (
+    SELECT 1 FROM sys_user_roles sur
+    WHERE sur.user_id = sra.target_id
+    AND sur.role_id = sra.role_id
+);
