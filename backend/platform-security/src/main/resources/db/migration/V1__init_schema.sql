@@ -39,13 +39,20 @@ CREATE TABLE IF NOT EXISTS sys_users (
     deleted BOOLEAN NOT NULL DEFAULT false,
     deleted_at TIMESTAMP,
     deleted_by VARCHAR(64),
-    CONSTRAINT chk_sys_user_status CHECK (status IN ('ACTIVE', 'INACTIVE', 'DISABLED', 'LOCKED', 'PENDING'))
+    -- Updated CHECK constraint to match admin-center UserStatus enum (4 values)
+    -- INACTIVE removed as it's not used by admin-center (only in platform-security enum)
+    CONSTRAINT chk_sys_user_status CHECK (status IN ('ACTIVE', 'DISABLED', 'LOCKED', 'PENDING'))
 );
+
+-- Comment explaining the status values
+COMMENT ON COLUMN sys_users.status IS 'User status: ACTIVE (can login), DISABLED (disabled by admin), LOCKED (security lock), PENDING (pending activation)';
 
 CREATE INDEX IF NOT EXISTS idx_sys_users_username ON sys_users(username);
 CREATE INDEX IF NOT EXISTS idx_sys_users_email ON sys_users(email);
 CREATE INDEX IF NOT EXISTS idx_sys_users_status ON sys_users(status);
 CREATE INDEX IF NOT EXISTS idx_sys_users_employee_id ON sys_users(employee_id);
+CREATE INDEX IF NOT EXISTS idx_sys_users_entity_manager ON sys_users(entity_manager_id);
+CREATE INDEX IF NOT EXISTS idx_sys_users_function_manager ON sys_users(function_manager_id);
 CREATE INDEX IF NOT EXISTS idx_sys_users_deleted ON sys_users(deleted);
 
 -- =====================================================
