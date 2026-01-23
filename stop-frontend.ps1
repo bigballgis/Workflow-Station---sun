@@ -98,7 +98,7 @@ foreach ($port in $frontendPorts) {
         if ($processId -and $processId -match '^\d+$') {
             try {
                 $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
-                if ($process -and ($process.ProcessName -eq "node" -or $process.ProcessName -eq "npm")) {
+                if ($process -and ($process.ProcessName -eq "node" -or $process.ProcessName -eq "npm" -or $process.ProcessName -eq "pnpm")) {
                     Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
                 }
             } catch {

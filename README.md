@@ -70,6 +70,7 @@ Enterprise low-code workflow platform for HSBC, providing visual process design,
 ### Prerequisites
 - Java 17+
 - Node.js 20+
+- pnpm 10.28.0+
 - Docker & Docker Compose
 - Maven 3.9+
 
@@ -96,7 +97,7 @@ cd backend/workflow-engine-core && mvn spring-boot:run
 
 4. Start frontend:
 ```bash
-cd frontend/user-portal && npm install && npm run dev
+cd frontend/user-portal && pnpm install && pnpm run dev
 ```
 
 ### Full Stack with Docker

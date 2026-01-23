@@ -26,6 +26,16 @@ if ([int]$nodeVersion -lt 20) {
     Write-Host "⚠️  警告: Node.js 版本过低，建议使用 Node.js 20+" -ForegroundColor Yellow
 }
 
+# 检查 pnpm
+if (-not (Get-Command pnpm -ErrorAction SilentlyContinue)) {
+    Write-Host "❌ 错误: 未找到 pnpm，请先安装 pnpm 10.28.0" -ForegroundColor Red
+    Write-Host "   安装命令: npm install -g pnpm@10.28.0" -ForegroundColor Yellow
+    exit 1
+}
+
+$pnpmVersion = pnpm -v
+Write-Host "📦 使用 pnpm 版本: $pnpmVersion" -ForegroundColor Cyan
+
 # 启动 Frontend Admin
 Write-Host "1️⃣  启动 Frontend Admin (端口 3000)..." -ForegroundColor Yellow
 $frontendAdminDir = Join-Path $BASE_DIR "frontend\admin-center"
@@ -33,12 +43,12 @@ $frontendAdminDir = Join-Path $BASE_DIR "frontend\admin-center"
 if (-not (Test-Path (Join-Path $frontendAdminDir "node_modules"))) {
     Write-Host "   安装依赖..." -ForegroundColor Gray
     Set-Location $frontendAdminDir
-    npm install
+    pnpm install
     Set-Location $BASE_DIR
 }
 
 $frontendAdminLog = Join-Path $LOG_DIR "frontend-admin.log"
-$frontendAdminProcess = Start-Process -FilePath "npm" -ArgumentList "run", "dev" -WorkingDirectory $frontendAdminDir -PassThru -WindowStyle Hidden -RedirectStandardOutput $frontendAdminLog -RedirectStandardError $frontendAdminLog
+$frontendAdminProcess = Start-Process -FilePath "pnpm" -ArgumentList "run", "dev" -WorkingDirectory $frontendAdminDir -PassThru -WindowStyle Hidden -RedirectStandardOutput $frontendAdminLog -RedirectStandardError $frontendAdminLog
 $frontendAdminPID = $frontendAdminProcess.Id
 Write-Host "   PID: $frontendAdminPID" -ForegroundColor Gray
 $frontendAdminPID | Out-File -FilePath (Join-Path $LOG_DIR "frontend-admin.pid") -NoNewline
@@ -51,12 +61,12 @@ $frontendPortalDir = Join-Path $BASE_DIR "frontend\user-portal"
 if (-not (Test-Path (Join-Path $frontendPortalDir "node_modules"))) {
     Write-Host "   安装依赖..." -ForegroundColor Gray
     Set-Location $frontendPortalDir
-    npm install
+    pnpm install
     Set-Location $BASE_DIR
 }
 
 $frontendPortalLog = Join-Path $LOG_DIR "frontend-portal.log"
-$frontendPortalProcess = Start-Process -FilePath "npm" -ArgumentList "run", "dev" -WorkingDirectory $frontendPortalDir -PassThru -WindowStyle Hidden -RedirectStandardOutput $frontendPortalLog -RedirectStandardError $frontendPortalLog
+$frontendPortalProcess = Start-Process -FilePath "pnpm" -ArgumentList "run", "dev" -WorkingDirectory $frontendPortalDir -PassThru -WindowStyle Hidden -RedirectStandardOutput $frontendPortalLog -RedirectStandardError $frontendPortalLog
 $frontendPortalPID = $frontendPortalProcess.Id
 Write-Host "   PID: $frontendPortalPID" -ForegroundColor Gray
 $frontendPortalPID | Out-File -FilePath (Join-Path $LOG_DIR "frontend-portal.pid") -NoNewline
@@ -69,12 +79,12 @@ $frontendDeveloperDir = Join-Path $BASE_DIR "frontend\developer-workstation"
 if (-not (Test-Path (Join-Path $frontendDeveloperDir "node_modules"))) {
     Write-Host "   安装依赖..." -ForegroundColor Gray
     Set-Location $frontendDeveloperDir
-    npm install
+    pnpm install
     Set-Location $BASE_DIR
 }
 
 $frontendDeveloperLog = Join-Path $LOG_DIR "frontend-developer.log"
-$frontendDeveloperProcess = Start-Process -FilePath "npm" -ArgumentList "run", "dev" -WorkingDirectory $frontendDeveloperDir -PassThru -WindowStyle Hidden -RedirectStandardOutput $frontendDeveloperLog -RedirectStandardError $frontendDeveloperLog
+$frontendDeveloperProcess = Start-Process -FilePath "pnpm" -ArgumentList "run", "dev" -WorkingDirectory $frontendDeveloperDir -PassThru -WindowStyle Hidden -RedirectStandardOutput $frontendDeveloperLog -RedirectStandardError $frontendDeveloperLog
 $frontendDeveloperPID = $frontendDeveloperProcess.Id
 Write-Host "   PID: $frontendDeveloperPID" -ForegroundColor Gray
 $frontendDeveloperPID | Out-File -FilePath (Join-Path $LOG_DIR "frontend-developer.pid") -NoNewline
