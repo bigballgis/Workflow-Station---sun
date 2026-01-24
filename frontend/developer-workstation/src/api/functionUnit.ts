@@ -247,7 +247,7 @@ export const functionUnitApi = {
   
   updateTable: (functionUnitId: number, tableId: number, data: Partial<TableDefinition>) => {
     console.log('[FunctionUnitAPI] Updating table:', { functionUnitId, tableId, data })
-    console.log('[FunctionUnitAPI] Request data fields:', data.fields)
+    console.log('[FunctionUnitAPI] Request data fieldDefinitions:', data.fieldDefinitions)
     console.log('[FunctionUnitAPI] Request data JSON:', JSON.stringify(data, null, 2))
     return functionUnitAxios.put<any, { data: TableDefinition }>(`/api/v1/function-units/${functionUnitId}/tables/${tableId}`, data)
   },

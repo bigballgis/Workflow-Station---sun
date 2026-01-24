@@ -129,8 +129,8 @@ function formatValue(value: any, type: string): string {
   return String(value)
 }
 
-function typeTagType(type: string): string {
-  const map: Record<string, string> = {
+function typeTagType(type: string): 'primary' | 'success' | 'warning' | 'info' | 'danger' {
+  const map: Record<string, 'primary' | 'success' | 'warning' | 'info' | 'danger'> = {
     string: 'success',
     number: 'primary',
     boolean: 'warning',

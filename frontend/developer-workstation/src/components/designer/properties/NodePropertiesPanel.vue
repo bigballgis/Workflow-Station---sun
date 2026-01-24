@@ -79,7 +79,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, shallowRef, watch } from 'vue'
+import { computed, onMounted, onUnmounted, shallowRef, watch } from 'vue'
 import { User, Setting, Share, Connection, Flag } from '@element-plus/icons-vue'
 import type { BpmnElement, BpmnModeler } from '@/types/bpmn'
 import {
@@ -89,7 +89,7 @@ import {
   isSequenceFlow,
   isEvent,
   isProcess,
-  isTask,
+  // isTask,
   getBasicProperties,
   setBasicProperties,
   getElementType
@@ -170,7 +170,7 @@ const basicProps = computed(() =>
 const panelTitle = computed(() => {
   if (!selectedElement.value) return '流程属性'
   const type = selectedElement.value.businessObject?.$type || ''
-  const id = selectedElement.value.id || ''
+  // const id = selectedElement.value.id || ''
   
   // 用户任务
   if (isUserTaskElement.value) {
