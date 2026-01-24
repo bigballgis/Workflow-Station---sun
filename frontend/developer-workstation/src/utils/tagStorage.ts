@@ -72,8 +72,8 @@ export function getAllUsedTags(): string[] {
   const data = getAllTagsData()
   const allTags = new Set<string>()
   
-  Object.values(data).forEach((tags: string[]) => {
-    tags.forEach((tag: string) => allTags.add(tag))
+  Object.values(data).forEach(tags => {
+    tags.forEach(tag => allTags.add(tag))
   })
   
   return Array.from(allTags)

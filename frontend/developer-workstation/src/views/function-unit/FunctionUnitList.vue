@@ -177,7 +177,7 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox, type FormInstance } from 'element-plus'
 import { Search, Plus } from '@element-plus/icons-vue'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
-import type { FunctionUnitResponse } from '@/api/functionUnit'
+import type { FunctionUnit, FunctionUnitResponse } from '@/api/functionUnit'
 import IconPreview from '@/components/icon/IconPreview.vue'
 import IconSelector from '@/components/icon/IconSelector.vue'
 import FunctionUnitCard from '@/components/function-unit/FunctionUnitCard.vue'
@@ -195,7 +195,7 @@ const createFormRef = ref<FormInstance>()
 const createForm = reactive({ 
   name: '', 
   description: '', 
-  iconId: undefined as number | undefined,
+  iconId: null as number | null,
   tags: [] as string[]
 })
 const showIconSelector = ref(false)
@@ -269,7 +269,7 @@ async function handleCreate() {
   showCreateDialog.value = false
   createForm.name = ''
   createForm.description = ''
-  createForm.iconId = undefined
+  createForm.iconId = null
   createForm.tags = []
   selectedIcon.value = null
   loadData()

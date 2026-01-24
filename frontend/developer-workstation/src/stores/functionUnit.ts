@@ -27,8 +27,8 @@ export const useFunctionUnitStore = defineStore('functionUnit', () => {
       // Page: { content: [], totalElements: number, ... }
       // 拦截器已经返回了 response.data，所以 res 就是 ApiResponse
       
-      if (res && (res as any).success && (res as any).data) {
-        const pageData = (res as any).data
+      if (res && res.success && res.data) {
+        const pageData = res.data
         // pageData 是 Spring Data Page 对象
         if (pageData.content !== undefined) {
           list.value = pageData.content || []
@@ -43,9 +43,9 @@ export const useFunctionUnitStore = defineStore('functionUnit', () => {
           list.value = []
           total.value = 0
         }
-      } else if (res && (res as any).data) {
+      } else if (res && res.data) {
         // 兼容处理：如果 data 直接是 Page 对象
-        const pageData = (res as any).data
+        const pageData = res.data
         if (pageData.content !== undefined) {
           list.value = pageData.content || []
           total.value = pageData.totalElements || 0

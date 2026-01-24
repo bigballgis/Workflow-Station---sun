@@ -19,7 +19,7 @@ interface ColumnConfig {
 }
 
 // Sub-table configuration interface
-type SubTableConfig = {
+interface SubTableConfig {
   title?: string
   bindingId?: number
   tableId?: number
@@ -43,10 +43,10 @@ describe('SubTableField Property Tests', () => {
   })
   
   // Arbitrary for sub-table config
-  const subTableConfigArb: fc.Arbitrary<SubTableConfig> = fc.record({
+  const subTableConfigArb = fc.record({
     title: fc.option(fc.string({ minLength: 1, maxLength: 50 }), { nil: undefined }),
-    bindingId: fc.option(fc.integer({ min: 1 }), { nil: undefined }),
-    tableId: fc.option(fc.integer({ min: 1 }), { nil: undefined }),
+    bindingId: fc.option(fc.nat({ min: 1 }), { nil: undefined }),
+    tableId: fc.option(fc.nat({ min: 1 }), { nil: undefined }),
     columns: fc.array(columnConfigArb, { minLength: 1, maxLength: 10 }),
     pagination: fc.option(fc.boolean(), { nil: undefined }),
     pageSize: fc.option(fc.integer({ min: 5, max: 100 }), { nil: undefined }),
