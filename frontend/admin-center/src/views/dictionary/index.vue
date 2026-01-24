@@ -50,7 +50,7 @@
             <el-table-column label="操作" width="150">
               <template #default="{ row }">
                 <el-button link type="primary" size="small" @click="showItemDialog(row)">编辑</el-button>
-                <el-button link type="primary" size="small" @click="showItemDialog(null, row)">添加子项</el-button>
+                <el-button link type="primary" size="small" @click="showItemDialog(undefined, row)">添加子项</el-button>
                 <el-button link type="danger" size="small" @click="handleDeleteItem(row)">删除</el-button>
               </template>
             </el-table-column>
