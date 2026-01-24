@@ -152,8 +152,8 @@ const activeTab = ref('overview')
 
 const formatDate = (date: string) => dayjs(date).format('YYYY-MM-DD HH:mm:ss')
 
-const diffTagType = (type: string) => {
-  const map: Record<string, string> = { added: 'success', modified: 'warning', removed: 'danger' }
+const diffTagType = (type: string): 'success' | 'info' | 'warning' | 'danger' | 'primary' | undefined => {
+  const map: Record<string, 'success' | 'info' | 'warning' | 'danger' | 'primary'> = { added: 'success', modified: 'warning', removed: 'danger' }
   return map[type] || 'info'
 }
 

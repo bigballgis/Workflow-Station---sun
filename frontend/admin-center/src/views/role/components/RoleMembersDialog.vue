@@ -22,7 +22,7 @@
         <el-descriptions-item :label="t('virtualGroup.boundRole')" :span="3">
           <template v-if="boundVirtualGroup">
             <el-tag type="primary" size="small">{{ boundVirtualGroup.name }}</el-tag>
-            <span v-if="boundVirtualGroup.boundRoleCode" class="text-muted" style="margin-left: 8px">({{ boundVirtualGroup.boundRoleCode }})</span>
+            <span class="text-muted" style="margin-left: 8px">({{ boundVirtualGroup.code }})</span>
           </template>
           <span v-else class="text-muted">{{ t('role.noVirtualGroupBound') }}</span>
         </el-descriptions-item>

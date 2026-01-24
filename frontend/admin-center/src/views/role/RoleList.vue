@@ -62,7 +62,7 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Lock } from '@element-plus/icons-vue'
 import { useRoleStore } from '@/stores/role'
-import { Role, RoleType } from '@/api/role'
+import { Role } from '@/api/role'
 import { hasPermission, PERMISSIONS } from '@/utils/permission'
 import RoleFormDialog from './components/RoleFormDialog.vue'
 import RoleMembersDialog from './components/RoleMembersDialog.vue'
@@ -74,7 +74,7 @@ const roleStore = useRoleStore()
 const canWriteRole = hasPermission(PERMISSIONS.ROLE_WRITE)
 const canDeleteRole = hasPermission(PERMISSIONS.ROLE_DELETE)
 
-const query = reactive<{ type: string }>({ type: '' })
+const query = reactive({ type: '' })
 const formDialogVisible = ref(false)
 const membersDialogVisible = ref(false)
 const currentRole = ref<Role | null>(null)
@@ -102,7 +102,7 @@ const sortedRoles = computed(() => {
   })
 })
 
-const handleSearch = () => roleStore.fetchRoles(query.type ? { type: query.type as RoleType } : undefined)
+const handleSearch = () => roleStore.fetchRoles(query.type ? { type: query.type } : undefined)
 const handleReset = () => { query.type = ''; handleSearch() }
 
 const showCreateDialog = () => { currentRole.value = null; formDialogVisible.value = true }

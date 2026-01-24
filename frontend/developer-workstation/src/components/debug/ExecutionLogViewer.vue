@@ -106,8 +106,8 @@ function formatTime(timestamp: string): string {
   return dayjs(timestamp).format('HH:mm:ss.SSS')
 }
 
-function levelTagType(level: string): string {
-  const map: Record<string, string> = {
+function levelTagType(level: string): 'success' | 'info' | 'warning' | 'danger' | undefined {
+  const map: Record<string, 'success' | 'info' | 'warning' | 'danger'> = {
     info: 'info',
     success: 'success',
     warning: 'warning',

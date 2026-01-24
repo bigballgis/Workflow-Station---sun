@@ -46,12 +46,12 @@
         </template>
         
         <template v-if="step === 2">
-          <el-result :icon="importResult.failed === 0 ? 'success' : 'warning'" :title="resultTitle">
+          <el-result :icon="importResult.failedCount === 0 ? 'success' : 'warning'" :title="resultTitle">
             <template #sub-title>
               <div class="result-stats">
-                <span>{{ t('user.totalCount') }}: {{ importResult.total }}</span>
-                <span class="success">{{ t('user.successCount') }}: {{ importResult.success }}</span>
-                <span class="failed">{{ t('user.failedCount') }}: {{ importResult.failed }}</span>
+                <span>{{ t('user.totalCount') }}: {{ importResult.totalCount }}</span>
+                <span class="success">{{ t('user.successCount') }}: {{ importResult.successCount }}</span>
+                <span class="failed">{{ t('user.failedCount') }}: {{ importResult.failedCount }}</span>
               </div>
             </template>
             <template #extra>
@@ -78,6 +78,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { ElMessage } from 'element-plus'
 import { userApi, ImportResult } from '@/api/user'
 
 const { t } = useI18n()
@@ -86,9 +87,9 @@ const step = ref(0)
 const selectedFile = ref<File | null>(null)
 const previewData = ref<any[]>([])
 const importing = ref(false)
-const importResult = ref<ImportResult>({ total: 0, success: 0, failed: 0, errors: [] })
+const importResult = ref<ImportResult>({ totalCount: 0, successCount: 0, failedCount: 0, errors: [] })
 
-const resultTitle = computed(() => importResult.value.failed === 0 ? t('user.importSuccess') : t('user.importPartialSuccess'))
+const resultTitle = computed(() => importResult.value.failedCount === 0 ? t('user.importSuccess') : t('user.importPartialSuccess'))
 
 const handleFileChange = (file: any) => { selectedFile.value = file.raw }
 
@@ -119,7 +120,7 @@ const handleImport = async () => {
     step.value = 2
   } catch {
     // Mock result for demo
-    importResult.value = { total: previewData.value.length, success: previewData.value.length, failed: 0, errors: [] }
+    importResult.value = { totalCount: previewData.value.length, successCount: previewData.value.length, failedCount: 0, errors: [] }
     step.value = 2
   } finally {
     importing.value = false
@@ -130,7 +131,7 @@ const resetImport = () => {
   step.value = 0
   selectedFile.value = null
   previewData.value = []
-  importResult.value = { total: 0, success: 0, failed: 0, errors: [] }
+  importResult.value = { totalCount: 0, successCount: 0, failedCount: 0, errors: [] }
 }
 </script>
 

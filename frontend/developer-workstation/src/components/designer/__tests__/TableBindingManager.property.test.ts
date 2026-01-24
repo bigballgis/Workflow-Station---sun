@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import * as fc from 'fast-check'
-import type { TableBinding, BindingType, BindingMode, TableDefinition } from '@/api/functionUnit'
+import type { BindingType, BindingMode } from '@/api/functionUnit'
 
 /**
  * Property 1: Multi-table binding support
@@ -19,19 +19,19 @@ describe('TableBindingManager Property Tests', () => {
   // Arbitrary for TableBinding
   const tableBindingArb = fc.record({
     id: fc.nat(),
-    tableId: fc.nat({ min: 1 }),
+    tableId: fc.integer({ min: 1 }),
     tableName: fc.string({ minLength: 1, maxLength: 50 }),
     bindingType: bindingTypeArb,
     bindingMode: bindingModeArb,
     foreignKeyField: fc.option(fc.string({ minLength: 1, maxLength: 50 }), { nil: undefined }),
-    sortOrder: fc.nat({ max: 100 })
+    sortOrder: fc.nat().filter(n => n <= 100)
   })
   
   // Arbitrary for a list of bindings with exactly one PRIMARY
   const bindingListWithPrimaryArb = fc.tuple(
     fc.record({
       id: fc.nat(),
-      tableId: fc.nat({ min: 1 }),
+      tableId: fc.integer({ min: 1 }),
       tableName: fc.string({ minLength: 1, maxLength: 50 }),
       bindingType: fc.constant<BindingType>('PRIMARY'),
       bindingMode: fc.constant<BindingMode>('EDITABLE'),
@@ -41,12 +41,12 @@ describe('TableBindingManager Property Tests', () => {
     fc.array(
       fc.record({
         id: fc.nat(),
-        tableId: fc.nat({ min: 1 }),
+        tableId: fc.integer({ min: 1 }),
         tableName: fc.string({ minLength: 1, maxLength: 50 }),
         bindingType: fc.constantFrom<BindingType>('SUB', 'RELATED'),
         bindingMode: bindingModeArb,
         foreignKeyField: fc.string({ minLength: 1, maxLength: 50 }),
-        sortOrder: fc.nat({ max: 100 })
+        sortOrder: fc.nat().filter(n => n <= 100)
       }),
       { minLength: 0, maxLength: 5 }
     )
@@ -115,7 +115,7 @@ describe('TableBindingManager Property Tests', () => {
   it('Property 1.6: Each table can only be bound once per form', () => {
     fc.assert(
       fc.property(
-        fc.array(fc.nat({ min: 1, max: 100 }), { minLength: 1, maxLength: 10 }),
+        fc.array(fc.integer({ min: 1, max: 100 }), { minLength: 1, maxLength: 10 }),
         (tableIds) => {
           const uniqueTableIds = new Set(tableIds)
           // In a valid binding list, all table IDs should be unique

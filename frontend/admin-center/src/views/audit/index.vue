@@ -130,10 +130,10 @@ const query = reactive<AuditQueryRequest>({
   result: ''
 })
 
-const actionType = (action: string): 'success' | 'info' | 'primary' | 'warning' | 'danger' => ({
+const actionType = (action: string) => ({
   LOGIN: 'success', LOGOUT: 'info', CREATE: 'primary',
   UPDATE: 'warning', DELETE: 'danger', PERMISSION_CHANGE: 'warning'
-}[action] || 'info') as 'success' | 'info' | 'primary' | 'warning' | 'danger'
+}[action] || 'info')
 
 const actionText = (action: string) => ({
   LOGIN: t('audit.login'), LOGOUT: t('audit.logout'), CREATE: t('audit.create'),
