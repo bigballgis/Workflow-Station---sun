@@ -1,14 +1,16 @@
 server:
-  port: 8083
+  port: ${SERVER_PORT:8083}
 
 spring:
   application:
     name: developer-workstation
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
   
   datasource:
-    url: jdbc:postgresql://localhost:5432/workflow_platform
-    username: platform
-    password: platform123
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/workflow_platform}
+    username: ${SPRING_DATASOURCE_USERNAME:platform}
+    password: ${SPRING_DATASOURCE_PASSWORD:platform123}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 10
@@ -51,6 +53,11 @@ security:
   
   rate-limit:
     requests-per-minute: 100
+
+# Platform Configuration
+platform:
+  encryption:
+    secret-key: ${ENCRYPTION_SECRET_KEY:your-32-byte-aes-256-secret-key!!}
 
 # OpenAPI
 springdoc:
