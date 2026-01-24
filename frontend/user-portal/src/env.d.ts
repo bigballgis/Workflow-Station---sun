@@ -11,3 +11,19 @@ declare module 'vue-grid-layout-v3' {
   export const GridLayout: DefineComponent<any, any, any>
   export const GridItem: DefineComponent<any, any, any>
 }
+
+// Element Plus locale modules
+declare module 'element-plus/dist/locale/zh-cn.mjs' {
+  const locale: any
+  export default locale
+}
+
+declare module 'element-plus/dist/locale/zh-tw.mjs' {
+  const locale: any
+  export default locale
+}
+
+declare module 'element-plus/dist/locale/en.mjs' {
+  const locale: any
+  export default locale
+}

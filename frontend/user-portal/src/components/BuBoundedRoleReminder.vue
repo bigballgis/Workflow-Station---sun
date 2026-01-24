@@ -53,8 +53,8 @@ const checkAndShowReminder = async () => {
 
   try {
     const res = await permissionApi.shouldShowReminder()
-    const data = res.data?.data || res.data || res
-    if (data.shouldShow && data.roles && data.roles.length > 0) {
+    const data = (res as any).data || res
+    if (data && data.shouldShow && data.roles && Array.isArray(data.roles) && data.roles.length > 0) {
       unactivatedRoles.value = data.roles
       visible.value = true
     }
@@ -63,8 +63,8 @@ const checkAndShowReminder = async () => {
     // Fallback: try to get unactivated roles directly
     try {
       const rolesRes = await permissionApi.getUnactivatedRoles()
-      const roles = rolesRes.data?.data || rolesRes.data || []
-      if (roles.length > 0) {
+      const roles = (rolesRes as any).data || []
+      if (Array.isArray(roles) && roles.length > 0) {
         unactivatedRoles.value = roles
         visible.value = true
       }

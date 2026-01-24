@@ -44,6 +44,8 @@ export interface TaskInfo {
   completedTime?: string
   durationInMillis?: number
   action?: string
+  // 候选用户（用于任务分配）
+  candidateUsers?: string
 }
 
 export interface PageResponse<T> {
@@ -160,4 +162,25 @@ export function batchUrgeTasks(taskIds: string[], message?: string) {
 // 查询已处理任务
 export function queryCompletedTasks(params: TaskQueryRequest) {
   return request.post<{ data: PageResponse<TaskInfo> }>('/tasks/completed/query', params)
+}
+
+// Task API 对象
+export const taskApi = {
+  getMyTasks: queryTasks,
+  queryTasks,
+  getTaskDetail,
+  getTaskHistory,
+  getTaskStatistics,
+  claimTask,
+  unclaimTask,
+  completeTask,
+  delegateTask: (taskId: string, data: { targetUserId: string; reason?: string }) => {
+    return delegateTask(taskId, data.targetUserId, data.reason)
+  },
+  transferTask: (taskId: string, data: { targetUserId: string; reason?: string }) => {
+    return transferTask(taskId, data.targetUserId, data.reason)
+  },
+  urgeTask,
+  batchUrgeTasks,
+  queryCompletedTasks
 }

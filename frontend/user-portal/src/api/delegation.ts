@@ -82,3 +82,16 @@ export function getProxyTasks() {
 export function getDelegationAuditRecords(page: number = 0, size: number = 20) {
   return request.get<{ data: any }>('/delegations/audit', { params: { page, size } })
 }
+
+// Delegation API 对象
+export const delegationApi = {
+  getDelegationRules,
+  getActiveDelegationRules,
+  createDelegationRule,
+  updateDelegationRule,
+  deleteDelegationRule,
+  suspendDelegationRule,
+  resumeDelegationRule,
+  getProxyTasks,
+  getDelegationAuditRecords
+}
