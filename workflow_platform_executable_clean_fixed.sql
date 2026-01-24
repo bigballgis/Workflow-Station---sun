@@ -191,13 +191,15 @@ CREATE TABLE IF NOT EXISTS public.act_app_databasechangelog (
     liquibase character varying(20),
     contexts character varying(255),
     labels character varying(255),
-    deployment_id character varying(10)
+    deployment_id character varying(10),
+    PRIMARY KEY (id, author, filename)
 );
 CREATE TABLE IF NOT EXISTS public.act_app_databasechangeloglock (
     id integer NOT NULL,
     locked boolean NOT NULL,
     lockgranted timestamp without time zone,
-    lockedby character varying(255)
+    lockedby character varying(255),
+    PRIMARY KEY (id)
 );
 CREATE TABLE IF NOT EXISTS public.act_app_deployment (
     id_ character varying(255) NOT NULL,
@@ -242,13 +244,15 @@ CREATE TABLE IF NOT EXISTS public.act_cmmn_databasechangelog (
     liquibase character varying(20),
     contexts character varying(255),
     labels character varying(255),
-    deployment_id character varying(10)
+    deployment_id character varying(10),
+    PRIMARY KEY (id, author, filename)
 );
 CREATE TABLE IF NOT EXISTS public.act_cmmn_databasechangeloglock (
     id integer NOT NULL,
     locked boolean NOT NULL,
     lockgranted timestamp without time zone,
-    lockedby character varying(255)
+    lockedby character varying(255),
+    PRIMARY KEY (id)
 );
 CREATE TABLE IF NOT EXISTS public.act_cmmn_deployment (
     id_ character varying(255) NOT NULL,
@@ -423,13 +427,15 @@ CREATE TABLE IF NOT EXISTS public.act_dmn_databasechangelog (
     liquibase character varying(20),
     contexts character varying(255),
     labels character varying(255),
-    deployment_id character varying(10)
+    deployment_id character varying(10),
+    PRIMARY KEY (id, author, filename)
 );
 CREATE TABLE IF NOT EXISTS public.act_dmn_databasechangeloglock (
     id integer NOT NULL,
     locked boolean NOT NULL,
     lockgranted timestamp without time zone,
-    lockedby character varying(255)
+    lockedby character varying(255),
+    PRIMARY KEY (id)
 );
 CREATE TABLE IF NOT EXISTS public.act_dmn_decision (
     id_ character varying(255) NOT NULL,
@@ -496,7 +502,8 @@ CREATE TABLE IF NOT EXISTS public.act_ge_bytearray (
 CREATE TABLE IF NOT EXISTS public.act_ge_property (
     name_ character varying(64) NOT NULL,
     value_ character varying(300),
-    rev_ integer
+    rev_ integer,
+    PRIMARY KEY (name_)
 );
 CREATE TABLE IF NOT EXISTS public.act_hi_actinst (
     id_ character varying(64) NOT NULL,
@@ -715,7 +722,8 @@ CREATE TABLE IF NOT EXISTS public.act_id_priv_mapping (
 CREATE TABLE IF NOT EXISTS public.act_id_property (
     name_ character varying(64) NOT NULL,
     value_ character varying(300),
-    rev_ integer
+    rev_ integer,
+    PRIMARY KEY (name_)
 );
 CREATE TABLE IF NOT EXISTS public.act_id_token (
     id_ character varying(64) NOT NULL,
@@ -1462,13 +1470,15 @@ CREATE TABLE IF NOT EXISTS public.flw_ev_databasechangelog (
     liquibase character varying(20),
     contexts character varying(255),
     labels character varying(255),
-    deployment_id character varying(10)
+    deployment_id character varying(10),
+    PRIMARY KEY (id, author, filename)
 );
 CREATE TABLE IF NOT EXISTS public.flw_ev_databasechangeloglock (
     id integer NOT NULL,
     locked boolean NOT NULL,
     lockgranted timestamp without time zone,
-    lockedby character varying(255)
+    lockedby character varying(255),
+    PRIMARY KEY (id)
 );
 CREATE TABLE IF NOT EXISTS public.flw_event_definition (
     id_ character varying(255) NOT NULL,
@@ -2167,7 +2177,7 @@ CREATE TABLE IF NOT EXISTS public.wf_process_variables (
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
     updated_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
     activity_instance_id character varying(64),
-    binary_value oid,
+    binary_value bytea,
     case_execution_id character varying(64),
     case_instance_id character varying(64),
     change_reason character varying(500),
@@ -2506,35 +2516,160 @@ CREATE SEQUENCE IF NOT EXISTS public.wf_extended_task_info_id_seq AS integer STA
 -- =====================================================
 -- 第五步：插入数据
 -- =====================================================
-INSERT INTO public.act_app_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('1', 'flowable', 'org/flowable/app/db/liquibase/flowable-app-db-changelog.xml', '2026-01-14 17:11:36.881182', 1, 'EXECUTED', '9:959783069c0c7ce80320a0617aa48969', 'createTable tableName=ACT_APP_DEPLOYMENT', NULL, NULL, '4.24.0', NULL, NULL, NULL);
-INSERT INTO public.act_app_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('1', 'flowable', 'org/flowable/app/db/liquibase/flowable-app-db-changelog.xml', '2026-01-14 17:11:36.881182', 1, 'EXECUTED', '9:959783069c0c7ce80320a0617aa48969', 'createTable tableName=ACT_APP_DEPLOYMENT', NULL, NULL, '4.24.0', NULL, NULL, NULL);
-INSERT INTO public.act_app_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('3', 'flowable', 'org/flowable/app/db/liquibase/flowable-app-db-changelog.xml', '2026-01-14 17:11:36.897756', 2, 'EXECUTED', '9:c05b79a3b00e95136533085718361208', 'createIndex indexName=ACT_IDX_APP_DEF_UNIQ, tableName=ACT_APP_APPDEF', '', NULL, '4.24.0', NULL, NULL, '8381896797');
-INSERT INTO public.act_app_databasechangeloglock (id, locked, lockgranted, lockedby) VALUES (1, false, NULL, NULL);
-INSERT INTO public.act_cmmn_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('1', 'flowable', 'org/flowable/cmmn/db/liquibase/flowable-cmmn-db-changelog.xml', '2026-01-14 17:11:36.284078', 1, 'EXECUTED', '9:d0cc0aaadf0e4ef70c5b412cd05fadc4', 'createTable tableName=ACT_CMMN_DEPLOYMENT', NULL, NULL, '4.24.0', NULL, NULL, NULL);
-INSERT INTO public.act_cmmn_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('2', 'flowable', 'org/flowable/cmmn/db/liquibase/flowable-cmmn-db-changelog.xml', '2026-01-14 17:11:36.316879', 2, 'EXECUTED', '9:8095a5a8a222a100c2d0310cacbda5e7', 'addColumn tableName=ACT_CMMN_CASEDEF', NULL, NULL, '4.24.0', NULL, NULL, NULL);
-INSERT INTO public.act_cmmn_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('3', 'flowable', 'org/flowable/cmmn/db/liquibase/flowable-cmmn-db-changelog.xml', '2026-01-14 17:11:36.372838', 3, 'EXECUTED', '9:f031b4f0ae67bc5a640736b379049b12', 'addColumn tableName=ACT_CMMN_RU_PLAN_ITEM_INST', NULL, NULL, '4.24.0', NULL, NULL, NULL);
-INSERT INTO public.act_cmmn_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('4', 'flowable', 'org/flowable/cmmn/db/liquibase/flowable-cmmn-db-changelog.xml', '2026-01-14 17:11:36.44873', 4, 'EXECUTED', '9:c484ecfb08719feccac2f80fc962dda9', 'createTable tableName=ACT_CMMN_HI_PLAN_ITEM_INST', NULL, NULL, '4.24.0', NULL, NULL, NULL);
-INSERT INTO public.act_cmmn_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('6', 'flowable', 'org/flowable/cmmn/db/liquibase/flowable-cmmn-db-changelog.xml', '2026-01-14 17:11:36.469984', 5, 'EXECUTED', '9:7343ab247d959e5add9278b5386de833', 'createIndex indexName=ACT_IDX_CASE_DEF_UNIQ, tableName=ACT_CMMN_CASEDEF', '', NULL, '4.24.0', NULL, NULL, '8381896015');
-INSERT INTO public.act_cmmn_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('7', 'flowable', 'org/flowable/cmmn/db/liquibase/flowable-cmmn-db-changelog.xml', '2026-01-14 17:11:36.511524', 6, 'EXECUTED', '9:d73200db684b6cdb748cc03570d5d2e9', 'renameColumn newColumnName=CREATE_TIME_, oldColumnName=START_TIME_, tableName=ACT_CMMN_RU_PLAN_ITEM_INST', NULL, NULL, '4.24.0', NULL, NULL, NULL);
-INSERT INTO public.act_cmmn_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('8', 'flowable', 'org/flowable/cmmn/db/liquibase/flowable-cmmn-db-changelog.xml', '2026-01-14 17:11:36.52187', 7, 'EXECUTED', '9:eda5e43816221f2d8554bfcc90f1c37e', 'addColumn tableName=ACT_CMMN_HI_PLAN_ITEM_INST', '', NULL, '4.24.0', NULL, NULL, '8381896015');
-INSERT INTO public.act_cmmn_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('9', 'flowable', 'org/flowable/cmmn/db/liquibase/flowable-cmmn-db-changelog.xml', '2026-01-14 17:11:36.539497', 8, 'EXECUTED', '9:c34685611779075a73caf8c380f078ea', 'addColumn tableName=ACT_CMMN_RU_PLAN_ITEM_INST', NULL, NULL, '4.24.0', NULL, NULL, NULL);
-INSERT INTO public.act_cmmn_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('10', 'flowable', 'org/flowable/cmmn/db/liquibase/flowable-cmmn-db-changelog.xml', '2026-01-14 17:11:36.56556', 9, 'EXECUTED', '9:368e9472ad2348206205170d6c52d58e', 'addColumn tableName=ACT_CMMN_RU_CASE_INST', NULL, NULL, '4.24.0', NULL, NULL, NULL);
-INSERT INTO public.act_cmmn_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('11', 'flowable', 'org/flowable/cmmn/db/liquibase/flowable-cmmn-db-changelog.xml', '2026-01-14 17:11:36.576827', 10, 'EXECUTED', '9:e54b50ceb2bcd5355ae4dfb56d9ff3ad', 'addColumn tableName=ACT_CMMN_RU_PLAN_ITEM_INST', NULL, NULL, '4.24.0', NULL, NULL, NULL);
-INSERT INTO public.act_cmmn_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('12', 'flowable', 'org/flowable/cmmn/db/liquibase/flowable-cmmn-db-changelog.xml', '2026-01-14 17:11:36.587979', 11, 'EXECUTED', '9:f53f262768d04e74529f43fcd93429b0', 'addColumn tableName=ACT_CMMN_RU_CASE_INST', '', NULL, '4.24.0', NULL, NULL, '8381896015');
-INSERT INTO public.act_cmmn_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('13', 'flowable', 'org/flowable/cmmn/db/liquibase/flowable-cmmn-db-changelog.xml', '2026-01-14 17:11:36.602914', 12, 'EXECUTED', '9:64e7eafbe97997094654e83caea99895', 'addColumn tableName=ACT_CMMN_RU_PLAN_ITEM_INST', NULL, NULL, '4.24.0', NULL, NULL, NULL);
-INSERT INTO public.act_cmmn_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('14', 'flowable', 'org/flowable/cmmn/db/liquibase/flowable-cmmn-db-changelog.xml', '2026-01-14 17:11:36.617188', 13, 'EXECUTED', '9:ab7d934abde497eac034701542e0a281', 'addColumn tableName=ACT_CMMN_RU_CASE_INST', NULL, NULL, '4.24.0', NULL, NULL, NULL);
-INSERT INTO public.act_cmmn_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('16', 'flowable', 'org/flowable/cmmn/db/liquibase/flowable-cmmn-db-changelog.xml', '2026-01-14 17:11:36.631458', 14, 'EXECUTED', '9:03928d422e510959770e7a9daa5a993f', 'addColumn tableName=ACT_CMMN_RU_CASE_INST', NULL, NULL, '4.24.0', NULL, NULL, NULL);
-INSERT INTO public.act_cmmn_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('17', 'flowable', 'org/flowable/cmmn/db/liquibase/flowable-cmmn-db-changelog.xml', '2026-01-14 17:11:36.643064', 15, 'EXECUTED', '9:f30304cf001d6eac78c793ea88cd5781', 'createIndex indexName=ACT_IDX_HI_CASE_INST_END, tableName=ACT_CMMN_HI_CASE_INST', '', NULL, '4.24.0', NULL, NULL, '8381896015');
-INSERT INTO public.act_cmmn_databasechangeloglock (id, locked, lockgranted, lockedby) VALUES (1, false, NULL, NULL);
-INSERT INTO public.act_dmn_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('1', 'activiti', 'org/flowable/dmn/db/liquibase/flowable-dmn-db-changelog.xml', '2026-01-14 17:11:35.504255', 1, 'EXECUTED', '9:5b36e70aee5a2e42f6e7a62ea5fa681b', 'createTable tableName=ACT_DMN_DEPLOYMENT', NULL, NULL, '4.24.0', NULL, NULL, NULL);
-INSERT INTO public.act_dmn_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('2', 'flowable', 'org/flowable/dmn/db/liquibase/flowable-dmn-db-changelog.xml', '2026-01-14 17:11:35.521245', 2, 'EXECUTED', '9:fd13fa3f7af55d2b72f763fc261da30d', 'createTable tableName=ACT_DMN_HI_DECISION_EXECUTION', '', NULL, '4.24.0', NULL, NULL, '8381895464');
-INSERT INTO public.act_dmn_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('3', 'flowable', 'org/flowable/dmn/db/liquibase/flowable-dmn-db-changelog.xml', '2026-01-14 17:11:35.53143', 3, 'EXECUTED', '9:9f30e6a3557d4b4c713dbb2dcc141782', 'addColumn tableName=ACT_DMN_HI_DECISION_EXECUTION', '', NULL, '4.24.0', NULL, NULL, '8381895464');
-INSERT INTO public.act_dmn_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('4', 'flowable', 'org/flowable/dmn/db/liquibase/flowable-dmn-db-changelog.xml', '2026-01-14 17:11:35.542009', 4, 'EXECUTED', '9:41085fbde807dba96104ee75a2fcc4cc', 'dropColumn columnName=PARENT_DEPLOYMENT_ID_, tableName=ACT_DMN_DECISION_TABLE', '', NULL, '4.24.0', NULL, NULL, '8381895464');
-INSERT INTO public.act_dmn_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('6', 'flowable', 'org/flowable/dmn/db/liquibase/flowable-dmn-db-changelog.xml', '2026-01-14 17:11:35.552966', 5, 'EXECUTED', '9:f00f92f3ef1af3fc1604f0323630f9b1', 'createIndex indexName=ACT_IDX_DEC_TBL_UNIQ, tableName=ACT_DMN_DECISION_TABLE', '', NULL, '4.24.0', NULL, NULL, '8381895464');
-INSERT INTO public.act_dmn_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('7', 'flowable', 'org/flowable/dmn/db/liquibase/flowable-dmn-db-changelog.xml', '2026-01-14 17:11:35.570229', 6, 'EXECUTED', '9:d24d4c5f44083b4edf1231a7a682a2cd', 'dropIndex indexName=ACT_IDX_DEC_TBL_UNIQ, tableName=ACT_DMN_DECISION_TABLE', NULL, NULL, '4.24.0', NULL, NULL, NULL);
-INSERT INTO public.act_dmn_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('8', 'flowable', 'org/flowable/dmn/db/liquibase/flowable-dmn-db-changelog.xml', '2026-01-14 17:11:35.578836', 7, 'EXECUTED', '9:3998ef0958b46fe9c19458183952d2a0', 'addColumn tableName=ACT_DMN_DECISION', '', NULL, '4.24.0', NULL, NULL, '8381895464');
-INSERT INTO public.act_dmn_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('9', 'flowable', 'org/flowable/dmn/db/liquibase/flowable-dmn-db-changelog.xml', '2026-01-14 17:11:35.591222', 8, 'EXECUTED', '9:5c9dc65601456faa1aa12f8d3afe0e9e', 'createIndex indexName=ACT_IDX_DMN_INSTANCE_ID, tableName=ACT_DMN_HI_DECISION_EXECUTION', '', NULL, '4.24.0', NULL, NULL, '8381895464');
-INSERT INTO public.act_dmn_databasechangeloglock (id, locked, lockgranted, lockedby) VALUES (1, false, NULL, NULL);
+
+-- 确保所有需要 ON CONFLICT 的表都有主键约束
+-- 使用更可靠的检查方式：检查是否存在任何主键约束（不依赖确切的约束名称）
+DO $$
+BEGIN
+    -- act_app_databasechangelog (composite primary key)
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'act_app_databasechangelog') THEN
+        IF NOT EXISTS (
+            SELECT 1 FROM information_schema.table_constraints 
+            WHERE table_schema = 'public' 
+            AND table_name = 'act_app_databasechangelog' 
+            AND constraint_type = 'PRIMARY KEY'
+        ) THEN
+            ALTER TABLE public.act_app_databasechangelog ADD PRIMARY KEY (id, author, filename);
+        END IF;
+    END IF;
+    
+    -- act_cmmn_databasechangelog (composite primary key)
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'act_cmmn_databasechangelog') THEN
+        IF NOT EXISTS (
+            SELECT 1 FROM information_schema.table_constraints 
+            WHERE table_schema = 'public' 
+            AND table_name = 'act_cmmn_databasechangelog' 
+            AND constraint_type = 'PRIMARY KEY'
+        ) THEN
+            ALTER TABLE public.act_cmmn_databasechangelog ADD PRIMARY KEY (id, author, filename);
+        END IF;
+    END IF;
+    
+    -- act_dmn_databasechangelog (composite primary key)
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'act_dmn_databasechangelog') THEN
+        IF NOT EXISTS (
+            SELECT 1 FROM information_schema.table_constraints 
+            WHERE table_schema = 'public' 
+            AND table_name = 'act_dmn_databasechangelog' 
+            AND constraint_type = 'PRIMARY KEY'
+        ) THEN
+            ALTER TABLE public.act_dmn_databasechangelog ADD PRIMARY KEY (id, author, filename);
+        END IF;
+    END IF;
+    
+    -- flw_ev_databasechangelog (composite primary key)
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'flw_ev_databasechangelog') THEN
+        IF NOT EXISTS (
+            SELECT 1 FROM information_schema.table_constraints 
+            WHERE table_schema = 'public' 
+            AND table_name = 'flw_ev_databasechangelog' 
+            AND constraint_type = 'PRIMARY KEY'
+        ) THEN
+            ALTER TABLE public.flw_ev_databasechangelog ADD PRIMARY KEY (id, author, filename);
+        END IF;
+    END IF;
+    
+    -- act_app_databasechangeloglock
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'act_app_databasechangeloglock') THEN
+        IF NOT EXISTS (
+            SELECT 1 FROM information_schema.table_constraints 
+            WHERE table_schema = 'public' 
+            AND table_name = 'act_app_databasechangeloglock' 
+            AND constraint_type = 'PRIMARY KEY'
+        ) THEN
+            ALTER TABLE public.act_app_databasechangeloglock ADD PRIMARY KEY (id);
+        END IF;
+    END IF;
+    
+    -- act_cmmn_databasechangeloglock
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'act_cmmn_databasechangeloglock') THEN
+        IF NOT EXISTS (
+            SELECT 1 FROM information_schema.table_constraints 
+            WHERE table_schema = 'public' 
+            AND table_name = 'act_cmmn_databasechangeloglock' 
+            AND constraint_type = 'PRIMARY KEY'
+        ) THEN
+            ALTER TABLE public.act_cmmn_databasechangeloglock ADD PRIMARY KEY (id);
+        END IF;
+    END IF;
+    
+    -- act_dmn_databasechangeloglock
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'act_dmn_databasechangeloglock') THEN
+        IF NOT EXISTS (
+            SELECT 1 FROM information_schema.table_constraints 
+            WHERE table_schema = 'public' 
+            AND table_name = 'act_dmn_databasechangeloglock' 
+            AND constraint_type = 'PRIMARY KEY'
+        ) THEN
+            ALTER TABLE public.act_dmn_databasechangeloglock ADD PRIMARY KEY (id);
+        END IF;
+    END IF;
+    
+    -- flw_ev_databasechangeloglock
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'flw_ev_databasechangeloglock') THEN
+        IF NOT EXISTS (
+            SELECT 1 FROM information_schema.table_constraints 
+            WHERE table_schema = 'public' 
+            AND table_name = 'flw_ev_databasechangeloglock' 
+            AND constraint_type = 'PRIMARY KEY'
+        ) THEN
+            ALTER TABLE public.flw_ev_databasechangeloglock ADD PRIMARY KEY (id);
+        END IF;
+    END IF;
+    
+    -- act_ge_property
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'act_ge_property') THEN
+        IF NOT EXISTS (
+            SELECT 1 FROM information_schema.table_constraints 
+            WHERE table_schema = 'public' 
+            AND table_name = 'act_ge_property' 
+            AND constraint_type = 'PRIMARY KEY'
+        ) THEN
+            ALTER TABLE public.act_ge_property ADD PRIMARY KEY (name_);
+        END IF;
+    END IF;
+    
+    -- act_id_property
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'act_id_property') THEN
+        IF NOT EXISTS (
+            SELECT 1 FROM information_schema.table_constraints 
+            WHERE table_schema = 'public' 
+            AND table_name = 'act_id_property' 
+            AND constraint_type = 'PRIMARY KEY'
+        ) THEN
+            ALTER TABLE public.act_id_property ADD PRIMARY KEY (name_);
+        END IF;
+    END IF;
+END $$;
+
+INSERT INTO public.act_app_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('1', 'flowable', 'org/flowable/app/db/liquibase/flowable-app-db-changelog.xml', '2026-01-14 17:11:36.881182', 1, 'EXECUTED', '9:959783069c0c7ce80320a0617aa48969', 'createTable tableName=ACT_APP_DEPLOYMENT', NULL, NULL, '4.24.0', NULL, NULL, NULL) ON CONFLICT (id, author, filename) DO NOTHING;
+INSERT INTO public.act_app_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('3', 'flowable', 'org/flowable/app/db/liquibase/flowable-app-db-changelog.xml', '2026-01-14 17:11:36.897756', 2, 'EXECUTED', '9:c05b79a3b00e95136533085718361208', 'createIndex indexName=ACT_IDX_APP_DEF_UNIQ, tableName=ACT_APP_APPDEF', '', NULL, '4.24.0', NULL, NULL, '8381896797') ON CONFLICT (id, author, filename) DO NOTHING;
+INSERT INTO public.act_app_databasechangeloglock (id, locked, lockgranted, lockedby) VALUES (1, false, NULL, NULL) ON CONFLICT (id) DO NOTHING;
+INSERT INTO public.act_cmmn_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('1', 'flowable', 'org/flowable/cmmn/db/liquibase/flowable-cmmn-db-changelog.xml', '2026-01-14 17:11:36.284078', 1, 'EXECUTED', '9:d0cc0aaadf0e4ef70c5b412cd05fadc4', 'createTable tableName=ACT_CMMN_DEPLOYMENT', NULL, NULL, '4.24.0', NULL, NULL, NULL) ON CONFLICT (id, author, filename) DO NOTHING;
+INSERT INTO public.act_cmmn_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('2', 'flowable', 'org/flowable/cmmn/db/liquibase/flowable-cmmn-db-changelog.xml', '2026-01-14 17:11:36.316879', 2, 'EXECUTED', '9:8095a5a8a222a100c2d0310cacbda5e7', 'addColumn tableName=ACT_CMMN_CASEDEF', NULL, NULL, '4.24.0', NULL, NULL, NULL) ON CONFLICT (id, author, filename) DO NOTHING;
+INSERT INTO public.act_cmmn_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('3', 'flowable', 'org/flowable/cmmn/db/liquibase/flowable-cmmn-db-changelog.xml', '2026-01-14 17:11:36.372838', 3, 'EXECUTED', '9:f031b4f0ae67bc5a640736b379049b12', 'addColumn tableName=ACT_CMMN_RU_PLAN_ITEM_INST', NULL, NULL, '4.24.0', NULL, NULL, NULL) ON CONFLICT (id, author, filename) DO NOTHING;
+INSERT INTO public.act_cmmn_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('4', 'flowable', 'org/flowable/cmmn/db/liquibase/flowable-cmmn-db-changelog.xml', '2026-01-14 17:11:36.44873', 4, 'EXECUTED', '9:c484ecfb08719feccac2f80fc962dda9', 'createTable tableName=ACT_CMMN_HI_PLAN_ITEM_INST', NULL, NULL, '4.24.0', NULL, NULL, NULL) ON CONFLICT (id, author, filename) DO NOTHING;
+INSERT INTO public.act_cmmn_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('6', 'flowable', 'org/flowable/cmmn/db/liquibase/flowable-cmmn-db-changelog.xml', '2026-01-14 17:11:36.469984', 5, 'EXECUTED', '9:7343ab247d959e5add9278b5386de833', 'createIndex indexName=ACT_IDX_CASE_DEF_UNIQ, tableName=ACT_CMMN_CASEDEF', '', NULL, '4.24.0', NULL, NULL, '8381896015') ON CONFLICT (id, author, filename) DO NOTHING;
+INSERT INTO public.act_cmmn_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('7', 'flowable', 'org/flowable/cmmn/db/liquibase/flowable-cmmn-db-changelog.xml', '2026-01-14 17:11:36.511524', 6, 'EXECUTED', '9:d73200db684b6cdb748cc03570d5d2e9', 'renameColumn newColumnName=CREATE_TIME_, oldColumnName=START_TIME_, tableName=ACT_CMMN_RU_PLAN_ITEM_INST', NULL, NULL, '4.24.0', NULL, NULL, NULL) ON CONFLICT (id, author, filename) DO NOTHING;
+INSERT INTO public.act_cmmn_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('8', 'flowable', 'org/flowable/cmmn/db/liquibase/flowable-cmmn-db-changelog.xml', '2026-01-14 17:11:36.52187', 7, 'EXECUTED', '9:eda5e43816221f2d8554bfcc90f1c37e', 'addColumn tableName=ACT_CMMN_HI_PLAN_ITEM_INST', '', NULL, '4.24.0', NULL, NULL, '8381896015') ON CONFLICT (id, author, filename) DO NOTHING;
+INSERT INTO public.act_cmmn_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('9', 'flowable', 'org/flowable/cmmn/db/liquibase/flowable-cmmn-db-changelog.xml', '2026-01-14 17:11:36.539497', 8, 'EXECUTED', '9:c34685611779075a73caf8c380f078ea', 'addColumn tableName=ACT_CMMN_RU_PLAN_ITEM_INST', NULL, NULL, '4.24.0', NULL, NULL, NULL) ON CONFLICT (id, author, filename) DO NOTHING;
+INSERT INTO public.act_cmmn_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('10', 'flowable', 'org/flowable/cmmn/db/liquibase/flowable-cmmn-db-changelog.xml', '2026-01-14 17:11:36.56556', 9, 'EXECUTED', '9:368e9472ad2348206205170d6c52d58e', 'addColumn tableName=ACT_CMMN_RU_CASE_INST', NULL, NULL, '4.24.0', NULL, NULL, NULL) ON CONFLICT (id, author, filename) DO NOTHING;
+INSERT INTO public.act_cmmn_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('11', 'flowable', 'org/flowable/cmmn/db/liquibase/flowable-cmmn-db-changelog.xml', '2026-01-14 17:11:36.576827', 10, 'EXECUTED', '9:e54b50ceb2bcd5355ae4dfb56d9ff3ad', 'addColumn tableName=ACT_CMMN_RU_PLAN_ITEM_INST', NULL, NULL, '4.24.0', NULL, NULL, NULL) ON CONFLICT (id, author, filename) DO NOTHING;
+INSERT INTO public.act_cmmn_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('12', 'flowable', 'org/flowable/cmmn/db/liquibase/flowable-cmmn-db-changelog.xml', '2026-01-14 17:11:36.587979', 11, 'EXECUTED', '9:f53f262768d04e74529f43fcd93429b0', 'addColumn tableName=ACT_CMMN_RU_CASE_INST', '', NULL, '4.24.0', NULL, NULL, '8381896015') ON CONFLICT (id, author, filename) DO NOTHING;
+INSERT INTO public.act_cmmn_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('13', 'flowable', 'org/flowable/cmmn/db/liquibase/flowable-cmmn-db-changelog.xml', '2026-01-14 17:11:36.602914', 12, 'EXECUTED', '9:64e7eafbe97997094654e83caea99895', 'addColumn tableName=ACT_CMMN_RU_PLAN_ITEM_INST', NULL, NULL, '4.24.0', NULL, NULL, NULL) ON CONFLICT (id, author, filename) DO NOTHING;
+INSERT INTO public.act_cmmn_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('14', 'flowable', 'org/flowable/cmmn/db/liquibase/flowable-cmmn-db-changelog.xml', '2026-01-14 17:11:36.617188', 13, 'EXECUTED', '9:ab7d934abde497eac034701542e0a281', 'addColumn tableName=ACT_CMMN_RU_CASE_INST', NULL, NULL, '4.24.0', NULL, NULL, NULL) ON CONFLICT (id, author, filename) DO NOTHING;
+INSERT INTO public.act_cmmn_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('16', 'flowable', 'org/flowable/cmmn/db/liquibase/flowable-cmmn-db-changelog.xml', '2026-01-14 17:11:36.631458', 14, 'EXECUTED', '9:03928d422e510959770e7a9daa5a993f', 'addColumn tableName=ACT_CMMN_RU_CASE_INST', NULL, NULL, '4.24.0', NULL, NULL, NULL) ON CONFLICT (id, author, filename) DO NOTHING;
+INSERT INTO public.act_cmmn_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('17', 'flowable', 'org/flowable/cmmn/db/liquibase/flowable-cmmn-db-changelog.xml', '2026-01-14 17:11:36.643064', 15, 'EXECUTED', '9:f30304cf001d6eac78c793ea88cd5781', 'createIndex indexName=ACT_IDX_HI_CASE_INST_END, tableName=ACT_CMMN_HI_CASE_INST', '', NULL, '4.24.0', NULL, NULL, '8381896015') ON CONFLICT (id, author, filename) DO NOTHING;
+INSERT INTO public.act_cmmn_databasechangeloglock (id, locked, lockgranted, lockedby) VALUES (1, false, NULL, NULL) ON CONFLICT (id) DO NOTHING;
+INSERT INTO public.act_dmn_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('1', 'activiti', 'org/flowable/dmn/db/liquibase/flowable-dmn-db-changelog.xml', '2026-01-14 17:11:35.504255', 1, 'EXECUTED', '9:5b36e70aee5a2e42f6e7a62ea5fa681b', 'createTable tableName=ACT_DMN_DEPLOYMENT', NULL, NULL, '4.24.0', NULL, NULL, NULL) ON CONFLICT (id, author, filename) DO NOTHING;
+INSERT INTO public.act_dmn_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('2', 'flowable', 'org/flowable/dmn/db/liquibase/flowable-dmn-db-changelog.xml', '2026-01-14 17:11:35.521245', 2, 'EXECUTED', '9:fd13fa3f7af55d2b72f763fc261da30d', 'createTable tableName=ACT_DMN_HI_DECISION_EXECUTION', '', NULL, '4.24.0', NULL, NULL, '8381895464') ON CONFLICT (id, author, filename) DO NOTHING;
+INSERT INTO public.act_dmn_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('3', 'flowable', 'org/flowable/dmn/db/liquibase/flowable-dmn-db-changelog.xml', '2026-01-14 17:11:35.53143', 3, 'EXECUTED', '9:9f30e6a3557d4b4c713dbb2dcc141782', 'addColumn tableName=ACT_DMN_HI_DECISION_EXECUTION', '', NULL, '4.24.0', NULL, NULL, '8381895464') ON CONFLICT (id, author, filename) DO NOTHING;
+INSERT INTO public.act_dmn_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('4', 'flowable', 'org/flowable/dmn/db/liquibase/flowable-dmn-db-changelog.xml', '2026-01-14 17:11:35.542009', 4, 'EXECUTED', '9:41085fbde807dba96104ee75a2fcc4cc', 'dropColumn columnName=PARENT_DEPLOYMENT_ID_, tableName=ACT_DMN_DECISION_TABLE', '', NULL, '4.24.0', NULL, NULL, '8381895464') ON CONFLICT (id, author, filename) DO NOTHING;
+INSERT INTO public.act_dmn_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('6', 'flowable', 'org/flowable/dmn/db/liquibase/flowable-dmn-db-changelog.xml', '2026-01-14 17:11:35.552966', 5, 'EXECUTED', '9:f00f92f3ef1af3fc1604f0323630f9b1', 'createIndex indexName=ACT_IDX_DEC_TBL_UNIQ, tableName=ACT_DMN_DECISION_TABLE', '', NULL, '4.24.0', NULL, NULL, '8381895464') ON CONFLICT (id, author, filename) DO NOTHING;
+INSERT INTO public.act_dmn_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('7', 'flowable', 'org/flowable/dmn/db/liquibase/flowable-dmn-db-changelog.xml', '2026-01-14 17:11:35.570229', 6, 'EXECUTED', '9:d24d4c5f44083b4edf1231a7a682a2cd', 'dropIndex indexName=ACT_IDX_DEC_TBL_UNIQ, tableName=ACT_DMN_DECISION_TABLE', NULL, NULL, '4.24.0', NULL, NULL, NULL) ON CONFLICT (id, author, filename) DO NOTHING;
+INSERT INTO public.act_dmn_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('8', 'flowable', 'org/flowable/dmn/db/liquibase/flowable-dmn-db-changelog.xml', '2026-01-14 17:11:35.578836', 7, 'EXECUTED', '9:3998ef0958b46fe9c19458183952d2a0', 'addColumn tableName=ACT_DMN_DECISION', '', NULL, '4.24.0', NULL, NULL, '8381895464') ON CONFLICT (id, author, filename) DO NOTHING;
+INSERT INTO public.act_dmn_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('9', 'flowable', 'org/flowable/dmn/db/liquibase/flowable-dmn-db-changelog.xml', '2026-01-14 17:11:35.591222', 8, 'EXECUTED', '9:5c9dc65601456faa1aa12f8d3afe0e9e', 'createIndex indexName=ACT_IDX_DMN_INSTANCE_ID, tableName=ACT_DMN_HI_DECISION_EXECUTION', '', NULL, '4.24.0', NULL, NULL, '8381895464') ON CONFLICT (id, author, filename) DO NOTHING;
+INSERT INTO public.act_dmn_databasechangeloglock (id, locked, lockgranted, lockedby) VALUES (1, false, NULL, NULL) ON CONFLICT (id) DO NOTHING;
 INSERT INTO public.act_ge_bytearray (id_, rev_, name_, deployment_id_, bytes_, generated_) VALUES ('46d79886-f12a-11f0-a8df-f2dbc029a3c2', 1, 'Process_1.bpmn', '46d79885-f12a-11f0-a8df-f2dbc029a3c2', '\x3c3f786d6c2076657273696f6e3d22312e302220656e636f64696e673d225554462d38223f3e0a3c62706d6e3a646566696e6974696f6e7320786d6c6e733a7873693d22687474703a2f2f7777772e77332e6f72672f323030312f584d4c536368656d612d696e7374616e63652220786d6c6e733a62706d6e3d22687474703a2f2f7777772e6f6d672e6f72672f737065632f42504d4e2f32303130303532342f4d4f44454c2220786d6c6e733a62706d6e64693d22687474703a2f2f7777772e6f6d672e6f72672f737065632f42504d4e2f32303130303532342f44492220786d6c6e733a64633d22687474703a2f2f7777772e6f6d672e6f72672f737065632f44442f32303130303532342f44432220786d6c6e733a64693d22687474703a2f2f7777772e6f6d672e6f72672f737065632f44442f32303130303532342f44492220786d6c6e733a637573746f6d3d22687474703a2f2f637573746f6d2e62706d6e2e696f2f736368656d61222069643d22446566696e6974696f6e735f3122207461726765744e616d6573706163653d22687474703a2f2f62706d6e2e696f2f736368656d612f62706d6e223e0a20203c62706d6e3a70726f636573732069643d2250726f636573735f312220697345786563757461626c653d2274727565223e0a202020203c62706d6e3a73746172744576656e742069643d2253746172744576656e745f3122206e616d653d22e5bc80e5a78b223e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f313c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a73746172744576656e743e0a202020203c62706d6e3a656e644576656e742069643d22456e644576656e745f3122206e616d653d22e7bb93e69d9f223e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f3069336d7167613c2f62706d6e3a696e636f6d696e673e0a202020203c2f62706d6e3a656e644576656e743e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f312220736f757263655265663d2253746172744576656e745f3122207461726765745265663d2241637469766974795f30396468337a3922202f3e0a202020203c62706d6e3a757365725461736b2069643d2241637469766974795f30396468337a39223e0a2020202020203c62706d6e3a657874656e73696f6e456c656d656e74733e0a20202020202020203c637573746f6d3a70726f706572746965733e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656554797065222076616c75653d22494e49544941544f5222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656556616c7565222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e65654c6162656c222076616c75653d22e6b581e7a88be58f91e8b5b7e4baba22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e6469646174655573657273222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e64696461746547726f757073222076616c75653d2222202f3e0a20202020202020203c2f637573746f6d3a70726f706572746965733e0a2020202020203c2f62706d6e3a657874656e73696f6e456c656d656e74733e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f313c2f62706d6e3a696e636f6d696e673e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f30756e37686c683c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a757365725461736b3e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f30756e37686c682220736f757263655265663d2241637469766974795f30396468337a3922207461726765745265663d2241637469766974795f306d767635686322202f3e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f3069336d7167612220736f757263655265663d2241637469766974795f306d767635686322207461726765745265663d22456e644576656e745f3122202f3e0a202020203c62706d6e3a757365725461736b2069643d2241637469766974795f306d7676356863223e0a2020202020203c62706d6e3a657874656e73696f6e456c656d656e74733e0a20202020202020203c637573746f6d3a70726f706572746965733e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656554797065222076616c75653d22454e544954595f4d414e4147455222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656556616c7565222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e65654c6162656c222076616c75653d22e5ae9ee4bd93e7bb8fe7908622202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e6469646174655573657273222076616c75653d225361726168204368656e22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e64696461746547726f757073222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a20202020202020203c2f637573746f6d3a70726f706572746965733e0a2020202020203c2f62706d6e3a657874656e73696f6e456c656d656e74733e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f30756e37686c683c2f62706d6e3a696e636f6d696e673e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f3069336d7167613c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a757365725461736b3e0a20203c2f62706d6e3a70726f636573733e0a20203c62706d6e64693a42504d4e4469616772616d2069643d2242504d4e4469616772616d5f31223e0a202020203c62706d6e64693a42504d4e506c616e652069643d2242504d4e506c616e655f31222062706d6e456c656d656e743d2250726f636573735f31223e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2253746172744576656e745f315f6469222062706d6e456c656d656e743d2253746172744576656e745f31223e0a20202020202020203c64633a426f756e647320783d223138302220793d22313630222077696474683d22333622206865696768743d22333622202f3e0a20202020202020203c62706d6e64693a42504d4e4c6162656c3e0a202020202020202020203c64633a426f756e647320783d223138372220793d22323033222077696474683d22323222206865696768743d22313422202f3e0a20202020202020203c2f62706d6e64693a42504d4e4c6162656c3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d22456e644576656e745f315f6469222062706d6e456c656d656e743d22456e644576656e745f31223e0a20202020202020203c64633a426f756e647320783d223639322220793d22313630222077696474683d22333622206865696768743d22333622202f3e0a20202020202020203c62706d6e64693a42504d4e4c6162656c3e0a202020202020202020203c64633a426f756e647320783d223639392220793d22323033222077696474683d22323222206865696768743d22313422202f3e0a20202020202020203c2f62706d6e64693a42504d4e4c6162656c3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2241637469766974795f3131326a75366a5f6469222062706d6e456c656d656e743d2241637469766974795f30396468337a39223e0a20202020202020203c64633a426f756e647320783d223236302220793d22313338222077696474683d2231303022206865696768743d22383022202f3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2241637469766974795f30397962666d375f6469222062706d6e456c656d656e743d2241637469766974795f306d7676356863223e0a20202020202020203c64633a426f756e647320783d223431302220793d22313338222077696474683d2231303022206865696768743d22383022202f3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f315f6469222062706d6e456c656d656e743d22466c6f775f31223e0a20202020202020203c64693a776179706f696e7420783d223231362220793d2231373822202f3e0a20202020202020203c64693a776179706f696e7420783d223236302220793d2231373822202f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f30756e37686c685f6469222062706d6e456c656d656e743d22466c6f775f30756e37686c68223e0a20202020202020203c64693a776179706f696e7420783d223336302220793d2231373822202f3e0a20202020202020203c64693a776179706f696e7420783d223431302220793d2231373822202f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f3069336d7167615f6469222062706d6e456c656d656e743d22466c6f775f3069336d716761223e0a20202020202020203c64693a776179706f696e7420783d223531302220793d2231373822202f3e0a20202020202020203c64693a776179706f696e7420783d223639322220793d2231373822202f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a202020203c2f62706d6e64693a42504d4e506c616e653e0a20203c2f62706d6e64693a42504d4e4469616772616d3e0a3c2f62706d6e3a646566696e6974696f6e733e0a', false);
 INSERT INTO public.act_ge_bytearray (id_, rev_, name_, deployment_id_, bytes_, generated_) VALUES ('46dc5377-f12a-11f0-a8df-f2dbc029a3c2', 1, 'Process_1.Process_1.png', '46d79885-f12a-11f0-a8df-f2dbc029a3c2', '\x89504e470d0a1a0a0000000d49484452000002e2000000e40806000000dd25410b000010f649444154785eeddddd6f54677e07f07d91aabdccb6bb97b9d9abfd17b6bde9c5ae5a3552762f00bf60909149204aa48002586d521527482d7749c806902a354058b541f18549a3a609845a4a431210091b52b12924e1b51888c16c01870dd3f3504f34796c60b0c1f3cccf9f8ff4958367e69c83e777e67c39399ef9ce7700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008082d46ab53f3a7af4e82befbefbee57bb76edaabdf9e69b32cba97eeed78787874feddebdfb97f9f3d3aecc55eb1371ae002094aa2ceda80ed6b53367ced4ae5cb9521b1f1f97594efab9a79fff9e3d7b2e5605ea81fc396a47e6aaf589385700104a3a63990ed6f9415c663fa74f9f3e5715a6f7f3e7a81d99ab721269ae00209474d980339665243d0f5561ba9a3f47edc85c959348730500a1a46b49f303b7b42ee9f9c89fa37664aeca4a94b90280509a2d4cbfbf70ba76f4837faa1d7aebe91b49ff9dbe97df4f66962885c95c959528730500a13453982e8d9eac7dfcc6dfd63efad7d5df4afa5eba2dbfbf4c3f510a93b92a2b51e60a004269a6301d3f3434a92cd573e2d0ce49f797e9274a6132576525ca5c014028cd14a6ff7a7bfda4a2544fba2dbfbf4c3f510a93b92a2b51e60a004269a6307dfce6da4945a99e745b7e7f997ea21426735556a2cc150084a23095952885c95c959528730500a1345398d2bb59e445a99e745b7e7f997ea21426735556a2cc150084d24c61faf49d172615a57ad26df9fd65fa895298cc555989325700104a3385e9fcc983b58ffffdef2695a5f4bd745b7e7f997ea21426735556a2cc150084d24c614af96cdfd64985297d2fbf9fcc2c510a93b92a2b51e60a004269aa305dbd5afbf43f374e2a4ce97be9b649f79769274a6132576525ca5c014028b72b4ce9130e7ff7ce864965a99e749b4f41bc7b895298cc55598932570010ca4d0bd3d5abb5d39feeaefdf6dffe665249ca93ee93eeeb2ce6cc13a53099abb21265ae002094a90ad3edce56de2cce62ce3c510a93b92a2b51e60a004299aa303573b6f266498fcd9727cd274a6132576525ca5c0140285315a6bc04dd69f2e549f3895298cc55598932570010ca5485495a972885c95c959528730533d1dbdb7b5f6767e7bc8e8e8ee7abafbbaa7c56e57295dac4d7f4e75d13b7cf4bf7cf9701ccd0c58b17ff786868e8e9175e78e1a381818173fdfdfd571e79e491eb69475cbe7cf9b555ab568d3df9e493c79e7efae99dab57affecbea21dfcd971189c25456a21426735556a2cc154c475757d72faa63fc6095f189d2dd6cd2fd07d3e3f3650277e8bdf7de5bfeecb3cf9e5cb66c59ad2adfb51d3b76d4f6efdf5f3b72e448edfcf9f3b5247d4d7f4edf4fb7af59b3e67a5f5fdf7855c8dfe8eeeefe49becc0814a6b212a53099abb21265aee04e5405fa675591de3b45c19e4ef6a6e5e5eb006ee3e0c1837ff5e28b2f9e7af8e1876bafbefa6aedecd9b3374a77b3d2fdd3e3aa42fed5ca952b5fa976c41fe5eb68670a5359895298cc5559893257d08cdedede1f747474fcba2acf37fe6f776356ac5851dbbe7dfb2d4fc4a5dbd3fdf2c7a6e5a5e5a6e5e7eb0432d57ef5fdd75f7f7d2815f02d5bb6d42e5dbaf4ed867d87d2e3d372aa1df0724f4fcfaff2f5b52b85a9ac44294ce6aaac44992bb89daa2cdfdfd5d5f5516381eeeeeeae6ddebcb976e2c489fcd07e4be9fee971e9f15921ff30ad275f3730a1da7feedbb66ddbef1e7df4d1dad1a347f37d6b46d2f2aa727fa5afaf6f205f6f3b5298ca4a94c264aeca4a94b9825ba90af84fab9c6c2ccdebd7afaf1d3f7e3c3f94df91f4f8b49cac8c1f4febcbb701e6bc6a9fb9eff9e79f1f7deaa9a76aa3a3a3f9fe7457a4e5f6f7f75f5ebc78f1d67cfded46612a2b510a93b92a2b51e60a6e66e24cf837253c9dc51e1a1aca0fdf339296979d1d3feecc3834a8f693ef6fdbb6edd354c2d3c1e75e4acb5fb56ad585850b173e996f473b5198ca4a94c264aeca4a94b982a9a46bb61b2f4759b26449edc08103f961fbae48cb4dcb6f28e31fba661c26a46bc21f7becb17b76263c97d6b374e9d2b16a477c30df9676a13095952885c95c95952873055399f8c5cc6fce84dfab125e9796df78663cad3fdf269873aa1de381f48b9977fb9af0db49ebebe9e9199d3f7ffe8ff36d6a070a5359895298cc5559893257909b788bc2afeba578e7ce9df961fa9e48eb69382bfeb5b73664ce4b6f5198ded5a415366edc78aada119fcbb7a91d284c65254a6132576525ca5c41aeb3e17dc2d32f54cea6ec1738f7e6db067346fab09e74367c6c6c2cdf4f66455aefa2458b2eb6e387fe284c65254a6132576525ca5c41a3050b16fcbc5e84d3a522337d77943b95d6d778894ada9e7c1b614e489f9839383898ef23b36aebd6ad47aa1d7173be6da55398ca4a94c264aeca4a94b982469dffffb1f5374a707abfef5648eb6d382b3e986f2384373636f627cb972faf8d8c8ce4fbc7acaad6ff87ea5fc667d6ae5dfbbd7c1b4ba63095952885c95c959528730575d5f1f68755f11daf97e0d93e1b5e97d6db50c4c7d376e5db0aa1bdf6da6b03fdfdfdf9bed1124b972efdbcda11ff34dfc656a8b6e3ed2a7f9e7f3fa7309595d20b93b96acf943e57d0a899d799eaf679f5029c3e8ebe95d2fa1bcaf8bc7c5b21b40d1b36fc76c78e1df97ed1129b366d4a1f7bfb0ff936b642c38bc22d5fd014a6b2527a613257ed99d2e70a1a35f33a537d7f43fd7e2fbffc727e389e5569fd0ddbbc21df56086d6060e0dcfefdfbf3fda2258687870f7674740ce5dbd80a0d2f0ab77c415398ca4ae985c95cb5674a9f2b68d4cceb4c5757d7eefaedfbf6edcb0fc7b32aadbfbe2d69bb1ab713c25bb366cd95d97eeff09b397cf870ba34e5837c1b5b618a17b2295fd014a6b2527a619a629ecc551ba4f4b9824653bcbe4c7a9da9be1eab7fbfd51d20adbf611b8f657f1d886df9f2e5d7bffcf2cb7cbf6889f3e7cf5faa76c293f936b6c2142f60796ebca0294c65a5f4c234c51ce5315705a6f4b9824653bcaee449af33ff5bff73ab3b405a7f7d5bbababac6f2bf0f84b668d1a2dab56bd7f2fda225aaed481f779fbf60141d85a9ace4cf4fbbc65c9595fcf9118994567780b4fe86edf943de5320b465cb965d6bf5bf86ebce9e3dfbdf9de59f117fbbd32504c5a6f4339753cc93b96a83943e57d0688ad79749af33e9cc73fdfbadee00ce8833a73df1c41363adbe3eacee934f3ed9d759ee35e2df2a4a750a535929bd3099abf64ce973058d9a799de9748d3894e1a9a79e3a5ecabba6bcf5d65bbb0a7cd794492f608d14a6b2527a613257ed99d2e70a1a35f33ae35d53a0106bd7aedd59cafb88af5bb72e7ddc6e29ef237ed317b0460a535929bd3099abf64ce973058d9a799de9f43ee25086fefefebf58b366cdf57cc768816bdddddd073b0bf964cd66294c65254a6132576525ca5c415d67419facf9f8e38f5f6f28e23e5993b965eddab5df5bba74e9f8c8c848be6fccaa13274ebc53ed80a7d3f6e4db583285a9ac44294ce6aaac44992ba8ebeeeefe6175cc1daf17e0e3c78fe787e55991d6db50c2c7d376e5db0ae1ad5ebdfa8dc1c1c17cff9855cf3cf3cc6faa9d7073be6da55398ca4a94c264aeca4a94b98246d531375d0e7aa3046fdebc393f2ccf8ab4de86223e986f23cc09d5bf407fd2d7d7f7d5d8d858be8fcc8ad1d1d1f7ab1d70246d47be6da55398ca4a94c264aeca4a94b982460b162cf879bd0457c7df593f2b9ed6d7d5d5f5cd6529697bf26d843963e5ca95af6cd9b225df4f6645b5ee7fa976c2e7f26d6a070a5359895298cc555989325790ab8ebd7beb4578fdfaf5f9e1f99e4aeb6b381bbe37df369853e6cf9fffe3dededecbb3fd7ea2fbf6ed4b97a48ca4f5e7dbd40e14a6b212a53099abb21265ae20d7d5d5f5b3ea18fc75bd10efdcb9333f4cdf13693d0d25fcebb41df9b6c19cd3d3d3f3ab65cb965d191d1dcdf7997b626464e43faa1df08b2a0fe6dbd22e14a6b212a53099abb21265ae602a1d1d1dbfae97e27489ca810307f2c3f55d9596df78494a5a7fbe4d3067f5f5f50df4f7f75f4e079f7be9ead5ab9f543bfc07d5cef8d7f936b41385a9ac44294ce6aaac44992b984a6f6fef0faa42fc61bd182f59b2e49e95f1b4dc6a7ddf9c814feb4debcfb709e6b4c58b176f5db56ad5857b75667c6464644f2ae1d50ef88ff9badb8dc25456a21426735556a2cc15dc4c753cbebfcaf1c633e3434343f9e17b46d2f21acf844faceffe7c5b80cac2850b9fecebeb1bbbdbd78c4f5c137eacddcf84d7294c65254a6132576525ca5cc1ad54c7e59f3696f194f40b95337d3795f4f8ec17336f94f0b4be7c1b8006d58ef2604f4fcfe8c68d1b4f5dba7429dfb7eec8850b17de9b78779491b4dc7c5ded4a612a2b510a93b92a2b51e60a6e279da1ee6cb84c25259d1d4feff77de2c489fcd07e4be9fee971d959f01b97a3a4f5e4eb06a650ed403faa7698e7162d5a74f1a5975e3a72f6ecd96bf9ce760bd74e9e3cf9cec0c0c08d774649cb49cbcbd7d1ce14a6b212a53099abb21265aea019e99aed895fe0cc0b746dc58a15b5eddbb7d7f6efdf5f3b72e448edfcf9f3370ef6e96bfa73fa7eba3dfbd8fa7aaea7e5ba261ca6217dd84eb5136dae8af4c8430f3df4c5a64d9b0e0c0f0f1f3c7cf8f0b173e7cefdbeda0f2f8d8c8c1c3d74e8d0beeaa0f5e6ba75eb06abc71cac1ef33fe971edf8613dcd5098ca4a94c264aeca4a94b9823b31f1d686dfbccff80cb3d75b14c2ddf1dd050b16fc59b543fd7df52fdba16ae74a9f8a59bfa62c7d7d3f7d3fdd9eee97ee9f2f201285a9ac44294ce6aaac44992b988eea78fe8bead83e58657c8a827daba4fb0fa6c7e7cb04b82b14a6b212a53099abb21265ae60267a7b7befab8af5bc8e8e8ee7abafbbaa7c56e5f244e94e5fd39f774ddc3e2fdd3f5f06c05da53095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1ecdab5ebfa952b57261db865f6533d0fa7aac274357f8eda91b92a2791e60a0042191e1e3e75e6cc9949076f99fd7cf1c517ff5c15a6f7f3e7a81d99ab721269ae002094ddbb77ff72cf9e3d174f9f3e7dce19ccd6a4fab99ffefcf3cf7f5395a563551ec89fa37664ae5a9f88730500e1a483743a6356653c5d4b2ab39ef4734f3fff506529fd7d26fe5ee6aa35093957000000000000000000000000000000000000000000000000000004f07f07178e4d89a3c38c0000000049454e44ae426082', true);
 INSERT INTO public.act_ge_bytearray (id_, rev_, name_, deployment_id_, bytes_, generated_) VALUES ('2d5e787f-f132-11f0-bfbd-f2dbc029a3c2', 1, 'fu-20260114-paed3z.bpmn', '2d5e787e-f132-11f0-bfbd-f2dbc029a3c2', '\x3c3f786d6c2076657273696f6e3d22312e302220656e636f64696e673d225554462d38223f3e0a3c62706d6e3a646566696e6974696f6e7320786d6c6e733a7873693d22687474703a2f2f7777772e77332e6f72672f323030312f584d4c536368656d612d696e7374616e63652220786d6c6e733a62706d6e3d22687474703a2f2f7777772e6f6d672e6f72672f737065632f42504d4e2f32303130303532342f4d4f44454c2220786d6c6e733a62706d6e64693d22687474703a2f2f7777772e6f6d672e6f72672f737065632f42504d4e2f32303130303532342f44492220786d6c6e733a64633d22687474703a2f2f7777772e6f6d672e6f72672f737065632f44442f32303130303532342f44432220786d6c6e733a64693d22687474703a2f2f7777772e6f6d672e6f72672f737065632f44442f32303130303532342f44492220786d6c6e733a637573746f6d3d22687474703a2f2f637573746f6d2e62706d6e2e696f2f736368656d61222069643d22446566696e6974696f6e735f3122207461726765744e616d6573706163653d22687474703a2f2f62706d6e2e696f2f736368656d612f62706d6e223e0a20203c62706d6e3a70726f636573732069643d2250726f636573735f312220697345786563757461626c653d2274727565223e0a202020203c62706d6e3a73746172744576656e742069643d2253746172744576656e745f3122206e616d653d22e5bc80e5a78b223e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f313c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a73746172744576656e743e0a202020203c62706d6e3a656e644576656e742069643d22456e644576656e745f3122206e616d653d22e7bb93e69d9f223e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f3069336d7167613c2f62706d6e3a696e636f6d696e673e0a202020203c2f62706d6e3a656e644576656e743e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f312220736f757263655265663d2253746172744576656e745f3122207461726765745265663d2241637469766974795f30396468337a3922202f3e0a202020203c62706d6e3a757365725461736b2069643d2241637469766974795f30396468337a39223e0a2020202020203c62706d6e3a657874656e73696f6e456c656d656e74733e0a20202020202020203c637573746f6d3a70726f706572746965733e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656554797065222076616c75653d22494e49544941544f5222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656556616c7565222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e65654c6162656c222076616c75653d22e6b581e7a88be58f91e8b5b7e4baba22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e6469646174655573657273222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e64696461746547726f757073222076616c75653d2222202f3e0a20202020202020203c2f637573746f6d3a70726f706572746965733e0a2020202020203c2f62706d6e3a657874656e73696f6e456c656d656e74733e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f313c2f62706d6e3a696e636f6d696e673e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f30756e37686c683c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a757365725461736b3e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f30756e37686c682220736f757263655265663d2241637469766974795f30396468337a3922207461726765745265663d2241637469766974795f306d767635686322202f3e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f3069336d7167612220736f757263655265663d2241637469766974795f306d767635686322207461726765745265663d22456e644576656e745f3122202f3e0a202020203c62706d6e3a757365725461736b2069643d2241637469766974795f306d7676356863223e0a2020202020203c62706d6e3a657874656e73696f6e456c656d656e74733e0a20202020202020203c637573746f6d3a70726f706572746965733e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656554797065222076616c75653d22454e544954595f4d414e4147455222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656556616c7565222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e65654c6162656c222076616c75653d22e5ae9ee4bd93e7bb8fe7908622202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e6469646174655573657273222076616c75653d225361726168204368656e22202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e64696461746547726f757073222076616c75653d2222202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4964222076616c75653d223722202f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d22202f3e0a20202020202020203c2f637573746f6d3a70726f706572746965733e0a2020202020203c2f62706d6e3a657874656e73696f6e456c656d656e74733e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f30756e37686c683c2f62706d6e3a696e636f6d696e673e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f3069336d7167613c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a757365725461736b3e0a20203c2f62706d6e3a70726f636573733e0a20203c62706d6e64693a42504d4e4469616772616d2069643d2242504d4e4469616772616d5f31223e0a202020203c62706d6e64693a42504d4e506c616e652069643d2242504d4e506c616e655f31222062706d6e456c656d656e743d2250726f636573735f31223e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2253746172744576656e745f315f6469222062706d6e456c656d656e743d2253746172744576656e745f31223e0a20202020202020203c64633a426f756e647320783d223138302220793d22313630222077696474683d22333622206865696768743d22333622202f3e0a20202020202020203c62706d6e64693a42504d4e4c6162656c3e0a202020202020202020203c64633a426f756e647320783d223138372220793d22323033222077696474683d22323222206865696768743d22313422202f3e0a20202020202020203c2f62706d6e64693a42504d4e4c6162656c3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d22456e644576656e745f315f6469222062706d6e456c656d656e743d22456e644576656e745f31223e0a20202020202020203c64633a426f756e647320783d223639322220793d22313630222077696474683d22333622206865696768743d22333622202f3e0a20202020202020203c62706d6e64693a42504d4e4c6162656c3e0a202020202020202020203c64633a426f756e647320783d223639392220793d22323033222077696474683d22323222206865696768743d22313422202f3e0a20202020202020203c2f62706d6e64693a42504d4e4c6162656c3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2241637469766974795f3131326a75366a5f6469222062706d6e456c656d656e743d2241637469766974795f30396468337a39223e0a20202020202020203c64633a426f756e647320783d223236302220793d22313338222077696474683d2231303022206865696768743d22383022202f3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2241637469766974795f30397962666d375f6469222062706d6e456c656d656e743d2241637469766974795f306d7676356863223e0a20202020202020203c64633a426f756e647320783d223431302220793d22313338222077696474683d2231303022206865696768743d22383022202f3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f315f6469222062706d6e456c656d656e743d22466c6f775f31223e0a20202020202020203c64693a776179706f696e7420783d223231362220793d2231373822202f3e0a20202020202020203c64693a776179706f696e7420783d223236302220793d2231373822202f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f30756e37686c685f6469222062706d6e456c656d656e743d22466c6f775f30756e37686c68223e0a20202020202020203c64693a776179706f696e7420783d223336302220793d2231373822202f3e0a20202020202020203c64693a776179706f696e7420783d223431302220793d2231373822202f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f3069336d7167615f6469222062706d6e456c656d656e743d22466c6f775f3069336d716761223e0a20202020202020203c64693a776179706f696e7420783d223531302220793d2231373822202f3e0a20202020202020203c64693a776179706f696e7420783d223639322220793d2231373822202f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a202020203c2f62706d6e64693a42504d4e506c616e653e0a20203c2f62706d6e64693a42504d4e4469616772616d3e0a3c2f62706d6e3a646566696e6974696f6e733e0a', false);
@@ -2563,19 +2698,19 @@ INSERT INTO public.act_ge_bytearray (id_, rev_, name_, deployment_id_, bytes_, g
 INSERT INTO public.act_ge_bytearray (id_, rev_, name_, deployment_id_, bytes_, generated_) VALUES ('091b5d30-f537-11f0-83bf-1a46ed4020c1', 1, 'Process_1.Process_1.png', '09178c9e-f537-11f0-83bf-1a46ed4020c1', '\x89504e470d0a1a0a0000000d49484452000002e2000000e40806000000dd25410b000010f649444154785eeddddd6f54677e07f07d91aabdccb6bb97b9d9abfd17b6bde9c5ae5a3552762f00bf60909149204aa48002586d521527482d7749c806902a354058b541f18549a3a609845a4a431210091b52b12924e1b51888c16c01870dd3f3504f34796c60b0c1f3cccf9f8ff4958367e69c83e777e67c39399ef9ce7700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008082d46ab53f3a7af4e82befbefbee57bb76edaabdf9e69b32cba97eeed78787874feddebdfb97f9f3d3aecc55eb1371ae002094aa2ceda80ed6b53367ced4ae5cb9521b1f1f97594efab9a79fff9e3d7b2e5605ea81fc396a47e6aaf589385700104a3a63990ed6f9415c663fa74f9f3e5715a6f7f3e7a81d99ab721269ae00209474d980339665243d0f5561ba9a3f47edc85c959348730500a1a46b49f303b7b42ee9f9c89fa37664aeca4a94b90280509a2d4cbfbf70ba76f4837faa1d7aebe91b49ff9dbe97df4f66962885c95c959528730500a13453982e8d9eac7dfcc6dfd63efad7d5df4afa5eba2dbfbf4c3f510a93b92a2b51e60a004269a6301d3f3434a92cd573e2d0ce49f797e9274a6132576525ca5c014028cd14a6ff7a7bfda4a2544fba2dbfbf4c3f510a93b92a2b51e60a004269a6307dfce6da4945a99e745b7e7f997ea21426735556a2cc150084a23095952885c95c959528730500a1345398d2bb59e445a99e745b7e7f997ea21426735556a2cc150084d24c61faf49d172615a57ad26df9fd65fa895298cc555989325700104a3385e9fcc983b58ffffdef2695a5f4bd745b7e7f997ea21426735556a2cc150084d24c614af96cdfd64985297d2fbf9fcc2c510a93b92a2b51e60a004269aa305dbd5afbf43f374e2a4ce97be9b649f79769274a6132576525ca5c014028b72b4ce9130e7ff7ce864965a99e749b4f41bc7b895298cc55598932570010ca4d0bd3d5abb5d39feeaefdf6dffe665249ca93ee93eeeb2ce6cc13a53099abb21265ae002094a90ad3edce56de2cce62ce3c510a93b92a2b51e60a004299aa303573b6f266498fcd9727cd274a6132576525ca5c0140285315a6bc04dd69f2e549f3895298cc55598932570010ca5485495a972885c95c959528730533d1dbdb7b5f6767e7bc8e8e8ee7abafbbaa7c56e57295dac4d7f4e75d13b7cf4bf7cf9701ccd0c58b17ff786868e8e9175e78e1a381818173fdfdfd571e79e491eb69475cbe7cf9b555ab568d3df9e493c79e7efae99dab57affecbea21dfcd971189c25456a21426735556a2cc154c475757d72faa63fc6095f189d2dd6cd2fd07d3e3f3650277e8bdf7de5bfeecb3cf9e5cb66c59ad2adfb51d3b76d4f6efdf5f3b72e448edfcf9f3b5247d4d7f4edf4fb7af59b3e67a5f5fdf7855c8dfe8eeeefe49becc0814a6b212a53099abb21265aee04e5405fa675591de3b45c19e4ef6a6e5e5eb006ee3e0c1837ff5e28b2f9e7af8e1876bafbefa6aedecd9b3374a77b3d2fdd3e3aa42fed5ca952b5fa976c41fe5eb68670a5359895298cc5559893257d08cdedede1f747474fcba2acf37fe6f776356ac5851dbbe7dfb2d4fc4a5dbd3fdf2c7a6e5a5e5a6e5e7eb0432d57ef5fdd75f7f7d2815f02d5bb6d42e5dbaf4ed867d87d2e3d372aa1df0724f4fcfaff2f5b52b85a9ac44294ce6aaac44992bb89daa2cdfdfd5d5f5516381eeeeeeae6ddebcb976e2c489fcd07e4be9fee971e9f15921ff30ad275f3730a1da7feedbb66ddbef1e7df4d1dad1a347f37d6b46d2f2aa727fa5afaf6f205f6f3b5298ca4a94c264aeca4a94b9825ba90af84fab9c6c2ccdebd7afaf1d3f7e3c3f94df91f4f8b49cac8c1f4febcbb701e6bc6a9fb9eff9e79f1f7deaa9a76aa3a3a3f9fe7457a4e5f6f7f75f5ebc78f1d67cfded46612a2b510a93b92a2b51e60a6e66e24cf837253c9dc51e1a1aca0fdf339296979d1d3feecc3834a8f693ef6fdbb6edd354c2d3c1e75e4acb5fb56ad585850b173e996f473b5198ca4a94c264aeca4a94b982a9a46bb61b2f4759b26449edc08103f961fbae48cb4dcb6f28e31fba661c26a46bc21f7becb17b76263c97d6b374e9d2b16a477c30df9676a13095952885c95c95952873055399f8c5cc6fce84dfab125e9796df78663cad3fdf269873aa1de381f48b9977fb9af0db49ebebe9e9199d3f7ffe8ff36d6a070a5359895298cc5559893257909b788bc2afeba578e7ce9df961fa9e48eb69382bfeb5b73664ce4b6f5198ded5a415366edc78aada119fcbb7a91d284c65254a6132576525ca5c41aeb3e17dc2d32f54cea6ec1738f7e6db067346fab09e74367c6c6c2cdf4f66455aefa2458b2eb6e387fe284c65254a6132576525ca5c41a3050b16fcbc5e84d3a522337d77943b95d6d778894ada9e7c1b614e489f9839383898ef23b36aebd6ad47aa1d7173be6da55398ca4a94c264aeca4a94b982469dffffb1f5374a707abfef5648eb6d382b3e986f2384373636f627cb972faf8d8c8ce4fbc7acaad6ff87ea5fc667d6ae5dfbbd7c1b4ba63095952885c95c959528730575d5f1f68755f11daf97e0d93e1b5e97d6db50c4c7d376e5db0aa1bdf6da6b03fdfdfdf9bed1124b972efdbcda11ff34dfc656a8b6e3ed2a7f9e7f3fa7309595d20b93b96acf943e57d0a899d799eaf679f5029c3e8ebe95d2fa1bcaf8bc7c5b21b40d1b36fc76c78e1df97ed1129b366d4a1f7bfb0ff936b642c38bc22d5fd014a6b2527a613257ed99d2e70a1a35f33a537d7f43fd7e2fbffc727e389e5569fd0ddbbc21df56086d6060e0dcfefdfbf3fda2258687870f7674740ce5dbd80a0d2f0ab77c415398ca4ae985c95cb5674a9f2b68d4cceb4c5757d7eefaedfbf6edcb0fc7b32aadbfbe2d69bb1ab713c25bb366cd95d97eeff09b397cf870ba34e5837c1b5b618a17b2295fd014a6b2527a619a629ecc551ba4f4b9824653bcbe4c7a9da9be1eab7fbfd51d20adbf611b8f657f1d886df9f2e5d7bffcf2cb7cbf6889f3e7cf5faa76c293f936b6c2142f60796ebca0294c65a5f4c234c51ce5315705a6f4b9824653bcaee449af33ff5bff73ab3b405a7f7d5bbababac6f2bf0f84b668d1a2dab56bd7f2fda225aaed481f779fbf60141d85a9ace4cf4fbbc65c9595fcf9118994567780b4fe86edf943de5320b465cb965d6bf5bf86ebce9e3dfbdf9de59f117fbbd32504c5a6f4339753cc93b96a83943e57d0688ad79749af33e9cc73fdfbadee00ce8833a73df1c41363adbe3eacee934f3ed9d759ee35e2df2a4a750a535929bd3099abf64ce973058d9a799de9748d3894e1a9a79e3a5ecabba6bcf5d65bbb0a7cd794492f608d14a6b2527a613257ed99d2e70a1a35f33ae35d53a0106bd7aedd59cafb88af5bb72e7ddc6e29ef237ed317b0460a535929bd3099abf64ce973058d9a799de9f43ee25086fefefebf58b366cdf57cc768816bdddddd073b0bf964cd66294c65254a6132576525ca5c415d67419facf9f8e38f5f6f28e23e5993b965eddab5df5bba74e9f8c8c848be6fccaa13274ebc53ed80a7d3f6e4db583285a9ac44294ce6aaac44992ba8ebeeeefe6175cc1daf17e0e3c78fe787e55991d6db50c2c7d376e5db0ae1ad5ebdfa8dc1c1c17cff9855cf3cf3cc6faa9d7073be6da55398ca4a94c264aeca4a94b98246d531375d0e7aa3046fdebc393f2ccf8ab4de86223e986f23cc09d5bf407fd2d7d7f7d5d8d858be8fcc8ad1d1d1f7ab1d70246d47be6da55398ca4a94c264aeca4a94b982460b162cf879bd0457c7df593f2b9ed6d7d5d5f5cd6529697bf26d843963e5ca95af6cd9b225df4f6645b5ee7fa976c2e7f26d6a070a5359895298cc555989325790ab8ebd7beb4578fdfaf5f9e1f99e4aeb6b381bbe37df369853e6cf9fffe3dededecbb3fd7ea2fbf6ed4b97a48ca4f5e7dbd40e14a6b212a53099abb21265ae20d7d5d5f5b3ea18fc75bd10efdcb9333f4cdf13693d0d25fcebb41df9b6c19cd3d3d3f3ab65cb965d191d1dcdf7997b626464e43faa1df08b2a0fe6dbd22e14a6b212a53099abb21265ae602a1d1d1dbfae97e27489ca810307f2c3f55d9596df78494a5a7fbe4d3067f5f5f50df4f7f75f4e079f7be9ead5ab9f543bfc07d5cef8d7f936b41385a9ac44294ce6aaac44992b984a6f6fef0faa42fc61bd182f59b2e49e95f1b4dc6a7ddf9c814feb4debcfb709e6b4c58b176f5db56ad5857b75667c6464644f2ae1d50ef88ff9badb8dc25456a21426735556a2cc15dc4c753cbebfcaf1c633e3434343f9e17b46d2f21acf844faceffe7c5b80cac2850b9fecebeb1bbbdbd78c4f5c137eacddcf84d7294c65254a6132576525ca5cc1ad54c7e59f3696f194f40b95337d3795f4f8ec17336f94f0b4be7c1b8006d58ef2604f4fcfe8c68d1b4f5dba7429dfb7eec8850b17de9b78779491b4dc7c5ded4a612a2b510a93b92a2b51e60a6e279da1ee6cb84c25259d1d4feff77de2c489fcd07e4be9fee971d959f01b97a3a4f5e4eb06a650ed403faa7698e7162d5a74f1a5975e3a72f6ecd96bf9ce760bd74e9e3cf9cec0c0c08d774649cb49cbcbd7d1ce14a6b212a53099abb21265aea019e99aed895fe0cc0b746dc58a15b5eddbb7d7f6efdf5f3b72e448edfcf9f3370ef6e96bfa73fa7eba3dfbd8fa7aaea7e5ba261ca6217dd84eb5136dae8af4c8430f3df4c5a64d9b0e0c0f0f1f3c7cf8f0b173e7cefdbeda0f2f8d8c8c1c3d74e8d0beeaa0f5e6ba75eb06abc71cac1ef33fe971edf8613dcd5098ca4a94c264aeca4a94b9823b31f1d686dfbccff80cb3d75b14c2ddf1dd050b16fc59b543fd7df52fdba16ae74a9f8a59bfa62c7d7d3f7d3fdd9eee97ee9f2f201285a9ac44294ce6aaac44992b988eea78fe8bead83e58657c8a827daba4fb0fa6c7e7cb04b82b14a6b212a53099abb21265ae60267a7b7befab8af5bc8e8e8ee7abafbbaa7c56e5f244e94e5fd39f774ddc3e2fdd3f5f06c05da53095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1ecdab5ebfa952b57261db865f6533d0fa7aac274357f8eda91b92a2791e60a0042191e1e3e75e6cc9949076f99fd7cf1c517ff5c15a6f7f3e7a81d99ab721269ae002094ddbb77ff72cf9e3d174f9f3e7dce19ccd6a4fab99ffefcf3cf7f5395a563551ec89fa37664ae5a9f88730500e1a483743a6356653c5d4b2ab39ef4734f3fff506529fd7d26fe5ee6aa35093957000000000000000000000000000000000000000000000000000004f07f07178e4d89a3c38c0000000049454e44ae426082', true);
 INSERT INTO public.act_ge_bytearray (id_, rev_, name_, deployment_id_, bytes_, generated_) VALUES ('14ba10a7-f537-11f0-83bf-1a46ed4020c1', 1, 'fu-20260114-paed3z.bpmn', '14ba10a6-f537-11f0-83bf-1a46ed4020c1', '\x3c3f786d6c2076657273696f6e3d22312e302220656e636f64696e673d225554462d38223f3e3c62706d6e3a646566696e6974696f6e7320786d6c6e733a7873693d22687474703a2f2f7777772e77332e6f72672f323030312f584d4c536368656d612d696e7374616e63652220786d6c6e733a62706d6e3d22687474703a2f2f7777772e6f6d672e6f72672f737065632f42504d4e2f32303130303532342f4d4f44454c2220786d6c6e733a62706d6e64693d22687474703a2f2f7777772e6f6d672e6f72672f737065632f42504d4e2f32303130303532342f44492220786d6c6e733a64633d22687474703a2f2f7777772e6f6d672e6f72672f737065632f44442f32303130303532342f44432220786d6c6e733a64693d22687474703a2f2f7777772e6f6d672e6f72672f737065632f44442f32303130303532342f44492220786d6c6e733a637573746f6d3d22687474703a2f2f637573746f6d2e62706d6e2e696f2f736368656d61222069643d22446566696e6974696f6e735f3122207461726765744e616d6573706163653d22687474703a2f2f62706d6e2e696f2f736368656d612f62706d6e223e0a20203c62706d6e3a70726f636573732069643d2250726f636573735f312220697345786563757461626c653d2274727565223e0a202020203c62706d6e3a73746172744576656e742069643d2253746172744576656e745f3122206e616d653d22e5bc80e5a78b223e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f313c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a73746172744576656e743e0a202020203c62706d6e3a656e644576656e742069643d22456e644576656e745f3122206e616d653d22e7bb93e69d9f223e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f3069336d7167613c2f62706d6e3a696e636f6d696e673e0a202020203c2f62706d6e3a656e644576656e743e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f312220736f757263655265663d2253746172744576656e745f3122207461726765745265663d2241637469766974795f30396468337a39222f3e0a202020203c62706d6e3a757365725461736b2069643d2241637469766974795f30396468337a39223e0a2020202020203c62706d6e3a657874656e73696f6e456c656d656e74733e0a20202020202020203c637573746f6d3a70726f706572746965733e0a202020202020202020200a202020202020202020200a202020202020202020200a202020202020202020200a202020202020202020200a202020202020202020200a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656554797065222076616c75653d2246495845445f44455054222f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656556616c7565222076616c75653d22444550542d4852222f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e65654c6162656c222076616c75653d2248756d616e205265736f7572636573222f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e6469646174655573657273222076616c75653d22222f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e64696461746547726f757073222076616c75653d22222f3e0a20202020202020203c637573746f6d3a70726f7065727479206e616d653d22666f726d4964222076616c75653d2237222f3e3c637573746f6d3a70726f7065727479206e616d653d22666f726d4e616d65222076616c75653d2274657374466f726d222f3e3c2f637573746f6d3a70726f706572746965733e0a2020202020203c2f62706d6e3a657874656e73696f6e456c656d656e74733e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f313c2f62706d6e3a696e636f6d696e673e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f30756e37686c683c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a757365725461736b3e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f30756e37686c682220736f757263655265663d2241637469766974795f30396468337a3922207461726765745265663d2241637469766974795f306d7676356863222f3e0a202020203c62706d6e3a73657175656e6365466c6f772069643d22466c6f775f3069336d7167612220736f757263655265663d2241637469766974795f306d767635686322207461726765745265663d22456e644576656e745f31222f3e0a202020203c62706d6e3a757365725461736b2069643d2241637469766974795f306d7676356863223e0a2020202020203c62706d6e3a657874656e73696f6e456c656d656e74733e0a20202020202020203c637573746f6d3a70726f706572746965733e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656554797065222076616c75653d2246495845445f44455054222f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e656556616c7565222076616c75653d22444550542d434f52502d42414e4b494e47222f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2261737369676e65654c6162656c222076616c75653d22436f72706f726174652042616e6b696e67222f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e6469646174655573657273222076616c75653d22222f3e0a202020202020202020203c637573746f6d3a76616c756573206e616d653d2263616e64696461746547726f757073222076616c75653d22222f3e0a202020202020202020200a202020202020202020200a20202020202020203c2f637573746f6d3a70726f706572746965733e0a2020202020203c2f62706d6e3a657874656e73696f6e456c656d656e74733e0a2020202020203c62706d6e3a696e636f6d696e673e466c6f775f30756e37686c683c2f62706d6e3a696e636f6d696e673e0a2020202020203c62706d6e3a6f7574676f696e673e466c6f775f3069336d7167613c2f62706d6e3a6f7574676f696e673e0a202020203c2f62706d6e3a757365725461736b3e0a20203c2f62706d6e3a70726f636573733e0a20203c62706d6e64693a42504d4e4469616772616d2069643d2242504d4e4469616772616d5f31223e0a202020203c62706d6e64693a42504d4e506c616e652069643d2242504d4e506c616e655f31222062706d6e456c656d656e743d2250726f636573735f31223e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2253746172744576656e745f315f6469222062706d6e456c656d656e743d2253746172744576656e745f31223e0a20202020202020203c64633a426f756e647320783d223138302220793d22313630222077696474683d22333622206865696768743d223336222f3e0a20202020202020203c62706d6e64693a42504d4e4c6162656c3e0a202020202020202020203c64633a426f756e647320783d223138372220793d22323033222077696474683d22323222206865696768743d223134222f3e0a20202020202020203c2f62706d6e64693a42504d4e4c6162656c3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d22456e644576656e745f315f6469222062706d6e456c656d656e743d22456e644576656e745f31223e0a20202020202020203c64633a426f756e647320783d223639322220793d22313630222077696474683d22333622206865696768743d223336222f3e0a20202020202020203c62706d6e64693a42504d4e4c6162656c3e0a202020202020202020203c64633a426f756e647320783d223639392220793d22323033222077696474683d22323222206865696768743d223134222f3e0a20202020202020203c2f62706d6e64693a42504d4e4c6162656c3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2241637469766974795f3131326a75366a5f6469222062706d6e456c656d656e743d2241637469766974795f30396468337a39223e0a20202020202020203c64633a426f756e647320783d223236302220793d22313338222077696474683d2231303022206865696768743d223830222f3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e53686170652069643d2241637469766974795f30397962666d375f6469222062706d6e456c656d656e743d2241637469766974795f306d7676356863223e0a20202020202020203c64633a426f756e647320783d223431302220793d22313338222077696474683d2231303022206865696768743d223830222f3e0a2020202020203c2f62706d6e64693a42504d4e53686170653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f315f6469222062706d6e456c656d656e743d22466c6f775f31223e0a20202020202020203c64693a776179706f696e7420783d223231362220793d22313738222f3e0a20202020202020203c64693a776179706f696e7420783d223236302220793d22313738222f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f30756e37686c685f6469222062706d6e456c656d656e743d22466c6f775f30756e37686c68223e0a20202020202020203c64693a776179706f696e7420783d223336302220793d22313738222f3e0a20202020202020203c64693a776179706f696e7420783d223431302220793d22313738222f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a2020202020203c62706d6e64693a42504d4e456467652069643d22466c6f775f3069336d7167615f6469222062706d6e456c656d656e743d22466c6f775f3069336d716761223e0a20202020202020203c64693a776179706f696e7420783d223531302220793d22313738222f3e0a20202020202020203c64693a776179706f696e7420783d223639322220793d22313738222f3e0a2020202020203c2f62706d6e64693a42504d4e456467653e0a202020203c2f62706d6e64693a42504d4e506c616e653e0a20203c2f62706d6e64693a42504d4e4469616772616d3e0a3c2f62706d6e3a646566696e6974696f6e733e', false);
 INSERT INTO public.act_ge_bytearray (id_, rev_, name_, deployment_id_, bytes_, generated_) VALUES ('14bdba28-f537-11f0-83bf-1a46ed4020c1', 1, 'fu-20260114-paed3z.Process_1.png', '14ba10a6-f537-11f0-83bf-1a46ed4020c1', '\x89504e470d0a1a0a0000000d49484452000002e2000000e40806000000dd25410b000010f649444154785eeddddd6f54677e07f07d91aabdccb6bb97b9d9abfd17b6bde9c5ae5a3552762f00bf60909149204aa48002586d521527482d7749c806902a354058b541f18549a3a609845a4a431210091b52b12924e1b51888c16c01870dd3f3504f34796c60b0c1f3cccf9f8ff4958367e69c83e777e67c39399ef9ce7700000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008082d46ab53f3a7af4e82befbefbee57bb76edaabdf9e69b32cba97eeed78787874feddebdfb97f9f3d3aecc55eb1371ae002094aa2ceda80ed6b53367ced4ae5cb9521b1f1f97594efab9a79fff9e3d7b2e5605ea81fc396a47e6aaf589385700104a3a63990ed6f9415c663fa74f9f3e5715a6f7f3e7a81d99ab721269ae00209474d980339665243d0f5561ba9a3f47edc85c959348730500a1a46b49f303b7b42ee9f9c89fa37664aeca4a94b90280509a2d4cbfbf70ba76f4837faa1d7aebe91b49ff9dbe97df4f66962885c95c959528730500a13453982e8d9eac7dfcc6dfd63efad7d5df4afa5eba2dbfbf4c3f510a93b92a2b51e60a004269a6301d3f3434a92cd573e2d0ce49f797e9274a6132576525ca5c014028cd14a6ff7a7bfda4a2544fba2dbfbf4c3f510a93b92a2b51e60a004269a6307dfce6da4945a99e745b7e7f997ea21426735556a2cc150084a23095952885c95c959528730500a1345398d2bb59e445a99e745b7e7f997ea21426735556a2cc150084d24c61faf49d172615a57ad26df9fd65fa895298cc555989325700104a3385e9fcc983b58ffffdef2695a5f4bd745b7e7f997ea21426735556a2cc150084d24c614af96cdfd64985297d2fbf9fcc2c510a93b92a2b51e60a004269aa305dbd5afbf43f374e2a4ce97be9b649f79769274a6132576525ca5c014028b72b4ce9130e7ff7ce864965a99e749b4f41bc7b895298cc55598932570010ca4d0bd3d5abb5d39feeaefdf6dffe665249ca93ee93eeeb2ce6cc13a53099abb21265ae002094a90ad3edce56de2cce62ce3c510a93b92a2b51e60a004299aa303573b6f266498fcd9727cd274a6132576525ca5c0140285315a6bc04dd69f2e549f3895298cc55598932570010ca5485495a972885c95c959528730533d1dbdb7b5f6767e7bc8e8e8ee7abafbbaa7c56e57295dac4d7f4e75d13b7cf4bf7cf9701ccd0c58b17ff786868e8e9175e78e1a381818173fdfdfd571e79e491eb69475cbe7cf9b555ab568d3df9e493c79e7efae99dab57affecbea21dfcd971189c25456a21426735556a2cc154c475757d72faa63fc6095f189d2dd6cd2fd07d3e3f3650277e8bdf7de5bfeecb3cf9e5cb66c59ad2adfb51d3b76d4f6efdf5f3b72e448edfcf9f3b5247d4d7f4edf4fb7af59b3e67a5f5fdf7855c8dfe8eeeefe49becc0814a6b212a53099abb21265aee04e5405fa675591de3b45c19e4ef6a6e5e5eb006ee3e0c1837ff5e28b2f9e7af8e1876bafbefa6aedecd9b3374a77b3d2fdd3e3aa42fed5ca952b5fa976c41fe5eb68670a5359895298cc5559893257d08cdedede1f747474fcba2acf37fe6f776356ac5851dbbe7dfb2d4fc4a5dbd3fdf2c7a6e5a5e5a6e5e7eb0432d57ef5fdd75f7f7d2815f02d5bb6d42e5dbaf4ed867d87d2e3d372aa1df0724f4fcfaff2f5b52b85a9ac44294ce6aaac44992bb89daa2cdfdfd5d5f5516381eeeeeeae6ddebcb976e2c489fcd07e4be9fee971e9f15921ff30ad275f3730a1da7feedbb66ddbef1e7df4d1dad1a347f37d6b46d2f2aa727fa5afaf6f205f6f3b5298ca4a94c264aeca4a94b9825ba90af84fab9c6c2ccdebd7afaf1d3f7e3c3f94df91f4f8b49cac8c1f4febcbb701e6bc6a9fb9eff9e79f1f7deaa9a76aa3a3a3f9fe7457a4e5f6f7f75f5ebc78f1d67cfded46612a2b510a93b92a2b51e60a6e66e24cf837253c9dc51e1a1aca0fdf339296979d1d3feecc3834a8f693ef6fdbb6edd354c2d3c1e75e4acb5fb56ad585850b173e996f473b5198ca4a94c264aeca4a94b982a9a46bb61b2f4759b26449edc08103f961fbae48cb4dcb6f28e31fba661c26a46bc21f7becb17b76263c97d6b374e9d2b16a477c30df9676a13095952885c95c95952873055399f8c5cc6fce84dfab125e9796df78663cad3fdf269873aa1de381f48b9977fb9af0db49ebebe9e9199d3f7ffe8ff36d6a070a5359895298cc5559893257909b788bc2afeba578e7ce9df961fa9e48eb69382bfeb5b73664ce4b6f5198ded5a415366edc78aada119fcbb7a91d284c65254a6132576525ca5c41aeb3e17dc2d32f54cea6ec1738f7e6db067346fab09e74367c6c6c2cdf4f66455aefa2458b2eb6e387fe284c65254a6132576525ca5c41a3050b16fcbc5e84d3a522337d77943b95d6d778894ada9e7c1b614e489f9839383898ef23b36aebd6ad47aa1d7173be6da55398ca4a94c264aeca4a94b982469dffffb1f5374a707abfef5648eb6d382b3e986f2384373636f627cb972faf8d8c8ce4fbc7acaad6ff87ea5fc667d6ae5dfbbd7c1b4ba63095952885c95c959528730575d5f1f68755f11daf97e0d93e1b5e97d6db50c4c7d376e5db0aa1bdf6da6b03fdfdfdf9bed1124b972efdbcda11ff34dfc656a8b6e3ed2a7f9e7f3fa7309595d20b93b96acf943e57d0a899d799eaf679f5029c3e8ebe95d2fa1bcaf8bc7c5b21b40d1b36fc76c78e1df97ed1129b366d4a1f7bfb0ff936b642c38bc22d5fd014a6b2527a613257ed99d2e70a1a35f33a537d7f43fd7e2fbffc727e389e5569fd0ddbbc21df56086d6060e0dcfefdfbf3fda2258687870f7674740ce5dbd80a0d2f0ab77c415398ca4ae985c95cb5674a9f2b68d4cceb4c5757d7eefaedfbf6edcb0fc7b32aadbfbe2d69bb1ab713c25bb366cd95d97eeff09b397cf870ba34e5837c1b5b618a17b2295fd014a6b2527a619a629ecc551ba4f4b9824653bcbe4c7a9da9be1eab7fbfd51d20adbf611b8f657f1d886df9f2e5d7bffcf2cb7cbf6889f3e7cf5faa76c293f936b6c2142f60796ebca0294c65a5f4c234c51ce5315705a6f4b9824653bcaee449af33ff5bff73ab3b405a7f7d5bbababac6f2bf0f84b668d1a2dab56bd7f2fda225aaed481f779fbf60141d85a9ace4cf4fbbc65c9595fcf9118994567780b4fe86edf943de5320b465cb965d6bf5bf86ebce9e3dfbdf9de59f117fbbd32504c5a6f4339753cc93b96a83943e57d0688ad79749af33e9cc73fdfbadee00ce8833a73df1c41363adbe3eacee934f3ed9d759ee35e2df2a4a750a535929bd3099abf64ce973058d9a799de9748d3894e1a9a79e3a5ecabba6bcf5d65bbb0a7cd794492f608d14a6b2527a613257ed99d2e70a1a35f33ae35d53a0106bd7aedd59cafb88af5bb72e7ddc6e29ef237ed317b0460a535929bd3099abf64ce973058d9a799de9f43ee25086fefefebf58b366cdf57cc768816bdddddd073b0bf964cd66294c65254a6132576525ca5c415d67419facf9f8e38f5f6f28e23e5993b965eddab5df5bba74e9f8c8c848be6fccaa13274ebc53ed80a7d3f6e4db583285a9ac44294ce6aaac44992ba8ebeeeefe6175cc1daf17e0e3c78fe787e55991d6db50c2c7d376e5db0ae1ad5ebdfa8dc1c1c17cff9855cf3cf3cc6faa9d7073be6da55398ca4a94c264aeca4a94b98246d531375d0e7aa3046fdebc393f2ccf8ab4de86223e986f23cc09d5bf407fd2d7d7f7d5d8d858be8fcc8ad1d1d1f7ab1d70246d47be6da55398ca4a94c264aeca4a94b982460b162cf879bd0457c7df593f2b9ed6d7d5d5f5cd6529697bf26d843963e5ca95af6cd9b225df4f6645b5ee7fa976c2e7f26d6a070a5359895298cc555989325790ab8ebd7beb4578fdfaf5f9e1f99e4aeb6b381bbe37df369853e6cf9fffe3dededecbb3fd7ea2fbf6ed4b97a48ca4f5e7dbd40e14a6b212a53099abb21265ae20d7d5d5f5b3ea18fc75bd10efdcb9333f4cdf13693d0d25fcebb41df9b6c19cd3d3d3f3ab65cb965d191d1dcdf7997b626464e43faa1df08b2a0fe6dbd22e14a6b212a53099abb21265ae602a1d1d1dbfae97e27489ca810307f2c3f55d9596df78494a5a7fbe4d3067f5f5f50df4f7f75f4e079f7be9ead5ab9f543bfc07d5cef8d7f936b41385a9ac44294ce6aaac44992b984a6f6fef0faa42fc61bd182f59b2e49e95f1b4dc6a7ddf9c814feb4debcfb709e6b4c58b176f5db56ad5857b75667c6464644f2ae1d50ef88ff9badb8dc25456a21426735556a2cc15dc4c753cbebfcaf1c633e3434343f9e17b46d2f21acf844faceffe7c5b80cac2850b9fecebeb1bbbdbd78c4f5c137eacddcf84d7294c65254a6132576525ca5cc1ad54c7e59f3696f194f40b95337d3795f4f8ec17336f94f0b4be7c1b8006d58ef2604f4fcfe8c68d1b4f5dba7429dfb7eec8850b17de9b78779491b4dc7c5ded4a612a2b510a93b92a2b51e60a6e279da1ee6cb84c25259d1d4feff77de2c489fcd07e4be9fee971d959f01b97a3a4f5e4eb06a650ed403faa7698e7162d5a74f1a5975e3a72f6ecd96bf9ce760bd74e9e3cf9cec0c0c08d774649cb49cbcbd7d1ce14a6b212a53099abb21265aea019e99aed895fe0cc0b746dc58a15b5eddbb7d7f6efdf5f3b72e448edfcf9f3370ef6e96bfa73fa7eba3dfbd8fa7aaea7e5ba261ca6217dd84eb5136dae8af4c8430f3df4c5a64d9b0e0c0f0f1f3c7cf8f0b173e7cefdbeda0f2f8d8c8c1c3d74e8d0beeaa0f5e6ba75eb06abc71cac1ef33fe971edf8613dcd5098ca4a94c264aeca4a94b9823b31f1d686dfbccff80cb3d75b14c2ddf1dd050b16fc59b543fd7df52fdba16ae74a9f8a59bfa62c7d7d3f7d3fdd9eee97ee9f2f201285a9ac44294ce6aaac44992b988eea78fe8bead83e58657c8a827daba4fb0fa6c7e7cb04b82b14a6b212a53099abb21265ae60267a7b7befab8af5bc8e8e8ee7abafbbaa7c56e5f244e94e5fd39f774ddc3e2fdd3f5f06c05da53095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1284c65254a6132576525ca5c0140280a5359895298cc555989325700108ac25456a21426735556a2cc150084a23095952885c95c959528730500a1ecdab5ebfa952b57261db865f6533d0fa7aac274357f8eda91b92a2791e60a0042191e1e3e75e6cc9949076f99fd7cf1c517ff5c15a6f7f3e7a81d99ab721269ae002094ddbb77ff72cf9e3d174f9f3e7dce19ccd6a4fab99ffefcf3cf7f5395a563551ec89fa37664ae5a9f88730500e1a483743a6356653c5d4b2ab39ef4734f3fff506529fd7d26fe5ee6aa35093957000000000000000000000000000000000000000000000000000004f07f07178e4d89a3c38c0000000049454e44ae426082', true);
-INSERT INTO public.act_ge_property (name_, value_, rev_) VALUES ('common.schema.version', '7.0.0.0', 1);
-INSERT INTO public.act_ge_property (name_, value_, rev_) VALUES ('next.dbid', '1', 1);
-INSERT INTO public.act_ge_property (name_, value_, rev_) VALUES ('identitylink.schema.version', '7.0.0.0', 1);
-INSERT INTO public.act_ge_property (name_, value_, rev_) VALUES ('entitylink.schema.version', '7.0.0.0', 1);
-INSERT INTO public.act_ge_property (name_, value_, rev_) VALUES ('eventsubscription.schema.version', '7.0.0.0', 1);
-INSERT INTO public.act_ge_property (name_, value_, rev_) VALUES ('task.schema.version', '7.0.0.0', 1);
-INSERT INTO public.act_ge_property (name_, value_, rev_) VALUES ('variable.schema.version', '7.0.0.0', 1);
-INSERT INTO public.act_ge_property (name_, value_, rev_) VALUES ('job.schema.version', '7.0.0.0', 1);
-INSERT INTO public.act_ge_property (name_, value_, rev_) VALUES ('batch.schema.version', '7.0.0.0', 1);
-INSERT INTO public.act_ge_property (name_, value_, rev_) VALUES ('schema.version', '7.0.0.0', 1);
-INSERT INTO public.act_ge_property (name_, value_, rev_) VALUES ('schema.history', 'create(7.0.0.0)', 1);
-INSERT INTO public.act_ge_property (name_, value_, rev_) VALUES ('cfg.execution-related-entities-count', 'true', 1);
-INSERT INTO public.act_ge_property (name_, value_, rev_) VALUES ('cfg.task-related-entities-count', 'true', 1);
+INSERT INTO public.act_ge_property (name_, value_, rev_) VALUES ('common.schema.version', '7.0.0.0', 1) ON CONFLICT (name_) DO NOTHING;
+INSERT INTO public.act_ge_property (name_, value_, rev_) VALUES ('next.dbid', '1', 1) ON CONFLICT (name_) DO NOTHING;
+INSERT INTO public.act_ge_property (name_, value_, rev_) VALUES ('identitylink.schema.version', '7.0.0.0', 1) ON CONFLICT (name_) DO NOTHING;
+INSERT INTO public.act_ge_property (name_, value_, rev_) VALUES ('entitylink.schema.version', '7.0.0.0', 1) ON CONFLICT (name_) DO NOTHING;
+INSERT INTO public.act_ge_property (name_, value_, rev_) VALUES ('eventsubscription.schema.version', '7.0.0.0', 1) ON CONFLICT (name_) DO NOTHING;
+INSERT INTO public.act_ge_property (name_, value_, rev_) VALUES ('task.schema.version', '7.0.0.0', 1) ON CONFLICT (name_) DO NOTHING;
+INSERT INTO public.act_ge_property (name_, value_, rev_) VALUES ('variable.schema.version', '7.0.0.0', 1) ON CONFLICT (name_) DO NOTHING;
+INSERT INTO public.act_ge_property (name_, value_, rev_) VALUES ('job.schema.version', '7.0.0.0', 1) ON CONFLICT (name_) DO NOTHING;
+INSERT INTO public.act_ge_property (name_, value_, rev_) VALUES ('batch.schema.version', '7.0.0.0', 1) ON CONFLICT (name_) DO NOTHING;
+INSERT INTO public.act_ge_property (name_, value_, rev_) VALUES ('schema.version', '7.0.0.0', 1) ON CONFLICT (name_) DO NOTHING;
+INSERT INTO public.act_ge_property (name_, value_, rev_) VALUES ('schema.history', 'create(7.0.0.0)', 1) ON CONFLICT (name_) DO NOTHING;
+INSERT INTO public.act_ge_property (name_, value_, rev_) VALUES ('cfg.execution-related-entities-count', 'true', 1) ON CONFLICT (name_) DO NOTHING;
+INSERT INTO public.act_ge_property (name_, value_, rev_) VALUES ('cfg.task-related-entities-count', 'true', 1) ON CONFLICT (name_) DO NOTHING;
 INSERT INTO public.act_hi_actinst (id_, rev_, proc_def_id_, proc_inst_id_, execution_id_, act_id_, task_id_, call_proc_inst_id_, act_name_, act_type_, assignee_, start_time_, end_time_, transaction_order_, duration_, delete_reason_, tenant_id_) VALUES ('2d7a8c07-f132-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1:2:2d6cf771-f132-11f0-bfbd-f2dbc029a3c2', '2d7a16d2-f132-11f0-bfbd-f2dbc029a3c2', '2d7a8c06-f132-11f0-bfbd-f2dbc029a3c2', 'StartEvent_1', NULL, NULL, '开始', 'startEvent', NULL, '2026-01-14 18:17:06.215', '2026-01-14 18:17:06.219', 1, 4, NULL, '');
 INSERT INTO public.act_hi_actinst (id_, rev_, proc_def_id_, proc_inst_id_, execution_id_, act_id_, task_id_, call_proc_inst_id_, act_name_, act_type_, assignee_, start_time_, end_time_, transaction_order_, duration_, delete_reason_, tenant_id_) VALUES ('2d7b4f58-f132-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1:2:2d6cf771-f132-11f0-bfbd-f2dbc029a3c2', '2d7a16d2-f132-11f0-bfbd-f2dbc029a3c2', '2d7a8c06-f132-11f0-bfbd-f2dbc029a3c2', 'Flow_1', NULL, NULL, NULL, 'sequenceFlow', NULL, '2026-01-14 18:17:06.22', '2026-01-14 18:17:06.22', 2, 0, NULL, '');
 INSERT INTO public.act_hi_actinst (id_, rev_, proc_def_id_, proc_inst_id_, execution_id_, act_id_, task_id_, call_proc_inst_id_, act_name_, act_type_, assignee_, start_time_, end_time_, transaction_order_, duration_, delete_reason_, tenant_id_) VALUES ('6f7295a4-f1f4-11f0-bfbd-f2dbc029a3c2', 1, 'Process_1:7:6f5a7aaf-f1f4-11f0-bfbd-f2dbc029a3c2', '6f5f83c0-f1f4-11f0-bfbd-f2dbc029a3c2', '6f5f83c8-f1f4-11f0-bfbd-f2dbc029a3c2', 'Flow_0un7hlh', NULL, NULL, NULL, 'sequenceFlow', NULL, '2026-01-15 17:27:39.258', '2026-01-15 17:27:39.258', 1, 0, NULL, '');
@@ -2722,7 +2857,7 @@ INSERT INTO public.act_hi_varinst (id_, rev_, proc_inst_id_, execution_id_, task
 INSERT INTO public.act_hi_varinst (id_, rev_, proc_inst_id_, execution_id_, task_id_, name_, var_type_, scope_id_, sub_scope_id_, scope_type_, bytearray_id_, double_, long_, text_, text2_, meta_info_, create_time_, last_updated_time_) VALUES ('14c1fff0-f537-11f0-83bf-1a46ed4020c1', 1, '14c1ffea-f537-11f0-83bf-1a46ed4020c1', '14c1ffea-f537-11f0-83bf-1a46ed4020c1', NULL, 'initiator', 'string', NULL, NULL, NULL, NULL, NULL, NULL, 'purchase-requester-001', NULL, NULL, '2026-01-19 21:02:16.875', '2026-01-19 21:02:16.988');
 INSERT INTO public.act_hi_varinst (id_, rev_, proc_inst_id_, execution_id_, task_id_, name_, var_type_, scope_id_, sub_scope_id_, scope_type_, bytearray_id_, double_, long_, text_, text2_, meta_info_, create_time_, last_updated_time_) VALUES ('14c1ffec-f537-11f0-83bf-1a46ed4020c1', 1, '14c1ffea-f537-11f0-83bf-1a46ed4020c1', '14c1ffea-f537-11f0-83bf-1a46ed4020c1', NULL, 'Fq63mkdrn28vabc', 'string', NULL, NULL, NULL, NULL, NULL, NULL, 'ooo', NULL, NULL, '2026-01-19 21:02:16.875', '2026-01-19 21:02:16.985');
 INSERT INTO public.act_hi_varinst (id_, rev_, proc_inst_id_, execution_id_, task_id_, name_, var_type_, scope_id_, sub_scope_id_, scope_type_, bytearray_id_, double_, long_, text_, text2_, meta_info_, create_time_, last_updated_time_) VALUES ('14c1ffee-f537-11f0-83bf-1a46ed4020c1', 1, '14c1ffea-f537-11f0-83bf-1a46ed4020c1', '14c1ffea-f537-11f0-83bf-1a46ed4020c1', NULL, 'Fxe2mkdrrp95ahc', 'null', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-01-19 21:02:16.875', '2026-01-19 21:02:16.987');
-INSERT INTO public.act_id_property (name_, value_, rev_) VALUES ('schema.version', '7.0.0.0', 1);
+INSERT INTO public.act_id_property (name_, value_, rev_) VALUES ('schema.version', '7.0.0.0', 1) ON CONFLICT (name_) DO NOTHING;
 INSERT INTO public.act_re_deployment (id_, name_, category_, key_, tenant_id_, deploy_time_, derived_from_, derived_from_root_, parent_deployment_id_, engine_version_) VALUES ('46d79885-f12a-11f0-a8df-f2dbc029a3c2', 'Test - main-process.bpmn', NULL, 'Process_1', '', '2026-01-14 17:20:32.794', NULL, NULL, '46d79885-f12a-11f0-a8df-f2dbc029a3c2', NULL);
 INSERT INTO public.act_re_deployment (id_, name_, category_, key_, tenant_id_, deploy_time_, derived_from_, derived_from_root_, parent_deployment_id_, engine_version_) VALUES ('2d5e787e-f132-11f0-bfbd-f2dbc029a3c2', 'Test', NULL, 'fu-20260114-paed3z', '', '2026-01-14 18:17:06.031', NULL, NULL, '2d5e787e-f132-11f0-bfbd-f2dbc029a3c2', NULL);
 INSERT INTO public.act_re_deployment (id_, name_, category_, key_, tenant_id_, deploy_time_, derived_from_, derived_from_root_, parent_deployment_id_, engine_version_) VALUES ('80ec968a-f133-11f0-bfbd-f2dbc029a3c2', 'Test', NULL, 'fu-20260114-paed3z', '', '2026-01-14 18:26:35.71', NULL, NULL, '80ec968a-f133-11f0-bfbd-f2dbc029a3c2', NULL);
@@ -2948,10 +3083,10 @@ INSERT INTO public.dw_versions (id, function_unit_id, version_number, change_log
 INSERT INTO public.dw_versions (id, function_unit_id, version_number, change_log, snapshot_data, published_by, published_at) VALUES (5, 2, '1.0.4', '', '\x7b2270726f63657373586d6c223a225044393462577767646d567963326c76626a30694d5334774969426c626d4e765a476c755a7a3069565652474c546769507a344b50474a77625734365a47566d6157357064476c76626e4d6765473173626e4d3665484e7050534a6f644852774f693876643364334c6e637a4c6d39795a7938794d4441784c31684e54464e6a6147567459533170626e4e305957356a5a53496765473173626e4d36596e4274626a30696148523063446f764c336433647935766257637562334a6e4c334e775a574d76516c424e546938794d4445774d4455794e43394e543052465443496765473173626e4d36596e4274626d527050534a6f644852774f693876643364334c6d39745a793576636d63766333426c597939435545314f4c7a49774d5441774e5449304c30524a4969423462577875637a706b597a30696148523063446f764c336433647935766257637562334a6e4c334e775a574d76524551764d6a41784d4441314d6a517652454d69494868746247357a4f6d527050534a6f644852774f693876643364334c6d39745a793576636d63766333426c59793945524338794d4445774d4455794e4339455353496765473173626e4d365933567a6447397450534a6f644852774f6938765933567a644739744c6d4a77625734756157387663324e6f5a573168496942705a4430695247566d6157357064476c76626e4e664d534967644746795a325630546d46745a584e7759574e6c50534a6f644852774f693876596e4274626935706279397a5932686c62574576596e42746269492b4369416750474a776257343663484a765932567a637942705a44306955484a765932567a6331387849694270633056345a574e316447466962475539496e52796457556950676f674943416750474a776257343663335268636e5246646d5675644342705a44306955335268636e5246646d567564463878496942755957316c50534c6c7649446c7034736950676f674943416749434138596e4274626a70766458526e62326c755a7a354762473933587a45384c324a7762573436623356305a323970626d632b43694167494341384c324a776257343663335268636e5246646d56756444344b4943416749447869634731754f6d56755a4556325a57353049476c6b50534a46626d5246646d567564463878496942755957316c50534c6e7535506d6e5a386950676f674943416749434138596e4274626a7070626d4e7662576c755a7a354762473933587a42704d3231785a3245384c324a77625734366157356a62323170626d632b43694167494341384c324a77625734365a57356b52585a6c626e512b4369416749434138596e4274626a707a5a5846315a57356a5a555a736233636761575139496b5a73623364664d53496763323931636d4e6c556d566d50534a5464474679644556325a573530587a456949485268636d646c64464a6c5a6a306951574e3061585a7064486c664d446c6b61444e364f5349674c7a344b4943416749447869634731754f6e567a5a584a5559584e7249476c6b50534a4259335270646d6c30655638774f57526f4d336f35496a344b494341674943416750474a77625734365a5868305a57357a615739755257786c6257567564484d2b43694167494341674943416750474e316333527662547077636d39775a584a306157567a50676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a5430695a6d397962556c6b49694232595778315a5430694e7949674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d5a76636d314f5957316c49694232595778315a5430696447567a64455a76636d30694943382b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6d62334a745357516949485a686248566c505349334969417650676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a5430695a6d3979625535686257556949485a686248566c50534a305a584e30526d3979625349674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d5a76636d314a5a434967646d467364575539496a63694943382b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6d62334a74546d46745a534967646d467364575539496e526c6333524762334a744969417650676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a54306959584e7a615764755a5756556558426c49694232595778315a543069566b6c535646564254463948556b3956554349674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d467a63326c6e626d566c566d46736457556949485a686248566c50534a325a79316862477774625746755957646c636e4d694943382b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6863334e705a32356c5a557868596d567349694232595778315a5430695157787349453168626d466e5a584a7a4969417650676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a543069593246755a476c6b5958526c56584e6c636e4d6949485a686248566c505349694943382b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6a5957356b6157526864475648636d393163484d6949485a686248566c505349694943382b4369416749434167494341675043396a64584e306232303663484a766347567964476c6c637a344b494341674943416750433969634731754f6d56346447567563326c76626b56735a57316c626e527a50676f674943416749434138596e4274626a7070626d4e7662576c755a7a354762473933587a45384c324a77625734366157356a62323170626d632b436941674943416749447869634731754f6d3931644764766157356e506b5a73623364664d4856754e32687361447776596e4274626a70766458526e62326c755a7a344b4943416749447776596e4274626a7031633256795647467a617a344b4943416749447869634731754f6e4e6c6358566c626d4e6c526d7876647942705a443069526d787664313877645734336147786f4969427a62335679593256535a575939496b466a64476c3261585235587a41355a47677a656a6b6949485268636d646c64464a6c5a6a306951574e3061585a7064486c664d473132646a566f597949674c7a344b4943416749447869634731754f6e4e6c6358566c626d4e6c526d7876647942705a443069526d78766431387761544e74635764684969427a62335679593256535a575939496b466a64476c3261585235587a4274646e593161474d6949485268636d646c64464a6c5a6a30695257356b52585a6c626e52664d5349674c7a344b4943416749447869634731754f6e567a5a584a5559584e7249476c6b50534a4259335270646d6c306556387762585a324e57686a496a344b494341674943416750474a77625734365a5868305a57357a615739755257786c6257567564484d2b43694167494341674943416750474e316333527662547077636d39775a584a306157567a50676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a54306959584e7a615764755a5756556558426c49694232595778315a543069525535555356525a58303142546b4648525649694943382b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6863334e705a32356c5a565a686248566c49694232595778315a5430694969417650676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a54306959584e7a615764755a57564d59574a6c62434967646d467364575539497557756e7553396b2b65376a2b6551686949674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d4e68626d52705a4746305a56567a5a584a7a49694232595778315a54306955324679595767675132686c626949674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d4e68626d52705a4746305a5564796233567763794967646d467364575539496949674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d5a76636d314a5a434967646d467364575539496a63694943382b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6d62334a74546d46745a534967646d467364575539496e526c6333524762334a744969417650676f674943416749434167494477765933567a644739744f6e42796233426c636e52705a584d2b436941674943416749447776596e4274626a706c6548526c626e4e7062323546624756745a573530637a344b494341674943416750474a77625734366157356a62323170626d632b526d787664313877645734336147786f50433969634731754f6d6c75593239746157356e50676f674943416749434138596e4274626a70766458526e62326c755a7a354762473933587a42704d3231785a3245384c324a7762573436623356305a323970626d632b43694167494341384c324a776257343664584e6c636c52686332732b4369416750433969634731754f6e427962324e6c63334d2b4369416750474a776257356b615470435545314f52476c685a334a68625342705a443069516c424e546b527059576479595731664d53492b4369416749434138596e4274626d52704f6b4a5154553551624746755a5342705a443069516c424e546c42735957356c587a456949474a7762573546624756745a57353050534a51636d396a5a584e7a587a456950676f674943416749434138596e4274626d52704f6b4a5154553554614746775a5342705a44306955335268636e5246646d5675644638785832527049694269634731755257786c625756756444306955335268636e5246646d567564463878496a344b4943416749434167494341385a474d36516d3931626d527a49486739496a45344d434967655430694d5459774969423361575230614430694d7a59694947686c6157646f644430694d7a59694943382b43694167494341674943416750474a776257356b615470435545314f544746695a57772b436941674943416749434167494341385a474d36516d3931626d527a49486739496a45344e794967655430694d6a417a4969423361575230614430694d6a49694947686c6157646f644430694d5451694943382b43694167494341674943416750433969634731755a476b36516c424e546b7868596d567350676f6749434167494341384c324a776257356b615470435545314f553268686347552b436941674943416749447869634731755a476b36516c424e546c4e6f5958426c49476c6b50534a46626d5246646d5675644638785832527049694269634731755257786c62575675644430695257356b52585a6c626e52664d53492b4369416749434167494341675047526a4f6b4a766457356b63794234505349324f54496949486b39496a45324d43496764326c6b64476739496a4d324969426f5a576c6e61485139496a4d324969417650676f67494341674943416749447869634731755a476b36516c424e546b7868596d567350676f674943416749434167494341675047526a4f6b4a766457356b63794234505349324f546b6949486b39496a49774d79496764326c6b64476739496a49794969426f5a576c6e61485139496a45304969417650676f67494341674943416749447776596e4274626d52704f6b4a515455354d59574a6c6244344b494341674943416750433969634731755a476b36516c424e546c4e6f5958426c50676f674943416749434138596e4274626d52704f6b4a5154553554614746775a5342705a44306951574e3061585a7064486c664d544579616e5532616c396b61534967596e4274626b56735a57316c626e5139496b466a64476c3261585235587a41355a47677a656a6b6950676f6749434167494341674944786b597a7043623356755a484d67654430694d6a597749694235505349784d7a6769494864705a48526f505349784d4441694947686c6157646f644430694f4441694943382b436941674943416749447776596e4274626d52704f6b4a5154553554614746775a54344b494341674943416750474a776257356b615470435545314f553268686347556761575139496b466a64476c3261585235587a413565574a6d625464665a476b6949474a7762573546624756745a57353050534a4259335270646d6c306556387762585a324e57686a496a344b4943416749434167494341385a474d36516d3931626d527a49486739496a51784d434967655430694d544d344969423361575230614430694d5441774969426f5a576c6e61485139496a67774969417650676f6749434167494341384c324a776257356b615470435545314f553268686347552b436941674943416749447869634731755a476b36516c424e546b566b5a32556761575139496b5a73623364664d56396b61534967596e4274626b56735a57316c626e5139496b5a73623364664d53492b436941674943416749434167504752704f6e6468655842766157353049486739496a49784e694967655430694d5463344969417650676f6749434167494341674944786b6154703359586c7762326c7564434234505349794e6a416949486b39496a45334f4349674c7a344b494341674943416750433969634731755a476b36516c424e546b566b5a32552b436941674943416749447869634731755a476b36516c424e546b566b5a32556761575139496b5a73623364664d4856754e3268736146396b61534967596e4274626b56735a57316c626e5139496b5a73623364664d4856754e3268736143492b436941674943416749434167504752704f6e6468655842766157353049486739496a4d324d434967655430694d5463344969417650676f6749434167494341674944786b6154703359586c7762326c7564434234505349304d54416949486b39496a45334f4349674c7a344b494341674943416750433969634731755a476b36516c424e546b566b5a32552b436941674943416749447869634731755a476b36516c424e546b566b5a32556761575139496b5a73623364664d476b7a6258466e5956396b61534967596e4274626b56735a57316c626e5139496b5a73623364664d476b7a6258466e5953492b436941674943416749434167504752704f6e6468655842766157353049486739496a55784d434967655430694d5463344969417650676f6749434167494341674944786b6154703359586c7762326c7564434234505349324f54496949486b39496a45334f4349674c7a344b494341674943416750433969634731755a476b36516c424e546b566b5a32552b43694167494341384c324a776257356b615470435545314f55477868626d552b4369416750433969634731755a476b36516c424e546b5270595764795957302b436a7776596e4274626a706b5a575a70626d6c3061573975637a344b222c226e616d65223a2254657374222c226465736372697074696f6e223a22227d', 'system', '2026-01-15 09:25:04.468569');
 INSERT INTO public.dw_versions (id, function_unit_id, version_number, change_log, snapshot_data, published_by, published_at) VALUES (6, 2, '1.0.5', '', '\x7b2270726f63657373586d6c223a225044393462577767646d567963326c76626a30694d5334774969426c626d4e765a476c755a7a3069565652474c546769507a344b50474a77625734365a47566d6157357064476c76626e4d6765473173626e4d3665484e7050534a6f644852774f693876643364334c6e637a4c6d39795a7938794d4441784c31684e54464e6a6147567459533170626e4e305957356a5a53496765473173626e4d36596e4274626a30696148523063446f764c336433647935766257637562334a6e4c334e775a574d76516c424e546938794d4445774d4455794e43394e543052465443496765473173626e4d36596e4274626d527050534a6f644852774f693876643364334c6d39745a793576636d63766333426c597939435545314f4c7a49774d5441774e5449304c30524a4969423462577875637a706b597a30696148523063446f764c336433647935766257637562334a6e4c334e775a574d76524551764d6a41784d4441314d6a517652454d69494868746247357a4f6d527050534a6f644852774f693876643364334c6d39745a793576636d63766333426c59793945524338794d4445774d4455794e4339455353496765473173626e4d365933567a6447397450534a6f644852774f6938765933567a644739744c6d4a77625734756157387663324e6f5a573168496942705a4430695247566d6157357064476c76626e4e664d534967644746795a325630546d46745a584e7759574e6c50534a6f644852774f693876596e4274626935706279397a5932686c62574576596e42746269492b4369416750474a776257343663484a765932567a637942705a44306955484a765932567a6331387849694270633056345a574e316447466962475539496e52796457556950676f674943416750474a776257343663335268636e5246646d5675644342705a44306955335268636e5246646d567564463878496942755957316c50534c6c7649446c7034736950676f674943416749434138596e4274626a70766458526e62326c755a7a354762473933587a45384c324a7762573436623356305a323970626d632b43694167494341384c324a776257343663335268636e5246646d56756444344b4943416749447869634731754f6d56755a4556325a57353049476c6b50534a46626d5246646d567564463878496942755957316c50534c6e7535506d6e5a386950676f674943416749434138596e4274626a7070626d4e7662576c755a7a354762473933587a42704d3231785a3245384c324a77625734366157356a62323170626d632b43694167494341384c324a77625734365a57356b52585a6c626e512b4369416749434138596e4274626a707a5a5846315a57356a5a555a736233636761575139496b5a73623364664d53496763323931636d4e6c556d566d50534a5464474679644556325a573530587a456949485268636d646c64464a6c5a6a306951574e3061585a7064486c664d446c6b61444e364f5349674c7a344b4943416749447869634731754f6e567a5a584a5559584e7249476c6b50534a4259335270646d6c30655638774f57526f4d336f35496a344b494341674943416750474a77625734365a5868305a57357a615739755257786c6257567564484d2b43694167494341674943416750474e316333527662547077636d39775a584a306157567a50676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a5430695a6d397962556c6b49694232595778315a5430694e7949674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d5a76636d314f5957316c49694232595778315a5430696447567a64455a76636d30694943382b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6d62334a745357516949485a686248566c505349334969417650676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a5430695a6d3979625535686257556949485a686248566c50534a305a584e30526d3979625349674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d5a76636d314a5a434967646d467364575539496a63694943382b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6d62334a74546d46745a534967646d467364575539496e526c6333524762334a744969417650676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a54306959584e7a615764755a5756556558426c49694232595778315a543069526b6c595255526652455651564349674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d467a63326c6e626d566c566d46736457556949485a686248566c50534a45525642554c5568534969417650676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a54306959584e7a615764755a57564d59574a6c62434967646d467364575539496b68316257467549464a6c63323931636d4e6c637949674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d4e68626d52705a4746305a56567a5a584a7a49694232595778315a5430694969417650676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a543069593246755a476c6b5958526c52334a766458427a49694232595778315a5430694969417650676f674943416749434167494477765933567a644739744f6e42796233426c636e52705a584d2b436941674943416749447776596e4274626a706c6548526c626e4e7062323546624756745a573530637a344b494341674943416750474a77625734366157356a62323170626d632b526d78766431387850433969634731754f6d6c75593239746157356e50676f674943416749434138596e4274626a70766458526e62326c755a7a354762473933587a4231626a646f624767384c324a7762573436623356305a323970626d632b43694167494341384c324a776257343664584e6c636c52686332732b4369416749434138596e4274626a707a5a5846315a57356a5a555a736233636761575139496b5a73623364664d4856754e3268736143496763323931636d4e6c556d566d50534a4259335270646d6c30655638774f57526f4d336f354969423059584a6e5a5852535a575939496b466a64476c3261585235587a4274646e593161474d694943382b4369416749434138596e4274626a707a5a5846315a57356a5a555a736233636761575139496b5a73623364664d476b7a6258466e5953496763323931636d4e6c556d566d50534a4259335270646d6c306556387762585a324e57686a4969423059584a6e5a5852535a575939496b56755a4556325a573530587a45694943382b4369416749434138596e4274626a7031633256795647467a617942705a44306951574e3061585a7064486c664d473132646a566f5979492b436941674943416749447869634731754f6d56346447567563326c76626b56735a57316c626e527a50676f6749434167494341674944786a64584e306232303663484a766347567964476c6c637a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d467a63326c6e626d566c56486c775a534967646d467364575539496b5a4a5745564558305246554651694943382b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6863334e705a32356c5a565a686248566c49694232595778315a543069524556515643314454314a514c554a42546b744a546b63694943382b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6863334e705a32356c5a557868596d567349694232595778315a54306951323979634739795958526c49454a68626d7470626d63694943382b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6a5957356b61575268644756566332567963794967646d467364575539496949674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d4e68626d52705a4746305a5564796233567763794967646d467364575539496949674c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d5a76636d314a5a434967646d467364575539496a63694943382b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6d62334a74546d46745a534967646d467364575539496e526c6333524762334a744969417650676f674943416749434167494477765933567a644739744f6e42796233426c636e52705a584d2b436941674943416749447776596e4274626a706c6548526c626e4e7062323546624756745a573530637a344b494341674943416750474a77625734366157356a62323170626d632b526d787664313877645734336147786f50433969634731754f6d6c75593239746157356e50676f674943416749434138596e4274626a70766458526e62326c755a7a354762473933587a42704d3231785a3245384c324a7762573436623356305a323970626d632b43694167494341384c324a776257343664584e6c636c52686332732b4369416750433969634731754f6e427962324e6c63334d2b4369416750474a776257356b615470435545314f52476c685a334a68625342705a443069516c424e546b527059576479595731664d53492b4369416749434138596e4274626d52704f6b4a5154553551624746755a5342705a443069516c424e546c42735957356c587a456949474a7762573546624756745a57353050534a51636d396a5a584e7a587a456950676f674943416749434138596e4274626d52704f6b4a5154553554614746775a5342705a44306955335268636e5246646d5675644638785832527049694269634731755257786c625756756444306955335268636e5246646d567564463878496a344b4943416749434167494341385a474d36516d3931626d527a49486739496a45344d434967655430694d5459774969423361575230614430694d7a59694947686c6157646f644430694d7a59694943382b43694167494341674943416750474a776257356b615470435545314f544746695a57772b436941674943416749434167494341385a474d36516d3931626d527a49486739496a45344e794967655430694d6a417a4969423361575230614430694d6a49694947686c6157646f644430694d5451694943382b43694167494341674943416750433969634731755a476b36516c424e546b7868596d567350676f6749434167494341384c324a776257356b615470435545314f553268686347552b436941674943416749447869634731755a476b36516c424e546c4e6f5958426c49476c6b50534a46626d5246646d5675644638785832527049694269634731755257786c62575675644430695257356b52585a6c626e52664d53492b4369416749434167494341675047526a4f6b4a766457356b63794234505349324f54496949486b39496a45324d43496764326c6b64476739496a4d324969426f5a576c6e61485139496a4d324969417650676f67494341674943416749447869634731755a476b36516c424e546b7868596d567350676f674943416749434167494341675047526a4f6b4a766457356b63794234505349324f546b6949486b39496a49774d79496764326c6b64476739496a49794969426f5a576c6e61485139496a45304969417650676f67494341674943416749447776596e4274626d52704f6b4a515455354d59574a6c6244344b494341674943416750433969634731755a476b36516c424e546c4e6f5958426c50676f674943416749434138596e4274626d52704f6b4a5154553554614746775a5342705a44306951574e3061585a7064486c664d544579616e5532616c396b61534967596e4274626b56735a57316c626e5139496b466a64476c3261585235587a41355a47677a656a6b6950676f6749434167494341674944786b597a7043623356755a484d67654430694d6a597749694235505349784d7a6769494864705a48526f505349784d4441694947686c6157646f644430694f4441694943382b436941674943416749447776596e4274626d52704f6b4a5154553554614746775a54344b494341674943416750474a776257356b615470435545314f553268686347556761575139496b466a64476c3261585235587a413565574a6d625464665a476b6949474a7762573546624756745a57353050534a4259335270646d6c306556387762585a324e57686a496a344b4943416749434167494341385a474d36516d3931626d527a49486739496a51784d434967655430694d544d344969423361575230614430694d5441774969426f5a576c6e61485139496a67774969417650676f6749434167494341384c324a776257356b615470435545314f553268686347552b436941674943416749447869634731755a476b36516c424e546b566b5a32556761575139496b5a73623364664d56396b61534967596e4274626b56735a57316c626e5139496b5a73623364664d53492b436941674943416749434167504752704f6e6468655842766157353049486739496a49784e694967655430694d5463344969417650676f6749434167494341674944786b6154703359586c7762326c7564434234505349794e6a416949486b39496a45334f4349674c7a344b494341674943416750433969634731755a476b36516c424e546b566b5a32552b436941674943416749447869634731755a476b36516c424e546b566b5a32556761575139496b5a73623364664d4856754e3268736146396b61534967596e4274626b56735a57316c626e5139496b5a73623364664d4856754e3268736143492b436941674943416749434167504752704f6e6468655842766157353049486739496a4d324d434967655430694d5463344969417650676f6749434167494341674944786b6154703359586c7762326c7564434234505349304d54416949486b39496a45334f4349674c7a344b494341674943416750433969634731755a476b36516c424e546b566b5a32552b436941674943416749447869634731755a476b36516c424e546b566b5a32556761575139496b5a73623364664d476b7a6258466e5956396b61534967596e4274626b56735a57316c626e5139496b5a73623364664d476b7a6258466e5953492b436941674943416749434167504752704f6e6468655842766157353049486739496a55784d434967655430694d5463344969417650676f6749434167494341674944786b6154703359586c7762326c7564434234505349324f54496949486b39496a45334f4349674c7a344b494341674943416750433969634731755a476b36516c424e546b566b5a32552b43694167494341384c324a776257356b615470435545314f55477868626d552b4369416750433969634731755a476b36516c424e546b5270595764795957302b436a7776596e4274626a706b5a575a70626d6c3061573975637a344b222c226e616d65223a2254657374222c226465736372697074696f6e223a22227d', 'system', '2026-01-15 09:36:20.621888');
 INSERT INTO public.dw_versions (id, function_unit_id, version_number, change_log, snapshot_data, published_by, published_at) VALUES (7, 2, '1.0.6', '', '\x7b2270726f63657373586d6c223a225044393462577767646d567963326c76626a30694d5334774969426c626d4e765a476c755a7a3069565652474c546769507a3438596e4274626a706b5a575a70626d6c30615739756379423462577875637a703463326b39496d6830644841364c79393364336375647a4d7562334a6e4c7a49774d4445765745314d55324e6f5a5731684c576c7563335268626d4e6c4969423462577875637a70696347317550534a6f644852774f693876643364334c6d39745a793576636d63766333426c597939435545314f4c7a49774d5441774e5449304c3031505245564d4969423462577875637a7069634731755a476b39496d6830644841364c793933643363756232316e4c6d39795a79397a6347566a4c304a51545534764d6a41784d4441314d6a517652456b69494868746247357a4f6d526a50534a6f644852774f693876643364334c6d39745a793576636d63766333426c59793945524338794d4445774d4455794e4339455179496765473173626e4d365a476b39496d6830644841364c793933643363756232316e4c6d39795a79397a6347566a4c3052454c7a49774d5441774e5449304c30524a4969423462577875637a706a64584e3062323039496d6830644841364c79396a64584e3062323075596e4274626935706279397a5932686c6257456949476c6b50534a455a575a70626d6c3061573975633138784969423059584a6e5a58524f5957316c6333426859325539496d6830644841364c793969634731754c6d6c764c334e6a614756745953396963473175496a344b49434138596e4274626a7077636d396a5a584e7a49476c6b50534a51636d396a5a584e7a587a456949476c7a5258686c5933563059574a735a54306964484a315a53492b4369416749434138596e4274626a707a64474679644556325a57353049476c6b50534a5464474679644556325a573530587a4569494735686257553949755738674f576e6979492b436941674943416749447869634731754f6d3931644764766157356e506b5a73623364664d547776596e4274626a70766458526e62326c755a7a344b4943416749447776596e4274626a707a64474679644556325a57353050676f674943416750474a77625734365a57356b52585a6c626e516761575139496b56755a4556325a573530587a45694947356862575539497565376b2b61646e79492b436941674943416749447869634731754f6d6c75593239746157356e506b5a73623364664d476b7a6258466e59547776596e4274626a7070626d4e7662576c755a7a344b4943416749447776596e4274626a706c626d5246646d56756444344b4943416749447869634731754f6e4e6c6358566c626d4e6c526d7876647942705a443069526d7876643138784969427a62335679593256535a575939496c4e3059584a3052585a6c626e52664d534967644746795a325630556d566d50534a4259335270646d6c30655638774f57526f4d336f354969382b4369416749434138596e4274626a7031633256795647467a617942705a44306951574e3061585a7064486c664d446c6b61444e364f53492b436941674943416749447869634731754f6d56346447567563326c76626b56735a57316c626e527a50676f6749434167494341674944786a64584e306232303663484a766347567964476c6c637a344b49434167494341674943416749416f674943416749434167494341674369416749434167494341674943414b49434167494341674943416749416f674943416749434167494341674369416749434167494341674943414b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d467a63326c6e626d566c56486c775a534967646d467364575539496b5a4a5745564558305246554651694c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d467a63326c6e626d566c566d46736457556949485a686248566c50534a45525642554c5568534969382b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6863334e705a32356c5a557868596d567349694232595778315a5430695348567459573467556d567a623356795932567a4969382b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6a5957356b61575268644756566332567963794967646d4673645755394969497650676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a543069593246755a476c6b5958526c52334a766458427a49694232595778315a5430694969382b43694167494341674943416750474e316333527662547077636d39775a584a30655342755957316c50534a6d62334a745357516949485a686248566c505349334969382b50474e316333527662547077636d39775a584a30655342755957316c50534a6d62334a74546d46745a534967646d467364575539496e526c6333524762334a744969382b5043396a64584e306232303663484a766347567964476c6c637a344b494341674943416750433969634731754f6d56346447567563326c76626b56735a57316c626e527a50676f674943416749434138596e4274626a7070626d4e7662576c755a7a354762473933587a45384c324a77625734366157356a62323170626d632b436941674943416749447869634731754f6d3931644764766157356e506b5a73623364664d4856754e32687361447776596e4274626a70766458526e62326c755a7a344b4943416749447776596e4274626a7031633256795647467a617a344b4943416749447869634731754f6e4e6c6358566c626d4e6c526d7876647942705a443069526d787664313877645734336147786f4969427a62335679593256535a575939496b466a64476c3261585235587a41355a47677a656a6b6949485268636d646c64464a6c5a6a306951574e3061585a7064486c664d473132646a566f5979497650676f674943416750474a77625734366332567864575675593256476247393349476c6b50534a4762473933587a42704d3231785a32456949484e7664584a6a5a564a6c5a6a306951574e3061585a7064486c664d473132646a566f59794967644746795a325630556d566d50534a46626d5246646d5675644638784969382b4369416749434138596e4274626a7031633256795647467a617942705a44306951574e3061585a7064486c664d473132646a566f5979492b436941674943416749447869634731754f6d56346447567563326c76626b56735a57316c626e527a50676f6749434167494341674944786a64584e306232303663484a766347567964476c6c637a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d467a63326c6e626d566c56486c775a534967646d467364575539496b5a4a5745564558305246554651694c7a344b4943416749434167494341674944786a64584e3062323036646d46736457567a4947356862575539496d467a63326c6e626d566c566d46736457556949485a686248566c50534a45525642554c554e50556c4174516b464f53306c4f5279497650676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a54306959584e7a615764755a57564d59574a6c62434967646d467364575539496b4e76636e4276636d46305a534243595735726157356e4969382b436941674943416749434167494341385933567a644739744f6e5a686248566c637942755957316c50534a6a5957356b61575268644756566332567963794967646d4673645755394969497650676f6749434167494341674943416750474e316333527662547032595778315a584d67626d46745a543069593246755a476c6b5958526c52334a766458427a49694232595778315a5430694969382b4369416749434167494341674943414b49434167494341674943416749416f674943416749434167494477765933567a644739744f6e42796233426c636e52705a584d2b436941674943416749447776596e4274626a706c6548526c626e4e7062323546624756745a573530637a344b494341674943416750474a77625734366157356a62323170626d632b526d787664313877645734336147786f50433969634731754f6d6c75593239746157356e50676f674943416749434138596e4274626a70766458526e62326c755a7a354762473933587a42704d3231785a3245384c324a7762573436623356305a323970626d632b43694167494341384c324a776257343664584e6c636c52686332732b4369416750433969634731754f6e427962324e6c63334d2b4369416750474a776257356b615470435545314f52476c685a334a68625342705a443069516c424e546b527059576479595731664d53492b4369416749434138596e4274626d52704f6b4a5154553551624746755a5342705a443069516c424e546c42735957356c587a456949474a7762573546624756745a57353050534a51636d396a5a584e7a587a456950676f674943416749434138596e4274626d52704f6b4a5154553554614746775a5342705a44306955335268636e5246646d5675644638785832527049694269634731755257786c625756756444306955335268636e5246646d567564463878496a344b4943416749434167494341385a474d36516d3931626d527a49486739496a45344d434967655430694d5459774969423361575230614430694d7a59694947686c6157646f644430694d7a59694c7a344b494341674943416749434138596e4274626d52704f6b4a515455354d59574a6c6244344b4943416749434167494341674944786b597a7043623356755a484d67654430694d54673349694235505349794d444d69494864705a48526f505349794d694967614756705a326830505349784e43497650676f67494341674943416749447776596e4274626d52704f6b4a515455354d59574a6c6244344b494341674943416750433969634731755a476b36516c424e546c4e6f5958426c50676f674943416749434138596e4274626d52704f6b4a5154553554614746775a5342705a4430695257356b52585a6c626e52664d56396b61534967596e4274626b56735a57316c626e5139496b56755a4556325a573530587a456950676f6749434167494341674944786b597a7043623356755a484d67654430694e6a6b7949694235505349784e6a4169494864705a48526f5053497a4e694967614756705a3268305053497a4e69497650676f67494341674943416749447869634731755a476b36516c424e546b7868596d567350676f674943416749434167494341675047526a4f6b4a766457356b63794234505349324f546b6949486b39496a49774d79496764326c6b64476739496a49794969426f5a576c6e61485139496a45304969382b43694167494341674943416750433969634731755a476b36516c424e546b7868596d567350676f6749434167494341384c324a776257356b615470435545314f553268686347552b436941674943416749447869634731755a476b36516c424e546c4e6f5958426c49476c6b50534a4259335270646d6c30655638784d544a7164545a715832527049694269634731755257786c625756756444306951574e3061585a7064486c664d446c6b61444e364f53492b4369416749434167494341675047526a4f6b4a766457356b63794234505349794e6a416949486b39496a457a4f43496764326c6b64476739496a45774d434967614756705a326830505349344d43497650676f6749434167494341384c324a776257356b615470435545314f553268686347552b436941674943416749447869634731755a476b36516c424e546c4e6f5958426c49476c6b50534a4259335270646d6c30655638774f586c695a6d30335832527049694269634731755257786c625756756444306951574e3061585a7064486c664d473132646a566f5979492b4369416749434167494341675047526a4f6b4a766457356b63794234505349304d54416949486b39496a457a4f43496764326c6b64476739496a45774d434967614756705a326830505349344d43497650676f6749434167494341384c324a776257356b615470435545314f553268686347552b436941674943416749447869634731755a476b36516c424e546b566b5a32556761575139496b5a73623364664d56396b61534967596e4274626b56735a57316c626e5139496b5a73623364664d53492b436941674943416749434167504752704f6e6468655842766157353049486739496a49784e694967655430694d5463344969382b436941674943416749434167504752704f6e6468655842766157353049486739496a49324d434967655430694d5463344969382b436941674943416749447776596e4274626d52704f6b4a51545535465a47646c50676f674943416749434138596e4274626d52704f6b4a51545535465a47646c49476c6b50534a4762473933587a4231626a646f624768665a476b6949474a7762573546624756745a57353050534a4762473933587a4231626a646f6247676950676f6749434167494341674944786b6154703359586c7762326c75644342345053497a4e6a416949486b39496a45334f43497650676f6749434167494341674944786b6154703359586c7762326c7564434234505349304d54416949486b39496a45334f43497650676f6749434167494341384c324a776257356b615470435545314f5257526e5a54344b494341674943416750474a776257356b615470435545314f5257526e5a5342705a443069526d78766431387761544e74635764685832527049694269634731755257786c6257567564443069526d78766431387761544e7463576468496a344b4943416749434167494341385a476b366432463563473970626e5167654430694e54457749694235505349784e7a67694c7a344b4943416749434167494341385a476b366432463563473970626e5167654430694e6a6b7949694235505349784e7a67694c7a344b494341674943416750433969634731755a476b36516c424e546b566b5a32552b43694167494341384c324a776257356b615470435545314f55477868626d552b4369416750433969634731755a476b36516c424e546b5270595764795957302b436a7776596e4274626a706b5a575a70626d6c3061573975637a343d222c226e616d65223a2254657374222c226465736372697074696f6e223a22227d', 'system', '2026-01-19 12:42:17.760512');
-INSERT INTO public.flw_ev_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('1', 'flowable', 'org/flowable/eventregistry/db/liquibase/flowable-eventregistry-db-changelog.xml', '2026-01-14 17:11:35.18681', 1, 'EXECUTED', '9:63268f536c469325acef35970312551b', 'createTable tableName=FLW_EVENT_DEPLOYMENT', NULL, NULL, '4.24.0', NULL, NULL, NULL);
-INSERT INTO public.flw_ev_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('2', 'flowable', 'org/flowable/eventregistry/db/liquibase/flowable-eventregistry-db-changelog.xml', '2026-01-14 17:11:35.19909', 2, 'EXECUTED', '9:dcb58b7dfd6dbda66939123a96985536', 'addColumn tableName=FLW_CHANNEL_DEFINITION', NULL, NULL, '4.24.0', NULL, NULL, NULL);
-INSERT INTO public.flw_ev_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('3', 'flowable', 'org/flowable/eventregistry/db/liquibase/flowable-eventregistry-db-changelog.xml', '2026-01-14 17:11:35.211701', 3, 'EXECUTED', '9:d0c05678d57af23ad93699991e3bf4f6', 'customChange', '', NULL, '4.24.0', NULL, NULL, '8381895121');
-INSERT INTO public.flw_ev_databasechangeloglock (id, locked, lockgranted, lockedby) VALUES (1, false, NULL, NULL);
+INSERT INTO public.flw_ev_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('1', 'flowable', 'org/flowable/eventregistry/db/liquibase/flowable-eventregistry-db-changelog.xml', '2026-01-14 17:11:35.18681', 1, 'EXECUTED', '9:63268f536c469325acef35970312551b', 'createTable tableName=FLW_EVENT_DEPLOYMENT', NULL, NULL, '4.24.0', NULL, NULL, NULL) ON CONFLICT (id, author, filename) DO NOTHING;
+INSERT INTO public.flw_ev_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('2', 'flowable', 'org/flowable/eventregistry/db/liquibase/flowable-eventregistry-db-changelog.xml', '2026-01-14 17:11:35.19909', 2, 'EXECUTED', '9:dcb58b7dfd6dbda66939123a96985536', 'addColumn tableName=FLW_CHANNEL_DEFINITION', NULL, NULL, '4.24.0', NULL, NULL, NULL) ON CONFLICT (id, author, filename) DO NOTHING;
+INSERT INTO public.flw_ev_databasechangelog (id, author, filename, dateexecuted, orderexecuted, exectype, md5sum, description, comments, tag, liquibase, contexts, labels, deployment_id) VALUES ('3', 'flowable', 'org/flowable/eventregistry/db/liquibase/flowable-eventregistry-db-changelog.xml', '2026-01-14 17:11:35.211701', 3, 'EXECUTED', '9:d0c05678d57af23ad93699991e3bf4f6', 'customChange', '', NULL, '4.24.0', NULL, NULL, '8381895121') ON CONFLICT (id, author, filename) DO NOTHING;
+INSERT INTO public.flw_ev_databasechangeloglock (id, locked, lockgranted, lockedby) VALUES (1, false, NULL, NULL) ON CONFLICT (id) DO NOTHING;
 INSERT INTO public.sys_developer_role_permissions (id, role_id, permission, created_at, created_by) VALUES ('57725b4e-2980-4cac-86cc-21187b8d3a26', 'TECH_DIRECTOR_ROLE', 'FUNCTION_UNIT_CREATE', '2026-01-13 09:37:39.760054', NULL);
 INSERT INTO public.sys_developer_role_permissions (id, role_id, permission, created_at, created_by) VALUES ('abe4b672-d6f5-4ebc-93e7-07a0cacaea8a', 'TECH_DIRECTOR_ROLE', 'FUNCTION_UNIT_UPDATE', '2026-01-13 09:37:39.760054', NULL);
 INSERT INTO public.sys_developer_role_permissions (id, role_id, permission, created_at, created_by) VALUES ('15050b6e-e2a8-49bc-a800-ab4fb73ae996', 'TECH_DIRECTOR_ROLE', 'FUNCTION_UNIT_DELETE', '2026-01-13 09:37:39.760054', NULL);
@@ -3266,5 +3401,922 @@ AND NOT EXISTS (
     WHERE sur.user_id = sra.target_id
     AND sur.role_id = sra.role_id
 );
+
+-- =====================================================
+-- Add PRIMARY KEY constraints to sys_* tables
+-- =====================================================
+
+-- Add PRIMARY KEY constraints (if not exists)
+DO $$
+BEGIN
+    -- sys_approvers
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sys_approvers_pkey') THEN
+        ALTER TABLE public.sys_approvers ADD PRIMARY KEY (id);
+    END IF;
+
+    -- sys_business_unit_roles
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sys_business_unit_roles_pkey') THEN
+        ALTER TABLE public.sys_business_unit_roles ADD PRIMARY KEY (id);
+    END IF;
+
+    -- sys_business_units
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sys_business_units_pkey') THEN
+        ALTER TABLE public.sys_business_units ADD PRIMARY KEY (id);
+    END IF;
+
+    -- sys_developer_role_permissions
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sys_developer_role_permissions_pkey') THEN
+        ALTER TABLE public.sys_developer_role_permissions ADD PRIMARY KEY (id);
+    END IF;
+
+    -- sys_dictionaries
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sys_dictionaries_pkey') THEN
+        ALTER TABLE public.sys_dictionaries ADD PRIMARY KEY (id);
+    END IF;
+
+    -- sys_dictionary_data_sources
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sys_dictionary_data_sources_pkey') THEN
+        ALTER TABLE public.sys_dictionary_data_sources ADD PRIMARY KEY (id);
+    END IF;
+
+    -- sys_dictionary_items
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sys_dictionary_items_pkey') THEN
+        ALTER TABLE public.sys_dictionary_items ADD PRIMARY KEY (id);
+    END IF;
+
+    -- sys_dictionary_versions
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sys_dictionary_versions_pkey') THEN
+        ALTER TABLE public.sys_dictionary_versions ADD PRIMARY KEY (id);
+    END IF;
+
+    -- sys_function_unit_access
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sys_function_unit_access_pkey') THEN
+        ALTER TABLE public.sys_function_unit_access ADD PRIMARY KEY (id);
+    END IF;
+
+    -- sys_function_unit_approvals
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sys_function_unit_approvals_pkey') THEN
+        ALTER TABLE public.sys_function_unit_approvals ADD PRIMARY KEY (id);
+    END IF;
+
+    -- sys_function_unit_contents
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sys_function_unit_contents_pkey') THEN
+        ALTER TABLE public.sys_function_unit_contents ADD PRIMARY KEY (id);
+    END IF;
+
+    -- sys_function_unit_dependencies
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sys_function_unit_dependencies_pkey') THEN
+        ALTER TABLE public.sys_function_unit_dependencies ADD PRIMARY KEY (id);
+    END IF;
+
+    -- sys_function_unit_deployments
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sys_function_unit_deployments_pkey') THEN
+        ALTER TABLE public.sys_function_unit_deployments ADD PRIMARY KEY (id);
+    END IF;
+
+    -- sys_function_units
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sys_function_units_pkey') THEN
+        ALTER TABLE public.sys_function_units ADD PRIMARY KEY (id);
+    END IF;
+
+    -- sys_login_audit
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sys_login_audit_pkey') THEN
+        ALTER TABLE public.sys_login_audit ADD PRIMARY KEY (id);
+    END IF;
+
+    -- sys_member_change_logs
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sys_member_change_logs_pkey') THEN
+        ALTER TABLE public.sys_member_change_logs ADD PRIMARY KEY (id);
+    END IF;
+
+    -- sys_permission_requests
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sys_permission_requests_pkey') THEN
+        ALTER TABLE public.sys_permission_requests ADD PRIMARY KEY (id);
+    END IF;
+
+    -- sys_permissions
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sys_permissions_pkey') THEN
+        ALTER TABLE public.sys_permissions ADD PRIMARY KEY (id);
+    END IF;
+
+    -- sys_role_assignments
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sys_role_assignments_pkey') THEN
+        ALTER TABLE public.sys_role_assignments ADD PRIMARY KEY (id);
+    END IF;
+
+    -- sys_role_permissions
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sys_role_permissions_pkey') THEN
+        ALTER TABLE public.sys_role_permissions ADD PRIMARY KEY (id);
+    END IF;
+
+    -- sys_roles
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sys_roles_pkey') THEN
+        ALTER TABLE public.sys_roles ADD PRIMARY KEY (id);
+    END IF;
+
+    -- sys_user_business_unit_roles
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sys_user_business_unit_roles_pkey') THEN
+        ALTER TABLE public.sys_user_business_unit_roles ADD PRIMARY KEY (id);
+    END IF;
+
+    -- sys_user_business_units
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sys_user_business_units_pkey') THEN
+        ALTER TABLE public.sys_user_business_units ADD PRIMARY KEY (id);
+    END IF;
+
+    -- sys_user_preferences
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sys_user_preferences_pkey') THEN
+        ALTER TABLE public.sys_user_preferences ADD PRIMARY KEY (id);
+    END IF;
+
+    -- sys_user_roles
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sys_user_roles_pkey') THEN
+        ALTER TABLE public.sys_user_roles ADD PRIMARY KEY (id);
+    END IF;
+
+    -- sys_users
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sys_users_pkey') THEN
+        ALTER TABLE public.sys_users ADD PRIMARY KEY (id);
+    END IF;
+
+    -- sys_virtual_group_members
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sys_virtual_group_members_pkey') THEN
+        ALTER TABLE public.sys_virtual_group_members ADD PRIMARY KEY (id);
+    END IF;
+
+    -- sys_virtual_group_roles
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sys_virtual_group_roles_pkey') THEN
+        ALTER TABLE public.sys_virtual_group_roles ADD PRIMARY KEY (id);
+    END IF;
+
+    -- sys_virtual_group_task_history
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sys_virtual_group_task_history_pkey') THEN
+        ALTER TABLE public.sys_virtual_group_task_history ADD PRIMARY KEY (id);
+    END IF;
+
+    -- sys_virtual_groups
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'sys_virtual_groups_pkey') THEN
+        ALTER TABLE public.sys_virtual_groups ADD PRIMARY KEY (id);
+    END IF;
+END $$;
+
+-- =====================================================
+-- 为所有缺少主键的表添加主键约束（除 sys_* 表外）
+-- =====================================================
+DO $$
+BEGIN
+    -- act_app_appdef
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_app_appdef_pkey') THEN
+        ALTER TABLE public.act_app_appdef ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_app_databasechangelog (composite primary key)
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_app_databasechangelog_pkey') THEN
+        ALTER TABLE public.act_app_databasechangelog ADD PRIMARY KEY (id, author, filename);
+    END IF;
+
+    -- act_app_databasechangeloglock
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_app_databasechangeloglock_pkey') THEN
+        ALTER TABLE public.act_app_databasechangeloglock ADD PRIMARY KEY (id);
+    END IF;
+
+    -- act_app_deployment
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_app_deployment_pkey') THEN
+        ALTER TABLE public.act_app_deployment ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_app_deployment_resource
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_app_deployment_resource_pkey') THEN
+        ALTER TABLE public.act_app_deployment_resource ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_cmmn_casedef
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_cmmn_casedef_pkey') THEN
+        ALTER TABLE public.act_cmmn_casedef ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_cmmn_databasechangelog (composite primary key)
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_cmmn_databasechangelog_pkey') THEN
+        ALTER TABLE public.act_cmmn_databasechangelog ADD PRIMARY KEY (id, author, filename);
+    END IF;
+
+    -- act_cmmn_databasechangeloglock
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_cmmn_databasechangeloglock_pkey') THEN
+        ALTER TABLE public.act_cmmn_databasechangeloglock ADD PRIMARY KEY (id);
+    END IF;
+
+    -- act_cmmn_deployment
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_cmmn_deployment_pkey') THEN
+        ALTER TABLE public.act_cmmn_deployment ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_cmmn_deployment_resource
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_cmmn_deployment_resource_pkey') THEN
+        ALTER TABLE public.act_cmmn_deployment_resource ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_cmmn_hi_case_inst
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_cmmn_hi_case_inst_pkey') THEN
+        ALTER TABLE public.act_cmmn_hi_case_inst ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_cmmn_hi_mil_inst
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_cmmn_hi_mil_inst_pkey') THEN
+        ALTER TABLE public.act_cmmn_hi_mil_inst ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_cmmn_hi_plan_item_inst
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_cmmn_hi_plan_item_inst_pkey') THEN
+        ALTER TABLE public.act_cmmn_hi_plan_item_inst ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_cmmn_ru_case_inst
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_cmmn_ru_case_inst_pkey') THEN
+        ALTER TABLE public.act_cmmn_ru_case_inst ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_cmmn_ru_mil_inst
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_cmmn_ru_mil_inst_pkey') THEN
+        ALTER TABLE public.act_cmmn_ru_mil_inst ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_cmmn_ru_plan_item_inst
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_cmmn_ru_plan_item_inst_pkey') THEN
+        ALTER TABLE public.act_cmmn_ru_plan_item_inst ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_cmmn_ru_sentry_part_inst
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_cmmn_ru_sentry_part_inst_pkey') THEN
+        ALTER TABLE public.act_cmmn_ru_sentry_part_inst ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_dmn_databasechangelog (composite primary key)
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_dmn_databasechangelog_pkey') THEN
+        ALTER TABLE public.act_dmn_databasechangelog ADD PRIMARY KEY (id, author, filename);
+    END IF;
+
+    -- act_dmn_databasechangeloglock
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_dmn_databasechangeloglock_pkey') THEN
+        ALTER TABLE public.act_dmn_databasechangeloglock ADD PRIMARY KEY (id);
+    END IF;
+
+    -- act_dmn_decision
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_dmn_decision_pkey') THEN
+        ALTER TABLE public.act_dmn_decision ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_dmn_deployment
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_dmn_deployment_pkey') THEN
+        ALTER TABLE public.act_dmn_deployment ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_dmn_deployment_resource
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_dmn_deployment_resource_pkey') THEN
+        ALTER TABLE public.act_dmn_deployment_resource ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_dmn_hi_decision_execution
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_dmn_hi_decision_execution_pkey') THEN
+        ALTER TABLE public.act_dmn_hi_decision_execution ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_evt_log
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_evt_log_pkey') THEN
+        ALTER TABLE public.act_evt_log ADD PRIMARY KEY (log_nr_);
+    END IF;
+
+    -- act_ge_bytearray
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_ge_bytearray_pkey') THEN
+        ALTER TABLE public.act_ge_bytearray ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_ge_property
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_ge_property_pkey') THEN
+        ALTER TABLE public.act_ge_property ADD PRIMARY KEY (name_);
+    END IF;
+
+    -- act_hi_actinst
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_hi_actinst_pkey') THEN
+        ALTER TABLE public.act_hi_actinst ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_hi_attachment
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_hi_attachment_pkey') THEN
+        ALTER TABLE public.act_hi_attachment ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_hi_comment
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_hi_comment_pkey') THEN
+        ALTER TABLE public.act_hi_comment ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_hi_detail
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_hi_detail_pkey') THEN
+        ALTER TABLE public.act_hi_detail ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_hi_entitylink
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_hi_entitylink_pkey') THEN
+        ALTER TABLE public.act_hi_entitylink ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_hi_identitylink
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_hi_identitylink_pkey') THEN
+        ALTER TABLE public.act_hi_identitylink ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_hi_procinst
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_hi_procinst_pkey') THEN
+        ALTER TABLE public.act_hi_procinst ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_hi_taskinst
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_hi_taskinst_pkey') THEN
+        ALTER TABLE public.act_hi_taskinst ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_hi_tsk_log
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_hi_tsk_log_pkey') THEN
+        ALTER TABLE public.act_hi_tsk_log ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_hi_varinst
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_hi_varinst_pkey') THEN
+        ALTER TABLE public.act_hi_varinst ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_id_bytearray
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_id_bytearray_pkey') THEN
+        ALTER TABLE public.act_id_bytearray ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_id_group
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_id_group_pkey') THEN
+        ALTER TABLE public.act_id_group ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_id_info
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_id_info_pkey') THEN
+        ALTER TABLE public.act_id_info ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_id_membership (联合主键)
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_id_membership_pkey') THEN
+        ALTER TABLE public.act_id_membership ADD PRIMARY KEY (user_id_, group_id_);
+    END IF;
+
+    -- act_id_priv
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_id_priv_pkey') THEN
+        ALTER TABLE public.act_id_priv ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_id_priv_mapping
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_id_priv_mapping_pkey') THEN
+        ALTER TABLE public.act_id_priv_mapping ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_id_property
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_id_property_pkey') THEN
+        ALTER TABLE public.act_id_property ADD PRIMARY KEY (name_);
+    END IF;
+
+    -- act_id_token
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_id_token_pkey') THEN
+        ALTER TABLE public.act_id_token ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_id_user
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_id_user_pkey') THEN
+        ALTER TABLE public.act_id_user ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_procdef_info
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_procdef_info_pkey') THEN
+        ALTER TABLE public.act_procdef_info ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_re_deployment
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_re_deployment_pkey') THEN
+        ALTER TABLE public.act_re_deployment ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_re_model
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_re_model_pkey') THEN
+        ALTER TABLE public.act_re_model ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_re_procdef
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_re_procdef_pkey') THEN
+        ALTER TABLE public.act_re_procdef ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_ru_actinst
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_ru_actinst_pkey') THEN
+        ALTER TABLE public.act_ru_actinst ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_ru_deadletter_job
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_ru_deadletter_job_pkey') THEN
+        ALTER TABLE public.act_ru_deadletter_job ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_ru_entitylink
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_ru_entitylink_pkey') THEN
+        ALTER TABLE public.act_ru_entitylink ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_ru_event_subscr
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_ru_event_subscr_pkey') THEN
+        ALTER TABLE public.act_ru_event_subscr ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_ru_execution
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_ru_execution_pkey') THEN
+        ALTER TABLE public.act_ru_execution ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_ru_external_job
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_ru_external_job_pkey') THEN
+        ALTER TABLE public.act_ru_external_job ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_ru_history_job
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_ru_history_job_pkey') THEN
+        ALTER TABLE public.act_ru_history_job ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_ru_identitylink
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_ru_identitylink_pkey') THEN
+        ALTER TABLE public.act_ru_identitylink ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_ru_job
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_ru_job_pkey') THEN
+        ALTER TABLE public.act_ru_job ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_ru_suspended_job
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_ru_suspended_job_pkey') THEN
+        ALTER TABLE public.act_ru_suspended_job ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_ru_task
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_ru_task_pkey') THEN
+        ALTER TABLE public.act_ru_task ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_ru_timer_job
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_ru_timer_job_pkey') THEN
+        ALTER TABLE public.act_ru_timer_job ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- act_ru_variable
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'act_ru_variable_pkey') THEN
+        ALTER TABLE public.act_ru_variable ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- admin_alert_rules
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'admin_alert_rules_pkey') THEN
+        ALTER TABLE public.admin_alert_rules ADD PRIMARY KEY (id);
+    END IF;
+
+    -- admin_alerts
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'admin_alerts_pkey') THEN
+        ALTER TABLE public.admin_alerts ADD PRIMARY KEY (id);
+    END IF;
+
+    -- admin_audit_logs
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'admin_audit_logs_pkey') THEN
+        ALTER TABLE public.admin_audit_logs ADD PRIMARY KEY (id);
+    END IF;
+
+    -- admin_column_permissions
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'admin_column_permissions_pkey') THEN
+        ALTER TABLE public.admin_column_permissions ADD PRIMARY KEY (id);
+    END IF;
+
+    -- admin_config_history
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'admin_config_history_pkey') THEN
+        ALTER TABLE public.admin_config_history ADD PRIMARY KEY (id);
+    END IF;
+
+    -- admin_data_permission_rules
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'admin_data_permission_rules_pkey') THEN
+        ALTER TABLE public.admin_data_permission_rules ADD PRIMARY KEY (id);
+    END IF;
+
+    -- admin_log_retention_policies
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'admin_log_retention_policies_pkey') THEN
+        ALTER TABLE public.admin_log_retention_policies ADD PRIMARY KEY (id);
+    END IF;
+
+    -- admin_password_history
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'admin_password_history_pkey') THEN
+        ALTER TABLE public.admin_password_history ADD PRIMARY KEY (id);
+    END IF;
+
+    -- admin_permission_change_history
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'admin_permission_change_history_pkey') THEN
+        ALTER TABLE public.admin_permission_change_history ADD PRIMARY KEY (id);
+    END IF;
+
+    -- admin_permission_conflicts
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'admin_permission_conflicts_pkey') THEN
+        ALTER TABLE public.admin_permission_conflicts ADD PRIMARY KEY (id);
+    END IF;
+
+    -- admin_permission_delegations
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'admin_permission_delegations_pkey') THEN
+        ALTER TABLE public.admin_permission_delegations ADD PRIMARY KEY (id);
+    END IF;
+
+    -- admin_security_policies
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'admin_security_policies_pkey') THEN
+        ALTER TABLE public.admin_security_policies ADD PRIMARY KEY (id);
+    END IF;
+
+    -- admin_system_configs
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'admin_system_configs_pkey') THEN
+        ALTER TABLE public.admin_system_configs ADD PRIMARY KEY (id);
+    END IF;
+
+    -- admin_system_logs
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'admin_system_logs_pkey') THEN
+        ALTER TABLE public.admin_system_logs ADD PRIMARY KEY (id);
+    END IF;
+
+    -- dw_action_definitions
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'dw_action_definitions_pkey') THEN
+        ALTER TABLE public.dw_action_definitions ADD PRIMARY KEY (id);
+    END IF;
+
+    -- dw_field_definitions
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'dw_field_definitions_pkey') THEN
+        ALTER TABLE public.dw_field_definitions ADD PRIMARY KEY (id);
+    END IF;
+
+    -- dw_foreign_keys
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'dw_foreign_keys_pkey') THEN
+        ALTER TABLE public.dw_foreign_keys ADD PRIMARY KEY (id);
+    END IF;
+
+    -- dw_form_definitions
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'dw_form_definitions_pkey') THEN
+        ALTER TABLE public.dw_form_definitions ADD PRIMARY KEY (id);
+    END IF;
+
+    -- dw_form_table_bindings
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'dw_form_table_bindings_pkey') THEN
+        ALTER TABLE public.dw_form_table_bindings ADD PRIMARY KEY (id);
+    END IF;
+
+    -- dw_function_units
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'dw_function_units_pkey') THEN
+        ALTER TABLE public.dw_function_units ADD PRIMARY KEY (id);
+    END IF;
+
+    -- dw_icons
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'dw_icons_pkey') THEN
+        ALTER TABLE public.dw_icons ADD PRIMARY KEY (id);
+    END IF;
+
+    -- dw_operation_logs
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'dw_operation_logs_pkey') THEN
+        ALTER TABLE public.dw_operation_logs ADD PRIMARY KEY (id);
+    END IF;
+
+    -- dw_process_definitions
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'dw_process_definitions_pkey') THEN
+        ALTER TABLE public.dw_process_definitions ADD PRIMARY KEY (id);
+    END IF;
+
+    -- dw_table_definitions
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'dw_table_definitions_pkey') THEN
+        ALTER TABLE public.dw_table_definitions ADD PRIMARY KEY (id);
+    END IF;
+
+    -- dw_versions
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'dw_versions_pkey') THEN
+        ALTER TABLE public.dw_versions ADD PRIMARY KEY (id);
+    END IF;
+
+    -- flw_channel_definition
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'flw_channel_definition_pkey') THEN
+        ALTER TABLE public.flw_channel_definition ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- flw_ev_databasechangelog (composite primary key)
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'flw_ev_databasechangelog_pkey') THEN
+        ALTER TABLE public.flw_ev_databasechangelog ADD PRIMARY KEY (id, author, filename);
+    END IF;
+
+    -- flw_ev_databasechangeloglock
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'flw_ev_databasechangeloglock_pkey') THEN
+        ALTER TABLE public.flw_ev_databasechangeloglock ADD PRIMARY KEY (id);
+    END IF;
+
+    -- flw_event_definition
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'flw_event_definition_pkey') THEN
+        ALTER TABLE public.flw_event_definition ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- flw_event_deployment
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'flw_event_deployment_pkey') THEN
+        ALTER TABLE public.flw_event_deployment ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- flw_event_resource
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'flw_event_resource_pkey') THEN
+        ALTER TABLE public.flw_event_resource ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- flw_ru_batch
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'flw_ru_batch_pkey') THEN
+        ALTER TABLE public.flw_ru_batch ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- flw_ru_batch_part
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'flw_ru_batch_part_pkey') THEN
+        ALTER TABLE public.flw_ru_batch_part ADD PRIMARY KEY (id_);
+    END IF;
+
+    -- up_dashboard_layout
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'up_dashboard_layout_pkey') THEN
+        ALTER TABLE public.up_dashboard_layout ADD PRIMARY KEY (id);
+    END IF;
+
+    -- up_delegation_audit
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'up_delegation_audit_pkey') THEN
+        ALTER TABLE public.up_delegation_audit ADD PRIMARY KEY (id);
+    END IF;
+
+    -- up_delegation_rule
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'up_delegation_rule_pkey') THEN
+        ALTER TABLE public.up_delegation_rule ADD PRIMARY KEY (id);
+    END IF;
+
+    -- up_favorite_process
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'up_favorite_process_pkey') THEN
+        ALTER TABLE public.up_favorite_process ADD PRIMARY KEY (id);
+    END IF;
+
+    -- up_notification_preference
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'up_notification_preference_pkey') THEN
+        ALTER TABLE public.up_notification_preference ADD PRIMARY KEY (id);
+    END IF;
+
+    -- up_permission_request
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'up_permission_request_pkey') THEN
+        ALTER TABLE public.up_permission_request ADD PRIMARY KEY (id);
+    END IF;
+
+    -- up_process_draft
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'up_process_draft_pkey') THEN
+        ALTER TABLE public.up_process_draft ADD PRIMARY KEY (id);
+    END IF;
+
+    -- up_process_history
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'up_process_history_pkey') THEN
+        ALTER TABLE public.up_process_history ADD PRIMARY KEY (id);
+    END IF;
+
+    -- up_process_instance
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'up_process_instance_pkey') THEN
+        ALTER TABLE public.up_process_instance ADD PRIMARY KEY (id);
+    END IF;
+
+    -- up_user_preference
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'up_user_preference_pkey') THEN
+        ALTER TABLE public.up_user_preference ADD PRIMARY KEY (id);
+    END IF;
+
+    -- wf_audit_logs
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'wf_audit_logs_pkey') THEN
+        ALTER TABLE public.wf_audit_logs ADD PRIMARY KEY (id);
+    END IF;
+
+    -- wf_exception_records
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'wf_exception_records_pkey') THEN
+        ALTER TABLE public.wf_exception_records ADD PRIMARY KEY (id);
+    END IF;
+
+    -- wf_extended_task_info
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'wf_extended_task_info_pkey') THEN
+        ALTER TABLE public.wf_extended_task_info ADD PRIMARY KEY (task_id);
+    END IF;
+
+    -- wf_process_variables
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'wf_process_variables_pkey') THEN
+        ALTER TABLE public.wf_process_variables ADD PRIMARY KEY (id);
+    END IF;
+
+    -- wf_saga_steps
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'wf_saga_steps_pkey') THEN
+        ALTER TABLE public.wf_saga_steps ADD PRIMARY KEY (id);
+    END IF;
+
+    -- wf_saga_transactions
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'wf_saga_transactions_pkey') THEN
+        ALTER TABLE public.wf_saga_transactions ADD PRIMARY KEY (id);
+    END IF;
+
+END $$;
+
+-- =====================================================
+-- 修复 wf_process_variables.binary_value 列类型：从 oid 转换为 bytea
+-- =====================================================
+DO $$
+BEGIN
+    -- 检查列是否存在且类型为 oid
+    IF EXISTS (
+        SELECT 1 
+        FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'wf_process_variables' 
+        AND column_name = 'binary_value'
+        AND udt_name = 'oid'
+    ) THEN
+        -- 删除列并重新创建为 bytea
+        ALTER TABLE public.wf_process_variables DROP COLUMN binary_value;
+        ALTER TABLE public.wf_process_variables ADD COLUMN binary_value bytea;
+        RAISE NOTICE 'Fixed binary_value column type from oid to bytea';
+    ELSIF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'wf_process_variables' 
+        AND column_name = 'binary_value'
+    ) THEN
+        -- 列不存在，创建为 bytea
+        ALTER TABLE public.wf_process_variables ADD COLUMN binary_value bytea;
+        RAISE NOTICE 'Created binary_value column as bytea';
+    ELSIF EXISTS (
+        SELECT 1 
+        FROM information_schema.columns 
+        WHERE table_schema = 'public' 
+        AND table_name = 'wf_process_variables' 
+        AND column_name = 'binary_value'
+        AND udt_name = 'bytea'
+    ) THEN
+        RAISE NOTICE 'binary_value column is already bytea, no change needed';
+    ELSE
+        -- 列存在但类型不是 bytea，尝试转换
+        BEGIN
+            ALTER TABLE public.wf_process_variables 
+            ALTER COLUMN binary_value TYPE bytea USING binary_value::bytea;
+            RAISE NOTICE 'Converted binary_value column to bytea';
+        EXCEPTION WHEN OTHERS THEN
+            -- 转换失败，删除并重新创建
+            ALTER TABLE public.wf_process_variables DROP COLUMN binary_value;
+            ALTER TABLE public.wf_process_variables ADD COLUMN binary_value bytea;
+            RAISE NOTICE 'Dropped and recreated binary_value column as bytea due to conversion error';
+        END;
+    END IF;
+END $$;
+
+-- =====================================================
+-- 确保 sys_login_audit 表存在且结构完整
+-- =====================================================
+DO $$
+BEGIN
+    -- 检查表是否存在
+    IF NOT EXISTS (
+        SELECT 1 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+        AND table_name = 'sys_login_audit'
+    ) THEN
+        -- 创建表
+        CREATE TABLE public.sys_login_audit (
+            id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+            user_id character varying(64),
+            username character varying(50) NOT NULL,
+            action character varying(20) NOT NULL,
+            ip_address character varying(45),
+            user_agent text,
+            success boolean DEFAULT true,
+            failure_reason character varying(255),
+            created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+            CONSTRAINT sys_login_audit_pkey PRIMARY KEY (id)
+        );
+
+        -- 创建索引
+        CREATE INDEX IF NOT EXISTS idx_login_audit_user ON public.sys_login_audit(user_id);
+        CREATE INDEX IF NOT EXISTS idx_login_audit_username ON public.sys_login_audit(username);
+        CREATE INDEX IF NOT EXISTS idx_login_audit_created ON public.sys_login_audit(created_at);
+        CREATE INDEX IF NOT EXISTS idx_login_audit_action ON public.sys_login_audit(action);
+
+        RAISE NOTICE 'Created sys_login_audit table';
+    ELSE
+        -- 表存在，验证并添加缺失的列和索引
+        -- 添加缺失的列
+        IF NOT EXISTS (
+            SELECT 1 
+            FROM information_schema.columns 
+            WHERE table_schema = 'public' 
+            AND table_name = 'sys_login_audit' 
+            AND column_name = 'id'
+        ) THEN
+            ALTER TABLE public.sys_login_audit ADD COLUMN id uuid DEFAULT public.uuid_generate_v4() NOT NULL;
+        END IF;
+
+        IF NOT EXISTS (
+            SELECT 1 
+            FROM information_schema.columns 
+            WHERE table_schema = 'public' 
+            AND table_name = 'sys_login_audit' 
+            AND column_name = 'user_id'
+        ) THEN
+            ALTER TABLE public.sys_login_audit ADD COLUMN user_id character varying(64);
+        END IF;
+
+        IF NOT EXISTS (
+            SELECT 1 
+            FROM information_schema.columns 
+            WHERE table_schema = 'public' 
+            AND table_name = 'sys_login_audit' 
+            AND column_name = 'username'
+        ) THEN
+            ALTER TABLE public.sys_login_audit ADD COLUMN username character varying(50) NOT NULL DEFAULT '';
+        END IF;
+
+        IF NOT EXISTS (
+            SELECT 1 
+            FROM information_schema.columns 
+            WHERE table_schema = 'public' 
+            AND table_name = 'sys_login_audit' 
+            AND column_name = 'action'
+        ) THEN
+            ALTER TABLE public.sys_login_audit ADD COLUMN action character varying(20) NOT NULL DEFAULT 'LOGIN';
+        END IF;
+
+        IF NOT EXISTS (
+            SELECT 1 
+            FROM information_schema.columns 
+            WHERE table_schema = 'public' 
+            AND table_name = 'sys_login_audit' 
+            AND column_name = 'ip_address'
+        ) THEN
+            ALTER TABLE public.sys_login_audit ADD COLUMN ip_address character varying(45);
+        END IF;
+
+        IF NOT EXISTS (
+            SELECT 1 
+            FROM information_schema.columns 
+            WHERE table_schema = 'public' 
+            AND table_name = 'sys_login_audit' 
+            AND column_name = 'user_agent'
+        ) THEN
+            ALTER TABLE public.sys_login_audit ADD COLUMN user_agent text;
+        END IF;
+
+        IF NOT EXISTS (
+            SELECT 1 
+            FROM information_schema.columns 
+            WHERE table_schema = 'public' 
+            AND table_name = 'sys_login_audit' 
+            AND column_name = 'success'
+        ) THEN
+            ALTER TABLE public.sys_login_audit ADD COLUMN success boolean DEFAULT true;
+        END IF;
+
+        IF NOT EXISTS (
+            SELECT 1 
+            FROM information_schema.columns 
+            WHERE table_schema = 'public' 
+            AND table_name = 'sys_login_audit' 
+            AND column_name = 'failure_reason'
+        ) THEN
+            ALTER TABLE public.sys_login_audit ADD COLUMN failure_reason character varying(255);
+        END IF;
+
+        IF NOT EXISTS (
+            SELECT 1 
+            FROM information_schema.columns 
+            WHERE table_schema = 'public' 
+            AND table_name = 'sys_login_audit' 
+            AND column_name = 'created_at'
+        ) THEN
+            ALTER TABLE public.sys_login_audit ADD COLUMN created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP;
+        END IF;
+
+        -- 创建缺失的索引
+        CREATE INDEX IF NOT EXISTS idx_login_audit_user ON public.sys_login_audit(user_id);
+        CREATE INDEX IF NOT EXISTS idx_login_audit_username ON public.sys_login_audit(username);
+        CREATE INDEX IF NOT EXISTS idx_login_audit_created ON public.sys_login_audit(created_at);
+        CREATE INDEX IF NOT EXISTS idx_login_audit_action ON public.sys_login_audit(action);
+
+        -- 确保主键存在
+        IF NOT EXISTS (
+            SELECT 1 
+            FROM pg_constraint 
+            WHERE conname = 'sys_login_audit_pkey'
+        ) THEN
+            ALTER TABLE public.sys_login_audit ADD CONSTRAINT sys_login_audit_pkey PRIMARY KEY (id);
+        END IF;
+
+        RAISE NOTICE 'Verified and updated sys_login_audit table structure';
+    END IF;
+END $$;
 
 SET session_replication_role = 'origin';
