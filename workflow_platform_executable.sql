@@ -1,1 +1,0 @@
-workflow_platform_executable_clean.sql
