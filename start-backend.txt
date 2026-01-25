@@ -101,39 +101,125 @@ function Wait-ForService {
 # Create network
 Ensure-Network
 
-# Check if Redis is running (required for backend services)
-Write-Host "检查 Redis 服务..." -ForegroundColor Yellow
-$redisExists = Container-Exists "platform-redis"
-if (-not $redisExists) {
-    Write-Host "⚠️  警告: Redis 未运行，请先运行 .\start-services.ps1 启动 Redis" -ForegroundColor Yellow
-    Write-Host "或者等待脚本自动启动 Redis..." -ForegroundColor Gray
+# Function to check and start infrastructure service
+function Ensure-InfrastructureService {
+    param(
+        [string]$ContainerName,
+        [string]$ServiceName,
+        [string]$CheckCommand,
+        [scriptblock]$StartScript
+    )
     
-    # Start Redis
-    Write-Host "启动 Redis..." -ForegroundColor Yellow
+    Write-Host "检查 $ServiceName 服务..." -ForegroundColor Yellow
+    $exists = Container-Exists $ContainerName
+    if (-not $exists) {
+        Write-Host "⚠️  警告: $ServiceName 未运行，正在启动..." -ForegroundColor Yellow
+        & $StartScript
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "✅ $ServiceName 已启动" -ForegroundColor Green
+            if ($CheckCommand) {
+                Wait-ForService $ContainerName $CheckCommand
+            }
+        } else {
+            Write-Host "❌ 错误: 启动 $ServiceName 失败" -ForegroundColor Red
+            exit 1
+        }
+    } else {
+        $running = docker ps --filter "name=$ContainerName" --format "{{.Names}}"
+        if ($running -eq $ContainerName) {
+            Write-Host "✅ $ServiceName 正在运行" -ForegroundColor Green
+        } else {
+            Write-Host "启动 $ServiceName 容器..." -ForegroundColor Yellow
+            docker start $ContainerName
+            if ($CheckCommand) {
+                Wait-ForService $ContainerName $CheckCommand
+            }
+        }
+    }
+}
+
+# Check and start PostgreSQL
+Ensure-InfrastructureService "platform-postgres" "PostgreSQL" "pg_isready -U platform -d workflow_platform" {
+    Remove-Container "platform-postgres"
+    docker run -d `
+        --name platform-postgres `
+        --network $networkName `
+        --network-alias postgres `
+        -e POSTGRES_DB=workflow_platform `
+        -e POSTGRES_USER=platform `
+        -e POSTGRES_PASSWORD=$env:POSTGRES_PASSWORD `
+        -p 5432:5432 `
+        -v postgres_data:/var/lib/postgresql/data `
+        -v "${PWD}/deploy/init-scripts/00-schema/01-schema.sql:/docker-entrypoint-initdb.d/00-01-schema.sql" `
+        -v "${PWD}/deploy/init-scripts/01-admin/01-admin-user.sql:/docker-entrypoint-initdb.d/01-01-admin-user.sql" `
+        -v "${PWD}/deploy/init-scripts/02-test-data/01-organization.sql:/docker-entrypoint-initdb.d/02-01-organization.sql" `
+        -v "${PWD}/deploy/init-scripts/02-test-data/02-organization-detail.sql:/docker-entrypoint-initdb.d/02-02-organization-detail.sql" `
+        -v "${PWD}/deploy/init-scripts/02-test-data/03-users.sql:/docker-entrypoint-initdb.d/02-03-users.sql" `
+        -v "${PWD}/deploy/init-scripts/02-test-data/04-role-assignments.sql:/docker-entrypoint-initdb.d/02-04-role-assignments.sql" `
+        -v "${PWD}/deploy/init-scripts/02-test-data/04-department-managers.sql:/docker-entrypoint-initdb.d/02-05-department-managers.sql" `
+        -v "${PWD}/deploy/init-scripts/02-test-data/05-virtual-groups.sql:/docker-entrypoint-initdb.d/02-06-virtual-groups.sql" `
+        -v "${PWD}/deploy/init-scripts/04-purchase-workflow/04-01-function-unit.sql:/docker-entrypoint-initdb.d/04-01-function-unit.sql" `
+        -v "${PWD}/deploy/init-scripts/04-purchase-workflow/04-02-tables.sql:/docker-entrypoint-initdb.d/04-02-tables.sql" `
+        -v "${PWD}/deploy/init-scripts/04-purchase-workflow/04-03-fields-main-fixed.sql:/docker-entrypoint-initdb.d/04-03-fields-main-fixed.sql" `
+        -v "${PWD}/deploy/init-scripts/04-purchase-workflow/04-04-fields-sub-fixed.sql:/docker-entrypoint-initdb.d/04-04-fields-sub-fixed.sql" `
+        -v "${PWD}/deploy/init-scripts/04-purchase-workflow/04-05-fk-relations.sql:/docker-entrypoint-initdb.d/04-05-fk-relations.sql" `
+        -v "${PWD}/deploy/init-scripts/04-purchase-workflow/04-06-forms-fixed.sql:/docker-entrypoint-initdb.d/04-06-forms-fixed.sql" `
+        -v "${PWD}/deploy/init-scripts/04-purchase-workflow/04-07-actions-fixed.sql:/docker-entrypoint-initdb.d/04-07-actions-fixed.sql" `
+        -v "${PWD}/deploy/init-scripts/04-purchase-workflow/04-08-process-fixed-v2-corrected.sql:/docker-entrypoint-initdb.d/04-08-process-fixed-v2-corrected.sql" `
+        -v "${PWD}/deploy/init-scripts/04-purchase-workflow/04-09-form-bindings-fixed.sql:/docker-entrypoint-initdb.d/04-09-form-bindings-fixed.sql" `
+        -v "${PWD}/deploy/init-scripts/04-purchase-workflow/04-10-form-configs.sql:/docker-entrypoint-initdb.d/04-10-form-configs.sql" `
+        -v "${PWD}/deploy/init-scripts/04-purchase-workflow/04-11-action-configs.sql:/docker-entrypoint-initdb.d/04-11-action-configs.sql" `
+        --restart unless-stopped `
+        postgres:16.5-alpine
+}
+
+# Check and start Redis
+Ensure-InfrastructureService "platform-redis" "Redis" "redis-cli -a $env:REDIS_PASSWORD ping" {
+    Remove-Container "platform-redis"
     docker run -d `
         --name platform-redis `
         --network $networkName `
+        --network-alias redis `
         -p 6379:6379 `
         -v redis_data:/data `
         --restart unless-stopped `
         redis:7.2-alpine redis-server --appendonly yes --requirepass $env:REDIS_PASSWORD
-    
-    if ($LASTEXITCODE -eq 0) {
-        Write-Host "✅ Redis 已启动" -ForegroundColor Green
-        Wait-ForService "platform-redis" "redis-cli -a $env:REDIS_PASSWORD ping"
-    } else {
-        Write-Host "❌ 错误: 启动 Redis 失败" -ForegroundColor Red
-        exit 1
-    }
-} else {
-    $redisRunning = docker ps --filter "name=platform-redis" --format "{{.Names}}"
-    if ($redisRunning -eq "platform-redis") {
-        Write-Host "✅ Redis 正在运行" -ForegroundColor Green
-    } else {
-        Write-Host "启动 Redis 容器..." -ForegroundColor Yellow
-        docker start platform-redis
-        Wait-ForService "platform-redis" "redis-cli -a $env:REDIS_PASSWORD ping"
-    }
+}
+
+# Check and start Zookeeper (required for Kafka)
+Ensure-InfrastructureService "platform-zookeeper" "Zookeeper" $null {
+    Remove-Container "platform-zookeeper"
+    docker run -d `
+        --name platform-zookeeper `
+        --network $networkName `
+        -e ZOOKEEPER_CLIENT_PORT=2181 `
+        -e ZOOKEEPER_TICK_TIME=2000 `
+        -p 2181:2181 `
+        -v zookeeper_data:/var/lib/zookeeper/data `
+        -v zookeeper_log:/var/lib/zookeeper/log `
+        --restart unless-stopped `
+        confluentinc/cp-zookeeper:7.5.3
+}
+
+# Check and start Kafka
+Ensure-InfrastructureService "platform-kafka" "Kafka" $null {
+    Remove-Container "platform-kafka"
+    docker run -d `
+        --name platform-kafka `
+        --network $networkName `
+        --network-alias kafka `
+        -e KAFKA_BROKER_ID=1 `
+        -e KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181 `
+        -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092 `
+        -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT `
+        -e KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT `
+        -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 `
+        -e KAFKA_AUTO_CREATE_TOPICS_ENABLE=true `
+        -p 9092:9092 `
+        -p 29092:29092 `
+        -v kafka_data:/var/lib/kafka/data `
+        --restart unless-stopped `
+        confluentinc/cp-kafka:7.5.3
 }
 
 # Step 1: Build platform modules (if needed)
