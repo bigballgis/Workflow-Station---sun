@@ -1,124 +1,124 @@
 # =====================================================
-# 启动项目前后端服务脚本（Windows PowerShell）
+# 启动基础设施服务脚本（仅 Redis）
 # =====================================================
 
 $ErrorActionPreference = "Stop"
 
 $BASE_DIR = $PSScriptRoot
+$networkName = "platform-network"
 
-Write-Host "🚀 开始启动项目服务..." -ForegroundColor Cyan
+# Set environment variables
+$env:REDIS_PASSWORD = "redis123"
+
+Write-Host "📦 启动基础设施服务（Redis）..." -ForegroundColor Cyan
 Write-Host ""
 
-# 检查基础设施服务
-Write-Host "📦 检查基础设施服务..." -ForegroundColor Yellow
-try {
-    $postgresStatus = docker ps --filter "name=platform-postgres" --format "{{.Status}}" 2>$null
-    if ($postgresStatus -match "running") {
-        Write-Host "✅ 基础设施服务已运行" -ForegroundColor Green
+# Check if Docker is running
+$dockerRunning = docker info 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "❌ 错误: Docker 未运行，请先启动 Docker Desktop" -ForegroundColor Red
+    exit 1
+}
+
+# Function to create network if it doesn't exist
+function Ensure-Network {
+    $networkExists = docker network ls --filter "name=$networkName" --format "{{.Name}}"
+    if (-not $networkExists) {
+        Write-Host "创建 Docker 网络: $networkName..." -ForegroundColor Yellow
+        docker network create $networkName
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "❌ 错误: 创建网络失败" -ForegroundColor Red
+            exit 1
+        }
+        Write-Host "✅ 网络 $networkName 创建成功" -ForegroundColor Green
     } else {
-        Write-Host "启动基础设施服务..." -ForegroundColor Yellow
-        docker-compose up -d postgres redis kafka zookeeper
-        Write-Host "等待服务就绪..." -ForegroundColor Gray
-        Start-Sleep -Seconds 10
-    }
-} catch {
-    Write-Host "⚠️  警告: 无法检查 Docker 服务状态，请确保 Docker Desktop 正在运行" -ForegroundColor Yellow
-}
-
-Write-Host ""
-Write-Host "🔧 启动选项：" -ForegroundColor Cyan
-Write-Host "1. 使用 Docker Compose 启动（推荐，需要先构建镜像）" -ForegroundColor White
-Write-Host "2. 使用本地开发模式启动（需要 Java 17+ 和 Node.js 20+）" -ForegroundColor White
-Write-Host ""
-$choice = Read-Host "请选择启动方式 (1/2)"
-
-switch ($choice) {
-    "1" {
-        Write-Host ""
-        Write-Host "🐳 使用 Docker Compose 启动服务..." -ForegroundColor Cyan
-        Write-Host "启动后端服务..." -ForegroundColor Yellow
-        docker-compose --profile backend up -d
-        
-        Write-Host "等待后端服务启动..." -ForegroundColor Gray
-        Start-Sleep -Seconds 15
-        
-        Write-Host "启动前端服务..." -ForegroundColor Yellow
-        docker-compose --profile frontend up -d
-        
-        Write-Host ""
-        Write-Host "✅ 所有服务已启动！" -ForegroundColor Green
-        Write-Host ""
-        Write-Host "服务访问地址：" -ForegroundColor Cyan
-        Write-Host "- API Gateway: http://localhost:8080" -ForegroundColor White
-        Write-Host "- Workflow Engine: http://localhost:8081" -ForegroundColor White
-        Write-Host "- Admin Center: http://localhost:8090" -ForegroundColor White
-        Write-Host "- User Portal: http://localhost:8082" -ForegroundColor White
-        Write-Host "- Developer Workstation: http://localhost:8083" -ForegroundColor White
-        Write-Host "- Frontend Admin: http://localhost:3000" -ForegroundColor White
-        Write-Host "- Frontend Portal: http://localhost:3001" -ForegroundColor White
-        Write-Host "- Frontend Developer: http://localhost:3002" -ForegroundColor White
-    }
-    "2" {
-        Write-Host ""
-        Write-Host "💻 使用本地开发模式启动服务..." -ForegroundColor Cyan
-        Write-Host ""
-        
-        # 检查必要的工具
-        $hasMaven = Get-Command mvn -ErrorAction SilentlyContinue
-        $hasNode = Get-Command node -ErrorAction SilentlyContinue
-        
-        if (-not $hasMaven) {
-            Write-Host "❌ 错误: 未找到 Maven，请先安装 Maven" -ForegroundColor Red
-            exit 1
-        }
-        
-        if (-not $hasNode) {
-            Write-Host "❌ 错误: 未找到 Node.js，请先安装 Node.js 20+" -ForegroundColor Red
-            exit 1
-        }
-        
-        # 启动后端服务
-        Write-Host "启动后端服务..." -ForegroundColor Yellow
-        & "$BASE_DIR\start-backend.ps1"
-        
-        Write-Host ""
-        Write-Host "等待后端服务启动..." -ForegroundColor Gray
-        Start-Sleep -Seconds 10
-        
-        # 启动前端服务
-        Write-Host "启动前端服务..." -ForegroundColor Yellow
-        & "$BASE_DIR\start-frontend.ps1"
-        
-        Write-Host ""
-        Write-Host "✅ 所有服务已启动！" -ForegroundColor Green
-        Write-Host ""
-        Write-Host "服务访问地址：" -ForegroundColor Cyan
-        Write-Host "- API Gateway: http://localhost:8080" -ForegroundColor White
-        Write-Host "- Workflow Engine: http://localhost:8081" -ForegroundColor White
-        Write-Host "- Admin Center: http://localhost:8090" -ForegroundColor White
-        Write-Host "- User Portal: http://localhost:8082" -ForegroundColor White
-        Write-Host "- Developer Workstation: http://localhost:8083" -ForegroundColor White
-        Write-Host "- Frontend Admin: http://localhost:3000" -ForegroundColor White
-        Write-Host "- Frontend Portal: http://localhost:3001" -ForegroundColor White
-        Write-Host "- Frontend Developer: http://localhost:3002" -ForegroundColor White
-        Write-Host ""
-        Write-Host "查看日志：" -ForegroundColor Cyan
-        Write-Host "  Get-Content logs\*.log -Tail 50 -Wait" -ForegroundColor Gray
-        Write-Host ""
-        Write-Host "停止服务：" -ForegroundColor Cyan
-        Write-Host "  .\stop-backend.ps1" -ForegroundColor Gray
-        Write-Host "  .\stop-frontend.ps1" -ForegroundColor Gray
-    }
-    default {
-        Write-Host "❌ 无效选择" -ForegroundColor Red
-        exit 1
+        Write-Host "✅ 网络 $networkName 已存在" -ForegroundColor Green
     }
 }
 
+# Function to check if container exists
+function Container-Exists {
+    param([string]$ContainerName)
+    $exists = docker ps -a --filter "name=$ContainerName" --format "{{.Names}}"
+    return ($exists -eq $ContainerName)
+}
+
+# Function to remove container if exists
+function Remove-Container {
+    param([string]$ContainerName)
+    if (Container-Exists $ContainerName) {
+        Write-Host "移除已存在的容器: $ContainerName..." -ForegroundColor Yellow
+        docker rm -f $ContainerName | Out-Null
+    }
+}
+
+# Function to wait for service to be healthy
+function Wait-ForService {
+    param(
+        [string]$ContainerName,
+        [string]$CheckCommand,
+        [int]$MaxRetries = 30,
+        [int]$RetryInterval = 2
+    )
+    
+    Write-Host "等待 $ContainerName 就绪..." -ForegroundColor Gray
+    $retryCount = 0
+    while ($retryCount -lt $MaxRetries) {
+        $result = docker exec $ContainerName $CheckCommand 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "✅ $ContainerName 已就绪" -ForegroundColor Green
+            return $true
+        }
+        $retryCount++
+        Write-Host "等待 $ContainerName... ($retryCount/$MaxRetries)" -ForegroundColor Gray
+        Start-Sleep -Seconds $RetryInterval
+    }
+    Write-Host "❌ 错误: $ContainerName 启动失败" -ForegroundColor Red
+    return $false
+}
+
+# Create network
+Ensure-Network
+
+# Start Redis
 Write-Host ""
-Write-Host "📊 查看服务状态：" -ForegroundColor Cyan
-Write-Host "  docker-compose ps" -ForegroundColor Gray
+Write-Host "启动 Redis..." -ForegroundColor Yellow
+
+Remove-Container "platform-redis"
+
+Write-Host "启动 Redis 容器 (端口 6379)..." -ForegroundColor Yellow
+docker run -d `
+    --name platform-redis `
+    --network $networkName `
+    -p 6379:6379 `
+    -v redis_data:/data `
+    --restart unless-stopped `
+    redis:7.2-alpine redis-server --appendonly yes --requirepass $env:REDIS_PASSWORD
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "❌ 错误: 启动 Redis 失败" -ForegroundColor Red
+    exit 1
+}
+
+# Wait for Redis to be ready
+Wait-ForService "platform-redis" "redis-cli -a $env:REDIS_PASSWORD ping"
+
 Write-Host ""
-Write-Host "📝 查看服务日志：" -ForegroundColor Cyan
-Write-Host "  docker-compose logs -f [service-name]" -ForegroundColor Gray
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "✅ Redis 服务已启动！" -ForegroundColor Green
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "服务信息：" -ForegroundColor Cyan
+Write-Host "  - Redis:        localhost:6379" -ForegroundColor White
+Write-Host "  - 密码:         $env:REDIS_PASSWORD" -ForegroundColor White
+Write-Host ""
+Write-Host "查看日志：" -ForegroundColor Cyan
+Write-Host "  docker logs -f platform-redis" -ForegroundColor Gray
+Write-Host ""
+Write-Host "测试连接：" -ForegroundColor Cyan
+Write-Host "  docker exec -it platform-redis redis-cli -a $env:REDIS_PASSWORD ping" -ForegroundColor Gray
+Write-Host ""
+Write-Host "停止服务：" -ForegroundColor Cyan
+Write-Host "  docker stop platform-redis" -ForegroundColor Gray
+Write-Host "  docker rm platform-redis" -ForegroundColor Gray
 Write-Host ""

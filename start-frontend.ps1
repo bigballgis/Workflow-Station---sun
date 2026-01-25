@@ -1,105 +1,154 @@
 # =====================================================
-# 启动前端服务脚本（Windows PowerShell）
+# 启动前端服务脚本（Docker 模式）
 # =====================================================
+
+param(
+    [switch]$NoBuild       # Skip build, use existing images
+)
 
 $ErrorActionPreference = "Stop"
 
 $BASE_DIR = $PSScriptRoot
-$LOG_DIR = Join-Path $BASE_DIR "logs"
+$networkName = "platform-network"
 
-# 创建日志目录
-if (-not (Test-Path $LOG_DIR)) {
-    New-Item -ItemType Directory -Path $LOG_DIR | Out-Null
-}
-
-Write-Host "🎨 启动前端服务..." -ForegroundColor Cyan
+Write-Host "🎨 启动前端服务（Docker 模式）..." -ForegroundColor Cyan
 Write-Host ""
 
-# 检查 Node.js
-if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
-    Write-Host "❌ 错误: 未找到 Node.js，请先安装 Node.js 20+" -ForegroundColor Red
+# Check if Docker is running
+$dockerRunning = docker info 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "❌ 错误: Docker 未运行，请先启动 Docker Desktop" -ForegroundColor Red
     exit 1
 }
 
-$nodeVersion = (node -v) -replace 'v', '' -split '\.' | Select-Object -First 1
-if ([int]$nodeVersion -lt 20) {
-    Write-Host "⚠️  警告: Node.js 版本过低，建议使用 Node.js 20+" -ForegroundColor Yellow
+# Function to create network if it doesn't exist
+function Ensure-Network {
+    $networkExists = docker network ls --filter "name=$networkName" --format "{{.Name}}"
+    if (-not $networkExists) {
+        Write-Host "创建 Docker 网络: $networkName..." -ForegroundColor Yellow
+        docker network create $networkName
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "❌ 错误: 创建网络失败" -ForegroundColor Red
+            exit 1
+        }
+    }
 }
 
-# 检查 pnpm
-if (-not (Get-Command pnpm -ErrorAction SilentlyContinue)) {
-    Write-Host "❌ 错误: 未找到 pnpm，请先安装 pnpm 10.28.0" -ForegroundColor Red
-    Write-Host "   安装命令: npm install -g pnpm@10.28.0" -ForegroundColor Yellow
+# Function to build Docker image
+function Build-Image {
+    param(
+        [string]$Context,
+        [string]$Dockerfile,
+        [string]$ImageName
+    )
+    
+    Write-Host "构建镜像: $ImageName..." -ForegroundColor Yellow
+    docker build --platform linux/amd64 -f $Dockerfile -t $ImageName $Context
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "❌ 错误: 构建镜像 $ImageName 失败" -ForegroundColor Red
+        exit 1
+    }
+    Write-Host "✅ 镜像 $ImageName 构建成功" -ForegroundColor Green
+}
+
+# Function to check if container exists
+function Container-Exists {
+    param([string]$ContainerName)
+    $exists = docker ps -a --filter "name=$ContainerName" --format "{{.Names}}"
+    return ($exists -eq $ContainerName)
+}
+
+# Function to remove container if exists
+function Remove-Container {
+    param([string]$ContainerName)
+    if (Container-Exists $ContainerName) {
+        Write-Host "移除已存在的容器: $ContainerName..." -ForegroundColor Yellow
+        docker rm -f $ContainerName | Out-Null
+    }
+}
+
+# Create network
+Ensure-Network
+
+# Step 1: Build frontend images
+if (-not $NoBuild) {
+    Write-Host "步骤 1: 构建前端 Docker 镜像..." -ForegroundColor Yellow
+    
+    Build-Image "./frontend/admin-center" "./frontend/admin-center/Dockerfile" "frontend-admin:latest"
+    Build-Image "./frontend/user-portal" "./frontend/user-portal/Dockerfile" "frontend-portal:latest"
+    Build-Image "./frontend/developer-workstation" "./frontend/developer-workstation/Dockerfile" "frontend-developer:latest"
+} else {
+    Write-Host "步骤 1: 跳过构建，使用已有镜像..." -ForegroundColor Yellow
+}
+
+# Step 2: Start frontend services
+Write-Host ""
+Write-Host "步骤 2: 启动前端服务..." -ForegroundColor Yellow
+
+# Start Frontend Admin
+Remove-Container "platform-frontend-admin"
+Write-Host "启动 Frontend Admin (端口 3000)..." -ForegroundColor Yellow
+docker run -d `
+    --name platform-frontend-admin `
+    --network $networkName `
+    -p 3000:80 `
+    --restart unless-stopped `
+    frontend-admin:latest
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "❌ 错误: 启动 Frontend Admin 失败" -ForegroundColor Red
     exit 1
 }
+Write-Host "✅ Frontend Admin 已启动" -ForegroundColor Green
 
-$pnpmVersion = pnpm -v
-Write-Host "📦 使用 pnpm 版本: $pnpmVersion" -ForegroundColor Cyan
+# Start Frontend Portal
+Remove-Container "platform-frontend-portal"
+Write-Host "启动 Frontend Portal (端口 3001)..." -ForegroundColor Yellow
+docker run -d `
+    --name platform-frontend-portal `
+    --network $networkName `
+    -p 3001:80 `
+    --restart unless-stopped `
+    frontend-portal:latest
 
-# 启动 Frontend Admin
-Write-Host "1️⃣  启动 Frontend Admin (端口 3000)..." -ForegroundColor Yellow
-$frontendAdminDir = Join-Path $BASE_DIR "frontend\admin-center"
-
-if (-not (Test-Path (Join-Path $frontendAdminDir "node_modules"))) {
-    Write-Host "   安装依赖..." -ForegroundColor Gray
-    Set-Location $frontendAdminDir
-    pnpm install
-    Set-Location $BASE_DIR
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "❌ 错误: 启动 Frontend Portal 失败" -ForegroundColor Red
+    exit 1
 }
+Write-Host "✅ Frontend Portal 已启动" -ForegroundColor Green
 
-$frontendAdminLog = Join-Path $LOG_DIR "frontend-admin.log"
-$frontendAdminProcess = Start-Process -FilePath "pnpm" -ArgumentList "run", "dev" -WorkingDirectory $frontendAdminDir -PassThru -WindowStyle Hidden -RedirectStandardOutput $frontendAdminLog -RedirectStandardError $frontendAdminLog
-$frontendAdminPID = $frontendAdminProcess.Id
-Write-Host "   PID: $frontendAdminPID" -ForegroundColor Gray
-$frontendAdminPID | Out-File -FilePath (Join-Path $LOG_DIR "frontend-admin.pid") -NoNewline
-Start-Sleep -Seconds 3
+# Start Frontend Developer
+Remove-Container "platform-frontend-developer"
+Write-Host "启动 Frontend Developer (端口 3002)..." -ForegroundColor Yellow
+docker run -d `
+    --name platform-frontend-developer `
+    --network $networkName `
+    -p 3002:80 `
+    --restart unless-stopped `
+    frontend-developer:latest
 
-# 启动 Frontend Portal
-Write-Host "2️⃣  启动 Frontend Portal (端口 3001)..." -ForegroundColor Yellow
-$frontendPortalDir = Join-Path $BASE_DIR "frontend\user-portal"
-
-if (-not (Test-Path (Join-Path $frontendPortalDir "node_modules"))) {
-    Write-Host "   安装依赖..." -ForegroundColor Gray
-    Set-Location $frontendPortalDir
-    pnpm install
-    Set-Location $BASE_DIR
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "❌ 错误: 启动 Frontend Developer 失败" -ForegroundColor Red
+    exit 1
 }
-
-$frontendPortalLog = Join-Path $LOG_DIR "frontend-portal.log"
-$frontendPortalProcess = Start-Process -FilePath "pnpm" -ArgumentList "run", "dev" -WorkingDirectory $frontendPortalDir -PassThru -WindowStyle Hidden -RedirectStandardOutput $frontendPortalLog -RedirectStandardError $frontendPortalLog
-$frontendPortalPID = $frontendPortalProcess.Id
-Write-Host "   PID: $frontendPortalPID" -ForegroundColor Gray
-$frontendPortalPID | Out-File -FilePath (Join-Path $LOG_DIR "frontend-portal.pid") -NoNewline
-Start-Sleep -Seconds 3
-
-# 启动 Frontend Developer
-Write-Host "3️⃣  启动 Frontend Developer (端口 3002)..." -ForegroundColor Yellow
-$frontendDeveloperDir = Join-Path $BASE_DIR "frontend\developer-workstation"
-
-if (-not (Test-Path (Join-Path $frontendDeveloperDir "node_modules"))) {
-    Write-Host "   安装依赖..." -ForegroundColor Gray
-    Set-Location $frontendDeveloperDir
-    pnpm install
-    Set-Location $BASE_DIR
-}
-
-$frontendDeveloperLog = Join-Path $LOG_DIR "frontend-developer.log"
-$frontendDeveloperProcess = Start-Process -FilePath "pnpm" -ArgumentList "run", "dev" -WorkingDirectory $frontendDeveloperDir -PassThru -WindowStyle Hidden -RedirectStandardOutput $frontendDeveloperLog -RedirectStandardError $frontendDeveloperLog
-$frontendDeveloperPID = $frontendDeveloperProcess.Id
-Write-Host "   PID: $frontendDeveloperPID" -ForegroundColor Gray
-$frontendDeveloperPID | Out-File -FilePath (Join-Path $LOG_DIR "frontend-developer.pid") -NoNewline
+Write-Host "✅ Frontend Developer 已启动" -ForegroundColor Green
 
 Write-Host ""
+Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "✅ 所有前端服务已启动！" -ForegroundColor Green
+Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "服务访问地址：" -ForegroundColor Cyan
-Write-Host "- Frontend Admin: http://localhost:3000" -ForegroundColor White
-Write-Host "- Frontend Portal: http://localhost:3001" -ForegroundColor White
-Write-Host "- Frontend Developer: http://localhost:3002" -ForegroundColor White
+Write-Host "  - Frontend Admin:    http://localhost:3000" -ForegroundColor White
+Write-Host "  - Frontend Portal:   http://localhost:3001" -ForegroundColor White
+Write-Host "  - Frontend Developer: http://localhost:3002" -ForegroundColor White
 Write-Host ""
 Write-Host "查看日志：" -ForegroundColor Cyan
-Write-Host "  Get-Content $LOG_DIR\frontend-*.log -Tail 50 -Wait" -ForegroundColor Gray
+Write-Host "  docker logs -f platform-frontend-admin" -ForegroundColor Gray
+Write-Host "  docker logs -f platform-frontend-portal" -ForegroundColor Gray
+Write-Host "  docker logs -f platform-frontend-developer" -ForegroundColor Gray
 Write-Host ""
 Write-Host "停止服务：" -ForegroundColor Cyan
-Write-Host "  .\stop-frontend.ps1" -ForegroundColor Gray
+Write-Host "  docker stop platform-frontend-admin platform-frontend-portal platform-frontend-developer" -ForegroundColor Gray
+Write-Host "  docker rm platform-frontend-admin platform-frontend-portal platform-frontend-developer" -ForegroundColor Gray
 Write-Host ""
