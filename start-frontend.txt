@@ -74,9 +74,13 @@ Ensure-Network
 if (-not $NoBuild) {
     Write-Host "步骤 1: 构建前端 Docker 镜像..." -ForegroundColor Yellow
     
-    Build-Image "./frontend/admin-center" "./frontend/admin-center/Dockerfile" "frontend-admin:latest"
-    Build-Image "./frontend/user-portal" "./frontend/user-portal/Dockerfile" "frontend-portal:latest"
-    Build-Image "./frontend/developer-workstation" "./frontend/developer-workstation/Dockerfile" "frontend-developer:latest"
+    $adminCenterContext = Join-Path $BASE_DIR "frontend\admin-center"
+    $userPortalContext = Join-Path $BASE_DIR "frontend\user-portal"
+    $developerContext = Join-Path $BASE_DIR "frontend\developer-workstation"
+    
+    Build-Image $adminCenterContext (Join-Path $adminCenterContext "Dockerfile") "frontend-admin:latest"
+    Build-Image $userPortalContext (Join-Path $userPortalContext "Dockerfile") "frontend-portal:latest"
+    Build-Image $developerContext (Join-Path $developerContext "Dockerfile") "frontend-developer:latest"
 } else {
     Write-Host "步骤 1: 跳过构建，使用已有镜像..." -ForegroundColor Yellow
 }
