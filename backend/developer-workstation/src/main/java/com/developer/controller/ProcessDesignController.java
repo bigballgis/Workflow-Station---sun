@@ -28,6 +28,7 @@ public class ProcessDesignController {
     @Operation(summary = "获取流程定义")
     public ResponseEntity<ApiResponse<ProcessDefinition>> get(@PathVariable Long functionUnitId) {
         ProcessDefinition result = processDesignComponent.getByFunctionUnitId(functionUnitId);
+        // 如果 ProcessDefinition 不存在，返回 null（前端会处理空值情况）
         return ResponseEntity.ok(ApiResponse.success(result));
     }
     

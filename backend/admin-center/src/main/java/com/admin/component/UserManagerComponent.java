@@ -74,6 +74,20 @@ public class UserManagerComponent {
         String encodedPassword = passwordEncoder.encode(request.getInitialPassword());
         String userId = UUID.randomUUID().toString();
         
+        // 验证实体管理者存在（如果提供）
+        if (request.getEntityManagerId() != null && !request.getEntityManagerId().isEmpty()) {
+            if (!userRepository.existsById(request.getEntityManagerId())) {
+                throw new AdminBusinessException("ENTITY_MANAGER_NOT_FOUND", "实体管理者不存在");
+            }
+        }
+        
+        // 验证职能管理者存在（如果提供）
+        if (request.getFunctionManagerId() != null && !request.getFunctionManagerId().isEmpty()) {
+            if (!userRepository.existsById(request.getFunctionManagerId())) {
+                throw new AdminBusinessException("FUNCTION_MANAGER_NOT_FOUND", "职能管理者不存在");
+            }
+        }
+        
         User user = User.builder()
                 .id(userId)
                 .username(request.getUsername())
@@ -82,6 +96,8 @@ public class UserManagerComponent {
                 .fullName(request.getFullName())
                 .employeeId(request.getEmployeeId())
                 .position(request.getPosition())
+                .entityManagerId(request.getEntityManagerId())
+                .functionManagerId(request.getFunctionManagerId())
                 .status(UserStatus.ACTIVE)
                 .mustChangePassword(true)
                 .passwordExpiredAt(LocalDateTime.now().plusDays(90))

@@ -88,6 +88,18 @@ public class VirtualGroupManagerComponent {
         
         virtualGroupRepository.save(group);
         
+        // 如果提供了角色ID，在创建时绑定角色
+        if (request.getRoleId() != null && !request.getRoleId().isBlank()) {
+            log.info("Binding role {} to virtual group {} during creation", request.getRoleId(), groupId);
+            try {
+                // 对于 SYSTEM 类型，允许在创建时绑定角色
+                bindRoleDuringCreation(groupId, request.getRoleId());
+            } catch (Exception e) {
+                log.error("Failed to bind role during virtual group creation: {}", e.getMessage());
+                // 不抛出异常，允许虚拟组创建成功，但记录错误
+            }
+        }
+        
         log.info("Virtual group created successfully: {}", groupId);
         return VirtualGroupResult.success(group);
     }
@@ -100,6 +112,35 @@ public class VirtualGroupManagerComponent {
                 .replaceAll("[^A-Z0-9]", "_")
                 .replaceAll("_+", "_")
                 .replaceAll("^_|_$", "");
+    }
+    
+    /**
+     * 在创建虚拟组时绑定角色（允许 SYSTEM 类型）
+     */
+    private void bindRoleDuringCreation(String virtualGroupId, String roleId) {
+        // 验证角色存在且为业务角色
+        Role role = roleRepository.findById(roleId)
+                .orElseThrow(() -> new AdminBusinessException("ROLE_NOT_FOUND", "角色不存在: " + roleId));
+        
+        if (!role.getType().isBusinessRole()) {
+            throw new AdminBusinessException("INVALID_ROLE_TYPE", 
+                    "只能绑定业务角色（BU-Bounded 或 BU-Unbounded），当前角色类型: " + role.getType());
+        }
+        
+        // 检查是否已有绑定
+        if (virtualGroupRoleRepository.findByVirtualGroupId(virtualGroupId).isPresent()) {
+            log.warn("Virtual group {} already has a role binding, skipping", virtualGroupId);
+            return;
+        }
+        
+        VirtualGroupRole binding = VirtualGroupRole.builder()
+                .id(UUID.randomUUID().toString())
+                .virtualGroupId(virtualGroupId)
+                .roleId(roleId)
+                .build();
+        
+        virtualGroupRoleRepository.save(binding);
+        log.info("Role {} bound to virtual group {} during creation", roleId, virtualGroupId);
     }
     
     /**

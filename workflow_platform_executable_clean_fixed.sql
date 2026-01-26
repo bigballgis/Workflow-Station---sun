@@ -2,7 +2,7 @@
 -- 数据库初始化脚本
 -- 执行顺序：删除表 -> 创建表 -> 创建索引 -> 创建序列 -> 插入数据 -> 添加约束
 -- 
--- 最后更新: 2026-01-22
+-- 最后更新: 2026-01-26
 -- 更新内容:
 --   1. sys_users 表 CHECK 约束更新为 4 值 (ACTIVE, DISABLED, LOCKED, PENDING)
 --   2. 移除 sys_users.department_id 列和相关索引
@@ -11,6 +11,7 @@
 --   5. dw_form_table_bindings 添加 uk_form_table_binding 唯一约束
 --   6. 更新 sys_role_assignments 中的角色分配 ID (ra-admin-sys-admin, ra-tech-director-tech-director)
 --   7. 添加 sys_user_roles 同步逻辑，确保所有用户角色分配都同步到 sys_user_roles 表
+--   8. 为所有使用序列的表添加 ALTER SEQUENCE ... OWNED BY 语句，确保序列正确关联到列
 -- =====================================================
 
 SET session_replication_role = 'replica';
@@ -3357,28 +3358,51 @@ INSERT INTO public.up_user_preference (id, created_at, date_format, font_size, l
 -- 第六步：添加约束和修改表结构
 -- =====================================================
 ALTER TABLE ONLY public.act_evt_log ALTER COLUMN log_nr_ SET DEFAULT nextval('public.act_evt_log_log_nr__seq'::regclass);
+ALTER SEQUENCE public.act_evt_log_log_nr__seq OWNED BY public.act_evt_log.log_nr_;
 ALTER TABLE ONLY public.act_hi_tsk_log ALTER COLUMN id_ SET DEFAULT nextval('public.act_hi_tsk_log_id__seq'::regclass);
+ALTER SEQUENCE public.act_hi_tsk_log_id__seq OWNED BY public.act_hi_tsk_log.id_;
 ALTER TABLE ONLY public.dw_action_definitions ALTER COLUMN id SET DEFAULT nextval('public.dw_action_definitions_id_seq'::regclass);
+ALTER SEQUENCE public.dw_action_definitions_id_seq OWNED BY public.dw_action_definitions.id;
 ALTER TABLE ONLY public.dw_field_definitions ALTER COLUMN id SET DEFAULT nextval('public.dw_field_definitions_id_seq'::regclass);
+ALTER SEQUENCE public.dw_field_definitions_id_seq OWNED BY public.dw_field_definitions.id;
 ALTER TABLE ONLY public.dw_foreign_keys ALTER COLUMN id SET DEFAULT nextval('public.dw_foreign_keys_id_seq'::regclass);
+ALTER SEQUENCE public.dw_foreign_keys_id_seq OWNED BY public.dw_foreign_keys.id;
 ALTER TABLE ONLY public.dw_form_definitions ALTER COLUMN id SET DEFAULT nextval('public.dw_form_definitions_id_seq'::regclass);
+ALTER SEQUENCE public.dw_form_definitions_id_seq OWNED BY public.dw_form_definitions.id;
 ALTER TABLE ONLY public.dw_form_table_bindings ALTER COLUMN id SET DEFAULT nextval('public.dw_form_table_bindings_id_seq'::regclass);
+ALTER SEQUENCE public.dw_form_table_bindings_id_seq OWNED BY public.dw_form_table_bindings.id;
 ALTER TABLE ONLY public.dw_function_units ALTER COLUMN id SET DEFAULT nextval('public.dw_function_units_id_seq'::regclass);
+ALTER SEQUENCE public.dw_function_units_id_seq OWNED BY public.dw_function_units.id;
 ALTER TABLE ONLY public.dw_icons ALTER COLUMN id SET DEFAULT nextval('public.dw_icons_id_seq'::regclass);
+ALTER SEQUENCE public.dw_icons_id_seq OWNED BY public.dw_icons.id;
 ALTER TABLE ONLY public.dw_operation_logs ALTER COLUMN id SET DEFAULT nextval('public.dw_operation_logs_id_seq'::regclass);
+ALTER SEQUENCE public.dw_operation_logs_id_seq OWNED BY public.dw_operation_logs.id;
 ALTER TABLE ONLY public.dw_process_definitions ALTER COLUMN id SET DEFAULT nextval('public.dw_process_definitions_id_seq'::regclass);
+ALTER SEQUENCE public.dw_process_definitions_id_seq OWNED BY public.dw_process_definitions.id;
 ALTER TABLE ONLY public.dw_table_definitions ALTER COLUMN id SET DEFAULT nextval('public.dw_table_definitions_id_seq'::regclass);
+ALTER SEQUENCE public.dw_table_definitions_id_seq OWNED BY public.dw_table_definitions.id;
 ALTER TABLE ONLY public.dw_versions ALTER COLUMN id SET DEFAULT nextval('public.dw_versions_id_seq'::regclass);
+ALTER SEQUENCE public.dw_versions_id_seq OWNED BY public.dw_versions.id;
 ALTER TABLE ONLY public.up_dashboard_layout ALTER COLUMN id SET DEFAULT nextval('public.up_dashboard_layout_id_seq'::regclass);
+ALTER SEQUENCE public.up_dashboard_layout_id_seq OWNED BY public.up_dashboard_layout.id;
 ALTER TABLE ONLY public.up_delegation_audit ALTER COLUMN id SET DEFAULT nextval('public.up_delegation_audit_id_seq'::regclass);
+ALTER SEQUENCE public.up_delegation_audit_id_seq OWNED BY public.up_delegation_audit.id;
 ALTER TABLE ONLY public.up_delegation_rule ALTER COLUMN id SET DEFAULT nextval('public.up_delegation_rule_id_seq'::regclass);
+ALTER SEQUENCE public.up_delegation_rule_id_seq OWNED BY public.up_delegation_rule.id;
 ALTER TABLE ONLY public.up_favorite_process ALTER COLUMN id SET DEFAULT nextval('public.up_favorite_process_id_seq'::regclass);
+ALTER SEQUENCE public.up_favorite_process_id_seq OWNED BY public.up_favorite_process.id;
 ALTER TABLE ONLY public.up_notification_preference ALTER COLUMN id SET DEFAULT nextval('public.up_notification_preference_id_seq'::regclass);
+ALTER SEQUENCE public.up_notification_preference_id_seq OWNED BY public.up_notification_preference.id;
 ALTER TABLE ONLY public.up_permission_request ALTER COLUMN id SET DEFAULT nextval('public.up_permission_request_id_seq'::regclass);
+ALTER SEQUENCE public.up_permission_request_id_seq OWNED BY public.up_permission_request.id;
 ALTER TABLE ONLY public.up_process_draft ALTER COLUMN id SET DEFAULT nextval('public.up_process_draft_id_seq'::regclass);
+ALTER SEQUENCE public.up_process_draft_id_seq OWNED BY public.up_process_draft.id;
 ALTER TABLE ONLY public.up_process_history ALTER COLUMN id SET DEFAULT nextval('public.up_process_history_id_seq'::regclass);
+ALTER SEQUENCE public.up_process_history_id_seq OWNED BY public.up_process_history.id;
 ALTER TABLE ONLY public.up_user_preference ALTER COLUMN id SET DEFAULT nextval('public.up_user_preference_id_seq'::regclass);
+ALTER SEQUENCE public.up_user_preference_id_seq OWNED BY public.up_user_preference.id;
 ALTER TABLE ONLY public.wf_extended_task_info ALTER COLUMN id SET DEFAULT nextval('public.wf_extended_task_info_id_seq'::regclass);
+ALTER SEQUENCE public.wf_extended_task_info_id_seq OWNED BY public.wf_extended_task_info.id;
 
 -- =====================================================
 -- 同步 sys_role_assignments 到 sys_user_roles

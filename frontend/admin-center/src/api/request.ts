@@ -36,7 +36,46 @@ request.interceptors.request.use(
 )
 
 request.interceptors.response.use(
-  (response: AxiosResponse) => response.data,
+  (response: AxiosResponse) => {
+    const data = response.data
+    
+    // 检查响应数据中是否包含错误代码（即使 HTTP 状态码是 200）
+    if (data && typeof data === 'object' && 'code' in data) {
+      const errorCode = data.code
+      
+      // 如果是错误代码（403, 404, 500 等），将其作为错误处理
+      if (errorCode === 403 || errorCode === '403' || errorCode === 'PERMISSION_DENIED') {
+        const message = data.message || '权限不足'
+        ElMessage.error(message)
+        return Promise.reject({
+          name: 'PermissionDenied',
+          httpError: false,
+          httpStatus: response.status,
+          httpStatusText: response.statusText,
+          code: errorCode,
+          message: message,
+          response: response
+        })
+      }
+      
+      // 其他错误代码也类似处理
+      if (errorCode === 404 || errorCode === '404' || errorCode === 'NOT_FOUND') {
+        const message = data.message || '资源不存在'
+        ElMessage.error(message)
+        return Promise.reject({
+          name: 'NotFound',
+          httpError: false,
+          httpStatus: response.status,
+          httpStatusText: response.statusText,
+          code: errorCode,
+          message: message,
+          response: response
+        })
+      }
+    }
+    
+    return response.data
+  },
   async (error) => {
     const originalRequest = error.config
     
@@ -81,6 +120,22 @@ request.interceptors.response.use(
       }
     }
 
+    // Handle network errors (Failed to fetch)
+    if (!error.response && error.message) {
+      const networkMessage = error.message.includes('Failed to fetch') 
+        ? '无法连接到服务器，请检查后端服务是否运行' 
+        : error.message
+      ElMessage.error(networkMessage)
+      return Promise.reject({
+        ...error,
+        name: 'NetworkError',
+        httpError: true,
+        httpStatus: 0,
+        httpStatusText: error.message,
+        message: networkMessage
+      })
+    }
+    
     const message = error.response?.data?.message || error.message || '请求失败'
     ElMessage.error(message)
     return Promise.reject(error)

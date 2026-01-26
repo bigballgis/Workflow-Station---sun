@@ -50,8 +50,17 @@ public class ProcessDesignComponentImpl implements ProcessDesignComponent {
     @Override
     @Transactional(readOnly = true)
     public ProcessDefinition getByFunctionUnitId(Long functionUnitId) {
+        // 验证 FunctionUnit 是否存在
+        FunctionUnit functionUnit = functionUnitRepository.findById(functionUnitId)
+                .orElseThrow(() -> new ResourceNotFoundException("FunctionUnit", functionUnitId));
+        
+        // 如果 ProcessDefinition 不存在，返回 null（前端会处理空值情况）
         ProcessDefinition processDefinition = processDefinitionRepository.findByFunctionUnitId(functionUnitId)
-                .orElseThrow(() -> new ResourceNotFoundException("ProcessDefinition", "functionUnitId=" + functionUnitId));
+                .orElse(null);
+        
+        if (processDefinition == null) {
+            return null;
+        }
         
         // 智能解码：兼容旧数据（未编码）和新数据（Base64编码）
         String decodedXml = XmlEncodingUtil.smartDecode(processDefinition.getBpmnXml());

@@ -6,7 +6,7 @@
     width="560px"
     destroy-on-close
   >
-    <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
+    <el-form ref="formRef" :model="form" :rules="rules" label-width="120px">
       <el-form-item :label="t('user.username')" prop="username">
         <el-input v-model="form.username" :disabled="isEdit" :placeholder="t('user.usernamePlaceholder')" />
       </el-form-item>
@@ -111,7 +111,7 @@ const rules = computed<FormRules>(() => ({
   ],
   initialPassword: [
     { required: true, message: t('user.initialPasswordPlaceholder'), trigger: 'blur' },
-    { min: 8, message: t('user.initialPasswordPlaceholder'), trigger: 'blur' }
+    { min: 8, message: '密码长度至少为8个字符', trigger: 'blur' }
   ]
 }))
 
@@ -248,3 +248,10 @@ const handleSubmit = async () => {
   }
 }
 </script>
+
+<style scoped>
+:deep(.el-form-item__label) {
+  white-space: nowrap;
+  word-break: keep-all;
+}
+</style>
