@@ -53,14 +53,31 @@ export const ROUTE_PERMISSIONS: Record<string, string[]> = {
  */
 export function hasPermission(permission: string): boolean {
   const user = getUser()
-  if (!user) return false
+  if (!user) {
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('[Permission Check] User not found in localStorage')
+    }
+    return false
+  }
   
   // System admin has all permissions
-  if (user.roles?.includes('SYS_ADMIN') || user.roles?.includes('SUPER_ADMIN')) {
+  if (user.roles?.includes('SYS_ADMIN') || user.roles?.includes('SUPER_ADMIN') || user.roles?.includes('ADMIN')) {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[Permission Check] User has admin role, granting all permissions')
+    }
     return true
   }
   
-  return user.permissions?.includes(permission) ?? false
+  const hasPerm = user.permissions?.includes(permission) ?? false
+  if (process.env.NODE_ENV === 'development' && !hasPerm) {
+    console.warn('[Permission Check] User does not have permission:', {
+      permission,
+      userRoles: user.roles,
+      userPermissions: user.permissions
+    })
+  }
+  
+  return hasPerm
 }
 
 /**
@@ -85,6 +102,19 @@ export function hasAllPermissions(permissions: string[]): boolean {
 export function canAccessRoute(path: string): boolean {
   const permissions = ROUTE_PERMISSIONS[path]
   if (!permissions || permissions.length === 0) return true
+  
+  const user = getUser()
+  // Debug: log user info for troubleshooting
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[Permission Check]', {
+      path,
+      requiredPermissions: permissions,
+      userRoles: user?.roles,
+      userPermissions: user?.permissions,
+      hasAccess: hasAnyPermission(permissions)
+    })
+  }
+  
   return hasAnyPermission(permissions)
 }
 

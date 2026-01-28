@@ -40,37 +40,71 @@ request.interceptors.response.use(
     const data = response.data
     
     // 检查响应数据中是否包含错误代码（即使 HTTP 状态码是 200）
-    if (data && typeof data === 'object' && 'code' in data) {
+    // 注意：只有当响应同时包含 code 和 message 字段，且 code 是错误代码时，才认为是错误响应
+    // 正常的响应（如 PageResult）可能也有 code 字段，但通常没有 message 字段
+    if (data && typeof data === 'object' && 'code' in data && 'message' in data) {
       const errorCode = data.code
       
-      // 如果是错误代码（403, 404, 500 等），将其作为错误处理
-      if (errorCode === 403 || errorCode === '403' || errorCode === 'PERMISSION_DENIED') {
-        const message = data.message || '权限不足'
-        ElMessage.error(message)
-        return Promise.reject({
-          name: 'PermissionDenied',
-          httpError: false,
-          httpStatus: response.status,
-          httpStatusText: response.statusText,
-          code: errorCode,
-          message: message,
-          response: response
-        })
-      }
+      // 只有当 code 明确表示错误时才处理（403, 404, 500 等错误代码）
+      // 忽略成功代码和正常响应（如 PageResult 可能包含 code 字段但不是错误）
+      const isErrorCode = (
+        errorCode === 403 || errorCode === '403' || errorCode === 'PERMISSION_DENIED' ||
+        errorCode === 404 || errorCode === '404' || errorCode === 'NOT_FOUND' ||
+        errorCode === 500 || errorCode === '500' || errorCode === 'INTERNAL_ERROR'
+      )
       
-      // 其他错误代码也类似处理
-      if (errorCode === 404 || errorCode === '404' || errorCode === 'NOT_FOUND') {
-        const message = data.message || '资源不存在'
-        ElMessage.error(message)
-        return Promise.reject({
-          name: 'NotFound',
-          httpError: false,
-          httpStatus: response.status,
-          httpStatusText: response.statusText,
-          code: errorCode,
-          message: message,
-          response: response
-        })
+      if (isErrorCode) {
+        // 如果是错误代码（403, 404, 500 等），将其作为错误处理
+        if (errorCode === 403 || errorCode === '403' || errorCode === 'PERMISSION_DENIED') {
+          const message = data.message || '权限不足'
+          console.warn('[Request Interceptor] Permission denied:', {
+            code: errorCode,
+            message: message,
+            path: response.config?.url,
+            status: response.status,
+            fullResponse: data
+          })
+          ElMessage.error(message)
+          // 延迟跳转到 403 页面，避免与当前导航冲突
+          setTimeout(() => {
+            if (typeof window !== 'undefined' && window.location.pathname !== '/403') {
+              window.location.href = '/403'
+            }
+          }, 1500)
+          // 创建一个可识别的错误对象
+          const permissionError = {
+            name: 'PermissionDenied',
+            httpError: false,
+            httpStatus: response.status,
+            httpStatusText: response.statusText,
+            code: errorCode,
+            message: message,
+            response: response,
+            isHandled: true, // 标记为已处理
+            // 添加 toString 方法，避免在控制台显示为 [object Object]
+            toString: () => `PermissionDenied: ${message}`
+          }
+          // 使用 setTimeout 确保错误被正确处理，避免未捕获的 Promise 错误
+          setTimeout(() => {
+            console.warn('[Request Interceptor] Permission denied error (handled):', permissionError)
+          }, 0)
+          return Promise.reject(permissionError)
+        }
+        
+        // 其他错误代码也类似处理
+        if (errorCode === 404 || errorCode === '404' || errorCode === 'NOT_FOUND') {
+          const message = data.message || '资源不存在'
+          ElMessage.error(message)
+          return Promise.reject({
+            name: 'NotFound',
+            httpError: false,
+            httpStatus: response.status,
+            httpStatusText: response.statusText,
+            code: errorCode,
+            message: message,
+            response: response
+          })
+        }
       }
     }
     
@@ -120,6 +154,27 @@ request.interceptors.response.use(
       }
     }
 
+    // Handle 403 Forbidden errors
+    if (error.response?.status === 403) {
+      const message = error.response?.data?.message || '权限不足'
+      ElMessage.error(message)
+      // 延迟跳转到 403 页面
+      setTimeout(() => {
+        if (typeof window !== 'undefined' && window.location.pathname !== '/403') {
+          window.location.href = '/403'
+        }
+      }, 1500)
+      return Promise.reject({
+        ...error,
+        name: 'PermissionDenied',
+        httpError: true,
+        httpStatus: 403,
+        httpStatusText: 'Forbidden',
+        code: 403,
+        message: message
+      })
+    }
+    
     // Handle network errors (Failed to fetch)
     if (!error.response && error.message) {
       const networkMessage = error.message.includes('Failed to fetch') 

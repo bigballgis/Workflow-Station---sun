@@ -210,7 +210,7 @@ docker run -d `
     -e SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/workflow_platform `
     -e SPRING_DATASOURCE_USERNAME=platform `
     -e SPRING_DATASOURCE_PASSWORD=$env:POSTGRES_PASSWORD `
-    -e SPRING_REDIS_HOST=redis `
+    -e =redis `
     -e SPRING_REDIS_PORT=6379 `
     -e SPRING_REDIS_PASSWORD=$env:REDIS_PASSWORD `
     -e SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:29092 `

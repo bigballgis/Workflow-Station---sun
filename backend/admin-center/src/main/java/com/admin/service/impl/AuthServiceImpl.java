@@ -288,7 +288,7 @@ public class AuthServiceImpl implements AuthService {
         
         for (String role : roles) {
             switch (role) {
-                case "SYS_ADMIN", "SUPER_ADMIN", "ADMIN" -> permissions.addAll(List.of(
+                case "SYS_ADMIN", "SUPER_ADMIN", "ADMIN", "SYS_ADAMIN_ROLE" -> permissions.addAll(List.of(
                         "user:read", "user:write", "user:delete",
                         "role:read", "role:write", "role:delete",
                         "system:admin"

@@ -27,11 +27,16 @@ public class UserPermissionService {
      * 验证用户是否有权限操作指定分配类型的任务
      * @param userId 用户ID
      * @param assignmentType 分配类型
-     * @param assignmentTarget 分配目标（用户ID/虚拟组ID）
+     * @param assignmentTarget 分配目标（用户ID/虚拟组ID/候选用户列表）
      * @return 是否有权限
      */
     public boolean hasTaskPermission(String userId, AssignmentType assignmentType, String assignmentTarget) {
-        if (userId == null || assignmentTarget == null) {
+        if (userId == null) {
+            return false;
+        }
+        
+        // 对于 CANDIDATE_USER 类型，assignmentTarget 可能为 null（如果没有候选用户）
+        if (assignmentTarget == null && assignmentType != AssignmentType.CANDIDATE_USER) {
             return false;
         }
         
@@ -39,6 +44,20 @@ public class UserPermissionService {
             case USER:
                 // 直接分配给用户的任务，只有该用户有权限
                 return userId.equals(assignmentTarget);
+                
+            case CANDIDATE_USER:
+                // 分配给候选用户的任务，检查用户是否在候选用户列表中
+                if (assignmentTarget == null || assignmentTarget.isEmpty()) {
+                    return false;
+                }
+                // assignmentTarget 是逗号分隔的用户ID列表
+                String[] candidateUsers = assignmentTarget.split(",");
+                for (String candidateUserId : candidateUsers) {
+                    if (userId.equals(candidateUserId.trim())) {
+                        return true;
+                    }
+                }
+                return false;
                 
             case VIRTUAL_GROUP:
                 // 分配给虚拟组的任务，虚拟组成员有权限
@@ -81,5 +100,14 @@ public class UserPermissionService {
      */
     public List<String> getUserRoles(String userId) {
         return adminCenterClient.getUserRoles(userId);
+    }
+    
+    /**
+     * 获取用户的角色ID列表（用于任务候选组查询）
+     * @param userId 用户ID
+     * @return 角色ID列表
+     */
+    public List<String> getUserRoleIds(String userId) {
+        return adminCenterClient.getUserRoleIds(userId);
     }
 }

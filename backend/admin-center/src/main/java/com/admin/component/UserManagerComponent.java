@@ -14,7 +14,9 @@ import com.admin.exception.*;
 import com.admin.repository.BusinessUnitRepository;
 import com.admin.repository.PasswordHistoryRepository;
 import com.admin.repository.UserRepository;
+import com.admin.repository.UserBusinessUnitRoleRepository;
 import com.admin.service.AuditService;
+import com.admin.service.UserPermissionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -48,6 +50,8 @@ public class UserManagerComponent {
     private final PasswordEncoder passwordEncoder;
     private final AuditService auditService;
     private final com.admin.repository.UserBusinessUnitRepository userBusinessUnitRepository;
+    private final UserPermissionService userPermissionService;
+    private final UserBusinessUnitRoleRepository userBusinessUnitRoleRepository;
     
     private static final Pattern EMAIL_PATTERN = Pattern.compile(
             "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$");
@@ -379,8 +383,11 @@ public class UserManagerComponent {
         
         UserDetailInfo detail = UserDetailInfo.fromEntity(user);
         
-        // 获取用户角色 - 需要在事务内访问懒加载属性
-        Set<UserDetailInfo.RoleInfo> roles = user.getUserRoles().stream()
+        // 获取用户角色 - 需要从多个来源获取
+        Set<UserDetailInfo.RoleInfo> roles = new java.util.HashSet<>();
+        
+        // 1. 从 sys_user_roles 获取直接分配的角色
+        user.getUserRoles().stream()
                 .filter(ur -> ur.getRole() != null)
                 .map(ur -> UserDetailInfo.RoleInfo.builder()
                         .roleId(ur.getRole().getId())
@@ -388,7 +395,29 @@ public class UserManagerComponent {
                         .roleName(ur.getRole().getName())
                         .description(ur.getRole().getDescription())
                         .build())
-                .collect(java.util.stream.Collectors.toSet());
+                .forEach(roles::add);
+        
+        // 2. 从 sys_user_business_unit_roles 获取业务单元角色
+        userBusinessUnitRoleRepository.findByUserIdWithDetails(userId).stream()
+                .filter(ubur -> ubur.getRole() != null)
+                .map(ubur -> UserDetailInfo.RoleInfo.builder()
+                        .roleId(ubur.getRole().getId())
+                        .roleCode(ubur.getRole().getCode())
+                        .roleName(ubur.getRole().getName())
+                        .description(ubur.getRole().getDescription())
+                        .build())
+                .forEach(roles::add);
+        
+        // 3. 从虚拟组获取角色（通过 UserPermissionService）
+        userPermissionService.getUserRoles(userId).stream()
+                .map(role -> UserDetailInfo.RoleInfo.builder()
+                        .roleId(role.getId())
+                        .roleCode(role.getCode())
+                        .roleName(role.getName())
+                        .description(role.getDescription())
+                        .build())
+                .forEach(roles::add);
+        
         detail.setRoles(roles);
         
         // 获取实体管理者名称
