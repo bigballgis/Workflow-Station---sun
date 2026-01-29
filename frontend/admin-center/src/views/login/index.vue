@@ -126,7 +126,10 @@ const handleLogin = async () => {
     ElMessage.success(t('common.success'))
     router.push('/dashboard')
   } catch (error: any) {
-    const message = error.response?.data?.message || error.message || t('common.failed')
+    let message = error.response?.data?.message || error.message || t('common.failed')
+    if (error.response?.status === 500 && !error.response?.data?.message) {
+      message = '服务器错误，请确认后端已启动（admin-center 8090）并重试'
+    }
     ElMessage.error(message)
   } finally {
     loading.value = false

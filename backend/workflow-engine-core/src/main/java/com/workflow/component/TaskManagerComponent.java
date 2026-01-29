@@ -25,6 +25,8 @@ import org.flowable.engine.history.HistoricActivityInstance;
 import org.flowable.engine.repository.ProcessDefinition;
 import org.flowable.engine.runtime.ProcessInstance;
 import org.flowable.task.api.Task;
+import org.flowable.task.api.history.HistoricTaskInstance;
+import org.flowable.identitylink.api.IdentityLink;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -42,6 +44,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 /**
  * 任务管理组件
@@ -181,6 +184,9 @@ public class TaskManagerComponent {
             currentAssigneeName = resolveUserDisplayName(currentAssignee);
         }
         
+        // 确定分配类型：检查任务的候选人和候选组
+        AssignmentType assignmentType = determineAssignmentType(task);
+        
         return TaskListResult.TaskInfo.builder()
             .taskId(task.getId())
             .taskName(task.getName())
@@ -189,7 +195,7 @@ public class TaskManagerComponent {
             .processDefinitionId(processDefinitionId)
             .processDefinitionKey(processDefinitionKey)
             .processDefinitionName(processDefinitionName)
-            .assignmentType(task.getAssignee() != null ? AssignmentType.USER : AssignmentType.VIRTUAL_GROUP)
+            .assignmentType(assignmentType)
             .assignmentTarget(task.getAssignee())
             .currentAssignee(currentAssignee)
             .currentAssigneeName(currentAssigneeName)
@@ -203,6 +209,46 @@ public class TaskManagerComponent {
             .initiatorId(initiatorId)
             .initiatorName(initiatorName)
             .build();
+    }
+    
+    /**
+     * 确定任务的分配类型
+     * - 如果有 assignee，则为 USER（直接分配）
+     * - 如果有 candidateUsers，则为 USER（候选用户，需要认领）
+     * - 如果有 candidateGroups，则为 VIRTUAL_GROUP（候选组）
+     * - 否则为 VIRTUAL_GROUP（默认）
+     */
+    private AssignmentType determineAssignmentType(Task task) {
+        // 1. 如果已经分配给具体用户，则为 USER 类型
+        if (task.getAssignee() != null && !task.getAssignee().isEmpty()) {
+            return AssignmentType.USER;
+        }
+        
+        // 2. 检查是否有候选用户
+        List<org.flowable.identitylink.api.IdentityLink> identityLinks = 
+            taskService.getIdentityLinksForTask(task.getId());
+        
+        boolean hasCandidateUsers = false;
+        boolean hasCandidateGroups = false;
+        
+        for (org.flowable.identitylink.api.IdentityLink link : identityLinks) {
+            if ("candidate".equals(link.getType())) {
+                if (link.getUserId() != null) {
+                    hasCandidateUsers = true;
+                }
+                if (link.getGroupId() != null) {
+                    hasCandidateGroups = true;
+                }
+            }
+        }
+        
+        // 3. 如果有候选用户，则为 USER 类型（需要认领）
+        if (hasCandidateUsers) {
+            return AssignmentType.USER;
+        }
+        
+        // 4. 如果有候选组或没有任何分配，则为 VIRTUAL_GROUP 类型
+        return AssignmentType.VIRTUAL_GROUP;
     }
     
     /**
@@ -727,6 +773,17 @@ public class TaskManagerComponent {
                 .singleResult();
             
             if (flowableTask == null) {
+                // 检查任务是否已完成（在历史表中）
+                HistoricTaskInstance historicTask = historyService.createHistoricTaskInstanceQuery()
+                    .taskId(taskId)
+                    .singleResult();
+                
+                if (historicTask != null && historicTask.getEndTime() != null) {
+                    throw new WorkflowValidationException(Collections.singletonList(
+                        new WorkflowValidationException.ValidationError(
+                            "taskId", "任务已完成，无法再次完成", taskId)));
+                }
+                
                 throw new WorkflowValidationException(Collections.singletonList(
                     new WorkflowValidationException.ValidationError(
                         "taskId", "任务不存在", taskId)));
@@ -740,14 +797,70 @@ public class TaskManagerComponent {
             if (extendedTaskInfoOpt.isPresent()) {
                 ExtendedTaskInfo extendedTaskInfo = extendedTaskInfoOpt.get();
                 
-                // 验证完成权限
-                validateCompletePermission(extendedTaskInfo, userId);
-                
                 // 检查任务是否已完成
                 if (extendedTaskInfo.isCompleted()) {
                     throw new WorkflowValidationException(Collections.singletonList(
                         new WorkflowValidationException.ValidationError(
                             "taskId", "任务已完成", taskId)));
+                }
+                
+                // 验证完成权限
+                // 如果扩展任务信息的权限检查失败，回退到检查 Flowable 的 identitylink
+                try {
+                    validateCompletePermission(extendedTaskInfo, userId);
+                } catch (WorkflowValidationException e) {
+                    // 如果扩展任务信息权限检查失败，检查 Flowable 的 identitylink
+                    // 这可以处理扩展任务信息与 Flowable 数据不一致的情况
+                    boolean hasFlowablePermission = false;
+                    
+                    // 检查是否是任务的 assignee
+                    if (flowableTask.getAssignee() != null && flowableTask.getAssignee().equals(userId)) {
+                        hasFlowablePermission = true;
+                    } else {
+                        // 检查是否是候选用户
+                        List<IdentityLink> identityLinks = taskService.getIdentityLinksForTask(taskId);
+                        for (IdentityLink link : identityLinks) {
+                            if ("candidate".equals(link.getType())) {
+                                if (userId.equals(link.getUserId())) {
+                                    hasFlowablePermission = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    
+                    if (!hasFlowablePermission) {
+                        // 如果 Flowable 也没有权限，抛出原始异常
+                        throw e;
+                    }
+                    // 如果 Flowable 有权限，允许继续（扩展任务信息可能过时）
+                    log.warn("Extended task info permission check failed for task {} and user {}, but Flowable identitylink allows completion. Extended task info may be out of sync.", 
+                        taskId, userId);
+                }
+            } else {
+                // 如果没有扩展任务信息，检查 Flowable 的权限
+                boolean hasFlowablePermission = false;
+                
+                // 检查是否是任务的 assignee
+                if (flowableTask.getAssignee() != null && flowableTask.getAssignee().equals(userId)) {
+                    hasFlowablePermission = true;
+                } else {
+                    // 检查是否是候选用户
+                    List<IdentityLink> identityLinks = taskService.getIdentityLinksForTask(taskId);
+                    for (IdentityLink link : identityLinks) {
+                        if ("candidate".equals(link.getType())) {
+                            if (userId.equals(link.getUserId())) {
+                                hasFlowablePermission = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                if (!hasFlowablePermission) {
+                    throw new WorkflowValidationException(Collections.singletonList(
+                        new WorkflowValidationException.ValidationError(
+                            "userId", "用户没有完成此任务的权限", userId)));
                 }
             }
             
@@ -982,8 +1095,21 @@ public class TaskManagerComponent {
         
         if (task.getAssignee() == null || task.getAssignee().isEmpty()) {
             // 没有直接分配，检查候选人/候选组
-            assignmentType = AssignmentType.VIRTUAL_GROUP;
-            assignmentTarget = null;
+            // 获取候选用户列表
+            List<IdentityLink> identityLinks = taskService.getIdentityLinksForTask(task.getId());
+            List<String> candidateUsers = identityLinks.stream()
+                .filter(link -> "candidate".equals(link.getType()) && link.getUserId() != null)
+                .map(IdentityLink::getUserId)
+                .collect(Collectors.toList());
+            
+            if (!candidateUsers.isEmpty()) {
+                assignmentType = AssignmentType.CANDIDATE_USER;
+                // 将候选用户列表转换为逗号分隔的字符串
+                assignmentTarget = String.join(",", candidateUsers);
+            } else {
+                assignmentType = AssignmentType.VIRTUAL_GROUP;
+                assignmentTarget = null;
+            }
         }
         
         // 获取流程发起人信息

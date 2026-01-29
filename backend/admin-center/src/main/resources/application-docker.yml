@@ -3,22 +3,23 @@
 
 spring:
   datasource:
-    url: jdbc:postgresql://postgres:5432/workflow_platform
-    username: platform
-    password: ${POSTGRES_PASSWORD:platform123}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://postgres:5432/workflow_platform}
+    username: ${SPRING_DATASOURCE_USERNAME:platform}
+    password: ${SPRING_DATASOURCE_PASSWORD:${POSTGRES_PASSWORD:-platform123}}
 
   data:
     redis:
-      host: redis
-      password: ${REDIS_PASSWORD:redis123}
+      host: ${SPRING_REDIS_HOST:redis}
+      port: ${SPRING_REDIS_PORT:6379}
+      password: ${SPRING_REDIS_PASSWORD:${REDIS_PASSWORD:-redis123}}
 
   kafka:
-    bootstrap-servers: kafka:29092
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:kafka:29092}
 
 # Workflow Engine Configuration for Docker network
 # In Docker, use service name and internal port
 workflow-engine:
-  url: http://platform-workflow-engine:8080
+  url: ${WORKFLOW_ENGINE_URL:http://workflow-engine:8080}
   enabled: true
 
 # Logging - reduce verbosity in Docker

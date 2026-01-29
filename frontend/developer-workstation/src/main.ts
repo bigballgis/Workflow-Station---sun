@@ -152,7 +152,7 @@ window.addEventListener('unhandledrejection', (event) => {
 }, true) // 使用 capture 模式
 
 // Vue 全局错误处理
-app.config.errorHandler = (err, instance, info) => {
+app.config.errorHandler = (err, _instance, info) => {
   console.error('[VueErrorHandler]', err, info)
 }
 

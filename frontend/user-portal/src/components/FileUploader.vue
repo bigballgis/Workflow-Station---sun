@@ -246,9 +246,17 @@ const handleError = (error: Error) => {
 
 // 移除文件
 const handleRemove = (file: UploadFile) => {
-  const fileInfo = props.modelValue.find(f => f.id === file.uid || f.name === file.name)
+  const fileInfo = props.modelValue.find(f => {
+    const fileId = typeof f.id === 'string' ? f.id : String(f.id)
+    const fileUid = typeof file.uid === 'string' ? file.uid : String(file.uid)
+    return fileId === fileUid || f.name === file.name
+  })
   if (fileInfo) {
-    const newValue = props.modelValue.filter(f => f.id !== fileInfo.id)
+    const newValue = props.modelValue.filter(f => {
+      const fileId = typeof f.id === 'string' ? f.id : String(f.id)
+      const infoId = typeof fileInfo.id === 'string' ? fileInfo.id : String(fileInfo.id)
+      return fileId !== infoId
+    })
     emit('update:modelValue', newValue)
     emit('remove', fileInfo)
   }

@@ -136,7 +136,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, markRaw, shallowRef } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -316,14 +316,14 @@ const handleDragEnd = () => {
 }
 
 // 拖拽经过
-const handleDragOver = (e: DragEvent, widget: DashboardWidget) => {
+const handleDragOver = (_e: DragEvent, widget: DashboardWidget) => {
   if (draggingId.value && draggingId.value !== widget.id) {
     dragOverId.value = widget.id
   }
 }
 
 // 放置
-const handleDrop = (e: DragEvent, targetWidget: DashboardWidget) => {
+const handleDrop = (_e: DragEvent, targetWidget: DashboardWidget) => {
   if (!draggingId.value || draggingId.value === targetWidget.id) return
 
   const sourceIndex = layoutWidgets.value.findIndex(w => w.id === draggingId.value)
@@ -443,7 +443,7 @@ const removeWidget = async (widget: DashboardWidget) => {
 }
 
 // 切换全屏
-const toggleFullscreen = (widget: DashboardWidget) => {
+const toggleFullscreen = (_widget: DashboardWidget) => {
   // 实现全屏逻辑
 }
 
@@ -482,7 +482,7 @@ const getDefaultLayout = (): DashboardWidget[] => {
 }
 
 // 组件刷新
-const handleWidgetRefresh = (widget: DashboardWidget) => {
+const handleWidgetRefresh = (_widget: DashboardWidget) => {
   // 处理组件刷新
 }
 

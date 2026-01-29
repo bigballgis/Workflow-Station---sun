@@ -1,5 +1,8 @@
 package com.workflow.listener;
 
+import com.workflow.entity.ExtendedTaskInfo;
+import com.workflow.enums.AssignmentType;
+import com.workflow.repository.ExtendedTaskInfoRepository;
 import com.workflow.service.TaskAssigneeResolver;
 import lombok.extern.slf4j.Slf4j;
 import org.flowable.bpmn.model.BpmnModel;
@@ -9,15 +12,17 @@ import org.flowable.bpmn.model.UserTask;
 import org.flowable.common.engine.api.delegate.event.FlowableEngineEventType;
 import org.flowable.common.engine.api.delegate.event.FlowableEvent;
 import org.flowable.common.engine.api.delegate.event.FlowableEventListener;
+import org.flowable.common.engine.impl.event.FlowableEntityEventImpl;
 import org.flowable.engine.RepositoryService;
 import org.flowable.engine.RuntimeService;
 import org.flowable.engine.TaskService;
-import org.flowable.engine.delegate.event.impl.FlowableEntityEventImpl;
 import org.flowable.task.service.impl.persistence.entity.TaskEntity;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 
@@ -65,16 +70,25 @@ public class TaskAssignmentListener implements FlowableEventListener {
     @Autowired
     @Lazy
     private RepositoryService repositoryService;
+    
+    @Autowired
+    @Lazy
+    private ExtendedTaskInfoRepository extendedTaskInfoRepository;
 
     @Override
     public void onEvent(FlowableEvent event) {
+        log.info("=== TaskAssignmentListener.onEvent called === Event type: {}", event.getType());
         if (event.getType() == FlowableEngineEventType.TASK_CREATED) {
+            log.info("=== TASK_CREATED event detected, calling handleTaskCreated ===");
             handleTaskCreated(event);
         }
     }
 
     private void handleTaskCreated(FlowableEvent event) {
+        log.info("=== handleTaskCreated called ===");
+        
         if (!(event instanceof FlowableEntityEventImpl)) {
+            log.warn("Event is not FlowableEntityEventImpl, skipping. Event class: {}", event.getClass().getName());
             return;
         }
 
@@ -82,6 +96,7 @@ public class TaskAssignmentListener implements FlowableEventListener {
         Object entity = entityEvent.getEntity();
         
         if (!(entity instanceof TaskEntity)) {
+            log.warn("Entity is not TaskEntity, skipping. Entity class: {}", entity != null ? entity.getClass().getName() : "null");
             return;
         }
 
@@ -91,7 +106,7 @@ public class TaskAssignmentListener implements FlowableEventListener {
         String taskDefinitionKey = task.getTaskDefinitionKey();
         String processDefinitionId = task.getProcessDefinitionId();
 
-        log.info("Task created: taskId={}, taskName={}, taskDefKey={}, processInstanceId={}", 
+        log.info("=== Task created: taskId={}, taskName={}, taskDefKey={}, processInstanceId={} ===", 
                 taskId, task.getName(), taskDefinitionKey, processInstanceId);
 
         // 如果任务已经有 assignee，不需要再分配
@@ -180,22 +195,113 @@ public class TaskAssignmentListener implements FlowableEventListener {
                 taskService.setAssignee(taskId, result.getAssignee());
                 log.info("Task {} assigned to user: {}", taskId, result.getAssignee());
             } else if (result.isRequiresClaim()) {
-                // 认领类型：设置候选人
+                // 认领类型：根据分配类型决定使用 candidateGroup 还是 candidateUsers
+                // 对于 Fixed BU Role 和基于业务单元的角色分配，必须使用 candidateUsers
+                // 因为 Flowable 不知道业务单元的角色绑定关系
                 if (result.getCandidateUsers() != null && !result.getCandidateUsers().isEmpty()) {
+                    // 优先使用候选用户列表（适用于 Fixed BU Role 等需要具体用户列表的情况）
                     for (String candidateUser : result.getCandidateUsers()) {
                         taskService.addCandidateUser(taskId, candidateUser);
                     }
-                    log.info("Task {} set candidate users: {}", taskId, result.getCandidateUsers());
+                    log.info("Task {} set candidate users ({}): {}", taskId, result.getCandidateUsers().size(), result.getCandidateUsers());
+                } else if (roleId != null && !roleId.isEmpty() && 
+                          (assigneeType == null || 
+                           !assigneeType.equals("FIXED_BU_ROLE") && 
+                           !assigneeType.equals("INITIATOR_BU_ROLE") && 
+                           !assigneeType.equals("INITIATOR_PARENT_BU_ROLE") && 
+                           !assigneeType.equals("CURRENT_BU_ROLE") && 
+                           !assigneeType.equals("CURRENT_PARENT_BU_ROLE"))) {
+                    // 对于 BU_UNBOUNDED_ROLE 等不依赖业务单元的角色，可以使用 candidateGroup
+                    // 使用角色作为候选组，所有拥有该角色的用户都能看到任务
+                    taskService.addCandidateGroup(taskId, roleId);
+                    log.info("Task {} set candidate group (role): {}", taskId, roleId);
+                } else {
+                    log.warn("Task {} requires claim but no candidate users or groups set. assigneeType={}, roleId={}, businessUnitId={}", 
+                            taskId, assigneeType, roleId, businessUnitId);
                 }
             }
+            
+            // 创建扩展任务信息记录
+            createExtendedTaskInfo(task, assigneeType, result, roleId, businessUnitId);
 
         } catch (Exception e) {
             log.error("Error handling task assignment for task {}: {}", taskId, e.getMessage(), e);
         }
     }
+    
+    /**
+     * 创建扩展任务信息记录
+     */
+    private void createExtendedTaskInfo(TaskEntity task, String assigneeType, 
+                                       TaskAssigneeResolver.ResolveResult result,
+                                       String roleId, String businessUnitId) {
+        try {
+            String taskId = task.getId();
+            
+            // 确定分配目标
+            String assignmentTarget = null;
+            if (!result.isRequiresClaim() && result.getAssignee() != null) {
+                // 直接分配：使用 assignee
+                assignmentTarget = result.getAssignee();
+            } else if (result.isRequiresClaim()) {
+                // 认领类型：使用 roleId 或第一个候选用户
+                if (roleId != null && !roleId.isEmpty()) {
+                    assignmentTarget = roleId;
+                } else if (result.getCandidateUsers() != null && !result.getCandidateUsers().isEmpty()) {
+                    assignmentTarget = String.join(",", result.getCandidateUsers());
+                }
+            }
+            
+            // 转换 assigneeType 为 AssignmentType 枚举
+            AssignmentType assignmentTypeEnum = convertToAssignmentType(assigneeType);
+            
+            // 创建扩展任务信息
+            ExtendedTaskInfo extendedTaskInfo = ExtendedTaskInfo.builder()
+                .taskId(taskId)
+                .taskName(task.getName())
+                .taskDescription(task.getDescription())
+                .processInstanceId(task.getProcessInstanceId())
+                .processDefinitionId(task.getProcessDefinitionId())
+                .taskDefinitionKey(task.getTaskDefinitionKey())
+                .assignmentType(assignmentTypeEnum)
+                .assignmentTarget(assignmentTarget)
+                .priority(task.getPriority())
+                .dueDate(task.getDueDate() != null ? 
+                    LocalDateTime.ofInstant(task.getDueDate().toInstant(), ZoneId.systemDefault()) : null)
+                .status("ACTIVE")
+                .createdTime(LocalDateTime.now())
+                .build();
+            
+            extendedTaskInfoRepository.save(extendedTaskInfo);
+            log.info("Created extended task info for task {}: assignmentType={}, assignmentTarget={}", 
+                    taskId, assignmentTypeEnum, assignmentTarget);
+                    
+        } catch (Exception e) {
+            log.error("Failed to create extended task info for task {}: {}", task.getId(), e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * 转换字符串类型为 AssignmentType 枚举
+     */
+    private AssignmentType convertToAssignmentType(String assigneeType) {
+        if (assigneeType == null || assigneeType.isEmpty()) {
+            return AssignmentType.USER;
+        }
+        
+        try {
+            return AssignmentType.valueOf(assigneeType);
+        } catch (IllegalArgumentException e) {
+            log.warn("Unknown assigneeType: {}, defaulting to USER", assigneeType);
+            return AssignmentType.USER;
+        }
+    }
 
     /**
-     * 从 UserTask 的扩展元素中获取 custom:property 的值
+     * 从 UserTask 的扩展元素中获取 custom:property 或 custom:values 的值
+     * 支持两种格式：
+     * 1. <custom:property name="xxx" value="yyy"/>
+     * 2. <custom:values name="xxx" value="yyy"/>
      */
     private String getExtensionProperty(UserTask userTask, String propertyName) {
         if (userTask.getExtensionElements() == null) {
@@ -209,16 +315,25 @@ public class TaskAssignmentListener implements FlowableEventListener {
         }
 
         for (ExtensionElement propertiesElement : propertiesElements) {
-            // 查找 custom:property 子元素
+            // 尝试查找 custom:property 子元素
             List<ExtensionElement> propertyElements = propertiesElement.getChildElements().get("property");
-            if (propertyElements == null) {
-                continue;
+            if (propertyElements != null) {
+                for (ExtensionElement propertyElement : propertyElements) {
+                    String name = propertyElement.getAttributeValue(null, "name");
+                    if (propertyName.equals(name)) {
+                        return propertyElement.getAttributeValue(null, "value");
+                    }
+                }
             }
-
-            for (ExtensionElement propertyElement : propertyElements) {
-                String name = propertyElement.getAttributeValue(null, "name");
-                if (propertyName.equals(name)) {
-                    return propertyElement.getAttributeValue(null, "value");
+            
+            // 尝试查找 custom:values 子元素（兼容旧格式）
+            List<ExtensionElement> valuesElements = propertiesElement.getChildElements().get("values");
+            if (valuesElements != null) {
+                for (ExtensionElement valuesElement : valuesElements) {
+                    String name = valuesElement.getAttributeValue(null, "name");
+                    if (propertyName.equals(name)) {
+                        return valuesElement.getAttributeValue(null, "value");
+                    }
                 }
             }
         }

@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { dashboardApi, type DashboardOverview, type DashboardWidget } from '@/api/dashboard'
+import { getDashboardOverview } from '@/api/dashboard'
 
 export const useDashboardStore = defineStore('dashboard', () => {
   const overview = ref<DashboardOverview | null>(null)
@@ -10,7 +11,7 @@ export const useDashboardStore = defineStore('dashboard', () => {
   const fetchOverview = async () => {
     loading.value = true
     try {
-      const res = await dashboardApi.getOverview()
+      const res = await getDashboardOverview()
       overview.value = res.data
     } finally {
       loading.value = false

@@ -133,11 +133,13 @@ const loadPermissionView = async () => {
   loading.value = true
   try {
     const res = await permissionApi.getMyPermissionView()
-    const data = res.data?.data || res.data || res
-    buUnboundedRoles.value = data.buUnboundedRoles || []
-    buBoundedRoles.value = data.buBoundedRoles || []
-    virtualGroups.value = data.virtualGroups || []
-    businessUnits.value = data.businessUnits || []
+    const data = (res as any).data || res
+    if (data) {
+      buUnboundedRoles.value = data.buUnboundedRoles || []
+      buBoundedRoles.value = data.buBoundedRoles || []
+      virtualGroups.value = data.virtualGroups || []
+      businessUnits.value = data.businessUnits || []
+    }
   } catch (e) {
     console.error('Failed to load permission view:', e)
     // Fallback to old API
@@ -146,16 +148,30 @@ const loadPermissionView = async () => {
         permissionApi.getMyRoles(),
         permissionApi.getMyVirtualGroups()
       ])
-      const roles = rolesRes.data?.data || rolesRes.data || []
-      virtualGroups.value = groupsRes.data?.data || groupsRes.data || []
+      const roles = (rolesRes as any).data || []
+      virtualGroups.value = (groupsRes as any).data || []
       // Separate roles by type
-      buUnboundedRoles.value = roles.filter((r: any) => r.roleType === 'BU_UNBOUNDED').map((r: any) => ({
-        id: r.roleId, name: r.roleName || r.name
-      }))
-      buBoundedRoles.value = roles.filter((r: any) => r.roleType === 'BU_BOUNDED').map((r: any) => ({
-        role: { id: r.roleId, name: r.roleName || r.name },
-        activatedBusinessUnits: r.organizationUnitId ? [{ id: r.organizationUnitId, name: r.organizationUnitName }] : []
-      }))
+      buUnboundedRoles.value = Array.isArray(roles) ? roles.filter((r: any) => r.roleType === 'BU_UNBOUNDED').map((r: any) => ({
+        id: r.roleId || r.id,
+        name: r.roleName || r.name,
+        code: r.roleCode || r.code || r.roleId || r.id,
+        description: r.description,
+        type: r.roleType || r.type
+      })) : []
+      buBoundedRoles.value = []
+      businessUnits.value = []
+      if (Array.isArray(roles)) {
+        buBoundedRoles.value = roles.filter((r: any) => r.roleType === 'BU_BOUNDED').map((r: any) => ({
+          role: {
+            id: r.roleId || r.id,
+            name: r.roleName || r.name,
+            code: r.roleCode || r.code || r.roleId || r.id,
+            description: r.description,
+            type: r.roleType || r.type
+          },
+          activatedBusinessUnits: r.organizationUnitId ? [{ id: r.organizationUnitId, name: r.organizationUnitName || r.organizationUnitId }] : []
+        }))
+      }
     } catch (e2) {
       console.error('Fallback also failed:', e2)
     }

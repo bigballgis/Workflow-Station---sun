@@ -76,8 +76,8 @@ const emit = defineEmits<{
 const displayTags = computed(() => props.tags.slice(0, MAX_DISPLAY_TAGS))
 const extraTagCount = computed(() => Math.max(0, props.tags.length - MAX_DISPLAY_TAGS))
 
-const statusType = computed(() => {
-  const map: Record<string, string> = { 
+const statusType = computed((): 'primary' | 'success' | 'warning' | 'info' | 'danger' => {
+  const map: Record<string, 'primary' | 'success' | 'warning' | 'info' | 'danger'> = { 
     DRAFT: 'info', 
     PUBLISHED: 'success', 
     ARCHIVED: 'warning' 

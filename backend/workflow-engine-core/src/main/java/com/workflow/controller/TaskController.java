@@ -406,11 +406,13 @@ public class TaskController {
         
         List<String> virtualGroupIds = userPermissionService.getUserVirtualGroupIds(userId);
         List<String> roles = userPermissionService.getUserRoles(userId);
+        List<String> roleIds = userPermissionService.getUserRoleIds(userId);
         
         Map<String, Object> result = new HashMap<>();
         result.put("userId", userId);
         result.put("virtualGroupIds", virtualGroupIds);
         result.put("roles", roles);
+        result.put("roleIds", roleIds);  // 添加角色ID列表，用于候选组查询
         
         return ResponseEntity.ok(ApiResponse.success(result));
     }

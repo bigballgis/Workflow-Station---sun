@@ -102,6 +102,11 @@ public class AdminCenterClient {
      * @param userId 用户ID
      * @return 角色编码列表
      */
+    /**
+     * 获取用户的角色编码列表
+     * @param userId 用户ID
+     * @return 角色编码列表（如 "SYS_ADMIN", "DEVELOPER"）
+     */
     @SuppressWarnings("unchecked")
     public List<String> getUserRoles(String userId) {
         try {
@@ -129,6 +134,42 @@ public class AdminCenterClient {
             
         } catch (Exception e) {
             log.error("Failed to get roles for user {}: {}", userId, e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+    
+    /**
+     * 获取用户的角色ID列表（用于任务候选组查询）
+     * @param userId 用户ID
+     * @return 角色ID列表（UUID格式）
+     */
+    @SuppressWarnings("unchecked")
+    public List<String> getUserRoleIds(String userId) {
+        try {
+            String url = adminCenterUrl + "/api/v1/admin/users/" + userId + "/roles";
+            ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<List<Map<String, Object>>>() {}
+            );
+            
+            List<Map<String, Object>> roles = response.getBody();
+            if (roles == null || roles.isEmpty()) {
+                return Collections.emptyList();
+            }
+            
+            List<String> roleIds = new ArrayList<>();
+            for (Map<String, Object> role : roles) {
+                Object id = role.get("id");
+                if (id != null) {
+                    roleIds.add(id.toString());
+                }
+            }
+            return roleIds;
+            
+        } catch (Exception e) {
+            log.error("Failed to get role IDs for user {}: {}", userId, e.getMessage());
             return Collections.emptyList();
         }
     }

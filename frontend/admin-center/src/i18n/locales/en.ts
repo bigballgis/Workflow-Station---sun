@@ -298,7 +298,9 @@ export default {
     roleTypeHint: 'Role Type Description:',
     buBoundedHint: 'Requires business unit association. Users need to join a business unit after joining the virtual group to activate permissions.',
     buUnboundedHint: 'Takes effect immediately. Users get the role permissions right after joining the virtual group.',
-    systemGroupRoleWarning: 'Role bindings for system virtual groups cannot be modified'
+    systemGroupRoleWarning: 'Role bindings for system virtual groups cannot be modified',
+    systemGroupRoleHint: 'System virtual groups must bind a business role',
+    roleRequiredForSystem: 'System virtual groups must bind a role'
   },
   functionUnit: {
     title: 'Function Unit Management',

@@ -125,17 +125,24 @@ public class FunctionUnitManagerComponent {
         // 1. 验证文件格式
         if (!validateFileFormat(request, result)) {
             result.setFileFormatValid(false);
+            result.setValid(false);
         }
         
         // 2. 验证完整性
         if (!validateIntegrity(request, result)) {
             result.setIntegrityValid(false);
+            result.setValid(false);
         }
         
         // 3. 验证数字签名（如果有）
         if (request.getFileContent() != null && !validateDigitalSignature(request, result)) {
             result.setSignatureValid(false);
             result.addWarning("数字签名验证失败，但不影响导入");
+        }
+        
+        // 如果验证失败，记录错误日志
+        if (!result.isValid()) {
+            log.warn("Package validation failed: {}", result.getErrors());
         }
         
         return result;
@@ -150,14 +157,17 @@ public class FunctionUnitManagerComponent {
             return false;
         }
         
-        // 检查文件扩展名
+        // 检查文件扩展名（如果提供了文件名）
         String fileName = request.getFileName().toLowerCase();
         if (!fileName.endsWith(".zip") && !fileName.endsWith(".fpkg")) {
             result.addError("FILE_FORMAT", "fileName", "不支持的文件格式，仅支持 .zip 或 .fpkg");
             return false;
         }
         
-        // 检查文件内容
+        // 检查文件内容或文件路径（至少有一个）
+        // 注意：如果是从 ZIP 解析后的内容，fileContent 可能是 BPMN XML 字符串，不是 Base64 编码的 ZIP
+        // 如果是从 FunctionUnitImportController 解析的 ZIP，fileContent 可能是空字符串（如果没有流程定义）
+        // 这种情况下，只要 fileContent 不为 null 即可（空字符串也是有效的）
         if (request.getFileContent() == null && request.getFilePath() == null) {
             result.addError("FILE_FORMAT", "fileContent", "文件内容或文件路径不能为空");
             return false;
@@ -170,11 +180,15 @@ public class FunctionUnitManagerComponent {
      * 验证完整性
      */
     private boolean validateIntegrity(FunctionUnitImportRequest request, ValidationResult result) {
-        // 简化实现：检查文件内容是否为空
-        if (request.getFileContent() != null && request.getFileContent().isEmpty()) {
-            result.addError("INTEGRITY", "fileContent", "文件内容为空");
+        // 简化实现：检查文件内容或文件路径
+        // 注意：如果是从 ZIP 解析后的内容，fileContent 可能是 BPMN XML 字符串
+        // 如果是从 FunctionUnitImportController 解析的 ZIP，fileContent 可能是空字符串（如果没有流程定义）
+        // 这种情况下，空字符串也是有效的（因为其他内容如表单、表定义会单独处理）
+        if (request.getFileContent() == null && request.getFilePath() == null) {
+            result.addError("INTEGRITY", "fileContent", "文件内容或文件路径不能为空");
             return false;
         }
+        // 如果 fileContent 不为 null，即使是空字符串也认为是有效的（可能没有流程定义）
         return true;
     }
     

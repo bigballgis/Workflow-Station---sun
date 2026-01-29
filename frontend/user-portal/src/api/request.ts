@@ -63,8 +63,16 @@ service.interceptors.response.use(
     const res = response.data
     
     if (res.success === false) {
-      ElMessage.error(res.message || '请求失败')
-      return Promise.reject(new Error(res.message || '请求失败'))
+      // Only show error message if it's not a 403 permission error on login page
+      const isLoginPage = window.location.pathname === '/login'
+      if (!isLoginPage || res.code !== 403) {
+        ElMessage.error(res.message || '请求失败')
+      }
+      const error = new Error(res.message || '请求失败') as any
+      error.code = res.code
+      error.httpStatus = response.status
+      error.httpStatusText = response.statusText
+      return Promise.reject(error)
     }
     
     return res

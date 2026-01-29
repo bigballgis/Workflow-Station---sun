@@ -12,6 +12,22 @@ const authRequest = axios.create({
   headers: { 'Content-Type': 'application/json' }
 })
 
+// Add response interceptor to handle errors
+authRequest.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    // Handle 400 Bad Request errors
+    if (error.response?.status === 400) {
+      const errorData = error.response.data
+      // If it's an ErrorResponse format, extract the message
+      if (errorData?.message) {
+        error.message = errorData.message
+      }
+    }
+    return Promise.reject(error)
+  }
+)
+
 export interface LoginRequest {
   username: string
   password: string

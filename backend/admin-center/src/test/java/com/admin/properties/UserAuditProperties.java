@@ -9,8 +9,10 @@ import com.admin.enums.UserStatus;
 import com.admin.repository.BusinessUnitRepository;
 import com.admin.repository.PasswordHistoryRepository;
 import com.admin.repository.UserBusinessUnitRepository;
+import com.admin.repository.UserBusinessUnitRoleRepository;
 import com.admin.repository.UserRepository;
 import com.admin.service.AuditService;
+import com.admin.service.UserPermissionService;
 import net.jqwik.api.*;
 import net.jqwik.api.lifecycle.BeforeTry;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -50,6 +52,8 @@ public class UserAuditProperties {
         userBusinessUnitRepository = mock(UserBusinessUnitRepository.class);
         passwordEncoder = mock(PasswordEncoder.class);
         auditService = mock(AuditService.class);
+        UserPermissionService userPermissionService = mock(UserPermissionService.class);
+        UserBusinessUnitRoleRepository userBusinessUnitRoleRepository = mock(UserBusinessUnitRoleRepository.class);
         
         userManagerComponent = new UserManagerComponent(
                 userRepository,
@@ -57,7 +61,9 @@ public class UserAuditProperties {
                 passwordHistoryRepository,
                 passwordEncoder,
                 auditService,
-                userBusinessUnitRepository);
+                userBusinessUnitRepository,
+                userPermissionService,
+                userBusinessUnitRoleRepository);
         
         // Default mock behaviors
         when(passwordEncoder.encode(anyString())).thenAnswer(inv -> "encoded_" + inv.getArgument(0));

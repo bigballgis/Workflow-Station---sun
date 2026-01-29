@@ -64,15 +64,20 @@ public class DeveloperPermissionService {
             DeveloperPermission.ACTION_VIEW
         ));
         
-        // 开发工程师：查看、开发权限（不能创建、删除功能单元）
+        // 开发工程师：查看、开发、创建、更新、删除、发布功能单元（含 Publish/Deploy）
         DEFAULT_ROLE_PERMISSIONS.put("DEVELOPER", EnumSet.of(
+            DeveloperPermission.FUNCTION_UNIT_CREATE,
             DeveloperPermission.FUNCTION_UNIT_VIEW,
+            DeveloperPermission.FUNCTION_UNIT_UPDATE,
+            DeveloperPermission.FUNCTION_UNIT_DELETE,
             DeveloperPermission.FUNCTION_UNIT_DEVELOP,
+            DeveloperPermission.FUNCTION_UNIT_PUBLISH,
             DeveloperPermission.FORM_VIEW,
             DeveloperPermission.FORM_UPDATE,
             DeveloperPermission.PROCESS_VIEW,
             DeveloperPermission.PROCESS_UPDATE,
             DeveloperPermission.TABLE_VIEW,
+            DeveloperPermission.TABLE_UPDATE,
             DeveloperPermission.ACTION_VIEW,
             DeveloperPermission.ACTION_UPDATE
         ));

@@ -202,6 +202,14 @@ const handleSearch = async () => {
     users.value = result.content
     total.value = result.totalElements
   } catch (error: any) {
+    // 如果是权限错误，request.ts 的拦截器已经处理了跳转，这里只记录错误
+    if (error?.code === 403 || error?.code === '403' || error?.code === 'PERMISSION_DENIED' || error?.isHandled) {
+      // 权限错误已在拦截器中处理，不需要额外操作
+      console.log('[UserList] Permission denied, redirecting to 403 page')
+      return
+    }
+    // 其他错误正常显示
+    console.error('[UserList] Error fetching users:', error)
     ElMessage.error(error.message || '查询失败')
   } finally {
     loading.value = false

@@ -7,34 +7,38 @@ export const useDelegationStore = defineStore('delegation', () => {
   const loading = ref(false)
   const total = ref(0)
 
-  const fetchRules = async (params?: { page?: number; size?: number }) => {
+  const fetchRules = async () => {
     loading.value = true
     try {
-      const res = await delegationApi.getMyRules(params)
-      rules.value = res.data.content
-      total.value = res.data.totalElements
+      const res = await delegationApi.getDelegationRules()
+      rules.value = res.data
+      total.value = res.data.length
     } finally {
       loading.value = false
     }
   }
 
   const createRule = async (data: DelegationRuleRequest) => {
-    await delegationApi.createRule(data)
+    await delegationApi.createDelegationRule(data)
     await fetchRules()
   }
 
-  const updateRule = async (id: string, data: DelegationRuleRequest) => {
-    await delegationApi.updateRule(id, data)
+  const updateRule = async (id: number, data: DelegationRuleRequest) => {
+    await delegationApi.updateDelegationRule(id, data)
     await fetchRules()
   }
 
-  const deleteRule = async (id: string) => {
-    await delegationApi.deleteRule(id)
+  const deleteRule = async (id: number) => {
+    await delegationApi.deleteDelegationRule(id)
     await fetchRules()
   }
 
-  const toggleRuleStatus = async (id: string, enabled: boolean) => {
-    await delegationApi.toggleRuleStatus(id, enabled)
+  const toggleRuleStatus = async (id: number, enabled: boolean) => {
+    if (enabled) {
+      await delegationApi.resumeDelegationRule(id)
+    } else {
+      await delegationApi.suspendDelegationRule(id)
+    }
     await fetchRules()
   }
 

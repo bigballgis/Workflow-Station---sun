@@ -36,4 +36,9 @@ public class VirtualGroupCreateRequest {
      */
     @Size(max = 100, message = "AD Group名称长度不能超过100个字符")
     private String adGroup;
+    
+    /**
+     * 绑定的角色ID（可选，创建时可以绑定角色）
+     */
+    private String roleId;
 }

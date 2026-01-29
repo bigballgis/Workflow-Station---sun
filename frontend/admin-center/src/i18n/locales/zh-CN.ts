@@ -298,7 +298,9 @@ export default {
     roleTypeHint: '角色类型说明：',
     buBoundedHint: '需要配合业务单元使用，用户加入虚拟组后还需申请加入业务单元才能激活权限',
     buUnboundedHint: '独立生效，用户加入虚拟组后立即拥有该角色权限',
-    systemGroupRoleWarning: '系统内置虚拟组的角色绑定不可修改'
+    systemGroupRoleWarning: '系统内置虚拟组的角色绑定不可修改',
+    systemGroupRoleHint: '系统内置虚拟组必须绑定一个业务角色',
+    roleRequiredForSystem: '系统内置虚拟组必须绑定角色'
   },
   functionUnit: {
     title: '功能单元管理',

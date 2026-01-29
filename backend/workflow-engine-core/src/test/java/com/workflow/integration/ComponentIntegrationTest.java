@@ -57,7 +57,7 @@ class ComponentIntegrationTest {
         
         // 初始化组件
         notificationManagerComponent = new NotificationManagerComponent(eventPublisher, stringRedisTemplate, objectMapper);
-        securityManagerComponent = new SecurityManagerComponent(stringRedisTemplate, objectMapper, auditManagerComponent);
+        securityManagerComponent = new SecurityManagerComponent(stringRedisTemplate, objectMapper, auditManagerComponent, mock(org.springframework.core.env.Environment.class));
         securityManagerComponent.initializeDefaultRolePermissions();
     }
 

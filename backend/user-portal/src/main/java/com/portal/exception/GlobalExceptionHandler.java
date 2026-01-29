@@ -44,6 +44,13 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleException(Exception e) {
+        // #region agent log
+        try {
+            java.io.FileWriter fw = new java.io.FileWriter("/Users/qiweige/Desktop/PROJECTXXXSUN/Workflow-Station---sun/.cursor/debug.log", true);
+            fw.write(java.util.Map.of("sessionId", "debug-session", "runId", "run1", "hypothesisId", "E", "location", "GlobalExceptionHandler.java:46", "message", "Global exception handler caught exception", "data", java.util.Map.of("exceptionType", e.getClass().getName(), "exceptionMessage", e.getMessage(), "stackTrace", java.util.Arrays.toString(e.getStackTrace()).substring(0, Math.min(500, java.util.Arrays.toString(e.getStackTrace()).length()))), "timestamp", System.currentTimeMillis()).toString() + "\n");
+            fw.close();
+        } catch (Exception ex) {}
+        // #endregion
         log.error("系统异常", e);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ApiResponse.error("500", "系统内部错误"));

@@ -139,10 +139,10 @@ const passwordRules = computed<FormRules>(() => ({
   ]
 }))
 
-const formatDate = (dateStr?: string) => {
-  if (!dateStr) return '-'
-  return new Date(dateStr).toLocaleString('zh-CN')
-}
+// const formatDate = (dateStr?: string) => {
+//   if (!dateStr) return '-'
+//   return new Date(dateStr).toLocaleString('zh-CN')
+// }
 
 const loadUserInfo = async () => {
   loading.value = true

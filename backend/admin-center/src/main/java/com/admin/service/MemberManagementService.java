@@ -1,5 +1,6 @@
 package com.admin.service;
 
+import com.admin.constant.DeveloperRoleSyncConstants;
 import com.admin.entity.*;
 import com.admin.enums.ApproverTargetType;
 import com.admin.enums.MemberChangeType;
@@ -16,6 +17,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -32,6 +38,8 @@ public class MemberManagementService {
     private final VirtualGroupMemberRepository virtualGroupMemberRepository;
     private final VirtualGroupRepository virtualGroupRepository;
     private final UserRepository userRepository;
+    private final UserRoleRepository userRoleRepository;
+    private final RoleRepository roleRepository;
     private final UserBusinessUnitRoleRepository userBusinessUnitRoleRepository;
     private final UserBusinessUnitRepository userBusinessUnitRepository;
     private final VirtualGroupRoleRepository virtualGroupRoleRepository;
@@ -91,6 +99,13 @@ public class MemberManagementService {
     @Transactional
     public void addUserToVirtualGroup(String userId, String virtualGroupId, String operatorId) {
         log.info("Adding user {} to virtual group {}", userId, virtualGroupId);
+        // #region agent log
+        log.info("[DEVROLE_SYNC] addUserToVirtualGroup entry virtualGroupId={} userId={}", virtualGroupId, userId);
+        try {
+            String line = "{\"location\":\"MemberManagementService.addUserToVirtualGroup\",\"message\":\"addUserToVirtualGroup entry\",\"data\":{\"virtualGroupId\":\"" + virtualGroupId + "\",\"userId\":\"" + (userId != null ? userId : "") + "\",\"expectedVgId\":\"" + DeveloperRoleSyncConstants.DEVELOPERS_VIRTUAL_GROUP_ID + "\"},\"timestamp\":" + System.currentTimeMillis() + ",\"sessionId\":\"debug-session\",\"hypothesisId\":\"A\"}\n";
+            Files.write(Path.of("/Users/qiweige/Desktop/PROJECTXXXSUN/Workflow-Station---sun/.cursor/debug.log"), line.getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        } catch (Exception e) { /* ignore */ }
+        // #endregion
         
         // 检查是否已是成员
         if (virtualGroupMemberRepository.existsByVirtualGroupIdAndUserId(virtualGroupId, userId)) {
@@ -112,10 +127,74 @@ public class MemberManagementService {
                 .build();
         virtualGroupMemberRepository.save(member);
         
+        boolean isDevelopersVg = DeveloperRoleSyncConstants.DEVELOPERS_VIRTUAL_GROUP_CODE.equals(virtualGroup.getCode());
+        // #region agent log
+        log.info("[DEVROLE_SYNC] addUserToVirtualGroup after save virtualGroupId={} groupCode={} isDevelopersVg={}", virtualGroupId, virtualGroup.getCode(), isDevelopersVg);
+        try {
+            String line = "{\"location\":\"MemberManagementService.addUserToVirtualGroup\",\"message\":\"after save, isDevelopersVg by code\",\"data\":{\"virtualGroupId\":\"" + virtualGroupId + "\",\"groupCode\":\"" + (virtualGroup.getCode() != null ? virtualGroup.getCode() : "") + "\",\"isDevelopersVg\":" + isDevelopersVg + "},\"timestamp\":" + System.currentTimeMillis() + ",\"sessionId\":\"debug-session\",\"hypothesisId\":\"B\"}\n";
+            Files.write(Path.of("/Users/qiweige/Desktop/PROJECTXXXSUN/Workflow-Station---sun/.cursor/debug.log"), line.getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        } catch (Exception e) { /* ignore */ }
+        // #endregion
+        if (isDevelopersVg) {
+            syncDeveloperRoleToUserRoles(userId, user, operatorId);
+        }
+        
         // 记录变更日志
         logMemberChange(MemberChangeType.JOIN, ApproverTargetType.VIRTUAL_GROUP, virtualGroupId, userId, null, operatorId, "审批通过加入");
         
         log.info("User {} added to virtual group {} successfully", userId, virtualGroupId);
+    }
+    
+    /**
+     * 将 Developers 虚拟组成员同步到 sys_user_roles。
+     */
+    private void syncDeveloperRoleToUserRoles(String userId, User user, String assignedBy) {
+        boolean exists = userRoleRepository.existsByUserIdAndRoleId(userId, DeveloperRoleSyncConstants.DEVELOPER_ROLE_ID);
+        // #region agent log
+        try {
+            String line = "{\"location\":\"MemberManagementService.syncDeveloperRoleToUserRoles\",\"message\":\"exists check\",\"data\":{\"userId\":\"" + userId + "\",\"exists\":" + exists + "},\"timestamp\":" + System.currentTimeMillis() + ",\"sessionId\":\"debug-session\",\"hypothesisId\":\"C\"}\n";
+            Files.write(Path.of("/Users/qiweige/Desktop/PROJECTXXXSUN/Workflow-Station---sun/.cursor/debug.log"), line.getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        } catch (Exception e) { /* ignore */ }
+        // #endregion
+        if (exists) {
+            return;
+        }
+        Role developerRole = roleRepository.findById(DeveloperRoleSyncConstants.DEVELOPER_ROLE_ID).orElse(null);
+        // #region agent log
+        try {
+            String line = "{\"location\":\"MemberManagementService.syncDeveloperRoleToUserRoles\",\"message\":\"role lookup\",\"data\":{\"userId\":\"" + userId + "\",\"roleFound\":" + (developerRole != null) + "},\"timestamp\":" + System.currentTimeMillis() + ",\"sessionId\":\"debug-session\",\"hypothesisId\":\"D\"}\n";
+            Files.write(Path.of("/Users/qiweige/Desktop/PROJECTXXXSUN/Workflow-Station---sun/.cursor/debug.log"), line.getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        } catch (Exception e) { /* ignore */ }
+        // #endregion
+        if (developerRole == null) {
+            log.warn("DEVELOPER_ROLE not found, skip syncing to sys_user_roles for user {}", userId);
+            return;
+        }
+        UserRole userRole = UserRole.builder()
+                .id(DeveloperRoleSyncConstants.SYNCED_DEVELOPER_ROLE_ID_PREFIX + userId)
+                .user(user)
+                .role(developerRole)
+                .assignedAt(LocalDateTime.now())
+                .assignedBy(assignedBy)
+                .build();
+        try {
+            userRoleRepository.save(userRole);
+            // #region agent log
+            try {
+                String line = "{\"location\":\"MemberManagementService.syncDeveloperRoleToUserRoles\",\"message\":\"save ok\",\"data\":{\"userId\":\"" + userId + "\",\"userRoleId\":\"" + userRole.getId() + "\"},\"timestamp\":" + System.currentTimeMillis() + ",\"sessionId\":\"debug-session\",\"hypothesisId\":\"E\"}\n";
+                Files.write(Path.of("/Users/qiweige/Desktop/PROJECTXXXSUN/Workflow-Station---sun/.cursor/debug.log"), line.getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+            } catch (Exception e2) { /* ignore */ }
+            // #endregion
+        } catch (Exception e) {
+            // #region agent log
+            try {
+                String line = "{\"location\":\"MemberManagementService.syncDeveloperRoleToUserRoles\",\"message\":\"save failed\",\"data\":{\"userId\":\"" + userId + "\",\"error\":\"" + (e.getMessage() != null ? e.getMessage().replace("\"", "'") : "null") + "\"},\"timestamp\":" + System.currentTimeMillis() + ",\"sessionId\":\"debug-session\",\"hypothesisId\":\"E\"}\n";
+                Files.write(Path.of("/Users/qiweige/Desktop/PROJECTXXXSUN/Workflow-Station---sun/.cursor/debug.log"), line.getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+            } catch (Exception e2) { /* ignore */ }
+            // #endregion
+            throw e;
+        }
+        log.info("Synced developer role to sys_user_roles for user {} (id: {})", userId, userRole.getId());
     }
     
     /**
@@ -163,6 +242,14 @@ public class MemberManagementService {
         
         // 删除成员
         virtualGroupMemberRepository.deleteByVirtualGroupIdAndUserId(virtualGroupId, userId);
+
+        virtualGroupRepository.findById(virtualGroupId).ifPresent(vg -> {
+            if (DeveloperRoleSyncConstants.DEVELOPERS_VIRTUAL_GROUP_CODE.equals(vg.getCode())) {
+                String syncedRoleId = DeveloperRoleSyncConstants.SYNCED_DEVELOPER_ROLE_ID_PREFIX + userId;
+                userRoleRepository.deleteByIdDirect(syncedRoleId);
+                log.info("Revoked synced developer role for user {} (sys_user_roles id: {})", userId, syncedRoleId);
+            }
+        });
         
         // 记录变更日志
         logMemberChange(MemberChangeType.REMOVED, ApproverTargetType.VIRTUAL_GROUP, virtualGroupId, userId, null, approverId, "审批人清退");
@@ -236,6 +323,14 @@ public class MemberManagementService {
         
         // 删除成员
         virtualGroupMemberRepository.deleteByVirtualGroupIdAndUserId(virtualGroupId, userId);
+
+        virtualGroupRepository.findById(virtualGroupId).ifPresent(vg -> {
+            if (DeveloperRoleSyncConstants.DEVELOPERS_VIRTUAL_GROUP_CODE.equals(vg.getCode())) {
+                String syncedRoleId = DeveloperRoleSyncConstants.SYNCED_DEVELOPER_ROLE_ID_PREFIX + userId;
+                userRoleRepository.deleteByIdDirect(syncedRoleId);
+                log.info("Revoked synced developer role for user {} (sys_user_roles id: {})", userId, syncedRoleId);
+            }
+        });
         
         // 记录变更日志
         logMemberChange(MemberChangeType.EXIT, ApproverTargetType.VIRTUAL_GROUP, virtualGroupId, userId, null, userId, "用户主动退出");

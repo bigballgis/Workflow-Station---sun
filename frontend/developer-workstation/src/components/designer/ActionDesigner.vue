@@ -304,11 +304,13 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ArrowLeft, Refresh } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
 import { functionUnitApi, type ActionDefinition } from '@/api/functionUnit'
 
+const { t } = useI18n()
 const props = defineProps<{ functionUnitId: number }>()
 
 const store = useFunctionUnitStore()

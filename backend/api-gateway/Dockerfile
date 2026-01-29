@@ -1,5 +1,5 @@
 # Runtime image for API Gateway (uses pre-built JAR)
-FROM eclipse-temurin:17-jre-alpine
+FROM --platform=linux/amd64 eclipse-temurin:17-jre-alpine
 
 WORKDIR /app
 

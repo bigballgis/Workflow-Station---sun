@@ -17,7 +17,8 @@ import java.time.Instant;
  */
 @Entity
 @Table(name = "dw_form_table_bindings", 
-       uniqueConstraints = @UniqueConstraint(columnNames = {"form_id", "table_id"}))
+       uniqueConstraints = @UniqueConstraint(name = "uk_form_table_binding", 
+                                             columnNames = {"form_id", "table_id"}))
 @EntityListeners(AuditingEntityListener.class)
 @Data
 @Builder

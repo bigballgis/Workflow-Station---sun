@@ -15,6 +15,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.HashOperations;
+import org.springframework.core.env.Environment;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
@@ -47,6 +48,9 @@ class SecurityManagerComponentTest {
     @Mock(lenient = true)
     private AuditManagerComponent auditManagerComponent;
     
+    @Mock(lenient = true)
+    private Environment environment;
+    
     private ObjectMapper objectMapper;
     private SecurityManagerComponent securityManager;
 
@@ -56,7 +60,7 @@ class SecurityManagerComponentTest {
         when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
         when(stringRedisTemplate.opsForHash()).thenReturn(hashOperations);
         
-        securityManager = new SecurityManagerComponent(stringRedisTemplate, objectMapper, auditManagerComponent);
+        securityManager = new SecurityManagerComponent(stringRedisTemplate, objectMapper, auditManagerComponent, environment);
         securityManager.initializeDefaultRolePermissions();
     }
 

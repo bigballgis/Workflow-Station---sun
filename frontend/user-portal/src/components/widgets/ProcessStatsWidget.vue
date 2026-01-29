@@ -87,11 +87,13 @@ const handleResize = () => {
 
 onMounted(async () => {
   await dashboardStore.fetchOverview()
-  stats.value = {
-    initiated: dashboardStore.overview?.initiatedProcesses || 0,
-    inProgress: dashboardStore.overview?.inProgressProcesses || 0,
-    completed: dashboardStore.overview?.completedThisMonth || 0,
-    approvalRate: dashboardStore.overview?.approvalRate || 0
+  if (dashboardStore.overview?.processOverview) {
+    stats.value = {
+      initiated: dashboardStore.overview.processOverview.initiatedCount || 0,
+      inProgress: dashboardStore.overview.processOverview.inProgressCount || 0,
+      completed: dashboardStore.overview.processOverview.completedThisMonthCount || 0,
+      approvalRate: dashboardStore.overview.processOverview.approvalRate || 0
+    }
   }
   initChart()
   window.addEventListener('resize', handleResize)

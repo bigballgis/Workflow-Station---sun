@@ -14,7 +14,9 @@ import com.admin.exception.*;
 import com.admin.repository.BusinessUnitRepository;
 import com.admin.repository.PasswordHistoryRepository;
 import com.admin.repository.UserRepository;
+import com.admin.repository.UserBusinessUnitRoleRepository;
 import com.admin.service.AuditService;
+import com.admin.service.UserPermissionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -48,6 +50,8 @@ public class UserManagerComponent {
     private final PasswordEncoder passwordEncoder;
     private final AuditService auditService;
     private final com.admin.repository.UserBusinessUnitRepository userBusinessUnitRepository;
+    private final UserPermissionService userPermissionService;
+    private final UserBusinessUnitRoleRepository userBusinessUnitRoleRepository;
     
     private static final Pattern EMAIL_PATTERN = Pattern.compile(
             "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$");
@@ -74,6 +78,20 @@ public class UserManagerComponent {
         String encodedPassword = passwordEncoder.encode(request.getInitialPassword());
         String userId = UUID.randomUUID().toString();
         
+        // 验证实体管理者存在（如果提供）
+        if (request.getEntityManagerId() != null && !request.getEntityManagerId().isEmpty()) {
+            if (!userRepository.existsById(request.getEntityManagerId())) {
+                throw new AdminBusinessException("ENTITY_MANAGER_NOT_FOUND", "实体管理者不存在");
+            }
+        }
+        
+        // 验证职能管理者存在（如果提供）
+        if (request.getFunctionManagerId() != null && !request.getFunctionManagerId().isEmpty()) {
+            if (!userRepository.existsById(request.getFunctionManagerId())) {
+                throw new AdminBusinessException("FUNCTION_MANAGER_NOT_FOUND", "职能管理者不存在");
+            }
+        }
+        
         User user = User.builder()
                 .id(userId)
                 .username(request.getUsername())
@@ -82,6 +100,8 @@ public class UserManagerComponent {
                 .fullName(request.getFullName())
                 .employeeId(request.getEmployeeId())
                 .position(request.getPosition())
+                .entityManagerId(request.getEntityManagerId())
+                .functionManagerId(request.getFunctionManagerId())
                 .status(UserStatus.ACTIVE)
                 .mustChangePassword(true)
                 .passwordExpiredAt(LocalDateTime.now().plusDays(90))
@@ -363,8 +383,11 @@ public class UserManagerComponent {
         
         UserDetailInfo detail = UserDetailInfo.fromEntity(user);
         
-        // 获取用户角色 - 需要在事务内访问懒加载属性
-        Set<UserDetailInfo.RoleInfo> roles = user.getUserRoles().stream()
+        // 获取用户角色 - 需要从多个来源获取
+        Set<UserDetailInfo.RoleInfo> roles = new java.util.HashSet<>();
+        
+        // 1. 从 sys_user_roles 获取直接分配的角色
+        user.getUserRoles().stream()
                 .filter(ur -> ur.getRole() != null)
                 .map(ur -> UserDetailInfo.RoleInfo.builder()
                         .roleId(ur.getRole().getId())
@@ -372,7 +395,29 @@ public class UserManagerComponent {
                         .roleName(ur.getRole().getName())
                         .description(ur.getRole().getDescription())
                         .build())
-                .collect(java.util.stream.Collectors.toSet());
+                .forEach(roles::add);
+        
+        // 2. 从 sys_user_business_unit_roles 获取业务单元角色
+        userBusinessUnitRoleRepository.findByUserIdWithDetails(userId).stream()
+                .filter(ubur -> ubur.getRole() != null)
+                .map(ubur -> UserDetailInfo.RoleInfo.builder()
+                        .roleId(ubur.getRole().getId())
+                        .roleCode(ubur.getRole().getCode())
+                        .roleName(ubur.getRole().getName())
+                        .description(ubur.getRole().getDescription())
+                        .build())
+                .forEach(roles::add);
+        
+        // 3. 从虚拟组获取角色（通过 UserPermissionService）
+        userPermissionService.getUserRoles(userId).stream()
+                .map(role -> UserDetailInfo.RoleInfo.builder()
+                        .roleId(role.getId())
+                        .roleCode(role.getCode())
+                        .roleName(role.getName())
+                        .description(role.getDescription())
+                        .build())
+                .forEach(roles::add);
+        
         detail.setRoles(roles);
         
         // 获取实体管理者名称

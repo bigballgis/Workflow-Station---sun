@@ -37,8 +37,8 @@ public class ApproverService {
      * 添加审批人
      */
     @Transactional
-    public void addApprover(ApproverTargetType targetType, String targetId, String userId) {
-        log.info("Adding approver {} for {} {}", userId, targetType, targetId);
+    public void addApprover(ApproverTargetType targetType, String targetId, String userId, String currentUserId) {
+        log.info("Adding approver {} for {} {} by user {}", userId, targetType, targetId, currentUserId);
         
         // 验证目标存在
         validateTargetExists(targetType, targetId);
@@ -61,6 +61,7 @@ public class ApproverService {
                 .targetType(targetType)
                 .targetId(targetId)
                 .userId(userId)
+                .createdBy(currentUserId != null ? currentUserId : "system")
                 .build();
         
         approverRepository.save(approver);

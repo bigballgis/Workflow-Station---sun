@@ -38,6 +38,9 @@ public class TaskInfo {
     /** 分配类型：USER, VIRTUAL_GROUP, DEPT_ROLE, DELEGATED */
     private String assignmentType;
 
+    /** 分配目标（用户ID、虚拟组ID、角色ID等） */
+    private String assignmentTarget;
+
     /** 分配人/组ID */
     private String assignee;
 

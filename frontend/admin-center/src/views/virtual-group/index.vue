@@ -88,9 +88,14 @@ const fetchGroups = async () => {
   loading.value = true
   try {
     groups.value = await virtualGroupApi.list()
-  } catch (e) {
+  } catch (e: any) {
     console.error('Failed to load virtual groups:', e)
-    ElMessage.error(t('common.failed'))
+    // 如果是网络错误，显示更详细的错误信息
+    if (e.httpStatus === 0 || e.name === 'NetworkError') {
+      ElMessage.error('无法连接到后端服务，请检查：\n1. 后端服务是否在 http://localhost:8090 运行\n2. 网络连接是否正常')
+    } else {
+      ElMessage.error(t('common.failed'))
+    }
   } finally {
     loading.value = false
   }

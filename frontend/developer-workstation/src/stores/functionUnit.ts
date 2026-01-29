@@ -25,12 +25,12 @@ export const useFunctionUnitStore = defineStore('functionUnit', () => {
       // 后端返回格式: ApiResponse<Page<FunctionUnitResponse>>
       // ApiResponse: { success: true, data: Page }
       // Page: { content: [], totalElements: number, ... }
-      // 拦截器已经返回了 response.data，所以 res 就是 ApiResponse
+      // 拦截器已经返回了 response.data，所以 res 可能是 ApiResponse 或直接是数据
       
-      if (res && res.success && res.data) {
+      if (res && typeof res === 'object' && 'success' in res && res.success && res.data) {
         const pageData = res.data
         // pageData 是 Spring Data Page 对象
-        if (pageData.content !== undefined) {
+        if (pageData && typeof pageData === 'object' && 'content' in pageData) {
           list.value = pageData.content || []
           total.value = pageData.totalElements || 0
           console.log('[FunctionUnitStore] Successfully parsed:', {
@@ -43,10 +43,10 @@ export const useFunctionUnitStore = defineStore('functionUnit', () => {
           list.value = []
           total.value = 0
         }
-      } else if (res && res.data) {
+      } else if (res && typeof res === 'object' && 'data' in res && res.data) {
         // 兼容处理：如果 data 直接是 Page 对象
         const pageData = res.data
-        if (pageData.content !== undefined) {
+        if (pageData && typeof pageData === 'object' && 'content' in pageData) {
           list.value = pageData.content || []
           total.value = pageData.totalElements || 0
           console.log('[FunctionUnitStore] Parsed (no success field):', {

@@ -10,8 +10,31 @@
       <el-form-item :label="t('common.type')" prop="type">
         <el-select v-model="form.type" :disabled="isSystemGroup">
           <el-option :label="t('virtualGroup.typeCustom')" value="CUSTOM" />
-          <el-option v-if="isSystemGroup" :label="t('virtualGroup.typeSystem')" value="SYSTEM" />
+          <el-option :label="t('virtualGroup.typeSystem')" value="SYSTEM" />
         </el-select>
+      </el-form-item>
+      <el-form-item 
+        :label="t('virtualGroup.boundRole')" 
+        prop="roleId"
+        :required="form.type === 'SYSTEM'"
+      >
+        <el-select 
+          v-model="form.roleId" 
+          :placeholder="t('virtualGroup.selectRolePlaceholder')" 
+          filterable 
+          style="width: 100%"
+          :disabled="isSystemGroup"
+        >
+          <el-option
+            v-for="role in availableRoles"
+            :key="role.id"
+            :label="`${role.name} (${getRoleTypeLabel(role.type)})`"
+            :value="role.id"
+          />
+        </el-select>
+        <div v-if="form.type === 'SYSTEM'" style="color: #909399; font-size: 12px; margin-top: 4px;">
+          {{ t('virtualGroup.systemGroupRoleHint') }}
+        </div>
       </el-form-item>
       <el-form-item :label="t('virtualGroup.adGroup')">
         <el-input v-model="form.adGroup" :placeholder="t('virtualGroup.adGroupPlaceholder')" />
@@ -28,10 +51,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch } from 'vue'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, FormInstance } from 'element-plus'
 import { virtualGroupApi } from '@/api/virtualGroup'
+import { roleApi, type Role } from '@/api/role'
 
 const { t } = useI18n()
 
@@ -42,20 +66,67 @@ const formRef = ref<FormInstance>()
 const loading = ref(false)
 const isEdit = computed(() => !!props.group)
 const isSystemGroup = computed(() => props.group?.type === 'SYSTEM')
+const allRoles = ref<Role[]>([])
 
-const form = reactive({ name: '', code: '', type: 'CUSTOM', adGroup: '', description: '' })
+const form = reactive({ name: '', code: '', type: 'CUSTOM', roleId: '', adGroup: '', description: '' })
+
+// 只显示业务角色（BU_BOUNDED 或 BU_UNBOUNDED）
+const availableRoles = computed(() => {
+  return allRoles.value.filter(r => {
+    const roleType = r.type as string
+    return roleType === 'BU_BOUNDED' || roleType === 'BU_UNBOUNDED' || roleType === 'BUSINESS'
+  })
+})
+
+const getRoleTypeLabel = (type?: string) => {
+  const map: Record<string, string> = {
+    BU_BOUNDED: t('role.buBounded'),
+    BU_UNBOUNDED: t('role.buUnbounded'),
+    BUSINESS: t('role.businessRole'),
+    ADMIN: t('role.adminRole'),
+    DEVELOPER: t('role.developerRole')
+  }
+  return map[type || ''] || type
+}
+
+const fetchRoles = async () => {
+  try {
+    allRoles.value = await roleApi.list()
+  } catch (e) {
+    console.error('Failed to fetch roles:', e)
+  }
+}
+
+onMounted(() => {
+  fetchRoles()
+})
 
 const rules = computed(() => ({
   name: [{ required: true, message: t('common.inputPlaceholder'), trigger: 'blur' }],
   code: [{ required: true, message: t('common.inputPlaceholder'), trigger: 'blur' }],
-  type: [{ required: true, message: t('common.selectPlaceholder'), trigger: 'change' }]
+  type: [{ required: true, message: t('common.selectPlaceholder'), trigger: 'change' }],
+  roleId: [
+    { 
+      required: form.type === 'SYSTEM', 
+      message: t('virtualGroup.roleRequiredForSystem'), 
+      trigger: 'change' 
+    }
+  ]
 }))
 
 watch(() => props.modelValue, (val) => {
   if (val && props.group) {
-    Object.assign(form, { name: props.group.name, code: props.group.code, type: props.group.type, adGroup: props.group.adGroup || '', description: props.group.description || '' })
+    Object.assign(form, { 
+      name: props.group.name, 
+      code: props.group.code, 
+      type: props.group.type, 
+      roleId: props.group.boundRoleId || '', 
+      adGroup: props.group.adGroup || '', 
+      description: props.group.description || '' 
+    })
   } else if (val) {
-    Object.assign(form, { name: '', code: '', type: 'CUSTOM', adGroup: '', description: '' })
+    Object.assign(form, { name: '', code: '', type: 'CUSTOM', roleId: '', adGroup: '', description: '' })
+    fetchRoles()
   }
 })
 
@@ -69,7 +140,8 @@ const handleSubmit = async () => {
       name: form.name,
       type: form.type as any,
       description: form.description,
-      adGroup: form.adGroup || undefined
+      adGroup: form.adGroup || undefined,
+      roleId: form.roleId || undefined
     }
     if (isEdit.value) {
       await virtualGroupApi.update(props.group.id, data)

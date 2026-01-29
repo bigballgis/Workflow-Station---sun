@@ -19,6 +19,9 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+
 import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -47,6 +50,9 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     @Override
     @Transactional
     public FunctionUnit create(FunctionUnitRequest request) {
+        log.info("Creating function unit: name={}, description={}, iconId={}", 
+                request.getName(), request.getDescription(), request.getIconId());
+        
         if (functionUnitRepository.existsByName(request.getName())) {
             throw new BusinessException("CONFLICT_NAME_EXISTS", 
                     "功能单元名称已存在: " + request.getName(),
@@ -55,21 +61,38 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         
         // 生成唯一编码
         String code = generateUniqueCode();
+        log.debug("Generated code: {}", code);
+        
+        String currentUserId = getCurrentUserId();
+        log.debug("Current user ID: {}", currentUserId);
         
         FunctionUnit functionUnit = FunctionUnit.builder()
                 .name(request.getName())
                 .code(code)
                 .description(request.getDescription())
                 .status(FunctionUnitStatus.DRAFT)
+                .createdBy(currentUserId)
                 .build();
         
         if (request.getIconId() != null) {
+            log.debug("Looking up icon: {}", request.getIconId());
             Icon icon = iconRepository.findById(request.getIconId())
                     .orElseThrow(() -> new ResourceNotFoundException("Icon", request.getIconId()));
             functionUnit.setIcon(icon);
         }
         
-        return functionUnitRepository.save(functionUnit);
+        try {
+            FunctionUnit saved = functionUnitRepository.save(functionUnit);
+            log.info("Function unit created successfully: id={}, name={}, code={}", 
+                    saved.getId(), saved.getName(), saved.getCode());
+            return saved;
+        } catch (Exception e) {
+            log.error("Failed to save function unit: name={}, code={}, error={}", 
+                    request.getName(), code, e.getMessage(), e);
+            throw new BusinessException("SAVE_FAILED", 
+                    "保存功能单元失败: " + e.getMessage(),
+                    "请检查数据是否正确");
+        }
     }
     
     /**
@@ -461,5 +484,19 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
                 .isDefault(source.getIsDefault())
                 .build();
         actionDefinitionRepository.save(cloned);
+    }
+    
+    /**
+     * 获取当前用户ID
+     */
+    private String getCurrentUserId() {
+        // 优先从 SecurityContext 获取
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null && authentication.isAuthenticated() 
+                && !"anonymousUser".equals(authentication.getPrincipal())) {
+            return authentication.getName();
+        }
+        // 默认返回 "system"
+        return "system";
     }
 }

@@ -95,7 +95,7 @@ const loadRequests = async () => {
   loading.value = true
   try {
     const res = await permissionApi.getMyRequests({ page: query.page - 1, size: query.size })
-    const data = res.data?.data || res.data || res
+    const data = (res as any).data || res
     requests.value = data.content || []
     total.value = data.totalElements || 0
   } catch (e) {

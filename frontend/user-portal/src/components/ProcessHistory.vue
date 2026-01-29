@@ -87,7 +87,6 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Refresh, Document } from '@element-plus/icons-vue'
 
@@ -113,7 +112,7 @@ interface Props {
   showRefresh?: boolean
 }
 
-const props = withDefaults(defineProps<Props>(), {
+withDefaults(defineProps<Props>(), {
   records: () => [],
   showHeader: true,
   showRefresh: true

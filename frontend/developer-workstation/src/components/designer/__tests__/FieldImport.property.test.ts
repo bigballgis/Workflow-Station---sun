@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import * as fc from 'fast-check'
-import type { FieldDefinition, TableBinding, BindingType } from '@/api/functionUnit'
+import type { BindingType } from '@/api/functionUnit'
 
 /**
  * Property 4: Field import from multiple tables
@@ -18,9 +18,9 @@ describe('Field Import Property Tests', () => {
     id: fc.nat(),
     fieldName: fc.string({ minLength: 1, maxLength: 50 }).filter(s => /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(s)),
     dataType: dataTypeArb,
-    length: fc.option(fc.nat({ max: 4000 }), { nil: undefined }),
-    precision: fc.option(fc.nat({ max: 38 }), { nil: undefined }),
-    scale: fc.option(fc.nat({ max: 10 }), { nil: undefined }),
+    length: fc.option(fc.integer({ min: 1, max: 4000 }), { nil: undefined }),
+    precision: fc.option(fc.integer({ min: 1, max: 38 }), { nil: undefined }),
+    scale: fc.option(fc.integer({ min: 1, max: 10 }), { nil: undefined }),
     nullable: fc.boolean(),
     isPrimaryKey: fc.boolean(),
     defaultValue: fc.option(fc.string({ maxLength: 100 }), { nil: undefined }),
@@ -30,7 +30,7 @@ describe('Field Import Property Tests', () => {
   // Arbitrary for TableBinding
   const tableBindingArb = fc.record({
     id: fc.nat(),
-    tableId: fc.nat({ min: 1 }),
+    tableId: fc.integer({ min: 1 }),
     tableName: fc.string({ minLength: 1, maxLength: 50 }).filter(s => s.trim().length > 0),
     bindingType: fc.constantFrom<BindingType>('PRIMARY', 'SUB', 'RELATED'),
     bindingMode: fc.constantFrom('EDITABLE', 'READONLY'),
@@ -56,7 +56,7 @@ describe('Field Import Property Tests', () => {
   it('Property 4.1: Fields can be imported from any bound table', () => {
     // Create a valid binding arbitrary with tableId >= 1
     const validBindingArb = fc.record({
-      id: fc.nat({ min: 1 }),
+      id: fc.integer({ min: 1 }),
       tableId: fc.integer({ min: 1, max: 1000 }),
       tableName: fc.string({ minLength: 1, maxLength: 50 }).filter(s => s.trim().length > 0),
       bindingType: fc.constantFrom<BindingType>('PRIMARY', 'SUB', 'RELATED'),

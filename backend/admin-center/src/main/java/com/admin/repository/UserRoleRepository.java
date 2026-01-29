@@ -4,6 +4,7 @@ import com.admin.entity.UserRole;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -42,17 +43,24 @@ public interface UserRoleRepository extends JpaRepository<UserRole, String> {
     Optional<UserRole> findByUserIdAndRoleId(@Param("userId") String userId, @Param("roleId") String roleId);
     
     /**
+     * 按主键 ID 直接删除（用于撤销 Developers 虚拟组同步的 developer 角色）
+     */
+    @Modifying
+    @Query("DELETE FROM UserRole ur WHERE ur.id = :id")
+    void deleteByIdDirect(@Param("id") String id);
+
+    /**
      * 删除用户的所有角色
      */
     @Query("DELETE FROM UserRole ur WHERE ur.user.id = :userId")
-    @org.springframework.data.jpa.repository.Modifying
+    @Modifying
     void deleteByUserId(@Param("userId") String userId);
     
     /**
      * 删除角色的所有用户关联
      */
     @Query("DELETE FROM UserRole ur WHERE ur.role.id = :roleId")
-    @org.springframework.data.jpa.repository.Modifying
+    @Modifying
     void deleteByRoleId(@Param("roleId") String roleId);
     
     /**

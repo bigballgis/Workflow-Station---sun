@@ -33,8 +33,13 @@ export const useTaskStore = defineStore('task', () => {
     await taskApi.claimTask(taskId)
   }
 
-  const completeTask = async (taskId: string, data: { variables?: Record<string, any>; comment?: string }) => {
-    await taskApi.completeTask(taskId, data)
+  const completeTask = async (taskId: string, data: { variables?: Record<string, any>; comment?: string; action?: string }) => {
+    await taskApi.completeTask(taskId, {
+      taskId,
+      action: data.action || 'approve',
+      comment: data.comment,
+      variables: data.variables
+    })
   }
 
   const transferTask = async (taskId: string, targetUserId: string, reason: string) => {

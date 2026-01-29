@@ -8,7 +8,7 @@ spring:
 
 # Admin Center Configuration - Docker network address
 admin-center:
-  url: http://admin-center:8080
+  url: ${ADMIN_CENTER_URL:http://admin-center:8080}
 
 # Logging for Docker environment
 logging:

@@ -19,7 +19,7 @@
             <el-table-column prop="endTime" :label="t('delegation.endTime')" width="160" />
             <el-table-column prop="status" :label="t('delegation.status')" width="100">
               <template #default="{ row }">
-                <el-tag :type="getStatusType(row.status)" size="small">
+                <el-tag :type="getStatusType(row.status) as any" size="small">
                   {{ t(`delegation.${row.status.toLowerCase()}`) }}
                 </el-tag>
               </template>
@@ -61,7 +61,14 @@
     </el-tabs>
 
     <!-- 创建委托对话框 -->
-    <el-dialog v-model="createDialogVisible" :title="t('delegation.create')" width="500px">
+    <el-dialog 
+      v-model="createDialogVisible" 
+      :title="t('delegation.create')" 
+      width="500px" 
+      :append-to-body="true"
+      :modal="true"
+      class="delegation-dialog"
+    >
       <el-form :model="createForm" label-width="100px">
         <el-form-item :label="t('delegation.delegateTo')">
           <el-select v-model="createForm.delegateId" filterable :placeholder="t('delegation.selectDelegate')" style="width: 100%;">
@@ -78,10 +85,24 @@
           </el-select>
         </el-form-item>
         <el-form-item :label="t('delegation.startTime')">
-          <el-date-picker v-model="createForm.startTime" type="datetime" style="width: 100%;" />
+          <el-date-picker 
+            v-model="createForm.startTime" 
+            type="datetime" 
+            style="width: 100%;" 
+            popper-class="delegation-date-picker"
+            teleported
+            @visible-change="handleDatePickerVisible"
+          />
         </el-form-item>
         <el-form-item :label="t('delegation.endTime')">
-          <el-date-picker v-model="createForm.endTime" type="datetime" style="width: 100%;" />
+          <el-date-picker 
+            v-model="createForm.endTime" 
+            type="datetime" 
+            style="width: 100%;" 
+            popper-class="delegation-date-picker"
+            teleported
+            @visible-change="handleDatePickerVisible"
+          />
         </el-form-item>
         <el-form-item :label="t('delegation.reason')">
           <el-input v-model="createForm.reason" type="textarea" :rows="3" />
@@ -96,15 +117,44 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getDelegationRules, createDelegationRule, suspendDelegationRule, resumeDelegationRule, deleteDelegationRule, getDelegationAuditRecords } from '@/api/delegation'
+import { getDelegationRules, createDelegationRule, suspendDelegationRule, resumeDelegationRule, deleteDelegationRule } from '@/api/delegation'
 
 const { t } = useI18n()
 
 const activeTab = ref('my')
 const createDialogVisible = ref(false)
+
+// 监听对话框打开，确保时间选择器的 z-index 正确
+watch(createDialogVisible, async (visible) => {
+  if (visible) {
+    await nextTick()
+    // 延迟一点确保 DOM 已渲染
+    setTimeout(() => {
+      updateDatePickerZIndex()
+    }, 100)
+  }
+})
+
+// 更新时间选择器的 z-index
+const updateDatePickerZIndex = () => {
+  const pickers = document.querySelectorAll('.delegation-date-picker, .el-picker__popper, .el-picker-panel')
+  pickers.forEach((picker: any) => {
+    if (picker && picker.style) {
+      picker.style.zIndex = '5000'
+    }
+  })
+}
+
+const handleDatePickerVisible = (visible: boolean) => {
+  if (visible) {
+    nextTick(() => {
+      updateDatePickerZIndex()
+    })
+  }
+}
 
 const delegationList = ref<any[]>([])
 
@@ -220,5 +270,45 @@ onMounted(() => {
       margin: 0;
     }
   }
+}
+</style>
+
+<style lang="scss">
+// 全局样式，用于时间选择器弹出层 - 确保在对话框之上
+// 使用更高的 z-index 值确保时间选择器显示在对话框上方
+.delegation-date-picker {
+  z-index: 5000 !important;
+}
+
+// Element Plus 日期选择器弹出层的所有可能的选择器
+.el-picker__popper.delegation-date-picker,
+.el-picker__popper.el-popper.delegation-date-picker,
+.el-picker__popper[data-popper-placement].delegation-date-picker,
+.el-date-picker__popper.delegation-date-picker,
+.el-picker-panel.delegation-date-picker,
+.el-date-picker.delegation-date-picker .el-picker__popper,
+.el-picker__popper.el-popper[class*="delegation-date-picker"] {
+  z-index: 5000 !important;
+}
+
+// 确保对话框的 z-index 低于时间选择器
+.el-dialog__wrapper {
+  z-index: 2000 !important;
+}
+
+// 对话框遮罩层
+.el-overlay {
+  z-index: 2000 !important;
+}
+
+// 对话框本身
+.el-dialog {
+  z-index: 2001 !important;
+}
+
+// 委托对话框打开时，确保时间选择器在最上层
+.delegation-dialog.is-opened ~ .el-picker__popper,
+.delegation-dialog.is-opened ~ .el-date-picker__popper {
+  z-index: 5000 !important;
 }
 </style>

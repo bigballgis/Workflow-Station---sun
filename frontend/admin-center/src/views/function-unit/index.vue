@@ -172,7 +172,7 @@ const deleteTargetUnit = ref<FunctionUnit | null>(null)
 const deletePreview = ref<DeletePreviewResponse | null>(null)
 const deployForm = reactive({ environment: 'DEVELOPMENT' as const, strategy: 'FULL' as const })
 const loading = ref(false)
-const deploymentsLoading = ref(false)
+// const deploymentsLoading = ref(false)
 const accessLoading = ref(false)
 const addAccessLoading = ref(false)
 
@@ -222,17 +222,17 @@ const fetchFunctionUnits = async () => {
   }
 }
 
-const fetchDeployments = async () => {
-  if (!currentUnit.value) return
-  deploymentsLoading.value = true
-  try {
-    deployments.value = await functionUnitApi.getDeploymentHistory(currentUnit.value.id)
-  } catch (e) {
-    console.error('Failed to load deployments:', e)
-  } finally {
-    deploymentsLoading.value = false
-  }
-}
+// const fetchDeployments = async () => {
+//   if (!currentUnit.value) return
+//   deploymentsLoading.value = true
+//   try {
+//     deployments.value = await functionUnitApi.getDeploymentHistory(currentUnit.value.id)
+//   } catch (e) {
+//     console.error('Failed to load deployments:', e)
+//   } finally {
+//     deploymentsLoading.value = false
+//   }
+// }
 
 const fetchAccessConfigs = async () => {
   if (!currentUnit.value) return

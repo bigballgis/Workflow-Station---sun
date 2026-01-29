@@ -95,7 +95,7 @@ const loadMemberships = async () => {
   loading.value = true
   try {
     const res = await permissionApi.getMyMemberships()
-    const data = res.data?.data || res.data || res
+    const data = (res as any).data || res
     memberships.virtualGroups = data.virtualGroups || []
     // Convert businessUnitRoles to businessUnits (group by business unit)
     const buMap = new Map<string, BusinessUnitMembership>()

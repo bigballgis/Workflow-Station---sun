@@ -55,12 +55,16 @@ const stats = ref({
 
 const recentTasks = ref<Array<{ id: string; name: string; priority: string }>>([])
 
-const getPriorityType = (priority: string) => {
-  const types: Record<string, string> = {
+const getPriorityType = (priority: string): 'primary' | 'success' | 'warning' | 'danger' | 'info' => {
+  const types: Record<string, 'primary' | 'success' | 'warning' | 'danger' | 'info'> = {
     '紧急': 'danger',
     '高': 'warning',
     '普通': 'info',
-    '低': 'success'
+    '低': 'success',
+    'URGENT': 'danger',
+    'HIGH': 'warning',
+    'NORMAL': 'info',
+    'LOW': 'success'
   }
   return types[priority] || 'info'
 }
@@ -75,11 +79,13 @@ const goToTask = (id: string) => {
 
 onMounted(async () => {
   await dashboardStore.fetchOverview()
-  stats.value = {
-    pending: dashboardStore.overview?.pendingTasks || 0,
-    overdue: dashboardStore.overview?.overdueTasks || 0,
-    completedToday: dashboardStore.overview?.completedToday || 0,
-    urgent: dashboardStore.overview?.urgentTasks || 0
+  if (dashboardStore.overview?.taskOverview) {
+    stats.value = {
+      pending: dashboardStore.overview.taskOverview.pendingCount || 0,
+      overdue: dashboardStore.overview.taskOverview.overdueCount || 0,
+      completedToday: dashboardStore.overview.taskOverview.completedTodayCount || 0,
+      urgent: dashboardStore.overview.taskOverview.urgentCount || 0
+    }
   }
 })
 </script>
