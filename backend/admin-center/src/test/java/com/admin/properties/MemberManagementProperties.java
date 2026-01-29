@@ -40,6 +40,7 @@ public class MemberManagementProperties {
     private VirtualGroupRepository virtualGroupRepository;
     private UserRepository userRepository;
     private UserRoleRepository userRoleRepository;
+    private RoleRepository roleRepository;
     private UserBusinessUnitRoleRepository userBusinessUnitRoleRepository;
     private UserBusinessUnitRepository userBusinessUnitRepository;
     private VirtualGroupRoleRepository virtualGroupRoleRepository;
@@ -54,6 +55,7 @@ public class MemberManagementProperties {
         virtualGroupRepository = mock(VirtualGroupRepository.class);
         userRepository = mock(UserRepository.class);
         userRoleRepository = mock(UserRoleRepository.class);
+        roleRepository = mock(RoleRepository.class);
         userBusinessUnitRoleRepository = mock(UserBusinessUnitRoleRepository.class);
         userBusinessUnitRepository = mock(UserBusinessUnitRepository.class);
         virtualGroupRoleRepository = mock(VirtualGroupRoleRepository.class);
@@ -66,6 +68,7 @@ public class MemberManagementProperties {
                 virtualGroupRepository,
                 userRepository,
                 userRoleRepository,
+                roleRepository,
                 userBusinessUnitRoleRepository,
                 userBusinessUnitRepository,
                 virtualGroupRoleRepository,

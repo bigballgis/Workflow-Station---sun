@@ -11,8 +11,8 @@ import com.workflow.dto.response.UserSecurityInfo;
 import com.workflow.enums.AuditOperationType;
 import com.workflow.enums.AuditResourceType;
 import com.workflow.exception.WorkflowBusinessException;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.env.Environment;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
@@ -40,12 +40,20 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class SecurityManagerComponent {
 
     private final StringRedisTemplate stringRedisTemplate;
     private final ObjectMapper objectMapper;
     private final AuditManagerComponent auditManagerComponent;
+    private final Environment environment;
+
+    public SecurityManagerComponent(StringRedisTemplate stringRedisTemplate, ObjectMapper objectMapper,
+                                    AuditManagerComponent auditManagerComponent, Environment environment) {
+        this.stringRedisTemplate = stringRedisTemplate;
+        this.objectMapper = objectMapper;
+        this.auditManagerComponent = auditManagerComponent;
+        this.environment = environment;
+    }
     
     // JWT配置
     private static final String JWT_SECRET_KEY = "workflow-engine-jwt-secret-key-2026";
