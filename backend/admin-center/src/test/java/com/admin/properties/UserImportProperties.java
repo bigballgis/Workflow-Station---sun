@@ -4,7 +4,6 @@ import com.admin.component.UserManagerComponent;
 import com.admin.dto.request.UserCreateRequest;
 import com.admin.dto.response.BatchImportResult;
 import com.admin.entity.User;
-import com.admin.enums.UserStatus;
 import com.admin.repository.BusinessUnitRepository;
 import com.admin.repository.PasswordHistoryRepository;
 import com.admin.repository.UserBusinessUnitRepository;
@@ -14,12 +13,8 @@ import com.admin.service.AuditService;
 import com.admin.service.UserPermissionService;
 import net.jqwik.api.*;
 import net.jqwik.api.lifecycle.BeforeTry;
-import org.mockito.ArgumentCaptor;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.web.multipart.MultipartFile;
-
-import java.util.*;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;

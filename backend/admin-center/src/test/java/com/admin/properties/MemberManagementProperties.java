@@ -3,7 +3,6 @@ package com.admin.properties;
 import com.admin.entity.*;
 import com.admin.enums.ApproverTargetType;
 import com.admin.enums.MemberChangeType;
-import com.admin.enums.PermissionRequestType;
 import com.admin.enums.UserStatus;
 import com.admin.exception.AdminBusinessException;
 import com.admin.repository.*;

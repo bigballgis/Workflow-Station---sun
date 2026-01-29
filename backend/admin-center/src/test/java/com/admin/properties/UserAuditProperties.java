@@ -4,7 +4,6 @@ import com.admin.component.UserManagerComponent;
 import com.admin.dto.request.UserCreateRequest;
 import com.admin.dto.request.UserUpdateRequest;
 import com.admin.entity.User;
-import com.admin.entity.UserRole;
 import com.admin.enums.UserStatus;
 import com.admin.repository.BusinessUnitRepository;
 import com.admin.repository.PasswordHistoryRepository;
