@@ -59,6 +59,7 @@ public class VirtualGroupApprovalIntegrationProperties {
                 virtualGroupMemberRepository,
                 virtualGroupRepository,
                 userRepository,
+                mock(UserRoleRepository.class),
                 mock(UserBusinessUnitRoleRepository.class),
                 mock(UserBusinessUnitRepository.class),
                 virtualGroupRoleRepository,

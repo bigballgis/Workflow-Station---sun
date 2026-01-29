@@ -32,25 +32,37 @@ public class AuthController {
     public ResponseEntity<?> login(
             @Valid @RequestBody LoginRequest request,
             HttpServletRequest httpRequest) {
-        
+        String path = safeRequestPath(httpRequest);
         String ipAddress = getClientIpAddress(httpRequest);
-        String userAgent = httpRequest.getHeader("User-Agent");
-        
-        log.debug("Login request from IP: {}", ipAddress);
-        
+
         try {
-            LoginResponse response = authService.login(request, ipAddress, userAgent);
+            LoginResponse response = authService.login(request, ipAddress, httpRequest.getHeader("User-Agent"));
             return ResponseEntity.ok(response);
         } catch (RuntimeException e) {
             log.warn("Login failed: {}", e.getMessage());
-            ErrorResponse error = ErrorResponse.builder()
-                    .code("LOGIN_FAILED")
-                    .message(e.getMessage())
-                    .timestamp(Instant.now())
-                    .path(httpRequest.getRequestURI())
-                    .build();
-            return ResponseEntity.badRequest().body(error);
+            return ResponseEntity.badRequest().body(safeError("LOGIN_FAILED", e.getMessage(), path));
+        } catch (Exception e) {
+            String user = (request != null && request.getUsername() != null) ? request.getUsername() : "?";
+            log.error("Login error for user {}: {}", user, e.getMessage(), e);
+            return ResponseEntity.badRequest().body(safeError("LOGIN_FAILED", "登录失败，请稍后重试", path));
         }
+    }
+
+    private static String safeRequestPath(HttpServletRequest req) {
+        try {
+            return req != null && req.getRequestURI() != null ? req.getRequestURI() : "";
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    private static ErrorResponse safeError(String code, String message, String path) {
+        return ErrorResponse.builder()
+                .code(code)
+                .message(message != null ? message : "登录失败")
+                .timestamp(Instant.now())
+                .path(path)
+                .build();
     }
 
     /**

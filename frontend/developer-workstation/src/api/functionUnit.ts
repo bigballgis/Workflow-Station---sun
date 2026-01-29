@@ -18,7 +18,6 @@ functionUnitAxios.interceptors.request.use(config => {
   if (user && user.userId) {
     config.headers['X-User-Id'] = user.userId
   }
-  
   return config
 })
 
