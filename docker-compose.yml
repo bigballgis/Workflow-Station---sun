@@ -134,8 +134,8 @@ services:
       SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD:-redis123}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
       ADMIN_CENTER_URL: http://admin-center:8080
-      JWT_SECRET: ${JWT_SECRET:-your-256-bit-secret-key-for-development-only}
-      ENCRYPTION_SECRET_KEY: ${ENCRYPTION_SECRET_KEY:-your-32-byte-aes-256-secret-key!!}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-workflow-engine-jwt-secret-key-2026}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-workflow-aes-256-encryption-key!}
     networks:
       - platform-network
     restart: unless-stopped
@@ -176,8 +176,8 @@ services:
       SPRING_REDIS_PORT: ${SPRING_REDIS_PORT:-6379}
       SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD:-redis123}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
-      JWT_SECRET: ${JWT_SECRET:-your-256-bit-secret-key-for-development-only}
-      ENCRYPTION_SECRET_KEY: ${ENCRYPTION_SECRET_KEY:-your-32-byte-aes-256-secret-key!!}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-workflow-engine-jwt-secret-key-2026}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-workflow-aes-256-encryption-key!}
     networks:
       - platform-network
     restart: unless-stopped
@@ -220,8 +220,8 @@ services:
       SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD:-redis123}
       ADMIN_CENTER_URL: http://admin-center:8080
       WORKFLOW_ENGINE_URL: ${WORKFLOW_ENGINE_URL:-http://workflow-engine:8080}
-      JWT_SECRET: ${JWT_SECRET:-your-256-bit-secret-key-for-development-only}
-      ENCRYPTION_SECRET_KEY: ${ENCRYPTION_SECRET_KEY:-your-32-byte-aes-256-secret-key!!}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-workflow-engine-jwt-secret-key-2026}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-workflow-aes-256-encryption-key!}
     networks:
       - platform-network
     restart: unless-stopped
@@ -260,8 +260,8 @@ services:
       SPRING_REDIS_PORT: ${SPRING_REDIS_PORT:-6379}
       SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD:-redis123}
       ADMIN_CENTER_URL: http://admin-center:8080
-      JWT_SECRET: ${JWT_SECRET:-your-256-bit-secret-key-for-development-only}
-      ENCRYPTION_SECRET_KEY: ${ENCRYPTION_SECRET_KEY:-your-32-byte-aes-256-secret-key!!}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-workflow-engine-jwt-secret-key-2026}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-workflow-aes-256-encryption-key!}
     networks:
       - platform-network
     restart: unless-stopped
@@ -304,7 +304,7 @@ services:
       ADMIN_CENTER_URL: ${ADMIN_CENTER_URL:-http://admin-center:8080}
       USER_PORTAL_URL: ${USER_PORTAL_URL:-http://user-portal:8080}
       DEVELOPER_WORKSTATION_URL: ${DEVELOPER_WORKSTATION_URL:-http://developer-workstation:8080}
-      JWT_SECRET: ${JWT_SECRET:-your-256-bit-secret-key-for-development-only}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-workflow-engine-jwt-secret-key-2026}
     networks:
       - platform-network
     restart: unless-stopped

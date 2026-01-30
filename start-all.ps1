@@ -26,8 +26,8 @@ if ($LASTEXITCODE -ne 0) {
 # Set environment variables
 $env:POSTGRES_PASSWORD = "platform123"
 $env:REDIS_PASSWORD = "redis123"
-$env:JWT_SECRET = "your-256-bit-secret-key-for-development-only"
-$env:ENCRYPTION_SECRET_KEY = "your-32-byte-aes-256-secret-key!!"
+$env:JWT_SECRET_KEY = "workflow-engine-jwt-secret-key-2026"
+$env:ENCRYPTION_KEY = "workflow-aes-256-encryption-key!"
 
 # Network name
 $networkName = "platform-network"
@@ -338,8 +338,8 @@ if ($BackendOnly -or (-not $FrontendOnly)) {
         -e SPRING_REDIS_PASSWORD=$env:REDIS_PASSWORD `
         -e SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:29092 `
         -e ADMIN_CENTER_URL=http://admin-center:8080 `
-        -e JWT_SECRET=$env:JWT_SECRET `
-        -e ENCRYPTION_SECRET_KEY=$env:ENCRYPTION_SECRET_KEY `
+        -e JWT_SECRET_KEY=$env:JWT_SECRET_KEY `
+        -e ENCRYPTION_KEY=$env:ENCRYPTION_KEY `
         -p 8081:8080 `
         --restart unless-stopped `
         workflow-engine:latest
@@ -359,8 +359,8 @@ if ($BackendOnly -or (-not $FrontendOnly)) {
         -e SPRING_REDIS_PORT=6379 `
         -e SPRING_REDIS_PASSWORD=$env:REDIS_PASSWORD `
         -e SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:29092 `
-        -e JWT_SECRET=$env:JWT_SECRET `
-        -e ENCRYPTION_SECRET_KEY=$env:ENCRYPTION_SECRET_KEY `
+        -e JWT_SECRET_KEY=$env:JWT_SECRET_KEY `
+        -e ENCRYPTION_KEY=$env:ENCRYPTION_KEY `
         -p 8090:8080 `
         --restart unless-stopped `
         admin-center:latest
@@ -381,8 +381,8 @@ if ($BackendOnly -or (-not $FrontendOnly)) {
         -e SPRING_REDIS_PASSWORD=$env:REDIS_PASSWORD `
         -e ADMIN_CENTER_URL=http://admin-center:8080 `
         -e WORKFLOW_ENGINE_URL=http://workflow-engine:8080 `
-        -e JWT_SECRET=$env:JWT_SECRET `
-        -e ENCRYPTION_SECRET_KEY=$env:ENCRYPTION_SECRET_KEY `
+        -e JWT_SECRET_KEY=$env:JWT_SECRET_KEY `
+        -e ENCRYPTION_KEY=$env:ENCRYPTION_KEY `
         -p 8082:8080 `
         --restart unless-stopped `
         user-portal:latest
@@ -402,8 +402,8 @@ if ($BackendOnly -or (-not $FrontendOnly)) {
         -e SPRING_REDIS_PORT=6379 `
         -e SPRING_REDIS_PASSWORD=$env:REDIS_PASSWORD `
         -e ADMIN_CENTER_URL=http://admin-center:8080 `
-        -e JWT_SECRET=$env:JWT_SECRET `
-        -e ENCRYPTION_SECRET_KEY=$env:ENCRYPTION_SECRET_KEY `
+        -e JWT_SECRET_KEY=$env:JWT_SECRET_KEY `
+        -e ENCRYPTION_KEY=$env:ENCRYPTION_KEY `
         -p 8083:8080 `
         --restart unless-stopped `
         developer-workstation:latest
@@ -425,7 +425,7 @@ if ($BackendOnly -or (-not $FrontendOnly)) {
         -e ADMIN_CENTER_URL=http://admin-center:8080 `
         -e USER_PORTAL_URL=http://user-portal:8080 `
         -e DEVELOPER_WORKSTATION_URL=http://developer-workstation:8080 `
-        -e JWT_SECRET=$env:JWT_SECRET `
+        -e JWT_SECRET_KEY=$env:JWT_SECRET_KEY `
         -p 8080:8080 `
         --restart unless-stopped `
         api-gateway:latest

@@ -49,7 +49,7 @@ spring:
 # Security
 security:
   jwt:
-    secret: ${JWT_SECRET:your-256-bit-secret-key-for-development-only}
+    secret: ${JWT_SECRET_KEY:workflow-engine-jwt-secret-key-2026}
     expiration: 86400000  # 24 hours
   
   rate-limit:
@@ -58,7 +58,7 @@ security:
 # Platform Configuration
 platform:
   encryption:
-    secret-key: ${ENCRYPTION_SECRET_KEY:your-32-byte-aes-256-secret-key!!}
+    secret-key: ${ENCRYPTION_KEY:workflow-aes-256-encryption-key!}
 
 # OpenAPI
 springdoc:

@@ -282,10 +282,10 @@ REDIS_PASSWORD=<strong-password>
 REDIS_HOST=<redis-host>
 
 # JWT
-JWT_SECRET=<random-secret-key>
+JWT_SECRET_KEY=<random-secret-key>
 
 # 加密
-ENCRYPTION_SECRET_KEY=<random-encryption-key>
+ENCRYPTION_KEY=<random-encryption-key>
 ```
 
 ## 文档

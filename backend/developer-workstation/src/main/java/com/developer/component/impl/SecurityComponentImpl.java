@@ -37,14 +37,14 @@ public class SecurityComponentImpl implements SecurityComponent {
      * 默认构造函数，用于测试
      */
     public SecurityComponentImpl() {
-        this("your-256-bit-secret-key-for-development-only", 86400000L, 5, 30);
+        this("workflow-engine-jwt-secret-key-2026", 86400000L, 5, 30);
     }
     
     /**
      * Spring构造函数注入
      */
     public SecurityComponentImpl(
-            @Value("${security.jwt.secret:your-256-bit-secret-key-for-development-only}") String jwtSecret,
+            @Value("${security.jwt.secret:workflow-engine-jwt-secret-key-2026}") String jwtSecret,
             @Value("${security.jwt.expiration:86400000}") long jwtExpiration,
             @Value("${security.max-login-attempts:5}") int maxLoginAttempts,
             @Value("${security.lock-duration-minutes:30}") int lockDurationMinutes) {

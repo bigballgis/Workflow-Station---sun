@@ -63,8 +63,8 @@ services:
       SPRING_REDIS_PORT: 6379
       SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD:-redis123}
       ADMIN_CENTER_URL: ${ADMIN_CENTER_URL:-http://localhost:8090}
-      JWT_SECRET: ${JWT_SECRET:-your-256-bit-secret-key-for-development-only}
-      ENCRYPTION_SECRET_KEY: ${ENCRYPTION_SECRET_KEY:-your-32-byte-aes-256-secret-key!!}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-workflow-engine-jwt-secret-key-2026}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-workflow-aes-256-encryption-key!}
     networks:
       - workflow-engine-network
     restart: unless-stopped
