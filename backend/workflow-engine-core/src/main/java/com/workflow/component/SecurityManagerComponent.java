@@ -46,6 +46,9 @@ public class SecurityManagerComponent {
     private final ObjectMapper objectMapper;
     private final AuditManagerComponent auditManagerComponent;
     private final Environment environment;
+    /** JWT 密钥与加密密钥从配置读取，与 application.yml / 环境变量一致 */
+    private final String jwtSecretKey;
+    private final String encryptionKey;
 
     public SecurityManagerComponent(StringRedisTemplate stringRedisTemplate, ObjectMapper objectMapper,
                                     AuditManagerComponent auditManagerComponent, Environment environment) {
@@ -53,10 +56,11 @@ public class SecurityManagerComponent {
         this.objectMapper = objectMapper;
         this.auditManagerComponent = auditManagerComponent;
         this.environment = environment;
+        this.jwtSecretKey = environment.getProperty("jwt.secret", "workflow-engine-jwt-secret-key-2026");
+        this.encryptionKey = environment.getProperty("platform.encryption.secret-key", "workflow-aes-256-encryption-key!");
     }
     
-    // JWT配置
-    private static final String JWT_SECRET_KEY = "workflow-engine-jwt-secret-key-2026";
+    // JWT 有效期（毫秒）
     private static final long JWT_EXPIRATION_MS = 24 * 60 * 60 * 1000; // 24小时
     private static final long REFRESH_TOKEN_EXPIRATION_MS = 7 * 24 * 60 * 60 * 1000; // 7天
     
@@ -64,7 +68,6 @@ public class SecurityManagerComponent {
     private static final String ENCRYPTION_ALGORITHM = "AES/GCM/NoPadding";
     private static final int GCM_IV_LENGTH = 12;
     private static final int GCM_TAG_LENGTH = 128;
-    private static final String ENCRYPTION_KEY = "workflow-aes-256-encryption-key!";
     
     // 缓存键前缀
     private static final String TOKEN_CACHE_PREFIX = "security:token:";
@@ -701,7 +704,7 @@ public class SecurityManagerComponent {
      * 获取加密密钥
      */
     private SecretKey getEncryptionKey() {
-        byte[] keyBytes = ENCRYPTION_KEY.getBytes(StandardCharsets.UTF_8);
+        byte[] keyBytes = encryptionKey.getBytes(StandardCharsets.UTF_8);
         byte[] key = new byte[32]; // AES-256需要32字节密钥
         System.arraycopy(keyBytes, 0, key, 0, Math.min(keyBytes.length, 32));
         return new SecretKeySpec(key, "AES");
@@ -1016,7 +1019,7 @@ public class SecurityManagerComponent {
                     .encodeToString(payload.getBytes(StandardCharsets.UTF_8));
             
             // 简化的签名（实际应使用HMAC-SHA256）
-            String signature = hashPassword(encodedPayload + JWT_SECRET_KEY);
+            String signature = hashPassword(encodedPayload + jwtSecretKey);
             
             return encodedPayload + "." + signature;
             
@@ -1044,7 +1047,7 @@ public class SecurityManagerComponent {
             String encodedPayload = Base64.getUrlEncoder().withoutPadding()
                     .encodeToString(payload.getBytes(StandardCharsets.UTF_8));
             
-            String signature = hashPassword(encodedPayload + JWT_SECRET_KEY);
+            String signature = hashPassword(encodedPayload + jwtSecretKey);
             
             return encodedPayload + "." + signature;
             
@@ -1068,7 +1071,7 @@ public class SecurityManagerComponent {
             String signature = parts[1];
             
             // 验证签名
-            String expectedSignature = hashPassword(encodedPayload + JWT_SECRET_KEY);
+            String expectedSignature = hashPassword(encodedPayload + jwtSecretKey);
             if (!expectedSignature.equals(signature)) {
                 return null;
             }

@@ -27,9 +27,6 @@ public class SecurityComponentImpl implements SecurityComponent {
     private final int lockDurationMinutes;
     private final ObjectMapper objectMapper = new ObjectMapper();
     
-    // workflow-engine 使用的 JWT secret
-    private static final String WORKFLOW_ENGINE_JWT_SECRET = "workflow-engine-jwt-secret-key-2026";
-    
     private final Map<String, Integer> loginFailures = new ConcurrentHashMap<>();
     private final Map<String, Long> lockoutTimes = new ConcurrentHashMap<>();
     
@@ -163,7 +160,7 @@ public class SecurityComponentImpl implements SecurityComponent {
                 String signature = parts[1];
                 
                 // 验证签名
-                String expectedSignature = hashPassword(encodedPayload + WORKFLOW_ENGINE_JWT_SECRET);
+                String expectedSignature = hashPassword(encodedPayload + jwtSecret);
                 if (!expectedSignature.equals(signature)) {
                     log.debug("Signature mismatch for 2-part token");
                     return null;
