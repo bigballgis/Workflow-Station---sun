@@ -28,12 +28,12 @@ if (Test-Path $apiGatewayPidFile) {
             Write-Host "✅ 已停止 API Gateway (PID: $pid)" -ForegroundColor Green
         } else {
             # 尝试通过端口停止
-            $netstat = netstat -ano | Select-String ":8080.*LISTENING"
+            $netstat = netstat -ano | Select-String ":8090.*LISTENING"
             if ($netstat) {
                 $processId = ($netstat -split '\s+')[-1]
                 if ($processId -and $processId -match '^\d+$') {
                     Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
-                    Write-Host "✅ 已停止 API Gateway (端口 8080)" -ForegroundColor Green
+                    Write-Host "✅ 已停止 API Gateway (端口 8090)" -ForegroundColor Green
                 }
             }
         }
@@ -54,12 +54,12 @@ if (Test-Path $workflowEnginePidFile) {
             Stop-Process -Id $pid -Force
             Write-Host "✅ 已停止 Workflow Engine (PID: $pid)" -ForegroundColor Green
         } else {
-            $netstat = netstat -ano | Select-String ":8081.*LISTENING"
+            $netstat = netstat -ano | Select-String ":8091.*LISTENING"
             if ($netstat) {
                 $processId = ($netstat -split '\s+')[-1]
                 if ($processId -and $processId -match '^\d+$') {
                     Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
-                    Write-Host "✅ 已停止 Workflow Engine (端口 8081)" -ForegroundColor Green
+                    Write-Host "✅ 已停止 Workflow Engine (端口 8091)" -ForegroundColor Green
                 }
             }
         }
@@ -80,12 +80,12 @@ if (Test-Path $adminCenterPidFile) {
             Stop-Process -Id $pid -Force
             Write-Host "✅ 已停止 Admin Center (PID: $pid)" -ForegroundColor Green
         } else {
-            $netstat = netstat -ano | Select-String ":8090.*LISTENING"
+            $netstat = netstat -ano | Select-String ":8092.*LISTENING"
             if ($netstat) {
                 $processId = ($netstat -split '\s+')[-1]
                 if ($processId -and $processId -match '^\d+$') {
                     Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
-                    Write-Host "✅ 已停止 Admin Center (端口 8090)" -ForegroundColor Green
+                    Write-Host "✅ 已停止 Admin Center (端口 8092)" -ForegroundColor Green
                 }
             }
         }
@@ -106,12 +106,12 @@ if (Test-Path $devWorkstationPidFile) {
             Stop-Process -Id $pid -Force
             Write-Host "✅ 已停止 Developer Workstation (PID: $pid)" -ForegroundColor Green
         } else {
-            $netstat = netstat -ano | Select-String ":8083.*LISTENING"
+            $netstat = netstat -ano | Select-String ":8094.*LISTENING"
             if ($netstat) {
                 $processId = ($netstat -split '\s+')[-1]
                 if ($processId -and $processId -match '^\d+$') {
                     Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
-                    Write-Host "✅ 已停止 Developer Workstation (端口 8083)" -ForegroundColor Green
+                    Write-Host "✅ 已停止 Developer Workstation (端口 8094)" -ForegroundColor Green
                 }
             }
         }
@@ -132,12 +132,12 @@ if (Test-Path $userPortalPidFile) {
             Stop-Process -Id $pid -Force
             Write-Host "✅ 已停止 User Portal (PID: $pid)" -ForegroundColor Green
         } else {
-            $netstat = netstat -ano | Select-String ":8082.*LISTENING"
+            $netstat = netstat -ano | Select-String ":8093.*LISTENING"
             if ($netstat) {
                 $processId = ($netstat -split '\s+')[-1]
                 if ($processId -and $processId -match '^\d+$') {
                     Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
-                    Write-Host "✅ 已停止 User Portal (端口 8082)" -ForegroundColor Green
+                    Write-Host "✅ 已停止 User Portal (端口 8093)" -ForegroundColor Green
                 }
             }
         }
@@ -150,7 +150,7 @@ if (Test-Path $userPortalPidFile) {
 # 清理所有相关的 Java 进程（作为后备方案，通过端口）
 Write-Host ""
 Write-Host "清理残留的 Java 进程..." -ForegroundColor Gray
-$backendPorts = @(8080, 8081, 8082, 8083, 8090)
+$backendPorts = @(8090, 8091, 8092, 8093, 8094)
 foreach ($port in $backendPorts) {
     $netstat = netstat -ano | Select-String ":$port.*LISTENING"
     if ($netstat) {

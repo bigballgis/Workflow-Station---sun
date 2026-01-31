@@ -1,5 +1,5 @@
 server:
-  port: ${SERVER_PORT:8090}
+  port: ${SERVER_PORT:8092}
   servlet:
     context-path: /api/v1/admin
 
@@ -151,7 +151,7 @@ admin:
 
 # Workflow Engine Configuration
 workflow-engine:
-  url: ${WORKFLOW_ENGINE_URL:http://localhost:8081}
+  url: ${WORKFLOW_ENGINE_URL:http://localhost:8091}
   enabled: true
 
 # JWT Configuration

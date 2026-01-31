@@ -348,7 +348,7 @@ if ($BackendOnly -or (-not $FrontendOnly)) {
         -e ADMIN_CENTER_URL=http://admin-center:8080 `
         -e JWT_SECRET_KEY=$env:JWT_SECRET_KEY `
         -e ENCRYPTION_KEY=$env:ENCRYPTION_KEY `
-        -p 8081:8080 `
+        -p 8091:8080 `
         --restart unless-stopped `
         workflow-engine:latest
     
@@ -369,7 +369,7 @@ if ($BackendOnly -or (-not $FrontendOnly)) {
         -e SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:29092 `
         -e JWT_SECRET_KEY=$env:JWT_SECRET_KEY `
         -e ENCRYPTION_KEY=$env:ENCRYPTION_KEY `
-        -p 8090:8080 `
+        -p 8092:8080 `
         --restart unless-stopped `
         admin-center:latest
     
@@ -391,7 +391,7 @@ if ($BackendOnly -or (-not $FrontendOnly)) {
         -e WORKFLOW_ENGINE_URL=http://workflow-engine:8080 `
         -e JWT_SECRET_KEY=$env:JWT_SECRET_KEY `
         -e ENCRYPTION_KEY=$env:ENCRYPTION_KEY `
-        -p 8082:8080 `
+        -p 8093:8080 `
         --restart unless-stopped `
         user-portal:latest
     
@@ -412,7 +412,7 @@ if ($BackendOnly -or (-not $FrontendOnly)) {
         -e ADMIN_CENTER_URL=http://admin-center:8080 `
         -e JWT_SECRET_KEY=$env:JWT_SECRET_KEY `
         -e ENCRYPTION_KEY=$env:ENCRYPTION_KEY `
-        -p 8083:8080 `
+        -p 8094:8080 `
         --restart unless-stopped `
         developer-workstation:latest
     
@@ -434,7 +434,7 @@ if ($BackendOnly -or (-not $FrontendOnly)) {
         -e USER_PORTAL_URL=http://user-portal:8080 `
         -e DEVELOPER_WORKSTATION_URL=http://developer-workstation:8080 `
         -e JWT_SECRET_KEY=$env:JWT_SECRET_KEY `
-        -p 8080:8080 `
+        -p 8090:8080 `
         --restart unless-stopped `
         api-gateway:latest
     
@@ -500,11 +500,11 @@ Write-Host "    - Redis:          localhost:6379" -ForegroundColor Gray
 Write-Host "    - Kafka:          localhost:9092" -ForegroundColor Gray
 Write-Host ""
 Write-Host "  Backend Services:" -ForegroundColor White
-Write-Host "    - API Gateway:    http://localhost:8080" -ForegroundColor Gray
-Write-Host "    - Workflow Engine: http://localhost:8081" -ForegroundColor Gray
-Write-Host "    - User Portal:    http://localhost:8082" -ForegroundColor Gray
-Write-Host "    - Developer WS:   http://localhost:8083" -ForegroundColor Gray
-Write-Host "    - Admin Center:   http://localhost:8090" -ForegroundColor Gray
+Write-Host "    - API Gateway:    http://localhost:8090" -ForegroundColor Gray
+Write-Host "    - Workflow Engine: http://localhost:8091" -ForegroundColor Gray
+Write-Host "    - Admin Center:   http://localhost:8092" -ForegroundColor Gray
+Write-Host "    - User Portal:    http://localhost:8093" -ForegroundColor Gray
+Write-Host "    - Developer WS:   http://localhost:8094" -ForegroundColor Gray
 Write-Host ""
 Write-Host "  Frontend Applications:" -ForegroundColor White
 Write-Host "    - Admin Center:   http://localhost:3000" -ForegroundColor Gray

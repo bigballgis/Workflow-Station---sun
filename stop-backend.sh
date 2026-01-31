@@ -51,7 +51,7 @@ stop_service "User Portal" "$LOG_DIR/user-portal-prod.pid"
 echo ""
 echo "🔍 检查端口占用..."
 
-for port in 8080 8081 8082 8083 8090; do
+for port in 8090 8091 8092 8093 8094; do
     PID=$(lsof -ti:$port 2>/dev/null)
     if [ -n "$PID" ]; then
         echo "⚠️  端口 $port 仍被占用 (PID: $PID)，正在停止..."

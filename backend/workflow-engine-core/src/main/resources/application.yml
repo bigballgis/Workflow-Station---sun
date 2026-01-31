@@ -1,5 +1,5 @@
 server:
-  port: ${SERVER_PORT:8081}
+  port: ${SERVER_PORT:8091}
 
 spring:
   application:
@@ -71,7 +71,7 @@ flowable:
 
 # Admin Center Configuration
 admin-center:
-  url: ${ADMIN_CENTER_URL:http://localhost:8090}
+  url: ${ADMIN_CENTER_URL:http://localhost:8092}
 
 # JWT Configuration
 jwt:
