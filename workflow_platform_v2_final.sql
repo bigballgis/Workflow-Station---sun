@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict fp1JHCstXrbWMZ2J7zEWqotVdsmWRLMtxadRAyHun55ND70lABbWZFP5IOzIoJM
+-- \restrict fp1JHCstXrbWMZ2J7zEWqotVdsmWRLMtxadRAyHun55ND70lABbWZFP5IOzIoJM
 
 -- Dumped from database version 16.5
 -- Dumped by pg_dump version 16.11 (Homebrew)

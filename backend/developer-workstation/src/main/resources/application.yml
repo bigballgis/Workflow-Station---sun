@@ -76,6 +76,10 @@ logging:
     org.springframework.security: INFO
     org.hibernate.SQL: DEBUG
 
+# Admin Center Configuration
+admin-center:
+  url: ${ADMIN_CENTER_URL:http://localhost:8090}
+
 # Actuator Configuration
 management:
   endpoints:
