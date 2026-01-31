@@ -1,6 +1,14 @@
 # Stop All Services Script
 # This script stops all running Docker containers
 
+# ========================================
+# UTF-8 编码配置（解决中文乱码）
+# ========================================
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
+$PSDefaultParameterValues['*:Encoding'] = 'utf8'
+chcp 65001 | Out-Null
+
 param(
     [switch]$RemoveVolumes,  # Also remove volumes (WARNING: deletes data)
     [switch]$InfraOnly,       # Only stop infrastructure

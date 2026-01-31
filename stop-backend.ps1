@@ -2,6 +2,14 @@
 # 停止后端服务脚本（Windows PowerShell）
 # =====================================================
 
+# ========================================
+# UTF-8 编码配置（解决中文乱码）
+# ========================================
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
+$PSDefaultParameterValues['*:Encoding'] = 'utf8'
+chcp 65001 | Out-Null
+
 $BASE_DIR = $PSScriptRoot
 $LOG_DIR = Join-Path $BASE_DIR "logs"
 

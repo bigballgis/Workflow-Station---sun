@@ -1,6 +1,14 @@
 # Start All Services Script
 # This script builds Docker images and starts all services using docker run
 
+# ========================================
+# UTF-8 编码配置（解决中文乱码）
+# ========================================
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$OutputEncoding = [System.Text.Encoding]::UTF8
+$PSDefaultParameterValues['*:Encoding'] = 'utf8'
+chcp 65001 | Out-Null
+
 param(
     [switch]$Build,        # Force rebuild all images
     [switch]$InfraOnly,    # Only start infrastructure (postgres, redis, kafka)
