@@ -1,7 +1,7 @@
 <template>
   <el-dialog 
     v-model="dialogVisible" 
-    :title="$t('icon.selectIcon')" 
+    :title="t('icon.selectIcon')" 
     width="700px"
     @close="handleClose"
   >
@@ -10,7 +10,7 @@
       <div class="icon-selector__header">
         <el-input 
           v-model="searchKeyword" 
-          :placeholder="$t('icon.searchPlaceholder')" 
+          :placeholder="t('icon.searchPlaceholder')" 
           clearable 
           @input="handleSearch"
           style="width: 200px;"
@@ -21,7 +21,7 @@
         </el-input>
         <el-select 
           v-model="selectedCategory" 
-          :placeholder="$t('icon.category')" 
+          :placeholder="t('icon.category')" 
           clearable 
           @change="loadIcons"
           style="width: 120px;"
@@ -30,7 +30,7 @@
         </el-select>
         <el-button type="primary" @click="showUploadDialog = true">
           <el-icon><Upload /></el-icon>
-          {{ $t('icon.upload') }}
+          {{ t('icon.upload') }}
         </el-button>
       </div>
 
@@ -48,7 +48,7 @@
           <div class="icon-item__name">{{ icon.name }}</div>
         </div>
         <div v-if="!icons.length && !loading" class="icon-selector__empty">
-          {{ $t('common.noData') }}
+          {{ t('common.noData') }}
         </div>
       </div>
 
@@ -64,15 +64,15 @@
     </div>
 
     <template #footer>
-      <el-button @click="handleClear">{{ $t('icon.clear') }}</el-button>
-      <el-button @click="handleClose">{{ $t('common.cancel') }}</el-button>
-      <el-button type="primary" @click="handleConfirm">{{ $t('common.confirm') }}</el-button>
+      <el-button @click="handleClear">{{ t('icon.clear') }}</el-button>
+      <el-button @click="handleClose">{{ t('common.cancel') }}</el-button>
+      <el-button type="primary" @click="handleConfirm">{{ t('common.confirm') }}</el-button>
     </template>
 
     <!-- Upload Dialog -->
-    <el-dialog v-model="showUploadDialog" :title="$t('icon.upload')" width="500px" append-to-body>
+    <el-dialog v-model="showUploadDialog" :title="t('icon.upload')" width="500px" append-to-body>
       <el-form :model="uploadForm" label-width="80px">
-        <el-form-item :label="$t('icon.file')" required>
+        <el-form-item :label="t('icon.file')" required>
           <el-upload
             ref="uploadRef"
             :auto-upload="false"
@@ -80,24 +80,24 @@
             accept=".svg"
             :on-change="handleFileChange"
           >
-            <el-button>{{ $t('icon.selectFile') }}</el-button>
+            <el-button>{{ t('icon.selectFile') }}</el-button>
           </el-upload>
         </el-form-item>
-        <el-form-item :label="$t('icon.name')" required>
-          <el-input v-model="uploadForm.name" :placeholder="$t('icon.namePlaceholder')" />
+        <el-form-item :label="t('icon.name')" required>
+          <el-input v-model="uploadForm.name" :placeholder="t('icon.namePlaceholder')" />
         </el-form-item>
-        <el-form-item :label="$t('icon.category')" required>
+        <el-form-item :label="t('icon.category')" required>
           <el-select v-model="uploadForm.category" style="width: 100%;">
             <el-option v-for="cat in categories" :key="cat" :label="categoryLabel(cat)" :value="cat" />
           </el-select>
         </el-form-item>
-        <el-form-item :label="$t('icon.tags')">
-          <el-input v-model="uploadForm.tags" :placeholder="$t('icon.tagsPlaceholder')" />
+        <el-form-item :label="t('icon.tags')">
+          <el-input v-model="uploadForm.tags" :placeholder="t('icon.tagsPlaceholder')" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showUploadDialog = false">{{ $t('common.cancel') }}</el-button>
-        <el-button type="primary" @click="handleUpload" :loading="uploading">{{ $t('icon.upload') }}</el-button>
+        <el-button @click="showUploadDialog = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="handleUpload" :loading="uploading">{{ t('icon.upload') }}</el-button>
       </template>
     </el-dialog>
   </el-dialog>

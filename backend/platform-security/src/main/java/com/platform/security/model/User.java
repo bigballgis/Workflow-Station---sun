@@ -31,13 +31,13 @@ public class User {
     @Column(length = 64)
     private String id;
 
-    @Column(unique = true, nullable = false, length = 50)
+    @Column(unique = true, nullable = false, length = 100)
     private String username;
 
     @Column(name = "password_hash", nullable = false)
     private String passwordHash;
 
-    @Column(length = 100)
+    @Column(name = "email", length = 255)
     private String email;
 
     @Column(name = "display_name", length = 50)

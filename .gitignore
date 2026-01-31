@@ -73,9 +73,11 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
-package-lock.json
-yarn.lock
-pnpm-lock.yaml
+# Note: package-lock.json, yarn.lock, pnpm-lock.yaml should be tracked
+# to ensure consistent dependency versions across environments
+# package-lock.json
+# yarn.lock
+# pnpm-lock.yaml
 
 # Vue / Vite
 .nuxt/
@@ -86,9 +88,11 @@ pnpm-lock.yaml
 # Logs
 # =============================================================================
 logs/
+**/logs/
 *.log
 *.log.*
 log/
+**/log/
 
 # =============================================================================
 # Temporary files
@@ -257,7 +261,6 @@ data/
 # =============================================================================
 # Generated documentation
 # =============================================================================
-docs/generated/
 site/
 javadoc/
 apidocs/
@@ -277,6 +280,20 @@ HELP.md
 .spring-boot-devtools.properties
 
 # =============================================================================
-# AI LOG MARKDOWN FILES
+# EXTERNAL: AI LOG MARKDOWN FILES
 # =============================================================================
 ai-logs/
+.kiro/
+docs/
+
+# =============================================================================
+# EXTERNAL: SCRIPTS
+# =============================================================================
+# Ignore scripts/ directory but keep script files
+scripts/
+!scripts/
+!scripts/**/*.sh
+!scripts/**/*.ps1
+
+# Ignore deploy/ directory but keep important scripts
+deploy/
