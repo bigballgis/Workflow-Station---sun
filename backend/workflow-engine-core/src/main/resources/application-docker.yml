@@ -15,4 +15,5 @@ logging:
   level:
     root: INFO
     com.workflow: DEBUG
+    com.platform: DEBUG
     org.flowable: INFO
