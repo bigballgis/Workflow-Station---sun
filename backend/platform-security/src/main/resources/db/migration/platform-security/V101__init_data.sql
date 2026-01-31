@@ -504,3 +504,42 @@ VALUES
     ('vgm-corpofficer-riskanalysts', 'vg-risk-analysts', 'corp-officer-001', NOW()),
     ('vgm-risklead-riskanalysts', 'vg-risk-analysts', 'risk-lead-001', NOW())
 ON CONFLICT (group_id, user_id) DO NOTHING;
+
+
+-- =====================================================
+-- 12. Direct Role Assignments (sys_role_assignments)
+-- For users who need direct role access without virtual groups
+-- =====================================================
+INSERT INTO sys_role_assignments (id, role_id, target_type, target_id, assigned_at, assigned_by)
+VALUES 
+    -- Admin user gets SYS_ADMIN role directly
+    ('ra-admin-sysadmin', 'SYS_ADMIN_ROLE', 'USER', 'admin-001', NOW(), 'system'),
+    -- Super admin gets SYS_ADMIN role
+    ('ra-superadmin-sysadmin', 'SYS_ADMIN_ROLE', 'USER', 'e9c974a2-3b71-4eba-9082-3b8d8cd03f08', NOW(), 'system'),
+    -- System admin gets SYS_ADMIN role
+    ('ra-sysadmin-sysadmin', 'SYS_ADMIN_ROLE', 'USER', 'f64d52ad-be7a-45ed-9b49-21138310b67c', NOW(), 'system'),
+    -- Auditor gets AUDITOR role
+    ('ra-auditor-auditor', 'AUDITOR_ROLE', 'USER', '90140d0a-6fbb-4432-b07d-e208fb6ebd55', NOW(), 'system'),
+    -- Tech director gets TECH_DIRECTOR role
+    ('ra-techdirector-techdirector', 'TECH_DIRECTOR_ROLE', 'USER', 'tech-director-001', NOW(), 'system'),
+    -- Team lead gets TEAM_LEADER role
+    ('ra-teamlead-teamleader', 'TEAM_LEADER_ROLE', 'USER', 'b7890c89-ef16-491b-ba2f-ef559817eb8a', NOW(), 'system'),
+    -- Dev lead gets TEAM_LEADER role
+    ('ra-devlead-teamleader', 'TEAM_LEADER_ROLE', 'USER', 'b4fe69e8-7313-48c5-865b-878231c24b9f', NOW(), 'system'),
+    -- Developers get DEVELOPER role
+    ('ra-designer-developer', 'DEVELOPER_ROLE', 'USER', 'aa220ecd-bb5b-4ba5-aa0a-27af144b9679', NOW(), 'system'),
+    ('ra-developer-developer', 'DEVELOPER_ROLE', 'USER', '635281da-5dbb-4118-9610-dd4d6318dcd6', NOW(), 'system'),
+    ('ra-seniordev-developer', 'DEVELOPER_ROLE', 'USER', '7e468949-05ea-4c41-8ab5-484fb0626185', NOW(), 'system'),
+    ('ra-devalex-developer', 'DEVELOPER_ROLE', 'USER', 'dev-alex-001', NOW(), 'system'),
+    ('ra-devemma-developer', 'DEVELOPER_ROLE', 'USER', 'dev-emma-001', NOW(), 'system'),
+    ('ra-devjohn-developer', 'DEVELOPER_ROLE', 'USER', 'dev-john-001', NOW(), 'system'),
+    ('ra-devlisa-developer', 'DEVELOPER_ROLE', 'USER', 'dev-lisa-001', NOW(), 'system'),
+    ('ra-devmary-developer', 'DEVELOPER_ROLE', 'USER', 'dev-mary-001', NOW(), 'system'),
+    ('ra-devpeter-developer', 'DEVELOPER_ROLE', 'USER', 'dev-peter-001', NOW(), 'system'),
+    -- Business users get USER role
+    ('ra-manager-user', 'USER_ROLE', 'USER', '9ad52216-f42b-4259-84eb-5e53a8fb0a3b', NOW(), 'system'),
+    ('ra-employeea-user', 'USER_ROLE', 'USER', 'e7eb22f1-aa8a-4eda-b4b0-f52d53622b3a', NOW(), 'system'),
+    ('ra-employeeb-user', 'USER_ROLE', 'USER', 'c7529039-05aa-4cdc-9b12-c8efa34bd61e', NOW(), 'system'),
+    ('ra-finance-user', 'USER_ROLE', 'USER', '48b3dad7-c5a9-4000-8b6b-80453e59a6da', NOW(), 'system'),
+    ('ra-hrstaff-user', 'USER_ROLE', 'USER', '7a55eeb0-d0cf-4b58-911d-61334643a374', NOW(), 'system')
+ON CONFLICT (id) DO NOTHING;

@@ -32,6 +32,13 @@ public interface UserRoleService {
     List<String> getPermissionsForUser(String userId);
     
     /**
+     * 根据角色代码列表获取权限（从数据库查询）
+     * @param roleCodes 角色代码列表
+     * @return 权限代码列表
+     */
+    List<String> getPermissionsForRoleCodes(List<String> roleCodes);
+    
+    /**
      * 检查用户是否拥有指定角色
      * @param userId 用户ID
      * @param roleCode 角色代码

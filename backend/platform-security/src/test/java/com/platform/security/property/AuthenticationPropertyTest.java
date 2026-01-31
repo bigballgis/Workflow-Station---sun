@@ -10,6 +10,7 @@ import com.platform.security.model.UserStatus;
 import com.platform.security.repository.LoginAuditRepository;
 import com.platform.security.repository.UserRepository;
 import com.platform.security.service.JwtTokenService;
+import com.platform.security.service.UserRoleService;
 import com.platform.security.service.impl.AuthenticationServiceImpl;
 import com.platform.security.service.impl.JwtTokenServiceImpl;
 import com.platform.security.service.impl.LoginAuditService;
@@ -20,6 +21,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -65,6 +67,7 @@ class AuthenticationPropertyTest {
         UserRepository userRepository = mock(UserRepository.class);
         LoginAuditRepository auditRepository = mock(LoginAuditRepository.class);
         LoginAuditService auditService = new LoginAuditService(auditRepository);
+        UserRoleService userRoleService = mock(UserRoleService.class);
 
         String passwordHash = passwordEncoder.encode(password);
         User user = User.builder()
@@ -77,9 +80,10 @@ class AuthenticationPropertyTest {
                 .build();
 
         when(userRepository.findByUsername(username)).thenReturn(Optional.of(user));
+        when(userRoleService.getPermissionsForRoleCodes(any())).thenReturn(List.of("user:read"));
 
         AuthenticationServiceImpl authService = new AuthenticationServiceImpl(
-                userRepository, jwtTokenService, passwordEncoder, jwtProperties, auditService
+                userRepository, jwtTokenService, passwordEncoder, jwtProperties, auditService, userRoleService
         );
 
         // Execute
@@ -111,6 +115,7 @@ class AuthenticationPropertyTest {
         UserRepository userRepository = mock(UserRepository.class);
         LoginAuditRepository auditRepository = mock(LoginAuditRepository.class);
         LoginAuditService auditService = new LoginAuditService(auditRepository);
+        UserRoleService userRoleService = mock(UserRoleService.class);
 
         String passwordHash = passwordEncoder.encode(correctPassword);
         User user = User.builder()
@@ -124,7 +129,7 @@ class AuthenticationPropertyTest {
         when(userRepository.findByUsername(username)).thenReturn(Optional.of(user));
 
         AuthenticationServiceImpl authService = new AuthenticationServiceImpl(
-                userRepository, jwtTokenService, passwordEncoder, jwtProperties, auditService
+                userRepository, jwtTokenService, passwordEncoder, jwtProperties, auditService, userRoleService
         );
 
         // Execute and verify
@@ -152,6 +157,7 @@ class AuthenticationPropertyTest {
         UserRepository userRepository = mock(UserRepository.class);
         LoginAuditRepository auditRepository = mock(LoginAuditRepository.class);
         LoginAuditService auditService = new LoginAuditService(auditRepository);
+        UserRoleService userRoleService = mock(UserRoleService.class);
 
         String passwordHash = passwordEncoder.encode(password);
         User user = User.builder()
@@ -165,7 +171,7 @@ class AuthenticationPropertyTest {
         when(userRepository.findByUsername(username)).thenReturn(Optional.of(user));
 
         AuthenticationServiceImpl authService = new AuthenticationServiceImpl(
-                userRepository, jwtTokenService, passwordEncoder, jwtProperties, auditService
+                userRepository, jwtTokenService, passwordEncoder, jwtProperties, auditService, userRoleService
         );
 
         // Execute and verify
@@ -193,6 +199,7 @@ class AuthenticationPropertyTest {
         UserRepository userRepository = mock(UserRepository.class);
         LoginAuditRepository auditRepository = mock(LoginAuditRepository.class);
         LoginAuditService auditService = new LoginAuditService(auditRepository);
+        UserRoleService userRoleService = mock(UserRoleService.class);
 
         String passwordHash = passwordEncoder.encode(password);
         User user = User.builder()
@@ -206,7 +213,7 @@ class AuthenticationPropertyTest {
         when(userRepository.findByUsername(username)).thenReturn(Optional.of(user));
 
         AuthenticationServiceImpl authService = new AuthenticationServiceImpl(
-                userRepository, jwtTokenService, passwordEncoder, jwtProperties, auditService
+                userRepository, jwtTokenService, passwordEncoder, jwtProperties, auditService, userRoleService
         );
 
         // Execute and verify
@@ -234,11 +241,12 @@ class AuthenticationPropertyTest {
         UserRepository userRepository = mock(UserRepository.class);
         LoginAuditRepository auditRepository = mock(LoginAuditRepository.class);
         LoginAuditService auditService = new LoginAuditService(auditRepository);
+        UserRoleService userRoleService = mock(UserRoleService.class);
 
         when(userRepository.findByUsername(username)).thenReturn(Optional.empty());
 
         AuthenticationServiceImpl authService = new AuthenticationServiceImpl(
-                userRepository, jwtTokenService, passwordEncoder, jwtProperties, auditService
+                userRepository, jwtTokenService, passwordEncoder, jwtProperties, auditService, userRoleService
         );
 
         // Execute and verify

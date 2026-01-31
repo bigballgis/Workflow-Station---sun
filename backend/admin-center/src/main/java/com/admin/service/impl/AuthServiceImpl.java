@@ -284,29 +284,36 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private List<String> getPermissionsForRoles(List<String> roles) {
+        if (roles == null || roles.isEmpty()) {
+            return List.of("basic:access");
+        }
+        
         List<String> permissions = new ArrayList<>();
         
-        for (String role : roles) {
-            switch (role) {
-                case "SYS_ADMIN", "SUPER_ADMIN", "ADMIN" -> permissions.addAll(List.of(
-                        "user:read", "user:write", "user:delete",
-                        "role:read", "role:write", "role:delete",
-                        "system:admin"
-                ));
-                case "SYSTEM_ADMIN" -> permissions.addAll(List.of(
-                        "user:read", "user:write",
-                        "role:read", "role:write",
-                        "system:config"
-                ));
-                case "TENANT_ADMIN" -> permissions.addAll(List.of(
-                        "user:read", "user:write",
-                        "tenant:admin"
-                ));
-                case "AUDITOR" -> permissions.addAll(List.of(
-                        "audit:read", "log:read"
-                ));
-                default -> permissions.add("basic:access");
+        for (String roleCode : roles) {
+            try {
+                // 从数据库查询角色对应的权限
+                // 通过 sys_roles -> sys_role_permissions -> sys_permissions 关联查询
+                List<String> rolePermissions = jdbcTemplate.queryForList(
+                    "SELECT p.code FROM sys_permissions p " +
+                    "JOIN sys_role_permissions rp ON p.id = rp.permission_id " +
+                    "JOIN sys_roles r ON rp.role_id = r.id " +
+                    "WHERE r.code = ? AND r.status = 'ACTIVE'",
+                    String.class,
+                    roleCode
+                );
+                
+                if (!rolePermissions.isEmpty()) {
+                    log.debug("Found {} permissions for role {} from database", rolePermissions.size(), roleCode);
+                    permissions.addAll(rolePermissions);
+                }
+            } catch (Exception e) {
+                log.warn("Failed to get permissions for role {}: {}", roleCode, e.getMessage());
             }
+        }
+        
+        if (permissions.isEmpty()) {
+            permissions.add("basic:access");
         }
         
         return permissions.stream().distinct().toList();
@@ -314,14 +321,32 @@ public class AuthServiceImpl implements AuthService {
     
     private List<String> getUserRoleCodes(String userId) {
         try {
+            // Query roles from multiple sources:
+            // 1. Direct role assignments (sys_role_assignments with target_type='USER')
+            // 2. Virtual group memberships (sys_virtual_group_members -> sys_virtual_group_roles)
+            // 3. Role assignments to virtual groups (sys_role_assignments with target_type='VIRTUAL_GROUP')
             return jdbcTemplate.queryForList(
-                    "SELECT r.code FROM sys_role_assignments ra " +
-                    "JOIN sys_roles r ON ra.role_id = r.id " +
-                    "WHERE ra.target_type = 'USER' AND ra.target_id = ? AND r.status = 'ACTIVE' " +
-                    "AND (ra.valid_from IS NULL OR ra.valid_from <= NOW()) " +
-                    "AND (ra.valid_to IS NULL OR ra.valid_to >= NOW())",
+                    "SELECT DISTINCT r.code FROM sys_roles r WHERE r.status = 'ACTIVE' AND r.id IN (" +
+                    // Direct user role assignments
+                    "  SELECT ra.role_id FROM sys_role_assignments ra " +
+                    "  WHERE ra.target_type = 'USER' AND ra.target_id = ? " +
+                    "  AND (ra.valid_from IS NULL OR ra.valid_from <= NOW()) " +
+                    "  AND (ra.valid_to IS NULL OR ra.valid_to >= NOW()) " +
+                    "  UNION " +
+                    // Roles from virtual group memberships
+                    "  SELECT vgr.role_id FROM sys_virtual_group_roles vgr " +
+                    "  JOIN sys_virtual_group_members vgm ON vgr.virtual_group_id = vgm.group_id " +
+                    "  WHERE vgm.user_id = ? " +
+                    "  UNION " +
+                    // Roles assigned to virtual groups the user belongs to
+                    "  SELECT ra.role_id FROM sys_role_assignments ra " +
+                    "  JOIN sys_virtual_group_members vgm ON ra.target_id = vgm.group_id " +
+                    "  WHERE ra.target_type = 'VIRTUAL_GROUP' AND vgm.user_id = ? " +
+                    "  AND (ra.valid_from IS NULL OR ra.valid_from <= NOW()) " +
+                    "  AND (ra.valid_to IS NULL OR ra.valid_to >= NOW()) " +
+                    ")",
                     String.class,
-                    userId
+                    userId, userId, userId
             );
         } catch (Exception e) {
             log.warn("Failed to get role codes for user {}: {}", userId, e.getMessage());
