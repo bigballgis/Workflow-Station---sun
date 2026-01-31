@@ -11,7 +11,7 @@ spring:
 
   # Database Configuration
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/workflow_platform}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/workflow_platform?currentSchema=projectx}
     username: ${SPRING_DATASOURCE_USERNAME:platform}
     password: ${SPRING_DATASOURCE_PASSWORD:platform123}
     driver-class-name: org.postgresql.Driver
@@ -28,6 +28,7 @@ spring:
     show-sql: false
     properties:
       hibernate:
+        default_schema: projectx
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
 
