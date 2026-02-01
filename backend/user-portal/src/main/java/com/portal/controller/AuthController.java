@@ -4,6 +4,8 @@ import com.platform.security.dto.UserEffectiveRole;
 import com.platform.security.service.UserRoleService;
 import com.portal.dto.LoginRequest;
 import com.portal.dto.LoginResponse;
+import com.portal.dto.RefreshRequest;
+import com.portal.dto.TokenResponse;
 import com.portal.entity.User;
 import com.portal.repository.UserRepository;
 import io.jsonwebtoken.Claims;
@@ -118,6 +120,40 @@ public class AuthController {
     @PostMapping("/logout")
     public ResponseEntity<Void> logout() {
         return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<TokenResponse> refresh(@RequestBody RefreshRequest request) {
+        if (request == null || request.getRefreshToken() == null || request.getRefreshToken().isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
+        try {
+            Claims claims = Jwts.parser().verifyWith(getSigningKey()).build()
+                    .parseSignedClaims(request.getRefreshToken()).getPayload();
+            if (!"refresh".equals(claims.get("type", String.class))) {
+                return ResponseEntity.status(401).build();
+            }
+            String userId = claims.getSubject();
+            User user = userRepository.findById(userId)
+                    .orElseThrow(() -> new RuntimeException("用户不存在"));
+            List<UserEffectiveRole> effectiveRoles = userRoleService.getEffectiveRolesForUser(userId);
+            List<String> roles = effectiveRoles.stream()
+                    .map(UserEffectiveRole::getRoleCode)
+                    .distinct()
+                    .collect(Collectors.toList());
+            if (roles.isEmpty()) {
+                roles = getRolesForUserLegacy(user.getId());
+            }
+            List<String> permissions = getPermissionsForRoles(roles);
+            String accessToken = generateToken(user, roles, permissions);
+            return ResponseEntity.ok(TokenResponse.builder()
+                    .accessToken(accessToken)
+                    .expiresIn(jwtExpiration / 1000)
+                    .build());
+        } catch (Exception e) {
+            log.warn("Refresh token failed: {}", e.getMessage());
+            return ResponseEntity.status(401).build();
+        }
     }
 
     @GetMapping("/me")
