@@ -160,7 +160,7 @@ const loadUserInfo = async () => {
     }
     
     // 从 API 获取用户信息
-    const response = await request.get('/api/v1/auth/me', { baseURL: '' })
+    const response = await request.get('/auth/me')
     userInfo.value = response.data || response
   } catch (error) {
     console.error('Failed to load user info:', error)
@@ -186,10 +186,10 @@ const handleChangePassword = async () => {
     
     changingPassword.value = true
     try {
-      await request.post('/api/v1/auth/change-password', {
+      await request.post('/auth/change-password', {
         oldPassword: passwordForm.oldPassword,
         newPassword: passwordForm.newPassword
-      }, { baseURL: '' })
+      })
       ElMessage.success(t('profile.passwordChanged'))
       passwordFormRef.value?.resetFields()
     } catch (error: any) {
