@@ -31,9 +31,9 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
 
-  # Flyway Configuration
+  # Flyway Configuration - DISABLED for controlled database initialization
   flyway:
-    enabled: true
+    enabled: false
     locations: classpath:db/migration/platform-security,classpath:db/migration/workflow-engine
     baseline-on-migrate: true
     validate-on-migrate: false
@@ -62,9 +62,9 @@ spring:
       properties:
         spring.json.trusted.packages: com.platform.*
 
-# Flowable Configuration
+# Flowable Configuration - DISABLED automatic schema updates
 flowable:
-  database-schema-update: true
+  database-schema-update: false
   async-executor-activate: true
   history-level: full
 

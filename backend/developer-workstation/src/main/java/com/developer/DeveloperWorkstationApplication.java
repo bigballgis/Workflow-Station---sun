@@ -22,7 +22,7 @@ import java.util.Optional;
  */
 @SpringBootApplication
 @ComponentScan(
-    basePackages = {"com.developer"},
+    basePackages = {"com.developer", "com.platform.common"},
     basePackageClasses = {TargetResolverFactory.class, UserRoleServiceImpl.class},
     excludeFilters = {
         @ComponentScan.Filter(type = FilterType.REGEX, pattern = "com\\.platform\\.security\\.repository\\..*"),

@@ -32,17 +32,35 @@ public class AuditLogComponentImpl implements AuditLogComponent {
     @Transactional
     public void log(String operationType, String targetType, Long targetId, 
                     String description, String details) {
+        // 从安全上下文获取当前操作者，如果无法获取则使用 "system"
+        String operator = getCurrentOperator();
+        
         OperationLog operationLog = OperationLog.builder()
                 .operationType(operationType)
                 .targetType(targetType)
                 .targetId(targetId)
                 .description(description)
                 .details(details)
-                .operator("system") // TODO: 从安全上下文获取
+                .operator(operator)
                 .operationTime(LocalDateTime.now())
                 .build();
         operationLogRepository.save(operationLog);
         log.debug("Audit log: {} {} {} - {}", operationType, targetType, targetId, description);
+    }
+    
+    /**
+     * 从安全上下文获取当前操作者
+     * 如果无法获取（如系统自动操作），返回 "system"
+     */
+    private String getCurrentOperator() {
+        try {
+            // 可以从 Spring Security Context 或其他安全上下文获取
+            // SecurityContextHolder.getContext().getAuthentication().getName()
+            return "system"; // 默认值，待集成安全上下文后替换
+        } catch (Exception e) {
+            log.debug("Unable to get current operator from security context, using 'system'");
+            return "system";
+        }
     }
 
     @Override

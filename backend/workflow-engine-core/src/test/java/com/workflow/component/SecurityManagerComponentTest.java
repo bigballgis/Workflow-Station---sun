@@ -56,7 +56,19 @@ class SecurityManagerComponentTest {
         when(stringRedisTemplate.opsForValue()).thenReturn(valueOperations);
         when(stringRedisTemplate.opsForHash()).thenReturn(hashOperations);
         
-        securityManager = new SecurityManagerComponent(stringRedisTemplate, objectMapper, auditManagerComponent);
+        // 使用测试用的密钥
+        String testJwtSecret = "test-jwt-secret-key-for-unit-testing-32chars";
+        String testEncryptionKey = "test-encryption-key-32-bytes!!!!";
+        
+        securityManager = new SecurityManagerComponent(
+            stringRedisTemplate, 
+            objectMapper, 
+            auditManagerComponent,
+            testJwtSecret,
+            86400000L,
+            604800000L,
+            testEncryptionKey
+        );
         securityManager.initializeDefaultRolePermissions();
     }
 

@@ -1,5 +1,8 @@
 package com.workflow.controller;
 
+import com.platform.common.config.ConfigurationManager;
+import com.platform.common.config.WorkflowConfig;
+import com.platform.common.security.SecurityIntegrationService;
 import com.workflow.component.HistoryManagerComponent;
 import com.workflow.component.TaskManagerComponent;
 import com.workflow.dto.request.HistoryQueryRequest;
@@ -35,6 +38,9 @@ import java.util.stream.Collectors;
  * 
  * 提供任务查询、完成、委托、转办等RESTful API接口
  * 通过 TaskManagerComponent 调用 Flowable 引擎
+ * 集成了安全验证、输入验证和错误处理框架
+ * 
+ * **Validates: Requirements 4.2**
  * 
  * @author Workflow Engine
  * @version 1.0
@@ -49,6 +55,8 @@ public class TaskController {
     private final TaskManagerComponent taskManagerComponent;
     private final UserPermissionService userPermissionService;
     private final HistoryService historyService;
+    private final ConfigurationManager configurationManager;
+    private final SecurityIntegrationService securityIntegrationService;
 
     /**
      * 查询任务列表
@@ -63,22 +71,39 @@ public class TaskController {
             @Parameter(description = "页码")
             @RequestParam(value = "page", defaultValue = "0") int page,
             @Parameter(description = "每页大小")
-            @RequestParam(value = "size", defaultValue = "10") int size,
+            @RequestParam(value = "size", required = false) Integer size,
             @Parameter(description = "虚拟组ID列表")
             @RequestParam(value = "groupIds", required = false) List<String> groupIds,
             @Parameter(description = "部门角色列表")
             @RequestParam(value = "deptRoles", required = false) List<String> deptRoles) {
         
-        log.info("Querying tasks for user: {}, processInstanceId: {}, page: {}, size: {}", userId, processInstanceId, page, size);
+        // Validate and sanitize inputs using security integration service
+        if (userId != null) {
+            securityIntegrationService.validateAndAuditInput("userId", userId, "task_query");
+        }
+        if (processInstanceId != null) {
+            securityIntegrationService.validateAndAuditInput("processInstanceId", processInstanceId, "task_query");
+        }
+        
+        // Use externalized configuration for default page size
+        WorkflowConfig workflowConfig = configurationManager.getConfiguration(WorkflowConfig.class);
+        int pageSize = size != null ? size : workflowConfig.getDefaultPageSize();
+        
+        // Enforce maximum page size limit
+        if (pageSize > workflowConfig.getMaxPageSize()) {
+            pageSize = workflowConfig.getMaxPageSize();
+        }
+        
+        log.info("Querying tasks for user: {}, processInstanceId: {}, page: {}, size: {}", userId, processInstanceId, page, pageSize);
         
         TaskListResult result;
         if (processInstanceId != null && !processInstanceId.isEmpty()) {
             // 按流程实例ID查询任务
-            result = taskManagerComponent.getTasksByProcessInstance(processInstanceId, page, size);
+            result = taskManagerComponent.getTasksByProcessInstance(processInstanceId, page, pageSize);
         } else if (groupIds != null || deptRoles != null) {
-            result = taskManagerComponent.getUserAllVisibleTasks(userId, groupIds, deptRoles, page, size);
+            result = taskManagerComponent.getUserAllVisibleTasks(userId, groupIds, deptRoles, page, pageSize);
         } else {
-            result = taskManagerComponent.getUserTasks(userId, page, size);
+            result = taskManagerComponent.getUserTasks(userId, page, pageSize);
         }
         
         return ResponseEntity.ok(ApiResponse.success(result));

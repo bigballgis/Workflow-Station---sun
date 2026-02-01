@@ -11,6 +11,9 @@ import com.developer.repository.VersionRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,6 +33,35 @@ public class VersionComponentImpl implements VersionComponent {
     private final FunctionUnitRepository functionUnitRepository;
     private final ObjectMapper objectMapper;
     
+    /**
+     * 获取当前操作者
+     * 优先从 Spring Security Context 获取，如果无法获取则返回 "system"
+     * 
+     * 返回 "system" 的情况：
+     * - 没有认证信息（未登录）
+     * - 匿名用户
+     * - 系统后台任务
+     * - 获取过程中发生异常
+     * 
+     * @return 当前操作者用户名，如果无法获取则返回 "system"
+     */
+    private String getCurrentOperator() {
+        try {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (authentication != null 
+                    && authentication.isAuthenticated() 
+                    && !(authentication instanceof AnonymousAuthenticationToken)) {
+                String username = authentication.getName();
+                if (username != null && !username.isEmpty()) {
+                    return username;
+                }
+            }
+        } catch (Exception e) {
+            log.debug("Failed to get current operator from security context: {}", e.getMessage());
+        }
+        return "system";
+    }
+    
     @Override
     @Transactional
     public Version createVersion(Long functionUnitId, String changeLog) {
@@ -46,7 +78,7 @@ public class VersionComponentImpl implements VersionComponent {
                     .versionNumber(newVersion)
                     .changeLog(changeLog)
                     .snapshotData(snapshotData)
-                    .publishedBy("system") // TODO: 从安全上下文获取
+                    .publishedBy(getCurrentOperator())
                     .build();
             
             version = versionRepository.save(version);
@@ -118,7 +150,7 @@ public class VersionComponentImpl implements VersionComponent {
                     .versionNumber(backupVersion)
                     .changeLog("回滚前自动备份")
                     .snapshotData(createSnapshot(functionUnit))
-                    .publishedBy("system")
+                    .publishedBy(getCurrentOperator())
                     .build();
             versionRepository.save(backup);
             
@@ -133,7 +165,7 @@ public class VersionComponentImpl implements VersionComponent {
                     .versionNumber(newVersion)
                     .changeLog("回滚到版本 " + targetVersion.getVersionNumber())
                     .snapshotData(targetVersion.getSnapshotData())
-                    .publishedBy("system")
+                    .publishedBy(getCurrentOperator())
                     .build();
             versionRepository.save(rollbackVersion);
             
@@ -214,4 +246,5 @@ public class VersionComponentImpl implements VersionComponent {
         
         return differences;
     }
+    
 }

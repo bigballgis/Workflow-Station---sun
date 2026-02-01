@@ -1,0 +1,191 @@
+# External Configuration Example
+# This file demonstrates how to externalize configuration values
+# Copy this to application.yml or set as environment variables
+
+# Platform-level configuration encryption
+platform:
+  config:
+    encryption:
+      key: ${PLATFORM_CONFIG_ENCRYPTION_KEY:default-config-encryption-key-32bytes}
+  encryption:
+    secret-key: ${PLATFORM_ENCRYPTION_SECRET_KEY:default-encryption-key-32-bytes!!!}
+
+app:
+  database:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/workflow_platform}
+    username: ${DATABASE_USERNAME:platform}
+    password: ${DATABASE_PASSWORD:platform123}
+    driver-class-name: ${DATABASE_DRIVER:org.postgresql.Driver}
+    max-connections: ${DATABASE_MAX_CONNECTIONS:20}
+    min-idle-connections: ${DATABASE_MIN_IDLE:5}
+    connection-timeout-ms: ${DATABASE_CONNECTION_TIMEOUT:20000}
+    idle-timeout-ms: ${DATABASE_IDLE_TIMEOUT:300000}
+    max-lifetime-ms: ${DATABASE_MAX_LIFETIME:1200000}
+    pool-name: ${DATABASE_POOL_NAME:PlatformHikariPool}
+    show-sql: ${DATABASE_SHOW_SQL:false}
+    format-sql: ${DATABASE_FORMAT_SQL:true}
+    dialect: ${DATABASE_DIALECT:org.hibernate.dialect.PostgreSQLDialect}
+    timezone: ${DATABASE_TIMEZONE:UTC}
+
+  security:
+    enable-input-validation: ${SECURITY_ENABLE_INPUT_VALIDATION:true}
+    enable-sql-injection-detection: ${SECURITY_ENABLE_SQL_INJECTION_DETECTION:true}
+    enable-xss-protection: ${SECURITY_ENABLE_XSS_PROTECTION:true}
+    enable-csrf-protection: ${SECURITY_ENABLE_CSRF_PROTECTION:true}
+    allowed-origins: ${SECURITY_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:3002}
+    allowed-headers: ${SECURITY_ALLOWED_HEADERS:Content-Type,Authorization,X-User-Id}
+    allowed-methods: ${SECURITY_ALLOWED_METHODS:GET,POST,PUT,DELETE,OPTIONS}
+    password-min-length: ${SECURITY_PASSWORD_MIN_LENGTH:8}
+    password-max-length: ${SECURITY_PASSWORD_MAX_LENGTH:128}
+    password-require-uppercase: ${SECURITY_PASSWORD_REQUIRE_UPPERCASE:true}
+    password-require-lowercase: ${SECURITY_PASSWORD_REQUIRE_LOWERCASE:true}
+    password-require-digit: ${SECURITY_PASSWORD_REQUIRE_DIGIT:true}
+    password-require-special: ${SECURITY_PASSWORD_REQUIRE_SPECIAL:true}
+    password-history-count: ${SECURITY_PASSWORD_HISTORY_COUNT:5}
+    password-expiry-days: ${SECURITY_PASSWORD_EXPIRY_DAYS:90}
+    max-failed-attempts: ${SECURITY_MAX_FAILED_ATTEMPTS:5}
+    lockout-duration-minutes: ${SECURITY_LOCKOUT_DURATION:30}
+    session-timeout-minutes: ${SECURITY_SESSION_TIMEOUT:30}
+    max-concurrent-sessions: ${SECURITY_MAX_CONCURRENT_SESSIONS:3}
+    enable-security-audit-logging: ${SECURITY_ENABLE_AUDIT_LOGGING:true}
+    enable-security-event-notification: ${SECURITY_ENABLE_EVENT_NOTIFICATION:true}
+    jwt-secret-key: ${SECURITY_JWT_SECRET_KEY:default-jwt-secret-key-change-in-production}
+    jwt-expiration-seconds: ${SECURITY_JWT_EXPIRATION:3600}
+    # Secure configuration management settings
+    enable-configuration-encryption: ${SECURITY_ENABLE_CONFIG_ENCRYPTION:true}
+    enable-configuration-audit-logging: ${SECURITY_ENABLE_CONFIG_AUDIT_LOGGING:true}
+    enable-credential-caching: ${SECURITY_ENABLE_CREDENTIAL_CACHING:true}
+    credential-cache-ttl-minutes: ${SECURITY_CREDENTIAL_CACHE_TTL:60}
+    configuration-encryption-algorithm: ${SECURITY_CONFIG_ENCRYPTION_ALGORITHM:AES/GCM/NoPadding}
+    mask-sensitive-configuration-in-logs: ${SECURITY_MASK_SENSITIVE_CONFIG:true}
+    validate-credentials-at-startup: ${SECURITY_VALIDATE_CREDENTIALS_AT_STARTUP:true}
+
+  api:
+    request-timeout-ms: ${API_REQUEST_TIMEOUT:30000}
+    connection-timeout-ms: ${API_CONNECTION_TIMEOUT:10000}
+    read-timeout-ms: ${API_READ_TIMEOUT:30000}
+    max-connections: ${API_MAX_CONNECTIONS:100}
+    max-connections-per-route: ${API_MAX_CONNECTIONS_PER_ROUTE:50}
+    rate-limit-requests-per-minute: ${API_RATE_LIMIT_REQUESTS:1000}
+    rate-limit-burst-size: ${API_RATE_LIMIT_BURST:100}
+    enable-rate-limiting: ${API_ENABLE_RATE_LIMITING:true}
+    enable-request-logging: ${API_ENABLE_REQUEST_LOGGING:true}
+    enable-response-logging: ${API_ENABLE_RESPONSE_LOGGING:false}
+    enable-metrics: ${API_ENABLE_METRICS:true}
+    version: ${API_VERSION:v1}
+    base-path: ${API_BASE_PATH:/api}
+    cors-allowed-origins: ${API_CORS_ALLOWED_ORIGINS:*}
+    cors-allowed-methods: ${API_CORS_ALLOWED_METHODS:GET,POST,PUT,DELETE,OPTIONS}
+    cors-allowed-headers: ${API_CORS_ALLOWED_HEADERS:Content-Type,Authorization,X-User-Id}
+    cors-allow-credentials: ${API_CORS_ALLOW_CREDENTIALS:true}
+    cors-max-age-seconds: ${API_CORS_MAX_AGE:3600}
+    workflow-engine-url: ${API_WORKFLOW_ENGINE_URL:http://localhost:8081}
+    user-service-url: ${API_USER_SERVICE_URL:http://localhost:8082}
+    notification-service-url: ${API_NOTIFICATION_SERVICE_URL:http://localhost:8083}
+    enable-circuit-breaker: ${API_ENABLE_CIRCUIT_BREAKER:true}
+    circuit-breaker-failure-threshold: ${API_CIRCUIT_BREAKER_FAILURE_THRESHOLD:5}
+    circuit-breaker-timeout-ms: ${API_CIRCUIT_BREAKER_TIMEOUT:60000}
+
+  monitoring:
+    enable-metrics: ${MONITORING_ENABLE_METRICS:true}
+    enable-health-checks: ${MONITORING_ENABLE_HEALTH_CHECKS:true}
+    enable-tracing: ${MONITORING_ENABLE_TRACING:true}
+    enable-logging: ${MONITORING_ENABLE_LOGGING:true}
+    metrics-endpoint: ${MONITORING_METRICS_ENDPOINT:/actuator/metrics}
+    health-endpoint: ${MONITORING_HEALTH_ENDPOINT:/actuator/health}
+    info-endpoint: ${MONITORING_INFO_ENDPOINT:/actuator/info}
+    metrics-collection-interval-seconds: ${MONITORING_METRICS_INTERVAL:60}
+    health-check-interval-seconds: ${MONITORING_HEALTH_CHECK_INTERVAL:30}
+    log-retention-days: ${MONITORING_LOG_RETENTION_DAYS:30}
+    max-log-file-size-mb: ${MONITORING_MAX_LOG_FILE_SIZE:10}
+    log-level: ${MONITORING_LOG_LEVEL:INFO}
+    log-pattern: ${MONITORING_LOG_PATTERN:%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n}
+    enable-audit-logging: ${MONITORING_ENABLE_AUDIT_LOGGING:true}
+    audit-retention-days: ${MONITORING_AUDIT_RETENTION_DAYS:365}
+    enable-performance-monitoring: ${MONITORING_ENABLE_PERFORMANCE_MONITORING:true}
+    performance-threshold-ms: ${MONITORING_PERFORMANCE_THRESHOLD:1000}
+    enable-alerts: ${MONITORING_ENABLE_ALERTS:true}
+    alert-notification-url: ${MONITORING_ALERT_NOTIFICATION_URL:http://localhost:8083/notifications/alerts}
+
+  cache:
+    redis-host: ${CACHE_REDIS_HOST:localhost}
+    redis-port: ${CACHE_REDIS_PORT:6379}
+    redis-password: ${CACHE_REDIS_PASSWORD:redis123}
+    redis-database: ${CACHE_REDIS_DATABASE:1}
+    redis-timeout-ms: ${CACHE_REDIS_TIMEOUT:5000}
+    redis-max-active: ${CACHE_REDIS_MAX_ACTIVE:20}
+    redis-max-idle: ${CACHE_REDIS_MAX_IDLE:10}
+    redis-min-idle: ${CACHE_REDIS_MIN_IDLE:5}
+    redis-max-wait-ms: ${CACHE_REDIS_MAX_WAIT:3000}
+    user-cache-ttl-minutes: ${CACHE_USER_TTL:30}
+    permission-cache-ttl-minutes: ${CACHE_PERMISSION_TTL:60}
+    dictionary-cache-ttl-minutes: ${CACHE_DICTIONARY_TTL:120}
+    session-cache-ttl-minutes: ${CACHE_SESSION_TTL:30}
+    configuration-cache-ttl-minutes: ${CACHE_CONFIGURATION_TTL:60}
+    enable-local-cache: ${CACHE_ENABLE_LOCAL:true}
+    enable-distributed-cache: ${CACHE_ENABLE_DISTRIBUTED:true}
+    enable-cache-metrics: ${CACHE_ENABLE_METRICS:true}
+    local-cache-max-size: ${CACHE_LOCAL_MAX_SIZE:10000}
+    local-cache-expire-after-write-minutes: ${CACHE_LOCAL_EXPIRE_AFTER_WRITE:30}
+    local-cache-expire-after-access-minutes: ${CACHE_LOCAL_EXPIRE_AFTER_ACCESS:15}
+
+  messaging:
+    kafka-bootstrap-servers: ${MESSAGING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    kafka-producer-key-serializer: ${MESSAGING_KAFKA_PRODUCER_KEY_SERIALIZER:org.apache.kafka.common.serialization.StringSerializer}
+    kafka-producer-value-serializer: ${MESSAGING_KAFKA_PRODUCER_VALUE_SERIALIZER:org.springframework.kafka.support.serializer.JsonSerializer}
+    kafka-consumer-group-id: ${MESSAGING_KAFKA_CONSUMER_GROUP_ID:platform-consumer}
+    kafka-consumer-auto-offset-reset: ${MESSAGING_KAFKA_CONSUMER_AUTO_OFFSET_RESET:earliest}
+    kafka-consumer-key-deserializer: ${MESSAGING_KAFKA_CONSUMER_KEY_DESERIALIZER:org.apache.kafka.common.serialization.StringDeserializer}
+    kafka-consumer-value-deserializer: ${MESSAGING_KAFKA_CONSUMER_VALUE_DESERIALIZER:org.springframework.kafka.support.serializer.JsonDeserializer}
+    kafka-producer-retries: ${MESSAGING_KAFKA_PRODUCER_RETRIES:3}
+    kafka-producer-batch-size: ${MESSAGING_KAFKA_PRODUCER_BATCH_SIZE:16384}
+    kafka-producer-linger-ms: ${MESSAGING_KAFKA_PRODUCER_LINGER_MS:1}
+    kafka-producer-buffer-memory: ${MESSAGING_KAFKA_PRODUCER_BUFFER_MEMORY:33554432}
+    kafka-consumer-session-timeout-ms: ${MESSAGING_KAFKA_CONSUMER_SESSION_TIMEOUT:30000}
+    kafka-consumer-max-poll-records: ${MESSAGING_KAFKA_CONSUMER_MAX_POLL_RECORDS:500}
+    enable-kafka: ${MESSAGING_ENABLE_KAFKA:true}
+    enable-kafka-metrics: ${MESSAGING_ENABLE_KAFKA_METRICS:true}
+    enable-kafka-health-check: ${MESSAGING_ENABLE_KAFKA_HEALTH_CHECK:true}
+    audit-events-topic: ${MESSAGING_AUDIT_EVENTS_TOPIC:audit-events}
+    notification-events-topic: ${MESSAGING_NOTIFICATION_EVENTS_TOPIC:notification-events}
+    workflow-events-topic: ${MESSAGING_WORKFLOW_EVENTS_TOPIC:workflow-events}
+    user-events-topic: ${MESSAGING_USER_EVENTS_TOPIC:user-events}
+    system-events-topic: ${MESSAGING_SYSTEM_EVENTS_TOPIC:system-events}
+    email-host: ${MESSAGING_EMAIL_HOST:localhost}
+    email-port: ${MESSAGING_EMAIL_PORT:587}
+    email-username: ${MESSAGING_EMAIL_USERNAME:}
+    email-password: ${MESSAGING_EMAIL_PASSWORD:}
+    email-enable-tls: ${MESSAGING_EMAIL_ENABLE_TLS:true}
+    email-enable-auth: ${MESSAGING_EMAIL_ENABLE_AUTH:true}
+    email-from-address: ${MESSAGING_EMAIL_FROM_ADDRESS:noreply@platform.com}
+    email-from-name: ${MESSAGING_EMAIL_FROM_NAME:Platform System}
+    enable-sms: ${MESSAGING_ENABLE_SMS:false}
+    sms-provider-url: ${MESSAGING_SMS_PROVIDER_URL:http://localhost:8084/sms}
+    sms-api-key: ${MESSAGING_SMS_API_KEY:}
+    sms-api-secret: ${MESSAGING_SMS_API_SECRET:}
+    sms-timeout-ms: ${MESSAGING_SMS_TIMEOUT:10000}
+
+  workflow:
+    engine-url: ${WORKFLOW_ENGINE_URL:http://localhost:8081}
+    enabled: ${WORKFLOW_ENABLED:true}
+    connection-timeout-ms: ${WORKFLOW_CONNECTION_TIMEOUT:30000}
+    read-timeout-ms: ${WORKFLOW_READ_TIMEOUT:60000}
+    max-retry-attempts: ${WORKFLOW_MAX_RETRY_ATTEMPTS:3}
+    retry-delay-ms: ${WORKFLOW_RETRY_DELAY:5000}
+    enable-circuit-breaker: ${WORKFLOW_ENABLE_CIRCUIT_BREAKER:true}
+    circuit-breaker-failure-threshold: ${WORKFLOW_CIRCUIT_BREAKER_FAILURE_THRESHOLD:5}
+    circuit-breaker-timeout-ms: ${WORKFLOW_CIRCUIT_BREAKER_TIMEOUT:60000}
+    enable-metrics: ${WORKFLOW_ENABLE_METRICS:true}
+    enable-health-check: ${WORKFLOW_ENABLE_HEALTH_CHECK:true}
+    enable-audit-logging: ${WORKFLOW_ENABLE_AUDIT_LOGGING:true}
+    default-page-size: ${WORKFLOW_DEFAULT_PAGE_SIZE:10}
+    max-page-size: ${WORKFLOW_MAX_PAGE_SIZE:1000}
+    task-query-timeout-seconds: ${WORKFLOW_TASK_QUERY_TIMEOUT:30}
+    process-query-timeout-seconds: ${WORKFLOW_PROCESS_QUERY_TIMEOUT:60}
+    enable-task-caching: ${WORKFLOW_ENABLE_TASK_CACHING:true}
+    task-cache-ttl-minutes: ${WORKFLOW_TASK_CACHE_TTL:15}
+    enable-process-caching: ${WORKFLOW_ENABLE_PROCESS_CACHING:true}
+    process-cache-ttl-minutes: ${WORKFLOW_PROCESS_CACHE_TTL:30}
+    enable-async-processing: ${WORKFLOW_ENABLE_ASYNC_PROCESSING:true}
+    async-thread-pool-size: ${WORKFLOW_ASYNC_THREAD_POOL_SIZE:10}
+    async-queue-capacity: ${WORKFLOW_ASYNC_QUEUE_CAPACITY:1000}

@@ -1,10 +1,15 @@
 package com.developer.component.impl;
 
 import com.developer.component.SecurityComponent;
+import com.developer.repository.PermissionRepository;
+import com.developer.repository.RoleRepository;
+import com.developer.security.SecurityCacheManager;
+import com.developer.security.SecurityAuditLogger;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -27,8 +32,14 @@ public class SecurityComponentImpl implements SecurityComponent {
     private final int lockDurationMinutes;
     private final ObjectMapper objectMapper = new ObjectMapper();
     
-    // workflow-engine 使用的 JWT secret
-    private static final String WORKFLOW_ENGINE_JWT_SECRET = "workflow-engine-jwt-secret-key-2026";
+    // workflow-engine 使用的 JWT secret - 从配置读取
+    private final String workflowEngineJwtSecret;
+    
+    // Security repositories and cache for database-backed permission checking
+    private final PermissionRepository permissionRepository;
+    private final RoleRepository roleRepository;
+    private final SecurityCacheManager cacheManager;
+    private final SecurityAuditLogger auditLogger;
     
     private final Map<String, Integer> loginFailures = new ConcurrentHashMap<>();
     private final Map<String, Long> lockoutTimes = new ConcurrentHashMap<>();
@@ -37,7 +48,8 @@ public class SecurityComponentImpl implements SecurityComponent {
      * 默认构造函数，用于测试
      */
     public SecurityComponentImpl() {
-        this("your-256-bit-secret-key-for-development-only", 86400000L, 5, 30);
+        this("your-256-bit-secret-key-for-development-only", 86400000L, 5, 30, 
+             "your-256-bit-secret-key-for-development-only", null, null, null, null);
     }
     
     /**
@@ -47,11 +59,21 @@ public class SecurityComponentImpl implements SecurityComponent {
             @Value("${security.jwt.secret:your-256-bit-secret-key-for-development-only}") String jwtSecret,
             @Value("${security.jwt.expiration:86400000}") long jwtExpiration,
             @Value("${security.max-login-attempts:5}") int maxLoginAttempts,
-            @Value("${security.lock-duration-minutes:30}") int lockDurationMinutes) {
+            @Value("${security.lock-duration-minutes:30}") int lockDurationMinutes,
+            @Value("${workflow-engine.jwt.secret:${security.jwt.secret}}") String workflowEngineJwtSecret,
+            @Autowired(required = false) PermissionRepository permissionRepository,
+            @Autowired(required = false) RoleRepository roleRepository,
+            @Autowired(required = false) SecurityCacheManager cacheManager,
+            @Autowired(required = false) SecurityAuditLogger auditLogger) {
         this.jwtSecret = jwtSecret;
         this.jwtExpiration = jwtExpiration;
         this.maxLoginAttempts = maxLoginAttempts;
         this.lockDurationMinutes = lockDurationMinutes;
+        this.workflowEngineJwtSecret = workflowEngineJwtSecret;
+        this.permissionRepository = permissionRepository;
+        this.roleRepository = roleRepository;
+        this.cacheManager = cacheManager;
+        this.auditLogger = auditLogger;
     }
     
     private SecretKey getSigningKey() {
@@ -163,7 +185,7 @@ public class SecurityComponentImpl implements SecurityComponent {
                 String signature = parts[1];
                 
                 // 验证签名
-                String expectedSignature = hashPassword(encodedPayload + WORKFLOW_ENGINE_JWT_SECRET);
+                String expectedSignature = hashPassword(encodedPayload + workflowEngineJwtSecret);
                 if (!expectedSignature.equals(signature)) {
                     log.debug("Signature mismatch for 2-part token");
                     return null;
@@ -258,13 +280,129 @@ public class SecurityComponentImpl implements SecurityComponent {
     
     @Override
     public boolean hasPermission(String username, String permission) {
-        // TODO: 实现权限检查逻辑
-        return true;
+        // If repositories are not available (e.g., in tests), fall back to secure default
+        if (permissionRepository == null || cacheManager == null) {
+            if (auditLogger != null) {
+                auditLogger.logSystemError(username, "permission_check", 
+                        new IllegalStateException("Permission repository or cache manager not available"));
+            }
+            log.warn("Permission repository or cache manager not available, denying permission: user={}, permission={}", 
+                    username, permission);
+            return false;
+        }
+        
+        try {
+            // Try to get cached result first
+            var cachedResult = cacheManager.getCachedPermission(username, permission);
+            if (cachedResult.isPresent()) {
+                boolean result = cachedResult.get();
+                if (auditLogger != null) {
+                    auditLogger.logSuccessfulAccess(username, "permission_check", permission, true);
+                    auditLogger.logCacheOperation(username, "cache_hit", permission, "permission_check");
+                }
+                log.debug("Permission check cache hit: user={}, permission={}, result={}", 
+                        username, permission, result);
+                return result;
+            }
+            
+            // Cache miss - log it
+            if (auditLogger != null) {
+                auditLogger.logCacheOperation(username, "cache_miss", permission, "permission_check");
+            }
+            
+            // Query database for permission
+            boolean hasPermission = permissionRepository.hasPermission(username, permission);
+            
+            // Cache the result
+            cacheManager.cachePermission(username, permission, hasPermission);
+            
+            // Log the result
+            if (auditLogger != null) {
+                if (hasPermission) {
+                    auditLogger.logSuccessfulAccess(username, "permission_check", permission, false);
+                } else {
+                    auditLogger.logAccessDenied(username, "permission_check", permission);
+                }
+            }
+            
+            log.debug("Permission check database result: user={}, permission={}, result={}", 
+                    username, permission, hasPermission);
+            
+            return hasPermission;
+            
+        } catch (Exception e) {
+            if (auditLogger != null) {
+                auditLogger.logDatabaseError(username, "permission_check", permission, e);
+            }
+            log.error("Error checking permission for user {} and permission {}: {}", 
+                    username, permission, e.getMessage(), e);
+            
+            // Fail-safe: deny permission on database errors
+            return false;
+        }
     }
     
     @Override
     public boolean hasRole(String username, String role) {
-        // TODO: 实现角色检查逻辑
-        return true;
+        // If repositories are not available (e.g., in tests), fall back to secure default
+        if (roleRepository == null || cacheManager == null) {
+            if (auditLogger != null) {
+                auditLogger.logSystemError(username, "role_check", 
+                        new IllegalStateException("Role repository or cache manager not available"));
+            }
+            log.warn("Role repository or cache manager not available, denying role: user={}, role={}", 
+                    username, role);
+            return false;
+        }
+        
+        try {
+            // Try to get cached result first
+            var cachedResult = cacheManager.getCachedRole(username, role);
+            if (cachedResult.isPresent()) {
+                boolean result = cachedResult.get();
+                if (auditLogger != null) {
+                    auditLogger.logSuccessfulAccess(username, "role_check", role, true);
+                    auditLogger.logCacheOperation(username, "cache_hit", role, "role_check");
+                }
+                log.debug("Role check cache hit: user={}, role={}, result={}", 
+                        username, role, result);
+                return result;
+            }
+            
+            // Cache miss - log it
+            if (auditLogger != null) {
+                auditLogger.logCacheOperation(username, "cache_miss", role, "role_check");
+            }
+            
+            // Query database for role
+            boolean hasRole = roleRepository.hasRole(username, role);
+            
+            // Cache the result
+            cacheManager.cacheRole(username, role, hasRole);
+            
+            // Log the result
+            if (auditLogger != null) {
+                if (hasRole) {
+                    auditLogger.logSuccessfulAccess(username, "role_check", role, false);
+                } else {
+                    auditLogger.logAccessDenied(username, "role_check", role);
+                }
+            }
+            
+            log.debug("Role check database result: user={}, role={}, result={}", 
+                    username, role, hasRole);
+            
+            return hasRole;
+            
+        } catch (Exception e) {
+            if (auditLogger != null) {
+                auditLogger.logDatabaseError(username, "role_check", role, e);
+            }
+            log.error("Error checking role for user {} and role {}: {}", 
+                    username, role, e.getMessage(), e);
+            
+            // Fail-safe: deny role on database errors
+            return false;
+        }
     }
 }

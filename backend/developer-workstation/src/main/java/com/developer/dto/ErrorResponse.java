@@ -10,7 +10,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 错误响应
+ * Error response DTO for API error responses.
+ * 
+ * Requirements: 3.2, 3.3
  */
 @Data
 @Builder
@@ -24,4 +26,5 @@ public class ErrorResponse {
     private String suggestion;
     private Instant timestamp;
     private String traceId;
+    private String path;
 }

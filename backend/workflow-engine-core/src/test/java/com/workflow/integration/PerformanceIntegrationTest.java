@@ -64,9 +64,16 @@ class PerformanceIntegrationTest {
         when(stringRedisTemplate.opsForList()).thenReturn(listOperations);
         when(stringRedisTemplate.opsForHash()).thenReturn(hashOperations);
         
+        // 测试用密钥
+        String testJwtSecret = "test-jwt-secret-key-for-performance-testing";
+        String testEncryptionKey = "test-encryption-key-32-bytes!!!!";
+        
         // 初始化组件
         notificationManagerComponent = new NotificationManagerComponent(eventPublisher, stringRedisTemplate, objectMapper);
-        securityManagerComponent = new SecurityManagerComponent(stringRedisTemplate, objectMapper, auditManagerComponent);
+        securityManagerComponent = new SecurityManagerComponent(
+            stringRedisTemplate, objectMapper, auditManagerComponent,
+            testJwtSecret, 86400000L, 604800000L, testEncryptionKey
+        );
         securityManagerComponent.initializeDefaultRolePermissions();
     }
 

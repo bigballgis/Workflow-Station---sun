@@ -114,6 +114,13 @@
             <version>1.0.0-SNAPSHOT</version>
         </dependency>
 
+        <!-- Platform Common (shared module) -->
+        <dependency>
+            <groupId>com.platform</groupId>
+            <artifactId>platform-common</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+        </dependency>
+
         <!-- Rate Limiting -->
         <dependency>
             <groupId>com.bucket4j</groupId>

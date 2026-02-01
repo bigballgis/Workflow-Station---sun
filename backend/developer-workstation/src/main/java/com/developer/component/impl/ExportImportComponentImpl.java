@@ -17,6 +17,9 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -49,6 +52,35 @@ public class ExportImportComponentImpl implements ExportImportComponent {
     
     @Value("${platform.version:1.0.0}")
     private String platformVersion;
+
+    /**
+     * 获取当前操作者
+     * 优先从 Spring Security Context 获取，如果无法获取则返回 "system"
+     * 
+     * 返回 "system" 的情况：
+     * - 没有认证信息（未登录）
+     * - 匿名用户
+     * - 系统后台任务
+     * - 获取过程中发生异常
+     * 
+     * @return 当前操作者用户名，如果无法获取则返回 "system"
+     */
+    private String getCurrentOperator() {
+        try {
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            if (authentication != null 
+                    && authentication.isAuthenticated() 
+                    && !(authentication instanceof AnonymousAuthenticationToken)) {
+                String username = authentication.getName();
+                if (username != null && !username.isEmpty()) {
+                    return username;
+                }
+            }
+        } catch (Exception e) {
+            log.debug("Failed to get current operator from security context: {}", e.getMessage());
+        }
+        return "system";
+    }
 
     @Override
     @Transactional(readOnly = true)
@@ -128,7 +160,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
                     .version(functionUnit.getCurrentVersion())
                     .description(functionUnit.getDescription())
                     .exportedAt(LocalDateTime.now())
-                    .exportedBy("system") // TODO: 从安全上下文获取当前用户
+                    .exportedBy(getCurrentOperator())
                     .platformVersion(platformVersion)
                     .minPlatformVersion("1.0.0")
                     .components(ExportManifest.Components.builder()

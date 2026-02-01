@@ -11,8 +11,8 @@ import com.workflow.dto.response.UserSecurityInfo;
 import com.workflow.enums.AuditOperationType;
 import com.workflow.enums.AuditResourceType;
 import com.workflow.exception.WorkflowBusinessException;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
@@ -40,23 +40,47 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class SecurityManagerComponent {
 
     private final StringRedisTemplate stringRedisTemplate;
     private final ObjectMapper objectMapper;
     private final AuditManagerComponent auditManagerComponent;
     
-    // JWT配置
-    private static final String JWT_SECRET_KEY = "workflow-engine-jwt-secret-key-2026";
-    private static final long JWT_EXPIRATION_MS = 24 * 60 * 60 * 1000; // 24小时
-    private static final long REFRESH_TOKEN_EXPIRATION_MS = 7 * 24 * 60 * 60 * 1000; // 7天
+    // JWT配置 - 从环境变量/配置文件读取
+    private final String jwtSecretKey;
+    private final long jwtExpirationMs;
+    private final long refreshTokenExpirationMs;
     
-    // 加密配置
+    // 加密配置 - 从环境变量/配置文件读取
     private static final String ENCRYPTION_ALGORITHM = "AES/GCM/NoPadding";
     private static final int GCM_IV_LENGTH = 12;
     private static final int GCM_TAG_LENGTH = 128;
-    private static final String ENCRYPTION_KEY = "workflow-aes-256-encryption-key!";
+    private final String encryptionKey;
+    
+    public SecurityManagerComponent(
+            StringRedisTemplate stringRedisTemplate,
+            ObjectMapper objectMapper,
+            AuditManagerComponent auditManagerComponent,
+            @Value("${jwt.secret}") String jwtSecretKey,
+            @Value("${jwt.expiration:86400000}") long jwtExpirationMs,
+            @Value("${jwt.refresh-expiration:604800000}") long refreshTokenExpirationMs,
+            @Value("${platform.encryption.secret-key}") String encryptionKey) {
+        this.stringRedisTemplate = stringRedisTemplate;
+        this.objectMapper = objectMapper;
+        this.auditManagerComponent = auditManagerComponent;
+        this.jwtSecretKey = jwtSecretKey;
+        this.jwtExpirationMs = jwtExpirationMs;
+        this.refreshTokenExpirationMs = refreshTokenExpirationMs;
+        this.encryptionKey = encryptionKey;
+        
+        // 验证密钥长度
+        if (jwtSecretKey.length() < 32) {
+            log.warn("JWT密钥长度不足32字符，建议使用更长的密钥以提高安全性");
+        }
+        if (encryptionKey.length() < 32) {
+            log.warn("加密密钥长度不足32字符，AES-256需要32字节密钥");
+        }
+    }
     
     // 缓存键前缀
     private static final String TOKEN_CACHE_PREFIX = "security:token:";
@@ -108,7 +132,7 @@ public class SecurityManagerComponent {
             log.info("用户认证成功: username={}", request.getUsername());
             
             return AuthenticationResult.success(accessToken, refreshToken, 
-                    JWT_EXPIRATION_MS, userInfo);
+                    jwtExpirationMs, userInfo);
                     
         } catch (Exception e) {
             log.error("用户认证失败: username={}, error={}", request.getUsername(), e.getMessage(), e);
@@ -151,7 +175,7 @@ public class SecurityManagerComponent {
             log.info("令牌刷新成功: username={}", username);
             
             return AuthenticationResult.success(newAccessToken, newRefreshToken, 
-                    JWT_EXPIRATION_MS, userInfo);
+                    jwtExpirationMs, userInfo);
                     
         } catch (Exception e) {
             log.error("令牌刷新失败: error={}", e.getMessage(), e);
@@ -484,7 +508,7 @@ public class SecurityManagerComponent {
                     "LDAP认证成功", ipAddress);
             
             return AuthenticationResult.success(accessToken, refreshToken, 
-                    JWT_EXPIRATION_MS, userInfo);
+                    jwtExpirationMs, userInfo);
                     
         } catch (Exception e) {
             log.error("LDAP认证失败: username={}, error={}", username, e.getMessage(), e);
@@ -522,7 +546,7 @@ public class SecurityManagerComponent {
                     "SSO认证成功", ipAddress);
             
             return AuthenticationResult.success(accessToken, refreshToken, 
-                    JWT_EXPIRATION_MS, ssoResult.getUserInfo());
+                    jwtExpirationMs, ssoResult.getUserInfo());
                     
         } catch (Exception e) {
             log.error("SSO认证失败: error={}", e.getMessage(), e);
@@ -693,7 +717,7 @@ public class SecurityManagerComponent {
      * 获取加密密钥
      */
     private SecretKey getEncryptionKey() {
-        byte[] keyBytes = ENCRYPTION_KEY.getBytes(StandardCharsets.UTF_8);
+        byte[] keyBytes = encryptionKey.getBytes(StandardCharsets.UTF_8);
         byte[] key = new byte[32]; // AES-256需要32字节密钥
         System.arraycopy(keyBytes, 0, key, 0, Math.min(keyBytes.length, 32));
         return new SecretKeySpec(key, "AES");
@@ -993,7 +1017,7 @@ public class SecurityManagerComponent {
      */
     private String generateAccessToken(String username) {
         long now = System.currentTimeMillis();
-        long expiration = now + JWT_EXPIRATION_MS;
+        long expiration = now + jwtExpirationMs;
         
         Map<String, Object> claims = new HashMap<>();
         claims.put("sub", username);
@@ -1008,7 +1032,7 @@ public class SecurityManagerComponent {
                     .encodeToString(payload.getBytes(StandardCharsets.UTF_8));
             
             // 简化的签名（实际应使用HMAC-SHA256）
-            String signature = hashPassword(encodedPayload + JWT_SECRET_KEY);
+            String signature = hashPassword(encodedPayload + jwtSecretKey);
             
             return encodedPayload + "." + signature;
             
@@ -1022,7 +1046,7 @@ public class SecurityManagerComponent {
      */
     private String generateRefreshToken(String username) {
         long now = System.currentTimeMillis();
-        long expiration = now + REFRESH_TOKEN_EXPIRATION_MS;
+        long expiration = now + refreshTokenExpirationMs;
         
         Map<String, Object> claims = new HashMap<>();
         claims.put("sub", username);
@@ -1036,7 +1060,7 @@ public class SecurityManagerComponent {
             String encodedPayload = Base64.getUrlEncoder().withoutPadding()
                     .encodeToString(payload.getBytes(StandardCharsets.UTF_8));
             
-            String signature = hashPassword(encodedPayload + JWT_SECRET_KEY);
+            String signature = hashPassword(encodedPayload + jwtSecretKey);
             
             return encodedPayload + "." + signature;
             
@@ -1060,7 +1084,7 @@ public class SecurityManagerComponent {
             String signature = parts[1];
             
             // 验证签名
-            String expectedSignature = hashPassword(encodedPayload + JWT_SECRET_KEY);
+            String expectedSignature = hashPassword(encodedPayload + jwtSecretKey);
             if (!expectedSignature.equals(signature)) {
                 return null;
             }

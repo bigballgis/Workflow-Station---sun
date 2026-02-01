@@ -13,14 +13,14 @@ spring:
       connection-timeout: 20000
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: none
     show-sql: false
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
   flyway:
-    enabled: true
+    enabled: false
     locations: classpath:db/migration/user-portal
     baseline-on-migrate: true
     validate-on-migrate: false

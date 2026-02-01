@@ -102,8 +102,38 @@ public class FormDesignComponentImpl implements FormDesignComponent {
     @Transactional
     public void delete(Long id) {
         FormDefinition formDefinition = getById(id);
-        // TODO: 检查是否被流程步骤绑定
+        checkFormDependencies(id);
         formDefinitionRepository.delete(formDefinition);
+    }
+    
+    /**
+     * 检查表单是否被流程步骤引用
+     * 如果被引用，抛出 BusinessException
+     * 
+     * @param formId 表单ID
+     * @throws BusinessException 如果表单正在被使用
+     */
+    private void checkFormDependencies(Long formId) {
+        FormDefinition form = formDefinitionRepository.findById(formId)
+                .orElseThrow(() -> new ResourceNotFoundException("FormDefinition", formId));
+        
+        // 获取该功能单元的流程定义
+        FunctionUnit functionUnit = form.getFunctionUnit();
+        if (functionUnit.getProcessDefinition() != null) {
+            String bpmnXml = functionUnit.getProcessDefinition().getBpmnXml();
+            
+            // 简化检查：在 BPMN XML 中搜索表单名称
+            // 注意：这是简化实现，完整实现需要解析 BPMN XML
+            if (bpmnXml != null && bpmnXml.contains(form.getFormName())) {
+                throw new BusinessException(
+                    "FORM_IN_USE",
+                    "无法删除表单：该表单正在被流程定义使用",
+                    "请先从流程定义中移除该表单的引用"
+                );
+            }
+        }
+        
+        log.info("Form dependency check passed for form: {}", formId);
     }
     
     @Override

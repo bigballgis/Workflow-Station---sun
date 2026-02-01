@@ -2,6 +2,9 @@ package com.workflow.component;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.platform.common.resource.ResourceManager;
+import com.platform.common.resource.ResourceTimeoutException;
+import com.platform.common.resource.ResourceLimitExceededException;
 import com.workflow.dto.request.CacheOperationRequest;
 import com.workflow.dto.response.AsyncOperationResult;
 import com.workflow.dto.response.CacheStatisticsResult;
@@ -49,6 +52,7 @@ public class PerformanceManagerComponent {
     private final RuntimeService runtimeService;
     private final TaskService taskService;
     private final ManagementService managementService;
+    private final ResourceManager resourceManager;
     
     // 缓存统计
     private final AtomicLong cacheHitCount = new AtomicLong(0);
@@ -421,7 +425,69 @@ public class PerformanceManagerComponent {
         log.debug("清理已完成的异步操作");
     }
 
-    // ==================== 性能监控方法 ====================
+    // ==================== Resource-Managed Operations ====================
+
+    /**
+     * Execute resource-intensive operation with timeout and resource management
+     * 
+     * @param operationId Operation identifier
+     * @param operation Operation to execute
+     * @param timeoutMs Timeout in milliseconds
+     * @return Operation result
+     */
+    public <T> T executeResourceManagedOperation(String operationId, Supplier<T> operation, long timeoutMs) {
+        try {
+            return resourceManager.executeWithTimeout(operationId, operation, timeoutMs);
+        } catch (ResourceTimeoutException e) {
+            log.warn("Resource-managed operation timed out: {}", e.getMessage());
+            throw new WorkflowBusinessException("OPERATION_TIMEOUT", e.getMessage());
+        } catch (ResourceLimitExceededException e) {
+            log.warn("Resource limit exceeded: {}", e.getMessage());
+            throw new WorkflowBusinessException("RESOURCE_LIMIT_EXCEEDED", e.getMessage());
+        }
+    }
+
+    /**
+     * Execute database operation with resource management
+     * 
+     * @param operationId Operation identifier
+     * @param operation Database operation
+     * @param timeoutMs Timeout in milliseconds
+     * @return Operation result
+     */
+    public <T> T executeResourceManagedDatabaseOperation(String operationId, 
+                                                        ResourceManager.DatabaseOperation<T> operation, 
+                                                        long timeoutMs) {
+        try {
+            return resourceManager.executeWithConnection(operationId, operation, timeoutMs);
+        } catch (ResourceTimeoutException e) {
+            log.warn("Resource-managed database operation timed out: {}", e.getMessage());
+            throw new WorkflowBusinessException("DATABASE_OPERATION_TIMEOUT", e.getMessage());
+        } catch (ResourceLimitExceededException e) {
+            log.warn("Database resource limit exceeded: {}", e.getMessage());
+            throw new WorkflowBusinessException("DATABASE_RESOURCE_LIMIT_EXCEEDED", e.getMessage());
+        }
+    }
+
+    /**
+     * Execute cached operation with resource management
+     * 
+     * @param cacheKey Cache key
+     * @param operationId Operation identifier
+     * @param type Result type
+     * @param operation Operation to execute
+     * @param ttlSeconds Cache TTL
+     * @param timeoutMs Operation timeout
+     * @return Operation result
+     */
+    public <T> T executeResourceManagedCachedOperation(String cacheKey, String operationId, Class<T> type,
+                                                      Supplier<T> operation, long ttlSeconds, long timeoutMs) {
+        return getFromCacheOrLoad(cacheKey, type, 
+                () -> executeResourceManagedOperation(operationId, operation, timeoutMs), 
+                ttlSeconds);
+    }
+
+    // ==================== Enhanced Performance Analysis ====================
 
     /**
      * 获取性能分析结果

@@ -1,14 +1,14 @@
 server:
-  port: 8083
+  port: ${SERVER_PORT:8083}
 
 spring:
   application:
     name: developer-workstation
   
   datasource:
-    url: jdbc:postgresql://localhost:5432/workflow_platform
-    username: platform
-    password: platform123
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/workflow_platform}
+    username: ${SPRING_DATASOURCE_USERNAME:platform}
+    password: ${SPRING_DATASOURCE_PASSWORD:platform123}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 10
@@ -18,7 +18,7 @@ spring:
   
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: none
     show-sql: false
     properties:
       hibernate:
@@ -26,7 +26,7 @@ spring:
         format_sql: true
   
   flyway:
-    enabled: true
+    enabled: false
     locations: classpath:db/migration/developer-workstation
     baseline-on-migrate: true
     validate-on-migrate: false
@@ -47,10 +47,37 @@ spring:
 security:
   jwt:
     secret: ${JWT_SECRET:your-256-bit-secret-key-for-development-only}
-    expiration: 86400000  # 24 hours
+    expiration: ${JWT_EXPIRATION:86400000}  # 24 hours
+  max-login-attempts: ${MAX_LOGIN_ATTEMPTS:5}
+  lock-duration-minutes: ${LOCK_DURATION_MINUTES:30}
+  
+  # Security Permission System Configuration
+  cache:
+    session-timeout-minutes: ${SECURITY_CACHE_SESSION_TIMEOUT:30}
+    max-size: ${SECURITY_CACHE_MAX_SIZE:1000}
+    enabled: ${SECURITY_CACHE_ENABLED:true}
+    cleanup-interval-minutes: ${SECURITY_CACHE_CLEANUP_INTERVAL:15}
+  
+  database:
+    query-timeout-seconds: ${SECURITY_DB_QUERY_TIMEOUT:30}
+    retry-attempts: ${SECURITY_DB_RETRY_ATTEMPTS:2}
+    retry-delay-ms: ${SECURITY_DB_RETRY_DELAY:1000}
+    connection-pooling-enabled: ${SECURITY_DB_CONNECTION_POOLING:true}
+  
+  permission:
+    resolution-strategy: ${SECURITY_PERMISSION_STRATEGY:DATABASE_FIRST}
+    strict-checking: ${SECURITY_PERMISSION_STRICT:true}
+    audit-logging: ${SECURITY_PERMISSION_AUDIT:true}
+    max-permission-name-length: ${SECURITY_PERMISSION_MAX_NAME_LENGTH:100}
+    max-role-name-length: ${SECURITY_ROLE_MAX_NAME_LENGTH:100}
   
   rate-limit:
     requests-per-minute: 100
+
+# Workflow Engine JWT (for token validation)
+workflow-engine:
+  jwt:
+    secret: ${JWT_SECRET:your-256-bit-secret-key-for-development-only}
 
 # OpenAPI
 springdoc:

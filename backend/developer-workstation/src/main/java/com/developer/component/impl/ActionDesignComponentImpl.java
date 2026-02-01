@@ -80,8 +80,38 @@ public class ActionDesignComponentImpl implements ActionDesignComponent {
     @Transactional
     public void delete(Long id) {
         ActionDefinition actionDefinition = getById(id);
-        // TODO: 检查是否被流程步骤绑定
+        checkActionDependencies(id);
         actionDefinitionRepository.delete(actionDefinition);
+    }
+    
+    /**
+     * 检查动作是否被流程步骤引用
+     * 如果被引用，抛出 BusinessException
+     * 
+     * @param actionId 动作ID
+     * @throws BusinessException 如果动作正在被使用
+     */
+    private void checkActionDependencies(Long actionId) {
+        ActionDefinition action = actionDefinitionRepository.findById(actionId)
+                .orElseThrow(() -> new ResourceNotFoundException("ActionDefinition", actionId));
+        
+        // 获取该功能单元的流程定义
+        FunctionUnit functionUnit = action.getFunctionUnit();
+        if (functionUnit.getProcessDefinition() != null) {
+            String bpmnXml = functionUnit.getProcessDefinition().getBpmnXml();
+            
+            // 简化检查：在 BPMN XML 中搜索动作名称
+            // 注意：这是简化实现，完整实现需要解析 BPMN XML
+            if (bpmnXml != null && bpmnXml.contains(action.getActionName())) {
+                throw new BusinessException(
+                    "ACTION_IN_USE",
+                    "无法删除动作：该动作正在被流程定义使用",
+                    "请先从流程定义中移除该动作的引用"
+                );
+            }
+        }
+        
+        log.info("Action dependency check passed for action: {}", actionId);
     }
     
     @Override

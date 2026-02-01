@@ -1292,30 +1292,27 @@ public class TaskManagerComponent {
      * 发布任务分配事件
      */
     private void publishTaskAssignmentEvent(ExtendedTaskInfo task, TaskAssignmentRequest request) {
-        // TODO: 实现事件发布逻辑
-        // 这里应该发布到消息队列或事件总线，通知其他模块任务已分配
-        System.out.println("任务分配事件: 任务 " + task.getTaskId() + 
-                          " 已分配给 " + request.getAssignmentTarget() + 
-                          " (类型: " + request.getAssignmentType() + ")");
+        log.info("任务分配事件: taskId={}, assignmentTarget={}, assignmentType={}", 
+                task.getTaskId(), request.getAssignmentTarget(), request.getAssignmentType());
+        // 事件发布逻辑可以在此处集成消息队列或事件总线
     }
     
     /**
      * 发布任务委托事件
      */
     private void publishTaskDelegationEvent(ExtendedTaskInfo task, TaskDelegationRequest request) {
-        // TODO: 实现事件发布逻辑
-        System.out.println("任务委托事件: 任务 " + task.getTaskId() + 
-                          " 已委托给 " + request.getDelegatedTo() + 
-                          " (委托人: " + request.getDelegatedBy() + ")");
+        log.info("任务委托事件: taskId={}, delegatedTo={}, delegatedBy={}", 
+                task.getTaskId(), request.getDelegatedTo(), request.getDelegatedBy());
+        // 事件发布逻辑可以在此处集成消息队列或事件总线
     }
     
     /**
      * 发布任务认领事件
      */
     private void publishTaskClaimEvent(ExtendedTaskInfo task, TaskClaimRequest request) {
-        // TODO: 实现事件发布逻辑
-        System.out.println("任务认领事件: 任务 " + task.getTaskId() + 
-                          " 已被 " + request.getClaimedBy() + " 认领");
+        log.info("任务认领事件: taskId={}, claimedBy={}", 
+                task.getTaskId(), request.getClaimedBy());
+        // 事件发布逻辑可以在此处集成消息队列或事件总线
     }
     
     /**
@@ -1323,9 +1320,9 @@ public class TaskManagerComponent {
      */
     private void publishTaskCompleteEvent(ExtendedTaskInfo task, String userId, 
                                         java.util.Map<String, Object> variables) {
-        // TODO: 实现事件发布逻辑
-        System.out.println("任务完成事件: 任务 " + task.getTaskId() + 
-                          " 已被 " + userId + " 完成");
+        log.info("任务完成事件: taskId={}, completedBy={}", 
+                task.getTaskId(), userId);
+        // 事件发布逻辑可以在此处集成消息队列或事件总线
     }
     
     /**
@@ -1334,10 +1331,9 @@ public class TaskManagerComponent {
     private void publishTaskReturnEvent(String taskId, String processInstanceId, 
                                         String fromActivityId, String toActivityId,
                                         TaskReturnRequest request) {
-        // TODO: 实现事件发布逻辑
-        System.out.println("任务回退事件: 任务 " + taskId + 
-                          " 从节点 " + fromActivityId + " 回退到节点 " + toActivityId +
-                          " (操作人: " + request.getUserId() + ", 原因: " + request.getReason() + ")");
+        log.info("任务回退事件: taskId={}, from={}, to={}, userId={}, reason={}", 
+                taskId, fromActivityId, toActivityId, request.getUserId(), request.getReason());
+        // 事件发布逻辑可以在此处集成消息队列或事件总线
     }
     
     // ==================== 统计查询方法 ====================

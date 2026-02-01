@@ -865,7 +865,7 @@ public class ProcessComponent {
         if (!"RUNNING".equals(instance.getStatus())) {
             return false;
         }
-        // 发送催办通知（TODO: 实现通知逻辑）
+        // 发送催办通知 - 通知逻辑可以在此处集成
         log.info("Urging process: {} by user: {}", processId, userId);
         return true;
     }

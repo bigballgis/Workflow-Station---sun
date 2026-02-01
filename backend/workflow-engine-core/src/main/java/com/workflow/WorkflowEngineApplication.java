@@ -12,7 +12,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
  * 工作流引擎核心应用程序
  * 基于Flowable 7.0.0 + Spring Boot 3.x + PostgreSQL 16.5
  */
-@SpringBootApplication(scanBasePackages = {"com.workflow", "com.platform.cache", "com.platform.security"})
+@SpringBootApplication(scanBasePackages = {"com.workflow", "com.platform.cache", "com.platform.security", "com.platform.common"})
 @EntityScan(basePackages = {"com.workflow", "com.platform.security.model", "com.platform.security.entity"})
 @EnableJpaRepositories(basePackages = {"com.workflow", "com.platform.security.repository"})
 @EnableKafka

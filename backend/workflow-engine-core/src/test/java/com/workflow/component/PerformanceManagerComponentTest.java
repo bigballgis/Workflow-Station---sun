@@ -79,6 +79,9 @@ class PerformanceManagerComponentTest {
     private TaskQuery taskQuery;
     
     @Mock(lenient = true)
+    private com.platform.common.resource.ResourceManager resourceManager;
+    
+    @Mock(lenient = true)
     private JobQuery jobQuery;
 
     private ObjectMapper objectMapper;
@@ -107,7 +110,7 @@ class PerformanceManagerComponentTest {
         
         performanceManager = new PerformanceManagerComponent(
                 stringRedisTemplate, redisTemplate, objectMapper,
-                dataSource, runtimeService, taskService, managementService);
+                dataSource, runtimeService, taskService, managementService, resourceManager);
     }
 
     @Nested

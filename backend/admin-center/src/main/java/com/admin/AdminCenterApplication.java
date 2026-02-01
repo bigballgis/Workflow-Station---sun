@@ -20,7 +20,7 @@ import com.platform.security.service.impl.UserRoleServiceImpl;
  */
 @SpringBootApplication
 @ComponentScan(
-    basePackages = {"com.admin"},
+    basePackages = {"com.admin", "com.platform.common"},
     basePackageClasses = {TargetResolverFactory.class, UserRoleServiceImpl.class},
     excludeFilters = {
         // 排除platform-security中的repository，由单独的配置类处理
