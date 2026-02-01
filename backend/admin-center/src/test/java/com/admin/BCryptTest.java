@@ -26,14 +26,15 @@ public class BCryptTest {
     public void testAdmin123Password() {
         BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
         String password = "admin123";
-        String storedHash = "$2a$10$EIXvYkRAhq0xaOye6lEnoOQowMIJQx1QpO1XLbHrZhtLc/4sHlUHq";
         
+        // Test with the hash from database
+        String dbHash = "$2a$10$XMfQkI8Q4i2ZOLcl.V5RH.SoLTbPpfsxbv0YG21jRr8F7zhNouMle";
         System.out.println("Testing admin123 password:");
         System.out.println("Password: " + password);
-        System.out.println("Stored Hash: " + storedHash);
-        System.out.println("Hash Length: " + storedHash.length());
+        System.out.println("DB Hash: " + dbHash);
+        System.out.println("Hash Length: " + dbHash.length());
         
-        boolean matches = encoder.matches(password, storedHash);
+        boolean matches = encoder.matches(password, dbHash);
         System.out.println("Matches: " + matches);
         
         // Generate new hash for comparison
@@ -41,6 +42,10 @@ public class BCryptTest {
         System.out.println("New Hash: " + newHash);
         System.out.println("New Hash Matches: " + encoder.matches(password, newHash));
         
-        assertTrue(matches, "admin123 should match the stored hash");
+        // Print SQL to update database
+        System.out.println("\n=== SQL to update database ===");
+        System.out.println("UPDATE sys_users SET password_hash = '" + newHash + "';");
+        
+        assertTrue(matches, "admin123 should match the DB hash");
     }
 }

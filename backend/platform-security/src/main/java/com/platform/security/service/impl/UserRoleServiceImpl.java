@@ -99,6 +99,24 @@ public class UserRoleServiceImpl implements UserRoleService {
         return getPermissionsForUser(userId).contains(permission);
     }
     
+    @Override
+    public List<String> getPermissionsForRoleCodes(List<String> roleCodes) {
+        if (roleCodes == null || roleCodes.isEmpty()) {
+            return List.of("basic:access");
+        }
+        
+        Set<String> permissions = new HashSet<>();
+        for (String roleCode : roleCodes) {
+            permissions.addAll(getPermissionsForRole(roleCode));
+        }
+        
+        if (permissions.isEmpty()) {
+            permissions.add("basic:access");
+        }
+        
+        return new ArrayList<>(permissions);
+    }
+    
     /**
      * 从分配记录添加角色到映射
      */
@@ -190,38 +208,33 @@ public class UserRoleServiceImpl implements UserRoleService {
     }
     
     /**
-     * 获取角色的权限列表
+     * 获取角色的权限列表（从数据库查询）
      */
     private List<String> getPermissionsForRole(String roleCode) {
-        // 基于角色代码返回权限
-        // 这里使用硬编码的权限映射，实际项目中应该从数据库查询
-        return switch (roleCode) {
-            case "SYS_ADMIN", "SUPER_ADMIN", "ADMIN" -> List.of(
-                    "user:read", "user:write", "user:delete",
-                    "role:read", "role:write", "role:delete",
-                    "system:admin"
+        try {
+            // 从数据库查询角色对应的权限
+            // 通过 sys_roles -> sys_role_permissions -> sys_permissions 关联查询
+            List<String> permissions = jdbcTemplate.queryForList(
+                "SELECT p.code FROM sys_permissions p " +
+                "JOIN sys_role_permissions rp ON p.id = rp.permission_id " +
+                "JOIN sys_roles r ON rp.role_id = r.id " +
+                "WHERE r.code = ? AND r.status = 'ACTIVE'",
+                String.class,
+                roleCode
             );
-            case "SYSTEM_ADMIN" -> List.of(
-                    "user:read", "user:write",
-                    "role:read", "role:write",
-                    "system:config"
-            );
-            case "TENANT_ADMIN" -> List.of(
-                    "user:read", "user:write",
-                    "tenant:admin"
-            );
-            case "AUDITOR" -> List.of(
-                    "audit:read", "log:read"
-            );
-            case "Manager" -> List.of(
-                    "workflow:approve", "workflow:reject",
-                    "task:assign", "task:reassign"
-            );
-            case "User" -> List.of(
-                    "workflow:submit", "workflow:view",
-                    "task:view", "task:complete"
-            );
-            default -> List.of("basic:access");
-        };
+            
+            if (!permissions.isEmpty()) {
+                log.debug("Found {} permissions for role {} from database", permissions.size(), roleCode);
+                return permissions;
+            }
+            
+            // 如果数据库中没有配置权限，返回基本权限
+            log.debug("No permissions found in database for role {}, returning basic access", roleCode);
+            return List.of("basic:access");
+            
+        } catch (Exception e) {
+            log.warn("Failed to get permissions for role {}: {}", roleCode, e.getMessage());
+            return List.of("basic:access");
+        }
     }
 }

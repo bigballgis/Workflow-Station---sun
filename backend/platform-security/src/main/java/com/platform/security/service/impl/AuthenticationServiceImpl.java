@@ -10,6 +10,7 @@ import com.platform.security.model.UserStatus;
 import com.platform.security.repository.UserRepository;
 import com.platform.security.service.AuthenticationService;
 import com.platform.security.service.JwtTokenService;
+import com.platform.security.service.UserRoleService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -33,6 +34,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     private final PasswordEncoder passwordEncoder;
     private final JwtProperties jwtProperties;
     private final LoginAuditService loginAuditService;
+    private final UserRoleService userRoleService;
 
     @Override
     @Transactional(readOnly = true)
@@ -188,42 +190,10 @@ public class AuthenticationServiceImpl implements AuthenticationService {
     }
 
     /**
-     * Get permissions for the given roles.
-     * This is a simplified implementation - in production, this would query the database.
+     * Get permissions for the given roles from database.
+     * Queries permissions from sys_role_permissions table based on role codes.
      */
     private List<String> getPermissionsForRoles(List<String> roles) {
-        // TODO: Implement proper role-permission mapping from database
-        List<String> permissions = new ArrayList<>();
-        
-        for (String role : roles) {
-            switch (role) {
-                case "SUPER_ADMIN" -> permissions.addAll(List.of(
-                        "user:read", "user:write", "user:delete",
-                        "role:read", "role:write", "role:delete",
-                        "system:admin"
-                ));
-                case "SYSTEM_ADMIN" -> permissions.addAll(List.of(
-                        "user:read", "user:write",
-                        "role:read", "role:write",
-                        "system:config"
-                ));
-                case "TENANT_ADMIN" -> permissions.addAll(List.of(
-                        "user:read", "user:write",
-                        "tenant:admin"
-                ));
-                case "DEVELOPER" -> permissions.addAll(List.of(
-                        "process:read", "process:write",
-                        "form:read", "form:write",
-                        "function:read", "function:write"
-                ));
-                case "USER" -> permissions.addAll(List.of(
-                        "task:read", "task:write",
-                        "process:start"
-                ));
-                default -> permissions.add("basic:access");
-            }
-        }
-        
-        return permissions.stream().distinct().toList();
+        return userRoleService.getPermissionsForRoleCodes(roles);
     }
 }
