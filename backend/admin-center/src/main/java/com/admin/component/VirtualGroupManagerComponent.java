@@ -5,16 +5,23 @@ import com.admin.dto.request.VirtualGroupMemberRequest;
 import com.admin.dto.response.VirtualGroupInfo;
 import com.admin.dto.response.VirtualGroupMemberInfo;
 import com.admin.dto.response.VirtualGroupResult;
+import com.admin.entity.Role;
 import com.admin.entity.User;
 import com.admin.entity.VirtualGroup;
 import com.admin.entity.VirtualGroupMember;
+import com.admin.entity.UserRole;
+import com.admin.entity.VirtualGroupRole;
 import com.admin.enums.VirtualGroupType;
 import com.admin.exception.AdminBusinessException;
 import com.admin.exception.UserNotFoundException;
 import com.admin.exception.VirtualGroupNotFoundException;
+import com.admin.constant.DeveloperRoleSyncConstants;
+import com.admin.repository.RoleRepository;
 import com.admin.repository.UserRepository;
+import com.admin.repository.UserRoleRepository;
 import com.admin.repository.VirtualGroupMemberRepository;
 import com.admin.repository.VirtualGroupRepository;
+import com.admin.repository.VirtualGroupRoleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -23,7 +30,12 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -40,8 +52,12 @@ public class VirtualGroupManagerComponent {
     
     private final VirtualGroupRepository virtualGroupRepository;
     private final VirtualGroupMemberRepository virtualGroupMemberRepository;
+    private final VirtualGroupRoleRepository virtualGroupRoleRepository;
+    private final RoleRepository roleRepository;
     private final UserRepository userRepository;
+    private final UserRoleRepository userRoleRepository;
     private final JdbcTemplate jdbcTemplate;
+    private final com.admin.repository.UserBusinessUnitRepository userBusinessUnitRepository;
 
     
     /**
@@ -56,25 +72,84 @@ public class VirtualGroupManagerComponent {
             throw new AdminBusinessException("NAME_EXISTS", "虚拟组名称已存在: " + request.getName());
         }
         
-        // 验证有效期
-        validateValidPeriod(request.getValidFrom(), request.getValidTo());
-        
         String groupId = UUID.randomUUID().toString();
+        
+        // 生成代码（如果未提供）
+        String code = request.getCode();
+        if (code == null || code.isBlank()) {
+            code = generateCode(request.getName());
+        }
+        
+        // 验证代码唯一性
+        if (virtualGroupRepository.existsByCode(code)) {
+            throw new AdminBusinessException("CODE_EXISTS", "虚拟组代码已存在: " + code);
+        }
         
         VirtualGroup group = VirtualGroup.builder()
                 .id(groupId)
                 .name(request.getName())
+                .code(code)
                 .type(request.getType())
                 .description(request.getDescription())
-                .validFrom(request.getValidFrom())
-                .validTo(request.getValidTo())
+                .adGroup(request.getAdGroup())
                 .status("ACTIVE")
                 .build();
         
         virtualGroupRepository.save(group);
         
+        // 如果提供了角色ID，在创建时绑定角色
+        if (request.getRoleId() != null && !request.getRoleId().isBlank()) {
+            log.info("Binding role {} to virtual group {} during creation", request.getRoleId(), groupId);
+            try {
+                // 对于 SYSTEM 类型，允许在创建时绑定角色
+                bindRoleDuringCreation(groupId, request.getRoleId());
+            } catch (Exception e) {
+                log.error("Failed to bind role during virtual group creation: {}", e.getMessage());
+                // 不抛出异常，允许虚拟组创建成功，但记录错误
+            }
+        }
+        
         log.info("Virtual group created successfully: {}", groupId);
         return VirtualGroupResult.success(group);
+    }
+    
+    /**
+     * 根据名称生成代码
+     */
+    private String generateCode(String name) {
+        return name.toUpperCase()
+                .replaceAll("[^A-Z0-9]", "_")
+                .replaceAll("_+", "_")
+                .replaceAll("^_|_$", "");
+    }
+    
+    /**
+     * 在创建虚拟组时绑定角色（允许 SYSTEM 类型）
+     */
+    private void bindRoleDuringCreation(String virtualGroupId, String roleId) {
+        // 验证角色存在且为业务角色
+        Role role = roleRepository.findById(roleId)
+                .orElseThrow(() -> new AdminBusinessException("ROLE_NOT_FOUND", "角色不存在: " + roleId));
+        
+        if (!role.getType().isBusinessRole()) {
+            throw new AdminBusinessException("INVALID_ROLE_TYPE", 
+                    "只能绑定业务角色（BU-Bounded 或 BU-Unbounded），当前角色类型: " + role.getType());
+        }
+        
+        // 检查是否已有绑定
+        if (virtualGroupRoleRepository.findByVirtualGroupId(virtualGroupId).isPresent()) {
+            log.warn("Virtual group {} already has a role binding, skipping", virtualGroupId);
+            return;
+        }
+        
+        VirtualGroupRole binding = VirtualGroupRole.builder()
+                .id(UUID.randomUUID().toString())
+                .virtualGroupId(virtualGroupId)
+                .roleId(roleId)
+                .build();
+        
+        virtualGroupRoleRepository.save(binding);
+        log.info("Role {} bound to virtual group {} during creation", roleId, virtualGroupId);
     }
     
     /**
@@ -87,20 +162,24 @@ public class VirtualGroupManagerComponent {
         VirtualGroup group = virtualGroupRepository.findById(groupId)
                 .orElseThrow(() -> new VirtualGroupNotFoundException(groupId));
         
+        // 系统内置虚拟组只能修改 AD Group
+        if (group.getType() == VirtualGroupType.SYSTEM) {
+            group.setAdGroup(request.getAdGroup());
+            virtualGroupRepository.save(group);
+            log.info("System virtual group AD group updated: {}", groupId);
+            return VirtualGroupResult.success(group);
+        }
+        
         // 验证名称唯一性（排除自身）
         if (!group.getName().equals(request.getName()) && 
             virtualGroupRepository.existsByName(request.getName())) {
             throw new AdminBusinessException("NAME_EXISTS", "虚拟组名称已存在: " + request.getName());
         }
         
-        // 验证有效期
-        validateValidPeriod(request.getValidFrom(), request.getValidTo());
-        
         group.setName(request.getName());
         group.setType(request.getType());
         group.setDescription(request.getDescription());
-        group.setValidFrom(request.getValidFrom());
-        group.setValidTo(request.getValidTo());
+        group.setAdGroup(request.getAdGroup());
         
         virtualGroupRepository.save(group);
         
@@ -110,6 +189,7 @@ public class VirtualGroupManagerComponent {
     
     /**
      * 删除虚拟组
+     * 系统内置虚拟组（type = SYSTEM）不可删除
      */
     @Transactional
     public void deleteVirtualGroup(String groupId) {
@@ -117,6 +197,12 @@ public class VirtualGroupManagerComponent {
         
         VirtualGroup group = virtualGroupRepository.findById(groupId)
                 .orElseThrow(() -> new VirtualGroupNotFoundException(groupId));
+        
+        // 系统内置虚拟组不可删除
+        if (group.getType() == VirtualGroupType.SYSTEM) {
+            throw new AdminBusinessException("SYSTEM_GROUP_CANNOT_DELETE", 
+                    "系统内置虚拟组不可删除: " + group.getName());
+        }
         
         // 删除所有成员关系
         virtualGroupMemberRepository.deleteByVirtualGroupId(groupId);
@@ -152,9 +238,49 @@ public class VirtualGroupManagerComponent {
         } else {
             groups = virtualGroupRepository.findAll();
         }
+        
+        // 获取所有虚拟组的角色绑定
+        List<String> groupIds = groups.stream().map(VirtualGroup::getId).collect(Collectors.toList());
+        Map<String, Role> roleBindings = getRoleBindingsForGroups(groupIds);
+        
         return groups.stream()
-                .map(VirtualGroupInfo::fromEntity)
+                .map(group -> {
+                    VirtualGroupInfo info = VirtualGroupInfo.fromEntity(group);
+                    Role boundRole = roleBindings.get(group.getId());
+                    if (boundRole != null) {
+                        info.setBoundRoleId(boundRole.getId());
+                        info.setBoundRoleName(boundRole.getName());
+                        info.setBoundRoleCode(boundRole.getCode());
+                        info.setBoundRoleType(boundRole.getType().name());
+                    }
+                    return info;
+                })
                 .collect(Collectors.toList());
+    }
+    
+    /**
+     * 获取多个虚拟组的角色绑定
+     */
+    private Map<String, Role> getRoleBindingsForGroups(List<String> groupIds) {
+        if (groupIds.isEmpty()) {
+            return Map.of();
+        }
+        
+        List<VirtualGroupRole> bindings = virtualGroupRoleRepository.findByVirtualGroupIdIn(groupIds);
+        List<String> roleIds = bindings.stream()
+                .map(VirtualGroupRole::getRoleId)
+                .distinct()
+                .collect(Collectors.toList());
+        
+        Map<String, Role> roleMap = roleRepository.findAllById(roleIds).stream()
+                .collect(Collectors.toMap(Role::getId, r -> r));
+        
+        return bindings.stream()
+                .collect(Collectors.toMap(
+                        VirtualGroupRole::getVirtualGroupId,
+                        binding -> roleMap.get(binding.getRoleId()),
+                        (a, b) -> a
+                ));
     }
     
     /**
@@ -170,7 +296,7 @@ public class VirtualGroupManagerComponent {
      * 获取有效的虚拟组列表
      */
     public List<VirtualGroupInfo> getValidGroups() {
-        return virtualGroupRepository.findValidGroups(Instant.now()).stream()
+        return virtualGroupRepository.findValidGroups().stream()
                 .map(VirtualGroupInfo::fromEntity)
                 .collect(Collectors.toList());
     }
@@ -184,6 +310,13 @@ public class VirtualGroupManagerComponent {
     @Transactional
     public VirtualGroupResult addMember(String groupId, VirtualGroupMemberRequest request) {
         log.info("Adding member {} to virtual group {}", request.getUserId(), groupId);
+        // #region agent log
+        log.info("[DEVROLE_SYNC] addMember entry groupId={} userId={}", groupId, request.getUserId());
+        try {
+            String line = "{\"location\":\"VirtualGroupManagerComponent.addMember\",\"message\":\"addMember entry\",\"data\":{\"groupId\":\"" + groupId + "\",\"userId\":\"" + (request.getUserId() != null ? request.getUserId() : "") + "\",\"expectedVgId\":\"" + DeveloperRoleSyncConstants.DEVELOPERS_VIRTUAL_GROUP_ID + "\"},\"timestamp\":" + System.currentTimeMillis() + ",\"sessionId\":\"debug-session\",\"hypothesisId\":\"A,B\"}\n";
+            Files.write(Path.of("/Users/qiweige/Desktop/PROJECTXXXSUN/Workflow-Station---sun/.cursor/debug.log"), line.getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        } catch (Exception e) { /* ignore */ }
+        // #endregion
         
         VirtualGroup group = virtualGroupRepository.findById(groupId)
                 .orElseThrow(() -> new VirtualGroupNotFoundException(groupId));
@@ -207,8 +340,77 @@ public class VirtualGroupManagerComponent {
         
         virtualGroupMemberRepository.save(member);
         
+        boolean isDevelopersVg = DeveloperRoleSyncConstants.DEVELOPERS_VIRTUAL_GROUP_CODE.equals(group.getCode());
+        // #region agent log
+        log.info("[DEVROLE_SYNC] addMember after save groupId={} groupCode={} isDevelopersVg={}", groupId, group.getCode(), isDevelopersVg);
+        try {
+            String line = "{\"location\":\"VirtualGroupManagerComponent.addMember\",\"message\":\"after save, isDevelopersVg by code\",\"data\":{\"groupId\":\"" + groupId + "\",\"groupCode\":\"" + (group.getCode() != null ? group.getCode() : "") + "\",\"isDevelopersVg\":" + isDevelopersVg + "},\"timestamp\":" + System.currentTimeMillis() + ",\"sessionId\":\"debug-session\",\"hypothesisId\":\"B\"}\n";
+            Files.write(Path.of("/Users/qiweige/Desktop/PROJECTXXXSUN/Workflow-Station---sun/.cursor/debug.log"), line.getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        } catch (Exception e) { /* ignore */ }
+        // #endregion
+        if (isDevelopersVg) {
+            syncDeveloperRoleToUserRoles(request.getUserId(), user, "system");
+        }
+        
         log.info("Member added successfully: {} to group {}", request.getUserId(), groupId);
         return VirtualGroupResult.success(group);
+    }
+    
+    /**
+     * 将 Developers 虚拟组成员同步到 sys_user_roles，以便 admin-center 能识别其 DEVELOPER 角色。
+     */
+    private void syncDeveloperRoleToUserRoles(String userId, User user, String assignedBy) {
+        boolean exists = userRoleRepository.existsByUserIdAndRoleId(userId, DeveloperRoleSyncConstants.DEVELOPER_ROLE_ID);
+        // #region agent log
+        log.info("[DEVROLE_SYNC] syncDeveloperRoleToUserRoles userId={} exists={}", userId, exists);
+        try {
+            String line = "{\"location\":\"VirtualGroupManagerComponent.syncDeveloperRoleToUserRoles\",\"message\":\"exists check\",\"data\":{\"userId\":\"" + userId + "\",\"exists\":" + exists + "},\"timestamp\":" + System.currentTimeMillis() + ",\"sessionId\":\"debug-session\",\"hypothesisId\":\"C\"}\n";
+            Files.write(Path.of("/Users/qiweige/Desktop/PROJECTXXXSUN/Workflow-Station---sun/.cursor/debug.log"), line.getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        } catch (Exception e) { /* ignore */ }
+        // #endregion
+        if (exists) {
+            return;
+        }
+        Role developerRole = roleRepository.findById(DeveloperRoleSyncConstants.DEVELOPER_ROLE_ID)
+                .orElse(null);
+        // #region agent log
+        log.info("[DEVROLE_SYNC] syncDeveloperRoleToUserRoles userId={} roleFound={}", userId, developerRole != null);
+        try {
+            String line = "{\"location\":\"VirtualGroupManagerComponent.syncDeveloperRoleToUserRoles\",\"message\":\"role lookup\",\"data\":{\"userId\":\"" + userId + "\",\"roleFound\":" + (developerRole != null) + "},\"timestamp\":" + System.currentTimeMillis() + ",\"sessionId\":\"debug-session\",\"hypothesisId\":\"D\"}\n";
+            Files.write(Path.of("/Users/qiweige/Desktop/PROJECTXXXSUN/Workflow-Station---sun/.cursor/debug.log"), line.getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        } catch (Exception e) { /* ignore */ }
+        // #endregion
+        if (developerRole == null) {
+            log.warn("DEVELOPER_ROLE not found, skip syncing to sys_user_roles for user {}", userId);
+            return;
+        }
+        UserRole userRole = UserRole.builder()
+                .id(DeveloperRoleSyncConstants.SYNCED_DEVELOPER_ROLE_ID_PREFIX + userId)
+                .user(user)
+                .role(developerRole)
+                .assignedAt(LocalDateTime.now())
+                .assignedBy(assignedBy)
+                .build();
+        try {
+            userRoleRepository.save(userRole);
+            // #region agent log
+            log.info("[DEVROLE_SYNC] syncDeveloperRoleToUserRoles save ok userId={} userRoleId={}", userId, userRole.getId());
+            try {
+                String line = "{\"location\":\"VirtualGroupManagerComponent.syncDeveloperRoleToUserRoles\",\"message\":\"save ok\",\"data\":{\"userId\":\"" + userId + "\",\"userRoleId\":\"" + userRole.getId() + "\"},\"timestamp\":" + System.currentTimeMillis() + ",\"sessionId\":\"debug-session\",\"hypothesisId\":\"E\"}\n";
+                Files.write(Path.of("/Users/qiweige/Desktop/PROJECTXXXSUN/Workflow-Station---sun/.cursor/debug.log"), line.getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+            } catch (Exception e2) { /* ignore */ }
+            // #endregion
+        } catch (Exception e) {
+            // #region agent log
+            log.info("[DEVROLE_SYNC] syncDeveloperRoleToUserRoles save failed userId={} error={}", userId, e.getMessage());
+            try {
+                String line = "{\"location\":\"VirtualGroupManagerComponent.syncDeveloperRoleToUserRoles\",\"message\":\"save failed\",\"data\":{\"userId\":\"" + userId + "\",\"error\":\"" + (e.getMessage() != null ? e.getMessage().replace("\"", "'") : "null") + "\"},\"timestamp\":" + System.currentTimeMillis() + ",\"sessionId\":\"debug-session\",\"hypothesisId\":\"E\"}\n";
+                Files.write(Path.of("/Users/qiweige/Desktop/PROJECTXXXSUN/Workflow-Station---sun/.cursor/debug.log"), line.getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+            } catch (Exception e2) { /* ignore */ }
+            // #endregion
+            throw e;
+        }
+        log.info("Synced developer role to sys_user_roles for user {} (id: {})", userId, userRole.getId());
     }
     
     /**
@@ -233,6 +435,7 @@ public class VirtualGroupManagerComponent {
     
     /**
      * 移除成员
+     * System Administrators 组必须至少保留一个成员
      */
     @Transactional
     public VirtualGroupResult removeMember(String groupId, String userId) {
@@ -245,7 +448,22 @@ public class VirtualGroupManagerComponent {
                 .findByVirtualGroupIdAndUserId(groupId, userId)
                 .orElseThrow(() -> new AdminBusinessException("MEMBER_NOT_FOUND", "用户不是该虚拟组成员"));
         
+        // System Administrators 组必须至少保留一个成员
+        if (group.getType() == VirtualGroupType.SYSTEM && "SYS_ADMINS".equals(group.getCode())) {
+            long memberCount = virtualGroupMemberRepository.countByVirtualGroupId(groupId);
+            if (memberCount <= 1) {
+                throw new AdminBusinessException("LAST_ADMIN_CANNOT_REMOVE", 
+                        "System Administrators 组必须至少保留一个成员");
+            }
+        }
+        
         virtualGroupMemberRepository.delete(member);
+
+        if (DeveloperRoleSyncConstants.DEVELOPERS_VIRTUAL_GROUP_CODE.equals(group.getCode())) {
+            String syncedRoleId = DeveloperRoleSyncConstants.SYNCED_DEVELOPER_ROLE_ID_PREFIX + userId;
+            userRoleRepository.deleteByIdDirect(syncedRoleId);
+            log.info("Revoked synced developer role for user {} (sys_user_roles id: {})", userId, syncedRoleId);
+        }
         
         log.info("Member removed successfully: {} from group {}", userId, groupId);
         return VirtualGroupResult.success(group);
@@ -259,15 +477,21 @@ public class VirtualGroupManagerComponent {
             throw new VirtualGroupNotFoundException(groupId);
         }
         
-        // 获取部门名称映射
-        Map<String, String> deptNameMap = getDepartmentNameMap();
+        // 获取业务单元名称映射
+        Map<String, String> businessUnitNameMap = getBusinessUnitNameMap();
         
         return virtualGroupMemberRepository.findByVirtualGroupId(groupId).stream()
                 .map(member -> {
                     VirtualGroupMemberInfo info = VirtualGroupMemberInfo.fromEntity(member);
-                    // 填充部门名称
-                    if (info.getDepartmentId() != null) {
-                        info.setDepartmentName(deptNameMap.get(info.getDepartmentId()));
+                    // 通过关联表获取用户的业务单元
+                    if (member.getUserId() != null) {
+                        List<com.admin.entity.UserBusinessUnit> userBusinessUnits = 
+                                userBusinessUnitRepository.findByUserId(member.getUserId());
+                        if (!userBusinessUnits.isEmpty()) {
+                            String businessUnitId = userBusinessUnits.get(0).getBusinessUnitId();
+                            info.setBusinessUnitId(businessUnitId);
+                            info.setBusinessUnitName(businessUnitNameMap.get(businessUnitId));
+                        }
                     }
                     return info;
                 })
@@ -275,16 +499,16 @@ public class VirtualGroupManagerComponent {
     }
     
     /**
-     * 获取部门ID到名称的映射
+     * 获取业务单元ID到名称的映射
      */
-    private Map<String, String> getDepartmentNameMap() {
+    private Map<String, String> getBusinessUnitNameMap() {
         try {
             return jdbcTemplate.query(
-                "SELECT id, name FROM sys_departments",
+                "SELECT id, name FROM sys_business_units",
                 (rs, rowNum) -> Map.entry(rs.getString("id"), rs.getString("name"))
             ).stream().collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (a, b) -> a));
         } catch (Exception e) {
-            log.warn("Failed to get department names", e);
+            log.warn("Failed to get business unit names", e);
             return Map.of();
         }
     }
@@ -362,43 +586,11 @@ public class VirtualGroupManagerComponent {
     }
     
     /**
-     * 处理过期的虚拟组
-     */
-    @Transactional
-    public int processExpiredGroups() {
-        log.info("Processing expired virtual groups");
-        
-        List<VirtualGroup> expiredGroups = virtualGroupRepository.findExpiredGroups(Instant.now());
-        
-        for (VirtualGroup group : expiredGroups) {
-            if ("ACTIVE".equals(group.getStatus())) {
-                group.setStatus("EXPIRED");
-                virtualGroupRepository.save(group);
-                log.info("Virtual group marked as expired: {}", group.getId());
-            }
-        }
-        
-        log.info("Processed {} expired virtual groups", expiredGroups.size());
-        return expiredGroups.size();
-    }
-    
-    /**
      * 获取用户所属的虚拟组
      */
     public List<VirtualGroupInfo> getUserGroups(String userId) {
         return virtualGroupRepository.findByUserId(userId).stream()
                 .map(VirtualGroupInfo::fromEntity)
                 .collect(Collectors.toList());
-    }
-    
-    // ==================== 私有方法 ====================
-    
-    /**
-     * 验证有效期
-     */
-    private void validateValidPeriod(Instant validFrom, Instant validTo) {
-        if (validFrom != null && validTo != null && validFrom.isAfter(validTo)) {
-            throw new AdminBusinessException("INVALID_PERIOD", "有效期开始时间不能晚于结束时间");
-        }
     }
 }

@@ -28,13 +28,10 @@
           <el-descriptions-item label="User ID">
             {{ userInfo?.userId || '-' }}
           </el-descriptions-item>
-          <el-descriptions-item :label="t('user.department')">
-            {{ userInfo?.departmentId || '-' }}
-          </el-descriptions-item>
           <el-descriptions-item label="Language">
             {{ userInfo?.language || 'zh-CN' }}
           </el-descriptions-item>
-          <el-descriptions-item label="Permissions">
+          <el-descriptions-item label="Permissions" :span="2">
             {{ userInfo?.permissions?.length || 0 }}
           </el-descriptions-item>
         </el-descriptions>
@@ -105,7 +102,6 @@ interface UserInfo {
   email?: string
   roles?: string[]
   permissions?: string[]
-  departmentId?: string
   language?: string
   avatar?: string
 }
@@ -143,10 +139,10 @@ const passwordRules = computed<FormRules>(() => ({
   ]
 }))
 
-const formatDate = (dateStr?: string) => {
-  if (!dateStr) return '-'
-  return new Date(dateStr).toLocaleString('zh-CN')
-}
+// const formatDate = (dateStr?: string) => {
+//   if (!dateStr) return '-'
+//   return new Date(dateStr).toLocaleString('zh-CN')
+// }
 
 const loadUserInfo = async () => {
   loading.value = true
@@ -164,7 +160,7 @@ const loadUserInfo = async () => {
     }
     
     // 从 API 获取用户信息
-    const response = await request.get('/api/v1/auth/me', { baseURL: '' })
+    const response = await request.get('/auth/me')
     userInfo.value = response.data || response
   } catch (error) {
     console.error('Failed to load user info:', error)
@@ -190,10 +186,10 @@ const handleChangePassword = async () => {
     
     changingPassword.value = true
     try {
-      await request.post('/api/v1/auth/change-password', {
+      await request.post('/auth/change-password', {
         oldPassword: passwordForm.oldPassword,
         newPassword: passwordForm.newPassword
-      }, { baseURL: '' })
+      })
       ElMessage.success(t('profile.passwordChanged'))
       passwordFormRef.value?.resetFields()
     } catch (error: any) {

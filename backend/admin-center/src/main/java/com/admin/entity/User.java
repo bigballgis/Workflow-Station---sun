@@ -50,9 +50,6 @@ public class User {
     @Column(name = "employee_id", length = 50)
     private String employeeId;
     
-    @Column(name = "department_id", length = 64)
-    private String departmentId;
-    
     @Column(name = "position", length = 100)
     private String position;
     

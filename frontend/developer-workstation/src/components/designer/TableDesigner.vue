@@ -1,30 +1,30 @@
 <template>
   <div class="table-designer">
     <div class="designer-toolbar">
-      <el-button type="primary" @click="showCreateDialog = true">{{ $t('table.title') }}</el-button>
+      <el-button type="primary" @click="showCreateDialog = true">{{ t('table.title') }}</el-button>
       <el-button @click="loadTables" :loading="loading">
-        <el-icon><Refresh /></el-icon> {{ $t('common.refresh') }}
+        <el-icon><Refresh /></el-icon> {{ t('common.refresh') }}
       </el-button>
-      <el-button @click="handleGenerateDDL" :disabled="!selectedTable">{{ $t('table.generateDDL') }}</el-button>
-      <el-button @click="handleValidate">{{ $t('functionUnit.validate') }}</el-button>
-      <el-button @click="showRelationDialog = true" :disabled="store.tables.length < 2">{{ $t('table.relations') }}</el-button>
+      <el-button @click="handleGenerateDDL" :disabled="!selectedTable">{{ t('table.generateDDL') }}</el-button>
+      <el-button @click="handleValidate">{{ t('functionUnit.validate') }}</el-button>
+      <el-button @click="showRelationDialog = true" :disabled="store.tables.length < 2">{{ t('table.relations') }}</el-button>
     </div>
     
     <div class="table-list" v-if="!selectedTable">
       <el-table :data="store.tables" v-loading="loading" stripe @row-click="handleSelectTable">
-        <el-table-column prop="tableName" :label="$t('table.tableName')" />
-        <el-table-column prop="tableType" :label="$t('table.tableType')" width="120">
+        <el-table-column prop="tableName" :label="t('table.tableName')" />
+        <el-table-column prop="tableType" :label="t('table.tableType')" width="120">
           <template #default="{ row }">
             <el-tag :type="row.tableType === 'MAIN' ? 'primary' : 'info'">
               {{ tableTypeLabel(row.tableType) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="description" :label="$t('table.description')" show-overflow-tooltip />
-        <el-table-column :label="$t('table.fieldCount')" width="80">
+        <el-table-column prop="description" :label="t('table.description')" show-overflow-tooltip />
+        <el-table-column :label="t('table.fieldCount')" width="80">
           <template #default="{ row }">{{ row.fieldDefinitions?.length || 0 }}</template>
         </el-table-column>
-        <el-table-column :label="$t('table.relations')" width="100">
+        <el-table-column :label="t('table.relations')" width="100">
           <template #default="{ row }">
             <el-tag v-if="getTableRelations(row.id).length" type="success" size="small">
               {{ getTableRelations(row.id).length }}
@@ -32,10 +32,10 @@
             <span v-else class="text-muted">-</span>
           </template>
         </el-table-column>
-        <el-table-column :label="$t('common.actions')" width="150">
+        <el-table-column :label="t('common.actions')" width="150">
           <template #default="{ row }">
-            <el-button link type="primary" @click.stop="handleSelectTable(row)">{{ $t('common.edit') }}</el-button>
-            <el-button link type="danger" @click.stop="handleDeleteTable(row)">{{ $t('common.delete') }}</el-button>
+            <el-button link type="primary" @click.stop="handleSelectTable(row)">{{ t('common.edit') }}</el-button>
+            <el-button link type="danger" @click.stop="handleDeleteTable(row)">{{ t('common.delete') }}</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -51,10 +51,10 @@
       </div>
       
       <el-form :model="selectedTable" label-width="100px" style="max-width: 600px; margin-bottom: 20px;">
-        <el-form-item :label="$t('table.tableName')">
+        <el-form-item :label="t('table.tableName')">
           <el-input v-model="selectedTable.tableName" />
         </el-form-item>
-        <el-form-item :label="$t('table.tableType')">
+        <el-form-item :label="t('table.tableType')">
           <el-select v-model="selectedTable.tableType">
             <el-option label="主表" value="MAIN" />
             <el-option label="子表" value="SUB" />
@@ -67,7 +67,7 @@
         </el-form-item>
       </el-form>
 
-      <h4>{{ $t('table.fields') }}</h4>
+      <h4>{{ t('table.fields') }}</h4>
       <el-button size="small" @click="handleAddField" style="margin-bottom: 10px;">添加字段</el-button>
       <el-table :data="selectedTable.fieldDefinitions" size="small" border>
         <el-table-column prop="fieldName" label="字段名" width="150">
@@ -118,26 +118,26 @@
     </div>
 
     <!-- Create Table Dialog -->
-    <el-dialog v-model="showCreateDialog" :title="$t('table.title')" width="500px">
+    <el-dialog v-model="showCreateDialog" :title="t('table.title')" width="500px">
       <el-form :model="createForm" label-width="80px">
-        <el-form-item :label="$t('table.tableName')" required>
+        <el-form-item :label="t('table.tableName')" required>
           <el-input v-model="createForm.tableName" />
         </el-form-item>
-        <el-form-item :label="$t('table.tableType')">
+        <el-form-item :label="t('table.tableType')">
           <el-select v-model="createForm.tableType">
-            <el-option :label="$t('form.mainForm')" value="MAIN" />
-            <el-option :label="$t('form.subForm')" value="SUB" />
-            <el-option :label="$t('form.actionForm')" value="ACTION" />
-            <el-option :label="$t('table.relations')" value="RELATION" />
+            <el-option :label="t('form.mainForm')" value="MAIN" />
+            <el-option :label="t('form.subForm')" value="SUB" />
+            <el-option :label="t('form.actionForm')" value="ACTION" />
+            <el-option :label="t('table.relations')" value="RELATION" />
           </el-select>
         </el-form-item>
-        <el-form-item :label="$t('table.description')">
+        <el-form-item :label="t('table.description')">
           <el-input v-model="createForm.description" type="textarea" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showCreateDialog = false">{{ $t('common.cancel') }}</el-button>
-        <el-button type="primary" @click="handleCreateTable">{{ $t('common.confirm') }}</el-button>
+        <el-button @click="showCreateDialog = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="handleCreateTable">{{ t('common.confirm') }}</el-button>
       </template>
     </el-dialog>
 
@@ -257,8 +257,23 @@ function getTableRelations(tableId: number): (TableRelation | ForeignKeyDTO)[] {
 async function loadTables() {
   loading.value = true
   try {
-    await store.fetchTables(props.functionUnitId)
+    const tables = await store.fetchTables(props.functionUnitId)
+    console.log('[TableDesigner] Loaded tables:', tables)
+    tables.forEach(table => {
+      console.log(`[TableDesigner] Table ${table.tableName} has ${table.fieldDefinitions?.length || 0} fields`)
+    })
     await loadRelations()
+    // 如果当前选中的表还在，更新选中表的数据
+    if (selectedTable.value) {
+      const updatedTable = tables.find(t => t.id === selectedTable.value!.id)
+      if (updatedTable) {
+        selectedTable.value = { 
+          ...updatedTable, 
+          fieldDefinitions: [...(updatedTable.fieldDefinitions || []).map(f => ({ ...f }))] 
+        }
+        console.log('[TableDesigner] Updated selected table with', selectedTable.value.fieldDefinitions?.length || 0, 'fields')
+      }
+    }
   } finally {
     loading.value = false
   }
@@ -307,10 +322,64 @@ async function handleCreateTable() {
 async function handleSaveTable() {
   if (!selectedTable.value) return
   try {
-    await store.updateTable(props.functionUnitId, selectedTable.value.id, selectedTable.value)
+    // 转换数据格式：将 fieldDefinitions 转换为 fields
+    // 后端期望的是 TableDefinitionRequest，包含 fields 而不是 fieldDefinitions
+    const fields = (selectedTable.value.fieldDefinitions || [])
+      .filter(f => f.fieldName && f.fieldName.trim()) // 过滤空字段名
+      .map((f: any, index: number) => ({
+        fieldName: f.fieldName,
+        dataType: f.dataType, // 确保 dataType 是有效的枚举值
+        length: f.length,
+        precision: f.precision,
+        scale: f.scale,
+        nullable: f.nullable !== undefined ? f.nullable : true,
+        defaultValue: f.defaultValue,
+        isPrimaryKey: f.isPrimaryKey || false,
+        isUnique: (f as any).isUnique || false,
+        description: f.description,
+        sortOrder: (f as any).sortOrder !== undefined ? (f as any).sortOrder : index
+      }))
+    
+    const requestData = {
+      tableName: selectedTable.value.tableName,
+      tableType: selectedTable.value.tableType,
+      description: selectedTable.value.description,
+      fields: fields
+    }
+    
+    console.log('[TableDesigner] Saving table with fields:', {
+      tableId: selectedTable.value.id,
+      tableName: requestData.tableName,
+      fieldCount: fields.length,
+      fields: fields,
+      requestData: JSON.stringify(requestData, null, 2)
+    })
+    
+    const result = await store.updateTable(props.functionUnitId, selectedTable.value.id, requestData)
+    console.log('[TableDesigner] Save result:', result)
+    console.log('[TableDesigner] Result fieldDefinitions:', result?.fieldDefinitions?.length || 0)
+    console.log('[TableDesigner] Result fieldDefinitions array:', result?.fieldDefinitions)
+    
+    // 更新当前选中的表，使用返回的数据
+    // result 已经是 TableDefinition（store.updateTable 返回 res.data，而 res 是 ApiResponse）
+    if (result) {
+      selectedTable.value = { 
+        ...result, 
+        fieldDefinitions: [...(result.fieldDefinitions || []).map(f => ({ ...f }))] 
+      }
+      console.log('[TableDesigner] Updated selected table after save with', selectedTable.value.fieldDefinitions?.length || 0, 'fields')
+    } else {
+      console.warn('[TableDesigner] Save result is null or undefined')
+    }
+    
     ElMessage.success('保存成功')
+    
+    // 延迟加载列表，确保事务已提交
+    setTimeout(() => {
     loadTables()
+    }, 500)
   } catch (e: any) {
+    console.error('[TableDesigner] Save failed:', e)
     ElMessage.error(e.response?.data?.message || '保存失败')
   }
 }

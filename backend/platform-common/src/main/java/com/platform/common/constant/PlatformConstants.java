@@ -22,7 +22,6 @@ public final class PlatformConstants {
     public static final String JWT_CLAIM_USERNAME = "username";
     public static final String JWT_CLAIM_ROLES = "roles";
     public static final String JWT_CLAIM_PERMISSIONS = "permissions";
-    public static final String JWT_CLAIM_DEPARTMENT_ID = "departmentId";
     public static final String JWT_CLAIM_LANGUAGE = "language";
     
     // Cache Keys

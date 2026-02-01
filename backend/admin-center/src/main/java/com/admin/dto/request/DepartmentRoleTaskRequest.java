@@ -7,7 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * 部门角色任务分配请求
+ * 业务单元角色任务分配请求
  */
 @Data
 @Builder
@@ -15,8 +15,8 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class DepartmentRoleTaskRequest {
     
-    @NotBlank(message = "部门ID不能为空")
-    private String departmentId;
+    @NotBlank(message = "业务单元ID不能为空")
+    private String businessUnitId;
     
     @NotBlank(message = "角色ID不能为空")
     private String roleId;

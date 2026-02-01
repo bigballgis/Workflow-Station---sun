@@ -110,9 +110,25 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleGenericException(Exception ex) {
         log.error("Unexpected error occurred", ex);
+        
+        // 提取更详细的错误信息
+        String message = ex.getMessage();
+        if (message == null || message.isEmpty()) {
+            message = ex.getClass().getSimpleName();
+        }
+        
+        // 检查是否是数据库约束错误
+        if (ex.getMessage() != null) {
+            if (ex.getMessage().contains("not-null") || ex.getMessage().contains("NULL")) {
+                message = "数据库约束错误: " + message;
+            } else if (ex.getMessage().contains("unique constraint") || ex.getMessage().contains("duplicate key")) {
+                message = "数据唯一性冲突: " + message;
+            }
+        }
+        
         ErrorResponse error = ErrorResponse.builder()
                 .code("SYS_INTERNAL_ERROR")
-                .message("An unexpected error occurred")
+                .message(message)
                 .suggestion("Please try again later or contact support")
                 .timestamp(Instant.now())
                 .traceId(UUID.randomUUID().toString())

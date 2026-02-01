@@ -51,8 +51,8 @@ public class FunctionUnitAccessService {
         Role role = roleRepository.findById(request.getRoleId())
                 .orElseThrow(() -> new EntityNotFoundException("角色不存在: " + request.getRoleId()));
         
-        if (role.getType() != RoleType.BUSINESS) {
-            throw new IllegalArgumentException("只能将功能单元分配给业务角色，当前角色类型: " + role.getType());
+        if (!role.getType().isBusinessRole()) {
+            throw new IllegalArgumentException("只能将功能单元分配给业务角色（BU-Bounded 或 BU-Unbounded），当前角色类型: " + role.getType());
         }
         
         // 检查是否已存在相同配置
@@ -115,8 +115,8 @@ public class FunctionUnitAccessService {
             Role role = roleRepository.findById(request.getRoleId())
                     .orElseThrow(() -> new EntityNotFoundException("角色不存在: " + request.getRoleId()));
             
-            if (role.getType() != RoleType.BUSINESS) {
-                throw new IllegalArgumentException("只能将功能单元分配给业务角色: " + role.getName());
+            if (!role.getType().isBusinessRole()) {
+                throw new IllegalArgumentException("只能将功能单元分配给业务角色（BU-Bounded 或 BU-Unbounded）: " + role.getName());
             }
             
             FunctionUnitAccess access = FunctionUnitAccess.builder()
@@ -182,14 +182,19 @@ public class FunctionUnitAccessService {
     
     /**
      * 获取业务角色列表（用于功能单元访问配置）
+     * 包括 BU_BOUNDED 和 BU_UNBOUNDED 类型
      */
     @Transactional(readOnly = true)
     public List<Role> getBusinessRoles() {
-        return roleRepository.findByType(RoleType.BUSINESS);
+        List<Role> buBounded = roleRepository.findByType(RoleType.BU_BOUNDED);
+        List<Role> buUnbounded = roleRepository.findByType(RoleType.BU_UNBOUNDED);
+        List<Role> result = new ArrayList<>(buBounded);
+        result.addAll(buUnbounded);
+        return result;
     }
     
     /**
-     * 获取用户的业务角色ID列表
+     * 获取用户的业务角色ID列表（BU_BOUNDED 和 BU_UNBOUNDED）
      */
     private List<String> getUserBusinessRoleIds(String userId) {
         List<String> allRoleIds = userRoleRepository.findRoleIdsByUserId(userId);
@@ -197,7 +202,7 @@ public class FunctionUnitAccessService {
         return allRoleIds.stream()
             .filter(roleId -> {
                 Role role = roleRepository.findById(roleId).orElse(null);
-                return role != null && role.getType() == RoleType.BUSINESS;
+                return role != null && role.getType().isBusinessRole();
             })
             .collect(Collectors.toList());
     }

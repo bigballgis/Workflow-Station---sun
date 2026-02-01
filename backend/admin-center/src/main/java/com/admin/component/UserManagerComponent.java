@@ -11,10 +11,12 @@ import com.admin.entity.PasswordHistory;
 import com.admin.entity.User;
 import com.admin.enums.UserStatus;
 import com.admin.exception.*;
-import com.admin.repository.DepartmentRepository;
+import com.admin.repository.BusinessUnitRepository;
 import com.admin.repository.PasswordHistoryRepository;
 import com.admin.repository.UserRepository;
+import com.admin.repository.UserBusinessUnitRoleRepository;
 import com.admin.service.AuditService;
+import com.admin.service.UserPermissionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -43,10 +45,13 @@ import java.util.regex.Pattern;
 public class UserManagerComponent {
     
     private final UserRepository userRepository;
-    private final DepartmentRepository departmentRepository;
+    private final BusinessUnitRepository businessUnitRepository;
     private final PasswordHistoryRepository passwordHistoryRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuditService auditService;
+    private final com.admin.repository.UserBusinessUnitRepository userBusinessUnitRepository;
+    private final UserPermissionService userPermissionService;
+    private final UserBusinessUnitRoleRepository userBusinessUnitRoleRepository;
     
     private static final Pattern EMAIL_PATTERN = Pattern.compile(
             "^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+$");
@@ -73,6 +78,20 @@ public class UserManagerComponent {
         String encodedPassword = passwordEncoder.encode(request.getInitialPassword());
         String userId = UUID.randomUUID().toString();
         
+        // 验证实体管理者存在（如果提供）
+        if (request.getEntityManagerId() != null && !request.getEntityManagerId().isEmpty()) {
+            if (!userRepository.existsById(request.getEntityManagerId())) {
+                throw new AdminBusinessException("ENTITY_MANAGER_NOT_FOUND", "实体管理者不存在");
+            }
+        }
+        
+        // 验证职能管理者存在（如果提供）
+        if (request.getFunctionManagerId() != null && !request.getFunctionManagerId().isEmpty()) {
+            if (!userRepository.existsById(request.getFunctionManagerId())) {
+                throw new AdminBusinessException("FUNCTION_MANAGER_NOT_FOUND", "职能管理者不存在");
+            }
+        }
+        
         User user = User.builder()
                 .id(userId)
                 .username(request.getUsername())
@@ -80,8 +99,9 @@ public class UserManagerComponent {
                 .email(request.getEmail())
                 .fullName(request.getFullName())
                 .employeeId(request.getEmployeeId())
-                .departmentId(request.getDepartmentId())
                 .position(request.getPosition())
+                .entityManagerId(request.getEntityManagerId())
+                .functionManagerId(request.getFunctionManagerId())
                 .status(UserStatus.ACTIVE)
                 .mustChangePassword(true)
                 .passwordExpiredAt(LocalDateTime.now().plusDays(90))
@@ -89,6 +109,16 @@ public class UserManagerComponent {
                 .build();
         
         user = userRepository.save(user);
+        
+        // 如果指定了业务单元，创建用户-业务单元关联
+        if (request.getBusinessUnitId() != null && !request.getBusinessUnitId().isEmpty()) {
+            com.admin.entity.UserBusinessUnit userBusinessUnit = com.admin.entity.UserBusinessUnit.builder()
+                    .id(UUID.randomUUID().toString())
+                    .userId(userId)
+                    .businessUnitId(request.getBusinessUnitId())
+                    .build();
+            userBusinessUnitRepository.save(userBusinessUnit);
+        }
         
         // 保存密码历史
         savePasswordHistory(userId, encodedPassword);
@@ -113,7 +143,6 @@ public class UserManagerComponent {
         User oldUser = User.builder()
                 .email(user.getEmail())
                 .fullName(user.getFullName())
-                .departmentId(user.getDepartmentId())
                 .position(user.getPosition())
                 .build();
         
@@ -131,8 +160,17 @@ public class UserManagerComponent {
         if (request.getEmployeeId() != null) {
             user.setEmployeeId(request.getEmployeeId());
         }
-        if (request.getDepartmentId() != null) {
-            user.setDepartmentId(request.getDepartmentId());
+        if (request.getBusinessUnitId() != null) {
+            // 更新用户-业务单元关联（先删除旧的，再创建新的）
+            userBusinessUnitRepository.deleteByUserId(userId);
+            if (!request.getBusinessUnitId().isEmpty()) {
+                com.admin.entity.UserBusinessUnit userBusinessUnit = com.admin.entity.UserBusinessUnit.builder()
+                        .id(UUID.randomUUID().toString())
+                        .userId(userId)
+                        .businessUnitId(request.getBusinessUnitId())
+                        .build();
+                userBusinessUnitRepository.save(userBusinessUnit);
+            }
         }
         if (request.getPosition() != null) {
             user.setPosition(request.getPosition());
@@ -240,45 +278,84 @@ public class UserManagerComponent {
     public void deleteUser(String userId) {
         log.info("Deleting user: {}", userId);
         
-        // 使用 findByIdWithRoles 加载用户及其角色，避免 LazyInitializationException
-        User user = userRepository.findByIdWithRoles(userId)
-                .orElseThrow(() -> new UserNotFoundException(userId));
-        
-        // 检查是否是最后一个管理员
-        if (isLastActiveAdmin(user)) {
-            throw new AdminBusinessException("USER_005", "不能删除最后一个管理员");
+        try {
+            // 使用 findByIdWithRoles 加载用户及其角色，避免 LazyInitializationException
+            User user = userRepository.findByIdWithRoles(userId)
+                    .orElseThrow(() -> new UserNotFoundException(userId));
+            
+            // 检查是否是最后一个管理员
+            if (isLastActiveAdmin(user)) {
+                throw new AdminBusinessException("USER_005", "不能删除最后一个管理员");
+            }
+            
+            // 软删除 - 不改变状态，只设置删除标记
+            // 如果必须改变状态，使用 INACTIVE（数据库约束允许）
+            // 但通常软删除只需要设置 deleted=true 即可
+            user.setDeleted(true);
+            user.setDeletedAt(LocalDateTime.now());
+            user.setDeletedBy(getCurrentUserId());
+            // 保持原有状态，不强制修改状态
+            // 如果需要禁用，可以单独调用状态更新接口
+            
+            userRepository.save(user);
+            
+            // 记录审计日志（在事务外执行，避免影响事务）
+            try {
+                auditService.recordUserDeletion(user);
+            } catch (Exception e) {
+                log.warn("Failed to record user deletion audit log: {}", e.getMessage());
+                // 审计日志失败不影响删除操作
+            }
+            
+            log.info("User soft deleted successfully: {}", userId);
+        } catch (AdminBusinessException e) {
+            // 业务异常（包括 UserNotFoundException）直接抛出
+            throw e;
+        } catch (Exception e) {
+            log.error("Failed to delete user: {}", userId, e);
+            throw new AdminBusinessException("USER_DELETE_FAILED", "删除用户失败: " + e.getMessage());
         }
-        
-        // 软删除
-        user.setDeleted(true);
-        user.setDeletedAt(LocalDateTime.now());
-        user.setDeletedBy(getCurrentUserId());
-        user.setStatus(UserStatus.DISABLED);
-        
-        userRepository.save(user);
-        
-        // 记录审计日志
-        auditService.recordUserDeletion(user);
-        
-        log.info("User soft deleted successfully: {}", userId);
     }
     
     /**
      * 检查是否是最后一个活跃管理员
      */
     private boolean isLastActiveAdmin(User user) {
-        // 检查用户是否有管理员角色
-        boolean isAdmin = user.getUserRoles().stream()
-                .anyMatch(ur -> ur.getRole() != null && 
-                        ("ADMIN".equals(ur.getRole().getCode()) || "SUPER_ADMIN".equals(ur.getRole().getCode())));
-        
-        if (!isAdmin) {
+        if (user == null || user.getUserRoles() == null) {
             return false;
         }
         
-        // 统计活跃管理员数量
-        long activeAdminCount = userRepository.countActiveAdmins();
-        return activeAdminCount <= 1;
+        try {
+            // 检查用户是否有管理员角色
+            // 使用 findByIdWithRoles 已经加载了 role，但需要安全访问
+            boolean isAdmin = user.getUserRoles().stream()
+                    .filter(ur -> ur != null)
+                    .map(ur -> {
+                        try {
+                            return ur.getRole();
+                        } catch (org.hibernate.LazyInitializationException e) {
+                            log.warn("LazyInitializationException when getting role for userRole: {}", ur.getId());
+                            return null;
+                        } catch (Exception e) {
+                            log.warn("Failed to get role for userRole: {}", ur.getId(), e);
+                            return null;
+                        }
+                    })
+                    .filter(role -> role != null && role.getCode() != null)
+                    .anyMatch(role -> "ADMIN".equals(role.getCode()) || "SUPER_ADMIN".equals(role.getCode()));
+            
+            if (!isAdmin) {
+                return false;
+            }
+            
+            // 统计活跃管理员数量
+            long activeAdminCount = userRepository.countActiveAdmins();
+            return activeAdminCount <= 1;
+        } catch (Exception e) {
+            log.error("Error checking if last active admin for user: {}", user.getId(), e);
+            // 如果检查失败，为了安全起见，不允许删除
+            return true;
+        }
     }
     
     /**
@@ -299,20 +376,48 @@ public class UserManagerComponent {
     /**
      * 获取用户详情（包含角色和登录历史）
      */
+    @Transactional(readOnly = true)
     public UserDetailInfo getUserDetail(String userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException(userId));
         
         UserDetailInfo detail = UserDetailInfo.fromEntity(user);
         
-        // 获取用户角色
-        Set<UserDetailInfo.RoleInfo> roles = user.getUserRoles().stream()
+        // 获取用户角色 - 需要从多个来源获取
+        Set<UserDetailInfo.RoleInfo> roles = new java.util.HashSet<>();
+        
+        // 1. 从 sys_user_roles 获取直接分配的角色
+        user.getUserRoles().stream()
                 .filter(ur -> ur.getRole() != null)
                 .map(ur -> UserDetailInfo.RoleInfo.builder()
+                        .roleId(ur.getRole().getId())
                         .roleCode(ur.getRole().getCode())
                         .roleName(ur.getRole().getName())
+                        .description(ur.getRole().getDescription())
                         .build())
-                .collect(java.util.stream.Collectors.toSet());
+                .forEach(roles::add);
+        
+        // 2. 从 sys_user_business_unit_roles 获取业务单元角色
+        userBusinessUnitRoleRepository.findByUserIdWithDetails(userId).stream()
+                .filter(ubur -> ubur.getRole() != null)
+                .map(ubur -> UserDetailInfo.RoleInfo.builder()
+                        .roleId(ubur.getRole().getId())
+                        .roleCode(ubur.getRole().getCode())
+                        .roleName(ubur.getRole().getName())
+                        .description(ubur.getRole().getDescription())
+                        .build())
+                .forEach(roles::add);
+        
+        // 3. 从虚拟组获取角色（通过 UserPermissionService）
+        userPermissionService.getUserRoles(userId).stream()
+                .map(role -> UserDetailInfo.RoleInfo.builder()
+                        .roleId(role.getId())
+                        .roleCode(role.getCode())
+                        .roleName(role.getName())
+                        .description(role.getDescription())
+                        .build())
+                .forEach(roles::add);
+        
         detail.setRoles(roles);
         
         // 获取实体管理者名称
@@ -351,7 +456,7 @@ public class UserManagerComponent {
                 Sort.by(Sort.Direction.DESC, "createdAt"));
         
         Page<User> users = userRepository.findByConditions(
-                request.getDepartmentId(),
+                request.getBusinessUnitId(),
                 request.getStatus(),
                 request.getKeyword(),
                 pageable);
@@ -359,10 +464,13 @@ public class UserManagerComponent {
         return users.map(user -> {
             UserInfo info = UserInfo.fromEntity(user);
             
-            // 填充部门名称
-            if (user.getDepartmentId() != null) {
-                departmentRepository.findById(user.getDepartmentId())
-                        .ifPresent(dept -> info.setDepartmentName(dept.getName()));
+            // 通过关联表获取用户的业务单元
+            List<com.admin.entity.UserBusinessUnit> userBusinessUnits = userBusinessUnitRepository.findByUserId(user.getId());
+            if (!userBusinessUnits.isEmpty()) {
+                String businessUnitId = userBusinessUnits.get(0).getBusinessUnitId();
+                info.setBusinessUnitId(businessUnitId);
+                businessUnitRepository.findById(businessUnitId)
+                        .ifPresent(unit -> info.setBusinessUnitName(unit.getName()));
             }
             
             // 填充实体管理者名称

@@ -3,6 +3,25 @@ export default {
     name: '開發工作站',
     title: '工作流平臺'
   },
+  profile: {
+    title: '個人中心',
+    businessUnits: '業務單元',
+    virtualGroups: '虛擬群組',
+    roles: '角色',
+    noBusinessUnits: '暫無業務單元',
+    noVirtualGroups: '暫無虛擬群組',
+    noRoles: '暫無角色',
+    changePassword: '修改密碼',
+    currentPassword: '當前密碼',
+    newPassword: '新密碼',
+    confirmPassword: '確認密碼',
+    currentPasswordPlaceholder: '請輸入當前密碼',
+    newPasswordPlaceholder: '請輸入新密碼',
+    confirmPasswordPlaceholder: '請再次輸入新密碼',
+    passwordMismatch: '兩次輸入的密碼不一致',
+    passwordChanged: '密碼修改成功',
+    passwordMinLength: '密碼長度不能少於6位'
+  },
   common: {
     save: '儲存',
     cancel: '取消',
@@ -206,9 +225,24 @@ export default {
     assigneeType: '分配方式',
     assigneeLabel: '分配標籤',
     assigneeValue: '分配值',
+    // 直接分配類型
+    directAssignment: '直接分配',
     functionManager: '職能經理',
     entityManager: '實體經理',
     initiator: '流程發起人',
+    // 基於當前人業務單元的角色分配
+    currentUserBuRole: '當前人業務單元角色',
+    currentBuRole: '當前人業務單元角色',
+    currentParentBuRole: '當前人上級業務單元角色',
+    // 基於發起人業務單元的角色分配
+    initiatorBuRole: '發起人業務單元角色',
+    initiatorBuRoleOption: '發起人業務單元角色',
+    initiatorParentBuRole: '發起人上級業務單元角色',
+    // 其他角色類型
+    otherRoleTypes: '其他角色類型',
+    fixedBuRole: '指定業務單元角色',
+    buUnboundedRole: 'BU無關型角色',
+    // 舊類型（已廢棄，保留相容）
     deptOthers: '本部門其他人',
     parentDept: '上級部門',
     fixedDept: '指定部門',
@@ -216,8 +250,17 @@ export default {
     user: '指定使用者',
     role: '指定角色',
     expression: '表達式',
-    selectDepartment: '請選擇部門',
+    // 選擇器
+    selectRole: '選擇角色',
+    selectBusinessUnit: '選擇業務單元',
+    selectBusinessUnitFirst: '請先選擇業務單元',
     selectVirtualGroup: '請選擇虛擬群組',
+    // 提示
+    claimRequired: '此分配方式需要使用者認領任務',
+    selectBusinessUnitTip: '選擇業務單元後，將顯示該業務單元的準入角色',
+    buBoundedRoleTip: '選擇BU綁定型角色，任務將分配給該業務單元中擁有此角色的使用者',
+    buUnboundedRoleTip: '選擇BU無關型角色，任務將分配給擁有此角色的虛擬群組成員',
+    fixedBuRoleTip: '請先選擇業務單元，然後選擇該業務單元的準入角色',
     candidateUsers: '候選使用者',
     candidateGroups: '候選群組',
     candidateUsersPlaceholder: '多個使用者用逗號分隔',
@@ -267,5 +310,9 @@ export default {
     errorMessagePlaceholder: '處理失敗',
     userIdPlaceholder: '使用者ID或使用者名稱',
     roleIdPlaceholder: '角色ID或角色名稱'
+  },
+  user: {
+    username: '使用者名稱',
+    email: '電子郵件'
   }
 }

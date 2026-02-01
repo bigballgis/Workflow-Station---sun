@@ -7,8 +7,8 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.*;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -259,9 +259,18 @@ public class WorkflowEngineClient {
         try {
             String url = workflowEngineUrl + "/api/v1/tasks/" + taskId + "/complete";
             
+            // Ensure variables is not null
+            if (variables == null) {
+                variables = new HashMap<>();
+            }
+            
+            // Put action into variables (not at top level)
+            if (action != null) {
+                variables.put("action", action);
+            }
+            
             Map<String, Object> request = new HashMap<>();
             request.put("userId", userId);
-            request.put("action", action);
             request.put("variables", variables);
             
             HttpHeaders headers = new HttpHeaders();
@@ -271,12 +280,102 @@ public class WorkflowEngineClient {
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                 url, HttpMethod.POST, entity,
                 new ParameterizedTypeReference<Map<String, Object>>() {});
-            
-            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+
+            // #region agent log
+            try {
+                java.io.FileWriter fw = new java.io.FileWriter("/Users/qiweige/Desktop/PROJECTXXXSUN/Workflow-Station---sun/.cursor/debug.log", true);
+                fw.write(java.util.Map.of("sessionId", "debug-session", "runId", "run1", "hypothesisId", "A", "location", "WorkflowEngineClient.java:285", "message", "Response received from workflow-engine", "data", java.util.Map.of("taskId", taskId, "statusCode", response.getStatusCode().toString(), "hasBody", response.getBody() != null), "timestamp", System.currentTimeMillis()).toString() + "\n");
+                fw.close();
+            } catch (Exception ex) {}
+            // #endregion
+
+            // 即使 HTTP 状态码不是 2xx，也返回响应体，让调用方处理错误信息
+            if (response.getBody() != null) {
+                // #region agent log
+                try {
+                    java.io.FileWriter fw = new java.io.FileWriter("/Users/qiweige/Desktop/PROJECTXXXSUN/Workflow-Station---sun/.cursor/debug.log", true);
+                    fw.write(java.util.Map.of("sessionId", "debug-session", "runId", "run1", "hypothesisId", "A", "location", "WorkflowEngineClient.java:286", "message", "Returning response body", "data", java.util.Map.of("taskId", taskId, "responseKeys", response.getBody().keySet().toString()), "timestamp", System.currentTimeMillis()).toString() + "\n");
+                    fw.close();
+                } catch (Exception ex) {}
+                // #endregion
                 return Optional.of(response.getBody());
+            } else {
+                log.error("Failed to complete task {}: HTTP status {}, empty response body", 
+                    taskId, response.getStatusCode());
+            }
+        } catch (org.springframework.web.client.HttpClientErrorException e) {
+            // #region agent log
+            try {
+                java.io.FileWriter fw = new java.io.FileWriter("/Users/qiweige/Desktop/PROJECTXXXSUN/Workflow-Station---sun/.cursor/debug.log", true);
+                fw.write(java.util.Map.of("sessionId", "debug-session", "runId", "run1", "hypothesisId", "A", "location", "WorkflowEngineClient.java:291", "message", "HttpClientErrorException caught", "data", java.util.Map.of("taskId", taskId, "statusCode", e.getStatusCode().toString(), "responseBody", e.getResponseBodyAsString() != null ? e.getResponseBodyAsString().substring(0, Math.min(200, e.getResponseBodyAsString().length())) : "null"), "timestamp", System.currentTimeMillis()).toString() + "\n");
+                fw.close();
+            } catch (Exception ex) {}
+            // #endregion
+            // 尝试解析错误响应体
+            try {
+                String responseBody = e.getResponseBodyAsString();
+                if (responseBody != null && !responseBody.isEmpty()) {
+                    // 尝试解析 JSON 响应
+                    ObjectMapper objectMapper = new ObjectMapper();
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> errorResponse = objectMapper.readValue(responseBody, Map.class);
+                    log.error("HTTP error completing task {}: status={}, response={}", 
+                        taskId, e.getStatusCode(), errorResponse);
+                    return Optional.of(errorResponse);
+                }
+            } catch (Exception parseException) {
+                log.error("HTTP error completing task {}: status={}, response={}", 
+                    taskId, e.getStatusCode(), e.getResponseBodyAsString());
+            }
+        } catch (org.springframework.web.client.HttpServerErrorException e) {
+            // #region agent log
+            try {
+                java.io.FileWriter fw = new java.io.FileWriter("/Users/qiweige/Desktop/PROJECTXXXSUN/Workflow-Station---sun/.cursor/debug.log", true);
+                fw.write(java.util.Map.of("sessionId", "debug-session", "runId", "run1", "hypothesisId", "A", "location", "WorkflowEngineClient.java:308", "message", "HttpServerErrorException caught", "data", java.util.Map.of("taskId", taskId, "statusCode", e.getStatusCode().toString(), "responseBody", e.getResponseBodyAsString() != null ? e.getResponseBodyAsString().substring(0, Math.min(200, e.getResponseBodyAsString().length())) : "null"), "timestamp", System.currentTimeMillis()).toString() + "\n");
+                fw.close();
+            } catch (Exception ex) {}
+            // #endregion
+            // 尝试解析错误响应体
+            try {
+                String responseBody = e.getResponseBodyAsString();
+                if (responseBody != null && !responseBody.isEmpty()) {
+                    // 尝试解析 JSON 响应
+                    ObjectMapper objectMapper = new ObjectMapper();
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> errorResponse = objectMapper.readValue(responseBody, Map.class);
+                    
+                    // #region agent log
+                    try {
+                        java.io.FileWriter fw = new java.io.FileWriter("/Users/qiweige/Desktop/PROJECTXXXSUN/Workflow-Station---sun/.cursor/debug.log", true);
+                        fw.write(java.util.Map.of("sessionId", "debug-session", "runId", "run1", "hypothesisId", "A", "location", "WorkflowEngineClient.java:319", "message", "Parsed error response", "data", java.util.Map.of("taskId", taskId, "errorResponseKeys", errorResponse.keySet().toString()), "timestamp", System.currentTimeMillis()).toString() + "\n");
+                        fw.close();
+                    } catch (Exception ex) {}
+                    // #endregion
+                    
+                    log.error("Server error completing task {}: status={}, response={}", 
+                        taskId, e.getStatusCode(), errorResponse);
+                    return Optional.of(errorResponse);
+                }
+            } catch (Exception parseException) {
+                // #region agent log
+                try {
+                    java.io.FileWriter fw = new java.io.FileWriter("/Users/qiweige/Desktop/PROJECTXXXSUN/Workflow-Station---sun/.cursor/debug.log", true);
+                    fw.write(java.util.Map.of("sessionId", "debug-session", "runId", "run1", "hypothesisId", "A", "location", "WorkflowEngineClient.java:322", "message", "Failed to parse error response", "data", java.util.Map.of("taskId", taskId, "parseException", parseException.getClass().getName(), "parseExceptionMessage", parseException.getMessage()), "timestamp", System.currentTimeMillis()).toString() + "\n");
+                    fw.close();
+                } catch (Exception ex) {}
+                // #endregion
+                log.error("Server error completing task {}: status={}, response={}", 
+                    taskId, e.getStatusCode(), e.getResponseBodyAsString());
             }
         } catch (Exception e) {
-            log.warn("Failed to complete task in workflow engine: {}", e.getMessage());
+            // #region agent log
+            try {
+                java.io.FileWriter fw = new java.io.FileWriter("/Users/qiweige/Desktop/PROJECTXXXSUN/Workflow-Station---sun/.cursor/debug.log", true);
+                fw.write(java.util.Map.of("sessionId", "debug-session", "runId", "run1", "hypothesisId", "A", "location", "WorkflowEngineClient.java:325", "message", "General exception caught", "data", java.util.Map.of("taskId", taskId, "exceptionType", e.getClass().getName(), "exceptionMessage", e.getMessage()), "timestamp", System.currentTimeMillis()).toString() + "\n");
+                fw.close();
+            } catch (Exception ex) {}
+            // #endregion
+            log.error("Failed to complete task {} in workflow engine: {}", taskId, e.getMessage(), e);
         }
         return Optional.empty();
     }
@@ -577,6 +676,78 @@ public class WorkflowEngineClient {
             }
         } catch (Exception e) {
             log.warn("Failed to check task permission from workflow engine: {}", e.getMessage());
+        }
+        return Optional.empty();
+    }
+    
+    /**
+     * 获取用户已处理的任务列表
+     */
+    @SuppressWarnings("unchecked")
+    public Optional<Map<String, Object>> getCompletedTasks(String userId, int page, int size, 
+                                                           String keyword, String startTime, String endTime) {
+        if (!isAvailable()) {
+            return Optional.empty();
+        }
+        try {
+            StringBuilder urlBuilder = new StringBuilder(workflowEngineUrl)
+                .append("/api/v1/history/completed-tasks?userId=").append(userId)
+                .append("&page=").append(page)
+                .append("&size=").append(size);
+            
+            if (keyword != null && !keyword.isEmpty()) {
+                urlBuilder.append("&keyword=").append(keyword);
+            }
+            if (startTime != null && !startTime.isEmpty()) {
+                urlBuilder.append("&startTime=").append(startTime);
+            }
+            if (endTime != null && !endTime.isEmpty()) {
+                urlBuilder.append("&endTime=").append(endTime);
+            }
+            
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                urlBuilder.toString(), HttpMethod.GET, null,
+                new ParameterizedTypeReference<Map<String, Object>>() {});
+            
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                Map<String, Object> body = response.getBody();
+                // 从 ApiResponse 中提取 data
+                if (body.containsKey("data")) {
+                    return Optional.of((Map<String, Object>) body.get("data"));
+                }
+                return Optional.of(body);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to get completed tasks from workflow engine: {}", e.getMessage());
+        }
+        return Optional.empty();
+    }
+    
+    /**
+     * 获取用户流程统计数据
+     */
+    @SuppressWarnings("unchecked")
+    public Optional<Map<String, Object>> getProcessStatistics(String userId) {
+        if (!isAvailable()) {
+            return Optional.empty();
+        }
+        try {
+            String url = workflowEngineUrl + "/api/v1/history/process-statistics?userId=" + userId;
+            
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                url, HttpMethod.GET, null,
+                new ParameterizedTypeReference<Map<String, Object>>() {});
+            
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                Map<String, Object> body = response.getBody();
+                // 从 ApiResponse 中提取 data
+                if (body.containsKey("data")) {
+                    return Optional.of((Map<String, Object>) body.get("data"));
+                }
+                return Optional.of(body);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to get process statistics from workflow engine: {}", e.getMessage());
         }
         return Optional.empty();
     }

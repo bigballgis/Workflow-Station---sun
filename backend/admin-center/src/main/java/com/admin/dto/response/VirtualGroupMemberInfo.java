@@ -24,8 +24,8 @@ public class VirtualGroupMemberInfo {
     private String fullName;
     private String employeeId;
     private String email;
-    private String departmentId;
-    private String departmentName;
+    private String businessUnitId;
+    private String businessUnitName;
     private String role;
     private Instant joinedAt;
     
@@ -43,7 +43,7 @@ public class VirtualGroupMemberInfo {
             info.setFullName(member.getUser().getFullName());
             info.setEmployeeId(member.getUser().getEmployeeId());
             info.setEmail(member.getUser().getEmail());
-            info.setDepartmentId(member.getUser().getDepartmentId());
+            // businessUnitId 需要通过关联表获取，在调用处设置
         }
         
         return info;

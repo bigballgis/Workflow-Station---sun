@@ -7,6 +7,9 @@ import lombok.NoArgsConstructor;
 
 /**
  * 解析后的用户信息
+ * 
+ * Note: Department fields have been removed as part of the migration
+ * from Department to BusinessUnit architecture.
  */
 @Data
 @Builder
@@ -17,7 +20,5 @@ public class ResolvedUser {
     private String username;
     private String displayName;
     private String employeeId;
-    private String departmentId;
-    private String departmentName;
     private String email;
 }

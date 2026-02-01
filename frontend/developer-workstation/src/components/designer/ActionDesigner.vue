@@ -9,8 +9,8 @@
     
     <div class="action-list" v-if="!selectedAction">
       <el-table :data="store.actions" v-loading="loading" stripe @row-click="handleSelectAction">
-        <el-table-column prop="actionName" :label="$t('action.actionName')" width="120" />
-        <el-table-column prop="actionType" :label="$t('action.actionType')" width="100">
+        <el-table-column prop="actionName" :label="t('action.actionName')" width="120" />
+        <el-table-column prop="actionType" :label="t('action.actionType')" width="100">
           <template #default="{ row }">
             <el-tag size="small">{{ actionTypeLabel(row.actionType) }}</el-tag>
           </template>
@@ -50,15 +50,15 @@
           <el-icon><ArrowLeft /></el-icon> 返回列表
         </el-button>
         <span class="action-name">{{ selectedAction.actionName }}</span>
-        <el-button type="success" @click="handleTestAction(selectedAction)">{{ $t('action.test') }}</el-button>
+        <el-button type="success" @click="handleTestAction(selectedAction)">{{ t('action.test') }}</el-button>
         <el-button type="primary" @click="handleSaveAction">保存</el-button>
       </div>
       
       <el-form :model="selectedAction" label-width="100px" style="max-width: 600px;">
-        <el-form-item :label="$t('action.actionName')">
+        <el-form-item :label="t('action.actionName')">
           <el-input v-model="selectedAction.actionName" />
         </el-form-item>
-        <el-form-item :label="$t('action.actionType')">
+        <el-form-item :label="t('action.actionType')">
           <el-select v-model="selectedAction.actionType">
             <el-option-group label="审批操作">
               <el-option label="批准" value="APPROVE" />
@@ -304,11 +304,13 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ArrowLeft, Refresh } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
 import { functionUnitApi, type ActionDefinition } from '@/api/functionUnit'
 
+const { t } = useI18n()
 const props = defineProps<{ functionUnitId: number }>()
 
 const store = useFunctionUnitStore()

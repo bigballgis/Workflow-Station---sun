@@ -9,7 +9,6 @@ import com.portal.dto.TaskHistoryInfo;
 import com.portal.entity.DelegationRule;
 import com.portal.entity.ProcessHistory;
 import com.portal.entity.ProcessInstance;
-import com.portal.enums.DelegationStatus;
 import com.portal.repository.DelegationRuleRepository;
 import com.portal.repository.ProcessHistoryRepository;
 import com.portal.repository.ProcessInstanceRepository;
@@ -67,17 +66,16 @@ public class TaskQueryComponent {
 
         // 1. 从 Flowable 获取任务
         try {
-            // 获取用户所属的虚拟组和部门角色
-            List<String> groupIds = getUserVirtualGroups(userId);
-            List<String> deptRoles = getUserDeptRoles(userId);
+            // 获取用户所属的虚拟组和角色
+            List<String> groupIds = getUserVirtualGroupsAndRoles(userId);
             
             // 根据分配类型筛选决定查询方式
             boolean includeGroups = assignmentTypes == null || assignmentTypes.isEmpty() 
-                || assignmentTypes.contains("VIRTUAL_GROUP") || assignmentTypes.contains("DEPT_ROLE");
+                || assignmentTypes.contains("VIRTUAL_GROUP");
             
             Optional<Map<String, Object>> result;
             if (includeGroups) {
-                result = workflowEngineClient.getUserAllVisibleTasks(userId, groupIds, deptRoles, 0, 1000);
+                result = workflowEngineClient.getUserAllVisibleTasks(userId, groupIds, Collections.emptyList(), 0, 1000);
             } else {
                 result = workflowEngineClient.getUserTasks(userId, 0, 1000);
             }
@@ -115,6 +113,9 @@ public class TaskQueryComponent {
                 .values()
                 .stream()
                 .collect(Collectors.toList());
+
+        // 过滤已撤回流程的任务
+        allTasks = filterWithdrawnProcessTasks(allTasks);
 
         // 应用筛选条件
         allTasks = applyFilters(allTasks, request);
@@ -162,14 +163,20 @@ public class TaskQueryComponent {
             currentAssigneeName = currentAssignee;
         }
         
-        // 确定分配类型：如果有 currentAssignee，则为 USER 类型（包括认领后的任务）
+        // 确定分配类型：优先使用返回的 assignmentType，如果没有则根据 currentAssignee 判断
         String assignmentType = taskMap.get("assignmentType") != null ? taskMap.get("assignmentType").toString() : null;
-        if (currentAssignee != null && !currentAssignee.isEmpty()) {
-            // 有处理人的任务，分配类型应该是 USER
-            assignmentType = "USER";
-        } else if (assignmentType == null) {
-            assignmentType = "VIRTUAL_GROUP";
+        if (assignmentType == null || assignmentType.isEmpty()) {
+            if (currentAssignee != null && !currentAssignee.isEmpty()) {
+                // 有处理人但没有指定分配类型，默认为 USER
+                assignmentType = "USER";
+            } else {
+                // 没有处理人也没有分配类型，默认为 VIRTUAL_GROUP
+                assignmentType = "VIRTUAL_GROUP";
+            }
         }
+        
+        // 获取分配目标（assignmentTarget）
+        String assignmentTarget = (String) taskMap.get("assignmentTarget");
         
         return TaskInfo.builder()
                 .taskId((String) taskMap.get("taskId"))
@@ -179,6 +186,7 @@ public class TaskQueryComponent {
                 .processDefinitionKey(processDefinitionKey)
                 .processDefinitionName(processDefinitionName)
                 .assignmentType(assignmentType)
+                .assignmentTarget(assignmentTarget)
                 .assignee(currentAssignee)
                 .assigneeName(currentAssigneeName)
                 .initiatorId(initiatorId)
@@ -329,6 +337,63 @@ public class TaskQueryComponent {
     }
 
     /**
+     * 过滤已撤回流程的任务
+     */
+    private List<TaskInfo> filterWithdrawnProcessTasks(List<TaskInfo> tasks) {
+        if (tasks == null || tasks.isEmpty()) {
+            return tasks;
+        }
+        
+        // 收集所有流程实例ID
+        Set<String> processInstanceIds = tasks.stream()
+                .map(TaskInfo::getProcessInstanceId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        
+        if (processInstanceIds.isEmpty()) {
+            log.debug("No process instance IDs found in tasks, skipping withdrawn filter");
+            return tasks;
+        }
+        
+        log.debug("Filtering withdrawn process tasks, checking {} process instances", processInstanceIds.size());
+        
+        // 批量查询流程实例状态
+        List<ProcessInstance> processInstances = processInstanceRepository.findAllById(processInstanceIds);
+        Map<String, String> processInstanceStatusMap = processInstances.stream()
+                .collect(Collectors.toMap(
+                        ProcessInstance::getId,
+                        ProcessInstance::getStatus,
+                        (existing, replacement) -> existing
+                ));
+        
+        log.debug("Found {} process instances, {} with WITHDRAWN status", 
+                processInstances.size(), 
+                processInstanceStatusMap.values().stream().filter(s -> "WITHDRAWN".equals(s)).count());
+        
+        // 过滤掉已撤回流程的任务
+        List<TaskInfo> filteredTasks = tasks.stream()
+                .filter(task -> {
+                    String processInstanceId = task.getProcessInstanceId();
+                    if (processInstanceId == null) {
+                        return true; // 如果没有流程实例ID，保留任务
+                    }
+                    String status = processInstanceStatusMap.get(processInstanceId);
+                    // 过滤掉状态为 WITHDRAWN 的任务
+                    boolean isWithdrawn = "WITHDRAWN".equals(status);
+                    if (isWithdrawn) {
+                        log.debug("Filtering out task {} from withdrawn process {}", task.getTaskId(), processInstanceId);
+                    }
+                    return !isWithdrawn;
+                })
+                .collect(Collectors.toList());
+        
+        log.info("Filtered {} tasks, {} remaining after removing withdrawn processes", 
+                tasks.size(), filteredTasks.size());
+        
+        return filteredTasks;
+    }
+
+    /**
      * 应用筛选条件
      */
     private List<TaskInfo> applyFilters(List<TaskInfo> tasks, TaskQueryRequest request) {
@@ -408,48 +473,42 @@ public class TaskQueryComponent {
     }
 
     /**
-     * 获取用户所属的虚拟组
+     * 获取用户所属的虚拟组和角色
      * 通过 workflow-engine-core 调用 admin-center 获取
+     * 返回虚拟组ID和角色ID的合并列表，用于任务候选组查询
      */
     @SuppressWarnings("unchecked")
-    private List<String> getUserVirtualGroups(String userId) {
+    private List<String> getUserVirtualGroupsAndRoles(String userId) {
+        List<String> groupIds = new ArrayList<>();
+        
         try {
             Optional<Map<String, Object>> result = workflowEngineClient.getUserTaskPermissions(userId);
             if (result.isPresent()) {
                 Map<String, Object> data = result.get();
-                List<String> groupIds = (List<String>) data.get("virtualGroupIds");
-                if (groupIds != null && !groupIds.isEmpty()) {
-                    return groupIds;
+                
+                // 添加虚拟组ID
+                List<String> virtualGroupIds = (List<String>) data.get("virtualGroupIds");
+                if (virtualGroupIds != null && !virtualGroupIds.isEmpty()) {
+                    groupIds.addAll(virtualGroupIds);
                 }
+                
+                // 添加角色ID（用于候选组查询）
+                List<String> roleIds = (List<String>) data.get("roleIds");
+                if (roleIds != null && !roleIds.isEmpty()) {
+                    groupIds.addAll(roleIds);
+                }
+                
+                log.debug("User {} has {} virtual groups and roles for task query", userId, groupIds.size());
             }
         } catch (Exception e) {
-            log.warn("Failed to get user virtual groups from workflow engine: {}", e.getMessage());
+            log.warn("Failed to get user virtual groups and roles from workflow engine: {}", e.getMessage());
         }
-        // 返回空列表，不使用模拟数据
-        return Collections.emptyList();
+        
+        // 返回合并后的列表，如果为空则返回空列表
+        return groupIds;
     }
 
-    /**
-     * 获取用户的部门角色
-     * 通过 workflow-engine-core 调用 admin-center 获取
-     */
-    @SuppressWarnings("unchecked")
-    private List<String> getUserDeptRoles(String userId) {
-        try {
-            Optional<Map<String, Object>> result = workflowEngineClient.getUserTaskPermissions(userId);
-            if (result.isPresent()) {
-                Map<String, Object> data = result.get();
-                List<String> deptRoles = (List<String>) data.get("departmentRoles");
-                if (deptRoles != null && !deptRoles.isEmpty()) {
-                    return deptRoles;
-                }
-            }
-        } catch (Exception e) {
-            log.warn("Failed to get user department roles from workflow engine: {}", e.getMessage());
-        }
-        // 返回空列表，不使用模拟数据
-        return Collections.emptyList();
-    }
+
 
     /**
      * 获取任务统计信息
@@ -593,5 +652,76 @@ public class TaskQueryComponent {
         }
         
         return history;
+    }
+    
+    /**
+     * 查询用户已处理的任务列表
+     */
+    @SuppressWarnings("unchecked")
+    public PageResponse<TaskInfo> queryCompletedTasks(TaskQueryRequest request) {
+        // 检查 Flowable 引擎是否可用
+        if (!workflowEngineClient.isAvailable()) {
+            throw new IllegalStateException("Flowable 引擎不可用，请检查 workflow-engine-core 服务是否启动");
+        }
+        
+        String userId = request.getUserId();
+        int page = request.getPage() != null ? request.getPage() : 0;
+        int size = request.getSize() != null ? request.getSize() : 20;
+        String keyword = request.getKeyword();
+        String startTime = request.getStartTime() != null ? request.getStartTime().toString() : null;
+        String endTime = request.getEndTime() != null ? request.getEndTime().toString() : null;
+        
+        try {
+            Optional<Map<String, Object>> result = workflowEngineClient.getCompletedTasks(
+                userId, page, size, keyword, startTime, endTime);
+            
+            if (result.isPresent()) {
+                Map<String, Object> data = result.get();
+                List<Map<String, Object>> content = (List<Map<String, Object>>) data.get("content");
+                long totalElements = data.get("totalElements") != null 
+                    ? ((Number) data.get("totalElements")).longValue() : 0;
+                
+                List<TaskInfo> tasks = new ArrayList<>();
+                if (content != null) {
+                    for (Map<String, Object> taskMap : content) {
+                        tasks.add(convertCompletedTaskToTaskInfo(taskMap));
+                    }
+                }
+                
+                return PageResponse.of(tasks, page, size, totalElements);
+            }
+        } catch (Exception e) {
+            log.error("Failed to query completed tasks from Flowable: {}", e.getMessage(), e);
+            throw new IllegalStateException("查询已处理任务失败: " + e.getMessage(), e);
+        }
+        
+        return PageResponse.of(Collections.emptyList(), page, size, 0);
+    }
+    
+    /**
+     * 将已完成任务的 Map 转换为 TaskInfo
+     */
+    private TaskInfo convertCompletedTaskToTaskInfo(Map<String, Object> taskMap) {
+        String processDefinitionKey = (String) taskMap.get("processDefinitionKey");
+        String processDefinitionName = (String) taskMap.get("processDefinitionName");
+        if (processDefinitionName == null || processDefinitionName.isEmpty()) {
+            processDefinitionName = processDefinitionKey;
+        }
+        
+        return TaskInfo.builder()
+                .taskId((String) taskMap.get("taskId"))
+                .taskName((String) taskMap.get("taskName"))
+                .description((String) taskMap.get("taskDescription"))
+                .processInstanceId((String) taskMap.get("processInstanceId"))
+                .processDefinitionKey(processDefinitionKey)
+                .processDefinitionName(processDefinitionName)
+                .assignee((String) taskMap.get("assignee"))
+                .status("COMPLETED")
+                .createTime(parseDateTime(taskMap.get("startTime")))
+                .completedTime(parseDateTime(taskMap.get("endTime")))
+                .durationInMillis(taskMap.get("durationInMillis") != null 
+                    ? ((Number) taskMap.get("durationInMillis")).longValue() : null)
+                .action((String) taskMap.get("action"))
+                .build();
     }
 }

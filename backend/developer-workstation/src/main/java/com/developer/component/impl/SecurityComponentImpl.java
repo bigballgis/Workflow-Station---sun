@@ -27,9 +27,6 @@ public class SecurityComponentImpl implements SecurityComponent {
     private final int lockDurationMinutes;
     private final ObjectMapper objectMapper = new ObjectMapper();
     
-    // workflow-engine 使用的 JWT secret
-    private static final String WORKFLOW_ENGINE_JWT_SECRET = "workflow-engine-jwt-secret-key-2026";
-    
     private final Map<String, Integer> loginFailures = new ConcurrentHashMap<>();
     private final Map<String, Long> lockoutTimes = new ConcurrentHashMap<>();
     
@@ -37,14 +34,14 @@ public class SecurityComponentImpl implements SecurityComponent {
      * 默认构造函数，用于测试
      */
     public SecurityComponentImpl() {
-        this("your-256-bit-secret-key-for-development-only", 86400000L, 5, 30);
+        this("workflow-engine-jwt-secret-key-2026", 86400000L, 5, 30);
     }
     
     /**
      * Spring构造函数注入
      */
     public SecurityComponentImpl(
-            @Value("${security.jwt.secret:your-256-bit-secret-key-for-development-only}") String jwtSecret,
+            @Value("${security.jwt.secret:workflow-engine-jwt-secret-key-2026}") String jwtSecret,
             @Value("${security.jwt.expiration:86400000}") long jwtExpiration,
             @Value("${security.max-login-attempts:5}") int maxLoginAttempts,
             @Value("${security.lock-duration-minutes:30}") int lockDurationMinutes) {
@@ -163,7 +160,7 @@ public class SecurityComponentImpl implements SecurityComponent {
                 String signature = parts[1];
                 
                 // 验证签名
-                String expectedSignature = hashPassword(encodedPayload + WORKFLOW_ENGINE_JWT_SECRET);
+                String expectedSignature = hashPassword(encodedPayload + jwtSecret);
                 if (!expectedSignature.equals(signature)) {
                     log.debug("Signature mismatch for 2-part token");
                     return null;

@@ -3,6 +3,25 @@ export default {
     name: '开发工作站',
     title: '工作流平台'
   },
+  profile: {
+    title: '个人中心',
+    businessUnits: '业务单元',
+    virtualGroups: '虚拟组',
+    roles: '角色',
+    noBusinessUnits: '暂无业务单元',
+    noVirtualGroups: '暂无虚拟组',
+    noRoles: '暂无角色',
+    changePassword: '修改密码',
+    currentPassword: '当前密码',
+    newPassword: '新密码',
+    confirmPassword: '确认密码',
+    currentPasswordPlaceholder: '请输入当前密码',
+    newPasswordPlaceholder: '请输入新密码',
+    confirmPasswordPlaceholder: '请再次输入新密码',
+    passwordMismatch: '两次输入的密码不一致',
+    passwordChanged: '密码修改成功',
+    passwordMinLength: '密码长度不能少于6位'
+  },
   common: {
     save: '保存',
     cancel: '取消',
@@ -206,9 +225,24 @@ export default {
     assigneeType: '分配方式',
     assigneeLabel: '分配标签',
     assigneeValue: '分配值',
+    // 直接分配类型
+    directAssignment: '直接分配',
     functionManager: '职能经理',
     entityManager: '实体经理',
     initiator: '流程发起人',
+    // 基于当前人业务单元的角色分配
+    currentUserBuRole: '当前人业务单元角色',
+    currentBuRole: '当前人业务单元角色',
+    currentParentBuRole: '当前人上级业务单元角色',
+    // 基于发起人业务单元的角色分配
+    initiatorBuRole: '发起人业务单元角色',
+    initiatorBuRoleOption: '发起人业务单元角色',
+    initiatorParentBuRole: '发起人上级业务单元角色',
+    // 其他角色类型
+    otherRoleTypes: '其他角色类型',
+    fixedBuRole: '指定业务单元角色',
+    buUnboundedRole: 'BU无关型角色',
+    // 旧类型（已废弃，保留兼容）
     deptOthers: '本部门其他人',
     parentDept: '上级部门',
     fixedDept: '指定部门',
@@ -216,8 +250,17 @@ export default {
     user: '指定用户',
     role: '指定角色',
     expression: '表达式',
-    selectDepartment: '请选择部门',
+    // 选择器
+    selectRole: '选择角色',
+    selectBusinessUnit: '选择业务单元',
+    selectBusinessUnitFirst: '请先选择业务单元',
     selectVirtualGroup: '请选择虚拟组',
+    // 提示
+    claimRequired: '此分配方式需要用户认领任务',
+    selectBusinessUnitTip: '选择业务单元后，将显示该业务单元的准入角色',
+    buBoundedRoleTip: '选择BU绑定型角色，任务将分配给该业务单元中拥有此角色的用户',
+    buUnboundedRoleTip: '选择BU无关型角色，任务将分配给拥有此角色的虚拟组成员',
+    fixedBuRoleTip: '请先选择业务单元，然后选择该业务单元的准入角色',
     candidateUsers: '候选用户',
     candidateGroups: '候选组',
     candidateUsersPlaceholder: '多个用户用逗号分隔',
@@ -267,5 +310,9 @@ export default {
     errorMessagePlaceholder: '处理失败',
     userIdPlaceholder: '用户ID或用户名',
     roleIdPlaceholder: '角色ID或角色名'
+  },
+  user: {
+    username: '用户名',
+    email: '邮箱'
   }
 }

@@ -4,21 +4,21 @@ import { preferenceApi, type UserPreference, type NotificationPreference } from 
 
 export const useSettingsStore = defineStore('settings', () => {
   const userPreference = ref<UserPreference>({
-    language: 'zh-CN',
     theme: 'light',
+    themeColor: '#409EFF',
     fontSize: 'medium',
-    sidebarCollapsed: false,
-    defaultPage: '/dashboard',
+    layoutDensity: 'comfortable',
+    language: 'zh-CN',
+    timezone: 'Asia/Shanghai',
+    dateFormat: 'YYYY-MM-DD',
     pageSize: 20
   })
 
   const notificationPreference = ref<NotificationPreference>({
+    notificationType: 'TASK',
     emailEnabled: true,
-    smsEnabled: false,
-    pushEnabled: true,
-    taskReminder: true,
-    processUpdate: true,
-    systemNotice: true
+    browserEnabled: true,
+    inAppEnabled: true
   })
 
   const loading = ref(false)
@@ -28,10 +28,13 @@ export const useSettingsStore = defineStore('settings', () => {
     try {
       const [userRes, notifyRes] = await Promise.all([
         preferenceApi.getUserPreference(),
-        preferenceApi.getNotificationPreference()
+        preferenceApi.getNotificationPreferences()
       ])
       userPreference.value = userRes.data
-      notificationPreference.value = notifyRes.data
+      // 取第一个通知偏好设置，或使用默认值
+      notificationPreference.value = Array.isArray(notifyRes.data) && notifyRes.data.length > 0 
+        ? notifyRes.data[0] 
+        : notificationPreference.value
     } finally {
       loading.value = false
     }
@@ -43,8 +46,13 @@ export const useSettingsStore = defineStore('settings', () => {
   }
 
   const updateNotificationPreference = async (data: Partial<NotificationPreference>) => {
-    await preferenceApi.updateNotificationPreference(data)
-    Object.assign(notificationPreference.value, data)
+    const fullData: NotificationPreference = {
+      ...notificationPreference.value,
+      ...data,
+      notificationType: data.notificationType || notificationPreference.value.notificationType
+    }
+    await preferenceApi.updateNotificationPreference(fullData)
+    Object.assign(notificationPreference.value, fullData)
   }
 
   // 监听语言变化

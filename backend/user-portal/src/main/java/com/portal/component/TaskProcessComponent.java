@@ -109,15 +109,59 @@ public class TaskProcessComponent {
      */
     @Transactional
     public void completeTask(TaskCompleteRequest request, String userId) {
+        // #region agent log
+        try {
+            java.io.FileWriter fw = new java.io.FileWriter("/Users/qiweige/Desktop/PROJECTXXXSUN/Workflow-Station---sun/.cursor/debug.log", true);
+            fw.write(java.util.Map.of("sessionId", "debug-session", "runId", "run1", "hypothesisId", "A", "location", "TaskProcessComponent.java:111", "message", "completeTask entry", "data", java.util.Map.of("taskId", request.getTaskId() != null ? request.getTaskId() : "null", "userId", userId, "action", request.getAction() != null ? request.getAction() : "null"), "timestamp", System.currentTimeMillis()).toString() + "\n");
+            fw.close();
+        } catch (Exception e) {}
+        // #endregion
+        
         String taskId = request.getTaskId();
         TaskInfo task = getTaskOrThrow(taskId);
 
+        // #region agent log
+        try {
+            java.io.FileWriter fw = new java.io.FileWriter("/Users/qiweige/Desktop/PROJECTXXXSUN/Workflow-Station---sun/.cursor/debug.log", true);
+            fw.write(java.util.Map.of("sessionId", "debug-session", "runId", "run1", "hypothesisId", "A", "location", "TaskProcessComponent.java:116", "message", "Before permission check", "data", java.util.Map.of("taskId", taskId, "assignmentType", task.getAssignmentType() != null ? task.getAssignmentType() : "null", "assignee", task.getAssignee() != null ? task.getAssignee() : "null", "status", task.getStatus() != null ? task.getStatus() : "null"), "timestamp", System.currentTimeMillis()).toString() + "\n");
+            fw.close();
+        } catch (Exception e) {}
+        // #endregion
+
+        // 检查任务状态：如果任务已完成，不允许再次完成
+        if (task.getStatus() != null && ("COMPLETED".equals(task.getStatus()) || "COMPLETE".equals(task.getStatus()))) {
+            // #region agent log
+            try {
+                java.io.FileWriter fw = new java.io.FileWriter("/Users/qiweige/Desktop/PROJECTXXXSUN/Workflow-Station---sun/.cursor/debug.log", true);
+                fw.write(java.util.Map.of("sessionId", "debug-session", "runId", "run1", "hypothesisId", "A", "location", "TaskProcessComponent.java:132", "message", "Task already completed", "data", java.util.Map.of("taskId", taskId, "status", task.getStatus()), "timestamp", System.currentTimeMillis()).toString() + "\n");
+                fw.close();
+            } catch (Exception e) {}
+            // #endregion
+            throw new PortalException("400", "任务已完成，无法再次处理");
+        }
+
         // 验证用户是否有权限处理任务
         if (!canProcessTask(task, userId)) {
+            // #region agent log
+            try {
+                java.io.FileWriter fw = new java.io.FileWriter("/Users/qiweige/Desktop/PROJECTXXXSUN/Workflow-Station---sun/.cursor/debug.log", true);
+                fw.write(java.util.Map.of("sessionId", "debug-session", "runId", "run1", "hypothesisId", "A", "location", "TaskProcessComponent.java:117", "message", "Permission check failed", "data", java.util.Map.of("taskId", taskId, "userId", userId), "timestamp", System.currentTimeMillis()).toString() + "\n");
+                fw.close();
+            } catch (Exception e) {}
+            // #endregion
             throw new PortalException("403", "您没有权限处理此任务");
         }
 
         String action = request.getAction();
+        
+        // #region agent log
+        try {
+            java.io.FileWriter fw = new java.io.FileWriter("/Users/qiweige/Desktop/PROJECTXXXSUN/Workflow-Station---sun/.cursor/debug.log", true);
+            fw.write(java.util.Map.of("sessionId", "debug-session", "runId", "run1", "hypothesisId", "A", "location", "TaskProcessComponent.java:122", "message", "Before action switch", "data", java.util.Map.of("taskId", taskId, "action", action), "timestamp", System.currentTimeMillis()).toString() + "\n");
+            fw.close();
+        } catch (Exception e) {}
+        // #endregion
+        
         switch (action) {
             case "APPROVE", "REJECT" -> handleApproval(task, request, userId);
             case "TRANSFER" -> handleTransfer(task, request, userId);
@@ -125,6 +169,14 @@ public class TaskProcessComponent {
             case "RETURN" -> handleReturn(task, request, userId);
             default -> throw new PortalException("400", "不支持的操作类型: " + action);
         }
+        
+        // #region agent log
+        try {
+            java.io.FileWriter fw = new java.io.FileWriter("/Users/qiweige/Desktop/PROJECTXXXSUN/Workflow-Station---sun/.cursor/debug.log", true);
+            fw.write(java.util.Map.of("sessionId", "debug-session", "runId", "run1", "hypothesisId", "A", "location", "TaskProcessComponent.java:128", "message", "completeTask exit success", "data", java.util.Map.of("taskId", taskId), "timestamp", System.currentTimeMillis()).toString() + "\n");
+            fw.close();
+        } catch (Exception e) {}
+        // #endregion
     }
 
     /**
@@ -214,11 +266,22 @@ public class TaskProcessComponent {
      */
     public boolean canClaimTask(TaskInfo task, String userId) {
         String assignmentType = task.getAssignmentType();
-        String assignee = task.getAssignee();
+        String assignmentTarget = task.getAssignmentTarget();
 
         return switch (assignmentType) {
-            case "VIRTUAL_GROUP" -> isUserInVirtualGroup(userId, assignee);
-            case "DEPT_ROLE" -> isUserHasDeptRole(userId, assignee);
+            case "CANDIDATE_USER" -> {
+                // 候选用户任务，检查用户是否在候选用户列表中
+                if (assignmentTarget != null && !assignmentTarget.isEmpty()) {
+                    String[] candidateUsers = assignmentTarget.split(",");
+                    for (String candidateUserId : candidateUsers) {
+                        if (userId.equals(candidateUserId.trim())) {
+                            yield true;
+                        }
+                    }
+                }
+                yield false;
+            }
+            case "VIRTUAL_GROUP" -> isUserInVirtualGroup(userId, assignmentTarget);
             default -> false;
         };
     }
@@ -246,14 +309,30 @@ public class TaskProcessComponent {
             return true;
         }
 
-        // 虚拟组任务（未认领的情况）
-        if ("VIRTUAL_GROUP".equals(assignmentType) && isUserInVirtualGroup(userId, assignee)) {
-            return true;
+        // 候选用户任务（未认领的情况）
+        if ("CANDIDATE_USER".equals(assignmentType)) {
+            // assignmentTarget 是逗号分隔的候选用户ID列表
+            String assignmentTarget = task.getAssignmentTarget();
+            if (assignmentTarget != null && !assignmentTarget.isEmpty()) {
+                String[] candidateUsers = assignmentTarget.split(",");
+                for (String candidateUserId : candidateUsers) {
+                    if (userId.equals(candidateUserId.trim())) {
+                        return true;
+                    }
+                }
+            }
         }
 
-        // 部门角色任务（未认领的情况）
-        if ("DEPT_ROLE".equals(assignmentType) && isUserHasDeptRole(userId, assignee)) {
-            return true;
+        // 虚拟组任务（未认领的情况）
+        // 对于 VIRTUAL_GROUP 类型，使用 assignmentTarget（虚拟组ID）而不是 assignee
+        if ("VIRTUAL_GROUP".equals(assignmentType)) {
+            String assignmentTarget = task.getAssignmentTarget();
+            if (assignmentTarget != null && !assignmentTarget.isEmpty()) {
+                return isUserInVirtualGroup(userId, assignmentTarget);
+            } else if (assignee != null && !assignee.isEmpty()) {
+                // 兼容旧数据：如果没有 assignmentTarget，使用 assignee
+                return isUserInVirtualGroup(userId, assignee);
+            }
         }
 
         // 检查是否有委托权限
@@ -284,6 +363,14 @@ public class TaskProcessComponent {
         String taskId = task.getTaskId();
         String action = request.getAction();
         
+        // #region agent log
+        try {
+            java.io.FileWriter fw = new java.io.FileWriter("/Users/qiweige/Desktop/PROJECTXXXSUN/Workflow-Station---sun/.cursor/debug.log", true);
+            fw.write(java.util.Map.of("sessionId", "debug-session", "runId", "run1", "hypothesisId", "A", "location", "TaskProcessComponent.java:310", "message", "handleApproval entry", "data", java.util.Map.of("taskId", taskId, "userId", userId, "action", action), "timestamp", System.currentTimeMillis()).toString() + "\n");
+            fw.close();
+        } catch (Exception e) {}
+        // #endregion
+        
         if (!workflowEngineClient.isAvailable()) {
             throw new IllegalStateException("Flowable 引擎不可用，请检查 workflow-engine-core 服务是否启动");
         }
@@ -297,19 +384,147 @@ public class TaskProcessComponent {
             variables.putAll(request.getFormData());
         }
         
+        // #region agent log
+        try {
+            java.io.FileWriter fw = new java.io.FileWriter("/Users/qiweige/Desktop/PROJECTXXXSUN/Workflow-Station---sun/.cursor/debug.log", true);
+            fw.write(java.util.Map.of("sessionId", "debug-session", "runId", "run1", "hypothesisId", "A", "location", "TaskProcessComponent.java:327", "message", "Before completeTask call", "data", java.util.Map.of("taskId", taskId, "variables", variables.toString()), "timestamp", System.currentTimeMillis()).toString() + "\n");
+            fw.close();
+        } catch (Exception e) {}
+        // #endregion
+        
         Optional<Map<String, Object>> result = workflowEngineClient.completeTask(taskId, userId, action, variables);
         
+        // #region agent log
+        try {
+            java.io.FileWriter fw = new java.io.FileWriter("/Users/qiweige/Desktop/PROJECTXXXSUN/Workflow-Station---sun/.cursor/debug.log", true);
+            fw.write(java.util.Map.of("sessionId", "debug-session", "runId", "run1", "hypothesisId", "A", "location", "TaskProcessComponent.java:329", "message", "After completeTask call", "data", java.util.Map.of("taskId", taskId, "resultIsEmpty", result.isEmpty()), "timestamp", System.currentTimeMillis()).toString() + "\n");
+            fw.close();
+        } catch (Exception e) {}
+        // #endregion
+        
         if (result.isEmpty()) {
+            log.error("Failed to complete task {}: workflow engine returned empty result", taskId);
             throw new PortalException("500", "完成任务失败: " + taskId);
         }
         
-        Map<String, Object> data = result.get();
-        if (!Boolean.TRUE.equals(data.get("success"))) {
-            String message = data.get("message") != null ? (String) data.get("message") : "完成任务失败";
-            throw new PortalException("500", message);
+        try {
+            Map<String, Object> responseBody = result.get();
+            
+            // #region agent log
+            try {
+                java.io.FileWriter fw = new java.io.FileWriter("/Users/qiweige/Desktop/PROJECTXXXSUN/Workflow-Station---sun/.cursor/debug.log", true);
+                fw.write(java.util.Map.of("sessionId", "debug-session", "runId", "run1", "hypothesisId", "B", "location", "TaskProcessComponent.java:336", "message", "Response body received", "data", java.util.Map.of("taskId", taskId, "responseBodyKeys", responseBody.keySet().toString(), "hasData", responseBody.containsKey("data")), "timestamp", System.currentTimeMillis()).toString() + "\n");
+                fw.close();
+            } catch (Exception e) {}
+            // #endregion
+            
+            log.debug("Workflow engine response for task {}: {}", taskId, responseBody);
+            
+            // 检查响应结构：可能是 {success: true, data: {...}} 或直接是 {success: true, ...}
+            @SuppressWarnings("unchecked")
+            Map<String, Object> data = responseBody.containsKey("data") && responseBody.get("data") instanceof Map
+                ? (Map<String, Object>) responseBody.get("data")
+                : responseBody;
+            
+            // #region agent log
+            try {
+                java.io.FileWriter fw = new java.io.FileWriter("/Users/qiweige/Desktop/PROJECTXXXSUN/Workflow-Station---sun/.cursor/debug.log", true);
+                fw.write(java.util.Map.of("sessionId", "debug-session", "runId", "run1", "hypothesisId", "B", "location", "TaskProcessComponent.java:343", "message", "Data extracted", "data", java.util.Map.of("taskId", taskId, "dataKeys", data.keySet().toString()), "timestamp", System.currentTimeMillis()).toString() + "\n");
+                fw.close();
+            } catch (Exception e) {}
+            // #endregion
+            
+            // 检查 success 字段（可能在顶层或 data 中）
+            // 安全地转换 success 字段，支持 Boolean、String、Integer 等类型
+            Object successObj = data.get("success") != null ? data.get("success") : responseBody.get("success");
+            
+            // #region agent log
+            try {
+                java.io.FileWriter fw = new java.io.FileWriter("/Users/qiweige/Desktop/PROJECTXXXSUN/Workflow-Station---sun/.cursor/debug.log", true);
+                fw.write(java.util.Map.of("sessionId", "debug-session", "runId", "run1", "hypothesisId", "C", "location", "TaskProcessComponent.java:347", "message", "Before convertToBoolean", "data", java.util.Map.of("taskId", taskId, "successObj", successObj != null ? successObj.toString() : "null", "successObjType", successObj != null ? successObj.getClass().getName() : "null"), "timestamp", System.currentTimeMillis()).toString() + "\n");
+                fw.close();
+            } catch (Exception e) {}
+            // #endregion
+            
+            Boolean success = convertToBoolean(successObj);
+            
+            // #region agent log
+            try {
+                java.io.FileWriter fw = new java.io.FileWriter("/Users/qiweige/Desktop/PROJECTXXXSUN/Workflow-Station---sun/.cursor/debug.log", true);
+                fw.write(java.util.Map.of("sessionId", "debug-session", "runId", "run1", "hypothesisId", "C", "location", "TaskProcessComponent.java:349", "message", "After convertToBoolean", "data", java.util.Map.of("taskId", taskId, "success", success), "timestamp", System.currentTimeMillis()).toString() + "\n");
+                fw.close();
+            } catch (Exception e) {}
+            // #endregion
+            
+            log.debug("Task {} completion success check: successObj={}, success={}", taskId, successObj, success);
+            
+            if (!Boolean.TRUE.equals(success)) {
+                String message = data.get("message") != null ? String.valueOf(data.get("message")) 
+                    : (responseBody.get("message") != null ? String.valueOf(responseBody.get("message")) : "完成任务失败");
+                String errorCode = data.get("code") != null ? String.valueOf(data.get("code"))
+                    : (responseBody.get("code") != null ? String.valueOf(responseBody.get("code")) : "500");
+                
+                // #region agent log
+                try {
+                    java.io.FileWriter fw = new java.io.FileWriter("/Users/qiweige/Desktop/PROJECTXXXSUN/Workflow-Station---sun/.cursor/debug.log", true);
+                    fw.write(java.util.Map.of("sessionId", "debug-session", "runId", "run1", "hypothesisId", "D", "location", "TaskProcessComponent.java:357", "message", "Throwing PortalException", "data", java.util.Map.of("taskId", taskId, "errorCode", errorCode, "message", message), "timestamp", System.currentTimeMillis()).toString() + "\n");
+                    fw.close();
+                } catch (Exception e) {}
+                // #endregion
+                
+                log.error("Failed to complete task {}: {} - {}", taskId, errorCode, message);
+                throw new PortalException(errorCode, message);
+            }
+            
+            // #region agent log
+            try {
+                java.io.FileWriter fw = new java.io.FileWriter("/Users/qiweige/Desktop/PROJECTXXXSUN/Workflow-Station---sun/.cursor/debug.log", true);
+                fw.write(java.util.Map.of("sessionId", "debug-session", "runId", "run1", "hypothesisId", "E", "location", "TaskProcessComponent.java:360", "message", "Task completed successfully", "data", java.util.Map.of("taskId", taskId), "timestamp", System.currentTimeMillis()).toString() + "\n");
+                fw.close();
+            } catch (Exception e) {}
+            // #endregion
+            
+            log.info("Task {} completed via Flowable by user {} with action {}", taskId, userId, action);
+        } catch (PortalException e) {
+            // #region agent log
+            try {
+                java.io.FileWriter fw = new java.io.FileWriter("/Users/qiweige/Desktop/PROJECTXXXSUN/Workflow-Station---sun/.cursor/debug.log", true);
+                fw.write(java.util.Map.of("sessionId", "debug-session", "runId", "run1", "hypothesisId", "D", "location", "TaskProcessComponent.java:362", "message", "PortalException caught and rethrown", "data", java.util.Map.of("taskId", taskId, "code", e.getCode(), "message", e.getMessage()), "timestamp", System.currentTimeMillis()).toString() + "\n");
+                fw.close();
+            } catch (Exception ex) {}
+            // #endregion
+            throw e;
+        } catch (Exception e) {
+            // #region agent log
+            try {
+                java.io.FileWriter fw = new java.io.FileWriter("/Users/qiweige/Desktop/PROJECTXXXSUN/Workflow-Station---sun/.cursor/debug.log", true);
+                fw.write(java.util.Map.of("sessionId", "debug-session", "runId", "run1", "hypothesisId", "E", "location", "TaskProcessComponent.java:364", "message", "Unexpected exception caught", "data", java.util.Map.of("taskId", taskId, "exceptionType", e.getClass().getName(), "exceptionMessage", e.getMessage(), "stackTrace", java.util.Arrays.toString(e.getStackTrace()).substring(0, Math.min(500, java.util.Arrays.toString(e.getStackTrace()).length()))), "timestamp", System.currentTimeMillis()).toString() + "\n");
+                fw.close();
+            } catch (Exception ex) {}
+            // #endregion
+            log.error("Unexpected error processing workflow engine response for task {}: {}", taskId, e.getMessage(), e);
+            throw new PortalException("500", "处理任务完成响应时发生错误: " + e.getMessage());
         }
-        
-        log.info("Task {} completed via Flowable by user {} with action {}", taskId, userId, action);
+    }
+    
+    /**
+     * 安全地将对象转换为 Boolean
+     */
+    private Boolean convertToBoolean(Object obj) {
+        if (obj == null) {
+            return false;
+        }
+        if (obj instanceof Boolean) {
+            return (Boolean) obj;
+        }
+        if (obj instanceof String) {
+            String str = ((String) obj).trim().toLowerCase();
+            return "true".equals(str) || "1".equals(str) || "yes".equals(str);
+        }
+        if (obj instanceof Number) {
+            return ((Number) obj).intValue() != 0;
+        }
+        return false;
     }
 
     /**
@@ -405,33 +620,6 @@ public class TaskProcessComponent {
             }
         } catch (Exception e) {
             log.warn("Failed to check virtual group membership: {}", e.getMessage());
-        }
-        
-        return false;
-    }
-
-    /**
-     * 检查用户是否有部门角色
-     * 通过 WorkflowEngineClient 调用 workflow-engine-core 验证
-     */
-    private boolean isUserHasDeptRole(String userId, String deptRoleId) {
-        if (!workflowEngineClient.isAvailable()) {
-            log.warn("Workflow engine not available, cannot verify department role");
-            return false;
-        }
-        
-        try {
-            // 获取用户的部门角色列表
-            Optional<Map<String, Object>> permissions = workflowEngineClient.getUserTaskPermissions(userId);
-            if (permissions.isPresent()) {
-                @SuppressWarnings("unchecked")
-                List<String> deptRoles = (List<String>) permissions.get().get("departmentRoles");
-                if (deptRoles != null) {
-                    return deptRoles.contains(deptRoleId);
-                }
-            }
-        } catch (Exception e) {
-            log.warn("Failed to check department role: {}", e.getMessage());
         }
         
         return false;

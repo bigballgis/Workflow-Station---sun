@@ -27,6 +27,12 @@ const routes: RouteRecordRaw[] = [
         meta: { titleKey: 'menu.tasks', icon: 'List' }
       },
       {
+        path: 'tasks/completed',
+        name: 'CompletedTasks',
+        component: () => import('@/views/tasks/completed.vue'),
+        meta: { titleKey: 'menu.completedTasks', icon: 'Finished' }
+      },
+      {
         path: 'tasks/:id',
         name: 'TaskDetail',
         component: () => import('@/views/tasks/detail.vue'),
@@ -69,16 +75,34 @@ const routes: RouteRecordRaw[] = [
         meta: { titleKey: 'menu.permissions', icon: 'Key' }
       },
       {
-        path: 'notifications',
-        name: 'Notifications',
-        component: () => import('@/views/notifications/index.vue'),
-        meta: { titleKey: 'menu.notifications', icon: 'Bell' }
+        path: 'my-requests',
+        name: 'MyRequests',
+        component: () => import('@/views/permissions/my-requests.vue'),
+        meta: { titleKey: 'menu.myRequests', icon: 'Document' }
       },
       {
-        path: 'settings',
-        name: 'Settings',
-        component: () => import('@/views/settings/index.vue'),
-        meta: { titleKey: 'menu.settings', icon: 'Setting' }
+        path: 'approvals',
+        name: 'Approvals',
+        component: () => import('@/views/permissions/approvals.vue'),
+        meta: { titleKey: 'menu.approvals', icon: 'Checked' }
+      },
+      {
+        path: 'member-management',
+        name: 'MemberManagement',
+        component: () => import('@/views/permissions/member-management.vue'),
+        meta: { titleKey: 'menu.memberManagement', icon: 'UserFilled' }
+      },
+      {
+        path: 'exit-role',
+        name: 'ExitRole',
+        component: () => import('@/views/permissions/exit-role.vue'),
+        meta: { titleKey: 'menu.exitRole', icon: 'SwitchButton' }
+      },
+      {
+        path: 'profile',
+        name: 'Profile',
+        component: () => import('@/views/profile/index.vue'),
+        meta: { titleKey: 'profile.title', icon: 'User', hidden: true }
       }
     ]
   },
@@ -95,7 +119,7 @@ const router = createRouter({
 })
 
 // 路由守卫
-router.beforeEach((to, from, next) => {
+router.beforeEach((to, _from, next) => {
   // 设置页面标题
   const t = i18n.global.t
   const titleKey = to.meta.titleKey as string

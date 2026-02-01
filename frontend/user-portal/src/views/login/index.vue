@@ -1,22 +1,5 @@
 <template>
   <div class="login-container">
-    <!-- Language Switcher -->
-    <div class="language-switcher">
-      <el-dropdown @command="handleLanguage">
-        <span class="lang-trigger">
-          <el-icon><Location /></el-icon>
-          <span>{{ currentLang }}</span>
-          <el-icon><ArrowDown /></el-icon>
-        </span>
-        <template #dropdown>
-          <el-dropdown-menu>
-            <el-dropdown-item command="zh-CN">简体中文</el-dropdown-item>
-            <el-dropdown-item command="zh-TW">繁體中文</el-dropdown-item>
-            <el-dropdown-item command="en">English</el-dropdown-item>
-          </el-dropdown-menu>
-        </template>
-      </el-dropdown>
-    </div>
     <div class="login-card">
       <div class="login-header">
         <h1>{{ t('login.title') }}</h1>
@@ -86,23 +69,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, FormInstance } from 'element-plus'
-import { User, Lock, Location, ArrowDown } from '@element-plus/icons-vue'
+import { User, Lock } from '@element-plus/icons-vue'
 import { login as authLogin, saveTokens, saveUser } from '@/api/auth'
-import i18n from '@/i18n'
+import axios from 'axios'
 
 const { t } = useI18n()
-
-const langMap: Record<string, string> = { 'zh-CN': '简体中文', 'zh-TW': '繁體中文', 'en': 'English' }
-const currentLang = computed(() => langMap[i18n.global.locale.value] || '简体中文')
-
-const handleLanguage = (lang: string) => {
-  i18n.global.locale.value = lang as 'zh-CN' | 'zh-TW' | 'en'
-  localStorage.setItem('language', lang)
-}
 const router = useRouter()
 const formRef = ref<FormInstance>()
 const loading = ref(false)
@@ -110,17 +85,72 @@ const loading = ref(false)
 // 开发环境检测
 const isDev = import.meta.env.DEV
 
-// 测试用户数据 (仅开发环境使用) - HR和公司银行部门员工
-const testUsers = [
-  { username: 'hr.manager', password: 'admin123', name: 'Sarah Chen', role: 'HR Manager', tagType: 'danger' as const },
-  { username: 'corp.director', password: 'admin123', name: 'James Zhang', role: 'Corp Bank Director', tagType: 'danger' as const },
-  { username: 'corp.manager', password: 'admin123', name: 'Linda Li', role: 'Corp Bank Manager', tagType: 'warning' as const },
-  { username: 'hr.specialist', password: 'admin123', name: 'Michael Wang', role: 'HR Specialist', tagType: 'warning' as const },
-  { username: 'corp.analyst', password: 'admin123', name: 'David Wu', role: 'Business Analyst', tagType: 'success' as const },
-  { username: 'corp.officer', password: 'admin123', name: 'Amy Zhao', role: 'Account Manager', tagType: 'success' as const },
-]
+// 测试用户数据 (从数据库动态加载)
+interface TestUser {
+  username: string
+  password: string
+  name: string
+  role: string
+  tagType: 'primary' | 'success' | 'warning' | 'danger' | 'info'
+}
 
+const testUsers = ref<TestUser[]>([])
 const selectedTestUser = ref('')
+
+// 从数据库加载用户列表
+const loadTestUsers = async () => {
+  if (!isDev) return
+  
+  try {
+    const response = await axios.get('/api/admin-center/users', {
+      params: { size: 50, page: 0 }
+    })
+    
+    // 将数据库用户转换为测试用户格式
+    const users = response.data?.content || []
+    testUsers.value = users.map((user: any, index: number) => {
+      // 根据用户名或角色分配标签颜色
+      let tagType: TestUser['tagType'] = 'primary'
+      const username = user.username.toLowerCase()
+      
+      if (username.includes('admin') || username.includes('director')) {
+        tagType = 'danger'
+      } else if (username.includes('manager') || username.includes('lead')) {
+        tagType = 'warning'
+      } else if (username.includes('reviewer') || username.includes('approver')) {
+        tagType = 'success'
+      } else if (username.includes('countersign')) {
+        tagType = 'info'
+      }
+      
+      return {
+        username: user.username,
+        password: 'admin123', // 默认测试密码
+        name: user.fullName || user.displayName || user.username,
+        role: user.email || 'User',
+        tagType
+      }
+    })
+  } catch (error) {
+    console.error('Failed to load test users:', error)
+    // 如果加载失败，使用默认的测试用户列表
+    testUsers.value = [
+      { username: 'purchase.requester', password: 'admin123', name: 'Tom Wilson', role: 'Initiator (IT-DEV)', tagType: 'primary' },
+      { username: 'dept.reviewer', password: 'admin123', name: 'Alice Johnson', role: 'Dept Reviewer (IT-DEV)', tagType: 'success' },
+      { username: 'parent.reviewer', password: 'admin123', name: 'Bob Smith', role: 'Senior Approver (IT)', tagType: 'warning' },
+      { username: 'finance.reviewer', password: 'admin123', name: 'Carol Davis', role: 'Finance Reviewer', tagType: 'danger' },
+      { username: 'countersign.approver1', password: 'admin123', name: 'Daniel Brown', role: 'Countersign Approver', tagType: 'info' },
+      { username: 'countersign.approver2', password: 'admin123', name: 'Eva Martinez', role: 'Countersign Approver', tagType: 'info' },
+      { username: 'core.lead', password: 'admin123', name: 'Kevin Huang', role: 'Entity Manager', tagType: 'warning' },
+      { username: 'tech.director', password: 'admin123', name: 'Robert Sun', role: 'Function Manager', tagType: 'danger' },
+    ]
+  }
+}
+
+// 组件挂载时加载用户列表
+onMounted(() => {
+  loadTestUsers()
+})
 
 const form = reactive({
   username: '',
@@ -134,7 +164,7 @@ const rules = computed(() => ({
 
 // 选择测试用户时自动填充
 const onTestUserSelect = (username: string) => {
-  const user = testUsers.find(u => u.username === username)
+  const user = testUsers.value.find((u: TestUser) => u.username === username)
   if (user) {
     form.username = user.username
     form.password = user.password
@@ -181,30 +211,6 @@ const handleLogin = async () => {
   align-items: center;
   background: linear-gradient(135deg, var(--hsbc-red) 0%, #8B0000 100%);
   position: relative;
-}
-
-.language-switcher {
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  z-index: 10;
-
-  .lang-trigger {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 8px 16px;
-    background: rgba(255, 255, 255, 0.15);
-    border-radius: 20px;
-    color: white;
-    cursor: pointer;
-    font-size: 14px;
-    transition: background-color 0.3s;
-
-    &:hover {
-      background: rgba(255, 255, 255, 0.25);
-    }
-  }
 }
 
 .login-card {

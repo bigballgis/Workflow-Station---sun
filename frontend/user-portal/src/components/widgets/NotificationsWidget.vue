@@ -92,7 +92,15 @@ const goToNotifications = () => {
 
 onMounted(async () => {
   await notificationStore.fetchNotifications()
-  notifications.value = notificationStore.notifications.slice(0, 5)
+  notifications.value = notificationStore.notifications.slice(0, 5).map(n => ({
+    id: n.id,
+    type: (n.type === 'reminder' ? 'warning' : n.type) as 'task' | 'process' | 'system' | 'warning',
+    title: n.title,
+    content: n.content,
+    read: n.isRead || false,
+    createdAt: n.createdAt,
+    link: n.link
+  }))
 })
 </script>
 

@@ -38,7 +38,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useTaskStore } from '@/stores/task'
 
@@ -97,8 +97,8 @@ const goToTask = (id: string) => {
 const loadTasks = async () => {
   await taskStore.fetchTasks({ page: 0, size: 100 })
   tasks.value = taskStore.tasks.map(task => ({
-    id: task.id,
-    name: task.name,
+    id: task.taskId,
+    name: task.taskName,
     dueDate: task.dueDate?.split('T')[0] || '',
     dueTime: task.dueDate?.split('T')[1]?.substring(0, 5),
     priority: task.priority as any

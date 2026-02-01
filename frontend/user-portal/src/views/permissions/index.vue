@@ -6,62 +6,15 @@
     </div>
 
     <el-tabs v-model="activeTab">
-      <!-- 我的权限 Tab -->
-      <el-tab-pane :label="t('permission.myPermissions')" name="my">
+      <!-- 进行中 Tab -->
+      <el-tab-pane name="pending">
+        <template #label>
+          <span>{{ t('permission.pending') }}</span>
+          <el-badge v-if="pendingCount > 0" :value="pendingCount" class="tab-badge" />
+        </template>
         <div class="portal-card">
-          <!-- 我的角色 -->
-          <div class="section">
-            <h3 class="section-title">
-              <el-icon><User /></el-icon>
-              {{ t('permission.myRoles') }}
-            </h3>
-            <el-empty v-if="myRoles.length === 0" :description="t('permission.noRoles')" />
-            <div v-else class="role-list">
-              <div v-for="role in myRoles" :key="role.roleId" class="role-item">
-                <el-tag type="primary" size="large">{{ role.roleName || role.name }}</el-tag>
-                <span v-if="role.organizationUnitName" class="org-name">
-                  @ {{ role.organizationUnitName }}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <el-divider />
-
-          <!-- 我的虚拟组 -->
-          <div class="section">
-            <h3 class="section-title">
-              <el-icon><UserFilled /></el-icon>
-              {{ t('permission.myVirtualGroups') }}
-            </h3>
-            <el-empty v-if="myVirtualGroups.length === 0" :description="t('permission.noVirtualGroups')" />
-            <div v-else class="virtual-group-list">
-              <el-card v-for="group in myVirtualGroups" :key="group.groupId" class="group-card" shadow="hover">
-                <template #header>
-                  <div class="group-header">
-                    <span class="group-name">{{ group.groupName || group.name }}</span>
-                    <el-tag size="small" type="success">{{ t('permission.member') }}</el-tag>
-                  </div>
-                </template>
-                <div v-if="group.boundRoles && group.boundRoles.length > 0" class="bound-roles">
-                  <span class="label">{{ t('permission.boundRoles') }}:</span>
-                  <el-tag v-for="role in group.boundRoles" :key="role.id" size="small" type="info" class="role-tag">
-                    {{ role.name }}
-                  </el-tag>
-                </div>
-                <div v-else class="no-bound-roles">
-                  {{ t('permission.noBoundRoles') }}
-                </div>
-              </el-card>
-            </div>
-          </div>
-        </div>
-      </el-tab-pane>
-
-      <!-- 申请历史 Tab -->
-      <el-tab-pane :label="t('permission.requestHistory')" name="history">
-        <div class="portal-card">
-          <el-table :data="requestList" stripe v-loading="loadingHistory">
+          <el-empty v-if="pendingList.length === 0 && !loadingPending" :description="t('permission.noPendingRequests')" />
+          <el-table v-else :data="pendingList" stripe v-loading="loadingPending">
             <el-table-column prop="requestType" :label="t('permission.requestType')" width="140">
               <template #default="{ row }">
                 <el-tag :type="getRequestTypeTag(row.requestType)" size="small">
@@ -71,21 +24,44 @@
             </el-table-column>
             <el-table-column :label="t('permission.requestTarget')" min-width="200">
               <template #default="{ row }">
-                <template v-if="row.requestType === 'ROLE_ASSIGNMENT'">
-                  <span>{{ row.roleName }}</span>
-                  <span v-if="row.organizationUnitName" class="org-info">
-                    @ {{ row.organizationUnitName }}
-                  </span>
-                </template>
-                <template v-else-if="row.requestType === 'VIRTUAL_GROUP_JOIN'">
-                  {{ row.virtualGroupName }}
-                </template>
-                <template v-else>
-                  {{ row.permissions?.join(', ') || '-' }}
-                </template>
+                {{ getTargetName(row) }}
               </template>
             </el-table-column>
-            <el-table-column prop="reason" :label="t('permission.reason')" width="200" show-overflow-tooltip />
+            <el-table-column prop="reason" :label="t('permission.reason')" min-width="200" show-overflow-tooltip />
+            <el-table-column prop="createdAt" :label="t('permission.applyTime')" width="160">
+              <template #default="{ row }">
+                {{ formatDateTime(row.createdAt) }}
+              </template>
+            </el-table-column>
+            <el-table-column :label="t('common.actions')" width="100" fixed="right">
+              <template #default="{ row }">
+                <el-button type="danger" size="small" text @click="cancelRequest(row)">
+                  {{ t('permission.cancelRequest') }}
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+      </el-tab-pane>
+
+      <!-- 历史记录 Tab -->
+      <el-tab-pane :label="t('permission.requestHistory')" name="history">
+        <div class="portal-card">
+          <el-empty v-if="historyList.length === 0 && !loadingHistory" :description="t('permission.noRequests')" />
+          <el-table v-else :data="historyList" stripe v-loading="loadingHistory">
+            <el-table-column prop="requestType" :label="t('permission.requestType')" width="140">
+              <template #default="{ row }">
+                <el-tag :type="getRequestTypeTag(row.requestType)" size="small">
+                  {{ getRequestTypeLabel(row.requestType) }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column :label="t('permission.requestTarget')" min-width="180">
+              <template #default="{ row }">
+                {{ getTargetName(row) }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="reason" :label="t('permission.reason')" min-width="150" show-overflow-tooltip />
             <el-table-column prop="status" :label="t('permission.status')" width="100">
               <template #default="{ row }">
                 <el-tag :type="getStatusType(row.status)" size="small">
@@ -93,9 +69,15 @@
                 </el-tag>
               </template>
             </el-table-column>
+            <el-table-column prop="approverComment" :label="t('approval.comment')" min-width="150" show-overflow-tooltip />
             <el-table-column prop="createdAt" :label="t('permission.applyTime')" width="160">
               <template #default="{ row }">
                 {{ formatDateTime(row.createdAt) }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="updatedAt" :label="t('permission.approvedAt')" width="160">
+              <template #default="{ row }">
+                {{ formatDateTime(row.updatedAt) }}
               </template>
             </el-table-column>
           </el-table>
@@ -109,59 +91,54 @@
         <!-- 申请类型选择 -->
         <el-form-item :label="t('permission.applyType')">
           <el-radio-group v-model="applyForm.applyType" @change="onApplyTypeChange">
-            <el-radio-button value="role">{{ t('permission.applyRole') }}</el-radio-button>
             <el-radio-button value="virtualGroup">{{ t('permission.joinVirtualGroup') }}</el-radio-button>
+            <el-radio-button value="businessUnit">{{ t('permission.joinBusinessUnit') }}</el-radio-button>
           </el-radio-group>
         </el-form-item>
 
-        <!-- 申请角色模式 -->
-        <template v-if="applyForm.applyType === 'role'">
-          <el-form-item :label="t('permission.organization')" required>
-            <el-select v-model="applyForm.organizationUnitId" :placeholder="t('permission.selectOrganization')" style="width: 100%;" filterable>
-              <el-option
-                v-for="dept in departments"
-                :key="dept.id"
-                :label="dept.name"
-                :value="dept.id"
-              />
-            </el-select>
-          </el-form-item>
-          <el-form-item :label="t('permission.role')" required>
-            <el-select v-model="applyForm.roleId" :placeholder="t('permission.selectRole')" style="width: 100%;" filterable>
-              <el-option
-                v-for="role in availableRoles"
-                :key="role.id"
-                :label="role.name"
-                :value="role.id"
-              >
-                <span>{{ role.name }}</span>
-                <span v-if="role.description" class="role-desc"> - {{ role.description }}</span>
-              </el-option>
-            </el-select>
-          </el-form-item>
-        </template>
-
         <!-- 加入虚拟组模式 -->
-        <template v-else>
+        <template v-if="applyForm.applyType === 'virtualGroup'">
           <el-form-item :label="t('permission.virtualGroup')" required>
-            <el-select v-model="applyForm.virtualGroupId" :placeholder="t('permission.selectVirtualGroup')" style="width: 100%;" filterable @change="onVirtualGroupChange">
+            <el-select 
+              v-model="applyForm.virtualGroupId" 
+              :placeholder="t('permission.selectVirtualGroup')" 
+              style="width: 100%;" 
+              filterable
+              :teleported="false"
+            >
               <el-option
                 v-for="group in availableVirtualGroups"
                 :key="group.id"
                 :label="group.name"
                 :value="group.id"
               >
-                <span>{{ group.name }}</span>
-                <span v-if="group.description" class="group-desc"> - {{ group.description }}</span>
+                <div class="group-option">
+                  <span>{{ group.name }}</span>
+                  <span v-if="group.description" class="group-desc"> - {{ group.description }}</span>
+                </div>
               </el-option>
             </el-select>
           </el-form-item>
-          <el-form-item v-if="selectedGroupBoundRoles.length > 0" :label="t('permission.boundRoles')">
-            <div class="bound-roles-preview">
-              <el-tag v-for="role in selectedGroupBoundRoles" :key="role.id" size="small" type="info" class="role-tag">
-                {{ role.name }}
-              </el-tag>
-            </div>
+        </template>
+
+        <!-- 加入业务单元模式 -->
+        <template v-else-if="applyForm.applyType === 'businessUnit'">
+          <el-form-item :label="t('permission.businessUnit')" required>
+            <el-select 
+              v-model="applyForm.businessUnitId" 
+              :placeholder="t('permission.selectBusinessUnit')" 
+              style="width: 100%;" 
+              filterable 
+              :loading="loadingBusinessUnits"
+              :teleported="false"
+            >
+              <el-option
+                v-for="bu in applicableBusinessUnits"
+                :key="bu.id"
+                :label="bu.name"
+                :value="bu.id"
+              />
+            </el-select>
           </el-form-item>
         </template>
 
@@ -180,112 +157,128 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessage } from 'element-plus'
-import { User, UserFilled } from '@element-plus/icons-vue'
-import { permissionApi, type RoleInfo, type VirtualGroupInfo, type OrganizationUnit, type UserRoleAssignment, type UserVirtualGroupMembership, type PermissionRequestRecord } from '@/api/permission'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { permissionApi, type VirtualGroupInfo, type BusinessUnit, type PermissionRequestRecord } from '@/api/permission'
 
 const { t } = useI18n()
 
-const activeTab = ref('my')
+const activeTab = ref('pending')
 const applyDialogVisible = ref(false)
 const submitting = ref(false)
+const loadingPending = ref(false)
 const loadingHistory = ref(false)
+const loadingBusinessUnits = ref(false)
 
 // 数据
-const myRoles = ref<UserRoleAssignment[]>([])
-const myVirtualGroups = ref<UserVirtualGroupMembership[]>([])
-const requestList = ref<PermissionRequestRecord[]>([])
-const availableRoles = ref<RoleInfo[]>([])
+const pendingList = ref<PermissionRequestRecord[]>([])
+const historyList = ref<PermissionRequestRecord[]>([])
 const availableVirtualGroups = ref<VirtualGroupInfo[]>([])
-const departments = ref<OrganizationUnit[]>([])
+const applicableBusinessUnits = ref<BusinessUnit[]>([])
+
+// 待处理数量
+const pendingCount = computed(() => pendingList.value.length)
 
 // 申请表单
 const applyForm = reactive({
-  applyType: 'role' as 'role' | 'virtualGroup',
-  roleId: '',
-  organizationUnitId: '',
+  applyType: 'virtualGroup' as 'virtualGroup' | 'businessUnit',
   virtualGroupId: '',
+  businessUnitId: '',
   reason: ''
 })
 
-// 选中的虚拟组绑定的角色
-const selectedGroupBoundRoles = computed(() => {
-  if (!applyForm.virtualGroupId) return []
-  const group = availableVirtualGroups.value.find(g => g.id === applyForm.virtualGroupId)
-  return group?.boundRoles || []
-})
-
-// 加载数据
-const loadMyRoles = async () => {
+// 加载待处理申请
+const loadPendingRequests = async () => {
+  loadingPending.value = true
   try {
-    const res = await permissionApi.getMyRoles()
-    myRoles.value = res.data?.data || res.data || []
+    const res = await permissionApi.getRequestHistory({ status: 'PENDING', page: 0, size: 100 }) as any
+    if (res?.data?.content) {
+      pendingList.value = res.data.content
+    } else if (res?.content) {
+      pendingList.value = res.content
+    } else if (Array.isArray(res)) {
+      pendingList.value = res
+    } else {
+      pendingList.value = []
+    }
   } catch (e) {
-    console.error('Failed to load my roles:', e)
-    myRoles.value = []
+    console.error('Failed to load pending requests:', e)
+    pendingList.value = []
+  } finally {
+    loadingPending.value = false
   }
 }
 
-const loadMyVirtualGroups = async () => {
-  try {
-    const res = await permissionApi.getMyVirtualGroups()
-    myVirtualGroups.value = res.data?.data || res.data || []
-  } catch (e) {
-    console.error('Failed to load my virtual groups:', e)
-    myVirtualGroups.value = []
-  }
-}
-
-const loadRequestHistory = async () => {
+// 加载历史记录（已批准和已拒绝）
+const loadHistoryRequests = async () => {
   loadingHistory.value = true
   try {
-    const res = await permissionApi.getRequestHistory({ page: 0, size: 50 })
-    const data = res.data?.data || res.data
-    requestList.value = data?.content || data || []
+    const res = await permissionApi.getRequestHistory({ page: 0, size: 50 }) as any
+    let allRequests: any[] = []
+    if (res?.data?.content) {
+      allRequests = res.data.content
+    } else if (res?.content) {
+      allRequests = res.content
+    } else if (Array.isArray(res)) {
+      allRequests = res
+    }
+    // 过滤出已完成的申请（APPROVED, REJECTED, CANCELLED）
+    historyList.value = allRequests.filter(
+      (r: any) => r.status !== 'PENDING'
+    )
   } catch (e) {
-    console.error('Failed to load request history:', e)
-    requestList.value = []
+    console.error('Failed to load history requests:', e)
+    historyList.value = []
   } finally {
     loadingHistory.value = false
   }
 }
 
-const loadAvailableRoles = async () => {
-  try {
-    const res = await permissionApi.getAvailableRoles()
-    availableRoles.value = res.data?.data || res.data || []
-  } catch (e) {
-    console.error('Failed to load available roles:', e)
-    availableRoles.value = []
-  }
-}
-
 const loadAvailableVirtualGroups = async () => {
   try {
-    const res = await permissionApi.getAvailableVirtualGroups()
-    availableVirtualGroups.value = res.data?.data || res.data || []
+    const res = await permissionApi.getAvailableVirtualGroups() as any
+    // axios 拦截器返回 response.data，即 ApiResponse { success, data: [...] }
+    if (res?.data && Array.isArray(res.data)) {
+      availableVirtualGroups.value = res.data
+    } else if (Array.isArray(res)) {
+      availableVirtualGroups.value = res
+    } else {
+      availableVirtualGroups.value = []
+    }
   } catch (e) {
     console.error('Failed to load available virtual groups:', e)
     availableVirtualGroups.value = []
   }
 }
 
-const loadDepartments = async () => {
+const loadApplicableBusinessUnits = async () => {
+  loadingBusinessUnits.value = true
   try {
-    const res = await permissionApi.getDepartments()
-    departments.value = res.data?.data || res.data || []
+    const res = await permissionApi.getApplicableBusinessUnits() as any
+    // axios 拦截器返回 response.data，即 ApiResponse { success, data: [...] }
+    if (res?.data && Array.isArray(res.data)) {
+      applicableBusinessUnits.value = res.data
+    } else if (Array.isArray(res)) {
+      applicableBusinessUnits.value = res
+    } else {
+      applicableBusinessUnits.value = []
+    }
   } catch (e) {
-    console.error('Failed to load departments:', e)
-    departments.value = []
+    console.error('Failed to load applicable business units:', e)
+    applicableBusinessUnits.value = []
+  } finally {
+    loadingBusinessUnits.value = false
   }
 }
 
 // 状态和类型处理
-const getStatusType = (status: string) => {
-  const map: Record<string, string> = {
+type TagType = 'primary' | 'success' | 'warning' | 'info' | 'danger'
+
+const getStatusType = (status: string): TagType => {
+  const map: Record<string, TagType> = {
     PENDING: 'warning',
     APPROVED: 'success',
-    REJECTED: 'danger'
+    REJECTED: 'danger',
+    CANCELLED: 'info'
   }
   return map[status] || 'info'
 }
@@ -294,31 +287,41 @@ const getStatusLabel = (status: string) => {
   const map: Record<string, string> = {
     PENDING: t('permission.pending'),
     APPROVED: t('permission.approved'),
-    REJECTED: t('permission.rejected')
+    REJECTED: t('permission.rejected'),
+    CANCELLED: t('permission.cancelled')
   }
   return map[status] || status
 }
 
-const getRequestTypeTag = (type: string) => {
-  const map: Record<string, string> = {
-    ROLE_ASSIGNMENT: 'primary',
+const getRequestTypeTag = (type: string): TagType => {
+  const map: Record<string, TagType> = {
+    VIRTUAL_GROUP: 'success',
     VIRTUAL_GROUP_JOIN: 'success',
-    FUNCTION: 'info',
-    DATA: 'warning',
-    TEMPORARY: 'danger'
+    BUSINESS_UNIT: 'primary',
+    BUSINESS_UNIT_JOIN: 'primary',
+    ROLE_ASSIGNMENT: 'info'
   }
   return map[type] || 'info'
 }
 
 const getRequestTypeLabel = (type: string) => {
   const map: Record<string, string> = {
-    ROLE_ASSIGNMENT: t('permission.roleAssignment'),
+    VIRTUAL_GROUP: t('permission.virtualGroupJoin'),
     VIRTUAL_GROUP_JOIN: t('permission.virtualGroupJoin'),
-    FUNCTION: t('permission.function'),
-    DATA: t('permission.data'),
-    TEMPORARY: t('permission.temporary')
+    BUSINESS_UNIT: t('permission.businessUnitJoin'),
+    BUSINESS_UNIT_JOIN: t('permission.businessUnitJoin'),
+    ROLE_ASSIGNMENT: t('permission.roleAssignment')
   }
   return map[type] || type
+}
+
+// 获取申请目标名称
+const getTargetName = (row: any) => {
+  if (row.targetName) return row.targetName
+  if (row.virtualGroupName) return row.virtualGroupName
+  if (row.businessUnitName) return row.businessUnitName
+  if (row.roleName) return row.roleName
+  return '-'
 }
 
 const formatDateTime = (dateStr: string) => {
@@ -337,44 +340,50 @@ const formatDateTime = (dateStr: string) => {
   }
 }
 
+// 取消申请
+const cancelRequest = async (row: PermissionRequestRecord) => {
+  try {
+    await ElMessageBox.confirm(t('permission.cancelConfirm'), t('common.warning'), {
+      type: 'warning'
+    })
+    
+    await permissionApi.cancelRequest(row.id)
+    ElMessage.success(t('permission.cancelSuccess'))
+    loadPendingRequests()
+    loadHistoryRequests()
+  } catch (e: any) {
+    if (e !== 'cancel') {
+      ElMessage.error(t('permission.cancelFailed'))
+    }
+  }
+}
+
 // 对话框操作
 const showApplyDialog = () => {
-  applyForm.applyType = 'role'
-  applyForm.roleId = ''
-  applyForm.organizationUnitId = ''
+  applyForm.applyType = 'virtualGroup'
   applyForm.virtualGroupId = ''
+  applyForm.businessUnitId = ''
   applyForm.reason = ''
   applyDialogVisible.value = true
   
-  // 加载可选数据
-  loadAvailableRoles()
   loadAvailableVirtualGroups()
-  loadDepartments()
+  loadApplicableBusinessUnits()
 }
 
 const onApplyTypeChange = () => {
-  applyForm.roleId = ''
-  applyForm.organizationUnitId = ''
   applyForm.virtualGroupId = ''
-}
-
-const onVirtualGroupChange = () => {
-  // 选择虚拟组时自动显示绑定的角色
+  applyForm.businessUnitId = ''
 }
 
 const submitApply = async () => {
-  if (applyForm.applyType === 'role') {
-    if (!applyForm.organizationUnitId) {
-      ElMessage.warning(t('permission.selectOrganization'))
-      return
-    }
-    if (!applyForm.roleId) {
-      ElMessage.warning(t('permission.selectRole'))
-      return
-    }
-  } else {
+  if (applyForm.applyType === 'virtualGroup') {
     if (!applyForm.virtualGroupId) {
       ElMessage.warning(t('permission.selectVirtualGroup'))
+      return
+    }
+  } else if (applyForm.applyType === 'businessUnit') {
+    if (!applyForm.businessUnitId) {
+      ElMessage.warning(t('permission.selectBusinessUnit'))
       return
     }
   }
@@ -386,27 +395,23 @@ const submitApply = async () => {
 
   submitting.value = true
   try {
-    if (applyForm.applyType === 'role') {
-      await permissionApi.requestRole({
-        roleId: applyForm.roleId,
-        organizationUnitId: applyForm.organizationUnitId,
-        reason: applyForm.reason
-      })
-      ElMessage.success(t('permission.roleRequestSuccess'))
-    } else {
+    if (applyForm.applyType === 'virtualGroup') {
       await permissionApi.requestVirtualGroup({
         virtualGroupId: applyForm.virtualGroupId,
         reason: applyForm.reason
       })
       ElMessage.success(t('permission.virtualGroupRequestSuccess'))
+    } else {
+      await permissionApi.requestBusinessUnit({
+        businessUnitId: applyForm.businessUnitId,
+        reason: applyForm.reason
+      })
+      ElMessage.success(t('permission.businessUnitRequestSuccess'))
     }
     
     applyDialogVisible.value = false
-    
-    // 刷新数据
-    loadMyRoles()
-    loadMyVirtualGroups()
-    loadRequestHistory()
+    loadPendingRequests()
+    loadHistoryRequests()
   } catch (e: any) {
     const msg = e.response?.data?.message || e.message || t('permission.requestFailed')
     ElMessage.error(msg)
@@ -417,9 +422,8 @@ const submitApply = async () => {
 
 // 初始化
 onMounted(() => {
-  loadMyRoles()
-  loadMyVirtualGroups()
-  loadRequestHistory()
+  loadPendingRequests()
+  loadHistoryRequests()
 })
 </script>
 
@@ -439,88 +443,14 @@ onMounted(() => {
     }
   }
   
-  .section {
-    margin-bottom: 20px;
-    
-    .section-title {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 16px;
-      font-weight: 500;
-      color: var(--text-primary);
-      margin-bottom: 16px;
-    }
+  .tab-badge {
+    margin-left: 6px;
   }
   
-  .role-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 12px;
-    
-    .role-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      
-      .org-name {
-        color: var(--text-secondary);
-        font-size: 13px;
-      }
-    }
-  }
-  
-  .virtual-group-list {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 16px;
-    
-    .group-card {
-      .group-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        
-        .group-name {
-          font-weight: 500;
-        }
-      }
-      
-      .bound-roles {
-        .label {
-          color: var(--text-secondary);
-          font-size: 13px;
-          margin-right: 8px;
-        }
-        
-        .role-tag {
-          margin-right: 6px;
-          margin-bottom: 4px;
-        }
-      }
-      
-      .no-bound-roles {
-        color: var(--text-secondary);
-        font-size: 13px;
-      }
-    }
-  }
-  
-  .org-info {
-    color: var(--text-secondary);
-    font-size: 13px;
-    margin-left: 8px;
-  }
-  
-  .role-desc, .group-desc {
-    color: var(--text-secondary);
-    font-size: 12px;
-  }
-  
-  .bound-roles-preview {
-    .role-tag {
-      margin-right: 6px;
-      margin-bottom: 4px;
+  .group-option {
+    .group-desc {
+      color: var(--text-secondary);
+      font-size: 12px;
     }
   }
 }

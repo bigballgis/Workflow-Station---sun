@@ -2,6 +2,7 @@ package com.admin.entity;
 
 import com.admin.enums.RoleType;
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
 import org.springframework.data.annotation.CreatedBy;
@@ -25,6 +26,7 @@ import java.util.Set;
 @NoArgsConstructor
 @AllArgsConstructor
 @EqualsAndHashCode(of = "id")
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class Role {
     
     @Id
@@ -87,10 +89,10 @@ public class Role {
     }
     
     /**
-     * 检查是否是业务角色
+     * 检查是否是业务角色（BU_BOUNDED 或 BU_UNBOUNDED）
      */
     public boolean isBusinessRole() {
-        return type == RoleType.BUSINESS;
+        return type != null && type.isBusinessRole();
     }
     
     /**

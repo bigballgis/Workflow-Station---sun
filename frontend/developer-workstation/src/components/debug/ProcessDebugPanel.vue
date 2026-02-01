@@ -61,7 +61,7 @@
         <div class="input-variables" v-if="!isDebugging">
           <h4>输入变量</h4>
           <el-form label-position="top" size="small">
-            <el-form-item v-for="(value, key) in inputVariables" :key="key" :label="key">
+            <el-form-item v-for="(_value, key) in inputVariables" :key="key" :label="key">
               <el-input v-model="inputVariables[key]" />
             </el-form-item>
           </el-form>

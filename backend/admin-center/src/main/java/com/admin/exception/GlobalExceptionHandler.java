@@ -5,6 +5,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
@@ -30,7 +31,7 @@ public class GlobalExceptionHandler {
                 .code(ex.getErrorCode())
                 .message(ex.getErrorMessage())
                 .timestamp(Instant.now())
-                .path(request.getRequestURI())
+                .path(safePath(request))
                 .build();
         
         return ResponseEntity.badRequest().body(error);
@@ -45,7 +46,7 @@ public class GlobalExceptionHandler {
                 .code(ex.getErrorCode())
                 .message(ex.getErrorMessage())
                 .timestamp(Instant.now())
-                .path(request.getRequestURI())
+                .path(safePath(request))
                 .build();
         
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
@@ -60,7 +61,7 @@ public class GlobalExceptionHandler {
                 .code(ex.getErrorCode())
                 .message(ex.getErrorMessage())
                 .timestamp(Instant.now())
-                .path(request.getRequestURI())
+                .path(safePath(request))
                 .build();
         
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(error);
@@ -80,10 +81,23 @@ public class GlobalExceptionHandler {
                 .code("VALIDATION_ERROR")
                 .message("请求参数验证失败")
                 .timestamp(Instant.now())
-                .path(request.getRequestURI())
+                .path(safePath(request))
                 .details(errors)
                 .build();
         
+        return ResponseEntity.badRequest().body(error);
+    }
+    
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ErrorResponse> handleMessageNotReadable(
+            HttpMessageNotReadableException ex, HttpServletRequest request) {
+        log.warn("Request body not readable: {}", ex.getMessage());
+        ErrorResponse error = ErrorResponse.builder()
+                .code("BAD_REQUEST")
+                .message("请求体格式错误，请检查 JSON 格式")
+                .timestamp(Instant.now())
+                .path(safePath(request))
+                .build();
         return ResponseEntity.badRequest().body(error);
     }
     
@@ -91,14 +105,31 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleGenericException(
             Exception ex, HttpServletRequest request) {
         log.error("Unexpected error", ex);
-        
-        ErrorResponse error = ErrorResponse.builder()
-                .code("INTERNAL_ERROR")
-                .message("系统内部错误")
-                .timestamp(Instant.now())
-                .path(request.getRequestURI())
-                .build();
-        
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+        try {
+            ErrorResponse error = ErrorResponse.builder()
+                    .code("INTERNAL_ERROR")
+                    .message("系统内部错误")
+                    .timestamp(Instant.now())
+                    .path(safePath(request))
+                    .build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(error);
+        } catch (Exception fallback) {
+            log.error("Failed to build error response", fallback);
+            ErrorResponse minimal = ErrorResponse.builder()
+                    .code("INTERNAL_ERROR")
+                    .message("系统内部错误")
+                    .timestamp(Instant.now())
+                    .path("")
+                    .build();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(minimal);
+        }
+    }
+
+    private static String safePath(HttpServletRequest request) {
+        try {
+            return (request != null && request.getRequestURI() != null) ? request.getRequestURI() : "";
+        } catch (Exception e) {
+            return "";
+        }
     }
 }

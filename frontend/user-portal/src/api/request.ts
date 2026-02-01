@@ -33,9 +33,21 @@ service.interceptors.request.use(
       config.headers['Authorization'] = `Bearer ${token}`
     }
     
-    // 添加用户ID头
-    const userId = localStorage.getItem('userId') || 'user_1'
-    config.headers['X-User-Id'] = userId
+    // 添加用户ID头 - 从存储的用户对象中获取
+    let userId = localStorage.getItem('userId')
+    if (!userId) {
+      // 尝试从 user 对象中获取
+      const userStr = localStorage.getItem('user')
+      if (userStr) {
+        try {
+          const user = JSON.parse(userStr)
+          userId = user.userId || user.id
+        } catch (e) {
+          console.error('Failed to parse user from localStorage:', e)
+        }
+      }
+    }
+    config.headers['X-User-Id'] = userId || 'user_1'
     
     return config
   },
@@ -51,8 +63,16 @@ service.interceptors.response.use(
     const res = response.data
     
     if (res.success === false) {
-      ElMessage.error(res.message || '请求失败')
-      return Promise.reject(new Error(res.message || '请求失败'))
+      // Only show error message if it's not a 403 permission error on login page
+      const isLoginPage = window.location.pathname === '/login'
+      if (!isLoginPage || res.code !== 403) {
+        ElMessage.error(res.message || '请求失败')
+      }
+      const error = new Error(res.message || '请求失败') as any
+      error.code = res.code
+      error.httpStatus = response.status
+      error.httpStatusText = response.statusText
+      return Promise.reject(error)
     }
     
     return res

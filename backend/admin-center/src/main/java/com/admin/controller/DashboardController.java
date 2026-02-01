@@ -5,10 +5,9 @@ import com.admin.dto.response.RecentActivity;
 import com.admin.dto.response.UserTrend;
 import com.admin.entity.AuditLog;
 import com.admin.repository.AuditLogRepository;
-import com.admin.repository.DepartmentRepository;
+import com.admin.repository.BusinessUnitRepository;
 import com.admin.repository.RoleRepository;
 import com.admin.repository.UserRepository;
-import com.admin.enums.UserStatus;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -21,7 +20,6 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
-import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -36,17 +34,17 @@ import java.util.List;
 public class DashboardController {
 
     private final UserRepository userRepository;
-    private final DepartmentRepository departmentRepository;
+    private final BusinessUnitRepository businessUnitRepository;
     private final RoleRepository roleRepository;
     private final AuditLogRepository auditLogRepository;
 
     @GetMapping("/stats")
-    @Operation(summary = "获取统计数据", description = "获取用户、部门、角色等统计数据")
+    @Operation(summary = "获取统计数据", description = "获取用户、业务单元、角色等统计数据")
     public ResponseEntity<DashboardStats> getStats() {
         log.info("Getting dashboard stats");
         
         long totalUsers = userRepository.count();
-        long totalDepartments = departmentRepository.count();
+        long totalBusinessUnits = businessUnitRepository.count();
         long totalRoles = roleRepository.count();
         
         // 计算在线用户数（最近30分钟有登录活动的用户）
@@ -64,7 +62,7 @@ public class DashboardController {
         
         DashboardStats stats = DashboardStats.builder()
             .totalUsers(totalUsers)
-            .totalDepartments(totalDepartments)
+            .totalBusinessUnits(totalBusinessUnits)
             .totalRoles(totalRoles)
             .onlineUsers(onlineUsers)
             .todayLogins(todayLogins)

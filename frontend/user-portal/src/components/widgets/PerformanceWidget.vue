@@ -100,13 +100,13 @@ const overallScore = computed(() => {
 
 onMounted(async () => {
   await dashboardStore.fetchOverview()
-  if (dashboardStore.overview) {
+  if (dashboardStore.overview?.performanceOverview) {
     metrics.value = {
-      efficiency: dashboardStore.overview.efficiencyScore || 85,
-      quality: dashboardStore.overview.qualityScore || 92,
-      collaboration: dashboardStore.overview.collaborationScore || 88
+      efficiency: dashboardStore.overview.performanceOverview.efficiencyScore || 85,
+      quality: dashboardStore.overview.performanceOverview.qualityScore || 92,
+      collaboration: dashboardStore.overview.performanceOverview.collaborationScore || 88
     }
-    rank.value = dashboardStore.overview.monthlyRank || 12
+    rank.value = dashboardStore.overview.performanceOverview.monthlyRank || 12
   }
 })
 </script>

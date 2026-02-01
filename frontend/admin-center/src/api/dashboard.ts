@@ -4,7 +4,7 @@ import { get } from './request'
 
 export interface DashboardStats {
   totalUsers: number
-  totalDepartments: number
+  totalBusinessUnits: number
   totalRoles: number
   onlineUsers: number
   activeProcesses: number

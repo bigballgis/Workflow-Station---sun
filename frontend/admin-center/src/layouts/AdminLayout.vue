@@ -13,42 +13,7 @@
         </el-icon>
       </div>
       <div class="header-right">
-        <el-dropdown @command="handleLanguage">
-          <span class="header-action">
-            <el-icon><Location /></el-icon>
-            <span class="action-text">{{ currentLang }}</span>
-          </span>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="zh-CN">简体中文</el-dropdown-item>
-              <el-dropdown-item command="zh-TW">繁體中文</el-dropdown-item>
-              <el-dropdown-item command="en">English</el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
-        <el-dropdown @command="handleUserCommand">
-          <span class="user-info">
-            <el-avatar :size="36" class="user-avatar">
-              {{ displayName.charAt(0) }}
-            </el-avatar>
-            <span class="user-name">{{ displayName }}</span>
-            <el-tag size="small" type="info" class="role-tag">{{ userRoleDisplay }}</el-tag>
-            <el-icon><ArrowDown /></el-icon>
-          </span>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="profile">
-                <el-icon><User /></el-icon>{{ t('profile.title') }}
-              </el-dropdown-item>
-              <el-dropdown-item command="settings" v-if="canAccessConfig">
-                <el-icon><Setting /></el-icon>{{ t('menu.config') }}
-              </el-dropdown-item>
-              <el-dropdown-item divided command="logout">
-                <el-icon><SwitchButton /></el-icon>{{ t('common.logout') }}
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
+        <UserProfileDropdown />
       </div>
     </el-header>
 
@@ -102,30 +67,6 @@
               <el-icon><Box /></el-icon>
               <template #title>{{ t('menu.functionUnit') }}</template>
             </el-menu-item>
-            
-            <!-- Dictionary - requires system:admin -->
-            <el-menu-item index="/dictionary" v-if="isSystemAdmin">
-              <el-icon><Collection /></el-icon>
-              <template #title>{{ t('menu.dictionary') }}</template>
-            </el-menu-item>
-            
-            <!-- Monitor - requires system:admin -->
-            <el-menu-item index="/monitor" v-if="isSystemAdmin">
-              <el-icon><Monitor /></el-icon>
-              <template #title>{{ t('menu.monitor') }}</template>
-            </el-menu-item>
-            
-            <!-- Audit Log - requires audit:read -->
-            <el-menu-item index="/audit" v-if="canReadAudit">
-              <el-icon><Document /></el-icon>
-              <template #title>{{ t('menu.audit') }}</template>
-            </el-menu-item>
-            
-            <!-- System Config - requires system:admin -->
-            <el-menu-item index="/config" v-if="isSystemAdmin">
-              <el-icon><Setting /></el-icon>
-              <template #title>{{ t('menu.config') }}</template>
-            </el-menu-item>
           </el-menu>
         </el-scrollbar>
       </el-aside>
@@ -146,66 +87,29 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ElMessage } from 'element-plus'
 import { 
-  Fold, Expand, ArrowDown, User, Setting, SwitchButton,
-  Odometer, OfficeBuilding, Key, Connection, Box, Collection, 
-  Monitor, Document, Location
+  Fold, Expand,
+  Odometer, OfficeBuilding, Key, Connection, Box, User
 } from '@element-plus/icons-vue'
-import { logout as authLogout, clearAuth, getUser } from '@/api/auth'
-import { hasPermission, getUserRoleDisplay, PERMISSIONS } from '@/utils/permission'
-import i18n from '@/i18n'
+import UserProfileDropdown from '@/components/UserProfileDropdown.vue'
+import { hasPermission, PERMISSIONS } from '@/utils/permission'
 
 const route = useRoute()
-const router = useRouter()
 const { t } = useI18n()
 
 const isCollapse = ref(false)
 const activeMenu = computed(() => route.path)
-
-// Get current user info
-const currentUser = computed(() => getUser())
-const displayName = computed(() => currentUser.value?.displayName || currentUser.value?.username || 'Admin')
-const userRoleDisplay = computed(() => getUserRoleDisplay())
 
 // Permission checks
 const isSystemAdmin = computed(() => hasPermission(PERMISSIONS.SYSTEM_ADMIN))
 const canReadUser = computed(() => hasPermission(PERMISSIONS.USER_READ))
 const canWriteUser = computed(() => hasPermission(PERMISSIONS.USER_WRITE))
 const canReadRole = computed(() => hasPermission(PERMISSIONS.ROLE_READ))
-const canReadAudit = computed(() => hasPermission(PERMISSIONS.AUDIT_READ))
-const canAccessConfig = computed(() => hasPermission(PERMISSIONS.SYSTEM_ADMIN))
-
-const langMap: Record<string, string> = { 'zh-CN': '简体中文', 'zh-TW': '繁體中文', 'en': 'English' }
-const currentLang = computed(() => langMap[i18n.global.locale.value] || '简体中文')
 
 const toggleCollapse = () => {
   isCollapse.value = !isCollapse.value
-}
-
-const handleLanguage = (lang: string) => {
-  i18n.global.locale.value = lang as 'zh-CN' | 'zh-TW' | 'en'
-  localStorage.setItem('language', lang)
-}
-
-const handleUserCommand = async (command: string) => {
-  if (command === 'logout') {
-    try {
-      await authLogout()
-      ElMessage.success(t('common.logoutSuccess'))
-    } catch (error) {
-      console.error('Logout API error:', error)
-    } finally {
-      clearAuth()
-      router.push('/login')
-    }
-  } else if (command === 'settings') {
-    router.push('/config')
-  } else if (command === 'profile') {
-    router.push('/profile')
-  }
 }
 </script>
 
@@ -270,58 +174,6 @@ $main-bg: #f5f7fa;
     display: flex;
     align-items: center;
     gap: 24px;
-
-    .header-action {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 8px 12px;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: background-color 0.3s;
-      color: white;
-
-      &:hover {
-        background-color: rgba(255, 255, 255, 0.15);
-      }
-
-      .action-text {
-        font-size: 14px;
-      }
-    }
-
-    .user-info {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 6px 12px;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: background-color 0.3s;
-      color: white;
-
-      &:hover {
-        background-color: rgba(255, 255, 255, 0.15);
-      }
-
-      .user-avatar {
-        background: rgba(255, 255, 255, 0.2);
-        color: white;
-        font-weight: 600;
-      }
-
-      .user-name {
-        font-size: 14px;
-        font-weight: 500;
-      }
-
-      .role-tag {
-        background: rgba(255, 255, 255, 0.2);
-        border: none;
-        color: white;
-        font-size: 12px;
-      }
-    }
   }
 }
 

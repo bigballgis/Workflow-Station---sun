@@ -1,5 +1,7 @@
 package com.developer.controller;
 
+import com.developer.dto.ApiResponse;
+import com.developer.dto.ErrorResponse;
 import com.developer.dto.LoginRequest;
 import com.developer.dto.LoginResponse;
 import com.developer.entity.User;
@@ -43,7 +45,7 @@ public class AuthController {
     private long jwtExpiration;
 
     @PostMapping("/login")
-    public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request, HttpServletRequest httpRequest) {
+    public ResponseEntity<?> login(@Valid @RequestBody LoginRequest request, HttpServletRequest httpRequest) {
         String ipAddress = getClientIpAddress(httpRequest);
         log.debug("Login attempt for user: {} from {}", request.getUsername(), ipAddress);
         
@@ -106,13 +108,17 @@ public class AuthController {
                             .roles(roles)
                             .permissions(permissions)
                             .rolesWithSources(rolesWithSources)
-                            .departmentId(user.getDepartmentId())
                             .language(user.getLanguage())
                             .build())
                     .build());
         } catch (RuntimeException e) {
             log.warn("Login failed: {}", e.getMessage());
-            return ResponseEntity.badRequest().body(LoginResponse.builder().build());
+            ErrorResponse err = ErrorResponse.builder()
+                    .code("LOGIN_FAILED")
+                    .message(e.getMessage())
+                    .timestamp(java.time.Instant.now())
+                    .build();
+            return ResponseEntity.badRequest().body(ApiResponse.error(err));
         }
     }
 
@@ -154,7 +160,6 @@ public class AuthController {
                     .roles(roles)
                     .permissions(getPermissionsForRoles(roles))
                     .rolesWithSources(rolesWithSources)
-                    .departmentId(user.getDepartmentId())
                     .language(user.getLanguage())
                     .build());
         } catch (Exception e) {

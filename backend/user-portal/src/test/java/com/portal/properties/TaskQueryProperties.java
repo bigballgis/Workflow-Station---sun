@@ -69,16 +69,14 @@ class TaskQueryProperties {
         when(delegationRuleRepository.findActiveDelegationsForDelegate(any(), any()))
                 .thenReturn(Collections.emptyList());
         
-        // Mock 用户权限查询 - 返回包含虚拟组和部门角色的权限信息
-        // 使用 Answer 动态生成权限数据，使虚拟组和部门角色与用户ID关联
+        // Mock 用户权限查询 - 返回包含虚拟组的权限信息
+        // 使用 Answer 动态生成权限数据，使虚拟组与用户ID关联
         when(workflowEngineClient.getUserTaskPermissions(anyString()))
                 .thenAnswer(invocation -> {
                     String userId = invocation.getArgument(0);
                     Map<String, Object> permissions = new HashMap<>();
                     // 虚拟组ID格式: group_<userId>
                     permissions.put("virtualGroupIds", List.of("group_" + userId));
-                    // 部门角色ID格式: dept_role_<userId>
-                    permissions.put("departmentRoles", List.of("dept_role_" + userId));
                     return Optional.of(permissions);
                 });
     }
@@ -143,37 +141,7 @@ class TaskQueryProperties {
     }
 
     /**
-     * 属性3: 部门角色任务应该对符合条件的用户可见
-     */
-    @RepeatedTest(20)
-    void deptRoleTasksShouldBeVisibleToQualifiedUsers() {
-        String userId = "user_" + random.nextInt(1000);
-        String deptRoleId = "dept_role_" + userId; // 模拟用户的部门角色
-        int taskCount = 1 + random.nextInt(10);
-
-        // 创建部门角色任务数据
-        List<Map<String, Object>> tasks = new ArrayList<>();
-        for (int i = 0; i < taskCount; i++) {
-            tasks.add(createTaskMap("dept_task_" + i, "DEPT_ROLE", deptRoleId));
-        }
-        
-        // Mock Flowable 返回
-        mockFlowableTasksResponse(tasks);
-
-        TaskQueryRequest request = TaskQueryRequest.builder()
-                .userId(userId)
-                .assignmentTypes(List.of("DEPT_ROLE"))
-                .build();
-
-        PageResponse<TaskInfo> result = taskQueryComponent.queryTasks(request);
-
-        assertEquals(taskCount, result.getTotalElements());
-        assertTrue(result.getContent().stream()
-                .allMatch(t -> "DEPT_ROLE".equals(t.getAssignmentType())));
-    }
-
-    /**
-     * 属性4: 委托任务应该对被委托人可见
+     * 属性3: 委托任务应该对被委托人可见
      */
     @RepeatedTest(20)
     void delegatedTasksShouldBeVisibleToDelegate() {
@@ -221,7 +189,7 @@ class TaskQueryProperties {
     }
 
     /**
-     * 属性5: 多维度查询应该返回所有类型的任务（去重）
+     * 属性4: 多维度查询应该返回所有类型的任务（去重）
      */
     @RepeatedTest(20)
     void multiDimensionalQueryShouldReturnAllTypes() {
@@ -231,7 +199,6 @@ class TaskQueryProperties {
         List<Map<String, Object>> tasks = new ArrayList<>();
         tasks.add(createTaskMap("direct_task", "USER", userId));
         tasks.add(createTaskMap("group_task", "VIRTUAL_GROUP", "group_" + userId));
-        tasks.add(createTaskMap("dept_task", "DEPT_ROLE", "dept_role_" + userId));
         
         // Mock Flowable 返回
         mockFlowableTasksResponse(tasks);
@@ -242,17 +209,16 @@ class TaskQueryProperties {
 
         PageResponse<TaskInfo> result = taskQueryComponent.queryTasks(request);
 
-        assertEquals(3, result.getTotalElements());
+        assertEquals(2, result.getTotalElements());
         
         Set<String> types = new HashSet<>();
         result.getContent().forEach(t -> types.add(t.getAssignmentType()));
         assertTrue(types.contains("USER"));
         assertTrue(types.contains("VIRTUAL_GROUP"));
-        assertTrue(types.contains("DEPT_ROLE"));
     }
 
     /**
-     * 属性6: 优先级筛选应该正确过滤任务
+     * 属性5: 优先级筛选应该正确过滤任务
      */
     @RepeatedTest(20)
     void priorityFilterShouldWorkCorrectly() {
@@ -284,7 +250,7 @@ class TaskQueryProperties {
     }
 
     /**
-     * 属性7: 分页应该正确工作
+     * 属性6: 分页应该正确工作
      */
     @RepeatedTest(20)
     void paginationShouldWorkCorrectly() {
@@ -329,7 +295,7 @@ class TaskQueryProperties {
     }
 
     /**
-     * 属性8: 排序应该正确工作
+     * 属性7: 排序应该正确工作
      */
     @RepeatedTest(20)
     void sortingShouldWorkCorrectly() {
@@ -363,7 +329,7 @@ class TaskQueryProperties {
     }
 
     /**
-     * 属性9: 关键词搜索应该正确过滤
+     * 属性8: 关键词搜索应该正确过滤
      */
     @RepeatedTest(20)
     void keywordSearchShouldWorkCorrectly() {
@@ -402,7 +368,7 @@ class TaskQueryProperties {
     }
 
     /**
-     * 属性9.1: 关键词搜索应该包含发起人名称匹配
+     * 属性8.1: 关键词搜索应该包含发起人名称匹配
      * 验证通过发起人名称可以搜索到对应的任务
      */
     @RepeatedTest(20)
@@ -451,7 +417,7 @@ class TaskQueryProperties {
     }
 
     /**
-     * 属性9.2: 发起人信息应该正确传递到任务结果中
+     * 属性8.2: 发起人信息应该正确传递到任务结果中
      * 验证从 Flowable 返回的发起人信息能正确映射到 TaskInfo
      */
     @RepeatedTest(20)
@@ -483,7 +449,7 @@ class TaskQueryProperties {
     }
 
     /**
-     * 属性9.3: 发起人信息为空时应该正确处理
+     * 属性8.3: 发起人信息为空时应该正确处理
      * 验证当任务没有发起人信息时不会导致错误
      */
     @RepeatedTest(20)
@@ -512,7 +478,7 @@ class TaskQueryProperties {
     }
 
     /**
-     * 属性10: 空结果应该正确处理
+     * 属性9: 空结果应该正确处理
      */
     @Test
     void emptyResultShouldBeHandledCorrectly() {
@@ -535,7 +501,7 @@ class TaskQueryProperties {
     }
     
     /**
-     * 属性11: Flowable 引擎不可用时应该抛出异常
+     * 属性10: Flowable 引擎不可用时应该抛出异常
      */
     @Test
     void shouldThrowExceptionWhenFlowableUnavailable() {

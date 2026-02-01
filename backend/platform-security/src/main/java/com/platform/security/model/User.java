@@ -15,11 +15,8 @@ import java.util.Set;
  * Validates: Requirements 1.1, 1.2, 1.4, 1.5
  */
 @Entity
-@Table(name = "sys_users", indexes = {
-    @Index(name = "idx_user_username", columnList = "username"),
-    @Index(name = "idx_user_status", columnList = "status"),
-    @Index(name = "idx_user_email", columnList = "email")
-})
+@Table(name = "sys_users")
+// Indexes are defined in Flyway migration scripts (V1__init_schema.sql)
 @Data
 @Builder
 @NoArgsConstructor
@@ -31,13 +28,13 @@ public class User {
     @Column(length = 64)
     private String id;
 
-    @Column(unique = true, nullable = false, length = 50)
+    @Column(unique = true, nullable = false, length = 100)
     private String username;
 
     @Column(name = "password_hash", nullable = false)
     private String passwordHash;
 
-    @Column(length = 100)
+    @Column(name = "email", length = 255)
     private String email;
 
     @Column(name = "display_name", length = 50)
@@ -53,9 +50,6 @@ public class User {
     @Column(nullable = false, length = 20)
     @Builder.Default
     private UserStatus status = UserStatus.ACTIVE;
-
-    @Column(name = "department_id", length = 50)
-    private String departmentId;
 
     @Column(length = 100)
     private String position;

@@ -2,19 +2,19 @@
   <div class="event-properties">
     <el-collapse v-model="activeGroups">
       <!-- 基本信息 -->
-      <el-collapse-item :title="$t('properties.basic')" name="basic">
+      <el-collapse-item :title="t('properties.basic')" name="basic">
         <el-form label-position="top" size="small">
-          <el-form-item :label="$t('properties.eventId')">
+          <el-form-item :label="t('properties.eventId')">
             <el-input :model-value="basicProps.id" disabled />
           </el-form-item>
-          <el-form-item :label="$t('common.type')">
+          <el-form-item :label="t('common.type')">
             <el-input :model-value="eventTypeLabel" disabled />
           </el-form-item>
-          <el-form-item :label="$t('common.type')">
+          <el-form-item :label="t('common.type')">
             <el-input :model-value="eventDefinitionLabel" disabled />
           </el-form-item>
-          <el-form-item :label="$t('properties.eventName')">
-            <el-input v-model="eventName" @change="updateBasicProp('name', eventName)" :placeholder="$t('properties.eventName')" />
+          <el-form-item :label="t('properties.eventName')">
+            <el-input v-model="eventName" @change="updateBasicProp('name', eventName)" :placeholder="t('properties.eventName')" />
           </el-form-item>
         </el-form>
       </el-collapse-item>

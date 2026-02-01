@@ -20,7 +20,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
@@ -66,7 +65,7 @@ class PerformanceIntegrationTest {
         
         // 初始化组件
         notificationManagerComponent = new NotificationManagerComponent(eventPublisher, stringRedisTemplate, objectMapper);
-        securityManagerComponent = new SecurityManagerComponent(stringRedisTemplate, objectMapper, auditManagerComponent);
+        securityManagerComponent = new SecurityManagerComponent(stringRedisTemplate, objectMapper, auditManagerComponent, mock(org.springframework.core.env.Environment.class));
         securityManagerComponent.initializeDefaultRolePermissions();
     }
 

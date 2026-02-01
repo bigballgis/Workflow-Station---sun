@@ -73,9 +73,10 @@ public class DeveloperPermissionInterceptor implements HandlerInterceptor {
         RequireDeveloperPermission.Mode mode = annotation.mode();
         
         boolean hasPermission = checkPermissions(userId, requiredPermissions, mode);
-        
         if (!hasPermission) {
-            log.warn("User {} does not have required permissions: {}", userId, Arrays.toString(requiredPermissions));
+            Set<String> userPermissions = permissionChecker.getUserPermissions(userId);
+            log.warn("Permission denied: userId={}, required={}, userPermissions(size={})={}", 
+                userId, Arrays.toString(requiredPermissions), userPermissions.size(), userPermissions);
             response.setStatus(HttpStatus.FORBIDDEN.value());
             response.setContentType("application/json;charset=UTF-8");
             response.getWriter().write("{\"error\":\"FORBIDDEN\",\"message\":\"没有操作权限\"}");

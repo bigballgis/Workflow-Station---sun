@@ -53,15 +53,6 @@ public final class SecurityContextUtils {
     }
     
     /**
-     * Get the current user's department ID.
-     * 
-     * @return Optional containing department ID if authenticated, empty otherwise
-     */
-    public static Optional<String> getCurrentDepartmentId() {
-        return getCurrentUser().map(UserPrincipal::getDepartmentId);
-    }
-    
-    /**
      * Get the current user's preferred language.
      * 
      * @return Language code, defaults to "en" if not authenticated

@@ -29,7 +29,6 @@ public class LoginResponse {
         private List<String> roles;
         private List<String> permissions;
         private List<RoleWithSource> rolesWithSources;
-        private String departmentId;
         private String language;
     }
     

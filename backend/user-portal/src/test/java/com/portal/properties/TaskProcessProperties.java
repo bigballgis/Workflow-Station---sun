@@ -102,16 +102,14 @@ class TaskProcessProperties {
         when(workflowEngineClient.completeTask(any(), any(), any(), any()))
                 .thenReturn(Optional.of(Map.of("success", true)));
         
-        // Mock 用户权限查询 - 返回包含虚拟组和部门角色的权限信息
-        // 使用 Answer 动态生成权限数据，使虚拟组和部门角色与用户ID关联
+        // Mock 用户权限查询 - 返回包含虚拟组的权限信息
+        // 使用 Answer 动态生成权限数据，使虚拟组与用户ID关联
         when(workflowEngineClient.getUserTaskPermissions(anyString()))
                 .thenAnswer(invocation -> {
                     String userId = invocation.getArgument(0);
                     Map<String, Object> permissions = new HashMap<>();
                     // 虚拟组ID格式: group_<userId>
                     permissions.put("virtualGroupIds", List.of("group_" + userId));
-                    // 部门角色ID格式: dept_role_<userId>
-                    permissions.put("departmentRoles", List.of("dept_role_" + userId));
                     return Optional.of(permissions);
                 });
         
@@ -157,25 +155,7 @@ class TaskProcessProperties {
     }
 
     /**
-     * 属性3: 部门角色任务可以被符合条件的用户认领和处理
-     */
-    @RepeatedTest(20)
-    void deptRoleTaskCanBeClaimedByQualifiedUser() {
-        String userId = "user_" + random.nextInt(1000);
-        String deptRoleId = "dept_role_" + userId; // 模拟用户的部门角色
-        String taskId = "task_" + random.nextInt(1000);
-
-        TaskInfo task = createTask(taskId, "DEPT_ROLE", deptRoleId);
-
-        // 符合条件的用户可以认领
-        assertTrue(taskProcessComponent.canClaimTask(task, userId));
-
-        // 符合条件的用户可以处理
-        assertTrue(taskProcessComponent.canProcessTask(task, userId));
-    }
-
-    /**
-     * 属性4: 委托任务可以被委托人处理
+     * 属性3: 委托任务可以被委托人处理
      */
     @RepeatedTest(20)
     void delegatedTaskCanBeProcessedByDelegate() {
@@ -200,7 +180,7 @@ class TaskProcessProperties {
     }
 
     /**
-     * 属性5: 认领任务后从 Flowable 获取更新后的任务状态
+     * 属性4: 认领任务后从 Flowable 获取更新后的任务状态
      */
     @RepeatedTest(20)
     void claimingTaskReturnsUpdatedTaskFromFlowable() {
@@ -218,7 +198,7 @@ class TaskProcessProperties {
     }
 
     /**
-     * 属性6: 直接分配的任务不能被认领（Flowable 返回失败）
+     * 属性5: 直接分配的任务不能被认领（Flowable 返回失败）
      */
     @RepeatedTest(20)
     void directAssignedTaskCannotBeClaimed() {
@@ -234,7 +214,7 @@ class TaskProcessProperties {
     }
 
     /**
-     * 属性7: 无权限用户不能认领任务（Flowable 返回失败）
+     * 属性6: 无权限用户不能认领任务（Flowable 返回失败）
      */
     @RepeatedTest(20)
     void unauthorizedUserCannotClaimTask() {
@@ -251,7 +231,7 @@ class TaskProcessProperties {
     }
 
     /**
-     * 属性8: 委托任务成功调用 Flowable
+     * 属性7: 委托任务成功调用 Flowable
      */
     @RepeatedTest(20)
     void delegatingTaskCallsFlowable() {
@@ -269,7 +249,7 @@ class TaskProcessProperties {
     }
 
     /**
-     * 属性9: 转办任务成功调用 Flowable
+     * 属性8: 转办任务成功调用 Flowable
      */
     @RepeatedTest(20)
     void transferringTaskCallsFlowable() {
@@ -287,7 +267,7 @@ class TaskProcessProperties {
     }
 
     /**
-     * 属性10: 无权限用户不能完成任务
+     * 属性9: 无权限用户不能完成任务
      */
     @RepeatedTest(20)
     void unauthorizedUserCannotCompleteTask() {
@@ -310,7 +290,7 @@ class TaskProcessProperties {
     }
 
     /**
-     * 属性11: 不存在的任务操作应该抛出异常
+     * 属性10: 不存在的任务操作应该抛出异常
      */
     @Test
     void operationOnNonexistentTaskShouldThrowException() {
@@ -333,7 +313,7 @@ class TaskProcessProperties {
     }
 
     /**
-     * 属性12: 委托和转办需要目标用户
+     * 属性11: 委托和转办需要目标用户
      */
     @RepeatedTest(20)
     void delegateAndTransferRequireTargetUser() {
@@ -362,7 +342,7 @@ class TaskProcessProperties {
     }
     
     /**
-     * 属性13: Flowable 引擎不可用时应该抛出异常
+     * 属性12: Flowable 引擎不可用时应该抛出异常
      */
     @Test
     void shouldThrowExceptionWhenFlowableUnavailable() {

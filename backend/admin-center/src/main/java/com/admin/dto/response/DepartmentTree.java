@@ -1,7 +1,7 @@
 package com.admin.dto.response;
 
-import com.admin.entity.Department;
-import com.admin.enums.DepartmentStatus;
+import com.admin.entity.BusinessUnit;
+import com.admin.enums.BusinessUnitStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -11,7 +11,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 部门树形结构DTO
+ * 业务单元树形结构DTO
+ * Note: 保留 DepartmentTree 名称以保持向后兼容
  */
 @Data
 @Builder
@@ -26,31 +27,24 @@ public class DepartmentTree {
     private String parentName;
     private Integer level;
     private String path;
-    private String managerId;
-    private String managerName;
-    private String leaderName;
-    private String secondaryManagerId;
-    private String secondaryManagerName;
-    private DepartmentStatus status;
+    private BusinessUnitStatus status;
     private Integer sortOrder;
     private Long memberCount;
     
     @Builder.Default
     private List<DepartmentTree> children = new ArrayList<>();
     
-    public static DepartmentTree fromEntity(Department dept) {
+    public static DepartmentTree fromEntity(BusinessUnit bu) {
         return DepartmentTree.builder()
-                .id(dept.getId())
-                .name(dept.getName())
-                .code(dept.getCode())
-                .parentId(dept.getParentId())
-                .level(dept.getLevel())
-                .path(dept.getPath())
-                .managerId(dept.getManagerId())
-                .secondaryManagerId(dept.getSecondaryManagerId())
-                .status(dept.getStatus())
-                .sortOrder(dept.getSortOrder())
-                .memberCount(dept.getMemberCount())
+                .id(bu.getId())
+                .name(bu.getName())
+                .code(bu.getCode())
+                .parentId(bu.getParentId())
+                .level(bu.getLevel())
+                .path(bu.getPath())
+                .status(bu.getStatus())
+                .sortOrder(bu.getSortOrder())
+                .memberCount(bu.getMemberCount())
                 .children(new ArrayList<>())
                 .build();
     }

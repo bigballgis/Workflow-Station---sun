@@ -1,22 +1,5 @@
 <template>
   <div class="login-container">
-    <!-- Language Switcher -->
-    <div class="language-switcher">
-      <el-dropdown @command="handleLanguage">
-        <span class="lang-trigger">
-          <el-icon><Location /></el-icon>
-          <span>{{ currentLang }}</span>
-          <el-icon><ArrowDown /></el-icon>
-        </span>
-        <template #dropdown>
-          <el-dropdown-menu>
-            <el-dropdown-item command="zh-CN">简体中文</el-dropdown-item>
-            <el-dropdown-item command="zh-TW">繁體中文</el-dropdown-item>
-            <el-dropdown-item command="en">English</el-dropdown-item>
-          </el-dropdown-menu>
-        </template>
-      </el-dropdown>
-    </div>
     <div class="login-card">
       <h2 class="login-title">{{ t('login.title') }}</h2>
       
@@ -68,19 +51,9 @@ import { ref, reactive, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, type FormInstance } from 'element-plus'
-import { Location, ArrowDown } from '@element-plus/icons-vue'
 import { login as authLogin, saveTokens, saveUser } from '@/api/auth'
-import i18n from '@/i18n'
 
 const { t } = useI18n()
-
-const langMap: Record<string, string> = { 'zh-CN': '简体中文', 'zh-TW': '繁體中文', 'en': 'English' }
-const currentLang = computed(() => langMap[i18n.global.locale.value] || '简体中文')
-
-const handleLanguage = (lang: string) => {
-  i18n.global.locale.value = lang as 'zh-CN' | 'zh-TW' | 'en'
-  localStorage.setItem('language', lang)
-}
 const router = useRouter()
 const formRef = ref<FormInstance>()
 const loading = ref(false)
@@ -138,7 +111,8 @@ async function handleLogin() {
     router.push('/')
     ElMessage.success(t('common.success'))
   } catch (error: any) {
-    const message = error.response?.data?.message || error.message || t('common.error')
+    const data = error.response?.data
+    const message = data?.error?.message || data?.message || error.message || t('common.error')
     ElMessage.error(message)
   } finally {
     loading.value = false
@@ -154,30 +128,6 @@ async function handleLogin() {
   justify-content: center;
   background: linear-gradient(135deg, #DB0011 0%, #8B0000 100%);
   position: relative;
-}
-
-.language-switcher {
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  z-index: 10;
-
-  .lang-trigger {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 8px 16px;
-    background: rgba(255, 255, 255, 0.15);
-    border-radius: 20px;
-    color: white;
-    cursor: pointer;
-    font-size: 14px;
-    transition: background-color 0.3s;
-
-    &:hover {
-      background: rgba(255, 255, 255, 0.25);
-    }
-  }
 }
 
 .login-card {

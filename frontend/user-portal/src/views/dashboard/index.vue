@@ -122,10 +122,6 @@
               <el-icon :size="24" color="#722ed1"><Key /></el-icon>
               <span>{{ t('menu.permissions') }}</span>
             </div>
-            <div class="action-item" @click="$router.push('/settings')">
-              <el-icon :size="24" color="var(--text-secondary)"><Setting /></el-icon>
-              <span>{{ t('menu.settings') }}</span>
-            </div>
           </div>
         </div>
       </el-col>
@@ -165,18 +161,18 @@
           <div class="rank-info">
             <span>{{ t('dashboard.monthlyRank') }}:</span>
             <span class="rank-value">
-              第 {{ performanceOverview.monthlyRank }} 名 / {{ performanceOverview.totalUsers }} 人
+              {{ t('dashboard.rankFormat', { rank: performanceOverview.monthlyRank, total: performanceOverview.totalUsers }) }}
             </span>
           </div>
         </div>
       </el-col>
 
-      <!-- 最近任务 -->
+      <!-- Recent Tasks -->
       <el-col :span="8">
         <div class="portal-card">
           <div class="card-header">
-            <span class="card-title">最近任务</span>
-            <el-button type="primary" link @click="$router.push('/tasks')">查看全部</el-button>
+            <span class="card-title">{{ t('dashboard.recentTasks') }}</span>
+            <el-button type="primary" link @click="$router.push('/tasks')">{{ t('dashboard.viewAll') }}</el-button>
           </div>
           <div class="recent-tasks">
             <div v-for="task in recentTasks" :key="task.taskId" class="task-item">
@@ -185,13 +181,13 @@
                 <span class="task-process">{{ task.processDefinitionName }}</span>
               </div>
               <el-tag
-                :class="['priority-tag', task.priority.toLowerCase()]"
+                :class="['priority-tag', getPriorityClass(task.priority)]"
                 size="small"
               >
-                {{ t(`task.${task.priority.toLowerCase()}`) }}
+                {{ getPriorityLabel(task.priority) }}
               </el-tag>
             </div>
-            <el-empty v-if="recentTasks.length === 0" description="暂无待办任务" />
+            <el-empty v-if="recentTasks.length === 0" :description="t('dashboard.noTasks')" />
           </div>
         </div>
       </el-col>
@@ -202,7 +198,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Plus, List, Document, Share, Key, Setting } from '@element-plus/icons-vue'
+import { Plus, List, Document, Share, Key } from '@element-plus/icons-vue'
 import { getDashboardOverview, TaskOverview, ProcessOverview, PerformanceOverview } from '@/api/dashboard'
 
 const { t } = useI18n()
@@ -248,6 +244,52 @@ const loadDashboardData = async () => {
   } catch (error) {
     console.error('Failed to load dashboard data:', error)
   }
+}
+
+// 将优先级转换为翻译键
+const getPriorityLabel = (priority: any): string => {
+  if (!priority) return t('task.normal')
+  
+  // 如果是字符串，直接使用
+  if (typeof priority === 'string') {
+    const upperPriority = priority.toUpperCase()
+    if (['URGENT', 'HIGH', 'NORMAL', 'LOW'].includes(upperPriority)) {
+      return t(`task.${upperPriority.toLowerCase()}`)
+    }
+  }
+  
+  // 如果是数字，映射到对应的优先级
+  if (typeof priority === 'number') {
+    if (priority >= 75) return t('task.urgent')
+    if (priority >= 50) return t('task.high')
+    if (priority >= 25) return t('task.normal')
+    return t('task.low')
+  }
+  
+  return t('task.normal')
+}
+
+// 获取优先级 CSS 类名
+const getPriorityClass = (priority: any): string => {
+  if (!priority) return 'normal'
+  
+  // 如果是字符串，直接使用
+  if (typeof priority === 'string') {
+    const upperPriority = priority.toUpperCase()
+    if (['URGENT', 'HIGH', 'NORMAL', 'LOW'].includes(upperPriority)) {
+      return upperPriority.toLowerCase()
+    }
+  }
+  
+  // 如果是数字，映射到对应的优先级
+  if (typeof priority === 'number') {
+    if (priority >= 75) return 'urgent'
+    if (priority >= 50) return 'high'
+    if (priority >= 25) return 'normal'
+    return 'low'
+  }
+  
+  return 'normal'
 }
 
 onMounted(() => {

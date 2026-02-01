@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { TOKEN_KEY } from './auth'
+import { TOKEN_KEY, getUser } from './auth'
 
 // Create a separate axios instance for function unit API
 const functionUnitAxios = axios.create({
@@ -12,12 +12,30 @@ functionUnitAxios.interceptors.request.use(config => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
+  
+  // 添加 X-User-Id 请求头，用于后端权限检查
+  const user = getUser()
+  if (user && user.userId) {
+    config.headers['X-User-Id'] = user.userId
+  }
   return config
 })
 
 functionUnitAxios.interceptors.response.use(
   response => {
     console.log('[FunctionUnitAPI] Response:', response.status, response.data)
+    // 检查响应体中的 success 字段，确保是成功响应
+    if (response.data && typeof response.data === 'object' && 'success' in response.data) {
+      if (response.data.success === false) {
+        // 如果 success 为 false，即使 HTTP 状态码是 200，也应该作为错误处理
+        const error = new Error(response.data.error?.message || '请求失败')
+        ;(error as any).response = {
+          status: response.data.error?.code === '403' ? 403 : 500,
+          data: response.data
+        }
+        return Promise.reject(error)
+      }
+    }
     return response.data
   },
   async error => {
@@ -226,8 +244,12 @@ export const functionUnitApi = {
   createTable: (functionUnitId: number, data: Partial<TableDefinition>) =>
     functionUnitAxios.post<any, { data: TableDefinition }>(`/api/v1/function-units/${functionUnitId}/tables`, data),
   
-  updateTable: (functionUnitId: number, tableId: number, data: Partial<TableDefinition>) =>
-    functionUnitAxios.put<any, { data: TableDefinition }>(`/api/v1/function-units/${functionUnitId}/tables/${tableId}`, data),
+  updateTable: (functionUnitId: number, tableId: number, data: Partial<TableDefinition>) => {
+    console.log('[FunctionUnitAPI] Updating table:', { functionUnitId, tableId, data })
+    console.log('[FunctionUnitAPI] Request data fieldDefinitions:', data.fieldDefinitions)
+    console.log('[FunctionUnitAPI] Request data JSON:', JSON.stringify(data, null, 2))
+    return functionUnitAxios.put<any, { data: TableDefinition }>(`/api/v1/function-units/${functionUnitId}/tables/${tableId}`, data)
+  },
   
   deleteTable: (functionUnitId: number, tableId: number) =>
     functionUnitAxios.delete(`/api/v1/function-units/${functionUnitId}/tables/${tableId}`),

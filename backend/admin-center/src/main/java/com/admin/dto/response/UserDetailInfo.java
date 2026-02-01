@@ -27,8 +27,8 @@ public class UserDetailInfo {
     private String displayName;
     private String fullName;
     private String employeeId;
-    private String departmentId;
-    private String departmentName;
+    private String businessUnitId;
+    private String businessUnitName;
     private String position;
     private String entityManagerId;
     private String entityManagerName;
@@ -91,7 +91,7 @@ public class UserDetailInfo {
                 .displayName(user.getDisplayName())
                 .fullName(user.getFullName())
                 .employeeId(user.getEmployeeId())
-                .departmentId(user.getDepartmentId())
+                // businessUnitId 需要通过关联表获取，在调用处设置
                 .position(user.getPosition())
                 .entityManagerId(user.getEntityManagerId() != null ? user.getEntityManagerId().toString() : null)
                 .functionManagerId(user.getFunctionManagerId() != null ? user.getFunctionManagerId().toString() : null)

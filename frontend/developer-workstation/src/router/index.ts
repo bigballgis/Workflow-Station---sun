@@ -32,6 +32,12 @@ const routes: RouteRecordRaw[] = [
         name: 'IconLibrary',
         component: () => import('@/views/icon/IconLibrary.vue'),
         meta: { titleKey: 'icon.title' }
+      },
+      {
+        path: 'profile',
+        name: 'Profile',
+        component: () => import('@/views/profile/index.vue'),
+        meta: { titleKey: 'profile.title', hidden: true }
       }
     ]
   }
@@ -43,12 +49,12 @@ const router = createRouter({
 })
 
 // 路由守卫
-router.beforeEach((to, _from, next) => {
+router.beforeEach(async (to, _from, next) => {
   const t = i18n.global.t
   const pageTitle = (to.meta as any)?.titleKey ? t((to.meta as any).titleKey) : ((to.meta as any)?.title || t('app.name'))
   document.title = `${pageTitle} - ${t('app.title')}`
   
-  console.log('[Router] Navigating to:', to.path, 'from:', from.path)
+  console.log('[Router] Navigating to:', to.path, 'from:', _from.path)
   
   // 如果是登录页，检查是否已登录
   if (to.path === '/login') {

@@ -22,8 +22,8 @@
         <java.version>17</java.version>
         <jqwik.version>1.8.2</jqwik.version>
         <testcontainers.version>1.19.3</testcontainers.version>
-        <poi.version>5.2.5</poi.version>
-        <minio.version>8.5.7</minio.version>
+        <poi.version>5.4.1</poi.version>
+        <minio.version>8.6.0</minio.version>
     </properties>
 
     <dependencies>
@@ -203,6 +203,7 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
+                    <mainClass>com.admin.AdminCenterApplication</mainClass>
                     <excludes>
                         <exclude>
                             <groupId>org.projectlombok</groupId>

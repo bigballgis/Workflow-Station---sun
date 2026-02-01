@@ -1,6 +1,7 @@
 -- =====================================================
--- Platform Security V1: Core System Tables
+-- Platform Security V1: Core System Tables (Consolidated)
 -- All sys_* tables for authentication and authorization
+-- Consolidated from V1-V5 migrations
 -- =====================================================
 
 -- Enable extensions
@@ -14,12 +15,12 @@ CREATE TABLE IF NOT EXISTS sys_users (
     id VARCHAR(64) PRIMARY KEY,
     username VARCHAR(100) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
-    email VARCHAR(255) NOT NULL,
+    email VARCHAR(255),
     display_name VARCHAR(50),
-    full_name VARCHAR(100) NOT NULL,
+    full_name VARCHAR(100),
     phone VARCHAR(50),
     employee_id VARCHAR(50),
-    department_id VARCHAR(64),
+    department_id character varying(64),
     position VARCHAR(100),
     entity_manager_id VARCHAR(64),
     function_manager_id VARCHAR(64),
@@ -38,56 +39,35 @@ CREATE TABLE IF NOT EXISTS sys_users (
     deleted BOOLEAN NOT NULL DEFAULT false,
     deleted_at TIMESTAMP,
     deleted_by VARCHAR(64),
-    CONSTRAINT chk_sys_user_status CHECK (status IN ('ACTIVE', 'INACTIVE', 'DISABLED', 'LOCKED', 'PENDING'))
+    -- Updated CHECK constraint to match admin-center UserStatus enum (4 values)
+    -- INACTIVE removed as it's not used by admin-center (only in platform-security enum)
+    CONSTRAINT chk_sys_user_status CHECK (status IN ('ACTIVE', 'DISABLED', 'LOCKED', 'PENDING'))
 );
+
+-- Comment explaining the status values
+COMMENT ON COLUMN sys_users.status IS 'User status: ACTIVE (can login), DISABLED (disabled by admin), LOCKED (security lock), PENDING (pending activation)';
 
 CREATE INDEX IF NOT EXISTS idx_sys_users_username ON sys_users(username);
 CREATE INDEX IF NOT EXISTS idx_sys_users_email ON sys_users(email);
 CREATE INDEX IF NOT EXISTS idx_sys_users_status ON sys_users(status);
-CREATE INDEX IF NOT EXISTS idx_sys_users_department ON sys_users(department_id);
 CREATE INDEX IF NOT EXISTS idx_sys_users_employee_id ON sys_users(employee_id);
+CREATE INDEX IF NOT EXISTS idx_sys_users_entity_manager ON sys_users(entity_manager_id);
+CREATE INDEX IF NOT EXISTS idx_sys_users_function_manager ON sys_users(function_manager_id);
 CREATE INDEX IF NOT EXISTS idx_sys_users_deleted ON sys_users(deleted);
 
 -- =====================================================
--- 2. Departments Table (sys_departments)
--- =====================================================
-CREATE TABLE IF NOT EXISTS sys_departments (
-    id VARCHAR(64) PRIMARY KEY,
-    code VARCHAR(50) NOT NULL UNIQUE,
-    name VARCHAR(100) NOT NULL,
-    parent_id VARCHAR(64),
-    level INTEGER DEFAULT 1,
-    path VARCHAR(500),
-    sort_order INTEGER DEFAULT 0,
-    status VARCHAR(20) DEFAULT 'ACTIVE',
-    description TEXT,
-    cost_center VARCHAR(50),
-    location VARCHAR(200),
-    manager_id VARCHAR(64),
-    secondary_manager_id VARCHAR(64),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    created_by VARCHAR(64),
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_by VARCHAR(64),
-    CONSTRAINT fk_dept_parent FOREIGN KEY (parent_id) REFERENCES sys_departments(id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_sys_dept_parent ON sys_departments(parent_id);
-CREATE INDEX IF NOT EXISTS idx_sys_dept_code ON sys_departments(code);
-CREATE INDEX IF NOT EXISTS idx_sys_dept_path ON sys_departments(path);
-
-ALTER TABLE sys_users ADD CONSTRAINT fk_user_department 
-    FOREIGN KEY (department_id) REFERENCES sys_departments(id);
-
-
--- =====================================================
--- 3. Roles Table (sys_roles)
+-- 2. Roles Table (sys_roles)
+-- Role types:
+--   ADMIN: Admin roles for Admin Center management
+--   DEVELOPER: Developer roles for Developer Workstation
+--   BU_BOUNDED: Business unit bound roles
+--   BU_UNBOUNDED: Business unit independent roles
 -- =====================================================
 CREATE TABLE IF NOT EXISTS sys_roles (
     id VARCHAR(64) PRIMARY KEY,
     code VARCHAR(50) NOT NULL UNIQUE,
     name VARCHAR(100) NOT NULL,
-    type VARCHAR(20) NOT NULL DEFAULT 'BUSINESS',
+    type VARCHAR(20) NOT NULL DEFAULT 'BU_UNBOUNDED',
     description TEXT,
     status VARCHAR(20) DEFAULT 'ACTIVE',
     is_system BOOLEAN DEFAULT false,
@@ -95,11 +75,38 @@ CREATE TABLE IF NOT EXISTS sys_roles (
     created_by VARCHAR(64),
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_by VARCHAR(64),
-    CONSTRAINT chk_role_type CHECK (type IN ('ADMIN', 'DEVELOPER', 'BUSINESS'))
+    CONSTRAINT chk_role_type CHECK (type IN ('ADMIN', 'DEVELOPER', 'BU_BOUNDED', 'BU_UNBOUNDED'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_sys_roles_code ON sys_roles(code);
 CREATE INDEX IF NOT EXISTS idx_sys_roles_type ON sys_roles(type);
+
+-- =====================================================
+-- 3. Business Units Table (sys_business_units)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS sys_business_units (
+    id VARCHAR(64) PRIMARY KEY,
+    code VARCHAR(50) NOT NULL UNIQUE,
+    name VARCHAR(100) NOT NULL,
+    parent_id VARCHAR(64),
+    level INTEGER NOT NULL,
+    path VARCHAR(500),
+    sort_order INTEGER,
+    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+    description TEXT,
+    cost_center VARCHAR(50),
+    location VARCHAR(200),
+    phone VARCHAR(50),
+    created_at TIMESTAMP(6) WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    created_by VARCHAR(64),
+    updated_at TIMESTAMP(6) WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_by VARCHAR(64),
+    CONSTRAINT chk_business_unit_status CHECK (status IN ('ACTIVE', 'DISABLED'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_business_units_parent_id ON sys_business_units(parent_id);
+CREATE INDEX IF NOT EXISTS idx_business_units_code ON sys_business_units(code);
+CREATE INDEX IF NOT EXISTS idx_business_units_status ON sys_business_units(status);
 
 -- =====================================================
 -- 4. User-Role Association Table (sys_user_roles)
@@ -143,6 +150,7 @@ CREATE INDEX IF NOT EXISTS idx_role_assignments_role ON sys_role_assignments(rol
 CREATE INDEX IF NOT EXISTS idx_role_assignments_target ON sys_role_assignments(target_type, target_id);
 CREATE INDEX IF NOT EXISTS idx_role_assignments_valid ON sys_role_assignments(valid_from, valid_to);
 
+
 -- =====================================================
 -- 6. Permissions Table (sys_permissions)
 -- =====================================================
@@ -178,7 +186,6 @@ CREATE TABLE IF NOT EXISTS sys_role_permissions (
     CONSTRAINT uk_role_permission UNIQUE (role_id, permission_id)
 );
 
-
 -- =====================================================
 -- 8. Login Audit Table (sys_login_audit)
 -- =====================================================
@@ -200,21 +207,22 @@ CREATE INDEX IF NOT EXISTS idx_login_audit_created ON sys_login_audit(created_at
 
 -- =====================================================
 -- 9. Virtual Groups (sys_virtual_groups)
+-- type: SYSTEM (cannot be deleted), CUSTOM (user-created)
 -- =====================================================
 CREATE TABLE IF NOT EXISTS sys_virtual_groups (
     id VARCHAR(64) PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     code VARCHAR(50) NOT NULL UNIQUE,
     description TEXT,
-    type VARCHAR(50) DEFAULT 'STATIC',
+    type VARCHAR(50) DEFAULT 'CUSTOM',
     rule_expression TEXT,
+    ad_group VARCHAR(100),
     status VARCHAR(20) DEFAULT 'ACTIVE',
-    valid_from TIMESTAMP,
-    valid_to TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_by VARCHAR(64),
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_by VARCHAR(64)
+    updated_by VARCHAR(64),
+    CONSTRAINT chk_virtual_group_type CHECK (type IN ('SYSTEM', 'CUSTOM'))
 );
 
 -- =====================================================
@@ -232,7 +240,24 @@ CREATE TABLE IF NOT EXISTS sys_virtual_group_members (
 );
 
 -- =====================================================
--- 11. Virtual Group Task History (sys_virtual_group_task_history)
+-- 11. Virtual Group Roles (sys_virtual_group_roles)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS sys_virtual_group_roles (
+    id VARCHAR(64) PRIMARY KEY,
+    virtual_group_id VARCHAR(64) NOT NULL,
+    role_id VARCHAR(64) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_by VARCHAR(64),
+    CONSTRAINT fk_vgr_virtual_group FOREIGN KEY (virtual_group_id) REFERENCES sys_virtual_groups(id) ON DELETE CASCADE,
+    CONSTRAINT fk_vgr_role FOREIGN KEY (role_id) REFERENCES sys_roles(id) ON DELETE CASCADE,
+    CONSTRAINT uk_virtual_group_role UNIQUE (virtual_group_id, role_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_vgr_virtual_group_id ON sys_virtual_group_roles(virtual_group_id);
+CREATE INDEX IF NOT EXISTS idx_vgr_role_id ON sys_virtual_group_roles(role_id);
+
+-- =====================================================
+-- 12. Virtual Group Task History (sys_virtual_group_task_history)
 -- =====================================================
 CREATE TABLE IF NOT EXISTS sys_virtual_group_task_history (
     id VARCHAR(64) PRIMARY KEY,
@@ -257,22 +282,143 @@ CREATE INDEX IF NOT EXISTS idx_vg_task_history_group ON sys_virtual_group_task_h
 CREATE INDEX IF NOT EXISTS idx_vg_task_history_action ON sys_virtual_group_task_history(action_type);
 CREATE INDEX IF NOT EXISTS idx_vg_task_history_created ON sys_virtual_group_task_history(created_at);
 
--- Comments
-COMMENT ON TABLE sys_users IS 'Unified user table for all services';
-COMMENT ON TABLE sys_departments IS 'Organization/Department hierarchy';
-COMMENT ON TABLE sys_roles IS 'Role definitions';
-COMMENT ON TABLE sys_user_roles IS 'User-Role associations';
-COMMENT ON TABLE sys_role_assignments IS 'Role assignments to users/departments/groups';
-COMMENT ON TABLE sys_permissions IS 'Permission definitions';
-COMMENT ON TABLE sys_role_permissions IS 'Role-Permission associations';
-COMMENT ON TABLE sys_login_audit IS 'Login/logout audit trail';
-COMMENT ON TABLE sys_virtual_groups IS 'Virtual groups for cross-service role assignment';
-COMMENT ON TABLE sys_virtual_group_members IS 'Virtual group member associations';
-COMMENT ON TABLE sys_virtual_group_task_history IS 'Virtual group task assignment history';
+-- =====================================================
+-- 13. Business Unit Roles (sys_business_unit_roles)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS sys_business_unit_roles (
+    id VARCHAR(64) PRIMARY KEY,
+    business_unit_id VARCHAR(64) NOT NULL,
+    role_id VARCHAR(64) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_by VARCHAR(64),
+    CONSTRAINT fk_bur_business_unit FOREIGN KEY (business_unit_id) REFERENCES sys_business_units(id) ON DELETE CASCADE,
+    CONSTRAINT fk_bur_role FOREIGN KEY (role_id) REFERENCES sys_roles(id) ON DELETE CASCADE,
+    CONSTRAINT uk_business_unit_role UNIQUE (business_unit_id, role_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_bur_business_unit_id ON sys_business_unit_roles(business_unit_id);
+CREATE INDEX IF NOT EXISTS idx_bur_role_id ON sys_business_unit_roles(role_id);
+
+-- =====================================================
+-- 14. User Business Units (sys_user_business_units)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS sys_user_business_units (
+    id VARCHAR(64) PRIMARY KEY,
+    user_id VARCHAR(64) NOT NULL,
+    business_unit_id VARCHAR(64) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_by VARCHAR(64),
+    CONSTRAINT fk_ubu_user FOREIGN KEY (user_id) REFERENCES sys_users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_ubu_business_unit FOREIGN KEY (business_unit_id) REFERENCES sys_business_units(id) ON DELETE CASCADE,
+    CONSTRAINT uk_user_business_unit UNIQUE (user_id, business_unit_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_ubu_user_id ON sys_user_business_units(user_id);
+CREATE INDEX IF NOT EXISTS idx_ubu_business_unit_id ON sys_user_business_units(business_unit_id);
+
+-- =====================================================
+-- 15. User Business Unit Roles (sys_user_business_unit_roles)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS sys_user_business_unit_roles (
+    id VARCHAR(64) PRIMARY KEY,
+    user_id VARCHAR(64) NOT NULL,
+    business_unit_id VARCHAR(64) NOT NULL,
+    role_id VARCHAR(64) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_by VARCHAR(64),
+    CONSTRAINT fk_ubur_user FOREIGN KEY (user_id) REFERENCES sys_users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_ubur_business_unit FOREIGN KEY (business_unit_id) REFERENCES sys_business_units(id) ON DELETE CASCADE,
+    CONSTRAINT fk_ubur_role FOREIGN KEY (role_id) REFERENCES sys_roles(id) ON DELETE CASCADE,
+    CONSTRAINT uk_user_bu_role UNIQUE (user_id, business_unit_id, role_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_ubur_user_id ON sys_user_business_unit_roles(user_id);
+CREATE INDEX IF NOT EXISTS idx_ubur_business_unit_id ON sys_user_business_unit_roles(business_unit_id);
+CREATE INDEX IF NOT EXISTS idx_ubur_role_id ON sys_user_business_unit_roles(role_id);
+
+-- =====================================================
+-- 16. Approvers (sys_approvers)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS sys_approvers (
+    id VARCHAR(64) PRIMARY KEY,
+    target_type VARCHAR(20) NOT NULL,
+    target_id VARCHAR(64) NOT NULL,
+    user_id VARCHAR(64) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_by VARCHAR(64),
+    CONSTRAINT fk_approver_user FOREIGN KEY (user_id) REFERENCES sys_users(id) ON DELETE CASCADE,
+    CONSTRAINT uk_approver UNIQUE (target_type, target_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_approver_target ON sys_approvers(target_type, target_id);
+CREATE INDEX IF NOT EXISTS idx_approver_user_id ON sys_approvers(user_id);
+
+-- =====================================================
+-- 17. Permission Requests (sys_permission_requests)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS sys_permission_requests (
+    id VARCHAR(64) PRIMARY KEY,
+    applicant_id VARCHAR(64) NOT NULL,
+    request_type VARCHAR(20) NOT NULL,
+    target_id VARCHAR(64) NOT NULL,
+    role_ids TEXT,
+    reason TEXT,
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    approver_id VARCHAR(64),
+    approver_comment TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP,
+    approved_at TIMESTAMP,
+    CONSTRAINT fk_pr_applicant FOREIGN KEY (applicant_id) REFERENCES sys_users(id),
+    CONSTRAINT chk_pr_request_type CHECK (request_type IN ('VIRTUAL_GROUP', 'BUSINESS_UNIT', 'BUSINESS_UNIT_ROLE')),
+    CONSTRAINT chk_pr_status CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED', 'CANCELLED'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_pr_applicant_id ON sys_permission_requests(applicant_id);
+CREATE INDEX IF NOT EXISTS idx_pr_status ON sys_permission_requests(status);
+CREATE INDEX IF NOT EXISTS idx_pr_request_type ON sys_permission_requests(request_type);
+CREATE INDEX IF NOT EXISTS idx_pr_target_id ON sys_permission_requests(target_id);
+
+-- =====================================================
+-- 18. Member Change Logs (sys_member_change_logs)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS sys_member_change_logs (
+    id VARCHAR(64) PRIMARY KEY,
+    change_type VARCHAR(20) NOT NULL,
+    target_type VARCHAR(20) NOT NULL,
+    target_id VARCHAR(64) NOT NULL,
+    user_id VARCHAR(64) NOT NULL,
+    role_ids TEXT,
+    operator_id VARCHAR(64),
+    reason TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_mcl_target ON sys_member_change_logs(target_type, target_id);
+CREATE INDEX IF NOT EXISTS idx_mcl_user_id ON sys_member_change_logs(user_id);
+CREATE INDEX IF NOT EXISTS idx_mcl_change_type ON sys_member_change_logs(change_type);
+CREATE INDEX IF NOT EXISTS idx_mcl_created_at ON sys_member_change_logs(created_at);
+
+-- =====================================================
+-- 19. User Preferences (sys_user_preferences)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS sys_user_preferences (
+    id VARCHAR(64) PRIMARY KEY,
+    user_id VARCHAR(64) NOT NULL,
+    preference_key VARCHAR(100) NOT NULL,
+    preference_value VARCHAR(500),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP,
+    CONSTRAINT fk_user_pref_user FOREIGN KEY (user_id) REFERENCES sys_users(id) ON DELETE CASCADE,
+    CONSTRAINT uk_user_preference UNIQUE (user_id, preference_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_preferences_user_id ON sys_user_preferences(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_preferences_key ON sys_user_preferences(preference_key);
 
 
 -- =====================================================
--- 12. Dictionaries (sys_dictionaries)
+-- 20. Dictionaries (sys_dictionaries)
 -- =====================================================
 CREATE TABLE IF NOT EXISTS sys_dictionaries (
     id VARCHAR(64) PRIMARY KEY,
@@ -298,7 +444,7 @@ CREATE INDEX IF NOT EXISTS idx_dict_type ON sys_dictionaries(type);
 CREATE INDEX IF NOT EXISTS idx_dict_status ON sys_dictionaries(status);
 
 -- =====================================================
--- 13. Dictionary Items (sys_dictionary_items)
+-- 21. Dictionary Items (sys_dictionary_items)
 -- =====================================================
 CREATE TABLE IF NOT EXISTS sys_dictionary_items (
     id VARCHAR(64) PRIMARY KEY,
@@ -327,7 +473,7 @@ CREATE INDEX IF NOT EXISTS idx_dict_item_dict_id ON sys_dictionary_items(diction
 CREATE INDEX IF NOT EXISTS idx_dict_item_code ON sys_dictionary_items(dictionary_id, item_code);
 
 -- =====================================================
--- 14. Dictionary Versions (sys_dictionary_versions)
+-- 22. Dictionary Versions (sys_dictionary_versions)
 -- =====================================================
 CREATE TABLE IF NOT EXISTS sys_dictionary_versions (
     id VARCHAR(36) PRIMARY KEY,
@@ -343,7 +489,7 @@ CREATE TABLE IF NOT EXISTS sys_dictionary_versions (
 CREATE INDEX IF NOT EXISTS idx_dict_ver_dict_id ON sys_dictionary_versions(dictionary_id);
 
 -- =====================================================
--- 15. Dictionary Data Sources (sys_dictionary_data_sources)
+-- 23. Dictionary Data Sources (sys_dictionary_data_sources)
 -- =====================================================
 CREATE TABLE IF NOT EXISTS sys_dictionary_data_sources (
     id VARCHAR(36) PRIMARY KEY,
@@ -365,7 +511,7 @@ CREATE TABLE IF NOT EXISTS sys_dictionary_data_sources (
 CREATE INDEX IF NOT EXISTS idx_dict_ds_dict_id ON sys_dictionary_data_sources(dictionary_id);
 
 -- =====================================================
--- 16. Function Units (sys_function_units)
+-- 24. Function Units (sys_function_units)
 -- =====================================================
 CREATE TABLE IF NOT EXISTS sys_function_units (
     id VARCHAR(64) PRIMARY KEY,
@@ -387,11 +533,13 @@ CREATE TABLE IF NOT EXISTS sys_function_units (
     validated_at TIMESTAMP(6) WITH TIME ZONE,
     validated_by VARCHAR(64),
     version VARCHAR(20) NOT NULL,
+    process_deployed BOOLEAN DEFAULT false,
+    process_deployment_count INTEGER DEFAULT 0,
     CONSTRAINT chk_func_unit_status CHECK (status IN ('DRAFT', 'VALIDATED', 'DEPLOYED', 'DEPRECATED'))
 );
 
 -- =====================================================
--- 17. Function Unit Deployments (sys_function_unit_deployments)
+-- 25. Function Unit Deployments (sys_function_unit_deployments)
 -- =====================================================
 CREATE TABLE IF NOT EXISTS sys_function_unit_deployments (
     id VARCHAR(64) PRIMARY KEY,
@@ -414,7 +562,7 @@ CREATE INDEX IF NOT EXISTS idx_fu_deployment_func_unit ON sys_function_unit_depl
 CREATE INDEX IF NOT EXISTS idx_fu_deployment_status ON sys_function_unit_deployments(status);
 
 -- =====================================================
--- 18. Function Unit Approvals (sys_function_unit_approvals)
+-- 26. Function Unit Approvals (sys_function_unit_approvals)
 -- =====================================================
 CREATE TABLE IF NOT EXISTS sys_function_unit_approvals (
     id VARCHAR(64) PRIMARY KEY,
@@ -432,7 +580,7 @@ CREATE TABLE IF NOT EXISTS sys_function_unit_approvals (
 CREATE INDEX IF NOT EXISTS idx_fu_approval_deployment ON sys_function_unit_approvals(deployment_id);
 
 -- =====================================================
--- 19. Function Unit Dependencies (sys_function_unit_dependencies)
+-- 27. Function Unit Dependencies (sys_function_unit_dependencies)
 -- =====================================================
 CREATE TABLE IF NOT EXISTS sys_function_unit_dependencies (
     id VARCHAR(64) PRIMARY KEY,
@@ -447,7 +595,7 @@ CREATE TABLE IF NOT EXISTS sys_function_unit_dependencies (
 CREATE INDEX IF NOT EXISTS idx_fu_dependency_func_unit ON sys_function_unit_dependencies(function_unit_id);
 
 -- =====================================================
--- 20. Function Unit Contents (sys_function_unit_contents)
+-- 28. Function Unit Contents (sys_function_unit_contents)
 -- =====================================================
 CREATE TABLE IF NOT EXISTS sys_function_unit_contents (
     id VARCHAR(64) PRIMARY KEY,
@@ -458,14 +606,17 @@ CREATE TABLE IF NOT EXISTS sys_function_unit_contents (
     content_data TEXT,
     checksum VARCHAR(64),
     source_id VARCHAR(64),
+    flowable_deployment_id VARCHAR(64),
+    flowable_process_definition_id VARCHAR(64),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_content_func_unit FOREIGN KEY (function_unit_id) REFERENCES sys_function_units(id)
+    CONSTRAINT fk_content_func_unit FOREIGN KEY (function_unit_id) REFERENCES sys_function_units(id),
+    CONSTRAINT chk_content_type CHECK (content_type IN ('PROCESS', 'FORM', 'DATA_TABLE', 'SCRIPT'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_fu_content_func_unit ON sys_function_unit_contents(function_unit_id);
 
 -- =====================================================
--- 21. Function Unit Access (sys_function_unit_access)
+-- 29. Function Unit Access (sys_function_unit_access)
 -- =====================================================
 CREATE TABLE IF NOT EXISTS sys_function_unit_access (
     id VARCHAR(64) PRIMARY KEY,
@@ -481,7 +632,7 @@ CREATE TABLE IF NOT EXISTS sys_function_unit_access (
 CREATE INDEX IF NOT EXISTS idx_fu_access_func_unit ON sys_function_unit_access(function_unit_id);
 
 -- =====================================================
--- 22. Developer Role Permissions (sys_developer_role_permissions)
+-- 30. Developer Role Permissions (sys_developer_role_permissions)
 -- =====================================================
 CREATE TABLE IF NOT EXISTS sys_developer_role_permissions (
     id VARCHAR(64) PRIMARY KEY,
@@ -495,9 +646,29 @@ CREATE TABLE IF NOT EXISTS sys_developer_role_permissions (
 
 CREATE INDEX IF NOT EXISTS idx_dev_role_perm_role ON sys_developer_role_permissions(role_id);
 
-COMMENT ON TABLE sys_developer_role_permissions IS 'Developer role permission mappings';
-
--- Additional Comments
+-- =====================================================
+-- Comments
+-- =====================================================
+COMMENT ON TABLE sys_users IS 'Unified user table for all services';
+COMMENT ON TABLE sys_roles IS 'Role definitions';
+COMMENT ON TABLE sys_business_units IS 'Organization structure (business units)';
+COMMENT ON TABLE sys_user_roles IS 'User-Role associations';
+COMMENT ON TABLE sys_role_assignments IS 'Role assignments to users/departments/groups';
+COMMENT ON TABLE sys_permissions IS 'Permission definitions';
+COMMENT ON TABLE sys_role_permissions IS 'Role-Permission associations';
+COMMENT ON TABLE sys_login_audit IS 'Login/logout audit trail';
+COMMENT ON TABLE sys_virtual_groups IS 'Virtual groups for role assignment. type=SYSTEM groups cannot be deleted.';
+COMMENT ON TABLE sys_virtual_group_members IS 'Virtual group member associations';
+COMMENT ON TABLE sys_virtual_group_roles IS 'Virtual group role bindings';
+COMMENT ON TABLE sys_virtual_group_task_history IS 'Virtual group task assignment history';
+COMMENT ON TABLE sys_business_unit_roles IS 'Business unit role bindings';
+COMMENT ON TABLE sys_user_business_units IS 'User business unit membership';
+COMMENT ON TABLE sys_user_business_unit_roles IS 'User business unit role assignments';
+COMMENT ON TABLE sys_approvers IS 'Approver configurations';
+COMMENT ON TABLE sys_permission_requests IS 'Permission requests';
+COMMENT ON TABLE sys_member_change_logs IS 'Member change audit logs';
+COMMENT ON TABLE sys_user_preferences IS 'User preferences';
 COMMENT ON TABLE sys_dictionaries IS 'Data dictionaries';
 COMMENT ON TABLE sys_dictionary_items IS 'Dictionary items';
 COMMENT ON TABLE sys_function_units IS 'Function unit packages';
+COMMENT ON TABLE sys_developer_role_permissions IS 'Developer role permission mappings';

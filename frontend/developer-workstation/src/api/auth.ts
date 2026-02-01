@@ -24,7 +24,7 @@ export interface LoginResponse {
 }
 
 /** 分配目标类型 */
-export type AssignmentTargetType = 'USER' | 'DEPARTMENT' | 'DEPARTMENT_HIERARCHY' | 'VIRTUAL_GROUP'
+export type AssignmentTargetType = 'USER' | 'VIRTUAL_GROUP'
 
 /** 角色及来源信息 */
 export interface RoleWithSource {
@@ -43,7 +43,6 @@ export interface UserInfo {
   roles: string[]
   permissions: string[]
   rolesWithSources?: RoleWithSource[]
-  departmentId: string
   language: string
 }
 

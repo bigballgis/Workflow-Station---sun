@@ -27,16 +27,16 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/api/v1/auth': {
-        target: 'http://localhost:8090',
+        target: 'http://localhost:8092',
         changeOrigin: true,
         rewrite: (path) => '/api/v1/admin/auth' + path.substring('/api/v1/auth'.length)
       },
       '/api/v1/admin': {
-        target: 'http://localhost:8090',
+        target: 'http://localhost:8092',
         changeOrigin: true
       },
       '/api/v1': {
-        target: 'http://localhost:8090',
+        target: 'http://localhost:8092',
         changeOrigin: true,
         rewrite: (path) => '/api/v1/admin' + path.substring('/api/v1'.length)
       }

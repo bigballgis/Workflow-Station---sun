@@ -177,11 +177,11 @@
                       />
                     </el-select>
                   </template>
-                  <template v-else-if="field.type === 'department'">
+                  <template v-else-if="field.type === 'businessUnit'">
                     <el-tree-select
                       v-model="formData[field.key]"
-                      :data="field.deptOptions || []"
-                      :props="{ label: 'name', value: 'id', children: 'children' }"
+                      :data="field.buOptions || []"
+                      :props="{ label: 'name', children: 'children' }"
                       :placeholder="field.placeholder"
                       check-strictly
                       clearable
@@ -404,12 +404,12 @@
                 />
               </el-select>
 
-              <!-- 部门选择器 -->
+              <!-- 业务单元选择器 -->
               <el-tree-select
-                v-else-if="field.type === 'department'"
+                v-else-if="field.type === 'businessUnit'"
                 v-model="formData[field.key]"
-                :data="field.deptOptions || []"
-                :props="{ label: 'name', value: 'id', children: 'children' }"
+                :data="field.buOptions || []"
+                :props="{ label: 'name', children: 'children' }"
                 :placeholder="field.placeholder"
                 check-strictly
                 clearable
@@ -489,7 +489,7 @@ export interface FormField {
   alertTitle?: string
   alertType?: 'success' | 'warning' | 'info' | 'error'
   userOptions?: Array<{ id: string; name: string }>
-  deptOptions?: any[]
+  buOptions?: any[]
   rules?: any[]
   defaultValue?: any
   tabName?: string  // 所属 Tab 名称
@@ -575,17 +575,19 @@ const formRules = computed<FormRules>(() => {
   const rules: FormRules = {}
   allFields.value.forEach(field => {
     if (field.required || field.rules) {
-      rules[field.key] = []
+      const fieldRules: any[] = []
       if (field.required) {
-        rules[field.key].push({
+        fieldRules.push({
           required: true,
           message: `请输入${field.label}`,
           trigger: field.type === 'select' ? 'change' : 'blur'
         })
       }
       if (field.rules) {
-        rules[field.key].push(...field.rules)
+        const rulesArray = Array.isArray(field.rules) ? field.rules : [field.rules]
+        fieldRules.push(...(rulesArray as any[]))
       }
+      rules[field.key] = fieldRules
     }
   })
   return rules
@@ -607,7 +609,7 @@ watch(() => props.modelValue, (newVal, oldVal) => {
 }, { deep: true })
 
 // 用户搜索
-const searchUsers = async (query: string, field: FormField) => {
+const searchUsers = async (query: string, _field: FormField) => {
   if (query.length < 2) return
   // 这里可以调用API搜索用户
   // const users = await userApi.search(query)

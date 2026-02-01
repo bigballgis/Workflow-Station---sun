@@ -130,4 +130,17 @@ public class TaskController {
         TaskStatistics statistics = taskQueryComponent.getTaskStatistics(userId);
         return ApiResponse.success(statistics);
     }
+    
+    @Operation(summary = "查询已处理任务列表")
+    @PostMapping("/completed/query")
+    public ApiResponse<PageResponse<TaskInfo>> queryCompletedTasks(
+            @RequestHeader(value = "X-User-Id", required = false) String userId,
+            @RequestBody TaskQueryRequest request) {
+        // 如果请求中没有userId，使用header中的
+        if (request.getUserId() == null && userId != null) {
+            request.setUserId(userId);
+        }
+        PageResponse<TaskInfo> result = taskQueryComponent.queryCompletedTasks(request);
+        return ApiResponse.success(result);
+    }
 }

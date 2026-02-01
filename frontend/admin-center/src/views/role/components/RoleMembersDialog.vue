@@ -1,318 +1,158 @@
 <template>
-  <el-dialog :model-value="modelValue" @update:model-value="$emit('update:modelValue', $event)" :title="`成员管理 - ${role?.name}`" width="900px" destroy-on-close>
-    <el-tabs v-model="activeTab">
-      <!-- 分配记录标签页 -->
-      <el-tab-pane label="分配记录" name="assignments">
-        <div class="tab-header">
-          <el-button type="primary" size="small" @click="openAddAssignmentDialog">添加分配</el-button>
+  <el-dialog 
+    :model-value="modelValue" 
+    @update:model-value="$emit('update:modelValue', $event)" 
+    :title="t('role.members') + ' - ' + (role?.name || '')" 
+    width="900px" 
+    destroy-on-close
+  >
+    <!-- 角色信息卡片 -->
+    <el-card shadow="never" class="info-card">
+      <template #header>
+        <div class="card-header">
+          <span>{{ t('role.roleInfo') }}</span>
         </div>
-        
-        <el-table :data="assignments" v-loading="assignmentsLoading" max-height="400">
-          <el-table-column prop="targetType" label="分配类型" width="120">
-            <template #default="{ row }">
-              <el-tag :type="getTargetTypeTagType(row.targetType) as any" size="small">
-                {{ getTargetTypeText(row.targetType) }}
-              </el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column prop="targetName" label="分配目标" />
-          <el-table-column prop="effectiveUserCount" label="影响用户数" width="100" align="center" />
-          <el-table-column prop="assignedAt" label="分配时间" width="170">
-            <template #default="{ row }">
-              {{ row.assignedAt ? new Date(row.assignedAt).toLocaleString('zh-CN') : '-' }}
-            </template>
-          </el-table-column>
-          <el-table-column prop="assignedByName" label="分配人" width="100" />
-          <el-table-column label="操作" width="80">
-            <template #default="{ row }">
-              <el-button link type="danger" @click="handleDeleteAssignment(row)">删除</el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-      </el-tab-pane>
-      
-      <!-- 有效用户标签页 -->
-      <el-tab-pane label="有效用户" name="effectiveUsers">
-        <el-table :data="effectiveUsers" v-loading="effectiveUsersLoading" max-height="400">
-          <el-table-column prop="employeeId" label="员工编号" width="100" />
-          <el-table-column prop="username" label="用户名" width="120" />
-          <el-table-column prop="displayName" label="显示名" width="100" />
-          <el-table-column prop="departmentName" label="部门" width="120" />
-          <el-table-column prop="email" label="邮箱" width="180" />
-          <el-table-column label="角色来源">
-            <template #default="{ row }">
-              <div class="sources-list">
-                <el-tag 
-                  v-for="(source, index) in row.sources" 
-                  :key="index"
-                  :type="getTargetTypeTagType(source.sourceType) as any"
-                  size="small"
-                  class="source-tag"
-                >
-                  {{ getTargetTypeText(source.sourceType) }}: {{ source.sourceName }}
-                </el-tag>
-              </div>
-            </template>
-          </el-table-column>
-        </el-table>
-      </el-tab-pane>
-    </el-tabs>
-    
-    <!-- 添加分配对话框 -->
-    <el-dialog v-model="showAddAssignmentDialog" title="添加分配" width="500px" append-to-body>
-      <el-form :model="assignmentForm" label-width="100px">
-        <el-form-item label="分配类型" required>
-          <el-select v-model="assignmentForm.targetType" style="width: 100%" @change="handleTargetTypeChange">
-            <el-option label="用户" value="USER" />
-            <el-option label="部门" value="DEPARTMENT" />
-            <el-option label="部门及下级" value="DEPARTMENT_HIERARCHY" />
-            <el-option label="虚拟组" value="VIRTUAL_GROUP" />
-          </el-select>
-        </el-form-item>
-        
-        <!-- 用户选择 -->
-        <el-form-item v-if="assignmentForm.targetType === 'USER'" label="选择用户" required>
-          <el-select
-            v-model="assignmentForm.targetId"
-            filterable
-            remote
-            reserve-keyword
-            placeholder="搜索用户名或姓名"
-            :remote-method="searchUsers"
-            :loading="searchLoading"
-            style="width: 100%"
-            @focus="loadDefaultUsers"
-          >
-            <el-option
-              v-for="user in userOptions"
-              :key="user.id"
-              :label="`${user.fullName} (${user.employeeId || user.username})`"
-              :value="user.id"
-            />
-          </el-select>
-        </el-form-item>
-        
-        <!-- 部门选择 -->
-        <el-form-item v-if="assignmentForm.targetType === 'DEPARTMENT' || assignmentForm.targetType === 'DEPARTMENT_HIERARCHY'" label="选择部门" required>
-          <el-tree-select
-            v-model="assignmentForm.targetId"
-            :data="departmentTree"
-            :props="{ label: 'name', children: 'children' }"
-            node-key="id"
-            placeholder="选择部门"
-            style="width: 100%"
-            check-strictly
-            filterable
-          />
-        </el-form-item>
-        
-        <!-- 虚拟组选择 -->
-        <el-form-item v-if="assignmentForm.targetType === 'VIRTUAL_GROUP'" label="选择虚拟组" required>
-          <el-select v-model="assignmentForm.targetId" placeholder="选择虚拟组" style="width: 100%">
-            <el-option
-              v-for="group in virtualGroups"
-              :key="group.id"
-              :label="group.name"
-              :value="group.id"
-            />
-          </el-select>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showAddAssignmentDialog = false">取消</el-button>
-        <el-button type="primary" :loading="addAssignmentLoading" @click="handleAddAssignment">确定</el-button>
       </template>
-    </el-dialog>
+      <el-descriptions :column="3" border size="small">
+        <el-descriptions-item :label="t('role.roleName')">{{ role?.name }}</el-descriptions-item>
+        <el-descriptions-item :label="t('role.roleCode')">{{ role?.code }}</el-descriptions-item>
+        <el-descriptions-item :label="t('role.roleType')">
+          <el-tag :type="typeTagType(role?.type)" size="small">{{ typeText(role?.type) }}</el-tag>
+        </el-descriptions-item>
+        <el-descriptions-item :label="t('virtualGroup.boundRole')" :span="3">
+          <template v-if="boundVirtualGroup">
+            <el-tag type="primary" size="small">{{ boundVirtualGroup.name }}</el-tag>
+            <span v-if="boundVirtualGroup.boundRoleCode" class="text-muted" style="margin-left: 8px">({{ boundVirtualGroup.boundRoleCode }})</span>
+          </template>
+          <span v-else class="text-muted">{{ t('role.noVirtualGroupBound') }}</span>
+        </el-descriptions-item>
+      </el-descriptions>
+    </el-card>
+    
+    <!-- 成员列表 -->
+    <div class="section-title">
+      <span>{{ t('role.memberList') }}</span>
+      <span class="member-count">{{ members.length }} {{ t('role.people') }}</span>
+    </div>
+    
+    <el-table :data="members" v-loading="loading" max-height="350" stripe size="small">
+      <el-table-column type="index" width="50" align="center" />
+      <el-table-column prop="employeeId" :label="t('user.employeeId')" width="100" />
+      <el-table-column prop="username" :label="t('user.username')" width="120" />
+      <el-table-column prop="fullName" :label="t('user.fullName')" width="100" />
+      <el-table-column prop="email" :label="t('user.email')" min-width="180" show-overflow-tooltip />
+      <el-table-column prop="businessUnitName" :label="t('user.businessUnit')" min-width="120" show-overflow-tooltip>
+        <template #default="{ row }">
+          {{ row.businessUnitName || '-' }}
+        </template>
+      </el-table-column>
+      <el-table-column prop="joinedAt" :label="t('virtualGroup.joinedAt')" width="160">
+        <template #default="{ row }">
+          {{ formatDate(row.joinedAt) }}
+        </template>
+      </el-table-column>
+    </el-table>
+    
+    <el-empty v-if="members.length === 0 && !loading && boundVirtualGroup" :description="t('common.noData')" />
+    
+    <template #footer>
+      <el-button @click="$emit('update:modelValue', false)">{{ t('common.close') }}</el-button>
+    </template>
   </el-dialog>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { type Role } from '@/api/role'
-import { userApi, type User } from '@/api/user'
-import { departmentApi } from '@/api/department'
-import { virtualGroupApi } from '@/api/virtualGroup'
-import { 
-  roleAssignmentApi, 
-  type RoleAssignment, 
-  type EffectiveUser,
-  type AssignmentTargetType,
-  getTargetTypeText,
-  getTargetTypeTagType
-} from '@/api/roleAssignment'
+import { virtualGroupApi, type VirtualGroup, type VirtualGroupMember } from '@/api/virtualGroup'
+
+const { t } = useI18n()
 
 const props = defineProps<{ modelValue: boolean; role: Role | null }>()
-const emit = defineEmits(['update:modelValue'])
+defineEmits(['update:modelValue'])
 
-const activeTab = ref('assignments')
+const loading = ref(false)
+const members = ref<VirtualGroupMember[]>([])
+const boundVirtualGroup = ref<VirtualGroup | null>(null)
 
-// 分配记录
-const assignmentsLoading = ref(false)
-const assignments = ref<RoleAssignment[]>([])
+const typeText = (type?: string) => ({ 
+  BU_BOUNDED: t('role.buBounded'), 
+  BU_UNBOUNDED: t('role.buUnbounded'), 
+  ADMIN: t('role.adminRole'), 
+  DEVELOPER: t('role.developerRole') 
+}[type || ''] || type || '-')
 
-// 有效用户
-const effectiveUsersLoading = ref(false)
-const effectiveUsers = ref<EffectiveUser[]>([])
+const typeTagType = (type?: string) => ({ 
+  BU_BOUNDED: 'warning', 
+  BU_UNBOUNDED: 'success', 
+  ADMIN: 'danger', 
+  DEVELOPER: 'primary' 
+}[type || ''] || 'info') as any
 
-// 添加分配对话框
-const showAddAssignmentDialog = ref(false)
-const addAssignmentLoading = ref(false)
-const assignmentForm = reactive({
-  targetType: 'USER' as AssignmentTargetType,
-  targetId: ''
-})
+const formatDate = (date?: string) => {
+  if (!date) return '-'
+  return new Date(date).toLocaleString('zh-CN', { 
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit'
+  })
+}
 
-// 选项数据
-const searchLoading = ref(false)
-const userOptions = ref<User[]>([])
-const departmentTree = ref<any[]>([])
-const virtualGroups = ref<any[]>([])
+// 获取角色绑定的虚拟组
+const getBoundVirtualGroup = async (roleId: string): Promise<VirtualGroup | null> => {
+  try {
+    const groups = await virtualGroupApi.list()
+    return groups.find(g => g.boundRoleId === roleId) || null
+  } catch (error) {
+    console.error('Failed to get bound virtual group:', error)
+    return null
+  }
+}
 
 watch(() => props.modelValue, async (val) => {
   if (val && props.role) {
-    activeTab.value = 'assignments'
-    await Promise.all([
-      loadAssignments(),
-      loadEffectiveUsers()
-    ])
-  }
-})
-
-watch(activeTab, async (tab) => {
-  if (tab === 'assignments' && assignments.value.length === 0) {
-    await loadAssignments()
-  } else if (tab === 'effectiveUsers' && effectiveUsers.value.length === 0) {
-    await loadEffectiveUsers()
-  }
-})
-
-const loadAssignments = async () => {
-  if (!props.role) return
-  assignmentsLoading.value = true
-  try {
-    assignments.value = await roleAssignmentApi.getAssignments(props.role.id)
-  } catch (error: any) {
-    console.error('Failed to load assignments:', error)
-    assignments.value = []
-  } finally {
-    assignmentsLoading.value = false
-  }
-}
-
-const loadEffectiveUsers = async () => {
-  if (!props.role) return
-  effectiveUsersLoading.value = true
-  try {
-    effectiveUsers.value = await roleAssignmentApi.getEffectiveUsers(props.role.id)
-  } catch (error: any) {
-    console.error('Failed to load effective users:', error)
-    effectiveUsers.value = []
-  } finally {
-    effectiveUsersLoading.value = false
-  }
-}
-
-const openAddAssignmentDialog = async () => {
-  assignmentForm.targetType = 'USER'
-  assignmentForm.targetId = ''
-  userOptions.value = []
-  
-  // 预加载部门和虚拟组数据
-  try {
-    const [deptResult, groupResult] = await Promise.all([
-      departmentApi.getTree(),
-      virtualGroupApi.list()
-    ])
-    departmentTree.value = deptResult
-    virtualGroups.value = groupResult
-  } catch (error) {
-    console.error('Failed to load options:', error)
-  }
-  
-  showAddAssignmentDialog.value = true
-}
-
-const handleTargetTypeChange = () => {
-  assignmentForm.targetId = ''
-}
-
-const handleAddAssignment = async () => {
-  if (!assignmentForm.targetId) {
-    ElMessage.warning('请选择分配目标')
-    return
-  }
-  addAssignmentLoading.value = true
-  try {
-    await roleAssignmentApi.createAssignment(props.role!.id, {
-      targetType: assignmentForm.targetType,
-      targetId: assignmentForm.targetId
-    })
-    showAddAssignmentDialog.value = false
-    await Promise.all([loadAssignments(), loadEffectiveUsers()])
-    ElMessage.success('添加成功')
-  } catch (error: any) {
-    ElMessage.error(error.message || '添加失败')
-  } finally {
-    addAssignmentLoading.value = false
-  }
-}
-
-const handleDeleteAssignment = async (assignment: RoleAssignment) => {
-  try {
-    await ElMessageBox.confirm('确定要删除该分配吗？', '提示', { type: 'warning' })
-    await roleAssignmentApi.deleteAssignment(props.role!.id, assignment.id)
-    await Promise.all([loadAssignments(), loadEffectiveUsers()])
-    ElMessage.success('删除成功')
-  } catch (error: any) {
-    if (error !== 'cancel') {
-      ElMessage.error(error.message || '删除失败')
+    loading.value = true
+    members.value = []
+    boundVirtualGroup.value = null
+    
+    try {
+      boundVirtualGroup.value = await getBoundVirtualGroup(props.role.id)
+      if (boundVirtualGroup.value) {
+        members.value = await virtualGroupApi.getMembers(boundVirtualGroup.value.id)
+      }
+    } catch (error) {
+      console.error('Failed to load role members:', error)
+    } finally {
+      loading.value = false
     }
   }
-}
-
-const loadDefaultUsers = async () => {
-  if (userOptions.value.length > 0) return
-  searchLoading.value = true
-  try {
-    const result = await userApi.list({ size: 10 })
-    userOptions.value = result.content
-  } catch (error) {
-    console.error('Failed to load users:', error)
-  } finally {
-    searchLoading.value = false
-  }
-}
-
-const searchUsers = async (query: string) => {
-  if (!query) {
-    await loadDefaultUsers()
-    return
-  }
-  searchLoading.value = true
-  try {
-    const result = await userApi.list({ keyword: query, size: 10 })
-    userOptions.value = result.content
-  } catch (error) {
-    console.error('Failed to search users:', error)
-  } finally {
-    searchLoading.value = false
-  }
-}
+})
 </script>
 
 <style scoped>
-.tab-header {
-  margin-bottom: 15px;
+.info-card {
+  margin-bottom: 16px;
 }
 
-.sources-list {
+.card-header {
+  font-weight: 500;
+}
+
+.section-title {
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  font-weight: 500;
 }
 
-.source-tag {
-  margin: 2px 0;
+.member-count {
+  font-size: 13px;
+  color: #909399;
+  font-weight: normal;
+}
+
+.text-muted {
+  color: #909399;
 }
 </style>

@@ -2,16 +2,16 @@
   <div class="task-properties">
     <el-collapse v-model="activeGroups">
       <!-- 基本信息 -->
-      <el-collapse-item :title="$t('properties.basic')" name="basic">
+      <el-collapse-item :title="t('properties.basic')" name="basic">
         <el-form label-position="top" size="small">
-          <el-form-item :label="$t('properties.taskId')">
+          <el-form-item :label="t('properties.taskId')">
             <el-input :model-value="basicProps.id" disabled />
           </el-form-item>
-          <el-form-item :label="$t('common.type')">
+          <el-form-item :label="t('common.type')">
             <el-input :model-value="taskTypeLabel" disabled />
           </el-form-item>
-          <el-form-item :label="$t('properties.taskName')">
-            <el-input v-model="taskName" @change="updateBasicProp('name', taskName)" :placeholder="$t('properties.taskName')" />
+          <el-form-item :label="t('properties.taskName')">
+            <el-input v-model="taskName" @change="updateBasicProp('name', taskName)" :placeholder="t('properties.taskName')" />
           </el-form-item>
         </el-form>
       </el-collapse-item>

@@ -6,7 +6,7 @@
     width="560px"
     destroy-on-close
   >
-    <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
+    <el-form ref="formRef" :model="form" :rules="rules" label-width="120px">
       <el-form-item :label="t('user.username')" prop="username">
         <el-input v-model="form.username" :disabled="isEdit" :placeholder="t('user.usernamePlaceholder')" />
       </el-form-item>
@@ -18,18 +18,6 @@
       </el-form-item>
       <el-form-item :label="t('user.employeeId')" prop="employeeId">
         <el-input v-model="form.employeeId" :placeholder="t('user.employeeIdPlaceholder')" />
-      </el-form-item>
-      <el-form-item :label="t('user.department')" prop="departmentId">
-        <el-tree-select 
-          v-model="form.departmentId" 
-          :data="departmentTree" 
-          :props="{ label: 'name', children: 'children' }" 
-          node-key="id"
-          clearable 
-          check-strictly 
-          :placeholder="t('user.departmentPlaceholder')"
-          style="width: 100%"
-        />
       </el-form-item>
       <el-form-item :label="t('user.position')" prop="position">
         <el-input v-model="form.position" :placeholder="t('user.positionPlaceholder')" />
@@ -87,7 +75,6 @@
 import { ref, reactive, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
-import { useOrganizationStore } from '@/stores/organization'
 import { userApi, type User } from '@/api/user'
 
 const { t } = useI18n()
@@ -95,21 +82,17 @@ const { t } = useI18n()
 const props = defineProps<{ modelValue: boolean; user: User | null }>()
 const emit = defineEmits(['update:modelValue', 'success'])
 
-const orgStore = useOrganizationStore()
-
 const formRef = ref<FormInstance>()
 const loading = ref(false)
 const userSearchLoading = ref(false)
 const userOptions = ref<{ id: string; fullName: string; username: string }[]>([])
 const isEdit = computed(() => !!props.user)
-const departmentTree = computed(() => orgStore.departmentTree)
 
 const form = reactive({
   username: '',
   fullName: '',
   email: '',
   employeeId: '',
-  departmentId: '',
   position: '',
   entityManagerId: '',
   functionManagerId: '',
@@ -128,13 +111,12 @@ const rules = computed<FormRules>(() => ({
   ],
   initialPassword: [
     { required: true, message: t('user.initialPasswordPlaceholder'), trigger: 'blur' },
-    { min: 8, message: t('user.initialPasswordPlaceholder'), trigger: 'blur' }
+    { min: 8, message: '密码长度至少为8个字符', trigger: 'blur' }
   ]
 }))
 
 watch(() => props.modelValue, (val) => {
   if (val) {
-    orgStore.fetchTree()
     loadDefaultUsers() // 加载默认用户列表
     if (props.user) {
       Object.assign(form, {
@@ -142,7 +124,6 @@ watch(() => props.modelValue, (val) => {
         fullName: props.user.fullName,
         email: props.user.email,
         employeeId: props.user.employeeId || '',
-        departmentId: props.user.departmentId || '',
         position: props.user.position || '',
         entityManagerId: (props.user as any).entityManagerId || '',
         functionManagerId: (props.user as any).functionManagerId || '',
@@ -153,7 +134,7 @@ watch(() => props.modelValue, (val) => {
     } else {
       Object.assign(form, {
         username: '', fullName: '', email: '',
-        employeeId: '', departmentId: '', position: '',
+        employeeId: '', position: '',
         entityManagerId: '', functionManagerId: '',
         initialPassword: ''
       })
@@ -241,7 +222,6 @@ const handleSubmit = async () => {
         fullName: form.fullName,
         email: form.email,
         employeeId: form.employeeId || undefined,
-        departmentId: form.departmentId || undefined,
         position: form.position || undefined,
         entityManagerId: form.entityManagerId || undefined,
         functionManagerId: form.functionManagerId || undefined
@@ -252,7 +232,6 @@ const handleSubmit = async () => {
         fullName: form.fullName,
         email: form.email,
         employeeId: form.employeeId || undefined,
-        departmentId: form.departmentId || undefined,
         position: form.position || undefined,
         entityManagerId: form.entityManagerId || undefined,
         functionManagerId: form.functionManagerId || undefined,
@@ -269,3 +248,10 @@ const handleSubmit = async () => {
   }
 }
 </script>
+
+<style scoped>
+:deep(.el-form-item__label) {
+  white-space: nowrap;
+  word-break: keep-all;
+}
+</style>

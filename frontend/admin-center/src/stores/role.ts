@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { roleApi, permissionApi, Role, Permission } from '@/api/role'
+import { roleApi, permissionApi, Role, Permission, RoleType } from '@/api/role'
 
 export const useRoleStore = defineStore('role', () => {
   const roles = ref<Role[]>([])
@@ -8,7 +8,7 @@ export const useRoleStore = defineStore('role', () => {
   const loading = ref(false)
   const currentRole = ref<Role | null>(null)
 
-  const fetchRoles = async (params?: { type?: string; status?: string }) => {
+  const fetchRoles = async (params?: { type?: RoleType; status?: string }) => {
     loading.value = true
     try {
       roles.value = await roleApi.list(params)

@@ -66,3 +66,13 @@ export function getNotificationPreferences() {
 export function updateNotificationPreference(data: NotificationPreference) {
   return request.put<{ data: NotificationPreference }>('/preferences/notifications', data)
 }
+
+// Preference API 对象
+export const preferenceApi = {
+  getUserPreference,
+  updateUserPreference,
+  getDashboardLayout,
+  saveDashboardLayout,
+  getNotificationPreferences,
+  updateNotificationPreference
+}

@@ -113,4 +113,47 @@ overrideStyle.textContent = `
 `
 document.head.appendChild(overrideStyle)
 
+// 添加全局错误处理，捕获未处理的 Promise 错误
+// 这些错误通常来自浏览器扩展，不应该影响应用运行
+// 使用 capture 模式确保最早捕获
+window.addEventListener('unhandledrejection', (event) => {
+  // 检查是否是来自浏览器扩展的错误（content.js）
+  const error = event.reason
+  
+  // 更宽松的匹配条件，捕获所有可能的浏览器扩展错误
+  if (error && typeof error === 'object') {
+    // 检查错误特征，判断是否来自浏览器扩展
+    const isExtensionError = 
+      // 网络错误（httpStatus: 0）
+      error.httpStatus === 0 ||
+      // 网络错误文本
+      error.httpStatusText === 'TypeError: Failed to fetch' ||
+      // 浏览器扩展的典型错误格式：name: 'n', code: 0 或 code: 403
+      (error.name === 'n' && (error.code === 0 || error.code === 403)) ||
+      // 错误堆栈中包含 content.js
+      (error.stack && typeof error.stack === 'string' && error.stack.includes('content.js')) ||
+      // HTTP 状态码是 200 但 code 字段是 403（浏览器扩展的误判）
+      (error.httpStatus === 200 && error.code === 403 && error.name === 'n') ||
+      // 更宽松的条件：name 是 'n' 且 httpError 是 false（浏览器扩展的特征）
+      (error.name === 'n' && error.httpError === false && error.httpStatus === 200) ||
+      // 最宽松的条件：只要 name 是 'n' 且 httpStatus 是 200，就认为是扩展错误
+      (error.name === 'n' && error.httpStatus === 200)
+    
+    if (isExtensionError) {
+      // 静默忽略，不输出任何日志
+      event.preventDefault() // 阻止错误在控制台显示
+      event.stopPropagation() // 阻止事件传播
+      event.stopImmediatePropagation() // 立即停止传播
+      return false // 返回 false 表示已处理
+    }
+  }
+  // 其他错误正常处理
+  console.error('[GlobalErrorHandler] Unhandled promise rejection:', event.reason)
+}, true) // 使用 capture 模式
+
+// Vue 全局错误处理
+app.config.errorHandler = (err, _instance, info) => {
+  console.error('[VueErrorHandler]', err, info)
+}
+
 app.mount('#app')

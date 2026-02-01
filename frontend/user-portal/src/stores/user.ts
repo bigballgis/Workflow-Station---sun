@@ -7,7 +7,6 @@ export interface UserInfo {
   name: string
   email: string
   avatar?: string
-  department?: string
   roles: string[]
 }
 
@@ -28,7 +27,7 @@ export const useUserStore = defineStore('user', () => {
     userInfo.value = info
   }
 
-  const login = async (username: string, password: string) => {
+  const login = async (username: string, _password: string) => {
     // 模拟登录
     const mockToken = `token_${Date.now()}`
     setToken(mockToken)
@@ -37,7 +36,6 @@ export const useUserStore = defineStore('user', () => {
       username,
       name: username,
       email: `${username}@hsbc.com`,
-      department: '技术部',
       roles: ['user']
     })
     return true

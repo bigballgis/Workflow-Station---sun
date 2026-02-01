@@ -9,41 +9,7 @@
         </div>
       </div>
       <div class="header-right">
-        <el-dropdown @command="handleLanguage">
-          <span class="header-action">
-            <el-icon><Location /></el-icon>
-            <span class="action-text">{{ currentLang }}</span>
-          </span>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="zh-CN">简体中文</el-dropdown-item>
-              <el-dropdown-item command="zh-TW">繁體中文</el-dropdown-item>
-              <el-dropdown-item command="en">English</el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
-        <el-badge :value="unreadCount" :hidden="unreadCount === 0" class="notification-badge">
-          <el-button :icon="Bell" circle @click="goToNotifications" />
-        </el-badge>
-        <el-dropdown @command="handleCommand">
-          <div class="user-info">
-            <el-avatar :size="32" :src="userAvatar">{{ userName.charAt(0) }}</el-avatar>
-            <span class="user-name">{{ userName }}</span>
-            <el-icon><ArrowDown /></el-icon>
-          </div>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="settings">
-                <el-icon><Setting /></el-icon>
-                {{ t('menu.settings') }}
-              </el-dropdown-item>
-              <el-dropdown-item divided command="logout">
-                <el-icon><SwitchButton /></el-icon>
-                {{ t('common.logout') }}
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
+        <UserProfileDropdown />
       </div>
     </el-header>
 
@@ -64,6 +30,10 @@
             <el-icon><List /></el-icon>
             <template #title>{{ t('menu.tasks') }}</template>
           </el-menu-item>
+          <el-menu-item index="/tasks/completed">
+            <el-icon><Finished /></el-icon>
+            <template #title>{{ t('menu.completedTasks') }}</template>
+          </el-menu-item>
           <el-menu-item index="/processes">
             <el-icon><Plus /></el-icon>
             <template #title>{{ t('menu.processes') }}</template>
@@ -80,13 +50,9 @@
             <el-icon><Key /></el-icon>
             <template #title>{{ t('menu.permissions') }}</template>
           </el-menu-item>
-          <el-menu-item index="/notifications">
-            <el-icon><Bell /></el-icon>
-            <template #title>{{ t('menu.notifications') }}</template>
-          </el-menu-item>
-          <el-menu-item index="/settings">
-            <el-icon><Setting /></el-icon>
-            <template #title>{{ t('menu.settings') }}</template>
+          <el-menu-item v-if="isApprover" index="/approvals">
+            <el-icon><Checked /></el-icon>
+            <template #title>{{ t('menu.approvals') }}</template>
           </el-menu-item>
         </el-menu>
         <div class="collapse-btn" @click="toggleCollapse">
@@ -112,63 +78,54 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { ref, computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ElMessage } from 'element-plus'
 import {
-  HomeFilled, List, Plus, Document, Share, Key, Bell, Setting,
-  ArrowDown, SwitchButton, Fold, Expand, Location
+  HomeFilled, List, Plus, Document, Share, Key,
+  Fold, Expand, Checked, Finished
 } from '@element-plus/icons-vue'
-import { logout as authLogout, clearAuth, getUser } from '@/api/auth'
-import i18n from '@/i18n'
+import UserProfileDropdown from '@/components/UserProfileDropdown.vue'
+import { permissionApi } from '@/api/permission'
 
 const { t } = useI18n()
 const route = useRoute()
-const router = useRouter()
 
 const isCollapsed = ref(false)
-const unreadCount = ref(5)
 const cachedViews = ref(['Dashboard', 'Tasks', 'MyApplications'])
-
-// Get current user info
-const currentUser = computed(() => getUser())
-const userName = computed(() => currentUser.value?.displayName || currentUser.value?.username || '用户')
-const userAvatar = ref('')
+const isApprover = ref(false)
 
 const activeMenu = computed(() => route.path)
 
-const langMap: Record<string, string> = { 'zh-CN': '简体中文', 'zh-TW': '繁體中文', 'en': 'English' }
-const currentLang = computed(() => langMap[i18n.global.locale.value] || '简体中文')
+// Check if user is an approver
+const checkApproverStatus = async () => {
+  // Only check if user is logged in
+  const token = localStorage.getItem('token')
+  if (!token) {
+    isApprover.value = false
+    return
+  }
+  
+  try {
+    const res = await permissionApi.isApprover() as any
+    if (res?.data?.isApprover !== undefined) {
+      isApprover.value = res.data.isApprover
+    } else if (res?.isApprover !== undefined) {
+      isApprover.value = res.isApprover
+    }
+  } catch (e) {
+    // Silently fail if user is not logged in or doesn't have permission
+    console.debug('Failed to check approver status:', e)
+    isApprover.value = false
+  }
+}
+
+onMounted(() => {
+  checkApproverStatus()
+})
 
 const toggleCollapse = () => {
   isCollapsed.value = !isCollapsed.value
-}
-
-const goToNotifications = () => {
-  router.push('/notifications')
-}
-
-const handleLanguage = (lang: string) => {
-  i18n.global.locale.value = lang as 'zh-CN' | 'zh-TW' | 'en'
-  localStorage.setItem('language', lang)
-}
-
-const handleCommand = async (command: string) => {
-  if (command === 'settings') {
-    router.push('/settings')
-  } else if (command === 'logout') {
-    try {
-      await authLogout()
-      ElMessage.success(t('common.logoutSuccess'))
-    } catch (error) {
-      // Even if API fails, still clear local auth
-      console.error('Logout API error:', error)
-    } finally {
-      clearAuth()
-      router.push('/login')
-    }
-  }
 }
 </script>
 
@@ -210,54 +167,6 @@ const handleCommand = async (command: string) => {
     display: flex;
     align-items: center;
     gap: 16px;
-    
-    .header-action {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 8px 12px;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: background-color 0.3s;
-      color: white;
-
-      &:hover {
-        background-color: rgba(255, 255, 255, 0.15);
-      }
-
-      .action-text {
-        font-size: 14px;
-      }
-    }
-    
-    .notification-badge {
-      :deep(.el-button) {
-        background: transparent;
-        border: none;
-        color: white;
-        
-        &:hover {
-          background: rgba(255, 255, 255, 0.1);
-        }
-      }
-    }
-    
-    .user-info {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      cursor: pointer;
-      padding: 4px 8px;
-      border-radius: 4px;
-      
-      &:hover {
-        background: rgba(255, 255, 255, 0.1);
-      }
-      
-      .user-name {
-        font-size: 14px;
-      }
-    }
   }
 }
 

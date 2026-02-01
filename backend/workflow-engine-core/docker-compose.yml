@@ -1,0 +1,86 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16.5-alpine
+    container_name: workflow-engine-postgres
+    environment:
+      POSTGRES_DB: workflow_platform
+      POSTGRES_USER: platform
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-platform123}
+    ports:
+      - "5432:5432"
+    volumes:
+      - workflow_engine_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U platform -d workflow_platform"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - workflow-engine-network
+
+  # Redis Cache
+  redis:
+    image: redis:7.2-alpine
+    container_name: workflow-engine-redis
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis123}
+    ports:
+      - "6379:6379"
+    volumes:
+      - workflow_engine_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis123}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - workflow-engine-network
+
+  # Workflow Engine Core
+  workflow-engine:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      platforms:
+        - linux/amd64
+    container_name: workflow-engine-core
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8081:8080"
+    environment:
+      SERVER_PORT: 8080
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/workflow_platform
+      SPRING_DATASOURCE_USERNAME: platform
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-platform123}
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD:-redis123}
+      ADMIN_CENTER_URL: ${ADMIN_CENTER_URL:-http://localhost:8090}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-workflow-engine-jwt-secret-key-2026}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-workflow-aes-256-encryption-key!}
+    networks:
+      - workflow-engine-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  workflow_engine_postgres_data:
+    driver: local
+  workflow_engine_redis_data:
+    driver: local
+
+networks:
+  workflow-engine-network:
+    driver: bridge

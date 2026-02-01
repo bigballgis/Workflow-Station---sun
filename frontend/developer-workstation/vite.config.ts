@@ -28,40 +28,40 @@ export default defineConfig({
     proxy: {
       // Auth API routes to developer-workstation
       '/api/v1/auth': {
-        target: 'http://localhost:8083',
+        target: 'http://localhost:8094',
         changeOrigin: true,
         rewrite: (path) => '/auth' + path.substring('/api/v1/auth'.length)
       },
       // Admin Center API (departments, virtual-groups)
       '/api/admin-center': {
-        target: 'http://localhost:8090',
+        target: 'http://localhost:8092',
         changeOrigin: true,
         rewrite: (path) => path.replace('/api/admin-center', '/api/v1/admin')
       },
       // Function units, icons, versions, export/import - developer-workstation
       '/api/v1/function-units': {
-        target: 'http://localhost:8083',
+        target: 'http://localhost:8094',
         changeOrigin: true
       },
       '/api/v1/icons': {
-        target: 'http://localhost:8083',
+        target: 'http://localhost:8094',
         changeOrigin: true
       },
       '/api/v1/versions': {
-        target: 'http://localhost:8083',
+        target: 'http://localhost:8094',
         changeOrigin: true
       },
       '/api/v1/export': {
-        target: 'http://localhost:8083',
+        target: 'http://localhost:8094',
         changeOrigin: true
       },
       '/api/v1/import': {
-        target: 'http://localhost:8083',
+        target: 'http://localhost:8094',
         changeOrigin: true
       },
       // Default: all other /api requests go to developer-workstation
       '/api': {
-        target: 'http://localhost:8083',
+        target: 'http://localhost:8094',
         changeOrigin: true
       }
     }

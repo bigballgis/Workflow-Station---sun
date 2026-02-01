@@ -1,60 +1,60 @@
 <template>
   <div class="version-manager">
     <el-table :data="store.versions" v-loading="loading" stripe>
-      <el-table-column prop="versionNumber" :label="$t('version.versionNumber')" width="120" />
-      <el-table-column prop="changeLog" :label="$t('version.changeLog')" show-overflow-tooltip />
-      <el-table-column prop="createdBy" :label="$t('version.publisher')" width="120" />
-      <el-table-column prop="createdAt" :label="$t('version.publishTime')" width="180">
+      <el-table-column prop="versionNumber" :label="t('version.versionNumber')" width="120" />
+      <el-table-column prop="changeLog" :label="t('version.changeLog')" show-overflow-tooltip />
+      <el-table-column prop="createdBy" :label="t('version.publisher')" width="120" />
+      <el-table-column prop="createdAt" :label="t('version.publishTime')" width="180">
         <template #default="{ row }">
           {{ formatDate(row.createdAt) }}
         </template>
       </el-table-column>
-      <el-table-column :label="$t('common.actions')" width="200">
+      <el-table-column :label="t('common.actions')" width="200">
         <template #default="{ row }">
-          <el-button link type="primary" @click="handleCompare(row)">{{ $t('common.compare') }}</el-button>
-          <el-button link type="warning" @click="handleRollback(row)">{{ $t('common.rollback') }}</el-button>
-          <el-button link type="success" @click="handleExport(row)">{{ $t('common.export') }}</el-button>
+          <el-button link type="primary" @click="handleCompare(row)">{{ t('common.compare') }}</el-button>
+          <el-button link type="warning" @click="handleRollback(row)">{{ t('common.rollback') }}</el-button>
+          <el-button link type="success" @click="handleExport(row)">{{ t('common.export') }}</el-button>
         </template>
       </el-table-column>
     </el-table>
 
     <!-- Compare Dialog -->
-    <el-dialog v-model="showCompareDialog" :title="$t('version.compare')" width="900px">
+    <el-dialog v-model="showCompareDialog" :title="t('version.compare')" width="900px">
       <div class="compare-container">
         <div class="version-select">
-          <el-select v-model="compareVersion1" :placeholder="$t('version.selectVersion1')" @change="handleVersionChange">
+          <el-select v-model="compareVersion1" :placeholder="t('version.selectVersion1')" @change="handleVersionChange">
             <el-option v-for="v in store.versions" :key="v.id" 
                        :label="v.versionNumber" :value="v.id" />
           </el-select>
-          <span class="vs-label">{{ $t('common.vs') }}</span>
-          <el-select v-model="compareVersion2" :placeholder="$t('version.selectVersion2')" @change="handleVersionChange">
+          <span class="vs-label">{{ t('common.vs') }}</span>
+          <el-select v-model="compareVersion2" :placeholder="t('version.selectVersion2')" @change="handleVersionChange">
             <el-option v-for="v in store.versions" :key="v.id" 
                        :label="v.versionNumber" :value="v.id" />
           </el-select>
           <el-button type="primary" @click="doCompare" :loading="comparing" 
-                     :disabled="!compareVersion1 || !compareVersion2">{{ $t('common.compare') }}</el-button>
+                     :disabled="!compareVersion1 || !compareVersion2">{{ t('common.compare') }}</el-button>
         </div>
         
         <div v-if="compareResult" class="compare-result">
           <el-tabs v-model="activeTab">
-            <el-tab-pane :label="$t('common.overview')" name="overview">
+            <el-tab-pane :label="t('common.overview')" name="overview">
               <div class="diff-summary">
                 <div class="summary-item added">
                   <el-icon><Plus /></el-icon>
-                  <span>{{ $t('common.added') }}: {{ compareResult.added?.length || 0 }}</span>
+                  <span>{{ t('common.added') }}: {{ compareResult.added?.length || 0 }}</span>
                 </div>
                 <div class="summary-item modified">
                   <el-icon><Edit /></el-icon>
-                  <span>{{ $t('common.modified') }}: {{ compareResult.modified?.length || 0 }}</span>
+                  <span>{{ t('common.modified') }}: {{ compareResult.modified?.length || 0 }}</span>
                 </div>
                 <div class="summary-item removed">
                   <el-icon><Minus /></el-icon>
-                  <span>{{ $t('common.deleted') }}: {{ compareResult.removed?.length || 0 }}</span>
+                  <span>{{ t('common.deleted') }}: {{ compareResult.removed?.length || 0 }}</span>
                 </div>
               </div>
             </el-tab-pane>
             
-            <el-tab-pane :label="$t('version.tableDefinition')" name="tables">
+            <el-tab-pane :label="t('version.tableDefinition')" name="tables">
               <div class="diff-section" v-if="compareResult.tables">
                 <div v-for="diff in compareResult.tables" :key="diff.name" class="diff-item">
                   <div class="diff-header" :class="diff.type">
@@ -70,11 +70,11 @@
                     </div>
                   </div>
                 </div>
-                <el-empty v-if="!compareResult.tables?.length" :description="$t('common.noData')" />
+                <el-empty v-if="!compareResult.tables?.length" :description="t('common.noData')" />
               </div>
             </el-tab-pane>
             
-            <el-tab-pane :label="$t('version.formDefinition')" name="forms">
+            <el-tab-pane :label="t('version.formDefinition')" name="forms">
               <div class="diff-section" v-if="compareResult.forms">
                 <div v-for="diff in compareResult.forms" :key="diff.name" class="diff-item">
                   <div class="diff-header" :class="diff.type">
@@ -90,18 +90,18 @@
                     </div>
                   </div>
                 </div>
-                <el-empty v-if="!compareResult.forms?.length" :description="$t('common.noData')" />
+                <el-empty v-if="!compareResult.forms?.length" :description="t('common.noData')" />
               </div>
             </el-tab-pane>
             
-            <el-tab-pane :label="$t('version.processDefinition')" name="process">
+            <el-tab-pane :label="t('version.processDefinition')" name="process">
               <div class="diff-section" v-if="compareResult.process">
                 <div class="process-diff">
                   <div class="diff-header" :class="compareResult.process.type">
                     <el-tag :type="diffTagType(compareResult.process.type)" size="small">
                       {{ diffLabel(compareResult.process.type) }}
                     </el-tag>
-                    <span>{{ compareResult.process.name || $t('version.processDefinition') }}</span>
+                    <span>{{ compareResult.process.name || t('version.processDefinition') }}</span>
                   </div>
                   <div v-if="compareResult.process.changes?.length" class="diff-changes">
                     <div v-for="(change, idx) in compareResult.process.changes" :key="idx" class="change-item">
@@ -113,16 +113,16 @@
                   </div>
                 </div>
               </div>
-              <el-empty v-else :description="$t('common.noData')" />
+              <el-empty v-else :description="t('common.noData')" />
             </el-tab-pane>
             
-            <el-tab-pane :label="$t('common.rawData')" name="raw">
+            <el-tab-pane :label="t('common.rawData')" name="raw">
               <pre class="raw-json">{{ JSON.stringify(compareResult, null, 2) }}</pre>
             </el-tab-pane>
           </el-tabs>
         </div>
         
-        <el-empty v-else-if="!comparing" :description="$t('version.selectVersion1')" />
+        <el-empty v-else-if="!comparing" :description="t('version.selectVersion1')" />
       </div>
     </el-dialog>
   </div>
@@ -152,8 +152,8 @@ const activeTab = ref('overview')
 
 const formatDate = (date: string) => dayjs(date).format('YYYY-MM-DD HH:mm:ss')
 
-const diffTagType = (type: string) => {
-  const map: Record<string, string> = { added: 'success', modified: 'warning', removed: 'danger' }
+const diffTagType = (type: string): 'primary' | 'success' | 'warning' | 'info' | 'danger' => {
+  const map: Record<string, 'primary' | 'success' | 'warning' | 'info' | 'danger'> = { added: 'success', modified: 'warning', removed: 'danger' }
   return map[type] || 'info'
 }
 

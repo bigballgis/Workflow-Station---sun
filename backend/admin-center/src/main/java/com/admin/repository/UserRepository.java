@@ -40,24 +40,9 @@ public interface UserRepository extends JpaRepository<User, String> {
     boolean existsByEmail(String email);
     
     /**
-     * 根据部门ID查找用户
-     */
-    List<User> findByDepartmentId(String departmentId);
-    
-    /**
-     * 根据部门ID分页查找用户
-     */
-    Page<User> findByDepartmentId(String departmentId, Pageable pageable);
-    
-    /**
      * 根据状态查找用户
      */
     List<User> findByStatus(UserStatus status);
-    
-    /**
-     * 统计部门用户数量
-     */
-    long countByDepartmentId(String departmentId);
     
     /**
      * 搜索用户（用户名、姓名、邮箱）
@@ -70,11 +55,11 @@ public interface UserRepository extends JpaRepository<User, String> {
     Page<User> searchUsers(@Param("keyword") String keyword, Pageable pageable);
     
     /**
-     * 根据条件查询用户
+     * 根据条件查询用户（不再使用 businessUnitId 字段，改用关联表）
      */
-    @Query("SELECT u FROM User u WHERE " +
+    @Query("SELECT DISTINCT u FROM User u WHERE " +
            "(u.deleted = false OR u.deleted IS NULL) AND " +
-           "(:departmentId IS NULL OR u.departmentId = :departmentId) AND " +
+           "(:businessUnitId IS NULL OR u.id IN (SELECT ub.userId FROM UserBusinessUnit ub WHERE ub.businessUnitId = :businessUnitId)) AND " +
            "(:status IS NULL OR u.status = :status) AND " +
            "(:keyword IS NULL OR :keyword = '' OR " +
            "u.username LIKE CONCAT('%', :keyword, '%') OR " +
@@ -82,7 +67,7 @@ public interface UserRepository extends JpaRepository<User, String> {
            "u.displayName LIKE CONCAT('%', :keyword, '%') OR " +
            "u.email LIKE CONCAT('%', :keyword, '%'))")
     Page<User> findByConditions(
-            @Param("departmentId") String departmentId,
+            @Param("businessUnitId") String businessUnitId,
             @Param("status") UserStatus status,
             @Param("keyword") String keyword,
             Pageable pageable);
@@ -126,4 +111,20 @@ public interface UserRepository extends JpaRepository<User, String> {
      * 统计指定时间范围内创建的用户数
      */
     long countByCreatedAtBetween(LocalDateTime start, LocalDateTime end);
+    
+    /**
+     * 通过关联表查询业务单元成员（多对多关系）
+     */
+    @Query("SELECT u FROM User u WHERE u.id IN " +
+           "(SELECT ub.userId FROM UserBusinessUnit ub WHERE ub.businessUnitId = :businessUnitId) " +
+           "AND (u.deleted = false OR u.deleted IS NULL)")
+    Page<User> findMembersByBusinessUnitId(@Param("businessUnitId") String businessUnitId, Pageable pageable);
+    
+    /**
+     * 通过关联表统计业务单元成员数量（多对多关系）
+     */
+    @Query("SELECT COUNT(u) FROM User u WHERE u.id IN " +
+           "(SELECT ub.userId FROM UserBusinessUnit ub WHERE ub.businessUnitId = :businessUnitId) " +
+           "AND (u.deleted = false OR u.deleted IS NULL)")
+    long countMembersByBusinessUnitId(@Param("businessUnitId") String businessUnitId);
 }

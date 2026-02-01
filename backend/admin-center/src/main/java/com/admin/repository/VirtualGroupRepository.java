@@ -9,7 +9,6 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -28,6 +27,16 @@ public interface VirtualGroupRepository extends JpaRepository<VirtualGroup, Stri
      * 检查名称是否存在
      */
     boolean existsByName(String name);
+    
+    /**
+     * 根据代码查找虚拟组
+     */
+    Optional<VirtualGroup> findByCode(String code);
+    
+    /**
+     * 检查代码是否存在
+     */
+    boolean existsByCode(String code);
     
     /**
      * 根据类型查找虚拟组
@@ -50,21 +59,10 @@ public interface VirtualGroupRepository extends JpaRepository<VirtualGroup, Stri
     List<VirtualGroup> findByTypeAndStatus(VirtualGroupType type, String status);
     
     /**
-     * 查找有效的虚拟组（在有效期内且状态为ACTIVE）
+     * 查找有效的虚拟组（状态为ACTIVE）
      */
-    @Query("SELECT vg FROM VirtualGroup vg WHERE " +
-           "vg.status = 'ACTIVE' AND " +
-           "(vg.validFrom IS NULL OR vg.validFrom <= :now) AND " +
-           "(vg.validTo IS NULL OR vg.validTo >= :now)")
-    List<VirtualGroup> findValidGroups(@Param("now") Instant now);
-
-    
-    /**
-     * 查找已过期的虚拟组
-     */
-    @Query("SELECT vg FROM VirtualGroup vg WHERE " +
-           "vg.validTo IS NOT NULL AND vg.validTo < :now")
-    List<VirtualGroup> findExpiredGroups(@Param("now") Instant now);
+    @Query("SELECT vg FROM VirtualGroup vg WHERE vg.status = 'ACTIVE'")
+    List<VirtualGroup> findValidGroups();
     
     /**
      * 根据条件查询虚拟组

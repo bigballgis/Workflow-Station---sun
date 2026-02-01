@@ -15,7 +15,9 @@ import java.util.Map;
 
 /**
  * 任务分配请求DTO
- * 支持多维度任务分配：用户、虚拟组、部门角色
+ * 支持多维度任务分配：用户、虚拟组
+ * 
+ * 注意：新的任务分配机制使用 AssigneeType 枚举和 TaskAssigneeResolver 服务
  */
 @Data
 @Builder
@@ -39,7 +41,6 @@ public class TaskAssignmentRequest {
      * 分配目标
      * - 当assignmentType为USER时，存储用户ID
      * - 当assignmentType为VIRTUAL_GROUP时，存储虚拟组ID
-     * - 当assignmentType为DEPT_ROLE时，存储"部门ID:角色ID"格式
      */
     @NotBlank(message = "分配目标不能为空")
     private String assignmentTarget;
@@ -107,36 +108,9 @@ public class TaskAssignmentRequest {
                 // 虚拟组ID格式验证（简单的非空验证）
                 return !assignmentTarget.trim().isEmpty();
             
-            case DEPT_ROLE:
-                // 部门角色格式验证：部门ID:角色ID
-                return assignmentTarget.contains(":") && 
-                       assignmentTarget.split(":").length == 2 &&
-                       !assignmentTarget.split(":")[0].trim().isEmpty() &&
-                       !assignmentTarget.split(":")[1].trim().isEmpty();
-            
             default:
                 return false;
         }
-    }
-
-    /**
-     * 获取部门ID（仅当分配类型为DEPT_ROLE时有效）
-     */
-    public String getDepartmentId() {
-        if (assignmentType == AssignmentType.DEPT_ROLE && isValidAssignmentTarget()) {
-            return assignmentTarget.split(":")[0].trim();
-        }
-        return null;
-    }
-
-    /**
-     * 获取角色ID（仅当分配类型为DEPT_ROLE时有效）
-     */
-    public String getRoleId() {
-        if (assignmentType == AssignmentType.DEPT_ROLE && isValidAssignmentTarget()) {
-            return assignmentTarget.split(":")[1].trim();
-        }
-        return null;
     }
 
     /**

@@ -36,6 +36,9 @@ public class VirtualGroup {
     @Column(name = "name", nullable = false, length = 100)
     private String name;
     
+    @Column(name = "code", nullable = false, length = 50, unique = true)
+    private String code;
+    
     @Enumerated(EnumType.STRING)
     @Column(name = "type", nullable = false, length = 20)
     private VirtualGroupType type;
@@ -43,12 +46,11 @@ public class VirtualGroup {
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
     
-    @Column(name = "valid_from")
-    private Instant validFrom;
-    
-    @Column(name = "valid_to")
-    private Instant validTo;
-
+    /**
+     * AD Group 名称，用于与 Active Directory 系统集成
+     */
+    @Column(name = "ad_group", length = 100)
+    private String adGroup;
     
     @Column(name = "status", nullable = false, length = 20)
     @Builder.Default
@@ -76,27 +78,17 @@ public class VirtualGroup {
     private Set<VirtualGroupMember> members = new HashSet<>();
     
     /**
-     * 检查虚拟组是否有效（在有效期内）
+     * 检查虚拟组是否有效
      */
     public boolean isValid() {
-        Instant now = Instant.now();
-        boolean afterStart = validFrom == null || !now.isBefore(validFrom);
-        boolean beforeEnd = validTo == null || !now.isAfter(validTo);
-        return "ACTIVE".equals(status) && afterStart && beforeEnd;
+        return "ACTIVE".equals(status);
     }
     
     /**
-     * 检查虚拟组是否已过期
+     * 检查虚拟组是否是系统内置组
      */
-    public boolean isExpired() {
-        return validTo != null && Instant.now().isAfter(validTo);
-    }
-    
-    /**
-     * 检查虚拟组是否是临时组
-     */
-    public boolean isTemporary() {
-        return type == VirtualGroupType.TEMPORARY;
+    public boolean isSystem() {
+        return type == VirtualGroupType.SYSTEM;
     }
     
     /**

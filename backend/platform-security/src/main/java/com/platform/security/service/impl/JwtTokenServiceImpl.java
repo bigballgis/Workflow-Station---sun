@@ -28,7 +28,6 @@ public class JwtTokenServiceImpl implements JwtTokenService {
     private static final String CLAIM_DISPLAY_NAME = "displayName";
     private static final String CLAIM_ROLES = "roles";
     private static final String CLAIM_PERMISSIONS = "permissions";
-    private static final String CLAIM_DEPARTMENT_ID = "departmentId";
     private static final String CLAIM_LANGUAGE = "language";
     private static final String CLAIM_TOKEN_TYPE = "tokenType";
     private static final String TOKEN_TYPE_ACCESS = "access";
@@ -49,13 +48,12 @@ public class JwtTokenServiceImpl implements JwtTokenService {
 
     @Override
     public String generateToken(String userId, String username, List<String> roles,
-                                List<String> permissions, String departmentId, String language) {
-        return generateToken(userId, username, null, null, roles, permissions, departmentId, language);
+                                List<String> permissions, String language) {
+        return generateToken(userId, username, null, null, roles, permissions, language);
     }
 
     public String generateToken(String userId, String username, String email, String displayName,
-                                List<String> roles, List<String> permissions, 
-                                String departmentId, String language) {
+                                List<String> roles, List<String> permissions, String language) {
         Date now = new Date();
         Date expiration = new Date(now.getTime() + jwtProperties.getExpirationMs());
 
@@ -68,7 +66,6 @@ public class JwtTokenServiceImpl implements JwtTokenService {
                 .claim(CLAIM_DISPLAY_NAME, displayName)
                 .claim(CLAIM_ROLES, roles != null ? roles : Collections.emptyList())
                 .claim(CLAIM_PERMISSIONS, permissions != null ? permissions : Collections.emptyList())
-                .claim(CLAIM_DEPARTMENT_ID, departmentId)
                 .claim(CLAIM_LANGUAGE, language != null ? language : "zh_CN")
                 .claim(CLAIM_TOKEN_TYPE, TOKEN_TYPE_ACCESS)
                 .issuer(jwtProperties.getIssuer())
@@ -87,7 +84,6 @@ public class JwtTokenServiceImpl implements JwtTokenService {
                 principal.getDisplayName(),
                 principal.getRoles(),
                 principal.getPermissions(),
-                principal.getDepartmentId(),
                 principal.getLanguage()
         );
     }
@@ -154,7 +150,6 @@ public class JwtTokenServiceImpl implements JwtTokenService {
                 .displayName(claims.get(CLAIM_DISPLAY_NAME, String.class))
                 .roles(roles != null ? roles : Collections.emptyList())
                 .permissions(permissions != null ? permissions : Collections.emptyList())
-                .departmentId(claims.get(CLAIM_DEPARTMENT_ID, String.class))
                 .language(claims.get(CLAIM_LANGUAGE, String.class))
                 .build();
     }
@@ -182,7 +177,7 @@ public class JwtTokenServiceImpl implements JwtTokenService {
         
         // Generate new access token with minimal claims
         // The caller should fetch fresh user data and generate a proper token
-        return generateToken(userId, null, null, null, null, null);
+        return generateToken(userId, null, null, null, null);
     }
 
     @Override

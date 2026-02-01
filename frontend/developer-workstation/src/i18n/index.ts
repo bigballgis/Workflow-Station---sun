@@ -4,17 +4,18 @@ import zhTW from './locales/zh-TW'
 import en from './locales/en'
 
 const i18n = createI18n({
-  legacy: false,
-  locale: localStorage.getItem('language') || 'zh-CN',
-  fallbackLocale: 'zh-CN',
+  legacy: false, // Use Composition API mode (required for Vue 3 and v11+)
+  locale: 'en', // Fixed to English
+  fallbackLocale: 'en',
   messages: {
     'zh-CN': zhCN,
     'zh-TW': zhTW,
     'en': en
-  }
+  },
+  // Vue I18n v11+ configuration
+  warnHtmlMessage: false, // Disable HTML message warnings in development
+  missingWarn: false, // Disable missing key warnings (optional)
+  fallbackWarn: false // Disable fallback warnings (optional)
 })
-
-// 如果当前语言显示有问题，可以重置为简体中文
-// localStorage.setItem('locale', 'zh-CN')
 
 export default i18n

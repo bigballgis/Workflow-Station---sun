@@ -397,7 +397,7 @@ public class TaskController {
      * 返回用户所属的虚拟组ID列表和部门角色列表，用于任务查询
      */
     @GetMapping("/user-permissions")
-    @Operation(summary = "获取用户任务权限", description = "获取用户的虚拟组和部门角色信息，用于任务查询")
+    @Operation(summary = "获取用户任务权限", description = "获取用户的虚拟组和角色信息，用于任务查询")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getUserTaskPermissions(
             @Parameter(description = "用户ID", required = true)
             @RequestParam("userId") String userId) {
@@ -405,14 +405,14 @@ public class TaskController {
         log.info("Getting task permissions for user: {}", userId);
         
         List<String> virtualGroupIds = userPermissionService.getUserVirtualGroupIds(userId);
-        List<String> departmentRoles = userPermissionService.getUserDepartmentRoles(userId);
         List<String> roles = userPermissionService.getUserRoles(userId);
+        List<String> roleIds = userPermissionService.getUserRoleIds(userId);
         
         Map<String, Object> result = new HashMap<>();
         result.put("userId", userId);
         result.put("virtualGroupIds", virtualGroupIds);
-        result.put("departmentRoles", departmentRoles);
         result.put("roles", roles);
+        result.put("roleIds", roleIds);  // 添加角色ID列表，用于候选组查询
         
         return ResponseEntity.ok(ApiResponse.success(result));
     }
