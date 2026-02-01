@@ -1,0 +1,308 @@
+version: '3.8'
+
+services:
+  # Infrastructure Services
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres-uat
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    volumes:
+      - postgres_data_uat:/var/lib/postgresql/data
+      - ../../init-scripts:/docker-entrypoint-initdb.d
+    networks:
+      - platform-network-uat
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis-uat
+    ports:
+      - "${REDIS_PORT}:6379"
+    volumes:
+      - redis_data_uat:/data
+    networks:
+      - platform-network-uat
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    container_name: zookeeper-uat
+    environment:
+      ZOOKEEPER_CLIENT_PORT: ${ZOOKEEPER_PORT}
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "${ZOOKEEPER_PORT}:2181"
+    volumes:
+      - zookeeper_data_uat:/var/lib/zookeeper/data
+      - zookeeper_logs_uat:/var/lib/zookeeper/log
+    networks:
+      - platform-network-uat
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: kafka-uat
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:${ZOOKEEPER_PORT}
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:${KAFKA_PORT}
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'true'
+    ports:
+      - "${KAFKA_PORT}:9092"
+    volumes:
+      - kafka_data_uat:/var/lib/kafka/data
+    networks:
+      - platform-network-uat
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Backend Services
+  api-gateway:
+    build:
+      context: ../../../backend/api-gateway
+      dockerfile: Dockerfile
+    container_name: api-gateway-uat
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: uat
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      JWT_SECRET: ${JWT_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      EXTERNAL_CONFIG_URL: ${EXTERNAL_CONFIG_URL}
+      MONITORING_ENDPOINT: ${MONITORING_ENDPOINT}
+      CACHE_TTL: ${CACHE_TTL}
+      API_RATE_LIMIT: ${API_RATE_LIMIT}
+      WORKFLOW_ENGINE_URL: http://workflow-engine:8081
+      USER_PORTAL_URL: http://user-portal:8082
+      DEVELOPER_WORKSTATION_URL: http://developer-workstation:8083
+      ADMIN_CENTER_URL: http://admin-center:8090
+    ports:
+      - "${API_GATEWAY_PORT}:8080"
+    networks:
+      - platform-network-uat
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  workflow-engine:
+    build:
+      context: ../../../backend/workflow-engine-core
+      dockerfile: Dockerfile
+    container_name: workflow-engine-uat
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: uat
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      JWT_SECRET: ${JWT_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      EXTERNAL_CONFIG_URL: ${EXTERNAL_CONFIG_URL}
+      MONITORING_ENDPOINT: ${MONITORING_ENDPOINT}
+      CACHE_TTL: ${CACHE_TTL}
+    ports:
+      - "${WORKFLOW_ENGINE_PORT}:8081"
+    networks:
+      - platform-network-uat
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  user-portal:
+    build:
+      context: ../../../backend/user-portal
+      dockerfile: Dockerfile
+    container_name: user-portal-backend-uat
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: uat
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      JWT_SECRET: ${JWT_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      EXTERNAL_CONFIG_URL: ${EXTERNAL_CONFIG_URL}
+      MONITORING_ENDPOINT: ${MONITORING_ENDPOINT}
+      CACHE_TTL: ${CACHE_TTL}
+    ports:
+      - "${USER_PORTAL_BACKEND_PORT}:8082"
+    networks:
+      - platform-network-uat
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  developer-workstation:
+    build:
+      context: ../../../backend/developer-workstation
+      dockerfile: Dockerfile
+    container_name: developer-workstation-backend-uat
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: uat
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      JWT_SECRET: ${JWT_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      EXTERNAL_CONFIG_URL: ${EXTERNAL_CONFIG_URL}
+      MONITORING_ENDPOINT: ${MONITORING_ENDPOINT}
+      CACHE_TTL: ${CACHE_TTL}
+    ports:
+      - "${DEVELOPER_WORKSTATION_BACKEND_PORT}:8083"
+    networks:
+      - platform-network-uat
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  admin-center:
+    build:
+      context: ../../../backend/admin-center
+      dockerfile: Dockerfile
+    container_name: admin-center-backend-uat
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: uat
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      JWT_SECRET: ${JWT_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+      EXTERNAL_CONFIG_URL: ${EXTERNAL_CONFIG_URL}
+      MONITORING_ENDPOINT: ${MONITORING_ENDPOINT}
+      CACHE_TTL: ${CACHE_TTL}
+    ports:
+      - "${ADMIN_CENTER_BACKEND_PORT}:8090"
+    networks:
+      - platform-network-uat
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8090/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Frontend Services
+  admin-center-frontend:
+    build:
+      context: ../../../frontend/admin-center
+      dockerfile: Dockerfile
+    container_name: admin-center-frontend-uat
+    environment:
+      VITE_API_BASE_URL: http://localhost:${API_GATEWAY_PORT}
+      VITE_ENVIRONMENT: uat
+    ports:
+      - "${ADMIN_CENTER_FRONTEND_PORT}:80"
+    networks:
+      - platform-network-uat
+    depends_on:
+      - api-gateway
+
+  user-portal-frontend:
+    build:
+      context: ../../../frontend/user-portal
+      dockerfile: Dockerfile
+    container_name: user-portal-frontend-uat
+    environment:
+      VITE_API_BASE_URL: http://localhost:${API_GATEWAY_PORT}
+      VITE_ENVIRONMENT: uat
+    ports:
+      - "${USER_PORTAL_FRONTEND_PORT}:80"
+    networks:
+      - platform-network-uat
+    depends_on:
+      - api-gateway
+
+  developer-workstation-frontend:
+    build:
+      context: ../../../frontend/developer-workstation
+      dockerfile: Dockerfile
+    container_name: developer-workstation-frontend-uat
+    environment:
+      VITE_API_BASE_URL: http://localhost:${API_GATEWAY_PORT}
+      VITE_ENVIRONMENT: uat
+    ports:
+      - "${DEVELOPER_WORKSTATION_FRONTEND_PORT}:80"
+    networks:
+      - platform-network-uat
+    depends_on:
+      - api-gateway
+
+networks:
+  platform-network-uat:
+    driver: bridge
+
+volumes:
+  postgres_data_uat:
+  redis_data_uat:
+  zookeeper_data_uat:
+  zookeeper_logs_uat:
+  kafka_data_uat:

@@ -285,15 +285,3 @@ HELP.md
 ai-logs/
 .kiro/
 docs/
-
-# =============================================================================
-# EXTERNAL: SCRIPTS
-# =============================================================================
-# Ignore scripts/ directory but keep script files
-scripts/
-!scripts/
-!scripts/**/*.sh
-!scripts/**/*.ps1
-
-# Ignore deploy/ directory but keep important scripts
-deploy/
