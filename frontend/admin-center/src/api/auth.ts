@@ -5,9 +5,10 @@ import axios from 'axios'
  * Validates: Requirements 5.1, 5.5
  */
 
-// Create a separate axios instance for auth to avoid circular dependencies
+// Create a separate axios instance for auth to avoid circular dependencies.
+// Must match admin-center backend context-path: /api/v1/admin -> auth at /api/v1/admin/auth
 const authRequest = axios.create({
-  baseURL: '/api/v1/auth',
+  baseURL: '/api/v1/admin/auth',
   timeout: 30000,
   headers: { 'Content-Type': 'application/json' }
 })

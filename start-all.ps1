@@ -7,11 +7,19 @@
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
 $PSDefaultParameterValues['*:Encoding'] = 'utf8'
-chcp 65001 | Out-Null
+
+# Set UTF-8 encoding for Windows only
+if ($IsWindows -or $PSVersionTable.PSVersion.Major -lt 6) {
+    try {
+        chcp 65001 | Out-Null
+    } catch {
+        # Ignore chcp errors on non-Windows systems
+    }
+}
 
 param(
     [switch]$Build,        # Force rebuild all images
-    [switch]$InfraOnly,    # Only start infrastructure (postgres, redis, kafka)
+    [switch]$InfraOnly,    # Only start infrastructure (postgres, redis)
     [switch]$BackendOnly,  # Only start backend services
     [switch]$FrontendOnly, # Only start frontend services
     [switch]$NoBuild       # Skip build, use existing images
@@ -64,7 +72,7 @@ function Build-Image {
     )
     
     Write-Host "Building image: $ImageName..." -ForegroundColor Yellow
-    docker build --platform linux/amd64 -f $Dockerfile -t $ImageName $Context
+    docker build -f $Dockerfile -t $ImageName $Context
     if ($LASTEXITCODE -ne 0) {
         Write-Host "Error: Failed to build image $ImageName" -ForegroundColor Red
         exit 1
@@ -164,44 +172,10 @@ if ($InfraOnly) {
         --restart unless-stopped `
         redis:7.2-alpine redis-server --appendonly yes --requirepass $env:REDIS_PASSWORD
     
-    # Start Zookeeper
-    Remove-Container "platform-zookeeper"
-    Write-Host "Starting Zookeeper..." -ForegroundColor Yellow
-    docker run -d `
-        --name platform-zookeeper `
-        --network $networkName `
-        -e ZOOKEEPER_CLIENT_PORT=2181 `
-        -e ZOOKEEPER_TICK_TIME=2000 `
-        -p 2181:2181 `
-        -v zookeeper_data:/var/lib/zookeeper/data `
-        -v zookeeper_log:/var/lib/zookeeper/log `
-        --restart unless-stopped `
-        confluentinc/cp-zookeeper:7.5.3
-    
-    # Start Kafka
-    Remove-Container "platform-kafka"
-    Write-Host "Starting Kafka..." -ForegroundColor Yellow
-    docker run -d `
-        --name platform-kafka `
-        --network $networkName `
-        -e KAFKA_BROKER_ID=1 `
-        -e KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181 `
-        -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092 `
-        -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT `
-        -e KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT `
-        -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 `
-        -e KAFKA_AUTO_CREATE_TOPICS_ENABLE=true `
-        -p 9092:9092 `
-        -p 29092:29092 `
-        -v kafka_data:/var/lib/kafka/data `
-        --restart unless-stopped `
-        confluentinc/cp-kafka:7.5.3
-    
     Write-Host ""
     Write-Host "Infrastructure services started!" -ForegroundColor Green
     Write-Host "  - PostgreSQL: localhost:5432" -ForegroundColor White
     Write-Host "  - Redis: localhost:6379" -ForegroundColor White
-    Write-Host "  - Kafka: localhost:9092" -ForegroundColor White
     exit 0
 }
 
@@ -265,39 +239,6 @@ docker run -d `
     --restart unless-stopped `
     redis:7.2-alpine redis-server --appendonly yes --requirepass $env:REDIS_PASSWORD
 
-# Start Zookeeper
-Remove-Container "platform-zookeeper"
-Write-Host "Starting Zookeeper..." -ForegroundColor Yellow
-docker run -d `
-    --name platform-zookeeper `
-    --network $networkName `
-    -e ZOOKEEPER_CLIENT_PORT=2181 `
-    -e ZOOKEEPER_TICK_TIME=2000 `
-    -p 2181:2181 `
-    -v zookeeper_data:/var/lib/zookeeper/data `
-    -v zookeeper_log:/var/lib/zookeeper/log `
-    --restart unless-stopped `
-    confluentinc/cp-zookeeper:7.5.3
-
-# Start Kafka
-Remove-Container "platform-kafka"
-Write-Host "Starting Kafka..." -ForegroundColor Yellow
-docker run -d `
-    --name platform-kafka `
-    --network $networkName `
-    -e KAFKA_BROKER_ID=1 `
-    -e KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181 `
-    -e KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092 `
-    -e KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT `
-    -e KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT `
-    -e KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1 `
-    -e KAFKA_AUTO_CREATE_TOPICS_ENABLE=true `
-    -p 9092:9092 `
-    -p 29092:29092 `
-    -v kafka_data:/var/lib/kafka/data `
-    --restart unless-stopped `
-    confluentinc/cp-kafka:7.5.3
-
 # Wait for infrastructure
 Write-Host "Waiting for infrastructure to be ready..." -ForegroundColor Gray
 Wait-ForService "platform-postgres" "pg_isready -U platform -d workflow_platform"
@@ -336,19 +277,17 @@ if ($BackendOnly -or (-not $FrontendOnly)) {
     docker run -d `
         --name platform-workflow-engine `
         --network $networkName `
-        -e SERVER_PORT=8080 `
-        -e SPRING_PROFILES_ACTIVE=docker `
-        -e SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/workflow_platform `
+        -e SERVER_PORT=8091 `
+        -e SPRING_DATASOURCE_URL=jdbc:postgresql://platform-postgres:5432/workflow_platform?currentSchema=projectx `
         -e SPRING_DATASOURCE_USERNAME=platform `
         -e SPRING_DATASOURCE_PASSWORD=$env:POSTGRES_PASSWORD `
-        -e SPRING_REDIS_HOST=redis `
+        -e SPRING_REDIS_HOST=platform-redis `
         -e SPRING_REDIS_PORT=6379 `
         -e SPRING_REDIS_PASSWORD=$env:REDIS_PASSWORD `
-        -e SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:29092 `
-        -e ADMIN_CENTER_URL=http://admin-center:8080 `
+        -e ADMIN_CENTER_URL=http://platform-admin-center:8092/api/v1/admin `
         -e JWT_SECRET_KEY=$env:JWT_SECRET_KEY `
         -e ENCRYPTION_KEY=$env:ENCRYPTION_KEY `
-        -p 8091:8080 `
+        -p 8091:8091 `
         --restart unless-stopped `
         workflow-engine:latest
     
@@ -358,18 +297,16 @@ if ($BackendOnly -or (-not $FrontendOnly)) {
     docker run -d `
         --name platform-admin-center `
         --network $networkName `
-        -e SERVER_PORT=8080 `
-        -e SPRING_PROFILES_ACTIVE=docker `
-        -e SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/workflow_platform `
+        -e SERVER_PORT=8092 `
+        -e SPRING_DATASOURCE_URL=jdbc:postgresql://platform-postgres:5432/workflow_platform?currentSchema=projectx `
         -e SPRING_DATASOURCE_USERNAME=platform `
         -e SPRING_DATASOURCE_PASSWORD=$env:POSTGRES_PASSWORD `
-        -e SPRING_REDIS_HOST=redis `
+        -e SPRING_REDIS_HOST=platform-redis `
         -e SPRING_REDIS_PORT=6379 `
         -e SPRING_REDIS_PASSWORD=$env:REDIS_PASSWORD `
-        -e SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:29092 `
         -e JWT_SECRET_KEY=$env:JWT_SECRET_KEY `
         -e ENCRYPTION_KEY=$env:ENCRYPTION_KEY `
-        -p 8092:8080 `
+        -p 8092:8092 `
         --restart unless-stopped `
         admin-center:latest
     
@@ -379,19 +316,18 @@ if ($BackendOnly -or (-not $FrontendOnly)) {
     docker run -d `
         --name platform-user-portal `
         --network $networkName `
-        -e SERVER_PORT=8080 `
-        -e SPRING_PROFILES_ACTIVE=docker `
-        -e SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/workflow_platform `
+        -e SERVER_PORT=8093 `
+        -e SPRING_DATASOURCE_URL=jdbc:postgresql://platform-postgres:5432/workflow_platform?currentSchema=projectx `
         -e SPRING_DATASOURCE_USERNAME=platform `
         -e SPRING_DATASOURCE_PASSWORD=$env:POSTGRES_PASSWORD `
-        -e SPRING_REDIS_HOST=redis `
+        -e SPRING_REDIS_HOST=platform-redis `
         -e SPRING_REDIS_PORT=6379 `
         -e SPRING_REDIS_PASSWORD=$env:REDIS_PASSWORD `
-        -e ADMIN_CENTER_URL=http://admin-center:8080 `
-        -e WORKFLOW_ENGINE_URL=http://workflow-engine:8080 `
+        -e ADMIN_CENTER_URL=http://platform-admin-center:8092/api/v1/admin `
+        -e WORKFLOW_ENGINE_URL=http://platform-workflow-engine:8091 `
         -e JWT_SECRET_KEY=$env:JWT_SECRET_KEY `
         -e ENCRYPTION_KEY=$env:ENCRYPTION_KEY `
-        -p 8093:8080 `
+        -p 8093:8093 `
         --restart unless-stopped `
         user-portal:latest
     
@@ -401,18 +337,17 @@ if ($BackendOnly -or (-not $FrontendOnly)) {
     docker run -d `
         --name platform-developer-workstation `
         --network $networkName `
-        -e SERVER_PORT=8080 `
-        -e SPRING_PROFILES_ACTIVE=docker `
-        -e SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/workflow_platform `
+        -e SERVER_PORT=8094 `
+        -e SPRING_DATASOURCE_URL=jdbc:postgresql://platform-postgres:5432/workflow_platform?currentSchema=projectx `
         -e SPRING_DATASOURCE_USERNAME=platform `
         -e SPRING_DATASOURCE_PASSWORD=$env:POSTGRES_PASSWORD `
-        -e SPRING_REDIS_HOST=redis `
+        -e SPRING_REDIS_HOST=platform-redis `
         -e SPRING_REDIS_PORT=6379 `
         -e SPRING_REDIS_PASSWORD=$env:REDIS_PASSWORD `
-        -e ADMIN_CENTER_URL=http://admin-center:8080 `
+        -e ADMIN_CENTER_URL=http://platform-admin-center:8092/api/v1/admin `
         -e JWT_SECRET_KEY=$env:JWT_SECRET_KEY `
         -e ENCRYPTION_KEY=$env:ENCRYPTION_KEY `
-        -p 8094:8080 `
+        -p 8094:8094 `
         --restart unless-stopped `
         developer-workstation:latest
     
@@ -422,19 +357,19 @@ if ($BackendOnly -or (-not $FrontendOnly)) {
     docker run -d `
         --name platform-api-gateway `
         --network $networkName `
-        -e SPRING_PROFILES_ACTIVE=docker `
-        -e SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/workflow_platform `
+        -e SERVER_PORT=8090 `
+        -e SPRING_DATASOURCE_URL=jdbc:postgresql://platform-postgres:5432/workflow_platform?currentSchema=projectx `
         -e SPRING_DATASOURCE_USERNAME=platform `
         -e SPRING_DATASOURCE_PASSWORD=$env:POSTGRES_PASSWORD `
-        -e SPRING_REDIS_HOST=redis `
+        -e SPRING_REDIS_HOST=platform-redis `
         -e SPRING_REDIS_PORT=6379 `
         -e SPRING_REDIS_PASSWORD=$env:REDIS_PASSWORD `
-        -e WORKFLOW_ENGINE_URL=http://workflow-engine:8080 `
-        -e ADMIN_CENTER_URL=http://admin-center:8080 `
-        -e USER_PORTAL_URL=http://user-portal:8080 `
-        -e DEVELOPER_WORKSTATION_URL=http://developer-workstation:8080 `
+        -e WORKFLOW_ENGINE_URL=http://platform-workflow-engine:8091 `
+        -e ADMIN_CENTER_URL=http://platform-admin-center:8092/api/v1/admin `
+        -e USER_PORTAL_URL=http://platform-user-portal:8093/api/portal `
+        -e DEVELOPER_WORKSTATION_URL=http://platform-developer-workstation:8094 `
         -e JWT_SECRET_KEY=$env:JWT_SECRET_KEY `
-        -p 8090:8080 `
+        -p 8090:8090 `
         --restart unless-stopped `
         api-gateway:latest
     
@@ -497,7 +432,6 @@ Write-Host "Service URLs:" -ForegroundColor Yellow
 Write-Host "  Infrastructure:" -ForegroundColor White
 Write-Host "    - PostgreSQL:     localhost:5432" -ForegroundColor Gray
 Write-Host "    - Redis:          localhost:6379" -ForegroundColor Gray
-Write-Host "    - Kafka:          localhost:9092" -ForegroundColor Gray
 Write-Host ""
 Write-Host "  Backend Services:" -ForegroundColor White
 Write-Host "    - API Gateway:    http://localhost:8090" -ForegroundColor Gray
