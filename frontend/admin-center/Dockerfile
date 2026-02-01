@@ -27,7 +27,8 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 # Nginx config from template (resolver set at runtime for Docker vs IKP/K8s)
 COPY nginx.conf.template /etc/nginx/conf.d/default.conf.template
 COPY docker-entrypoint.sh /docker-entrypoint.sh
-RUN chmod +x /docker-entrypoint.sh
+# Windows-friendly: strip CR if file was checked out with CRLF (avoids "bad interpreter" in container)
+RUN tr -d '\r' < /docker-entrypoint.sh > /tmp/ep && mv /tmp/ep /docker-entrypoint.sh && chmod +x /docker-entrypoint.sh
 
 # Remove default conf so entrypoint generates it (avoid static upstream resolve at startup)
 RUN rm -f /etc/nginx/conf.d/default.conf
