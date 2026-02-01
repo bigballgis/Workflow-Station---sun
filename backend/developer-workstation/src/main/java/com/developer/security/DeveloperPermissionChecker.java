@@ -54,7 +54,8 @@ public class DeveloperPermissionChecker {
 
     private Set<String> loadFromAdminCenter(String userId) {
         try {
-            String url = adminCenterUrl + "/api/v1/admin/developer-permissions/user/" + userId;
+            String base = (adminCenterUrl != null && adminCenterUrl.endsWith("/api/v1/admin")) ? adminCenterUrl : adminCenterUrl + "/api/v1/admin";
+            String url = base + "/developer-permissions/user/" + userId;
             log.info("Loading permissions from admin-center: {}", url);
             ResponseEntity<List<String>> response = restTemplate.exchange(
                 url,

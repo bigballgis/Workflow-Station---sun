@@ -288,16 +288,15 @@ if ($BackendOnly -or (-not $FrontendOnly)) {
             Write-Host "Error: Backend build failed" -ForegroundColor Red
             exit 1
         }
+        Write-Host "Building Docker images for backend services..." -ForegroundColor Yellow
+        Build-Image "./backend/workflow-engine-core" "./backend/workflow-engine-core/Dockerfile" "workflow-engine:latest"
+        Build-Image "./backend/admin-center" "./backend/admin-center/Dockerfile" "admin-center:latest"
+        Build-Image "./backend/user-portal" "./backend/user-portal/Dockerfile" "user-portal:latest"
+        Build-Image "./backend/developer-workstation" "./backend/developer-workstation/Dockerfile" "developer-workstation:latest"
+        Build-Image "./backend/api-gateway" "./backend/api-gateway/Dockerfile" "api-gateway:latest"
+    } else {
+        Write-Host "Skipping backend build (NoBuild); using existing images" -ForegroundColor Gray
     }
-    
-    # Build Docker images
-    Write-Host "Building Docker images for backend services..." -ForegroundColor Yellow
-    
-    Build-Image "./backend/workflow-engine-core" "./backend/workflow-engine-core/Dockerfile" "workflow-engine:latest"
-    Build-Image "./backend/admin-center" "./backend/admin-center/Dockerfile" "admin-center:latest"
-    Build-Image "./backend/user-portal" "./backend/user-portal/Dockerfile" "user-portal:latest"
-    Build-Image "./backend/developer-workstation" "./backend/developer-workstation/Dockerfile" "developer-workstation:latest"
-    Build-Image "./backend/api-gateway" "./backend/api-gateway/Dockerfile" "api-gateway:latest"
     
     # Step 4: Start backend services
     Write-Host ""
@@ -331,7 +330,7 @@ if ($BackendOnly -or (-not $FrontendOnly)) {
         -e SPRING_REDIS_HOST=platform-redis `
         -e SPRING_REDIS_PORT=6379 `
         -e "SPRING_REDIS_PASSWORD=$($env:REDIS_PASSWORD)" `
-        -e ADMIN_CENTER_URL=http://platform-admin-center:8092/api/v1/admin `
+        -e ADMIN_CENTER_URL=http://platform-admin-center:8092 `
         -e "JWT_SECRET_KEY=$($env:JWT_SECRET_KEY)" `
         -e "ENCRYPTION_KEY=$($env:ENCRYPTION_KEY)" `
         -p 8091:8091 `
@@ -370,7 +369,7 @@ if ($BackendOnly -or (-not $FrontendOnly)) {
         -e SPRING_REDIS_HOST=platform-redis `
         -e SPRING_REDIS_PORT=6379 `
         -e "SPRING_REDIS_PASSWORD=$($env:REDIS_PASSWORD)" `
-        -e ADMIN_CENTER_URL=http://platform-admin-center:8092/api/v1/admin `
+        -e ADMIN_CENTER_URL=http://platform-admin-center:8092 `
         -e WORKFLOW_ENGINE_URL=http://platform-workflow-engine:8091 `
         -e "JWT_SECRET_KEY=$($env:JWT_SECRET_KEY)" `
         -e "ENCRYPTION_KEY=$($env:ENCRYPTION_KEY)" `
@@ -391,7 +390,7 @@ if ($BackendOnly -or (-not $FrontendOnly)) {
         -e SPRING_REDIS_HOST=platform-redis `
         -e SPRING_REDIS_PORT=6379 `
         -e "SPRING_REDIS_PASSWORD=$($env:REDIS_PASSWORD)" `
-        -e ADMIN_CENTER_URL=http://platform-admin-center:8092/api/v1/admin `
+        -e ADMIN_CENTER_URL=http://platform-admin-center:8092 `
         -e "JWT_SECRET_KEY=$($env:JWT_SECRET_KEY)" `
         -e "ENCRYPTION_KEY=$($env:ENCRYPTION_KEY)" `
         -p 8094:8094 `
@@ -412,7 +411,7 @@ if ($BackendOnly -or (-not $FrontendOnly)) {
         -e SPRING_REDIS_PORT=6379 `
         -e "SPRING_REDIS_PASSWORD=$($env:REDIS_PASSWORD)" `
         -e WORKFLOW_ENGINE_URL=http://platform-workflow-engine:8091 `
-        -e ADMIN_CENTER_URL=http://platform-admin-center:8092/api/v1/admin `
+        -e ADMIN_CENTER_URL=http://platform-admin-center:8092 `
         -e USER_PORTAL_URL=http://platform-user-portal:8093/api/portal `
         -e DEVELOPER_WORKSTATION_URL=http://platform-developer-workstation:8094 `
         -e "JWT_SECRET_KEY=$($env:JWT_SECRET_KEY)" `
@@ -428,10 +427,13 @@ if ($FrontendOnly -or (-not $BackendOnly)) {
     Write-Host ""
     Write-Host "Step 5: Building frontend services..." -ForegroundColor Yellow
     
-    # Build Docker images
-    Build-Image "./frontend/admin-center" "./frontend/admin-center/Dockerfile" "frontend-admin:latest"
-    Build-Image "./frontend/user-portal" "./frontend/user-portal/Dockerfile" "frontend-portal:latest"
-    Build-Image "./frontend/developer-workstation" "./frontend/developer-workstation/Dockerfile" "frontend-developer:latest"
+    if (-not $NoBuild) {
+        Build-Image "./frontend/admin-center" "./frontend/admin-center/Dockerfile" "frontend-admin:latest"
+        Build-Image "./frontend/user-portal" "./frontend/user-portal/Dockerfile" "frontend-portal:latest"
+        Build-Image "./frontend/developer-workstation" "./frontend/developer-workstation/Dockerfile" "frontend-developer:latest"
+    } else {
+        Write-Host "Skipping frontend build (NoBuild); using existing images" -ForegroundColor Gray
+    }
     
     # Step 6: Start frontend services
     Write-Host ""

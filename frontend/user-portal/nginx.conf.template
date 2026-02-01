@@ -14,8 +14,9 @@ server {
         try_files $uri $uri/ /index.html;
     }
 
+    # Docker: platform-api-gateway:8090, platform-user-portal:8093, platform-admin-center:8092 (see start-all.ps1/sh)
     location /api/v1/auth {
-        set $upstream_ag api-gateway:8080;
+        set $upstream_ag platform-api-gateway:8090;
         proxy_pass http://$upstream_ag;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -23,7 +24,7 @@ server {
     }
 
     location /api/portal {
-        set $upstream_up user-portal:8080;
+        set $upstream_up platform-user-portal:8093;
         proxy_pass http://$upstream_up;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -31,7 +32,7 @@ server {
     }
 
     location /api/v1/admin {
-        set $upstream_ac admin-center:8080;
+        set $upstream_ac platform-admin-center:8092;
         proxy_pass http://$upstream_ac;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;

@@ -127,7 +127,7 @@ public class MemberManagementService {
                 .build();
         virtualGroupMemberRepository.save(member);
         
-        boolean isDevelopersVg = DeveloperRoleSyncConstants.DEVELOPERS_VIRTUAL_GROUP_CODE.equals(virtualGroup.getCode());
+        boolean isDevelopersVg = virtualGroup.getCode() != null && DeveloperRoleSyncConstants.DEVELOPERS_VIRTUAL_GROUP_CODE.equalsIgnoreCase(virtualGroup.getCode());
         // #region agent log
         log.info("[DEVROLE_SYNC] addUserToVirtualGroup after save virtualGroupId={} groupCode={} isDevelopersVg={}", virtualGroupId, virtualGroup.getCode(), isDevelopersVg);
         try {
@@ -244,7 +244,7 @@ public class MemberManagementService {
         virtualGroupMemberRepository.deleteByVirtualGroupIdAndUserId(virtualGroupId, userId);
 
         virtualGroupRepository.findById(virtualGroupId).ifPresent(vg -> {
-            if (DeveloperRoleSyncConstants.DEVELOPERS_VIRTUAL_GROUP_CODE.equals(vg.getCode())) {
+            if (vg.getCode() != null && DeveloperRoleSyncConstants.DEVELOPERS_VIRTUAL_GROUP_CODE.equalsIgnoreCase(vg.getCode())) {
                 String syncedRoleId = DeveloperRoleSyncConstants.SYNCED_DEVELOPER_ROLE_ID_PREFIX + userId;
                 userRoleRepository.deleteByIdDirect(syncedRoleId);
                 log.info("Revoked synced developer role for user {} (sys_user_roles id: {})", userId, syncedRoleId);
@@ -325,7 +325,7 @@ public class MemberManagementService {
         virtualGroupMemberRepository.deleteByVirtualGroupIdAndUserId(virtualGroupId, userId);
 
         virtualGroupRepository.findById(virtualGroupId).ifPresent(vg -> {
-            if (DeveloperRoleSyncConstants.DEVELOPERS_VIRTUAL_GROUP_CODE.equals(vg.getCode())) {
+            if (vg.getCode() != null && DeveloperRoleSyncConstants.DEVELOPERS_VIRTUAL_GROUP_CODE.equalsIgnoreCase(vg.getCode())) {
                 String syncedRoleId = DeveloperRoleSyncConstants.SYNCED_DEVELOPER_ROLE_ID_PREFIX + userId;
                 userRoleRepository.deleteByIdDirect(syncedRoleId);
                 log.info("Revoked synced developer role for user {} (sys_user_roles id: {})", userId, syncedRoleId);

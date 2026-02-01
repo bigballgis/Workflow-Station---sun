@@ -340,7 +340,7 @@ public class VirtualGroupManagerComponent {
         
         virtualGroupMemberRepository.save(member);
         
-        boolean isDevelopersVg = DeveloperRoleSyncConstants.DEVELOPERS_VIRTUAL_GROUP_CODE.equals(group.getCode());
+        boolean isDevelopersVg = group.getCode() != null && DeveloperRoleSyncConstants.DEVELOPERS_VIRTUAL_GROUP_CODE.equalsIgnoreCase(group.getCode());
         // #region agent log
         log.info("[DEVROLE_SYNC] addMember after save groupId={} groupCode={} isDevelopersVg={}", groupId, group.getCode(), isDevelopersVg);
         try {
@@ -459,7 +459,7 @@ public class VirtualGroupManagerComponent {
         
         virtualGroupMemberRepository.delete(member);
 
-        if (DeveloperRoleSyncConstants.DEVELOPERS_VIRTUAL_GROUP_CODE.equals(group.getCode())) {
+        if (group.getCode() != null && DeveloperRoleSyncConstants.DEVELOPERS_VIRTUAL_GROUP_CODE.equalsIgnoreCase(group.getCode())) {
             String syncedRoleId = DeveloperRoleSyncConstants.SYNCED_DEVELOPER_ROLE_ID_PREFIX + userId;
             userRoleRepository.deleteByIdDirect(syncedRoleId);
             log.info("Revoked synced developer role for user {} (sys_user_roles id: {})", userId, syncedRoleId);

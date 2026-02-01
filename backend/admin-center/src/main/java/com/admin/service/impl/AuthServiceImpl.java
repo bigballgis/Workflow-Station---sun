@@ -116,6 +116,7 @@ public class AuthServiceImpl implements AuthService {
         
         log.info("User {} logged in successfully from {}", request.getUsername(), ipAddress);
         
+        String businessUnitId = safeGetUserBusinessUnitId(user.getId());
         return LoginResponse.builder()
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
@@ -128,10 +129,101 @@ public class AuthServiceImpl implements AuthService {
                         .roles(roles)
                         .permissions(permissions)
                         .rolesWithSources(rolesWithSources)
-                        .businessUnitId(taskAssignmentQueryService.getUserBusinessUnitId(user.getId()))
+                        .businessUnitId(businessUnitId)
                         .language(user.getLanguage())
                         .build())
                 .build();
+    }
+
+    @Override
+    @Transactional
+    public LoginResponse loginForDeveloper(LoginRequest request, String ipAddress, String userAgent) {
+        log.debug("Developer login attempt for user: {}", request.getUsername());
+        
+        User user = userRepository.findByUsername(request.getUsername())
+                .orElseThrow(() -> {
+                    log.warn("User not found: {}", request.getUsername());
+                    return new RuntimeException("Invalid username or password");
+                });
+        
+        if (user.getStatus() == UserStatus.LOCKED) {
+            log.warn("Account locked: {}", request.getUsername());
+            throw new RuntimeException("Account is locked");
+        }
+        
+        if (user.getStatus() == UserStatus.DISABLED) {
+            log.warn("Account disabled: {}", request.getUsername());
+            throw new RuntimeException("Account is disabled");
+        }
+        
+        if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
+            log.warn("Invalid password for user: {}", request.getUsername());
+            user.incrementFailedLoginCount();
+            if (user.getFailedLoginCount() >= 5) {
+                user.setStatus(UserStatus.LOCKED);
+                user.setLockedUntil(LocalDateTime.now().plusMinutes(30));
+            }
+            userRepository.save(user);
+            throw new RuntimeException("Invalid username or password");
+        }
+        
+        List<String> userRoleCodes;
+        try {
+            userRoleCodes = getUserRoleCodes(user.getId());
+        } catch (Exception e) {
+            log.error("Failed to get user roles for {}: {}", request.getUsername(), e.getMessage());
+            throw new RuntimeException("Failed to get user roles");
+        }
+        
+        user.resetFailedLoginCount();
+        user.setLastLoginAt(LocalDateTime.now());
+        user.setLastLoginIp(ipAddress);
+        userRepository.save(user);
+        
+        List<String> roles = userRoleCodes;
+        List<String> permissions = getPermissionsForRoles(roles);
+        
+        List<LoginResponse.RoleWithSource> rolesWithSources = roles.stream()
+                .map(code -> LoginResponse.RoleWithSource.builder()
+                        .roleCode(code)
+                        .roleName(code)
+                        .sourceType(null)
+                        .sourceId(user.getId())
+                        .sourceName("Direct Assignment")
+                        .build())
+                .collect(Collectors.toList());
+        
+        String accessToken = generateToken(user, roles, permissions);
+        String refreshToken = generateRefreshToken(user.getId());
+        
+        log.info("User {} developer login from {}", request.getUsername(), ipAddress);
+        
+        String businessUnitId = safeGetUserBusinessUnitId(user.getId());
+        return LoginResponse.builder()
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
+                .expiresIn(jwtExpiration / 1000)
+                .user(LoginResponse.UserLoginInfo.builder()
+                        .userId(user.getId())
+                        .username(user.getUsername())
+                        .displayName(user.getDisplayName())
+                        .email(user.getEmail())
+                        .roles(roles)
+                        .permissions(permissions)
+                        .rolesWithSources(rolesWithSources)
+                        .businessUnitId(businessUnitId)
+                        .language(user.getLanguage())
+                        .build())
+                .build();
+    }
+
+    private String safeGetUserBusinessUnitId(String userId) {
+        try {
+            return taskAssignmentQueryService.getUserBusinessUnitId(userId);
+        } catch (Exception e) {
+            log.warn("Could not get business unit for user {}: {}", userId, e.getMessage());
+            return null;
+        }
     }
 
     @Override
@@ -164,7 +256,7 @@ public class AuthServiceImpl implements AuthService {
                     .roles(roles)
                     .permissions(getPermissionsForRoles(roles))
                     .rolesWithSources(rolesWithSources)
-                    .businessUnitId(taskAssignmentQueryService.getUserBusinessUnitId(user.getId()))
+                    .businessUnitId(safeGetUserBusinessUnitId(user.getId()))
                     .language(user.getLanguage())
                     .build();
         } catch (Exception e) {
@@ -198,7 +290,7 @@ public class AuthServiceImpl implements AuthService {
                     .roles(roles)
                     .permissions(getPermissionsForRoles(roles))
                     .rolesWithSources(rolesWithSources)
-                    .businessUnitId(taskAssignmentQueryService.getUserBusinessUnitId(user.getId()))
+                    .businessUnitId(safeGetUserBusinessUnitId(user.getId()))
                     .language(user.getLanguage())
                     .build();
         } catch (Exception e) {
@@ -246,7 +338,7 @@ public class AuthServiceImpl implements AuthService {
                 .claim("displayName", user.getDisplayName())
                 .claim("roles", roles)
                 .claim("permissions", permissions)
-                .claim("businessUnitId", taskAssignmentQueryService.getUserBusinessUnitId(user.getId()))
+                .claim("businessUnitId", safeGetUserBusinessUnitId(user.getId()))
                 .claim("language", user.getLanguage())
                 .issuedAt(now)
                 .expiration(expiry)
