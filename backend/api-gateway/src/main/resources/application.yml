@@ -9,7 +9,14 @@ spring:
   cloud:
     gateway:
       routes:
-        # Authentication routes - handled by workflow-engine for now
+        # Admin Center - Auth (login/logout/refresh/me) - must be before generic auth-service
+        - id: admin-center-auth
+          uri: ${ADMIN_CENTER_URL:http://admin-center:8080}
+          predicates:
+            - Path=/api/v1/admin/auth/**
+          filters:
+            - StripPrefix=0
+        # Authentication routes - workflow-engine (e.g. other clients using /api/v1/auth)
         - id: auth-service
           uri: ${WORKFLOW_ENGINE_URL:http://workflow-engine:8080}
           predicates:
@@ -150,12 +157,16 @@ platform:
       endpoints:
         /api/v1/auth/login: 10
         /api/v1/auth/refresh: 20
+        /api/v1/admin/auth/login: 10
+        /api/v1/admin/auth/refresh: 20
         /api/auth/login: 10
         /api/auth/register: 5
     # Public endpoints that don't require authentication
     public-paths:
       - /api/v1/auth/login
       - /api/v1/auth/refresh
+      - /api/v1/admin/auth/login
+      - /api/v1/admin/auth/refresh
       - /actuator/**
       - /swagger-ui/**
       - /v3/api-docs/**
