@@ -1,5 +1,5 @@
-# Fallback static config for local run (no template). For Docker/IKP use nginx.conf.template + docker-entrypoint.sh
-resolver 127.0.0.11 valid=10s ipv6=off;
+# Resolver: set at runtime (Docker=127.0.0.11, IKP/K8s=cluster DNS e.g. 10.96.0.10)
+resolver __RESOLVER__ valid=10s ipv6=off;
 
 server {
     listen 80;
@@ -14,6 +14,7 @@ server {
         try_files $uri $uri/ /index.html;
     }
 
+    # API proxy - variable forces resolve at request time (no "host not found" at startup)
     location /api/v1/auth {
         set $upstream_we workflow-engine:8080;
         proxy_pass http://$upstream_we;
