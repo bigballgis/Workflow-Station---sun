@@ -1,5 +1,5 @@
-# Fallback static config for local run. For Docker/IKP use nginx.conf.template + docker-entrypoint.sh
-resolver 127.0.0.11 valid=10s ipv6=off;
+# Resolver: set at runtime (Docker=127.0.0.11, IKP/K8s=cluster DNS)
+resolver __RESOLVER__ valid=10s ipv6=off;
 
 server {
     listen 80;

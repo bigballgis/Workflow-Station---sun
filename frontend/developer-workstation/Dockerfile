@@ -24,9 +24,13 @@ FROM --platform=linux/amd64 nginx:alpine
 # Copy built assets
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Copy nginx configuration
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Nginx config from template (resolver set at runtime for Docker vs IKP/K8s)
+COPY nginx.conf.template /etc/nginx/conf.d/default.conf.template
+COPY docker-entrypoint.sh /docker-entrypoint.sh
+# Windows-friendly: strip CR if file was checked out with CRLF (avoids "bad interpreter" in container)
+RUN tr -d '\r' < /docker-entrypoint.sh > /tmp/ep && mv /tmp/ep /docker-entrypoint.sh && chmod +x /docker-entrypoint.sh
+RUN rm -f /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
 
-CMD ["nginx", "-g", "daemon off;"]
+ENTRYPOINT ["/docker-entrypoint.sh"]
