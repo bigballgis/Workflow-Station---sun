@@ -91,12 +91,16 @@ services:
     build:
       context: ./backend/workflow-engine-core
       dockerfile: Dockerfile
+      platforms:
+        - linux/amd64
     container_name: platform-workflow-engine
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      kafka:
+        condition: service_started
     ports:
       - "8081:8080"
     environment:
@@ -106,10 +110,21 @@ services:
       SPRING_DATASOURCE_USERNAME: platform
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-platform123}
       SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: ${SPRING_REDIS_PORT:-6379}
       SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD:-redis123}
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
       ADMIN_CENTER_URL: http://admin-center:8080
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-workflow-engine-jwt-secret-key-2026}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-workflow-aes-256-encryption-key!}
     networks:
       - platform-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     profiles:
       - backend
       - full
@@ -119,12 +134,16 @@ services:
     build:
       context: ./backend/admin-center
       dockerfile: Dockerfile
+      platforms:
+        - linux/amd64
     container_name: platform-admin-center
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      kafka:
+        condition: service_started
     ports:
       - "8090:8080"
     environment:
@@ -134,9 +153,20 @@ services:
       SPRING_DATASOURCE_USERNAME: platform
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-platform123}
       SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: ${SPRING_REDIS_PORT:-6379}
       SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD:-redis123}
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-workflow-engine-jwt-secret-key-2026}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-workflow-aes-256-encryption-key!}
     networks:
       - platform-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     profiles:
       - backend
       - full
@@ -147,6 +177,8 @@ services:
     build:
       context: ./backend/user-portal
       dockerfile: Dockerfile
+      platforms:
+        - linux/amd64
     container_name: platform-user-portal
     depends_on:
       postgres:
@@ -164,10 +196,21 @@ services:
       SPRING_DATASOURCE_USERNAME: platform
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-platform123}
       SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: ${SPRING_REDIS_PORT:-6379}
       SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD:-redis123}
       ADMIN_CENTER_URL: http://admin-center:8080
+      WORKFLOW_ENGINE_URL: ${WORKFLOW_ENGINE_URL:-http://workflow-engine:8080}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-workflow-engine-jwt-secret-key-2026}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-workflow-aes-256-encryption-key!}
     networks:
       - platform-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     profiles:
       - backend
       - full
@@ -177,6 +220,8 @@ services:
     build:
       context: ./backend/developer-workstation
       dockerfile: Dockerfile
+      platforms:
+        - linux/amd64
     container_name: platform-developer-workstation
     depends_on:
       postgres:
@@ -192,10 +237,20 @@ services:
       SPRING_DATASOURCE_USERNAME: platform
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-platform123}
       SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: ${SPRING_REDIS_PORT:-6379}
       SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD:-redis123}
       ADMIN_CENTER_URL: http://admin-center:8080
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-workflow-engine-jwt-secret-key-2026}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-workflow-aes-256-encryption-key!}
     networks:
       - platform-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     profiles:
       - backend
       - full
@@ -205,12 +260,16 @@ services:
     build:
       context: ./backend/api-gateway
       dockerfile: Dockerfile
+      platforms:
+        - linux/amd64
     container_name: platform-api-gateway
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      workflow-engine:
+        condition: service_started
     ports:
       - "8080:8080"
     environment:
@@ -219,9 +278,22 @@ services:
       SPRING_DATASOURCE_USERNAME: platform
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-platform123}
       SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: ${SPRING_REDIS_PORT:-6379}
       SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD:-redis123}
+      WORKFLOW_ENGINE_URL: ${WORKFLOW_ENGINE_URL:-http://workflow-engine:8080}
+      ADMIN_CENTER_URL: ${ADMIN_CENTER_URL:-http://admin-center:8080}
+      USER_PORTAL_URL: ${USER_PORTAL_URL:-http://user-portal:8080}
+      DEVELOPER_WORKSTATION_URL: ${DEVELOPER_WORKSTATION_URL:-http://developer-workstation:8080}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-workflow-engine-jwt-secret-key-2026}
     networks:
       - platform-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/actuator/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     profiles:
       - backend
       - full
@@ -231,14 +303,19 @@ services:
     build:
       context: ./frontend/admin-center
       dockerfile: Dockerfile
+      platforms:
+        - linux/amd64
     container_name: platform-frontend-admin
     depends_on:
-      - admin-center
-      - workflow-engine
+      admin-center:
+        condition: service_started
+      workflow-engine:
+        condition: service_started
     ports:
       - "3000:80"
     networks:
       - platform-network
+    restart: unless-stopped
     profiles:
       - frontend
       - full
@@ -248,14 +325,19 @@ services:
     build:
       context: ./frontend/user-portal
       dockerfile: Dockerfile
+      platforms:
+        - linux/amd64
     container_name: platform-frontend-portal
     depends_on:
-      - user-portal
-      - api-gateway
+      user-portal:
+        condition: service_started
+      api-gateway:
+        condition: service_started
     ports:
       - "3001:80"
     networks:
       - platform-network
+    restart: unless-stopped
     profiles:
       - frontend
       - full
@@ -265,14 +347,19 @@ services:
     build:
       context: ./frontend/developer-workstation
       dockerfile: Dockerfile
+      platforms:
+        - linux/amd64
     container_name: platform-frontend-developer
     depends_on:
-      - developer-workstation
-      - workflow-engine
+      developer-workstation:
+        condition: service_started
+      workflow-engine:
+        condition: service_started
     ports:
       - "3002:80"
     networks:
       - platform-network
+    restart: unless-stopped
     profiles:
       - frontend
       - full

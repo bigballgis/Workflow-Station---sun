@@ -85,13 +85,16 @@ public class FunctionUnitImportController {
             String description = (String) manifest.get("description");
             
             // 构建导入请求
+            // 注意：fileContent 用于验证，如果 ZIP 中没有 process，使用空字符串占位
+            // 实际流程内容会通过 parsePackageContent 从 fileContent 解析
+            String processContent = (String) packageData.get("process");
             FunctionUnitImportRequest importRequest = FunctionUnitImportRequest.builder()
                     .fileName(file.getOriginalFilename())
                     .name(name)
                     .code(code)
                     .version(version != null ? version : "1.0.0")
                     .description(description)
-                    .fileContent((String) packageData.get("process"))
+                    .fileContent(processContent != null ? processContent : "")
                     .overwrite("OVERWRITE".equals(conflictStrategy))
                     .build();
             

@@ -3,7 +3,6 @@ package com.admin.properties;
 import com.admin.entity.*;
 import com.admin.enums.ApproverTargetType;
 import com.admin.enums.MemberChangeType;
-import com.admin.enums.PermissionRequestType;
 import com.admin.enums.UserStatus;
 import com.admin.exception.AdminBusinessException;
 import com.admin.repository.*;
@@ -39,6 +38,8 @@ public class MemberManagementProperties {
     private VirtualGroupMemberRepository virtualGroupMemberRepository;
     private VirtualGroupRepository virtualGroupRepository;
     private UserRepository userRepository;
+    private UserRoleRepository userRoleRepository;
+    private RoleRepository roleRepository;
     private UserBusinessUnitRoleRepository userBusinessUnitRoleRepository;
     private UserBusinessUnitRepository userBusinessUnitRepository;
     private VirtualGroupRoleRepository virtualGroupRoleRepository;
@@ -52,6 +53,8 @@ public class MemberManagementProperties {
         virtualGroupMemberRepository = mock(VirtualGroupMemberRepository.class);
         virtualGroupRepository = mock(VirtualGroupRepository.class);
         userRepository = mock(UserRepository.class);
+        userRoleRepository = mock(UserRoleRepository.class);
+        roleRepository = mock(RoleRepository.class);
         userBusinessUnitRoleRepository = mock(UserBusinessUnitRoleRepository.class);
         userBusinessUnitRepository = mock(UserBusinessUnitRepository.class);
         virtualGroupRoleRepository = mock(VirtualGroupRoleRepository.class);
@@ -63,6 +66,8 @@ public class MemberManagementProperties {
                 virtualGroupMemberRepository,
                 virtualGroupRepository,
                 userRepository,
+                userRoleRepository,
+                roleRepository,
                 userBusinessUnitRoleRepository,
                 userBusinessUnitRepository,
                 virtualGroupRoleRepository,

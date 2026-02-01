@@ -75,13 +75,13 @@ case $choice in
         echo "  cd backend/developer-workstation && mvn spring-boot:run"
         echo ""
         echo "终端 6 - Frontend Admin:"
-        echo "  cd frontend/admin-center && npm install && npm run dev"
+        echo "  cd frontend/admin-center && pnpm install && pnpm run dev"
         echo ""
         echo "终端 7 - Frontend Portal:"
-        echo "  cd frontend/user-portal && npm install && npm run dev"
+        echo "  cd frontend/user-portal && pnpm install && pnpm run dev"
         echo ""
         echo "终端 8 - Frontend Developer:"
-        echo "  cd frontend/developer-workstation && npm install && npm run dev"
+        echo "  cd frontend/developer-workstation && pnpm install && pnpm run dev"
         ;;
     *)
         echo "❌ 无效选择"

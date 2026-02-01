@@ -82,9 +82,11 @@ export interface TaskHistory {
 
 export interface VirtualGroupCreateRequest {
   name: string
+  code?: string
   type: 'SYSTEM' | 'CUSTOM'
   description?: string
   adGroup?: string
+  roleId?: string
 }
 
 export interface MemberRequest {

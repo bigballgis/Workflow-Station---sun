@@ -24,14 +24,24 @@ if [ "$NODE_VERSION" -lt 20 ]; then
     echo "⚠️  警告: Node.js 版本过低，建议使用 Node.js 20+"
 fi
 
+# 检查 pnpm
+if ! command -v pnpm &> /dev/null; then
+    echo "❌ 错误: 未找到 pnpm，请先安装 pnpm 10.28.0"
+    echo "   安装命令: npm install -g pnpm@10.28.0"
+    exit 1
+fi
+
+PNPM_VERSION=$(pnpm -v)
+echo "📦 使用 pnpm 版本: $PNPM_VERSION"
+
 # 启动 Frontend Admin
 echo "1️⃣  启动 Frontend Admin (端口 3000)..."
 cd "$BASE_DIR/frontend/admin-center"
 if [ ! -d "node_modules" ]; then
     echo "   安装依赖..."
-    npm install
+    pnpm install
 fi
-nohup npm run dev > "$LOG_DIR/frontend-admin.log" 2>&1 &
+nohup pnpm run dev > "$LOG_DIR/frontend-admin.log" 2>&1 &
 FRONTEND_ADMIN_PID=$!
 echo "   PID: $FRONTEND_ADMIN_PID"
 sleep 3
@@ -41,9 +51,9 @@ echo "2️⃣  启动 Frontend Portal (端口 3001)..."
 cd "$BASE_DIR/frontend/user-portal"
 if [ ! -d "node_modules" ]; then
     echo "   安装依赖..."
-    npm install
+    pnpm install
 fi
-nohup npm run dev > "$LOG_DIR/frontend-portal.log" 2>&1 &
+nohup pnpm run dev > "$LOG_DIR/frontend-portal.log" 2>&1 &
 FRONTEND_PORTAL_PID=$!
 echo "   PID: $FRONTEND_PORTAL_PID"
 sleep 3
@@ -53,9 +63,9 @@ echo "3️⃣  启动 Frontend Developer (端口 3002)..."
 cd "$BASE_DIR/frontend/developer-workstation"
 if [ ! -d "node_modules" ]; then
     echo "   安装依赖..."
-    npm install
+    pnpm install
 fi
-nohup npm run dev > "$LOG_DIR/frontend-developer.log" 2>&1 &
+nohup pnpm run dev > "$LOG_DIR/frontend-developer.log" 2>&1 &
 FRONTEND_DEVELOPER_PID=$!
 echo "   PID: $FRONTEND_DEVELOPER_PID"
 

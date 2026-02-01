@@ -111,7 +111,8 @@ async function handleLogin() {
     router.push('/')
     ElMessage.success(t('common.success'))
   } catch (error: any) {
-    const message = error.response?.data?.message || error.message || t('common.error')
+    const data = error.response?.data
+    const message = data?.error?.message || data?.message || error.message || t('common.error')
     ElMessage.error(message)
   } finally {
     loading.value = false

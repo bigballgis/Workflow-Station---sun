@@ -102,7 +102,7 @@ const loadManagedGroups = async () => {
   try {
     // 获取当前用户作为审批人管理的虚拟组
     const res = await permissionApi.getAvailableVirtualGroups()
-    managedVirtualGroups.value = res.data?.data || res.data || res || []
+    managedVirtualGroups.value = (res as any).data || []
   } catch (e) {
     console.error('Failed to load managed virtual groups:', e)
   }
@@ -111,7 +111,7 @@ const loadManagedGroups = async () => {
 const loadManagedBusinessUnits = async () => {
   try {
     const res = await permissionApi.getBusinessUnits()
-    managedBusinessUnits.value = res.data?.data || res.data || res || []
+    managedBusinessUnits.value = (res as any).data || []
   } catch (e) {
     console.error('Failed to load managed business units:', e)
   }
@@ -122,7 +122,7 @@ const loadVirtualGroupMembers = async () => {
   loadingVG.value = true
   try {
     const res = await permissionApi.getVirtualGroupMembers(selectedVirtualGroup.value)
-    virtualGroupMembers.value = res.data?.data || res.data || res || []
+    virtualGroupMembers.value = (res as any).data || []
   } catch (e) {
     console.error('Failed to load virtual group members:', e)
     virtualGroupMembers.value = []
@@ -136,7 +136,7 @@ const loadBusinessUnitMembers = async () => {
   loadingBU.value = true
   try {
     const res = await permissionApi.getBusinessUnitMembers(selectedBusinessUnit.value)
-    businessUnitMembers.value = res.data?.data || res.data || res || []
+    businessUnitMembers.value = (res as any).data || []
   } catch (e) {
     console.error('Failed to load business unit members:', e)
     businessUnitMembers.value = []

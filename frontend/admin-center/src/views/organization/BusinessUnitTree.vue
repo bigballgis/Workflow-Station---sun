@@ -254,7 +254,14 @@ const showUserDetail = (userId: string) => {
   userDetailVisible.value = true
 }
 
-onMounted(() => orgStore.fetchTree())
+onMounted(async () => {
+  try {
+    await orgStore.fetchTree()
+  } catch (error: any) {
+    // 错误已经在 store 中处理，这里只记录
+    console.error('加载组织架构失败:', error)
+  }
+})
 </script>
 
 <style scoped lang="scss">

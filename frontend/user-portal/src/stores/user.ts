@@ -27,7 +27,7 @@ export const useUserStore = defineStore('user', () => {
     userInfo.value = info
   }
 
-  const login = async (username: string, password: string) => {
+  const login = async (username: string, _password: string) => {
     // 模拟登录
     const mockToken = `token_${Date.now()}`
     setToken(mockToken)

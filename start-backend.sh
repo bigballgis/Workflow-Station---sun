@@ -19,44 +19,51 @@ if ! docker-compose ps | grep -q "platform-postgres.*healthy"; then
     echo "⚠️  警告: PostgreSQL 可能未就绪，请等待..."
 fi
 
-# 启动 API Gateway
-echo "1️⃣  启动 API Gateway (端口 8080)..."
-cd "$BASE_DIR/backend/api-gateway"
-nohup mvn spring-boot:run > "$LOG_DIR/api-gateway.log" 2>&1 &
-API_GATEWAY_PID=$!
-echo "   PID: $API_GATEWAY_PID"
-sleep 5
+# 启动顺序：
+# 1. Workflow Engine Core (8091) - 核心引擎，其他服务依赖它
+# 2. Admin Center (8092) - 管理中心，提供用户/角色管理
+# 3. User Portal (8093) - 用户门户，依赖 workflow-engine 和 admin-center
+# 4. Developer Workstation (8094) - 开发工作站，依赖 admin-center
+# 5. API Gateway (8090) - 网关，路由到所有服务
 
-# 启动 Workflow Engine
-echo "2️⃣  启动 Workflow Engine (端口 8081)..."
+# 1. 启动 Workflow Engine Core
+echo "1️⃣  启动 Workflow Engine Core (端口 8091)..."
 cd "$BASE_DIR/backend/workflow-engine-core"
 nohup mvn spring-boot:run > "$LOG_DIR/workflow-engine.log" 2>&1 &
 WORKFLOW_ENGINE_PID=$!
 echo "   PID: $WORKFLOW_ENGINE_PID"
-sleep 5
+sleep 10
 
-# 启动 Admin Center
-echo "3️⃣  启动 Admin Center (端口 8090)..."
+# 2. 启动 Admin Center
+echo "2️⃣  启动 Admin Center (端口 8092)..."
 cd "$BASE_DIR/backend/admin-center"
 nohup mvn spring-boot:run > "$LOG_DIR/admin-center.log" 2>&1 &
 ADMIN_CENTER_PID=$!
 echo "   PID: $ADMIN_CENTER_PID"
-sleep 5
+sleep 10
 
-# 启动 Developer Workstation
-echo "4️⃣  启动 Developer Workstation (端口 8083)..."
-cd "$BASE_DIR/backend/developer-workstation"
-nohup mvn spring-boot:run > "$LOG_DIR/developer-workstation.log" 2>&1 &
-DEV_WORKSTATION_PID=$!
-echo "   PID: $DEV_WORKSTATION_PID"
-sleep 5
-
-# 启动 User Portal
-echo "5️⃣  启动 User Portal (端口 8082)..."
+# 3. 启动 User Portal
+echo "3️⃣  启动 User Portal (端口 8093)..."
 cd "$BASE_DIR/backend/user-portal"
 nohup mvn spring-boot:run > "$LOG_DIR/user-portal.log" 2>&1 &
 USER_PORTAL_PID=$!
 echo "   PID: $USER_PORTAL_PID"
+sleep 10
+
+# 4. 启动 Developer Workstation
+echo "4️⃣  启动 Developer Workstation (端口 8094)..."
+cd "$BASE_DIR/backend/developer-workstation"
+nohup mvn spring-boot:run > "$LOG_DIR/developer-workstation.log" 2>&1 &
+DEV_WORKSTATION_PID=$!
+echo "   PID: $DEV_WORKSTATION_PID"
+sleep 10
+
+# 5. 启动 API Gateway
+echo "5️⃣  启动 API Gateway (端口 8090)..."
+cd "$BASE_DIR/backend/api-gateway"
+nohup mvn spring-boot:run > "$LOG_DIR/api-gateway.log" 2>&1 &
+API_GATEWAY_PID=$!
+echo "   PID: $API_GATEWAY_PID"
 
 # 保存 PID 到文件
 echo "$API_GATEWAY_PID" > "$LOG_DIR/api-gateway.pid"
@@ -69,11 +76,11 @@ echo ""
 echo "✅ 所有后端服务已启动！"
 echo ""
 echo "服务访问地址："
-echo "- API Gateway: http://localhost:8080"
-echo "- Workflow Engine: http://localhost:8081"
-echo "- Admin Center: http://localhost:8090"
-echo "- User Portal: http://localhost:8082"
-echo "- Developer Workstation: http://localhost:8083"
+echo "- API Gateway: http://localhost:8090"
+echo "- Workflow Engine: http://localhost:8091"
+echo "- Admin Center: http://localhost:8092"
+echo "- User Portal: http://localhost:8093"
+echo "- Developer Workstation: http://localhost:8094"
 echo ""
 echo "查看日志："
 echo "  tail -f $LOG_DIR/*.log"

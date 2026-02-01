@@ -28,8 +28,10 @@ public class ApproverController {
     
     @PostMapping
     @Operation(summary = "添加审批人")
-    public ResponseEntity<Void> addApprover(@RequestBody ApproverAddRequest request) {
-        approverService.addApprover(request.getTargetType(), request.getTargetId(), request.getUserId());
+    public ResponseEntity<Void> addApprover(
+            @RequestBody ApproverAddRequest request,
+            @RequestHeader(value = "X-User-Id", required = false, defaultValue = "system") String currentUserId) {
+        approverService.addApprover(request.getTargetType(), request.getTargetId(), request.getUserId(), currentUserId);
         return ResponseEntity.ok().build();
     }
     

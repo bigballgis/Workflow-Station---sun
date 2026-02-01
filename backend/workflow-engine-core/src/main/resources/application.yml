@@ -1,17 +1,15 @@
 server:
-  port: ${SERVER_PORT:8081}
+  port: ${SERVER_PORT:8091}
 
 spring:
   application:
     name: workflow-engine
-  profiles:
-    active: ${SPRING_PROFILES_ACTIVE:dev}
   main:
     allow-bean-definition-overriding: true
 
   # Database Configuration
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/workflow_platform}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/workflow_platform?currentSchema=projectx}
     username: ${SPRING_DATASOURCE_USERNAME:platform}
     password: ${SPRING_DATASOURCE_PASSWORD:platform123}
     driver-class-name: org.postgresql.Driver
@@ -20,23 +18,30 @@ spring:
       minimum-idle: 5
       idle-timeout: 300000
       connection-timeout: 20000
+      max-lifetime: 1200000
+      pool-name: WorkflowEngineHikariPool
 
   # JPA Configuration
   jpa:
     hibernate:
-      ddl-auto: none
+      ddl-auto: update
     show-sql: false
     properties:
       hibernate:
+        default_schema: projectx
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
+        jdbc:
+          time_zone: UTC
 
   # Flyway Configuration
   flyway:
-    enabled: true
-    locations: classpath:db/migration/platform-security,classpath:db/migration/workflow-engine
+    enabled: false
+    locations: classpath:db/migration
     baseline-on-migrate: true
     validate-on-migrate: false
+    schemas: projectx
+    create-schemas: false
 
   # Redis Configuration
   data:
@@ -44,7 +49,14 @@ spring:
       host: ${SPRING_REDIS_HOST:localhost}
       port: ${SPRING_REDIS_PORT:6379}
       password: ${SPRING_REDIS_PASSWORD:redis123}
+      database: 3
       timeout: 5000ms
+      lettuce:
+        pool:
+          max-active: 20
+          max-idle: 10
+          min-idle: 5
+          max-wait: 3000ms
 
   # Kafka Configuration
   kafka:
@@ -62,26 +74,55 @@ spring:
       properties:
         spring.json.trusted.packages: com.platform.*
 
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
+
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: UTC
+    serialization:
+      write-dates-as-timestamps: false
+
 # Flowable Configuration
 flowable:
   database-schema-update: true
+  database-schema: projectx
   async-executor-activate: true
   history-level: full
 
 # Admin Center Configuration
 admin-center:
-  url: ${ADMIN_CENTER_URL:http://localhost:8090}
+  url: ${ADMIN_CENTER_URL:http://localhost:8092}
 
 # JWT Configuration
 jwt:
-  secret: ${JWT_SECRET:your-256-bit-secret-key-for-development-only}
+  secret: ${JWT_SECRET_KEY:workflow-engine-jwt-secret-key-2026}
   expiration: 86400000
   refresh-expiration: 604800000
 
 # Platform Configuration
 platform:
   encryption:
-    secret-key: ${ENCRYPTION_SECRET_KEY:your-32-byte-aes-256-secret-key!!}
+    secret-key: ${ENCRYPTION_KEY:workflow-aes-256-encryption-key!}
+
+# Logging Configuration
+logging:
+  level:
+    root: INFO
+    com.workflow: DEBUG
+    org.flowable: INFO
+    org.hibernate.SQL: DEBUG
+  file:
+    name: logs/workflow-engine.log
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [workflow-engine] [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [workflow-engine] [%thread] %-5level %logger{36} - %msg%n"
+  logback:
+    rollingpolicy:
+      max-file-size: 10MB
+      max-history: 30
 
 # Actuator Configuration
 management:
@@ -89,59 +130,21 @@ management:
     web:
       base-path: /actuator
       exposure:
-        include: "*"
+        include: health,info,metrics,prometheus
   endpoint:
     health:
-      show-details: always
+      show-details: when_authorized
   health:
     db:
       enabled: true
     redis:
       enabled: true
 
-# Logging Configuration
-logging:
-  level:
-    root: INFO
-    com.platform: DEBUG
-    org.flowable: INFO
-  pattern:
-    console: "%d{yyyy-MM-dd HH:mm:ss} [workflow-engine] [%thread] [%X{traceId}] %-5level %logger{36} - %msg%n"
-
----
-# Development Profile
-spring:
-  config:
-    activate:
-      on-profile: dev
-  jpa:
-    show-sql: true
-
-logging:
-  level:
-    com.platform: DEBUG
-    org.hibernate.SQL: DEBUG
-
----
-# Docker Profile
-spring:
-  config:
-    activate:
-      on-profile: docker
-
----
-# Production Profile
-spring:
-  config:
-    activate:
-      on-profile: prod
-
-logging:
-  level:
-    root: WARN
-    com.platform: INFO
-
-management:
-  endpoint:
-    health:
-      show-details: never
+# OpenAPI Configuration
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha

@@ -11,6 +11,16 @@ export const useOrganizationStore = defineStore('organization', () => {
     loading.value = true
     try {
       businessUnitTree.value = await organizationApi.getTree()
+    } catch (error: any) {
+      // 如果是权限错误，显示友好提示
+      if (error?.code === 403 || error?.code === '403' || error?.code === 'PERMISSION_DENIED') {
+        console.error('权限不足，无法访问组织架构:', error)
+        businessUnitTree.value = []
+      } else {
+        console.error('获取组织架构失败:', error)
+        businessUnitTree.value = []
+      }
+      throw error
     } finally {
       loading.value = false
     }

@@ -70,7 +70,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { ElMessage, type UploadInstance, type UploadFile, type UploadRawFile } from 'element-plus'
+import { ElMessage, type UploadInstance, type UploadFile } from 'element-plus'
 import { Upload, Download } from '@element-plus/icons-vue'
 import { userApi, type ImportResult } from '@/api/user'
 

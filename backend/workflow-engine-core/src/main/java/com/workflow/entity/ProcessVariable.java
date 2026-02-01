@@ -152,8 +152,10 @@ public class ProcessVariable {
 
     /**
      * 二进制数据（文件等）
+     * 注意：PostgreSQL 使用 bytea 类型存储二进制数据，不是 BLOB (oid)
      */
     @Column(name = "binary_value", columnDefinition = "bytea")
+    @JdbcTypeCode(SqlTypes.VARBINARY)
     private byte[] binaryValue;
 
     /**

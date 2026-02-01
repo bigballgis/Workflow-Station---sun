@@ -18,6 +18,12 @@ public enum AssignmentType {
     USER("USER", "用户分配"),
     
     /**
+     * 分配给候选用户
+     * 任务分配给一组候选用户，这些用户都可以看到并认领处理
+     */
+    CANDIDATE_USER("CANDIDATE_USER", "候选用户分配"),
+    
+    /**
      * 分配给虚拟组
      * 任务分配给虚拟组，虚拟组的所有成员都可以看到并认领处理
      */

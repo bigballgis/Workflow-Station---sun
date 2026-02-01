@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS admin_password_history (
     created_at TIMESTAMP(6) WITH TIME ZONE,
     password_hash VARCHAR(255) NOT NULL,
     user_id VARCHAR(64) NOT NULL,
-    CONSTRAINT fk_password_history_user FOREIGN KEY (user_id) REFERENCES sys_users(id)
+    CONSTRAINT fk_password_history_user FOREIGN KEY (user_id) REFERENCES projectx.sys_users(id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_password_history_user ON admin_password_history(user_id);
@@ -38,8 +38,8 @@ CREATE TABLE IF NOT EXISTS admin_permission_delegations (
     valid_from TIMESTAMP(6) WITH TIME ZONE NOT NULL,
     valid_to TIMESTAMP(6) WITH TIME ZONE,
     permission_id VARCHAR(64) NOT NULL,
-    CONSTRAINT fk_deleg_delegator FOREIGN KEY (delegator_id) REFERENCES sys_users(id),
-    CONSTRAINT fk_deleg_delegatee FOREIGN KEY (delegatee_id) REFERENCES sys_users(id),
+    CONSTRAINT fk_deleg_delegator FOREIGN KEY (delegator_id) REFERENCES projectx.sys_users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_deleg_delegatee FOREIGN KEY (delegatee_id) REFERENCES projectx.sys_users(id) ON DELETE CASCADE,
     CONSTRAINT chk_delegation_type CHECK (delegation_type IN ('TEMPORARY', 'PROXY', 'TRANSFER'))
 );
 

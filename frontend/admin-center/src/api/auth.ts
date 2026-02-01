@@ -5,12 +5,29 @@ import axios from 'axios'
  * Validates: Requirements 5.1, 5.5
  */
 
-// Create a separate axios instance for auth to avoid circular dependencies
+// Create a separate axios instance for auth to avoid circular dependencies.
+// Must match admin-center backend context-path: /api/v1/admin -> auth at /api/v1/admin/auth
 const authRequest = axios.create({
-  baseURL: '/api/v1/auth',
+  baseURL: '/api/v1/admin/auth',
   timeout: 30000,
   headers: { 'Content-Type': 'application/json' }
 })
+
+// Add response interceptor to handle errors
+authRequest.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    // Handle 400 Bad Request errors
+    if (error.response?.status === 400) {
+      const errorData = error.response.data
+      // If it's an ErrorResponse format, extract the message
+      if (errorData?.message) {
+        error.message = errorData.message
+      }
+    }
+    return Promise.reject(error)
+  }
+)
 
 export interface LoginRequest {
   username: string

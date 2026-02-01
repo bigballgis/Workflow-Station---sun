@@ -15,11 +15,8 @@ import java.util.Set;
  * Validates: Requirements 1.1, 1.2, 1.4, 1.5
  */
 @Entity
-@Table(name = "sys_users", indexes = {
-    @Index(name = "idx_user_username", columnList = "username"),
-    @Index(name = "idx_user_status", columnList = "status"),
-    @Index(name = "idx_user_email", columnList = "email")
-})
+@Table(name = "sys_users")
+// Indexes are defined in Flyway migration scripts (V1__init_schema.sql)
 @Data
 @Builder
 @NoArgsConstructor

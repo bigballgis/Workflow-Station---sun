@@ -115,7 +115,7 @@ import {
   getBasicProperties,
   setBasicProperties,
   getExtensionProperties,
-  setExtensionProperty,
+  // setExtensionProperty,
   getElementType
 } from '@/utils/bpmnExtensions'
 

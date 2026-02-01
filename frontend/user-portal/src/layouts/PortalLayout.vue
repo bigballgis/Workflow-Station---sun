@@ -99,6 +99,13 @@ const activeMenu = computed(() => route.path)
 
 // Check if user is an approver
 const checkApproverStatus = async () => {
+  // Only check if user is logged in
+  const token = localStorage.getItem('token')
+  if (!token) {
+    isApprover.value = false
+    return
+  }
+  
   try {
     const res = await permissionApi.isApprover() as any
     if (res?.data?.isApprover !== undefined) {
@@ -107,7 +114,8 @@ const checkApproverStatus = async () => {
       isApprover.value = res.isApprover
     }
   } catch (e) {
-    console.error('Failed to check approver status:', e)
+    // Silently fail if user is not logged in or doesn't have permission
+    console.debug('Failed to check approver status:', e)
     isApprover.value = false
   }
 }

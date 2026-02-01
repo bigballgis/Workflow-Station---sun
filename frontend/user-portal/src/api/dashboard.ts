@@ -62,3 +62,34 @@ export function getTaskTrendData(days: number = 30) {
 export function getProcessStatisticsData() {
   return request.get<{ data: any }>('/dashboard/process-statistics')
 }
+
+// Dashboard Widget 类型
+export interface DashboardWidget {
+  id: string
+  type: string
+  title: string
+  x: number
+  y: number
+  w: number
+  h: number
+  config?: any
+}
+
+// Dashboard API 对象
+export const dashboardApi = {
+  getOverview: getDashboardOverview,
+  getTaskOverview,
+  getProcessOverview,
+  getPerformanceOverview,
+  getTaskTrendData,
+  getProcessStatisticsData,
+  getWidgets: async () => {
+    return request.get<{ data: DashboardWidget[] }>('/dashboard/widgets')
+  },
+  saveLayout: async (layout: DashboardWidget[]) => {
+    return request.post('/dashboard/layout', layout)
+  },
+  resetLayout: async () => {
+    return request.post('/dashboard/layout/reset')
+  }
+}
