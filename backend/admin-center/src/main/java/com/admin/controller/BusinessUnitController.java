@@ -97,7 +97,7 @@ public class BusinessUnitController {
             @RequestParam(defaultValue = "20") int size) {
         
         // 使用关联表查询成员（多对多关系）
-        Page<com.admin.entity.User> users = userRepository.findMembersByBusinessUnitId(
+        Page<com.platform.security.entity.User> users = userRepository.findMembersByBusinessUnitId(
                 unitId, PageRequest.of(page, size));
         
         PageResult<UserInfo> result = PageResult.of(

@@ -1,0 +1,90 @@
+# Docker profile configuration for developer-workstation
+# Overrides default settings for Docker environment
+
+# Application Configuration (platform-common)
+app:
+  database:
+    url: jdbc:postgresql://postgres:5432/workflow_platform
+    username: platform
+    password: ${POSTGRES_PASSWORD:platform123}
+    driver-class-name: org.postgresql.Driver
+    max-pool-size: 20
+    min-idle: 5
+    connection-timeout: 20000
+    
+  security:
+    jwt-secret-key: ${JWT_SECRET:dev-256-bit-secret-key-for-jwt-signing-development-environment-only}
+    jwt-expiration-ms: ${JWT_EXPIRATION:86400000}
+    jwt-refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION:604800000}
+    password:
+      min-length: ${SECURITY_PASSWORD_MIN_LENGTH:8}
+      max-length: 128
+      require-uppercase: true
+      require-lowercase: true
+      require-digit: true
+      require-special: true
+      history-count: 5
+      expiry-days: 90
+    login:
+      max-failed-attempts: ${SECURITY_LOGIN_MAX_FAILED_ATTEMPTS:5}
+      lockout-duration-minutes: 30
+    session:
+      timeout-minutes: ${SECURITY_SESSION_TIMEOUT_MINUTES:30}
+      max-concurrent-sessions: 3
+      
+  api:
+    workflow-engine-url: ${WORKFLOW_ENGINE_URL:http://platform-workflow-engine:8080}
+    admin-center-url: ${ADMIN_CENTER_URL:http://platform-admin-center:8080}
+    timeout-seconds: 30
+    max-retries: 3
+    
+  monitoring:
+    enabled: true
+    log-level: ${LOG_LEVEL:INFO}
+    metrics-enabled: true
+    health-check-interval-seconds: 60
+    
+  cache:
+    redis-host: redis
+    redis-port: 6379
+    redis-password: ${SPRING_REDIS_PASSWORD:dev_redis_123}
+    redis-database: 2
+    user-ttl-minutes: ${CACHE_USER_TTL_MINUTES:30}
+    permission-ttl-minutes: ${CACHE_PERMISSION_TTL_MINUTES:60}
+    dictionary-ttl-minutes: ${CACHE_DICTIONARY_TTL_MINUTES:120}
+    
+  messaging:
+    kafka-bootstrap-servers: kafka:29092
+    kafka-group-id: developer-workstation
+    enabled: false
+    
+  workflow:
+    engine-url: ${WORKFLOW_ENGINE_URL:http://platform-workflow-engine:8080}
+    enabled: true
+    timeout-seconds: 30
+
+spring:
+  datasource:
+    url: jdbc:postgresql://postgres:5432/workflow_platform
+    username: platform
+    password: ${POSTGRES_PASSWORD:platform123}
+
+  data:
+    redis:
+      host: redis
+      port: 6379
+      password: ${SPRING_REDIS_PASSWORD:dev_redis_123}
+      database: 2
+
+# Actuator Configuration - disable Redis health check to avoid localhost connection issue
+management:
+  health:
+    redis:
+      enabled: false
+
+# Logging - reduce verbosity in Docker
+logging:
+  level:
+    root: INFO
+    com.developer: INFO
+    org.hibernate.SQL: WARN

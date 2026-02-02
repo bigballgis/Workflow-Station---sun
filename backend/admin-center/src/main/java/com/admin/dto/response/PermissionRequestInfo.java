@@ -37,7 +37,9 @@ public class PermissionRequestInfo {
     private Instant updatedAt;
     private Instant approvedAt;
     
-    public static PermissionRequestInfo fromEntity(PermissionRequest entity) {
+    public static PermissionRequestInfo fromEntity(PermissionRequest entity, 
+                                                    com.platform.security.entity.User applicant,
+                                                    com.platform.security.entity.User approver) {
         PermissionRequestInfo info = PermissionRequestInfo.builder()
                 .id(entity.getId())
                 .applicantId(entity.getApplicantId())
@@ -53,14 +55,14 @@ public class PermissionRequestInfo {
                 .approvedAt(entity.getApprovedAt())
                 .build();
         
-        if (entity.getApplicant() != null) {
-            info.setApplicantName(entity.getApplicant().getUsername());
-            info.setApplicantFullName(entity.getApplicant().getFullName());
+        if (applicant != null) {
+            info.setApplicantName(applicant.getUsername());
+            info.setApplicantFullName(applicant.getFullName());
         }
         
-        if (entity.getApprover() != null) {
-            info.setApproverName(entity.getApprover().getUsername());
-            info.setApproverFullName(entity.getApprover().getFullName());
+        if (approver != null) {
+            info.setApproverName(approver.getUsername());
+            info.setApproverFullName(approver.getFullName());
         }
         
         return info;

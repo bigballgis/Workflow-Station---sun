@@ -2,9 +2,9 @@ spring:
   application:
     name: user-portal
   datasource:
-    url: jdbc:postgresql://localhost:5432/workflow_platform
-    username: platform
-    password: platform123
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/workflow_platform}
+    username: ${SPRING_DATASOURCE_USERNAME:platform}
+    password: ${SPRING_DATASOURCE_PASSWORD:platform123}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 20
@@ -24,19 +24,33 @@ spring:
     locations: classpath:db/migration/user-portal
     baseline-on-migrate: true
     validate-on-migrate: false
+  
+  # Redis Configuration (if needed)
+  data:
+    redis:
+      host: ${SPRING_REDIS_HOST:localhost}
+      port: ${SPRING_REDIS_PORT:6379}
+      password: ${SPRING_REDIS_PASSWORD:redis123}
+      database: 2
+      timeout: 5000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
 
 server:
-  port: 8082
+  port: ${SERVER_PORT:8082}
   servlet:
     context-path: /api/portal
 
 # Admin Center URL for API calls
 admin-center:
-  url: http://localhost:8090
+  url: ${ADMIN_CENTER_URL:http://localhost:8090}
 
 # Workflow Engine Core URL for API calls
 workflow-engine:
-  url: http://localhost:8081
+  url: ${WORKFLOW_ENGINE_URL:http://localhost:8081}
   enabled: true  # 启用 Flowable 集成，通过 workflow-engine-core 调用 Flowable 引擎
 
 springdoc:
@@ -47,7 +61,8 @@ springdoc:
 
 logging:
   level:
-    com.portal: DEBUG
+    root: ${LOG_LEVEL_ROOT:INFO}
+    com.portal: ${LOG_LEVEL_PLATFORM:DEBUG}
     org.springframework.web: INFO
 
 # Actuator Configuration

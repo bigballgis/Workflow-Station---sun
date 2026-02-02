@@ -1,10 +1,11 @@
 package com.admin.properties;
 
 import com.admin.dto.request.TaskClaimRequest;
-import com.admin.entity.VirtualGroup;
+import com.platform.security.entity.VirtualGroup;
 import com.admin.entity.VirtualGroupTaskHistory;
 import com.admin.enums.TaskActionType;
 import com.admin.enums.VirtualGroupType;
+import com.admin.util.EntityTypeConverter;
 import com.admin.exception.AdminBusinessException;
 import com.admin.repository.VirtualGroupMemberRepository;
 import com.admin.repository.VirtualGroupRepository;
@@ -33,6 +34,7 @@ public class VirtualGroupTaskClaimProperties {
     private VirtualGroupRepository virtualGroupRepository;
     private VirtualGroupMemberRepository virtualGroupMemberRepository;
     private VirtualGroupTaskHistoryRepository taskHistoryRepository;
+    private com.admin.helper.VirtualGroupHelper virtualGroupHelper;
     private VirtualGroupTaskServiceImpl taskService;
     
     @BeforeTry
@@ -40,10 +42,19 @@ public class VirtualGroupTaskClaimProperties {
         virtualGroupRepository = mock(VirtualGroupRepository.class);
         virtualGroupMemberRepository = mock(VirtualGroupMemberRepository.class);
         taskHistoryRepository = mock(VirtualGroupTaskHistoryRepository.class);
+        virtualGroupHelper = mock(com.admin.helper.VirtualGroupHelper.class);
+        
+        // Mock virtualGroupHelper to return true for valid groups by default
+        when(virtualGroupHelper.isValid(any(VirtualGroup.class))).thenAnswer(invocation -> {
+            VirtualGroup group = invocation.getArgument(0);
+            return group != null && "ACTIVE".equals(group.getStatus());
+        });
+        
         taskService = new VirtualGroupTaskServiceImpl(
                 virtualGroupRepository,
                 virtualGroupMemberRepository,
-                taskHistoryRepository);
+                taskHistoryRepository,
+                virtualGroupHelper);
     }
     
     // ==================== 属性测试 ====================
@@ -360,9 +371,8 @@ public class VirtualGroupTaskClaimProperties {
         return VirtualGroup.builder()
                 .id(groupId)
                 .name("Test Group " + groupId)
-                .type(VirtualGroupType.CUSTOM)
+                .type(EntityTypeConverter.fromVirtualGroupType(VirtualGroupType.CUSTOM))
                 .status("ACTIVE")
-                .members(new HashSet<>())
                 .build();
     }
     
@@ -370,9 +380,8 @@ public class VirtualGroupTaskClaimProperties {
         return VirtualGroup.builder()
                 .id(groupId)
                 .name("Expired Group " + groupId)
-                .type(VirtualGroupType.CUSTOM)
+                .type(EntityTypeConverter.fromVirtualGroupType(VirtualGroupType.CUSTOM))
                 .status("INACTIVE")
-                .members(new HashSet<>())
                 .build();
     }
     

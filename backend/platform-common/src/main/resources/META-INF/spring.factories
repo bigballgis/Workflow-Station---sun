@@ -1,4 +1,4 @@
 org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
 com.platform.common.config.PlatformConfigurationAutoConfiguration,\
-com.platform.common.config.TechnicalDebtRemediationConfiguration,\
+com.platform.common.config.PlatformCommonConfiguration,\
 com.platform.common.config.ValidationConfiguration

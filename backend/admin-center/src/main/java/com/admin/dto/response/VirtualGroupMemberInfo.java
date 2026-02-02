@@ -1,6 +1,6 @@
 package com.admin.dto.response;
 
-import com.admin.entity.VirtualGroupMember;
+import com.platform.security.entity.VirtualGroupMember;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -29,20 +29,20 @@ public class VirtualGroupMemberInfo {
     private String role;
     private Instant joinedAt;
     
-    public static VirtualGroupMemberInfo fromEntity(VirtualGroupMember member) {
+    public static VirtualGroupMemberInfo fromEntity(VirtualGroupMember member, com.platform.security.entity.VirtualGroup virtualGroup, com.platform.security.entity.User user) {
         VirtualGroupMemberInfo info = VirtualGroupMemberInfo.builder()
                 .id(member.getId())
-                .groupId(member.getVirtualGroup() != null ? member.getVirtualGroup().getId() : null)
+                .groupId(virtualGroup != null ? virtualGroup.getId() : member.getGroupId())
                 .userId(member.getUserId())
                 .role("MEMBER") // 默认为成员，暂无角色字段
-                .joinedAt(member.getJoinedAt())
+                .joinedAt(member.getJoinedAt() != null ? member.getJoinedAt().atZone(java.time.ZoneId.systemDefault()).toInstant() : null)
                 .build();
         
-        if (member.getUser() != null) {
-            info.setUsername(member.getUser().getUsername());
-            info.setFullName(member.getUser().getFullName());
-            info.setEmployeeId(member.getUser().getEmployeeId());
-            info.setEmail(member.getUser().getEmail());
+        if (user != null) {
+            info.setUsername(user.getUsername());
+            info.setFullName(user.getFullName());
+            info.setEmployeeId(user.getEmployeeId());
+            info.setEmail(user.getEmail());
             // businessUnitId 需要通过关联表获取，在调用处设置
         }
         

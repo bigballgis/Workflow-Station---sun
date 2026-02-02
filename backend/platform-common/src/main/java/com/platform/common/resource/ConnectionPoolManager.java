@@ -23,7 +23,7 @@ import java.util.concurrent.TimeUnit;
  * @version 1.0
  */
 @Slf4j
-@Component
+@Component("platformConnectionPoolManager")
 public class ConnectionPoolManager {
     
     private final ConfigurationManager configurationManager;

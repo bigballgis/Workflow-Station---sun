@@ -1,6 +1,6 @@
 package com.developer.config;
 
-import com.platform.common.config.TechnicalDebtRemediationConfiguration;
+import com.platform.common.config.PlatformCommonConfiguration;
 import com.platform.common.config.ValidationConfiguration;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
@@ -18,7 +18,7 @@ import org.springframework.context.annotation.Import;
  */
 @Configuration
 @Import({
-    TechnicalDebtRemediationConfiguration.class,
+    PlatformCommonConfiguration.class,
     ValidationConfiguration.class
 })
 public class DeveloperDependencyConfiguration {

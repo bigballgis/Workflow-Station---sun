@@ -39,7 +39,7 @@ import java.util.stream.Collectors;
  * @version 1.0
  */
 @Slf4j
-@Component
+@Component("workflowSecurityManager")
 public class SecurityManagerComponent {
 
     private final StringRedisTemplate stringRedisTemplate;

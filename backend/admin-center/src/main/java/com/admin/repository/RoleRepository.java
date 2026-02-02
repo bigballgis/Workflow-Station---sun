@@ -1,6 +1,6 @@
 package com.admin.repository;
 
-import com.admin.entity.Role;
+import com.platform.security.entity.Role;
 import com.admin.enums.RoleType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -53,7 +53,11 @@ public interface RoleRepository extends JpaRepository<Role, String> {
     
     /**
      * 查找用户的所有角色
+     * Note: Using native query since platform-security Role doesn't have userRoles relationship
      */
-    @Query("SELECT r FROM Role r JOIN r.userRoles ur WHERE ur.user.id = :userId AND r.status = 'ACTIVE'")
+    @Query(value = "SELECT r.* FROM sys_roles r " +
+           "JOIN sys_user_roles ur ON r.id = ur.role_id " +
+           "WHERE ur.user_id = :userId AND r.status = 'ACTIVE'",
+           nativeQuery = true)
     List<Role> findByUserId(@Param("userId") String userId);
 }

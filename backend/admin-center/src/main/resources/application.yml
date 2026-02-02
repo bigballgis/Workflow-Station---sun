@@ -1,16 +1,78 @@
 server:
-  port: 8090
+  port: ${SERVER_PORT:8090}
   servlet:
     context-path: /api/v1/admin
+
+# Application Configuration (platform-common)
+app:
+  database:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/workflow_platform}
+    username: ${SPRING_DATASOURCE_USERNAME:platform}
+    password: ${SPRING_DATASOURCE_PASSWORD:platform123}
+    driver-class-name: org.postgresql.Driver
+    max-pool-size: 20
+    min-idle: 5
+    connection-timeout: 20000
+    
+  security:
+    jwt-secret-key: ${JWT_SECRET:default-jwt-secret-key}
+    jwt-expiration-ms: ${JWT_EXPIRATION:86400000}
+    jwt-refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION:604800000}
+    password:
+      min-length: 8
+      max-length: 128
+      require-uppercase: true
+      require-lowercase: true
+      require-digit: true
+      require-special: true
+      history-count: 5
+      expiry-days: 90
+    login:
+      max-failed-attempts: 5
+      lockout-duration-minutes: 30
+    session:
+      timeout-minutes: 30
+      max-concurrent-sessions: 3
+      
+  api:
+    workflow-engine-url: ${WORKFLOW_ENGINE_URL:http://localhost:8081}
+    admin-center-url: ${ADMIN_CENTER_URL:http://localhost:8090}
+    timeout-seconds: 30
+    max-retries: 3
+    
+  monitoring:
+    enabled: true
+    log-level: ${LOG_LEVEL:INFO}
+    metrics-enabled: true
+    health-check-interval-seconds: 60
+    
+  cache:
+    redis-host: ${SPRING_REDIS_HOST:localhost}
+    redis-port: ${SPRING_REDIS_PORT:6379}
+    redis-password: ${SPRING_REDIS_PASSWORD:redis123}
+    redis-database: 1
+    user-ttl-minutes: 30
+    permission-ttl-minutes: 60
+    dictionary-ttl-minutes: 120
+    
+  messaging:
+    kafka-bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    kafka-group-id: admin-center
+    enabled: false
+    
+  workflow:
+    engine-url: ${WORKFLOW_ENGINE_URL:http://localhost:8081}
+    enabled: true
+    timeout-seconds: 30
 
 spring:
   application:
     name: admin-center
   
   datasource:
-    url: jdbc:postgresql://localhost:5432/workflow_platform
-    username: platform
-    password: platform123
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/workflow_platform}
+    username: ${SPRING_DATASOURCE_USERNAME:platform}
+    password: ${SPRING_DATASOURCE_PASSWORD:platform123}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 20
@@ -39,9 +101,9 @@ spring:
 
   data:
     redis:
-      host: localhost
-      port: 6379
-      password: redis123
+      host: ${SPRING_REDIS_HOST:localhost}
+      port: ${SPRING_REDIS_PORT:6379}
+      password: ${SPRING_REDIS_PASSWORD:redis123}
       database: 1
       timeout: 5000ms
       lettuce:
@@ -52,7 +114,7 @@ spring:
           max-wait: 3000ms
 
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
@@ -96,10 +158,10 @@ security:
 # Logging Configuration
 logging:
   level:
-    root: INFO
-    com.admin: DEBUG
+    root: ${LOG_LEVEL_ROOT:INFO}
+    com.admin: ${LOG_LEVEL_PLATFORM:DEBUG}
     org.springframework.security: INFO
-    org.hibernate.SQL: DEBUG
+    org.hibernate.SQL: ${LOG_LEVEL_SQL:DEBUG}
   file:
     name: logs/admin-center.log
   pattern:
@@ -148,5 +210,5 @@ admin:
 
 # Workflow Engine Configuration
 workflow-engine:
-  url: http://localhost:8081
+  url: ${WORKFLOW_ENGINE_URL:http://localhost:8081}
   enabled: true

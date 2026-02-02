@@ -2,8 +2,14 @@ package com.admin.controller;
 
 import com.admin.dto.request.UserBusinessUnitRoleAssignRequest;
 import com.admin.dto.response.UserBusinessUnitRoleInfo;
-import com.admin.entity.UserBusinessUnitRole;
+import com.platform.security.entity.BusinessUnit;
+import com.platform.security.entity.Role;
+import com.platform.security.entity.User;
+import com.platform.security.entity.UserBusinessUnitRole;
+import com.admin.repository.BusinessUnitRepository;
+import com.admin.repository.RoleRepository;
 import com.admin.repository.UserBusinessUnitRoleRepository;
+import com.admin.repository.UserRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -12,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -25,13 +32,34 @@ import java.util.stream.Collectors;
 public class UserBusinessUnitRoleController {
     
     private final UserBusinessUnitRoleRepository userBusinessUnitRoleRepository;
+    private final UserRepository userRepository;
+    private final BusinessUnitRepository businessUnitRepository;
+    private final RoleRepository roleRepository;
     
     @GetMapping
     @Operation(summary = "获取用户的业务单元角色列表")
     public ResponseEntity<List<UserBusinessUnitRoleInfo>> getUserBusinessUnitRoles(@PathVariable String userId) {
-        List<UserBusinessUnitRole> roles = userBusinessUnitRoleRepository.findByUserIdWithDetails(userId);
+        List<UserBusinessUnitRole> roles = userBusinessUnitRoleRepository.findByUserId(userId);
+        
+        // Fetch related entities
+        List<String> userIds = roles.stream().map(UserBusinessUnitRole::getUserId).distinct().collect(Collectors.toList());
+        List<String> businessUnitIds = roles.stream().map(UserBusinessUnitRole::getBusinessUnitId).distinct().collect(Collectors.toList());
+        List<String> roleIds = roles.stream().map(UserBusinessUnitRole::getRoleId).distinct().collect(Collectors.toList());
+        
+        Map<String, User> userMap = userRepository.findAllById(userIds).stream()
+                .collect(Collectors.toMap(User::getId, u -> u));
+        Map<String, BusinessUnit> businessUnitMap = businessUnitRepository.findAllById(businessUnitIds).stream()
+                .collect(Collectors.toMap(BusinessUnit::getId, bu -> bu));
+        Map<String, Role> roleMap = roleRepository.findAllById(roleIds).stream()
+                .collect(Collectors.toMap(Role::getId, r -> r));
+        
         List<UserBusinessUnitRoleInfo> result = roles.stream()
-                .map(UserBusinessUnitRoleInfo::fromEntity)
+                .map(ubur -> UserBusinessUnitRoleInfo.fromEntity(
+                        ubur,
+                        userMap.get(ubur.getUserId()),
+                        businessUnitMap.get(ubur.getBusinessUnitId()),
+                        roleMap.get(ubur.getRoleId())
+                ))
                 .collect(Collectors.toList());
         return ResponseEntity.ok(result);
     }
@@ -81,8 +109,26 @@ public class UserBusinessUnitRoleController {
             @PathVariable String businessUnitId) {
         
         List<UserBusinessUnitRole> roles = userBusinessUnitRoleRepository.findByUserIdAndBusinessUnitId(userId, businessUnitId);
+        
+        // Fetch related entities
+        List<String> userIds = roles.stream().map(UserBusinessUnitRole::getUserId).distinct().collect(Collectors.toList());
+        List<String> businessUnitIds = roles.stream().map(UserBusinessUnitRole::getBusinessUnitId).distinct().collect(Collectors.toList());
+        List<String> roleIds = roles.stream().map(UserBusinessUnitRole::getRoleId).distinct().collect(Collectors.toList());
+        
+        Map<String, User> userMap = userRepository.findAllById(userIds).stream()
+                .collect(Collectors.toMap(User::getId, u -> u));
+        Map<String, BusinessUnit> businessUnitMap = businessUnitRepository.findAllById(businessUnitIds).stream()
+                .collect(Collectors.toMap(BusinessUnit::getId, bu -> bu));
+        Map<String, Role> roleMap = roleRepository.findAllById(roleIds).stream()
+                .collect(Collectors.toMap(Role::getId, r -> r));
+        
         List<UserBusinessUnitRoleInfo> result = roles.stream()
-                .map(UserBusinessUnitRoleInfo::fromEntity)
+                .map(ubur -> UserBusinessUnitRoleInfo.fromEntity(
+                        ubur,
+                        userMap.get(ubur.getUserId()),
+                        businessUnitMap.get(ubur.getBusinessUnitId()),
+                        roleMap.get(ubur.getRoleId())
+                ))
                 .collect(Collectors.toList());
         return ResponseEntity.ok(result);
     }

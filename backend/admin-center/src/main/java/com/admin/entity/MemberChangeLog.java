@@ -52,12 +52,4 @@ public class MemberChangeLog {
     @CreatedDate
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;
-    
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", insertable = false, updatable = false)
-    private User user;
-    
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "operator_id", insertable = false, updatable = false)
-    private User operator;
 }

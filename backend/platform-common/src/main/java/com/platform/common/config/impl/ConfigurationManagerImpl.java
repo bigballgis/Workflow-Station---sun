@@ -7,9 +7,9 @@ import com.platform.common.config.security.SecureCredentialManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.core.env.Environment;
-import org.springframework.stereotype.Service;
 
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
@@ -29,7 +29,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * @author Platform Team
  * @version 1.0
  */
-@Service
 public class ConfigurationManagerImpl implements ConfigurationManager {
     
     private static final Logger logger = LoggerFactory.getLogger(ConfigurationManagerImpl.class);
@@ -50,7 +49,7 @@ public class ConfigurationManagerImpl implements ConfigurationManager {
     @Autowired
     public ConfigurationManagerImpl(Environment environment, 
                                   Validator validator,
-                                  ApplicationConfiguration applicationConfiguration,
+                                  @Qualifier("applicationConfiguration") ApplicationConfiguration applicationConfiguration,
                                   ConfigurationValidator configurationValidator,
                                   RuntimeConfigurationUpdater runtimeUpdater,
                                   ConfigurationEncryptionService encryptionService,

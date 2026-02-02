@@ -1,5 +1,6 @@
 package com.developer.security;
 
+import com.platform.common.security.SecurityAuditLogger;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
@@ -7,6 +8,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.util.Optional;
+import java.util.Map;
 
 /**
  * Service for managing user context and Spring Security integration.
@@ -35,7 +37,8 @@ public class UserContextService {
             
             if (authentication == null) {
                 if (auditLogger != null) {
-                    auditLogger.logAuthenticationIssue("get_current_username", "no_authentication_in_context");
+                    Map<String, String> metadata = Map.of("issue", "no_authentication_in_context");
+                    auditLogger.logSecurityEvent("AUTHENTICATION_ISSUE", "No authentication found in context", metadata);
                 }
                 log.debug("No authentication found in SecurityContext");
                 return Optional.empty();
@@ -43,7 +46,8 @@ public class UserContextService {
             
             if (!authentication.isAuthenticated()) {
                 if (auditLogger != null) {
-                    auditLogger.logAuthenticationIssue("get_current_username", "user_not_authenticated");
+                    Map<String, String> metadata = Map.of("issue", "user_not_authenticated");
+                    auditLogger.logSecurityEvent("AUTHENTICATION_ISSUE", "User not authenticated", metadata);
                 }
                 log.debug("User is not authenticated");
                 return Optional.empty();
@@ -52,7 +56,8 @@ public class UserContextService {
             String username = authentication.getName();
             if (username == null || username.trim().isEmpty()) {
                 if (auditLogger != null) {
-                    auditLogger.logAuthenticationIssue("get_current_username", "username_null_or_empty");
+                    Map<String, String> metadata = Map.of("issue", "username_null_or_empty");
+                    auditLogger.logSecurityEvent("AUTHENTICATION_ISSUE", "Username is null or empty", metadata);
                 }
                 log.debug("Authentication exists but username is null or empty");
                 return Optional.empty();
@@ -63,7 +68,8 @@ public class UserContextService {
             
         } catch (Exception e) {
             if (auditLogger != null) {
-                auditLogger.logSystemError(null, "get_current_username", e);
+                Map<String, String> metadata = Map.of("error_type", e.getClass().getSimpleName(), "error_message", e.getMessage());
+                auditLogger.logSecurityEvent("SYSTEM_ERROR", "Error retrieving current user from SecurityContext", metadata);
             }
             log.error("Error retrieving current user from SecurityContext: {}", e.getMessage(), e);
             return Optional.empty();
@@ -171,7 +177,8 @@ public class UserContextService {
             Optional<String> currentUser = getCurrentUsername();
             if (currentUser.isEmpty()) {
                 if (auditLogger != null) {
-                    auditLogger.logAuthenticationIssue("session_expiration", "no_current_authentication");
+                    Map<String, String> metadata = Map.of("issue", "no_current_authentication");
+                    auditLogger.logSecurityEvent("AUTHENTICATION_ISSUE", "Session expiration: no current authentication", metadata);
                 }
                 log.info("No current authentication found, session likely expired for user: {}", username);
                 return false;
@@ -179,8 +186,8 @@ public class UserContextService {
             
             if (!currentUser.get().equals(username)) {
                 if (auditLogger != null) {
-                    auditLogger.logAuthenticationIssue("session_expiration", 
-                            "user_mismatch_expected_" + username + "_actual_" + currentUser.get());
+                    Map<String, String> metadata = Map.of("issue", "user_mismatch", "expected", username, "actual", currentUser.get());
+                    auditLogger.logSecurityEvent("AUTHENTICATION_ISSUE", "Session expiration: user mismatch", metadata);
                 }
                 log.warn("Current authenticated user '{}' differs from expected user '{}', possible session issue", 
                         currentUser.get(), username);
@@ -192,7 +199,8 @@ public class UserContextService {
             
         } catch (Exception e) {
             if (auditLogger != null) {
-                auditLogger.logSystemError(username, "session_expiration", e);
+                Map<String, String> metadata = Map.of("error_type", e.getClass().getSimpleName(), "error_message", e.getMessage());
+                auditLogger.logSecurityEvent("SYSTEM_ERROR", "Error handling session expiration", metadata);
             }
             log.error("Error handling session expiration for user {}: {}", username, e.getMessage(), e);
             return false;

@@ -1,6 +1,6 @@
 package com.admin.dto.response;
 
-import com.admin.entity.UserBusinessUnitRole;
+import com.platform.security.entity.UserBusinessUnitRole;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -28,27 +28,31 @@ public class UserBusinessUnitRoleInfo {
     private String roleCode;
     private Instant createdAt;
     
-    public static UserBusinessUnitRoleInfo fromEntity(UserBusinessUnitRole entity) {
+    public static UserBusinessUnitRoleInfo fromEntity(UserBusinessUnitRole entity,
+                                                       com.platform.security.entity.User user,
+                                                       com.platform.security.entity.BusinessUnit businessUnit,
+                                                       com.platform.security.entity.Role role) {
         UserBusinessUnitRoleInfo info = UserBusinessUnitRoleInfo.builder()
                 .id(entity.getId())
                 .userId(entity.getUserId())
                 .businessUnitId(entity.getBusinessUnitId())
                 .roleId(entity.getRoleId())
-                .createdAt(entity.getCreatedAt())
+                .createdAt(entity.getCreatedAt() != null ? 
+                    entity.getCreatedAt().atZone(java.time.ZoneId.systemDefault()).toInstant() : null)
                 .build();
         
-        if (entity.getUser() != null) {
-            info.setUserName(entity.getUser().getUsername());
-            info.setUserFullName(entity.getUser().getFullName());
+        if (user != null) {
+            info.setUserName(user.getUsername());
+            info.setUserFullName(user.getFullName());
         }
         
-        if (entity.getBusinessUnit() != null) {
-            info.setBusinessUnitName(entity.getBusinessUnit().getName());
+        if (businessUnit != null) {
+            info.setBusinessUnitName(businessUnit.getName());
         }
         
-        if (entity.getRole() != null) {
-            info.setRoleName(entity.getRole().getName());
-            info.setRoleCode(entity.getRole().getCode());
+        if (role != null) {
+            info.setRoleName(role.getName());
+            info.setRoleCode(role.getCode());
         }
         
         return info;

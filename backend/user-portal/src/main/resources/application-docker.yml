@@ -1,30 +1,14 @@
-# Docker profile configuration for user-portal
-# Overrides default settings for Docker environment
-
 spring:
-  datasource:
-    url: jdbc:postgresql://postgres:5432/workflow_platform
-    username: platform
-    password: ${POSTGRES_PASSWORD:platform123}
+  config:
+    activate:
+      on-profile: docker
 
-  data:
-    redis:
-      host: redis
-      password: ${REDIS_PASSWORD:redis123}
+# Messaging Configuration - Kafka disabled (not used in application)
+app:
+  messaging:
+    enabled: false
 
-# Admin Center URL for Docker network
-admin-center:
-  url: http://platform-admin-center:8080
-
-# Workflow Engine Core URL for Docker network
-# In Docker, use service name and internal port
-workflow-engine:
-  url: http://platform-workflow-engine:8080
-  enabled: true
-
-# Logging - reduce verbosity in Docker
 logging:
   level:
     root: INFO
     com.portal: INFO
-    org.hibernate.SQL: WARN

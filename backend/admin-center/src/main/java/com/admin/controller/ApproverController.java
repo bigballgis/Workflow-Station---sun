@@ -3,8 +3,9 @@ package com.admin.controller;
 import com.admin.dto.request.ApproverAddRequest;
 import com.admin.dto.response.ApproverInfo;
 import com.admin.entity.Approver;
-import com.admin.entity.User;
+import com.platform.security.entity.User;
 import com.admin.enums.ApproverTargetType;
+import com.admin.repository.UserRepository;
 import com.admin.service.ApproverService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -13,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -25,6 +27,7 @@ import java.util.stream.Collectors;
 public class ApproverController {
     
     private final ApproverService approverService;
+    private final UserRepository userRepository;
     
     @PostMapping
     @Operation(summary = "添加审批人")
@@ -44,8 +47,14 @@ public class ApproverController {
     @Operation(summary = "获取虚拟组的审批人列表")
     public ResponseEntity<List<ApproverInfo>> getVirtualGroupApprovers(@PathVariable String groupId) {
         List<Approver> approvers = approverService.getApproverConfigs(ApproverTargetType.VIRTUAL_GROUP, groupId);
+        
+        // Fetch related users
+        List<String> userIds = approvers.stream().map(Approver::getUserId).distinct().collect(Collectors.toList());
+        Map<String, User> userMap = userRepository.findAllById(userIds).stream()
+                .collect(Collectors.toMap(User::getId, u -> u));
+        
         List<ApproverInfo> result = approvers.stream()
-                .map(ApproverInfo::fromEntity)
+                .map(approver -> ApproverInfo.fromEntity(approver, userMap.get(approver.getUserId())))
                 .collect(Collectors.toList());
         return ResponseEntity.ok(result);
     }
@@ -54,8 +63,14 @@ public class ApproverController {
     @Operation(summary = "获取业务单元的审批人列表")
     public ResponseEntity<List<ApproverInfo>> getBusinessUnitApprovers(@PathVariable String unitId) {
         List<Approver> approvers = approverService.getApproverConfigs(ApproverTargetType.BUSINESS_UNIT, unitId);
+        
+        // Fetch related users
+        List<String> userIds = approvers.stream().map(Approver::getUserId).distinct().collect(Collectors.toList());
+        Map<String, User> userMap = userRepository.findAllById(userIds).stream()
+                .collect(Collectors.toMap(User::getId, u -> u));
+        
         List<ApproverInfo> result = approvers.stream()
-                .map(ApproverInfo::fromEntity)
+                .map(approver -> ApproverInfo.fromEntity(approver, userMap.get(approver.getUserId())))
                 .collect(Collectors.toList());
         return ResponseEntity.ok(result);
     }

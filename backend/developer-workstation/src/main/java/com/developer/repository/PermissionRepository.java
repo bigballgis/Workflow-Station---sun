@@ -1,10 +1,9 @@
 package com.developer.repository;
 
-import com.platform.security.model.Permission;
+import com.platform.security.entity.Permission;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
-import org.springframework.stereotype.Repository;
 
 import java.util.List;
 
@@ -14,7 +13,6 @@ import java.util.List;
  * 
  * Requirements: 1.1, 4.4, 5.3
  */
-@Repository
 public interface PermissionRepository extends JpaRepository<Permission, String> {
     
     /**

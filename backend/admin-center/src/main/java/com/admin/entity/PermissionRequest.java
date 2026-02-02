@@ -69,12 +69,4 @@ public class PermissionRequest {
     
     @Column(name = "approved_at")
     private Instant approvedAt;
-    
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "applicant_id", insertable = false, updatable = false)
-    private User applicant;
-    
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "approver_id", insertable = false, updatable = false)
-    private User approver;
 }

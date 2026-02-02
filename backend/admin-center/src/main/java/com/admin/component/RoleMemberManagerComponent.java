@@ -6,7 +6,10 @@ import com.admin.entity.*;
 import com.admin.exception.AdminBusinessException;
 import com.admin.exception.RoleNotFoundException;
 import com.admin.repository.*;
-import com.admin.service.AuditService;
+import com.platform.security.entity.User;
+import com.platform.security.entity.Role;
+import com.platform.security.entity.UserRole;
+import com.platform.common.audit.Audited;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -32,12 +35,12 @@ public class RoleMemberManagerComponent {
     private final UserRepository userRepository;
     private final UserRoleRepository userRoleRepository;
     private final PermissionChangeHistoryRepository changeHistoryRepository;
-    private final AuditService auditService;
     
     /**
      * 为用户分配角色
      */
     @Transactional
+    @Audited(action = "ROLE_ASSIGN", resourceType = "USER_ROLE", resourceId = "#userId")
     public void assignRoleToUser(String userId, String roleId, String assignedBy, String reason) {
         log.info("Assigning role {} to user {} by {}", roleId, userId, assignedBy);
         
@@ -57,8 +60,8 @@ public class RoleMemberManagerComponent {
         // 创建用户角色关联
         UserRole userRole = UserRole.builder()
                 .id(UUID.randomUUID().toString())
-                .user(user)
-                .role(role)
+                .userId(userId)
+                .roleId(roleId)
                 .assignedAt(LocalDateTime.now())
                 .assignedBy(assignedBy)
                 .build();
@@ -75,13 +78,17 @@ public class RoleMemberManagerComponent {
      * 移除用户角色
      */
     @Transactional
+    @Audited(action = "ROLE_REMOVE", resourceType = "USER_ROLE", resourceId = "#userId")
     public void removeRoleFromUser(String userId, String roleId, String removedBy, String reason) {
         log.info("Removing role {} from user {} by {}", roleId, userId, removedBy);
         
         UserRole userRole = userRoleRepository.findByUserIdAndRoleId(userId, roleId)
                 .orElseThrow(() -> new AdminBusinessException("ROLE_NOT_ASSIGNED", "用户没有该角色"));
         
-        String roleName = userRole.getRole().getName();
+        // Fetch role to get name
+        Role role = roleRepository.findById(roleId)
+                .orElseThrow(() -> new RoleNotFoundException(roleId));
+        String roleName = role.getName();
         
         userRoleRepository.delete(userRole);
         
@@ -125,8 +132,8 @@ public class RoleMemberManagerComponent {
                 // 创建用户角色关联
                 UserRole userRole = UserRole.builder()
                         .id(UUID.randomUUID().toString())
-                        .user(user)
-                        .role(role)
+                        .userId(userId)
+                        .roleId(request.getRoleId())
                         .assignedAt(LocalDateTime.now())
                         .assignedBy(operatedBy)
                         .build();
@@ -305,8 +312,12 @@ public class RoleMemberManagerComponent {
         
         // 移除所有当前角色
         for (UserRole userRole : currentRoles) {
-            recordChangeHistory("ROLE_REMOVED", userId, userRole.getRole().getId(), null, 
-                    userRole.getRole().getName(), null, reason, operatedBy);
+            // Fetch role to get name
+            Role role = roleRepository.findById(userRole.getRoleId())
+                    .orElse(null);
+            String roleName = role != null ? role.getName() : "Unknown";
+            recordChangeHistory("ROLE_REMOVED", userId, userRole.getRoleId(), null, 
+                    roleName, null, reason, operatedBy);
         }
         userRoleRepository.deleteAll(currentRoles);
         
@@ -317,8 +328,8 @@ public class RoleMemberManagerComponent {
             
             UserRole userRole = UserRole.builder()
                     .id(UUID.randomUUID().toString())
-                    .user(User.builder().id(userId).build())
-                    .role(role)
+                    .userId(userId)
+                    .roleId(roleId)
                     .assignedAt(LocalDateTime.now())
                     .assignedBy(operatedBy)
                     .build();

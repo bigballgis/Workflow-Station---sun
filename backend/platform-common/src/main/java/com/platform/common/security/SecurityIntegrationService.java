@@ -6,7 +6,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -23,20 +22,19 @@ import java.util.Set;
  * @author Platform Team
  * @version 1.0
  */
-@Service
 public class SecurityIntegrationService {
     
     private static final Logger logger = LoggerFactory.getLogger(SecurityIntegrationService.class);
     
-    private final AuthenticationSecurityManager authenticationManager;
-    private final AuthorizationSecurityManager authorizationManager;
+    private final EnhancedAuthenticationManager authenticationManager;
+    private final EnhancedAuthorizationManager authorizationManager;
     private final SecurityConfig securityConfig;
     private final ConfigurationAuditLogger auditLogger;
     private final SecurityAuditLogger securityAuditLogger;
     
     @Autowired
-    public SecurityIntegrationService(AuthenticationSecurityManager authenticationManager,
-                                    AuthorizationSecurityManager authorizationManager,
+    public SecurityIntegrationService(EnhancedAuthenticationManager authenticationManager,
+                                    EnhancedAuthorizationManager authorizationManager,
                                     SecurityConfig securityConfig,
                                     ConfigurationAuditLogger auditLogger,
                                     SecurityAuditLogger securityAuditLogger) {
@@ -126,7 +124,7 @@ public class SecurityIntegrationService {
         
         try {
             // Step 1: Authenticate user
-            AuthenticationSecurityManager.AuthenticationSecurityResult authResult = 
+            EnhancedAuthenticationManager.AuthenticationSecurityResult authResult = 
                     authenticationManager.authenticateUser(username, password, ipAddress, userAgent);
             
             if (!authResult.isSuccess()) {
@@ -141,7 +139,7 @@ public class SecurityIntegrationService {
             securityMetadata.put("sessionId", sessionId);
             
             // Step 2: Check authorization
-            AuthorizationSecurityManager.AuthorizationResult authzResult = 
+            EnhancedAuthorizationManager.AuthorizationResult authzResult = 
                     authorizationManager.checkAuthorization(username, resource, action, context);
             
             if (!authzResult.isAuthorized()) {
@@ -215,7 +213,7 @@ public class SecurityIntegrationService {
             }
             
             // Step 2: Get session information
-            AuthenticationSecurityManager.SecureSession session = authenticationManager.getSession(sessionId);
+            EnhancedAuthenticationManager.SecureSession session = authenticationManager.getSession(sessionId);
             if (session == null) {
                 logSecurityEvent("SESSION_NOT_FOUND", "Session not found", securityMetadata);
                 return SecurityCheckResult.authenticationFailure("Session not found", securityMetadata);
@@ -225,7 +223,7 @@ public class SecurityIntegrationService {
             securityMetadata.put("username", username);
             
             // Step 3: Check authorization
-            AuthorizationSecurityManager.AuthorizationResult authzResult = 
+            EnhancedAuthorizationManager.AuthorizationResult authzResult = 
                     authorizationManager.checkAuthorization(username, resource, action, context);
             
             if (!authzResult.isAuthorized()) {
@@ -296,7 +294,7 @@ public class SecurityIntegrationService {
                 return false;
             }
             
-            AuthenticationSecurityManager.SecureSession session = authenticationManager.getSession(assignerSessionId);
+            EnhancedAuthenticationManager.SecureSession session = authenticationManager.getSession(assignerSessionId);
             if (session == null) {
                 return false;
             }
@@ -304,7 +302,7 @@ public class SecurityIntegrationService {
             String assignerUsername = session.getUsername();
             
             // Check if assigner has permission to assign roles
-            AuthorizationSecurityManager.AuthorizationResult authzResult = 
+            EnhancedAuthorizationManager.AuthorizationResult authzResult = 
                     authorizationManager.checkAuthorization(assignerUsername, "USER", "ASSIGN_ROLE", null);
             
             if (!authzResult.isAuthorized()) {

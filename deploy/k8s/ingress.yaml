@@ -1,0 +1,68 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: workflow-platform-ingress
+  namespace: workflow-platform-sit
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # 如果使用 cert-manager 自动管理证书，取消下面的注释
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: nginx
+  # TLS 配置（如果需要 HTTPS）
+  # tls:
+  # - hosts:
+  #   - admin.your-domain.com
+  #   - portal.your-domain.com
+  #   - dev.your-domain.com
+  #   - api.your-domain.com
+  #   secretName: workflow-platform-tls
+  rules:
+  # Admin Center Frontend
+  - host: admin-sit.your-domain.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: admin-center-frontend-service
+            port:
+              number: 80
+  
+  # User Portal Frontend
+  - host: portal-sit.your-domain.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: user-portal-frontend-service
+            port:
+              number: 80
+  
+  # Developer Workstation Frontend
+  - host: dev-sit.your-domain.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: developer-workstation-frontend-service
+            port:
+              number: 80
+  
+  # API Gateway (Backend API)
+  - host: api-sit.your-domain.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: api-gateway-service
+            port:
+              number: 8080

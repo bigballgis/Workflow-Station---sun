@@ -44,8 +44,4 @@ public class Approver {
     @CreatedBy
     @Column(name = "created_by", length = 64, updatable = false)
     private String createdBy;
-    
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", insertable = false, updatable = false)
-    private User user;
 }

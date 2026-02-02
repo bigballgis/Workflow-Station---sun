@@ -1,6 +1,6 @@
 package com.platform.security.repository;
 
-import com.platform.security.model.User;
+import com.platform.security.entity.User;
 import com.platform.security.model.UserStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;

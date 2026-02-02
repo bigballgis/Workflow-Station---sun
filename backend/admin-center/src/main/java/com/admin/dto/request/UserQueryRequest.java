@@ -1,6 +1,6 @@
 package com.admin.dto.request;
 
-import com.admin.enums.UserStatus;
+import com.platform.security.model.UserStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

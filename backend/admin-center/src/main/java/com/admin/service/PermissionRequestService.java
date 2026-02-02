@@ -1,7 +1,7 @@
 package com.admin.service;
 
 import com.admin.entity.PermissionRequest;
-import com.admin.entity.Role;
+import com.platform.security.entity.Role;
 import com.admin.enums.ApproverTargetType;
 import com.admin.enums.PermissionRequestStatus;
 import com.admin.enums.PermissionRequestType;
@@ -150,7 +150,7 @@ public class PermissionRequestService {
                 .map(virtualGroupRoleService::getBoundRole)
                 .filter(Optional::isPresent)
                 .map(Optional::get)
-                .filter(role -> role.getType() == RoleType.BU_BOUNDED)
+                .filter(role -> "BU_BOUNDED".equals(role.getType()))
                 .distinct()
                 .toList();
     }
@@ -159,7 +159,7 @@ public class PermissionRequestService {
      * 获取用户可申请的业务单元列表
      * 只返回用户尚未加入且有审批人的业务单元
      */
-    public List<com.admin.entity.BusinessUnit> getApplicableBusinessUnits(String userId) {
+    public List<com.platform.security.entity.BusinessUnit> getApplicableBusinessUnits(String userId) {
         // 获取用户已加入的业务单元ID
         List<String> joinedBusinessUnitIds = memberManagementService.getUserBusinessUnitIds(userId);
         

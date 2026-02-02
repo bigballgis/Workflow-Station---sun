@@ -5,7 +5,7 @@ import com.platform.security.dto.LoginResponse;
 import com.platform.security.dto.TokenResponse;
 import com.platform.security.exception.AuthErrorCode;
 import com.platform.security.exception.AuthenticationException;
-import com.platform.security.model.User;
+import com.platform.security.entity.User;
 import com.platform.security.model.UserStatus;
 import com.platform.security.repository.LoginAuditRepository;
 import com.platform.security.repository.UserRepository;

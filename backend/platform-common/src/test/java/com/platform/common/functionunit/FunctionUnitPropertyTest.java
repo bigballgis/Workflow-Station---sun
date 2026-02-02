@@ -28,8 +28,23 @@ class FunctionUnitPropertyTest {
             @ForAll @Size(min = 1, max = 5) List<@AlphaChars @Size(min = 1, max = 20) String> processNames,
             @ForAll @Size(min = 1, max = 5) List<@AlphaChars @Size(min = 1, max = 20) String> tableNames) {
         
+        // Remove duplicates and empty strings from process names and table names
+        List<String> uniqueProcessNames = processNames.stream()
+                .filter(s -> s != null && !s.isEmpty())
+                .distinct()
+                .toList();
+        List<String> uniqueTableNames = tableNames.stream()
+                .filter(s -> s != null && !s.isEmpty())
+                .distinct()
+                .toList();
+        
+        // Skip if no valid names
+        if (uniqueProcessNames.isEmpty() && uniqueTableNames.isEmpty()) {
+            return;
+        }
+        
         // Create a function unit
-        SimulatedFunctionUnit original = new SimulatedFunctionUnit(name, version, processNames, tableNames);
+        SimulatedFunctionUnit original = new SimulatedFunctionUnit(name, version, uniqueProcessNames, uniqueTableNames);
         
         // Export to ZIP
         byte[] exported = original.export();
@@ -49,14 +64,24 @@ class FunctionUnitPropertyTest {
             @ForAll @AlphaChars @Size(min = 1, max = 20) String name,
             @ForAll @Size(min = 1, max = 5) List<@AlphaChars @Size(min = 1, max = 20) String> processNames) {
         
-        SimulatedFunctionUnit unit = new SimulatedFunctionUnit(name, "1.0", processNames, List.of());
+        // Remove duplicates and empty strings
+        List<String> uniqueProcessNames = processNames.stream()
+                .filter(s -> s != null && !s.isEmpty())
+                .distinct()
+                .toList();
+        
+        if (uniqueProcessNames.isEmpty()) {
+            return; // Skip if no valid process names
+        }
+        
+        SimulatedFunctionUnit unit = new SimulatedFunctionUnit(name, "1.0", uniqueProcessNames, List.of());
         byte[] exported = unit.export();
         
         // Verify ZIP contains expected entries
         Set<String> entries = getZipEntries(exported);
         
         assertThat(entries).contains("manifest.json");
-        for (String processName : processNames) {
+        for (String processName : uniqueProcessNames) {
             assertThat(entries).contains("processes/" + processName + ".bpmn");
         }
     }

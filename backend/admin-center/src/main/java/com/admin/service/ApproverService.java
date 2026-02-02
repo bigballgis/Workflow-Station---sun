@@ -1,7 +1,7 @@
 package com.admin.service;
 
 import com.admin.entity.Approver;
-import com.admin.entity.User;
+import com.platform.security.entity.User;
 import com.admin.enums.ApproverTargetType;
 import com.admin.exception.AdminBusinessException;
 import com.admin.exception.BusinessUnitNotFoundException;
@@ -99,10 +99,16 @@ public class ApproverService {
      * 获取目标的审批人列表
      */
     public List<User> getApprovers(ApproverTargetType targetType, String targetId) {
-        return approverRepository.findByTargetTypeAndTargetIdWithUser(targetType, targetId)
-                .stream()
-                .map(Approver::getUser)
+        List<Approver> approvers = approverRepository.findByTargetTypeAndTargetId(targetType, targetId);
+        
+        // Extract user IDs
+        List<String> userIds = approvers.stream()
+                .map(Approver::getUserId)
+                .distinct()
                 .collect(Collectors.toList());
+        
+        // Batch fetch users
+        return userRepository.findAllById(userIds);
     }
     
     /**

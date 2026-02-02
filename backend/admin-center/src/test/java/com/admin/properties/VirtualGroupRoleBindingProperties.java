@@ -1,8 +1,10 @@
 package com.admin.properties;
 
-import com.admin.entity.Role;
-import com.admin.entity.VirtualGroupRole;
+import com.platform.security.entity.Role;
+import com.platform.security.entity.VirtualGroup;
+import com.platform.security.entity.VirtualGroupRole;
 import com.admin.enums.RoleType;
+import com.admin.util.EntityTypeConverter;
 import com.admin.exception.AdminBusinessException;
 import com.admin.repository.RoleRepository;
 import com.admin.repository.VirtualGroupRepository;
@@ -35,6 +37,7 @@ public class VirtualGroupRoleBindingProperties {
     private VirtualGroupRoleRepository virtualGroupRoleRepository;
     private VirtualGroupRepository virtualGroupRepository;
     private RoleRepository roleRepository;
+    private com.admin.helper.RoleHelper roleHelper;
     private VirtualGroupRoleService virtualGroupRoleService;
     
     @BeforeTry
@@ -42,10 +45,12 @@ public class VirtualGroupRoleBindingProperties {
         virtualGroupRoleRepository = mock(VirtualGroupRoleRepository.class);
         virtualGroupRepository = mock(VirtualGroupRepository.class);
         roleRepository = mock(RoleRepository.class);
+        roleHelper = mock(com.admin.helper.RoleHelper.class);
         virtualGroupRoleService = new VirtualGroupRoleService(
                 virtualGroupRoleRepository,
                 virtualGroupRepository,
-                roleRepository);
+                roleRepository,
+                roleHelper);
     }
     
     // ==================== Property 1: Role Type Validation ====================
@@ -62,10 +67,19 @@ public class VirtualGroupRoleBindingProperties {
         
         // Given: Virtual group exists
         when(virtualGroupRepository.existsById(virtualGroupId)).thenReturn(true);
+        VirtualGroup virtualGroup = VirtualGroup.builder()
+                .id(virtualGroupId)
+                .name("Test Group")
+                .type("CUSTOM")
+                .build();
+        when(virtualGroupRepository.findById(virtualGroupId)).thenReturn(Optional.of(virtualGroup));
         
         // Given: Role exists and is BU_BOUNDED type
         Role buBoundedRole = createRole(roleId, RoleType.BU_BOUNDED);
         when(roleRepository.findById(roleId)).thenReturn(Optional.of(buBoundedRole));
+        
+        // Given: RoleHelper recognizes it as a business role
+        when(roleHelper.isBusinessRole(buBoundedRole)).thenReturn(true);
         
         // Given: No existing binding
         when(virtualGroupRoleRepository.findByVirtualGroupId(virtualGroupId))
@@ -94,10 +108,19 @@ public class VirtualGroupRoleBindingProperties {
         
         // Given: Virtual group exists
         when(virtualGroupRepository.existsById(virtualGroupId)).thenReturn(true);
+        VirtualGroup virtualGroup = VirtualGroup.builder()
+                .id(virtualGroupId)
+                .name("Test Group")
+                .type("CUSTOM")
+                .build();
+        when(virtualGroupRepository.findById(virtualGroupId)).thenReturn(Optional.of(virtualGroup));
         
         // Given: Role exists and is BU_UNBOUNDED type
         Role buUnboundedRole = createRole(roleId, RoleType.BU_UNBOUNDED);
         when(roleRepository.findById(roleId)).thenReturn(Optional.of(buUnboundedRole));
+        
+        // Given: RoleHelper recognizes it as a business role
+        when(roleHelper.isBusinessRole(buUnboundedRole)).thenReturn(true);
         
         // Given: No existing binding
         when(virtualGroupRoleRepository.findByVirtualGroupId(virtualGroupId))
@@ -126,10 +149,19 @@ public class VirtualGroupRoleBindingProperties {
         
         // Given: Virtual group exists
         when(virtualGroupRepository.existsById(virtualGroupId)).thenReturn(true);
+        VirtualGroup virtualGroup = VirtualGroup.builder()
+                .id(virtualGroupId)
+                .name("Test Group")
+                .type("CUSTOM")
+                .build();
+        when(virtualGroupRepository.findById(virtualGroupId)).thenReturn(Optional.of(virtualGroup));
         
         // Given: Role exists and is ADMIN type
         Role adminRole = createRole(roleId, RoleType.ADMIN);
         when(roleRepository.findById(roleId)).thenReturn(Optional.of(adminRole));
+        
+        // Given: RoleHelper recognizes it as NOT a business role
+        when(roleHelper.isBusinessRole(adminRole)).thenReturn(false);
         
         // When & Then: Binding should throw exception
         assertThatThrownBy(() -> virtualGroupRoleService.bindRole(virtualGroupId, roleId))
@@ -152,10 +184,19 @@ public class VirtualGroupRoleBindingProperties {
         
         // Given: Virtual group exists
         when(virtualGroupRepository.existsById(virtualGroupId)).thenReturn(true);
+        VirtualGroup virtualGroup = VirtualGroup.builder()
+                .id(virtualGroupId)
+                .name("Test Group")
+                .type("CUSTOM")
+                .build();
+        when(virtualGroupRepository.findById(virtualGroupId)).thenReturn(Optional.of(virtualGroup));
         
         // Given: Role exists and is DEVELOPER type
         Role developerRole = createRole(roleId, RoleType.DEVELOPER);
         when(roleRepository.findById(roleId)).thenReturn(Optional.of(developerRole));
+        
+        // Given: RoleHelper recognizes it as NOT a business role
+        when(roleHelper.isBusinessRole(developerRole)).thenReturn(false);
         
         // When & Then: Binding should throw exception
         assertThatThrownBy(() -> virtualGroupRoleService.bindRole(virtualGroupId, roleId))
@@ -178,6 +219,9 @@ public class VirtualGroupRoleBindingProperties {
         
         // Given: Create role with the given type
         Role role = createRole(roleId, roleType);
+        
+        // Given: Mock roleHelper behavior based on role type
+        when(roleHelper.isBusinessRole(role)).thenReturn(roleType.isBusinessRole());
         
         // When: Validate role type
         boolean shouldPass = roleType.isBusinessRole();
@@ -208,6 +252,12 @@ public class VirtualGroupRoleBindingProperties {
         
         // Given: Virtual group exists
         when(virtualGroupRepository.existsById(virtualGroupId)).thenReturn(true);
+        VirtualGroup virtualGroup = VirtualGroup.builder()
+                .id(virtualGroupId)
+                .name("Test Group")
+                .type("CUSTOM")
+                .build();
+        when(virtualGroupRepository.findById(virtualGroupId)).thenReturn(Optional.of(virtualGroup));
         
         // Given: Old role binding exists
         VirtualGroupRole existingBinding = VirtualGroupRole.builder()
@@ -221,6 +271,9 @@ public class VirtualGroupRoleBindingProperties {
         // Given: New role exists and is BU_BOUNDED type
         Role newRole = createRole(newRoleId, RoleType.BU_BOUNDED);
         when(roleRepository.findById(newRoleId)).thenReturn(Optional.of(newRole));
+        
+        // Given: RoleHelper recognizes it as a business role
+        when(roleHelper.isBusinessRole(newRole)).thenReturn(true);
         
         // Given: Save succeeds
         when(virtualGroupRoleRepository.save(any(VirtualGroupRole.class)))
@@ -250,10 +303,19 @@ public class VirtualGroupRoleBindingProperties {
         
         // Given: Virtual group exists
         when(virtualGroupRepository.existsById(virtualGroupId)).thenReturn(true);
+        VirtualGroup virtualGroup = VirtualGroup.builder()
+                .id(virtualGroupId)
+                .name("Test Group")
+                .type("CUSTOM")
+                .build();
+        when(virtualGroupRepository.findById(virtualGroupId)).thenReturn(Optional.of(virtualGroup));
         
         // Given: Role exists and is BU_BOUNDED type
         Role role = createRole(roleId, RoleType.BU_BOUNDED);
         when(roleRepository.findById(roleId)).thenReturn(Optional.of(role));
+        
+        // Given: RoleHelper recognizes it as a business role
+        when(roleHelper.isBusinessRole(role)).thenReturn(true);
         
         // Given: No existing binding
         when(virtualGroupRoleRepository.findByVirtualGroupId(virtualGroupId))
@@ -311,7 +373,7 @@ public class VirtualGroupRoleBindingProperties {
                 .id(roleId)
                 .name("Test Role " + roleId)
                 .code("ROLE_" + roleId.toUpperCase().replace("-", "_"))
-                .type(type)
+                .type(EntityTypeConverter.fromRoleType(type))
                 .status("ACTIVE")
                 .build();
     }

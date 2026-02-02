@@ -6,7 +6,15 @@ import com.admin.entity.*;
 import com.admin.enums.RoleType;
 import com.admin.exception.AdminBusinessException;
 import com.admin.exception.RoleNotFoundException;
+import com.admin.helper.PermissionHelper;
+import com.admin.helper.RoleHelper;
 import com.admin.repository.*;
+import com.admin.util.EntityTypeConverter;
+import com.platform.security.entity.User;
+import com.platform.security.entity.Role;
+import com.platform.security.entity.Permission;
+import com.platform.security.entity.UserRole;
+import com.platform.security.entity.RolePermission;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -32,6 +40,8 @@ public class RolePermissionManagerComponent {
     private final UserRoleRepository userRoleRepository;
     private final PermissionDelegationComponent delegationComponent;
     private final PermissionConflictComponent conflictComponent;
+    private final RoleHelper roleHelper;
+    private final PermissionHelper permissionHelper;
     
     /**
      * 创建角色
@@ -45,11 +55,14 @@ public class RolePermissionManagerComponent {
             throw new AdminBusinessException("CODE_EXISTS", "角色编码已存在: " + code);
         }
         
+        // 使用 EntityTypeConverter 转换类型
+        String typeStr = EntityTypeConverter.fromRoleType(type);
+        
         Role role = Role.builder()
                 .id(UUID.randomUUID().toString())
                 .name(name)
                 .code(code)
-                .type(type)
+                .type(typeStr)
                 .description(description)
                 .status("ACTIVE")
                 .build();
@@ -67,25 +80,27 @@ public class RolePermissionManagerComponent {
     public void configureRolePermissions(String roleId, List<PermissionConfig> permissions) {
         log.info("Configuring permissions for role: {}", roleId);
         
-        Role role = roleRepository.findById(roleId)
+        // 验证角色存在
+        roleRepository.findById(roleId)
                 .orElseThrow(() -> new RoleNotFoundException(roleId));
         
         // 清除现有权限
         rolePermissionRepository.deleteByRoleId(roleId);
         
-        // 添加新权限
+        // 添加新权限 - 使用ID字段
         for (PermissionConfig config : permissions) {
-            Permission permission = permissionRepository.findById(config.getPermissionId())
+            // 验证权限存在
+            permissionRepository.findById(config.getPermissionId())
                     .orElseThrow(() -> new AdminBusinessException("PERMISSION_NOT_FOUND", 
                             "权限不存在: " + config.getPermissionId()));
             
             RolePermission rp = RolePermission.builder()
                     .id(UUID.randomUUID().toString())
-                    .role(role)
-                    .permission(permission)
+                    .roleId(roleId)
+                    .permissionId(config.getPermissionId())
                     .conditionType(config.getConditionType())
                     .conditionValue(config.getConditionValue())
-                    .grantedAt(Instant.now())
+                    .grantedAt(LocalDateTime.now())
                     .build();
             
             rolePermissionRepository.save(rp);
@@ -140,12 +155,8 @@ public class RolePermissionManagerComponent {
         Set<Permission> effectivePermissions = getEffectivePermissions(role.getId());
         
         for (Permission permission : effectivePermissions) {
-            if (permission.getResource().equals(resource) && permission.getAction().equals(action)) {
-                return PermissionCheckResult.allowed(role.getId(), role.getName());
-            }
-            // 支持通配符
-            if (permission.getResource().equals("*") || 
-                (permission.getResource().equals(resource) && permission.getAction().equals("*"))) {
+            // 使用 PermissionHelper 进行匹配
+            if (permissionHelper.matches(permission, resource, action)) {
                 return PermissionCheckResult.allowed(role.getId(), role.getName());
             }
         }
@@ -189,13 +200,15 @@ public class RolePermissionManagerComponent {
             throw new AdminBusinessException("ROLE_ALREADY_ASSIGNED", "用户已拥有该角色");
         }
         
-        Role role = roleRepository.findById(roleId)
+        // 验证角色存在
+        roleRepository.findById(roleId)
                 .orElseThrow(() -> new RoleNotFoundException(roleId));
         
+        // 使用ID字段构建
         UserRole userRole = UserRole.builder()
                 .id(UUID.randomUUID().toString())
-                .user(User.builder().id(userId).build())
-                .role(role)
+                .userId(userId)
+                .roleId(roleId)
                 .assignedAt(LocalDateTime.now())
                 .assignedBy(assignedBy)
                 .build();
@@ -291,8 +304,8 @@ public class RolePermissionManagerComponent {
         Role role = roleRepository.findById(roleId)
                 .orElseThrow(() -> new RoleNotFoundException(roleId));
         
-        // 系统角色不能删除
-        if (role.isSystemRole()) {
+        // 使用 RoleHelper 检查系统角色
+        if (roleHelper.isSystemRole(role)) {
             throw new AdminBusinessException("CANNOT_DELETE_SYSTEM_ROLE", "系统角色不能删除");
         }
         

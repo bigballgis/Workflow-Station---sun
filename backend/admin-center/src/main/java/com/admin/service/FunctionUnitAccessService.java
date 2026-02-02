@@ -4,7 +4,9 @@ import com.admin.dto.request.FunctionUnitAccessRequest;
 import com.admin.dto.response.FunctionUnitAccessInfo;
 import com.admin.entity.*;
 import com.admin.enums.RoleType;
+import com.admin.helper.RoleHelper;
 import com.admin.repository.*;
+import com.platform.security.entity.Role;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,6 +29,7 @@ public class FunctionUnitAccessService {
     private final FunctionUnitRepository functionUnitRepository;
     private final RoleRepository roleRepository;
     private final UserRoleRepository userRoleRepository;
+    private final RoleHelper roleHelper;
     
     /**
      * 获取功能单元的所有访问配置
@@ -51,7 +54,7 @@ public class FunctionUnitAccessService {
         Role role = roleRepository.findById(request.getRoleId())
                 .orElseThrow(() -> new EntityNotFoundException("角色不存在: " + request.getRoleId()));
         
-        if (!role.getType().isBusinessRole()) {
+        if (!roleHelper.isBusinessRole(role)) {
             throw new IllegalArgumentException("只能将功能单元分配给业务角色（BU-Bounded 或 BU-Unbounded），当前角色类型: " + role.getType());
         }
         
@@ -115,7 +118,7 @@ public class FunctionUnitAccessService {
             Role role = roleRepository.findById(request.getRoleId())
                     .orElseThrow(() -> new EntityNotFoundException("角色不存在: " + request.getRoleId()));
             
-            if (!role.getType().isBusinessRole()) {
+            if (!roleHelper.isBusinessRole(role)) {
                 throw new IllegalArgumentException("只能将功能单元分配给业务角色（BU-Bounded 或 BU-Unbounded）: " + role.getName());
             }
             
@@ -202,7 +205,7 @@ public class FunctionUnitAccessService {
         return allRoleIds.stream()
             .filter(roleId -> {
                 Role role = roleRepository.findById(roleId).orElse(null);
-                return role != null && role.getType().isBusinessRole();
+                return role != null && roleHelper.isBusinessRole(role);
             })
             .collect(Collectors.toList());
     }

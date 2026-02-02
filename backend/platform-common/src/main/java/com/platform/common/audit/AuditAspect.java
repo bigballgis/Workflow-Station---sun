@@ -1,11 +1,11 @@
 package com.platform.common.audit;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.reflect.MethodSignature;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.expression.EvaluationContext;
 import org.springframework.expression.ExpressionParser;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
@@ -23,13 +23,16 @@ import java.util.UUID;
  */
 @Slf4j
 @Aspect
-@Component
-@RequiredArgsConstructor
 public class AuditAspect {
     
     private final AuditService auditService;
     private final AuditContextProvider contextProvider;
     private final ExpressionParser parser = new SpelExpressionParser();
+    
+    public AuditAspect(AuditService auditService, AuditContextProvider contextProvider) {
+        this.auditService = auditService;
+        this.contextProvider = contextProvider;
+    }
     
     @Around("@annotation(audited)")
     public Object audit(ProceedingJoinPoint joinPoint, Audited audited) throws Throwable {

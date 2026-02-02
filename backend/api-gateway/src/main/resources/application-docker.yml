@@ -1,0 +1,28 @@
+# Docker profile configuration for api-gateway
+# Overrides default settings for Docker environment
+
+spring:
+  datasource:
+    url: jdbc:postgresql://postgres:5432/workflow_platform
+    username: platform
+    password: ${POSTGRES_PASSWORD:platform123}
+
+  data:
+    redis:
+      host: redis
+      port: 6379
+      password: ${SPRING_REDIS_PASSWORD:dev_redis_123}
+      database: 5
+
+# Actuator Configuration - disable Redis health check to avoid localhost connection issue
+management:
+  health:
+    redis:
+      enabled: false
+
+# Logging - reduce verbosity in Docker
+logging:
+  level:
+    root: INFO
+    com.platform: INFO
+    org.springframework.cloud.gateway: INFO

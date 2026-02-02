@@ -1,12 +1,13 @@
 package com.admin.properties;
 
 import com.admin.entity.PermissionRequest;
-import com.admin.entity.Role;
-import com.admin.entity.VirtualGroupMember;
+import com.platform.security.entity.Role;
+import com.platform.security.entity.VirtualGroupMember;
 import com.admin.enums.*;
 import com.admin.exception.AdminBusinessException;
 import com.admin.repository.*;
 import com.admin.service.*;
+import com.admin.util.EntityTypeConverter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import net.jqwik.api.*;
 import net.jqwik.api.lifecycle.BeforeTry;
@@ -332,7 +333,7 @@ public class PermissionRequestProperties {
                 .id(roleId)
                 .name("Test Role " + roleId)
                 .code("ROLE_" + roleId.toUpperCase().replace("-", "_"))
-                .type(type)
+                .type(EntityTypeConverter.fromRoleType(type))
                 .status("ACTIVE")
                 .build();
     }

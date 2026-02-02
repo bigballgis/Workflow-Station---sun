@@ -1,6 +1,6 @@
 package com.admin.repository;
 
-import com.admin.entity.VirtualGroupRole;
+import com.platform.security.entity.VirtualGroupRole;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;

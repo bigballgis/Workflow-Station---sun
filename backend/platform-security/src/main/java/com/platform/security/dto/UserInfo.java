@@ -18,7 +18,7 @@ public record UserInfo(
     /**
      * Create UserInfo from User entity.
      */
-    public static UserInfo fromUser(com.platform.security.model.User user, List<String> permissions) {
+    public static UserInfo fromUser(com.platform.security.entity.User user, List<String> permissions) {
         return new UserInfo(
             user.getId(),
             user.getUsername(),

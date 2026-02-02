@@ -5,7 +5,7 @@ import com.platform.security.config.JwtProperties;
 import com.platform.security.dto.*;
 import com.platform.security.exception.AuthErrorCode;
 import com.platform.security.exception.AuthenticationException;
-import com.platform.security.model.User;
+import com.platform.security.entity.User;
 import com.platform.security.model.UserStatus;
 import com.platform.security.repository.UserRepository;
 import com.platform.security.service.AuthenticationService;

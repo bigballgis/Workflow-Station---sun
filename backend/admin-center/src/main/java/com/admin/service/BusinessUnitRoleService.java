@@ -1,8 +1,9 @@
 package com.admin.service;
 
-import com.admin.entity.BusinessUnitRole;
-import com.admin.entity.Role;
+import com.platform.security.entity.BusinessUnitRole;
+import com.platform.security.entity.Role;
 import com.admin.enums.RoleType;
+import com.admin.helper.RoleHelper;
 import com.admin.exception.AdminBusinessException;
 import com.admin.exception.BusinessUnitNotFoundException;
 import com.admin.exception.RoleNotFoundException;
@@ -29,6 +30,7 @@ public class BusinessUnitRoleService {
     private final BusinessUnitRoleRepository businessUnitRoleRepository;
     private final BusinessUnitRepository businessUnitRepository;
     private final RoleRepository roleRepository;
+    private final RoleHelper roleHelper;
     
     /**
      * 绑定角色到业务单元
@@ -87,10 +89,13 @@ public class BusinessUnitRoleService {
             throw new BusinessUnitNotFoundException(businessUnitId);
         }
         
-        return businessUnitRoleRepository.findByBusinessUnitIdWithRole(businessUnitId)
+        // Get role IDs and fetch roles explicitly
+        List<String> roleIds = businessUnitRoleRepository.findByBusinessUnitId(businessUnitId)
                 .stream()
-                .map(BusinessUnitRole::getRole)
+                .map(BusinessUnitRole::getRoleId)
                 .collect(Collectors.toList());
+        
+        return roleRepository.findAllById(roleIds);
     }
     
     /**
@@ -107,7 +112,7 @@ public class BusinessUnitRoleService {
      * 验证角色是否为业务角色（BU_BOUNDED 或 BU_UNBOUNDED）
      */
     public void validateBusinessRole(Role role) {
-        if (!role.getType().isBusinessRole()) {
+        if (!roleHelper.isBusinessRole(role)) {
             throw new AdminBusinessException("INVALID_ROLE_TYPE", 
                     "只能绑定业务角色（BU-Bounded 或 BU-Unbounded），当前角色类型: " + role.getType());
         }

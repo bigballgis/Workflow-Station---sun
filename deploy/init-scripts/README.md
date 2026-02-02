@@ -1,20 +1,70 @@
 # Database Initialization Scripts
 
-This directory contains consolidated database initialization scripts that replace the automatic Flyway migrations. All automatic database operations have been disabled to provide controlled database management.
+This directory contains consolidated database initialization scripts for the Workflow Platform. All scripts are designed to be idempotent and can be run multiple times safely.
+
+## Quick Start
+
+### Windows (PowerShell)
+```powershell
+cd deploy/init-scripts
+.\init-database.ps1 -DbHost localhost -DbPort 5432 -DbName workflow_platform -DbUser postgres -DbPassword yourpassword
+```
+
+### Linux/Mac (Bash)
+```bash
+cd deploy/init-scripts
+export DB_HOST=localhost
+export DB_PORT=5432
+export DB_NAME=workflow_platform
+export DB_USER=postgres
+export DB_PASSWORD=yourpassword
+./init-database.sh
+```
+
+## What Gets Initialized
+
+The initialization process creates:
+
+1. **Database Schemas** - All tables, indexes, and constraints
+2. **5 System Roles**:
+   - `SYS_ADMIN` (系统管理员) - Full system access
+   - `AUDITOR` (审计员) - Audit and monitoring access
+   - `MANAGER` (部门经理) - Department management
+   - `DEVELOPER` (工作流开发者) - Workflow development
+   - `DESIGNER` (工作流设计师) - Process design
+
+3. **5 Virtual Groups**:
+   - `SYSTEM_ADMINISTRATORS` → SYS_ADMIN role
+   - `AUDITORS` → AUDITOR role
+   - `MANAGERS` → MANAGER role
+   - `DEVELOPERS` → DEVELOPER role
+   - `DESIGNERS` → DESIGNER role
+
+4. **5 Test Users** (all with password: `password`):
+   - `admin` - System Administrator
+   - `auditor` - System Auditor
+   - `manager` - Department Manager
+   - `developer` - Workflow Developer
+   - `designer` - Workflow Designer
 
 ## Directory Structure
 
 ```
 deploy/init-scripts/
-├── 00-schema/                    # Core database schema
-│   ├── 00-init-all-schemas.sql   # Master initialization script
+├── init-database.sh              # Main initialization script (Linux/Mac)
+├── init-database.ps1             # Main initialization script (Windows)
+├── 00-init-all.sh                # Docker entrypoint script
+├── 00-schema/                    # Database schema definitions
+│   ├── 00-init-all-schemas.sql   # Master schema script
 │   ├── 01-platform-security-schema.sql    # Core sys_* tables
 │   ├── 02-workflow-engine-schema.sql      # Workflow wf_* tables
 │   ├── 03-user-portal-schema.sql          # User portal up_* tables
 │   ├── 04-developer-workstation-schema.sql # Developer dw_* tables
 │   └── 05-admin-center-schema.sql         # Admin admin_* tables
-├── 01-admin/                     # Administrative data
-├── 02-test-data/                 # Test data (optional)
+├── 01-admin/                     # System initialization
+│   ├── 01-create-roles-and-groups.sql     # 5 roles + 5 virtual groups
+│   └── 02-create-test-users.sql           # 5 test users
+├── 02-test-data/                 # Optional test data
 ├── 04-purchase-workflow/         # Workflow-specific data
 └── README.md                     # This file
 ```
@@ -55,32 +105,42 @@ Test configurations (`application-test.yml`) remain unchanged and may still use:
 
 ### Initial Database Setup
 
-1. **Create Database**: Ensure PostgreSQL database exists
-2. **Run Master Script**: Execute the master initialization script
-   ```bash
-   psql -d workflow_platform -f deploy/init-scripts/00-schema/00-init-all-schemas.sql
-   ```
+**Option 1: Using the automated script (Recommended)**
 
-### Individual Schema Installation
+Windows:
+```powershell
+.\init-database.ps1 -DbHost localhost -DbPort 5432 -DbName workflow_platform -DbUser postgres
+```
 
-If needed, you can run individual schema files:
+Linux/Mac:
+```bash
+./init-database.sh
+```
+
+**Option 2: Manual execution**
+
+If you prefer to run scripts manually:
 
 ```bash
-# Core platform security (required first)
-psql -d workflow_platform -f deploy/init-scripts/00-schema/01-platform-security-schema.sql
+# 1. Create all schemas
+psql -d workflow_platform -f deploy/init-scripts/00-schema/00-init-all-schemas.sql
 
-# Workflow engine
-psql -d workflow_platform -f deploy/init-scripts/00-schema/02-workflow-engine-schema.sql
+# 2. Create roles and virtual groups
+psql -d workflow_platform -f deploy/init-scripts/01-admin/01-create-roles-and-groups.sql
 
-# User portal
-psql -d workflow_platform -f deploy/init-scripts/00-schema/03-user-portal-schema.sql
-
-# Developer workstation
-psql -d workflow_platform -f deploy/init-scripts/00-schema/04-developer-workstation-schema.sql
-
-# Admin center
-psql -d workflow_platform -f deploy/init-scripts/00-schema/05-admin-center-schema.sql
+# 3. Create test users
+psql -d workflow_platform -f deploy/init-scripts/01-admin/02-create-test-users.sql
 ```
+
+### Docker Environment
+
+The `00-init-all.sh` script is automatically executed when using Docker Compose:
+
+```bash
+docker-compose up -d postgres
+```
+
+All initialization scripts in the mounted directories will be executed automatically.
 
 ### Execution Order
 

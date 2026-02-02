@@ -2,8 +2,15 @@ package com.admin.properties;
 
 import com.admin.entity.*;
 import com.admin.enums.RoleType;
+import com.platform.security.entity.User;
+import com.platform.security.entity.Role;
+import com.platform.security.entity.VirtualGroup;
+import com.platform.security.entity.VirtualGroupMember;
+import com.platform.security.entity.VirtualGroupRole;
+import com.platform.security.entity.UserBusinessUnit;
 import com.admin.repository.*;
 import com.admin.service.UserPermissionService;
+import com.admin.util.EntityTypeConverter;
 import net.jqwik.api.*;
 import net.jqwik.api.lifecycle.BeforeTry;
 
@@ -32,6 +39,7 @@ public class UserPermissionProperties {
     private RoleRepository roleRepository;
     private UserPreferenceRepository userPreferenceRepository;
     private BusinessUnitRepository businessUnitRepository;
+    private com.admin.helper.RoleHelper roleHelper;
     private UserPermissionService userPermissionService;
     
     @BeforeTry
@@ -42,6 +50,7 @@ public class UserPermissionProperties {
         roleRepository = mock(RoleRepository.class);
         userPreferenceRepository = mock(UserPreferenceRepository.class);
         businessUnitRepository = mock(BusinessUnitRepository.class);
+        roleHelper = mock(com.admin.helper.RoleHelper.class);
         
         userPermissionService = new UserPermissionService(
                 virtualGroupMemberRepository,
@@ -49,7 +58,8 @@ public class UserPermissionProperties {
                 userBusinessUnitRepository,
                 roleRepository,
                 userPreferenceRepository,
-                businessUnitRepository);
+                businessUnitRepository,
+                roleHelper);
     }
     
     // ==================== Property 12: BU-Bounded Role Activation ====================
@@ -248,7 +258,7 @@ public class UserPermissionProperties {
         
         // Then: Should return only BU-Unbounded roles
         assertThat(result).hasSize(unboundedRoleIds.size());
-        assertThat(result).allMatch(role -> role.getType() == RoleType.BU_UNBOUNDED);
+        assertThat(result).allMatch(role -> EntityTypeConverter.fromRoleType(RoleType.BU_UNBOUNDED).equals(role.getType()));
     }
 
     
@@ -481,7 +491,7 @@ public class UserPermissionProperties {
                 .id(id)
                 .name("Role " + id.substring(0, 8))
                 .code("ROLE_" + id.substring(0, 8).toUpperCase())
-                .type(type)
+                .type(EntityTypeConverter.fromRoleType(type))
                 .status("ACTIVE")
                 .build();
     }

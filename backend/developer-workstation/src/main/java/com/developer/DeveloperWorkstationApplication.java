@@ -3,6 +3,7 @@ package com.developer;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.FilterType;
@@ -21,8 +22,9 @@ import java.util.Optional;
  * 开发者工作站应用程序入口
  */
 @SpringBootApplication
+@EnableConfigurationProperties(com.developer.config.SecurityConfigurationProperties.class)
 @ComponentScan(
-    basePackages = {"com.developer", "com.platform.common"},
+    basePackages = {"com.developer", "com.platform.common", "com.platform.security.exception"},
     basePackageClasses = {TargetResolverFactory.class, UserRoleServiceImpl.class},
     excludeFilters = {
         @ComponentScan.Filter(type = FilterType.REGEX, pattern = "com\\.platform\\.security\\.repository\\..*"),
@@ -33,7 +35,7 @@ import java.util.Optional;
 )
 @EnableJpaAuditing(auditorAwareRef = "auditorProvider")
 @EnableJpaRepositories(basePackages = {"com.developer.repository"})
-@EntityScan(basePackages = {"com.developer.entity", "com.platform.security.entity"})
+@EntityScan(basePackages = {"com.developer.entity"})
 public class DeveloperWorkstationApplication {
     
     public static void main(String[] args) {

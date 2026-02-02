@@ -2,7 +2,6 @@ package com.platform.common.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.NestedConfigurationProperty;
-import org.springframework.stereotype.Component;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;
@@ -16,7 +15,6 @@ import jakarta.validation.constraints.NotNull;
  * @author Platform Team
  * @version 1.0
  */
-@Component
 @ConfigurationProperties(prefix = "app")
 public class ApplicationConfiguration {
     

@@ -32,4 +32,14 @@ public interface AuthService {
      * 验证令牌
      */
     boolean validateToken(String token);
+    
+    /**
+     * 测试密码匹配（仅用于调试）
+     */
+    boolean testPasswordMatch(String plainPassword, String hash);
+    
+    /**
+     * 生成密码哈希（仅用于调试）
+     */
+    String generatePasswordHash(String plainPassword);
 }

@@ -4,7 +4,15 @@ import com.admin.entity.*;
 import com.admin.enums.ApproverTargetType;
 import com.admin.enums.MemberChangeType;
 import com.admin.enums.PermissionRequestType;
-import com.admin.enums.UserStatus;
+import com.platform.security.entity.User;
+import com.platform.security.entity.Role;
+import com.platform.security.entity.BusinessUnit;
+import com.platform.security.entity.VirtualGroup;
+import com.platform.security.entity.VirtualGroupMember;
+import com.platform.security.entity.VirtualGroupRole;
+import com.platform.security.entity.UserBusinessUnit;
+import com.platform.security.entity.UserBusinessUnitRole;
+import com.platform.security.model.UserStatus;
 import com.admin.exception.AdminBusinessException;
 import com.admin.repository.*;
 import com.admin.service.ApproverService;
@@ -107,8 +115,8 @@ public class MemberManagementProperties {
         
         // Then: User should be added immediately
         verify(virtualGroupMemberRepository).save(argThat(member -> 
-                member.getUser().getId().equals(userId) &&
-                member.getVirtualGroup().getId().equals(virtualGroupId)));
+                member.getUserId().equals(userId) &&
+                member.getGroupId().equals(virtualGroupId)));
         
         // Then: Change log should be recorded
         verify(memberChangeLogRepository).save(argThat(log ->
@@ -704,7 +712,6 @@ public class MemberManagementProperties {
                 .id(id)
                 .name("Test Group " + id)
                 .status("ACTIVE")
-                .members(new HashSet<>())
                 .build();
     }
     

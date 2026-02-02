@@ -62,9 +62,11 @@ spring:
       properties:
         spring.json.trusted.packages: com.platform.*
 
-# Flowable Configuration - DISABLED automatic schema updates
+# Flowable Configuration
 flowable:
-  database-schema-update: false
+  # For development: create schema automatically
+  # For production: set to false and use manual schema initialization
+  database-schema-update: ${FLOWABLE_SCHEMA_UPDATE:true}
   async-executor-activate: true
   history-level: full
 

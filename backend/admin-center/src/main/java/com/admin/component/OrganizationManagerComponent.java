@@ -4,8 +4,9 @@ import com.admin.dto.request.BusinessUnitCreateRequest;
 import com.admin.dto.request.BusinessUnitUpdateRequest;
 import com.admin.dto.response.BusinessUnitResult;
 import com.admin.dto.response.BusinessUnitTree;
-import com.admin.entity.BusinessUnit;
+import com.platform.security.entity.BusinessUnit;
 import com.admin.enums.BusinessUnitStatus;
+import com.admin.util.EntityTypeConverter;
 import com.admin.exception.*;
 import com.admin.repository.BusinessUnitRepository;
 import com.admin.repository.UserRepository;
@@ -76,7 +77,7 @@ public class OrganizationManagerComponent {
                 .costCenter(request.getCostCenter())
                 .location(request.getLocation())
                 .sortOrder(request.getSortOrder() != null ? request.getSortOrder() : 0)
-                .status(BusinessUnitStatus.ACTIVE)
+                .status(EntityTypeConverter.fromBusinessUnitStatus(BusinessUnitStatus.ACTIVE))
                 .build();
         
         businessUnitRepository.save(businessUnit);

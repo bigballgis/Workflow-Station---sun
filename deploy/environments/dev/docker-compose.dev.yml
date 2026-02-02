@@ -13,7 +13,7 @@ services:
       - "${POSTGRES_PORT}:5432"
     volumes:
       - postgres_dev_data:/var/lib/postgresql/data
-      - ../../../init-scripts:/docker-entrypoint-initdb.d:ro
+      - ../../../deploy/init-scripts:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
@@ -97,7 +97,7 @@ services:
       - "${WORKFLOW_ENGINE_PORT}:8080"
     environment:
       SERVER_PORT: 8080
-      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
+      SPRING_PROFILES_ACTIVE: docker
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
@@ -132,7 +132,7 @@ services:
       - "${ADMIN_CENTER_PORT}:8080"
     environment:
       SERVER_PORT: 8080
-      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
+      SPRING_PROFILES_ACTIVE: docker
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
@@ -164,7 +164,7 @@ services:
       - "${USER_PORTAL_PORT}:8080"
     environment:
       SERVER_PORT: 8080
-      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
+      SPRING_PROFILES_ACTIVE: docker
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
@@ -195,7 +195,7 @@ services:
       - "${DEVELOPER_WORKSTATION_PORT}:8080"
     environment:
       SERVER_PORT: 8080
-      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
+      SPRING_PROFILES_ACTIVE: docker
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
@@ -226,7 +226,7 @@ services:
     ports:
       - "${API_GATEWAY_PORT}:8080"
     environment:
-      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
+      SPRING_PROFILES_ACTIVE: docker
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
@@ -240,57 +240,47 @@ services:
 
   # Frontend - Admin Center - Development
   admin-center-frontend:
-    build:
-      context: ../../../frontend/admin-center
-      dockerfile: Dockerfile
-      args:
-        ENVIRONMENT: dev
-        VITE_API_BASE_URL: http://localhost:${API_GATEWAY_PORT}
-        VITE_WORKFLOW_ENGINE_URL: http://localhost:${WORKFLOW_ENGINE_PORT}
+    image: dev-admin-center-frontend
     container_name: platform-admin-center-frontend-dev
     depends_on:
       - admin-center
       - api-gateway
     ports:
       - "${ADMIN_CENTER_FRONTEND_PORT}:80"
+    environment:
+      ADMIN_CENTER_BACKEND_URL: http://platform-admin-center-dev:8080
     networks:
       - platform-dev-network
     restart: unless-stopped
 
   # Frontend - User Portal - Development
   user-portal-frontend:
-    build:
-      context: ../../../frontend/user-portal
-      dockerfile: Dockerfile
-      args:
-        ENVIRONMENT: dev
-        VITE_API_BASE_URL: http://localhost:${API_GATEWAY_PORT}
-        VITE_API_GATEWAY_URL: http://localhost:${API_GATEWAY_PORT}
+    image: dev-user-portal-frontend
     container_name: platform-user-portal-frontend-dev
     depends_on:
       - user-portal
       - api-gateway
     ports:
       - "${USER_PORTAL_FRONTEND_PORT}:80"
+    environment:
+      USER_PORTAL_BACKEND_URL: http://platform-user-portal-dev:8080
+      ADMIN_CENTER_BACKEND_URL: http://platform-admin-center-dev:8080
     networks:
       - platform-dev-network
     restart: unless-stopped
 
   # Frontend - Developer Workstation - Development
   developer-workstation-frontend:
-    build:
-      context: ../../../frontend/developer-workstation
-      dockerfile: Dockerfile
-      args:
-        ENVIRONMENT: dev
-        VITE_API_BASE_URL: http://localhost:${API_GATEWAY_PORT}
-        VITE_WORKFLOW_ENGINE_URL: http://localhost:${WORKFLOW_ENGINE_PORT}
+    image: dev-developer-workstation-frontend
     container_name: platform-developer-workstation-frontend-dev
     depends_on:
       - developer-workstation
       - api-gateway
     ports:
       - "${DEVELOPER_WORKSTATION_FRONTEND_PORT}:80"
+    environment:
+      DEVELOPER_WORKSTATION_BACKEND_URL: http://platform-developer-workstation-dev:8080
+      ADMIN_CENTER_BACKEND_URL: http://platform-admin-center-dev:8080
     networks:
       - platform-dev-network
     restart: unless-stopped

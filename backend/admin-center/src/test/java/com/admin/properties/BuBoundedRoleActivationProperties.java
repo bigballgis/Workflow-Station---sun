@@ -2,8 +2,15 @@ package com.admin.properties;
 
 import com.admin.entity.*;
 import com.admin.enums.*;
+import com.platform.security.entity.User;
+import com.platform.security.entity.Role;
+import com.platform.security.entity.VirtualGroup;
+import com.platform.security.entity.VirtualGroupMember;
+import com.platform.security.entity.VirtualGroupRole;
+import com.platform.security.entity.UserBusinessUnit;
 import com.admin.repository.*;
 import com.admin.service.*;
+import com.admin.util.EntityTypeConverter;
 import net.jqwik.api.*;
 import net.jqwik.api.lifecycle.BeforeTry;
 
@@ -29,6 +36,7 @@ public class BuBoundedRoleActivationProperties {
     private VirtualGroupRoleRepository virtualGroupRoleRepository;
     private UserBusinessUnitRepository userBusinessUnitRepository;
     private RoleRepository roleRepository;
+    private com.admin.helper.RoleHelper roleHelper;
     private UserPermissionService userPermissionService;
     
     @BeforeTry
@@ -37,6 +45,7 @@ public class BuBoundedRoleActivationProperties {
         virtualGroupRoleRepository = mock(VirtualGroupRoleRepository.class);
         userBusinessUnitRepository = mock(UserBusinessUnitRepository.class);
         roleRepository = mock(RoleRepository.class);
+        roleHelper = mock(com.admin.helper.RoleHelper.class);
         
         userPermissionService = new UserPermissionService(
                 virtualGroupMemberRepository,
@@ -44,7 +53,8 @@ public class BuBoundedRoleActivationProperties {
                 userBusinessUnitRepository,
                 roleRepository,
                 mock(UserPreferenceRepository.class),
-                mock(BusinessUnitRepository.class));
+                mock(BusinessUnitRepository.class),
+                roleHelper);
     }
     
     // ==================== Property 12: BU-Bounded Role Activation ====================
@@ -84,7 +94,7 @@ public class BuBoundedRoleActivationProperties {
         // Then: The BU_BOUNDED role should be in the unactivated list
         assertThat(unactivatedRoles).hasSize(1);
         assertThat(unactivatedRoles.get(0).getId()).isEqualTo(roleId);
-        assertThat(unactivatedRoles.get(0).getType()).isEqualTo(RoleType.BU_BOUNDED);
+        assertThat(unactivatedRoles.get(0).getType()).isEqualTo(EntityTypeConverter.fromRoleType(RoleType.BU_BOUNDED));
     }
     
     /**
@@ -207,7 +217,7 @@ public class BuBoundedRoleActivationProperties {
                 .id(roleId)
                 .name("Test Role " + roleId)
                 .code("ROLE_" + roleId.toUpperCase().replace("-", "_"))
-                .type(type)
+                .type(EntityTypeConverter.fromRoleType(type))
                 .status("ACTIVE")
                 .build();
     }

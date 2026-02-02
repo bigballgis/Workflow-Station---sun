@@ -2,7 +2,7 @@ package com.developer.security;
 
 import com.developer.repository.PermissionRepository;
 import com.developer.repository.RoleRepository;
-import com.developer.security.SecurityAuditLogger;
+import com.platform.common.security.SecurityAuditLogger;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.PermissionEvaluator;
@@ -10,6 +10,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 
 import java.io.Serializable;
+import java.util.Map;
 
 /**
  * Custom Spring Security PermissionEvaluator implementation.
@@ -39,7 +40,8 @@ public class DatabasePermissionEvaluator implements PermissionEvaluator {
     @Override
     public boolean hasPermission(Authentication authentication, Object targetDomainObject, Object permission) {
         if (authentication == null || !authentication.isAuthenticated()) {
-            auditLogger.logAuthenticationIssue("permission_evaluation", "no_authenticated_user");
+            Map<String, String> metadata = Map.of("issue", "no_authenticated_user");
+            auditLogger.logSecurityEvent("AUTHENTICATION_ISSUE", "Permission evaluation failed: no authenticated user", metadata);
             log.debug("Permission denied: no authenticated user");
             return false;
         }
@@ -67,7 +69,8 @@ public class DatabasePermissionEvaluator implements PermissionEvaluator {
     public boolean hasPermission(Authentication authentication, Serializable targetId, 
                                 String targetType, Object permission) {
         if (authentication == null || !authentication.isAuthenticated()) {
-            auditLogger.logAuthenticationIssue("permission_evaluation", "no_authenticated_user");
+            Map<String, String> metadata = Map.of("issue", "no_authenticated_user");
+            auditLogger.logSecurityEvent("AUTHENTICATION_ISSUE", "Permission evaluation failed: no authenticated user", metadata);
             log.debug("Permission denied: no authenticated user");
             return false;
         }
@@ -95,15 +98,15 @@ public class DatabasePermissionEvaluator implements PermissionEvaluator {
             var cachedResult = cacheManager.getCachedPermission(username, permission);
             if (cachedResult.isPresent()) {
                 boolean result = cachedResult.get();
-                auditLogger.logSuccessfulAccess(username, "permission_evaluation", permission, true);
-                auditLogger.logCacheOperation(username, "cache_hit", permission, "permission_evaluation");
+                Map<String, String> metadata = Map.of("from_cache", "true");
+                auditLogger.logAuthorizationEvent("PERMISSION_CHECK", "Permission evaluation successful", username, permission, "evaluate", true, metadata);
                 log.debug("Permission check cache hit: user={}, permission={}, result={}", 
                         username, permission, result);
                 return result;
             }
             
             // Cache miss - log it
-            auditLogger.logCacheOperation(username, "cache_miss", permission, "permission_evaluation");
+            log.debug("Permission cache miss for user={}, permission={}", username, permission);
             
             // Query database for permission
             boolean hasPermission = permissionRepository.hasPermission(username, permission);
@@ -113,9 +116,11 @@ public class DatabasePermissionEvaluator implements PermissionEvaluator {
             
             // Log the result
             if (hasPermission) {
-                auditLogger.logSuccessfulAccess(username, "permission_evaluation", permission, false);
+                Map<String, String> metadata = Map.of("from_cache", "false");
+                auditLogger.logAuthorizationEvent("PERMISSION_CHECK", "Permission evaluation successful", username, permission, "evaluate", true, metadata);
             } else {
-                auditLogger.logAccessDenied(username, "permission_evaluation", permission);
+                Map<String, String> metadata = Map.of("reason", "insufficient_privileges");
+                auditLogger.logAuthorizationEvent("PERMISSION_DENIED", "Permission evaluation denied", username, permission, "evaluate", false, metadata);
             }
             
             log.debug("Permission check database result: user={}, permission={}, result={}", 
@@ -124,7 +129,8 @@ public class DatabasePermissionEvaluator implements PermissionEvaluator {
             return hasPermission;
             
         } catch (Exception e) {
-            auditLogger.logDatabaseError(username, "permission_evaluation", permission, e);
+            Map<String, String> metadata = Map.of("error_type", e.getClass().getSimpleName(), "error_message", e.getMessage());
+            auditLogger.logSecurityEvent("DATABASE_ERROR", "Database error during permission evaluation", metadata);
             log.error("Error checking permission for user {} and permission {}: {}", 
                     username, permission, e.getMessage(), e);
             
@@ -147,15 +153,15 @@ public class DatabasePermissionEvaluator implements PermissionEvaluator {
             var cachedResult = cacheManager.getCachedRole(username, role);
             if (cachedResult.isPresent()) {
                 boolean result = cachedResult.get();
-                auditLogger.logSuccessfulAccess(username, "role_evaluation", role, true);
-                auditLogger.logCacheOperation(username, "cache_hit", role, "role_evaluation");
+                Map<String, String> metadata = Map.of("from_cache", "true");
+                auditLogger.logAuthorizationEvent("ROLE_CHECK", "Role evaluation successful", username, role, "evaluate", true, metadata);
                 log.debug("Role check cache hit: user={}, role={}, result={}", 
                         username, role, result);
                 return result;
             }
             
             // Cache miss - log it
-            auditLogger.logCacheOperation(username, "cache_miss", role, "role_evaluation");
+            log.debug("Role cache miss for user={}, role={}", username, role);
             
             // Query database for role
             boolean hasRole = roleRepository.hasRole(username, role);
@@ -165,9 +171,11 @@ public class DatabasePermissionEvaluator implements PermissionEvaluator {
             
             // Log the result
             if (hasRole) {
-                auditLogger.logSuccessfulAccess(username, "role_evaluation", role, false);
+                Map<String, String> metadata = Map.of("from_cache", "false");
+                auditLogger.logAuthorizationEvent("ROLE_CHECK", "Role evaluation successful", username, role, "evaluate", true, metadata);
             } else {
-                auditLogger.logAccessDenied(username, "role_evaluation", role);
+                Map<String, String> metadata = Map.of("reason", "insufficient_privileges");
+                auditLogger.logAuthorizationEvent("ROLE_DENIED", "Role evaluation denied", username, role, "evaluate", false, metadata);
             }
             
             log.debug("Role check database result: user={}, role={}, result={}", 
@@ -176,7 +184,8 @@ public class DatabasePermissionEvaluator implements PermissionEvaluator {
             return hasRole;
             
         } catch (Exception e) {
-            auditLogger.logDatabaseError(username, "role_evaluation", role, e);
+            Map<String, String> metadata = Map.of("error_type", e.getClass().getSimpleName(), "error_message", e.getMessage());
+            auditLogger.logSecurityEvent("DATABASE_ERROR", "Database error during role evaluation", metadata);
             log.error("Error checking role for user {} and role {}: {}", 
                     username, role, e.getMessage(), e);
             

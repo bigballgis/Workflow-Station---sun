@@ -1,7 +1,6 @@
 package com.admin.repository;
 
-import com.admin.entity.VirtualGroup;
-import com.admin.enums.VirtualGroupType;
+import com.platform.security.entity.VirtualGroup;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -41,12 +40,12 @@ public interface VirtualGroupRepository extends JpaRepository<VirtualGroup, Stri
     /**
      * 根据类型查找虚拟组
      */
-    List<VirtualGroup> findByType(VirtualGroupType type);
+    List<VirtualGroup> findByType(String type);
     
     /**
      * 根据类型分页查找虚拟组
      */
-    Page<VirtualGroup> findByType(VirtualGroupType type, Pageable pageable);
+    Page<VirtualGroup> findByType(String type, Pageable pageable);
     
     /**
      * 根据状态查找虚拟组
@@ -56,7 +55,7 @@ public interface VirtualGroupRepository extends JpaRepository<VirtualGroup, Stri
     /**
      * 根据类型和状态查找虚拟组
      */
-    List<VirtualGroup> findByTypeAndStatus(VirtualGroupType type, String status);
+    List<VirtualGroup> findByTypeAndStatus(String type, String status);
     
     /**
      * 查找有效的虚拟组（状态为ACTIVE）
@@ -72,7 +71,7 @@ public interface VirtualGroupRepository extends JpaRepository<VirtualGroup, Stri
            "(:status IS NULL OR vg.status = :status) AND " +
            "(:keyword IS NULL OR LOWER(vg.name) LIKE LOWER(CONCAT('%', :keyword, '%')))")
     Page<VirtualGroup> findByConditions(
-            @Param("type") VirtualGroupType type,
+            @Param("type") String type,
             @Param("status") String status,
             @Param("keyword") String keyword,
             Pageable pageable);
@@ -80,7 +79,7 @@ public interface VirtualGroupRepository extends JpaRepository<VirtualGroup, Stri
     /**
      * 统计某类型的虚拟组数量
      */
-    long countByType(VirtualGroupType type);
+    long countByType(String type);
     
     /**
      * 统计某状态的虚拟组数量

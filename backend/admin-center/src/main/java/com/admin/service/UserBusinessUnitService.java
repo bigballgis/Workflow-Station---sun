@@ -1,7 +1,7 @@
 package com.admin.service;
 
-import com.admin.entity.BusinessUnit;
-import com.admin.entity.UserBusinessUnit;
+import com.platform.security.entity.BusinessUnit;
+import com.platform.security.entity.UserBusinessUnit;
 import com.admin.exception.AdminBusinessException;
 import com.admin.exception.BusinessUnitNotFoundException;
 import com.admin.exception.UserNotFoundException;
@@ -91,10 +91,16 @@ public class UserBusinessUnitService {
      * @return 业务单元列表
      */
     public List<BusinessUnit> getUserBusinessUnits(String userId) {
-        return userBusinessUnitRepository.findByUserIdWithBusinessUnit(userId)
-                .stream()
-                .map(UserBusinessUnit::getBusinessUnit)
+        List<UserBusinessUnit> memberships = userBusinessUnitRepository.findByUserId(userId);
+        
+        // Extract business unit IDs
+        List<String> businessUnitIds = memberships.stream()
+                .map(UserBusinessUnit::getBusinessUnitId)
+                .distinct()
                 .collect(Collectors.toList());
+        
+        // Batch fetch business units
+        return businessUnitRepository.findAllById(businessUnitIds);
     }
     
     /**

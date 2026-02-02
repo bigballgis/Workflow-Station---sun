@@ -1,6 +1,6 @@
 package com.admin.controller;
 
-import com.admin.entity.Role;
+import com.platform.security.entity.Role;
 import com.admin.service.BusinessUnitRoleService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;

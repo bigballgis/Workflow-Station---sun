@@ -28,7 +28,7 @@ import java.util.function.Supplier;
  * @version 1.0
  */
 @Slf4j
-@Component
+@Component("platformResourceManager")
 @RequiredArgsConstructor
 public class ResourceManager {
 

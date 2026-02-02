@@ -28,9 +28,8 @@ public class PermissionConflict {
     @Column(name = "user_id", nullable = false, length = 64)
     private String userId;
     
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "permission_id", nullable = false)
-    private Permission permission;
+    @Column(name = "permission_id", nullable = false, length = 64)
+    private String permissionId;
     
     @Column(name = "conflict_source1", nullable = false, length = 100)
     private String conflictSource1;

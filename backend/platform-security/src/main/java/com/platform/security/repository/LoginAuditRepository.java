@@ -1,6 +1,6 @@
 package com.platform.security.repository;
 
-import com.platform.security.model.LoginAudit;
+import com.platform.security.entity.LoginAudit;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;

@@ -1,6 +1,6 @@
 package com.developer.config;
 
-import com.developer.security.SecurityAuditLogger;
+import com.platform.common.security.SecurityAuditLogger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Tag;
@@ -9,6 +9,7 @@ import org.mockito.MockitoAnnotations;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
+import static org.mockito.ArgumentMatchers.*;
 
 /**
  * Property-based tests for SecurityConfigurationProperties.
@@ -28,7 +29,8 @@ public class SecurityConfigurationPropertiesPropertyTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        configProperties = new SecurityConfigurationProperties(mockAuditLogger);
+        configProperties = new SecurityConfigurationProperties();
+        configProperties.setAuditLogger(mockAuditLogger);
     }
     
     /**
@@ -38,7 +40,8 @@ public class SecurityConfigurationPropertiesPropertyTest {
     @Test
     void property_configurationParametersAreValidatedAtStartup() {
         // Test valid configuration - should not throw exception
-        SecurityConfigurationProperties validConfig = new SecurityConfigurationProperties(mockAuditLogger);
+        SecurityConfigurationProperties validConfig = new SecurityConfigurationProperties();
+        validConfig.setAuditLogger(mockAuditLogger);
         
         // Set valid values
         validConfig.getCache().setSessionTimeoutMinutes(30);
@@ -61,9 +64,9 @@ public class SecurityConfigurationPropertiesPropertyTest {
         assertDoesNotThrow(() -> validConfig.validateConfiguration());
         
         // Verify successful validation was logged
-        verify(mockAuditLogger, atLeastOnce()).logConfigurationValidation(eq("security.cache"), eq(true), isNull());
-        verify(mockAuditLogger, atLeastOnce()).logConfigurationValidation(eq("security.database"), eq(true), isNull());
-        verify(mockAuditLogger, atLeastOnce()).logConfigurationValidation(eq("security.permission"), eq(true), isNull());
+        verify(mockAuditLogger, atLeastOnce()).logSecurityEvent(eq("CONFIG_VALIDATION"), contains("cache"), anyMap());
+        verify(mockAuditLogger, atLeastOnce()).logSecurityEvent(eq("CONFIG_VALIDATION"), contains("database"), anyMap());
+        verify(mockAuditLogger, atLeastOnce()).logSecurityEvent(eq("CONFIG_VALIDATION"), contains("permission"), anyMap());
     }
     
     @Test
@@ -74,7 +77,8 @@ public class SecurityConfigurationPropertiesPropertyTest {
         int[] invalidCleanupIntervals = {0, -1, 61}; // Outside valid range 1-60
         
         for (int timeout : invalidTimeouts) {
-            SecurityConfigurationProperties invalidConfig = new SecurityConfigurationProperties(mockAuditLogger);
+            SecurityConfigurationProperties invalidConfig = new SecurityConfigurationProperties();
+            invalidConfig.setAuditLogger(mockAuditLogger);
             invalidConfig.getCache().setSessionTimeoutMinutes(timeout);
             
             Exception exception = assertThrows(Exception.class, () -> invalidConfig.validateConfiguration());
@@ -82,12 +86,13 @@ public class SecurityConfigurationPropertiesPropertyTest {
                     "Should reject invalid timeout: " + timeout);
             
             // Verify failure was logged
-            verify(mockAuditLogger, atLeastOnce()).logConfigurationValidation(eq("security"), eq(false), anyString());
+            verify(mockAuditLogger, atLeastOnce()).logSecurityEvent(eq("CONFIG_VALIDATION"), anyString(), anyMap());
         }
         
         for (int size : invalidSizes) {
             reset(mockAuditLogger);
-            SecurityConfigurationProperties invalidConfig = new SecurityConfigurationProperties(mockAuditLogger);
+            SecurityConfigurationProperties invalidConfig = new SecurityConfigurationProperties();
+            invalidConfig.setAuditLogger(mockAuditLogger);
             invalidConfig.getCache().setMaxSize(size);
             
             Exception exception = assertThrows(Exception.class, () -> invalidConfig.validateConfiguration());
@@ -95,7 +100,7 @@ public class SecurityConfigurationPropertiesPropertyTest {
                     "Should reject invalid cache size: " + size);
             
             // Verify failure was logged
-            verify(mockAuditLogger, atLeastOnce()).logConfigurationValidation(eq("security"), eq(false), anyString());
+            verify(mockAuditLogger, atLeastOnce()).logSecurityEvent(eq("CONFIG_VALIDATION"), anyString(), anyMap());
         }
     }
     
@@ -108,7 +113,8 @@ public class SecurityConfigurationPropertiesPropertyTest {
         
         for (int timeout : invalidTimeouts) {
             reset(mockAuditLogger);
-            SecurityConfigurationProperties invalidConfig = new SecurityConfigurationProperties(mockAuditLogger);
+            SecurityConfigurationProperties invalidConfig = new SecurityConfigurationProperties();
+            invalidConfig.setAuditLogger(mockAuditLogger);
             invalidConfig.getDatabase().setQueryTimeoutSeconds(timeout);
             
             Exception exception = assertThrows(Exception.class, () -> invalidConfig.validateConfiguration());
@@ -116,12 +122,13 @@ public class SecurityConfigurationPropertiesPropertyTest {
                     "Should reject invalid query timeout: " + timeout);
             
             // Verify failure was logged
-            verify(mockAuditLogger, atLeastOnce()).logConfigurationValidation(eq("security"), eq(false), anyString());
+            verify(mockAuditLogger, atLeastOnce()).logSecurityEvent(eq("CONFIG_VALIDATION"), anyString(), anyMap());
         }
         
         for (int retryAttempts : invalidRetryAttempts) {
             reset(mockAuditLogger);
-            SecurityConfigurationProperties invalidConfig = new SecurityConfigurationProperties(mockAuditLogger);
+            SecurityConfigurationProperties invalidConfig = new SecurityConfigurationProperties();
+            invalidConfig.setAuditLogger(mockAuditLogger);
             invalidConfig.getDatabase().setRetryAttempts(retryAttempts);
             
             Exception exception = assertThrows(Exception.class, () -> invalidConfig.validateConfiguration());
@@ -129,7 +136,7 @@ public class SecurityConfigurationPropertiesPropertyTest {
                     "Should reject invalid retry attempts: " + retryAttempts);
             
             // Verify failure was logged
-            verify(mockAuditLogger, atLeastOnce()).logConfigurationValidation(eq("security"), eq(false), anyString());
+            verify(mockAuditLogger, atLeastOnce()).logSecurityEvent(eq("CONFIG_VALIDATION"), anyString(), anyMap());
         }
     }
     
@@ -140,7 +147,8 @@ public class SecurityConfigurationPropertiesPropertyTest {
         
         for (int nameLength : invalidNameLengths) {
             reset(mockAuditLogger);
-            SecurityConfigurationProperties invalidConfig = new SecurityConfigurationProperties(mockAuditLogger);
+            SecurityConfigurationProperties invalidConfig = new SecurityConfigurationProperties();
+            invalidConfig.setAuditLogger(mockAuditLogger);
             invalidConfig.getPermission().setMaxPermissionNameLength(nameLength);
             
             Exception exception = assertThrows(Exception.class, () -> invalidConfig.validateConfiguration());
@@ -148,12 +156,13 @@ public class SecurityConfigurationPropertiesPropertyTest {
                     "Should reject invalid permission name length: " + nameLength);
             
             // Verify failure was logged
-            verify(mockAuditLogger, atLeastOnce()).logConfigurationValidation(eq("security"), eq(false), anyString());
+            verify(mockAuditLogger, atLeastOnce()).logSecurityEvent(eq("CONFIG_VALIDATION"), anyString(), anyMap());
         }
         
         // Test incompatible strategy and cache settings
         reset(mockAuditLogger);
-        SecurityConfigurationProperties incompatibleConfig = new SecurityConfigurationProperties(mockAuditLogger);
+        SecurityConfigurationProperties incompatibleConfig = new SecurityConfigurationProperties();
+        incompatibleConfig.setAuditLogger(mockAuditLogger);
         incompatibleConfig.getCache().setEnabled(false);
         incompatibleConfig.getPermission().setResolutionStrategy(SecurityConfigurationProperties.ResolutionStrategy.CACHE_ONLY);
         
@@ -162,12 +171,13 @@ public class SecurityConfigurationPropertiesPropertyTest {
                 "Should reject CACHE_ONLY strategy when caching is disabled");
         
         // Verify failure was logged
-        verify(mockAuditLogger, atLeastOnce()).logConfigurationValidation(eq("security"), eq(false), anyString());
+        verify(mockAuditLogger, atLeastOnce()).logSecurityEvent(eq("CONFIG_VALIDATION"), anyString(), anyMap());
     }
     
     @Test
     void property_permissionAndRoleNameValidationWorks() {
-        SecurityConfigurationProperties config = new SecurityConfigurationProperties(mockAuditLogger);
+        SecurityConfigurationProperties config = new SecurityConfigurationProperties();
+        config.setAuditLogger(mockAuditLogger);
         config.getPermission().setMaxPermissionNameLength(50);
         config.getPermission().setMaxRoleNameLength(50);
         
@@ -201,7 +211,8 @@ public class SecurityConfigurationPropertiesPropertyTest {
     
     @Test
     void property_configurationSummaryIsGenerated() {
-        SecurityConfigurationProperties config = new SecurityConfigurationProperties(mockAuditLogger);
+        SecurityConfigurationProperties config = new SecurityConfigurationProperties();
+        config.setAuditLogger(mockAuditLogger);
         
         String summary = config.getConfigurationSummary();
         
@@ -220,8 +231,10 @@ public class SecurityConfigurationPropertiesPropertyTest {
     
     @Test
     void property_restartRequirementIsDetectedCorrectly() {
-        SecurityConfigurationProperties config1 = new SecurityConfigurationProperties(mockAuditLogger);
-        SecurityConfigurationProperties config2 = new SecurityConfigurationProperties(mockAuditLogger);
+        SecurityConfigurationProperties config1 = new SecurityConfigurationProperties();
+        config1.setAuditLogger(mockAuditLogger);
+        SecurityConfigurationProperties config2 = new SecurityConfigurationProperties();
+        config2.setAuditLogger(mockAuditLogger);
         
         // Initially identical configurations should not require restart
         assertFalse(config1.requiresRestart(config2), "Identical configurations should not require restart");
@@ -255,7 +268,8 @@ public class SecurityConfigurationPropertiesPropertyTest {
                 SecurityConfigurationProperties.ResolutionStrategy.values();
         
         for (SecurityConfigurationProperties.ResolutionStrategy strategy : strategies) {
-            SecurityConfigurationProperties config = new SecurityConfigurationProperties(mockAuditLogger);
+            SecurityConfigurationProperties config = new SecurityConfigurationProperties();
+            config.setAuditLogger(mockAuditLogger);
             config.getPermission().setResolutionStrategy(strategy);
             
             if (strategy == SecurityConfigurationProperties.ResolutionStrategy.CACHE_ONLY) {

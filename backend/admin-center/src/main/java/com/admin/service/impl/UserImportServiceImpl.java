@@ -3,7 +3,6 @@ package com.admin.service.impl;
 import com.admin.component.UserManagerComponent;
 import com.admin.dto.request.UserCreateRequest;
 import com.admin.dto.response.BatchImportResult;
-import com.admin.service.AuditService;
 import com.admin.service.UserImportService;
 import com.opencsv.CSVReader;
 import com.opencsv.exceptions.CsvException;
@@ -30,7 +29,6 @@ import java.util.List;
 public class UserImportServiceImpl implements UserImportService {
     
     private final UserManagerComponent userManager;
-    private final AuditService auditService;
     
     @Override
     public List<UserCreateRequest> parseExcelFile(MultipartFile file) {
@@ -139,8 +137,6 @@ public class UserImportServiceImpl implements UserImportService {
                     .startTime(startTime)
                     .endTime(Instant.now())
                     .build();
-            
-            auditService.recordBatchImport(result);
             
             log.info("User import completed: {} success, {} failed", successCount, failureCount);
             return result;

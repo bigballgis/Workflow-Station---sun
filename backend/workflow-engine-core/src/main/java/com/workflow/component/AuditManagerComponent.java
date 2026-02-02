@@ -28,7 +28,7 @@ import java.util.stream.Collectors;
  * 负责审计日志的记录、查询、分析和管理
  * 支持数据脱敏、权限控制和合规检查
  */
-@Component
+@Component("workflowAuditManager")
 public class AuditManagerComponent {
     
     private static final Logger logger = LoggerFactory.getLogger(AuditManagerComponent.class);

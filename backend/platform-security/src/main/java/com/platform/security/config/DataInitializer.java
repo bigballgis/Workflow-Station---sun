@@ -1,6 +1,6 @@
 package com.platform.security.config;
 
-import com.platform.security.model.User;
+import com.platform.security.entity.User;
 import com.platform.security.model.UserStatus;
 import com.platform.security.repository.UserRepository;
 import lombok.RequiredArgsConstructor;

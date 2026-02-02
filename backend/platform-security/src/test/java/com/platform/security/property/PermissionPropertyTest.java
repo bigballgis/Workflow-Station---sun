@@ -2,6 +2,7 @@ package com.platform.security.property;
 
 import com.platform.cache.service.CacheService;
 import com.platform.common.dto.DataFilter;
+import com.platform.security.entity.*;
 import com.platform.security.model.*;
 import com.platform.security.repository.PermissionRepository;
 import com.platform.security.service.PermissionService;

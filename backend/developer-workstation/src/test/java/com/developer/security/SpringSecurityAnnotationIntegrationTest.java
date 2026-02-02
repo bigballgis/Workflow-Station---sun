@@ -39,7 +39,7 @@ public class SpringSecurityAnnotationIntegrationTest {
     private SecurityCacheManager cacheManager;
     
     @MockBean
-    private SecurityAuditLogger auditLogger;
+    private com.platform.common.security.SecurityAuditLogger auditLogger;
     
     private TestSecuredService testService;
     
@@ -141,7 +141,15 @@ public class SpringSecurityAnnotationIntegrationTest {
         // Verify cache was used, database was not queried
         verify(cacheManager).getCachedPermission("testuser", "READ_DATA");
         verify(permissionRepository, never()).hasPermission(anyString(), anyString());
-        verify(auditLogger).logSuccessfulAccess("testuser", "permission_evaluation", "READ_DATA", true);
+        // Use the actual method signature from SecurityAuditLogger
+        verify(auditLogger).logAuthorizationEvent(
+                eq("PERMISSION_CHECK"), 
+                anyString(), 
+                eq("testuser"), 
+                eq("READ_DATA"), 
+                anyString(), 
+                eq(true), 
+                any());
     }
     
     /**
@@ -179,7 +187,15 @@ public class SpringSecurityAnnotationIntegrationTest {
         
         // Verify no database queries were made
         verify(permissionRepository, never()).hasPermission(anyString(), anyString());
-        verify(auditLogger).logAuthenticationIssue("permission_evaluation", "no_authenticated_user");
+        // Use the actual method signature from SecurityAuditLogger
+        verify(auditLogger).logAuthenticationEvent(
+                eq("AUTHENTICATION_REQUIRED"), 
+                anyString(), 
+                anyString(), 
+                anyString(), 
+                anyString(), 
+                eq(false), 
+                any());
     }
     
     /**
@@ -197,8 +213,11 @@ public class SpringSecurityAnnotationIntegrationTest {
         assertThrows(org.springframework.security.access.AccessDeniedException.class, 
                 () -> testService.readData());
         
-        // Verify error was logged
-        verify(auditLogger).logDatabaseError("testuser", "permission_evaluation", "READ_DATA", dbError);
+        // Verify error was logged using the actual method signature
+        verify(auditLogger).logSecurityEvent(
+                eq("DATABASE_ERROR"), 
+                anyString(), 
+                any());
     }
     
     /**

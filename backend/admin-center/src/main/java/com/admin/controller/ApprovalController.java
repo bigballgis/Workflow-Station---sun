@@ -4,8 +4,10 @@ import com.admin.dto.request.ApprovalRequest;
 import com.admin.dto.response.ErrorResponse;
 import com.admin.dto.response.PermissionRequestInfo;
 import com.admin.entity.PermissionRequest;
+import com.admin.repository.UserRepository;
 import com.admin.service.PermissionRequestService;
 import com.platform.common.security.SecurityIntegrationService;
+import com.platform.security.entity.User;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -36,6 +38,7 @@ public class ApprovalController {
     
     private final PermissionRequestService permissionRequestService;
     private final SecurityIntegrationService securityIntegrationService;
+    private final UserRepository userRepository;
     
     /**
      * Approve a permission request.
@@ -93,7 +96,14 @@ public class ApprovalController {
         
         // Return updated request information
         PermissionRequest updatedRequest = permissionRequestService.getRequestDetail(requestId);
-        PermissionRequestInfo response = PermissionRequestInfo.fromEntity(updatedRequest);
+        
+        // Fetch related users
+        User applicant = updatedRequest.getApplicantId() != null ? 
+                userRepository.findById(updatedRequest.getApplicantId()).orElse(null) : null;
+        User approver = updatedRequest.getApproverId() != null ? 
+                userRepository.findById(updatedRequest.getApproverId()).orElse(null) : null;
+        
+        PermissionRequestInfo response = PermissionRequestInfo.fromEntity(updatedRequest, applicant, approver);
         
         log.info("Approval completed successfully: requestId={}, status={}", 
                 requestId, updatedRequest.getStatus());
@@ -150,7 +160,14 @@ public class ApprovalController {
         
         // Return updated request information
         PermissionRequest updatedRequest = permissionRequestService.getRequestDetail(requestId);
-        PermissionRequestInfo response = PermissionRequestInfo.fromEntity(updatedRequest);
+        
+        // Fetch related users
+        User applicant = updatedRequest.getApplicantId() != null ? 
+                userRepository.findById(updatedRequest.getApplicantId()).orElse(null) : null;
+        User approver = updatedRequest.getApproverId() != null ? 
+                userRepository.findById(updatedRequest.getApproverId()).orElse(null) : null;
+        
+        PermissionRequestInfo response = PermissionRequestInfo.fromEntity(updatedRequest, applicant, approver);
         
         log.info("Rejection completed successfully: requestId={}, status={}", 
                 requestId, updatedRequest.getStatus());
@@ -189,7 +206,14 @@ public class ApprovalController {
         log.debug("Getting approval status for request: {}", requestId);
         
         PermissionRequest request = permissionRequestService.getRequestDetail(requestId);
-        PermissionRequestInfo response = PermissionRequestInfo.fromEntity(request);
+        
+        // Fetch related users
+        User applicant = request.getApplicantId() != null ? 
+                userRepository.findById(request.getApplicantId()).orElse(null) : null;
+        User approver = request.getApproverId() != null ? 
+                userRepository.findById(request.getApproverId()).orElse(null) : null;
+        
+        PermissionRequestInfo response = PermissionRequestInfo.fromEntity(request, applicant, approver);
         
         return ResponseEntity.ok(response);
     }
@@ -222,8 +246,22 @@ public class ApprovalController {
         java.util.List<PermissionRequest> pendingRequests = 
                 permissionRequestService.getPendingRequestsForApprover(approverId);
         
+        // Fetch all related users
+        java.util.Set<String> userIds = new java.util.HashSet<>();
+        pendingRequests.forEach(pr -> {
+            if (pr.getApplicantId() != null) userIds.add(pr.getApplicantId());
+            if (pr.getApproverId() != null) userIds.add(pr.getApproverId());
+        });
+        
+        java.util.Map<String, User> userMap = userRepository.findAllById(userIds).stream()
+                .collect(java.util.stream.Collectors.toMap(User::getId, u -> u));
+        
         java.util.List<PermissionRequestInfo> response = pendingRequests.stream()
-                .map(PermissionRequestInfo::fromEntity)
+                .map(pr -> PermissionRequestInfo.fromEntity(
+                        pr,
+                        userMap.get(pr.getApplicantId()),
+                        userMap.get(pr.getApproverId())
+                ))
                 .toList();
         
         return ResponseEntity.ok(response);

@@ -1,6 +1,6 @@
 package com.admin.repository;
 
-import com.admin.entity.BusinessUnit;
+import com.platform.security.entity.BusinessUnit;
 import com.admin.enums.BusinessUnitStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;

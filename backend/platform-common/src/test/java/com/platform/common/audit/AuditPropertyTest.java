@@ -21,11 +21,11 @@ class AuditPropertyTest {
     
     @Property(tries = 100)
     void auditLogShouldContainRequiredFields(
-            @ForAll @AlphaChars @Size(min = 1, max = 20) String userId,
-            @ForAll @AlphaChars @Size(min = 1, max = 20) String username,
+            @ForAll("nonEmptyAlphaStrings") String userId,
+            @ForAll("nonEmptyAlphaStrings") String username,
             @ForAll("actions") String action,
-            @ForAll @AlphaChars @Size(min = 1, max = 20) String resourceType,
-            @ForAll @AlphaChars @Size(min = 1, max = 20) String resourceId) {
+            @ForAll("nonEmptyAlphaStrings") String resourceType,
+            @ForAll("nonEmptyAlphaStrings") String resourceId) {
         
         AuditLog log = AuditLog.builder()
                 .id(UUID.randomUUID().toString())
@@ -42,6 +42,15 @@ class AuditPropertyTest {
         assertThat(log.getUserId()).isNotNull().isNotBlank();
         assertThat(log.getAction()).isNotNull().isNotBlank();
         assertThat(log.getTimestamp()).isNotNull();
+    }
+    
+    @Provide
+    Arbitrary<String> nonEmptyAlphaStrings() {
+        return Arbitraries.strings()
+                .alpha()
+                .ofMinLength(1)
+                .ofMaxLength(20)
+                .filter(s -> !s.isEmpty());
     }
     
     @Property(tries = 100)

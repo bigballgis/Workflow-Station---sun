@@ -108,8 +108,9 @@ public class HorizontalScalingComponent {
             log.info("节点注册成功: nodeId={}", nodeId);
             
         } catch (Exception e) {
-            log.error("节点注册失败: {}", e.getMessage(), e);
-            throw new WorkflowBusinessException("NODE_REGISTER_FAILED", "节点注册失败: " + e.getMessage());
+            log.warn("节点注册失败，将在心跳时重试: {}", e.getMessage());
+            // Don't throw exception - allow startup to continue
+            // The scheduled heartbeat will retry registration
         }
     }
 

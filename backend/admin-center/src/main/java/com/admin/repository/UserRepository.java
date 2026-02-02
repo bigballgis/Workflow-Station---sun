@@ -1,7 +1,7 @@
 package com.admin.repository;
 
-import com.admin.entity.User;
-import com.admin.enums.UserStatus;
+import com.platform.security.entity.User;
+import com.platform.security.model.UserStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -80,16 +80,20 @@ public interface UserRepository extends JpaRepository<User, String> {
     
     /**
      * 统计活跃管理员数量
+     * Note: User entity from platform-security doesn't have userRoles relationship, use native query instead
      */
-    @Query("SELECT COUNT(u) FROM User u JOIN u.userRoles ur JOIN ur.role r WHERE " +
-           "(u.deleted = false OR u.deleted IS NULL) AND u.status = 'ACTIVE' AND r.code = 'ADMIN'")
+    @Query(value = "SELECT COUNT(DISTINCT u.id) FROM sys_users u " +
+           "JOIN sys_user_roles ur ON u.id = ur.user_id " +
+           "JOIN sys_roles r ON ur.role_id = r.id " +
+           "WHERE (u.deleted = false OR u.deleted IS NULL) AND u.status = 'ACTIVE' AND r.code = 'ADMIN'",
+           nativeQuery = true)
     long countActiveAdmins();
     
     /**
-     * 根据ID查找用户并加载角色
+     * 根据ID查找用户
+     * Note: User entity from platform-security doesn't have userRoles relationship
      */
-    @Query("SELECT DISTINCT u FROM User u LEFT JOIN FETCH u.userRoles ur LEFT JOIN FETCH ur.role WHERE u.id = :userId")
-    Optional<User> findByIdWithRoles(@Param("userId") String userId);
+    Optional<User> findById(String userId);
     
     /**
      * 检查邮箱是否被其他用户使用

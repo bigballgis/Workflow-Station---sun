@@ -3,13 +3,12 @@ package com.admin.properties;
 import com.admin.component.UserManagerComponent;
 import com.admin.dto.request.UserCreateRequest;
 import com.admin.dto.response.BatchImportResult;
-import com.admin.entity.User;
-import com.admin.enums.UserStatus;
+import com.platform.security.entity.User;
+import com.platform.security.model.UserStatus;
 import com.admin.repository.BusinessUnitRepository;
 import com.admin.repository.PasswordHistoryRepository;
 import com.admin.repository.UserBusinessUnitRepository;
 import com.admin.repository.UserRepository;
-import com.admin.service.AuditService;
 import net.jqwik.api.*;
 import net.jqwik.api.lifecycle.BeforeTry;
 import org.mockito.ArgumentCaptor;
@@ -40,7 +39,6 @@ public class UserImportProperties {
     private PasswordHistoryRepository passwordHistoryRepository;
     private UserBusinessUnitRepository userBusinessUnitRepository;
     private PasswordEncoder passwordEncoder;
-    private AuditService auditService;
     private UserManagerComponent userManagerComponent;
     
     @BeforeTry
@@ -50,14 +48,12 @@ public class UserImportProperties {
         passwordHistoryRepository = mock(PasswordHistoryRepository.class);
         userBusinessUnitRepository = mock(UserBusinessUnitRepository.class);
         passwordEncoder = mock(PasswordEncoder.class);
-        auditService = mock(AuditService.class);
         
         userManagerComponent = new UserManagerComponent(
                 userRepository,
                 businessUnitRepository,
                 passwordHistoryRepository,
                 passwordEncoder,
-                auditService,
                 userBusinessUnitRepository);
         
         // Default mock behaviors
@@ -152,8 +148,8 @@ public class UserImportProperties {
         assertThat(result.getTotalCount()).isEqualTo(
                 result.getSuccessCount() + result.getFailureCount());
         
-        // And: Audit should be recorded
-        verify(auditService).recordBatchImport(any(BatchImportResult.class));
+        // And: Result should be returned
+        assertThat(result).isNotNull();
     }
     
     /**

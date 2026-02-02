@@ -5,15 +5,14 @@ import com.admin.dto.request.UserCreateRequest;
 import com.admin.dto.request.UserQueryRequest;
 import com.admin.dto.request.UserUpdateRequest;
 import com.admin.dto.response.UserInfo;
-import com.admin.entity.User;
-import com.admin.enums.UserStatus;
+import com.platform.security.entity.User;
+import com.platform.security.model.UserStatus;
 import com.admin.exception.UsernameAlreadyExistsException;
 import com.admin.exception.AdminBusinessException;
 import com.admin.repository.BusinessUnitRepository;
 import com.admin.repository.PasswordHistoryRepository;
 import com.admin.repository.UserBusinessUnitRepository;
 import com.admin.repository.UserRepository;
-import com.admin.service.AuditService;
 import net.jqwik.api.*;
 import net.jqwik.api.lifecycle.BeforeTry;
 import org.springframework.data.domain.Page;
@@ -52,7 +51,6 @@ public class UserManagementProperties {
     private PasswordHistoryRepository passwordHistoryRepository;
     private UserBusinessUnitRepository userBusinessUnitRepository;
     private PasswordEncoder passwordEncoder;
-    private AuditService auditService;
     private UserManagerComponent userManagerComponent;
     
     @BeforeTry
@@ -62,14 +60,12 @@ public class UserManagementProperties {
         passwordHistoryRepository = mock(PasswordHistoryRepository.class);
         userBusinessUnitRepository = mock(UserBusinessUnitRepository.class);
         passwordEncoder = mock(PasswordEncoder.class);
-        auditService = mock(AuditService.class);
         
         userManagerComponent = new UserManagerComponent(
                 userRepository,
                 businessUnitRepository,
                 passwordHistoryRepository,
                 passwordEncoder,
-                auditService,
                 userBusinessUnitRepository);
         
         // Default mock behaviors
@@ -437,8 +433,10 @@ public class UserManagementProperties {
     }
     
     @Provide
-    Arbitrary<UserStatus> userStatuses() {
-        return Arbitraries.of(UserStatus.ACTIVE, UserStatus.DISABLED, UserStatus.LOCKED);
+    Arbitrary<com.platform.security.model.UserStatus> userStatuses() {
+        return Arbitraries.of(com.platform.security.model.UserStatus.ACTIVE, 
+                             com.platform.security.model.UserStatus.INACTIVE, 
+                             com.platform.security.model.UserStatus.LOCKED);
     }
     
     @Provide
@@ -455,8 +453,9 @@ public class UserManagementProperties {
                         // Set different createdAt times
                         users.get(i).setCreatedAt(LocalDateTime.now().minusHours(count - i));
                         // Set random status
-                        users.get(i).setStatus(i % 3 == 0 ? UserStatus.DISABLED : 
-                                              i % 3 == 1 ? UserStatus.LOCKED : UserStatus.ACTIVE);
+                        users.get(i).setStatus(i % 3 == 0 ? com.platform.security.model.UserStatus.INACTIVE : 
+                                              i % 3 == 1 ? com.platform.security.model.UserStatus.LOCKED : 
+                                              com.platform.security.model.UserStatus.ACTIVE);
                     }
                     return Arbitraries.just(users);
                 });

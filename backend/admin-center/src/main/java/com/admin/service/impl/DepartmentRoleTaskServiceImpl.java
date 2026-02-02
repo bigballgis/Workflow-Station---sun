@@ -5,7 +5,11 @@ import com.admin.dto.response.DepartmentRoleUserInfo;
 import com.admin.dto.response.GroupTaskInfo;
 import com.admin.entity.*;
 import com.admin.enums.TaskActionType;
-import com.admin.enums.UserStatus;
+import com.platform.security.model.UserStatus;
+import com.platform.security.entity.User;
+import com.platform.security.entity.Role;
+import com.platform.security.entity.BusinessUnit;
+import com.platform.security.entity.UserRole;
 import com.admin.exception.AdminBusinessException;
 import com.admin.exception.BusinessUnitNotFoundException;
 import com.admin.exception.RoleNotFoundException;
@@ -134,7 +138,7 @@ public class DepartmentRoleTaskServiceImpl implements DepartmentRoleTaskService 
         List<UserRole> userRoles = userRoleRepository.findByUserId(userId);
         List<String> validRoleIds = userRoles.stream()
                 .filter(UserRole::isValid)
-                .map(ur -> ur.getRole().getId())
+                .map(UserRole::getRoleId)
                 .collect(Collectors.toList());
         
         // 获取每个角色对应的业务单元角色任务

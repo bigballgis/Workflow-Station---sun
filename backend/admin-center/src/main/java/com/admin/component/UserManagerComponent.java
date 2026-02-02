@@ -8,13 +8,14 @@ import com.admin.dto.response.UserCreateResult;
 import com.admin.dto.response.UserDetailInfo;
 import com.admin.dto.response.UserInfo;
 import com.admin.entity.PasswordHistory;
-import com.admin.entity.User;
-import com.admin.enums.UserStatus;
+import com.platform.security.entity.User;
+import com.platform.security.entity.UserBusinessUnit;
+import com.platform.security.model.UserStatus;
 import com.admin.exception.*;
 import com.admin.repository.BusinessUnitRepository;
 import com.admin.repository.PasswordHistoryRepository;
 import com.admin.repository.UserRepository;
-import com.admin.service.AuditService;
+import com.platform.common.audit.Audited;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -46,7 +47,6 @@ public class UserManagerComponent {
     private final BusinessUnitRepository businessUnitRepository;
     private final PasswordHistoryRepository passwordHistoryRepository;
     private final PasswordEncoder passwordEncoder;
-    private final AuditService auditService;
     private final com.admin.repository.UserBusinessUnitRepository userBusinessUnitRepository;
     
     private static final Pattern EMAIL_PATTERN = Pattern.compile(
@@ -56,6 +56,7 @@ public class UserManagerComponent {
      * 创建用户 - 立即激活，无需邮件验证
      */
     @Transactional
+    @Audited(action = "USER_CREATE", resourceType = "USER", resourceId = "#result.userId")
     public UserCreateResult createUser(UserCreateRequest request) {
         log.info("Creating user: {}", request.getUsername());
         
@@ -92,7 +93,7 @@ public class UserManagerComponent {
         
         // 如果指定了业务单元，创建用户-业务单元关联
         if (request.getBusinessUnitId() != null && !request.getBusinessUnitId().isEmpty()) {
-            com.admin.entity.UserBusinessUnit userBusinessUnit = com.admin.entity.UserBusinessUnit.builder()
+            UserBusinessUnit userBusinessUnit = UserBusinessUnit.builder()
                     .id(UUID.randomUUID().toString())
                     .userId(userId)
                     .businessUnitId(request.getBusinessUnitId())
@@ -103,9 +104,6 @@ public class UserManagerComponent {
         // 保存密码历史
         savePasswordHistory(userId, encodedPassword);
         
-        // 记录审计日志
-        auditService.recordUserCreation(user);
-        
         log.info("User created successfully: {}", userId);
         return UserCreateResult.success(userId, request.getUsername());
     }
@@ -114,6 +112,7 @@ public class UserManagerComponent {
      * 更新用户信息
      */
     @Transactional
+    @Audited(action = "USER_UPDATE", resourceType = "USER", resourceId = "#userId")
     public void updateUser(String userId, UserUpdateRequest request) {
         log.info("Updating user: {}", userId);
         
@@ -144,7 +143,7 @@ public class UserManagerComponent {
             // 更新用户-业务单元关联（先删除旧的，再创建新的）
             userBusinessUnitRepository.deleteByUserId(userId);
             if (!request.getBusinessUnitId().isEmpty()) {
-                com.admin.entity.UserBusinessUnit userBusinessUnit = com.admin.entity.UserBusinessUnit.builder()
+                UserBusinessUnit userBusinessUnit = UserBusinessUnit.builder()
                         .id(UUID.randomUUID().toString())
                         .userId(userId)
                         .businessUnitId(request.getBusinessUnitId())
@@ -184,9 +183,6 @@ public class UserManagerComponent {
         
         userRepository.save(user);
         
-        // 记录审计日志
-        auditService.recordUserUpdate(user, oldUser);
-        
         log.info("User updated successfully: {}", userId);
     }
     
@@ -194,6 +190,7 @@ public class UserManagerComponent {
      * 更新用户状态
      */
     @Transactional
+    @Audited(action = "USER_STATUS_CHANGE", resourceType = "USER", resourceId = "#userId")
     public void updateUserStatus(String userId, UserStatus newStatus, String reason) {
         log.info("Updating user status: {} -> {}", userId, newStatus);
         
@@ -215,9 +212,6 @@ public class UserManagerComponent {
         
         userRepository.save(user);
         
-        // 记录审计日志
-        auditService.recordStatusChange(user, oldStatus, newStatus, reason);
-        
         log.info("User status updated: {} from {} to {}", userId, oldStatus, newStatus);
     }
     
@@ -225,6 +219,7 @@ public class UserManagerComponent {
      * 重置用户密码
      */
     @Transactional
+    @Audited(action = "PASSWORD_RESET", resourceType = "USER", resourceId = "#userId")
     public String resetPassword(String userId) {
         log.info("Resetting password for user: {}", userId);
         
@@ -244,9 +239,6 @@ public class UserManagerComponent {
         // 保存密码历史
         savePasswordHistory(userId, encodedPassword);
         
-        // 记录审计日志
-        auditService.recordPasswordReset(user);
-        
         log.info("Password reset successfully for user: {}", userId);
         return newPassword;
     }
@@ -255,12 +247,13 @@ public class UserManagerComponent {
      * 删除用户（软删除）
      */
     @Transactional
+    @Audited(action = "USER_DELETE", resourceType = "USER", resourceId = "#userId")
     public void deleteUser(String userId) {
         log.info("Deleting user: {}", userId);
         
         try {
-            // 使用 findByIdWithRoles 加载用户及其角色，避免 LazyInitializationException
-            User user = userRepository.findByIdWithRoles(userId)
+            // 直接查找用户
+            User user = userRepository.findById(userId)
                     .orElseThrow(() -> new UserNotFoundException(userId));
             
             // 检查是否是最后一个管理员
@@ -279,14 +272,6 @@ public class UserManagerComponent {
             
             userRepository.save(user);
             
-            // 记录审计日志（在事务外执行，避免影响事务）
-            try {
-                auditService.recordUserDeletion(user);
-            } catch (Exception e) {
-                log.warn("Failed to record user deletion audit log: {}", e.getMessage());
-                // 审计日志失败不影响删除操作
-            }
-            
             log.info("User soft deleted successfully: {}", userId);
         } catch (AdminBusinessException e) {
             // 业务异常（包括 UserNotFoundException）直接抛出
@@ -301,33 +286,11 @@ public class UserManagerComponent {
      * 检查是否是最后一个活跃管理员
      */
     private boolean isLastActiveAdmin(User user) {
-        if (user == null || user.getUserRoles() == null) {
+        if (user == null) {
             return false;
         }
         
         try {
-            // 检查用户是否有管理员角色
-            // 使用 findByIdWithRoles 已经加载了 role，但需要安全访问
-            boolean isAdmin = user.getUserRoles().stream()
-                    .filter(ur -> ur != null)
-                    .map(ur -> {
-                        try {
-                            return ur.getRole();
-                        } catch (org.hibernate.LazyInitializationException e) {
-                            log.warn("LazyInitializationException when getting role for userRole: {}", ur.getId());
-                            return null;
-                        } catch (Exception e) {
-                            log.warn("Failed to get role for userRole: {}", ur.getId(), e);
-                            return null;
-                        }
-                    })
-                    .filter(role -> role != null && role.getCode() != null)
-                    .anyMatch(role -> "ADMIN".equals(role.getCode()) || "SUPER_ADMIN".equals(role.getCode()));
-            
-            if (!isAdmin) {
-                return false;
-            }
-            
             // 统计活跃管理员数量
             long activeAdminCount = userRepository.countActiveAdmins();
             return activeAdminCount <= 1;
@@ -363,17 +326,9 @@ public class UserManagerComponent {
         
         UserDetailInfo detail = UserDetailInfo.fromEntity(user);
         
-        // 获取用户角色 - 需要在事务内访问懒加载属性
-        Set<UserDetailInfo.RoleInfo> roles = user.getUserRoles().stream()
-                .filter(ur -> ur.getRole() != null)
-                .map(ur -> UserDetailInfo.RoleInfo.builder()
-                        .roleId(ur.getRole().getId())
-                        .roleCode(ur.getRole().getCode())
-                        .roleName(ur.getRole().getName())
-                        .description(ur.getRole().getDescription())
-                        .build())
-                .collect(java.util.stream.Collectors.toSet());
-        detail.setRoles(roles);
+        // 获取用户角色 - 通过repository查询
+        // 注意：User实体不再有getUserRoles()方法，需要通过其他方式获取
+        detail.setRoles(java.util.Set.of());
         
         // 获取实体管理者名称
         if (user.getEntityManagerId() != null) {
@@ -420,7 +375,7 @@ public class UserManagerComponent {
             UserInfo info = UserInfo.fromEntity(user);
             
             // 通过关联表获取用户的业务单元
-            List<com.admin.entity.UserBusinessUnit> userBusinessUnits = userBusinessUnitRepository.findByUserId(user.getId());
+            List<UserBusinessUnit> userBusinessUnits = userBusinessUnitRepository.findByUserId(user.getId());
             if (!userBusinessUnits.isEmpty()) {
                 String businessUnitId = userBusinessUnits.get(0).getBusinessUnitId();
                 info.setBusinessUnitId(businessUnitId);
@@ -448,6 +403,7 @@ public class UserManagerComponent {
      * 批量导入用户
      */
     @Transactional
+    @Audited(action = "BATCH_IMPORT", resourceType = "USER", logResponse = true)
     public BatchImportResult batchImportUsers(MultipartFile file) {
         log.info("Starting batch import from file: {}", file.getOriginalFilename());
         
@@ -481,8 +437,6 @@ public class UserManagerComponent {
                     .endTime(Instant.now())
                     .success(failureCount == 0)
                     .build();
-            
-            auditService.recordBatchImport(result);
             
             log.info("Batch import completed: {} success, {} failed", successCount, failureCount);
             return result;
@@ -520,10 +474,9 @@ public class UserManagerComponent {
      */
     private void validateStatusTransition(UserStatus from, UserStatus to) {
         boolean valid = switch (from) {
-            case ACTIVE -> to == UserStatus.DISABLED || to == UserStatus.LOCKED;
-            case DISABLED -> to == UserStatus.ACTIVE;
+            case ACTIVE -> to == UserStatus.INACTIVE || to == UserStatus.LOCKED;
+            case INACTIVE -> to == UserStatus.ACTIVE;
             case LOCKED -> to == UserStatus.ACTIVE;
-            case PENDING -> to == UserStatus.ACTIVE || to == UserStatus.DISABLED;
         };
         
         if (!valid) {

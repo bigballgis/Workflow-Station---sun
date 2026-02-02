@@ -2,6 +2,11 @@ package com.admin.properties;
 
 import com.admin.entity.*;
 import com.admin.enums.*;
+import com.platform.security.entity.User;
+import com.platform.security.entity.VirtualGroup;
+import com.platform.security.entity.VirtualGroupMember;
+import com.platform.security.entity.UserBusinessUnit;
+import com.platform.security.entity.UserBusinessUnitRole;
 import com.admin.exception.AdminBusinessException;
 import com.admin.repository.*;
 import com.admin.service.MemberManagementService;

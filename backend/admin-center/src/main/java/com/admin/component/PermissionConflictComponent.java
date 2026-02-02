@@ -2,14 +2,15 @@ package com.admin.component;
 
 import com.admin.dto.request.ConflictResolutionRequest;
 import com.admin.dto.response.ConflictDetectionResult;
-import com.admin.entity.Permission;
+import com.platform.security.entity.Permission;
 import com.admin.entity.PermissionConflict;
-import com.admin.entity.Role;
+import com.platform.security.entity.Role;
 import com.admin.enums.ConflictResolutionStrategy;
 import com.admin.exception.AdminBusinessException;
+import com.admin.helper.PermissionHelper;
 import com.admin.repository.PermissionConflictRepository;
 import com.admin.repository.RoleRepository;
-import com.admin.service.AuditService;
+import com.platform.common.audit.Audited;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -30,7 +31,7 @@ public class PermissionConflictComponent {
     
     private final PermissionConflictRepository conflictRepository;
     private final RoleRepository roleRepository;
-    private final AuditService auditService;
+    private final PermissionHelper permissionHelper;
     
     /**
      * 检测用户权限冲突
@@ -138,14 +139,21 @@ public class PermissionConflictComponent {
                 "CREATE", Set.of("READONLY")
         );
         
-        String action1 = perm1.getAction().toUpperCase();
-        String action2 = perm2.getAction().toUpperCase();
+        String action1 = permissionHelper.getAction(perm1);
+        String action2 = permissionHelper.getAction(perm2);
         
-        Set<String> exclusiveActions1 = mutuallyExclusiveRules.get(action1);
-        Set<String> exclusiveActions2 = mutuallyExclusiveRules.get(action2);
+        if (action1 == null || action2 == null) {
+            return false;
+        }
         
-        return (exclusiveActions1 != null && exclusiveActions1.contains(action2)) ||
-               (exclusiveActions2 != null && exclusiveActions2.contains(action1));
+        String action1Upper = action1.toUpperCase();
+        String action2Upper = action2.toUpperCase();
+        
+        Set<String> exclusiveActions1 = mutuallyExclusiveRules.get(action1Upper);
+        Set<String> exclusiveActions2 = mutuallyExclusiveRules.get(action2Upper);
+        
+        return (exclusiveActions1 != null && exclusiveActions1.contains(action2Upper)) ||
+               (exclusiveActions2 != null && exclusiveActions2.contains(action1Upper));
     }
     
     /**
@@ -153,7 +161,10 @@ public class PermissionConflictComponent {
      */
     private boolean isHierarchicalConflict(Permission perm1, Permission perm2) {
         // 检查同一资源的不同层级权限是否冲突
-        if (!perm1.getResource().equals(perm2.getResource())) {
+        String resource1 = permissionHelper.getResource(perm1);
+        String resource2 = permissionHelper.getResource(perm2);
+        
+        if (resource1 == null || resource2 == null || !resource1.equals(resource2)) {
             return false;
         }
         
@@ -165,8 +176,11 @@ public class PermissionConflictComponent {
                 "ADMIN", 4
         );
         
-        Integer level1 = actionLevels.get(perm1.getAction().toUpperCase());
-        Integer level2 = actionLevels.get(perm2.getAction().toUpperCase());
+        String action1 = permissionHelper.getAction(perm1);
+        String action2 = permissionHelper.getAction(perm2);
+        
+        Integer level1 = action1 != null ? actionLevels.get(action1.toUpperCase()) : null;
+        Integer level2 = action2 != null ? actionLevels.get(action2.toUpperCase()) : null;
         
         // 如果层级差距过大，可能存在冲突
         return level1 != null && level2 != null && Math.abs(level1 - level2) > 2;
@@ -208,6 +222,7 @@ public class PermissionConflictComponent {
      * 创建权限冲突记录
      */
     @Transactional
+    @Audited(action = "PERMISSION_CONFLICT_DETECT", resourceType = "PERMISSION", resourceId = "#permission.id")
     public PermissionConflict createConflictRecord(String userId, Permission permission, 
                                                   String source1, String source2, 
                                                   String description, 
@@ -215,7 +230,7 @@ public class PermissionConflictComponent {
         PermissionConflict conflict = PermissionConflict.builder()
                 .id(UUID.randomUUID().toString())
                 .userId(userId)
-                .permission(permission)
+                .permissionId(permission.getId())
                 .conflictSource1(source1)
                 .conflictSource2(source2)
                 .conflictDescription(description)
@@ -225,9 +240,6 @@ public class PermissionConflictComponent {
         
         conflictRepository.save(conflict);
         
-        // 记录审计日志
-        auditService.recordPermissionConflictDetection(conflict);
-        
         return conflict;
     }
     
@@ -235,6 +247,7 @@ public class PermissionConflictComponent {
      * 解决权限冲突
      */
     @Transactional
+    @Audited(action = "PERMISSION_CONFLICT_RESOLVE", resourceType = "PERMISSION", resourceId = "#request.conflictId")
     public void resolveConflict(ConflictResolutionRequest request) {
         log.info("Resolving permission conflict: {}", request.getConflictId());
         
@@ -257,9 +270,6 @@ public class PermissionConflictComponent {
         conflict.setResolvedBy(request.getResolvedBy());
         
         conflictRepository.save(conflict);
-        
-        // 记录审计日志
-        auditService.recordPermissionConflictResolution(conflict, request.getResolvedBy());
         
         log.info("Permission conflict resolved: {}", request.getConflictId());
     }

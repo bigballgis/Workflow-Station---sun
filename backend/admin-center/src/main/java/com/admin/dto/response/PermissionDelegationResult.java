@@ -35,13 +35,13 @@ public class PermissionDelegationResult {
     private boolean isValid;
     private boolean isExpired;
     
-    public static PermissionDelegationResult fromEntity(PermissionDelegation delegation) {
+    public static PermissionDelegationResult fromEntity(PermissionDelegation delegation, com.platform.security.entity.Permission permission) {
         return PermissionDelegationResult.builder()
                 .id(delegation.getId())
                 .delegatorId(delegation.getDelegatorId())
                 .delegateeId(delegation.getDelegateeId())
-                .permissionId(delegation.getPermission().getId())
-                .permissionName(delegation.getPermission().getName())
+                .permissionId(delegation.getPermissionId())
+                .permissionName(permission != null ? permission.getName() : null)
                 .delegationType(delegation.getDelegationType())
                 .validFrom(delegation.getValidFrom())
                 .validTo(delegation.getValidTo())
@@ -54,7 +54,7 @@ public class PermissionDelegationResult {
                 .build();
     }
     
-    public static PermissionDelegationResult success(PermissionDelegation delegation) {
-        return fromEntity(delegation);
+    public static PermissionDelegationResult success(PermissionDelegation delegation, com.platform.security.entity.Permission permission) {
+        return fromEntity(delegation, permission);
     }
 }

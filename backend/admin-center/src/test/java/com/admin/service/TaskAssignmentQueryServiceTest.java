@@ -2,6 +2,12 @@ package com.admin.service;
 
 import com.admin.entity.*;
 import com.admin.enums.RoleType;
+import com.admin.util.EntityTypeConverter;
+import com.platform.security.entity.User;
+import com.platform.security.entity.Role;
+import com.platform.security.entity.BusinessUnit;
+import com.platform.security.entity.UserBusinessUnitRole;
+import com.platform.security.entity.BusinessUnitRole;
 import com.admin.exception.BusinessUnitNotFoundException;
 import com.admin.exception.RoleNotFoundException;
 import com.admin.repository.*;
@@ -162,7 +168,7 @@ class TaskAssignmentQueryServiceTest {
         void shouldReturnUserIdsWhenUsersExist() {
             Role role = new Role();
             role.setId(ROLE_ID);
-            role.setType(RoleType.BU_BOUNDED);
+            role.setType(EntityTypeConverter.fromRoleType(RoleType.BU_BOUNDED));
             
             when(businessUnitRepository.existsById(BU_ID)).thenReturn(true);
             when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.of(role));
@@ -179,7 +185,7 @@ class TaskAssignmentQueryServiceTest {
         void shouldReturnEmptyListWhenNoUsers() {
             Role role = new Role();
             role.setId(ROLE_ID);
-            role.setType(RoleType.BU_BOUNDED);
+            role.setType(EntityTypeConverter.fromRoleType(RoleType.BU_BOUNDED));
             
             when(businessUnitRepository.existsById(BU_ID)).thenReturn(true);
             when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.of(role));
@@ -196,7 +202,7 @@ class TaskAssignmentQueryServiceTest {
         void shouldReturnEmptyListWhenRoleNotBuBounded() {
             Role role = new Role();
             role.setId(ROLE_ID);
-            role.setType(RoleType.BU_UNBOUNDED);
+            role.setType(EntityTypeConverter.fromRoleType(RoleType.BU_UNBOUNDED));
             
             when(businessUnitRepository.existsById(BU_ID)).thenReturn(true);
             when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.of(role));
@@ -236,7 +242,7 @@ class TaskAssignmentQueryServiceTest {
         void shouldReturnUserIdsThroughVirtualGroups() {
             Role role = new Role();
             role.setId(ROLE_ID);
-            role.setType(RoleType.BU_UNBOUNDED);
+            role.setType(EntityTypeConverter.fromRoleType(RoleType.BU_UNBOUNDED));
             
             when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.of(role));
             when(virtualGroupRoleRepository.findVirtualGroupIdsByRoleId(ROLE_ID))
@@ -254,7 +260,7 @@ class TaskAssignmentQueryServiceTest {
         void shouldReturnEmptyListWhenNoVirtualGroups() {
             Role role = new Role();
             role.setId(ROLE_ID);
-            role.setType(RoleType.BU_UNBOUNDED);
+            role.setType(EntityTypeConverter.fromRoleType(RoleType.BU_UNBOUNDED));
             
             when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.of(role));
             when(virtualGroupRoleRepository.findVirtualGroupIdsByRoleId(ROLE_ID))
@@ -271,7 +277,7 @@ class TaskAssignmentQueryServiceTest {
         void shouldReturnEmptyListWhenRoleNotBuUnbounded() {
             Role role = new Role();
             role.setId(ROLE_ID);
-            role.setType(RoleType.BU_BOUNDED);
+            role.setType(EntityTypeConverter.fromRoleType(RoleType.BU_BOUNDED));
             
             when(roleRepository.findById(ROLE_ID)).thenReturn(Optional.of(role));
             
@@ -373,11 +379,11 @@ class TaskAssignmentQueryServiceTest {
         void shouldReturnBuBoundedRoles() {
             Role role1 = new Role();
             role1.setId("role-001");
-            role1.setType(RoleType.BU_BOUNDED);
+            role1.setType(EntityTypeConverter.fromRoleType(RoleType.BU_BOUNDED));
             
             Role role2 = new Role();
             role2.setId("role-002");
-            role2.setType(RoleType.BU_BOUNDED);
+            role2.setType(EntityTypeConverter.fromRoleType(RoleType.BU_BOUNDED));
             
             when(roleRepository.findByType(RoleType.BU_BOUNDED))
                     .thenReturn(Arrays.asList(role1, role2));
@@ -398,7 +404,7 @@ class TaskAssignmentQueryServiceTest {
         void shouldReturnBuUnboundedRoles() {
             Role role1 = new Role();
             role1.setId("role-001");
-            role1.setType(RoleType.BU_UNBOUNDED);
+            role1.setType(EntityTypeConverter.fromRoleType(RoleType.BU_UNBOUNDED));
             
             when(roleRepository.findByType(RoleType.BU_UNBOUNDED))
                     .thenReturn(Arrays.asList(role1));

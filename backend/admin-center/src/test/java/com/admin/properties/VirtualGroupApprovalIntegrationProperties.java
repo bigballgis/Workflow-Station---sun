@@ -2,9 +2,16 @@ package com.admin.properties;
 
 import com.admin.entity.*;
 import com.admin.enums.*;
+import com.platform.security.entity.User;
+import com.platform.security.entity.Role;
+import com.platform.security.entity.VirtualGroup;
+import com.platform.security.entity.VirtualGroupMember;
+import com.platform.security.entity.VirtualGroupRole;
+import com.platform.security.model.UserStatus;
 import com.admin.exception.AdminBusinessException;
 import com.admin.repository.*;
 import com.admin.service.*;
+import com.admin.util.EntityTypeConverter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import net.jqwik.api.*;
 import net.jqwik.api.lifecycle.BeforeTry;
@@ -141,8 +148,8 @@ public class VirtualGroupApprovalIntegrationProperties {
         
         // Then: User should be added to virtual group immediately
         verify(virtualGroupMemberRepository).save(argThat(member ->
-                member.getUser().getId().equals(applicantId) &&
-                member.getVirtualGroup().getId().equals(virtualGroupId)));
+                member.getUserId().equals(applicantId) &&
+                member.getGroupId().equals(virtualGroupId)));
     }
     
     /**
@@ -206,8 +213,8 @@ public class VirtualGroupApprovalIntegrationProperties {
         
         // Then: User should be added to virtual group (which grants the bound role)
         verify(virtualGroupMemberRepository).save(argThat(member ->
-                member.getUser().getId().equals(applicantId) &&
-                member.getVirtualGroup().getId().equals(virtualGroupId)));
+                member.getUserId().equals(applicantId) &&
+                member.getGroupId().equals(virtualGroupId)));
         
         // Then: The bound role is implicitly granted through virtual group membership
         // (Role is inherited from virtual group, not directly assigned)
@@ -278,7 +285,7 @@ public class VirtualGroupApprovalIntegrationProperties {
         // Then: BU_UNBOUNDED role is immediately effective (no business unit required)
         // This is verified by the fact that the user is now a member of the virtual group
         // and the role type is BU_UNBOUNDED
-        assertThat(buUnboundedRole.getType()).isEqualTo(RoleType.BU_UNBOUNDED);
+        assertThat(buUnboundedRole.getType()).isEqualTo(EntityTypeConverter.fromRoleType(RoleType.BU_UNBOUNDED));
     }
     
     /**
@@ -344,7 +351,7 @@ public class VirtualGroupApprovalIntegrationProperties {
         
         // Then: BU_BOUNDED role is granted but not yet effective
         // (requires business unit membership to activate)
-        assertThat(buBoundedRole.getType()).isEqualTo(RoleType.BU_BOUNDED);
+        assertThat(buBoundedRole.getType()).isEqualTo(EntityTypeConverter.fromRoleType(RoleType.BU_BOUNDED));
     }
 
     
@@ -458,8 +465,8 @@ public class VirtualGroupApprovalIntegrationProperties {
         return VirtualGroup.builder()
                 .id(id)
                 .name("Test Group " + id)
+                .type("CUSTOM")
                 .status("ACTIVE")
-                .members(new HashSet<>())
                 .build();
     }
     
@@ -478,7 +485,7 @@ public class VirtualGroupApprovalIntegrationProperties {
                 .id(roleId)
                 .name("Test Role " + roleId)
                 .code("ROLE_" + roleId.toUpperCase().replace("-", "_"))
-                .type(type)
+                .type(EntityTypeConverter.fromRoleType(type))
                 .status("ACTIVE")
                 .build();
     }

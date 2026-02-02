@@ -2,7 +2,12 @@ package com.admin.service;
 
 import com.admin.entity.*;
 import com.admin.enums.RoleType;
+import com.admin.helper.RoleHelper;
+import com.admin.util.EntityTypeConverter;
 import com.admin.repository.*;
+import com.platform.security.entity.Role;
+import com.platform.security.entity.BusinessUnit;
+import com.platform.security.entity.UserBusinessUnit;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -29,6 +34,7 @@ public class UserPermissionService {
     private final RoleRepository roleRepository;
     private final UserPreferenceRepository userPreferenceRepository;
     private final BusinessUnitRepository businessUnitRepository;
+    private final RoleHelper roleHelper;
     
     /**
      * 获取用户的所有角色（通过虚拟组继承）
@@ -69,9 +75,9 @@ public class UserPermissionService {
     public Map<Role, List<BusinessUnit>> getUserBuBoundedRoles(String userId) {
         List<Role> allRoles = getUserRoles(userId);
         
-        // 过滤出 BU_BOUNDED 类型的角色
+        // 过滤出 BU_BOUNDED 类型的角色 - 使用 RoleHelper
         List<Role> buBoundedRoles = allRoles.stream()
-                .filter(role -> role.getType() == RoleType.BU_BOUNDED)
+                .filter(role -> "BU_BOUNDED".equals(role.getType()))
                 .collect(Collectors.toList());
         
         if (buBoundedRoles.isEmpty()) {
@@ -106,7 +112,7 @@ public class UserPermissionService {
      */
     public List<Role> getUserBuUnboundedRoles(String userId) {
         return getUserRoles(userId).stream()
-                .filter(role -> role.getType() == RoleType.BU_UNBOUNDED)
+                .filter(role -> "BU_UNBOUNDED".equals(role.getType()))
                 .collect(Collectors.toList());
     }
 
@@ -135,12 +141,12 @@ public class UserPermissionService {
         Role role = targetRole.get();
         
         // 如果是 BU-Unbounded 角色，直接返回 true（不需要业务单元）
-        if (role.getType() == RoleType.BU_UNBOUNDED) {
+        if (EntityTypeConverter.toRoleType(role.getType()) == RoleType.BU_UNBOUNDED) {
             return true;
         }
         
         // 如果是 BU-Bounded 角色，检查用户是否是该业务单元的成员
-        if (role.getType() == RoleType.BU_BOUNDED) {
+        if (EntityTypeConverter.toRoleType(role.getType()) == RoleType.BU_BOUNDED) {
             return userBusinessUnitRepository.existsByUserIdAndBusinessUnitId(userId, businessUnitId);
         }
         
@@ -160,7 +166,7 @@ public class UserPermissionService {
     public List<Role> getUnactivatedBuBoundedRoles(String userId) {
         // 获取用户的所有 BU-Bounded 角色
         List<Role> buBoundedRoles = getUserRoles(userId).stream()
-                .filter(role -> role.getType() == RoleType.BU_BOUNDED)
+                .filter(role -> EntityTypeConverter.toRoleType(role.getType()) == RoleType.BU_BOUNDED)
                 .collect(Collectors.toList());
         
         if (buBoundedRoles.isEmpty()) {

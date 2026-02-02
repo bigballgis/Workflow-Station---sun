@@ -1,7 +1,8 @@
 package com.admin.dto.response;
 
-import com.admin.entity.VirtualGroup;
+import com.platform.security.entity.VirtualGroup;
 import com.admin.enums.VirtualGroupType;
+import com.admin.util.EntityTypeConverter;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -29,7 +30,7 @@ public class VirtualGroupResult {
                 .success(true)
                 .groupId(group.getId())
                 .name(group.getName())
-                .type(group.getType())
+                .type(EntityTypeConverter.toVirtualGroupType(group.getType()))
                 .message("操作成功")
                 .build();
     }

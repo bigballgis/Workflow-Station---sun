@@ -1,6 +1,6 @@
 package com.platform.security.service.impl;
 
-import com.platform.security.model.LoginAudit;
+import com.platform.security.entity.LoginAudit;
 import com.platform.security.repository.LoginAuditRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

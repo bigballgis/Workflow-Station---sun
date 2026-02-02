@@ -35,7 +35,7 @@ public class SecurityPermissionSystemEndToEndTest {
     private com.developer.repository.RoleRepository roleRepository;
     
     private SecurityCacheManager cacheManager;
-    private SecurityAuditLogger auditLogger;
+    private com.platform.common.security.SecurityAuditLogger auditLogger;
     private DatabasePermissionEvaluator permissionEvaluator;
     private UserContextService userContextService;
     
@@ -45,7 +45,12 @@ public class SecurityPermissionSystemEndToEndTest {
         
         // Create real instances with mocked dependencies
         cacheManager = new SecurityCacheManager(30, 1000);
-        auditLogger = new SecurityAuditLogger();
+        
+        // Create SecurityConfig for SecurityAuditLogger
+        com.platform.common.config.SecurityConfig securityConfig = new com.platform.common.config.SecurityConfig();
+        securityConfig.setEnableSecurityAuditLogging(true);
+        auditLogger = new com.platform.common.security.SecurityAuditLogger(securityConfig);
+        
         userContextService = new UserContextService(auditLogger);
         
         // Create permission evaluator with all dependencies

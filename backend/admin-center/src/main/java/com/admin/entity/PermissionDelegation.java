@@ -32,9 +32,8 @@ public class PermissionDelegation {
     @Column(name = "delegatee_id", nullable = false, length = 64)
     private String delegateeId;
     
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "permission_id", nullable = false)
-    private Permission permission;
+    @Column(name = "permission_id", nullable = false, length = 64)
+    private String permissionId;
     
     @Enumerated(EnumType.STRING)
     @Column(name = "delegation_type", nullable = false, length = 20)

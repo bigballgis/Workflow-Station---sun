@@ -1,7 +1,7 @@
 package com.admin.dto.response;
 
-import com.admin.entity.User;
-import com.admin.enums.UserStatus;
+import com.platform.security.entity.User;
+import com.platform.security.model.UserStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

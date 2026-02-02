@@ -4,11 +4,12 @@ import com.admin.component.PermissionConflictComponent;
 import com.admin.component.PermissionDelegationComponent;
 import com.admin.component.RolePermissionManagerComponent;
 import com.admin.dto.response.PermissionCheckResult;
-import com.admin.entity.Permission;
-import com.admin.entity.Role;
-import com.admin.entity.UserRole;
-import com.admin.entity.User;
+import com.platform.security.entity.Permission;
+import com.platform.security.entity.Role;
+import com.platform.security.entity.UserRole;
+import com.platform.security.entity.User;
 import com.admin.enums.RoleType;
+import com.admin.util.EntityTypeConverter;
 import com.admin.repository.*;
 import net.jqwik.api.*;
 
@@ -47,13 +48,13 @@ public class PermissionCheckConsistencyProperties {
         for (Permission permission : userWithPerms.permissions) {
             PermissionCheckResult result = ctx.rolePermissionManager.checkPermission(
                     userWithPerms.userId, 
-                    permission.getResource(), 
+                    permission.getResourceType(), 
                     permission.getAction());
             
             // Then: 应该返回允许
             assertThat(result.isAllowed())
                     .as("用户拥有权限 %s:%s 应该通过检查", 
-                            permission.getResource(), permission.getAction())
+                            permission.getResourceType(), permission.getAction())
                     .isTrue();
         }
     }
@@ -70,7 +71,7 @@ public class PermissionCheckConsistencyProperties {
         
         // 确保非存在权限不在用户权限列表中
         Assume.that(userWithPerms.permissions.stream()
-                .noneMatch(p -> p.getResource().equals(nonExistentPermission.getResource()) 
+                .noneMatch(p -> p.getResourceType().equals(nonExistentPermission.getResourceType()) 
                         && p.getAction().equals(nonExistentPermission.getAction())));
         
         // 创建测试上下文
@@ -82,13 +83,13 @@ public class PermissionCheckConsistencyProperties {
         // When: 检查用户没有的权限
         PermissionCheckResult result = ctx.rolePermissionManager.checkPermission(
                 userWithPerms.userId, 
-                nonExistentPermission.getResource(), 
+                nonExistentPermission.getResourceType(), 
                 nonExistentPermission.getAction());
         
         // Then: 应该返回拒绝
         assertThat(result.isAllowed())
                 .as("用户没有权限 %s:%s 应该被拒绝", 
-                        nonExistentPermission.getResource(), nonExistentPermission.getAction())
+                        nonExistentPermission.getResourceType(), nonExistentPermission.getAction())
                 .isFalse();
     }
     
@@ -110,7 +111,7 @@ public class PermissionCheckConsistencyProperties {
         
         // When: 检查权限
         PermissionCheckResult result = ctx.rolePermissionManager.checkPermission(
-                userId, permission.getResource(), permission.getAction());
+                userId, permission.getResourceType(), permission.getAction());
         
         // Then: 应该返回拒绝
         assertThat(result.isAllowed())
@@ -140,11 +141,11 @@ public class PermissionCheckConsistencyProperties {
         
         // When: 多次检查同一权限
         PermissionCheckResult firstResult = ctx.rolePermissionManager.checkPermission(
-                userWithPerms.userId, permission.getResource(), permission.getAction());
+                userWithPerms.userId, permission.getResourceType(), permission.getAction());
         PermissionCheckResult secondResult = ctx.rolePermissionManager.checkPermission(
-                userWithPerms.userId, permission.getResource(), permission.getAction());
+                userWithPerms.userId, permission.getResourceType(), permission.getAction());
         PermissionCheckResult thirdResult = ctx.rolePermissionManager.checkPermission(
-                userWithPerms.userId, permission.getResource(), permission.getAction());
+                userWithPerms.userId, permission.getResourceType(), permission.getAction());
         
         // Then: 结果应该一致
         assertThat(firstResult.isAllowed())
@@ -213,12 +214,12 @@ public class PermissionCheckConsistencyProperties {
         for (Permission permission : allPermissions) {
             PermissionCheckResult result = ctx.rolePermissionManager.checkPermission(
                     userWithRoles.userId, 
-                    permission.getResource(), 
+                    permission.getResourceType(), 
                     permission.getAction());
             
             assertThat(result.isAllowed())
                     .as("多角色用户应该拥有所有角色的权限: %s:%s", 
-                            permission.getResource(), permission.getAction())
+                            permission.getResourceType(), permission.getAction())
                     .isTrue();
         }
     }
@@ -245,7 +246,7 @@ public class PermissionCheckConsistencyProperties {
         Permission permission = userWithPerms.permissions.iterator().next();
         PermissionCheckResult result = ctx.rolePermissionManager.checkPermission(
                 userWithPerms.userId, 
-                permission.getResource(), 
+                permission.getResourceType(), 
                 permission.getAction());
         
         // Then: 允许结果应该包含角色信息
@@ -284,13 +285,18 @@ public class PermissionCheckConsistencyProperties {
         // 默认委托权限检查返回 false
         when(ctx.delegationComponent.hasDelegatedPermission(anyString(), anyString())).thenReturn(false);
         
+        // Use real PermissionHelper instead of mock for proper permission matching
+        com.admin.helper.PermissionHelper permissionHelper = new com.admin.helper.PermissionHelper(ctx.permissionRepository);
+        
         ctx.rolePermissionManager = new RolePermissionManagerComponent(
                 ctx.roleRepository,
                 ctx.permissionRepository,
                 ctx.rolePermissionRepository,
                 ctx.userRoleRepository,
                 ctx.delegationComponent,
-                ctx.conflictComponent);
+                ctx.conflictComponent,
+                mock(com.admin.helper.RoleHelper.class),
+                permissionHelper);
         return ctx;
     }
     
@@ -355,7 +361,7 @@ public class PermissionCheckConsistencyProperties {
                     .id(roleId)
                     .name("Role " + roleCode)
                     .code("ROLE_" + roleCode.toUpperCase())
-                    .type(RoleType.BU_BOUNDED)
+                    .type(EntityTypeConverter.fromRoleType(RoleType.BU_BOUNDED))
                     .status("ACTIVE")
                     .build();
             
@@ -374,8 +380,7 @@ public class PermissionCheckConsistencyProperties {
                 .id(UUID.randomUUID().toString())
                 .name("Non-existent Permission")
                 .code("NON_EXIST_" + resource.toUpperCase())
-                .type("MENU")
-                .resource("nonexistent_" + resource)
+                .resourceType("nonexistent_" + resource)
                 .action(action)
                 .build());
     }
@@ -394,7 +399,7 @@ public class PermissionCheckConsistencyProperties {
                     .id(roleId)
                     .name("Wildcard Role " + roleCode)
                     .code("WILDCARD_" + roleCode.toUpperCase())
-                    .type(RoleType.ADMIN)
+                    .type(EntityTypeConverter.fromRoleType(RoleType.ADMIN))
                     .status("ACTIVE")
                     .build();
             
@@ -404,8 +409,7 @@ public class PermissionCheckConsistencyProperties {
                         .id(UUID.randomUUID().toString())
                         .name("All Resources Permission")
                         .code("ALL_RESOURCES")
-                        .type("SYSTEM")
-                        .resource("*")
+                        .resourceType("*")
                         .action("*")
                         .build());
             } else {
@@ -413,8 +417,7 @@ public class PermissionCheckConsistencyProperties {
                         .id(UUID.randomUUID().toString())
                         .name("All Actions Permission")
                         .code("ALL_ACTIONS_" + targetResource.toUpperCase())
-                        .type("MENU")
-                        .resource(targetResource)
+                        .resourceType(targetResource)
                         .action("*")
                         .build());
             }
@@ -442,7 +445,7 @@ public class PermissionCheckConsistencyProperties {
                                                     .id(roleId)
                                                     .name("Role " + index + " " + roleCode)
                                                     .code("ROLE_" + index + "_" + roleCode.toUpperCase())
-                                                    .type(RoleType.BU_BOUNDED)
+                                                    .type(EntityTypeConverter.fromRoleType(RoleType.BU_BOUNDED))
                                                     .status("ACTIVE")
                                                     .build();
                                             Set<Permission> permissions = generatePermissions("role" + index, permCount);
@@ -478,8 +481,7 @@ public class PermissionCheckConsistencyProperties {
                     .id(UUID.randomUUID().toString())
                     .name(prefix + " Permission " + i)
                     .code(prefix.toUpperCase() + "_PERM_" + i)
-                    .type("MENU")
-                    .resource(prefix + "_resource_" + i)
+                    .resourceType(prefix + "_resource_" + i)
                     .action(actions[i % actions.length])
                     .build());
         }

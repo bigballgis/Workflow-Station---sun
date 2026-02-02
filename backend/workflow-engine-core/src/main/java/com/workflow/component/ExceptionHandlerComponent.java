@@ -24,7 +24,7 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 
-@Component
+@Component("workflowExceptionHandler")
 public class ExceptionHandlerComponent {
     
     private static final Logger log = LoggerFactory.getLogger(ExceptionHandlerComponent.class);

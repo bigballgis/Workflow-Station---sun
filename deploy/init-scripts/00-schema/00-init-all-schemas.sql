@@ -25,35 +25,35 @@ BEGIN;
 -- Must be executed first as other schemas depend on sys_* tables
 -- =====================================================
 \echo 'Creating Platform Security Schema (sys_* tables)...'
-\i 01-platform-security-schema.sql
+\i /docker-entrypoint-initdb.d/00-schema/01-platform-security-schema.sql
 
 -- =====================================================
 -- 2. Workflow Engine Schema
 -- Depends on sys_users and other platform-security tables
 -- =====================================================
 \echo 'Creating Workflow Engine Schema (wf_* tables)...'
-\i 02-workflow-engine-schema.sql
+\i /docker-entrypoint-initdb.d/00-schema/02-workflow-engine-schema.sql
 
 -- =====================================================
 -- 3. User Portal Schema
 -- Depends on platform-security for user references
 -- =====================================================
 \echo 'Creating User Portal Schema (up_* tables)...'
-\i 03-user-portal-schema.sql
+\i /docker-entrypoint-initdb.d/00-schema/03-user-portal-schema.sql
 
 -- =====================================================
 -- 4. Developer Workstation Schema
 -- Independent schema for developer tools
 -- =====================================================
 \echo 'Creating Developer Workstation Schema (dw_* tables)...'
-\i 04-developer-workstation-schema.sql
+\i /docker-entrypoint-initdb.d/00-schema/04-developer-workstation-schema.sql
 
 -- =====================================================
 -- 5. Admin Center Schema
 -- Depends on platform-security for user and permission references
 -- =====================================================
 \echo 'Creating Admin Center Schema (admin_* tables)...'
-\i 05-admin-center-schema.sql
+\i /docker-entrypoint-initdb.d/00-schema/05-admin-center-schema.sql
 
 -- Commit transaction
 COMMIT;

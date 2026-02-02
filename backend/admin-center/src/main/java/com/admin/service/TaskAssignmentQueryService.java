@@ -1,10 +1,11 @@
 package com.admin.service;
 
-import com.admin.entity.BusinessUnit;
-import com.admin.entity.Role;
-import com.admin.entity.User;
-import com.admin.entity.UserBusinessUnitRole;
+import com.platform.security.entity.BusinessUnit;
+import com.platform.security.entity.Role;
+import com.platform.security.entity.User;
+import com.platform.security.entity.UserBusinessUnitRole;
 import com.admin.enums.RoleType;
+import com.admin.util.EntityTypeConverter;
 import com.admin.exception.BusinessUnitNotFoundException;
 import com.admin.exception.RoleNotFoundException;
 import com.admin.exception.UserNotFoundException;
@@ -91,7 +92,7 @@ public class TaskAssignmentQueryService {
         Role role = roleRepository.findById(roleId)
                 .orElseThrow(() -> new RoleNotFoundException(roleId));
         
-        if (role.getType() != RoleType.BU_BOUNDED) {
+        if (EntityTypeConverter.toRoleType(role.getType()) != RoleType.BU_BOUNDED) {
             log.warn("Role {} is not BU_BOUNDED type, actual type: {}", roleId, role.getType());
             return Collections.emptyList();
         }
@@ -114,7 +115,7 @@ public class TaskAssignmentQueryService {
         Role role = roleRepository.findById(roleId)
                 .orElseThrow(() -> new RoleNotFoundException(roleId));
         
-        if (role.getType() != RoleType.BU_UNBOUNDED) {
+        if (EntityTypeConverter.toRoleType(role.getType()) != RoleType.BU_UNBOUNDED) {
             log.warn("Role {} is not BU_UNBOUNDED type, actual type: {}", roleId, role.getType());
             return Collections.emptyList();
         }

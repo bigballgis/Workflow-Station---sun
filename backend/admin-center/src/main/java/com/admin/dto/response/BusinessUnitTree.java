@@ -1,7 +1,8 @@
 package com.admin.dto.response;
 
-import com.admin.entity.BusinessUnit;
+import com.platform.security.entity.BusinessUnit;
 import com.admin.enums.BusinessUnitStatus;
+import com.admin.util.EntityTypeConverter;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -41,9 +42,9 @@ public class BusinessUnitTree {
                 .parentId(unit.getParentId())
                 .level(unit.getLevel())
                 .path(unit.getPath())
-                .status(unit.getStatus())
+                .status(EntityTypeConverter.toBusinessUnitStatus(unit.getStatus()))
                 .sortOrder(unit.getSortOrder())
-                .memberCount(unit.getMemberCount())
+                .memberCount(0L) // Will be set by helper service
                 .children(new ArrayList<>())
                 .build();
     }

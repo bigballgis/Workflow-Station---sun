@@ -1,13 +1,15 @@
 package com.developer.config;
 
-import com.developer.security.SecurityAuditLogger;
+import com.platform.common.security.SecurityAuditLogger;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.validation.annotation.Validated;
 
 import jakarta.annotation.PostConstruct;
+import java.util.Map;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
@@ -18,18 +20,14 @@ import jakarta.validation.constraints.NotNull;
  * 
  * Requirements: 8.1, 8.2, 8.3, 8.5
  */
-@Configuration
 @ConfigurationProperties(prefix = "security")
 @Data
 @Validated
 @Slf4j
 public class SecurityConfigurationProperties {
     
-    private final SecurityAuditLogger auditLogger;
-    
-    public SecurityConfigurationProperties(SecurityAuditLogger auditLogger) {
-        this.auditLogger = auditLogger;
-    }
+    @Autowired(required = false)
+    private SecurityAuditLogger auditLogger;
     
     /**
      * Cache configuration properties
@@ -181,15 +179,29 @@ public class SecurityConfigurationProperties {
             validateDatabaseConfiguration();
             validatePermissionConfiguration();
             
-            auditLogger.logConfigurationValidation("security.cache", true, null);
-            auditLogger.logConfigurationValidation("security.database", true, null);
-            auditLogger.logConfigurationValidation("security.permission", true, null);
+            // Log to audit logger if available
+            if (auditLogger != null) {
+                Map<String, String> metadata = Map.of("parameter", "security.cache", "valid", "true");
+                auditLogger.logSecurityEvent("CONFIG_VALIDATION", "Security cache configuration validation successful", metadata);
+                
+                metadata = Map.of("parameter", "security.database", "valid", "true");
+                auditLogger.logSecurityEvent("CONFIG_VALIDATION", "Security database configuration validation successful", metadata);
+                
+                metadata = Map.of("parameter", "security.permission", "valid", "true");
+                auditLogger.logSecurityEvent("CONFIG_VALIDATION", "Security permission configuration validation successful", metadata);
+            }
             
             log.info("Security configuration validation completed successfully");
             
         } catch (Exception e) {
             String errorMessage = "Security configuration validation failed: " + e.getMessage();
-            auditLogger.logConfigurationValidation("security", false, errorMessage);
+            
+            // Log to audit logger if available
+            if (auditLogger != null) {
+                Map<String, String> metadata = Map.of("parameter", "security", "valid", "false", "error", errorMessage);
+                auditLogger.logSecurityEvent("CONFIG_VALIDATION", "Security configuration validation failed", metadata);
+            }
+            
             log.error(errorMessage, e);
             throw new IllegalStateException(errorMessage, e);
         }

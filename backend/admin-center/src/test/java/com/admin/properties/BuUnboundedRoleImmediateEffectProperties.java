@@ -2,6 +2,13 @@ package com.admin.properties;
 
 import com.admin.entity.*;
 import com.admin.enums.*;
+import com.admin.util.EntityTypeConverter;
+import com.platform.security.entity.User;
+import com.platform.security.entity.Role;
+import com.platform.security.entity.VirtualGroup;
+import com.platform.security.entity.VirtualGroupMember;
+import com.platform.security.entity.VirtualGroupRole;
+import com.platform.security.entity.UserBusinessUnit;
 import com.admin.repository.*;
 import com.admin.service.*;
 import net.jqwik.api.*;
@@ -28,6 +35,7 @@ public class BuUnboundedRoleImmediateEffectProperties {
     private UserBusinessUnitRepository userBusinessUnitRepository;
     private RoleRepository roleRepository;
     private UserPermissionService userPermissionService;
+    private com.admin.helper.RoleHelper roleHelper;
     
     @BeforeTry
     void setUp() {
@@ -35,6 +43,7 @@ public class BuUnboundedRoleImmediateEffectProperties {
         virtualGroupRoleRepository = mock(VirtualGroupRoleRepository.class);
         userBusinessUnitRepository = mock(UserBusinessUnitRepository.class);
         roleRepository = mock(RoleRepository.class);
+        roleHelper = mock(com.admin.helper.RoleHelper.class);
         
         userPermissionService = new UserPermissionService(
                 virtualGroupMemberRepository,
@@ -42,7 +51,8 @@ public class BuUnboundedRoleImmediateEffectProperties {
                 userBusinessUnitRepository,
                 roleRepository,
                 mock(UserPreferenceRepository.class),
-                mock(BusinessUnitRepository.class));
+                mock(BusinessUnitRepository.class),
+                roleHelper);
     }
     
     // ==================== Property 13: BU-Unbounded Role Immediate Effect ====================
@@ -82,7 +92,7 @@ public class BuUnboundedRoleImmediateEffectProperties {
         // Then: The BU_UNBOUNDED role should be in the list (immediately effective)
         assertThat(buUnboundedRoles).hasSize(1);
         assertThat(buUnboundedRoles.get(0).getId()).isEqualTo(roleId);
-        assertThat(buUnboundedRoles.get(0).getType()).isEqualTo(RoleType.BU_UNBOUNDED);
+        assertThat(buUnboundedRoles.get(0).getType()).isEqualTo(EntityTypeConverter.fromRoleType(RoleType.BU_UNBOUNDED));
     }
     
     /**
@@ -187,7 +197,7 @@ public class BuUnboundedRoleImmediateEffectProperties {
                 .id(roleId)
                 .name("Test Role " + roleId)
                 .code("ROLE_" + roleId.toUpperCase().replace("-", "_"))
-                .type(type)
+                .type(EntityTypeConverter.fromRoleType(type))
                 .status("ACTIVE")
                 .build();
     }

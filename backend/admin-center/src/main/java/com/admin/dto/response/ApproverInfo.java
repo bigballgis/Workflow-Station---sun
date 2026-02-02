@@ -26,7 +26,7 @@ public class ApproverInfo {
     private String userFullName;
     private Instant createdAt;
     
-    public static ApproverInfo fromEntity(Approver approver) {
+    public static ApproverInfo fromEntity(Approver approver, com.platform.security.entity.User user) {
         ApproverInfo info = ApproverInfo.builder()
                 .id(approver.getId())
                 .targetType(approver.getTargetType())
@@ -35,9 +35,9 @@ public class ApproverInfo {
                 .createdAt(approver.getCreatedAt())
                 .build();
         
-        if (approver.getUser() != null) {
-            info.setUserName(approver.getUser().getUsername());
-            info.setUserFullName(approver.getUser().getFullName());
+        if (user != null) {
+            info.setUserName(user.getUsername());
+            info.setUserFullName(user.getFullName());
         }
         
         return info;

@@ -31,7 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class AuthorizationSecurityPropertyTest {
     
     private SecurityConfig securityConfig;
-    private AuthorizationSecurityManager authorizationManager;
+    private EnhancedAuthorizationManager authorizationManager;
     
     @BeforeProperty
     void setUp() {
@@ -41,7 +41,7 @@ class AuthorizationSecurityPropertyTest {
         // Create a simple audit logger implementation for testing
         ConfigurationAuditLogger auditLogger = new TestAuditLogger();
         
-        authorizationManager = new AuthorizationSecurityManager(securityConfig, auditLogger);
+        authorizationManager = new EnhancedAuthorizationManager(securityConfig, auditLogger);
     }
     
     /**
@@ -76,7 +76,7 @@ class AuthorizationSecurityPropertyTest {
         authorizationManager.assignRole(username, role, "system");
         
         // Check authorization
-        AuthorizationSecurityManager.AuthorizationResult result = 
+        EnhancedAuthorizationManager.AuthorizationResult result = 
                 authorizationManager.checkAuthorization(username, resource, action, null);
         
         assertThat(result.isAuthorized())
@@ -112,7 +112,7 @@ class AuthorizationSecurityPropertyTest {
         authorizationManager.assignRole(username, role, "system");
         
         // Check authorization for the original resource
-        AuthorizationSecurityManager.AuthorizationResult result = 
+        EnhancedAuthorizationManager.AuthorizationResult result = 
                 authorizationManager.checkAuthorization(username, resource, action, null);
         
         assertThat(result.isAuthorized())
@@ -141,7 +141,7 @@ class AuthorizationSecurityPropertyTest {
         authorizationManager.assignRole(username, role, "system");
         
         // Check authorization for any action on the resource
-        AuthorizationSecurityManager.AuthorizationResult result = 
+        EnhancedAuthorizationManager.AuthorizationResult result = 
                 authorizationManager.checkAuthorization(username, resource, action, null);
         
         assertThat(result.isAuthorized())
@@ -168,7 +168,7 @@ class AuthorizationSecurityPropertyTest {
         authorizationManager.assignRole(username, adminRole, "system");
         
         // Check authorization for any resource and action
-        AuthorizationSecurityManager.AuthorizationResult result = 
+        EnhancedAuthorizationManager.AuthorizationResult result = 
                 authorizationManager.checkAuthorization(username, resource, action, null);
         
         assertThat(result.isAuthorized())
@@ -204,7 +204,7 @@ class AuthorizationSecurityPropertyTest {
         authorizationManager.assignRole(username, childRole, "system");
         
         // Check authorization - should succeed due to inheritance
-        AuthorizationSecurityManager.AuthorizationResult result = 
+        EnhancedAuthorizationManager.AuthorizationResult result = 
                 authorizationManager.checkAuthorization(username, resource, action, null);
         
         assertThat(result.isAuthorized())
@@ -230,7 +230,7 @@ class AuthorizationSecurityPropertyTest {
         // Don't assign any roles to the user
         
         // Check authorization
-        AuthorizationSecurityManager.AuthorizationResult result = 
+        EnhancedAuthorizationManager.AuthorizationResult result = 
                 authorizationManager.checkAuthorization(username, resource, action, null);
         
         assertThat(result.isAuthorized())
@@ -259,8 +259,8 @@ class AuthorizationSecurityPropertyTest {
         authorizationManager.defineRolePermissions(requiredRole, Set.of(resource + ":" + action));
         authorizationManager.defineRolePermissions(otherRole, Set.of("OTHER_RESOURCE:OTHER_ACTION"));
         
-        AuthorizationSecurityManager.ResourceAccessPolicy policy = 
-                new AuthorizationSecurityManager.ResourceAccessPolicy(
+        EnhancedAuthorizationManager.ResourceAccessPolicy policy = 
+                new EnhancedAuthorizationManager.ResourceAccessPolicy(
                         resource,
                         Set.of(), // No specific permissions required
                         Set.of(requiredRole), // Specific role required
@@ -274,7 +274,7 @@ class AuthorizationSecurityPropertyTest {
         String allowedUser = username + "_allowed";
         authorizationManager.assignRole(allowedUser, requiredRole, "system");
         
-        AuthorizationSecurityManager.AuthorizationResult allowedResult = 
+        EnhancedAuthorizationManager.AuthorizationResult allowedResult = 
                 authorizationManager.checkAuthorization(allowedUser, resource, action, null);
         
         assertThat(allowedResult.isAuthorized())
@@ -285,7 +285,7 @@ class AuthorizationSecurityPropertyTest {
         String deniedUser = username + "_denied";
         authorizationManager.assignRole(deniedUser, otherRole, "system");
         
-        AuthorizationSecurityManager.AuthorizationResult deniedResult = 
+        EnhancedAuthorizationManager.AuthorizationResult deniedResult = 
                 authorizationManager.checkAuthorization(deniedUser, resource, action, null);
         
         assertThat(deniedResult.isAuthorized())
@@ -314,8 +314,8 @@ class AuthorizationSecurityPropertyTest {
         // First define the role with appropriate permissions
         authorizationManager.defineRolePermissions(role, Set.of(resource + ":" + action));
         
-        AuthorizationSecurityManager.ResourceAccessPolicy policy = 
-                new AuthorizationSecurityManager.ResourceAccessPolicy(
+        EnhancedAuthorizationManager.ResourceAccessPolicy policy = 
+                new EnhancedAuthorizationManager.ResourceAccessPolicy(
                         resource,
                         Set.of(), // No specific permissions required
                         Set.of(role), // Role required
@@ -332,7 +332,7 @@ class AuthorizationSecurityPropertyTest {
         // Test 1: Context with correct condition should be granted
         Map<String, Object> correctContext = Map.of(conditionKey, requiredValue);
         
-        AuthorizationSecurityManager.AuthorizationResult allowedResult = 
+        EnhancedAuthorizationManager.AuthorizationResult allowedResult = 
                 authorizationManager.checkAuthorization(testUser, resource, action, correctContext);
         
         assertThat(allowedResult.isAuthorized())
@@ -342,7 +342,7 @@ class AuthorizationSecurityPropertyTest {
         // Test 2: Context with incorrect condition should be denied
         Map<String, Object> incorrectContext = Map.of(conditionKey, "WRONG_VALUE");
         
-        AuthorizationSecurityManager.AuthorizationResult deniedResult = 
+        EnhancedAuthorizationManager.AuthorizationResult deniedResult = 
                 authorizationManager.checkAuthorization(testUser, resource, action, incorrectContext);
         
         assertThat(deniedResult.isAuthorized())
@@ -370,7 +370,7 @@ class AuthorizationSecurityPropertyTest {
         authorizationManager.defineRolePermissions(role, Set.of(permission));
         
         // Initially user should not have access
-        AuthorizationSecurityManager.AuthorizationResult initialResult = 
+        EnhancedAuthorizationManager.AuthorizationResult initialResult = 
                 authorizationManager.checkAuthorization(username, resource, action, null);
         
         assertThat(initialResult.isAuthorized())
@@ -381,7 +381,7 @@ class AuthorizationSecurityPropertyTest {
         authorizationManager.assignRole(username, role, "system");
         
         // Now user should have access
-        AuthorizationSecurityManager.AuthorizationResult assignedResult = 
+        EnhancedAuthorizationManager.AuthorizationResult assignedResult = 
                 authorizationManager.checkAuthorization(username, resource, action, null);
         
         assertThat(assignedResult.isAuthorized())
@@ -392,7 +392,7 @@ class AuthorizationSecurityPropertyTest {
         authorizationManager.revokeRole(username, role, "system");
         
         // User should lose access
-        AuthorizationSecurityManager.AuthorizationResult revokedResult = 
+        EnhancedAuthorizationManager.AuthorizationResult revokedResult = 
                 authorizationManager.checkAuthorization(username, resource, action, null);
         
         assertThat(revokedResult.isAuthorized())

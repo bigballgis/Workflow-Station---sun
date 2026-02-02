@@ -6,6 +6,7 @@ import org.springframework.boot.autoconfigure.domain.EntityScan;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.FilterType;
+import org.springframework.context.annotation.Import;
 import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.scheduling.annotation.EnableAsync;
@@ -28,9 +29,12 @@ import com.platform.security.service.impl.UserRoleServiceImpl;
         // 排除platform-security中不需要的服务（它们依赖platform-security自己的repository和config）
         @ComponentScan.Filter(type = FilterType.REGEX, pattern = "com\\.platform\\.security\\.service\\.impl\\.(?!UserRoleServiceImpl).*"),
         @ComponentScan.Filter(type = FilterType.REGEX, pattern = "com\\.platform\\.security\\.config\\..*"),
-        @ComponentScan.Filter(type = FilterType.REGEX, pattern = "com\\.platform\\.security\\.controller\\..*")
+        @ComponentScan.Filter(type = FilterType.REGEX, pattern = "com\\.platform\\.security\\.controller\\..*"),
+        // 排除 AuditAspect，由 PlatformCommonConfiguration 通过 @Bean 创建
+        @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = com.platform.common.audit.AuditAspect.class)
     }
 )
+@Import(com.platform.common.config.PlatformCommonConfiguration.class)
 @EnableJpaAuditing
 @EnableJpaRepositories(basePackages = {"com.admin.repository"})
 @EntityScan(basePackages = {"com.admin.entity", "com.platform.security.entity"})

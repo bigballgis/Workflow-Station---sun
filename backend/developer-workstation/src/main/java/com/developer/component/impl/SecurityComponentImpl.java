@@ -4,7 +4,7 @@ import com.developer.component.SecurityComponent;
 import com.developer.repository.PermissionRepository;
 import com.developer.repository.RoleRepository;
 import com.developer.security.SecurityCacheManager;
-import com.developer.security.SecurityAuditLogger;
+import com.platform.common.security.SecurityAuditLogger;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
@@ -283,8 +283,8 @@ public class SecurityComponentImpl implements SecurityComponent {
         // If repositories are not available (e.g., in tests), fall back to secure default
         if (permissionRepository == null || cacheManager == null) {
             if (auditLogger != null) {
-                auditLogger.logSystemError(username, "permission_check", 
-                        new IllegalStateException("Permission repository or cache manager not available"));
+                Map<String, String> metadata = Map.of("error_type", "IllegalStateException", "error_message", "Permission repository or cache manager not available");
+                auditLogger.logSecurityEvent("SYSTEM_ERROR", "System error during permission check", metadata);
             }
             log.warn("Permission repository or cache manager not available, denying permission: user={}, permission={}", 
                     username, permission);
@@ -297,8 +297,8 @@ public class SecurityComponentImpl implements SecurityComponent {
             if (cachedResult.isPresent()) {
                 boolean result = cachedResult.get();
                 if (auditLogger != null) {
-                    auditLogger.logSuccessfulAccess(username, "permission_check", permission, true);
-                    auditLogger.logCacheOperation(username, "cache_hit", permission, "permission_check");
+                    Map<String, String> metadata = Map.of("from_cache", "true");
+                    auditLogger.logAuthorizationEvent("PERMISSION_CHECK", "Permission check successful", username, permission, "check", true, metadata);
                 }
                 log.debug("Permission check cache hit: user={}, permission={}, result={}", 
                         username, permission, result);
@@ -306,9 +306,7 @@ public class SecurityComponentImpl implements SecurityComponent {
             }
             
             // Cache miss - log it
-            if (auditLogger != null) {
-                auditLogger.logCacheOperation(username, "cache_miss", permission, "permission_check");
-            }
+            log.debug("Permission cache miss for user={}, permission={}", username, permission);
             
             // Query database for permission
             boolean hasPermission = permissionRepository.hasPermission(username, permission);
@@ -319,9 +317,11 @@ public class SecurityComponentImpl implements SecurityComponent {
             // Log the result
             if (auditLogger != null) {
                 if (hasPermission) {
-                    auditLogger.logSuccessfulAccess(username, "permission_check", permission, false);
+                    Map<String, String> metadata = Map.of("from_cache", "false");
+                    auditLogger.logAuthorizationEvent("PERMISSION_CHECK", "Permission check successful", username, permission, "check", true, metadata);
                 } else {
-                    auditLogger.logAccessDenied(username, "permission_check", permission);
+                    Map<String, String> metadata = Map.of("reason", "insufficient_privileges");
+                    auditLogger.logAuthorizationEvent("PERMISSION_DENIED", "Permission check denied", username, permission, "check", false, metadata);
                 }
             }
             
@@ -332,7 +332,8 @@ public class SecurityComponentImpl implements SecurityComponent {
             
         } catch (Exception e) {
             if (auditLogger != null) {
-                auditLogger.logDatabaseError(username, "permission_check", permission, e);
+                Map<String, String> metadata = Map.of("error_type", e.getClass().getSimpleName(), "error_message", e.getMessage());
+                auditLogger.logSecurityEvent("DATABASE_ERROR", "Database error during permission check", metadata);
             }
             log.error("Error checking permission for user {} and permission {}: {}", 
                     username, permission, e.getMessage(), e);
@@ -347,8 +348,8 @@ public class SecurityComponentImpl implements SecurityComponent {
         // If repositories are not available (e.g., in tests), fall back to secure default
         if (roleRepository == null || cacheManager == null) {
             if (auditLogger != null) {
-                auditLogger.logSystemError(username, "role_check", 
-                        new IllegalStateException("Role repository or cache manager not available"));
+                Map<String, String> metadata = Map.of("error_type", "IllegalStateException", "error_message", "Role repository or cache manager not available");
+                auditLogger.logSecurityEvent("SYSTEM_ERROR", "System error during role check", metadata);
             }
             log.warn("Role repository or cache manager not available, denying role: user={}, role={}", 
                     username, role);
@@ -361,8 +362,8 @@ public class SecurityComponentImpl implements SecurityComponent {
             if (cachedResult.isPresent()) {
                 boolean result = cachedResult.get();
                 if (auditLogger != null) {
-                    auditLogger.logSuccessfulAccess(username, "role_check", role, true);
-                    auditLogger.logCacheOperation(username, "cache_hit", role, "role_check");
+                    Map<String, String> metadata = Map.of("from_cache", "true");
+                    auditLogger.logAuthorizationEvent("ROLE_CHECK", "Role check successful", username, role, "check", true, metadata);
                 }
                 log.debug("Role check cache hit: user={}, role={}, result={}", 
                         username, role, result);
@@ -370,9 +371,7 @@ public class SecurityComponentImpl implements SecurityComponent {
             }
             
             // Cache miss - log it
-            if (auditLogger != null) {
-                auditLogger.logCacheOperation(username, "cache_miss", role, "role_check");
-            }
+            log.debug("Role cache miss for user={}, role={}", username, role);
             
             // Query database for role
             boolean hasRole = roleRepository.hasRole(username, role);
@@ -383,9 +382,11 @@ public class SecurityComponentImpl implements SecurityComponent {
             // Log the result
             if (auditLogger != null) {
                 if (hasRole) {
-                    auditLogger.logSuccessfulAccess(username, "role_check", role, false);
+                    Map<String, String> metadata = Map.of("from_cache", "false");
+                    auditLogger.logAuthorizationEvent("ROLE_CHECK", "Role check successful", username, role, "check", true, metadata);
                 } else {
-                    auditLogger.logAccessDenied(username, "role_check", role);
+                    Map<String, String> metadata = Map.of("reason", "insufficient_privileges");
+                    auditLogger.logAuthorizationEvent("ROLE_DENIED", "Role check denied", username, role, "check", false, metadata);
                 }
             }
             
@@ -396,7 +397,8 @@ public class SecurityComponentImpl implements SecurityComponent {
             
         } catch (Exception e) {
             if (auditLogger != null) {
-                auditLogger.logDatabaseError(username, "role_check", role, e);
+                Map<String, String> metadata = Map.of("error_type", e.getClass().getSimpleName(), "error_message", e.getMessage());
+                auditLogger.logSecurityEvent("DATABASE_ERROR", "Database error during role check", metadata);
             }
             log.error("Error checking role for user {} and role {}: {}", 
                     username, role, e.getMessage(), e);

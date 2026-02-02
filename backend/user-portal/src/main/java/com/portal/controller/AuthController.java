@@ -1,10 +1,11 @@
 package com.portal.controller;
 
 import com.platform.security.dto.UserEffectiveRole;
+import com.platform.security.entity.User;
+import com.platform.security.model.UserStatus;
 import com.platform.security.service.UserRoleService;
 import com.portal.dto.LoginRequest;
 import com.portal.dto.LoginResponse;
-import com.portal.entity.User;
 import com.portal.repository.UserRepository;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
@@ -45,30 +46,38 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request, HttpServletRequest httpRequest) {
         String ipAddress = getClientIpAddress(httpRequest);
-        log.debug("Login attempt for user: {} from {}", request.getUsername(), ipAddress);
+        log.info("Login attempt for user: {} from {}", request.getUsername(), ipAddress);
         
         try {
+            log.debug("Looking up user: {}", request.getUsername());
             User user = userRepository.findByUsername(request.getUsername())
                     .orElseThrow(() -> new RuntimeException("用户名或密码错误"));
             
+            log.debug("User found: {}, status: {}", user.getUsername(), user.getStatus());
+            
             if (user.isLocked()) {
+                log.warn("User {} is locked", user.getUsername());
                 throw new RuntimeException("账户已被锁定");
             }
             
-            if ("DISABLED".equals(user.getStatus())) {
+            if (UserStatus.INACTIVE.equals(user.getStatus())) {
+                log.warn("User {} is inactive", user.getUsername());
                 throw new RuntimeException("账户已被禁用");
             }
             
+            log.debug("Checking password for user: {}", user.getUsername());
             if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
+                log.warn("Password mismatch for user: {}", user.getUsername());
                 user.incrementFailedLoginCount();
                 if (user.getFailedLoginCount() >= 5) {
-                    user.setStatus("LOCKED");
+                    user.setStatus(UserStatus.LOCKED);
                     user.setLockedUntil(LocalDateTime.now().plusMinutes(30));
                 }
                 userRepository.save(user);
                 throw new RuntimeException("用户名或密码错误");
             }
             
+            log.debug("Password matched, updating login info");
             user.resetFailedLoginCount();
             user.setLastLoginAt(LocalDateTime.now());
             user.setLastLoginIp(ipAddress);

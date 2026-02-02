@@ -302,64 +302,64 @@ public class PermissionRepositoryPropertyTest {
         
         // JpaRepository methods - not implemented for testing
         @Override
-        public List<com.platform.security.model.Permission> findAll() { return List.of(); }
+        public List<com.platform.security.entity.Permission> findAll() { return List.of(); }
         @Override
-        public List<com.platform.security.model.Permission> findAllById(Iterable<String> strings) { return List.of(); }
+        public List<com.platform.security.entity.Permission> findAllById(Iterable<String> strings) { return List.of(); }
         @Override
         public long count() { return 0; }
         @Override
         public void deleteById(String s) {}
         @Override
-        public void delete(com.platform.security.model.Permission entity) {}
+        public void delete(com.platform.security.entity.Permission entity) {}
         @Override
         public void deleteAllById(Iterable<? extends String> strings) {}
         @Override
-        public void deleteAll(Iterable<? extends com.platform.security.model.Permission> entities) {}
+        public void deleteAll(Iterable<? extends com.platform.security.entity.Permission> entities) {}
         @Override
         public void deleteAll() {}
         @Override
-        public <S extends com.platform.security.model.Permission> S save(S entity) { return entity; }
+        public <S extends com.platform.security.entity.Permission> S save(S entity) { return entity; }
         @Override
-        public <S extends com.platform.security.model.Permission> List<S> saveAll(Iterable<S> entities) { return List.of(); }
+        public <S extends com.platform.security.entity.Permission> List<S> saveAll(Iterable<S> entities) { return List.of(); }
         @Override
-        public java.util.Optional<com.platform.security.model.Permission> findById(String s) { return java.util.Optional.empty(); }
+        public java.util.Optional<com.platform.security.entity.Permission> findById(String s) { return java.util.Optional.empty(); }
         @Override
         public boolean existsById(String s) { return false; }
         @Override
         public void flush() {}
         @Override
-        public <S extends com.platform.security.model.Permission> S saveAndFlush(S entity) { return entity; }
+        public <S extends com.platform.security.entity.Permission> S saveAndFlush(S entity) { return entity; }
         @Override
-        public <S extends com.platform.security.model.Permission> List<S> saveAllAndFlush(Iterable<S> entities) { return List.of(); }
+        public <S extends com.platform.security.entity.Permission> List<S> saveAllAndFlush(Iterable<S> entities) { return List.of(); }
         @Override
-        public void deleteAllInBatch(Iterable<com.platform.security.model.Permission> entities) {}
+        public void deleteAllInBatch(Iterable<com.platform.security.entity.Permission> entities) {}
         @Override
         public void deleteAllByIdInBatch(Iterable<String> strings) {}
         @Override
         public void deleteAllInBatch() {}
         @Override
-        public com.platform.security.model.Permission getOne(String s) { return null; }
+        public com.platform.security.entity.Permission getOne(String s) { return null; }
         @Override
-        public com.platform.security.model.Permission getById(String s) { return null; }
+        public com.platform.security.entity.Permission getById(String s) { return null; }
         @Override
-        public com.platform.security.model.Permission getReferenceById(String s) { return null; }
+        public com.platform.security.entity.Permission getReferenceById(String s) { return null; }
         @Override
-        public <S extends com.platform.security.model.Permission> java.util.Optional<S> findOne(org.springframework.data.domain.Example<S> example) { return java.util.Optional.empty(); }
+        public <S extends com.platform.security.entity.Permission> java.util.Optional<S> findOne(org.springframework.data.domain.Example<S> example) { return java.util.Optional.empty(); }
         @Override
-        public <S extends com.platform.security.model.Permission> List<S> findAll(org.springframework.data.domain.Example<S> example) { return List.of(); }
+        public <S extends com.platform.security.entity.Permission> List<S> findAll(org.springframework.data.domain.Example<S> example) { return List.of(); }
         @Override
-        public <S extends com.platform.security.model.Permission> List<S> findAll(org.springframework.data.domain.Example<S> example, org.springframework.data.domain.Sort sort) { return List.of(); }
+        public <S extends com.platform.security.entity.Permission> List<S> findAll(org.springframework.data.domain.Example<S> example, org.springframework.data.domain.Sort sort) { return List.of(); }
         @Override
-        public <S extends com.platform.security.model.Permission> org.springframework.data.domain.Page<S> findAll(org.springframework.data.domain.Example<S> example, org.springframework.data.domain.Pageable pageable) { return null; }
+        public <S extends com.platform.security.entity.Permission> org.springframework.data.domain.Page<S> findAll(org.springframework.data.domain.Example<S> example, org.springframework.data.domain.Pageable pageable) { return null; }
         @Override
-        public <S extends com.platform.security.model.Permission> long count(org.springframework.data.domain.Example<S> example) { return 0; }
+        public <S extends com.platform.security.entity.Permission> long count(org.springframework.data.domain.Example<S> example) { return 0; }
         @Override
-        public <S extends com.platform.security.model.Permission> boolean exists(org.springframework.data.domain.Example<S> example) { return false; }
+        public <S extends com.platform.security.entity.Permission> boolean exists(org.springframework.data.domain.Example<S> example) { return false; }
         @Override
-        public <S extends com.platform.security.model.Permission, R> R findBy(org.springframework.data.domain.Example<S> example, java.util.function.Function<org.springframework.data.repository.query.FluentQuery.FetchableFluentQuery<S>, R> queryFunction) { return null; }
+        public <S extends com.platform.security.entity.Permission, R> R findBy(org.springframework.data.domain.Example<S> example, java.util.function.Function<org.springframework.data.repository.query.FluentQuery.FetchableFluentQuery<S>, R> queryFunction) { return null; }
         @Override
-        public List<com.platform.security.model.Permission> findAll(org.springframework.data.domain.Sort sort) { return List.of(); }
+        public List<com.platform.security.entity.Permission> findAll(org.springframework.data.domain.Sort sort) { return List.of(); }
         @Override
-        public org.springframework.data.domain.Page<com.platform.security.model.Permission> findAll(org.springframework.data.domain.Pageable pageable) { return null; }
+        public org.springframework.data.domain.Page<com.platform.security.entity.Permission> findAll(org.springframework.data.domain.Pageable pageable) { return null; }
     }
 }

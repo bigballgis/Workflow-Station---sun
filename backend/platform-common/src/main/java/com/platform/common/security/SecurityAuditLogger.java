@@ -33,7 +33,6 @@ import java.util.HashSet;
  * @author Platform Team
  * @version 1.0
  */
-@Service
 public class SecurityAuditLogger {
     
     private static final Logger logger = LoggerFactory.getLogger(SecurityAuditLogger.class);

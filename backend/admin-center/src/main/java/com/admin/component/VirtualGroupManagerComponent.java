@@ -5,13 +5,14 @@ import com.admin.dto.request.VirtualGroupMemberRequest;
 import com.admin.dto.response.VirtualGroupInfo;
 import com.admin.dto.response.VirtualGroupMemberInfo;
 import com.admin.dto.response.VirtualGroupResult;
-import com.admin.entity.Role;
-import com.admin.entity.User;
-import com.admin.entity.VirtualGroup;
-import com.admin.entity.VirtualGroupMember;
-import com.admin.entity.VirtualGroupRole;
+import com.platform.security.entity.Role;
+import com.platform.security.entity.User;
+import com.platform.security.entity.VirtualGroup;
+import com.platform.security.entity.VirtualGroupMember;
+import com.platform.security.entity.VirtualGroupRole;
 import com.admin.enums.VirtualGroupType;
 import com.admin.exception.AdminBusinessException;
+import com.admin.util.EntityTypeConverter;
 import com.admin.exception.UserNotFoundException;
 import com.admin.exception.VirtualGroupNotFoundException;
 import com.admin.repository.RoleRepository;
@@ -49,6 +50,7 @@ public class VirtualGroupManagerComponent {
     private final UserRepository userRepository;
     private final JdbcTemplate jdbcTemplate;
     private final com.admin.repository.UserBusinessUnitRepository userBusinessUnitRepository;
+    private final com.admin.helper.VirtualGroupHelper virtualGroupHelper;
 
     
     /**
@@ -80,7 +82,7 @@ public class VirtualGroupManagerComponent {
                 .id(groupId)
                 .name(request.getName())
                 .code(code)
-                .type(request.getType())
+                .type(EntityTypeConverter.fromVirtualGroupType(request.getType()))
                 .description(request.getDescription())
                 .adGroup(request.getAdGroup())
                 .status("ACTIVE")
@@ -113,7 +115,7 @@ public class VirtualGroupManagerComponent {
                 .orElseThrow(() -> new VirtualGroupNotFoundException(groupId));
         
         // 系统内置虚拟组只能修改 AD Group
-        if (group.getType() == VirtualGroupType.SYSTEM) {
+        if (EntityTypeConverter.toVirtualGroupType(group.getType()) == VirtualGroupType.SYSTEM) {
             group.setAdGroup(request.getAdGroup());
             virtualGroupRepository.save(group);
             log.info("System virtual group AD group updated: {}", groupId);
@@ -127,7 +129,7 @@ public class VirtualGroupManagerComponent {
         }
         
         group.setName(request.getName());
-        group.setType(request.getType());
+        group.setType(EntityTypeConverter.fromVirtualGroupType(request.getType()));
         group.setDescription(request.getDescription());
         group.setAdGroup(request.getAdGroup());
         
@@ -149,7 +151,7 @@ public class VirtualGroupManagerComponent {
                 .orElseThrow(() -> new VirtualGroupNotFoundException(groupId));
         
         // 系统内置虚拟组不可删除
-        if (group.getType() == VirtualGroupType.SYSTEM) {
+        if (EntityTypeConverter.toVirtualGroupType(group.getType()) == VirtualGroupType.SYSTEM) {
             throw new AdminBusinessException("SYSTEM_GROUP_CANNOT_DELETE", 
                     "系统内置虚拟组不可删除: " + group.getName());
         }
@@ -178,11 +180,11 @@ public class VirtualGroupManagerComponent {
     public List<VirtualGroupInfo> listVirtualGroups(String type, String status) {
         List<VirtualGroup> groups;
         if (type != null && status != null) {
-            VirtualGroupType groupType = VirtualGroupType.valueOf(type);
-            groups = virtualGroupRepository.findByTypeAndStatus(groupType, status);
+            // type is already a String from platform-security entity, no conversion needed
+            groups = virtualGroupRepository.findByTypeAndStatus(type, status);
         } else if (type != null) {
-            VirtualGroupType groupType = VirtualGroupType.valueOf(type);
-            groups = virtualGroupRepository.findByType(groupType);
+            // type is already a String from platform-security entity, no conversion needed
+            groups = virtualGroupRepository.findByType(type);
         } else if (status != null) {
             groups = virtualGroupRepository.findByStatus(status);
         } else {
@@ -201,7 +203,7 @@ public class VirtualGroupManagerComponent {
                         info.setBoundRoleId(boundRole.getId());
                         info.setBoundRoleName(boundRole.getName());
                         info.setBoundRoleCode(boundRole.getCode());
-                        info.setBoundRoleType(boundRole.getType().name());
+                        info.setBoundRoleType(boundRole.getType());
                     }
                     return info;
                 })
@@ -236,7 +238,7 @@ public class VirtualGroupManagerComponent {
     /**
      * 分页查询虚拟组
      */
-    public Page<VirtualGroupInfo> listVirtualGroups(VirtualGroupType type, String status, 
+    public Page<VirtualGroupInfo> listVirtualGroups(String type, String status, 
                                                      String keyword, Pageable pageable) {
         return virtualGroupRepository.findByConditions(type, status, keyword, pageable)
                 .map(VirtualGroupInfo::fromEntity);
@@ -276,9 +278,8 @@ public class VirtualGroupManagerComponent {
         
         VirtualGroupMember member = VirtualGroupMember.builder()
                 .id(memberId)
-                .virtualGroup(group)
-                .user(user)
-                .joinedAt(Instant.now())
+                .groupId(groupId)
+                .userId(request.getUserId())
                 .build();
         
         virtualGroupMemberRepository.save(member);
@@ -323,7 +324,7 @@ public class VirtualGroupManagerComponent {
                 .orElseThrow(() -> new AdminBusinessException("MEMBER_NOT_FOUND", "用户不是该虚拟组成员"));
         
         // System Administrators 组必须至少保留一个成员
-        if (group.getType() == VirtualGroupType.SYSTEM && "SYS_ADMINS".equals(group.getCode())) {
+        if (EntityTypeConverter.toVirtualGroupType(group.getType()) == VirtualGroupType.SYSTEM && "SYS_ADMINS".equals(group.getCode())) {
             long memberCount = virtualGroupMemberRepository.countByVirtualGroupId(groupId);
             if (memberCount <= 1) {
                 throw new AdminBusinessException("LAST_ADMIN_CANNOT_REMOVE", 
@@ -345,15 +346,30 @@ public class VirtualGroupManagerComponent {
             throw new VirtualGroupNotFoundException(groupId);
         }
         
+        // 获取虚拟组
+        VirtualGroup group = virtualGroupRepository.findById(groupId)
+                .orElseThrow(() -> new VirtualGroupNotFoundException(groupId));
+        
         // 获取业务单元名称映射
         Map<String, String> businessUnitNameMap = getBusinessUnitNameMap();
         
-        return virtualGroupMemberRepository.findByVirtualGroupId(groupId).stream()
+        List<VirtualGroupMember> members = virtualGroupMemberRepository.findByVirtualGroupId(groupId);
+        
+        // 批量获取用户
+        List<String> userIds = members.stream()
+                .map(VirtualGroupMember::getUserId)
+                .distinct()
+                .collect(Collectors.toList());
+        Map<String, User> userMap = userRepository.findAllById(userIds).stream()
+                .collect(Collectors.toMap(User::getId, u -> u));
+        
+        return members.stream()
                 .map(member -> {
-                    VirtualGroupMemberInfo info = VirtualGroupMemberInfo.fromEntity(member);
+                    User user = userMap.get(member.getUserId());
+                    VirtualGroupMemberInfo info = VirtualGroupMemberInfo.fromEntity(member, group, user);
                     // 通过关联表获取用户的业务单元
                     if (member.getUserId() != null) {
-                        List<com.admin.entity.UserBusinessUnit> userBusinessUnits = 
+                        List<com.platform.security.entity.UserBusinessUnit> userBusinessUnits = 
                                 userBusinessUnitRepository.findByUserId(member.getUserId());
                         if (!userBusinessUnits.isEmpty()) {
                             String businessUnitId = userBusinessUnits.get(0).getBusinessUnitId();
@@ -389,8 +405,24 @@ public class VirtualGroupManagerComponent {
             throw new VirtualGroupNotFoundException(groupId);
         }
         
-        return virtualGroupMemberRepository.findByVirtualGroupId(groupId, pageable)
-                .map(VirtualGroupMemberInfo::fromEntity);
+        // 获取虚拟组
+        VirtualGroup group = virtualGroupRepository.findById(groupId)
+                .orElseThrow(() -> new VirtualGroupNotFoundException(groupId));
+        
+        Page<VirtualGroupMember> membersPage = virtualGroupMemberRepository.findByVirtualGroupId(groupId, pageable);
+        
+        // 批量获取用户
+        List<String> userIds = membersPage.getContent().stream()
+                .map(VirtualGroupMember::getUserId)
+                .distinct()
+                .collect(Collectors.toList());
+        Map<String, User> userMap = userRepository.findAllById(userIds).stream()
+                .collect(Collectors.toMap(User::getId, u -> u));
+        
+        return membersPage.map(member -> {
+            User user = userMap.get(member.getUserId());
+            return VirtualGroupMemberInfo.fromEntity(member, group, user);
+        });
     }
     
     /**

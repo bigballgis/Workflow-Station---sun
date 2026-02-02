@@ -1,8 +1,8 @@
 package com.admin.service;
 
 import com.admin.entity.DeveloperRolePermission;
-import com.admin.entity.Role;
-import com.admin.entity.User;
+import com.platform.security.entity.Role;
+import com.platform.security.entity.User;
 import com.admin.enums.DeveloperPermission;
 import com.admin.enums.RoleType;
 import com.admin.repository.DeveloperRolePermissionRepository;
@@ -242,7 +242,7 @@ public class DeveloperPermissionService {
         return allRoleIds.stream()
             .filter(roleId -> {
                 Role role = roleRepository.findById(roleId).orElse(null);
-                return role != null && role.getType() == RoleType.DEVELOPER;
+                return role != null && "DEVELOPER".equals(role.getType());
             })
             .collect(Collectors.toList());
     }

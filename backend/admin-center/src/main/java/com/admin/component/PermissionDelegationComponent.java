@@ -2,14 +2,14 @@ package com.admin.component;
 
 import com.admin.dto.request.PermissionDelegationRequest;
 import com.admin.dto.response.PermissionDelegationResult;
-import com.admin.entity.Permission;
+import com.platform.security.entity.Permission;
 import com.admin.entity.PermissionDelegation;
 import com.admin.enums.DelegationType;
 import com.admin.exception.AdminBusinessException;
 import com.admin.exception.PermissionNotFoundException;
 import com.admin.repository.PermissionDelegationRepository;
 import com.admin.repository.PermissionRepository;
-import com.admin.service.AuditService;
+import com.platform.common.audit.Audited;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -31,12 +31,12 @@ public class PermissionDelegationComponent {
     
     private final PermissionDelegationRepository delegationRepository;
     private final PermissionRepository permissionRepository;
-    private final AuditService auditService;
     
     /**
      * 创建权限委托
      */
     @Transactional
+    @Audited(action = "PERMISSION_DELEGATE", resourceType = "PERMISSION", resourceId = "#request.permissionId")
     public PermissionDelegationResult createDelegation(PermissionDelegationRequest request) {
         log.info("Creating permission delegation from {} to {} for permission {}", 
                 request.getDelegatorId(), request.getDelegateeId(), request.getPermissionId());
@@ -72,7 +72,7 @@ public class PermissionDelegationComponent {
                 .id(UUID.randomUUID().toString())
                 .delegatorId(request.getDelegatorId())
                 .delegateeId(request.getDelegateeId())
-                .permission(permission)
+                .permissionId(request.getPermissionId())
                 .delegationType(request.getDelegationType())
                 .validFrom(request.getValidFrom())
                 .validTo(request.getValidTo())
@@ -83,17 +83,15 @@ public class PermissionDelegationComponent {
         
         delegationRepository.save(delegation);
         
-        // 记录审计日志
-        auditService.recordPermissionDelegation(delegation);
-        
         log.info("Permission delegation created successfully: {}", delegation.getId());
-        return PermissionDelegationResult.success(delegation);
+        return PermissionDelegationResult.success(delegation, permission);
     }
     
     /**
      * 撤销权限委托
      */
     @Transactional
+    @Audited(action = "PERMISSION_DELEGATE_REVOKE", resourceType = "PERMISSION", resourceId = "#delegationId")
     public void revokeDelegation(String delegationId, String revokedBy, String reason) {
         log.info("Revoking permission delegation: {}", delegationId);
         
@@ -112,9 +110,6 @@ public class PermissionDelegationComponent {
         
         delegationRepository.save(delegation);
         
-        // 记录审计日志
-        auditService.recordPermissionDelegationRevocation(delegation, revokedBy, reason);
-        
         log.info("Permission delegation revoked successfully: {}", delegationId);
     }
     
@@ -126,7 +121,10 @@ public class PermissionDelegationComponent {
                 .findActiveUserDelegations(userId, Instant.now());
         
         return delegations.stream()
-                .map(PermissionDelegationResult::fromEntity)
+                .map(delegation -> {
+                    Permission permission = permissionRepository.findById(delegation.getPermissionId()).orElse(null);
+                    return PermissionDelegationResult.fromEntity(delegation, permission);
+                })
                 .collect(Collectors.toList());
     }
     
@@ -138,7 +136,10 @@ public class PermissionDelegationComponent {
         
         return delegations.stream()
                 .filter(d -> "ACTIVE".equals(d.getStatus()))
-                .map(PermissionDelegationResult::fromEntity)
+                .map(delegation -> {
+                    Permission permission = permissionRepository.findById(delegation.getPermissionId()).orElse(null);
+                    return PermissionDelegationResult.fromEntity(delegation, permission);
+                })
                 .collect(Collectors.toList());
     }
     
@@ -169,9 +170,6 @@ public class PermissionDelegationComponent {
             delegation.setRevokeReason("自动过期回收");
             
             delegationRepository.save(delegation);
-            
-            // 记录审计日志
-            auditService.recordPermissionDelegationRevocation(delegation, "SYSTEM", "自动过期回收");
         }
         
         log.info("Revoked {} expired delegations", expiredDelegations.size());

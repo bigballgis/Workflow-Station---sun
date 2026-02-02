@@ -1,7 +1,8 @@
 package com.admin.dto.response;
 
-import com.admin.entity.VirtualGroup;
+import com.platform.security.entity.VirtualGroup;
 import com.admin.enums.VirtualGroupType;
+import com.admin.util.EntityTypeConverter;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -44,13 +45,13 @@ public class VirtualGroupInfo {
                 .id(group.getId())
                 .name(group.getName())
                 .code(group.getCode())
-                .type(group.getType())
+                .type(EntityTypeConverter.toVirtualGroupType(group.getType()))
                 .description(group.getDescription())
                 .adGroup(group.getAdGroup())
                 .status(group.getStatus())
-                .memberCount(group.getMemberCount())
-                .valid(group.isValid())
-                .createdAt(group.getCreatedAt())
+                .memberCount(0) // Will be set by helper service
+                .valid(false) // Will be set by helper service
+                .createdAt(group.getCreatedAt() != null ? group.getCreatedAt().atZone(java.time.ZoneId.systemDefault()).toInstant() : null)
                 .createdBy(group.getCreatedBy())
                 .build();
     }

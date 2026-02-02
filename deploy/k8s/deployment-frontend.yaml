@@ -1,0 +1,212 @@
+# Admin Center Frontend
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: admin-center-frontend
+  namespace: workflow-platform-sit
+  labels:
+    app: admin-center-frontend
+    component: frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: admin-center-frontend
+  template:
+    metadata:
+      labels:
+        app: admin-center-frontend
+        component: frontend
+    spec:
+      containers:
+      - name: admin-center-frontend
+        image: your-registry/admin-center-frontend:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 80
+          name: http
+          protocol: TCP
+        env:
+        - name: ADMIN_CENTER_BACKEND_URL
+          value: "http://admin-center-service:8080"
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: admin-center-frontend-service
+  namespace: workflow-platform-sit
+  labels:
+    app: admin-center-frontend
+spec:
+  selector:
+    app: admin-center-frontend
+  ports:
+  - name: http
+    protocol: TCP
+    port: 80
+    targetPort: 80
+  type: ClusterIP
+
+---
+# User Portal Frontend
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-portal-frontend
+  namespace: workflow-platform-sit
+  labels:
+    app: user-portal-frontend
+    component: frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: user-portal-frontend
+  template:
+    metadata:
+      labels:
+        app: user-portal-frontend
+        component: frontend
+    spec:
+      containers:
+      - name: user-portal-frontend
+        image: your-registry/user-portal-frontend:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 80
+          name: http
+          protocol: TCP
+        env:
+        - name: USER_PORTAL_BACKEND_URL
+          value: "http://user-portal-service:8080"
+        - name: ADMIN_CENTER_BACKEND_URL
+          value: "http://admin-center-service:8080"
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-portal-frontend-service
+  namespace: workflow-platform-sit
+  labels:
+    app: user-portal-frontend
+spec:
+  selector:
+    app: user-portal-frontend
+  ports:
+  - name: http
+    protocol: TCP
+    port: 80
+    targetPort: 80
+  type: ClusterIP
+
+---
+# Developer Workstation Frontend
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: developer-workstation-frontend
+  namespace: workflow-platform-sit
+  labels:
+    app: developer-workstation-frontend
+    component: frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: developer-workstation-frontend
+  template:
+    metadata:
+      labels:
+        app: developer-workstation-frontend
+        component: frontend
+    spec:
+      containers:
+      - name: developer-workstation-frontend
+        image: your-registry/developer-workstation-frontend:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 80
+          name: http
+          protocol: TCP
+        env:
+        - name: DEVELOPER_WORKSTATION_BACKEND_URL
+          value: "http://developer-workstation-service:8080"
+        - name: ADMIN_CENTER_BACKEND_URL
+          value: "http://admin-center-service:8080"
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: developer-workstation-frontend-service
+  namespace: workflow-platform-sit
+  labels:
+    app: developer-workstation-frontend
+spec:
+  selector:
+    app: developer-workstation-frontend
+  ports:
+  - name: http
+    protocol: TCP
+    port: 80
+    targetPort: 80
+  type: ClusterIP

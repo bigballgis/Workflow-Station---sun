@@ -1,10 +1,12 @@
 package com.admin.service;
 
-import com.admin.entity.Role;
-import com.admin.entity.VirtualGroup;
-import com.admin.entity.VirtualGroupRole;
+import com.platform.security.entity.Role;
+import com.platform.security.entity.VirtualGroup;
+import com.platform.security.entity.VirtualGroupRole;
 import com.admin.enums.RoleType;
 import com.admin.enums.VirtualGroupType;
+import com.admin.helper.RoleHelper;
+import com.admin.util.EntityTypeConverter;
 import com.admin.exception.AdminBusinessException;
 import com.admin.exception.RoleNotFoundException;
 import com.admin.exception.VirtualGroupNotFoundException;
@@ -31,6 +33,7 @@ public class VirtualGroupRoleService {
     private final VirtualGroupRoleRepository virtualGroupRoleRepository;
     private final VirtualGroupRepository virtualGroupRepository;
     private final RoleRepository roleRepository;
+    private final RoleHelper roleHelper;
     
     /**
      * 绑定角色到虚拟组（单角色绑定，会替换现有绑定）
@@ -44,7 +47,7 @@ public class VirtualGroupRoleService {
                 .orElseThrow(() -> new VirtualGroupNotFoundException(virtualGroupId));
         
         // 检查是否为系统内置虚拟组
-        if (virtualGroup.getType() == VirtualGroupType.SYSTEM) {
+        if (EntityTypeConverter.toVirtualGroupType(virtualGroup.getType()) == VirtualGroupType.SYSTEM) {
             throw new AdminBusinessException("SYSTEM_GROUP_PROTECTED", 
                     "系统内置虚拟组的角色绑定不可修改");
         }
@@ -83,7 +86,7 @@ public class VirtualGroupRoleService {
         VirtualGroup virtualGroup = virtualGroupRepository.findById(virtualGroupId)
                 .orElseThrow(() -> new VirtualGroupNotFoundException(virtualGroupId));
         
-        if (virtualGroup.getType() == VirtualGroupType.SYSTEM) {
+        if (EntityTypeConverter.toVirtualGroupType(virtualGroup.getType()) == VirtualGroupType.SYSTEM) {
             throw new AdminBusinessException("SYSTEM_GROUP_PROTECTED", 
                     "系统内置虚拟组的角色绑定不可修改");
         }
@@ -128,7 +131,7 @@ public class VirtualGroupRoleService {
      * 验证角色是否为业务角色（BU_BOUNDED 或 BU_UNBOUNDED）
      */
     public void validateBusinessRole(Role role) {
-        if (!role.getType().isBusinessRole()) {
+        if (!roleHelper.isBusinessRole(role)) {
             throw new AdminBusinessException("INVALID_ROLE_TYPE", 
                     "只能绑定业务角色（BU-Bounded 或 BU-Unbounded），当前角色类型: " + role.getType());
         }

@@ -8,6 +8,11 @@ import com.admin.exception.AdminBusinessException;
 import com.admin.exception.UserNotFoundException;
 import com.admin.exception.VirtualGroupNotFoundException;
 import com.admin.repository.*;
+import com.platform.security.entity.User;
+import com.platform.security.entity.VirtualGroup;
+import com.platform.security.entity.VirtualGroupMember;
+import com.platform.security.entity.UserBusinessUnit;
+import com.platform.security.entity.UserBusinessUnitRole;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -98,17 +103,17 @@ public class MemberManagementService {
             return;
         }
         
-        // 获取虚拟组和用户实体
-        VirtualGroup virtualGroup = virtualGroupRepository.findById(virtualGroupId)
+        // 验证虚拟组和用户存在
+        virtualGroupRepository.findById(virtualGroupId)
                 .orElseThrow(() -> new VirtualGroupNotFoundException(virtualGroupId));
-        User user = userRepository.findById(userId)
+        userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException(userId));
         
-        // 添加到虚拟组
+        // 添加到虚拟组 - 使用ID字段
         VirtualGroupMember member = VirtualGroupMember.builder()
                 .id(UUID.randomUUID().toString())
-                .virtualGroup(virtualGroup)
-                .user(user)
+                .groupId(virtualGroupId)
+                .userId(userId)
                 .build();
         virtualGroupMemberRepository.save(member);
         
@@ -301,10 +306,18 @@ public class MemberManagementService {
      * 获取虚拟组成员列表
      */
     public List<User> getVirtualGroupMembers(String virtualGroupId) {
-        return virtualGroupMemberRepository.findByVirtualGroupIdWithUser(virtualGroupId)
-                .stream()
-                .map(VirtualGroupMember::getUser)
+        List<VirtualGroupMember> members = virtualGroupMemberRepository.findByVirtualGroupIdWithUser(virtualGroupId);
+        
+        // 批量获取用户ID
+        List<String> userIds = members.stream()
+                .map(VirtualGroupMember::getUserId)
+                .distinct()
                 .collect(Collectors.toList());
+        
+        // 批量查询用户
+        List<User> users = userRepository.findAllById(userIds);
+        
+        return users;
     }
     
     /**

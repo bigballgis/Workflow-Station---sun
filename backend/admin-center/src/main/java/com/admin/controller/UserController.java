@@ -12,15 +12,19 @@ import com.admin.dto.response.PageResult;
 import com.admin.dto.response.UserCreateResult;
 import com.admin.dto.response.UserDetailInfo;
 import com.admin.dto.response.UserInfo;
-import com.admin.entity.BusinessUnit;
-import com.admin.entity.Role;
-import com.admin.entity.User;
-import com.admin.entity.VirtualGroupMember;
+import com.platform.security.entity.BusinessUnit;
+import com.platform.security.entity.Role;
+import com.platform.security.entity.User;
+import com.platform.security.entity.VirtualGroup;
+import com.platform.security.entity.VirtualGroupMember;
 import com.admin.enums.RoleType;
+import com.admin.helper.RoleHelper;
 import com.admin.repository.VirtualGroupMemberRepository;
+import com.admin.repository.VirtualGroupRepository;
 import com.admin.service.UserBusinessUnitService;
 import com.admin.service.UserImportService;
 import com.admin.service.UserPermissionService;
+import com.admin.util.EntityTypeConverter;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -48,8 +52,10 @@ public class UserController {
     private final UserImportService userImportService;
     private final RolePermissionManagerComponent rolePermissionManager;
     private final VirtualGroupMemberRepository virtualGroupMemberRepository;
+    private final VirtualGroupRepository virtualGroupRepository;
     private final UserBusinessUnitService userBusinessUnitService;
     private final UserPermissionService userPermissionService;
+    private final RoleHelper roleHelper;
     
     @PostMapping
     @Operation(summary = "创建用户", description = "创建新用户，立即激活")
@@ -79,7 +85,7 @@ public class UserController {
         UserQueryRequest request = UserQueryRequest.builder()
                 .keyword(keyword)
                 .businessUnitId(businessUnitId)
-                .status(status != null ? com.admin.enums.UserStatus.valueOf(status) : null)
+                .status(status != null ? com.platform.security.model.UserStatus.valueOf(status) : null)
                 .page(page)
                 .size(size)
                 .build();
@@ -156,24 +162,26 @@ public class UserController {
             // 支持 BUSINESS 作为特殊值，返回所有业务角色（BU_BOUNDED 和 BU_UNBOUNDED）
             if ("BUSINESS".equalsIgnoreCase(type)) {
                 roles = roles.stream()
-                        .filter(r -> r.getType().isBusinessRole())
+                        .filter(roleHelper::isBusinessRole)
                         .collect(Collectors.toList());
             } else {
-                RoleType roleType = RoleType.valueOf(type);
+                String roleTypeStr = EntityTypeConverter.fromRoleType(RoleType.valueOf(type));
                 roles = roles.stream()
-                        .filter(r -> r.getType() == roleType)
+                        .filter(r -> roleTypeStr.equals(r.getType()))
                         .collect(Collectors.toList());
             }
         }
         
         // 转换为简单的Map格式
         List<Map<String, Object>> result = roles.stream()
-                .map(r -> Map.<String, Object>of(
-                        "id", r.getId(),
-                        "name", r.getName(),
-                        "code", r.getCode(),
-                        "type", r.getType().name()
-                ))
+                .map(r -> {
+                    Map<String, Object> roleMap = new HashMap<>();
+                    roleMap.put("id", r.getId());
+                    roleMap.put("name", r.getName());
+                    roleMap.put("code", r.getCode());
+                    roleMap.put("type", r.getType());
+                    return roleMap;
+                })
                 .collect(Collectors.toList());
         
         return ResponseEntity.ok(result);
@@ -185,16 +193,30 @@ public class UserController {
             @PathVariable String userId) {
         List<VirtualGroupMember> memberships = virtualGroupMemberRepository.findByUserId(userId);
         
+        // 批量获取虚拟组
+        List<String> groupIds = memberships.stream()
+                .map(VirtualGroupMember::getGroupId)
+                .distinct()
+                .collect(Collectors.toList());
+        
+        Map<String, VirtualGroup> groupMap = virtualGroupRepository.findAllById(groupIds).stream()
+                .collect(Collectors.toMap(VirtualGroup::getId, g -> g));
+        
         // 转换为简单的Map格式
         List<Map<String, Object>> result = memberships.stream()
                 .map(m -> {
+                    VirtualGroup group = groupMap.get(m.getGroupId());
+                    if (group == null) {
+                        return null;
+                    }
                     Map<String, Object> groupInfo = new HashMap<>();
-                    groupInfo.put("groupId", m.getVirtualGroup().getId());
-                    groupInfo.put("groupName", m.getVirtualGroup().getName());
-                    groupInfo.put("groupDescription", m.getVirtualGroup().getDescription());
+                    groupInfo.put("groupId", group.getId());
+                    groupInfo.put("groupName", group.getName());
+                    groupInfo.put("groupDescription", group.getDescription());
                     groupInfo.put("joinedAt", m.getJoinedAt());
                     return groupInfo;
                 })
+                .filter(m -> m != null)
                 .collect(Collectors.toList());
         
         return ResponseEntity.ok(result);

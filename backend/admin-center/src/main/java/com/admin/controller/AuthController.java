@@ -126,6 +126,40 @@ public class AuthController {
         
         return ResponseEntity.ok(isValid);
     }
+    
+    /**
+     * 测试密码编码器（仅用于调试）
+     */
+    @GetMapping("/test-password")
+    public ResponseEntity<Map<String, Object>> testPassword(
+            @RequestParam(required = false, defaultValue = "password") String plainPassword) {
+        
+        String hash = "$2a$10$N9qo8uLOickgx2ZMRZoMye/IVI0nO8p54a4qN7LLO85e8J8CJHQCK";
+        boolean matches = authService.testPasswordMatch(plainPassword, hash);
+        
+        return ResponseEntity.ok(Map.of(
+                "plainPassword", plainPassword,
+                "hash", hash,
+                "matches", matches,
+                "hashLength", hash.length()
+        ));
+    }
+    
+    /**
+     * 生成密码哈希（仅用于调试）
+     */
+    @GetMapping("/generate-hash")
+    public ResponseEntity<Map<String, Object>> generateHash(
+            @RequestParam(required = false, defaultValue = "password") String plainPassword) {
+        
+        String newHash = authService.generatePasswordHash(plainPassword);
+        
+        return ResponseEntity.ok(Map.of(
+                "plainPassword", plainPassword,
+                "newHash", newHash,
+                "hashLength", newHash.length()
+        ));
+    }
 
     private String getClientIpAddress(HttpServletRequest request) {
         String xForwardedFor = request.getHeader("X-Forwarded-For");

@@ -1,6 +1,6 @@
 package com.workflow.component;
 
-import com.workflow.aspect.AuditAspect.Auditable;
+import com.workflow.aspect.WorkflowAuditAspect.Auditable;
 import com.workflow.dto.request.ProcessDefinitionRequest;
 import com.workflow.dto.request.StartProcessRequest;
 import com.workflow.dto.request.ProcessInstanceQueryRequest;

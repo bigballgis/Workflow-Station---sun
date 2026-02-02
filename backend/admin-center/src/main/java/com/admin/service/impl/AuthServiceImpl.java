@@ -2,8 +2,8 @@ package com.admin.service.impl;
 
 import com.admin.dto.request.LoginRequest;
 import com.admin.dto.response.LoginResponse;
-import com.admin.entity.User;
-import com.admin.enums.UserStatus;
+import com.platform.security.entity.User;
+import com.platform.security.model.UserStatus;
 import com.admin.repository.UserRepository;
 import com.admin.service.AuthService;
 import com.platform.security.dto.UserEffectiveRole;
@@ -60,13 +60,16 @@ public class AuthServiceImpl implements AuthService {
             throw new RuntimeException("Account is locked");
         }
         
-        if (user.getStatus() == UserStatus.DISABLED) {
+        if (user.getStatus() == UserStatus.INACTIVE) {
             log.warn("Account disabled: {}", request.getUsername());
             throw new RuntimeException("Account is disabled");
         }
         
         if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
             log.warn("Invalid password for user: {}", request.getUsername());
+            log.debug("Password from request: {}", request.getPassword());
+            log.debug("Password hash from DB: {}", user.getPasswordHash());
+            log.debug("Hash length: {}", user.getPasswordHash() != null ? user.getPasswordHash().length() : 0);
             user.incrementFailedLoginCount();
             
             if (user.getFailedLoginCount() >= 5) {
@@ -352,5 +355,26 @@ public class AuthServiceImpl implements AuthService {
             log.warn("Failed to get role codes for user {}: {}", userId, e.getMessage());
             return List.of();
         }
+    }
+    
+    @Override
+    public boolean testPasswordMatch(String plainPassword, String hash) {
+        log.info("Testing password match");
+        log.info("Plain password: {}", plainPassword);
+        log.info("Hash: {}", hash);
+        log.info("PasswordEncoder class: {}", passwordEncoder.getClass().getName());
+        
+        boolean matches = passwordEncoder.matches(plainPassword, hash);
+        log.info("Match result: {}", matches);
+        
+        return matches;
+    }
+    
+    @Override
+    public String generatePasswordHash(String plainPassword) {
+        log.info("Generating password hash for: {}", plainPassword);
+        String hash = passwordEncoder.encode(plainPassword);
+        log.info("Generated hash: {}", hash);
+        return hash;
     }
 }

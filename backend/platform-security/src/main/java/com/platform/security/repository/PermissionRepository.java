@@ -2,8 +2,8 @@ package com.platform.security.repository;
 
 import com.platform.security.model.ApiPermission;
 import com.platform.security.model.DataPermission;
-import com.platform.security.model.Permission;
-import com.platform.security.model.Role;
+import com.platform.security.entity.Permission;
+import com.platform.security.entity.Role;
 
 import java.util.List;
 import java.util.Optional;

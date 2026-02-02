@@ -289,64 +289,64 @@ public class RoleRepositoryPropertyTest {
         
         // JpaRepository methods - not implemented for testing
         @Override
-        public List<com.platform.security.model.Role> findAll() { return List.of(); }
+        public List<com.platform.security.entity.Role> findAll() { return List.of(); }
         @Override
-        public List<com.platform.security.model.Role> findAllById(Iterable<String> strings) { return List.of(); }
+        public List<com.platform.security.entity.Role> findAllById(Iterable<String> strings) { return List.of(); }
         @Override
         public long count() { return 0; }
         @Override
         public void deleteById(String s) {}
         @Override
-        public void delete(com.platform.security.model.Role entity) {}
+        public void delete(com.platform.security.entity.Role entity) {}
         @Override
         public void deleteAllById(Iterable<? extends String> strings) {}
         @Override
-        public void deleteAll(Iterable<? extends com.platform.security.model.Role> entities) {}
+        public void deleteAll(Iterable<? extends com.platform.security.entity.Role> entities) {}
         @Override
         public void deleteAll() {}
         @Override
-        public <S extends com.platform.security.model.Role> S save(S entity) { return entity; }
+        public <S extends com.platform.security.entity.Role> S save(S entity) { return entity; }
         @Override
-        public <S extends com.platform.security.model.Role> List<S> saveAll(Iterable<S> entities) { return List.of(); }
+        public <S extends com.platform.security.entity.Role> List<S> saveAll(Iterable<S> entities) { return List.of(); }
         @Override
-        public java.util.Optional<com.platform.security.model.Role> findById(String s) { return java.util.Optional.empty(); }
+        public java.util.Optional<com.platform.security.entity.Role> findById(String s) { return java.util.Optional.empty(); }
         @Override
         public boolean existsById(String s) { return false; }
         @Override
         public void flush() {}
         @Override
-        public <S extends com.platform.security.model.Role> S saveAndFlush(S entity) { return entity; }
+        public <S extends com.platform.security.entity.Role> S saveAndFlush(S entity) { return entity; }
         @Override
-        public <S extends com.platform.security.model.Role> List<S> saveAllAndFlush(Iterable<S> entities) { return List.of(); }
+        public <S extends com.platform.security.entity.Role> List<S> saveAllAndFlush(Iterable<S> entities) { return List.of(); }
         @Override
-        public void deleteAllInBatch(Iterable<com.platform.security.model.Role> entities) {}
+        public void deleteAllInBatch(Iterable<com.platform.security.entity.Role> entities) {}
         @Override
         public void deleteAllByIdInBatch(Iterable<String> strings) {}
         @Override
         public void deleteAllInBatch() {}
         @Override
-        public com.platform.security.model.Role getOne(String s) { return null; }
+        public com.platform.security.entity.Role getOne(String s) { return null; }
         @Override
-        public com.platform.security.model.Role getById(String s) { return null; }
+        public com.platform.security.entity.Role getById(String s) { return null; }
         @Override
-        public com.platform.security.model.Role getReferenceById(String s) { return null; }
+        public com.platform.security.entity.Role getReferenceById(String s) { return null; }
         @Override
-        public <S extends com.platform.security.model.Role> java.util.Optional<S> findOne(org.springframework.data.domain.Example<S> example) { return java.util.Optional.empty(); }
+        public <S extends com.platform.security.entity.Role> java.util.Optional<S> findOne(org.springframework.data.domain.Example<S> example) { return java.util.Optional.empty(); }
         @Override
-        public <S extends com.platform.security.model.Role> List<S> findAll(org.springframework.data.domain.Example<S> example) { return List.of(); }
+        public <S extends com.platform.security.entity.Role> List<S> findAll(org.springframework.data.domain.Example<S> example) { return List.of(); }
         @Override
-        public <S extends com.platform.security.model.Role> List<S> findAll(org.springframework.data.domain.Example<S> example, org.springframework.data.domain.Sort sort) { return List.of(); }
+        public <S extends com.platform.security.entity.Role> List<S> findAll(org.springframework.data.domain.Example<S> example, org.springframework.data.domain.Sort sort) { return List.of(); }
         @Override
-        public <S extends com.platform.security.model.Role> org.springframework.data.domain.Page<S> findAll(org.springframework.data.domain.Example<S> example, org.springframework.data.domain.Pageable pageable) { return null; }
+        public <S extends com.platform.security.entity.Role> org.springframework.data.domain.Page<S> findAll(org.springframework.data.domain.Example<S> example, org.springframework.data.domain.Pageable pageable) { return null; }
         @Override
-        public <S extends com.platform.security.model.Role> long count(org.springframework.data.domain.Example<S> example) { return 0; }
+        public <S extends com.platform.security.entity.Role> long count(org.springframework.data.domain.Example<S> example) { return 0; }
         @Override
-        public <S extends com.platform.security.model.Role> boolean exists(org.springframework.data.domain.Example<S> example) { return false; }
+        public <S extends com.platform.security.entity.Role> boolean exists(org.springframework.data.domain.Example<S> example) { return false; }
         @Override
-        public <S extends com.platform.security.model.Role, R> R findBy(org.springframework.data.domain.Example<S> example, java.util.function.Function<org.springframework.data.repository.query.FluentQuery.FetchableFluentQuery<S>, R> queryFunction) { return null; }
+        public <S extends com.platform.security.entity.Role, R> R findBy(org.springframework.data.domain.Example<S> example, java.util.function.Function<org.springframework.data.repository.query.FluentQuery.FetchableFluentQuery<S>, R> queryFunction) { return null; }
         @Override
-        public List<com.platform.security.model.Role> findAll(org.springframework.data.domain.Sort sort) { return List.of(); }
+        public List<com.platform.security.entity.Role> findAll(org.springframework.data.domain.Sort sort) { return List.of(); }
         @Override
-        public org.springframework.data.domain.Page<com.platform.security.model.Role> findAll(org.springframework.data.domain.Pageable pageable) { return null; }
+        public org.springframework.data.domain.Page<com.platform.security.entity.Role> findAll(org.springframework.data.domain.Pageable pageable) { return null; }
     }
 }

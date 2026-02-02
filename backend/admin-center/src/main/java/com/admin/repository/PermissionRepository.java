@@ -1,6 +1,6 @@
 package com.admin.repository;
 
-import com.admin.entity.Permission;
+import com.platform.security.entity.Permission;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -49,18 +49,23 @@ public interface PermissionRepository extends JpaRepository<Permission, String> 
     
     /**
      * 查找角色的所有权限
+     * Note: Using native query since platform-security entities don't have JPA relationships
      */
-    @Query("SELECT p FROM Permission p JOIN RolePermission rp ON p.id = rp.permission.id " +
-           "WHERE rp.role.id = :roleId")
+    @Query(value = "SELECT p.* FROM sys_permissions p " +
+           "JOIN sys_role_permissions rp ON p.id = rp.permission_id " +
+           "WHERE rp.role_id = :roleId",
+           nativeQuery = true)
     Set<Permission> findByRoleId(@Param("roleId") String roleId);
     
     /**
      * 查找用户的所有权限（通过角色）
+     * Note: Using native query since platform-security entities don't have JPA relationships
      */
-    @Query("SELECT DISTINCT p FROM Permission p " +
-           "JOIN RolePermission rp ON p.id = rp.permission.id " +
-           "JOIN Role r ON rp.role.id = r.id " +
-           "JOIN UserRole ur ON r.id = ur.role.id " +
-           "WHERE ur.user.id = :userId AND r.status = 'ACTIVE'")
+    @Query(value = "SELECT DISTINCT p.* FROM sys_permissions p " +
+           "JOIN sys_role_permissions rp ON p.id = rp.permission_id " +
+           "JOIN sys_roles r ON rp.role_id = r.id " +
+           "JOIN sys_user_roles ur ON r.id = ur.role_id " +
+           "WHERE ur.user_id = :userId AND r.status = 'ACTIVE'",
+           nativeQuery = true)
     Set<Permission> findByUserId(@Param("userId") String userId);
 }

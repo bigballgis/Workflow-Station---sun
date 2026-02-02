@@ -1,13 +1,15 @@
 package com.admin.properties;
 
-import com.admin.entity.BusinessUnitRole;
-import com.admin.entity.Role;
+import com.platform.security.entity.BusinessUnitRole;
+import com.platform.security.entity.Role;
 import com.admin.enums.RoleType;
 import com.admin.exception.AdminBusinessException;
 import com.admin.repository.BusinessUnitRepository;
 import com.admin.repository.BusinessUnitRoleRepository;
 import com.admin.repository.RoleRepository;
+import com.admin.helper.RoleHelper;
 import com.admin.service.BusinessUnitRoleService;
+import com.admin.util.EntityTypeConverter;
 import net.jqwik.api.*;
 import net.jqwik.api.lifecycle.BeforeTry;
 
@@ -32,6 +34,7 @@ public class BusinessUnitRoleBindingProperties {
     private BusinessUnitRoleRepository businessUnitRoleRepository;
     private BusinessUnitRepository businessUnitRepository;
     private RoleRepository roleRepository;
+    private RoleHelper roleHelper;
     private BusinessUnitRoleService businessUnitRoleService;
     
     @BeforeTry
@@ -39,10 +42,12 @@ public class BusinessUnitRoleBindingProperties {
         businessUnitRoleRepository = mock(BusinessUnitRoleRepository.class);
         businessUnitRepository = mock(BusinessUnitRepository.class);
         roleRepository = mock(RoleRepository.class);
+        roleHelper = mock(RoleHelper.class);
         businessUnitRoleService = new BusinessUnitRoleService(
                 businessUnitRoleRepository,
                 businessUnitRepository,
-                roleRepository);
+                roleRepository,
+                roleHelper);
     }
     
     // ==================== Property Tests ====================
@@ -63,6 +68,9 @@ public class BusinessUnitRoleBindingProperties {
         // Given: Role exists and is BU_BOUNDED type
         Role businessRole = createRole(roleId, RoleType.BU_BOUNDED);
         when(roleRepository.findById(roleId)).thenReturn(Optional.of(businessRole));
+        
+        // Given: RoleHelper recognizes it as a business role
+        when(roleHelper.isBusinessRole(businessRole)).thenReturn(true);
         
         // Given: Role is not already bound
         when(businessUnitRoleRepository.existsByBusinessUnitIdAndRoleId(businessUnitId, roleId))
@@ -96,6 +104,9 @@ public class BusinessUnitRoleBindingProperties {
         Role businessRole = createRole(roleId, RoleType.BU_UNBOUNDED);
         when(roleRepository.findById(roleId)).thenReturn(Optional.of(businessRole));
         
+        // Given: RoleHelper recognizes it as a business role
+        when(roleHelper.isBusinessRole(businessRole)).thenReturn(true);
+        
         // Given: Role is not already bound
         when(businessUnitRoleRepository.existsByBusinessUnitIdAndRoleId(businessUnitId, roleId))
                 .thenReturn(false);
@@ -128,6 +139,9 @@ public class BusinessUnitRoleBindingProperties {
         Role adminRole = createRole(roleId, RoleType.ADMIN);
         when(roleRepository.findById(roleId)).thenReturn(Optional.of(adminRole));
         
+        // Given: RoleHelper recognizes it as NOT a business role
+        when(roleHelper.isBusinessRole(adminRole)).thenReturn(false);
+        
         // When & Then: Binding should throw exception
         assertThatThrownBy(() -> businessUnitRoleService.bindRole(businessUnitId, roleId))
                 .isInstanceOf(AdminBusinessException.class)
@@ -154,6 +168,9 @@ public class BusinessUnitRoleBindingProperties {
         Role developerRole = createRole(roleId, RoleType.DEVELOPER);
         when(roleRepository.findById(roleId)).thenReturn(Optional.of(developerRole));
         
+        // Given: RoleHelper recognizes it as NOT a business role
+        when(roleHelper.isBusinessRole(developerRole)).thenReturn(false);
+        
         // When & Then: Binding should throw exception
         assertThatThrownBy(() -> businessUnitRoleService.bindRole(businessUnitId, roleId))
                 .isInstanceOf(AdminBusinessException.class)
@@ -175,6 +192,9 @@ public class BusinessUnitRoleBindingProperties {
         
         // Given: Create role with the given type
         Role role = createRole(roleId, roleType);
+        
+        // Given: Mock roleHelper behavior based on role type
+        when(roleHelper.isBusinessRole(role)).thenReturn(roleType.isBusinessRole());
         
         // When: Validate role type
         boolean shouldPass = roleType.isBusinessRole();
@@ -205,6 +225,10 @@ public class BusinessUnitRoleBindingProperties {
         Role role1 = createRole(roleId1, roleType);
         Role role2 = createRole(roleId2, roleType);
         
+        // Given: Mock roleHelper behavior based on role type
+        when(roleHelper.isBusinessRole(role1)).thenReturn(roleType.isBusinessRole());
+        when(roleHelper.isBusinessRole(role2)).thenReturn(roleType.isBusinessRole());
+        
         // When: Validate both roles
         boolean result1 = isValidBusinessRole(role1);
         boolean result2 = isValidBusinessRole(role2);
@@ -233,6 +257,9 @@ public class BusinessUnitRoleBindingProperties {
         Role role = createRole(roleId, roleType);
         when(roleRepository.findById(roleId)).thenReturn(Optional.of(role));
         
+        // Given: RoleHelper recognizes it as NOT a business role
+        when(roleHelper.isBusinessRole(role)).thenReturn(false);
+        
         // When & Then: Both bindings should fail
         assertThatThrownBy(() -> businessUnitRoleService.bindRole(businessUnitId1, roleId))
                 .isInstanceOf(AdminBusinessException.class);
@@ -248,7 +275,7 @@ public class BusinessUnitRoleBindingProperties {
                 .id(roleId)
                 .name("Test Role " + roleId)
                 .code("ROLE_" + roleId.toUpperCase().replace("-", "_"))
-                .type(type)
+                .type(EntityTypeConverter.fromRoleType(type))
                 .status("ACTIVE")
                 .build();
     }

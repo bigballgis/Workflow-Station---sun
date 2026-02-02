@@ -40,12 +40,12 @@ public class ConflictDetectionResult {
         private String status;
         private Instant detectedAt;
         
-        public static ConflictInfo fromEntity(PermissionConflict conflict) {
+        public static ConflictInfo fromEntity(PermissionConflict conflict, com.platform.security.entity.Permission permission) {
             return ConflictInfo.builder()
                     .conflictId(conflict.getId())
                     .userId(conflict.getUserId())
-                    .permissionId(conflict.getPermission().getId())
-                    .permissionName(conflict.getPermission().getName())
+                    .permissionId(conflict.getPermissionId())
+                    .permissionName(permission != null ? permission.getName() : null)
                     .conflictSource1(conflict.getConflictSource1())
                     .conflictSource2(conflict.getConflictSource2())
                     .conflictDescription(conflict.getConflictDescription())

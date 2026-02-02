@@ -8,7 +8,7 @@ import com.admin.dto.request.PermissionDelegationRequest;
 import com.admin.dto.response.ConflictDetectionResult;
 import com.admin.dto.response.PermissionCheckResult;
 import com.admin.dto.response.PermissionDelegationResult;
-import com.admin.entity.Permission;
+import com.platform.security.entity.Permission;
 import com.admin.entity.PermissionConflict;
 import com.admin.repository.PermissionRepository;
 import io.swagger.v3.oas.annotations.Operation;

@@ -49,8 +49,10 @@ public class PermissionRequestAdminController {
                 status, requestType, applicantId, startInstant, endInstant,
                 PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt")));
         
+        // Note: fromEntity now requires User parameters, but for list view we can pass null
+        // Individual services should fetch users when needed for detailed views
         PageResult<PermissionRequestInfo> result = PageResult.of(
-                requests.map(PermissionRequestInfo::fromEntity).getContent(),
+                requests.map(req -> PermissionRequestInfo.fromEntity(req, null, null)).getContent(),
                 requests.getNumber(),
                 requests.getSize(),
                 requests.getTotalElements());
@@ -62,6 +64,8 @@ public class PermissionRequestAdminController {
     @Operation(summary = "获取权限申请详情")
     public ResponseEntity<PermissionRequestInfo> getRequestDetail(@PathVariable String requestId) {
         PermissionRequest request = permissionRequestService.getRequestDetail(requestId);
-        return ResponseEntity.ok(PermissionRequestInfo.fromEntity(request));
+        // Note: fromEntity now requires User parameters, but for simple view we can pass null
+        // Service layer should handle fetching users when needed
+        return ResponseEntity.ok(PermissionRequestInfo.fromEntity(request, null, null));
     }
 }

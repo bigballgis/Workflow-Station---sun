@@ -15,7 +15,7 @@ import com.platform.security.service.impl.UserRoleServiceImpl;
  */
 @SpringBootApplication
 @ComponentScan(
-    basePackages = {"com.portal"},
+    basePackages = {"com.portal", "com.platform.common", "com.platform.security.exception"},
     basePackageClasses = {TargetResolverFactory.class, UserRoleServiceImpl.class},
     excludeFilters = {
         @ComponentScan.Filter(type = FilterType.REGEX, pattern = "com\\.platform\\.security\\.repository\\..*"),
@@ -25,7 +25,7 @@ import com.platform.security.service.impl.UserRoleServiceImpl;
     }
 )
 @EnableJpaRepositories(basePackages = {"com.portal.repository"})
-@EntityScan(basePackages = {"com.portal.entity", "com.platform.security.entity"})
+@EntityScan(basePackages = {"com.portal.entity"})
 public class UserPortalApplication {
 
     public static void main(String[] args) {

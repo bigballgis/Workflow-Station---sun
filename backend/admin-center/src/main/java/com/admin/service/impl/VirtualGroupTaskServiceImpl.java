@@ -4,11 +4,12 @@ import com.admin.dto.request.TaskClaimRequest;
 import com.admin.dto.request.TaskDelegationRequest;
 import com.admin.dto.response.GroupTaskInfo;
 import com.admin.dto.response.TaskHistoryInfo;
-import com.admin.entity.VirtualGroup;
+import com.platform.security.entity.VirtualGroup;
 import com.admin.entity.VirtualGroupTaskHistory;
 import com.admin.enums.TaskActionType;
 import com.admin.exception.AdminBusinessException;
 import com.admin.exception.VirtualGroupNotFoundException;
+import com.admin.helper.VirtualGroupHelper;
 import com.admin.repository.VirtualGroupMemberRepository;
 import com.admin.repository.VirtualGroupRepository;
 import com.admin.repository.VirtualGroupTaskHistoryRepository;
@@ -36,6 +37,7 @@ public class VirtualGroupTaskServiceImpl implements VirtualGroupTaskService {
     private final VirtualGroupRepository virtualGroupRepository;
     private final VirtualGroupMemberRepository virtualGroupMemberRepository;
     private final VirtualGroupTaskHistoryRepository taskHistoryRepository;
+    private final VirtualGroupHelper virtualGroupHelper;
 
     
     @Override
@@ -52,7 +54,7 @@ public class VirtualGroupTaskServiceImpl implements VirtualGroupTaskService {
         }
         
         // 验证虚拟组有效
-        if (!group.isValid()) {
+        if (!virtualGroupHelper.isValid(group)) {
             throw new AdminBusinessException("GROUP_INVALID", "虚拟组已失效或过期");
         }
         
@@ -71,7 +73,7 @@ public class VirtualGroupTaskServiceImpl implements VirtualGroupTaskService {
         
         List<GroupTaskInfo> allTasks = new ArrayList<>();
         for (VirtualGroup group : userGroups) {
-            if (group.isValid()) {
+            if (virtualGroupHelper.isValid(group)) {
                 allTasks.addAll(getTasksAssignedToGroup(group.getId()));
             }
         }
@@ -181,7 +183,7 @@ public class VirtualGroupTaskServiceImpl implements VirtualGroupTaskService {
     public boolean canUserClaimTask(String userId, String taskId, String groupId) {
         // 验证虚拟组存在且有效
         VirtualGroup group = virtualGroupRepository.findById(groupId).orElse(null);
-        if (group == null || !group.isValid()) {
+        if (group == null || !virtualGroupHelper.isValid(group)) {
             return false;
         }
         
