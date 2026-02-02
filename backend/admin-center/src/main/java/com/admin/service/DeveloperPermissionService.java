@@ -5,10 +5,12 @@ import com.admin.entity.Role;
 import com.admin.entity.User;
 import com.admin.enums.DeveloperPermission;
 import com.admin.enums.RoleType;
+import com.admin.constant.DeveloperRoleSyncConstants;
 import com.admin.repository.DeveloperRolePermissionRepository;
 import com.admin.repository.RoleRepository;
 import com.admin.repository.UserRepository;
 import com.admin.repository.UserRoleRepository;
+import com.admin.repository.VirtualGroupRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -30,6 +32,7 @@ public class DeveloperPermissionService {
     private final UserRoleRepository userRoleRepository;
     private final RoleRepository roleRepository;
     private final UserRepository userRepository;
+    private final VirtualGroupRepository virtualGroupRepository;
     
     // 预定义的角色权限映射
     private static final Map<String, Set<DeveloperPermission>> DEFAULT_ROLE_PERMISSIONS = new HashMap<>();
@@ -132,7 +135,14 @@ public class DeveloperPermissionService {
         // 获取用户的开发角色ID列表
         List<String> developerRoleIds = getUserDeveloperRoleIds(userId);
         
+        // 兜底：若 sys_user_roles 中无 DEVELOPER 角色，但用户属于 Developers 虚拟组，则按 DEVELOPER 角色授予权限
         if (developerRoleIds.isEmpty()) {
+            boolean inDevelopersVg = virtualGroupRepository.findByUserId(userId).stream()
+                    .anyMatch(vg -> vg.getCode() != null && DeveloperRoleSyncConstants.DEVELOPERS_VIRTUAL_GROUP_CODE.equalsIgnoreCase(vg.getCode()));
+            if (inDevelopersVg) {
+                log.debug("User {} has no developer role in sys_user_roles but is in Developers virtual group; granting DEVELOPER default permissions", userId);
+                return DEFAULT_ROLE_PERMISSIONS.getOrDefault("DEVELOPER", Collections.emptySet());
+            }
             return Collections.emptySet();
         }
         

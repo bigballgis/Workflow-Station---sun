@@ -1,5 +1,6 @@
 package com.workflow.exception;
 
+import com.platform.security.exception.AuthenticationException;
 import com.workflow.dto.response.ApiResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -88,6 +89,17 @@ public class GlobalExceptionHandler {
         log.warn("Illegal argument: {}", e.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
             .body(ApiResponse.error("INVALID_ARGUMENT", e.getMessage()));
+    }
+
+    /**
+     * 处理认证异常（登录/登出/令牌无效等），返回 401/403 而非 500
+     */
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAuthenticationException(AuthenticationException e) {
+        log.warn("Authentication failed: {} - {}", e.getCode(), e.getMessage());
+        HttpStatus status = e.getHttpStatus() == 403 ? HttpStatus.FORBIDDEN : HttpStatus.UNAUTHORIZED;
+        return ResponseEntity.status(status)
+            .body(ApiResponse.error(e.getCode(), e.getMessage()));
     }
 
     /**

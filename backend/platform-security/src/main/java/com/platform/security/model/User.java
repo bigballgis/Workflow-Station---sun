@@ -130,10 +130,13 @@ public class User {
     }
 
     /**
-     * Check if user account is inactive.
+     * Check if user account is inactive (cannot login).
+     * Includes INACTIVE, DISABLED, PENDING to align with admin-center and DB.
      */
     public boolean isInactive() {
-        return status == UserStatus.INACTIVE;
+        return status == UserStatus.INACTIVE
+            || status == UserStatus.DISABLED
+            || status == UserStatus.PENDING;
     }
 
     /**

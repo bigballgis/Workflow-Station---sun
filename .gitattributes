@@ -1,0 +1,12 @@
+# Force LF for shell scripts and Docker entrypoints (Windows-friendly: avoid "bad interpreter" in containers)
+*.sh text eol=lf
+**/docker-entrypoint.sh text eol=lf
+
+# Dockerfiles and nginx configs: LF for consistency
+Dockerfile text eol=lf
+**/Dockerfile text eol=lf
+*.conf text eol=lf
+*.template text eol=lf
+
+# Default: auto line endings (respect git config)
+* text=auto

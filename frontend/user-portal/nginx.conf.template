@@ -1,5 +1,5 @@
-# Fallback static config for local run (no template). For Docker/IKP use nginx.conf.template + docker-entrypoint.sh
-resolver 127.0.0.11 valid=10s ipv6=off;
+# Resolver: set at runtime (Docker=127.0.0.11, IKP/K8s=cluster DNS)
+resolver __RESOLVER__ valid=10s ipv6=off;
 
 server {
     listen 80;
@@ -14,9 +14,18 @@ server {
         try_files $uri $uri/ /index.html;
     }
 
+    # Docker: platform-api-gateway:8090, platform-user-portal:8093, platform-admin-center:8092 (see start-all.ps1/sh)
     location /api/v1/auth {
-        set $upstream_we platform-workflow-engine:8091;
-        proxy_pass http://$upstream_we;
+        set $upstream_ag platform-api-gateway:8090;
+        proxy_pass http://$upstream_ag;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    location /api/portal {
+        set $upstream_up platform-user-portal:8093;
+        proxy_pass http://$upstream_up;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -24,16 +33,6 @@ server {
 
     location /api/v1/admin {
         set $upstream_ac platform-admin-center:8092;
-        proxy_pass http://$upstream_ac;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    }
-
-    # set before rewrite so variable is defined when proxy_pass runs (nginx bug with rewrite break)
-    location /api/v1 {
-        set $upstream_ac platform-admin-center:8092;
-        rewrite ^/api/v1(.*)$ /api/v1/admin$1 break;
         proxy_pass http://$upstream_ac;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
