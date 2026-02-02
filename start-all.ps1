@@ -4,6 +4,8 @@
 #
 # Script variables (all defined before use):
 #   $env:POSTGRES_PASSWORD, $env:REDIS_PASSWORD, $env:JWT_SECRET_KEY, $env:ENCRYPTION_KEY
+#   Infra 默认只启动 Redis；START_POSTGRES=1 时同时启动本地 PostgreSQL（并挂载 init SQL）
+#   未启动 PostgreSQL 时需设置 SPRING_DATASOURCE_URL（及 USERNAME/PASSWORD）指向云上/外部 DB
 #   $networkName, $projectRoot (Windows path with / for Docker)
 #   Params: $InfraOnly, $BackendOnly, $FrontendOnly, $NoBuild
 
@@ -52,6 +54,9 @@ $networkName = "platform-network"
 
 # Windows-friendly: project root with forward slashes for Docker volume mounts
 $projectRoot = (Get-Location).Path -replace '\\', '/'
+
+# Infra 默认只启动 Redis；START_POSTGRES=1 时同时启动本地 PostgreSQL
+$startPostgres = ($env:START_POSTGRES -eq "1" -or $env:START_POSTGRES -eq "true")
 
 # Function to create network if it doesn't exist (Windows-friendly: exact match, CRLF-safe)
 function Ensure-Network {
@@ -137,7 +142,80 @@ Ensure-Network
 if ($InfraOnly) {
     Write-Host "Starting infrastructure services only..." -ForegroundColor Yellow
     
-    # Start PostgreSQL
+    if ($startPostgres) {
+        # Start PostgreSQL (with init SQL when using local DB)
+        Remove-Container "platform-postgres"
+        Write-Host "Starting PostgreSQL..." -ForegroundColor Yellow
+        docker run -d `
+            --name platform-postgres `
+            --network $networkName `
+            -e POSTGRES_DB=workflow_platform `
+            -e POSTGRES_USER=platform `
+            -e "POSTGRES_PASSWORD=$($env:POSTGRES_PASSWORD)" `
+            -p 5432:5432 `
+            -v postgres_data:/var/lib/postgresql/data `
+            -v "$projectRoot/deploy/init-scripts/00-schema/01-schema.sql:/docker-entrypoint-initdb.d/00-01-schema.sql" `
+            -v "$projectRoot/deploy/init-scripts/01-admin/01-admin-user.sql:/docker-entrypoint-initdb.d/01-01-admin-user.sql" `
+            -v "$projectRoot/deploy/init-scripts/02-test-data/01-organization.sql:/docker-entrypoint-initdb.d/02-01-organization.sql" `
+            -v "$projectRoot/deploy/init-scripts/02-test-data/02-organization-detail.sql:/docker-entrypoint-initdb.d/02-02-organization-detail.sql" `
+            -v "$projectRoot/deploy/init-scripts/02-test-data/03-users.sql:/docker-entrypoint-initdb.d/02-03-users.sql" `
+            -v "$projectRoot/deploy/init-scripts/02-test-data/04-role-assignments.sql:/docker-entrypoint-initdb.d/02-04-role-assignments.sql" `
+            -v "$projectRoot/deploy/init-scripts/02-test-data/04-department-managers.sql:/docker-entrypoint-initdb.d/02-05-department-managers.sql" `
+            -v "$projectRoot/deploy/init-scripts/02-test-data/05-virtual-groups.sql:/docker-entrypoint-initdb.d/02-06-virtual-groups.sql" `
+            -v "$projectRoot/deploy/init-scripts/04-purchase-workflow/04-01-function-unit.sql:/docker-entrypoint-initdb.d/04-01-function-unit.sql" `
+            -v "$projectRoot/deploy/init-scripts/04-purchase-workflow/04-02-tables.sql:/docker-entrypoint-initdb.d/04-02-tables.sql" `
+            -v "$projectRoot/deploy/init-scripts/04-purchase-workflow/04-03-fields-main-fixed.sql:/docker-entrypoint-initdb.d/04-03-fields-main-fixed.sql" `
+            -v "$projectRoot/deploy/init-scripts/04-purchase-workflow/04-04-fields-sub-fixed.sql:/docker-entrypoint-initdb.d/04-04-fields-sub-fixed.sql" `
+            -v "$projectRoot/deploy/init-scripts/04-purchase-workflow/04-05-fk-relations.sql:/docker-entrypoint-initdb.d/04-05-fk-relations.sql" `
+            -v "$projectRoot/deploy/init-scripts/04-purchase-workflow/04-06-forms-fixed.sql:/docker-entrypoint-initdb.d/04-06-forms-fixed.sql" `
+            -v "$projectRoot/deploy/init-scripts/04-purchase-workflow/04-07-actions-fixed.sql:/docker-entrypoint-initdb.d/04-07-actions-fixed.sql" `
+            -v "$projectRoot/deploy/init-scripts/04-purchase-workflow/04-08-process-fixed-v2-corrected.sql:/docker-entrypoint-initdb.d/04-08-process-fixed-v2-corrected.sql" `
+            -v "$projectRoot/deploy/init-scripts/04-purchase-workflow/04-09-form-bindings-fixed.sql:/docker-entrypoint-initdb.d/04-09-form-bindings-fixed.sql" `
+            -v "$projectRoot/deploy/init-scripts/04-purchase-workflow/04-10-form-configs.sql:/docker-entrypoint-initdb.d/04-10-form-configs.sql" `
+            -v "$projectRoot/deploy/init-scripts/04-purchase-workflow/04-11-action-configs.sql:/docker-entrypoint-initdb.d/04-11-action-configs.sql" `
+            --restart unless-stopped `
+            postgres:16.5-alpine
+    } else {
+        Write-Host "Skipping PostgreSQL (default: only Redis; set START_POSTGRES=1 to start local PostgreSQL)" -ForegroundColor Gray
+    }
+    
+    # Start Redis
+    Remove-Container "platform-redis"
+    Write-Host "Starting Redis..." -ForegroundColor Yellow
+    docker run -d `
+        --name platform-redis `
+        --network $networkName `
+        -e "REDIS_PASSWORD=$($env:REDIS_PASSWORD)" `
+        -p 6379:6379 `
+        -v redis_data:/data `
+        --restart unless-stopped `
+        redis:7.2-alpine redis-server --appendonly yes --requirepass "$($env:REDIS_PASSWORD)"
+    
+    Write-Host ""
+    Write-Host "Infrastructure services started!" -ForegroundColor Green
+    if ($startPostgres) { Write-Host "  - PostgreSQL: localhost:5432" -ForegroundColor White }
+    Write-Host "  - Redis: localhost:6379" -ForegroundColor White
+    exit 0
+}
+
+# Step 1: Build platform modules (if needed)
+if (-not $NoBuild) {
+    Write-Host "Step 1: Building platform modules..." -ForegroundColor Yellow
+    Write-Host "Running Maven build (this may take a few minutes)..." -ForegroundColor Gray
+    mvn clean install -DskipTests
+    if (-not $?) {
+        Write-Host "Error: Maven build failed" -ForegroundColor Red
+        exit 1
+    }
+    Write-Host "Platform modules built successfully" -ForegroundColor Green
+}
+
+# Step 2: Start infrastructure
+Write-Host ""
+Write-Host "Step 2: Starting infrastructure services..." -ForegroundColor Yellow
+
+if ($startPostgres) {
+    # Start PostgreSQL (with init SQL when using local DB)
     Remove-Container "platform-postgres"
     Write-Host "Starting PostgreSQL..." -ForegroundColor Yellow
     docker run -d `
@@ -169,74 +247,9 @@ if ($InfraOnly) {
         -v "$projectRoot/deploy/init-scripts/04-purchase-workflow/04-11-action-configs.sql:/docker-entrypoint-initdb.d/04-11-action-configs.sql" `
         --restart unless-stopped `
         postgres:16.5-alpine
-    
-    # Start Redis
-    Remove-Container "platform-redis"
-    Write-Host "Starting Redis..." -ForegroundColor Yellow
-    docker run -d `
-        --name platform-redis `
-        --network $networkName `
-        -e "REDIS_PASSWORD=$($env:REDIS_PASSWORD)" `
-        -p 6379:6379 `
-        -v redis_data:/data `
-        --restart unless-stopped `
-        redis:7.2-alpine redis-server --appendonly yes --requirepass "$($env:REDIS_PASSWORD)"
-    
-    Write-Host ""
-    Write-Host "Infrastructure services started!" -ForegroundColor Green
-    Write-Host "  - PostgreSQL: localhost:5432" -ForegroundColor White
-    Write-Host "  - Redis: localhost:6379" -ForegroundColor White
-    exit 0
+} else {
+    Write-Host "Skipping PostgreSQL (default: only Redis; set START_POSTGRES=1 to start local PostgreSQL)" -ForegroundColor Gray
 }
-
-# Step 1: Build platform modules (if needed)
-if (-not $NoBuild) {
-    Write-Host "Step 1: Building platform modules..." -ForegroundColor Yellow
-    Write-Host "Running Maven build (this may take a few minutes)..." -ForegroundColor Gray
-    mvn clean install -DskipTests
-    if (-not $?) {
-        Write-Host "Error: Maven build failed" -ForegroundColor Red
-        exit 1
-    }
-    Write-Host "Platform modules built successfully" -ForegroundColor Green
-}
-
-# Step 2: Start infrastructure
-Write-Host ""
-Write-Host "Step 2: Starting infrastructure services..." -ForegroundColor Yellow
-
-# Start PostgreSQL
-Remove-Container "platform-postgres"
-Write-Host "Starting PostgreSQL..." -ForegroundColor Yellow
-docker run -d `
-    --name platform-postgres `
-    --network $networkName `
-    -e POSTGRES_DB=workflow_platform `
-    -e POSTGRES_USER=platform `
-    -e "POSTGRES_PASSWORD=$($env:POSTGRES_PASSWORD)" `
-    -p 5432:5432 `
-    -v postgres_data:/var/lib/postgresql/data `
-    -v "$projectRoot/deploy/init-scripts/00-schema/01-schema.sql:/docker-entrypoint-initdb.d/00-01-schema.sql" `
-    -v "$projectRoot/deploy/init-scripts/01-admin/01-admin-user.sql:/docker-entrypoint-initdb.d/01-01-admin-user.sql" `
-    -v "$projectRoot/deploy/init-scripts/02-test-data/01-organization.sql:/docker-entrypoint-initdb.d/02-01-organization.sql" `
-    -v "$projectRoot/deploy/init-scripts/02-test-data/02-organization-detail.sql:/docker-entrypoint-initdb.d/02-02-organization-detail.sql" `
-    -v "$projectRoot/deploy/init-scripts/02-test-data/03-users.sql:/docker-entrypoint-initdb.d/02-03-users.sql" `
-    -v "$projectRoot/deploy/init-scripts/02-test-data/04-role-assignments.sql:/docker-entrypoint-initdb.d/02-04-role-assignments.sql" `
-    -v "$projectRoot/deploy/init-scripts/02-test-data/04-department-managers.sql:/docker-entrypoint-initdb.d/02-05-department-managers.sql" `
-    -v "$projectRoot/deploy/init-scripts/02-test-data/05-virtual-groups.sql:/docker-entrypoint-initdb.d/02-06-virtual-groups.sql" `
-    -v "$projectRoot/deploy/init-scripts/04-purchase-workflow/04-01-function-unit.sql:/docker-entrypoint-initdb.d/04-01-function-unit.sql" `
-    -v "$projectRoot/deploy/init-scripts/04-purchase-workflow/04-02-tables.sql:/docker-entrypoint-initdb.d/04-02-tables.sql" `
-    -v "$projectRoot/deploy/init-scripts/04-purchase-workflow/04-03-fields-main-fixed.sql:/docker-entrypoint-initdb.d/04-03-fields-main-fixed.sql" `
-    -v "$projectRoot/deploy/init-scripts/04-purchase-workflow/04-04-fields-sub-fixed.sql:/docker-entrypoint-initdb.d/04-04-fields-sub-fixed.sql" `
-    -v "$projectRoot/deploy/init-scripts/04-purchase-workflow/04-05-fk-relations.sql:/docker-entrypoint-initdb.d/04-05-fk-relations.sql" `
-    -v "$projectRoot/deploy/init-scripts/04-purchase-workflow/04-06-forms-fixed.sql:/docker-entrypoint-initdb.d/04-06-forms-fixed.sql" `
-    -v "$projectRoot/deploy/init-scripts/04-purchase-workflow/04-07-actions-fixed.sql:/docker-entrypoint-initdb.d/04-07-actions-fixed.sql" `
-    -v "$projectRoot/deploy/init-scripts/04-purchase-workflow/04-08-process-fixed-v2-corrected.sql:/docker-entrypoint-initdb.d/04-08-process-fixed-v2-corrected.sql" `
-    -v "$projectRoot/deploy/init-scripts/04-purchase-workflow/04-09-form-bindings-fixed.sql:/docker-entrypoint-initdb.d/04-09-form-bindings-fixed.sql" `
-    -v "$projectRoot/deploy/init-scripts/04-purchase-workflow/04-10-form-configs.sql:/docker-entrypoint-initdb.d/04-10-form-configs.sql" `
-    -v "$projectRoot/deploy/init-scripts/04-purchase-workflow/04-11-action-configs.sql:/docker-entrypoint-initdb.d/04-11-action-configs.sql" `
-    --restart unless-stopped `
-    postgres:16.5-alpine
 
 # Start Redis
 Remove-Container "platform-redis"
@@ -251,9 +264,11 @@ docker run -d `
 
 # Wait for infrastructure (exit on failure, same as start-all.sh set -e)
 Write-Host "Waiting for infrastructure to be ready..." -ForegroundColor Gray
-if (-not (Wait-ForService "platform-postgres" "pg_isready -U platform -d workflow_platform")) {
-    Write-Host "Error: PostgreSQL did not become ready" -ForegroundColor Red
-    exit 1
+if ($startPostgres) {
+    if (-not (Wait-ForService "platform-postgres" "pg_isready -U platform -d workflow_platform")) {
+        Write-Host "Error: PostgreSQL did not become ready" -ForegroundColor Red
+        exit 1
+    }
 }
 $redisCmd = "redis-cli -a " + $env:REDIS_PASSWORD + " ping"
 if (-not (Wait-ForService "platform-redis" $redisCmd)) {
@@ -273,20 +288,34 @@ if ($BackendOnly -or (-not $FrontendOnly)) {
             Write-Host "Error: Backend build failed" -ForegroundColor Red
             exit 1
         }
+        Write-Host "Building Docker images for backend services..." -ForegroundColor Yellow
+        Build-Image "./backend/workflow-engine-core" "./backend/workflow-engine-core/Dockerfile" "workflow-engine:latest"
+        Build-Image "./backend/admin-center" "./backend/admin-center/Dockerfile" "admin-center:latest"
+        Build-Image "./backend/user-portal" "./backend/user-portal/Dockerfile" "user-portal:latest"
+        Build-Image "./backend/developer-workstation" "./backend/developer-workstation/Dockerfile" "developer-workstation:latest"
+        Build-Image "./backend/api-gateway" "./backend/api-gateway/Dockerfile" "api-gateway:latest"
+    } else {
+        Write-Host "Skipping backend build (NoBuild); using existing images" -ForegroundColor Gray
     }
-    
-    # Build Docker images
-    Write-Host "Building Docker images for backend services..." -ForegroundColor Yellow
-    
-    Build-Image "./backend/workflow-engine-core" "./backend/workflow-engine-core/Dockerfile" "workflow-engine:latest"
-    Build-Image "./backend/admin-center" "./backend/admin-center/Dockerfile" "admin-center:latest"
-    Build-Image "./backend/user-portal" "./backend/user-portal/Dockerfile" "user-portal:latest"
-    Build-Image "./backend/developer-workstation" "./backend/developer-workstation/Dockerfile" "developer-workstation:latest"
-    Build-Image "./backend/api-gateway" "./backend/api-gateway/Dockerfile" "api-gateway:latest"
     
     # Step 4: Start backend services
     Write-Host ""
     Write-Host "Step 4: Starting backend services..." -ForegroundColor Yellow
+    
+    # 未启动本地 PostgreSQL 时使用环境变量（云上/外部 DB）；START_POSTGRES=1 时使用本地 platform-postgres
+    if (-not $startPostgres) {
+        if (-not $env:SPRING_DATASOURCE_URL) {
+            Write-Host "Error: PostgreSQL not started (default). Set SPRING_DATASOURCE_URL to your DB JDBC URL, or set START_POSTGRES=1 to use local PostgreSQL." -ForegroundColor Red
+            exit 1
+        }
+        $datasourceUrl = $env:SPRING_DATASOURCE_URL
+        $datasourceUser = if ($env:SPRING_DATASOURCE_USERNAME) { $env:SPRING_DATASOURCE_USERNAME } else { "platform" }
+        $datasourcePassword = if ($env:SPRING_DATASOURCE_PASSWORD) { $env:SPRING_DATASOURCE_PASSWORD } else { $env:POSTGRES_PASSWORD }
+    } else {
+        $datasourceUrl = "jdbc:postgresql://platform-postgres:5432/workflow_platform?currentSchema=projectx"
+        $datasourceUser = "platform"
+        $datasourcePassword = $env:POSTGRES_PASSWORD
+    }
     
     # Start Workflow Engine
     Remove-Container "platform-workflow-engine"
@@ -295,13 +324,13 @@ if ($BackendOnly -or (-not $FrontendOnly)) {
         --name platform-workflow-engine `
         --network $networkName `
         -e SERVER_PORT=8091 `
-        -e SPRING_DATASOURCE_URL=jdbc:postgresql://platform-postgres:5432/workflow_platform?currentSchema=projectx `
-        -e SPRING_DATASOURCE_USERNAME=platform `
-        -e "SPRING_DATASOURCE_PASSWORD=$($env:POSTGRES_PASSWORD)" `
+        -e "SPRING_DATASOURCE_URL=$datasourceUrl" `
+        -e "SPRING_DATASOURCE_USERNAME=$datasourceUser" `
+        -e "SPRING_DATASOURCE_PASSWORD=$datasourcePassword" `
         -e SPRING_REDIS_HOST=platform-redis `
         -e SPRING_REDIS_PORT=6379 `
         -e "SPRING_REDIS_PASSWORD=$($env:REDIS_PASSWORD)" `
-        -e ADMIN_CENTER_URL=http://platform-admin-center:8092/api/v1/admin `
+        -e ADMIN_CENTER_URL=http://platform-admin-center:8092 `
         -e "JWT_SECRET_KEY=$($env:JWT_SECRET_KEY)" `
         -e "ENCRYPTION_KEY=$($env:ENCRYPTION_KEY)" `
         -p 8091:8091 `
@@ -315,9 +344,9 @@ if ($BackendOnly -or (-not $FrontendOnly)) {
         --name platform-admin-center `
         --network $networkName `
         -e SERVER_PORT=8092 `
-        -e SPRING_DATASOURCE_URL=jdbc:postgresql://platform-postgres:5432/workflow_platform?currentSchema=projectx `
-        -e SPRING_DATASOURCE_USERNAME=platform `
-        -e "SPRING_DATASOURCE_PASSWORD=$($env:POSTGRES_PASSWORD)" `
+        -e "SPRING_DATASOURCE_URL=$datasourceUrl" `
+        -e "SPRING_DATASOURCE_USERNAME=$datasourceUser" `
+        -e "SPRING_DATASOURCE_PASSWORD=$datasourcePassword" `
         -e SPRING_REDIS_HOST=platform-redis `
         -e SPRING_REDIS_PORT=6379 `
         -e "SPRING_REDIS_PASSWORD=$($env:REDIS_PASSWORD)" `
@@ -334,13 +363,13 @@ if ($BackendOnly -or (-not $FrontendOnly)) {
         --name platform-user-portal `
         --network $networkName `
         -e SERVER_PORT=8093 `
-        -e SPRING_DATASOURCE_URL=jdbc:postgresql://platform-postgres:5432/workflow_platform?currentSchema=projectx `
-        -e SPRING_DATASOURCE_USERNAME=platform `
-        -e "SPRING_DATASOURCE_PASSWORD=$($env:POSTGRES_PASSWORD)" `
+        -e "SPRING_DATASOURCE_URL=$datasourceUrl" `
+        -e "SPRING_DATASOURCE_USERNAME=$datasourceUser" `
+        -e "SPRING_DATASOURCE_PASSWORD=$datasourcePassword" `
         -e SPRING_REDIS_HOST=platform-redis `
         -e SPRING_REDIS_PORT=6379 `
         -e "SPRING_REDIS_PASSWORD=$($env:REDIS_PASSWORD)" `
-        -e ADMIN_CENTER_URL=http://platform-admin-center:8092/api/v1/admin `
+        -e ADMIN_CENTER_URL=http://platform-admin-center:8092 `
         -e WORKFLOW_ENGINE_URL=http://platform-workflow-engine:8091 `
         -e "JWT_SECRET_KEY=$($env:JWT_SECRET_KEY)" `
         -e "ENCRYPTION_KEY=$($env:ENCRYPTION_KEY)" `
@@ -355,13 +384,13 @@ if ($BackendOnly -or (-not $FrontendOnly)) {
         --name platform-developer-workstation `
         --network $networkName `
         -e SERVER_PORT=8094 `
-        -e SPRING_DATASOURCE_URL=jdbc:postgresql://platform-postgres:5432/workflow_platform?currentSchema=projectx `
-        -e SPRING_DATASOURCE_USERNAME=platform `
-        -e "SPRING_DATASOURCE_PASSWORD=$($env:POSTGRES_PASSWORD)" `
+        -e "SPRING_DATASOURCE_URL=$datasourceUrl" `
+        -e "SPRING_DATASOURCE_USERNAME=$datasourceUser" `
+        -e "SPRING_DATASOURCE_PASSWORD=$datasourcePassword" `
         -e SPRING_REDIS_HOST=platform-redis `
         -e SPRING_REDIS_PORT=6379 `
         -e "SPRING_REDIS_PASSWORD=$($env:REDIS_PASSWORD)" `
-        -e ADMIN_CENTER_URL=http://platform-admin-center:8092/api/v1/admin `
+        -e ADMIN_CENTER_URL=http://platform-admin-center:8092 `
         -e "JWT_SECRET_KEY=$($env:JWT_SECRET_KEY)" `
         -e "ENCRYPTION_KEY=$($env:ENCRYPTION_KEY)" `
         -p 8094:8094 `
@@ -375,14 +404,14 @@ if ($BackendOnly -or (-not $FrontendOnly)) {
         --name platform-api-gateway `
         --network $networkName `
         -e SERVER_PORT=8090 `
-        -e SPRING_DATASOURCE_URL=jdbc:postgresql://platform-postgres:5432/workflow_platform?currentSchema=projectx `
-        -e SPRING_DATASOURCE_USERNAME=platform `
-        -e "SPRING_DATASOURCE_PASSWORD=$($env:POSTGRES_PASSWORD)" `
+        -e "SPRING_DATASOURCE_URL=$datasourceUrl" `
+        -e "SPRING_DATASOURCE_USERNAME=$datasourceUser" `
+        -e "SPRING_DATASOURCE_PASSWORD=$datasourcePassword" `
         -e SPRING_REDIS_HOST=platform-redis `
         -e SPRING_REDIS_PORT=6379 `
         -e "SPRING_REDIS_PASSWORD=$($env:REDIS_PASSWORD)" `
         -e WORKFLOW_ENGINE_URL=http://platform-workflow-engine:8091 `
-        -e ADMIN_CENTER_URL=http://platform-admin-center:8092/api/v1/admin `
+        -e ADMIN_CENTER_URL=http://platform-admin-center:8092 `
         -e USER_PORTAL_URL=http://platform-user-portal:8093/api/portal `
         -e DEVELOPER_WORKSTATION_URL=http://platform-developer-workstation:8094 `
         -e "JWT_SECRET_KEY=$($env:JWT_SECRET_KEY)" `
@@ -398,10 +427,13 @@ if ($FrontendOnly -or (-not $BackendOnly)) {
     Write-Host ""
     Write-Host "Step 5: Building frontend services..." -ForegroundColor Yellow
     
-    # Build Docker images
-    Build-Image "./frontend/admin-center" "./frontend/admin-center/Dockerfile" "frontend-admin:latest"
-    Build-Image "./frontend/user-portal" "./frontend/user-portal/Dockerfile" "frontend-portal:latest"
-    Build-Image "./frontend/developer-workstation" "./frontend/developer-workstation/Dockerfile" "frontend-developer:latest"
+    if (-not $NoBuild) {
+        Build-Image "./frontend/admin-center" "./frontend/admin-center/Dockerfile" "frontend-admin:latest"
+        Build-Image "./frontend/user-portal" "./frontend/user-portal/Dockerfile" "frontend-portal:latest"
+        Build-Image "./frontend/developer-workstation" "./frontend/developer-workstation/Dockerfile" "frontend-developer:latest"
+    } else {
+        Write-Host "Skipping frontend build (NoBuild); using existing images" -ForegroundColor Gray
+    }
     
     # Step 6: Start frontend services
     Write-Host ""
@@ -447,7 +479,7 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Service URLs:" -ForegroundColor Yellow
 Write-Host "  Infrastructure:" -ForegroundColor White
-Write-Host "    - PostgreSQL:     localhost:5432" -ForegroundColor Gray
+if ($startPostgres) { Write-Host "    - PostgreSQL:     localhost:5432" -ForegroundColor Gray }
 Write-Host "    - Redis:          localhost:6379" -ForegroundColor Gray
 Write-Host ""
 Write-Host "  Backend Services:" -ForegroundColor White

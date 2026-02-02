@@ -5,8 +5,9 @@ import axios from 'axios'
  * Validates: Requirements 5.1, 5.5
  */
 
+// Use User Portal backend auth (platform-user-portal:8093) to avoid api-gateway → workflow-engine dependency
 const authRequest = axios.create({
-  baseURL: '/api/v1/auth',
+  baseURL: '/api/portal/auth',
   timeout: 30000,
   headers: { 'Content-Type': 'application/json' }
 })

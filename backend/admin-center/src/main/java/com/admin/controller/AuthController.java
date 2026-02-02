@@ -26,7 +26,7 @@ public class AuthController {
     private final AuthService authService;
 
     /**
-     * 用户登录
+     * 用户登录（需 Admin Center 角色）
      */
     @PostMapping("/login")
     public ResponseEntity<?> login(
@@ -44,6 +44,29 @@ public class AuthController {
         } catch (Exception e) {
             String user = (request != null && request.getUsername() != null) ? request.getUsername() : "?";
             log.error("Login error for user {}: {}", user, e.getMessage(), e);
+            return ResponseEntity.badRequest().body(safeError("LOGIN_FAILED", "登录失败，请稍后重试", path));
+        }
+    }
+
+    /**
+     * Developer Workstation 登录（仅校验用户名密码，不要求 Admin Center 角色）
+     */
+    @PostMapping("/developer-login")
+    public ResponseEntity<?> developerLogin(
+            @Valid @RequestBody LoginRequest request,
+            HttpServletRequest httpRequest) {
+        String path = safeRequestPath(httpRequest);
+        String ipAddress = getClientIpAddress(httpRequest);
+
+        try {
+            LoginResponse response = authService.loginForDeveloper(request, ipAddress, httpRequest.getHeader("User-Agent"));
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            log.warn("Developer login failed: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(safeError("LOGIN_FAILED", e.getMessage(), path));
+        } catch (Exception e) {
+            String user = (request != null && request.getUsername() != null) ? request.getUsername() : "?";
+            log.error("Developer login error for user {}: {}", user, e.getMessage(), e);
             return ResponseEntity.badRequest().body(safeError("LOGIN_FAILED", "登录失败，请稍后重试", path));
         }
     }

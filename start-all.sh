@@ -287,7 +287,7 @@ if [ "$BACKEND_ONLY" = true ] || [ "$FRONTEND_ONLY" != true ]; then
         -e SPRING_REDIS_HOST=platform-redis \
         -e SPRING_REDIS_PORT=6379 \
         -e SPRING_REDIS_PASSWORD=$REDIS_PASSWORD \
-        -e ADMIN_CENTER_URL=http://platform-admin-center:8092/api/v1/admin \
+        -e ADMIN_CENTER_URL=http://platform-admin-center:8092 \
         -e JWT_SECRET_KEY=$JWT_SECRET_KEY \
         -e ENCRYPTION_KEY=$ENCRYPTION_KEY \
         -p 8091:8091 \
@@ -326,7 +326,7 @@ if [ "$BACKEND_ONLY" = true ] || [ "$FRONTEND_ONLY" != true ]; then
         -e SPRING_REDIS_HOST=platform-redis \
         -e SPRING_REDIS_PORT=6379 \
         -e SPRING_REDIS_PASSWORD=$REDIS_PASSWORD \
-        -e ADMIN_CENTER_URL=http://platform-admin-center:8092/api/v1/admin \
+        -e ADMIN_CENTER_URL=http://platform-admin-center:8092 \
         -e WORKFLOW_ENGINE_URL=http://platform-workflow-engine:8091 \
         -e JWT_SECRET_KEY=$JWT_SECRET_KEY \
         -e ENCRYPTION_KEY=$ENCRYPTION_KEY \
@@ -347,7 +347,7 @@ if [ "$BACKEND_ONLY" = true ] || [ "$FRONTEND_ONLY" != true ]; then
         -e SPRING_REDIS_HOST=platform-redis \
         -e SPRING_REDIS_PORT=6379 \
         -e SPRING_REDIS_PASSWORD=$REDIS_PASSWORD \
-        -e ADMIN_CENTER_URL=http://platform-admin-center:8092/api/v1/admin \
+        -e ADMIN_CENTER_URL=http://platform-admin-center:8092 \
         -e JWT_SECRET_KEY=$JWT_SECRET_KEY \
         -e ENCRYPTION_KEY=$ENCRYPTION_KEY \
         -p 8094:8094 \
@@ -368,7 +368,7 @@ if [ "$BACKEND_ONLY" = true ] || [ "$FRONTEND_ONLY" != true ]; then
         -e SPRING_REDIS_PORT=6379 \
         -e SPRING_REDIS_PASSWORD=$REDIS_PASSWORD \
         -e WORKFLOW_ENGINE_URL=http://platform-workflow-engine:8091 \
-        -e ADMIN_CENTER_URL=http://platform-admin-center:8092/api/v1/admin \
+        -e ADMIN_CENTER_URL=http://platform-admin-center:8092 \
         -e USER_PORTAL_URL=http://platform-user-portal:8093/api/portal \
         -e DEVELOPER_WORKSTATION_URL=http://platform-developer-workstation:8094 \
         -e JWT_SECRET_KEY=$JWT_SECRET_KEY \

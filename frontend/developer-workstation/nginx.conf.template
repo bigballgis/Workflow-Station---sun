@@ -14,16 +14,29 @@ server {
         try_files $uri $uri/ /index.html;
     }
 
+    # Developer Workstation login: use developer-login (no Admin Center role required)
+    # set before rewrite so variable is defined when proxy_pass runs (nginx bug with rewrite break)
+    # Docker: platform-admin-center:8092 (see start-all.ps1/sh)
+    location = /api/v1/auth/login {
+        set $upstream_ac platform-admin-center:8092;
+        rewrite ^ /api/v1/admin/auth/developer-login break;
+        proxy_pass http://$upstream_ac;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+    # set before rewrite so variable is defined when proxy_pass runs (nginx bug with rewrite break)
     location /api/v1/auth {
-        set $upstream_we workflow-engine:8080;
-        proxy_pass http://$upstream_we;
+        set $upstream_ac platform-admin-center:8092;
+        rewrite ^/api/v1/auth(.*)$ /api/v1/admin/auth$1 break;
+        proxy_pass http://$upstream_ac;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     }
 
     location /api/v1/function-units {
-        set $upstream_dw developer-workstation:8080;
+        set $upstream_dw platform-developer-workstation:8094;
         proxy_pass http://$upstream_dw;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -31,7 +44,7 @@ server {
     }
 
     location /api/v1/icons {
-        set $upstream_dw developer-workstation:8080;
+        set $upstream_dw platform-developer-workstation:8094;
         proxy_pass http://$upstream_dw;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -39,7 +52,7 @@ server {
     }
 
     location /api/v1/versions {
-        set $upstream_dw developer-workstation:8080;
+        set $upstream_dw platform-developer-workstation:8094;
         proxy_pass http://$upstream_dw;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -47,7 +60,7 @@ server {
     }
 
     location /api/v1/export {
-        set $upstream_dw developer-workstation:8080;
+        set $upstream_dw platform-developer-workstation:8094;
         proxy_pass http://$upstream_dw;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -55,7 +68,7 @@ server {
     }
 
     location /api/v1/import {
-        set $upstream_dw developer-workstation:8080;
+        set $upstream_dw platform-developer-workstation:8094;
         proxy_pass http://$upstream_dw;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
@@ -63,7 +76,7 @@ server {
     }
 
     location /api {
-        set $upstream_dw developer-workstation:8080;
+        set $upstream_dw platform-developer-workstation:8094;
         proxy_pass http://$upstream_dw;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
