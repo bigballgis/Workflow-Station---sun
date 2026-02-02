@@ -98,7 +98,7 @@ public class MemberManagementService {
         log.info("Adding user {} to virtual group {}", userId, virtualGroupId);
         
         // 检查是否已是成员
-        if (virtualGroupMemberRepository.existsByVirtualGroupIdAndUserId(virtualGroupId, userId)) {
+        if (virtualGroupMemberRepository.existsByGroupIdAndUserId(virtualGroupId, userId)) {
             log.warn("User {} is already a member of virtual group {}", userId, virtualGroupId);
             return;
         }
@@ -167,7 +167,7 @@ public class MemberManagementService {
         }
         
         // 删除成员
-        virtualGroupMemberRepository.deleteByVirtualGroupIdAndUserId(virtualGroupId, userId);
+        virtualGroupMemberRepository.deleteByGroupIdAndUserId(virtualGroupId, userId);
         
         // 记录变更日志
         logMemberChange(MemberChangeType.REMOVED, ApproverTargetType.VIRTUAL_GROUP, virtualGroupId, userId, null, approverId, "审批人清退");
@@ -240,7 +240,7 @@ public class MemberManagementService {
         log.info("User {} exiting virtual group {}", userId, virtualGroupId);
         
         // 删除成员
-        virtualGroupMemberRepository.deleteByVirtualGroupIdAndUserId(virtualGroupId, userId);
+        virtualGroupMemberRepository.deleteByGroupIdAndUserId(virtualGroupId, userId);
         
         // 记录变更日志
         logMemberChange(MemberChangeType.EXIT, ApproverTargetType.VIRTUAL_GROUP, virtualGroupId, userId, null, userId, "用户主动退出");
@@ -306,7 +306,7 @@ public class MemberManagementService {
      * 获取虚拟组成员列表
      */
     public List<User> getVirtualGroupMembers(String virtualGroupId) {
-        List<VirtualGroupMember> members = virtualGroupMemberRepository.findByVirtualGroupIdWithUser(virtualGroupId);
+        List<VirtualGroupMember> members = virtualGroupMemberRepository.findByGroupId(virtualGroupId);
         
         // 批量获取用户ID
         List<String> userIds = members.stream()
@@ -333,7 +333,7 @@ public class MemberManagementService {
      * 获取业务单元成员列表（新版本：从 UserBusinessUnit 表获取）
      */
     public List<UserBusinessUnit> getBusinessUnitMemberUsers(String businessUnitId) {
-        return userBusinessUnitRepository.findByBusinessUnitIdWithUser(businessUnitId);
+        return userBusinessUnitRepository.findByBusinessUnitId(businessUnitId);
     }
     
     /**

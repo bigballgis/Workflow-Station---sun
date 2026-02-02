@@ -21,7 +21,7 @@ import java.util.List;
  * 表设计控制器
  */
 @RestController
-@RequestMapping("/api/v1/function-units/{functionUnitId}/tables")
+@RequestMapping("/function-units/{functionUnitId}/tables")
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "表设计", description = "数据表设计相关操作")

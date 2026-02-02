@@ -103,13 +103,25 @@ const downloadTemplate = async () => {
   URL.revokeObjectURL(url)
 }
 
-const parseFile = () => {
-  // Mock parse - in real app, use xlsx library
-  previewData.value = [
-    { username: 'user1', realName: 'User One', email: 'user1@example.com' },
-    { username: 'user2', realName: 'User Two', email: 'user2@example.com' }
-  ]
-  step.value = 1
+const parseFile = async () => {
+  if (!selectedFile.value) return
+  
+  try {
+    // 使用FileReader读取文件内容进行预览
+    // 注意：这里简化处理，实际应该使用xlsx库解析Excel
+    // 或者调用后台API进行预览
+    ElMessage.info('正在解析文件...')
+    
+    // 简化方案：直接跳过预览，让用户确认导入
+    // 如果需要预览功能，建议安装 xlsx 库或调用后台预览API
+    previewData.value = [
+      { username: '...', realName: '文件已选择，点击"确认导入"开始导入', email: '...' }
+    ]
+    step.value = 1
+  } catch (error) {
+    console.error('Failed to parse file:', error)
+    ElMessage.error('文件解析失败')
+  }
 }
 
 const handleImport = async () => {
@@ -118,10 +130,10 @@ const handleImport = async () => {
   try {
     importResult.value = await userApi.batchImport(selectedFile.value)
     step.value = 2
-  } catch {
-    // Mock result for demo
-    importResult.value = { totalCount: previewData.value.length, successCount: previewData.value.length, failedCount: 0, errors: [] }
-    step.value = 2
+  } catch (error) {
+    console.error('Failed to import users:', error)
+    ElMessage.error('导入失败，请检查文件格式')
+    importing.value = false
   } finally {
     importing.value = false
   }

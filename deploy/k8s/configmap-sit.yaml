@@ -22,6 +22,14 @@ data:
   WORKFLOW_ENGINE_URL: "http://workflow-engine-service:8080"
   DEVELOPER_WORKSTATION_URL: "http://developer-workstation-service:8080"
   USER_PORTAL_URL: "http://user-portal-service:8080"
+  API_GATEWAY_URL: "http://api-gateway-service:8080"
+  
+  # 前端 Nginx 代理后端 URL（K8s 内部服务名称）
+  ADMIN_CENTER_BACKEND_URL: "http://admin-center-service:8080"
+  USER_PORTAL_BACKEND_URL: "http://user-portal-service:8080"
+  DEVELOPER_WORKSTATION_BACKEND_URL: "http://developer-workstation-service:8080"
+  WORKFLOW_ENGINE_BACKEND_URL: "http://workflow-engine-service:8080"
+  API_GATEWAY_BACKEND_URL: "http://api-gateway-service:8080"
   
   # JWT 配置（非敏感部分）
   JWT_EXPIRATION: "86400000"

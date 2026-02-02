@@ -5,8 +5,10 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.CreationTimestamp;
 
 import java.io.Serializable;
+import java.time.LocalDateTime;
 
 /**
  * Permission entity representing a single permission.
@@ -32,18 +34,25 @@ public class Permission implements Serializable {
     @Column(nullable = false, length = 100)
     private String name;
     
-    @Column(length = 500)
+    @Column(columnDefinition = "TEXT")
     private String description;
     
     @Column(length = 50)
-    private String module;
+    private String type;
     
-    @Column(name = "resource_type", length = 50)
-    private String resourceType;
+    @Column(length = 100)
+    private String resource;
     
     @Column(length = 50)
     private String action;
     
-    @Column(nullable = false)
-    private boolean enabled;
+    @CreationTimestamp
+    @Column(name = "created_at", updatable = false)
+    private LocalDateTime createdAt;
+    
+    @Column(name = "parent_id", length = 64)
+    private String parentId;
+    
+    @Column(name = "sort_order")
+    private Integer sortOrder;
 }

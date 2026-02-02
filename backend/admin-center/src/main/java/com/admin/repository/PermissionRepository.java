@@ -27,6 +27,11 @@ public interface PermissionRepository extends JpaRepository<Permission, String> 
     boolean existsByCode(String code);
     
     /**
+     * 根据类型查找权限
+     */
+    List<Permission> findByType(String type);
+    
+    /**
      * 根据资源查找权限
      */
     List<Permission> findByResource(String resource);
@@ -35,17 +40,6 @@ public interface PermissionRepository extends JpaRepository<Permission, String> 
      * 根据资源和操作查找权限
      */
     Optional<Permission> findByResourceAndAction(String resource, String action);
-    
-    /**
-     * 根据父权限ID查找子权限
-     */
-    List<Permission> findByParentIdOrderBySortOrder(String parentId);
-    
-    /**
-     * 查找根权限
-     */
-    @Query("SELECT p FROM Permission p WHERE p.parentId IS NULL ORDER BY p.sortOrder")
-    List<Permission> findRootPermissions();
     
     /**
      * 查找角色的所有权限

@@ -77,7 +77,7 @@ public class VirtualGroupTaskVisibilityProperties {
         when(virtualGroupRepository.findById(groupId)).thenReturn(Optional.of(group));
         
         // Given: 用户是组成员
-        when(virtualGroupMemberRepository.existsByVirtualGroupIdAndUserId(groupId, userId))
+        when(virtualGroupMemberRepository.existsByGroupIdAndUserId(groupId, userId))
                 .thenReturn(true);
         
         // When: 获取组任务
@@ -102,7 +102,7 @@ public class VirtualGroupTaskVisibilityProperties {
         when(virtualGroupRepository.findById(groupId)).thenReturn(Optional.of(group));
         
         // Given: 用户不是组成员
-        when(virtualGroupMemberRepository.existsByVirtualGroupIdAndUserId(groupId, userId))
+        when(virtualGroupMemberRepository.existsByGroupIdAndUserId(groupId, userId))
                 .thenReturn(false);
         
         // When & Then: 应该抛出异常
@@ -126,7 +126,7 @@ public class VirtualGroupTaskVisibilityProperties {
         when(virtualGroupRepository.findById(groupId)).thenReturn(Optional.of(group));
         
         // Given: 用户是组成员
-        when(virtualGroupMemberRepository.existsByVirtualGroupIdAndUserId(groupId, userId))
+        when(virtualGroupMemberRepository.existsByGroupIdAndUserId(groupId, userId))
                 .thenReturn(true);
         
         // When & Then: 应该抛出异常
@@ -148,7 +148,7 @@ public class VirtualGroupTaskVisibilityProperties {
             @ForAll boolean isMember) {
         
         // Given: 设置成员关系
-        when(virtualGroupMemberRepository.existsByVirtualGroupIdAndUserId(anyString(), anyString()))
+        when(virtualGroupMemberRepository.existsByGroupIdAndUserId(anyString(), anyString()))
                 .thenReturn(isMember);
         
         // When: 检查任务可见性

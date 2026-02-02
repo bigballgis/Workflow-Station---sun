@@ -22,7 +22,7 @@ import java.util.Map;
  * 表单设计控制器
  */
 @RestController
-@RequestMapping("/api/v1/function-units/{functionUnitId}/forms")
+@RequestMapping("/function-units/{functionUnitId}/forms")
 @RequiredArgsConstructor
 @Tag(name = "表单设计", description = "表单设计相关操作")
 public class FormDesignController {

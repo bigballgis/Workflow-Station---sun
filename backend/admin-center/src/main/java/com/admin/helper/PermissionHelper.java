@@ -55,28 +55,28 @@ public class PermissionHelper {
     /**
      * Gets the resource from a Permission entity.
      * 
-     * <p>The Permission entity from platform-security has a resourceType field that represents
+     * <p>The Permission entity from platform-security has a resource field that represents
      * the resource being protected. This method extracts and returns that field.</p>
      * 
      * <p>If the Permission entity has a code field in a format like "resource:action",
-     * this method will return the resourceType field directly. For more complex parsing,
+     * this method will return the resource field directly. For more complex parsing,
      * consider using the code field.</p>
      * 
      * @param permission the Permission entity
-     * @return the resource string, or null if the permission is null or has no resourceType
+     * @return the resource string, or null if the permission is null or has no resource
      */
     public String getResource(Permission permission) {
         if (permission == null) {
             return null;
         }
         
-        // Return the resourceType field directly
-        String resourceType = permission.getResourceType();
-        if (resourceType != null && !resourceType.isEmpty()) {
-            return resourceType;
+        // Return the resource field directly
+        String resource = permission.getResource();
+        if (resource != null && !resource.isEmpty()) {
+            return resource;
         }
         
-        // Fallback: try to parse from code if resourceType is not set
+        // Fallback: try to parse from code if resource is not set
         String code = permission.getCode();
         if (code != null && code.contains(":")) {
             String[] parts = code.split(":", 2);

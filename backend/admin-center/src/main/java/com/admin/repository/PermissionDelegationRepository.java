@@ -30,7 +30,7 @@ public interface PermissionDelegationRepository extends JpaRepository<Permission
      * 根据委托人和权限查找有效的委托记录
      */
     @Query("SELECT pd FROM PermissionDelegation pd WHERE pd.delegatorId = :delegatorId " +
-           "AND pd.permission.id = :permissionId AND pd.status = 'ACTIVE' " +
+           "AND pd.permissionId = :permissionId AND pd.status = 'ACTIVE' " +
            "AND pd.validFrom <= :now AND (pd.validTo IS NULL OR pd.validTo > :now)")
     List<PermissionDelegation> findActiveDelegationsByDelegatorAndPermission(
             @Param("delegatorId") String delegatorId,
@@ -41,7 +41,7 @@ public interface PermissionDelegationRepository extends JpaRepository<Permission
      * 根据受委托人和权限查找有效的委托记录
      */
     @Query("SELECT pd FROM PermissionDelegation pd WHERE pd.delegateeId = :delegateeId " +
-           "AND pd.permission.id = :permissionId AND pd.status = 'ACTIVE' " +
+           "AND pd.permissionId = :permissionId AND pd.status = 'ACTIVE' " +
            "AND pd.validFrom <= :now AND (pd.validTo IS NULL OR pd.validTo > :now)")
     List<PermissionDelegation> findActiveDelegationsByDelegateeAndPermission(
             @Param("delegateeId") String delegateeId,

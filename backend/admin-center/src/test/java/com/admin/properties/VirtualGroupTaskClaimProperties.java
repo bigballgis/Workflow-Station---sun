@@ -75,7 +75,7 @@ public class VirtualGroupTaskClaimProperties {
         when(virtualGroupRepository.findById(groupId)).thenReturn(Optional.of(group));
         
         // Given: 用户是组成员
-        when(virtualGroupMemberRepository.existsByVirtualGroupIdAndUserId(groupId, userId))
+        when(virtualGroupMemberRepository.existsByGroupIdAndUserId(groupId, userId))
                 .thenReturn(true);
         
         // Given: 任务未被认领
@@ -122,7 +122,7 @@ public class VirtualGroupTaskClaimProperties {
         when(virtualGroupRepository.findById(groupId)).thenReturn(Optional.of(group));
         
         // Given: 用户不是组成员
-        when(virtualGroupMemberRepository.existsByVirtualGroupIdAndUserId(groupId, userId))
+        when(virtualGroupMemberRepository.existsByGroupIdAndUserId(groupId, userId))
                 .thenReturn(false);
         
         // When: 检查是否可以认领
@@ -148,7 +148,7 @@ public class VirtualGroupTaskClaimProperties {
         when(virtualGroupRepository.findById(groupId)).thenReturn(Optional.of(group));
         
         // Given: 用户是组成员
-        when(virtualGroupMemberRepository.existsByVirtualGroupIdAndUserId(groupId, userId))
+        when(virtualGroupMemberRepository.existsByGroupIdAndUserId(groupId, userId))
                 .thenReturn(true);
         
         // When: 检查是否可以认领
@@ -175,7 +175,7 @@ public class VirtualGroupTaskClaimProperties {
         when(virtualGroupRepository.findById(groupId)).thenReturn(Optional.of(group));
         
         // Given: 用户是组成员
-        when(virtualGroupMemberRepository.existsByVirtualGroupIdAndUserId(groupId, userId))
+        when(virtualGroupMemberRepository.existsByGroupIdAndUserId(groupId, userId))
                 .thenReturn(true);
         
         // Given: 任务已被其他用户认领
@@ -214,7 +214,7 @@ public class VirtualGroupTaskClaimProperties {
         when(virtualGroupRepository.findById(groupId)).thenReturn(Optional.of(group));
         
         // Given: 用户是组成员
-        when(virtualGroupMemberRepository.existsByVirtualGroupIdAndUserId(groupId, userId))
+        when(virtualGroupMemberRepository.existsByGroupIdAndUserId(groupId, userId))
                 .thenReturn(true);
         
         // Given: 任务未被认领
@@ -244,7 +244,7 @@ public class VirtualGroupTaskClaimProperties {
         when(virtualGroupRepository.findById(groupId)).thenReturn(Optional.of(group));
         
         // Given: 用户是组成员
-        when(virtualGroupMemberRepository.existsByVirtualGroupIdAndUserId(groupId, userId))
+        when(virtualGroupMemberRepository.existsByGroupIdAndUserId(groupId, userId))
                 .thenReturn(true);
         
         // Given: 任务已被该用户认领
@@ -303,7 +303,7 @@ public class VirtualGroupTaskClaimProperties {
         when(virtualGroupRepository.findById(groupId)).thenReturn(Optional.of(group));
         
         // Given: 用户不是组成员
-        when(virtualGroupMemberRepository.existsByVirtualGroupIdAndUserId(groupId, userId))
+        when(virtualGroupMemberRepository.existsByGroupIdAndUserId(groupId, userId))
                 .thenReturn(false);
         
         // When & Then: 认领应该抛出异常
@@ -332,7 +332,7 @@ public class VirtualGroupTaskClaimProperties {
         when(virtualGroupRepository.findById(groupId)).thenReturn(Optional.of(group));
         
         // Given: 用户是组成员
-        when(virtualGroupMemberRepository.existsByVirtualGroupIdAndUserId(groupId, userId))
+        when(virtualGroupMemberRepository.existsByGroupIdAndUserId(groupId, userId))
                 .thenReturn(true);
         
         // Given: 任务未被认领

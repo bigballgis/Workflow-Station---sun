@@ -189,8 +189,8 @@ public class FunctionUnitAccessService {
      */
     @Transactional(readOnly = true)
     public List<Role> getBusinessRoles() {
-        List<Role> buBounded = roleRepository.findByType(RoleType.BU_BOUNDED);
-        List<Role> buUnbounded = roleRepository.findByType(RoleType.BU_UNBOUNDED);
+        List<Role> buBounded = roleRepository.findByType("BU_BOUNDED");
+        List<Role> buUnbounded = roleRepository.findByType("BU_UNBOUNDED");
         List<Role> result = new ArrayList<>(buBounded);
         result.addAll(buUnbounded);
         return result;

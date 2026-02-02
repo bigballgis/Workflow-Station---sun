@@ -33,7 +33,7 @@ import java.util.Map;
  */
 @Slf4j
 @RestController
-@RequestMapping("/api/v1/members")
+@RequestMapping("/members")
 @RequiredArgsConstructor
 @Tag(name = "Member Management", description = "Complete member management operations with CRUD functionality")
 public class MemberController extends BaseController {

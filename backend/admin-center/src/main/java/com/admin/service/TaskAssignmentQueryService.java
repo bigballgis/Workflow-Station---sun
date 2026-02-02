@@ -171,7 +171,7 @@ public class TaskAssignmentQueryService {
      * @return 角色列表
      */
     public List<Role> getBuBoundedRoles() {
-        return roleRepository.findByType(RoleType.BU_BOUNDED);
+        return roleRepository.findByType("BU_BOUNDED");
     }
     
     /**
@@ -179,6 +179,6 @@ public class TaskAssignmentQueryService {
      * @return 角色列表
      */
     public List<Role> getBuUnboundedRoles() {
-        return roleRepository.findByType(RoleType.BU_UNBOUNDED);
+        return roleRepository.findByType("BU_UNBOUNDED");
     }
 }

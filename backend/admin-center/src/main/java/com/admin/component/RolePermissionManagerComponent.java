@@ -250,8 +250,9 @@ public class RolePermissionManagerComponent {
     
     /**
      * 根据类型获取角色
+     * Note: Role.type is String, not enum
      */
-    public List<Role> getRolesByType(RoleType type) {
+    public List<Role> getRolesByType(String type) {
         return roleRepository.findByType(type);
     }
     
@@ -259,8 +260,8 @@ public class RolePermissionManagerComponent {
      * 获取所有业务角色（BU_BOUNDED 和 BU_UNBOUNDED）
      */
     public List<Role> getBusinessRoles() {
-        List<Role> buBounded = roleRepository.findByType(RoleType.BU_BOUNDED);
-        List<Role> buUnbounded = roleRepository.findByType(RoleType.BU_UNBOUNDED);
+        List<Role> buBounded = roleRepository.findByType("BU_BOUNDED");
+        List<Role> buUnbounded = roleRepository.findByType("BU_UNBOUNDED");
         List<Role> result = new java.util.ArrayList<>(buBounded);
         result.addAll(buUnbounded);
         return result;
@@ -270,14 +271,14 @@ public class RolePermissionManagerComponent {
      * 获取所有开发角色
      */
     public List<Role> getDeveloperRoles() {
-        return roleRepository.findByType(RoleType.DEVELOPER);
+        return roleRepository.findByType("DEVELOPER");
     }
     
     /**
      * 获取所有管理角色
      */
     public List<Role> getAdminRoles() {
-        return roleRepository.findByType(RoleType.ADMIN);
+        return roleRepository.findByType("ADMIN");
     }
     
     /**

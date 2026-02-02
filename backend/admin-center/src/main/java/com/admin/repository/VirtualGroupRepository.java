@@ -88,9 +88,10 @@ public interface VirtualGroupRepository extends JpaRepository<VirtualGroup, Stri
     
     /**
      * 查找用户所属的虚拟组
+     * Note: Using subquery since VirtualGroup doesn't have members relationship
      */
-    @Query("SELECT vg FROM VirtualGroup vg " +
-           "JOIN vg.members m " +
-           "WHERE m.user.id = :userId AND vg.status = 'ACTIVE'")
+    @Query("SELECT vg FROM VirtualGroup vg WHERE vg.id IN " +
+           "(SELECT vgm.groupId FROM VirtualGroupMember vgm WHERE vgm.userId = :userId) " +
+           "AND vg.status = 'ACTIVE'")
     List<VirtualGroup> findByUserId(@Param("userId") String userId);
 }

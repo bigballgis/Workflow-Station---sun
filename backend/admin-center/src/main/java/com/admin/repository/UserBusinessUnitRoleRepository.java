@@ -62,21 +62,25 @@ public interface UserBusinessUnitRoleRepository extends JpaRepository<UserBusine
     
     /**
      * 根据用户ID查找所有业务单元角色分配（包含业务单元和角色信息）
+     * Note: UserBusinessUnitRole entity uses businessUnitId and roleId fields, not relationships
+     * Callers should fetch BusinessUnit and Role separately using these IDs if needed
+     * @deprecated Use {@link #findByUserId(String)} and fetch related entities separately
      */
-    @Query("SELECT ubur FROM UserBusinessUnitRole ubur " +
-           "LEFT JOIN FETCH ubur.businessUnit " +
-           "LEFT JOIN FETCH ubur.role " +
-           "WHERE ubur.userId = :userId")
-    List<UserBusinessUnitRole> findByUserIdWithDetails(@Param("userId") String userId);
+    @Deprecated
+    default List<UserBusinessUnitRole> findByUserIdWithDetails(String userId) {
+        return findByUserId(userId);
+    }
     
     /**
      * 根据业务单元ID查找所有用户角色分配（包含用户和角色信息）
+     * Note: UserBusinessUnitRole entity uses userId and roleId fields, not relationships
+     * Callers should fetch User and Role separately using these IDs if needed
+     * @deprecated Use {@link #findByBusinessUnitId(String)} and fetch related entities separately
      */
-    @Query("SELECT ubur FROM UserBusinessUnitRole ubur " +
-           "LEFT JOIN FETCH ubur.user " +
-           "LEFT JOIN FETCH ubur.role " +
-           "WHERE ubur.businessUnitId = :businessUnitId")
-    List<UserBusinessUnitRole> findByBusinessUnitIdWithDetails(@Param("businessUnitId") String businessUnitId);
+    @Deprecated
+    default List<UserBusinessUnitRole> findByBusinessUnitIdWithDetails(String businessUnitId) {
+        return findByBusinessUnitId(businessUnitId);
+    }
     
     /**
      * 统计用户所属的业务单元数量
@@ -99,10 +103,12 @@ public interface UserBusinessUnitRoleRepository extends JpaRepository<UserBusine
     
     /**
      * 根据业务单元ID和角色ID查找所有用户角色分配（包含用户信息）
+     * Note: UserBusinessUnitRole entity uses userId field, not a relationship
+     * Callers should fetch User separately using userId if needed
+     * @deprecated Use {@link #findUserIdsByBusinessUnitIdAndRoleId(String, String)} to get user IDs, then fetch Users separately
      */
-    @Query("SELECT ubur FROM UserBusinessUnitRole ubur " +
-           "LEFT JOIN FETCH ubur.user " +
-           "WHERE ubur.businessUnitId = :businessUnitId AND ubur.roleId = :roleId")
+    @Deprecated
+    @Query("SELECT ubur FROM UserBusinessUnitRole ubur WHERE ubur.businessUnitId = :businessUnitId AND ubur.roleId = :roleId")
     List<UserBusinessUnitRole> findByBusinessUnitIdAndRoleIdWithUser(@Param("businessUnitId") String businessUnitId, @Param("roleId") String roleId);
     
     /**

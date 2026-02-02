@@ -93,7 +93,7 @@ public class MemberManagementProperties {
             @ForAll("validUserIds") String operatorId) {
         
         // Given: User is not already a member
-        when(virtualGroupMemberRepository.existsByVirtualGroupIdAndUserId(virtualGroupId, userId))
+        when(virtualGroupMemberRepository.existsByGroupIdAndUserId(virtualGroupId, userId))
                 .thenReturn(false);
         
         // Given: Virtual group exists
@@ -172,7 +172,7 @@ public class MemberManagementProperties {
             @ForAll("validUserIds") String operatorId) {
         
         // Given: User is already a member
-        when(virtualGroupMemberRepository.existsByVirtualGroupIdAndUserId(virtualGroupId, userId))
+        when(virtualGroupMemberRepository.existsByGroupIdAndUserId(virtualGroupId, userId))
                 .thenReturn(true);
         
         // When: Try to add user again
@@ -207,7 +207,7 @@ public class MemberManagementProperties {
         memberManagementService.removeVirtualGroupMember(virtualGroupId, userId, approverId);
         
         // Then: Member should be deleted immediately
-        verify(virtualGroupMemberRepository).deleteByVirtualGroupIdAndUserId(virtualGroupId, userId);
+        verify(virtualGroupMemberRepository).deleteByGroupIdAndUserId(virtualGroupId, userId);
         
         // Then: Change log should be recorded
         verify(memberChangeLogRepository).save(argThat(log ->
@@ -237,7 +237,7 @@ public class MemberManagementProperties {
                 .hasMessageContaining("不是该虚拟组的审批人");
         
         // Then: Member should not be deleted
-        verify(virtualGroupMemberRepository, never()).deleteByVirtualGroupIdAndUserId(any(), any());
+        verify(virtualGroupMemberRepository, never()).deleteByGroupIdAndUserId(any(), any());
     }
     
     /**
@@ -372,7 +372,7 @@ public class MemberManagementProperties {
         memberManagementService.exitVirtualGroup(virtualGroupId, userId);
         
         // Then: Member should be deleted
-        verify(virtualGroupMemberRepository).deleteByVirtualGroupIdAndUserId(virtualGroupId, userId);
+        verify(virtualGroupMemberRepository).deleteByGroupIdAndUserId(virtualGroupId, userId);
         
         // Then: Change log should be recorded with EXIT type
         ArgumentCaptor<MemberChangeLog> logCaptor = ArgumentCaptor.forClass(MemberChangeLog.class);
@@ -570,7 +570,7 @@ public class MemberManagementProperties {
         memberManagementService.exitVirtualGroup(virtualGroupId, userId);
         
         // Then: Member should be deleted immediately (which revokes the inherited role)
-        verify(virtualGroupMemberRepository).deleteByVirtualGroupIdAndUserId(virtualGroupId, userId);
+        verify(virtualGroupMemberRepository).deleteByGroupIdAndUserId(virtualGroupId, userId);
         
         // Then: Change log should be recorded with EXIT type
         ArgumentCaptor<MemberChangeLog> logCaptor = ArgumentCaptor.forClass(MemberChangeLog.class);

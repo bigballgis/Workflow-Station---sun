@@ -121,7 +121,7 @@ public class VirtualGroupHelper {
         }
         
         log.debug("Getting member count for virtual group: {}", virtualGroupId);
-        return memberRepository.countByVirtualGroupId(virtualGroupId);
+        return memberRepository.countByGroupId(virtualGroupId);
     }
     
     /**
@@ -148,7 +148,7 @@ public class VirtualGroupHelper {
         log.debug("Getting members for virtual group: {}", virtualGroupId);
         
         // Fetch all member relationships
-        List<VirtualGroupMember> members = memberRepository.findByVirtualGroupId(virtualGroupId);
+        List<VirtualGroupMember> members = memberRepository.findByGroupId(virtualGroupId);
         
         if (members.isEmpty()) {
             return List.of();

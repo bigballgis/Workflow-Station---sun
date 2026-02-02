@@ -58,10 +58,14 @@ public interface ApproverRepository extends JpaRepository<Approver, String> {
     
     /**
      * 根据目标类型和目标ID查找所有审批人（包含用户信息）
+     * Note: Approver entity uses userId field, not a relationship
+     * Callers should fetch User separately using userId if needed
+     * @deprecated Use {@link #findByTargetTypeAndTargetId(ApproverTargetType, String)} and fetch Users separately
      */
-    @Query("SELECT a FROM Approver a LEFT JOIN FETCH a.user WHERE a.targetType = :targetType AND a.targetId = :targetId")
-    List<Approver> findByTargetTypeAndTargetIdWithUser(@Param("targetType") ApproverTargetType targetType, 
-                                                        @Param("targetId") String targetId);
+    @Deprecated
+    default List<Approver> findByTargetTypeAndTargetIdWithUser(ApproverTargetType targetType, String targetId) {
+        return findByTargetTypeAndTargetId(targetType, targetId);
+    }
     
     /**
      * 根据用户ID查找所有审批人配置（按目标类型分组）

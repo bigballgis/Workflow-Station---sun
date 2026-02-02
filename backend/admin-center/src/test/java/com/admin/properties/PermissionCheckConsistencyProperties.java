@@ -48,13 +48,13 @@ public class PermissionCheckConsistencyProperties {
         for (Permission permission : userWithPerms.permissions) {
             PermissionCheckResult result = ctx.rolePermissionManager.checkPermission(
                     userWithPerms.userId, 
-                    permission.getResourceType(), 
+                    permission.getResource(), 
                     permission.getAction());
             
             // Then: 应该返回允许
             assertThat(result.isAllowed())
                     .as("用户拥有权限 %s:%s 应该通过检查", 
-                            permission.getResourceType(), permission.getAction())
+                            permission.getResource(), permission.getAction())
                     .isTrue();
         }
     }
@@ -71,7 +71,7 @@ public class PermissionCheckConsistencyProperties {
         
         // 确保非存在权限不在用户权限列表中
         Assume.that(userWithPerms.permissions.stream()
-                .noneMatch(p -> p.getResourceType().equals(nonExistentPermission.getResourceType()) 
+                .noneMatch(p -> p.getResource().equals(nonExistentPermission.getResource()) 
                         && p.getAction().equals(nonExistentPermission.getAction())));
         
         // 创建测试上下文
@@ -83,13 +83,13 @@ public class PermissionCheckConsistencyProperties {
         // When: 检查用户没有的权限
         PermissionCheckResult result = ctx.rolePermissionManager.checkPermission(
                 userWithPerms.userId, 
-                nonExistentPermission.getResourceType(), 
+                nonExistentPermission.getResource(), 
                 nonExistentPermission.getAction());
         
         // Then: 应该返回拒绝
         assertThat(result.isAllowed())
                 .as("用户没有权限 %s:%s 应该被拒绝", 
-                        nonExistentPermission.getResourceType(), nonExistentPermission.getAction())
+                        nonExistentPermission.getResource(), nonExistentPermission.getAction())
                 .isFalse();
     }
     
@@ -111,7 +111,7 @@ public class PermissionCheckConsistencyProperties {
         
         // When: 检查权限
         PermissionCheckResult result = ctx.rolePermissionManager.checkPermission(
-                userId, permission.getResourceType(), permission.getAction());
+                userId, permission.getResource(), permission.getAction());
         
         // Then: 应该返回拒绝
         assertThat(result.isAllowed())
@@ -141,11 +141,11 @@ public class PermissionCheckConsistencyProperties {
         
         // When: 多次检查同一权限
         PermissionCheckResult firstResult = ctx.rolePermissionManager.checkPermission(
-                userWithPerms.userId, permission.getResourceType(), permission.getAction());
+                userWithPerms.userId, permission.getResource(), permission.getAction());
         PermissionCheckResult secondResult = ctx.rolePermissionManager.checkPermission(
-                userWithPerms.userId, permission.getResourceType(), permission.getAction());
+                userWithPerms.userId, permission.getResource(), permission.getAction());
         PermissionCheckResult thirdResult = ctx.rolePermissionManager.checkPermission(
-                userWithPerms.userId, permission.getResourceType(), permission.getAction());
+                userWithPerms.userId, permission.getResource(), permission.getAction());
         
         // Then: 结果应该一致
         assertThat(firstResult.isAllowed())
@@ -214,12 +214,12 @@ public class PermissionCheckConsistencyProperties {
         for (Permission permission : allPermissions) {
             PermissionCheckResult result = ctx.rolePermissionManager.checkPermission(
                     userWithRoles.userId, 
-                    permission.getResourceType(), 
+                    permission.getResource(), 
                     permission.getAction());
             
             assertThat(result.isAllowed())
                     .as("多角色用户应该拥有所有角色的权限: %s:%s", 
-                            permission.getResourceType(), permission.getAction())
+                            permission.getResource(), permission.getAction())
                     .isTrue();
         }
     }
@@ -246,7 +246,7 @@ public class PermissionCheckConsistencyProperties {
         Permission permission = userWithPerms.permissions.iterator().next();
         PermissionCheckResult result = ctx.rolePermissionManager.checkPermission(
                 userWithPerms.userId, 
-                permission.getResourceType(), 
+                permission.getResource(), 
                 permission.getAction());
         
         // Then: 允许结果应该包含角色信息
@@ -544,3 +544,4 @@ public class PermissionCheckConsistencyProperties {
         }
     }
 }
+

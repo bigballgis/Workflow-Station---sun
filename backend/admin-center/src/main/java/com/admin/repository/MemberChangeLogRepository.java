@@ -46,19 +46,22 @@ public interface MemberChangeLogRepository extends JpaRepository<MemberChangeLog
     
     /**
      * 根据用户ID查找变更记录（包含用户和操作人信息）
+     * Note: MemberChangeLog entity uses userId and operatorId fields, not relationships
+     * Callers should fetch Users separately using these IDs if needed
+     * @deprecated Use {@link #findByUserId(String)} and fetch Users separately
      */
-    @Query("SELECT mcl FROM MemberChangeLog mcl " +
-           "LEFT JOIN FETCH mcl.user " +
-           "LEFT JOIN FETCH mcl.operator " +
-           "WHERE mcl.userId = :userId ORDER BY mcl.createdAt DESC")
+    @Deprecated
+    @Query("SELECT mcl FROM MemberChangeLog mcl WHERE mcl.userId = :userId ORDER BY mcl.createdAt DESC")
     List<MemberChangeLog> findByUserIdWithDetails(@Param("userId") String userId);
     
     /**
      * 根据目标查找变更记录（包含用户和操作人信息）
+     * Note: MemberChangeLog entity uses userId and operatorId fields, not relationships
+     * Callers should fetch Users separately using these IDs if needed
+     * @deprecated Use {@link #findByTargetTypeAndTargetId(ApproverTargetType, String)} and fetch Users separately
      */
+    @Deprecated
     @Query("SELECT mcl FROM MemberChangeLog mcl " +
-           "LEFT JOIN FETCH mcl.user " +
-           "LEFT JOIN FETCH mcl.operator " +
            "WHERE mcl.targetType = :targetType AND mcl.targetId = :targetId " +
            "ORDER BY mcl.createdAt DESC")
     List<MemberChangeLog> findByTargetWithDetails(
@@ -67,9 +70,9 @@ public interface MemberChangeLogRepository extends JpaRepository<MemberChangeLog
     
     /**
      * 分页查询变更记录（带筛选条件）
+     * Note: MemberChangeLog entity uses userId field, not a relationship
      */
     @Query("SELECT mcl FROM MemberChangeLog mcl " +
-           "LEFT JOIN FETCH mcl.user " +
            "WHERE (:changeType IS NULL OR mcl.changeType = :changeType) " +
            "AND (:targetType IS NULL OR mcl.targetType = :targetType) " +
            "AND (:userId IS NULL OR mcl.userId = :userId) " +

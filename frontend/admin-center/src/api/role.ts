@@ -108,7 +108,7 @@ export const roleApi = {
 }
 
 export const permissionApi = {
-  getTree: () => get<Permission[]>(`${PERMISSION_BASE}/tree`),
+  getTree: () => get<Permission[]>(`${PERMISSION_BASE}`),
   
   getByRole: (roleId: string) => get<Permission[]>(`${PERMISSION_BASE}/role/${roleId}`)
 }

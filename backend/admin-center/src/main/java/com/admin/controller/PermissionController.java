@@ -52,13 +52,6 @@ public class PermissionController {
         return ResponseEntity.ok(permission);
     }
     
-    @GetMapping("/tree")
-    @Operation(summary = "获取权限树")
-    public ResponseEntity<List<Permission>> getPermissionTree() {
-        List<Permission> rootPermissions = permissionRepository.findRootPermissions();
-        return ResponseEntity.ok(rootPermissions);
-    }
-    
     @GetMapping("/resource/{resource}")
     @Operation(summary = "根据资源获取权限")
     public ResponseEntity<List<Permission>> getPermissionsByResource(@PathVariable String resource) {

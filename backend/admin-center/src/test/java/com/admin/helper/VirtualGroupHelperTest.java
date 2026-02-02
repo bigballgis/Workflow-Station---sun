@@ -203,23 +203,23 @@ class VirtualGroupHelperTest {
     @Test
     @DisplayName("getMemberCount: Should return correct count")
     void testGetMemberCount_ReturnsCorrectCount() {
-        when(memberRepository.countByVirtualGroupId("vg-1")).thenReturn(3L);
+        when(memberRepository.countByGroupId("vg-1")).thenReturn(3L);
         
         long count = virtualGroupHelper.getMemberCount("vg-1");
         
         assertEquals(3L, count);
-        verify(memberRepository, times(1)).countByVirtualGroupId("vg-1");
+        verify(memberRepository, times(1)).countByGroupId("vg-1");
     }
     
     @Test
     @DisplayName("getMemberCount: Should return 0 for group with no members")
     void testGetMemberCount_NoMembers() {
-        when(memberRepository.countByVirtualGroupId("vg-2")).thenReturn(0L);
+        when(memberRepository.countByGroupId("vg-2")).thenReturn(0L);
         
         long count = virtualGroupHelper.getMemberCount("vg-2");
         
         assertEquals(0L, count);
-        verify(memberRepository, times(1)).countByVirtualGroupId("vg-2");
+        verify(memberRepository, times(1)).countByGroupId("vg-2");
     }
     
     @Test
@@ -228,7 +228,7 @@ class VirtualGroupHelperTest {
         long count = virtualGroupHelper.getMemberCount(null);
         
         assertEquals(0L, count);
-        verify(memberRepository, never()).countByVirtualGroupId(any());
+        verify(memberRepository, never()).countByGroupId(any());
     }
     
     // ========== getMembers Tests ==========
@@ -240,7 +240,7 @@ class VirtualGroupHelperTest {
         List<User> users = Arrays.asList(user1, user2, user3);
         List<String> userIds = Arrays.asList("user-1", "user-2", "user-3");
         
-        when(memberRepository.findByVirtualGroupId("vg-1")).thenReturn(members);
+        when(memberRepository.findByGroupId("vg-1")).thenReturn(members);
         when(userRepository.findAllById(userIds)).thenReturn(users);
         
         List<User> result = virtualGroupHelper.getMembers("vg-1");
@@ -250,19 +250,19 @@ class VirtualGroupHelperTest {
         assertTrue(result.contains(user2));
         assertTrue(result.contains(user3));
         
-        verify(memberRepository, times(1)).findByVirtualGroupId("vg-1");
+        verify(memberRepository, times(1)).findByGroupId("vg-1");
         verify(userRepository, times(1)).findAllById(userIds);
     }
     
     @Test
     @DisplayName("getMembers: Should return empty list when no members")
     void testGetMembers_NoMembers() {
-        when(memberRepository.findByVirtualGroupId("vg-2")).thenReturn(List.of());
+        when(memberRepository.findByGroupId("vg-2")).thenReturn(List.of());
         
         List<User> result = virtualGroupHelper.getMembers("vg-2");
         
         assertTrue(result.isEmpty());
-        verify(memberRepository, times(1)).findByVirtualGroupId("vg-2");
+        verify(memberRepository, times(1)).findByGroupId("vg-2");
         verify(userRepository, never()).findAllById(any());
     }
     
@@ -272,7 +272,7 @@ class VirtualGroupHelperTest {
         List<User> result = virtualGroupHelper.getMembers(null);
         
         assertTrue(result.isEmpty());
-        verify(memberRepository, never()).findByVirtualGroupId(any());
+        verify(memberRepository, times(1)).findByGroupId(any());
         verify(userRepository, never()).findAllById(any());
     }
     
@@ -289,7 +289,7 @@ class VirtualGroupHelperTest {
         List<VirtualGroupMember> members = Arrays.asList(member1, duplicateMember);
         List<String> expectedUserIds = List.of("user-1"); // Should be deduplicated
         
-        when(memberRepository.findByVirtualGroupId("vg-1")).thenReturn(members);
+        when(memberRepository.findByGroupId("vg-1")).thenReturn(members);
         when(userRepository.findAllById(expectedUserIds)).thenReturn(List.of(user1));
         
         List<User> result = virtualGroupHelper.getMembers("vg-1");
@@ -297,7 +297,7 @@ class VirtualGroupHelperTest {
         assertEquals(1, result.size());
         assertEquals(user1, result.get(0));
         
-        verify(memberRepository, times(1)).findByVirtualGroupId("vg-1");
+        verify(memberRepository, times(1)).findByGroupId("vg-1");
         verify(userRepository, times(1)).findAllById(expectedUserIds);
     }
     

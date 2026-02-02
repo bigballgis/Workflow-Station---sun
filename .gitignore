@@ -131,6 +131,11 @@ desktop.ini
 .env.production
 *.env
 
+# Exception: Allow environment template files in deploy/environments/
+# These are example configurations for different environments
+!deploy/environments/**/.env
+!deploy/environments/**/.env.*
+
 # Secret/credential files
 secrets/
 credentials/

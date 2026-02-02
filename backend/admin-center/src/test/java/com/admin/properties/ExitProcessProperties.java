@@ -90,7 +90,7 @@ public class ExitProcessProperties {
         memberManagementService.exitVirtualGroup(virtualGroupId, userId);
         
         // Then: Membership should be deleted (which revokes inherited roles)
-        verify(virtualGroupMemberRepository).deleteByVirtualGroupIdAndUserId(virtualGroupId, userId);
+        verify(virtualGroupMemberRepository).deleteByGroupIdAndUserId(virtualGroupId, userId);
         
         // Then: Exit should be logged with proper cleanup context
         ArgumentCaptor<MemberChangeLog> logCaptor = ArgumentCaptor.forClass(MemberChangeLog.class);
@@ -203,14 +203,14 @@ public class ExitProcessProperties {
             @ForAll("validGroupIds") String virtualGroupId) {
         
         // Given: User is not a member (already exited or never joined)
-        // Note: deleteByVirtualGroupIdAndUserId returns void, so we just verify it's called
-        doNothing().when(virtualGroupMemberRepository).deleteByVirtualGroupIdAndUserId(virtualGroupId, userId);
+        // Note: deleteByGroupIdAndUserId returns void, so we just verify it's called
+        doNothing().when(virtualGroupMemberRepository).deleteByGroupIdAndUserId(virtualGroupId, userId);
         
         // When: Exit virtual group (should not fail even if not a member)
         memberManagementService.exitVirtualGroup(virtualGroupId, userId);
         
         // Then: Delete operation should still be attempted
-        verify(virtualGroupMemberRepository).deleteByVirtualGroupIdAndUserId(virtualGroupId, userId);
+        verify(virtualGroupMemberRepository).deleteByGroupIdAndUserId(virtualGroupId, userId);
         
         // Then: Exit should still be logged (for audit purposes)
         verify(memberChangeLogRepository).save(any(MemberChangeLog.class));

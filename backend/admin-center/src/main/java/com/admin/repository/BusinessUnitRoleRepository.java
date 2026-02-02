@@ -47,9 +47,14 @@ public interface BusinessUnitRoleRepository extends JpaRepository<BusinessUnitRo
     
     /**
      * 根据业务单元ID查找所有角色绑定（包含角色信息）
+     * Note: BusinessUnitRole entity uses roleId field, not a relationship
+     * Callers should fetch Role separately using roleId if needed
+     * @deprecated Use {@link #findByBusinessUnitId(String)} and fetch Roles separately
      */
-    @Query("SELECT bur FROM BusinessUnitRole bur LEFT JOIN FETCH bur.role WHERE bur.businessUnitId = :businessUnitId")
-    List<BusinessUnitRole> findByBusinessUnitIdWithRole(@Param("businessUnitId") String businessUnitId);
+    @Deprecated
+    default List<BusinessUnitRole> findByBusinessUnitIdWithRole(String businessUnitId) {
+        return findByBusinessUnitId(businessUnitId);
+    }
     
     /**
      * 统计业务单元绑定的角色数量

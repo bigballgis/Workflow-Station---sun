@@ -18,7 +18,7 @@ import java.util.Map;
  * 动作设计控制器
  */
 @RestController
-@RequestMapping("/api/v1/function-units/{functionUnitId}/actions")
+@RequestMapping("/function-units/{functionUnitId}/actions")
 @RequiredArgsConstructor
 @Tag(name = "动作设计", description = "动作设计相关操作")
 public class ActionDesignController {

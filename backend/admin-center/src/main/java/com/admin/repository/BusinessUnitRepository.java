@@ -50,7 +50,7 @@ public interface BusinessUnitRepository extends JpaRepository<BusinessUnit, Stri
     /**
      * 根据状态查找业务单元
      */
-    List<BusinessUnit> findByStatus(BusinessUnitStatus status);
+    List<BusinessUnit> findByStatus(String status);
     
     /**
      * 检查是否有子业务单元

@@ -66,7 +66,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         }
 
         // Generate tokens
-        List<String> roles = new ArrayList<>(user.getRoles());
+        List<String> roles = userRoleService.getEffectiveRoleCodesForUser(user.getId());
         List<String> permissions = getPermissionsForRoles(roles);
 
         String accessToken = ((JwtTokenServiceImpl) jwtTokenService).generateToken(
@@ -90,7 +90,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 accessToken,
                 refreshToken,
                 jwtProperties.getExpirationMs() / 1000,
-                UserInfo.fromUser(user, permissions)
+                UserInfo.fromUser(user, roles, permissions)
         );
     }
 
@@ -132,7 +132,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         }
 
         // Generate new access token with fresh user data
-        List<String> roles = new ArrayList<>(user.getRoles());
+        List<String> roles = userRoleService.getEffectiveRoleCodesForUser(user.getId());
         List<String> permissions = getPermissionsForRoles(roles);
 
         String newAccessToken = jwtTokenService.generateToken(
@@ -170,7 +170,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new AuthenticationException(AuthErrorCode.AUTH_001));
         
-        List<String> roles = new ArrayList<>(user.getRoles());
+        List<String> roles = userRoleService.getEffectiveRoleCodesForUser(user.getId());
         List<String> permissions = getPermissionsForRoles(roles);
         
         return new UserInfo(

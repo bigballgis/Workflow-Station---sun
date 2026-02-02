@@ -17,7 +17,7 @@ import java.util.Map;
  * 流程设计控制器
  */
 @RestController
-@RequestMapping("/api/v1/function-units/{functionUnitId}/process")
+@RequestMapping("/function-units/{functionUnitId}/process")
 @RequiredArgsConstructor
 @Tag(name = "流程设计", description = "BPMN流程设计相关操作")
 public class ProcessDesignController {

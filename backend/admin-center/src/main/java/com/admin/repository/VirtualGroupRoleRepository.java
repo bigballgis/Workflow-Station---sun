@@ -55,9 +55,14 @@ public interface VirtualGroupRoleRepository extends JpaRepository<VirtualGroupRo
     
     /**
      * 根据虚拟组ID查找角色绑定（包含角色信息，单角色绑定）
+     * Note: VirtualGroupRole entity uses roleId field, not a relationship
+     * Callers should fetch Role separately using roleId if needed
+     * @deprecated Use {@link #findByVirtualGroupId(String)} and fetch Role separately
      */
-    @Query("SELECT vgr FROM VirtualGroupRole vgr LEFT JOIN FETCH vgr.role WHERE vgr.virtualGroupId = :virtualGroupId")
-    Optional<VirtualGroupRole> findByVirtualGroupIdWithRole(@Param("virtualGroupId") String virtualGroupId);
+    @Deprecated
+    default Optional<VirtualGroupRole> findByVirtualGroupIdWithRole(String virtualGroupId) {
+        return findByVirtualGroupId(virtualGroupId);
+    }
     
     /**
      * 统计虚拟组绑定的角色数量

@@ -137,14 +137,13 @@ public class PermissionServiceImpl implements PermissionService {
         
         Set<Permission> permissions = permissionRepository.findPermissionsByUserId(userId);
         Set<String> permissionCodes = permissions.stream()
-                .filter(Permission::isEnabled)
                 .map(Permission::getCode)
                 .collect(Collectors.toSet());
         
         // Also include permissions from roles
         Set<Role> roles = permissionRepository.findRolesByUserId(userId);
         for (Role role : roles) {
-            if (role.isEnabled() && role.getPermissionCodes() != null) {
+            if ("ACTIVE".equals(role.getStatus()) && role.getPermissionCodes() != null) {
                 permissionCodes.addAll(role.getPermissionCodes());
             }
         }
@@ -168,7 +167,7 @@ public class PermissionServiceImpl implements PermissionService {
         
         Set<Role> roles = permissionRepository.findRolesByUserId(userId);
         Set<String> roleCodes = roles.stream()
-                .filter(Role::isEnabled)
+                .filter(role -> "ACTIVE".equals(role.getStatus()))
                 .map(Role::getCode)
                 .collect(Collectors.toSet());
         

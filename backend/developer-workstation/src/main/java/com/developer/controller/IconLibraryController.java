@@ -20,7 +20,7 @@ import java.util.List;
  * 图标库控制器
  */
 @RestController
-@RequestMapping("/api/v1/icons")
+@RequestMapping("/icons")
 @RequiredArgsConstructor
 @Tag(name = "图标库", description = "图标管理相关操作")
 public class IconLibraryController {

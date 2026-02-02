@@ -16,7 +16,7 @@ import java.util.Map;
  * 版本管理控制器
  */
 @RestController
-@RequestMapping("/api/v1/function-units/{functionUnitId}/versions")
+@RequestMapping("/function-units/{functionUnitId}/versions")
 @RequiredArgsConstructor
 @Tag(name = "版本管理", description = "版本历史、比较、回滚等操作")
 public class VersionController {

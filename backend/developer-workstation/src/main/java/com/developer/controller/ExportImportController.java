@@ -15,7 +15,7 @@ import java.util.Map;
  * 导入导出控制器
  */
 @RestController
-@RequestMapping("/api/v1/export-import")
+@RequestMapping("/export-import")
 @RequiredArgsConstructor
 @Tag(name = "导入导出", description = "功能单元导入导出操作")
 public class ExportImportController {

@@ -5,6 +5,7 @@ import com.admin.component.RolePermissionManagerComponent;
 import com.admin.dto.request.BatchRoleMemberRequest;
 import com.admin.dto.request.PermissionConfig;
 import com.admin.dto.response.BatchRoleMemberResult;
+import com.admin.util.EntityTypeConverter;
 import com.platform.security.entity.Permission;
 import com.admin.entity.PermissionChangeHistory;
 import com.platform.security.entity.Role;
@@ -61,7 +62,9 @@ public class RoleController {
             @RequestParam(required = false) RoleType type) {
         List<Role> roles;
         if (type != null) {
-            roles = rolePermissionManager.getRolesByType(type);
+            // Convert enum to String since Role.type is String
+            String typeStr = EntityTypeConverter.fromRoleType(type);
+            roles = rolePermissionManager.getRolesByType(typeStr);
         } else {
             roles = rolePermissionManager.getAllRoles();
         }

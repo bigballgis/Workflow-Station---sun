@@ -46,7 +46,7 @@ public interface PermissionConflictRepository extends JpaRepository<PermissionCo
      * 根据用户和权限查找冲突
      */
     @Query("SELECT pc FROM PermissionConflict pc WHERE pc.userId = :userId " +
-           "AND pc.permission.id = :permissionId AND pc.status = 'PENDING'")
+           "AND pc.permissionId = :permissionId AND pc.status = 'PENDING'")
     List<PermissionConflict> findPendingConflictsByUserAndPermission(
             @Param("userId") String userId,
             @Param("permissionId") String permissionId);

@@ -376,9 +376,9 @@ public class OrganizationManagerComponent {
         }
         
         // 排序
-        roots.sort(Comparator.comparingInt(BusinessUnitTree::getSortOrder));
+        roots.sort(Comparator.comparingInt(tree -> tree.getSortOrder() != null ? tree.getSortOrder() : 0));
         for (BusinessUnitTree tree : treeMap.values()) {
-            tree.getChildren().sort(Comparator.comparingInt(BusinessUnitTree::getSortOrder));
+            tree.getChildren().sort(Comparator.comparingInt(child -> child.getSortOrder() != null ? child.getSortOrder() : 0));
         }
         
         return roots;

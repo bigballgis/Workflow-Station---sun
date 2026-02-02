@@ -17,6 +17,7 @@ public interface UserBusinessUnitRepository extends JpaRepository<UserBusinessUn
     
     /**
      * 根据用户ID查找所有业务单元成员关系
+     * Note: UserBusinessUnit entity doesn't have relationships, only ID fields
      */
     List<UserBusinessUnit> findByUserId(String userId);
     
@@ -44,18 +45,6 @@ public interface UserBusinessUnitRepository extends JpaRepository<UserBusinessUn
      * 删除业务单元的所有成员关系
      */
     void deleteByBusinessUnitId(String businessUnitId);
-    
-    /**
-     * 根据用户ID查找所有业务单元成员关系（包含业务单元信息）
-     */
-    @Query("SELECT ub FROM UserBusinessUnit ub LEFT JOIN FETCH ub.businessUnit WHERE ub.userId = :userId")
-    List<UserBusinessUnit> findByUserIdWithBusinessUnit(@Param("userId") String userId);
-    
-    /**
-     * 根据业务单元ID查找所有成员关系（包含用户信息）
-     */
-    @Query("SELECT ub FROM UserBusinessUnit ub LEFT JOIN FETCH ub.user WHERE ub.businessUnitId = :businessUnitId")
-    List<UserBusinessUnit> findByBusinessUnitIdWithUser(@Param("businessUnitId") String businessUnitId);
     
     /**
      * 统计业务单元的成员数量

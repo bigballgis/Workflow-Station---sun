@@ -20,7 +20,7 @@ import java.util.List;
  * 部署控制器
  */
 @RestController
-@RequestMapping("/api/v1/function-units")
+@RequestMapping("/function-units")
 @RequiredArgsConstructor
 @Tag(name = "功能单元部署", description = "功能单元导出和一键部署")
 public class DeploymentController {

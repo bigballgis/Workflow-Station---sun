@@ -47,6 +47,12 @@ public class VirtualGroup {
     private String description;
     
     /**
+     * Rule expression for dynamic group membership
+     */
+    @Column(name = "rule_expression", columnDefinition = "TEXT")
+    private String ruleExpression;
+    
+    /**
      * AD Group name for Active Directory integration
      */
     @Column(name = "ad_group", length = 100)

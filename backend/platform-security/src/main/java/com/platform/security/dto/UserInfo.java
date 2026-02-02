@@ -18,13 +18,13 @@ public record UserInfo(
     /**
      * Create UserInfo from User entity.
      */
-    public static UserInfo fromUser(com.platform.security.entity.User user, List<String> permissions) {
+    public static UserInfo fromUser(com.platform.security.entity.User user, List<String> roles, List<String> permissions) {
         return new UserInfo(
             user.getId(),
             user.getUsername(),
             user.getDisplayName(),
             user.getEmail(),
-            user.getRoles() != null ? List.copyOf(user.getRoles()) : List.of(),
+            roles != null ? List.copyOf(roles) : List.of(),
             permissions != null ? permissions : List.of(),
             user.getLanguage()
         );

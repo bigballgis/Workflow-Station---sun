@@ -88,12 +88,9 @@ public class User {
 
     @Column(name = "locked_until")
     private LocalDateTime lockedUntil;
-
-    @ElementCollection(fetch = FetchType.EAGER)
-    @CollectionTable(name = "sys_user_roles", joinColumns = @JoinColumn(name = "user_id"))
-    @Column(name = "role_id")
-    @Builder.Default
-    private Set<String> roles = new HashSet<>();
+    
+    @Column(length = 50)
+    private String phone;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -139,25 +136,6 @@ public class User {
      */
     public boolean isInactive() {
         return status == UserStatus.INACTIVE;
-    }
-
-    /**
-     * Add a role to the user.
-     */
-    public void addRole(String roleCode) {
-        if (roles == null) {
-            roles = new HashSet<>();
-        }
-        roles.add(roleCode);
-    }
-
-    /**
-     * Remove a role from the user.
-     */
-    public void removeRole(String roleCode) {
-        if (roles != null) {
-            roles.remove(roleCode);
-        }
     }
 
     /**

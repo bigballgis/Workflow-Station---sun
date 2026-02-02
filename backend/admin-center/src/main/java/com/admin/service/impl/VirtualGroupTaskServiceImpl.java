@@ -49,7 +49,7 @@ public class VirtualGroupTaskServiceImpl implements VirtualGroupTaskService {
                 .orElseThrow(() -> new VirtualGroupNotFoundException(groupId));
         
         // 验证用户是组成员
-        if (!virtualGroupMemberRepository.existsByVirtualGroupIdAndUserId(groupId, userId)) {
+        if (!virtualGroupMemberRepository.existsByGroupIdAndUserId(groupId, userId)) {
             throw new AdminBusinessException("NOT_GROUP_MEMBER", "用户不是该虚拟组成员");
         }
         
@@ -173,7 +173,7 @@ public class VirtualGroupTaskServiceImpl implements VirtualGroupTaskService {
         // 检查用户是否属于任务分配的虚拟组
         String groupId = getTaskAssignedGroup(taskId);
         if (groupId != null) {
-            return virtualGroupMemberRepository.existsByVirtualGroupIdAndUserId(groupId, userId);
+            return virtualGroupMemberRepository.existsByGroupIdAndUserId(groupId, userId);
         }
         
         return false;
@@ -188,7 +188,7 @@ public class VirtualGroupTaskServiceImpl implements VirtualGroupTaskService {
         }
         
         // 验证用户是组成员
-        if (!virtualGroupMemberRepository.existsByVirtualGroupIdAndUserId(groupId, userId)) {
+        if (!virtualGroupMemberRepository.existsByGroupIdAndUserId(groupId, userId)) {
             return false;
         }
         

@@ -57,10 +57,6 @@ public class Role implements Serializable {
     @Transient
     private Set<String> permissionCodes;
     
-    @Column(nullable = false)
-    @Builder.Default
-    private boolean enabled = true;
-    
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

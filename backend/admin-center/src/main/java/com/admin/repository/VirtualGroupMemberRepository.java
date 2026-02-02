@@ -14,6 +14,7 @@ import java.util.Optional;
 
 /**
  * 虚拟组成员仓库接口
+ * Note: VirtualGroupMember entity uses groupId and userId as String fields, not relationships
  */
 @Repository
 public interface VirtualGroupMemberRepository extends JpaRepository<VirtualGroupMember, String> {
@@ -21,83 +22,68 @@ public interface VirtualGroupMemberRepository extends JpaRepository<VirtualGroup
     /**
      * 根据虚拟组ID查找成员
      */
-    @Query("SELECT m FROM VirtualGroupMember m WHERE m.virtualGroup.id = :groupId")
-    List<VirtualGroupMember> findByVirtualGroupId(@Param("groupId") String groupId);
+    List<VirtualGroupMember> findByGroupId(String groupId);
     
     /**
      * 根据虚拟组ID分页查找成员
      */
-    @Query("SELECT m FROM VirtualGroupMember m WHERE m.virtualGroup.id = :groupId")
-    Page<VirtualGroupMember> findByVirtualGroupId(@Param("groupId") String groupId, Pageable pageable);
+    Page<VirtualGroupMember> findByGroupId(String groupId, Pageable pageable);
     
     /**
      * 根据用户ID查找成员关系
      */
-    @Query("SELECT m FROM VirtualGroupMember m WHERE m.user.id = :userId")
-    List<VirtualGroupMember> findByUserId(@Param("userId") String userId);
+    List<VirtualGroupMember> findByUserId(String userId);
     
     /**
      * 根据虚拟组ID和用户ID查找成员关系
      */
-    @Query("SELECT m FROM VirtualGroupMember m WHERE m.virtualGroup.id = :groupId AND m.user.id = :userId")
-    Optional<VirtualGroupMember> findByVirtualGroupIdAndUserId(@Param("groupId") String groupId, @Param("userId") String userId);
+    Optional<VirtualGroupMember> findByGroupIdAndUserId(String groupId, String userId);
     
     /**
      * 检查用户是否是虚拟组成员
      */
-    @Query("SELECT COUNT(m) > 0 FROM VirtualGroupMember m WHERE m.virtualGroup.id = :groupId AND m.user.id = :userId")
-    boolean existsByVirtualGroupIdAndUserId(@Param("groupId") String groupId, @Param("userId") String userId);
+    boolean existsByGroupIdAndUserId(String groupId, String userId);
     
     /**
      * 统计虚拟组成员数量
      */
-    @Query("SELECT COUNT(m) FROM VirtualGroupMember m WHERE m.virtualGroup.id = :groupId")
-    long countByVirtualGroupId(@Param("groupId") String groupId);
+    long countByGroupId(String groupId);
     
     /**
      * 删除虚拟组的所有成员
      */
     @Modifying
-    @Query("DELETE FROM VirtualGroupMember m WHERE m.virtualGroup.id = :groupId")
-    void deleteByVirtualGroupId(@Param("groupId") String groupId);
+    void deleteByGroupId(String groupId);
     
     /**
      * 删除用户的所有虚拟组成员关系
      */
     @Modifying
-    @Query("DELETE FROM VirtualGroupMember m WHERE m.user.id = :userId")
-    void deleteByUserId(@Param("userId") String userId);
+    void deleteByUserId(String userId);
     
     /**
      * 查找用户在有效虚拟组中的成员关系
+     * Using subquery since VirtualGroupMember doesn't have relationship to VirtualGroup
      */
-    @Query("SELECT m FROM VirtualGroupMember m " +
-           "JOIN m.virtualGroup vg " +
-           "WHERE m.user.id = :userId AND vg.status = 'ACTIVE'")
+    @Query("SELECT m FROM VirtualGroupMember m WHERE m.userId = :userId " +
+           "AND m.groupId IN (SELECT vg.id FROM VirtualGroup vg WHERE vg.status = 'ACTIVE')")
     List<VirtualGroupMember> findActiveGroupMembershipsByUserId(@Param("userId") String userId);
     
     /**
      * 获取用户所属的所有虚拟组ID
      */
-    @Query("SELECT m.virtualGroup.id FROM VirtualGroupMember m WHERE m.user.id = :userId")
+    @Query("SELECT m.groupId FROM VirtualGroupMember m WHERE m.userId = :userId")
     List<String> findVirtualGroupIdsByUserId(@Param("userId") String userId);
     
     /**
      * 删除指定虚拟组和用户的成员关系
      */
     @Modifying
-    @Query("DELETE FROM VirtualGroupMember m WHERE m.virtualGroup.id = :groupId AND m.user.id = :userId")
-    void deleteByVirtualGroupIdAndUserId(@Param("groupId") String groupId, @Param("userId") String userId);
-    
-    /**
-     * 根据虚拟组ID查找成员（包含用户信息）
-     */
-    @Query("SELECT m FROM VirtualGroupMember m LEFT JOIN FETCH m.user WHERE m.virtualGroup.id = :groupId")
-    List<VirtualGroupMember> findByVirtualGroupIdWithUser(@Param("groupId") String groupId);
+    void deleteByGroupIdAndUserId(String groupId, String userId);
     
     /**
      * 根据多个虚拟组ID查找所有成员用户ID（去重）
      */
-    @Query("SELECT DISTINCT m.user.id FROM VirtualGroupMember m WHERE m.virtualGroup.id IN :groupIds")
+    @Query("SELECT DISTINCT m.userId FROM VirtualGroupMember m WHERE m.groupId IN :groupIds")
     List<String> findUserIdsByVirtualGroupIds(@Param("groupIds") List<String> groupIds);
 }

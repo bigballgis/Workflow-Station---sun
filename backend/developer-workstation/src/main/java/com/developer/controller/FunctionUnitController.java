@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.*;
  * 功能单元控制器
  */
 @RestController
-@RequestMapping("/api/v1/function-units")
+@RequestMapping("/function-units")
 @RequiredArgsConstructor
 @Tag(name = "功能单元管理", description = "功能单元CRUD、发布、克隆等操作")
 public class FunctionUnitController {

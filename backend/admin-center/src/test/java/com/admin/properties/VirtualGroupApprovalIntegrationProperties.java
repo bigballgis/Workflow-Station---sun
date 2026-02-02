@@ -126,7 +126,7 @@ public class VirtualGroupApprovalIntegrationProperties {
         when(userRepository.findById(applicantId)).thenReturn(Optional.of(user));
         
         // Given: User is not already a member
-        when(virtualGroupMemberRepository.existsByVirtualGroupIdAndUserId(virtualGroupId, applicantId))
+        when(virtualGroupMemberRepository.existsByGroupIdAndUserId(virtualGroupId, applicantId))
                 .thenReturn(false);
         
         // Given: Save operations succeed
@@ -197,7 +197,7 @@ public class VirtualGroupApprovalIntegrationProperties {
         when(userRepository.findById(applicantId)).thenReturn(Optional.of(user));
         
         // Given: User is not already a member
-        when(virtualGroupMemberRepository.existsByVirtualGroupIdAndUserId(virtualGroupId, applicantId))
+        when(virtualGroupMemberRepository.existsByGroupIdAndUserId(virtualGroupId, applicantId))
                 .thenReturn(false);
         
         // Given: Save operations succeed
@@ -265,7 +265,7 @@ public class VirtualGroupApprovalIntegrationProperties {
         when(userRepository.findById(applicantId)).thenReturn(Optional.of(user));
         
         // Given: User is not already a member
-        when(virtualGroupMemberRepository.existsByVirtualGroupIdAndUserId(virtualGroupId, applicantId))
+        when(virtualGroupMemberRepository.existsByGroupIdAndUserId(virtualGroupId, applicantId))
                 .thenReturn(false);
         
         // Given: Save operations succeed
@@ -332,7 +332,7 @@ public class VirtualGroupApprovalIntegrationProperties {
         when(userRepository.findById(applicantId)).thenReturn(Optional.of(user));
         
         // Given: User is not already a member
-        when(virtualGroupMemberRepository.existsByVirtualGroupIdAndUserId(virtualGroupId, applicantId))
+        when(virtualGroupMemberRepository.existsByGroupIdAndUserId(virtualGroupId, applicantId))
                 .thenReturn(false);
         
         // Given: Save operations succeed
@@ -434,7 +434,7 @@ public class VirtualGroupApprovalIntegrationProperties {
         when(userRepository.findById(applicantId)).thenReturn(Optional.of(user));
         
         // Given: User is not already a member
-        when(virtualGroupMemberRepository.existsByVirtualGroupIdAndUserId(virtualGroupId, applicantId))
+        when(virtualGroupMemberRepository.existsByGroupIdAndUserId(virtualGroupId, applicantId))
                 .thenReturn(false);
         
         // Given: Save operations succeed

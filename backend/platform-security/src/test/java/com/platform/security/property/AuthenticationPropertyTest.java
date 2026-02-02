@@ -75,7 +75,6 @@ class AuthenticationPropertyTest {
                 .username(username)
                 .passwordHash(passwordHash)
                 .status(UserStatus.ACTIVE)
-                .roles(Set.of("USER"))
                 .language("zh_CN")
                 .build();
 
@@ -123,7 +122,6 @@ class AuthenticationPropertyTest {
                 .username(username)
                 .passwordHash(passwordHash)
                 .status(UserStatus.ACTIVE)
-                .roles(Set.of("USER"))
                 .build();
 
         when(userRepository.findByUsername(username)).thenReturn(Optional.of(user));
@@ -165,7 +163,6 @@ class AuthenticationPropertyTest {
                 .username(username)
                 .passwordHash(passwordHash)
                 .status(UserStatus.LOCKED)
-                .roles(Set.of("USER"))
                 .build();
 
         when(userRepository.findByUsername(username)).thenReturn(Optional.of(user));
@@ -207,7 +204,6 @@ class AuthenticationPropertyTest {
                 .username(username)
                 .passwordHash(passwordHash)
                 .status(UserStatus.INACTIVE)
-                .roles(Set.of("USER"))
                 .build();
 
         when(userRepository.findByUsername(username)).thenReturn(Optional.of(user));

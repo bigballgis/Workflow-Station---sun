@@ -385,7 +385,7 @@ class TaskAssignmentQueryServiceTest {
             role2.setId("role-002");
             role2.setType(EntityTypeConverter.fromRoleType(RoleType.BU_BOUNDED));
             
-            when(roleRepository.findByType(RoleType.BU_BOUNDED))
+            when(roleRepository.findByType("BU_BOUNDED"))
                     .thenReturn(Arrays.asList(role1, role2));
             
             List<Role> result = service.getBuBoundedRoles();
@@ -406,7 +406,7 @@ class TaskAssignmentQueryServiceTest {
             role1.setId("role-001");
             role1.setType(EntityTypeConverter.fromRoleType(RoleType.BU_UNBOUNDED));
             
-            when(roleRepository.findByType(RoleType.BU_UNBOUNDED))
+            when(roleRepository.findByType("BU_UNBOUNDED"))
                     .thenReturn(Arrays.asList(role1));
             
             List<Role> result = service.getBuUnboundedRoles();

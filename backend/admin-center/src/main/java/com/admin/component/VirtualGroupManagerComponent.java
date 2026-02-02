@@ -157,7 +157,7 @@ public class VirtualGroupManagerComponent {
         }
         
         // 删除所有成员关系
-        virtualGroupMemberRepository.deleteByVirtualGroupId(groupId);
+        virtualGroupMemberRepository.deleteByGroupId(groupId);
         
         // 删除虚拟组
         virtualGroupRepository.delete(group);
@@ -270,7 +270,7 @@ public class VirtualGroupManagerComponent {
                 .orElseThrow(() -> new UserNotFoundException(request.getUserId()));
         
         // 检查是否已是成员
-        if (virtualGroupMemberRepository.existsByVirtualGroupIdAndUserId(groupId, request.getUserId())) {
+        if (virtualGroupMemberRepository.existsByGroupIdAndUserId(groupId, request.getUserId())) {
             throw new AdminBusinessException("MEMBER_EXISTS", "用户已是该虚拟组成员");
         }
         
@@ -320,12 +320,12 @@ public class VirtualGroupManagerComponent {
                 .orElseThrow(() -> new VirtualGroupNotFoundException(groupId));
         
         VirtualGroupMember member = virtualGroupMemberRepository
-                .findByVirtualGroupIdAndUserId(groupId, userId)
+                .findByGroupIdAndUserId(groupId, userId)
                 .orElseThrow(() -> new AdminBusinessException("MEMBER_NOT_FOUND", "用户不是该虚拟组成员"));
         
         // System Administrators 组必须至少保留一个成员
         if (EntityTypeConverter.toVirtualGroupType(group.getType()) == VirtualGroupType.SYSTEM && "SYS_ADMINS".equals(group.getCode())) {
-            long memberCount = virtualGroupMemberRepository.countByVirtualGroupId(groupId);
+            long memberCount = virtualGroupMemberRepository.countByGroupId(groupId);
             if (memberCount <= 1) {
                 throw new AdminBusinessException("LAST_ADMIN_CANNOT_REMOVE", 
                         "System Administrators 组必须至少保留一个成员");
@@ -353,7 +353,7 @@ public class VirtualGroupManagerComponent {
         // 获取业务单元名称映射
         Map<String, String> businessUnitNameMap = getBusinessUnitNameMap();
         
-        List<VirtualGroupMember> members = virtualGroupMemberRepository.findByVirtualGroupId(groupId);
+        List<VirtualGroupMember> members = virtualGroupMemberRepository.findByGroupId(groupId);
         
         // 批量获取用户
         List<String> userIds = members.stream()
@@ -409,7 +409,7 @@ public class VirtualGroupManagerComponent {
         VirtualGroup group = virtualGroupRepository.findById(groupId)
                 .orElseThrow(() -> new VirtualGroupNotFoundException(groupId));
         
-        Page<VirtualGroupMember> membersPage = virtualGroupMemberRepository.findByVirtualGroupId(groupId, pageable);
+        Page<VirtualGroupMember> membersPage = virtualGroupMemberRepository.findByGroupId(groupId, pageable);
         
         // 批量获取用户
         List<String> userIds = membersPage.getContent().stream()
@@ -429,7 +429,7 @@ public class VirtualGroupManagerComponent {
      * 检查用户是否是虚拟组成员
      */
     public boolean isGroupMember(String groupId, String userId) {
-        return virtualGroupMemberRepository.existsByVirtualGroupIdAndUserId(groupId, userId);
+        return virtualGroupMemberRepository.existsByGroupIdAndUserId(groupId, userId);
     }
 
     

@@ -1,7 +1,6 @@
 package com.admin.repository;
 
 import com.platform.security.entity.Role;
-import com.admin.enums.RoleType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -30,8 +29,9 @@ public interface RoleRepository extends JpaRepository<Role, String> {
     
     /**
      * 根据类型查找角色
+     * Note: Role.type is String, not enum
      */
-    List<Role> findByType(RoleType type);
+    List<Role> findByType(String type);
     
     /**
      * 查找所有活跃角色
@@ -41,13 +41,14 @@ public interface RoleRepository extends JpaRepository<Role, String> {
     
     /**
      * 分页查询角色
+     * Note: Role.type is String, not enum
      */
     @Query("SELECT r FROM Role r WHERE " +
            "(:type IS NULL OR r.type = :type) AND " +
            "(:keyword IS NULL OR LOWER(r.name) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
            "LOWER(r.code) LIKE LOWER(CONCAT('%', :keyword, '%')))")
     Page<Role> findByConditions(
-            @Param("type") RoleType type,
+            @Param("type") String type,
             @Param("keyword") String keyword,
             Pageable pageable);
     

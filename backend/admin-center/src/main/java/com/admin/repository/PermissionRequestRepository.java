@@ -77,24 +77,31 @@ public interface PermissionRequestRepository extends JpaRepository<PermissionReq
     
     /**
      * 根据申请人ID查找申请（包含申请人信息）
+     * Note: PermissionRequest entity uses applicantId field, not a relationship
+     * Callers should fetch User separately using applicantId if needed
+     * @deprecated Use {@link #findByApplicantId(String)} and fetch User separately
      */
-    @Query("SELECT pr FROM PermissionRequest pr LEFT JOIN FETCH pr.applicant WHERE pr.applicantId = :applicantId ORDER BY pr.createdAt DESC")
-    List<PermissionRequest> findByApplicantIdWithApplicant(@Param("applicantId") String applicantId);
+    @Deprecated
+    default List<PermissionRequest> findByApplicantIdWithApplicant(String applicantId) {
+        return findByApplicantId(applicantId);
+    }
     
     /**
      * 根据ID查找申请（包含申请人和审批人信息）
+     * Note: PermissionRequest entity uses applicantId and approverId fields, not relationships
+     * Callers should fetch User separately using these IDs if needed
+     * @deprecated Use {@link #findById(String)} and fetch Users separately
      */
-    @Query("SELECT pr FROM PermissionRequest pr " +
-           "LEFT JOIN FETCH pr.applicant " +
-           "LEFT JOIN FETCH pr.approver " +
-           "WHERE pr.id = :id")
-    Optional<PermissionRequest> findByIdWithDetails(@Param("id") String id);
+    @Deprecated
+    default Optional<PermissionRequest> findByIdWithDetails(String id) {
+        return findById(id);
+    }
     
     /**
      * 分页查询所有申请（带筛选条件）
+     * Note: PermissionRequest entity uses applicantId field, not a relationship
      */
     @Query("SELECT pr FROM PermissionRequest pr " +
-           "LEFT JOIN FETCH pr.applicant " +
            "WHERE (:status IS NULL OR pr.status = :status) " +
            "AND (:requestType IS NULL OR pr.requestType = :requestType) " +
            "AND (:applicantId IS NULL OR pr.applicantId = :applicantId) " +

@@ -65,7 +65,6 @@ class PermissionPropertyTest {
                 .id(UUID.randomUUID().toString())
                 .code(permissionCode)
                 .name(permissionCode)
-                .enabled(true)
                 .build();
         
         when(permissionRepository.findPermissionsByUserId(userId)).thenReturn(Set.of(permission));
@@ -82,11 +81,12 @@ class PermissionPropertyTest {
             @ForAll @AlphaChars @Size(min = 1, max = 20) String permissionCode) {
         setup();
         
+        // Note: Permission entity no longer has 'enabled' field
+        // Disabled permissions are filtered at the repository/service level
         Permission permission = Permission.builder()
                 .id(UUID.randomUUID().toString())
                 .code(permissionCode)
                 .name(permissionCode)
-                .enabled(false)  // Disabled
                 .build();
         
         when(permissionRepository.findPermissionsByUserId(userId)).thenReturn(Set.of(permission));
@@ -109,7 +109,6 @@ class PermissionPropertyTest {
                 .code(roleCode)
                 .name(roleCode)
                 .permissionCodes(Set.of(permissionCode))
-                .enabled(true)
                 .build();
         
         when(permissionRepository.findPermissionsByUserId(userId)).thenReturn(Collections.emptySet());
@@ -133,7 +132,6 @@ class PermissionPropertyTest {
                 .id(UUID.randomUUID().toString())
                 .code(firstPerm)
                 .name(firstPerm)
-                .enabled(true)
                 .build();
         
         when(permissionRepository.findPermissionsByUserId(userId)).thenReturn(Set.of(permission));
@@ -156,7 +154,6 @@ class PermissionPropertyTest {
                 .id(UUID.randomUUID().toString())
                 .code(firstPerm)
                 .name(firstPerm)
-                .enabled(true)
                 .build();
         
         when(permissionRepository.findPermissionsByUserId(userId)).thenReturn(Set.of(permission));
