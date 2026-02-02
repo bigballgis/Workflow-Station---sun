@@ -1,7 +1,8 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import router from '@/router'
-import { refreshToken as refreshAuthToken, REFRESH_TOKEN_KEY, TOKEN_KEY, clearAuth, getUser } from './auth'
+import { authService } from '@/auth/authService'
+import { tokenStorage } from '@/auth/tokenStorage'
 
 let isRefreshing = false
 let failedQueue: Array<{ resolve: Function; reject: Function }> = []
@@ -24,17 +25,14 @@ const api = axios.create({
 
 api.interceptors.request.use(
   config => {
-    const token = localStorage.getItem(TOKEN_KEY)
+    const token = tokenStorage.getAccessToken()
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
-    
-    // 添加 X-User-Id 请求头，用于后端权限检查
-    const user = getUser()
-    if (user && user.userId) {
-      config.headers['X-User-Id'] = user.userId
+    const userId = tokenStorage.getUserId()
+    if (userId) {
+      config.headers['X-User-Id'] = userId
     }
-    
     return config
   },
   error => Promise.reject(error)
@@ -59,40 +57,28 @@ api.interceptors.response.use(
       originalRequest._retry = true
       isRefreshing = true
 
-      const storedRefreshToken = localStorage.getItem(REFRESH_TOKEN_KEY)
-      
-      if (storedRefreshToken) {
-        try {
-          const tokenResponse = await refreshAuthToken(storedRefreshToken)
-          const newToken = tokenResponse.accessToken
-          localStorage.setItem(TOKEN_KEY, newToken)
-          
+      try {
+        const newToken = await authService.refreshToken()
+        if (newToken) {
           processQueue(null, newToken)
           originalRequest.headers.Authorization = `Bearer ${newToken}`
           return api(originalRequest)
-        } catch (refreshError) {
-          processQueue(refreshError, null)
-          clearAuth()
-          router.push('/login')
-          return Promise.reject(refreshError)
-        } finally {
-          isRefreshing = false
         }
-      } else {
-        clearAuth()
-        router.push('/login')
-        return Promise.reject(error)
+      } catch (refreshError) {
+        processQueue(refreshError, null)
+      } finally {
+        isRefreshing = false
       }
+      tokenStorage.clear()
+      router.push('/login')
+      return Promise.reject(error)
     }
 
     if (response) {
       switch (response.status) {
         case 403:
-          // 403 可能是未登录或权限不足
-          const token = localStorage.getItem(TOKEN_KEY)
-          if (!token) {
-            // 没有 token，清除认证并重定向到登录页
-            clearAuth()
+          if (!tokenStorage.getAccessToken()) {
+            tokenStorage.clear()
             router.push('/login')
             ElMessage.warning('请先登录')
           } else {

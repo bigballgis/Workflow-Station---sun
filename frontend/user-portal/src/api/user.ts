@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { TOKEN_KEY } from './auth'
+import { tokenStorage } from '@/auth/tokenStorage'
 
 /** 用户业务单元成员身份 */
 export interface UserBusinessUnitMembership {
@@ -32,7 +32,7 @@ const adminCenterAxios = axios.create({
 })
 
 adminCenterAxios.interceptors.request.use(config => {
-  const token = localStorage.getItem(TOKEN_KEY)
+  const token = tokenStorage.getAccessToken()
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
@@ -65,7 +65,7 @@ export const userApi = {
       timeout: 30000
     })
     portalAxios.interceptors.request.use(config => {
-      const token = localStorage.getItem(TOKEN_KEY)
+      const token = tokenStorage.getAccessToken()
       if (token) {
         config.headers.Authorization = `Bearer ${token}`
       }

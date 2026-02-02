@@ -1,6 +1,7 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
 import { ElMessage } from 'element-plus'
-import { refreshToken as refreshAuthToken, REFRESH_TOKEN_KEY, TOKEN_KEY, clearAuth } from './auth'
+import { authService } from '@/auth/authService'
+import { tokenStorage } from '@/auth/tokenStorage'
 
 let isRefreshing = false
 let failedQueue: Array<{ resolve: Function; reject: Function }> = []
@@ -28,27 +29,11 @@ const service: AxiosInstance = axios.create({
 // 请求拦截器
 service.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem(TOKEN_KEY)
+    const token = tokenStorage.getAccessToken()
     if (token) {
       config.headers['Authorization'] = `Bearer ${token}`
     }
-    
-    // 添加用户ID头 - 从存储的用户对象中获取
-    let userId = localStorage.getItem('userId')
-    if (!userId) {
-      // 尝试从 user 对象中获取
-      const userStr = localStorage.getItem('user')
-      if (userStr) {
-        try {
-          const user = JSON.parse(userStr)
-          userId = user.userId || user.id
-        } catch (e) {
-          console.error('Failed to parse user from localStorage:', e)
-        }
-      }
-    }
-    config.headers['X-User-Id'] = userId || 'user_1'
-    
+    config.headers['X-User-Id'] = tokenStorage.getUserId() || 'user_1'
     return config
   },
   (error) => {
@@ -93,30 +78,21 @@ service.interceptors.response.use(
       originalRequest._retry = true
       isRefreshing = true
 
-      const storedRefreshToken = localStorage.getItem(REFRESH_TOKEN_KEY)
-      
-      if (storedRefreshToken) {
-        try {
-          const tokenResponse = await refreshAuthToken(storedRefreshToken)
-          const newToken = tokenResponse.accessToken
-          localStorage.setItem(TOKEN_KEY, newToken)
-          
+      try {
+        const newToken = await authService.refreshToken()
+        if (newToken) {
           processQueue(null, newToken)
           originalRequest.headers.Authorization = `Bearer ${newToken}`
           return service(originalRequest)
-        } catch (refreshError) {
-          processQueue(refreshError, null)
-          clearAuth()
-          window.location.href = '/login'
-          return Promise.reject(refreshError)
-        } finally {
-          isRefreshing = false
         }
-      } else {
-        clearAuth()
-        window.location.href = '/login'
-        return Promise.reject(error)
+      } catch (refreshError) {
+        processQueue(refreshError, null)
+      } finally {
+        isRefreshing = false
       }
+      tokenStorage.clear()
+      window.location.href = '/login'
+      return Promise.reject(error)
     }
     
     console.error('响应错误:', error)

@@ -121,10 +121,10 @@ const handleLogin = async () => {
     
     saveTokens(response.accessToken, response.refreshToken)
     saveUser(response.user)
-    localStorage.setItem('userId', response.user.userId)
     
     ElMessage.success(t('common.success'))
-    router.push('/dashboard')
+    const redirect = (router.currentRoute.value.query.redirect as string) || '/dashboard'
+    router.push(redirect)
   } catch (error: any) {
     let message = error.response?.data?.message || error.message || t('common.failed')
     if (error.response?.status === 500 && !error.response?.data?.message) {

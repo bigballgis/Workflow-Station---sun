@@ -37,6 +37,12 @@ public interface VirtualGroupMemberRepository extends JpaRepository<VirtualGroup
     List<VirtualGroupMember> findByUserId(@Param("userId") String userId);
     
     /**
+     * 根据用户ID查找成员关系（包含虚拟组信息，避免 LazyInitializationException）
+     */
+    @Query("SELECT m FROM VirtualGroupMember m LEFT JOIN FETCH m.virtualGroup WHERE m.user.id = :userId")
+    List<VirtualGroupMember> findByUserIdWithVirtualGroup(@Param("userId") String userId);
+    
+    /**
      * 根据虚拟组ID和用户ID查找成员关系
      */
     @Query("SELECT m FROM VirtualGroupMember m WHERE m.virtualGroup.id = :groupId AND m.user.id = :userId")

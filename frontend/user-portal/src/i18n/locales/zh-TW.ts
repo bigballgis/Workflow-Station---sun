@@ -43,6 +43,7 @@ export default {
     all: '全部',
     actions: '操作',
     back: '返回',
+    home: '返回首頁',
     to: '至',
     startDate: '開始日期',
     endDate: '結束日期',
@@ -436,7 +437,9 @@ export default {
   error: {
     notFound: '頁面不存在',
     notFoundDesc: '抱歉，您存取的頁面不存在',
-    backHome: '返回首頁'
+    backHome: '返回首頁',
+    noPermission: '抱歉，您沒有權限存取此頁面',
+    contactAdmin: '請聯絡管理員取得相應權限'
   },
   settings: {
     title: '個人設定',

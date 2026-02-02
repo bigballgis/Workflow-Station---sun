@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { TOKEN_KEY } from './auth'
+import { tokenStorage } from '@/auth/tokenStorage'
 
 /**
  * User API module for developer-workstation
@@ -12,7 +12,7 @@ const adminCenterAxios = axios.create({
 })
 
 adminCenterAxios.interceptors.request.use(config => {
-  const token = localStorage.getItem(TOKEN_KEY)
+  const token = tokenStorage.getAccessToken()
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }

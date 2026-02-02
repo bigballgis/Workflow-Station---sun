@@ -100,7 +100,8 @@ const activeMenu = computed(() => route.path)
 // Check if user is an approver
 const checkApproverStatus = async () => {
   // Only check if user is logged in
-  const token = localStorage.getItem('token')
+  const { tokenStorage } = await import('@/auth/tokenStorage')
+  const token = tokenStorage.getAccessToken()
   if (!token) {
     isApprover.value = false
     return

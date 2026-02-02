@@ -43,6 +43,7 @@ export default {
     all: '全部',
     actions: '操作',
     back: '返回',
+    home: '返回首页',
     to: '至',
     startDate: '开始日期',
     endDate: '结束日期',
@@ -436,7 +437,9 @@ export default {
   error: {
     notFound: '页面不存在',
     notFoundDesc: '抱歉，您访问的页面不存在',
-    backHome: '返回首页'
+    backHome: '返回首页',
+    noPermission: '抱歉，您没有权限访问此页面',
+    contactAdmin: '请联系管理员获取相应权限'
   },
   settings: {
     title: '个人设置',

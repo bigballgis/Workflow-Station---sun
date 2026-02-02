@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { TOKEN_KEY, getUser } from './auth'
+import { tokenStorage } from '@/auth/tokenStorage'
 
 // Create a separate axios instance for function unit API
 const functionUnitAxios = axios.create({
@@ -8,15 +8,13 @@ const functionUnitAxios = axios.create({
 })
 
 functionUnitAxios.interceptors.request.use(config => {
-  const token = localStorage.getItem(TOKEN_KEY)
+  const token = tokenStorage.getAccessToken()
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
-  
-  // 添加 X-User-Id 请求头，用于后端权限检查
-  const user = getUser()
-  if (user && user.userId) {
-    config.headers['X-User-Id'] = user.userId
+  const userId = tokenStorage.getUserId()
+  if (userId) {
+    config.headers['X-User-Id'] = userId
   }
   return config
 })
@@ -43,20 +41,16 @@ functionUnitAxios.interceptors.response.use(
     
     // 处理 401 未授权
     if (response?.status === 401) {
-      const { clearAuth } = await import('./auth')
+      tokenStorage.clear()
       const router = (await import('@/router')).default
-      clearAuth()
       router.push('/login')
       return Promise.reject(error)
     }
     
     // 处理 403 禁止访问
     if (response?.status === 403) {
-      const { TOKEN_KEY, clearAuth } = await import('./auth')
-      const token = localStorage.getItem(TOKEN_KEY)
-      if (!token) {
-        // 没有 token，清除认证并重定向到登录页
-        clearAuth()
+      if (!tokenStorage.getAccessToken()) {
+        tokenStorage.clear()
         const router = (await import('@/router')).default
         router.push('/login')
       }

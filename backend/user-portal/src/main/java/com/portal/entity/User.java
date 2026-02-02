@@ -4,6 +4,13 @@ import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
 
+/**
+ * User entity for User Portal auth (login/refresh/me).
+ * Shared table with Admin Center: projectx.sys_users.
+ * Explicit schema is required: without it, in some environments (e.g. docker profile
+ * or connection defaulting to public) the query can resolve to public.sys_users and
+ * return no rows, causing "user not found" on login.
+ */
 @Entity
 @Table(name = "sys_users", schema = "projectx")
 @Data

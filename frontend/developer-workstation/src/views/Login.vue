@@ -51,7 +51,8 @@ import { ref, reactive, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, type FormInstance } from 'element-plus'
-import { login as authLogin, saveTokens, saveUser } from '@/api/auth'
+import { authService } from '@/auth'
+import { tokenStorage } from '@/auth/tokenStorage'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -97,18 +98,20 @@ async function handleLogin() {
   await formRef.value?.validate()
   loading.value = true
   try {
-    // Call real login API
-    const response = await authLogin({
+    const response = await authService.login({
       username: form.username,
       password: form.password
     })
     
-    // Save tokens and user info
-    saveTokens(response.accessToken, response.refreshToken)
-    saveUser(response.user)
-    localStorage.setItem('userId', response.user.userId)
-    
-    router.push('/')
+    tokenStorage.setTokens(response.accessToken, response.refreshToken)
+    tokenStorage.setUser(response.user)
+
+    const hasAccess = ['DEVELOPER', 'TECH_DIRECTOR'].some((r) => response.user.roles?.includes(r))
+    if (!hasAccess) {
+      router.push('/no-permission')
+    } else {
+      router.push((router.currentRoute.value.query.redirect as string) || '/')
+    }
     ElMessage.success(t('common.success'))
   } catch (error: any) {
     const data = error.response?.data

@@ -1,33 +1,13 @@
-import axios from 'axios'
-
 /**
  * Authentication API module.
- * Validates: Requirements 5.1, 5.5
+ * Uses tokenStorage and authService - no direct localStorage access.
  */
 
-// Create a separate axios instance for auth to avoid circular dependencies.
-// Must match admin-center backend context-path: /api/v1/admin -> auth at /api/v1/admin/auth
-const authRequest = axios.create({
-  baseURL: '/api/v1/admin/auth',
-  timeout: 30000,
-  headers: { 'Content-Type': 'application/json' }
-})
+import { authService } from '@/auth/authService'
+import { tokenStorage, TOKEN_KEY, REFRESH_TOKEN_KEY, USER_KEY } from '@/auth/tokenStorage'
+import type { UserInfo } from '@/auth/tokenStorage'
 
-// Add response interceptor to handle errors
-authRequest.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    // Handle 400 Bad Request errors
-    if (error.response?.status === 400) {
-      const errorData = error.response.data
-      // If it's an ErrorResponse format, extract the message
-      if (errorData?.message) {
-        error.message = errorData.message
-      }
-    }
-    return Promise.reject(error)
-  }
-)
+export type { UserInfo }
 
 export interface LoginRequest {
   username: string
@@ -41,10 +21,8 @@ export interface LoginResponse {
   user: UserInfo
 }
 
-/** 分配目标类型 */
 export type AssignmentTargetType = 'USER' | 'VIRTUAL_GROUP'
 
-/** 角色及来源信息 */
 export interface RoleWithSource {
   roleCode: string
   roleName: string
@@ -53,123 +31,55 @@ export interface RoleWithSource {
   sourceName: string
 }
 
-export interface UserInfo {
-  userId: string
-  username: string
-  displayName: string
-  email: string
-  roles: string[]
-  permissions: string[]
-  rolesWithSources?: RoleWithSource[]
-  language: string
-}
-
 export interface TokenResponse {
   accessToken: string
   expiresIn: number
 }
 
-export interface RefreshRequest {
-  refreshToken: string
-}
-
-/**
- * Login with username and password.
- */
 export const login = async (data: LoginRequest): Promise<LoginResponse> => {
-  const response = await authRequest.post<LoginResponse>('/login', data)
-  return response.data
+  const result = await authService.login(data)
+  return {
+    ...result,
+    expiresIn: 86400
+  }
 }
 
-/**
- * Logout and invalidate token.
- */
 export const logout = async (): Promise<void> => {
-  const token = localStorage.getItem('token')
-  if (token) {
-    try {
-      await authRequest.post('/logout', null, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-    } catch (e) {
-      // Ignore logout errors, still clear local storage
-      console.warn('Logout request failed:', e)
-    }
+  await authService.logout()
+}
+
+export const refreshToken = async (_refreshTokenParam?: string): Promise<TokenResponse> => {
+  const newAccess = await authService.refreshToken()
+  if (!newAccess) throw new Error('Token refresh failed')
+  return {
+    accessToken: newAccess,
+    expiresIn: 86400
   }
 }
 
-/**
- * Refresh access token using refresh token.
- */
-export const refreshToken = async (refreshToken: string): Promise<TokenResponse> => {
-  const response = await authRequest.post<TokenResponse>('/refresh', { refreshToken })
-  return response.data
-}
-
-/**
- * Get current user info.
- */
 export const getCurrentUser = async (): Promise<UserInfo> => {
-  const token = localStorage.getItem('token')
-  const response = await authRequest.get<UserInfo>('/me', {
-    headers: { Authorization: `Bearer ${token}` }
-  })
-  return response.data
+  return authService.getCurrentUser()
 }
 
-/**
- * Validate token.
- */
 export const validateToken = async (): Promise<boolean> => {
-  const token = localStorage.getItem('token')
-  if (!token) return false
-  
-  try {
-    const response = await authRequest.get<boolean>('/validate', {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    return response.data
-  } catch {
-    return false
-  }
+  return authService.validateToken()
 }
 
-// Token storage helpers
-export const TOKEN_KEY = 'token'
-export const REFRESH_TOKEN_KEY = 'refreshToken'
-export const USER_KEY = 'user'
+export { TOKEN_KEY, REFRESH_TOKEN_KEY, USER_KEY }
 
-export const saveTokens = (accessToken: string, refreshToken: string) => {
-  localStorage.setItem(TOKEN_KEY, accessToken)
-  localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken)
+export const saveTokens = (accessToken: string, refreshTokenParam: string) => {
+  tokenStorage.setTokens(accessToken, refreshTokenParam)
 }
 
 export const saveUser = (user: UserInfo) => {
-  localStorage.setItem(USER_KEY, JSON.stringify(user))
+  tokenStorage.setUser(user)
 }
 
-export const getStoredUser = (): UserInfo | null => {
-  const userStr = localStorage.getItem(USER_KEY)
-  if (userStr) {
-    try {
-      return JSON.parse(userStr)
-    } catch {
-      return null
-    }
-  }
-  return null
-}
-
-// Alias for getStoredUser
+export const getStoredUser = (): UserInfo | null => tokenStorage.getUser()
 export const getUser = getStoredUser
 
 export const clearAuth = () => {
-  localStorage.removeItem(TOKEN_KEY)
-  localStorage.removeItem(REFRESH_TOKEN_KEY)
-  localStorage.removeItem(USER_KEY)
-  localStorage.removeItem('userId')
+  tokenStorage.clear()
 }
 
-export const isAuthenticated = (): boolean => {
-  return !!localStorage.getItem(TOKEN_KEY)
-}
+export const isAuthenticated = (): boolean => !!tokenStorage.getAccessToken()

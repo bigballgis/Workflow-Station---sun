@@ -272,11 +272,12 @@ public class AuthController {
         return Keys.hmacShaKeyFor(keyBytes);
     }
 
+    /** Legacy role lookup from projectx (same schema as sys_users). */
     private List<String> getRolesForUserLegacy(String userId) {
         try {
             return jdbcTemplate.queryForList(
-                    "SELECT r.code FROM sys_role_assignments ra " +
-                    "JOIN sys_roles r ON ra.role_id = r.id " +
+                    "SELECT r.code FROM projectx.sys_role_assignments ra " +
+                    "JOIN projectx.sys_roles r ON ra.role_id = r.id " +
                     "WHERE ra.target_type = 'USER' AND ra.target_id = ? AND r.status = 'ACTIVE' " +
                     "AND (ra.valid_from IS NULL OR ra.valid_from <= NOW()) " +
                     "AND (ra.valid_to IS NULL OR ra.valid_to >= NOW())",

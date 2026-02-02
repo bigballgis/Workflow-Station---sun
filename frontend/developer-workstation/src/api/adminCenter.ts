@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { TOKEN_KEY, getUser } from './auth'
+import { tokenStorage } from '@/auth/tokenStorage'
 
 /**
  * Admin Center API module for developer-workstation
@@ -12,17 +12,14 @@ const adminCenterAxios = axios.create({
 })
 
 adminCenterAxios.interceptors.request.use(config => {
-  const token = localStorage.getItem(TOKEN_KEY)
+  const token = tokenStorage.getAccessToken()
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
-  
-  // 添加 X-User-Id 请求头，用于后端权限检查
-  const user = getUser()
-  if (user && user.userId) {
-    config.headers['X-User-Id'] = user.userId
+  const userId = tokenStorage.getUserId()
+  if (userId) {
+    config.headers['X-User-Id'] = userId
   }
-  
   return config
 })
 

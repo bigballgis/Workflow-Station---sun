@@ -314,5 +314,9 @@ export default {
   user: {
     username: '使用者名稱',
     email: '電子郵件'
+  },
+  error: {
+    noPermission: '抱歉，您沒有權限存取此頁面',
+    developerOnly: '開發工作站僅限具有 Developer 或 Tech Director 角色的使用者存取'
   }
 }

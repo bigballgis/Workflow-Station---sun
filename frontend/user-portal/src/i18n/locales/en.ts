@@ -43,6 +43,7 @@ export default {
     all: 'All',
     actions: 'Actions',
     back: 'Back',
+    home: 'Back to Home',
     to: 'to',
     startDate: 'Start Date',
     endDate: 'End Date',
@@ -436,7 +437,9 @@ export default {
   error: {
     notFound: 'Page Not Found',
     notFoundDesc: 'Sorry, the page you visited does not exist',
-    backHome: 'Back to Home'
+    backHome: 'Back to Home',
+    noPermission: 'You do not have permission to access this page',
+    contactAdmin: 'Please contact the administrator for access'
   },
   settings: {
     title: 'Settings',

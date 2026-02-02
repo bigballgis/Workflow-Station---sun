@@ -314,5 +314,9 @@ export default {
   user: {
     username: 'Username',
     email: 'Email'
+  },
+  error: {
+    noPermission: 'You do not have permission to access this page',
+    developerOnly: 'Developer Workstation is only accessible to users with Developer or Tech Director role'
   }
 }

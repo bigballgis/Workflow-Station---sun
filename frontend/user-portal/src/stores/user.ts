@@ -1,50 +1,69 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { tokenStorage } from '@/auth/tokenStorage'
 
 export interface UserInfo {
   id: string
+  userId?: string
   username: string
   name: string
+  displayName?: string
   email: string
   avatar?: string
   roles: string[]
 }
 
 export const useUserStore = defineStore('user', () => {
-  const token = ref<string>(localStorage.getItem('token') || '')
   const userInfo = ref<UserInfo | null>(null)
 
-  const isLoggedIn = computed(() => !!token.value)
-  const userName = computed(() => userInfo.value?.name || '')
-  const userRoles = computed(() => userInfo.value?.roles || [])
+  const token = computed(() => tokenStorage.getAccessToken() ?? '')
+  const isLoggedIn = computed(() => !!tokenStorage.getAccessToken())
+  const userName = computed(() => {
+    const u = userInfo.value ?? tokenStorage.getUser()
+    return (u as any)?.displayName ?? (u as any)?.name ?? (u as any)?.username ?? ''
+  })
+  const userRoles = computed(() => {
+    const u = userInfo.value ?? tokenStorage.getUser()
+    return (u as any)?.roles ?? []
+  })
 
-  const setToken = (newToken: string) => {
-    token.value = newToken
-    localStorage.setItem('token', newToken)
+  const setToken = (_newToken: string) => {
+    tokenStorage.setTokens(_newToken, tokenStorage.getRefreshToken() ?? '')
   }
 
-  const setUserInfo = (info: UserInfo) => {
+  const setUserInfo = (info: UserInfo | null) => {
     userInfo.value = info
-  }
-
-  const login = async (username: string, _password: string) => {
-    // 模拟登录
-    const mockToken = `token_${Date.now()}`
-    setToken(mockToken)
-    setUserInfo({
-      id: '1',
-      username,
-      name: username,
-      email: `${username}@hsbc.com`,
-      roles: ['user']
-    })
-    return true
+    if (info) {
+      tokenStorage.setUser({
+        userId: info.userId ?? info.id,
+        username: info.username,
+        displayName: info.displayName ?? info.name,
+        email: info.email,
+        roles: info.roles,
+        permissions: [],
+        language: 'zh_CN'
+      })
+    }
   }
 
   const logout = () => {
-    token.value = ''
     userInfo.value = null
-    localStorage.removeItem('token')
+    tokenStorage.clear()
+  }
+
+  const syncFromStorage = () => {
+    const u = tokenStorage.getUser()
+    if (u) {
+      userInfo.value = {
+        id: u.userId,
+        userId: u.userId,
+        username: u.username,
+        name: u.displayName ?? u.username,
+        displayName: u.displayName,
+        email: u.email,
+        roles: u.roles ?? []
+      }
+    }
   }
 
   return {
@@ -55,7 +74,7 @@ export const useUserStore = defineStore('user', () => {
     userRoles,
     setToken,
     setUserInfo,
-    login,
-    logout
+    logout,
+    syncFromStorage
   }
 })

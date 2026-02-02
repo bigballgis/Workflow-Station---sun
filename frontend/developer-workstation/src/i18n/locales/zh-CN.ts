@@ -314,5 +314,9 @@ export default {
   user: {
     username: '用户名',
     email: '邮箱'
+  },
+  error: {
+    noPermission: '抱歉，您没有权限访问此页面',
+    developerOnly: '开发工作站仅限具有 Developer 或 Tech Director 角色的用户访问'
   }
 }

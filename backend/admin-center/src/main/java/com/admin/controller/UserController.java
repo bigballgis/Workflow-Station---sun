@@ -30,10 +30,13 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * 用户管理控制器
@@ -41,6 +44,7 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/users")
 @RequiredArgsConstructor
+@Slf4j
 @Tag(name = "用户管理", description = "用户的创建、查询、更新、删除等操作")
 public class UserController {
     
@@ -148,10 +152,12 @@ public class UserController {
     public ResponseEntity<List<Map<String, Object>>> getUserRoles(
             @PathVariable String userId,
             @RequestParam(required = false) String type) {
+        try {
         // 通过虚拟组获取用户角色（角色只能分配给虚拟组，不能直接分配给用户）
         List<Role> roles = userPermissionService.getUserRoles(userId);
         
-        // 按类型筛选
+        // 按类型筛选（过滤掉 type 为 null 的异常数据）
+        roles = roles.stream().filter(r -> r.getType() != null).collect(Collectors.toList());
         if (type != null && !type.isEmpty()) {
             // 支持 BUSINESS 作为特殊值，返回所有业务角色（BU_BOUNDED 和 BU_UNBOUNDED）
             if ("BUSINESS".equalsIgnoreCase(type)) {
@@ -159,10 +165,14 @@ public class UserController {
                         .filter(r -> r.getType().isBusinessRole())
                         .collect(Collectors.toList());
             } else {
-                RoleType roleType = RoleType.valueOf(type);
-                roles = roles.stream()
-                        .filter(r -> r.getType() == roleType)
-                        .collect(Collectors.toList());
+                try {
+                    RoleType roleType = RoleType.valueOf(type);
+                    roles = roles.stream()
+                            .filter(r -> r.getType() == roleType)
+                            .collect(Collectors.toList());
+                } catch (IllegalArgumentException e) {
+                    roles = List.of();
+                }
             }
         }
         
@@ -177,16 +187,22 @@ public class UserController {
                 .collect(Collectors.toList());
         
         return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            log.warn("getUserRoles failed for userId={}: {}", userId, e.getMessage(), e);
+            return ResponseEntity.ok(Collections.emptyList());
+        }
     }
     
     @GetMapping("/{userId}/virtual-groups")
     @Operation(summary = "获取用户虚拟组列表", description = "获取用户所属的虚拟组列表")
     public ResponseEntity<List<Map<String, Object>>> getUserVirtualGroups(
             @PathVariable String userId) {
-        List<VirtualGroupMember> memberships = virtualGroupMemberRepository.findByUserId(userId);
+        try {
+        List<VirtualGroupMember> memberships = virtualGroupMemberRepository.findByUserIdWithVirtualGroup(userId);
         
-        // 转换为简单的Map格式
+        // 转换为简单的Map格式（过滤掉 virtualGroup 为 null 的异常数据）
         List<Map<String, Object>> result = memberships.stream()
+                .filter(m -> m.getVirtualGroup() != null)
                 .map(m -> {
                     Map<String, Object> groupInfo = new HashMap<>();
                     groupInfo.put("groupId", m.getVirtualGroup().getId());
@@ -198,12 +214,17 @@ public class UserController {
                 .collect(Collectors.toList());
         
         return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            log.warn("getUserVirtualGroups failed for userId={}: {}", userId, e.getMessage(), e);
+            return ResponseEntity.ok(Collections.emptyList());
+        }
     }
     
     @GetMapping("/{userId}/business-units")
     @Operation(summary = "获取用户业务单元成员身份", description = "获取用户加入的所有业务单元")
     public ResponseEntity<List<Map<String, Object>>> getUserBusinessUnits(
             @PathVariable String userId) {
+        try {
         List<BusinessUnit> businessUnits = userBusinessUnitService.getUserBusinessUnits(userId);
         
         // 转换为简单的Map格式
@@ -219,5 +240,9 @@ public class UserController {
                 .collect(Collectors.toList());
         
         return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            log.warn("getUserBusinessUnits failed for userId={}: {}", userId, e.getMessage(), e);
+            return ResponseEntity.ok(Collections.emptyList());
+        }
     }
 }

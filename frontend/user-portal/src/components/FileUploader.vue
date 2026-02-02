@@ -118,6 +118,7 @@ import {
   FolderOpened
 } from '@element-plus/icons-vue'
 import type { UploadInstance, UploadFile, UploadRawFile, UploadUserFile } from 'element-plus'
+import { tokenStorage } from '@/auth/tokenStorage'
 
 export interface FileInfo {
   id: string
@@ -175,7 +176,7 @@ const previewUrl = ref('')
 
 // 上传请求头
 const uploadHeaders = computed(() => ({
-  Authorization: `Bearer ${localStorage.getItem('token') || ''}`
+  Authorization: `Bearer ${tokenStorage.getAccessToken() || ''}`
 }))
 
 // 接受的文件类型

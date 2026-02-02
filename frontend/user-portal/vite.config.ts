@@ -1,12 +1,29 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { resolve } from 'path'
+import fs from 'fs'
 import AutoImport from 'unplugin-auto-import/vite'
 import Components from 'unplugin-vue-components/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 
 export default defineConfig({
   plugins: [
+    {
+      name: 'favicon-fallback',
+      configureServer(server) {
+        server.middlewares.use((req, res, next) => {
+          if (req.url === '/favicon.ico') {
+            const svgPath = resolve(__dirname, 'public/logo.svg')
+            if (fs.existsSync(svgPath)) {
+              res.setHeader('Content-Type', 'image/svg+xml')
+              res.end(fs.readFileSync(svgPath))
+              return
+            }
+          }
+          next()
+        })
+      }
+    },
     vue(),
     AutoImport({
       resolvers: [ElementPlusResolver()],

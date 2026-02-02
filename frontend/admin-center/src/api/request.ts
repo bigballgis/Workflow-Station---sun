@@ -1,6 +1,7 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
 import { ElMessage } from 'element-plus'
-import { refreshToken as refreshAuthToken, REFRESH_TOKEN_KEY, TOKEN_KEY, clearAuth } from './auth'
+import { authService } from '@/auth/authService'
+import { tokenStorage } from '@/auth/tokenStorage'
 
 let isRefreshing = false
 let failedQueue: Array<{ resolve: Function; reject: Function }> = []
@@ -24,12 +25,11 @@ const request: AxiosInstance = axios.create({
 
 request.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem(TOKEN_KEY)
+    const token = tokenStorage.getAccessToken()
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
-    const userId = localStorage.getItem('userId') || 'system'
-    config.headers['X-User-Id'] = userId
+    config.headers['X-User-Id'] = tokenStorage.getUserId() || 'system'
     return config
   },
   (error) => Promise.reject(error)
@@ -128,30 +128,21 @@ request.interceptors.response.use(
       originalRequest._retry = true
       isRefreshing = true
 
-      const storedRefreshToken = localStorage.getItem(REFRESH_TOKEN_KEY)
-      
-      if (storedRefreshToken) {
-        try {
-          const response = await refreshAuthToken(storedRefreshToken)
-          const newToken = response.accessToken
-          localStorage.setItem(TOKEN_KEY, newToken)
-          
+      try {
+        const newToken = await authService.refreshToken()
+        if (newToken) {
           processQueue(null, newToken)
           originalRequest.headers.Authorization = `Bearer ${newToken}`
           return request(originalRequest)
-        } catch (refreshError) {
-          processQueue(refreshError, null)
-          clearAuth()
-          window.location.href = '/login'
-          return Promise.reject(refreshError)
-        } finally {
-          isRefreshing = false
         }
-      } else {
-        clearAuth()
-        window.location.href = '/login'
-        return Promise.reject(error)
+      } catch (refreshError) {
+        processQueue(refreshError, null)
+      } finally {
+        isRefreshing = false
       }
+      tokenStorage.clear()
+      window.location.href = '/login'
+      return Promise.reject(error)
     }
 
     // Handle 403 Forbidden errors

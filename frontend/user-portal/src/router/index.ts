@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory, RouteRecordRaw } from 'vue-router'
 import i18n from '@/i18n'
+import { createAuthGuard } from '@/auth'
 
 const routes: RouteRecordRaw[] = [
   {
@@ -103,6 +104,12 @@ const routes: RouteRecordRaw[] = [
         name: 'Profile',
         component: () => import('@/views/profile/index.vue'),
         meta: { titleKey: 'profile.title', icon: 'User', hidden: true }
+      },
+      {
+        path: '403',
+        name: 'Forbidden',
+        component: () => import('@/views/error/403.vue'),
+        meta: { titleKey: 'error.noPermission', hidden: true }
       }
     ]
   },
@@ -118,21 +125,21 @@ const router = createRouter({
   routes
 })
 
-// 路由守卫
-router.beforeEach((to, _from, next) => {
-  // 设置页面标题
+const authGuard = createAuthGuard()
+
+router.beforeEach(async (to, _from, next) => {
   const t = i18n.global.t
   const titleKey = to.meta.titleKey as string
   const pageTitle = titleKey ? t(titleKey) : t('app.name')
   document.title = `${pageTitle} - ${t('app.title')}`
-  
-  // 检查登录状态
-  const token = localStorage.getItem('token')
-  if (to.meta.requiresAuth !== false && !token && to.path !== '/login') {
-    next('/login')
-  } else {
-    next()
+
+  const redirect = await authGuard(to)
+  if (redirect) {
+    next(redirect)
+    return
   }
+
+  next()
 })
 
 export default router

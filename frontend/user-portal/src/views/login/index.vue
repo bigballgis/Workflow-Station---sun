@@ -185,13 +185,12 @@ const handleLogin = async () => {
           password: form.password
         })
         
-        // Save tokens and user info
         saveTokens(response.accessToken, response.refreshToken)
         saveUser(response.user)
-        localStorage.setItem('userId', response.user.userId)
         
         ElMessage.success(t('login.loginSuccess'))
-        router.push('/dashboard')
+        const redirect = (router.currentRoute.value.query.redirect as string) || '/dashboard'
+        router.push(redirect)
       } catch (error: any) {
         const message = error.response?.data?.message || error.message || t('login.loginFailed')
         ElMessage.error(message)

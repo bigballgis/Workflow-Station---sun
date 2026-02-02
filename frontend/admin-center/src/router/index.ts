@@ -2,6 +2,7 @@ import { createRouter, createWebHistory, RouteRecordRaw } from 'vue-router'
 import { canAccessRoute, PERMISSIONS } from '@/utils/permission'
 import { ElMessage } from 'element-plus'
 import i18n from '@/i18n'
+import { createAuthGuard } from '@/auth'
 import { getCurrentUser, saveUser, isAuthenticated } from '@/api/auth'
 
 // Extend route meta type
@@ -107,60 +108,47 @@ const router = createRouter({
   routes
 })
 
-// Track if user info has been refreshed in this navigation
-// Use a timestamp to ensure we refresh on each page load
+const authGuard = createAuthGuard()
 const USER_INFO_REFRESH_KEY = 'user_info_refresh_timestamp'
-const REFRESH_INTERVAL = 5 * 60 * 1000 // Refresh every 5 minutes
+const REFRESH_INTERVAL = 5 * 60 * 1000
 
 router.beforeEach(async (to, _from, next) => {
   const t = i18n.global.t
   const pageTitle = to.meta.titleKey ? t(to.meta.titleKey) : (to.meta.title || t('app.name'))
   document.title = `${pageTitle} - ${t('app.title')}`
-  
-  // Check login status
-  const token = localStorage.getItem('token')
-  if (to.path !== '/login' && !token) {
-    next('/login')
+
+  const redirect = await authGuard(to)
+  if (redirect) {
+    next(redirect)
     return
   }
-  
-  // Skip permission check for login page
+
   if (to.path === '/login') {
     next()
     return
   }
-  
-  // Refresh user info from API to ensure we have the latest permissions
-  // This is especially important after backend fixes or permission changes
+
   if (isAuthenticated()) {
     const lastRefresh = sessionStorage.getItem(USER_INFO_REFRESH_KEY)
     const now = Date.now()
-    const shouldRefresh = !lastRefresh || (now - parseInt(lastRefresh)) > REFRESH_INTERVAL
-    
+    const shouldRefresh = !lastRefresh || now - parseInt(lastRefresh) > REFRESH_INTERVAL
     if (shouldRefresh) {
       try {
-        console.log('[Router] Refreshing user info from API...')
         const userInfo = await getCurrentUser()
         saveUser(userInfo)
         sessionStorage.setItem(USER_INFO_REFRESH_KEY, now.toString())
-        console.log('[Router] User info refreshed:', {
-          roles: userInfo.roles,
-          permissions: userInfo.permissions
-        })
-      } catch (error) {
-        console.warn('[Router] Failed to refresh user info, using cached data:', error)
-        // Continue with cached data if API call fails
+      } catch {
+        // Continue with cached data
       }
     }
   }
-  
-  // Check route permissions
+
   if (!canAccessRoute(to.path)) {
     ElMessage.warning('您没有权限访问该页面')
     next('/403')
     return
   }
-  
+
   next()
 })
 

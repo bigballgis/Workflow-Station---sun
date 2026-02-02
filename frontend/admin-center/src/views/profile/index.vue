@@ -90,6 +90,7 @@ import { ref, onMounted, reactive, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, FormInstance, FormRules } from 'element-plus'
 import request from '@/api/request'
+import { tokenStorage } from '@/auth/tokenStorage'
 
 const { t } = useI18n()
 
@@ -147,16 +148,11 @@ const passwordRules = computed<FormRules>(() => ({
 const loadUserInfo = async () => {
   loading.value = true
   try {
-    // 优先从 localStorage 获取用户信息（登录时保存的）
-    const storedUser = localStorage.getItem('user')
+    const storedUser = tokenStorage.getUser()
     if (storedUser) {
-      try {
-        userInfo.value = JSON.parse(storedUser)
-        loading.value = false
-        return
-      } catch {
-        // 继续尝试从 API 获取
-      }
+      userInfo.value = storedUser as any
+      loading.value = false
+      return
     }
     
     // 从 API 获取用户信息
@@ -164,14 +160,11 @@ const loadUserInfo = async () => {
     userInfo.value = response.data || response
   } catch (error) {
     console.error('Failed to load user info:', error)
-    // 尝试从 localStorage 获取基本信息
-    const storedUser = localStorage.getItem('userInfo')
+    const storedUser = tokenStorage.getUser()
     if (storedUser) {
-      try {
-        userInfo.value = JSON.parse(storedUser)
-      } catch {
-        userInfo.value = { username: localStorage.getItem('username') || '用户' }
-      }
+      userInfo.value = storedUser as any
+    } else {
+      userInfo.value = { username: '用户' } as any
     }
   } finally {
     loading.value = false
