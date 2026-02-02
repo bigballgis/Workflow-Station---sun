@@ -43,11 +43,7 @@ export default defineConfig({
   server: {
     port: 3001,
     proxy: {
-      '/api/v1/auth': {
-        target: 'http://localhost:8093',
-        changeOrigin: true,
-        rewrite: (path) => '/api/portal/auth' + path.substring('/api/v1/auth'.length)
-      },
+      // Unified Auth: Admin Center /api/v1/admin/auth/**
       '/api/portal': {
         target: 'http://localhost:8093',
         changeOrigin: true

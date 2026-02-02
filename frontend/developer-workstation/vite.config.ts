@@ -26,11 +26,10 @@ export default defineConfig({
   server: {
     port: 3002,
     proxy: {
-      // Auth API routes to developer-workstation
-      '/api/v1/auth': {
-        target: 'http://localhost:8094',
-        changeOrigin: true,
-        rewrite: (path) => '/auth' + path.substring('/api/v1/auth'.length)
+      // Unified Auth: Admin Center /api/v1/admin/auth/**
+      '/api/v1/admin': {
+        target: 'http://localhost:8092',
+        changeOrigin: true
       },
       // Admin Center API (departments, virtual-groups)
       '/api/admin-center': {

@@ -7,7 +7,8 @@ import axios from 'axios'
 import { tokenStorage, type UserInfo } from './tokenStorage'
 
 const authRequest = axios.create({
-  baseURL: '/api/portal/auth',
+  // Unified Auth: Admin Center /api/v1/admin/auth/**
+  baseURL: '/api/v1/admin/auth',
   timeout: 30000,
   headers: { 'Content-Type': 'application/json' }
 })
@@ -25,7 +26,8 @@ export interface LoginResult {
 
 export const authService = {
   async login(credentials: LoginCredentials): Promise<LoginResult> {
-    const { data } = await authRequest.post<LoginResult>('/login', credentials)
+    // Use unified public login (no Admin Center role gate)
+    const { data } = await authRequest.post<LoginResult>('/public-login', credentials)
     return data
   },
 

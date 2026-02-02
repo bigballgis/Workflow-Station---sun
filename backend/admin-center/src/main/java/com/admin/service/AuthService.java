@@ -17,6 +17,12 @@ public interface AuthService {
      * Developer Workstation 登录（仅校验用户名密码与状态，不要求 Admin Center 角色）
      */
     LoginResponse loginForDeveloper(LoginRequest request, String ipAddress, String userAgent);
+
+    /**
+     * 公共登录入口（仅校验用户名密码与状态，不要求 Admin Center 角色）。
+     * 用于统一三端登录到 /api/v1/admin/auth/** 下。
+     */
+    LoginResponse publicLogin(LoginRequest request, String ipAddress, String userAgent);
     
     /**
      * 用户登出

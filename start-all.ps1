@@ -9,8 +9,17 @@
 #   $networkName, $projectRoot (Windows path with / for Docker)
 #   Params: $InfraOnly, $BackendOnly, $FrontendOnly, $NoBuild
 
+param(
+    [switch]$Build,        # Reserved (same as start-all.sh)
+    [switch]$InfraOnly,    # Only start infrastructure (postgres, redis)
+    [switch]$BackendOnly,  # Only start backend services
+    [switch]$FrontendOnly, # Only start frontend services
+    [switch]$NoBuild       # Skip build, use existing images
+)
+
 # ========================================
 # UTF-8 编码配置（解决中文乱码）
+# NOTE: param(...) must be the first executable statement in PowerShell scripts.
 # ========================================
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $OutputEncoding = [System.Text.Encoding]::UTF8
@@ -20,14 +29,6 @@ if ($PSVersionTable.PSVersion.Major -ge 6) { $PSDefaultParameterValues['*:Encodi
 if ($IsWindows -ne $false -or $PSVersionTable.PSVersion.Major -lt 6) {
     try { chcp 65001 | Out-Null } catch { }
 }
-
-param(
-    [switch]$Build,        # Reserved (same as start-all.sh)
-    [switch]$InfraOnly,    # Only start infrastructure (postgres, redis)
-    [switch]$BackendOnly,  # Only start backend services
-    [switch]$FrontendOnly, # Only start frontend services
-    [switch]$NoBuild       # Skip build, use existing images
-)
 
 $ErrorActionPreference = "Stop"
 
@@ -400,6 +401,8 @@ if ($BackendOnly -or (-not $FrontendOnly)) {
     # Start API Gateway
     Remove-Container "platform-api-gateway"
     Write-Host "Starting API Gateway..." -ForegroundColor Yellow
+    # IMPORTANT: USER_PORTAL_URL should be host:port only (no /api/portal suffix).
+    # api-gateway routes already handle /api/portal/** with StripPrefix/Rewrite.
     docker run -d `
         --name platform-api-gateway `
         --network $networkName `
@@ -412,7 +415,7 @@ if ($BackendOnly -or (-not $FrontendOnly)) {
         -e "SPRING_REDIS_PASSWORD=$($env:REDIS_PASSWORD)" `
         -e WORKFLOW_ENGINE_URL=http://platform-workflow-engine:8091 `
         -e ADMIN_CENTER_URL=http://platform-admin-center:8092 `
-        -e USER_PORTAL_URL=http://platform-user-portal:8093/api/portal `
+        -e USER_PORTAL_URL=http://platform-user-portal:8093 `
         -e DEVELOPER_WORKSTATION_URL=http://platform-developer-workstation:8094 `
         -e "JWT_SECRET_KEY=$($env:JWT_SECRET_KEY)" `
         -p 8090:8090 `

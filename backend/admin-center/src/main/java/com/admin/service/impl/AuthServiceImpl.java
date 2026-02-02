@@ -217,6 +217,13 @@ public class AuthServiceImpl implements AuthService {
                 .build();
     }
 
+    @Override
+    @Transactional
+    public LoginResponse publicLogin(LoginRequest request, String ipAddress, String userAgent) {
+        // 统一入口：与 Developer Workstation 登录语义一致（不要求 Admin Center 角色）
+        return loginForDeveloper(request, ipAddress, userAgent);
+    }
+
     private String safeGetUserBusinessUnitId(String userId) {
         try {
             return taskAssignmentQueryService.getUserBusinessUnitId(userId);

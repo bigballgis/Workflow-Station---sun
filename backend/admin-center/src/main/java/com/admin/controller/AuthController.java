@@ -71,6 +71,30 @@ public class AuthController {
         }
     }
 
+    /**
+     * 公共登录（统一入口，不要求 Admin Center 角色）
+     * 供 User Portal / Developer Workstation 等系统使用。
+     */
+    @PostMapping("/public-login")
+    public ResponseEntity<?> publicLogin(
+            @Valid @RequestBody LoginRequest request,
+            HttpServletRequest httpRequest) {
+        String path = safeRequestPath(httpRequest);
+        String ipAddress = getClientIpAddress(httpRequest);
+
+        try {
+            LoginResponse response = authService.publicLogin(request, ipAddress, httpRequest.getHeader("User-Agent"));
+            return ResponseEntity.ok(response);
+        } catch (RuntimeException e) {
+            log.warn("Public login failed: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(safeError("LOGIN_FAILED", e.getMessage(), path));
+        } catch (Exception e) {
+            String user = (request != null && request.getUsername() != null) ? request.getUsername() : "?";
+            log.error("Public login error for user {}: {}", user, e.getMessage(), e);
+            return ResponseEntity.badRequest().body(safeError("LOGIN_FAILED", "登录失败，请稍后重试", path));
+        }
+    }
+
     private static String safeRequestPath(HttpServletRequest req) {
         try {
             return req != null && req.getRequestURI() != null ? req.getRequestURI() : "";

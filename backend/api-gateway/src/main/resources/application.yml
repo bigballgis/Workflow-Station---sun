@@ -16,13 +16,21 @@ spring:
             - Path=/api/v1/admin/auth/**
           filters:
             - StripPrefix=0
-        # Authentication routes - workflow-engine (e.g. other clients using /api/v1/auth)
-        - id: auth-service
-          uri: ${WORKFLOW_ENGINE_URL:http://workflow-engine:8080}
+        # Unified authentication routes - map /api/v1/auth/** -> admin-center /api/v1/admin/auth/**
+        # Note: /api/v1/auth/login uses public-login (no Admin Center role gate)
+        - id: unified-auth-login
+          uri: ${ADMIN_CENTER_URL:http://admin-center:8080}
+          predicates:
+            - Path=/api/v1/auth/login
+          filters:
+            - RewritePath=/api/v1/auth/login, /api/v1/admin/auth/public-login
+        - id: unified-auth
+          uri: ${ADMIN_CENTER_URL:http://admin-center:8080}
           predicates:
             - Path=/api/v1/auth/**
           filters:
-            - StripPrefix=0
+            - RewritePath=/api/v1/auth/(?<segment>.*), /api/v1/admin/auth/${segment}
+            - RewritePath=/api/v1/auth, /api/v1/admin/auth
         # User management routes - admin-center
         - id: user-management
           uri: ${ADMIN_CENTER_URL:http://admin-center:8080}
