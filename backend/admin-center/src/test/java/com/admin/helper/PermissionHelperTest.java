@@ -36,12 +36,12 @@ class PermissionHelperTest {
     
     @BeforeEach
     void setUp() {
-        // Permission with resourceType and action fields
+        // Permission with resource and action fields
         permissionWithFields = Permission.builder()
                 .id("perm-1")
                 .code("USER_READ")
                 .name("Read User")
-                .resourceType("user")
+                .resource("user")
                 .action("read")
                 .build();
         
@@ -50,7 +50,7 @@ class PermissionHelperTest {
                 .id("perm-2")
                 .code("role:write")
                 .name("Write Role")
-                .resourceType(null)
+                .resource(null)
                 .action(null)
                 .build();
         
@@ -59,7 +59,7 @@ class PermissionHelperTest {
                 .id("perm-3")
                 .code("permission:delete")
                 .name("Delete Permission")
-                .resourceType("permission")
+                .resource("permission")
                 .action("delete")
                 .build();
         
@@ -68,7 +68,7 @@ class PermissionHelperTest {
                 .id("perm-4")
                 .code("ALL_READ")
                 .name("Read All")
-                .resourceType("*")
+                .resource("*")
                 .action("read")
                 .build();
         
@@ -77,7 +77,7 @@ class PermissionHelperTest {
                 .id("perm-5")
                 .code("USER_ALL")
                 .name("All User Actions")
-                .resourceType("user")
+                .resource("user")
                 .action("*")
                 .build();
         
@@ -86,7 +86,7 @@ class PermissionHelperTest {
                 .id("perm-6")
                 .code("ALL_ALL")
                 .name("All Permissions")
-                .resourceType("*")
+                .resource("*")
                 .action("*")
                 .build();
         
@@ -95,7 +95,7 @@ class PermissionHelperTest {
                 .id("perm-7")
                 .code("ADMIN_ALL")
                 .name("All Admin Actions")
-                .resourceType("admin.*")
+                .resource("admin.*")
                 .action("*")
                 .build();
     }
@@ -103,21 +103,21 @@ class PermissionHelperTest {
     // ========== getResource Tests ==========
     
     @Test
-    @DisplayName("getResource: Should return resourceType when field is set")
+    @DisplayName("getResource: Should return resource when field is set")
     void testGetResource_WithResourceTypeField() {
         String result = permissionHelper.getResource(permissionWithFields);
         assertEquals("user", result);
     }
     
     @Test
-    @DisplayName("getResource: Should parse from code when resourceType is null")
+    @DisplayName("getResource: Should parse from code when resource is null")
     void testGetResource_ParseFromCode() {
         String result = permissionHelper.getResource(permissionWithCode);
         assertEquals("role", result);
     }
     
     @Test
-    @DisplayName("getResource: Should prefer resourceType field over code")
+    @DisplayName("getResource: Should prefer resource field over code")
     void testGetResource_PreferField() {
         String result = permissionHelper.getResource(permissionWithBoth);
         assertEquals("permission", result);
@@ -131,13 +131,13 @@ class PermissionHelperTest {
     }
     
     @Test
-    @DisplayName("getResource: Should return null when both resourceType and code are null")
+    @DisplayName("getResource: Should return null when both resource and code are null")
     void testGetResource_BothNull() {
         Permission emptyPermission = Permission.builder()
                 .id("perm-8")
                 .code(null)
                 .name("Empty Permission")
-                .resourceType(null)
+                .resource(null)
                 .action("read")
                 .build();
         
@@ -146,13 +146,13 @@ class PermissionHelperTest {
     }
     
     @Test
-    @DisplayName("getResource: Should return null when resourceType is empty and code has no colon")
+    @DisplayName("getResource: Should return null when resource is empty and code has no colon")
     void testGetResource_EmptyResourceTypeNoColon() {
         Permission permission = Permission.builder()
                 .id("perm-9")
                 .code("SIMPLE_CODE")
                 .name("Simple Code Permission")
-                .resourceType("")
+                .resource("")
                 .action("read")
                 .build();
         
@@ -211,7 +211,7 @@ class PermissionHelperTest {
                 .id("perm-10")
                 .code(null)
                 .name("Empty Permission")
-                .resourceType("user")
+                .resource("user")
                 .action(null)
                 .build();
         
@@ -226,7 +226,7 @@ class PermissionHelperTest {
                 .id("perm-11")
                 .code("SIMPLE_CODE")
                 .name("Simple Code Permission")
-                .resourceType("user")
+                .resource("user")
                 .action("")
                 .build();
         
@@ -325,7 +325,7 @@ class PermissionHelperTest {
                 .id("perm-12")
                 .code("TEST")
                 .name("Test Permission")
-                .resourceType(null)
+                .resource(null)
                 .action("read")
                 .build();
         
@@ -339,7 +339,7 @@ class PermissionHelperTest {
                 .id("perm-13")
                 .code("TEST")
                 .name("Test Permission")
-                .resourceType("user")
+                .resource("user")
                 .action(null)
                 .build();
         
@@ -391,7 +391,7 @@ class PermissionHelperTest {
                 .id("perm-14")
                 .code("TEST")
                 .name("Test Permission")
-                .resourceType(null)
+                .resource(null)
                 .action(null)
                 .build();
         
@@ -405,7 +405,7 @@ class PermissionHelperTest {
                 .id("perm-15")
                 .code("TEST")
                 .name("Test Permission")
-                .resourceType("")
+                .resource("")
                 .action("read")
                 .build();
         
@@ -419,7 +419,7 @@ class PermissionHelperTest {
                 .id("perm-16")
                 .code("TEST")
                 .name("Test Permission")
-                .resourceType("*")
+                .resource("*")
                 .action("read")
                 .build();
         
@@ -433,7 +433,7 @@ class PermissionHelperTest {
                 .id("perm-17")
                 .code("TEST")
                 .name("Test Permission")
-                .resourceType("user")
+                .resource("user")
                 .action("*")
                 .build();
         

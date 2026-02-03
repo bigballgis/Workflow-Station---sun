@@ -380,7 +380,7 @@ public class PermissionCheckConsistencyProperties {
                 .id(UUID.randomUUID().toString())
                 .name("Non-existent Permission")
                 .code("NON_EXIST_" + resource.toUpperCase())
-                .resourceType("nonexistent_" + resource)
+                .resource("nonexistent_" + resource)
                 .action(action)
                 .build());
     }
@@ -409,7 +409,7 @@ public class PermissionCheckConsistencyProperties {
                         .id(UUID.randomUUID().toString())
                         .name("All Resources Permission")
                         .code("ALL_RESOURCES")
-                        .resourceType("*")
+                        .resource("*")
                         .action("*")
                         .build());
             } else {
@@ -417,7 +417,7 @@ public class PermissionCheckConsistencyProperties {
                         .id(UUID.randomUUID().toString())
                         .name("All Actions Permission")
                         .code("ALL_ACTIONS_" + targetResource.toUpperCase())
-                        .resourceType(targetResource)
+                        .resource(targetResource)
                         .action("*")
                         .build());
             }
@@ -481,7 +481,7 @@ public class PermissionCheckConsistencyProperties {
                     .id(UUID.randomUUID().toString())
                     .name(prefix + " Permission " + i)
                     .code(prefix.toUpperCase() + "_PERM_" + i)
-                    .resourceType(prefix + "_resource_" + i)
+                    .resource(prefix + "_resource_" + i)
                     .action(actions[i % actions.length])
                     .build());
         }

@@ -65,6 +65,7 @@ class UserPropertyTest {
             @ForAll @Size(min = 1, max = 50) String wrongPassword) {
         
         Assume.that(!password.equals(wrongPassword));
+        Assume.that(!password.isEmpty() && !wrongPassword.isEmpty());
         
         String hash = passwordEncoder.encode(password);
         

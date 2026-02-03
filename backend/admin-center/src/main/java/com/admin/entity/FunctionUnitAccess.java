@@ -10,12 +10,10 @@ import java.time.Instant;
 
 /**
  * 功能单元访问权限配置
- * 定义哪些业务角色可以使用某个功能单元
- * 简化后只支持角色分配，不再支持部门、虚拟组等
+ * 定义哪些目标（角色、用户、虚拟组等）可以使用某个功能单元
  */
 @Entity
-@Table(name = "sys_function_unit_access", 
-       uniqueConstraints = @UniqueConstraint(columnNames = {"function_unit_id", "role_id"}))
+@Table(name = "sys_function_unit_access")
 @EntityListeners(AuditingEntityListener.class)
 @Data
 @Builder
@@ -33,13 +31,17 @@ public class FunctionUnitAccess {
     @JoinColumn(name = "function_unit_id", nullable = false)
     private FunctionUnit functionUnit;
     
-    /** 业务角色ID */
-    @Column(name = "role_id", nullable = false, length = 64)
-    private String roleId;
+    /** 访问类型：DEVELOPER, USER */
+    @Column(name = "access_type", nullable = false, length = 20)
+    private String accessType;
     
-    /** 角色名称（冗余字段，方便显示） */
-    @Column(name = "role_name", length = 100)
-    private String roleName;
+    /** 目标类型：ROLE, USER, VIRTUAL_GROUP */
+    @Column(name = "target_type", nullable = false, length = 20)
+    private String targetType;
+    
+    /** 目标ID（角色ID、用户ID或虚拟组ID） */
+    @Column(name = "target_id", nullable = false, length = 64)
+    private String targetId;
     
     @CreatedDate
     @Column(name = "created_at", updatable = false)

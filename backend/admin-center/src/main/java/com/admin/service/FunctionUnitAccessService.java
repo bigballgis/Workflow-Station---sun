@@ -65,8 +65,9 @@ public class FunctionUnitAccessService {
         
         FunctionUnitAccess access = FunctionUnitAccess.builder()
                 .functionUnit(functionUnit)
-                .roleId(request.getRoleId())
-                .roleName(role.getName())
+                .accessType("USER")  // 用户访问类型
+                .targetType("ROLE")  // 目标类型为角色
+                .targetId(request.getRoleId())  // 角色ID
                 .build();
         
         access = accessRepository.save(access);
@@ -124,8 +125,9 @@ public class FunctionUnitAccessService {
             
             FunctionUnitAccess access = FunctionUnitAccess.builder()
                     .functionUnit(functionUnit)
-                    .roleId(request.getRoleId())
-                    .roleName(role.getName())
+                    .accessType("USER")  // 用户访问类型
+                    .targetType("ROLE")  // 目标类型为角色
+                    .targetId(request.getRoleId())  // 角色ID
                     .build();
             newConfigs.add(access);
         }
@@ -155,7 +157,8 @@ public class FunctionUnitAccessService {
         
         // 检查用户是否有任何被分配的角色
         for (FunctionUnitAccess config : configs) {
-            if (userBusinessRoleIds.contains(config.getRoleId())) {
+            // 只检查角色类型的访问配置
+            if ("ROLE".equals(config.getTargetType()) && userBusinessRoleIds.contains(config.getTargetId())) {
                 return true;
             }
         }

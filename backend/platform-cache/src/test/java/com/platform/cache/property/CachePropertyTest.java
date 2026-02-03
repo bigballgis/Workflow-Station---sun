@@ -232,11 +232,11 @@ class CachePropertyTest {
         }
     }
     
-    private final InMemoryCacheService cacheService = new InMemoryCacheService();
+    private InMemoryCacheService cacheService;
     
     @BeforeProperty
     void setup() {
-        cacheService.clear();
+        cacheService = new InMemoryCacheService();
     }
     
     /**
@@ -305,6 +305,9 @@ class CachePropertyTest {
             @ForAll @StringLength(min = 1, max = 100) @CharRange(from = 'a', to = 'z') String value1,
             @ForAll @StringLength(min = 1, max = 100) @CharRange(from = 'a', to = 'z') String value2
     ) {
+        // Clean up any existing key first
+        cacheService.delete(key);
+        
         // First setIfAbsent should succeed
         boolean first = cacheService.setIfAbsent(key, value1, Duration.ofMinutes(5));
         assert first : "First setIfAbsent should succeed";
@@ -373,6 +376,9 @@ class CachePropertyTest {
             @ForAll @IntRange(min = 1, max = 100) int times,
             @ForAll @LongRange(min = 1, max = 10) long delta
     ) {
+        // Clean up any existing key first
+        cacheService.delete(key);
+        
         long expected = 0;
         for (int i = 0; i < times; i++) {
             long result = cacheService.increment(key, delta);

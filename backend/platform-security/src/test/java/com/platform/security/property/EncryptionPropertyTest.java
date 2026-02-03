@@ -44,6 +44,8 @@ class EncryptionPropertyTest {
     void encryptedDataShouldBeDifferentFromPlainText(
             @ForAll @Size(min = 1, max = 100) String plainText) {
         
+        Assume.that(!plainText.isEmpty());
+        
         SimulatedEncryptionService service = new SimulatedEncryptionService();
         
         String encrypted = service.encrypt(plainText);
@@ -56,6 +58,8 @@ class EncryptionPropertyTest {
     @Property(tries = 100)
     void sameDataShouldProduceDifferentCiphertext(
             @ForAll @Size(min = 1, max = 100) String plainText) {
+        
+        Assume.that(!plainText.isEmpty());
         
         SimulatedEncryptionService service = new SimulatedEncryptionService();
         
@@ -98,6 +102,8 @@ class EncryptionPropertyTest {
     void isEncryptedShouldDetectEncryptedStrings(
             @ForAll @Size(min = 1, max = 100) String plainText) {
         
+        Assume.that(!plainText.isEmpty());
+        
         SimulatedEncryptionService service = new SimulatedEncryptionService();
         
         assertThat(service.isEncrypted(plainText)).isFalse();
@@ -130,6 +136,8 @@ class EncryptionPropertyTest {
     @Property(tries = 100)
     void encryptedDataShouldBeBase64Encoded(
             @ForAll @Size(min = 1, max = 100) String plainText) {
+        
+        Assume.that(!plainText.isEmpty());
         
         SimulatedEncryptionService service = new SimulatedEncryptionService();
         
