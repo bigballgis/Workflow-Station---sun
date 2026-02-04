@@ -545,6 +545,10 @@ CREATE TABLE IF NOT EXISTS sys_function_unit_deployments (
     rollback_to_id VARCHAR(64),
     error_message TEXT,
     deployment_log TEXT,
+    started_at TIMESTAMP,
+    rollback_reason TEXT,
+    rollback_by VARCHAR(64),
+    rollback_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_by VARCHAR(64),
     CONSTRAINT fk_deployment_func_unit FOREIGN KEY (function_unit_id) REFERENCES sys_function_units(id)

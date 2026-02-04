@@ -60,11 +60,15 @@ public interface UserRepository extends JpaRepository<User, String> {
 
     /**
      * Find all users with a specific role.
+     * Uses user_roles and roles join tables since User entity no longer has roles field.
      *
      * @param roleCode the role code
      * @return list of users with the role
      */
-    @Query("SELECT u FROM User u JOIN u.roles r WHERE r = :roleCode")
+    @Query("SELECT DISTINCT u FROM User u " +
+           "JOIN UserRole ur ON ur.userId = u.id " +
+           "JOIN Role r ON r.id = ur.roleId " +
+           "WHERE r.code = :roleCode")
     List<User> findByRole(@Param("roleCode") String roleCode);
 
     /**

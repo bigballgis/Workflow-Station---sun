@@ -104,10 +104,13 @@ public class AuthServiceImpl implements AuthService {
         List<String> roles = userRoleCodes;
         List<String> permissions = getPermissionsForRoles(roles);
         
+        // Get role names from database
+        Map<String, String> roleCodeToName = getRoleNames(roles);
+        
         List<LoginResponse.RoleWithSource> rolesWithSources = roles.stream()
                 .map(code -> LoginResponse.RoleWithSource.builder()
                         .roleCode(code)
-                        .roleName(code)
+                        .roleName(roleCodeToName.getOrDefault(code, code))
                         .sourceType(null)
                         .sourceId(user.getId())
                         .sourceName("Direct Assignment")
@@ -376,5 +379,31 @@ public class AuthServiceImpl implements AuthService {
         String hash = passwordEncoder.encode(plainPassword);
         log.info("Generated hash: {}", hash);
         return hash;
+    }
+    
+    private Map<String, String> getRoleNames(List<String> roleCodes) {
+        if (roleCodes == null || roleCodes.isEmpty()) {
+            return Map.of();
+        }
+        
+        try {
+            // Build placeholders for IN clause
+            String placeholders = roleCodes.stream()
+                    .map(code -> "?")
+                    .collect(Collectors.joining(","));
+            
+            String sql = "SELECT code, name FROM sys_roles WHERE code IN (" + placeholders + ")";
+            
+            List<Map<String, Object>> results = jdbcTemplate.queryForList(sql, roleCodes.toArray());
+            
+            return results.stream()
+                    .collect(Collectors.toMap(
+                            row -> (String) row.get("code"),
+                            row -> (String) row.get("name")
+                    ));
+        } catch (Exception e) {
+            log.warn("Failed to get role names: {}", e.getMessage());
+            return Map.of();
+        }
     }
 }

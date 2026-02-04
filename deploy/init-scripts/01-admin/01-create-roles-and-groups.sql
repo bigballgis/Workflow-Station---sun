@@ -9,46 +9,55 @@
 \echo 'Creating System Default Roles...'
 \echo '========================================='
 
--- 1. System Administrator Role (系统管理员)
+-- 1. System Administrator Role
 INSERT INTO sys_roles (id, code, name, type, description, status, is_system, created_at, updated_at)
 VALUES 
-('role-sys-admin', 'SYS_ADMIN', '系统管理员', 'ADMIN', 'System administrator with full access to all system functions', 'ACTIVE', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+('role-sys-admin', 'SYS_ADMIN', 'System Administrator', 'ADMIN', 'System administrator with full access to all system functions', 'ACTIVE', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 ON CONFLICT (code) DO UPDATE SET 
     name = EXCLUDED.name,
     description = EXCLUDED.description,
     updated_at = CURRENT_TIMESTAMP;
 
--- 2. Auditor Role (审计员)
+-- 2. Auditor Role
 INSERT INTO sys_roles (id, code, name, type, description, status, is_system, created_at, updated_at)
 VALUES 
-('role-auditor', 'AUDITOR', '审计员', 'ADMIN', 'System auditor with read-only access to audit logs and system monitoring', 'ACTIVE', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+('role-auditor', 'AUDITOR', 'Auditor', 'ADMIN', 'System auditor with read-only access to audit logs and system monitoring', 'ACTIVE', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 ON CONFLICT (code) DO UPDATE SET 
     name = EXCLUDED.name,
     description = EXCLUDED.description,
     updated_at = CURRENT_TIMESTAMP;
 
--- 3. Department Manager Role (部门经理)
+-- 3. Department Manager Role
 INSERT INTO sys_roles (id, code, name, type, description, status, is_system, created_at, updated_at)
 VALUES 
-('role-manager', 'MANAGER', '部门经理', 'BU_BOUNDED', 'Department manager with access to team workflows and approvals', 'ACTIVE', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+('role-manager', 'MANAGER', 'Department Manager', 'BU_BOUNDED', 'Department manager with access to team workflows and approvals', 'ACTIVE', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 ON CONFLICT (code) DO UPDATE SET 
     name = EXCLUDED.name,
     description = EXCLUDED.description,
     updated_at = CURRENT_TIMESTAMP;
 
--- 4. Workflow Developer Role (工作流开发者)
+-- 4. Technical Lead Role
 INSERT INTO sys_roles (id, code, name, type, description, status, is_system, created_at, updated_at)
 VALUES 
-('role-developer', 'DEVELOPER', '工作流开发者', 'DEVELOPER', 'Workflow developer with access to developer workstation', 'ACTIVE', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+('role-tech-lead', 'TECH_LEAD', 'Technical Lead', 'DEVELOPER', 'Technical lead with full permissions on function units: create, edit, delete, deploy, and publish', 'ACTIVE', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 ON CONFLICT (code) DO UPDATE SET 
     name = EXCLUDED.name,
     description = EXCLUDED.description,
     updated_at = CURRENT_TIMESTAMP;
 
--- 5. Workflow Designer Role (工作流设计师)
+-- 5. Team Lead Role
 INSERT INTO sys_roles (id, code, name, type, description, status, is_system, created_at, updated_at)
 VALUES 
-('role-designer', 'DESIGNER', '工作流设计师', 'DEVELOPER', 'Workflow designer with access to process and form design tools', 'ACTIVE', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+('role-team-lead', 'TEAM_LEAD', 'Team Lead', 'DEVELOPER', 'Team lead with permissions to create, edit, deploy, and publish function units (cannot delete)', 'ACTIVE', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+ON CONFLICT (code) DO UPDATE SET 
+    name = EXCLUDED.name,
+    description = EXCLUDED.description,
+    updated_at = CURRENT_TIMESTAMP;
+
+-- 6. Developer Role
+INSERT INTO sys_roles (id, code, name, type, description, status, is_system, created_at, updated_at)
+VALUES 
+('role-developer', 'DEVELOPER', 'Developer', 'DEVELOPER', 'Developer with permissions to edit, deploy, and publish existing function units (cannot create or delete)', 'ACTIVE', true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 ON CONFLICT (code) DO UPDATE SET 
     name = EXCLUDED.name,
     description = EXCLUDED.description,
@@ -64,7 +73,7 @@ ON CONFLICT (code) DO UPDATE SET
 -- 1. System Administrators Virtual Group
 INSERT INTO sys_virtual_groups (id, code, name, type, description, status, created_at, updated_at)
 VALUES 
-('vg-sys-admins', 'SYSTEM_ADMINISTRATORS', '系统管理员组', 'SYSTEM', 'Virtual group for system administrators with full system access', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+('vg-sys-admins', 'SYSTEM_ADMINISTRATORS', 'System Administrators', 'SYSTEM', 'Virtual group for system administrators with full system access', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 ON CONFLICT (code) DO UPDATE SET 
     name = EXCLUDED.name,
     type = EXCLUDED.type,
@@ -74,7 +83,7 @@ ON CONFLICT (code) DO UPDATE SET
 -- 2. Auditors Virtual Group
 INSERT INTO sys_virtual_groups (id, code, name, type, description, status, created_at, updated_at)
 VALUES 
-('vg-auditors', 'AUDITORS', '审计员组', 'SYSTEM', 'Virtual group for system auditors with monitoring and audit access', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+('vg-auditors', 'AUDITORS', 'Auditors', 'SYSTEM', 'Virtual group for system auditors with monitoring and audit access', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 ON CONFLICT (code) DO UPDATE SET 
     name = EXCLUDED.name,
     type = EXCLUDED.type,
@@ -84,27 +93,37 @@ ON CONFLICT (code) DO UPDATE SET
 -- 3. Managers Virtual Group
 INSERT INTO sys_virtual_groups (id, code, name, type, description, status, created_at, updated_at)
 VALUES 
-('vg-managers', 'MANAGERS', '部门经理组', 'SYSTEM', 'Virtual group for department managers', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+('vg-managers', 'MANAGERS', 'Department Managers', 'SYSTEM', 'Virtual group for department managers', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 ON CONFLICT (code) DO UPDATE SET 
     name = EXCLUDED.name,
     type = EXCLUDED.type,
     description = EXCLUDED.description,
     updated_at = CURRENT_TIMESTAMP;
 
--- 4. Developers Virtual Group
+-- 4. Technical Leads Virtual Group
 INSERT INTO sys_virtual_groups (id, code, name, type, description, status, created_at, updated_at)
 VALUES 
-('vg-developers', 'DEVELOPERS', '工作流开发者组', 'SYSTEM', 'Virtual group for workflow developers', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+('vg-tech-leads', 'TECH_LEADS', 'Technical Leads', 'SYSTEM', 'Virtual group for technical leads with full function unit management permissions', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 ON CONFLICT (code) DO UPDATE SET 
     name = EXCLUDED.name,
     type = EXCLUDED.type,
     description = EXCLUDED.description,
     updated_at = CURRENT_TIMESTAMP;
 
--- 5. Designers Virtual Group
+-- 5. Team Leads Virtual Group
 INSERT INTO sys_virtual_groups (id, code, name, type, description, status, created_at, updated_at)
 VALUES 
-('vg-designers', 'DESIGNERS', '工作流设计师组', 'SYSTEM', 'Virtual group for workflow designers', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+('vg-team-leads', 'TEAM_LEADS', 'Team Leads', 'SYSTEM', 'Virtual group for team leads with create and deployment permissions', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+ON CONFLICT (code) DO UPDATE SET 
+    name = EXCLUDED.name,
+    type = EXCLUDED.type,
+    description = EXCLUDED.description,
+    updated_at = CURRENT_TIMESTAMP;
+
+-- 6. Developers Virtual Group
+INSERT INTO sys_virtual_groups (id, code, name, type, description, status, created_at, updated_at)
+VALUES 
+('vg-developers', 'DEVELOPERS', 'Developers', 'SYSTEM', 'Virtual group for developers with edit and deployment permissions', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 ON CONFLICT (code) DO UPDATE SET 
     name = EXCLUDED.name,
     type = EXCLUDED.type,
@@ -136,16 +155,22 @@ VALUES
 ('vgr-manager-001', 'vg-managers', 'role-manager', CURRENT_TIMESTAMP, 'system')
 ON CONFLICT (virtual_group_id, role_id) DO NOTHING;
 
+-- Bind TECH_LEAD role to Technical Leads group
+INSERT INTO sys_virtual_group_roles (id, virtual_group_id, role_id, created_at, created_by)
+VALUES 
+('vgr-tech-lead-001', 'vg-tech-leads', 'role-tech-lead', CURRENT_TIMESTAMP, 'system')
+ON CONFLICT (virtual_group_id, role_id) DO NOTHING;
+
+-- Bind TEAM_LEAD role to Team Leads group
+INSERT INTO sys_virtual_group_roles (id, virtual_group_id, role_id, created_at, created_by)
+VALUES 
+('vgr-team-lead-001', 'vg-team-leads', 'role-team-lead', CURRENT_TIMESTAMP, 'system')
+ON CONFLICT (virtual_group_id, role_id) DO NOTHING;
+
 -- Bind DEVELOPER role to Developers group
 INSERT INTO sys_virtual_group_roles (id, virtual_group_id, role_id, created_at, created_by)
 VALUES 
 ('vgr-developer-001', 'vg-developers', 'role-developer', CURRENT_TIMESTAMP, 'system')
-ON CONFLICT (virtual_group_id, role_id) DO NOTHING;
-
--- Bind DESIGNER role to Designers group
-INSERT INTO sys_virtual_group_roles (id, virtual_group_id, role_id, created_at, created_by)
-VALUES 
-('vgr-designer-001', 'vg-designers', 'role-designer', CURRENT_TIMESTAMP, 'system')
 ON CONFLICT (virtual_group_id, role_id) DO NOTHING;
 
 \echo '✓ All roles bound to virtual groups successfully'
@@ -155,16 +180,18 @@ ON CONFLICT (virtual_group_id, role_id) DO NOTHING;
 \echo 'System Roles and Groups Summary'
 \echo '========================================='
 \echo 'Roles Created:'
-\echo '  1. SYS_ADMIN (系统管理员) - Full system access'
-\echo '  2. AUDITOR (审计员) - Audit and monitoring access'
-\echo '  3. MANAGER (部门经理) - Department management'
-\echo '  4. DEVELOPER (工作流开发者) - Workflow development'
-\echo '  5. DESIGNER (工作流设计师) - Process design'
+\echo '  1. SYS_ADMIN (System Administrator) - Full system access'
+\echo '  2. AUDITOR (Auditor) - Audit and monitoring access'
+\echo '  3. MANAGER (Department Manager) - Department management'
+\echo '  4. TECH_LEAD (Technical Lead) - Full function unit permissions'
+\echo '  5. TEAM_LEAD (Team Lead) - Create, edit, deploy, publish (no delete)'
+\echo '  6. DEVELOPER (Developer) - Edit, deploy, publish only'
 \echo ''
 \echo 'Virtual Groups Created:'
 \echo '  1. SYSTEM_ADMINISTRATORS → SYS_ADMIN'
 \echo '  2. AUDITORS → AUDITOR'
 \echo '  3. MANAGERS → MANAGER'
-\echo '  4. DEVELOPERS → DEVELOPER'
-\echo '  5. DESIGNERS → DESIGNER'
+\echo '  4. TECH_LEADS → TECH_LEAD'
+\echo '  5. TEAM_LEADS → TEAM_LEAD'
+\echo '  6. DEVELOPERS → DEVELOPER'
 \echo '========================================='

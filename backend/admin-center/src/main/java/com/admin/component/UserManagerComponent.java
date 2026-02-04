@@ -291,7 +291,14 @@ public class UserManagerComponent {
         }
         
         try {
-            // 统计活跃管理员数量
+            // 首先检查该用户是否是管理员
+            boolean isAdmin = userRepository.isUserAdmin(user.getId());
+            if (!isAdmin) {
+                // 如果不是管理员，可以删除
+                return false;
+            }
+            
+            // 如果是管理员，检查是否是最后一个活跃管理员
             long activeAdminCount = userRepository.countActiveAdmins();
             return activeAdminCount <= 1;
         } catch (Exception e) {

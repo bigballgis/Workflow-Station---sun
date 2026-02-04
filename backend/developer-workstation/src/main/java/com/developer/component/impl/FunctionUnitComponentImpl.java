@@ -78,6 +78,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     
     @Override
     @Transactional
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('TECH_LEAD', 'TEAM_LEAD')")
     public FunctionUnit create(FunctionUnitRequest request) {
         if (functionUnitRepository.existsByName(request.getName())) {
             throw new BusinessException("CONFLICT_NAME_EXISTS", 
@@ -129,6 +130,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     
     @Override
     @Transactional
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER')")
     public FunctionUnit update(Long id, FunctionUnitRequest request) {
         FunctionUnit functionUnit = getById(id);
         
@@ -154,6 +156,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     
     @Override
     @Transactional
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('TECH_LEAD')")
     public void delete(Long id) {
         FunctionUnit functionUnit = getById(id);
         functionUnitRepository.delete(functionUnit);
@@ -220,6 +223,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     
     @Override
     @Transactional
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER')")
     public FunctionUnit publish(Long id, String changeLog) {
         FunctionUnit functionUnit = getById(id);
         
@@ -258,6 +262,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     
     @Override
     @Transactional
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('TECH_LEAD', 'TEAM_LEAD')")
     public FunctionUnit clone(Long id, String newName) {
         if (functionUnitRepository.existsByName(newName)) {
             throw new BusinessException("CONFLICT_NAME_EXISTS", 

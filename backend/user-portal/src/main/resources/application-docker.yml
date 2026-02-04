@@ -3,8 +3,11 @@ spring:
     activate:
       on-profile: docker
 
-# Messaging Configuration - Kafka disabled (not used in application)
+# Application Configuration
 app:
+  security:
+    jwt-secret-key: ${JWT_SECRET:default-jwt-secret-key-change-in-production}
+    jwt-expiration-seconds: 86400  # 24 hours in seconds (JWT_EXPIRATION env var is in milliseconds)
   messaging:
     enabled: false
 

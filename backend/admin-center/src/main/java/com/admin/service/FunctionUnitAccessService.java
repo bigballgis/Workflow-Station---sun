@@ -38,7 +38,17 @@ public class FunctionUnitAccessService {
     public List<FunctionUnitAccessInfo> getAccessConfigs(String functionUnitId) {
         return accessRepository.findByFunctionUnitId(functionUnitId)
                 .stream()
-                .map(FunctionUnitAccessInfo::fromEntity)
+                .map(access -> {
+                    FunctionUnitAccessInfo info = FunctionUnitAccessInfo.fromEntity(access);
+                    
+                    // 填充目标名称（角色名）
+                    if ("ROLE".equals(access.getTargetType())) {
+                        roleRepository.findById(access.getTargetId())
+                                .ifPresent(role -> info.setTargetName(role.getName()));
+                    }
+                    
+                    return info;
+                })
                 .collect(Collectors.toList());
     }
     

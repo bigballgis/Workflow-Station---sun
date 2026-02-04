@@ -85,9 +85,18 @@ public interface UserRepository extends JpaRepository<User, String> {
     @Query(value = "SELECT COUNT(DISTINCT u.id) FROM sys_users u " +
            "JOIN sys_user_roles ur ON u.id = ur.user_id " +
            "JOIN sys_roles r ON ur.role_id = r.id " +
-           "WHERE (u.deleted = false OR u.deleted IS NULL) AND u.status = 'ACTIVE' AND r.code = 'ADMIN'",
+           "WHERE (u.deleted = false OR u.deleted IS NULL) AND u.status = 'ACTIVE' AND r.code IN ('SYS_ADMIN', 'AUDITOR')",
            nativeQuery = true)
     long countActiveAdmins();
+    
+    /**
+     * 检查用户是否是管理员（SYS_ADMIN 或 AUDITOR）
+     */
+    @Query(value = "SELECT COUNT(*) > 0 FROM sys_user_roles ur " +
+           "JOIN sys_roles r ON ur.role_id = r.id " +
+           "WHERE ur.user_id = :userId AND r.code IN ('SYS_ADMIN', 'AUDITOR')",
+           nativeQuery = true)
+    boolean isUserAdmin(@Param("userId") String userId);
     
     /**
      * 根据ID查找用户

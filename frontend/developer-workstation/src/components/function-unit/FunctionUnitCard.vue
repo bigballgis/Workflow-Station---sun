@@ -31,19 +31,19 @@
     <div class="card-overlay">
       <p class="card-description" v-if="item.description">{{ item.description }}</p>
       <div class="card-actions" @click.stop>
-        <el-button size="small" type="primary" @click="$emit('edit', item)">
+        <el-button v-if="permissions.canEdit()" size="small" type="primary" @click="$emit('edit', item)">
           <el-icon><Edit /></el-icon>
           编辑
         </el-button>
-        <el-button size="small" type="success" @click="$emit('publish', item)">
+        <el-button v-if="permissions.canPublish()" size="small" type="success" @click="$emit('publish', item)">
           <el-icon><Upload /></el-icon>
           发布
         </el-button>
-        <el-button size="small" type="warning" @click="$emit('clone', item)">
+        <el-button v-if="permissions.canClone()" size="small" type="warning" @click="$emit('clone', item)">
           <el-icon><CopyDocument /></el-icon>
           克隆
         </el-button>
-        <el-button size="small" type="danger" @click="$emit('delete', item)">
+        <el-button v-if="permissions.canDelete()" size="small" type="danger" @click="$emit('delete', item)">
           <el-icon><Delete /></el-icon>
           删除
         </el-button>
@@ -57,6 +57,7 @@ import { computed } from 'vue'
 import { Edit, Upload, CopyDocument, Delete } from '@element-plus/icons-vue'
 import IconPreview from '@/components/icon/IconPreview.vue'
 import type { FunctionUnitResponse } from '@/api/functionUnit'
+import { permissions } from '@/utils/permission'
 
 const MAX_DISPLAY_TAGS = 3
 

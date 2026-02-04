@@ -48,7 +48,7 @@
             {{ t('functionUnit.showingResults', { count: filteredList.length, total: store.list.length }) }}
           </span>
         </div>
-        <el-button type="primary" @click="showCreateDialog = true">
+        <el-button v-if="permissions.canCreate()" type="primary" @click="showCreateDialog = true">
           <el-icon><Plus /></el-icon>
           {{ t('functionUnit.create') }}
         </el-button>
@@ -73,7 +73,7 @@
       <!-- Empty State -->
       <div v-else-if="store.list.length === 0" class="empty-state">
         <el-empty :description="t('functionUnit.noData')">
-          <el-button type="primary" @click="showCreateDialog = true">
+          <el-button v-if="permissions.canCreate()" type="primary" @click="showCreateDialog = true">
             {{ t('functionUnit.create') }}
           </el-button>
         </el-empty>
@@ -183,6 +183,7 @@ import IconSelector from '@/components/icon/IconSelector.vue'
 import FunctionUnitCard from '@/components/function-unit/FunctionUnitCard.vue'
 import { getTags, setTags, getAllAvailableTags, matchesTags } from '@/utils/tagStorage'
 import { isAuthenticated } from '@/api/auth'
+import { permissions } from '@/utils/permission'
 
 const { t } = useI18n()
 const router = useRouter()

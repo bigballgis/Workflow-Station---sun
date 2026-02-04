@@ -42,6 +42,7 @@ public class DeploymentComponentImpl implements DeploymentComponent {
     private final Map<Long, List<DeployResponse>> deploymentHistoryMap = new ConcurrentHashMap<>();
     
     @Override
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER')")
     public DeployResponse deployToAdminCenter(Long functionUnitId, DeployRequest request) {
         FunctionUnit functionUnit = functionUnitRepository.findById(functionUnitId)
                 .orElseThrow(() -> new ResourceNotFoundException("FunctionUnit", functionUnitId));
