@@ -6,6 +6,7 @@ import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -85,4 +86,7 @@ public class TaskInfo {
     
     /** 操作类型（approved, rejected, transferred, delegated, completed） */
     private String action;
+    
+    /** 可用的操作列表 */
+    private List<TaskActionInfo> actions;
 }

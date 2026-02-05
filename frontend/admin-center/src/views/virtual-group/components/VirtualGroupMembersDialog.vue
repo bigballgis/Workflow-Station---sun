@@ -11,8 +11,8 @@
       <el-table-column prop="email" :label="t('user.email')" width="200" />
       <el-table-column prop="role" :label="t('user.role')" width="100">
         <template #default="{ row }">
-          <el-tag :type="row.role === 'LEADER' ? 'warning' : 'info'" size="small">
-            {{ row.role === 'LEADER' ? t('organization.leader') : t('role.members') }}
+          <el-tag type="info" size="small">
+            {{ t('role.members') }}
           </el-tag>
         </template>
       </el-table-column>
@@ -51,8 +51,7 @@
           </el-select>
         </el-form-item>
         <el-form-item :label="t('user.role')">
-          <el-select v-model="newMember.role" style="width: 100%">
-            <el-option :label="t('organization.leader')" value="LEADER" />
+          <el-select v-model="newMember.role" style="width: 100%" disabled>
             <el-option :label="t('role.members')" value="MEMBER" />
           </el-select>
         </el-form-item>
@@ -83,7 +82,7 @@ const showAddDialog = ref(false)
 const addLoading = ref(false)
 const searchLoading = ref(false)
 const userOptions = ref<User[]>([])
-const newMember = reactive({ userId: '', role: 'MEMBER' as 'LEADER' | 'MEMBER' })
+const newMember = reactive({ userId: '', role: 'MEMBER' as const })
 
 watch(() => props.modelValue, async (val) => {
   if (val && props.group) {

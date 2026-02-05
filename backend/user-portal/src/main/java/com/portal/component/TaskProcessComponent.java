@@ -286,7 +286,20 @@ public class TaskProcessComponent {
         
         Map<String, Object> variables = new HashMap<>();
         variables.put("action", action);
-        variables.put("comment", request.getComment());
+        
+        // Auto-set approval status based on action
+        if ("APPROVE".equals(action)) {
+            variables.put("approvalStatus", "APPROVED");
+        } else if ("REJECT".equals(action)) {
+            variables.put("approvalStatus", "REJECTED");
+        }
+        
+        // Add approver comments
+        if (request.getComment() != null && !request.getComment().isEmpty()) {
+            variables.put("approverComments", request.getComment());
+        }
+        
+        // Add any additional form data
         if (request.getFormData() != null) {
             variables.putAll(request.getFormData());
         }
@@ -303,7 +316,8 @@ public class TaskProcessComponent {
             throw new PortalException("500", message);
         }
         
-        log.info("Task {} completed via Flowable by user {} with action {}", taskId, userId, action);
+        log.info("Task {} completed via Flowable by user {} with action {} (approvalStatus: {})", 
+                taskId, userId, action, variables.get("approvalStatus"));
     }
 
     /**

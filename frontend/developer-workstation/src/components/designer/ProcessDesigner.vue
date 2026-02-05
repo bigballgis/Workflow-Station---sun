@@ -8,7 +8,7 @@
         <el-button @click="handleZoomOut" :disabled="!modelerReady">
           <el-icon><ZoomOut /></el-icon>
         </el-button>
-        <el-button @click="handleFitViewport" :disabled="!modelerReady">适应画布</el-button>
+        <el-button @click="handleFitViewport" :disabled="!modelerReady">{{ t('process.fitCanvas') }}</el-button>
         <el-button @click="handleUndo" :disabled="!modelerReady">
           <el-icon><RefreshLeft /></el-icon>
         </el-button>
@@ -17,14 +17,14 @@
         </el-button>
       </el-button-group>
       <el-button-group>
-        <el-button @click="handleValidate" :disabled="!modelerReady">验证</el-button>
-        <el-button @click="handleExportSVG" :disabled="!modelerReady">导出SVG</el-button>
-        <el-button @click="handleExportXML" :disabled="!modelerReady">导出XML</el-button>
+        <el-button @click="handleValidate" :disabled="!modelerReady">{{ t('process.validate') }}</el-button>
+        <el-button @click="handleExportSVG" :disabled="!modelerReady">{{ t('process.exportSVG') }}</el-button>
+        <el-button @click="handleExportXML" :disabled="!modelerReady">{{ t('process.exportXML') }}</el-button>
         <el-button @click="showDebugPanel = !showDebugPanel" :type="showDebugPanel ? 'primary' : ''">
-          <el-icon><Monitor /></el-icon> 调试
+          <el-icon><Monitor /></el-icon> {{ t('process.debug') }}
         </el-button>
         <el-button type="primary" @click="handleSave" :loading="saving" :disabled="!modelerReady">
-          保存
+          {{ t('process.save') }}
         </el-button>
       </el-button-group>
     </div>
@@ -41,16 +41,16 @@
     </div>
     
     <!-- Debug Panel Drawer -->
-    <el-drawer v-model="showDebugPanel" title="流程调试" direction="btt" size="50%">
+    <el-drawer v-model="showDebugPanel" :title="t('process.processDebug')" direction="btt" size="50%">
       <ProcessDebugPanel :function-unit-id="functionUnitId" />
     </el-drawer>
 
     <!-- Import XML Dialog -->
-    <el-dialog v-model="showImportDialog" title="导入BPMN XML" width="600px">
-      <el-input v-model="importXml" type="textarea" :rows="15" placeholder="粘贴BPMN XML内容..." />
+    <el-dialog v-model="showImportDialog" :title="t('process.importBpmnXml')" width="600px">
+      <el-input v-model="importXml" type="textarea" :rows="15" :placeholder="t('process.pasteBpmnXml')" />
       <template #footer>
-        <el-button @click="showImportDialog = false">取消</el-button>
-        <el-button type="primary" @click="handleImportXML">导入</el-button>
+        <el-button @click="showImportDialog = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="handleImportXML">{{ t('process.import') }}</el-button>
       </template>
     </el-dialog>
   </div>
@@ -58,6 +58,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick, shallowRef } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ZoomIn, ZoomOut, Monitor, RefreshLeft, RefreshRight } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
@@ -65,10 +66,12 @@ import { functionUnitApi } from '@/api/functionUnit'
 import ProcessDebugPanel from '@/components/debug/ProcessDebugPanel.vue'
 import NodePropertiesPanel from '@/components/designer/properties/NodePropertiesPanel.vue'
 import customModdleDescriptor from '@/utils/customModdle'
+import { customTranslateModule } from '@/utils/customTranslate'
 
 // @ts-ignore - bpmn-js types
 import BpmnModeler from 'bpmn-js/lib/Modeler'
 
+const { t } = useI18n()
 const props = defineProps<{ functionUnitId: number }>()
 
 const store = useFunctionUnitStore()
@@ -93,10 +96,10 @@ const defaultBpmnXml = `<?xml version="1.0" encoding="UTF-8"?>
   id="Definitions_1"
   targetNamespace="http://bpmn.io/schema/bpmn">
   <bpmn:process id="Process_1" isExecutable="true">
-    <bpmn:startEvent id="StartEvent_1" name="开始">
+    <bpmn:startEvent id="StartEvent_1" name="Start">
       <bpmn:outgoing>Flow_1</bpmn:outgoing>
     </bpmn:startEvent>
-    <bpmn:endEvent id="EndEvent_1" name="结束">
+    <bpmn:endEvent id="EndEvent_1" name="End">
       <bpmn:incoming>Flow_1</bpmn:incoming>
     </bpmn:endEvent>
     <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="EndEvent_1" />
@@ -134,7 +137,10 @@ async function initModeler() {
       },
       moddleExtensions: {
         custom: customModdleDescriptor
-      }
+      },
+      additionalModules: [
+        customTranslateModule
+      ]
     })
 
     // Load existing process or default
@@ -165,7 +171,7 @@ async function initModeler() {
     
   } catch (err: any) {
     console.error('Failed to initialize BPMN modeler:', err)
-    ElMessage.error('流程设计器初始化失败: ' + (err.message || '未知错误'))
+    ElMessage.error(t('process.initializationFailed') + ': ' + (err.message || t('common.error')))
   }
 }
 
@@ -206,18 +212,18 @@ async function handleValidate() {
   try {
     const res = await functionUnitApi.validateProcess?.(props.functionUnitId)
     if (res?.data?.valid) {
-      ElMessage.success('流程验证通过')
+      ElMessage.success(t('process.validationPassed'))
     } else {
       const errors = res?.data?.errors || []
       const warnings = res?.data?.warnings || []
       if (errors.length) {
-        ElMessage.error(`验证错误: ${errors.join(', ')}`)
+        ElMessage.error(`${t('process.validationError')}: ${errors.join(', ')}`)
       } else if (warnings.length) {
-        ElMessage.warning(`验证警告: ${warnings.join(', ')}`)
+        ElMessage.warning(`${t('process.validationWarning')}: ${warnings.join(', ')}`)
       }
     }
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.message || '验证失败')
+    ElMessage.error(e.response?.data?.message || t('process.validationError'))
   }
 }
 
@@ -226,9 +232,9 @@ async function handleExportSVG() {
   try {
     const { svg } = await bpmnModeler.saveSVG()
     downloadFile(svg, 'process.svg', 'image/svg+xml')
-    ElMessage.success('SVG导出成功')
+    ElMessage.success(t('process.svgExportSuccess'))
   } catch (err) {
-    ElMessage.error('SVG导出失败')
+    ElMessage.error(t('process.svgExportFailed'))
   }
 }
 
@@ -237,9 +243,9 @@ async function handleExportXML() {
   try {
     const { xml } = await bpmnModeler.saveXML({ format: true })
     downloadFile(xml, 'process.bpmn', 'application/xml')
-    ElMessage.success('XML导出成功')
+    ElMessage.success(t('process.xmlExportSuccess'))
   } catch (err) {
-    ElMessage.error('XML导出失败')
+    ElMessage.error(t('process.xmlExportFailed'))
   }
 }
 
@@ -259,9 +265,9 @@ async function handleImportXML() {
     await bpmnModeler.importXML(importXml.value)
     showImportDialog.value = false
     importXml.value = ''
-    ElMessage.success('导入成功')
+    ElMessage.success(t('process.importSuccess'))
   } catch (err: any) {
-    ElMessage.error('导入失败: ' + (err.message || '无效的BPMN XML'))
+    ElMessage.error(t('process.importFailed') + ': ' + (err.message || t('process.importFailed')))
   }
 }
 
@@ -271,9 +277,9 @@ async function handleSave() {
   try {
     const { xml } = await bpmnModeler.saveXML({ format: true })
     await store.saveProcess(props.functionUnitId, { bpmnXml: xml })
-    ElMessage.success('保存成功')
+    ElMessage.success(t('process.saveSuccess'))
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.message || '保存失败')
+    ElMessage.error(e.response?.data?.message || t('process.saveFailed'))
   } finally {
     saving.value = false
   }

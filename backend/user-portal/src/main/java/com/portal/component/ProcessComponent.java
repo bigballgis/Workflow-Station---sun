@@ -194,6 +194,7 @@ public class ProcessComponent {
         // 流程启动后，第一个任务通常是发起人填写表单的任务，需要自动完成以流转到下一个审批节点
         String currentNodeName = null;
         String currentAssigneeId = null;
+        String currentAssigneeName = null;
         
         try {
             // 查询流程实例的任务
@@ -240,9 +241,17 @@ public class ProcessComponent {
                                         if (currentAssigneeId == null) {
                                             currentAssigneeId = (String) currentTask.get("assignmentTarget");
                                         }
+                                        // 获取当前处理人名称
+                                        currentAssigneeName = (String) currentTask.get("currentAssigneeName");
+                                        if (currentAssigneeName == null || currentAssigneeName.isEmpty()) {
+                                            // 如果没有名称，解析用户ID为名称
+                                            if (currentAssigneeId != null && !currentAssigneeId.isEmpty()) {
+                                                currentAssigneeName = resolveUserDisplayName(currentAssigneeId);
+                                            }
+                                        }
                                         
-                                        log.info("Current task after auto-complete: node={}, assignee={}", 
-                                                currentNodeName, currentAssigneeId);
+                                        log.info("Current task after auto-complete: node={}, assignee={}, assigneeName={}", 
+                                                currentNodeName, currentAssigneeId, currentAssigneeName);
                                     }
                                 }
                             }
@@ -262,6 +271,7 @@ public class ProcessComponent {
         }
         
         // 保存流程实例到本地数据库（包含当前节点和处理人信息）
+        String startUserDisplayName = resolveUserDisplayName(userId);
         ProcessInstance processInstance = ProcessInstance.builder()
                 .id(flowableProcessInstanceId)
                 .processDefinitionId((String) data.get("processDefinitionId"))
@@ -269,15 +279,15 @@ public class ProcessComponent {
                 .processDefinitionName(processName)
                 .businessKey(request.getBusinessKey())
                 .startUserId(userId)
-                .startUserName(userId)
+                .startUserName(startUserDisplayName)
                 .status("RUNNING")
                 .currentNode(currentNodeName)
-                .currentAssignee(currentAssigneeId)
+                .currentAssignee(currentAssigneeName != null ? currentAssigneeName : currentAssigneeId)
                 .variables(variables)
                 .build();
         processInstanceRepository.save(processInstance);
         log.info("Process instance saved to local database: {} with currentNode={}, currentAssignee={}", 
-                flowableProcessInstanceId, currentNodeName, currentAssigneeId);
+                flowableProcessInstanceId, currentNodeName, currentAssigneeName);
         
         // 记录流程启动历史
         ProcessHistory startHistory = ProcessHistory.builder()
@@ -287,7 +297,7 @@ public class ProcessComponent {
                 .activityType("startEvent")
                 .operationType("SUBMIT")
                 .operatorId(userId)
-                .operatorName(userId)
+                .operatorName(startUserDisplayName)
                 .comment("发起流程")
                 .build();
         processHistoryRepository.save(startHistory);
@@ -301,9 +311,9 @@ public class ProcessComponent {
                 .startTime(LocalDateTime.now())
                 .status("RUNNING")
                 .startUserId(userId)
-                .startUserName(userId)
+                .startUserName(startUserDisplayName)
                 .currentNode(currentNodeName)
-                .currentAssignee(currentAssigneeId)
+                .currentAssignee(currentAssigneeName != null ? currentAssigneeName : currentAssigneeId)
                 .build();
     }
     
@@ -701,6 +711,49 @@ public class ProcessComponent {
     }
     
     /**
+     * 解析用户显示名称
+     * 优先级: fullName > displayName > username > userId
+     */
+    private String resolveUserDisplayName(String userId) {
+        if (userId == null || userId.isEmpty()) {
+            return null;
+        }
+        
+        try {
+            RestTemplate restTemplate = new RestTemplate();
+            String userUrl = adminCenterUrl + "/api/v1/admin/users/" + userId;
+            
+            @SuppressWarnings("unchecked")
+            Map<String, Object> userInfo = restTemplate.getForObject(userUrl, Map.class);
+            
+            if (userInfo != null) {
+                // 优先使用 fullName
+                String fullName = (String) userInfo.get("fullName");
+                if (fullName != null && !fullName.isEmpty()) {
+                    return fullName;
+                }
+                
+                // 其次使用 displayName
+                String displayName = (String) userInfo.get("displayName");
+                if (displayName != null && !displayName.isEmpty()) {
+                    return displayName;
+                }
+                
+                // 再次使用 username
+                String username = (String) userInfo.get("username");
+                if (username != null && !username.isEmpty()) {
+                    return username;
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to resolve user display name for {}: {}", userId, e.getMessage());
+        }
+        
+        // 最后回退到使用 userId
+        return userId;
+    }
+    
+    /**
      * 从 XML 标签中提取属性值
      */
     private String extractAttribute(String tag, String attrName) {
@@ -750,6 +803,52 @@ public class ProcessComponent {
      * 转换实体到DTO
      */
     private ProcessInstanceInfo toProcessInstanceInfo(ProcessInstance instance) {
+        String currentAssignee = instance.getCurrentAssignee();
+        String currentAssigneeName = null;
+        
+        log.debug("=== toProcessInstanceInfo: processId={}, status={}, currentAssignee from DB={}", 
+                instance.getId(), instance.getStatus(), currentAssignee);
+        
+        // 如果有当前处理人，尝试从 workflow-engine 获取任务信息以获取用户名称
+        if (currentAssignee != null && !currentAssignee.isEmpty() && "RUNNING".equals(instance.getStatus())) {
+            try {
+                if (workflowEngineClient.isAvailable()) {
+                    Optional<Map<String, Object>> tasksResult = workflowEngineClient.getProcessInstanceTasks(instance.getId());
+                    if (tasksResult.isPresent()) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> tasksData = (Map<String, Object>) tasksResult.get().get("data");
+                        if (tasksData != null) {
+                            @SuppressWarnings("unchecked")
+                            List<Map<String, Object>> tasks = (List<Map<String, Object>>) tasksData.get("tasks");
+                            if (tasks != null && !tasks.isEmpty()) {
+                                Map<String, Object> currentTask = tasks.get(0);
+                                currentAssigneeName = (String) currentTask.get("currentAssigneeName");
+                                // 如果没有名称，使用ID
+                                if (currentAssigneeName == null || currentAssigneeName.isEmpty()) {
+                                    currentAssigneeName = currentAssignee;
+                                }
+                            } else {
+                                // 任务列表为空，说明流程没有活动任务（可能已完成或在过渡状态）
+                                log.debug("No active tasks found for process instance {}, clearing current assignee", instance.getId());
+                                currentAssigneeName = null;
+                                currentAssignee = null;
+                            }
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Failed to get current assignee name for process {}: {}", instance.getId(), e.getMessage());
+                currentAssigneeName = currentAssignee; // 回退到使用ID
+            }
+        }
+        
+        // 如果没有获取到名称，使用ID（如果有的话）
+        if (currentAssigneeName == null && currentAssignee != null) {
+            currentAssigneeName = currentAssignee;
+        }
+        
+        log.debug("=== toProcessInstanceInfo: final currentAssigneeName={}", currentAssigneeName);
+        
         return ProcessInstanceInfo.builder()
                 .id(instance.getId())
                 .processDefinitionId(instance.getProcessDefinitionId())
@@ -762,7 +861,7 @@ public class ProcessComponent {
                 .startUserId(instance.getStartUserId())
                 .startUserName(instance.getStartUserName())
                 .currentNode(instance.getCurrentNode())
-                .currentAssignee(instance.getCurrentAssignee())
+                .currentAssignee(currentAssigneeName)  // 使用解析后的名称，如果没有活动任务则为null
                 .candidateUsers(instance.getCandidateUsers())
                 .variables(instance.getVariables())
                 .build();
@@ -801,17 +900,26 @@ public class ProcessComponent {
                                     currentAssigneeId = (String) currentTask.get("assignmentTarget");
                                 }
                                 
+                                // 获取当前处理人名称
+                                String currentAssigneeName = (String) currentTask.get("currentAssigneeName");
+                                if (currentAssigneeName == null || currentAssigneeName.isEmpty()) {
+                                    // 如果没有名称，尝试解析用户ID为名称
+                                    if (currentAssigneeId != null && !currentAssigneeId.isEmpty()) {
+                                        currentAssigneeName = resolveUserDisplayName(currentAssigneeId);
+                                    }
+                                }
+                                
                                 // 更新返回的信息
                                 info.setCurrentNode(currentNodeName);
-                                info.setCurrentAssignee(currentAssigneeId);
+                                info.setCurrentAssignee(currentAssigneeName != null ? currentAssigneeName : currentAssigneeId);
                                 
-                                // 同时更新本地数据库
+                                // 同时更新本地数据库（保存用户名称而不是ID）
                                 instance.setCurrentNode(currentNodeName);
-                                instance.setCurrentAssignee(currentAssigneeId);
+                                instance.setCurrentAssignee(currentAssigneeName != null ? currentAssigneeName : currentAssigneeId);
                                 processInstanceRepository.save(instance);
                                 
                                 log.info("Updated process instance {} with currentNode={}, currentAssignee={}", 
-                                        processId, currentNodeName, currentAssigneeId);
+                                        processId, currentNodeName, currentAssigneeName);
                             }
                         }
                     }
@@ -1040,6 +1148,82 @@ public class ProcessComponent {
             Map<String, Object> errorResult = new HashMap<>();
             errorResult.put("error", e.getMessage());
             return errorResult;
+        }
+    }
+    
+    /**
+     * 获取流程历史记录
+     * 调用 workflow-engine 的流程历史接口，返回已解析用户名称的历史记录
+     */
+    public List<Map<String, Object>> getProcessHistory(String processId) {
+        log.info("=== ProcessComponent.getProcessHistory called for: {}", processId);
+        
+        if (!workflowEngineClient.isAvailable()) {
+            log.warn("=== Workflow engine not available, returning empty history");
+            return Collections.emptyList();
+        }
+        
+        log.info("=== Workflow engine is available, calling getProcessInstanceHistory");
+        
+        try {
+            // 直接调用 workflow-engine 的流程实例历史接口（通过 processInstanceId）
+            // 该接口会查询 Flowable 的历史活动记录并解析用户名称
+            Optional<List<Map<String, Object>>> historyResult = workflowEngineClient.getProcessInstanceHistory(processId);
+            
+            if (historyResult.isPresent()) {
+                List<Map<String, Object>> history = historyResult.get();
+                log.info("=== Got {} history records for process: {}", history.size(), processId);
+                return history;
+            } else {
+                log.warn("=== Failed to get process history from workflow engine for process: {}", processId);
+                return Collections.emptyList();
+            }
+            
+        } catch (Exception e) {
+            log.error("=== Failed to get process history for {}: {}", processId, e.getMessage(), e);
+            return Collections.emptyList();
+        }
+    }
+    
+    /**
+     * 标记流程为已完成
+     * 由 workflow-engine 的流程完成监听器调用
+     */
+    public void markProcessAsCompleted(String processId, String lastActivityName) {
+        log.info("=== ProcessComponent.markProcessAsCompleted called for: {} with lastActivity: {}", 
+                processId, lastActivityName);
+        
+        try {
+            Optional<ProcessInstance> optInstance = processInstanceRepository.findById(processId);
+            if (optInstance.isEmpty()) {
+                log.warn("Process instance not found in local database: {}", processId);
+                return;
+            }
+            
+            ProcessInstance instance = optInstance.get();
+            
+            // 只更新状态为 RUNNING 的流程
+            if ("RUNNING".equals(instance.getStatus())) {
+                instance.setStatus("COMPLETED");
+                instance.setEndTime(LocalDateTime.now());
+                // 保存最后一个节点名称，而不是清空
+                if (lastActivityName != null && !lastActivityName.isEmpty()) {
+                    instance.setCurrentNode(lastActivityName);
+                } else {
+                    instance.setCurrentNode("已完成");
+                }
+                // 清空当前处理人
+                instance.setCurrentAssignee(null);
+                processInstanceRepository.save(instance);
+                log.info("Process instance {} marked as COMPLETED with lastNode: {}", 
+                        processId, instance.getCurrentNode());
+            } else {
+                log.info("Process instance {} already has status: {}, skipping update", 
+                        processId, instance.getStatus());
+            }
+            
+        } catch (Exception e) {
+            log.error("Failed to mark process as completed for {}: {}", processId, e.getMessage(), e);
         }
     }
 }

@@ -133,5 +133,10 @@ export const processApi = {
   // 获取功能单元完整内容（BPMN、表单等）
   getFunctionUnitContent(functionUnitId: string) {
     return request.get<FunctionUnitContent>(`/processes/function-units/${functionUnitId}/content`)
+  },
+  
+  // 获取流程历史记录
+  getProcessHistory(processId: string) {
+    return request.get(`/processes/${processId}/history`)
   }
 }

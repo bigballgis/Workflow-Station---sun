@@ -11,6 +11,7 @@
     <!-- Content Area -->
     <div class="card-content">
       <h3 class="card-title">{{ item.name }}</h3>
+      <p class="card-description-preview" v-if="item.description">{{ item.description }}</p>
       <div class="card-tags" v-if="tags.length > 0">
         <el-tag 
           v-for="tag in displayTags" 
@@ -33,19 +34,19 @@
       <div class="card-actions" @click.stop>
         <el-button v-if="permissions.canEdit()" size="small" type="primary" @click="$emit('edit', item)">
           <el-icon><Edit /></el-icon>
-          编辑
+          {{ t('common.edit') }}
         </el-button>
         <el-button v-if="permissions.canPublish()" size="small" type="success" @click="$emit('publish', item)">
           <el-icon><Upload /></el-icon>
-          发布
+          {{ t('functionUnit.publish') }}
         </el-button>
         <el-button v-if="permissions.canClone()" size="small" type="warning" @click="$emit('clone', item)">
           <el-icon><CopyDocument /></el-icon>
-          克隆
+          {{ t('functionUnit.clone') }}
         </el-button>
         <el-button v-if="permissions.canDelete()" size="small" type="danger" @click="$emit('delete', item)">
           <el-icon><Delete /></el-icon>
-          删除
+          {{ t('common.delete') }}
         </el-button>
       </div>
     </div>
@@ -54,11 +55,13 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Edit, Upload, CopyDocument, Delete } from '@element-plus/icons-vue'
 import IconPreview from '@/components/icon/IconPreview.vue'
 import type { FunctionUnitResponse } from '@/api/functionUnit'
 import { permissions } from '@/utils/permission'
 
+const { t } = useI18n()
 const MAX_DISPLAY_TAGS = 3
 
 const props = defineProps<{
@@ -88,9 +91,9 @@ const statusType = computed(() => {
 
 const statusLabel = computed(() => {
   const map: Record<string, string> = { 
-    DRAFT: '草稿', 
-    PUBLISHED: '已发布', 
-    ARCHIVED: '已归档' 
+    DRAFT: t('functionUnit.draft'), 
+    PUBLISHED: t('functionUnit.published'), 
+    ARCHIVED: t('functionUnit.archived') 
   }
   return map[props.item.status] || props.item.status
 })
@@ -151,10 +154,13 @@ function handleClick() {
 .card-content {
   padding: 16px;
   text-align: center;
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
 }
 
 .card-title {
-  margin: 0 0 12px 0;
+  margin: 0 0 8px 0;
   font-size: 16px;
   font-weight: 600;
   color: #303133;
@@ -163,11 +169,25 @@ function handleClick() {
   white-space: nowrap;
 }
 
+.card-description-preview {
+  margin: 0 0 12px 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #606266;
+  text-align: center;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  flex: 1;
+}
+
 .card-tags {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
   justify-content: center;
+  margin-top: auto;
   
   .el-tag {
     font-size: 11px;
