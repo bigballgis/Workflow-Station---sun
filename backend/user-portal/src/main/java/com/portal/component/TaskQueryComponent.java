@@ -2,6 +2,7 @@ package com.portal.component;
 
 import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.PageResponse;
+import com.portal.dto.TaskActionInfo;
 import com.portal.dto.TaskInfo;
 import com.portal.dto.TaskQueryRequest;
 import com.portal.dto.TaskStatistics;
@@ -13,6 +14,7 @@ import com.portal.enums.DelegationStatus;
 import com.portal.repository.DelegationRuleRepository;
 import com.portal.repository.ProcessHistoryRepository;
 import com.portal.repository.ProcessInstanceRepository;
+import com.portal.service.TaskActionService;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -41,6 +43,7 @@ public class TaskQueryComponent {
     private final ProcessInstanceRepository processInstanceRepository;
     private final ProcessHistoryRepository processHistoryRepository;
     private final WorkflowEngineClient workflowEngineClient;
+    private final TaskActionService taskActionService;
 
     @PostConstruct
     public void init() {
@@ -313,19 +316,40 @@ public class TaskQueryComponent {
      * 获取任务详情
      */
     public Optional<TaskInfo> getTaskById(String taskId) {
+        log.info("=== getTaskById called with taskId: {}", taskId);
+        
         // 检查 Flowable 引擎是否可用
         if (!workflowEngineClient.isAvailable()) {
             throw new IllegalStateException("Flowable 引擎不可用，请检查 workflow-engine-core 服务是否启动");
         }
         
+        log.info("=== Workflow engine is available, calling getTaskById");
+        
         try {
             Optional<Map<String, Object>> result = workflowEngineClient.getTaskById(taskId);
+            log.info("=== Got result from workflow engine: {}", result.isPresent());
+            
             if (result.isPresent()) {
                 Map<String, Object> responseBody = result.get();
                 @SuppressWarnings("unchecked")
                 Map<String, Object> data = (Map<String, Object>) responseBody.get("data");
                 if (data != null) {
-                    return Optional.of(convertMapToTaskInfo(data));
+                    log.info("=== Converting task data to TaskInfo");
+                    TaskInfo taskInfo = convertMapToTaskInfo(data);
+                    
+                    // 获取任务的可用操作
+                    log.info("=== About to call TaskActionService for task: {}", taskId);
+                    log.info("=== TaskActionService instance: {}", taskActionService);
+                    try {
+                        List<TaskActionInfo> actions = taskActionService.getTaskActions(taskId);
+                        log.info("=== Got {} actions from TaskActionService", actions != null ? actions.size() : 0);
+                        taskInfo.setActions(actions);
+                    } catch (Exception e) {
+                        log.warn("Failed to get actions for task {}: {}", taskId, e.getMessage(), e);
+                        // 继续返回任务信息，即使获取操作失败
+                    }
+                    
+                    return Optional.of(taskInfo);
                 }
             }
         } catch (Exception e) {

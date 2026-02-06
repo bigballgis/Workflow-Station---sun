@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+UPDATE sys_function_units SET bpmn_xml = '<?xml version="1.0" encoding="UTF-8"?>
 <bpmn:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
   xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
@@ -41,7 +41,7 @@
           <custom:property name="formId" value="9" />
           <custom:property name="formName" value="Loan Approval Form" />
           <custom:property name="formReadOnly" value="false" />
-          <custom:property name="actionIds" value="[20,16,17,18]" />
+          <custom:property name="actionIds" value="[action-dl-verify-docs,action-dl-approve-loan,action-dl-reject-loan,action-dl-request-info]" />
           <custom:property name="actionNames" value="[&quot;Verify Documents&quot;,&quot;Approve Loan&quot;,&quot;Reject Loan&quot;,&quot;Request Additional Info&quot;]" />
         </custom:properties>
       </bpmn:extensionElements>
@@ -66,8 +66,8 @@
           <custom:property name="formId" value="9" />
           <custom:property name="formName" value="Loan Approval Form" />
           <custom:property name="formReadOnly" value="false" />
-          <custom:property name="actionIds" value="[13,16,17,18]" />
-          <custom:property name="actionNames" value="[&quot;Perform Credit Check&quot;,&quot;Approve Loan&quot;,&quot;Reject Loan&quot;,&quot;Request Additional Info&quot;]" />
+          <custom:property name="actionIds" value="[13,14,15,16,18]" />
+          <custom:property name="actionNames" value="[&quot;Perform Credit Check&quot;,&quot;View Credit Report&quot;,&quot;Calculate EMI&quot;,&quot;Approve Loan&quot;,&quot;Request Additional Info&quot;]" />
         </custom:properties>
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_DocsApproved</bpmn:incoming>
@@ -83,8 +83,8 @@
           <custom:property name="formId" value="9" />
           <custom:property name="formName" value="Loan Approval Form" />
           <custom:property name="formReadOnly" value="false" />
-          <custom:property name="actionIds" value="[19,24,25]" />
-          <custom:property name="actionNames" value="[&quot;Assess Risk&quot;,&quot;Mark as Low Risk&quot;,&quot;Mark as High Risk&quot;]" />
+          <custom:property name="actionIds" value="[19,14,16,17,18]" />
+          <custom:property name="actionNames" value="[&quot;Assess Risk&quot;,&quot;View Credit Report&quot;,&quot;Approve Loan&quot;,&quot;Reject Loan&quot;,&quot;Request Additional Info&quot;]" />
         </custom:properties>
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_4</bpmn:incoming>
@@ -107,8 +107,8 @@
           <custom:property name="formId" value="9" />
           <custom:property name="formName" value="Loan Approval Form" />
           <custom:property name="formReadOnly" value="false" />
-          <custom:property name="actionIds" value="[26,27,28]" />
-          <custom:property name="actionNames" value="[&quot;Approve&quot;,&quot;Reject&quot;,&quot;Request Revision&quot;]" />
+          <custom:property name="actionIds" value="[16,17,18,14]" />
+          <custom:property name="actionNames" value="[&quot;Approve Loan&quot;,&quot;Reject Loan&quot;,&quot;Request Additional Info&quot;,&quot;View Credit Report&quot;]" />
         </custom:properties>
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_LowRisk</bpmn:incoming>
@@ -131,8 +131,8 @@
           <custom:property name="formId" value="9" />
           <custom:property name="formName" value="Loan Approval Form" />
           <custom:property name="formReadOnly" value="false" />
-          <custom:property name="actionIds" value="[29,30,31]" />
-          <custom:property name="actionNames" value="[&quot;Final Approve&quot;,&quot;Final Reject&quot;,&quot;Escalate&quot;]" />
+          <custom:property name="actionIds" value="[16,17,18,14]" />
+          <custom:property name="actionNames" value="[&quot;Approve Loan&quot;,&quot;Reject Loan&quot;,&quot;Request Additional Info&quot;,&quot;View Credit Report&quot;]" />
         </custom:properties>
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_ManagerApproved</bpmn:incoming>
@@ -155,8 +155,8 @@
           <custom:property name="formId" value="10" />
           <custom:property name="formName" value="Loan Disbursement Form" />
           <custom:property name="formReadOnly" value="false" />
-          <custom:property name="actionIds" value="[32,33,34]" />
-          <custom:property name="actionNames" value="[&quot;Disburse Loan&quot;,&quot;Hold Disbursement&quot;,&quot;Verify Account&quot;]" />
+          <custom:property name="actionIds" value="[21,14]" />
+          <custom:property name="actionNames" value="[&quot;Process Disbursement&quot;,&quot;View Credit Report&quot;]" />
         </custom:properties>
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_SeniorApproved</bpmn:incoming>
@@ -350,3 +350,4 @@
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>
 </bpmn:definitions>
+' WHERE code = 'DIGITAL_LENDING';

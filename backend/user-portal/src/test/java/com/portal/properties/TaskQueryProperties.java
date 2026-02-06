@@ -47,6 +47,9 @@ class TaskQueryProperties {
     
     @Mock
     private WorkflowEngineClient workflowEngineClient;
+    
+    @Mock
+    private com.portal.service.TaskActionService taskActionService;
 
     private TaskQueryComponent taskQueryComponent;
     private Random random;
@@ -58,7 +61,8 @@ class TaskQueryProperties {
             delegationRuleRepository, 
             processInstanceRepository, 
             processHistoryRepository,
-            workflowEngineClient
+            workflowEngineClient,
+            taskActionService
         );
         random = new Random();
         

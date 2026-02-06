@@ -167,7 +167,7 @@ export interface TableBindingRequest {
 }
 
 export interface ActionDefinition {
-  id: number
+  id: string | number // Support both String IDs (new) and numeric IDs (legacy)
   actionName: string
   actionType: string
   description?: string

@@ -24,6 +24,8 @@ spring:
     locations: classpath:db/migration/user-portal
     baseline-on-migrate: true
     validate-on-migrate: false
+  liquibase:
+    enabled: false
   
   # Redis Configuration (if needed)
   data:

@@ -371,3 +371,35 @@ Internal use only - Part of the Workflow Platform project
 **Created**: 2026-02-05  
 **Version**: 1.0.0  
 **Status**: Production Ready
+
+
+## Recent Updates
+
+### 2026-02-06: Action ID Migration Complete
+
+Completed migration from numeric action IDs to String action IDs:
+
+**New Scripts**:
+- `13-add-submit-withdraw-actions.sql` - Adds Submit and Withdraw actions with String IDs to `sys_action_definitions`
+- `14-update-bpmn-submit-actions.ps1` - Updates BPMN XML in database with String action IDs
+
+**Changes**:
+- All 21 actions now use String IDs (e.g., `action-dl-submit-application`)
+- BPMN XML updated to use String IDs instead of numeric IDs
+- Bound nodes now display correctly in Developer Workstation
+
+**To apply these updates**:
+```powershell
+# Add new action definitions
+Get-Content 13-add-submit-withdraw-actions.sql | docker exec -i platform-postgres-dev psql -U platform_dev -d workflow_platform_dev
+
+# Update BPMN in database
+.\14-update-bpmn-submit-actions.ps1
+```
+
+**Verification**:
+1. Open Developer Workstation at http://localhost:3002
+2. Navigate to Digital Lending System → Action Design tab
+3. Verify all 21 actions show correct bound nodes
+
+See `BOUND_NODES_FIX_COMPLETE.md` for detailed information.

@@ -1060,8 +1060,100 @@ public class TaskManagerComponent {
             .initiatorId(initiatorId)
             .initiatorName(initiatorName)
             .variables(variables)
+            .actionIds(extractActionIds(task))
             .build();
     }
+    
+    /**
+     * 从任务的BPMN定义中提取actionIds
+     */
+    private List<String> extractActionIds(Task task) {
+        try {
+            // 获取BPMN模型
+            org.flowable.bpmn.model.BpmnModel bpmnModel = repositoryService.getBpmnModel(
+                task.getProcessDefinitionId()
+            );
+            
+            // 获取UserTask元素
+            org.flowable.bpmn.model.UserTask userTask = (org.flowable.bpmn.model.UserTask) bpmnModel.getFlowElement(
+                task.getTaskDefinitionKey()
+            );
+            
+            if (userTask == null) {
+                log.debug("UserTask not found in BPMN for task: {}", task.getId());
+                return null;
+            }
+            
+            // 从extensionElements中提取actionIds
+            Map<String, List<org.flowable.bpmn.model.ExtensionElement>> extensions = 
+                userTask.getExtensionElements();
+            
+            if (extensions == null || extensions.isEmpty()) {
+                return null;
+            }
+            
+            List<org.flowable.bpmn.model.ExtensionElement> properties = extensions.get("properties");
+            if (properties == null || properties.isEmpty()) {
+                return null;
+            }
+            
+            for (org.flowable.bpmn.model.ExtensionElement prop : properties) {
+                Map<String, List<org.flowable.bpmn.model.ExtensionElement>> childElements = 
+                    prop.getChildElements();
+                
+                if (childElements == null) {
+                    continue;
+                }
+                
+                List<org.flowable.bpmn.model.ExtensionElement> customProps = childElements.get("property");
+                if (customProps == null) {
+                    continue;
+                }
+                
+                for (org.flowable.bpmn.model.ExtensionElement customProp : customProps) {
+                    String name = customProp.getAttributeValue(null, "name");
+                    if ("actionIds".equals(name)) {
+                        String value = customProp.getAttributeValue(null, "value");
+                        return parseActionIds(value);
+                    }
+                }
+            }
+            
+            return null;
+            
+        } catch (Exception e) {
+            log.warn("Failed to extract actionIds for task {}: {}", task.getId(), e.getMessage());
+            return null;
+        }
+    }
+    
+    /**
+     * 解析actionIds字符串：将"[id1,id2]"转换为List<String>
+     */
+    private List<String> parseActionIds(String value) {
+        try {
+            if (value == null || value.isEmpty()) {
+                return null;
+            }
+            
+            // 移除括号和空格: "[id1,id2]" -> "id1,id2"
+            String cleaned = value.replaceAll("[\\[\\]\\s]", "");
+            
+            if (cleaned.isEmpty()) {
+                return null;
+            }
+            
+            return java.util.Arrays.stream(cleaned.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .collect(java.util.stream.Collectors.toList());
+                
+        } catch (Exception e) {
+            log.error("Error parsing actionIds: " + value, e);
+            return null;
+        }
+    }
+    
     // ==================== 私有辅助方法 ====================
     
     /**

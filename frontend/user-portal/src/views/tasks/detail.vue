@@ -134,21 +134,36 @@
             <el-button @click="$router.back()">{{ t('task.backToList') }}</el-button>
           </div>
           <div class="right-actions">
-            <el-button type="success" @click="handleApprove">
-              <el-icon><Check /></el-icon> {{ t('task.approve') }}
-            </el-button>
-            <el-button type="danger" @click="handleReject">
-              <el-icon><Close /></el-icon> {{ t('task.reject') }}
-            </el-button>
-            <el-button @click="handleDelegate">
-              <el-icon><User /></el-icon> {{ t('task.delegate') }}
-            </el-button>
-            <el-button @click="handleTransfer">
-              <el-icon><Switch /></el-icon> {{ t('task.transfer') }}
-            </el-button>
-            <el-button type="warning" @click="handleUrge">
-              <el-icon><Bell /></el-icon> {{ t('task.urge') }}
-            </el-button>
+            <!-- 动态渲染自定义操作按钮 -->
+            <template v-if="taskInfo.actions && taskInfo.actions.length > 0">
+              <el-button
+                v-for="action in taskInfo.actions"
+                :key="action.actionId"
+                :type="getButtonType(action.buttonColor)"
+                @click="handleCustomAction(action)"
+              >
+                <el-icon v-if="action.icon"><component :is="getIconComponent(action.icon)" /></el-icon>
+                {{ action.actionName }}
+              </el-button>
+            </template>
+            <!-- 默认操作按钮（如果没有自定义按钮） -->
+            <template v-else>
+              <el-button type="success" @click="handleApprove">
+                <el-icon><Check /></el-icon> {{ t('task.approve') }}
+              </el-button>
+              <el-button type="danger" @click="handleReject">
+                <el-icon><Close /></el-icon> {{ t('task.reject') }}
+              </el-button>
+              <el-button @click="handleDelegate">
+                <el-icon><User /></el-icon> {{ t('task.delegate') }}
+              </el-button>
+              <el-button @click="handleTransfer">
+                <el-icon><Switch /></el-icon> {{ t('task.transfer') }}
+              </el-button>
+              <el-button type="warning" @click="handleUrge">
+                <el-icon><Bell /></el-icon> {{ t('task.urge') }}
+              </el-button>
+            </template>
           </div>
         </div>
       </div>
@@ -195,11 +210,26 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, markRaw } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, InfoFilled, Share, Document, Clock, Bell, Check, Close, User, Switch } from '@element-plus/icons-vue'
+import { 
+  ArrowLeft, 
+  InfoFilled, 
+  Share, 
+  Document, 
+  Clock, 
+  Bell, 
+  Check, 
+  Close, 
+  User, 
+  Switch,
+  CircleCheck,
+  CircleClose,
+  Files,
+  Warning
+} from '@element-plus/icons-vue'
 import { 
   getTaskDetail, 
   getTaskHistory, 
@@ -208,7 +238,8 @@ import {
   transferTask, 
   urgeTask,
   TaskInfo, 
-  TaskHistoryInfo 
+  TaskHistoryInfo,
+  TaskActionInfo
 } from '@/api/task'
 import { processApi } from '@/api/process'
 import ProcessDiagram, { type ProcessNode, type ProcessFlow } from '@/components/ProcessDiagram.vue'
@@ -750,6 +781,75 @@ const submitAction = async () => {
   } finally {
     submitting.value = false
   }
+}
+
+// 处理自定义操作按钮
+const handleCustomAction = (action: TaskActionInfo) => {
+  console.log('Custom action clicked:', action)
+  
+  // 根据 actionType 处理不同类型的操作
+  switch (action.actionType) {
+    case 'APPROVE':
+      currentApproveAction.value = 'APPROVE'
+      approveDialogTitle.value = action.actionName
+      approveForm.comment = ''
+      approveDialogVisible.value = true
+      break
+    
+    case 'REJECT':
+      currentApproveAction.value = 'REJECT'
+      approveDialogTitle.value = action.actionName
+      approveForm.comment = ''
+      approveDialogVisible.value = true
+      break
+    
+    case 'FORM_POPUP':
+      // 解析 configJson 获取 formId
+      try {
+        const config = action.configJson ? JSON.parse(action.configJson) : {}
+        console.log('Form popup config:', config)
+        // TODO: 实现表单弹窗逻辑
+        ElMessage.info(`打开表单: ${config.formId || 'unknown'}`)
+      } catch (error) {
+        console.error('Failed to parse configJson:', error)
+        ElMessage.error('配置解析失败')
+      }
+      break
+    
+    default:
+      ElMessage.warning(`未知的操作类型: ${action.actionType}`)
+  }
+}
+
+// 获取按钮类型（Element Plus 的 type）
+const getButtonType = (buttonColor?: string): 'primary' | 'success' | 'warning' | 'danger' | 'info' | '' => {
+  const colorMap: Record<string, 'primary' | 'success' | 'warning' | 'danger' | 'info'> = {
+    'primary': 'primary',
+    'success': 'success',
+    'warning': 'warning',
+    'danger': 'danger',
+    'info': 'info'
+  }
+  return colorMap[buttonColor || ''] || 'primary'
+}
+
+// 获取图标组件
+const getIconComponent = (iconName?: string) => {
+  if (!iconName) return null
+  
+  const iconMap: Record<string, any> = {
+    'check': markRaw(Check),
+    'check-circle': markRaw(CircleCheck),
+    'times-circle': markRaw(CircleClose),
+    'close': markRaw(Close),
+    'file-alt': markRaw(Files),
+    'files': markRaw(Files),
+    'warning': markRaw(Warning),
+    'bell': markRaw(Bell),
+    'user': markRaw(User)
+  }
+  
+  return iconMap[iconName] || markRaw(Check)
 }
 
 onMounted(() => {
