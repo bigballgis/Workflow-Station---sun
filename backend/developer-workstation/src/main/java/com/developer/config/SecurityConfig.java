@@ -47,8 +47,8 @@ public class SecurityConfig {
                 .requestMatchers("/auth/**").permitAll()
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
                 .requestMatchers("/actuator/**").permitAll()
-                // 开发环境：允许所有API访问
-                .requestMatchers("/api/v1/**").permitAll()
+                // 所有其他API需要认证，具体权限由@PreAuthorize控制
+                .requestMatchers("/api/v1/**").authenticated()
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtAuthenticationFilter, 
