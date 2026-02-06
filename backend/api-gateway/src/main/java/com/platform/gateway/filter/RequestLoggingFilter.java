@@ -46,6 +46,11 @@ public class RequestLoggingFilter implements GatewayFilter, Ordered {
         
         // Store start time for duration calculation
         exchange.getAttributes().put(REQUEST_START_TIME, startTime);
+
+        exchange.getResponse().beforeCommit(() -> {
+            exchange.getResponse().getHeaders().set(TRACE_ID_HEADER, traceId);
+            return Mono.empty();
+        });
         
         // Log request
         logRequest(modifiedRequest, traceId);
@@ -100,8 +105,5 @@ public class RequestLoggingFilter implements GatewayFilter, Ordered {
                 path,
                 statusCode, 
                 duration.toMillis());
-        
-        // Add trace ID to response headers
-        response.getHeaders().add(TRACE_ID_HEADER, traceId);
     }
 }

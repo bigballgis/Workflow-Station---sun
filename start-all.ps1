@@ -448,6 +448,10 @@ if ($FrontendOnly -or (-not $BackendOnly)) {
     docker run -d `
         --name platform-frontend-admin `
         --network $networkName `
+        -e API_GATEWAY_URL=platform-api-gateway `
+        -e API_GATEWAY_PORT=8090 `
+        -e ADMIN_CENTER_URL=platform-admin-center `
+        -e ADMIN_CENTER_PORT=8092 `
         -p 3000:80 `
         --restart unless-stopped `
         frontend-admin:latest
@@ -458,6 +462,12 @@ if ($FrontendOnly -or (-not $BackendOnly)) {
     docker run -d `
         --name platform-frontend-portal `
         --network $networkName `
+        -e API_GATEWAY_URL=platform-api-gateway `
+        -e API_GATEWAY_PORT=8090 `
+        -e USER_PORTAL_URL=platform-user-portal `
+        -e USER_PORTAL_PORT=8093 `
+        -e ADMIN_CENTER_URL=platform-admin-center `
+        -e ADMIN_CENTER_PORT=8092 `
         -p 3001:80 `
         --restart unless-stopped `
         frontend-portal:latest
@@ -468,6 +478,10 @@ if ($FrontendOnly -or (-not $BackendOnly)) {
     docker run -d `
         --name platform-frontend-developer `
         --network $networkName `
+        -e API_GATEWAY_URL=platform-api-gateway `
+        -e API_GATEWAY_PORT=8090 `
+        -e DEVELOPER_WORKSTATION_URL=platform-developer-workstation `
+        -e DEVELOPER_WORKSTATION_PORT=8094 `
         -p 3002:80 `
         --restart unless-stopped `
         frontend-developer:latest

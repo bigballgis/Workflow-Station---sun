@@ -412,17 +412,28 @@ public class AuthServiceImpl implements AuthService {
     }
     
     private List<String> getUserRoleCodes(String userId) {
+        List<String> roleCodes = List.of();
         try {
             // Prefer sys_user_roles (admin-center schema); fallback not used if DB has both
-            return jdbcTemplate.queryForList(
+            roleCodes = jdbcTemplate.queryForList(
                     "SELECT r.code FROM sys_user_roles ur " +
-                    "JOIN sys_roles r ON ur.role_id = r.id " +
-                    "WHERE ur.user_id = ? AND r.status = 'ACTIVE'",
+                        "JOIN sys_roles r ON ur.role_id = r.id " +
+                        "WHERE ur.user_id = ? AND r.status = 'ACTIVE'",
                     String.class,
                     userId
             );
         } catch (Exception e) {
             log.warn("Failed to get role codes for user {} (sys_user_roles): {}", userId, e.getMessage());
+        }
+
+        if(roleCodes != null && !roleCodes.isEmpty()){
+            return roleCodes.stream().distinct().toList();
+        }
+
+        try {
+            return userRoleService.getEffectiveRoleCodesForUser(userId).stream().distinct().toList();
+        } catch (Exception e) {
+            log.warn("Failed to get role codes for user {} (userRoleService): {}", userId, e.getMessage());
             return List.of();
         }
     }
