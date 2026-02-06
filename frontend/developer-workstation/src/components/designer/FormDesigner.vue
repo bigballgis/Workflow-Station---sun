@@ -75,11 +75,11 @@
     <div class="form-editor-view" v-else>
       <div class="editor-header">
         <el-button @click="handleBackToList">
-          <el-icon><ArrowLeft /></el-icon> 返回列表
+          <el-icon><ArrowLeft /></el-icon> {{ t('form.backToList') }}
         </el-button>
         <span class="form-name">{{ selectedForm.formName }}</span>
         <el-tag v-if="selectedForm.boundTableId" type="success" size="small" class="bound-table-tag">
-          绑定表: {{ getTableName(selectedForm.boundTableId) }}
+          {{ t('form.boundTableLabel') }}: {{ getTableName(selectedForm.boundTableId) }}
         </el-tag>
         <div class="bound-nodes-header" v-if="getFormBoundNodes(selectedForm.id).length > 0">
           <el-tag 
@@ -88,17 +88,17 @@
             :type="node.readOnly ? 'info' : 'success'" 
             size="small"
           >
-            {{ node.nodeName }}{{ node.readOnly ? '(只读)' : '' }}
+            {{ node.nodeName }}{{ node.readOnly ? `(${t('form.readOnly')})` : '' }}
           </el-tag>
         </div>
         <div class="header-actions">
           <el-button @click="handleImportFieldsToDesigner" :disabled="!selectedForm.boundTableId">
-            <el-icon><Connection /></el-icon> 导入表字段
+            <el-icon><Connection /></el-icon> {{ t('form.importTableFields') }}
           </el-button>
-          <el-button @click="handleManageBindings(selectedForm)">管理绑定</el-button>
-          <el-button @click="handleBindNode(selectedForm)">绑定流程节点</el-button>
-          <el-button @click="handlePreview">预览</el-button>
-          <el-button type="primary" @click="handleSaveForm">保存</el-button>
+          <el-button @click="handleManageBindings(selectedForm)">{{ t('form.manageBindings') }}</el-button>
+          <el-button @click="handleBindNode(selectedForm)">{{ t('form.bindProcessNode') }}</el-button>
+          <el-button @click="handlePreview">{{ t('common.preview') }}</el-button>
+          <el-button type="primary" @click="handleSaveForm">{{ t('common.save') }}</el-button>
         </div>
       </div>
       
@@ -108,20 +108,20 @@
     </div>
 
     <!-- 创建表单对话框 -->
-    <el-dialog v-model="showCreateDialog" title="创建表单" width="500px">
-      <el-form :model="createForm" label-width="80px">
-        <el-form-item label="表单名" required>
-          <el-input v-model="createForm.formName" placeholder="请输入表单名称" />
+    <el-dialog v-model="showCreateDialog" :title="t('form.createFormTitle')" width="500px">
+      <el-form :model="createForm" label-width="100px">
+        <el-form-item :label="t('form.formNameLabel')" required>
+          <el-input v-model="createForm.formName" :placeholder="t('form.enterFormName')" />
         </el-form-item>
-        <el-form-item label="表单类型">
+        <el-form-item :label="t('form.formTypeLabel')">
           <el-select v-model="createForm.formType" style="width: 100%">
-            <el-option label="主表单" value="MAIN" />
-            <el-option label="子表单" value="SUB" />
-            <el-option label="弹出表单" value="POPUP" />
+            <el-option :label="t('form.mainForm')" value="MAIN" />
+            <el-option :label="t('form.subForm')" value="SUB" />
+            <el-option :label="t('form.popupForm')" value="POPUP" />
           </el-select>
         </el-form-item>
-        <el-form-item label="绑定表">
-          <el-select v-model="createForm.boundTableId" placeholder="选择要绑定的数据表" style="width: 100%" clearable>
+        <el-form-item :label="t('form.bindTableLabel')">
+          <el-select v-model="createForm.boundTableId" :placeholder="t('form.selectTableToBind')" style="width: 100%" clearable>
             <el-option 
               v-for="table in store.tables" 
               :key="table.id" 
@@ -129,33 +129,33 @@
               :value="table.id" 
             />
           </el-select>
-          <div class="form-item-tip">绑定表后，表单数据将与该表进行关联，支持数据的增删改查</div>
+          <div class="form-item-tip">{{ t('form.bindTableHint') }}</div>
         </el-form-item>
-        <el-form-item label="描述">
+        <el-form-item :label="t('form.descriptionLabel')">
           <el-input v-model="createForm.description" type="textarea" :rows="3" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showCreateDialog = false">取消</el-button>
-        <el-button type="primary" @click="handleCreateForm">确定</el-button>
+        <el-button @click="showCreateDialog = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="handleCreateForm">{{ t('common.confirm') }}</el-button>
       </template>
     </el-dialog>
 
     <!-- 预览对话框 -->
-    <el-dialog v-model="showPreviewDialog" title="表单预览" width="800px" destroy-on-close>
+    <el-dialog v-model="showPreviewDialog" :title="t('form.previewTitle')" width="800px" destroy-on-close>
       <div class="preview-container">
         <div class="form-preview-wrapper">
           <form-create v-if="previewRule.length" v-model="previewData" :rule="previewRule" :option="previewOption" />
-          <el-empty v-else description="暂无表单内容" />
+          <el-empty v-else :description="t('form.noFormContent')" />
         </div>
       </div>
     </el-dialog>
 
     <!-- 绑定节点对话框 -->
-    <el-dialog v-model="showBindDialog" title="绑定流程节点" width="650px" :key="bindDialogKey">
+    <el-dialog v-model="showBindDialog" :title="t('form.bindNodeTitle')" width="650px" :key="bindDialogKey">
       <div class="bind-dialog-content">
         <el-alert type="info" :closable="false" style="margin-bottom: 16px;">
-          选择要绑定此表单的流程节点。可以选择多个节点，并设置是否为只读模式。
+          {{ t('form.bindNodeHint') }}
         </el-alert>
         <div v-if="processNodes.length" class="node-list">
           <div v-for="node in processNodes" :key="`${node.id}-${bindDialogKey}`" class="node-item">
@@ -174,32 +174,32 @@
               :model-value="isNodeReadOnly(node.id)"
               @change="setNodeReadOnly(node.id, $event as boolean)"
             >
-              只读
+              {{ t('form.readOnly') }}
             </el-checkbox>
           </div>
         </div>
-        <el-empty v-else description="暂无可绑定的流程节点，请先设计流程" />
+        <el-empty v-else :description="t('form.noNodesAvailable')" />
       </div>
       <template #footer>
-        <el-button @click="showBindDialog = false">取消</el-button>
-        <el-button type="primary" @click="handleConfirmBind">确定</el-button>
+        <el-button @click="showBindDialog = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="handleConfirmBind">{{ t('common.confirm') }}</el-button>
       </template>
     </el-dialog>
 
     <!-- 从表导入字段对话框 -->
-    <el-dialog v-model="showImportFieldsDialog" title="从表导入字段" width="800px">
+    <el-dialog v-model="showImportFieldsDialog" :title="t('form.importFieldsTitle')" width="800px">
       <div class="import-fields-dialog">
         <el-alert type="info" :closable="false" style="margin-bottom: 16px;">
-          选择表和字段，将自动生成对应的表单控件。字段类型会自动映射为合适的表单组件。
+          {{ t('form.importFieldsHint') }}
           <span v-if="formBindings.length > 0" style="display: block; margin-top: 4px;">
-            当前表单已绑定 {{ formBindings.length }} 个表，可从绑定表中快速选择字段。
+            {{ t('form.importFieldsHintWithBindings', { count: formBindings.length }) }}
           </span>
         </el-alert>
         
-        <el-form label-width="80px" style="margin-bottom: 16px;">
-          <el-form-item label="选择表">
-            <el-select v-model="importTableId" placeholder="请选择表" style="width: 100%;" @change="handleTableChange">
-              <el-option-group v-if="formBindings.length > 0" label="已绑定的表">
+        <el-form label-width="100px" style="margin-bottom: 16px;">
+          <el-form-item :label="t('form.selectTable')">
+            <el-select v-model="importTableId" :placeholder="t('form.selectTable')" style="width: 100%;" @change="handleTableChange">
+              <el-option-group v-if="formBindings.length > 0" :label="t('form.boundTables')">
                 <el-option 
                   v-for="binding in formBindings" 
                   :key="binding.tableId" 
@@ -214,7 +214,7 @@
                   </div>
                 </el-option>
               </el-option-group>
-              <el-option-group label="所有表">
+              <el-option-group :label="t('form.allTables')">
                 <el-option 
                   v-for="table in store.tables" 
                   :key="table.id" 
@@ -233,9 +233,9 @@
               :indeterminate="isFieldsIndeterminate"
               @change="(val: any) => handleSelectAllFields(!!val)"
             >
-              全选
+              {{ t('form.selectAll') }}
             </el-checkbox>
-            <span class="field-count">已选 {{ selectedImportFields.length }} / {{ availableFields.length }} 个字段</span>
+            <span class="field-count">{{ t('form.selectedCount', { count: selectedImportFields.length, total: availableFields.length }) }}</span>
             <el-tag v-if="getImportTableBinding()" size="small" :type="bindingTypeTag(getImportTableBinding()!.bindingType)" style="margin-left: 8px;">
               {{ bindingTypeLabel(getImportTableBinding()!.bindingType) }}
             </el-tag>
@@ -250,41 +250,41 @@
                 />
               </template>
             </el-table-column>
-            <el-table-column prop="fieldName" label="字段名" width="150" />
-            <el-table-column prop="dataType" label="数据类型" width="100" />
-            <el-table-column label="表单组件" width="120">
+            <el-table-column prop="fieldName" :label="t('form.fieldName')" width="150" />
+            <el-table-column prop="dataType" :label="t('form.dataType')" width="100" />
+            <el-table-column :label="t('form.formComponent')" width="120">
               <template #default="{ row }">
                 <el-tag size="small">{{ getFormComponentType(row.dataType) }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="来源表" width="120" v-if="formBindings.length > 0">
+            <el-table-column :label="t('form.sourceTable')" width="120" v-if="formBindings.length > 0">
               <template #default>
                 <span class="source-table">{{ getTableName(importTableId!) }}</span>
               </template>
             </el-table-column>
-            <el-table-column prop="description" label="描述" show-overflow-tooltip />
-            <el-table-column prop="nullable" label="必填" width="60">
+            <el-table-column prop="description" :label="t('table.description')" show-overflow-tooltip />
+            <el-table-column prop="nullable" :label="t('form.required')" width="60">
               <template #default="{ row }">
                 <el-tag :type="row.nullable ? 'info' : 'danger'" size="small">
-                  {{ row.nullable ? '否' : '是' }}
+                  {{ row.nullable ? t('form.no') : t('form.yes') }}
                 </el-tag>
               </template>
             </el-table-column>
           </el-table>
         </div>
         
-        <el-empty v-else description="请先选择一个表" />
+        <el-empty v-else :description="t('form.selectTableFirst')" />
       </div>
       <template #footer>
-        <el-button @click="showImportFieldsDialog = false">取消</el-button>
+        <el-button @click="showImportFieldsDialog = false">{{ t('common.cancel') }}</el-button>
         <el-button type="primary" @click="handleConfirmImportFields" :disabled="selectedImportFields.length === 0">
-          导入 ({{ selectedImportFields.length }})
+          {{ t('form.importButton', { count: selectedImportFields.length }) }}
         </el-button>
       </template>
     </el-dialog>
 
     <!-- 管理表绑定对话框 -->
-    <el-dialog v-model="showBindingManagerDialog" title="管理表绑定" width="700px" destroy-on-close>
+    <el-dialog v-model="showBindingManagerDialog" :title="t('form.manageBindingsTitle')" width="700px" destroy-on-close>
       <TableBindingManager 
         v-if="bindingManagerForm"
         ref="bindingManagerRef"
@@ -294,7 +294,7 @@
         @update="handleBindingUpdate"
       />
       <template #footer>
-        <el-button @click="showBindingManagerDialog = false">关闭</el-button>
+        <el-button @click="showBindingManagerDialog = false">{{ t('form.closeButton') }}</el-button>
       </template>
     </el-dialog>
   </div>
@@ -373,7 +373,8 @@ const bindDialogKey = ref(0)
 const designerConfig = {
   showDevice: true,
   showSave: false, // 使用自定义保存按钮
-  fieldReadonly: false
+  fieldReadonly: false,
+  locale: 'en' // 使用英文语言
 }
 
 // 预览配置
@@ -462,16 +463,16 @@ function handleBindingUpdate() {
  */
 function getFormComponentType(dataType: string): string {
   const typeMap: Record<string, string> = {
-    'VARCHAR': '输入框',
-    'TEXT': '文本域',
-    'INTEGER': '数字输入',
-    'BIGINT': '数字输入',
-    'DECIMAL': '数字输入',
-    'BOOLEAN': '开关',
-    'DATE': '日期选择',
-    'TIMESTAMP': '日期时间'
+    'VARCHAR': t('form.inputBox'),
+    'TEXT': t('form.textArea'),
+    'INTEGER': t('form.numberInput'),
+    'BIGINT': t('form.numberInput'),
+    'DECIMAL': t('form.numberInput'),
+    'BOOLEAN': t('form.switch'),
+    'DATE': t('form.datePicker'),
+    'TIMESTAMP': t('form.dateTimePicker')
   }
-  return typeMap[dataType] || '输入框'
+  return typeMap[dataType] || t('form.inputBox')
 }
 
 /**
@@ -570,7 +571,7 @@ function fieldToFormRule(field: FieldDefinition): any {
   if (!field.nullable) {
     baseRule.validate.push({
       required: true,
-      message: `${field.description || field.fieldName}不能为空`,
+      message: `${field.description || field.fieldName} ${t('form.required').toLowerCase()}`,
       trigger: 'blur'
     })
   }
@@ -582,7 +583,7 @@ function fieldToFormRule(field: FieldDefinition): any {
         ...baseRule,
         type: 'input',
         props: {
-          placeholder: `请输入${field.description || field.fieldName}`,
+          placeholder: `${t('common.inputPlaceholder')} ${field.description || field.fieldName}`,
           maxlength: field.length || 255,
           showWordLimit: true
         }
@@ -593,7 +594,7 @@ function fieldToFormRule(field: FieldDefinition): any {
         type: 'input',
         props: {
           type: 'textarea',
-          placeholder: `请输入${field.description || field.fieldName}`,
+          placeholder: `${t('common.inputPlaceholder')} ${field.description || field.fieldName}`,
           rows: 3
         }
       }
@@ -603,7 +604,7 @@ function fieldToFormRule(field: FieldDefinition): any {
         ...baseRule,
         type: 'inputNumber',
         props: {
-          placeholder: `请输入${field.description || field.fieldName}`,
+          placeholder: `${t('common.inputPlaceholder')} ${field.description || field.fieldName}`,
           precision: 0
         }
       }
@@ -612,7 +613,7 @@ function fieldToFormRule(field: FieldDefinition): any {
         ...baseRule,
         type: 'inputNumber',
         props: {
-          placeholder: `请输入${field.description || field.fieldName}`,
+          placeholder: `${t('common.inputPlaceholder')} ${field.description || field.fieldName}`,
           precision: field.scale || 2
         }
       }
@@ -628,7 +629,7 @@ function fieldToFormRule(field: FieldDefinition): any {
         type: 'datePicker',
         props: {
           type: 'date',
-          placeholder: `请选择${field.description || field.fieldName}`,
+          placeholder: `${t('common.inputPlaceholder')} ${field.description || field.fieldName}`,
           valueFormat: 'YYYY-MM-DD'
         }
       }
@@ -638,7 +639,7 @@ function fieldToFormRule(field: FieldDefinition): any {
         type: 'datePicker',
         props: {
           type: 'datetime',
-          placeholder: `请选择${field.description || field.fieldName}`,
+          placeholder: `${t('common.inputPlaceholder')} ${field.description || field.fieldName}`,
           valueFormat: 'YYYY-MM-DD HH:mm:ss'
         }
       }
@@ -647,7 +648,7 @@ function fieldToFormRule(field: FieldDefinition): any {
         ...baseRule,
         type: 'input',
         props: {
-          placeholder: `请输入${field.description || field.fieldName}`
+          placeholder: `${t('common.inputPlaceholder')} ${field.description || field.fieldName}`
         }
       }
   }
@@ -658,7 +659,7 @@ function fieldToFormRule(field: FieldDefinition): any {
  */
 function handleConfirmImportFields() {
   if (selectedImportFields.value.length === 0) {
-    ElMessage.warning('请至少选择一个字段')
+    ElMessage.warning(t('form.selectAtLeastOne'))
     return
   }
   
@@ -675,18 +676,18 @@ function handleConfirmImportFields() {
     const duplicateCount = rules.length - newRules.length
     
     if (duplicateCount > 0) {
-      ElMessage.warning(`跳过 ${duplicateCount} 个已存在的字段`)
+      ElMessage.warning(t('form.skipExisting', { count: duplicateCount }))
     }
     
     if (newRules.length > 0) {
       // 合并规则
       const mergedRules = [...currentRules, ...newRules]
       designerRef.value.setRule(mergedRules)
-      ElMessage.success(`成功导入 ${newRules.length} 个字段`)
+      ElMessage.success(t('form.importedSuccess', { count: newRules.length }))
     }
   } else {
     // 如果在列表视图，提示用户先选择或创建表单
-    ElMessage.info('请先选择或创建一个表单，然后在设计器中导入字段')
+    ElMessage.info(t('form.selectOrCreateForm'))
   }
   
   showImportFieldsDialog.value = false
@@ -912,7 +913,7 @@ function handleBackToList() {
 
 async function handleCreateForm() {
   if (!createForm.formName.trim()) {
-    ElMessage.warning('请输入表单名称')
+    ElMessage.warning(t('form.enterFormName'))
     return
   }
   try {
@@ -923,12 +924,12 @@ async function handleCreateForm() {
       boundTableId: createForm.boundTableId || undefined,
       configJson: { rule: [], options: {} }
     })
-    ElMessage.success('创建成功')
+    ElMessage.success(t('form.createSuccess'))
     showCreateDialog.value = false
     Object.assign(createForm, { formName: '', formType: 'MAIN', description: '', boundTableId: null })
     loadForms()
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.message || '创建失败')
+    ElMessage.error(e.response?.data?.message || t('form.createFailed'))
   }
 }
 
@@ -946,21 +947,21 @@ async function handleSaveForm() {
       description: selectedForm.value.description,
       configJson: { rule, options }
     })
-    ElMessage.success('保存成功')
+    ElMessage.success(t('form.saveSuccess'))
     loadForms()
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.message || '保存失败')
+    ElMessage.error(e.response?.data?.message || t('form.saveFailed'))
   }
 }
 
 async function handleDeleteForm(row: FormDefinition) {
-  await ElMessageBox.confirm('确定要删除该表单吗？', '提示', { type: 'warning' })
+  await ElMessageBox.confirm(t('form.deleteConfirm'), t('form.deleteTitle'), { type: 'warning' })
   try {
     await store.deleteForm(props.functionUnitId, row.id)
-    ElMessage.success('删除成功')
+    ElMessage.success(t('form.deleteSuccess'))
     loadForms()
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.message || '删除失败')
+    ElMessage.error(e.response?.data?.message || t('form.deleteFailed'))
   }
 }
 
@@ -1020,12 +1021,12 @@ async function handleConfirmBind() {
       console.log(`[FormDesigner] Node ${node.id} isSelected:`, isSelected)
     })
     
-    ElMessage.success('绑定保存成功')
+    ElMessage.success(t('form.bindSuccess'))
     // 不关闭对话框，让用户看到更新后的状态
     // showBindDialog.value = false
   } catch (e: any) {
     console.error('[FormDesigner] Save binding failed:', e)
-    ElMessage.error(e.response?.data?.message || '绑定失败')
+    ElMessage.error(e.response?.data?.message || t('form.bindFailed'))
   }
 }
 

@@ -489,7 +489,7 @@ public class WorkflowEngineClient {
     }
 
     /**
-     * 获取任务历史
+     * 获取任务历史（通过流程实例ID）
      */
     public Optional<List<Map<String, Object>>> getTaskHistory(String processInstanceId) {
         if (!isAvailable()) {
@@ -515,6 +515,65 @@ public class WorkflowEngineClient {
             }
         } catch (Exception e) {
             log.warn("Failed to get task history from workflow engine: {}", e.getMessage());
+        }
+        return Optional.empty();
+    }
+    
+    /**
+     * 获取流程实例流转历史（通过流程实例ID，包含用户名称解析）
+     */
+    public Optional<List<Map<String, Object>>> getProcessInstanceHistory(String processInstanceId) {
+        log.info("=== WorkflowEngineClient.getProcessInstanceHistory called for: {}", processInstanceId);
+        if (!isAvailable()) {
+            log.warn("=== Workflow engine not available");
+            return Optional.empty();
+        }
+        try {
+            String url = workflowEngineUrl + "/api/v1/tasks/process/" + processInstanceId + "/history";
+            log.info("=== Calling workflow engine URL: {}", url);
+            
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                url, HttpMethod.GET, null,
+                new ParameterizedTypeReference<Map<String, Object>>() {});
+            
+            log.info("=== Response status: {}", response.getStatusCode());
+            
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                Map<String, Object> body = response.getBody();
+                log.info("=== Response body keys: {}", body.keySet());
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> data = (List<Map<String, Object>>) body.get("data");
+                log.info("=== Extracted {} records from response", data != null ? data.size() : 0);
+                return Optional.ofNullable(data);
+            }
+        } catch (Exception e) {
+            log.error("=== Failed to get process instance history from workflow engine: {}", e.getMessage(), e);
+        }
+        return Optional.empty();
+    }
+    
+    /**
+     * 获取任务流转历史（通过任务ID，包含用户名称解析）
+     */
+    public Optional<List<Map<String, Object>>> getTaskHistoryByTaskId(String taskId) {
+        if (!isAvailable()) {
+            return Optional.empty();
+        }
+        try {
+            String url = workflowEngineUrl + "/api/v1/tasks/" + taskId + "/history";
+            
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                url, HttpMethod.GET, null,
+                new ParameterizedTypeReference<Map<String, Object>>() {});
+            
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                Map<String, Object> body = response.getBody();
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> data = (List<Map<String, Object>>) body.get("data");
+                return Optional.ofNullable(data);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to get task history by taskId from workflow engine: {}", e.getMessage());
         }
         return Optional.empty();
     }

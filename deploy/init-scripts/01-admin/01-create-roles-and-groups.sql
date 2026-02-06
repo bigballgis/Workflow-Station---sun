@@ -90,10 +90,10 @@ ON CONFLICT (code) DO UPDATE SET
     description = EXCLUDED.description,
     updated_at = CURRENT_TIMESTAMP;
 
--- 3. Managers Virtual Group
+-- 3. Managers Virtual Group (CUSTOM - not a system default)
 INSERT INTO sys_virtual_groups (id, code, name, type, description, status, created_at, updated_at)
 VALUES 
-('vg-managers', 'MANAGERS', 'Department Managers', 'SYSTEM', 'Virtual group for department managers', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+('vg-managers', 'MANAGERS', 'Department Managers', 'CUSTOM', 'Virtual group for department managers', 'ACTIVE', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
 ON CONFLICT (code) DO UPDATE SET 
     name = EXCLUDED.name,
     type = EXCLUDED.type,

@@ -57,6 +57,7 @@ public class TaskController {
     private final HistoryService historyService;
     private final ConfigurationManager configurationManager;
     private final SecurityIntegrationService securityIntegrationService;
+    private final com.workflow.client.AdminCenterClient adminCenterClient;
 
     /**
      * 查询任务列表
@@ -138,6 +139,20 @@ public class TaskController {
         TaskListResult.TaskInfo taskInfo = taskManagerComponent.getTaskInfo(taskId);
         String processInstanceId = taskInfo.getProcessInstanceId();
         
+        return getProcessInstanceHistory(processInstanceId);
+    }
+    
+    /**
+     * 获取流程实例流转历史（通过流程实例ID）
+     */
+    @GetMapping("/process/{processInstanceId}/history")
+    @Operation(summary = "获取流程实例流转历史", description = "获取流程实例的完整流转历史，包含用户名称解析")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getProcessInstanceHistory(
+            @Parameter(description = "流程实例ID", required = true)
+            @PathVariable String processInstanceId) {
+        
+        log.info("Getting process instance history for: {}", processInstanceId);
+        
         // 查询流程实例的活动历史
         List<HistoricActivityInstance> activities = historyService
             .createHistoricActivityInstanceQuery()
@@ -170,8 +185,39 @@ public class TaskController {
                 }
                 item.put("operationType", operationType);
                 
-                item.put("operatorId", activity.getAssignee());
-                item.put("operatorName", activity.getAssignee()); // TODO: 从用户服务获取用户名
+                String assignee = activity.getAssignee();
+                item.put("operatorId", assignee);
+                
+                // 解析用户显示名称
+                String operatorName = assignee;
+                if (assignee != null && !assignee.isEmpty()) {
+                    try {
+                        Map<String, Object> userInfo = adminCenterClient.getUserInfo(assignee);
+                        if (userInfo != null) {
+                            // 优先使用 fullName
+                            String fullName = (String) userInfo.get("fullName");
+                            if (fullName != null && !fullName.isEmpty()) {
+                                operatorName = fullName;
+                            } else {
+                                // 其次使用 displayName
+                                String displayName = (String) userInfo.get("displayName");
+                                if (displayName != null && !displayName.isEmpty()) {
+                                    operatorName = displayName;
+                                } else {
+                                    // 再次使用 username
+                                    String username = (String) userInfo.get("username");
+                                    if (username != null && !username.isEmpty()) {
+                                        operatorName = username;
+                                    }
+                                }
+                            }
+                        }
+                    } catch (Exception e) {
+                        log.warn("Failed to resolve user display name for {}: {}", assignee, e.getMessage());
+                    }
+                }
+                item.put("operatorName", operatorName);
+                
                 item.put("operationTime", activity.getEndTime() != null ? 
                     activity.getEndTime().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime().toString() :
                     activity.getStartTime().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime().toString());

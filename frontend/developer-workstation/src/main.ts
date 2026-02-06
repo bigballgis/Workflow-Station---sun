@@ -13,6 +13,9 @@ import router from './router'
 import i18n from './i18n'
 import './styles/index.scss'
 
+// 强制设置 HTML lang 属性为英文
+document.documentElement.lang = 'en'
+
 const app = createApp(App)
 
 // 注册Element Plus图标
@@ -24,7 +27,8 @@ app.use(createPinia())
 app.use(router)
 app.use(ElementPlus)
 app.use(i18n)
-app.use(FcDesigner)
+// 配置 form-create designer 使用英文
+app.use(FcDesigner, { locale: 'en' })
 app.use(FcDesigner.formCreate)
 
 // 覆盖 form-create 库注入的全局伪元素样式

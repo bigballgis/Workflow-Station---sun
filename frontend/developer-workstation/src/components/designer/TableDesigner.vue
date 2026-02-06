@@ -44,10 +44,10 @@
     <div class="table-editor" v-else>
       <div class="editor-header">
         <el-button @click="handleBackToList">
-          <el-icon><ArrowLeft /></el-icon> 返回列表
+          <el-icon><ArrowLeft /></el-icon> {{ t('table.backToList') }}
         </el-button>
         <span class="table-name">{{ selectedTable.tableName }}</span>
-        <el-button type="primary" @click="handleSaveTable">保存</el-button>
+        <el-button type="primary" @click="handleSaveTable">{{ t('table.save') }}</el-button>
       </div>
       
       <el-form :model="selectedTable" label-width="100px" style="max-width: 600px; margin-bottom: 20px;">
@@ -56,26 +56,26 @@
         </el-form-item>
         <el-form-item :label="t('table.tableType')">
           <el-select v-model="selectedTable.tableType">
-            <el-option label="主表" value="MAIN" />
-            <el-option label="子表" value="SUB" />
-            <el-option label="动作表" value="ACTION" />
-            <el-option label="关联表" value="RELATION" />
+            <el-option :label="t('table.mainTable')" value="MAIN" />
+            <el-option :label="t('table.subTable')" value="SUB" />
+            <el-option :label="t('table.actionTable')" value="ACTION" />
+            <el-option :label="t('table.relationTable')" value="RELATION" />
           </el-select>
         </el-form-item>
-        <el-form-item label="描述">
+        <el-form-item :label="t('table.description')">
           <el-input v-model="selectedTable.description" type="textarea" />
         </el-form-item>
       </el-form>
 
       <h4>{{ t('table.fields') }}</h4>
-      <el-button size="small" @click="handleAddField" style="margin-bottom: 10px;">添加字段</el-button>
+      <el-button size="small" @click="handleAddField" style="margin-bottom: 10px;">{{ t('table.addField') }}</el-button>
       <el-table :data="selectedTable.fieldDefinitions" size="small" border>
-        <el-table-column prop="fieldName" label="字段名" width="150">
+        <el-table-column prop="fieldName" :label="t('table.fieldName')" width="150">
           <template #default="{ row }">
             <el-input v-model="row.fieldName" size="small" />
           </template>
         </el-table-column>
-        <el-table-column prop="dataType" label="数据类型" width="120">
+        <el-table-column prop="dataType" :label="t('table.dataType')" width="120">
           <template #default="{ row }">
             <el-select v-model="row.dataType" size="small">
               <el-option label="VARCHAR" value="VARCHAR" />
@@ -89,29 +89,29 @@
             </el-select>
           </template>
         </el-table-column>
-        <el-table-column prop="length" label="长度" width="80">
+        <el-table-column prop="length" :label="t('table.length')" width="80">
           <template #default="{ row }">
             <el-input-number v-model="row.length" size="small" :min="0" controls-position="right" />
           </template>
         </el-table-column>
-        <el-table-column prop="nullable" label="可空" width="60">
+        <el-table-column prop="nullable" :label="t('table.nullable')" width="60">
           <template #default="{ row }">
             <el-checkbox v-model="row.nullable" />
           </template>
         </el-table-column>
-        <el-table-column prop="isPrimaryKey" label="主键" width="60">
+        <el-table-column prop="isPrimaryKey" :label="t('table.primaryKey')" width="60">
           <template #default="{ row }">
             <el-checkbox v-model="row.isPrimaryKey" />
           </template>
         </el-table-column>
-        <el-table-column prop="description" label="描述" min-width="150">
+        <el-table-column prop="description" :label="t('table.description')" min-width="150">
           <template #default="{ row }">
             <el-input v-model="row.description" size="small" />
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="80">
+        <el-table-column :label="t('table.operation')" width="80">
           <template #default="{ $index }">
-            <el-button link type="danger" @click="handleRemoveField($index)">删除</el-button>
+            <el-button link type="danger" @click="handleRemoveField($index)">{{ t('table.delete') }}</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -142,7 +142,7 @@
     </el-dialog>
 
     <!-- DDL Dialog -->
-    <el-dialog v-model="showDDLDialog" title="DDL 预览" width="700px">
+    <el-dialog v-model="showDDLDialog" :title="t('table.ddlPreview')" width="700px">
       <el-select v-model="ddlDialect" style="margin-bottom: 16px;">
         <el-option label="PostgreSQL" value="POSTGRESQL" />
         <el-option label="MySQL" value="MYSQL" />
@@ -150,37 +150,37 @@
       </el-select>
       <el-input v-model="ddlContent" type="textarea" :rows="15" readonly />
       <template #footer>
-        <el-button @click="handleCopyDDL">复制</el-button>
-        <el-button @click="showDDLDialog = false">关闭</el-button>
+        <el-button @click="handleCopyDDL">{{ t('table.copy') }}</el-button>
+        <el-button @click="showDDLDialog = false">{{ t('table.close') }}</el-button>
       </template>
     </el-dialog>
 
     <!-- Relation Config Dialog -->
-    <el-dialog v-model="showRelationDialog" title="数据模型关联配置" width="800px">
+    <el-dialog v-model="showRelationDialog" :title="t('table.relationConfig')" width="800px">
       <div class="relation-config">
         <el-alert type="info" :closable="false" style="margin-bottom: 16px;">
-          配置表之间的关联关系，支持一对一、一对多、多对多关联类型。
+          {{ t('table.relationConfigHint') }}
         </el-alert>
         
         <div class="relation-list">
           <div v-for="(rel, index) in relations" :key="index" class="relation-item">
-            <el-select v-model="rel.sourceTableId" placeholder="源表" style="width: 150px;">
+            <el-select v-model="rel.sourceTableId" :placeholder="t('table.sourceTable')" style="width: 150px;">
               <el-option v-for="t in store.tables" :key="t.id" :label="t.tableName" :value="t.id" />
             </el-select>
-            <el-select v-model="rel.sourceFieldName" placeholder="源字段" style="width: 120px;" 
+            <el-select v-model="rel.sourceFieldName" :placeholder="t('table.sourceField')" style="width: 120px;" 
                        :disabled="!rel.sourceTableId">
               <el-option v-for="f in getTableFields(rel.sourceTableId)" :key="f.fieldName" 
                          :label="f.fieldName" :value="f.fieldName" />
             </el-select>
-            <el-select v-model="rel.relationType" placeholder="关联类型" style="width: 120px;">
-              <el-option label="一对一" value="ONE_TO_ONE" />
-              <el-option label="一对多" value="ONE_TO_MANY" />
-              <el-option label="多对多" value="MANY_TO_MANY" />
+            <el-select v-model="rel.relationType" :placeholder="t('table.relationType')" style="width: 120px;">
+              <el-option :label="t('table.oneToOne')" value="ONE_TO_ONE" />
+              <el-option :label="t('table.oneToMany')" value="ONE_TO_MANY" />
+              <el-option :label="t('table.manyToMany')" value="MANY_TO_MANY" />
             </el-select>
-            <el-select v-model="rel.targetTableId" placeholder="目标表" style="width: 150px;">
+            <el-select v-model="rel.targetTableId" :placeholder="t('table.targetTable')" style="width: 150px;">
               <el-option v-for="t in store.tables" :key="t.id" :label="t.tableName" :value="t.id" />
             </el-select>
-            <el-select v-model="rel.targetFieldName" placeholder="目标字段" style="width: 120px;"
+            <el-select v-model="rel.targetFieldName" :placeholder="t('table.targetField')" style="width: 120px;"
                        :disabled="!rel.targetTableId">
               <el-option v-for="f in getTableFields(rel.targetTableId)" :key="f.fieldName" 
                          :label="f.fieldName" :value="f.fieldName" />
@@ -192,12 +192,12 @@
         </div>
         
         <el-button @click="addRelation" style="margin-top: 12px;">
-          <el-icon><Plus /></el-icon> 添加关联
+          <el-icon><Plus /></el-icon> {{ t('table.addRelation') }}
         </el-button>
       </div>
       <template #footer>
-        <el-button @click="showRelationDialog = false">取消</el-button>
-        <el-button type="primary" @click="handleSaveRelations">保存</el-button>
+        <el-button @click="showRelationDialog = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="handleSaveRelations">{{ t('table.save') }}</el-button>
       </template>
     </el-dialog>
   </div>
@@ -310,12 +310,12 @@ function handleBackToList() {
 async function handleCreateTable() {
   try {
     await store.createTable(props.functionUnitId, createForm)
-    ElMessage.success('创建成功')
+    ElMessage.success(t('functionUnit.createSuccess'))
     showCreateDialog.value = false
     Object.assign(createForm, { tableName: '', tableType: 'MAIN', description: '' })
     loadTables()
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.message || '创建失败')
+    ElMessage.error(e.response?.data?.message || t('common.error'))
   }
 }
 
@@ -372,26 +372,26 @@ async function handleSaveTable() {
       console.warn('[TableDesigner] Save result is null or undefined')
     }
     
-    ElMessage.success('保存成功')
+    ElMessage.success(t('common.success'))
     
-    // 延迟加载列表，确保事务已提交
+    // Delay loading list to ensure transaction is committed
     setTimeout(() => {
     loadTables()
     }, 500)
   } catch (e: any) {
     console.error('[TableDesigner] Save failed:', e)
-    ElMessage.error(e.response?.data?.message || '保存失败')
+    ElMessage.error(e.response?.data?.message || t('common.error'))
   }
 }
 
 async function handleDeleteTable(row: TableDefinition) {
-  await ElMessageBox.confirm('确定要删除该表吗？', '提示', { type: 'warning' })
+  await ElMessageBox.confirm(t('functionUnit.deleteConfirm'), t('functionUnit.confirmTitle'), { type: 'warning' })
   try {
     await store.deleteTable(props.functionUnitId, row.id)
-    ElMessage.success('删除成功')
+    ElMessage.success(t('functionUnit.deleteSuccess'))
     loadTables()
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.message || '删除失败')
+    ElMessage.error(e.response?.data?.message || t('common.error'))
   }
 }
 
@@ -419,7 +419,7 @@ async function handleGenerateDDL() {
     ddlContent.value = res?.data || ''
     showDDLDialog.value = true
   } catch {
-    ElMessage.info('DDL生成功能开发中')
+    ElMessage.info(t('common.loading'))
   }
 }
 
@@ -427,18 +427,18 @@ async function handleValidate() {
   try {
     const res = await functionUnitApi.validateTables?.(props.functionUnitId)
     if (res?.data?.valid) {
-      ElMessage.success('表结构验证通过')
+      ElMessage.success(t('common.success'))
     } else {
-      ElMessage.warning(`验证发现问题: ${res?.data?.errors?.join(', ') || '未知错误'}`)
+      ElMessage.warning(`${t('common.error')}: ${res?.data?.errors?.join(', ') || t('common.error')}`)
     }
   } catch {
-    ElMessage.info('验证功能开发中')
+    ElMessage.info(t('common.loading'))
   }
 }
 
 function handleCopyDDL() {
   navigator.clipboard.writeText(ddlContent.value)
-  ElMessage.success('已复制到剪贴板')
+  ElMessage.success(t('common.success'))
 }
 
 function addRelation() {
@@ -465,7 +465,7 @@ function handleSaveRelations() {
   localStorage.setItem(`table_relations_${props.functionUnitId}`, JSON.stringify(validRelations))
   relations.value = validRelations
   
-  ElMessage.success('关联配置已保存')
+  ElMessage.success(t('common.success'))
   showRelationDialog.value = false
 }
 

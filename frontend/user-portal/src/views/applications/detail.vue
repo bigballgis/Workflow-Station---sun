@@ -137,7 +137,7 @@ import { processApi, type ProcessInstance } from '@/api/process'
 import ProcessDiagram, { type ProcessNode, type ProcessFlow } from '@/components/ProcessDiagram.vue'
 import ProcessHistory, { type HistoryRecord } from '@/components/ProcessHistory.vue'
 import FormRenderer, { type FormField, type FormTab } from '@/components/FormRenderer.vue'
-import dayjs from 'dayjs'
+import { formatDate } from '@/utils/dateFormat'
 
 const route = useRoute()
 const router = useRouter()
@@ -162,11 +162,6 @@ const currentFormName = ref('')
 
 // 流转记录
 const historyRecords = ref<HistoryRecord[]>([])
-
-const formatDate = (date?: string) => {
-  if (!date) return '-'
-  return dayjs(date).format('YYYY-MM-DD HH:mm')
-}
 
 const getCurrentAssigneeDisplay = () => {
   // 如果有直接分配的处理人
@@ -202,17 +197,24 @@ const getNodeStatusType = (status?: string): 'success' | 'warning' | 'info' => {
 
 // 加载流程详情
 const loadProcessDetail = async () => {
+  console.log('=== loadProcessDetail called for processId:', processId)
   loading.value = true
   try {
     const res = await processApi.getProcessDetail(processId)
+    console.log('=== Process detail response:', res)
     const data = res.data || res
     if (data) {
       processInfo.value = data
       if (data.variables) formData.value = data.variables
       if (data.processDefinitionKey) {
-        await loadFunctionUnitContent(data.processDefinitionKey)
+        try {
+          await loadFunctionUnitContent(data.processDefinitionKey)
+        } catch (error) {
+          console.error('Failed to load function unit content, but continuing:', error)
+        }
       }
-      initHistoryRecords()
+      // 加载真正的流转历史 - 即使上面出错也要执行
+      await loadProcessHistory()
     }
   } catch (error) {
     console.error('Failed to load process detail:', error)
@@ -528,6 +530,66 @@ const convertFormCreateRule = (rule: any): FormField | null => {
   if (rule.options) field.options = rule.options.map((opt: any) => ({ label: opt.label || opt.value, value: opt.value }))
   if (rule.type === 'input' && rule.props?.type === 'textarea') { field.type = 'textarea'; field.rows = rule.props?.rows || 3 }
   return field
+}
+
+// 加载流转历史
+const loadProcessHistory = async () => {
+  try {
+    console.log('=== [HISTORY] Loading process history for:', processId)
+    console.log('=== [HISTORY] Calling API: /api/portal/processes/' + processId + '/history')
+    
+    // 使用 processApi 调用后端API获取流程历史
+    const response = await processApi.getProcessHistory(processId)
+    console.log('=== [HISTORY] Process history response:', response)
+    console.log('=== [HISTORY] Response type:', typeof response)
+    console.log('=== [HISTORY] Response keys:', Object.keys(response))
+    
+    const historyData = response.data || response
+    console.log('=== [HISTORY] History data:', historyData)
+    console.log('=== [HISTORY] Is array:', Array.isArray(historyData))
+    console.log('=== [HISTORY] Data type:', typeof historyData)
+    
+    if (historyData && Array.isArray(historyData)) {
+      console.log('=== [HISTORY] Processing', historyData.length, 'history records')
+      console.log('=== [HISTORY] First record:', historyData[0])
+      // 转换为 HistoryRecord 格式
+      historyRecords.value = historyData.map((item: any, index: number) => ({
+        id: `history_${index}`,
+        nodeId: item.activityId || `node_${index}`,
+        nodeName: item.activityName || item.taskName || '未知节点',
+        status: getHistoryStatus(item.operationType),
+        assigneeName: item.operatorName || '-',
+        comment: item.comment,
+        createdTime: item.operationTime || '',
+        completedTime: item.operationTime
+      }))
+      console.log('=== [HISTORY] Converted history records:', historyRecords.value.length)
+      console.log('=== [HISTORY] First converted record:', historyRecords.value[0])
+      console.log('=== [HISTORY] historyRecords.value:', historyRecords.value)
+    } else {
+      console.warn('=== [HISTORY] History data is not an array, falling back to initHistoryRecords')
+      console.warn('=== [HISTORY] historyData:', historyData)
+      initHistoryRecords()
+    }
+  } catch (error) {
+    console.error('=== [HISTORY] Failed to load process history:', error)
+    console.error('=== [HISTORY] Error details:', error)
+    // 回退到简单的历史记录
+    initHistoryRecords()
+  }
+}
+
+const getHistoryStatus = (operationType: string): 'completed' | 'current' | 'pending' | 'rejected' => {
+  const map: Record<string, 'completed' | 'current' | 'pending' | 'rejected'> = {
+    'SUBMIT': 'completed',
+    'APPROVE': 'completed',
+    'REJECT': 'rejected',
+    'DELEGATE': 'completed',
+    'TRANSFER': 'completed',
+    'CLAIM': 'completed',
+    'PENDING': 'current'
+  }
+  return map[operationType] || 'completed'
 }
 
 // 初始化流转记录

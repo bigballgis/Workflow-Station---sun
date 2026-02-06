@@ -66,7 +66,7 @@
           </el-table-column>
           <el-table-column prop="currentAssignee" :label="t('application.currentAssignee')" min-width="100" show-overflow-tooltip>
             <template #default="{ row }">
-              {{ row.currentAssignee || t('application.unassigned') }}
+              {{ row.currentAssignee || '-' }}
             </template>
           </el-table-column>
           <el-table-column prop="startTime" :label="t('application.startTime')" width="160">
@@ -117,7 +117,7 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { processApi } from '@/api/process'
-import dayjs from 'dayjs'
+import { formatDate } from '@/utils/dateFormat'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -128,11 +128,6 @@ const pagination = reactive({ page: 1, size: 20, total: 0 })
 const applicationList = ref<any[]>([])
 const draftList = ref<any[]>([])
 const draftCount = ref(0)
-
-const formatDate = (date: string) => {
-  if (!date) return '-'
-  return dayjs(date).format('YYYY-MM-DD HH:mm')
-}
 
 const getStatusType = (status: string): 'success' | 'warning' | 'info' | 'danger' | 'primary' => {
   const map: Record<string, 'success' | 'warning' | 'info' | 'danger' | 'primary'> = {

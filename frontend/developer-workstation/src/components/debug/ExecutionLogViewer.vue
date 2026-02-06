@@ -1,24 +1,24 @@
 <template>
   <div class="execution-log-viewer">
     <div class="log-toolbar">
-      <el-input v-model="searchText" placeholder="搜索日志..." size="small" clearable style="width: 200px;">
+      <el-input v-model="searchText" :placeholder="t('debug.searchLog')" size="small" clearable style="width: 200px;">
         <template #prefix>
           <el-icon><Search /></el-icon>
         </template>
       </el-input>
-      <el-select v-model="levelFilter" placeholder="日志级别" size="small" clearable style="width: 120px;">
-        <el-option label="全部" value="" />
-        <el-option label="信息" value="info" />
-        <el-option label="成功" value="success" />
-        <el-option label="警告" value="warning" />
-        <el-option label="错误" value="error" />
+      <el-select v-model="levelFilter" :placeholder="t('debug.logLevel')" size="small" clearable style="width: 120px;">
+        <el-option :label="t('debug.all')" value="" />
+        <el-option :label="t('debug.info')" value="info" />
+        <el-option :label="t('debug.success')" value="success" />
+        <el-option :label="t('debug.warning')" value="warning" />
+        <el-option :label="t('debug.error')" value="error" />
       </el-select>
-      <el-checkbox v-model="autoScroll" size="small">自动滚动</el-checkbox>
+      <el-checkbox v-model="autoScroll" size="small">{{ t('debug.autoScroll') }}</el-checkbox>
       <el-button size="small" @click="handleClear">
-        <el-icon><Delete /></el-icon> 清空
+        <el-icon><Delete /></el-icon> {{ t('debug.clear') }}
       </el-button>
       <el-button size="small" @click="handleExport">
-        <el-icon><Download /></el-icon> 导出
+        <el-icon><Download /></el-icon> {{ t('debug.export') }}
       </el-button>
     </div>
 
@@ -34,11 +34,11 @@
           <el-icon><View /></el-icon>
         </el-button>
       </div>
-      <el-empty v-if="!filteredLogs.length" description="暂无日志" />
+      <el-empty v-if="!filteredLogs.length" :description="t('debug.noLogs')" />
     </div>
 
     <!-- Variables Dialog -->
-    <el-dialog v-model="showVariablesDialog" title="变量快照" width="500px">
+    <el-dialog v-model="showVariablesDialog" :title="t('debug.variablesSnapshot')" width="500px">
       <pre class="variables-preview">{{ JSON.stringify(selectedLogVariables, null, 2) }}</pre>
     </el-dialog>
   </div>
@@ -46,9 +46,12 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Search, Delete, Download, View } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import dayjs from 'dayjs'
+
+const { t } = useI18n()
 
 interface ExecutionLog {
   timestamp: string
@@ -118,10 +121,10 @@ function levelTagType(level: string): string {
 
 function levelLabel(level: string): string {
   const map: Record<string, string> = {
-    info: '信息',
-    success: '成功',
-    warning: '警告',
-    error: '错误'
+    info: t('debug.info'),
+    success: t('debug.success'),
+    warning: t('debug.warning'),
+    error: t('debug.error')
   }
   return map[level] || level
 }
@@ -147,7 +150,7 @@ function handleExport() {
   a.download = `execution_log_${Date.now()}.txt`
   a.click()
   URL.revokeObjectURL(url)
-  ElMessage.success('导出成功')
+  ElMessage.success(t('debug.exportSuccess'))
 }
 </script>
 
