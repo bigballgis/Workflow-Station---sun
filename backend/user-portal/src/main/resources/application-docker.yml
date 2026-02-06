@@ -14,4 +14,4 @@ app:
 logging:
   level:
     root: INFO
-    com.portal: INFO
+    com.portal: DEBUG

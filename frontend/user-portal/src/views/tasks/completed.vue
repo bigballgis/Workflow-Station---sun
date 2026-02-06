@@ -84,7 +84,7 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Search } from '@element-plus/icons-vue'
 import { queryCompletedTasks, TaskInfo } from '@/api/task'
-import dayjs from 'dayjs'
+import { formatDate } from '@/utils/dateFormat'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -148,11 +148,6 @@ const handlePageChange = () => {
 const viewTask = (task: TaskInfo) => {
   // 跳转到流程详情页面
   router.push(`/applications/${task.processInstanceId}`)
-}
-
-const formatDate = (date: string) => {
-  if (!date) return '-'
-  return dayjs(date).format('YYYY-MM-DD HH:mm')
 }
 
 const formatDuration = (ms: number | undefined) => {

@@ -7,7 +7,7 @@
             <el-icon><ArrowLeft /></el-icon>
             {{ t('common.back') }}
           </el-button>
-          <el-tooltip :content="store.current?.description || '暂无描述'" placement="bottom">
+          <el-tooltip :content="store.current?.description || t('functionUnit.noDescription')" placement="bottom">
             <IconPreview 
               :icon-id="store.current?.icon?.id" 
               size="large" 
@@ -82,7 +82,7 @@
     </el-dialog>
 
     <!-- Validation Result Dialog -->
-    <el-dialog v-model="showValidationDialog" title="验证结果" width="500px">
+    <el-dialog v-model="showValidationDialog" :title="t('functionUnit.validationResult')" width="500px">
       <div v-if="validationResult">
         <el-result v-if="validationResult.valid" icon="success" title="验证通过" sub-title="功能单元配置完整，可以发布" />
         <div v-else>

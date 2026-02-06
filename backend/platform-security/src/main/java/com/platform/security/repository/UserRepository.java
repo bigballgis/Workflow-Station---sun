@@ -66,9 +66,12 @@ public interface UserRepository extends JpaRepository<User, String> {
      * @return list of users with the role
      */
     @Query("SELECT DISTINCT u FROM User u " +
-           "JOIN UserRole ur ON ur.userId = u.id " +
-           "JOIN Role r ON r.id = ur.roleId " +
-           "WHERE r.code = :roleCode")
+           "WHERE u.id IN (" +
+           "  SELECT ur.userId FROM UserRole ur " +
+           "  WHERE ur.roleId IN (" +
+           "    SELECT r.id FROM Role r WHERE r.code = :roleCode" +
+           "  )" +
+           ")")
     List<User> findByRole(@Param("roleCode") String roleCode);
 
     /**

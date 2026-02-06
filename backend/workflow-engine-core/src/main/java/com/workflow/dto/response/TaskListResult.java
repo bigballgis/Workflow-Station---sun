@@ -168,6 +168,11 @@ public class TaskListResult {
         private String initiatorName;
         
         /**
+         * 流程变量（用于表单数据绑定）
+         */
+        private java.util.Map<String, Object> variables;
+        
+        /**
          * 分配类型描述
          */
         public String getAssignmentTypeDescription() {

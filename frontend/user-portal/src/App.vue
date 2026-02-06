@@ -19,7 +19,7 @@ const localeMap: Record<string, any> = {
   'en': en
 }
 
-const locale = computed(() => localeMap[currentLocale.value] || zhCn)
+const locale = computed(() => localeMap[currentLocale.value] || en)
 </script>
 
 <style>

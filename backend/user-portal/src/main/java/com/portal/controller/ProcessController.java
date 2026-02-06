@@ -7,6 +7,7 @@ import com.portal.entity.ProcessDraft;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
@@ -15,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @RestController
 @RequestMapping("/processes")
 @RequiredArgsConstructor
@@ -183,4 +185,26 @@ public class ProcessController {
         processComponent.deleteDraftById(userId, draftId);
         return ApiResponse.success(null);
     }
+    
+    @GetMapping("/{processId}/history")
+    @Operation(summary = "获取流程历史记录")
+    public ApiResponse<List<Map<String, Object>>> getProcessHistory(
+            @PathVariable String processId) {
+        log.info("=== ProcessController.getProcessHistory called with processId: {}", processId);
+        List<Map<String, Object>> history = processComponent.getProcessHistory(processId);
+        log.info("=== ProcessController.getProcessHistory returning {} records", history.size());
+        return ApiResponse.success(history);
+    }
+    
+    @PostMapping("/{processId}/complete")
+    @Operation(summary = "流程完成通知", description = "由 workflow-engine 调用，通知流程已完成")
+    public ApiResponse<Void> processCompleted(
+            @PathVariable String processId,
+            @RequestBody Map<String, Object> request) {
+        log.info("=== ProcessController.processCompleted called for processId: {}", processId);
+        String lastActivityName = (String) request.get("lastActivityName");
+        processComponent.markProcessAsCompleted(processId, lastActivityName);
+        return ApiResponse.success(null);
+    }
 }
+

@@ -1,9 +1,9 @@
 <template>
   <div class="action-designer">
     <div class="designer-toolbar">
-      <el-button type="primary" @click="showCreateDialog = true">创建动作</el-button>
+      <el-button type="primary" @click="showCreateDialog = true">{{ t('action.createAction') }}</el-button>
       <el-button @click="loadActions" :loading="loading">
-        <el-icon><Refresh /></el-icon> 刷新
+        <el-icon><Refresh /></el-icon> {{ t('action.refresh') }}
       </el-button>
     </div>
     
@@ -15,7 +15,7 @@
             <el-tag size="small">{{ actionTypeLabel(row.actionType) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="绑定节点" min-width="200">
+        <el-table-column :label="t('action.boundNodes')" min-width="200">
           <template #default="{ row }">
             <div class="bound-nodes">
               <template v-if="getActionBoundNodes(row.id).length > 0">
@@ -29,16 +29,16 @@
                   {{ node.name || node.id }}
                 </el-tag>
               </template>
-              <span v-else class="no-binding">未绑定</span>
+              <span v-else class="no-binding">{{ t('action.notBound') }}</span>
             </div>
           </template>
         </el-table-column>
-        <el-table-column prop="description" label="描述" show-overflow-tooltip />
-        <el-table-column label="操作" width="200">
+        <el-table-column prop="description" :label="t('action.description')" show-overflow-tooltip />
+        <el-table-column :label="t('action.operation')" width="200">
           <template #default="{ row }">
-            <el-button link type="primary" @click.stop="handleSelectAction(row)">编辑</el-button>
-            <el-button link type="success" @click.stop="handleTestAction(row)">测试</el-button>
-            <el-button link type="danger" @click.stop="handleDeleteAction(row)">删除</el-button>
+            <el-button link type="primary" @click.stop="handleSelectAction(row)">{{ t('action.edit') }}</el-button>
+            <el-button link type="success" @click.stop="handleTestAction(row)">{{ t('action.test') }}</el-button>
+            <el-button link type="danger" @click.stop="handleDeleteAction(row)">{{ t('action.delete') }}</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -47,11 +47,11 @@
     <div class="action-editor" v-else>
       <div class="editor-header">
         <el-button @click="handleBackToList">
-          <el-icon><ArrowLeft /></el-icon> 返回列表
+          <el-icon><ArrowLeft /></el-icon> {{ t('action.backToList') }}
         </el-button>
         <span class="action-name">{{ selectedAction.actionName }}</span>
         <el-button type="success" @click="handleTestAction(selectedAction)">{{ t('action.test') }}</el-button>
-        <el-button type="primary" @click="handleSaveAction">保存</el-button>
+        <el-button type="primary" @click="handleSaveAction">{{ t('action.save') }}</el-button>
       </div>
       
       <el-form :model="selectedAction" label-width="100px" style="max-width: 600px;">
@@ -60,37 +60,37 @@
         </el-form-item>
         <el-form-item :label="t('action.actionType')">
           <el-select v-model="selectedAction.actionType">
-            <el-option-group label="审批操作">
-              <el-option label="批准" value="APPROVE" />
-              <el-option label="拒绝" value="REJECT" />
-              <el-option label="转办" value="TRANSFER" />
-              <el-option label="委托" value="DELEGATE" />
-              <el-option label="回退" value="ROLLBACK" />
-              <el-option label="撤回" value="WITHDRAW" />
+            <el-option-group :label="t('action.approvalOperations')">
+              <el-option :label="t('action.approve')" value="APPROVE" />
+              <el-option :label="t('action.reject')" value="REJECT" />
+              <el-option :label="t('action.transfer')" value="TRANSFER" />
+              <el-option :label="t('action.delegate')" value="DELEGATE" />
+              <el-option :label="t('action.rollback')" value="ROLLBACK" />
+              <el-option :label="t('action.withdraw')" value="WITHDRAW" />
             </el-option-group>
-            <el-option-group label="流程操作">
-              <el-option label="流程提交" value="PROCESS_SUBMIT" />
-              <el-option label="流程驳回" value="PROCESS_REJECT" />
-              <el-option label="组合动作" value="COMPOSITE" />
+            <el-option-group :label="t('action.processOperations')">
+              <el-option :label="t('action.processSubmit')" value="PROCESS_SUBMIT" />
+              <el-option :label="t('action.processReject')" value="PROCESS_REJECT" />
+              <el-option :label="t('action.composite')" value="COMPOSITE" />
             </el-option-group>
-            <el-option-group label="自定义操作">
-              <el-option label="API调用" value="API_CALL" />
-              <el-option label="表单弹出" value="FORM_POPUP" />
-              <el-option label="自定义脚本" value="CUSTOM_SCRIPT" />
+            <el-option-group :label="t('action.customOperations')">
+              <el-option :label="t('action.apiCall')" value="API_CALL" />
+              <el-option :label="t('action.formPopup')" value="FORM_POPUP" />
+              <el-option :label="t('action.customScript')" value="CUSTOM_SCRIPT" />
             </el-option-group>
           </el-select>
         </el-form-item>
-        <el-form-item label="描述">
+        <el-form-item :label="t('action.description')">
           <el-input v-model="selectedAction.description" type="textarea" />
         </el-form-item>
         
         <!-- API Call Config -->
         <template v-if="selectedAction.actionType === 'API_CALL'">
-          <el-divider>API配置</el-divider>
-          <el-form-item label="请求URL">
-            <el-input v-model="actionConfig.url" placeholder="https://api.example.com/endpoint" />
+          <el-divider>{{ t('action.apiConfig') }}</el-divider>
+          <el-form-item :label="t('action.requestUrl')">
+            <el-input v-model="actionConfig.url" :placeholder="t('action.requestUrlPlaceholder')" />
           </el-form-item>
-          <el-form-item label="请求方法">
+          <el-form-item :label="t('action.requestMethod')">
             <el-select v-model="actionConfig.method">
               <el-option label="GET" value="GET" />
               <el-option label="POST" value="POST" />
@@ -98,133 +98,133 @@
               <el-option label="DELETE" value="DELETE" />
             </el-select>
           </el-form-item>
-          <el-form-item label="请求头">
+          <el-form-item :label="t('action.requestHeaders')">
             <el-input v-model="actionConfig.headers" type="textarea" :rows="3" 
-                      placeholder='{"Content-Type": "application/json"}' />
+                      :placeholder="t('action.requestHeadersPlaceholder')" />
           </el-form-item>
-          <el-form-item label="请求体">
+          <el-form-item :label="t('action.requestBody')">
             <el-input v-model="actionConfig.body" type="textarea" :rows="5" 
-                      placeholder='{"key": "value"}' />
+                      :placeholder="t('action.requestBodyPlaceholder')" />
           </el-form-item>
         </template>
         
         <!-- Form Popup Config -->
         <template v-if="selectedAction.actionType === 'FORM_POPUP'">
-          <el-divider>表单配置</el-divider>
-          <el-form-item label="关联表单">
+          <el-divider>{{ t('action.formConfig') }}</el-divider>
+          <el-form-item :label="t('action.relatedForm')">
             <el-select v-model="actionConfig.formId">
               <el-option v-for="form in store.forms" :key="form.id" 
                          :label="form.formName" :value="form.id" />
             </el-select>
           </el-form-item>
-          <el-form-item label="弹窗标题">
+          <el-form-item :label="t('action.dialogTitle')">
             <el-input v-model="actionConfig.dialogTitle" />
           </el-form-item>
-          <el-form-item label="弹窗宽度">
-            <el-input v-model="actionConfig.dialogWidth" placeholder="600px" />
+          <el-form-item :label="t('action.dialogWidth')">
+            <el-input v-model="actionConfig.dialogWidth" :placeholder="t('action.dialogWidthPlaceholder')" />
           </el-form-item>
         </template>
 
         <!-- Process Submit/Reject Config -->
         <template v-if="selectedAction.actionType === 'PROCESS_SUBMIT' || selectedAction.actionType === 'PROCESS_REJECT'">
-          <el-divider>流程配置</el-divider>
-          <el-form-item label="需要审批意见">
+          <el-divider>{{ t('action.processConfig') }}</el-divider>
+          <el-form-item :label="t('action.requireComment')">
             <el-switch v-model="actionConfig.requireComment" />
           </el-form-item>
-          <el-form-item label="确认提示">
-            <el-input v-model="actionConfig.confirmMessage" placeholder="确定要提交吗？" />
+          <el-form-item :label="t('action.confirmMessage')">
+            <el-input v-model="actionConfig.confirmMessage" :placeholder="t('action.confirmMessagePlaceholder')" />
           </el-form-item>
         </template>
 
         <!-- Custom Script Config -->
         <template v-if="selectedAction.actionType === 'CUSTOM_SCRIPT'">
-          <el-divider>脚本配置</el-divider>
-          <el-form-item label="脚本代码">
+          <el-divider>{{ t('action.scriptConfig') }}</el-divider>
+          <el-form-item :label="t('action.scriptCode')">
             <el-input v-model="actionConfig.script" type="textarea" :rows="10" 
-                      placeholder="// JavaScript code here" />
+                      :placeholder="t('action.scriptCodePlaceholder')" />
           </el-form-item>
         </template>
 
         <!-- Approve/Reject Config -->
         <template v-if="selectedAction.actionType === 'APPROVE' || selectedAction.actionType === 'REJECT'">
-          <el-divider>审批配置</el-divider>
-          <el-form-item label="目标状态">
-            <el-input v-model="actionConfig.targetStatus" placeholder="APPROVED / REJECTED" />
+          <el-divider>{{ t('action.approvalConfig') }}</el-divider>
+          <el-form-item :label="t('action.targetStatus')">
+            <el-input v-model="actionConfig.targetStatus" :placeholder="t('action.targetStatusPlaceholder')" />
           </el-form-item>
-          <el-form-item label="需要审批意见">
+          <el-form-item :label="t('action.requireComment')">
             <el-switch v-model="actionConfig.requireComment" />
           </el-form-item>
-          <el-form-item label="确认提示">
-            <el-input v-model="actionConfig.confirmMessage" placeholder="确定要执行此操作吗？" />
+          <el-form-item :label="t('action.confirmMessage')">
+            <el-input v-model="actionConfig.confirmMessage" :placeholder="t('action.confirmMessageApprovalPlaceholder')" />
           </el-form-item>
         </template>
 
         <!-- Transfer/Delegate Config -->
         <template v-if="selectedAction.actionType === 'TRANSFER' || selectedAction.actionType === 'DELEGATE'">
-          <el-divider>转办/委托配置</el-divider>
-          <el-form-item label="需要指定处理人">
+          <el-divider>{{ t('action.transferDelegateConfig') }}</el-divider>
+          <el-form-item :label="t('action.requireAssignee')">
             <el-switch v-model="actionConfig.requireAssignee" />
           </el-form-item>
-          <el-form-item label="需要审批意见">
+          <el-form-item :label="t('action.requireComment')">
             <el-switch v-model="actionConfig.requireComment" />
           </el-form-item>
         </template>
 
         <!-- Rollback Config -->
         <template v-if="selectedAction.actionType === 'ROLLBACK'">
-          <el-divider>回退配置</el-divider>
-          <el-form-item label="目标步骤">
+          <el-divider>{{ t('action.rollbackConfig') }}</el-divider>
+          <el-form-item :label="t('action.targetStep')">
             <el-select v-model="actionConfig.targetStep">
-              <el-option label="上一步" value="previous" />
-              <el-option label="指定步骤" value="specific" />
-              <el-option label="发起人" value="initiator" />
+              <el-option :label="t('action.previousStep')" value="previous" />
+              <el-option :label="t('action.specificStep')" value="specific" />
+              <el-option :label="t('action.initiator')" value="initiator" />
             </el-select>
           </el-form-item>
-          <el-form-item label="需要审批意见">
+          <el-form-item :label="t('action.requireComment')">
             <el-switch v-model="actionConfig.requireComment" />
           </el-form-item>
         </template>
 
         <!-- Withdraw Config -->
         <template v-if="selectedAction.actionType === 'WITHDRAW'">
-          <el-divider>撤回配置</el-divider>
-          <el-form-item label="目标状态">
-            <el-input v-model="actionConfig.targetStatus" placeholder="CANCELLED" />
+          <el-divider>{{ t('action.withdrawConfig') }}</el-divider>
+          <el-form-item :label="t('action.targetStatus')">
+            <el-input v-model="actionConfig.targetStatus" :placeholder="t('action.targetStatusCancelledPlaceholder')" />
           </el-form-item>
-          <el-form-item label="允许撤回的状态">
-            <el-select v-model="actionConfig.allowedFromStatus" multiple placeholder="选择允许撤回的状态">
-              <el-option label="待处理" value="PENDING" />
-              <el-option label="审批中" value="IN_PROGRESS" />
+          <el-form-item :label="t('action.allowedFromStatus')">
+            <el-select v-model="actionConfig.allowedFromStatus" multiple :placeholder="t('action.selectAllowedStatus')">
+              <el-option :label="t('action.pending')" value="PENDING" />
+              <el-option :label="t('action.inProgress')" value="IN_PROGRESS" />
             </el-select>
           </el-form-item>
         </template>
 
         <!-- Composite Config -->
         <template v-if="selectedAction.actionType === 'COMPOSITE'">
-          <el-divider>组合动作配置</el-divider>
-          <el-form-item label="子动作">
-            <el-select v-model="actionConfig.subActions" multiple placeholder="选择要组合的动作">
+          <el-divider>{{ t('action.compositeConfig') }}</el-divider>
+          <el-form-item :label="t('action.subActions')">
+            <el-select v-model="actionConfig.subActions" multiple :placeholder="t('action.selectSubActions')">
               <el-option v-for="action in store.actions.filter(a => a.actionType !== 'COMPOSITE')" 
                          :key="action.id" :label="action.actionName" :value="action.id" />
             </el-select>
           </el-form-item>
-          <el-form-item label="执行顺序">
+          <el-form-item :label="t('action.executionOrder')">
             <el-radio-group v-model="actionConfig.executionOrder">
-              <el-radio label="sequential">顺序执行</el-radio>
-              <el-radio label="parallel">并行执行</el-radio>
+              <el-radio label="sequential">{{ t('action.sequential') }}</el-radio>
+              <el-radio label="parallel">{{ t('action.parallel') }}</el-radio>
             </el-radio-group>
           </el-form-item>
         </template>
 
         <!-- 节点绑定配置 -->
-        <el-divider>节点绑定</el-divider>
-        <el-form-item label="绑定类型">
+        <el-divider>{{ t('action.nodeBinding') }}</el-divider>
+        <el-form-item :label="t('action.bindingType')">
           <el-radio-group v-model="bindingType">
-            <el-radio label="node">绑定到节点</el-radio>
-            <el-radio label="global">流程全局</el-radio>
+            <el-radio label="node">{{ t('action.bindToNode') }}</el-radio>
+            <el-radio label="global">{{ t('action.processGlobal') }}</el-radio>
           </el-radio-group>
         </el-form-item>
-        <el-form-item v-if="bindingType === 'node'" label="选择节点">
+        <el-form-item v-if="bindingType === 'node'" :label="t('action.selectNodes')">
           <el-checkbox-group v-model="selectedNodeIds">
             <el-checkbox 
               v-for="node in availableNodes" 
@@ -235,68 +235,68 @@
             </el-checkbox>
           </el-checkbox-group>
           <div v-if="availableNodes.length === 0" class="no-nodes-tip">
-            暂无可绑定的用户任务节点，请先在流程设计器中创建
+            {{ t('action.noNodesAvailable') }}
           </div>
         </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleSaveBinding" :loading="savingBinding">
-            保存绑定
+            {{ t('action.saveBinding') }}
           </el-button>
-          <span class="binding-tip">绑定会更新流程定义中的节点配置</span>
+          <span class="binding-tip">{{ t('action.bindingWillUpdateProcess') }}</span>
         </el-form-item>
       </el-form>
     </div>
 
     <!-- Create Action Dialog -->
-    <el-dialog v-model="showCreateDialog" title="创建动作" width="500px">
+    <el-dialog v-model="showCreateDialog" :title="t('action.createActionTitle')" width="500px">
       <el-form :model="createForm" label-width="80px">
-        <el-form-item label="动作名" required>
+        <el-form-item :label="t('action.actionName')" required>
           <el-input v-model="createForm.actionName" />
         </el-form-item>
-        <el-form-item label="动作类型">
+        <el-form-item :label="t('action.actionType')">
           <el-select v-model="createForm.actionType">
-            <el-option-group label="审批操作">
-              <el-option label="批准" value="APPROVE" />
-              <el-option label="拒绝" value="REJECT" />
-              <el-option label="转办" value="TRANSFER" />
-              <el-option label="委托" value="DELEGATE" />
-              <el-option label="回退" value="ROLLBACK" />
-              <el-option label="撤回" value="WITHDRAW" />
+            <el-option-group :label="t('action.approvalOperations')">
+              <el-option :label="t('action.approve')" value="APPROVE" />
+              <el-option :label="t('action.reject')" value="REJECT" />
+              <el-option :label="t('action.transfer')" value="TRANSFER" />
+              <el-option :label="t('action.delegate')" value="DELEGATE" />
+              <el-option :label="t('action.rollback')" value="ROLLBACK" />
+              <el-option :label="t('action.withdraw')" value="WITHDRAW" />
             </el-option-group>
-            <el-option-group label="流程操作">
-              <el-option label="流程提交" value="PROCESS_SUBMIT" />
-              <el-option label="流程驳回" value="PROCESS_REJECT" />
-              <el-option label="组合动作" value="COMPOSITE" />
+            <el-option-group :label="t('action.processOperations')">
+              <el-option :label="t('action.processSubmit')" value="PROCESS_SUBMIT" />
+              <el-option :label="t('action.processReject')" value="PROCESS_REJECT" />
+              <el-option :label="t('action.composite')" value="COMPOSITE" />
             </el-option-group>
-            <el-option-group label="自定义操作">
-              <el-option label="API调用" value="API_CALL" />
-              <el-option label="表单弹出" value="FORM_POPUP" />
-              <el-option label="自定义脚本" value="CUSTOM_SCRIPT" />
+            <el-option-group :label="t('action.customOperations')">
+              <el-option :label="t('action.apiCall')" value="API_CALL" />
+              <el-option :label="t('action.formPopup')" value="FORM_POPUP" />
+              <el-option :label="t('action.customScript')" value="CUSTOM_SCRIPT" />
             </el-option-group>
           </el-select>
         </el-form-item>
-        <el-form-item label="描述">
+        <el-form-item :label="t('action.description')">
           <el-input v-model="createForm.description" type="textarea" />
         </el-form-item>
       </el-form>
       <template #footer>
-        <el-button @click="showCreateDialog = false">取消</el-button>
-        <el-button type="primary" @click="handleCreateAction">确定</el-button>
+        <el-button @click="showCreateDialog = false">{{ t('action.cancel') }}</el-button>
+        <el-button type="primary" @click="handleCreateAction">{{ t('action.confirm') }}</el-button>
       </template>
     </el-dialog>
 
     <!-- Test Action Dialog -->
-    <el-dialog v-model="showTestDialog" title="测试动作" width="600px">
+    <el-dialog v-model="showTestDialog" :title="t('action.testActionTitle')" width="600px">
       <el-form label-width="80px">
-        <el-form-item label="测试数据">
-          <el-input v-model="testData" type="textarea" :rows="5" placeholder='{"key": "value"}' />
+        <el-form-item :label="t('action.testData')">
+          <el-input v-model="testData" type="textarea" :rows="5" :placeholder="t('action.testDataPlaceholder')" />
         </el-form-item>
       </el-form>
-      <el-divider>执行结果</el-divider>
+      <el-divider>{{ t('action.executionResult') }}</el-divider>
       <pre class="test-result">{{ testResult }}</pre>
       <template #footer>
-        <el-button @click="showTestDialog = false">关闭</el-button>
-        <el-button type="primary" @click="executeTest" :loading="testing">执行测试</el-button>
+        <el-button @click="showTestDialog = false">{{ t('action.close') }}</el-button>
+        <el-button type="primary" @click="executeTest" :loading="testing">{{ t('action.executeTest') }}</el-button>
       </template>
     </el-dialog>
   </div>
@@ -304,10 +304,13 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ArrowLeft, Refresh } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
 import { functionUnitApi, type ActionDefinition } from '@/api/functionUnit'
+
+const { t } = useI18n()
 
 const props = defineProps<{ functionUnitId: number }>()
 
@@ -348,18 +351,18 @@ const actionConfig = reactive<Record<string, any>>({
 
 const actionTypeLabel = (type: string) => {
   const map: Record<string, string> = {
-    APPROVE: '批准',
-    REJECT: '拒绝',
-    TRANSFER: '转办',
-    DELEGATE: '委托',
-    ROLLBACK: '回退',
-    WITHDRAW: '撤回',
-    PROCESS_SUBMIT: '流程提交',
-    PROCESS_REJECT: '流程驳回',
-    COMPOSITE: '组合动作',
-    API_CALL: 'API调用',
-    FORM_POPUP: '表单弹出',
-    CUSTOM_SCRIPT: '自定义脚本'
+    APPROVE: t('action.approve'),
+    REJECT: t('action.reject'),
+    TRANSFER: t('action.transfer'),
+    DELEGATE: t('action.delegate'),
+    ROLLBACK: t('action.rollback'),
+    WITHDRAW: t('action.withdraw'),
+    PROCESS_SUBMIT: t('action.processSubmit'),
+    PROCESS_REJECT: t('action.processReject'),
+    COMPOSITE: t('action.composite'),
+    API_CALL: t('action.apiCall'),
+    FORM_POPUP: t('action.formPopup'),
+    CUSTOM_SCRIPT: t('action.customScript')
   }
   return map[type] || type
 }
@@ -449,7 +452,7 @@ function parseActionBindingsFromBpmn() {
                   if (!bindings.has(actionId)) {
                     bindings.set(actionId, [])
                   }
-                  bindings.get(actionId)!.push({ id: 'process', name: '流程全局' })
+                  bindings.get(actionId)!.push({ id: 'process', name: t('action.processGlobal') })
                 })
               } catch (e) {
                 console.warn('Failed to parse globalActionIds:', value)
@@ -535,7 +538,7 @@ function loadActionBinding(actionId: number) {
  */
 async function handleSaveBinding() {
   if (!selectedAction.value || !store.process?.bpmnXml) {
-    ElMessage.warning('请先保存流程定义')
+    ElMessage.warning(t('action.saveProcessFirst'))
     return
   }
   
@@ -571,7 +574,7 @@ async function handleSaveBinding() {
       bpmnXml: newXml
     })
     
-    ElMessage.success('绑定保存成功')
+    ElMessage.success(t('action.bindingSaveSuccess'))
     
     // 重新加载绑定信息
     await store.fetchProcess(props.functionUnitId)
@@ -579,7 +582,7 @@ async function handleSaveBinding() {
     loadActionBinding(actionId)
   } catch (e: any) {
     console.error('Save binding failed:', e)
-    ElMessage.error(e.response?.data?.message || '保存绑定失败')
+    ElMessage.error(e.response?.data?.message || t('action.saveFailed'))
   } finally {
     savingBinding.value = false
   }
@@ -793,12 +796,12 @@ async function handleCreateAction() {
       description: createForm.description,
       configJson: {}
     })
-    ElMessage.success('创建成功')
+    ElMessage.success(t('action.createSuccess'))
     showCreateDialog.value = false
     Object.assign(createForm, { actionName: '', actionType: 'APPROVE', description: '' })
     loadActions()
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.message || '创建失败')
+    ElMessage.error(e.response?.data?.message || t('action.createFailed'))
   }
 }
 
@@ -811,21 +814,21 @@ async function handleSaveAction() {
       description: selectedAction.value.description,
       configJson: actionConfig
     })
-    ElMessage.success('保存成功')
+    ElMessage.success(t('action.saveSuccess'))
     loadActions()
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.message || '保存失败')
+    ElMessage.error(e.response?.data?.message || t('action.saveFailed'))
   }
 }
 
 async function handleDeleteAction(row: ActionDefinition) {
-  await ElMessageBox.confirm('确定要删除该动作吗？', '提示', { type: 'warning' })
+  await ElMessageBox.confirm(t('action.deleteConfirm'), t('action.confirmTitle'), { type: 'warning' })
   try {
     await store.deleteAction(props.functionUnitId, row.id)
-    ElMessage.success('删除成功')
+    ElMessage.success(t('action.deleteSuccess'))
     loadActions()
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.message || '删除失败')
+    ElMessage.error(e.response?.data?.message || t('action.deleteFailed'))
   }
 }
 
@@ -844,7 +847,7 @@ async function executeTest() {
     const res = await functionUnitApi.testAction?.(props.functionUnitId, selectedAction.value.id, data)
     testResult.value = JSON.stringify(res?.data || {}, null, 2)
   } catch (e: any) {
-    testResult.value = `Error: ${e.message || '测试失败'}`
+    testResult.value = `Error: ${e.message || t('action.testFailed')}`
   } finally {
     testing.value = false
   }
