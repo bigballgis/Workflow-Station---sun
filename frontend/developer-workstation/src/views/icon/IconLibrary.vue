@@ -137,27 +137,27 @@ const categories = ['APPROVAL', 'CREDIT', 'ACCOUNT', 'PAYMENT', 'CUSTOMER', 'COM
 
 const categoryLabel = (cat: string) => {
   const map: Record<string, string> = {
-    APPROVAL: '审批流程',
-    CREDIT: '信贷业务',
-    ACCOUNT: '账户服务',
-    PAYMENT: '支付结算',
-    CUSTOMER: '客户管理',
-    COMPLIANCE: '合规风控',
-    OPERATION: '运营管理',
-    GENERAL: '通用图标'
+    APPROVAL: t('icon.categoryApproval'),
+    CREDIT: t('icon.categoryCredit'),
+    ACCOUNT: t('icon.categoryAccount'),
+    PAYMENT: t('icon.categoryPayment'),
+    CUSTOMER: t('icon.categoryCustomer'),
+    COMPLIANCE: t('icon.categoryCompliance'),
+    OPERATION: t('icon.categoryOperation'),
+    GENERAL: t('icon.categoryGeneral')
   }
   return map[cat] || cat
 }
 
-// 清理 SVG 内容，移除可能导致显示问题的元素
+// Clean SVG content, remove elements that may cause display issues
 function sanitizeSvg(svg: string): string {
   if (!svg) return ''
   let result = svg
-  // 移除 <title> 元素
+  // Remove <title> elements
   result = result.replace(/<title[^>]*>[\s\S]*?<\/title>/gi, '')
-  // 移除 <style> 元素（防止样式泄漏到全局）
+  // Remove <style> elements (prevent style leakage to global)
   result = result.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-  // 移除 <defs> 元素（包含 <style> 定义，防止样式泄漏）
+  // Remove <defs> elements (contains <style> definitions, prevent style leakage)
   result = result.replace(/<defs[\s\S]*?<\/defs>/gi, '')
   // 将 class="cls-1" 替换为内联样式 fill="#fff"
   result = result.replace(/class="cls-1"/gi, 'fill="#fff"')
@@ -181,7 +181,7 @@ async function loadIcons() {
     icons.value = res.data?.content || []
     total.value = res.data?.totalElements || 0
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.message || '加载失败')
+    ElMessage.error(e.response?.data?.message || t('icon.loadFailed'))
   } finally {
     loading.value = false
   }

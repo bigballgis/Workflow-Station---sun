@@ -39,6 +39,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -181,6 +182,20 @@ public class TaskManagerComponent {
             currentAssigneeName = resolveUserDisplayName(currentAssignee);
         }
         
+        // 获取流程变量（用于表单数据绑定）
+        Map<String, Object> variables = null;
+        if (task.getProcessInstanceId() != null) {
+            try {
+                variables = runtimeService.getVariables(task.getProcessInstanceId());
+                log.debug("Retrieved {} variables for task {}", 
+                    variables != null ? variables.size() : 0, task.getId());
+            } catch (Exception e) {
+                log.warn("Failed to get variables for process instance {}: {}", 
+                    task.getProcessInstanceId(), e.getMessage());
+                variables = new HashMap<>();
+            }
+        }
+        
         return TaskListResult.TaskInfo.builder()
             .taskId(task.getId())
             .taskName(task.getName())
@@ -202,6 +217,7 @@ public class TaskManagerComponent {
             .formKey(task.getFormKey())
             .initiatorId(initiatorId)
             .initiatorName(initiatorName)
+            .variables(variables)
             .build();
     }
     
@@ -1008,6 +1024,20 @@ public class TaskManagerComponent {
             currentAssigneeName = resolveUserDisplayName(currentAssignee);
         }
         
+        // 获取流程变量（用于表单数据绑定）
+        Map<String, Object> variables = null;
+        if (task.getProcessInstanceId() != null) {
+            try {
+                variables = runtimeService.getVariables(task.getProcessInstanceId());
+                log.debug("Retrieved {} variables for task {}", 
+                    variables != null ? variables.size() : 0, task.getId());
+            } catch (Exception e) {
+                log.warn("Failed to get variables for process instance {}: {}", 
+                    task.getProcessInstanceId(), e.getMessage());
+                variables = new HashMap<>();
+            }
+        }
+        
         return TaskListResult.TaskInfo.builder()
             .taskId(task.getId())
             .taskName(task.getName())
@@ -1029,6 +1059,7 @@ public class TaskManagerComponent {
             .status("ACTIVE")
             .initiatorId(initiatorId)
             .initiatorName(initiatorName)
+            .variables(variables)
             .build();
     }
     // ==================== 私有辅助方法 ====================

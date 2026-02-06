@@ -170,7 +170,7 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { Search, ArrowDown } from '@element-plus/icons-vue'
 import { queryTasks, claimTask, unclaimTask, delegateTask, transferTask, urgeTask, batchUrgeTasks, TaskInfo } from '@/api/task'
-import dayjs from 'dayjs'
+import { formatDate } from '@/utils/dateFormat'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -338,10 +338,6 @@ const submitAction = async () => {
     ElMessage.success(t('common.success'))
     actionDialogVisible.value = false
   }
-}
-
-const formatDate = (date: string) => {
-  return dayjs(date).format('YYYY-MM-DD HH:mm')
 }
 
 const getAssignmentClass = (type: string) => {

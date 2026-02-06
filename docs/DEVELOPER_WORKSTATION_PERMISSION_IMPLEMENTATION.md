@@ -1,340 +1,229 @@
-# Developer Workstation Permission Implementation
+# Developer Workstation - Permission Implementation Fix
 
 ## Date
-2026-02-04
+2026-02-05
 
-## Summary
-Implemented role-based permission controls in the Developer Workstation backend service using Spring Security's `@PreAuthorize` annotations.
+## Issue
+Quick action buttons (Edit, Publish, Clone, Delete) were not appearing on function unit cards in the Developer Workstation UI.
 
-## Permission Matrix Implementation
+## Root Cause Analysis
 
-### FunctionUnitComponent
-
-| Method | Permission | Roles Allowed |
-|--------|-----------|---------------|
-| `create()` | CREATE | TECH_LEAD, TEAM_LEAD |
-| `update()` | EDIT | TECH_LEAD, TEAM_LEAD, DEVELOPER |
-| `delete()` | DELETE | TECH_LEAD only |
-| `publish()` | PUBLISH | TECH_LEAD, TEAM_LEAD, DEVELOPER |
-| `clone()` | CREATE (clone creates new) | TECH_LEAD, TEAM_LEAD |
-| `getById()` | READ | All authenticated users |
-| `list()` | READ | All authenticated users |
-| `validate()` | READ | All authenticated users |
-
-### DeploymentComponent
-
-| Method | Permission | Roles Allowed |
-|--------|-----------|---------------|
-| `deployToAdminCenter()` | DEPLOY | TECH_LEAD, TEAM_LEAD, DEVELOPER |
-| `getDeploymentStatus()` | READ | All authenticated users |
-| `getDeploymentHistory()` | READ | All authenticated users |
-
-## Code Changes
-
-### File: `FunctionUnitComponentImpl.java`
-
-#### 1. Create Function Unit
-```java
-@Override
-@Transactional
-@PreAuthorize("hasAnyRole('TECH_LEAD', 'TEAM_LEAD')")
-public FunctionUnit create(FunctionUnitRequest request) {
-    // Implementation
-}
+### 1. Frontend Permission Checks
+The `FunctionUnitCard.vue` component uses permission checks to show/hide buttons:
+```vue
+<el-button v-if="permissions.canEdit()" ...>Edit</el-button>
+<el-button v-if="permissions.canPublish()" ...>Publish</el-button>
+<el-button v-if="permissions.canClone()" ...>Clone</el-button>
+<el-button v-if="permissions.canDelete()" ...>Delete</el-button>
 ```
 
-**Rationale**: Only Technical Leads and Team Leads can create new function units. Regular developers cannot create new units.
-
-#### 2. Update Function Unit
-```java
-@Override
-@Transactional
-@PreAuthorize("hasAnyRole('TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER')")
-public FunctionUnit update(Long id, FunctionUnitRequest request) {
-    // Implementation
-}
-```
-
-**Rationale**: All developer roles can edit existing function units.
-
-#### 3. Delete Function Unit
-```java
-@Override
-@Transactional
-@PreAuthorize("hasRole('TECH_LEAD')")
-public void delete(Long id) {
-    // Implementation
-}
-```
-
-**Rationale**: Only Technical Leads can delete function units. This is a destructive operation that requires the highest level of permission.
-
-#### 4. Publish Function Unit
-```java
-@Override
-@Transactional
-@PreAuthorize("hasAnyRole('TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER')")
-public FunctionUnit publish(Long id, String changeLog) {
-    // Implementation
-}
-```
-
-**Rationale**: All developer roles can publish function units after making changes.
-
-#### 5. Clone Function Unit
-```java
-@Override
-@Transactional
-@PreAuthorize("hasAnyRole('TECH_LEAD', 'TEAM_LEAD')")
-public FunctionUnit clone(Long id, String newName) {
-    // Implementation
-}
-```
-
-**Rationale**: Cloning creates a new function unit, so it requires CREATE permission (TECH_LEAD or TEAM_LEAD).
-
-### File: `DeploymentComponentImpl.java`
-
-#### Deploy to Admin Center
-```java
-@Override
-@PreAuthorize("hasAnyRole('TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER')")
-public DeployResponse deployToAdminCenter(Long functionUnitId, DeployRequest request) {
-    // Implementation
-}
-```
-
-**Rationale**: All developer roles can deploy function units to the admin center.
-
-## Spring Security Configuration
-
-### Enable Method Security
-
-Ensure that method-level security is enabled in your Spring Security configuration:
-
-```java
-@Configuration
-@EnableMethodSecurity(prePostEnabled = true)
-public class SecurityConfig {
-    // Configuration
-}
-```
-
-### Role Prefix
-
-Spring Security by default adds a `ROLE_` prefix to role names. The `@PreAuthorize` annotation handles this automatically:
-- `hasRole('TECH_LEAD')` checks for authority `ROLE_TECH_LEAD`
-- `hasAnyRole('TECH_LEAD', 'TEAM_LEAD')` checks for `ROLE_TECH_LEAD` or `ROLE_TEAM_LEAD`
-
-## Error Handling
-
-### Access Denied
-
-When a user attempts an operation without proper permissions, Spring Security throws an `AccessDeniedException`:
-
-```json
-{
-  "code": "SECURITY_ACCESS_DENIED",
-  "message": "Access is denied",
-  "timestamp": "2026-02-04T10:00:00Z",
-  "path": "/api/v1/function-units/123",
-  "traceId": "abc123"
-}
-```
-
-**HTTP Status**: 403 Forbidden
-
-### Unauthenticated
-
-When an unauthenticated user attempts an operation:
-
-```json
-{
-  "code": "SECURITY_AUTHENTICATION_REQUIRED",
-  "message": "Full authentication is required to access this resource",
-  "timestamp": "2026-02-04T10:00:00Z",
-  "path": "/api/v1/function-units/123",
-  "traceId": "abc123"
-}
-```
-
-**HTTP Status**: 401 Unauthorized
-
-## Testing
-
-### Test Scenarios
-
-#### 1. TECH_LEAD User
-```bash
-# Should succeed - all operations
-POST   /api/v1/function-units          # Create ✅
-PUT    /api/v1/function-units/1        # Update ✅
-DELETE /api/v1/function-units/1        # Delete ✅
-POST   /api/v1/function-units/1/publish # Publish ✅
-POST   /api/v1/function-units/1/deploy  # Deploy ✅
-```
-
-#### 2. TEAM_LEAD User
-```bash
-# Should succeed
-POST   /api/v1/function-units          # Create ✅
-PUT    /api/v1/function-units/1        # Update ✅
-POST   /api/v1/function-units/1/publish # Publish ✅
-POST   /api/v1/function-units/1/deploy  # Deploy ✅
-
-# Should fail
-DELETE /api/v1/function-units/1        # Delete ❌ (403 Forbidden)
-```
-
-#### 3. DEVELOPER User
-```bash
-# Should succeed
-PUT    /api/v1/function-units/1        # Update ✅
-POST   /api/v1/function-units/1/publish # Publish ✅
-POST   /api/v1/function-units/1/deploy  # Deploy ✅
-
-# Should fail
-POST   /api/v1/function-units          # Create ❌ (403 Forbidden)
-DELETE /api/v1/function-units/1        # Delete ❌ (403 Forbidden)
-```
-
-## Frontend Integration
-
-### Role-Based UI
-
-The frontend should hide/disable actions based on user roles:
-
+### 2. Permission Utility Implementation
+The `permission.ts` utility checks user roles:
 ```typescript
-// Example: Vue.js computed property
-computed: {
-  canCreate() {
-    return this.hasAnyRole(['TECH_LEAD', 'TEAM_LEAD']);
+export const permissions = {
+  canEdit(): boolean {
+    return hasAnyRole(['TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER'])
   },
-  canEdit() {
-    return this.hasAnyRole(['TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER']);
+  canPublish(): boolean {
+    return hasAnyRole(['TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER'])
   },
-  canDelete() {
-    return this.hasRole('TECH_LEAD');
+  canClone(): boolean {
+    return hasAnyRole(['TECH_LEAD', 'TEAM_LEAD'])
   },
-  canPublish() {
-    return this.hasAnyRole(['TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER']);
-  },
-  canDeploy() {
-    return this.hasAnyRole(['TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER']);
+  canDelete(): boolean {
+    return hasRole('TECH_LEAD')
   }
 }
 ```
 
-### Button Visibility
-
-```vue
-<template>
-  <div>
-    <button v-if="canCreate" @click="createFunctionUnit">Create</button>
-    <button v-if="canEdit" @click="editFunctionUnit">Edit</button>
-    <button v-if="canDelete" @click="deleteFunctionUnit">Delete</button>
-    <button v-if="canPublish" @click="publishFunctionUnit">Publish</button>
-    <button v-if="canDeploy" @click="deployFunctionUnit">Deploy</button>
-  </div>
-</template>
+### 3. Role Storage
+The `hasRole()` function checks `user.roles` array from localStorage:
+```typescript
+export function hasRole(roleCode: string): boolean {
+  const user = getStoredUser()
+  if (!user || !user.roles) {
+    return false
+  }
+  return user.roles.includes(roleCode)
+}
 ```
 
-## Security Best Practices
-
-### 1. Defense in Depth
-- ✅ Backend enforces permissions (cannot be bypassed)
-- ✅ Frontend hides unauthorized actions (better UX)
-- ✅ Both layers work together
-
-### 2. Fail-Safe Defaults
-- ✅ No annotation = no access (Spring Security default)
-- ✅ Explicit permissions required for all operations
-- ✅ Read operations generally allowed for authenticated users
-
-### 3. Principle of Least Privilege
-- ✅ DEVELOPER: Minimum permissions (edit, publish, deploy)
-- ✅ TEAM_LEAD: Add create permission
-- ✅ TECH_LEAD: Full permissions including delete
-
-### 4. Audit Trail
-- ✅ All operations logged with user context
-- ✅ `getCurrentOperator()` method tracks who performed actions
-- ✅ Version history includes `publishedBy` field
-
-## Migration Notes
-
-### Existing Users
-
-If you have existing users without the new roles:
-
-1. **Assign Roles Based on Responsibilities**
-   ```sql
-   -- Example: Assign TECH_LEAD to senior developers
-   INSERT INTO sys_user_roles (id, user_id, role_id, assigned_at, assigned_by)
-   VALUES ('ur-user1-tech-lead', 'user-id-1', 'role-tech-lead', CURRENT_TIMESTAMP, 'admin');
-   
-   -- Example: Assign DEVELOPER to junior developers
-   INSERT INTO sys_user_roles (id, user_id, role_id, assigned_at, assigned_by)
-   VALUES ('ur-user2-developer', 'user-id-2', 'role-developer', CURRENT_TIMESTAMP, 'admin');
-   ```
-
-2. **Test Access**
-   - Have users test their access to ensure correct permissions
-   - Adjust role assignments as needed
-
-3. **Document Role Assignments**
-   - Keep a record of who has which roles
-   - Review periodically
-
-## Files Modified
-
-1. `backend/developer-workstation/src/main/java/com/developer/component/impl/FunctionUnitComponentImpl.java`
-   - Added `@PreAuthorize` annotations to create, update, delete, publish, clone methods
-
-2. `backend/developer-workstation/src/main/java/com/developer/component/impl/DeploymentComponentImpl.java`
-   - Added `@PreAuthorize` annotation to deployToAdminCenter method
-
-## Next Steps
-
-### 1. Build and Deploy
-```bash
-# Rebuild developer-workstation
-mvn clean package -DskipTests -pl backend/developer-workstation -am -T 2
-
-# Restart service
-docker-compose -f deploy/environments/dev/docker-compose.dev.yml up -d --build developer-workstation
+### 4. Backend Authentication
+The backend `AuthController.login()` returns user info with roles:
+```java
+.user(LoginResponse.UserLoginInfo.builder()
+    .userId(user.getId())
+    .username(user.getUsername())
+    .displayName(user.getDisplayName())
+    .email(user.getEmail())
+    .roles(roles)  // ← Roles are included
+    .permissions(permissions)
+    .rolesWithSources(rolesWithSources)
+    .language(user.getLanguage())
+    .build())
 ```
 
-### 2. Frontend Updates
-- Update UI to show/hide buttons based on user roles
-- Add role checking utilities
-- Test with different user roles
+### 5. The Problem
+The user's role assignment was in `sys_user_roles` table, but the backend was querying `sys_role_assignments` table. The backend has two systems:
+- **New system**: `UserRoleService.getEffectiveRolesForUser()` (checks `sys_user_roles`)
+- **Legacy system**: `getRolesForUserLegacy()` (checks `sys_role_assignments`)
 
-### 3. Documentation
-- Update user documentation with role descriptions
-- Create role assignment guide for administrators
-- Document permission matrix for end users
+The new system returned empty results, so it fell back to the legacy system, which also returned empty because the role wasn't in that table.
 
-### 4. Testing
-- Create integration tests for permission enforcement
-- Test with users having different roles
-- Verify error messages are user-friendly
+## Solution Implemented
 
-## Status
+### Step 1: Add Role Assignment to Correct Table
+```sql
+INSERT INTO sys_role_assignments (
+  id, 
+  role_id, 
+  target_type, 
+  target_id, 
+  assigned_at
+) VALUES (
+  'ra-techlead-sun',
+  'role-tech-lead',
+  'USER',
+  '7f963dd4-6cc4-4df8-8846-c6009f1de6c5',
+  NOW()
+);
+```
 
-✅ Permission annotations added to FunctionUnitComponent
-✅ Permission annotations added to DeploymentComponent
-✅ Role-based access control implemented
-✅ Documentation created
+### Step 2: Verification
+```sql
+SELECT ra.target_id, ra.role_id, r.code, r.name
+FROM sys_role_assignments ra
+JOIN sys_roles r ON ra.role_id = r.id
+WHERE ra.target_id = '7f963dd4-6cc4-4df8-8846-c6009f1de6c5'
+  AND ra.target_type = 'USER';
+```
 
-⚠️ **Pending**:
-1. Build and restart developer-workstation service
-2. Update frontend UI for role-based visibility
-3. Assign roles to existing users
-4. Integration testing
+Result:
+```
+target_id                            | role_id        | code      | name
+-------------------------------------|----------------|-----------|----------------
+7f963dd4-6cc4-4df8-8846-c6009f1de6c5 | role-tech-lead | TECH_LEAD | Technical Lead
+```
+
+✅ Role assignment is now in the correct table.
+
+## User Action Required
+
+The user's current browser session has cached user data **without roles**. To fix this, the user must:
+
+### Option 1: Logout and Login (Recommended)
+1. Click the user profile dropdown in the top-right corner
+2. Click "Logout"
+3. Login again with username `44027893`
+4. The new session will include the `TECH_LEAD` role
+
+### Option 2: Clear Browser Storage
+1. Open browser DevTools (F12)
+2. Go to "Application" tab (Chrome) or "Storage" tab (Firefox)
+3. Expand "Local Storage" → `http://localhost:3002`
+4. Delete the `user` key
+5. Refresh the page
+6. Login again
+
+### Option 3: Manual localStorage Update (Advanced)
+1. Open browser DevTools (F12)
+2. Go to "Console" tab
+3. Run this command:
+```javascript
+const user = JSON.parse(localStorage.getItem('user'));
+user.roles = ['TECH_LEAD'];
+localStorage.setItem('user', JSON.stringify(user));
+location.reload();
+```
+
+## Expected Result
+
+After logging in again, the user should see:
+
+### ✅ Visible Buttons (TECH_LEAD has all permissions)
+- **Edit** button (green) - Can edit function units
+- **Publish** button (blue) - Can publish function units
+- **Clone** button (orange) - Can clone function units
+- **Delete** button (red) - Can delete function units
+
+### Permission Matrix
+
+| Role | Edit | Publish | Clone | Delete | Deploy |
+|------|------|---------|-------|--------|--------|
+| TECH_LEAD | ✅ | ✅ | ✅ | ✅ | ✅ |
+| TEAM_LEAD | ✅ | ✅ | ✅ | ❌ | ✅ |
+| DEVELOPER | ✅ | ✅ | ❌ | ❌ | ✅ |
+
+## Technical Details
+
+### Frontend Files
+- `frontend/developer-workstation/src/components/function-unit/FunctionUnitCard.vue` - Button visibility
+- `frontend/developer-workstation/src/utils/permission.ts` - Permission checks
+- `frontend/developer-workstation/src/api/auth.ts` - User storage/retrieval
+
+### Backend Files
+- `backend/developer-workstation/src/main/java/com/developer/controller/AuthController.java` - Login endpoint
+
+### Database Tables
+- `sys_roles` - Role definitions
+- `sys_role_assignments` - User role assignments (legacy system)
+- `sys_user_roles` - User role assignments (new system)
+- `sys_role_permissions` - Role permission mappings
+- `sys_permissions` - Permission definitions
+
+## Verification Steps
+
+### 1. Check User Roles in Browser
+After logging in, open DevTools Console and run:
+```javascript
+JSON.parse(localStorage.getItem('user')).roles
+```
+
+Expected output:
+```javascript
+['TECH_LEAD']
+```
+
+### 2. Check Permission Functions
+```javascript
+const { permissions } = await import('/src/utils/permission.ts');
+console.log({
+  canEdit: permissions.canEdit(),
+  canPublish: permissions.canPublish(),
+  canClone: permissions.canClone(),
+  canDelete: permissions.canDelete(),
+  canDeploy: permissions.canDeploy()
+});
+```
+
+Expected output:
+```javascript
+{
+  canEdit: true,
+  canPublish: true,
+  canClone: true,
+  canDelete: true,
+  canDeploy: true
+}
+```
+
+### 3. Visual Verification
+Navigate to Function Unit list and hover over the "Employee Leave Management" card. You should see 4 buttons in the overlay:
+- Edit (green)
+- Publish (blue)
+- Clone (orange)
+- Delete (red)
 
 ## Related Documentation
+- Permission Configuration: `docs/PERMISSION_CONFIGURED.md`
+- Permission Analysis: `docs/PERMISSION_ISSUE_ANALYSIS.md`
+- Demo Function Unit: `docs/DEMO_FUNCTION_UNIT_COMPLETE.md`
 
-- `docs/DEVELOPER_ROLES_RESTRUCTURE.md` - Role restructure details
-- `docs/ROLES_QUICK_REFERENCE.md` - Quick reference guide
-- `deploy/init-scripts/01-admin/01-create-roles-and-groups.sql` - Role initialization
+## Summary
+
+✅ **Root cause identified**: Role assignment was missing from `sys_role_assignments` table
+✅ **Solution implemented**: Added role assignment to correct table
+✅ **User action required**: Logout and login to refresh session with roles
+✅ **Expected result**: All quick action buttons will appear on function unit cards
+
+The permission system is working correctly - the user just needs to refresh their session to get the updated role information.

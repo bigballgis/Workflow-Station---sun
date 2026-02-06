@@ -173,6 +173,10 @@ public class TaskQueryComponent {
             }
         }
         
+        // 获取流程变量
+        @SuppressWarnings("unchecked")
+        Map<String, Object> variables = (Map<String, Object>) taskMap.get("variables");
+        
         return TaskInfo.builder()
                 .taskId((String) taskMap.get("taskId"))
                 .taskName((String) taskMap.get("taskName"))
@@ -191,6 +195,7 @@ public class TaskQueryComponent {
                 .dueDate(parseDateTime(taskMap.get("dueDate")))
                 .isOverdue(taskMap.get("isOverdue") != null ? (Boolean) taskMap.get("isOverdue") : false)
                 .formKey((String) taskMap.get("formKey"))
+                .variables(variables)
                 .build();
     }
     
@@ -498,49 +503,48 @@ public class TaskQueryComponent {
         
         List<TaskHistoryInfo> history = new ArrayList<>();
         
-        // 首先尝试从 Flowable 获取任务信息以获取 processInstanceId
-        Optional<TaskInfo> taskInfoOpt = getTaskById(taskId);
-        if (taskInfoOpt.isPresent()) {
-            String processInstanceId = taskInfoOpt.get().getProcessInstanceId();
-            
-            // 从 Flowable 获取任务历史
-            Optional<List<Map<String, Object>>> historyResult = workflowEngineClient.getTaskHistory(processInstanceId);
-            if (historyResult.isPresent()) {
-                List<Map<String, Object>> historyList = historyResult.get();
-                for (int i = 0; i < historyList.size(); i++) {
-                    Map<String, Object> historyMap = historyList.get(i);
-                    Long duration = null;
-                    if (i > 0) {
-                        // 计算持续时间
-                        LocalDateTime prevTime = parseDateTime(historyList.get(i-1).get("endTime"));
-                        LocalDateTime currTime = parseDateTime(historyMap.get("startTime"));
-                        if (prevTime != null && currTime != null) {
-                            duration = java.time.Duration.between(prevTime, currTime).toMillis();
-                        }
+        // 从 Flowable 获取任务历史（包含用户名称解析）
+        Optional<List<Map<String, Object>>> historyResult = workflowEngineClient.getTaskHistoryByTaskId(taskId);
+        if (historyResult.isPresent()) {
+            List<Map<String, Object>> historyList = historyResult.get();
+            for (int i = 0; i < historyList.size(); i++) {
+                Map<String, Object> historyMap = historyList.get(i);
+                Long duration = null;
+                if (i > 0) {
+                    // 计算持续时间
+                    LocalDateTime prevTime = parseDateTime(historyList.get(i-1).get("operationTime"));
+                    LocalDateTime currTime = parseDateTime(historyMap.get("operationTime"));
+                    if (prevTime != null && currTime != null) {
+                        duration = java.time.Duration.between(prevTime, currTime).toMillis();
                     }
-                    
-                    history.add(TaskHistoryInfo.builder()
-                            .id((String) historyMap.get("id"))
-                            .taskId((String) historyMap.get("taskId"))
-                            .taskName((String) historyMap.get("name"))
-                            .activityId((String) historyMap.get("activityId"))
-                            .activityName((String) historyMap.get("activityName"))
-                            .activityType((String) historyMap.get("activityType"))
-                            .operationType((String) historyMap.get("deleteReason"))
-                            .operatorId((String) historyMap.get("assignee"))
-                            .operatorName((String) historyMap.get("assignee"))
-                            .operationTime(parseDateTime(historyMap.get("endTime")))
-                            .duration(duration)
-                            .build());
                 }
+                
+                history.add(TaskHistoryInfo.builder()
+                        .id((String) historyMap.get("id"))
+                        .taskId((String) historyMap.get("taskId"))
+                        .taskName((String) historyMap.get("taskName"))
+                        .activityId((String) historyMap.get("activityId"))
+                        .activityName((String) historyMap.get("activityName"))
+                        .activityType((String) historyMap.get("activityType"))
+                        .operationType((String) historyMap.get("operationType"))
+                        .operatorId((String) historyMap.get("operatorId"))
+                        .operatorName((String) historyMap.get("operatorName"))
+                        .operationTime(parseDateTime(historyMap.get("operationTime")))
+                        .comment((String) historyMap.get("comment"))
+                        .duration(duration)
+                        .build());
             }
+            return history;
         }
         
         // 如果 Flowable 没有历史记录，尝试从本地数据库获取
-        if (history.isEmpty()) {
-            try {
+        try {
+            // 首先尝试从 Flowable 获取任务信息以获取 processInstanceId
+            Optional<TaskInfo> taskInfoOpt = getTaskById(taskId);
+            if (taskInfoOpt.isPresent()) {
+                String processInstanceId = taskInfoOpt.get().getProcessInstanceId();
+                
                 // 尝试从本地数据库获取历史
-                String processInstanceId = taskId.startsWith("task-") ? taskId.substring(5) : taskId;
                 List<ProcessHistory> dbHistory = processHistoryRepository
                         .findByProcessInstanceIdOrderByOperationTimeAsc(processInstanceId);
                 
@@ -569,9 +573,9 @@ public class TaskQueryComponent {
                             .duration(duration)
                             .build());
                 }
-            } catch (Exception e) {
-                log.warn("Failed to get process history from database: {}", e.getMessage());
             }
+        } catch (Exception e) {
+            log.warn("Failed to get process history from database: {}", e.getMessage());
         }
         
         return history;

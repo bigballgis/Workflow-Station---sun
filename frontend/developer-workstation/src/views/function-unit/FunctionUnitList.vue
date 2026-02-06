@@ -266,7 +266,7 @@ async function handleCreate() {
   if (result && createForm.tags.length > 0) {
     setTags(result.id, createForm.tags)
   }
-  ElMessage.success('创建成功')
+  ElMessage.success(t('functionUnit.createSuccess'))
   showCreateDialog.value = false
   createForm.name = ''
   createForm.description = ''
@@ -277,32 +277,32 @@ async function handleCreate() {
 }
 
 async function handlePublish(item: FunctionUnitResponse) {
-  const { value } = await ElMessageBox.prompt('请输入变更日志', '发布功能单元', { inputType: 'textarea' })
+  const { value } = await ElMessageBox.prompt(t('functionUnit.enterChangeLog'), t('functionUnit.publishTitle'), { inputType: 'textarea' })
   await store.publish(item.id, value)
-  ElMessage.success('发布成功')
+  ElMessage.success(t('functionUnit.publishSuccess'))
   loadData()
 }
 
 async function handleClone(item: FunctionUnitResponse) {
-  const { value } = await ElMessageBox.prompt('请输入新名称', '克隆功能单元')
+  const { value } = await ElMessageBox.prompt(t('functionUnit.enterNewName'), t('functionUnit.cloneTitle'))
   await store.clone(item.id, value)
-  ElMessage.success('克隆成功')
+  ElMessage.success(t('functionUnit.cloneSuccess'))
   loadData()
 }
 
 async function handleDelete(item: FunctionUnitResponse) {
-  await ElMessageBox.confirm('确定要删除该功能单元吗？', '提示', { type: 'warning' })
+  await ElMessageBox.confirm(t('functionUnit.deleteConfirm'), t('functionUnit.confirmTitle'), { type: 'warning' })
   await store.remove(item.id)
-  ElMessage.success('删除成功')
+  ElMessage.success(t('functionUnit.deleteSuccess'))
   loadData()
 }
 
 onMounted(() => {
-  // 检查是否已登录
+  // Check if logged in
   if (isAuthenticated()) {
     loadData()
   } else {
-    // 未登录，路由守卫应该已经重定向，但以防万一
+    // Not logged in, route guard should have redirected, but just in case
     router.push('/login')
   }
 })
