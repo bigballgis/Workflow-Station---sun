@@ -50,8 +50,14 @@ public class SecurityConfig {
                 .requestMatchers("/auth/**").permitAll()
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
                 .requestMatchers("/actuator/**").permitAll()
+<<<<<<< HEAD
                 // 开发环境：允许所有API访问（路径相对于 context-path /api/v1）
                 .anyRequest().permitAll()
+=======
+                // 所有其他API需要认证，具体权限由@PreAuthorize控制
+                .requestMatchers("/api/v1/**").authenticated()
+                .anyRequest().authenticated()
+>>>>>>> 476d041 (fix deploy and publish)
             )
             .addFilterBefore(jwtAuthenticationFilter, 
                 UsernamePasswordAuthenticationFilter.class);
