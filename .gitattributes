@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Default: auto-detect (MUST be first — later rules override)
 * text=auto
 
@@ -6,3 +7,8 @@
 
 # SQL scripts
 *.sql text eol=lf
+=======
+# Ensure shell scripts always use LF line endings
+*.sh text eol=lf
+docker-entrypoint.sh text eol=lf
+>>>>>>> dbad9b9 (fix local build issue)

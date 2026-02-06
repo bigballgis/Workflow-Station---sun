@@ -1,0 +1,259 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  # DB_INIT_MODE controls which init scripts are loaded:
+  #   - "schema-only": Only schema and system data (00-schema/)
+  #   - "with-admin": Schema + admin user (00-schema/ + 01-admin/)
+  #   - "full-test": All test data (00-schema/ + 01-admin/ + 02-test-data/ + 03-test-workflow/)
+  #   - "legacy": Use old flat init-scripts (for backward compatibility)
+  postgres:
+    image: postgres:16.5-alpine
+    container_name: platform-postgres
+    environment:
+      POSTGRES_DB: workflow_platform
+      POSTGRES_USER: platform
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-platform123}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Database initialization is now controlled via deploy/init-scripts
+      # Flyway automatic migrations have been disabled for controlled database management
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U platform -d workflow_platform"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - platform-network
+
+  # Redis Cache
+  redis:
+    image: redis:7.2-alpine
+    container_name: platform-redis
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis123}
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis123}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - platform-network
+
+  # Workflow Engine Core (Auth Service)
+  workflow-engine:
+    build:
+      context: ./backend/workflow-engine-core
+      dockerfile: Dockerfile
+    container_name: platform-workflow-engine
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8081:8080"
+    environment:
+      SERVER_PORT: 8080
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/workflow_platform
+      SPRING_DATASOURCE_USERNAME: platform
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-platform123}
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD:-redis123}
+      ADMIN_CENTER_URL: http://admin-center:8080
+      JWT_SECRET: ${JWT_SECRET:-your-256-bit-secret-key-for-development-only}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-86400000}
+      JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION:-604800000}
+      ENCRYPTION_SECRET_KEY: ${ENCRYPTION_SECRET_KEY:-your-32-byte-aes-256-secret-key!!}
+    networks:
+      - platform-network
+    profiles:
+      - backend
+      - full
+
+  # Admin Center Backend
+  admin-center:
+    build:
+      context: ./backend/admin-center
+      dockerfile: Dockerfile
+    container_name: platform-admin-center
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8090:8080"
+    environment:
+      SERVER_PORT: 8080
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/workflow_platform
+      SPRING_DATASOURCE_USERNAME: platform
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-platform123}
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD:-redis123}
+    networks:
+      - platform-network
+    profiles:
+      - backend
+      - full
+
+
+  # User Portal Backend
+  user-portal:
+    build:
+      context: ./backend/user-portal
+      dockerfile: Dockerfile
+    container_name: platform-user-portal
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      workflow-engine:
+        condition: service_started
+    ports:
+      - "8082:8080"
+    environment:
+      SERVER_PORT: 8080
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/workflow_platform
+      SPRING_DATASOURCE_USERNAME: platform
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-platform123}
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD:-redis123}
+      ADMIN_CENTER_URL: http://admin-center:8080
+      WORKFLOW_ENGINE_URL: http://workflow-engine:8080
+      JWT_SECRET: ${JWT_SECRET:-your-256-bit-secret-key-for-development-only}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-86400000}
+      JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION:-604800000}
+      ENCRYPTION_SECRET_KEY: ${ENCRYPTION_SECRET_KEY:-your-32-byte-aes-256-secret-key!!}
+    networks:
+      - platform-network
+    profiles:
+      - backend
+      - full
+
+  # Developer Workstation Backend
+  developer-workstation:
+    build:
+      context: ./backend/developer-workstation
+      dockerfile: Dockerfile
+    container_name: platform-developer-workstation
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8083:8080"
+    environment:
+      SERVER_PORT: 8080
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/workflow_platform
+      SPRING_DATASOURCE_USERNAME: platform
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-platform123}
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD:-redis123}
+      ADMIN_CENTER_URL: http://admin-center:8080
+      JWT_SECRET: ${JWT_SECRET:-your-256-bit-secret-key-for-development-only}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-86400000}
+    networks:
+      - platform-network
+    profiles:
+      - backend
+      - full
+
+  # API Gateway
+  api-gateway:
+    build:
+      context: ./backend/api-gateway
+      dockerfile: Dockerfile
+    container_name: platform-api-gateway
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/workflow_platform
+      SPRING_DATASOURCE_USERNAME: platform
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-platform123}
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD:-redis123}
+    networks:
+      - platform-network
+    profiles:
+      - backend
+      - full
+
+  # Frontend - Admin Center
+  frontend-admin:
+    build:
+      context: ./frontend/admin-center
+      dockerfile: Dockerfile
+    container_name: platform-frontend-admin
+    depends_on:
+      - admin-center
+      - workflow-engine
+    ports:
+      - "3000:80"
+    networks:
+      - platform-network
+    profiles:
+      - frontend
+      - full
+
+  # Frontend - User Portal
+  frontend-portal:
+    build:
+      context: ./frontend/user-portal
+      dockerfile: Dockerfile
+    container_name: platform-frontend-portal
+    depends_on:
+      - user-portal
+      - api-gateway
+    ports:
+      - "3001:80"
+    networks:
+      - platform-network
+    profiles:
+      - frontend
+      - full
+
+  # Frontend - Developer Workstation
+  frontend-developer:
+    build:
+      context: ./frontend/developer-workstation
+      dockerfile: Dockerfile
+    container_name: platform-frontend-developer
+    depends_on:
+      - developer-workstation
+      - workflow-engine
+    ports:
+      - "3002:80"
+    environment:
+      DEVELOPER_WORKSTATION_BACKEND_URL: http://developer-workstation:8080
+      ADMIN_CENTER_BACKEND_URL: http://admin-center:8080
+    networks:
+      - platform-network
+    profiles:
+      - frontend
+      - full
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  platform-network:
+    driver: bridge

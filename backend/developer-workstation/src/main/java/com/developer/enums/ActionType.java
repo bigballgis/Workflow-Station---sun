@@ -16,6 +16,12 @@ public enum ActionType {
     ROLLBACK,
     /** 默认动作 - 撤回 */
     WITHDRAW,
+    /** 取消/撤回操作 */
+    CANCEL,
+    /** 保存草稿 */
+    SAVE,
+    /** 导出数据 */
+    EXPORT,
     /** 自定义动作 - API调用 */
     API_CALL,
     /** 自定义动作 - 表单弹出 */
