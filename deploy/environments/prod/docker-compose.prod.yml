@@ -97,8 +97,8 @@ services:
       SPRING_REDIS_HOST: ${REDIS_HOST}
       SPRING_REDIS_PORT: ${REDIS_PORT}
       SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD}
-      ADMIN_CENTER_URL: http://admin-center:8080
-      WORKFLOW_ENGINE_URL: http://workflow-engine:8080
+      ADMIN_CENTER_URL: ${ADMIN_CENTER_URL}
+      WORKFLOW_ENGINE_URL: ${WORKFLOW_ENGINE_URL}
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRATION: ${JWT_EXPIRATION}
       ENCRYPTION_SECRET_KEY: ${ENCRYPTION_SECRET_KEY}
@@ -132,7 +132,7 @@ services:
       SPRING_REDIS_HOST: ${REDIS_HOST}
       SPRING_REDIS_PORT: ${REDIS_PORT}
       SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD}
-      ADMIN_CENTER_URL: http://admin-center:8080
+      ADMIN_CENTER_URL: ${ADMIN_CENTER_URL}
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRATION: ${JWT_EXPIRATION}
       ENCRYPTION_SECRET_KEY: ${ENCRYPTION_SECRET_KEY}
@@ -191,7 +191,7 @@ services:
     ports:
       - "${FRONTEND_ADMIN_PORT}:80"
     environment:
-      ADMIN_CENTER_BACKEND_URL: http://admin-center:8080
+      ADMIN_CENTER_BACKEND_URL: ${ADMIN_CENTER_BACKEND_URL}
     networks:
       - platform-prod-network
     restart: unless-stopped
@@ -210,8 +210,8 @@ services:
     ports:
       - "${FRONTEND_PORTAL_PORT}:80"
     environment:
-      USER_PORTAL_BACKEND_URL: http://user-portal:8080
-      ADMIN_CENTER_BACKEND_URL: http://admin-center:8080
+      USER_PORTAL_BACKEND_URL: ${USER_PORTAL_BACKEND_URL}
+      ADMIN_CENTER_BACKEND_URL: ${ADMIN_CENTER_BACKEND_URL}
     networks:
       - platform-prod-network
     restart: unless-stopped
@@ -230,8 +230,8 @@ services:
     ports:
       - "${FRONTEND_DEVELOPER_PORT}:80"
     environment:
-      DEVELOPER_WORKSTATION_BACKEND_URL: http://developer-workstation:8080
-      ADMIN_CENTER_BACKEND_URL: http://admin-center:8080
+      DEVELOPER_WORKSTATION_BACKEND_URL: ${DEVELOPER_WORKSTATION_BACKEND_URL}
+      ADMIN_CENTER_BACKEND_URL: ${ADMIN_CENTER_BACKEND_URL}
     networks:
       - platform-prod-network
     restart: unless-stopped
