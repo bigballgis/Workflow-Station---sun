@@ -41,16 +41,16 @@ describe('Field Import Property Tests', () => {
   // Helper function to map data type to form component
   const getFormComponentType = (dataType: string): string => {
     const typeMap: Record<string, string> = {
-      'VARCHAR': '输入框',
-      'TEXT': '文本域',
-      'INTEGER': '数字输入',
-      'BIGINT': '数字输入',
-      'DECIMAL': '数字输入',
-      'BOOLEAN': '开关',
-      'DATE': '日期选择',
-      'TIMESTAMP': '日期时间'
+      'VARCHAR': 'Input Box',
+      'TEXT': 'Text Area',
+      'INTEGER': 'Number Input',
+      'BIGINT': 'Number Input',
+      'DECIMAL': 'Number Input',
+      'BOOLEAN': 'Switch',
+      'DATE': 'Date Picker',
+      'TIMESTAMP': 'Date Time Picker'
     }
-    return typeMap[dataType] || '输入框'
+    return typeMap[dataType] || 'Input Box'
   }
 
   it('Property 4.1: Fields can be imported from any bound table', () => {
@@ -176,16 +176,16 @@ describe('Field Import Property Tests', () => {
 describe('Data Type to Form Component Mapping', () => {
   const getFormComponentType = (dataType: string): string => {
     const typeMap: Record<string, string> = {
-      'VARCHAR': '输入框',
-      'TEXT': '文本域',
-      'INTEGER': '数字输入',
-      'BIGINT': '数字输入',
-      'DECIMAL': '数字输入',
-      'BOOLEAN': '开关',
-      'DATE': '日期选择',
-      'TIMESTAMP': '日期时间'
+      'VARCHAR': 'Input Box',
+      'TEXT': 'Text Area',
+      'INTEGER': 'Number Input',
+      'BIGINT': 'Number Input',
+      'DECIMAL': 'Number Input',
+      'BOOLEAN': 'Switch',
+      'DATE': 'Date Picker',
+      'TIMESTAMP': 'Date Time Picker'
     }
-    return typeMap[dataType] || '输入框'
+    return typeMap[dataType] || 'Input Box'
   }
 
   it('should map all known data types correctly', () => {
@@ -195,7 +195,7 @@ describe('Data Type to Form Component Mapping', () => {
       fc.property(fc.constantFrom(...knownTypes), (dataType) => {
         const component = getFormComponentType(dataType)
         expect(component).toBeTruthy()
-        // All known types should have a mapping (VARCHAR maps to 输入框 which is valid)
+        // All known types should have a mapping
         expect(typeof component).toBe('string')
         return true
       }),
@@ -212,7 +212,7 @@ describe('Data Type to Form Component Mapping', () => {
         ),
         (unknownType) => {
           const component = getFormComponentType(unknownType)
-          expect(component).toBe('输入框')
+          expect(component).toBe('Input Box')
         }
       ),
       { numRuns: 20 }

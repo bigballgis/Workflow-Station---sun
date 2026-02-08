@@ -1,29 +1,29 @@
 <template>
   <div class="process-properties">
     <el-collapse v-model="activeGroups">
-      <el-collapse-item title="基本信息" name="basic">
+      <el-collapse-item :title="t('properties.basic')" name="basic">
         <el-form label-position="top" size="small">
-          <el-form-item label="流程ID">
-            <el-input v-model="processId" @change="updateProcessId" placeholder="流程唯一标识" />
+          <el-form-item :label="t('properties.processId')">
+            <el-input v-model="processId" @change="updateProcessId" :placeholder="t('properties.processIdPlaceholder')" />
           </el-form-item>
-          <el-form-item label="流程名称">
-            <el-input v-model="processName" @change="updateProcessName" placeholder="流程名称" />
+          <el-form-item :label="t('properties.processName')">
+            <el-input v-model="processName" @change="updateProcessName" :placeholder="t('properties.processNamePlaceholder')" />
           </el-form-item>
-          <el-form-item label="是否可执行">
+          <el-form-item :label="t('properties.isExecutable')">
             <el-switch v-model="isExecutable" @change="updateExecutable" />
           </el-form-item>
         </el-form>
       </el-collapse-item>
       
-      <el-collapse-item title="文档说明" name="documentation">
+      <el-collapse-item :title="t('properties.documentation')" name="documentation">
         <el-form label-position="top" size="small">
-          <el-form-item label="流程描述">
+          <el-form-item :label="t('properties.processDescription')">
             <el-input 
               v-model="documentation" 
               type="textarea" 
               :rows="4"
               @change="updateDocumentation"
-              placeholder="描述流程的用途和注意事项"
+              :placeholder="t('properties.processDescriptionPlaceholder')"
             />
           </el-form-item>
         </el-form>
@@ -34,7 +34,10 @@
 
 <script setup lang="ts">
 import { ref, watch, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { BpmnElement, BpmnModeler } from '@/types/bpmn'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   modeler: BpmnModeler
@@ -55,7 +58,7 @@ function loadProperties() {
   processName.value = bo.name || ''
   isExecutable.value = bo.isExecutable !== false
   
-  // 读取文档说明
+  // Read documentation
   const docs = bo.documentation
   if (docs && docs.length > 0) {
     documentation.value = docs[0].text || ''

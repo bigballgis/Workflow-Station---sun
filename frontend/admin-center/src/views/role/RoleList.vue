@@ -110,7 +110,7 @@ const showEditDialog = (role: Role) => { currentRole.value = role; formDialogVis
 const showMembersDialog = (role: Role) => { currentRole.value = role; membersDialogVisible.value = true }
 
 const handleDelete = async (role: Role) => {
-  await ElMessageBox.confirm('确定要删除该角色吗？', '提示', { type: 'warning' })
+  await ElMessageBox.confirm(t('role.confirmDeleteRole'), t('user.hint'), { type: 'warning' })
   await roleStore.deleteRole(role.id)
   ElMessage.success(t('common.success'))
 }

@@ -3,16 +3,29 @@
  * Stores tags in localStorage until backend support is added
  */
 
+import i18n from '@/i18n'
+
 const TAGS_STORAGE_KEY = 'function-unit-tags'
 
-export const PREDEFINED_TAGS = [
-  '核心业务',
-  '报表',
-  '审批流程',
-  '数据管理',
-  '系统集成',
-  '用户管理'
-]
+/**
+ * Get predefined tags with i18n translations
+ */
+export const getPredefinedTags = (): string[] => {
+  const { t } = i18n.global
+  return [
+    t('tags.coreBusiness'),
+    t('tags.reports'),
+    t('tags.approvalProcess'),
+    t('tags.dataManagement'),
+    t('tags.systemIntegration'),
+    t('tags.userManagement'),
+  ]
+}
+
+/**
+ * @deprecated Use getPredefinedTags() instead for dynamic i18n support
+ */
+export const PREDEFINED_TAGS = getPredefinedTags()
 
 interface TagData {
   [functionUnitId: number]: string[]
@@ -84,7 +97,7 @@ export function getAllUsedTags(): string[] {
  */
 export function getAllAvailableTags(): string[] {
   const usedTags = getAllUsedTags()
-  const allTags = new Set([...PREDEFINED_TAGS, ...usedTags])
+  const allTags = new Set([...getPredefinedTags(), ...usedTags])
   return Array.from(allTags).sort()
 }
 

@@ -2,6 +2,7 @@ import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import router from '@/router'
 import { refreshToken as refreshAuthToken, REFRESH_TOKEN_KEY, TOKEN_KEY, clearAuth, getUser } from './auth'
+import i18n from '@/i18n'
 
 let isRefreshing = false
 let failedQueue: Array<{ resolve: Function; reject: Function }> = []
@@ -29,7 +30,7 @@ api.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`
     }
     
-    // 添加 X-User-Id 请求头，用于后端权限检查
+    // Add X-User-Id request header for backend permission check
     const user = getUser()
     if (user && user.userId) {
       config.headers['X-User-Id'] = user.userId
@@ -88,25 +89,25 @@ api.interceptors.response.use(
     if (response) {
       switch (response.status) {
         case 403:
-          // 403 可能是未登录或权限不足
+          // 403 may indicate not logged in or insufficient permissions
           const token = localStorage.getItem(TOKEN_KEY)
           if (!token) {
-            // 没有 token，清除认证并重定向到登录页
+            // No token, clear auth and redirect to login page
             clearAuth()
             router.push('/login')
-            ElMessage.warning('请先登录')
+            ElMessage.warning(i18n.global.t('api.pleaseLogin'))
           } else {
-            ElMessage.error('没有权限执行此操作')
+            ElMessage.error(i18n.global.t('api.noPermission'))
           }
           break
         case 429:
-          ElMessage.warning('请求过于频繁，请稍后重试')
+          ElMessage.warning(i18n.global.t('api.tooManyRequests'))
           break
         default:
-          ElMessage.error(response.data?.message || '请求失败')
+          ElMessage.error(response.data?.message || i18n.global.t('api.requestFailed'))
       }
     } else {
-      ElMessage.error('网络错误，请检查网络连接')
+      ElMessage.error(i18n.global.t('api.networkError'))
     }
     return Promise.reject(error)
   }

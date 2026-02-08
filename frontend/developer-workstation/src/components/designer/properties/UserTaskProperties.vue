@@ -1,7 +1,7 @@
 <template>
   <div class="user-task-properties">
     <el-collapse v-model="activeGroups">
-      <!-- 基本信息 -->
+      <!-- Basic info -->
       <el-collapse-item :title="t('properties.basic')" name="basic">
         <el-form label-position="top" size="small">
           <el-form-item :label="t('properties.taskId')">
@@ -16,8 +16,8 @@
         </el-form>
       </el-collapse-item>
       
-      <!-- 处理人配置 -->
-      <el-collapse-item :title="t('properties.assignee')" name="assignee">
+      <!-- Assignee config -->
+      <el-collapse-item :title="t('properties.assigneeConfig')" name="assignee">
         <el-form label-position="top" size="small">
           <el-form-item :label="t('properties.assigneeType')">
             <el-select v-model="assigneeType" @change="handleAssigneeTypeChange">
@@ -41,12 +41,12 @@
             </el-select>
           </el-form-item>
           
-          <!-- 显示当前分配标签 -->
+          <!-- Display current assignment label -->
           <div v-if="assigneeLabel" class="assignee-label">
             <el-tag type="info" size="small">{{ assigneeLabel }}</el-tag>
           </div>
           
-          <!-- 业务单元选择器（FIXED_BU_ROLE需要，放在角色选择器上面） -->
+          <!-- Business unit selector (required for FIXED_BU_ROLE, placed above role selector) -->
           <el-form-item v-if="assigneeType === 'FIXED_BU_ROLE'" :label="t('properties.selectBusinessUnit')">
             <el-tree-select
               v-model="businessUnitId"
@@ -62,8 +62,8 @@
             <div class="form-tip">{{ t('properties.selectBusinessUnitTip') }}</div>
           </el-form-item>
           
-          <!-- 角色选择器（6种角色类型需要） -->
-          <!-- FIXED_BU_ROLE 需要先选择业务单元才能选择角色 -->
+          <!-- Role selector (required for 6 role types) -->
+          <!-- FIXED_BU_ROLE requires selecting business unit first before selecting role -->
           <el-form-item v-if="showRoleSelector" :label="t('properties.selectRole')">
             <el-select
               v-model="roleId"
@@ -86,7 +86,7 @@
             <div class="form-tip">{{ roleSelectTip }}</div>
           </el-form-item>
           
-          <!-- 认领类型提示 -->
+          <!-- Claim type tip -->
           <div v-if="needsClaim" class="claim-tip">
             <el-alert type="info" :closable="false" show-icon>
               <template #title>
@@ -105,7 +105,7 @@
         </el-form>
       </el-collapse-item>
       
-      <!-- 表单绑定 -->
+      <!-- Form binding -->
       <el-collapse-item :title="t('properties.form')" name="form">
         <el-form label-position="top" size="small">
           <el-form-item :label="t('properties.bindForm')">
@@ -119,7 +119,7 @@
         </el-form>
       </el-collapse-item>
       
-      <!-- 动作绑定 -->
+      <!-- Action binding -->
       <el-collapse-item :title="t('properties.actions')" name="actions">
         <el-form label-position="top" size="small">
           <el-form-item :label="t('properties.availableActions')">
@@ -136,7 +136,7 @@
         </el-form>
       </el-collapse-item>
       
-      <!-- 超时配置 -->
+      <!-- Timeout config -->
       <el-collapse-item :title="t('properties.timeout')" name="timeout">
         <el-form label-position="top" size="small">
           <el-form-item :label="t('properties.enableTimeout')">
@@ -160,29 +160,29 @@
         </el-form>
       </el-collapse-item>
       
-      <!-- 多实例配置 -->
-      <el-collapse-item title="多实例配置" name="multiInstance">
+      <!-- Multi-instance config -->
+      <el-collapse-item :title="t('properties.multiInstanceConfig')" name="multiInstance">
         <el-form label-position="top" size="small">
-          <el-form-item label="启用多实例">
+          <el-form-item :label="t('properties.enableMultiInstance')">
             <el-switch v-model="multiInstance" @change="updateExtProp('multiInstance', multiInstance)" />
           </el-form-item>
           
           <template v-if="multiInstance">
-            <el-form-item label="执行方式">
+            <el-form-item :label="t('properties.executionMode')">
               <el-radio-group v-model="sequential" @change="updateExtProp('sequential', sequential)">
-                <el-radio :value="false">并行</el-radio>
-                <el-radio :value="true">串行</el-radio>
+                <el-radio :value="false">{{ t('properties.parallelMode') }}</el-radio>
+                <el-radio :value="true">{{ t('properties.sequentialMode') }}</el-radio>
               </el-radio-group>
             </el-form-item>
             
-            <el-form-item label="集合变量">
-              <el-input v-model="collection" @change="updateExtProp('collection', collection)" placeholder="assigneeList" />
-              <div class="form-tip">包含处理人列表的流程变量名</div>
+            <el-form-item :label="t('properties.collectionVariable')">
+              <el-input v-model="collection" @change="updateExtProp('collection', collection)" :placeholder="t('properties.collectionVariablePlaceholder')" />
+              <div class="form-tip">{{ t('properties.collectionVariableTip') }}</div>
             </el-form-item>
             
-            <el-form-item label="完成条件">
+            <el-form-item :label="t('properties.completionCondition')">
               <el-input v-model="completionCondition" @change="updateExtProp('completionCondition', completionCondition)" placeholder="${nrOfCompletedInstances/nrOfInstances >= 0.5}" />
-              <div class="form-tip">JUEL 表达式，满足条件时结束多实例</div>
+              <div class="form-tip">{{ t('properties.completionConditionTip') }}</div>
             </el-form-item>
           </template>
         </el-form>
@@ -216,11 +216,11 @@ const props = defineProps<{
 
 const activeGroups = ref(['basic', 'assignee', 'form', 'actions'])
 
-// 基本属性
+// Basic properties
 const taskName = ref('')
 const taskDescription = ref('')
 
-// 9种标准分配类型
+// 9 standard assignment types
 type AssigneeTypeEnum = 
   | 'FUNCTION_MANAGER' 
   | 'ENTITY_MANAGER' 
@@ -232,7 +232,7 @@ type AssigneeTypeEnum =
   | 'FIXED_BU_ROLE' 
   | 'BU_UNBOUNDED_ROLE'
 
-// 处理人配置
+// Assignee config
 const assigneeType = ref<AssigneeTypeEnum>('INITIATOR')
 const roleId = ref('')
 const businessUnitId = ref('')
@@ -240,7 +240,7 @@ const assigneeLabel = ref('')
 const candidateUsers = ref('')
 const candidateGroups = ref('')
 
-// 业务单元和角色数据
+// Business unit and role data
 const businessUnits = ref<BusinessUnitInfo[]>([])
 const buBoundedRoles = ref<RoleInfo[]>([])
 const buUnboundedRoles = ref<RoleInfo[]>([])
@@ -248,20 +248,20 @@ const eligibleRoles = ref<RoleInfo[]>([])
 const loadingBusinessUnits = ref(false)
 const loadingRoles = ref(false)
 
-// 表单绑定
+// Form binding
 const formId = ref<number | null>(null)
 const forms = ref<FormDefinition[]>([])
 
-// 动作绑定
+// Action binding
 const actionIds = ref<number[]>([])
 const actions = ref<ActionDefinition[]>([])
 
-// 超时配置
+// Timeout config
 const timeoutEnabled = ref(false)
 const timeoutDuration = ref('')
 const timeoutAction = ref<'remind' | 'approve' | 'reject'>('remind')
 
-// 多实例配置
+// Multi-instance config
 const multiInstance = ref(false)
 const sequential = ref(false)
 const collection = ref('')
@@ -269,18 +269,18 @@ const completionCondition = ref('')
 
 const basicProps = computed(() => getBasicProperties(props.element))
 
-// 是否需要角色ID
+// Whether role ID is needed
 const needsRoleId = computed(() => {
   return ['CURRENT_BU_ROLE', 'CURRENT_PARENT_BU_ROLE', 'INITIATOR_BU_ROLE', 
           'INITIATOR_PARENT_BU_ROLE', 'FIXED_BU_ROLE', 'BU_UNBOUNDED_ROLE'].includes(assigneeType.value)
 })
 
-// 是否显示角色选择器
+// Whether to show role selector
 const showRoleSelector = computed(() => {
   return needsRoleId.value
 })
 
-// 角色选择器占位符
+// Role selector placeholder
 const roleSelectPlaceholder = computed(() => {
   if (assigneeType.value === 'FIXED_BU_ROLE' && !businessUnitId.value) {
     return t('properties.selectBusinessUnitFirst')
@@ -288,26 +288,26 @@ const roleSelectPlaceholder = computed(() => {
   return t('properties.selectRole')
 })
 
-// 是否需要认领
+// Whether claim is needed
 const needsClaim = computed(() => {
   return ['CURRENT_BU_ROLE', 'CURRENT_PARENT_BU_ROLE', 'INITIATOR_BU_ROLE', 
           'INITIATOR_PARENT_BU_ROLE', 'FIXED_BU_ROLE', 'BU_UNBOUNDED_ROLE'].includes(assigneeType.value)
 })
 
-// 根据分配类型过滤角色
+// Filter roles by assignment type
 const filteredRoles = computed(() => {
   if (assigneeType.value === 'BU_UNBOUNDED_ROLE') {
     return buUnboundedRoles.value
   } else if (assigneeType.value === 'FIXED_BU_ROLE' && businessUnitId.value) {
-    // FIXED_BU_ROLE 只显示业务单元的准入角色
+    // FIXED_BU_ROLE only shows eligible roles for the business unit
     return eligibleRoles.value
   } else {
-    // 其他BU角色类型显示所有BU绑定型角色
+    // Other BU role types show all BU bounded roles
     return buBoundedRoles.value
   }
 })
 
-// 角色选择提示
+// Role selection tip
 const roleSelectTip = computed(() => {
   if (assigneeType.value === 'BU_UNBOUNDED_ROLE') {
     return t('properties.buUnboundedRoleTip')
@@ -321,11 +321,11 @@ const roleSelectTip = computed(() => {
 function loadProperties() {
   if (!props.element) return
   
-  // 基本属性
+  // Basic properties
   const basic = getBasicProperties(props.element)
   taskName.value = basic.name
   
-  // 扩展属性
+  // Extension properties
   const ext = getExtensionProperties(props.element)
   taskDescription.value = ext.description || ''
   assigneeType.value = ext.assigneeType || 'INITIATOR'
@@ -344,7 +344,7 @@ function loadProperties() {
   collection.value = ext.collection || ''
   completionCondition.value = ext.completionCondition || ''
   
-  // 根据分配类型加载数据
+  // Load data based on assignment type
   if (needsRoleId.value) {
     loadRoles()
   }
@@ -377,7 +377,7 @@ function handleFormChange(id: number | null) {
 function handleAssigneeTypeChange(type: AssigneeTypeEnum) {
   updateExtProp('assigneeType', type)
   
-  // 根据类型设置默认标签
+  // Set default label based on type
   const labelMap: Record<AssigneeTypeEnum, string> = {
     INITIATOR: t('properties.initiator'),
     ENTITY_MANAGER: t('properties.entityManager'),
@@ -390,13 +390,13 @@ function handleAssigneeTypeChange(type: AssigneeTypeEnum) {
     BU_UNBOUNDED_ROLE: ''
   }
   
-  // 清空角色和业务单元
+  // Clear role and business unit
   roleId.value = ''
   businessUnitId.value = ''
   updateExtProp('roleId', '')
   updateExtProp('businessUnitId', '')
   
-  // 设置默认标签
+  // Set default label
   if (!needsRoleId.value) {
     assigneeLabel.value = labelMap[type] || ''
     updateExtProp('assigneeLabel', assigneeLabel.value)
@@ -405,17 +405,17 @@ function handleAssigneeTypeChange(type: AssigneeTypeEnum) {
     updateExtProp('assigneeLabel', '')
   }
   
-  // 加载角色数据
+  // Load role data
   if (needsRoleId.value) {
     loadRoles()
   }
   
-  // 加载业务单元数据
+  // Load business unit data
   if (type === 'FIXED_BU_ROLE') {
     loadBusinessUnits()
   }
   
-  // 清空候选用户/组
+  // Clear candidate users/groups
   candidateUsers.value = ''
   candidateGroups.value = ''
   updateExtProp('candidateUsers', '')
@@ -425,7 +425,7 @@ function handleAssigneeTypeChange(type: AssigneeTypeEnum) {
 function handleRoleChange(id: string) {
   updateExtProp('roleId', id)
   
-  // 更新标签
+  // Update label
   const role = filteredRoles.value.find(r => r.id === id)
   if (role) {
     const typeLabel = getAssigneeTypeLabel(assigneeType.value)
@@ -437,18 +437,18 @@ function handleRoleChange(id: string) {
 function handleBusinessUnitChange(id: string) {
   updateExtProp('businessUnitId', id)
   
-  // 清空角色选择
+  // Clear role selection
   roleId.value = ''
   updateExtProp('roleId', '')
   
-  // 加载业务单元的准入角色
+  // Load eligible roles for the business unit
   if (id) {
     loadEligibleRoles(id)
   } else {
     eligibleRoles.value = []
   }
   
-  // 更新标签
+  // Update label
   const bu = findBusinessUnitById(businessUnits.value, id)
   if (bu) {
     assigneeLabel.value = bu.name
@@ -471,7 +471,7 @@ function getAssigneeTypeLabel(type: AssigneeTypeEnum): string {
   return labels[type] || type
 }
 
-// 递归查找业务单元
+// Recursively find business unit
 function findBusinessUnitById(units: BusinessUnitInfo[], id: string): BusinessUnitInfo | null {
   for (const unit of units) {
     if (unit.id === id) return unit
@@ -483,7 +483,7 @@ function findBusinessUnitById(units: BusinessUnitInfo[], id: string): BusinessUn
   return null
 }
 
-// 加载角色
+// Load roles
 async function loadRoles() {
   loadingRoles.value = true
   try {
@@ -502,7 +502,7 @@ async function loadRoles() {
   }
 }
 
-// 加载业务单元
+// Load business units
 async function loadBusinessUnits() {
   if (businessUnits.value.length > 0) return
   loadingBusinessUnits.value = true
@@ -517,7 +517,7 @@ async function loadBusinessUnits() {
   }
 }
 
-// 加载业务单元的准入角色
+// Load eligible roles for business unit
 async function loadEligibleRoles(unitId: string) {
   try {
     const data = await adminCenterApi.getBusinessUnitEligibleRoles(unitId)
@@ -539,18 +539,18 @@ function handleActionsChange(ids: number[]) {
 
 const actionTypeLabel = (type: string) => {
   const map: Record<string, string> = {
-    APPROVE: '批准',
-    REJECT: '拒绝',
-    TRANSFER: '转办',
-    DELEGATE: '委托',
-    ROLLBACK: '回退',
-    WITHDRAW: '撤回',
-    PROCESS_SUBMIT: '流程提交',
-    PROCESS_REJECT: '流程驳回',
-    COMPOSITE: '组合动作',
-    API_CALL: 'API调用',
-    FORM_POPUP: '表单弹出',
-    CUSTOM_SCRIPT: '自定义脚本'
+    APPROVE: t('action.approve'),
+    REJECT: t('action.reject'),
+    TRANSFER: t('action.transfer'),
+    DELEGATE: t('action.delegate'),
+    ROLLBACK: t('action.rollback'),
+    WITHDRAW: t('action.withdraw'),
+    PROCESS_SUBMIT: t('action.processSubmit'),
+    PROCESS_REJECT: t('action.processReject'),
+    COMPOSITE: t('action.composite'),
+    API_CALL: t('action.apiCall'),
+    FORM_POPUP: t('action.formPopup'),
+    CUSTOM_SCRIPT: t('action.customScript')
   }
   return map[type] || type
 }

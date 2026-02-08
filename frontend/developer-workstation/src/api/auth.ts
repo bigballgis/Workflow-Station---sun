@@ -23,10 +23,10 @@ export interface LoginResponse {
   user: UserInfo
 }
 
-/** 分配目标类型 */
+/** Assignment target type */
 export type AssignmentTargetType = 'USER' | 'VIRTUAL_GROUP'
 
-/** 角色及来源信息 */
+/** Role with source information */
 export interface RoleWithSource {
   roleCode: string
   roleName: string

@@ -22,13 +22,13 @@
         <el-card v-if="selectedRole" v-loading="loading">
           <template #header>
             <div class="permission-header">
-              <span>{{ selectedRole.name }} - 权限配置</span>
-              <el-button type="primary" size="small" @click="handleSave" :disabled="loading">保存配置</el-button>
+              <span>{{ selectedRole.name }} - {{ t('permission.permissionConfig') }}</span>
+              <el-button type="primary" size="small" @click="handleSave" :disabled="loading">{{ t('permission.saveConfig') }}</el-button>
             </div>
           </template>
           
           <el-table :data="permissionMatrix" border>
-            <el-table-column prop="name" label="资源" width="200" />
+            <el-table-column prop="name" :label="t('permission.resource')" width="200" />
             <el-table-column v-for="action in actions" :key="action" :label="actionText(action)" width="100" align="center">
               <template #default="{ row }">
                 <el-checkbox v-model="row.permissions[action]" :disabled="loading" />
@@ -36,7 +36,7 @@
             </el-table-column>
           </el-table>
         </el-card>
-        <el-empty v-else description="请选择角色配置权限" />
+        <el-empty v-else :description="t('permission.selectRoleToConfig')" />
       </el-col>
     </el-row>
   </div>
@@ -95,7 +95,7 @@ const handleRoleSelect = async (roleId: string) => {
     })
   } catch (error) {
     console.error('Failed to load role permissions:', error)
-    ElMessage.error('加载角色权限失败')
+    ElMessage.error(t('permission.loadRolePermissionFailed'))
   } finally {
     loading.value = false
   }
@@ -121,7 +121,7 @@ const handleSave = async () => {
     ElMessage.success(t('common.success'))
   } catch (error) {
     console.error('Failed to save permissions:', error)
-    ElMessage.error('保存权限配置失败')
+    ElMessage.error(t('permission.savePermissionFailed'))
   } finally {
     loading.value = false
   }
@@ -135,7 +135,7 @@ onMounted(async () => {
     allPermissions.value = await permissionApi.getTree()
   } catch (error) {
     console.error('Failed to load permissions:', error)
-    ElMessage.error('加载权限列表失败')
+    ElMessage.error(t('permission.loadPermissionListFailed'))
   }
 })
 </script>
