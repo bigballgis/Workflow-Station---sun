@@ -268,7 +268,18 @@ export default {
     datePicker: '日期選擇器',
     dateTimePicker: '日期時間選擇器',
     yes: '是',
-    no: '否'
+    no: '否',
+    // Binding types
+    bindingTypePrimary: '主表',
+    bindingTypeSub: '子表',
+    bindingTypeRelated: '關聯表',
+    // Node types
+    nodeTypeUserTask: '使用者任務',
+    nodeTypeServiceTask: '服務任務',
+    nodeTypeStartEvent: '開始事件',
+    nodeTypeEndEvent: '結束事件',
+    // Other
+    unknownTable: '未知表'
   },
   action: {
     title: '動作設計器',

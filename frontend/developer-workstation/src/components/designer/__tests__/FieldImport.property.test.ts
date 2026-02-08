@@ -50,7 +50,7 @@ describe('Field Import Property Tests', () => {
       'DATE': 'Date Picker',
       'TIMESTAMP': 'Date Time Picker'
     }
-    return typeMap[dataType] || 'Input Box'
+    return Object.hasOwn(typeMap, dataType) ? typeMap[dataType] : 'Input Box'
   }
 
   it('Property 4.1: Fields can be imported from any bound table', () => {
@@ -185,7 +185,7 @@ describe('Data Type to Form Component Mapping', () => {
       'DATE': 'Date Picker',
       'TIMESTAMP': 'Date Time Picker'
     }
-    return typeMap[dataType] || 'Input Box'
+    return Object.hasOwn(typeMap, dataType) ? typeMap[dataType] : 'Input Box'
   }
 
   it('should map all known data types correctly', () => {
@@ -208,7 +208,7 @@ describe('Data Type to Form Component Mapping', () => {
       fc.property(
         fc.string({ minLength: 1, maxLength: 20 }).filter(s => 
           !['VARCHAR', 'TEXT', 'INTEGER', 'BIGINT', 'DECIMAL', 'BOOLEAN', 'DATE', 'TIMESTAMP'].includes(s) &&
-          !s.startsWith('__') // Exclude special JS properties
+          !Object.prototype.hasOwnProperty.call(Object.prototype, s) // Exclude JS prototype properties like 'constructor', 'toString', etc.
         ),
         (unknownType) => {
           const component = getFormComponentType(unknownType)
