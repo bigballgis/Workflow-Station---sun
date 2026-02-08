@@ -30,7 +30,7 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf.template
 
 # Copy entrypoint script
 COPY docker-entrypoint.sh /docker-entrypoint.sh
-RUN chmod +x /docker-entrypoint.sh
+RUN sed -i 's/\r$//' /docker-entrypoint.sh && chmod +x /docker-entrypoint.sh
 
 # Set default backend URLs
 ENV USER_PORTAL_URL=http://user-portal:8080
