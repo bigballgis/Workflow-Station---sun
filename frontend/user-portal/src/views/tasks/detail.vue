@@ -211,6 +211,7 @@ import {
   TaskHistoryInfo 
 } from '@/api/task'
 import { processApi } from '@/api/process'
+import { useUserStore } from '@/stores/user'
 import ProcessDiagram, { type ProcessNode, type ProcessFlow } from '@/components/ProcessDiagram.vue'
 import ProcessHistory, { type HistoryRecord } from '@/components/ProcessHistory.vue'
 import FormRenderer, { type FormField, type FormTab } from '@/components/FormRenderer.vue'
@@ -218,6 +219,7 @@ import dayjs from 'dayjs'
 
 const { t } = useI18n()
 const route = useRoute()
+const userStore = useUserStore()
 const router = useRouter()
 
 const taskId = route.params.id as string
@@ -710,10 +712,28 @@ const handleUrge = () => {
 const submitApprove = async () => {
   submitting.value = true
   try {
+    // 根据审批动作设置流程变量
+    const variables: Record<string, any> = {}
+    
+    if (currentApproveAction.value === 'APPROVE') {
+      variables.approval_result = 'approved'
+      variables.approved = true
+    } else if (currentApproveAction.value === 'REJECT') {
+      variables.approval_result = 'rejected'
+      variables.approved = false
+    }
+    
+    // 添加审批意见
+    if (approveForm.comment) {
+      variables.approval_comment = approveForm.comment
+    }
+    
     await completeTask(taskId, {
       taskId: taskId,
+      userId: userStore.userInfo?.username || 'admin',
       action: currentApproveAction.value,
-      comment: approveForm.comment
+      comment: approveForm.comment,
+      variables: variables
     })
     ElMessage.success('操作成功')
     approveDialogVisible.value = false
