@@ -37,6 +37,10 @@ app:
     admin-center-url: ${ADMIN_CENTER_URL:http://platform-admin-center:8080}
     timeout-seconds: 30
     max-retries: 3
+
+# Admin Center URL for permission checking
+admin-center:
+  url: ${ADMIN_CENTER_URL:http://platform-admin-center:8080}
     
   monitoring:
     enabled: true

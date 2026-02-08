@@ -28,10 +28,12 @@ public class DeveloperPermissionInterceptor implements HandlerInterceptor {
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) 
             throws Exception {
         
-        log.debug("Interceptor preHandle: {} {}", request.getMethod(), request.getRequestURI());
+        log.info("=== DeveloperPermissionInterceptor triggered ===");
+        log.info("Request: {} {}", request.getMethod(), request.getRequestURI());
+        log.info("Handler: {}", handler.getClass().getName());
         
         if (!(handler instanceof HandlerMethod)) {
-            log.debug("Handler is not HandlerMethod, skipping");
+            log.info("Handler is not HandlerMethod, skipping");
             return true;
         }
         
