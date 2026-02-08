@@ -12,7 +12,7 @@
             <component :is="action.icon" />
           </el-icon>
         </div>
-        <span class="action-name">{{ action.name }}</span>
+        <span class="action-name">{{ t(action.nameKey) }}</span>
       </div>
     </div>
   </div>
@@ -21,6 +21,7 @@
 <script setup lang="ts">
 import { markRaw } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import {
   Plus,
   Document,
@@ -32,7 +33,7 @@ import {
 
 interface QuickAction {
   key: string
-  name: string
+  nameKey: string
   icon: any
   color: string
   bgColor: string
@@ -41,11 +42,12 @@ interface QuickAction {
 }
 
 const router = useRouter()
+const { t } = useI18n()
 
 const actions: QuickAction[] = [
   {
     key: 'newProcess',
-    name: '发起流程',
+    nameKey: 'widget.newProcess',
     icon: markRaw(Plus),
     color: '#DB0011',
     bgColor: '#fff5f5',
@@ -53,7 +55,7 @@ const actions: QuickAction[] = [
   },
   {
     key: 'myApplications',
-    name: '我的申请',
+    nameKey: 'widget.myApplications',
     icon: markRaw(Document),
     color: '#1890ff',
     bgColor: '#e6f7ff',
@@ -61,7 +63,7 @@ const actions: QuickAction[] = [
   },
   {
     key: 'delegation',
-    name: '委托管理',
+    nameKey: 'widget.delegationMgmt',
     icon: markRaw(Share),
     color: '#FF6600',
     bgColor: '#fff7e6',
@@ -69,7 +71,7 @@ const actions: QuickAction[] = [
   },
   {
     key: 'permissions',
-    name: '权限申请',
+    nameKey: 'widget.permissionApply',
     icon: markRaw(User),
     color: '#00A651',
     bgColor: '#f6ffed',
@@ -77,7 +79,7 @@ const actions: QuickAction[] = [
   },
   {
     key: 'notifications',
-    name: '消息中心',
+    nameKey: 'widget.notificationCenter',
     icon: markRaw(Bell),
     color: '#722ed1',
     bgColor: '#f9f0ff',
@@ -85,7 +87,7 @@ const actions: QuickAction[] = [
   },
   {
     key: 'settings',
-    name: '个人设置',
+    nameKey: 'widget.personalSettings',
     icon: markRaw(Setting),
     color: '#909399',
     bgColor: '#f5f7fa',

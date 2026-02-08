@@ -2,8 +2,8 @@
   <div class="application-detail-page">
     <!-- 页面头部 -->
     <div class="page-header">
-      <el-button :icon="ArrowLeft" @click="$router.back()">返回</el-button>
-      <h1>{{ processInfo.processDefinitionName || '申请详情' }}</h1>
+      <el-button :icon="ArrowLeft" @click="$router.back()">{{ t('applicationDetail.back') }}</el-button>
+      <h1>{{ processInfo.processDefinitionName || t('applicationDetail.applicationDetail') }}</h1>
       <el-tag :type="getStatusType(processInfo.status)" size="small">{{ getStatusLabel(processInfo.status) }}</el-tag>
     </div>
 
@@ -24,26 +24,26 @@
       <div class="section info-section">
         <div class="section-header">
           <el-icon><InfoFilled /></el-icon>
-          <span>基本信息</span>
+          <span>{{ t('applicationDetail.basicInfo') }}</span>
         </div>
         <div class="section-content">
           <el-descriptions :column="3" border>
-            <el-descriptions-item label="流程标题">
+            <el-descriptions-item :label="t('applicationDetail.processTitle')">
               {{ processInfo.businessKey || processInfo.processDefinitionName || '-' }}
             </el-descriptions-item>
-            <el-descriptions-item label="流程类型">
+            <el-descriptions-item :label="t('applicationDetail.processType')">
               {{ processInfo.processDefinitionName || '-' }}
             </el-descriptions-item>
-            <el-descriptions-item label="发起人">
+            <el-descriptions-item :label="t('applicationDetail.initiator')">
               {{ processInfo.startUserName || processInfo.startUserId || '-' }}
             </el-descriptions-item>
-            <el-descriptions-item label="发起时间">
+            <el-descriptions-item :label="t('applicationDetail.initiateTime')">
               {{ formatDate(processInfo.startTime) }}
             </el-descriptions-item>
-            <el-descriptions-item label="当前节点">
+            <el-descriptions-item :label="t('applicationDetail.currentNode')">
               {{ processInfo.currentNode || '-' }}
             </el-descriptions-item>
-            <el-descriptions-item label="当前处理人">
+            <el-descriptions-item :label="t('applicationDetail.currentAssignee')">
               {{ getCurrentAssigneeDisplay() }}
             </el-descriptions-item>
           </el-descriptions>
@@ -54,9 +54,9 @@
       <div class="section workflow-section">
         <div class="section-header">
           <el-icon><Share /></el-icon>
-          <span>工作流程图</span>
+          <span>{{ t('applicationDetail.workflowDiagram') }}</span>
           <el-tag :type="getNodeStatusType(processInfo.status)" size="small">
-            {{ processInfo.currentNode || '待处理' }}
+            {{ processInfo.currentNode || t('applicationDetail.pending') }}
           </el-tag>
         </div>
         <div class="section-content">
@@ -69,7 +69,7 @@
             :show-toolbar="true"
             :show-legend="true"
           />
-          <el-empty v-else description="暂无流程定义" />
+          <el-empty v-else :description="t('applicationDetail.noProcessDefinition')" />
         </div>
       </div>
 
@@ -77,7 +77,7 @@
       <div class="section form-section">
         <div class="section-header">
           <el-icon><Document /></el-icon>
-          <span>{{ currentFormName || '申请表单' }}</span>
+          <span>{{ currentFormName || t('applicationDetail.applicationForm') }}</span>
         </div>
         <div class="section-content">
           <div v-if="formFields.length > 0 || formTabs.length > 0" class="form-container">
@@ -89,7 +89,7 @@
               :readonly="true"
             />
           </div>
-          <el-empty v-else description="暂无表单数据" />
+          <el-empty v-else :description="t('applicationDetail.noFormData')" />
         </div>
       </div>
 
@@ -97,7 +97,7 @@
       <div class="section history-section">
         <div class="section-header">
           <el-icon><Clock /></el-icon>
-          <span>流转记录</span>
+          <span>{{ t('applicationDetail.flowHistory') }}</span>
         </div>
         <div class="section-content">
           <ProcessHistory
@@ -112,14 +112,14 @@
       <div v-if="processInfo.status === 'RUNNING'" class="section action-section">
         <div class="action-buttons">
           <div class="left-actions">
-            <el-button @click="$router.back()">返回</el-button>
+            <el-button @click="$router.back()">{{ t('applicationDetail.back') }}</el-button>
           </div>
           <div class="right-actions">
             <el-button type="warning" @click="handleUrge" :loading="urging">
-              <el-icon><Bell /></el-icon> 催办
+              <el-icon><Bell /></el-icon> {{ t('applicationDetail.urge') }}
             </el-button>
             <el-button type="danger" @click="handleWithdraw" :loading="withdrawing">
-              <el-icon><RefreshLeft /></el-icon> 撤回
+              <el-icon><RefreshLeft /></el-icon> {{ t('applicationDetail.withdraw') }}
             </el-button>
           </div>
         </div>
@@ -131,6 +131,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, InfoFilled, Share, Document, Clock, Bell, RefreshLeft } from '@element-plus/icons-vue'
 import { processApi, type ProcessInstance } from '@/api/process'
@@ -141,6 +142,7 @@ import { formatDate } from '@/utils/dateFormat'
 
 const route = useRoute()
 const router = useRouter()
+const { t } = useI18n()
 const processId = route.params.id as string
 
 const loading = ref(true)
@@ -174,7 +176,7 @@ const getCurrentAssigneeDisplay = () => {
     if (candidates.length === 1) {
       return candidates[0]
     }
-    return `${candidates.join(' / ')} (任一审批)`
+    return `${candidates.join(' / ')} (${t('applicationDetail.anyApprove')})`
   }
   return '-'
 }
@@ -185,7 +187,7 @@ const getStatusType = (status?: string): 'success' | 'warning' | 'info' | 'dange
 }
 
 const getStatusLabel = (status?: string) => {
-  const map: Record<string, string> = { RUNNING: '进行中', COMPLETED: '已完成', WITHDRAWN: '已撤回', REJECTED: '已拒绝' }
+  const map: Record<string, string> = { RUNNING: t('applicationDetail.running'), COMPLETED: t('applicationDetail.completed'), WITHDRAWN: t('applicationDetail.withdrawn'), REJECTED: t('applicationDetail.rejected') }
   return map[status || ''] || status || '-'
 }
 
@@ -218,7 +220,7 @@ const loadProcessDetail = async () => {
     }
   } catch (error) {
     console.error('Failed to load process detail:', error)
-    ElMessage.error('加载流程详情失败')
+    ElMessage.error(t('applicationDetail.loadFailed'))
   } finally {
     loading.value = false
   }
@@ -368,14 +370,14 @@ const parseBpmnXml = (xml: string) => {
     doc.querySelectorAll('startEvent').forEach((event, index) => {
       const id = event.getAttribute('id') || `start_${index}`
       const pos = positionMap.get(id)
-      nodes.push({ id, name: event.getAttribute('name') || '开始', type: 'start', status: 'completed', x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
+      nodes.push({ id, name: event.getAttribute('name') || t('task.startNode'), type: 'start', status: 'completed', x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
       completed.push(id)
     })
     
     // 解析用户任务
     doc.querySelectorAll('userTask').forEach((task, index) => {
       const id = task.getAttribute('id') || `task_${index}`
-      const name = task.getAttribute('name') || `任务${index + 1}`
+      const name = task.getAttribute('name') || t('task.taskFallbackName', { index: index + 1 })
       const pos = positionMap.get(id)
       
       let status: 'completed' | 'current' | 'pending' = 'pending'
@@ -403,7 +405,7 @@ const parseBpmnXml = (xml: string) => {
     // 解析服务任务
     doc.querySelectorAll('serviceTask').forEach((task, index) => {
       const id = task.getAttribute('id') || `service_${index}`
-      const name = task.getAttribute('name') || `服务任务${index + 1}`
+      const name = task.getAttribute('name') || t('applicationDetail.serviceFallbackName', { index: index + 1 })
       const pos = positionMap.get(id)
       const status = processInfo.value.status === 'COMPLETED' ? 'completed' : 'pending'
       nodes.push({ id, name, type: 'task', status, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
@@ -424,7 +426,7 @@ const parseBpmnXml = (xml: string) => {
       const id = event.getAttribute('id') || `end_${index}`
       const pos = positionMap.get(id)
       const status = processInfo.value.status === 'COMPLETED' ? 'completed' : 'pending'
-      nodes.push({ id, name: event.getAttribute('name') || '结束', type: 'end', status, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
+      nodes.push({ id, name: event.getAttribute('name') || t('task.endNode'), type: 'end', status, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
       if (status === 'completed') completed.push(id)
     })
     
@@ -556,7 +558,7 @@ const loadProcessHistory = async () => {
       historyRecords.value = historyData.map((item: any, index: number) => ({
         id: `history_${index}`,
         nodeId: item.activityId || `node_${index}`,
-        nodeName: item.activityName || item.taskName || '未知节点',
+        nodeName: item.activityName || item.taskName || t('applicationDetail.unknownNode'),
         status: getHistoryStatus(item.operationType),
         assigneeName: item.operatorName || '-',
         comment: item.comment,
@@ -594,30 +596,30 @@ const getHistoryStatus = (operationType: string): 'completed' | 'current' | 'pen
 
 // 初始化流转记录
 const initHistoryRecords = () => {
-  const records: HistoryRecord[] = [{ id: 'submit', nodeId: 'start', nodeName: '提交申请', status: 'completed', assigneeName: processInfo.value.startUserName || processInfo.value.startUserId, createdTime: processInfo.value.startTime || '' }]
-  if (processInfo.value.status === 'RUNNING') records.push({ id: 'current', nodeId: 'task', nodeName: processInfo.value.currentNode || '待审批', status: 'current', assigneeName: processInfo.value.currentAssignee || '待分配', createdTime: '' })
-  else if (processInfo.value.status === 'COMPLETED') records.push({ id: 'end', nodeId: 'end', nodeName: '流程结束', status: 'completed', createdTime: processInfo.value.endTime || '' })
-  else if (processInfo.value.status === 'WITHDRAWN') records.push({ id: 'withdrawn', nodeId: 'withdrawn', nodeName: '已撤回', status: 'rejected', assigneeName: processInfo.value.startUserName || processInfo.value.startUserId, createdTime: processInfo.value.endTime || '' })
+  const records: HistoryRecord[] = [{ id: 'submit', nodeId: 'start', nodeName: t('applicationDetail.submitApplication'), status: 'completed', assigneeName: processInfo.value.startUserName || processInfo.value.startUserId, createdTime: processInfo.value.startTime || '' }]
+  if (processInfo.value.status === 'RUNNING') records.push({ id: 'current', nodeId: 'task', nodeName: processInfo.value.currentNode || t('applicationDetail.pendingApproval'), status: 'current', assigneeName: processInfo.value.currentAssignee || t('applicationDetail.unassigned'), createdTime: '' })
+  else if (processInfo.value.status === 'COMPLETED') records.push({ id: 'end', nodeId: 'end', nodeName: t('applicationDetail.processEnded'), status: 'completed', createdTime: processInfo.value.endTime || '' })
+  else if (processInfo.value.status === 'WITHDRAWN') records.push({ id: 'withdrawn', nodeId: 'withdrawn', nodeName: t('applicationDetail.processWithdrawn'), status: 'rejected', assigneeName: processInfo.value.startUserName || processInfo.value.startUserId, createdTime: processInfo.value.endTime || '' })
   historyRecords.value = records
 }
 
 // 催办
 const handleUrge = async () => {
   urging.value = true
-  try { await processApi.urgeProcess(processId); ElMessage.success('催办成功') }
-  catch { ElMessage.error('催办失败') }
+  try { await processApi.urgeProcess(processId); ElMessage.success(t('applicationDetail.urgeSuccess')) }
+  catch { ElMessage.error(t('applicationDetail.urgeFailed')) }
   finally { urging.value = false }
 }
 
 // 撤回
 const handleWithdraw = async () => {
   try {
-    await ElMessageBox.confirm('确定要撤回该流程吗？撤回后将无法恢复。', '提示', { type: 'warning' })
+    await ElMessageBox.confirm(t('applicationDetail.withdrawConfirm'), t('applicationDetail.withdrawConfirmTitle'), { type: 'warning' })
     withdrawing.value = true
-    await processApi.withdrawProcess(processId, '用户主动撤回')
-    ElMessage.success('撤回成功')
+    await processApi.withdrawProcess(processId, t('applicationDetail.userWithdraw'))
+    ElMessage.success(t('applicationDetail.withdrawSuccess'))
     router.push('/my-applications')
-  } catch (error: any) { if (error !== 'cancel') ElMessage.error('撤回失败') }
+  } catch (error: any) { if (error !== 'cancel') ElMessage.error(t('applicationDetail.withdrawFailed')) }
   finally { withdrawing.value = false }
 }
 

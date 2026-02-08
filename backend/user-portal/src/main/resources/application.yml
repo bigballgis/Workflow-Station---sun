@@ -40,6 +40,11 @@ spring:
           max-active: 8
           max-idle: 8
           min-idle: 0
+  
+  # 禁用静态资源处理，避免与 API 路由冲突
+  web:
+    resources:
+      add-mappings: false
 
 server:
   port: ${SERVER_PORT:8082}

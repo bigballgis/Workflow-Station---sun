@@ -50,6 +50,7 @@ export interface TaskInfo {
   claimed?: boolean
   originalAssignmentType?: string
   originalAssignee?: string
+  candidateUsers?: string
   // 已处理任务字段
   completedTime?: string
   durationInMillis?: number

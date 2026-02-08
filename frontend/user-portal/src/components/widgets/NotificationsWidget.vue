@@ -33,6 +33,7 @@
 <script setup lang="ts">
 import { ref, onMounted, markRaw } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { Bell, Document, Warning, InfoFilled } from '@element-plus/icons-vue'
 import { useNotificationStore } from '@/stores/notification'
 
@@ -47,6 +48,7 @@ interface Notification {
 }
 
 const router = useRouter()
+const { t } = useI18n()
 const notificationStore = useNotificationStore()
 
 const notifications = ref<Notification[]>([])
@@ -69,10 +71,10 @@ const formatTime = (time: string) => {
   const hours = Math.floor(diff / 3600000)
   const days = Math.floor(diff / 86400000)
 
-  if (minutes < 1) return '刚刚'
-  if (minutes < 60) return `${minutes}分钟前`
-  if (hours < 24) return `${hours}小时前`
-  if (days < 7) return `${days}天前`
+  if (minutes < 1) return t('widget.justNow')
+  if (minutes < 60) return t('widget.minutesAgo', { n: minutes })
+  if (hours < 24) return t('widget.hoursAgo', { n: hours })
+  if (days < 7) return t('widget.daysAgo', { n: days })
   return date.toLocaleDateString()
 }
 

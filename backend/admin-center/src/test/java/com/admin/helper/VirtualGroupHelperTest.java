@@ -272,7 +272,7 @@ class VirtualGroupHelperTest {
         List<User> result = virtualGroupHelper.getMembers(null);
         
         assertTrue(result.isEmpty());
-        verify(memberRepository, times(1)).findByGroupId(any());
+        verify(memberRepository, never()).findByGroupId(any());
         verify(userRepository, never()).findAllById(any());
     }
     

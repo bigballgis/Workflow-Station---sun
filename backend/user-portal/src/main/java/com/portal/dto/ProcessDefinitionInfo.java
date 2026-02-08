@@ -15,7 +15,7 @@ public class ProcessDefinitionInfo {
     private String name;
     private String description;
     private String category;
-    private Integer version;
+    private String version;
     private String icon;
     private Boolean isFavorite;
 }

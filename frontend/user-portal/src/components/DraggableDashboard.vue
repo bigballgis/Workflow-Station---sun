@@ -222,8 +222,8 @@ const editingWidget = ref<DashboardWidget | null>(null)
 const availableWidgets: WidgetType[] = [
   {
     type: 'taskOverview',
-    name: '任务概览',
-    description: '显示待办任务统计',
+    name: t('widget.taskOverview'),
+    description: t('widget.taskOverviewDesc'),
     icon: markRaw(List),
     defaultColSpan: 4,
     defaultRowSpan: 2,
@@ -231,8 +231,8 @@ const availableWidgets: WidgetType[] = [
   },
   {
     type: 'processStats',
-    name: '流程统计',
-    description: '显示流程处理统计',
+    name: t('widget.processStats'),
+    description: t('widget.processStatsDesc'),
     icon: markRaw(PieChart),
     defaultColSpan: 4,
     defaultRowSpan: 2,
@@ -240,8 +240,8 @@ const availableWidgets: WidgetType[] = [
   },
   {
     type: 'performance',
-    name: '个人绩效',
-    description: '显示个人绩效指标',
+    name: t('widget.performance'),
+    description: t('widget.performanceDesc'),
     icon: markRaw(DataLine),
     defaultColSpan: 4,
     defaultRowSpan: 2,
@@ -249,8 +249,8 @@ const availableWidgets: WidgetType[] = [
   },
   {
     type: 'quickActions',
-    name: '快捷操作',
-    description: '常用操作入口',
+    name: t('widget.quickActions'),
+    description: t('widget.quickActionsDesc'),
     icon: markRaw(Timer),
     defaultColSpan: 3,
     defaultRowSpan: 2,
@@ -258,8 +258,8 @@ const availableWidgets: WidgetType[] = [
   },
   {
     type: 'notifications',
-    name: '通知中心',
-    description: '最新通知消息',
+    name: t('widget.notifications'),
+    description: t('widget.notificationsDesc'),
     icon: markRaw(Bell),
     defaultColSpan: 3,
     defaultRowSpan: 2,
@@ -267,8 +267,8 @@ const availableWidgets: WidgetType[] = [
   },
   {
     type: 'calendar',
-    name: '日程安排',
-    description: '任务日历视图',
+    name: t('widget.calendar'),
+    description: t('widget.calendarDesc'),
     icon: markRaw(Calendar),
     defaultColSpan: 6,
     defaultRowSpan: 3,
@@ -472,12 +472,12 @@ const resetLayout = async () => {
 // 获取默认布局
 const getDefaultLayout = (): DashboardWidget[] => {
   return [
-    { id: 'w1', type: 'taskOverview', title: '任务概览', col: 1, row: 1, colSpan: 4, rowSpan: 2 },
-    { id: 'w2', type: 'processStats', title: '流程统计', col: 5, row: 1, colSpan: 4, rowSpan: 2 },
-    { id: 'w3', type: 'performance', title: '个人绩效', col: 9, row: 1, colSpan: 4, rowSpan: 2 },
-    { id: 'w4', type: 'quickActions', title: '快捷操作', col: 1, row: 3, colSpan: 3, rowSpan: 2 },
-    { id: 'w5', type: 'notifications', title: '通知中心', col: 4, row: 3, colSpan: 3, rowSpan: 2 },
-    { id: 'w6', type: 'calendar', title: '日程安排', col: 7, row: 3, colSpan: 6, rowSpan: 3 }
+    { id: 'w1', type: 'taskOverview', title: t('widget.taskOverview'), col: 1, row: 1, colSpan: 4, rowSpan: 2 },
+    { id: 'w2', type: 'processStats', title: t('widget.processStats'), col: 5, row: 1, colSpan: 4, rowSpan: 2 },
+    { id: 'w3', type: 'performance', title: t('widget.performance'), col: 9, row: 1, colSpan: 4, rowSpan: 2 },
+    { id: 'w4', type: 'quickActions', title: t('widget.quickActions'), col: 1, row: 3, colSpan: 3, rowSpan: 2 },
+    { id: 'w5', type: 'notifications', title: t('widget.notifications'), col: 4, row: 3, colSpan: 3, rowSpan: 2 },
+    { id: 'w6', type: 'calendar', title: t('widget.calendar'), col: 7, row: 3, colSpan: 6, rowSpan: 3 }
   ]
 }
 

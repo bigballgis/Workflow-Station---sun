@@ -140,6 +140,28 @@
       </template>
     </el-dialog>
     
+    <!-- Version History Dialog -->
+    <el-dialog v-model="showVersionsDialogVisible" :title="t('functionUnit.versions') + ' - ' + (currentUnit?.name || '')" width="800px">
+      <el-table :data="versionList" stripe v-loading="versionsLoading">
+        <el-table-column prop="name" :label="t('common.name')" />
+        <el-table-column prop="version" :label="t('functionUnit.version')" width="120" />
+        <el-table-column prop="status" :label="t('common.status')" width="120">
+          <template #default="{ row }">
+            <el-tag :type="statusType(row.status)">{{ getStatusText(row.status) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('common.enable')" width="80">
+          <template #default="{ row }">
+            <el-tag :type="row.enabled ? 'success' : 'info'" size="small">{{ row.enabled ? 'Yes' : 'No' }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="updatedAt" :label="t('common.updateTime')" />
+      </el-table>
+      <template #footer>
+        <el-button @click="showVersionsDialogVisible = false">{{ t('common.close') }}</el-button>
+      </template>
+    </el-dialog>
+    
     <!-- Delete Confirm Dialog -->
     <DeleteConfirmDialog
       v-model="showDeleteDialogVisible"
@@ -167,6 +189,7 @@ const showDeployDialogVisible = ref(false)
 const showAccessDialogVisible = ref(false)
 const showAddAccessDialogVisible = ref(false)
 const showDeleteDialogVisible = ref(false)
+const showVersionsDialogVisible = ref(false)
 const currentUnit = ref<FunctionUnit | null>(null)
 const deleteTargetUnit = ref<FunctionUnit | null>(null)
 const deletePreview = ref<DeletePreviewResponse | null>(null)
@@ -175,11 +198,13 @@ const loading = ref(false)
 const deploymentsLoading = ref(false)
 const accessLoading = ref(false)
 const addAccessLoading = ref(false)
+const versionsLoading = ref(false)
 
 const functionUnits = ref<FunctionUnit[]>([])
 const deployments = ref<Deployment[]>([])
 const accessConfigs = ref<FunctionUnitAccess[]>([])
 const businessRoles = ref<Role[]>([])
+const versionList = ref<FunctionUnit[]>([])
 
 const accessForm = reactive({
   roleId: '',
@@ -204,12 +229,42 @@ const formatDate = (dateStr: string) => {
   return new Date(dateStr).toLocaleString('zh-CN')
 }
 
+/**
+ * 比较两个语义化版本号，返回正数表示 a > b
+ */
+const compareVersions = (a: string, b: string): number => {
+  const pa = (a || '0.0.0').split('.').map(Number)
+  const pb = (b || '0.0.0').split('.').map(Number)
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const na = pa[i] || 0
+    const nb = pb[i] || 0
+    if (na !== nb) return na - nb
+  }
+  return 0
+}
+
+/**
+ * 按 code 分组，每组只保留版本号最高的记录
+ */
+const deduplicateByCode = <T extends { code: string; version: string }>(units: T[]): T[] => {
+  const map = new Map<string, T>()
+  for (const unit of units) {
+    const existing = map.get(unit.code)
+    if (!existing || compareVersions(unit.version, existing.version) > 0) {
+      map.set(unit.code, unit)
+    }
+  }
+  return Array.from(map.values())
+}
+
 const fetchFunctionUnits = async () => {
   loading.value = true
   try {
     const result = await functionUnitApi.list()
+    // Deduplicate by code, keeping only the latest version per code
+    const deduplicated = deduplicateByCode(result.content)
     // Add _enabledLoading property to each function unit
-    functionUnits.value = result.content.map(unit => ({
+    functionUnits.value = deduplicated.map(unit => ({
       ...unit,
       enabled: unit.enabled !== false, // Default to true
       _enabledLoading: false
@@ -249,11 +304,16 @@ const fetchAccessConfigs = async () => {
 
 const showDeployDialog = (unit: FunctionUnit) => { currentUnit.value = unit; showDeployDialogVisible.value = true }
 const showVersions = async (unit: FunctionUnit) => {
+  currentUnit.value = unit
+  showVersionsDialogVisible.value = true
+  versionsLoading.value = true
   try {
-    const versions = await functionUnitApi.getVersionHistory(unit.code)
-    ElMessage.info(t('functionUnit.versionCount', { name: unit.name, count: versions.length }))
+    versionList.value = await functionUnitApi.getAllVersions(unit.code)
   } catch (e) {
     console.error('Failed to load versions:', e)
+    ElMessage.error(t('functionUnit.loadFailed'))
+  } finally {
+    versionsLoading.value = false
   }
 }
 

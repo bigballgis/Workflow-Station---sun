@@ -686,8 +686,8 @@ defineExpose({
 </style>
 
 <style lang="scss">
-/* 全局样式，确保弹出框正确显示 */
+/* 全局样式，确保弹出框正确显示（包括在 el-dialog 内） */
 .form-renderer-popper {
-  z-index: 3000 !important;
+  z-index: 9999 !important;
 }
 </style>

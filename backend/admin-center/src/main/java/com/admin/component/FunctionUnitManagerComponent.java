@@ -24,12 +24,14 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.platform.common.version.SemanticVersion;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.*;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * 功能单元管理组件
@@ -80,13 +82,23 @@ public class FunctionUnitManagerComponent {
             // 4. 检测依赖冲突
             List<ImportResult.DependencyConflict> conflicts = detectConflicts(packageContent);
             
-            // 5. 创建功能单元
-            FunctionUnit functionUnit = createFunctionUnit(packageContent, request, importerId);
+            // 5. 如果启用新版本，自动禁用同一 code 的其他版本
+            boolean enableNewVersion = request.getEnableOnImport() != null ? request.getEnableOnImport() : true;
+            if (enableNewVersion) {
+                List<String> disabledVersions = disableOtherVersions(packageContent.getCode(), null, importerId);
+                if (!disabledVersions.isEmpty()) {
+                    log.info("Auto-disabled {} version(s) of {}: {}", 
+                            disabledVersions.size(), packageContent.getCode(), disabledVersions);
+                }
+            }
             
-            // 6. 保存依赖关系
+            // 6. 创建功能单元
+            FunctionUnit functionUnit = createFunctionUnit(packageContent, request, importerId, enableNewVersion);
+            
+            // 7. 保存依赖关系
             saveDependencies(functionUnit, packageContent.getDependencies());
             
-            // 7. 保存内容
+            // 8. 保存内容
             saveContents(functionUnit, packageContent.getContents());
             
             log.info("Function package imported successfully: {}", functionUnit.getId());
@@ -334,7 +346,8 @@ public class FunctionUnitManagerComponent {
      */
     private FunctionUnit createFunctionUnit(FunctionPackageContent packageContent, 
                                             FunctionUnitImportRequest request, 
-                                            String importerId) {
+                                            String importerId,
+                                            boolean enabled) {
         String checksum = calculateChecksum(request.getFileContent());
         
         FunctionUnit functionUnit = FunctionUnit.builder()
@@ -347,8 +360,10 @@ public class FunctionUnitManagerComponent {
                 .packageSize(request.getFileContent() != null ? (long) request.getFileContent().length() : 0L)
                 .checksum(checksum)
                 .status(FunctionUnitStatus.DRAFT)
+                .enabled(enabled)  // 设置启用状态
                 .importedAt(Instant.now())
                 .importedBy(importerId)
+                .deployedAt(Instant.now()) // 设置 deployed_at 避免非空约束冲突
                 .build();
         
         return functionUnitRepository.save(functionUnit);
@@ -1123,10 +1138,29 @@ public class FunctionUnitManagerComponent {
      */
     @Transactional
     public FunctionUnit setEnabled(String functionUnitId, boolean enabled) {
+        return setEnabled(functionUnitId, enabled, "system", "Manual status change");
+    }
+    
+    /**
+     * 设置功能单元启用状态（带操作人和原因）
+     * @param functionUnitId 功能单元ID
+     * @param enabled 启用状态
+     * @param operatorId 操作人ID
+     * @param reason 原因
+     * @return 更新后的功能单元
+     */
+    @Transactional
+    public FunctionUnit setEnabled(String functionUnitId, boolean enabled, String operatorId, String reason) {
         FunctionUnit unit = getFunctionUnitById(functionUnitId);
+        String oldStatus = unit.getEnabled() ? "enabled" : "disabled";
+        String newStatus = enabled ? "enabled" : "disabled";
+        
         unit.setEnabled(enabled);
         FunctionUnit saved = functionUnitRepository.save(unit);
-        log.info("Function unit {} enabled status set to: {}", functionUnitId, enabled);
+        
+        log.info("Function unit {} (code: {}, version: {}) status changed from {} to {} by operator: {}, reason: {}, timestamp: {}", 
+                functionUnitId, unit.getCode(), unit.getVersion(), oldStatus, newStatus, operatorId, reason, Instant.now());
+        
         return saved;
     }
     
@@ -1135,5 +1169,176 @@ public class FunctionUnitManagerComponent {
      */
     public Page<FunctionUnit> listDeployedAndEnabledFunctionUnits(Pageable pageable) {
         return functionUnitRepository.findByStatusAndEnabled(FunctionUnitStatus.DEPLOYED, true, pageable);
+    }
+    
+    /**
+     * 获取每个功能单元 code 的最新已部署版本
+     * 按 code 分组，使用 SemanticVersion 比较保留每组版本号最高的记录
+     */
+    public List<FunctionUnit> listLatestDeployedFunctionUnits() {
+        List<FunctionUnit> allDeployed = functionUnitRepository.findByStatusAndEnabled(
+                FunctionUnitStatus.DEPLOYED, true);
+        
+        if (allDeployed.isEmpty()) {
+            return Collections.emptyList();
+        }
+        
+        // 按 code 分组，每组保留语义化版本号最高的记录
+        Map<String, FunctionUnit> latestByCode = new HashMap<>();
+        for (FunctionUnit unit : allDeployed) {
+            String code = unit.getCode();
+            FunctionUnit existing = latestByCode.get(code);
+            if (existing == null) {
+                latestByCode.put(code, unit);
+            } else {
+                try {
+                    SemanticVersion currentVersion = SemanticVersion.parse(unit.getVersion());
+                    SemanticVersion existingVersion = SemanticVersion.parse(existing.getVersion());
+                    if (currentVersion.compareTo(existingVersion) > 0) {
+                        latestByCode.put(code, unit);
+                    }
+                } catch (IllegalArgumentException e) {
+                    // 版本号格式不合法，降级为字典序比较
+                    log.warn("Invalid semantic version format, falling back to lexicographic comparison: {} vs {}", 
+                            unit.getVersion(), existing.getVersion());
+                    if (unit.getVersion().compareTo(existing.getVersion()) > 0) {
+                        latestByCode.put(code, unit);
+                    }
+                }
+            }
+        }
+        
+        return new ArrayList<>(latestByCode.values());
+    }
+    
+    // ==================== 新增版本管理方法 ====================
+    
+    /**
+     * 禁用指定功能单元代码的其他版本
+     * @param code 功能单元代码
+     * @param enabledVersion 保持启用的版本号（如果为null则禁用所有版本）
+     * @param operatorId 操作人ID
+     * @return 被禁用的版本号列表
+     */
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW)
+    public List<String> disableOtherVersions(String code, String enabledVersion, String operatorId) {
+        log.info("Disabling other versions for code: {}, keeping enabled: {}, operator: {}", 
+                code, enabledVersion, operatorId);
+        
+        List<String> disabledVersions = new ArrayList<>();
+        
+        // 查询该代码的所有版本
+        List<FunctionUnit> allVersions = functionUnitRepository.findAllByCodeOrderByVersionDesc(code);
+        
+        for (FunctionUnit unit : allVersions) {
+            // 如果不是要保持启用的版本，且当前是启用状态，则禁用
+            if (!unit.getVersion().equals(enabledVersion) && unit.isEnabled()) {
+                unit.setEnabled(false);
+                functionUnitRepository.save(unit);
+                disabledVersions.add(unit.getVersion());
+                log.info("Disabled version {} of function unit {}", unit.getVersion(), code);
+            }
+        }
+        
+        // 强制刷新到数据库，确保约束检查时旧版本已禁用
+        functionUnitRepository.flush();
+        
+        log.info("Disabled {} versions for function unit {}: {}", 
+                disabledVersions.size(), code, disabledVersions);
+        
+        return disabledVersions;
+    }
+    
+    /**
+     * 获取当前启用的版本
+     * @param code 功能单元代码
+     * @return 当前启用的功能单元，如果没有则返回空
+     */
+    public Optional<FunctionUnit> getEnabledVersion(String code) {
+        return functionUnitRepository.findByCodeAndEnabledTrue(code);
+    }
+    
+    /**
+     * 激活指定版本（用于回滚）
+     * @param code 功能单元代码
+     * @param targetVersion 目标版本号
+     * @param operatorId 操作人ID
+     * @return 激活的功能单元
+     */
+    @Transactional
+    public FunctionUnit activateVersion(String code, String targetVersion, String operatorId) {
+        log.info("Activating version {} for code: {}, operator: {}", targetVersion, code, operatorId);
+        
+        // 1. 验证目标版本是否存在
+        FunctionUnit targetUnit = functionUnitRepository.findByCodeAndVersion(code, targetVersion)
+                .orElseThrow(() -> new FunctionUnitNotFoundException(
+                        "功能单元版本不存在: " + code + ":" + targetVersion));
+        
+        // 2. 验证目标版本状态
+        if (!targetUnit.isDeployable()) {
+            throw new AdminBusinessException("INVALID_STATUS", 
+                    "无法激活状态为 " + targetUnit.getStatus() + " 的版本。只能激活 VALIDATED 或 DEPLOYED 状态的版本。");
+        }
+        
+        // 3. 获取当前启用的版本
+        Optional<FunctionUnit> currentEnabled = getEnabledVersion(code);
+        
+        // 4. 禁用当前启用的版本
+        if (currentEnabled.isPresent()) {
+            FunctionUnit current = currentEnabled.get();
+            if (!current.getVersion().equals(targetVersion)) {
+                current.setEnabled(false);
+                functionUnitRepository.save(current);
+                log.info("Disabled current version {} during activation", current.getVersion());
+            }
+        }
+        
+        // 5. 启用目标版本
+        targetUnit.setEnabled(true);
+        FunctionUnit activated = functionUnitRepository.save(targetUnit);
+        
+        log.info("Successfully activated version {} for function unit {}", targetVersion, code);
+        
+        return activated;
+    }
+    
+    /**
+     * 获取版本历史（包含启用状态）
+     * @param code 功能单元代码
+     * @return 版本历史列表
+     */
+    public List<com.admin.dto.response.VersionHistoryEntry> getVersionHistoryWithStatus(String code) {
+        List<FunctionUnit> versions = functionUnitRepository.findAllByCodeOrderByVersionDesc(code);
+        List<com.admin.dto.response.VersionHistoryEntry> history = new ArrayList<>();
+        
+        for (int i = 0; i < versions.size(); i++) {
+            FunctionUnit current = versions.get(i);
+            
+            com.admin.dto.response.VersionHistoryEntry entry = 
+                    com.admin.dto.response.VersionHistoryEntry.builder()
+                    .version(current.getVersion())
+                    .status(current.getStatus())
+                    .enabled(current.getEnabled())
+                    .createdAt(current.getCreatedAt())
+                    .createdBy(current.getCreatedBy())
+                    .deployedAt(current.getDeployedAt())
+                    .validatedAt(current.getValidatedAt())
+                    .validatedBy(current.getValidatedBy())
+                    .isLatest(i == 0)
+                    .isCurrentlyEnabled(current.isEnabled())
+                    .build();
+            
+            // 计算与前一版本的差异类型
+            if (i < versions.size() - 1) {
+                FunctionUnit previous = versions.get(i + 1);
+                entry.setChangeType(determineChangeType(previous.getVersion(), current.getVersion()));
+            } else {
+                entry.setChangeType("INITIAL");
+            }
+            
+            history.add(entry);
+        }
+        
+        return history;
     }
 }

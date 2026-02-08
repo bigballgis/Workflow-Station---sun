@@ -24,9 +24,11 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import * as echarts from 'echarts'
 import { useDashboardStore } from '@/stores/dashboard'
 
+const { t } = useI18n()
 const chartRef = ref<HTMLElement>()
 let chart: echarts.ECharts | null = null
 
@@ -71,9 +73,9 @@ const initChart = () => {
           show: false
         },
         data: [
-          { value: stats.value.inProgress, name: '进行中', itemStyle: { color: '#FF6600' } },
-          { value: stats.value.completed, name: '已完成', itemStyle: { color: '#00A651' } },
-          { value: 5, name: '已拒绝', itemStyle: { color: '#DB0011' } }
+          { value: stats.value.inProgress, name: t('widget.inProgress'), itemStyle: { color: '#FF6600' } },
+          { value: stats.value.completed, name: t('widget.completed'), itemStyle: { color: '#00A651' } },
+          { value: 5, name: t('widget.rejected'), itemStyle: { color: '#DB0011' } }
         ]
       }
     ]

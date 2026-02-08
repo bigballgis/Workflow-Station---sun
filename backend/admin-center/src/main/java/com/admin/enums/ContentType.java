@@ -22,5 +22,10 @@ public enum ContentType {
     /**
      * 脚本
      */
-    SCRIPT
+    SCRIPT,
+    
+    /**
+     * 操作定义 (Action)
+     */
+    ACTION
 }

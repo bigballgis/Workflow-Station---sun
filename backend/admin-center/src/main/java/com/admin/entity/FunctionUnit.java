@@ -70,6 +70,14 @@ public class FunctionUnit {
     @Column(name = "imported_by", length = 64)
     private String importedBy;
     
+    /**
+     * 功能单元部署时间戳
+     * 记录功能单元首次部署到系统的时间
+     */
+    @Column(name = "deployed_at", nullable = false)
+    @Builder.Default
+    private Instant deployedAt = Instant.now();
+    
     @Column(name = "validated_at")
     private Instant validatedAt;
     

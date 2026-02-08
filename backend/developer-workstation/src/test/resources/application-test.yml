@@ -21,6 +21,7 @@ jwt:
 security:
   max-login-attempts: 5
   lock-duration-minutes: 30
+  jwt-secret-key: testSecretKeyForDeveloperWorkstationModule123456
 
 rate-limit:
   requests-per-minute: 1000

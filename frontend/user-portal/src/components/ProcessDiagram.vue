@@ -2,10 +2,10 @@
   <div class="process-diagram" ref="containerRef">
     <div class="diagram-toolbar" v-if="showToolbar">
       <el-button-group>
-        <el-button :icon="ZoomIn" @click="zoomIn" title="放大" />
-        <el-button :icon="ZoomOut" @click="zoomOut" title="缩小" />
-        <el-button :icon="RefreshRight" @click="resetZoom" title="重置" />
-        <el-button :icon="FullScreen" @click="fitViewport" title="适应" />
+        <el-button :icon="ZoomIn" @click="zoomIn" :title="t('diagram.zoomIn')" />
+        <el-button :icon="ZoomOut" @click="zoomOut" :title="t('diagram.zoomOut')" />
+        <el-button :icon="RefreshRight" @click="resetZoom" :title="t('diagram.reset')" />
+        <el-button :icon="FullScreen" @click="fitViewport" :title="t('diagram.fitViewport')" />
       </el-button-group>
       <span class="zoom-level">{{ Math.round(zoomLevel * 100) }}%</span>
     </div>
@@ -13,15 +13,15 @@
     <div class="diagram-legend" v-if="showLegend">
       <div class="legend-item">
         <span class="legend-dot completed"></span>
-        <span>已完成</span>
+        <span>{{ t('diagram.completed') }}</span>
       </div>
       <div class="legend-item">
         <span class="legend-dot current"></span>
-        <span>当前节点</span>
+        <span>{{ t('diagram.currentNode') }}</span>
       </div>
       <div class="legend-item">
         <span class="legend-dot pending"></span>
-        <span>待处理</span>
+        <span>{{ t('diagram.pending') }}</span>
       </div>
     </div>
   </div>
@@ -29,7 +29,10 @@
 
 <script setup lang="ts">
 import { ref, onMounted, watch, nextTick } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ZoomIn, ZoomOut, RefreshRight, FullScreen } from '@element-plus/icons-vue'
+
+const { t } = useI18n()
 
 export interface ProcessNode {
   id: string

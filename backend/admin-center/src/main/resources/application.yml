@@ -98,6 +98,11 @@ spring:
     locations: classpath:db/migration/admin-center,classpath:db/migration/platform-security
     baseline-on-migrate: true
     validate-on-migrate: false
+  
+  # 禁用静态资源处理，避免与 API 路由冲突
+  web:
+    resources:
+      add-mappings: false
 
   data:
     redis:

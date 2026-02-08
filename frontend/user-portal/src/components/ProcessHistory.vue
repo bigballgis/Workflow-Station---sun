@@ -76,7 +76,7 @@
 
           <!-- 签名图片 -->
           <div class="signature" v-if="record.signatureUrl">
-            <img :src="record.signatureUrl" alt="签名" />
+            <img :src="record.signatureUrl" alt="Signature" />
           </div>
         </el-card>
       </el-timeline-item>

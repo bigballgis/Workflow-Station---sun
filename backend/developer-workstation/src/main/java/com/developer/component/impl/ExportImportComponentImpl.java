@@ -29,6 +29,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -271,6 +272,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
                 .code(code != null ? code : generateImportCode()) // Use code from manifest or generate new one
                 .description(description)
                 .currentVersion(version)
+                .deployedAt(Instant.now()) // Set deployed_at to avoid null constraint violation
                 .build();
         functionUnit = functionUnitRepository.save(functionUnit);
         

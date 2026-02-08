@@ -8,7 +8,7 @@ export interface ProcessDefinition {
   name: string
   description?: string
   category: string
-  version: number
+  version: string
   icon?: string
   isFavorite?: boolean
 }

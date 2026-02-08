@@ -58,9 +58,17 @@ const recentTasks = ref<Array<{ id: string; name: string; priority: string }>>([
 const getPriorityType = (priority: string) => {
   const types: Record<string, string> = {
     '紧急': 'danger',
+    'URGENT': 'danger',
+    'Urgent': 'danger',
     '高': 'warning',
+    'HIGH': 'warning',
+    'High': 'warning',
     '普通': 'info',
-    '低': 'success'
+    'NORMAL': 'info',
+    'Normal': 'info',
+    '低': 'success',
+    'LOW': 'success',
+    'Low': 'success'
   }
   return types[priority] || 'info'
 }
