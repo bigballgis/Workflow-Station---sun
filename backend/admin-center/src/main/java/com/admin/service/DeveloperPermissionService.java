@@ -114,13 +114,22 @@ public class DeveloperPermissionService {
             return Collections.emptySet();
         }
         
-        // 首先检查用户是否是管理员（ADMIN 角色拥有所有权限）
-        List<String> allRoleIds = userRoleRepository.findRoleIdsByUserId(userId);
+        log.info("Getting permissions for user: {} (resolved to userId: {})", userIdOrUsername, userId);
+        
+        // 首先检查用户是否是管理员（ADMIN 类型角色拥有所有权限）
+        // 使用 findAllRoleIdsByUserId 来获取包括虚拟组分配的所有角色
+        List<String> allRoleIds = userRoleRepository.findAllRoleIdsByUserId(userId);
+        log.info("User {} has {} roles: {}", userId, allRoleIds.size(), allRoleIds);
+        
         for (String roleId : allRoleIds) {
             Role role = roleRepository.findById(roleId).orElse(null);
-            if (role != null && "ADMIN".equals(role.getCode())) {
-                // 管理员拥有所有开发权限
-                return EnumSet.allOf(DeveloperPermission.class);
+            if (role != null) {
+                log.info("Checking role: id={}, code={}, type={}", role.getId(), role.getCode(), role.getType());
+                if ("ADMIN".equals(role.getType())) {
+                    // 管理员拥有所有开发权限
+                    log.info("User {} has ADMIN role, granting all developer permissions", userId);
+                    return EnumSet.allOf(DeveloperPermission.class);
+                }
             }
         }
         
