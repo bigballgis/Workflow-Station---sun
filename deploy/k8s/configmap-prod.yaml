@@ -7,60 +7,63 @@ data:
   # Spring Profile
   SPRING_PROFILES_ACTIVE: "prod"
   
-  # 服务端口（K8s 内部统一使用 8080）
+  # Server Port (unified to 8080 inside K8S)
   SERVER_PORT: "8080"
   
-  # 数据库配置（非敏感部分）
+  # Database Configuration (non-sensitive)
   SPRING_DATASOURCE_URL: "jdbc:postgresql://your-prod-postgres-host:5432/workflow_platform_prod"
   
-  # Redis 配置（非敏感部分）
+  # Redis Configuration (non-sensitive)
   SPRING_REDIS_HOST: "your-prod-redis-host"
   SPRING_REDIS_PORT: "6379"
   
-  # 服务间调用 URL（使用 K8s Service 名称）
+  # Kafka Configuration
+  SPRING_KAFKA_BOOTSTRAP_SERVERS: "your-prod-kafka-host:9092"
+  
+  # Service URLs (using K8S Service names)
   ADMIN_CENTER_URL: "http://admin-center-service:8080"
   WORKFLOW_ENGINE_URL: "http://workflow-engine-service:8080"
   DEVELOPER_WORKSTATION_URL: "http://developer-workstation-service:8080"
   USER_PORTAL_URL: "http://user-portal-service:8080"
   API_GATEWAY_URL: "http://api-gateway-service:8080"
   
-  # 前端 Nginx 代理后端 URL（K8s 内部服务名称）
+  # Frontend Nginx proxy backend URLs (K8S internal service names)
   ADMIN_CENTER_BACKEND_URL: "http://admin-center-service:8080"
   USER_PORTAL_BACKEND_URL: "http://user-portal-service:8080"
   DEVELOPER_WORKSTATION_BACKEND_URL: "http://developer-workstation-service:8080"
   WORKFLOW_ENGINE_BACKEND_URL: "http://workflow-engine-service:8080"
   API_GATEWAY_BACKEND_URL: "http://api-gateway-service:8080"
   
-  # JWT 配置（非敏感部分 - 生产环境使用较短的过期时间）
+  # JWT Configuration (non-sensitive, shorter expiration for production)
   JWT_EXPIRATION: "28800000"
   JWT_REFRESH_EXPIRATION: "86400000"
   
-  # 日志配置（生产环境只记录 WARN 和 ERROR）
+  # Logging (production: WARN and ERROR only)
   LOG_LEVEL_ROOT: "WARN"
   LOG_LEVEL_PLATFORM: "INFO"
   LOG_LEVEL_SQL: "ERROR"
   
-  # 缓存配置（生产环境使用更长的缓存时间以提高性能）
+  # Cache Configuration (production uses longer TTL for performance)
   CACHE_USER_TTL_MINUTES: "60"
   CACHE_PERMISSION_TTL_MINUTES: "120"
   CACHE_DICTIONARY_TTL_MINUTES: "240"
   
-  # 安全配置（生产环境使用最严格的安全策略）
+  # Security Configuration (production uses strictest policies)
   SECURITY_PASSWORD_MIN_LENGTH: "12"
   SECURITY_LOGIN_MAX_FAILED_ATTEMPTS: "3"
   SECURITY_SESSION_TIMEOUT_MINUTES: "15"
   
-  # Swagger 配置（生产环境必须禁用）
+  # Swagger (must be disabled in production)
   SWAGGER_ENABLED: "false"
   
-  # Actuator 配置（生产环境限制访问）
+  # Actuator (restricted access in production)
   MANAGEMENT_ENDPOINTS_ENABLED: "true"
   ACTUATOR_HEALTH_SHOW_DETAILS: "never"
   
-  # Flowable 配置（生产环境禁止自动更新 schema）
+  # Flowable (disable auto schema update in production)
   FLOWABLE_SCHEMA_UPDATE: "false"
   
-  # 数据库连接池配置（生产环境优化）
+  # Database Connection Pool (production optimized)
   DATASOURCE_MAX_POOL_SIZE: "50"
   DATASOURCE_MIN_IDLE: "10"
   DATASOURCE_CONNECTION_TIMEOUT: "30000"

@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
       - name: admin-center-frontend
-        image: your-registry/admin-center-frontend:latest
+        image: harbor.company.com/workflow/admin-center-frontend:latest  # Update to your registry
         imagePullPolicy: Always
         ports:
         - containerPort: 80
@@ -90,7 +90,7 @@ spec:
     spec:
       containers:
       - name: user-portal-frontend
-        image: your-registry/user-portal-frontend:latest
+        image: harbor.company.com/workflow/user-portal-frontend:latest  # Update to your registry
         imagePullPolicy: Always
         ports:
         - containerPort: 80
@@ -162,7 +162,7 @@ spec:
     spec:
       containers:
       - name: developer-workstation-frontend
-        image: your-registry/developer-workstation-frontend:latest
+        image: harbor.company.com/workflow/developer-workstation-frontend:latest  # Update to your registry
         imagePullPolicy: Always
         ports:
         - containerPort: 80

@@ -19,14 +19,14 @@ spec:
     spec:
       containers:
       - name: admin-center
-        image: your-registry/admin-center:latest
+        image: harbor.company.com/workflow/admin-center:latest  # Update to your registry
         imagePullPolicy: Always
         ports:
         - containerPort: 8080
           name: http
           protocol: TCP
         env:
-        # 从 ConfigMap 读取非敏感配置
+        # ConfigMap - non-sensitive configuration
         - name: SPRING_PROFILES_ACTIVE
           valueFrom:
             configMapKeyRef:
@@ -57,6 +57,16 @@ spec:
             configMapKeyRef:
               name: workflow-platform-config
               key: WORKFLOW_ENGINE_URL
+        - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: SPRING_KAFKA_BOOTSTRAP_SERVERS
+        - name: JWT_EXPIRATION
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: JWT_EXPIRATION
         - name: LOG_LEVEL_ROOT
           valueFrom:
             configMapKeyRef:
@@ -68,7 +78,7 @@ spec:
               name: workflow-platform-config
               key: LOG_LEVEL_PLATFORM
         
-        # 从 Secret 读取敏感配置
+        # Secret - sensitive configuration
         - name: SPRING_DATASOURCE_USERNAME
           valueFrom:
             secretKeyRef:
@@ -84,6 +94,16 @@ spec:
             secretKeyRef:
               name: workflow-platform-secrets
               key: SPRING_REDIS_PASSWORD
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: workflow-platform-secrets
+              key: JWT_SECRET
+        - name: ENCRYPTION_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: workflow-platform-secrets
+              key: ENCRYPTION_SECRET_KEY
         
         resources:
           requests:

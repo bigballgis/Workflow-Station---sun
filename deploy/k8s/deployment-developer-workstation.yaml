@@ -19,14 +19,14 @@ spec:
     spec:
       containers:
       - name: developer-workstation
-        image: your-registry/developer-workstation:latest
+        image: harbor.company.com/workflow/developer-workstation:latest  # Update to your registry
         imagePullPolicy: Always
         ports:
         - containerPort: 8080
           name: http
           protocol: TCP
         env:
-        # 从 ConfigMap 读取非敏感配置
+        # ConfigMap - non-sensitive configuration
         - name: SPRING_PROFILES_ACTIVE
           valueFrom:
             configMapKeyRef:
@@ -73,7 +73,7 @@ spec:
               name: workflow-platform-config
               key: LOG_LEVEL_PLATFORM
         
-        # 从 Secret 读取敏感配置
+        # Secret - sensitive configuration
         - name: SPRING_DATASOURCE_USERNAME
           valueFrom:
             secretKeyRef:
@@ -94,6 +94,11 @@ spec:
             secretKeyRef:
               name: workflow-platform-secrets
               key: JWT_SECRET
+        - name: ENCRYPTION_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: workflow-platform-secrets
+              key: ENCRYPTION_SECRET_KEY
         
         resources:
           requests:

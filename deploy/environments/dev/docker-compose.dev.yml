@@ -142,6 +142,9 @@ services:
       SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       WORKFLOW_ENGINE_URL: http://workflow-engine:8080
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION: ${JWT_EXPIRATION}
+      ENCRYPTION_SECRET_KEY: ${ENCRYPTION_SECRET_KEY}
     volumes:
       - ./logs:/app/logs
     networks:
@@ -211,6 +214,7 @@ services:
       ADMIN_CENTER_URL: http://admin-center:8080
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRATION: ${JWT_EXPIRATION}
+      ENCRYPTION_SECRET_KEY: ${ENCRYPTION_SECRET_KEY}
     volumes:
       - ./logs:/app/logs
     networks:
@@ -239,6 +243,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
       SPRING_REDIS_HOST: redis
       SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      ENCRYPTION_SECRET_KEY: ${ENCRYPTION_SECRET_KEY}
     volumes:
       - ./logs:/app/logs
     networks:
