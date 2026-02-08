@@ -345,6 +345,8 @@ public class SecurityComponentImpl implements SecurityComponent {
     
     @Override
     public boolean hasRole(String username, String role) {
+        log.info("=== ROLE CHECK START === username={}, role={}", username, role);
+        
         // If repositories are not available (e.g., in tests), fall back to secure default
         if (roleRepository == null || cacheManager == null) {
             if (auditLogger != null) {
@@ -361,6 +363,7 @@ public class SecurityComponentImpl implements SecurityComponent {
             var cachedResult = cacheManager.getCachedRole(username, role);
             if (cachedResult.isPresent()) {
                 boolean result = cachedResult.get();
+                log.info("=== ROLE CHECK CACHE HIT === username={}, role={}, result={}", username, role, result);
                 if (auditLogger != null) {
                     Map<String, String> metadata = Map.of("from_cache", "true");
                     auditLogger.logAuthorizationEvent("ROLE_CHECK", "Role check successful", username, role, "check", true, metadata);
@@ -371,10 +374,12 @@ public class SecurityComponentImpl implements SecurityComponent {
             }
             
             // Cache miss - log it
-            log.debug("Role cache miss for user={}, role={}", username, role);
+            log.info("=== ROLE CHECK CACHE MISS === username={}, role={}, querying database...", username, role);
             
             // Query database for role
             boolean hasRole = roleRepository.hasRole(username, role);
+            
+            log.info("=== ROLE CHECK DATABASE RESULT === username={}, role={}, hasRole={}", username, role, hasRole);
             
             // Cache the result
             cacheManager.cacheRole(username, role, hasRole);
