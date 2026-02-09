@@ -110,6 +110,7 @@ services:
       JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION}
       ENCRYPTION_SECRET_KEY: ${ENCRYPTION_SECRET_KEY}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+      SWAGGER_ENABLED: ${SWAGGER_ENABLED:-true}
     volumes:
       - ./logs:/app/logs
     networks:
@@ -147,6 +148,7 @@ services:
       JWT_EXPIRATION: ${JWT_EXPIRATION}
       ENCRYPTION_SECRET_KEY: ${ENCRYPTION_SECRET_KEY}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+      SWAGGER_ENABLED: ${SWAGGER_ENABLED:-true}
     volumes:
       - ./logs:/app/logs
     networks:
@@ -185,6 +187,7 @@ services:
       JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION}
       ENCRYPTION_SECRET_KEY: ${ENCRYPTION_SECRET_KEY}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+      SWAGGER_ENABLED: ${SWAGGER_ENABLED:-true}
     volumes:
       - ./logs:/app/logs
     networks:
@@ -219,6 +222,7 @@ services:
       JWT_EXPIRATION: ${JWT_EXPIRATION}
       ENCRYPTION_SECRET_KEY: ${ENCRYPTION_SECRET_KEY}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+      SWAGGER_ENABLED: ${SWAGGER_ENABLED:-true}
     volumes:
       - ./logs:/app/logs
     networks:
@@ -250,6 +254,7 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       ENCRYPTION_SECRET_KEY: ${ENCRYPTION_SECRET_KEY}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+      SWAGGER_ENABLED: ${SWAGGER_ENABLED:-true}
     volumes:
       - ./logs:/app/logs
     networks:

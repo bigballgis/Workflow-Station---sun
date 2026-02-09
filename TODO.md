@@ -25,7 +25,7 @@
   - `backend/api-gateway/src/main/resources/application.yml`
 - **方案**: CORS allowedOrigins 提取到环境变量/配置文件，按环境区分。
 
-### 3. Swagger/API 文档在生产环境未禁用
+### 3. ~~Swagger/API 文档在生产环境未禁用~~ ✅ 已修复
 - **描述**: SecurityConfig 中 `/swagger-ui/**`、`/v3/api-docs/**` 全部 permitAll，生产环境也暴露。
 - **方案**: 通过 `@Profile("!prod")` 或配置开关控制 Swagger 是否启用。
 
