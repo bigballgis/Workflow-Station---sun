@@ -823,9 +823,9 @@ public class ProcessComponent {
                             if (tasks != null && !tasks.isEmpty()) {
                                 Map<String, Object> currentTask = tasks.get(0);
                                 currentAssigneeName = (String) currentTask.get("currentAssigneeName");
-                                // 如果没有名称，使用ID
+                                // 如果 workflow-engine 没有返回名称，直接解析用户ID
                                 if (currentAssigneeName == null || currentAssigneeName.isEmpty()) {
-                                    currentAssigneeName = currentAssignee;
+                                    currentAssigneeName = resolveUserDisplayName(currentAssignee);
                                 }
                             } else {
                                 // 任务列表为空，说明流程没有活动任务（可能已完成或在过渡状态）
@@ -838,13 +838,13 @@ public class ProcessComponent {
                 }
             } catch (Exception e) {
                 log.warn("Failed to get current assignee name for process {}: {}", instance.getId(), e.getMessage());
-                currentAssigneeName = currentAssignee; // 回退到使用ID
+                currentAssigneeName = resolveUserDisplayName(currentAssignee);
             }
         }
         
-        // 如果没有获取到名称，使用ID（如果有的话）
+        // 如果没有获取到名称，尝试解析用户ID
         if (currentAssigneeName == null && currentAssignee != null) {
-            currentAssigneeName = currentAssignee;
+            currentAssigneeName = resolveUserDisplayName(currentAssignee);
         }
         
         log.debug("=== toProcessInstanceInfo: final currentAssigneeName={}", currentAssigneeName);
