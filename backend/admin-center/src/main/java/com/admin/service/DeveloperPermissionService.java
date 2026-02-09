@@ -243,10 +243,11 @@ public class DeveloperPermissionService {
     }
     
     /**
-     * 获取用户的开发角色ID列表
+     * 获取用户的开发角色ID列表（包括通过虚拟组分配的角色）
      */
     private List<String> getUserDeveloperRoleIds(String userId) {
-        List<String> allRoleIds = userRoleRepository.findRoleIdsByUserId(userId);
+        // 使用 findAllRoleIdsByUserId 来获取包括虚拟组分配的所有角色
+        List<String> allRoleIds = userRoleRepository.findAllRoleIdsByUserId(userId);
         
         return allRoleIds.stream()
             .filter(roleId -> {

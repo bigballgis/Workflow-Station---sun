@@ -83,6 +83,7 @@ services:
   # Workflow Engine Core - Development
   workflow-engine:
     image: ${IMAGE_TAG_WORKFLOW_ENGINE:-dev-workflow-engine-core:latest}
+    pull_policy: never
     container_name: platform-workflow-engine-dev
     depends_on:
       postgres:
@@ -114,6 +115,7 @@ services:
   # Admin Center Backend - Development
   admin-center:
     image: ${IMAGE_TAG_ADMIN_CENTER:-dev-admin-center:latest}
+    pull_policy: never
     container_name: platform-admin-center-dev
     depends_on:
       postgres:
@@ -143,6 +145,7 @@ services:
   # User Portal Backend - Development
   user-portal:
     image: ${IMAGE_TAG_USER_PORTAL:-dev-user-portal:latest}
+    pull_policy: never
     container_name: platform-user-portal-dev
     depends_on:
       postgres:
@@ -176,6 +179,7 @@ services:
   # Developer Workstation Backend - Development
   developer-workstation:
     image: ${IMAGE_TAG_DEVELOPER_WORKSTATION:-dev-developer-workstation:latest}
+    pull_policy: never
     container_name: platform-developer-workstation-dev
     depends_on:
       postgres:
@@ -204,6 +208,7 @@ services:
   # API Gateway - Development
   api-gateway:
     image: ${IMAGE_TAG_API_GATEWAY:-dev-api-gateway:latest}
+    pull_policy: never
     container_name: platform-api-gateway-dev
     depends_on:
       postgres:
@@ -228,6 +233,7 @@ services:
   # Frontend - Admin Center - Development
   admin-center-frontend:
     image: ${IMAGE_TAG_ADMIN_CENTER_FRONTEND:-dev-admin-center-frontend:latest}
+    pull_policy: never
     container_name: platform-admin-center-frontend-dev
     depends_on:
       - admin-center
@@ -243,6 +249,7 @@ services:
   # Frontend - User Portal - Development
   user-portal-frontend:
     image: ${IMAGE_TAG_USER_PORTAL_FRONTEND:-dev-user-portal-frontend:latest}
+    pull_policy: never
     container_name: platform-user-portal-frontend-dev
     depends_on:
       - user-portal
@@ -259,6 +266,7 @@ services:
   # Frontend - Developer Workstation - Development
   developer-workstation-frontend:
     image: ${IMAGE_TAG_DEVELOPER_WORKSTATION_FRONTEND:-dev-developer-workstation-frontend:latest}
+    pull_policy: never
     container_name: platform-developer-workstation-frontend-dev
     depends_on:
       - developer-workstation
