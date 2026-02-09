@@ -124,18 +124,18 @@
 
 | 优先级 | 编号 | 简述 | 状态 |
 |--------|------|------|------|
-| P0 | 1 | SecurityConfig permitAll | ⏳ 待处理 (2-3天) |
+| P0 | 1 | SecurityConfig permitAll | 🔲 待定 — SIT 后处理 (2-3天) |
 | P0 | 2 | CORS 硬编码 | ✅ 已修复 |
 | P0 | 3 | Swagger 生产禁用 | ✅ 已修复 |
-| P1 | 4 | API Gateway 架空 | ⏳ 待处理 (2-3天) |
-| P1 | 5 | User Portal TODO 桩代码 | ⏳ 待处理 (3-5天) |
-| P1 | 6 | Admin Center 工作流集成 | ⏳ 待处理 (2-3天) |
-| P1 | 7 | User Portal Mock 登录 | ⏳ 待处理 (1天) |
+| P1 | 4 | API Gateway 架空 | 🔲 待定 — SIT 后处理 (2-3天) |
+| P1 | 5 | User Portal TODO 桩代码 | 🔲 待定 — SIT 后处理 (3-5天) |
+| P1 | 6 | Admin Center 工作流集成 | 🔲 待定 — SIT 后处理 (2-3天) |
+| P1 | 7 | User Portal Mock 登录 | 🔲 待定 — SIT 后处理 (1天) |
 | P2 | 8 | 服务间 URL 默认值不一致 | ✅ 已修复 |
-| P2 | 9 | Flyway 迁移禁用 | ⏳ 待处理 (2天) |
+| P2 | 9 | Flyway 迁移禁用 | 🔲 待定 — SIT 后处理 (2天) |
 | P2 | 10 | Gateway 缺环境变量 | ✅ 已修复 |
 | P3 | 11 | 前端残留中文硬编码 | ⏸️ 暂不处理 |
 | P3 | 12 | 后端测试中文硬编码 | ✅ 已修复 |
 | P3 | 13 | platform-common 配置类 | ✅ 已确认保留 |
-| P3 | 14 | JWT Token localStorage | ⏳ 待处理 |
-| P3 | 15 | ProcessService 工作流集成 | ⏳ 依赖 #6 |
+| P3 | 14 | JWT Token localStorage | 🔲 待定 — SIT 后处理 |
+| P3 | 15 | ProcessService 工作流集成 | 🔲 待定 — 依赖 #6 |
