@@ -103,14 +103,9 @@
 - **涉及文件**: `backend/workflow-engine-core/src/test/java/com/workflow/integration/PerformanceIntegrationTest.java`
 - **方案**: 改为英文，保持测试输出一致性。
 
-### 13. platform-common 中有未使用的配置类
+### 13. ~~platform-common 中有未使用的配置类~~ ✅ 已确认（保留）
 - **描述**: `ApiConfig`、`MonitoringConfig`、`MessagingConfig`、`WorkflowConfig` 等定义了 `userServiceUrl`、`notificationServiceUrl`、`smsProviderUrl`、`alertNotificationUrl` 等字段，但实际服务中未使用这些配置。
-- **涉及文件**:
-  - `backend/platform-common/src/main/java/com/platform/common/config/ApiConfig.java`
-  - `backend/platform-common/src/main/java/com/platform/common/config/MonitoringConfig.java`
-  - `backend/platform-common/src/main/java/com/platform/common/config/MessagingConfig.java`
-  - `backend/platform-common/src/main/java/com/platform/common/config/WorkflowConfig.java`
-- **方案**: 清理未使用的配置字段，或标记为 future use。
+- **结论**: 这些类实际通过 `app.*` yml 配置绑定使用中（`WorkflowConfig` 在 `TaskController` 中直接引用）。未使用的字段（如 `smsProviderUrl`）是预留配置，不影响运行，暂不清理。
 
 ### 14. JWT Token 存储在 localStorage
 - **描述**: 前端（admin-center、user-portal）将 JWT token 存在 localStorage，存在 XSS 攻击风险。
@@ -119,7 +114,7 @@
   - `frontend/user-portal/src/api/auth.ts`
 - **方案**: 改用 HttpOnly Cookie 存储 token（需要后端配合设置 Set-Cookie）。
 
-### 15. Developer Workstation ProcessService 工作流集成未完成
+### 15. Developer Workstation ProcessService 工作流集成未完成（依赖 #6）
 - **描述**: `ProcessService.java` 中 `startProcess` 方法有 TODO，未实际调用 Flowable。
 - **涉及文件**: `backend/developer-workstation/src/main/java/com/developer/service/ProcessService.java`
 
@@ -127,16 +122,20 @@
 
 ## 📋 整改优先级总结
 
-| 优先级 | 编号 | 简述 | 工作量 |
-|--------|------|------|--------|
-| P0 | 1 | SecurityConfig permitAll | 2-3天 |
-| P0 | 2 | CORS 硬编码 | 0.5天 |
-| P0 | 3 | Swagger 生产禁用 | 0.5天 |
-| P1 | 4 | API Gateway 架空 | 2-3天 |
-| P1 | 5 | User Portal TODO 桩代码 | 3-5天 |
-| P1 | 6 | Admin Center 工作流集成 | 2-3天 |
-| P1 | 7 | User Portal Mock 登录 | 1天 |
-| P2 | 8 | 服务间 URL 默认值不一致 | 0.5天 |
-| P2 | 9 | Flyway 迁移禁用 | 2天 |
-| P2 | 10 | Gateway 缺环境变量 | 0.5天 |
-| P3 | 11-15 | 代码质量杂项 | 各0.5-1天 |
+| 优先级 | 编号 | 简述 | 状态 |
+|--------|------|------|------|
+| P0 | 1 | SecurityConfig permitAll | ⏳ 待处理 (2-3天) |
+| P0 | 2 | CORS 硬编码 | ✅ 已修复 |
+| P0 | 3 | Swagger 生产禁用 | ✅ 已修复 |
+| P1 | 4 | API Gateway 架空 | ⏳ 待处理 (2-3天) |
+| P1 | 5 | User Portal TODO 桩代码 | ⏳ 待处理 (3-5天) |
+| P1 | 6 | Admin Center 工作流集成 | ⏳ 待处理 (2-3天) |
+| P1 | 7 | User Portal Mock 登录 | ⏳ 待处理 (1天) |
+| P2 | 8 | 服务间 URL 默认值不一致 | ✅ 已修复 |
+| P2 | 9 | Flyway 迁移禁用 | ⏳ 待处理 (2天) |
+| P2 | 10 | Gateway 缺环境变量 | ✅ 已修复 |
+| P3 | 11 | 前端残留中文硬编码 | ⏸️ 暂不处理 |
+| P3 | 12 | 后端测试中文硬编码 | ✅ 已修复 |
+| P3 | 13 | platform-common 配置类 | ✅ 已确认保留 |
+| P3 | 14 | JWT Token localStorage | ⏳ 待处理 |
+| P3 | 15 | ProcessService 工作流集成 | ⏳ 依赖 #6 |
