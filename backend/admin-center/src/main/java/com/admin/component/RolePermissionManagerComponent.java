@@ -245,7 +245,7 @@ public class RolePermissionManagerComponent {
      * 获取所有角色
      */
     public List<Role> getAllRoles() {
-        return roleRepository.findAllActive();
+        return roleRepository.findAll();
     }
     
     /**
@@ -319,5 +319,36 @@ public class RolePermissionManagerComponent {
         roleRepository.delete(role);
         
         log.info("Role deleted successfully: {}", roleId);
+    }
+    
+    /**
+     * 更新角色
+     */
+    @Transactional
+    public Role updateRole(String roleId, String name, String description, String status) {
+        log.info("Updating role: {}", roleId);
+        
+        Role role = roleRepository.findById(roleId)
+                .orElseThrow(() -> new RoleNotFoundException(roleId));
+        
+        // 使用 RoleHelper 检查系统角色
+        if (roleHelper.isSystemRole(role)) {
+            throw new AdminBusinessException("CANNOT_UPDATE_SYSTEM_ROLE", "系统角色不能修改");
+        }
+        
+        if (name != null) {
+            role.setName(name);
+        }
+        if (description != null) {
+            role.setDescription(description);
+        }
+        if (status != null) {
+            role.setStatus(status);
+        }
+        
+        roleRepository.save(role);
+        
+        log.info("Role updated successfully: {}", roleId);
+        return role;
     }
 }
