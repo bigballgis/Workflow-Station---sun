@@ -198,6 +198,12 @@ public class VirtualGroupManagerComponent {
         return groups.stream()
                 .map(group -> {
                     VirtualGroupInfo info = VirtualGroupInfo.fromEntity(group);
+                    
+                    // 设置成员数量
+                    long memberCount = virtualGroupMemberRepository.countByGroupId(group.getId());
+                    info.setMemberCount((int) memberCount);
+                    
+                    // 设置角色绑定信息
                     Role boundRole = roleBindings.get(group.getId());
                     if (boundRole != null) {
                         info.setBoundRoleId(boundRole.getId());
