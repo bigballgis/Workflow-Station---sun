@@ -28,7 +28,7 @@ public class WorkflowEngineClient {
 
     private final RestTemplate restTemplate;
 
-    @Value("${workflow-engine.url:http://localhost:8091}")
+    @Value("${workflow-engine.url:http://localhost:8081}")
     private String workflowEngineUrl;
 
     @Value("${workflow-engine.enabled:false}")

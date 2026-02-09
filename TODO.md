@@ -69,7 +69,7 @@
 
 ## 🟡 P2 — 配置与部署
 
-### 8. 服务间 URL 默认值不一致
+### 8. ~~服务间 URL 默认值不一致~~ ✅ 已修复
 - **描述**: Java `@Value` 注解中 `admin-center.url` 默认 `http://localhost:8090`，但 `workflow-engine.url` 有的默认 `http://localhost:8091` 有的默认 `http://localhost:8081`。Docker profile 中用 `platform-admin-center` 容器名，但 docker-compose service name 是 `admin-center`。
 - **涉及文件**:
   - `backend/user-portal/src/main/java/com/portal/client/WorkflowEngineClient.java` (8091)
