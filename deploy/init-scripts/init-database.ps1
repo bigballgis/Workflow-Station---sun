@@ -126,7 +126,7 @@ function Main {
     Write-Host ""
     
     # Step 3: Create test users
-    Write-Info "Step 3/4: Creating test users..."
+    Write-Info "Step 3/5: Creating test users..."
     Write-Host ""
     
     $usersFile = Join-Path $ScriptDir "01-admin\02-create-test-users.sql"
@@ -135,11 +135,24 @@ function Main {
     }
     
     Write-Host ""
-    Write-Success "Step 3/4: Test users created successfully"
+    Write-Success "Step 3/5: Test users created successfully"
     Write-Host ""
     
-    # Step 4: Optional test data
-    Write-Info "Step 4/6: Loading optional test data..."
+    # Step 4: Create role assignments
+    Write-Info "Step 4/5: Creating role assignments..."
+    Write-Host ""
+    
+    $assignmentsFile = Join-Path $ScriptDir "01-admin\05-create-role-assignments.sql"
+    if (-not (Execute-SqlFile -FilePath $assignmentsFile -Description "Role assignments")) {
+        exit 1
+    }
+    
+    Write-Host ""
+    Write-Success "Step 4/5: Role assignments created successfully"
+    Write-Host ""
+    
+    # Step 5: Optional test data
+    Write-Info "Step 5/5: Loading optional test data..."
     Write-Host ""
     
     $testDataDir = Join-Path $ScriptDir "02-test-data"

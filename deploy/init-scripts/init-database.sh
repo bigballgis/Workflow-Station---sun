@@ -100,17 +100,27 @@ main() {
     echo ""
     
     # Step 3: Create test users
-    print_info "Step 3/4: Creating test users..."
+    print_info "Step 3/5: Creating test users..."
     echo ""
     
     execute_sql_file "$SCRIPT_DIR/01-admin/02-create-test-users.sql" "Test users"
     
     echo ""
-    print_success "Step 3/4: Test users created successfully"
+    print_success "Step 3/5: Test users created successfully"
     echo ""
     
-    # Step 4: Optional test data
-    print_info "Step 4/6: Loading optional test data..."
+    # Step 4: Create role assignments
+    print_info "Step 4/5: Creating role assignments..."
+    echo ""
+    
+    execute_sql_file "$SCRIPT_DIR/01-admin/05-create-role-assignments.sql" "Role assignments"
+    
+    echo ""
+    print_success "Step 4/5: Role assignments created successfully"
+    echo ""
+    
+    # Step 5: Optional test data
+    print_info "Step 5/5: Loading optional test data..."
     echo ""
     
     if [ -d "$SCRIPT_DIR/02-test-data" ]; then
@@ -119,32 +129,15 @@ main() {
                 execute_sql_file "$file" "$(basename "$file")"
             fi
         done
-        print_success "Step 4/6: Test data loaded successfully"
+        print_success "Step 5/5: Test data loaded successfully"
     else
-        print_warning "Step 4/6: No test data directory found, skipping"
+        print_warning "Step 5/5: No test data directory found, skipping"
     fi
     
     echo ""
     
-    # Step 5: Optional purchase workflow
-    print_info "Step 5/6: Loading purchase workflow..."
-    echo ""
-    
-    if [ -d "$SCRIPT_DIR/04-purchase-workflow" ]; then
-        for file in "$SCRIPT_DIR/04-purchase-workflow"/*.sql; do
-            if [ -f "$file" ]; then
-                execute_sql_file "$file" "$(basename "$file")"
-            fi
-        done
-        print_success "Step 5/6: Purchase workflow loaded successfully"
-    else
-        print_warning "Step 5/6: No purchase workflow directory found, skipping"
-    fi
-    
-    echo ""
-    
-    # Step 6: Verification
-    print_info "Step 6/6: Verifying initialization..."
+    # Verification
+    print_info "Verifying initialization..."
     echo ""
     echo "========================================="
     echo "  Database Initialization Complete!"
@@ -155,8 +148,7 @@ main() {
     echo "  ✓ 5 system roles created"
     echo "  ✓ 5 virtual groups created"
     echo "  ✓ 5 test users created"
-    echo "  ✓ Test organization structure created"
-    echo "  ✓ Purchase workflow created"
+    echo "  ✓ Virtual group role assignments created"
     echo ""
     echo "Login Credentials (password: password):"
     echo "  • admin      - System Administrator"
