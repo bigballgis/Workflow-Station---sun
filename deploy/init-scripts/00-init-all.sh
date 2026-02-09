@@ -1,42 +1,60 @@
 #!/bin/bash
+# =====================================================
+# Database Initialization (Docker entrypoint)
+# =====================================================
+# Auto-executed by PostgreSQL on first container start.
+# Creates: schemas → roles/groups → admin user → test function unit
+# =====================================================
 set -e
 
-echo "Starting database initialization..."
+PSQL="psql -v ON_ERROR_STOP=1 --username $POSTGRES_USER --dbname $POSTGRES_DB"
 
-# Execute schema creation scripts
-echo "Creating schemas..."
-for file in /docker-entrypoint-initdb.d/00-schema/*.sql; do
-    if [ -f "$file" ]; then
-        echo "Executing $file..."
-        psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" -f "$file"
-    fi
+echo "========================================="
+echo "  Database Initialization Starting..."
+echo "========================================="
+
+# --- Step 1: Base schemas ---
+echo ""
+echo "[1/4] Creating base schemas..."
+for f in /docker-entrypoint-initdb.d/00-schema/01-*.sql \
+         /docker-entrypoint-initdb.d/00-schema/02-*.sql \
+         /docker-entrypoint-initdb.d/00-schema/03-*.sql \
+         /docker-entrypoint-initdb.d/00-schema/04-*.sql \
+         /docker-entrypoint-initdb.d/00-schema/05-*.sql; do
+    [ -f "$f" ] && echo "  Running $(basename $f)..." && $PSQL -f "$f"
 done
 
-# Execute admin user scripts
-echo "Creating admin users..."
-for file in /docker-entrypoint-initdb.d/01-admin/*.sql; do
-    if [ -f "$file" ]; then
-        echo "Executing $file..."
-        psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" -f "$file"
-    fi
+# --- Step 2: Incremental migrations ---
+echo ""
+echo "[2/4] Applying incremental migrations..."
+for f in /docker-entrypoint-initdb.d/00-schema/06-*.sql \
+         /docker-entrypoint-initdb.d/00-schema/07-*.sql \
+         /docker-entrypoint-initdb.d/00-schema/08-*.sql \
+         /docker-entrypoint-initdb.d/00-schema/10-*.sql \
+         /docker-entrypoint-initdb.d/00-schema/11-*.sql \
+         /docker-entrypoint-initdb.d/00-schema/12-*.sql; do
+    [ -f "$f" ] && echo "  Running $(basename $f)..." && $PSQL -f "$f"
 done
 
-# Execute test data scripts
-echo "Loading test data..."
-for file in /docker-entrypoint-initdb.d/02-test-data/*.sql; do
-    if [ -f "$file" ]; then
-        echo "Executing $file..."
-        psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" -f "$file"
-    fi
+# --- Step 3: Roles, groups, admin user ---
+echo ""
+echo "[3/4] Creating roles, groups, and admin user..."
+$PSQL -f /docker-entrypoint-initdb.d/01-admin/01-create-roles-and-groups.sql
+$PSQL -f /docker-entrypoint-initdb.d/01-admin/01-create-admin-only.sql
+
+# --- Step 4: Test function unit (Digital Lending V2 EN) ---
+echo ""
+echo "[4/4] Loading test function unit (Digital Lending V2 EN)..."
+for f in /docker-entrypoint-initdb.d/08-digital-lending-v2-en/00-*.sql \
+         /docker-entrypoint-initdb.d/08-digital-lending-v2-en/01-*.sql \
+         /docker-entrypoint-initdb.d/08-digital-lending-v2-en/03-*.sql; do
+    [ -f "$f" ] && echo "  Running $(basename $f)..." && $PSQL -f "$f"
 done
 
-# Execute purchase workflow scripts
-echo "Loading purchase workflow..."
-for file in /docker-entrypoint-initdb.d/04-purchase-workflow/*.sql; do
-    if [ -f "$file" ]; then
-        echo "Executing $file..."
-        psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" -f "$file"
-    fi
-done
-
-echo "Database initialization completed!"
+echo ""
+echo "========================================="
+echo "  Database Initialization Complete!"
+echo "========================================="
+echo "  Login: admin / password"
+echo "  Change password after first login!"
+echo "========================================="
