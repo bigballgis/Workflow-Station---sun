@@ -5,7 +5,9 @@ import com.developer.dto.ApiResponse;
 import com.developer.dto.FunctionUnitRequest;
 import com.developer.dto.FunctionUnitResponse;
 import com.developer.dto.ValidationResult;
+import com.developer.dto.VersionResponse;
 import com.developer.entity.FunctionUnit;
+import com.developer.repository.VersionRepository;
 import com.developer.security.RequireDeveloperPermission;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -15,6 +17,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 /**
  * 功能单元控制器
@@ -26,6 +30,7 @@ import org.springframework.web.bind.annotation.*;
 public class FunctionUnitController {
     
     private final FunctionUnitComponent functionUnitComponent;
+    private final VersionRepository versionRepository;
     
     @PostMapping
     @Operation(summary = "创建功能单元")
@@ -98,5 +103,17 @@ public class FunctionUnitController {
     public ResponseEntity<ApiResponse<ValidationResult>> validate(@PathVariable Long id) {
         ValidationResult result = functionUnitComponent.validate(id);
         return ResponseEntity.ok(ApiResponse.success(result));
+    }
+    
+    @GetMapping("/{id}/versions")
+    @Operation(summary = "获取版本历史")
+    @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
+    public ResponseEntity<ApiResponse<List<VersionResponse>>> getVersions(@PathVariable Long id) {
+        List<VersionResponse> versions = versionRepository
+                .findByFunctionUnitIdOrderByPublishedAtDesc(id)
+                .stream()
+                .map(VersionResponse::from)
+                .toList();
+        return ResponseEntity.ok(ApiResponse.success(versions));
     }
 }
