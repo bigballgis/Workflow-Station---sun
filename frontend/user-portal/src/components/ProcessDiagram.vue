@@ -263,8 +263,29 @@ const createNodeElement = (node: ProcessNode, pos: { x: number; y: number; width
       shape.setAttribute('cx', String(centerX))
       shape.setAttribute('cy', String(centerY))
       shape.setAttribute('r', String(Math.min(pos.width, pos.height) / 2 - 2))
-      shape.setAttribute('fill', '#ffebee')
-      shape.setAttribute('stroke', '#DB0011')
+      
+      // 根据节点ID或名称判断是批准还是拒绝
+      const isApproved = node.id?.includes('approved') || 
+                        node.name?.includes('通过') || 
+                        node.name?.includes('批准') ||
+                        node.name?.includes('完成')
+      const isRejected = node.id?.includes('rejected') || 
+                        node.name?.includes('拒绝') || 
+                        node.name?.includes('驳回')
+      
+      if (isApproved) {
+        // 绿色表示批准通过
+        shape.setAttribute('fill', '#e8f5e9')
+        shape.setAttribute('stroke', '#00A651')
+      } else if (isRejected) {
+        // 红色表示拒绝
+        shape.setAttribute('fill', '#ffebee')
+        shape.setAttribute('stroke', '#DB0011')
+      } else {
+        // 默认灰色
+        shape.setAttribute('fill', '#f5f5f5')
+        shape.setAttribute('stroke', '#909399')
+      }
       shape.setAttribute('stroke-width', '3')
       break
     case 'gateway':

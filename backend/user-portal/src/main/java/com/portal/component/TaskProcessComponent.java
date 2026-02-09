@@ -285,6 +285,14 @@ public class TaskProcessComponent {
         log.info("Using Flowable engine to complete task: {} with action: {}", taskId, action);
         
         Map<String, Object> variables = new HashMap<>();
+        
+        // Add variables from request first (includes approval_result from frontend)
+        if (request.getVariables() != null) {
+            variables.putAll(request.getVariables());
+            log.info("Added variables from request: {}", request.getVariables());
+        }
+        
+        // Add action
         variables.put("action", action);
         
         // Auto-set approval status based on action
@@ -303,6 +311,8 @@ public class TaskProcessComponent {
         if (request.getFormData() != null) {
             variables.putAll(request.getFormData());
         }
+        
+        log.info("Final variables to be sent to workflow engine: {}", variables);
         
         Optional<Map<String, Object>> result = workflowEngineClient.completeTask(taskId, userId, action, variables);
         

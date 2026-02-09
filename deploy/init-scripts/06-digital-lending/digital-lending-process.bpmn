@@ -179,19 +179,37 @@
     <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="Task_SubmitApplication" />
     <bpmn:sequenceFlow id="Flow_2" sourceRef="Task_SubmitApplication" targetRef="Task_DocumentVerification" />
     <bpmn:sequenceFlow id="Flow_3" sourceRef="Task_DocumentVerification" targetRef="Gateway_DocumentsOK" />
-    <bpmn:sequenceFlow id="Flow_DocsApproved" name="Yes" sourceRef="Gateway_DocumentsOK" targetRef="Task_CreditCheck" />
-    <bpmn:sequenceFlow id="Flow_DocsRejected" name="No" sourceRef="Gateway_DocumentsOK" targetRef="EndEvent_Rejected" />
+    <bpmn:sequenceFlow id="Flow_DocsApproved" name="Yes" sourceRef="Gateway_DocumentsOK" targetRef="Task_CreditCheck">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${approval_result == 'approved'}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_DocsRejected" name="No" sourceRef="Gateway_DocumentsOK" targetRef="EndEvent_Rejected">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${approval_result == 'rejected'}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_4" sourceRef="Task_CreditCheck" targetRef="Task_RiskAssessment" />
     <bpmn:sequenceFlow id="Flow_5" sourceRef="Task_RiskAssessment" targetRef="Gateway_RiskAcceptable" />
-    <bpmn:sequenceFlow id="Flow_LowRisk" name="Low/Medium Risk" sourceRef="Gateway_RiskAcceptable" targetRef="Task_ManagerApproval" />
-    <bpmn:sequenceFlow id="Flow_HighRisk" name="High Risk - Reject" sourceRef="Gateway_RiskAcceptable" targetRef="EndEvent_Rejected" />
-    <bpmn:sequenceFlow id="Flow_NeedMoreInfo" name="Need More Info" sourceRef="Gateway_RiskAcceptable" targetRef="Task_SubmitApplication" />
+    <bpmn:sequenceFlow id="Flow_LowRisk" name="Low/Medium Risk" sourceRef="Gateway_RiskAcceptable" targetRef="Task_ManagerApproval">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${approval_result == 'approved'}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_HighRisk" name="High Risk - Reject" sourceRef="Gateway_RiskAcceptable" targetRef="EndEvent_Rejected">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${approval_result == 'rejected'}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_NeedMoreInfo" name="Need More Info" sourceRef="Gateway_RiskAcceptable" targetRef="Task_SubmitApplication">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${approval_result == 'need_more_info'}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_6" sourceRef="Task_ManagerApproval" targetRef="Gateway_ManagerDecision" />
-    <bpmn:sequenceFlow id="Flow_ManagerApproved" name="Yes" sourceRef="Gateway_ManagerDecision" targetRef="Task_SeniorManagerApproval" />
-    <bpmn:sequenceFlow id="Flow_ManagerRejected" name="No" sourceRef="Gateway_ManagerDecision" targetRef="EndEvent_Rejected" />
+    <bpmn:sequenceFlow id="Flow_ManagerApproved" name="Yes" sourceRef="Gateway_ManagerDecision" targetRef="Task_SeniorManagerApproval">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${approval_result == 'approved'}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_ManagerRejected" name="No" sourceRef="Gateway_ManagerDecision" targetRef="EndEvent_Rejected">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${approval_result == 'rejected'}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_7" sourceRef="Task_SeniorManagerApproval" targetRef="Gateway_SeniorManagerDecision" />
-    <bpmn:sequenceFlow id="Flow_SeniorApproved" name="Yes" sourceRef="Gateway_SeniorManagerDecision" targetRef="Task_Disbursement" />
-    <bpmn:sequenceFlow id="Flow_SeniorRejected" name="No" sourceRef="Gateway_SeniorManagerDecision" targetRef="EndEvent_Rejected" />
+    <bpmn:sequenceFlow id="Flow_SeniorApproved" name="Yes" sourceRef="Gateway_SeniorManagerDecision" targetRef="Task_Disbursement">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${approval_result == 'approved'}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_SeniorRejected" name="No" sourceRef="Gateway_SeniorManagerDecision" targetRef="EndEvent_Rejected">
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${approval_result == 'rejected'}</bpmn:conditionExpression>
+    </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_8" sourceRef="Task_Disbursement" targetRef="EndEvent_Approved" />
     
   </bpmn:process>
