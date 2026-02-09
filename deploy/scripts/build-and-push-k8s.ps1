@@ -103,17 +103,30 @@ if (-not $SkipBackend) {
     }
 }
 
-# 3. Docker Build & Push (Frontend)
+# 3. Docker Build & Push (Frontend — local npm build + Dockerfile.local)
 if (-not $SkipFrontend) {
-    Write-Step "Building frontend Docker images..."
+    Write-Step "Building frontend (local npm build + Docker)..."
 
     foreach ($svc in $selectedFrontend) {
         $imageName = "$Registry/$($svc.Name):$Tag"
         $contextDir = Join-Path $ProjectRoot $svc.Dir
 
         if (-not $PushOnly) {
-            Write-Host "   Building $($svc.Name)..." -ForegroundColor Gray
-            docker build -t $imageName $contextDir
+            # npm install + build locally (Docker multi-stage build not used)
+            Write-Host "   npm install & build $($svc.Name)..." -ForegroundColor Gray
+            Push-Location $contextDir
+            try {
+                npm install --prefer-offline --no-audit 2>&1 | Out-Null
+                if ($LASTEXITCODE -ne 0) { Pop-Location; Write-Fail "npm install failed: $($svc.Name)" }
+                npx vite build
+                if ($LASTEXITCODE -ne 0) { Pop-Location; Write-Fail "vite build failed: $($svc.Name)" }
+            } finally {
+                Pop-Location
+            }
+
+            # Docker image copies pre-built dist/ only
+            Write-Host "   Docker build $($svc.Name) (Dockerfile.local)..." -ForegroundColor Gray
+            docker build -f "$contextDir/Dockerfile.local" -t $imageName $contextDir
             if ($LASTEXITCODE -ne 0) { Write-Fail "Docker build failed: $($svc.Name)" }
             docker tag $imageName "$Registry/$($svc.Name):latest"
         }

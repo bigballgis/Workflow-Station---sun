@@ -4,8 +4,20 @@
 # Local Docker Desktop only. Infrastructure (PG, Redis) runs locally.
 # SIT/UAT/PROD use company K8S — see deploy/k8s/
 #
-# Usage:
-#   docker compose -f docker-compose.dev.yml --env-file .env up -d
+# IMPORTANT: All images use "local build + copy" approach.
+# Docker multi-stage builds are NOT used due to local Docker limitations.
+# You MUST build artifacts locally before running docker compose:
+#
+# Backend (requires Maven):
+#   mvn clean package -DskipTests -pl backend/workflow-engine-core,backend/admin-center,backend/user-portal,backend/developer-workstation -am
+#
+# Frontend (requires Node.js):
+#   cd frontend/admin-center && npm run build
+#   cd frontend/user-portal && npm run build
+#   cd frontend/developer-workstation && npm run build
+#
+# Then start:
+#   docker compose -f docker-compose.dev.yml --env-file .env up -d --build
 # =====================================================
 
 services:
@@ -191,12 +203,16 @@ services:
     restart: unless-stopped
 
   # ==================== Frontend Services ====================
-  # NOTE: Frontend images must be pre-built locally:
-  #   docker build -t dev-admin-center-frontend frontend/admin-center
-  #   docker build -t dev-user-portal-frontend frontend/user-portal
-  #   docker build -t dev-developer-workstation-frontend frontend/developer-workstation
+  # Uses Dockerfile.local — requires pre-built dist/ in each frontend project.
+  # Build steps before docker compose up:
+  #   1. cd frontend/admin-center && npm run build
+  #   2. cd frontend/user-portal && npm run build
+  #   3. cd frontend/developer-workstation && npm run build
 
   admin-center-frontend:
+    build:
+      context: ../../../frontend/admin-center
+      dockerfile: Dockerfile.local
     image: dev-admin-center-frontend
     container_name: platform-admin-center-frontend-dev
     depends_on:
@@ -210,6 +226,9 @@ services:
     restart: unless-stopped
 
   user-portal-frontend:
+    build:
+      context: ../../../frontend/user-portal
+      dockerfile: Dockerfile.local
     image: dev-user-portal-frontend
     container_name: platform-user-portal-frontend-dev
     depends_on:
@@ -224,6 +243,9 @@ services:
     restart: unless-stopped
 
   developer-workstation-frontend:
+    build:
+      context: ../../../frontend/developer-workstation
+      dockerfile: Dockerfile.local
     image: dev-developer-workstation-frontend
     container_name: platform-developer-workstation-frontend-dev
     depends_on:

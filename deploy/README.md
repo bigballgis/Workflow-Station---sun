@@ -62,17 +62,31 @@
 | uat | Company K8S | Company-managed PG + Redis | `k8s/configmap-uat.yaml` |
 | prod | Company K8S | Company-managed PG + Redis | `k8s/configmap-prod.yaml` |
 
+## Docker Build Approach
+
+All environments use "local build + copy" — artifacts are built on the host machine,
+then copied into Docker images. Docker multi-stage builds are NOT used.
+
+**Reason**: Local Docker Desktop has issues with multi-stage builds (npm ci / Maven
+inside Docker fails). All Dockerfiles expect pre-built artifacts:
+- Backend: `COPY target/*.jar` (requires `mvn package` first)
+- Frontend: `Dockerfile.local` copies `dist/` (requires `npm run build` first)
+- Frontend `Dockerfile` (multi-stage) exists but is NOT used
+
 ## Quick Start
 
 ### Dev (Local Docker Desktop)
 
 ```powershell
-# Full build & deploy
+# Full build & deploy (Maven + npm build + Docker)
 cd deploy/environments/dev
 .\build-and-deploy.ps1
 
 # Skip Maven (just restart containers)
 .\build-and-deploy.ps1 -SkipMaven
+
+# Skip frontend (backend only)
+.\build-and-deploy.ps1 -SkipFrontend
 
 # Clean reset (destroy volumes)
 .\build-and-deploy.ps1 -Clean
@@ -81,7 +95,7 @@ cd deploy/environments/dev
 ### SIT / UAT / PROD (Company K8S)
 
 ```powershell
-# 1. Build & push images to registry
+# 1. Build & push images to registry (local build + Dockerfile.local)
 cd deploy/scripts
 .\build-and-push-k8s.ps1 -Registry harbor.company.com/workflow -Tag v1.0.0 -SkipTests
 

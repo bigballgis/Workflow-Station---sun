@@ -69,6 +69,21 @@
 
 ## 🟡 P2 — 配置与部署
 
+### 8a. Docker 多阶段构建不可用 ⚠️ 已记录
+- **描述**: 本地 Docker Desktop 无法正常执行多阶段构建（multi-stage build），npm ci / Maven 在 Docker 内部执行会失败。
+- **影响**: 所有环境（dev / sit / uat / prod）必须使用"本地构建 + 复制"方式构建镜像。
+- **当前方案**:
+  - 后端 Dockerfile: 只有 JRE 运行层，`COPY target/*.jar`（需先 `mvn package`）
+  - 前端 `Dockerfile.local`: 只有 nginx 层，`COPY dist/`（需先 `npm run build`）
+  - 前端 `Dockerfile`（多阶段）保留但不使用
+  - `build-and-deploy.ps1`（dev）和 `build-and-push-k8s.ps1`（K8S）均已改为本地构建 + `Dockerfile.local`
+- **涉及文件**:
+  - `deploy/environments/dev/docker-compose.dev.yml`（前端使用 `Dockerfile.local`）
+  - `deploy/environments/dev/build-and-deploy.ps1`（本地 npm build + Dockerfile.local）
+  - `deploy/scripts/build-and-push-k8s.ps1`（本地 npm build + Dockerfile.local）
+  - `frontend/*/Dockerfile`（多阶段，未使用）
+  - `frontend/*/Dockerfile.local`（实际使用）
+
 ### 8. ~~服务间 URL 默认值不一致~~ ✅ 已修复
 - **描述**: Java `@Value` 注解中 `admin-center.url` 默认 `http://localhost:8090`，但 `workflow-engine.url` 有的默认 `http://localhost:8091` 有的默认 `http://localhost:8081`。Docker profile 中用 `platform-admin-center` 容器名，但 docker-compose service name 是 `admin-center`。
 - **涉及文件**:
@@ -131,6 +146,7 @@
 | P1 | 5 | User Portal TODO 桩代码 | 🔲 待定 — SIT 后处理 (3-5天) |
 | P1 | 6 | Admin Center 工作流集成 | 🔲 待定 — SIT 后处理 (2-3天) |
 | P1 | 7 | User Portal Mock 登录 | 🔲 待定 — SIT 后处理 (1天) |
+| P2 | 8a | Docker 多阶段构建不可用 | ⚠️ 已记录（使用本地构建+复制） |
 | P2 | 8 | 服务间 URL 默认值不一致 | ✅ 已修复 |
 | P2 | 9 | Flyway 迁移禁用 | 🔲 待定 — SIT 后处理 (2天) |
 | P2 | 10 | Gateway 缺环境变量 | ✅ 已修复 |

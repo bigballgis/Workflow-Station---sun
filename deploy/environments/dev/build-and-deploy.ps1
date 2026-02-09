@@ -56,9 +56,9 @@ if (-not $SkipMaven) {
     Write-Host "`n[1/4] Skipping Maven build" -ForegroundColor DarkGray
 }
 
-# Step 2: Build frontend Docker images
+# Step 2: Build frontend (npm build locally, then Docker image with Dockerfile.local)
 if (-not $SkipFrontend) {
-    Write-Host "`n[2/4] Building frontend Docker images..." -ForegroundColor Yellow
+    Write-Host "`n[2/4] Building frontend (local npm build + Docker)..." -ForegroundColor Yellow
     
     $frontends = @(
         @{ Name = "admin-center-frontend"; Dir = "frontend/admin-center" },
@@ -67,9 +67,24 @@ if (-not $SkipFrontend) {
     )
     
     foreach ($fe in $frontends) {
-        Write-Host "  Building $($fe.Name)..."
-        docker build -t "dev-$($fe.Name)" "$RootDir/$($fe.Dir)"
-        if ($LASTEXITCODE -ne 0) { throw "$($fe.Name) build failed" }
+        $feDir = "$RootDir/$($fe.Dir)"
+        
+        # npm install + build locally (Docker multi-stage build not used)
+        Write-Host "  npm install & build $($fe.Name)..."
+        Push-Location $feDir
+        try {
+            npm install --prefer-offline --no-audit 2>&1 | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "npm install failed: $($fe.Name)" }
+            npx vite build
+            if ($LASTEXITCODE -ne 0) { throw "vite build failed: $($fe.Name)" }
+        } finally {
+            Pop-Location
+        }
+        
+        # Docker image copies pre-built dist/ only
+        Write-Host "  Docker build $($fe.Name) (Dockerfile.local)..."
+        docker build -f "$feDir/Dockerfile.local" -t "dev-$($fe.Name)" $feDir
+        if ($LASTEXITCODE -ne 0) { throw "$($fe.Name) docker build failed" }
     }
     
     Write-Host "  Frontend images built." -ForegroundColor Green
