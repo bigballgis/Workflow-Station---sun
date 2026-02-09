@@ -1,0 +1,21 @@
+# =====================================================
+# Kustomize Base Configuration
+# =====================================================
+# Usage:
+#   kubectl apply -k deploy/k8s/overlays/sit
+#   kubectl apply -k deploy/k8s/overlays/uat
+#   kubectl apply -k deploy/k8s/overlays/prod
+#
+# Or use deploy.ps1:
+#   .\deploy.ps1 -Environment sit
+# =====================================================
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - deployment-workflow-engine.yaml
+  - deployment-admin-center.yaml
+  - deployment-user-portal.yaml
+  - deployment-developer-workstation.yaml
+  - deployment-frontend.yaml
+  - ingress.yaml

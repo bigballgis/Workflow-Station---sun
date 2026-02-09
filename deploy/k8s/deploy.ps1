@@ -1,8 +1,7 @@
+#!/usr/bin/env pwsh
 # =====================================================
 # K8S Deployment Script
 # =====================================================
-# Deploys all K8S resources for the specified environment.
-#
 # Usage:
 #   .\deploy.ps1 -Environment sit
 #   .\deploy.ps1 -Environment uat -Namespace workflow-platform-uat
@@ -43,7 +42,7 @@ catch { Write-Fail "kubectl not found. Install Kubernetes CLI." }
 
 $dryRunFlag = if ($DryRun) { "--dry-run=client" } else { "" }
 
-# Step 1: Create namespace if not exists
+# Step 1: Create namespace
 Write-Step "Ensuring namespace $Namespace exists..."
 $nsExists = kubectl get namespace $Namespace 2>&1
 if ($LASTEXITCODE -ne 0) {
@@ -69,14 +68,13 @@ kubectl apply -f $secretFile -n $Namespace $dryRunFlag
 if ($LASTEXITCODE -ne 0) { Write-Fail "Failed to apply Secrets" }
 Write-Ok "Secrets applied"
 
-# Step 4: Update image tags in deployments and apply
+# Step 4: Apply Deployments
 Write-Step "Applying Deployments..."
 $deploymentFiles = @(
     "deployment-workflow-engine.yaml",
     "deployment-admin-center.yaml",
     "deployment-user-portal.yaml",
     "deployment-developer-workstation.yaml",
-    "deployment-api-gateway.yaml",
     "deployment-frontend.yaml"
 )
 
@@ -87,7 +85,7 @@ foreach ($file in $deploymentFiles) {
         continue
     }
 
-    # Read, replace namespace and image registry/tag, then apply
+    # Replace namespace and image registry/tag
     $content = Get-Content $filePath -Raw
     $content = $content -replace "namespace: workflow-platform-\w+", "namespace: $Namespace"
     $content = $content -replace "harbor\.company\.com/workflow", $Registry
@@ -127,8 +125,7 @@ Write-Host "=========================================" -ForegroundColor Green
 Write-Host "  Deployment Complete! ($Environment)" -ForegroundColor Green
 Write-Host "=========================================" -ForegroundColor Green
 Write-Host ""
-Write-Host "Verify with:" -ForegroundColor Yellow
+Write-Host "Verify:" -ForegroundColor Yellow
 Write-Host "  kubectl get pods -n $Namespace" -ForegroundColor Gray
 Write-Host "  kubectl get svc -n $Namespace" -ForegroundColor Gray
 Write-Host "  kubectl get ingress -n $Namespace" -ForegroundColor Gray
-Write-Host ""
