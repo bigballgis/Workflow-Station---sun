@@ -767,10 +767,29 @@ public class TaskManagerComponent {
                 }
             }
             
+            // 设置流程变量到流程实例（在完成任务之前）
+            if (variables != null && !variables.isEmpty()) {
+                String processInstanceId = flowableTask.getProcessInstanceId();
+                if (processInstanceId != null) {
+                    log.info("Setting {} variables on process instance {} before completing task {}", 
+                        variables.size(), processInstanceId, taskId);
+                    log.info("Variables to set: {}", variables);
+                    runtimeService.setVariables(processInstanceId, variables);
+                    
+                    // 验证变量是否已设置
+                    Map<String, Object> verifyVars = runtimeService.getVariables(processInstanceId);
+                    log.info("Variables after setting (verification): {}", verifyVars);
+                }
+            } else {
+                log.warn("No variables provided for task completion. TaskId: {}, UserId: {}", taskId, userId);
+            }
+            
             // 完成Flowable任务
             if (variables != null && !variables.isEmpty()) {
+                log.info("Completing task {} with variables: {}", taskId, variables);
                 taskService.complete(taskId, variables);
             } else {
+                log.info("Completing task {} without variables", taskId);
                 taskService.complete(taskId);
             }
             

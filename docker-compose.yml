@@ -129,6 +129,11 @@ services:
       SPRING_REDIS_HOST: redis
       SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD:-redis123}
       ADMIN_CENTER_URL: http://admin-center:8080
+      WORKFLOW_ENGINE_URL: http://workflow-engine:8080
+      JWT_SECRET: ${JWT_SECRET:-your-256-bit-secret-key-for-development-only}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-86400000}
+      JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION:-604800000}
+      ENCRYPTION_SECRET_KEY: ${ENCRYPTION_SECRET_KEY:-your-32-byte-aes-256-secret-key!!}
     networks:
       - platform-network
     profiles:
@@ -236,6 +241,9 @@ services:
       - workflow-engine
     ports:
       - "3002:80"
+    environment:
+      DEVELOPER_WORKSTATION_BACKEND_URL: http://developer-workstation:8080
+      ADMIN_CENTER_BACKEND_URL: http://admin-center:8080
     networks:
       - platform-network
     profiles:

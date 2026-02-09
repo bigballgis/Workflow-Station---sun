@@ -28,9 +28,9 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 # Copy nginx configuration as template
 COPY nginx.conf /etc/nginx/conf.d/default.conf.template
 
-# Copy entrypoint script
+# Copy entrypoint script and fix line endings
 COPY docker-entrypoint.sh /docker-entrypoint.sh
-RUN chmod +x /docker-entrypoint.sh
+RUN dos2unix /docker-entrypoint.sh || sed -i 's/\r$//' /docker-entrypoint.sh && chmod +x /docker-entrypoint.sh
 
 # Set default backend URLs
 ENV DEVELOPER_WORKSTATION_BACKEND_URL=http://platform-developer-workstation:8080
