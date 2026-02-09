@@ -13,7 +13,7 @@
   - `backend/workflow-engine-core/src/main/java/com/workflow/config/SecurityConfig.java`
 - **方案**: 实现 JWT Filter，只对 `/api/v1/auth/login`、`/actuator/health`、`/swagger-ui/**` 等白名单放行，其余需要 Bearer Token。
 
-### 2. CORS 配置硬编码 localhost 且过于宽松
+### 2. ~~CORS 配置硬编码 localhost 且过于宽松~~ ✅ 已修复
 - **描述**: 
   - developer-workstation 硬编码 `http://localhost:3000,3002,3003,3004,5173`
   - admin-center WebMvcConfig 硬编码 `http://localhost:3001,3000`
