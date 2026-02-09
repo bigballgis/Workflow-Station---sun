@@ -185,6 +185,10 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-platform123}
       SPRING_REDIS_HOST: redis
       SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD:-redis123}
+      ADMIN_CENTER_URL: ${ADMIN_CENTER_URL:-http://admin-center:8080}
+      WORKFLOW_ENGINE_URL: ${WORKFLOW_ENGINE_URL:-http://workflow-engine:8080}
+      USER_PORTAL_URL: ${USER_PORTAL_URL:-http://user-portal:8080}
+      DEVELOPER_WORKSTATION_URL: ${DEVELOPER_WORKSTATION_URL:-http://developer-workstation:8080}
     networks:
       - platform-network
     profiles:

@@ -83,7 +83,7 @@
 - **影响**: 无法追踪 schema 变更历史，多环境 schema 可能不一致。
 - **方案**: 启用 Flyway，将现有 init-scripts 转为 migration 脚本。
 
-### 10. API Gateway docker-compose 缺少路由所需的环境变量
+### 10. ~~API Gateway docker-compose 缺少路由所需的环境变量~~ ✅ 已修复
 - **描述**: API Gateway 的 `application.yml` 引用了 `WORKFLOW_ENGINE_URL`、`ADMIN_CENTER_URL`、`DEVELOPER_WORKSTATION_URL`、`USER_PORTAL_URL`，但 docker-compose 中 api-gateway 服务未传入这些变量。
 - **涉及文件**: 所有环境的 `docker-compose.*.yml` 中 api-gateway 服务定义
 - **方案**: 在 api-gateway 的 environment 中补充这些变量。
