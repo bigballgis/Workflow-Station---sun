@@ -98,7 +98,7 @@
   - `frontend/user-portal/` 整体未做 i18n 改造（按之前约定不修改 user-portal）
 - **备注**: user-portal 前端暂不处理（用户要求）
 
-### 12. 后端测试代码中有中文硬编码
+### 12. ~~后端测试代码中有中文硬编码~~ ✅ 已修复
 - **描述**: `PerformanceIntegrationTest.java` 中 `@DisplayName`、`System.out.println` 全是中文。
 - **涉及文件**: `backend/workflow-engine-core/src/test/java/com/workflow/integration/PerformanceIntegrationTest.java`
 - **方案**: 改为英文，保持测试输出一致性。
