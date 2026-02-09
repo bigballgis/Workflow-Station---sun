@@ -5,10 +5,6 @@
 -- Password for all users: password (BCrypt hash: $2a$10$P/xQaseE4Hr8/9fhSws86ez3nTUDLUGC8XeQueVX4QKZmdM/LeiYa)
 -- =====================================================
 
-\echo '========================================='
-\echo 'Creating System Default Roles...'
-\echo '========================================='
-
 -- 1. System Administrator Role
 INSERT INTO sys_roles (id, code, name, type, description, status, is_system, created_at, updated_at)
 VALUES 
@@ -63,6 +59,7 @@ ON CONFLICT (code) DO UPDATE SET
     description = EXCLUDED.description,
     updated_at = CURRENT_TIMESTAMP;
 
+<<<<<<< HEAD
 \echo '✓ 6 system roles created successfully'
 \echo ''
 
@@ -70,6 +67,8 @@ ON CONFLICT (code) DO UPDATE SET
 \echo 'Creating Virtual Groups...'
 \echo '========================================='
 
+=======
+>>>>>>> 782ced6 (fix deploy script and flyway)
 -- 1. System Administrators Virtual Group
 INSERT INTO sys_virtual_groups (id, code, name, type, description, status, created_at, updated_at)
 VALUES 
@@ -130,6 +129,7 @@ ON CONFLICT (code) DO UPDATE SET
     description = EXCLUDED.description,
     updated_at = CURRENT_TIMESTAMP;
 
+<<<<<<< HEAD
 \echo '✓ 6 virtual groups created successfully'
 \echo ''
 
@@ -137,6 +137,8 @@ ON CONFLICT (code) DO UPDATE SET
 \echo 'Binding Roles to Virtual Groups...'
 \echo '========================================='
 
+=======
+>>>>>>> 782ced6 (fix deploy script and flyway)
 -- Bind SYS_ADMIN role to System Administrators group
 INSERT INTO sys_virtual_group_roles (id, virtual_group_id, role_id, created_at, created_by)
 VALUES 
@@ -172,26 +174,3 @@ INSERT INTO sys_virtual_group_roles (id, virtual_group_id, role_id, created_at, 
 VALUES 
 ('vgr-developer-001', 'vg-developers', 'role-developer', CURRENT_TIMESTAMP, 'system')
 ON CONFLICT (virtual_group_id, role_id) DO NOTHING;
-
-\echo '✓ All roles bound to virtual groups successfully'
-\echo ''
-
-\echo '========================================='
-\echo 'System Roles and Groups Summary'
-\echo '========================================='
-\echo 'Roles Created:'
-\echo '  1. SYS_ADMIN (System Administrator) - Full system access'
-\echo '  2. AUDITOR (Auditor) - Audit and monitoring access'
-\echo '  3. MANAGER (Department Manager) - Department management'
-\echo '  4. TECH_LEAD (Technical Lead) - Full function unit permissions'
-\echo '  5. TEAM_LEAD (Team Lead) - Create, edit, deploy, publish (no delete)'
-\echo '  6. DEVELOPER (Developer) - Edit, deploy, publish only'
-\echo ''
-\echo 'Virtual Groups Created:'
-\echo '  1. SYSTEM_ADMINISTRATORS → SYS_ADMIN'
-\echo '  2. AUDITORS → AUDITOR'
-\echo '  3. MANAGERS → MANAGER'
-\echo '  4. TECH_LEADS → TECH_LEAD'
-\echo '  5. TEAM_LEADS → TEAM_LEAD'
-\echo '  6. DEVELOPERS → DEVELOPER'
-\echo '========================================='

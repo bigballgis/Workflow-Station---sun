@@ -65,9 +65,13 @@ services:
 
   # Workflow Engine Core
   workflow-engine:
+<<<<<<< HEAD
     build:
       context: ../../../backend/workflow-engine-core
       dockerfile: Dockerfile
+=======
+    image: ${IMAGE_TAG_WORKFLOW_ENGINE:-dev-workflow-engine-core:latest}
+>>>>>>> 782ced6 (fix deploy script and flyway)
     container_name: platform-workflow-engine-dev
     depends_on:
       postgres:
@@ -99,9 +103,13 @@ services:
 
   # Admin Center Backend
   admin-center:
+<<<<<<< HEAD
     build:
       context: ../../../backend/admin-center
       dockerfile: Dockerfile
+=======
+    image: ${IMAGE_TAG_ADMIN_CENTER:-dev-admin-center:latest}
+>>>>>>> 782ced6 (fix deploy script and flyway)
     container_name: platform-admin-center-dev
     depends_on:
       postgres:
@@ -135,9 +143,13 @@ services:
 
   # User Portal Backend
   user-portal:
+<<<<<<< HEAD
     build:
       context: ../../../backend/user-portal
       dockerfile: Dockerfile
+=======
+    image: ${IMAGE_TAG_USER_PORTAL:-dev-user-portal:latest}
+>>>>>>> 782ced6 (fix deploy script and flyway)
     container_name: platform-user-portal-dev
     depends_on:
       postgres:
@@ -172,9 +184,13 @@ services:
 
   # Developer Workstation Backend
   developer-workstation:
+<<<<<<< HEAD
     build:
       context: ../../../backend/developer-workstation
       dockerfile: Dockerfile
+=======
+    image: ${IMAGE_TAG_DEVELOPER_WORKSTATION:-dev-developer-workstation:latest}
+>>>>>>> 782ced6 (fix deploy script and flyway)
     container_name: platform-developer-workstation-dev
     depends_on:
       postgres:
@@ -207,18 +223,48 @@ services:
       - platform-dev-network
     restart: unless-stopped
 
+<<<<<<< HEAD
   # ==================== Frontend Services ====================
   # Uses Dockerfile.local — requires pre-built dist/ in each frontend project.
   # Build steps before docker compose up:
   #   1. cd frontend/admin-center && npm run build
   #   2. cd frontend/user-portal && npm run build
   #   3. cd frontend/developer-workstation && npm run build
+=======
+  # API Gateway - Development
+  api-gateway:
+    image: ${IMAGE_TAG_API_GATEWAY:-dev-api-gateway:latest}
+    container_name: platform-api-gateway-dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "${API_GATEWAY_PORT}:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD}
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - platform-dev-network
+    restart: unless-stopped
+>>>>>>> 782ced6 (fix deploy script and flyway)
 
   admin-center-frontend:
+<<<<<<< HEAD
     build:
       context: ../../../frontend/admin-center
       dockerfile: Dockerfile.local
     image: dev-admin-center-frontend
+=======
+    image: ${IMAGE_TAG_ADMIN_CENTER_FRONTEND:-dev-admin-center-frontend:latest}
+>>>>>>> 782ced6 (fix deploy script and flyway)
     container_name: platform-admin-center-frontend-dev
     depends_on:
       - admin-center
@@ -231,10 +277,14 @@ services:
     restart: unless-stopped
 
   user-portal-frontend:
+<<<<<<< HEAD
     build:
       context: ../../../frontend/user-portal
       dockerfile: Dockerfile.local
     image: dev-user-portal-frontend
+=======
+    image: ${IMAGE_TAG_USER_PORTAL_FRONTEND:-dev-user-portal-frontend:latest}
+>>>>>>> 782ced6 (fix deploy script and flyway)
     container_name: platform-user-portal-frontend-dev
     depends_on:
       - user-portal
@@ -248,10 +298,14 @@ services:
     restart: unless-stopped
 
   developer-workstation-frontend:
+<<<<<<< HEAD
     build:
       context: ../../../frontend/developer-workstation
       dockerfile: Dockerfile.local
     image: dev-developer-workstation-frontend
+=======
+    image: ${IMAGE_TAG_DEVELOPER_WORKSTATION_FRONTEND:-dev-developer-workstation-frontend:latest}
+>>>>>>> 782ced6 (fix deploy script and flyway)
     container_name: platform-developer-workstation-frontend-dev
     depends_on:
       - developer-workstation
