@@ -4,11 +4,6 @@
 -- This script creates 5 test users and assigns them to virtual groups
 -- Password for all users: password (BCrypt hash: $2a$10$P/xQaseE4Hr8/9fhSws86ez3nTUDLUGC8XeQueVX4QKZmdM/LeiYa)
 -- =====================================================
-
-\echo '========================================='
-\echo 'Creating Test Users...'
-\echo '========================================='
-
 -- 1. Super Admin User (超级管理员)
 INSERT INTO sys_users (id, username, password_hash, email, display_name, full_name, status, language, must_change_password, created_at, updated_at, deleted)
 VALUES 
@@ -64,13 +59,6 @@ ON CONFLICT (username) DO UPDATE SET
     full_name = EXCLUDED.full_name,
     updated_at = CURRENT_TIMESTAMP;
 
-\echo '✓ 5 test users created successfully'
-\echo ''
-
-\echo '========================================='
-\echo 'Assigning Users to Virtual Groups...'
-\echo '========================================='
-
 -- Add admin to System Administrators group
 INSERT INTO sys_virtual_group_members (id, group_id, user_id, joined_at, added_by)
 VALUES 
@@ -95,42 +83,42 @@ VALUES
 ('vgm-developer-001', 'vg-developers', 'user-developer', CURRENT_TIMESTAMP, 'system')
 ON CONFLICT (group_id, user_id) DO NOTHING;
 
--- Add designer to Designers group
+-- Add designer to Developers group (designers are also developers)
 INSERT INTO sys_virtual_group_members (id, group_id, user_id, joined_at, added_by)
 VALUES 
-('vgm-designer-001', 'vg-designers', 'user-designer', CURRENT_TIMESTAMP, 'system')
+('vgm-designer-001', 'vg-developers', 'user-designer', CURRENT_TIMESTAMP, 'system')
 ON CONFLICT (group_id, user_id) DO NOTHING;
 
-\echo '✓ All users assigned to virtual groups successfully'
-\echo ''
+-- =====================================================
+-- Assign Roles to Users
+-- =====================================================
 
-\echo '========================================='
-\echo 'Test Users Summary'
-\echo '========================================='
-\echo 'Login Credentials (all passwords: password):'
-\echo ''
-\echo '  1. admin / password'
-\echo '     Role: SYS_ADMIN (系统管理员)'
-\echo '     Group: SYSTEM_ADMINISTRATORS'
-\echo '     Access: Full system access'
-\echo ''
-\echo '  2. auditor / password'
-\echo '     Role: AUDITOR (审计员)'
-\echo '     Group: AUDITORS'
-\echo '     Access: Audit logs and monitoring'
-\echo ''
-\echo '  3. manager / password'
-\echo '     Role: MANAGER (部门经理)'
-\echo '     Group: MANAGERS'
-\echo '     Access: Department workflows and approvals'
-\echo ''
-\echo '  4. developer / password'
-\echo '     Role: DEVELOPER (工作流开发者)'
-\echo '     Group: DEVELOPERS'
-\echo '     Access: Developer workstation'
-\echo ''
-\echo '  5. designer / password'
-\echo '     Role: DESIGNER (工作流设计师)'
-\echo '     Group: DESIGNERS'
-\echo '     Access: Process and form design'
-\echo '========================================='
+-- Assign SYS_ADMIN role to admin user
+INSERT INTO sys_user_roles (id, user_id, role_id, assigned_at, assigned_by)
+VALUES 
+('ur-admin-001', 'user-admin', 'role-sys-admin', CURRENT_TIMESTAMP, 'system')
+ON CONFLICT (user_id, role_id) DO NOTHING;
+
+-- Assign AUDITOR role to auditor user
+INSERT INTO sys_user_roles (id, user_id, role_id, assigned_at, assigned_by)
+VALUES 
+('ur-auditor-001', 'user-auditor', 'role-auditor', CURRENT_TIMESTAMP, 'system')
+ON CONFLICT (user_id, role_id) DO NOTHING;
+
+-- Assign MANAGER role to manager user
+INSERT INTO sys_user_roles (id, user_id, role_id, assigned_at, assigned_by)
+VALUES 
+('ur-manager-001', 'user-manager', 'role-manager', CURRENT_TIMESTAMP, 'system')
+ON CONFLICT (user_id, role_id) DO NOTHING;
+
+-- Assign DEVELOPER role to developer user
+INSERT INTO sys_user_roles (id, user_id, role_id, assigned_at, assigned_by)
+VALUES 
+('ur-developer-001', 'user-developer', 'role-developer', CURRENT_TIMESTAMP, 'system')
+ON CONFLICT (user_id, role_id) DO NOTHING;
+
+-- Assign DEVELOPER role to designer user
+INSERT INTO sys_user_roles (id, user_id, role_id, assigned_at, assigned_by)
+VALUES 
+('ur-designer-001', 'user-designer', 'role-developer', CURRENT_TIMESTAMP, 'system')
+ON CONFLICT (user_id, role_id) DO NOTHING;
