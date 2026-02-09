@@ -71,7 +71,11 @@ services:
       dockerfile: Dockerfile
 =======
     image: ${IMAGE_TAG_WORKFLOW_ENGINE:-dev-workflow-engine-core:latest}
+<<<<<<< HEAD
 >>>>>>> 782ced6 (fix deploy script and flyway)
+=======
+    pull_policy: never
+>>>>>>> c768e07 (flyway updates)
     container_name: platform-workflow-engine-dev
     depends_on:
       postgres:
@@ -109,7 +113,11 @@ services:
       dockerfile: Dockerfile
 =======
     image: ${IMAGE_TAG_ADMIN_CENTER:-dev-admin-center:latest}
+<<<<<<< HEAD
 >>>>>>> 782ced6 (fix deploy script and flyway)
+=======
+    pull_policy: never
+>>>>>>> c768e07 (flyway updates)
     container_name: platform-admin-center-dev
     depends_on:
       postgres:
@@ -149,7 +157,11 @@ services:
       dockerfile: Dockerfile
 =======
     image: ${IMAGE_TAG_USER_PORTAL:-dev-user-portal:latest}
+<<<<<<< HEAD
 >>>>>>> 782ced6 (fix deploy script and flyway)
+=======
+    pull_policy: never
+>>>>>>> c768e07 (flyway updates)
     container_name: platform-user-portal-dev
     depends_on:
       postgres:
@@ -190,7 +202,11 @@ services:
       dockerfile: Dockerfile
 =======
     image: ${IMAGE_TAG_DEVELOPER_WORKSTATION:-dev-developer-workstation:latest}
+<<<<<<< HEAD
 >>>>>>> 782ced6 (fix deploy script and flyway)
+=======
+    pull_policy: never
+>>>>>>> c768e07 (flyway updates)
     container_name: platform-developer-workstation-dev
     depends_on:
       postgres:
@@ -234,6 +250,7 @@ services:
   # API Gateway - Development
   api-gateway:
     image: ${IMAGE_TAG_API_GATEWAY:-dev-api-gateway:latest}
+    pull_policy: never
     container_name: platform-api-gateway-dev
     depends_on:
       postgres:
@@ -264,7 +281,11 @@ services:
     image: dev-admin-center-frontend
 =======
     image: ${IMAGE_TAG_ADMIN_CENTER_FRONTEND:-dev-admin-center-frontend:latest}
+<<<<<<< HEAD
 >>>>>>> 782ced6 (fix deploy script and flyway)
+=======
+    pull_policy: never
+>>>>>>> c768e07 (flyway updates)
     container_name: platform-admin-center-frontend-dev
     depends_on:
       - admin-center
@@ -284,7 +305,11 @@ services:
     image: dev-user-portal-frontend
 =======
     image: ${IMAGE_TAG_USER_PORTAL_FRONTEND:-dev-user-portal-frontend:latest}
+<<<<<<< HEAD
 >>>>>>> 782ced6 (fix deploy script and flyway)
+=======
+    pull_policy: never
+>>>>>>> c768e07 (flyway updates)
     container_name: platform-user-portal-frontend-dev
     depends_on:
       - user-portal
@@ -305,7 +330,11 @@ services:
     image: dev-developer-workstation-frontend
 =======
     image: ${IMAGE_TAG_DEVELOPER_WORKSTATION_FRONTEND:-dev-developer-workstation-frontend:latest}
+<<<<<<< HEAD
 >>>>>>> 782ced6 (fix deploy script and flyway)
+=======
+    pull_policy: never
+>>>>>>> c768e07 (flyway updates)
     container_name: platform-developer-workstation-frontend-dev
     depends_on:
       - developer-workstation

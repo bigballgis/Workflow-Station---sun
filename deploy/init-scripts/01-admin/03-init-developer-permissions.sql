@@ -5,30 +5,32 @@
 -- =====================================================
 
 -- Insert permissions for DEVELOPER role
+-- DEVELOPER can: EDIT, DEPLOY, PUBLISH existing function units
+-- DEVELOPER cannot: CREATE or DELETE function units
+-- DEVELOPER can: CREATE/EDIT components within function units (forms, processes, tables, actions)
 INSERT INTO sys_developer_role_permissions (id, role_id, permission, created_at)
 VALUES 
-    ('drp-dev-001', 'role-developer', 'FUNCTION_UNIT_CREATE', CURRENT_TIMESTAMP),
+    -- Function Unit permissions (no CREATE, no DELETE)
     ('drp-dev-002', 'role-developer', 'FUNCTION_UNIT_VIEW', CURRENT_TIMESTAMP),
     ('drp-dev-003', 'role-developer', 'FUNCTION_UNIT_UPDATE', CURRENT_TIMESTAMP),
-    ('drp-dev-004', 'role-developer', 'FUNCTION_UNIT_DELETE', CURRENT_TIMESTAMP),
     ('drp-dev-005', 'role-developer', 'FUNCTION_UNIT_DEVELOP', CURRENT_TIMESTAMP),
     ('drp-dev-006', 'role-developer', 'FUNCTION_UNIT_PUBLISH', CURRENT_TIMESTAMP),
+    -- Form permissions (can create/edit within function units, no delete)
     ('drp-dev-007', 'role-developer', 'FORM_CREATE', CURRENT_TIMESTAMP),
     ('drp-dev-008', 'role-developer', 'FORM_VIEW', CURRENT_TIMESTAMP),
     ('drp-dev-009', 'role-developer', 'FORM_UPDATE', CURRENT_TIMESTAMP),
-    ('drp-dev-010', 'role-developer', 'FORM_DELETE', CURRENT_TIMESTAMP),
+    -- Process permissions (can create/edit within function units, no delete)
     ('drp-dev-011', 'role-developer', 'PROCESS_CREATE', CURRENT_TIMESTAMP),
     ('drp-dev-012', 'role-developer', 'PROCESS_VIEW', CURRENT_TIMESTAMP),
     ('drp-dev-013', 'role-developer', 'PROCESS_UPDATE', CURRENT_TIMESTAMP),
-    ('drp-dev-014', 'role-developer', 'PROCESS_DELETE', CURRENT_TIMESTAMP),
+    -- Table permissions (can create/edit within function units, no delete)
     ('drp-dev-015', 'role-developer', 'TABLE_CREATE', CURRENT_TIMESTAMP),
     ('drp-dev-016', 'role-developer', 'TABLE_VIEW', CURRENT_TIMESTAMP),
     ('drp-dev-017', 'role-developer', 'TABLE_UPDATE', CURRENT_TIMESTAMP),
-    ('drp-dev-018', 'role-developer', 'TABLE_DELETE', CURRENT_TIMESTAMP),
+    -- Action permissions (can create/edit within function units, no delete)
     ('drp-dev-019', 'role-developer', 'ACTION_CREATE', CURRENT_TIMESTAMP),
     ('drp-dev-020', 'role-developer', 'ACTION_VIEW', CURRENT_TIMESTAMP),
-    ('drp-dev-021', 'role-developer', 'ACTION_UPDATE', CURRENT_TIMESTAMP),
-    ('drp-dev-022', 'role-developer', 'ACTION_DELETE', CURRENT_TIMESTAMP)
+    ('drp-dev-021', 'role-developer', 'ACTION_UPDATE', CURRENT_TIMESTAMP)
 ON CONFLICT (role_id, permission) DO NOTHING;
 
 -- Insert permissions for TEAM_LEAD role
