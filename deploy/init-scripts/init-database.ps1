@@ -83,8 +83,7 @@ Exec-Sql -File (Join-Path $ScriptDir "01-admin/01-create-admin-only.sql") -Desc 
 Write-Step "Step 4/4: Loading test function unit (Digital Lending V2 EN)..."
 $fuScripts = @(
     "08-digital-lending-v2-en/00-create-virtual-groups.sql",
-    "08-digital-lending-v2-en/01-create-digital-lending-complete.sql",
-    "08-digital-lending-v2-en/03-bind-actions.sql"
+    "08-digital-lending-v2-en/01-create-digital-lending-complete.sql"
 )
 foreach ($f in $fuScripts) {
     $path = Join-Path $ScriptDir $f

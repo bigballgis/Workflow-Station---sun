@@ -46,8 +46,7 @@ $PSQL -f /docker-entrypoint-initdb.d/01-admin/01-create-admin-only.sql
 echo ""
 echo "[4/4] Loading test function unit (Digital Lending V2 EN)..."
 for f in /docker-entrypoint-initdb.d/08-digital-lending-v2-en/00-*.sql \
-         /docker-entrypoint-initdb.d/08-digital-lending-v2-en/01-*.sql \
-         /docker-entrypoint-initdb.d/08-digital-lending-v2-en/03-*.sql; do
+         /docker-entrypoint-initdb.d/08-digital-lending-v2-en/01-*.sql; do
     [ -f "$f" ] && echo "  Running $(basename $f)..." && $PSQL -f "$f"
 done
 

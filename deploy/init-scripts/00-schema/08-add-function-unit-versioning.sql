@@ -25,9 +25,12 @@ ALTER TABLE dw_function_units
 ADD COLUMN IF NOT EXISTS previous_version_id BIGINT NULL;
 
 -- Add foreign key constraint for previous_version_id
-ALTER TABLE dw_function_units 
-ADD CONSTRAINT IF NOT EXISTS fk_dw_function_unit_previous_version 
-FOREIGN KEY (previous_version_id) REFERENCES dw_function_units(id) ON DELETE SET NULL;
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_dw_function_unit_previous_version') THEN
+        ALTER TABLE dw_function_units ADD CONSTRAINT fk_dw_function_unit_previous_version
+        FOREIGN KEY (previous_version_id) REFERENCES dw_function_units(id) ON DELETE SET NULL;
+    END IF;
+END $$;
 
 -- Create index for version queries (function unit name + version)
 CREATE INDEX IF NOT EXISTS idx_dw_function_unit_version 
@@ -77,9 +80,12 @@ ALTER TABLE sys_function_units
 ADD COLUMN IF NOT EXISTS previous_version_id VARCHAR(64) NULL;
 
 -- Add foreign key constraint for previous_version_id
-ALTER TABLE sys_function_units 
-ADD CONSTRAINT IF NOT EXISTS fk_sys_function_unit_previous_version 
-FOREIGN KEY (previous_version_id) REFERENCES sys_function_units(id) ON DELETE SET NULL;
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_sys_function_unit_previous_version') THEN
+        ALTER TABLE sys_function_units ADD CONSTRAINT fk_sys_function_unit_previous_version
+        FOREIGN KEY (previous_version_id) REFERENCES sys_function_units(id) ON DELETE SET NULL;
+    END IF;
+END $$;
 
 -- Create index for version queries (function unit name + version)
 CREATE INDEX IF NOT EXISTS idx_sys_function_unit_version 
@@ -117,9 +123,12 @@ ALTER TABLE dw_process_definitions
 ALTER COLUMN function_unit_version_id SET NOT NULL;
 
 -- Add foreign key constraint
-ALTER TABLE dw_process_definitions 
-ADD CONSTRAINT IF NOT EXISTS fk_dw_process_def_function_unit_version 
-FOREIGN KEY (function_unit_version_id) REFERENCES dw_function_units(id) ON DELETE CASCADE;
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_dw_process_def_function_unit_version') THEN
+        ALTER TABLE dw_process_definitions ADD CONSTRAINT fk_dw_process_def_function_unit_version
+        FOREIGN KEY (function_unit_version_id) REFERENCES dw_function_units(id) ON DELETE CASCADE;
+    END IF;
+END $$;
 
 -- Create index for version queries
 CREATE INDEX IF NOT EXISTS idx_dw_process_def_version 
