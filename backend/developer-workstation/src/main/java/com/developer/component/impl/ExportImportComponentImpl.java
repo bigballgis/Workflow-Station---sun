@@ -151,7 +151,8 @@ public class ExportImportComponentImpl implements ExportImportComponent {
                         .name(functionUnit.getIcon().getName())
                         .category(functionUnit.getIcon().getCategory() != null ? 
                                 functionUnit.getIcon().getCategory().name() : null)
-                        .color(null) // Icon entity doesn't have color field
+                        .color(null)
+                        .svgContent(functionUnit.getIcon().getSvgContent())
                         .build();
             }
             

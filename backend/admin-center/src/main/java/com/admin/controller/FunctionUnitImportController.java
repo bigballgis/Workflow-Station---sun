@@ -93,6 +93,7 @@ public class FunctionUnitImportController {
                     .description(description)
                     .fileContent((String) packageData.get("process"))
                     .overwrite("OVERWRITE".equals(conflictStrategy))
+                    .iconSvg(extractIconSvg(manifest))
                     .build();
             
             // 执行导入
@@ -503,6 +504,14 @@ public class FunctionUnitImportController {
         }
         
         return result;
+    }
+    
+    @SuppressWarnings("unchecked")
+    private String extractIconSvg(Map<String, Object> manifest) {
+        if (manifest == null) return null;
+        Map<String, Object> icon = (Map<String, Object>) manifest.get("icon");
+        if (icon == null) return null;
+        return (String) icon.get("svgContent");
     }
     
     /**

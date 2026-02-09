@@ -65,7 +65,8 @@
                   class="process-card"
                   @click="startProcess(process)"
                 >
-                  <el-icon :size="32" :color="getProcessColor(process.category)">
+                  <div v-if="process.icon" class="process-icon-svg" v-html="process.icon"></div>
+                  <el-icon v-else :size="32" :color="getProcessColor(process.category)">
                     <component :is="getProcessIcon(process.category)" />
                   </el-icon>
                   <span class="process-name">{{ process.name }}</span>
@@ -245,6 +246,15 @@ onMounted(() => {
     &:hover {
       border-color: var(--hsbc-red);
       box-shadow: 0 4px 12px rgba(219, 0, 17, 0.1);
+    }
+    
+    .process-icon-svg {
+      width: 32px;
+      height: 32px;
+      :deep(svg) {
+        width: 100%;
+        height: 100%;
+      }
     }
     
     .process-name {

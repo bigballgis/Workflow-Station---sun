@@ -113,6 +113,9 @@ public class FunctionUnit {
     @Column(name = "process_deployment_count")
     @Builder.Default
     private Integer processDeploymentCount = 0;
+    
+    @Column(name = "icon_svg", columnDefinition = "TEXT")
+    private String iconSvg;
 
     
     @OneToMany(mappedBy = "functionUnit", cascade = CascadeType.ALL, orphanRemoval = true)

@@ -67,4 +67,9 @@ public class FunctionUnitImportRequest {
      */
     @Builder.Default
     private Boolean enableOnImport = true;
+    
+    /**
+     * 图标SVG内容（可选，从导出包manifest中提取）
+     */
+    private String iconSvg;
 }

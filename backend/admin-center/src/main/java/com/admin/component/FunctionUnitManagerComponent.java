@@ -360,10 +360,11 @@ public class FunctionUnitManagerComponent {
                 .packageSize(request.getFileContent() != null ? (long) request.getFileContent().length() : 0L)
                 .checksum(checksum)
                 .status(FunctionUnitStatus.DRAFT)
-                .enabled(enabled)  // 设置启用状态
+                .enabled(enabled)
                 .importedAt(Instant.now())
                 .importedBy(importerId)
-                .deployedAt(Instant.now()) // 设置 deployed_at 避免非空约束冲突
+                .deployedAt(Instant.now())
+                .iconSvg(request.getIconSvg())
                 .build();
         
         return functionUnitRepository.save(functionUnit);

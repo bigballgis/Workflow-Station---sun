@@ -73,6 +73,7 @@ public class ProcessComponent {
                             .description((String) unit.get("description"))
                             .category("业务流程")
                             .version(unit.get("version") != null ? String.valueOf(unit.get("version")) : "1.0.0")
+                            .icon((String) unit.get("iconSvg"))
                             .build();
                     definitions.add(info);
                 }

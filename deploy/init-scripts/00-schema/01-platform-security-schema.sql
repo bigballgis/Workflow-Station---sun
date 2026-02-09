@@ -525,6 +525,7 @@ CREATE TABLE IF NOT EXISTS sys_function_units (
     version VARCHAR(20) NOT NULL,
     process_deployed BOOLEAN DEFAULT false,
     process_deployment_count INTEGER DEFAULT 0,
+    icon_svg TEXT,
     CONSTRAINT chk_func_unit_status CHECK (status IN ('DRAFT', 'VALIDATED', 'DEPLOYED', 'DEPRECATED'))
 );
 
