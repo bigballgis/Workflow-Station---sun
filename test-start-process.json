@@ -1,8 +1,0 @@
-{
-  "processDefinitionKey": "DIGITAL_LENDING",
-  "variables": {
-    "applicantName": "Test User 2",
-    "loanAmount": 75000,
-    "loanPurpose": "Business Expansion"
-  }
-}
