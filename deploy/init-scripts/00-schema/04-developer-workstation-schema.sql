@@ -34,17 +34,27 @@ CREATE TABLE IF NOT EXISTS dw_function_units (
     icon_id BIGINT,
     status VARCHAR(20) NOT NULL DEFAULT 'DRAFT',
     current_version VARCHAR(20),
+    version VARCHAR(20) NOT NULL DEFAULT '1.0.0',
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    deployed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    previous_version_id BIGINT,
+    lock_version BIGINT DEFAULT 0,
     created_by VARCHAR(50) NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_by VARCHAR(50),
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_function_unit_icon FOREIGN KEY (icon_id) REFERENCES dw_icons(id) ON DELETE SET NULL,
+    CONSTRAINT fk_dw_function_unit_previous_version FOREIGN KEY (previous_version_id) REFERENCES dw_function_units(id) ON DELETE SET NULL,
     CONSTRAINT chk_function_unit_status CHECK (status IN ('DRAFT', 'PUBLISHED', 'ARCHIVED'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_dw_function_units_name ON dw_function_units(name);
 CREATE INDEX IF NOT EXISTS idx_dw_function_units_status ON dw_function_units(status);
 CREATE INDEX IF NOT EXISTS idx_function_unit_code ON dw_function_units(code);
+CREATE INDEX IF NOT EXISTS idx_dw_function_unit_version ON dw_function_units(name, version);
+CREATE INDEX IF NOT EXISTS idx_dw_function_unit_active ON dw_function_units(name, is_active);
+CREATE INDEX IF NOT EXISTS idx_dw_function_unit_deployed_at ON dw_function_units(deployed_at);
 
 -- =====================================================
 -- 3. Process Definitions Table (dw_process_definitions)

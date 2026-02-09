@@ -47,13 +47,11 @@ public class SecurityConfig {
             .sessionManagement(session -> 
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/v1/auth/**").permitAll()
                 .requestMatchers("/auth/**").permitAll()
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
                 .requestMatchers("/actuator/**").permitAll()
-                // 开发环境：允许所有API访问
-                .requestMatchers("/api/v1/**").permitAll()
-                .anyRequest().authenticated()
+                // 开发环境：允许所有API访问（路径相对于 context-path /api/v1）
+                .anyRequest().permitAll()
             )
             .addFilterBefore(jwtAuthenticationFilter, 
                 UsernamePasswordAuthenticationFilter.class);
