@@ -348,9 +348,15 @@ public class FunctionUnitAccessComponent {
             if (response.getBody() != null) {
                 log.info("Got {} access records for function unit {}", response.getBody().size(), functionUnitId);
                 for (Map<String, Object> access : response.getBody()) {
-                    String roleId = (String) access.get("roleId");
-                    log.info("Function unit {} allows role: {}", functionUnitId, roleId);
-                    roleIds.add(roleId);
+                    // 检查targetType是否为ROLE
+                    String targetType = (String) access.get("targetType");
+                    if ("ROLE".equals(targetType)) {
+                        String roleId = (String) access.get("targetId");
+                        if (roleId != null) {
+                            log.info("Function unit {} allows role: {}", functionUnitId, roleId);
+                            roleIds.add(roleId);
+                        }
+                    }
                 }
             }
             

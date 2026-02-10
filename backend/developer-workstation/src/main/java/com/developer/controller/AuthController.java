@@ -238,14 +238,23 @@ public class AuthController {
 
     private List<String> getRolesForUserLegacy(String userId) {
         try {
-            return jdbcTemplate.queryForList(
-                    "SELECT r.code FROM sys_role_assignments ra " +
-                    "JOIN sys_roles r ON ra.role_id = r.id " +
-                    "WHERE ra.target_type = 'USER' AND ra.target_id = ? AND r.status = 'ACTIVE' " +
-                    "AND (ra.valid_from IS NULL OR ra.valid_from <= NOW()) " +
-                    "AND (ra.valid_to IS NULL OR ra.valid_to >= NOW())",
-                    String.class, userId);
+            // 查询用户通过虚拟组获得的角色
+            String sql = "SELECT DISTINCT r.code FROM sys_virtual_group_members vgm " +
+                    "JOIN sys_virtual_group_roles vgr ON vgm.group_id = vgr.virtual_group_id " +
+                    "JOIN sys_roles r ON vgr.role_id = r.id " +
+                    "WHERE vgm.user_id = ?";
+            List<String> roles = jdbcTemplate.queryForList(sql, String.class, userId);
+            
+            // 如果没有找到角色，返回默认角色
+            if (roles.isEmpty()) {
+                log.warn("No roles found for user {}, returning default DEVELOPER role", userId);
+                return List.of("DEVELOPER");
+            }
+            
+            log.info("Found {} roles for user {}: {}", roles.size(), userId, roles);
+            return roles;
         } catch (Exception e) {
+            log.error("Error fetching roles for user {}: {}", userId, e.getMessage(), e);
             return List.of("DEVELOPER");
         }
     }
