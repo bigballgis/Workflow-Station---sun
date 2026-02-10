@@ -74,10 +74,11 @@ foreach ($m in $migrations) {
     if (Test-Path $path) { Exec-Sql -File $path -Desc (Split-Path $m -Leaf) | Out-Null }
 }
 
-# Step 3: Roles, groups, admin user
-Write-Step "Step 3/4: Creating roles, groups, and admin user..."
+# Step 3: Roles, groups, admin user, developer permissions
+Write-Step "Step 3/4: Creating roles, groups, admin user, and developer permissions..."
 Exec-Sql -File (Join-Path $ScriptDir "01-admin/01-create-roles-and-groups.sql") -Desc "Roles and virtual groups" | Out-Null
 Exec-Sql -File (Join-Path $ScriptDir "01-admin/01-create-admin-only.sql") -Desc "Admin user" | Out-Null
+Exec-Sql -File (Join-Path $ScriptDir "01-admin/02-init-developer-permissions.sql") -Desc "Developer permissions" | Out-Null
 
 # Step 4: Test function unit
 Write-Step "Step 4/4: Loading test function unit (Digital Lending V2 EN)..."

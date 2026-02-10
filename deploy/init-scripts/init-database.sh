@@ -94,9 +94,10 @@ main() {
     echo ""
     
     execute_sql_file "$SCRIPT_DIR/01-admin/01-create-roles-and-groups.sql" "System roles and virtual groups"
+    execute_sql_file "$SCRIPT_DIR/01-admin/02-init-developer-permissions.sql" "Developer role permissions"
     
     echo ""
-    print_success "Step 2/4: Roles and groups created successfully"
+    print_success "Step 2/4: Roles, groups, and permissions created successfully"
     echo ""
     
     # Step 3: Create test users
