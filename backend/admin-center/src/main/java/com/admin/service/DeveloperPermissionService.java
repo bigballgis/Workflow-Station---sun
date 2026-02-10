@@ -35,11 +35,11 @@ public class DeveloperPermissionService {
     private static final Map<String, Set<DeveloperPermission>> DEFAULT_ROLE_PERMISSIONS = new HashMap<>();
     
     static {
-        // 技术主管：所有权限
-        DEFAULT_ROLE_PERMISSIONS.put("TECH_DIRECTOR", EnumSet.allOf(DeveloperPermission.class));
+        // Technical Lead (技术主管)：所有权限
+        DEFAULT_ROLE_PERMISSIONS.put("TECH_LEAD", EnumSet.allOf(DeveloperPermission.class));
         
-        // 技术组长：创建、更新、删除、查看、开发权限
-        DEFAULT_ROLE_PERMISSIONS.put("TEAM_LEADER", EnumSet.of(
+        // Team Lead (团队组长)：创建、更新、删除、查看、开发权限
+        DEFAULT_ROLE_PERMISSIONS.put("TEAM_LEAD", EnumSet.of(
             DeveloperPermission.FUNCTION_UNIT_CREATE,
             DeveloperPermission.FUNCTION_UNIT_UPDATE,
             DeveloperPermission.FUNCTION_UNIT_DELETE,
@@ -135,25 +135,36 @@ public class DeveloperPermissionService {
         
         // 获取用户的开发角色ID列表
         List<String> developerRoleIds = getUserDeveloperRoleIds(userId);
+        log.info("User {} has {} developer roles: {}", userId, developerRoleIds.size(), developerRoleIds);
         
         if (developerRoleIds.isEmpty()) {
+            log.info("User {} has no developer roles", userId);
             return Collections.emptySet();
         }
         
         // 从数据库获取权限
         Set<DeveloperPermission> permissions = permissionRepository.findPermissionsByRoleIds(developerRoleIds);
+        log.info("Found {} permissions from database for roles: {}", permissions.size(), developerRoleIds);
         
         // 如果数据库没有配置，使用默认权限
         if (permissions.isEmpty()) {
+            log.info("No permissions in database, using default permissions");
             permissions = new HashSet<>();
             for (String roleId : developerRoleIds) {
                 Role role = roleRepository.findById(roleId).orElse(null);
-                if (role != null && DEFAULT_ROLE_PERMISSIONS.containsKey(role.getCode())) {
-                    permissions.addAll(DEFAULT_ROLE_PERMISSIONS.get(role.getCode()));
+                if (role != null) {
+                    log.info("Checking default permissions for role: code={}, hasDefault={}", 
+                        role.getCode(), DEFAULT_ROLE_PERMISSIONS.containsKey(role.getCode()));
+                    if (DEFAULT_ROLE_PERMISSIONS.containsKey(role.getCode())) {
+                        Set<DeveloperPermission> rolePerms = DEFAULT_ROLE_PERMISSIONS.get(role.getCode());
+                        log.info("Adding {} default permissions for role {}", rolePerms.size(), role.getCode());
+                        permissions.addAll(rolePerms);
+                    }
                 }
             }
         }
         
+        log.info("Final permissions for user {}: {} permissions", userId, permissions.size());
         return permissions;
     }
     

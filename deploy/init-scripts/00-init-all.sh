@@ -41,6 +41,7 @@ echo ""
 echo "[3/4] Creating roles, groups, and admin user..."
 $PSQL -f /docker-entrypoint-initdb.d/01-admin/01-create-roles-and-groups.sql
 $PSQL -f /docker-entrypoint-initdb.d/01-admin/01-create-admin-only.sql
+$PSQL -f /docker-entrypoint-initdb.d/01-admin/02-init-developer-permissions.sql
 
 # --- Step 4: Test function unit (Digital Lending V2 EN) ---
 echo ""
