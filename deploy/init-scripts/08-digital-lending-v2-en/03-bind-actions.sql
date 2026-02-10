@@ -26,7 +26,7 @@ BEGIN
     WHERE function_unit_id = v_function_unit_id;
 
     IF v_process_id IS NULL THEN
-        RAISE EXCEPTION 'Process definition does not exist, please run 02-insert-bpmn-process.ps1 first';
+        RAISE EXCEPTION 'Process definition does not exist, please run 02-insert-bpmn-process.sql first';
     END IF;
 
     -- Count actions

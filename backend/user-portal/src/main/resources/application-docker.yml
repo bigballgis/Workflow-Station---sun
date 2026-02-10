@@ -47,7 +47,7 @@ app:
   cache:
     redis-host: redis
     redis-port: 6379
-    redis-password: ${SPRING_REDIS_PASSWORD:dev_redis_123}
+    redis-password: ${SPRING_REDIS_PASSWORD:redis123}
     redis-database: 4
     user-ttl-minutes: ${CACHE_USER_TTL_MINUTES:30}
     permission-ttl-minutes: ${CACHE_PERMISSION_TTL_MINUTES:60}
@@ -73,7 +73,7 @@ spring:
     redis:
       host: redis
       port: 6379
-      password: ${SPRING_REDIS_PASSWORD:dev_redis_123}
+      password: ${SPRING_REDIS_PASSWORD:redis123}
       database: 4
 
 # Actuator Configuration - disable Redis health check to avoid localhost connection issue

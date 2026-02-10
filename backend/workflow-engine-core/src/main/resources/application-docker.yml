@@ -47,7 +47,7 @@ app:
   cache:
     redis-host: redis
     redis-port: 6379
-    redis-password: ${REDIS_PASSWORD:redis123}
+    redis-password: ${SPRING_REDIS_PASSWORD:redis123}
     redis-database: 3
     user-ttl-minutes: ${CACHE_USER_TTL_MINUTES:30}
     permission-ttl-minutes: ${CACHE_PERMISSION_TTL_MINUTES:60}

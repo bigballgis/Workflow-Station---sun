@@ -27,4 +27,12 @@ BEGIN;
 
 COMMIT;
 
+\echo 'Applying incremental migrations...'
+\i /docker-entrypoint-initdb.d/00-schema/06-add-deployment-rollback-columns.sql
+\i /docker-entrypoint-initdb.d/00-schema/07-add-action-definitions-table.sql
+\i /docker-entrypoint-initdb.d/00-schema/08-add-function-unit-versioning.sql
+\i /docker-entrypoint-initdb.d/00-schema/10-add-approval-order-column.sql
+\i /docker-entrypoint-initdb.d/00-schema/11-add-unique-enabled-constraint.sql
+\i /docker-entrypoint-initdb.d/00-schema/12-add-enabled-field-to-dw-function-units.sql
+
 \echo 'All schemas created successfully.'

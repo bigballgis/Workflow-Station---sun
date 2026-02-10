@@ -223,3 +223,9 @@ admin:
 workflow-engine:
   url: ${WORKFLOW_ENGINE_URL:http://localhost:8081}
   enabled: true
+
+# JWT Configuration
+jwt:
+  secret: ${JWT_SECRET:your-256-bit-secret-key-for-development-only}
+  expiration: ${JWT_EXPIRATION:86400000}
+  refresh-expiration: ${JWT_REFRESH_EXPIRATION:604800000}

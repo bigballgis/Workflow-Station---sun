@@ -1,8 +1,8 @@
+# Default: auto-detect (MUST be first — later rules override)
+* text=auto
+
 # Shell scripts must use LF line endings (they run in Linux containers)
 *.sh text eol=lf
 
 # SQL scripts
 *.sql text eol=lf
-
-# Default: auto-detect
-* text=auto

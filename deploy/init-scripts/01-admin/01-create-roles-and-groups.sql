@@ -1,7 +1,7 @@
 -- =====================================================
 -- System Default Roles and Virtual Groups Initialization
 -- =====================================================
--- This script creates 5 system default roles and 5 virtual groups
+-- This script creates 6 system default roles and 6 virtual groups
 -- Password for all users: password (BCrypt hash: $2a$10$P/xQaseE4Hr8/9fhSws86ez3nTUDLUGC8XeQueVX4QKZmdM/LeiYa)
 -- =====================================================
 
@@ -63,7 +63,7 @@ ON CONFLICT (code) DO UPDATE SET
     description = EXCLUDED.description,
     updated_at = CURRENT_TIMESTAMP;
 
-\echo '✓ 5 system roles created successfully'
+\echo '✓ 6 system roles created successfully'
 \echo ''
 
 \echo '========================================='
@@ -130,7 +130,7 @@ ON CONFLICT (code) DO UPDATE SET
     description = EXCLUDED.description,
     updated_at = CURRENT_TIMESTAMP;
 
-\echo '✓ 5 virtual groups created successfully'
+\echo '✓ 6 virtual groups created successfully'
 \echo ''
 
 \echo '========================================='

@@ -551,7 +551,15 @@ npx vitest --run
 | 变量名 | 使用者 | 说明 |
 |--------|--------|------|
 | `ADMIN_CENTER_URL` | workflow-engine, user-portal, developer-workstation | 管理后台地址 |
-| `WORKFLOW_ENGINE_URL` | admin-center, user-portal | 工作流引擎地址 |
+| `WORKFLOW_ENGINE_URL` | admin-center, user-portal, developer-workstation | 工作流引擎地址 |
+
+#### 前端 nginx 反向代理 URL 变量
+
+| 变量名 | 使用者 | 说明 |
+|--------|--------|------|
+| `ADMIN_CENTER_URL` | admin-center-frontend, user-portal-frontend, developer-workstation-frontend | 管理后台 API 地址 |
+| `USER_PORTAL_URL` | user-portal-frontend | 用户门户 API 地址 |
+| `DEVELOPER_WORKSTATION_URL` | developer-workstation-frontend | 开发者工作台 API 地址 |
 
 ---
 

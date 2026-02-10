@@ -438,7 +438,7 @@ BEGIN
     RAISE NOTICE 'Action Definitions: 15 (including popup form actions and API calls)';
     RAISE NOTICE '';
     RAISE NOTICE 'Next Steps:';
-    RAISE NOTICE '  1. Run: 02-insert-bpmn-process.ps1';
+    RAISE NOTICE '  1. Run: 02-insert-bpmn-process.sql';
     RAISE NOTICE '  2. Run: 03-bind-actions.sql';
     RAISE NOTICE '  3. Deploy function unit in Developer Workstation';
     RAISE NOTICE '  4. Test complete workflow in User Portal';

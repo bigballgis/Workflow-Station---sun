@@ -61,6 +61,11 @@ spec:
             configMapKeyRef:
               name: workflow-platform-config
               key: JWT_EXPIRATION
+        - name: JWT_REFRESH_EXPIRATION
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: JWT_REFRESH_EXPIRATION
         - name: CORS_ALLOWED_ORIGINS
           valueFrom:
             configMapKeyRef:
