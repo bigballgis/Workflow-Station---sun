@@ -16,6 +16,16 @@ export interface TaskQueryRequest {
   size?: number
 }
 
+export interface TaskActionInfo {
+  actionId: string
+  actionName: string
+  actionType: string
+  description?: string
+  icon?: string
+  buttonColor?: string
+  configJson?: string
+}
+
 export interface TaskInfo {
   taskId: string
   taskName: string
@@ -40,10 +50,13 @@ export interface TaskInfo {
   claimed?: boolean
   originalAssignmentType?: string
   originalAssignee?: string
+  candidateUsers?: string
   // 已处理任务字段
   completedTime?: string
   durationInMillis?: number
   action?: string
+  // 自定义操作按钮
+  actions?: TaskActionInfo[]
 }
 
 export interface PageResponse<T> {

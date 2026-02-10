@@ -182,6 +182,9 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         Specification<FunctionUnit> spec = (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
             
+            // Only show enabled versions to users
+            predicates.add(cb.equal(root.get("enabled"), true));
+            
             if (name != null && !name.trim().isEmpty()) {
                 predicates.add(cb.like(cb.lower(root.get("name")), "%" + name.trim().toLowerCase() + "%"));
             }

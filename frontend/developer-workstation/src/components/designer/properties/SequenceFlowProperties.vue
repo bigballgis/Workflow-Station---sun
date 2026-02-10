@@ -1,35 +1,35 @@
 <template>
   <div class="sequence-flow-properties">
     <el-collapse v-model="activeGroups">
-      <!-- 基本信息 -->
-      <el-collapse-item title="基本信息" name="basic">
+      <!-- Basic info -->
+      <el-collapse-item :title="t('properties.basic')" name="basic">
         <el-form label-position="top" size="small">
-          <el-form-item label="连接线ID">
+          <el-form-item :label="t('properties.flowId')">
             <el-input :model-value="basicProps.id" disabled />
           </el-form-item>
-          <el-form-item label="连接线名称">
-            <el-input v-model="flowName" @change="updateBasicProp('name', flowName)" placeholder="连接线名称" />
+          <el-form-item :label="t('properties.flowName')">
+            <el-input v-model="flowName" @change="updateBasicProp('name', flowName)" :placeholder="t('properties.flowNamePlaceholder')" />
           </el-form-item>
-          <el-form-item label="源节点">
+          <el-form-item :label="t('properties.sourceNode')">
             <el-input :model-value="sourceRef" disabled />
           </el-form-item>
-          <el-form-item label="目标节点">
+          <el-form-item :label="t('properties.targetNode')">
             <el-input :model-value="targetRef" disabled />
           </el-form-item>
         </el-form>
       </el-collapse-item>
       
-      <!-- 条件配置 -->
-      <el-collapse-item v-if="showCondition" title="条件配置" name="condition">
+      <!-- Condition config -->
+      <el-collapse-item v-if="showCondition" :title="t('properties.conditionConfig')" name="condition">
         <el-form label-position="top" size="small">
-          <el-form-item label="条件类型">
+          <el-form-item :label="t('properties.conditionType')">
             <el-select v-model="conditionType" @change="updateExtProp('conditionType', conditionType)">
-              <el-option label="JUEL 表达式" value="juel" />
-              <el-option label="脚本" value="script" />
+              <el-option :label="t('properties.juelExpression')" value="juel" />
+              <el-option :label="t('properties.script')" value="script" />
             </el-select>
           </el-form-item>
           
-          <el-form-item label="条件表达式">
+          <el-form-item :label="t('properties.conditionExpression')">
             <el-input 
               v-model="conditionExpression" 
               type="textarea" 
@@ -41,7 +41,7 @@
           </el-form-item>
           
           <div class="condition-examples">
-            <div class="examples-title">常用表达式示例</div>
+            <div class="examples-title">{{ t('properties.commonExpressions') }}</div>
             <div 
               v-for="example in conditionExamples" 
               :key="example.expression"
@@ -55,10 +55,10 @@
         </el-form>
       </el-collapse-item>
       
-      <!-- 非条件分支说明 -->
-      <el-collapse-item v-if="!showCondition" title="说明" name="info">
+      <!-- Non-condition branch info -->
+      <el-collapse-item v-if="!showCondition" :title="t('properties.info')" name="info">
         <el-alert type="info" :closable="false">
-          此连接线的源节点不是网关，无需配置条件表达式。
+          {{ t('properties.flowNoConditionInfo') }}
         </el-alert>
       </el-collapse-item>
     </el-collapse>
@@ -67,6 +67,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { BpmnElement, BpmnModeler } from '@/types/bpmn'
 import {
   getBasicProperties,
@@ -74,6 +75,8 @@ import {
   getExtensionProperties,
   setExtensionProperty
 } from '@/utils/bpmnExtensions'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   modeler: BpmnModeler
@@ -99,20 +102,20 @@ const showCondition = computed(() => {
 const conditionPlaceholder = computed(() => {
   return conditionType.value === 'juel' 
     ? '${variable > 100}' 
-    : '// JavaScript 脚本\nreturn variable > 100;'
+    : t('properties.conditionPlaceholderScript')
 })
 
 const conditionTip = computed(() => {
   return conditionType.value === 'juel'
-    ? '使用 JUEL 表达式，如 ${amount > 1000}'
-    : '使用 JavaScript 脚本，通过 return 返回布尔值'
+    ? t('properties.conditionTipJuel')
+    : t('properties.conditionTipScript')
 })
 
-const conditionExamples = [
-  { expression: '${amount > 1000}', label: '金额大于1000' },
-  { expression: '${approved == true}', label: '已审批通过' },
-  { expression: '${status == "completed"}', label: '状态为已完成' }
-]
+const conditionExamples = computed(() => [
+  { expression: '${amount > 1000}', label: t('properties.amountGreaterThan1000') },
+  { expression: '${approved == true}', label: t('properties.approved') },
+  { expression: '${status == "completed"}', label: t('properties.statusCompleted') }
+])
 
 function loadProperties() {
   if (!props.element) return
@@ -124,7 +127,7 @@ function loadProperties() {
   sourceRef.value = bo.sourceRef?.name || bo.sourceRef?.id || ''
   targetRef.value = bo.targetRef?.name || bo.targetRef?.id || ''
   
-  // 读取条件表达式
+  // Read condition expression
   const condition = bo.conditionExpression
   if (condition) {
     conditionExpression.value = condition.body || ''
@@ -132,7 +135,7 @@ function loadProperties() {
     conditionExpression.value = ''
   }
   
-  // 读取扩展属性
+  // Read extension properties
   const ext = getExtensionProperties(props.element)
   conditionType.value = ext.conditionType || 'juel'
 }

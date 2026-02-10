@@ -3,6 +3,10 @@ server:
   servlet:
     context-path: /api/v1/admin
 
+# CORS Configuration
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:3001}
+
 # Application Configuration (platform-common)
 app:
   database:
@@ -98,6 +102,11 @@ spring:
     locations: classpath:db/migration/admin-center,classpath:db/migration/platform-security
     baseline-on-migrate: true
     validate-on-migrate: false
+  
+  # 禁用静态资源处理，避免与 API 路由冲突
+  web:
+    resources:
+      add-mappings: false
 
   data:
     redis:
@@ -186,8 +195,10 @@ management:
 springdoc:
   api-docs:
     path: /api-docs
+    enabled: ${SWAGGER_ENABLED:true}
   swagger-ui:
     path: /swagger-ui.html
+    enabled: ${SWAGGER_ENABLED:true}
     tags-sorter: alpha
     operations-sorter: alpha
 

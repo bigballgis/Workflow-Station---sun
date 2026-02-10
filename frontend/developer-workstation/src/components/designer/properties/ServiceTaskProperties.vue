@@ -1,39 +1,39 @@
 <template>
   <div class="service-task-properties">
     <el-collapse v-model="activeGroups">
-      <!-- 基本信息 -->
-      <el-collapse-item title="基本信息" name="basic">
+      <!-- Basic info -->
+      <el-collapse-item :title="t('properties.basic')" name="basic">
         <el-form label-position="top" size="small">
-          <el-form-item label="任务ID">
+          <el-form-item :label="t('properties.taskId')">
             <el-input :model-value="basicProps.id" disabled />
           </el-form-item>
-          <el-form-item label="任务名称">
-            <el-input v-model="taskName" @change="updateBasicProp('name', taskName)" placeholder="任务名称" />
+          <el-form-item :label="t('properties.taskName')">
+            <el-input v-model="taskName" @change="updateBasicProp('name', taskName)" :placeholder="t('properties.taskName')" />
           </el-form-item>
-          <el-form-item label="任务描述">
-            <el-input v-model="taskDescription" type="textarea" :rows="2" @change="updateExtProp('description', taskDescription)" placeholder="任务描述" />
+          <el-form-item :label="t('properties.taskDescription')">
+            <el-input v-model="taskDescription" type="textarea" :rows="2" @change="updateExtProp('description', taskDescription)" :placeholder="t('properties.taskDescription')" />
           </el-form-item>
         </el-form>
       </el-collapse-item>
       
-      <!-- 服务类型 -->
-      <el-collapse-item title="服务配置" name="service">
+      <!-- Service config -->
+      <el-collapse-item :title="t('properties.serviceConfig')" name="service">
         <el-form label-position="top" size="small">
-          <el-form-item label="服务类型">
+          <el-form-item :label="t('common.type')">
             <el-select v-model="serviceType" @change="updateExtProp('serviceType', serviceType)">
-              <el-option label="HTTP 调用" value="http" />
-              <el-option label="脚本执行" value="script" />
-              <el-option label="消息发送" value="message" />
+              <el-option :label="t('properties.serviceTypeHttp')" value="http" />
+              <el-option :label="t('properties.serviceTypeScript')" value="script" />
+              <el-option :label="t('properties.serviceTypeMessage')" value="message" />
             </el-select>
           </el-form-item>
           
-          <!-- HTTP 配置 -->
+          <!-- HTTP config -->
           <template v-if="serviceType === 'http'">
-            <el-form-item label="请求URL">
+            <el-form-item :label="t('properties.requestUrl')">
               <el-input v-model="httpUrl" @change="updateExtProp('httpUrl', httpUrl)" placeholder="https://api.example.com/endpoint" />
             </el-form-item>
             
-            <el-form-item label="请求方法">
+            <el-form-item :label="t('properties.requestMethod')">
               <el-select v-model="httpMethod" @change="updateExtProp('httpMethod', httpMethod)">
                 <el-option label="GET" value="GET" />
                 <el-option label="POST" value="POST" />
@@ -42,65 +42,65 @@
               </el-select>
             </el-form-item>
             
-            <el-form-item label="请求头">
+            <el-form-item :label="t('properties.requestHeaders')">
               <el-input v-model="httpHeadersStr" type="textarea" :rows="3" @change="updateHttpHeaders" placeholder='{"Content-Type": "application/json"}' />
-              <div class="form-tip">JSON 格式的请求头</div>
+              <div class="form-tip">{{ t('properties.requestHeadersTip') }}</div>
             </el-form-item>
             
-            <el-form-item label="请求体">
+            <el-form-item :label="t('properties.requestBody')">
               <el-input v-model="httpBody" type="textarea" :rows="4" @change="updateExtProp('httpBody', httpBody)" placeholder='{"key": "${variable}"}' />
-              <div class="form-tip">支持 ${variable} 引用流程变量</div>
+              <div class="form-tip">{{ t('properties.requestBodyTip') }}</div>
             </el-form-item>
             
-            <el-form-item label="响应存储变量">
+            <el-form-item :label="t('properties.responseVariable')">
               <el-input v-model="httpResponseVar" @change="updateExtProp('httpResponseVar', httpResponseVar)" placeholder="responseData" />
-              <div class="form-tip">将响应结果存储到此变量</div>
+              <div class="form-tip">{{ t('properties.responseVariableTip') }}</div>
             </el-form-item>
           </template>
           
-          <!-- 脚本配置 -->
+          <!-- Script config -->
           <template v-if="serviceType === 'script'">
-            <el-form-item label="脚本语言">
+            <el-form-item :label="t('properties.scriptLanguage')">
               <el-select v-model="scriptLanguage" @change="updateExtProp('scriptLanguage', scriptLanguage)">
                 <el-option label="JavaScript" value="javascript" />
                 <el-option label="Groovy" value="groovy" />
               </el-select>
             </el-form-item>
             
-            <el-form-item label="脚本内容">
-              <el-input v-model="scriptContent" type="textarea" :rows="8" @change="updateExtProp('scriptContent', scriptContent)" placeholder="// 在此编写脚本" />
-              <div class="form-tip">可通过 execution 对象访问流程变量</div>
+            <el-form-item :label="t('properties.scriptContent')">
+              <el-input v-model="scriptContent" type="textarea" :rows="8" @change="updateExtProp('scriptContent', scriptContent)" :placeholder="t('properties.scriptContentPlaceholder')" />
+              <div class="form-tip">{{ t('properties.scriptContentTip') }}</div>
             </el-form-item>
           </template>
           
-          <!-- 消息配置 -->
+          <!-- Message config -->
           <template v-if="serviceType === 'message'">
-            <el-form-item label="消息主题">
+            <el-form-item :label="t('properties.messageTopic')">
               <el-input v-model="messageTopic" @change="updateExtProp('messageTopic', messageTopic)" placeholder="order.created" />
             </el-form-item>
             
-            <el-form-item label="消息内容">
+            <el-form-item :label="t('properties.messagePayload')">
               <el-input v-model="messagePayload" type="textarea" :rows="4" @change="updateExtProp('messagePayload', messagePayload)" placeholder='{"orderId": "${orderId}"}' />
             </el-form-item>
           </template>
         </el-form>
       </el-collapse-item>
       
-      <!-- 重试配置 -->
-      <el-collapse-item title="重试配置" name="retry">
+      <!-- Retry config -->
+      <el-collapse-item :title="t('properties.retryConfig')" name="retry">
         <el-form label-position="top" size="small">
-          <el-form-item label="启用重试">
+          <el-form-item :label="t('properties.enableRetry')">
             <el-switch v-model="retryEnabled" @change="updateExtProp('retryEnabled', retryEnabled)" />
           </el-form-item>
           
           <template v-if="retryEnabled">
-            <el-form-item label="重试次数">
+            <el-form-item :label="t('properties.retryCount')">
               <el-input-number v-model="retryCount" :min="1" :max="10" @change="updateExtProp('retryCount', retryCount)" />
             </el-form-item>
             
-            <el-form-item label="重试间隔">
-              <el-input v-model="retryInterval" @change="updateExtProp('retryInterval', retryInterval)" placeholder="PT5M (5分钟)" />
-              <div class="form-tip">ISO 8601 格式</div>
+            <el-form-item :label="t('properties.retryInterval')">
+              <el-input v-model="retryInterval" @change="updateExtProp('retryInterval', retryInterval)" :placeholder="t('properties.retryIntervalPlaceholder')" />
+              <div class="form-tip">ISO 8601</div>
             </el-form-item>
           </template>
         </el-form>
@@ -111,6 +111,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { BpmnElement, BpmnModeler } from '@/types/bpmn'
 import {
   getBasicProperties,
@@ -119,6 +120,8 @@ import {
   setExtensionProperty
 } from '@/utils/bpmnExtensions'
 
+const { t } = useI18n()
+
 const props = defineProps<{
   modeler: BpmnModeler
   element: BpmnElement
@@ -126,29 +129,23 @@ const props = defineProps<{
 
 const activeGroups = ref(['basic', 'service'])
 
-// 基本属性
 const taskName = ref('')
 const taskDescription = ref('')
 
-// 服务配置
 const serviceType = ref<'http' | 'script' | 'message'>('http')
 
-// HTTP 配置
 const httpUrl = ref('')
 const httpMethod = ref<'GET' | 'POST' | 'PUT' | 'DELETE'>('POST')
 const httpHeadersStr = ref('')
 const httpBody = ref('')
 const httpResponseVar = ref('')
 
-// 脚本配置
 const scriptLanguage = ref<'javascript' | 'groovy'>('javascript')
 const scriptContent = ref('')
 
-// 消息配置
 const messageTopic = ref('')
 const messagePayload = ref('')
 
-// 重试配置
 const retryEnabled = ref(false)
 const retryCount = ref(3)
 const retryInterval = ref('PT5M')
@@ -193,7 +190,7 @@ function updateHttpHeaders() {
     const headers = httpHeadersStr.value ? JSON.parse(httpHeadersStr.value) : {}
     updateExtProp('httpHeaders', headers)
   } catch {
-    // 忽略 JSON 解析错误
+    // Ignore JSON parse errors
   }
 }
 

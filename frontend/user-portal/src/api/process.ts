@@ -6,7 +6,7 @@ export interface ProcessDefinition {
   name: string
   description?: string
   category: string
-  version: number
+  version: string
   icon?: string
   isFavorite?: boolean
 }
@@ -133,6 +133,31 @@ export const processApi = {
   // 获取功能单元完整内容（BPMN、表单等）
   getFunctionUnitContent(functionUnitId: string) {
     return request.get<FunctionUnitContent>(`/processes/function-units/${functionUnitId}/content`)
+  },
+  
+  // 获取功能单元特定类型的内容
+  getFunctionUnitContents(functionUnitId: string, contentType: string) {
+    // 调用已经能正常工作的 /processes/function-units/{id}/content 端点
+    // 然后在前端根据 contentType 过滤结果
+    return this.getFunctionUnitContent(functionUnitId).then((response: any) => {
+      // response 是 ApiResponse 格式: {success, code, data: {forms, processes, dataTables, ...}}
+      const content = response.data || response
+      const key = contentType.toUpperCase() === 'FORM' ? 'forms' :
+                  contentType.toUpperCase() === 'PROCESS' ? 'processes' :
+                  contentType.toUpperCase() === 'DATA_TABLE' ? 'dataTables' : null
+      
+      const items = key ? (content[key] || []) : []
+      // 返回与原始 API 格式兼容的结构: { data: [...] }
+      return {
+        data: items.map((item: any) => ({
+          id: item.id,
+          contentType: contentType,
+          contentName: item.name,
+          contentData: item.data,
+          sourceId: item.sourceId || item.id
+        }))
+      }
+    })
   },
   
   // 获取流程历史记录

@@ -1,3 +1,7 @@
+# =====================================================
+# Frontend Deployments (Admin Center, User Portal, Developer Workstation)
+# =====================================================
+
 # Admin Center Frontend
 apiVersion: apps/v1
 kind: Deployment
@@ -20,15 +24,17 @@ spec:
     spec:
       containers:
       - name: admin-center-frontend
-        image: your-registry/admin-center-frontend:latest
+        image: harbor.company.com/workflow/admin-center-frontend:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 80
           name: http
-          protocol: TCP
         env:
         - name: ADMIN_CENTER_BACKEND_URL
-          value: "http://admin-center-service:8080"
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: ADMIN_CENTER_BACKEND_URL
         resources:
           requests:
             memory: "128Mi"
@@ -62,7 +68,6 @@ spec:
     app: admin-center-frontend
   ports:
   - name: http
-    protocol: TCP
     port: 80
     targetPort: 80
   type: ClusterIP
@@ -90,17 +95,22 @@ spec:
     spec:
       containers:
       - name: user-portal-frontend
-        image: your-registry/user-portal-frontend:latest
+        image: harbor.company.com/workflow/user-portal-frontend:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 80
           name: http
-          protocol: TCP
         env:
         - name: USER_PORTAL_BACKEND_URL
-          value: "http://user-portal-service:8080"
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: USER_PORTAL_BACKEND_URL
         - name: ADMIN_CENTER_BACKEND_URL
-          value: "http://admin-center-service:8080"
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: ADMIN_CENTER_BACKEND_URL
         resources:
           requests:
             memory: "128Mi"
@@ -134,7 +144,6 @@ spec:
     app: user-portal-frontend
   ports:
   - name: http
-    protocol: TCP
     port: 80
     targetPort: 80
   type: ClusterIP
@@ -162,17 +171,22 @@ spec:
     spec:
       containers:
       - name: developer-workstation-frontend
-        image: your-registry/developer-workstation-frontend:latest
+        image: harbor.company.com/workflow/developer-workstation-frontend:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 80
           name: http
-          protocol: TCP
         env:
         - name: DEVELOPER_WORKSTATION_BACKEND_URL
-          value: "http://developer-workstation-service:8080"
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: DEVELOPER_WORKSTATION_BACKEND_URL
         - name: ADMIN_CENTER_BACKEND_URL
-          value: "http://admin-center-service:8080"
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: ADMIN_CENTER_BACKEND_URL
         resources:
           requests:
             memory: "128Mi"
@@ -206,7 +220,6 @@ spec:
     app: developer-workstation-frontend
   ports:
   - name: http
-    protocol: TCP
     port: 80
     targetPort: 80
   type: ClusterIP

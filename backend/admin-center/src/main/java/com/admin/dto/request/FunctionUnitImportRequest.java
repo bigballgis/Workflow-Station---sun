@@ -59,4 +59,17 @@ public class FunctionUnitImportRequest {
      * 功能单元描述（可选）
      */
     private String description;
+    
+    /**
+     * 导入后是否启用（默认为 true）
+     * 如果为 true，将自动禁用同一 code 的其他版本
+     * 如果为 false，新版本将以禁用状态导入
+     */
+    @Builder.Default
+    private Boolean enableOnImport = true;
+    
+    /**
+     * 图标SVG内容（可选，从导出包manifest中提取）
+     */
+    private String iconSvg;
 }

@@ -1,65 +1,65 @@
 <template>
   <div class="table-binding-manager">
-    <!-- 绑定列表 -->
+    <!-- Binding list -->
     <div class="binding-list">
       <div class="binding-header">
-        <span class="title">表绑定管理</span>
+        <span class="title">{{ t('tableBinding.title') }}</span>
         <el-button type="primary" size="small" @click="showAddDialog = true">
-          <el-icon><Plus /></el-icon> 添加绑定
+          <el-icon><Plus /></el-icon> {{ t('tableBinding.addBinding') }}
         </el-button>
       </div>
       
       <el-table :data="bindings" size="small" v-loading="loading">
-        <el-table-column prop="tableName" label="表名" min-width="120">
+        <el-table-column prop="tableName" :label="t('tableBinding.tableName')" min-width="120">
           <template #default="{ row }">
             <span>{{ row.tableName || getTableName(row.tableId) }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="bindingType" label="绑定类型" width="100">
+        <el-table-column prop="bindingType" :label="t('tableBinding.bindingType')" width="100">
           <template #default="{ row }">
             <el-tag :type="bindingTypeTag(row.bindingType)" size="small">
               {{ bindingTypeLabel(row.bindingType) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="bindingMode" label="模式" width="80">
+        <el-table-column prop="bindingMode" :label="t('tableBinding.mode')" width="80">
           <template #default="{ row }">
             <el-tag :type="row.bindingMode === 'EDITABLE' ? 'success' : 'info'" size="small">
-              {{ row.bindingMode === 'EDITABLE' ? '可编辑' : '只读' }}
+              {{ row.bindingMode === 'EDITABLE' ? t('tableBinding.editable') : t('tableBinding.readOnly') }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="foreignKeyField" label="外键字段" width="120">
+        <el-table-column prop="foreignKeyField" :label="t('tableBinding.foreignKeyField')" width="120">
           <template #default="{ row }">
             <span v-if="row.foreignKeyField">{{ row.foreignKeyField }}</span>
             <span v-else class="text-muted">-</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="120">
+        <el-table-column :label="t('tableBinding.operations')" width="120">
           <template #default="{ row }">
-            <el-button link type="primary" size="small" @click="handleEdit(row)">编辑</el-button>
+            <el-button link type="primary" size="small" @click="handleEdit(row)">{{ t('common.edit') }}</el-button>
             <el-button link type="danger" size="small" @click="handleDelete(row)" :disabled="row.bindingType === 'PRIMARY'">
-              删除
+              {{ t('common.delete') }}
             </el-button>
           </template>
         </el-table-column>
       </el-table>
       
-      <el-empty v-if="bindings.length === 0 && !loading" description="暂无表绑定" :image-size="60" />
+      <el-empty v-if="bindings.length === 0 && !loading" :description="t('tableBinding.noBindings')" :image-size="60" />
     </div>
 
-    <!-- 添加/编辑绑定对话框 -->
+    <!-- Add/Edit binding dialog -->
     <el-dialog 
       v-model="showAddDialog" 
-      :title="editingBinding ? '编辑表绑定' : '添加表绑定'" 
+      :title="editingBinding ? t('tableBinding.editBinding') : t('tableBinding.addBinding')" 
       width="500px"
       @close="resetForm"
     >
       <el-form :model="bindingForm" :rules="formRules" ref="formRef" label-width="100px">
-        <el-form-item label="选择表" prop="tableId">
+        <el-form-item :label="t('tableBinding.selectTable')" prop="tableId">
           <el-select 
             v-model="bindingForm.tableId" 
-            placeholder="请选择要绑定的表" 
+            :placeholder="t('tableBinding.selectTablePlaceholder')" 
             style="width: 100%"
             :disabled="!!editingBinding"
             @change="handleTableSelect"
@@ -74,29 +74,29 @@
           </el-select>
         </el-form-item>
         
-        <el-form-item label="绑定类型" prop="bindingType">
+        <el-form-item :label="t('tableBinding.bindingType')" prop="bindingType">
           <el-select v-model="bindingForm.bindingType" style="width: 100%" :disabled="!!editingBinding && editingBinding.bindingType === 'PRIMARY'">
-            <el-option label="主表" value="PRIMARY" :disabled="hasPrimaryBinding && bindingForm.bindingType !== 'PRIMARY'" />
-            <el-option label="子表" value="SUB" />
-            <el-option label="关联表" value="RELATED" />
+            <el-option :label="t('tableBinding.primaryTable')" value="PRIMARY" :disabled="hasPrimaryBinding && bindingForm.bindingType !== 'PRIMARY'" />
+            <el-option :label="t('tableBinding.subTable')" value="SUB" />
+            <el-option :label="t('tableBinding.relatedTable')" value="RELATED" />
           </el-select>
         </el-form-item>
         
-        <el-form-item label="绑定模式" prop="bindingMode">
+        <el-form-item :label="t('tableBinding.bindingMode')" prop="bindingMode">
           <el-radio-group v-model="bindingForm.bindingMode">
-            <el-radio value="EDITABLE">可编辑</el-radio>
-            <el-radio value="READONLY">只读</el-radio>
+            <el-radio value="EDITABLE">{{ t('tableBinding.editable') }}</el-radio>
+            <el-radio value="READONLY">{{ t('tableBinding.readOnly') }}</el-radio>
           </el-radio-group>
         </el-form-item>
         
         <el-form-item 
-          label="外键字段" 
+          :label="t('tableBinding.foreignKeyField')" 
           prop="foreignKeyField"
           v-if="bindingForm.bindingType !== 'PRIMARY'"
         >
           <el-select 
             v-model="bindingForm.foreignKeyField" 
-            placeholder="选择关联主表的外键字段" 
+            :placeholder="t('tableBinding.selectForeignKey')" 
             style="width: 100%"
             clearable
           >
@@ -107,14 +107,14 @@
               :value="field.fieldName" 
             />
           </el-select>
-          <div class="form-item-tip">子表和关联表需要指定关联主表的外键字段</div>
+          <div class="form-item-tip">{{ t('tableBinding.foreignKeyTip') }}</div>
         </el-form-item>
       </el-form>
       
       <template #footer>
-        <el-button @click="showAddDialog = false">取消</el-button>
+        <el-button @click="showAddDialog = false">{{ t('common.cancel') }}</el-button>
         <el-button type="primary" @click="handleSubmit" :loading="submitting">
-          {{ editingBinding ? '保存' : '添加' }}
+          {{ editingBinding ? t('common.save') : t('tableBinding.add') }}
         </el-button>
       </template>
     </el-dialog>
@@ -125,7 +125,10 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { Plus } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
+import { useI18n } from 'vue-i18n'
 import { functionUnitApi, type TableBinding, type TableBindingRequest, type TableDefinition, type BindingType } from '@/api/functionUnit'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   functionUnitId: number
@@ -151,60 +154,69 @@ const bindingForm = ref<TableBindingRequest>({
   foreignKeyField: undefined
 })
 
-const formRules: FormRules = {
-  tableId: [{ required: true, message: '请选择表', trigger: 'change' }],
-  bindingType: [{ required: true, message: '请选择绑定类型', trigger: 'change' }],
-  bindingMode: [{ required: true, message: '请选择绑定模式', trigger: 'change' }]
-}
+const formRules = computed<FormRules>(() => ({
+  tableId: [{ required: true, message: t('tableBinding.selectTableRequired'), trigger: 'change' }],
+  bindingType: [{ required: true, message: t('tableBinding.selectBindingTypeRequired'), trigger: 'change' }],
+  bindingMode: [{ required: true, message: t('tableBinding.selectBindingModeRequired'), trigger: 'change' }]
+}))
 
-// 计算属性：是否已有主表绑定
+// Whether a primary binding already exists
 const hasPrimaryBinding = computed(() => {
   return bindings.value.some(b => b.bindingType === 'PRIMARY')
 })
 
-// 计算属性：可用的表（排除已绑定的）
+// Available tables
 const availableTables = computed(() => {
   return props.tables
 })
 
-// 计算属性：选中表的字段列表
+// Fields of the selected table
 const selectedTableFields = computed(() => {
   if (!bindingForm.value.tableId) return []
   const table = props.tables.find(t => t.id === bindingForm.value.tableId)
   return table?.fieldDefinitions || []
 })
 
-// 检查表是否已绑定
+// Check if table is already bound
 function isTableBound(tableId: number): boolean {
   if (editingBinding.value?.tableId === tableId) return false
   return bindings.value.some(b => b.tableId === tableId)
 }
 
-// 获取表名
+// Get table name by ID
 function getTableName(tableId: number): string {
   const table = props.tables.find(t => t.id === tableId)
-  return table?.tableName || '未知表'
+  return table?.tableName || t('tableBinding.unknownTable')
 }
 
-// 绑定类型标签
+// Binding type label
 function bindingTypeLabel(type: BindingType): string {
-  const map: Record<BindingType, string> = { PRIMARY: '主表', SUB: '子表', RELATED: '关联表' }
+  const map: Record<BindingType, string> = {
+    PRIMARY: t('tableBinding.primaryTable'),
+    SUB: t('tableBinding.subTable'),
+    RELATED: t('tableBinding.relatedTable')
+  }
   return map[type] || type
 }
 
-// 绑定类型标签颜色
+// Binding type tag color
 function bindingTypeTag(type: BindingType): 'primary' | 'success' | 'warning' | 'info' | 'danger' {
   const map: Record<BindingType, 'primary' | 'success' | 'warning' | 'info' | 'danger'> = { PRIMARY: 'primary', SUB: 'success', RELATED: 'warning' }
   return map[type] || 'info'
 }
 
-// 表类型标签
+// Table type label
 function tableTypeLabel(type: string): string {
-  const map: Record<string, string> = { MAIN: '主表', SUB: '子表', ACTION: '动作表', RELATION: '关联表' }
+  const map: Record<string, string> = {
+    MAIN: t('tableBinding.mainTableType'),
+    SUB: t('tableBinding.subTableType'),
+    ACTION: t('tableBinding.actionTableType'),
+    RELATION: t('tableBinding.relationTableType')
+  }
   return map[type] || type
 }
 
-// 加载绑定列表
+// Load bindings
 async function loadBindings() {
   loading.value = true
   try {
@@ -218,9 +230,8 @@ async function loadBindings() {
   }
 }
 
-// 表选择变化
+// Handle table selection change
 function handleTableSelect(tableId: number) {
-  // 根据表类型自动设置绑定类型
   const table = props.tables.find(t => t.id === tableId)
   if (table) {
     if (table.tableType === 'MAIN' && !hasPrimaryBinding.value) {
@@ -236,7 +247,7 @@ function handleTableSelect(tableId: number) {
   }
 }
 
-// 编辑绑定
+// Edit binding
 function handleEdit(binding: TableBinding) {
   editingBinding.value = binding
   bindingForm.value = {
@@ -249,26 +260,26 @@ function handleEdit(binding: TableBinding) {
   showAddDialog.value = true
 }
 
-// 删除绑定
+// Delete binding
 async function handleDelete(binding: TableBinding) {
   if (binding.bindingType === 'PRIMARY') {
-    ElMessage.warning('主表绑定不能删除')
+    ElMessage.warning(t('tableBinding.cannotDeletePrimary'))
     return
   }
   
-  await ElMessageBox.confirm('确定要删除该表绑定吗？', '提示', { type: 'warning' })
+  await ElMessageBox.confirm(t('tableBinding.deleteConfirm'), t('tableBinding.confirmTitle'), { type: 'warning' })
   
   try {
     await functionUnitApi.deleteFormBinding(props.functionUnitId, props.formId, binding.id!)
-    ElMessage.success('删除成功')
+    ElMessage.success(t('tableBinding.deleteSuccess'))
     loadBindings()
     emit('update')
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.message || '删除失败')
+    ElMessage.error(e.response?.data?.message || t('tableBinding.deleteFailed'))
   }
 }
 
-// 提交表单
+// Submit form
 async function handleSubmit() {
   if (!formRef.value) return
   
@@ -283,22 +294,22 @@ async function handleSubmit() {
         editingBinding.value.id!, 
         bindingForm.value
       )
-      ElMessage.success('更新成功')
+      ElMessage.success(t('tableBinding.updateSuccess'))
     } else {
       await functionUnitApi.createFormBinding(props.functionUnitId, props.formId, bindingForm.value)
-      ElMessage.success('添加成功')
+      ElMessage.success(t('tableBinding.addSuccess'))
     }
     showAddDialog.value = false
     loadBindings()
     emit('update')
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.message || '操作失败')
+    ElMessage.error(e.response?.data?.message || t('tableBinding.operationFailed'))
   } finally {
     submitting.value = false
   }
 }
 
-// 重置表单
+// Reset form
 function resetForm() {
   editingBinding.value = null
   bindingForm.value = {
@@ -310,7 +321,7 @@ function resetForm() {
   formRef.value?.resetFields()
 }
 
-// 监听 formId 变化重新加载
+// Reload when formId changes
 watch(() => props.formId, () => {
   if (props.formId) {
     loadBindings()
@@ -323,7 +334,7 @@ onMounted(() => {
   }
 })
 
-// 暴露方法供父组件调用
+// Expose methods for parent component
 defineExpose({
   loadBindings,
   bindings

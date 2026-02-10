@@ -3,7 +3,7 @@
     <div class="login-card">
       <h2 class="login-title">{{ t('login.title') }}</h2>
       
-      <!-- 测试用户快速选择 (仅开发环境) -->
+      <!-- Test user quick select (dev environment only) -->
       <div v-if="isDev" class="test-user-section">
         <el-divider content-position="center">
           <span class="test-user-label">{{ t('login.testUserHint') }}</span>
@@ -58,10 +58,10 @@ const router = useRouter()
 const formRef = ref<FormInstance>()
 const loading = ref(false)
 
-// 开发环境检测
+// Dev environment detection
 const isDev = import.meta.env.DEV
 
-// 测试用户数据 (仅开发环境使用) - IT部门开发人员
+// Test user data (dev environment only) - IT department developers
 const testUsers = [
   { username: 'tech.director', password: 'admin123', name: 'Robert Sun', role: 'Tech Director', tagType: 'danger' as const },
   { username: 'core.lead', password: 'admin123', name: 'Kevin Huang', role: 'Core Lead', tagType: 'warning' as const },
@@ -83,7 +83,7 @@ const rules = computed(() => ({
   password: [{ required: true, message: t('login.passwordPlaceholder'), trigger: 'blur' }]
 }))
 
-// 选择测试用户时自动填充
+// Auto-fill when a test user is selected
 const onTestUserSelect = (username: string) => {
   const user = testUsers.find(u => u.username === username)
   if (user) {

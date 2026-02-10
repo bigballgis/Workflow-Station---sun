@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { TOKEN_KEY, getUser } from './auth'
+import i18n from '@/i18n'
 
 // Create a separate axios instance for function unit API
 const functionUnitAxios = axios.create({
@@ -13,7 +14,7 @@ functionUnitAxios.interceptors.request.use(config => {
     config.headers.Authorization = `Bearer ${token}`
   }
   
-  // 添加 X-User-Id 请求头，用于后端权限检查
+  // Add X-User-Id request header for backend permission check
   const user = getUser()
   if (user && user.userId) {
     config.headers['X-User-Id'] = user.userId
@@ -25,11 +26,11 @@ functionUnitAxios.interceptors.request.use(config => {
 functionUnitAxios.interceptors.response.use(
   response => {
     console.log('[FunctionUnitAPI] Response:', response.status, response.data)
-    // 检查响应体中的 success 字段，确保是成功响应
+    // Check the success field in the response body to ensure it's a successful response
     if (response.data && typeof response.data === 'object' && 'success' in response.data) {
       if (response.data.success === false) {
-        // 如果 success 为 false，即使 HTTP 状态码是 200，也应该作为错误处理
-        const error = new Error(response.data.error?.message || '请求失败')
+        // If success is false, even with HTTP status 200, it should be treated as an error
+        const error = new Error(response.data.error?.message || i18n.global.t('api.requestFailed'))
         ;(error as any).response = {
           status: response.data.error?.code === '403' ? 403 : 500,
           data: response.data
@@ -42,7 +43,7 @@ functionUnitAxios.interceptors.response.use(
   async error => {
     const { response } = error
     
-    // 处理 401 未授权
+    // Handle 401 Unauthorized
     if (response?.status === 401) {
       const { clearAuth } = await import('./auth')
       const router = (await import('@/router')).default
@@ -51,12 +52,12 @@ functionUnitAxios.interceptors.response.use(
       return Promise.reject(error)
     }
     
-    // 处理 403 禁止访问
+    // Handle 403 Forbidden
     if (response?.status === 403) {
       const { TOKEN_KEY, clearAuth } = await import('./auth')
       const token = localStorage.getItem(TOKEN_KEY)
       if (!token) {
-        // 没有 token，清除认证并重定向到登录页
+        // No token, clear auth and redirect to login page
         clearAuth()
         const router = (await import('@/router')).default
         router.push('/login')
@@ -140,13 +141,13 @@ export interface FormDefinition {
   tableBindings?: TableBinding[]
 }
 
-// 表绑定类型
+// Table binding type
 export type BindingType = 'PRIMARY' | 'SUB' | 'RELATED'
 
-// 绑定模式
+// Binding mode
 export type BindingMode = 'EDITABLE' | 'READONLY'
 
-// 表绑定接口
+// Table binding interface
 export interface TableBinding {
   id?: number
   tableId: number
@@ -157,7 +158,7 @@ export interface TableBinding {
   sortOrder: number
 }
 
-// 表绑定请求
+// Table binding request
 export interface TableBindingRequest {
   tableId: number
   bindingType: BindingType
@@ -167,7 +168,7 @@ export interface TableBindingRequest {
 }
 
 export interface ActionDefinition {
-  id: number
+  id: string | number // Support both String IDs (new) and numeric IDs (legacy)
   actionName: string
   actionType: string
   description?: string

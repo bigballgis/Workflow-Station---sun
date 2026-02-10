@@ -92,4 +92,19 @@ public interface FunctionUnitRepository extends JpaRepository<FunctionUnit, Stri
      * 根据状态和启用状态查找功能单元列表
      */
     List<FunctionUnit> findByStatusAndEnabled(FunctionUnitStatus status, Boolean enabled);
+    
+    /**
+     * 根据代码和启用状态查找功能单元列表
+     */
+    List<FunctionUnit> findByCodeAndEnabled(String code, Boolean enabled);
+    
+    /**
+     * 根据代码查找已启用的功能单元
+     */
+    Optional<FunctionUnit> findByCodeAndEnabledTrue(String code);
+    
+    /**
+     * 统计指定代码和启用状态的功能单元数量
+     */
+    long countByCodeAndEnabled(String code, Boolean enabled);
 }

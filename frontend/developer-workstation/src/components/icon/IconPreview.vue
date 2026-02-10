@@ -61,20 +61,20 @@ async function loadIcon() {
   }
 }
 
-// 清理 SVG 内容，移除可能导致显示问题的元素
+// Sanitize SVG content, remove elements that may cause display issues
 function sanitizeSvg(svg: string): string {
   let result = svg
-  // 移除 <title> 元素
+  // Remove <title> elements
   result = result.replace(/<title[^>]*>[\s\S]*?<\/title>/gi, '')
-  // 移除 <style> 元素（防止样式泄漏到全局）
+  // Remove <style> elements (prevent style leaking to global scope)
   result = result.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-  // 移除 <defs> 元素（包含 <style> 定义，防止样式泄漏）
+  // Remove <defs> elements (contains <style> definitions, prevent style leaking)
   result = result.replace(/<defs[\s\S]*?<\/defs>/gi, '')
-  // 将 class="cls-1" 替换为内联样式 fill="#fff"
+  // Replace class="cls-1" with inline style fill="#fff"
   result = result.replace(/class="cls-1"/gi, 'fill="#fff"')
-  // 将 class="cls-2" 替换为内联样式 fill="#db0011"
+  // Replace class="cls-2" with inline style fill="#db0011"
   result = result.replace(/class="cls-2"/gi, 'fill="#db0011"')
-  // 移除所有 class 属性，防止样式冲突
+  // Remove all class attributes to prevent style conflicts
   result = result.replace(/\s+class="[^"]*"/gi, '')
   return result
 }

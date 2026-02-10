@@ -173,6 +173,11 @@ public class TaskListResult {
         private java.util.Map<String, Object> variables;
         
         /**
+         * 任务可用操作ID列表（从BPMN extensionElements中提取）
+         */
+        private java.util.List<String> actionIds;
+        
+        /**
          * 分配类型描述
          */
         public String getAssignmentTypeDescription() {

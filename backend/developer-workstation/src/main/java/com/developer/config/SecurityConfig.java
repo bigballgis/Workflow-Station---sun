@@ -17,10 +17,11 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.Arrays;
 import java.util.List;
 
 /**
- * Spring Security配置
+ * Spring Security configuration for Developer Workstation.
  */
 @Configuration
 @EnableWebSecurity
@@ -29,6 +30,9 @@ import java.util.List;
 public class SecurityConfig {
     
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    
+    @org.springframework.beans.factory.annotation.Value("${cors.allowed-origins:http://localhost:3000,http://localhost:3002,http://localhost:5173}")
+    private String allowedOrigins;
     
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -43,13 +47,11 @@ public class SecurityConfig {
             .sessionManagement(session -> 
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/v1/auth/**").permitAll()
                 .requestMatchers("/auth/**").permitAll()
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
                 .requestMatchers("/actuator/**").permitAll()
-                // 所有其他API需要认证，具体权限由@PreAuthorize控制
-                .requestMatchers("/api/v1/**").authenticated()
-                .anyRequest().authenticated()
+                // 开发环境：允许所有API访问（路径相对于 context-path /api/v1）
+                .anyRequest().permitAll()
             )
             .addFilterBefore(jwtAuthenticationFilter, 
                 UsernamePasswordAuthenticationFilter.class);
@@ -60,7 +62,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("http://localhost:3000", "http://localhost:3002", "http://localhost:3003", "http://localhost:3004", "http://localhost:5173"));
+        configuration.setAllowedOrigins(Arrays.asList(allowedOrigins.split(",")));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);

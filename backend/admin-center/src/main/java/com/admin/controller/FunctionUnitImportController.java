@@ -93,6 +93,7 @@ public class FunctionUnitImportController {
                     .description(description)
                     .fileContent((String) packageData.get("process"))
                     .overwrite("OVERWRITE".equals(conflictStrategy))
+                    .iconSvg(extractIconSvg(manifest))
                     .build();
             
             // 执行导入
@@ -207,6 +208,37 @@ public class FunctionUnitImportController {
                 // 直接将功能单元标记为已部署
                 functionUnit.markAsDeployed();
                 functionUnitManager.saveFunctionUnit(functionUnit);
+                
+                // 自动禁用其他版本
+                List<String> disabledVersions = functionUnitManager.disableOtherVersions(
+                        functionUnit.getCode(), 
+                        functionUnit.getVersion(), 
+                        "system");
+                
+                if (!disabledVersions.isEmpty()) {
+                    result.put("disabledVersions", disabledVersions);
+                    log.info("Automatically disabled {} previous versions: {}", 
+                            disabledVersions.size(), disabledVersions);
+                }
+                
+                // 创建部署记录用于审计追踪（但不需要审批）
+                try {
+                    String envStr = (String) request.getOrDefault("environment", "DEVELOPMENT");
+                    DeploymentEnvironment environment = DeploymentEnvironment.valueOf(envStr);
+                    
+                    // 创建部署记录
+                    FunctionUnitDeployment deployment = deploymentManager.createDeployment(
+                            id, environment, DeploymentStrategy.FULL, "system");
+                    
+                    // 对于不需要审批的环境（如DEVELOPMENT），直接执行
+                    if (!deploymentManager.requiresApproval(environment)) {
+                        deployment = deploymentManager.executeDeployment(deployment.getId());
+                        result.put("deploymentId", deployment.getId());
+                    }
+                } catch (Exception e) {
+                    log.warn("Failed to create deployment record for audit: {}", e.getMessage());
+                    // 即使创建部署记录失败，也不影响功能单元的部署
+                }
                 
                 result.put("status", "SUCCESS");
                 result.put("functionUnitId", id);
@@ -335,17 +367,18 @@ public class FunctionUnitImportController {
     
     /**
      * 获取已部署的功能单元列表（供用户门户使用）
+     * 只返回已部署且启用的功能单元
      */
     @GetMapping("/deployed")
-    @Operation(summary = "获取已部署的功能单元", description = "获取所有已部署的功能单元列表")
+    @Operation(summary = "获取已部署的功能单元", description = "获取所有已部署且启用的功能单元列表（终端用户视图）")
     public ResponseEntity<Map<String, Object>> getDeployedFunctionUnits() {
-        log.info("Getting deployed function units");
+        log.info("Getting deployed and enabled function units for end users");
         
         Map<String, Object> result = new HashMap<>();
         
         try {
-            var units = functionUnitManager.listFunctionUnitsByStatus(
-                    FunctionUnitStatus.DEPLOYED, 
+            // 只返回已部署且启用的功能单元
+            var units = functionUnitManager.listDeployedAndEnabledFunctionUnits(
                     org.springframework.data.domain.Pageable.unpaged());
             
             result.put("content", units.map(FunctionUnitInfo::fromEntity).getContent());
@@ -471,5 +504,88 @@ public class FunctionUnitImportController {
         }
         
         return result;
+    }
+    
+    @SuppressWarnings("unchecked")
+    private String extractIconSvg(Map<String, Object> manifest) {
+        if (manifest == null) return null;
+        Map<String, Object> icon = (Map<String, Object>) manifest.get("icon");
+        if (icon == null) return null;
+        return (String) icon.get("svgContent");
+    }
+    
+    /**
+     * 激活指定版本（回滚）
+     */
+    @PostMapping("/{code}/activate/{version}")
+    @Operation(summary = "激活指定版本", description = "激活功能单元的指定版本，禁用其他版本（用于回滚）")
+    public ResponseEntity<Map<String, Object>> activateVersion(
+            @Parameter(description = "功能单元代码") @PathVariable String code,
+            @Parameter(description = "目标版本号") @PathVariable String version) {
+        
+        log.info("Activating version {} for function unit code: {}", version, code);
+        
+        Map<String, Object> result = new HashMap<>();
+        
+        try {
+            FunctionUnit activated = functionUnitManager.activateVersion(code, version, "system");
+            
+            result.put("status", "SUCCESS");
+            result.put("functionUnitId", activated.getId());
+            result.put("code", activated.getCode());
+            result.put("version", activated.getVersion());
+            result.put("name", activated.getName());
+            result.put("enabled", activated.getEnabled());
+            result.put("message", "版本激活成功");
+            
+            return ResponseEntity.ok(result);
+            
+        } catch (com.admin.exception.FunctionUnitNotFoundException e) {
+            log.error("Function unit version not found: {}:{}", code, version);
+            result.put("status", "FAILED");
+            result.put("message", e.getMessage());
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(result);
+            
+        } catch (com.admin.exception.AdminBusinessException e) {
+            log.error("Failed to activate version: {}", e.getMessage());
+            result.put("status", "FAILED");
+            result.put("message", e.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(result);
+            
+        } catch (Exception e) {
+            log.error("Failed to activate version", e);
+            result.put("status", "FAILED");
+            result.put("message", "激活版本失败: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(result);
+        }
+    }
+    
+    /**
+     * 获取版本历史
+     */
+    @GetMapping("/{code}/versions")
+    @Operation(summary = "获取版本历史", description = "获取功能单元的所有版本历史")
+    public ResponseEntity<Map<String, Object>> getVersionHistory(
+            @Parameter(description = "功能单元代码") @PathVariable String code) {
+        
+        log.info("Getting version history for function unit code: {}", code);
+        
+        Map<String, Object> result = new HashMap<>();
+        
+        try {
+            List<com.admin.dto.response.VersionHistoryEntry> history = 
+                    functionUnitManager.getVersionHistoryWithStatus(code);
+            
+            result.put("code", code);
+            result.put("versions", history);
+            result.put("totalVersions", history.size());
+            
+            return ResponseEntity.ok(result);
+            
+        } catch (Exception e) {
+            log.error("Failed to get version history", e);
+            result.put("error", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(result);
+        }
     }
 }

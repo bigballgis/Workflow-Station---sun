@@ -65,10 +65,12 @@
                   class="process-card"
                   @click="startProcess(process)"
                 >
-                  <el-icon :size="32" :color="getProcessColor(process.category)">
+                  <div v-if="process.icon" class="process-icon-svg" v-html="process.icon"></div>
+                  <el-icon v-else :size="32" :color="getProcessColor(process.category)">
                     <component :is="getProcessIcon(process.category)" />
                   </el-icon>
                   <span class="process-name">{{ process.name }}</span>
+                  <span class="process-version" v-if="process.version">v{{ process.version }}</span>
                   <span class="process-desc">{{ process.description }}</span>
                   <el-tag v-if="process.isFavorite" size="small" type="warning" class="favorite-tag">
                     <el-icon><Star /></el-icon>
@@ -107,12 +109,19 @@ const favoriteProcesses = computed(() => {
 const getProcessIcon = (category: string) => {
   const iconMap: Record<string, any> = {
     '人事': Calendar,
+    'HR': Calendar,
     '财务': Money,
+    'Finance': Money,
     '采购': ShoppingCart,
+    'Procurement': ShoppingCart,
     '出差': Location,
+    'Travel': Location,
     '加班': Clock,
+    'Overtime': Clock,
     '合同': Files,
+    'Contract': Files,
     '业务流程': Tickets,
+    'Business Process': Tickets,
   }
   return iconMap[category] || Document
 }
@@ -121,14 +130,45 @@ const getProcessIcon = (category: string) => {
 const getProcessColor = (category: string) => {
   const colorMap: Record<string, string> = {
     '人事': 'var(--hsbc-red)',
+    'HR': 'var(--hsbc-red)',
     '财务': 'var(--success-green)',
+    'Finance': 'var(--success-green)',
     '采购': 'var(--warning-orange)',
+    'Procurement': 'var(--warning-orange)',
     '出差': 'var(--info-blue)',
+    'Travel': 'var(--info-blue)',
     '加班': '#722ed1',
+    'Overtime': '#722ed1',
     '合同': '#13c2c2',
+    'Contract': '#13c2c2',
     '业务流程': '#1890ff',
+    'Business Process': '#1890ff',
   }
   return colorMap[category] || 'var(--hsbc-red)'
+}
+
+// 语义化版本比较（用于防御性去重）
+const compareSemanticVersions = (v1: string, v2: string): number => {
+  const parts1 = v1.split('.').map(Number)
+  const parts2 = v2.split('.').map(Number)
+  for (let i = 0; i < 3; i++) {
+    const a = parts1[i] || 0
+    const b = parts2[i] || 0
+    if (a !== b) return a - b
+  }
+  return 0
+}
+
+// 防御性去重：按 key(code) 分组，保留版本号最高的记录
+const deduplicateByKey = (definitions: ProcessDefinition[]): ProcessDefinition[] => {
+  const map = new Map<string, ProcessDefinition>()
+  for (const def of definitions) {
+    const existing = map.get(def.key)
+    if (!existing || compareSemanticVersions(def.version, existing.version) > 0) {
+      map.set(def.key, def)
+    }
+  }
+  return Array.from(map.values())
 }
 
 // 加载流程定义列表
@@ -139,10 +179,12 @@ const loadProcessDefinitions = async () => {
       keyword: searchKeyword.value || undefined
     })
     // API 返回的是 { success: true, data: [...] } 格式
-    allProcesses.value = response.data || response || []
+    const raw = response.data || response || []
+    // 防御性去重：确保每个 key 只显示一条记录
+    allProcesses.value = deduplicateByKey(raw)
   } catch (error: any) {
     console.error('Failed to load process definitions:', error)
-    ElMessage.error('加载流程列表失败')
+    ElMessage.error(t('task.loadFailed'))
     allProcesses.value = []
   } finally {
     loading.value = false
@@ -206,6 +248,15 @@ onMounted(() => {
       box-shadow: 0 4px 12px rgba(219, 0, 17, 0.1);
     }
     
+    .process-icon-svg {
+      width: 32px;
+      height: 32px;
+      :deep(svg) {
+        width: 100%;
+        height: 100%;
+      }
+    }
+    
     .process-name {
       font-size: 14px;
       font-weight: 500;
@@ -213,6 +264,14 @@ onMounted(() => {
       text-align: center;
       word-break: break-word;
       width: 100%;
+    }
+    
+    .process-version {
+      font-size: 11px;
+      color: var(--text-secondary);
+      background: var(--bg-secondary, #f5f5f5);
+      padding: 1px 6px;
+      border-radius: 4px;
     }
     
     .process-desc {

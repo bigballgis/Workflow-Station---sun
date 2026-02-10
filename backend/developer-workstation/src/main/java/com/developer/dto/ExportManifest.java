@@ -91,5 +91,6 @@ public class ExportManifest {
         private String name;
         private String category;
         private String color;
+        private String svgContent;
     }
 }

@@ -59,6 +59,36 @@ public class ProcessController {
         return ApiResponse.success(content);
     }
     
+    @GetMapping("/function-units/{functionUnitId}/contents")
+    @Operation(summary = "获取功能单元特定类型的内容", description = "获取功能单元的特定类型内容（如表单、流程等），用于表单弹窗等场景")
+    public ApiResponse<List<Map<String, Object>>> getFunctionUnitContentsByType(
+            @RequestHeader(value = "X-User-Id", required = false) String userId,
+            @PathVariable String functionUnitId,
+            @RequestParam String contentType) {
+        List<Map<String, Object>> contents = processComponent.getFunctionUnitContents(functionUnitId, contentType);
+        return ApiResponse.success(contents);
+    }
+    
+    @GetMapping("/fu-data/{functionUnitId}")
+    @Operation(summary = "获取功能单元特定类型的内容", description = "获取功能单元的特定类型内容（如表单、流程等），用于表单弹窗等场景")
+    public ApiResponse<List<Map<String, Object>>> getFunctionUnitData(
+            @RequestHeader(value = "X-User-Id", required = false) String userId,
+            @PathVariable String functionUnitId,
+            @RequestParam String contentType) {
+        List<Map<String, Object>> contents = processComponent.getFunctionUnitContents(functionUnitId, contentType);
+        return ApiResponse.success(contents);
+    }
+    
+    @GetMapping("/function-unit-contents/{functionUnitId}")
+    @Operation(summary = "获取功能单元特定类型的内容", description = "获取功能单元的特定类型内容（如表单、流程等），用于表单弹窗等场景")
+    public ApiResponse<List<Map<String, Object>>> getFunctionUnitContents(
+            @RequestHeader(value = "X-User-Id", required = false) String userId,
+            @PathVariable String functionUnitId,
+            @RequestParam String contentType) {
+        List<Map<String, Object>> contents = processComponent.getFunctionUnitContents(functionUnitId, contentType);
+        return ApiResponse.success(contents);
+    }
+    
     /**
      * 处理功能单元已禁用异常
      */

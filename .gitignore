@@ -290,3 +290,19 @@ HELP.md
 # =============================================================================
 ai-logs/
 .kiro/
+
+# =============================================================================
+# Project-specific exclusions
+# =============================================================================
+# AI-generated documentation noise
+docs/
+
+# Extracted JAR build artifacts
+BOOT-INF/
+
+# Root-level temp/debug files
+/*.sql
+/*.json
+!package.json
+!package-lock.json
+!tsconfig.json

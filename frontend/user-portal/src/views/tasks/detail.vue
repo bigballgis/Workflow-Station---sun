@@ -134,21 +134,36 @@
             <el-button @click="$router.back()">{{ t('task.backToList') }}</el-button>
           </div>
           <div class="right-actions">
-            <el-button type="success" @click="handleApprove">
-              <el-icon><Check /></el-icon> {{ t('task.approve') }}
-            </el-button>
-            <el-button type="danger" @click="handleReject">
-              <el-icon><Close /></el-icon> {{ t('task.reject') }}
-            </el-button>
-            <el-button @click="handleDelegate">
-              <el-icon><User /></el-icon> {{ t('task.delegate') }}
-            </el-button>
-            <el-button @click="handleTransfer">
-              <el-icon><Switch /></el-icon> {{ t('task.transfer') }}
-            </el-button>
-            <el-button type="warning" @click="handleUrge">
-              <el-icon><Bell /></el-icon> {{ t('task.urge') }}
-            </el-button>
+            <!-- 动态渲染自定义操作按钮 -->
+            <template v-if="taskInfo.actions && taskInfo.actions.length > 0">
+              <el-button
+                v-for="action in taskInfo.actions"
+                :key="action.actionId"
+                :type="getButtonType(action.buttonColor)"
+                @click="handleCustomAction(action)"
+              >
+                <el-icon v-if="action.icon"><component :is="getIconComponent(action.icon)" /></el-icon>
+                {{ action.actionName }}
+              </el-button>
+            </template>
+            <!-- 默认操作按钮（如果没有自定义按钮） -->
+            <template v-else>
+              <el-button type="success" @click="handleApprove">
+                <el-icon><Check /></el-icon> {{ t('task.approve') }}
+              </el-button>
+              <el-button type="danger" @click="handleReject">
+                <el-icon><Close /></el-icon> {{ t('task.reject') }}
+              </el-button>
+              <el-button @click="handleDelegate">
+                <el-icon><User /></el-icon> {{ t('task.delegate') }}
+              </el-button>
+              <el-button @click="handleTransfer">
+                <el-icon><Switch /></el-icon> {{ t('task.transfer') }}
+              </el-button>
+              <el-button type="warning" @click="handleUrge">
+                <el-icon><Bell /></el-icon> {{ t('task.urge') }}
+              </el-button>
+            </template>
           </div>
         </div>
       </div>
@@ -191,15 +206,50 @@
         <el-button type="primary" @click="submitAction" :loading="submitting">{{ t('common.confirm') }}</el-button>
       </template>
     </el-dialog>
+
+    <!-- 表单弹窗对话框 -->
+    <el-dialog v-model="formPopupVisible" :title="formPopupTitle" :width="formPopupWidth" append-to-body>
+      <div v-if="formPopupFields.length > 0 || formPopupTabs.length > 0" class="form-popup-container">
+        <FormRenderer
+          :fields="formPopupFields"
+          :tabs="formPopupTabs"
+          v-model="formPopupData"
+          label-width="120px"
+          :readonly="formPopupReadOnly"
+        />
+      </div>
+      <el-empty v-else :description="t('task.noFormData')" />
+      <template #footer>
+        <el-button @click="formPopupVisible = false">{{ t('common.cancel') }}</el-button>
+        <el-button v-if="!formPopupReadOnly" type="primary" @click="submitFormPopup" :loading="submitting">
+          {{ t('common.submit') }}
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, markRaw } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, InfoFilled, Share, Document, Clock, Bell, Check, Close, User, Switch } from '@element-plus/icons-vue'
+import { 
+  ArrowLeft, 
+  InfoFilled, 
+  Share, 
+  Document, 
+  Clock, 
+  Bell, 
+  Check, 
+  Close, 
+  User, 
+  Switch,
+  CircleCheck,
+  CircleClose,
+  Files,
+  Warning
+} from '@element-plus/icons-vue'
 import { 
   getTaskDetail, 
   getTaskHistory, 
@@ -208,7 +258,8 @@ import {
   transferTask, 
   urgeTask,
   TaskInfo, 
-  TaskHistoryInfo 
+  TaskHistoryInfo,
+  TaskActionInfo
 } from '@/api/task'
 import { processApi } from '@/api/process'
 import { useUserStore } from '@/stores/user'
@@ -263,6 +314,16 @@ const actionForm = reactive({
   reason: ''
 })
 
+// 表单弹窗状态
+const formPopupVisible = ref(false)
+const formPopupTitle = ref('')
+const formPopupFields = ref<FormField[]>([])
+const formPopupTabs = ref<FormTab[]>([])
+const formPopupData = ref<Record<string, any>>({})
+const formPopupReadOnly = ref(false)
+const formPopupWidth = ref('800px')
+const currentFormPopupAction = ref<TaskActionInfo | null>(null)
+
 const loadTaskDetail = async () => {
   loading.value = true
   taskError.value = null
@@ -306,7 +367,7 @@ const loadTaskHistory = async () => {
       historyRecords.value = data.map((item: TaskHistoryInfo, index: number) => ({
         id: `history_${index}`,
         nodeId: item.activityId || `node_${index}`,
-        nodeName: item.activityName || '未知节点',
+        nodeName: item.activityName || t('task.unknownNode'),
         status: getHistoryStatus(item.operationType),
         assigneeName: item.operatorName || '-',
         comment: item.comment,
@@ -474,14 +535,14 @@ const parseBpmnXml = (xml: string) => {
     doc.querySelectorAll('startEvent').forEach((event, index) => {
       const id = event.getAttribute('id') || `start_${index}`
       const pos = positionMap.get(id)
-      nodes.push({ id, name: event.getAttribute('name') || '开始', type: 'start', status: 'completed', x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
+      nodes.push({ id, name: event.getAttribute('name') || t('task.startNode'), type: 'start', status: 'completed', x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
       completed.push(id)
     })
     
     // 解析用户任务
     doc.querySelectorAll('userTask').forEach((task, index) => {
       const id = task.getAttribute('id') || `task_${index}`
-      const name = task.getAttribute('name') || `任务${index + 1}`
+      const name = task.getAttribute('name') || t('task.taskFallbackName', { index: index + 1 })
       const pos = positionMap.get(id)
       
       let status: 'completed' | 'current' | 'pending' = 'pending'
@@ -509,7 +570,7 @@ const parseBpmnXml = (xml: string) => {
     doc.querySelectorAll('endEvent').forEach((event, index) => {
       const id = event.getAttribute('id') || `end_${index}`
       const pos = positionMap.get(id)
-      nodes.push({ id, name: event.getAttribute('name') || '结束', type: 'end', status: 'pending', x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
+      nodes.push({ id, name: event.getAttribute('name') || t('task.endNode'), type: 'end', status: 'pending', x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
     })
     
     // 解析连线路径点
@@ -613,8 +674,12 @@ const convertFormCreateRule = (rule: any): FormField | null => {
   else if (rule.props?.type === 'daterange') dateType = 'daterange'
   const typeMap: Record<string, string> = { 'input': 'text', 'inputNumber': 'number', 'select': 'select', 'radio': 'radio', 'checkbox': 'checkbox', 'switch': 'switch', 'datePicker': dateType, 'DatePicker': dateType, 'date-picker': dateType, 'el-date-picker': dateType, 'timePicker': 'time', 'cascader': 'cascader' }
   const field: FormField = { key: rule.field, label: rule.title || rule.field, type: typeMap[rule.type] || 'text', required: rule.validate?.some((v: any) => v.required) || false, placeholder: rule.props?.placeholder || '', span: rule.col?.span || 24 }
-  if (rule.options) field.options = rule.options.map((opt: any) => ({ label: opt.label || opt.value, value: opt.value }))
+  if (rule.options) {
+    field.options = rule.options.map((opt: any) => ({ label: opt.label || opt.value, value: opt.value }))
+    console.log(`Field ${rule.field} options:`, JSON.stringify(field.options))
+  }
   if (rule.type === 'input' && rule.props?.type === 'textarea') { field.type = 'textarea'; field.rows = rule.props?.rows || 3 }
+  console.log(`convertFormCreateRule: field=${rule.field}, type=${field.type}, hasOptions=${!!field.options}`)
   return field
 }
 
@@ -674,21 +739,21 @@ const getPriorityType = (priority?: string): 'danger' | 'warning' | 'info' | 'su
 
 const handleApprove = () => {
   currentApproveAction.value = 'APPROVE'
-  approveDialogTitle.value = '同意'
+  approveDialogTitle.value = t('task.approve')
   approveForm.comment = ''
   approveDialogVisible.value = true
 }
 
 const handleReject = () => {
   currentApproveAction.value = 'REJECT'
-  approveDialogTitle.value = '拒绝'
+  approveDialogTitle.value = t('task.reject')
   approveForm.comment = ''
   approveDialogVisible.value = true
 }
 
 const handleDelegate = () => {
   currentAction.value = 'delegate'
-  actionDialogTitle.value = '委托'
+  actionDialogTitle.value = t('task.delegate')
   actionForm.targetUserId = ''
   actionForm.reason = ''
   actionDialogVisible.value = true
@@ -696,7 +761,7 @@ const handleDelegate = () => {
 
 const handleTransfer = () => {
   currentAction.value = 'transfer'
-  actionDialogTitle.value = '转办'
+  actionDialogTitle.value = t('task.transfer')
   actionForm.targetUserId = ''
   actionForm.reason = ''
   actionDialogVisible.value = true
@@ -704,7 +769,7 @@ const handleTransfer = () => {
 
 const handleUrge = () => {
   currentAction.value = 'urge'
-  actionDialogTitle.value = '催办'
+  actionDialogTitle.value = t('task.urge')
   actionForm.reason = ''
   actionDialogVisible.value = true
 }
@@ -735,11 +800,11 @@ const submitApprove = async () => {
       comment: approveForm.comment,
       variables: variables
     })
-    ElMessage.success('操作成功')
+    ElMessage.success(t('task.operationSuccess'))
     approveDialogVisible.value = false
     router.push('/tasks')
   } catch (error) {
-    ElMessage.error('操作失败')
+    ElMessage.error(t('task.operationFailed'))
   } finally {
     submitting.value = false
   }
@@ -755,21 +820,214 @@ const submitAction = async () => {
   try {
     if (currentAction.value === 'delegate') {
       await delegateTask(taskId, actionForm.targetUserId, actionForm.reason)
-      ElMessage.success('委托成功')
+      ElMessage.success(t('task.delegateSuccess'))
     } else if (currentAction.value === 'transfer') {
       await transferTask(taskId, actionForm.targetUserId, actionForm.reason)
-      ElMessage.success('转办成功')
+      ElMessage.success(t('task.transferSuccess'))
     } else if (currentAction.value === 'urge') {
       await urgeTask(taskId, actionForm.reason)
-      ElMessage.success('催办成功')
+      ElMessage.success(t('task.urgeSuccess'))
     }
     actionDialogVisible.value = false
     loadTaskDetail()
   } catch (error) {
-    ElMessage.error('操作失败')
+    ElMessage.error(t('task.operationFailed'))
   } finally {
     submitting.value = false
   }
+}
+
+// 处理自定义操作按钮
+const handleCustomAction = (action: TaskActionInfo) => {
+  console.log('Custom action clicked:', action)
+  
+  // 根据 actionType 处理不同类型的操作
+  switch (action.actionType) {
+    case 'APPROVE':
+      currentApproveAction.value = 'APPROVE'
+      approveDialogTitle.value = action.actionName
+      approveForm.comment = ''
+      approveDialogVisible.value = true
+      break
+    
+    case 'REJECT':
+      currentApproveAction.value = 'REJECT'
+      approveDialogTitle.value = action.actionName
+      approveForm.comment = ''
+      approveDialogVisible.value = true
+      break
+    
+    case 'FORM_POPUP':
+      // 解析 configJson 获取 formId
+      try {
+        const config = action.configJson ? JSON.parse(action.configJson) : {}
+        console.log('Form popup config:', config)
+        openFormPopup(action, config)
+      } catch (error) {
+        console.error('Failed to parse configJson:', error)
+        ElMessage.error(t('task.configParseFailed'))
+      }
+      break
+    
+    default:
+      ElMessage.warning(t('task.unknownActionType', { type: action.actionType }))
+  }
+}
+
+// 打开表单弹窗
+const openFormPopup = async (action: TaskActionInfo, config: any) => {
+  try {
+    currentFormPopupAction.value = action
+    formPopupTitle.value = config.popupTitle || action.actionName
+    formPopupWidth.value = config.popupWidth || '800px'
+    formPopupReadOnly.value = config.readOnly === true || config.readOnly === 'true'
+    formPopupData.value = {}
+    
+    // 获取表单配置
+    if (config.formId) {
+      // 从功能单元内容中获取表单配置
+      const functionUnitId = taskInfo.value.processDefinitionKey
+      if (functionUnitId) {
+        try {
+          const res = await processApi.getFunctionUnitContents(functionUnitId, 'FORM')
+          const forms = res.data || []
+          
+          // 查找对应的表单
+          const formContent = forms.find((f: any) => {
+            // 尝试从 source_id 匹配
+            return f.sourceId === String(config.formId) || f.contentName === config.formName
+          })
+          
+          if (formContent && formContent.contentData) {
+            // 解析表单配置
+            const formConfig = typeof formContent.contentData === 'string' 
+              ? JSON.parse(formContent.contentData) 
+              : formContent.contentData
+            
+            // 使用与主表单相同的解析逻辑
+            parseFormPopupConfig(formConfig)
+            formPopupVisible.value = true
+          } else {
+            ElMessage.error(t('task.formNotFound', { name: config.formName || config.formId }))
+          }
+        } catch (error) {
+          console.error('Failed to load form:', error)
+          ElMessage.error(t('task.formLoadFailed'))
+        }
+      }
+    } else {
+      ElMessage.error(t('task.formMissingId'))
+    }
+  } catch (error) {
+    console.error('Failed to open form popup:', error)
+    ElMessage.error(t('task.formOpenFailed'))
+  }
+}
+
+// 解析表单弹窗配置 - 复用 parseFormConfig 的逻辑
+const parseFormPopupConfig = (configInput: any) => {
+  try {
+    // 确保 config 是对象（可能传入字符串）
+    const config = typeof configInput === 'string' ? JSON.parse(configInput) : configInput
+    console.log('parseFormPopupConfig: type of config =', typeof config, ', keys =', Object.keys(config || {}))
+    
+    const rules = config.rule && Array.isArray(config.rule) ? config.rule : (Array.isArray(config) ? config : null)
+    if (rules) {
+      console.log('Form popup rules count:', rules.length)
+      rules.forEach((r: any, i: number) => {
+        console.log(`Rule[${i}]: type=${r.type}, field=${r.field}, hasOptions=${!!r.options}, optionsCount=${r.options?.length || 0}`)
+      })
+      
+      // 检查是否有 el-tabs 结构
+      const tabsRule = rules.find((r: any) => r.type === 'el-tabs' || r.type === 'ElTabPane' || r.type === 'el-tab-pane')
+      
+      if (tabsRule && tabsRule.children && Array.isArray(tabsRule.children)) {
+        const tabs: FormTab[] = []
+        for (const tabPane of tabsRule.children) {
+          if ((tabPane.type === 'el-tab-pane' || tabPane.type === 'ElTabPane') && tabPane.props) {
+            const tabName = tabPane.props.name || `tab_${tabs.length}`
+            const tabLabel = tabPane.props.label || `Tab ${tabs.length + 1}`
+            const tabFields: FormField[] = []
+            if (tabPane.children && Array.isArray(tabPane.children)) {
+              for (const item of tabPane.children) {
+                if (item.field) {
+                  const field = convertFormCreateRule(item)
+                  if (field) tabFields.push(field)
+                }
+                if (item.children && Array.isArray(item.children)) {
+                  tabFields.push(...extractFieldsRecursive(item.children))
+                }
+              }
+            }
+            tabs.push({ name: tabName, label: tabLabel, fields: tabFields })
+          }
+        }
+        formPopupTabs.value = tabs
+        formPopupFields.value = []
+      } else {
+        formPopupTabs.value = []
+        formPopupFields.value = extractFieldsRecursive(rules)
+      }
+      
+      console.log('Popup fields result:', formPopupFields.value.map(f => ({ key: f.key, type: f.type, hasOptions: !!f.options, optionsCount: f.options?.length })))
+    } else {
+      console.warn('parseFormPopupConfig: no rules found in config')
+    }
+  } catch (error) {
+    console.error('Failed to parse form popup config:', error)
+  }
+}
+
+// 提交表单弹窗
+const submitFormPopup = async () => {
+  try {
+    submitting.value = true
+    
+    // TODO: 根据 action 类型处理表单数据
+    // 可能需要调用不同的 API 或更新流程变量
+    
+    ElMessage.success(t('task.formSubmitSuccess'))
+    formPopupVisible.value = false
+    
+    // 刷新任务详情
+    await loadTaskDetail()
+  } catch (error) {
+    console.error('Failed to submit form popup:', error)
+    ElMessage.error(t('task.formSubmitFailed'))
+  } finally {
+    submitting.value = false
+  }
+}
+
+// 获取按钮类型（Element Plus 的 type）
+const getButtonType = (buttonColor?: string): 'primary' | 'success' | 'warning' | 'danger' | 'info' | '' => {
+  const colorMap: Record<string, 'primary' | 'success' | 'warning' | 'danger' | 'info'> = {
+    'primary': 'primary',
+    'success': 'success',
+    'warning': 'warning',
+    'danger': 'danger',
+    'info': 'info'
+  }
+  return colorMap[buttonColor || ''] || 'primary'
+}
+
+// 获取图标组件
+const getIconComponent = (iconName?: string) => {
+  if (!iconName) return null
+  
+  const iconMap: Record<string, any> = {
+    'check': markRaw(Check),
+    'check-circle': markRaw(CircleCheck),
+    'times-circle': markRaw(CircleClose),
+    'close': markRaw(Close),
+    'file-alt': markRaw(Files),
+    'files': markRaw(Files),
+    'warning': markRaw(Warning),
+    'bell': markRaw(Bell),
+    'user': markRaw(User)
+  }
+  
+  return iconMap[iconName] || markRaw(Check)
 }
 
 onMounted(() => {
@@ -854,6 +1112,12 @@ onMounted(() => {
     .form-container {
       width: 100%;
     }
+  }
+  
+  .form-popup-container {
+    width: 100%;
+    max-height: 60vh;
+    overflow-y: auto;
   }
   
   .history-section {

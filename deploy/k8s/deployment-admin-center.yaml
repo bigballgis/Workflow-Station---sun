@@ -19,14 +19,13 @@ spec:
     spec:
       containers:
       - name: admin-center
-        image: your-registry/admin-center:latest
+        image: harbor.company.com/workflow/admin-center:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 8080
           name: http
-          protocol: TCP
         env:
-        # 从 ConfigMap 读取非敏感配置
+        # ConfigMap
         - name: SPRING_PROFILES_ACTIVE
           valueFrom:
             configMapKeyRef:
@@ -57,18 +56,17 @@ spec:
             configMapKeyRef:
               name: workflow-platform-config
               key: WORKFLOW_ENGINE_URL
-        - name: LOG_LEVEL_ROOT
+        - name: JWT_EXPIRATION
           valueFrom:
             configMapKeyRef:
               name: workflow-platform-config
-              key: LOG_LEVEL_ROOT
-        - name: LOG_LEVEL_PLATFORM
+              key: JWT_EXPIRATION
+        - name: CORS_ALLOWED_ORIGINS
           valueFrom:
             configMapKeyRef:
               name: workflow-platform-config
-              key: LOG_LEVEL_PLATFORM
-        
-        # 从 Secret 读取敏感配置
+              key: CORS_ALLOWED_ORIGINS
+        # Secret
         - name: SPRING_DATASOURCE_USERNAME
           valueFrom:
             secretKeyRef:
@@ -84,7 +82,16 @@ spec:
             secretKeyRef:
               name: workflow-platform-secrets
               key: SPRING_REDIS_PASSWORD
-        
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: workflow-platform-secrets
+              key: JWT_SECRET
+        - name: ENCRYPTION_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: workflow-platform-secrets
+              key: ENCRYPTION_SECRET_KEY
         resources:
           requests:
             memory: "512Mi"
@@ -92,7 +99,6 @@ spec:
           limits:
             memory: "1Gi"
             cpu: "1000m"
-        
         livenessProbe:
           httpGet:
             path: /actuator/health
@@ -101,7 +107,6 @@ spec:
           periodSeconds: 10
           timeoutSeconds: 5
           failureThreshold: 3
-        
         readinessProbe:
           httpGet:
             path: /actuator/health
@@ -124,7 +129,6 @@ spec:
     app: admin-center
   ports:
   - name: http
-    protocol: TCP
     port: 8080
     targetPort: 8080
   type: ClusterIP

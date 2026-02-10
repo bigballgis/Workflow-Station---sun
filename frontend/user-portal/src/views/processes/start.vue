@@ -2,8 +2,8 @@
   <div class="process-start-page">
     <!-- 页面头部 -->
     <div class="page-header">
-      <el-button :icon="ArrowLeft" @click="$router.back()">返回</el-button>
-      <h1>{{ functionUnitName || '发起流程' }}</h1>
+      <el-button :icon="ArrowLeft" @click="$router.back()">{{ t('processStart.back') }}</el-button>
+      <h1>{{ functionUnitName || t('processStart.startProcess') }}</h1>
       <el-tag v-if="functionUnitVersion" type="info" size="small">v{{ functionUnitVersion }}</el-tag>
     </div>
 
@@ -20,30 +20,30 @@
     
     <!-- 功能单元已禁用状态 -->
     <div v-else-if="isDisabled" class="disabled-state">
-      <el-result icon="warning" title="功能单元已禁用" sub-title="该功能单元已被管理员禁用，暂时无法使用">
+      <el-result icon="warning" :title="t('processStart.disabledTitle')" :sub-title="t('processStart.disabledSubtitle')">
         <template #extra>
-          <el-button type="primary" @click="$router.back()">返回</el-button>
-          <el-button @click="$router.push('/processes')">查看其他流程</el-button>
+          <el-button type="primary" @click="$router.back()">{{ t('processStart.back') }}</el-button>
+          <el-button @click="$router.push('/processes')">{{ t('processStart.viewOtherProcesses') }}</el-button>
         </template>
       </el-result>
     </div>
     
     <!-- 访问被拒绝状态 -->
     <div v-else-if="isAccessDenied" class="access-denied-state">
-      <el-result icon="error" title="无访问权限" sub-title="您没有访问此功能单元的权限，请联系管理员">
+      <el-result icon="error" :title="t('processStart.accessDeniedTitle')" :sub-title="t('processStart.accessDeniedSubtitle')">
         <template #extra>
-          <el-button type="primary" @click="$router.back()">返回</el-button>
-          <el-button @click="$router.push('/processes')">查看其他流程</el-button>
+          <el-button type="primary" @click="$router.back()">{{ t('processStart.back') }}</el-button>
+          <el-button @click="$router.push('/processes')">{{ t('processStart.viewOtherProcesses') }}</el-button>
         </template>
       </el-result>
     </div>
     
     <!-- 加载错误状态 -->
     <div v-else-if="loadError" class="error-state">
-      <el-result icon="error" title="加载失败" :sub-title="loadError">
+      <el-result icon="error" :title="t('processStart.loadFailedTitle')" :sub-title="loadError">
         <template #extra>
-          <el-button type="primary" @click="loadFunctionUnitContent">重新加载</el-button>
-          <el-button @click="$router.back()">返回</el-button>
+          <el-button type="primary" @click="loadFunctionUnitContent">{{ t('processStart.reload') }}</el-button>
+          <el-button @click="$router.back()">{{ t('processStart.back') }}</el-button>
         </template>
       </el-result>
     </div>
@@ -54,8 +54,8 @@
       <div class="section workflow-section">
         <div class="section-header">
           <el-icon><Share /></el-icon>
-          <span>工作流程图</span>
-          <el-tag type="success" size="small">开始节点</el-tag>
+          <span>{{ t('processStart.workflowDiagram') }}</span>
+          <el-tag type="success" size="small">{{ t('processStart.startNodeTag') }}</el-tag>
         </div>
         <div class="section-content">
           <ProcessDiagram
@@ -67,7 +67,7 @@
             :show-toolbar="true"
             :show-legend="true"
           />
-          <el-empty v-else description="暂无流程定义" />
+          <el-empty v-else :description="t('processStart.noProcessDefinition')" />
         </div>
       </div>
 
@@ -75,7 +75,7 @@
       <div class="section form-section">
         <div class="section-header">
           <el-icon><Document /></el-icon>
-          <span>{{ currentFormName || '申请表单' }}</span>
+          <span>{{ currentFormName || t('processStart.applicationForm') }}</span>
         </div>
         <div class="section-content">
           <div v-if="formFields.length > 0 || formTabs.length > 0" class="form-container">
@@ -87,7 +87,7 @@
               label-width="120px"
             />
           </div>
-          <el-empty v-else description="暂无表单配置" />
+          <el-empty v-else :description="t('processStart.noFormConfig')" />
         </div>
       </div>
 
@@ -95,7 +95,7 @@
       <div class="section history-section">
         <div class="section-header">
           <el-icon><Clock /></el-icon>
-          <span>流转记录</span>
+          <span>{{ t('processStart.flowHistory') }}</span>
         </div>
         <div class="section-content">
           <ProcessHistory
@@ -111,9 +111,9 @@
         <div class="action-buttons">
           <div class="left-actions">
             <el-button @click="handleSaveDraft" :loading="savingDraft">
-              <el-icon><FolderOpened /></el-icon> 保存草稿
+              <el-icon><FolderOpened /></el-icon> {{ t('processStart.saveDraft') }}
             </el-button>
-            <el-button @click="$router.back()">取消</el-button>
+            <el-button @click="$router.back()">{{ t('processStart.cancel') }}</el-button>
           </div>
           <div class="right-actions">
             <el-button 
@@ -131,7 +131,7 @@
               @click="handleSubmit"
               :loading="submitting"
             >
-              <el-icon><Promotion /></el-icon> 提交
+              <el-icon><Promotion /></el-icon> {{ t('processStart.submit') }}
             </el-button>
           </div>
         </div>
@@ -143,6 +143,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft, Share, Document, Clock, FolderOpened, Promotion } from '@element-plus/icons-vue'
 import { processApi } from '@/api/process'
@@ -152,6 +153,7 @@ import FormRenderer, { type FormField, type FormTab } from '@/components/FormRen
 
 const route = useRoute()
 const router = useRouter()
+const { t } = useI18n()
 
 // 路由参数：key 是功能单元的 ID
 const functionUnitId = computed(() => route.params.key as string)
@@ -278,13 +280,13 @@ const loadFunctionUnitContent = async () => {
     // 检查是否是 403 错误（禁用或无权限）
     if (error.response?.status === 403) {
       const message = error.response?.data?.message || ''
-      if (message.includes('禁用')) {
+      if (message.includes('disabled') || message.includes('禁用')) {
         isDisabled.value = true
       } else {
         isAccessDenied.value = true
       }
     } else {
-      loadError.value = error.message || '加载功能单元内容失败'
+      loadError.value = error.message || t('processStart.loadFailed')
     }
   } finally {
     loading.value = false
@@ -382,7 +384,7 @@ const loadDraftData = async () => {
     const draft = response.data || response
     if (draft && draft.formData) {
       formData.value = draft.formData
-      ElMessage.success('已加载草稿数据')
+      ElMessage.success(t('processStart.draftLoaded'))
     }
   } catch (error) {
     console.error('Failed to load draft:', error)
@@ -424,7 +426,7 @@ const parseBpmnXml = (xml: string) => {
     const startEvents = doc.querySelectorAll('startEvent')
     startEvents.forEach((event, index) => {
       const id = event.getAttribute('id') || `start_${index}`
-      const name = event.getAttribute('name') || '开始'
+      const name = event.getAttribute('name') || t('task.startNode')
       const pos = positionMap.get(id)
       nodes.push({ 
         id, 
@@ -443,7 +445,7 @@ const parseBpmnXml = (xml: string) => {
     const userTasks = doc.querySelectorAll('userTask')
     userTasks.forEach((task, index) => {
       const id = task.getAttribute('id') || `task_${index}`
-      const name = task.getAttribute('name') || `任务${index + 1}`
+      const name = task.getAttribute('name') || t('task.taskFallbackName', { index: index + 1 })
       const pos = positionMap.get(id)
       nodes.push({ 
         id, 
@@ -461,7 +463,7 @@ const parseBpmnXml = (xml: string) => {
     const serviceTasks = doc.querySelectorAll('serviceTask')
     serviceTasks.forEach((task, index) => {
       const id = task.getAttribute('id') || `service_${index}`
-      const name = task.getAttribute('name') || `服务${index + 1}`
+      const name = task.getAttribute('name') || t('processStart.serviceFallbackName', { index: index + 1 })
       const pos = positionMap.get(id)
       nodes.push({ 
         id, 
@@ -497,7 +499,7 @@ const parseBpmnXml = (xml: string) => {
     const endEvents = doc.querySelectorAll('endEvent')
     endEvents.forEach((event, index) => {
       const id = event.getAttribute('id') || `end_${index}`
-      const name = event.getAttribute('name') || '结束'
+      const name = event.getAttribute('name') || t('task.endNode')
       const pos = positionMap.get(id)
       nodes.push({ 
         id, 
@@ -670,7 +672,7 @@ const convertFormCreateRule = (rule: any): FormField | null => {
     label: rule.title || rule.field,
     type: typeMap[rule.type] || 'text',
     required: rule.validate?.some((v: any) => v.required) || false,
-    placeholder: rule.props?.placeholder || `请输入${rule.title || rule.field}`,
+    placeholder: rule.props?.placeholder || '',
     span: rule.col?.span || 24
   }
   
@@ -713,7 +715,7 @@ const initHistoryRecords = () => {
     {
       id: 'init',
       nodeId: 'start',
-      nodeName: '发起申请',
+      nodeName: t('processStart.initiateApplication'),
       status: 'current',
       createdTime: new Date().toISOString()
     }
@@ -725,7 +727,7 @@ const initActionButtons = () => {
   availableActions.value = [
     {
       id: 'submit',
-      label: '提交申请',
+      label: t('processStart.submitApplication'),
       type: 'primary',
       action: 'submit'
     }
@@ -737,9 +739,9 @@ const handleSaveDraft = async () => {
   savingDraft.value = true
   try {
     await processApi.saveDraft(functionUnitCode.value || functionUnitId.value, formData.value)
-    ElMessage.success('草稿保存成功')
+    ElMessage.success(t('processStart.draftSaved'))
   } catch (error: any) {
-    ElMessage.error(error.message || '保存草稿失败')
+    ElMessage.error(error.message || t('processStart.draftSaveFailed'))
   } finally {
     savingDraft.value = false
   }
@@ -758,7 +760,7 @@ const handleSubmit = async () => {
   if (formRendererRef.value) {
     const valid = await formRendererRef.value.validate()
     if (!valid) {
-      ElMessage.warning('请完善表单信息')
+      ElMessage.warning(t('processStart.pleaseCompleteForm'))
       return
     }
   }
@@ -779,11 +781,11 @@ const handleSubmit = async () => {
       // 忽略删除草稿失败
     }
     
-    ElMessage.success('流程提交成功')
+    ElMessage.success(t('processStart.processSubmitSuccess'))
     router.push('/my-applications')
     
   } catch (error: any) {
-    ElMessage.error(error.message || '提交失败')
+    ElMessage.error(error.message || t('processStart.submitFailed'))
   } finally {
     submitting.value = false
     currentAction.value = ''

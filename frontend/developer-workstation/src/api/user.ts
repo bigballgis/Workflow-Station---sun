@@ -24,7 +24,7 @@ adminCenterAxios.interceptors.response.use(
   error => Promise.reject(error)
 )
 
-/** 用户业务单元成员身份 */
+/** User business unit membership */
 export interface UserBusinessUnitMembership {
   id: string
   name: string
@@ -32,7 +32,7 @@ export interface UserBusinessUnitMembership {
   path?: string
 }
 
-/** 用户虚拟组成员身份 */
+/** User virtual group membership */
 export interface UserVirtualGroupMembership {
   groupId: string
   groupName: string
@@ -40,7 +40,7 @@ export interface UserVirtualGroupMembership {
   joinedAt: string
 }
 
-/** 用户角色 */
+/** User role */
 export interface UserRole {
   id: string
   name: string
@@ -49,19 +49,19 @@ export interface UserRole {
 }
 
 export const userApi = {
-  /** 获取用户业务单元成员身份 */
+  /** Get user business unit memberships */
   getBusinessUnits: (userId: string): Promise<UserBusinessUnitMembership[]> =>
     adminCenterAxios.get(`/users/${userId}/business-units`),
 
-  /** 获取用户虚拟组成员身份 */
+  /** Get user virtual group memberships */
   getVirtualGroups: (userId: string): Promise<UserVirtualGroupMembership[]> =>
     adminCenterAxios.get(`/users/${userId}/virtual-groups`),
 
-  /** 获取用户角色（通过虚拟组获取） */
+  /** Get user roles (via virtual groups) */
   getRoles: (userId: string): Promise<UserRole[]> =>
     adminCenterAxios.get(`/users/${userId}/roles`),
 
-  /** 修改密码 */
+  /** Change password */
   changePassword: (data: { oldPassword: string; newPassword: string }): Promise<void> =>
     adminCenterAxios.post('/auth/change-password', data)
 }

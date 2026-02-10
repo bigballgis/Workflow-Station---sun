@@ -15,7 +15,7 @@ import lombok.AllArgsConstructor;
 public class TaskActionInfo {
     
     /** 操作ID */
-    private Long actionId;
+    private String actionId;
     
     /** 操作名称 */
     private String actionName;
@@ -26,9 +26,12 @@ public class TaskActionInfo {
     /** 操作描述 */
     private String description;
     
-    /** 表单ID（用于FORM_POPUP类型） */
-    private Long formId;
+    /** 图标 */
+    private String icon;
     
-    /** 表单名称 */
-    private String formName;
+    /** 按钮颜色 */
+    private String buttonColor;
+    
+    /** 配置JSON（包含formId, apiEndpoint等） */
+    private String configJson;
 }

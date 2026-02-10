@@ -152,7 +152,7 @@ async function initModeler() {
     const result = await bpmnModeler.importXML(xml)
     console.log('Import result:', result)
     
-    // 检查连线是否存在
+    // Check if connections exist
     const elementRegistry = bpmnModeler.get('elementRegistry')
     const connections = elementRegistry.filter((element: any) => element.type === 'bpmn:SequenceFlow')
     console.log('Connections found:', connections.length, connections)

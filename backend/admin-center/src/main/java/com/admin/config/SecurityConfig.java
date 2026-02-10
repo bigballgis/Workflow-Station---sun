@@ -31,6 +31,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
                 .requestMatchers("/actuator/**").permitAll()
+                .requestMatchers("/data-api/**").permitAll() // 明确允许 data-api 路径
                 .anyRequest().permitAll() // 暂时允许所有请求，后续添加认证
             );
         

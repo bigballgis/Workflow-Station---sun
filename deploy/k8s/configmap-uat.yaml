@@ -6,56 +6,50 @@ metadata:
 data:
   # Spring Profile
   SPRING_PROFILES_ACTIVE: "uat"
-  
-  # 服务端口（K8s 内部统一使用 8080）
+
+  # Server Port
   SERVER_PORT: "8080"
-  
-  # 数据库配置（非敏感部分）
-  SPRING_DATASOURCE_URL: "jdbc:postgresql://your-uat-postgres-host:5432/workflow_platform_uat"
-  
-  # Redis 配置（非敏感部分）
-  SPRING_REDIS_HOST: "your-uat-redis-host"
+
+  # Database (non-sensitive)
+  SPRING_DATASOURCE_URL: "jdbc:postgresql://uat-postgres.internal:5432/workflow_platform_uat"
+
+  # Redis (non-sensitive)
+  SPRING_REDIS_HOST: "uat-redis.internal"
   SPRING_REDIS_PORT: "6379"
-  
-  # 服务间调用 URL（使用 K8s Service 名称）
+
+  # Service URLs (K8S Service names)
   ADMIN_CENTER_URL: "http://admin-center-service:8080"
   WORKFLOW_ENGINE_URL: "http://workflow-engine-service:8080"
   DEVELOPER_WORKSTATION_URL: "http://developer-workstation-service:8080"
   USER_PORTAL_URL: "http://user-portal-service:8080"
-  API_GATEWAY_URL: "http://api-gateway-service:8080"
-  
-  # 前端 Nginx 代理后端 URL（K8s 内部服务名称）
+
+  # Frontend nginx proxy backend URLs
   ADMIN_CENTER_BACKEND_URL: "http://admin-center-service:8080"
   USER_PORTAL_BACKEND_URL: "http://user-portal-service:8080"
   DEVELOPER_WORKSTATION_BACKEND_URL: "http://developer-workstation-service:8080"
-  WORKFLOW_ENGINE_BACKEND_URL: "http://workflow-engine-service:8080"
-  API_GATEWAY_BACKEND_URL: "http://api-gateway-service:8080"
-  
-  # JWT 配置（非敏感部分）
+
+  # JWT (non-sensitive)
   JWT_EXPIRATION: "43200000"
   JWT_REFRESH_EXPIRATION: "259200000"
-  
-  # 日志配置
+
+  # Logging
   LOG_LEVEL_ROOT: "INFO"
   LOG_LEVEL_PLATFORM: "INFO"
   LOG_LEVEL_SQL: "WARN"
-  
-  # 缓存配置（UAT 环境使用较长的缓存时间）
+
+  # Cache (longer TTL for UAT)
   CACHE_USER_TTL_MINUTES: "45"
   CACHE_PERMISSION_TTL_MINUTES: "90"
   CACHE_DICTIONARY_TTL_MINUTES: "180"
-  
-  # 安全配置（UAT 环境使用更严格的安全策略）
+
+  # Security (stricter)
   SECURITY_PASSWORD_MIN_LENGTH: "10"
   SECURITY_LOGIN_MAX_FAILED_ATTEMPTS: "3"
   SECURITY_SESSION_TIMEOUT_MINUTES: "30"
-  
-  # Swagger 配置（UAT 环境禁用）
+
+  # Features
   SWAGGER_ENABLED: "false"
-  
-  # Actuator 配置
-  MANAGEMENT_ENDPOINTS_ENABLED: "true"
-  ACTUATOR_HEALTH_SHOW_DETAILS: "when_authorized"
-  
-  # Flowable 配置
+  CORS_ALLOWED_ORIGINS: "https://uat-admin.company.com,https://uat-portal.company.com,https://uat-dev.company.com"
+
+  # Flowable
   FLOWABLE_SCHEMA_UPDATE: "false"

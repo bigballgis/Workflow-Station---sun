@@ -1,6 +1,6 @@
 <template>
   <div class="form-designer">
-    <!-- 表单列表视图 -->
+    <!-- Form list view -->
     <div class="form-list-view" v-if="!selectedForm">
       <div class="designer-toolbar">
         <el-button type="primary" @click="showCreateDialog = true">
@@ -50,7 +50,7 @@
                   size="small"
                   class="node-tag"
                 >
-                  {{ node.nodeName }}{{ node.readOnly ? '(只读)' : '' }}
+                  {{ node.nodeName }}{{ node.readOnly ? `(${t('form.readOnly')})` : '' }}
                 </el-tag>
               </template>
               <span v-else class="text-muted">{{ t('form.notBound') }}</span>
@@ -71,7 +71,7 @@
       </el-table>
     </div>
 
-    <!-- 表单设计器视图 -->
+    <!-- Form designer view -->
     <div class="form-editor-view" v-else>
       <div class="editor-header">
         <el-button @click="handleBackToList">
@@ -107,7 +107,7 @@
       </div>
     </div>
 
-    <!-- 创建表单对话框 -->
+    <!-- Create form dialog -->
     <el-dialog v-model="showCreateDialog" :title="t('form.createFormTitle')" width="500px">
       <el-form :model="createForm" label-width="100px">
         <el-form-item :label="t('form.formNameLabel')" required>
@@ -141,7 +141,7 @@
       </template>
     </el-dialog>
 
-    <!-- 预览对话框 -->
+    <!-- Preview dialog -->
     <el-dialog v-model="showPreviewDialog" :title="t('form.previewTitle')" width="800px" destroy-on-close>
       <div class="preview-container">
         <div class="form-preview-wrapper">
@@ -151,7 +151,7 @@
       </div>
     </el-dialog>
 
-    <!-- 绑定节点对话框 -->
+    <!-- Bind node dialog -->
     <el-dialog v-model="showBindDialog" :title="t('form.bindNodeTitle')" width="650px" :key="bindDialogKey">
       <div class="bind-dialog-content">
         <el-alert type="info" :closable="false" style="margin-bottom: 16px;">
@@ -186,7 +186,7 @@
       </template>
     </el-dialog>
 
-    <!-- 从表导入字段对话框 -->
+    <!-- Import fields from table dialog -->
     <el-dialog v-model="showImportFieldsDialog" :title="t('form.importFieldsTitle')" width="800px">
       <div class="import-fields-dialog">
         <el-alert type="info" :closable="false" style="margin-bottom: 16px;">
@@ -283,7 +283,7 @@
       </template>
     </el-dialog>
 
-    <!-- 管理表绑定对话框 -->
+    <!-- Manage table bindings dialog -->
     <el-dialog v-model="showBindingManagerDialog" :title="t('form.manageBindingsTitle')" width="700px" destroy-on-close>
       <TableBindingManager 
         v-if="bindingManagerForm"
@@ -332,52 +332,51 @@ const previewRule = ref<any[]>([])
 const createForm = reactive({ formName: '', formType: 'MAIN', description: '', boundTableId: null as number | null })
 const bindingForm = ref<FormDefinition | null>(null)
 
-// 管理表绑定相关状态
+// Table binding management state
 const showBindingManagerDialog = ref(false)
 const bindingManagerForm = ref<FormDefinition | null>(null)
 const processNodes = ref<ProcessNode[]>([])
 
-// 导入字段相关状态
+// Import fields state
 const showImportFieldsDialog = ref(false)
 const importTableId = ref<number | null>(null)
 const selectedImportFields = ref<FieldDefinition[]>([])
 const formBindings = ref<TableBinding[]>([])
 
-// 计算属性：当前选中表的可用字段
+// Computed: available fields for selected table
 const availableFields = computed(() => {
   if (!importTableId.value) return []
   const table = store.tables.find(t => t.id === importTableId.value)
   return table?.fieldDefinitions || []
 })
 
-// 计算属性：是否全选
+// Computed: all fields selected
 const isAllFieldsSelected = computed(() => {
   return availableFields.value.length > 0 && 
          selectedImportFields.value.length === availableFields.value.length
 })
 
-// 计算属性：是否部分选中
+// Computed: indeterminate selection state
 const isFieldsIndeterminate = computed(() => {
   return selectedImportFields.value.length > 0 && 
          selectedImportFields.value.length < availableFields.value.length
 })
-// 存储从BPMN XML解析出的表单绑定信息（支持多节点）
+// Store form-node bindings parsed from BPMN XML (supports multiple nodes)
 const formNodeBindings = ref<Map<number, Array<{ nodeId: string; nodeName: string; readOnly: boolean }>>>(new Map())
 
-// 绑定对话框中选中的节点
+// Selected nodes in bind dialog
 const selectedBindNodes = ref<Array<{ nodeId: string; nodeName: string; readOnly: boolean }>>([])
-// 用于强制更新复选框的 key
+// Key to force checkbox re-render
 const bindDialogKey = ref(0)
 
-// form-create designer 配置
+// Form-create designer config
 const designerConfig = {
   showDevice: true,
-  showSave: false, // 使用自定义保存按钮
+  showSave: false, // Use custom save button
   fieldReadonly: false,
-  locale: 'en' // 使用英文语言
 }
 
-// 预览配置
+// Preview options
 const previewOption = {
   submitBtn: false,
   resetBtn: false
@@ -390,10 +389,10 @@ const formTypeLabel = (type: string) => {
 
 const nodeTypeLabel = (type: string) => {
   const map: Record<string, string> = { 
-    userTask: '用户任务', 
-    serviceTask: '服务任务',
-    startEvent: '开始事件',
-    endEvent: '结束事件'
+    userTask: t('form.nodeTypeUserTask'), 
+    serviceTask: t('form.nodeTypeServiceTask'),
+    startEvent: t('form.nodeTypeStartEvent'),
+    endEvent: t('form.nodeTypeEndEvent')
   }
   return map[type] || type
 }
@@ -403,48 +402,48 @@ const tableTypeLabel = (type: string) => {
   return map[type] || type
 }
 
-// 绑定类型标签
+// Binding type label
 const bindingTypeLabel = (type: BindingType): string => {
-  const map: Record<BindingType, string> = { PRIMARY: '主表', SUB: '子表', RELATED: '关联表' }
+  const map: Record<BindingType, string> = { PRIMARY: t('form.bindingTypePrimary'), SUB: t('form.bindingTypeSub'), RELATED: t('form.bindingTypeRelated') }
   return map[type] || type
 }
 
-// 绑定类型标签颜色
+// Binding type tag color
 const bindingTypeTag = (type: BindingType): 'primary' | 'success' | 'warning' | 'info' => {
   const map: Record<BindingType, 'primary' | 'success' | 'warning' | 'info'> = { PRIMARY: 'primary', SUB: 'success', RELATED: 'warning' }
   return map[type] || 'info'
 }
 
-// 获取当前导入表的绑定信息
+// Get binding info for the currently selected import table
 function getImportTableBinding(): TableBinding | undefined {
   if (!importTableId.value) return undefined
   return formBindings.value.find(b => b.tableId === importTableId.value)
 }
 
 /**
- * 根据表ID获取表名
+ * Get table name by table ID
  */
 function getTableName(tableId: number): string {
   const table = store.tables.find(t => t.id === tableId)
-  return table?.tableName || '未知表'
+  return table?.tableName || t('form.unknownTable')
 }
 
 /**
- * 获取表单的PRIMARY绑定
+ * Get PRIMARY binding for a form
  */
 function getPrimaryBinding(form: FormDefinition): TableBinding | undefined {
   return form.tableBindings?.find(b => b.bindingType === 'PRIMARY')
 }
 
 /**
- * 获取表单的子表/关联表绑定数量
+ * Get sub/related binding count for a form
  */
 function getSubBindingsCount(form: FormDefinition): number {
   return form.tableBindings?.filter(b => b.bindingType !== 'PRIMARY').length || 0
 }
 
 /**
- * 打开管理表绑定对话框
+ * Open manage table bindings dialog
  */
 function handleManageBindings(form: FormDefinition) {
   bindingManagerForm.value = form
@@ -452,14 +451,14 @@ function handleManageBindings(form: FormDefinition) {
 }
 
 /**
- * 表绑定更新回调
+ * Table binding update callback
  */
 function handleBindingUpdate() {
   loadForms()
 }
 
 /**
- * 根据数据类型获取对应的表单组件类型
+ * Get form component type by data type
  */
 function getFormComponentType(dataType: string): string {
   const typeMap: Record<string, string> = {
@@ -476,14 +475,14 @@ function getFormComponentType(dataType: string): string {
 }
 
 /**
- * 检查字段是否被选中
+ * Check if a field is selected
  */
 function isFieldSelected(fieldName: string): boolean {
   return selectedImportFields.value.some(f => f.fieldName === fieldName)
 }
 
 /**
- * 切换字段选中状态
+ * Toggle field selection
  */
 function toggleFieldSelection(field: FieldDefinition) {
   const index = selectedImportFields.value.findIndex(f => f.fieldName === field.fieldName)
@@ -495,7 +494,7 @@ function toggleFieldSelection(field: FieldDefinition) {
 }
 
 /**
- * 全选/取消全选字段
+ * Select/deselect all fields
  */
 function handleSelectAllFields(checked: boolean) {
   if (checked) {
@@ -506,14 +505,14 @@ function handleSelectAllFields(checked: boolean) {
 }
 
 /**
- * 表切换时重置选中字段
+ * Reset selected fields when table changes
  */
 function handleTableChange() {
   selectedImportFields.value = []
 }
 
 /**
- * 打开导入字段对话框（列表页面）
+ * Open import fields dialog (from list page)
  */
 async function handleImportFromTable() {
   await store.fetchTables(props.functionUnitId)
@@ -524,12 +523,12 @@ async function handleImportFromTable() {
 }
 
 /**
- * 打开导入字段对话框（设计器页面）
+ * Open import fields dialog (from designer page)
  */
 async function handleImportFieldsToDesigner() {
   await store.fetchTables(props.functionUnitId)
   
-  // 加载表单绑定信息
+  // Load form bindings
   if (selectedForm.value) {
     try {
       const res = await functionUnitApi.getFormBindings(props.functionUnitId, selectedForm.value.id)
@@ -538,7 +537,7 @@ async function handleImportFieldsToDesigner() {
       formBindings.value = []
     }
     
-    // 如果有主表绑定，自动选中主表
+    // Auto-select primary table if bound
     const primaryBinding = formBindings.value.find(b => b.bindingType === 'PRIMARY')
     if (primaryBinding) {
       importTableId.value = primaryBinding.tableId
@@ -557,7 +556,7 @@ async function handleImportFieldsToDesigner() {
 }
 
 /**
- * 将数据库字段类型转换为 form-create 规则
+ * Convert database field type to form-create rule
  */
 function fieldToFormRule(field: FieldDefinition): any {
   const baseRule = {
@@ -567,7 +566,7 @@ function fieldToFormRule(field: FieldDefinition): any {
     validate: [] as any[]
   }
   
-  // 如果字段不可空，添加必填验证
+  // Add required validation if field is not nullable
   if (!field.nullable) {
     baseRule.validate.push({
       required: true,
@@ -576,7 +575,7 @@ function fieldToFormRule(field: FieldDefinition): any {
     })
   }
   
-  // 根据数据类型映射表单组件
+  // Map data type to form component
   switch (field.dataType) {
     case 'VARCHAR':
       return {
@@ -655,7 +654,7 @@ function fieldToFormRule(field: FieldDefinition): any {
 }
 
 /**
- * 确认导入字段到表单设计器
+ * Confirm importing fields to form designer
  */
 function handleConfirmImportFields() {
   if (selectedImportFields.value.length === 0) {
@@ -663,14 +662,14 @@ function handleConfirmImportFields() {
     return
   }
   
-  // 如果在设计器视图中，直接添加到设计器
+  // If in designer view, add directly to designer
   if (selectedForm.value && designerRef.value) {
     const rules = selectedImportFields.value.map(fieldToFormRule)
     
-    // 获取当前设计器中的规则
+    // Get current designer rules
     const currentRules = designerRef.value.getRule() || []
     
-    // 检查是否有重复字段
+    // Check for duplicate fields
     const existingFields = new Set(currentRules.map((r: any) => r.field))
     const newRules = rules.filter(r => !existingFields.has(r.field))
     const duplicateCount = rules.length - newRules.length
@@ -680,7 +679,7 @@ function handleConfirmImportFields() {
     }
     
     if (newRules.length > 0) {
-      // 合并规则
+      // Merge rules
       const mergedRules = [...currentRules, ...newRules]
       designerRef.value.setRule(mergedRules)
       ElMessage.success(t('form.importedSuccess', { count: newRules.length }))

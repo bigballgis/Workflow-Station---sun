@@ -2,7 +2,7 @@
   <el-dialog 
     :model-value="modelValue" 
     @update:model-value="$emit('update:modelValue', $event)" 
-    title="批量导入用户" 
+    :title="t('user.batchImportUsers')" 
     width="600px"
     destroy-on-close
   >
@@ -10,7 +10,7 @@
       <div class="import-tips">
         <el-alert type="info" :closable="false" show-icon>
           <template #title>
-            <span>请先下载模板，按照模板格式填写用户信息后上传</span>
+            <span>{{ t('user.importTip') }}</span>
           </template>
         </el-alert>
       </div>
@@ -26,9 +26,9 @@
           drag
         >
           <el-icon class="el-icon--upload"><Upload /></el-icon>
-          <div class="el-upload__text">将文件拖到此处，或<em>点击上传</em></div>
+          <div class="el-upload__text" v-html="t('user.dragFileOrClick')"></div>
           <template #tip>
-            <div class="el-upload__tip">只能上传 xlsx/xls 文件，且不超过 5MB</div>
+            <div class="el-upload__tip">{{ t('user.uploadFileLimitTip') }}</div>
           </template>
         </el-upload>
       </div>
@@ -36,33 +36,33 @@
       <div v-if="importResult" class="import-result">
         <el-result 
           :icon="importResult.failed === 0 ? 'success' : 'warning'" 
-          :title="importResult.failed === 0 ? '导入成功' : '部分导入成功'"
+          :title="importResult.failed === 0 ? t('user.importSuccessResult') : t('user.importPartialResult')"
         >
           <template #sub-title>
             <div class="result-summary">
-              <span>总计: {{ importResult.total }} 条</span>
-              <span class="success">成功: {{ importResult.success }} 条</span>
-              <span class="failed" v-if="importResult.failed > 0">失败: {{ importResult.failed }} 条</span>
+              <span>{{ t('user.totalRecords', { count: importResult.total }) }}</span>
+              <span class="success">{{ t('user.successRecords', { count: importResult.success }) }}</span>
+              <span class="failed" v-if="importResult.failed > 0">{{ t('user.failedRecords', { count: importResult.failed }) }}</span>
             </div>
           </template>
         </el-result>
 
         <el-table v-if="importResult.errors?.length" :data="importResult.errors" border size="small" max-height="200">
-          <el-table-column prop="row" label="行号" width="70" />
-          <el-table-column prop="field" label="字段" width="100" />
-          <el-table-column prop="value" label="值" width="120" />
-          <el-table-column prop="message" label="错误信息" />
+          <el-table-column prop="row" :label="t('common.rowNumber')" width="70" />
+          <el-table-column prop="field" :label="t('common.field')" width="100" />
+          <el-table-column prop="value" :label="t('common.value')" width="120" />
+          <el-table-column prop="message" :label="t('common.errorMessage')" />
         </el-table>
       </div>
     </div>
 
     <template #footer>
       <el-button @click="handleDownloadTemplate">
-        <el-icon><Download /></el-icon>下载模板
+        <el-icon><Download /></el-icon>{{ t('user.downloadTemplate') }}
       </el-button>
-      <el-button @click="$emit('update:modelValue', false)">取消</el-button>
+      <el-button @click="$emit('update:modelValue', false)">{{ t('common.cancel') }}</el-button>
       <el-button type="primary" :loading="loading" :disabled="!selectedFile" @click="handleImport">
-        开始导入
+        {{ t('user.startImport') }}
       </el-button>
     </template>
   </el-dialog>
@@ -70,9 +70,12 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, type UploadInstance, type UploadFile, type UploadRawFile } from 'element-plus'
 import { Upload, Download } from '@element-plus/icons-vue'
 import { userApi, type ImportResult } from '@/api/user'
+
+const { t } = useI18n()
 
 defineProps<{ modelValue: boolean }>()
 const emit = defineEmits(['update:modelValue', 'success'])
@@ -85,7 +88,7 @@ const importResult = ref<ImportResult | null>(null)
 const handleFileChange = (file: UploadFile) => {
   if (file.raw) {
     if (file.raw.size > 5 * 1024 * 1024) {
-      ElMessage.error('文件大小不能超过 5MB')
+      ElMessage.error(t('user.fileSizeExceeded'))
       uploadRef.value?.clearFiles()
       return
     }
@@ -95,7 +98,7 @@ const handleFileChange = (file: UploadFile) => {
 }
 
 const handleExceed = () => {
-  ElMessage.warning('只能上传一个文件，请先删除已选文件')
+  ElMessage.warning(t('user.onlyOneFile'))
 }
 
 const handleDownloadTemplate = async () => {
@@ -104,11 +107,11 @@ const handleDownloadTemplate = async () => {
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = '用户导入模板.xlsx'
+    link.download = t('user.templateFileName')
     link.click()
     window.URL.revokeObjectURL(url)
   } catch (error: any) {
-    ElMessage.error(error.message || '下载模板失败')
+    ElMessage.error(error.message || t('user.downloadTemplateFailed'))
   }
 }
 
@@ -122,10 +125,10 @@ const handleImport = async () => {
       emit('success')
     }
     if (importResult.value.failed === 0) {
-      ElMessage.success('导入成功')
+      ElMessage.success(t('user.importSuccessResult'))
     }
   } catch (error: any) {
-    ElMessage.error(error.message || '导入失败')
+    ElMessage.error(error.message || t('user.importFailed'))
   } finally {
     loading.value = false
   }

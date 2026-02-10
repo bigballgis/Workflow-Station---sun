@@ -1,6 +1,6 @@
 <template>
   <el-container class="admin-layout">
-    <!-- 顶部导航栏 -->
+    <!-- Top navigation bar -->
     <el-header class="admin-header">
       <div class="header-left">
         <div class="logo">
@@ -18,7 +18,7 @@
     </el-header>
 
     <el-container class="admin-body">
-      <!-- 左侧菜单 -->
+      <!-- Left sidebar menu -->
       <el-aside :width="isCollapse ? '64px' : '240px'" class="admin-aside">
         <el-scrollbar>
           <el-menu
@@ -71,7 +71,7 @@
         </el-scrollbar>
       </el-aside>
 
-      <!-- 主内容区 -->
+      <!-- Main content area -->
       <el-main class="admin-main">
         <router-view v-slot="{ Component, route }">
           <transition name="fade" mode="out-in">
@@ -240,7 +240,7 @@ $main-bg: #f5f7fa;
   overflow-y: auto;
 }
 
-// 页面切换动画
+// Page transition animation
 .fade-enter-active,
 .fade-leave-active {
   transition: opacity 0.2s ease;

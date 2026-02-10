@@ -52,6 +52,9 @@ class TaskProcessProperties {
     
     @Mock
     private WorkflowEngineClient workflowEngineClient;
+    
+    @Mock
+    private com.portal.service.TaskActionService taskActionService;
 
     private TaskQueryComponent taskQueryComponent;
     private TaskProcessComponent taskProcessComponent;
@@ -64,7 +67,8 @@ class TaskProcessProperties {
             delegationRuleRepository, 
             processInstanceRepository, 
             processHistoryRepository,
-            workflowEngineClient
+            workflowEngineClient,
+            taskActionService
         );
         taskProcessComponent = new TaskProcessComponent(
             taskQueryComponent, 

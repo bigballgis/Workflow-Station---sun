@@ -110,17 +110,17 @@ const parseFile = async () => {
     // 使用FileReader读取文件内容进行预览
     // 注意：这里简化处理，实际应该使用xlsx库解析Excel
     // 或者调用后台API进行预览
-    ElMessage.info('正在解析文件...')
+    ElMessage.info(t('user.parsingFile'))
     
     // 简化方案：直接跳过预览，让用户确认导入
     // 如果需要预览功能，建议安装 xlsx 库或调用后台预览API
     previewData.value = [
-      { username: '...', realName: '文件已选择，点击"确认导入"开始导入', email: '...' }
+      { username: '...', realName: t('user.fileSelectedHint'), email: '...' }
     ]
     step.value = 1
   } catch (error) {
     console.error('Failed to parse file:', error)
-    ElMessage.error('文件解析失败')
+    ElMessage.error(t('user.parseFileFailed'))
   }
 }
 
@@ -132,7 +132,7 @@ const handleImport = async () => {
     step.value = 2
   } catch (error) {
     console.error('Failed to import users:', error)
-    ElMessage.error('导入失败，请检查文件格式')
+    ElMessage.error(t('user.importFailedCheckFormat'))
     importing.value = false
   } finally {
     importing.value = false

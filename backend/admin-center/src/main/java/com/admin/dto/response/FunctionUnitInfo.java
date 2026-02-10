@@ -33,6 +33,7 @@ public class FunctionUnitInfo {
     private String validatedBy;
     private Instant createdAt;
     private Instant updatedAt;
+    private String iconSvg;
     
     /**
      * 从实体转换
@@ -57,6 +58,7 @@ public class FunctionUnitInfo {
                 .validatedBy(entity.getValidatedBy())
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())
+                .iconSvg(entity.getIconSvg())
                 .build();
     }
 }

@@ -50,8 +50,8 @@ public class ProcessComponent {
         try {
             // 尝试从管理员中心获取已部署的功能单元
             RestTemplate restTemplate = new RestTemplate();
-            String url = adminCenterUrl + "/api/v1/admin/function-units/deployed";
-            log.info("Fetching deployed function units from: {}", url);
+            String url = adminCenterUrl + "/api/v1/admin/function-units/deployed/latest";
+            log.info("Fetching latest deployed function units from: {}", url);
             
             @SuppressWarnings("unchecked")
             Map<String, Object> response = restTemplate.getForObject(url, Map.class);
@@ -72,7 +72,8 @@ public class ProcessComponent {
                             .name((String) unit.get("name"))
                             .description((String) unit.get("description"))
                             .category("业务流程")
-                            .version(1)
+                            .version(unit.get("version") != null ? String.valueOf(unit.get("version")) : "1.0.0")
+                            .icon((String) unit.get("iconSvg"))
                             .build();
                     definitions.add(info);
                 }
@@ -823,9 +824,9 @@ public class ProcessComponent {
                             if (tasks != null && !tasks.isEmpty()) {
                                 Map<String, Object> currentTask = tasks.get(0);
                                 currentAssigneeName = (String) currentTask.get("currentAssigneeName");
-                                // 如果没有名称，使用ID
+                                // 如果 workflow-engine 没有返回名称，直接解析用户ID
                                 if (currentAssigneeName == null || currentAssigneeName.isEmpty()) {
-                                    currentAssigneeName = currentAssignee;
+                                    currentAssigneeName = resolveUserDisplayName(currentAssignee);
                                 }
                             } else {
                                 // 任务列表为空，说明流程没有活动任务（可能已完成或在过渡状态）
@@ -838,13 +839,13 @@ public class ProcessComponent {
                 }
             } catch (Exception e) {
                 log.warn("Failed to get current assignee name for process {}: {}", instance.getId(), e.getMessage());
-                currentAssigneeName = currentAssignee; // 回退到使用ID
+                currentAssigneeName = resolveUserDisplayName(currentAssignee);
             }
         }
         
-        // 如果没有获取到名称，使用ID（如果有的话）
+        // 如果没有获取到名称，尝试解析用户ID
         if (currentAssigneeName == null && currentAssignee != null) {
-            currentAssigneeName = currentAssignee;
+            currentAssigneeName = resolveUserDisplayName(currentAssignee);
         }
         
         log.debug("=== toProcessInstanceInfo: final currentAssigneeName={}", currentAssigneeName);
@@ -1148,6 +1149,55 @@ public class ProcessComponent {
             Map<String, Object> errorResult = new HashMap<>();
             errorResult.put("error", e.getMessage());
             return errorResult;
+        }
+    }
+    
+    /**
+     * 获取功能单元特定类型的内容（用于表单弹窗等场景）
+     * 
+     * 使用 /function-units/{id}/content 端点获取所有内容，然后在客户端过滤
+     * 这是因为 Spring 的 ResourceHttpRequestHandler 会拦截某些特定路径模式
+     */
+    public List<Map<String, Object>> getFunctionUnitContents(String functionUnitIdOrCode, String contentType) {
+        log.info("Getting function unit contents for: {}, contentType: {}", functionUnitIdOrCode, contentType);
+        
+        try {
+            // 先解析功能单元 ID（支持 code 或名称）
+            String functionUnitId = functionUnitAccessComponent.resolveFunctionUnitId(functionUnitIdOrCode);
+            log.info("Resolved function unit ID: {}", functionUnitId);
+            
+            RestTemplate restTemplate = new RestTemplate();
+            
+            // 使用通用的 /content 端点获取所有内容
+            String url = adminCenterUrl + "/api/v1/admin/function-units/" + functionUnitId + "/content";
+            log.info("Fetching function unit content from: {}", url);
+            
+            @SuppressWarnings("unchecked")
+            Map<String, Object> response = restTemplate.getForObject(url, Map.class);
+            
+            if (response != null) {
+                // 根据内容类型提取对应的数组
+                String key = contentType.equalsIgnoreCase("FORM") ? "forms" :
+                            contentType.equalsIgnoreCase("PROCESS") ? "processes" :
+                            contentType.equalsIgnoreCase("DATA_TABLE") ? "dataTables" : null;
+                
+                if (key != null && response.containsKey(key)) {
+                    @SuppressWarnings("unchecked")
+                    List<Map<String, Object>> contents = (List<Map<String, Object>>) response.get(key);
+                    log.info("Got {} contents of type {} from key '{}'", contents.size(), contentType, key);
+                    return contents;
+                } else {
+                    log.warn("Response does not contain key '{}' for contentType '{}'", key, contentType);
+                }
+            } else {
+                log.warn("Got null response from admin center");
+            }
+            
+            return Collections.emptyList();
+            
+        } catch (Exception e) {
+            log.error("Failed to get function unit contents for {}: {}", functionUnitIdOrCode, e.getMessage(), e);
+            return Collections.emptyList();
         }
     }
     

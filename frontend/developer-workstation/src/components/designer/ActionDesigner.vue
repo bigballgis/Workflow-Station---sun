@@ -325,7 +325,7 @@ const testing = ref(false)
 const createForm = reactive({ actionName: '', actionType: 'APPROVE', description: '' })
 
 // 存储从BPMN XML解析出的动作绑定信息
-const actionNodeBindings = ref<Map<number, Array<{ id: string; name: string }>>>(new Map())
+const actionNodeBindings = ref<Map<string | number, Array<{ id: string; name: string }>>>(new Map())
 
 // 节点绑定相关
 const bindingType = ref<'node' | 'global'>('node')
@@ -412,7 +412,7 @@ async function loadActions() {
  * 从BPMN XML解析动作与节点的绑定关系
  */
 function parseActionBindingsFromBpmn() {
-  const bindings = new Map<number, Array<{ id: string; name: string }>>()
+  const bindings = new Map<string | number, Array<{ id: string; name: string }>>()
   const nodes: Array<{ id: string; name: string }> = []
   
   const processDefinition = store.process
@@ -447,7 +447,7 @@ function parseActionBindingsFromBpmn() {
             
             if (name === 'globalActionIds' && value) {
               try {
-                const actionIds = JSON.parse(value) as number[]
+                const actionIds = parseActionIds(value)
                 actionIds.forEach(actionId => {
                   if (!bindings.has(actionId)) {
                     bindings.set(actionId, [])
@@ -487,7 +487,7 @@ function parseActionBindingsFromBpmn() {
             
             if (name === 'actionIds' && value) {
               try {
-                const actionIds = JSON.parse(value) as number[]
+                const actionIds = parseActionIds(value)
                 actionIds.forEach(actionId => {
                   if (!bindings.has(actionId)) {
                     bindings.set(actionId, [])
@@ -495,7 +495,7 @@ function parseActionBindingsFromBpmn() {
                   bindings.get(actionId)!.push({ id: taskId, name: taskName })
                 })
               } catch (e) {
-                console.warn('Failed to parse actionIds:', value)
+                console.warn('Failed to parse actionIds:', value, e)
               }
             }
           }
@@ -508,19 +508,48 @@ function parseActionBindingsFromBpmn() {
   
   actionNodeBindings.value = bindings
   availableNodes.value = nodes
+  
+  // 调试日志
+  console.log('[ActionDesigner] Parsed bindings:', bindings)
+  console.log('[ActionDesigner] Available nodes:', nodes)
+}
+
+/**
+ * 解析actionIds - 支持数字ID和字符串ID
+ * 格式: [12,22] 或 [action-dl-verify-docs,action-dl-approve-loan]
+ */
+function parseActionIds(value: string): Array<string | number> {
+  if (!value) return []
+  
+  try {
+    // 尝试作为JSON解析（数字ID格式）
+    const result = JSON.parse(value) as number[]
+    console.log('[ActionDesigner] Parsed as JSON:', value, '->', result)
+    return result
+  } catch (e) {
+    // 如果JSON解析失败，尝试解析字符串ID格式
+    // 移除括号和空格: "[id1,id2]" -> "id1,id2"
+    const cleaned = value.replace(/[\[\]\s]/g, '')
+    if (!cleaned) return []
+    
+    // 分割并返回字符串ID数组
+    const stringIds = cleaned.split(',').map(s => s.trim()).filter(s => s)
+    console.log('[ActionDesigner] Parsed as String IDs:', value, '->', stringIds)
+    return stringIds
+  }
 }
 
 /**
  * 获取动作绑定的节点列表
  */
-function getActionBoundNodes(actionId: number): Array<{ id: string; name: string }> {
+function getActionBoundNodes(actionId: string | number): Array<{ id: string; name: string }> {
   return actionNodeBindings.value.get(actionId) || []
 }
 
 /**
  * 加载当前动作的绑定信息
  */
-function loadActionBinding(actionId: number) {
+function loadActionBinding(actionId: string | number) {
   const boundNodes = getActionBoundNodes(actionId)
   
   // 判断是否为全局绑定

@@ -117,6 +117,14 @@ public class TaskProcessComponent {
             throw new PortalException("403", "您没有权限处理此任务");
         }
 
+        // 自动认领虚拟组任务：如果任务属于虚拟组且未被认领，先自动认领再处理
+        if ("VIRTUAL_GROUP".equals(task.getAssignmentType()) && 
+                (task.getAssignee() == null || task.getAssignee().isEmpty())) {
+            log.info("Auto-claiming virtual group task {} for user {}", taskId, userId);
+            claimTask(taskId, userId);
+            task = getTaskOrThrow(taskId); // 认领后刷新任务状态
+        }
+
         String action = request.getAction();
         switch (action) {
             case "APPROVE", "REJECT" -> handleApproval(task, request, userId);
@@ -246,8 +254,15 @@ public class TaskProcessComponent {
         }
 
         // 虚拟组任务（未认领的情况）
-        if ("VIRTUAL_GROUP".equals(assignmentType) && isUserInVirtualGroup(userId, assignee)) {
-            return true;
+        if ("VIRTUAL_GROUP".equals(assignmentType)) {
+            // 如果 assignee 为 null，说明任务未认领，用户能查询到此任务说明 Flowable 已验证其组成员资格
+            if (assignee == null || assignee.isEmpty()) {
+                log.info("Virtual group task {} has no assignee, allowing user {} to process (group membership verified by Flowable query)", task.getTaskId(), userId);
+                return true;
+            }
+            if (isUserInVirtualGroup(userId, assignee)) {
+                return true;
+            }
         }
 
         // 检查是否有委托权限

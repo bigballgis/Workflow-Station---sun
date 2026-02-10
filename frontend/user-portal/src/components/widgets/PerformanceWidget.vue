@@ -26,7 +26,7 @@
           </svg>
           <div class="score-value">{{ overallScore }}</div>
         </div>
-        <div class="score-label">综合评分</div>
+        <div class="score-label">{{ t('widget.overallScore') }}</div>
       </div>
     </div>
 
@@ -72,16 +72,18 @@
     <div class="rank-info">
       <el-icon><Trophy /></el-icon>
       <span>{{ $t('dashboard.monthlyRank') }}: </span>
-      <span class="rank-value">第 {{ rank }} 名</span>
+      <span class="rank-value">{{ t('widget.rankDisplay', { rank }) }}</span>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Trophy } from '@element-plus/icons-vue'
 import { useDashboardStore } from '@/stores/dashboard'
 
+const { t } = useI18n()
 const dashboardStore = useDashboardStore()
 
 const metrics = ref({

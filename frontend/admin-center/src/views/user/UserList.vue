@@ -104,20 +104,20 @@
       </div>
     </el-card>
     
-    <!-- 用户表单对话框 -->
+    <!-- User form dialog -->
     <UserFormDialog 
       v-model="formDialogVisible" 
       :user="currentUser" 
       @success="handleSearch" 
     />
     
-    <!-- 用户详情对话框 -->
+    <!-- User detail dialog -->
     <UserDetailDialog
       v-model="detailDialogVisible"
       :user-id="currentUserId"
     />
     
-    <!-- 批量导入对话框 -->
+    <!-- Batch import dialog -->
     <UserImportDialog
       v-model="importDialogVisible"
       @success="handleSearch"
@@ -145,12 +145,12 @@ const { t } = useI18n()
 const canWriteUser = hasPermission(PERMISSIONS.USER_WRITE)
 const canDeleteUser = hasPermission(PERMISSIONS.USER_DELETE)
 
-// 状态
+// State
 const loading = ref(false)
 const users = ref<User[]>([])
 const total = ref(0)
 
-// 查询参数
+// Query parameters
 const query = reactive({
   keyword: '',
   status: '',
@@ -158,14 +158,14 @@ const query = reactive({
   size: 20
 })
 
-// 对话框状态
+// Dialog state
 const formDialogVisible = ref(false)
 const detailDialogVisible = ref(false)
 const importDialogVisible = ref(false)
 const currentUser = ref<User | null>(null)
 const currentUserId = ref('')
 
-// 状态映射
+// Status mapping
 const statusType = (status: string): 'success' | 'info' | 'danger' | 'warning' => {
   const map: Record<string, 'success' | 'info' | 'danger' | 'warning'> = {
     ACTIVE: 'success',
@@ -188,7 +188,7 @@ const statusText = (status: string) => {
 
 
 
-// 查询用户列表
+// Query user list
 const handleSearch = async () => {
   loading.value = true
   try {
@@ -202,52 +202,52 @@ const handleSearch = async () => {
     users.value = result.content
     total.value = result.totalElements
   } catch (error: any) {
-    ElMessage.error(error.message || '查询失败')
+    ElMessage.error(error.message || t('user.queryFailed'))
   } finally {
     loading.value = false
   }
 }
 
-// 重置查询
+// Reset query
 const handleReset = () => {
   Object.assign(query, { keyword: '', status: '', page: 1 })
   handleSearch()
 }
 
-// 显示创建对话框
+// Show create dialog
 const showCreateDialog = () => {
   currentUser.value = null
   formDialogVisible.value = true
 }
 
-// 显示编辑对话框
+// Show edit dialog
 const showEditDialog = (user: User) => {
   currentUser.value = user
   formDialogVisible.value = true
 }
 
-// 显示详情对话框
+// Show detail dialog
 const showDetailDialog = (user: User) => {
   currentUserId.value = user.id
   detailDialogVisible.value = true
 }
 
-// 显示导入对话框
+// Show import dialog
 const showImportDialog = () => {
   importDialogVisible.value = true
 }
 
-// 处理下拉菜单命令
+// Handle dropdown menu command
 const handleCommand = async (user: User, command: string) => {
   switch (command) {
     case 'enable':
-      await handleStatusChange(user, 'ACTIVE', '启用用户')
+      await handleStatusChange(user, 'ACTIVE', t('user.enableUser'))
       break
     case 'disable':
-      await handleStatusChange(user, 'DISABLED', '停用用户')
+      await handleStatusChange(user, 'DISABLED', t('user.disableUser'))
       break
     case 'unlock':
-      await handleStatusChange(user, 'ACTIVE', '解锁用户')
+      await handleStatusChange(user, 'ACTIVE', t('user.unlockUser'))
       break
     case 'resetPassword':
       await handleResetPassword(user)
@@ -258,53 +258,53 @@ const handleCommand = async (user: User, command: string) => {
   }
 }
 
-// 更新用户状态
+// Update user status
 const handleStatusChange = async (user: User, status: string, action: string) => {
   try {
-    await ElMessageBox.confirm(`确定要${action}「${user.fullName}」吗？`, '提示', { type: 'warning' })
+    await ElMessageBox.confirm(t('user.confirmAction', { action, name: user.fullName }), t('user.hint'), { type: 'warning' })
     await userApi.updateStatus(user.id, { status: status as any })
-    ElMessage.success(`${action}成功`)
+    ElMessage.success(t('user.actionSuccess', { action }))
     handleSearch()
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(error.message || `${action}失败`)
+      ElMessage.error(error.message || t('user.actionFailed', { action }))
     }
   }
 }
 
-// 重置密码
+// Reset password
 const handleResetPassword = async (user: User) => {
   try {
-    await ElMessageBox.confirm(`确定要重置「${user.fullName}」的密码吗？`, '提示', { type: 'warning' })
+    await ElMessageBox.confirm(t('user.confirmResetPassword', { name: user.fullName }), t('user.hint'), { type: 'warning' })
     const newPassword = await userApi.resetPassword(user.id)
-    ElMessageBox.alert(`新密码：${newPassword}`, '密码已重置', {
-      confirmButtonText: '复制密码',
+    ElMessageBox.alert(t('user.newPasswordLabel', { password: newPassword }), t('user.passwordReset'), {
+      confirmButtonText: t('user.copyPassword'),
       callback: () => {
         navigator.clipboard.writeText(newPassword)
-        ElMessage.success('密码已复制到剪贴板')
+        ElMessage.success(t('user.passwordCopied'))
       }
     })
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(error.message || '重置密码失败')
+      ElMessage.error(error.message || t('user.resetPasswordFailed'))
     }
   }
 }
 
-// 删除用户
+// Delete user
 const handleDelete = async (user: User) => {
   try {
-    await ElMessageBox.confirm(`确定要删除用户「${user.fullName}」吗？此操作不可恢复！`, '警告', {
+    await ElMessageBox.confirm(t('user.confirmDeleteUser', { name: user.fullName }), t('user.warning'), {
       type: 'warning',
-      confirmButtonText: '确定删除',
+      confirmButtonText: t('user.confirmDelete'),
       confirmButtonClass: 'el-button--danger'
     })
     await userApi.delete(user.id)
-    ElMessage.success('删除成功')
+    ElMessage.success(t('user.deleteSuccess'))
     handleSearch()
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(error.message || '删除失败')
+      ElMessage.error(error.message || t('user.deleteFailed'))
     }
   }
 }

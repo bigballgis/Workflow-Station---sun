@@ -56,6 +56,42 @@ public class FunctionUnit {
     @Column(name = "current_version", length = 20)
     private String currentVersion;
     
+    /**
+     * Semantic version number (MAJOR.MINOR.PATCH)
+     */
+    @Column(name = "version", nullable = false, length = 20)
+    @Builder.Default
+    private String version = "1.0.0";
+    
+    /**
+     * Whether this version is currently active (only one version per function unit should be active)
+     */
+    @Column(name = "is_active", nullable = false)
+    @Builder.Default
+    private Boolean isActive = true;
+    
+    /**
+     * Whether this version is enabled and visible to users
+     * Only enabled versions should be displayed in the function unit list
+     */
+    @Column(name = "enabled", nullable = false)
+    @Builder.Default
+    private Boolean enabled = true;
+    
+    /**
+     * Timestamp when this version was deployed
+     */
+    @Column(name = "deployed_at", nullable = false)
+    @Builder.Default
+    private Instant deployedAt = Instant.now();
+    
+    /**
+     * Reference to the previous version of this function unit
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "previous_version_id")
+    private FunctionUnit previousVersion;
+    
     @CreatedBy
     @Column(name = "created_by", nullable = false, length = 50, updatable = false)
     private String createdBy;
@@ -71,6 +107,14 @@ public class FunctionUnit {
     @LastModifiedDate
     @Column(name = "updated_at")
     private Instant updatedAt;
+    
+    /**
+     * Version field for optimistic locking.
+     * JPA will automatically increment this on each update and check for concurrent modifications.
+     */
+    @jakarta.persistence.Version
+    @Column(name = "lock_version")
+    private Long lockVersion;
     
     @JsonIgnore
     @OneToOne(mappedBy = "functionUnit", cascade = CascadeType.ALL, orphanRemoval = true)

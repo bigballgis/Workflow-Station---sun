@@ -1,22 +1,30 @@
+# =====================================================
+# Ingress Configuration
+# =====================================================
+# Routes external traffic to frontend services.
+# Backend APIs are accessed via frontend nginx reverse proxy,
+# NOT through a separate API Gateway service.
+#
+# Replace "your-domain.com" with your actual domain.
+# Namespace is replaced by deploy.ps1 based on -Environment flag.
+# =====================================================
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: workflow-platform-ingress
   namespace: workflow-platform-sit
   annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    # 如果使用 cert-manager 自动管理证书，取消下面的注释
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    # Uncomment for cert-manager:
     # cert-manager.io/cluster-issuer: "letsencrypt-prod"
 spec:
   ingressClassName: nginx
-  # TLS 配置（如果需要 HTTPS）
   # tls:
   # - hosts:
-  #   - admin.your-domain.com
-  #   - portal.your-domain.com
-  #   - dev.your-domain.com
-  #   - api.your-domain.com
+  #   - admin-sit.your-domain.com
+  #   - portal-sit.your-domain.com
+  #   - dev-sit.your-domain.com
   #   secretName: workflow-platform-tls
   rules:
   # Admin Center Frontend
@@ -30,7 +38,7 @@ spec:
             name: admin-center-frontend-service
             port:
               number: 80
-  
+
   # User Portal Frontend
   - host: portal-sit.your-domain.com
     http:
@@ -42,7 +50,7 @@ spec:
             name: user-portal-frontend-service
             port:
               number: 80
-  
+
   # Developer Workstation Frontend
   - host: dev-sit.your-domain.com
     http:
@@ -54,15 +62,3 @@ spec:
             name: developer-workstation-frontend-service
             port:
               number: 80
-  
-  # API Gateway (Backend API)
-  - host: api-sit.your-domain.com
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: api-gateway-service
-            port:
-              number: 8080

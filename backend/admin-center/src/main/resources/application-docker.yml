@@ -33,8 +33,8 @@ app:
       max-concurrent-sessions: 3
       
   api:
-    workflow-engine-url: ${WORKFLOW_ENGINE_URL:http://platform-workflow-engine:8080}
-    admin-center-url: ${ADMIN_CENTER_URL:http://platform-admin-center:8080}
+    workflow-engine-url: ${WORKFLOW_ENGINE_URL:http://workflow-engine:8080}
+    admin-center-url: ${ADMIN_CENTER_URL:http://admin-center:8080}
     timeout-seconds: 30
     max-retries: 3
     
@@ -59,7 +59,7 @@ app:
     enabled: false
     
   workflow:
-    engine-url: ${WORKFLOW_ENGINE_URL:http://platform-workflow-engine:8080}
+    engine-url: ${WORKFLOW_ENGINE_URL:http://workflow-engine:8080}
     enabled: true
     timeout-seconds: 30
 
@@ -88,7 +88,7 @@ management:
 # Workflow Engine Configuration for Docker network
 # In Docker, use service name and internal port
 workflow-engine:
-  url: http://platform-workflow-engine:8080
+  url: ${WORKFLOW_ENGINE_URL:http://workflow-engine:8080}
   enabled: true
 
 # Logging - reduce verbosity in Docker

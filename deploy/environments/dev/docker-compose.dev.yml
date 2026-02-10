@@ -1,7 +1,29 @@
-version: '3.8'
+# =====================================================
+# Development Environment - Docker Compose
+# =====================================================
+# Local Docker Desktop only. Infrastructure (PG, Redis) runs locally.
+# SIT/UAT/PROD use company K8S — see deploy/k8s/
+#
+# IMPORTANT: All images use "local build + copy" approach.
+# Docker multi-stage builds are NOT used due to local Docker limitations.
+# You MUST build artifacts locally before running docker compose:
+#
+# Backend (requires Maven):
+#   mvn clean package -DskipTests -pl backend/workflow-engine-core,backend/admin-center,backend/user-portal,backend/developer-workstation -am
+#
+# Frontend (requires Node.js):
+#   cd frontend/admin-center && npm run build
+#   cd frontend/user-portal && npm run build
+#   cd frontend/developer-workstation && npm run build
+#
+# Then start:
+#   docker compose -f docker-compose.dev.yml --env-file .env up -d --build
+# =====================================================
 
 services:
-  # PostgreSQL Database - Development
+  # ==================== Infrastructure ====================
+
+  # PostgreSQL Database
   postgres:
     image: postgres:16.5-alpine
     container_name: platform-postgres-dev
@@ -22,7 +44,7 @@ services:
     networks:
       - platform-dev-network
 
-  # Redis Cache - Development
+  # Redis Cache
   redis:
     image: redis:7.2-alpine
     container_name: platform-redis-dev
@@ -39,48 +61,9 @@ services:
     networks:
       - platform-dev-network
 
-  # Apache Kafka - Development
-  zookeeper:
-    image: confluentinc/cp-zookeeper:7.5.3
-    container_name: platform-zookeeper-dev
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
-    ports:
-      - "2181:2181"
-    volumes:
-      - zookeeper_dev_data:/var/lib/zookeeper/data
-      - zookeeper_dev_log:/var/lib/zookeeper/log
-    networks:
-      - platform-dev-network
+  # ==================== Backend Services ====================
 
-  kafka:
-    image: confluentinc/cp-kafka:7.5.3
-    container_name: platform-kafka-dev
-    depends_on:
-      - zookeeper
-    ports:
-      - "9092:9092"
-      - "29092:29092"
-    environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
-    volumes:
-      - kafka_dev_data:/var/lib/kafka/data
-    healthcheck:
-      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
-      interval: 10s
-      timeout: 10s
-      retries: 5
-    networks:
-      - platform-dev-network
-
-  # Workflow Engine Core - Development
+  # Workflow Engine Core
   workflow-engine:
     image: ${IMAGE_TAG_WORKFLOW_ENGINE:-dev-workflow-engine-core:latest}
     pull_policy: never
@@ -100,19 +83,20 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
       SPRING_REDIS_HOST: redis
       SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD}
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       ADMIN_CENTER_URL: http://admin-center:8080
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRATION: ${JWT_EXPIRATION}
       JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION}
       ENCRYPTION_SECRET_KEY: ${ENCRYPTION_SECRET_KEY}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+      SWAGGER_ENABLED: ${SWAGGER_ENABLED:-true}
     volumes:
       - ./logs:/app/logs
     networks:
       - platform-dev-network
     restart: unless-stopped
 
-  # Admin Center Backend - Development
+  # Admin Center Backend
   admin-center:
     image: ${IMAGE_TAG_ADMIN_CENTER:-dev-admin-center:latest}
     pull_policy: never
@@ -134,15 +118,19 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
       SPRING_REDIS_HOST: redis
       SPRING_REDIS_PASSWORD: ${REDIS_PASSWORD}
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       WORKFLOW_ENGINE_URL: http://workflow-engine:8080
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION: ${JWT_EXPIRATION}
+      ENCRYPTION_SECRET_KEY: ${ENCRYPTION_SECRET_KEY}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+      SWAGGER_ENABLED: ${SWAGGER_ENABLED:-true}
     volumes:
       - ./logs:/app/logs
     networks:
       - platform-dev-network
     restart: unless-stopped
 
-  # User Portal Backend - Development
+  # User Portal Backend
   user-portal:
     image: ${IMAGE_TAG_USER_PORTAL:-dev-user-portal:latest}
     pull_policy: never
@@ -170,13 +158,15 @@ services:
       JWT_EXPIRATION: ${JWT_EXPIRATION}
       JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION}
       ENCRYPTION_SECRET_KEY: ${ENCRYPTION_SECRET_KEY}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+      SWAGGER_ENABLED: ${SWAGGER_ENABLED:-true}
     volumes:
       - ./logs:/app/logs
     networks:
       - platform-dev-network
     restart: unless-stopped
 
-  # Developer Workstation Backend - Development
+  # Developer Workstation Backend
   developer-workstation:
     image: ${IMAGE_TAG_DEVELOPER_WORKSTATION:-dev-developer-workstation:latest}
     pull_policy: never
@@ -199,6 +189,9 @@ services:
       ADMIN_CENTER_URL: http://admin-center:8080
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRATION: ${JWT_EXPIRATION}
+      ENCRYPTION_SECRET_KEY: ${ENCRYPTION_SECRET_KEY}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
+      SWAGGER_ENABLED: ${SWAGGER_ENABLED:-true}
     volumes:
       - ./logs:/app/logs
     networks:
@@ -230,14 +223,12 @@ services:
       - platform-dev-network
     restart: unless-stopped
 
-  # Frontend - Admin Center - Development
   admin-center-frontend:
     image: ${IMAGE_TAG_ADMIN_CENTER_FRONTEND:-dev-admin-center-frontend:latest}
     pull_policy: never
     container_name: platform-admin-center-frontend-dev
     depends_on:
       - admin-center
-      - api-gateway
     ports:
       - "${ADMIN_CENTER_FRONTEND_PORT}:80"
     environment:
@@ -246,14 +237,12 @@ services:
       - platform-dev-network
     restart: unless-stopped
 
-  # Frontend - User Portal - Development
   user-portal-frontend:
     image: ${IMAGE_TAG_USER_PORTAL_FRONTEND:-dev-user-portal-frontend:latest}
     pull_policy: never
     container_name: platform-user-portal-frontend-dev
     depends_on:
       - user-portal
-      - api-gateway
     ports:
       - "${USER_PORTAL_FRONTEND_PORT}:80"
     environment:
@@ -263,14 +252,12 @@ services:
       - platform-dev-network
     restart: unless-stopped
 
-  # Frontend - Developer Workstation - Development
   developer-workstation-frontend:
     image: ${IMAGE_TAG_DEVELOPER_WORKSTATION_FRONTEND:-dev-developer-workstation-frontend:latest}
     pull_policy: never
     container_name: platform-developer-workstation-frontend-dev
     depends_on:
       - developer-workstation
-      - api-gateway
     ports:
       - "${DEVELOPER_WORKSTATION_FRONTEND_PORT}:80"
     environment:
@@ -283,9 +270,6 @@ services:
 volumes:
   postgres_dev_data:
   redis_dev_data:
-  zookeeper_dev_data:
-  zookeeper_dev_log:
-  kafka_dev_data:
 
 networks:
   platform-dev-network:

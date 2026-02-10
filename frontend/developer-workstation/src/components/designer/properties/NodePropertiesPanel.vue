@@ -6,14 +6,14 @@
     </div>
     
     <div class="panel-content">
-      <!-- 流程属性 -->
+      <!-- Process properties -->
       <ProcessProperties 
         v-if="!selectedElement || isProcessElement"
         :modeler="modeler"
         :element="processElement"
       />
       
-      <!-- 用户任务属性 -->
+      <!-- User task properties -->
       <UserTaskProperties
         v-else-if="isUserTaskElement"
         :modeler="modeler"
@@ -21,7 +21,7 @@
         :function-unit-id="functionUnitId"
       />
       
-      <!-- 服务任务属性 -->
+      <!-- Service task properties -->
       <ServiceTaskProperties
         v-else-if="isServiceTaskElement"
         :modeler="modeler"
@@ -29,7 +29,7 @@
         :function-unit-id="functionUnitId"
       />
       
-      <!-- 其他任务属性（通用任务、脚本任务等） -->
+      <!-- Other task properties (generic task, script task, etc.) -->
       <TaskProperties
         v-else-if="isTaskElement"
         :modeler="modeler"
@@ -37,21 +37,21 @@
         :function-unit-id="functionUnitId"
       />
       
-      <!-- 网关属性 -->
+      <!-- Gateway properties -->
       <GatewayProperties
         v-else-if="isGatewayElement"
         :modeler="modeler"
         :element="selectedElement"
       />
       
-      <!-- 连接线属性 -->
+      <!-- Sequence flow properties -->
       <SequenceFlowProperties
         v-else-if="isSequenceFlowElement"
         :modeler="modeler"
         :element="selectedElement"
       />
       
-      <!-- 事件属性 -->
+      <!-- Event properties -->
       <EventProperties
         v-else-if="isEventElement"
         :modeler="modeler"
@@ -59,17 +59,17 @@
         :function-unit-id="functionUnitId"
       />
       
-      <!-- 其他元素的基本属性 -->
+      <!-- Other element basic properties -->
       <div v-else class="basic-properties">
         <el-form label-position="top" size="small">
           <el-form-item label="ID">
             <el-input :model-value="basicProps.id" disabled />
           </el-form-item>
-          <el-form-item label="名称">
+          <el-form-item :label="t('properties.name')">
             <el-input 
               :model-value="basicProps.name" 
               @update:model-value="updateName"
-              placeholder="输入名称"
+              :placeholder="t('properties.namePlaceholder')"
             />
           </el-form-item>
         </el-form>
@@ -80,6 +80,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, shallowRef, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { User, Setting, Share, Connection, Flag } from '@element-plus/icons-vue'
 import type { BpmnElement, BpmnModeler } from '@/types/bpmn'
 import {
@@ -102,6 +103,8 @@ import GatewayProperties from './GatewayProperties.vue'
 import SequenceFlowProperties from './SequenceFlowProperties.vue'
 import EventProperties from './EventProperties.vue'
 
+const { t } = useI18n()
+
 const props = defineProps<{
   modeler: BpmnModeler
   functionUnitId: number
@@ -110,14 +113,14 @@ const props = defineProps<{
 const selectedElement = shallowRef<BpmnElement | null>(null)
 const processElement = shallowRef<BpmnElement | null>(null)
 
-// 调试：输出当前选中元素的类型
+// Debug: output selected element type
 watch(selectedElement, (el) => {
   if (el) {
     console.log('[NodePropertiesPanel] Selected element type:', getElementType(el), el)
   }
 })
 
-// 计算属性
+// Computed properties
 const isProcessElement = computed(() => 
   selectedElement.value && isProcess(selectedElement.value)
 )
@@ -132,14 +135,14 @@ const isServiceTaskElement = computed(() =>
 
 const isTaskElement = computed(() => {
   if (!selectedElement.value) return false
-  // 排除 UserTask 和 ServiceTask，它们有专门的组件
+  // Exclude UserTask and ServiceTask, they have dedicated components
   if (isUserTask(selectedElement.value) || isServiceTask(selectedElement.value)) {
     return false
   }
   const type = getElementType(selectedElement.value)
   const id = selectedElement.value.id || ''
   
-  // 支持其他任务类型
+  // Support other task types
   return type === 'bpmn:Task' || 
          type === 'bpmn:Activity' ||
          type === 'bpmn:ScriptTask' ||
@@ -168,60 +171,60 @@ const basicProps = computed(() =>
 )
 
 const panelTitle = computed(() => {
-  if (!selectedElement.value) return '流程属性'
+  if (!selectedElement.value) return t('properties.processProperties')
   const type = selectedElement.value.businessObject?.$type || ''
   const id = selectedElement.value.id || ''
   
-  // 用户任务
+  // User task
   if (isUserTaskElement.value) {
-    return '用户任务配置'
+    return t('properties.userTaskConfig')
   }
   
-  // 服务任务
+  // Service task
   if (isServiceTaskElement.value) {
-    return '服务任务配置'
+    return t('properties.serviceTaskConfig')
   }
   
-  // 其他任务类型
+  // Other task types
   if (isTaskElement.value) {
-    return '任务配置'
+    return t('properties.taskConfig')
   }
   
   const typeMap: Record<string, string> = {
-    'bpmn:Process': '流程属性',
-    'bpmn:ExclusiveGateway': '排他网关',
-    'bpmn:ParallelGateway': '并行网关',
-    'bpmn:InclusiveGateway': '包容网关',
-    'bpmn:EventBasedGateway': '事件网关',
-    'bpmn:ComplexGateway': '复杂网关',
-    'bpmn:SequenceFlow': '连接线',
-    'bpmn:StartEvent': '开始事件',
-    'bpmn:EndEvent': '结束事件',
-    'bpmn:IntermediateCatchEvent': '中间捕获事件',
-    'bpmn:IntermediateThrowEvent': '中间抛出事件',
-    'bpmn:BoundaryEvent': '边界事件',
-    'bpmn:SubProcess': '子流程',
-    'bpmn:CallActivity': '调用活动'
+    'bpmn:Process': t('properties.processProperties'),
+    'bpmn:ExclusiveGateway': t('properties.gatewayTypeExclusive'),
+    'bpmn:ParallelGateway': t('properties.gatewayTypeParallel'),
+    'bpmn:InclusiveGateway': t('properties.gatewayTypeInclusive'),
+    'bpmn:EventBasedGateway': t('properties.gatewayTypeEventBased'),
+    'bpmn:ComplexGateway': t('properties.gatewayTypeComplex'),
+    'bpmn:SequenceFlow': t('properties.flowName'),
+    'bpmn:StartEvent': t('properties.eventTypeStartEvent'),
+    'bpmn:EndEvent': t('properties.eventTypeEndEvent'),
+    'bpmn:IntermediateCatchEvent': t('properties.eventTypeIntermediateCatchEvent'),
+    'bpmn:IntermediateThrowEvent': t('properties.eventTypeIntermediateThrowEvent'),
+    'bpmn:BoundaryEvent': t('properties.eventTypeBoundaryEvent'),
+    'bpmn:SubProcess': t('properties.elementProperties'),
+    'bpmn:CallActivity': t('properties.elementProperties')
   }
   
-  return typeMap[type] || '元素属性'
+  return typeMap[type] || t('properties.elementProperties')
 })
 
 const elementIcon = computed(() => {
   if (!selectedElement.value) return Setting
   const type = selectedElement.value.businessObject?.$type || ''
   
-  // 用户任务
+  // User task
   if (isUserTaskElement.value) {
     return User
   }
   
-  // 服务任务
+  // Service task
   if (isServiceTaskElement.value) {
     return Setting
   }
   
-  // 其他任务类型
+  // Other task types
   if (isTaskElement.value) {
     return User
   }
@@ -257,7 +260,7 @@ function handleSelectionChanged(e: any) {
   } else if (selection.length === 0) {
     selectedElement.value = null
   } else {
-    // 多选时显示流程属性
+    // Multi-select shows process properties
     selectedElement.value = null
   }
 }
@@ -275,7 +278,7 @@ onMounted(() => {
     props.modeler.on('selection.changed', handleSelectionChanged)
     findProcessElement()
     
-    // 监听导入完成事件
+    // Listen for import complete event
     props.modeler.on('import.done', findProcessElement)
   }
 })

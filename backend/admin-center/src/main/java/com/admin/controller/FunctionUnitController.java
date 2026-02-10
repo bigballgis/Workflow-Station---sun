@@ -105,6 +105,31 @@ public class FunctionUnitController {
         }
     }
     
+    @GetMapping("/deployed/latest")
+    @Operation(summary = "获取每个功能单元的最新已部署版本", description = "每个 code 仅返回版本号最高的一条记录（供用户门户使用）")
+    public ResponseEntity<java.util.Map<String, Object>> getLatestDeployedFunctionUnits() {
+        log.info("Getting latest deployed function units (deduplicated by code)");
+        
+        java.util.Map<String, Object> result = new java.util.HashMap<>();
+        
+        try {
+            var units = functionUnitManager.listLatestDeployedFunctionUnits();
+            var infos = units.stream().map(FunctionUnitInfo::fromEntity).toList();
+            
+            result.put("content", infos);
+            result.put("totalElements", infos.size());
+            
+            return ResponseEntity.ok(result);
+            
+        } catch (Exception e) {
+            log.error("Failed to get latest deployed function units", e);
+            result.put("content", java.util.Collections.emptyList());
+            result.put("totalElements", 0);
+            result.put("error", e.getMessage());
+            return ResponseEntity.ok(result);
+        }
+    }
+    
     @GetMapping("/{id}")
     @Operation(summary = "获取功能单元详情", description = "根据ID获取功能单元详细信息")
     public ResponseEntity<FunctionUnitInfo> getFunctionUnit(
@@ -457,7 +482,7 @@ public class FunctionUnitController {
             java.util.List<com.admin.entity.FunctionUnitContent> contents = 
                     functionUnitManager.getFunctionUnitContents(id);
             
-            // 分类内容
+            // 没有过滤器，返回所有内容（按类型分类）
             java.util.List<java.util.Map<String, Object>> forms = new java.util.ArrayList<>();
             java.util.List<java.util.Map<String, Object>> processes = new java.util.ArrayList<>();
             java.util.List<java.util.Map<String, Object>> dataTables = new java.util.ArrayList<>();
@@ -486,12 +511,12 @@ public class FunctionUnitController {
                 contentMap.put("type", content.getContentType().name());
                 
                 // 使用 if-else 替代 switch 避免 ClassNotFoundException
-                com.admin.enums.ContentType contentType = content.getContentType();
-                if (contentType == com.admin.enums.ContentType.FORM) {
+                com.admin.enums.ContentType ct = content.getContentType();
+                if (ct == com.admin.enums.ContentType.FORM) {
                     forms.add(contentMap);
-                } else if (contentType == com.admin.enums.ContentType.PROCESS) {
+                } else if (ct == com.admin.enums.ContentType.PROCESS) {
                     processes.add(contentMap);
-                } else if (contentType == com.admin.enums.ContentType.DATA_TABLE) {
+                } else if (ct == com.admin.enums.ContentType.DATA_TABLE) {
                     dataTables.add(contentMap);
                 }
             }
@@ -505,6 +530,132 @@ public class FunctionUnitController {
         } catch (Exception e) {
             log.error("Failed to get function unit content for {}: {}", id, e.getMessage(), e);
             result.put("error", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(result);
+        }
+    }
+    
+    @PostMapping(value = "/formcontent", produces = "application/json")
+    @Operation(summary = "获取功能单元表单内容", description = "获取功能单元的表单定义内容，用于表单弹窗等场景")
+    public ResponseEntity<java.util.List<java.util.Map<String, Object>>> getFunctionUnitFormContent(
+            @RequestBody java.util.Map<String, String> request) {
+        String id = request.get("id");
+        log.info("Getting function unit form content for: {}", id);
+        
+        java.util.List<java.util.Map<String, Object>> result = new java.util.ArrayList<>();
+        
+        try {
+            // 获取所有内容
+            java.util.List<com.admin.entity.FunctionUnitContent> contents = 
+                    functionUnitManager.getFunctionUnitContents(id);
+            
+            // 过滤并返回 FORM 类型的内容
+            for (com.admin.entity.FunctionUnitContent content : contents) {
+                if (content.getContentType() == com.admin.enums.ContentType.FORM) {
+                    java.util.Map<String, Object> contentMap = new java.util.HashMap<>();
+                    contentMap.put("id", content.getId());
+                    contentMap.put("contentType", content.getContentType().name());
+                    contentMap.put("contentName", content.getContentName());
+                    contentMap.put("contentData", content.getContentData());
+                    contentMap.put("sourceId", content.getSourceId());
+                    result.add(contentMap);
+                }
+            }
+            
+            log.info("Returning {} form contents", result.size());
+            return ResponseEntity.ok(result);
+            
+        } catch (Exception e) {
+            log.error("Failed to get function unit form contents for {}: {}", id, e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(result);
+        }
+    }
+    
+    @GetMapping(value = "/fu-content/{id}/type/{contentType}", produces = "application/json")
+    @Operation(summary = "获取功能单元特定类型的内容", description = "获取功能单元的特定类型内容（如表单、流程等），用于表单弹窗等场景")
+    public ResponseEntity<java.util.List<java.util.Map<String, Object>>> getFunctionUnitContentByType(
+            @Parameter(description = "功能单元ID") @PathVariable String id,
+            @Parameter(description = "内容类型：FORM, PROCESS, DATA_TABLE") @PathVariable String contentType) {
+        log.info("Getting function unit content by type for: {}, contentType: {}", id, contentType);
+        
+        java.util.List<java.util.Map<String, Object>> result = new java.util.ArrayList<>();
+        
+        try {
+            // 获取所有内容
+            java.util.List<com.admin.entity.FunctionUnitContent> contents = 
+                    functionUnitManager.getFunctionUnitContents(id);
+            
+            // 解析请求的内容类型
+            com.admin.enums.ContentType requestedType;
+            try {
+                requestedType = com.admin.enums.ContentType.valueOf(contentType.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                log.error("Invalid content type: {}", contentType);
+                return ResponseEntity.badRequest().build();
+            }
+            
+            // 过滤并返回指定类型的内容
+            for (com.admin.entity.FunctionUnitContent content : contents) {
+                if (content.getContentType() == requestedType) {
+                    java.util.Map<String, Object> contentMap = new java.util.HashMap<>();
+                    contentMap.put("id", content.getId());
+                    contentMap.put("contentType", content.getContentType().name());
+                    contentMap.put("contentName", content.getContentName());
+                    contentMap.put("contentData", content.getContentData());
+                    contentMap.put("sourceId", content.getSourceId());
+                    result.add(contentMap);
+                }
+            }
+            
+            log.info("Returning {} contents of type {}", result.size(), contentType);
+            return ResponseEntity.ok(result);
+            
+        } catch (Exception e) {
+            log.error("Failed to get function unit contents for {}: {}", id, e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(result);
+        }
+    }
+    
+    @GetMapping(value = "/{id}/content-items", produces = "application/json")
+    @Operation(summary = "获取功能单元特定类型的内容", description = "获取功能单元的特定类型内容（如表单、流程等），用于表单弹窗等场景")
+    public ResponseEntity<java.util.List<java.util.Map<String, Object>>> getFunctionUnitContents(
+            @Parameter(description = "功能单元ID") @PathVariable String id,
+            @Parameter(description = "内容类型") @RequestParam String contentType) {
+        log.info("Getting function unit content items for: {}, contentType: {}", id, contentType);
+        
+        java.util.List<java.util.Map<String, Object>> result = new java.util.ArrayList<>();
+        
+        try {
+            // 获取所有内容
+            java.util.List<com.admin.entity.FunctionUnitContent> contents = 
+                    functionUnitManager.getFunctionUnitContents(id);
+            
+            // 解析请求的内容类型
+            com.admin.enums.ContentType requestedType;
+            try {
+                requestedType = com.admin.enums.ContentType.valueOf(contentType.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                log.error("Invalid content type: {}", contentType);
+                return ResponseEntity.badRequest().build();
+            }
+            
+            // 过滤指定类型的内容
+            for (com.admin.entity.FunctionUnitContent content : contents) {
+                if (content.getContentType() == requestedType) {
+                    java.util.Map<String, Object> contentMap = new java.util.HashMap<>();
+                    contentMap.put("id", content.getId());
+                    contentMap.put("contentType", content.getContentType().name());
+                    contentMap.put("contentName", content.getContentName());
+                    contentMap.put("contentData", content.getContentData());
+                    contentMap.put("sourceId", content.getSourceId());
+                    result.add(contentMap);
+                }
+            }
+            
+            log.info("Found {} contents of type {}", result.size(), contentType);
+            return ResponseEntity.ok(result);
+            
+        } catch (Exception e) {
+            log.error("Failed to get function unit contents for {}: {}", id, e.getMessage(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(result);
         }
     }
