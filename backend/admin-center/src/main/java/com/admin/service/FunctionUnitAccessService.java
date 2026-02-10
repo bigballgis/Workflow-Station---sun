@@ -211,9 +211,11 @@ public class FunctionUnitAccessService {
     
     /**
      * 获取用户的业务角色ID列表（BU_BOUNDED 和 BU_UNBOUNDED）
+     * 包括通过虚拟组分配的角色
      */
     private List<String> getUserBusinessRoleIds(String userId) {
-        List<String> allRoleIds = userRoleRepository.findRoleIdsByUserId(userId);
+        // 使用 findAllRoleIdsByUserId 来获取包括虚拟组分配的所有角色
+        List<String> allRoleIds = userRoleRepository.findAllRoleIdsByUserId(userId);
         
         return allRoleIds.stream()
             .filter(roleId -> {
