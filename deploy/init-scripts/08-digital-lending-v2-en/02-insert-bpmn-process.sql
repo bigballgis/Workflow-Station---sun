@@ -507,9 +507,9 @@ BEGIN
     -- Step 6: Insert process definition
     -- =========================================================================
     INSERT INTO dw_process_definitions (
-        function_unit_id, bpmn_xml, created_at, updated_at
+        function_unit_id, function_unit_version_id, bpmn_xml, created_at, updated_at
     ) VALUES (
-        v_function_unit_id, v_bpmn_xml, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+        v_function_unit_id, v_function_unit_id, v_bpmn_xml, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     );
 
     RAISE NOTICE '========================================';
