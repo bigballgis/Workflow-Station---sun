@@ -32,10 +32,10 @@ data:
   LOG_LEVEL_PLATFORM: "INFO"
   LOG_LEVEL_SQL: "WARN"
 
-  # Cache (longer TTL for UAT)
-  CACHE_USER_TTL_MINUTES: "45"
-  CACHE_PERMISSION_TTL_MINUTES: "90"
-  CACHE_DICTIONARY_TTL_MINUTES: "180"
+  # Cache (minutes)
+  CACHE_USER_TTL_MINUTES: "30"
+  CACHE_PERMISSION_TTL_MINUTES: "60"
+  CACHE_DICTIONARY_TTL_MINUTES: "120"
 
   # Security (stricter)
   SECURITY_PASSWORD_MIN_LENGTH: "10"
@@ -47,4 +47,4 @@ data:
   CORS_ALLOWED_ORIGINS: "https://uat-admin.company.com,https://uat-portal.company.com,https://uat-dev.company.com"
 
   # Flowable
-  FLOWABLE_SCHEMA_UPDATE: "false"
+  FLOWABLE_SCHEMA_UPDATE: "true"

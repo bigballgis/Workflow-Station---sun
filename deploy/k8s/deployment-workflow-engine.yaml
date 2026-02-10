@@ -76,6 +76,11 @@ spec:
             configMapKeyRef:
               name: workflow-platform-config
               key: SWAGGER_ENABLED
+        - name: FLOWABLE_SCHEMA_UPDATE
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: FLOWABLE_SCHEMA_UPDATE
         # Secret
         - name: SPRING_DATASOURCE_USERNAME
           valueFrom:

@@ -93,10 +93,9 @@
   - `backend/*/src/main/resources/application-docker.yml` (platform-xxx-xxx 容器名)
 - **方案**: 统一所有默认值；Docker profile 中容器名与 docker-compose service name 对齐。
 
-### 9. Flyway 数据库迁移全部禁用
+### 9. ~~Flyway 数据库迁移全部禁用~~ ✅ 已处理
 - **描述**: 所有服务 `flyway.enabled: false`，依赖手动 SQL 脚本初始化。
-- **影响**: 无法追踪 schema 变更历史，多环境 schema 可能不一致。
-- **方案**: 启用 Flyway，将现有 init-scripts 转为 migration 脚本。
+- **处理**: 已删除所有 Flyway migration 文件和 flyway 配置段。数据库初始化统一使用 `deploy/init-scripts/`。
 
 ### 10. ~~API Gateway docker-compose 缺少路由所需的环境变量~~ ✅ 已修复
 - **描述**: API Gateway 的 `application.yml` 引用了 `WORKFLOW_ENGINE_URL`、`ADMIN_CENTER_URL`、`DEVELOPER_WORKSTATION_URL`、`USER_PORTAL_URL`，但 docker-compose 中 api-gateway 服务未传入这些变量。
@@ -148,7 +147,7 @@
 | P1 | 7 | User Portal Mock 登录 | 🔲 待定 — SIT 后处理 (1天) |
 | P2 | 8a | Docker 多阶段构建不可用 | ⚠️ 已记录（使用本地构建+复制） |
 | P2 | 8 | 服务间 URL 默认值不一致 | ✅ 已修复 |
-| P2 | 9 | Flyway 迁移禁用 | 🔲 待定 — SIT 后处理 (2天) |
+| P2 | 9 | Flyway 迁移禁用 | ✅ 已处理（删除 migration 文件，统一用 init-scripts） |
 | P2 | 10 | Gateway 缺环境变量 | ✅ 已修复 |
 | P3 | 11 | 前端残留中文硬编码 | ⏸️ 暂不处理 |
 | P3 | 12 | 后端测试中文硬编码 | ✅ 已修复 |
