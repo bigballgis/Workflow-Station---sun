@@ -1,10 +1,10 @@
 # Runtime image for Developer Workstation
-FROM eclipse-temurin:17-jre-alpine
+FROM eclipse-temurin:17-jre
 
 WORKDIR /app
 
 # Add non-root user
-RUN addgroup -S platform && adduser -S platform -G platform
+RUN groupadd -r platform && useradd -r -g platform platform
 
 # Copy the pre-built artifact
 COPY target/developer-workstation-*.jar app.jar
