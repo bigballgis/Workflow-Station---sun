@@ -11,7 +11,7 @@
 -- 6. Form popup operations
 -- =============================================================================
 
-DO $
+DO $$
 DECLARE
     v_function_unit_id BIGINT;
     v_loan_application_table_id BIGINT;
@@ -444,4 +444,4 @@ BEGIN
     RAISE NOTICE '  4. Test complete workflow in User Portal';
     RAISE NOTICE '========================================';
 
-END $;
+END $$;
