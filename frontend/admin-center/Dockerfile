@@ -33,7 +33,7 @@ COPY docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 
 # Set default backend URL
-ENV ADMIN_CENTER_BACKEND_URL=http://platform-admin-center:8080
+ENV ADMIN_CENTER_URL=http://admin-center:8080
 
 EXPOSE 80
 

@@ -14,9 +14,9 @@ COPY nginx.conf /etc/nginx/conf.d/default.conf.template
 COPY docker-entrypoint.sh /docker-entrypoint.sh
 RUN chmod +x /docker-entrypoint.sh
 
-# Set default backend URLs
-ENV USER_PORTAL_BACKEND_URL=http://platform-user-portal-dev:8080
-ENV ADMIN_CENTER_BACKEND_URL=http://platform-admin-center-dev:8080
+# Default backend URLs (overridden by docker-compose or K8S env)
+ENV USER_PORTAL_URL=http://user-portal:8080
+ENV ADMIN_CENTER_URL=http://admin-center:8080
 
 EXPOSE 80
 

@@ -30,11 +30,11 @@ spec:
         - containerPort: 80
           name: http
         env:
-        - name: ADMIN_CENTER_BACKEND_URL
+        - name: ADMIN_CENTER_URL
           valueFrom:
             configMapKeyRef:
               name: workflow-platform-config
-              key: ADMIN_CENTER_BACKEND_URL
+              key: ADMIN_CENTER_URL
         resources:
           requests:
             memory: "128Mi"
@@ -101,16 +101,16 @@ spec:
         - containerPort: 80
           name: http
         env:
-        - name: USER_PORTAL_BACKEND_URL
+        - name: USER_PORTAL_URL
           valueFrom:
             configMapKeyRef:
               name: workflow-platform-config
-              key: USER_PORTAL_BACKEND_URL
-        - name: ADMIN_CENTER_BACKEND_URL
+              key: USER_PORTAL_URL
+        - name: ADMIN_CENTER_URL
           valueFrom:
             configMapKeyRef:
               name: workflow-platform-config
-              key: ADMIN_CENTER_BACKEND_URL
+              key: ADMIN_CENTER_URL
         resources:
           requests:
             memory: "128Mi"
@@ -177,16 +177,16 @@ spec:
         - containerPort: 80
           name: http
         env:
-        - name: DEVELOPER_WORKSTATION_BACKEND_URL
+        - name: DEVELOPER_WORKSTATION_URL
           valueFrom:
             configMapKeyRef:
               name: workflow-platform-config
-              key: DEVELOPER_WORKSTATION_BACKEND_URL
-        - name: ADMIN_CENTER_BACKEND_URL
+              key: DEVELOPER_WORKSTATION_URL
+        - name: ADMIN_CENTER_URL
           valueFrom:
             configMapKeyRef:
               name: workflow-platform-config
-              key: ADMIN_CENTER_BACKEND_URL
+              key: ADMIN_CENTER_URL
         resources:
           requests:
             memory: "128Mi"
