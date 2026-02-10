@@ -92,13 +92,23 @@ public class TaskQueryComponent {
                     @SuppressWarnings("unchecked")
                     List<Map<String, Object>> tasks = (List<Map<String, Object>>) data.get("tasks");
                     if (tasks != null) {
+                        log.info("Processing {} tasks from Flowable", tasks.size());
                         for (Map<String, Object> taskMap : tasks) {
                             TaskInfo taskInfo = convertMapToTaskInfo(taskMap);
-                            allTasks.add(taskInfo);
+                            log.info("Checking task {} from process {}", taskInfo.getTaskId(), taskInfo.getProcessInstanceId());
+                            // 过滤掉已撤回流程的任务
+                            if (!isProcessWithdrawn(taskInfo.getProcessInstanceId())) {
+                                allTasks.add(taskInfo);
+                                log.info("Task {} added to list", taskInfo.getTaskId());
+                            } else {
+                                log.info("Filtering out task {} from withdrawn process {}", 
+                                    taskInfo.getTaskId(), taskInfo.getProcessInstanceId());
+                            }
                         }
                     }
                 }
-                log.info("Found {} tasks from Flowable for user {}", allTasks.size(), userId);
+                log.info("Found {} tasks from Flowable for user {} (after filtering withdrawn processes)", 
+                    allTasks.size(), userId);
             }
         } catch (Exception e) {
             log.error("Failed to query tasks from Flowable: {}", e.getMessage(), e);
@@ -133,6 +143,28 @@ public class TaskQueryComponent {
                 : Collections.emptyList();
 
         return PageResponse.of(pagedTasks, page, size, allTasks.size());
+    }
+    
+    /**
+     * 检查流程实例是否已被撤回
+     */
+    private boolean isProcessWithdrawn(String processInstanceId) {
+        if (processInstanceId == null || processInstanceId.isEmpty()) {
+            log.debug("Process instance ID is null or empty");
+            return false;
+        }
+        
+        log.debug("Checking if process {} is withdrawn", processInstanceId);
+        Optional<ProcessInstance> optInstance = processInstanceRepository.findById(processInstanceId);
+        if (optInstance.isPresent()) {
+            ProcessInstance instance = optInstance.get();
+            boolean isWithdrawn = "WITHDRAWN".equals(instance.getStatus());
+            log.debug("Process {} status: {}, isWithdrawn: {}", processInstanceId, instance.getStatus(), isWithdrawn);
+            return isWithdrawn;
+        }
+        
+        log.debug("Process {} not found in database", processInstanceId);
+        return false;
     }
     
     /**
