@@ -277,15 +277,38 @@ public class TaskManagerComponent {
     /**
      * 从 processDefinitionId 中提取 processDefinitionKey
      * 格式: key:version:uuid (例如: Process_PurchaseRequest:2:b550b1fe-f0b0-11f0-b82f-00ff197375e0)
+     * 如果 processDefinitionId 不包含冒号（只是UUID），则查询 Flowable RepositoryService 获取实际的 key
      */
     private String extractProcessDefinitionKey(String processDefinitionId) {
         if (processDefinitionId == null || processDefinitionId.isEmpty()) {
             return null;
         }
+        
+        // 如果包含冒号，说明是标准格式 key:version:uuid，直接提取 key
         int colonIndex = processDefinitionId.indexOf(':');
         if (colonIndex > 0) {
             return processDefinitionId.substring(0, colonIndex);
         }
+        
+        // 如果不包含冒号，说明可能只是UUID，需要查询 Flowable 获取实际的 key
+        try {
+            ProcessDefinition processDefinition = repositoryService.createProcessDefinitionQuery()
+                .processDefinitionId(processDefinitionId)
+                .singleResult();
+            
+            if (processDefinition != null) {
+                String key = processDefinition.getKey();
+                log.debug("Resolved processDefinitionKey '{}' from processDefinitionId '{}'", key, processDefinitionId);
+                return key;
+            } else {
+                log.warn("ProcessDefinition not found for processDefinitionId: {}", processDefinitionId);
+            }
+        } catch (Exception e) {
+            log.error("Failed to query processDefinitionKey for processDefinitionId {}: {}", 
+                processDefinitionId, e.getMessage());
+        }
+        
+        // 如果查询失败，返回原始ID作为降级处理
         return processDefinitionId;
     }
     
@@ -774,6 +797,10 @@ public class TaskManagerComponent {
                     log.info("Setting {} variables on process instance {} before completing task {}", 
                         variables.size(), processInstanceId, taskId);
                     log.info("Variables to set: {}", variables);
+                    
+                    // 检测子表单数据完整性
+                    detectSubFormDataLoss(processInstanceId, taskId, variables);
+                    
                     runtimeService.setVariables(processInstanceId, variables);
                     
                     // 验证变量是否已设置
@@ -1002,11 +1029,11 @@ public class TaskManagerComponent {
      */
     private TaskListResult.TaskInfo buildTaskInfoFromFlowableTask(Task task) {
         // 从 processDefinitionId 提取 processDefinitionKey
-        String processDefinitionKey = null;
         String processDefinitionId = task.getProcessDefinitionId();
-        if (processDefinitionId != null && processDefinitionId.contains(":")) {
-            processDefinitionKey = processDefinitionId.substring(0, processDefinitionId.indexOf(':'));
-        }
+        String processDefinitionKey = extractProcessDefinitionKey(processDefinitionId);
+        
+        log.info("Building TaskInfo: processDefinitionId={}, extracted processDefinitionKey={}", 
+            processDefinitionId, processDefinitionKey);
         
         // 获取流程定义名称
         String processDefinitionName = getProcessDefinitionName(processDefinitionId);
@@ -1447,6 +1474,43 @@ public class TaskManagerComponent {
         } catch (Exception e) {
             throw new WorkflowBusinessException("TASK_QUERY_ERROR", 
                 "查询高优先级任务失败: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * 检测子表单数据丢失
+     * 记录警告日志，但不阻塞流程执行
+     */
+    private void detectSubFormDataLoss(String processInstanceId, String taskId, Map<String, Object> variables) {
+        try {
+            // 检查常见的子表单字段名称模式
+            List<String> subFormPatterns = List.of("_form", "_items", "_details", "_list");
+            
+            for (Map.Entry<String, Object> entry : variables.entrySet()) {
+                String key = entry.getKey();
+                Object value = entry.getValue();
+                
+                // 检查是否为子表单字段（通常是数组或列表）
+                boolean isSubForm = subFormPatterns.stream().anyMatch(pattern -> key.toLowerCase().contains(pattern));
+                
+                if (isSubForm) {
+                    if (value == null) {
+                        log.warn("Sub-form data is null - ProcessInstanceId: {}, TaskId: {}, FormName: {}", 
+                            processInstanceId, taskId, key);
+                    } else if (value instanceof List) {
+                        List<?> list = (List<?>) value;
+                        if (list.isEmpty()) {
+                            log.warn("Sub-form data is empty - ProcessInstanceId: {}, TaskId: {}, FormName: {}", 
+                                processInstanceId, taskId, key);
+                        } else {
+                            log.info("Sub-form data present - ProcessInstanceId: {}, TaskId: {}, FormName: {}, RecordCount: {}", 
+                                processInstanceId, taskId, key, list.size());
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.error("Failed to detect sub-form data loss: {}", e.getMessage(), e);
         }
     }
 }

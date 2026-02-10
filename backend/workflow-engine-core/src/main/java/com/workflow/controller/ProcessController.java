@@ -184,4 +184,23 @@ public class ProcessController {
         Map<String, Object> result = Map.of("processDefinitionId", processDefinitionId, "activated", true);
         return ResponseEntity.ok(ApiResponse.success(result));
     }
+    
+    /**
+     * 获取结束节点的状态配置
+     * 从 BPMN 模型中读取结束节点的扩展属性，判断该节点代表的流程状态
+     */
+    @GetMapping("/definitions/{processDefinitionKey}/end-events/{endEventName}/status")
+    @Operation(summary = "获取结束节点状态", description = "从BPMN模型中读取结束节点的状态配置")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getEndEventStatus(
+            @Parameter(description = "流程定义Key", required = true)
+            @PathVariable String processDefinitionKey,
+            @Parameter(description = "结束节点名称", required = true)
+            @PathVariable String endEventName) {
+        
+        log.info("Getting end event status: processDefinitionKey={}, endEventName={}", 
+                processDefinitionKey, endEventName);
+        
+        Map<String, Object> result = processEngineComponent.getEndEventStatus(processDefinitionKey, endEventName);
+        return ResponseEntity.ok(ApiResponse.success(result));
+    }
 }

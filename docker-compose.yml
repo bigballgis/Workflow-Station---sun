@@ -222,8 +222,13 @@ services:
     depends_on:
       - user-portal
       - api-gateway
+      - workflow-engine
     ports:
       - "3001:80"
+    environment:
+      USER_PORTAL_BACKEND_URL: http://user-portal:8080
+      ADMIN_CENTER_BACKEND_URL: http://admin-center:8080
+      WORKFLOW_ENGINE_BACKEND_URL: http://workflow-engine:8080
     networks:
       - platform-network
     profiles:

@@ -177,13 +177,31 @@ public class TaskQueryComponent {
         @SuppressWarnings("unchecked")
         Map<String, Object> variables = (Map<String, Object>) taskMap.get("variables");
         
+        // 通过 processInstanceId 查询 functionUnitId
+        String processInstanceId = (String) taskMap.get("processInstanceId");
+        String functionUnitId = null;
+        if (processInstanceId != null && !processInstanceId.isEmpty()) {
+            try {
+                Optional<ProcessInstance> processInstanceOpt = processInstanceRepository.findById(processInstanceId);
+                if (processInstanceOpt.isPresent()) {
+                    functionUnitId = processInstanceOpt.get().getFunctionUnitId();
+                    log.debug("Found functionUnitId {} for processInstanceId {}", functionUnitId, processInstanceId);
+                } else {
+                    log.warn("ProcessInstance not found in local database: {}", processInstanceId);
+                }
+            } catch (Exception e) {
+                log.warn("Failed to get functionUnitId for processInstanceId {}: {}", processInstanceId, e.getMessage());
+            }
+        }
+        
         return TaskInfo.builder()
                 .taskId((String) taskMap.get("taskId"))
                 .taskName((String) taskMap.get("taskName"))
                 .description((String) taskMap.get("taskDescription"))
-                .processInstanceId((String) taskMap.get("processInstanceId"))
+                .processInstanceId(processInstanceId)
                 .processDefinitionKey(processDefinitionKey)
                 .processDefinitionName(processDefinitionName)
+                .functionUnitId(functionUnitId)
                 .assignmentType(assignmentType)
                 .assignee(currentAssignee)
                 .assigneeName(currentAssigneeName)

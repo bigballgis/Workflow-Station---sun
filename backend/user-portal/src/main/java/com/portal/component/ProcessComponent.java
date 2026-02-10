@@ -275,8 +275,9 @@ public class ProcessComponent {
         ProcessInstance processInstance = ProcessInstance.builder()
                 .id(flowableProcessInstanceId)
                 .processDefinitionId((String) data.get("processDefinitionId"))
-                .processDefinitionKey(processKey)
+                .processDefinitionKey(actualProcessKey)  // 使用 actualProcessKey 而不是 processKey
                 .processDefinitionName(processName)
+                .functionUnitId(functionUnitId)
                 .businessKey(request.getBusinessKey())
                 .startUserId(userId)
                 .startUserName(startUserDisplayName)
@@ -286,8 +287,8 @@ public class ProcessComponent {
                 .variables(variables)
                 .build();
         processInstanceRepository.save(processInstance);
-        log.info("Process instance saved to local database: {} with currentNode={}, currentAssignee={}", 
-                flowableProcessInstanceId, currentNodeName, currentAssigneeName);
+        log.info("Process instance saved to local database: {} with functionUnitId={}, currentNode={}, currentAssignee={}", 
+                flowableProcessInstanceId, functionUnitId, currentNodeName, currentAssigneeName);
         
         // 记录流程启动历史
         ProcessHistory startHistory = ProcessHistory.builder()
@@ -305,7 +306,7 @@ public class ProcessComponent {
         return ProcessInstanceInfo.builder()
                 .id(flowableProcessInstanceId)
                 .processDefinitionId((String) data.get("processDefinitionId"))
-                .processDefinitionKey(processKey)
+                .processDefinitionKey(actualProcessKey)  // 使用 actualProcessKey 而不是 processKey
                 .processDefinitionName(processName)
                 .businessKey(request.getBusinessKey())
                 .startTime(LocalDateTime.now())
@@ -1204,19 +1205,23 @@ public class ProcessComponent {
             
             // 只更新状态为 RUNNING 的流程
             if ("RUNNING".equals(instance.getStatus())) {
-                instance.setStatus("COMPLETED");
+                // 根据 BPMN 定义中的结束节点配置智能判断流程状态
+                String finalStatus = determineProcessStatus(processId, lastActivityName);
+                instance.setStatus(finalStatus);
                 instance.setEndTime(LocalDateTime.now());
-                // 保存最后一个节点名称，而不是清空
+                
+                // 保存最后一个节点名称
                 if (lastActivityName != null && !lastActivityName.isEmpty()) {
                     instance.setCurrentNode(lastActivityName);
                 } else {
                     instance.setCurrentNode("已完成");
                 }
+                
                 // 清空当前处理人
                 instance.setCurrentAssignee(null);
                 processInstanceRepository.save(instance);
-                log.info("Process instance {} marked as COMPLETED with lastNode: {}", 
-                        processId, instance.getCurrentNode());
+                log.info("Process instance {} marked as {} with lastNode: {}", 
+                        processId, finalStatus, instance.getCurrentNode());
             } else {
                 log.info("Process instance {} already has status: {}, skipping update", 
                         processId, instance.getStatus());
@@ -1225,5 +1230,55 @@ public class ProcessComponent {
         } catch (Exception e) {
             log.error("Failed to mark process as completed for {}: {}", processId, e.getMessage(), e);
         }
+    }
+    
+    /**
+     * 根据最后一个活动节点名称判断流程的最终状态
+     * 从 workflow-engine 获取 BPMN 定义，读取结束节点的扩展属性来判断状态
+     * 
+     * @param processId 流程实例ID
+     * @param lastActivityName 最后一个活动节点的名称
+     * @return 流程状态：COMPLETED（批准）或 REJECTED（拒绝）
+     */
+    private String determineProcessStatus(String processId, String lastActivityName) {
+        if (lastActivityName == null || lastActivityName.isEmpty()) {
+            return "COMPLETED";
+        }
+        
+        try {
+            // 从 workflow-engine 获取流程定义和结束节点配置
+            Optional<ProcessInstance> optInstance = processInstanceRepository.findById(processId);
+            if (optInstance.isEmpty()) {
+                log.warn("Process instance not found: {}", processId);
+                return "COMPLETED";
+            }
+            
+            ProcessInstance instance = optInstance.get();
+            String processDefinitionKey = instance.getProcessDefinitionKey();
+            
+            // 调用 workflow-engine 获取 BPMN 模型中的结束节点配置
+            if (workflowEngineClient.isAvailable()) {
+                Optional<Map<String, Object>> endEventConfigResult = 
+                    workflowEngineClient.getEndEventStatus(processDefinitionKey, lastActivityName);
+                
+                if (endEventConfigResult.isPresent()) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> endEventConfig = (Map<String, Object>) endEventConfigResult.get().get("data");
+                    if (endEventConfig != null) {
+                        String status = (String) endEventConfig.get("status");
+                        if ("REJECTED".equals(status)) {
+                            log.info("EndEvent {} is configured as REJECTED in BPMN", lastActivityName);
+                            return "REJECTED";
+                        }
+                    }
+                }
+            }
+            
+        } catch (Exception e) {
+            log.warn("Failed to determine process status from BPMN model: {}", e.getMessage());
+        }
+        
+        // 默认为已完成（批准）
+        return "COMPLETED";
     }
 }

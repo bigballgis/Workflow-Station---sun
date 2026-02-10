@@ -134,6 +134,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, InfoFilled, Share, Document, Clock, Bell, RefreshLeft } from '@element-plus/icons-vue'
 import { processApi, type ProcessInstance } from '@/api/process'
+import { historyApi } from '@/api/history'
 import ProcessDiagram, { type ProcessNode, type ProcessFlow } from '@/components/ProcessDiagram.vue'
 import ProcessHistory, { type HistoryRecord } from '@/components/ProcessHistory.vue'
 import FormRenderer, { type FormField, type FormTab } from '@/components/FormRenderer.vue'
@@ -205,7 +206,12 @@ const loadProcessDetail = async () => {
     const data = res.data || res
     if (data) {
       processInfo.value = data
-      if (data.variables) formData.value = data.variables
+      
+      // 保存流程变量到表单数据
+      if (data.variables) {
+        formData.value = data.variables
+      }
+      
       if (data.processDefinitionKey) {
         try {
           await loadFunctionUnitContent(data.processDefinitionKey)
@@ -336,7 +342,7 @@ const parseBpmnXmlAndGetFormId = (xml: string): { formId: string | null, formNam
 }
 
 // 解析 BPMN XML
-const parseBpmnXml = (xml: string) => {
+const parseBpmnXml = async (xml: string) => {
   if (!xml) return
   try {
     const parser = new DOMParser()
@@ -360,16 +366,40 @@ const parseBpmnXml = (xml: string) => {
       }
     })
     
-    // 获取当前节点名称
+    // 从后端获取实际执行的活动ID列表
+    let executedActivityIds: string[] = []
+    if (processInfo.value.processInstanceId) {
+      try {
+        executedActivityIds = await historyApi.getExecutedActivityIds(processInfo.value.processInstanceId)
+        console.log('Executed activity IDs:', executedActivityIds)
+      } catch (error) {
+        console.error('Failed to load executed activities, using fallback logic:', error)
+      }
+    }
+    
+    // 获取当前节点名称和流程状态
     const currentNodeName = processInfo.value.currentNode || ''
-    let foundCurrentNode = false
+    const processStatus = processInfo.value.status || ''
+    const isRejectedProcess = processStatus === 'REJECTED'
+    
+    console.log('=== Process status:', processStatus, 'isRejected:', isRejectedProcess)
     
     // 解析开始事件
     doc.querySelectorAll('startEvent').forEach((event, index) => {
       const id = event.getAttribute('id') || `start_${index}`
       const pos = positionMap.get(id)
-      nodes.push({ id, name: event.getAttribute('name') || '开始', type: 'start', status: 'completed', x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
-      completed.push(id)
+      const isExecuted = executedActivityIds.includes(id)
+      nodes.push({ 
+        id, 
+        name: event.getAttribute('name') || '开始', 
+        type: 'start', 
+        status: isExecuted ? 'completed' : 'pending', 
+        x: pos?.x, 
+        y: pos?.y, 
+        width: pos?.width, 
+        height: pos?.height 
+      })
+      if (isExecuted) completed.push(id)
     })
     
     // 解析用户任务
@@ -380,21 +410,14 @@ const parseBpmnXml = (xml: string) => {
       
       let status: 'completed' | 'current' | 'pending' = 'pending'
       
-      if (processInfo.value.status === 'COMPLETED') {
-        // 流程已完成，所有节点都是已完成状态
+      // 判断是否为当前节点
+      if (name === currentNodeName || id === currentNodeName) {
+        status = 'current'
+        currentNodeId.value = id
+      } else if (executedActivityIds.includes(id)) {
+        // 使用后端返回的已执行活动列表
         status = 'completed'
         completed.push(id)
-      } else if (processInfo.value.status === 'RUNNING') {
-        // 流程进行中，根据当前节点名称判断
-        if (name === currentNodeName || id === currentNodeName) {
-          status = 'current'
-          currentNodeId.value = id
-          foundCurrentNode = true
-        } else if (!foundCurrentNode) {
-          // 当前节点之前的节点都是已完成
-          status = 'completed'
-          completed.push(id)
-        }
       }
       
       nodes.push({ id, name, type: 'task', status, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
@@ -405,7 +428,8 @@ const parseBpmnXml = (xml: string) => {
       const id = task.getAttribute('id') || `service_${index}`
       const name = task.getAttribute('name') || `服务任务${index + 1}`
       const pos = positionMap.get(id)
-      const status = processInfo.value.status === 'COMPLETED' ? 'completed' : 'pending'
+      const isExecuted = executedActivityIds.includes(id)
+      const status = isExecuted ? 'completed' : 'pending'
       nodes.push({ id, name, type: 'task', status, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
       if (status === 'completed') completed.push(id)
     })
@@ -414,7 +438,8 @@ const parseBpmnXml = (xml: string) => {
     doc.querySelectorAll('exclusiveGateway, parallelGateway, inclusiveGateway').forEach((gateway, index) => {
       const id = gateway.getAttribute('id') || `gateway_${index}`
       const pos = positionMap.get(id)
-      const status = processInfo.value.status === 'COMPLETED' ? 'completed' : 'pending'
+      const isExecuted = executedActivityIds.includes(id)
+      const status = isExecuted ? 'completed' : 'pending'
       nodes.push({ id, name: gateway.getAttribute('name') || '', type: 'gateway', status, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
       if (status === 'completed') completed.push(id)
     })
@@ -422,10 +447,40 @@ const parseBpmnXml = (xml: string) => {
     // 解析结束事件
     doc.querySelectorAll('endEvent').forEach((event, index) => {
       const id = event.getAttribute('id') || `end_${index}`
+      const name = event.getAttribute('name') || '结束'
       const pos = positionMap.get(id)
-      const status = processInfo.value.status === 'COMPLETED' ? 'completed' : 'pending'
-      nodes.push({ id, name: event.getAttribute('name') || '结束', type: 'end', status, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
-      if (status === 'completed') completed.push(id)
+      const isExecuted = executedActivityIds.includes(id)
+      
+      // 判断结束节点的类型
+      let status: 'completed' | 'pending' | 'rejected' = isExecuted ? 'completed' : 'pending'
+      
+      // 检查是否是拒绝节点（通过ID或名称判断）
+      const isRejectedNode = id.toLowerCase().includes('reject') || 
+                            name.includes('拒绝') || 
+                            name.includes('驳回') ||
+                            name.includes('不通过')
+      
+      // 如果流程状态是 REJECTED 且这是已执行的拒绝节点，标记为 rejected 状态
+      if (isRejectedProcess && isExecuted && isRejectedNode) {
+        status = 'rejected'
+        console.log('=== Marking end node as rejected:', id, name)
+        // 拒绝节点也需要添加到 completed 数组中，这样连线才能正确显示颜色
+        completed.push(id)
+      } else if (isExecuted) {
+        // 其他已执行的节点也添加到 completed 数组
+        completed.push(id)
+      }
+      
+      nodes.push({ 
+        id, 
+        name, 
+        type: 'end', 
+        status, 
+        x: pos?.x, 
+        y: pos?.y, 
+        width: pos?.width, 
+        height: pos?.height 
+      })
     })
     
     // 解析连线路径点
@@ -445,6 +500,11 @@ const parseBpmnXml = (xml: string) => {
     doc.querySelectorAll('sequenceFlow').forEach((flow, index) => {
       const id = flow.getAttribute('id') || `flow_${index}`
       flows.push({ id, sourceRef: flow.getAttribute('sourceRef') || '', targetRef: flow.getAttribute('targetRef') || '', name: flow.getAttribute('name') || '', waypoints: waypointsMap.get(id) })
+      
+      // 如果连线已执行，也添加到 completed 列表中
+      if (executedActivityIds.includes(id)) {
+        completed.push(id)
+      }
     })
     
     processNodes.value = nodes

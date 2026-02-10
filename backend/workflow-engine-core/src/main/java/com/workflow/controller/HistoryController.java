@@ -302,6 +302,47 @@ public class HistoryController {
     }
     
     /**
+     * 获取流程实例已执行的活动ID列表
+     * 用于流程图高亮显示实际执行过的节点
+     */
+    @GetMapping("/executed-activities")
+    @Operation(summary = "获取已执行活动ID", description = "根据流程实例ID获取已执行的活动ID列表")
+    public ResponseEntity<ApiResponse<List<String>>> getExecutedActivityIds(
+            @Parameter(description = "流程实例ID", required = true)
+            @RequestParam("processInstanceId") String processInstanceId) {
+        
+        log.info("Getting executed activity IDs for process instance: {}", processInstanceId);
+        
+        try {
+            // 查询已完成的历史活动实例
+            List<HistoricActivityInstance> activities = historyService
+                .createHistoricActivityInstanceQuery()
+                .processInstanceId(processInstanceId)
+                .finished()  // 只查询已完成的活动（endTime != null）
+                .orderByHistoricActivityInstanceStartTime()
+                .asc()
+                .list();
+            
+            // 提取活动ID列表（去重）
+            List<String> executedActivityIds = activities.stream()
+                .map(HistoricActivityInstance::getActivityId)
+                .distinct()
+                .collect(Collectors.toList());
+            
+            log.debug("Found {} executed activities for process instance {}: {}", 
+                executedActivityIds.size(), processInstanceId, executedActivityIds);
+            
+            return ResponseEntity.ok(ApiResponse.success(executedActivityIds));
+            
+        } catch (Exception e) {
+            log.error("Failed to get executed activities for process instance {}: {}", 
+                processInstanceId, e.getMessage(), e);
+            return ResponseEntity.status(500)
+                .body(ApiResponse.error("HISTORY_QUERY_ERROR", "Failed to query process history: " + e.getMessage()));
+        }
+    }
+    
+    /**
      * 获取用户流程统计数据
      */
     @GetMapping("/process-statistics")

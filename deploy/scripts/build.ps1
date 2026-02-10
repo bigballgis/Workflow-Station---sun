@@ -1,4 +1,4 @@
-# 构建脚本 - 支持多环境构建
+﻿# 构建脚本 - 支持多环境构建
 # 使用方法: .\build.ps1 -Environment dev -Services "admin-center,user-portal" -CleanImages
 
 param(

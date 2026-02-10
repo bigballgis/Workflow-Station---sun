@@ -711,4 +711,33 @@ public class WorkflowEngineClient {
         }
         return Optional.empty();
     }
+
+    /**
+     * 获取结束节点的状态配置
+     * 从 BPMN 模型中读取结束节点的扩展属性，判断该节点代表的流程状态
+     *
+     * @param processDefinitionKey 流程定义Key
+     * @param endEventName 结束节点名称
+     * @return 结束节点配置，包含 status 字段（COMPLETED 或 REJECTED）
+     */
+    public Optional<Map<String, Object>> getEndEventStatus(String processDefinitionKey, String endEventName) {
+        if (!isAvailable()) {
+            return Optional.empty();
+        }
+        try {
+            String url = workflowEngineUrl + "/api/v1/processes/definitions/" + processDefinitionKey +
+                        "/end-events/" + endEventName + "/status";
+
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                url, HttpMethod.GET, null,
+                new ParameterizedTypeReference<Map<String, Object>>() {});
+
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                return Optional.of(response.getBody());
+            }
+        } catch (Exception e) {
+            log.debug("Failed to get end event status from workflow engine: {}", e.getMessage());
+        }
+        return Optional.empty();
+    }
 }

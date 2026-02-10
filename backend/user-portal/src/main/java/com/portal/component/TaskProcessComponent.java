@@ -286,21 +286,31 @@ public class TaskProcessComponent {
         
         Map<String, Object> variables = new HashMap<>();
         
-        // Add variables from request first (includes approval_result from frontend)
+        // CRITICAL: Set approval_result FIRST before adding other variables
+        // This ensures the gateway condition variable is always present
+        if ("APPROVE".equals(action)) {
+            variables.put("approval_result", "approved");
+            variables.put("approved", true);
+            variables.put("approvalStatus", "APPROVED");
+        } else if ("REJECT".equals(action)) {
+            variables.put("approval_result", "rejected");
+            variables.put("approved", false);
+            variables.put("approvalStatus", "REJECTED");
+        }
+        
+        // Add variables from request (may override approval_result if explicitly set)
         if (request.getVariables() != null) {
-            variables.putAll(request.getVariables());
+            // Only add non-null values to avoid overwriting with null
+            request.getVariables().forEach((key, value) -> {
+                if (value != null) {
+                    variables.put(key, value);
+                }
+            });
             log.info("Added variables from request: {}", request.getVariables());
         }
         
         // Add action
         variables.put("action", action);
-        
-        // Auto-set approval status based on action
-        if ("APPROVE".equals(action)) {
-            variables.put("approvalStatus", "APPROVED");
-        } else if ("REJECT".equals(action)) {
-            variables.put("approvalStatus", "REJECTED");
-        }
         
         // Add approver comments
         if (request.getComment() != null && !request.getComment().isEmpty()) {
@@ -309,9 +319,15 @@ public class TaskProcessComponent {
         
         // Add any additional form data
         if (request.getFormData() != null) {
-            variables.putAll(request.getFormData());
+            request.getFormData().forEach((key, value) -> {
+                if (value != null) {
+                    variables.put(key, value);
+                }
+            });
         }
         
+        // Log the critical gateway variable
+        log.info("CRITICAL: approval_result = {}", variables.get("approval_result"));
         log.info("Final variables to be sent to workflow engine: {}", variables);
         
         Optional<Map<String, Object>> result = workflowEngineClient.completeTask(taskId, userId, action, variables);
@@ -326,8 +342,8 @@ public class TaskProcessComponent {
             throw new PortalException("500", message);
         }
         
-        log.info("Task {} completed via Flowable by user {} with action {} (approvalStatus: {})", 
-                taskId, userId, action, variables.get("approvalStatus"));
+        log.info("Task {} completed via Flowable by user {} with action {} (approval_result: {})", 
+                taskId, userId, action, variables.get("approval_result"));
     }
 
     /**

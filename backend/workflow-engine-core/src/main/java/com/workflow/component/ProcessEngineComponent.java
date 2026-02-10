@@ -20,6 +20,7 @@ import com.workflow.enums.AuditResourceType;
 import com.workflow.exception.WorkflowBusinessException;
 import com.workflow.exception.WorkflowValidationException;
 
+import lombok.extern.slf4j.Slf4j;
 import org.flowable.engine.ProcessEngine;
 import org.flowable.engine.RepositoryService;
 import org.flowable.engine.RuntimeService;
@@ -65,6 +66,7 @@ import java.util.stream.Collectors;
  * 流程引擎组件
  * 负责流程定义管理、流程实例执行、BPMN解析
  */
+@Slf4j
 @Component
 @Transactional
 public class ProcessEngineComponent {
@@ -1328,5 +1330,131 @@ public class ProcessEngineComponent {
             throw new WorkflowValidationException(Collections.singletonList(
                 new WorkflowValidationException.ValidationError("action", "不支持的操作类型", request.getAction())));
         }
+    }
+    
+    /**
+     * 获取结束节点的状态配置
+     * 从 BPMN 模型中读取结束节点的扩展属性，判断该节点代表的流程状态
+     * 
+     * @param processDefinitionKey 流程定义Key
+     * @param endEventName 结束节点名称或ID
+     * @return 包含 status 字段的 Map（COMPLETED 或 REJECTED）
+     */
+    public Map<String, Object> getEndEventStatus(String processDefinitionKey, String endEventName) {
+        try {
+            // 获取最新版本的流程定义
+            ProcessDefinition processDefinition = repositoryService.createProcessDefinitionQuery()
+                    .processDefinitionKey(processDefinitionKey)
+                    .latestVersion()
+                    .singleResult();
+            
+            if (processDefinition == null) {
+                // 如果找不到流程定义，记录警告并返回默认状态，而不是抛出异常
+                log.warn("流程定义不存在: {}, 返回默认状态 COMPLETED", processDefinitionKey);
+                return Map.of("status", "COMPLETED", "message", "流程定义不存在，使用默认状态");
+            }
+            
+            // 获取 BPMN 模型
+            BpmnModel bpmnModel = repositoryService.getBpmnModel(processDefinition.getId());
+            
+            // 查找所有结束节点
+            List<EndEvent> endEvents = bpmnModel.getMainProcess().findFlowElementsOfType(EndEvent.class);
+            
+            for (EndEvent endEvent : endEvents) {
+                // 匹配节点名称或ID
+                if (endEventName.equals(endEvent.getName()) || endEventName.equals(endEvent.getId())) {
+                    // 检查扩展属性中的 status 配置
+                    String status = getExtensionProperty(endEvent, "status");
+                    
+                    if (status == null || status.isEmpty()) {
+                        // 如果没有配置扩展属性，根据节点ID和名称推断
+                        // 优先使用ID判断（ID通常是英文，更可靠）
+                        status = inferStatusFromName(endEvent.getId());
+                        if ("COMPLETED".equals(status)) {
+                            // 如果ID判断不出来，再用名称判断
+                            status = inferStatusFromName(endEvent.getName());
+                        }
+                    }
+                    
+                    return Map.of(
+                        "endEventId", endEvent.getId(),
+                        "endEventName", endEvent.getName() != null ? endEvent.getName() : "",
+                        "status", status,
+                        "inferredFromId", endEvent.getId() // 返回ID供前端使用
+                    );
+                }
+            }
+            
+            // 如果没有找到匹配的结束节点，返回默认状态
+            return Map.of("status", "COMPLETED");
+            
+        } catch (Exception e) {
+            // 捕获异常并返回默认状态，避免影响流程完成
+            log.warn("获取结束节点状态失败: {}, 返回默认状态 COMPLETED", e.getMessage());
+            return Map.of("status", "COMPLETED", "message", "获取结束节点状态失败: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * 从 FlowElement 的扩展属性中获取指定属性值
+     * 读取 BPMN 扩展元素中的自定义属性
+     */
+    private String getExtensionProperty(FlowElement flowElement, String propertyName) {
+        try {
+            Map<String, List<org.flowable.bpmn.model.ExtensionElement>> extensionElements = 
+                flowElement.getExtensionElements();
+            
+            if (extensionElements != null && !extensionElements.isEmpty()) {
+                // 查找 flowable:property 或 custom:property 元素
+                List<org.flowable.bpmn.model.ExtensionElement> properties = 
+                    extensionElements.get("property");
+                
+                if (properties == null) {
+                    properties = extensionElements.get("flowable:property");
+                }
+                
+                if (properties != null) {
+                    for (org.flowable.bpmn.model.ExtensionElement property : properties) {
+                        String name = property.getAttributeValue(null, "name");
+                        if (propertyName.equals(name)) {
+                            return property.getAttributeValue(null, "value");
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to read extension property '{}' from flow element: {}", 
+                    propertyName, e.getMessage());
+        }
+        return null;
+    }
+    
+    /**
+     * 根据节点ID推断状态
+     * 这是一个后备方案，当 BPMN 中没有配置扩展属性时使用
+     * 通过节点ID来判断，而不是节点名称（名称可能是中文或其他语言）
+     */
+    private String inferStatusFromName(String nodeName) {
+        if (nodeName == null || nodeName.isEmpty()) {
+            return "COMPLETED";
+        }
+        
+        // 转换为小写进行匹配
+        String lowerName = nodeName.toLowerCase();
+        
+        // 通过节点ID或名称中的关键词判断
+        // 拒绝相关：rejected, reject, deny, denied, disapprove, 拒绝, 驳回, 不通过
+        if (lowerName.contains("reject") || 
+            lowerName.contains("deny") || 
+            lowerName.contains("denied") ||
+            lowerName.contains("disapprove") ||
+            lowerName.contains("拒绝") || 
+            lowerName.contains("驳回") ||
+            lowerName.contains("不通过")) {
+            return "REJECTED";
+        }
+        
+        // 默认为已完成（批准）
+        return "COMPLETED";
     }
 }

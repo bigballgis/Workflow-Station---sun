@@ -23,6 +23,7 @@ export interface TaskInfo {
   processInstanceId: string
   processDefinitionKey: string
   processDefinitionName: string
+  functionUnitId?: string
   assignmentType: string
   assignee: string
   assigneeName?: string
@@ -40,6 +41,7 @@ export interface TaskInfo {
   claimed?: boolean
   originalAssignmentType?: string
   originalAssignee?: string
+  candidateUsers?: string
   // 已处理任务字段
   completedTime?: string
   durationInMillis?: number
@@ -58,6 +60,7 @@ export interface PageResponse<T> {
 
 export interface TaskCompleteRequest {
   taskId: string
+  userId?: string
   action: string
   comment?: string
   formData?: Record<string, any>

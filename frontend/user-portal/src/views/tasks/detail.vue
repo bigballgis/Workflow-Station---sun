@@ -211,6 +211,7 @@ import {
   TaskHistoryInfo 
 } from '@/api/task'
 import { processApi } from '@/api/process'
+import { historyApi } from '@/api/history'
 import { useUserStore } from '@/stores/user'
 import ProcessDiagram, { type ProcessNode, type ProcessFlow } from '@/components/ProcessDiagram.vue'
 import ProcessHistory, { type HistoryRecord } from '@/components/ProcessHistory.vue'
@@ -273,8 +274,10 @@ const loadTaskDetail = async () => {
       taskInfo.value = data
       if (data.variables) formData.value = data.variables
       // 加载功能单元内容（流程图和表单）
-      if (data.processDefinitionKey) {
-        await loadFunctionUnitContent(data.processDefinitionKey)
+      // 优先使用 functionUnitId，如果没有则使用 processDefinitionKey
+      const functionUnitIdOrKey = data.functionUnitId || data.processDefinitionKey
+      if (functionUnitIdOrKey) {
+        await loadFunctionUnitContent(functionUnitIdOrKey)
       }
       // 加载流转历史
       await loadTaskHistory()
@@ -339,7 +342,7 @@ const loadFunctionUnitContent = async (processKey: string) => {
     if (content.processes?.length > 0) {
       // 先获取当前节点的 formId 和 formName
       currentFormInfo = parseBpmnXmlAndGetFormId(content.processes[0].data)
-      parseBpmnXml(content.processes[0].data)
+      await parseBpmnXml(content.processes[0].data)
     }
     
     // 解析表单 - 根据当前节点的 formId 选择正确的表单
@@ -442,7 +445,7 @@ const parseBpmnXmlAndGetFormId = (xml: string): { formId: string | null, formNam
 }
 
 // 解析 BPMN XML
-const parseBpmnXml = (xml: string) => {
+const parseBpmnXml = async (xml: string) => {
   if (!xml) return
   try {
     const parser = new DOMParser()
@@ -466,16 +469,36 @@ const parseBpmnXml = (xml: string) => {
       }
     })
     
+    // 从后端获取实际执行的活动ID列表
+    let executedActivityIds: string[] = []
+    if (taskInfo.value.processInstanceId) {
+      try {
+        executedActivityIds = await historyApi.getExecutedActivityIds(taskInfo.value.processInstanceId)
+        console.log('Executed activity IDs:', executedActivityIds)
+      } catch (error) {
+        console.error('Failed to load executed activities, using fallback logic:', error)
+      }
+    }
+    
     // 获取当前任务名称
     const currentTaskName = taskInfo.value.taskName || ''
-    let foundCurrentNode = false
     
     // 解析开始事件
     doc.querySelectorAll('startEvent').forEach((event, index) => {
       const id = event.getAttribute('id') || `start_${index}`
       const pos = positionMap.get(id)
-      nodes.push({ id, name: event.getAttribute('name') || '开始', type: 'start', status: 'completed', x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
-      completed.push(id)
+      const isExecuted = executedActivityIds.includes(id)
+      nodes.push({ 
+        id, 
+        name: event.getAttribute('name') || '开始', 
+        type: 'start', 
+        status: isExecuted ? 'completed' : 'pending', 
+        x: pos?.x, 
+        y: pos?.y, 
+        width: pos?.width, 
+        height: pos?.height 
+      })
+      if (isExecuted) completed.push(id)
     })
     
     // 解析用户任务
@@ -486,11 +509,12 @@ const parseBpmnXml = (xml: string) => {
       
       let status: 'completed' | 'current' | 'pending' = 'pending'
       
+      // 判断是否为当前节点
       if (name === currentTaskName || id === currentTaskName) {
         status = 'current'
         currentNodeId.value = id
-        foundCurrentNode = true
-      } else if (!foundCurrentNode) {
+      } else if (executedActivityIds.includes(id)) {
+        // 使用后端返回的已执行活动列表
         status = 'completed'
         completed.push(id)
       }
@@ -502,14 +526,36 @@ const parseBpmnXml = (xml: string) => {
     doc.querySelectorAll('exclusiveGateway, parallelGateway, inclusiveGateway').forEach((gateway, index) => {
       const id = gateway.getAttribute('id') || `gateway_${index}`
       const pos = positionMap.get(id)
-      nodes.push({ id, name: gateway.getAttribute('name') || '', type: 'gateway', status: 'pending', x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
+      const isExecuted = executedActivityIds.includes(id)
+      nodes.push({ 
+        id, 
+        name: gateway.getAttribute('name') || '', 
+        type: 'gateway', 
+        status: isExecuted ? 'completed' : 'pending', 
+        x: pos?.x, 
+        y: pos?.y, 
+        width: pos?.width, 
+        height: pos?.height 
+      })
+      if (isExecuted) completed.push(id)
     })
     
     // 解析结束事件
     doc.querySelectorAll('endEvent').forEach((event, index) => {
       const id = event.getAttribute('id') || `end_${index}`
       const pos = positionMap.get(id)
-      nodes.push({ id, name: event.getAttribute('name') || '结束', type: 'end', status: 'pending', x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
+      const isExecuted = executedActivityIds.includes(id)
+      nodes.push({ 
+        id, 
+        name: event.getAttribute('name') || '结束', 
+        type: 'end', 
+        status: isExecuted ? 'completed' : 'pending', 
+        x: pos?.x, 
+        y: pos?.y, 
+        width: pos?.width, 
+        height: pos?.height 
+      })
+      if (isExecuted) completed.push(id)
     })
     
     // 解析连线路径点
@@ -529,6 +575,11 @@ const parseBpmnXml = (xml: string) => {
     doc.querySelectorAll('sequenceFlow').forEach((flow, index) => {
       const id = flow.getAttribute('id') || `flow_${index}`
       flows.push({ id, sourceRef: flow.getAttribute('sourceRef') || '', targetRef: flow.getAttribute('targetRef') || '', name: flow.getAttribute('name') || '', waypoints: waypointsMap.get(id) })
+      
+      // 如果连线已执行，也添加到 completed 列表中
+      if (executedActivityIds.includes(id)) {
+        completed.push(id)
+      }
     })
     
     processNodes.value = nodes
@@ -536,6 +587,7 @@ const parseBpmnXml = (xml: string) => {
     completedNodeIds.value = completed
   } catch (error) {
     console.error('Failed to parse BPMN XML:', error)
+    processError.value = t('task.processLoadFailed')
   }
 }
 
@@ -713,7 +765,9 @@ const submitApprove = async () => {
   submitting.value = true
   try {
     // 根据审批动作设置流程变量
-    const variables: Record<string, any> = {}
+    const variables: Record<string, any> = {
+      ...formData.value  // 包含所有表单数据，包括子表单
+    }
     
     if (currentApproveAction.value === 'APPROVE') {
       variables.approval_result = 'approved'
@@ -728,6 +782,9 @@ const submitApprove = async () => {
       variables.approval_comment = approveForm.comment
     }
     
+    // 记录日志以便调试
+    console.log('Submitting task with variables:', variables)
+    
     await completeTask(taskId, {
       taskId: taskId,
       userId: userStore.userInfo?.username || 'admin',
@@ -739,6 +796,7 @@ const submitApprove = async () => {
     approveDialogVisible.value = false
     router.push('/tasks')
   } catch (error) {
+    console.error('Failed to complete task:', error)
     ElMessage.error('操作失败')
   } finally {
     submitting.value = false

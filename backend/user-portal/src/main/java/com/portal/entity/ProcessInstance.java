@@ -37,6 +37,9 @@ public class ProcessInstance {
     @Column(name = "process_definition_name", length = 255)
     private String processDefinitionName;
 
+    @Column(name = "function_unit_id", length = 64)
+    private String functionUnitId;
+
     @Column(name = "business_key", length = 255)
     private String businessKey;
 

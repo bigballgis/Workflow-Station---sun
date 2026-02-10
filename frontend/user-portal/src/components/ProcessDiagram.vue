@@ -20,6 +20,10 @@
         <span>当前节点</span>
       </div>
       <div class="legend-item">
+        <span class="legend-dot rejected"></span>
+        <span>已拒绝</span>
+      </div>
+      <div class="legend-item">
         <span class="legend-dot pending"></span>
         <span>待处理</span>
       </div>
@@ -35,7 +39,7 @@ export interface ProcessNode {
   id: string
   name: string
   type: 'start' | 'end' | 'task' | 'gateway' | 'subprocess'
-  status?: 'completed' | 'current' | 'pending'
+  status?: 'completed' | 'current' | 'pending' | 'rejected'
   x?: number
   y?: number
   width?: number
@@ -99,6 +103,8 @@ const renderDiagram = () => {
   
   // 添加箭头定义
   const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs')
+  
+  // 默认灰色箭头
   const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker')
   marker.setAttribute('id', 'arrowhead')
   marker.setAttribute('markerWidth', '10')
@@ -111,6 +117,21 @@ const renderDiagram = () => {
   polygon.setAttribute('fill', '#909399')
   marker.appendChild(polygon)
   defs.appendChild(marker)
+  
+  // 绿色箭头（已完成）
+  const markerCompleted = document.createElementNS('http://www.w3.org/2000/svg', 'marker')
+  markerCompleted.setAttribute('id', 'arrowhead-completed')
+  markerCompleted.setAttribute('markerWidth', '10')
+  markerCompleted.setAttribute('markerHeight', '7')
+  markerCompleted.setAttribute('refX', '9')
+  markerCompleted.setAttribute('refY', '3.5')
+  markerCompleted.setAttribute('orient', 'auto')
+  const polygonCompleted = document.createElementNS('http://www.w3.org/2000/svg', 'polygon')
+  polygonCompleted.setAttribute('points', '0 0, 10 3.5, 0 7')
+  polygonCompleted.setAttribute('fill', '#00A651')
+  markerCompleted.appendChild(polygonCompleted)
+  defs.appendChild(markerCompleted)
+  
   svg.appendChild(defs)
 
   const nodePositions = calculateNodePositions()
@@ -236,7 +257,12 @@ const createNodeElement = (node: ProcessNode, pos: { x: number; y: number; width
 
   let fillColor = '#ffffff'
   let strokeColor = '#909399'
-  if (props.completedNodeIds.includes(node.id) || node.status === 'completed') {
+  // 优先检查 rejected 状态，避免被 completed 覆盖
+  if (node.status === 'rejected') {
+    // 拒绝状态的节点显示为红色
+    fillColor = '#ffebee'
+    strokeColor = '#DB0011'
+  } else if (props.completedNodeIds.includes(node.id) || node.status === 'completed') {
     fillColor = '#e8f5e9'
     strokeColor = '#00A651'
   } else if (node.id === props.currentNodeId || node.status === 'current') {
@@ -254,8 +280,9 @@ const createNodeElement = (node: ProcessNode, pos: { x: number; y: number; width
       shape.setAttribute('cx', String(centerX))
       shape.setAttribute('cy', String(centerY))
       shape.setAttribute('r', String(Math.min(pos.width, pos.height) / 2 - 2))
-      shape.setAttribute('fill', '#e8f5e9')
-      shape.setAttribute('stroke', '#00A651')
+      // 开始节点的颜色由实际执行状态决定
+      shape.setAttribute('fill', fillColor)
+      shape.setAttribute('stroke', strokeColor)
       shape.setAttribute('stroke-width', '2')
       break
     case 'end':
@@ -264,28 +291,9 @@ const createNodeElement = (node: ProcessNode, pos: { x: number; y: number; width
       shape.setAttribute('cy', String(centerY))
       shape.setAttribute('r', String(Math.min(pos.width, pos.height) / 2 - 2))
       
-      // 根据节点ID或名称判断是批准还是拒绝
-      const isApproved = node.id?.includes('approved') || 
-                        node.name?.includes('通过') || 
-                        node.name?.includes('批准') ||
-                        node.name?.includes('完成')
-      const isRejected = node.id?.includes('rejected') || 
-                        node.name?.includes('拒绝') || 
-                        node.name?.includes('驳回')
-      
-      if (isApproved) {
-        // 绿色表示批准通过
-        shape.setAttribute('fill', '#e8f5e9')
-        shape.setAttribute('stroke', '#00A651')
-      } else if (isRejected) {
-        // 红色表示拒绝
-        shape.setAttribute('fill', '#ffebee')
-        shape.setAttribute('stroke', '#DB0011')
-      } else {
-        // 默认灰色
-        shape.setAttribute('fill', '#f5f5f5')
-        shape.setAttribute('stroke', '#909399')
-      }
+      // 结束节点的颜色完全由实际执行状态决定，不根据名称判断
+      shape.setAttribute('fill', fillColor)
+      shape.setAttribute('stroke', strokeColor)
       shape.setAttribute('stroke-width', '3')
       break
     case 'gateway':
@@ -445,12 +453,15 @@ const createFlowLine = (
     labelY = (startY + endY) / 2
   }
   
+  // 判断连线是否已执行
+  const isExecuted = props.completedNodeIds.includes(flow.id)
+  
   const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
   path.setAttribute('d', d)
   path.setAttribute('fill', 'none')
-  path.setAttribute('stroke', '#909399')
-  path.setAttribute('stroke-width', '1.5')
-  path.setAttribute('marker-end', 'url(#arrowhead)')
+  path.setAttribute('stroke', isExecuted ? '#00A651' : '#909399')
+  path.setAttribute('stroke-width', isExecuted ? '2' : '1.5')
+  path.setAttribute('marker-end', isExecuted ? 'url(#arrowhead-completed)' : 'url(#arrowhead)')
   g.appendChild(path)
 
   let labelGroup: SVGElement | null = null
@@ -570,6 +581,7 @@ defineExpose({ zoomIn, zoomOut, resetZoom, fitViewport })
         border-radius: 2px;
         &.completed { background: #e8f5e9; border: 2px solid #00A651; }
         &.current { background: #fff3e0; border: 2px solid #FF6600; }
+        &.rejected { background: #ffebee; border: 2px solid #DB0011; }
         &.pending { background: #ffffff; border: 2px solid #909399; }
       }
     }

@@ -36,6 +36,9 @@ public class TaskInfo {
     /** 流程定义名称 */
     private String processDefinitionName;
 
+    /** 功能单元ID */
+    private String functionUnitId;
+
     /** 分配类型：USER, VIRTUAL_GROUP, DEPT_ROLE, DELEGATED */
     private String assignmentType;
 

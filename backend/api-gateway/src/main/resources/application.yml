@@ -100,6 +100,14 @@ spring:
           filters:
             - RewritePath=/api/v1/tasks/(?<segment>.*), /tasks/${segment}
             - RewritePath=/api/v1/tasks, /tasks
+        # User Portal - Processes API
+        - id: user-portal-processes
+          uri: ${USER_PORTAL_URL:http://user-portal:8080}
+          predicates:
+            - Path=/api/v1/processes/**
+          filters:
+            - RewritePath=/api/v1/processes/(?<segment>.*), /processes/${segment}
+            - RewritePath=/api/v1/processes, /processes
         # Admin Center - System Monitor API
         - id: admin-monitor
           uri: ${ADMIN_CENTER_URL:http://admin-center:8080}
