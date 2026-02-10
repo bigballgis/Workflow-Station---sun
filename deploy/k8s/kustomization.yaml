@@ -1,21 +1,28 @@
 # =====================================================
 # Kustomize Base Configuration
 # =====================================================
-# Usage:
-#   kubectl apply -k deploy/k8s/overlays/sit
-#   kubectl apply -k deploy/k8s/overlays/uat
-#   kubectl apply -k deploy/k8s/overlays/prod
-#
-# Or use deploy.ps1:
+# Usage (via deploy.ps1, which handles namespace/image replacement):
 #   .\deploy.ps1 -Environment sit
+#   .\deploy.ps1 -Environment uat
+#   .\deploy.ps1 -Environment prod
+#
+# Note: deploy.ps1 applies configmap/secret separately per environment,
+# then applies deployments with namespace/image replacement.
+# This kustomization is for reference / manual kubectl apply -k usage.
 # =====================================================
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
+  # ConfigMap & Secret (SIT as default — deploy.ps1 replaces per environment)
+  - configmap-sit.yaml
+  - secret-sit.yaml
+  # Backend Deployments
   - deployment-workflow-engine.yaml
   - deployment-admin-center.yaml
   - deployment-user-portal.yaml
   - deployment-developer-workstation.yaml
+  # Frontend Deployments
   - deployment-frontend.yaml
+  # Ingress
   - ingress.yaml

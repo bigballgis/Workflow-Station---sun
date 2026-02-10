@@ -26,7 +26,7 @@ $ProjectRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 
 # Backend services (no API Gateway — it's bypassed)
 $BackendServices = @(
-    @{ Name = "workflow-engine"; Dir = "backend/workflow-engine-core" },
+    @{ Name = "workflow-engine-core"; Dir = "backend/workflow-engine-core" },
     @{ Name = "admin-center"; Dir = "backend/admin-center" },
     @{ Name = "developer-workstation"; Dir = "backend/developer-workstation" },
     @{ Name = "user-portal"; Dir = "backend/user-portal" }
@@ -66,7 +66,7 @@ Write-Host "=========================================" -ForegroundColor Yellow
 if (-not $SkipBackend -and -not $PushOnly) {
     Write-Step "Building backend with Maven..."
 
-    $modules = ($selectedBackend | ForEach-Object { $_.Dir }) -join ","
+    $modules = "backend/platform-common,backend/platform-cache,backend/platform-security,backend/platform-messaging," + (($selectedBackend | ForEach-Object { $_.Dir }) -join ",")
     $mvnArgs = @("clean", "package", "-pl", $modules, "-am")
     if ($SkipTests) { $mvnArgs += "-DskipTests" }
 
