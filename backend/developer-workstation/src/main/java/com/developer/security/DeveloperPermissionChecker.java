@@ -40,15 +40,20 @@ public class DeveloperPermissionChecker {
      * 获取用户的开发者权限
      */
     public Set<String> getUserPermissions(String userId) {
+        log.info("Getting permissions for user: {}", userId);
+        
         // 检查缓存
         CachedPermissions cached = permissionCache.get(userId);
         if (cached != null && !cached.isExpired()) {
+            log.info("Returning cached permissions for user: {}, permissions: {}", userId, cached.permissions);
             return cached.permissions;
         }
         
         try {
             // admin-center 的 context-path 是 /api/v1/admin
             String url = adminCenterUrl + "/api/v1/admin/developer-permissions/user/" + userId;
+            log.info("Calling admin-center API: {}", url);
+            
             ResponseEntity<List<String>> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
@@ -61,13 +66,14 @@ public class DeveloperPermissionChecker {
             // 更新缓存
             permissionCache.put(userId, new CachedPermissions(permissions));
             
-            log.debug("Loaded permissions for user {}: {}", userId, permissions);
+            log.info("Loaded {} permissions for user {}: {}", permissions.size(), userId, permissions);
             return permissions;
             
         } catch (Exception e) {
-            log.error("Failed to load permissions for user {}: {}", userId, e.getMessage());
+            log.error("Failed to load permissions for user {}: {}", userId, e.getMessage(), e);
             // 如果有过期的缓存，返回过期的数据
             if (cached != null) {
+                log.warn("Returning expired cached permissions for user: {}", userId);
                 return cached.permissions;
             }
             return Collections.emptySet();

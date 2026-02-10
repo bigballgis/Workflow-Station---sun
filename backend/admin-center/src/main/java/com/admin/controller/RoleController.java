@@ -91,6 +91,20 @@ public class RoleController {
         rolePermissionManager.deleteRole(roleId);
         return ResponseEntity.noContent().build();
     }
+    
+    @PutMapping("/{roleId}")
+    @Operation(summary = "更新角色")
+    public ResponseEntity<Role> updateRole(
+            @PathVariable String roleId,
+            @RequestBody @Valid UpdateRoleRequest request) {
+        Role role = rolePermissionManager.updateRole(
+                roleId,
+                request.getName(),
+                request.getDescription(),
+                request.getStatus()
+        );
+        return ResponseEntity.ok(role);
+    }
 
     
     // ==================== 权限配置 ====================
@@ -213,5 +227,12 @@ public class RoleController {
         private RoleType type;
         
         private String description;
+    }
+    
+    @lombok.Data
+    public static class UpdateRoleRequest {
+        private String name;
+        private String description;
+        private String status;
     }
 }

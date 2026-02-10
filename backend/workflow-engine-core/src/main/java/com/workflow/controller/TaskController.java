@@ -354,6 +354,9 @@ public class TaskController {
         Map<String, Object> variables = (Map<String, Object>) request.get("variables");
         
         log.info("Completing task: {} by user: {}", taskId, userId);
+        log.info("Request body: {}", request);
+        log.info("Variables received: {}", variables);
+        
         TaskAssignmentResult result = taskManagerComponent.completeTask(taskId, userId, variables);
         
         if (result.isSuccess()) {

@@ -49,6 +49,7 @@ export interface CreateRoleRequest {
 export interface UpdateRoleRequest {
   name?: string
   description?: string
+  status?: 'ACTIVE' | 'INACTIVE'
 }
 
 // 角色管理API
