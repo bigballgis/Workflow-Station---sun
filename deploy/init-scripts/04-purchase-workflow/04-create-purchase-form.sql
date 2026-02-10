@@ -127,36 +127,33 @@ SELECT
     '采购明细子表单',
     td.id,
     jsonb_build_object(
-        'layout', 'table',
-        'editable', true,
-        'columns', jsonb_build_array(
+        'rule', jsonb_build_array(
             jsonb_build_object(
                 'field', 'item_name',
                 'label', '物品名称',
                 'type', 'input',
                 'required', true,
-                'width', '200px'
+                'placeholder', '请输入物品名称'
             ),
             jsonb_build_object(
                 'field', 'specification',
                 'label', '规格型号',
                 'type', 'input',
-                'width', '150px'
+                'placeholder', '请输入规格型号'
             ),
             jsonb_build_object(
                 'field', 'quantity',
                 'label', '数量',
                 'type', 'number',
                 'required', true,
-                'width', '100px',
-                'min', 1
+                'min', 1,
+                'defaultValue', 1
             ),
             jsonb_build_object(
                 'field', 'unit',
                 'label', '单位',
                 'type', 'select',
                 'required', true,
-                'width', '80px',
                 'options', jsonb_build_array(
                     jsonb_build_object('label', '个', 'value', '个'),
                     jsonb_build_object('label', '台', 'value', '台'),
@@ -170,24 +167,22 @@ SELECT
                 'label', '单价',
                 'type', 'number',
                 'required', true,
-                'width', '120px',
                 'precision', 2,
-                'min', 0
+                'min', 0,
+                'placeholder', '请输入单价'
             ),
             jsonb_build_object(
                 'field', 'subtotal',
                 'label', '小计',
                 'type', 'number',
                 'readonly', true,
-                'width', '120px',
-                'precision', 2,
-                'computed', 'quantity * unit_price'
+                'precision', 2
             ),
             jsonb_build_object(
                 'field', 'remarks',
                 'label', '备注',
                 'type', 'input',
-                'width', '150px'
+                'placeholder', '请输入备注'
             )
         )
     ),
@@ -221,38 +216,41 @@ SELECT
     '供应商选择弹窗表单',
     td.id,
     jsonb_build_object(
-        'layout', 'table',
-        'selectable', true,
-        'searchable', true,
-        'columns', jsonb_build_array(
+        'rule', jsonb_build_array(
             jsonb_build_object(
                 'field', 'supplier_code',
                 'label', '供应商编号',
-                'width', '120px'
+                'type', 'input',
+                'readonly', true
             ),
             jsonb_build_object(
                 'field', 'supplier_name',
                 'label', '供应商名称',
-                'width', '200px'
+                'type', 'input',
+                'required', true,
+                'placeholder', '请输入供应商名称'
             ),
             jsonb_build_object(
                 'field', 'contact_person',
                 'label', '联系人',
-                'width', '100px'
+                'type', 'input',
+                'placeholder', '请输入联系人'
             ),
             jsonb_build_object(
                 'field', 'contact_phone',
                 'label', '联系电话',
-                'width', '120px'
+                'type', 'input',
+                'placeholder', '请输入联系电话'
             ),
             jsonb_build_object(
                 'field', 'status',
                 'label', '状态',
-                'width', '80px',
-                'type', 'tag',
-                'tagMap', jsonb_build_object(
-                    'ACTIVE', jsonb_build_object('label', '活跃', 'type', 'success'),
-                    'INACTIVE', jsonb_build_object('label', '停用', 'type', 'info')
+                'type', 'select',
+                'required', true,
+                'defaultValue', 'ACTIVE',
+                'options', jsonb_build_array(
+                    jsonb_build_object('label', '活跃', 'value', 'ACTIVE'),
+                    jsonb_build_object('label', '停用', 'value', 'INACTIVE')
                 )
             )
         )
@@ -287,16 +285,13 @@ SELECT
     '审批操作表单',
     td.id,
     jsonb_build_object(
-        'layout', 'vertical',
-        'labelWidth', '100px',
-        'fields', jsonb_build_array(
+        'rule', jsonb_build_array(
             jsonb_build_object(
                 'field', 'approver',
                 'label', '审批人',
                 'type', 'input',
                 'required', true,
-                'readonly', true,
-                'defaultValue', '${currentUser}'
+                'readonly', true
             ),
             jsonb_build_object(
                 'field', 'result',
