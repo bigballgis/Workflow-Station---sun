@@ -253,6 +253,13 @@ public class TaskProcessComponent {
             return true;
         }
 
+        // 实体管理者任务（ENTITY_MANAGER）
+        // 这种类型的任务通常分配给特定角色或组，如果用户能查询到此任务，说明已通过权限验证
+        if ("ENTITY_MANAGER".equals(assignmentType)) {
+            log.info("Entity manager task {} for user {}, allowing process (permission verified by query)", task.getTaskId(), userId);
+            return true;
+        }
+
         // 虚拟组任务（未认领的情况）
         if ("VIRTUAL_GROUP".equals(assignmentType)) {
             // 如果 assignee 为 null，说明任务未认领，用户能查询到此任务说明 Flowable 已验证其组成员资格
@@ -299,14 +306,24 @@ public class TaskProcessComponent {
         
         log.info("Using Flowable engine to complete task: {} with action: {}", taskId, action);
         
+        // Start with variables from request if provided
         Map<String, Object> variables = new HashMap<>();
+        if (request.getVariables() != null) {
+            variables.putAll(request.getVariables());
+        }
+        
+        // Add action
         variables.put("action", action);
         
-        // Auto-set approval status based on action
+        // Auto-set decision variable based on action
         if ("APPROVE".equals(action)) {
+            variables.put("decision", "yes");
             variables.put("approvalStatus", "APPROVED");
+            log.info("Set decision=yes for APPROVE action");
         } else if ("REJECT".equals(action)) {
+            variables.put("decision", "no");
             variables.put("approvalStatus", "REJECTED");
+            log.info("Set decision=no for REJECT action");
         }
         
         // Add approver comments
@@ -318,6 +335,8 @@ public class TaskProcessComponent {
         if (request.getFormData() != null) {
             variables.putAll(request.getFormData());
         }
+        
+        log.info("Variables before calling workflowEngineClient: {}", variables);
         
         Optional<Map<String, Object>> result = workflowEngineClient.completeTask(taskId, userId, action, variables);
         

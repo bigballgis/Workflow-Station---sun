@@ -208,6 +208,11 @@ const loadProcessDetail = async () => {
     if (data) {
       processInfo.value = data
       if (data.variables) formData.value = data.variables
+      
+      // 先加载流转历史
+      await loadProcessHistory()
+      
+      // 然后加载功能单元内容（包括 BPMN 解析）
       if (data.processDefinitionKey) {
         try {
           await loadFunctionUnitContent(data.processDefinitionKey)
@@ -215,8 +220,6 @@ const loadProcessDetail = async () => {
           console.error('Failed to load function unit content, but continuing:', error)
         }
       }
-      // 加载真正的流转历史 - 即使上面出错也要执行
-      await loadProcessHistory()
     }
   } catch (error) {
     console.error('Failed to load process detail:', error)
@@ -362,6 +365,22 @@ const parseBpmnXml = (xml: string) => {
       }
     })
     
+    // 创建节点名称到历史记录状态的映射
+    const nodeStatusMap = new Map<string, 'completed' | 'current' | 'pending' | 'rejected'>()
+    const completedNodeNames = new Set<string>()
+    historyRecords.value.forEach(record => {
+      if (record.nodeName) {
+        nodeStatusMap.set(record.nodeName, record.status)
+        if (record.status === 'completed') {
+          completedNodeNames.add(record.nodeName)
+        }
+      }
+    })
+    
+    // 检查是否有批准或拒绝的操作
+    const hasApproval = historyRecords.value.some(h => h.status === 'completed' && (h.nodeName.includes('Approval') || h.nodeName.includes('审批')))
+    const hasRejection = historyRecords.value.some(h => h.status === 'rejected')
+    
     // 获取当前节点名称
     const currentNodeName = processInfo.value.currentNode || ''
     let foundCurrentNode = false
@@ -380,9 +399,16 @@ const parseBpmnXml = (xml: string) => {
       const name = task.getAttribute('name') || t('task.taskFallbackName', { index: index + 1 })
       const pos = positionMap.get(id)
       
-      let status: 'completed' | 'current' | 'pending' = 'pending'
+      let status: 'completed' | 'current' | 'pending' | 'rejected' = 'pending'
       
-      if (processInfo.value.status === 'COMPLETED') {
+      // 优先从历史记录中获取状态
+      const historyStatus = nodeStatusMap.get(name)
+      if (historyStatus) {
+        status = historyStatus
+        if (status === 'completed' || status === 'rejected') {
+          completed.push(id)
+        }
+      } else if (processInfo.value.status === 'COMPLETED') {
         // 流程已完成，所有节点都是已完成状态
         status = 'completed'
         completed.push(id)
@@ -415,18 +441,57 @@ const parseBpmnXml = (xml: string) => {
     // 解析网关
     doc.querySelectorAll('exclusiveGateway, parallelGateway, inclusiveGateway').forEach((gateway, index) => {
       const id = gateway.getAttribute('id') || `gateway_${index}`
+      const name = gateway.getAttribute('name') || ''
       const pos = positionMap.get(id)
-      const status = processInfo.value.status === 'COMPLETED' ? 'completed' : 'pending'
-      nodes.push({ id, name: gateway.getAttribute('name') || '', type: 'gateway', status, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
+      
+      // 如果流程已完成或有已完成的审批任务，网关应该标记为已完成
+      let status: 'completed' | 'pending' = 'pending'
+      if (processInfo.value.status === 'COMPLETED') {
+        status = 'completed'
+      } else if (completedNodeNames.has(name)) {
+        status = 'completed'
+      } else if (hasApproval && !foundCurrentNode) {
+        status = 'completed'
+      }
+      
+      nodes.push({ id, name, type: 'gateway', status, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
       if (status === 'completed') completed.push(id)
     })
     
     // 解析结束事件
     doc.querySelectorAll('endEvent').forEach((event, index) => {
       const id = event.getAttribute('id') || `end_${index}`
+      const name = event.getAttribute('name') || t('task.endNode')
       const pos = positionMap.get(id)
-      const status = processInfo.value.status === 'COMPLETED' ? 'completed' : 'pending'
-      nodes.push({ id, name: event.getAttribute('name') || t('task.endNode'), type: 'end', status, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
+      
+      // 检查结束节点是否应该标记为已完成
+      let status: 'completed' | 'pending' = 'pending'
+      
+      // 优先从历史记录中获取状态
+      if (completedNodeNames.has(name)) {
+        status = 'completed'
+      } else if (processInfo.value.status === 'COMPLETED') {
+        // 流程已完成，根据结束节点名称和流程结果判断
+        if (name === currentNodeName) {
+          // 当前节点就是这个结束节点
+          status = 'completed'
+        } else if (hasApproval && !hasRejection) {
+          // 有批准操作且没有拒绝，标记"Approved"结束节点为已完成
+          if (name.toLowerCase().includes('approved') || name.toLowerCase().includes('通过')) {
+            status = 'completed'
+          }
+        } else if (hasRejection) {
+          // 有拒绝操作，标记"Rejected"结束节点为已完成
+          if (name.toLowerCase().includes('rejected') || name.toLowerCase().includes('拒绝')) {
+            status = 'completed'
+          }
+        } else {
+          // 其他情况，如果流程已完成，标记所有结束节点为已完成
+          status = 'completed'
+        }
+      }
+      
+      nodes.push({ id, name, type: 'end', status, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
       if (status === 'completed') completed.push(id)
     })
     
