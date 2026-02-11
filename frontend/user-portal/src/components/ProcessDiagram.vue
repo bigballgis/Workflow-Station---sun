@@ -266,9 +266,9 @@ const createNodeElement = (node: ProcessNode, pos: { x: number; y: number; width
       shape.setAttribute('cx', String(centerX))
       shape.setAttribute('cy', String(centerY))
       shape.setAttribute('r', String(Math.min(pos.width, pos.height) / 2 - 2))
-      shape.setAttribute('fill', '#ffebee')
-      shape.setAttribute('stroke', '#DB0011')
-      shape.setAttribute('stroke-width', '3')
+      shape.setAttribute('fill', fillColor)
+      shape.setAttribute('stroke', strokeColor)
+      shape.setAttribute('stroke-width', '2')
       break
     case 'gateway':
       const halfW = pos.width / 2
