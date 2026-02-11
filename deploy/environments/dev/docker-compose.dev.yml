@@ -188,6 +188,7 @@ services:
       ENCRYPTION_SECRET_KEY: ${ENCRYPTION_SECRET_KEY}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
       SWAGGER_ENABLED: ${SWAGGER_ENABLED:-true}
+      SPRING_FLYWAY_ENABLED: false
     volumes:
       - ./logs:/app/logs
     networks:
@@ -233,6 +234,7 @@ services:
       ENCRYPTION_SECRET_KEY: ${ENCRYPTION_SECRET_KEY}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
       SWAGGER_ENABLED: ${SWAGGER_ENABLED:-true}
+      SPRING_FLYWAY_ENABLED: false
     volumes:
       - ./logs:/app/logs
     networks:
