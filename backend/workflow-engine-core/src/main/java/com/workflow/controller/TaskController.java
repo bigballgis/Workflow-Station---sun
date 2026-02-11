@@ -23,6 +23,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.flowable.engine.HistoryService;
 import org.flowable.engine.history.HistoricActivityInstance;
+import org.flowable.task.api.history.HistoricTaskInstance;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -160,6 +161,21 @@ public class TaskController {
             .orderByHistoricActivityInstanceStartTime().asc()
             .list();
         
+        // 查询任务历史以获取 deleteReason
+        List<HistoricTaskInstance> tasks = historyService
+            .createHistoricTaskInstanceQuery()
+            .processInstanceId(processInstanceId)
+            .list();
+        
+        // 创建 taskId 到 deleteReason 的映射
+        Map<String, String> taskDeleteReasons = tasks.stream()
+            .filter(task -> task.getDeleteReason() != null)
+            .collect(Collectors.toMap(
+                HistoricTaskInstance::getId,
+                HistoricTaskInstance::getDeleteReason,
+                (existing, replacement) -> existing
+            ));
+        
         // 转换为前端期望的格式
         List<Map<String, Object>> historyList = activities.stream()
             .filter(activity -> "userTask".equals(activity.getActivityType()) || 
@@ -174,11 +190,31 @@ public class TaskController {
                 item.put("activityName", activity.getActivityName());
                 item.put("activityType", activity.getActivityType());
                 
-                // 根据活动类型设置操作类型
+                // 根据活动类型和 deleteReason 设置操作类型
                 String operationType = "PENDING";
                 if (activity.getEndTime() != null) {
                     if ("startEvent".equals(activity.getActivityType())) {
                         operationType = "SUBMIT";
+                    } else if ("userTask".equals(activity.getActivityType())) {
+                        // 检查 deleteReason 来判断是 APPROVE 还是 REJECT
+                        String deleteReason = taskDeleteReasons.get(activity.getTaskId());
+                        if (deleteReason != null) {
+                            if (deleteReason.contains("rejected") || deleteReason.contains("REJECTED") ||
+                                deleteReason.contains("reject") || deleteReason.contains("REJECT")) {
+                                operationType = "REJECT";
+                            } else if (deleteReason.contains("approved") || deleteReason.contains("APPROVED") ||
+                                      deleteReason.contains("approve") || deleteReason.contains("APPROVE")) {
+                                operationType = "APPROVE";
+                            } else if (deleteReason.contains("transfer") || deleteReason.contains("TRANSFER")) {
+                                operationType = "TRANSFER";
+                            } else if (deleteReason.contains("delegate") || deleteReason.contains("DELEGATE")) {
+                                operationType = "DELEGATE";
+                            } else {
+                                operationType = "APPROVE"; // 默认为 APPROVE
+                            }
+                        } else {
+                            operationType = "APPROVE"; // 没有 deleteReason 时默认为 APPROVE
+                        }
                     } else {
                         operationType = "APPROVE";
                     }

@@ -38,7 +38,7 @@ export interface ProcessNode {
   id: string
   name: string
   type: 'start' | 'end' | 'task' | 'gateway' | 'subprocess'
-  status?: 'completed' | 'current' | 'pending'
+  status?: 'completed' | 'current' | 'pending' | 'rejected'
   x?: number
   y?: number
   width?: number
@@ -239,7 +239,8 @@ const createNodeElement = (node: ProcessNode, pos: { x: number; y: number; width
 
   let fillColor = '#ffffff'
   let strokeColor = '#909399'
-  if (props.completedNodeIds.includes(node.id) || node.status === 'completed') {
+  // 已完成和已拒绝的节点都用同一种颜色（已走过的节点）
+  if (props.completedNodeIds.includes(node.id) || node.status === 'completed' || node.status === 'rejected') {
     fillColor = '#e8f5e9'
     strokeColor = '#00A651'
   } else if (node.id === props.currentNodeId || node.status === 'current') {
