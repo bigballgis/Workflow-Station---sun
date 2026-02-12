@@ -1,9 +1,6 @@
 # Production stage only - assumes dist is already built locally
 FROM nginx:alpine
 
-# Install gettext for envsubst
-RUN apk add --no-cache gettext
-
 # Copy pre-built assets
 COPY dist /usr/share/nginx/html
 
