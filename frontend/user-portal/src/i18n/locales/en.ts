@@ -242,6 +242,7 @@ export default {
   },
   applicationDetail: {
     back: 'Back',
+    refresh: 'Refresh',
     applicationDetail: 'Application Detail',
     basicInfo: 'Basic Info',
     processTitle: 'Process Title',
@@ -286,6 +287,7 @@ export default {
     fitViewport: 'Fit',
     completed: 'Completed',
     currentNode: 'Current Node',
+    rejected: 'Rejected',
     pending: 'Pending'
   },
   widget: {

@@ -2,9 +2,12 @@
   <div class="application-detail-page">
     <!-- 页面头部 -->
     <div class="page-header">
-      <el-button :icon="ArrowLeft" @click="$router.back()">{{ t('applicationDetail.back') }}</el-button>
-      <h1>{{ processInfo.processDefinitionName || t('applicationDetail.applicationDetail') }}</h1>
-      <el-tag :type="getStatusType(processInfo.status)" size="small">{{ getStatusLabel(processInfo.status) }}</el-tag>
+      <div class="header-left">
+        <el-button :icon="ArrowLeft" @click="$router.back()">{{ t('applicationDetail.back') }}</el-button>
+        <h1>{{ processInfo.processDefinitionName || t('applicationDetail.applicationDetail') }}</h1>
+        <el-tag :type="getStatusType(processInfo.status)" size="small">{{ getStatusLabel(processInfo.status) }}</el-tag>
+      </div>
+      <el-button :icon="Refresh" @click="loadProcessDetail" :loading="loading">{{ t('applicationDetail.refresh') }}</el-button>
     </div>
 
     <!-- 加载状态 -->
@@ -133,7 +136,7 @@ import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowLeft, InfoFilled, Share, Document, Clock, Bell, RefreshLeft } from '@element-plus/icons-vue'
+import { ArrowLeft, InfoFilled, Share, Document, Clock, Bell, RefreshLeft, Refresh } from '@element-plus/icons-vue'
 import { processApi, type ProcessInstance } from '@/api/process'
 import ProcessDiagram, { type ProcessNode, type ProcessFlow } from '@/components/ProcessDiagram.vue'
 import ProcessHistory, { type HistoryRecord } from '@/components/ProcessHistory.vue'
@@ -465,34 +468,26 @@ const parseBpmnXml = (xml: string) => {
       const pos = positionMap.get(id)
       
       // 检查结束节点是否应该标记为已完成
-      let status: 'completed' | 'pending' = 'pending'
+      let status: 'completed' | 'pending' | 'rejected' = 'pending'
       
       // 优先从历史记录中获取状态
       if (completedNodeNames.has(name)) {
         status = 'completed'
       } else if (processInfo.value.status === 'COMPLETED') {
-        // 流程已完成，根据结束节点名称和流程结果判断
+        // 流程已完成，只标记当前实际到达的结束节点
         if (name === currentNodeName) {
           // 当前节点就是这个结束节点
           status = 'completed'
-        } else if (hasApproval && !hasRejection) {
-          // 有批准操作且没有拒绝，标记"Approved"结束节点为已完成
-          if (name.toLowerCase().includes('approved') || name.toLowerCase().includes('通过')) {
-            status = 'completed'
-          }
-        } else if (hasRejection) {
-          // 有拒绝操作，标记"Rejected"结束节点为已完成
-          if (name.toLowerCase().includes('rejected') || name.toLowerCase().includes('拒绝')) {
-            status = 'completed'
-          }
-        } else {
-          // 其他情况，如果流程已完成，标记所有结束节点为已完成
-          status = 'completed'
+        }
+      } else if (processInfo.value.status === 'REJECTED') {
+        // 流程被拒绝，只标记 Rejected 结束节点
+        if (name.toLowerCase().includes('rejected') || name.toLowerCase().includes('拒绝')) {
+          status = 'rejected'
         }
       }
       
       nodes.push({ id, name, type: 'end', status, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
-      if (status === 'completed') completed.push(id)
+      if (status === 'completed' || status === 'rejected') completed.push(id)
     })
     
     // 解析连线路径点
@@ -695,7 +690,26 @@ onMounted(() => { loadProcessDetail() })
 .application-detail-page {
   max-width: 1200px;
   margin: 0 auto;
-  .page-header { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; h1 { font-size: 24px; font-weight: 500; color: var(--text-primary); margin: 0; } }
+  .page-header { 
+    display: flex; 
+    align-items: center; 
+    justify-content: space-between;
+    gap: 16px; 
+    margin-bottom: 20px; 
+    
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    
+    h1 { 
+      font-size: 24px; 
+      font-weight: 500; 
+      color: var(--text-primary); 
+      margin: 0; 
+    } 
+  }
   .skeleton-content { display: flex; flex-direction: column; }
   .content-sections { display: flex; flex-direction: column; gap: 20px; }
   .section { background: white; border-radius: 8px; border: 1px solid var(--border-color);

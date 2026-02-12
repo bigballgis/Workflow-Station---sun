@@ -478,6 +478,16 @@ export default {
     rejected: '已拒絕',
     cancelled: '已取消'
   },
+  diagram: {
+    zoomIn: '放大',
+    zoomOut: '縮小',
+    reset: '重置',
+    fitViewport: '適應',
+    completed: '已完成',
+    currentNode: '目前節點',
+    rejected: '已拒絕',
+    pending: '待處理'
+  },
   action: {
     approve: '同意',
     approved: '已同意',
