@@ -38,7 +38,7 @@ export interface ProcessNode {
   id: string
   name: string
   type: 'start' | 'end' | 'task' | 'gateway' | 'subprocess'
-  status?: 'completed' | 'current' | 'pending'
+  status?: 'completed' | 'current' | 'pending' | 'rejected'
   x?: number
   y?: number
   width?: number
@@ -239,7 +239,8 @@ const createNodeElement = (node: ProcessNode, pos: { x: number; y: number; width
 
   let fillColor = '#ffffff'
   let strokeColor = '#909399'
-  if (props.completedNodeIds.includes(node.id) || node.status === 'completed') {
+  // 已完成和已拒绝的节点都用同一种颜色（已走过的节点）
+  if (props.completedNodeIds.includes(node.id) || node.status === 'completed' || node.status === 'rejected') {
     fillColor = '#e8f5e9'
     strokeColor = '#00A651'
   } else if (node.id === props.currentNodeId || node.status === 'current') {
@@ -266,9 +267,9 @@ const createNodeElement = (node: ProcessNode, pos: { x: number; y: number; width
       shape.setAttribute('cx', String(centerX))
       shape.setAttribute('cy', String(centerY))
       shape.setAttribute('r', String(Math.min(pos.width, pos.height) / 2 - 2))
-      shape.setAttribute('fill', '#ffebee')
-      shape.setAttribute('stroke', '#DB0011')
-      shape.setAttribute('stroke-width', '3')
+      shape.setAttribute('fill', fillColor)
+      shape.setAttribute('stroke', strokeColor)
+      shape.setAttribute('stroke-width', '2')
       break
     case 'gateway':
       const halfW = pos.width / 2
