@@ -20,6 +20,10 @@
         <span>{{ t('diagram.currentNode') }}</span>
       </div>
       <div class="legend-item">
+        <span class="legend-dot rejected"></span>
+        <span>{{ t('diagram.rejected') }}</span>
+      </div>
+      <div class="legend-item">
         <span class="legend-dot pending"></span>
         <span>{{ t('diagram.pending') }}</span>
       </div>
@@ -239,11 +243,16 @@ const createNodeElement = (node: ProcessNode, pos: { x: number; y: number; width
 
   let fillColor = '#ffffff'
   let strokeColor = '#909399'
-  // 已完成和已拒绝的节点都用同一种颜色（已走过的节点）
-  if (props.completedNodeIds.includes(node.id) || node.status === 'completed' || node.status === 'rejected') {
+  // 已拒绝的节点用红色
+  if (node.status === 'rejected') {
+    fillColor = '#ffebee'
+    strokeColor = '#f44336'
+  } else if (props.completedNodeIds.includes(node.id) || node.status === 'completed') {
+    // 已完成的节点用绿色
     fillColor = '#e8f5e9'
     strokeColor = '#00A651'
   } else if (node.id === props.currentNodeId || node.status === 'current') {
+    // 当前节点用橙色
     fillColor = '#fff3e0'
     strokeColor = '#FF6600'
   }
@@ -553,6 +562,7 @@ defineExpose({ zoomIn, zoomOut, resetZoom, fitViewport })
         border-radius: 2px;
         &.completed { background: #e8f5e9; border: 2px solid #00A651; }
         &.current { background: #fff3e0; border: 2px solid #FF6600; }
+        &.rejected { background: #ffebee; border: 2px solid #f44336; }
         &.pending { background: #ffffff; border: 2px solid #909399; }
       }
     }

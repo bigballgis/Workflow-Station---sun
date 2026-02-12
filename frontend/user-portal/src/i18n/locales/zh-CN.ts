@@ -242,6 +242,7 @@ export default {
   },
   applicationDetail: {
     back: '返回',
+    refresh: '刷新',
     applicationDetail: '申请详情',
     basicInfo: '基本信息',
     processTitle: '流程标题',
@@ -286,6 +287,7 @@ export default {
     fitViewport: '适应',
     completed: '已完成',
     currentNode: '当前节点',
+    rejected: '已拒绝',
     pending: '待处理'
   },
   widget: {
