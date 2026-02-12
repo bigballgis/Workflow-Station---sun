@@ -466,6 +466,30 @@ public class WorkflowEngineClient {
     }
 
     /**
+     * 获取流程实例状态
+     * 用于检查流程是否已完成以及获取最后一个活动节点
+     */
+    public Optional<Map<String, Object>> getProcessInstanceStatus(String processInstanceId) {
+        if (!isAvailable()) {
+            return Optional.empty();
+        }
+        try {
+            String url = workflowEngineUrl + "/api/v1/processes/" + processInstanceId + "/status";
+            
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                url, HttpMethod.GET, null,
+                new ParameterizedTypeReference<Map<String, Object>>() {});
+            
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                return Optional.of(response.getBody());
+            }
+        } catch (Exception e) {
+            log.warn("Failed to get process instance status from workflow engine: {}", e.getMessage());
+        }
+        return Optional.empty();
+    }
+
+    /**
      * 获取流程历史
      */
     public Optional<Map<String, Object>> getProcessHistory(String processInstanceId) {
@@ -487,6 +511,8 @@ public class WorkflowEngineClient {
         }
         return Optional.empty();
     }
+
+
 
     /**
      * 获取任务历史（通过流程实例ID）

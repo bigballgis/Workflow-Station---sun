@@ -184,4 +184,19 @@ public class ProcessController {
         Map<String, Object> result = Map.of("processDefinitionId", processDefinitionId, "activated", true);
         return ResponseEntity.ok(ApiResponse.success(result));
     }
+    
+    /**
+     * 获取流程实例状态
+     * 用于检查流程是否已完成以及获取最后一个活动节点
+     */
+    @GetMapping("/{processInstanceId}/status")
+    @Operation(summary = "获取流程实例状态", description = "获取流程实例的当前状态，包括是否完成、最后活动节点等信息")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getProcessInstanceStatus(
+            @Parameter(description = "流程实例ID", required = true)
+            @PathVariable String processInstanceId) {
+        
+        log.info("Getting process instance status: {}", processInstanceId);
+        Map<String, Object> status = processEngineComponent.getProcessInstanceStatus(processInstanceId);
+        return ResponseEntity.ok(ApiResponse.success(status));
+    }
 }

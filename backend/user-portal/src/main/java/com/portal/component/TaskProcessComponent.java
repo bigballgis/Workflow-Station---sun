@@ -352,6 +352,52 @@ public class TaskProcessComponent {
         
         log.info("Task {} completed via Flowable by user {} with action {} (approvalStatus: {})", 
                 taskId, userId, action, variables.get("approvalStatus"));
+        
+        // 任务完成后，检查流程是否还有活动任务，如果没有则流程可能已完成
+        // 这是一个补偿机制，防止 ProcessCompletionListener 通知失败导致状态不同步
+        try {
+            String processInstanceId = task.getProcessInstanceId();
+            // 延迟一小段时间，让 Flowable 完成流程状态更新
+            Thread.sleep(500);
+            
+            // 通过 workflowEngineClient 检查流程状态
+            Optional<Map<String, Object>> processStatus = workflowEngineClient.getProcessInstanceStatus(processInstanceId);
+            if (processStatus.isPresent()) {
+                Map<String, Object> status = processStatus.get();
+                Boolean isCompleted = (Boolean) status.get("completed");
+                
+                if (Boolean.TRUE.equals(isCompleted)) {
+                    log.info("Process {} is completed after task completion, updating current node", processInstanceId);
+                    String lastActivityName = (String) status.get("lastActivityName");
+                    
+                    // 更新流程实例状态
+                    Optional<ProcessInstance> optInstance = processInstanceRepository.findById(processInstanceId);
+                    if (optInstance.isPresent()) {
+                        ProcessInstance instance = optInstance.get();
+                        if ("RUNNING".equals(instance.getStatus())) {
+                            instance.setStatus("COMPLETED");
+                            instance.setEndTime(LocalDateTime.now());
+                            instance.setCurrentNode(lastActivityName != null ? lastActivityName : "已完成");
+                            instance.setCurrentAssignee(null);
+                            processInstanceRepository.save(instance);
+                            log.info("Process instance {} updated to COMPLETED with currentNode: {}", 
+                                    processInstanceId, instance.getCurrentNode());
+                        }
+                    }
+                } else {
+                    // 流程未完成，可能有下一个任务，尝试获取下一个任务信息
+                    String nextTaskName = (String) status.get("nextTaskName");
+                    String nextAssignee = (String) status.get("nextAssignee");
+                    if (nextTaskName != null) {
+                        updateProcessInstanceAssignee(processInstanceId, nextAssignee, nextTaskName);
+                        log.info("Process {} continues with next task: {}", processInstanceId, nextTaskName);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to check process status after task completion: {}", e.getMessage());
+            // 不抛出异常，因为这只是一个补偿机制
+        }
     }
 
     /**
