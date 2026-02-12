@@ -31,6 +31,9 @@ public class ProcessDefinition {
     @JoinColumn(name = "function_unit_id", nullable = false)
     private FunctionUnit functionUnit;
     
+    @Column(name = "function_unit_version_id", nullable = false)
+    private Long functionUnitVersionId;
+    
     @Column(name = "bpmn_xml", nullable = false, columnDefinition = "TEXT")
     private String bpmnXml;
     
