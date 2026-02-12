@@ -38,6 +38,7 @@ public class ProcessDesignComponentImpl implements ProcessDesignComponent {
                 .findByFunctionUnitId(functionUnitId)
                 .orElse(ProcessDefinition.builder()
                         .functionUnit(functionUnit)
+                        .functionUnitVersionId(functionUnitId)
                         .build());
         
         // 使用Base64编码存储XML，避免特殊字符转义问题
