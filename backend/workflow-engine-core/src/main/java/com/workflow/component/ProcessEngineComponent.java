@@ -20,17 +20,23 @@ import com.workflow.enums.AuditResourceType;
 import com.workflow.exception.WorkflowBusinessException;
 import com.workflow.exception.WorkflowValidationException;
 
+import lombok.extern.slf4j.Slf4j;
+
 import org.flowable.engine.ProcessEngine;
 import org.flowable.engine.RepositoryService;
 import org.flowable.engine.RuntimeService;
 import org.flowable.engine.TaskService;
 import org.flowable.engine.ManagementService;
+import org.flowable.engine.HistoryService;
 import org.flowable.engine.repository.Deployment;
 import org.flowable.engine.repository.ProcessDefinition;
 import org.flowable.engine.runtime.ProcessInstance;
 import org.flowable.engine.runtime.ProcessInstanceQuery;
 import org.flowable.engine.runtime.Execution;
 import org.flowable.engine.runtime.ActivityInstance;
+import org.flowable.engine.history.HistoricProcessInstance;
+import org.flowable.engine.history.HistoricActivityInstance;
+import org.flowable.task.api.Task;
 import org.flowable.bpmn.model.BpmnModel;
 import org.flowable.bpmn.model.FlowElement;
 import org.flowable.bpmn.model.Gateway;
@@ -57,6 +63,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -65,6 +72,7 @@ import java.util.stream.Collectors;
  * 流程引擎组件
  * 负责流程定义管理、流程实例执行、BPMN解析
  */
+@Slf4j
 @Component
 @Transactional
 public class ProcessEngineComponent {
@@ -83,6 +91,9 @@ public class ProcessEngineComponent {
     
     @Autowired
     private ManagementService managementService;
+    
+    @Autowired
+    private HistoryService historyService;
     
     /**
      * 部署流程定义
@@ -353,6 +364,104 @@ public class ProcessEngineComponent {
                     
         } catch (Exception e) {
             throw new WorkflowBusinessException("PROCESS_QUERY_ERROR", "查询流程实例失败: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * 获取流程实例状态
+     * 用于检查流程是否已完成以及获取最后一个活动节点
+     */
+    public Map<String, Object> getProcessInstanceStatus(String processInstanceId) {
+        Map<String, Object> status = new HashMap<>();
+        
+        try {
+            // 首先检查运行时流程实例
+            ProcessInstance processInstance = runtimeService.createProcessInstanceQuery()
+                    .processInstanceId(processInstanceId)
+                    .singleResult();
+            
+            if (processInstance != null) {
+                // 流程还在运行中
+                status.put("completed", false);
+                status.put("processInstanceId", processInstanceId);
+                status.put("state", processInstance.isSuspended() ? "SUSPENDED" : "RUNNING");
+                
+                // 获取当前活动任务
+                List<Task> tasks = taskService.createTaskQuery()
+                        .processInstanceId(processInstanceId)
+                        .list();
+                
+                if (!tasks.isEmpty()) {
+                    Task currentTask = tasks.get(0);
+                    status.put("nextTaskName", currentTask.getName());
+                    status.put("nextAssignee", currentTask.getAssignee());
+                    status.put("nextTaskId", currentTask.getId());
+                }
+                
+                return status;
+            }
+            
+            // 流程不在运行时表中，检查历史表
+            HistoricProcessInstance historicProcessInstance = historyService
+                    .createHistoricProcessInstanceQuery()
+                    .processInstanceId(processInstanceId)
+                    .singleResult();
+            
+            if (historicProcessInstance != null) {
+                status.put("completed", true);
+                status.put("processInstanceId", processInstanceId);
+                status.put("state", "COMPLETED");
+                status.put("endTime", historicProcessInstance.getEndTime());
+                
+                // 获取最后一个活动节点（优先获取结束事件）
+                List<HistoricActivityInstance> endEvents = historyService
+                        .createHistoricActivityInstanceQuery()
+                        .processInstanceId(processInstanceId)
+                        .activityType("endEvent")
+                        .orderByHistoricActivityInstanceStartTime()
+                        .desc()
+                        .list();
+                
+                if (!endEvents.isEmpty()) {
+                    HistoricActivityInstance endEvent = endEvents.get(0);
+                    String activityName = endEvent.getActivityName();
+                    if (activityName != null && !activityName.isEmpty() && 
+                        !activityName.equalsIgnoreCase("End") && 
+                        !activityName.equalsIgnoreCase("结束")) {
+                        status.put("lastActivityName", activityName);
+                        return status;
+                    }
+                }
+                
+                // 如果结束事件没有有意义的名称，获取最后一个用户任务
+                List<HistoricActivityInstance> userTasks = historyService
+                        .createHistoricActivityInstanceQuery()
+                        .processInstanceId(processInstanceId)
+                        .activityType("userTask")
+                        .finished()
+                        .orderByHistoricActivityInstanceEndTime()
+                        .desc()
+                        .list();
+                
+                if (!userTasks.isEmpty()) {
+                    status.put("lastActivityName", userTasks.get(0).getActivityName());
+                } else {
+                    status.put("lastActivityName", "已完成");
+                }
+                
+                return status;
+            }
+            
+            // 流程实例不存在
+            status.put("completed", false);
+            status.put("error", "流程实例不存在");
+            return status;
+            
+        } catch (Exception e) {
+            log.error("Failed to get process instance status: {}", e.getMessage(), e);
+            status.put("completed", false);
+            status.put("error", e.getMessage());
+            return status;
         }
     }
     
