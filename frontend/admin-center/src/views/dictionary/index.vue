@@ -50,7 +50,7 @@
             <el-table-column :label="t('dictionary.dictActions')" width="150">
               <template #default="{ row }">
                 <el-button link type="primary" size="small" @click="showItemDialog(row)">{{ t('dictionary.dictEdit') }}</el-button>
-                <el-button link type="primary" size="small" @click="showItemDialog(null, row)">{{ t('dictionary.addChild') }}</el-button>
+                <el-button link type="primary" size="small" @click="showItemDialog(undefined, row)">{{ t('dictionary.addChild') }}</el-button>
                 <el-button link type="danger" size="small" @click="handleDeleteItem(row)">{{ t('dictionary.dictDelete') }}</el-button>
               </template>
             </el-table-column>
