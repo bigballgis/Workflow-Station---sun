@@ -105,9 +105,10 @@ management:
 # Logging Configuration
 logging:
   level:
-    root: INFO
-    com.platform: DEBUG
+    root: ${LOG_LEVEL_ROOT:INFO}
+    com.platform: ${LOG_LEVEL_PLATFORM:DEBUG}
     org.flowable: INFO
+    org.hibernate.SQL: ${LOG_LEVEL_SQL:DEBUG}
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [workflow-engine] [%thread] [%X{traceId}] %-5level %logger{36} - %msg%n"
 

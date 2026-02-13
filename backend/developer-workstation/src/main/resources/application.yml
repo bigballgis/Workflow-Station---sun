@@ -104,9 +104,10 @@ springdoc:
 # Logging
 logging:
   level:
-    com.developer: DEBUG
+    root: ${LOG_LEVEL_ROOT:INFO}
+    com.developer: ${LOG_LEVEL_PLATFORM:DEBUG}
     org.springframework.security: INFO
-    org.hibernate.SQL: DEBUG
+    org.hibernate.SQL: ${LOG_LEVEL_SQL:DEBUG}
 
 # Actuator Configuration
 management:
