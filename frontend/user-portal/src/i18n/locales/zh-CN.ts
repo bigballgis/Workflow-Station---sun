@@ -645,5 +645,18 @@ export default {
   user: {
     username: '用户名',
     email: '邮箱'
+  },
+  api: {
+    requestFailed: '请求失败',
+    networkError: '网络错误，请检查网络连接',
+    invalidParams: '请求参数错误',
+    noPermission: '没有权限访问',
+    notFound: '请求的资源不存在',
+    businessError: '业务逻辑错误',
+    tooManyRequests: '请求过于频繁，请稍后重试',
+    serverError: '服务器内部错误',
+    serviceUnavailable: '服务暂时不可用，请稍后重试',
+    serviceMaintenance: '服务维护中，请稍后重试',
+    configError: '请求配置错误'
   }
 }

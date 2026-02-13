@@ -479,5 +479,18 @@ export default {
     name: '业务单元名称',
     code: '业务单元编码',
     path: '路径'
+  },
+  api: {
+    requestFailed: '请求失败',
+    networkError: '网络错误，请检查网络连接',
+    invalidParams: '请求参数无效',
+    noPermission: '没有访问权限',
+    notFound: '资源不存在',
+    businessError: '业务逻辑错误',
+    tooManyRequests: '请求过于频繁，请稍后再试',
+    serverError: '服务器内部错误',
+    serviceUnavailable: '服务暂时不可用，请稍后再试',
+    serviceMaintenance: '服务维护中，请稍后再试',
+    configError: '请求配置错误'
   }
 }

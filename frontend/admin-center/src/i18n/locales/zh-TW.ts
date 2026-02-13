@@ -479,5 +479,18 @@ export default {
     name: '業務單元名稱',
     code: '業務單元編碼',
     path: '路徑'
+  },
+  api: {
+    requestFailed: '請求失敗',
+    networkError: '網路錯誤，請檢查網路連線',
+    invalidParams: '請求參數無效',
+    noPermission: '沒有存取權限',
+    notFound: '資源不存在',
+    businessError: '業務邏輯錯誤',
+    tooManyRequests: '請求過於頻繁，請稍後再試',
+    serverError: '伺服器內部錯誤',
+    serviceUnavailable: '服務暫時不可用，請稍後再試',
+    serviceMaintenance: '服務維護中，請稍後再試',
+    configError: '請求配置錯誤'
   }
 }

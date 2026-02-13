@@ -530,5 +530,18 @@ export default {
   user: {
     username: '使用者名稱',
     email: '電子郵件'
+  },
+  api: {
+    requestFailed: '請求失敗',
+    networkError: '網路錯誤，請檢查網路連線',
+    invalidParams: '請求參數錯誤',
+    noPermission: '沒有權限存取',
+    notFound: '請求的資源不存在',
+    businessError: '業務邏輯錯誤',
+    tooManyRequests: '請求過於頻繁，請稍後重試',
+    serverError: '伺服器內部錯誤',
+    serviceUnavailable: '服務暫時不可用，請稍後重試',
+    serviceMaintenance: '服務維護中，請稍後重試',
+    configError: '請求配置錯誤'
   }
 }

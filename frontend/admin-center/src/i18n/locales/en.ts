@@ -479,5 +479,18 @@ export default {
     name: 'Business Unit Name',
     code: 'Business Unit Code',
     path: 'Path'
+  },
+  api: {
+    requestFailed: 'Request failed',
+    networkError: 'Network error, please check your connection',
+    invalidParams: 'Invalid request parameters',
+    noPermission: 'Access denied',
+    notFound: 'Resource not found',
+    businessError: 'Business logic error',
+    tooManyRequests: 'Too many requests, please try again later',
+    serverError: 'Internal server error',
+    serviceUnavailable: 'Service temporarily unavailable, please try again later',
+    serviceMaintenance: 'Service under maintenance, please try again later',
+    configError: 'Request configuration error'
   }
 }

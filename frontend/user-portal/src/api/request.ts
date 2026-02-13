@@ -1,6 +1,7 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
 import { ElMessage } from 'element-plus'
 import { refreshToken as refreshAuthToken, REFRESH_TOKEN_KEY, TOKEN_KEY, clearAuth } from './auth'
+import i18n from '@/i18n'
 
 let isRefreshing = false
 let failedQueue: Array<{ resolve: Function; reject: Function }> = []
@@ -52,7 +53,7 @@ service.interceptors.request.use(
     return config
   },
   (error) => {
-    console.error('请求错误:', error)
+    console.error('Request error:', error)
     return Promise.reject(error)
   }
 )
@@ -63,8 +64,8 @@ service.interceptors.response.use(
     const res = response.data
     
     if (res.success === false) {
-      ElMessage.error(res.message || '请求失败')
-      return Promise.reject(new Error(res.message || '请求失败'))
+      ElMessage.error(res.message || i18n.global.t('api.requestFailed'))
+      return Promise.reject(new Error(res.message || i18n.global.t('api.requestFailed')))
     }
     
     return res
@@ -111,28 +112,48 @@ service.interceptors.response.use(
       }
     }
     
-    console.error('响应错误:', error)
+    console.error('Response error:', error)
     
     if (error.response) {
       const { status, data } = error.response
+      const errorMsg = data?.message || (data?.details 
+        ? (typeof data.details === 'object' 
+          ? Object.values(data.details).join('; ') 
+          : data.details)
+        : null)
       
       switch (status) {
+        case 400:
+          ElMessage.error(errorMsg || i18n.global.t('api.invalidParams'))
+          break
         case 403:
-          ElMessage.error('没有权限访问')
+          ElMessage.error(errorMsg || i18n.global.t('api.noPermission'))
           break
         case 404:
-          ElMessage.error('请求的资源不存在')
+          ElMessage.error(errorMsg || i18n.global.t('api.notFound'))
+          break
+        case 422:
+          ElMessage.error(errorMsg || i18n.global.t('api.businessError'))
+          break
+        case 429:
+          ElMessage.error(errorMsg || i18n.global.t('api.tooManyRequests'))
           break
         case 500:
-          ElMessage.error(data?.message || '服务器内部错误')
+          ElMessage.error(errorMsg || i18n.global.t('api.serverError'))
+          break
+        case 502:
+          ElMessage.error(i18n.global.t('api.serviceUnavailable'))
+          break
+        case 503:
+          ElMessage.error(i18n.global.t('api.serviceMaintenance'))
           break
         default:
-          ElMessage.error(data?.message || '请求失败')
+          ElMessage.error(errorMsg || `${i18n.global.t('api.requestFailed')} (${status})`)
       }
     } else if (error.request) {
-      ElMessage.error('网络错误，请检查网络连接')
+      ElMessage.error(i18n.global.t('api.networkError'))
     } else {
-      ElMessage.error('请求配置错误')
+      ElMessage.error(i18n.global.t('api.configError'))
     }
     
     return Promise.reject(error)
