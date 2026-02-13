@@ -51,6 +51,11 @@ spec:
             configMapKeyRef:
               name: workflow-platform-config
               key: SPRING_REDIS_PORT
+        - name: ADMIN_CENTER_URL
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: ADMIN_CENTER_URL
         - name: WORKFLOW_ENGINE_URL
           valueFrom:
             configMapKeyRef:
@@ -76,6 +81,21 @@ spec:
             configMapKeyRef:
               name: workflow-platform-config
               key: SWAGGER_ENABLED
+        - name: LOG_LEVEL_ROOT
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: LOG_LEVEL_ROOT
+        - name: LOG_LEVEL_PLATFORM
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: LOG_LEVEL_PLATFORM
+        - name: LOG_LEVEL_SQL
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: LOG_LEVEL_SQL
         # Secret
         - name: SPRING_DATASOURCE_USERNAME
           valueFrom:
