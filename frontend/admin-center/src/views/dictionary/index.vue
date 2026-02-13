@@ -13,16 +13,16 @@
           <template #header>{{ t('dictionary.title') }}</template>
           <el-input v-model="filterText" :placeholder="t('dictionary.searchDictionary')" clearable style="margin-bottom: 15px" />
           <el-table :data="filteredDictionaries" highlight-current-row @current-change="handleDictSelect" max-height="500" v-loading="loading">
-            <el-table-column prop="name" label="名称" />
-            <el-table-column prop="code" label="编码" width="120" />
-            <el-table-column prop="type" label="类型" width="100">
+            <el-table-column prop="name" :label="t('dictionary.dictName')" />
+            <el-table-column prop="code" :label="t('dictionary.dictCode')" width="120" />
+            <el-table-column prop="type" :label="t('dictionary.dictType')" width="100">
               <template #default="{ row }">
                 <el-tag size="small">{{ typeText(row.type) }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="100">
+            <el-table-column :label="t('dictionary.dictActions')" width="100">
               <template #default="{ row }">
-                <el-button link type="primary" size="small" @click.stop="showEditDialog(row)">编辑</el-button>
+                <el-button link type="primary" size="small" @click.stop="showEditDialog(row)">{{ t('dictionary.dictEdit') }}</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -33,30 +33,30 @@
         <el-card v-if="selectedDict">
           <template #header>
             <div class="dict-header">
-              <span>{{ selectedDict.name }} - 字典项</span>
-              <el-button type="primary" size="small" @click="showItemDialog()">添加字典项</el-button>
+              <span>{{ selectedDict.name }} - {{ t('dictionary.dictItems') }}</span>
+              <el-button type="primary" size="small" @click="showItemDialog()">{{ t('dictionary.addItem') }}</el-button>
             </div>
           </template>
           
           <el-table :data="dictItems" row-key="id" default-expand-all :tree-props="{ children: 'children' }" v-loading="itemsLoading">
-            <el-table-column prop="label" label="显示名称" />
-            <el-table-column prop="value" label="值" width="120" />
-            <el-table-column prop="sortOrder" label="排序" width="80" />
-            <el-table-column prop="status" label="状态" width="80">
+            <el-table-column prop="label" :label="t('dictionary.displayName')" />
+            <el-table-column prop="value" :label="t('dictionary.dictValue')" width="120" />
+            <el-table-column prop="sortOrder" :label="t('dictionary.dictSort')" width="80" />
+            <el-table-column prop="status" :label="t('dictionary.dictStatus')" width="80">
               <template #default="{ row }">
-                <el-tag :type="row.status === 'ACTIVE' ? 'success' : 'info'" size="small">{{ row.status === 'ACTIVE' ? '启用' : '禁用' }}</el-tag>
+                <el-tag :type="row.status === 'ACTIVE' ? 'success' : 'info'" size="small">{{ row.status === 'ACTIVE' ? t('dictionary.statusActive') : t('dictionary.statusInactive') }}</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="150">
+            <el-table-column :label="t('dictionary.dictActions')" width="150">
               <template #default="{ row }">
-                <el-button link type="primary" size="small" @click="showItemDialog(row)">编辑</el-button>
-                <el-button link type="primary" size="small" @click="showItemDialog(null, row)">添加子项</el-button>
-                <el-button link type="danger" size="small" @click="handleDeleteItem(row)">删除</el-button>
+                <el-button link type="primary" size="small" @click="showItemDialog(row)">{{ t('dictionary.dictEdit') }}</el-button>
+                <el-button link type="primary" size="small" @click="showItemDialog(null, row)">{{ t('dictionary.addChild') }}</el-button>
+                <el-button link type="danger" size="small" @click="handleDeleteItem(row)">{{ t('dictionary.dictDelete') }}</el-button>
               </template>
             </el-table-column>
           </el-table>
         </el-card>
-        <el-empty v-else description="请选择字典查看详情" />
+        <el-empty v-else :description="t('dictionary.selectDictHint')" />
       </el-col>
     </el-row>
     
@@ -88,7 +88,7 @@ const currentItem = ref<DictionaryItem | null>(null)
 const parentItem = ref<DictionaryItem | null>(null)
 
 const filteredDictionaries = computed(() => (dictionaries.value || []).filter(d => !filterText.value || d.name.includes(filterText.value) || d.code.includes(filterText.value)))
-const typeText = (type: string) => ({ SYSTEM: '系统', BUSINESS: '业务', CUSTOM: '自定义' }[type] || type)
+const typeText = (type: string) => ({ SYSTEM: t('dictionary.typeSystem'), BUSINESS: t('dictionary.typeBusiness'), CUSTOM: t('dictionary.typeCustom') }[type] || type)
 
 const fetchDictionaries = async () => {
   loading.value = true
@@ -98,7 +98,7 @@ const fetchDictionaries = async () => {
   } catch (e) {
     console.error('Failed to load dictionaries:', e)
     dictionaries.value = []
-    ElMessage.error('加载字典列表失败')
+    ElMessage.error(t('dictionary.loadListFailed'))
   } finally {
     loading.value = false
   }
@@ -111,7 +111,7 @@ const fetchDictItems = async () => {
     dictItems.value = await dictionaryApi.getItems(selectedDict.value.id)
   } catch (e) {
     console.error('Failed to load dictionary items:', e)
-    ElMessage.error('加载字典项失败')
+    ElMessage.error(t('dictionary.loadItemsFailed'))
   } finally {
     itemsLoading.value = false
   }
@@ -131,14 +131,14 @@ const showItemDialog = (item?: DictionaryItem, parent?: DictionaryItem) => {
 }
 
 const handleDeleteItem = async (item: DictionaryItem) => {
-  await ElMessageBox.confirm('确定要删除该字典项吗？', '提示', { type: 'warning' })
+  await ElMessageBox.confirm(t('dictionary.deleteConfirm'), t('dictionary.deleteConfirmTitle'), { type: 'warning' })
   try {
     await dictionaryApi.deleteItem(item.id)
-    ElMessage.success('删除成功')
+    ElMessage.success(t('dictionary.deleteSuccess'))
     fetchDictItems()
   } catch (e) {
     console.error('Failed to delete item:', e)
-    ElMessage.error('删除失败')
+    ElMessage.error(t('dictionary.deleteFailed'))
   }
 }
 

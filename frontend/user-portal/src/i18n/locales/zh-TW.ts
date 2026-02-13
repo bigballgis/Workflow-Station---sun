@@ -431,7 +431,20 @@ export default {
     markAsRead: '標記已讀',
     markAllAsRead: '全部已讀',
     delete: '刪除',
-    noNotifications: '暫無訊息'
+    noNotifications: '暫無訊息',
+    markedAsRead: '已標記為已讀',
+    allMarkedAsRead: '已全部標記為已讀',
+    deleteSuccess: '刪除成功',
+    mockNewTask: '新任務分配',
+    mockNewTaskContent: '您有一個新的請假申請需要審批',
+    mockProcessApproved: '流程審批通過',
+    mockProcessApprovedContent: '您的報銷申請已通過審批',
+    mockSystemMaintenance: '系統維護通知',
+    mockSystemMaintenanceContent: '系統將於今晚22:00進行維護',
+    mockTaskExpiring: '任務即將到期',
+    mockTaskExpiringContent: '採購申請審批任務將於明天到期',
+    mockMinutesAgo: '{n}分鐘前',
+    mockHoursAgo: '{n}小時前'
   },
   error: {
     notFound: '頁面不存在',
@@ -469,7 +482,10 @@ export default {
     endTime: '結束時間',
     itemsPerPage: '{count}條/頁',
     saveSuccess: '儲存成功',
-    notificationSaveSuccess: '通知設定儲存成功'
+    notificationSaveSuccess: '通知設定儲存成功',
+    timezoneShanghai: '(UTC+8) 中國標準時間',
+    timezoneHongKong: '(UTC+8) 香港時間',
+    timezoneTokyo: '(UTC+9) 東京時間'
   },
   status: {
     completed: '已完成',

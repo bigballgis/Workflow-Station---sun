@@ -556,7 +556,20 @@ export default {
     markAsRead: 'Mark as Read',
     markAllAsRead: 'Mark All as Read',
     delete: 'Delete',
-    noNotifications: 'No Notifications'
+    noNotifications: 'No Notifications',
+    markedAsRead: 'Marked as read',
+    allMarkedAsRead: 'All marked as read',
+    deleteSuccess: 'Deleted successfully',
+    mockNewTask: 'New Task Assigned',
+    mockNewTaskContent: 'You have a new leave request pending approval',
+    mockProcessApproved: 'Process Approved',
+    mockProcessApprovedContent: 'Your reimbursement request has been approved',
+    mockSystemMaintenance: 'System Maintenance Notice',
+    mockSystemMaintenanceContent: 'System maintenance scheduled tonight at 22:00',
+    mockTaskExpiring: 'Task Expiring Soon',
+    mockTaskExpiringContent: 'Procurement approval task expires tomorrow',
+    mockMinutesAgo: '{n} min ago',
+    mockHoursAgo: '{n} hr ago'
   },
   error: {
     notFound: 'Page Not Found',
@@ -594,7 +607,10 @@ export default {
     endTime: 'End Time',
     itemsPerPage: '{count} items/page',
     saveSuccess: 'Saved successfully',
-    notificationSaveSuccess: 'Notification settings saved'
+    notificationSaveSuccess: 'Notification settings saved',
+    timezoneShanghai: '(UTC+8) China Standard Time',
+    timezoneHongKong: '(UTC+8) Hong Kong Time',
+    timezoneTokyo: '(UTC+9) Tokyo Time'
   },
   login: {
     title: 'Workflow Platform',

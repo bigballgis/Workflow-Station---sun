@@ -556,7 +556,20 @@ export default {
     markAsRead: '标记已读',
     markAllAsRead: '全部已读',
     delete: '删除',
-    noNotifications: '暂无消息'
+    noNotifications: '暂无消息',
+    markedAsRead: '已标记为已读',
+    allMarkedAsRead: '已全部标记为已读',
+    deleteSuccess: '删除成功',
+    mockNewTask: '新任务分配',
+    mockNewTaskContent: '您有一个新的请假申请需要审批',
+    mockProcessApproved: '流程审批通过',
+    mockProcessApprovedContent: '您的报销申请已通过审批',
+    mockSystemMaintenance: '系统维护通知',
+    mockSystemMaintenanceContent: '系统将于今晚22:00进行维护',
+    mockTaskExpiring: '任务即将到期',
+    mockTaskExpiringContent: '采购申请审批任务将于明天到期',
+    mockMinutesAgo: '{n}分钟前',
+    mockHoursAgo: '{n}小时前'
   },
   error: {
     notFound: '页面不存在',
@@ -594,7 +607,10 @@ export default {
     endTime: '结束时间',
     itemsPerPage: '{count}条/页',
     saveSuccess: '保存成功',
-    notificationSaveSuccess: '通知设置保存成功'
+    notificationSaveSuccess: '通知设置保存成功',
+    timezoneShanghai: '(UTC+8) 中国标准时间',
+    timezoneHongKong: '(UTC+8) 香港时间',
+    timezoneTokyo: '(UTC+9) 东京时间'
   },
   status: {
     completed: '已完成',

@@ -5,40 +5,40 @@
     </div>
     
     <el-tabs v-model="activeTab">
-      <el-tab-pane label="系统参数" name="system">
+      <el-tab-pane :label="t('config.systemParams')" name="system">
         <el-form :model="systemConfig" label-width="150px">
-          <el-form-item label="会话超时时间">
+          <el-form-item :label="t('config.sessionTimeout')">
             <el-input-number v-model="systemConfig.sessionTimeout" :min="5" :max="120" />
-            <span class="form-tip">分钟</span>
+            <span class="form-tip">{{ t('config.minutes') }}</span>
           </el-form-item>
-          <el-form-item label="文件上传限制">
+          <el-form-item :label="t('config.fileUploadLimit')">
             <el-input-number v-model="systemConfig.maxFileSize" :min="1" :max="100" />
             <span class="form-tip">MB</span>
           </el-form-item>
-          <el-form-item label="邮件服务器">
+          <el-form-item :label="t('config.mailServer')">
             <el-input v-model="systemConfig.smtpServer" style="width: 300px" />
           </el-form-item>
           <el-form-item>
-            <el-button type="primary" @click="saveConfig('system')">保存</el-button>
+            <el-button type="primary" @click="saveConfig('system')">{{ t('common.save') }}</el-button>
           </el-form-item>
         </el-form>
       </el-tab-pane>
       
-      <el-tab-pane label="业务参数" name="business">
+      <el-tab-pane :label="t('config.businessParams')" name="business">
         <el-form :model="businessConfig" label-width="150px">
-          <el-form-item label="流程超时时间">
+          <el-form-item :label="t('config.processTimeout')">
             <el-input-number v-model="businessConfig.processTimeout" :min="1" :max="30" />
-            <span class="form-tip">天</span>
+            <span class="form-tip">{{ t('config.days') }}</span>
           </el-form-item>
-          <el-form-item label="任务分配规则">
+          <el-form-item :label="t('config.taskAssignRule')">
             <el-select v-model="businessConfig.taskAssignRule">
-              <el-option label="轮询分配" value="ROUND_ROBIN" />
-              <el-option label="负载均衡" value="LOAD_BALANCE" />
-              <el-option label="随机分配" value="RANDOM" />
+              <el-option :label="t('config.roundRobin')" value="ROUND_ROBIN" />
+              <el-option :label="t('config.loadBalance')" value="LOAD_BALANCE" />
+              <el-option :label="t('config.random')" value="RANDOM" />
             </el-select>
           </el-form-item>
           <el-form-item>
-            <el-button type="primary" @click="saveConfig('business')">保存</el-button>
+            <el-button type="primary" @click="saveConfig('business')">{{ t('common.save') }}</el-button>
           </el-form-item>
         </el-form>
       </el-tab-pane>
@@ -91,10 +91,10 @@ const saveConfig = async (type: string) => {
         configApi.update('task.assignRule', { configValue: businessConfig.taskAssignRule })
       ])
     }
-    ElMessage.success(`${type === 'system' ? '系统' : '业务'}参数保存成功`)
+    ElMessage.success(type === 'system' ? t('config.systemSaveSuccess') : t('config.businessSaveSuccess'))
   } catch (e) {
     console.error('Failed to save config:', e)
-    ElMessage.error('保存失败')
+    ElMessage.error(t('config.saveFailed'))
   }
 }
 
