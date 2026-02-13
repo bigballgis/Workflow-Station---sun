@@ -80,10 +80,17 @@ security:
   rate-limit:
     requests-per-minute: 100
 
-# Workflow Engine JWT (for token validation)
+# Workflow Engine Configuration
 workflow-engine:
+  url: ${WORKFLOW_ENGINE_URL:http://localhost:8081}
+  enabled: true
   jwt:
     secret: ${JWT_SECRET:your-256-bit-secret-key-for-development-only}
+
+# JWT Configuration (used by AuthController)
+jwt:
+  secret: ${JWT_SECRET:your-256-bit-secret-key-for-development-only}
+  expiration: ${JWT_EXPIRATION:86400000}
 
 # OpenAPI
 springdoc:

@@ -56,6 +56,11 @@ spec:
             configMapKeyRef:
               name: workflow-platform-config
               key: ADMIN_CENTER_URL
+        - name: USER_PORTAL_URL
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: USER_PORTAL_URL
         - name: JWT_EXPIRATION
           valueFrom:
             configMapKeyRef:

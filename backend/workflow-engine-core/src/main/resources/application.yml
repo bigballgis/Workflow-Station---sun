@@ -71,6 +71,10 @@ flowable:
 admin-center:
   url: ${ADMIN_CENTER_URL:http://localhost:8090}
 
+# User Portal Configuration
+user-portal:
+  url: ${USER_PORTAL_URL:http://localhost:8082}
+
 # JWT Configuration
 jwt:
   secret: ${JWT_SECRET:your-256-bit-secret-key-for-development-only}
