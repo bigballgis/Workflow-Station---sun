@@ -35,7 +35,7 @@
             <el-icon><Upload /></el-icon>
             {{ t('functionUnit.deploy') }}
           </el-button>
-          <el-button type="primary" @click="handlePublish">{{ t('functionUnit.publish') }}</el-button>
+
         </div>
       </div>
 
@@ -120,6 +120,9 @@
           <el-switch v-model="deployForm.autoEnable" />
           <span style="margin-left: 12px; color: #909399; font-size: 12px;">{{ t('functionUnit.autoEnableHint') }}</span>
         </el-form-item>
+        <el-form-item label="变更日志">
+          <el-input v-model="deployForm.changeLog" type="textarea" placeholder="描述本次变更内容（可选）..." :rows="3" />
+        </el-form-item>
       </el-form>
       <el-alert type="info" :closable="false" style="margin-bottom: 16px;">
         将功能单元部署到管理中心，部署后可在用户门户中使用
@@ -148,6 +151,17 @@
           :percentage="deployStatus.progress || 0" 
           status="exception"
         />
+        <el-alert
+          v-if="deployStatus.status === 'FAILED' && deployStatus.versionNumber"
+          type="warning"
+          :closable="false"
+          style="margin-top: 12px;"
+        >
+          版本 {{ deployStatus.versionNumber }} 已创建成功，但部署失败
+        </el-alert>
+        <div v-if="deployStatus.status === 'SUCCESS' && deployStatus.versionNumber" class="version-info">
+          新版本: {{ deployStatus.versionNumber }}
+        </div>
         <div v-if="deployStatus.steps?.length" class="deploy-steps">
           <div v-for="step in deployStatus.steps" :key="step.name" class="step-item">
             <el-icon v-if="step.status === 'SUCCESS'" color="#67c23a"><CircleCheck /></el-icon>
@@ -224,7 +238,8 @@ const deployStatus = ref<DeployResponse | null>(null)
 const deployPollingTimer = ref<number | null>(null)
 
 const deployForm = reactive({
-  autoEnable: true
+  autoEnable: true,
+  changeLog: ''
 })
 
 const editForm = reactive({
@@ -335,7 +350,8 @@ async function handleDeploy() {
   deployStatus.value = null
   try {
     const request: DeployRequest = {
-      autoEnable: deployForm.autoEnable
+      autoEnable: deployForm.autoEnable,
+      changeLog: deployForm.changeLog || undefined
     }
     const response = await functionUnitApi.deploy(functionUnitId.value, request)
     deployStatus.value = response.data
@@ -344,7 +360,9 @@ async function handleDeploy() {
     if (response.data.status === 'DEPLOYING') {
       startDeployPolling(response.data.deploymentId)
     } else if (response.data.status === 'SUCCESS') {
-      ElMessage.success('部署成功')
+      const versionInfo = response.data.versionNumber
+        ? `（版本 ${response.data.versionNumber}）` : ''
+      ElMessage.success(`部署成功${versionInfo}`)
     }
   } catch (e: any) {
     ElMessage.error(e.response?.data?.message || '部署失败')
@@ -369,7 +387,9 @@ function startDeployPolling(deploymentId: string) {
       deployStatus.value = response.data
       
       if (response.data.status === 'SUCCESS') {
-        ElMessage.success('部署成功')
+        const versionInfo = response.data.versionNumber
+          ? `（版本 ${response.data.versionNumber}）` : ''
+        ElMessage.success(`部署成功${versionInfo}`)
         stopDeployPolling()
       } else if (response.data.status === 'FAILED') {
         ElMessage.error('部署失败: ' + response.data.message)
@@ -392,6 +412,7 @@ function closeDeployDialog() {
   showDeployDialog.value = false
   // 重置部署状态，以便下次打开时可以重新部署
   deployStatus.value = null
+  deployForm.changeLog = ''
   stopDeployPolling()
 }
 
@@ -473,6 +494,16 @@ function getDeployStatusLabel(status: string) {
     }
   }
   
+  .version-info {
+    margin-top: 12px;
+    padding: 8px 12px;
+    background-color: #f0f9eb;
+    border-radius: 4px;
+    color: #67c23a;
+    font-size: 13px;
+    font-weight: 500;
+  }
+
   .error-message {
     margin-top: 12px;
     padding: 12px;

@@ -36,10 +36,6 @@
           <el-icon><Edit /></el-icon>
           {{ t('common.edit') }}
         </el-button>
-        <el-button v-if="permissions.canPublish()" size="small" type="success" @click="$emit('publish', item)">
-          <el-icon><Upload /></el-icon>
-          {{ t('functionUnit.publish') }}
-        </el-button>
         <el-button v-if="permissions.canClone()" size="small" type="warning" @click="$emit('clone', item)">
           <el-icon><CopyDocument /></el-icon>
           {{ t('functionUnit.clone') }}
@@ -56,7 +52,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Edit, Upload, CopyDocument, Delete } from '@element-plus/icons-vue'
+import { Edit, CopyDocument, Delete } from '@element-plus/icons-vue'
 import IconPreview from '@/components/icon/IconPreview.vue'
 import type { FunctionUnitResponse } from '@/api/functionUnit'
 import { permissions } from '@/utils/permission'
@@ -72,7 +68,6 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'click', item: FunctionUnitResponse): void
   (e: 'edit', item: FunctionUnitResponse): void
-  (e: 'publish', item: FunctionUnitResponse): void
   (e: 'clone', item: FunctionUnitResponse): void
   (e: 'delete', item: FunctionUnitResponse): void
 }>()

@@ -88,7 +88,7 @@
               :fields="formFields"
               :tabs="formTabs"
               v-model="formData"
-              label-width="120px"
+              :label-width="formLabelWidth"
               :readonly="true"
             />
           </div>
@@ -164,6 +164,7 @@ const formFields = ref<FormField[]>([])
 const formTabs = ref<FormTab[]>([])
 const formData = ref<Record<string, any>>({})
 const currentFormName = ref('')
+const formLabelWidth = ref('250px')
 
 // 流转记录
 const historyRecords = ref<HistoryRecord[]>([])
@@ -524,6 +525,11 @@ const parseFormConfig = (configStr: string) => {
     const config = typeof configStr === 'string' ? JSON.parse(configStr) : configStr
     const rules = config.rule && Array.isArray(config.rule) ? config.rule : (Array.isArray(config) ? config : null)
     if (rules) {
+      // 提取 labelWidth 配置
+      if (config.options?.form?.labelWidth) {
+        formLabelWidth.value = config.options.form.labelWidth
+      }
+      
       // 检查是否有 el-tabs 结构
       const tabsRule = rules.find((r: any) => r.type === 'el-tabs')
       

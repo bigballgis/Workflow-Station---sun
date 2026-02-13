@@ -359,7 +359,9 @@ export interface DeployRequest {
   environment?: 'DEVELOPMENT' | 'TESTING' | 'PRODUCTION'
   conflictStrategy?: string
   autoEnable?: boolean
+  changeLog?: string
 }
+
 
 export interface DeployResponse {
   deploymentId: string
@@ -368,7 +370,10 @@ export interface DeployResponse {
   progress?: number
   steps?: DeployStep[]
   deployedAt?: string
+  versionNumber?: string
+  changeLog?: string
 }
+
 
 export interface DeployStep {
   name: string

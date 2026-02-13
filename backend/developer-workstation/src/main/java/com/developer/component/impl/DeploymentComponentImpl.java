@@ -2,6 +2,7 @@ package com.developer.component.impl;
 
 import com.developer.component.DeploymentComponent;
 import com.developer.component.ExportImportComponent;
+import com.developer.component.FunctionUnitComponent;
 import com.developer.dto.DeployRequest;
 import com.developer.dto.DeployResponse;
 import com.developer.entity.FunctionUnit;
@@ -18,6 +19,9 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
+
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -33,6 +37,7 @@ public class DeploymentComponentImpl implements DeploymentComponent {
     private final FunctionUnitRepository functionUnitRepository;
     private final ExportImportComponent exportImportComponent;
     private final RestTemplate restTemplate;
+    private final FunctionUnitComponent functionUnitComponent;
     
     @Value("${admin-center.url:http://localhost:8090}")
     private String defaultAdminCenterUrl;
@@ -60,8 +65,18 @@ public class DeploymentComponentImpl implements DeploymentComponent {
         
         deploymentStatusMap.put(deploymentId, response);
         
+        // 捕获当前线程的 SecurityContext，传递到异步线程
+        SecurityContext securityContext = SecurityContextHolder.getContext();
+        
         // 异步执行部署
-        new Thread(() -> executeDeployment(functionUnitId, functionUnit, deploymentId, targetUrl, request)).start();
+        new Thread(() -> {
+            SecurityContextHolder.setContext(securityContext);
+            try {
+                executeDeployment(functionUnitId, functionUnit, deploymentId, targetUrl, request);
+            } finally {
+                SecurityContextHolder.clearContext();
+            }
+        }).start();
         
         return response;
     }
@@ -72,9 +87,18 @@ public class DeploymentComponentImpl implements DeploymentComponent {
         List<DeployResponse.DeployStep> steps = response.getSteps();
         
         try {
+            // Step 0: 自动创建版本
+            updateStep(steps, "创建版本快照", "RUNNING", null);
+            response.setProgress(5);
+            FunctionUnit updatedUnit = functionUnitComponent.publish(functionUnitId, request.getChangeLog());
+            response.setVersionNumber(updatedUnit.getCurrentVersion());
+            response.setChangeLog(request.getChangeLog());
+            updateStep(steps, "创建版本快照", "SUCCESS", "版本 " + updatedUnit.getCurrentVersion() + " 创建成功");
+            response.setProgress(15);
+            
             // Step 1: 导出功能单元
             updateStep(steps, "导出功能单元", "RUNNING", null);
-            response.setProgress(10);
+            response.setProgress(20);
             byte[] exportData = exportImportComponent.exportFunctionUnit(functionUnitId);
             updateStep(steps, "导出功能单元", "SUCCESS", "导出成功");
             response.setProgress(30);
