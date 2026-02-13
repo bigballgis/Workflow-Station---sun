@@ -25,6 +25,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.Locale;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -69,14 +70,17 @@ public class DeploymentComponentImpl implements DeploymentComponent {
         
         // 捕获当前线程的 SecurityContext，传递到异步线程
         SecurityContext securityContext = SecurityContextHolder.getContext();
+        Locale currentLocale = org.springframework.context.i18n.LocaleContextHolder.getLocale();
         
         // 异步执行部署
         new Thread(() -> {
             SecurityContextHolder.setContext(securityContext);
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(currentLocale);
             try {
                 executeDeployment(functionUnitId, functionUnit, deploymentId, targetUrl, request);
             } finally {
                 SecurityContextHolder.clearContext();
+                org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
             }
         }).start();
         

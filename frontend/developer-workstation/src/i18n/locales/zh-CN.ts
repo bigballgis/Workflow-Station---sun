@@ -854,5 +854,20 @@ export default {
   user: {
     username: '用户名',
     email: '邮箱'
+  },
+  deploy: {
+    step: {
+      create_version: '创建版本快照',
+      export: '导出功能单元',
+      upload: '上传到管理中心',
+      deploy: '部署功能单元'
+    },
+    started: '部署已开始',
+    version_created: '版本创建成功',
+    export_success: '导出成功',
+    upload_success: '上传成功',
+    success: '部署成功',
+    failed: '部署失败',
+    import_failed: '导入失败'
   }
 }

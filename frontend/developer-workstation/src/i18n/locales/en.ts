@@ -854,5 +854,20 @@ export default {
   user: {
     username: 'Username',
     email: 'Email'
+  },
+  deploy: {
+    step: {
+      create_version: 'Create version snapshot',
+      export: 'Export function unit',
+      upload: 'Upload to admin center',
+      deploy: 'Deploy function unit'
+    },
+    started: 'Deployment started',
+    version_created: 'Version created successfully',
+    export_success: 'Export successful',
+    upload_success: 'Upload successful',
+    success: 'Deploy successful',
+    failed: 'Deploy failed',
+    import_failed: 'Import failed'
   }
 }

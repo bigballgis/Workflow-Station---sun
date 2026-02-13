@@ -44,6 +44,10 @@ spring:
       password: ${SPRING_REDIS_PASSWORD:redis123}
       timeout: 5000ms
   
+  messages:
+    basename: i18n/messages
+    encoding: UTF-8
+
   servlet:
     multipart:
       max-file-size: 10MB

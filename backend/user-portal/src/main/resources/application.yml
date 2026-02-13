@@ -23,6 +23,10 @@ spring:
         format_sql: true
 
   
+  messages:
+    basename: i18n/messages
+    encoding: UTF-8
+
   # Redis Configuration (if needed)
   data:
     redis:

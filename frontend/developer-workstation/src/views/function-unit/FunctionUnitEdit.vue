@@ -168,8 +168,8 @@
             <el-icon v-else-if="step.status === 'FAILED'" color="#f56c6c"><CircleClose /></el-icon>
             <el-icon v-else-if="step.status === 'RUNNING'" color="#409eff"><Loading /></el-icon>
             <el-icon v-else color="#909399"><Clock /></el-icon>
-            <span>{{ step.name }}</span>
-            <span v-if="step.message" class="step-message">{{ step.message }}</span>
+            <span>{{ translateStep(step.name) }}</span>
+            <span v-if="step.message" class="step-message">{{ translateStep(step.message) }}</span>
           </div>
         </div>
         <div v-if="deployStatus.message && deployStatus.status === 'FAILED'" class="error-message">
@@ -446,6 +446,13 @@ function getDeployStatusLabel(status: string) {
     ROLLED_BACK: t('functionUnit.statusRolledBack')
   }
   return map[status] || status
+}
+
+function translateStep(text: string) {
+  if (!text) return text
+  // 尝试用 te() 检查 key 是否存在，存在则翻译
+  const translated = t(text)
+  return translated !== text ? translated : text
 }
 </script>
 
