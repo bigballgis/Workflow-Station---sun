@@ -20,14 +20,14 @@ import java.util.Map;
 @AllArgsConstructor
 public class FormDefinitionRequest {
     
-    @NotBlank(message = "表单名不能为空")
-    @Size(max = 100, message = "表单名长度不能超过100个字符")
+    @NotBlank(message = "{validation.form_name_required}")
+    @Size(max = 100, message = "{validation.form_name_max_length}")
     private String formName;
     
-    @NotNull(message = "表单类型不能为空")
+    @NotNull(message = "{validation.form_type_required}")
     private FormType formType;
     
-    @NotNull(message = "表单配置不能为空")
+    @NotNull(message = "{validation.form_config_required}")
     private Map<String, Object> configJson;
     
     private String description;

@@ -10,6 +10,7 @@ import com.admin.repository.RoleRepository;
 import com.admin.helper.RoleHelper;
 import com.admin.service.BusinessUnitRoleService;
 import com.admin.util.EntityTypeConverter;
+import com.platform.common.i18n.I18nService;
 import net.jqwik.api.*;
 import net.jqwik.api.lifecycle.BeforeTry;
 
@@ -35,6 +36,7 @@ public class BusinessUnitRoleBindingProperties {
     private BusinessUnitRepository businessUnitRepository;
     private RoleRepository roleRepository;
     private RoleHelper roleHelper;
+    private I18nService i18nService;
     private BusinessUnitRoleService businessUnitRoleService;
     
     @BeforeTry
@@ -43,11 +45,14 @@ public class BusinessUnitRoleBindingProperties {
         businessUnitRepository = mock(BusinessUnitRepository.class);
         roleRepository = mock(RoleRepository.class);
         roleHelper = mock(RoleHelper.class);
+        i18nService = mock(I18nService.class);
+        when(i18nService.getMessage(any(String.class))).thenReturn("test message");
         businessUnitRoleService = new BusinessUnitRoleService(
                 businessUnitRoleRepository,
                 businessUnitRepository,
                 roleRepository,
-                roleHelper);
+                roleHelper,
+                i18nService);
     }
     
     // ==================== Property Tests ====================

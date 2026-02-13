@@ -21,19 +21,19 @@ public class BatchRoleMemberRequest {
     /**
      * 角色ID
      */
-    @NotBlank(message = "角色ID不能为空")
+    @NotBlank(message = "{validation.role_id_required}")
     private String roleId;
     
     /**
      * 用户ID列表
      */
-    @NotEmpty(message = "用户ID列表不能为空")
+    @NotEmpty(message = "{validation.user_ids_required}")
     private List<String> userIds;
     
     /**
      * 操作类型: ADD, REMOVE
      */
-    @NotBlank(message = "操作类型不能为空")
+    @NotBlank(message = "{validation.operation_type_required}")
     private String operationType;
     
     /**

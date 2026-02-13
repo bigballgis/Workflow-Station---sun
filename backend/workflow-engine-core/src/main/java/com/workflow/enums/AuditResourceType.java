@@ -6,20 +6,20 @@ package com.workflow.enums;
  */
 public enum AuditResourceType {
     
-    PROCESS_DEFINITION("流程定义"),
-    PROCESS_INSTANCE("流程实例"),
-    TASK("任务"),
-    VARIABLE("流程变量"),
-    FORM("表单"),
-    USER("用户"),
-    ROLE("角色"),
-    BUSINESS_UNIT("业务单元"),
-    VIRTUAL_GROUP("虚拟组"),
-    SYSTEM("系统"),
-    DATA_TABLE("数据表"),
-    FILE("文件"),
-    NOTIFICATION("通知"),
-    AUDIT_LOG("审计日志");
+    PROCESS_DEFINITION("Process Definition"),
+    PROCESS_INSTANCE("Process Instance"),
+    TASK("Task"),
+    VARIABLE("Process Variable"),
+    FORM("Form"),
+    USER("User"),
+    ROLE("Role"),
+    BUSINESS_UNIT("Business Unit"),
+    VIRTUAL_GROUP("Virtual Group"),
+    SYSTEM("System"),
+    DATA_TABLE("Data Table"),
+    FILE("File"),
+    NOTIFICATION("Notification"),
+    AUDIT_LOG("Audit Log");
     
     private final String description;
     
@@ -40,6 +40,6 @@ public enum AuditResourceType {
                 return type;
             }
         }
-        throw new IllegalArgumentException("未知的资源类型: " + resourceType);
+        throw new IllegalArgumentException("Unknown resource type: " + resourceType);
     }
 }

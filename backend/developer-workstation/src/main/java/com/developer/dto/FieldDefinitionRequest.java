@@ -18,11 +18,11 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class FieldDefinitionRequest {
     
-    @NotBlank(message = "字段名不能为空")
-    @Size(max = 100, message = "字段名长度不能超过100个字符")
+    @NotBlank(message = "{validation.field_name_required}")
+    @Size(max = 100, message = "{validation.field_name_max_length}")
     private String fieldName;
     
-    @NotNull(message = "数据类型不能为空")
+    @NotNull(message = "{validation.data_type_required}")
     private DataType dataType;
     
     private Integer length;

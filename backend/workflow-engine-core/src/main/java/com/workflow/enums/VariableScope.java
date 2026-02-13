@@ -14,25 +14,10 @@ public enum VariableScope {
      * 流程实例级别
      * 变量在整个流程实例中可见，所有任务和执行都可以访问
      */
-    PROCESS_INSTANCE("process_instance", "流程实例级别"),
-    
-    /**
-     * 执行级别
-     * 变量仅在特定执行分支中可见，用于并行网关等场景
-     */
-    EXECUTION("execution", "执行级别"),
-    
-    /**
-     * 任务级别
-     * 变量仅在特定任务中可见，任务完成后变量可能被清理
-     */
-    TASK("task", "任务级别"),
-    
-    /**
-     * 全局级别
-     * 变量在所有流程实例中可见，用于系统级配置
-     */
-    GLOBAL("global", "全局级别");
+    PROCESS_INSTANCE("process_instance", "Process Instance"),
+    EXECUTION("execution", "Execution"),
+    TASK("task", "Task"),
+    GLOBAL("global", "Global");
     
     private final String code;
     private final String description;
@@ -62,6 +47,6 @@ public enum VariableScope {
                 return scope;
             }
         }
-        throw new IllegalArgumentException("未知的变量作用域代码: " + code);
+        throw new IllegalArgumentException("Unknown variable scope code: " + code);
     }
 }

@@ -90,7 +90,7 @@ public class WorkflowAuditAspect {
         } catch (Exception e) {
             operationResult = "FAILURE";
             errorMessage = e.getMessage();
-            logger.error("审计方法执行失败: {}", joinPoint.getSignature().getName(), e);
+            logger.error("Audit method execution failed: {}", joinPoint.getSignature().getName(), e);
             throw e;
             
         } finally {
@@ -128,7 +128,7 @@ public class WorkflowAuditAspect {
                 
             } catch (Exception auditException) {
                 // 审计日志记录失败不应该影响业务逻辑
-                logger.error("记录审计日志失败，但不影响业务执行", auditException);
+                logger.error("Failed to record audit log, but business execution is not affected", auditException);
             }
         }
         

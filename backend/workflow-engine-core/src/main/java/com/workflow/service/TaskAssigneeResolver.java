@@ -63,7 +63,7 @@ public class TaskAssigneeResolver {
         if (assigneeType == null) {
             log.warn("Unknown assignee type: {}", assigneeTypeCode);
             return ResolveResult.builder()
-                    .errorMessage("未知的分配类型: " + assigneeTypeCode)
+                    .errorMessage("Unknown assignee type: " + assigneeTypeCode)
                     .build();
         }
         
@@ -111,7 +111,7 @@ public class TaskAssigneeResolver {
             return ResolveResult.builder()
                     .assigneeType(assigneeType)
                     .requiresClaim(assigneeType.requiresClaim())
-                    .errorMessage("解析处理人失败: " + e.getMessage())
+                    .errorMessage("Failed to resolve assignee: " + e.getMessage())
                     .build();
         }
     }
@@ -124,22 +124,22 @@ public class TaskAssigneeResolver {
                                        String currentUserId) {
         // 验证 roleId
         if (assigneeType.requiresRoleId() && (roleId == null || roleId.isEmpty())) {
-            return "分配类型 " + assigneeType.getName() + " 需要指定角色ID";
+            return "Assignee type " + assigneeType.getName() + " requires a role ID";
         }
         
         // 验证 businessUnitId
         if (assigneeType.requiresBusinessUnitId() && (businessUnitId == null || businessUnitId.isEmpty())) {
-            return "分配类型 " + assigneeType.getName() + " 需要指定业务单元ID";
+            return "Assignee type " + assigneeType.getName() + " requires a business unit ID";
         }
         
         // 验证 initiatorId（发起人相关类型需要）
         if (assigneeType.isInitiatorBased() && (initiatorId == null || initiatorId.isEmpty())) {
-            return "分配类型 " + assigneeType.getName() + " 需要流程发起人ID";
+            return "Assignee type " + assigneeType.getName() + " requires process initiator ID";
         }
         
         // 验证 currentUserId（当前人相关类型需要）
         if (assigneeType.isCurrentUserBased() && (currentUserId == null || currentUserId.isEmpty())) {
-            return "分配类型 " + assigneeType.getName() + " 需要当前处理人ID";
+            return "Assignee type " + assigneeType.getName() + " requires current user ID";
         }
         
         return null;
@@ -156,7 +156,7 @@ public class TaskAssigneeResolver {
             return ResolveResult.builder()
                     .assigneeType(AssigneeType.FUNCTION_MANAGER)
                     .requiresClaim(false)
-                    .errorMessage("无法获取用户信息: " + initiatorId)
+                    .errorMessage("Cannot get user info: " + initiatorId)
                     .build();
         }
         
@@ -165,7 +165,7 @@ public class TaskAssigneeResolver {
             return ResolveResult.builder()
                     .assigneeType(AssigneeType.FUNCTION_MANAGER)
                     .requiresClaim(false)
-                    .errorMessage("用户没有设置职能经理: " + initiatorId)
+                    .errorMessage("User has no function manager set: " + initiatorId)
                     .build();
         }
         
@@ -186,7 +186,7 @@ public class TaskAssigneeResolver {
             return ResolveResult.builder()
                     .assigneeType(AssigneeType.ENTITY_MANAGER)
                     .requiresClaim(false)
-                    .errorMessage("无法获取用户信息: " + initiatorId)
+                    .errorMessage("Cannot get user info: " + initiatorId)
                     .build();
         }
         
@@ -195,7 +195,7 @@ public class TaskAssigneeResolver {
             return ResolveResult.builder()
                     .assigneeType(AssigneeType.ENTITY_MANAGER)
                     .requiresClaim(false)
-                    .errorMessage("用户没有设置实体经理: " + initiatorId)
+                    .errorMessage("User has no entity manager set: " + initiatorId)
                     .build();
         }
         
@@ -233,7 +233,7 @@ public class TaskAssigneeResolver {
             return ResolveResult.builder()
                     .assigneeType(AssigneeType.CURRENT_BU_ROLE)
                     .requiresClaim(true)
-                    .errorMessage("用户没有所属业务单元: " + currentUserId)
+                    .errorMessage("User has no business unit: " + currentUserId)
                     .build();
         }
         
@@ -243,7 +243,7 @@ public class TaskAssigneeResolver {
             return ResolveResult.builder()
                     .assigneeType(AssigneeType.CURRENT_BU_ROLE)
                     .requiresClaim(true)
-                    .errorMessage("业务单元 " + businessUnitId + " 中没有拥有角色 " + roleId + " 的用户")
+                    .errorMessage("No users with role " + roleId + " in business unit " + businessUnitId)
                     .build();
         }
         
@@ -267,7 +267,7 @@ public class TaskAssigneeResolver {
             return ResolveResult.builder()
                     .assigneeType(AssigneeType.CURRENT_PARENT_BU_ROLE)
                     .requiresClaim(true)
-                    .errorMessage("用户没有所属业务单元: " + currentUserId)
+                    .errorMessage("User has no business unit: " + currentUserId)
                     .build();
         }
         
@@ -277,7 +277,7 @@ public class TaskAssigneeResolver {
             return ResolveResult.builder()
                     .assigneeType(AssigneeType.CURRENT_PARENT_BU_ROLE)
                     .requiresClaim(true)
-                    .errorMessage("业务单元 " + businessUnitId + " 没有上级业务单元")
+                    .errorMessage("Business unit " + businessUnitId + " has no parent unit")
                     .build();
         }
         
@@ -287,7 +287,7 @@ public class TaskAssigneeResolver {
             return ResolveResult.builder()
                     .assigneeType(AssigneeType.CURRENT_PARENT_BU_ROLE)
                     .requiresClaim(true)
-                    .errorMessage("上级业务单元 " + parentBuId + " 中没有拥有角色 " + roleId + " 的用户")
+                    .errorMessage("No users with role " + roleId + " in parent business unit " + parentBuId)
                     .build();
         }
         
@@ -313,7 +313,7 @@ public class TaskAssigneeResolver {
             return ResolveResult.builder()
                     .assigneeType(AssigneeType.INITIATOR_BU_ROLE)
                     .requiresClaim(true)
-                    .errorMessage("发起人没有所属业务单元: " + initiatorId)
+                    .errorMessage("Initiator has no business unit: " + initiatorId)
                     .build();
         }
         
@@ -323,7 +323,7 @@ public class TaskAssigneeResolver {
             return ResolveResult.builder()
                     .assigneeType(AssigneeType.INITIATOR_BU_ROLE)
                     .requiresClaim(true)
-                    .errorMessage("业务单元 " + businessUnitId + " 中没有拥有角色 " + roleId + " 的用户")
+                    .errorMessage("No users with role " + roleId + " in business unit " + businessUnitId)
                     .build();
         }
         
@@ -347,7 +347,7 @@ public class TaskAssigneeResolver {
             return ResolveResult.builder()
                     .assigneeType(AssigneeType.INITIATOR_PARENT_BU_ROLE)
                     .requiresClaim(true)
-                    .errorMessage("发起人没有所属业务单元: " + initiatorId)
+                    .errorMessage("Initiator has no business unit: " + initiatorId)
                     .build();
         }
         
@@ -357,7 +357,7 @@ public class TaskAssigneeResolver {
             return ResolveResult.builder()
                     .assigneeType(AssigneeType.INITIATOR_PARENT_BU_ROLE)
                     .requiresClaim(true)
-                    .errorMessage("业务单元 " + businessUnitId + " 没有上级业务单元")
+                    .errorMessage("Business unit " + businessUnitId + " has no parent unit")
                     .build();
         }
         
@@ -367,7 +367,7 @@ public class TaskAssigneeResolver {
             return ResolveResult.builder()
                     .assigneeType(AssigneeType.INITIATOR_PARENT_BU_ROLE)
                     .requiresClaim(true)
-                    .errorMessage("上级业务单元 " + parentBuId + " 中没有拥有角色 " + roleId + " 的用户")
+                    .errorMessage("No users with role " + roleId + " in parent business unit " + parentBuId)
                     .build();
         }
         
@@ -393,7 +393,7 @@ public class TaskAssigneeResolver {
             return ResolveResult.builder()
                     .assigneeType(AssigneeType.FIXED_BU_ROLE)
                     .requiresClaim(true)
-                    .errorMessage("角色 " + roleId + " 不是业务单元 " + businessUnitId + " 的准入角色")
+                    .errorMessage("Role " + roleId + " is not an eligible role for business unit " + businessUnitId)
                     .build();
         }
         
@@ -403,7 +403,7 @@ public class TaskAssigneeResolver {
             return ResolveResult.builder()
                     .assigneeType(AssigneeType.FIXED_BU_ROLE)
                     .requiresClaim(true)
-                    .errorMessage("业务单元 " + businessUnitId + " 中没有拥有角色 " + roleId + " 的用户")
+                    .errorMessage("No users with role " + roleId + " in business unit " + businessUnitId)
                     .build();
         }
         
@@ -429,7 +429,7 @@ public class TaskAssigneeResolver {
             return ResolveResult.builder()
                     .assigneeType(AssigneeType.BU_UNBOUNDED_ROLE)
                     .requiresClaim(true)
-                    .errorMessage("没有用户拥有角色 " + roleId + "（通过虚拟组）")
+                    .errorMessage("No users with role " + roleId + " (via virtual groups)")
                     .build();
         }
         
@@ -454,7 +454,7 @@ public class TaskAssigneeResolver {
         if (assigneeType == null) {
             log.warn("Unknown assignee type: {}", assigneeTypeCode);
             return ResolveResult.builder()
-                    .errorMessage("未知的分配类型: " + assigneeTypeCode)
+                    .errorMessage("Unknown assignee type: " + assigneeTypeCode)
                     .build();
         }
         

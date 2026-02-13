@@ -36,7 +36,7 @@ public class ApiResponse<T> {
         return ApiResponse.<T>builder()
                 .success(true)
                 .code("200")
-                .message("操作成功")
+                .message("Success")
                 .data(data)
                 .build();
     }

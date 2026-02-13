@@ -18,7 +18,7 @@ import java.util.List;
 public class TaskBatchUrgeRequest {
 
     /** 任务ID列表 */
-    @NotEmpty(message = "任务ID列表不能为空")
+    @NotEmpty(message = "{validation.task_ids_required}")
     private List<String> taskIds;
 
     /** 催办消息 */

@@ -34,7 +34,7 @@ public class WorkflowValidationException extends RuntimeException {
      */
     private static String buildMessage(List<ValidationError> validationErrors) {
         if (validationErrors == null || validationErrors.isEmpty()) {
-            return "数据验证失败";
+            return "Validation failed";
         }
         
         if (validationErrors.size() == 1) {

@@ -117,7 +117,44 @@ export default {
     noDescription: 'No description',
     validationResult: 'Validation Result',
     checkLogin: 'Checking login status',
-    notLoggedIn: 'Not logged in, redirecting'
+    notLoggedIn: 'Not logged in, redirecting',
+    // Validation dialog
+    validationPassed: 'Validation Passed',
+    validationPassedDesc: 'Function unit configuration is complete and ready to publish',
+    validationErrors: 'Errors',
+    validationWarnings: 'Warnings',
+    validationFailed: 'Validation failed',
+    // Deploy dialog
+    changeLog: 'Change Log',
+    changeLogPlaceholder: 'Describe the changes (optional)...',
+    deployInfo: 'Deploy function unit to admin center, it will be available in user portal after deployment',
+    deployStatusTitle: 'Deploy Status',
+    versionCreatedButDeployFailed: 'Version {version} created successfully, but deployment failed',
+    newVersion: 'New version: {version}',
+    deploying: 'Deploying...',
+    startDeploy: 'Start Deploy',
+    redeploy: 'Redeploy',
+    // Messages
+    enterName: 'Please enter a name',
+    saveSuccess: 'Saved successfully',
+    saveFailed: 'Save failed',
+    exportSuccess: 'Export successful',
+    exportFailed: 'Export failed',
+    deploySuccess: 'Deploy successful',
+    deployFailed: 'Deploy failed',
+    deploySuccessWithVersion: 'Deploy successful (Version {version})',
+    deployFailedWithMessage: 'Deploy failed: {message}',
+    // Publish prompt
+    enterChangeLogPrompt: 'Please enter change log',
+    publishFunctionUnit: 'Publish Function Unit',
+    publishChangeLogPlaceholder: 'Describe the changes in this release...',
+    publishFailed: 'Publish failed',
+    // Deploy status labels
+    statusPending: 'Pending',
+    statusDeploying: 'Deploying',
+    statusSuccess: 'Deploy Success',
+    statusFailed: 'Deploy Failed',
+    statusRolledBack: 'Rolled Back'
   },
   table: {
     title: 'Table Designer',

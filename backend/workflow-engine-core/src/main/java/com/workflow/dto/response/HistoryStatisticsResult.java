@@ -145,7 +145,7 @@ public class HistoryStatisticsResult {
          * 获取格式化的吞吐量
          */
         public String getFormattedThroughput() {
-            return throughputPerHour != null ? String.format("%.2f 个/小时", throughputPerHour) : "N/A";
+            return throughputPerHour != null ? String.format("%.2f /hour", throughputPerHour) : "N/A";
         }
     }
 
@@ -204,13 +204,13 @@ public class HistoryStatisticsResult {
         long days = hours / 24;
 
         if (days > 0) {
-            return String.format("%d天%d小时%d分钟", days, hours % 24, minutes % 60);
+            return String.format("%dd %dh %dm", days, hours % 24, minutes % 60);
         } else if (hours > 0) {
-            return String.format("%d小时%d分钟", hours, minutes % 60);
+            return String.format("%dh %dm", hours, minutes % 60);
         } else if (minutes > 0) {
-            return String.format("%d分钟%d秒", minutes, seconds % 60);
+            return String.format("%dm %ds", minutes, seconds % 60);
         } else {
-            return String.format("%d秒", seconds);
+            return String.format("%ds", seconds);
         }
     }
 
@@ -242,13 +242,13 @@ public class HistoryStatisticsResult {
         long days = hours / 24;
 
         if (days > 0) {
-            return String.format("%d天%d小时%d分钟", days, hours % 24, minutes % 60);
+            return String.format("%dd %dh %dm", days, hours % 24, minutes % 60);
         } else if (hours > 0) {
-            return String.format("%d小时%d分钟", hours, minutes % 60);
+            return String.format("%dh %dm", hours, minutes % 60);
         } else if (minutes > 0) {
-            return String.format("%d分钟%d秒", minutes, seconds % 60);
+            return String.format("%dm %ds", minutes, seconds % 60);
         } else {
-            return String.format("%d秒", seconds);
+            return String.format("%ds", seconds);
         }
     }
 
@@ -256,7 +256,7 @@ public class HistoryStatisticsResult {
      * 获取统计摘要
      */
     public String getStatisticsSummary() {
-        return String.format("共完成 %d 个流程实例，%d 个任务，平均执行时长 %s",
+        return String.format("Completed %d process instances, %d tasks, average duration %s",
             completedProcessCount != null ? completedProcessCount : 0,
             completedTaskCount != null ? completedTaskCount : 0,
             getFormattedAverageDuration());
@@ -267,13 +267,13 @@ public class HistoryStatisticsResult {
      */
     public String getMostActiveProcessDefinition() {
         if (processDefinitionStats == null || processDefinitionStats.isEmpty()) {
-            return "无数据";
+            return "No data";
         }
 
         return processDefinitionStats.entrySet().stream()
             .max(Map.Entry.comparingByValue())
-            .map(entry -> String.format("%s (%d个实例)", entry.getKey(), entry.getValue()))
-            .orElse("无数据");
+            .map(entry -> String.format("%s (%d instances)", entry.getKey(), entry.getValue()))
+            .orElse("No data");
     }
 
     /**
@@ -281,13 +281,13 @@ public class HistoryStatisticsResult {
      */
     public String getMostActiveUser() {
         if (userStats == null || userStats.isEmpty()) {
-            return "无数据";
+            return "No data";
         }
 
         return userStats.entrySet().stream()
             .max(Map.Entry.comparingByValue())
-            .map(entry -> String.format("%s (%d个任务)", entry.getKey(), entry.getValue()))
-            .orElse("无数据");
+            .map(entry -> String.format("%s (%d tasks)", entry.getKey(), entry.getValue()))
+            .orElse("No data");
     }
 
     /**
@@ -309,7 +309,7 @@ public class HistoryStatisticsResult {
      */
     public String getPerformanceGrade() {
         if (performanceMetrics == null) {
-            return "无数据";
+            return "No data";
         }
 
         Double completionRate = performanceMetrics.getProcessCompletionRate();
@@ -318,16 +318,16 @@ public class HistoryStatisticsResult {
         if (completionRate != null && slaRate != null) {
             double avgRate = (completionRate + slaRate) / 2;
             if (avgRate >= 95) {
-                return "优秀";
+                return "Excellent";
             } else if (avgRate >= 85) {
-                return "良好";
+                return "Good";
             } else if (avgRate >= 70) {
-                return "一般";
+                return "Average";
             } else {
-                return "需改进";
+                return "Needs Improvement";
             }
         }
 
-        return "无法评估";
+        return "Unable to evaluate";
     }
 }

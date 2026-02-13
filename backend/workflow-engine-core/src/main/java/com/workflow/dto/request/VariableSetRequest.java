@@ -28,7 +28,7 @@ public class VariableSetRequest {
     /**
      * 变量名称
      */
-    @NotBlank(message = "变量名称不能为空")
+    @NotBlank(message = "Variable name is required")
     private String name;
 
     /**
@@ -39,13 +39,13 @@ public class VariableSetRequest {
     /**
      * 变量类型
      */
-    @NotNull(message = "变量类型不能为空")
+    @NotNull(message = "Variable type is required")
     private VariableType type;
 
     /**
      * 变量作用域
      */
-    @NotNull(message = "变量作用域不能为空")
+    @NotNull(message = "Variable scope is required")
     private VariableScope scope;
 
     /**

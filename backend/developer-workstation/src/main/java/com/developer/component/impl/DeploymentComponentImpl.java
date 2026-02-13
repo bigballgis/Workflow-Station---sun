@@ -9,6 +9,7 @@ import com.developer.entity.FunctionUnit;
 import com.developer.exception.BusinessException;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.FunctionUnitRepository;
+import com.platform.common.i18n.I18nService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -38,6 +39,7 @@ public class DeploymentComponentImpl implements DeploymentComponent {
     private final ExportImportComponent exportImportComponent;
     private final RestTemplate restTemplate;
     private final FunctionUnitComponent functionUnitComponent;
+    private final I18nService i18nService;
     
     @Value("${admin-center.url:http://localhost:8090}")
     private String defaultAdminCenterUrl;
@@ -57,7 +59,7 @@ public class DeploymentComponentImpl implements DeploymentComponent {
         DeployResponse response = DeployResponse.builder()
                 .deploymentId(deploymentId)
                 .status(DeployResponse.DeployStatus.DEPLOYING)
-                .message("部署已开始")
+                .message(i18nService.getMessage("deploy.started"))
                 .progress(0)
                 .steps(new ArrayList<>())
                 .deployedAt(LocalDateTime.now())
@@ -87,24 +89,24 @@ public class DeploymentComponentImpl implements DeploymentComponent {
         List<DeployResponse.DeployStep> steps = response.getSteps();
         
         try {
-            // Step 0: 自动创建版本
-            updateStep(steps, "创建版本快照", "RUNNING", null);
+            // Step 0: Auto create version
+            updateStep(steps, i18nService.getMessage("deploy.step.create_version"), "RUNNING", null);
             response.setProgress(5);
             FunctionUnit updatedUnit = functionUnitComponent.publish(functionUnitId, request.getChangeLog());
             response.setVersionNumber(updatedUnit.getCurrentVersion());
             response.setChangeLog(request.getChangeLog());
-            updateStep(steps, "创建版本快照", "SUCCESS", "版本 " + updatedUnit.getCurrentVersion() + " 创建成功");
+            updateStep(steps, i18nService.getMessage("deploy.step.create_version"), "SUCCESS", i18nService.getMessage("deploy.version_created", updatedUnit.getCurrentVersion()));
             response.setProgress(15);
             
-            // Step 1: 导出功能单元
-            updateStep(steps, "导出功能单元", "RUNNING", null);
+            // Step 1: Export function unit
+            updateStep(steps, i18nService.getMessage("deploy.step.export"), "RUNNING", null);
             response.setProgress(20);
             byte[] exportData = exportImportComponent.exportFunctionUnit(functionUnitId);
-            updateStep(steps, "导出功能单元", "SUCCESS", "导出成功");
+            updateStep(steps, i18nService.getMessage("deploy.step.export"), "SUCCESS", i18nService.getMessage("deploy.export_success"));
             response.setProgress(30);
             
-            // Step 2: 上传到管理员中心
-            updateStep(steps, "上传到管理员中心", "RUNNING", null);
+            // Step 2: Upload to admin center
+            updateStep(steps, i18nService.getMessage("deploy.step.upload"), "RUNNING", null);
             // 使用 function-units-import 控制器的 API
             String importUrl = targetUrl + "/api/v1/admin/function-units-import/import";
             
@@ -128,14 +130,14 @@ public class DeploymentComponentImpl implements DeploymentComponent {
                     importUrl, HttpMethod.POST, requestEntity, Map.class);
             
             if (!importResponse.getStatusCode().is2xxSuccessful()) {
-                throw new BusinessException("DEPLOY_IMPORT_FAILED", "导入失败");
+                throw new BusinessException("DEPLOY_IMPORT_FAILED", i18nService.getMessage("deploy.import_failed"));
             }
             
-            updateStep(steps, "上传到管理员中心", "SUCCESS", "上传成功");
+            updateStep(steps, i18nService.getMessage("deploy.step.upload"), "SUCCESS", i18nService.getMessage("deploy.upload_success"));
             response.setProgress(60);
             
-            // Step 3: 触发部署
-            updateStep(steps, "部署功能单元", "RUNNING", null);
+            // Step 3: Trigger deploy
+            updateStep(steps, i18nService.getMessage("deploy.step.deploy"), "RUNNING", null);
             Map<String, Object> importResult = importResponse.getBody();
             String importedId = (String) importResult.get("functionUnitId");
             
@@ -155,18 +157,18 @@ public class DeploymentComponentImpl implements DeploymentComponent {
                     deployUrl, HttpMethod.POST, deployRequest, Map.class);
             
             if (!deployResponse.getStatusCode().is2xxSuccessful()) {
-                throw new BusinessException("DEPLOY_FAILED", "部署失败");
+                throw new BusinessException("DEPLOY_FAILED", i18nService.getMessage("deploy.failed"));
             }
             
-            updateStep(steps, "部署功能单元", "SUCCESS", "部署成功");
+            updateStep(steps, i18nService.getMessage("deploy.step.deploy"), "SUCCESS", i18nService.getMessage("deploy.success"));
             response.setProgress(100);
             response.setStatus(DeployResponse.DeployStatus.SUCCESS);
-            response.setMessage("部署成功");
+            response.setMessage(i18nService.getMessage("deploy.success"));
             
         } catch (Exception e) {
-            log.error("部署失败: {}", e.getMessage(), e);
+            log.error("Deploy failed: {}", e.getMessage(), e);
             response.setStatus(DeployResponse.DeployStatus.FAILED);
-            response.setMessage("部署失败: " + e.getMessage());
+            response.setMessage(i18nService.getMessage("deploy.failed") + ": " + e.getMessage());
             
             // 标记当前步骤失败
             for (DeployResponse.DeployStep step : steps) {

@@ -2,6 +2,7 @@ package com.admin.controller;
 
 import com.admin.entity.ActionDefinition;
 import com.admin.repository.ActionDefinitionRepository;
+import com.platform.common.i18n.I18nService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -22,6 +23,7 @@ import java.util.Map;
 public class ActionDefinitionController {
     
     private final ActionDefinitionRepository actionDefinitionRepository;
+    private final I18nService i18nService;
     
     /**
      * Batch query actions by IDs
@@ -41,14 +43,14 @@ public class ActionDefinitionController {
             Map<String, Object> response = new HashMap<>();
             response.put("code", "SUCCESS");
             response.put("data", actions);
-            response.put("message", "查询成功");
+            response.put("message", i18nService.getMessage("admin.query_success"));
             
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             log.error("Failed to batch query actions", e);
             Map<String, Object> error = new HashMap<>();
             error.put("code", "ERROR");
-            error.put("message", "查询失败: " + e.getMessage());
+            error.put("message", i18nService.getMessage("admin.query_failed", e.getMessage()));
             return ResponseEntity.internalServerError().body(error);
         }
     }
@@ -65,14 +67,14 @@ public class ActionDefinitionController {
             Map<String, Object> response = new HashMap<>();
             response.put("code", "SUCCESS");
             response.put("data", actions);
-            response.put("message", "查询成功");
+            response.put("message", i18nService.getMessage("admin.query_success"));
             
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             log.error("Failed to query actions by function unit", e);
             Map<String, Object> error = new HashMap<>();
             error.put("code", "ERROR");
-            error.put("message", "查询失败: " + e.getMessage());
+            error.put("message", i18nService.getMessage("admin.query_failed", e.getMessage()));
             return ResponseEntity.internalServerError().body(error);
         }
     }

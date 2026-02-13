@@ -4,6 +4,7 @@ import com.portal.component.FunctionUnitAccessComponent;
 import com.portal.component.ProcessComponent;
 import com.portal.dto.*;
 import com.portal.entity.ProcessDraft;
+import com.platform.common.i18n.I18nService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +25,7 @@ import java.util.Map;
 public class ProcessController {
 
     private final ProcessComponent processComponent;
+    private final I18nService i18nService;
 
     @GetMapping("/definitions")
     @Operation(summary = "获取可发起的流程定义列表")
@@ -146,7 +148,7 @@ public class ProcessController {
         if (success) {
             return ApiResponse.success(null);
         }
-        return ApiResponse.error("撤回失败");
+        return ApiResponse.error(i18nService.getMessage("portal.withdraw_failed"));
     }
 
     @PostMapping("/{processId}/urge")
@@ -158,7 +160,7 @@ public class ProcessController {
         if (success) {
             return ApiResponse.success(null);
         }
-        return ApiResponse.error("催办失败");
+        return ApiResponse.error(i18nService.getMessage("portal.urge_failed"));
     }
 
     @PostMapping("/{processKey}/favorite")

@@ -6,6 +6,7 @@ import com.portal.dto.DelegationRuleRequest;
 import com.portal.dto.PageResponse;
 import com.portal.entity.DelegationAudit;
 import com.portal.entity.DelegationRule;
+import com.platform.common.i18n.I18nService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -26,6 +27,7 @@ import java.util.List;
 public class DelegationController {
 
     private final DelegationComponent delegationComponent;
+    private final I18nService i18nService;
 
     @Operation(summary = "获取委托规则列表")
     @GetMapping
@@ -49,7 +51,7 @@ public class DelegationController {
             @RequestHeader("X-User-Id") String userId,
             @Valid @RequestBody DelegationRuleRequest request) {
         DelegationRule rule = delegationComponent.createDelegationRule(userId, request);
-        return ApiResponse.success("委托规则创建成功", rule);
+        return ApiResponse.success(i18nService.getMessage("portal.delegation_created"), rule);
     }
 
     @Operation(summary = "更新委托规则")
@@ -59,7 +61,7 @@ public class DelegationController {
             @RequestHeader("X-User-Id") String userId,
             @Valid @RequestBody DelegationRuleRequest request) {
         DelegationRule rule = delegationComponent.updateDelegationRule(ruleId, userId, request);
-        return ApiResponse.success("委托规则更新成功", rule);
+        return ApiResponse.success(i18nService.getMessage("portal.delegation_updated"), rule);
     }
 
     @Operation(summary = "删除委托规则")
@@ -68,7 +70,7 @@ public class DelegationController {
             @PathVariable Long ruleId,
             @RequestHeader("X-User-Id") String userId) {
         delegationComponent.deleteDelegationRule(ruleId, userId);
-        return ApiResponse.success("委托规则删除成功", null);
+        return ApiResponse.success(i18nService.getMessage("portal.delegation_deleted"), null);
     }
 
     @Operation(summary = "暂停委托规则")
@@ -77,7 +79,7 @@ public class DelegationController {
             @PathVariable Long ruleId,
             @RequestHeader("X-User-Id") String userId) {
         DelegationRule rule = delegationComponent.suspendDelegationRule(ruleId, userId);
-        return ApiResponse.success("委托规则已暂停", rule);
+        return ApiResponse.success(i18nService.getMessage("portal.delegation_suspended"), rule);
     }
 
     @Operation(summary = "恢复委托规则")
@@ -86,7 +88,7 @@ public class DelegationController {
             @PathVariable Long ruleId,
             @RequestHeader("X-User-Id") String userId) {
         DelegationRule rule = delegationComponent.resumeDelegationRule(ruleId, userId);
-        return ApiResponse.success("委托规则已恢复", rule);
+        return ApiResponse.success(i18nService.getMessage("portal.delegation_resumed"), rule);
     }
 
     @Operation(summary = "获取代理任务（委托给我的）")

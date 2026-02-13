@@ -17,26 +17,26 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class BusinessUnitCreateRequest {
     
-    @NotBlank(message = "业务单元名称不能为空")
-    @Size(max = 100, message = "业务单元名称长度不能超过100")
+    @NotBlank(message = "{validation.bu_name_required}")
+    @Size(max = 100, message = "{validation.bu_name_max_length}")
     private String name;
     
-    @NotBlank(message = "业务单元编码不能为空")
-    @Size(max = 50, message = "业务单元编码长度不能超过50")
-    @Pattern(regexp = "^[A-Za-z0-9_-]+$", message = "业务单元编码只能包含字母、数字、下划线和连字符")
+    @NotBlank(message = "{validation.bu_code_required}")
+    @Size(max = 50, message = "{validation.bu_code_max_length}")
+    @Pattern(regexp = "^[A-Za-z0-9_-]+$", message = "{validation.bu_code_pattern}")
     private String code;
     
     private String parentId;
     
-    @Size(max = 50, message = "电话长度不能超过50")
+    @Size(max = 50, message = "{validation.phone_max_length}")
     private String phone;
     
     private String description;
     
-    @Size(max = 50, message = "成本中心长度不能超过50")
+    @Size(max = 50, message = "{validation.cost_center_max_length}")
     private String costCenter;
     
-    @Size(max = 200, message = "位置长度不能超过200")
+    @Size(max = 200, message = "{validation.location_max_length}")
     private String location;
     
     private Integer sortOrder;

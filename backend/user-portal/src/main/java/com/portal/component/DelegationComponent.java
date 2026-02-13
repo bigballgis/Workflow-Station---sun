@@ -7,6 +7,7 @@ import com.portal.enums.DelegationStatus;
 import com.portal.exception.PortalException;
 import com.portal.repository.DelegationAuditRepository;
 import com.portal.repository.DelegationRuleRepository;
+import com.platform.common.i18n.I18nService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -27,6 +28,7 @@ public class DelegationComponent {
 
     private final DelegationRuleRepository delegationRuleRepository;
     private final DelegationAuditRepository delegationAuditRepository;
+    private final I18nService i18nService;
 
     /**
      * 创建委托规则
@@ -35,12 +37,12 @@ public class DelegationComponent {
     public DelegationRule createDelegationRule(String delegatorId, DelegationRuleRequest request) {
         // 验证不能委托给自己
         if (delegatorId.equals(request.getDelegateId())) {
-            throw new PortalException("400", "不能委托给自己");
+            throw new PortalException("400", i18nService.getMessage("portal.cannot_delegate_self"));
         }
 
         // 检查是否存在循环委托
         if (hasCircularDelegation(delegatorId, request.getDelegateId())) {
-            throw new PortalException("400", "存在循环委托");
+            throw new PortalException("400", i18nService.getMessage("portal.circular_delegation"));
         }
 
         DelegationRule rule = DelegationRule.builder()
@@ -70,11 +72,11 @@ public class DelegationComponent {
     @Transactional
     public DelegationRule updateDelegationRule(Long ruleId, String delegatorId, DelegationRuleRequest request) {
         DelegationRule rule = delegationRuleRepository.findById(ruleId)
-                .orElseThrow(() -> new PortalException("404", "委托规则不存在"));
+                .orElseThrow(() -> new PortalException("404", i18nService.getMessage("portal.delegation_not_found")));
 
         // 验证是否是委托人
         if (!delegatorId.equals(rule.getDelegatorId())) {
-            throw new PortalException("403", "只有委托人才能修改委托规则");
+            throw new PortalException("403", i18nService.getMessage("portal.only_delegator_modify"));
         }
 
         rule.setDelegateId(request.getDelegateId());
@@ -100,11 +102,11 @@ public class DelegationComponent {
     @Transactional
     public void deleteDelegationRule(Long ruleId, String delegatorId) {
         DelegationRule rule = delegationRuleRepository.findById(ruleId)
-                .orElseThrow(() -> new PortalException("404", "委托规则不存在"));
+                .orElseThrow(() -> new PortalException("404", i18nService.getMessage("portal.delegation_not_found")));
 
         // 验证是否是委托人
         if (!delegatorId.equals(rule.getDelegatorId())) {
-            throw new PortalException("403", "只有委托人才能删除委托规则");
+            throw new PortalException("403", i18nService.getMessage("portal.only_delegator_delete"));
         }
 
         delegationRuleRepository.delete(rule);
@@ -121,10 +123,10 @@ public class DelegationComponent {
     @Transactional
     public DelegationRule suspendDelegationRule(Long ruleId, String delegatorId) {
         DelegationRule rule = delegationRuleRepository.findById(ruleId)
-                .orElseThrow(() -> new PortalException("404", "委托规则不存在"));
+                .orElseThrow(() -> new PortalException("404", i18nService.getMessage("portal.delegation_not_found")));
 
         if (!delegatorId.equals(rule.getDelegatorId())) {
-            throw new PortalException("403", "只有委托人才能暂停委托规则");
+            throw new PortalException("403", i18nService.getMessage("portal.only_delegator_suspend"));
         }
 
         rule.setStatus(DelegationStatus.SUSPENDED);
@@ -142,10 +144,10 @@ public class DelegationComponent {
     @Transactional
     public DelegationRule resumeDelegationRule(Long ruleId, String delegatorId) {
         DelegationRule rule = delegationRuleRepository.findById(ruleId)
-                .orElseThrow(() -> new PortalException("404", "委托规则不存在"));
+                .orElseThrow(() -> new PortalException("404", i18nService.getMessage("portal.delegation_not_found")));
 
         if (!delegatorId.equals(rule.getDelegatorId())) {
-            throw new PortalException("403", "只有委托人才能恢复委托规则");
+            throw new PortalException("403", i18nService.getMessage("portal.only_delegator_resume"));
         }
 
         rule.setStatus(DelegationStatus.ACTIVE);

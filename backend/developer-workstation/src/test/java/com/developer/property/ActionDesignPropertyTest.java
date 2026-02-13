@@ -5,9 +5,11 @@ import com.developer.component.impl.ActionDesignComponentImpl;
 import com.developer.enums.ActionType;
 import com.developer.repository.ActionDefinitionRepository;
 import com.developer.repository.FunctionUnitRepository;
+import com.platform.common.i18n.I18nService;
 import net.jqwik.api.*;
 
 import static org.assertj.core.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 /**
@@ -24,7 +26,9 @@ public class ActionDesignPropertyTest {
     void actionProcessStepBindingProperty(@ForAll("actionTypes") ActionType actionType) {
         ActionDefinitionRepository repository = mock(ActionDefinitionRepository.class);
         FunctionUnitRepository functionUnitRepository = mock(FunctionUnitRepository.class);
-        ActionDesignComponent component = new ActionDesignComponentImpl(repository, functionUnitRepository);
+        I18nService i18nService = mock(I18nService.class);
+        when(i18nService.getMessage(any(String.class))).thenReturn("test message");
+        ActionDesignComponent component = new ActionDesignComponentImpl(repository, functionUnitRepository, i18nService);
         
         assertThat(component).isNotNull();
         assertThat(actionType).isNotNull();

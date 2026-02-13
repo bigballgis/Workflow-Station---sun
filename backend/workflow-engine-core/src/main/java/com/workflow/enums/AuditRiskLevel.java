@@ -6,10 +6,10 @@ package com.workflow.enums;
  */
 public enum AuditRiskLevel {
     
-    LOW("低风险", "常规操作，无特殊风险"),
-    MEDIUM("中等风险", "需要关注的操作，可能影响业务流程"),
-    HIGH("高风险", "重要操作，可能影响系统安全或数据完整性"),
-    CRITICAL("严重风险", "关键操作，必须严格监控和审查");
+    LOW("Low Risk", "Routine operation, no special risk"),
+    MEDIUM("Medium Risk", "Operation that needs attention, may affect business processes"),
+    HIGH("High Risk", "Important operation, may affect system security or data integrity"),
+    CRITICAL("Critical Risk", "Critical operation, must be strictly monitored and reviewed");
     
     private final String description;
     private final String detail;
@@ -72,6 +72,6 @@ public enum AuditRiskLevel {
                 return level;
             }
         }
-        throw new IllegalArgumentException("未知的风险等级: " + riskLevel);
+        throw new IllegalArgumentException("Unknown risk level: " + riskLevel);
     }
 }

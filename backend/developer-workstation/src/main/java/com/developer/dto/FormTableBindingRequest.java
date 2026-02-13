@@ -20,13 +20,13 @@ public class FormTableBindingRequest {
     /**
      * 要绑定的表ID
      */
-    @NotNull(message = "表ID不能为空")
+    @NotNull(message = "{validation.table_id_required}")
     private Long tableId;
     
     /**
      * 绑定类型
      */
-    @NotNull(message = "绑定类型不能为空")
+    @NotNull(message = "{validation.binding_type_required}")
     private BindingType bindingType;
     
     /**

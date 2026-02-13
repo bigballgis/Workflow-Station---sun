@@ -83,13 +83,13 @@ public class HistoryQueryResult {
             long days = hours / 24;
             
             if (days > 0) {
-                return String.format("%d天%d小时%d分钟", days, hours % 24, minutes % 60);
+                return String.format("%dd %dh %dm", days, hours % 24, minutes % 60);
             } else if (hours > 0) {
-                return String.format("%d小时%d分钟", hours, minutes % 60);
+                return String.format("%dh %dm", hours, minutes % 60);
             } else if (minutes > 0) {
-                return String.format("%d分钟%d秒", minutes, seconds % 60);
+                return String.format("%dm %ds", minutes, seconds % 60);
             } else {
-                return String.format("%d秒", seconds);
+                return String.format("%ds", seconds);
             }
         }
     }
@@ -146,16 +146,16 @@ public class HistoryQueryResult {
          */
         public String getPriorityDescription() {
             if (priority == null) {
-                return "普通";
+                return "Normal";
             }
             if (priority >= 80) {
-                return "紧急";
+                return "Urgent";
             } else if (priority >= 60) {
-                return "高";
+                return "High";
             } else if (priority >= 40) {
-                return "普通";
+                return "Normal";
             } else {
-                return "低";
+                return "Low";
             }
         }
     }
@@ -199,23 +199,23 @@ public class HistoryQueryResult {
         public String getActivityTypeDescription() {
             switch (activityType != null ? activityType : "") {
                 case "startEvent":
-                    return "开始事件";
+                    return "Start Event";
                 case "endEvent":
-                    return "结束事件";
+                    return "End Event";
                 case "userTask":
-                    return "用户任务";
+                    return "User Task";
                 case "serviceTask":
-                    return "服务任务";
+                    return "Service Task";
                 case "exclusiveGateway":
-                    return "排他网关";
+                    return "Exclusive Gateway";
                 case "parallelGateway":
-                    return "并行网关";
+                    return "Parallel Gateway";
                 case "subProcess":
-                    return "子流程";
+                    return "Sub Process";
                 case "callActivity":
-                    return "调用活动";
+                    return "Call Activity";
                 default:
-                    return activityType != null ? activityType : "未知";
+                    return activityType != null ? activityType : "Unknown";
             }
         }
     }
@@ -244,13 +244,13 @@ public class HistoryQueryResult {
          */
         public String getVariableScope() {
             if (taskId != null) {
-                return "任务变量";
+                return "Task Variable";
             } else if (activityInstanceId != null) {
-                return "活动变量";
+                return "Activity Variable";
             } else if (processInstanceId != null) {
-                return "流程变量";
+                return "Process Variable";
             } else {
-                return "全局变量";
+                return "Global Variable";
             }
         }
 
@@ -276,23 +276,23 @@ public class HistoryQueryResult {
         public String getVariableTypeDescription() {
             switch (variableTypeName != null ? variableTypeName : "") {
                 case "string":
-                    return "字符串";
+                    return "String";
                 case "integer":
-                    return "整数";
+                    return "Integer";
                 case "long":
-                    return "长整数";
+                    return "Long";
                 case "double":
-                    return "浮点数";
+                    return "Double";
                 case "boolean":
-                    return "布尔值";
+                    return "Boolean";
                 case "date":
-                    return "日期";
+                    return "Date";
                 case "json":
-                    return "JSON对象";
+                    return "JSON Object";
                 case "serializable":
-                    return "序列化对象";
+                    return "Serializable Object";
                 default:
-                    return variableTypeName != null ? variableTypeName : "未知";
+                    return variableTypeName != null ? variableTypeName : "Unknown";
             }
         }
     }
@@ -328,24 +328,24 @@ public class HistoryQueryResult {
         StringBuilder summary = new StringBuilder();
         
         if (processInstances != null && !processInstances.isEmpty()) {
-            summary.append("流程实例: ").append(processInstances.size()).append("个");
+            summary.append("Process Instances: ").append(processInstances.size());
         }
         
         if (taskInstances != null && !taskInstances.isEmpty()) {
             if (summary.length() > 0) summary.append(", ");
-            summary.append("任务实例: ").append(taskInstances.size()).append("个");
+            summary.append("Task Instances: ").append(taskInstances.size());
         }
         
         if (activityInstances != null && !activityInstances.isEmpty()) {
             if (summary.length() > 0) summary.append(", ");
-            summary.append("活动实例: ").append(activityInstances.size()).append("个");
+            summary.append("Activity Instances: ").append(activityInstances.size());
         }
         
         if (variableInstances != null && !variableInstances.isEmpty()) {
             if (summary.length() > 0) summary.append(", ");
-            summary.append("变量实例: ").append(variableInstances.size()).append("个");
+            summary.append("Variable Instances: ").append(variableInstances.size());
         }
         
-        return summary.length() > 0 ? summary.toString() : "无数据";
+        return summary.length() > 0 ? summary.toString() : "No data";
     }
 }
