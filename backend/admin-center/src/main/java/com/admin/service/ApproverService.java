@@ -11,6 +11,7 @@ import com.admin.repository.ApproverRepository;
 import com.admin.repository.BusinessUnitRepository;
 import com.admin.repository.UserRepository;
 import com.admin.repository.VirtualGroupRepository;
+import com.platform.common.i18n.I18nService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -32,6 +33,7 @@ public class ApproverService {
     private final UserRepository userRepository;
     private final VirtualGroupRepository virtualGroupRepository;
     private final BusinessUnitRepository businessUnitRepository;
+    private final I18nService i18nService;
     
     /**
      * 添加审批人
@@ -48,12 +50,12 @@ public class ApproverService {
                 .orElseThrow(() -> new UserNotFoundException(userId));
         
         if (!user.isActive()) {
-            throw new AdminBusinessException("USER_NOT_ACTIVE", "用户不是活跃状态，无法设为审批人");
+            throw new AdminBusinessException("USER_NOT_ACTIVE", i18nService.getMessage("admin.user_not_active"));
         }
         
         // 检查是否已是审批人
         if (approverRepository.existsByTargetTypeAndTargetIdAndUserId(targetType, targetId, userId)) {
-            throw new AdminBusinessException("ALREADY_APPROVER", "该用户已是此目标的审批人");
+            throw new AdminBusinessException("ALREADY_APPROVER", i18nService.getMessage("admin.already_approver"));
         }
         
         Approver approver = Approver.builder()
@@ -75,7 +77,7 @@ public class ApproverService {
         log.info("Removing approver {}", approverId);
         
         Approver approver = approverRepository.findById(approverId)
-                .orElseThrow(() -> new AdminBusinessException("APPROVER_NOT_FOUND", "审批人配置不存在"));
+                .orElseThrow(() -> new AdminBusinessException("APPROVER_NOT_FOUND", i18nService.getMessage("admin.approver_not_found")));
         
         approverRepository.delete(approver);
         log.info("Approver {} removed successfully", approverId);
@@ -89,7 +91,7 @@ public class ApproverService {
         log.info("Removing approver {} from {} {}", userId, targetType, targetId);
         
         Approver approver = approverRepository.findByTargetTypeAndTargetIdAndUserId(targetType, targetId, userId)
-                .orElseThrow(() -> new AdminBusinessException("APPROVER_NOT_FOUND", "该用户不是此目标的审批人"));
+                .orElseThrow(() -> new AdminBusinessException("APPROVER_NOT_FOUND", i18nService.getMessage("admin.not_approver")));
         
         approverRepository.delete(approver);
         log.info("Approver {} removed from {} {} successfully", userId, targetType, targetId);
@@ -176,7 +178,7 @@ public class ApproverService {
                 }
                 break;
             default:
-                throw new AdminBusinessException("INVALID_TARGET_TYPE", "无效的目标类型: " + targetType);
+                throw new AdminBusinessException("INVALID_TARGET_TYPE", i18nService.getMessage("admin.invalid_target_type", targetType));
         }
     }
 }

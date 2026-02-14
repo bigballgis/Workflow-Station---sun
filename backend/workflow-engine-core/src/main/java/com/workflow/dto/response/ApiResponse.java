@@ -52,7 +52,7 @@ public class ApiResponse<T> {
         return ApiResponse.<T>builder()
                 .success(true)
                 .code("SUCCESS")
-                .message("操作成功")
+                .message("Success")
                 .data(data)
                 .timestamp(System.currentTimeMillis())
                 .build();

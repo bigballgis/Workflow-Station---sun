@@ -21,11 +21,11 @@ import java.util.List;
 public class DelegationRuleRequest {
 
     /** 被委托人ID */
-    @NotBlank(message = "被委托人ID不能为空")
+    @NotBlank(message = "{validation.delegate_id_required}")
     private String delegateId;
 
     /** 委托类型 */
-    @NotNull(message = "委托类型不能为空")
+    @NotNull(message = "{validation.delegation_type_required}")
     private DelegationType delegationType;
 
     /** 流程类型筛选 */

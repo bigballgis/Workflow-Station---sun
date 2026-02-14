@@ -8,6 +8,7 @@ import com.developer.exception.BusinessException;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.ActionDefinitionRepository;
 import com.developer.repository.FunctionUnitRepository;
+import com.platform.common.i18n.I18nService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -27,6 +28,7 @@ public class ActionDesignComponentImpl implements ActionDesignComponent {
     
     private final ActionDefinitionRepository actionDefinitionRepository;
     private final FunctionUnitRepository functionUnitRepository;
+    private final I18nService i18nService;
     
     @Override
     @Transactional
@@ -36,8 +38,8 @@ public class ActionDesignComponentImpl implements ActionDesignComponent {
         
         if (actionDefinitionRepository.existsByFunctionUnitIdAndActionName(functionUnitId, request.getActionName())) {
             throw new BusinessException("CONFLICT_ACTION_NAME_EXISTS", 
-                    "动作名已存在: " + request.getActionName(),
-                    "请使用其他动作名");
+                    i18nService.getMessage("action.name_exists", request.getActionName()),
+                    i18nService.getMessage("action.use_other_name"));
         }
         
         ActionDefinition actionDefinition = ActionDefinition.builder()
@@ -62,8 +64,8 @@ public class ActionDesignComponentImpl implements ActionDesignComponent {
         if (actionDefinitionRepository.existsByFunctionUnitIdAndActionNameAndIdNot(
                 actionDefinition.getFunctionUnit().getId(), request.getActionName(), id)) {
             throw new BusinessException("CONFLICT_ACTION_NAME_EXISTS", 
-                    "动作名已存在: " + request.getActionName(),
-                    "请使用其他动作名");
+                    i18nService.getMessage("action.name_exists", request.getActionName()),
+                    i18nService.getMessage("action.use_other_name"));
         }
         
         actionDefinition.setActionName(request.getActionName());
@@ -105,8 +107,8 @@ public class ActionDesignComponentImpl implements ActionDesignComponent {
             if (bpmnXml != null && bpmnXml.contains(action.getActionName())) {
                 throw new BusinessException(
                     "ACTION_IN_USE",
-                    "无法删除动作：该动作正在被流程定义使用",
-                    "请先从流程定义中移除该动作的引用"
+                    i18nService.getMessage("action.in_use"),
+                    i18nService.getMessage("action.remove_reference_first")
                 );
             }
         }
@@ -149,7 +151,7 @@ public class ActionDesignComponentImpl implements ActionDesignComponent {
         result.put("actionName", actionDefinition.getActionName());
         result.put("actionType", actionDefinition.getActionType());
         result.put("status", "SUCCESS");
-        result.put("message", "动作测试执行成功");
+        result.put("message", i18nService.getMessage("action.test_success"));
         
         // TODO: 根据动作类型执行实际测试
         

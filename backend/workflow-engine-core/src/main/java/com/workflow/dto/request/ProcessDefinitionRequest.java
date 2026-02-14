@@ -10,17 +10,17 @@ import lombok.Data;
 @Data
 public class ProcessDefinitionRequest {
     
-    @NotBlank(message = "流程定义名称不能为空")
+    @NotBlank(message = "Process definition name is required")
     private String name;
     
-    @NotBlank(message = "流程定义键不能为空")
+    @NotBlank(message = "Process definition key is required")
     private String key;
     
     private String category;
     
     private String description;
     
-    @NotNull(message = "BPMN XML内容不能为空")
+    @NotNull(message = "BPMN XML content is required")
     private String bpmnXml;
     
     private String tenantId;

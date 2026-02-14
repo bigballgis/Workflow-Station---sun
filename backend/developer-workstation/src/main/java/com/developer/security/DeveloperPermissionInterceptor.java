@@ -1,5 +1,6 @@
 package com.developer.security;
 
+import com.platform.common.i18n.I18nService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +24,7 @@ import java.util.Set;
 public class DeveloperPermissionInterceptor implements HandlerInterceptor {
     
     private final DeveloperPermissionChecker permissionChecker;
+    private final I18nService i18nService;
     
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) 
@@ -60,14 +62,14 @@ public class DeveloperPermissionInterceptor implements HandlerInterceptor {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()) {
             response.setStatus(HttpStatus.UNAUTHORIZED.value());
-            response.getWriter().write("{\"error\":\"UNAUTHORIZED\",\"message\":\"未登录\"}");
+            response.getWriter().write("{\"error\":\"UNAUTHORIZED\",\"message\":\"" + i18nService.getMessage("auth.unauthorized") + "\"}");
             return false;
         }
         
         String userId = getUserIdFromRequest(request);
         if (userId == null) {
             response.setStatus(HttpStatus.UNAUTHORIZED.value());
-            response.getWriter().write("{\"error\":\"UNAUTHORIZED\",\"message\":\"无法获取用户ID\"}");
+            response.getWriter().write("{\"error\":\"UNAUTHORIZED\",\"message\":\"" + i18nService.getMessage("auth.cannot_get_user_id") + "\"}");
             return false;
         }
         
@@ -80,7 +82,7 @@ public class DeveloperPermissionInterceptor implements HandlerInterceptor {
             log.warn("User {} does not have required permissions: {}", userId, Arrays.toString(requiredPermissions));
             response.setStatus(HttpStatus.FORBIDDEN.value());
             response.setContentType("application/json;charset=UTF-8");
-            response.getWriter().write("{\"error\":\"FORBIDDEN\",\"message\":\"没有操作权限\"}");
+            response.getWriter().write("{\"error\":\"FORBIDDEN\",\"message\":\"" + i18nService.getMessage("auth.no_permission") + "\"}");
             return false;
         }
         

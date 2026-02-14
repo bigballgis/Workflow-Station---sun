@@ -87,6 +87,12 @@ api.interceptors.response.use(
     }
 
     if (response) {
+      const errorMsg = response.data?.message || (response.data?.details 
+        ? (typeof response.data.details === 'object' 
+          ? Object.values(response.data.details).join('; ') 
+          : response.data.details)
+        : null)
+      
       switch (response.status) {
         case 403:
           // 403 may indicate not logged in or insufficient permissions
@@ -97,14 +103,30 @@ api.interceptors.response.use(
             router.push('/login')
             ElMessage.warning(i18n.global.t('api.pleaseLogin'))
           } else {
-            ElMessage.error(i18n.global.t('api.noPermission'))
+            ElMessage.error(errorMsg || i18n.global.t('api.noPermission'))
           }
+          break
+        case 400:
+          ElMessage.error(errorMsg || i18n.global.t('api.requestFailed'))
+          break
+        case 404:
+          ElMessage.error(errorMsg || i18n.global.t('api.requestFailed'))
+          break
+        case 422:
+          ElMessage.error(errorMsg || i18n.global.t('api.requestFailed'))
           break
         case 429:
           ElMessage.warning(i18n.global.t('api.tooManyRequests'))
           break
+        case 500:
+          ElMessage.error(errorMsg || i18n.global.t('api.requestFailed'))
+          break
+        case 502:
+        case 503:
+          ElMessage.error(i18n.global.t('api.networkError'))
+          break
         default:
-          ElMessage.error(response.data?.message || i18n.global.t('api.requestFailed'))
+          ElMessage.error(errorMsg || i18n.global.t('api.requestFailed'))
       }
     } else {
       ElMessage.error(i18n.global.t('api.networkError'))

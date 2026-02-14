@@ -19,7 +19,7 @@ public class ApprovalRequest {
     /**
      * The ID of the approver performing the action
      */
-    @NotBlank(message = "审批人ID不能为空")
+    @NotBlank(message = "{validation.approver_id_required}")
     private String approverId;
     
     /**

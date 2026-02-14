@@ -6,6 +6,7 @@ import com.portal.dto.PageResponse;
 import com.portal.dto.PermissionRequestDto;
 import com.portal.entity.PermissionRequest;
 import com.portal.enums.PermissionRequestStatus;
+import com.platform.common.i18n.I18nService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +26,7 @@ import java.util.Map;
 public class PermissionController {
 
     private final PermissionComponent permissionComponent;
+    private final I18nService i18nService;
 
     // ==================== 新的 API 端点 ====================
 
@@ -62,13 +64,13 @@ public class PermissionController {
         String reason = body.get("reason");
         
         if (roleId == null || roleId.isEmpty()) {
-            return ApiResponse.error("角色ID不能为空");
+            return ApiResponse.error(i18nService.getMessage("validation.role_id_required"));
         }
         if (organizationUnitId == null || organizationUnitId.isEmpty()) {
-            return ApiResponse.error("组织单元ID不能为空");
+            return ApiResponse.error(i18nService.getMessage("portal.org_unit_id_required"));
         }
         if (reason == null || reason.isEmpty()) {
-            return ApiResponse.error("申请理由不能为空");
+            return ApiResponse.error(i18nService.getMessage("portal.reason_required"));
         }
         
         try {
@@ -88,10 +90,10 @@ public class PermissionController {
         String reason = body.get("reason");
         
         if (virtualGroupId == null || virtualGroupId.isEmpty()) {
-            return ApiResponse.error("虚拟组ID不能为空");
+            return ApiResponse.error(i18nService.getMessage("portal.virtual_group_id_required"));
         }
         if (reason == null || reason.isEmpty()) {
-            return ApiResponse.error("申请理由不能为空");
+            return ApiResponse.error(i18nService.getMessage("portal.reason_required"));
         }
         
         try {
@@ -111,10 +113,10 @@ public class PermissionController {
         String reason = body.get("reason");
         
         if (businessUnitId == null || businessUnitId.isEmpty()) {
-            return ApiResponse.error("业务单元ID不能为空");
+            return ApiResponse.error(i18nService.getMessage("portal.bu_id_required"));
         }
         if (reason == null || reason.isEmpty()) {
-            return ApiResponse.error("申请理由不能为空");
+            return ApiResponse.error(i18nService.getMessage("portal.reason_required"));
         }
         
         try {
@@ -151,7 +153,7 @@ public class PermissionController {
             @RequestParam(defaultValue = "20") int size) {
         // 检查审批权限
         if (!permissionComponent.isApprover(userId)) {
-            return ApiResponse.error("您没有审批权限");
+            return ApiResponse.error(i18nService.getMessage("portal.no_approval_permission"));
         }
         
         // 只返回用户可以审批的申请
@@ -167,7 +169,7 @@ public class PermissionController {
             @RequestBody(required = false) Map<String, String> body) {
         // 检查审批权限
         if (!permissionComponent.isApprover(userId)) {
-            return ApiResponse.error("您没有审批权限");
+            return ApiResponse.error(i18nService.getMessage("portal.no_approval_permission"));
         }
         
         String comment = body != null ? body.get("comment") : null;
@@ -188,12 +190,12 @@ public class PermissionController {
             @RequestBody Map<String, String> body) {
         // 检查审批权限
         if (!permissionComponent.isApprover(userId)) {
-            return ApiResponse.error("您没有审批权限");
+            return ApiResponse.error(i18nService.getMessage("portal.no_approval_permission"));
         }
         
         String comment = body != null ? body.get("comment") : null;
         if (comment == null || comment.trim().isEmpty()) {
-            return ApiResponse.error("拒绝申请必须填写原因");
+            return ApiResponse.error(i18nService.getMessage("portal.reject_reason_required"));
         }
         
         try {

@@ -10,6 +10,7 @@ import com.admin.exception.RoleNotFoundException;
 import com.admin.repository.BusinessUnitRepository;
 import com.admin.repository.BusinessUnitRoleRepository;
 import com.admin.repository.RoleRepository;
+import com.platform.common.i18n.I18nService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -31,6 +32,7 @@ public class BusinessUnitRoleService {
     private final BusinessUnitRepository businessUnitRepository;
     private final RoleRepository roleRepository;
     private final RoleHelper roleHelper;
+    private final I18nService i18nService;
     
     /**
      * 绑定角色到业务单元
@@ -52,7 +54,7 @@ public class BusinessUnitRoleService {
         
         // 检查是否已绑定
         if (businessUnitRoleRepository.existsByBusinessUnitIdAndRoleId(businessUnitId, roleId)) {
-            throw new AdminBusinessException("ALREADY_BOUND", "该角色已绑定到此业务单元");
+            throw new AdminBusinessException("ALREADY_BOUND", i18nService.getMessage("admin.role_already_bound"));
         }
         
         BusinessUnitRole binding = BusinessUnitRole.builder()
@@ -74,7 +76,7 @@ public class BusinessUnitRoleService {
         
         BusinessUnitRole binding = businessUnitRoleRepository
                 .findByBusinessUnitIdAndRoleId(businessUnitId, roleId)
-                .orElseThrow(() -> new AdminBusinessException("NOT_BOUND", "该角色未绑定到此业务单元"));
+                .orElseThrow(() -> new AdminBusinessException("NOT_BOUND", i18nService.getMessage("admin.role_not_bound")));
         
         businessUnitRoleRepository.delete(binding);
         log.info("Role {} unbound from business unit {} successfully", roleId, businessUnitId);
@@ -114,7 +116,7 @@ public class BusinessUnitRoleService {
     public void validateBusinessRole(Role role) {
         if (!roleHelper.isBusinessRole(role)) {
             throw new AdminBusinessException("INVALID_ROLE_TYPE", 
-                    "只能绑定业务角色（BU-Bounded 或 BU-Unbounded），当前角色类型: " + role.getType());
+                    i18nService.getMessage("admin.only_business_role", role.getType()));
         }
     }
     

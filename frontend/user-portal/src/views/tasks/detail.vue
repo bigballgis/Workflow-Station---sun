@@ -101,7 +101,7 @@
               :fields="formFields"
               :tabs="formTabs"
               v-model="formData"
-              label-width="120px"
+              :label-width="formLabelWidth"
               :readonly="formReadOnly"
             />
           </div>
@@ -214,7 +214,7 @@
           :fields="formPopupFields"
           :tabs="formPopupTabs"
           v-model="formPopupData"
-          label-width="120px"
+          :label-width="formPopupLabelWidth"
           :readonly="formPopupReadOnly"
         />
       </div>
@@ -295,6 +295,7 @@ const formTabs = ref<FormTab[]>([])
 const formData = ref<Record<string, any>>({})
 const currentFormName = ref('')
 const formReadOnly = ref(false)
+const formLabelWidth = ref('250px')
 
 // 流转记录
 const historyRecords = ref<HistoryRecord[]>([])
@@ -322,6 +323,7 @@ const formPopupTabs = ref<FormTab[]>([])
 const formPopupData = ref<Record<string, any>>({})
 const formPopupReadOnly = ref(false)
 const formPopupWidth = ref('800px')
+const formPopupLabelWidth = ref('250px')
 const currentFormPopupAction = ref<TaskActionInfo | null>(null)
 
 const loadTaskDetail = async () => {
@@ -687,6 +689,11 @@ const parseFormConfig = (configStr: string) => {
     const config = typeof configStr === 'string' ? JSON.parse(configStr) : configStr
     const rules = config.rule && Array.isArray(config.rule) ? config.rule : (Array.isArray(config) ? config : null)
     if (rules) {
+      // 提取 labelWidth 配置
+      if (config.options?.form?.labelWidth) {
+        formLabelWidth.value = config.options.form.labelWidth
+      }
+      
       // 检查是否有 el-tabs 结构
       const tabsRule = rules.find((r: any) => r.type === 'el-tabs')
       
@@ -1017,6 +1024,11 @@ const parseFormPopupConfig = (configInput: any) => {
       rules.forEach((r: any, i: number) => {
         console.log(`Rule[${i}]: type=${r.type}, field=${r.field}, hasOptions=${!!r.options}, optionsCount=${r.options?.length || 0}`)
       })
+      
+      // 提取 labelWidth 配置
+      if (config.options?.form?.labelWidth) {
+        formPopupLabelWidth.value = config.options.form.labelWidth
+      }
       
       // 检查是否有 el-tabs 结构
       const tabsRule = rules.find((r: any) => r.type === 'el-tabs' || r.type === 'ElTabPane' || r.type === 'el-tab-pane')

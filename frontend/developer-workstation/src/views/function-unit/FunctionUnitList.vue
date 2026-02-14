@@ -95,7 +95,6 @@
           :tags="getItemTags(item.id)"
           @click="handleEdit"
           @edit="handleEdit"
-          @publish="handlePublish"
           @clone="handleClone"
           @delete="handleDelete"
         />
@@ -273,13 +272,6 @@ async function handleCreate() {
   createForm.iconId = null
   createForm.tags = []
   selectedIcon.value = null
-  loadData()
-}
-
-async function handlePublish(item: FunctionUnitResponse) {
-  const { value } = await ElMessageBox.prompt(t('functionUnit.enterChangeLog'), t('functionUnit.publishTitle'), { inputType: 'textarea' })
-  await store.publish(item.id, value)
-  ElMessage.success(t('functionUnit.publishSuccess'))
   loadData()
 }
 

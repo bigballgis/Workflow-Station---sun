@@ -15,13 +15,13 @@ public enum AssignmentType {
      * 直接分配给用户
      * 任务直接分配给特定用户，该用户在待办任务中可以看到
      */
-    USER("USER", "用户分配"),
+    USER("USER", "User Assignment"),
     
     /**
      * 分配给虚拟组
      * 任务分配给虚拟组，虚拟组的所有成员都可以看到并认领处理
      */
-    VIRTUAL_GROUP("VIRTUAL_GROUP", "虚拟组分配");
+    VIRTUAL_GROUP("VIRTUAL_GROUP", "Virtual Group Assignment");
     
     private final String code;
     private final String description;
@@ -48,6 +48,6 @@ public enum AssignmentType {
                 return type;
             }
         }
-        throw new IllegalArgumentException("未知的任务分配类型: " + code);
+        throw new IllegalArgumentException("Unknown assignment type: " + code);
     }
 }

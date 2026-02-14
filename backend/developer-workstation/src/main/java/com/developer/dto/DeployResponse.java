@@ -47,6 +47,16 @@ public class DeployResponse {
      */
     private LocalDateTime deployedAt;
     
+    /**
+     * 自动创建的版本号
+     */
+    private String versionNumber;
+    
+    /**
+     * 变更日志
+     */
+    private String changeLog;
+    
     public enum DeployStatus {
         PENDING,
         DEPLOYING,

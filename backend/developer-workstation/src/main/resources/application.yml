@@ -7,7 +7,13 @@ server:
 cors:
   allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:3002,http://localhost:5173}
 
+# Admin Center URL for permission checking and deployment
+admin-center:
+  url: ${ADMIN_CENTER_URL:http://localhost:8090}
+
 spring:
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
   application:
     name: developer-workstation
   
@@ -38,6 +44,10 @@ spring:
       password: ${SPRING_REDIS_PASSWORD:redis123}
       timeout: 5000ms
   
+  messages:
+    basename: i18n/messages
+    encoding: UTF-8
+
   servlet:
     multipart:
       max-file-size: 10MB
@@ -74,10 +84,17 @@ security:
   rate-limit:
     requests-per-minute: 100
 
-# Workflow Engine JWT (for token validation)
+# Workflow Engine Configuration
 workflow-engine:
+  url: ${WORKFLOW_ENGINE_URL:http://localhost:8081}
+  enabled: true
   jwt:
     secret: ${JWT_SECRET:your-256-bit-secret-key-for-development-only}
+
+# JWT Configuration (used by AuthController)
+jwt:
+  secret: ${JWT_SECRET:your-256-bit-secret-key-for-development-only}
+  expiration: ${JWT_EXPIRATION:86400000}
 
 # OpenAPI
 springdoc:
@@ -91,9 +108,10 @@ springdoc:
 # Logging
 logging:
   level:
-    com.developer: DEBUG
+    root: ${LOG_LEVEL_ROOT:INFO}
+    com.developer: ${LOG_LEVEL_PLATFORM:DEBUG}
     org.springframework.security: INFO
-    org.hibernate.SQL: DEBUG
+    org.hibernate.SQL: ${LOG_LEVEL_SQL:DEBUG}
 
 # Actuator Configuration
 management:

@@ -170,7 +170,7 @@ const loadUserInfo = async () => {
       try {
         userInfo.value = JSON.parse(storedUser)
       } catch {
-        userInfo.value = { username: localStorage.getItem('username') || '用户' }
+        userInfo.value = { username: localStorage.getItem('username') || 'User' }
       }
     }
   } finally {

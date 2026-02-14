@@ -1,6 +1,7 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
 import { ElMessage } from 'element-plus'
 import { refreshToken as refreshAuthToken, REFRESH_TOKEN_KEY, TOKEN_KEY, clearAuth } from './auth'
+import i18n from '@/i18n'
 
 let isRefreshing = false
 let failedQueue: Array<{ resolve: Function; reject: Function }> = []
@@ -81,8 +82,49 @@ request.interceptors.response.use(
       }
     }
 
-    const message = error.response?.data?.message || error.message || '请求失败'
-    ElMessage.error(message)
+    const message = error.response?.data?.message || error.response?.data?.details 
+      ? (typeof error.response?.data?.details === 'object' 
+        ? Object.values(error.response.data.details).join('; ') 
+        : error.response?.data?.details)
+      : null
+    
+    if (error.response) {
+      const { status, data } = error.response
+      const errorMsg = data?.message || message
+      
+      switch (status) {
+        case 400:
+          ElMessage.error(errorMsg || i18n.global.t('api.invalidParams'))
+          break
+        case 403:
+          ElMessage.error(errorMsg || i18n.global.t('api.noPermission'))
+          break
+        case 404:
+          ElMessage.error(errorMsg || i18n.global.t('api.notFound'))
+          break
+        case 422:
+          ElMessage.error(errorMsg || i18n.global.t('api.businessError'))
+          break
+        case 429:
+          ElMessage.error(errorMsg || i18n.global.t('api.tooManyRequests'))
+          break
+        case 500:
+          ElMessage.error(errorMsg || i18n.global.t('api.serverError'))
+          break
+        case 502:
+          ElMessage.error(i18n.global.t('api.serviceUnavailable'))
+          break
+        case 503:
+          ElMessage.error(i18n.global.t('api.serviceMaintenance'))
+          break
+        default:
+          ElMessage.error(errorMsg || `${i18n.global.t('api.requestFailed')} (${status})`)
+      }
+    } else if (error.request) {
+      ElMessage.error(i18n.global.t('api.networkError'))
+    } else {
+      ElMessage.error(i18n.global.t('api.configError'))
+    }
     return Promise.reject(error)
   }
 )

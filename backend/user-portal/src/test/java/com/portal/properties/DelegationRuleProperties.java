@@ -8,6 +8,7 @@ import com.portal.enums.DelegationType;
 import com.portal.exception.PortalException;
 import com.portal.repository.DelegationAuditRepository;
 import com.portal.repository.DelegationRuleRepository;
+import com.platform.common.i18n.I18nService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
@@ -36,13 +37,17 @@ class DelegationRuleProperties {
     @Mock
     private DelegationAuditRepository delegationAuditRepository;
 
+    @Mock
+    private I18nService i18nService;
+
     private DelegationComponent delegationComponent;
     private Random random;
 
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
-        delegationComponent = new DelegationComponent(delegationRuleRepository, delegationAuditRepository);
+        when(i18nService.getMessage(any(String.class))).thenReturn("test message");
+        delegationComponent = new DelegationComponent(delegationRuleRepository, delegationAuditRepository, i18nService);
         random = new Random();
 
         // 默认返回空列表

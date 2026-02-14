@@ -4,6 +4,7 @@ import com.platform.security.dto.UserEffectiveRole;
 import com.platform.security.entity.User;
 import com.platform.security.model.UserStatus;
 import com.platform.security.service.UserRoleService;
+import com.platform.common.i18n.I18nService;
 import com.portal.dto.LoginRequest;
 import com.portal.dto.LoginResponse;
 import com.portal.repository.UserRepository;
@@ -36,6 +37,7 @@ public class AuthController {
     private final PasswordEncoder passwordEncoder;
     private final JdbcTemplate jdbcTemplate;
     private final UserRoleService userRoleService;
+    private final I18nService i18nService;
     
     @Value("${jwt.secret:my-super-secret-jwt-key-for-development-only-32chars}")
     private String jwtSecret;
@@ -51,18 +53,18 @@ public class AuthController {
         try {
             log.debug("Looking up user: {}", request.getUsername());
             User user = userRepository.findByUsername(request.getUsername())
-                    .orElseThrow(() -> new RuntimeException("用户名或密码错误"));
+                    .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.invalid_credentials")));
             
             log.debug("User found: {}, status: {}", user.getUsername(), user.getStatus());
             
             if (user.isLocked()) {
                 log.warn("User {} is locked", user.getUsername());
-                throw new RuntimeException("账户已被锁定");
+                throw new RuntimeException(i18nService.getMessage("auth.account_locked"));
             }
             
             if (UserStatus.INACTIVE.equals(user.getStatus())) {
                 log.warn("User {} is inactive", user.getUsername());
-                throw new RuntimeException("账户已被禁用");
+                throw new RuntimeException(i18nService.getMessage("auth.account_disabled"));
             }
             
             log.debug("Checking password for user: {}", user.getUsername());
@@ -74,7 +76,7 @@ public class AuthController {
                     user.setLockedUntil(LocalDateTime.now().plusMinutes(30));
                 }
                 userRepository.save(user);
-                throw new RuntimeException("用户名或密码错误");
+                throw new RuntimeException(i18nService.getMessage("auth.invalid_credentials"));
             }
             
             log.debug("Password matched, updating login info");
@@ -140,7 +142,7 @@ public class AuthController {
             String userId = claims.getSubject();
             
             User user = userRepository.findById(userId)
-                    .orElseThrow(() -> new RuntimeException("用户不存在"));
+                    .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.user_not_found")));
             
             List<UserEffectiveRole> effectiveRoles = userRoleService.getEffectiveRolesForUser(userId);
             List<String> roles = effectiveRoles.stream()

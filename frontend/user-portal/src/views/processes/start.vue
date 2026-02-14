@@ -84,7 +84,7 @@
               :fields="formFields"
               :tabs="formTabs"
               v-model="formData"
-              label-width="120px"
+              :label-width="formLabelWidth"
             />
           </div>
           <el-empty v-else :description="t('processStart.noFormConfig')" />
@@ -184,6 +184,7 @@ const formFields = ref<FormField[]>([])
 const formTabs = ref<FormTab[]>([])
 const formData = ref<Record<string, any>>({})
 const currentFormName = ref('')
+const formLabelWidth = ref('250px')
 const formRendererRef = ref<InstanceType<typeof FormRenderer> | null>(null)
 
 // 流转记录
@@ -570,6 +571,11 @@ const parseFormConfig = (configStr: string) => {
     }
     
     if (rules) {
+      // 提取 labelWidth 配置
+      if (config.options?.form?.labelWidth) {
+        formLabelWidth.value = config.options.form.labelWidth
+      }
+      
       // 检查是否有 el-tabs 结构
       const tabsRule = rules.find((r: any) => r.type === 'el-tabs')
       

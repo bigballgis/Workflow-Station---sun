@@ -19,7 +19,7 @@ import java.util.Map;
 public class ProcessStartRequest {
 
     /** 流程定义Key */
-    @NotBlank(message = "流程定义Key不能为空")
+    @NotBlank(message = "{validation.process_definition_key_required}")
     private String processDefinitionKey;
 
     /** 业务Key */

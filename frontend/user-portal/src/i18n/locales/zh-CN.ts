@@ -556,7 +556,20 @@ export default {
     markAsRead: '标记已读',
     markAllAsRead: '全部已读',
     delete: '删除',
-    noNotifications: '暂无消息'
+    noNotifications: '暂无消息',
+    markedAsRead: '已标记为已读',
+    allMarkedAsRead: '已全部标记为已读',
+    deleteSuccess: '删除成功',
+    mockNewTask: '新任务分配',
+    mockNewTaskContent: '您有一个新的请假申请需要审批',
+    mockProcessApproved: '流程审批通过',
+    mockProcessApprovedContent: '您的报销申请已通过审批',
+    mockSystemMaintenance: '系统维护通知',
+    mockSystemMaintenanceContent: '系统将于今晚22:00进行维护',
+    mockTaskExpiring: '任务即将到期',
+    mockTaskExpiringContent: '采购申请审批任务将于明天到期',
+    mockMinutesAgo: '{n}分钟前',
+    mockHoursAgo: '{n}小时前'
   },
   error: {
     notFound: '页面不存在',
@@ -594,7 +607,10 @@ export default {
     endTime: '结束时间',
     itemsPerPage: '{count}条/页',
     saveSuccess: '保存成功',
-    notificationSaveSuccess: '通知设置保存成功'
+    notificationSaveSuccess: '通知设置保存成功',
+    timezoneShanghai: '(UTC+8) 中国标准时间',
+    timezoneHongKong: '(UTC+8) 香港时间',
+    timezoneTokyo: '(UTC+9) 东京时间'
   },
   status: {
     completed: '已完成',
@@ -645,5 +661,18 @@ export default {
   user: {
     username: '用户名',
     email: '邮箱'
+  },
+  api: {
+    requestFailed: '请求失败',
+    networkError: '网络错误，请检查网络连接',
+    invalidParams: '请求参数错误',
+    noPermission: '没有权限访问',
+    notFound: '请求的资源不存在',
+    businessError: '业务逻辑错误',
+    tooManyRequests: '请求过于频繁，请稍后重试',
+    serverError: '服务器内部错误',
+    serviceUnavailable: '服务暂时不可用，请稍后重试',
+    serviceMaintenance: '服务维护中，请稍后重试',
+    configError: '请求配置错误'
   }
 }

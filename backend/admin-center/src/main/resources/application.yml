@@ -70,6 +70,8 @@ app:
     timeout-seconds: 30
 
 spring:
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
   application:
     name: admin-center
   
@@ -132,6 +134,10 @@ spring:
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+
+  messages:
+    basename: i18n/messages
+    encoding: UTF-8
 
   servlet:
     multipart:

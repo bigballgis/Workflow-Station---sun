@@ -18,11 +18,11 @@ import java.util.Map;
 public class TaskCompleteRequest {
 
     /** 任务ID */
-    @NotBlank(message = "任务ID不能为空")
+    @NotBlank(message = "{validation.task_id_required}")
     private String taskId;
 
     /** 操作类型：APPROVE, REJECT, TRANSFER, DELEGATE, RETURN */
-    @NotBlank(message = "操作类型不能为空")
+    @NotBlank(message = "{validation.operation_type_required}")
     private String action;
 
     /** 处理意见 */

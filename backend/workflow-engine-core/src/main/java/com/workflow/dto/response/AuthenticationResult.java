@@ -58,7 +58,7 @@ public class AuthenticationResult {
             long expiresIn, UserSecurityInfo userInfo) {
         return AuthenticationResult.builder()
                 .success(true)
-                .message("认证成功")
+                .message("Authentication successful")
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
                 .expiresIn(expiresIn)

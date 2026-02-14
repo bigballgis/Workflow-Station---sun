@@ -16,8 +16,8 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class FunctionUnitRequest {
     
-    @NotBlank(message = "名称不能为空")
-    @Size(max = 100, message = "名称长度不能超过100个字符")
+    @NotBlank(message = "{validation.name_required}")
+    @Size(max = 100, message = "{validation.name_max_length}")
     private String name;
     
     private String description;

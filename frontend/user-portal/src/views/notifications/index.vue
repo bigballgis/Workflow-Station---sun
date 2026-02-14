@@ -57,10 +57,10 @@ const { t } = useI18n()
 const activeTab = ref('unread')
 
 const notifications = ref([
-  { id: 1, type: 'task', title: '新任务分配', content: '您有一个新的请假申请需要审批', time: '5分钟前', isRead: false },
-  { id: 2, type: 'process', title: '流程审批通过', content: '您的报销申请已通过审批', time: '1小时前', isRead: false },
-  { id: 3, type: 'system', title: '系统维护通知', content: '系统将于今晚22:00进行维护', time: '2小时前', isRead: true },
-  { id: 4, type: 'task', title: '任务即将到期', content: '采购申请审批任务将于明天到期', time: '3小时前', isRead: true }
+  { id: 1, type: 'task', title: t('notification.mockNewTask'), content: t('notification.mockNewTaskContent'), time: t('notification.mockMinutesAgo', { n: 5 }), isRead: false },
+  { id: 2, type: 'process', title: t('notification.mockProcessApproved'), content: t('notification.mockProcessApprovedContent'), time: t('notification.mockHoursAgo', { n: 1 }), isRead: false },
+  { id: 3, type: 'system', title: t('notification.mockSystemMaintenance'), content: t('notification.mockSystemMaintenanceContent'), time: t('notification.mockHoursAgo', { n: 2 }), isRead: true },
+  { id: 4, type: 'task', title: t('notification.mockTaskExpiring'), content: t('notification.mockTaskExpiringContent'), time: t('notification.mockHoursAgo', { n: 3 }), isRead: true }
 ])
 
 const unreadCount = computed(() => notifications.value.filter(n => !n.isRead).length)
@@ -103,19 +103,19 @@ const handleClick = (item: any) => {
 
 const markAsRead = (item: any) => {
   item.isRead = true
-  ElMessage.success('已标记为已读')
+  ElMessage.success(t('notification.markedAsRead'))
 }
 
 const markAllAsRead = () => {
   notifications.value.forEach(n => n.isRead = true)
-  ElMessage.success('已全部标记为已读')
+  ElMessage.success(t('notification.allMarkedAsRead'))
 }
 
 const deleteNotification = (item: any) => {
   const index = notifications.value.findIndex(n => n.id === item.id)
   if (index > -1) {
     notifications.value.splice(index, 1)
-    ElMessage.success('删除成功')
+    ElMessage.success(t('notification.deleteSuccess'))
   }
 }
 </script>

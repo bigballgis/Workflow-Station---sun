@@ -35,7 +35,7 @@
             <el-icon><Upload /></el-icon>
             {{ t('functionUnit.deploy') }}
           </el-button>
-          <el-button type="primary" @click="handlePublish">{{ t('functionUnit.publish') }}</el-button>
+
         </div>
       </div>
 
@@ -84,16 +84,16 @@
     <!-- Validation Result Dialog -->
     <el-dialog v-model="showValidationDialog" :title="t('functionUnit.validationResult')" width="500px">
       <div v-if="validationResult">
-        <el-result v-if="validationResult.valid" icon="success" title="验证通过" sub-title="功能单元配置完整，可以发布" />
+        <el-result v-if="validationResult.valid" icon="success" :title="t('functionUnit.validationPassed')" :sub-title="t('functionUnit.validationPassedDesc')" />
         <div v-else>
           <el-alert v-if="validationResult.errors?.length" type="error" :closable="false" style="margin-bottom: 12px;">
-            <template #title>错误 ({{ validationResult.errors.length }})</template>
+            <template #title>{{ t('functionUnit.validationErrors') }} ({{ validationResult.errors.length }})</template>
             <ul style="margin: 8px 0 0 0; padding-left: 20px;">
               <li v-for="(err, i) in validationResult.errors" :key="i">{{ err }}</li>
             </ul>
           </el-alert>
           <el-alert v-if="validationResult.warnings?.length" type="warning" :closable="false">
-            <template #title>警告 ({{ validationResult.warnings.length }})</template>
+            <template #title>{{ t('functionUnit.validationWarnings') }} ({{ validationResult.warnings.length }})</template>
             <ul style="margin: 8px 0 0 0; padding-left: 20px;">
               <li v-for="(warn, i) in validationResult.warnings" :key="i">{{ warn }}</li>
             </ul>
@@ -101,7 +101,7 @@
         </div>
       </div>
       <template #footer>
-        <el-button @click="showValidationDialog = false">关闭</el-button>
+        <el-button @click="showValidationDialog = false">{{ t('common.close') }}</el-button>
       </template>
     </el-dialog>
 
@@ -120,14 +120,17 @@
           <el-switch v-model="deployForm.autoEnable" />
           <span style="margin-left: 12px; color: #909399; font-size: 12px;">{{ t('functionUnit.autoEnableHint') }}</span>
         </el-form-item>
+        <el-form-item :label="t('functionUnit.changeLog')">
+          <el-input v-model="deployForm.changeLog" type="textarea" :placeholder="t('functionUnit.changeLogPlaceholder')" :rows="3" />
+        </el-form-item>
       </el-form>
       <el-alert type="info" :closable="false" style="margin-bottom: 16px;">
-        将功能单元部署到管理中心，部署后可在用户门户中使用
+        {{ t('functionUnit.deployInfo') }}
       </el-alert>
       
       <!-- Deploy Status -->
       <div v-if="deployStatus" class="deploy-status">
-        <el-divider>部署状态</el-divider>
+        <el-divider>{{ t('functionUnit.deployStatusTitle') }}</el-divider>
         <div class="status-header">
           <el-tag :type="getDeployStatusType(deployStatus.status)">
             {{ getDeployStatusLabel(deployStatus.status) }}
@@ -148,14 +151,25 @@
           :percentage="deployStatus.progress || 0" 
           status="exception"
         />
+        <el-alert
+          v-if="deployStatus.status === 'FAILED' && deployStatus.versionNumber"
+          type="warning"
+          :closable="false"
+          style="margin-top: 12px;"
+        >
+          {{ t('functionUnit.versionCreatedButDeployFailed', { version: deployStatus.versionNumber }) }}
+        </el-alert>
+        <div v-if="deployStatus.status === 'SUCCESS' && deployStatus.versionNumber" class="version-info">
+          {{ t('functionUnit.newVersion', { version: deployStatus.versionNumber }) }}
+        </div>
         <div v-if="deployStatus.steps?.length" class="deploy-steps">
           <div v-for="step in deployStatus.steps" :key="step.name" class="step-item">
             <el-icon v-if="step.status === 'SUCCESS'" color="#67c23a"><CircleCheck /></el-icon>
             <el-icon v-else-if="step.status === 'FAILED'" color="#f56c6c"><CircleClose /></el-icon>
             <el-icon v-else-if="step.status === 'RUNNING'" color="#409eff"><Loading /></el-icon>
             <el-icon v-else color="#909399"><Clock /></el-icon>
-            <span>{{ step.name }}</span>
-            <span v-if="step.message" class="step-message">{{ step.message }}</span>
+            <span>{{ translateStep(step.name) }}</span>
+            <span v-if="step.message" class="step-message">{{ translateStep(step.message) }}</span>
           </div>
         </div>
         <div v-if="deployStatus.message && deployStatus.status === 'FAILED'" class="error-message">
@@ -164,7 +178,7 @@
       </div>
       
       <template #footer>
-        <el-button @click="closeDeployDialog">关闭</el-button>
+        <el-button @click="closeDeployDialog">{{ t('common.close') }}</el-button>
         <el-button 
           v-if="!deployStatus || (deployStatus.status !== 'SUCCESS' && deployStatus.status !== 'FAILED')"
           type="primary" 
@@ -172,7 +186,7 @@
           :loading="deploying"
           :disabled="deployStatus?.status === 'DEPLOYING'"
         >
-          {{ deploying ? '部署中...' : '开始部署' }}
+          {{ deploying ? t('functionUnit.deploying') : t('functionUnit.startDeploy') }}
         </el-button>
         <el-button 
           v-if="deployStatus?.status === 'FAILED'"
@@ -180,7 +194,7 @@
           @click="handleDeploy" 
           :loading="deploying"
         >
-          重新部署
+          {{ t('functionUnit.redeploy') }}
         </el-button>
       </template>
     </el-dialog>
@@ -224,7 +238,8 @@ const deployStatus = ref<DeployResponse | null>(null)
 const deployPollingTimer = ref<number | null>(null)
 
 const deployForm = reactive({
-  autoEnable: true
+  autoEnable: true,
+  changeLog: ''
 })
 
 const editForm = reactive({
@@ -256,7 +271,7 @@ function openEditDialog() {
 
 async function handleSaveEdit() {
   if (!editForm.name.trim()) {
-    ElMessage.warning('请输入名称')
+    ElMessage.warning(t('functionUnit.enterName'))
     return
   }
   saving.value = true
@@ -266,11 +281,11 @@ async function handleSaveEdit() {
       description: editForm.description,
       iconId: editForm.iconId
     })
-    ElMessage.success('保存成功')
+    ElMessage.success(t('functionUnit.saveSuccess'))
     showEditDialog.value = false
     store.fetchById(functionUnitId.value)
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.message || '保存失败')
+    ElMessage.error(e.response?.data?.message || t('functionUnit.saveFailed'))
   } finally {
     saving.value = false
   }
@@ -286,7 +301,7 @@ async function handleValidate() {
     validationResult.value = await store.validate(functionUnitId.value)
     showValidationDialog.value = true
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.message || '验证失败')
+    ElMessage.error(e.response?.data?.message || t('functionUnit.validationFailed'))
   } finally {
     validating.value = false
   }
@@ -294,16 +309,16 @@ async function handleValidate() {
 
 async function handlePublish() {
   try {
-    const { value } = await ElMessageBox.prompt('请输入变更日志', '发布功能单元', { 
+    const { value } = await ElMessageBox.prompt(t('functionUnit.enterChangeLogPrompt'), t('functionUnit.publishFunctionUnit'), { 
       inputType: 'textarea',
-      inputPlaceholder: '描述本次发布的变更内容...'
+      inputPlaceholder: t('functionUnit.publishChangeLogPlaceholder')
     })
     await store.publish(functionUnitId.value, value)
-    ElMessage.success('发布成功')
+    ElMessage.success(t('functionUnit.publishSuccess'))
     store.fetchById(functionUnitId.value)
   } catch (e: any) {
     if (e !== 'cancel') {
-      ElMessage.error(e.response?.data?.message || '发布失败')
+      ElMessage.error(e.response?.data?.message || t('functionUnit.publishFailed'))
     }
   }
 }
@@ -322,9 +337,9 @@ async function handleExport() {
     link.click()
     document.body.removeChild(link)
     window.URL.revokeObjectURL(url)
-    ElMessage.success('导出成功')
+    ElMessage.success(t('functionUnit.exportSuccess'))
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.message || '导出失败')
+    ElMessage.error(e.response?.data?.message || t('functionUnit.exportFailed'))
   } finally {
     exporting.value = false
   }
@@ -335,7 +350,8 @@ async function handleDeploy() {
   deployStatus.value = null
   try {
     const request: DeployRequest = {
-      autoEnable: deployForm.autoEnable
+      autoEnable: deployForm.autoEnable,
+      changeLog: deployForm.changeLog || undefined
     }
     const response = await functionUnitApi.deploy(functionUnitId.value, request)
     deployStatus.value = response.data
@@ -344,14 +360,17 @@ async function handleDeploy() {
     if (response.data.status === 'DEPLOYING') {
       startDeployPolling(response.data.deploymentId)
     } else if (response.data.status === 'SUCCESS') {
-      ElMessage.success('部署成功')
+      const versionInfo = response.data.versionNumber
+        ? t('functionUnit.deploySuccessWithVersion', { version: response.data.versionNumber })
+        : t('functionUnit.deploySuccess')
+      ElMessage.success(versionInfo)
     }
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.message || '部署失败')
+    ElMessage.error(e.response?.data?.message || t('functionUnit.deployFailed'))
     deployStatus.value = {
       deploymentId: '',
       status: 'FAILED',
-      message: e.response?.data?.message || '部署失败'
+      message: e.response?.data?.message || t('functionUnit.deployFailed')
     }
   } finally {
     deploying.value = false
@@ -369,10 +388,13 @@ function startDeployPolling(deploymentId: string) {
       deployStatus.value = response.data
       
       if (response.data.status === 'SUCCESS') {
-        ElMessage.success('部署成功')
+        const versionInfo = response.data.versionNumber
+          ? t('functionUnit.deploySuccessWithVersion', { version: response.data.versionNumber })
+          : t('functionUnit.deploySuccess')
+        ElMessage.success(versionInfo)
         stopDeployPolling()
       } else if (response.data.status === 'FAILED') {
-        ElMessage.error('部署失败: ' + response.data.message)
+        ElMessage.error(t('functionUnit.deployFailedWithMessage', { message: response.data.message }))
         stopDeployPolling()
       }
     } catch (e) {
@@ -390,8 +412,9 @@ function stopDeployPolling() {
 
 function closeDeployDialog() {
   showDeployDialog.value = false
-  // 重置部署状态，以便下次打开时可以重新部署
+  // Reset deploy status so next open can redeploy
   deployStatus.value = null
+  deployForm.changeLog = ''
   stopDeployPolling()
 }
 
@@ -416,13 +439,20 @@ function getDeployStatusType(status: string): 'primary' | 'success' | 'warning' 
 
 function getDeployStatusLabel(status: string) {
   const map: Record<string, string> = {
-    PENDING: '等待中',
-    DEPLOYING: '部署中',
-    SUCCESS: '部署成功',
-    FAILED: '部署失败',
-    ROLLED_BACK: '已回滚'
+    PENDING: t('functionUnit.statusPending'),
+    DEPLOYING: t('functionUnit.statusDeploying'),
+    SUCCESS: t('functionUnit.statusSuccess'),
+    FAILED: t('functionUnit.statusFailed'),
+    ROLLED_BACK: t('functionUnit.statusRolledBack')
   }
   return map[status] || status
+}
+
+function translateStep(text: string) {
+  if (!text) return text
+  // 尝试用 te() 检查 key 是否存在，存在则翻译
+  const translated = t(text)
+  return translated !== text ? translated : text
 }
 </script>
 
@@ -473,6 +503,16 @@ function getDeployStatusLabel(status: string) {
     }
   }
   
+  .version-info {
+    margin-top: 12px;
+    padding: 8px 12px;
+    background-color: #f0f9eb;
+    border-radius: 4px;
+    color: #67c23a;
+    font-size: 13px;
+    font-weight: 500;
+  }
+
   .error-message {
     margin-top: 12px;
     padding: 12px;

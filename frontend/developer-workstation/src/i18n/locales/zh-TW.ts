@@ -117,7 +117,44 @@ export default {
     noDescription: '暫無描述',
     validationResult: '驗證結果',
     checkLogin: '正在檢查登入狀態',
-    notLoggedIn: '未登入，正在跳轉'
+    notLoggedIn: '未登入，正在跳轉',
+    // 驗證對話框
+    validationPassed: '驗證通過',
+    validationPassedDesc: '功能單元配置完整，可以發佈',
+    validationErrors: '錯誤',
+    validationWarnings: '警告',
+    validationFailed: '驗證失敗',
+    // 部署對話框
+    changeLog: '變更日誌',
+    changeLogPlaceholder: '描述本次變更內容（可選）...',
+    deployInfo: '將功能單元部署到管理中心，部署後可在使用者入口中使用',
+    deployStatusTitle: '部署狀態',
+    versionCreatedButDeployFailed: '版本 {version} 已建立成功，但部署失敗',
+    newVersion: '新版本: {version}',
+    deploying: '部署中...',
+    startDeploy: '開始部署',
+    redeploy: '重新部署',
+    // 訊息
+    enterName: '請輸入名稱',
+    saveSuccess: '儲存成功',
+    saveFailed: '儲存失敗',
+    exportSuccess: '匯出成功',
+    exportFailed: '匯出失敗',
+    deploySuccess: '部署成功',
+    deployFailed: '部署失敗',
+    deploySuccessWithVersion: '部署成功（版本 {version}）',
+    deployFailedWithMessage: '部署失敗: {message}',
+    // 發佈提示
+    enterChangeLogPrompt: '請輸入變更日誌',
+    publishFunctionUnit: '發佈功能單元',
+    publishChangeLogPlaceholder: '描述本次發佈的變更內容...',
+    publishFailed: '發佈失敗',
+    // 部署狀態標籤
+    statusPending: '等待中',
+    statusDeploying: '部署中',
+    statusSuccess: '部署成功',
+    statusFailed: '部署失敗',
+    statusRolledBack: '已回滾'
   },
   process: {
     title: '流程設計器',
@@ -817,5 +854,20 @@ export default {
   user: {
     username: '使用者名稱',
     email: '電子郵件'
+  },
+  deploy: {
+    step: {
+      create_version: '建立版本快照',
+      export: '匯出功能單元',
+      upload: '上傳到管理中心',
+      deploy: '部署功能單元'
+    },
+    started: '部署已開始',
+    version_created: '版本建立成功',
+    export_success: '匯出成功',
+    upload_success: '上傳成功',
+    success: '部署成功',
+    failed: '部署失敗',
+    import_failed: '匯入失敗'
   }
 }

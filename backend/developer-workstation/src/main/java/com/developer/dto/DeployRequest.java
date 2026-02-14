@@ -34,6 +34,11 @@ public class DeployRequest {
      */
     private Boolean autoEnable;
     
+    /**
+     * 版本变更日志（可选）
+     */
+    private String changeLog;
+    
     public enum DeployEnvironment {
         DEVELOPMENT,
         TESTING,

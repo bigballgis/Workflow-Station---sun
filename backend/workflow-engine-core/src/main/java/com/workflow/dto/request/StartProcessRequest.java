@@ -11,7 +11,7 @@ import java.util.Map;
 @Data
 public class StartProcessRequest {
     
-    @NotBlank(message = "流程定义键不能为空")
+    @NotBlank(message = "Process definition key is required")
     private String processDefinitionKey;
     
     private String businessKey;

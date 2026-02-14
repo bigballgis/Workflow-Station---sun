@@ -115,7 +115,7 @@ public class ProcessCompletionListener implements FlowableEventListener {
                 String activityName = lastUserTask.getActivityName();
                 log.info("Found last userTask for process {}: {} (end_time: {})", 
                         processInstanceId, activityName, lastUserTask.getEndTime());
-                return activityName != null ? activityName : "已完成";
+                return activityName != null ? activityName : "Completed";
             }
             
             // 如果没有用户任务，查询服务任务
@@ -133,17 +133,17 @@ public class ProcessCompletionListener implements FlowableEventListener {
                 String activityName = lastServiceTask.getActivityName();
                 log.info("Found last serviceTask for process {}: {} (end_time: {})", 
                         processInstanceId, activityName, lastServiceTask.getEndTime());
-                return activityName != null ? activityName : "已完成";
+                return activityName != null ? activityName : "Completed";
             }
             
             // 如果都没有找到，返回默认值
             log.warn("No endEvent, userTask or serviceTask found for process {}", processInstanceId);
-            return "已完成";
+            return "Completed";
             
         } catch (Exception e) {
             log.error("Failed to get last activity name for process {}: {}", 
                     processInstanceId, e.getMessage());
-            return "已完成";
+            return "Completed";
         }
     }
 

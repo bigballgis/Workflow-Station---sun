@@ -1,4 +1,6 @@
 spring:
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
   application:
     name: user-portal
   datasource:
@@ -21,6 +23,10 @@ spring:
         format_sql: true
 
   
+  messages:
+    basename: i18n/messages
+    encoding: UTF-8
+
   # Redis Configuration (if needed)
   data:
     redis:
@@ -73,6 +79,7 @@ logging:
     root: ${LOG_LEVEL_ROOT:INFO}
     com.portal: ${LOG_LEVEL_PLATFORM:DEBUG}
     org.springframework.web: INFO
+    org.hibernate.SQL: ${LOG_LEVEL_SQL:DEBUG}
 
 # Actuator Configuration
 management:

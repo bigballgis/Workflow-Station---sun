@@ -14,55 +14,55 @@ public enum VariableType {
     /**
      * 字符串类型
      */
-    STRING("string", "字符串"),
+    STRING("string", "String"),
     
     /**
      * 整数类型
      */
-    INTEGER("integer", "整数"),
+    INTEGER("integer", "Integer"),
     
     /**
      * 长整数类型
      */
-    LONG("long", "长整数"),
+    LONG("long", "Long"),
     
     /**
      * 双精度浮点数类型
      */
-    DOUBLE("double", "双精度浮点数"),
+    DOUBLE("double", "Double"),
     
     /**
      * 布尔类型
      */
-    BOOLEAN("boolean", "布尔值"),
+    BOOLEAN("boolean", "Boolean"),
     
     /**
      * 日期时间类型
      */
-    DATE("date", "日期时间"),
+    DATE("date", "Date"),
     
     /**
      * JSON对象类型
      * 用于存储复杂对象，使用PostgreSQL JSONB格式
      */
-    JSON("json", "JSON对象"),
+    JSON("json", "JSON"),
     
     /**
      * 文件类型
      * 存储文件引用信息
      */
-    FILE("file", "文件"),
+    FILE("file", "File"),
     
     /**
      * 二进制数据类型
      */
-    BINARY("binary", "二进制数据"),
+    BINARY("binary", "Binary"),
     
     /**
      * 已删除标记
      * 用于标记已删除的变量历史记录
      */
-    DELETED("deleted", "已删除");
+    DELETED("deleted", "Deleted");
     
     private final String code;
     private final String description;
@@ -92,7 +92,7 @@ public enum VariableType {
                 return type;
             }
         }
-        throw new IllegalArgumentException("未知的变量类型代码: " + code);
+        throw new IllegalArgumentException("Unknown variable type code: " + code);
     }
     
     /**

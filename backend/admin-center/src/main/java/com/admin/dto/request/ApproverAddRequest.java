@@ -17,12 +17,12 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class ApproverAddRequest {
     
-    @NotNull(message = "目标类型不能为空")
+    @NotNull(message = "{validation.target_type_required}")
     private ApproverTargetType targetType;
     
-    @NotBlank(message = "目标ID不能为空")
+    @NotBlank(message = "{validation.target_id_required}")
     private String targetId;
     
-    @NotBlank(message = "用户ID不能为空")
+    @NotBlank(message = "{validation.user_id_required}")
     private String userId;
 }

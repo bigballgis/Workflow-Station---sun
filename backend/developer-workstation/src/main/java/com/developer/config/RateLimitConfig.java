@@ -1,11 +1,13 @@
 package com.developer.config;
 
+import com.platform.common.i18n.I18nService;
 import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.Bucket;
 import io.github.bucket4j.Refill;
 import jakarta.servlet.*;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -22,6 +24,9 @@ public class RateLimitConfig implements Filter {
     
     @Value("${rate-limit.requests-per-minute:60}")
     private int requestsPerMinute;
+    
+    @Autowired
+    private I18nService i18nService;
     
     private final Map<String, Bucket> buckets = new ConcurrentHashMap<>();
     
@@ -40,7 +45,7 @@ public class RateLimitConfig implements Filter {
         } else {
             httpResponse.setStatus(429);
             httpResponse.setContentType("application/json");
-            httpResponse.getWriter().write("{\"error\":\"Too many requests\",\"message\":\"请求过于频繁，请稍后重试\"}");
+            httpResponse.getWriter().write("{\"error\":\"Too many requests\",\"message\":\"" + i18nService.getMessage("rate_limit.exceeded") + "\"}");
         }
     }
     

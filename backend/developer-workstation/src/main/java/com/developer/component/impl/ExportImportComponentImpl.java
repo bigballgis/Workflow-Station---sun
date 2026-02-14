@@ -349,22 +349,46 @@ public class ExportImportComponentImpl implements ExportImportComponent {
         }
     }
     
+    @SuppressWarnings("unchecked")
     private void importForm(FunctionUnit functionUnit, Map<String, Object> formData) {
+        Map<String, Object> configJsonMap = null;
+        Object configJsonObj = formData.get("configJson");
+        if (configJsonObj instanceof Map) {
+            configJsonMap = (Map<String, Object>) configJsonObj;
+        } else if (configJsonObj instanceof String) {
+            try {
+                configJsonMap = objectMapper.readValue((String) configJsonObj, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+            } catch (Exception e) {
+                log.warn("Failed to parse form configJson string: {}", e.getMessage());
+            }
+        }
         FormDefinition form = FormDefinition.builder()
                 .functionUnit(functionUnit)
                 .formName((String) formData.get("formName"))
                 .formType(FormType.valueOf((String) formData.get("formType")))
-                .configJson(null) // Will be set from configJson field
+                .configJson(configJsonMap)
                 .build();
         formDefinitionRepository.save(form);
     }
     
+    @SuppressWarnings("unchecked")
     private void importAction(FunctionUnit functionUnit, Map<String, Object> actionData) {
+        Map<String, Object> configJsonMap = null;
+        Object configJsonObj = actionData.get("configJson");
+        if (configJsonObj instanceof Map) {
+            configJsonMap = (Map<String, Object>) configJsonObj;
+        } else if (configJsonObj instanceof String) {
+            try {
+                configJsonMap = objectMapper.readValue((String) configJsonObj, new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+            } catch (Exception e) {
+                log.warn("Failed to parse action configJson string: {}", e.getMessage());
+            }
+        }
         ActionDefinition action = ActionDefinition.builder()
                 .functionUnit(functionUnit)
                 .actionName((String) actionData.get("actionName"))
                 .actionType(ActionType.valueOf((String) actionData.get("actionType")))
-                .configJson(null) // Will be set from configJson field
+                .configJson(configJsonMap)
                 .build();
         actionDefinitionRepository.save(action);
     }

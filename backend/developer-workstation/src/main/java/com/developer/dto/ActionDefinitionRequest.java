@@ -20,14 +20,14 @@ import java.util.Map;
 @AllArgsConstructor
 public class ActionDefinitionRequest {
     
-    @NotBlank(message = "动作名不能为空")
-    @Size(max = 100, message = "动作名长度不能超过100个字符")
+    @NotBlank(message = "{validation.action_name_required}")
+    @Size(max = 100, message = "{validation.action_name_max_length}")
     private String actionName;
     
-    @NotNull(message = "动作类型不能为空")
+    @NotNull(message = "{validation.action_type_required}")
     private ActionType actionType;
     
-    @NotNull(message = "动作配置不能为空")
+    @NotNull(message = "{validation.action_config_required}")
     private Map<String, Object> configJson;
     
     private String icon;

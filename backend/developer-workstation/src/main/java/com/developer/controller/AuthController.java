@@ -6,6 +6,7 @@ import com.developer.entity.User;
 import com.developer.repository.UserRepository;
 import com.platform.security.dto.UserEffectiveRole;
 import com.platform.security.service.UserRoleService;
+import com.platform.common.i18n.I18nService;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -35,6 +36,7 @@ public class AuthController {
     private final PasswordEncoder passwordEncoder;
     private final JdbcTemplate jdbcTemplate;
     private final UserRoleService userRoleService;
+    private final I18nService i18nService;
     
     @Value("${jwt.secret:my-super-secret-jwt-key-for-development-only-32chars}")
     private String jwtSecret;
@@ -49,14 +51,14 @@ public class AuthController {
         
         try {
             User user = userRepository.findByUsername(request.getUsername())
-                    .orElseThrow(() -> new RuntimeException("用户名或密码错误"));
+                    .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.invalid_credentials")));
             
             if (user.isLocked()) {
-                throw new RuntimeException("账户已被锁定");
+                throw new RuntimeException(i18nService.getMessage("auth.account_locked"));
             }
             
             if ("DISABLED".equals(user.getStatus())) {
-                throw new RuntimeException("账户已被禁用");
+                throw new RuntimeException(i18nService.getMessage("auth.account_disabled"));
             }
             
             if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
@@ -66,7 +68,7 @@ public class AuthController {
                     user.setLockedUntil(LocalDateTime.now().plusMinutes(30));
                 }
                 userRepository.save(user);
-                throw new RuntimeException("用户名或密码错误");
+                throw new RuntimeException(i18nService.getMessage("auth.invalid_credentials"));
             }
             
             user.resetFailedLoginCount();
@@ -131,7 +133,7 @@ public class AuthController {
             String userId = claims.getSubject();
             
             User user = userRepository.findById(userId)
-                    .orElseThrow(() -> new RuntimeException("用户不存在"));
+                    .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.user_not_found")));
             
             List<UserEffectiveRole> effectiveRoles = userRoleService.getEffectiveRolesForUser(userId);
             List<String> roles = effectiveRoles.stream()

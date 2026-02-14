@@ -79,9 +79,9 @@
               <el-form :model="preferenceForm" label-width="120px">
                 <el-form-item :label="t('settings.timezone')">
                   <el-select v-model="preferenceForm.timezone" style="width: 300px;">
-                    <el-option value="Asia/Shanghai" label="(UTC+8) 中国标准时间" />
-                    <el-option value="Asia/Hong_Kong" label="(UTC+8) 香港时间" />
-                    <el-option value="Asia/Tokyo" label="(UTC+9) 东京时间" />
+                    <el-option value="Asia/Shanghai" :label="t('settings.timezoneShanghai')" />
+                    <el-option value="Asia/Hong_Kong" :label="t('settings.timezoneHongKong')" />
+                    <el-option value="Asia/Tokyo" :label="t('settings.timezoneTokyo')" />
                   </el-select>
                 </el-form-item>
                 <el-form-item :label="t('settings.dateFormat')">

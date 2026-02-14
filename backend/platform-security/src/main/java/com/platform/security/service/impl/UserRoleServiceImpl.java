@@ -46,7 +46,7 @@ public class UserRoleServiceImpl implements UserRoleService {
         // 1. 查询直接分配给用户的角色 (USER类型)
         List<RoleAssignment> userAssignments = roleAssignmentRepository.findValidUserAssignments(userId);
         for (RoleAssignment assignment : userAssignments) {
-            addRoleFromAssignment(roleMap, assignment, AssignmentTargetType.USER, userId, "直接分配");
+            addRoleFromAssignment(roleMap, assignment, AssignmentTargetType.USER, userId, "Direct Assignment");
         }
         
         // 2. 查询用户所属虚拟组被分配的角色 (VIRTUAL_GROUP类型)

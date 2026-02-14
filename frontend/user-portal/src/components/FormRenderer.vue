@@ -514,7 +514,7 @@ const props = withDefaults(defineProps<Props>(), {
   modelValue: () => ({}),
   tabs: () => [],
   readonly: false,
-  labelWidth: '120px',
+  labelWidth: '250px',
   size: 'default'
 })
 

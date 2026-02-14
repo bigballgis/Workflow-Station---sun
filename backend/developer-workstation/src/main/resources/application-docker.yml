@@ -38,10 +38,6 @@ app:
     timeout-seconds: 30
     max-retries: 3
 
-# Admin Center URL for permission checking
-admin-center:
-  url: ${ADMIN_CENTER_URL:http://platform-admin-center:8080}
-    
   monitoring:
     enabled: true
     log-level: ${LOG_LEVEL:INFO}
@@ -66,6 +62,10 @@ admin-center:
     engine-url: ${WORKFLOW_ENGINE_URL:http://workflow-engine:8080}
     enabled: true
     timeout-seconds: 30
+
+# Admin Center URL for permission checking
+admin-center:
+  url: ${ADMIN_CENTER_URL:http://admin-center:8080}
 
 spring:
   datasource:
