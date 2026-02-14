@@ -26,6 +26,8 @@ import java.util.Map;
 @Tag(name = "监控管理", description = "流程监控和统计分析API")
 public class MonitoringController {
 
+    private final com.workflow.component.ProcessEngineComponent processEngineComponent;
+
     /**
      * 查询流程监控数据
      */
@@ -61,6 +63,20 @@ public class MonitoringController {
             @PathVariable String processInstanceId) {
         
         Map<String, Object> result = Map.of("processInstanceId", processInstanceId, "diagram", "diagram-data");
+        return ResponseEntity.ok(ApiResponse.success(result));
+    }
+
+    /**
+     * 获取流程实例的当前活动节点
+     */
+    @GetMapping("/processes/{processInstanceId}/current-activity")
+    @Operation(summary = "获取当前活动节点", description = "获取流程实例的当前活动节点信息")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getCurrentActivity(
+            @Parameter(description = "流程实例ID", required = true)
+            @PathVariable String processInstanceId) {
+        
+        log.info("Getting current activity for process instance: {}", processInstanceId);
+        Map<String, Object> result = processEngineComponent.getCurrentActivity(processInstanceId);
         return ResponseEntity.ok(ApiResponse.success(result));
     }
 

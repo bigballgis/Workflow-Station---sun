@@ -391,6 +391,36 @@ public class TaskProcessComponent {
                     if (nextTaskName != null) {
                         updateProcessInstanceAssignee(processInstanceId, nextAssignee, nextTaskName);
                         log.info("Process {} continues with next task: {}", processInstanceId, nextTaskName);
+                    } else {
+                        // 没有下一个用户任务，可能流程已经到达非用户任务节点（如结束事件）
+                        // 尝试获取当前活动节点
+                        log.info("No next user task found for process {}, checking for current activity", processInstanceId);
+                        Optional<Map<String, Object>> currentActivity = getCurrentActivity(processInstanceId);
+                        if (currentActivity.isPresent()) {
+                            String currentActivityName = (String) currentActivity.get().get("activityName");
+                            String currentActivityType = (String) currentActivity.get().get("activityType");
+                            log.info("Current activity for process {}: {} (type: {})", 
+                                    processInstanceId, currentActivityName, currentActivityType);
+                            
+                            // 更新流程实例的当前节点
+                            Optional<ProcessInstance> optInstance = processInstanceRepository.findById(processInstanceId);
+                            if (optInstance.isPresent()) {
+                                ProcessInstance instance = optInstance.get();
+                                instance.setCurrentNode(currentActivityName);
+                                instance.setCurrentAssignee(null);
+                                
+                                // 如果当前活动是结束事件，则流程已完成
+                                if ("endEvent".equals(currentActivityType)) {
+                                    log.info("Current activity is end event, marking process {} as COMPLETED", processInstanceId);
+                                    instance.setStatus("COMPLETED");
+                                    instance.setEndTime(LocalDateTime.now());
+                                }
+                                
+                                processInstanceRepository.save(instance);
+                                log.info("Updated process instance {} currentNode to: {}, status: {}", 
+                                        processInstanceId, instance.getCurrentNode(), instance.getStatus());
+                            }
+                        }
                     }
                 }
             }
@@ -590,6 +620,23 @@ public class TaskProcessComponent {
             }
         } catch (Exception e) {
             log.warn("Failed to update process instance assignee: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * 获取流程实例的当前活动节点
+     */
+    private Optional<Map<String, Object>> getCurrentActivity(String processInstanceId) {
+        try {
+            if (!workflowEngineClient.isAvailable()) {
+                return Optional.empty();
+            }
+            
+            // 调用 workflow-engine 获取当前活动节点
+            return workflowEngineClient.getCurrentActivity(processInstanceId);
+        } catch (Exception e) {
+            log.warn("Failed to get current activity for process {}: {}", processInstanceId, e.getMessage());
+            return Optional.empty();
         }
     }
 }

@@ -490,6 +490,31 @@ public class WorkflowEngineClient {
     }
 
     /**
+     * 获取流程实例的当前活动节点
+     */
+    public Optional<Map<String, Object>> getCurrentActivity(String processInstanceId) {
+        if (!isAvailable()) {
+            return Optional.empty();
+        }
+        try {
+            String url = workflowEngineUrl + "/api/v1/monitoring/processes/" + processInstanceId + "/current-activity";
+            
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                url, HttpMethod.GET, null,
+                new ParameterizedTypeReference<Map<String, Object>>() {});
+            
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> body = (Map<String, Object>) response.getBody().get("data");
+                return Optional.ofNullable(body);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to get current activity from workflow engine: {}", e.getMessage());
+        }
+        return Optional.empty();
+    }
+
+    /**
      * 获取流程历史
      */
     public Optional<Map<String, Object>> getProcessHistory(String processInstanceId) {

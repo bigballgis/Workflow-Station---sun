@@ -466,6 +466,88 @@ public class ProcessEngineComponent {
     }
     
     /**
+     * 获取流程实例的当前活动节点
+     */
+    public Map<String, Object> getCurrentActivity(String processInstanceId) {
+        Map<String, Object> result = new HashMap<>();
+        
+        try {
+            // 首先检查运行时流程实例
+            ProcessInstance processInstance = runtimeService.createProcessInstanceQuery()
+                    .processInstanceId(processInstanceId)
+                    .singleResult();
+            
+            if (processInstance != null) {
+                // 流程还在运行中，获取当前活动节点
+                List<org.flowable.engine.runtime.Execution> executions = runtimeService
+                        .createExecutionQuery()
+                        .processInstanceId(processInstanceId)
+                        .list();
+                
+                for (org.flowable.engine.runtime.Execution execution : executions) {
+                    String activityId = execution.getActivityId();
+                    if (activityId != null) {
+                        // 获取活动节点的详细信息
+                        org.flowable.bpmn.model.BpmnModel bpmnModel = repositoryService.getBpmnModel(processInstance.getProcessDefinitionId());
+                        org.flowable.bpmn.model.FlowElement flowElement = bpmnModel.getFlowElement(activityId);
+                        
+                        if (flowElement != null) {
+                            result.put("activityId", activityId);
+                            result.put("activityName", flowElement.getName());
+                            result.put("activityType", flowElement.getClass().getSimpleName().replace("Impl", ""));
+                            result.put("processInstanceId", processInstanceId);
+                            result.put("state", "RUNNING");
+                            
+                            log.info("Current activity for process {}: {} ({})", 
+                                    processInstanceId, flowElement.getName(), flowElement.getClass().getSimpleName());
+                            
+                            // 如果找到了活动节点，返回第一个（通常只有一个）
+                            return result;
+                        }
+                    }
+                }
+                
+                result.put("error", "未找到当前活动节点");
+                return result;
+            }
+            
+            // 流程不在运行时表中，检查历史表
+            HistoricProcessInstance historicProcessInstance = historyService
+                    .createHistoricProcessInstanceQuery()
+                    .processInstanceId(processInstanceId)
+                    .singleResult();
+            
+            if (historicProcessInstance != null) {
+                // 流程已完成，获取最后一个活动节点
+                List<HistoricActivityInstance> activities = historyService
+                        .createHistoricActivityInstanceQuery()
+                        .processInstanceId(processInstanceId)
+                        .orderByHistoricActivityInstanceStartTime()
+                        .desc()
+                        .list();
+                
+                if (!activities.isEmpty()) {
+                    HistoricActivityInstance lastActivity = activities.get(0);
+                    result.put("activityId", lastActivity.getActivityId());
+                    result.put("activityName", lastActivity.getActivityName());
+                    result.put("activityType", lastActivity.getActivityType());
+                    result.put("processInstanceId", processInstanceId);
+                    result.put("state", "COMPLETED");
+                    return result;
+                }
+            }
+            
+            result.put("error", "流程实例不存在");
+            return result;
+            
+        } catch (Exception e) {
+            log.error("Failed to get current activity: {}", e.getMessage(), e);
+            result.put("error", e.getMessage());
+            return result;
+        }
+    }
+    
+    /**
      * 控制流程实例（暂停、恢复、终止）
      */
     public ProcessInstanceControlResult controlProcessInstance(ProcessInstanceControlRequest request) {
