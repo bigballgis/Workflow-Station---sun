@@ -12,7 +12,7 @@ param(
     [int]$DbPort = 5432,
     [string]$DbName = "workflow_platform_dev",
     [string]$DbUser = "platform_dev",
-    [string]$DbPassword = ""
+    [string]$DbPassword = "dev_password_123"
 )
 
 $ErrorActionPreference = "Stop"
