@@ -32,8 +32,8 @@
           <span v-else class="text-muted">-</span>
         </template>
       </el-table-column>
-      <el-table-column prop="memberCount" :label="t('virtualGroup.memberCount')" width="80" align="center" />
-      <el-table-column prop="status" :label="t('virtualGroup.status')" width="80">
+      <el-table-column prop="memberCount" :label="t('virtualGroup.memberCount')" width="100" align="center" :show-overflow-tooltip="false" class-name="no-wrap-header" />
+      <el-table-column prop="status" :label="t('virtualGroup.status')" width="100" :show-overflow-tooltip="false" class-name="no-wrap-header">
         <template #default="{ row }">
           <el-tag :type="row.status === 'ACTIVE' ? 'success' : 'info'" size="small">{{ row.status === 'ACTIVE' ? t('virtualGroup.active') : t('virtualGroup.inactive') }}</el-tag>
         </template>
@@ -120,5 +120,10 @@ onMounted(fetchGroups)
 <style scoped>
 .text-muted {
   color: #909399;
+}
+
+.page-container :deep(.no-wrap-header .cell) {
+  white-space: nowrap !important;
+  overflow: visible !important;
 }
 </style>

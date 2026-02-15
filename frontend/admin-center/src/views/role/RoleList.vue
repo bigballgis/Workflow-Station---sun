@@ -31,18 +31,18 @@
         </template>
       </el-table-column>
       <el-table-column prop="description" :label="t('role.description')" min-width="150" show-overflow-tooltip />
-      <el-table-column prop="memberCount" :label="t('role.memberCount')" width="70" align="center" />
-      <el-table-column prop="status" :label="t('common.status')" width="70" align="center">
+      <el-table-column prop="memberCount" :label="t('role.memberCount')" width="100" align="center" :show-overflow-tooltip="false" class-name="no-wrap-header" />
+      <el-table-column prop="status" :label="t('common.status')" width="100" align="center" :show-overflow-tooltip="false" class-name="no-wrap-header">
         <template #default="{ row }">
           <el-tag :type="row.status === 'ACTIVE' ? 'success' : 'info'" size="small">{{ row.status === 'ACTIVE' ? t('common.enabled') : t('common.disabled') }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column :label="t('role.systemRole')" width="70" align="center">
+      <el-table-column :label="t('role.systemRole')" width="120" align="center" :show-overflow-tooltip="false" class-name="no-wrap-header">
         <template #default="{ row }">
           <el-icon v-if="row.isSystem" color="#E6A23C"><Lock /></el-icon>
         </template>
       </el-table-column>
-      <el-table-column :label="t('common.operation')" width="180" fixed="right">
+      <el-table-column :label="t('common.operation')" width="200" fixed="right">
         <template #default="{ row }">
           <el-button v-if="!row.isSystem && canWriteRole" link type="primary" @click="showEditDialog(row)">{{ t('common.edit') }}</el-button>
           <el-button link type="primary" @click="showMembersDialog(row)">{{ t('role.members') }}</el-button>
@@ -117,3 +117,10 @@ const handleDelete = async (role: Role) => {
 
 onMounted(handleSearch)
 </script>
+
+<style scoped>
+.page-container :deep(.no-wrap-header .cell) {
+  white-space: nowrap !important;
+  overflow: visible !important;
+}
+</style>

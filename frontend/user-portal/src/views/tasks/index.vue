@@ -47,7 +47,7 @@
           </template>
         </el-table-column>
         <el-table-column prop="processDefinitionName" :label="t('task.processName')" min-width="140" show-overflow-tooltip />
-        <el-table-column prop="assignmentType" :label="t('task.assignmentType')" width="100">
+        <el-table-column prop="assignmentType" :label="t('task.assignmentType')" width="130" :show-overflow-tooltip="false" class-name="no-wrap-header">
           <template #default="{ row }">
             <el-tag :class="['assignment-tag', getAssignmentClass(row.assignmentType)]" size="small">
               {{ t(`task.${getAssignmentKey(row.assignmentType)}`) }}
@@ -449,5 +449,10 @@ onMounted(() => {
   .overdue {
     color: var(--error-red);
   }
+}
+
+.tasks-page :deep(.no-wrap-header .cell) {
+  white-space: nowrap !important;
+  overflow: visible !important;
 }
 </style>
