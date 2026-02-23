@@ -68,7 +68,15 @@ public interface FunctionUnitContentRepository extends JpaRepository<FunctionUni
     
     /**
      * 根据流程定义Key查找内容（flowable_process_definition_id 以 processKey: 开头）
+     * 返回最新部署的记录（按 createdAt 降序取第一条）
      */
-    @Query("SELECT c FROM FunctionUnitContent c WHERE c.flowableProcessDefinitionId LIKE :processKey || ':%'")
+    @Query("SELECT c FROM FunctionUnitContent c WHERE c.flowableProcessDefinitionId LIKE :processKey || ':%' ORDER BY c.createdAt DESC")
+    List<FunctionUnitContent> findAllByProcessDefinitionKey(@Param("processKey") String processKey);
+
+    /**
+     * @deprecated Use findAllByProcessDefinitionKey instead (multiple deployments may exist)
+     */
+    @Deprecated
+    @Query("SELECT c FROM FunctionUnitContent c WHERE c.flowableProcessDefinitionId LIKE :processKey || ':%' ORDER BY c.createdAt DESC LIMIT 1")
     Optional<FunctionUnitContent> findByProcessDefinitionKey(@Param("processKey") String processKey);
 }

@@ -564,9 +564,12 @@ public class FunctionUnitManagerComponent {
      * 通过查找 flowable_process_definition_id 以 processKey: 开头的内容来定位功能单元
      */
     public FunctionUnit getFunctionUnitByProcessKey(String processKey) {
-        return contentRepository.findByProcessDefinitionKey(processKey)
-                .map(content -> content.getFunctionUnit())
-                .orElseThrow(() -> new FunctionUnitNotFoundException("未找到流程定义Key对应的功能单元: " + processKey));
+        List<com.admin.entity.FunctionUnitContent> results = contentRepository.findAllByProcessDefinitionKey(processKey);
+        if (results.isEmpty()) {
+            throw new FunctionUnitNotFoundException("未找到流程定义Key对应的功能单元: " + processKey);
+        }
+        // 取最新部署的记录（列表已按 createdAt DESC 排序）
+        return results.get(0).getFunctionUnit();
     }
     
     /**
@@ -711,21 +714,35 @@ public class FunctionUnitManagerComponent {
     }
     
     /**
-     * 获取功能单元的最新版本
+     * 获取功能单元的最新版本（使用语义化版本比较，避免字典序错误如 1.0.9 > 1.0.11）
      */
     public Optional<FunctionUnit> getLatestVersion(String code) {
-        return functionUnitRepository.findLatestByCode(code);
+        List<FunctionUnit> versions = functionUnitRepository.findByCodeOrderByVersionDesc(code);
+        if (versions.isEmpty()) return Optional.empty();
+        return versions.stream().max((a, b) -> {
+            try {
+                return SemanticVersion.parse(a.getVersion()).compareTo(SemanticVersion.parse(b.getVersion()));
+            } catch (IllegalArgumentException e) {
+                return a.getVersion().compareTo(b.getVersion());
+            }
+        });
     }
     
     /**
-     * 获取功能单元的最新稳定版本（已验证或已部署）
+     * 获取功能单元的最新稳定版本（已验证或已部署），使用语义化版本比较
      */
     public Optional<FunctionUnit> getLatestStableVersion(String code) {
         List<FunctionUnit> versions = functionUnitRepository.findAllByCodeOrderByVersionDesc(code);
         return versions.stream()
                 .filter(v -> v.getStatus() == FunctionUnitStatus.VALIDATED || 
                             v.getStatus() == FunctionUnitStatus.DEPLOYED)
-                .findFirst();
+                .max((a, b) -> {
+                    try {
+                        return SemanticVersion.parse(a.getVersion()).compareTo(SemanticVersion.parse(b.getVersion()));
+                    } catch (IllegalArgumentException e) {
+                        return a.getVersion().compareTo(b.getVersion());
+                    }
+                });
     }
     
     /**

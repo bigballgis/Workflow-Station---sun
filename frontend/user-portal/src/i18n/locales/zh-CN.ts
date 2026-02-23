@@ -157,6 +157,8 @@ export default {
     basicInfo: '基本信息',
     workflowDiagram: '工作流程图',
     taskForm: '任务表单',
+    applicationContent: '申请内容',
+    readonly: '只读',
     flowHistory: '流转记录',
     backToList: '返回列表',
     currentAssignee: '当前处理人',

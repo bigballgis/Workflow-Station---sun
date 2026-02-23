@@ -75,6 +75,9 @@ public class TaskInfo {
     /** 表单Key */
     private String formKey;
 
+    /** 任务定义Key（BPMN元素ID，如 Activity_1abc） */
+    private String taskDefinitionKey;
+
     /** 流程变量 */
     private Map<String, Object> variables;
     

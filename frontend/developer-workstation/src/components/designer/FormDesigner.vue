@@ -92,7 +92,7 @@
           </el-tag>
         </div>
         <div class="header-actions">
-          <el-button @click="handleImportFieldsToDesigner" :disabled="!selectedForm.boundTableId">
+          <el-button @click="handleImportFieldsToDesigner" :disabled="!selectedForm.boundTableId && (!selectedForm.tableBindings || selectedForm.tableBindings.length === 0)">
             <el-icon><Connection /></el-icon> {{ t('form.importTableFields') }}
           </el-button>
           <el-button @click="handleManageBindings(selectedForm)">{{ t('form.manageBindings') }}</el-button>
@@ -102,9 +102,40 @@
         </div>
       </div>
       
-      <div class="fc-designer-wrapper">
-        <fc-designer ref="designerRef" :config="designerConfig" height="calc(100vh - 200px)" />
-      </div>
+      <el-tabs v-model="activeDesignerTab" class="designer-tabs" @tab-change="handleTabChange">
+        <el-tab-pane name="main">
+          <template #label>
+            <span>
+              <el-tag type="primary" size="small" style="margin-right: 6px;">{{ t('form.mainTable') }}</el-tag>
+              {{ selectedForm.formName }}
+            </span>
+          </template>
+          <div class="fc-designer-wrapper">
+            <fc-designer ref="designerRef" :config="designerConfig" height="calc(100vh - 260px)" />
+          </div>
+        </el-tab-pane>
+        <el-tab-pane
+          v-for="(binding, index) in designerSubBindings"
+          :key="binding.bindingId"
+          :name="String(binding.bindingId)"
+        >
+          <template #label>
+            <span>
+              <el-tag :type="binding.bindingType === 'SUB' ? 'success' : 'warning'" size="small" style="margin-right: 6px;">
+                {{ binding.bindingType === 'SUB' ? t('tableBinding.subTableType') : t('tableBinding.relationTableType') }}
+              </el-tag>
+              {{ binding.tableName }}
+            </span>
+          </template>
+          <div class="fc-designer-wrapper">
+            <fc-designer
+              :ref="(el: any) => setSubDesignerRef(el, index)"
+              :config="designerConfig"
+              height="calc(100vh - 260px)"
+            />
+          </div>
+        </el-tab-pane>
+      </el-tabs>
     </div>
 
     <!-- Create form dialog -->
@@ -142,12 +173,67 @@
     </el-dialog>
 
     <!-- Preview dialog -->
-    <el-dialog v-model="showPreviewDialog" :title="t('form.previewTitle')" width="800px" destroy-on-close>
+    <el-dialog v-model="showPreviewDialog" :title="t('form.previewTitle')" width="900px" destroy-on-close>
       <div class="preview-container">
         <div class="form-preview-wrapper">
           <form-create v-if="previewRule.length" v-model="previewData" :rule="previewRule" :option="previewOption" />
           <el-empty v-else :description="t('form.noFormContent')" />
         </div>
+        <!-- Sub/Relation table preview -->
+        <template v-if="previewSubBindings.length > 0">
+          <div
+            v-for="binding in previewSubBindings"
+            :key="binding.bindingId"
+            style="margin-top: 20px;"
+          >
+            <div class="sub-preview-header" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+              <div>
+                <el-tag :type="binding.bindingType === 'SUB' ? 'success' : 'warning'" size="small">
+                  {{ binding.bindingType === 'SUB' ? t('tableBinding.subTableType') : t('tableBinding.relationTableType') }}
+                </el-tag>
+                <span style="margin-left: 8px; font-weight: 500;">{{ binding.tableName }}</span>
+              </div>
+              <el-button
+                type="primary"
+                size="small"
+                @click="previewTableRows[binding.bindingId].push({})"
+              >
+                + {{ t('common.add') }}
+              </el-button>
+            </div>
+
+            <el-table
+              v-if="binding.rule && binding.rule.length"
+              :data="previewTableRows[binding.bindingId]"
+              border
+              size="small"
+              style="width: 100%;"
+            >
+              <el-table-column
+                v-for="col in binding.rule"
+                :key="col.field"
+                :prop="col.field"
+                :label="col.title || col.field"
+                min-width="140"
+              >
+                <template #default="{ row }">
+                  <el-input v-model="row[col.field]" size="small" />
+                </template>
+              </el-table-column>
+              <el-table-column :label="t('common.operation')" width="80" fixed="right">
+                <template #default="{ $index }">
+                  <el-button
+                    type="danger"
+                    size="small"
+                    link
+                    @click="previewTableRows[binding.bindingId].splice($index, 1)"
+                  >{{ t('common.delete') }}</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+            <el-empty v-else :description="t('form.noFormContent')" :image-size="40" style="border: 1px solid #e6e6e6; border-radius: 4px;" />
+          </div>
+        </template>
       </div>
     </el-dialog>
 
@@ -309,6 +395,7 @@ import { useFunctionUnitStore } from '@/stores/functionUnit'
 import type { FormDefinition, FieldDefinition, TableBinding, BindingType } from '@/api/functionUnit'
 import { functionUnitApi } from '@/api/functionUnit'
 import TableBindingManager from './TableBindingManager.vue'
+import SubTableField from './SubTableField.vue'
 
 const { t } = useI18n()
 
@@ -329,6 +416,59 @@ const showPreviewDialog = ref(false)
 const showBindDialog = ref(false)
 const previewData = ref({})
 const previewRule = ref<any[]>([])
+const previewSubBindings = ref<Array<{
+  bindingId: number
+  bindingType: string
+  bindingMode: string
+  tableName: string
+  tableType: string
+  tableDescription: string
+  rule: any[]
+}>>([])
+const previewSubData = ref<Record<number, any>>({})
+const previewTableRows = ref<Record<number, any[]>>({})
+
+// Sub-designer refs (one per non-PRIMARY binding)
+const subDesignerRefs = ref<any[]>([])
+// In-memory cache: persists sub form rules across tab switches (tabs unmount when not active)
+const subFormCache = ref<Record<number, { rule: any[]; options: any }>>({})
+
+function setSubDesignerRef(el: any, index: number) {
+  if (!el) {
+    // Tab is unmounting — snapshot current rule into cache before ref is lost
+    const prev = subDesignerRefs.value[index]
+    if (prev) {
+      const binding = designerSubBindings.value[index]
+      if (binding) {
+        try {
+          subFormCache.value[binding.bindingId] = {
+            rule: prev.getRule() || [],
+            options: prev.getOption() || {}
+          }
+        } catch {}
+      }
+    }
+  }
+  subDesignerRefs.value[index] = el
+}
+
+// Active tab: 'main' or bindingId string
+const activeDesignerTab = ref<string>('main')
+
+// Non-PRIMARY bindings for tabs
+const designerSubBindings = computed(() => {
+  if (!selectedForm.value) return []
+  const nonPrimary = (selectedForm.value.tableBindings || []).filter((b: TableBinding) => b.bindingType !== 'PRIMARY')
+  return nonPrimary.map((b: TableBinding) => ({
+    bindingId: b.id as number,
+    bindingType: b.bindingType,
+    bindingMode: b.bindingMode,
+    tableName: b.tableName || getTableName(b.tableId),
+    tableType: (store.tables.find(t => t.id === b.tableId)?.tableType) || '',
+    tableDescription: (store.tables.find(t => t.id === b.tableId)?.description) || '',
+  }))
+})
+
 const createForm = reactive({ formName: '', formType: 'MAIN', description: '', boundTableId: null as number | null })
 const bindingForm = ref<FormDefinition | null>(null)
 
@@ -421,6 +561,36 @@ function getImportTableBinding(): TableBinding | undefined {
 }
 
 /**
+ * Derive preview columns for sub-table based on table type
+ */
+function derivePreviewColumns(tableType: string): Array<{ field: string; label: string; type?: string }> {
+  const defaults: Record<string, Array<{ field: string; label: string; type?: string }>> = {
+    'SUB': [
+      { field: 'item_name', label: t('preview.itemName') },
+      { field: 'quantity', label: t('preview.quantity'), type: 'number' },
+      { field: 'unit_price', label: t('preview.unitPrice'), type: 'number' },
+      { field: 'amount', label: t('preview.amount'), type: 'number' },
+      { field: 'remark', label: t('preview.remark') }
+    ],
+    'ACTION': [
+      { field: 'action_type', label: t('preview.actionType') },
+      { field: 'action_result', label: t('preview.actionResult') },
+      { field: 'comment', label: t('preview.comment') },
+      { field: 'operator', label: t('preview.operator') },
+      { field: 'action_time', label: t('preview.actionTime'), type: 'date' }
+    ],
+    'RELATION': [
+      { field: 'file_name', label: t('preview.fileName') },
+      { field: 'file_type', label: t('preview.fileType') },
+      { field: 'file_url', label: t('preview.fileUrl') },
+      { field: 'upload_time', label: t('preview.uploadTime'), type: 'date' },
+      { field: 'remark', label: t('preview.remark') }
+    ]
+  }
+  return defaults[tableType] || [{ field: 'value', label: t('preview.value') }]
+}
+
+/**
  * Get table name by table ID
  */
 function getTableName(tableId: number): string {
@@ -453,8 +623,18 @@ function handleManageBindings(form: FormDefinition) {
 /**
  * Table binding update callback
  */
-function handleBindingUpdate() {
-  loadForms()
+async function handleBindingUpdate() {
+  await loadForms()
+  // If we're currently in the designer view, refresh the selected form's bindings in place
+  if (selectedForm.value) {
+    try {
+      const res = await functionUnitApi.getFormBindings(props.functionUnitId, selectedForm.value.id)
+      selectedForm.value = { ...selectedForm.value, tableBindings: res.data || [] }
+      // Reset sub designer state so new tabs render cleanly
+      subDesignerRefs.value = []
+      subFormCache.value = {}
+    } catch {}
+  }
 }
 
 /**
@@ -661,34 +841,39 @@ function handleConfirmImportFields() {
     ElMessage.warning(t('form.selectAtLeastOne'))
     return
   }
-  
-  // If in designer view, add directly to designer
-  if (selectedForm.value && designerRef.value) {
+
+  if (selectedForm.value) {
     const rules = selectedImportFields.value.map(fieldToFormRule)
-    
-    // Get current designer rules
-    const currentRules = designerRef.value.getRule() || []
-    
-    // Check for duplicate fields
-    const existingFields = new Set(currentRules.map((r: any) => r.field))
-    const newRules = rules.filter(r => !existingFields.has(r.field))
-    const duplicateCount = rules.length - newRules.length
-    
-    if (duplicateCount > 0) {
-      ElMessage.warning(t('form.skipExisting', { count: duplicateCount }))
+
+    // Determine target designer: active sub tab or main
+    let targetRef: any = null
+    if (activeDesignerTab.value !== 'main') {
+      const bindingId = Number(activeDesignerTab.value)
+      const index = designerSubBindings.value.findIndex(b => b.bindingId === bindingId)
+      if (index >= 0) targetRef = subDesignerRefs.value[index]
     }
-    
-    if (newRules.length > 0) {
-      // Merge rules
-      const mergedRules = [...currentRules, ...newRules]
-      designerRef.value.setRule(mergedRules)
-      ElMessage.success(t('form.importedSuccess', { count: newRules.length }))
+    // Fall back to main designer if no sub ref found
+    if (!targetRef) targetRef = designerRef.value
+
+    if (targetRef) {
+      const currentRules: any[] = targetRef.getRule() || []
+      const existingFields = new Set(currentRules.map((r: any) => r.field))
+      const newRules = rules.filter(r => !existingFields.has(r.field))
+      const duplicateCount = rules.length - newRules.length
+
+      if (duplicateCount > 0) {
+        ElMessage.warning(t('form.skipExisting', { count: duplicateCount }))
+      }
+
+      if (newRules.length > 0) {
+        targetRef.setRule([...currentRules, ...newRules])
+        ElMessage.success(t('form.importedSuccess', { count: newRules.length }))
+      }
     }
   } else {
-    // 如果在列表视图，提示用户先选择或创建表单
     ElMessage.info(t('form.selectOrCreateForm'))
   }
-  
+
   showImportFieldsDialog.value = false
 }
 
@@ -867,40 +1052,75 @@ async function loadProcessNodes() {
 
 function handleSelectForm(row: FormDefinition) {
   selectedForm.value = { ...row }
-  // 等待设计器组件完全渲染后再加载配置
+  subDesignerRefs.value = []
+  subFormCache.value = {}
+  activeDesignerTab.value = 'main'
+
+  // Load table bindings
+  functionUnitApi.getFormBindings(props.functionUnitId, row.id)
+    .then(res => {
+      if (selectedForm.value) {
+        selectedForm.value = { ...selectedForm.value, tableBindings: res.data || [] }
+      }
+      // Load sub designers after bindings are known
+      nextTick(() => setTimeout(() => loadSubDesigners(row), 200))
+    })
+    .catch(() => {})
+
+  // Load main designer
   nextTick(() => {
-    // 使用 setTimeout 确保设计器组件完全初始化
     setTimeout(() => {
       if (designerRef.value) {
+        const config = row.configJson || {}
         try {
-          // 加载已保存的表单配置到设计器
-          const config = row.configJson || {}
-          
-          // 如果配置中有规则，则加载；否则初始化为空数组
-          if (config.rule && Array.isArray(config.rule) && config.rule.length > 0) {
-            designerRef.value.setRule(config.rule)
-          } else {
-            // 初始化空表单
-            designerRef.value.setRule([])
-          }
-          
-          // 如果配置中有选项，则加载；否则使用默认选项
-          if (config.options && Object.keys(config.options).length > 0) {
-            designerRef.value.setOption(config.options)
-          } else {
-            // 使用默认选项
-            designerRef.value.setOption({})
-          }
-        } catch (error) {
-          console.error('Failed to load form config:', error)
-          // 如果加载失败，至少初始化一个空表单
-          try {
-            designerRef.value.setRule([])
-            designerRef.value.setOption({})
-          } catch (e) {
-            console.error('Failed to initialize empty form:', e)
-          }
+          designerRef.value.setRule(config.rule && config.rule.length ? config.rule : [])
+          designerRef.value.setOption(config.options && Object.keys(config.options).length ? config.options : {})
+        } catch (e) {
+          console.error('Failed to load main form config:', e)
+          try { designerRef.value.setRule([]); designerRef.value.setOption({}) } catch {}
         }
+      }
+    }, 100)
+  })
+}
+
+function loadSubDesigners(row: FormDefinition) {
+  const config = row.configJson || {}
+  const subForms = config.subForms || {}
+  designerSubBindings.value.forEach((binding, index) => {
+    nextTick(() => {
+      setTimeout(() => {
+        const subRef = subDesignerRefs.value[index]
+        if (subRef) {
+          const subConfig = subForms[binding.bindingId] || {}
+          try {
+            subRef.setRule(subConfig.rule && subConfig.rule.length ? subConfig.rule : [])
+            subRef.setOption(subConfig.options && Object.keys(subConfig.options).length ? subConfig.options : {})
+          } catch {}
+        }
+      }, 150)
+    })
+  })
+}
+
+function handleTabChange(tabName: string) {
+  if (tabName === 'main') return
+  const bindingId = Number(tabName)
+  const index = designerSubBindings.value.findIndex(b => b.bindingId === bindingId)
+  if (index < 0) return
+  const config = selectedForm.value?.configJson || {}
+  const subForms = config.subForms || {}
+  nextTick(() => {
+    setTimeout(() => {
+      const subRef = subDesignerRefs.value[index]
+      if (subRef) {
+        // Use cache if available (user already visited this tab), else fall back to saved config
+        const cached = subFormCache.value[bindingId]
+        const subConfig = cached || subForms[bindingId] || {}
+        try {
+          subRef.setRule(subConfig.rule && subConfig.rule.length ? subConfig.rule : [])
+          subRef.setOption(subConfig.options && Object.keys(subConfig.options).length ? subConfig.options : {})
+        } catch {}
       }
     }, 100)
   })
@@ -934,17 +1154,38 @@ async function handleCreateForm() {
 
 async function handleSaveForm() {
   if (!selectedForm.value || !designerRef.value) return
-  
   try {
-    // 从设计器获取表单配置
     const rule = designerRef.value.getRule()
     const options = designerRef.value.getOption()
-    
+
+    // Collect sub form rules — prefer live ref, then cache, then previously saved
+    const subForms: Record<number, { rule: any[]; options: any }> = {}
+    designerSubBindings.value.forEach((binding, index) => {
+      const subRef = subDesignerRefs.value[index]
+      if (subRef) {
+        // Tab is currently active and mounted
+        try {
+          const liveRule = subRef.getRule() || []
+          const liveOptions = subRef.getOption() || {}
+          subForms[binding.bindingId] = { rule: liveRule, options: liveOptions }
+          // Also update cache
+          subFormCache.value[binding.bindingId] = { rule: liveRule, options: liveOptions }
+        } catch {}
+      } else if (subFormCache.value[binding.bindingId]) {
+        // Tab was visited but is now unmounted — use cache
+        subForms[binding.bindingId] = subFormCache.value[binding.bindingId]
+      } else {
+        // Tab never visited — preserve previously saved data
+        const existing = (selectedForm.value!.configJson?.subForms || {})[binding.bindingId]
+        if (existing) subForms[binding.bindingId] = existing
+      }
+    })
+
     await store.updateForm(props.functionUnitId, selectedForm.value.id, {
       formName: selectedForm.value.formName,
       formType: selectedForm.value.formType,
       description: selectedForm.value.description,
-      configJson: { rule, options }
+      configJson: { rule, options, subForms }
     })
     ElMessage.success(t('form.saveSuccess'))
     loadForms()
@@ -965,9 +1206,45 @@ async function handleDeleteForm(row: FormDefinition) {
 }
 
 function handlePreview() {
-  if (!designerRef.value) return
+  if (!designerRef.value || !selectedForm.value) return
   previewRule.value = designerRef.value.getRule()
   previewData.value = {}
+  previewSubData.value = {}
+  previewTableRows.value = {}
+
+  const config = selectedForm.value.configJson || {}
+  const subForms = config.subForms || {}
+  const nonPrimary = (selectedForm.value.tableBindings || []).filter((b: TableBinding) => b.bindingType !== 'PRIMARY')
+
+  previewSubBindings.value = nonPrimary.map((b: TableBinding) => {
+    const bindingId = b.id as number
+    const index = designerSubBindings.value.findIndex(d => d.bindingId === bindingId)
+    const subRef = subDesignerRefs.value[index]
+    let rule: any[] = []
+    try {
+      if (subRef) {
+        rule = subRef.getRule() || []
+      } else if (subFormCache.value[bindingId]) {
+        rule = subFormCache.value[bindingId].rule || []
+      } else {
+        rule = subForms[bindingId]?.rule || []
+      }
+    } catch {
+      rule = subFormCache.value[bindingId]?.rule || subForms[bindingId]?.rule || []
+    }
+    // Initialize with one empty row
+    previewTableRows.value[bindingId] = [{}]
+    return {
+      bindingId,
+      bindingType: b.bindingType,
+      bindingMode: b.bindingMode,
+      tableName: b.tableName || getTableName(b.tableId),
+      tableType: (store.tables.find(t => t.id === b.tableId)?.tableType) || '',
+      tableDescription: (store.tables.find(t => t.id === b.tableId)?.description) || '',
+      rule
+    }
+  })
+
   showPreviewDialog.value = true
 }
 
@@ -1382,6 +1659,55 @@ onMounted(loadForms)
   :deep(.el-textarea) {
     width: 100%;
   }
+}
+
+.designer-tabs {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+
+  :deep(.el-tabs__header) {
+    margin-bottom: 0;
+    flex-shrink: 0;
+  }
+
+  :deep(.el-tabs__content) {
+    flex: 1;
+    overflow: hidden;
+  }
+
+  :deep(.el-tab-pane) {
+    height: 100%;
+  }
+}
+
+.designer-sub-tables {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.designer-sub-table-item {
+  .sub-table-binding-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+
+    .sub-table-name {
+      font-size: 14px;
+      font-weight: 500;
+      color: #303133;
+    }
+  }
+}
+
+.sub-preview-header {
+  display: flex;
+  align-items: center;
+  padding: 8px 0 4px;
 }
 
 .preview-container {

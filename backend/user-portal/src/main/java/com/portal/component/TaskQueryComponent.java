@@ -230,6 +230,7 @@ public class TaskQueryComponent {
                 .dueDate(parseDateTime(taskMap.get("dueDate")))
                 .isOverdue(taskMap.get("isOverdue") != null ? (Boolean) taskMap.get("isOverdue") : false)
                 .formKey((String) taskMap.get("formKey"))
+                .taskDefinitionKey((String) taskMap.get("taskDefinitionKey"))
                 .variables(variables)
                 .build();
     }
@@ -368,6 +369,25 @@ public class TaskQueryComponent {
                 if (data != null) {
                     log.info("=== Converting task data to TaskInfo");
                     TaskInfo taskInfo = convertMapToTaskInfo(data);
+                    
+                    // 从本地 ProcessInstance 补充 variables（Flowable 对复杂嵌套对象序列化可能丢失数据）
+                    String processInstanceId = taskInfo.getProcessInstanceId();
+                    if (processInstanceId != null) {
+                        processInstanceRepository.findById(processInstanceId).ifPresent(pi -> {
+                            if (pi.getVariables() != null) {
+                                Map<String, Object> merged = new java.util.HashMap<>();
+                                // 先放 Flowable 的 variables（基础字段）
+                                if (taskInfo.getVariables() != null) {
+                                    merged.putAll(taskInfo.getVariables());
+                                }
+                                // 再用本地 DB 的 variables 覆盖（更完整，包含 __subTables__）
+                                merged.putAll(pi.getVariables());
+                                taskInfo.setVariables(merged);
+                                log.info("=== Merged variables from local DB for process {}, keys: {}", 
+                                    processInstanceId, merged.keySet());
+                            }
+                        });
+                    }
                     
                     // 获取任务的可用操作
                     log.info("=== About to call TaskActionService for task: {}", taskId);
@@ -689,6 +709,23 @@ public class TaskQueryComponent {
         String processDefinitionName = (String) taskMap.get("processDefinitionName");
         if (processDefinitionName == null || processDefinitionName.isEmpty()) {
             processDefinitionName = processDefinitionKey;
+        }
+
+        // 用 processInstanceId 从 up_process_instance 查真实的 function unit 名称，覆盖 Flowable 返回的 BPMN name
+        String processInstanceId = (String) taskMap.get("processInstanceId");
+        if (processInstanceId != null && !processInstanceId.isEmpty()) {
+            try {
+                processInstanceRepository.findById(processInstanceId).ifPresent(instance -> {
+                    // instance.getProcessDefinitionName() 存的是 function unit 名称
+                });
+                // findById 用 lambda 无法赋值外部变量，改用直接赋值
+                Optional<ProcessInstance> instanceOpt = processInstanceRepository.findById(processInstanceId);
+                if (instanceOpt.isPresent() && instanceOpt.get().getProcessDefinitionName() != null) {
+                    processDefinitionName = instanceOpt.get().getProcessDefinitionName();
+                }
+            } catch (Exception e) {
+                log.warn("Failed to get process definition name from up_process_instance for {}: {}", processInstanceId, e.getMessage());
+            }
         }
         
         return TaskInfo.builder()

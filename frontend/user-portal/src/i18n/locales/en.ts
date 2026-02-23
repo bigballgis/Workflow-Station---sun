@@ -157,6 +157,8 @@ export default {
     basicInfo: 'Basic Info',
     workflowDiagram: 'Workflow Diagram',
     taskForm: 'Task Form',
+    applicationContent: 'Application Content',
+    readonly: 'Read Only',
     flowHistory: 'Flow History',
     backToList: 'Back to List',
     currentAssignee: 'Current Assignee',

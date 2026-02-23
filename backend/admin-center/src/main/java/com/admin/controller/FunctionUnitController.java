@@ -16,6 +16,7 @@ import com.admin.enums.DeploymentStrategy;
 import com.admin.enums.FunctionUnitStatus;
 import com.admin.service.FunctionUnitAccessService;
 import io.swagger.v3.oas.annotations.Operation;
+import org.springframework.jdbc.core.JdbcTemplate;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -28,6 +29,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * 功能单元管理 RESTful API
@@ -42,6 +44,7 @@ public class FunctionUnitController {
     private final FunctionUnitManagerComponent functionUnitManager;
     private final DeploymentManagerComponent deploymentManager;
     private final FunctionUnitAccessService accessService;
+    private final JdbcTemplate jdbcTemplate;
     
     // ==================== 功能包导入 ====================
     
@@ -518,6 +521,104 @@ public class FunctionUnitController {
                     processes.add(contentMap);
                 } else if (ct == com.admin.enums.ContentType.DATA_TABLE) {
                     dataTables.add(contentMap);
+                }
+            }
+            
+            // 为每个 form 附加 tableBindings
+            // 优先用 sourceId 精确匹配；sourceId 为 null 时回退到 form_name 匹配（取最新版本）
+            try {
+                java.util.List<String> formSourceIds = forms.stream()
+                    .map(f -> (String) f.get("sourceId"))
+                    .filter(sid -> sid != null && !sid.isBlank())
+                    .distinct()
+                    .toList();
+
+                java.util.List<String> formNamesForFallback = forms.stream()
+                    .filter(f -> {
+                        String sid = (String) f.get("sourceId");
+                        return sid == null || sid.isBlank();
+                    })
+                    .map(f -> (String) f.get("name"))
+                    .filter(n -> n != null)
+                    .distinct()
+                    .toList();
+
+                // key: form identifier (sourceId or form_name), value: list of bindings
+                java.util.Map<String, java.util.List<java.util.Map<String, Object>>> bindingsBySourceId = new java.util.LinkedHashMap<>();
+                java.util.Map<String, java.util.List<java.util.Map<String, Object>>> bindingsByFormName = new java.util.LinkedHashMap<>();
+
+                if (!formSourceIds.isEmpty()) {
+                    String placeholders = formSourceIds.stream().map(n -> "?").collect(java.util.stream.Collectors.joining(","));
+                    String bindingsSql =
+                        "SELECT fd.id as form_id, ftb.id as binding_id, ftb.binding_type, ftb.binding_mode, " +
+                        "       ftb.foreign_key_field, ftb.sort_order, " +
+                        "       td.id as table_id, td.table_name, td.table_type, td.description as table_description " +
+                        "FROM dw_form_definitions fd " +
+                        "JOIN dw_form_table_bindings ftb ON ftb.form_id = fd.id " +
+                        "JOIN dw_table_definitions td ON td.id = ftb.table_id " +
+                        "WHERE fd.id::text IN (" + placeholders + ") " +
+                        "ORDER BY fd.id, ftb.sort_order";
+                    jdbcTemplate.query(bindingsSql, rs -> {
+                        String formId = rs.getString("form_id");
+                        java.util.Map<String, Object> binding = new java.util.HashMap<>();
+                        binding.put("bindingId", rs.getLong("binding_id"));
+                        binding.put("bindingType", rs.getString("binding_type"));
+                        binding.put("bindingMode", rs.getString("binding_mode"));
+                        binding.put("foreignKeyField", rs.getString("foreign_key_field"));
+                        binding.put("sortOrder", rs.getInt("sort_order"));
+                        binding.put("tableId", rs.getLong("table_id"));
+                        binding.put("tableName", rs.getString("table_name"));
+                        binding.put("tableType", rs.getString("table_type"));
+                        binding.put("tableDescription", rs.getString("table_description"));
+                        bindingsBySourceId.computeIfAbsent(formId, k -> new java.util.ArrayList<>()).add(binding);
+                    }, formSourceIds.toArray());
+                }
+
+                if (!formNamesForFallback.isEmpty()) {
+                    // 用 DISTINCT ON 取每个 form_name 最新（id 最大）的版本，避免同名表单重复
+                    String placeholders = formNamesForFallback.stream().map(n -> "?").collect(java.util.stream.Collectors.joining(","));
+                    String bindingsSql =
+                        "SELECT latest.form_name, ftb.id as binding_id, ftb.binding_type, ftb.binding_mode, " +
+                        "       ftb.foreign_key_field, ftb.sort_order, " +
+                        "       td.id as table_id, td.table_name, td.table_type, td.description as table_description " +
+                        "FROM (SELECT DISTINCT ON (form_name) id, form_name FROM dw_form_definitions " +
+                        "      WHERE form_name IN (" + placeholders + ") ORDER BY form_name, id DESC) latest " +
+                        "JOIN dw_form_table_bindings ftb ON ftb.form_id = latest.id " +
+                        "JOIN dw_table_definitions td ON td.id = ftb.table_id " +
+                        "ORDER BY latest.form_name, ftb.sort_order";
+                    jdbcTemplate.query(bindingsSql, rs -> {
+                        String formName = rs.getString("form_name");
+                        java.util.Map<String, Object> binding = new java.util.HashMap<>();
+                        binding.put("bindingId", rs.getLong("binding_id"));
+                        binding.put("bindingType", rs.getString("binding_type"));
+                        binding.put("bindingMode", rs.getString("binding_mode"));
+                        binding.put("foreignKeyField", rs.getString("foreign_key_field"));
+                        binding.put("sortOrder", rs.getInt("sort_order"));
+                        binding.put("tableId", rs.getLong("table_id"));
+                        binding.put("tableName", rs.getString("table_name"));
+                        binding.put("tableType", rs.getString("table_type"));
+                        binding.put("tableDescription", rs.getString("table_description"));
+                        bindingsByFormName.computeIfAbsent(formName, k -> new java.util.ArrayList<>()).add(binding);
+                    }, formNamesForFallback.toArray());
+                }
+
+                // attach bindings to each form: prefer sourceId match, fallback to form_name
+                for (java.util.Map<String, Object> formMap : forms) {
+                    String sourceId = (String) formMap.get("sourceId");
+                    java.util.List<java.util.Map<String, Object>> bindings;
+                    if (sourceId != null && !sourceId.isBlank()) {
+                        bindings = bindingsBySourceId.getOrDefault(sourceId, java.util.Collections.emptyList());
+                    } else {
+                        String formName = (String) formMap.get("name");
+                        bindings = bindingsByFormName.getOrDefault(formName, java.util.Collections.emptyList());
+                    }
+                    formMap.put("tableBindings", bindings);
+                }
+                log.info("Attached tableBindings to {} forms for function unit {}", forms.size(), id);
+            } catch (Exception e) {
+                log.warn("Failed to load tableBindings for function unit {}: {}", id, e.getMessage());
+                for (java.util.Map<String, Object> formMap : forms) {
+                    formMap.put("tableBindings", java.util.Collections.emptyList());
                 }
             }
             

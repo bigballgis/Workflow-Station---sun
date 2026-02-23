@@ -52,7 +52,11 @@ export default {
     type: '类型',
     inputPlaceholder: '请输入',
     logout: '退出登录',
-    logoutSuccess: '已退出登录'
+    logoutSuccess: '已退出登录',
+    add: '添加',
+    operation: '操作',
+    deleteSuccess: '删除成功',
+    confirmTitle: '提示'
   },
   sidebar: {
     collapse: '收起侧边栏',
@@ -240,6 +244,7 @@ export default {
     selectBindTable: '选择要绑定的数据表',
     bindTableHint: '绑定表后，表单数据将与该表进行关联，支持数据的增删改查',
     mainForm: '主表单',
+    mainTable: '主表',
     subForm: '子表单',
     popupForm: '弹出表单',
     actionForm: '动作表单',
@@ -850,6 +855,27 @@ export default {
     updateSuccess: '更新成功',
     addSuccess: '添加成功',
     operationFailed: '操作失败'
+  },
+  subTable: {
+    defaultTitle: '子表数据',
+    deleteConfirm: '确定要删除这条记录吗？'
+  },
+  preview: {
+    itemName: '项目名称',
+    quantity: '数量',
+    unitPrice: '单价',
+    amount: '金额',
+    remark: '备注',
+    actionType: '操作类型',
+    actionResult: '操作结果',
+    comment: '意见',
+    operator: '操作人',
+    actionTime: '操作时间',
+    fileName: '文件名',
+    fileType: '文件类型',
+    fileUrl: '文件地址',
+    uploadTime: '上传时间',
+    value: '值'
   },
   user: {
     username: '用户名',

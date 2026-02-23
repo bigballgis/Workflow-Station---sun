@@ -179,7 +179,7 @@ public class FunctionUnitAccessComponent {
                 @SuppressWarnings("unchecked")
                 java.util.List<Map<String, Object>> content = (java.util.List<Map<String, Object>>) searchResponse.getBody().get("content");
                 if (content != null && !content.isEmpty()) {
-                    // 找到精确匹配名称的功能单元
+                    // 只返回精确匹配名称的功能单元，避免模糊匹配返回错误结果
                     for (Map<String, Object> unit : content) {
                         String name = (String) unit.get("name");
                         if (functionUnitIdOrCode.equals(name)) {
@@ -188,10 +188,8 @@ public class FunctionUnitAccessComponent {
                             return id;
                         }
                     }
-                    // 如果没有精确匹配，返回第一个结果
-                    String id = (String) content.get(0).get("id");
-                    log.info("Resolved function unit (first match) {} to ID {}", functionUnitIdOrCode, id);
-                    return id;
+                    // 没有精确匹配，不使用模糊结果（避免加载错误的功能单元）
+                    log.warn("No exact name match found for: {}, skipping fuzzy result to avoid wrong function unit", functionUnitIdOrCode);
                 }
             }
             

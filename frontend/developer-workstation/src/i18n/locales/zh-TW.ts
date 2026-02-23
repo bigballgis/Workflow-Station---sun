@@ -52,7 +52,11 @@ export default {
     type: '類型',
     inputPlaceholder: '請輸入',
     logout: '登出',
-    logoutSuccess: '已登出'
+    logoutSuccess: '已登出',
+    add: '新增',
+    operation: '操作',
+    deleteSuccess: '刪除成功',
+    confirmTitle: '提示'
   },
   sidebar: {
     collapse: '收起側邊欄',
@@ -240,6 +244,7 @@ export default {
     selectBindTable: '選擇要綁定的資料表',
     bindTableHint: '綁定表後，表單資料將與該表進行關聯，支援資料的增刪改查',
     mainForm: '主表單',
+    mainTable: '主表',
     subForm: '子表單',
     popupForm: '彈出表單',
     actionForm: '動作表單',
@@ -850,6 +855,27 @@ export default {
     updateSuccess: '更新成功',
     addSuccess: '新增成功',
     operationFailed: '操作失敗'
+  },
+  subTable: {
+    defaultTitle: '子表資料',
+    deleteConfirm: '確定要刪除這條記錄嗎？'
+  },
+  preview: {
+    itemName: '項目名稱',
+    quantity: '數量',
+    unitPrice: '單價',
+    amount: '金額',
+    remark: '備註',
+    actionType: '操作類型',
+    actionResult: '操作結果',
+    comment: '意見',
+    operator: '操作人',
+    actionTime: '操作時間',
+    fileName: '檔案名',
+    fileType: '檔案類型',
+    fileUrl: '檔案地址',
+    uploadTime: '上傳時間',
+    value: '值'
   },
   user: {
     username: '使用者名稱',

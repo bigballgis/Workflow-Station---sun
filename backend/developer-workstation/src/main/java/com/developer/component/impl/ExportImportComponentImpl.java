@@ -592,6 +592,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
     
     private Map<String, Object> serializeForm(FormDefinition form) {
         Map<String, Object> map = new HashMap<>();
+        map.put("formId", form.getId());  // 原始 dw_form_definitions.id，用于 admin center 的 sourceId 匹配
         map.put("formName", form.getFormName());
         map.put("formType", form.getFormType().name());
         map.put("configJson", form.getConfigJson());

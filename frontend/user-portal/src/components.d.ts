@@ -75,6 +75,7 @@ declare module 'vue' {
     QuickActionsWidget: typeof import('./components/widgets/QuickActionsWidget.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    SubTableField: typeof import('./components/SubTableField.vue')['default']
     TaskOverviewWidget: typeof import('./components/widgets/TaskOverviewWidget.vue')['default']
     UserProfileDropdown: typeof import('./components/UserProfileDropdown.vue')['default']
   }

@@ -157,6 +157,8 @@ export default {
     basicInfo: '基本資訊',
     workflowDiagram: '工作流程圖',
     taskForm: '任務表單',
+    applicationContent: '申請內容',
+    readonly: '唯讀',
     flowHistory: '流轉記錄',
     backToList: '返回列表',
     currentAssignee: '目前處理人',

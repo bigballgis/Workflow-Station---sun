@@ -44,7 +44,7 @@ $PSQL -f /docker-entrypoint-initdb.d/01-admin/01-create-admin-only.sql
 
 # --- Step 4: Test function unit (Digital Lending V2 EN) ---
 echo ""
-echo "[5/4] Loading test function unit (Digital Lending V2 EN)..."
+echo "[4/6] Loading test function unit (Digital Lending V2 EN)..."
 for f in /docker-entrypoint-initdb.d/08-digital-lending-v2-en/00-*.sql \
          /docker-entrypoint-initdb.d/08-digital-lending-v2-en/01-*.sql \
          /docker-entrypoint-initdb.d/08-digital-lending-v2-en/02-*.sql \
@@ -54,10 +54,21 @@ done
 
 # --- Step 5: Simple Approval Workflow ---
 echo ""
-echo "[6/4] Loading Simple Approval Workflow..."
+echo "[5/6] Loading Simple Approval Workflow..."
 for f in /docker-entrypoint-initdb.d/10-simple-approval/00-*.sql \
          /docker-entrypoint-initdb.d/10-simple-approval/01-*.sql \
-         /docker-entrypoint-initdb.d/10-simple-approval/02-*.sql; do
+         /docker-entrypoint-initdb.d/10-simple-approval/02-*.sql \
+         /docker-entrypoint-initdb.d/10-simple-approval/03-*.sql; do
+    [ -f "$f" ] && echo "  Running $(basename $f)..." && $PSQL -f "$f"
+done
+
+# --- Step 6: Simple Approval Workflow 12 ---
+echo ""
+echo "[6/6] Loading Simple Approval Workflow 12..."
+for f in /docker-entrypoint-initdb.d/12-simple-approval/00-*.sql \
+         /docker-entrypoint-initdb.d/12-simple-approval/01-*.sql \
+         /docker-entrypoint-initdb.d/12-simple-approval/02-*.sql \
+         /docker-entrypoint-initdb.d/12-simple-approval/03-*.sql; do
     [ -f "$f" ] && echo "  Running $(basename $f)..." && $PSQL -f "$f"
 done
 
@@ -70,4 +81,5 @@ echo "  Change password after first login!"
 echo "  Test workflows loaded:"
 echo "    - Digital Lending V2 EN"
 echo "    - Simple Approval"
+echo "    - Simple Approval Workflow 12"
 echo "========================================="

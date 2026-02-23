@@ -52,7 +52,11 @@ export default {
     type: 'Type',
     inputPlaceholder: 'Please input',
     logout: 'Logout',
-    logoutSuccess: 'Logged out successfully'
+    logoutSuccess: 'Logged out successfully',
+    add: 'Add',
+    operation: 'Operation',
+    deleteSuccess: 'Deleted successfully',
+    confirmTitle: 'Confirm'
   },
   sidebar: {
     collapse: 'Collapse sidebar',
@@ -208,6 +212,7 @@ export default {
     selectBindTable: 'Select table to bind',
     bindTableHint: 'After binding, form data will be associated with the table for CRUD operations',
     mainForm: 'Main Form',
+    mainTable: 'Main Table',
     subForm: 'Sub Form',
     popupForm: 'Popup Form',
     actionForm: 'Action Form',
@@ -854,6 +859,27 @@ export default {
   user: {
     username: 'Username',
     email: 'Email'
+  },
+  subTable: {
+    defaultTitle: 'Sub Table Data',
+    deleteConfirm: 'Are you sure to delete this record?'
+  },
+  preview: {
+    itemName: 'Item Name',
+    quantity: 'Quantity',
+    unitPrice: 'Unit Price',
+    amount: 'Amount',
+    remark: 'Remark',
+    actionType: 'Action Type',
+    actionResult: 'Action Result',
+    comment: 'Comment',
+    operator: 'Operator',
+    actionTime: 'Action Time',
+    fileName: 'File Name',
+    fileType: 'File Type',
+    fileUrl: 'File URL',
+    uploadTime: 'Upload Time',
+    value: 'Value'
   },
   deploy: {
     step: {

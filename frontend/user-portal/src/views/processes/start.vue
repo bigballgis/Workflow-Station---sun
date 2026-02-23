@@ -88,6 +88,22 @@
             />
           </div>
           <el-empty v-else :description="t('processStart.noFormConfig')" />
+
+          <!-- Sub-tables (SUB / RELATED bindings) -->
+          <template v-if="subTableBindings.length > 0">
+            <div
+              v-for="binding in subTableBindings"
+              :key="binding.bindingId"
+              class="sub-table-section"
+            >
+              <SubTableField
+                :title="binding.tableName"
+                :columns="binding.columns"
+                v-model="binding.data"
+                :editable="binding.bindingMode === 'EDITABLE'"
+              />
+            </div>
+          </template>
         </div>
       </div>
 
@@ -150,6 +166,7 @@ import { processApi } from '@/api/process'
 import ProcessDiagram, { type ProcessNode, type ProcessFlow } from '@/components/ProcessDiagram.vue'
 import ProcessHistory, { type HistoryRecord } from '@/components/ProcessHistory.vue'
 import FormRenderer, { type FormField, type FormTab } from '@/components/FormRenderer.vue'
+import SubTableField from '@/components/SubTableField.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -186,6 +203,18 @@ const formData = ref<Record<string, any>>({})
 const currentFormName = ref('')
 const formLabelWidth = ref('250px')
 const formRendererRef = ref<InstanceType<typeof FormRenderer> | null>(null)
+
+// Sub-table bindings for the start form
+const subTableBindings = ref<Array<{
+  bindingId: number
+  bindingType: string
+  bindingMode: string
+  tableName: string
+  tableType: string
+  tableDescription: string
+  columns: Array<{ field: string; label: string; type?: string }>
+  data: any[]
+}>>([])
 
 // 流转记录
 const historyRecords = ref<HistoryRecord[]>([])
@@ -262,6 +291,30 @@ const loadFunctionUnitContent = async () => {
       
       currentFormName.value = selectedForm.name
       parseFormConfig(selectedForm.data)
+      
+      // Parse subForms from configJson for column definitions
+      let subForms: Record<string, any> = {}
+      try {
+        const cfg = typeof selectedForm.data === 'string' ? JSON.parse(selectedForm.data) : (selectedForm.data || {})
+        subForms = cfg.subForms || {}
+      } catch {}
+
+      // Load sub-table bindings (SUB / RELATED, skip PRIMARY)
+      const bindings: typeof subTableBindings.value = []
+      for (const b of (selectedForm.tableBindings || [])) {
+        if (b.bindingType === 'PRIMARY') continue
+        bindings.push({
+          bindingId: b.bindingId,
+          bindingType: b.bindingType,
+          bindingMode: b.bindingMode,
+          tableName: b.tableName,
+          tableType: b.tableType,
+          tableDescription: b.tableDescription,
+          columns: deriveColumnsFromBinding(b, subForms),
+          data: []
+        })
+      }
+      subTableBindings.value = bindings
     }
     
     // 初始化流转记录（新流程，只有开始节点）
@@ -384,7 +437,18 @@ const loadDraftData = async () => {
     const response = await processApi.getDraft(functionUnitCode.value || functionUnitId.value)
     const draft = response.data || response
     if (draft && draft.formData) {
-      formData.value = draft.formData
+      const { __subTables__, ...mainFormData } = draft.formData
+      formData.value = mainFormData
+      // 恢复子表数据
+      // 注意：JSON 序列化后 key 变为 string，需同时用 number 和 string 查找
+      if (__subTables__ && typeof __subTables__ === 'object') {
+        subTableBindings.value.forEach(binding => {
+          const saved = __subTables__[binding.bindingId] ?? __subTables__[String(binding.bindingId)]
+          if (Array.isArray(saved)) {
+            binding.data = saved
+          }
+        })
+      }
       ElMessage.success(t('processStart.draftLoaded'))
     }
   } catch (error) {
@@ -715,6 +779,21 @@ const convertFormCreateRule = (rule: any): FormField | null => {
   return field
 }
 
+// Derive display columns for a sub-table binding based on table type
+const deriveColumnsFromBinding = (binding: any, subForms?: Record<string, any>): Array<{ field: string; label: string; type?: string }> => {
+  // First try to use designed fields from configJson.subForms
+  const subFormRule = subForms?.[binding.bindingId]?.rule
+  if (subFormRule && Array.isArray(subFormRule) && subFormRule.length > 0) {
+    return subFormRule.map((r: any) => {
+      let type: 'text' | 'number' | 'date' | undefined
+      if (r.type === 'inputNumber') type = 'number'
+      else if (r.type === 'datePicker') type = 'date'
+      return { field: r.field, label: r.title || r.field, type }
+    })
+  }
+  return []
+}
+
 // 初始化流转记录
 const initHistoryRecords = () => {
   historyRecords.value = [
@@ -744,7 +823,14 @@ const initActionButtons = () => {
 const handleSaveDraft = async () => {
   savingDraft.value = true
   try {
-    await processApi.saveDraft(functionUnitCode.value || functionUnitId.value, formData.value)
+    // Include sub-table data in draft
+    const draftData = {
+      ...formData.value,
+      __subTables__: Object.fromEntries(
+        subTableBindings.value.map(b => [b.bindingId, b.data])
+      )
+    }
+    await processApi.saveDraft(functionUnitCode.value || functionUnitId.value, draftData)
     ElMessage.success(t('processStart.draftSaved'))
   } catch (error: any) {
     ElMessage.error(error.message || t('processStart.draftSaveFailed'))
@@ -776,7 +862,12 @@ const handleSubmit = async () => {
   
   try {
     await processApi.startProcess(functionUnitCode.value || functionUnitId.value, {
-      formData: formData.value,
+      formData: {
+        ...formData.value,
+        __subTables__: Object.fromEntries(
+          subTableBindings.value.map(b => [b.bindingId, b.data])
+        )
+      },
       priority: 'NORMAL'
     })
     
@@ -880,6 +971,10 @@ onMounted(() => {
   .form-section {
     .form-container {
       width: 100%;
+    }
+
+    .sub-table-section {
+      margin-top: 16px;
     }
   }
   

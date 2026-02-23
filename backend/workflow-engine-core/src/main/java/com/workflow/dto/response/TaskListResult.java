@@ -173,6 +173,11 @@ public class TaskListResult {
         private java.util.Map<String, Object> variables;
         
         /**
+         * 任务定义Key（BPMN元素ID，如 Activity_1abc）
+         */
+        private String taskDefinitionKey;
+        
+        /**
          * 任务可用操作ID列表（从BPMN extensionElements中提取）
          */
         private java.util.List<String> actionIds;

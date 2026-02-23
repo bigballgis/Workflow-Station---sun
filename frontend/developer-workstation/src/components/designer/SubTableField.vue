@@ -1,10 +1,10 @@
 <template>
   <div class="sub-table-field">
     <div class="sub-table-header">
-      <span class="title">{{ config.title || '子表数据' }}</span>
+      <span class="title">{{ config.title || t('subTable.defaultTitle') }}</span>
       <div class="actions" v-if="editable">
         <el-button type="primary" size="small" @click="handleAdd">
-          <el-icon><Plus /></el-icon> 添加
+          <el-icon><Plus /></el-icon> {{ t('common.add') }}
         </el-button>
       </div>
     </div>
@@ -54,21 +54,21 @@
         </template>
       </el-table-column>
       
-      <el-table-column label="操作" width="120" v-if="editable">
+      <el-table-column :label="t('common.operation')" width="120" v-if="editable">
         <template #default="scope">
           <template v-if="editingRow === scope.$index">
-            <el-button link type="primary" size="small" @click="handleSave(scope.$index)">保存</el-button>
-            <el-button link type="info" size="small" @click="handleCancel">取消</el-button>
+            <el-button link type="primary" size="small" @click="handleSave(scope.$index)">{{ t('common.save') }}</el-button>
+            <el-button link type="info" size="small" @click="handleCancel">{{ t('common.cancel') }}</el-button>
           </template>
           <template v-else>
-            <el-button link type="primary" size="small" @click="handleEdit(scope.$index)">编辑</el-button>
-            <el-button link type="danger" size="small" @click="handleDelete(scope.$index)">删除</el-button>
+            <el-button link type="primary" size="small" @click="handleEdit(scope.$index)">{{ t('common.edit') }}</el-button>
+            <el-button link type="danger" size="small" @click="handleDelete(scope.$index)">{{ t('common.delete') }}</el-button>
           </template>
         </template>
       </el-table-column>
       
       <template #empty>
-        <el-empty description="暂无数据" :image-size="40" />
+        <el-empty :description="t('common.noData')" :image-size="40" />
       </template>
     </el-table>
     
@@ -88,8 +88,11 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Plus } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+
+const { t } = useI18n()
 
 // 列配置接口
 interface ColumnConfig {
@@ -191,12 +194,12 @@ function handleCancel() {
 
 // 删除行
 async function handleDelete(index: number) {
-  await ElMessageBox.confirm('确定要删除这条记录吗？', '提示', { type: 'warning' })
+  await ElMessageBox.confirm(t('subTable.deleteConfirm'), t('common.confirmTitle'), { type: 'warning' })
   const deletedRow = tableData.value[index]
   tableData.value.splice(index, 1)
   emit('update:modelValue', [...tableData.value])
   emit('delete', deletedRow, index)
-  ElMessage.success('删除成功')
+  ElMessage.success(t('common.deleteSuccess'))
 }
 
 // 分页变化
