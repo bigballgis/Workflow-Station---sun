@@ -67,7 +67,7 @@
         </el-form>
 
         <div class="login-footer">
-          <span>© 2024 {{ t('login.title') }}</span>
+          <span>© 2026 {{ t('login.title') }}</span>
         </div>
       </div>
     </div>

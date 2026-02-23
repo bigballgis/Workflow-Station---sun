@@ -12,19 +12,19 @@
     
     <div class="table-list" v-if="!selectedTable">
       <el-table :data="store.tables" v-loading="loading" stripe @row-click="handleSelectTable">
-        <el-table-column prop="tableName" :label="t('table.tableName')" />
-        <el-table-column prop="tableType" :label="t('table.tableType')" width="120">
+        <el-table-column prop="tableName" :label="t('table.tableName')" min-width="150" show-overflow-tooltip />
+        <el-table-column prop="tableType" :label="t('table.tableType')" min-width="120">
           <template #default="{ row }">
             <el-tag :type="row.tableType === 'MAIN' ? 'primary' : 'info'">
               {{ tableTypeLabel(row.tableType) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="description" :label="t('table.description')" show-overflow-tooltip />
-        <el-table-column :label="t('table.fieldCount')" width="80">
+        <el-table-column prop="description" :label="t('table.description')" min-width="200" show-overflow-tooltip />
+        <el-table-column :label="t('table.fieldCount')" min-width="100">
           <template #default="{ row }">{{ row.fieldDefinitions?.length || 0 }}</template>
         </el-table-column>
-        <el-table-column :label="t('table.relations')" width="100">
+        <el-table-column :label="t('table.relations')" min-width="100">
           <template #default="{ row }">
             <el-tag v-if="getTableRelations(row.id).length" type="success" size="small">
               {{ getTableRelations(row.id).length }}
@@ -32,7 +32,7 @@
             <span v-else class="text-muted">-</span>
           </template>
         </el-table-column>
-        <el-table-column :label="t('common.actions')" width="150">
+        <el-table-column :label="t('common.actions')" min-width="150">
           <template #default="{ row }">
             <el-button link type="primary" @click.stop="handleSelectTable(row)">{{ t('common.edit') }}</el-button>
             <el-button link type="danger" @click.stop="handleDeleteTable(row)">{{ t('common.delete') }}</el-button>
@@ -70,12 +70,12 @@
       <h4>{{ t('table.fields') }}</h4>
       <el-button size="small" @click="handleAddField" style="margin-bottom: 10px;">{{ t('table.addField') }}</el-button>
       <el-table :data="selectedTable.fieldDefinitions" size="small" border>
-        <el-table-column prop="fieldName" :label="t('table.fieldName')" width="150">
+        <el-table-column prop="fieldName" :label="t('table.fieldName')" min-width="120">
           <template #default="{ row }">
             <el-input v-model="row.fieldName" size="small" />
           </template>
         </el-table-column>
-        <el-table-column prop="dataType" :label="t('table.dataType')" width="120">
+        <el-table-column prop="dataType" :label="t('table.dataType')" min-width="100">
           <template #default="{ row }">
             <el-select v-model="row.dataType" size="small">
               <el-option label="VARCHAR" value="VARCHAR" />
@@ -89,27 +89,27 @@
             </el-select>
           </template>
         </el-table-column>
-        <el-table-column prop="length" :label="t('table.length')" width="80">
+        <el-table-column prop="length" :label="t('table.length')" min-width="92">
           <template #default="{ row }">
             <el-input-number v-model="row.length" size="small" :min="0" controls-position="right" />
           </template>
         </el-table-column>
-        <el-table-column prop="nullable" :label="t('table.nullable')" width="60">
+        <el-table-column prop="nullable" :label="t('table.nullable')" min-width="63" align="center">
           <template #default="{ row }">
             <el-checkbox v-model="row.nullable" />
           </template>
         </el-table-column>
-        <el-table-column prop="isPrimaryKey" :label="t('table.primaryKey')" width="60">
+        <el-table-column prop="isPrimaryKey" :label="t('table.primaryKey')" min-width="68" align="center">
           <template #default="{ row }">
             <el-checkbox v-model="row.isPrimaryKey" />
           </template>
         </el-table-column>
-        <el-table-column prop="description" :label="t('table.description')" min-width="150">
+        <el-table-column prop="description" :label="t('table.description')" min-width="270">
           <template #default="{ row }">
             <el-input v-model="row.description" size="small" />
           </template>
         </el-table-column>
-        <el-table-column :label="t('table.operation')" width="80">
+        <el-table-column :label="t('table.operation')" min-width="90" align="center">
           <template #default="{ $index }">
             <el-button link type="danger" @click="handleRemoveField($index)">{{ t('table.delete') }}</el-button>
           </template>
@@ -475,6 +475,20 @@ onMounted(loadTables)
 <style lang="scss" scoped>
 .table-designer {
   min-height: 400px;
+  
+  // 确保表格内容不折行
+  :deep(.el-table) {
+    .el-table__cell {
+      white-space: nowrap;
+    }
+  }
+}
+
+.table-list {
+  // 为表格列表添加水平滚动
+  :deep(.el-table) {
+    overflow-x: auto;
+  }
 }
 
 .designer-toolbar {

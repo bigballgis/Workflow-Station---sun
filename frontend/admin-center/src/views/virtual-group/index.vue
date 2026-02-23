@@ -8,14 +8,14 @@
     </div>
     
     <el-table :data="groups" v-loading="loading" stripe>
-      <el-table-column prop="name" :label="t('virtualGroup.name')" min-width="160" />
+      <el-table-column prop="name" :label="t('virtualGroup.name')" min-width="150" />
       <el-table-column prop="code" :label="t('virtualGroup.code')" min-width="120" />
       <el-table-column prop="type" :label="t('virtualGroup.type')" width="100">
         <template #default="{ row }">
           <el-tag :type="row.type === 'SYSTEM' ? 'warning' : 'info'">{{ typeText(row.type) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="boundRoleName" :label="t('virtualGroup.boundRole')" min-width="150">
+      <el-table-column prop="boundRoleName" :label="t('virtualGroup.boundRole')" min-width="180">
         <template #default="{ row }">
           <template v-if="row.boundRoleName">
             <span>{{ row.boundRoleName }}</span>
@@ -26,19 +26,19 @@
           <span v-else class="text-muted">-</span>
         </template>
       </el-table-column>
-      <el-table-column prop="adGroup" :label="t('virtualGroup.adGroup')" min-width="150">
+      <el-table-column prop="adGroup" :label="t('virtualGroup.adGroup')" min-width="140">
         <template #default="{ row }">
           <span v-if="row.adGroup">{{ row.adGroup }}</span>
           <span v-else class="text-muted">-</span>
         </template>
       </el-table-column>
-      <el-table-column prop="memberCount" :label="t('virtualGroup.memberCount')" width="80" align="center" />
-      <el-table-column prop="status" :label="t('virtualGroup.status')" width="80">
+      <el-table-column prop="memberCount" :label="t('virtualGroup.memberCount')" width="100" align="center" :show-overflow-tooltip="false" class-name="no-wrap-header" />
+      <el-table-column prop="status" :label="t('virtualGroup.status')" width="100" :show-overflow-tooltip="false" class-name="no-wrap-header">
         <template #default="{ row }">
           <el-tag :type="row.status === 'ACTIVE' ? 'success' : 'info'" size="small">{{ row.status === 'ACTIVE' ? t('virtualGroup.active') : t('virtualGroup.inactive') }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column :label="t('common.operation')" width="340" fixed="right">
+      <el-table-column :label="t('common.operation')" min-width="380" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" @click="showEditDialog(row)">{{ t('virtualGroup.edit') }}</el-button>
           <el-button link type="primary" @click="showMembersDialog(row)">{{ t('virtualGroup.members') }}</el-button>
@@ -120,5 +120,10 @@ onMounted(fetchGroups)
 <style scoped>
 .text-muted {
   color: #909399;
+}
+
+.page-container :deep(.no-wrap-header .cell) {
+  white-space: nowrap !important;
+  overflow: visible !important;
 }
 </style>

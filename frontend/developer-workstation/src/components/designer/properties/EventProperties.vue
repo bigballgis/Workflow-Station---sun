@@ -90,8 +90,8 @@
           </el-form-item>
           <div class="timer-examples">
             <div class="examples-title">{{ t('properties.expressionExamples') }}</div>
-            <div v-if="timerType === 'date'" class="example-item" @click="setTimerValue('2024-12-31T23:59:59')">
-              <code>2024-12-31T23:59:59</code>
+            <div v-if="timerType === 'date'" class="example-item" @click="setTimerValue('2026-12-31T23:59:59')">
+              <code>2026-12-31T23:59:59</code>
               <span>{{ t('properties.specificDateTime') }}</span>
             </div>
             <div v-if="timerType === 'duration'" class="example-item" @click="setTimerValue('PT1H')">
@@ -234,7 +234,7 @@ const eventDefinitionLabel = computed(() => {
 
 const timerPlaceholder = computed(() => {
   const placeholders: Record<string, string> = {
-    date: '2024-12-31T23:59:59',
+    date: '2026-12-31T23:59:59',
     duration: 'PT1H',
     cycle: 'R3/PT10M'
   }
