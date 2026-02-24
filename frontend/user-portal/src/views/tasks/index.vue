@@ -81,8 +81,9 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column :label="t('task.actions')" width="200" fixed="right">
+        <el-table-column :label="t('task.actions')" width="240" fixed="right">
           <template #default="{ row }">
+            <div style="white-space: nowrap; display: flex; gap: 4px; align-items: center; flex-wrap: nowrap;">
             <el-button
               v-if="canClaim(row)"
               type="primary"
@@ -114,6 +115,7 @@
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -138,7 +140,7 @@
 
     <!-- 委托/转办/催办对话框 -->
     <el-dialog v-model="actionDialogVisible" :title="actionDialogTitle" width="500px">
-      <el-form :model="actionForm" label-width="80px">
+      <el-form :model="actionForm" label-width="150px" label-position="left">
         <el-form-item :label="t('task.targetUser')" v-if="currentAction !== 'urge' && currentAction !== 'batchUrge'">
           <el-select v-model="actionForm.targetUserId" filterable :placeholder="t('task.selectUser')" style="width: 100%;">
             <el-option label="Li Si" value="user_2" />

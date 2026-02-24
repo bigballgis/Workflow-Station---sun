@@ -50,13 +50,13 @@ export default {
     logoutSuccess: '已退出登录'
   },
   menu: {
-    dashboard: '工作台',
-    tasks: '待办任务',
+    dashboard: '首页',
+    tasks: '待办',
     completedTasks: '已处理任务',
-    processes: '发起流程',
-    myApplications: '我的申请',
+    processes: '新建申请',
+    myApplications: '我的请求',
     delegations: '委托管理',
-    permissions: '权限申请',
+    permissions: '用户档案设置',
     myRequests: '我的申请记录',
     approvals: '权限审批',
     memberManagement: '成员管理',
@@ -65,7 +65,7 @@ export default {
     settings: '个人设置'
   },
   dashboard: {
-    title: '工作台',
+    title: '首页',
     taskOverview: '任务概览',
     processOverview: '流程概览',
     performance: '个人绩效',
@@ -103,7 +103,7 @@ export default {
     confirmResetLayout: '确定要重置布局吗？所有自定义设置将丢失。'
   },
   task: {
-    title: '待办任务',
+    title: '待办',
     completedTasks: '已处理任务',
     completedTime: '完成时间',
     taskName: '任务名称',
@@ -191,14 +191,14 @@ export default {
     taskFallbackName: '任务{index}'
   },
   process: {
-    title: '发起流程',
+    title: '新建申请',
     processName: '流程名称',
     category: '流程分类',
     description: '流程描述',
-    startProcess: '发起流程',
+    startProcess: '新建申请',
     favorites: '常用流程',
     recent: '最近使用',
-    all: '全部流程',
+    all: '我的工作流',
     formData: '表单数据',
     attachments: '附件',
     submit: '提交',
@@ -214,7 +214,7 @@ export default {
   },
   processStart: {
     back: '返回',
-    startProcess: '发起流程',
+    startProcess: '新建申请',
     disabledTitle: '功能单元已禁用',
     disabledSubtitle: '该功能单元已被管理员禁用，暂时无法使用',
     accessDeniedTitle: '无访问权限',
@@ -307,8 +307,8 @@ export default {
     notificationsDesc: '最新通知消息',
     calendar: '日程安排',
     calendarDesc: '任务日历视图',
-    newProcess: '发起流程',
-    myApplications: '我的申请',
+    newProcess: '新建申请',
+    myApplications: '我的请求',
     delegationMgmt: '委托管理',
     permissionApply: '权限申请',
     notificationCenter: '消息中心',
@@ -322,7 +322,7 @@ export default {
     daysAgo: '{n}天前'
   },
   application: {
-    title: '我的申请',
+    title: '我的请求',
     processTitle: '流程标题',
     currentNode: '当前节点',
     startTime: '发起时间',
@@ -391,7 +391,7 @@ export default {
     deleteSuccess: '删除成功'
   },
   permission: {
-    title: '权限申请',
+    title: '用户档案设置',
     myPermissions: '我的权限',
     applyPermission: '申请权限',
     requestHistory: '申请记录',

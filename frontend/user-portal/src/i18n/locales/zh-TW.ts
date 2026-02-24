@@ -50,13 +50,13 @@ export default {
     logoutSuccess: '已登出'
   },
   menu: {
-    dashboard: '工作臺',
-    tasks: '待辦任務',
+    dashboard: '首頁',
+    tasks: '待辦',
     completedTasks: '已處理任務',
-    processes: '發起流程',
-    myApplications: '我的申請',
+    processes: '新建申請',
+    myApplications: '我的請求',
     delegations: '委託管理',
-    permissions: '權限申請',
+    permissions: '用戶檔案設置',
     myRequests: '我的申請記錄',
     approvals: '權限審批',
     memberManagement: '成員管理',
@@ -65,7 +65,7 @@ export default {
     settings: '個人設定'
   },
   dashboard: {
-    title: '工作臺',
+    title: '首頁',
     taskOverview: '任務概覽',
     processOverview: '流程概覽',
     performance: '個人績效',
@@ -103,7 +103,7 @@ export default {
     confirmResetLayout: '確定要重置版面嗎？所有自訂設定將遺失。'
   },
   task: {
-    title: '待辦任務',
+    title: '待辦',
     completedTasks: '已處理任務',
     completedTime: '完成時間',
     taskName: '任務名稱',
@@ -175,14 +175,14 @@ export default {
     serverError: '伺服器錯誤，請稍後重試'
   },
   process: {
-    title: '發起流程',
+    title: '新建申請',
     processName: '流程名稱',
     category: '流程分類',
     description: '流程描述',
-    startProcess: '發起流程',
+    startProcess: '新建申請',
     favorites: '常用流程',
     recent: '最近使用',
-    all: '全部流程',
+    all: '我的工作流',
     formData: '表單資料',
     attachments: '附件',
     submit: '提交',
@@ -197,7 +197,7 @@ export default {
     contactAdminForAccess: '請加入對應的 AD Group 以獲取功能單元的存取權限'
   },
   application: {
-    title: '我的申請',
+    title: '我的請求',
     processTitle: '流程標題',
     currentNode: '目前節點',
     startTime: '發起時間',
@@ -266,7 +266,7 @@ export default {
     deleteSuccess: '刪除成功'
   },
   permission: {
-    title: '權限申請',
+    title: '用戶檔案設置',
     myPermissions: '我的權限',
     applyPermission: '申請權限',
     requestHistory: '申請記錄',

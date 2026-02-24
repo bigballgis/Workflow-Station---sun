@@ -42,7 +42,7 @@
             <el-icon><Document /></el-icon>
             <template #title>{{ t('menu.myApplications') }}</template>
           </el-menu-item>
-          <el-menu-item index="/delegations">
+          <el-menu-item index="/delegations" v-show="false">
             <el-icon><Share /></el-icon>
             <template #title>{{ t('menu.delegations') }}</template>
           </el-menu-item>

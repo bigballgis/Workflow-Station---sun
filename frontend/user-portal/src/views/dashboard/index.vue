@@ -14,7 +14,9 @@
           <el-row :gutter="16">
             <el-col :span="8">
               <div class="stat-item">
-                <div class="stat-number">{{ taskOverview.pendingCount }}</div>
+                <div class="stat-number">
+                  <router-link to="/tasks" class="stat-link">{{ taskOverview.pendingCount }}</router-link>
+                </div>
                 <div class="stat-label">{{ t('dashboard.pendingTasks') }}</div>
               </div>
             </el-col>
@@ -47,11 +49,10 @@
             </el-col>
             <el-col :span="8">
               <div class="stat-item small">
-                <div class="stat-value">{{ taskOverview.avgProcessingHours }}h</div>
-                <div class="stat-label">{{ t('dashboard.avgProcessingTime') }}</div>
+                <div class="stat-value">{{ taskOverview.completedTodayCount }}</div>
+                <div class="stat-label">{{ t('dashboard.teamCompletedToday') }}</div>
               </div>
-            </el-col>
-          </el-row>
+            </el-col>          </el-row>
         </div>
       </el-col>
 
@@ -328,6 +329,15 @@ onMounted(() => {
       font-size: 14px;
       color: var(--text-secondary);
       margin-top: 8px;
+    }
+
+    .stat-link {
+      color: inherit;
+      text-decoration: none;
+      &:hover {
+        text-decoration: underline;
+        cursor: pointer;
+      }
     }
   }
   
