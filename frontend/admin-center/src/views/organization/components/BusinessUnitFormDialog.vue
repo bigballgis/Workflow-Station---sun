@@ -1,6 +1,6 @@
 <template>
   <el-dialog :model-value="modelValue" @update:model-value="$emit('update:modelValue', $event)" :title="isEdit ? t('organization.editBusinessUnit') : t('organization.createBusinessUnit')" width="500px">
-    <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
+    <el-form ref="formRef" :model="form" :rules="rules" label-width="auto" label-position="left">
       <el-form-item :label="t('organization.businessUnitName')" prop="name">
         <el-input v-model="form.name" />
       </el-form-item>

@@ -6,7 +6,7 @@
     width="560px"
     destroy-on-close
   >
-    <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
+    <el-form ref="formRef" :model="form" :rules="rules" label-width="auto" label-position="left">
       <el-form-item :label="t('user.username')" prop="username">
         <el-input v-model="form.username" :disabled="isEdit" :placeholder="t('user.usernamePlaceholder')" />
       </el-form-item>

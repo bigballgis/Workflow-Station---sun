@@ -35,23 +35,16 @@ const routes: RouteRecordRaw[] = [
         meta: { titleKey: 'menu.dashboard', icon: 'Odometer', permissions: [] }
       },
       {
-        path: 'user',
-        name: 'UserManagement',
-        meta: { titleKey: 'menu.userManagement', icon: 'User', permissions: [PERMISSIONS.USER_READ] },
-        children: [
-          {
-            path: 'list',
-            name: 'UserList',
-            component: () => import('@/views/user/UserList.vue'),
-            meta: { titleKey: 'menu.userList', permissions: [PERMISSIONS.USER_READ] }
-          },
-          {
-            path: 'import',
-            name: 'UserImport',
-            component: () => import('@/views/user/UserImport.vue'),
-            meta: { titleKey: 'menu.userImport', permissions: [PERMISSIONS.USER_WRITE] }
-          }
-        ]
+        path: 'user/list',
+        name: 'UserList',
+        component: () => import('@/views/user/UserList.vue'),
+        meta: { titleKey: 'menu.userManagement', icon: 'User', permissions: [PERMISSIONS.USER_READ] }
+      },
+      {
+        path: 'user/import',
+        name: 'UserImport',
+        component: () => import('@/views/user/UserImport.vue'),
+        meta: { titleKey: 'menu.userImport', hidden: true, permissions: [PERMISSIONS.USER_WRITE] }
       },
       {
         path: 'organization',

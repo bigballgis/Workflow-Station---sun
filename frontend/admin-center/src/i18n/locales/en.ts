@@ -58,6 +58,7 @@ export default {
   menu: {
     dashboard: 'Dashboard',
     userManagement: 'User Management',
+    entitlementManagement: 'Entitlement Management',
     userList: 'User List',
     userImport: 'Batch Import',
     organization: 'Organization',

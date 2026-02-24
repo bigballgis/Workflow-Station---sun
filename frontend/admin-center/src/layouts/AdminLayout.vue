@@ -35,32 +35,21 @@
             </el-menu-item>
             
             <!-- User Management - requires user:read -->
-            <el-sub-menu index="user" v-if="canReadUser">
+            <el-menu-item index="/user/list" v-if="canReadUser">
+              <el-icon><User /></el-icon>
+              <template #title>{{ t('menu.userManagement') }}</template>
+            </el-menu-item>
+            
+            <!-- Entitlement Management - sub-menu -->
+            <el-sub-menu index="entitlement" v-if="canReadUser || canReadRole">
               <template #title>
-                <el-icon><User /></el-icon>
-                <span>{{ t('menu.userManagement') }}</span>
+                <el-icon><Lock /></el-icon>
+                <span>{{ t('menu.entitlementManagement') }}</span>
               </template>
-              <el-menu-item index="/user/list">{{ t('menu.userList') }}</el-menu-item>
-              <el-menu-item index="/user/import" v-if="canWriteUser">{{ t('menu.userImport') }}</el-menu-item>
+              <el-menu-item index="/organization" v-if="canReadUser">{{ t('menu.organization') }}</el-menu-item>
+              <el-menu-item index="/virtual-group" v-if="canReadUser">{{ t('menu.virtualGroup') }}</el-menu-item>
+              <el-menu-item index="/role" v-if="canReadRole">{{ t('menu.roleManagement') }}</el-menu-item>
             </el-sub-menu>
-            
-            <!-- Organization - requires user:read -->
-            <el-menu-item index="/organization" v-if="canReadUser">
-              <el-icon><OfficeBuilding /></el-icon>
-              <template #title>{{ t('menu.organization') }}</template>
-            </el-menu-item>
-            
-            <!-- Virtual Group - requires user:read -->
-            <el-menu-item index="/virtual-group" v-if="canReadUser">
-              <el-icon><Connection /></el-icon>
-              <template #title>{{ t('menu.virtualGroup') }}</template>
-            </el-menu-item>
-            
-            <!-- Role Management - requires role:read -->
-            <el-menu-item index="/role" v-if="canReadRole">
-              <el-icon><Key /></el-icon>
-              <template #title>{{ t('menu.roleManagement') }}</template>
-            </el-menu-item>
             
             <!-- Function Unit - requires system:admin -->
             <el-menu-item index="/function-unit" v-if="isSystemAdmin">
@@ -91,7 +80,7 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { 
   Fold, Expand,
-  Odometer, OfficeBuilding, Key, Connection, Box, User
+  Odometer, OfficeBuilding, Key, Connection, Box, User, Lock
 } from '@element-plus/icons-vue'
 import UserProfileDropdown from '@/components/UserProfileDropdown.vue'
 import { hasPermission, PERMISSIONS } from '@/utils/permission'

@@ -1,6 +1,6 @@
 <template>
   <el-dialog :model-value="modelValue" @update:model-value="$emit('update:modelValue', $event)" :title="isEdit ? t('virtualGroup.edit') : t('virtualGroup.create')" width="500px">
-    <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
+    <el-form ref="formRef" :model="form" :rules="rules" label-width="auto" label-position="left">
       <el-form-item :label="t('common.name')" prop="name">
         <el-input v-model="form.name" :disabled="isSystemGroup" />
       </el-form-item>
@@ -87,3 +87,4 @@ const handleSubmit = async () => {
   }
 }
 </script>
+

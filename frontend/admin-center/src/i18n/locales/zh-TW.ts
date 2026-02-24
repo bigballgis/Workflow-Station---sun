@@ -58,6 +58,7 @@ export default {
   menu: {
     dashboard: '儀表板',
     userManagement: '使用者管理',
+    entitlementManagement: '權限管理',
     userList: '使用者列表',
     userImport: '批次匯入',
     organization: '組織架構',

@@ -4,24 +4,24 @@
       <el-button type="primary" size="small" @click="openAddDialog">{{ t('role.addMember') }}</el-button>
     </div>
     
-    <el-table :data="members" v-loading="loading" max-height="400">
-      <el-table-column prop="employeeId" :label="t('user.employeeId')" width="100" />
-      <el-table-column prop="fullName" :label="t('user.fullName')" width="120" />
-      <el-table-column prop="username" :label="t('user.username')" width="120" />
-      <el-table-column prop="email" :label="t('user.email')" width="200" />
-      <el-table-column prop="role" :label="t('user.role')" width="100">
+    <el-table :data="members" v-loading="loading" max-height="400" table-layout="auto" style="width: 100%">
+      <!-- <el-table-column prop="employeeId" :label="t('user.employeeId')" min-width="110" show-overflow-tooltip /> -->
+      <el-table-column prop="fullName" :label="t('user.fullName')" min-width="130" show-overflow-tooltip />
+      <el-table-column prop="username" :label="t('user.username')" min-width="120" show-overflow-tooltip />
+      <el-table-column prop="email" :label="t('user.email')" min-width="180" show-overflow-tooltip />
+      <el-table-column prop="role" :label="t('user.role')" min-width="110">
         <template #default="{ row }">
           <el-tag type="info" size="small">
             {{ t('role.members') }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="joinedAt" :label="t('common.createTime')" width="170">
+      <el-table-column prop="joinedAt" :label="t('common.createTime')" min-width="170">
         <template #default="{ row }">
           {{ row.joinedAt ? new Date(row.joinedAt).toLocaleString('zh-CN') : '-' }}
         </template>
       </el-table-column>
-      <el-table-column :label="t('common.operation')" width="80">
+      <el-table-column :label="t('common.operation')" min-width="80" fixed="right">
         <template #default="{ row }">
           <el-button link type="danger" @click="handleRemove(row)">{{ t('common.delete') }}</el-button>
         </template>
@@ -29,7 +29,7 @@
     </el-table>
     
     <el-dialog v-model="showAddDialog" :title="t('role.addMember')" width="400px" append-to-body>
-      <el-form label-width="80px">
+      <el-form label-width="auto" label-position="left">
         <el-form-item :label="t('role.selectUser')">
           <el-select 
             v-model="newMember.userId" 

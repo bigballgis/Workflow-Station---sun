@@ -3,9 +3,9 @@
     <div class="page-header">
       <span class="page-title">{{ t('menu.userList') }}</span>
       <div class="header-actions" v-if="canWriteUser">
-        <el-button @click="showImportDialog">
+        <!-- <el-button @click="showImportDialog">
           <el-icon><Upload /></el-icon>{{ t('user.batchImport') }}
-        </el-button>
+        </el-button> -->
         <el-button type="primary" @click="showCreateDialog">
           <el-icon><Plus /></el-icon>{{ t('user.createUser') }}
         </el-button>
@@ -36,31 +36,33 @@
     </el-card>
     
     <el-card class="table-card">
-      <el-table :data="users" v-loading="loading" stripe border table-layout="fixed">
-        <el-table-column prop="employeeId" :label="t('user.employeeId')" min-width="100" show-overflow-tooltip />
-        <el-table-column prop="username" :label="t('user.username')" min-width="100" show-overflow-tooltip />
-        <el-table-column prop="fullName" :label="t('user.fullName')" min-width="80" show-overflow-tooltip />
-        <el-table-column prop="email" :label="t('user.email')" min-width="160" show-overflow-tooltip />
-        <el-table-column prop="position" :label="t('user.position')" min-width="80" show-overflow-tooltip />
-        <el-table-column :label="t('user.entityManager')" min-width="90" show-overflow-tooltip>
+      <el-table :data="users" v-loading="loading" stripe border table-layout="auto" style="width: 100%">
+        <!-- <el-table-column prop="employeeId" :label="t('user.employeeId')" min-width="100" show-overflow-tooltip /> -->
+        <el-table-column prop="username" :label="t('user.username')" min-width="120" show-overflow-tooltip />
+        <el-table-column prop="fullName" :label="t('user.fullName')" min-width="120" show-overflow-tooltip />
+        <el-table-column prop="email" :label="t('user.email')" min-width="180" show-overflow-tooltip />
+        <el-table-column prop="position" :label="t('user.position')" min-width="100" show-overflow-tooltip />
+        <el-table-column :label="t('user.entityManager')" min-width="120" show-overflow-tooltip>
           <template #default="{ row }">
             <span v-if="row.entityManagerName" class="manager-name">{{ row.entityManagerName }}</span>
             <span v-else class="no-manager">-</span>
           </template>
         </el-table-column>
-        <el-table-column :label="t('user.functionManager')" min-width="90" show-overflow-tooltip>
+        <el-table-column :label="t('user.functionManager')" min-width="120" show-overflow-tooltip>
           <template #default="{ row }">
             <span v-if="row.functionManagerName" class="manager-name">{{ row.functionManagerName }}</span>
             <span v-else class="no-manager">-</span>
           </template>
         </el-table-column>
-        <el-table-column prop="status" :label="t('common.status')" width="70" align="center">
+        <el-table-column prop="status" :label="t('common.status')" width="90" align="center">
           <template #default="{ row }">
             <el-tag :type="statusType(row.status)" size="small">{{ statusText(row.status) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column :label="t('common.actions')" width="150" fixed="right">
+        <el-table-column :label="t('common.actions')" width="200" fixed="right">
+          <template #header>{{ t('common.actions') }}</template>
           <template #default="{ row }">
+            <div style="display: flex; align-items: center; flex-wrap: nowrap; white-space: nowrap;">
             <el-button v-if="canWriteUser" link type="primary" size="small" @click="showEditDialog(row)">{{ t('common.edit') }}</el-button>
             <el-button link type="primary" size="small" @click="showDetailDialog(row)">{{ t('common.view') }}</el-button>
             <el-dropdown v-if="canWriteUser" @command="(cmd: string) => handleCommand(row, cmd)">
@@ -87,6 +89,7 @@
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
+            </div>
           </template>
         </el-table-column>
       </el-table>

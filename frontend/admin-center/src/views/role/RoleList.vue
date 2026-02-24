@@ -22,31 +22,39 @@
       </el-form-item>
     </el-form>
     
-    <el-table :data="sortedRoles" v-loading="roleStore.loading" stripe>
-      <el-table-column prop="name" :label="t('role.roleName')" min-width="140" />
-      <el-table-column prop="code" :label="t('role.roleCode')" min-width="120" />
-      <el-table-column prop="type" :label="t('role.roleType')" width="110">
+    <el-table :data="sortedRoles" v-loading="roleStore.loading" stripe table-layout="auto" style="width: 100%">
+      <el-table-column prop="name" :label="t('role.roleName')" min-width="160">
+        <template #default="{ row }">
+          <el-tooltip :content="row.description || '-'" placement="top-start" :disabled="!row.description" popper-class="role-desc-tooltip">
+            <span style="cursor: default">{{ row.name }}</span>
+          </el-tooltip>
+        </template>
+      </el-table-column>
+      <el-table-column prop="code" :label="t('role.roleCode')" min-width="140" />
+      <el-table-column prop="type" :label="t('role.roleType')" width="130" align="center">
         <template #default="{ row }">
           <el-tag :type="typeTagType(row.type) as any" size="small">{{ typeText(row.type) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="description" :label="t('role.description')" min-width="150" show-overflow-tooltip />
-      <el-table-column prop="memberCount" :label="t('role.memberCount')" width="100" align="center" :show-overflow-tooltip="false" class-name="no-wrap-header" />
+      <!-- <el-table-column prop="description" :label="t('role.description')" min-width="150" show-overflow-tooltip /> -->
+      <!-- <el-table-column prop="memberCount" :label="t('role.memberCount')" width="100" align="center" :show-overflow-tooltip="false" class-name="no-wrap-header" /> -->
       <el-table-column prop="status" :label="t('common.status')" width="100" align="center" :show-overflow-tooltip="false" class-name="no-wrap-header">
         <template #default="{ row }">
           <el-tag :type="row.status === 'ACTIVE' ? 'success' : 'info'" size="small">{{ row.status === 'ACTIVE' ? t('common.enabled') : t('common.disabled') }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column :label="t('role.systemRole')" width="120" align="center" :show-overflow-tooltip="false" class-name="no-wrap-header">
+      <el-table-column :label="t('role.systemRole')" width="110" align="center" :show-overflow-tooltip="false" class-name="no-wrap-header">
         <template #default="{ row }">
           <el-icon v-if="row.isSystem" color="#E6A23C"><Lock /></el-icon>
         </template>
       </el-table-column>
-      <el-table-column :label="t('common.operation')" width="200" fixed="right">
+      <el-table-column :label="t('common.operation')" width="220" fixed="right" align="center">
         <template #default="{ row }">
-          <el-button v-if="!row.isSystem && canWriteRole" link type="primary" @click="showEditDialog(row)">{{ t('common.edit') }}</el-button>
-          <el-button link type="primary" @click="showMembersDialog(row)">{{ t('role.members') }}</el-button>
-          <el-button v-if="!row.isSystem && canWriteRole && canDeleteRole" link type="danger" @click="handleDelete(row)">{{ t('common.delete') }}</el-button>
+          <div style="display: flex; align-items: center; justify-content: center; flex-wrap: nowrap; white-space: nowrap; gap: 4px;">
+            <el-button v-if="!row.isSystem && canWriteRole" link type="primary" @click="showEditDialog(row)">{{ t('common.edit') }}</el-button>
+            <el-button link type="primary" @click="showMembersDialog(row)">{{ t('role.members') }}</el-button>
+            <el-button v-if="!row.isSystem && canWriteRole && canDeleteRole" link type="danger" @click="handleDelete(row)">{{ t('common.delete') }}</el-button>
+          </div>
         </template>
       </el-table-column>
     </el-table>
@@ -122,5 +130,17 @@ onMounted(handleSearch)
 .page-container :deep(.no-wrap-header .cell) {
   white-space: nowrap !important;
   overflow: visible !important;
+}
+</style>
+
+<style>
+.role-desc-tooltip.el-popper {
+  background-color: #737373 !important;
+  color: #ffffff !important;
+  border: 1px solid #808080 !important;
+}
+.role-desc-tooltip.el-popper .el-popper__arrow::before {
+  background-color: #737373 !important;
+  border-color: #808080 !important;
 }
 </style>

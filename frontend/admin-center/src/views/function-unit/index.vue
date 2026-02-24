@@ -28,13 +28,15 @@
             </template>
           </el-table-column>
           <el-table-column prop="updatedAt" :label="t('common.updateTime')" />
-          <el-table-column :label="t('common.actions')" width="320">
+          <el-table-column :label="t('common.actions')" width="360" fixed="right">
             <template #default="{ row }">
-              <el-button link type="primary" @click="showAccessDialog(row)">{{ t('functionUnit.access') }}</el-button>
-              <el-button link type="primary" @click="showDeployDialog(row)">{{ t('functionUnit.deploy') }}</el-button>
-              <el-button link type="primary" @click="showVersions(row)">{{ t('functionUnit.versions') }}</el-button>
-              <el-button link type="danger" @click="handleRollback(row)">{{ t('functionUnit.rollback') }}</el-button>
-              <el-button link type="danger" @click="handleDeleteClick(row)">{{ t('common.delete') }}</el-button>
+              <div style="display: flex; align-items: center; flex-wrap: nowrap; white-space: nowrap;">
+                <el-button link type="primary" @click="showAccessDialog(row)">{{ t('functionUnit.access') }}</el-button>
+                <el-button link type="primary" @click="showDeployDialog(row)">{{ t('functionUnit.deploy') }}</el-button>
+                <el-button link type="primary" @click="showVersions(row)">{{ t('functionUnit.versions') }}</el-button>
+                <el-button link type="danger" @click="handleRollback(row)">{{ t('functionUnit.rollback') }}</el-button>
+                <el-button link type="danger" @click="handleDeleteClick(row)">{{ t('common.delete') }}</el-button>
+              </div>
             </template>
           </el-table-column>
         </el-table>
@@ -72,9 +74,9 @@
     </el-dialog>
     
     <el-dialog v-model="showDeployDialogVisible" :title="t('functionUnit.deployFunctionUnit')" width="500px">
-      <el-form label-width="100px">
+      <el-form label-width="160px" label-position="left">
         <el-form-item :label="t('functionUnit.targetEnvironment')">
-          <el-select v-model="deployForm.environment">
+          <el-select v-model="deployForm.environment" style="width: 100%">
             <el-option :label="t('functionUnit.envDev')" value="DEV" />
             <el-option :label="t('functionUnit.envTest')" value="TEST" />
             <el-option :label="t('functionUnit.envStaging')" value="STAGING" />
@@ -82,7 +84,7 @@
           </el-select>
         </el-form-item>
         <el-form-item :label="t('functionUnit.deployStrategy')">
-          <el-select v-model="deployForm.strategy">
+          <el-select v-model="deployForm.strategy" style="width: 100%">
             <el-option :label="t('functionUnit.strategyFull')" value="FULL" />
             <el-option :label="t('functionUnit.strategyIncremental')" value="INCREMENTAL" />
             <el-option :label="t('functionUnit.strategyCanary')" value="CANARY" />
@@ -127,9 +129,9 @@
     
     <!-- Add Business Role Dialog -->
     <el-dialog v-model="showAddAccessDialogVisible" :title="t('functionUnit.selectBusinessRole')" width="500px">
-      <el-form :model="accessForm" label-width="100px">
+      <el-form :model="accessForm" label-width="120px" label-position="left">
         <el-form-item :label="t('functionUnit.businessRole')" required>
-          <el-select v-model="accessForm.roleId" filterable :placeholder="t('functionUnit.selectBusinessRole')" @change="handleRoleChange">
+          <el-select v-model="accessForm.roleId" filterable :placeholder="t('functionUnit.selectBusinessRole')" @change="handleRoleChange" style="width: 100%">
             <el-option v-for="role in businessRoles" :key="role.id" :label="role.name" :value="role.id" />
           </el-select>
         </el-form-item>
