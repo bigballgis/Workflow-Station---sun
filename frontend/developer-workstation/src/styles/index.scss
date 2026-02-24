@@ -133,6 +133,79 @@ svg:empty {
 }
 
 
+// 表单 label 不折行（Dialog 内 + form-create 设计器内）
+// 注意：不包含 form-preview-wrapper，它有单独规则
+.el-dialog {
+  .el-form-item__label,
+  .__fc_label,
+  .form-create-label {
+    white-space: nowrap !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+.fc-designer-wrapper {
+  .el-form-item__label,
+  .__fc_label,
+  .form-create-label {
+    white-space: nowrap !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+// Preview 弹窗内 label：左对齐、不截断、自动撑开宽度
+// 用更高优先级选择器覆盖 el-dialog 的规则
+.el-dialog .form-preview-wrapper,
+.form-preview-wrapper {
+  .el-form-item__label {
+    white-space: nowrap !important;
+    width: auto !important;
+    min-width: fit-content !important;
+    max-width: none !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    text-align: left !important;
+    justify-content: flex-start !important;
+  }
+  .el-form-item {
+    display: flex !important;
+    align-items: flex-start !important;
+  }
+  // fc-wrap-right 会强制右对齐，覆盖掉
+  .fc-wrap-right > .el-form-item__label {
+    justify-content: flex-start !important;
+  }
+}
+
+// form-create 设计器画布内 label 不折行，自动撑开宽度
+.fc-designer-wrapper {
+  .el-form-item__label {
+    white-space: nowrap !important;
+    width: auto !important;
+    min-width: fit-content !important;
+  }
+  .el-form-item {
+    display: flex;
+    align-items: flex-start;
+  }
+}
+
+// fc-designer 右侧属性面板配置项 label 和控件之间加间距
+._fd-ci-head {
+  gap: 12px !important;
+}
+
+._fd-ci-label {
+  flex-shrink: 0 !important;
+  margin-right: 4px !important;
+}
+
+._fd-ci-con {
+  flex-shrink: 1 !important;
+}
+
 // 确保 Element Plus 输入框使用正确的字体
 .el-input__inner,
 .el-input__wrapper,

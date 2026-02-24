@@ -54,7 +54,7 @@
         <el-button type="primary" @click="handleSaveAction">{{ t('action.save') }}</el-button>
       </div>
       
-      <el-form :model="selectedAction" label-width="100px" style="max-width: 600px;">
+      <el-form :model="selectedAction" label-width="100px" label-position="left" style="max-width: 600px;">
         <el-form-item :label="t('action.actionName')">
           <el-input v-model="selectedAction.actionName" />
         </el-form-item>
@@ -249,7 +249,7 @@
 
     <!-- Create Action Dialog -->
     <el-dialog v-model="showCreateDialog" :title="t('action.createActionTitle')" width="500px">
-      <el-form :model="createForm" label-width="80px">
+      <el-form :model="createForm" label-width="120px" label-position="left">
         <el-form-item :label="t('action.actionName')" required>
           <el-input v-model="createForm.actionName" />
         </el-form-item>
@@ -287,7 +287,7 @@
 
     <!-- Test Action Dialog -->
     <el-dialog v-model="showTestDialog" :title="t('action.testActionTitle')" width="600px">
-      <el-form label-width="80px">
+      <el-form label-width="120px" label-position="left">
         <el-form-item :label="t('action.testData')">
           <el-input v-model="testData" type="textarea" :rows="5" :placeholder="t('action.testDataPlaceholder')" />
         </el-form-item>

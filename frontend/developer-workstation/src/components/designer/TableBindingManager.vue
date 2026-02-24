@@ -55,7 +55,7 @@
       width="500px"
       @close="resetForm"
     >
-      <el-form :model="bindingForm" :rules="formRules" ref="formRef" label-width="100px">
+      <el-form :model="bindingForm" :rules="formRules" ref="formRef" label-width="120px" label-position="left">
         <el-form-item :label="t('tableBinding.selectTable')" prop="tableId">
           <el-select 
             v-model="bindingForm.tableId" 

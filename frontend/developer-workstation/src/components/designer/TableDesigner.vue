@@ -50,7 +50,7 @@
         <el-button type="primary" @click="handleSaveTable">{{ t('table.save') }}</el-button>
       </div>
       
-      <el-form :model="selectedTable" label-width="100px" style="max-width: 600px; margin-bottom: 20px;">
+      <el-form :model="selectedTable" label-width="100px" label-position="left" style="max-width: 600px; margin-bottom: 20px;">
         <el-form-item :label="t('table.tableName')">
           <el-input v-model="selectedTable.tableName" />
         </el-form-item>
@@ -68,7 +68,7 @@
       </el-form>
 
       <h4>{{ t('table.fields') }}</h4>
-      <el-button size="small" @click="handleAddField" style="margin-bottom: 10px;">{{ t('table.addField') }}</el-button>
+      <el-button size="small" @click="handleAddField" style="margin-top: 8px; margin-bottom: 10px;">{{ t('table.addField') }}</el-button>
       <el-table :data="selectedTable.fieldDefinitions" size="small" border>
         <el-table-column prop="fieldName" :label="t('table.fieldName')" min-width="120">
           <template #default="{ row }">
@@ -119,7 +119,7 @@
 
     <!-- Create Table Dialog -->
     <el-dialog v-model="showCreateDialog" :title="t('table.title')" width="500px">
-      <el-form :model="createForm" label-width="80px">
+      <el-form :model="createForm" label-width="100px" label-position="left">
         <el-form-item :label="t('table.tableName')" required>
           <el-input v-model="createForm.tableName" />
         </el-form-item>

@@ -60,7 +60,7 @@
 
     <!-- Edit Function Unit Dialog -->
     <el-dialog v-model="showEditDialog" :title="t('functionUnit.settings')" width="500px">
-      <el-form :model="editForm" label-width="80px">
+      <el-form :model="editForm" label-width="100px" label-position="left">
         <el-form-item :label="t('functionUnit.icon')">
           <div class="icon-edit-row">
             <IconPreview :icon-id="editForm.iconId" size="large" />
@@ -115,7 +115,7 @@
 
     <!-- Deploy Dialog -->
     <el-dialog v-model="showDeployDialog" :title="t('functionUnit.deploy')" width="500px">
-      <el-form :model="deployForm" label-width="100px">
+      <el-form :model="deployForm" label-width="120px" label-position="left">
         <el-form-item :label="t('functionUnit.autoEnable')">
           <el-switch v-model="deployForm.autoEnable" />
           <span style="margin-left: 12px; color: #909399; font-size: 12px;">{{ t('functionUnit.autoEnableHint') }}</span>

@@ -115,7 +115,7 @@
 
     <!-- Create Dialog -->
     <el-dialog v-model="showCreateDialog" :title="t('functionUnit.create')" width="500px">
-      <el-form ref="createFormRef" :model="createForm" :rules="formRules" label-width="80px">
+      <el-form ref="createFormRef" :model="createForm" :rules="formRules" label-width="100px" label-position="left">
         <el-form-item :label="t('functionUnit.icon')">
           <div class="icon-select-wrapper" @click="showIconSelector = true">
             <IconPreview 

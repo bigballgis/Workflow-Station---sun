@@ -71,7 +71,7 @@
 
     <!-- Upload Dialog -->
     <el-dialog v-model="showUploadDialog" :title="t('icon.upload')" width="500px" append-to-body>
-      <el-form :model="uploadForm" label-width="80px">
+      <el-form :model="uploadForm" label-width="100px" label-position="left">
         <el-form-item :label="t('icon.file')" required>
           <el-upload
             ref="uploadRef"

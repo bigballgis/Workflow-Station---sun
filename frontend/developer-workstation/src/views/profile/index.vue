@@ -65,6 +65,7 @@
         :model="passwordForm" 
         :rules="passwordRules" 
         label-width="100px"
+        label-position="left"
       >
         <el-form-item :label="t('profile.currentPassword')" prop="oldPassword">
           <el-input 

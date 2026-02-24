@@ -140,7 +140,7 @@
 
     <!-- Create form dialog -->
     <el-dialog v-model="showCreateDialog" :title="t('form.createFormTitle')" width="500px">
-      <el-form :model="createForm" label-width="100px">
+      <el-form :model="createForm" label-width="100px" label-position="left">
         <el-form-item :label="t('form.formNameLabel')" required>
           <el-input v-model="createForm.formName" :placeholder="t('form.enterFormName')" />
         </el-form-item>
@@ -282,7 +282,7 @@
           </span>
         </el-alert>
         
-        <el-form label-width="100px" style="margin-bottom: 16px;">
+        <el-form label-width="120px" label-position="left" style="margin-bottom: 16px;">
           <el-form-item :label="t('form.selectTable')">
             <el-select v-model="importTableId" :placeholder="t('form.selectTable')" style="width: 100%;" @change="handleTableChange">
               <el-option-group v-if="formBindings.length > 0" :label="t('form.boundTables')">
@@ -516,11 +516,15 @@ const designerConfig = {
   fieldReadonly: false,
 }
 
+// Default form options — label left-aligned
+const defaultFormOption = { form: { labelPosition: 'left' } }
+
 // Preview options
-const previewOption = {
+const previewOption = ref({
   submitBtn: false,
-  resetBtn: false
-}
+  resetBtn: false,
+  form: { labelPosition: 'left' }
+})
 
 const formTypeLabel = (type: string) => {
   const map: Record<string, string> = { MAIN: t('form.mainForm'), SUB: t('form.subForm'), POPUP: t('form.popupForm'), ACTION: t('form.actionForm') }
@@ -1074,10 +1078,10 @@ function handleSelectForm(row: FormDefinition) {
         const config = row.configJson || {}
         try {
           designerRef.value.setRule(config.rule && config.rule.length ? config.rule : [])
-          designerRef.value.setOption(config.options && Object.keys(config.options).length ? config.options : {})
+          designerRef.value.setOption(config.options && Object.keys(config.options).length ? config.options : defaultFormOption)
         } catch (e) {
           console.error('Failed to load main form config:', e)
-          try { designerRef.value.setRule([]); designerRef.value.setOption({}) } catch {}
+          try { designerRef.value.setRule([]); designerRef.value.setOption(defaultFormOption) } catch {}
         }
       }
     }, 100)
@@ -1095,7 +1099,7 @@ function loadSubDesigners(row: FormDefinition) {
           const subConfig = subForms[binding.bindingId] || {}
           try {
             subRef.setRule(subConfig.rule && subConfig.rule.length ? subConfig.rule : [])
-            subRef.setOption(subConfig.options && Object.keys(subConfig.options).length ? subConfig.options : {})
+            subRef.setOption(subConfig.options && Object.keys(subConfig.options).length ? subConfig.options : defaultFormOption)
           } catch {}
         }
       }, 150)
@@ -1119,7 +1123,7 @@ function handleTabChange(tabName: string) {
         const subConfig = cached || subForms[bindingId] || {}
         try {
           subRef.setRule(subConfig.rule && subConfig.rule.length ? subConfig.rule : [])
-          subRef.setOption(subConfig.options && Object.keys(subConfig.options).length ? subConfig.options : {})
+          subRef.setOption(subConfig.options && Object.keys(subConfig.options).length ? subConfig.options : defaultFormOption)
         } catch {}
       }
     }, 100)
@@ -1211,6 +1215,21 @@ function handlePreview() {
   previewData.value = {}
   previewSubData.value = {}
   previewTableRows.value = {}
+
+  // Sync label position from designer option
+  try {
+    const opt = designerRef.value.getOption() || {}
+    previewOption.value = {
+      submitBtn: false,
+      resetBtn: false,
+      form: {
+        labelPosition: opt.form?.labelPosition || 'left',
+        labelWidth: 'auto'
+      }
+    }
+  } catch {
+    previewOption.value = { submitBtn: false, resetBtn: false, form: { labelPosition: 'left', labelWidth: 'auto' } }
+  }
 
   const config = selectedForm.value.configJson || {}
   const subForms = config.subForms || {}
@@ -1723,6 +1742,22 @@ onMounted(loadForms)
     // 确保表单项样式正确
     :deep(.el-form-item) {
       margin-bottom: 18px;
+    }
+
+    // label 不截断，自动撑开宽度
+    :deep(.el-form-item__label) {
+      white-space: nowrap !important;
+      width: auto !important;
+      min-width: fit-content !important;
+      max-width: 200px !important;
+      height: auto !important;
+      line-height: 1.5 !important;
+      padding-top: 6px;
+    }
+
+    :deep(.el-form-item) {
+      display: flex !important;
+      align-items: flex-start !important;
     }
     
     // 确保输入框等组件样式正确
