@@ -15,25 +15,25 @@
         <div class="portal-card">
           <el-empty v-if="pendingList.length === 0 && !loadingPending" :description="t('permission.noPendingRequests')" />
           <el-table v-else :data="pendingList" stripe v-loading="loadingPending">
-            <el-table-column prop="requestType" :label="t('permission.requestType')" width="140">
+            <el-table-column prop="requestType" :label="t('permission.requestType')" width="160">
               <template #default="{ row }">
                 <el-tag :type="getRequestTypeTag(row.requestType)" size="small">
                   {{ getRequestTypeLabel(row.requestType) }}
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column :label="t('permission.requestTarget')" min-width="200">
+            <el-table-column :label="t('permission.requestTarget')" min-width="150">
               <template #default="{ row }">
                 {{ getTargetName(row) }}
               </template>
             </el-table-column>
-            <el-table-column prop="reason" :label="t('permission.reason')" min-width="200" show-overflow-tooltip />
+            <el-table-column prop="reason" :label="t('permission.reason')" min-width="150" show-overflow-tooltip />
             <el-table-column prop="createdAt" :label="t('permission.applyTime')" width="160">
               <template #default="{ row }">
                 {{ formatDateTime(row.createdAt) }}
               </template>
             </el-table-column>
-            <el-table-column :label="t('common.actions')" width="100" fixed="right">
+            <el-table-column :label="t('common.actions')" width="150" fixed="right">
               <template #default="{ row }">
                 <el-button type="danger" size="small" text @click="cancelRequest(row)">
                   {{ t('permission.cancelRequest') }}
@@ -87,7 +87,7 @@
 
     <!-- 申请权限对话框 -->
     <el-dialog v-model="applyDialogVisible" :title="t('permission.applyPermission')" width="600px">
-      <el-form :model="applyForm" label-width="100px">
+      <el-form :model="applyForm" label-width="120px" label-position="left" class="apply-form">
         <!-- 申请类型选择 -->
         <el-form-item :label="t('permission.applyType')">
           <el-radio-group v-model="applyForm.applyType" @change="onApplyTypeChange">
@@ -452,6 +452,12 @@ onMounted(() => {
       color: var(--text-secondary);
       font-size: 12px;
     }
+  }
+}
+
+:deep(.apply-form) {
+  .el-form-item__label {
+    white-space: nowrap;
   }
 }
 </style>
