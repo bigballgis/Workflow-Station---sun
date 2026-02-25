@@ -353,6 +353,26 @@ public class TaskProcessComponent {
         log.info("Task {} completed via Flowable by user {} with action {} (approvalStatus: {})", 
                 taskId, userId, action, variables.get("approvalStatus"));
         
+        // 将审批变量同步回本地 ProcessInstance，确保 Completed Tasks / My Requests 能看到
+        try {
+            String syncProcessId = task.getProcessInstanceId();
+            Optional<ProcessInstance> syncOpt = processInstanceRepository.findById(syncProcessId);
+            if (syncOpt.isPresent()) {
+                ProcessInstance syncInstance = syncOpt.get();
+                Map<String, Object> existingVars = syncInstance.getVariables();
+                if (existingVars == null) {
+                    existingVars = new HashMap<>();
+                }
+                existingVars.putAll(variables);
+                syncInstance.setVariables(existingVars);
+                processInstanceRepository.save(syncInstance);
+                log.info("Synced {} approval variables back to local ProcessInstance {}", 
+                        variables.size(), syncProcessId);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to sync approval variables to local ProcessInstance: {}", e.getMessage());
+        }
+        
         // 任务完成后，检查流程是否还有活动任务，如果没有则流程可能已完成
         // 这是一个补偿机制，防止 ProcessCompletionListener 通知失败导致状态不同步
         try {

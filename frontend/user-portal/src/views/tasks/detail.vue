@@ -1176,12 +1176,22 @@ const submitApprove = async () => {
       variables.approval_comment = approveForm.comment
     }
     
+    // 收集当前表单数据（如 Approval Form 中的 additional_information）
+    const currentFormData: Record<string, any> = {}
+    for (const key of Object.keys(formData.value)) {
+      // 排除系统字段和 start 表单已有的字段，只收集当前审批表单的字段
+      if (!key.startsWith('__') && !variables[key]) {
+        currentFormData[key] = formData.value[key]
+      }
+    }
+
     await completeTask(taskId, {
       taskId: taskId,
       userId: userStore.userInfo?.username || 'admin',
       action: currentApproveAction.value,
       comment: approveForm.comment,
-      variables: variables
+      variables: variables,
+      formData: currentFormData
     })
     ElMessage.success(t('task.operationSuccess'))
     approveDialogVisible.value = false

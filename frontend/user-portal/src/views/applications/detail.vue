@@ -76,7 +76,37 @@
         </div>
       </div>
 
-      <!-- 第三部分：表单数据 -->
+      <!-- 第三部分：申请内容（start 节点表单，只读） -->
+      <div v-if="hasStartForm" class="section form-section">
+        <div class="section-header">
+          <el-icon><Document /></el-icon>
+          <span>{{ startFormName || t('applicationDetail.applicationForm') }}</span>
+          <el-tag type="info" size="small">{{ t('applicationDetail.completed') }}</el-tag>
+        </div>
+        <div class="section-content">
+          <div v-if="startFormFields.length > 0 || startFormTabs.length > 0" class="form-container">
+            <FormRenderer
+              :fields="startFormFields"
+              :tabs="startFormTabs"
+              v-model="formData"
+              :label-width="startFormLabelWidth"
+              :readonly="true"
+            />
+          </div>
+          <template v-if="startSubTableBindings.length > 0">
+            <div v-for="binding in startSubTableBindings" :key="binding.bindingId" class="sub-table-section">
+              <SubTableField
+                :title="binding.tableName"
+                :columns="binding.columns"
+                v-model="binding.data"
+                :editable="false"
+              />
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <!-- 表单数据 -->
       <div class="section form-section">
         <div class="section-header">
           <el-icon><Document /></el-icon>
@@ -199,6 +229,24 @@ const subTableBindings = ref<Array<{
   columns: Array<{ field: string; label: string; type?: string }>
   data: any[]
 }>>([])
+
+// 申请内容（start 节点表单，只读展示）
+const startFormFields = ref<FormField[]>([])
+const startFormTabs = ref<FormTab[]>([])
+const startFormName = ref('')
+const startFormLabelWidth = ref('160px')
+const startSubTableBindings = ref<Array<{
+  bindingId: number
+  bindingType: string
+  bindingMode: string
+  foreignKeyField: string | null
+  tableName: string
+  tableType: string
+  tableDescription: string
+  columns: Array<{ field: string; label: string; type?: string }>
+  data: any[]
+}>>([])
+const hasStartForm = ref(false)
 
 // 流转记录
 const historyRecords = ref<HistoryRecord[]>([])
@@ -426,6 +474,85 @@ const loadFunctionUnitContent = async (processKey: string) => {
         })
       }
       subTableBindings.value = bindings
+
+      // 额外加载 start 节点表单（Request Form），只读展示申请内容
+      // 当当前节点有专属表单时，start form 作为额外的只读区域展示
+      // 当匹配不到当前节点表单时（如流程已完成），也尝试加载 start form
+      if (content.processes?.length > 0) {
+        const startFormInfo = parseBpmnXmlAndGetStartFormId(content.processes[0].data)
+        const startFormId = startFormInfo.formId
+        const startFormName2 = startFormInfo.formName
+        let startForm: any = null
+
+        if (currentFormInfo.formId || currentFormInfo.formName) {
+          // 当前节点有专属表单，只在 start form 不同时才额外展示
+          if (startFormId && String(selectedForm.sourceId) !== startFormId) {
+            startForm = content.forms.find((f: any) => String(f.sourceId) === startFormId)
+            if (!startForm && startFormName2) {
+              startForm = content.forms.find((f: any) => f.name === startFormName2)
+            }
+          } else if (!startFormId && startFormName2 && selectedForm.name !== startFormName2) {
+            startForm = content.forms.find((f: any) => f.name === startFormName2)
+          }
+        } else {
+          // 当前节点没有匹配到专属表单（如流程已完成），尝试找 start form
+          // 如果 start form 和默认选中的表单不同，则额外展示
+          if (startFormId) {
+            const matched = content.forms.find((f: any) => String(f.sourceId) === startFormId)
+            if (matched && matched.id !== selectedForm.id) {
+              startForm = matched
+            } else if (!matched && startFormName2) {
+              const matchedByName = content.forms.find((f: any) => f.name === startFormName2)
+              if (matchedByName && matchedByName.id !== selectedForm.id) {
+                startForm = matchedByName
+              }
+            }
+          } else if (startFormName2) {
+            const matched = content.forms.find((f: any) => f.name === startFormName2)
+            if (matched && matched.id !== selectedForm.id) {
+              startForm = matched
+            }
+          }
+        }
+
+        // 如果找到的 startForm 和当前 selectedForm 是同一个，不显示
+        if (startForm && startForm.id === selectedForm.id) {
+          startForm = null
+        }
+
+        if (startForm) {
+          startFormName.value = startForm.name
+          startFormLabelWidth.value = formLabelWidth.value
+          parseStartFormConfig(startForm.data)
+
+          let startSubForms: Record<string, any> = {}
+          try {
+            const cfg = typeof startForm.data === 'string' ? JSON.parse(startForm.data) : (startForm.data || {})
+            startSubForms = cfg.subForms || {}
+          } catch {}
+
+          const startBindings: typeof startSubTableBindings.value = []
+          for (const b of (startForm.tableBindings || [])) {
+            if (b.bindingType === 'PRIMARY') continue
+            const cols = deriveColumnsFromBinding(b, startSubForms)
+            const binding = {
+              bindingId: b.bindingId, bindingType: b.bindingType, bindingMode: b.bindingMode,
+              foreignKeyField: b.foreignKeyField, tableName: b.tableDisplayName || b.tableName, tableType: b.tableType,
+              tableDescription: b.tableDescription, columns: cols, data: [] as any[]
+            }
+            const savedSubTables = formData.value.__subTables__
+            if (savedSubTables) {
+              const saved = savedSubTables[b.bindingId] ?? savedSubTables[String(b.bindingId)]
+              if (Array.isArray(saved)) binding.data = saved
+            }
+            startBindings.push(binding)
+          }
+          startSubTableBindings.value = startBindings
+          hasStartForm.value = true
+        } else {
+          hasStartForm.value = false
+        }
+      }
     }
   } catch (error) {
     console.error('Failed to load function unit content:', error)
@@ -486,6 +613,95 @@ const parseBpmnXmlAndGetFormId = (xml: string): { formId: string | null, formNam
   }
   
   return { formId: null, formName: null }
+}
+
+// 解析 BPMN XML 并获取 start 节点后第一个用户任务的 formId
+const parseBpmnXmlAndGetStartFormId = (xml: string): { formId: string | null, formName: string | null } => {
+  if (!xml) return { formId: null, formName: null }
+  try {
+    const parser = new DOMParser()
+    const doc = parser.parseFromString(xml, 'text/xml')
+    const allElements = doc.getElementsByTagName('*')
+    let startEventId: string | null = null
+    for (let i = 0; i < allElements.length; i++) {
+      const el = allElements[i]
+      if ((el.localName || el.nodeName.split(':').pop()) === 'startEvent') {
+        startEventId = el.getAttribute('id')
+        break
+      }
+    }
+    if (!startEventId) return { formId: null, formName: null }
+    let firstTaskId: string | null = null
+    for (let i = 0; i < allElements.length; i++) {
+      const el = allElements[i]
+      if ((el.localName || el.nodeName.split(':').pop()) === 'sequenceFlow' && el.getAttribute('sourceRef') === startEventId) {
+        firstTaskId = el.getAttribute('targetRef')
+        break
+      }
+    }
+    if (!firstTaskId) return { formId: null, formName: null }
+    for (let i = 0; i < allElements.length; i++) {
+      const el = allElements[i]
+      if ((el.localName || el.nodeName.split(':').pop()) === 'userTask' && el.getAttribute('id') === firstTaskId) {
+        let formId: string | null = null, formName: string | null = null
+        const props = el.getElementsByTagName('*')
+        for (let j = 0; j < props.length; j++) {
+          const p = props[j]
+          const ln = p.localName || p.nodeName.split(':').pop()
+          if (ln === 'property' || ln === 'values') {
+            const n = p.getAttribute('name'), v = p.getAttribute('value')
+            if (n === 'formId' && v) formId = v
+            if (n === 'formName' && v) formName = v
+          }
+        }
+        return { formId, formName }
+      }
+    }
+  } catch (e) {
+    console.error('Failed to parse BPMN for start formId:', e)
+  }
+  return { formId: null, formName: null }
+}
+
+// 解析 start 节点表单配置（只提取字段，不影响当前节点表单）
+const parseStartFormConfig = (configStr: string) => {
+  if (!configStr) return
+  try {
+    const config = typeof configStr === 'string' ? JSON.parse(configStr) : configStr
+    const rules = config.rule && Array.isArray(config.rule) ? config.rule : (Array.isArray(config) ? config : null)
+    if (rules) {
+      const tabsRule = rules.find((r: any) => r.type === 'el-tabs')
+      if (tabsRule && tabsRule.children && Array.isArray(tabsRule.children)) {
+        const tabs: FormTab[] = []
+        for (const tabPane of tabsRule.children) {
+          if (tabPane.type === 'el-tab-pane' && tabPane.props) {
+            const tabName = tabPane.props.name || `tab_${tabs.length}`
+            const tabLabel = tabPane.props.label || `Tab ${tabs.length + 1}`
+            const tabFields: FormField[] = []
+            if (tabPane.children && Array.isArray(tabPane.children)) {
+              for (const item of tabPane.children) {
+                if (item.field) {
+                  const field = convertFormCreateRule(item)
+                  if (field) tabFields.push(field)
+                }
+                if (item.children && Array.isArray(item.children)) {
+                  tabFields.push(...extractFieldsRecursive(item.children))
+                }
+              }
+            }
+            tabs.push({ name: tabName, label: tabLabel, fields: tabFields })
+          }
+        }
+        startFormTabs.value = tabs
+        startFormFields.value = []
+      } else {
+        startFormTabs.value = []
+        startFormFields.value = extractFieldsRecursive(rules)
+      }
+    }
+  } catch (error) {
+    console.error('Failed to parse start form config:', error)
+  }
 }
 
 // 解析 BPMN XML
