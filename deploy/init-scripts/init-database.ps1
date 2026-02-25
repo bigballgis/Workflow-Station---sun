@@ -92,6 +92,32 @@ foreach ($f in $fuScripts) {
     if (Test-Path $path) { Exec-Sql -File $path -Desc (Split-Path $f -Leaf) | Out-Null }
 }
 
+# Step 5: Simple Approval Workflow
+Write-Step "Step 5/6: Loading Simple Approval Workflow..."
+$saScripts = @(
+    "10-simple-approval/00-create-simple-approval.sql",
+    "10-simple-approval/01-create-tables.sql",
+    "10-simple-approval/02-create-bpmn-process.sql",
+    "10-simple-approval/03-form-table-bindings.sql"
+)
+foreach ($f in $saScripts) {
+    $path = Join-Path $ScriptDir $f
+    if (Test-Path $path) { Exec-Sql -File $path -Desc (Split-Path $f -Leaf) | Out-Null }
+}
+
+# Step 6: Procurement Workflow
+Write-Step "Step 6/6: Loading Procurement Workflow..."
+$pwScripts = @(
+    "13-procurement-workflow/00-create-function-unit.sql",
+    "13-procurement-workflow/01-create-tables.sql",
+    "13-procurement-workflow/02-create-bpmn-process.sql",
+    "13-procurement-workflow/03-form-table-bindings.sql"
+)
+foreach ($f in $pwScripts) {
+    $path = Join-Path $ScriptDir $f
+    if (Test-Path $path) { Exec-Sql -File $path -Desc (Split-Path $f -Leaf) | Out-Null }
+}
+
 Write-Host ""
 Write-Host "=========================================" -ForegroundColor Green
 Write-Host "  Database Initialization Complete!" -ForegroundColor Green

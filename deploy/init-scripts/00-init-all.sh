@@ -62,13 +62,13 @@ for f in /docker-entrypoint-initdb.d/10-simple-approval/00-*.sql \
     [ -f "$f" ] && echo "  Running $(basename $f)..." && $PSQL -f "$f"
 done
 
-# --- Step 6: Simple Approval Workflow 12 ---
+# --- Step 6: Procurement Workflow ---
 echo ""
-echo "[6/6] Loading Simple Approval Workflow 12..."
-for f in /docker-entrypoint-initdb.d/12-simple-approval/00-*.sql \
-         /docker-entrypoint-initdb.d/12-simple-approval/01-*.sql \
-         /docker-entrypoint-initdb.d/12-simple-approval/02-*.sql \
-         /docker-entrypoint-initdb.d/12-simple-approval/03-*.sql; do
+echo "[6/6] Loading Procurement Workflow..."
+for f in /docker-entrypoint-initdb.d/13-procurement-workflow/00-*.sql \
+         /docker-entrypoint-initdb.d/13-procurement-workflow/01-*.sql \
+         /docker-entrypoint-initdb.d/13-procurement-workflow/02-*.sql \
+         /docker-entrypoint-initdb.d/13-procurement-workflow/03-*.sql; do
     [ -f "$f" ] && echo "  Running $(basename $f)..." && $PSQL -f "$f"
 done
 
@@ -81,5 +81,5 @@ echo "  Change password after first login!"
 echo "  Test workflows loaded:"
 echo "    - Digital Lending V2 EN"
 echo "    - Simple Approval"
-echo "    - Simple Approval Workflow 12"
+echo "    - Procurement Workflow"
 echo "========================================="
