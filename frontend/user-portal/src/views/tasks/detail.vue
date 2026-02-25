@@ -165,7 +165,7 @@
           <el-alert v-if="historyError" :title="historyError" type="warning" show-icon :closable="false" />
           <ProcessHistory
             v-else-if="historyRecords.length > 0"
-            :records="historyRecords"
+            :records="historyRecords.filter(r => !r.activityType?.includes('Gateway'))"
             :show-header="false"
             :show-refresh="false"
           />
@@ -445,7 +445,7 @@ const loadTaskHistory = async () => {
     const res = await getTaskHistory(taskId)
     const data = res.data || res
     if (data && Array.isArray(data)) {
-      // 转换为 HistoryRecord 格式
+      // 转换为 HistoryRecord 格式（保留 gateway 记录用于图表状态判断）
       historyRecords.value = data.map((item: TaskHistoryInfo, index: number) => ({
         id: `history_${index}`,
         nodeId: item.activityId || `node_${index}`,
@@ -454,7 +454,8 @@ const loadTaskHistory = async () => {
         assigneeName: item.operatorName || '-',
         comment: item.comment,
         createdTime: item.operationTime || '',
-        completedTime: item.operationTime
+        completedTime: item.operationTime,
+        activityType: item.activityType || ''
       }))
     }
   } catch (error) {
@@ -478,7 +479,7 @@ const loadFunctionUnitContent = async (processKey: string) => {
       return
     }
     
-    let currentFormInfo: { formId: string | null, formName: string | null } = { formId: null, formName: null }
+    let currentFormInfo: { formId: string | null, formName: string | null, readOnly: boolean } = { formId: null, formName: null, readOnly: false }
     
     // 解析流程图
     if (content.processes?.length > 0) {

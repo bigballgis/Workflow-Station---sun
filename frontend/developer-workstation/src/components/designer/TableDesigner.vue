@@ -5,8 +5,6 @@
       <el-button @click="loadTables" :loading="loading">
         <el-icon><Refresh /></el-icon> {{ t('common.refresh') }}
       </el-button>
-      <el-button @click="handleGenerateDDL" :disabled="!selectedTable">{{ t('table.generateDDL') }}</el-button>
-      <el-button @click="handleValidate">{{ t('functionUnit.validate') }}</el-button>
       <el-button @click="showRelationDialog = true" :disabled="store.tables.length < 2">{{ t('table.relations') }}</el-button>
     </div>
     

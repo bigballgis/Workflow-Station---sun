@@ -87,8 +87,11 @@ public class VersionComponentImpl implements VersionComponent {
             functionUnitRepository.save(functionUnit);
             
             return version;
+        } catch (BusinessException e) {
+            throw e;
         } catch (Exception e) {
-            throw new BusinessException("SYS_SNAPSHOT_ERROR", "创建版本快照失败");
+            log.error("创建版本快照失败，functionUnitId={}, version={}: {}", functionUnitId, newVersion, e.getMessage(), e);
+            throw new BusinessException("SYS_SNAPSHOT_ERROR", "创建版本快照失败: " + e.getMessage());
         }
     }
     

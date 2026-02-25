@@ -43,7 +43,7 @@
             <el-descriptions-item :label="t('applicationDetail.initiateTime')">
               {{ formatDate(processInfo.startTime) }}
             </el-descriptions-item>
-            <el-descriptions-item :label="t('applicationDetail.currentNode')">
+            <el-descriptions-item :label="t('applicationDetail.currentStep')">
               {{ processInfo.currentNode || '-' }}
             </el-descriptions-item>
             <el-descriptions-item :label="t('applicationDetail.currentAssignee')">
@@ -120,7 +120,7 @@
         </div>
         <div class="section-content">
           <ProcessHistory
-            :records="historyRecords"
+            :records="historyRecords.filter(r => !r.activityType?.includes('Gateway'))"
             :show-header="false"
             :show-refresh="false"
           />
@@ -587,9 +587,13 @@ const parseBpmnXml = (xml: string) => {
           currentNodeId.value = id
           foundCurrentNode = true
         } else if (!foundCurrentNode) {
-          // 当前节点之前的节点都是已完成
-          status = 'completed'
-          completed.push(id)
+          // 当前节点之前的节点：仅当历史记录中有该节点时才标记为已完成
+          // 避免将被网关跳过的分支节点错误标记为已完成
+          const historyMatch = historyRecords.value.find(h => h.nodeName === name || h.nodeId === id)
+          if (historyMatch && (historyMatch.status === 'completed' || historyMatch.status === 'rejected')) {
+            status = historyMatch.status
+            completed.push(id)
+          }
         }
       }
       
@@ -641,9 +645,13 @@ const parseBpmnXml = (xml: string) => {
       } else if (processInfo.value.status === 'COMPLETED') {
         // 流程已完成，网关视为已完成
         status = 'completed'
-      } else if (!snapshotTaskName && hasApproval && !foundCurrentNode) {
-        // 非快照模式下，有已完成审批且未找到当前节点，网关视为已完成
-        status = 'completed'
+      } else {
+        // 检查是否有已完成的入口节点（通过 sequenceFlow）
+        const incomingSourceIds = earlyFlows.filter(f => f.targetRef === id).map(f => f.sourceRef)
+        const hasCompletedSource = incomingSourceIds.some(srcId => completed.includes(srcId))
+        if (hasCompletedSource) {
+          status = 'completed'
+        }
       }
       
       nodes.push({ id, name, type: 'gateway', status, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
@@ -857,7 +865,7 @@ const loadProcessHistory = async () => {
         }
       }
 
-      // 转换为 HistoryRecord 格式
+      // 转换为 HistoryRecord 格式（保留 gateway 记录用于图表状态判断）
       historyRecords.value = filteredData.map((item: any, index: number) => ({
         id: `history_${index}`,
         nodeId: item.activityId || `node_${index}`,
@@ -866,7 +874,8 @@ const loadProcessHistory = async () => {
         assigneeName: item.operatorName || '-',
         comment: item.comment,
         createdTime: item.operationTime || '',
-        completedTime: item.operationTime
+        completedTime: item.operationTime,
+        activityType: item.activityType || ''
       }))
       console.log('=== [HISTORY] Converted history records:', historyRecords.value.length)
       console.log('=== [HISTORY] First converted record:', historyRecords.value[0])

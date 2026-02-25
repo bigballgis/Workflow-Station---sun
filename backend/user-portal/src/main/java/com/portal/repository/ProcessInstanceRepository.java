@@ -42,4 +42,17 @@ public interface ProcessInstanceRepository extends JpaRepository<ProcessInstance
      */
     @Query("SELECT p FROM ProcessInstance p WHERE p.status = :status AND (p.currentAssignee = :userId OR p.candidateUsers LIKE %:userId%)")
     Page<ProcessInstance> findByAssigneeOrCandidateAndStatus(@Param("userId") String userId, @Param("status") String status, Pageable pageable);
+
+
+    /**
+     * 条件更新：仅当流程状态不是 COMPLETED 时才更新 currentNode 和 currentAssignee。
+     * 用于避免 startProcess 自动完成首任务后覆盖 ProcessCompletionListener 已设置的 COMPLETED 状态（竞态条件）。
+     * 返回受影响行数：0 表示流程已完成，无需更新。
+     */
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("UPDATE ProcessInstance p SET p.currentNode = :currentNode, p.currentAssignee = :currentAssignee " +
+           "WHERE p.id = :id AND p.status <> 'COMPLETED'")
+    int updateCurrentNodeIfNotCompleted(@Param("id") String id,
+                                        @Param("currentNode") String currentNode,
+                                        @Param("currentAssignee") String currentAssignee);
 }

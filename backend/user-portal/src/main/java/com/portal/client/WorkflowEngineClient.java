@@ -111,8 +111,10 @@ public class WorkflowEngineClient {
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                 return Optional.of(response.getBody());
             }
+        } catch (org.springframework.web.client.HttpClientErrorException e) {
+            log.error("Failed to start process in workflow engine (HTTP {}): {}", e.getStatusCode(), e.getResponseBodyAsString());
         } catch (Exception e) {
-            log.warn("Failed to start process in workflow engine: {}", e.getMessage());
+            log.error("Failed to start process in workflow engine: {}", e.getMessage(), e);
         }
         return Optional.empty();
     }

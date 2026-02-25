@@ -484,14 +484,32 @@ public class ProcessEngineComponent {
                         .processInstanceId(processInstanceId)
                         .list();
                 
+                org.flowable.bpmn.model.BpmnModel bpmnModel = repositoryService.getBpmnModel(processInstance.getProcessDefinitionId());
+                
+                // 优先查找非 SequenceFlow 的活动节点（userTask、endEvent、gateway 等）
+                // SequenceFlow 的 name 通常是条件标签（如 "Yes"/"No"），不应作为 currentNode
+                Map<String, Object> fallback = null;
                 for (org.flowable.engine.runtime.Execution execution : executions) {
                     String activityId = execution.getActivityId();
                     if (activityId != null) {
-                        // 获取活动节点的详细信息
-                        org.flowable.bpmn.model.BpmnModel bpmnModel = repositoryService.getBpmnModel(processInstance.getProcessDefinitionId());
                         org.flowable.bpmn.model.FlowElement flowElement = bpmnModel.getFlowElement(activityId);
                         
                         if (flowElement != null) {
+                            // 跳过 SequenceFlow，它的 name 是条件标签（如 "Yes"/"No"），不是节点名称
+                            if (flowElement instanceof org.flowable.bpmn.model.SequenceFlow) {
+                                log.debug("Skipping SequenceFlow {} (name: {}) for process {}", 
+                                        activityId, flowElement.getName(), processInstanceId);
+                                if (fallback == null) {
+                                    fallback = new HashMap<>();
+                                    fallback.put("activityId", activityId);
+                                    fallback.put("activityName", flowElement.getName());
+                                    fallback.put("activityType", "SequenceFlow");
+                                    fallback.put("processInstanceId", processInstanceId);
+                                    fallback.put("state", "RUNNING");
+                                }
+                                continue;
+                            }
+                            
                             result.put("activityId", activityId);
                             result.put("activityName", flowElement.getName());
                             result.put("activityType", flowElement.getClass().getSimpleName().replace("Impl", ""));
@@ -501,10 +519,33 @@ public class ProcessEngineComponent {
                             log.info("Current activity for process {}: {} ({})", 
                                     processInstanceId, flowElement.getName(), flowElement.getClass().getSimpleName());
                             
-                            // 如果找到了活动节点，返回第一个（通常只有一个）
                             return result;
                         }
                     }
+                }
+                
+                // 如果只找到了 SequenceFlow，尝试解析其目标节点作为当前活动
+                if (fallback != null) {
+                    String seqFlowId = (String) fallback.get("activityId");
+                    org.flowable.bpmn.model.FlowElement seqFlow = bpmnModel.getFlowElement(seqFlowId);
+                    if (seqFlow instanceof org.flowable.bpmn.model.SequenceFlow) {
+                        String targetRef = ((org.flowable.bpmn.model.SequenceFlow) seqFlow).getTargetRef();
+                        org.flowable.bpmn.model.FlowElement targetElement = bpmnModel.getFlowElement(targetRef);
+                        if (targetElement != null) {
+                            result.put("activityId", targetRef);
+                            result.put("activityName", targetElement.getName());
+                            result.put("activityType", targetElement.getClass().getSimpleName().replace("Impl", ""));
+                            result.put("processInstanceId", processInstanceId);
+                            result.put("state", "RUNNING");
+                            
+                            log.info("Current activity (resolved from SequenceFlow target) for process {}: {} ({})", 
+                                    processInstanceId, targetElement.getName(), targetElement.getClass().getSimpleName());
+                            return result;
+                        }
+                    }
+                    // 无法解析目标节点，返回 SequenceFlow 本身作为最后手段
+                    log.warn("Could not resolve SequenceFlow target for process {}, returning SequenceFlow as fallback", processInstanceId);
+                    return fallback;
                 }
                 
                 result.put("error", "未找到当前活动节点");
@@ -1144,6 +1185,38 @@ public class ProcessEngineComponent {
             }
         }
         
+        // 处理数值比较表达式: <=, >=, <, >
+        // 注意: 必须先检查 <= 和 >= 再检查 < 和 >，避免误匹配
+        String[] numericOperators = {"<=", ">=", "<", ">"};
+        for (String op : numericOperators) {
+            if (expression.contains(op)) {
+                String[] parts = expression.split(java.util.regex.Pattern.quote(op), 2);
+                if (parts.length == 2) {
+                    String leftVar = parts[0].trim();
+                    String rightLiteral = parts[1].trim();
+                    
+                    Object varValue = variables.get(leftVar);
+                    if (varValue == null) {
+                        log.warn("Variable '{}' is null during numeric comparison, returning false", leftVar);
+                        return false;
+                    }
+                    
+                    try {
+                        double leftNum = toDouble(varValue);
+                        double rightNum = Double.parseDouble(rightLiteral);
+                        
+                        if ("<=".equals(op)) return leftNum <= rightNum;
+                        if (">=".equals(op)) return leftNum >= rightNum;
+                        if ("<".equals(op)) return leftNum < rightNum;
+                        if (">".equals(op)) return leftNum > rightNum;
+                    } catch (NumberFormatException e) {
+                        log.warn("Failed to parse numeric comparison: {} {} {}, varValue={}", leftVar, op, rightLiteral, varValue);
+                        return false;
+                    }
+                }
+            }
+        }
+        
         // 处理布尔变量
         Object varValue = variables.get(expression);
         if (varValue instanceof Boolean) {
@@ -1152,6 +1225,16 @@ public class ProcessEngineComponent {
         
         // 默认返回true（作为默认流）
         return true;
+    }
+
+    /**
+     * 将变量值安全转换为 double，支持常见数值类型和字符串
+     */
+    private double toDouble(Object value) {
+        if (value instanceof Number) {
+            return ((Number) value).doubleValue();
+        }
+        return Double.parseDouble(String.valueOf(value));
     }
     
     private void applyQueryConditions(ProcessInstanceQuery query, ProcessInstanceQueryRequest request) {

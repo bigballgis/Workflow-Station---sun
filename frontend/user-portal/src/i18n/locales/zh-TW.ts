@@ -47,7 +47,9 @@ export default {
     startDate: '開始日期',
     endDate: '結束日期',
     logout: '登出',
-    logoutSuccess: '已登出'
+    logoutSuccess: '已登出',
+    pleaseInput: '請輸入{label}',
+    pleaseSelect: '請選擇{label}'
   },
   menu: {
     dashboard: '首頁',
@@ -199,7 +201,7 @@ export default {
   application: {
     title: '我的請求',
     processTitle: '流程標題',
-    currentNode: '目前節點',
+    currentStep: '目前步驟',
     startTime: '發起時間',
     status: '狀態',
     running: '進行中',
@@ -502,7 +504,7 @@ export default {
     reset: '重置',
     fitViewport: '適應',
     completed: '已完成',
-    currentNode: '目前節點',
+    currentStep: '目前步驟',
     rejected: '已拒絕',
     pending: '待處理'
   },

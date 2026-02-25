@@ -105,6 +105,7 @@ export interface HistoryRecord {
   duration?: number // 毫秒
   attachments?: Array<{ id: string; name: string; url: string }>
   signatureUrl?: string
+  activityType?: string
 }
 
 interface Props {

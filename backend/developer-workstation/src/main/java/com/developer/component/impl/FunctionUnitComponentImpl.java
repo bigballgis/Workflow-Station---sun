@@ -241,19 +241,29 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         // 计算新版本号
         String newVersion = calculateNextVersion(functionUnit.getCurrentVersion());
         
-        // 创建版本快照
-        try {
-            byte[] snapshotData = createSnapshot(functionUnit);
-            Version version = Version.builder()
-                    .functionUnit(functionUnit)
-                    .versionNumber(newVersion)
-                    .changeLog(changeLog)
-                    .snapshotData(snapshotData)
-                    .publishedBy(getCurrentOperator())
-                    .build();
-            versionRepository.save(version);
-        } catch (Exception e) {
-            throw new BusinessException("SYS_SNAPSHOT_ERROR", "创建版本快照失败");
+        // 检查版本号是否已存在，避免唯一约束冲突
+        boolean versionAlreadyExists = versionRepository.findByFunctionUnitIdAndVersionNumber(id, newVersion).isPresent();
+        if (versionAlreadyExists) {
+            // 版本快照已存在但 currentVersion 尚未更新，说明上次 deploy 中途失败，允许继续完成状态更新
+            log.warn("版本快照 {} 已存在但功能单元状态未更新，继续完成发布流程，functionUnitId={}", newVersion, id);
+        } else {
+            // 创建版本快照
+            try {
+                byte[] snapshotData = createSnapshot(functionUnit);
+                Version version = Version.builder()
+                        .functionUnit(functionUnit)
+                        .versionNumber(newVersion)
+                        .changeLog(changeLog)
+                        .snapshotData(snapshotData)
+                        .publishedBy(getCurrentOperator())
+                        .build();
+                versionRepository.save(version);
+            } catch (BusinessException e) {
+                throw e;
+            } catch (Exception e) {
+                log.error("创建版本快照失败，functionUnitId={}, version={}: {}", id, newVersion, e.getMessage(), e);
+                throw new BusinessException("SYS_SNAPSHOT_ERROR", "创建版本快照失败: " + e.getMessage());
+            }
         }
         
         // 更新功能单元状态

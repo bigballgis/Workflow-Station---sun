@@ -170,9 +170,14 @@ public class DeploymentComponentImpl implements DeploymentComponent {
             response.setMessage(i18nService.getMessage("deploy.success"));
             
         } catch (Exception e) {
-            log.error("Deploy failed: {}", e.getMessage(), e);
+            log.error("Deploy failed for functionUnitId={}: {}", functionUnitId, e.getMessage(), e);
             response.setStatus(DeployResponse.DeployStatus.FAILED);
-            response.setMessage(i18nService.getMessage("deploy.failed") + ": " + e.getMessage());
+            // 提取最有意义的错误信息
+            String errorMsg = e.getMessage();
+            if (e.getCause() != null && e.getCause().getMessage() != null) {
+                errorMsg = e.getCause().getMessage();
+            }
+            response.setMessage(i18nService.getMessage("deploy.failed") + ": " + errorMsg);
             
             // 标记当前步骤失败
             for (DeployResponse.DeployStep step : steps) {

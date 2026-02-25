@@ -47,7 +47,9 @@ export default {
     startDate: 'Start Date',
     endDate: 'End Date',
     logout: 'Logout',
-    logoutSuccess: 'Logged out successfully'
+    logoutSuccess: 'Logged out successfully',
+    pleaseInput: 'Please input {label}',
+    pleaseSelect: 'Please select {label}'
   },
   menu: {
     dashboard: 'Home',
@@ -252,7 +254,7 @@ export default {
     processType: 'Process Type',
     initiator: 'Initiator',
     initiateTime: 'Initiate Time',
-    currentNode: 'Current Node',
+    currentStep: 'Current Step',
     currentAssignee: 'Current Assignee',
     workflowDiagram: 'Workflow Diagram',
     pending: 'Pending',
@@ -289,7 +291,7 @@ export default {
     reset: 'Reset',
     fitViewport: 'Fit',
     completed: 'Completed',
-    currentNode: 'Current Node',
+    currentStep: 'Current Step',
     rejected: 'Rejected',
     pending: 'Pending'
   },
@@ -325,7 +327,7 @@ export default {
   application: {
     title: 'My Requests',
     processTitle: 'Process Title',
-    currentNode: 'Current Node',
+    currentStep: 'Current Step',
     startTime: 'Start Time',
     status: 'Status',
     running: 'Running',

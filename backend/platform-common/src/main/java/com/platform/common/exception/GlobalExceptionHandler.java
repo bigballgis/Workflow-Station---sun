@@ -142,7 +142,7 @@ public class GlobalExceptionHandler {
         
         // 检查是否是已知的业务异常类型
         String errorCode = "BIZ_ERROR";
-        String message = "Business logic error occurred";
+        String message = ex.getMessage() != null ? ex.getMessage() : "Business logic error occurred";
         HttpStatus status = HttpStatus.UNPROCESSABLE_ENTITY;
         
         // 根据异常类名判断类型

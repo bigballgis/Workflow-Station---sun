@@ -19,6 +19,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDateTime;
@@ -35,6 +36,9 @@ public class ProcessComponent {
     private final ProcessHistoryRepository processHistoryRepository;
     private final FunctionUnitAccessComponent functionUnitAccessComponent;
     private final WorkflowEngineClient workflowEngineClient;
+
+    @jakarta.persistence.PersistenceContext
+    private jakarta.persistence.EntityManager entityManager;
     
     @Value("${admin-center.url:http://localhost:8090}")
     private String adminCenterUrl;
@@ -109,6 +113,7 @@ public class ProcessComponent {
      * 发起流程
      * 通过 WorkflowEngineClient 调用 Flowable 引擎
      */
+    @Transactional
     public ProcessInstanceInfo startProcess(String userId, String processKey, ProcessStartRequest request) {
         if (processKey == null || processKey.isEmpty()) {
             throw new IllegalArgumentException("流程Key不能为空");
@@ -191,6 +196,24 @@ public class ProcessComponent {
         String flowableProcessInstanceId = (String) data.get("processInstanceId");
         log.info("Process started via Flowable: {}", flowableProcessInstanceId);
         
+        // 立即保存流程实例到本地数据库（状态为 RUNNING），防止 ProcessCompletionListener 回调时找不到记录
+        String startUserDisplayName = resolveUserDisplayName(userId);
+        ProcessInstance processInstance = ProcessInstance.builder()
+                .id(flowableProcessInstanceId)
+                .processDefinitionId((String) data.get("processDefinitionId"))
+                .processDefinitionKey(processKey)
+                .processDefinitionName(processName)
+                .businessKey(request.getBusinessKey())
+                .startUserId(userId)
+                .startUserName(startUserDisplayName)
+                .status("RUNNING")
+                .currentNode(null)
+                .currentAssignee(null)
+                .variables(variables)
+                .build();
+        processInstanceRepository.save(processInstance);
+        log.info("Process instance pre-saved to local database: {}", flowableProcessInstanceId);
+        
         // 自动完成第一个任务（发起人任务）
         // 流程启动后，第一个任务通常是发起人填写表单的任务，需要自动完成以流转到下一个审批节点
         String currentNodeName = null;
@@ -220,6 +243,9 @@ public class ProcessComponent {
                             log.warn("Failed to claim first task: {}, trying to complete anyway", taskId);
                         }
                         
+                        // 计算子表条件变量（如 requestItemsHasHighValue）并注入
+                        computeSubTableConditionVariables(variables);
+
                         // 完成第一个任务
                         Optional<Map<String, Object>> completeResult = workflowEngineClient.completeTask(
                                 taskId, userId, "SUBMIT", variables);
@@ -271,24 +297,19 @@ public class ProcessComponent {
             // 不抛出异常，流程已经启动成功
         }
         
-        // 保存流程实例到本地数据库（包含当前节点和处理人信息）
-        String startUserDisplayName = resolveUserDisplayName(userId);
-        ProcessInstance processInstance = ProcessInstance.builder()
-                .id(flowableProcessInstanceId)
-                .processDefinitionId((String) data.get("processDefinitionId"))
-                .processDefinitionKey(processKey)
-                .processDefinitionName(processName)
-                .businessKey(request.getBusinessKey())
-                .startUserId(userId)
-                .startUserName(startUserDisplayName)
-                .status("RUNNING")
-                .currentNode(currentNodeName)
-                .currentAssignee(currentAssigneeName != null ? currentAssigneeName : currentAssigneeId)
-                .variables(variables)
-                .build();
-        processInstanceRepository.save(processInstance);
-        log.info("Process instance saved to local database: {} with currentNode={}, currentAssignee={}", 
-                flowableProcessInstanceId, currentNodeName, currentAssigneeName);
+        // 更新流程实例（补充当前节点和处理人信息）
+        // 使用条件 UPDATE 避免覆盖 ProcessCompletionListener 回调已设置的 COMPLETED 状态（竞态条件）
+        // JPA 一级缓存会导致 findById 返回旧对象，所以必须用 @Modifying 原生更新绕过缓存
+        String assignee = currentAssigneeName != null ? currentAssigneeName : currentAssigneeId;
+        int updated = processInstanceRepository.updateCurrentNodeIfNotCompleted(
+                flowableProcessInstanceId, currentNodeName, assignee);
+        if (updated > 0) {
+            log.info("Process instance updated in local database: {} with currentNode={}, currentAssignee={}",
+                    flowableProcessInstanceId, currentNodeName, assignee);
+        } else {
+            log.info("Process instance {} already COMPLETED, skipped currentNode update (race condition avoided)",
+                    flowableProcessInstanceId);
+        }
         
         // 记录流程启动历史
         ProcessHistory startHistory = ProcessHistory.builder()
@@ -1274,6 +1295,82 @@ public class ProcessComponent {
             
         } catch (Exception e) {
             log.error("Failed to mark process as completed for {}: {}", processId, e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 从表单变量中计算子表条件变量，注入到 variables 中供网关条件判断使用。
+     * 支持以下变量：
+     *   requestItemsHasHighValue — 任意一条记录的 total_price > 10000（Boolean）
+     *   totalPrice               — 所有记录 total_price 之和（Double，供 BPMN 直接比较）
+     *   maxItemPrice             — 所有记录中最大的 total_price（Double）
+     *   itemCount                — 子表记录总数（Integer）
+     */
+    @SuppressWarnings("unchecked")
+    private void computeSubTableConditionVariables(Map<String, Object> variables) {
+        try {
+            Object subTablesObj = variables.get("__subTables__");
+            if (!(subTablesObj instanceof Map)) {
+                variables.put("requestItemsHasHighValue", false);
+                variables.put("totalPrice", 0.0);
+                variables.put("maxItemPrice", 0.0);
+                variables.put("itemCount", 0);
+                log.info("[PriceCheck] No __subTables__ found, all price variables set to 0/false");
+                return;
+            }
+            Map<String, Object> subTables = (Map<String, Object>) subTablesObj;
+
+            boolean hasHighValue = false;
+            double totalPrice = 0.0;
+            double maxItemPrice = 0.0;
+            int itemCount = 0;
+
+            for (Object tableData : subTables.values()) {
+                if (!(tableData instanceof List)) continue;
+                List<Object> rows = (List<Object>) tableData;
+                for (Object rowObj : rows) {
+                    if (!(rowObj instanceof Map)) continue;
+                    Map<String, Object> row = (Map<String, Object>) rowObj;
+                    itemCount++;
+
+                    // Support both snake_case and camelCase field names for total_price
+                    Object priceVal = row.get("total_price");
+                    if (priceVal == null) priceVal = row.get("totalPrice");
+                    if (priceVal == null) priceVal = row.get("total_Price");
+                    // Also check unit_price as fallback
+                    if (priceVal == null) priceVal = row.get("unit_price");
+                    if (priceVal == null) priceVal = row.get("unitPrice");
+                    if (priceVal == null) continue;
+
+                    double price = 0;
+                    if (priceVal instanceof Number) {
+                        price = ((Number) priceVal).doubleValue();
+                    } else {
+                        try { price = Double.parseDouble(priceVal.toString()); } catch (Exception ignored) {}
+                    }
+
+                    totalPrice += price;
+                    if (price > maxItemPrice) {
+                        maxItemPrice = price;
+                    }
+                    if (price > 10000) {
+                        hasHighValue = true;
+                    }
+                }
+            }
+
+            variables.put("requestItemsHasHighValue", hasHighValue);
+            variables.put("totalPrice", totalPrice);
+            variables.put("maxItemPrice", maxItemPrice);
+            variables.put("itemCount", itemCount);
+            log.info("[PriceCheck] requestItemsHasHighValue={}, totalPrice={}, maxItemPrice={}, itemCount={}",
+                    hasHighValue, totalPrice, maxItemPrice, itemCount);
+        } catch (Exception e) {
+            log.warn("[PriceCheck] Failed to compute price condition variables: {}", e.getMessage());
+            variables.put("requestItemsHasHighValue", false);
+            variables.put("totalPrice", 0.0);
+            variables.put("maxItemPrice", 0.0);
+            variables.put("itemCount", 0);
         }
     }
 }

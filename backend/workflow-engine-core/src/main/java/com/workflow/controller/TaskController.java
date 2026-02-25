@@ -180,7 +180,10 @@ public class TaskController {
         List<Map<String, Object>> historyList = activities.stream()
             .filter(activity -> "userTask".equals(activity.getActivityType()) || 
                                "startEvent".equals(activity.getActivityType()) ||
-                               "endEvent".equals(activity.getActivityType()))
+                               "endEvent".equals(activity.getActivityType()) ||
+                               "exclusiveGateway".equals(activity.getActivityType()) ||
+                               "parallelGateway".equals(activity.getActivityType()) ||
+                               "inclusiveGateway".equals(activity.getActivityType()))
             .map(activity -> {
                 Map<String, Object> item = new HashMap<>();
                 item.put("id", activity.getId());
@@ -191,11 +194,16 @@ public class TaskController {
                 item.put("activityType", activity.getActivityType());
                 
                 // 根据活动类型和 deleteReason 设置操作类型
+                String activityType = activity.getActivityType();
                 String operationType = "PENDING";
                 if (activity.getEndTime() != null) {
-                    if ("startEvent".equals(activity.getActivityType())) {
+                    if ("startEvent".equals(activityType)) {
                         operationType = "SUBMIT";
-                    } else if ("userTask".equals(activity.getActivityType())) {
+                    } else if ("exclusiveGateway".equals(activityType) ||
+                               "parallelGateway".equals(activityType) ||
+                               "inclusiveGateway".equals(activityType)) {
+                        operationType = "GATEWAY";
+                    } else if ("userTask".equals(activityType)) {
                         // 检查 deleteReason 来判断是 APPROVE 还是 REJECT
                         String deleteReason = taskDeleteReasons.get(activity.getTaskId());
                         if (deleteReason != null) {

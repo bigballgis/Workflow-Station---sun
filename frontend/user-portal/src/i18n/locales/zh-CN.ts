@@ -47,7 +47,9 @@ export default {
     startDate: '开始日期',
     endDate: '结束日期',
     logout: '退出登录',
-    logoutSuccess: '已退出登录'
+    logoutSuccess: '已退出登录',
+    pleaseInput: '请输入{label}',
+    pleaseSelect: '请选择{label}'
   },
   menu: {
     dashboard: '首页',
@@ -251,7 +253,7 @@ export default {
     processType: '流程类型',
     initiator: '发起人',
     initiateTime: '发起时间',
-    currentNode: '当前节点',
+    currentStep: '当前步骤',
     currentAssignee: '当前处理人',
     workflowDiagram: '工作流程图',
     pending: '待处理',
@@ -288,7 +290,7 @@ export default {
     reset: '重置',
     fitViewport: '适应',
     completed: '已完成',
-    currentNode: '当前节点',
+    currentStep: '当前步骤',
     rejected: '已拒绝',
     pending: '待处理'
   },
@@ -324,7 +326,7 @@ export default {
   application: {
     title: '我的请求',
     processTitle: '流程标题',
-    currentNode: '当前节点',
+    currentStep: '当前步骤',
     startTime: '发起时间',
     status: '状态',
     running: '进行中',

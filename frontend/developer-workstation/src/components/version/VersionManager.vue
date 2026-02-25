@@ -1,19 +1,20 @@
 <template>
   <div class="version-manager">
     <el-table :data="store.versions" v-loading="loading" stripe>
-      <el-table-column prop="versionNumber" :label="t('version.versionNumber')" width="120" />
-      <el-table-column prop="changeLog" :label="t('version.changeLog')" show-overflow-tooltip />
-      <el-table-column prop="createdBy" :label="t('version.publisher')" width="120" />
-      <el-table-column prop="createdAt" :label="t('version.publishTime')" width="180">
+      <el-table-column prop="versionNumber" :label="t('version.versionNumber')" min-width="120" />
+      <el-table-column prop="createdBy" :label="t('version.publisher')" min-width="120" />
+      <el-table-column prop="createdAt" :label="t('version.publishTime')" min-width="180">
         <template #default="{ row }">
           {{ formatDate(row.createdAt) }}
         </template>
       </el-table-column>
-      <el-table-column :label="t('common.actions')" width="200">
+      <el-table-column :label="t('common.actions')" width="240" align="center">
         <template #default="{ row }">
-          <el-button link type="primary" @click="handleCompare(row)">{{ t('common.compare') }}</el-button>
-          <el-button link type="warning" @click="handleRollback(row)">{{ t('common.rollback') }}</el-button>
-          <el-button link type="success" @click="handleExport(row)">{{ t('common.export') }}</el-button>
+          <div class="action-buttons">
+            <el-button link type="primary" @click="handleCompare(row)">{{ t('common.compare') }}</el-button>
+            <el-button link type="warning" @click="handleRollback(row)">{{ t('common.rollback') }}</el-button>
+            <el-button link type="success" @click="handleExport(row)">{{ t('common.export') }}</el-button>
+          </div>
         </template>
       </el-table-column>
     </el-table>
@@ -227,6 +228,14 @@ onMounted(loadVersions)
 <style lang="scss" scoped>
 .version-manager {
   min-height: 300px;
+
+  .action-buttons {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    white-space: nowrap;
+  }
 }
 
 .compare-container {

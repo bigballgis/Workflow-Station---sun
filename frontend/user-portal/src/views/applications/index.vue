@@ -45,7 +45,6 @@
             </template>
           </el-table-column>
         </el-table>
-        <el-empty v-if="!loading && draftList.length === 0" :description="t('application.noDrafts')" />
       </template>
 
       <!-- 申请列表 -->
@@ -58,8 +57,8 @@
               </el-link>
             </template>
           </el-table-column>
-          <el-table-column prop="processDefinitionName" :label="t('application.processType')" min-width="120" show-overflow-tooltip />
-          <el-table-column prop="currentNode" :label="t('application.currentNode')" min-width="120" show-overflow-tooltip>
+          <!-- Process Type column hidden -->
+          <el-table-column prop="currentNode" :label="t('application.currentStep')" min-width="120" show-overflow-tooltip>
             <template #default="{ row }">
               {{ row.currentNode || '-' }}
             </template>

@@ -582,7 +582,7 @@ const formRules = computed<FormRules>(() => {
       if (field.required) {
         rules[field.key].push({
           required: true,
-          message: `请输入${field.label}`,
+          message: t('common.pleaseInput', { label: field.label }),
           trigger: field.type === 'select' ? 'change' : 'blur'
         })
       }

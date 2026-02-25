@@ -1,31 +1,33 @@
 <template>
   <div class="process-diagram" ref="containerRef">
-    <div class="diagram-toolbar" v-if="showToolbar">
-      <el-button-group>
-        <el-button :icon="ZoomIn" @click="zoomIn" :title="t('diagram.zoomIn')" />
-        <el-button :icon="ZoomOut" @click="zoomOut" :title="t('diagram.zoomOut')" />
-        <el-button :icon="RefreshRight" @click="resetZoom" :title="t('diagram.reset')" />
-        <el-button :icon="FullScreen" @click="fitViewport" :title="t('diagram.fitViewport')" />
-      </el-button-group>
-      <span class="zoom-level">{{ Math.round(zoomLevel * 100) }}%</span>
-    </div>
     <div class="diagram-canvas" ref="canvasRef"></div>
-    <div class="diagram-legend" v-if="showLegend">
-      <div class="legend-item">
-        <span class="legend-dot completed"></span>
-        <span>{{ t('diagram.completed') }}</span>
+    <div class="diagram-bottom-bar">
+      <div class="diagram-legend" v-if="showLegend">
+        <div class="legend-item">
+          <span class="legend-dot completed"></span>
+          <span>{{ t('diagram.completed') }}</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-dot current"></span>
+          <span>{{ t('diagram.currentStep') }}</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-dot rejected"></span>
+          <span>{{ t('diagram.rejected') }}</span>
+        </div>
+        <div class="legend-item">
+          <span class="legend-dot pending"></span>
+          <span>{{ t('diagram.pending') }}</span>
+        </div>
       </div>
-      <div class="legend-item">
-        <span class="legend-dot current"></span>
-        <span>{{ t('diagram.currentNode') }}</span>
-      </div>
-      <div class="legend-item">
-        <span class="legend-dot rejected"></span>
-        <span>{{ t('diagram.rejected') }}</span>
-      </div>
-      <div class="legend-item">
-        <span class="legend-dot pending"></span>
-        <span>{{ t('diagram.pending') }}</span>
+      <div class="diagram-toolbar" v-if="showToolbar">
+        <el-button-group>
+          <el-button :icon="ZoomIn" @click="zoomIn" :title="t('diagram.zoomIn')" />
+          <el-button :icon="ZoomOut" @click="zoomOut" :title="t('diagram.zoomOut')" />
+          <el-button :icon="RefreshRight" @click="resetZoom" :title="t('diagram.reset')" />
+          <el-button :icon="FullScreen" @click="fitViewport" :title="t('diagram.fitViewport')" />
+        </el-button-group>
+        <span class="zoom-level">{{ Math.round(zoomLevel * 100) }}%</span>
       </div>
     </div>
   </div>
@@ -122,13 +124,25 @@ const renderDiagram = () => {
 
   const nodePositions = calculateNodePositions()
   
-  // 计算边界，包含所有节点和连线标签
+  // 计算边界，包含所有节点、连线路径点和标签
   let minX = Infinity, minY = Infinity, maxX = 0, maxY = 0
   nodePositions.forEach(pos => {
     minX = Math.min(minX, pos.x)
     minY = Math.min(minY, pos.y)
     maxX = Math.max(maxX, pos.x + pos.width)
     maxY = Math.max(maxY, pos.y + pos.height)
+  })
+  
+  // 将连线路径点也纳入边界计算，避免弯曲连线被裁剪
+  props.flows.forEach(flow => {
+    if (flow.waypoints) {
+      flow.waypoints.forEach(wp => {
+        minX = Math.min(minX, wp.x)
+        minY = Math.min(minY, wp.y)
+        maxX = Math.max(maxX, wp.x)
+        maxY = Math.max(maxY, wp.y)
+      })
+    }
   })
   
   // 考虑连线标签和节点标签可能超出节点范围，增加额外边距
@@ -315,24 +329,40 @@ const createNodeElement = (node: ProcessNode, pos: { x: number; y: number; width
     text.setAttribute('y', String(pos.height + 15))
     text.textContent = node.name
   } else {
-    const maxCharsPerLine = Math.floor(pos.width / 12)
+    const maxCharsPerLine = Math.floor(pos.width / 7)
     const displayName = node.name.length > maxCharsPerLine * 2 
       ? node.name.substring(0, maxCharsPerLine * 2 - 2) + '...' 
       : node.name
     
-    if (displayName.length > maxCharsPerLine) {
-      const line1 = displayName.substring(0, maxCharsPerLine)
-      const line2 = displayName.substring(maxCharsPerLine)
-      const tspan1 = document.createElementNS('http://www.w3.org/2000/svg', 'tspan')
-      tspan1.setAttribute('x', String(centerX))
-      tspan1.setAttribute('dy', String(centerY - 6))
-      tspan1.textContent = line1
-      text.appendChild(tspan1)
-      const tspan2 = document.createElementNS('http://www.w3.org/2000/svg', 'tspan')
-      tspan2.setAttribute('x', String(centerX))
-      tspan2.setAttribute('dy', '14')
-      tspan2.textContent = line2
-      text.appendChild(tspan2)
+    // Split by word boundaries to avoid breaking words across lines
+    const words = displayName.split(/\s+/)
+    const lines: string[] = []
+    let currentLine = ''
+    for (const word of words) {
+      const testLine = currentLine ? currentLine + ' ' + word : word
+      if (testLine.length > maxCharsPerLine && currentLine) {
+        lines.push(currentLine)
+        currentLine = word
+      } else {
+        currentLine = testLine
+      }
+    }
+    if (currentLine) lines.push(currentLine)
+    // Limit to 2 lines max
+    if (lines.length > 2) {
+      lines.splice(2)
+      lines[1] = lines[1].substring(0, lines[1].length - 2) + '..'
+    }
+    
+    if (lines.length > 1) {
+      const startDy = centerY - (lines.length - 1) * 7
+      lines.forEach((line, i) => {
+        const tspan = document.createElementNS('http://www.w3.org/2000/svg', 'tspan')
+        tspan.setAttribute('x', String(centerX))
+        tspan.setAttribute('dy', i === 0 ? String(startDy) : '14')
+        tspan.textContent = line
+        text.appendChild(tspan)
+      })
     } else {
       text.setAttribute('x', String(centerX))
       text.setAttribute('y', String(centerY + 4))
@@ -508,26 +538,35 @@ defineExpose({ zoomIn, zoomOut, resetZoom, fitViewport })
 
 <style scoped lang="scss">
 .process-diagram {
-  position: relative;
   width: 100%;
   min-height: 350px;
   background: #fafafa;
   border: 1px solid #e4e7ed;
   border-radius: 4px;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+
+  .diagram-canvas {
+    width: 100%;
+    flex: 1;
+    min-height: 300px;
+  }
+
+  .diagram-bottom-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    border-top: 1px solid #e4e7ed;
+    background: #fff;
+    flex-shrink: 0;
+  }
 
   .diagram-toolbar {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    z-index: 10;
     display: flex;
     align-items: center;
     gap: 10px;
-    background: white;
-    padding: 5px 10px;
-    border-radius: 4px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     .zoom-level {
       font-size: 12px;
       color: #909399;
@@ -535,22 +574,9 @@ defineExpose({ zoomIn, zoomOut, resetZoom, fitViewport })
     }
   }
 
-  .diagram-canvas {
-    width: 100%;
-    height: 100%;
-    min-height: 350px;
-  }
-
   .diagram-legend {
-    position: absolute;
-    bottom: 10px;
-    left: 10px;
     display: flex;
     gap: 15px;
-    background: white;
-    padding: 8px 12px;
-    border-radius: 4px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     font-size: 12px;
     .legend-item {
       display: flex;

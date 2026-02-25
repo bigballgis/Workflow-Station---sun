@@ -402,23 +402,29 @@ public class TaskProcessComponent {
                             log.info("Current activity for process {}: {} (type: {})", 
                                     processInstanceId, currentActivityName, currentActivityType);
                             
-                            // 更新流程实例的当前节点
-                            Optional<ProcessInstance> optInstance = processInstanceRepository.findById(processInstanceId);
-                            if (optInstance.isPresent()) {
-                                ProcessInstance instance = optInstance.get();
-                                instance.setCurrentNode(currentActivityName);
-                                instance.setCurrentAssignee(null);
-                                
-                                // 如果当前活动是结束事件，则流程已完成
-                                if ("endEvent".equals(currentActivityType)) {
-                                    log.info("Current activity is end event, marking process {} as COMPLETED", processInstanceId);
-                                    instance.setStatus("COMPLETED");
-                                    instance.setEndTime(LocalDateTime.now());
+                            // 跳过 SequenceFlow 类型，其 name 是条件标签（如 "Yes"/"No"），不应作为 currentNode
+                            if ("SequenceFlow".equals(currentActivityType)) {
+                                log.warn("Current activity is SequenceFlow (name: {}), skipping currentNode update for process {}", 
+                                        currentActivityName, processInstanceId);
+                            } else {
+                                // 更新流程实例的当前节点
+                                Optional<ProcessInstance> optInstance = processInstanceRepository.findById(processInstanceId);
+                                if (optInstance.isPresent()) {
+                                    ProcessInstance instance = optInstance.get();
+                                    instance.setCurrentNode(currentActivityName);
+                                    instance.setCurrentAssignee(null);
+                                    
+                                    // 如果当前活动是结束事件，则流程已完成
+                                    if ("endEvent".equals(currentActivityType) || "EndEvent".equals(currentActivityType)) {
+                                        log.info("Current activity is end event, marking process {} as COMPLETED", processInstanceId);
+                                        instance.setStatus("COMPLETED");
+                                        instance.setEndTime(LocalDateTime.now());
+                                    }
+                                    
+                                    processInstanceRepository.save(instance);
+                                    log.info("Updated process instance {} currentNode to: {}, status: {}", 
+                                            processInstanceId, instance.getCurrentNode(), instance.getStatus());
                                 }
-                                
-                                processInstanceRepository.save(instance);
-                                log.info("Updated process instance {} currentNode to: {}, status: {}", 
-                                        processInstanceId, instance.getCurrentNode(), instance.getStatus());
                             }
                         }
                     }
