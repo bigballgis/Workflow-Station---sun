@@ -195,6 +195,7 @@ export default {
   table: {
     title: '表設計器',
     tableName: '表名',
+    tableDisplayName: '表顯示名稱',
     tableType: '表類型',
     fields: '欄位',
     fieldCount: '欄位數',

@@ -407,7 +407,7 @@ const loadFunctionUnitContent = async (processKey: string) => {
           bindingType: b.bindingType,
           bindingMode: b.bindingMode,
           foreignKeyField: b.foreignKeyField,
-          tableName: b.tableName,
+          tableName: b.tableDisplayName || b.tableName,
           tableType: b.tableType,
           tableDescription: b.tableDescription,
           columns,

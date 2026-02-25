@@ -1,22 +1,29 @@
 <template>
   <div class="login-container">
-    <div class="login-bg-pattern"></div>
-    <div class="login-content">
+    <!-- Left side arrow/chevron background decoration -->
+    <div class="login-bg-left">
+      <div class="chevron-shape"></div>
+    </div>
+
+    <!-- Right side login card -->
+    <div class="login-right">
       <div class="login-card">
         <div class="login-header">
-          <span class="login-icon">🛡️</span>
-          <h2 class="login-title">{{ t('login.title') }}</h2>
-          <p class="login-subtitle">{{ t('login.subtitle') }}</p>
+          <!-- H logo -->
+          <div class="brand-logo">
+            <span class="brand-h">H</span>
+          </div>
+          <h2 class="login-title">Admin Centre</h2>
         </div>
-        
-        <!-- 测试用户快速选择 (仅开发环境) -->
+
+        <!-- Test user quick select (dev only) -->
         <div v-if="isDev" class="test-user-section">
           <el-divider content-position="center">
             <span class="test-user-label">🚀 {{ t('login.testUserHint') }}</span>
           </el-divider>
-          <el-select 
-            v-model="selectedTestUser" 
-            :placeholder="t('login.selectTestUser')" 
+          <el-select
+            v-model="selectedTestUser"
+            :placeholder="t('login.selectTestUser')"
             @change="onTestUserSelect"
             class="test-user-select"
           >
@@ -36,38 +43,44 @@
 
         <el-form ref="formRef" :model="form" :rules="rules" @submit.prevent="handleLogin" class="login-form">
           <el-form-item prop="username">
-            <el-input 
-              v-model="form.username" 
-              :placeholder="t('login.usernamePlaceholder')" 
+            <label class="field-label">Username</label>
+            <el-input
+              v-model="form.username"
+              placeholder="Enter Your Username"
               prefix-icon="User"
               size="large"
             />
           </el-form-item>
           <el-form-item prop="password">
-            <el-input 
-              v-model="form.password" 
-              type="password" 
-              :placeholder="t('login.passwordPlaceholder')" 
-              prefix-icon="Lock" 
+            <label class="field-label">Password</label>
+            <el-input
+              v-model="form.password"
+              type="password"
+              placeholder="Enter Your Password"
+              prefix-icon="Lock"
               show-password
               size="large"
             />
           </el-form-item>
-          <el-form-item>
-            <el-button 
-              type="primary" 
-              native-type="submit" 
-              :loading="loading" 
+          <el-form-item class="btn-item">
+            <el-button
+              type="primary"
+              native-type="submit"
+              :loading="loading"
               class="login-btn"
               size="large"
             >
-              {{ loading ? t('common.loading') : t('login.login') }}
+              {{ loading ? t('common.loading') : 'Log in' }}
             </el-button>
           </el-form-item>
         </el-form>
 
+        <div class="workflow-link">
+          <a href="#" class="workflow-text">Workflow Platform</a>
+        </div>
+
         <div class="login-footer">
-          <span>© 2026 {{ t('login.title') }}</span>
+          <span>@2026 HerMes</span>
         </div>
       </div>
     </div>
@@ -111,18 +124,18 @@ const onTestUserSelect = (username: string) => {
 const handleLogin = async () => {
   const valid = await formRef.value?.validate()
   if (!valid) return
-  
+
   loading.value = true
   try {
     const response = await authLogin({
       username: form.username,
       password: form.password
     })
-    
+
     saveTokens(response.accessToken, response.refreshToken)
     saveUser(response.user)
     localStorage.setItem('userId', response.user.userId)
-    
+
     ElMessage.success(t('common.success'))
     router.push('/dashboard')
   } catch (error: any) {
@@ -135,71 +148,200 @@ const handleLogin = async () => {
 </script>
 
 <style scoped lang="scss">
-$primary-color: #DB0011;
-$primary-dark: #8B0000;
+$primary: #C8102E;
+$primary-dark: #9B0020;
+$primary-deeper: #7A0018;
 
 .login-container {
   height: 100vh;
   display: flex;
+  background: $primary;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Left decorative area with chevron */
+.login-bg-left {
+  flex: 1;
+  position: relative;
+  background: $primary;
+  display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, $primary-color 0%, $primary-dark 100%);
-  position: relative;
-  overflow: hidden;
 }
 
-.login-bg-pattern {
+.chevron-shape {
   position: absolute;
-  top: 0;
   left: 0;
-  right: 0;
-  bottom: 0;
-  background-image: 
-    radial-gradient(circle at 20% 80%, rgba(255,255,255,0.1) 0%, transparent 50%),
-    radial-gradient(circle at 80% 20%, rgba(255,255,255,0.08) 0%, transparent 50%),
-    radial-gradient(circle at 40% 40%, rgba(255,255,255,0.05) 0%, transparent 30%);
-  pointer-events: none;
+  top: 0;
+  width: 100%;
+  height: 100%;
+
+  /* Large left-pointing arrow using clip-path on a darker overlay */
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.15);
+    clip-path: polygon(0 0, 60% 0, 100% 50%, 60% 100%, 0 100%);
+  }
+
+  /* Inner darker chevron pointing left */
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.12);
+    clip-path: polygon(0 0, 45% 0, 85% 50%, 45% 100%, 0 100%);
+  }
 }
 
-.login-content {
-  position: relative;
-  z-index: 1;
+/* Right side with card */
+.login-right {
+  width: 480px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 48px;
+  background: $primary;
 }
 
 .login-card {
-  width: 420px;
-  padding: 40px;
-  background: white;
-  border-radius: 16px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  width: 100%;
+  max-width: 360px;
+  padding: 40px 36px 28px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.25);
 }
 
+/* Brand logo */
 .login-header {
   text-align: center;
-  margin-bottom: 32px;
+  margin-bottom: 28px;
+}
 
-  .login-icon {
-    font-size: 48px;
+.brand-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  background: $primary;
+  border-radius: 8px;
+  margin-bottom: 14px;
+}
+
+.brand-h {
+  color: #fff;
+  font-size: 28px;
+  font-weight: 800;
+  font-family: serif;
+  line-height: 1;
+}
+
+.login-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 0;
+}
+
+/* Form */
+.login-form {
+  .field-label {
     display: block;
-    margin-bottom: 16px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #444;
+    margin-bottom: 6px;
   }
 
-  .login-title {
-    font-size: 24px;
-    font-weight: 600;
-    color: #303133;
-    margin: 0 0 8px 0;
+  :deep(.el-form-item) {
+    margin-bottom: 18px;
+    flex-direction: column;
+    align-items: flex-start;
   }
 
-  .login-subtitle {
+  :deep(.el-form-item__content) {
+    width: 100%;
+  }
+
+  :deep(.el-input__wrapper) {
+    border-radius: 6px;
+    border: 1px solid #dcdfe6;
+    box-shadow: none;
+
+    &:hover, &.is-focus {
+      border-color: $primary;
+      box-shadow: none;
+    }
+  }
+
+  :deep(.el-input__inner) {
     font-size: 14px;
-    color: #909399;
-    margin: 0;
   }
 }
 
+.btn-item {
+  margin-top: 8px;
+  margin-bottom: 0 !important;
+}
+
+.login-btn {
+  width: 100%;
+  height: 44px;
+  font-size: 15px;
+  font-weight: 600;
+  border-radius: 6px;
+  background: $primary;
+  border-color: $primary;
+  letter-spacing: 0.3px;
+
+  &:hover, &:focus {
+    background: $primary-dark;
+    border-color: $primary-dark;
+  }
+
+  &:active {
+    background: $primary-deeper;
+    border-color: $primary-deeper;
+  }
+}
+
+/* Workflow link */
+.workflow-link {
+  text-align: center;
+  margin-top: 16px;
+}
+
+.workflow-text {
+  font-size: 14px;
+  font-weight: 600;
+  color: $primary;
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+/* Footer */
+.login-footer {
+  text-align: center;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #f0f0f0;
+
+  span {
+    font-size: 12px;
+    color: #bbb;
+  }
+}
+
+/* Test user section */
 .test-user-section {
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 
   :deep(.el-divider__text) {
     background: white;
@@ -224,40 +366,5 @@ $primary-dark: #8B0000;
 
 .user-name {
   font-size: 14px;
-}
-
-.login-form {
-  :deep(.el-input__wrapper) {
-    border-radius: 8px;
-  }
-
-  :deep(.el-form-item) {
-    margin-bottom: 20px;
-  }
-}
-
-.login-btn {
-  width: 100%;
-  height: 44px;
-  font-size: 16px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, $primary-color 0%, $primary-dark 100%);
-  border: none;
-  
-  &:hover {
-    background: linear-gradient(135deg, lighten($primary-color, 5%) 0%, lighten($primary-dark, 5%) 100%);
-  }
-}
-
-.login-footer {
-  text-align: center;
-  margin-top: 24px;
-  padding-top: 20px;
-  border-top: 1px solid #ebeef5;
-  
-  span {
-    font-size: 12px;
-    color: #c0c4cc;
-  }
 }
 </style>

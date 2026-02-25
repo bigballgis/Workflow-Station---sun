@@ -50,9 +50,12 @@
         <el-button type="primary" @click="handleSaveTable">{{ t('table.save') }}</el-button>
       </div>
       
-      <el-form :model="selectedTable" label-width="100px" label-position="left" style="max-width: 600px; margin-bottom: 20px;">
+      <el-form :model="selectedTable" label-width="140px" label-position="left" style="max-width: 640px; margin-bottom: 20px;">
         <el-form-item :label="t('table.tableName')">
           <el-input v-model="selectedTable.tableName" />
+        </el-form-item>
+        <el-form-item :label="t('table.tableDisplayName')">
+          <el-input v-model="selectedTable.tableDisplayName" />
         </el-form-item>
         <el-form-item :label="t('table.tableType')">
           <el-select v-model="selectedTable.tableType">
@@ -342,6 +345,7 @@ async function handleSaveTable() {
     
     const requestData = {
       tableName: selectedTable.value.tableName,
+      tableDisplayName: selectedTable.value.tableDisplayName,
       tableType: selectedTable.value.tableType,
       description: selectedTable.value.description,
       fields: fields

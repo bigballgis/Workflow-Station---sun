@@ -77,6 +77,7 @@ CREATE TABLE IF NOT EXISTS dw_table_definitions (
     id BIGSERIAL PRIMARY KEY,
     function_unit_id BIGINT NOT NULL,
     table_name VARCHAR(100) NOT NULL,
+    table_display_name VARCHAR(200),
     table_type VARCHAR(20) NOT NULL,
     description TEXT,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

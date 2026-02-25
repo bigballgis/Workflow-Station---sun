@@ -62,7 +62,7 @@
 
     <!-- 创建委托对话框 -->
     <el-dialog v-model="createDialogVisible" :title="t('delegation.create')" width="500px">
-      <el-form :model="createForm" label-width="100px">
+      <el-form :model="createForm" label-width="130px" label-position="left">
         <el-form-item :label="t('delegation.delegateTo')">
           <el-select v-model="createForm.delegateId" filterable :placeholder="t('delegation.selectDelegate')" style="width: 100%;">
             <el-option label="Li Si" value="user_2" />
@@ -219,6 +219,14 @@ onMounted(() => {
       color: var(--text-primary);
       margin: 0;
     }
+  }
+
+  :deep(.el-table .cell) {
+    white-space: nowrap;
+  }
+
+  :deep(.el-form-item__label) {
+    white-space: nowrap;
   }
 }
 </style>

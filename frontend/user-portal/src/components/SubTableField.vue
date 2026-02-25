@@ -3,7 +3,7 @@
     <div class="sub-table-header">
       <span class="title">{{ title }}</span>
       <el-button v-if="editable" type="primary" size="small" @click="handleAdd">
-        <el-icon><Plus /></el-icon> 添加
+        <el-icon><Plus /></el-icon> Add
       </el-button>
     </div>
 
@@ -38,21 +38,21 @@
         </template>
       </el-table-column>
 
-      <el-table-column v-if="editable" label="操作" width="120">
+      <el-table-column v-if="editable" label="Actions" width="120">
         <template #default="scope">
           <template v-if="editingRow === scope.$index">
-            <el-button link type="primary" size="small" @click="saveRow(scope.$index)">保存</el-button>
-            <el-button link size="small" @click="cancelEdit(scope.$index)">取消</el-button>
+            <el-button link type="primary" size="small" @click="saveRow(scope.$index)">Save</el-button>
+            <el-button link size="small" @click="cancelEdit(scope.$index)">Cancel</el-button>
           </template>
           <template v-else>
-            <el-button link type="primary" size="small" @click="editRow(scope.$index)">编辑</el-button>
-            <el-button link type="danger" size="small" @click="deleteRow(scope.$index)">删除</el-button>
+            <el-button link type="primary" size="small" @click="editRow(scope.$index)">Edit</el-button>
+            <el-button link type="danger" size="small" @click="deleteRow(scope.$index)">Delete</el-button>
           </template>
         </template>
       </el-table-column>
 
       <template #empty>
-        <el-empty description="暂无数据" :image-size="40" />
+        <el-empty description="No Data" :image-size="40" />
       </template>
     </el-table>
   </div>
@@ -118,7 +118,7 @@ function cancelEdit(i: number) {
 }
 
 async function deleteRow(i: number) {
-  await ElMessageBox.confirm('确定删除这条记录吗？', '提示', { type: 'warning' })
+  await ElMessageBox.confirm('Are you sure to delete this record?', 'Confirm', { type: 'warning' })
   rows.value.splice(i, 1)
   emit('update:modelValue', [...rows.value])
 }

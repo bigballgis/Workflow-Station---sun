@@ -41,6 +41,9 @@ public class TableDefinition {
     @Column(name = "table_type", nullable = false, length = 20)
     private TableType tableType;
     
+    @Column(name = "table_display_name", length = 200)
+    private String tableDisplayName;
+
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
     

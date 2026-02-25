@@ -186,7 +186,7 @@ function isTableBound(tableId: number): boolean {
 // Get table name by ID
 function getTableName(tableId: number): string {
   const table = props.tables.find(t => t.id === tableId)
-  return table?.tableName || t('tableBinding.unknownTable')
+  return table?.tableDisplayName || table?.tableName || t('tableBinding.unknownTable')
 }
 
 // Binding type label

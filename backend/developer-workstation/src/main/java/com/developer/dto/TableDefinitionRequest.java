@@ -27,6 +27,9 @@ public class TableDefinitionRequest {
     @NotNull(message = "表类型不能为空")
     private TableType tableType;
     
+    @Size(max = 200, message = "表显示名称长度不能超过200个字符")
+    private String tableDisplayName;
+
     private String description;
     
     private List<FieldDefinitionRequest> fields;

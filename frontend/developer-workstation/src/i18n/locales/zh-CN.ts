@@ -195,6 +195,7 @@ export default {
   table: {
     title: '表设计器',
     tableName: '表名',
+    tableDisplayName: '表显示名称',
     tableType: '表类型',
     fields: '字段',
     fieldCount: '字段数',

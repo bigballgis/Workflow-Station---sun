@@ -52,6 +52,7 @@ public class TableDesignComponentImpl implements TableDesignComponent {
         TableDefinition tableDefinition = TableDefinition.builder()
                 .functionUnit(functionUnit)
                 .tableName(request.getTableName())
+                .tableDisplayName(request.getTableDisplayName())
                 .tableType(request.getTableType())
                 .description(request.getDescription())
                 .build();
@@ -84,6 +85,7 @@ public class TableDesignComponentImpl implements TableDesignComponent {
         
         // 更新表基本信息
         tableDefinition.setTableName(request.getTableName());
+        tableDefinition.setTableDisplayName(request.getTableDisplayName());
         tableDefinition.setTableType(request.getTableType());
         tableDefinition.setDescription(request.getDescription());
         

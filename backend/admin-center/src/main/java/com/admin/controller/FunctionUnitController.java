@@ -552,7 +552,7 @@ public class FunctionUnitController {
                     String bindingsSql =
                         "SELECT fd.id as form_id, ftb.id as binding_id, ftb.binding_type, ftb.binding_mode, " +
                         "       ftb.foreign_key_field, ftb.sort_order, " +
-                        "       td.id as table_id, td.table_name, td.table_type, td.description as table_description " +
+                        "       td.id as table_id, td.table_name, td.table_display_name, td.table_type, td.description as table_description " +
                         "FROM dw_form_definitions fd " +
                         "JOIN dw_form_table_bindings ftb ON ftb.form_id = fd.id " +
                         "JOIN dw_table_definitions td ON td.id = ftb.table_id " +
@@ -568,6 +568,7 @@ public class FunctionUnitController {
                         binding.put("sortOrder", rs.getInt("sort_order"));
                         binding.put("tableId", rs.getLong("table_id"));
                         binding.put("tableName", rs.getString("table_name"));
+                        binding.put("tableDisplayName", rs.getString("table_display_name"));
                         binding.put("tableType", rs.getString("table_type"));
                         binding.put("tableDescription", rs.getString("table_description"));
                         bindingsBySourceId.computeIfAbsent(formId, k -> new java.util.ArrayList<>()).add(binding);
@@ -580,7 +581,7 @@ public class FunctionUnitController {
                     String bindingsSql =
                         "SELECT latest.form_name, ftb.id as binding_id, ftb.binding_type, ftb.binding_mode, " +
                         "       ftb.foreign_key_field, ftb.sort_order, " +
-                        "       td.id as table_id, td.table_name, td.table_type, td.description as table_description " +
+                        "       td.id as table_id, td.table_name, td.table_display_name, td.table_type, td.description as table_description " +
                         "FROM (SELECT DISTINCT ON (form_name) id, form_name FROM dw_form_definitions " +
                         "      WHERE form_name IN (" + placeholders + ") ORDER BY form_name, id DESC) latest " +
                         "JOIN dw_form_table_bindings ftb ON ftb.form_id = latest.id " +
@@ -596,6 +597,7 @@ public class FunctionUnitController {
                         binding.put("sortOrder", rs.getInt("sort_order"));
                         binding.put("tableId", rs.getLong("table_id"));
                         binding.put("tableName", rs.getString("table_name"));
+                        binding.put("tableDisplayName", rs.getString("table_display_name"));
                         binding.put("tableType", rs.getString("table_type"));
                         binding.put("tableDescription", rs.getString("table_description"));
                         bindingsByFormName.computeIfAbsent(formName, k -> new java.util.ArrayList<>()).add(binding);

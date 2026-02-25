@@ -163,6 +163,7 @@ export default {
   table: {
     title: 'Table Designer',
     tableName: 'Table Name',
+    tableDisplayName: 'Table Display Name',
     tableType: 'Table Type',
     fields: 'Fields',
     fieldCount: 'Field Count',

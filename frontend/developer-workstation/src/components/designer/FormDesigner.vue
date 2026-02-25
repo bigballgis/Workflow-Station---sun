@@ -463,7 +463,7 @@ const designerSubBindings = computed(() => {
     bindingId: b.id as number,
     bindingType: b.bindingType,
     bindingMode: b.bindingMode,
-    tableName: b.tableName || getTableName(b.tableId),
+    tableName: getTableName(b.tableId) || b.tableName,
     tableType: (store.tables.find(t => t.id === b.tableId)?.tableType) || '',
     tableDescription: (store.tables.find(t => t.id === b.tableId)?.description) || '',
   }))
@@ -599,7 +599,7 @@ function derivePreviewColumns(tableType: string): Array<{ field: string; label: 
  */
 function getTableName(tableId: number): string {
   const table = store.tables.find(t => t.id === tableId)
-  return table?.tableName || t('form.unknownTable')
+  return table?.tableDisplayName || table?.tableName || t('form.unknownTable')
 }
 
 /**
@@ -1257,7 +1257,7 @@ function handlePreview() {
       bindingId,
       bindingType: b.bindingType,
       bindingMode: b.bindingMode,
-      tableName: b.tableName || getTableName(b.tableId),
+      tableName: getTableName(b.tableId) || b.tableName,
       tableType: (store.tables.find(t => t.id === b.tableId)?.tableType) || '',
       tableDescription: (store.tables.find(t => t.id === b.tableId)?.description) || '',
       rule

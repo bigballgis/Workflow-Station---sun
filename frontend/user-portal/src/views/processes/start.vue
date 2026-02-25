@@ -309,7 +309,7 @@ const loadFunctionUnitContent = async () => {
           bindingId: b.bindingId,
           bindingType: b.bindingType,
           bindingMode: b.bindingMode,
-          tableName: b.tableName,
+          tableName: b.tableDisplayName || b.tableName,
           tableType: b.tableType,
           tableDescription: b.tableDescription,
           columns: deriveColumnsFromBinding(b, subForms),

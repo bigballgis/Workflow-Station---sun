@@ -111,6 +111,7 @@ export interface FunctionUnitRequest {
 export interface TableDefinition {
   id: number
   tableName: string
+  tableDisplayName?: string
   tableType: string
   description?: string
   fieldDefinitions: FieldDefinition[]

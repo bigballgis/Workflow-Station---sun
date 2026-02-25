@@ -545,7 +545,7 @@ const loadFunctionUnitContent = async (processKey: string) => {
           bindingType: b.bindingType,
           bindingMode: b.bindingMode,
           foreignKeyField: b.foreignKeyField,
-          tableName: b.tableName,
+          tableName: b.tableDisplayName || b.tableName,
           tableType: b.tableType,
           tableDescription: b.tableDescription,
           columns,
@@ -553,8 +553,6 @@ const loadFunctionUnitContent = async (processKey: string) => {
         })
       }
       console.log('[SubTable] bindings to render:', bindings.length, bindings.map(b => b.tableName))
-
-      // 从 variables 中恢复子表数据
       // 注意：JSON 序列化后 key 变为 string，需同时用 number 和 string 查找
       console.log('[SubTable] formData.value keys:', Object.keys(formData.value))
       console.log('[SubTable] formData.value.__subTables__:', JSON.stringify(formData.value.__subTables__))
