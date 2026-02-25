@@ -342,13 +342,13 @@ const formTabs = ref<FormTab[]>([])
 const formData = ref<Record<string, any>>({})
 const currentFormName = ref('')
 const formReadOnly = ref(false)
-const formLabelWidth = ref('250px')
+const formLabelWidth = ref('160px')
 
 // 申请内容（start 节点表单，只读展示）
 const startFormFields = ref<FormField[]>([])
 const startFormTabs = ref<FormTab[]>([])
 const startFormName = ref('')
-const startFormLabelWidth = ref('250px')
+const startFormLabelWidth = ref('160px')
 const startSubTableBindings = ref<Array<{
   bindingId: number
   bindingType: string
@@ -401,7 +401,7 @@ const formPopupTabs = ref<FormTab[]>([])
 const formPopupData = ref<Record<string, any>>({})
 const formPopupReadOnly = ref(false)
 const formPopupWidth = ref('800px')
-const formPopupLabelWidth = ref('250px')
+const formPopupLabelWidth = ref('160px')
 const currentFormPopupAction = ref<TaskActionInfo | null>(null)
 
 const loadTaskDetail = async () => {
@@ -604,7 +604,7 @@ const loadFunctionUnitContent = async (processKey: string) => {
           try {
             const cfg = typeof startForm.data === 'string' ? JSON.parse(startForm.data) : (startForm.data || {})
             startSubForms = cfg.subForms || {}
-            if (cfg.options?.form?.labelWidth) startFormLabelWidth.value = cfg.options.form.labelWidth
+            // if (cfg.options?.form?.labelWidth) startFormLabelWidth.value = cfg.options.form.labelWidth
           } catch {}
 
           const startBindings: typeof startSubTableBindings.value = []
@@ -971,10 +971,10 @@ const parseFormConfig = (configStr: string) => {
     const config = typeof configStr === 'string' ? JSON.parse(configStr) : configStr
     const rules = config.rule && Array.isArray(config.rule) ? config.rule : (Array.isArray(config) ? config : null)
     if (rules) {
-      // 提取 labelWidth 配置
-      if (config.options?.form?.labelWidth) {
-        formLabelWidth.value = config.options.form.labelWidth
-      }
+      // 提取 labelWidth 配置（忽略后端配置，使用固定值避免 label 被截断）
+      // if (config.options?.form?.labelWidth) {
+      //   formLabelWidth.value = config.options.form.labelWidth
+      // }
       
       // 检查是否有 el-tabs 结构
       const tabsRule = rules.find((r: any) => r.type === 'el-tabs')

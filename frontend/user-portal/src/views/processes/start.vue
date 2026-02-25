@@ -85,6 +85,7 @@
               :tabs="formTabs"
               v-model="formData"
               :label-width="formLabelWidth"
+              :label-position="formLabelPosition"
             />
           </div>
           <el-empty v-else :description="t('processStart.noFormConfig')" />
@@ -201,7 +202,8 @@ const formFields = ref<FormField[]>([])
 const formTabs = ref<FormTab[]>([])
 const formData = ref<Record<string, any>>({})
 const currentFormName = ref('')
-const formLabelWidth = ref('250px')
+const formLabelWidth = ref('160px')
+const formLabelPosition = ref<'left' | 'right' | 'top'>('left')
 const formRendererRef = ref<InstanceType<typeof FormRenderer> | null>(null)
 
 // Sub-table bindings for the start form
@@ -635,9 +637,13 @@ const parseFormConfig = (configStr: string) => {
     }
     
     if (rules) {
-      // 提取 labelWidth 配置
-      if (config.options?.form?.labelWidth) {
-        formLabelWidth.value = config.options.form.labelWidth
+      // 提取 labelWidth 配置（忽略后端配置，使用固定值避免 label 被截断）
+      // if (config.options?.form?.labelWidth) {
+      //   formLabelWidth.value = config.options.form.labelWidth
+      // }
+      // 提取 labelPosition 配置
+      if (config.options?.form?.labelPosition) {
+        formLabelPosition.value = config.options.form.labelPosition
       }
       
       // 检查是否有 el-tabs 结构

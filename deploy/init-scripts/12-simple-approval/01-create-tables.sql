@@ -38,7 +38,7 @@ BEGIN
         nullable, default_value, is_primary_key, is_unique, description, sort_order
     ) VALUES
     (v_main_table_id, 'id',                'BIGINT',    NULL, NULL, NULL, false, NULL, false, false, 'Primary key',           1),
-    (v_main_table_id, 'request_number',    'VARCHAR',   50,   NULL, NULL, false, NULL, false, false, 'Request number (unique)',2),
+    (v_main_table_id, 'request_number',    'VARCHAR',   50,   NULL, NULL, false, NULL, false, false, 'Request number',2),
     (v_main_table_id, 'request_date',      'TIMESTAMP', NULL, NULL, NULL, false, NULL, false, false, 'Request date',          3),
     (v_main_table_id, 'title',             'VARCHAR',   200,  NULL, NULL, false, NULL, false, false, 'Request title',         4),
     (v_main_table_id, 'description',       'TEXT',      NULL, NULL, NULL, false, NULL, false, false, 'Request description',   5),

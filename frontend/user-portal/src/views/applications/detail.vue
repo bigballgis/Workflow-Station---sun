@@ -185,7 +185,7 @@ const formFields = ref<FormField[]>([])
 const formTabs = ref<FormTab[]>([])
 const formData = ref<Record<string, any>>({})
 const currentFormName = ref('')
-const formLabelWidth = ref('250px')
+const formLabelWidth = ref('160px')
 
 // Sub-table bindings
 const subTableBindings = ref<Array<{
@@ -724,10 +724,10 @@ const parseFormConfig = (configStr: string) => {
     const config = typeof configStr === 'string' ? JSON.parse(configStr) : configStr
     const rules = config.rule && Array.isArray(config.rule) ? config.rule : (Array.isArray(config) ? config : null)
     if (rules) {
-      // 提取 labelWidth 配置
-      if (config.options?.form?.labelWidth) {
-        formLabelWidth.value = config.options.form.labelWidth
-      }
+      // 提取 labelWidth 配置（忽略后端配置，使用固定值避免 label 被截断）
+      // if (config.options?.form?.labelWidth) {
+      //   formLabelWidth.value = config.options.form.labelWidth
+      // }
       
       // 检查是否有 el-tabs 结构
       const tabsRule = rules.find((r: any) => r.type === 'el-tabs')

@@ -5,6 +5,7 @@
       :model="formData"
       :rules="formRules"
       :label-width="labelWidth"
+      :label-position="labelPosition"
       :disabled="readonly"
       :size="size"
     >
@@ -507,6 +508,7 @@ interface Props {
   modelValue?: Record<string, any>
   readonly?: boolean
   labelWidth?: string
+  labelPosition?: 'left' | 'right' | 'top'
   size?: 'large' | 'default' | 'small'
 }
 
@@ -514,7 +516,8 @@ const props = withDefaults(defineProps<Props>(), {
   modelValue: () => ({}),
   tabs: () => [],
   readonly: false,
-  labelWidth: '250px',
+  labelWidth: '160px',
+  labelPosition: 'left',
   size: 'default'
 })
 
@@ -664,6 +667,8 @@ defineExpose({
 
   :deep(.el-form-item__label) {
     font-weight: 500;
+    white-space: nowrap;
+    padding-right: 16px;
   }
   
   :deep(.el-tabs--border-card) {

@@ -165,13 +165,13 @@ const formatDuration = (ms: number | undefined) => {
   const days = Math.floor(hours / 24)
   
   if (days > 0) {
-    return `${days}天${hours % 24}小时`
+    return `${days}d${hours % 24}h`
   } else if (hours > 0) {
-    return `${hours}小时${minutes % 60}分钟`
+    return `${hours}h${minutes % 60}m`
   } else if (minutes > 0) {
-    return `${minutes}分钟`
+    return `${minutes}m`
   } else {
-    return `${seconds}秒`
+    return `${seconds}s`
   }
 }
 
