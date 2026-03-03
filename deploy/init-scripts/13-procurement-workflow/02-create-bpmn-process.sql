@@ -36,7 +36,6 @@ BEGIN
         RAISE EXCEPTION 'Actions not found. Run 00-create-function-unit.sql first.';
     END IF;
 
-    -- Build BPMN XML with actual IDs substituted
     v_bpmn_xml := format(
         $xml$<?xml version="1.0" encoding="UTF-8"?>
 <bpmn:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:custom_1="http://custom.bpmn.io/schema" xmlns:custom="http://workflow.platform/schema/custom" id="Definitions_ProcurementWorkflow" targetNamespace="http://bpmn.io/schema/bpmn">
@@ -47,26 +46,28 @@ BEGIN
     <bpmn:userTask id="Task_SubmitRequest" name="Submit Request">
       <bpmn:extensionElements>
         <custom_1:properties>
-          <custom_1:values name="actionIds" value="[%s]"/>
-          <custom_1:values name="actionNames" value="[&amp;#34;Submit Request&amp;#34;]"/>
-          <custom_1:values name="formId" value="%s"/>
-          <custom_1:values name="formName" value="Request Form"/>
+          <custom_1:values name="actionIds" value="[%s]" />
+          <custom_1:values name="actionNames" value="[&#38;#34;Submit Request&#38;#34;]" />
+          <custom_1:values name="formId" value="%s" />
+          <custom_1:values name="formName" value="Request Form" />
         </custom_1:properties>
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_1</bpmn:incoming>
-      <bpmn:outgoing>Flow_2</bpmn:outgoing>
+      <bpmn:outgoing>Flow_1cxue2t</bpmn:outgoing>
     </bpmn:userTask>
-    <bpmn:exclusiveGateway id="Gateway_PriceCheck" name="Total price &gt; 10000?">
-      <bpmn:incoming>Flow_2</bpmn:incoming>
+    <bpmn:exclusiveGateway id="Gateway_PriceCheck" name="Total price &#62; 10000?">
+      <bpmn:incoming>Flow_1cxue2t</bpmn:incoming>
       <bpmn:outgoing>Flow_ToManagerReview</bpmn:outgoing>
       <bpmn:outgoing>Flow_AutoApproved</bpmn:outgoing>
     </bpmn:exclusiveGateway>
     <bpmn:userTask id="Task_ManagerApproval" name="Manager Review">
       <bpmn:extensionElements>
         <custom_1:properties>
-          <custom_1:values name="actionIds" value="[%s,%s]"/>
-          <custom_1:values name="actionNames" value="[&amp;#34;Approve&amp;#34;,&amp;#34;Reject&amp;#34;]"/>
-        <custom_1:property name="formId" value="%s"/><custom_1:property name="formName" value="Approval Form"/></custom_1:properties>
+          <custom_1:values name="actionIds" value="[%s,%s]" />
+          <custom_1:values name="actionNames" value="[&#38;#34;Approve&#38;#34;,&#38;#34;Reject&#38;#34;]" />
+          <custom_1:values name="formId" value="%s" />
+          <custom_1:values name="formName" value="Approval Form" />
+        </custom_1:properties>
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_ToManagerReview</bpmn:incoming>
       <bpmn:outgoing>Flow_3</bpmn:outgoing>
@@ -83,101 +84,101 @@ BEGIN
     <bpmn:endEvent id="EndEvent_Rejected" name="Rejected">
       <bpmn:incoming>Flow_Rejected</bpmn:incoming>
     </bpmn:endEvent>
-    <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="Task_SubmitRequest"/>
-    <bpmn:sequenceFlow id="Flow_2" sourceRef="Task_SubmitRequest" targetRef="Gateway_PriceCheck"/>
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent_1" targetRef="Task_SubmitRequest" />
     <bpmn:sequenceFlow id="Flow_ToManagerReview" name="Yes" sourceRef="Gateway_PriceCheck" targetRef="Task_ManagerApproval">
-      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${totalPrice &gt; 10000}</bpmn:conditionExpression>
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${totalPrice > 10000}</bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_AutoApproved" name="No" sourceRef="Gateway_PriceCheck" targetRef="EndEvent_Approved">
-      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${totalPrice &lt;= 10000}</bpmn:conditionExpression>
+      <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${totalPrice <= 10000}</bpmn:conditionExpression>
     </bpmn:sequenceFlow>
-    <bpmn:sequenceFlow id="Flow_3" sourceRef="Task_ManagerApproval" targetRef="Gateway_ManagerDecision"/>
+    <bpmn:sequenceFlow id="Flow_3" sourceRef="Task_ManagerApproval" targetRef="Gateway_ManagerDecision" />
     <bpmn:sequenceFlow id="Flow_Approved" name="Yes" sourceRef="Gateway_ManagerDecision" targetRef="EndEvent_Approved">
       <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${decision == 'yes'}</bpmn:conditionExpression>
     </bpmn:sequenceFlow>
     <bpmn:sequenceFlow id="Flow_Rejected" name="No" sourceRef="Gateway_ManagerDecision" targetRef="EndEvent_Rejected">
       <bpmn:conditionExpression xsi:type="bpmn:tFormalExpression">${decision != 'yes'}</bpmn:conditionExpression>
     </bpmn:sequenceFlow>
+    <bpmn:sequenceFlow id="Flow_1cxue2t" sourceRef="Task_SubmitRequest" targetRef="Gateway_PriceCheck" />
   </bpmn:process>
   <bpmndi:BPMNDiagram id="BPMNDiagram_1">
     <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="ProcurementWorkflowProcess">
       <bpmndi:BPMNShape id="BPMNShape_1e8g875" bpmnElement="StartEvent_1">
-        <dc:Bounds x="170" y="150" width="36" height="36"/>
+        <dc:Bounds x="170" y="152" width="36" height="36" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="175" y="185" width="24" height="14"/>
+          <dc:Bounds x="175" y="187" width="24" height="14" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="BPMNShape_0o4rau3" bpmnElement="Task_SubmitRequest">
-        <dc:Bounds x="270" y="130" width="120" height="80"/>
-      </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="BPMNShape_PriceCheck" bpmnElement="Gateway_PriceCheck" isMarkerVisible="true">
-        <dc:Bounds x="470" y="145" width="50" height="50"/>
+        <dc:Bounds x="470" y="145" width="50" height="50" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="430" y="114" width="60" height="27"/>
+          <dc:Bounds x="430" y="114" width="60" height="27" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="BPMNShape_0o9yima" bpmnElement="Task_ManagerApproval">
-        <dc:Bounds x="590" y="130" width="120" height="80"/>
+        <dc:Bounds x="590" y="130" width="120" height="80" />
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="BPMNShape_07neaj5" bpmnElement="Gateway_ManagerDecision" isMarkerVisible="true">
-        <dc:Bounds x="750" y="145" width="50" height="50"/>
+        <dc:Bounds x="750" y="145" width="50" height="50" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="748" y="121" width="53" height="14"/>
+          <dc:Bounds x="748" y="121" width="53" height="14" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="BPMNShape_1vyg15b" bpmnElement="EndEvent_Approved">
-        <dc:Bounds x="870" y="150" width="36" height="36"/>
+        <dc:Bounds x="870" y="150" width="36" height="36" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="865" y="185" width="47" height="14"/>
+          <dc:Bounds x="865" y="185" width="47" height="14" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="BPMNShape_0gt3x3e" bpmnElement="EndEvent_Rejected">
-        <dc:Bounds x="757" y="262" width="36" height="36"/>
+        <dc:Bounds x="757" y="262" width="36" height="36" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="752" y="297" width="44" height="14"/>
+          <dc:Bounds x="752" y="297" width="44" height="14" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="BPMNShape_0o4rau3" bpmnElement="Task_SubmitRequest">
+        <dc:Bounds x="290" y="130" width="120" height="80" />
+      </bpmndi:BPMNShape>
       <bpmndi:BPMNEdge id="BPMNEdge_0ltq2fg" bpmnElement="Flow_1">
-        <di:waypoint x="206" y="168"/>
-        <di:waypoint x="270" y="168"/>
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="BPMNEdge_1e8h2d6" bpmnElement="Flow_2">
-        <di:waypoint x="390" y="168"/>
-        <di:waypoint x="472" y="168"/>
+        <di:waypoint x="206" y="170" />
+        <di:waypoint x="290" y="170" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="BPMNEdge_ToManagerReview" bpmnElement="Flow_ToManagerReview">
-        <di:waypoint x="520" y="168"/>
-        <di:waypoint x="590" y="168"/>
+        <di:waypoint x="520" y="168" />
+        <di:waypoint x="590" y="168" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="545" y="150" width="18" height="14"/>
+          <dc:Bounds x="545" y="150" width="18" height="14" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="BPMNEdge_AutoApproved" bpmnElement="Flow_AutoApproved">
-        <di:waypoint x="495" y="145"/>
-        <di:waypoint x="495" y="50"/>
-        <di:waypoint x="888" y="50"/>
-        <di:waypoint x="888" y="150"/>
+        <di:waypoint x="495" y="145" />
+        <di:waypoint x="495" y="50" />
+        <di:waypoint x="888" y="50" />
+        <di:waypoint x="888" y="150" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="469" y="43" width="15" height="14"/>
+          <dc:Bounds x="469" y="43" width="15" height="14" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="BPMNEdge_1udmyi1" bpmnElement="Flow_3">
-        <di:waypoint x="710" y="168"/>
-        <di:waypoint x="750" y="168"/>
+        <di:waypoint x="710" y="168" />
+        <di:waypoint x="750" y="168" />
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="BPMNEdge_0mqn3a0" bpmnElement="Flow_Approved">
-        <di:waypoint x="800" y="168"/>
-        <di:waypoint x="870" y="168"/>
+        <di:waypoint x="800" y="168" />
+        <di:waypoint x="870" y="168" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="825" y="150" width="18" height="14"/>
+          <dc:Bounds x="825" y="150" width="18" height="14" />
         </bpmndi:BPMNLabel>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="BPMNEdge_03qyogm" bpmnElement="Flow_Rejected">
-        <di:waypoint x="775" y="195"/>
-        <di:waypoint x="775" y="262"/>
+        <di:waypoint x="775" y="195" />
+        <di:waypoint x="775" y="262" />
         <bpmndi:BPMNLabel>
-          <dc:Bounds x="785" y="223" width="15" height="14"/>
+          <dc:Bounds x="785" y="223" width="15" height="14" />
         </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1cxue2t_di" bpmnElement="Flow_1cxue2t">
+        <di:waypoint x="410" y="170" />
+        <di:waypoint x="470" y="170" />
       </bpmndi:BPMNEdge>
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>
@@ -190,10 +191,8 @@ $xml$,
         v_approval_form_id     -- %s -> formId for Manager Review
     );
 
-    -- Encode to base64 (same storage format as source DB)
     v_bpmn_b64 := encode(convert_to(v_bpmn_xml, 'UTF8'), 'base64');
 
-    -- Insert or update process definition
     DELETE FROM dw_process_definitions WHERE function_unit_id = v_function_unit_id;
 
     INSERT INTO dw_process_definitions (

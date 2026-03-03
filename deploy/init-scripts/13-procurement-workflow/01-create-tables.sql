@@ -2,7 +2,7 @@
 -- 13-procurement-workflow: Create Table Definitions & Field Definitions
 -- 基于数据库实际数据生成 (source: Procurement Workflow)
 -- Tables: Request(MAIN), RequestItems(SUB), ApprovalActions(ACTION),
---         RequestAttachments(SUB), test(SUB), Test2(RELATION)
+--         RequestAttachments(SUB)
 -- =============================================================================
 
 DO $tables$
@@ -12,8 +12,6 @@ DECLARE
     v_items_table_id      BIGINT;  -- RequestItems (SUB)
     v_action_table_id     BIGINT;  -- ApprovalActions (ACTION)
     v_attach_table_id     BIGINT;  -- RequestAttachments (SUB)
-    v_test_table_id       BIGINT;  -- test (SUB)
-    v_test2_table_id      BIGINT;  -- Test2 (RELATION)
 BEGIN
     SELECT id INTO v_function_unit_id FROM dw_function_units WHERE code = 'PROCUREMENT_WORKFLOW';
     IF v_function_unit_id IS NULL THEN
@@ -40,16 +38,17 @@ BEGIN
         table_id, field_name, data_type, length, precision_value, scale,
         nullable, default_value, is_primary_key, is_unique, description, sort_order
     ) VALUES
-    (v_main_table_id, 'id',                     'BIGINT',    NULL, NULL, NULL, false, NULL, false, false, 'Primary key',            1),
-    (v_main_table_id, 'request_number',         'VARCHAR',   50,   NULL, NULL, false, NULL, false, false, 'Request Number',         2),
-    (v_main_table_id, 'request_date',           'TIMESTAMP', NULL, NULL, NULL, false, NULL, false, false, 'Request Date',           3),
-    (v_main_table_id, 'title',                  'VARCHAR',   200,  NULL, NULL, false, NULL, false, false, 'Request Title',          4),
-    (v_main_table_id, 'description',            'TEXT',      NULL, NULL, NULL, false, NULL, false, false, 'Request Description',    5),
-    (v_main_table_id, 'status',                 'VARCHAR',   30,   NULL, NULL, false, NULL, false, false, 'Request Status',         6),
-    (v_main_table_id, 'additional_information', 'TEXT',      NULL, NULL, NULL, true,  NULL, false, false, 'Additiona Information',  7),
-    (v_main_table_id, 'created_by',             'VARCHAR',   100,  NULL, NULL, false, NULL, false, false, 'Created by',             8),
-    (v_main_table_id, 'created_at',             'TIMESTAMP', NULL, NULL, NULL, false, NULL, false, false, 'Created at',             9),
-    (v_main_table_id, 'updated_at',             'TIMESTAMP', NULL, NULL, NULL, true,  NULL, false, false, 'Updated at',             10);
+    (v_main_table_id, 'id',                     'BIGINT',    NULL, NULL, NULL, false, NULL, false, false, 'Primary key',              1),
+    (v_main_table_id, 'request_number',         'VARCHAR',   50,   NULL, NULL, false, NULL, false, false, 'Request Number',           2),
+    (v_main_table_id, 'request_date',           'TIMESTAMP', NULL, NULL, NULL, false, NULL, false, false, 'Request Date',             3),
+    (v_main_table_id, 'title',                  'VARCHAR',   200,  NULL, NULL, false, NULL, false, false, 'Request Title',            4),
+    (v_main_table_id, 'description',            'TEXT',      NULL, NULL, NULL, false, NULL, false, false, 'Request Description',      5),
+    (v_main_table_id, 'status',                 'VARCHAR',   30,   NULL, NULL, false, NULL, false, false, 'Request Status',           6),
+    (v_main_table_id, 'additional_information', 'TEXT',      NULL, NULL, NULL, true,  NULL, false, false, 'Additional Inforrmation',  7),
+    (v_main_table_id, 'created_by',             'VARCHAR',   100,  NULL, NULL, false, NULL, false, false, 'Created by',               8),
+    (v_main_table_id, 'created_at',             'TIMESTAMP', NULL, NULL, NULL, false, NULL, false, false, 'Created at',               9),
+    (v_main_table_id, 'updated_at',             'TIMESTAMP', NULL, NULL, NULL, true,  NULL, false, false, 'Updated at',               10),
+    (v_main_table_id, 'budget',                 'INTEGER',   NULL, NULL, NULL, true,  NULL, false, false, 'budget',                   10);
 
     RAISE NOTICE 'Table Request (MAIN) created: id=%', v_main_table_id;
 
@@ -80,6 +79,7 @@ BEGIN
     (v_items_table_id, 'unit_price',  'DECIMAL', NULL, 10,   2,    false, NULL, false, false, 'Unit Price',                  5),
     (v_items_table_id, 'total_price', 'DECIMAL', NULL, 10,   2,    false, NULL, false, false, 'Total Price',                 6),
     (v_items_table_id, 'remarks',     'TEXT',    NULL, NULL, NULL, true,  NULL, false, false, 'Item Remarks',                7),
+    (v_items_table_id, 'count',       'INTEGER', NULL, NULL, NULL, true,  NULL, false, false, 'Count',                       8),
     (v_items_table_id, 'sort_order',  'INTEGER', NULL, NULL, NULL, false, NULL, false, false, 'Display Order',               8);
 
     RAISE NOTICE 'Table RequestItems (SUB) created: id=%', v_items_table_id;
@@ -149,49 +149,6 @@ BEGIN
     RAISE NOTICE 'Table RequestAttachments (SUB) created: id=%', v_attach_table_id;
 
     -- =========================================================================
-    -- Table 5: test (SUB)
-    -- =========================================================================
-    INSERT INTO dw_table_definitions (
-        function_unit_id, table_name, table_type, description, created_at, updated_at
-    ) VALUES (
-        v_function_unit_id, 'test', 'SUB', 'test', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-    )
-    ON CONFLICT (function_unit_id, table_name) DO UPDATE SET
-        table_type  = EXCLUDED.table_type,
-        description = EXCLUDED.description,
-        updated_at  = CURRENT_TIMESTAMP
-    RETURNING id INTO v_test_table_id;
-
-    DELETE FROM dw_field_definitions WHERE table_id = v_test_table_id;
-
-    INSERT INTO dw_field_definitions (
-        table_id, field_name, data_type, length, precision_value, scale,
-        nullable, default_value, is_primary_key, is_unique, description, sort_order
-    ) VALUES
-    (v_test_table_id, 'test',       'VARCHAR', 255, NULL, NULL, true, NULL, false, false, 'e',  0),
-    (v_test_table_id, 'request_id', 'INTEGER', 255, NULL, NULL, true, NULL, false, false, 'FK', 1);
-
-    RAISE NOTICE 'Table test (SUB) created: id=%', v_test_table_id;
-
-    -- =========================================================================
-    -- Table 6: Test2 (RELATION) — no fields
-    -- =========================================================================
-    INSERT INTO dw_table_definitions (
-        function_unit_id, table_name, table_type, description, created_at, updated_at
-    ) VALUES (
-        v_function_unit_id, 'Test2', 'RELATION', '3', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-    )
-    ON CONFLICT (function_unit_id, table_name) DO UPDATE SET
-        table_type  = EXCLUDED.table_type,
-        description = EXCLUDED.description,
-        updated_at  = CURRENT_TIMESTAMP
-    RETURNING id INTO v_test2_table_id;
-
-    DELETE FROM dw_field_definitions WHERE table_id = v_test2_table_id;
-
-    RAISE NOTICE 'Table Test2 (RELATION) created: id=% (no fields)', v_test2_table_id;
-
-    -- =========================================================================
     -- Summary
     -- =========================================================================
     RAISE NOTICE '========================================';
@@ -200,8 +157,6 @@ BEGIN
     RAISE NOTICE 'RequestItems (SUB)       : id=%', v_items_table_id;
     RAISE NOTICE 'ApprovalActions (ACTION)  : id=%', v_action_table_id;
     RAISE NOTICE 'RequestAttachments (SUB) : id=%', v_attach_table_id;
-    RAISE NOTICE 'test (SUB)               : id=%', v_test_table_id;
-    RAISE NOTICE 'Test2 (RELATION)         : id=%', v_test2_table_id;
     RAISE NOTICE 'Next: run 02-create-bpmn-process.sql';
     RAISE NOTICE '========================================';
 
