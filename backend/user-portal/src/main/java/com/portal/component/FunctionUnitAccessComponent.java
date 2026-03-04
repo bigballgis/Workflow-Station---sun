@@ -104,8 +104,25 @@ public class FunctionUnitAccessComponent {
     public String resolveFunctionUnitId(String functionUnitIdOrCode) {
         log.info("Resolving function unit ID for: {}", functionUnitIdOrCode);
         
-        // 如果看起来像 UUID，直接返回
+        // 如果看起来像 UUID，先验证是否为有效的功能单元 ID
+        // 注意：Flowable 7.0 的 processDefinitionId 也是 UUID 格式，不能直接当功能单元 ID 使用
         if (functionUnitIdOrCode != null && functionUnitIdOrCode.matches("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")) {
+            try {
+                String verifyUrl = adminCenterUrl + "/api/v1/admin/function-units/" + functionUnitIdOrCode;
+                ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                        verifyUrl, HttpMethod.GET, null,
+                        new ParameterizedTypeReference<Map<String, Object>>() {}
+                );
+                if (response.getBody() != null && response.getBody().get("id") != null) {
+                    log.info("UUID {} verified as valid function unit ID", functionUnitIdOrCode);
+                    return functionUnitIdOrCode;
+                }
+            } catch (Exception e) {
+                // UUID 不是有效的功能单元 ID（可能是 Flowable processDefinitionId），继续尝试其他查找方式
+                log.warn("UUID {} is not a valid function unit ID (possibly a Flowable processDefinitionId), trying other lookup methods: {}", functionUnitIdOrCode, e.getMessage());
+            }
+            // 不能通过 code/processKey 查找 UUID，直接返回（作为最终兜底）
+            log.warn("Could not resolve UUID {} to a function unit, returning as-is", functionUnitIdOrCode);
             return functionUnitIdOrCode;
         }
         

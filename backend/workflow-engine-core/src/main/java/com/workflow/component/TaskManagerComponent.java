@@ -278,14 +278,29 @@ public class TaskManagerComponent {
     /**
      * 从 processDefinitionId 中提取 processDefinitionKey
      * 格式: key:version:uuid (例如: Process_PurchaseRequest:2:b550b1fe-f0b0-11f0-b82f-00ff197375e0)
+     * Flowable 7.0 可能只返回 UUID，此时查询 repositoryService 获取真实 key
      */
     private String extractProcessDefinitionKey(String processDefinitionId) {
         if (processDefinitionId == null || processDefinitionId.isEmpty()) {
             return null;
         }
+        // 标准格式: key:version:uuid
         int colonIndex = processDefinitionId.indexOf(':');
         if (colonIndex > 0) {
             return processDefinitionId.substring(0, colonIndex);
+        }
+        // Flowable 7.0 可能仅返回 UUID，查询 repositoryService 获取真实 key
+        try {
+            org.flowable.engine.repository.ProcessDefinition pd = repositoryService
+                .createProcessDefinitionQuery()
+                .processDefinitionId(processDefinitionId)
+                .singleResult();
+            if (pd != null) {
+                log.debug("Resolved process definition key via repositoryService: {} -> {}", processDefinitionId, pd.getKey());
+                return pd.getKey();
+            }
+        } catch (Exception e) {
+            log.warn("Failed to resolve process definition key for ID {}: {}", processDefinitionId, e.getMessage());
         }
         return processDefinitionId;
     }
@@ -1003,11 +1018,9 @@ public class TaskManagerComponent {
      */
     private TaskListResult.TaskInfo buildTaskInfoFromFlowableTask(Task task) {
         // 从 processDefinitionId 提取 processDefinitionKey
-        String processDefinitionKey = null;
+        // Flowable 7.0 可能只返回 UUID，使用 extractProcessDefinitionKey 会自动查询 repositoryService
         String processDefinitionId = task.getProcessDefinitionId();
-        if (processDefinitionId != null && processDefinitionId.contains(":")) {
-            processDefinitionKey = processDefinitionId.substring(0, processDefinitionId.indexOf(':'));
-        }
+        String processDefinitionKey = extractProcessDefinitionKey(processDefinitionId);
         
         // 获取流程定义名称
         String processDefinitionName = getProcessDefinitionName(processDefinitionId);

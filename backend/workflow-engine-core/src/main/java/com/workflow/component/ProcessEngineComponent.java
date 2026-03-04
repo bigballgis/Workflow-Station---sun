@@ -130,9 +130,19 @@ public class ProcessEngineComponent {
             
             if (!processDefinitions.isEmpty()) {
                 ProcessDefinition processDefinition = processDefinitions.get(0);
+                // Ensure the process definition ID is always in key:version:uuid format.
+                // In some Flowable versions getId() may return only the raw UUID part;
+                // explicitly construct the composite format when that happens.
+                String rawId = processDefinition.getId();
+                String compositeId = rawId.contains(":")
+                        ? rawId
+                        : String.format("%s:%d:%s",
+                                processDefinition.getKey(),
+                                processDefinition.getVersion(),
+                                rawId);
                 return DeploymentResult.success(
                     deployment.getId(),
-                    processDefinition.getId(),
+                    compositeId,
                     processDefinition.getKey(),
                     processDefinition.getName(),
                     processDefinition.getVersion()

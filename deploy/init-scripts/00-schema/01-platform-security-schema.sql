@@ -602,7 +602,7 @@ CREATE TABLE IF NOT EXISTS sys_function_unit_contents (
     checksum VARCHAR(64),
     source_id VARCHAR(64),
     flowable_deployment_id VARCHAR(64),
-    flowable_process_definition_id VARCHAR(64),
+    flowable_process_definition_id VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_content_func_unit FOREIGN KEY (function_unit_id) REFERENCES sys_function_units(id),
     CONSTRAINT chk_content_type CHECK (content_type IN ('PROCESS', 'FORM', 'DATA_TABLE', 'SCRIPT'))

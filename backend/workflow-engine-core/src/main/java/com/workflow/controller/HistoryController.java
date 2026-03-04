@@ -148,14 +148,27 @@ public class HistoryController {
     
     /**
      * 从 processDefinitionId 中提取 processDefinitionKey
+     * Flowable 7.0 可能只返回 UUID，此时查询 repositoryService 获取真实 key
      */
     private String extractProcessDefinitionKey(String processDefinitionId) {
         if (processDefinitionId == null || processDefinitionId.isEmpty()) {
             return null;
         }
+        // 标准格式: key:version:uuid
         int colonIndex = processDefinitionId.indexOf(':');
         if (colonIndex > 0) {
             return processDefinitionId.substring(0, colonIndex);
+        }
+        // Flowable 7.0 可能仅返回 UUID，查询 repositoryService 获取真实 key
+        try {
+            ProcessDefinition pd = repositoryService.createProcessDefinitionQuery()
+                .processDefinitionId(processDefinitionId)
+                .singleResult();
+            if (pd != null) {
+                return pd.getKey();
+            }
+        } catch (Exception e) {
+            log.warn("Failed to resolve process definition key for ID {}: {}", processDefinitionId, e.getMessage());
         }
         return processDefinitionId;
     }
@@ -173,8 +186,12 @@ public class HistoryController {
                 ProcessDefinition processDefinition = repositoryService.createProcessDefinitionQuery()
                     .processDefinitionId(id)
                     .singleResult();
-                if (processDefinition != null && processDefinition.getName() != null) {
-                    return processDefinition.getName();
+                if (processDefinition != null) {
+                    if (processDefinition.getName() != null) {
+                        return processDefinition.getName();
+                    }
+                    // 用 key 作为名称 fallback
+                    return processDefinition.getKey();
                 }
             } catch (Exception e) {
                 log.warn("Failed to get process definition name for {}: {}", id, e.getMessage());

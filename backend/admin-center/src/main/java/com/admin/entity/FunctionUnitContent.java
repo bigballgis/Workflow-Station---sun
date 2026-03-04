@@ -55,8 +55,9 @@ public class FunctionUnitContent {
     
     /**
      * Flowable 流程定义ID（仅流程类型内容有效）
+     * 格式: {processKey}:{version}:{uuid}，例如 myProcess:1:abc123-def456-ghi789
      */
-    @Column(name = "flowable_process_definition_id", length = 64)
+    @Column(name = "flowable_process_definition_id", length = 255)
     private String flowableProcessDefinitionId;
     
     /**
