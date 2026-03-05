@@ -563,6 +563,7 @@ public class FunctionUnitManagerComponent {
      * 根据流程定义Key获取功能单元
      * 通过查找 flowable_process_definition_id 以 processKey: 开头的内容来定位功能单元
      */
+    @Transactional(readOnly = true)
     public FunctionUnit getFunctionUnitByProcessKey(String processKey) {
         List<com.admin.entity.FunctionUnitContent> results = contentRepository.findAllByProcessDefinitionKey(processKey);
         if (results.isEmpty()) {
