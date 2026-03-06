@@ -306,3 +306,10 @@ BOOT-INF/
 !package.json
 !package-lock.json
 !tsconfig.json
+backend/admin-center/Dockerfile
+backend/developer-workstation/Dockerfile
+backend/user-portal/Dockerfile
+backend/workflow-engine-core/Dockerfile
+frontend/admin-center/package-lock.json
+frontend/developer-workstation/package-lock.json
+frontend/user-portal/package-lock.json
