@@ -22,11 +22,12 @@ BEGIN
     -- Table 1: Request (MAIN)
     -- =========================================================================
     INSERT INTO dw_table_definitions (
-        function_unit_id, table_name, table_type, description, created_at, updated_at
+        function_unit_id, table_name, table_display_name, table_type, description, created_at, updated_at
     ) VALUES (
-        v_function_unit_id, 'Request', 'MAIN', 'Main request table', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+        v_function_unit_id, 'Request', 'Request', 'MAIN', 'Main request table', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
     ON CONFLICT (function_unit_id, table_name) DO UPDATE SET
+        table_display_name = EXCLUDED.table_display_name,
         table_type  = EXCLUDED.table_type,
         description = EXCLUDED.description,
         updated_at  = CURRENT_TIMESTAMP
@@ -56,11 +57,12 @@ BEGIN
     -- Table 2: RequestItems (SUB)
     -- =========================================================================
     INSERT INTO dw_table_definitions (
-        function_unit_id, table_name, table_type, description, created_at, updated_at
+        function_unit_id, table_name, table_display_name, table_type, description, created_at, updated_at
     ) VALUES (
-        v_function_unit_id, 'RequestItems', 'SUB', 'Sub table for request line items', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+        v_function_unit_id, 'RequestItems', 'Request Items', 'SUB', 'Sub table for request line items', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
     ON CONFLICT (function_unit_id, table_name) DO UPDATE SET
+        table_display_name = EXCLUDED.table_display_name,
         table_type  = EXCLUDED.table_type,
         description = EXCLUDED.description,
         updated_at  = CURRENT_TIMESTAMP
@@ -88,11 +90,12 @@ BEGIN
     -- Table 3: ApprovalActions (ACTION)
     -- =========================================================================
     INSERT INTO dw_table_definitions (
-        function_unit_id, table_name, table_type, description, created_at, updated_at
+        function_unit_id, table_name, table_display_name, table_type, description, created_at, updated_at
     ) VALUES (
-        v_function_unit_id, 'ApprovalActions', 'ACTION', 'Action table for tracking approval history', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+        v_function_unit_id, 'ApprovalActions', 'Approval Actions', 'ACTION', 'Action table for tracking approval history', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
     ON CONFLICT (function_unit_id, table_name) DO UPDATE SET
+        table_display_name = EXCLUDED.table_display_name,
         table_type  = EXCLUDED.table_type,
         description = EXCLUDED.description,
         updated_at  = CURRENT_TIMESTAMP
@@ -120,11 +123,12 @@ BEGIN
     -- Table 4: RequestAttachments (SUB)
     -- =========================================================================
     INSERT INTO dw_table_definitions (
-        function_unit_id, table_name, table_type, description, created_at, updated_at
+        function_unit_id, table_name, table_display_name, table_type, description, created_at, updated_at
     ) VALUES (
-        v_function_unit_id, 'RequestAttachments', 'SUB', 'Relation table for request attachments', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+        v_function_unit_id, 'RequestAttachments', 'Request Attachments', 'SUB', 'Relation table for request attachments', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
     ON CONFLICT (function_unit_id, table_name) DO UPDATE SET
+        table_display_name = EXCLUDED.table_display_name,
         table_type  = EXCLUDED.table_type,
         description = EXCLUDED.description,
         updated_at  = CURRENT_TIMESTAMP
