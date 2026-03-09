@@ -1,6 +1,8 @@
 package com.admin.entity;
 
 import com.admin.enums.AuditAction;
+import com.fasterxml.jackson.annotation.JsonGetter;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -39,6 +41,7 @@ public class AuditLog {
     @Column(nullable = false)
     private String userId;
     
+    @JsonProperty("username")
     private String userName;
     private String ipAddress;
     private String userAgent;
@@ -57,4 +60,52 @@ public class AuditLog {
     
     @CreationTimestamp
     private Instant timestamp;
+
+    /** 前端兼容：result = SUCCESS/FAILED */
+    @JsonGetter("result")
+    public String getResult() {
+        return Boolean.TRUE.equals(success) ? "SUCCESS" : "FAILED";
+    }
+
+    /** 前端兼容：createdAt */
+    @JsonGetter("createdAt")
+    public String getCreatedAt() {
+        return timestamp != null ? timestamp.toString() : null;
+    }
+
+    /** 前端兼容：description */
+    @JsonGetter("description")
+    public String getDescription() {
+        return changeDetails;
+    }
+
+    /** 前端兼容：duration (ms)，实体无此字段时返回 0 */
+    @JsonGetter("duration")
+    public int getDuration() {
+        return 0;
+    }
+
+    /** 前端兼容：requestMethod，实体无此字段 */
+    @JsonGetter("requestMethod")
+    public String getRequestMethod() {
+        return null;
+    }
+
+    /** 前端兼容：requestPath，实体无此字段 */
+    @JsonGetter("requestPath")
+    public String getRequestPath() {
+        return null;
+    }
+
+    /** 前端兼容：requestParams，实体无此字段 */
+    @JsonGetter("requestParams")
+    public Object getRequestParams() {
+        return null;
+    }
+
+    /** 前端兼容：errorMessage */
+    @JsonGetter("errorMessage")
+    public String getErrorMessage() {
+        return failureReason;
+    }
 }

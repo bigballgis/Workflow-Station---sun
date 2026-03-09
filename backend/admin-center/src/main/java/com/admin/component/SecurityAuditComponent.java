@@ -188,6 +188,9 @@ public class SecurityAuditComponent {
             if (request.getUserId() != null) {
                 predicates.add(cb.equal(root.get("userId"), request.getUserId()));
             }
+            if (request.getUserName() != null && !request.getUserName().isBlank()) {
+                predicates.add(cb.equal(root.get("userName"), request.getUserName()));
+            }
             if (request.getResourceType() != null) {
                 predicates.add(cb.equal(root.get("resourceType"), request.getResourceType()));
             }
@@ -422,11 +425,12 @@ public class SecurityAuditComponent {
     public static class AuditQueryRequest {
         private AuditAction action;
         private String userId;
+        private String userName;  // 支持按用户名筛选
         private String resourceType;
         private String resourceId;
         private Instant startTime;
         private Instant endTime;
-        private Boolean success;
+        private Boolean success;  // result: SUCCESS->true, FAILED->false
     }
     
     @lombok.Data
