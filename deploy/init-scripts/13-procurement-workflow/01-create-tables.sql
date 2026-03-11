@@ -142,13 +142,14 @@ BEGIN
     ) VALUES
     (v_attach_table_id, 'id',          'BIGINT',    NULL, NULL, NULL, false, NULL, false, false, 'Attachment ID',                1),
     (v_attach_table_id, 'request_id',  'BIGINT',    NULL, NULL, NULL, false, NULL, false, false, 'Foreign key to Request table', 2),
-    (v_attach_table_id, 'file_name',   'VARCHAR',   255,  NULL, NULL, false, NULL, false, false, 'Original File Name',           3),
-    (v_attach_table_id, 'file_path',   'VARCHAR',   500,  NULL, NULL, false, NULL, false, false, 'File Storage Path',            4),
-    (v_attach_table_id, 'file_size',   'BIGINT',    NULL, NULL, NULL, false, NULL, false, false, 'File size in bytes',           5),
-    (v_attach_table_id, 'file_type',   'VARCHAR',   100,  NULL, NULL, false, NULL, false, false, 'Type',                         6),
-    (v_attach_table_id, 'uploaded_by', 'VARCHAR',   100,  NULL, NULL, false, NULL, false, false, 'User who uploaded',            7),
-    (v_attach_table_id, 'uploaded_at', 'TIMESTAMP', NULL, NULL, NULL, false, NULL, false, false, 'Upload timestamp',             8),
-    (v_attach_table_id, 'description', 'TEXT',      NULL, NULL, NULL, true,  NULL, false, false, 'Attachment description',       9);
+    (v_attach_table_id, 'file',        'FILE',      NULL, NULL, NULL, false, NULL, false, false, 'Attachment File',              3),
+    (v_attach_table_id, 'file_name',   'VARCHAR',   255,  NULL, NULL, false, NULL, false, false, 'Original File Name',           4),
+    (v_attach_table_id, 'file_path',   'VARCHAR',   500,  NULL, NULL, false, NULL, false, false, 'File Storage Path',            5),
+    (v_attach_table_id, 'file_size',   'BIGINT',    NULL, NULL, NULL, false, NULL, false, false, 'File size in bytes',           6),
+    (v_attach_table_id, 'file_type',   'VARCHAR',   100,  NULL, NULL, false, NULL, false, false, 'Type',                         7),
+    (v_attach_table_id, 'uploaded_by', 'VARCHAR',   100,  NULL, NULL, false, NULL, false, false, 'User who uploaded',            8),
+    (v_attach_table_id, 'uploaded_at', 'TIMESTAMP', NULL, NULL, NULL, false, NULL, false, false, 'Upload timestamp',             9),
+    (v_attach_table_id, 'description', 'TEXT',      NULL, NULL, NULL, true,  NULL, false, false, 'Attachment description',       10);
 
     RAISE NOTICE 'Table RequestAttachments (SUB) created: id=%', v_attach_table_id;
 

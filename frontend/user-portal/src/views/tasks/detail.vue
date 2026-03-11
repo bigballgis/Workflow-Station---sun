@@ -1055,13 +1055,19 @@ const convertFormCreateRule = (rule: any): FormField | null => {
   let dateType = 'date'
   if (rule.props?.type === 'datetime') dateType = 'datetime'
   else if (rule.props?.type === 'daterange') dateType = 'daterange'
-  const typeMap: Record<string, string> = { 'input': 'text', 'inputNumber': 'number', 'select': 'select', 'radio': 'radio', 'checkbox': 'checkbox', 'switch': 'switch', 'datePicker': dateType, 'DatePicker': dateType, 'date-picker': dateType, 'el-date-picker': dateType, 'timePicker': 'time', 'cascader': 'cascader' }
+  const typeMap: Record<string, string> = { 'input': 'text', 'inputNumber': 'number', 'select': 'select', 'radio': 'radio', 'checkbox': 'checkbox', 'switch': 'switch', 'datePicker': dateType, 'DatePicker': dateType, 'date-picker': dateType, 'el-date-picker': dateType, 'timePicker': 'time', 'cascader': 'cascader', 'upload': 'upload' }
   const field: FormField = { key: rule.field, label: rule.title || rule.field, type: typeMap[rule.type] || 'text', required: rule.validate?.some((v: any) => v.required) || false, placeholder: rule.props?.placeholder || '', span: rule.col?.span || 24 }
   if (rule.options) {
     field.options = rule.options.map((opt: any) => ({ label: opt.label || opt.value, value: opt.value }))
     console.log(`Field ${rule.field} options:`, JSON.stringify(field.options))
   }
   if (rule.type === 'input' && rule.props?.type === 'textarea') { field.type = 'textarea'; field.rows = rule.props?.rows || 3 }
+  if (rule.type === 'upload') {
+    const action = rule.props?.action
+    field.uploadUrl = (action && action !== '/') ? action : '/api/v1/upload'
+    field.uploadAccept = rule.props?.accept || '.jpg,.jpeg,.png,.pdf,.docx,.xlsx'
+    field.uploadLimit = rule.props?.limit || 1
+  }
   console.log(`convertFormCreateRule: field=${rule.field}, type=${field.type}, hasOptions=${!!field.options}`)
   return field
 }

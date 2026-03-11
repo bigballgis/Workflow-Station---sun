@@ -278,6 +278,8 @@ export default {
     switch: 'Switch',
     datePicker: 'Date Picker',
     dateTimePicker: 'Date Time Picker',
+    fileUpload: 'File Upload',
+    fileUploadTip: 'Supported formats: jpg/png/pdf/docx/xlsx, max 10MB',
     yes: 'Yes',
     no: 'No',
     // Binding types

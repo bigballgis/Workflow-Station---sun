@@ -65,6 +65,7 @@ declare module 'vue' {
     ElTimelineItem: typeof import('element-plus/es')['ElTimelineItem']
     ElTimePicker: typeof import('element-plus/es')['ElTimePicker']
     ElTreeSelect: typeof import('element-plus/es')['ElTreeSelect']
+    ElUpload: typeof import('element-plus/es')['ElUpload']
     FileUploader: typeof import('./components/FileUploader.vue')['default']
     FormRenderer: typeof import('./components/FormRenderer.vue')['default']
     NotificationsWidget: typeof import('./components/widgets/NotificationsWidget.vue')['default']

@@ -204,8 +204,11 @@ services:
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
       SWAGGER_ENABLED: ${SWAGGER_ENABLED:-true}
       SPRING_FLYWAY_ENABLED: false
+      FILE_UPLOAD_DIR: /app/uploads
+      FILE_UPLOAD_BASE_URL: /api/v1/upload/files
     volumes:
       - ./logs:/app/logs
+      - developer_workstation_uploads:/app/uploads
     networks:
       - platform-dev-network
     restart: unless-stopped
@@ -246,6 +249,7 @@ services:
     environment:
       USER_PORTAL_URL: http://user-portal:8080
       ADMIN_CENTER_URL: http://admin-center:8080
+      DEVELOPER_WORKSTATION_URL: http://developer-workstation:8080
     networks:
       - platform-dev-network
     restart: unless-stopped
@@ -270,6 +274,7 @@ services:
 volumes:
   postgres_dev_data:
   redis_dev_data:
+  developer_workstation_uploads:
 
 networks:
   platform-dev-network:

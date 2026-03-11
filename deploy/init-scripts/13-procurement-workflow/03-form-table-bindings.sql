@@ -86,10 +86,10 @@ BEGIN
             }'::jsonb,
             v_binding_attach_id::text, '{
                 "rule": [
+                    {"name":"ref_Fattach_file","type":"upload","field":"file","props":{"action":"/api/v1/upload","accept":".jpg,.jpeg,.png,.pdf,.docx,.xlsx","limit":1,"multiple":false,"listType":"text","tip":"Supported: jpg/png/pdf/docx/xlsx, max 10MB"},"title":"Attachment File","_fc_id":"id_Fattach_file","hidden":false,"display":true,"validate":[{"message":"Attachment File required","trigger":"change","required":true}],"_fc_drag_tag":"upload"},
                     {"name":"ref_Flpimm1s4ixyaqc","type":"input","field":"file_name","props":{"maxlength":255,"placeholder":"Please input Original File Name","showWordLimit":true},"title":"Original File Name","_fc_id":"id_Fci5mm1s4ixyapc","hidden":false,"display":true,"validate":[{"message":"Original File Name required","trigger":"blur","required":true}],"_fc_drag_tag":"input"},
-                    {"name":"ref_Fosnmm1s4ixyasc","type":"input","field":"file_path","props":{"maxlength":500,"placeholder":"Please input File Storage Path","showWordLimit":true},"title":"File Storage Path","_fc_id":"id_Fpl1mm1s4ixyarc","hidden":false,"display":true,"validate":[{"message":"File Storage Path required","trigger":"blur","required":true}],"_fc_drag_tag":"input"},
-                    {"name":"ref_Fv41mm1s4ixyauc","type":"input","field":"file_type","props":{"maxlength":100,"placeholder":"Please input Type","showWordLimit":true},"title":"Type","_fc_id":"id_F8xymm1s4ixyatc","hidden":false,"display":true,"validate":[{"message":"Type required","trigger":"blur","required":true}],"_fc_drag_tag":"input"},
-                    {"info":"","name":"ref_F9g2mm1x14zeadc","type":"upload","field":"Feq2mm1x14zeabc","props":{"action":"/"},"title":"Upload","_fc_id":"id_Fmf6mm1x14zeacc","hidden":false,"display":true,"$required":false,"_fc_drag_tag":"upload"}
+                    {"name":"ref_Fv41mm1s4ixyauc","type":"input","field":"file_type","props":{"maxlength":100,"placeholder":"Please input Type","showWordLimit":true},"title":"Type","_fc_id":"id_F8xymm1s4ixyatc","hidden":false,"display":true,"$required":false,"_fc_drag_tag":"input"},
+                    {"name":"ref_Fattach_desc","type":"input","field":"description","props":{"type":"textarea","placeholder":"Please input description","rows":2},"title":"Description","_fc_id":"id_Fattach_desc","hidden":false,"display":true,"$required":false,"_fc_drag_tag":"input"}
                 ],
                 "options":{"form":{"size":"default","inline":false,"labelWidth":"125px","labelPosition":"left","hideRequiredAsterisk":false},"resetBtn":{"show":false,"innerText":"Reset"},"submitBtn":{"show":true,"innerText":"Submit"}}
             }'::jsonb

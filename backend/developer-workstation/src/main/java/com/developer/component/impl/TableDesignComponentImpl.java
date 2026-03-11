@@ -382,6 +382,7 @@ public class TableDesignComponentImpl implements TableDesignComponent {
             case TIMESTAMP -> "TIMESTAMP";
             case JSON -> "JSONB";
             case BYTEA -> "BYTEA";
+            case FILE -> "VARCHAR(500)";
         };
     }
     
@@ -398,6 +399,7 @@ public class TableDesignComponentImpl implements TableDesignComponent {
             case TIMESTAMP -> "DATETIME";
             case JSON -> "JSON";
             case BYTEA -> "BLOB";
+            case FILE -> "VARCHAR(500)";
         };
     }
     
@@ -414,6 +416,7 @@ public class TableDesignComponentImpl implements TableDesignComponent {
             case TIMESTAMP -> "TIMESTAMP";
             case JSON -> "CLOB";
             case BYTEA -> "BLOB";
+            case FILE -> "VARCHAR2(500)";
         };
     }
     
@@ -430,6 +433,7 @@ public class TableDesignComponentImpl implements TableDesignComponent {
             case TIMESTAMP -> "DATETIME2";
             case JSON -> "NVARCHAR(MAX)";
             case BYTEA -> "VARBINARY(MAX)";
+            case FILE -> "NVARCHAR(500)";
         };
     }
 }
