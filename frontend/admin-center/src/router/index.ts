@@ -79,6 +79,12 @@ const routes: RouteRecordRaw[] = [
         meta: { titleKey: 'menu.functionUnit', icon: 'Box', permissions: [PERMISSIONS.SYSTEM_ADMIN] }
       },
       {
+        path: 'audit',
+        name: 'Audit',
+        component: () => import('@/views/audit/index.vue'),
+        meta: { titleKey: 'menu.audit', icon: 'Document', permissions: [PERMISSIONS.AUDIT_READ, PERMISSIONS.LOG_READ] }
+      },
+      {
         path: 'profile',
         name: 'Profile',
         component: () => import('@/views/profile/index.vue'),

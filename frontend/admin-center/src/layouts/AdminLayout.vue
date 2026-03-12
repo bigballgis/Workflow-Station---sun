@@ -56,6 +56,12 @@
               <el-icon><Box /></el-icon>
               <template #title>{{ t('menu.functionUnit') }}</template>
             </el-menu-item>
+            
+            <!-- Audit Log - requires audit:read or log:read -->
+            <el-menu-item index="/audit" v-if="canReadAudit">
+              <el-icon><Document /></el-icon>
+              <template #title>{{ t('menu.audit') }}</template>
+            </el-menu-item>
           </el-menu>
         </el-scrollbar>
       </el-aside>
@@ -80,7 +86,7 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { 
   Fold, Expand,
-  Odometer, OfficeBuilding, Key, Connection, Box, User, Lock
+  Odometer, OfficeBuilding, Key, Connection, Box, User, Lock, Document
 } from '@element-plus/icons-vue'
 import UserProfileDropdown from '@/components/UserProfileDropdown.vue'
 import { hasPermission, PERMISSIONS } from '@/utils/permission'
@@ -96,6 +102,7 @@ const isSystemAdmin = computed(() => hasPermission(PERMISSIONS.SYSTEM_ADMIN))
 const canReadUser = computed(() => hasPermission(PERMISSIONS.USER_READ))
 const canWriteUser = computed(() => hasPermission(PERMISSIONS.USER_WRITE))
 const canReadRole = computed(() => hasPermission(PERMISSIONS.ROLE_READ))
+const canReadAudit = computed(() => hasPermission(PERMISSIONS.AUDIT_READ) || hasPermission(PERMISSIONS.LOG_READ))
 
 const toggleCollapse = () => {
   isCollapse.value = !isCollapse.value

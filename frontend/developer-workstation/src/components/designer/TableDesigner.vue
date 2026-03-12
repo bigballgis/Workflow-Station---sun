@@ -87,6 +87,7 @@
               <el-option label="DATE" value="DATE" />
               <el-option label="TIMESTAMP" value="TIMESTAMP" />
               <el-option label="TEXT" value="TEXT" />
+              <el-option label="FILE" value="FILE" />
             </el-select>
           </template>
         </el-table-column>

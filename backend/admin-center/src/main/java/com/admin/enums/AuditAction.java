@@ -29,6 +29,7 @@ public enum AuditAction {
     DATA_CREATED,
     DATA_UPDATED,
     DATA_DELETED,
+    DATA_QUERIED,
     DATA_EXPORTED,
     DATA_IMPORTED,
     

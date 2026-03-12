@@ -740,7 +740,8 @@ const convertFormCreateRule = (rule: any): FormField | null => {
     'el-time-picker': 'time',
     'cascader': 'cascader',
     'rate': 'number',
-    'slider': 'number'
+    'slider': 'number',
+    'upload': 'upload'
   }
   
   const field: FormField = {
@@ -778,6 +779,14 @@ const convertFormCreateRule = (rule: any): FormField | null => {
   if (rule.value !== undefined) {
     field.defaultValue = rule.value
   }
+
+  // 处理文件上传
+  if (rule.type === 'upload') {
+    const action = rule.props?.action
+    field.uploadUrl = (action && action !== '/') ? action : '/api/v1/upload'
+    field.uploadAccept = rule.props?.accept || '.jpg,.jpeg,.png,.pdf,.docx,.xlsx'
+    field.uploadLimit = rule.props?.limit || 1
+  }
   
   // 调试输出
   console.log('Converting rule:', rule.type, '->', field.type, rule)
@@ -791,10 +800,11 @@ const deriveColumnsFromBinding = (binding: any, subForms?: Record<string, any>):
   const subFormRule = subForms?.[binding.bindingId]?.rule
   if (subFormRule && Array.isArray(subFormRule) && subFormRule.length > 0) {
     return subFormRule.map((r: any) => {
-      let type: 'text' | 'number' | 'date' | undefined
+      let type: 'text' | 'number' | 'date' | 'upload' | undefined
       if (r.type === 'inputNumber') type = 'number'
       else if (r.type === 'datePicker') type = 'date'
-      return { field: r.field, label: r.title || r.field, type }
+      else if (r.type === 'upload') type = 'upload'
+      return { field: r.field, label: r.title || r.field, type, props: r.props }
     })
   }
   return []

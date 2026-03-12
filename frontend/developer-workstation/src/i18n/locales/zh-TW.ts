@@ -310,6 +310,8 @@ export default {
     switch: '開關',
     datePicker: '日期選擇器',
     dateTimePicker: '日期時間選擇器',
+    fileUpload: '檔案上傳',
+    fileUploadTip: '支援格式：jpg/png/pdf/docx/xlsx，最大 10MB',
     yes: '是',
     no: '否',
     // Binding types

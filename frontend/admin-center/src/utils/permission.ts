@@ -48,6 +48,13 @@ export const ROUTE_PERMISSIONS: Record<string, string[]> = {
   '/profile': [] // Everyone can access their profile
 }
 
+// Hardcoded role -> permissions fallback for when sys_role_permissions is empty
+const ROLE_PERMISSION_DEFAULTS: Record<string, string[]> = {
+  SYS_ADMIN: ['user:read', 'user:write', 'user:delete', 'role:read', 'role:write', 'role:delete', 'system:admin', 'system:config', 'audit:read', 'log:read', 'basic:access'],
+  SUPER_ADMIN: ['user:read', 'user:write', 'user:delete', 'role:read', 'role:write', 'role:delete', 'system:admin', 'system:config', 'audit:read', 'log:read', 'basic:access'],
+  AUDITOR: ['audit:read', 'log:read', 'user:read', 'basic:access'],
+}
+
 /**
  * Check if user has a specific permission
  */
@@ -60,7 +67,15 @@ export function hasPermission(permission: string): boolean {
     return true
   }
   
-  return user.permissions?.includes(permission) ?? false
+  // Check explicit permissions from JWT
+  if (user.permissions?.includes(permission)) return true
+  
+  // Fallback: derive permissions from roles when sys_role_permissions table is empty
+  for (const role of (user.roles ?? [])) {
+    if (ROLE_PERMISSION_DEFAULTS[role]?.includes(permission)) return true
+  }
+  
+  return false
 }
 
 /**
