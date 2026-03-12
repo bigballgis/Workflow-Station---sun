@@ -624,9 +624,11 @@ const initFormData = () => {
     } else {
       data[field.key] = null
     }
-    // 初始化文件上传列表（外部传入已有值时，用 URL 作为文件名显示）
+    // 初始化文件上传列表（外部传入已有值时，从 URL 提取文件名显示）
     if (field.type === 'upload' && data[field.key]) {
-      uploadFileLists.value[field.key] = [{ name: data[field.key], url: data[field.key] }]
+      const url = data[field.key]
+      const fileName = decodeURIComponent(url.split('/').pop() || url)
+      uploadFileLists.value[field.key] = [{ name: fileName, url }]
     }
   })
   isInternalUpdate = true
@@ -672,6 +674,13 @@ watch(() => props.modelValue, (newVal, oldVal) => {
     initFormData()
   }
 }, { deep: true })
+
+// 监听字段变化 - 当 fields 在 modelValue 之后加载时（如任务详情先设置数据再解析表单），重新初始化
+watch(allFields, (newFields, oldFields) => {
+  if (newFields.length !== oldFields.length || JSON.stringify(newFields.map(f => f.key)) !== JSON.stringify(oldFields.map(f => f.key))) {
+    initFormData()
+  }
+})
 
 // 用户搜索
 const searchUsers = async (query: string, field: FormField) => {
