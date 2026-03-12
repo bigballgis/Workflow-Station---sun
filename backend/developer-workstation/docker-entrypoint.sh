@@ -12,5 +12,5 @@ if [ -d "/app/logs" ]; then
   chmod 755 /app/logs
 fi
 
-# Drop privileges and run the application
-exec su-exec platform sh -c "java ${JAVA_OPTS} -jar /app/app.jar"
+# Run the application
+exec sh -c "java ${JAVA_OPTS} -jar /app/app.jar"
