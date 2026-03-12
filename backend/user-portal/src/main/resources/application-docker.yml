@@ -56,7 +56,7 @@ app:
   messaging:
     kafka-bootstrap-servers: kafka:29092
     kafka-group-id: user-portal
-    enabled: false
+    enabled: true
 
   workflow:
     engine-url: ${WORKFLOW_ENGINE_URL:http://workflow-engine:8080}
@@ -68,6 +68,9 @@ spring:
     url: jdbc:postgresql://postgres:5432/workflow_platform
     username: platform
     password: ${POSTGRES_PASSWORD:platform123}
+
+  kafka:
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:kafka:29092}
 
   data:
     redis:

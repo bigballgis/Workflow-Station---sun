@@ -45,6 +45,11 @@ public class KafkaEventPublisher implements EventPublisher {
     }
     
     @Override
+    public CompletableFuture<Void> publishNotificationEvent(NotificationEvent event) {
+        return publish(event);
+    }
+    
+    @Override
     public CompletableFuture<Void> publish(BaseEvent event) {
         event.initializeDefaults();
         
@@ -86,6 +91,8 @@ public class KafkaEventPublisher implements EventPublisher {
             return pe.getUserId();
         } else if (event instanceof DeploymentEvent de) {
             return de.getDeploymentId();
+        } else if (event instanceof NotificationEvent ne) {
+            return ne.getTargetUserId();
         }
         return event.getEventId();
     }

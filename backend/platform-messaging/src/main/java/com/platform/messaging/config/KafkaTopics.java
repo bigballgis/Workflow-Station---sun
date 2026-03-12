@@ -12,12 +12,14 @@ public final class KafkaTopics {
     public static final String TASK_EVENTS = "platform.task.events";
     public static final String PERMISSION_EVENTS = "platform.permission.events";
     public static final String DEPLOYMENT_EVENTS = "platform.deployment.events";
+    public static final String NOTIFICATION_EVENTS = "platform.notification.events";
     
     // Dead letter topics
     public static final String PROCESS_EVENTS_DLT = "platform.process.events.dlt";
     public static final String TASK_EVENTS_DLT = "platform.task.events.dlt";
     public static final String PERMISSION_EVENTS_DLT = "platform.permission.events.dlt";
     public static final String DEPLOYMENT_EVENTS_DLT = "platform.deployment.events.dlt";
+    public static final String NOTIFICATION_EVENTS_DLT = "platform.notification.events.dlt";
     
     // Retry topics
     public static final String PROCESS_EVENTS_RETRY = "platform.process.events.retry";

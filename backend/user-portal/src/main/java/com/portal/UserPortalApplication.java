@@ -15,7 +15,7 @@ import com.platform.security.service.impl.UserRoleServiceImpl;
  */
 @SpringBootApplication
 @ComponentScan(
-    basePackages = {"com.portal", "com.platform.common", "com.platform.security.exception"},
+    basePackages = {"com.portal", "com.platform.common", "com.platform.security.exception", "com.platform.messaging"},
     basePackageClasses = {TargetResolverFactory.class, UserRoleServiceImpl.class},
     excludeFilters = {
         @ComponentScan.Filter(type = FilterType.REGEX, pattern = "com\\.platform\\.security\\.repository\\..*"),

@@ -25,7 +25,8 @@ public class DeadLetterHandler {
                     KafkaTopics.PROCESS_EVENTS_DLT,
                     KafkaTopics.TASK_EVENTS_DLT,
                     KafkaTopics.PERMISSION_EVENTS_DLT,
-                    KafkaTopics.DEPLOYMENT_EVENTS_DLT
+                    KafkaTopics.DEPLOYMENT_EVENTS_DLT,
+                    KafkaTopics.NOTIFICATION_EVENTS_DLT
             },
             groupId = "platform-dlt-handler"
     )

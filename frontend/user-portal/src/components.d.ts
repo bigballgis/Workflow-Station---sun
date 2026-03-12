@@ -67,6 +67,7 @@ declare module 'vue' {
     ElTreeSelect: typeof import('element-plus/es')['ElTreeSelect']
     FileUploader: typeof import('./components/FileUploader.vue')['default']
     FormRenderer: typeof import('./components/FormRenderer.vue')['default']
+    NotificationBadge: typeof import('./components/NotificationBadge.vue')['default']
     NotificationsWidget: typeof import('./components/widgets/NotificationsWidget.vue')['default']
     PerformanceWidget: typeof import('./components/widgets/PerformanceWidget.vue')['default']
     ProcessDiagram: typeof import('./components/ProcessDiagram.vue')['default']

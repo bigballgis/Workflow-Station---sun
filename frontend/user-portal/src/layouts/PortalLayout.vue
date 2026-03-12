@@ -9,6 +9,7 @@
         </div>
       </div>
       <div class="header-right">
+        <NotificationBadge />
         <UserProfileDropdown />
       </div>
     </el-header>
@@ -86,6 +87,7 @@ import {
   Fold, Expand, Checked, Finished
 } from '@element-plus/icons-vue'
 import UserProfileDropdown from '@/components/UserProfileDropdown.vue'
+import NotificationBadge from '@/components/NotificationBadge.vue'
 import { permissionApi } from '@/api/permission'
 
 const { t } = useI18n()
