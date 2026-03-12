@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
 import { resolve } from 'path'
 import AutoImport from 'unplugin-auto-import/vite'
@@ -45,6 +45,10 @@ export default defineConfig({
         rewrite: (path) => '/api/v1/admin' + path.substring('/api/admin-center'.length)
       }
     }
+  },
+  test: {
+    environment: 'happy-dom',
+    globals: true
   },
   build: {
     rollupOptions: {
