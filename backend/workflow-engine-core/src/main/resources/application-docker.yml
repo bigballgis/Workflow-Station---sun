@@ -99,3 +99,7 @@ logging:
     com.platform: INFO
     org.flowable: INFO
     org.hibernate.SQL: WARN
+
+# File service base URL (developer-workstation internal address in Docker network)
+file-service:
+  base-url: ${FILE_SERVICE_BASE_URL:http://developer-workstation:8080}

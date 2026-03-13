@@ -194,6 +194,11 @@ function handleUploadSuccess(res: any, file: any, rowIndex: number, field: strin
   const url = res?.data?.url || ''
   rows.value[rowIndex][field] = url
   uploadNames.value = { ...uploadNames.value, [`${rowIndex}_${field}`]: file.name }
+  // Auto-fill file_name column with original filename if the column exists
+  const hasFileNameCol = props.columns.some(c => c.field === 'file_name')
+  if (hasFileNameCol && field !== 'file_name') {
+    rows.value[rowIndex]['file_name'] = file.name
+  }
 }
 
 function handleUploadError(_err: any, _file: any, rowIndex: number, field: string) {

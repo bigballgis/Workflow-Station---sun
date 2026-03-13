@@ -109,6 +109,10 @@ services:
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
       WEBHOOK_URL: ${N8N_WEBHOOK_URL:-http://localhost:5678}
       N8N_PORT: 5678
+      N8N_RESTRICT_ENVIRONMENT_VARIABLES_ACCESS: "false"
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      DOUBAO_MODEL_ID: ${DOUBAO_MODEL_ID:-doubao-1-5-vision-pro-32k-250115}
+      DOUBAO_API_KEY: ${DOUBAO_API_KEY:-your-doubao-api-key-here}
     volumes:
       - n8n_data:/home/node/.n8n
     healthcheck:

@@ -15,7 +15,7 @@ public class RestTemplateConfig {
     public RestTemplate restTemplate() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(10000);
-        factory.setReadTimeout(60000);
+        factory.setReadTimeout(600000); // 10 minutes - N8N workflows can take several minutes
         return new RestTemplate(factory);
     }
 }

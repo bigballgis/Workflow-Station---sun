@@ -117,7 +117,14 @@ public class ProcessController {
     @Operation(summary = "根据ID列表获取动作定义")
     public ApiResponse<List<ActionDefinition>> getActionsByIds(
             @RequestParam List<String> ids) {
+        log.info("getActionsByIds called with ids: {}", ids);
         List<ActionDefinition> actions = actionDefinitionRepository.findAllById(ids);
+        log.info("getActionsByIds found {} actions: {}", actions.size(), actions.stream().map(ActionDefinition::getId).collect(Collectors.toList()));
+        if (actions.isEmpty()) {
+            // Debug: try to count total records
+            long total = actionDefinitionRepository.count();
+            log.warn("No actions found for ids {}. Total records in sys_action_definitions: {}", ids, total);
+        }
         return ApiResponse.success(actions);
     }
 

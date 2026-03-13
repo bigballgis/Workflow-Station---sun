@@ -56,6 +56,9 @@ public class N8nTaskExecutor implements JavaDelegate {
     @Value("${platform.workflow-engine.callback-base-url:http://localhost:8081}")
     private String callbackBaseUrl;
 
+    @Value("${file-service.base-url:http://localhost:8083}")
+    private String fileServiceBaseUrl;
+
     // ==================== JavaDelegate: Service Task 异步模式 ====================
 
     @Override
@@ -181,8 +184,10 @@ public class N8nTaskExecutor implements JavaDelegate {
             inputData = N8nVariableMappingUtil.applyInputMapping(inputData, request.getInputMapping());
         }
 
-        Map<String, Object> webhookBody = new LinkedHashMap<>();
-        webhookBody.put("inputData", inputData);
+        Map<String, Object> webhookBody = new LinkedHashMap<>(inputData);
+
+        // Convert relative file paths to absolute URLs so N8N can access them
+        convertRelativeUrls(webhookBody);
 
         String inputDataJson = toJson(inputData);
 
@@ -211,6 +216,31 @@ public class N8nTaskExecutor implements JavaDelegate {
 
             if (response.getStatusCode().is2xxSuccessful()) {
                 Map<String, Object> responseBody = response.getBody();
+                
+                // Check if N8N returned an error in the response body
+                String n8nError = extractN8nError(responseBody);
+                if (n8nError != null) {
+                    record.setStatus(STATUS_FAILED);
+                    record.setErrorMessage(n8nError);
+                    record.setOutputData(toJson(responseBody));
+                    record.setCompletedAt(Instant.now());
+                    executionRecordRepository.save(record);
+                    log.error("N8N workflow execution failed: {}", n8nError);
+                    return N8nExecutionResult.failure(record.getId(), STATUS_FAILED, n8nError);
+                }
+                
+                // If response body is null/empty, the workflow likely failed before reaching
+                // the "Respond to Webhook" node. Treat as failure.
+                if (responseBody == null || responseBody.isEmpty()) {
+                    String emptyMsg = "N8N workflow did not return any data. The workflow may have failed internally. Check N8N execution logs for details.";
+                    record.setStatus(STATUS_FAILED);
+                    record.setErrorMessage(emptyMsg);
+                    record.setCompletedAt(Instant.now());
+                    executionRecordRepository.save(record);
+                    log.warn("N8N returned empty response body for recordId={}", record.getId());
+                    return N8nExecutionResult.failure(record.getId(), STATUS_FAILED, emptyMsg);
+                }
+                
                 String outputDataJson = toJson(responseBody);
 
                 // Apply output mapping if provided
@@ -236,6 +266,31 @@ public class N8nTaskExecutor implements JavaDelegate {
                 log.error("N8N Action execution failed: {}", errorMsg);
                 return N8nExecutionResult.failure(record.getId(), STATUS_FAILED, errorMsg);
             }
+        } catch (org.springframework.web.client.HttpStatusCodeException httpEx) {
+            // N8N returned 4xx/5xx — extract error details from response body
+            String responseBodyStr = httpEx.getResponseBodyAsString();
+            String errorMsg = "N8N webhook returned HTTP " + httpEx.getStatusCode();
+            
+            // Try to extract meaningful error from N8N response
+            try {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> errorBody = objectMapper.readValue(responseBodyStr, Map.class);
+                String n8nError = extractN8nError(errorBody);
+                if (n8nError != null) {
+                    errorMsg = n8nError;
+                }
+            } catch (Exception parseEx) {
+                if (responseBodyStr != null && !responseBodyStr.isBlank()) {
+                    errorMsg += ": " + responseBodyStr.substring(0, Math.min(responseBodyStr.length(), 500));
+                }
+            }
+            
+            record.setStatus(STATUS_FAILED);
+            record.setErrorMessage(errorMsg);
+            record.setCompletedAt(Instant.now());
+            executionRecordRepository.save(record);
+            log.error("N8N Action execution failed: {}", errorMsg);
+            return N8nExecutionResult.failure(record.getId(), STATUS_FAILED, errorMsg);
         } catch (Exception e) {
             String errorMsg = "N8N Action execution error: " + e.getMessage();
             record.setStatus(STATUS_FAILED);
@@ -407,6 +462,62 @@ public class N8nTaskExecutor implements JavaDelegate {
         } catch (JsonProcessingException e) {
             log.warn("Failed to serialize object to JSON: {}", e.getMessage());
             return null;
+        }
+    }
+
+    /**
+     * Extract error message from N8N response body.
+     * N8N may return errors in various formats depending on the failure type.
+     */
+    @SuppressWarnings("unchecked")
+    private String extractN8nError(Map<String, Object> responseBody) {
+        if (responseBody == null) return null;
+        
+        // Check for explicit error fields
+        if (responseBody.containsKey("error")) {
+            Object error = responseBody.get("error");
+            if (error instanceof Map) {
+                Object msg = ((Map<String, Object>) error).get("message");
+                if (msg != null) return "N8N error: " + msg;
+            }
+            return "N8N error: " + error;
+        }
+        if (responseBody.containsKey("message") && responseBody.containsKey("code")) {
+            return "N8N error: " + responseBody.get("message");
+        }
+        
+        // Check for execution status indicating failure
+        Object status = responseBody.get("status");
+        if ("error".equals(status) || "failed".equals(status)) {
+            Object message = responseBody.get("message");
+            return "N8N workflow failed: " + (message != null ? message : "unknown error");
+        }
+        
+        return null;
+    }
+
+    /**
+     * Convert relative file paths (e.g. /api/v1/upload/files/xxx.pdf) to absolute URLs
+     * so that N8N can access them via the Docker network.
+     */
+    @SuppressWarnings("unchecked")
+    private void convertRelativeUrls(Map<String, Object> data) {
+        if (data == null) return;
+        for (Map.Entry<String, Object> entry : data.entrySet()) {
+            Object value = entry.getValue();
+            if (value instanceof String str && str.startsWith("/api/")) {
+                entry.setValue(fileServiceBaseUrl + str);
+            } else if (value instanceof List<?> list) {
+                List<Object> converted = new java.util.ArrayList<>(list.size());
+                for (Object item : list) {
+                    if (item instanceof String str && str.startsWith("/api/")) {
+                        converted.add(fileServiceBaseUrl + str);
+                    } else {
+                        converted.add(item);
+                    }
+                }
+                entry.setValue(converted);
+            }
         }
     }
 }

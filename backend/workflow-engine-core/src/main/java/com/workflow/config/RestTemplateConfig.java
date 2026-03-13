@@ -17,7 +17,7 @@ public class RestTemplateConfig {
     public RestTemplate restTemplate(RestTemplateBuilder builder) {
         return builder
                 .setConnectTimeout(Duration.ofSeconds(5))
-                .setReadTimeout(Duration.ofSeconds(30))
+                .setReadTimeout(Duration.ofMinutes(10)) // N8N workflows calling LLM APIs can take several minutes
                 .build();
     }
 }

@@ -243,7 +243,8 @@ export default {
     pleaseCompleteForm: 'Please complete the form',
     processSubmitSuccess: 'Process submitted successfully',
     submitFailed: 'Submission failed',
-    serviceFallbackName: 'Service {index}'
+    serviceFallbackName: 'Service {index}',
+    n8nAutoFillSuccess: 'Auto-filled {count} invoice(s) into the form'
   },
   applicationDetail: {
     back: 'Back',
