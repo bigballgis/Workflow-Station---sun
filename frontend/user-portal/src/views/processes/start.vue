@@ -154,6 +154,16 @@
         </div>
       </div>
     </div>
+
+    <!-- N8N Action 对话框 -->
+    <N8nActionDialog
+      v-model:visible="n8nActionDialogVisible"
+      :action-definition="n8nActionDefinition"
+      :task-id="''"
+      :process-instance-id="''"
+      :initial-data="n8nInitialData"
+      @executed="handleN8nActionExecuted"
+    />
   </div>
 </template>
 
@@ -168,6 +178,8 @@ import ProcessDiagram, { type ProcessNode, type ProcessFlow } from '@/components
 import ProcessHistory, { type HistoryRecord } from '@/components/ProcessHistory.vue'
 import FormRenderer, { type FormField, type FormTab } from '@/components/FormRenderer.vue'
 import SubTableField from '@/components/SubTableField.vue'
+import N8nActionDialog from '@/components/N8nActionDialog.vue'
+import type { ActionDefinition } from '@/components/N8nActionDialog.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -227,7 +239,14 @@ const availableActions = ref<Array<{
   label: string
   type?: 'primary' | 'success' | 'warning' | 'danger' | 'info'
   action?: string
+  actionType?: string
+  configJson?: string
 }>>([])
+
+// N8N Action 对话框状态
+const n8nActionDialogVisible = ref(false)
+const n8nActionDefinition = ref<ActionDefinition>({ id: 0 })
+const n8nInitialData = ref<Record<string, any> | undefined>(undefined)
 
 // 加载功能单元内容
 const loadFunctionUnitContent = async () => {
@@ -250,7 +269,7 @@ const loadFunctionUnitContent = async () => {
     functionUnitVersion.value = content.version || ''
     functionUnitCode.value = content.code || ''
     
-    let startFormInfo: { formId: string | null, formName: string | null } = { formId: null, formName: null }
+    let startFormInfo: { formId: string | null, formName: string | null, actionIds: string[] | null } = { formId: null, formName: null, actionIds: null }
     
     // 解析流程定义
     if (content.processes && content.processes.length > 0) {
@@ -322,8 +341,8 @@ const loadFunctionUnitContent = async () => {
     // 初始化流转记录（新流程，只有开始节点）
     initHistoryRecords()
     
-    // 初始化动作按钮
-    initActionButtons()
+    // 初始化动作按钮（使用 BPMN 中提取的 actionIds）
+    await initActionButtons(startFormInfo.actionIds)
     
     // 如果是草稿模式，加载草稿数据
     if (isDraftMode.value) {
@@ -350,8 +369,8 @@ const loadFunctionUnitContent = async () => {
 }
 
 // 解析 BPMN XML 并获取开始节点后第一个用户任务的 formId
-const parseBpmnXmlAndGetStartFormId = (xml: string): { formId: string | null, formName: string | null } => {
-  if (!xml) return { formId: null, formName: null }
+const parseBpmnXmlAndGetStartFormId = (xml: string): { formId: string | null, formName: string | null, actionIds: string[] | null } => {
+  if (!xml) return { formId: null, formName: null, actionIds: null }
   
   try {
     const parser = new DOMParser()
@@ -371,7 +390,7 @@ const parseBpmnXmlAndGetStartFormId = (xml: string): { formId: string | null, fo
       }
     }
     
-    if (!startEventId) return { formId: null, formName: null }
+    if (!startEventId) return { formId: null, formName: null, actionIds: null }
     
     // 查找从开始事件出发的顺序流
     let firstTaskId: string | null = null
@@ -388,11 +407,12 @@ const parseBpmnXmlAndGetStartFormId = (xml: string): { formId: string | null, fo
       }
     }
     
-    if (!firstTaskId) return { formId: null, formName: null }
+    if (!firstTaskId) return { formId: null, formName: null, actionIds: null }
     
-    // 查找第一个用户任务的 formId 和 formName
+    // 查找第一个用户任务的 formId、formName 和 actionIds
     let formId: string | null = null
     let formName: string | null = null
+    let actionIds: string[] | null = null
     
     for (let i = 0; i < allElements.length; i++) {
       const el = allElements[i]
@@ -402,7 +422,7 @@ const parseBpmnXmlAndGetStartFormId = (xml: string): { formId: string | null, fo
         const taskId = el.getAttribute('id')
         
         if (taskId === firstTaskId) {
-          // 查找 formId 和 formName 属性
+          // 查找 formId、formName 和 actionIds 属性
           const taskProps = el.getElementsByTagName('*')
           for (let j = 0; j < taskProps.length; j++) {
             const prop = taskProps[j]
@@ -418,6 +438,15 @@ const parseBpmnXmlAndGetStartFormId = (xml: string): { formId: string | null, fo
               if (name === 'formName' && value) {
                 formName = value
               }
+              if (name === 'actionIds' && value) {
+                try {
+                  // actionIds 格式: "[46,47]" 或 "46,47"
+                  const cleaned = value.replace(/[\[\]\s]/g, '')
+                  actionIds = cleaned.split(',').filter(Boolean)
+                } catch (e) {
+                  console.error('Failed to parse actionIds:', value, e)
+                }
+              }
             }
           }
           break
@@ -425,12 +454,12 @@ const parseBpmnXmlAndGetStartFormId = (xml: string): { formId: string | null, fo
       }
     }
     
-    return { formId, formName }
+    return { formId, formName, actionIds }
   } catch (error) {
     console.error('Failed to parse BPMN for start formId:', error)
   }
   
-  return { formId: null, formName: null }
+  return { formId: null, formName: null, actionIds: null }
 }
 
 // 加载草稿数据
@@ -823,14 +852,48 @@ const initHistoryRecords = () => {
   ]
 }
 
-// 初始化动作按钮
-const initActionButtons = () => {
+// 初始化动作按钮 - 从 BPMN actionIds 获取自定义动作
+const initActionButtons = async (actionIds: string[] | null) => {
+  if (actionIds && actionIds.length > 0) {
+    try {
+      const response = await processApi.getActionsByIds(actionIds)
+      const actions = response.data || response
+      if (Array.isArray(actions) && actions.length > 0) {
+        availableActions.value = actions.map((action: any) => {
+          // 根据 actionType 设置按钮颜色
+          let btnType: 'primary' | 'success' | 'warning' | 'danger' | 'info' | undefined
+          switch (action.actionType) {
+            case 'PROCESS_SUBMIT': btnType = 'primary'; break
+            case 'APPROVE': btnType = 'success'; break
+            case 'REJECT': btnType = 'danger'; break
+            case 'N8N_ACTION': btnType = 'warning'; break
+            default: btnType = action.buttonColor || undefined
+          }
+          return {
+            id: action.id,
+            label: action.actionName,
+            type: btnType,
+            action: action.actionType,
+            actionType: action.actionType,
+            configJson: action.configJson
+          }
+        })
+        console.log('Loaded custom action buttons:', availableActions.value)
+        return
+      }
+    } catch (error) {
+      console.error('Failed to load action definitions, falling back to default:', error)
+    }
+  }
+  
+  // 回退：默认提交按钮
   availableActions.value = [
     {
       id: 'submit',
       label: t('processStart.submitApplication'),
       type: 'primary',
-      action: 'submit'
+      action: 'submit',
+      actionType: 'PROCESS_SUBMIT'
     }
   ]
 }
@@ -855,11 +918,68 @@ const handleSaveDraft = async () => {
   }
 }
 
-// 处理动作
-const handleAction = async (action: { id: string; label: string; action?: string }) => {
-  if (action.action === 'submit') {
-    await handleSubmit()
+// 处理动作按钮点击
+const handleAction = async (action: { id: string; label: string; action?: string; actionType?: string; configJson?: string }) => {
+  switch (action.actionType) {
+    case 'PROCESS_SUBMIT':
+      await handleSubmit()
+      break
+    case 'N8N_ACTION':
+      // 解析 configJson，根据 inputMapping 中的 sourceType 自动收集数据
+      const n8nInitData: Record<string, any> = {}
+      try {
+        const config = action.configJson ? JSON.parse(action.configJson) : {}
+        const inputMapping = config.inputMapping || []
+        for (const param of inputMapping) {
+          if (param.sourceType === 'sub_table' && param.sourceBindingId && param.sourceField) {
+            const targetBinding = subTableBindings.value.find(b => 
+              b.bindingId === param.sourceBindingId || String(b.bindingId) === String(param.sourceBindingId)
+            )
+            if (targetBinding) {
+              const files: string[] = []
+              for (const row of targetBinding.data) {
+                const val = row[param.sourceField]
+                if (val) {
+                  if (typeof val === 'string') {
+                    files.push(val)
+                  } else if (Array.isArray(val)) {
+                    val.forEach((f: any) => files.push(f.url || f.response?.url || f.name || String(f)))
+                  } else if (val.url) {
+                    files.push(val.url)
+                  }
+                }
+              }
+              if (files.length > 0) {
+                n8nInitData[param.paramName] = files
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Failed to parse N8N action config for auto-fill:', e)
+      }
+      n8nActionDefinition.value = {
+        id: Number(action.id) || 0,
+        actionName: action.label,
+        configJson: action.configJson
+      }
+      n8nInitialData.value = Object.keys(n8nInitData).length > 0 ? n8nInitData : undefined
+      n8nActionDialogVisible.value = true
+      break
+    default:
+      // 对于未知类型，尝试作为提交处理
+      if (action.action === 'submit') {
+        await handleSubmit()
+      } else {
+        ElMessage.warning(`未知操作类型: ${action.actionType || action.action}`)
+      }
   }
+}
+
+// N8N Action 执行完成回调
+const handleN8nActionExecuted = (_data: Record<string, any> | null) => {
+  // 发起流程页面不需要刷新，但可以提示用户
+  console.log('N8N action executed on start page:', _data)
 }
 
 // 提交流程

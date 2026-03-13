@@ -24,6 +24,7 @@
               <el-option :label="t('properties.serviceTypeHttp')" value="http" />
               <el-option :label="t('properties.serviceTypeScript')" value="script" />
               <el-option :label="t('properties.serviceTypeMessage')" value="message" />
+              <el-option :label="t('properties.serviceTypeN8n')" value="n8n" />
             </el-select>
           </el-form-item>
           
@@ -83,6 +84,15 @@
               <el-input v-model="messagePayload" type="textarea" :rows="4" @change="updateExtProp('messagePayload', messagePayload)" placeholder='{"orderId": "${orderId}"}' />
             </el-form-item>
           </template>
+
+          <!-- N8N config -->
+          <template v-if="serviceType === 'n8n'">
+            <N8nTaskPropertiesPanel
+              ref="n8nPanelRef"
+              :modeler="modeler"
+              :element="element"
+            />
+          </template>
         </el-form>
       </el-collapse-item>
       
@@ -119,6 +129,7 @@ import {
   getExtensionProperties,
   setExtensionProperty
 } from '@/utils/bpmnExtensions'
+import N8nTaskPropertiesPanel from './N8nTaskPropertiesPanel.vue'
 
 const { t } = useI18n()
 
@@ -132,7 +143,9 @@ const activeGroups = ref(['basic', 'service'])
 const taskName = ref('')
 const taskDescription = ref('')
 
-const serviceType = ref<'http' | 'script' | 'message'>('http')
+const serviceType = ref<'http' | 'script' | 'message' | 'n8n'>('http')
+
+const n8nPanelRef = ref<InstanceType<typeof N8nTaskPropertiesPanel> | null>(null)
 
 const httpUrl = ref('')
 const httpMethod = ref<'GET' | 'POST' | 'PUT' | 'DELETE'>('POST')

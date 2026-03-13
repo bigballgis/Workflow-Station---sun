@@ -92,10 +92,10 @@ if (-not $SkipFrontend) {
     Write-Host "`n[2/4] Skipping frontend build" -ForegroundColor DarkGray
 }
 
-# Step 3: Start infrastructure (postgres, redis)
+# Step 3: Start infrastructure (postgres, redis, kafka, n8n)
 if (-not $SkipInfra) {
-    Write-Host "`n[3/4] Starting infrastructure (postgres, redis)..." -ForegroundColor Yellow
-    docker compose -f $ComposeFile --env-file $EnvFile up -d postgres redis
+    Write-Host "`n[3/4] Starting infrastructure (postgres, redis, kafka, n8n)..." -ForegroundColor Yellow
+    docker compose -f $ComposeFile --env-file $EnvFile up -d postgres redis kafka n8n
     
     Write-Host "  Waiting for postgres..."
     $retries = 0
@@ -116,6 +116,28 @@ if (-not $SkipInfra) {
         $retries++
     }
     if ($health -ne "healthy") { throw "Redis failed to become healthy" }
+    
+    Write-Host "  Waiting for kafka..."
+    $retries = 0
+    while ($retries -lt 30) {
+        $health = docker inspect --format='{{.State.Health.Status}}' platform-kafka-dev 2>$null
+        if ($health -eq "healthy") { break }
+        Start-Sleep -Seconds 3
+        $retries++
+    }
+    if ($health -ne "healthy") { throw "Kafka failed to become healthy" }
+    
+    Write-Host "  Waiting for n8n..."
+    $retries = 0
+    while ($retries -lt 20) {
+        $health = docker inspect --format='{{.State.Health.Status}}' n8n 2>$null
+        if ($health -eq "healthy") { break }
+        Start-Sleep -Seconds 3
+        $retries++
+    }
+    if ($health -ne "healthy") {
+        Write-Host "  ⚠️  N8N not healthy yet, continuing (it may take longer on first start)..." -ForegroundColor Yellow
+    }
     
     Write-Host "  Infrastructure ready." -ForegroundColor Green
 } else {
@@ -144,6 +166,8 @@ Write-Host ""
 Write-Host "Infrastructure:" -ForegroundColor Cyan
 Write-Host "  PostgreSQL:             localhost:5432"
 Write-Host "  Redis:                  localhost:6379"
+Write-Host "  Kafka:                  localhost:9092"
+Write-Host "  N8N:                    http://localhost:5678"
 Write-Host ""
 Write-Host "Commands:" -ForegroundColor DarkGray
 Write-Host "  Logs:   docker compose -f docker-compose.dev.yml --env-file .env logs -f [service]"

@@ -82,7 +82,7 @@ export interface UserTaskProperties {
 }
 
 export interface ServiceTaskProperties {
-  serviceType?: 'http' | 'script' | 'message'
+  serviceType?: 'http' | 'script' | 'message' | 'n8n'
   httpUrl?: string
   httpMethod?: 'GET' | 'POST' | 'PUT' | 'DELETE'
   httpHeaders?: Record<string, string>

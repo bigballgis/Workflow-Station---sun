@@ -667,6 +667,26 @@ export default {
     username: 'Username',
     email: 'Email'
   },
+  n8nAction: {
+    title: 'N8N Workflow Execution',
+    workflowName: 'Workflow',
+    workflowDescription: 'Description',
+    inputParams: 'Input Parameters',
+    execute: 'Execute',
+    executing: 'Executing...',
+    retry: 'Retry',
+    close: 'Close',
+    success: 'Execution Successful',
+    failed: 'Execution Failed',
+    timeout: 'Execution Timeout',
+    resultData: 'Result Data',
+    errorMessage: 'Error Message',
+    requiredField: '{label} is required',
+    noInputParams: 'No input parameters required',
+    timeoutMessage: 'The workflow execution has timed out. Please try again.',
+    failedMessage: 'The workflow execution has failed.',
+    noResultData: 'No result data'
+  },
   api: {
     requestFailed: 'Request failed',
     networkError: 'Network error, please check your connection',

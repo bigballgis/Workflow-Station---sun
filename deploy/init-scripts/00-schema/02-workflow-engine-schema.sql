@@ -208,3 +208,37 @@ COMMENT ON COLUMN wf_audit_logs.is_sensitive IS 'Whether this is a sensitive ope
 COMMENT ON COLUMN wf_exception_records.severity IS 'Severity level: CRITICAL, HIGH, MEDIUM, LOW';
 COMMENT ON COLUMN wf_exception_records.status IS 'Exception status: PENDING, PROCESSING, RESOLVED, IGNORED';
 COMMENT ON COLUMN wf_exception_records.resolution_method IS 'Resolution method: AUTO_RETRY, MANUAL_FIX, IGNORED, COMPENSATED';
+
+-- =====================================================
+-- 5. N8N 执行记录 (wf_n8n_execution_record)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS wf_n8n_execution_record (
+    id BIGSERIAL PRIMARY KEY,
+    process_instance_id VARCHAR(64),
+    task_id VARCHAR(64),
+    n8n_config_id VARCHAR(36),
+    n8n_workflow_id VARCHAR(100),
+    webhook_url VARCHAR(500),
+    callback_token VARCHAR(64),
+    status VARCHAR(20) NOT NULL,
+    source_type VARCHAR(20) NOT NULL,
+    input_data JSONB,
+    output_data JSONB,
+    error_message TEXT,
+    retry_count INTEGER DEFAULT 0,
+    started_at TIMESTAMP,
+    completed_at TIMESTAMP,
+    timeout_seconds INTEGER DEFAULT 300,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT wf_n8n_exec_status_check CHECK (status IN ('PENDING', 'RUNNING', 'SUCCESS', 'FAILED', 'TIMEOUT')),
+    CONSTRAINT wf_n8n_exec_source_check CHECK (source_type IN ('SERVICE_TASK', 'ACTION'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_n8n_exec_process_instance ON wf_n8n_execution_record(process_instance_id);
+CREATE INDEX IF NOT EXISTS idx_n8n_exec_task_id ON wf_n8n_execution_record(task_id);
+CREATE INDEX IF NOT EXISTS idx_n8n_exec_status ON wf_n8n_execution_record(status);
+CREATE INDEX IF NOT EXISTS idx_n8n_exec_created_at ON wf_n8n_execution_record(created_at);
+
+COMMENT ON TABLE wf_n8n_execution_record IS 'N8N 工作流执行记录';
+COMMENT ON COLUMN wf_n8n_execution_record.status IS '执行状态: PENDING, RUNNING, SUCCESS, FAILED, TIMEOUT';
+COMMENT ON COLUMN wf_n8n_execution_record.source_type IS '执行来源: SERVICE_TASK（任务节点触发）, ACTION（用户操作触发）';

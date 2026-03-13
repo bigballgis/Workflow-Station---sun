@@ -299,6 +299,21 @@ CREATE TABLE IF NOT EXISTS admin_log_retention_policies (
 );
 
 -- =====================================================
+-- 15. N8N 连接配置 (ac_n8n_config)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS ac_n8n_config (
+    id VARCHAR(36) PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    base_url VARCHAR(500) NOT NULL,
+    api_key TEXT NOT NULL,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_n8n_config_active ON ac_n8n_config(is_active);
+
+-- =====================================================
 -- Comments
 -- =====================================================
 COMMENT ON TABLE admin_password_history IS 'Password history for password policy enforcement';
@@ -307,3 +322,5 @@ COMMENT ON TABLE admin_permission_conflicts IS 'Permission conflict tracking';
 COMMENT ON TABLE admin_alert_rules IS 'Alert rules configuration';
 COMMENT ON TABLE admin_system_configs IS 'System configuration';
 COMMENT ON TABLE admin_audit_logs IS 'Audit trail';
+COMMENT ON TABLE ac_n8n_config IS 'N8N 自动化引擎连接配置';
+COMMENT ON COLUMN ac_n8n_config.api_key IS 'AES-256-GCM 加密存储的 N8N API 密钥';

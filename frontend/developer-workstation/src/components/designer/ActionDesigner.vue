@@ -77,6 +77,7 @@
               <el-option :label="t('action.apiCall')" value="API_CALL" />
               <el-option :label="t('action.formPopup')" value="FORM_POPUP" />
               <el-option :label="t('action.customScript')" value="CUSTOM_SCRIPT" />
+              <el-option :label="t('action.n8nAction')" value="N8N_ACTION" />
             </el-option-group>
           </el-select>
         </el-form-item>
@@ -143,6 +144,125 @@
             <el-input v-model="actionConfig.script" type="textarea" :rows="10" 
                       :placeholder="t('action.scriptCodePlaceholder')" />
           </el-form-item>
+        </template>
+
+        <!-- N8N Action Config -->
+        <template v-if="selectedAction.actionType === 'N8N_ACTION'">
+          <el-divider>{{ t('action.n8nConfig') }}</el-divider>
+          <el-form-item :label="t('action.n8nConfigId')">
+            <el-select
+              v-model="actionConfig.n8nConfigId"
+              :placeholder="t('action.n8nConfigPlaceholder')"
+              filterable
+              @change="onN8nConfigChange"
+            >
+              <el-option
+                v-for="config in n8nConfigList"
+                :key="config.id"
+                :label="config.name"
+                :value="config.id"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item :label="t('action.n8nWorkflowId')">
+            <el-select
+              v-model="actionConfig.n8nWorkflowId"
+              :placeholder="t('action.n8nWorkflowPlaceholder')"
+              filterable
+              :disabled="!actionConfig.n8nConfigId"
+              @change="onN8nWorkflowChange"
+            >
+              <el-option
+                v-for="wf in n8nWorkflowList"
+                :key="wf.id"
+                :label="wf.name"
+                :value="wf.id"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item :label="t('action.n8nWebhookUrl')">
+            <el-input
+              v-model="actionConfig.webhookUrl"
+              :placeholder="t('action.n8nWebhookUrlPlaceholder')"
+            />
+          </el-form-item>
+          <el-form-item :label="t('action.n8nTimeout')">
+            <el-input-number
+              v-model="actionConfig.timeoutSeconds"
+              :min="1"
+              :max="3600"
+            />
+            <span style="font-size: 11px; color: #909399; margin-left: 8px;">{{ t('action.n8nTimeoutUnit') }}</span>
+          </el-form-item>
+
+          <!-- Input Parameter Mapping -->
+          <div class="mapping-section">
+            <div class="mapping-header">
+              <span>{{ t('action.n8nInputMapping') }}</span>
+              <el-button type="primary" link size="small" @click="addN8nInputParam">
+                + {{ t('common.add') }}
+              </el-button>
+            </div>
+            <el-table :data="actionConfig.inputMapping" size="small" border v-if="actionConfig.inputMapping && actionConfig.inputMapping.length > 0">
+              <el-table-column :label="t('action.n8nParamName')" min-width="100">
+                <template #default="{ row }">
+                  <el-input v-model="row.paramName" size="small" :placeholder="t('action.n8nParamNamePlaceholder')" />
+                </template>
+              </el-table-column>
+              <el-table-column :label="t('action.n8nParamLabel')" min-width="100">
+                <template #default="{ row }">
+                  <el-input v-model="row.paramLabel" size="small" :placeholder="t('action.n8nParamLabelPlaceholder')" />
+                </template>
+              </el-table-column>
+              <el-table-column :label="t('action.n8nParamType')" width="110">
+                <template #default="{ row }">
+                  <el-select v-model="row.paramType" size="small">
+                    <el-option label="string" value="string" />
+                    <el-option label="number" value="number" />
+                    <el-option label="boolean" value="boolean" />
+                    <el-option label="select" value="select" />
+                  </el-select>
+                </template>
+              </el-table-column>
+              <el-table-column :label="t('action.n8nParamRequired')" width="70" align="center">
+                <template #default="{ row }">
+                  <el-checkbox v-model="row.required" />
+                </template>
+              </el-table-column>
+              <el-table-column width="50" align="center">
+                <template #default="{ $index }">
+                  <el-button type="danger" link size="small" @click="removeN8nInputParam($index)">✕</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+
+          <!-- Output Result Mapping -->
+          <div class="mapping-section">
+            <div class="mapping-header">
+              <span>{{ t('action.n8nOutputMapping') }}</span>
+              <el-button type="primary" link size="small" @click="addN8nOutputMapping">
+                + {{ t('common.add') }}
+              </el-button>
+            </div>
+            <el-table :data="actionConfig.outputMapping" size="small" border v-if="actionConfig.outputMapping && actionConfig.outputMapping.length > 0">
+              <el-table-column :label="t('action.n8nOutputSource')" min-width="120">
+                <template #default="{ row }">
+                  <el-input v-model="row.source" size="small" :placeholder="t('action.n8nOutputSourcePlaceholder')" />
+                </template>
+              </el-table-column>
+              <el-table-column :label="t('action.n8nOutputTarget')" min-width="120">
+                <template #default="{ row }">
+                  <el-input v-model="row.target" size="small" :placeholder="t('action.n8nOutputTargetPlaceholder')" />
+                </template>
+              </el-table-column>
+              <el-table-column width="50" align="center">
+                <template #default="{ $index }">
+                  <el-button type="danger" link size="small" @click="removeN8nOutputMapping($index)">✕</el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
         </template>
 
         <!-- Approve/Reject Config -->
@@ -272,6 +392,7 @@
               <el-option :label="t('action.apiCall')" value="API_CALL" />
               <el-option :label="t('action.formPopup')" value="FORM_POPUP" />
               <el-option :label="t('action.customScript')" value="CUSTOM_SCRIPT" />
+              <el-option :label="t('action.n8nAction')" value="N8N_ACTION" />
             </el-option-group>
           </el-select>
         </el-form-item>
@@ -309,6 +430,7 @@ import { ArrowLeft, Refresh } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
 import { functionUnitApi, type ActionDefinition } from '@/api/functionUnit'
+import { n8nApi, type N8nConfig, type N8nWorkflow } from '@/api/n8n'
 
 const { t } = useI18n()
 
@@ -323,6 +445,10 @@ const testData = ref('{}')
 const testResult = ref('')
 const testing = ref(false)
 const createForm = reactive({ actionName: '', actionType: 'APPROVE', description: '' })
+
+// N8N Action 相关状态
+const n8nConfigList = ref<N8nConfig[]>([])
+const n8nWorkflowList = ref<N8nWorkflow[]>([])
 
 // 存储从BPMN XML解析出的动作绑定信息
 const actionNodeBindings = ref<Map<string | number, Array<{ id: string; name: string }>>>(new Map())
@@ -346,7 +472,14 @@ const actionConfig = reactive<Record<string, any>>({
   script: '',
   targetStatus: '',
   requireAssignee: false,
-  targetStep: ''
+  targetStep: '',
+  // N8N Action fields
+  n8nConfigId: '',
+  n8nWorkflowId: '',
+  webhookUrl: '',
+  timeoutSeconds: 120,
+  inputMapping: [] as Array<{ paramName: string; paramLabel: string; paramType: string; required: boolean }>,
+  outputMapping: [] as Array<{ source: string; target: string }>
 })
 
 const actionTypeLabel = (type: string) => {
@@ -362,7 +495,8 @@ const actionTypeLabel = (type: string) => {
     COMPOSITE: t('action.composite'),
     API_CALL: t('action.apiCall'),
     FORM_POPUP: t('action.formPopup'),
-    CUSTOM_SCRIPT: t('action.customScript')
+    CUSTOM_SCRIPT: t('action.customScript'),
+    N8N_ACTION: t('action.n8nAction')
   }
   return map[type] || type
 }
@@ -370,6 +504,11 @@ const actionTypeLabel = (type: string) => {
 watch(selectedAction, (action) => {
   if (action?.configJson) {
     Object.assign(actionConfig, action.configJson)
+    // Ensure N8N arrays are initialized
+    if (action.actionType === 'N8N_ACTION') {
+      if (!Array.isArray(actionConfig.inputMapping)) actionConfig.inputMapping = []
+      if (!Array.isArray(actionConfig.outputMapping)) actionConfig.outputMapping = []
+    }
   } else {
     // Reset to defaults
     Object.assign(actionConfig, {
@@ -385,13 +524,27 @@ watch(selectedAction, (action) => {
       script: '',
       targetStatus: '',
       requireAssignee: false,
-      targetStep: ''
+      targetStep: '',
+      // N8N Action fields
+      n8nConfigId: '',
+      n8nWorkflowId: '',
+      webhookUrl: '',
+      timeoutSeconds: 120,
+      inputMapping: [],
+      outputMapping: []
     })
   }
   
   // 加载当前动作的绑定信息
   if (action) {
     loadActionBinding(action.id)
+    // Load N8N configs if action type is N8N_ACTION
+    if (action.actionType === 'N8N_ACTION') {
+      loadN8nConfigs()
+      if (actionConfig.n8nConfigId) {
+        loadN8nWorkflows(actionConfig.n8nConfigId)
+      }
+    }
   }
 })
 
@@ -836,6 +989,19 @@ async function handleCreateAction() {
 
 async function handleSaveAction() {
   if (!selectedAction.value) return
+  
+  // Validate N8N_ACTION required fields
+  if (selectedAction.value.actionType === 'N8N_ACTION') {
+    if (!actionConfig.n8nConfigId) {
+      ElMessage.error(t('action.n8nConfigRequired'))
+      return
+    }
+    if (!actionConfig.webhookUrl) {
+      ElMessage.error(t('action.n8nWebhookUrlRequired'))
+      return
+    }
+  }
+  
   try {
     await store.updateAction(props.functionUnitId, selectedAction.value.id, {
       actionName: selectedAction.value.actionName,
@@ -880,6 +1046,68 @@ async function executeTest() {
   } finally {
     testing.value = false
   }
+}
+
+// ===== N8N Action helper methods =====
+
+/** Load N8N connection configs from admin-center */
+async function loadN8nConfigs() {
+  try {
+    n8nConfigList.value = await n8nApi.getConfigs()
+  } catch {
+    n8nConfigList.value = []
+  }
+}
+
+/** Load N8N workflows for selected config */
+async function loadN8nWorkflows(configId: string) {
+  if (!configId) {
+    n8nWorkflowList.value = []
+    return
+  }
+  try {
+    n8nWorkflowList.value = await n8nApi.getWorkflows(configId)
+  } catch {
+    n8nWorkflowList.value = []
+  }
+}
+
+/** Handle N8N config selection change */
+function onN8nConfigChange(configId: string) {
+  actionConfig.n8nWorkflowId = ''
+  actionConfig.webhookUrl = ''
+  n8nWorkflowList.value = []
+  loadN8nWorkflows(configId)
+}
+
+/** Handle N8N workflow selection change - auto-fill webhook URL */
+function onN8nWorkflowChange(workflowId: string) {
+  const selected = n8nWorkflowList.value.find(wf => wf.id === workflowId)
+  if (selected?.webhookUrl) {
+    actionConfig.webhookUrl = selected.webhookUrl
+  }
+}
+
+/** Add input parameter mapping row */
+function addN8nInputParam() {
+  if (!actionConfig.inputMapping) actionConfig.inputMapping = []
+  actionConfig.inputMapping.push({ paramName: '', paramLabel: '', paramType: 'string', required: false })
+}
+
+/** Remove input parameter mapping row */
+function removeN8nInputParam(index: number) {
+  actionConfig.inputMapping.splice(index, 1)
+}
+
+/** Add output result mapping row */
+function addN8nOutputMapping() {
+  if (!actionConfig.outputMapping) actionConfig.outputMapping = []
+  actionConfig.outputMapping.push({ source: '', target: '' })
+}
+
+/** Remove output result mapping row */
+function removeN8nOutputMapping(index: number) {
+  actionConfig.outputMapping.splice(index, 1)
 }
 
 onMounted(loadActions)
@@ -943,5 +1171,20 @@ onMounted(loadActions)
   color: #909399;
   font-size: 12px;
   margin-left: 12px;
+}
+
+.mapping-section {
+  margin-bottom: 16px;
+  padding: 0 100px 0 0;
+
+  .mapping-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #606266;
+  }
 }
 </style>

@@ -68,6 +68,7 @@ declare module 'vue' {
     ElUpload: typeof import('element-plus/es')['ElUpload']
     FileUploader: typeof import('./components/FileUploader.vue')['default']
     FormRenderer: typeof import('./components/FormRenderer.vue')['default']
+    N8nActionDialog: typeof import('./components/N8nActionDialog.vue')['default']
     NotificationBadge: typeof import('./components/NotificationBadge.vue')['default']
     NotificationsWidget: typeof import('./components/widgets/NotificationsWidget.vue')['default']
     PerformanceWidget: typeof import('./components/widgets/PerformanceWidget.vue')['default']

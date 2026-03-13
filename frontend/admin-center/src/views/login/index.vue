@@ -160,9 +160,9 @@ $primary-deeper: #7A0018;
   position: relative;
 }
 
-/* Left decorative area with chevron */
+/* Left decorative area with chevron — full screen background */
 .login-bg-left {
-  flex: 1;
+  width: 100%;
   position: relative;
   background: $primary;
   display: flex;
@@ -196,14 +196,17 @@ $primary-deeper: #7A0018;
   }
 }
 
-/* Right side with card */
+/* Right side with card — centered on screen */
 .login-right {
-  width: 480px;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 40px 48px;
-  background: $primary;
 }
 
 .login-card {

@@ -3,7 +3,9 @@ package com.portal.controller;
 import com.portal.component.FunctionUnitAccessComponent;
 import com.portal.component.ProcessComponent;
 import com.portal.dto.*;
+import com.portal.entity.ActionDefinition;
 import com.portal.entity.ProcessDraft;
+import com.portal.repository.ActionDefinitionRepository;
 import com.platform.common.i18n.I18nService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -16,6 +18,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Slf4j
 @RestController
@@ -26,6 +29,7 @@ public class ProcessController {
 
     private final ProcessComponent processComponent;
     private final I18nService i18nService;
+    private final ActionDefinitionRepository actionDefinitionRepository;
 
     @GetMapping("/definitions")
     @Operation(summary = "获取可发起的流程定义列表")
@@ -107,6 +111,14 @@ public class ProcessController {
     @ResponseStatus(HttpStatus.FORBIDDEN)
     public ApiResponse<Void> handleFunctionUnitAccessDenied(FunctionUnitAccessComponent.FunctionUnitAccessDeniedException e) {
         return ApiResponse.error("403", e.getMessage());
+    }
+
+    @GetMapping("/actions")
+    @Operation(summary = "根据ID列表获取动作定义")
+    public ApiResponse<List<ActionDefinition>> getActionsByIds(
+            @RequestParam List<String> ids) {
+        List<ActionDefinition> actions = actionDefinitionRepository.findAllById(ids);
+        return ApiResponse.success(actions);
     }
 
     @PostMapping("/{processKey}/start")

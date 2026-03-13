@@ -666,6 +666,26 @@ export default {
     username: '用户名',
     email: '邮箱'
   },
+  n8nAction: {
+    title: 'N8N 工作流执行',
+    workflowName: '工作流',
+    workflowDescription: '描述',
+    inputParams: '输入参数',
+    execute: '执行',
+    executing: '执行中...',
+    retry: '重试',
+    close: '关闭',
+    success: '执行成功',
+    failed: '执行失败',
+    timeout: '执行超时',
+    resultData: '结果数据',
+    errorMessage: '错误信息',
+    requiredField: '{label} 为必填项',
+    noInputParams: '无需输入参数',
+    timeoutMessage: '工作流执行已超时，请重试。',
+    failedMessage: '工作流执行失败。',
+    noResultData: '无结果数据'
+  },
   api: {
     requestFailed: '请求失败',
     networkError: '网络错误，请检查网络连接',

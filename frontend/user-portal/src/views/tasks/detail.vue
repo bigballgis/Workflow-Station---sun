@@ -253,6 +253,16 @@
       </template>
     </el-dialog>
 
+    <!-- N8N Action 对话框 -->
+    <N8nActionDialog
+      v-model:visible="n8nActionDialogVisible"
+      :action-definition="n8nActionDefinition"
+      :task-id="taskId"
+      :process-instance-id="taskInfo.processInstanceId || ''"
+      :initial-data="n8nInitialData"
+      @executed="handleN8nActionExecuted"
+    />
+
     <!-- 表单弹窗对话框 -->
     <el-dialog v-model="formPopupVisible" :title="formPopupTitle" :width="formPopupWidth" append-to-body>
       <div v-if="formPopupFields.length > 0 || formPopupTabs.length > 0" class="form-popup-container">
@@ -313,6 +323,8 @@ import ProcessDiagram, { type ProcessNode, type ProcessFlow } from '@/components
 import ProcessHistory, { type HistoryRecord } from '@/components/ProcessHistory.vue'
 import FormRenderer, { type FormField, type FormTab } from '@/components/FormRenderer.vue'
 import SubTableField from '@/components/SubTableField.vue'
+import N8nActionDialog from '@/components/N8nActionDialog.vue'
+import type { ActionDefinition } from '@/components/N8nActionDialog.vue'
 import dayjs from 'dayjs'
 
 const { t } = useI18n()
@@ -403,6 +415,11 @@ const formPopupReadOnly = ref(false)
 const formPopupWidth = ref('800px')
 const formPopupLabelWidth = ref('160px')
 const currentFormPopupAction = ref<TaskActionInfo | null>(null)
+
+// N8N Action 对话框状态
+const n8nActionDialogVisible = ref(false)
+const n8nActionDefinition = ref<ActionDefinition>({ id: 0 })
+const n8nInitialData = ref<Record<string, any> | undefined>(undefined)
 
 const loadTaskDetail = async () => {
   loading.value = true
@@ -1268,9 +1285,58 @@ const handleCustomAction = (action: TaskActionInfo) => {
       }
       break
     
+    case 'N8N_ACTION':
+      // 解析 configJson，根据 inputMapping 中的 sourceType 自动收集数据
+      const n8nAutoData: Record<string, any> = {}
+      try {
+        const n8nConfig = action.configJson ? JSON.parse(action.configJson) : {}
+        const n8nInputMapping = n8nConfig.inputMapping || []
+        for (const param of n8nInputMapping) {
+          if (param.sourceType === 'sub_table' && param.sourceBindingId && param.sourceField) {
+            const targetBinding = subTableBindings.value.find(b => 
+              b.bindingId === param.sourceBindingId || String(b.bindingId) === String(param.sourceBindingId)
+            )
+            if (targetBinding) {
+              const files: string[] = []
+              for (const row of targetBinding.data) {
+                const val = row[param.sourceField]
+                if (val) {
+                  if (typeof val === 'string') {
+                    files.push(val)
+                  } else if (Array.isArray(val)) {
+                    val.forEach((f: any) => files.push(f.url || f.response?.url || f.name || String(f)))
+                  } else if (val.url) {
+                    files.push(val.url)
+                  }
+                }
+              }
+              if (files.length > 0) {
+                n8nAutoData[param.paramName] = files
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Failed to parse N8N action config for auto-fill:', e)
+      }
+      n8nActionDefinition.value = {
+        id: Number(action.actionId) || 0,
+        actionName: action.actionName,
+        configJson: action.configJson
+      }
+      n8nInitialData.value = Object.keys(n8nAutoData).length > 0 ? n8nAutoData : undefined
+      n8nActionDialogVisible.value = true
+      break
+    
     default:
       ElMessage.warning(t('task.unknownActionType', { type: action.actionType }))
   }
+}
+
+// N8N Action 执行完成回调
+const handleN8nActionExecuted = (_data: Record<string, any> | null) => {
+  // 刷新任务详情以反映可能的变量变更
+  loadTaskDetail()
 }
 
 // 打开表单弹窗
