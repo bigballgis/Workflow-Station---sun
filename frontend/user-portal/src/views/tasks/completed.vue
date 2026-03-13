@@ -33,33 +33,33 @@
 
     <!-- 任务列表 -->
     <div class="portal-card">
-      <el-table :data="taskList" v-loading="loading" stripe table-layout="fixed">
-        <el-table-column prop="taskName" :label="t('task.taskName')" min-width="160">
+      <el-table :data="taskList" v-loading="loading" stripe table-layout="auto">
+        <el-table-column prop="taskName" :label="t('task.taskName')" min-width="160" show-overflow-tooltip>
           <template #default="{ row }">
             <el-link type="primary" @click="viewTask(row)">{{ row.taskName }}</el-link>
           </template>
         </el-table-column>
         <el-table-column prop="processDefinitionName" :label="t('task.processName')" min-width="140" show-overflow-tooltip />
-        <el-table-column prop="action" :label="t('task.action')" width="100">
+        <el-table-column prop="action" :label="t('task.action')" width="130">
           <template #default="{ row }">
-            <el-tag :type="getActionTagType(row.action)" size="small">
+            <el-tag :type="getActionTagType(row.action)" size="small" style="white-space: nowrap;">
               {{ t(`action.${row.action || 'completed'}`) }}
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="createTime" :label="t('task.createTime')" width="150">
+        <el-table-column prop="createTime" :label="t('task.createTime')" width="160">
           <template #default="{ row }">
-            {{ formatDate(row.createTime) }}
+            <span style="white-space: nowrap;">{{ formatDate(row.createTime) }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="completedTime" :label="t('task.completedTime')" width="150">
+        <el-table-column prop="completedTime" :label="t('task.completedTime')" width="160">
           <template #default="{ row }">
-            {{ formatDate(row.completedTime) }}
+            <span style="white-space: nowrap;">{{ formatDate(row.completedTime) }}</span>
           </template>
         </el-table-column>
-        <el-table-column prop="durationInMillis" :label="t('task.duration')" width="120">
+        <el-table-column prop="durationInMillis" :label="t('task.duration')" width="100">
           <template #default="{ row }">
-            {{ formatDuration(row.durationInMillis) }}
+            <span style="white-space: nowrap;">{{ formatDuration(row.durationInMillis) }}</span>
           </template>
         </el-table-column>
       </el-table>

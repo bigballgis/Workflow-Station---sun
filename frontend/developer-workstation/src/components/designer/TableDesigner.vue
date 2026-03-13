@@ -282,19 +282,22 @@ async function loadTables() {
 }
 
 async function loadRelations() {
+  // Load from localStorage first — independent of API availability
+  const stored = localStorage.getItem(`table_relations_${props.functionUnitId}`)
+  if (stored) {
+    try {
+      relations.value = JSON.parse(stored)
+    } catch {
+      relations.value = []
+    }
+  }
+
+  // Load DB foreign keys from API — failure must not wipe localStorage relations
   try {
-    // Load foreign keys from database API
     const res = await functionUnitApi.getForeignKeys(props.functionUnitId)
     foreignKeys.value = res?.data || []
-    
-    // Also load local relations from localStorage (for backward compatibility)
-    const stored = localStorage.getItem(`table_relations_${props.functionUnitId}`)
-    if (stored) {
-      relations.value = JSON.parse(stored)
-    }
   } catch {
     foreignKeys.value = []
-    relations.value = []
   }
 }
 

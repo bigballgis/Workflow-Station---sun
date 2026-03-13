@@ -12,12 +12,22 @@ dayjs.extend(timezone)
  * @param format - Output format (default: 'YYYY-MM-DD HH:mm')
  * @returns Formatted date string in local timezone
  */
-export const formatDate = (date?: string | null, format: string = 'YYYY-MM-DD HH:mm'): string => {
+export const formatDate = (date?: string | number[] | null, format: string = 'YYYY-MM-DD HH:mm'): string => {
   if (!date) return '-'
-  
+
   try {
-    // Parse as UTC and convert to local time
-    return dayjs.utc(date).local().format(format)
+    let d: ReturnType<typeof dayjs>
+
+    // Handle Java LocalDateTime array format: [year, month, day, hour, minute, second, nano]
+    if (Array.isArray(date)) {
+      const [year, month, day, hour = 0, minute = 0, second = 0] = date as number[]
+      d = dayjs(new Date(year, month - 1, day, hour, minute, second))
+    } else {
+      d = dayjs.utc(date).local()
+    }
+
+    if (!d.isValid()) return '-'
+    return d.format(format)
   } catch (error) {
     console.error('Error formatting date:', error)
     return '-'

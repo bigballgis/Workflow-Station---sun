@@ -7,6 +7,7 @@
 #   .\build-and-deploy.ps1 -SkipMaven         # Skip Maven, rebuild Docker only
 #   .\build-and-deploy.ps1 -SkipFrontend      # Skip frontend image builds
 #   .\build-and-deploy.ps1 -SkipInfra         # Skip infra startup (PG/Redis already running)
+#   .\build-and-deploy.ps1 -SkipImagePull     # Skip pre-pulling base images (if already cached)
 #   .\build-and-deploy.ps1 -Clean             # Destroy everything and rebuild
 #   .\build-and-deploy.ps1 -ServicesOnly      # Only restart backend+frontend (no Maven, no infra)
 
@@ -14,6 +15,7 @@ param(
     [switch]$SkipMaven,
     [switch]$SkipFrontend,
     [switch]$SkipInfra,
+    [switch]$SkipImagePull,
     [switch]$Clean,
     [switch]$ServicesOnly
 )
@@ -22,6 +24,40 @@ $ErrorActionPreference = "Stop"
 $RootDir = Resolve-Path "$PSScriptRoot/../../.."
 $ComposeFile = "$PSScriptRoot/docker-compose.dev.yml"
 $EnvFile = "$PSScriptRoot/.env"
+
+function Wait-ForContainerHealth {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ContainerName,
+
+        [Parameter(Mandatory = $true)]
+        [string]$DisplayName,
+
+        [int]$MaxRetries = 60,
+        [int]$SleepSeconds = 2
+    )
+
+    Write-Host "  Waiting for $DisplayName..."
+
+    $attempt = 0
+    while ($attempt -lt $MaxRetries) {
+        $status = docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' $ContainerName 2>$null
+
+        if ($status -eq "healthy") {
+            Write-Host "    $DisplayName is healthy." -ForegroundColor Green
+            return
+        }
+
+        if ($status -eq "exited" -or $status -eq "dead") {
+            throw "$DisplayName container stopped unexpectedly"
+        }
+
+        Start-Sleep -Seconds $SleepSeconds
+        $attempt++
+    }
+
+    throw "$DisplayName failed to become healthy in time"
+}
 
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host " Dev Environment Build & Deploy" -ForegroundColor Cyan
@@ -34,7 +70,42 @@ if ($ServicesOnly) {
     $SkipInfra = $true
 }
 
-# Step 0: Clean
+# Step 0a: Pre-pull base images via domestic mirror (avoids Docker Hub connectivity issues)
+if (-not $SkipImagePull) {
+    Write-Host "`n[0/4] Pre-pulling base images via domestic mirror..." -ForegroundColor Yellow
+
+    # Images required by this project, mapped to their domestic mirror equivalents
+    $images = @(
+        @{ Mirror = "docker.m.daocloud.io/library/eclipse-temurin:17-jre-alpine"; Target = "eclipse-temurin:17-jre-alpine" },
+        @{ Mirror = "docker.m.daocloud.io/library/nginx:alpine";                  Target = "nginx:alpine"                  },
+        @{ Mirror = "docker.m.daocloud.io/library/postgres:16.5-alpine";          Target = "postgres:16.5-alpine"          },
+        @{ Mirror = "docker.m.daocloud.io/library/redis:7.2-alpine";              Target = "redis:7.2-alpine"              }
+    )
+
+    foreach ($img in $images) {
+        # Skip if target image is already cached locally
+        $exists = docker image inspect $img.Target 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "  Already cached, skipping: $($img.Target)" -ForegroundColor DarkGray
+            continue
+        }
+
+        Write-Host "  Pulling $($img.Target) from mirror..."
+        docker pull $img.Mirror
+        if ($LASTEXITCODE -ne 0) { throw "Failed to pull $($img.Mirror)" }
+
+        docker tag $img.Mirror $img.Target
+        if ($LASTEXITCODE -ne 0) { throw "Failed to tag $($img.Mirror) as $($img.Target)" }
+
+        Write-Host "  OK: $($img.Target)" -ForegroundColor Green
+    }
+
+    Write-Host "  Base images ready." -ForegroundColor Green
+} else {
+    Write-Host "`n[0/4] Skipping image pre-pull" -ForegroundColor DarkGray
+}
+
+# Step 0b: Clean
 if ($Clean) {
     Write-Host "`n[0/4] Cleaning old containers and volumes..." -ForegroundColor Yellow
     docker compose -f $ComposeFile --env-file $EnvFile down -v --remove-orphans
@@ -147,6 +218,20 @@ if (-not $SkipInfra) {
 # Step 4: Build and start all services
 Write-Host "`n[4/4] Starting all services..." -ForegroundColor Yellow
 docker compose -f $ComposeFile --env-file $EnvFile up -d --build
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "  docker compose failed. Current service status:" -ForegroundColor Red
+    docker compose -f $ComposeFile --env-file $EnvFile ps
+    throw "Docker compose service startup failed"
+}
+
+Write-Host "  Waiting for backend health checks..." -ForegroundColor Cyan
+Wait-ForContainerHealth -ContainerName "platform-workflow-engine-dev" -DisplayName "Workflow Engine"
+Wait-ForContainerHealth -ContainerName "platform-admin-center-dev" -DisplayName "Admin Center"
+Wait-ForContainerHealth -ContainerName "platform-user-portal-dev" -DisplayName "User Portal"
+Wait-ForContainerHealth -ContainerName "platform-developer-workstation-dev" -DisplayName "Developer Workstation"
+
+Write-Host "  Current service status:" -ForegroundColor Cyan
+docker compose -f $ComposeFile --env-file $EnvFile ps
 
 Write-Host "`n========================================" -ForegroundColor Green
 Write-Host " Deployment Complete!" -ForegroundColor Green
