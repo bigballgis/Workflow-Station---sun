@@ -34,5 +34,7 @@ COMMIT;
 \i /docker-entrypoint-initdb.d/00-schema/10-add-approval-order-column.sql
 \i /docker-entrypoint-initdb.d/00-schema/11-add-unique-enabled-constraint.sql
 \i /docker-entrypoint-initdb.d/00-schema/12-add-enabled-field-to-dw-function-units.sql
+\i /docker-entrypoint-initdb.d/00-schema/13-add-notification-table.sql
+\i /docker-entrypoint-initdb.d/00-schema/14-add-common-table-feature.sql
 
 \echo 'All schemas created successfully.'

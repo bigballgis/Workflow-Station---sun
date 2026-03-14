@@ -55,6 +55,10 @@
             <el-icon><Checked /></el-icon>
             <template #title>{{ t('menu.approvals') }}</template>
           </el-menu-item>
+          <el-menu-item index="/common-table-data">
+            <el-icon><Grid /></el-icon>
+            <template #title>{{ t('menu.commonTable') }}</template>
+          </el-menu-item>
         </el-menu>
         <div class="collapse-btn" @click="toggleCollapse">
           <el-icon :size="20">
@@ -84,7 +88,7 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
   HomeFilled, List, Plus, Document, Share, Key,
-  Fold, Expand, Checked, Finished
+  Fold, Expand, Checked, Finished, Grid
 } from '@element-plus/icons-vue'
 import UserProfileDropdown from '@/components/UserProfileDropdown.vue'
 import NotificationBadge from '@/components/NotificationBadge.vue'
