@@ -243,7 +243,8 @@ export default {
     pleaseCompleteForm: 'Please complete the form',
     processSubmitSuccess: 'Process submitted successfully',
     submitFailed: 'Submission failed',
-    serviceFallbackName: 'Service {index}'
+    serviceFallbackName: 'Service {index}',
+    n8nAutoFillSuccess: 'Auto-filled {count} invoice(s) into the form'
   },
   applicationDetail: {
     back: 'Back',
@@ -666,6 +667,26 @@ export default {
   user: {
     username: 'Username',
     email: 'Email'
+  },
+  n8nAction: {
+    title: 'N8N Workflow Execution',
+    workflowName: 'Workflow',
+    workflowDescription: 'Description',
+    inputParams: 'Input Parameters',
+    execute: 'Execute',
+    executing: 'Executing...',
+    retry: 'Retry',
+    close: 'Close',
+    success: 'Execution Successful',
+    failed: 'Execution Failed',
+    timeout: 'Execution Timeout',
+    resultData: 'Result Data',
+    errorMessage: 'Error Message',
+    requiredField: '{label} is required',
+    noInputParams: 'No input parameters required',
+    timeoutMessage: 'The workflow execution has timed out. Please try again.',
+    failedMessage: 'The workflow execution has failed.',
+    noResultData: 'No result data'
   },
   api: {
     requestFailed: 'Request failed',

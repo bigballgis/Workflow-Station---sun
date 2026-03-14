@@ -2,21 +2,21 @@
   <div class="notifications-page">
     <div class="page-header">
       <h1>{{ t('notification.title') }}</h1>
-      <el-button @click="markAllAsRead">{{ t('notification.markAllAsRead') }}</el-button>
+      <el-button @click="handleMarkAllAsRead">{{ t('notification.markAllAsRead') }}</el-button>
     </div>
 
     <div class="portal-card">
-      <el-tabs v-model="activeTab">
-        <el-tab-pane :label="`${t('notification.unread')} (${unreadCount})`" name="unread" />
+      <el-tabs v-model="activeTab" @tab-change="handleTabChange">
+        <el-tab-pane :label="`${t('notification.unread')} (${store.unreadCount})`" name="unread" />
         <el-tab-pane :label="t('notification.all')" name="all" />
         <el-tab-pane :label="t('notification.system')" name="system" />
         <el-tab-pane :label="t('notification.task')" name="task" />
         <el-tab-pane :label="t('notification.process')" name="process" />
       </el-tabs>
 
-      <div class="notification-list">
+      <div v-loading="store.loading" class="notification-list">
         <div
-          v-for="item in filteredNotifications"
+          v-for="item in store.notifications"
           :key="item.id"
           :class="['notification-item', { unread: !item.isRead }]"
           @click="handleClick(item)"
@@ -29,95 +29,147 @@
           <div class="notification-content">
             <div class="notification-title">{{ item.title }}</div>
             <div class="notification-desc">{{ item.content }}</div>
-            <div class="notification-time">{{ item.time }}</div>
+            <div class="notification-time">{{ formatTime(item.createdAt) }}</div>
           </div>
           <div class="notification-actions">
-            <el-button v-if="!item.isRead" type="primary" link size="small" @click.stop="markAsRead(item)">
+            <el-button v-if="!item.isRead" type="primary" link size="small" @click.stop="handleMarkAsRead(item)">
               {{ t('notification.markAsRead') }}
             </el-button>
-            <el-button type="danger" link size="small" @click.stop="deleteNotification(item)">
+            <el-button type="danger" link size="small" @click.stop="handleDelete(item)">
               {{ t('notification.delete') }}
             </el-button>
           </div>
         </div>
-        <el-empty v-if="filteredNotifications.length === 0" :description="t('notification.noNotifications')" />
+        <el-empty v-if="!store.loading && store.notifications.length === 0" :description="t('notification.noNotifications')" />
+      </div>
+
+      <div v-if="store.total > pageSize" class="pagination-wrapper">
+        <el-pagination
+          v-model:current-page="currentPage"
+          :page-size="pageSize"
+          :total="store.total"
+          layout="prev, pager, next"
+          @current-change="handlePageChange"
+        />
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Bell, Document, Setting, Warning } from '@element-plus/icons-vue'
+import { useNotificationStore } from '@/stores/notification'
+import type { NotificationData } from '@/api/notification'
+import dayjs from 'dayjs'
 
 const { t } = useI18n()
+const router = useRouter()
+const store = useNotificationStore()
 
 const activeTab = ref('unread')
+const currentPage = ref(1)
+const pageSize = 20
 
-const notifications = ref([
-  { id: 1, type: 'task', title: t('notification.mockNewTask'), content: t('notification.mockNewTaskContent'), time: t('notification.mockMinutesAgo', { n: 5 }), isRead: false },
-  { id: 2, type: 'process', title: t('notification.mockProcessApproved'), content: t('notification.mockProcessApprovedContent'), time: t('notification.mockHoursAgo', { n: 1 }), isRead: false },
-  { id: 3, type: 'system', title: t('notification.mockSystemMaintenance'), content: t('notification.mockSystemMaintenanceContent'), time: t('notification.mockHoursAgo', { n: 2 }), isRead: true },
-  { id: 4, type: 'task', title: t('notification.mockTaskExpiring'), content: t('notification.mockTaskExpiringContent'), time: t('notification.mockHoursAgo', { n: 3 }), isRead: true }
-])
-
-const unreadCount = computed(() => notifications.value.filter(n => !n.isRead).length)
-
-const filteredNotifications = computed(() => {
+const getQueryParams = () => {
+  const params: any = { page: currentPage.value - 1, size: pageSize }
   if (activeTab.value === 'unread') {
-    return notifications.value.filter(n => !n.isRead)
+    params.isRead = false
+  } else if (activeTab.value === 'system') {
+    params.type = 'SYSTEM'
+  } else if (activeTab.value === 'task') {
+    params.type = 'TASK'
+  } else if (activeTab.value === 'process') {
+    params.type = 'PROCESS'
   }
-  if (activeTab.value === 'all') {
-    return notifications.value
+  return params
+}
+
+const loadNotifications = () => {
+  store.fetchNotifications(getQueryParams())
+}
+
+const handleTabChange = () => {
+  currentPage.value = 1
+  loadNotifications()
+}
+
+const handlePageChange = () => {
+  loadNotifications()
+}
+
+const handleClick = async (item: NotificationData) => {
+  try {
+    if (!item.isRead) {
+      await store.markAsRead(item.id)
+    }
+    if (item.link) {
+      router.push(item.link)
+    }
+  } catch (e) {
+    // error already shown by request interceptor
   }
-  return notifications.value.filter(n => n.type === activeTab.value)
-})
+}
+
+const handleMarkAsRead = async (item: NotificationData) => {
+  try {
+    await store.markAsRead(item.id)
+    ElMessage.success(t('notification.markedAsRead'))
+  } catch (e) {
+    // error already shown by request interceptor
+  }
+}
+
+const handleMarkAllAsRead = async () => {
+  try {
+    await store.markAllAsRead()
+    loadNotifications()
+    ElMessage.success(t('notification.allMarkedAsRead'))
+  } catch (e) {
+    // error already shown by request interceptor
+  }
+}
+
+const handleDelete = async (item: NotificationData) => {
+  try {
+    await store.deleteNotification(item.id)
+    ElMessage.success(t('notification.deleteSuccess'))
+  } catch (e) {
+    // error already shown by request interceptor
+  }
+}
+
+const formatTime = (time: string) => {
+  return dayjs(time).format('YYYY-MM-DD HH:mm')
+}
 
 const getIcon = (type: string) => {
   const map: Record<string, any> = {
-    task: Document,
-    process: Bell,
-    system: Setting,
-    warning: Warning
+    TASK: Document,
+    PROCESS: Bell,
+    SYSTEM: Setting,
+    REMINDER: Warning
   }
   return map[type] || Bell
 }
 
 const getIconColor = (type: string) => {
   const map: Record<string, string> = {
-    task: 'var(--success-green)',
-    process: 'var(--warning-orange)',
-    system: 'var(--info-blue)',
-    warning: 'var(--error-red)'
+    TASK: 'var(--success-green)',
+    PROCESS: 'var(--warning-orange)',
+    SYSTEM: 'var(--info-blue)',
+    REMINDER: 'var(--error-red)'
   }
   return map[type] || 'var(--text-secondary)'
 }
 
-const handleClick = (item: any) => {
-  if (!item.isRead) {
-    item.isRead = true
-  }
-}
-
-const markAsRead = (item: any) => {
-  item.isRead = true
-  ElMessage.success(t('notification.markedAsRead'))
-}
-
-const markAllAsRead = () => {
-  notifications.value.forEach(n => n.isRead = true)
-  ElMessage.success(t('notification.allMarkedAsRead'))
-}
-
-const deleteNotification = (item: any) => {
-  const index = notifications.value.findIndex(n => n.id === item.id)
-  if (index > -1) {
-    notifications.value.splice(index, 1)
-    ElMessage.success(t('notification.deleteSuccess'))
-  }
-}
+onMounted(() => {
+  loadNotifications()
+  store.fetchUnreadCount()
+})
 </script>
 
 <style lang="scss" scoped>
@@ -137,6 +189,8 @@ const deleteNotification = (item: any) => {
   }
   
   .notification-list {
+    min-height: 200px;
+
     .notification-item {
       display: flex;
       align-items: flex-start;
@@ -194,6 +248,12 @@ const deleteNotification = (item: any) => {
         flex-shrink: 0;
       }
     }
+  }
+
+  .pagination-wrapper {
+    display: flex;
+    justify-content: center;
+    padding: 16px 0;
   }
 }
 </style>

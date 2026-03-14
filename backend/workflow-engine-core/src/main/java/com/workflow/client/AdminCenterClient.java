@@ -416,4 +416,32 @@ public class AdminCenterClient {
             return Collections.emptyList();
         }
     }
+
+    /**
+     * 获取 N8N 连接配置（含解密后 apiKey）
+     * 调用 admin-center 的内部 API 获取完整的 N8N 连接配置信息
+     * @param configId N8N 配置ID
+     * @return N8N 配置信息Map，包含 id, name, baseUrl, apiKey, isActive 等；调用失败时返回 null
+     */
+    public Map<String, Object> getN8nConfig(String configId) {
+        try {
+            String url = adminCenterUrl + "/api/v1/admin/n8n-config/" + configId + "/internal";
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<Map<String, Object>>() {}
+            );
+
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                return response.getBody();
+            }
+            return null;
+
+        } catch (Exception e) {
+            log.error("Failed to get N8N config {}: {}", configId, e.getMessage());
+            return null;
+        }
+    }
+
 }

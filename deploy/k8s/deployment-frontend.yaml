@@ -111,6 +111,11 @@ spec:
             configMapKeyRef:
               name: workflow-platform-config
               key: ADMIN_CENTER_URL
+        - name: DEVELOPER_WORKSTATION_URL
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: DEVELOPER_WORKSTATION_URL
         resources:
           requests:
             memory: "128Mi"

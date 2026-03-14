@@ -47,19 +47,19 @@
 | admin-center-frontend | Frontend | `admin-center-frontend` | `/` |
 | user-portal-frontend | Frontend | `user-portal-frontend` | `/` |
 | developer-workstation-frontend | Frontend | `developer-workstation-frontend` | `/` |
+| n8n | Infrastructure | `n8nio/n8n` (official) | `/healthz` |
 
 ## NOT Deployed
 
 | Component | Reason |
 |-----------|--------|
 | API Gateway | Bypassed — frontends proxy directly to backends via nginx |
-| Kafka / Zookeeper | Not used — workflow-engine simulates via Redis |
 
 ## Environments
 
 | Environment | Platform | Infrastructure | Config |
 |-------------|----------|----------------|--------|
-| dev | Docker Desktop | PG + Redis containers | `environments/dev/` |
+| dev | Docker Desktop | PG + Redis + Kafka + N8N containers | `environments/dev/` |
 | sit | Company K8S | Company-managed | `k8s/configmap-sit.yaml` + `secret-sit.yaml` |
 | uat | Company K8S | Company-managed | `k8s/configmap-uat.yaml` + `secret-uat.yaml` |
 | prod | Company K8S | Company-managed | `k8s/configmap-prod.yaml` + `secret-prod.yaml` |

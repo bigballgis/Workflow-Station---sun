@@ -122,6 +122,19 @@ spec:
             secretKeyRef:
               name: workflow-platform-secrets
               key: ENCRYPTION_SECRET_KEY
+        - name: FILE_UPLOAD_DIR
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: FILE_UPLOAD_DIR
+        - name: FILE_UPLOAD_BASE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: FILE_UPLOAD_BASE_URL
+        volumeMounts:
+        - name: uploads-storage
+          mountPath: /app/uploads
         resources:
           requests:
             memory: "512Mi"
@@ -145,6 +158,25 @@ spec:
           periodSeconds: 5
           timeoutSeconds: 3
           failureThreshold: 3
+      volumes:
+      - name: uploads-storage
+        persistentVolumeClaim:
+          claimName: developer-workstation-uploads-pvc
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: developer-workstation-uploads-pvc
+  namespace: workflow-platform-sit
+  labels:
+    app: developer-workstation
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
 
 ---
 apiVersion: v1

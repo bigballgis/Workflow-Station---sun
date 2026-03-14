@@ -163,5 +163,10 @@ export const processApi = {
   // 获取流程历史记录
   getProcessHistory(processId: string) {
     return request.get(`/processes/${processId}/history`)
+  },
+
+  // 根据ID列表获取动作定义
+  getActionsByIds(ids: string[]) {
+    return request.get('/processes/actions', { params: { ids: ids.join(',') } })
   }
 }

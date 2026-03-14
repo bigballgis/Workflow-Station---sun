@@ -43,6 +43,14 @@ public interface EventPublisher {
     CompletableFuture<Void> publishDeploymentEvent(DeploymentEvent event);
     
     /**
+     * Publish a notification event.
+     * 
+     * @param event Notification event to publish
+     * @return CompletableFuture that completes when the event is sent
+     */
+    CompletableFuture<Void> publishNotificationEvent(NotificationEvent event);
+    
+    /**
      * Publish a generic event.
      * 
      * @param event Event to publish

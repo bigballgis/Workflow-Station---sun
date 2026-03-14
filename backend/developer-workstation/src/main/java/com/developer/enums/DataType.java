@@ -25,5 +25,7 @@ public enum DataType {
     /** JSON */
     JSON,
     /** 二进制 */
-    BYTEA
+    BYTEA,
+    /** 文件上传（存储文件路径/URL） */
+    FILE
 }

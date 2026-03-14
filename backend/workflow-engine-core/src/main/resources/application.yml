@@ -75,6 +75,10 @@ admin-center:
 user-portal:
   url: ${USER_PORTAL_URL:http://localhost:8082}
 
+# File service base URL (for converting relative file paths to absolute URLs)
+file-service:
+  base-url: ${FILE_SERVICE_BASE_URL:http://localhost:8083}
+
 # JWT Configuration
 jwt:
   secret: ${JWT_SECRET:your-256-bit-secret-key-for-development-only}
@@ -85,6 +89,8 @@ jwt:
 platform:
   encryption:
     secret-key: ${ENCRYPTION_SECRET_KEY:your-32-byte-aes-256-secret-key!!}
+  workflow-engine:
+    callback-base-url: ${WORKFLOW_ENGINE_CALLBACK_BASE_URL:http://localhost:8081}
 
 # Actuator Configuration
 management:

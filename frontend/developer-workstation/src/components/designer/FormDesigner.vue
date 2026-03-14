@@ -217,7 +217,31 @@
                 min-width="140"
               >
                 <template #default="{ row }">
-                  <el-input v-model="row[col.field]" size="small" />
+                  <div v-if="col.type === 'upload'" style="display:flex;flex-direction:column;gap:4px;">
+                    <el-upload
+                      :action="(col.props?.action && col.props.action !== '/') ? col.props.action : '/api/v1/upload'"
+                      :accept="col.props?.accept || '.jpg,.jpeg,.png,.pdf,.docx,.xlsx'"
+                      :limit="1"
+                      :show-file-list="false"
+                      :on-success="(res: any, file: any) => {
+                        row[col.field] = res?.data?.url || ''
+                        row[col.field + '__name'] = file.name
+                      }"
+                      :on-error="() => {}"
+                    >
+                      <el-button size="small" type="primary">{{ t('form.fileUpload') }}</el-button>
+                    </el-upload>
+                    <el-tag
+                      v-if="row[col.field + '__name']"
+                      size="small"
+                      type="success"
+                      closable
+                      @close="() => { row[col.field] = ''; row[col.field + '__name'] = '' }"
+                    >
+                      {{ row[col.field + '__name'] }}
+                    </el-tag>
+                  </div>
+                  <el-input v-else v-model="row[col.field]" size="small" />
                 </template>
               </el-table-column>
               <el-table-column :label="t('common.operation')" width="80" fixed="right">
@@ -653,7 +677,8 @@ function getFormComponentType(dataType: string): string {
     'DECIMAL': t('form.numberInput'),
     'BOOLEAN': t('form.switch'),
     'DATE': t('form.datePicker'),
-    'TIMESTAMP': t('form.dateTimePicker')
+    'TIMESTAMP': t('form.dateTimePicker'),
+    'FILE': t('form.fileUpload')
   }
   return typeMap[dataType] || t('form.inputBox')
 }
@@ -824,6 +849,19 @@ function fieldToFormRule(field: FieldDefinition): any {
           type: 'datetime',
           placeholder: `${t('common.inputPlaceholder')} ${field.description || field.fieldName}`,
           valueFormat: 'YYYY-MM-DD HH:mm:ss'
+        }
+      }
+    case 'FILE':
+      return {
+        ...baseRule,
+        type: 'upload',
+        props: {
+          action: '/api/v1/upload',
+          accept: '.jpg,.jpeg,.png,.pdf,.docx,.xlsx',
+          limit: 1,
+          multiple: false,
+          listType: 'text',
+          tip: t('form.fileUploadTip')
         }
       }
     default:

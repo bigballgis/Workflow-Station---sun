@@ -213,6 +213,30 @@
                       show-icon
                     />
                   </template>
+                  <template v-else-if="field.type === 'upload'">
+                    <el-upload
+                      v-if="!readonly"
+                      :action="(field.uploadUrl && field.uploadUrl !== '/') ? field.uploadUrl : '/api/v1/upload'"
+                      :accept="field.uploadAccept || '.jpg,.jpeg,.png,.pdf,.docx,.xlsx'"
+                      :limit="field.uploadLimit || 1"
+                      :multiple="false"
+                      :file-list="uploadFileLists[field.key] || []"
+                      :on-success="(res: any, file: any) => handleUploadSuccess(res, file, field.key)"
+                      :on-remove="(file: any) => handleUploadRemove(file, field.key)"
+                      list-type="text"
+                    >
+                      <el-button type="primary">
+                        <el-icon><Upload /></el-icon>
+                        {{ $t('upload.selectFile') }}
+                      </el-button>
+                    </el-upload>
+                    <div v-else>
+                      <a v-if="formData[field.key]" :href="formData[field.key]" target="_blank">
+                        {{ uploadFileLists[field.key]?.[0]?.name || formData[field.key] }}
+                      </a>
+                      <span v-else>-</span>
+                    </div>
+                  </template>
                   <template v-else>
                     <el-input
                       v-model="formData[field.key]"
@@ -444,7 +468,36 @@
                 :closable="false"
                 show-icon
               />
-              
+
+              <!-- 文件上传 -->
+              <template v-else-if="field.type === 'upload'">
+                <el-upload
+                  v-if="!readonly"
+                  :action="(field.uploadUrl && field.uploadUrl !== '/') ? field.uploadUrl : '/api/v1/upload'"
+                  :accept="field.uploadAccept || '.jpg,.jpeg,.png,.pdf,.docx,.xlsx'"
+                  :limit="field.uploadLimit || 1"
+                  :multiple="false"
+                  :file-list="uploadFileLists[field.key] || []"
+                  :on-success="(res: any, file: any) => handleUploadSuccess(res, file, field.key)"
+                  :on-remove="(file: any) => handleUploadRemove(file, field.key)"
+                  list-type="text"
+                >
+                  <el-button type="primary">
+                    <el-icon><Upload /></el-icon>
+                    {{ $t('upload.selectFile') }}
+                  </el-button>
+                  <template #tip>
+                    <div class="el-upload__tip">{{ field.uploadAccept || '.jpg/.png/.pdf/.docx/.xlsx' }}</div>
+                  </template>
+                </el-upload>
+                <div v-else>
+                  <a v-if="formData[field.key]" :href="formData[field.key]" target="_blank">
+                    {{ uploadFileLists[field.key]?.[0]?.name || formData[field.key] }}
+                  </a>
+                  <span v-else>-</span>
+                </div>
+              </template>
+
               <!-- 默认文本输入 -->
               <el-input
                 v-else
@@ -463,6 +516,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { Upload } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 
 const { t } = useI18n()
@@ -494,6 +548,9 @@ export interface FormField {
   rules?: any[]
   defaultValue?: any
   tabName?: string  // 所属 Tab 名称
+  uploadUrl?: string
+  uploadAccept?: string
+  uploadLimit?: number
 }
 
 export interface FormTab {
@@ -543,6 +600,9 @@ const formRef = ref<FormInstance>()
 const formData = ref<Record<string, any>>({})
 let isInternalUpdate = false
 
+// 独立管理文件上传列表，避免从 formData 派生导致的重渲染问题
+const uploadFileLists = ref<Record<string, Array<{ name: string; url: string; uid?: number }>>>({})
+
 // 获取所有字段（包括 tabs 中的字段）
 const allFields = computed(() => {
   if (hasTabs.value && props.tabs) {
@@ -563,6 +623,12 @@ const initFormData = () => {
       data[field.key] = []
     } else {
       data[field.key] = null
+    }
+    // 初始化文件上传列表（外部传入已有值时，从 URL 提取文件名显示）
+    if (field.type === 'upload' && data[field.key]) {
+      const url = data[field.key]
+      const fileName = decodeURIComponent(url.split('/').pop() || url)
+      uploadFileLists.value[field.key] = [{ name: fileName, url }]
     }
   })
   isInternalUpdate = true
@@ -609,12 +675,35 @@ watch(() => props.modelValue, (newVal, oldVal) => {
   }
 }, { deep: true })
 
+// 监听字段变化 - 当 fields 在 modelValue 之后加载时（如任务详情先设置数据再解析表单），重新初始化
+watch(allFields, (newFields, oldFields) => {
+  if (newFields.length !== oldFields.length || JSON.stringify(newFields.map(f => f.key)) !== JSON.stringify(oldFields.map(f => f.key))) {
+    initFormData()
+  }
+})
+
 // 用户搜索
 const searchUsers = async (query: string, field: FormField) => {
   if (query.length < 2) return
   // 这里可以调用API搜索用户
   // const users = await userApi.search(query)
   // field.userOptions = users
+}
+
+// 文件上传成功
+const handleUploadSuccess = (response: any, file: any, fieldKey: string) => {
+  const url = response?.data?.url || ''
+  formData.value[fieldKey] = url
+  // 用原始文件名 + 服务器 URL 更新文件列表，不从 formData 派生避免重渲染清除列表
+  uploadFileLists.value[fieldKey] = [{ name: file.name, url, uid: file.uid }]
+  emit('update:modelValue', { ...formData.value })
+}
+
+// 文件删除
+const handleUploadRemove = (_file: any, fieldKey: string) => {
+  formData.value[fieldKey] = ''
+  uploadFileLists.value[fieldKey] = []
+  emit('update:modelValue', { ...formData.value })
 }
 
 // 表单验证

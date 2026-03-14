@@ -764,4 +764,36 @@ public class WorkflowEngineClient {
         }
         return Optional.empty();
     }
+
+    /**
+     * 执行 N8N Action（同步模式）
+     * 通过 workflow-engine-core 的 POST /api/v1/n8n/execute 内部端点转发执行请求
+     *
+     * Validates: Requirements 10.19
+     */
+    @SuppressWarnings("unchecked")
+    public Optional<Map<String, Object>> executeN8nAction(Map<String, Object> request) {
+        if (!isAvailable()) {
+            return Optional.empty();
+        }
+        try {
+            String url = workflowEngineUrl + "/api/v1/n8n/execute";
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
+
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                url, HttpMethod.POST, entity,
+                new ParameterizedTypeReference<Map<String, Object>>() {});
+
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                return Optional.of(response.getBody());
+            }
+        } catch (Exception e) {
+            log.warn("Failed to execute N8N action via workflow engine: {}", e.getMessage());
+        }
+        return Optional.empty();
+    }
+
 }

@@ -118,6 +118,13 @@
             <version>1.0.0-SNAPSHOT</version>
         </dependency>
 
+        <!-- Platform Messaging -->
+        <dependency>
+            <groupId>com.platform</groupId>
+            <artifactId>platform-messaging</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+        </dependency>
+
         <!-- Hypersistence Utils for JSONB -->
         <dependency>
             <groupId>io.hypersistence</groupId>

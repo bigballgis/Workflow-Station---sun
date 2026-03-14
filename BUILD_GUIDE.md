@@ -17,7 +17,7 @@
 6. **统一的 `*_URL` 变量命名** — 后端和前端 nginx 使用相同的 URL 变量名（如 `ADMIN_CENTER_URL`）。没有 `*_BACKEND_URL` 变量。
 7. **`.sh` 和 `.sql` 文件必须是 LF 换行** — `.gitattributes` 已配置强制 LF。如果手动创建 `.sh` 文件，确保是 LF 而非 CRLF，否则容器内执行会报 `/bin/sh: bad interpreter`。
 8. **admin-center 有 context-path** — healthcheck 路径是 `/api/v1/admin/actuator/health`，不是 `/actuator/health`。
-9. **不部署 API Gateway 和 Kafka** — 前端 nginx 直连后端，Kafka 通过 Redis 模拟。
+9. **不部署 API Gateway** — 前端 nginx 直连后端。Kafka 使用 KRaft 模式（无 ZooKeeper），N8N 使用独立 PostgreSQL 数据库。
 10. **环境变量名必须是 `ENCRYPTION_SECRET_KEY`** — 不是 `ENCRYPTION_KEY`。
 
 ---
@@ -34,9 +34,9 @@
 | user-portal-frontend | Vue 3 + Vite + Element Plus | 用户门户 UI |
 | developer-workstation-frontend | Vue 3 + Vite + Element Plus + BPMN.js | 开发者工作台 UI |
 
-基础设施：PostgreSQL 16 + Redis 7（dev 环境本地容器，SIT/UAT/PROD 公司 K8S 托管）。
+基础设施：PostgreSQL 16 + Redis 7 + Kafka 7.5（KRaft 模式，无 ZooKeeper）+ N8N 自动化引擎（dev 环境本地容器，SIT/UAT/PROD 公司 K8S 托管）。
 
-不部署的组件：API Gateway（已架空，前端 nginx 直连后端）、Kafka/Zookeeper（未使用）。
+不部署的组件：API Gateway（已架空，前端 nginx 直连后端）。
 
 ---
 
@@ -144,7 +144,7 @@ envsubst < template > default.conf
 | 前端服务 | 需要的环境变量 | envsubst 变量列表 |
 |---------|--------------|-----------------|
 | admin-center-frontend | `ADMIN_CENTER_URL` | `'${ADMIN_CENTER_URL}'` |
-| user-portal-frontend | `USER_PORTAL_URL`, `ADMIN_CENTER_URL` | `'${USER_PORTAL_URL} ${ADMIN_CENTER_URL}'` |
+| user-portal-frontend | `USER_PORTAL_URL`, `ADMIN_CENTER_URL`, `DEVELOPER_WORKSTATION_URL` | `'${USER_PORTAL_URL} ${ADMIN_CENTER_URL} ${DEVELOPER_WORKSTATION_URL}'` |
 | developer-workstation-frontend | `DEVELOPER_WORKSTATION_URL`, `ADMIN_CENTER_URL` | `'${DEVELOPER_WORKSTATION_URL} ${ADMIN_CENTER_URL}'` |
 
 ### 5.4 docker-entrypoint.sh 模板
@@ -312,6 +312,8 @@ cd deploy/scripts
 |------|-----------|-----------|-----|
 | PostgreSQL | 5432 | 5432 | `localhost:5432` |
 | Redis | 6379 | 6379 | `localhost:6379` |
+| Kafka (KRaft) | 29092/9092 | 9092 | `localhost:9092` |
+| N8N | 5678 | 5678 | `http://localhost:5678` |
 | workflow-engine | 8080 | 8081 | `http://localhost:8081` |
 | admin-center | 8080 | 8090 | `http://localhost:8090` |
 | user-portal | 8080 | 8082 | `http://localhost:8082` |
@@ -330,11 +332,12 @@ admin-center-frontend:
   environment:
     ADMIN_CENTER_URL: http://admin-center:8080
 
-# user-portal-frontend — 需要 2 个变量
+# user-portal-frontend — 需要 3 个变量
 user-portal-frontend:
   environment:
     USER_PORTAL_URL: http://user-portal:8080
     ADMIN_CENTER_URL: http://admin-center:8080
+    DEVELOPER_WORKSTATION_URL: http://developer-workstation:8080
 
 # developer-workstation-frontend — 需要 2 个变量
 developer-workstation-frontend:
@@ -479,9 +482,12 @@ PostgreSQL ──┬── workflow-engine ──┬── admin-center ──�
              │                    │                  └── developer-workstation-frontend
 Redis ───────┘                    ├── user-portal ───── user-portal-frontend
                                   └── developer-workstation ── developer-workstation-frontend
+Kafka ──────────────────────────────── user-portal
+
+PostgreSQL ── N8N (独立数据库 n8n_dev)
 ```
 
-启动顺序：PostgreSQL + Redis → workflow-engine → admin-center → (user-portal, developer-workstation) → 前端。
+启动顺序：PostgreSQL + Redis + Kafka → N8N → workflow-engine → admin-center → (user-portal, developer-workstation) → 前端。
 
 ---
 
@@ -545,6 +551,7 @@ npx vitest --run
 | `ENCRYPTION_SECRET_KEY` | AES-256 加密密钥 | 32 字节字符串 |
 | `CORS_ALLOWED_ORIGINS` | CORS 允许的源 | `http://localhost:3000,...` |
 | `SWAGGER_ENABLED` | 是否启用 Swagger | `true` / `false` |
+| `SPRING_KAFKA_BOOTSTRAP_SERVERS` | Kafka 连接地址 | `kafka:29092` |
 
 #### 后端服务间 URL 变量
 
@@ -560,6 +567,22 @@ npx vitest --run
 | `ADMIN_CENTER_URL` | admin-center-frontend, user-portal-frontend, developer-workstation-frontend | 管理后台 API 地址 |
 | `USER_PORTAL_URL` | user-portal-frontend | 用户门户 API 地址 |
 | `DEVELOPER_WORKSTATION_URL` | developer-workstation-frontend | 开发者工作台 API 地址 |
+
+#### N8N 相关环境变量
+
+| 变量名 | 说明 | 示例值 |
+|--------|------|--------|
+| `N8N_PORT` | N8N 宿主机端口 | `5678` |
+| `N8N_DB_NAME` | N8N 专用数据库名 | `n8n_dev` |
+| `N8N_ENCRYPTION_KEY` | N8N 加密密钥 | 随机字符串 |
+| `N8N_WEBHOOK_URL` | N8N Webhook 外部访问地址 | `http://localhost:5678` |
+
+#### Kafka 相关环境变量
+
+| 变量名 | 说明 | 示例值 |
+|--------|------|--------|
+| `KAFKA_PORT` | Kafka 外部端口 | `9092` |
+| `KAFKA_INTERNAL_PORT` | Kafka 内部端口 | `29092` |
 
 ---
 

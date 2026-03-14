@@ -60,6 +60,8 @@ export interface AuditLog {
   resourceId: string
   resourceName: string
   description: string
+  oldValue: string | null
+  newValue: string | null
   ipAddress: string
   userAgent: string
   requestMethod: string
@@ -144,9 +146,11 @@ export const validatePassword = (password: string): Promise<PasswordValidationRe
 export const queryAuditLogs = (
   query: AuditQueryRequest,
   page: number = 0,
-  size: number = 20
+  size: number = 20,
+  sortField: string = 'createdAt',
+  sortOrder: string = 'desc'
 ): Promise<PageResult<AuditLog>> =>
-  request.post(`/security/audit-logs/query?page=${page}&size=${size}`, query)
+  request.post(`/security/audit-logs/query?page=${page}&size=${size}&sort=${sortField},${sortOrder}`, query)
 
 export const getAuditLogsByUser = (
   userId: string,

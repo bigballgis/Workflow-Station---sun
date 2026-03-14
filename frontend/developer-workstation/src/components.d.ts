@@ -64,6 +64,7 @@ declare module 'vue' {
     GatewayProperties: typeof import('./components/designer/properties/GatewayProperties.vue')['default']
     IconPreview: typeof import('./components/icon/IconPreview.vue')['default']
     IconSelector: typeof import('./components/icon/IconSelector.vue')['default']
+    N8nTaskPropertiesPanel: typeof import('./components/designer/properties/N8nTaskPropertiesPanel.vue')['default']
     NodePropertiesPanel: typeof import('./components/designer/properties/NodePropertiesPanel.vue')['default']
     ProcessDebugPanel: typeof import('./components/debug/ProcessDebugPanel.vue')['default']
     ProcessDesigner: typeof import('./components/designer/ProcessDesigner.vue')['default']

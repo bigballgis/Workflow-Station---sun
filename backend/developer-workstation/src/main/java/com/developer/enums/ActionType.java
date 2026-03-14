@@ -30,6 +30,8 @@ public enum ActionType {
     SCRIPT,
     /** 自定义动作 - 自定义脚本 */
     CUSTOM_SCRIPT,
+    /** 自定义动作 - N8N 动作 */
+    N8N_ACTION,
     /** 流程提交 */
     PROCESS_SUBMIT,
     /** 流程驳回 */

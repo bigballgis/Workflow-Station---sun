@@ -1139,7 +1139,12 @@ public class TaskManagerComponent {
                     continue;
                 }
                 
+                // Check both "property" and "values" child element names
+                // BPMN designer uses <custom_1:values> elements inside <custom_1:properties>
                 List<org.flowable.bpmn.model.ExtensionElement> customProps = childElements.get("property");
+                if (customProps == null) {
+                    customProps = childElements.get("values");
+                }
                 if (customProps == null) {
                     continue;
                 }

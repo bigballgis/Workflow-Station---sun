@@ -551,6 +551,26 @@ export default {
     username: '使用者名稱',
     email: '電子郵件'
   },
+  n8nAction: {
+    title: 'N8N 工作流執行',
+    workflowName: '工作流',
+    workflowDescription: '描述',
+    inputParams: '輸入參數',
+    execute: '執行',
+    executing: '執行中...',
+    retry: '重試',
+    close: '關閉',
+    success: '執行成功',
+    failed: '執行失敗',
+    timeout: '執行逾時',
+    resultData: '結果資料',
+    errorMessage: '錯誤訊息',
+    requiredField: '{label} 為必填項',
+    noInputParams: '無需輸入參數',
+    timeoutMessage: '工作流執行已逾時，請重試。',
+    failedMessage: '工作流執行失敗。',
+    noResultData: '無結果資料'
+  },
   api: {
     requestFailed: '請求失敗',
     networkError: '網路錯誤，請檢查網路連線',

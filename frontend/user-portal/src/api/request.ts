@@ -20,7 +20,7 @@ const processQueue = (error: any, token: string | null = null) => {
 // 创建axios实例
 const service: AxiosInstance = axios.create({
   baseURL: '/api/portal',
-  timeout: 30000,
+  timeout: 600000, // 10 minutes - N8N workflows (e.g. AI invoice recognition) can take several minutes
   headers: {
     'Content-Type': 'application/json'
   }

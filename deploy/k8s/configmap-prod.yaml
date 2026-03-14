@@ -53,3 +53,16 @@ data:
   DATASOURCE_MAX_POOL_SIZE: "50"
   DATASOURCE_MIN_IDLE: "10"
   DATASOURCE_CONNECTION_TIMEOUT: "30000"
+
+  # File Upload
+  FILE_UPLOAD_DIR: "/app/uploads"
+  FILE_UPLOAD_BASE_URL: "/api/v1/upload/files"
+
+  # N8N Configuration (non-sensitive)
+  N8N_PORT: "5678"
+  DB_TYPE: "postgresdb"
+  DB_POSTGRESDB_HOST: "prod-postgres.internal"
+  DB_POSTGRESDB_PORT: "5432"
+  DB_POSTGRESDB_DATABASE: "n8n_prod"
+  WEBHOOK_URL: "https://n8n.company.com"
+  N8N_SERVICE_URL: "http://n8n-service:5678"

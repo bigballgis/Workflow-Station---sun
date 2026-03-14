@@ -155,6 +155,8 @@ platform:
       - /actuator/**
       - /swagger-ui/**
       - /v3/api-docs/**
+      # N8N callback endpoint - called directly by N8N without auth (verified via callbackToken)
+      - /api/workflow/n8n/callback
 
 # JWT Configuration
 jwt:

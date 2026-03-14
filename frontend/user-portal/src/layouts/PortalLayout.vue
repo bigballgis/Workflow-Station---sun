@@ -9,6 +9,7 @@
         </div>
       </div>
       <div class="header-right">
+        <NotificationBadge />
         <UserProfileDropdown />
       </div>
     </el-header>
@@ -42,7 +43,7 @@
             <el-icon><Document /></el-icon>
             <template #title>{{ t('menu.myApplications') }}</template>
           </el-menu-item>
-          <el-menu-item index="/delegations" v-show="false">
+          <el-menu-item index="/delegations">
             <el-icon><Share /></el-icon>
             <template #title>{{ t('menu.delegations') }}</template>
           </el-menu-item>
@@ -86,6 +87,7 @@ import {
   Fold, Expand, Checked, Finished
 } from '@element-plus/icons-vue'
 import UserProfileDropdown from '@/components/UserProfileDropdown.vue'
+import NotificationBadge from '@/components/NotificationBadge.vue'
 import { permissionApi } from '@/api/permission'
 
 const { t } = useI18n()

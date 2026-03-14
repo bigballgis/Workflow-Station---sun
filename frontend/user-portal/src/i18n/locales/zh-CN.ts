@@ -242,7 +242,8 @@ export default {
     pleaseCompleteForm: '请完善表单信息',
     processSubmitSuccess: '流程提交成功',
     submitFailed: '提交失败',
-    serviceFallbackName: '服务{index}'
+    serviceFallbackName: '服务{index}',
+    n8nAutoFillSuccess: '已自动填充 {count} 张发票识别结果'
   },
   applicationDetail: {
     back: '返回',
@@ -665,6 +666,26 @@ export default {
   user: {
     username: '用户名',
     email: '邮箱'
+  },
+  n8nAction: {
+    title: 'N8N 工作流执行',
+    workflowName: '工作流',
+    workflowDescription: '描述',
+    inputParams: '输入参数',
+    execute: '执行',
+    executing: '执行中...',
+    retry: '重试',
+    close: '关闭',
+    success: '执行成功',
+    failed: '执行失败',
+    timeout: '执行超时',
+    resultData: '结果数据',
+    errorMessage: '错误信息',
+    requiredField: '{label} 为必填项',
+    noInputParams: '无需输入参数',
+    timeoutMessage: '工作流执行已超时，请重试。',
+    failedMessage: '工作流执行失败。',
+    noResultData: '无结果数据'
   },
   api: {
     requestFailed: '请求失败',
