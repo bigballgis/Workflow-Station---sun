@@ -13,11 +13,11 @@ import java.time.Instant;
 
 /**
  * 表单表绑定实体
- * 管理表单与数据表的多对多绑定关系
+ * 管理表单与数据表（或公共表）的多对多绑定关系
+ * table_id 和 common_table_id 二选一，不可同时为空
  */
 @Entity
-@Table(name = "dw_form_table_bindings", 
-       uniqueConstraints = @UniqueConstraint(columnNames = {"form_id", "table_id"}))
+@Table(name = "dw_form_table_bindings")
 @EntityListeners(AuditingEntityListener.class)
 @Data
 @Builder
@@ -37,8 +37,13 @@ public class FormTableBinding {
     
     @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "table_id", nullable = false)
+    @JoinColumn(name = "table_id")
     private TableDefinition table;
+
+    @JsonIgnore
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "common_table_id")
+    private CommonTableDefinition commonTable;
     
     @Enumerated(EnumType.STRING)
     @Column(name = "binding_type", nullable = false, length = 20)
@@ -80,7 +85,30 @@ public class FormTableBinding {
      * 获取绑定表名称（用于JSON序列化）
      */
     public String getTableName() {
-        return table != null ? table.getTableName() : null;
+        if (table != null) return table.getTableName();
+        if (commonTable != null) return commonTable.getName();
+        return null;
+    }
+
+    /**
+     * 获取公共表ID（用于JSON序列化）
+     */
+    public Long getCommonTableId() {
+        return commonTable != null ? commonTable.getId() : null;
+    }
+
+    /**
+     * 获取公共表编码（用于JSON序列化）
+     */
+    public String getCommonTableCode() {
+        return commonTable != null ? commonTable.getCode() : null;
+    }
+
+    /**
+     * 是否为公共表绑定
+     */
+    public boolean isCommonTableBinding() {
+        return commonTable != null;
     }
     
     /**

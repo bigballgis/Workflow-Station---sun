@@ -13,6 +13,9 @@
         <el-table-column prop="tableName" :label="t('tableBinding.tableName')" min-width="120">
           <template #default="{ row }">
             <span>{{ row.tableName || getTableName(row.tableId) }}</span>
+            <el-tag v-if="row.commonTableBinding" size="small" type="warning" style="margin-left:4px;">
+              {{ t('commonTable.title') }}
+            </el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="bindingType" :label="t('tableBinding.bindingType')" width="100">
@@ -56,7 +59,16 @@
       @close="resetForm"
     >
       <el-form :model="bindingForm" :rules="formRules" ref="formRef" label-width="120px" label-position="left">
-        <el-form-item :label="t('tableBinding.selectTable')" prop="tableId">
+        <el-form-item :label="t('commonTable.tableSource')">
+          <el-radio-group v-model="bindingForm.useCommonTable" :disabled="!!editingBinding"
+            @change="() => { bindingForm.tableId = 0; bindingForm.commonTableId = undefined }">
+            <el-radio :value="false">{{ t('commonTable.functionUnitTables') }}</el-radio>
+            <el-radio :value="true">{{ t('commonTable.commonTables') }}</el-radio>
+          </el-radio-group>
+        </el-form-item>
+
+        <!-- Function Unit table select -->
+        <el-form-item v-if="!bindingForm.useCommonTable" :label="t('tableBinding.selectTable')" prop="tableId">
           <el-select 
             v-model="bindingForm.tableId" 
             :placeholder="t('tableBinding.selectTablePlaceholder')" 
@@ -70,6 +82,25 @@
               :label="`${table.tableName} (${tableTypeLabel(table.tableType)})`" 
               :value="table.id"
               :disabled="isTableBound(table.id)"
+            />
+          </el-select>
+        </el-form-item>
+
+        <!-- Common table select -->
+        <el-form-item v-else :label="t('tableBinding.selectTable')">
+          <el-select
+            v-model="bindingForm.commonTableId"
+            :placeholder="t('tableBinding.selectTablePlaceholder')"
+            style="width: 100%"
+            :disabled="!!editingBinding"
+            @change="handleCommonTableSelect"
+          >
+            <el-option
+              v-for="ct in commonTables"
+              :key="ct.id"
+              :label="`${ct.name} (${ct.code})`"
+              :value="ct.id"
+              :disabled="isCommonTableBound(ct.id)"
             />
           </el-select>
         </el-form-item>
@@ -127,6 +158,7 @@ import { Plus } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import { functionUnitApi, type TableBinding, type TableBindingRequest, type TableDefinition, type BindingType } from '@/api/functionUnit'
+import { commonTableApi, type CommonTableDefinition } from '@/api/commonTable'
 
 const { t } = useI18n()
 
@@ -146,16 +178,19 @@ const bindings = ref<TableBinding[]>([])
 const showAddDialog = ref(false)
 const editingBinding = ref<TableBinding | null>(null)
 const formRef = ref<FormInstance>()
+const commonTables = ref<CommonTableDefinition[]>([])
 
-const bindingForm = ref<TableBindingRequest>({
+// Extended binding form that supports either tableId or commonTableId
+const bindingForm = ref<TableBindingRequest & { commonTableId?: number; useCommonTable?: boolean }>({
   tableId: 0,
+  commonTableId: undefined,
+  useCommonTable: false,
   bindingType: 'SUB',
   bindingMode: 'READONLY',
   foreignKeyField: undefined
 })
 
 const formRules = computed<FormRules>(() => ({
-  tableId: [{ required: true, message: t('tableBinding.selectTableRequired'), trigger: 'change' }],
   bindingType: [{ required: true, message: t('tableBinding.selectBindingTypeRequired'), trigger: 'change' }],
   bindingMode: [{ required: true, message: t('tableBinding.selectBindingModeRequired'), trigger: 'change' }]
 }))
@@ -170,8 +205,13 @@ const availableTables = computed(() => {
   return props.tables
 })
 
-// Fields of the selected table
+// Fields of the selected table (FU table or common table)
 const selectedTableFields = computed(() => {
+  if (bindingForm.value.useCommonTable) {
+    if (!bindingForm.value.commonTableId) return []
+    const ct = commonTables.value.find(t => t.id === bindingForm.value.commonTableId)
+    return ct?.fieldDefinitions || []
+  }
   if (!bindingForm.value.tableId) return []
   const table = props.tables.find(t => t.id === bindingForm.value.tableId)
   return table?.fieldDefinitions || []
@@ -181,6 +221,12 @@ const selectedTableFields = computed(() => {
 function isTableBound(tableId: number): boolean {
   if (editingBinding.value?.tableId === tableId) return false
   return bindings.value.some(b => b.tableId === tableId)
+}
+
+// Check if common table is already bound
+function isCommonTableBound(commonTableId: number): boolean {
+  if ((editingBinding.value as any)?.commonTableId === commonTableId) return false
+  return bindings.value.some((b: any) => b.commonTableId === commonTableId)
 }
 
 // Get table name by ID
@@ -230,7 +276,17 @@ async function loadBindings() {
   }
 }
 
-// Handle table selection change
+// Load common tables
+async function loadCommonTables() {
+  try {
+    const res = await commonTableApi.list()
+    commonTables.value = (res as any).data || res || []
+  } catch (e) {
+    console.error('Failed to load common tables:', e)
+  }
+}
+
+// Handle FU table selection change
 function handleTableSelect(tableId: number) {
   const table = props.tables.find(t => t.id === tableId)
   if (table) {
@@ -244,6 +300,15 @@ function handleTableSelect(tableId: number) {
       bindingForm.value.bindingType = 'RELATED'
       bindingForm.value.bindingMode = 'READONLY'
     }
+  }
+}
+
+// Handle common table selection change
+function handleCommonTableSelect(_commonTableId: number) {
+  // Default to SUB/READONLY for common table bindings
+  if (!bindingForm.value.bindingType || bindingForm.value.bindingType === 'PRIMARY') {
+    bindingForm.value.bindingType = 'RELATED'
+    bindingForm.value.bindingMode = 'READONLY'
   }
 }
 
@@ -282,9 +347,31 @@ async function handleDelete(binding: TableBinding) {
 // Submit form
 async function handleSubmit() {
   if (!formRef.value) return
+
+  // Validate that at least one table is selected
+  if (bindingForm.value.useCommonTable) {
+    if (!bindingForm.value.commonTableId) {
+      ElMessage.warning(t('tableBinding.selectTableRequired'))
+      return
+    }
+  } else {
+    if (!bindingForm.value.tableId) {
+      ElMessage.warning(t('tableBinding.selectTableRequired'))
+      return
+    }
+  }
   
   await formRef.value.validate()
   
+  const payload: TableBindingRequest = {
+    tableId: bindingForm.value.useCommonTable ? undefined : (bindingForm.value.tableId || undefined),
+    commonTableId: bindingForm.value.useCommonTable ? bindingForm.value.commonTableId : undefined,
+    bindingType: bindingForm.value.bindingType,
+    bindingMode: bindingForm.value.bindingMode,
+    foreignKeyField: bindingForm.value.foreignKeyField,
+    sortOrder: bindingForm.value.sortOrder
+  } as any
+
   submitting.value = true
   try {
     if (editingBinding.value) {
@@ -292,11 +379,11 @@ async function handleSubmit() {
         props.functionUnitId, 
         props.formId, 
         editingBinding.value.id!, 
-        bindingForm.value
+        payload
       )
       ElMessage.success(t('tableBinding.updateSuccess'))
     } else {
-      await functionUnitApi.createFormBinding(props.functionUnitId, props.formId, bindingForm.value)
+      await functionUnitApi.createFormBinding(props.functionUnitId, props.formId, payload)
       ElMessage.success(t('tableBinding.addSuccess'))
     }
     showAddDialog.value = false
@@ -314,6 +401,8 @@ function resetForm() {
   editingBinding.value = null
   bindingForm.value = {
     tableId: 0,
+    commonTableId: undefined,
+    useCommonTable: false,
     bindingType: 'SUB',
     bindingMode: 'READONLY',
     foreignKeyField: undefined
@@ -329,6 +418,7 @@ watch(() => props.formId, () => {
 }, { immediate: true })
 
 onMounted(() => {
+  loadCommonTables()
   if (props.formId) {
     loadBindings()
   }

@@ -16,7 +16,7 @@ echo "========================================="
 # --- Step 0: Create N8N database ---
 echo ""
 echo "[0/7] Creating N8N database..."
-psql -U $POSTGRES_USER -tc "SELECT 1 FROM pg_database WHERE datname = 'n8n_dev'" | grep -q 1 || psql -U $POSTGRES_USER -c "CREATE DATABASE n8n_dev OWNER $POSTGRES_USER"
+psql -U $POSTGRES_USER -d $POSTGRES_DB -tc "SELECT 1 FROM pg_database WHERE datname = 'n8n_dev'" | grep -q 1 || psql -U $POSTGRES_USER -d $POSTGRES_DB -c "CREATE DATABASE n8n_dev OWNER $POSTGRES_USER"
 echo "  N8N database 'n8n_dev' ready."
 
 # --- Step 1: Base schemas ---
@@ -38,7 +38,9 @@ for f in /docker-entrypoint-initdb.d/00-schema/06-*.sql \
          /docker-entrypoint-initdb.d/00-schema/08-*.sql \
          /docker-entrypoint-initdb.d/00-schema/10-*.sql \
          /docker-entrypoint-initdb.d/00-schema/11-*.sql \
-         /docker-entrypoint-initdb.d/00-schema/12-*.sql; do
+         /docker-entrypoint-initdb.d/00-schema/12-*.sql \
+         /docker-entrypoint-initdb.d/00-schema/13-*.sql \
+         /docker-entrypoint-initdb.d/00-schema/14-*.sql; do
     [ -f "$f" ] && echo "  Running $(basename $f)..." && $PSQL -f "$f"
 done
 

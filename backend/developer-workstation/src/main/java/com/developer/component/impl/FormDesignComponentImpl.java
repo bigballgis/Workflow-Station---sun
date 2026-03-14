@@ -4,6 +4,7 @@ import com.developer.component.FormDesignComponent;
 import com.developer.dto.FormDefinitionRequest;
 import com.developer.dto.FormTableBindingRequest;
 import com.developer.dto.ValidationResult;
+import com.developer.entity.CommonTableDefinition;
 import com.developer.entity.FieldDefinition;
 import com.developer.entity.FormDefinition;
 import com.developer.entity.FormTableBinding;
@@ -13,6 +14,7 @@ import com.developer.enums.BindingMode;
 import com.developer.enums.BindingType;
 import com.developer.exception.BusinessException;
 import com.developer.exception.ResourceNotFoundException;
+import com.developer.repository.CommonTableDefinitionRepository;
 import com.developer.repository.FormDefinitionRepository;
 import com.developer.repository.FormTableBindingRepository;
 import com.developer.repository.FunctionUnitRepository;
@@ -39,6 +41,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
     private final FunctionUnitRepository functionUnitRepository;
     private final TableDefinitionRepository tableDefinitionRepository;
     private final FormTableBindingRepository formTableBindingRepository;
+    private final CommonTableDefinitionRepository commonTableDefinitionRepository;
     private final ObjectMapper objectMapper;
     
     @Override
@@ -195,15 +198,27 @@ public class FormDesignComponentImpl implements FormDesignComponent {
     @Override
     @Transactional
     public FormTableBinding createBinding(Long formId, FormTableBindingRequest request) {
+        if (request.getTableId() == null && request.getCommonTableId() == null) {
+            throw new BusinessException("INVALID_REQUEST", "tableId 和 commonTableId 不能同时为空", "请选择要绑定的表");
+        }
+
         FormDefinition form = getById(formId);
-        TableDefinition table = tableDefinitionRepository.findById(request.getTableId())
-                .orElseThrow(() -> new ResourceNotFoundException("TableDefinition", request.getTableId()));
-        
-        // 检查是否已绑定该表
-        if (formTableBindingRepository.existsByFormIdAndTableId(formId, request.getTableId())) {
-            throw new BusinessException("BINDING_EXISTS", 
-                    "该表已绑定到此表单",
-                    "请勿重复绑定");
+
+        TableDefinition table = null;
+        CommonTableDefinition commonTable = null;
+
+        if (request.getCommonTableId() != null) {
+            commonTable = commonTableDefinitionRepository.findByIdWithFields(request.getCommonTableId())
+                    .orElseThrow(() -> new ResourceNotFoundException("CommonTableDefinition", request.getCommonTableId()));
+            if (formTableBindingRepository.existsByFormIdAndCommonTableId(formId, request.getCommonTableId())) {
+                throw new BusinessException("BINDING_EXISTS", "该公共表已绑定到此表单", "请勿重复绑定");
+            }
+        } else {
+            table = tableDefinitionRepository.findById(request.getTableId())
+                    .orElseThrow(() -> new ResourceNotFoundException("TableDefinition", request.getTableId()));
+            if (formTableBindingRepository.existsByFormIdAndTableId(formId, request.getTableId())) {
+                throw new BusinessException("BINDING_EXISTS", "该表已绑定到此表单", "请勿重复绑定");
+            }
         }
         
         // 检查主表绑定唯一性
@@ -213,11 +228,6 @@ public class FormDesignComponentImpl implements FormDesignComponent {
                         "此表单已有主表绑定",
                         "请先删除现有主表绑定");
             }
-        }
-        
-        // 验证外键字段（子表和关联表需要）
-        if (request.getBindingType() != BindingType.PRIMARY && request.getForeignKeyField() != null) {
-            validateForeignKeyField(table, request.getForeignKeyField());
         }
         
         // 设置默认绑定模式
@@ -236,6 +246,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         FormTableBinding binding = FormTableBinding.builder()
                 .form(form)
                 .table(table)
+                .commonTable(commonTable)
                 .bindingType(request.getBindingType())
                 .bindingMode(bindingMode)
                 .foreignKeyField(request.getForeignKeyField())

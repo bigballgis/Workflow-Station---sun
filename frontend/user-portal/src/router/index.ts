@@ -99,6 +99,12 @@ const routes: RouteRecordRaw[] = [
         meta: { titleKey: 'menu.exitRole', icon: 'SwitchButton' }
       },
       {
+        path: 'common-table-data',
+        name: 'CommonTableData',
+        component: () => import('@/views/common-table/DataList.vue'),
+        meta: { titleKey: 'menu.commonTable', icon: 'Grid' }
+      },
+      {
         path: 'notifications',
         name: 'Notifications',
         component: () => import('@/views/notifications/index.vue'),

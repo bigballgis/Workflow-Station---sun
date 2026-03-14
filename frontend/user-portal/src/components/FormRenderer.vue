@@ -237,6 +237,29 @@
                       <span v-else>-</span>
                     </div>
                   </template>
+                  <!-- 公共表关联字段 -->
+                  <template v-else-if="field.type === 'commonTableRef'">
+                    <el-select
+                      v-model="formData[field.key]"
+                      :placeholder="field.placeholder || `搜索${field.label}`"
+                      filterable
+                      remote
+                      clearable
+                      :remote-method="(q: string) => searchCommonTableOptions(field.key, field.commonTableCode!, q)"
+                      :loading="commonTableLoadingMap[field.key]"
+                      style="width: 100%"
+                      popper-class="form-renderer-popper"
+                      @change="(val: number) => handleCommonTableSelect(field.key, field.commonTableCode!, val)"
+                      @focus="() => { if (!commonTableOptionsMap[field.key]?.length) searchCommonTableOptions(field.key, field.commonTableCode!) }"
+                    >
+                      <el-option
+                        v-for="row in (commonTableOptionsMap[field.key] || [])"
+                        :key="row.id"
+                        :label="getCommonTableLabel(row)"
+                        :value="row.id"
+                      />
+                    </el-select>
+                  </template>
                   <template v-else>
                     <el-input
                       v-model="formData[field.key]"
@@ -498,6 +521,29 @@
                 </div>
               </template>
 
+              <!-- 公共表关联字段 -->
+              <el-select
+                v-else-if="field.type === 'commonTableRef'"
+                v-model="formData[field.key]"
+                :placeholder="field.placeholder || `搜索${field.label}`"
+                filterable
+                remote
+                clearable
+                :remote-method="(q: string) => searchCommonTableOptions(field.key, field.commonTableCode!, q)"
+                :loading="commonTableLoadingMap[field.key]"
+                style="width: 100%"
+                popper-class="form-renderer-popper"
+                @change="(val: number) => handleCommonTableSelect(field.key, field.commonTableCode!, val)"
+                @focus="() => { if (!commonTableOptionsMap[field.key]?.length) searchCommonTableOptions(field.key, field.commonTableCode!) }"
+              >
+                <el-option
+                  v-for="row in (commonTableOptionsMap[field.key] || [])"
+                  :key="row.id"
+                  :label="getCommonTableLabel(row)"
+                  :value="row.id"
+                />
+              </el-select>
+
               <!-- 默认文本输入 -->
               <el-input
                 v-else
@@ -518,6 +564,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Upload } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
+import { commonTableApi, type CommonTableDataRow } from '@/api/commonTable'
 
 const { t } = useI18n()
 
@@ -551,6 +598,11 @@ export interface FormField {
   uploadUrl?: string
   uploadAccept?: string
   uploadLimit?: number
+  /** commonTableRef field: code of the linked common table */
+  commonTableCode?: string
+  /** Internal: search results for commonTableRef */
+  commonTableOptions?: CommonTableDataRow[]
+  commonTableLoading?: boolean
 }
 
 export interface FormTab {
@@ -594,6 +646,7 @@ watch(() => props.tabs, (newTabs) => {
 const emit = defineEmits<{
   (e: 'update:modelValue', value: Record<string, any>): void
   (e: 'change', key: string, value: any): void
+  (e: 'fill-subtable', fieldKey: string, commonTableCode: string, record: CommonTableDataRow): void
 }>()
 
 const formRef = ref<FormInstance>()
@@ -638,6 +691,38 @@ const initFormData = () => {
     isInternalUpdate = false
   }, 0)
 }
+
+// ===== Common Table Reference Field Logic =====
+const commonTableOptionsMap = ref<Record<string, CommonTableDataRow[]>>({})
+const commonTableLoadingMap = ref<Record<string, boolean>>({})
+
+async function searchCommonTableOptions(fieldKey: string, commonTableCode: string, keyword?: string) {
+  commonTableLoadingMap.value[fieldKey] = true
+  try {
+    const res = await commonTableApi.search(commonTableCode, keyword)
+    commonTableOptionsMap.value[fieldKey] = (res as any).data || res || []
+  } catch (e) {
+    commonTableOptionsMap.value[fieldKey] = []
+  } finally {
+    commonTableLoadingMap.value[fieldKey] = false
+  }
+}
+
+function getCommonTableLabel(row: CommonTableDataRow): string {
+  if (!row?.dataJson) return String(row?.id || '')
+  const values = Object.values(row.dataJson)
+  return values.slice(0, 3).join(' / ') || String(row.id)
+}
+
+function handleCommonTableSelect(fieldKey: string, commonTableCode: string, recordId: number) {
+  const options = commonTableOptionsMap.value[fieldKey] || []
+  const record = options.find(r => r.id === recordId)
+  if (record) {
+    emit('fill-subtable', fieldKey, commonTableCode, record)
+  }
+}
+
+// ===== End Common Table Reference Field Logic =====
 
 // 生成表单验证规则
 const formRules = computed<FormRules>(() => {
