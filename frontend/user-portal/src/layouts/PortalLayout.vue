@@ -27,6 +27,10 @@
             <el-icon><HomeFilled /></el-icon>
             <template #title>{{ t('menu.dashboard') }}</template>
           </el-menu-item>
+          <el-menu-item v-if="hasBiDashboards" index="/bi-dashboard">
+            <el-icon><DataAnalysis /></el-icon>
+            <template #title>BI Dashboard</template>
+          </el-menu-item>
           <el-menu-item index="/tasks">
             <el-icon><List /></el-icon>
             <template #title>{{ t('menu.tasks') }}</template>
@@ -88,11 +92,12 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
   HomeFilled, List, Plus, Document, Share, Key,
-  Fold, Expand, Checked, Finished, Grid
+  Fold, Expand, Checked, Finished, Grid, DataAnalysis
 } from '@element-plus/icons-vue'
 import UserProfileDropdown from '@/components/UserProfileDropdown.vue'
 import NotificationBadge from '@/components/NotificationBadge.vue'
 import { permissionApi } from '@/api/permission'
+import { biDashboardApi } from '@/api/biDashboard'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -100,6 +105,7 @@ const route = useRoute()
 const isCollapsed = ref(false)
 const cachedViews = ref(['Dashboard', 'Tasks', 'MyApplications'])
 const isApprover = ref(false)
+const hasBiDashboards = ref(false)
 
 const activeMenu = computed(() => route.path)
 
@@ -118,8 +124,32 @@ const checkApproverStatus = async () => {
   }
 }
 
+// Check if user has BI dashboards assigned
+const checkBiDashboards = async () => {
+  try {
+    let userId = localStorage.getItem('userId')
+    if (!userId) {
+      const userStr = localStorage.getItem('user')
+      if (userStr) {
+        try {
+          const user = JSON.parse(userStr)
+          userId = user.userId || user.id
+        } catch (e) { /* ignore */ }
+      }
+    }
+    if (userId) {
+      const dashboards = await biDashboardApi.getUserDashboards(userId)
+      hasBiDashboards.value = Array.isArray(dashboards) && dashboards.length > 0
+    }
+  } catch (e) {
+    console.error('Failed to check BI dashboards:', e)
+    hasBiDashboards.value = false
+  }
+}
+
 onMounted(() => {
   checkApproverStatus()
+  checkBiDashboards()
 })
 
 const toggleCollapse = () => {
