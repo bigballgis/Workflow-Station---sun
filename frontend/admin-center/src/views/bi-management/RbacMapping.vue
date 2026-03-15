@@ -76,15 +76,23 @@
           <span>{{ editForm.sysRoleName }}</span>
         </el-form-item>
         <el-form-item label="Superset Roles">
-          <el-checkbox-group v-model="editForm.selectedRoleIds" v-loading="supersetRolesLoading">
-            <el-checkbox
+          <el-select
+            v-model="editForm.selectedRoleIds"
+            multiple
+            filterable
+            collapse-tags
+            collapse-tags-tooltip
+            placeholder="Select Superset Roles"
+            :loading="supersetRolesLoading"
+            style="width: 100%"
+          >
+            <el-option
               v-for="role in activeSupersetRoles"
               :key="role.supersetRoleId"
-              :label="role.supersetRoleId"
+              :label="role.name"
               :value="role.supersetRoleId"
-              style="display: block; margin-bottom: 8px;"
-            >{{ role.name }}</el-checkbox>
-          </el-checkbox-group>
+            />
+          </el-select>
           <el-empty v-if="!supersetRolesLoading && activeSupersetRoles.length === 0" description="No available Superset roles" :image-size="60" />
         </el-form-item>
       </el-form>

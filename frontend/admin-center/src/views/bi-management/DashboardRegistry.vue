@@ -46,13 +46,13 @@
             <span v-else style="color: #c0c4cc">-</span>
           </template>
         </el-table-column>
-        <el-table-column label="Default Landing" width="130" align="center">
+        <el-table-column label="Default Landing" width="150" align="center">
           <template #default="{ row }">
             <el-tag v-if="row.isDefaultLanding" type="success" size="small">Yes</el-tag>
             <el-tag v-else type="info" size="small">No</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="Status" width="130" align="center">
+        <el-table-column label="Status" width="110" align="center">
           <template #default="{ row }">
             <el-tag :type="statusTagType(row.status)" size="small">{{ statusText(row.status) }}</el-tag>
           </template>

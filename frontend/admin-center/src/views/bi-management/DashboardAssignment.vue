@@ -40,8 +40,8 @@
             <el-tag :type="targetTypeTagType(row.targetType)" size="small">{{ targetTypeText(row.targetType) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="targetName" label="Target Name" min-width="150" show-overflow-tooltip />
-        <el-table-column label="Layout Mode" width="110" align="center">
+        <el-table-column prop="targetName" label="Target Name" width="150" show-overflow-tooltip />
+        <el-table-column label="Layout Mode" width="130" align="center">
           <template #default="{ row }">
             {{ layoutModeText(row.layoutMode) }}
           </template>
