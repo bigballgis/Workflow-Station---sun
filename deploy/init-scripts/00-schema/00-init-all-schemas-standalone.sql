@@ -35,5 +35,8 @@ COMMIT;
 \i 00-schema/10-add-approval-order-column.sql
 \i 00-schema/11-add-unique-enabled-constraint.sql
 \i 00-schema/12-add-enabled-field-to-dw-function-units.sql
+\i 00-schema/13-add-notification-table.sql
+\i 00-schema/14-add-common-table-feature.sql
+\i 00-schema/15-bi-management-schema.sql
 
 \echo '=== All schemas created successfully ==='
