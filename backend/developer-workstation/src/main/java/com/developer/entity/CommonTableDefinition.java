@@ -1,6 +1,5 @@
 package com.developer.entity;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 import org.springframework.data.annotation.CreatedDate;
@@ -42,10 +41,26 @@ public class CommonTableDefinition {
     @Builder.Default
     private String status = "DRAFT";
 
+    @Column(name = "version", length = 20)
+    @Builder.Default
+    private String version = "1.0.0";
+
+    @Column(name = "enabled", nullable = false)
+    @Builder.Default
+    private Boolean enabled = false;
+
+    @Column(name = "deployed_at")
+    private Instant deployedAt;
+
+    @Column(name = "deployed_by", length = 100)
+    private String deployedBy;
+
+    @Column(name = "updated_by", length = 100)
+    private String updatedBy;
+
     @Column(name = "created_by", length = 50)
     private String createdBy;
 
-    @JsonIgnore
     @OneToMany(mappedBy = "commonTable", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("sortOrder ASC")
     @Builder.Default

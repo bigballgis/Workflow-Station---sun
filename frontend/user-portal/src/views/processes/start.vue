@@ -86,6 +86,7 @@
               v-model="formData"
               :label-width="formLabelWidth"
               :label-position="formLabelPosition"
+              :common-table-form-rules="commonTableFormRulesMap"
               @fill-subtable="handleFillSubtable"
             />
           </div>
@@ -219,6 +220,10 @@ const formLabelWidth = ref('160px')
 const formLabelPosition = ref<'left' | 'right' | 'top'>('left')
 const formRendererRef = ref<InstanceType<typeof FormRenderer> | null>(null)
 
+// Binding form-create rules keyed by commonTableCode — used by FormRenderer
+// to know exactly which fields to show in the lookup description view.
+const commonTableFormRulesMap = ref<Record<string, any[]>>({})
+
 // Sub-table bindings for the start form
 const subTableBindings = ref<Array<{
   bindingId: number
@@ -339,6 +344,22 @@ const loadFunctionUnitContent = async () => {
         })
       }
       subTableBindings.value = bindings
+
+      // Build commonTableFormRulesMap so FormRenderer uses the designed field list
+      console.log('[ctRules] subForms keys:', Object.keys(subForms))
+      console.log('[ctRules] tableBindings:', JSON.stringify((selectedForm.tableBindings || []).map((b: any) => ({ id: b.bindingId, code: b.commonTableCode, type: b.tableType }))))
+      const ctRules: Record<string, any[]> = {}
+      for (const b of (selectedForm.tableBindings || [])) {
+        if (b.commonTableCode) {
+          const rule = subForms?.[b.bindingId]?.rule
+          console.log(`[ctRules] binding ${b.bindingId} commonTableCode=${b.commonTableCode} rule=`, rule)
+          if (rule && Array.isArray(rule) && rule.length > 0) {
+            ctRules[b.commonTableCode] = rule
+          }
+        }
+      }
+      console.log('[ctRules] final map:', JSON.stringify(ctRules))
+      commonTableFormRulesMap.value = ctRules
     }
     
     // 初始化流转记录（新流程，只有开始节点）
@@ -819,9 +840,21 @@ const convertFormCreateRule = (rule: any): FormField | null => {
     field.uploadAccept = rule.props?.accept || '.jpg,.jpeg,.png,.pdf,.docx,.xlsx'
     field.uploadLimit = rule.props?.limit || 1
   }
-  
-  // 调试输出
-  console.log('Converting rule:', rule.type, '->', field.type, rule)
+
+  // 处理公共表关联字段（info 字段存储 "commonTableRef:<code>:<displayField>[:<storeField>]" 或 "common Table Ref:..."）
+  if (rule.info && typeof rule.info === 'string') {
+    const normalizedInfo = rule.info.startsWith('common Table Ref:')
+      ? 'commonTableRef:' + rule.info.slice('common Table Ref:'.length)
+      : rule.info
+    if (normalizedInfo.startsWith('commonTableRef:')) {
+      const parts = normalizedInfo.split(':')
+      field.type = 'commonTableRef'
+      field.commonTableCode = parts[1]?.trim() || ''
+      field.commonTableDisplayField = parts[2]?.trim() || ''
+      field.commonTableStoreField = parts[3]?.trim() || 'id'
+      field.placeholder = rule.props?.placeholder || `Search ${field.label}`
+    }
+  }
   
   return field
 }

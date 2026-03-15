@@ -49,7 +49,8 @@ export default {
     logout: 'Logout',
     logoutSuccess: 'Logged out successfully',
     pleaseInput: 'Please input {label}',
-    pleaseSelect: 'Please select {label}'
+    pleaseSelect: 'Please select {label}',
+    selectedRecord: 'Selected Record'
   },
   menu: {
     dashboard: 'Home',
@@ -64,7 +65,8 @@ export default {
     memberManagement: 'Member Management',
     exitRole: 'Exit Role',
     notifications: 'Notifications',
-    settings: 'Settings'
+    settings: 'Settings',
+    commonTable: 'Common Table'
   },
   dashboard: {
     title: 'Home',

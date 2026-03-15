@@ -56,6 +56,12 @@
               <el-icon><Box /></el-icon>
               <template #title>{{ t('menu.functionUnit') }}</template>
             </el-menu-item>
+
+            <!-- Common Table - requires system:admin -->
+            <el-menu-item index="/common-table" v-if="isSystemAdmin">
+              <el-icon><Grid /></el-icon>
+              <template #title>{{ t('menu.commonTable') }}</template>
+            </el-menu-item>
             
             <!-- Audit Log - requires audit:read or log:read -->
             <el-menu-item index="/audit" v-if="canReadAudit">
@@ -86,7 +92,7 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { 
   Fold, Expand,
-  Odometer, OfficeBuilding, Key, Connection, Box, User, Lock, Document
+  Odometer, OfficeBuilding, Key, Connection, Box, User, Lock, Document, Grid
 } from '@element-plus/icons-vue'
 import UserProfileDropdown from '@/components/UserProfileDropdown.vue'
 import { hasPermission, PERMISSIONS } from '@/utils/permission'

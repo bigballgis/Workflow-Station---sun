@@ -79,6 +79,12 @@ const routes: RouteRecordRaw[] = [
         meta: { titleKey: 'menu.functionUnit', icon: 'Box', permissions: [PERMISSIONS.SYSTEM_ADMIN] }
       },
       {
+        path: 'common-table',
+        name: 'CommonTable',
+        component: () => import('@/views/common-table/index.vue'),
+        meta: { titleKey: 'menu.commonTable', icon: 'Grid', permissions: [PERMISSIONS.SYSTEM_ADMIN] }
+      },
+      {
         path: 'audit',
         name: 'Audit',
         component: () => import('@/views/audit/index.vue'),

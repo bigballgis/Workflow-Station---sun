@@ -49,7 +49,8 @@ export default {
     logout: '登出',
     logoutSuccess: '已登出',
     pleaseInput: '請輸入{label}',
-    pleaseSelect: '請選擇{label}'
+    pleaseSelect: '請選擇{label}',
+    selectedRecord: '已選記錄'
   },
   menu: {
     dashboard: '首頁',

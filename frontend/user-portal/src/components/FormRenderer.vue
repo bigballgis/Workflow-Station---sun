@@ -29,6 +29,18 @@
                   :prop="field.key"
                   :required="field.required"
                 >
+                  <template v-if="field.type === 'commonTableRef'" #label>
+                    <span class="form-item-label">
+                      <el-tooltip
+                        v-if="getCommonTableRefLabel(field)"
+                        :content="getCommonTableRefLabel(field)"
+                        placement="top"
+                      >
+                        <el-icon class="common-table-ref-label-icon"><InfoFilled /></el-icon>
+                      </el-tooltip>
+                      {{ field.label }}
+                    </span>
+                  </template>
                   <!-- 渲染字段 -->
                   <template v-if="field.type === 'text' || field.type === 'input'">
                     <el-input
@@ -239,26 +251,44 @@
                   </template>
                   <!-- 公共表关联字段 -->
                   <template v-else-if="field.type === 'commonTableRef'">
-                    <el-select
-                      v-model="formData[field.key]"
-                      :placeholder="field.placeholder || `搜索${field.label}`"
-                      filterable
-                      remote
-                      clearable
-                      :remote-method="(q: string) => searchCommonTableOptions(field.key, field.commonTableCode!, q)"
-                      :loading="commonTableLoadingMap[field.key]"
-                      style="width: 100%"
-                      popper-class="form-renderer-popper"
-                      @change="(val: number) => handleCommonTableSelect(field.key, field.commonTableCode!, val)"
-                      @focus="() => { if (!commonTableOptionsMap[field.key]?.length) searchCommonTableOptions(field.key, field.commonTableCode!) }"
-                    >
-                      <el-option
-                        v-for="row in (commonTableOptionsMap[field.key] || [])"
-                        :key="row.id"
-                        :label="getCommonTableLabel(row)"
-                        :value="row.id"
-                      />
-                    </el-select>
+                    <div class="common-table-ref-wrapper">
+                      <div class="common-table-ref-header">
+                        <div v-if="formData[field.key] && selectedCommonTableRecordMap[field.key]" class="common-table-selected-display">
+                          <el-tag :closable="!readonly" size="large" @close="handleCommonTableClear(field.key)">
+                            {{ getCommonTableLabel(selectedCommonTableRecordMap[field.key], field.commonTableDisplayField) }}
+                          </el-tag>
+                        </div>
+                        <span v-else-if="readonly" class="readonly-text">-</span>
+                        <div v-else class="common-table-ref-input">
+                        <el-autocomplete
+                        v-model="commonTableSearchText[field.key]"
+                        :fetch-suggestions="(q: string, cb: (r: any[]) => void) => fetchCommonTableSuggestions(field.key, field.commonTableCode!, q, cb, field.commonTableDisplayField)"
+                        :placeholder="field.placeholder || `Search ${field.label}`"
+                        clearable
+                        :trigger-on-focus="true"
+                        style="width: 100%"
+                        popper-class="form-renderer-popper"
+                        @select="(item: any) => handleCommonTableAutoSelect(field.key, field.commonTableCode!, item, field.commonTableStoreField)"
+                        @clear="handleCommonTableClear(field.key)"
+                      >
+                        <template #default="{ item }">
+                          <span>{{ getCommonTableLabel(item, field.commonTableDisplayField) }}</span>
+                        </template>
+                      </el-autocomplete>
+                        </div>
+                      </div>
+                      <div v-if="selectedCommonTableRecordMap[field.key]" class="selected-record-desc">
+                        <el-descriptions :column="1" border size="small">
+                          <el-descriptions-item
+                            v-for="fd in getCommonTableDisplayFields(field)"
+                            :key="fd.fieldName"
+                            :label="fd.displayName || fd.fieldName"
+                          >
+                            {{ selectedCommonTableRecordMap[field.key]?.dataJson?.[fd.fieldName] ?? '-' }}
+                          </el-descriptions-item>
+                        </el-descriptions>
+                      </div>
+                    </div>
                   </template>
                   <template v-else>
                     <el-input
@@ -287,6 +317,18 @@
               :prop="field.key"
               :required="field.required"
             >
+              <template v-if="field.type === 'commonTableRef'" #label>
+                <span class="form-item-label">
+                  <el-tooltip
+                    v-if="getCommonTableRefLabel(field)"
+                    :content="getCommonTableRefLabel(field)"
+                    placement="top"
+                  >
+                    <el-icon class="common-table-ref-label-icon"><InfoFilled /></el-icon>
+                  </el-tooltip>
+                  {{ field.label }}
+                </span>
+              </template>
               <!-- 文本输入 -->
               <el-input
                 v-if="field.type === 'text' || field.type === 'input'"
@@ -522,27 +564,44 @@
               </template>
 
               <!-- 公共表关联字段 -->
-              <el-select
-                v-else-if="field.type === 'commonTableRef'"
-                v-model="formData[field.key]"
-                :placeholder="field.placeholder || `搜索${field.label}`"
-                filterable
-                remote
-                clearable
-                :remote-method="(q: string) => searchCommonTableOptions(field.key, field.commonTableCode!, q)"
-                :loading="commonTableLoadingMap[field.key]"
-                style="width: 100%"
-                popper-class="form-renderer-popper"
-                @change="(val: number) => handleCommonTableSelect(field.key, field.commonTableCode!, val)"
-                @focus="() => { if (!commonTableOptionsMap[field.key]?.length) searchCommonTableOptions(field.key, field.commonTableCode!) }"
-              >
-                <el-option
-                  v-for="row in (commonTableOptionsMap[field.key] || [])"
-                  :key="row.id"
-                  :label="getCommonTableLabel(row)"
-                  :value="row.id"
-                />
-              </el-select>
+              <div v-else-if="field.type === 'commonTableRef'" class="common-table-ref-wrapper">
+                <div class="common-table-ref-header">
+                  <div v-if="formData[field.key] && selectedCommonTableRecordMap[field.key]" class="common-table-selected-display">
+                    <el-tag :closable="!readonly" size="large" @close="handleCommonTableClear(field.key)">
+                      {{ getCommonTableLabel(selectedCommonTableRecordMap[field.key], field.commonTableDisplayField) }}
+                    </el-tag>
+                  </div>
+                  <span v-else-if="readonly" class="readonly-text">-</span>
+                  <div v-else class="common-table-ref-input">
+                  <el-autocomplete
+                    v-model="commonTableSearchText[field.key]"
+                  :fetch-suggestions="(q: string, cb: (r: any[]) => void) => fetchCommonTableSuggestions(field.key, field.commonTableCode!, q, cb, field.commonTableDisplayField)"
+                  :placeholder="field.placeholder || `Search ${field.label}`"
+                  clearable
+                  :trigger-on-focus="true"
+                  style="width: 100%"
+                  popper-class="form-renderer-popper"
+                  @select="(item: any) => handleCommonTableAutoSelect(field.key, field.commonTableCode!, item, field.commonTableStoreField)"
+                  @clear="handleCommonTableClear(field.key)"
+                >
+                  <template #default="{ item }">
+                    <span>{{ getCommonTableLabel(item, field.commonTableDisplayField) }}</span>
+                  </template>
+                </el-autocomplete>
+                  </div>
+                </div>
+                <div v-if="selectedCommonTableRecordMap[field.key]" class="selected-record-desc">
+                  <el-descriptions :column="1" border size="small">
+                    <el-descriptions-item
+                      v-for="fd in getCommonTableDisplayFields(field)"
+                      :key="fd.fieldName"
+                      :label="fd.displayName || fd.fieldName"
+                    >
+                      {{ selectedCommonTableRecordMap[field.key]?.dataJson?.[fd.fieldName] ?? '-' }}
+                    </el-descriptions-item>
+                  </el-descriptions>
+                </div>
+              </div>
 
               <!-- 默认文本输入 -->
               <el-input
@@ -560,11 +619,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Upload } from '@element-plus/icons-vue'
+import { Upload, InfoFilled } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
-import { commonTableApi, type CommonTableDataRow } from '@/api/commonTable'
+import { commonTableApi, type CommonTableDataRow, type CommonFieldDef } from '@/api/commonTable'
 
 const { t } = useI18n()
 
@@ -600,6 +659,10 @@ export interface FormField {
   uploadLimit?: number
   /** commonTableRef field: code of the linked common table */
   commonTableCode?: string
+  /** commonTableRef field: which field in dataJson to display as the label */
+  commonTableDisplayField?: string
+  /** commonTableRef field: which field's value to store in formData (defaults to 'id') */
+  commonTableStoreField?: string
   /** Internal: search results for commonTableRef */
   commonTableOptions?: CommonTableDataRow[]
   commonTableLoading?: boolean
@@ -619,6 +682,10 @@ interface Props {
   labelWidth?: string
   labelPosition?: 'left' | 'right' | 'top'
   size?: 'large' | 'default' | 'small'
+  /** form-create rules for each common table binding, keyed by commonTableCode.
+   *  When provided, used instead of fieldDefinitions from the API to determine
+   *  which fields to show in the lookup description view. */
+  commonTableFormRules?: Record<string, any[]>
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -677,6 +744,49 @@ const initFormData = () => {
     } else {
       data[field.key] = null
     }
+    // 初始化 commonTableRef 搜索文本，并预加载已有值
+    if (field.type === 'commonTableRef') {
+      commonTableSearchText.value[field.key] = ''
+      const existingVal = props.modelValue[field.key]
+      const storeField = field.commonTableStoreField || 'id'
+      if (existingVal != null && existingVal !== '' && !selectedCommonTableRecordMap.value[field.key]) {
+        const code = field.commonTableCode!
+        // Fetch field definitions once per table code so the descriptions view shows
+        // exactly the current schema (not whatever keys happen to be in dataJson).
+        if (!commonTableFieldDefsMap.value[code]) {
+          commonTableApi.getTable(code)
+            .then(res => {
+              const tbl = (res as any).data || res
+              commonTableFieldDefsMap.value[code] = tbl?.fieldDefinitions || []
+            })
+            .catch(() => { commonTableFieldDefsMap.value[code] = [] })
+        }
+        if (storeField === 'id') {
+          // 存的是主键，直接按 ID 获取
+          commonTableApi.getRowById(code, Number(existingVal))
+            .then(res => {
+              const row = (res as any).data
+              if (row) {
+                selectedCommonTableRecordMap.value[field.key] = row
+                commonTableSearchText.value[field.key] = getCommonTableLabel(row, field.commonTableDisplayField)
+              }
+            })
+            .catch(() => {})
+        } else {
+          // 存的是其他字段值，通过 search 接口按字段值查找记录
+          commonTableApi.search(code, String(existingVal), storeField)
+            .then(res => {
+              const rows: any[] = (res as any).data || []
+              const matched = rows.find(r => String(r.dataJson?.[storeField] ?? r[storeField]) === String(existingVal))
+              if (matched) {
+                selectedCommonTableRecordMap.value[field.key] = matched
+                commonTableSearchText.value[field.key] = getCommonTableLabel(matched, field.commonTableDisplayField)
+              }
+            })
+            .catch(() => {})
+        }
+      }
+    }
     // 初始化文件上传列表（外部传入已有值时，从 URL 提取文件名显示）
     if (field.type === 'upload' && data[field.key]) {
       const url = data[field.key]
@@ -695,31 +805,94 @@ const initFormData = () => {
 // ===== Common Table Reference Field Logic =====
 const commonTableOptionsMap = ref<Record<string, CommonTableDataRow[]>>({})
 const commonTableLoadingMap = ref<Record<string, boolean>>({})
+const commonTableQueryMap = ref<Record<string, string>>({})
+const commonTableSearchText = ref<Record<string, string>>({})
+const selectedCommonTableRecordMap = ref<Record<string, CommonTableDataRow>>({})
+const commonTableFieldDefsMap = ref<Record<string, CommonFieldDef[]>>({})
 
-async function searchCommonTableOptions(fieldKey: string, commonTableCode: string, keyword?: string) {
+function getCommonTableLabel(row: CommonTableDataRow, displayField?: string): string {
+  if (!row?.dataJson) return String(row?.id || '')
+  if (displayField && row.dataJson[displayField] !== undefined && row.dataJson[displayField] !== null) {
+    return String(row.dataJson[displayField])
+  }
+  const values = Object.values(row.dataJson)
+  return values.slice(0, 3).join(' / ') || String(row.id)
+}
+
+/** Returns the ordered list of { fieldName, displayName } to show in the lookup description.
+ *  Priority: binding form-create rules > API fieldDefinitions > dataJson keys (fallback) */
+function getCommonTableDisplayFields(field: FormField): Array<{ fieldName: string; displayName: string }> {
+  const code = field.commonTableCode!
+  // 1. Use binding's form-create rules (most accurate — mirrors what the designer configured)
+  const bindingRules = props.commonTableFormRules?.[code]
+  if (bindingRules && bindingRules.length > 0) {
+    return bindingRules.map((r: any) => ({ fieldName: r.field, displayName: r.title || r.field }))
+  }
+  // 2. Use fetched fieldDefinitions from the common table schema
+  const defs = commonTableFieldDefsMap.value[code]
+  if (defs && defs.length > 0) {
+    return defs.map(d => ({ fieldName: d.fieldName, displayName: d.displayName || d.fieldName }))
+  }
+  // 3. Fallback: all keys in the selected record's dataJson
+  const record = selectedCommonTableRecordMap.value[field.key]
+  return Object.keys(record?.dataJson || {}).map(k => ({ fieldName: k, displayName: k }))
+}
+
+function getCommonTableRefLabel(field: FormField): string {
+  if (!field.commonTableCode) return ''
+  const displayField = field.commonTableDisplayField || ''
+  return displayField
+    ? `common Table Ref:${field.commonTableCode}:${displayField}`
+    : `common Table Ref:${field.commonTableCode}`
+}
+
+async function fetchCommonTableSuggestions(
+  fieldKey: string,
+  commonTableCode: string,
+  query: string,
+  callback: (results: any[]) => void,
+  displayField?: string
+) {
+  commonTableQueryMap.value[fieldKey] = query
   commonTableLoadingMap.value[fieldKey] = true
   try {
-    const res = await commonTableApi.search(commonTableCode, keyword)
-    commonTableOptionsMap.value[fieldKey] = (res as any).data || res || []
-  } catch (e) {
-    commonTableOptionsMap.value[fieldKey] = []
+    const res = await commonTableApi.search(commonTableCode, query || undefined, displayField || undefined)
+    const rows: CommonTableDataRow[] = (res as any).data || []
+    commonTableOptionsMap.value[fieldKey] = rows
+    callback(rows.map(r => ({ ...r, value: getCommonTableLabel(r, displayField) })))
+  } catch {
+    callback([])
   } finally {
     commonTableLoadingMap.value[fieldKey] = false
   }
 }
 
-function getCommonTableLabel(row: CommonTableDataRow): string {
-  if (!row?.dataJson) return String(row?.id || '')
-  const values = Object.values(row.dataJson)
-  return values.slice(0, 3).join(' / ') || String(row.id)
+async function handleCommonTableAutoSelect(fieldKey: string, commonTableCode: string, item: CommonTableDataRow & { value?: string }, storeField?: string) {
+  const sf = storeField || 'id'
+  formData.value[fieldKey] = sf === 'id' ? item.id : (item.dataJson?.[sf] ?? item.id)
+  commonTableSearchText.value[fieldKey] = item.value || getCommonTableLabel(item)
+  selectedCommonTableRecordMap.value[fieldKey] = item
+  if (!commonTableFieldDefsMap.value[commonTableCode]) {
+    try {
+      const res = await commonTableApi.getTable(commonTableCode)
+      const tbl = (res as any).data || res
+      commonTableFieldDefsMap.value[commonTableCode] = tbl?.fieldDefinitions || []
+    } catch {
+      commonTableFieldDefsMap.value[commonTableCode] = []
+    }
+  }
+  emit('fill-subtable', fieldKey, commonTableCode, item)
 }
 
-function handleCommonTableSelect(fieldKey: string, commonTableCode: string, recordId: number) {
-  const options = commonTableOptionsMap.value[fieldKey] || []
-  const record = options.find(r => r.id === recordId)
-  if (record) {
-    emit('fill-subtable', fieldKey, commonTableCode, record)
-  }
+function handleCommonTableClear(fieldKey: string) {
+  selectedCommonTableRecordMap.value[fieldKey] = undefined as any
+  formData.value[fieldKey] = null
+  commonTableSearchText.value[fieldKey] = ''
+}
+
+// kept for backward compatibility (not used by autocomplete)
+async function searchCommonTableOptions(fieldKey: string, commonTableCode: string, keyword?: string) {
+  await fetchCommonTableSuggestions(fieldKey, commonTableCode, keyword || '', () => {})
 }
 
 // ===== End Common Table Reference Field Logic =====
@@ -860,6 +1033,64 @@ defineExpose({
   
   :deep(.el-form) {
     width: 100%;
+  }
+}
+
+.form-item-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.common-table-ref-label-icon {
+  font-size: 15px;
+  color: #409eff;
+  cursor: help;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+.common-table-ref-wrapper {
+  width: 100%;
+
+  .common-table-ref-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .common-table-ref-input {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .common-table-selected-display {
+    display: flex;
+    align-items: center;
+    min-height: 32px;
+    flex: 1;
+    min-width: 0;
+
+    .el-tag {
+      font-size: 13px;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  }
+}
+
+.selected-record-desc {
+  margin-top: 8px;
+
+  :deep(.el-descriptions__label) {
+    white-space: nowrap;
+    width: auto !important;
+    min-width: unset !important;
+    max-width: unset !important;
+    overflow: visible !important;
+    font-weight: 500;
   }
 }
 </style>

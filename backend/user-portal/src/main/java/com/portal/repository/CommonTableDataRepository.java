@@ -17,9 +17,13 @@ public interface CommonTableDataRepository extends JpaRepository<CommonTableData
 
     List<CommonTableData> findByCommonTable_Id(Long commonTableId);
 
-    @Query(value = "SELECT * FROM dw_common_table_data WHERE common_table_id = :tableId AND data_json::text ILIKE %:keyword%",
+    @Query(value = "SELECT * FROM dw_common_table_data WHERE common_table_id = :tableId AND CAST(data_json AS text) ILIKE CONCAT('%', :keyword, '%')",
            nativeQuery = true)
     List<CommonTableData> searchByKeyword(@Param("tableId") Long tableId, @Param("keyword") String keyword);
+
+    @Query(value = "SELECT * FROM dw_common_table_data WHERE common_table_id = :tableId AND data_json->>:displayField ILIKE CONCAT('%', :keyword, '%')",
+           nativeQuery = true)
+    List<CommonTableData> searchByKeywordInField(@Param("tableId") Long tableId, @Param("displayField") String displayField, @Param("keyword") String keyword);
 
     long countByCommonTable_Id(Long commonTableId);
 }
