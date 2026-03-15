@@ -3,6 +3,9 @@
     <div class="page-header">
       <span class="page-title">RBAC Mapping</span>
       <div class="header-actions">
+        <el-button type="success" @click="showCreateDialog">
+          <el-icon><Plus /></el-icon>Create Mapping
+        </el-button>
         <el-button type="primary" :loading="syncing" @click="handleSync">
           <el-icon><Refresh /></el-icon>Sync Superset Roles
         </el-button>
@@ -61,13 +64,61 @@
             <span v-else style="color: #c0c4cc">-</span>
           </template>
         </el-table-column>
-        <el-table-column label="Actions" width="120" fixed="right" align="center">
+        <el-table-column label="Actions" width="200" fixed="right" align="center">
           <template #default="{ row }">
             <el-button link type="primary" size="small" @click="showEditDialog(row)">Edit Mapping</el-button>
+            <el-button link type="danger" size="small" @click="handleDelete(row)">Delete</el-button>
           </template>
         </el-table-column>
       </el-table>
     </el-card>
+
+    <!-- Create Mapping Dialog -->
+    <el-dialog v-model="createDialogVisible" title="Create Mapping" width="560px" destroy-on-close>
+      <el-form :model="createForm" :rules="createFormRules" ref="createFormRef" label-width="140px">
+        <el-form-item label="System Role" prop="sysRoleId">
+          <el-select
+            v-model="createForm.sysRoleId"
+            filterable
+            placeholder="Select system role"
+            :loading="unmappedRolesLoading"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="role in unmappedRoles"
+              :key="role.id"
+              :label="`${role.name} (${role.code})`"
+              :value="role.id"
+            />
+          </el-select>
+          <el-empty v-if="!unmappedRolesLoading && unmappedRoles.length === 0" description="No unmapped roles available" :image-size="60" />
+        </el-form-item>
+        <el-form-item label="Superset Roles" prop="supersetRoleIds">
+          <el-select
+            v-model="createForm.supersetRoleIds"
+            multiple
+            filterable
+            collapse-tags
+            collapse-tags-tooltip
+            placeholder="Select Superset Roles"
+            :loading="createSupersetRolesLoading"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="role in createActiveSupersetRoles"
+              :key="role.supersetRoleId"
+              :label="role.name"
+              :value="role.supersetRoleId"
+            />
+          </el-select>
+          <el-empty v-if="!createSupersetRolesLoading && createActiveSupersetRoles.length === 0" description="No available Superset roles" :image-size="60" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="createDialogVisible = false">Cancel</el-button>
+        <el-button type="primary" :loading="createLoading" @click="handleCreateSubmit">OK</el-button>
+      </template>
+    </el-dialog>
 
     <!-- Edit Mapping Dialog -->
     <el-dialog v-model="editDialogVisible" title="Edit RBAC Mapping" width="560px" destroy-on-close>
@@ -106,13 +157,14 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
-import { ElMessage } from 'element-plus'
-import { Refresh, Search, Refresh as RefreshIcon } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
+import { Refresh, Search, Refresh as RefreshIcon, Plus } from '@element-plus/icons-vue'
 import {
   biManagementApi,
   type RbacMappingResponse,
   type SupersetRoleResponse,
-  type RbacMappingListParams
+  type RbacMappingListParams,
+  type RoleOptionResponse
 } from '@/api/biManagement'
 
 // State
@@ -140,6 +192,29 @@ const editForm = reactive({
 // Only show ACTIVE superset roles in the checkbox group
 const activeSupersetRoles = computed(() =>
   allSupersetRoles.value.filter(r => r.status === 'ACTIVE')
+)
+
+// Create dialog
+const createDialogVisible = ref(false)
+const createLoading = ref(false)
+const unmappedRolesLoading = ref(false)
+const createSupersetRolesLoading = ref(false)
+const unmappedRoles = ref<RoleOptionResponse[]>([])
+const createAllSupersetRoles = ref<SupersetRoleResponse[]>([])
+const createFormRef = ref<FormInstance>()
+
+const createForm = reactive({
+  sysRoleId: '',
+  supersetRoleIds: [] as number[]
+})
+
+const createFormRules: FormRules = {
+  sysRoleId: [{ required: true, message: 'Please select a system role', trigger: 'change' }],
+  supersetRoleIds: [{ required: true, type: 'array', min: 1, message: 'Please select at least one Superset role', trigger: 'change' }]
+}
+
+const createActiveSupersetRoles = computed(() =>
+  createAllSupersetRoles.value.filter(r => r.status === 'ACTIVE')
 )
 
 // Role type display mapping
@@ -229,6 +304,81 @@ const handleEditSubmit = async () => {
     ElMessage.error(error.message || 'Failed to update mapping')
   } finally {
     editLoading.value = false
+  }
+}
+
+// Show create mapping dialog
+const showCreateDialog = () => {
+  createForm.sysRoleId = ''
+  createForm.supersetRoleIds = []
+  loadUnmappedRoles()
+  loadCreateSupersetRoles()
+  createDialogVisible.value = true
+}
+
+// Load unmapped roles for create dialog dropdown
+const loadUnmappedRoles = async () => {
+  unmappedRolesLoading.value = true
+  try {
+    unmappedRoles.value = await biManagementApi.rbac.listUnmappedRoles()
+  } catch (error: any) {
+    ElMessage.error(error.message || 'Failed to load unmapped roles')
+  } finally {
+    unmappedRolesLoading.value = false
+  }
+}
+
+// Load superset roles for create dialog
+const loadCreateSupersetRoles = async () => {
+  createSupersetRolesLoading.value = true
+  try {
+    createAllSupersetRoles.value = await biManagementApi.rbac.listSupersetRoles()
+  } catch (error: any) {
+    ElMessage.error(error.message || 'Failed to load Superset role list')
+  } finally {
+    createSupersetRolesLoading.value = false
+  }
+}
+
+// Submit create mapping
+const handleCreateSubmit = async () => {
+  if (!createFormRef.value) return
+  await createFormRef.value.validate()
+
+  createLoading.value = true
+  try {
+    await biManagementApi.rbac.createMapping({
+      sysRoleId: createForm.sysRoleId,
+      supersetRoleIds: createForm.supersetRoleIds
+    })
+    ElMessage.success('Mapping created successfully')
+    createDialogVisible.value = false
+    handleSearch()
+  } catch (error: any) {
+    ElMessage.error(error.message || 'Failed to create mapping')
+  } finally {
+    createLoading.value = false
+  }
+}
+
+// Delete mapping
+const handleDelete = async (row: RbacMappingResponse) => {
+  try {
+    await ElMessageBox.confirm(
+      `Are you sure you want to delete all RBAC mappings for role "${row.sysRoleName}"?`,
+      'Confirm Delete',
+      {
+        confirmButtonText: 'Delete',
+        cancelButtonText: 'Cancel',
+        type: 'warning'
+      }
+    )
+    await biManagementApi.rbac.deleteMapping(row.sysRoleId)
+    ElMessage.success('Mapping deleted successfully')
+    handleSearch()
+  } catch (error: any) {
+    if (error === 'cancel' || error?.toString?.() === 'cancel') return
+    ElMessage.error(error.message || 'Failed to delete mapping')
   }
 }
 
