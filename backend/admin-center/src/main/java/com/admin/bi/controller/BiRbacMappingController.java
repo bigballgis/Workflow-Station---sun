@@ -1,7 +1,9 @@
 package com.admin.bi.controller;
 
+import com.admin.bi.dto.request.RbacMappingCreateRequest;
 import com.admin.bi.dto.request.RbacMappingUpdateRequest;
 import com.admin.bi.dto.response.RbacMappingResponse;
+import com.admin.bi.dto.response.RoleOptionResponse;
 import com.admin.bi.dto.response.SupersetRoleResponse;
 import com.admin.bi.dto.response.SyncResultResponse;
 import com.admin.bi.service.BiRbacMappingService;
@@ -52,6 +54,23 @@ public class BiRbacMappingController {
         return ResponseEntity.ok(mappings);
     }
 
+    @GetMapping("/unmapped-roles")
+    @Operation(summary = "获取未映射的活跃系统角色列表", description = "返回尚未创建 RBAC 映射的活跃系统角色，用于创建映射时的下拉选择")
+    public ResponseEntity<List<RoleOptionResponse>> listUnmappedRoles() {
+        List<RoleOptionResponse> roles = rbacMappingService.listUnmappedRoles();
+        return ResponseEntity.ok(roles);
+    }
+
+    @PostMapping("/mappings")
+    @Operation(summary = "创建 RBAC 映射", description = "为指定系统角色创建 Superset 角色映射")
+    public ResponseEntity<Void> createMapping(
+            @RequestBody @Valid RbacMappingCreateRequest request,
+            @RequestHeader("X-User-Id") String userId) {
+        log.info("User {} creating RBAC mapping for sysRoleId {}", userId, request.getSysRoleId());
+        rbacMappingService.createMapping(request);
+        return ResponseEntity.status(201).build();
+    }
+
     @PutMapping("/mappings/{sysRoleId}")
     @Operation(summary = "更新 Sys_Role 的 Superset_Role 映射", description = "全量替换该 Sys_Role 的所有 Superset_Role 映射")
     public ResponseEntity<Void> updateMapping(
@@ -60,6 +79,16 @@ public class BiRbacMappingController {
             @RequestHeader("X-User-Id") String userId) {
         log.info("User {} updating RBAC mapping for sysRoleId {}", userId, sysRoleId);
         rbacMappingService.updateMapping(sysRoleId, request);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/mappings/{sysRoleId}")
+    @Operation(summary = "删除 Sys_Role 的所有 RBAC 映射", description = "删除该系统角色的所有 Superset 角色映射记录")
+    public ResponseEntity<Void> deleteMapping(
+            @PathVariable String sysRoleId,
+            @RequestHeader("X-User-Id") String userId) {
+        log.info("User {} deleting RBAC mapping for sysRoleId {}", userId, sysRoleId);
+        rbacMappingService.deleteMapping(sysRoleId);
         return ResponseEntity.noContent().build();
     }
 }

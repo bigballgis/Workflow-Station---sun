@@ -101,6 +101,18 @@ export interface RbacMappingUpdateRequest {
   supersetRoleIds: number[]
 }
 
+export interface RbacMappingCreateRequest {
+  sysRoleId: string
+  supersetRoleIds: number[]
+}
+
+export interface RoleOptionResponse {
+  id: string
+  name: string
+  code: string
+  type: string
+}
+
 export interface GuestTokenRequest {
   dashboardId: string
 }
@@ -212,6 +224,18 @@ export const biManagementApi = {
     /** Update Sys_Role to Superset_Role mapping (full replace) */
     updateMapping: (sysRoleId: string, data: RbacMappingUpdateRequest) =>
       put<void>(`${RBAC_BASE}/mappings/${sysRoleId}`, data),
+
+    /** Create RBAC mapping for a system role */
+    createMapping: (data: RbacMappingCreateRequest) =>
+      post<void>(`${RBAC_BASE}/mappings`, data),
+
+    /** Delete all RBAC mappings for a system role */
+    deleteMapping: (sysRoleId: string) =>
+      del<void>(`${RBAC_BASE}/mappings/${sysRoleId}`),
+
+    /** Get unmapped active system roles (for create mapping dropdown) */
+    listUnmappedRoles: () =>
+      get<RoleOptionResponse[]>(`${RBAC_BASE}/unmapped-roles`),
   },
 
   /** Guest Token */

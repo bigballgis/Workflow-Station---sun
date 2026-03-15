@@ -2,6 +2,8 @@ package com.admin.bi.repository;
 
 import com.admin.bi.entity.BiRbacMapping;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -25,5 +27,13 @@ public interface BiRbacMappingRepository extends JpaRepository<BiRbacMapping, St
     /**
      * 按系统角色 ID 删除所有映射（全量替换时使用）
      */
+    @Modifying
+    @Query("DELETE FROM BiRbacMapping m WHERE m.sysRoleId = :sysRoleId")
     void deleteBySysRoleId(String sysRoleId);
+
+    /**
+     * 获取所有不重复的 sys_role_id（已映射的系统角色 ID）
+     */
+    @Query("SELECT DISTINCT m.sysRoleId FROM BiRbacMapping m")
+    List<String> findDistinctSysRoleIds();
 }
