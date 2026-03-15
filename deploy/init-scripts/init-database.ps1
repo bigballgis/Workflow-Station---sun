@@ -47,7 +47,7 @@ try { $null = Get-Command psql -ErrorAction Stop }
 catch { Write-Fail "psql not found."; exit 1 }
 
 # Step 1: Base schemas
-Write-Step "Step 1/4: Creating base schemas..."
+Write-Step "Step 1/8: Creating base schemas..."
 $schemas = @(
     "00-schema/01-platform-security-schema.sql",
     "00-schema/02-workflow-engine-schema.sql",
@@ -60,7 +60,7 @@ foreach ($s in $schemas) {
 }
 
 # Step 2: Incremental migrations
-Write-Step "Step 2/4: Applying incremental migrations..."
+Write-Step "Step 2/8: Applying incremental migrations..."
 $migrations = @(
     "00-schema/06-add-deployment-rollback-columns.sql",
     "00-schema/07-add-action-definitions-table.sql",
@@ -75,12 +75,12 @@ foreach ($m in $migrations) {
 }
 
 # Step 3: Roles, groups, admin user
-Write-Step "Step 3/4: Creating roles, groups, and admin user..."
+Write-Step "Step 3/8: Creating roles, groups, and admin user..."
 Exec-Sql -File (Join-Path $ScriptDir "01-admin/01-create-roles-and-groups.sql") -Desc "Roles and virtual groups" | Out-Null
 Exec-Sql -File (Join-Path $ScriptDir "01-admin/01-create-admin-only.sql") -Desc "Admin user" | Out-Null
 
 # Step 4: Test function unit
-Write-Step "Step 4/4: Loading test function unit (Digital Lending V2 EN)..."
+Write-Step "Step 4/8: Loading test function unit (Digital Lending V2 EN)..."
 $fuScripts = @(
     "08-digital-lending-v2-en/00-create-virtual-groups.sql",
     "08-digital-lending-v2-en/01-create-digital-lending-complete.sql",
@@ -93,7 +93,7 @@ foreach ($f in $fuScripts) {
 }
 
 # Step 5: Simple Approval Workflow
-Write-Step "Step 5/6: Loading Simple Approval Workflow..."
+Write-Step "Step 5/8: Loading Simple Approval Workflow..."
 $saScripts = @(
     "10-simple-approval/00-create-simple-approval.sql",
     "10-simple-approval/01-create-tables.sql",
@@ -106,7 +106,7 @@ foreach ($f in $saScripts) {
 }
 
 # Step 6: Procurement Workflow
-Write-Step "Step 6/6: Loading Procurement Workflow..."
+Write-Step "Step 6/8: Loading Procurement Workflow..."
 $pwScripts = @(
     "13-procurement-workflow/00-create-function-unit.sql",
     "13-procurement-workflow/01-create-tables.sql",
@@ -114,6 +114,20 @@ $pwScripts = @(
     "13-procurement-workflow/03-form-table-bindings.sql"
 )
 foreach ($f in $pwScripts) {
+    $path = Join-Path $ScriptDir $f
+    if (Test-Path $path) { Exec-Sql -File $path -Desc (Split-Path $f -Leaf) | Out-Null }
+}
+
+# Step 7: Travel Expense Reimbursement
+Write-Step "Step 7/8: Loading Travel Expense Reimbursement..."
+$teScripts = @(
+    "14-travel-expense-reimbursement/00-create-function-unit.sql",
+    "14-travel-expense-reimbursement/01-create-tables.sql",
+    "14-travel-expense-reimbursement/02-create-bpmn-process.sql",
+    "14-travel-expense-reimbursement/03-form-table-bindings.sql",
+    "14-travel-expense-reimbursement/04-update-n8n-action-config.sql"
+)
+foreach ($f in $teScripts) {
     $path = Join-Path $ScriptDir $f
     if (Test-Path $path) { Exec-Sql -File $path -Desc (Split-Path $f -Leaf) | Out-Null }
 }

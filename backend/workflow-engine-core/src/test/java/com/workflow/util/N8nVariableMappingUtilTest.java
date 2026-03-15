@@ -1,6 +1,8 @@
 package com.workflow.util;
 
 import com.workflow.util.N8nVariableMappingUtil.VariableMapping;
+import net.jqwik.api.*;
+import net.jqwik.api.constraints.*;
 import org.junit.jupiter.api.Test;
 
 import java.util.*;
@@ -184,5 +186,148 @@ class N8nVariableMappingUtilTest {
     @Test
     void applyOutputMapping_nullMappings_returnsEmptyMap() {
         assertThat(N8nVariableMappingUtil.applyOutputMapping((List<VariableMapping>) null, Map.of("a", 1))).isEmpty();
+    }
+
+    // ==================== resolveNestedValue (via applyOutputMapping) ====================
+    // Task 10.4: Unit tests for resolveNestedValue
+
+    @Test
+    void applyOutputMapping_nestedMapTraversal_resolvesCorrectly() {
+        // {"a": {"b": {"c": "value"}}} with source "a.b.c" → "value"
+        Map<String, Object> nested = new HashMap<>();
+        nested.put("a", Map.of("b", Map.of("c", "value")));
+
+        List<VariableMapping> mappings = List.of(new VariableMapping("a.b.c", "result"));
+        Map<String, Object> result = N8nVariableMappingUtil.applyOutputMapping(mappings, nested);
+
+        assertThat(result.get("result")).isEqualTo("value");
+    }
+
+    @Test
+    void applyOutputMapping_missingIntermediateKey_returnsNull() {
+        // {"a": {"b": 1}} with source "a.x.c" → null
+        Map<String, Object> nested = new HashMap<>();
+        nested.put("a", Map.of("b", 1));
+
+        List<VariableMapping> mappings = List.of(new VariableMapping("a.x.c", "result"));
+        Map<String, Object> result = N8nVariableMappingUtil.applyOutputMapping(mappings, nested);
+
+        assertThat(result).containsKey("result");
+        assertThat(result.get("result")).isNull();
+    }
+
+    @Test
+    void applyOutputMapping_nonMapIntermediateValue_returnsNull() {
+        // {"a": "string"} with source "a.b" → null
+        Map<String, Object> data = new HashMap<>();
+        data.put("a", "string");
+
+        List<VariableMapping> mappings = List.of(new VariableMapping("a.b", "result"));
+        Map<String, Object> result = N8nVariableMappingUtil.applyOutputMapping(mappings, data);
+
+        assertThat(result).containsKey("result");
+        assertThat(result.get("result")).isNull();
+    }
+
+    @Test
+    void applyOutputMapping_flatKeyLookup_backwardCompatible() {
+        // {"key": "value"} with source "key" → "value" (no dots, backward compatible)
+        Map<String, Object> data = Map.of("key", "value");
+
+        List<VariableMapping> mappings = List.of(new VariableMapping("key", "result"));
+        Map<String, Object> result = N8nVariableMappingUtil.applyOutputMapping(mappings, data);
+
+        assertThat(result.get("result")).isEqualTo("value");
+    }
+
+    @Test
+    void applyOutputMapping_deeplyNestedPath_resolvesCorrectly() {
+        Map<String, Object> data = new HashMap<>();
+        data.put("level1", Map.of("level2", Map.of("level3", Map.of("level4", 42))));
+
+        List<VariableMapping> mappings = List.of(new VariableMapping("level1.level2.level3.level4", "deep"));
+        Map<String, Object> result = N8nVariableMappingUtil.applyOutputMapping(mappings, data);
+
+        assertThat(result.get("deep")).isEqualTo(42);
+    }
+
+    @Test
+    void applyOutputMapping_mixedFlatAndNestedSources_resolvesAll() {
+        Map<String, Object> data = new HashMap<>();
+        data.put("flat", "flatValue");
+        data.put("nested", Map.of("child", "nestedValue"));
+
+        List<VariableMapping> mappings = List.of(
+                new VariableMapping("flat", "out1"),
+                new VariableMapping("nested.child", "out2")
+        );
+        Map<String, Object> result = N8nVariableMappingUtil.applyOutputMapping(mappings, data);
+
+        assertThat(result.get("out1")).isEqualTo("flatValue");
+        assertThat(result.get("out2")).isEqualTo("nestedValue");
+    }
+
+    // ==================== Property 9: Backend dot notation backward compatibility ====================
+    // Feature: n8n-output-autofill-generalization, Property 9: Backend dot notation backward compatibility
+    // Validates: Requirements 13.4
+
+    @Property(tries = 100)
+    void backwardCompatibility_flatMapWithNoDotSources_sameAsDirectLookup(
+            @ForAll("flatMapAndMappings") FlatMapAndMappings input) {
+        // For any flat Map and VariableMapping with source containing no dots,
+        // applyOutputMapping should produce the same result as direct key lookup
+        Map<String, Object> result = N8nVariableMappingUtil.applyOutputMapping(input.mappings, input.sourceData);
+
+        // Verify each mapping produces the same result as direct get
+        for (VariableMapping mapping : input.mappings) {
+            if (mapping.getSource() != null && mapping.getTarget() != null) {
+                Object expected = input.sourceData.get(mapping.getSource());
+                assertThat(result.get(mapping.getTarget())).isEqualTo(expected);
+            }
+        }
+    }
+
+    @Provide
+    Arbitrary<FlatMapAndMappings> flatMapAndMappings() {
+        // Generate keys that don't contain dots (flat keys)
+        Arbitrary<String> flatKey = Arbitraries.strings()
+                .alpha()
+                .ofMinLength(1)
+                .ofMaxLength(10)
+                .filter(s -> !s.contains("."));
+
+        Arbitrary<String> value = Arbitraries.strings()
+                .alpha()
+                .ofMinLength(0)
+                .ofMaxLength(20);
+
+        // Generate a flat map with 1-5 entries
+        Arbitrary<Map<String, Object>> flatMap = Arbitraries.maps(flatKey, value.map(v -> (Object) v))
+                .ofMinSize(1)
+                .ofMaxSize(5);
+
+        return flatMap.flatMap(map -> {
+            List<String> keys = new ArrayList<>(map.keySet());
+            // Generate 1 to keys.size() mappings using existing keys as sources
+            return Arbitraries.integers().between(1, Math.max(1, keys.size())).flatMap(count -> {
+                int actualCount = Math.min(count, keys.size());
+                List<VariableMapping> mappings = new ArrayList<>();
+                for (int i = 0; i < actualCount; i++) {
+                    mappings.add(new VariableMapping(keys.get(i), "target_" + i));
+                }
+                return Arbitraries.just(new FlatMapAndMappings(map, mappings));
+            });
+        });
+    }
+
+    /** Helper record for Property 9 */
+    static class FlatMapAndMappings {
+        final Map<String, Object> sourceData;
+        final List<VariableMapping> mappings;
+
+        FlatMapAndMappings(Map<String, Object> sourceData, List<VariableMapping> mappings) {
+            this.sourceData = sourceData;
+            this.mappings = mappings;
+        }
     }
 }

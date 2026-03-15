@@ -325,6 +325,7 @@ import FormRenderer, { type FormField, type FormTab } from '@/components/FormRen
 import SubTableField from '@/components/SubTableField.vue'
 import N8nActionDialog from '@/components/N8nActionDialog.vue'
 import type { ActionDefinition } from '@/components/N8nActionDialog.vue'
+import { applyAutoFill } from '@/utils/n8nAutoFillEngine'
 import dayjs from 'dayjs'
 
 const { t } = useI18n()
@@ -1334,9 +1335,31 @@ const handleCustomAction = (action: TaskActionInfo) => {
 }
 
 // N8N Action 执行完成回调
-const handleN8nActionExecuted = (_data: Record<string, any> | null) => {
-  // 刷新任务详情以反映可能的变量变更
-  loadTaskDetail()
+const handleN8nActionExecuted = (data: Record<string, any> | null) => {
+  try {
+    const n8nOutput = data?.outputData || data
+    if (!n8nOutput) return
+
+    const configJson = n8nActionDefinition.value?.configJson
+      ? JSON.parse(n8nActionDefinition.value.configJson)
+      : null
+
+    const frontendOutputMapping = configJson?.frontendOutputMapping
+    if (!frontendOutputMapping || !Array.isArray(frontendOutputMapping) || frontendOutputMapping.length === 0) {
+      return
+    }
+
+    const result = applyAutoFill(n8nOutput, frontendOutputMapping, subTableBindings.value, formData.value)
+
+    subTableBindings.value = result.updatedBindings as typeof subTableBindings.value
+    formData.value = result.updatedFormData
+
+    if (result.filledCount > 0) {
+      ElMessage.success(t('processStart.n8nAutoFillSuccess', { count: result.filledCount }))
+    }
+  } catch (e) {
+    console.error('[handleN8nActionExecuted] Error:', e)
+  }
 }
 
 // 打开表单弹窗
