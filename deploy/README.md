@@ -8,7 +8,7 @@
 ┌─────────────────────────────────────────────────────────┐
 │                    Ingress (K8S) / Nginx                │
 │         admin.company.com  portal.company.com           │
-│         dev.company.com                                 │
+│         dev.company.com    n8n.company.com              │
 └──────┬──────────────┬──────────────────┬────────────────┘
        │              │                  │
 ┌──────▼──────┐ ┌─────▼──────┐ ┌────────▼────────┐
@@ -29,40 +29,44 @@
             │   (Flowable)     │
             └──────┬───────────┘
                    │
-         ┌─────────┴─────────┐
-         │                   │
-    ┌────▼────┐        ┌─────▼────┐
-    │PostgreSQL│        │  Redis   │
-    └─────────┘        └──────────┘
+    ┌──────────────┼──────────────┐
+    │              │              │
+┌───▼─────┐  ┌────▼────┐  ┌─────▼────┐
+│PostgreSQL│  │  Redis  │  │  Kafka   │
+│(公司现有) │  │(K8S部署) │  │(K8S部署) │
+└─────────┘  └─────────┘  └──────────┘
 ```
 
-## Services (7 deployable)
+## Services (10 deployable)
 
-| Service | Type | Image Name | Healthcheck Path |
-|---------|------|------------|-----------------|
-| workflow-engine | Backend | `workflow-engine-core` | `/actuator/health` |
-| admin-center | Backend | `admin-center` | `/api/v1/admin/actuator/health` |
-| user-portal | Backend | `user-portal` | `/api/portal/actuator/health` |
-| developer-workstation | Backend | `developer-workstation` | `/api/v1/actuator/health` |
-| admin-center-frontend | Frontend | `admin-center-frontend` | `/` |
-| user-portal-frontend | Frontend | `user-portal-frontend` | `/` |
-| developer-workstation-frontend | Frontend | `developer-workstation-frontend` | `/` |
-| n8n | Infrastructure | `n8nio/n8n` (official) | `/healthz` |
+| Service | Type | K8S Manifest | Healthcheck |
+|---------|------|-------------|-------------|
+| redis | Infrastructure | `deployment-redis.yaml` | redis-cli ping |
+| kafka | Infrastructure | `deployment-kafka.yaml` | broker-api-versions |
+| n8n | Infrastructure | `deployment-n8n.yaml` | `/healthz` |
+| workflow-engine | Backend | `deployment-workflow-engine.yaml` | `/actuator/health` |
+| admin-center | Backend | `deployment-admin-center.yaml` | `/api/v1/admin/actuator/health` |
+| user-portal | Backend | `deployment-user-portal.yaml` | `/api/portal/actuator/health` |
+| developer-workstation | Backend | `deployment-developer-workstation.yaml` | `/api/v1/actuator/health` |
+| admin-center-frontend | Frontend | `deployment-frontend.yaml` | `/` |
+| user-portal-frontend | Frontend | `deployment-frontend.yaml` | `/` |
+| developer-workstation-frontend | Frontend | `deployment-frontend.yaml` | `/` |
 
 ## NOT Deployed
 
 | Component | Reason |
 |-----------|--------|
-| API Gateway | Bypassed — frontends proxy directly to backends via nginx |
+| PostgreSQL | 使用公司现有数据库 |
+| API Gateway | 已架空，前端 nginx 直连后端 |
 
 ## Environments
 
-| Environment | Platform | Infrastructure | Config |
-|-------------|----------|----------------|--------|
-| dev | Docker Desktop | PG + Redis + Kafka + N8N containers | `environments/dev/` |
-| sit | Company K8S | Company-managed | `k8s/configmap-sit.yaml` + `secret-sit.yaml` |
-| uat | Company K8S | Company-managed | `k8s/configmap-uat.yaml` + `secret-uat.yaml` |
-| prod | Company K8S | Company-managed | `k8s/configmap-prod.yaml` + `secret-prod.yaml` |
+| Environment | Platform | PostgreSQL | Redis/Kafka/N8N | Config |
+|-------------|----------|-----------|-----------------|--------|
+| dev | Docker Desktop | 本地容器 | 本地容器 | `environments/dev/` |
+| sit | Company K8S | 公司现有 | K8S 自行部署 | `k8s/configmap-sit.yaml` + `secret-sit.yaml` |
+| uat | Company K8S | 公司现有 | K8S 自行部署 | `k8s/configmap-uat.yaml` + `secret-uat.yaml` |
+| prod | Company K8S | 公司现有 | K8S 自行部署 | `k8s/configmap-prod.yaml` + `secret-prod.yaml` |
 
 ## Quick Start
 
@@ -80,28 +84,37 @@ cd deploy/environments/dev
 ### SIT / UAT / PROD (Company K8S)
 
 ```powershell
-# 1. Build & push images
+# 0. DBA 准备数据库（PostgreSQL 不部署）
+#    创建 workflow_platform_{env} 和 n8n_{env} 数据库
+
+# 1. 初始化数据库 Schema（首次部署）
+cd deploy/init-scripts
+.\init-database.ps1 -DbHost {postgres-host} -DbPort 5432 -DbName workflow_platform_{env} -DbUser platform_{env} -DbPassword {password}
+
+# 2. 更新 K8S 配置
+#    deploy/k8s/configmap-{env}.yaml — PostgreSQL 地址、域名
+#    deploy/k8s/secret-{env}.yaml — 所有 CHANGE_ME 替换为真实密码
+
+# 3. Build & push images
 cd deploy/scripts
 .\build-and-push-k8s.ps1 -Registry harbor.company.com/workflow -Tag v1.0.0 -SkipTests
 
-# 2. Update configmap/secret with real values
-#    deploy/k8s/configmap-{env}.yaml — DB host, Redis host
-#    deploy/k8s/secret-{env}.yaml — passwords, JWT secret, encryption key
-
-# 3. Deploy
+# 4. Deploy (Redis + Kafka + N8N + 后端 + 前端，共 10 个服务)
 cd deploy/k8s
 .\deploy.ps1 -Environment sit -Tag v1.0.0
 ```
 
 ## Key Rules
 
-1. **Docker multi-stage builds NOT used** — local build + copy only
-2. **Frontend uses `Dockerfile.local`** (not `Dockerfile`)
-3. **Frontend `.dockerignore` must NOT exclude `dist`**
-4. **nginx envsubst must list variables explicitly** — see BUILD_GUIDE.md §5
-5. **`.sh`/`.sql` files must use LF line endings** — `.gitattributes` enforces this
-6. **Env var name is `ENCRYPTION_SECRET_KEY`** (not `ENCRYPTION_KEY`)
-7. **Unified `*_URL` naming** — no `*_BACKEND_URL` variables
+1. **PostgreSQL 不部署** — SIT/UAT/PROD 使用公司现有数据库
+2. **Redis / Kafka / N8N 自行部署** — K8S 清单已包含
+3. **Docker 多阶段构建不可用** — 本地构建 + 复制
+4. **前端使用 `Dockerfile.local`** — 不是 `Dockerfile`
+5. **前端 `.dockerignore` 不能排除 `dist`**
+6. **nginx envsubst 必须显式列出变量** — 见 BUILD_GUIDE.md §6
+7. **`.sh`/`.sql` 文件必须 LF 换行** — `.gitattributes` 已配置
+8. **环境变量名是 `ENCRYPTION_SECRET_KEY`** — 不是 `ENCRYPTION_KEY`
+9. **统一 `*_URL` 命名** — 无 `*_BACKEND_URL` 变量
 
 ## File Structure
 
@@ -118,11 +131,14 @@ deploy/
 ├── k8s/
 │   ├── configmap-{sit,uat,prod}.yaml
 │   ├── secret-{sit,uat,prod}.yaml
+│   ├── deployment-redis.yaml       # Redis (自行部署)
+│   ├── deployment-kafka.yaml       # Kafka KRaft (自行部署)
+│   ├── deployment-n8n.yaml         # N8N (自行部署)
 │   ├── deployment-workflow-engine.yaml
 │   ├── deployment-admin-center.yaml
 │   ├── deployment-user-portal.yaml
 │   ├── deployment-developer-workstation.yaml
-│   ├── deployment-frontend.yaml
+│   ├── deployment-frontend.yaml    # 3 frontends combined
 │   ├── ingress.yaml
 │   ├── kustomization.yaml
 │   └── deploy.ps1                  # K8S deployment script
@@ -133,6 +149,10 @@ deploy/
 │   ├── init-database.ps1          # Standalone psql init
 │   ├── 00-schema/                 # DDL schemas + migrations
 │   ├── 01-admin/                  # Admin user + roles
-│   └── 08-digital-lending-v2-en/  # Test function unit data
+│   ├── 08-digital-lending-v2-en/  # Test function unit
+│   ├── 10-simple-approval/        # Simple Approval
+│   ├── 12-simple-approval/        # Simple Approval 12
+│   ├── 13-procurement-workflow/   # Procurement Workflow
+│   └── 14-travel-expense-reimbursement/  # Travel Expense
 └── README.md                      # This file
 ```

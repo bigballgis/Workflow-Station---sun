@@ -71,6 +71,9 @@ Write-Ok "Secrets applied"
 # Step 4: Apply Deployments
 Write-Step "Applying Deployments..."
 $deploymentFiles = @(
+    "deployment-redis.yaml",
+    "deployment-kafka.yaml",
+    "deployment-n8n.yaml",
     "deployment-workflow-engine.yaml",
     "deployment-admin-center.yaml",
     "deployment-user-portal.yaml",

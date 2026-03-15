@@ -19,6 +19,7 @@
 8. **admin-center 有 context-path** — healthcheck 路径是 `/api/v1/admin/actuator/health`，不是 `/actuator/health`。
 9. **不部署 API Gateway** — 前端 nginx 直连后端。Kafka 使用 KRaft 模式（无 ZooKeeper），N8N 使用独立 PostgreSQL 数据库。
 10. **环境变量名必须是 `ENCRYPTION_SECRET_KEY`** — 不是 `ENCRYPTION_KEY`。
+11. **PostgreSQL 不部署** — SIT/UAT/PROD 使用公司现有 PostgreSQL 数据库。Redis、Kafka、N8N 在 K8S 中自行部署。
 
 ---
 
@@ -34,13 +35,87 @@
 | user-portal-frontend | Vue 3 + Vite + Element Plus | 用户门户 UI |
 | developer-workstation-frontend | Vue 3 + Vite + Element Plus + BPMN.js | 开发者工作台 UI |
 
-基础设施：PostgreSQL 16 + Redis 7 + Kafka 7.5（KRaft 模式，无 ZooKeeper）+ N8N 自动化引擎（dev 环境本地容器，SIT/UAT/PROD 公司 K8S 托管）。
+基础设施：PostgreSQL 16（公司现有）+ Redis 7（K8S 部署）+ Kafka 7.5（KRaft 模式，K8S 部署）+ N8N 自动化引擎（K8S 部署）。
 
-不部署的组件：API Gateway（已架空，前端 nginx 直连后端）。
+不部署的组件：API Gateway（已架空，前端 nginx 直连后端）、PostgreSQL（使用公司现有数据库）。
 
 ---
 
-## 2. 环境要求
+## 2. 部署架构总览
+
+### 2.1 各环境部署方式
+
+| 环境 | 平台 | PostgreSQL | Redis | Kafka | N8N | 后端 (×4) | 前端 (×3) |
+|------|------|-----------|-------|-------|-----|----------|----------|
+| dev | Docker Desktop | 本地容器 | 本地容器 | 本地容器 | 本地容器 | 本地容器 | 本地容器 |
+| sit | 公司 K8S | ⚠️ 公司现有 | K8S Pod | K8S Pod | K8S Pod | K8S Pod | K8S Pod |
+| uat | 公司 K8S | ⚠️ 公司现有 | K8S Pod | K8S Pod | K8S Pod | K8S Pod | K8S Pod |
+| prod | 公司 K8S | ⚠️ 公司现有 | K8S Pod | K8S Pod | K8S Pod | K8S Pod | K8S Pod |
+
+> ⚠️ PostgreSQL 使用公司现有数据库，需要 DBA 提前创建好数据库和用户。
+
+### 2.2 架构图
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Ingress (K8S) / Nginx                │
+│         admin.company.com  portal.company.com           │
+│         dev.company.com    n8n.company.com              │
+└──────┬──────────────┬──────────────────┬────────────────┘
+       │              │                  │
+┌──────▼──────┐ ┌─────▼──────┐ ┌────────▼────────┐
+│ Admin Center│ │ User Portal│ │ Dev Workstation  │
+│  Frontend   │ │  Frontend  │ │   Frontend       │
+│  (nginx)    │ │  (nginx)   │ │   (nginx)        │
+└──────┬──────┘ └──┬────┬────┘ └────┬─────────────┘
+       │           │    │           │
+┌──────▼──────┐ ┌──▼────▼────┐ ┌───▼──────────────┐
+│ Admin Center│ │ User Portal│ │ Dev Workstation   │
+│  Backend    │ │  Backend   │ │   Backend         │
+└──────┬──────┘ └──┬────┬────┘ └───┬──────────────┘
+       │           │    │           │
+       └───────────┼────┼───────────┘
+                   │    │
+            ┌──────▼────▼──────┐
+            │ Workflow Engine  │
+            │   (Flowable)     │
+            └──────┬───────────┘
+                   │
+    ┌──────────────┼──────────────┐
+    │              │              │
+┌───▼─────┐  ┌────▼────┐  ┌─────▼────┐
+│PostgreSQL│  │  Redis  │  │  Kafka   │
+│(公司现有) │  │(K8S部署) │  │(K8S部署) │
+└─────────┘  └─────────┘  └──────────┘
+
+PostgreSQL ── N8N (独立数据库 n8n_{env})
+```
+
+### 2.3 需要部署的服务清单 (10 个)
+
+| # | 服务 | 类型 | K8S 清单 | 镜像 |
+|---|------|------|---------|------|
+| 1 | Redis | 基础设施 | `deployment-redis.yaml` | `redis:7.2-alpine` |
+| 2 | Kafka | 基础设施 | `deployment-kafka.yaml` | `confluentinc/cp-kafka:7.5.3` |
+| 3 | N8N | 基础设施 | `deployment-n8n.yaml` | `n8nio/n8n` (官方) |
+| 4 | workflow-engine | 后端 | `deployment-workflow-engine.yaml` | `workflow-engine-core` |
+| 5 | admin-center | 后端 | `deployment-admin-center.yaml` | `admin-center` |
+| 6 | user-portal | 后端 | `deployment-user-portal.yaml` | `user-portal` |
+| 7 | developer-workstation | 后端 | `deployment-developer-workstation.yaml` | `developer-workstation` |
+| 8 | admin-center-frontend | 前端 | `deployment-frontend.yaml` | `admin-center-frontend` |
+| 9 | user-portal-frontend | 前端 | `deployment-frontend.yaml` | `user-portal-frontend` |
+| 10 | developer-workstation-frontend | 前端 | `deployment-frontend.yaml` | `developer-workstation-frontend` |
+
+### 2.4 不部署的组件
+
+| 组件 | 原因 |
+|------|------|
+| PostgreSQL | 使用公司现有数据库 |
+| API Gateway | 已架空，前端 nginx 直连后端 |
+
+---
+
+## 3. 环境要求
 
 ```
 Java 17+          (推荐 Eclipse Temurin / Microsoft OpenJDK)
@@ -48,15 +123,17 @@ Maven 3.9+        (mvn --version)
 Node.js 18+       (node --version)
 npm 9+            (npm --version)
 Docker Desktop    (docker --version, docker compose version)
+kubectl           (SIT/UAT/PROD 部署需要)
 ```
 
 ---
 
-## 3. 项目结构
+## 4. 项目结构
 
 ```
 Workflow-Station---sun/
 ├── pom.xml                          # Maven 根 POM (多模块)
+├── BUILD_GUIDE.md                   # 本文档
 ├── backend/
 │   ├── platform-common/             # 公共库 (jar, 不部署)
 │   ├── platform-cache/              # 缓存库 (jar, 不部署)
@@ -82,13 +159,27 @@ Workflow-Station---sun/
 │   ├── scripts/
 │   │   └── build-and-push-k8s.ps1   # K8S 镜像构建推送脚本
 │   ├── k8s/                         # K8S 部署清单
-│   └── init-scripts/                # 数据库初始化 SQL
-└── TODO.md                          # 待整改项清单
+│   │   ├── configmap-{sit,uat,prod}.yaml
+│   │   ├── secret-{sit,uat,prod}.yaml
+│   │   ├── deployment-redis.yaml        # Redis (自行部署)
+│   │   ├── deployment-kafka.yaml        # Kafka (自行部署)
+│   │   ├── deployment-n8n.yaml          # N8N (自行部署)
+│   │   ├── deployment-workflow-engine.yaml
+│   │   ├── deployment-admin-center.yaml
+│   │   ├── deployment-user-portal.yaml
+│   │   ├── deployment-developer-workstation.yaml
+│   │   ├── deployment-frontend.yaml     # 3 个前端合并
+│   │   ├── ingress.yaml
+│   │   ├── kustomization.yaml
+│   │   └── deploy.ps1               # K8S 一键部署脚本
+│   ├── init-scripts/                # 数据库初始化 SQL
+│   └── README.md
+└── TODO.md
 ```
 
 ---
 
-## 4. 后端服务详细参数
+## 5. 后端服务详细参数
 
 | 服务 | Maven 模块路径 | JAR 文件名模式 | context-path | Healthcheck 路径 | JVM 内存 |
 |------|---------------|---------------|-------------|-----------------|---------|
@@ -107,16 +198,16 @@ RUN chown -R platform:platform /app
 USER platform
 ENV JAVA_OPTS="-Xms256m -Xmx512m -XX:+UseG1GC"
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/<healthcheck-path> || exit 1
+    CMD wget -q -T 5 -O /dev/null http://localhost:8080/<healthcheck-path> || exit 1
 EXPOSE 8080
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
 ```
 
 ---
 
-## 5. 前端 nginx 环境变量替换机制（关键）
+## 6. 前端 nginx 环境变量替换机制（关键）
 
-### 5.1 工作原理
+### 6.1 工作原理
 
 前端容器使用 nginx 反向代理到后端。nginx.conf 中包含 `${ADMIN_CENTER_URL}` 等变量占位符。
 
@@ -127,7 +218,7 @@ ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
 4. 用 `envsubst` 将模板中的变量替换为实际值，输出到 `default.conf`
 5. 启动 nginx
 
-### 5.2 envsubst 的关键细节
+### 6.2 envsubst 的关键细节
 
 `envsubst` 命令**必须显式指定要替换的变量列表**：
 
@@ -139,7 +230,7 @@ envsubst '${ADMIN_CENTER_URL}' < template > default.conf
 envsubst < template > default.conf
 ```
 
-### 5.3 每个前端服务的环境变量
+### 6.3 每个前端服务的环境变量
 
 | 前端服务 | 需要的环境变量 | envsubst 变量列表 |
 |---------|--------------|-----------------|
@@ -147,46 +238,13 @@ envsubst < template > default.conf
 | user-portal-frontend | `USER_PORTAL_URL`, `ADMIN_CENTER_URL`, `DEVELOPER_WORKSTATION_URL` | `'${USER_PORTAL_URL} ${ADMIN_CENTER_URL} ${DEVELOPER_WORKSTATION_URL}'` |
 | developer-workstation-frontend | `DEVELOPER_WORKSTATION_URL`, `ADMIN_CENTER_URL` | `'${DEVELOPER_WORKSTATION_URL} ${ADMIN_CENTER_URL}'` |
 
-### 5.4 docker-entrypoint.sh 模板
-
-```sh
-#!/bin/sh
-set -e
-
-# 1. 验证必需变量
-if [ -z "$ADMIN_CENTER_URL" ]; then
-  echo "ERROR: ADMIN_CENTER_URL is not set" >&2
-  exit 1
-fi
-
-# 2. envsubst 替换（只替换指定变量！）
-envsubst '${ADMIN_CENTER_URL}' < /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf
-
-# 3. 打印日志
-echo "nginx config: ADMIN_CENTER_URL=$ADMIN_CENTER_URL"
-
-# 4. 启动 nginx
-exec nginx -g 'daemon off;'
-```
-
-### 5.5 如果新增后端 URL 变量
-
-假设要给 user-portal-frontend 新增一个 `WORKFLOW_ENGINE_URL`：
-1. 在 `nginx.conf` 中使用 `${WORKFLOW_ENGINE_URL}`
-2. 在 `docker-entrypoint.sh` 中添加验证 + 更新 envsubst 列表：
-   ```sh
-   envsubst '${USER_PORTAL_URL} ${ADMIN_CENTER_URL} ${WORKFLOW_ENGINE_URL}' < template > conf
-   ```
-3. 在 `Dockerfile.local` 中添加 `ENV WORKFLOW_ENGINE_URL=http://workflow-engine:8080`
-4. 在 `docker-compose.dev.yml` 和 K8S `deployment-frontend.yaml` 中传入该变量
-
 ---
 
-## 6. 构建步骤（手动逐步执行）
+## 7. 构建步骤（手动逐步执行）
 
 以下命令全部在项目根目录执行。
 
-### 6.1 后端 Maven 构建
+### 7.1 后端 Maven 构建
 
 ```powershell
 # 编译所有后端模块（跳过测试），生成 JAR 到各 target/ 目录
@@ -204,7 +262,7 @@ Get-ChildItem backend/developer-workstation/target/*.jar -Exclude *original*
 Get-ChildItem backend/user-portal/target/*.jar -Exclude *original*
 ```
 
-### 6.2 前端 npm 构建
+### 7.2 前端 npm 构建
 
 ```powershell
 # admin-center-frontend
@@ -219,14 +277,7 @@ Push-Location frontend/developer-workstation; npm install --prefer-offline --no-
 
 成功标志：每个前端输出 `✓ built in XXs`，`dist/` 目录生成。
 
-产物验证：
-```powershell
-Test-Path frontend/admin-center/dist/index.html
-Test-Path frontend/user-portal/dist/index.html
-Test-Path frontend/developer-workstation/dist/index.html
-```
-
-### 6.3 Docker 镜像构建
+### 7.3 Docker 镜像构建
 
 #### 后端镜像（4 个）
 
@@ -249,18 +300,16 @@ docker build -f frontend/user-portal/Dockerfile.local -t "${registry}/user-porta
 docker build -f frontend/developer-workstation/Dockerfile.local -t "${registry}/developer-workstation-frontend:${tag}" frontend/developer-workstation
 ```
 
-验证：
+验证（应看到 7 个镜像）：
 ```powershell
 docker images "${registry}/*" --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
 ```
 
-应看到 7 个镜像。
-
 ---
 
-## 7. 一键构建脚本
+## 8. Dev 环境部署（本地 Docker Desktop）
 
-### 7.1 Dev 环境（本地 Docker Desktop）
+### 8.1 一键部署
 
 ```powershell
 cd deploy/environments/dev
@@ -281,32 +330,7 @@ cd deploy/environments/dev
 .\build-and-deploy.ps1 -Clean
 ```
 
-### 7.2 SIT/UAT/PROD 环境（K8S 镜像）
-
-```powershell
-cd deploy/scripts
-
-# 构建所有镜像（不推送）
-.\build-and-push-k8s.ps1 -Registry harbor.company.com/workflow -Tag latest -SkipTests -NoPush
-
-# 构建并推送
-.\build-and-push-k8s.ps1 -Registry harbor.company.com/workflow -Tag v1.0.0 -SkipTests
-
-# 只构建后端
-.\build-and-push-k8s.ps1 -Registry harbor.company.com/workflow -Tag latest -SkipTests -SkipFrontend -NoPush
-
-# 只构建前端
-.\build-and-push-k8s.ps1 -Registry harbor.company.com/workflow -Tag latest -SkipTests -SkipBackend -NoPush
-
-# 只推送（不重新构建）
-.\build-and-push-k8s.ps1 -Registry harbor.company.com/workflow -Tag latest -PushOnly
-```
-
----
-
-## 8. Dev 环境部署详情
-
-### 8.1 服务端口映射
+### 8.2 服务端口映射
 
 | 服务 | 容器内端口 | 宿主机端口 | URL |
 |------|-----------|-----------|-----|
@@ -321,32 +345,6 @@ cd deploy/scripts
 | admin-center-frontend | 80 | 3000 | `http://localhost:3000` |
 | user-portal-frontend | 80 | 3001 | `http://localhost:3001` |
 | developer-workstation-frontend | 80 | 3002 | `http://localhost:3002` |
-
-### 8.2 docker-compose 环境变量传递
-
-前端容器在 `docker-compose.dev.yml` 中需要传入正确的环境变量：
-
-```yaml
-# admin-center-frontend — 只需 1 个变量
-admin-center-frontend:
-  environment:
-    ADMIN_CENTER_URL: http://admin-center:8080
-
-# user-portal-frontend — 需要 3 个变量
-user-portal-frontend:
-  environment:
-    USER_PORTAL_URL: http://user-portal:8080
-    ADMIN_CENTER_URL: http://admin-center:8080
-    DEVELOPER_WORKSTATION_URL: http://developer-workstation:8080
-
-# developer-workstation-frontend — 需要 2 个变量
-developer-workstation-frontend:
-  environment:
-    DEVELOPER_WORKSTATION_URL: http://developer-workstation:8080
-    ADMIN_CENTER_URL: http://admin-center:8080
-```
-
-⚠️ 这些 URL 使用 Docker 网络内部的服务名（如 `admin-center`），不是 `localhost`。
 
 ### 8.3 数据库初始化
 
@@ -389,152 +387,201 @@ docker compose -f $compose --env-file $env down -v
 
 ---
 
-## 9. SIT/UAT/PROD 环境部署详情
+## 9. SIT/UAT/PROD 环境部署（公司 K8S）
 
-### 9.1 架构差异
+### 9.1 部署前准备
 
-| | Dev | SIT/UAT/PROD |
-|---|---|---|
-| 平台 | Docker Desktop (本地) | 公司 K8S |
-| PostgreSQL | 本地容器 | 公司托管 |
-| Redis | 本地容器 | 公司托管 |
-| docker-compose | 有 | 无（用 K8S 清单） |
-| 镜像 Registry | 本地 | Harbor (`harbor.company.com/workflow`) |
+#### 9.1.1 PostgreSQL 数据库准备（DBA 操作）
 
-### 9.2 镜像 Registry
+PostgreSQL 使用公司现有数据库，需要 DBA 提前完成以下操作：
+
+```sql
+-- 1. 创建应用数据库
+CREATE DATABASE workflow_platform_{env} OWNER platform_{env};
+
+-- 2. 创建 N8N 专用数据库
+CREATE DATABASE n8n_{env} OWNER platform_{env};
+
+-- 3. 创建数据库用户（如果不存在）
+CREATE USER platform_{env} WITH PASSWORD 'your_strong_password';
+GRANT ALL PRIVILEGES ON DATABASE workflow_platform_{env} TO platform_{env};
+GRANT ALL PRIVILEGES ON DATABASE n8n_{env} TO platform_{env};
+```
+
+其中 `{env}` 替换为 `sit` / `uat` / `prod`。
+
+#### 9.1.2 数据库 Schema 初始化
+
+首次部署需要初始化数据库 schema。使用 `init-database.ps1` 脚本：
+
+```powershell
+cd deploy/init-scripts
+.\init-database.ps1 -DbHost {postgres-host} -DbPort 5432 -DbName workflow_platform_{env} -DbUser platform_{env} -DbPassword {password}
+```
+
+或者手动执行 SQL：
+```powershell
+# 使用 standalone schema 文件
+cd deploy/init-scripts
+psql -h {host} -p 5432 -U platform_{env} -d workflow_platform_{env} -f 00-schema/00-init-all-schemas-standalone.sql
+```
+
+#### 9.1.3 更新 K8S 配置
+
+1. 修改 `deploy/k8s/configmap-{env}.yaml` 中的 PostgreSQL 连接地址：
+   ```yaml
+   SPRING_DATASOURCE_URL: "jdbc:postgresql://{your-postgres-host}:5432/workflow_platform_{env}"
+   ```
+
+2. 修改 `deploy/k8s/configmap-{env}.yaml` 中的 N8N 数据库地址：
+   ```yaml
+   DB_POSTGRESDB_HOST: "{your-postgres-host}"
+   DB_POSTGRESDB_DATABASE: "n8n_{env}"
+   ```
+
+3. 修改 `deploy/k8s/secret-{env}.yaml` 中所有 `CHANGE_ME` 值为真实密码。
+
+### 9.2 构建并推送镜像
+
+```powershell
+cd deploy/scripts
+
+# 构建并推送所有镜像到 Harbor
+.\build-and-push-k8s.ps1 -Registry harbor.company.com/workflow -Tag v1.0.0 -SkipTests
+
+# 只构建后端
+.\build-and-push-k8s.ps1 -Registry harbor.company.com/workflow -Tag v1.0.0 -SkipTests -SkipFrontend
+
+# 只构建前端
+.\build-and-push-k8s.ps1 -Registry harbor.company.com/workflow -Tag v1.0.0 -SkipTests -SkipBackend
+
+# 只推送（不重新构建）
+.\build-and-push-k8s.ps1 -Registry harbor.company.com/workflow -Tag v1.0.0 -PushOnly
+```
+
+### 9.3 K8S 部署
+
+```powershell
+cd deploy/k8s
+
+# 部署到 SIT
+.\deploy.ps1 -Environment sit -Tag v1.0.0
+
+# 部署到 UAT
+.\deploy.ps1 -Environment uat -Tag v1.0.0
+
+# 部署到 PROD
+.\deploy.ps1 -Environment prod -Tag v1.0.0
+
+# Dry-run（只验证不实际部署）
+.\deploy.ps1 -Environment sit -Tag v1.0.0 -DryRun
+```
+
+### 9.4 部署顺序
+
+`deploy.ps1` 会按以下顺序部署：
+
+1. 创建 Namespace
+2. 应用 ConfigMap
+3. 应用 Secret
+4. 部署基础设施：Redis → Kafka → N8N
+5. 部署后端：workflow-engine → admin-center → user-portal → developer-workstation
+6. 部署前端：admin-center-frontend → user-portal-frontend → developer-workstation-frontend
+7. 应用 Ingress
+
+### 9.5 验证部署
+
+```powershell
+# 查看所有 Pod 状态
+kubectl get pods -n workflow-platform-{env}
+
+# 查看服务
+kubectl get svc -n workflow-platform-{env}
+
+# 查看 Ingress
+kubectl get ingress -n workflow-platform-{env}
+
+# 查看某个 Pod 日志
+kubectl logs -f deployment/workflow-engine -n workflow-platform-{env}
+
+# 检查 Pod 健康状态
+kubectl describe pod -l app=workflow-engine -n workflow-platform-{env}
+```
+
+### 9.6 K8S Service 内部 URL
+
+所有服务在 K8S 内部通过 Service 名称互相访问：
+
+| Service 名称 | 端口 | 用途 |
+|-------------|------|------|
+| `redis-service` | 6379 | Redis 缓存 |
+| `kafka-service` | 29092 | Kafka 消息队列 |
+| `n8n-service` | 5678 | N8N 自动化引擎 |
+| `workflow-engine-service` | 8080 | 工作流引擎 |
+| `admin-center-service` | 8080 | 管理后台 API |
+| `user-portal-service` | 8080 | 用户门户 API |
+| `developer-workstation-service` | 8080 | 开发者工作台 API |
+| `admin-center-frontend-service` | 80 | 管理后台 UI |
+| `user-portal-frontend-service` | 80 | 用户门户 UI |
+| `developer-workstation-frontend-service` | 80 | 开发者工作台 UI |
+
+### 9.7 镜像 Registry
 
 ```
 harbor.company.com/workflow/
-├── workflow-engine-core:latest
-├── admin-center:latest
-├── developer-workstation:latest
-├── user-portal:latest
-├── admin-center-frontend:latest
-├── user-portal-frontend:latest
-└── developer-workstation-frontend:latest
-```
+├── workflow-engine-core:latest       # 后端 (自建)
+├── admin-center:latest               # 后端 (自建)
+├── developer-workstation:latest      # 后端 (自建)
+├── user-portal:latest                # 后端 (自建)
+├── admin-center-frontend:latest      # 前端 (自建)
+├── user-portal-frontend:latest       # 前端 (自建)
+└── developer-workstation-frontend:latest  # 前端 (自建)
 
-### 9.3 K8S ConfigMap 中的 URL 变量
-
-K8S 中后端和前端使用相同的 URL 变量名，值为 K8S Service 名称：
-
-```yaml
-# deploy/k8s/configmap-sit.yaml
-data:
-  ADMIN_CENTER_URL: "http://admin-center-service:8080"
-  WORKFLOW_ENGINE_URL: "http://workflow-engine-service:8080"
-  DEVELOPER_WORKSTATION_URL: "http://developer-workstation-service:8080"
-  USER_PORTAL_URL: "http://user-portal-service:8080"
-```
-
-### 9.4 K8S 前端 Deployment 环境变量
-
-前端 Pod 从 ConfigMap 读取 URL 变量，传给容器的 `docker-entrypoint.sh`：
-
-```yaml
-# admin-center-frontend Pod
-env:
-- name: ADMIN_CENTER_URL
-  valueFrom:
-    configMapKeyRef:
-      name: workflow-platform-config
-      key: ADMIN_CENTER_URL
-
-# user-portal-frontend Pod
-env:
-- name: USER_PORTAL_URL
-  valueFrom: { configMapKeyRef: { name: workflow-platform-config, key: USER_PORTAL_URL } }
-- name: ADMIN_CENTER_URL
-  valueFrom: { configMapKeyRef: { name: workflow-platform-config, key: ADMIN_CENTER_URL } }
-
-# developer-workstation-frontend Pod
-env:
-- name: DEVELOPER_WORKSTATION_URL
-  valueFrom: { configMapKeyRef: { name: workflow-platform-config, key: DEVELOPER_WORKSTATION_URL } }
-- name: ADMIN_CENTER_URL
-  valueFrom: { configMapKeyRef: { name: workflow-platform-config, key: ADMIN_CENTER_URL } }
-```
-
-### 9.5 SIT 环境变量参考
-
-见 `deploy/environments/sit/.env`，所有 `CHANGE_ME` 需替换为真实值：
-- `POSTGRES_HOST` / `POSTGRES_PASSWORD`
-- `REDIS_HOST` / `REDIS_PASSWORD`
-- `JWT_SECRET`
-- `ENCRYPTION_SECRET_KEY`
-
-### 9.6 推送镜像到 Harbor
-
-```powershell
-# 先登录
-docker login harbor.company.com
-
-# 构建并推送
-.\deploy\scripts\build-and-push-k8s.ps1 -Registry harbor.company.com/workflow -Tag latest -SkipTests
+# 基础设施使用官方镜像（不推送到 Harbor）
+redis:7.2-alpine                      # Docker Hub
+confluentinc/cp-kafka:7.5.3           # Docker Hub
+n8nio/n8n                             # Docker Hub
 ```
 
 ---
 
-## 10. 服务间依赖关系
+## 10. 各环境配置差异对比
 
-```
-PostgreSQL ──┬── workflow-engine ──┬── admin-center ──┬── admin-center-frontend
-             │                    │                  └── developer-workstation-frontend
-Redis ───────┘                    ├── user-portal ───── user-portal-frontend
-                                  └── developer-workstation ── developer-workstation-frontend
-Kafka ──────────────────────────────── user-portal
-
-PostgreSQL ── N8N (独立数据库 n8n_dev)
-```
-
-启动顺序：PostgreSQL + Redis + Kafka → N8N → workflow-engine → admin-center → (user-portal, developer-workstation) → 前端。
-
----
-
-## 11. 运行测试
-
-```powershell
-# 后端单元测试（全部）
-mvn test
-
-# 后端单元测试（单个模块）
-mvn test -pl backend/admin-center
-
-# 前端测试
-cd frontend/developer-workstation
-npx vitest --run
-```
+| 配置项 | SIT | UAT | PROD |
+|--------|-----|-----|------|
+| SWAGGER_ENABLED | true | false | false |
+| FLOWABLE_SCHEMA_UPDATE | true | true | false |
+| JWT_EXPIRATION | 24h | 12h | 8h |
+| JWT_REFRESH_EXPIRATION | 7d | 3d | 1d |
+| LOG_LEVEL_ROOT | INFO | INFO | WARN |
+| LOG_LEVEL_SQL | WARN | WARN | ERROR |
+| PASSWORD_MIN_LENGTH | 8 | 10 | 12 |
+| MAX_FAILED_ATTEMPTS | 5 | 5 | 3 |
+| SESSION_TIMEOUT | 30min | 30min | 15min |
+| HIKARI_MAX_POOL_SIZE | 15 | 20 | 50 |
+| Backend replicas | 2 | 2 | 2+ |
 
 ---
 
-## 12. 常见问题与故障排查
+## 11. 服务间依赖关系
 
-### 12.1 构建阶段
+```
+PostgreSQL(公司) ──┬── workflow-engine ──┬── admin-center ──┬── admin-center-frontend
+                   │                    │                  └── developer-workstation-frontend
+Redis(K8S) ────────┘                    ├── user-portal ───── user-portal-frontend
+                                        └── developer-workstation ── developer-workstation-frontend
+Kafka(K8S) ─────────────────────────────── workflow-engine + user-portal
 
-| 问题 | 原因 | 解决 |
-|------|------|------|
-| Docker build 前端报 `COPY failed: file not found in build context: dist` | `.dockerignore` 包含了 `dist` | 从 `.dockerignore` 中删除 `dist` |
-| Docker build 前端报 `COPY failed: file not found` | 没有先执行 `npm run build` | 先执行 `npx vite build` 生成 `dist/` |
-| Maven build 报 `platform-common` 找不到 | 没有加 `-am` 参数 | 加 `-am` 自动构建依赖模块 |
-| 后端容器启动后立即退出 | `target/` 下没有 JAR | 先执行 `mvn package` |
-| `npm install` 报权限错误 | node_modules 权限问题 | 删除 `node_modules` 重试 |
+PostgreSQL(公司) ── N8N(K8S) (独立数据库 n8n_{env})
+```
 
-### 12.2 运行阶段
+启动顺序：Redis + Kafka → N8N → workflow-engine → admin-center → (user-portal, developer-workstation) → 前端。
 
-| 问题 | 原因 | 解决 |
-|------|------|------|
-| 前端 nginx 502 Bad Gateway | 后端容器未启动或未就绪 | 等待后端 healthcheck 通过 |
-| 前端 nginx 报 `no resolver defined to resolve xxx` | `envsubst` 没有替换 `${*_URL}` 变量 | 检查 `docker-entrypoint.sh` 中 envsubst 是否列出了所有变量 |
-| 前端容器启动失败 `ERROR: xxx_URL is not set` | docker-compose 或 K8S 没有传入必需的环境变量 | 在 docker-compose `environment` 或 K8S `env` 中添加缺失变量 |
-| 前端 nginx 所有 `$host`、`$uri` 变成空 | `envsubst` 没有指定变量列表，替换了所有 `$xxx` | 在 envsubst 命令中显式列出变量：`envsubst '${VAR1} ${VAR2}'` |
-| PostgreSQL 容器启动慢 | 首次初始化执行 SQL 脚本 | 等待 healthcheck healthy |
-| admin-center healthcheck 失败 | context-path 是 `/api/v1/admin` | healthcheck 路径需包含 context-path |
-| `.sh` 文件在容器内报 `bad interpreter` | Windows CRLF 换行 | 确保 `.sh` 文件是 LF 换行（`.gitattributes` 已配置） |
-| `docker-entrypoint.sh: Permission denied` | 文件没有执行权限 | Dockerfile 中需要 `RUN chmod +x /docker-entrypoint.sh` |
+---
 
-### 12.3 环境变量完整清单
+## 12. 环境变量完整清单
 
-#### 后端通用环境变量
+### 12.1 后端通用环境变量
 
 | 变量名 | 说明 | 示例值 |
 |--------|------|--------|
@@ -543,24 +590,24 @@ npx vitest --run
 | `SPRING_DATASOURCE_URL` | JDBC URL | `jdbc:postgresql://postgres:5432/workflow_platform_dev` |
 | `SPRING_DATASOURCE_USERNAME` | DB 用户名 | `platform_dev` |
 | `SPRING_DATASOURCE_PASSWORD` | DB 密码 | `dev_password_123` |
-| `SPRING_REDIS_HOST` | Redis 主机 | `redis` |
+| `SPRING_REDIS_HOST` | Redis 主机 | `redis` / `redis-service` |
 | `SPRING_REDIS_PASSWORD` | Redis 密码 | `dev_redis_123` |
+| `SPRING_KAFKA_BOOTSTRAP_SERVERS` | Kafka 连接地址 | `kafka:29092` / `kafka-service:29092` |
 | `JWT_SECRET` | JWT 签名密钥 | 256-bit 字符串 |
 | `JWT_EXPIRATION` | JWT 过期时间(ms) | `86400000` |
 | `JWT_REFRESH_EXPIRATION` | 刷新令牌过期时间(ms) | `604800000` |
 | `ENCRYPTION_SECRET_KEY` | AES-256 加密密钥 | 32 字节字符串 |
 | `CORS_ALLOWED_ORIGINS` | CORS 允许的源 | `http://localhost:3000,...` |
 | `SWAGGER_ENABLED` | 是否启用 Swagger | `true` / `false` |
-| `SPRING_KAFKA_BOOTSTRAP_SERVERS` | Kafka 连接地址 | `kafka:29092` |
 
-#### 后端服务间 URL 变量
+### 12.2 后端服务间 URL 变量
 
 | 变量名 | 使用者 | 说明 |
 |--------|--------|------|
 | `ADMIN_CENTER_URL` | workflow-engine, user-portal, developer-workstation | 管理后台地址 |
 | `WORKFLOW_ENGINE_URL` | admin-center, user-portal, developer-workstation | 工作流引擎地址 |
 
-#### 前端 nginx 反向代理 URL 变量
+### 12.3 前端 nginx 反向代理 URL 变量
 
 | 变量名 | 使用者 | 说明 |
 |--------|--------|------|
@@ -568,21 +615,20 @@ npx vitest --run
 | `USER_PORTAL_URL` | user-portal-frontend | 用户门户 API 地址 |
 | `DEVELOPER_WORKSTATION_URL` | developer-workstation-frontend | 开发者工作台 API 地址 |
 
-#### N8N 相关环境变量
+### 12.4 N8N 相关环境变量
 
 | 变量名 | 说明 | 示例值 |
 |--------|------|--------|
-| `N8N_PORT` | N8N 宿主机端口 | `5678` |
-| `N8N_DB_NAME` | N8N 专用数据库名 | `n8n_dev` |
-| `N8N_ENCRYPTION_KEY` | N8N 加密密钥 | 随机字符串 |
-| `N8N_WEBHOOK_URL` | N8N Webhook 外部访问地址 | `http://localhost:5678` |
-
-#### Kafka 相关环境变量
-
-| 变量名 | 说明 | 示例值 |
-|--------|------|--------|
-| `KAFKA_PORT` | Kafka 外部端口 | `9092` |
-| `KAFKA_INTERNAL_PORT` | Kafka 内部端口 | `29092` |
+| `DB_TYPE` | 数据库类型 | `postgresdb` |
+| `DB_POSTGRESDB_HOST` | N8N 数据库主机 | `sit-postgres.internal` |
+| `DB_POSTGRESDB_PORT` | N8N 数据库端口 | `5432` |
+| `DB_POSTGRESDB_DATABASE` | N8N 数据库名 | `n8n_sit` |
+| `DB_POSTGRESDB_USER` | N8N 数据库用户 | Secret |
+| `DB_POSTGRESDB_PASSWORD` | N8N 数据库密码 | Secret |
+| `N8N_ENCRYPTION_KEY` | N8N 加密密钥 | Secret |
+| `WEBHOOK_URL` | N8N Webhook 外部访问地址 | `https://sit-n8n.company.com` |
+| `DOUBAO_MODEL_ID` | 豆包模型 ID（发票识别） | Secret |
+| `DOUBAO_API_KEY` | 豆包 API Key（发票识别） | Secret |
 
 ---
 
@@ -619,7 +665,7 @@ docker build -f frontend/developer-workstation/Dockerfile.local -t "${r}/develop
 # 5. 验证（应看到 7 个镜像）
 docker images "${r}/*" --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
 
-# 6. 推送到 Harbor（可选）
+# 6. 推送到 Harbor
 docker login harbor.company.com
 docker push "${r}/workflow-engine-core:${t}"
 docker push "${r}/admin-center:${t}"
@@ -628,11 +674,48 @@ docker push "${r}/user-portal:${t}"
 docker push "${r}/admin-center-frontend:${t}"
 docker push "${r}/user-portal-frontend:${t}"
 docker push "${r}/developer-workstation-frontend:${t}"
+
+# 7. 部署到 K8S
+cd deploy/k8s
+.\deploy.ps1 -Environment sit -Tag latest
 ```
 
 ---
 
-## 14. .gitattributes 配置
+## 14. 常见问题与故障排查
+
+### 14.1 构建阶段
+
+| 问题 | 原因 | 解决 |
+|------|------|------|
+| Docker build 前端报 `COPY failed: dist` | `.dockerignore` 包含了 `dist` | 从 `.dockerignore` 中删除 `dist` |
+| Docker build 前端报 `file not found` | 没有先执行 `npm run build` | 先执行 `npx vite build` 生成 `dist/` |
+| Maven build 报 `platform-common` 找不到 | 没有加 `-am` 参数 | 加 `-am` 自动构建依赖模块 |
+| 后端容器启动后立即退出 | `target/` 下没有 JAR | 先执行 `mvn package` |
+
+### 14.2 运行阶段
+
+| 问题 | 原因 | 解决 |
+|------|------|------|
+| 前端 nginx 502 Bad Gateway | 后端容器未启动或未就绪 | 等待后端 healthcheck 通过 |
+| 前端 nginx 报 `no resolver defined` | `envsubst` 没有替换 `${*_URL}` 变量 | 检查 `docker-entrypoint.sh` 中 envsubst 变量列表 |
+| 前端容器启动失败 `xxx_URL is not set` | 没有传入必需的环境变量 | 在 docker-compose 或 K8S env 中添加缺失变量 |
+| 前端 nginx `$host`、`$uri` 变空 | `envsubst` 没有指定变量列表 | 显式列出变量：`envsubst '${VAR1} ${VAR2}'` |
+| admin-center healthcheck 失败 | context-path 是 `/api/v1/admin` | healthcheck 路径需包含 context-path |
+| `.sh` 文件报 `bad interpreter` | Windows CRLF 换行 | 确保 `.sh` 文件是 LF 换行 |
+| Kafka 连接失败 | K8S 中未配置 `SPRING_KAFKA_BOOTSTRAP_SERVERS` | 检查 ConfigMap 中是否有该配置 |
+
+### 14.3 数据库相关
+
+| 问题 | 原因 | 解决 |
+|------|------|------|
+| 后端启动报 `Connection refused` | PostgreSQL 地址配置错误 | 检查 `SPRING_DATASOURCE_URL` 中的主机地址 |
+| N8N 启动报数据库连接失败 | N8N 数据库未创建 | 让 DBA 创建 `n8n_{env}` 数据库 |
+| Flowable 表不存在 | Schema 未初始化 | 运行 `init-database.ps1` 或设置 `FLOWABLE_SCHEMA_UPDATE=true` |
+
+---
+
+## 15. .gitattributes 配置
 
 项目根目录的 `.gitattributes` 强制 `.sh` 和 `.sql` 文件使用 LF 换行：
 
@@ -641,4 +724,4 @@ docker push "${r}/developer-workstation-frontend:${t}"
 *.sql text eol=lf
 ```
 
-这确保 Windows 上 checkout 的 shell 脚本在 Linux 容器内可以正常执行。如果手动创建 `.sh` 文件，请确认编辑器保存为 LF 格式。
+这确保 Windows 上 checkout 的 shell 脚本在 Linux 容器内可以正常执行。
