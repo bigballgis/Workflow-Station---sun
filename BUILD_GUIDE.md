@@ -556,7 +556,7 @@ n8nio/n8n                             # Docker Hub
 | LOG_LEVEL_ROOT | INFO | INFO | WARN |
 | LOG_LEVEL_SQL | WARN | WARN | ERROR |
 | PASSWORD_MIN_LENGTH | 8 | 10 | 12 |
-| MAX_FAILED_ATTEMPTS | 5 | 5 | 3 |
+| MAX_FAILED_ATTEMPTS | 5 | 3 | 3 |
 | SESSION_TIMEOUT | 30min | 30min | 15min |
 | HIKARI_MAX_POOL_SIZE | 15 | 20 | 50 |
 | Backend replicas | 2 | 2 | 2+ |
