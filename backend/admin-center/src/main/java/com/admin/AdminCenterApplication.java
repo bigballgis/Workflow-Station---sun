@@ -36,8 +36,8 @@ import com.platform.security.service.impl.UserRoleServiceImpl;
 )
 @Import(com.platform.common.config.PlatformCommonConfiguration.class)
 @EnableJpaAuditing
-@EnableJpaRepositories(basePackages = {"com.admin.repository"})
-@EntityScan(basePackages = {"com.admin.entity", "com.platform.security.entity"})
+@EnableJpaRepositories(basePackages = {"com.admin.repository", "com.admin.bi.repository"})
+@EntityScan(basePackages = {"com.admin.entity", "com.admin.bi.entity", "com.platform.security.entity"})
 @EnableCaching
 @EnableAsync
 @EnableScheduling

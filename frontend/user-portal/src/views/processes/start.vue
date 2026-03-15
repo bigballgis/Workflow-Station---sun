@@ -182,6 +182,7 @@ import FormRenderer, { type FormField, type FormTab } from '@/components/FormRen
 import SubTableField from '@/components/SubTableField.vue'
 import N8nActionDialog from '@/components/N8nActionDialog.vue'
 import type { ActionDefinition } from '@/components/N8nActionDialog.vue'
+import { applyAutoFill } from '@/utils/n8nAutoFillEngine'
 
 const route = useRoute()
 const router = useRouter()
@@ -1012,154 +1013,32 @@ const handleAction = async (action: { id: string; label: string; action?: string
   }
 }
 
-// N8N Action 执行完成回调 - 自动填充识别结果到子表
+// N8N Action 执行完成回调 - 自动填充识别结果
 const handleN8nActionExecuted = (data: Record<string, any> | null) => {
-  if (!data) return
-  console.log('N8N action executed, raw data received:', JSON.stringify(data))
-
-  // The data comes through multiple layers of wrapping:
-  // N8nActionDialog emits: result?.data ?? result?.outputData
-  // Which gives us: { success, status, outputData: { ExpenseItems, total_amount, InvoiceRecognitionResults: [...] } }
-  const n8nOutput = data.outputData || data
-
-  // Get outputMapping from the current N8N action's configJson
-  let outputMapping: Array<{ source: string; target: string }> = []
   try {
-    const config = n8nActionDefinition.value.configJson
+    const n8nOutput = data?.outputData || data
+    if (!n8nOutput) return
+
+    const configJson = n8nActionDefinition.value?.configJson
       ? JSON.parse(n8nActionDefinition.value.configJson)
-      : {}
-    outputMapping = config.outputMapping || []
+      : null
+
+    const frontendOutputMapping = configJson?.frontendOutputMapping
+    if (!frontendOutputMapping || !Array.isArray(frontendOutputMapping) || frontendOutputMapping.length === 0) {
+      return
+    }
+
+    const result = applyAutoFill(n8nOutput, frontendOutputMapping, subTableBindings.value, formData.value)
+
+    subTableBindings.value = result.updatedBindings as typeof subTableBindings.value
+    formData.value = result.updatedFormData
+
+    if (result.filledCount > 0) {
+      ElMessage.success(t('processStart.n8nAutoFillSuccess', { count: result.filledCount }))
+    }
   } catch (e) {
-    console.error('Failed to parse outputMapping:', e)
+    console.error('[handleN8nActionExecuted] Error:', e)
   }
-
-  // Find the invoice data array from n8nOutput.
-  // After backend outputMapping, the key could be "InvoiceRecognitionResults", "invoices", etc.
-  // Search: first try known keys, then find any array value in n8nOutput
-  let invoices: any[] = []
-  const tryKeys = ['invoices', 'InvoiceRecognitionResults', 'invoice_results']
-  for (const key of tryKeys) {
-    if (Array.isArray(n8nOutput[key]) && n8nOutput[key].length > 0) {
-      invoices = n8nOutput[key]
-      console.log(`Found invoices under key "${key}":`, invoices)
-      break
-    }
-  }
-  // Fallback: find any non-null array in n8nOutput
-  if (invoices.length === 0) {
-    for (const [key, val] of Object.entries(n8nOutput)) {
-      if (Array.isArray(val) && val.length > 0 && typeof val[0] === 'object') {
-        invoices = val
-        console.log(`Found invoices via fallback scan under key "${key}":`, invoices)
-        break
-      }
-    }
-  }
-  if (invoices.length === 0) {
-    console.log('No invoices found in N8N response. n8nOutput keys:', Object.keys(n8nOutput))
-    return
-  }
-
-  // Field mapping: N8N response field → sub-table column field
-  // For ExpenseItems sub-table
-  const expenseItemsFieldMap: Record<string, string> = {
-    invoiceType: 'expense_type',
-    invoiceDate: 'expense_date',
-    totalAmount: 'amount',
-    amount: 'amount',
-    description: 'description'
-  }
-  // Map invoice type values to expense type values
-  const invoiceTypeToExpenseType: Record<string, string> = {
-    '火车票': '交通',
-    '机票行程单': '交通',
-    '出租车发票': '交通',
-    '酒店住宿发票': '住宿',
-    '餐饮发票': '餐饮'
-  }
-
-  // Invoices sub-table has columns: file, file_name, description
-  // We only update the description of existing rows (which already hold uploaded files)
-
-  // Try to fill sub-tables based on outputMapping or by matching table names
-  for (const binding of subTableBindings.value) {
-    const tableName = binding.tableName.toLowerCase()
-    const columnFields = binding.columns.map(c => c.field)
-
-    // Determine which field map to use based on table name or outputMapping target
-    let fieldMap: Record<string, string> | null = null
-    const mappingEntry = outputMapping.find(m => {
-      const target = m.target.toLowerCase()
-      return tableName.includes(target.toLowerCase()) || target.toLowerCase().includes(tableName.replace(/\s+/g, '').toLowerCase())
-    })
-
-    const isExpenseTable = tableName.includes('expense') || tableName.includes('费用') || tableName.includes('明细') ||
-        (mappingEntry && mappingEntry.target.toLowerCase().includes('expense'))
-    const isInvoiceTable = tableName.includes('invoice') || tableName.includes('发票') ||
-        (mappingEntry && mappingEntry.target.toLowerCase().includes('invoice'))
-
-    if (isExpenseTable) {
-      fieldMap = expenseItemsFieldMap
-    } else if (isInvoiceTable) {
-      // Invoices sub-table: update description of existing rows with recognition summary
-      // Existing rows already hold uploaded files; we just enrich them with recognition info
-      for (let i = 0; i < Math.min(binding.data.length, invoices.length); i++) {
-        const inv = invoices[i]
-        const parts: string[] = []
-        if (inv.invoiceType) parts.push(inv.invoiceType)
-        if (inv.invoiceNumber) parts.push(`No.${inv.invoiceNumber}`)
-        if (inv.totalAmount) parts.push(`¥${inv.totalAmount}`)
-        if (inv.invoiceDate) parts.push(inv.invoiceDate)
-        if (parts.length > 0 && columnFields.includes('description')) {
-          binding.data[i].description = parts.join(' | ')
-        }
-      }
-      console.log(`Updated description for ${Math.min(binding.data.length, invoices.length)} existing invoice rows`)
-      continue
-    }
-
-    if (!fieldMap) continue
-
-    // Build rows from invoices (for expense items)
-    const newRows: any[] = []
-    for (const invoice of invoices) {
-      const row: Record<string, any> = {}
-      let hasData = false
-
-      for (const [srcField, targetField] of Object.entries(fieldMap)) {
-        if (!columnFields.includes(targetField)) continue
-        let value = invoice[srcField]
-        if (value === undefined || value === null) continue
-
-        // Special handling: map invoice type to expense type
-        if (srcField === 'invoiceType' && targetField === 'expense_type') {
-          value = invoiceTypeToExpenseType[value] || '其他'
-        }
-
-        row[targetField] = value
-        hasData = true
-      }
-
-      if (hasData) {
-        newRows.push(row)
-      }
-    }
-
-    if (newRows.length > 0) {
-      binding.data.push(...newRows)
-      console.log(`Auto-filled ${newRows.length} rows into "${binding.tableName}"`)
-    }
-  }
-
-  // Also fill total_amount in main form if available
-  const totalAmount = invoices.reduce((sum: number, inv: any) => {
-    return sum + (parseFloat(inv.totalAmount) || parseFloat(inv.amount) || 0)
-  }, 0)
-  if (totalAmount > 0) {
-    formData.value.total_amount = totalAmount
-  }
-
-  ElMessage.success(t('processStart.n8nAutoFillSuccess', { count: invoices.length }))
 }
 
 // 处理公共表关联字段回填事件

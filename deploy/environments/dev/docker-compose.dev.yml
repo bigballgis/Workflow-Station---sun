@@ -143,7 +143,7 @@ services:
     environment:
       SERVER_PORT: 8080
       SPRING_PROFILES_ACTIVE: docker
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://${POSTGRES_HOST:-postgres}:5432/${POSTGRES_DB}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
       SPRING_REDIS_HOST: redis
@@ -180,7 +180,7 @@ services:
     environment:
       SERVER_PORT: 8080
       SPRING_PROFILES_ACTIVE: docker
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://${POSTGRES_HOST:-postgres}:5432/${POSTGRES_DB}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
       SPRING_REDIS_HOST: redis
@@ -192,6 +192,7 @@ services:
       ENCRYPTION_SECRET_KEY: ${ENCRYPTION_SECRET_KEY}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS}
       SWAGGER_ENABLED: ${SWAGGER_ENABLED:-true}
+      SUPERSET_HOST: ${SUPERSET_HOST:-http://superset-final:8088}
     volumes:
       - ./logs:/app/logs
     networks:
@@ -218,7 +219,7 @@ services:
     environment:
       SERVER_PORT: 8080
       SPRING_PROFILES_ACTIVE: docker
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://${POSTGRES_HOST:-postgres}:5432/${POSTGRES_DB}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
       SPRING_REDIS_HOST: redis
@@ -257,7 +258,7 @@ services:
     environment:
       SERVER_PORT: 8080
       SPRING_PROFILES_ACTIVE: docker
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://${POSTGRES_HOST:-postgres}:5432/${POSTGRES_DB}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
       SPRING_REDIS_HOST: redis

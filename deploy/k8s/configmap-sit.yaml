@@ -13,9 +13,12 @@ data:
   # Database (non-sensitive — credentials in Secret)
   SPRING_DATASOURCE_URL: "jdbc:postgresql://sit-postgres.internal:5432/workflow_platform_sit"
 
-  # Redis (non-sensitive — password in Secret)
-  SPRING_REDIS_HOST: "sit-redis.internal"
+  # Redis (K8S internal service)
+  SPRING_REDIS_HOST: "redis-service"
   SPRING_REDIS_PORT: "6379"
+
+  # Kafka (K8S internal service)
+  SPRING_KAFKA_BOOTSTRAP_SERVERS: "kafka-service:29092"
 
   # Service URLs (K8S Service names — used by both backends and frontend nginx)
   ADMIN_CENTER_URL: "http://admin-center-service:8080"
@@ -61,3 +64,5 @@ data:
   DB_POSTGRESDB_DATABASE: "n8n_sit"
   WEBHOOK_URL: "https://sit-n8n.company.com"
   N8N_SERVICE_URL: "http://n8n-service:5678"
+  N8N_RESTRICT_ENVIRONMENT_VARIABLES_ACCESS: "false"
+  N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"

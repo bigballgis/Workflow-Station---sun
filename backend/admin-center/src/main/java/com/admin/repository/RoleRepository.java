@@ -53,6 +53,11 @@ public interface RoleRepository extends JpaRepository<Role, String> {
             Pageable pageable);
     
     /**
+     * 按 ID 列表批量查询角色
+     */
+    List<Role> findByIdIn(List<String> ids);
+
+    /**
      * 查找用户的所有角色
      * Note: Using native query since platform-security Role doesn't have userRoles relationship
      */

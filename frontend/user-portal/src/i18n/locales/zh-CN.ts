@@ -245,7 +245,7 @@ export default {
     processSubmitSuccess: '流程提交成功',
     submitFailed: '提交失败',
     serviceFallbackName: '服务{index}',
-    n8nAutoFillSuccess: '已自动填充 {count} 张发票识别结果'
+    n8nAutoFillSuccess: '已自动填充 {count} 条识别结果'
   },
   applicationDetail: {
     back: '返回',

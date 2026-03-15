@@ -86,6 +86,11 @@ spec:
             configMapKeyRef:
               name: workflow-platform-config
               key: FLOWABLE_SCHEMA_UPDATE
+        - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: SPRING_KAFKA_BOOTSTRAP_SERVERS
         - name: LOG_LEVEL_ROOT
           valueFrom:
             configMapKeyRef:

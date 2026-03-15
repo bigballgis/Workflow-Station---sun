@@ -246,7 +246,7 @@ export default {
     processSubmitSuccess: 'Process submitted successfully',
     submitFailed: 'Submission failed',
     serviceFallbackName: 'Service {index}',
-    n8nAutoFillSuccess: 'Auto-filled {count} invoice(s) into the form'
+    n8nAutoFillSuccess: 'Auto-filled {count} record(s) from recognition results'
   },
   applicationDetail: {
     back: 'Back',

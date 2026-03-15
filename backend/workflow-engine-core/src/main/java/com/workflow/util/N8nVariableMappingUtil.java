@@ -111,6 +111,7 @@ public final class N8nVariableMappingUtil {
 
     /**
      * 通用映射逻辑：从源数据按映射配置构建目标数据。
+     * 支持 dot notation 嵌套路径解析（如 "summary.totalAmount"）。
      */
     private static Map<String, Object> applyMapping(List<VariableMapping> mappings,
                                                      Map<String, Object> sourceData) {
@@ -124,10 +125,36 @@ public final class N8nVariableMappingUtil {
         Map<String, Object> result = new LinkedHashMap<>();
         for (VariableMapping mapping : mappings) {
             if (mapping.getSource() != null && mapping.getTarget() != null) {
-                Object value = sourceData.get(mapping.getSource());
+                Object value = resolveNestedValue(sourceData, mapping.getSource());
                 result.put(mapping.getTarget(), value);
             }
         }
         return result;
+    }
+
+    /**
+     * 支持 dot notation 的嵌套值解析。
+     * 例如: resolveNestedValue({"a": {"b": 1}}, "a.b") → 1
+     * 对于不含 dot 的路径，直接使用 data.get(path)（向后兼容）。
+     *
+     * @param data 源数据 Map
+     * @param path dot notation 路径
+     * @return 解析到的值，路径无效时返回 null
+     */
+    @SuppressWarnings("unchecked")
+    private static Object resolveNestedValue(Map<String, Object> data, String path) {
+        if (!path.contains(".")) {
+            return data.get(path);
+        }
+        String[] parts = path.split("\\.");
+        Object current = data;
+        for (String part : parts) {
+            if (current instanceof Map) {
+                current = ((Map<String, Object>) current).get(part);
+            } else {
+                return null;
+            }
+        }
+        return current;
     }
 }

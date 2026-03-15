@@ -115,6 +115,12 @@ const routes: RouteRecordRaw[] = [
         name: 'Profile',
         component: () => import('@/views/profile/index.vue'),
         meta: { titleKey: 'profile.title', icon: 'User', hidden: true }
+      },
+      {
+        path: 'bi-dashboard',
+        name: 'BiDashboard',
+        component: () => import('@/views/landing/DashboardLanding.vue'),
+        meta: { title: 'BI Dashboard', icon: 'DataAnalysis', requiresAuth: true }
       }
     ]
   },

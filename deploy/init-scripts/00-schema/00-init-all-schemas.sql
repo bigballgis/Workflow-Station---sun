@@ -37,5 +37,7 @@ COMMIT;
 \i /docker-entrypoint-initdb.d/00-schema/13-add-notification-table.sql
 \i /docker-entrypoint-initdb.d/00-schema/14-add-common-table-feature.sql
 \i /docker-entrypoint-initdb.d/00-schema/15-add-common-table-deploy.sql
+\i /docker-entrypoint-initdb.d/00-schema/15-bi-management-schema.sql
+
 
 \echo 'All schemas created successfully.'

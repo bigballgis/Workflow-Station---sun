@@ -47,7 +47,7 @@ try { $null = Get-Command psql -ErrorAction Stop }
 catch { Write-Fail "psql not found."; exit 1 }
 
 # Step 1: Base schemas
-Write-Step "Step 1/4: Creating base schemas..."
+Write-Step "Step 1/8: Creating base schemas..."
 $schemas = @(
     "00-schema/01-platform-security-schema.sql",
     "00-schema/02-workflow-engine-schema.sql",
@@ -60,14 +60,17 @@ foreach ($s in $schemas) {
 }
 
 # Step 2: Incremental migrations
-Write-Step "Step 2/4: Applying incremental migrations..."
+Write-Step "Step 2/8: Applying incremental migrations..."
 $migrations = @(
     "00-schema/06-add-deployment-rollback-columns.sql",
     "00-schema/07-add-action-definitions-table.sql",
     "00-schema/08-add-function-unit-versioning.sql",
     "00-schema/10-add-approval-order-column.sql",
     "00-schema/11-add-unique-enabled-constraint.sql",
-    "00-schema/12-add-enabled-field-to-dw-function-units.sql"
+    "00-schema/12-add-enabled-field-to-dw-function-units.sql",
+    "00-schema/13-add-notification-table.sql",
+    "00-schema/14-add-common-table-feature.sql",
+    "00-schema/15-bi-management-schema.sql"
 )
 foreach ($m in $migrations) {
     $path = Join-Path $ScriptDir $m
@@ -75,12 +78,15 @@ foreach ($m in $migrations) {
 }
 
 # Step 3: Roles, groups, admin user
-Write-Step "Step 3/4: Creating roles, groups, and admin user..."
+Write-Step "Step 3/8: Creating roles, groups, and admin user..."
 Exec-Sql -File (Join-Path $ScriptDir "01-admin/01-create-roles-and-groups.sql") -Desc "Roles and virtual groups" | Out-Null
 Exec-Sql -File (Join-Path $ScriptDir "01-admin/01-create-admin-only.sql") -Desc "Admin user" | Out-Null
+Exec-Sql -File (Join-Path $ScriptDir "01-admin/02-init-developer-permissions.sql") -Desc "Developer permissions" | Out-Null
+Exec-Sql -File (Join-Path $ScriptDir "01-admin/03-sync-role-tables.sql") -Desc "Sync role tables" | Out-Null
+Exec-Sql -File (Join-Path $ScriptDir "01-admin/04-admin-permissions.sql") -Desc "Admin permissions" | Out-Null
 
 # Step 4: Test function unit
-Write-Step "Step 4/4: Loading test function unit (Digital Lending V2 EN)..."
+Write-Step "Step 4/8: Loading test function unit (Digital Lending V2 EN)..."
 $fuScripts = @(
     "08-digital-lending-v2-en/00-create-virtual-groups.sql",
     "08-digital-lending-v2-en/01-create-digital-lending-complete.sql",
@@ -93,20 +99,36 @@ foreach ($f in $fuScripts) {
 }
 
 # Step 5: Simple Approval Workflow
-Write-Step "Step 5/6: Loading Simple Approval Workflow..."
+Write-Step "Step 5/8: Loading Simple Approval Workflow..."
 $saScripts = @(
     "10-simple-approval/00-create-simple-approval.sql",
-    "10-simple-approval/01-create-tables.sql",
-    "10-simple-approval/02-create-bpmn-process.sql",
-    "10-simple-approval/03-form-table-bindings.sql"
+    "10-simple-approval/01-insert-bpmn-process.sql",
+    "10-simple-approval/02-insert-table-design.sql",
+    "10-simple-approval/03-insert-additional-tables.sql",
+    "10-simple-approval/04-form-table-bindings.sql",
+    "10-simple-approval/04-insert-sample-data.sql",
+    "10-simple-approval/05-fix-bpmn-approval-form.sql"
 )
 foreach ($f in $saScripts) {
     $path = Join-Path $ScriptDir $f
     if (Test-Path $path) { Exec-Sql -File $path -Desc (Split-Path $f -Leaf) | Out-Null }
 }
 
-# Step 6: Procurement Workflow
-Write-Step "Step 6/6: Loading Procurement Workflow..."
+# Step 6: Simple Approval 12
+Write-Step "Step 6/8: Loading Simple Approval 12..."
+$sa12Scripts = @(
+    "12-simple-approval/00-create-function-unit.sql",
+    "12-simple-approval/01-create-tables.sql",
+    "12-simple-approval/02-create-bpmn-process.sql",
+    "12-simple-approval/03-form-table-bindings.sql"
+)
+foreach ($f in $sa12Scripts) {
+    $path = Join-Path $ScriptDir $f
+    if (Test-Path $path) { Exec-Sql -File $path -Desc (Split-Path $f -Leaf) | Out-Null }
+}
+
+# Step 7: Procurement Workflow
+Write-Step "Step 7/8: Loading Procurement Workflow..."
 $pwScripts = @(
     "13-procurement-workflow/00-create-function-unit.sql",
     "13-procurement-workflow/01-create-tables.sql",
@@ -114,6 +136,20 @@ $pwScripts = @(
     "13-procurement-workflow/03-form-table-bindings.sql"
 )
 foreach ($f in $pwScripts) {
+    $path = Join-Path $ScriptDir $f
+    if (Test-Path $path) { Exec-Sql -File $path -Desc (Split-Path $f -Leaf) | Out-Null }
+}
+
+# Step 8: Travel Expense Reimbursement
+Write-Step "Step 8/8: Loading Travel Expense Reimbursement..."
+$teScripts = @(
+    "14-travel-expense-reimbursement/00-create-function-unit.sql",
+    "14-travel-expense-reimbursement/01-create-tables.sql",
+    "14-travel-expense-reimbursement/02-create-bpmn-process.sql",
+    "14-travel-expense-reimbursement/03-form-table-bindings.sql",
+    "14-travel-expense-reimbursement/04-update-n8n-action-config.sql"
+)
+foreach ($f in $teScripts) {
     $path = Join-Path $ScriptDir $f
     if (Test-Path $path) { Exec-Sql -File $path -Desc (Split-Path $f -Leaf) | Out-Null }
 }
