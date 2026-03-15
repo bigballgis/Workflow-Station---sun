@@ -5,12 +5,8 @@
       <div class="header-left">
         <div class="logo">
           <span class="logo-icon">🛡️</span>
-          <span class="logo-text" v-if="!isCollapse">{{ t('app.name') }}</span>
+          <span class="logo-text">{{ t('app.name') }}</span>
         </div>
-        <el-icon class="collapse-btn" @click="toggleCollapse">
-          <Fold v-if="!isCollapse" />
-          <Expand v-else />
-        </el-icon>
       </div>
       <div class="header-right">
         <UserProfileDropdown />
@@ -81,6 +77,12 @@
             </el-menu-item>
           </el-menu>
         </el-scrollbar>
+        <div class="collapse-btn" @click="toggleCollapse">
+          <el-icon :size="20">
+            <Fold v-if="!isCollapse" />
+            <Expand v-else />
+          </el-icon>
+        </div>
       </el-aside>
 
       <!-- Main content area -->
@@ -169,18 +171,6 @@ $main-bg: #f5f7fa;
         letter-spacing: 1px;
       }
     }
-
-    .collapse-btn {
-      font-size: 20px;
-      cursor: pointer;
-      padding: 8px;
-      border-radius: 6px;
-      transition: background-color 0.3s;
-
-      &:hover {
-        background-color: rgba(255, 255, 255, 0.15);
-      }
-    }
   }
 
   .header-right {
@@ -199,6 +189,8 @@ $main-bg: #f5f7fa;
   border-right: 1px solid #e6e8eb;
   transition: width 0.3s;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 
   .admin-menu {
     border-right: none;
@@ -243,6 +235,23 @@ $main-bg: #f5f7fa;
       .el-sub-menu__title {
         margin: 4px;
       }
+    }
+  }
+
+  .el-scrollbar {
+    flex: 1;
+  }
+
+  .collapse-btn {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 48px;
+    cursor: pointer;
+    border-top: 1px solid #e6e8eb;
+
+    &:hover {
+      background-color: rgba($primary-color, 0.08);
     }
   }
 }
