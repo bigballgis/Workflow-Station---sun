@@ -550,7 +550,7 @@ n8nio/n8n                             # Docker Hub
 | 配置项 | SIT | UAT | PROD |
 |--------|-----|-----|------|
 | SWAGGER_ENABLED | true | false | false |
-| FLOWABLE_SCHEMA_UPDATE | true | true | false |
+| FLOWABLE_SCHEMA_UPDATE | true | false | false |
 | JWT_EXPIRATION | 24h | 12h | 8h |
 | JWT_REFRESH_EXPIRATION | 7d | 3d | 1d |
 | LOG_LEVEL_ROOT | INFO | INFO | WARN |

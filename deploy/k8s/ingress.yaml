@@ -62,3 +62,15 @@ spec:
             name: developer-workstation-frontend-service
             port:
               number: 80
+
+  # N8N Automation Engine (uncomment if N8N needs external webhook access)
+  # - host: n8n-sit.your-domain.com
+  #   http:
+  #     paths:
+  #     - path: /
+  #       pathType: Prefix
+  #       backend:
+  #         service:
+  #           name: n8n-service
+  #           port:
+  #             number: 5678
