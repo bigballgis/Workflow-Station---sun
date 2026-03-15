@@ -10,6 +10,7 @@ import lombok.NoArgsConstructor;
 
 /**
  * 表单表绑定请求DTO
+ * tableId 和 commonTableId 二选一
  */
 @Data
 @Builder
@@ -18,10 +19,14 @@ import lombok.NoArgsConstructor;
 public class FormTableBindingRequest {
     
     /**
-     * 要绑定的表ID
+     * 要绑定的功能单元表ID（与 commonTableId 二选一）
      */
-    @NotNull(message = "{validation.table_id_required}")
     private Long tableId;
+
+    /**
+     * 要绑定的公共表ID（与 tableId 二选一）
+     */
+    private Long commonTableId;
     
     /**
      * 绑定类型

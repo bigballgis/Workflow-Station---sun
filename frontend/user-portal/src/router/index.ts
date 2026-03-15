@@ -99,6 +99,12 @@ const routes: RouteRecordRaw[] = [
         meta: { titleKey: 'menu.exitRole', icon: 'SwitchButton' }
       },
       {
+        path: 'common-table-data',
+        name: 'CommonTableData',
+        component: () => import('@/views/common-table/DataList.vue'),
+        meta: { titleKey: 'menu.commonTable', icon: 'Grid' }
+      },
+      {
         path: 'notifications',
         name: 'Notifications',
         component: () => import('@/views/notifications/index.vue'),
@@ -109,6 +115,12 @@ const routes: RouteRecordRaw[] = [
         name: 'Profile',
         component: () => import('@/views/profile/index.vue'),
         meta: { titleKey: 'profile.title', icon: 'User', hidden: true }
+      },
+      {
+        path: 'bi-dashboard',
+        name: 'BiDashboard',
+        component: () => import('@/views/landing/DashboardLanding.vue'),
+        meta: { title: 'BI Dashboard', icon: 'DataAnalysis', requiresAuth: true }
       }
     ]
   },

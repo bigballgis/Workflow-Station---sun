@@ -1,0 +1,223 @@
+import { get, post, put, del } from './request'
+
+// ==================== Enums / Type Aliases ====================
+
+export type DashboardStatus = 'ACTIVE' | 'AUTO_INACTIVE' | 'MANUAL_INACTIVE'
+export type AssignmentTargetType = 'USER' | 'ROLE' | 'BUSINESS_UNIT'
+export type LayoutMode = 'SINGLE' | 'MULTI' | 'WIDGET'
+export type SupersetRoleStatus = 'ACTIVE' | 'INACTIVE'
+
+// ==================== Response Types ====================
+
+export interface DashboardRegistryResponse {
+  id: string
+  dashboardTitle: string
+  description: string
+  embedId: string
+  supersetDashboardUuid: string
+  supersetDashboardId: number
+  tags: string
+  isDefaultLanding: boolean
+  status: DashboardStatus
+  lastSyncedAt: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface DashboardAssignmentResponse {
+  id: string
+  dashboardId: string
+  dashboardTitle: string
+  targetType: AssignmentTargetType
+  targetId: string
+  targetName: string
+  layoutMode: LayoutMode
+  displayOrder: number
+  isDefault: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface SyncResultResponse {
+  created: number
+  updated: number
+  autoInactivated: number
+  syncedAt: string
+}
+
+export interface RbacMappingResponse {
+  sysRoleId: string
+  sysRoleName: string
+  sysRoleCode: string
+  sysRoleType: string
+  supersetRoles: SupersetRoleResponse[]
+  lastUpdatedAt: string
+}
+
+export interface SupersetRoleResponse {
+  id: number
+  supersetRoleId: number
+  name: string
+  status: SupersetRoleStatus
+  lastSyncedAt: string
+}
+
+export interface UserDashboardResponse {
+  dashboardId: string
+  dashboardTitle: string
+  description: string
+  embedId: string
+  layoutMode: LayoutMode
+  displayOrder: number
+  isDefault: boolean
+}
+
+export interface GuestTokenResponse {
+  token: string
+  dashboardEmbedId: string
+}
+
+// ==================== Request Types ====================
+
+export interface DashboardRegistryUpdateRequest {
+  tags?: string
+  isDefaultLanding?: boolean
+}
+
+export interface DashboardStatusUpdateRequest {
+  status: DashboardStatus
+}
+
+export interface DashboardAssignmentCreateRequest {
+  dashboardId: string
+  targetType: AssignmentTargetType
+  targetId: string
+  layoutMode?: LayoutMode
+  displayOrder?: number
+  isDefault?: boolean
+}
+
+export interface RbacMappingUpdateRequest {
+  supersetRoleIds: number[]
+}
+
+export interface GuestTokenRequest {
+  dashboardId: string
+}
+
+// ==================== Paginated Response ====================
+
+export interface PageResponse<T> {
+  content: T[]
+  totalElements: number
+  totalPages: number
+  size: number
+  number: number
+}
+
+// ==================== Query Params ====================
+
+export interface DashboardListParams {
+  page?: number
+  size?: number
+  title?: string
+  tags?: string
+  status?: DashboardStatus
+}
+
+export interface AssignmentListParams {
+  page?: number
+  size?: number
+  targetType?: AssignmentTargetType
+  dashboardTitle?: string
+}
+
+export interface RbacMappingListParams {
+  roleName?: string
+  roleType?: string
+}
+
+// ==================== API ====================
+
+const DASHBOARD_BASE = '/bi/dashboards'
+const ASSIGNMENT_BASE = '/bi/assignments'
+const RBAC_BASE = '/bi/rbac'
+const GUEST_TOKEN_BASE = '/bi/guest-token'
+
+export const biManagementApi = {
+  /** Dashboard Registry Management */
+  dashboard: {
+    /** Manually sync dashboards */
+    sync: () =>
+      post<SyncResultResponse>(`${DASHBOARD_BASE}/sync`),
+
+    /** Paginated dashboard list */
+    list: (params?: DashboardListParams) =>
+      get<PageResponse<DashboardRegistryResponse>>(DASHBOARD_BASE, { params }),
+
+    /** Get dashboard details */
+    getById: (id: string) =>
+      get<DashboardRegistryResponse>(`${DASHBOARD_BASE}/${id}`),
+
+    /** Update local extension fields (Tags, Is_Default_Landing) */
+    update: (id: string, data: DashboardRegistryUpdateRequest) =>
+      put<DashboardRegistryResponse>(`${DASHBOARD_BASE}/${id}`, data),
+
+    /** Toggle dashboard status (enable/disable) */
+    updateStatus: (id: string, data: DashboardStatusUpdateRequest) =>
+      put<DashboardRegistryResponse>(`${DASHBOARD_BASE}/${id}/status`, data),
+
+    /** Delete dashboard */
+    delete: (id: string) =>
+      del<void>(`${DASHBOARD_BASE}/${id}`),
+  },
+
+  /** Dashboard Assignment Management */
+  assignment: {
+    /** Create assignment record */
+    create: (data: DashboardAssignmentCreateRequest) =>
+      post<DashboardAssignmentResponse>(ASSIGNMENT_BASE, data),
+
+    /** Paginated assignment list */
+    list: (params?: AssignmentListParams) =>
+      get<PageResponse<DashboardAssignmentResponse>>(ASSIGNMENT_BASE, { params }),
+
+    /** Update assignment record */
+    update: (id: string, data: DashboardAssignmentCreateRequest) =>
+      put<DashboardAssignmentResponse>(`${ASSIGNMENT_BASE}/${id}`, data),
+
+    /** Delete assignment record */
+    delete: (id: string) =>
+      del<void>(`${ASSIGNMENT_BASE}/${id}`),
+
+    /** Get user's effective dashboard list */
+    getUserDashboards: (userId: string) =>
+      get<UserDashboardResponse[]>(`${ASSIGNMENT_BASE}/user/${userId}`),
+  },
+
+  /** RBAC Mapping Management */
+  rbac: {
+    /** Manually sync Superset roles */
+    syncSupersetRoles: () =>
+      post<SyncResultResponse>(`${RBAC_BASE}/superset-roles/sync`),
+
+    /** Get all synced Superset role list */
+    listSupersetRoles: () =>
+      get<SupersetRoleResponse[]>(`${RBAC_BASE}/superset-roles`),
+
+    /** Get RBAC mapping list */
+    listMappings: (params?: RbacMappingListParams) =>
+      get<RbacMappingResponse[]>(`${RBAC_BASE}/mappings`, { params }),
+
+    /** Update Sys_Role to Superset_Role mapping (full replace) */
+    updateMapping: (sysRoleId: string, data: RbacMappingUpdateRequest) =>
+      put<void>(`${RBAC_BASE}/mappings/${sysRoleId}`, data),
+  },
+
+  /** Guest Token */
+  guestToken: {
+    /** Get Guest Token */
+    getToken: (data: GuestTokenRequest) =>
+      post<GuestTokenResponse>(GUEST_TOKEN_BASE, data),
+  },
+}

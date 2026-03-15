@@ -15,6 +15,10 @@
             <el-icon><Folder /></el-icon>
             <span>{{ t('functionUnit.title') }}</span>
           </el-menu-item>
+          <el-menu-item index="/common-tables">
+            <el-icon><Grid /></el-icon>
+            <span>{{ t('commonTable.title') }}</span>
+          </el-menu-item>
           <el-menu-item index="/icons">
             <el-icon><Picture /></el-icon>
             <span>{{ t('icon.title') }}</span>
@@ -38,7 +42,7 @@
 import { computed, ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { Folder, Picture, DArrowLeft, DArrowRight } from '@element-plus/icons-vue'
+import { Folder, Picture, DArrowLeft, DArrowRight, Grid } from '@element-plus/icons-vue'
 import UserProfileDropdown from '@/components/UserProfileDropdown.vue'
 import { getUser, getCurrentUser, saveUser, clearAuth } from '@/api/auth'
 

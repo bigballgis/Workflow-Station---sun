@@ -4,9 +4,9 @@
 # Application Configuration (platform-common)
 app:
   database:
-    url: jdbc:postgresql://postgres:5432/workflow_platform
-    username: platform
-    password: ${POSTGRES_PASSWORD:platform123}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://postgres:5432/workflow_platform_dev}
+    username: ${SPRING_DATASOURCE_USERNAME:platform_dev}
+    password: ${SPRING_DATASOURCE_PASSWORD:dev_password_123}
     driver-class-name: org.postgresql.Driver
     max-pool-size: 20
     min-idle: 5
@@ -65,9 +65,9 @@ app:
 
 spring:
   datasource:
-    url: jdbc:postgresql://postgres:5432/workflow_platform
-    username: platform
-    password: ${POSTGRES_PASSWORD:platform123}
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://postgres:5432/workflow_platform_dev}
+    username: ${SPRING_DATASOURCE_USERNAME:platform_dev}
+    password: ${SPRING_DATASOURCE_PASSWORD:dev_password_123}
 
   data:
     redis:

@@ -24,6 +24,12 @@ public class FormTableBindingResponse {
     private Long tableId;
     private String tableName;
     private String tableType;
+    /** 公共表ID（当绑定到公共表时） */
+    private Long commonTableId;
+    /** 公共表编码（当绑定到公共表时） */
+    private String commonTableCode;
+    /** 是否为公共表绑定 */
+    private boolean commonTableBinding;
     private BindingType bindingType;
     private BindingMode bindingMode;
     private String foreignKeyField;
@@ -41,6 +47,9 @@ public class FormTableBindingResponse {
                 .tableId(binding.getTableId())
                 .tableName(binding.getTableName())
                 .tableType(binding.getTable() != null ? binding.getTable().getTableType().name() : null)
+                .commonTableId(binding.getCommonTableId())
+                .commonTableCode(binding.getCommonTableCode())
+                .commonTableBinding(binding.isCommonTableBinding())
                 .bindingType(binding.getBindingType())
                 .bindingMode(binding.getBindingMode())
                 .foreignKeyField(binding.getForeignKeyField())
