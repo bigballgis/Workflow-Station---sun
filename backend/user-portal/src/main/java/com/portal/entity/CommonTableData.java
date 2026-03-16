@@ -36,11 +36,8 @@ public class CommonTableData {
     @Column(name = "data_json", nullable = false, columnDefinition = "jsonb")
     private Map<String, Object> dataJson;
 
-    @Column(name = "created_by", length = 100)
+    @Column(name = "created_by", length = 50)
     private String createdBy;
-
-    @Column(name = "updated_by", length = 100)
-    private String updatedBy;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

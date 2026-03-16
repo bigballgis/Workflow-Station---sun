@@ -54,8 +54,7 @@ CREATE TABLE IF NOT EXISTS dw_common_table_data (
     id BIGSERIAL PRIMARY KEY,
     common_table_id BIGINT NOT NULL,
     data_json JSONB NOT NULL DEFAULT '{}',
-    created_by VARCHAR(100),
-    updated_by VARCHAR(100),
+    created_by VARCHAR(50),
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_common_data_table FOREIGN KEY (common_table_id) REFERENCES dw_common_table_definitions(id) ON DELETE CASCADE

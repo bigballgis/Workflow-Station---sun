@@ -37,9 +37,6 @@ public class CommonTableDefinition {
     @Column(name = "status", length = 20)
     private String status;
 
-    @Column(name = "enabled")
-    private Boolean enabled;
-
     @Column(name = "created_by", length = 50)
     private String createdBy;
 

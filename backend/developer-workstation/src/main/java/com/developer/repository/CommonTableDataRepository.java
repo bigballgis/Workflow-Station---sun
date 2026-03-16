@@ -23,7 +23,7 @@ public interface CommonTableDataRepository extends JpaRepository<CommonTableData
     /**
      * 通过关键词搜索（JSONB 全文搜索，cast to text for broad matching）
      */
-    @Query(value = "SELECT * FROM dw_common_table_data WHERE common_table_id = :tableId AND data_json::text ILIKE CONCAT('%', :keyword, '%')",
+    @Query(value = "SELECT * FROM dw_common_table_data WHERE common_table_id = :tableId AND data_json::text ILIKE %:keyword%",
            nativeQuery = true)
     List<CommonTableData> searchByKeyword(@Param("tableId") Long tableId, @Param("keyword") String keyword);
 

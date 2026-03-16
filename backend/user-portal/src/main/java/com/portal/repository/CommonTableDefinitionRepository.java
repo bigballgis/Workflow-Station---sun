@@ -14,12 +14,9 @@ public interface CommonTableDefinitionRepository extends JpaRepository<CommonTab
 
     Optional<CommonTableDefinition> findByCode(String code);
 
-    @Query("SELECT t FROM CommonTableDefinition t LEFT JOIN FETCH t.fieldDefinitions WHERE t.code = :code AND t.status = 'PUBLISHED' AND t.enabled = true")
+    @Query("SELECT t FROM CommonTableDefinition t LEFT JOIN FETCH t.fieldDefinitions WHERE t.code = :code")
     Optional<CommonTableDefinition> findByCodeWithFields(@Param("code") String code);
 
-    @Query("SELECT DISTINCT t FROM CommonTableDefinition t LEFT JOIN FETCH t.fieldDefinitions WHERE t.status = 'PUBLISHED' AND t.enabled = true ORDER BY t.createdAt DESC")
+    @Query("SELECT DISTINCT t FROM CommonTableDefinition t LEFT JOIN FETCH t.fieldDefinitions ORDER BY t.createdAt DESC")
     List<CommonTableDefinition> findAllWithFields();
-
-    @Query("SELECT t FROM CommonTableDefinition t LEFT JOIN FETCH t.fieldDefinitions WHERE t.code = :code AND t.status = 'PUBLISHED' AND t.enabled = true")
-    Optional<CommonTableDefinition> findPublishedByCodeWithFields(@Param("code") String code);
 }

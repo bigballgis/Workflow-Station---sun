@@ -2,7 +2,6 @@ package com.developer.component;
 
 import com.developer.dto.CommonTableRequest;
 import com.developer.entity.CommonTableDefinition;
-import com.developer.entity.CommonTableDeployment;
 
 import java.util.List;
 
@@ -22,12 +21,4 @@ public interface CommonTableComponent {
     CommonTableDefinition update(Long id, CommonTableRequest request);
 
     void delete(Long id);
-
-    CommonTableDefinition deploy(Long id, String deployedBy);
-
-    CommonTableDefinition updateEnabled(Long id, boolean enabled);
-
-    List<CommonTableDeployment> findDeployments(Long id);
-
-    List<CommonTableDeployment> findAllDeployments();
 }

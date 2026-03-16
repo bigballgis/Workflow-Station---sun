@@ -24,7 +24,6 @@ export interface CommonTableDataRow {
   commonTableId: number
   dataJson: Record<string, any>
   createdBy?: string
-  updatedBy?: string
   createdAt?: string
   updatedAt?: string
 }
@@ -53,15 +52,8 @@ export const commonTableApi = {
     return request.get(`${BASE}/${tableCode}`, { params: { page, size } })
   },
 
-  getRowById(tableCode: string, rowId: number): Promise<{ success: boolean; data: CommonTableDataRow }> {
-    return request.get(`${BASE}/${tableCode}/data/${rowId}`)
-  },
-
-  search(tableCode: string, keyword?: string, displayField?: string): Promise<{ success: boolean; data: CommonTableDataRow[] }> {
-    const params: Record<string, string> = {}
-    if (keyword) params.keyword = keyword
-    if (displayField) params.displayField = displayField
-    return request.get(`${BASE}/${tableCode}/search`, { params })
+  search(tableCode: string, keyword?: string): Promise<{ success: boolean; data: CommonTableDataRow[] }> {
+    return request.get(`${BASE}/${tableCode}/search`, { params: keyword ? { keyword } : {} })
   },
 
   create(tableCode: string, dataJson: Record<string, any>): Promise<{ success: boolean; data: CommonTableDataRow }> {

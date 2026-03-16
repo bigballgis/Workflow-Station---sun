@@ -52,12 +52,6 @@
               <el-icon><Box /></el-icon>
               <template #title>{{ t('menu.functionUnit') }}</template>
             </el-menu-item>
-
-            <!-- Common Table - requires system:admin -->
-            <el-menu-item index="/common-table" v-if="isSystemAdmin">
-              <el-icon><Grid /></el-icon>
-              <template #title>{{ t('menu.commonTable') }}</template>
-            </el-menu-item>
             
             <!-- BI Management - requires system:admin -->
             <el-sub-menu index="bi-management" v-if="isSystemAdmin">
@@ -105,7 +99,7 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { 
   Fold, Expand,
-  Odometer, OfficeBuilding, Key, Connection, Box, User, Lock, Document, Grid, DataAnalysis
+  Odometer, OfficeBuilding, Key, Connection, Box, User, Lock, Document, DataAnalysis
 } from '@element-plus/icons-vue'
 import UserProfileDropdown from '@/components/UserProfileDropdown.vue'
 import { hasPermission, PERMISSIONS } from '@/utils/permission'

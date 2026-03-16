@@ -91,7 +91,6 @@
               v-model="formData"
               :label-width="startFormLabelWidth"
               :readonly="true"
-              :common-table-form-rules="commonTableFormRulesMap"
             />
           </div>
           <template v-if="startSubTableBindings.length > 0">
@@ -121,7 +120,6 @@
               v-model="formData"
               :label-width="formLabelWidth"
               :readonly="true"
-              :common-table-form-rules="commonTableFormRulesMap"
             />
           </div>
           <el-empty v-else :description="t('applicationDetail.noFormData')" />
@@ -231,9 +229,6 @@ const subTableBindings = ref<Array<{
   columns: Array<{ field: string; label: string; type?: string }>
   data: any[]
 }>>([])
-
-// Binding form-create rules keyed by commonTableCode for FormRenderer
-const commonTableFormRulesMap = ref<Record<string, any[]>>({})
 
 // 申请内容（start 节点表单，只读展示）
 const startFormFields = ref<FormField[]>([])
@@ -479,18 +474,6 @@ const loadFunctionUnitContent = async (processKey: string) => {
         })
       }
       subTableBindings.value = bindings
-
-      // Build commonTableFormRulesMap for FormRenderer
-      const ctRules: Record<string, any[]> = {}
-      for (const b of tableBindings) {
-        if (b.commonTableCode) {
-          const rule = subForms?.[b.bindingId]?.rule
-          if (rule && Array.isArray(rule) && rule.length > 0) {
-            ctRules[b.commonTableCode] = rule
-          }
-        }
-      }
-      commonTableFormRulesMap.value = ctRules
 
       // 额外加载 start 节点表单（Request Form），只读展示申请内容
       // 当当前节点有专属表单时，start form 作为额外的只读区域展示
@@ -1042,19 +1025,6 @@ const convertFormCreateRule = (rule: any): FormField | null => {
     field.uploadUrl = (action && action !== '/') ? action : '/api/v1/upload'
     field.uploadAccept = rule.props?.accept || '.jpg,.jpeg,.png,.pdf,.docx,.xlsx'
     field.uploadLimit = rule.props?.limit || 1
-  }
-  if (rule.info && typeof rule.info === 'string') {
-    const normalizedInfo = rule.info.startsWith('common Table Ref:')
-      ? 'commonTableRef:' + rule.info.slice('common Table Ref:'.length)
-      : rule.info
-    if (normalizedInfo.startsWith('commonTableRef:')) {
-      const parts = normalizedInfo.split(':')
-      field.type = 'commonTableRef'
-      field.commonTableCode = parts[1]?.trim() || ''
-      field.commonTableDisplayField = parts[2]?.trim() || ''
-      field.commonTableStoreField = parts[3]?.trim() || 'id'
-      field.placeholder = rule.props?.placeholder || `Search ${field.label}`
-    }
   }
   return field
 }

@@ -49,7 +49,6 @@ export default {
     logout: '退出登录',
     logoutSuccess: '已退出登录',
     pleaseInput: '请输入{label}',
-    selectedRecord: '已选记录',
     pleaseSelect: '请选择{label}'
   },
   menu: {
@@ -66,7 +65,7 @@ export default {
     exitRole: '退出角色',
     notifications: '消息中心',
     settings: '个人设置',
-    commonTable: 'Common Table'
+    commonTable: '公共数据'
   },
   dashboard: {
     title: '首页',

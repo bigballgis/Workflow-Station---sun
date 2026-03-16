@@ -104,7 +104,6 @@
               v-model="formData"
               :label-width="startFormLabelWidth"
               :readonly="true"
-              :common-table-form-rules="commonTableFormRulesMap"
             />
           </div>
           <template v-if="startSubTableBindings.length > 0">
@@ -134,7 +133,6 @@
               v-model="formData"
               :label-width="formLabelWidth"
               :readonly="formReadOnly"
-              :common-table-form-rules="commonTableFormRulesMap"
               @fill-subtable="handleFillSubtable"
             />
           </div>
@@ -392,9 +390,6 @@ const subTableBindings = ref<Array<{
   commonTableCode?: string
 }>>([])
 
-// Binding form-create rules keyed by commonTableCode for FormRenderer
-const commonTableFormRulesMap = ref<Record<string, any[]>>({})
-
 // 流转记录
 const historyRecords = ref<HistoryRecord[]>([])
 
@@ -597,18 +592,6 @@ const loadFunctionUnitContent = async (processKey: string) => {
         console.warn('[SubTable] no __subTables__ found in formData.value')
       }
       subTableBindings.value = bindings
-
-      // Build commonTableFormRulesMap for FormRenderer
-      const ctRules: Record<string, any[]> = {}
-      for (const b of tableBindings) {
-        if (b.commonTableCode) {
-          const rule = subForms?.[b.bindingId]?.rule
-          if (rule && Array.isArray(rule) && rule.length > 0) {
-            ctRules[b.commonTableCode] = rule
-          }
-        }
-      }
-      commonTableFormRulesMap.value = ctRules
 
       // 如果当前节点的表单与 start 节点不同，额外加载 start 节点表单（只读展示申请内容）
       // 只有当前节点成功匹配到了专属表单（currentFormInfo 有值）时才考虑显示 start form
@@ -1098,6 +1081,7 @@ const convertFormCreateRule = (rule: any): FormField | null => {
   const field: FormField = { key: rule.field, label: rule.title || rule.field, type: typeMap[rule.type] || 'text', required: rule.validate?.some((v: any) => v.required) || false, placeholder: rule.props?.placeholder || '', span: rule.col?.span || 24 }
   if (rule.options) {
     field.options = rule.options.map((opt: any) => ({ label: opt.label || opt.value, value: opt.value }))
+    console.log(`Field ${rule.field} options:`, JSON.stringify(field.options))
   }
   if (rule.type === 'input' && rule.props?.type === 'textarea') { field.type = 'textarea'; field.rows = rule.props?.rows || 3 }
   if (rule.type === 'upload') {
@@ -1106,19 +1090,7 @@ const convertFormCreateRule = (rule: any): FormField | null => {
     field.uploadAccept = rule.props?.accept || '.jpg,.jpeg,.png,.pdf,.docx,.xlsx'
     field.uploadLimit = rule.props?.limit || 1
   }
-  if (rule.info && typeof rule.info === 'string') {
-    const normalizedInfo = rule.info.startsWith('common Table Ref:')
-      ? 'commonTableRef:' + rule.info.slice('common Table Ref:'.length)
-      : rule.info
-    if (normalizedInfo.startsWith('commonTableRef:')) {
-      const parts = normalizedInfo.split(':')
-      field.type = 'commonTableRef'
-      field.commonTableCode = parts[1]?.trim() || ''
-      field.commonTableDisplayField = parts[2]?.trim() || ''
-      field.commonTableStoreField = parts[3]?.trim() || 'id'
-      field.placeholder = rule.props?.placeholder || `Search ${field.label}`
-    }
-  }
+  console.log(`convertFormCreateRule: field=${rule.field}, type=${field.type}, hasOptions=${!!field.options}`)
   return field
 }
 

@@ -151,14 +151,8 @@ export type BindingMode = 'EDITABLE' | 'READONLY'
 // Table binding interface
 export interface TableBinding {
   id?: number
-  tableId?: number | null
+  tableId: number
   tableName?: string
-  /** Common table ID (when binding to common table) */
-  commonTableId?: number | null
-  /** Common table code (when binding to common table) */
-  commonTableCode?: string | null
-  /** Whether this is a common table binding */
-  commonTableBinding?: boolean
   bindingType: BindingType
   bindingMode: BindingMode
   foreignKeyField?: string

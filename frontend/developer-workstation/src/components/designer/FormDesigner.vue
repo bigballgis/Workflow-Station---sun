@@ -101,16 +101,7 @@
             type="warning"
             plain
           >
-            <el-icon><Link /></el-icon> {{ t('commonTable.addLookUpField') }}
-          </el-button>
-          <el-button
-            v-if="currentActiveLookupCode"
-            type="primary"
-            plain
-            size="default"
-            @click="navigateToLookupTab"
-          >
-            → Lookup Form
+            <el-icon><Link /></el-icon> {{ t('commonTable.addField') }}
           </el-button>
           <el-button @click="handleManageBindings(selectedForm)">{{ t('form.manageBindings') }}</el-button>
           <el-button @click="handleBindNode(selectedForm)">{{ t('form.bindProcessNode') }}</el-button>
@@ -138,7 +129,6 @@
         >
           <template #label>
             <span>
-              <el-tag v-if="binding.isCommonTable" type="danger" size="small" style="margin-right: 4px;">Lookup</el-tag>
               <el-tag :type="binding.bindingType === 'SUB' ? 'success' : 'warning'" size="small" style="margin-right: 6px;">
                 {{ binding.bindingType === 'SUB' ? t('tableBinding.subTableType') : t('tableBinding.relationTableType') }}
               </el-tag>
@@ -194,49 +184,13 @@
     <el-dialog v-model="showPreviewDialog" :title="t('form.previewTitle')" width="900px" destroy-on-close>
       <div class="preview-container">
         <div class="form-preview-wrapper">
-          <template v-if="previewSections.length">
-            <template v-for="(section, idx) in previewSections" :key="idx">
-              <!-- Regular form fields section -->
-              <form-create
-                v-if="section.type === 'form' && section.rule.length"
-                v-model="previewSectionData[idx]"
-                :rule="section.rule"
-                :option="previewOption"
-              />
-              <!-- lookupSection: CSS grid keeps label / input / descriptions in perfect alignment -->
-              <div v-else-if="section.type === 'lookupSection'" class="preview-lookup-section">
-                <!-- col 1: field label (same styling as form-create el-form-item__label) -->
-                <div class="preview-lookup-field-label">{{ section.fieldLabel }}</div>
-                <!-- col 2 row 1: disabled search input -->
-                <div class="preview-lookup-field-input">
-                  <el-input :placeholder="section.placeholder" disabled style="width:100%" />
-                </div>
-                <!-- col 2 row 2: descriptions table (auto-fit label column, no truncation) -->
-                <el-descriptions
-                  v-if="section.lookupRule.length"
-                  class="preview-lookup-desc"
-                  :column="1"
-                  border
-                  size="small"
-                >
-                  <el-descriptions-item
-                    v-for="col in section.lookupRule"
-                    :key="col.field"
-                    :label="col.title || col.field"
-                  >
-                    <span style="color:#c0c4cc;">-</span>
-                  </el-descriptions-item>
-                </el-descriptions>
-              </div>
-            </template>
-          </template>
+          <form-create v-if="previewRule.length" v-model="previewData" :rule="previewRule" :option="previewOption" />
           <el-empty v-else :description="t('form.noFormContent')" />
         </div>
-
-        <!-- Regular (non-lookup) sub/relation table bindings: rendered as el-table -->
-        <template v-if="previewSubBindings.some(b => b.tableType !== 'COMMON')">
+        <!-- Sub/Relation table preview -->
+        <template v-if="previewSubBindings.length > 0">
           <div
-            v-for="binding in previewSubBindings.filter(b => b.tableType !== 'COMMON')"
+            v-for="binding in previewSubBindings"
             :key="binding.bindingId"
             style="margin-top: 20px;"
           >
@@ -366,12 +320,12 @@
               <el-option-group v-if="formBindings.length > 0" :label="t('form.boundTables')">
                 <el-option 
                   v-for="binding in formBindings" 
-                  :key="getImportOptionKey(binding)" 
-                  :label="`${getBindingDisplayName(binding)} (${bindingTypeLabel(binding.bindingType)})`" 
-                  :value="getImportOptionValue(binding)"
+                  :key="binding.tableId" 
+                  :label="`${getTableName(binding.tableId)} (${bindingTypeLabel(binding.bindingType)})`" 
+                  :value="binding.tableId"
                 >
                   <div class="table-option-with-binding">
-                    <span>{{ getBindingDisplayName(binding) }}</span>
+                    <span>{{ getTableName(binding.tableId) }}</span>
                     <el-tag size="small" :type="bindingTypeTag(binding.bindingType)">
                       {{ bindingTypeLabel(binding.bindingType) }}
                     </el-tag>
@@ -423,7 +377,7 @@
             </el-table-column>
             <el-table-column :label="t('form.sourceTable')" width="120" v-if="formBindings.length > 0">
               <template #default>
-                <span class="source-table">{{ getImportTableDisplayName() }}</span>
+                <span class="source-table">{{ getTableName(importTableId!) }}</span>
               </template>
             </el-table-column>
             <el-table-column prop="description" :label="t('table.description')" show-overflow-tooltip />
@@ -463,13 +417,13 @@
     </el-dialog>
 
     <!-- Common Table Reference Field dialog -->
-    <el-dialog v-model="showCommonTableRefDialog" :title="t('commonTable.addLookUpField')" width="600px" destroy-on-close>
+    <el-dialog v-model="showCommonTableRefDialog" :title="t('commonTable.addField')" width="600px" destroy-on-close>
       <el-alert type="info" :closable="false" style="margin-bottom:16px;">
-        {{ t('commonTable.addFieldHint') }}
+        选择一个公共表绑定，插入一个搜索关联字段到当前表单。用户填写时可搜索公共表数据并自动回填关联子表。
       </el-alert>
-      <el-form label-width="180px" label-position="top" class="common-table-ref-form">
-        <el-form-item :label="t('commonTable.selectCommonTable')">
-          <el-select v-model="commonTableRefConfig.commonTableCode" style="width:100%;" :placeholder="t('commonTable.selectCommonTablePlaceholder')" @change="onCommonTableSelectChange">
+      <el-form label-width="120px" label-position="left">
+        <el-form-item label="选择公共表">
+          <el-select v-model="commonTableRefConfig.commonTableCode" style="width:100%;" placeholder="请选择公共表绑定">
             <el-option
               v-for="b in commonTableBindings"
               :key="(b as any).commonTableCode"
@@ -478,39 +432,26 @@
             />
           </el-select>
         </el-form-item>
-        <el-form-item :label="t('commonTable.displayField')">
-          <el-select v-model="commonTableRefConfig.displayField" style="width:100%;" :placeholder="t('commonTable.displayFieldPlaceholder')" :disabled="!commonTableRefConfig.commonTableCode">
-            <el-option
-              v-for="f in getCommonTableFields(commonTableRefConfig.commonTableCode)"
-              :key="f.fieldName"
-              :label="`${f.displayName || f.fieldName}`"
-              :value="f.fieldName"
-            />
-          </el-select>
+        <el-form-item label="字段名">
+          <el-input v-model="commonTableRefConfig.fieldName" placeholder="如：customerRef" />
         </el-form-item>
-        <el-form-item :label="t('commonTable.fieldName')">
-          <el-select v-model="commonTableRefConfig.fieldName" style="width:100%;" :placeholder="t('commonTable.fieldNamePlaceholder')" :disabled="!commonTableRefConfig.commonTableCode" @change="onFieldNameChange">
-            <el-option
-              v-for="f in getCommonTableFields(commonTableRefConfig.commonTableCode)"
-              :key="f.fieldName"
-              :label="`${f.isPrimaryKey ? '🔑 ' : ''}${f.displayName || f.fieldName}`"
-              :value="f.fieldName"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item :label="t('commonTable.variableName')">
-          <el-input v-model="commonTableRefConfig.variableName" :placeholder="t('commonTable.variableNamePlaceholder')" />
-          <div style="font-size:12px;color:#909399;margin-top:4px;">{{ t('commonTable.variableNameHint') }}</div>
-        </el-form-item>
-        <el-form-item :label="t('commonTable.displayLabel')">
-          <el-input v-model="commonTableRefConfig.label" :placeholder="t('commonTable.displayLabelPlaceholder')" />
+        <el-form-item label="显示标签">
+          <el-input v-model="commonTableRefConfig.label" placeholder="如：关联客户" />
         </el-form-item>
       </el-form>
+      <div v-if="commonTableRefConfig.commonTableCode" style="margin-top:12px;">
+        <el-divider>关联表字段预览（选中记录后将回填到子表）</el-divider>
+        <el-table :data="getCommonTableFields(commonTableRefConfig.commonTableCode)" size="small" border>
+          <el-table-column prop="fieldName" label="字段名" min-width="120" />
+          <el-table-column prop="displayName" label="显示名" min-width="120" />
+          <el-table-column prop="dataType" label="类型" width="100" />
+        </el-table>
+      </div>
       <template #footer>
         <el-button @click="showCommonTableRefDialog = false">{{ t('common.cancel') }}</el-button>
         <el-button type="primary" @click="insertCommonTableRefField"
-          :disabled="!commonTableRefConfig.commonTableCode || !commonTableRefConfig.fieldName || !commonTableRefConfig.displayField || !commonTableRefConfig.variableName">
-          {{ t('commonTable.insertField') }}
+          :disabled="!commonTableRefConfig.commonTableCode || !commonTableRefConfig.fieldName">
+          插入关联字段
         </el-button>
       </template>
     </el-dialog>
@@ -518,7 +459,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onBeforeUnmount, nextTick, computed, watch } from 'vue'
+import { ref, reactive, onMounted, nextTick, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ArrowLeft, Plus, Refresh, Connection, Link } from '@element-plus/icons-vue'
 import { commonTableApi, type CommonTableDefinition } from '@/api/commonTable'
@@ -555,24 +496,10 @@ const previewSubBindings = ref<Array<{
   tableName: string
   tableType: string
   tableDescription: string
-  commonTableCode?: string
   rule: any[]
 }>>([])
 const previewSubData = ref<Record<number, any>>({})
 const previewTableRows = ref<Record<number, any[]>>({})
-const previewLookupFieldTitles = ref<Record<string, string>>({})
-const previewLookupEntries = ref<Array<{ fieldTitle: string; commonTableCode: string; tableName: string; rule: any[] }>>([])
-// Sections for preview: regular form-field groups OR combined lookup sections (field + inline description)
-const previewSections = ref<Array<{
-  type: 'form' | 'lookupSection'
-  // 'form' fields
-  rule: any[]
-  // 'lookupSection' fields
-  fieldLabel?: string
-  placeholder?: string
-  lookupRule: any[]
-}>>([])
-const previewSectionData = ref<Record<number, any>>({})
 
 // Sub-designer refs (one per non-PRIMARY binding)
 const subDesignerRefs = ref<any[]>([])
@@ -611,7 +538,7 @@ const designerSubBindings = computed(() => {
       bindingId: b.id as number,
       bindingType: b.bindingType,
       bindingMode: b.bindingMode,
-      tableName: isCommon ? ((b as any).tableName || (b as any).commonTableCode || '') : (getTableName(b.tableId) || b.tableName || ''),
+      tableName: isCommon ? ((b as any).commonTableCode || b.tableName || '') : (getTableName(b.tableId) || b.tableName || ''),
       tableType: isCommon ? 'COMMON' : ((store.tables.find(t => t.id === b.tableId)?.tableType) || ''),
       tableDescription: isCommon ? '' : ((store.tables.find(t => t.id === b.tableId)?.description) || ''),
       isCommonTable: isCommon,
@@ -628,58 +555,8 @@ const commonTableBindings = computed(() => {
 
 // Common Table Reference Field dialog state
 const showCommonTableRefDialog = ref(false)
-const commonTableRefConfig = ref({ commonTableCode: '', fieldName: '', label: '', displayField: '', storeField: '', variableName: '' })
+const commonTableRefConfig = ref({ commonTableCode: '', fieldName: '', label: '' })
 const loadedCommonTables = ref<CommonTableDefinition[]>([])
-
-// Toolbar: detect if the currently selected designer rule is a lookup field
-const currentActiveLookupCode = ref<string | null>(null)
-let activeRulePollInterval: ReturnType<typeof setInterval> | null = null
-
-function parseLookupCodeFromInfo(info: unknown): string | null {
-  if (typeof info !== 'string') return null
-  const normalized = info.startsWith('common Table Ref:')
-    ? 'commonTableRef:' + info.slice('common Table Ref:'.length)
-    : info
-  if (!normalized.startsWith('commonTableRef:')) return null
-  const parts = normalized.split(':')
-  return parts[1]?.trim() || null
-}
-
-function startActiveRulePoll() {
-  if (activeRulePollInterval) return
-  activeRulePollInterval = setInterval(() => {
-    try {
-      let activeRef: any = null
-      if (activeDesignerTab.value === 'main') {
-        activeRef = designerRef.value
-      } else {
-        const idx = designerSubBindings.value.findIndex(b => String(b.bindingId) === activeDesignerTab.value)
-        if (idx >= 0) activeRef = subDesignerRefs.value[idx]
-      }
-      const info = activeRef?.activeRule?.info
-      currentActiveLookupCode.value = parseLookupCodeFromInfo(info)
-    } catch {
-      currentActiveLookupCode.value = null
-    }
-  }, 300)
-}
-
-function stopActiveRulePoll() {
-  if (activeRulePollInterval) {
-    clearInterval(activeRulePollInterval)
-    activeRulePollInterval = null
-  }
-}
-
-function navigateToLookupTab() {
-  if (!currentActiveLookupCode.value) return
-  const binding = designerSubBindings.value.find(b => b.isCommonTable && b.commonTableCode === currentActiveLookupCode.value)
-  if (binding) {
-    activeDesignerTab.value = String(binding.bindingId)
-  } else {
-    ElMessage.warning('No lookup form tab found for: ' + currentActiveLookupCode.value)
-  }
-}
 
 async function loadCommonTablesForDesigner() {
   try {
@@ -695,90 +572,32 @@ function getCommonTableFields(code: string) {
   return ct?.fieldDefinitions || []
 }
 
-function generateVariableName(code: string, fieldName: string): string {
-  if (!code) return ''
-  const suffix = fieldName ? fieldName.charAt(0).toUpperCase() + fieldName.slice(1) : 'Ref'
-  return `${code}${suffix}`
-}
-
-function onCommonTableSelectChange(code: string) {
-  commonTableRefConfig.value.displayField = ''
-  commonTableRefConfig.value.fieldName = ''
-  commonTableRefConfig.value.storeField = ''
-  commonTableRefConfig.value.variableName = ''
-  // Auto-select primary key field
-  const fields = getCommonTableFields(code)
-  const pkField = fields.find(f => f.isPrimaryKey)
-  if (pkField) {
-    commonTableRefConfig.value.fieldName = pkField.fieldName
-    commonTableRefConfig.value.storeField = pkField.fieldName
-    commonTableRefConfig.value.variableName = generateVariableName(code, pkField.fieldName)
-  }
-}
-
-function onFieldNameChange(fieldName: string) {
-  commonTableRefConfig.value.storeField = fieldName
-  commonTableRefConfig.value.variableName = generateVariableName(commonTableRefConfig.value.commonTableCode, fieldName)
-}
-
 function insertCommonTableRefField() {
-  if (!commonTableRefConfig.value.commonTableCode) return
-  const storeField = commonTableRefConfig.value.storeField || commonTableRefConfig.value.fieldName || 'id'
-  const varName = commonTableRefConfig.value.variableName || `${commonTableRefConfig.value.commonTableCode}Ref`
+  if (!designerRef.value || !commonTableRefConfig.value.commonTableCode) return
   const newField = {
     type: 'input',
-    field: varName,
+    field: commonTableRefConfig.value.fieldName || `${commonTableRefConfig.value.commonTableCode}Ref`,
     title: commonTableRefConfig.value.label || commonTableRefConfig.value.commonTableCode,
     props: {
-      placeholder: `${t('common.search')} ${commonTableRefConfig.value.label || commonTableRefConfig.value.commonTableCode}`,
+      placeholder: `搜索${commonTableRefConfig.value.label || commonTableRefConfig.value.commonTableCode}`,
       clearable: true,
     },
     // Extra metadata stored as component info for user portal rendering
-    // Format: common Table Ref:<tableCode>:<displayField>:<storeField>
-    info: `common Table Ref:${commonTableRefConfig.value.commonTableCode}:${commonTableRefConfig.value.displayField}:${storeField}`,
+    info: `commonTableRef:${commonTableRefConfig.value.commonTableCode}`,
   }
   try {
-    // Target designer: active sub tab or main form
-    let targetRef: any = null
-    if (activeDesignerTab.value !== 'main') {
-      const bindingId = Number(activeDesignerTab.value)
-      const index = designerSubBindings.value.findIndex(b => b.bindingId === bindingId)
-      if (index >= 0) targetRef = subDesignerRefs.value[index]
-    }
-    if (!targetRef) targetRef = designerRef.value
-
-    if (!targetRef || typeof targetRef.getRule !== 'function') {
-      ElMessage.info(t('commonTable.manualAddHint') + commonTableRefConfig.value.commonTableCode)
-      showCommonTableRefDialog.value = false
-      commonTableRefConfig.value = { commonTableCode: '', fieldName: '', label: '', displayField: '', storeField: '', variableName: '' }
-      return
-    }
-
-    const currentRules: any[] = targetRef.getRule() || []
-    let newRules: any[]
-
-    // Insert at selected position if user has selected a component in the designer
-    const activeRule = targetRef.activeRule
-    if (activeRule && (activeRule.field || activeRule._fc_id)) {
-      const idx = currentRules.findIndex(
-        (r: any) => r.field === activeRule.field || r._fc_id === activeRule._fc_id
-      )
-      if (idx >= 0) {
-        newRules = [...currentRules.slice(0, idx + 1), newField, ...currentRules.slice(idx + 1)]
-      } else {
-        newRules = [...currentRules, newField]
-      }
+    const api = designerRef.value
+    if (api && typeof api.addRule === 'function') {
+      api.addRule(newField)
     } else {
-      newRules = [...currentRules, newField]
+      // Fallback: show instructions
+      ElMessage.info('请在表单设计器中手动添加输入框，并在字段说明中填写：commonTableRef:' + commonTableRefConfig.value.commonTableCode)
     }
-
-    targetRef.setRule(newRules)
-    ElMessage.success(t('commonTable.insertSuccess'))
   } catch (e) {
-    ElMessage.info(t('commonTable.manualAddHint') + commonTableRefConfig.value.commonTableCode)
+    ElMessage.info('请在表单设计器中手动添加输入框字段，并在字段说明填写：commonTableRef:' + commonTableRefConfig.value.commonTableCode)
   }
   showCommonTableRefDialog.value = false
-  commonTableRefConfig.value = { commonTableCode: '', fieldName: '', label: '', displayField: '', storeField: '', variableName: '' }
+  commonTableRefConfig.value = { commonTableCode: '', fieldName: '', label: '' }
 }
 
 const createForm = reactive({ formName: '', formType: 'MAIN', description: '', boundTableId: null as number | null })
@@ -791,19 +610,14 @@ const processNodes = ref<ProcessNode[]>([])
 
 // Import fields state
 const showImportFieldsDialog = ref(false)
-const importTableId = ref<number | string | null>(null)
+const importTableId = ref<number | null>(null)
 const selectedImportFields = ref<FieldDefinition[]>([])
 const formBindings = ref<TableBinding[]>([])
-const commonTableFieldsCache = ref<FieldDefinition[]>([])
 
-// Computed: available fields for selected table (regular table or common table)
+// Computed: available fields for selected table
 const availableFields = computed(() => {
   if (!importTableId.value) return []
-  const v = importTableId.value
-  if (typeof v === 'string' && v.startsWith('ct-')) {
-    return commonTableFieldsCache.value
-  }
-  const table = store.tables.find(t => t.id === v)
+  const table = store.tables.find(t => t.id === importTableId.value)
   return table?.fieldDefinitions || []
 })
 
@@ -878,72 +692,8 @@ const bindingTypeTag = (type: BindingType): 'primary' | 'success' | 'warning' | 
 // Get binding info for the currently selected import table
 function getImportTableBinding(): TableBinding | undefined {
   if (!importTableId.value) return undefined
-  const v = importTableId.value
-  if (typeof v === 'string' && v.startsWith('ct-')) {
-    const id = parseInt(v.slice(3), 10)
-    return formBindings.value.find((b: any) => b.commonTableId === id)
-  }
-  return formBindings.value.find(b => b.tableId === v)
+  return formBindings.value.find(b => b.tableId === importTableId.value)
 }
-
-// Display name for a binding (handles common table)
-function getBindingDisplayName(binding: TableBinding): string {
-  if ((binding as any).commonTableBinding) {
-    return (binding as any).tableName || (binding as any).commonTableCode || t('form.unknownTable')
-  }
-  return getTableName((binding as any).tableId)
-}
-
-// Option value for import table select (ct-{id} for common table, tableId for regular)
-function getImportOptionValue(binding: TableBinding): number | string {
-  if ((binding as any).commonTableBinding && (binding as any).commonTableId) {
-    return `ct-${(binding as any).commonTableId}`
-  }
-  return (binding as any).tableId ?? 0
-}
-
-// Option key for import table select
-function getImportOptionKey(binding: TableBinding): string | number {
-  if ((binding as any).commonTableBinding && (binding as any).commonTableId) {
-    return `ct-${(binding as any).commonTableId}`
-  }
-  return (binding as any).tableId ?? `binding-${(binding as any).id}`
-}
-
-// Display name for the currently selected import table
-function getImportTableDisplayName(): string {
-  if (!importTableId.value) return ''
-  const v = importTableId.value
-  if (typeof v === 'string' && v.startsWith('ct-')) {
-    const binding = getImportTableBinding()
-    return binding ? getBindingDisplayName(binding) : ''
-  }
-  return getTableName(v as number)
-}
-
-// Load common table fields when a common table is selected for import
-watch(importTableId, async (val) => {
-  commonTableFieldsCache.value = []
-  if (typeof val === 'string' && val.startsWith('ct-')) {
-    const id = parseInt(val.slice(3), 10)
-    if (!isNaN(id)) {
-      try {
-        const res = await commonTableApi.getById(id)
-        const ct = (res as any).data || res
-        const fields = ct?.fieldDefinitions || []
-        commonTableFieldsCache.value = fields.map((f: any) => ({
-          fieldName: f.fieldName,
-          displayName: f.displayName,
-          dataType: f.dataType,
-          nullable: f.nullable ?? true,
-          description: f.description
-        }))
-      } catch {
-        commonTableFieldsCache.value = []
-      }
-    }
-  }
-}, { immediate: true })
 
 /**
  * Derive preview columns for sub-table based on table type
@@ -1106,11 +856,7 @@ async function handleImportFieldsToDesigner() {
     // Auto-select primary table if bound
     const primaryBinding = formBindings.value.find(b => b.bindingType === 'PRIMARY')
     if (primaryBinding) {
-      if ((primaryBinding as any).commonTableBinding && (primaryBinding as any).commonTableId) {
-        importTableId.value = `ct-${(primaryBinding as any).commonTableId}`
-      } else {
-        importTableId.value = (primaryBinding as any).tableId ?? null
-      }
+      importTableId.value = primaryBinding.tableId
     } else if (selectedForm.value.boundTableId) {
       importTableId.value = selectedForm.value.boundTableId
     } else {
@@ -1630,14 +1376,6 @@ function handlePreview() {
     previewOption.value = { submitBtn: false, resetBtn: false, form: { labelPosition: 'left', labelWidth: 'auto' } }
   }
 
-  // Build map: commonTableCode → field title from main form rules
-  const lookupTitles: Record<string, string> = {}
-  for (const rule of previewRule.value) {
-    const code = parseLookupCodeFromInfo(rule.info)
-    if (code && rule.title) lookupTitles[code] = rule.title
-  }
-  previewLookupFieldTitles.value = lookupTitles
-
   const config = selectedForm.value.configJson || {}
   const subForms = config.subForms || {}
   const nonPrimary = (selectedForm.value.tableBindings || []).filter((b: TableBinding) => b.bindingType !== 'PRIMARY')
@@ -1658,67 +1396,18 @@ function handlePreview() {
     } catch {
       rule = subFormCache.value[bindingId]?.rule || subForms[bindingId]?.rule || []
     }
-    const isCommon = !!(b as any).commonTableBinding
-    const tableName = isCommon ? ((b as any).tableName || (b as any).commonTableCode || '') : (getTableName((b as any).tableId) || b.tableName || '')
     // Initialize with one empty row
     previewTableRows.value[bindingId] = [{}]
     return {
       bindingId,
       bindingType: b.bindingType,
       bindingMode: b.bindingMode,
-      tableName,
-      tableType: isCommon ? 'COMMON' : (store.tables.find(t => t.id === (b as any).tableId)?.tableType || ''),
-      tableDescription: isCommon ? '' : (store.tables.find(t => t.id === (b as any).tableId)?.description || ''),
-      commonTableCode: isCommon ? (b as any).commonTableCode : undefined,
+      tableName: getTableName(b.tableId) || b.tableName,
+      tableType: (store.tables.find(t => t.id === b.tableId)?.tableType) || '',
+      tableDescription: (store.tables.find(t => t.id === b.tableId)?.description) || '',
       rule
     }
   })
-
-  // Build lookup entries (kept for backward compat)
-  const entries: Array<{ fieldTitle: string; commonTableCode: string; tableName: string; rule: any[] }> = []
-  for (const rule of previewRule.value) {
-    const code = parseLookupCodeFromInfo(rule.info)
-    if (!code) continue
-    const binding = previewSubBindings.value.find(b => b.commonTableCode === code)
-    if (binding) {
-      entries.push({ fieldTitle: rule.title || rule.field || code, commonTableCode: code, tableName: binding.tableName, rule: binding.rule })
-    }
-  }
-  previewLookupEntries.value = entries
-
-  // Build sections: regular form groups OR combined lookupSection (field label + descriptions in same grid)
-  const sectionsList: Array<{
-    type: 'form' | 'lookupSection'
-    rule: any[]
-    fieldLabel?: string
-    placeholder?: string
-    lookupRule: any[]
-  }> = []
-  let formBatch: any[] = []
-  for (const rule of previewRule.value) {
-    const code = parseLookupCodeFromInfo(rule.info)
-    if (code) {
-      if (formBatch.length > 0) {
-        sectionsList.push({ type: 'form', rule: [...formBatch], lookupRule: [] })
-        formBatch = []
-      }
-      const binding = previewSubBindings.value.find(b => b.commonTableCode === code)
-      sectionsList.push({
-        type: 'lookupSection',
-        rule: [],
-        fieldLabel: rule.title || rule.field || code,
-        placeholder: `Search ${rule.title || rule.field || code}`,
-        lookupRule: binding?.rule || []
-      })
-    } else {
-      formBatch.push(rule)
-    }
-  }
-  if (formBatch.length > 0) {
-    sectionsList.push({ type: 'form', rule: formBatch, lookupRule: [] })
-  }
-  previewSections.value = sectionsList
-  previewSectionData.value = {}
 
   showPreviewDialog.value = true
 }
@@ -2046,11 +1735,6 @@ async function updateBpmnFormBindings(
 onMounted(() => {
   loadForms()
   loadCommonTablesForDesigner()
-  startActiveRulePoll()
-})
-
-onBeforeUnmount(() => {
-  stopActiveRulePoll()
 })
 </script>
 
@@ -2198,16 +1882,17 @@ onBeforeUnmount(() => {
   padding: 20px;
   
   .form-preview-wrapper {
+    // 确保 form-create 样式能够正确应用
     :deep(.form-create) {
       width: 100%;
     }
-
+    
+    // 确保表单项样式正确
     :deep(.el-form-item) {
       margin-bottom: 18px;
-      display: flex !important;
-      align-items: flex-start !important;
     }
 
+    // label 不截断，自动撑开宽度
     :deep(.el-form-item__label) {
       white-space: nowrap !important;
       width: auto !important;
@@ -2218,61 +1903,22 @@ onBeforeUnmount(() => {
       padding-top: 6px;
     }
 
+    :deep(.el-form-item) {
+      display: flex !important;
+      align-items: flex-start !important;
+    }
+    
+    // 确保输入框等组件样式正确
     :deep(.el-input),
     :deep(.el-select),
     :deep(.el-date-picker),
     :deep(.el-textarea) {
       width: 100%;
     }
-
+    
+    // 确保按钮样式正确
     :deep(.el-button) {
       margin-right: 10px;
-    }
-
-    // lookupSection: CSS grid with 2 columns — label (max-content) | content (1fr)
-    // Row 1: field label + disabled search input
-    // Row 2: (empty)         + descriptions table
-    // => descriptions automatically left-aligns with the search input
-    .preview-lookup-section {
-      display: grid;
-      grid-template-columns: max-content 1fr;
-      grid-template-rows: auto auto;
-      column-gap: 12px;
-      row-gap: 8px;
-      margin-bottom: 18px;
-      align-items: center;
-
-      .preview-lookup-field-label {
-        grid-column: 1;
-        grid-row: 1;
-        white-space: nowrap;
-        text-align: right;
-        font-size: 14px;
-        color: #606266;
-        padding-right: 0;
-      }
-
-      .preview-lookup-field-input {
-        grid-column: 2;
-        grid-row: 1;
-      }
-
-      // Descriptions table sits in column 2, row 2 — aligned with input above
-      :deep(.preview-lookup-desc) {
-        grid-column: 2;
-        grid-row: 2;
-        align-self: start;
-
-        // Let the label cell auto-fit its content; no truncation, no wrapping
-        .el-descriptions__label {
-          white-space: nowrap;
-          width: auto !important;
-          min-width: unset !important;
-          max-width: unset !important;
-          overflow: visible !important;
-          text-overflow: clip !important;
-        }
-      }
     }
   }
 }
@@ -2398,16 +2044,6 @@ onBeforeUnmount(() => {
     padding: 8px;
     background: #f5f7fa;
     border-radius: 4px;
-  }
-}
-
-.common-table-ref-form {
-  :deep(.el-form-item) {
-    margin-bottom: 20px;
-  }
-  :deep(.el-form-item__label) {
-    display: block;
-    margin-bottom: 8px;
   }
 }
 </style>

@@ -4,7 +4,6 @@ import com.developer.component.CommonTableComponent;
 import com.developer.dto.ApiResponse;
 import com.developer.dto.CommonTableRequest;
 import com.developer.entity.CommonTableDefinition;
-import com.developer.entity.CommonTableDeployment;
 import com.developer.security.RequireDeveloperPermission;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -15,7 +14,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * 公共表管理控制器
@@ -80,42 +78,5 @@ public class CommonTableController {
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
         commonTableComponent.delete(id);
         return ResponseEntity.ok(ApiResponse.success(null));
-    }
-
-    @PostMapping("/{id}/deploy")
-    @Operation(summary = "部署公共表（发布到 Admin Center）")
-    @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
-    public ResponseEntity<ApiResponse<CommonTableDefinition>> deploy(
-            @PathVariable Long id,
-            @RequestHeader(value = "X-User-Id", required = false) String userId) {
-        CommonTableDefinition result = commonTableComponent.deploy(id, userId);
-        return ResponseEntity.ok(ApiResponse.success(result));
-    }
-
-    @PutMapping("/{id}/enabled")
-    @Operation(summary = "切换公共表 enabled 状态")
-    @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
-    public ResponseEntity<ApiResponse<CommonTableDefinition>> updateEnabled(
-            @PathVariable Long id,
-            @RequestBody Map<String, Boolean> body) {
-        boolean enabled = Boolean.TRUE.equals(body.get("enabled"));
-        CommonTableDefinition result = commonTableComponent.updateEnabled(id, enabled);
-        return ResponseEntity.ok(ApiResponse.success(result));
-    }
-
-    @GetMapping("/{id}/deployments")
-    @Operation(summary = "获取公共表部署记录")
-    @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
-    public ResponseEntity<ApiResponse<List<CommonTableDeployment>>> getDeployments(@PathVariable Long id) {
-        List<CommonTableDeployment> result = commonTableComponent.findDeployments(id);
-        return ResponseEntity.ok(ApiResponse.success(result));
-    }
-
-    @GetMapping("/deployments")
-    @Operation(summary = "获取所有公共表部署记录")
-    @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
-    public ResponseEntity<ApiResponse<List<CommonTableDeployment>>> getAllDeployments() {
-        List<CommonTableDeployment> result = commonTableComponent.findAllDeployments();
-        return ResponseEntity.ok(ApiResponse.success(result));
     }
 }
