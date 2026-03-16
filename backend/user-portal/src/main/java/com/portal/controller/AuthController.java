@@ -7,7 +7,7 @@ import com.platform.security.service.UserRoleService;
 import com.platform.common.i18n.I18nService;
 import com.portal.dto.LoginRequest;
 import com.portal.dto.LoginResponse;
-import com.portal.repository.UserRepository;
+import com.platform.security.repository.UserRepository;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;

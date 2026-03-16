@@ -81,6 +81,8 @@ export default {
     avgProcessingTime: 'Avg Processing Time',
     urgentTasks: 'Team Pending Tasks',
     highPriorityTasks: 'Team Overdue Tasks',
+    teamPendingTasks: 'Team Pending Tasks',
+    teamOverdueTasks: 'Team Overdue Tasks',
     teamCompletedToday: 'Team Completed Today',
     initiatedProcesses: 'Initiated',
     inProgressProcesses: 'In Progress',

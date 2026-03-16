@@ -37,22 +37,23 @@
           <el-row :gutter="16">
             <el-col :span="8">
               <div class="stat-item small">
-                <div class="stat-value">{{ taskOverview.urgentCount }}</div>
-                <div class="stat-label">{{ t('dashboard.urgentTasks') }}</div>
+                <div class="stat-value">{{ taskOverview.teamPendingCount }}</div>
+                <div class="stat-label">{{ t('dashboard.teamPendingTasks') }}</div>
               </div>
             </el-col>
             <el-col :span="8">
               <div class="stat-item small">
-                <div class="stat-value">{{ taskOverview.highPriorityCount }}</div>
-                <div class="stat-label">{{ t('dashboard.highPriorityTasks') }}</div>
+                <div class="stat-value error">{{ taskOverview.teamOverdueCount }}</div>
+                <div class="stat-label">{{ t('dashboard.teamOverdueTasks') }}</div>
               </div>
             </el-col>
             <el-col :span="8">
               <div class="stat-item small">
-                <div class="stat-value">{{ taskOverview.completedTodayCount }}</div>
+                <div class="stat-value success">{{ taskOverview.teamCompletedTodayCount }}</div>
                 <div class="stat-label">{{ t('dashboard.teamCompletedToday') }}</div>
               </div>
-            </el-col>          </el-row>
+            </el-col>
+          </el-row>
         </div>
       </el-col>
 
@@ -210,7 +211,10 @@ const taskOverview = ref<TaskOverview>({
   completedTodayCount: 0,
   avgProcessingHours: 0,
   urgentCount: 0,
-  highPriorityCount: 0
+  highPriorityCount: 0,
+  teamPendingCount: 0,
+  teamOverdueCount: 0,
+  teamCompletedTodayCount: 0
 })
 
 const processOverview = ref<ProcessOverview>({

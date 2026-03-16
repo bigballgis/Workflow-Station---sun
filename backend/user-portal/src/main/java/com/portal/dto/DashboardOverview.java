@@ -49,6 +49,12 @@ public class DashboardOverview {
         private Long urgentCount;
         /** 高优先级任务数 */
         private Long highPriorityCount;
+        /** 团队待办任务数 */
+        private Long teamPendingCount;
+        /** 团队逾期任务数 */
+        private Long teamOverdueCount;
+        /** 团队今日完成数 */
+        private Long teamCompletedTodayCount;
     }
 
     @Data

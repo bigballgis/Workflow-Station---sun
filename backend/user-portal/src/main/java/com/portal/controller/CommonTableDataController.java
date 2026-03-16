@@ -8,7 +8,7 @@ import com.portal.entity.CommonTableDefinition;
 import com.portal.repository.CommonTableDataRepository;
 import com.portal.repository.CommonTableDefinitionRepository;
 import com.portal.repository.CommonTableDeploymentRepository;
-import com.portal.repository.UserRepository;
+import com.platform.security.repository.UserRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;

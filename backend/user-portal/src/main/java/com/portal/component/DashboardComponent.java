@@ -1,10 +1,14 @@
 package com.portal.component;
 
+import com.platform.security.entity.BusinessUnit;
+import com.platform.security.entity.UserBusinessUnit;
 import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.DashboardOverview;
 import com.portal.dto.ProcessInfo;
 import com.portal.dto.TaskInfo;
 import com.portal.dto.TaskQueryRequest;
+import com.portal.repository.BusinessUnitRepository;
+import com.portal.repository.UserBusinessUnitRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -24,6 +28,8 @@ public class DashboardComponent {
 
     private final TaskQueryComponent taskQueryComponent;
     private final WorkflowEngineClient workflowEngineClient;
+    private final BusinessUnitRepository businessUnitRepository;
+    private final UserBusinessUnitRepository userBusinessUnitRepository;
 
     /**
      * 获取Dashboard概览数据
@@ -112,6 +118,74 @@ public class DashboardComponent {
             log.warn("Failed to calculate avg processing hours: {}", e.getMessage());
         }
 
+        // Team aggregation logic
+        long teamPendingCount = pendingCount;
+        long teamOverdueCount = overdueCount;
+        long teamCompletedTodayCount = completedTodayCount;
+
+        try {
+            List<UserBusinessUnit> userBUs = userBusinessUnitRepository.findByUserId(userId);
+            if (!userBUs.isEmpty()) {
+                // Collect all BU IDs (user's BUs + recursive children)
+                Set<String> allBuIds = new HashSet<>();
+                for (UserBusinessUnit ubu : userBUs) {
+                    String buId = ubu.getBusinessUnitId();
+                    allBuIds.add(buId);
+                    collectChildBuIds(buId, allBuIds);
+                }
+
+                // Collect all team member userIds (deduplicated)
+                List<UserBusinessUnit> allMembers = userBusinessUnitRepository
+                        .findByBusinessUnitIdIn(new ArrayList<>(allBuIds));
+                Set<String> teamMemberIds = allMembers.stream()
+                        .map(UserBusinessUnit::getUserId)
+                        .collect(Collectors.toSet());
+
+                // Aggregate team pending and overdue counts
+                long aggregatedPending = 0;
+                long aggregatedOverdue = 0;
+                long aggregatedCompletedToday = 0;
+
+                for (String memberId : teamMemberIds) {
+                    // Query pending tasks for each team member
+                    TaskQueryRequest memberRequest = TaskQueryRequest.builder()
+                            .userId(memberId)
+                            .build();
+                    var memberTasks = taskQueryComponent.queryTasks(memberRequest).getContent();
+                    aggregatedPending += memberTasks.size();
+                    aggregatedOverdue += memberTasks.stream()
+                            .filter(t -> Boolean.TRUE.equals(t.getIsOverdue()))
+                            .count();
+
+                    // Query Flowable completed tasks for each team member
+                    try {
+                        Optional<Map<String, Object>> memberResult = workflowEngineClient.getCompletedTasks(
+                                memberId, 0, 1000, null,
+                                LocalDate.now().atStartOfDay().toString(),
+                                LocalDateTime.now().toString());
+                        if (memberResult.isPresent()) {
+                            Object totalElements = memberResult.get().get("totalElements");
+                            if (totalElements instanceof Number) {
+                                aggregatedCompletedToday += ((Number) totalElements).longValue();
+                            }
+                        }
+                    } catch (Exception e) {
+                        log.warn("Failed to get completed tasks for team member {}: {}", memberId, e.getMessage());
+                    }
+                }
+
+                teamPendingCount = aggregatedPending;
+                teamOverdueCount = aggregatedOverdue;
+                teamCompletedTodayCount = aggregatedCompletedToday;
+            }
+            // When user doesn't belong to any BU, team metrics fall back to personal values (already set above)
+        } catch (Exception e) {
+            log.warn("Failed to aggregate team metrics, falling back to personal values: {}", e.getMessage());
+            teamPendingCount = pendingCount;
+            teamOverdueCount = overdueCount;
+            teamCompletedTodayCount = completedTodayCount;
+        }
+
         return DashboardOverview.TaskOverview.builder()
                 .pendingCount(pendingCount)
                 .overdueCount(overdueCount)
@@ -119,7 +193,22 @@ public class DashboardComponent {
                 .avgProcessingHours(Math.round(avgProcessingHours * 10) / 10.0)
                 .urgentCount(urgentCount)
                 .highPriorityCount(highPriorityCount)
+                .teamPendingCount(teamPendingCount)
+                .teamOverdueCount(teamOverdueCount)
+                .teamCompletedTodayCount(teamCompletedTodayCount)
                 .build();
+    }
+
+    /**
+     * 递归收集所有子 BU ID
+     */
+    private void collectChildBuIds(String parentBuId, Set<String> allBuIds) {
+        List<BusinessUnit> children = businessUnitRepository.findByParentIdAndStatus(parentBuId, "ACTIVE");
+        for (BusinessUnit child : children) {
+            if (allBuIds.add(child.getId())) {
+                collectChildBuIds(child.getId(), allBuIds);
+            }
+        }
     }
 
     /**

@@ -8,17 +8,12 @@ import com.platform.security.repository.RoleAssignmentRepository;
 
 /**
  * 平台安全模块仓库配置
- * 只导入需要的RoleAssignmentRepository
+ * 导入RoleAssignmentRepository（com.platform.security.repository包）
+ * 注意：com.portal.repository下的Repository由UserPortalApplication的@EnableJpaRepositories扫描
  */
 @Configuration
 @EnableJpaRepositories(
-    basePackageClasses = {RoleAssignmentRepository.class},
-    includeFilters = {
-        @org.springframework.context.annotation.ComponentScan.Filter(
-            type = org.springframework.context.annotation.FilterType.ASSIGNABLE_TYPE,
-            classes = {RoleAssignmentRepository.class}
-        )
-    }
+    basePackageClasses = {RoleAssignmentRepository.class}
 )
 @EntityScan(basePackages = {"com.platform.security.entity"})
 public class PlatformSecurityConfig {
