@@ -24,9 +24,9 @@ public interface FormTableBindingRepository extends JpaRepository<FormTableBindi
     List<FormTableBinding> findByFormIdOrderBySortOrder(@Param("formId") Long formId);
     
     /**
-     * 按表单ID查询所有绑定，同时加载表信息（包括公共表）
+     * 按表单ID查询所有绑定，同时加载表信息
      */
-    @Query("SELECT b FROM FormTableBinding b LEFT JOIN FETCH b.table LEFT JOIN FETCH b.commonTable WHERE b.form.id = :formId ORDER BY b.sortOrder")
+    @Query("SELECT b FROM FormTableBinding b LEFT JOIN FETCH b.table WHERE b.form.id = :formId ORDER BY b.sortOrder")
     List<FormTableBinding> findByFormIdWithTable(@Param("formId") Long formId);
     
     /**
@@ -36,16 +36,10 @@ public interface FormTableBindingRepository extends JpaRepository<FormTableBindi
     Optional<FormTableBinding> findByFormIdAndBindingType(@Param("formId") Long formId, @Param("bindingType") BindingType bindingType);
     
     /**
-     * 检查表单是否已绑定指定功能单元表
+     * 检查表单是否已绑定指定表
      */
     @Query("SELECT COUNT(b) > 0 FROM FormTableBinding b WHERE b.form.id = :formId AND b.table.id = :tableId")
     boolean existsByFormIdAndTableId(@Param("formId") Long formId, @Param("tableId") Long tableId);
-
-    /**
-     * 检查表单是否已绑定指定公共表
-     */
-    @Query("SELECT COUNT(b) > 0 FROM FormTableBinding b WHERE b.form.id = :formId AND b.commonTable.id = :commonTableId")
-    boolean existsByFormIdAndCommonTableId(@Param("formId") Long formId, @Param("commonTableId") Long commonTableId);
     
     /**
      * 检查表是否被任何表单绑定

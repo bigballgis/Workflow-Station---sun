@@ -2,7 +2,6 @@ package com.developer.property;
 
 import com.developer.component.FormDesignComponent;
 import com.developer.component.impl.FormDesignComponentImpl;
-import com.developer.repository.CommonTableDefinitionRepository;
 import com.developer.repository.FormDefinitionRepository;
 import com.developer.repository.FormTableBindingRepository;
 import com.developer.repository.FunctionUnitRepository;
@@ -31,10 +30,9 @@ public class FormDesignPropertyTest {
         FunctionUnitRepository functionUnitRepository = mock(FunctionUnitRepository.class);
         TableDefinitionRepository tableDefinitionRepository = mock(TableDefinitionRepository.class);
         FormTableBindingRepository formTableBindingRepository = mock(FormTableBindingRepository.class);
-        CommonTableDefinitionRepository commonTableDefinitionRepository = mock(CommonTableDefinitionRepository.class);
         ObjectMapper objectMapper = new ObjectMapper();
         FormDesignComponent component = new FormDesignComponentImpl(
-                repository, functionUnitRepository, tableDefinitionRepository, formTableBindingRepository, commonTableDefinitionRepository, objectMapper);
+                repository, functionUnitRepository, tableDefinitionRepository, formTableBindingRepository, objectMapper);
         
         assertThat(component).isNotNull();
         assertThat(config).isNotNull();

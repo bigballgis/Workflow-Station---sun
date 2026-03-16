@@ -86,7 +86,6 @@
               v-model="formData"
               :label-width="formLabelWidth"
               :label-position="formLabelPosition"
-              @fill-subtable="handleFillSubtable"
             />
           </div>
           <el-empty v-else :description="t('processStart.noFormConfig')" />
@@ -230,7 +229,6 @@ const subTableBindings = ref<Array<{
   tableDescription: string
   columns: Array<{ field: string; label: string; type?: string }>
   data: any[]
-  commonTableCode?: string
 }>>([])
 
 // 流转记录
@@ -335,8 +333,7 @@ const loadFunctionUnitContent = async () => {
           tableType: b.tableType,
           tableDescription: b.tableDescription,
           columns: deriveColumnsFromBinding(b, subForms),
-          data: [],
-          commonTableCode: b.commonTableCode
+          data: []
         })
       }
       subTableBindings.value = bindings
@@ -1005,20 +1002,6 @@ const handleN8nActionExecuted = (data: Record<string, any> | null) => {
     }
   } catch (e) {
     console.error('[handleN8nActionExecuted] Error:', e)
-  }
-}
-
-// 处理公共表关联字段回填事件
-function handleFillSubtable(fieldKey: string, commonTableCode: string, record: any) {
-  const binding = subTableBindings.value.find(b => b.commonTableCode === commonTableCode)
-  if (!binding) return
-  const newRow: Record<string, any> = {}
-  if (record.dataJson) {
-    Object.assign(newRow, record.dataJson)
-  }
-  // Ensure the binding data is editable
-  if (binding.bindingMode === 'EDITABLE') {
-    binding.data = [newRow, ...binding.data]
   }
 }
 

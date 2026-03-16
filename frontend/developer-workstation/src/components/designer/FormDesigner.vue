@@ -95,14 +95,6 @@
           <el-button @click="handleImportFieldsToDesigner" :disabled="!selectedForm.boundTableId && (!selectedForm.tableBindings || selectedForm.tableBindings.length === 0)">
             <el-icon><Connection /></el-icon> {{ t('form.importTableFields') }}
           </el-button>
-          <el-button
-            v-if="commonTableBindings.length > 0"
-            @click="showCommonTableRefDialog = true"
-            type="warning"
-            plain
-          >
-            <el-icon><Link /></el-icon> {{ t('commonTable.addField') }}
-          </el-button>
           <el-button @click="handleManageBindings(selectedForm)">{{ t('form.manageBindings') }}</el-button>
           <el-button @click="handleBindNode(selectedForm)">{{ t('form.bindProcessNode') }}</el-button>
           <el-button @click="handlePreview">{{ t('common.preview') }}</el-button>
@@ -415,54 +407,13 @@
         <el-button @click="showBindingManagerDialog = false">{{ t('form.closeButton') }}</el-button>
       </template>
     </el-dialog>
-
-    <!-- Common Table Reference Field dialog -->
-    <el-dialog v-model="showCommonTableRefDialog" :title="t('commonTable.addField')" width="600px" destroy-on-close>
-      <el-alert type="info" :closable="false" style="margin-bottom:16px;">
-        选择一个公共表绑定，插入一个搜索关联字段到当前表单。用户填写时可搜索公共表数据并自动回填关联子表。
-      </el-alert>
-      <el-form label-width="120px" label-position="left">
-        <el-form-item label="选择公共表">
-          <el-select v-model="commonTableRefConfig.commonTableCode" style="width:100%;" placeholder="请选择公共表绑定">
-            <el-option
-              v-for="b in commonTableBindings"
-              :key="(b as any).commonTableCode"
-              :label="`${b.tableName || (b as any).commonTableCode}`"
-              :value="(b as any).commonTableCode"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="字段名">
-          <el-input v-model="commonTableRefConfig.fieldName" placeholder="如：customerRef" />
-        </el-form-item>
-        <el-form-item label="显示标签">
-          <el-input v-model="commonTableRefConfig.label" placeholder="如：关联客户" />
-        </el-form-item>
-      </el-form>
-      <div v-if="commonTableRefConfig.commonTableCode" style="margin-top:12px;">
-        <el-divider>关联表字段预览（选中记录后将回填到子表）</el-divider>
-        <el-table :data="getCommonTableFields(commonTableRefConfig.commonTableCode)" size="small" border>
-          <el-table-column prop="fieldName" label="字段名" min-width="120" />
-          <el-table-column prop="displayName" label="显示名" min-width="120" />
-          <el-table-column prop="dataType" label="类型" width="100" />
-        </el-table>
-      </div>
-      <template #footer>
-        <el-button @click="showCommonTableRefDialog = false">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary" @click="insertCommonTableRefField"
-          :disabled="!commonTableRefConfig.commonTableCode || !commonTableRefConfig.fieldName">
-          插入关联字段
-        </el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, nextTick, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, Plus, Refresh, Connection, Link } from '@element-plus/icons-vue'
-import { commonTableApi, type CommonTableDefinition } from '@/api/commonTable'
+import { ArrowLeft, Plus, Refresh, Connection } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
 import type { FormDefinition, FieldDefinition, TableBinding, BindingType } from '@/api/functionUnit'
@@ -532,73 +483,15 @@ const activeDesignerTab = ref<string>('main')
 const designerSubBindings = computed(() => {
   if (!selectedForm.value) return []
   const nonPrimary = (selectedForm.value.tableBindings || []).filter((b: TableBinding) => b.bindingType !== 'PRIMARY')
-  return nonPrimary.map((b: TableBinding) => {
-    const isCommon = !!(b as any).commonTableBinding
-    return {
-      bindingId: b.id as number,
-      bindingType: b.bindingType,
-      bindingMode: b.bindingMode,
-      tableName: isCommon ? ((b as any).commonTableCode || b.tableName || '') : (getTableName(b.tableId) || b.tableName || ''),
-      tableType: isCommon ? 'COMMON' : ((store.tables.find(t => t.id === b.tableId)?.tableType) || ''),
-      tableDescription: isCommon ? '' : ((store.tables.find(t => t.id === b.tableId)?.description) || ''),
-      isCommonTable: isCommon,
-      commonTableCode: (b as any).commonTableCode,
-    }
-  })
+  return nonPrimary.map((b: TableBinding) => ({
+    bindingId: b.id as number,
+    bindingType: b.bindingType,
+    bindingMode: b.bindingMode,
+    tableName: getTableName(b.tableId) || b.tableName,
+    tableType: (store.tables.find(t => t.id === b.tableId)?.tableType) || '',
+    tableDescription: (store.tables.find(t => t.id === b.tableId)?.description) || '',
+  }))
 })
-
-// Common table bindings of the selected form (for reference field panel)
-const commonTableBindings = computed(() => {
-  if (!selectedForm.value) return []
-  return (selectedForm.value.tableBindings || []).filter((b: TableBinding) => (b as any).commonTableBinding)
-})
-
-// Common Table Reference Field dialog state
-const showCommonTableRefDialog = ref(false)
-const commonTableRefConfig = ref({ commonTableCode: '', fieldName: '', label: '' })
-const loadedCommonTables = ref<CommonTableDefinition[]>([])
-
-async function loadCommonTablesForDesigner() {
-  try {
-    const res = await commonTableApi.list()
-    loadedCommonTables.value = (res as any).data || res || []
-  } catch (e) {
-    console.warn('Failed to load common tables for designer:', e)
-  }
-}
-
-function getCommonTableFields(code: string) {
-  const ct = loadedCommonTables.value.find(t => t.code === code)
-  return ct?.fieldDefinitions || []
-}
-
-function insertCommonTableRefField() {
-  if (!designerRef.value || !commonTableRefConfig.value.commonTableCode) return
-  const newField = {
-    type: 'input',
-    field: commonTableRefConfig.value.fieldName || `${commonTableRefConfig.value.commonTableCode}Ref`,
-    title: commonTableRefConfig.value.label || commonTableRefConfig.value.commonTableCode,
-    props: {
-      placeholder: `搜索${commonTableRefConfig.value.label || commonTableRefConfig.value.commonTableCode}`,
-      clearable: true,
-    },
-    // Extra metadata stored as component info for user portal rendering
-    info: `commonTableRef:${commonTableRefConfig.value.commonTableCode}`,
-  }
-  try {
-    const api = designerRef.value
-    if (api && typeof api.addRule === 'function') {
-      api.addRule(newField)
-    } else {
-      // Fallback: show instructions
-      ElMessage.info('请在表单设计器中手动添加输入框，并在字段说明中填写：commonTableRef:' + commonTableRefConfig.value.commonTableCode)
-    }
-  } catch (e) {
-    ElMessage.info('请在表单设计器中手动添加输入框字段，并在字段说明填写：commonTableRef:' + commonTableRefConfig.value.commonTableCode)
-  }
-  showCommonTableRefDialog.value = false
-  commonTableRefConfig.value = { commonTableCode: '', fieldName: '', label: '' }
-}
 
 const createForm = reactive({ formName: '', formType: 'MAIN', description: '', boundTableId: null as number | null })
 const bindingForm = ref<FormDefinition | null>(null)
@@ -1732,10 +1625,7 @@ async function updateBpmnFormBindings(
   console.log('[FormDesigner] Process saved successfully')
 }
 
-onMounted(() => {
-  loadForms()
-  loadCommonTablesForDesigner()
-})
+onMounted(loadForms)
 </script>
 
 

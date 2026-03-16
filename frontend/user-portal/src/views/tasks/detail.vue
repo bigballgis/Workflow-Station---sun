@@ -133,7 +133,6 @@
               v-model="formData"
               :label-width="formLabelWidth"
               :readonly="formReadOnly"
-              @fill-subtable="handleFillSubtable"
             />
           </div>
           <el-empty v-else :description="t('task.noFormData')" />
@@ -387,7 +386,6 @@ const subTableBindings = ref<Array<{
   tableDescription: string
   columns: Array<{ field: string; label: string; type?: string }>
   data: any[]
-  commonTableCode?: string
 }>>([])
 
 // 流转记录
@@ -570,8 +568,7 @@ const loadFunctionUnitContent = async (processKey: string) => {
           tableType: b.tableType,
           tableDescription: b.tableDescription,
           columns,
-          data: [],
-          commonTableCode: b.commonTableCode
+          data: []
         })
       }
       console.log('[SubTable] bindings to render:', bindings.length, bindings.map(b => b.tableName))
@@ -1146,19 +1143,6 @@ const getPriorityType = (priority?: string): 'danger' | 'warning' | 'info' | 'su
     'LOW': 'success'
   }
   return map[priority || ''] || 'info'
-}
-
-// 处理公共表关联字段回填事件
-function handleFillSubtable(fieldKey: string, commonTableCode: string, record: any) {
-  const binding = subTableBindings.value.find(b => b.commonTableCode === commonTableCode)
-  if (!binding || formReadOnly.value) return
-  const newRow: Record<string, any> = {}
-  if (record.dataJson) {
-    Object.assign(newRow, record.dataJson)
-  }
-  if (binding.bindingMode === 'EDITABLE') {
-    binding.data = [newRow, ...binding.data]
-  }
 }
 
 const handleApprove = () => {

@@ -1,13 +1,11 @@
 package com.developer.controller;
 
-import com.developer.component.CommonTableComponent;
 import com.developer.component.FormDesignComponent;
 import com.developer.dto.ApiResponse;
 import com.developer.dto.FormDefinitionRequest;
 import com.developer.dto.FormTableBindingRequest;
 import com.developer.dto.FormTableBindingResponse;
 import com.developer.dto.ValidationResult;
-import com.developer.entity.CommonTableDefinition;
 import com.developer.entity.FormDefinition;
 import com.developer.entity.FormTableBinding;
 import io.swagger.v3.oas.annotations.Operation;
@@ -30,7 +28,6 @@ import java.util.Map;
 public class FormDesignController {
     
     private final FormDesignComponent formDesignComponent;
-    private final CommonTableComponent commonTableComponent;
     
     @GetMapping
     @Operation(summary = "获取功能单元的所有表单")
@@ -137,13 +134,5 @@ public class FormDesignController {
             @PathVariable Long bindingId) {
         formDesignComponent.deleteBinding(bindingId);
         return ResponseEntity.ok(ApiResponse.success(null));
-    }
-
-    @GetMapping("/available-common-tables")
-    @Operation(summary = "获取所有可用的公共表（供添加绑定时选择）")
-    public ResponseEntity<ApiResponse<List<CommonTableDefinition>>> getAvailableCommonTables(
-            @PathVariable Long functionUnitId) {
-        List<CommonTableDefinition> result = commonTableComponent.findAll();
-        return ResponseEntity.ok(ApiResponse.success(result));
     }
 }

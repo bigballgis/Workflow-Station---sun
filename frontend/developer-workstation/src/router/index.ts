@@ -28,18 +28,6 @@ const routes: RouteRecordRaw[] = [
         meta: { titleKey: 'functionUnit.edit' }
       },
       {
-        path: 'common-tables',
-        name: 'CommonTables',
-        component: () => import('@/views/common-table/CommonTableList.vue'),
-        meta: { titleKey: 'commonTable.title' }
-      },
-      {
-        path: 'common-tables/:id',
-        name: 'CommonTableEdit',
-        component: () => import('@/views/common-table/CommonTableEdit.vue'),
-        meta: { titleKey: 'commonTable.edit' }
-      },
-      {
         path: 'icons',
         name: 'IconLibrary',
         component: () => import('@/views/icon/IconLibrary.vue'),
