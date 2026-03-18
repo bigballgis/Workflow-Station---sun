@@ -194,31 +194,34 @@ const renderBpmn = async () => {
   const el = canvasRef.value
   await nextTick()
 
-  // 1. 先解析 BPMN XML 边界，计算自适应高度，再创建 viewer
-  //    这样 bpmn-js 初始化时就拿到正确的容器尺寸，fit-viewport 才能正确居中
-  const padding = 60
-  const containerWidth = el.clientWidth || 800
-  const bounds = parseBpmnBounds(props.bpmnXml)
-  if (bounds && bounds.width > 0 && bounds.height > 0) {
-    const scale = (containerWidth - padding * 2) / bounds.width
-    const h = Math.max(Math.ceil(bounds.height * scale + padding * 2), 200)
-    el.style.height = `${h}px`
-  } else {
-    el.style.height = '360px'
-  }
-
-  // 2. 容器高度已确定，现在创建 viewer
+  // 第一步：用临时高度创建 viewer，先 fit-viewport 得到真实的图形像素尺寸
+  el.style.height = '400px'
   viewer = new NavigatedViewer({ container: el })
 
   try {
     await viewer.importXML(props.bpmnXml)
     await nextTick()
 
-    // 3. fit-viewport：bpmn-js 以正确的容器尺寸居中显示
     const canvas = viewer.get('canvas')
     canvas.zoom('fit-viewport')
-    zoomLevel.value = canvas.zoom() as number
 
+    const vb   = canvas.viewbox()
+    const inner = vb.inner as { x: number; y: number; width: number; height: number } | undefined
+    const scale = canvas.zoom() as number
+
+    if (inner && inner.width > 0 && inner.height > 0) {
+      // 第二步：根据真实像素高度精确设置画布高度，再重新 fit-viewport 完成居中
+      const padding = 48
+      const exactHeight = Math.max(Math.ceil(inner.height * scale) + padding * 2, 200)
+      el.style.height = `${exactHeight}px`
+
+      // 等浏览器 reflow 完成，再通知 bpmn-js 容器尺寸已变化，最后重新居中
+      await new Promise<void>(r => setTimeout(r, 0))
+      canvas.resized()
+      canvas.zoom('fit-viewport')
+    }
+
+    zoomLevel.value = canvas.zoom() as number
     applyStatusColors()
 
     const eventBus = viewer.get('eventBus')
