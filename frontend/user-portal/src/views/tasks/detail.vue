@@ -180,7 +180,7 @@
             <el-button @click="$router.back()">{{ t('task.backToList') }}</el-button>
           </div>
           <div class="right-actions">
-            <!-- 动态渲染自定义操作按钮 -->
+            <!-- 有配置自定义 Actions 时只显示自定义按钮 -->
             <template v-if="taskInfo.actions && taskInfo.actions.length > 0">
               <el-button
                 v-for="action in taskInfo.actions"
@@ -192,8 +192,9 @@
                 {{ action.actionName }}
               </el-button>
             </template>
-            <!-- 默认操作按钮（如果没有自定义按钮） -->
-            <template v-else>
+            <!-- 节点未配置任何 Actions 时（actions 为 [] 或未返回）不显示默认按钮 -->
+            <!-- 仅当 actions 为 null/undefined（兼容旧接口或引擎未返回）时显示默认 Approve/Reject 等 -->
+            <template v-else-if="taskInfo.actions === undefined || taskInfo.actions === null">
               <el-button type="success" @click="handleApprove">
                 <el-icon><Check /></el-icon> {{ t('task.approve') }}
               </el-button>

@@ -47,9 +47,23 @@ public class TaskActionService {
                 return Collections.emptyList();
             }
             
-            // 2. 提取 actionIds
-            @SuppressWarnings("unchecked")
-            List<String> actionIds = (List<String>) data.get("actionIds");
+            // 2. 提取 actionIds（引擎 JSON 常为数字数组 [1,2,3]，反序列化为 List<Integer>，不能直接强转为 List<String>）
+            List<String> actionIds = normalizeActionIdList(data.get("actionIds"));
+            // #region agent log
+            try {
+                String _logPath = System.getenv("DEBUG_LOG_PATH");
+                if (_logPath == null || _logPath.isEmpty()) {
+                    _logPath = "/Users/qiweige/Desktop/PROJECTXXXSUN/Workflow-Station---sun/.cursor/debug-8aa4e2.log";
+                }
+                Object raw = data.get("actionIds");
+                String rawCls = raw == null ? "null" : raw.getClass().getName();
+                java.nio.file.Files.writeString(java.nio.file.Paths.get(_logPath),
+                    String.format("{\"sessionId\":\"8aa4e2\",\"hypothesisId\":\"H3\",\"location\":\"TaskActionService.getTaskActions\",\"message\":\"after normalize\",\"data\":{\"taskId\":\"%s\",\"rawEngineType\":\"%s\",\"normalizedCount\":%d,\"normalizedIds\":\"%s\"},\"timestamp\":%d}\n",
+                        String.valueOf(taskId).replace("\"", "'"), rawCls, actionIds != null ? actionIds.size() : -1,
+                        actionIds == null || actionIds.isEmpty() ? "" : String.join(",", actionIds).replace("\"", "'"), System.currentTimeMillis()),
+                    java.nio.charset.StandardCharsets.UTF_8, java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
+            } catch (Exception _ignored) {}
+            // #endregion
             
             if (actionIds == null || actionIds.isEmpty()) {
                 log.info("No actions defined for task: {}", taskId);
@@ -59,7 +73,9 @@ public class TaskActionService {
             log.info("Found {} action IDs for task {}: {}", actionIds.size(), taskId, actionIds);
             
             // 3. 从数据库获取action定义
-            return fetchActionDefinitions(actionIds);
+            // 同时传入 processDefinitionKey 用于回退查找
+            String processDefinitionKey = (String) data.get("processDefinitionKey");
+            return fetchActionDefinitions(actionIds, processDefinitionKey);
             
         } catch (Exception e) {
             log.error("Error getting task actions for task: " + taskId, e);
@@ -70,11 +86,64 @@ public class TaskActionService {
     /**
      * 从数据库批量获取action定义
      */
-    private List<TaskActionInfo> fetchActionDefinitions(List<String> actionIds) {
+    /**
+     * 将引擎返回的 actionIds（Integer/Long/String 混合列表）规范为 String ID，供 JPA 查询。
+     */
+    private static List<String> normalizeActionIdList(Object raw) {
+        if (raw == null) {
+            return Collections.emptyList();
+        }
+        if (!(raw instanceof List<?> list)) {
+            return Collections.emptyList();
+        }
+        List<String> out = new ArrayList<>();
+        for (Object o : list) {
+            if (o == null) {
+                continue;
+            }
+            String s = String.valueOf(o).trim();
+            if (!s.isEmpty()) {
+                out.add(s);
+            }
+        }
+        return out;
+    }
+
+    private List<TaskActionInfo> fetchActionDefinitions(List<String> actionIds, String processDefinitionKey) {
         try {
             log.info("Fetching {} action definitions from database", actionIds.size());
             
             List<ActionDefinition> actions = actionDefinitionRepository.findAllById(actionIds);
+            // #region agent log
+            try {
+                String _logPath = System.getenv("DEBUG_LOG_PATH");
+                if (_logPath == null || _logPath.isEmpty()) {
+                    _logPath = "/Users/qiweige/Desktop/PROJECTXXXSUN/Workflow-Station---sun/.cursor/debug-8aa4e2.log";
+                }
+                java.nio.file.Files.writeString(java.nio.file.Paths.get(_logPath),
+                    String.format("{\"sessionId\":\"8aa4e2\",\"hypothesisId\":\"H2\",\"location\":\"TaskActionService.fetchActionDefinitions\",\"message\":\"db lookup\",\"data\":{\"requestedIdsCount\":%d,\"foundRows\":%d,\"requestedSample\":\"%s\"},\"timestamp\":%d}\n",
+                        actionIds.size(), actions.size(),
+                        actionIds.size() > 5 ? String.join(",", actionIds.subList(0, 5)).replace("\"", "'") : String.join(",", actionIds).replace("\"", "'"),
+                        System.currentTimeMillis()),
+                    java.nio.charset.StandardCharsets.UTF_8, java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
+            } catch (Exception _ignored) {}
+            // #endregion
+            
+            // Fallback 1: BPMN stores dw_action_definitions IDs (integers like 17,18,23),
+            // but sys_action_definitions uses UUID IDs. When direct ID lookup fails,
+            // resolve the function unit from processDefinitionKey and return all its actions.
+            if (actions.isEmpty() && processDefinitionKey != null) {
+                log.info("Direct ID lookup returned empty, falling back to process key lookup: {}", processDefinitionKey);
+                actions = actionDefinitionRepository.findByProcessDefinitionKey(processDefinitionKey);
+                log.info("Fallback found {} actions for processDefinitionKey {}", actions.size(), processDefinitionKey);
+            }
+            
+            // Fallback 2: 直接从 dw_action_definitions 表查找（BPMN 中的 actionIds 来自此表）
+            if (actions.isEmpty()) {
+                log.info("sys_action_definitions lookup returned empty, falling back to dw_action_definitions for IDs: {}", actionIds);
+                actions = actionDefinitionRepository.findFromDwByIds(actionIds);
+                log.info("dw_action_definitions fallback found {} actions", actions.size());
+            }
             
             if (actions.isEmpty()) {
                 log.warn("No action definitions found for IDs: {}", actionIds);

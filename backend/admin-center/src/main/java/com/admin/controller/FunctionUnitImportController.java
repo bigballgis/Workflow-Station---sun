@@ -6,8 +6,10 @@ import com.admin.component.ProcessDeploymentComponent;
 import com.admin.dto.request.FunctionUnitImportRequest;
 import com.admin.dto.response.FunctionUnitInfo;
 import com.admin.dto.response.ImportResult;
+import com.admin.entity.ActionDefinition;
 import com.admin.entity.FunctionUnit;
 import com.admin.entity.FunctionUnitDeployment;
+import com.admin.repository.ActionDefinitionRepository;
 import com.admin.enums.DeploymentEnvironment;
 import com.admin.enums.DeploymentStrategy;
 import com.admin.enums.FunctionUnitStatus;
@@ -47,6 +49,7 @@ public class FunctionUnitImportController {
     private final FunctionUnitManagerComponent functionUnitManager;
     private final DeploymentManagerComponent deploymentManager;
     private final ProcessDeploymentComponent processDeploymentComponent;
+    private final ActionDefinitionRepository actionDefinitionRepository;
     private final ObjectMapper objectMapper;
     
     /**
@@ -129,6 +132,49 @@ public class FunctionUnitImportController {
                             }
                         } catch (Exception e) {
                             log.warn("Failed to save form content", e);
+                        }
+                    }
+                }
+                
+                // 保存动作定义到 sys_action_definitions
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> actions = (List<Map<String, Object>>) packageData.get("actions");
+                if (actions != null && !actions.isEmpty()) {
+                    // 先清除该功能单元的旧动作定义
+                    actionDefinitionRepository.deleteByFunctionUnitId(importResult.getFunctionUnit().getId());
+                    
+                    for (Map<String, Object> actionData : actions) {
+                        try {
+                            String actionName = (String) actionData.get("actionName");
+                            String actionType = (String) actionData.get("actionType");
+                            
+                            if (actionName != null && actionType != null) {
+                                String configJsonStr = null;
+                                Object configJsonObj = actionData.get("configJson");
+                                if (configJsonObj instanceof Map) {
+                                    configJsonStr = objectMapper.writeValueAsString(configJsonObj);
+                                } else if (configJsonObj instanceof String) {
+                                    configJsonStr = (String) configJsonObj;
+                                }
+                                
+                                ActionDefinition actionDef = ActionDefinition.builder()
+                                        .functionUnitId(importResult.getFunctionUnit().getId())
+                                        .actionName(actionName)
+                                        .actionType(actionType)
+                                        .description((String) actionData.get("description"))
+                                        .configJson(configJsonStr)
+                                        .icon((String) actionData.get("icon"))
+                                        .buttonColor((String) actionData.get("buttonColor"))
+                                        .isDefault(actionData.get("isDefault") instanceof Boolean ? 
+                                                (Boolean) actionData.get("isDefault") : false)
+                                        .build();
+                                
+                                actionDefinitionRepository.save(actionDef);
+                                log.info("Saved action definition: {} ({}) for function unit: {}", 
+                                        actionName, actionType, importResult.getFunctionUnit().getId());
+                            }
+                        } catch (Exception e) {
+                            log.warn("Failed to save action definition", e);
                         }
                     }
                 }
@@ -501,6 +547,33 @@ public class FunctionUnitImportController {
         }
         if (!forms.isEmpty()) {
             result.put("forms", forms);
+        }
+        
+        // 解析动作定义文件
+        List<Map<String, Object>> actions = new ArrayList<>();
+        if (rawFiles.containsKey("actions.json")) {
+            try {
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> actionList = objectMapper.readValue(rawFiles.get("actions.json"), List.class);
+                actions.addAll(actionList);
+            } catch (Exception e) {
+                log.warn("Failed to parse actions.json", e);
+            }
+        } else {
+            for (String fileName : rawFiles.keySet()) {
+                if (fileName.startsWith("actions/") && fileName.endsWith(".json")) {
+                    try {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> actionData = objectMapper.readValue(rawFiles.get(fileName), Map.class);
+                        actions.add(actionData);
+                    } catch (Exception e) {
+                        log.warn("Failed to parse action file: {}", fileName, e);
+                    }
+                }
+            }
+        }
+        if (!actions.isEmpty()) {
+            result.put("actions", actions);
         }
         
         return result;

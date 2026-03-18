@@ -16,6 +16,7 @@ import org.springframework.web.client.RestTemplate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * 流程完成事件监听器
@@ -44,21 +45,34 @@ public class ProcessCompletionListener implements FlowableEventListener {
             log.info("Process completed event received for process instance: {}", processInstanceId);
             
             try {
-                // 获取最后一个活动节点的名称
+                // 获取最后一个活动节点的名称（在当前线程中获取，因为 HistoryService 需要在事务内）
                 String lastActivityName = getLastActivityName(processInstanceId);
                 
-                // 通知 user-portal 更新流程实例状态
-                String url = userPortalUrl + "/api/portal/processes/" + processInstanceId + "/complete";
-                log.info("Notifying user-portal about process completion: {}", url);
-                
-                Map<String, Object> request = new HashMap<>();
-                request.put("processInstanceId", processInstanceId);
-                request.put("endTime", System.currentTimeMillis());
-                request.put("lastActivityName", lastActivityName);
-                
-                restTemplate.postForObject(url, request, Map.class);
-                log.info("Successfully notified user-portal about process completion: {} with lastActivity: {}", 
-                        processInstanceId, lastActivityName);
+                // 异步通知 user-portal 更新流程实例状态
+                // 必须异步，否则会导致死锁：completeTask(@Transactional) 持有 ProcessInstance 行锁
+                // → 同步调用 workflow-engine → listener 同步回调 user-portal markProcessAsCompleted
+                // → 等待同一行的行锁 → 死锁
+                CompletableFuture.runAsync(() -> {
+                    try {
+                        // 延迟一小段时间，确保 completeTask 事务已提交
+                        Thread.sleep(500);
+                        
+                        String url = userPortalUrl + "/api/portal/processes/" + processInstanceId + "/complete";
+                        log.info("Async notifying user-portal about process completion: {}", url);
+                        
+                        Map<String, Object> request = new HashMap<>();
+                        request.put("processInstanceId", processInstanceId);
+                        request.put("endTime", System.currentTimeMillis());
+                        request.put("lastActivityName", lastActivityName);
+                        
+                        restTemplate.postForObject(url, request, Map.class);
+                        log.info("Successfully notified user-portal about process completion: {} with lastActivity: {}", 
+                                processInstanceId, lastActivityName);
+                    } catch (Exception e) {
+                        log.error("Failed to async notify user-portal about process completion for {}: {}", 
+                                processInstanceId, e.getMessage(), e);
+                    }
+                });
                 
             } catch (Exception e) {
                 log.error("Failed to notify user-portal about process completion for {}: {}", 

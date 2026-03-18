@@ -389,17 +389,37 @@ public class TaskQueryComponent {
                         });
                     }
                     
-                    // 获取任务的可用操作
-                    log.info("=== About to call TaskActionService for task: {}", taskId);
-                    log.info("=== TaskActionService instance: {}", taskActionService);
+                    // 获取任务的可用操作：仅当引擎返回了 actionIds（含空数组）时才查库并设置 actions；
+                    // 若引擎未返回 actionIds（节点未配置 Actions），保持 actions=null，前端不显示默认 Approve/Reject。
+                    Object rawActionIds = data.get("actionIds");
+                    // #region agent log
                     try {
-                        List<TaskActionInfo> actions = taskActionService.getTaskActions(taskId);
-                        log.info("=== Got {} actions from TaskActionService", actions != null ? actions.size() : 0);
-                        taskInfo.setActions(actions);
-                    } catch (Exception e) {
-                        log.warn("Failed to get actions for task {}: {}", taskId, e.getMessage(), e);
-                        // 继续返回任务信息，即使获取操作失败
+                        String _logPath = System.getenv("DEBUG_LOG_PATH");
+                        if (_logPath == null || _logPath.isEmpty()) {
+                            _logPath = "/Users/qiweige/Desktop/PROJECTXXXSUN/Workflow-Station---sun/.cursor/debug-8aa4e2.log";
+                        }
+                        String rc = rawActionIds == null ? "null" : rawActionIds.getClass().getSimpleName();
+                        String pv = rawActionIds == null ? "" : String.valueOf(rawActionIds).replace("\"", "'").replace("\n", " ");
+                        if (pv.length() > 400) {
+                            pv = pv.substring(0, 400);
+                        }
+                        java.nio.file.Files.writeString(java.nio.file.Paths.get(_logPath),
+                            String.format("{\"sessionId\":\"8aa4e2\",\"hypothesisId\":\"H1\",\"location\":\"TaskQueryComponent.getTaskById\",\"message\":\"engine actionIds at portal\",\"data\":{\"taskId\":\"%s\",\"rawClass\":\"%s\",\"preview\":\"%s\",\"willCallGetTaskActions\":%s},\"timestamp\":%d}\n",
+                                String.valueOf(taskId).replace("\"", "'"), rc, pv, Boolean.toString(rawActionIds != null), System.currentTimeMillis()),
+                            java.nio.charset.StandardCharsets.UTF_8, java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
+                    } catch (Exception _ignored) {}
+                    // #endregion
+                    if (rawActionIds != null) {
+                        try {
+                            List<TaskActionInfo> actions = taskActionService.getTaskActions(taskId);
+                            log.info("=== Got {} actions from TaskActionService", actions != null ? actions.size() : 0);
+                            taskInfo.setActions(actions != null ? actions : Collections.emptyList());
+                        } catch (Exception e) {
+                            log.warn("Failed to get actions for task {}: {}", taskId, e.getMessage(), e);
+                            taskInfo.setActions(Collections.emptyList());
+                        }
                     }
+                    // rawActionIds == null 时不设置 actions，保持为 null，表示该节点未配置任何 Actions
                     
                     return Optional.of(taskInfo);
                 }

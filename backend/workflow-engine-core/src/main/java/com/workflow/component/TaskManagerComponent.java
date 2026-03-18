@@ -26,23 +26,30 @@ import org.flowable.engine.repository.ProcessDefinition;
 import org.flowable.engine.runtime.ProcessInstance;
 import org.flowable.task.api.Task;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import lombok.extern.slf4j.Slf4j;
 
+import java.io.InputStream;
+import java.io.StringReader;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
+import javax.xml.parsers.DocumentBuilderFactory;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
+import org.xml.sax.InputSource;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * 任务管理组件
@@ -1071,6 +1078,23 @@ public class TaskManagerComponent {
             }
         }
         
+        List<String> extractedActionIds = extractActionIds(task);
+        // #region agent log
+        try {
+            String _logPath = System.getenv("DEBUG_LOG_PATH");
+            if (_logPath == null || _logPath.isEmpty()) {
+                _logPath = "/Users/qiweige/Desktop/PROJECTXXXSUN/Workflow-Station---sun/.cursor/debug-8aa4e2.log";
+            }
+            int _sz = extractedActionIds == null ? -1 : extractedActionIds.size();
+            String _ids = extractedActionIds == null ? "null" : String.join(",", extractedActionIds).replace("\\", "\\\\").replace("\"", "'");
+            String _tdk = task.getTaskDefinitionKey() != null ? task.getTaskDefinitionKey().replace("\"", "'") : "";
+            java.nio.file.Files.writeString(java.nio.file.Paths.get(_logPath),
+                String.format("{\"sessionId\":\"8aa4e2\",\"hypothesisId\":\"H4\",\"location\":\"TaskManagerComponent.buildTaskInfoFromFlowableTask\",\"message\":\"extractActionIds\",\"data\":{\"taskId\":\"%s\",\"taskDefKey\":\"%s\",\"size\":%d,\"ids\":\"%s\"},\"timestamp\":%d}\n",
+                    String.valueOf(task.getId()).replace("\"", "'"), _tdk, _sz, _ids, System.currentTimeMillis()),
+                StandardCharsets.UTF_8, java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
+        } catch (Exception _ignored) {}
+        // #endregion
+        
         return TaskListResult.TaskInfo.builder()
             .taskId(task.getId())
             .taskName(task.getName())
@@ -1094,7 +1118,7 @@ public class TaskManagerComponent {
             .initiatorId(initiatorId)
             .initiatorName(initiatorName)
             .variables(variables)
-            .actionIds(extractActionIds(task))
+            .actionIds(extractedActionIds)
             .build();
     }
     
@@ -1115,55 +1139,255 @@ public class TaskManagerComponent {
             
             if (userTask == null) {
                 log.debug("UserTask not found in BPMN for task: {}", task.getId());
-                return null;
+                return extractActionIdsFromBpmnXmlResource(task, null);
             }
             
-            // 从extensionElements中提取actionIds
-            Map<String, List<org.flowable.bpmn.model.ExtensionElement>> extensions = 
-                userTask.getExtensionElements();
-            
-            if (extensions == null || extensions.isEmpty()) {
-                return null;
+            // 1) 递归扫描 UserTask 下全部 extension（兼容 custom:properties / 扁平 property）
+            List<String> fromExt = extractActionIdsRecursive(userTask.getExtensionElements(), "actionIds");
+            if (fromExt != null && !fromExt.isEmpty()) {
+                return fromExt;
             }
-            
-            List<org.flowable.bpmn.model.ExtensionElement> properties = extensions.get("properties");
-            if (properties == null || properties.isEmpty()) {
-                return null;
-            }
-            
-            for (org.flowable.bpmn.model.ExtensionElement prop : properties) {
-                Map<String, List<org.flowable.bpmn.model.ExtensionElement>> childElements = 
-                    prop.getChildElements();
-                
-                if (childElements == null) {
-                    continue;
-                }
-                
-                // Check both "property" and "values" child element names
-                // BPMN designer uses <custom_1:values> elements inside <custom_1:properties>
-                List<org.flowable.bpmn.model.ExtensionElement> customProps = childElements.get("property");
-                if (customProps == null) {
-                    customProps = childElements.get("values");
-                }
-                if (customProps == null) {
-                    continue;
-                }
-                
-                for (org.flowable.bpmn.model.ExtensionElement customProp : customProps) {
-                    String name = customProp.getAttributeValue(null, "name");
-                    if ("actionIds".equals(name)) {
-                        String value = customProp.getAttributeValue(null, "value");
-                        return parseActionIds(value);
-                    }
+
+            // 2) 流程级 globalActionIds（设计器「全局绑定」）
+            org.flowable.bpmn.model.Process mainProcess = bpmnModel.getMainProcess();
+            if (mainProcess != null) {
+                List<String> global = extractActionIdsRecursive(mainProcess.getExtensionElements(), "globalActionIds");
+                if (global != null && !global.isEmpty()) {
+                    return global;
                 }
             }
-            
-            return null;
+
+            // 3) 原始 BPMN 文本回退（Flowable 有时不把 custom 命名空间子节点放进内存模型）
+            return extractActionIdsFromBpmnXmlResource(task, userTask.getId());
             
         } catch (Exception e) {
             log.warn("Failed to extract actionIds for task {}: {}", task.getId(), e.getMessage());
+            return extractActionIdsFromBpmnXmlResource(task, task.getTaskDefinitionKey());
+        }
+    }
+
+    /**
+     * 深度优先查找 name 为给定属性名（actionIds / globalActionIds）的 extension 节点。
+     */
+    private List<String> extractActionIdsRecursive(
+            Map<String, List<org.flowable.bpmn.model.ExtensionElement>> extensions,
+            String propertyName) {
+        if (extensions == null || extensions.isEmpty()) {
             return null;
         }
+        for (List<org.flowable.bpmn.model.ExtensionElement> group : extensions.values()) {
+            if (group == null) {
+                continue;
+            }
+            for (org.flowable.bpmn.model.ExtensionElement el : group) {
+                String n = el.getAttributeValue(null, "name");
+                if (propertyName.equals(n)) {
+                    String value = el.getAttributeValue(null, "value");
+                    if (value == null || value.isEmpty()) {
+                        value = el.getElementText();
+                    }
+                    List<String> parsed = parseActionIds(value);
+                    if (parsed != null && !parsed.isEmpty()) {
+                        return parsed;
+                    }
+                }
+                List<String> nested = extractActionIdsRecursive(el.getChildElements(), propertyName);
+                if (nested != null && !nested.isEmpty()) {
+                    return nested;
+                }
+            }
+        }
+        return null;
+    }
+
+    private List<String> extractActionIdsFromBpmnXmlResource(Task task, String userTaskElementId) {
+        try {
+            org.flowable.engine.repository.ProcessDefinition pd = repositoryService
+                .createProcessDefinitionQuery()
+                .processDefinitionId(task.getProcessDefinitionId())
+                .singleResult();
+            if (pd == null) {
+                return null;
+            }
+            String resourceName = pd.getResourceName();
+            String rn = resourceName != null ? resourceName.toLowerCase() : "";
+            if (resourceName == null || (!rn.endsWith(".bpmn20.xml") && !rn.endsWith(".bpmn"))) {
+                List<String> names = repositoryService.getDeploymentResourceNames(pd.getDeploymentId());
+                resourceName = names.stream()
+                    .filter(n -> n != null && (n.endsWith(".bpmn20.xml") || n.endsWith(".bpmn")))
+                    .findFirst()
+                    .orElse(resourceName);
+            }
+            if (resourceName == null) {
+                return null;
+            }
+            try (InputStream in = repositoryService.getResourceAsStream(pd.getDeploymentId(), resourceName)) {
+                if (in == null) {
+                    return null;
+                }
+                String xml = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+                String key = userTaskElementId != null ? userTaskElementId : task.getTaskDefinitionKey();
+                // 1) DOM 解析（最稳：任意命名空间与属性顺序）
+                List<String> fromDom = parseActionIdsFromBpmnDom(xml, key, "actionIds");
+                if (fromDom != null && !fromDom.isEmpty()) {
+                    return fromDom;
+                }
+                // 2) 正则（双引号 / 单引号）
+                List<String> fromTask = parseActionIdsFromUserTaskXmlBlock(xml, key, "actionIds");
+                if (fromTask != null && !fromTask.isEmpty()) {
+                    return fromTask;
+                }
+                List<String> global = parseActionIdsFromProcessXmlBlock(xml, "globalActionIds");
+                if (global != null && !global.isEmpty()) {
+                    return global;
+                }
+                return parseActionIdsFromProcessXmlBlockDom(xml, "globalActionIds");
+            }
+        } catch (Exception e) {
+            log.debug("BPMN XML fallback for actionIds failed: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private static final Pattern ACTION_IDS_IN_USER_TASK = Pattern.compile(
+        "name\\s*=\\s*[\"']actionIds[\"'][^>]*?value\\s*=\\s*[\"']([^\"']*)[\"']|value\\s*=\\s*[\"']([^\"']*)[\"'][^>]*?name\\s*=\\s*[\"']actionIds[\"']",
+        Pattern.DOTALL
+    );
+
+    private static final Pattern GLOBAL_ACTION_IDS = Pattern.compile(
+        "name\\s*=\\s*[\"']globalActionIds[\"'][^>]*?value\\s*=\\s*[\"']([^\"']*)[\"']|value\\s*=\\s*[\"']([^\"']*)[\"'][^>]*?name\\s*=\\s*[\"']globalActionIds[\"']",
+        Pattern.DOTALL
+    );
+
+    /**
+     * 用 DOM 在 BPMN XML 中查找指定 userTask（按 id）下的 actionIds 属性值。
+     * 兼容任意命名空间（bpmn:userTask、custom:property 等）。
+     */
+    private List<String> parseActionIdsFromBpmnDom(String xml, String taskDefinitionKey, String propertyName) {
+        if (xml == null || taskDefinitionKey == null || !"actionIds".equals(propertyName)) {
+            return null;
+        }
+        try {
+            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+            factory.setNamespaceAware(true);
+            factory.setIgnoringElementContentWhitespace(false);
+            Document doc = factory.newDocumentBuilder().parse(new InputSource(new StringReader(xml)));
+            Element root = doc.getDocumentElement();
+            if (root == null) return null;
+            Element userTask = findUserTaskById(root, taskDefinitionKey);
+            if (userTask == null) return null;
+            String value = findFirstAttributeInTree(userTask, "name", propertyName, "value");
+            return value != null ? parseActionIds(value) : null;
+        } catch (Exception e) {
+            log.trace("DOM parse for actionIds failed: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private Element findUserTaskById(Element root, String id) {
+        if (root == null || id == null) return null;
+        String local = getLocalName(root);
+        String nodeId = root.getAttribute("id");
+        if ("userTask".equals(local) && id.equals(nodeId)) {
+            return root;
+        }
+        NodeList children = root.getChildNodes();
+        for (int i = 0; i < children.getLength(); i++) {
+            Node n = children.item(i);
+            if (n instanceof Element) {
+                Element found = findUserTaskById((Element) n, id);
+                if (found != null) return found;
+            }
+        }
+        return null;
+    }
+
+    private String findFirstAttributeInTree(Element root, String attrName, String attrValue, String valueAttrName) {
+        if (root == null) return null;
+        String name = root.getAttribute(attrName);
+        if (attrValue.equals(name)) {
+            String v = root.getAttribute(valueAttrName);
+            if (v != null && !v.isEmpty()) return v;
+        }
+        NodeList children = root.getChildNodes();
+        for (int i = 0; i < children.getLength(); i++) {
+            Node n = children.item(i);
+            if (n instanceof Element) {
+                String v = findFirstAttributeInTree((Element) n, attrName, attrValue, valueAttrName);
+                if (v != null) return v;
+            }
+        }
+        return null;
+    }
+
+    private static String getLocalName(Element el) {
+        String local = el.getLocalName();
+        return local != null ? local : el.getTagName().replaceAll("^[^:]+:", "");
+    }
+
+    private List<String> parseActionIdsFromProcessXmlBlockDom(String xml, String propertyName) {
+        if (xml == null || !"globalActionIds".equals(propertyName)) return null;
+        try {
+            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+            factory.setNamespaceAware(true);
+            Document doc = factory.newDocumentBuilder().parse(new InputSource(new StringReader(xml)));
+            Element root = doc.getDocumentElement();
+            if (root == null) return null;
+            String value = findFirstAttributeInTree(root, "name", "globalActionIds", "value");
+            return value != null ? parseActionIds(value) : null;
+        } catch (Exception e) {
+            log.trace("DOM parse for globalActionIds failed: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private List<String> parseActionIdsFromUserTaskXmlBlock(String xml, String taskDefinitionKey, String propName) {
+        if (xml == null || taskDefinitionKey == null) {
+            return null;
+        }
+        int idPos = xml.indexOf("id=\"" + taskDefinitionKey + "\"");
+        if (idPos < 0) {
+            return null;
+        }
+        int ut = xml.lastIndexOf("<userTask", idPos);
+        if (ut < 0) {
+            ut = xml.lastIndexOf("userTask ", idPos);
+        }
+        if (ut < 0) {
+            ut = xml.lastIndexOf("<bpmn:userTask", idPos);
+        }
+        if (ut < 0) {
+            return null;
+        }
+        int end = xml.indexOf("</userTask>", idPos);
+        if (end < 0) {
+            end = xml.indexOf("</bpmn:userTask>", idPos);
+        }
+        if (end < 0) {
+            return null;
+        }
+        String block = xml.substring(ut, Math.min(xml.length(), end + 20));
+        if (!"actionIds".equals(propName)) {
+            return null;
+        }
+        Matcher m = ACTION_IDS_IN_USER_TASK.matcher(block);
+        if (m.find()) {
+            String v = m.group(1) != null && !m.group(1).isEmpty() ? m.group(1) : m.group(2);
+            return parseActionIds(v);
+        }
+        return null;
+    }
+
+    private List<String> parseActionIdsFromProcessXmlBlock(String xml, String propName) {
+        if (xml == null || !"globalActionIds".equals(propName)) {
+            return null;
+        }
+        Matcher m = GLOBAL_ACTION_IDS.matcher(xml);
+        if (m.find()) {
+            String v = m.group(1) != null && !m.group(1).isEmpty() ? m.group(1) : m.group(2);
+            return parseActionIds(v);
+        }
+        return null;
     }
     
     /**
@@ -1174,14 +1398,33 @@ public class TaskManagerComponent {
             if (value == null || value.isEmpty()) {
                 return null;
             }
-            
-            // 移除括号和空格: "[id1,id2]" -> "id1,id2"
-            String cleaned = value.replaceAll("[\\[\\]\\s]", "");
-            
-            if (cleaned.isEmpty()) {
-                return null;
+
+            String trimmed = value.trim();
+
+            // JSON array: ["a","b"] 或 [1,2,3]（设计器存数字 ID）
+            if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+                try {
+                    com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                    com.fasterxml.jackson.databind.JsonNode node = mapper.readTree(trimmed);
+                    if (node != null && node.isArray() && !node.isEmpty()) {
+                        List<String> ids = new ArrayList<>();
+                        for (com.fasterxml.jackson.databind.JsonNode n : node) {
+                            if (n == null || n.isNull()) continue;
+                            String s = n.isTextual() ? n.asText() : n.asText();
+                            s = s != null ? s.trim() : "";
+                            if (!s.isEmpty()) ids.add(s);
+                        }
+                        if (!ids.isEmpty()) return ids;
+                    }
+                } catch (Exception ignore) {
+                    // fall through
+                }
             }
-            
+
+            // Legacy: "[id1,id2]" -> "id1,id2"
+            String cleaned = trimmed.replaceAll("[\\[\\]\\s\"]", "");
+            if (cleaned.isEmpty()) return null;
+
             return java.util.Arrays.stream(cleaned.split(","))
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())
