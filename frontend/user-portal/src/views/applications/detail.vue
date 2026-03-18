@@ -351,16 +351,14 @@ const loadProcessDetail = async () => {
         }
       }
 
-      // 快照模式：用 BPMN 流程图计算 snapshotTaskName 之后的下一个节点作为 currentNode
-      if (snapshotTaskName && processNodes.value.length > 0 && processFlows.value.length > 0) {
+      // 快照模式（仅进行中）：用 BPMN 计算 snapshotTaskName 之后的下一节点为 current；已结束不套用
+      if (snapshotTaskName && data.status === 'RUNNING' && processNodes.value.length > 0 && processFlows.value.length > 0) {
         const nextNodeName = findNextNodeName(snapshotTaskName)
         if (nextNodeName) {
           processInfo.value = { ...processInfo.value, currentNode: nextNodeName }
-          // 把下一个节点在流程图中标记为相应状态
           const nextNode = processNodes.value.find(n => n.name === nextNodeName)
           if (nextNode) {
             if (nextNode.type === 'end') {
-              // 结束事件：Rejected 用红色，其他（如 Approved）用绿色
               if (nextNodeName.toLowerCase().includes('rejected') || nextNodeName.toLowerCase().includes('拒绝')) {
                 nextNode.status = 'rejected'
               } else {
@@ -372,6 +370,19 @@ const loadProcessDetail = async () => {
             } else {
               // 非结束事件（如下一个 userTask）：标记为 current（橘色）
               nextNode.status = 'current'
+              // 从已完成列表移除，避免下游网关等因“前驱已完成”被错误标绿
+              completedNodeIds.value = completedNodeIds.value.filter(id => id !== nextNode.id)
+              // 仅因当前节点为前驱而被标为 completed 的下游节点改回 pending
+              const downstreamIds = processFlows.value.filter(f => f.sourceRef === nextNode.id).map(f => f.targetRef)
+              for (const targetId of downstreamIds) {
+                const targetNode = processNodes.value.find(n => n.id === targetId)
+                const completedIncoming = processFlows.value.filter(f => f.targetRef === targetId && completedNodeIds.value.includes(f.sourceRef))
+                const wasOnlyCurrent = completedIncoming.length === 0 && (targetNode?.status === 'completed' || completedNodeIds.value.includes(targetId))
+                if (targetNode && wasOnlyCurrent) {
+                  targetNode.status = 'pending'
+                  completedNodeIds.value = completedNodeIds.value.filter(id => id !== targetId)
+                }
+              }
             }
             currentNodeId.value = nextNode.id
           }
@@ -713,7 +724,9 @@ const parseBpmnXml = (xml: string) => {
     const nodes: ProcessNode[] = []
     const flows: ProcessFlow[] = []
     const completed: string[] = []
-    
+    // 仅流程进行中时启用快照视图；已结束则按真实完成态展示，避免仍显示橙色 Current Step
+    const snapshotActive = !!(snapshotTaskName && processInfo.value.status === 'RUNNING')
+
     // 解析位置信息
     const positionMap = new Map()
     doc.querySelectorAll('BPMNShape, bpmndi\\:BPMNShape').forEach(shape => {
@@ -767,7 +780,7 @@ const parseBpmnXml = (xml: string) => {
       
       // 优先从历史记录中获取状态
       const historyStatus = nodeStatusMap.get(name)
-      if (snapshotTaskName) {
+      if (snapshotActive) {
         // 快照模式：只显示到 snapshotTaskName 为止的状态
         if (name === snapshotTaskName || id === snapshotTaskName) {
           status = 'completed'
@@ -844,7 +857,7 @@ const parseBpmnXml = (xml: string) => {
       
       // 根据历史记录判断网关状态
       let status: 'completed' | 'pending' = 'pending'
-      if (snapshotTaskName) {
+      if (snapshotActive) {
         // 快照模式：检查网关的入口节点是否已完成
         if (completedNodeNames.has(name)) {
           status = 'completed'
@@ -891,7 +904,7 @@ const parseBpmnXml = (xml: string) => {
         } else {
           status = 'completed'
         }
-      } else if (snapshotTaskName) {
+      } else if (snapshotActive) {
         // 快照模式：结束节点保持 pending，除非在历史记录中
         status = 'pending'
       } else if (processInfo.value.status === 'COMPLETED') {
@@ -1065,9 +1078,9 @@ const loadProcessHistory = async () => {
       console.log('=== [HISTORY] Processing', historyData.length, 'history records')
       console.log('=== [HISTORY] First record:', historyData[0])
 
-      // 如果有快照任务名（从 completed tasks 进来），只保留到该任务为止的记录
+      // 进行中 + 快照：只保留到该任务为止；已结束流程展示完整历史
       let filteredData = historyData
-      if (snapshotTaskName) {
+      if (snapshotTaskName && processInfo.value.status === 'RUNNING') {
         // 找到 snapshotTaskName 在历史列表中最后一次出现的位置（按时间排序），截断到该位置
         const snapshotIdx = historyData.map((item: any) => item.activityName || item.taskName).lastIndexOf(snapshotTaskName)
         if (snapshotIdx >= 0) {

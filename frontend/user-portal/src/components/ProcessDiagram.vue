@@ -261,14 +261,14 @@ const createNodeElement = (node: ProcessNode, pos: { x: number; y: number; width
   if (node.status === 'rejected') {
     fillColor = '#ffebee'
     strokeColor = '#f44336'
+  } else if (node.id === props.currentNodeId || node.status === 'current') {
+    // 当前节点用橙色（优先于已完成，避免快照模式下“下一节点”被历史标成 completed 仍显示为当前）
+    fillColor = '#fff3e0'
+    strokeColor = '#FF6600'
   } else if (props.completedNodeIds.includes(node.id) || node.status === 'completed') {
     // 已完成的节点用绿色
     fillColor = '#e8f5e9'
     strokeColor = '#00A651'
-  } else if (node.id === props.currentNodeId || node.status === 'current') {
-    // 当前节点用橙色
-    fillColor = '#fff3e0'
-    strokeColor = '#FF6600'
   }
 
   let shape: SVGElement
