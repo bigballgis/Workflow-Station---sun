@@ -230,13 +230,21 @@
     </el-dialog>
 
     <!-- 委托/转办对话框 -->
-    <el-dialog v-model="actionDialogVisible" :title="actionDialogTitle" width="500px">
+    <el-dialog v-model="actionDialogVisible" :title="actionDialogTitle" width="500px" @opened="onActionDialogOpened">
       <el-form :model="actionForm" label-width="80px">
-        <el-form-item :label="t('task.targetUser')" v-if="currentAction !== 'urge'">
-          <el-select v-model="actionForm.targetUserId" filterable :placeholder="t('task.selectUser')" style="width: 100%;">
-            <el-option label="Li Si" value="user_2" />
-            <el-option label="Wang Wu" value="user_3" />
-            <el-option label="Zhao Liu" value="user_4" />
+        <el-form-item :label="t('task.targetUser')" v-show="currentAction !== 'urge'">
+          <el-select 
+            v-model="actionForm.targetUserId" 
+            :placeholder="t('task.selectUser')" 
+            :teleported="false"
+            style="width: 100%;"
+          >
+            <el-option
+              v-for="user in userOptions"
+              :key="user.id"
+              :label="user.name + ' (' + user.username + ')'"
+              :value="user.id"
+            />
           </el-select>
         </el-form-item>
         <el-form-item :label="currentAction === 'urge' ? t('task.urgeMessage') : t('task.reasonDescription')">
@@ -287,12 +295,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, markRaw } from 'vue'
+import { ref, reactive, onMounted, nextTick, markRaw } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { 
   ArrowLeft, 
+  ArrowDown,
   InfoFilled, 
   Share, 
   Document, 
@@ -320,6 +329,7 @@ import {
 } from '@/api/task'
 import { processApi } from '@/api/process'
 import { useUserStore } from '@/stores/user'
+import { userApi, type UserOption } from '@/api/user'
 import ProcessDiagram, { type ProcessNode, type ProcessFlow } from '@/components/ProcessDiagram.vue'
 import ProcessHistory, { type HistoryRecord } from '@/components/ProcessHistory.vue'
 import FormRenderer, { type FormField, type FormTab } from '@/components/FormRenderer.vue'
@@ -406,6 +416,31 @@ const actionForm = reactive({
   targetUserId: '',
   reason: ''
 })
+
+// 用户搜索
+const userOptions = ref<any[]>([])
+const userSearchLoading = ref(false)
+const searchUsers = async (keyword: string) => {
+  userSearchLoading.value = true
+  try {
+    const result = await userApi.searchUsers(keyword || '')
+    console.log('[detail] searchUsers result:', result, 'length:', result.length)
+    // 直接赋值新数组，确保响应式触发
+    userOptions.value = [...result]
+    console.log('[detail] userOptions.value after assign:', userOptions.value.length)
+  } catch (e) {
+    console.error('Failed to search users:', e)
+    userOptions.value = []
+  } finally {
+    userSearchLoading.value = false
+  }
+}
+
+const onActionDialogOpened = () => {
+  if (currentAction.value !== 'urge') {
+    searchUsers('')
+  }
+}
 
 // 表单弹窗状态
 const formPopupVisible = ref(false)
@@ -1172,6 +1207,7 @@ const handleDelegate = () => {
   actionDialogTitle.value = t('task.delegate')
   actionForm.targetUserId = ''
   actionForm.reason = ''
+  userOptions.value = []
   actionDialogVisible.value = true
 }
 
@@ -1180,6 +1216,7 @@ const handleTransfer = () => {
   actionDialogTitle.value = t('task.transfer')
   actionForm.targetUserId = ''
   actionForm.reason = ''
+  userOptions.value = []
   actionDialogVisible.value = true
 }
 

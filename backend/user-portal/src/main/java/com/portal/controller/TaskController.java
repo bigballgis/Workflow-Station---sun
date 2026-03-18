@@ -8,14 +8,23 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.client.RestTemplate;
 
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 任务管理API
  */
 @Tag(name = "任务管理", description = "任务查询、处理、委托等操作")
+@Slf4j
 @RestController
 @RequestMapping("/tasks")
 @RequiredArgsConstructor
@@ -24,6 +33,10 @@ public class TaskController {
     private final TaskQueryComponent taskQueryComponent;
     private final TaskProcessComponent taskProcessComponent;
     private final I18nService i18nService;
+    private final RestTemplate restTemplate;
+
+    @Value("${admin-center.url:http://localhost:8090}")
+    private String adminCenterUrl;
 
     @Operation(summary = "查询待办任务列表")
     @PostMapping("/query")
@@ -144,5 +157,27 @@ public class TaskController {
         }
         PageResponse<TaskInfo> result = taskQueryComponent.queryCompletedTasks(request);
         return ApiResponse.success(result);
+    }
+
+    @Operation(summary = "搜索用户（用于转办、委托）")
+    @GetMapping("/users/search")
+    @SuppressWarnings("unchecked")
+    public ApiResponse<List<Map<String, Object>>> searchUsers(
+            @RequestParam(required = false, defaultValue = "") String keyword) {
+        try {
+            String url = adminCenterUrl + "/api/v1/admin/users?keyword=" + keyword + "&size=20";
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    url, HttpMethod.GET, null,
+                    new ParameterizedTypeReference<Map<String, Object>>() {});
+            Map<String, Object> body = response.getBody();
+            if (body != null && body.get("content") != null) {
+                List<Map<String, Object>> users = (List<Map<String, Object>>) body.get("content");
+                return ApiResponse.success(users);
+            }
+            return ApiResponse.success(Collections.emptyList());
+        } catch (Exception e) {
+            log.error("Failed to search users from admin-center: {}", e.getMessage());
+            return ApiResponse.success(Collections.emptyList());
+        }
     }
 }

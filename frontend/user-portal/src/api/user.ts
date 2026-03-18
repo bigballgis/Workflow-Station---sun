@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { TOKEN_KEY } from './auth'
+import { request as portalRequest } from './request'
 
 /** 用户业务单元成员身份 */
 export interface UserBusinessUnitMembership {
@@ -44,8 +45,32 @@ adminCenterAxios.interceptors.response.use(
   error => Promise.reject(error)
 )
 
+/** 用户搜索结果 */
+export interface UserOption {
+  id: string
+  name: string
+  username: string
+}
+
 // 用户API - 通过 /api/admin-center 代理访问 admin-center 后端
 export const userApi = {
+  // 搜索用户（用于转办、委托等场景）- 通过 user-portal 后端代理
+  searchUsers: async (keyword: string): Promise<UserOption[]> => {
+    try {
+      const res: any = await portalRequest.get('/tasks/users/search', { params: { keyword } })
+      const data = res?.data || res
+      const users = Array.isArray(data) ? data : []
+      return users.map((u: any) => ({
+        id: u.id,
+        name: u.displayName || u.fullName || u.username,
+        username: u.username
+      }))
+    } catch (err) {
+      console.error('[searchUsers] error:', err)
+      return []
+    }
+  },
+
   // 获取用户业务单元
   getBusinessUnits: (userId: string): Promise<UserBusinessUnitMembership[]> =>
     adminCenterAxios.get(`/users/${userId}/business-units`),

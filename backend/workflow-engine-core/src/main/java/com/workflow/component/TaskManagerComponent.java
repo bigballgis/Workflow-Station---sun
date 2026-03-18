@@ -699,39 +699,49 @@ public class TaskManagerComponent {
             validateUserId(fromUserId);
             validateUserId(toUserId);
             
-            // 查找扩展任务信息
-            ExtendedTaskInfo extendedTaskInfo = extendedTaskInfoRepository
-                .findByTaskIdAndIsDeletedFalse(taskId)
-                .orElseThrow(() -> new WorkflowValidationException(Collections.singletonList(
-                    new WorkflowValidationException.ValidationError(
-                        "taskId", "任务不存在", taskId))));
+            // 首先从 Flowable 查询任务是否存在
+            Task flowableTask = taskService.createTaskQuery()
+                .taskId(taskId)
+                .singleResult();
             
-            // 检查任务是否已完成
-            if (extendedTaskInfo.isCompleted()) {
+            if (flowableTask == null) {
                 throw new WorkflowValidationException(Collections.singletonList(
                     new WorkflowValidationException.ValidationError(
-                        "taskId", "任务已完成，无法转办", taskId)));
+                        "taskId", "任务不存在", taskId)));
             }
             
-            // 验证转办权限
-            validateCompletePermission(extendedTaskInfo, fromUserId);
+            // 查找扩展任务信息（可选）
+            Optional<ExtendedTaskInfo> extendedTaskInfoOpt = extendedTaskInfoRepository
+                .findByTaskIdAndIsDeletedFalse(taskId);
             
-            // 执行转办操作 - 直接更改分配人
-            extendedTaskInfo.setAssignmentType(AssignmentType.USER);
-            extendedTaskInfo.setAssignmentTarget(toUserId);
-            extendedTaskInfo.setClaimedBy(null);
-            extendedTaskInfo.setClaimedTime(null);
-            extendedTaskInfo.setDelegatedTo(null);
-            extendedTaskInfo.setDelegatedBy(null);
-            extendedTaskInfo.setDelegatedTime(null);
-            extendedTaskInfo.setDelegationReason(null);
-            extendedTaskInfo.updateStatus("ASSIGNED", fromUserId);
+            if (extendedTaskInfoOpt.isPresent()) {
+                ExtendedTaskInfo extendedTaskInfo = extendedTaskInfoOpt.get();
+                
+                // 检查任务是否已完成
+                if (extendedTaskInfo.isCompleted()) {
+                    throw new WorkflowValidationException(Collections.singletonList(
+                        new WorkflowValidationException.ValidationError(
+                            "taskId", "任务已完成，无法转办", taskId)));
+                }
+                
+                // 验证转办权限
+                validateCompletePermission(extendedTaskInfo, fromUserId);
+                
+                // 执行转办操作 - 直接更改分配人
+                extendedTaskInfo.setAssignmentType(AssignmentType.USER);
+                extendedTaskInfo.setAssignmentTarget(toUserId);
+                extendedTaskInfo.setClaimedBy(null);
+                extendedTaskInfo.setClaimedTime(null);
+                extendedTaskInfo.setDelegatedTo(null);
+                extendedTaskInfo.setDelegatedBy(null);
+                extendedTaskInfo.setDelegatedTime(null);
+                extendedTaskInfo.setDelegationReason(null);
+                extendedTaskInfo.updateStatus("ASSIGNED", fromUserId);
+                extendedTaskInfoRepository.save(extendedTaskInfo);
+            }
             
             // 更新Flowable任务的分配人
             taskService.setAssignee(taskId, toUserId);
-            
-            // 保存扩展任务信息
-            extendedTaskInfo = extendedTaskInfoRepository.save(extendedTaskInfo);
             
             return TaskAssignmentResult.success(
                 taskId, 
