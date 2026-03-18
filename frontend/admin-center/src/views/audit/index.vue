@@ -581,15 +581,14 @@ const formatTime = (isoStr: string | null | undefined): string => {
   try {
     const date = new Date(isoStr)
     if (isNaN(date.getTime())) return isoStr
-    const utc8 = new Date(date.getTime() + 8 * 60 * 60 * 1000)
-    const yyyy = utc8.getUTCFullYear()
-    const MM = String(utc8.getUTCMonth() + 1).padStart(2, '0')
-    const dd = String(utc8.getUTCDate()).padStart(2, '0')
-    const HH = String(utc8.getUTCHours()).padStart(2, '0')
-    const mm = String(utc8.getUTCMinutes()).padStart(2, '0')
-    const ss = String(utc8.getUTCSeconds()).padStart(2, '0')
-    const SSS = String(utc8.getUTCMilliseconds()).padStart(3, '0')
-    return `${yyyy}-${MM}-${dd} ${HH}:${mm}:${ss}.${SSS} (UTC+8)`
+    const yyyy = date.getFullYear()
+    const MM = String(date.getMonth() + 1).padStart(2, '0')
+    const dd = String(date.getDate()).padStart(2, '0')
+    const HH = String(date.getHours()).padStart(2, '0')
+    const mm = String(date.getMinutes()).padStart(2, '0')
+    const ss = String(date.getSeconds()).padStart(2, '0')
+    const SSS = String(date.getMilliseconds()).padStart(3, '0')
+    return `${yyyy}-${MM}-${dd} ${HH}:${mm}:${ss}.${SSS}`
   } catch {
     return isoStr
   }

@@ -25,7 +25,7 @@ app:
     show-sql: ${DATABASE_SHOW_SQL:false}
     format-sql: ${DATABASE_FORMAT_SQL:true}
     dialect: ${DATABASE_DIALECT:org.hibernate.dialect.PostgreSQLDialect}
-    timezone: ${DATABASE_TIMEZONE:UTC}
+    timezone: ${DATABASE_TIMEZONE:Asia/Shanghai}
 
   security:
     enable-input-validation: ${SECURITY_ENABLE_INPUT_VALIDATION:true}

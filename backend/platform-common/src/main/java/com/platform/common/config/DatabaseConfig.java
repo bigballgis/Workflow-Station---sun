@@ -53,7 +53,7 @@ public class DatabaseConfig {
     private String dialect = "org.hibernate.dialect.PostgreSQLDialect";
     
     @NotBlank(message = "Timezone is required")
-    private String timezone = "UTC";
+    private String timezone = "Asia/Shanghai";
     
     // Getters and Setters
     public String getUrl() {

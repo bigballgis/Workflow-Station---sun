@@ -1105,8 +1105,15 @@ const getHistoryStatus = (operationType: string): 'completed' | 'current' | 'pen
   return map[operationType] || 'completed'
 }
 
-const formatDate = (date?: string) => {
-  return date ? dayjs(date).format('YYYY-MM-DD HH:mm') : '-'
+const formatDate = (date?: string | number[]) => {
+  if (!date) return '-'
+  if (Array.isArray(date)) {
+    const [year, month, day, hour = 0, minute = 0, second = 0] = date
+    const d = dayjs(new Date(year, month - 1, day, hour, minute, second))
+    return d.isValid() ? d.format('YYYY-MM-DD HH:mm') : '-'
+  }
+  const d = dayjs(date)
+  return d.isValid() ? d.format('YYYY-MM-DD HH:mm') : '-'
 }
 
 const getCurrentAssigneeDisplay = () => {

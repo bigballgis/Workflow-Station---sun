@@ -142,8 +142,15 @@ const handleDelete = async (item: NotificationData) => {
   }
 }
 
-const formatTime = (time: string) => {
-  return dayjs(time).format('YYYY-MM-DD HH:mm')
+const formatTime = (time: string | number[]) => {
+  if (!time) return '-'
+  if (Array.isArray(time)) {
+    const [year, month, day, hour = 0, minute = 0, second = 0] = time
+    const d = dayjs(new Date(year, month - 1, day, hour, minute, second))
+    return d.isValid() ? d.format('YYYY-MM-DD HH:mm') : '-'
+  }
+  const d = dayjs(time)
+  return d.isValid() ? d.format('YYYY-MM-DD HH:mm') : '-'
 }
 
 const getIcon = (type: string) => {

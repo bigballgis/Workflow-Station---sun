@@ -270,7 +270,7 @@ class ConfigurationValidationPropertyTest {
             config.setDriverClassName("org.postgresql.Driver");
             config.setPoolName("TestPool");
             config.setDialect("org.hibernate.dialect.PostgreSQLDialect");
-            config.setTimezone("UTC");
+            config.setTimezone("Asia/Shanghai");
             config.setConnectionTimeoutMs(5000);
             config.setIdleTimeoutMs(300000);
             config.setMaxLifetimeMs(1200000);

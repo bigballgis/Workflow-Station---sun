@@ -1,5 +1,7 @@
 package com.developer;
 
+import java.util.TimeZone;
+
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
@@ -39,6 +41,7 @@ import java.util.Optional;
 public class DeveloperWorkstationApplication {
     
     public static void main(String[] args) {
+        TimeZone.setDefault(TimeZone.getTimeZone("Asia/Shanghai"));
         SpringApplication.run(DeveloperWorkstationApplication.class, args);
     }
     

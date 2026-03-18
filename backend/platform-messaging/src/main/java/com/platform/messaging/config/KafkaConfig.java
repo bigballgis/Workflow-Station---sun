@@ -1,7 +1,5 @@
 package com.platform.messaging.config;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -31,13 +29,6 @@ public class KafkaConfig {
     
     @Value("${spring.kafka.consumer.group-id:platform-group}")
     private String groupId;
-    
-    @Bean
-    public ObjectMapper objectMapper() {
-        ObjectMapper mapper = new ObjectMapper();
-        mapper.registerModule(new JavaTimeModule());
-        return mapper;
-    }
     
     @Bean
     public ProducerFactory<String, String> producerFactory() {

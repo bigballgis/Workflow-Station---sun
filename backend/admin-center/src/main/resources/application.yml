@@ -97,7 +97,7 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
         jdbc:
-          time_zone: UTC
+          time_zone: Asia/Shanghai
 
   flyway:
     enabled: true
@@ -146,7 +146,7 @@ spring:
 
   jackson:
     date-format: yyyy-MM-dd HH:mm:ss
-    time-zone: UTC
+    time-zone: Asia/Shanghai
     serialization:
       write-dates-as-timestamps: false
 
