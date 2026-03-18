@@ -7,6 +7,9 @@ export interface TaskOverview {
   avgProcessingHours: number
   urgentCount: number
   highPriorityCount: number
+  teamPendingCount: number
+  teamOverdueCount: number
+  teamCompletedTodayCount: number
 }
 
 export interface ProcessOverview {
