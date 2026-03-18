@@ -64,9 +64,10 @@
         </div>
         <div class="section-content">
           <ProcessDiagram
-            v-if="processNodes.length > 0"
+            v-if="bpmnXml || processNodes.length > 0"
             :nodes="processNodes"
             :flows="processFlows"
+            :bpmn-xml="bpmnXml"
             :current-node-id="currentNodeId"
             :completed-node-ids="completedNodeIds"
             :show-toolbar="true"
@@ -209,6 +210,7 @@ const processNodes = ref<ProcessNode[]>([])
 const processFlows = ref<ProcessFlow[]>([])
 const currentNodeId = ref('')
 const completedNodeIds = ref<string[]>([])
+const bpmnXml = ref('')
 
 // 表单数据
 const formFields = ref<FormField[]>([])
@@ -412,6 +414,7 @@ const loadFunctionUnitContent = async (processKey: string) => {
     if (content.processes?.length > 0) {
       // 解析 BPMN 并获取当前节点的 formId 和 formName
       currentFormInfo = parseBpmnXmlAndGetFormId(content.processes[0].data)
+      bpmnXml.value = content.processes[0].data
       parseBpmnXml(content.processes[0].data)
     }
     

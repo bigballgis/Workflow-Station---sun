@@ -1,6 +1,6 @@
 <template>
   <div class="process-diagram" ref="containerRef">
-    <div class="diagram-canvas" ref="canvasRef"></div>
+    <div ref="canvasRef" class="bpmn-canvas"></div>
     <div class="diagram-bottom-bar">
       <div class="diagram-legend" v-if="showLegend">
         <div class="legend-item">
@@ -34,9 +34,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ZoomIn, ZoomOut, RefreshRight, FullScreen } from '@element-plus/icons-vue'
+// @ts-ignore
+import NavigatedViewer from 'bpmn-js/lib/NavigatedViewer'
 
 const { t } = useI18n()
 
@@ -65,6 +67,7 @@ export interface ProcessFlow {
 interface Props {
   nodes?: ProcessNode[]
   flows?: ProcessFlow[]
+  bpmnXml?: string
   currentNodeId?: string
   completedNodeIds?: string[]
   showToolbar?: boolean
@@ -74,6 +77,7 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   nodes: () => [],
   flows: () => [],
+  bpmnXml: '',
   currentNodeId: '',
   completedNodeIds: () => [],
   showToolbar: true,
@@ -88,450 +92,201 @@ const emit = defineEmits<{
 const containerRef = ref<HTMLElement>()
 const canvasRef = ref<HTMLElement>()
 const zoomLevel = ref(1)
-const diagramWidth = ref(0)
-const diagramHeight = ref(0)
-const viewBoxMinX = ref(0)
-const viewBoxMinY = ref(0)
 
-// 渲染流程图
-const renderDiagram = () => {
-  if (!canvasRef.value || !containerRef.value) return
+let viewer: any = null
 
-  const canvas = canvasRef.value
-  canvas.innerHTML = ''
+const destroyViewer = () => {
+  if (viewer) {
+    try { viewer.destroy() } catch (_) { /* ignore */ }
+    viewer = null
+  }
+}
 
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
-  svg.style.display = 'block'
-  svg.style.width = '100%'
-  svg.style.height = '100%'
-  svg.style.minHeight = '300px'
-  
-  // 添加箭头定义
-  const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs')
-  const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker')
-  marker.setAttribute('id', 'arrowhead')
-  marker.setAttribute('markerWidth', '10')
-  marker.setAttribute('markerHeight', '7')
-  marker.setAttribute('refX', '9')
-  marker.setAttribute('refY', '3.5')
-  marker.setAttribute('orient', 'auto')
-  const polygon = document.createElementNS('http://www.w3.org/2000/svg', 'polygon')
-  polygon.setAttribute('points', '0 0, 10 3.5, 0 7')
-  polygon.setAttribute('fill', '#909399')
-  marker.appendChild(polygon)
-  defs.appendChild(marker)
-  svg.appendChild(defs)
-
-  const nodePositions = calculateNodePositions()
-  
-  // 计算边界，包含所有节点、连线路径点和标签
-  let minX = Infinity, minY = Infinity, maxX = 0, maxY = 0
-  nodePositions.forEach(pos => {
-    minX = Math.min(minX, pos.x)
-    minY = Math.min(minY, pos.y)
-    maxX = Math.max(maxX, pos.x + pos.width)
-    maxY = Math.max(maxY, pos.y + pos.height)
-  })
-  
-  // 将连线路径点也纳入边界计算，避免弯曲连线被裁剪
-  props.flows.forEach(flow => {
-    if (flow.waypoints) {
-      flow.waypoints.forEach(wp => {
-        minX = Math.min(minX, wp.x)
-        minY = Math.min(minY, wp.y)
-        maxX = Math.max(maxX, wp.x)
-        maxY = Math.max(maxY, wp.y)
-      })
-    }
-  })
-  
-  // 考虑连线标签和节点标签可能超出节点范围，增加额外边距
-  const padding = 60
-  minX = Math.max(0, minX - padding)
-  minY = Math.max(0, minY - padding / 2)
-  maxX = maxX + padding
-  maxY = maxY + padding
-  
-  const viewWidth = Math.max(maxX - minX, 600)
-  const viewHeight = Math.max(maxY - minY, 300)
-  
-  // 保存原始尺寸用于缩放计算
-  diagramWidth.value = viewWidth
-  diagramHeight.value = viewHeight
-  viewBoxMinX.value = minX
-  viewBoxMinY.value = minY
-  
-  // 使用 viewBox 让 SVG 自动缩放以适应容器
-  svg.setAttribute('viewBox', `${minX} ${minY} ${viewWidth} ${viewHeight}`)
-  svg.setAttribute('preserveAspectRatio', 'xMidYMid meet')
-
-  // 收集所有标签，最后绘制以确保在最上层
-  const flowLabels: SVGElement[] = []
-  
-  props.flows.forEach(flow => {
-    const source = nodePositions.get(flow.sourceRef)
-    const target = nodePositions.get(flow.targetRef)
-    if (source && target) {
-      const { line, label } = createFlowLine(source, target, flow)
-      svg.appendChild(line)
-      if (label) flowLabels.push(label)
-    }
-  })
+// Apply status colors to rendered bpmn-js elements
+const applyStatusColors = () => {
+  if (!viewer) return
+  const elementRegistry = viewer.get('elementRegistry')
 
   props.nodes.forEach(node => {
-    const pos = nodePositions.get(node.id)
-    if (pos) {
-      const nodeEl = createNodeElement(node, pos)
-      svg.appendChild(nodeEl)
+    const element = elementRegistry.get(node.id)
+    if (!element) return
+
+    const gfx: SVGElement | null = elementRegistry.getGraphics(element)
+    if (!gfx) return
+
+    let fill = '#ffffff'
+    let stroke = '#909399'
+
+    if (node.status === 'rejected') {
+      fill = '#ffebee'
+      stroke = '#f44336'
+    } else if (node.id === props.currentNodeId || node.status === 'current') {
+      fill = '#fff3e0'
+      stroke = '#FF6600'
+    } else if (props.completedNodeIds.includes(node.id) || node.status === 'completed') {
+      fill = '#e8f5e9'
+      stroke = '#00A651'
     }
+
+    const visual = gfx.querySelector('.djs-visual')
+    if (!visual) return
+
+    // Apply to shape primitives, skip label backgrounds
+    const shapes = visual.querySelectorAll('rect, circle, polygon, polyline, ellipse')
+    shapes.forEach(shape => {
+      const el = shape as SVGElement
+      el.style.fill = fill
+      el.style.stroke = stroke
+      el.style.strokeWidth = '2px'
+    })
+    // Also handle path shapes (e.g. end event double-circle border)
+    const paths = visual.querySelectorAll('path')
+    paths.forEach(path => {
+      const el = path as SVGElement
+      if (!el.style.fill || el.style.fill === 'none') return
+      el.style.fill = fill
+      el.style.stroke = stroke
+    })
   })
-  
-  // 最后绘制标签，确保在节点之上
-  flowLabels.forEach(label => svg.appendChild(label))
-
-  canvas.appendChild(svg)
-  
-  // 初始化缩放级别为100%
-  zoomLevel.value = 1
-  
-  emit('loaded')
 }
 
-// 计算节点位置
-const calculateNodePositions = (): Map<string, { x: number; y: number; width: number; height: number }> => {
-  const positions = new Map<string, { x: number; y: number; width: number; height: number }>()
-  const hasPositionData = props.nodes.some(node => node.x !== undefined && node.y !== undefined)
-  
-  if (hasPositionData) {
-    props.nodes.forEach(node => {
-      if (node.x !== undefined && node.y !== undefined) {
-        let width = node.width || 100
-        let height = node.height || 80
-        if ((node.type === 'start' || node.type === 'end') && !node.width) {
-          width = 36
-          height = 36
-        } else if (node.type === 'gateway' && !node.width) {
-          width = 50
-          height = 50
-        }
-        positions.set(node.id, { x: node.x, y: node.y, width, height })
-      }
+// 从 BPMN XML 解析图形边界（在创建 viewer 之前调用，避免先后顺序问题）
+const parseBpmnBounds = (xml: string): { width: number; height: number } | null => {
+  try {
+    const doc = new DOMParser().parseFromString(xml, 'application/xml')
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+
+    doc.querySelectorAll('BPMNShape, bpmndi\\:BPMNShape').forEach(shape => {
+      const b = shape.querySelector('Bounds, dc\\:Bounds')
+      if (!b) return
+      const x = parseFloat(b.getAttribute('x') || '0')
+      const y = parseFloat(b.getAttribute('y') || '0')
+      const w = parseFloat(b.getAttribute('width') || '0')
+      const h = parseFloat(b.getAttribute('height') || '0')
+      minX = Math.min(minX, x);      minY = Math.min(minY, y)
+      maxX = Math.max(maxX, x + w);  maxY = Math.max(maxY, y + h)
     })
-  } else {
-    const horizontalGap = 180
-    const verticalGap = 100
-    const startX = 80
-    const startY = 80
-    const maxNodesPerRow = 5
-    let currentX = startX
-    let currentY = startY
-    let nodeIndex = 0
-
-    props.nodes.forEach(node => {
-      let width = 100, height = 80
-      if (node.type === 'start' || node.type === 'end') {
-        width = 36
-        height = 36
-      } else if (node.type === 'gateway') {
-        width = 50
-        height = 50
-      }
-      positions.set(node.id, { x: currentX, y: currentY, width, height })
-      nodeIndex++
-      if (nodeIndex % maxNodesPerRow === 0) {
-        currentX = startX
-        currentY += verticalGap
-      } else {
-        currentX += horizontalGap
-      }
+    doc.querySelectorAll('BPMNEdge waypoint, bpmndi\\:BPMNEdge waypoint, BPMNEdge di\\:waypoint').forEach(wp => {
+      const x = parseFloat(wp.getAttribute('x') || '0')
+      const y = parseFloat(wp.getAttribute('y') || '0')
+      minX = Math.min(minX, x);  minY = Math.min(minY, y)
+      maxX = Math.max(maxX, x);  maxY = Math.max(maxY, y)
     })
+    if (!isFinite(maxX) || !isFinite(maxY)) return null
+    return { width: maxX - minX, height: maxY - minY }
+  } catch {
+    return null
   }
-  return positions
 }
 
-// 创建节点元素
-const createNodeElement = (node: ProcessNode, pos: { x: number; y: number; width: number; height: number }) => {
-  const g = document.createElementNS('http://www.w3.org/2000/svg', 'g')
-  g.setAttribute('transform', `translate(${pos.x}, ${pos.y})`)
-  g.style.cursor = 'pointer'
+const fitToContainer = () => {
+  if (!viewer) return
+  const canvas = viewer.get('canvas')
+  canvas.zoom('fit-viewport')
+  zoomLevel.value = canvas.zoom() as number
+}
 
-  let fillColor = '#ffffff'
-  let strokeColor = '#909399'
-  // 已拒绝的节点用红色
-  if (node.status === 'rejected') {
-    fillColor = '#ffebee'
-    strokeColor = '#f44336'
-  } else if (node.id === props.currentNodeId || node.status === 'current') {
-    // 当前节点用橙色（优先于已完成，避免快照模式下“下一节点”被历史标成 completed 仍显示为当前）
-    fillColor = '#fff3e0'
-    strokeColor = '#FF6600'
-  } else if (props.completedNodeIds.includes(node.id) || node.status === 'completed') {
-    // 已完成的节点用绿色
-    fillColor = '#e8f5e9'
-    strokeColor = '#00A651'
-  }
+const renderBpmn = async () => {
+  if (!canvasRef.value || !props.bpmnXml) return
 
-  let shape: SVGElement
-  const centerX = pos.width / 2
-  const centerY = pos.height / 2
-  
-  switch (node.type) {
-    case 'start':
-      shape = document.createElementNS('http://www.w3.org/2000/svg', 'circle')
-      shape.setAttribute('cx', String(centerX))
-      shape.setAttribute('cy', String(centerY))
-      shape.setAttribute('r', String(Math.min(pos.width, pos.height) / 2 - 2))
-      shape.setAttribute('fill', '#e8f5e9')
-      shape.setAttribute('stroke', '#00A651')
-      shape.setAttribute('stroke-width', '2')
-      break
-    case 'end':
-      shape = document.createElementNS('http://www.w3.org/2000/svg', 'circle')
-      shape.setAttribute('cx', String(centerX))
-      shape.setAttribute('cy', String(centerY))
-      shape.setAttribute('r', String(Math.min(pos.width, pos.height) / 2 - 2))
-      shape.setAttribute('fill', fillColor)
-      shape.setAttribute('stroke', strokeColor)
-      shape.setAttribute('stroke-width', '2')
-      break
-    case 'gateway':
-      const halfW = pos.width / 2
-      const halfH = pos.height / 2
-      shape = document.createElementNS('http://www.w3.org/2000/svg', 'polygon')
-      shape.setAttribute('points', `${halfW},0 ${pos.width},${halfH} ${halfW},${pos.height} 0,${halfH}`)
-      shape.setAttribute('fill', fillColor)
-      shape.setAttribute('stroke', strokeColor)
-      shape.setAttribute('stroke-width', '2')
-      break
-    default:
-      shape = document.createElementNS('http://www.w3.org/2000/svg', 'rect')
-      shape.setAttribute('width', String(pos.width))
-      shape.setAttribute('height', String(pos.height))
-      shape.setAttribute('rx', '10')
-      shape.setAttribute('ry', '10')
-      shape.setAttribute('fill', fillColor)
-      shape.setAttribute('stroke', strokeColor)
-      shape.setAttribute('stroke-width', '2')
-  }
-  g.appendChild(shape)
+  destroyViewer()
 
-  const text = document.createElementNS('http://www.w3.org/2000/svg', 'text')
-  text.setAttribute('text-anchor', 'middle')
-  text.setAttribute('font-size', '12')
-  text.setAttribute('fill', '#303133')
-  
-  if (node.type === 'start' || node.type === 'end') {
-    text.setAttribute('x', String(centerX))
-    text.setAttribute('y', String(pos.height + 15))
-    text.textContent = node.name
-  } else if (node.type === 'gateway') {
-    text.setAttribute('x', String(centerX))
-    text.setAttribute('y', String(pos.height + 15))
-    text.textContent = node.name
+  const el = canvasRef.value
+  await nextTick()
+
+  // 1. 先解析 BPMN XML 边界，计算自适应高度，再创建 viewer
+  //    这样 bpmn-js 初始化时就拿到正确的容器尺寸，fit-viewport 才能正确居中
+  const padding = 60
+  const containerWidth = el.clientWidth || 800
+  const bounds = parseBpmnBounds(props.bpmnXml)
+  if (bounds && bounds.width > 0 && bounds.height > 0) {
+    const scale = (containerWidth - padding * 2) / bounds.width
+    const h = Math.max(Math.ceil(bounds.height * scale + padding * 2), 200)
+    el.style.height = `${h}px`
   } else {
-    const maxCharsPerLine = Math.floor(pos.width / 7)
-    const displayName = node.name.length > maxCharsPerLine * 2 
-      ? node.name.substring(0, maxCharsPerLine * 2 - 2) + '...' 
-      : node.name
-    
-    // Split by word boundaries to avoid breaking words across lines
-    const words = displayName.split(/\s+/)
-    const lines: string[] = []
-    let currentLine = ''
-    for (const word of words) {
-      const testLine = currentLine ? currentLine + ' ' + word : word
-      if (testLine.length > maxCharsPerLine && currentLine) {
-        lines.push(currentLine)
-        currentLine = word
-      } else {
-        currentLine = testLine
-      }
-    }
-    if (currentLine) lines.push(currentLine)
-    // Limit to 2 lines max
-    if (lines.length > 2) {
-      lines.splice(2)
-      lines[1] = lines[1].substring(0, lines[1].length - 2) + '..'
-    }
-    
-    if (lines.length > 1) {
-      const startDy = centerY - (lines.length - 1) * 7
-      lines.forEach((line, i) => {
-        const tspan = document.createElementNS('http://www.w3.org/2000/svg', 'tspan')
-        tspan.setAttribute('x', String(centerX))
-        tspan.setAttribute('dy', i === 0 ? String(startDy) : '14')
-        tspan.textContent = line
-        text.appendChild(tspan)
-      })
-    } else {
-      text.setAttribute('x', String(centerX))
-      text.setAttribute('y', String(centerY + 4))
-      text.textContent = displayName
-    }
+    el.style.height = '360px'
   }
-  g.appendChild(text)
 
-  g.addEventListener('click', () => emit('node-click', node))
-  return g
+  // 2. 容器高度已确定，现在创建 viewer
+  viewer = new NavigatedViewer({ container: el })
+
+  try {
+    await viewer.importXML(props.bpmnXml)
+    await nextTick()
+
+    // 3. fit-viewport：bpmn-js 以正确的容器尺寸居中显示
+    const canvas = viewer.get('canvas')
+    canvas.zoom('fit-viewport')
+    zoomLevel.value = canvas.zoom() as number
+
+    applyStatusColors()
+
+    const eventBus = viewer.get('eventBus')
+    eventBus.on('canvas.viewbox.changed', () => {
+      const z = viewer?.get('canvas')?.zoom()
+      if (z !== undefined) zoomLevel.value = z as number
+    })
+
+    emit('loaded')
+  } catch (err) {
+    console.error('Failed to render BPMN:', err)
+  }
 }
 
-// 创建连线
-const createFlowLine = (
-  source: { x: number; y: number; width: number; height: number },
-  target: { x: number; y: number; width: number; height: number },
-  flow: ProcessFlow
-): { line: SVGElement; label: SVGElement | null } => {
-  const g = document.createElementNS('http://www.w3.org/2000/svg', 'g')
-  let d: string
-  let labelX: number = 0
-  let labelY: number = 0
-  
-  if (flow.waypoints && flow.waypoints.length >= 2) {
-    const points = flow.waypoints
-    d = `M ${points[0].x} ${points[0].y}`
-    for (let i = 1; i < points.length; i++) {
-      d += ` L ${points[i].x} ${points[i].y}`
-    }
-    
-    // 计算路径总长度和中点位置
-    let totalLength = 0
-    const segments: { length: number; startX: number; startY: number; endX: number; endY: number }[] = []
-    for (let i = 0; i < points.length - 1; i++) {
-      const segLen = Math.sqrt(
-        Math.pow(points[i + 1].x - points[i].x, 2) + 
-        Math.pow(points[i + 1].y - points[i].y, 2)
-      )
-      segments.push({
-        length: segLen,
-        startX: points[i].x,
-        startY: points[i].y,
-        endX: points[i + 1].x,
-        endY: points[i + 1].y
-      })
-      totalLength += segLen
-    }
-    
-    // 找到中点所在的线段
-    const midLength = totalLength / 2
-    let accLength = 0
-    for (const seg of segments) {
-      if (accLength + seg.length >= midLength) {
-        const ratio = (midLength - accLength) / seg.length
-        labelX = seg.startX + (seg.endX - seg.startX) * ratio
-        labelY = seg.startY + (seg.endY - seg.startY) * ratio
-        break
-      }
-      accLength += seg.length
-    }
-    // 如果没找到，使用最后一个点
-    if (labelX === undefined) {
-      labelX = points[points.length - 1].x
-      labelY = points[points.length - 1].y
-    }
-  } else {
-    const sourceCenterX = source.x + source.width / 2
-    const sourceCenterY = source.y + source.height / 2
-    const targetCenterX = target.x + target.width / 2
-    const targetCenterY = target.y + target.height / 2
-    const dx = targetCenterX - sourceCenterX
-    const dy = targetCenterY - sourceCenterY
-    let startX: number, startY: number, endX: number, endY: number
-    
-    if (Math.abs(dx) > Math.abs(dy)) {
-      if (dx > 0) {
-        startX = source.x + source.width
-        startY = sourceCenterY
-        endX = target.x
-        endY = targetCenterY
-      } else {
-        startX = source.x
-        startY = sourceCenterY
-        endX = target.x + target.width
-        endY = targetCenterY
-      }
-    } else {
-      if (dy > 0) {
-        startX = sourceCenterX
-        startY = source.y + source.height
-        endX = targetCenterX
-        endY = target.y
-      } else {
-        startX = sourceCenterX
-        startY = source.y
-        endX = targetCenterX
-        endY = target.y + target.height
-      }
-    }
-    d = `M ${startX} ${startY} L ${endX} ${endY}`
-    labelX = (startX + endX) / 2
-    labelY = (startY + endY) / 2
-  }
-  
-  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
-  path.setAttribute('d', d)
-  path.setAttribute('fill', 'none')
-  path.setAttribute('stroke', '#909399')
-  path.setAttribute('stroke-width', '1.5')
-  path.setAttribute('marker-end', 'url(#arrowhead)')
-  g.appendChild(path)
-
-  let labelGroup: SVGElement | null = null
-  if (flow.name) {
-    labelGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g')
-    
-    const text = document.createElementNS('http://www.w3.org/2000/svg', 'text')
-    text.setAttribute('x', String(labelX))
-    text.setAttribute('y', String(labelY + 4))
-    text.setAttribute('text-anchor', 'middle')
-    text.setAttribute('font-size', '12')
-    text.setAttribute('fill', '#606266')
-    text.textContent = flow.name
-    labelGroup.appendChild(text)
-  }
-  
-  return { line: g, label: labelGroup }
-}
+// ── Toolbar actions ───────────────────────────────────────────────────────────
 
 const zoomIn = () => {
-  zoomLevel.value = Math.min(zoomLevel.value + 0.1, 2)
-  applyZoom()
+  if (viewer) {
+    const canvas = viewer.get('canvas')
+    canvas.zoom(canvas.zoom() + 0.1)
+    zoomLevel.value = canvas.zoom()
+  }
 }
 
 const zoomOut = () => {
-  zoomLevel.value = Math.max(zoomLevel.value - 0.1, 0.3)
-  applyZoom()
-}
-
-const resetZoom = () => {
-  zoomLevel.value = 1
-  applyZoom()
-}
-
-const fitViewport = () => {
-  // 重置为100%，SVG 的 viewBox + preserveAspectRatio 会自动适应
-  zoomLevel.value = 1
-  applyZoom()
-}
-
-const applyZoom = () => {
-  if (canvasRef.value) {
-    const svg = canvasRef.value.querySelector('svg')
-    if (svg && diagramWidth.value > 0) {
-      // 通过调整 viewBox 来实现缩放
-      const scaledWidth = diagramWidth.value / zoomLevel.value
-      const scaledHeight = diagramHeight.value / zoomLevel.value
-      const offsetX = (diagramWidth.value - scaledWidth) / 2
-      const offsetY = (diagramHeight.value - scaledHeight) / 2
-      svg.setAttribute('viewBox', `${viewBoxMinX.value + offsetX} ${viewBoxMinY.value + offsetY} ${scaledWidth} ${scaledHeight}`)
-    }
+  if (viewer) {
+    const canvas = viewer.get('canvas')
+    canvas.zoom(Math.max(canvas.zoom() - 0.1, 0.2))
+    zoomLevel.value = canvas.zoom()
   }
 }
 
-watch([() => props.nodes, () => props.flows, () => props.currentNodeId], () => {
-  nextTick(() => renderDiagram())
+const resetZoom = () => {
+  if (viewer) {
+    const canvas = viewer.get('canvas')
+    canvas.zoom(1)
+    zoomLevel.value = 1
+  }
+}
+
+const fitViewport = () => {
+  if (viewer) {
+    fitToContainer()
+  }
+}
+
+// ── Lifecycle ─────────────────────────────────────────────────────────────────
+
+watch(() => props.bpmnXml, async (xml) => {
+  if (xml) {
+    await nextTick()
+    await renderBpmn()
+  }
+}, { immediate: false })
+
+watch([() => props.nodes, () => props.completedNodeIds, () => props.currentNodeId], () => {
+  applyStatusColors()
 }, { deep: true })
 
-onMounted(() => renderDiagram())
+onMounted(async () => {
+  if (props.bpmnXml) {
+    await renderBpmn()
+  }
+})
+
+onUnmounted(() => {
+  destroyViewer()
+})
 
 defineExpose({ zoomIn, zoomOut, resetZoom, fitViewport })
 </script>
@@ -539,18 +294,17 @@ defineExpose({ zoomIn, zoomOut, resetZoom, fitViewport })
 <style scoped lang="scss">
 .process-diagram {
   width: 100%;
-  min-height: 350px;
   background: #fafafa;
   border: 1px solid #e4e7ed;
   border-radius: 4px;
-  overflow: hidden;
   display: flex;
   flex-direction: column;
 
-  .diagram-canvas {
+  .bpmn-canvas {
     width: 100%;
-    flex: 1;
-    min-height: 300px;
+    /* 高度由 JS 根据图内容自适应设定 */
+    min-height: 200px;
+    position: relative;
   }
 
   .diagram-bottom-bar {
@@ -587,11 +341,27 @@ defineExpose({ zoomIn, zoomOut, resetZoom, fitViewport })
         height: 12px;
         border-radius: 2px;
         &.completed { background: #e8f5e9; border: 2px solid #00A651; }
-        &.current { background: #fff3e0; border: 2px solid #FF6600; }
-        &.rejected { background: #ffebee; border: 2px solid #f44336; }
-        &.pending { background: #ffffff; border: 2px solid #909399; }
+        &.current   { background: #fff3e0; border: 2px solid #FF6600; }
+        &.rejected  { background: #ffebee; border: 2px solid #f44336; }
+        &.pending   { background: #ffffff; border: 2px solid #909399; }
       }
     }
   }
 }
+</style>
+
+<!-- bpmn-js requires global (non-scoped) CSS -->
+<style>
+@import 'bpmn-js/dist/assets/diagram-js.css';
+@import 'bpmn-js/dist/assets/bpmn-js.css';
+@import 'bpmn-js/dist/assets/bpmn-font/css/bpmn-embedded.css';
+
+/* Hide the bpmn-js logo/watermark */
+.bjs-powered-by { display: none !important; }
+
+/* Remove editing cursor hint */
+.bpmn-canvas .djs-container { cursor: default; }
+
+/* Allow bpmn-js SVG to render fully without clipping */
+.bpmn-canvas svg { overflow: visible !important; }
 </style>

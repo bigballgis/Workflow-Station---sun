@@ -140,7 +140,7 @@
 
     <!-- 委托/转办/催办对话框 -->
     <el-dialog v-model="actionDialogVisible" :title="actionDialogTitle" width="500px">
-      <el-form :model="actionForm" label-width="150px" label-position="left">
+      <el-form :model="actionForm" label-width="140px" label-position="left" class="task-action-form">
         <el-form-item :label="t('task.targetUser')" v-if="currentAction !== 'urge' && currentAction !== 'batchUrge'">
           <el-select v-model="actionForm.targetUserId" filterable :placeholder="t('task.selectUser')" style="width: 100%;">
             <el-option label="Li Si" value="user_2" />
@@ -456,5 +456,12 @@ onMounted(() => {
 .tasks-page :deep(.no-wrap-header .cell) {
   white-space: nowrap !important;
   overflow: visible !important;
+}
+</style>
+
+<style lang="scss">
+/* 弹窗挂载到 body，需用全局样式 */
+.task-action-form .el-form-item__label {
+  white-space: nowrap;
 }
 </style>

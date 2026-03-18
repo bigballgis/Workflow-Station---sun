@@ -59,9 +59,10 @@
         </div>
         <div class="section-content">
           <ProcessDiagram
-            v-if="processNodes.length > 0"
+            v-if="bpmnXml || processNodes.length > 0"
             :nodes="processNodes"
             :flows="processFlows"
+            :bpmn-xml="bpmnXml"
             :current-node-id="currentNodeId"
             :completed-node-ids="[]"
             :show-toolbar="true"

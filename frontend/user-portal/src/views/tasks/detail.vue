@@ -77,9 +77,10 @@
         <div class="section-content">
           <el-alert v-if="processError" :title="processError" type="warning" show-icon :closable="false" />
           <ProcessDiagram
-            v-else-if="processNodes.length > 0"
+            v-else-if="bpmnXml || processNodes.length > 0"
             :nodes="processNodes"
             :flows="processFlows"
+            :bpmn-xml="bpmnXml"
             :current-node-id="currentNodeId"
             :completed-node-ids="completedNodeIds"
             :show-toolbar="true"
@@ -359,6 +360,7 @@ const processNodes = ref<ProcessNode[]>([])
 const processFlows = ref<ProcessFlow[]>([])
 const currentNodeId = ref('')
 const completedNodeIds = ref<string[]>([])
+const bpmnXml = ref('')
 
 // 表单数据
 const formFields = ref<FormField[]>([])
@@ -539,6 +541,7 @@ const loadFunctionUnitContent = async (processKey: string) => {
     if (content.processes?.length > 0) {
       // 先获取当前节点的 formId 和 formName
       currentFormInfo = parseBpmnXmlAndGetFormId(content.processes[0].data)
+      bpmnXml.value = content.processes[0].data
       parseBpmnXml(content.processes[0].data)
     }
     

@@ -8,33 +8,35 @@
     <el-tabs v-model="activeTab">
       <el-tab-pane :label="t('delegation.myDelegations')" name="my">
         <div class="portal-card">
-          <el-table :data="delegationList" stripe>
-            <el-table-column prop="delegateId" :label="t('delegation.delegateTo')" width="120" />
-            <el-table-column prop="delegationType" :label="t('delegation.delegationType')" width="120">
+          <el-table :data="delegationList" stripe style="width: 100%;">
+            <el-table-column prop="delegateId" :label="t('delegation.delegateTo')" min-width="120" show-overflow-tooltip />
+            <el-table-column prop="delegationType" :label="t('delegation.delegationType')" min-width="120" show-overflow-tooltip>
               <template #default="{ row }">
                 {{ t(`delegation.${row.delegationType.toLowerCase()}`) }}
               </template>
             </el-table-column>
-            <el-table-column prop="startTime" :label="t('delegation.startTime')" width="160" />
-            <el-table-column prop="endTime" :label="t('delegation.endTime')" width="160" />
-            <el-table-column prop="status" :label="t('delegation.status')" width="100">
+            <el-table-column prop="startTime" :label="t('delegation.startTime')" min-width="160" show-overflow-tooltip />
+            <el-table-column prop="endTime" :label="t('delegation.endTime')" min-width="160" show-overflow-tooltip />
+            <el-table-column prop="status" :label="t('delegation.status')" min-width="100">
               <template #default="{ row }">
                 <el-tag :type="getStatusType(row.status)" size="small">
                   {{ t(`delegation.${row.status.toLowerCase()}`) }}
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column :label="t('common.actions')" width="200">
+            <el-table-column :label="t('common.actions')" min-width="200" fixed="right">
               <template #default="{ row }">
-                <el-button v-if="row.status === 'ACTIVE'" size="small" @click="handleSuspend(row)">
-                  {{ t('delegation.suspend') }}
-                </el-button>
-                <el-button v-if="row.status === 'SUSPENDED'" size="small" @click="handleResume(row)">
-                  {{ t('delegation.resume') }}
-                </el-button>
-                <el-button type="danger" size="small" @click="handleDelete(row)">
-                  {{ t('common.delete') }}
-                </el-button>
+                <div style="white-space: nowrap; display: flex; gap: 4px; align-items: center; flex-wrap: nowrap;">
+                  <el-button v-if="row.status === 'ACTIVE'" size="small" @click="handleSuspend(row)">
+                    {{ t('delegation.suspend') }}
+                  </el-button>
+                  <el-button v-if="row.status === 'SUSPENDED'" size="small" @click="handleResume(row)">
+                    {{ t('delegation.resume') }}
+                  </el-button>
+                  <el-button type="danger" size="small" @click="handleDelete(row)">
+                    {{ t('common.delete') }}
+                  </el-button>
+                </div>
               </template>
             </el-table-column>
           </el-table>
@@ -49,12 +51,12 @@
 
       <el-tab-pane :label="t('delegation.auditRecords')" name="audit">
         <div class="portal-card">
-          <el-table :data="auditList" stripe>
-            <el-table-column prop="operationType" :label="t('delegation.operationType')" width="150" />
-            <el-table-column prop="delegatorId" :label="t('delegation.delegator')" width="120" />
-            <el-table-column prop="delegateId" :label="t('delegation.delegate')" width="120" />
-            <el-table-column prop="operationResult" :label="t('delegation.result')" width="100" />
-            <el-table-column prop="createdAt" :label="t('delegation.time')" width="160" />
+          <el-table :data="auditList" stripe style="width: 100%;">
+            <el-table-column prop="operationType" :label="t('delegation.operationType')" min-width="150" show-overflow-tooltip />
+            <el-table-column prop="delegatorId" :label="t('delegation.delegator')" min-width="120" show-overflow-tooltip />
+            <el-table-column prop="delegateId" :label="t('delegation.delegate')" min-width="120" show-overflow-tooltip />
+            <el-table-column prop="operationResult" :label="t('delegation.result')" min-width="100" show-overflow-tooltip />
+            <el-table-column prop="createdAt" :label="t('delegation.time')" min-width="160" show-overflow-tooltip />
           </el-table>
         </div>
       </el-tab-pane>
@@ -222,6 +224,10 @@ onMounted(() => {
   }
 
   :deep(.el-table .cell) {
+    white-space: nowrap;
+  }
+
+  :deep(.el-table th .cell) {
     white-space: nowrap;
   }
 
