@@ -77,35 +77,37 @@
         </div>
       </div>
 
-      <!-- 第三部分：申请内容（start 节点表单，只读） -->
-      <div v-if="hasStartForm" class="section form-section">
-        <div class="section-header">
-          <el-icon><Document /></el-icon>
-          <span>{{ startFormName || t('applicationDetail.applicationForm') }}</span>
-          <el-tag type="info" size="small">{{ t('applicationDetail.completed') }}</el-tag>
-        </div>
-        <div class="section-content">
-          <div v-if="startFormFields.length > 0 || startFormTabs.length > 0" class="form-container">
-            <FormRenderer
-              :fields="startFormFields"
-              :tabs="startFormTabs"
-              v-model="formData"
-              :label-width="startFormLabelWidth"
-              :readonly="true"
-            />
+      <!-- 第三部分：前置节点表单（只读，按顺序展示） -->
+      <template v-for="prevForm in previousForms" :key="prevForm.formId">
+        <div class="section form-section">
+          <div class="section-header">
+            <el-icon><Document /></el-icon>
+            <span>{{ prevForm.formName }}</span>
+            <el-tag type="info" size="small">{{ t('applicationDetail.completed') }}</el-tag>
           </div>
-          <template v-if="startSubTableBindings.length > 0">
-            <div v-for="binding in startSubTableBindings" :key="binding.bindingId" class="sub-table-section">
-              <SubTableField
-                :title="binding.tableName"
-                :columns="binding.columns"
-                v-model="binding.data"
-                :editable="false"
+          <div class="section-content">
+            <div v-if="prevForm.fields.length > 0 || prevForm.tabs.length > 0" class="form-container">
+              <FormRenderer
+                :fields="prevForm.fields"
+                :tabs="prevForm.tabs"
+                v-model="formData"
+                :label-width="prevForm.labelWidth"
+                :readonly="true"
               />
             </div>
-          </template>
+            <template v-if="prevForm.subTableBindings.length > 0">
+              <div v-for="binding in prevForm.subTableBindings" :key="binding.bindingId" class="sub-table-section">
+                <SubTableField
+                  :title="binding.tableName"
+                  :columns="binding.columns"
+                  v-model="binding.data"
+                  :editable="false"
+                />
+              </div>
+            </template>
+          </div>
         </div>
-      </div>
+      </template>
 
       <!-- 表单数据 -->
       <div class="section form-section">
@@ -232,23 +234,26 @@ const subTableBindings = ref<Array<{
   data: any[]
 }>>([])
 
-// 申请内容（start 节点表单，只读展示）
-const startFormFields = ref<FormField[]>([])
-const startFormTabs = ref<FormTab[]>([])
-const startFormName = ref('')
-const startFormLabelWidth = ref('160px')
-const startSubTableBindings = ref<Array<{
-  bindingId: number
-  bindingType: string
-  bindingMode: string
-  foreignKeyField: string | null
-  tableName: string
-  tableType: string
-  tableDescription: string
-  columns: Array<{ field: string; label: string; type?: string }>
-  data: any[]
-}>>([])
-const hasStartForm = ref(false)
+// 前置节点表单（只读展示，按顺序排列）
+interface PreviousFormEntry {
+  formId: string
+  formName: string
+  labelWidth: string
+  fields: FormField[]
+  tabs: FormTab[]
+  subTableBindings: Array<{
+    bindingId: number
+    bindingType: string
+    bindingMode: string
+    foreignKeyField: string | null
+    tableName: string
+    tableType: string
+    tableDescription: string
+    columns: Array<{ field: string; label: string; type?: string }>
+    data: any[]
+  }>
+}
+const previousForms = ref<PreviousFormEntry[]>([])
 
 // 流转记录
 const historyRecords = ref<HistoryRecord[]>([])
@@ -331,15 +336,12 @@ const findNextNodeName = (taskName: string): string | null => {
 
 // 加载流程详情
 const loadProcessDetail = async () => {
-  console.log('=== loadProcessDetail called for processId:', processId)
   loading.value = true
   try {
     const res = await processApi.getProcessDetail(processId)
-    console.log('=== Process detail response:', res)
     const data = res.data || res
     if (data) {
       processInfo.value = data
-      console.log('=== Process variables keys:', data.variables ? Object.keys(data.variables) : 'null')
       if (data.variables) formData.value = data.variables
       
       // 先加载流转历史
@@ -419,8 +421,7 @@ const loadFunctionUnitContent = async (processKey: string) => {
       parseBpmnXml(content.processes[0].data)
     }
     
-    if (content.forms?.length > 0) {
-      // 根据当前节点的 formId 选择正确的表单
+    if (content.forms?.length > 0) {      // 根据当前节点的 formId 选择正确的表单
       let selectedForm = content.forms[0] // 默认第一个
       
       // 优先使用 formId 匹配 sourceId（原始表单ID）
@@ -430,14 +431,11 @@ const loadFunctionUnitContent = async (processKey: string) => {
         )
         if (matchedForm) {
           selectedForm = matchedForm
-          console.log('Matched form by sourceId:', currentFormInfo.formId, '->', selectedForm.name)
         } else {
-          // 如果 sourceId 匹配失败，尝试用 formName 匹配
           if (currentFormInfo.formName) {
             const matchedByName = content.forms.find((f: any) => f.name === currentFormInfo.formName)
             if (matchedByName) {
               selectedForm = matchedByName
-              console.log('Matched form by name:', currentFormInfo.formName)
             }
           }
         }
@@ -490,83 +488,84 @@ const loadFunctionUnitContent = async (processKey: string) => {
       }
       subTableBindings.value = bindings
 
-      // 额外加载 start 节点表单（Request Form），只读展示申请内容
-      // 当当前节点有专属表单时，start form 作为额外的只读区域展示
-      // 当匹配不到当前节点表单时（如流程已完成），也尝试加载 start form
+      // 收集当前节点之前所有节点绑定的不同表单（只读展示）
       if (content.processes?.length > 0) {
-        const startFormInfo = parseBpmnXmlAndGetStartFormId(content.processes[0].data)
-        const startFormId = startFormInfo.formId
-        const startFormName2 = startFormInfo.formName
-        let startForm: any = null
+        const prevFormIds = parseBpmnXmlAndGetPreviousFormIds(content.processes[0].data)
+        const collectedPrevForms: PreviousFormEntry[] = []
+        const savedSubTables = formData.value.__subTables__
 
-        if (currentFormInfo.formId || currentFormInfo.formName) {
-          // 当前节点有专属表单，只在 start form 不同时才额外展示
-          if (startFormId && String(selectedForm.sourceId) !== startFormId) {
-            startForm = content.forms.find((f: any) => String(f.sourceId) === startFormId)
-            if (!startForm && startFormName2) {
-              startForm = content.forms.find((f: any) => f.name === startFormName2)
-            }
-          } else if (!startFormId && startFormName2 && selectedForm.name !== startFormName2) {
-            startForm = content.forms.find((f: any) => f.name === startFormName2)
+        for (const info of prevFormIds) {
+          let prevForm: any = null
+          if (info.formId) {
+            if (info.formId === String(selectedForm.sourceId)) continue
+            prevForm = content.forms.find((f: any) => String(f.sourceId) === info.formId)
           }
-        } else {
-          // 当前节点没有匹配到专属表单（如流程已完成），尝试找 start form
-          // 如果 start form 和默认选中的表单不同，则额外展示
-          if (startFormId) {
-            const matched = content.forms.find((f: any) => String(f.sourceId) === startFormId)
-            if (matched && matched.id !== selectedForm.id) {
-              startForm = matched
-            } else if (!matched && startFormName2) {
-              const matchedByName = content.forms.find((f: any) => f.name === startFormName2)
-              if (matchedByName && matchedByName.id !== selectedForm.id) {
-                startForm = matchedByName
+          if (!prevForm && info.formName) {
+            if (info.formName === selectedForm.name) continue
+            prevForm = content.forms.find((f: any) => f.name === info.formName)
+          }
+          if (!prevForm && (info as any).taskName) {
+            if ((info as any).taskName === selectedForm.name) continue
+            prevForm = content.forms.find((f: any) => f.name === (info as any).taskName)
+          }
+          if (!prevForm || prevForm.id === selectedForm.id) continue
+          if (collectedPrevForms.some(e => e.formId === String(prevForm.id))) continue
+
+          const parsedFields: FormField[] = []
+          const parsedTabs: FormTab[] = []
+          try {
+            const cfg = typeof prevForm.data === 'string' ? JSON.parse(prevForm.data) : (prevForm.data || {})
+            const rules = cfg.rule && Array.isArray(cfg.rule) ? cfg.rule : (Array.isArray(cfg) ? cfg : null)
+            if (rules) {
+              const tabsRule = rules.find((r: any) => r.type === 'el-tabs')
+              if (tabsRule?.children) {
+                for (const tabPane of tabsRule.children) {
+                  if (tabPane.type === 'el-tab-pane' && tabPane.props) {
+                    const tabFields: FormField[] = []
+                    if (tabPane.children) tabFields.push(...extractFieldsRecursive(tabPane.children))
+                    parsedTabs.push({ name: tabPane.props.name || `tab_${parsedTabs.length}`, label: tabPane.props.label || `Tab ${parsedTabs.length + 1}`, fields: tabFields })
+                  }
+                }
+              } else {
+                parsedFields.push(...extractFieldsRecursive(rules))
               }
             }
-          } else if (startFormName2) {
-            const matched = content.forms.find((f: any) => f.name === startFormName2)
-            if (matched && matched.id !== selectedForm.id) {
-              startForm = matched
-            }
-          }
-        }
-
-        // 如果找到的 startForm 和当前 selectedForm 是同一个，不显示
-        if (startForm && startForm.id === selectedForm.id) {
-          startForm = null
-        }
-
-        if (startForm) {
-          startFormName.value = startForm.name
-          startFormLabelWidth.value = formLabelWidth.value
-          parseStartFormConfig(startForm.data)
-
-          let startSubForms: Record<string, any> = {}
-          try {
-            const cfg = typeof startForm.data === 'string' ? JSON.parse(startForm.data) : (startForm.data || {})
-            startSubForms = cfg.subForms || {}
           } catch {}
 
-          const startBindings: typeof startSubTableBindings.value = []
-          for (const b of (startForm.tableBindings || [])) {
+          let prevSubForms: Record<string, any> = {}
+          try {
+            const cfg = typeof prevForm.data === 'string' ? JSON.parse(prevForm.data) : (prevForm.data || {})
+            prevSubForms = cfg.subForms || {}
+          } catch {}
+          const prevBindings: PreviousFormEntry['subTableBindings'] = []
+          for (const b of (prevForm.tableBindings || [])) {
             if (b.bindingType === 'PRIMARY') continue
-            const cols = deriveColumnsFromBinding(b, startSubForms)
+            const cols = deriveColumnsFromBinding(b, prevSubForms)
             const binding = {
               bindingId: b.bindingId, bindingType: b.bindingType, bindingMode: b.bindingMode,
-              foreignKeyField: b.foreignKeyField, tableName: b.tableDisplayName || b.tableName, tableType: b.tableType,
-              tableDescription: b.tableDescription, columns: cols, data: [] as any[]
+              foreignKeyField: b.foreignKeyField, tableName: b.tableDisplayName || b.tableName,
+              tableType: b.tableType, tableDescription: b.tableDescription, columns: cols, data: [] as any[]
             }
-            const savedSubTables = formData.value.__subTables__
             if (savedSubTables) {
               const saved = savedSubTables[b.bindingId] ?? savedSubTables[String(b.bindingId)]
               if (Array.isArray(saved)) binding.data = saved
             }
-            startBindings.push(binding)
+            prevBindings.push(binding)
           }
-          startSubTableBindings.value = startBindings
-          hasStartForm.value = true
-        } else {
-          hasStartForm.value = false
+
+          collectedPrevForms.push({
+            formId: String(prevForm.id),
+            formName: prevForm.name,
+            labelWidth: formLabelWidth.value,
+            fields: parsedFields,
+            tabs: parsedTabs,
+            subTableBindings: prevBindings
+          })
         }
+
+        previousForms.value = collectedPrevForms
+      } else {
+        previousForms.value = []
       }
     }
   } catch (error) {
@@ -584,80 +583,18 @@ const parseBpmnXmlAndGetFormId = (xml: string): { formId: string | null, formNam
     // 快照模式（从 Completed Tasks 进来）用 snapshotTaskName；否则用 currentNode
     const currentNodeName = snapshotTaskName || processInfo.value.currentNode || ''
     
-    // 查找所有 userTask 节点
     const allElements = doc.getElementsByTagName('*')
-    
+
+    // 收集所有 userTask 及 sequenceFlow
+    const tasks = new Map<string, { name: string; formId: string | null; formName: string | null }>()
+    const flows: Array<{ source: string; target: string }> = []
+
     for (let i = 0; i < allElements.length; i++) {
       const el = allElements[i]
       const localName = el.localName || el.nodeName.split(':').pop()
-      
       if (localName === 'userTask') {
-        const taskId = el.getAttribute('id') || ''
-        const taskName = el.getAttribute('name') || ''
-        
-        // 检查是否是当前节点
-        if (taskName === currentNodeName || taskId === currentNodeName) {
-          // 查找 formId 和 formName 属性
-          let formId: string | null = null
-          let formName: string | null = null
-          
-          const taskProps = el.getElementsByTagName('*')
-          for (let j = 0; j < taskProps.length; j++) {
-            const prop = taskProps[j]
-            const propLocalName = prop.localName || prop.nodeName.split(':').pop()
-            
-            if (propLocalName === 'property' || propLocalName === 'values') {
-              const name = prop.getAttribute('name')
-              const value = prop.getAttribute('value')
-              
-              if (name === 'formId' && value) {
-                formId = value
-              }
-              if (name === 'formName' && value) {
-                formName = value
-              }
-            }
-          }
-          
-          return { formId, formName }
-        }
-      }
-    }
-  } catch (error) {
-    console.error('Failed to parse BPMN for formId:', error)
-  }
-  
-  return { formId: null, formName: null }
-}
-
-// 解析 BPMN XML 并获取 start 节点后第一个用户任务的 formId
-const parseBpmnXmlAndGetStartFormId = (xml: string): { formId: string | null, formName: string | null } => {
-  if (!xml) return { formId: null, formName: null }
-  try {
-    const parser = new DOMParser()
-    const doc = parser.parseFromString(xml, 'text/xml')
-    const allElements = doc.getElementsByTagName('*')
-    let startEventId: string | null = null
-    for (let i = 0; i < allElements.length; i++) {
-      const el = allElements[i]
-      if ((el.localName || el.nodeName.split(':').pop()) === 'startEvent') {
-        startEventId = el.getAttribute('id')
-        break
-      }
-    }
-    if (!startEventId) return { formId: null, formName: null }
-    let firstTaskId: string | null = null
-    for (let i = 0; i < allElements.length; i++) {
-      const el = allElements[i]
-      if ((el.localName || el.nodeName.split(':').pop()) === 'sequenceFlow' && el.getAttribute('sourceRef') === startEventId) {
-        firstTaskId = el.getAttribute('targetRef')
-        break
-      }
-    }
-    if (!firstTaskId) return { formId: null, formName: null }
-    for (let i = 0; i < allElements.length; i++) {
-      const el = allElements[i]
-      if ((el.localName || el.nodeName.split(':').pop()) === 'userTask' && el.getAttribute('id') === firstTaskId) {
+        const id = el.getAttribute('id') || ''
+        const name = el.getAttribute('name') || ''
         let formId: string | null = null, formName: string | null = null
         const props = el.getElementsByTagName('*')
         for (let j = 0; j < props.length; j++) {
@@ -669,54 +606,135 @@ const parseBpmnXmlAndGetStartFormId = (xml: string): { formId: string | null, fo
             if (n === 'formName' && v) formName = v
           }
         }
-        return { formId, formName }
+        tasks.set(id, { name, formId, formName })
+        // 直接匹配当前节点
+        if (name === currentNodeName || id === currentNodeName) {
+          return { formId, formName }
+        }
+      } else if (localName === 'sequenceFlow') {
+        flows.push({ source: el.getAttribute('sourceRef') || '', target: el.getAttribute('targetRef') || '' })
       }
     }
-  } catch (e) {
-    console.error('Failed to parse BPMN for start formId:', e)
+
+    // 当前节点不是 userTask（如流程已完成，currentNode = "End"）
+    // 找流程中最后一个 userTask：出边不指向任何其他 userTask 的节点
+    const taskIds = new Set(tasks.keys())
+    for (const [id, info] of tasks) {
+      const outTargets = flows.filter(f => f.source === id).map(f => f.target)
+      const hasUserTaskSuccessor = outTargets.some(t => taskIds.has(t))
+      if (!hasUserTaskSuccessor) {
+        return { formId: info.formId, formName: info.formName }
+      }
+    }
+    // 最终 fallback：取最后一个
+    const last = [...tasks.values()].pop()
+    if (last) return { formId: last.formId, formName: last.formName }
+  } catch (error) {
+    console.error('Failed to parse BPMN for formId:', error)
   }
+  
   return { formId: null, formName: null }
 }
 
-// 解析 start 节点表单配置（只提取字段，不影响当前节点表单）
-const parseStartFormConfig = (configStr: string) => {
-  if (!configStr) return
+// 解析 BPMN XML，按拓扑顺序返回当前节点之前所有节点绑定的表单信息（去重）
+const parseBpmnXmlAndGetPreviousFormIds = (xml: string): Array<{ formId: string | null, formName: string | null, taskName: string | null }> => {
+  if (!xml) return []
   try {
-    const config = typeof configStr === 'string' ? JSON.parse(configStr) : configStr
-    const rules = config.rule && Array.isArray(config.rule) ? config.rule : (Array.isArray(config) ? config : null)
-    if (rules) {
-      const tabsRule = rules.find((r: any) => r.type === 'el-tabs')
-      if (tabsRule && tabsRule.children && Array.isArray(tabsRule.children)) {
-        const tabs: FormTab[] = []
-        for (const tabPane of tabsRule.children) {
-          if (tabPane.type === 'el-tab-pane' && tabPane.props) {
-            const tabName = tabPane.props.name || `tab_${tabs.length}`
-            const tabLabel = tabPane.props.label || `Tab ${tabs.length + 1}`
-            const tabFields: FormField[] = []
-            if (tabPane.children && Array.isArray(tabPane.children)) {
-              for (const item of tabPane.children) {
-                if (item.field) {
-                  const field = convertFormCreateRule(item)
-                  if (field) tabFields.push(field)
-                }
-                if (item.children && Array.isArray(item.children)) {
-                  tabFields.push(...extractFieldsRecursive(item.children))
-                }
-              }
-            }
-            tabs.push({ name: tabName, label: tabLabel, fields: tabFields })
+    const parser = new DOMParser()
+    const doc = parser.parseFromString(xml, 'text/xml')
+    const allElements = doc.getElementsByTagName('*')
+    const currentNodeName = snapshotTaskName || processInfo.value.currentNode || ''
+
+    const tasks = new Map<string, { name: string; formId: string | null; formName: string | null }>()
+    const flows: Array<{ source: string; target: string }> = []
+
+    for (let i = 0; i < allElements.length; i++) {
+      const el = allElements[i]
+      const localName = el.localName || el.nodeName.split(':').pop()
+      if (localName === 'userTask') {
+        const id = el.getAttribute('id') || ''
+        const name = el.getAttribute('name') || ''
+        let formId: string | null = null, formName: string | null = null
+        const props = el.getElementsByTagName('*')
+        for (let j = 0; j < props.length; j++) {
+          const p = props[j]
+          const ln = p.localName || p.nodeName.split(':').pop()
+          if (ln === 'property' || ln === 'values') {
+            const n = p.getAttribute('name'), v = p.getAttribute('value')
+            if (n === 'formId' && v) formId = v
+            if (n === 'formName' && v) formName = v
           }
         }
-        startFormTabs.value = tabs
-        startFormFields.value = []
-      } else {
-        startFormTabs.value = []
-        startFormFields.value = extractFieldsRecursive(rules)
+        tasks.set(id, { name, formId, formName })
+      } else if (localName === 'sequenceFlow') {
+        flows.push({ source: el.getAttribute('sourceRef') || '', target: el.getAttribute('targetRef') || '' })
       }
     }
-  } catch (error) {
-    console.error('Failed to parse start form config:', error)
+    const taskIds = new Set(tasks.keys())
+    let currentId = ''
+    for (const [id, info] of tasks) {
+      if (info.name === currentNodeName || id === currentNodeName) { currentId = id; break }
+    }
+    // 如果没匹配到（流程已完成，currentNode = "End"），找最后一个 userTask（出边不指向任何 userTask 的节点）
+    if (!currentId) {
+      const taskIds = new Set(tasks.keys())
+      // 找没有出边指向其他 userTask 的节点（即流程中最后一个 userTask）
+      for (const [id] of tasks) {
+        const outTargets = flows.filter(f => f.source === id).map(f => f.target)
+        const hasUserTaskSuccessor = outTargets.some(t => taskIds.has(t))
+        if (!hasUserTaskSuccessor) { currentId = id; break }
+      }
+      // 仍未找到则取最后一个
+      if (!currentId) currentId = [...tasks.keys()].pop() || ''
+    }
+    if (!currentId) return []
+
+    // 找 startEvent
+    let startId = ''
+    for (let i = 0; i < allElements.length; i++) {
+      const el = allElements[i]
+      if ((el.localName || el.nodeName.split(':').pop()) === 'startEvent') {
+        startId = el.getAttribute('id') || ''; break
+      }
+    }
+
+    const forwardAdj = new Map<string, string[]>()
+    for (const f of flows) {
+      if (!forwardAdj.has(f.source)) forwardAdj.set(f.source, [])
+      forwardAdj.get(f.source)!.push(f.target)
+    }
+
+    // BFS 从 start 出发，按顺序收集到达 currentId 之前经过的 userTask
+    const visited = new Set<string>()
+    const queue: string[] = [startId]
+    const orderedPrevTaskIds: string[] = []
+    visited.add(startId)
+
+    while (queue.length > 0) {
+      const node = queue.shift()!
+      if (node === currentId) break
+      if (tasks.has(node)) orderedPrevTaskIds.push(node)
+      for (const next of (forwardAdj.get(node) || [])) {
+        if (!visited.has(next)) { visited.add(next); queue.push(next) }
+      }
+    }
+
+    const result: Array<{ formId: string | null, formName: string | null, taskName: string | null }> = []
+    const seenKeys = new Set<string>()
+    for (const taskId of orderedPrevTaskIds) {
+      const info = tasks.get(taskId)
+      if (!info) continue
+      // 优先用 formId，其次 formName，最后用 taskName 作为 fallback key
+      const key = info.formId || info.formName || info.name || ''
+      if (!key || seenKeys.has(key)) continue
+      seenKeys.add(key)
+      result.push({ formId: info.formId, formName: info.formName, taskName: info.name || null })
+    }
+    return result
+  } catch (e) {
+    console.error('Failed to parse BPMN for previous formIds:', e)
   }
+  return []
 }
 
 // 解析 BPMN XML
@@ -1071,23 +1089,9 @@ const deriveColumnsFromBinding = (binding: any, subForms?: Record<string, any>):
 // 加载流转历史
 const loadProcessHistory = async () => {
   try {
-    console.log('=== [HISTORY] Loading process history for:', processId)
-    console.log('=== [HISTORY] Calling API: /api/portal/processes/' + processId + '/history')
-    
-    // 使用 processApi 调用后端API获取流程历史
     const response = await processApi.getProcessHistory(processId)
-    console.log('=== [HISTORY] Process history response:', response)
-    console.log('=== [HISTORY] Response type:', typeof response)
-    console.log('=== [HISTORY] Response keys:', Object.keys(response))
-    
     const historyData = response.data || response
-    console.log('=== [HISTORY] History data:', historyData)
-    console.log('=== [HISTORY] Is array:', Array.isArray(historyData))
-    console.log('=== [HISTORY] Data type:', typeof historyData)
-    
     if (historyData && Array.isArray(historyData)) {
-      console.log('=== [HISTORY] Processing', historyData.length, 'history records')
-      console.log('=== [HISTORY] First record:', historyData[0])
 
       // 进行中 + 快照：只保留到该任务为止；已结束流程展示完整历史
       let filteredData = historyData
@@ -1124,18 +1128,11 @@ const loadProcessHistory = async () => {
         completedTime: item.operationTime,
         activityType: item.activityType || ''
       }))
-      console.log('=== [HISTORY] Converted history records:', historyRecords.value.length)
-      console.log('=== [HISTORY] First converted record:', historyRecords.value[0])
-      console.log('=== [HISTORY] historyRecords.value:', historyRecords.value)
     } else {
-      console.warn('=== [HISTORY] History data is not an array, falling back to initHistoryRecords')
-      console.warn('=== [HISTORY] historyData:', historyData)
       initHistoryRecords()
     }
   } catch (error) {
-    console.error('=== [HISTORY] Failed to load process history:', error)
-    console.error('=== [HISTORY] Error details:', error)
-    // 回退到简单的历史记录
+    console.error('Failed to load process history:', error)
     initHistoryRecords()
   }
 }
