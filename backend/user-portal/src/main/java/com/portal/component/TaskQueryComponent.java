@@ -29,10 +29,10 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * 任务查询组件
- * 支持多维度任务查询：直接分配、虚拟组、部门角色、委托任务
+ * Task query component.
+ * Supports multi-dimensional task queries: direct assignment, virtual groups, department roles, delegated tasks.
  * 
- * 注意：所有任务查询必须通过 Flowable 引擎完成，不允许本地回退实现
+ * Note: All task queries must go through the Flowable engine; local fallback implementations are not allowed.
  */
 @Slf4j
 @Component
@@ -51,14 +51,14 @@ public class TaskQueryComponent {
     }
 
     /**
-     * 查询用户的待办任务
+     * Query pending tasks for a user.
      * 
-     * 通过 Flowable 引擎获取任务列表，支持多维度查询
+     * Retrieves task list from the Flowable engine with multi-dimensional query support.
      */
     public PageResponse<TaskInfo> queryTasks(TaskQueryRequest request) {
-        // 检查 Flowable 引擎是否可用
+        // Check if the Flowable engine is available
         if (!workflowEngineClient.isAvailable()) {
-            throw new IllegalStateException("Flowable 引擎不可用，请检查 workflow-engine-core 服务是否启动");
+            throw new IllegalStateException("Flowable engine unavailable, please check if workflow-engine-core service is running");
         }
         
         String userId = request.getUserId();
@@ -68,12 +68,12 @@ public class TaskQueryComponent {
         
         List<TaskInfo> allTasks = new ArrayList<>();
 
-        // 1. 从 Flowable 获取任务
+        // 1. Fetch tasks from Flowable
         try {
-            // 获取用户所属的虚拟组
+            // Get virtual groups the user belongs to
             List<String> groupIds = getUserVirtualGroups(userId);
             
-            // 根据分配类型筛选决定查询方式
+            // Determine query method based on assignment type filter
             boolean includeGroups = assignmentTypes == null || assignmentTypes.isEmpty() 
                 || assignmentTypes.contains("VIRTUAL_GROUP");
             
@@ -96,7 +96,7 @@ public class TaskQueryComponent {
                         for (Map<String, Object> taskMap : tasks) {
                             TaskInfo taskInfo = convertMapToTaskInfo(taskMap);
                             log.info("Checking task {} from process {}", taskInfo.getTaskId(), taskInfo.getProcessInstanceId());
-                            // 过滤掉已撤回流程的任务
+                            // Filter out tasks from withdrawn processes
                             if (!isProcessWithdrawn(taskInfo.getProcessInstanceId())) {
                                 allTasks.add(taskInfo);
                                 log.info("Task {} added to list", taskInfo.getTaskId());
@@ -112,29 +112,29 @@ public class TaskQueryComponent {
             }
         } catch (Exception e) {
             log.error("Failed to query tasks from Flowable: {}", e.getMessage(), e);
-            throw new IllegalStateException("从 Flowable 查询任务失败: " + e.getMessage(), e);
+            throw new IllegalStateException("Failed to query tasks from Flowable: " + e.getMessage(), e);
         }
 
-        // 2. 查询委托任务（委托信息存储在本地）
+        // 2. Query delegated tasks (delegation info stored locally)
         if (assignmentTypes == null || assignmentTypes.isEmpty() || assignmentTypes.contains("DELEGATED")) {
             List<TaskInfo> delegatedTasks = queryDelegatedTasks(userId);
             allTasks.addAll(delegatedTasks);
         }
 
-        // 去重
+        // Deduplicate
         allTasks = allTasks.stream()
                 .collect(Collectors.toMap(TaskInfo::getTaskId, t -> t, (t1, t2) -> t1))
                 .values()
                 .stream()
                 .collect(Collectors.toList());
 
-        // 应用筛选条件
+        // Apply filters
         allTasks = applyFilters(allTasks, request);
 
-        // 排序
+        // Sort
         allTasks = applySorting(allTasks, request);
 
-        // 分页
+        // Paginate
         int start = page * size;
         int end = Math.min(start + size, allTasks.size());
 
@@ -146,7 +146,7 @@ public class TaskQueryComponent {
     }
     
     /**
-     * 检查流程实例是否已被撤回
+     * Check if a process instance has been withdrawn.
      */
     private boolean isProcessWithdrawn(String processInstanceId) {
         if (processInstanceId == null || processInstanceId.isEmpty()) {
@@ -168,47 +168,47 @@ public class TaskQueryComponent {
     }
     
     /**
-     * 将 Map 转换为 TaskInfo
+     * Convert a Map to TaskInfo.
      */
     private TaskInfo convertMapToTaskInfo(Map<String, Object> taskMap) {
-        // 优先使用 processDefinitionKey，如果没有则从 processDefinitionId 中提取
+        // Prefer processDefinitionKey; extract from processDefinitionId if absent
         String processDefinitionKey = (String) taskMap.get("processDefinitionKey");
         if (processDefinitionKey == null || processDefinitionKey.isEmpty()) {
             String processDefinitionId = (String) taskMap.get("processDefinitionId");
             processDefinitionKey = extractProcessDefinitionKey(processDefinitionId);
         }
         
-        // 获取流程定义名称，优先使用返回的 processDefinitionName，否则使用 processDefinitionKey
+        // Get process definition name; fall back to processDefinitionKey if not returned
         String processDefinitionName = (String) taskMap.get("processDefinitionName");
         if (processDefinitionName == null || processDefinitionName.isEmpty()) {
             processDefinitionName = processDefinitionKey;
         }
         
-        // 获取发起人信息
+        // Get initiator info
         String initiatorId = (String) taskMap.get("initiatorId");
         String initiatorName = (String) taskMap.get("initiatorName");
         
-        // 获取当前处理人
+        // Get current assignee
         String currentAssignee = (String) taskMap.get("currentAssignee");
-        // 获取当前处理人名称，优先使用 currentAssigneeName，否则使用 currentAssignee
+        // Get current assignee name; fall back to currentAssignee if not available
         String currentAssigneeName = (String) taskMap.get("currentAssigneeName");
         if (currentAssigneeName == null || currentAssigneeName.isEmpty()) {
             currentAssigneeName = currentAssignee;
         }
         
-        // 确定分配类型：优先使用返回的 assignmentType，如果没有则根据 currentAssignee 判断
+        // Determine assignment type: prefer returned assignmentType, otherwise infer from currentAssignee
         String assignmentType = taskMap.get("assignmentType") != null ? taskMap.get("assignmentType").toString() : null;
         if (assignmentType == null || assignmentType.isEmpty()) {
             if (currentAssignee != null && !currentAssignee.isEmpty()) {
-                // 有处理人但没有指定分配类型，默认为 USER
+                // Has assignee but no assignment type specified, default to USER
                 assignmentType = "USER";
             } else {
-                // 没有处理人也没有分配类型，默认为 VIRTUAL_GROUP
+                // No assignee and no assignment type, default to VIRTUAL_GROUP
                 assignmentType = "VIRTUAL_GROUP";
             }
         }
         
-        // 获取流程变量
+        // Get process variables
         @SuppressWarnings("unchecked")
         Map<String, Object> variables = (Map<String, Object>) taskMap.get("variables");
         
@@ -236,8 +236,8 @@ public class TaskQueryComponent {
     }
     
     /**
-     * 从 processDefinitionId 中提取 processDefinitionKey
-     * 格式: key:version:uuid (例如: Process_PurchaseRequest:2:b550b1fe-f0b0-11f0-b82f-00ff197375e0)
+     * Extract processDefinitionKey from processDefinitionId.
+     * Format: key:version:uuid (e.g. Process_PurchaseRequest:2:b550b1fe-f0b0-11f0-b82f-00ff197375e0)
      */
     private String extractProcessDefinitionKey(String processDefinitionId) {
         if (processDefinitionId == null || processDefinitionId.isEmpty()) {
@@ -251,7 +251,7 @@ public class TaskQueryComponent {
     }
     
     /**
-     * 解析日期时间
+     * Parse a date-time value.
      */
     private LocalDateTime parseDateTime(Object value) {
         if (value == null) {
@@ -272,17 +272,17 @@ public class TaskQueryComponent {
     }
 
     /**
-     * 查询委托给用户的任务
+     * Query tasks delegated to a user.
      * 
-     * 委托信息存储在本地数据库，需要结合 Flowable 任务信息
+     * Delegation info is stored in the local database and combined with Flowable task info.
      */
     public List<TaskInfo> queryDelegatedTasks(String userId) {
-        // 检查 Flowable 引擎是否可用
+        // Check if the Flowable engine is available
         if (!workflowEngineClient.isAvailable()) {
-            throw new IllegalStateException("Flowable 引擎不可用，请检查 workflow-engine-core 服务是否启动");
+            throw new IllegalStateException("Flowable engine unavailable, please check if workflow-engine-core service is running");
         }
         
-        // 获取委托给当前用户的有效委托规则
+        // Get active delegation rules where the current user is the delegate
         List<DelegationRule> delegations = delegationRuleRepository
                 .findActiveDelegationsForDelegate(userId, LocalDateTime.now());
 
@@ -290,12 +290,12 @@ public class TaskQueryComponent {
             return Collections.emptyList();
         }
 
-        // 获取委托人列表
+        // Get list of delegators
         Set<String> delegatorIds = delegations.stream()
                 .map(DelegationRule::getDelegatorId)
                 .collect(Collectors.toSet());
 
-        // 从 Flowable 获取委托人的任务
+        // Fetch delegator's tasks from Flowable
         List<TaskInfo> delegatedTasks = new ArrayList<>();
         for (String delegatorId : delegatorIds) {
             try {
@@ -310,7 +310,7 @@ public class TaskQueryComponent {
                         if (tasks != null) {
                             for (Map<String, Object> taskMap : tasks) {
                                 TaskInfo taskInfo = convertMapToTaskInfo(taskMap);
-                                // 标记为委托任务
+                                // Mark as delegated task
                                 TaskInfo delegatedTask = TaskInfo.builder()
                                         .taskId(taskInfo.getTaskId())
                                         .taskName(taskInfo.getTaskName())
@@ -346,14 +346,14 @@ public class TaskQueryComponent {
     }
 
     /**
-     * 获取任务详情
+     * Get task details by ID.
      */
     public Optional<TaskInfo> getTaskById(String taskId) {
         log.info("=== getTaskById called with taskId: {}", taskId);
         
-        // 检查 Flowable 引擎是否可用
+        // Check if the Flowable engine is available
         if (!workflowEngineClient.isAvailable()) {
-            throw new IllegalStateException("Flowable 引擎不可用，请检查 workflow-engine-core 服务是否启动");
+            throw new IllegalStateException("Flowable engine unavailable, please check if workflow-engine-core service is running");
         }
         
         log.info("=== Workflow engine is available, calling getTaskById");
@@ -370,17 +370,17 @@ public class TaskQueryComponent {
                     log.info("=== Converting task data to TaskInfo");
                     TaskInfo taskInfo = convertMapToTaskInfo(data);
                     
-                    // 从本地 ProcessInstance 补充 variables（Flowable 对复杂嵌套对象序列化可能丢失数据）
+                    // Supplement variables from local ProcessInstance (Flowable may lose data when serializing complex nested objects)
                     String processInstanceId = taskInfo.getProcessInstanceId();
                     if (processInstanceId != null) {
                         processInstanceRepository.findById(processInstanceId).ifPresent(pi -> {
                             if (pi.getVariables() != null) {
                                 Map<String, Object> merged = new java.util.HashMap<>();
-                                // 先放 Flowable 的 variables（基础字段）
+                                // Start with Flowable variables (base fields)
                                 if (taskInfo.getVariables() != null) {
                                     merged.putAll(taskInfo.getVariables());
                                 }
-                                // 再用本地 DB 的 variables 覆盖（更完整，包含 __subTables__）
+                                // Override with local DB variables (more complete, includes __subTables__)
                                 merged.putAll(pi.getVariables());
                                 taskInfo.setVariables(merged);
                                 log.info("=== Merged variables from local DB for process {}, keys: {}", 
@@ -389,8 +389,8 @@ public class TaskQueryComponent {
                         });
                     }
                     
-                    // 获取任务的可用操作：仅当引擎返回了 actionIds（含空数组）时才查库并设置 actions；
-                    // 若引擎未返回 actionIds（节点未配置 Actions），保持 actions=null，前端不显示默认 Approve/Reject。
+                    // Get available task actions: only query DB and set actions when the engine returns actionIds (including empty array);
+                    // if the engine did not return actionIds (node has no Actions configured), keep actions=null so the frontend does not show default Approve/Reject.
                     Object rawActionIds = data.get("actionIds");
                     // #region agent log
                     try {
@@ -419,7 +419,7 @@ public class TaskQueryComponent {
                             taskInfo.setActions(Collections.emptyList());
                         }
                     }
-                    // rawActionIds == null 时不设置 actions，保持为 null，表示该节点未配置任何 Actions
+                    // When rawActionIds == null, do not set actions; keep null to indicate no Actions configured on this node
                     
                     return Optional.of(taskInfo);
                 }
@@ -432,30 +432,30 @@ public class TaskQueryComponent {
     }
 
     /**
-     * 应用筛选条件
+     * Apply filter criteria.
      */
     private List<TaskInfo> applyFilters(List<TaskInfo> tasks, TaskQueryRequest request) {
         return tasks.stream()
                 .filter(t -> {
-                    // 优先级筛选
+                    // Priority filter
                     if (request.getPriorities() != null && !request.getPriorities().isEmpty()) {
                         if (!request.getPriorities().contains(t.getPriority())) {
                             return false;
                         }
                     }
-                    // 流程类型筛选
+                    // Process type filter
                     if (request.getProcessTypes() != null && !request.getProcessTypes().isEmpty()) {
                         if (!request.getProcessTypes().contains(t.getProcessDefinitionKey())) {
                             return false;
                         }
                     }
-                    // 状态筛选
+                    // Status filter
                     if (request.getStatuses() != null && !request.getStatuses().isEmpty()) {
                         if (!request.getStatuses().contains(t.getStatus())) {
                             return false;
                         }
                     }
-                    // 时间范围筛选
+                    // Time range filter
                     if (request.getStartTime() != null && t.getCreateTime() != null) {
                         if (t.getCreateTime().isBefore(request.getStartTime())) {
                             return false;
@@ -466,14 +466,14 @@ public class TaskQueryComponent {
                             return false;
                         }
                     }
-                    // 逾期筛选
+                    // Overdue filter
                     if (Boolean.TRUE.equals(request.getIncludeOverdue())) {
-                        // 只包含逾期任务
+                        // Only include overdue tasks
                         if (!Boolean.TRUE.equals(t.getIsOverdue())) {
                             return false;
                         }
                     }
-                    // 关键词搜索（包括发起人名称）
+                    // Keyword search (including initiator name)
                     if (request.getKeyword() != null && !request.getKeyword().isEmpty()) {
                         String keyword = request.getKeyword().toLowerCase();
                         boolean matches = (t.getTaskName() != null && t.getTaskName().toLowerCase().contains(keyword))
@@ -490,7 +490,7 @@ public class TaskQueryComponent {
     }
 
     /**
-     * 应用排序
+     * Apply sorting.
      */
     private List<TaskInfo> applySorting(List<TaskInfo> tasks, TaskQueryRequest request) {
         String sortBy = request.getSortBy() != null ? request.getSortBy() : "createTime";
@@ -511,8 +511,8 @@ public class TaskQueryComponent {
     }
 
     /**
-     * 获取用户所属的虚拟组
-     * 通过 workflow-engine-core 调用 admin-center 获取
+     * Get virtual groups the user belongs to.
+     * Retrieved via workflow-engine-core calling admin-center.
      */
     @SuppressWarnings("unchecked")
     private List<String> getUserVirtualGroups(String userId) {
@@ -528,22 +528,22 @@ public class TaskQueryComponent {
         } catch (Exception e) {
             log.warn("Failed to get user virtual groups from workflow engine: {}", e.getMessage());
         }
-        // 返回空列表，不使用模拟数据
+        // Return empty list; do not use mock data
         return Collections.emptyList();
     }
 
 
 
     /**
-     * 获取任务统计信息
+     * Get task statistics.
      */
     public TaskStatistics getTaskStatistics(String userId) {
-        // 检查 Flowable 引擎是否可用
+        // Check if the Flowable engine is available
         if (!workflowEngineClient.isAvailable()) {
-            throw new IllegalStateException("Flowable 引擎不可用，请检查 workflow-engine-core 服务是否启动");
+            throw new IllegalStateException("Flowable engine unavailable, please check if workflow-engine-core service is running");
         }
         
-        // 从 Flowable 获取任务统计
+        // Get task statistics from Flowable
         Optional<Map<String, Object>> countResult = workflowEngineClient.countUserTasks(userId);
         
         long totalCount = 0;
@@ -559,7 +559,7 @@ public class TaskQueryComponent {
             }
         }
         
-        // 查询所有任务以获取详细统计
+        // Query all tasks for detailed statistics
         TaskQueryRequest request = TaskQueryRequest.builder()
                 .userId(userId)
                 .page(0)
@@ -584,22 +584,22 @@ public class TaskQueryComponent {
                 .todayNewTasks(allTasks.stream()
                         .filter(t -> t.getCreateTime() != null && t.getCreateTime().isAfter(todayStart))
                         .count())
-                .todayCompletedTasks(0L) // 需要从历史记录中统计
+                .todayCompletedTasks(0L) // TODO: count from history records
                 .build();
     }
 
     /**
-     * 获取任务流转历史
+     * Get task flow history.
      */
     public List<TaskHistoryInfo> getTaskHistory(String taskId) {
-        // 检查 Flowable 引擎是否可用
+        // Check if the Flowable engine is available
         if (!workflowEngineClient.isAvailable()) {
-            throw new IllegalStateException("Flowable 引擎不可用，请检查 workflow-engine-core 服务是否启动");
+            throw new IllegalStateException("Flowable engine unavailable, please check if workflow-engine-core service is running");
         }
         
         List<TaskHistoryInfo> history = new ArrayList<>();
         
-        // 从 Flowable 获取任务历史（包含用户名称解析）
+        // Get task history from Flowable (includes user name resolution)
         Optional<List<Map<String, Object>>> historyResult = workflowEngineClient.getTaskHistoryByTaskId(taskId);
         if (historyResult.isPresent()) {
             List<Map<String, Object>> historyList = historyResult.get();
@@ -607,7 +607,7 @@ public class TaskQueryComponent {
                 Map<String, Object> historyMap = historyList.get(i);
                 Long duration = null;
                 if (i > 0) {
-                    // 计算持续时间
+                    // Calculate duration
                     LocalDateTime prevTime = parseDateTime(historyList.get(i-1).get("operationTime"));
                     LocalDateTime currTime = parseDateTime(historyMap.get("operationTime"));
                     if (prevTime != null && currTime != null) {
@@ -633,14 +633,14 @@ public class TaskQueryComponent {
             return history;
         }
         
-        // 如果 Flowable 没有历史记录，尝试从本地数据库获取
+        // If Flowable has no history records, try fetching from the local database
         try {
-            // 首先尝试从 Flowable 获取任务信息以获取 processInstanceId
+            // First try to get task info from Flowable to obtain processInstanceId
             Optional<TaskInfo> taskInfoOpt = getTaskById(taskId);
             if (taskInfoOpt.isPresent()) {
                 String processInstanceId = taskInfoOpt.get().getProcessInstanceId();
                 
-                // 尝试从本地数据库获取历史
+                // Try to get history from the local database
                 List<ProcessHistory> dbHistory = processHistoryRepository
                         .findByProcessInstanceIdOrderByOperationTimeAsc(processInstanceId);
                 
@@ -678,13 +678,13 @@ public class TaskQueryComponent {
     }
     
     /**
-     * 查询用户已处理的任务列表
+     * Query tasks completed by a user.
      */
     @SuppressWarnings("unchecked")
     public PageResponse<TaskInfo> queryCompletedTasks(TaskQueryRequest request) {
-        // 检查 Flowable 引擎是否可用
+        // Check if the Flowable engine is available
         if (!workflowEngineClient.isAvailable()) {
-            throw new IllegalStateException("Flowable 引擎不可用，请检查 workflow-engine-core 服务是否启动");
+            throw new IllegalStateException("Flowable engine unavailable, please check if workflow-engine-core service is running");
         }
         
         String userId = request.getUserId();
@@ -715,14 +715,14 @@ public class TaskQueryComponent {
             }
         } catch (Exception e) {
             log.error("Failed to query completed tasks from Flowable: {}", e.getMessage(), e);
-            throw new IllegalStateException("查询已处理任务失败: " + e.getMessage(), e);
+            throw new IllegalStateException("Failed to query completed tasks: " + e.getMessage(), e);
         }
         
         return PageResponse.of(Collections.emptyList(), page, size, 0);
     }
     
     /**
-     * 将已完成任务的 Map 转换为 TaskInfo
+     * Convert a completed task Map to TaskInfo.
      */
     private TaskInfo convertCompletedTaskToTaskInfo(Map<String, Object> taskMap) {
         String processDefinitionKey = (String) taskMap.get("processDefinitionKey");
@@ -731,14 +731,14 @@ public class TaskQueryComponent {
             processDefinitionName = processDefinitionKey;
         }
 
-        // 用 processInstanceId 从 up_process_instance 查真实的 function unit 名称，覆盖 Flowable 返回的 BPMN name
+        // Look up the actual function unit name from up_process_instance by processInstanceId, overriding the BPMN name returned by Flowable
         String processInstanceId = (String) taskMap.get("processInstanceId");
         if (processInstanceId != null && !processInstanceId.isEmpty()) {
             try {
                 processInstanceRepository.findById(processInstanceId).ifPresent(instance -> {
-                    // instance.getProcessDefinitionName() 存的是 function unit 名称
+                    // instance.getProcessDefinitionName() stores the function unit name
                 });
-                // findById 用 lambda 无法赋值外部变量，改用直接赋值
+                // Cannot assign to outer variable from lambda in findById; use direct assignment instead
                 Optional<ProcessInstance> instanceOpt = processInstanceRepository.findById(processInstanceId);
                 if (instanceOpt.isPresent() && instanceOpt.get().getProcessDefinitionName() != null) {
                     processDefinitionName = instanceOpt.get().getProcessDefinitionName();

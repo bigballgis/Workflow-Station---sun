@@ -929,21 +929,33 @@ const parseBpmnXml = (xml: string) => {
       nodes.push({ id, name, type: 'task', status, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
     })
     
+    // 提前解析顺序流（用于后续网关状态判断）
+    const earlyFlows: Array<{sourceRef: string, targetRef: string}> = []
+    doc.querySelectorAll('sequenceFlow').forEach(flow => {
+      earlyFlows.push({
+        sourceRef: flow.getAttribute('sourceRef') || '',
+        targetRef: flow.getAttribute('targetRef') || ''
+      })
+    })
+
     // 解析网关
     doc.querySelectorAll('exclusiveGateway, parallelGateway, inclusiveGateway').forEach((gateway, index) => {
       const id = gateway.getAttribute('id') || `gateway_${index}`
       const name = gateway.getAttribute('name') || ''
       const pos = positionMap.get(id)
       
-      // 检查网关是否在已完成的节点中
       let status: 'completed' | 'pending' = 'pending'
       if (completedNodeIds.has(id) || completedNodeNames.has(name)) {
         status = 'completed'
         completed.push(id)
-      } else if (hasApproval && !currentNodeFound) {
-        // 如果有已完成的审批任务，网关也应该标记为已完成
-        status = 'completed'
-        completed.push(id)
+      } else {
+        // 检查是否有已完成的入口节点（通过 sequenceFlow）
+        const incomingSourceIds = earlyFlows.filter(f => f.targetRef === id).map(f => f.sourceRef)
+        const hasCompletedSource = incomingSourceIds.some(srcId => completed.includes(srcId))
+        if (hasCompletedSource) {
+          status = 'completed'
+          completed.push(id)
+        }
       }
       
       nodes.push({ id, name, type: 'gateway', status, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })

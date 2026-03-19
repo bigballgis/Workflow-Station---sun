@@ -21,12 +21,12 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 
 /**
- * 通知管理组件
+ * Notification Manager Component
  * 
- * 负责实时事件推送和WebSocket通知
- * 支持流程生命周期事件的发布和订阅
- * 集成Kafka消息队列实现事件驱动架构
- * 支持邮件、站内消息、WebSocket推送等通知方式
+ * Handles real-time event pushing and WebSocket notifications.
+ * Supports publishing and subscribing to process lifecycle events.
+ * Integrates Kafka message queue for event-driven architecture.
+ * Supports email, in-app messages, WebSocket push and other notification channels.
  * 
  * @author Workflow Engine
  * @version 1.0
@@ -40,30 +40,30 @@ public class NotificationManagerComponent {
     private final StringRedisTemplate stringRedisTemplate;
     private final ObjectMapper objectMapper;
     
-    // WebSocket会话管理
+    // WebSocket session management
     private final Map<String, WebSocketSession> activeSessions = new ConcurrentHashMap<>();
     
-    // 事件订阅管理
+    // Event subscription management
     private final Map<String, List<EventSubscription>> eventSubscriptions = new ConcurrentHashMap<>();
     
-    // 通知历史记录
+    // Notification history
     private final List<NotificationRecord> notificationHistory = new CopyOnWriteArrayList<>();
     
-    // Kafka消息处理器（模拟）
+    // Kafka message handlers (simulated)
     private final Map<String, List<Consumer<WorkflowEvent>>> kafkaConsumers = new ConcurrentHashMap<>();
     
-    // 通知模板
+    // Notification templates
     private final Map<String, NotificationTemplate> notificationTemplates = new ConcurrentHashMap<>();
     
-    // 用户通知偏好
+    // User notification preferences
     private final Map<String, UserNotificationPreference> userPreferences = new ConcurrentHashMap<>();
     
-    // 缓存键前缀
+    // Cache key prefix
     private static final String NOTIFICATION_PREFIX = "notification:";
     private static final String KAFKA_TOPIC_PREFIX = "workflow:";
 
     /**
-     * 简化的WebSocket会话类
+     * Simplified WebSocket session class
      */
     public static class WebSocketSession {
         private final String sessionId;
@@ -87,14 +87,14 @@ public class NotificationManagerComponent {
         
         public void sendMessage(String message) {
             if (active) {
-                // 模拟WebSocket消息发送
-                log.info("发送WebSocket消息到会话 {}: {}", sessionId, message);
+                // Simulated WebSocket message sending
+                log.info("Sending WebSocket message to session {}: {}", sessionId, message);
             }
         }
     }
     
     /**
-     * 事件订阅类
+     * Event subscription class
      */
     public static class EventSubscription {
         private final String subscriptionId;
@@ -123,7 +123,7 @@ public class NotificationManagerComponent {
                 return false;
             }
             
-            // 检查过滤条件
+            // Check filter conditions
             for (Map.Entry<String, Object> filter : filters.entrySet()) {
                 Object eventValue = event.getEventData().get(filter.getKey());
                 if (!Objects.equals(eventValue, filter.getValue())) {
@@ -136,7 +136,7 @@ public class NotificationManagerComponent {
     }
     
     /**
-     * 工作流事件类
+     * Workflow event class
      */
     public static class WorkflowEvent {
         private final String eventId;
@@ -165,7 +165,7 @@ public class NotificationManagerComponent {
     }
     
     /**
-     * 通知记录类
+     * Notification record class
      */
     public static class NotificationRecord {
         private final String notificationId;
@@ -198,7 +198,7 @@ public class NotificationManagerComponent {
     }
 
     /**
-     * 通知模板类
+     * Notification template class
      */
     public static class NotificationTemplate {
         private String templateId;
@@ -206,8 +206,8 @@ public class NotificationManagerComponent {
         private String eventType;
         private String subject;
         private String bodyTemplate;
-        private Map<String, String> localizedSubjects; // 国际化标题
-        private Map<String, String> localizedBodies; // 国际化内容
+        private Map<String, String> localizedSubjects; // Localized subjects
+        private Map<String, String> localizedBodies; // Localized bodies
         private Set<String> channels; // EMAIL, SMS, WEBSOCKET, IN_APP
         private boolean enabled;
         private LocalDateTime createdTime;
@@ -236,11 +236,11 @@ public class NotificationManagerComponent {
     }
 
     /**
-     * 用户通知偏好类
+     * User notification preference class
      */
     public static class UserNotificationPreference {
         private String userId;
-        private Set<String> enabledChannels; // EMAIL, SMS, WEBSOCKET, IN_APP
+        private Set<String> enabledChannels;
         private Set<String> subscribedEventTypes;
         private String preferredLanguage;
         private boolean doNotDisturb;
@@ -271,7 +271,7 @@ public class NotificationManagerComponent {
     }
 
     /**
-     * Kafka消息类
+     * Kafka message class
      */
     public static class KafkaMessage {
         private String messageId;
@@ -303,25 +303,25 @@ public class NotificationManagerComponent {
     }
 
     /**
-     * 注册WebSocket会话
+     * Register a WebSocket session
      * 
-     * @param sessionId 会话ID
-     * @param userId 用户ID
-     * @return 注册结果
+     * @param sessionId session ID
+     * @param userId user ID
+     * @return registration result
      */
     @Transactional
     public NotificationResult registerWebSocketSession(String sessionId, String userId) {
-        log.info("注册WebSocket会话: sessionId={}, userId={}", sessionId, userId);
+        log.info("Registering WebSocket session: sessionId={}, userId={}", sessionId, userId);
         
         try {
-            // 验证参数
+            // Validate parameters
             validateSessionParameters(sessionId, userId);
             
-            // 创建会话
+            // Create session
             WebSocketSession session = new WebSocketSession(sessionId, userId);
             activeSessions.put(sessionId, session);
             
-            // 发布会话连接事件
+            // Publish session connected event
             WorkflowEvent event = new WorkflowEvent(
                     "SESSION_CONNECTED",
                     sessionId,
@@ -333,27 +333,27 @@ public class NotificationManagerComponent {
             
             return NotificationResult.builder()
                     .success(true)
-                    .message("WebSocket会话注册成功")
+                    .message("WebSocket session registered successfully")
                     .sessionId(sessionId)
                     .build();
                     
         } catch (WorkflowValidationException e) {
             throw e;
         } catch (Exception e) {
-            log.error("注册WebSocket会话失败: {}", e.getMessage(), e);
-            throw new WorkflowBusinessException("SESSION_REGISTER_FAILED", "注册WebSocket会话失败: " + e.getMessage());
+            log.error("Failed to register WebSocket session: {}", e.getMessage(), e);
+            throw new WorkflowBusinessException("SESSION_REGISTER_FAILED", "Failed to register WebSocket session: " + e.getMessage());
         }
     }
 
     /**
-     * 注销WebSocket会话
+     * Unregister a WebSocket session
      * 
-     * @param sessionId 会话ID
-     * @return 注销结果
+     * @param sessionId session ID
+     * @return unregistration result
      */
     @Transactional
     public NotificationResult unregisterWebSocketSession(String sessionId) {
-        log.info("注销WebSocket会话: sessionId={}", sessionId);
+        log.info("Unregistering WebSocket session: sessionId={}", sessionId);
         
         try {
             WebSocketSession session = activeSessions.remove(sessionId);
@@ -361,7 +361,7 @@ public class NotificationManagerComponent {
             if (session != null) {
                 session.setActive(false);
                 
-                // 发布会话断开事件
+                // Publish session disconnected event
                 WorkflowEvent event = new WorkflowEvent(
                         "SESSION_DISCONNECTED",
                         sessionId,
@@ -374,33 +374,33 @@ public class NotificationManagerComponent {
             
             return NotificationResult.builder()
                     .success(true)
-                    .message("WebSocket会话注销成功")
+                    .message("WebSocket session unregistered successfully")
                     .sessionId(sessionId)
                     .build();
                     
         } catch (Exception e) {
-            log.error("注销WebSocket会话失败: {}", e.getMessage(), e);
-            throw new WorkflowBusinessException("SESSION_UNREGISTER_FAILED", "注销WebSocket会话失败: " + e.getMessage());
+            log.error("Failed to unregister WebSocket session: {}", e.getMessage(), e);
+            throw new WorkflowBusinessException("SESSION_UNREGISTER_FAILED", "Failed to unregister WebSocket session: " + e.getMessage());
         }
     }
 
     /**
-     * 订阅事件
+     * Subscribe to an event
      * 
-     * @param eventType 事件类型
-     * @param userId 用户ID
-     * @param filters 过滤条件
-     * @return 订阅结果
+     * @param eventType event type
+     * @param userId user ID
+     * @param filters filter conditions
+     * @return subscription result
      */
     @Transactional
     public NotificationResult subscribeEvent(String eventType, String userId, Map<String, Object> filters) {
-        log.info("订阅事件: eventType={}, userId={}, filters={}", eventType, userId, filters);
+        log.info("Subscribing to event: eventType={}, userId={}, filters={}", eventType, userId, filters);
         
         try {
-            // 验证参数
+            // Validate parameters
             validateSubscriptionParameters(eventType, userId);
             
-            // 创建订阅
+            // Create subscription
             String subscriptionId = UUID.randomUUID().toString();
             EventSubscription subscription = new EventSubscription(subscriptionId, eventType, userId, filters);
             
@@ -408,27 +408,27 @@ public class NotificationManagerComponent {
             
             return NotificationResult.builder()
                     .success(true)
-                    .message("事件订阅成功")
+                    .message("Event subscribed successfully")
                     .subscriptionId(subscriptionId)
                     .build();
                     
         } catch (WorkflowValidationException e) {
             throw e;
         } catch (Exception e) {
-            log.error("订阅事件失败: {}", e.getMessage(), e);
-            throw new WorkflowBusinessException("EVENT_SUBSCRIBE_FAILED", "订阅事件失败: " + e.getMessage());
+            log.error("Failed to subscribe to event: {}", e.getMessage(), e);
+            throw new WorkflowBusinessException("EVENT_SUBSCRIBE_FAILED", "Failed to subscribe to event: " + e.getMessage());
         }
     }
 
     /**
-     * 取消订阅事件
+     * Unsubscribe from an event
      * 
-     * @param subscriptionId 订阅ID
-     * @return 取消订阅结果
+     * @param subscriptionId subscription ID
+     * @return unsubscription result
      */
     @Transactional
     public NotificationResult unsubscribeEvent(String subscriptionId) {
-        log.info("取消订阅事件: subscriptionId={}", subscriptionId);
+        log.info("Unsubscribing from event: subscriptionId={}", subscriptionId);
         
         try {
             boolean removed = false;
@@ -442,29 +442,29 @@ public class NotificationManagerComponent {
             
             return NotificationResult.builder()
                     .success(true)
-                    .message(removed ? "取消订阅成功" : "订阅不存在")
+                    .message(removed ? "Unsubscribed successfully" : "Subscription not found")
                     .subscriptionId(subscriptionId)
                     .build();
                     
         } catch (Exception e) {
-            log.error("取消订阅事件失败: {}", e.getMessage(), e);
-            throw new WorkflowBusinessException("EVENT_UNSUBSCRIBE_FAILED", "取消订阅事件失败: " + e.getMessage());
+            log.error("Failed to unsubscribe from event: {}", e.getMessage(), e);
+            throw new WorkflowBusinessException("EVENT_UNSUBSCRIBE_FAILED", "Failed to unsubscribe from event: " + e.getMessage());
         }
     }
 
     /**
-     * 发布流程启动事件
+     * Publish a process started event
      * 
-     * @param processInstanceId 流程实例ID
-     * @param processDefinitionKey 流程定义键
-     * @param businessKey 业务键
-     * @param startUserId 启动用户ID
-     * @return 发布结果
+     * @param processInstanceId process instance ID
+     * @param processDefinitionKey process definition key
+     * @param businessKey business key
+     * @param startUserId start user ID
+     * @return publish result
      */
     @Transactional
     public NotificationResult publishProcessStartedEvent(String processInstanceId, String processDefinitionKey, 
                                                        String businessKey, String startUserId) {
-        log.info("发布流程启动事件: processInstanceId={}, processDefinitionKey={}", processInstanceId, processDefinitionKey);
+        log.info("Publishing process started event: processInstanceId={}, processDefinitionKey={}", processInstanceId, processDefinitionKey);
         
         try {
             Map<String, Object> eventData = new HashMap<>();
@@ -484,24 +484,24 @@ public class NotificationManagerComponent {
             return publishEvent(event);
             
         } catch (Exception e) {
-            log.error("发布流程启动事件失败: {}", e.getMessage(), e);
-            throw new WorkflowBusinessException("EVENT_PUBLISH_FAILED", "发布流程启动事件失败: " + e.getMessage());
+            log.error("Failed to publish process started event: {}", e.getMessage(), e);
+            throw new WorkflowBusinessException("EVENT_PUBLISH_FAILED", "Failed to publish process started event: " + e.getMessage());
         }
     }
 
     /**
-     * 发布流程完成事件
+     * Publish a process completed event
      * 
-     * @param processInstanceId 流程实例ID
-     * @param processDefinitionKey 流程定义键
-     * @param businessKey 业务键
-     * @param endUserId 结束用户ID
-     * @return 发布结果
+     * @param processInstanceId process instance ID
+     * @param processDefinitionKey process definition key
+     * @param businessKey business key
+     * @param endUserId end user ID
+     * @return publish result
      */
     @Transactional
     public NotificationResult publishProcessCompletedEvent(String processInstanceId, String processDefinitionKey, 
                                                          String businessKey, String endUserId) {
-        log.info("发布流程完成事件: processInstanceId={}, processDefinitionKey={}", processInstanceId, processDefinitionKey);
+        log.info("Publishing process completed event: processInstanceId={}, processDefinitionKey={}", processInstanceId, processDefinitionKey);
         
         try {
             Map<String, Object> eventData = new HashMap<>();
@@ -521,23 +521,23 @@ public class NotificationManagerComponent {
             return publishEvent(event);
             
         } catch (Exception e) {
-            log.error("发布流程完成事件失败: {}", e.getMessage(), e);
-            throw new WorkflowBusinessException("EVENT_PUBLISH_FAILED", "发布流程完成事件失败: " + e.getMessage());
+            log.error("Failed to publish process completed event: {}", e.getMessage(), e);
+            throw new WorkflowBusinessException("EVENT_PUBLISH_FAILED", "Failed to publish process completed event: " + e.getMessage());
         }
     }
 
     /**
-     * 发布任务分配事件
+     * Publish a task assigned event
      * 
-     * @param taskId 任务ID
-     * @param taskName 任务名称
-     * @param assignee 分配人
-     * @param processInstanceId 流程实例ID
-     * @return 发布结果
+     * @param taskId task ID
+     * @param taskName task name
+     * @param assignee assignee
+     * @param processInstanceId process instance ID
+     * @return publish result
      */
     @Transactional
     public NotificationResult publishTaskAssignedEvent(String taskId, String taskName, String assignee, String processInstanceId) {
-        log.info("发布任务分配事件: taskId={}, assignee={}", taskId, assignee);
+        log.info("Publishing task assigned event: taskId={}, assignee={}", taskId, assignee);
         
         try {
             Map<String, Object> eventData = new HashMap<>();
@@ -557,23 +557,23 @@ public class NotificationManagerComponent {
             return publishEvent(event);
             
         } catch (Exception e) {
-            log.error("发布任务分配事件失败: {}", e.getMessage(), e);
-            throw new WorkflowBusinessException("EVENT_PUBLISH_FAILED", "发布任务分配事件失败: " + e.getMessage());
+            log.error("Failed to publish task assignment event: {}", e.getMessage(), e);
+            throw new WorkflowBusinessException("EVENT_PUBLISH_FAILED", "Failed to publish task assignment event: " + e.getMessage());
         }
     }
 
     /**
-     * 发布任务完成事件
+     * Publish a task completed event
      * 
-     * @param taskId 任务ID
-     * @param taskName 任务名称
-     * @param assignee 完成人
-     * @param processInstanceId 流程实例ID
-     * @return 发布结果
+     * @param taskId task ID
+     * @param taskName task name
+     * @param assignee completer
+     * @param processInstanceId process instance ID
+     * @return publish result
      */
     @Transactional
     public NotificationResult publishTaskCompletedEvent(String taskId, String taskName, String assignee, String processInstanceId) {
-        log.info("发布任务完成事件: taskId={}, assignee={}", taskId, assignee);
+        log.info("Publishing task completed event: taskId={}, assignee={}", taskId, assignee);
         
         try {
             Map<String, Object> eventData = new HashMap<>();
@@ -593,25 +593,25 @@ public class NotificationManagerComponent {
             return publishEvent(event);
             
         } catch (Exception e) {
-            log.error("发布任务完成事件失败: {}", e.getMessage(), e);
-            throw new WorkflowBusinessException("EVENT_PUBLISH_FAILED", "发布任务完成事件失败: " + e.getMessage());
+            log.error("Failed to publish task completion event: {}", e.getMessage(), e);
+            throw new WorkflowBusinessException("EVENT_PUBLISH_FAILED", "Failed to publish task completion event: " + e.getMessage());
         }
     }
 
     /**
-     * 发布任务超时事件
+     * Publish a task overdue event
      * 
-     * @param taskId 任务ID
-     * @param taskName 任务名称
-     * @param assignee 分配人
-     * @param processInstanceId 流程实例ID
-     * @param dueDate 到期时间
-     * @return 发布结果
+     * @param taskId task ID
+     * @param taskName task name
+     * @param assignee assignee
+     * @param processInstanceId process instance ID
+     * @param dueDate due date
+     * @return publish result
      */
     @Transactional
     public NotificationResult publishTaskOverdueEvent(String taskId, String taskName, String assignee, 
                                                     String processInstanceId, LocalDateTime dueDate) {
-        log.info("发布任务超时事件: taskId={}, assignee={}", taskId, assignee);
+        log.info("Publishing task overdue event: taskId={}, assignee={}", taskId, assignee);
         
         try {
             Map<String, Object> eventData = new HashMap<>();
@@ -632,20 +632,20 @@ public class NotificationManagerComponent {
             return publishEvent(event);
             
         } catch (Exception e) {
-            log.error("发布任务超时事件失败: {}", e.getMessage(), e);
-            throw new WorkflowBusinessException("EVENT_PUBLISH_FAILED", "发布任务超时事件失败: " + e.getMessage());
+            log.error("Failed to publish task timeout event: {}", e.getMessage(), e);
+            throw new WorkflowBusinessException("EVENT_PUBLISH_FAILED", "Failed to publish task timeout event: " + e.getMessage());
         }
     }
 
     /**
-     * 获取活跃会话列表
+     * Get active session list
      * 
-     * @param userId 用户ID（可选）
-     * @return 会话列表
+     * @param userId user ID (optional)
+     * @return session list
      */
     @Transactional(readOnly = true)
     public List<Map<String, Object>> getActiveSessions(String userId) {
-        log.info("获取活跃会话列表: userId={}", userId);
+        log.info("Getting active sessions: userId={}", userId);
         
         try {
             List<Map<String, Object>> sessions = new ArrayList<>();
@@ -664,21 +664,21 @@ public class NotificationManagerComponent {
             return sessions;
             
         } catch (Exception e) {
-            log.error("获取活跃会话列表失败: {}", e.getMessage(), e);
-            throw new WorkflowBusinessException("GET_SESSIONS_FAILED", "获取活跃会话列表失败: " + e.getMessage());
+            log.error("Failed to get active sessions: {}", e.getMessage(), e);
+            throw new WorkflowBusinessException("GET_SESSIONS_FAILED", "Failed to get active sessions: " + e.getMessage());
         }
     }
 
     /**
-     * 获取事件订阅列表
+     * Get event subscription list
      * 
-     * @param userId 用户ID（可选）
-     * @param eventType 事件类型（可选）
-     * @return 订阅列表
+     * @param userId user ID (optional)
+     * @param eventType event type (optional)
+     * @return subscription list
      */
     @Transactional(readOnly = true)
     public List<Map<String, Object>> getEventSubscriptions(String userId, String eventType) {
-        log.info("获取事件订阅列表: userId={}, eventType={}", userId, eventType);
+        log.info("Getting event subscriptions: userId={}, eventType={}", userId, eventType);
         
         try {
             List<Map<String, Object>> subscriptions = new ArrayList<>();
@@ -702,21 +702,21 @@ public class NotificationManagerComponent {
             return subscriptions;
             
         } catch (Exception e) {
-            log.error("获取事件订阅列表失败: {}", e.getMessage(), e);
-            throw new WorkflowBusinessException("GET_SUBSCRIPTIONS_FAILED", "获取事件订阅列表失败: " + e.getMessage());
+            log.error("Failed to get event subscriptions: {}", e.getMessage(), e);
+            throw new WorkflowBusinessException("GET_SUBSCRIPTIONS_FAILED", "Failed to get event subscriptions: " + e.getMessage());
         }
     }
 
     /**
-     * 获取通知历史记录
+     * Get notification history
      * 
-     * @param userId 用户ID（可选）
-     * @param limit 限制数量
-     * @return 通知历史
+     * @param userId user ID (optional)
+     * @param limit result limit
+     * @return notification history
      */
     @Transactional(readOnly = true)
     public List<Map<String, Object>> getNotificationHistory(String userId, Integer limit) {
-        log.info("获取通知历史记录: userId={}, limit={}", userId, limit);
+        log.info("Getting notification history: userId={}, limit={}", userId, limit);
         
         try {
             List<Map<String, Object>> history = new ArrayList<>();
@@ -724,7 +724,7 @@ public class NotificationManagerComponent {
             int count = 0;
             int maxLimit = limit != null ? limit : 100;
             
-            // 按时间倒序返回
+            // Return in reverse chronological order
             for (int i = notificationHistory.size() - 1; i >= 0 && count < maxLimit; i--) {
                 NotificationRecord record = notificationHistory.get(i);
                 
@@ -745,26 +745,26 @@ public class NotificationManagerComponent {
             return history;
             
         } catch (Exception e) {
-            log.error("获取通知历史记录失败: {}", e.getMessage(), e);
-            throw new WorkflowBusinessException("GET_HISTORY_FAILED", "获取通知历史记录失败: " + e.getMessage());
+            log.error("Failed to get notification history: {}", e.getMessage(), e);
+            throw new WorkflowBusinessException("GET_HISTORY_FAILED", "Failed to get notification history: " + e.getMessage());
         }
     }
 
-    // ==================== 私有辅助方法 ====================
+    // ==================== Private helper methods ====================
 
     /**
-     * 发布事件
+     * Publish an event
      */
     private NotificationResult publishEvent(WorkflowEvent event) {
-        log.info("发布事件: eventType={}, sourceId={}", event.getEventType(), event.getSourceId());
+        log.info("Publishing event: eventType={}, sourceId={}", event.getEventType(), event.getSourceId());
         
         try {
-            // 发布Spring事件（如果eventPublisher不为null）
+            // Publish Spring event (if eventPublisher is not null)
             if (eventPublisher != null) {
                 eventPublisher.publishEvent(event);
             }
             
-            // 处理事件订阅
+            // Process event subscriptions
             List<EventSubscription> subscriptions = eventSubscriptions.get(event.getEventType());
             if (subscriptions != null) {
                 for (EventSubscription subscription : subscriptions) {
@@ -776,24 +776,24 @@ public class NotificationManagerComponent {
             
             return NotificationResult.builder()
                     .success(true)
-                    .message("事件发布成功")
+                    .message("Event published successfully")
                     .eventId(event.getEventId())
                     .build();
                     
         } catch (Exception e) {
-            log.error("发布事件失败: {}", e.getMessage(), e);
-            throw new WorkflowBusinessException("EVENT_PUBLISH_FAILED", "发布事件失败: " + e.getMessage());
+            log.error("Failed to publish event: {}", e.getMessage(), e);
+            throw new WorkflowBusinessException("EVENT_PUBLISH_FAILED", "Failed to publish event: " + e.getMessage());
         }
     }
 
     /**
-     * 向用户发送通知
+     * Send notification to user
      */
     private void sendNotificationToUser(WorkflowEvent event, EventSubscription subscription) {
         try {
             String message = buildNotificationMessage(event);
             
-            // 创建通知记录
+            // Create notification record
             NotificationRecord record = new NotificationRecord(
                     event.getEventId(),
                     subscription.getUserId(),
@@ -803,20 +803,20 @@ public class NotificationManagerComponent {
             
             notificationHistory.add(record);
             
-            // 发送WebSocket通知
+            // Send WebSocket notification
             boolean delivered = sendWebSocketNotification(subscription.getUserId(), message);
             record.setDelivered(delivered);
             
-            log.info("向用户发送通知: userId={}, eventType={}, delivered={}", 
+            log.info("Sent notification to user: userId={}, eventType={}, delivered={}", 
                     subscription.getUserId(), event.getEventType(), delivered);
                     
         } catch (Exception e) {
-            log.error("向用户发送通知失败: {}", e.getMessage(), e);
+            log.error("Failed to send notification to user: {}", e.getMessage(), e);
         }
     }
 
     /**
-     * 发送WebSocket通知
+     * Send WebSocket notification
      */
     private boolean sendWebSocketNotification(String userId, String message) {
         boolean delivered = false;
@@ -832,49 +832,49 @@ public class NotificationManagerComponent {
     }
 
     /**
-     * 构建通知消息
+     * Build notification message
      */
     private String buildNotificationMessage(WorkflowEvent event) {
         Map<String, Object> data = event.getEventData();
         
         switch (event.getEventType()) {
             case "PROCESS_STARTED":
-                return String.format("流程已启动: %s (业务键: %s)", 
+                return String.format("Process started: %s (business key: %s)", 
                         data.get("processDefinitionKey"), data.get("businessKey"));
                         
             case "PROCESS_COMPLETED":
-                return String.format("流程已完成: %s (业务键: %s)", 
+                return String.format("Process completed: %s (business key: %s)", 
                         data.get("processDefinitionKey"), data.get("businessKey"));
                         
             case "TASK_ASSIGNED":
-                return String.format("任务已分配: %s (分配给: %s)", 
+                return String.format("Task assigned: %s (assigned to: %s)", 
                         data.get("taskName"), data.get("assignee"));
                         
             case "TASK_COMPLETED":
-                return String.format("任务已完成: %s (完成人: %s)", 
+                return String.format("Task completed: %s (completed by: %s)", 
                         data.get("taskName"), data.get("assignee"));
                         
             case "TASK_OVERDUE":
-                return String.format("任务已超时: %s (分配给: %s)", 
+                return String.format("Task overdue: %s (assigned to: %s)", 
                         data.get("taskName"), data.get("assignee"));
                         
             default:
-                return String.format("工作流事件: %s", event.getEventType());
+                return String.format("Workflow event: %s", event.getEventType());
         }
     }
 
     /**
-     * 验证会话参数
+     * Validate session parameters
      */
     private void validateSessionParameters(String sessionId, String userId) {
         List<WorkflowValidationException.ValidationError> errors = new ArrayList<>();
         
         if (!StringUtils.hasText(sessionId)) {
-            errors.add(new WorkflowValidationException.ValidationError("sessionId", "会话ID不能为空", sessionId));
+            errors.add(new WorkflowValidationException.ValidationError("sessionId", "Session ID must not be empty", sessionId));
         }
         
         if (!StringUtils.hasText(userId)) {
-            errors.add(new WorkflowValidationException.ValidationError("userId", "用户ID不能为空", userId));
+            errors.add(new WorkflowValidationException.ValidationError("userId", "User ID must not be empty", userId));
         }
         
         if (!errors.isEmpty()) {
@@ -883,17 +883,17 @@ public class NotificationManagerComponent {
     }
 
     /**
-     * 验证订阅参数
+     * Validate subscription parameters
      */
     private void validateSubscriptionParameters(String eventType, String userId) {
         List<WorkflowValidationException.ValidationError> errors = new ArrayList<>();
         
         if (!StringUtils.hasText(eventType)) {
-            errors.add(new WorkflowValidationException.ValidationError("eventType", "事件类型不能为空", eventType));
+            errors.add(new WorkflowValidationException.ValidationError("eventType", "Event type must not be empty", eventType));
         }
         
         if (!StringUtils.hasText(userId)) {
-            errors.add(new WorkflowValidationException.ValidationError("userId", "用户ID不能为空", userId));
+            errors.add(new WorkflowValidationException.ValidationError("userId", "User ID must not be empty", userId));
         }
         
         if (!errors.isEmpty()) {
@@ -901,70 +901,70 @@ public class NotificationManagerComponent {
         }
     }
 
-    // ==================== Kafka消息队列集成 ====================
+    // ==================== Kafka message queue integration ====================
 
     /**
-     * 发送Kafka消息
+     * Send a Kafka message
      * 
-     * @param topic 主题
-     * @param key 消息键
-     * @param event 工作流事件
-     * @return 发送结果
+     * @param topic topic
+     * @param key message key
+     * @param event workflow event
+     * @return send result
      */
     public NotificationResult sendKafkaMessage(String topic, String key, WorkflowEvent event) {
-        log.info("发送Kafka消息: topic={}, key={}, eventType={}", topic, key, event.getEventType());
+        log.info("Sending Kafka message: topic={}, key={}, eventType={}", topic, key, event.getEventType());
         
         try {
             KafkaMessage message = new KafkaMessage(KAFKA_TOPIC_PREFIX + topic, key, event);
             
-            // 模拟Kafka发送（实际实现中应该使用KafkaTemplate）
+            // Simulated Kafka sending (should use KafkaTemplate in production)
             String messageJson = objectMapper.writeValueAsString(message);
             
-            // 存储到Redis模拟Kafka队列
+            // Store in Redis to simulate Kafka queue
             String queueKey = NOTIFICATION_PREFIX + "kafka:" + topic;
             stringRedisTemplate.opsForList().rightPush(queueKey, messageJson);
             stringRedisTemplate.expire(queueKey, Duration.ofDays(7));
             
-            // 触发消费者
+            // Trigger consumers
             triggerKafkaConsumers(topic, event);
             
-            log.info("Kafka消息发送成功: messageId={}", message.getMessageId());
+            log.info("Kafka message sent successfully: messageId={}", message.getMessageId());
             
             return NotificationResult.builder()
                     .success(true)
-                    .message("Kafka消息发送成功")
+                    .message("Kafka message sent successfully")
                     .eventId(message.getMessageId())
                     .build();
                     
         } catch (JsonProcessingException e) {
-            log.error("Kafka消息序列化失败: {}", e.getMessage(), e);
-            throw new WorkflowBusinessException("KAFKA_SEND_FAILED", "Kafka消息序列化失败: " + e.getMessage());
+            log.error("Failed to serialize Kafka message: {}", e.getMessage(), e);
+            throw new WorkflowBusinessException("KAFKA_SEND_FAILED", "Failed to serialize Kafka message: " + e.getMessage());
         } catch (Exception e) {
-            log.error("发送Kafka消息失败: {}", e.getMessage(), e);
-            throw new WorkflowBusinessException("KAFKA_SEND_FAILED", "发送Kafka消息失败: " + e.getMessage());
+            log.error("Failed to send Kafka message: {}", e.getMessage(), e);
+            throw new WorkflowBusinessException("KAFKA_SEND_FAILED", "Failed to send Kafka message: " + e.getMessage());
         }
     }
 
     /**
-     * 注册Kafka消费者
+     * Register a Kafka consumer
      * 
-     * @param topic 主题
-     * @param consumer 消费者处理函数
-     * @return 注册结果
+     * @param topic topic
+     * @param consumer consumer handler function
+     * @return registration result
      */
     public NotificationResult registerKafkaConsumer(String topic, Consumer<WorkflowEvent> consumer) {
-        log.info("注册Kafka消费者: topic={}", topic);
+        log.info("Registering Kafka consumer: topic={}", topic);
         
         kafkaConsumers.computeIfAbsent(topic, k -> new CopyOnWriteArrayList<>()).add(consumer);
         
         return NotificationResult.builder()
                 .success(true)
-                .message("Kafka消费者注册成功")
+                .message("Kafka consumer registered successfully")
                 .build();
     }
 
     /**
-     * 触发Kafka消费者
+     * Trigger Kafka consumers
      */
     private void triggerKafkaConsumers(String topic, WorkflowEvent event) {
         List<Consumer<WorkflowEvent>> consumers = kafkaConsumers.get(topic);
@@ -973,40 +973,40 @@ public class NotificationManagerComponent {
                 try {
                     consumer.accept(event);
                 } catch (Exception e) {
-                    log.error("Kafka消费者处理失败: topic={}, error={}", topic, e.getMessage(), e);
+                    log.error("Kafka consumer processing failed: topic={}, error={}", topic, e.getMessage(), e);
                 }
             }
         }
     }
 
-    // ==================== 多渠道通知 ====================
+    // ==================== Multi-channel notifications ====================
 
     /**
-     * 发送邮件通知
+     * Send email notification
      * 
-     * @param userId 用户ID
-     * @param email 邮箱地址
-     * @param subject 邮件主题
-     * @param body 邮件内容
-     * @return 发送结果
+     * @param userId user ID
+     * @param email email address
+     * @param subject email subject
+     * @param body email body
+     * @return send result
      */
     public NotificationResult sendEmailNotification(String userId, String email, String subject, String body) {
-        log.info("发送邮件通知: userId={}, email={}, subject={}", userId, email, subject);
+        log.info("Sending email notification: userId={}, email={}, subject={}", userId, email, subject);
         
         try {
-            // 检查用户通知偏好
+            // Check user notification preferences
             if (!isChannelEnabled(userId, "EMAIL")) {
-                log.info("用户已禁用邮件通知: userId={}", userId);
+                log.info("User has disabled email notifications: userId={}", userId);
                 return NotificationResult.builder()
                         .success(false)
-                        .message("用户已禁用邮件通知")
+                        .message("User has disabled email notifications")
                         .build();
             }
             
-            // 模拟邮件发送（实际实现中应该使用JavaMailSender）
-            log.info("邮件发送成功: to={}, subject={}", email, subject);
+            // Simulated email sending (should use JavaMailSender in production)
+            log.info("Email sent successfully: to={}, subject={}", email, subject);
             
-            // 记录通知
+            // Record notification
             NotificationRecord record = new NotificationRecord(
                     UUID.randomUUID().toString(),
                     userId,
@@ -1018,41 +1018,41 @@ public class NotificationManagerComponent {
             
             return NotificationResult.builder()
                     .success(true)
-                    .message("邮件发送成功")
+                    .message("Email sent successfully")
                     .notificationId(record.getNotificationId())
                     .build();
                     
         } catch (Exception e) {
-            log.error("发送邮件通知失败: {}", e.getMessage(), e);
-            throw new WorkflowBusinessException("EMAIL_SEND_FAILED", "发送邮件通知失败: " + e.getMessage());
+            log.error("Failed to send email notification: {}", e.getMessage(), e);
+            throw new WorkflowBusinessException("EMAIL_SEND_FAILED", "Failed to send email notification: " + e.getMessage());
         }
     }
 
     /**
-     * 发送短信通知
+     * Send SMS notification
      * 
-     * @param userId 用户ID
-     * @param phoneNumber 手机号
-     * @param message 短信内容
-     * @return 发送结果
+     * @param userId user ID
+     * @param phoneNumber phone number
+     * @param message SMS content
+     * @return send result
      */
     public NotificationResult sendSmsNotification(String userId, String phoneNumber, String message) {
-        log.info("发送短信通知: userId={}, phoneNumber={}", userId, phoneNumber);
+        log.info("Sending SMS notification: userId={}, phoneNumber={}", userId, phoneNumber);
         
         try {
-            // 检查用户通知偏好
+            // Check user notification preferences
             if (!isChannelEnabled(userId, "SMS")) {
-                log.info("用户已禁用短信通知: userId={}", userId);
+                log.info("User has disabled SMS notifications: userId={}", userId);
                 return NotificationResult.builder()
                         .success(false)
-                        .message("用户已禁用短信通知")
+                        .message("User has disabled SMS notifications")
                         .build();
             }
             
-            // 模拟短信发送（实际实现中应该使用短信服务SDK）
-            log.info("短信发送成功: to={}, message={}", phoneNumber, message);
+            // Simulated SMS sending (should use SMS service SDK in production)
+            log.info("SMS sent successfully: to={}, message={}", phoneNumber, message);
             
-            // 记录通知
+            // Record notification
             NotificationRecord record = new NotificationRecord(
                     UUID.randomUUID().toString(),
                     userId,
@@ -1064,39 +1064,39 @@ public class NotificationManagerComponent {
             
             return NotificationResult.builder()
                     .success(true)
-                    .message("短信发送成功")
+                    .message("SMS sent successfully")
                     .notificationId(record.getNotificationId())
                     .build();
                     
         } catch (Exception e) {
-            log.error("发送短信通知失败: {}", e.getMessage(), e);
-            throw new WorkflowBusinessException("SMS_SEND_FAILED", "发送短信通知失败: " + e.getMessage());
+            log.error("Failed to send SMS notification: {}", e.getMessage(), e);
+            throw new WorkflowBusinessException("SMS_SEND_FAILED", "Failed to send SMS notification: " + e.getMessage());
         }
     }
 
     /**
-     * 发送站内消息
+     * Send in-app notification
      * 
-     * @param userId 用户ID
-     * @param title 消息标题
-     * @param content 消息内容
-     * @param eventType 事件类型
-     * @return 发送结果
+     * @param userId user ID
+     * @param title message title
+     * @param content message content
+     * @param eventType event type
+     * @return send result
      */
     public NotificationResult sendInAppNotification(String userId, String title, String content, String eventType) {
-        log.info("发送站内消息: userId={}, title={}", userId, title);
+        log.info("Sending in-app notification: userId={}, title={}", userId, title);
         
         try {
-            // 检查用户通知偏好
+            // Check user notification preferences
             if (!isChannelEnabled(userId, "IN_APP")) {
-                log.info("用户已禁用站内消息: userId={}", userId);
+                log.info("User has disabled in-app notifications: userId={}", userId);
                 return NotificationResult.builder()
                         .success(false)
-                        .message("用户已禁用站内消息")
+                        .message("User has disabled in-app notifications")
                         .build();
             }
             
-            // 存储站内消息到Redis
+            // Store in-app message in Redis
             String messageId = UUID.randomUUID().toString();
             Map<String, Object> messageData = new HashMap<>();
             messageData.put("messageId", messageId);
@@ -1111,7 +1111,7 @@ public class NotificationManagerComponent {
             String messageJson = objectMapper.writeValueAsString(messageData);
             stringRedisTemplate.opsForValue().set(messageKey, messageJson, Duration.ofDays(30));
             
-            // 记录通知
+            // Record notification
             NotificationRecord record = new NotificationRecord(
                     messageId,
                     userId,
@@ -1121,37 +1121,37 @@ public class NotificationManagerComponent {
             record.setDelivered(true);
             notificationHistory.add(record);
             
-            // 同时发送WebSocket通知
+            // Also send WebSocket notification
             sendWebSocketNotification(userId, title + ": " + content);
             
             return NotificationResult.builder()
                     .success(true)
-                    .message("站内消息发送成功")
+                    .message("In-app notification sent successfully")
                     .notificationId(messageId)
                     .build();
                     
         } catch (Exception e) {
-            log.error("发送站内消息失败: {}", e.getMessage(), e);
-            throw new WorkflowBusinessException("IN_APP_SEND_FAILED", "发送站内消息失败: " + e.getMessage());
+            log.error("Failed to send in-app notification: {}", e.getMessage(), e);
+            throw new WorkflowBusinessException("IN_APP_SEND_FAILED", "Failed to send in-app notification: " + e.getMessage());
         }
     }
 
     /**
-     * 批量发送通知（多渠道）
+     * Send multi-channel notification
      * 
-     * @param userId 用户ID
-     * @param event 工作流事件
-     * @return 发送结果
+     * @param userId user ID
+     * @param event workflow event
+     * @return send result
      */
     public NotificationResult sendMultiChannelNotification(String userId, WorkflowEvent event) {
-        log.info("发送多渠道通知: userId={}, eventType={}", userId, event.getEventType());
+        log.info("Sending multi-channel notification: userId={}, eventType={}", userId, event.getEventType());
         
         try {
             UserNotificationPreference preference = getUserPreference(userId);
             NotificationTemplate template = getTemplateForEvent(event.getEventType());
             
             String message = buildNotificationMessage(event);
-            String subject = template != null ? template.getSubject() : "工作流通知";
+            String subject = template != null ? template.getSubject() : "Workflow Notification";
             
             int successCount = 0;
             int totalChannels = 0;
@@ -1173,40 +1173,38 @@ public class NotificationManagerComponent {
                             successCount++;
                             break;
                         case "EMAIL":
-                            // 需要用户邮箱地址
-                            log.info("邮件通知需要用户邮箱地址");
+                            log.info("Email notification requires user email address");
                             break;
                         case "SMS":
-                            // 需要用户手机号
-                            log.info("短信通知需要用户手机号");
+                            log.info("SMS notification requires user phone number");
                             break;
                     }
                 } catch (Exception e) {
-                    log.error("发送{}通知失败: {}", channel, e.getMessage());
+                    log.error("Failed to send {} notification: {}", channel, e.getMessage());
                 }
             }
             
             return NotificationResult.builder()
                     .success(successCount > 0)
-                    .message(String.format("多渠道通知发送完成: %d/%d 成功", successCount, totalChannels))
+                    .message(String.format("Multi-channel notification completed: %d/%d succeeded", successCount, totalChannels))
                     .build();
                     
         } catch (Exception e) {
-            log.error("发送多渠道通知失败: {}", e.getMessage(), e);
-            throw new WorkflowBusinessException("MULTI_CHANNEL_SEND_FAILED", "发送多渠道通知失败: " + e.getMessage());
+            log.error("Failed to send multi-channel notification: {}", e.getMessage(), e);
+            throw new WorkflowBusinessException("MULTI_CHANNEL_SEND_FAILED", "Failed to send multi-channel notification: " + e.getMessage());
         }
     }
 
-    // ==================== 通知模板管理 ====================
+    // ==================== Notification template management ====================
 
     /**
-     * 定义通知模板
+     * Define a notification template
      * 
-     * @param template 通知模板
-     * @return 定义结果
+     * @param template notification template
+     * @return definition result
      */
     public NotificationResult defineNotificationTemplate(NotificationTemplate template) {
-        log.info("定义通知模板: templateId={}, eventType={}", template.getTemplateId(), template.getEventType());
+        log.info("Defining notification template: templateId={}, eventType={}", template.getTemplateId(), template.getEventType());
         
         try {
             if (template.getCreatedTime() == null) {
@@ -1215,24 +1213,24 @@ public class NotificationManagerComponent {
             
             notificationTemplates.put(template.getTemplateId(), template);
             
-            // 缓存到Redis
+            // Cache to Redis
             String cacheKey = NOTIFICATION_PREFIX + "template:" + template.getTemplateId();
             String templateJson = objectMapper.writeValueAsString(template);
             stringRedisTemplate.opsForValue().set(cacheKey, templateJson, Duration.ofDays(30));
             
             return NotificationResult.builder()
                     .success(true)
-                    .message("通知模板定义成功")
+                    .message("Notification template defined successfully")
                     .build();
                     
         } catch (Exception e) {
-            log.error("定义通知模板失败: {}", e.getMessage(), e);
-            throw new WorkflowBusinessException("TEMPLATE_DEFINE_FAILED", "定义通知模板失败: " + e.getMessage());
+            log.error("Failed to define notification template: {}", e.getMessage(), e);
+            throw new WorkflowBusinessException("TEMPLATE_DEFINE_FAILED", "Failed to define notification template: " + e.getMessage());
         }
     }
 
     /**
-     * 获取事件对应的通知模板
+     * Get notification template for an event
      */
     private NotificationTemplate getTemplateForEvent(String eventType) {
         return notificationTemplates.values().stream()
@@ -1242,22 +1240,22 @@ public class NotificationManagerComponent {
     }
 
     /**
-     * 使用模板渲染通知内容
+     * Render notification template content
      * 
-     * @param templateId 模板ID
-     * @param variables 变量
-     * @param language 语言
-     * @return 渲染后的内容
+     * @param templateId template ID
+     * @param variables variables
+     * @param language language
+     * @return rendered content
      */
     public Map<String, String> renderNotificationTemplate(String templateId, Map<String, Object> variables, String language) {
-        log.info("渲染通知模板: templateId={}, language={}", templateId, language);
+        log.info("Rendering notification template: templateId={}, language={}", templateId, language);
         
         NotificationTemplate template = notificationTemplates.get(templateId);
         if (template == null) {
-            throw new WorkflowBusinessException("TEMPLATE_NOT_FOUND", "通知模板不存在: " + templateId);
+            throw new WorkflowBusinessException("TEMPLATE_NOT_FOUND", "Notification template not found: " + templateId);
         }
         
-        // 获取本地化内容
+        // Get localized content
         String subject = template.getSubject();
         String body = template.getBodyTemplate();
         
@@ -1268,7 +1266,7 @@ public class NotificationManagerComponent {
             body = template.getLocalizedBodies().getOrDefault(language, body);
         }
         
-        // 替换变量
+        // Replace variables
         for (Map.Entry<String, Object> entry : variables.entrySet()) {
             String placeholder = "${" + entry.getKey() + "}";
             String value = entry.getValue() != null ? entry.getValue().toString() : "";
@@ -1282,54 +1280,54 @@ public class NotificationManagerComponent {
         return result;
     }
 
-    // ==================== 用户通知偏好管理 ====================
+    // ==================== User notification preference management ====================
 
     /**
-     * 设置用户通知偏好
+     * Set user notification preference
      * 
-     * @param preference 用户通知偏好
-     * @return 设置结果
+     * @param preference user notification preference
+     * @return set result
      */
     public NotificationResult setUserNotificationPreference(UserNotificationPreference preference) {
-        log.info("设置用户通知偏好: userId={}", preference.getUserId());
+        log.info("Setting user notification preference: userId={}", preference.getUserId());
         
         try {
             preference.setUpdatedTime(LocalDateTime.now());
             userPreferences.put(preference.getUserId(), preference);
             
-            // 缓存到Redis
+            // Cache to Redis
             String cacheKey = NOTIFICATION_PREFIX + "preference:" + preference.getUserId();
             String preferenceJson = objectMapper.writeValueAsString(preference);
             stringRedisTemplate.opsForValue().set(cacheKey, preferenceJson, Duration.ofDays(365));
             
             return NotificationResult.builder()
                     .success(true)
-                    .message("用户通知偏好设置成功")
+                    .message("User notification preference set successfully")
                     .build();
                     
         } catch (Exception e) {
-            log.error("设置用户通知偏好失败: {}", e.getMessage(), e);
-            throw new WorkflowBusinessException("PREFERENCE_SET_FAILED", "设置用户通知偏好失败: " + e.getMessage());
+            log.error("Failed to set user notification preference: {}", e.getMessage(), e);
+            throw new WorkflowBusinessException("PREFERENCE_SET_FAILED", "Failed to set user notification preference: " + e.getMessage());
         }
     }
 
     /**
-     * 获取用户通知偏好
+     * Get user notification preference
      */
     private UserNotificationPreference getUserPreference(String userId) {
         return userPreferences.get(userId);
     }
 
     /**
-     * 检查用户是否启用了指定渠道
+     * Check if user has enabled a specified channel
      */
     private boolean isChannelEnabled(String userId, String channel) {
         UserNotificationPreference preference = getUserPreference(userId);
         if (preference == null) {
-            return true; // 默认启用所有渠道
+            return true; // All channels enabled by default
         }
         
-        // 检查免打扰模式
+        // Check do-not-disturb mode
         if (preference.isDoNotDisturb()) {
             LocalDateTime now = LocalDateTime.now();
             if (preference.getDoNotDisturbStart() != null && preference.getDoNotDisturbEnd() != null) {
@@ -1343,14 +1341,14 @@ public class NotificationManagerComponent {
     }
 
     /**
-     * 获取用户未读站内消息
+     * Get unread in-app messages for a user
      * 
-     * @param userId 用户ID
-     * @param limit 限制数量
-     * @return 未读消息列表
+     * @param userId user ID
+     * @param limit result limit
+     * @return unread message list
      */
     public List<Map<String, Object>> getUnreadInAppMessages(String userId, int limit) {
-        log.info("获取用户未读站内消息: userId={}, limit={}", userId, limit);
+        log.info("Getting unread in-app messages: userId={}, limit={}", userId, limit);
         
         try {
             List<Map<String, Object>> messages = new ArrayList<>();
@@ -1379,20 +1377,20 @@ public class NotificationManagerComponent {
             return messages;
             
         } catch (Exception e) {
-            log.error("获取未读站内消息失败: {}", e.getMessage(), e);
-            throw new WorkflowBusinessException("GET_MESSAGES_FAILED", "获取未读站内消息失败: " + e.getMessage());
+            log.error("Failed to get unread in-app messages: {}", e.getMessage(), e);
+            throw new WorkflowBusinessException("GET_MESSAGES_FAILED", "Failed to get unread in-app messages: " + e.getMessage());
         }
     }
 
     /**
-     * 标记站内消息为已读
+     * Mark in-app message as read
      * 
-     * @param userId 用户ID
-     * @param messageId 消息ID
-     * @return 标记结果
+     * @param userId user ID
+     * @param messageId message ID
+     * @return mark result
      */
     public NotificationResult markInAppMessageAsRead(String userId, String messageId) {
-        log.info("标记站内消息为已读: userId={}, messageId={}", userId, messageId);
+        log.info("Marking in-app message as read: userId={}, messageId={}", userId, messageId);
         
         try {
             String messageKey = NOTIFICATION_PREFIX + "in_app:" + userId + ":" + messageId;
@@ -1401,7 +1399,7 @@ public class NotificationManagerComponent {
             if (messageJson == null) {
                 return NotificationResult.builder()
                         .success(false)
-                        .message("消息不存在")
+                        .message("Message not found")
                         .build();
             }
             
@@ -1415,60 +1413,60 @@ public class NotificationManagerComponent {
             
             return NotificationResult.builder()
                     .success(true)
-                    .message("消息已标记为已读")
+                    .message("Message marked as read")
                     .build();
                     
         } catch (Exception e) {
-            log.error("标记消息为已读失败: {}", e.getMessage(), e);
-            throw new WorkflowBusinessException("MARK_READ_FAILED", "标记消息为已读失败: " + e.getMessage());
+            log.error("Failed to mark message as read: {}", e.getMessage(), e);
+            throw new WorkflowBusinessException("MARK_READ_FAILED", "Failed to mark message as read: " + e.getMessage());
         }
     }
 
     /**
-     * 初始化默认通知模板
+     * Initialize default notification templates
      */
     public void initializeDefaultTemplates() {
-        log.info("初始化默认通知模板");
+        log.info("Initializing default notification templates");
         
-        // 任务分配模板
+        // Task assignment template
         NotificationTemplate taskAssignedTemplate = new NotificationTemplate();
         taskAssignedTemplate.setTemplateId("TASK_ASSIGNED_DEFAULT");
-        taskAssignedTemplate.setTemplateName("任务分配通知");
+        taskAssignedTemplate.setTemplateName("Task Assignment Notification");
         taskAssignedTemplate.setEventType("TASK_ASSIGNED");
-        taskAssignedTemplate.setSubject("您有新的任务待处理");
-        taskAssignedTemplate.setBodyTemplate("任务 ${taskName} 已分配给您，请及时处理。");
+        taskAssignedTemplate.setSubject("You have a new task to process");
+        taskAssignedTemplate.setBodyTemplate("Task ${taskName} has been assigned to you, please process it promptly.");
         taskAssignedTemplate.setLocalizedSubjects(Map.of("en", "You have a new task"));
         taskAssignedTemplate.setLocalizedBodies(Map.of("en", "Task ${taskName} has been assigned to you."));
         taskAssignedTemplate.setChannels(Set.of("WEBSOCKET", "IN_APP", "EMAIL"));
         taskAssignedTemplate.setEnabled(true);
         defineNotificationTemplate(taskAssignedTemplate);
         
-        // 任务超时模板
+        // Task overdue template
         NotificationTemplate taskOverdueTemplate = new NotificationTemplate();
         taskOverdueTemplate.setTemplateId("TASK_OVERDUE_DEFAULT");
-        taskOverdueTemplate.setTemplateName("任务超时通知");
+        taskOverdueTemplate.setTemplateName("Task Overdue Notification");
         taskOverdueTemplate.setEventType("TASK_OVERDUE");
-        taskOverdueTemplate.setSubject("任务已超时");
-        taskOverdueTemplate.setBodyTemplate("任务 ${taskName} 已超时，请尽快处理。");
+        taskOverdueTemplate.setSubject("Task is overdue");
+        taskOverdueTemplate.setBodyTemplate("Task ${taskName} is overdue, please process it as soon as possible.");
         taskOverdueTemplate.setLocalizedSubjects(Map.of("en", "Task overdue"));
         taskOverdueTemplate.setLocalizedBodies(Map.of("en", "Task ${taskName} is overdue."));
         taskOverdueTemplate.setChannels(Set.of("WEBSOCKET", "IN_APP", "EMAIL", "SMS"));
         taskOverdueTemplate.setEnabled(true);
         defineNotificationTemplate(taskOverdueTemplate);
         
-        // 流程完成模板
+        // Process completed template
         NotificationTemplate processCompletedTemplate = new NotificationTemplate();
         processCompletedTemplate.setTemplateId("PROCESS_COMPLETED_DEFAULT");
-        processCompletedTemplate.setTemplateName("流程完成通知");
+        processCompletedTemplate.setTemplateName("Process Completed Notification");
         processCompletedTemplate.setEventType("PROCESS_COMPLETED");
-        processCompletedTemplate.setSubject("流程已完成");
-        processCompletedTemplate.setBodyTemplate("流程 ${processDefinitionKey} (业务键: ${businessKey}) 已完成。");
+        processCompletedTemplate.setSubject("Process completed");
+        processCompletedTemplate.setBodyTemplate("Process ${processDefinitionKey} (business key: ${businessKey}) has been completed.");
         processCompletedTemplate.setLocalizedSubjects(Map.of("en", "Process completed"));
         processCompletedTemplate.setLocalizedBodies(Map.of("en", "Process ${processDefinitionKey} (business key: ${businessKey}) has been completed."));
         processCompletedTemplate.setChannels(Set.of("WEBSOCKET", "IN_APP"));
         processCompletedTemplate.setEnabled(true);
         defineNotificationTemplate(processCompletedTemplate);
         
-        log.info("默认通知模板初始化完成");
+        log.info("Default notification templates initialized");
     }
 }

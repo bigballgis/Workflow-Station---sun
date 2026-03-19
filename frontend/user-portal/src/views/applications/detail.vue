@@ -810,9 +810,12 @@ const parseBpmnXml = (xml: string) => {
           completed.push(id)
         }
       } else if (processInfo.value.status === 'COMPLETED') {
-        // 流程已完成，所有 userTask 都视为已完成
-        status = 'completed'
-        completed.push(id)
+        // 流程已完成，只标记实际执行过的节点（通过历史记录匹配）
+        const historyMatch = historyRecords.value.find(h => h.nodeName === name || h.nodeId === id)
+        if (historyMatch) {
+          status = historyMatch.status === 'rejected' ? 'rejected' : 'completed'
+          completed.push(id)
+        }
       } else if (processInfo.value.status === 'RUNNING') {
         // 流程进行中，根据当前节点名称判断
         if (name === currentNodeName || id === currentNodeName) {
@@ -876,8 +879,12 @@ const parseBpmnXml = (xml: string) => {
       } else if (completedNodeNames.has(name)) {
         status = 'completed'
       } else if (processInfo.value.status === 'COMPLETED') {
-        // 流程已完成，网关视为已完成
-        status = 'completed'
+        // 流程已完成，只标记实际执行路径上的网关
+        const incomingSourceIds = earlyFlows.filter(f => f.targetRef === id).map(f => f.sourceRef)
+        const hasCompletedSource = incomingSourceIds.some(srcId => completed.includes(srcId))
+        if (hasCompletedSource) {
+          status = 'completed'
+        }
       } else {
         // 检查是否有已完成的入口节点（通过 sequenceFlow）
         const incomingSourceIds = earlyFlows.filter(f => f.targetRef === id).map(f => f.sourceRef)

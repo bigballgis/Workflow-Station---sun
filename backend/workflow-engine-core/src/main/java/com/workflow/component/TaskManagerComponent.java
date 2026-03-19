@@ -151,7 +151,7 @@ public class TaskManagerComponent {
                 
         } catch (Exception e) {
             throw new WorkflowBusinessException("TASK_QUERY_ERROR", 
-                "查询用户待办任务失败: " + e.getMessage(), e);
+                "Failed to query user pending tasks: " + e.getMessage(), e);
         }
     }
     
@@ -345,7 +345,7 @@ public class TaskManagerComponent {
                 
         } catch (Exception e) {
             throw new WorkflowBusinessException("TASK_QUERY_ERROR", 
-                "按流程实例查询任务失败: " + e.getMessage(), e);
+                "Failed to query tasks by process instance: " + e.getMessage(), e);
         }
     }
     /**
@@ -426,7 +426,7 @@ public class TaskManagerComponent {
                 
         } catch (Exception e) {
             throw new WorkflowBusinessException("TASK_QUERY_ERROR", 
-                "查询用户可见任务失败: " + e.getMessage(), e);
+                "Failed to query user visible tasks: " + e.getMessage(), e);
         }
     }
     
@@ -436,7 +436,7 @@ public class TaskManagerComponent {
     @Auditable(
         operationType = AuditOperationType.ASSIGN_TASK,
         resourceType = AuditResourceType.TASK,
-        description = "分配任务",
+        description = "Assign task",
         captureArgs = true,
         captureResult = true
     )
@@ -453,7 +453,7 @@ public class TaskManagerComponent {
             if (flowableTask == null) {
                 throw new WorkflowValidationException(Collections.singletonList(
                     new WorkflowValidationException.ValidationError(
-                        "taskId", "任务不存在", taskId)));
+                        "taskId", "Task not found", taskId)));
             }
             
             // 检查任务是否已完成（通过查询历史任务）
@@ -464,7 +464,7 @@ public class TaskManagerComponent {
             if (isCompleted) {
                 throw new WorkflowValidationException(Collections.singletonList(
                     new WorkflowValidationException.ValidationError(
-                        "taskId", "任务已完成，无法重新分配", taskId)));
+                        "taskId", "Task already completed, cannot reassign", taskId)));
             }
             
             // 查找或创建扩展任务信息
@@ -489,7 +489,7 @@ public class TaskManagerComponent {
                 request.getAssignmentType(), 
                 request.getAssignmentTarget(),
                 request.getOperatorUserId(),
-                "任务分配成功");
+                "Task assigned successfully");
                 
         } catch (WorkflowValidationException e) {
             throw e;
@@ -499,7 +499,7 @@ public class TaskManagerComponent {
                 request.getAssignmentType(), 
                 request.getAssignmentTarget(),
                 request.getOperatorUserId(),
-                "任务分配失败: " + e.getMessage());
+                "Task assignment failed: " + e.getMessage());
         }
     }
     
@@ -516,7 +516,7 @@ public class TaskManagerComponent {
                 .findByTaskIdAndIsDeletedFalse(taskId)
                 .orElseThrow(() -> new WorkflowValidationException(Collections.singletonList(
                     new WorkflowValidationException.ValidationError(
-                        "taskId", "任务不存在", taskId))));
+                        "taskId", "Task not found", taskId))));
             
             // 验证委托权限
             validateDelegationPermission(extendedTaskInfo, request.getDelegatedBy());
@@ -525,7 +525,7 @@ public class TaskManagerComponent {
             if (extendedTaskInfo.isCompleted()) {
                 throw new WorkflowValidationException(Collections.singletonList(
                     new WorkflowValidationException.ValidationError(
-                        "taskId", "任务已完成，无法委托", taskId)));
+                        "taskId", "Task already completed, cannot delegate", taskId)));
             }
             
             // 执行委托操作
@@ -548,13 +548,13 @@ public class TaskManagerComponent {
                 AssignmentType.USER, // 委托后变为用户分配
                 request.getDelegatedTo(),
                 request.getDelegatedBy(),
-                "任务委托成功");
+                "Task delegated successfully");
                 
         } catch (WorkflowValidationException e) {
             throw e;
         } catch (Exception e) {
             throw new WorkflowBusinessException("TASK_DELEGATION_ERROR", 
-                "任务委托失败: " + e.getMessage(), e);
+                "Task delegation failed: " + e.getMessage(), e);
         }
     }
     /**
@@ -576,14 +576,14 @@ public class TaskManagerComponent {
             if (flowableTask == null) {
                 throw new WorkflowValidationException(Collections.singletonList(
                     new WorkflowValidationException.ValidationError(
-                        "taskId", "任务不存在", taskId)));
+                        "taskId", "Task not found", taskId)));
             }
             
             // 检查任务是否已被认领（有 assignee）
             if (flowableTask.getAssignee() != null && !flowableTask.getAssignee().isEmpty()) {
                 throw new WorkflowValidationException(Collections.singletonList(
                     new WorkflowValidationException.ValidationError(
-                        "taskId", "任务已被认领", taskId)));
+                        "taskId", "Task already claimed", taskId)));
             }
             
             // 查找扩展任务信息（可选）
@@ -601,7 +601,7 @@ public class TaskManagerComponent {
                 if (extendedTaskInfo.isCompleted()) {
                     throw new WorkflowValidationException(Collections.singletonList(
                         new WorkflowValidationException.ValidationError(
-                            "taskId", "任务已完成，无法认领", taskId)));
+                            "taskId", "Task already completed, cannot claim", taskId)));
                 }
                 
                 // 执行认领操作
@@ -620,13 +620,13 @@ public class TaskManagerComponent {
                 AssignmentType.USER, // 认领后变为用户分配
                 request.getClaimedBy(),
                 request.getClaimedBy(),
-                "任务认领成功");
+                "Task claimed successfully");
                 
         } catch (WorkflowValidationException e) {
             throw e;
         } catch (Exception e) {
             throw new WorkflowBusinessException("TASK_CLAIM_ERROR", 
-                "任务认领失败: " + e.getMessage(), e);
+                "Task claim failed: " + e.getMessage(), e);
         }
     }
     
@@ -643,27 +643,27 @@ public class TaskManagerComponent {
                 .findByTaskIdAndIsDeletedFalse(taskId)
                 .orElseThrow(() -> new WorkflowValidationException(Collections.singletonList(
                     new WorkflowValidationException.ValidationError(
-                        "taskId", "任务不存在", taskId))));
+                        "taskId", "Task not found", taskId))));
             
             // 检查任务是否已完成
             if (extendedTaskInfo.isCompleted()) {
                 throw new WorkflowValidationException(Collections.singletonList(
                     new WorkflowValidationException.ValidationError(
-                        "taskId", "任务已完成，无法取消认领", taskId)));
+                        "taskId", "Task already completed, cannot unclaim", taskId)));
             }
             
             // 检查任务是否已被认领
             if (!extendedTaskInfo.isClaimed()) {
                 throw new WorkflowValidationException(Collections.singletonList(
                     new WorkflowValidationException.ValidationError(
-                        "taskId", "任务未被认领", taskId)));
+                        "taskId", "Task not claimed", taskId)));
             }
             
             // 验证是否是当前认领人
             if (!userId.equals(extendedTaskInfo.getClaimedBy())) {
                 throw new WorkflowValidationException(Collections.singletonList(
                     new WorkflowValidationException.ValidationError(
-                        "userId", "只有认领人才能取消认领", userId)));
+                        "userId", "Only the claimer can unclaim", userId)));
             }
             
             // 执行取消认领操作
@@ -680,13 +680,13 @@ public class TaskManagerComponent {
                 extendedTaskInfo.getAssignmentType(),
                 extendedTaskInfo.getAssignmentTarget(),
                 userId,
-                "取消认领成功");
+                "Task unclaimed successfully");
                 
         } catch (WorkflowValidationException e) {
             throw e;
         } catch (Exception e) {
             throw new WorkflowBusinessException("TASK_UNCLAIM_ERROR", 
-                "取消认领失败: " + e.getMessage(), e);
+                "Task unclaim failed: " + e.getMessage(), e);
         }
     }
     
@@ -707,7 +707,7 @@ public class TaskManagerComponent {
             if (flowableTask == null) {
                 throw new WorkflowValidationException(Collections.singletonList(
                     new WorkflowValidationException.ValidationError(
-                        "taskId", "任务不存在", taskId)));
+                        "taskId", "Task not found", taskId)));
             }
             
             // 查找扩展任务信息（可选）
@@ -721,7 +721,7 @@ public class TaskManagerComponent {
                 if (extendedTaskInfo.isCompleted()) {
                     throw new WorkflowValidationException(Collections.singletonList(
                         new WorkflowValidationException.ValidationError(
-                            "taskId", "任务已完成，无法转办", taskId)));
+                            "taskId", "Task already completed, cannot transfer", taskId)));
                 }
                 
                 // 验证转办权限
@@ -748,13 +748,13 @@ public class TaskManagerComponent {
                 AssignmentType.USER,
                 toUserId,
                 fromUserId,
-                "任务转办成功");
+                "Task transferred successfully");
                 
         } catch (WorkflowValidationException e) {
             throw e;
         } catch (Exception e) {
             throw new WorkflowBusinessException("TASK_TRANSFER_ERROR", 
-                "任务转办失败: " + e.getMessage(), e);
+                "Task transfer failed: " + e.getMessage(), e);
         }
     }
     
@@ -778,7 +778,7 @@ public class TaskManagerComponent {
             if (flowableTask == null) {
                 throw new WorkflowValidationException(Collections.singletonList(
                     new WorkflowValidationException.ValidationError(
-                        "taskId", "任务不存在", taskId)));
+                        "taskId", "Task not found", taskId)));
             }
             
             // 查找扩展任务信息（可选，用于记录额外信息）
@@ -796,7 +796,7 @@ public class TaskManagerComponent {
                 if (extendedTaskInfo.isCompleted()) {
                     throw new WorkflowValidationException(Collections.singletonList(
                         new WorkflowValidationException.ValidationError(
-                            "taskId", "任务已完成", taskId)));
+                            "taskId", "Task already completed", taskId)));
                 }
             }
             
@@ -846,13 +846,13 @@ public class TaskManagerComponent {
                 assignmentType,
                 currentAssignee,
                 userId,
-                "任务完成成功");
+                "Task completed successfully");
                 
         } catch (WorkflowValidationException e) {
             throw e;
         } catch (Exception e) {
             throw new WorkflowBusinessException("TASK_COMPLETE_ERROR", 
-                "任务完成失败: " + e.getMessage(), e);
+                "Task completion failed: " + e.getMessage(), e);
         }
     }
     
@@ -863,7 +863,7 @@ public class TaskManagerComponent {
     @Auditable(
         operationType = AuditOperationType.RETURN_TASK,
         resourceType = AuditResourceType.TASK,
-        description = "回退任务",
+        description = "Return task",
         captureArgs = true,
         captureResult = true
     )
@@ -880,7 +880,7 @@ public class TaskManagerComponent {
             if (currentTask == null) {
                 throw new WorkflowValidationException(Collections.singletonList(
                     new WorkflowValidationException.ValidationError(
-                        "taskId", "任务不存在", taskId)));
+                        "taskId", "Task not found", taskId)));
             }
             
             String processInstanceId = currentTask.getProcessInstanceId();
@@ -900,7 +900,7 @@ public class TaskManagerComponent {
             if (historicActivities.isEmpty()) {
                 throw new WorkflowValidationException(Collections.singletonList(
                     new WorkflowValidationException.ValidationError(
-                        "targetActivityId", "目标节点不是有效的历史节点", targetActivityId)));
+                        "targetActivityId", "Target activity is not a valid historic activity", targetActivityId)));
             }
             
             // 使用 Flowable 的 createChangeActivityStateBuilder 进行回退
@@ -928,13 +928,13 @@ public class TaskManagerComponent {
                 AssignmentType.USER,
                 targetActivityId,
                 request.getUserId(),
-                "任务回退成功，已回退到节点: " + targetActivityId);
+                "Task returned successfully, returned to activity: " + targetActivityId);
                 
         } catch (WorkflowValidationException e) {
             throw e;
         } catch (Exception e) {
             throw new WorkflowBusinessException("TASK_RETURN_ERROR", 
-                "任务回退失败: " + e.getMessage(), e);
+                "Task return failed: " + e.getMessage(), e);
         }
     }
     
@@ -951,7 +951,7 @@ public class TaskManagerComponent {
             if (currentTask == null) {
                 throw new WorkflowValidationException(Collections.singletonList(
                     new WorkflowValidationException.ValidationError(
-                        "taskId", "任务不存在", taskId)));
+                        "taskId", "Task not found", taskId)));
             }
             
             String processInstanceId = currentTask.getProcessInstanceId();
@@ -989,7 +989,7 @@ public class TaskManagerComponent {
             
         } catch (Exception e) {
             throw new WorkflowBusinessException("TASK_QUERY_ERROR", 
-                "查询可回退节点失败: " + e.getMessage(), e);
+                "Failed to query returnable activities: " + e.getMessage(), e);
         }
     }
     
@@ -1020,13 +1020,13 @@ public class TaskManagerComponent {
             // 3. 都找不到，抛出异常
             throw new WorkflowValidationException(Collections.singletonList(
                 new WorkflowValidationException.ValidationError(
-                    "taskId", "任务不存在", taskId)));
+                    "taskId", "Task not found", taskId)));
             
         } catch (WorkflowValidationException e) {
             throw e;
         } catch (Exception e) {
             throw new WorkflowBusinessException("TASK_QUERY_ERROR", 
-                "查询任务详情失败: " + e.getMessage(), e);
+                "Failed to query task details: " + e.getMessage(), e);
         }
     }
     
@@ -1455,7 +1455,7 @@ public class TaskManagerComponent {
         if (!StringUtils.hasText(userId)) {
             throw new WorkflowValidationException(Collections.singletonList(
                 new WorkflowValidationException.ValidationError(
-                    "userId", "用户ID不能为空", userId)));
+                    "userId", "User ID cannot be empty", userId)));
         }
     }
     
@@ -1466,7 +1466,7 @@ public class TaskManagerComponent {
         if (request == null) {
             throw new WorkflowValidationException(Collections.singletonList(
                 new WorkflowValidationException.ValidationError(
-                    "request", "请求参数不能为空", null)));
+                    "request", "Request parameters cannot be empty", null)));
         }
         
         if (!request.isValid()) {
@@ -1483,7 +1483,7 @@ public class TaskManagerComponent {
         if (request == null) {
             throw new WorkflowValidationException(Collections.singletonList(
                 new WorkflowValidationException.ValidationError(
-                    "request", "请求参数不能为空", null)));
+                    "request", "Request parameters cannot be empty", null)));
         }
         
         if (!request.isValid()) {
@@ -1500,7 +1500,7 @@ public class TaskManagerComponent {
         if (request == null) {
             throw new WorkflowValidationException(Collections.singletonList(
                 new WorkflowValidationException.ValidationError(
-                    "request", "请求参数不能为空", null)));
+                    "request", "Request parameters cannot be empty", null)));
         }
         
         if (!request.isValid()) {
@@ -1517,19 +1517,19 @@ public class TaskManagerComponent {
         if (request == null) {
             throw new WorkflowValidationException(Collections.singletonList(
                 new WorkflowValidationException.ValidationError(
-                    "request", "请求参数不能为空", null)));
+                    "request", "Request parameters cannot be empty", null)));
         }
         
         if (!StringUtils.hasText(request.getTargetActivityId())) {
             throw new WorkflowValidationException(Collections.singletonList(
                 new WorkflowValidationException.ValidationError(
-                    "targetActivityId", "目标节点ID不能为空", null)));
+                    "targetActivityId", "Target activity ID cannot be empty", null)));
         }
         
         if (!StringUtils.hasText(request.getUserId())) {
             throw new WorkflowValidationException(Collections.singletonList(
                 new WorkflowValidationException.ValidationError(
-                    "userId", "用户ID不能为空", null)));
+                    "userId", "User ID cannot be empty", null)));
         }
     }
     
@@ -1616,7 +1616,7 @@ public class TaskManagerComponent {
         if (!hasPermission) {
             throw new WorkflowValidationException(Collections.singletonList(
                 new WorkflowValidationException.ValidationError(
-                    "delegatedBy", "用户没有委托此任务的权限", delegatedBy)));
+                    "delegatedBy", "User does not have permission to delegate this task", delegatedBy)));
         }
     }
     
@@ -1628,7 +1628,7 @@ public class TaskManagerComponent {
         if (task.getAssignmentType() == AssignmentType.USER) {
             throw new WorkflowValidationException(Collections.singletonList(
                 new WorkflowValidationException.ValidationError(
-                    "taskId", "直接分配的任务不能被认领", task.getTaskId())));
+                    "taskId", "Directly assigned tasks cannot be claimed", task.getTaskId())));
         }
         
         // 验证用户是否有权限认领此任务
@@ -1640,7 +1640,7 @@ public class TaskManagerComponent {
         if (!hasPermission) {
             throw new WorkflowValidationException(Collections.singletonList(
                 new WorkflowValidationException.ValidationError(
-                    "claimedBy", "用户没有认领此任务的权限", claimedBy)));
+                    "claimedBy", "User does not have permission to claim this task", claimedBy)));
         }
     }
     
@@ -1655,7 +1655,7 @@ public class TaskManagerComponent {
             if (!currentAssignee.equals(userId)) {
                 throw new WorkflowValidationException(Collections.singletonList(
                     new WorkflowValidationException.ValidationError(
-                        "userId", "用户没有完成此任务的权限", userId)));
+                        "userId", "User does not have permission to complete this task", userId)));
             }
             return;
         }
@@ -1669,7 +1669,7 @@ public class TaskManagerComponent {
         if (!hasPermission) {
             throw new WorkflowValidationException(Collections.singletonList(
                 new WorkflowValidationException.ValidationError(
-                    "userId", "用户没有完成此任务的权限", userId)));
+                    "userId", "User does not have permission to complete this task", userId)));
         }
     }
     
@@ -1707,7 +1707,7 @@ public class TaskManagerComponent {
      * 发布任务分配事件
      */
     private void publishTaskAssignmentEvent(ExtendedTaskInfo task, TaskAssignmentRequest request) {
-        log.info("任务分配事件: taskId={}, assignmentTarget={}, assignmentType={}", 
+        log.info("Task assignment event: taskId={}, assignmentTarget={}, assignmentType={}", 
                 task.getTaskId(), request.getAssignmentTarget(), request.getAssignmentType());
         // 事件发布逻辑可以在此处集成消息队列或事件总线
     }
@@ -1716,7 +1716,7 @@ public class TaskManagerComponent {
      * 发布任务委托事件
      */
     private void publishTaskDelegationEvent(ExtendedTaskInfo task, TaskDelegationRequest request) {
-        log.info("任务委托事件: taskId={}, delegatedTo={}, delegatedBy={}", 
+        log.info("Task delegation event: taskId={}, delegatedTo={}, delegatedBy={}", 
                 task.getTaskId(), request.getDelegatedTo(), request.getDelegatedBy());
         // 事件发布逻辑可以在此处集成消息队列或事件总线
     }
@@ -1725,7 +1725,7 @@ public class TaskManagerComponent {
      * 发布任务认领事件
      */
     private void publishTaskClaimEvent(ExtendedTaskInfo task, TaskClaimRequest request) {
-        log.info("任务认领事件: taskId={}, claimedBy={}", 
+        log.info("Task claim event: taskId={}, claimedBy={}", 
                 task.getTaskId(), request.getClaimedBy());
         // 事件发布逻辑可以在此处集成消息队列或事件总线
     }
@@ -1735,7 +1735,7 @@ public class TaskManagerComponent {
      */
     private void publishTaskCompleteEvent(ExtendedTaskInfo task, String userId, 
                                         java.util.Map<String, Object> variables) {
-        log.info("任务完成事件: taskId={}, completedBy={}", 
+        log.info("Task completion event: taskId={}, completedBy={}", 
                 task.getTaskId(), userId);
         // 事件发布逻辑可以在此处集成消息队列或事件总线
     }
@@ -1746,7 +1746,7 @@ public class TaskManagerComponent {
     private void publishTaskReturnEvent(String taskId, String processInstanceId, 
                                         String fromActivityId, String toActivityId,
                                         TaskReturnRequest request) {
-        log.info("任务回退事件: taskId={}, from={}, to={}, userId={}, reason={}", 
+        log.info("Task return event: taskId={}, from={}, to={}, userId={}, reason={}", 
                 taskId, fromActivityId, toActivityId, request.getUserId(), request.getReason());
         // 事件发布逻辑可以在此处集成消息队列或事件总线
     }
@@ -1762,7 +1762,7 @@ public class TaskManagerComponent {
             return extendedTaskInfoRepository.countUserTodoTasks(userId);
         } catch (Exception e) {
             throw new WorkflowBusinessException("TASK_COUNT_ERROR", 
-                "统计用户任务数量失败: " + e.getMessage(), e);
+                "Failed to count user tasks: " + e.getMessage(), e);
         }
     }
     
@@ -1775,7 +1775,7 @@ public class TaskManagerComponent {
             return extendedTaskInfoRepository.countUserOverdueTasks(userId, LocalDateTime.now());
         } catch (Exception e) {
             throw new WorkflowBusinessException("TASK_COUNT_ERROR", 
-                "统计用户过期任务数量失败: " + e.getMessage(), e);
+                "Failed to count user overdue tasks: " + e.getMessage(), e);
         }
     }
     
@@ -1793,7 +1793,7 @@ public class TaskManagerComponent {
                 
         } catch (Exception e) {
             throw new WorkflowBusinessException("TASK_QUERY_ERROR", 
-                "查询过期任务失败: " + e.getMessage(), e);
+                "Failed to query overdue tasks: " + e.getMessage(), e);
         }
     }
     
@@ -1811,7 +1811,7 @@ public class TaskManagerComponent {
                 
         } catch (Exception e) {
             throw new WorkflowBusinessException("TASK_QUERY_ERROR", 
-                "查询高优先级任务失败: " + e.getMessage(), e);
+                "Failed to query high priority tasks: " + e.getMessage(), e);
         }
     }
 }

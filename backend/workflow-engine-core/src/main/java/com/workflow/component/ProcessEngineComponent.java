@@ -69,8 +69,8 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * 流程引擎组件
- * 负责流程定义管理、流程实例执行、BPMN解析
+ * Process Engine Component
+ * Handles process definition management, process instance execution, BPMN parsing
  */
 @Slf4j
 @Component
@@ -96,25 +96,25 @@ public class ProcessEngineComponent {
     private HistoryService historyService;
     
     /**
-     * 部署流程定义
-     * 支持BPMN 2.0文件验证和版本管理
+     * Deploy process definition
+     * Supports BPMN 2.0 file validation and version management
      */
     @Auditable(
         operationType = AuditOperationType.DEPLOY_PROCESS,
         resourceType = AuditResourceType.PROCESS_DEFINITION,
-        description = "部署流程定义",
+        description = "Deploy process definition",
         captureArgs = true,
         captureResult = true
     )
     public DeploymentResult deployProcess(ProcessDefinitionRequest request) {
         try {
-            // 验证请求参数
+            // Validate request parameters
             validateDeploymentRequest(request);
             
-            // 验证BPMN文件格式
+            // Validate BPMN file format
             validateBpmnFile(request.getBpmnXml());
             
-            // 创建部署
+            // Create deployment
             Deployment deployment = repositoryService.createDeployment()
                 .name(request.getName())
                 .category(request.getCategory())
@@ -122,7 +122,7 @@ public class ProcessEngineComponent {
                 .addString(request.getKey() + ".bpmn", request.getBpmnXml())
                 .deploy();
             
-            // 获取部署的流程定义
+            // Get deployed process definitions
             List<ProcessDefinition> processDefinitions = repositoryService
                 .createProcessDefinitionQuery()
                 .deploymentId(deployment.getId())
@@ -148,39 +148,39 @@ public class ProcessEngineComponent {
                     processDefinition.getVersion()
                 );
             } else {
-                return DeploymentResult.failure("部署成功但未找到流程定义");
+                return DeploymentResult.failure("Deployment succeeded but no process definition found");
             }
                 
         } catch (WorkflowValidationException e) {
             // Re-throw validation exceptions so they can be caught by tests
             throw e;
         } catch (Exception e) {
-            return DeploymentResult.failure("流程定义部署失败: " + e.getMessage());
+            return DeploymentResult.failure("Failed to deploy process definition: " + e.getMessage());
         }
     }
     
     /**
-     * 启动流程实例
+     * Start process instance
      */
     @Auditable(
         operationType = AuditOperationType.START_PROCESS,
         resourceType = AuditResourceType.PROCESS_INSTANCE,
-        description = "启动流程实例",
+        description = "Start process instance",
         captureArgs = true,
         captureResult = true
     )
     public ProcessInstanceResult startProcess(StartProcessRequest request) {
         try {
-            // 验证请求参数
+            // Validate request parameters
             validateStartProcessRequest(request);
             
-            // 验证流程定义是否存在
+            // Verify process definition exists
             ProcessDefinition processDefinition = getProcessDefinition(request.getProcessDefinitionKey());
             
-            // 启动流程实例，设置启动用户
+            // Start process instance with start user
             ProcessInstance processInstance;
             if (StringUtils.hasText(request.getStartUserId())) {
-                // 设置启动用户ID
+                // Set start user ID
                 org.flowable.common.engine.impl.identity.Authentication.setAuthenticatedUserId(request.getStartUserId());
                 try {
                     processInstance = runtimeService.startProcessInstanceByKey(
@@ -188,7 +188,7 @@ public class ProcessEngineComponent {
                         request.getBusinessKey(), 
                         request.getVariables());
                 } finally {
-                    // 清除认证用户ID
+                    // Clear authenticated user ID
                     org.flowable.common.engine.impl.identity.Authentication.setAuthenticatedUserId(null);
                 }
             } else {
@@ -209,16 +209,16 @@ public class ProcessEngineComponent {
                 .startUserId(request.getStartUserId()) // Use the request startUserId
                 .variables(request.getVariables())
                 .success(true)
-                .message("流程实例启动成功")
+                .message("Process instance started successfully")
                 .build();
                 
         } catch (Exception e) {
-            throw new WorkflowBusinessException("PROCESS_START_ERROR", "流程实例启动失败: " + e.getMessage(), e);
+            throw new WorkflowBusinessException("PROCESS_START_ERROR", "Failed to start process instance: " + e.getMessage(), e);
         }
     }
     
     /**
-     * 查询流程定义列表
+     * Query process definition list
      */
     public List<ProcessDefinitionResult> getProcessDefinitions(String category, String key) {
         try {
@@ -232,7 +232,7 @@ public class ProcessEngineComponent {
             
             List<ProcessDefinition> processDefinitions = query.list();
             
-            // 如果指定了类别，需要手动过滤，因为Flowable没有直接的部署类别查询方法
+            // If category specified, filter manually since Flowable has no direct deployment category query
             if (StringUtils.hasText(category)) {
                 processDefinitions = processDefinitions.stream()
                     .filter(pd -> {
@@ -253,16 +253,16 @@ public class ProcessEngineComponent {
                 .collect(Collectors.toList());
                 
         } catch (Exception e) {
-            throw new WorkflowBusinessException("PROCESS_QUERY_ERROR", "查询流程定义失败: " + e.getMessage(), e);
+            throw new WorkflowBusinessException("PROCESS_QUERY_ERROR", "Failed to query process definitions: " + e.getMessage(), e);
         }
     }
     
     /**
-     * 删除流程定义
+     * Delete process definition
      */
     public void deleteProcessDefinition(String deploymentId, boolean cascade) {
         try {
-            // 检查是否有运行中的流程实例
+            // Check for running process instances
             if (!cascade) {
                 long runningInstances = runtimeService.createProcessInstanceQuery()
                     .deploymentId(deploymentId)
@@ -272,7 +272,7 @@ public class ProcessEngineComponent {
                     throw new WorkflowValidationException(Collections.singletonList(
                         new WorkflowValidationException.ValidationError(
                             "deploymentId", 
-                            "无法删除流程定义，存在 " + runningInstances + " 个运行中的流程实例", 
+                            "Cannot delete process definition, there are " + runningInstances + " running process instances", 
                             deploymentId)));
                 }
             }
@@ -283,41 +283,41 @@ public class ProcessEngineComponent {
             // Re-throw validation exceptions as-is
             throw e;
         } catch (Exception e) {
-            throw new WorkflowBusinessException("PROCESS_DELETE_ERROR", "删除流程定义失败: " + e.getMessage(), e);
+            throw new WorkflowBusinessException("PROCESS_DELETE_ERROR", "Failed to delete process definition: " + e.getMessage(), e);
         }
     }
     
     /**
-     * 暂停流程定义
+     * Suspend process definition
      */
     public void suspendProcessDefinition(String processDefinitionId) {
         try {
             repositoryService.suspendProcessDefinitionById(processDefinitionId);
         } catch (Exception e) {
-            throw new WorkflowBusinessException("PROCESS_SUSPEND_ERROR", "暂停流程定义失败: " + e.getMessage(), e);
+            throw new WorkflowBusinessException("PROCESS_SUSPEND_ERROR", "Failed to suspend process definition: " + e.getMessage(), e);
         }
     }
     
     /**
-     * 激活流程定义
+     * Activate process definition
      */
     public void activateProcessDefinition(String processDefinitionId) {
         try {
             repositoryService.activateProcessDefinitionById(processDefinitionId);
         } catch (Exception e) {
-            throw new WorkflowBusinessException("PROCESS_ACTIVATE_ERROR", "激活流程定义失败: " + e.getMessage(), e);
+            throw new WorkflowBusinessException("PROCESS_ACTIVATE_ERROR", "Failed to activate process definition: " + e.getMessage(), e);
         }
     }
     
     /**
-     * 查询流程实例
+     * Query process instances
      */
     public ProcessInstanceQueryResult queryProcessInstances(ProcessInstanceQueryRequest request) {
         try {
             List<ProcessInstanceQueryResult.ProcessInstanceInfo> allInstances = new ArrayList<>();
             long totalCount = 0;
             
-            // 如果没有指定状态或者包含active/suspended状态，查询运行时表
+            // If no state specified or includes active/suspended, query runtime table
             if (request.getState() == null || 
                 "active".equalsIgnoreCase(request.getState()) || 
                 "suspended".equalsIgnoreCase(request.getState())) {
@@ -338,12 +338,12 @@ public class ProcessEngineComponent {
                 totalCount += runtimeCount;
             }
             
-            // 如果没有指定状态或者包含completed状态，查询历史表
+            // If no state specified or includes completed, query history table
             if (request.getState() == null || "completed".equalsIgnoreCase(request.getState())) {
                 var historyQuery = processEngine.getHistoryService().createHistoricProcessInstanceQuery();
                 applyHistoryQueryConditions(historyQuery, request);
                 
-                // 如果查询运行时表时已经有结果，需要调整历史查询的分页参数
+                // If runtime query already has results, adjust history query pagination
                 int historyOffset = Math.max(0, request.getPage() * request.getSize() - allInstances.size());
                 int historyLimit = request.getSize() - allInstances.size();
                 
@@ -373,30 +373,30 @@ public class ProcessEngineComponent {
                     .build();
                     
         } catch (Exception e) {
-            throw new WorkflowBusinessException("PROCESS_QUERY_ERROR", "查询流程实例失败: " + e.getMessage(), e);
+            throw new WorkflowBusinessException("PROCESS_QUERY_ERROR", "Failed to query process instances: " + e.getMessage(), e);
         }
     }
     
     /**
-     * 获取流程实例状态
-     * 用于检查流程是否已完成以及获取最后一个活动节点
+     * Get process instance status
+     * Used to check if process is completed and get last activity node
      */
     public Map<String, Object> getProcessInstanceStatus(String processInstanceId) {
         Map<String, Object> status = new HashMap<>();
         
         try {
-            // 首先检查运行时流程实例
+            // First check runtime process instance
             ProcessInstance processInstance = runtimeService.createProcessInstanceQuery()
                     .processInstanceId(processInstanceId)
                     .singleResult();
             
             if (processInstance != null) {
-                // 流程还在运行中
+                // Process is still running
                 status.put("completed", false);
                 status.put("processInstanceId", processInstanceId);
                 status.put("state", processInstance.isSuspended() ? "SUSPENDED" : "RUNNING");
                 
-                // 获取当前活动任务
+                // Get current active tasks
                 List<Task> tasks = taskService.createTaskQuery()
                         .processInstanceId(processInstanceId)
                         .list();
@@ -411,7 +411,7 @@ public class ProcessEngineComponent {
                 return status;
             }
             
-            // 流程不在运行时表中，检查历史表
+            // Process not in runtime table, check history
             HistoricProcessInstance historicProcessInstance = historyService
                     .createHistoricProcessInstanceQuery()
                     .processInstanceId(processInstanceId)
@@ -423,7 +423,7 @@ public class ProcessEngineComponent {
                 status.put("state", "COMPLETED");
                 status.put("endTime", historicProcessInstance.getEndTime());
                 
-                // 获取最后一个活动节点（优先获取结束事件）
+                // Get last activity node (prioritize end events)
                 List<HistoricActivityInstance> endEvents = historyService
                         .createHistoricActivityInstanceQuery()
                         .processInstanceId(processInstanceId)
@@ -436,14 +436,13 @@ public class ProcessEngineComponent {
                     HistoricActivityInstance endEvent = endEvents.get(0);
                     String activityName = endEvent.getActivityName();
                     if (activityName != null && !activityName.isEmpty() && 
-                        !activityName.equalsIgnoreCase("End") && 
-                        !activityName.equalsIgnoreCase("结束")) {
+                        !activityName.equalsIgnoreCase("End")) {
                         status.put("lastActivityName", activityName);
                         return status;
                     }
                 }
                 
-                // 如果结束事件没有有意义的名称，获取最后一个用户任务
+                // If end event has no meaningful name, get the last user task
                 List<HistoricActivityInstance> userTasks = historyService
                         .createHistoricActivityInstanceQuery()
                         .processInstanceId(processInstanceId)
@@ -456,15 +455,15 @@ public class ProcessEngineComponent {
                 if (!userTasks.isEmpty()) {
                     status.put("lastActivityName", userTasks.get(0).getActivityName());
                 } else {
-                    status.put("lastActivityName", "已完成");
+                    status.put("lastActivityName", "Completed");
                 }
                 
                 return status;
             }
             
-            // 流程实例不存在
+            // Process instance does not exist
             status.put("completed", false);
-            status.put("error", "流程实例不存在");
+            status.put("error", "Process instance does not exist");
             return status;
             
         } catch (Exception e) {
@@ -476,19 +475,19 @@ public class ProcessEngineComponent {
     }
     
     /**
-     * 获取流程实例的当前活动节点
+     * Get current activity node of process instance
      */
     public Map<String, Object> getCurrentActivity(String processInstanceId) {
         Map<String, Object> result = new HashMap<>();
         
         try {
-            // 首先检查运行时流程实例
+            // First check runtime process instance
             ProcessInstance processInstance = runtimeService.createProcessInstanceQuery()
                     .processInstanceId(processInstanceId)
                     .singleResult();
             
             if (processInstance != null) {
-                // 流程还在运行中，获取当前活动节点
+                // Process still running, get current activity nodes
                 List<org.flowable.engine.runtime.Execution> executions = runtimeService
                         .createExecutionQuery()
                         .processInstanceId(processInstanceId)
@@ -496,8 +495,8 @@ public class ProcessEngineComponent {
                 
                 org.flowable.bpmn.model.BpmnModel bpmnModel = repositoryService.getBpmnModel(processInstance.getProcessDefinitionId());
                 
-                // 优先查找非 SequenceFlow 的活动节点（userTask、endEvent、gateway 等）
-                // SequenceFlow 的 name 通常是条件标签（如 "Yes"/"No"），不应作为 currentNode
+                // Prioritize non-SequenceFlow activity nodes (userTask, endEvent, gateway, etc.)
+                // SequenceFlow name is typically a condition label (e.g. "Yes"/"No"), not suitable as currentNode
                 Map<String, Object> fallback = null;
                 for (org.flowable.engine.runtime.Execution execution : executions) {
                     String activityId = execution.getActivityId();
@@ -505,7 +504,7 @@ public class ProcessEngineComponent {
                         org.flowable.bpmn.model.FlowElement flowElement = bpmnModel.getFlowElement(activityId);
                         
                         if (flowElement != null) {
-                            // 跳过 SequenceFlow，它的 name 是条件标签（如 "Yes"/"No"），不是节点名称
+                            // Skip SequenceFlow - its name is a condition label (e.g. "Yes"/"No"), not a node name
                             if (flowElement instanceof org.flowable.bpmn.model.SequenceFlow) {
                                 log.debug("Skipping SequenceFlow {} (name: {}) for process {}", 
                                         activityId, flowElement.getName(), processInstanceId);
@@ -534,7 +533,7 @@ public class ProcessEngineComponent {
                     }
                 }
                 
-                // 如果只找到了 SequenceFlow，尝试解析其目标节点作为当前活动
+                // If only SequenceFlow found, try to resolve its target node as current activity
                 if (fallback != null) {
                     String seqFlowId = (String) fallback.get("activityId");
                     org.flowable.bpmn.model.FlowElement seqFlow = bpmnModel.getFlowElement(seqFlowId);
@@ -553,23 +552,23 @@ public class ProcessEngineComponent {
                             return result;
                         }
                     }
-                    // 无法解析目标节点，返回 SequenceFlow 本身作为最后手段
+                    // Cannot resolve target node, return SequenceFlow as last resort
                     log.warn("Could not resolve SequenceFlow target for process {}, returning SequenceFlow as fallback", processInstanceId);
                     return fallback;
                 }
                 
-                result.put("error", "未找到当前活动节点");
+                result.put("error", "Current activity node not found");
                 return result;
             }
             
-            // 流程不在运行时表中，检查历史表
+            // Process not in runtime table, check history
             HistoricProcessInstance historicProcessInstance = historyService
                     .createHistoricProcessInstanceQuery()
                     .processInstanceId(processInstanceId)
                     .singleResult();
             
             if (historicProcessInstance != null) {
-                // 流程已完成，获取最后一个活动节点
+                // Process completed, get last activity node
                 List<HistoricActivityInstance> activities = historyService
                         .createHistoricActivityInstanceQuery()
                         .processInstanceId(processInstanceId)
@@ -588,7 +587,7 @@ public class ProcessEngineComponent {
                 }
             }
             
-            result.put("error", "流程实例不存在");
+            result.put("error", "Process instance does not exist");
             return result;
             
         } catch (Exception e) {
@@ -599,14 +598,14 @@ public class ProcessEngineComponent {
     }
     
     /**
-     * 控制流程实例（暂停、恢复、终止）
+     * Control process instance (suspend, resume, terminate)
      */
     public ProcessInstanceControlResult controlProcessInstance(ProcessInstanceControlRequest request) {
         try {
-            // 验证请求参数
+            // Validate request parameters
             validateProcessInstanceControlRequest(request);
             
-            // 验证流程实例是否存在
+            // Verify process instance exists
             ProcessInstance processInstance = runtimeService.createProcessInstanceQuery()
                     .processInstanceId(request.getProcessInstanceId())
                     .singleResult();
@@ -616,10 +615,10 @@ public class ProcessEngineComponent {
                     request.getProcessInstanceId(), 
                     request.getAction(), 
                     request.getUserId(),
-                    "流程实例不存在");
+                    "Process instance does not exist");
             }
             
-            // 执行相应操作
+            // Execute the corresponding operation
             switch (request.getAction().toLowerCase()) {
                 case "suspend" -> {
                     if (processInstance.isSuspended()) {
@@ -627,7 +626,7 @@ public class ProcessEngineComponent {
                             request.getProcessInstanceId(), 
                             request.getAction(), 
                             request.getUserId(),
-                            "流程实例已经处于暂停状态");
+                            "Process instance is already suspended");
                     }
                     runtimeService.suspendProcessInstanceById(request.getProcessInstanceId());
                     return ProcessInstanceControlResult.success(
@@ -642,7 +641,7 @@ public class ProcessEngineComponent {
                             request.getProcessInstanceId(), 
                             request.getAction(), 
                             request.getUserId(),
-                            "流程实例已经处于活动状态");
+                            "Process instance is already active");
                     }
                     runtimeService.activateProcessInstanceById(request.getProcessInstanceId());
                     return ProcessInstanceControlResult.success(
@@ -657,11 +656,11 @@ public class ProcessEngineComponent {
                             request.getProcessInstanceId(), 
                             request.getAction(), 
                             request.getUserId(),
-                            "流程实例已经结束");
+                            "Process instance has already ended");
                     }
                     runtimeService.deleteProcessInstance(
                         request.getProcessInstanceId(), 
-                        request.getReason() != null ? request.getReason() : "手动终止");
+                        request.getReason() != null ? request.getReason() : "Manually terminated");
                     return ProcessInstanceControlResult.success(
                         request.getProcessInstanceId(), 
                         request.getAction(), 
@@ -673,7 +672,7 @@ public class ProcessEngineComponent {
                         request.getProcessInstanceId(), 
                         request.getAction(), 
                         request.getUserId(),
-                        "不支持的操作类型: " + request.getAction());
+                        "Unsupported operation type: " + request.getAction());
                 }
             }
             
@@ -692,24 +691,24 @@ public class ProcessEngineComponent {
         }
     }
     
-    // ==================== BPMN网关和事件处理功能 ====================
+    // ==================== BPMN gateway and event handling ====================
     
     /**
-     * 获取流程实例的当前活动节点信息
-     * 用于网关和事件处理的状态查询
+     * Get current activity node information for process instance
+     * For gateway and event handling status queries
      */
     public List<ActivityInfo> getCurrentActivities(String processInstanceId) {
         try {
-            // 验证流程实例是否存在
+            // Verify process instance exists
             ProcessInstance processInstance = runtimeService.createProcessInstanceQuery()
                     .processInstanceId(processInstanceId)
                     .singleResult();
             
             if (processInstance == null) {
-                throw new WorkflowBusinessException("PROCESS_NOT_FOUND", "流程实例不存在: " + processInstanceId);
+                throw new WorkflowBusinessException("PROCESS_NOT_FOUND", "Process instance does not exist: " + processInstanceId);
             }
             
-            // 获取当前活动的执行实例
+            // Get current active execution instances
             List<Execution> executions = runtimeService.createExecutionQuery()
                     .processInstanceId(processInstanceId)
                     .list();
@@ -718,7 +717,7 @@ public class ProcessEngineComponent {
             
             for (Execution execution : executions) {
                 if (execution.getActivityId() != null) {
-                    // 获取BPMN模型以获取活动详细信息
+                    // Get BPMN model for activity details
                     BpmnModel bpmnModel = repositoryService.getBpmnModel(processInstance.getProcessDefinitionId());
                     FlowElement flowElement = bpmnModel.getFlowElement(execution.getActivityId());
                     
@@ -740,38 +739,38 @@ public class ProcessEngineComponent {
             return activities;
             
         } catch (Exception e) {
-            throw new WorkflowBusinessException("ACTIVITY_QUERY_ERROR", "查询当前活动节点失败: " + e.getMessage(), e);
+            throw new WorkflowBusinessException("ACTIVITY_QUERY_ERROR", "Failed to query current activity nodes: " + e.getMessage(), e);
         }
     }
     
     /**
-     * 评估排他网关的条件表达式
-     * 根据流程变量和条件表达式选择执行路径
+     * Evaluate exclusive gateway condition expressions
+     * Select execution path based on process variables and condition expressions
      */
     public GatewayEvaluationResult evaluateExclusiveGateway(String processInstanceId, String gatewayId) {
         try {
-            // 获取流程实例和BPMN模型
+            // Get process instance and BPMN model
             ProcessInstance processInstance = runtimeService.createProcessInstanceQuery()
                     .processInstanceId(processInstanceId)
                     .singleResult();
             
             if (processInstance == null) {
-                throw new WorkflowBusinessException("PROCESS_NOT_FOUND", "流程实例不存在: " + processInstanceId);
+                throw new WorkflowBusinessException("PROCESS_NOT_FOUND", "Process instance does not exist: " + processInstanceId);
             }
             
             BpmnModel bpmnModel = repositoryService.getBpmnModel(processInstance.getProcessDefinitionId());
             FlowElement flowElement = bpmnModel.getFlowElement(gatewayId);
             
             if (!(flowElement instanceof ExclusiveGateway)) {
-                throw new WorkflowBusinessException("INVALID_GATEWAY", "指定的元素不是排他网关: " + gatewayId);
+                throw new WorkflowBusinessException("INVALID_GATEWAY", "Specified element is not an exclusive gateway: " + gatewayId);
             }
             
             ExclusiveGateway exclusiveGateway = (ExclusiveGateway) flowElement;
             
-            // 获取流程变量
+            // Get process variables
             Map<String, Object> variables = runtimeService.getVariables(processInstanceId);
             
-            // 评估所有出口条件
+            // Evaluate all outgoing conditions
             List<SequenceFlow> outgoingFlows = exclusiveGateway.getOutgoingFlows();
             List<GatewayEvaluationResult.FlowEvaluation> flowEvaluations = new ArrayList<>();
             
@@ -781,22 +780,22 @@ public class ProcessEngineComponent {
             for (SequenceFlow sequenceFlow : outgoingFlows) {
                 boolean conditionResult = false;
                 String conditionExpression = sequenceFlow.getConditionExpression();
-                String evaluationMessage = "无条件表达式";
+                String evaluationMessage = "No condition expression";
                 
                 if (StringUtils.hasText(conditionExpression)) {
                     try {
-                        // 简化的条件评估 - 在实际项目中应该使用Flowable的表达式引擎
-                        // 这里提供基本的条件评估逻辑
+                        // Simplified condition evaluation - should use Flowable's expression engine in production
+                        // Basic condition evaluation logic provided here
                         conditionResult = evaluateSimpleCondition(conditionExpression, variables);
-                        evaluationMessage = "条件表达式: " + conditionExpression + ", 结果: " + conditionResult;
+                        evaluationMessage = "Condition expression: " + conditionExpression + ", result: " + conditionResult;
                         
                     } catch (Exception e) {
-                        evaluationMessage = "条件表达式评估失败: " + e.getMessage();
+                        evaluationMessage = "Condition expression evaluation failed: " + e.getMessage();
                     }
                 } else {
-                    // 默认流（没有条件表达式的流）
-                    conditionResult = (selectedFlowId == null); // 如果没有其他流被选中，则选择默认流
-                    evaluationMessage = "默认流";
+                    // Default flow (flow without condition expression)
+                    conditionResult = (selectedFlowId == null); // Select default flow if no other flow selected
+                    evaluationMessage = "Default flow";
                 }
                 
                 flowEvaluations.add(GatewayEvaluationResult.FlowEvaluation.builder()
@@ -807,7 +806,7 @@ public class ProcessEngineComponent {
                         .evaluationMessage(evaluationMessage)
                         .build());
                 
-                // 排他网关只选择第一个条件为真的流
+                // Exclusive gateway selects only the first flow with true condition
                 if (conditionResult && selectedFlowId == null) {
                     selectedFlowId = sequenceFlow.getId();
                     selectedFlowName = sequenceFlow.getName();
@@ -826,35 +825,35 @@ public class ProcessEngineComponent {
                     .build();
             
         } catch (Exception e) {
-            throw new WorkflowBusinessException("GATEWAY_EVALUATION_ERROR", "排他网关条件评估失败: " + e.getMessage(), e);
+            throw new WorkflowBusinessException("GATEWAY_EVALUATION_ERROR", "Failed to evaluate exclusive gateway conditions: " + e.getMessage(), e);
         }
     }
     
     /**
-     * 处理并行网关的分支创建和合并
-     * 支持并行执行路径的管理
+     * Handle parallel gateway branch creation and merging
+     * Supports parallel execution path management
      */
     public ParallelGatewayResult handleParallelGateway(String processInstanceId, String gatewayId) {
         try {
-            // 获取流程实例和BPMN模型
+            // Get process instance and BPMN model
             ProcessInstance processInstance = runtimeService.createProcessInstanceQuery()
                     .processInstanceId(processInstanceId)
                     .singleResult();
             
             if (processInstance == null) {
-                throw new WorkflowBusinessException("PROCESS_NOT_FOUND", "流程实例不存在: " + processInstanceId);
+                throw new WorkflowBusinessException("PROCESS_NOT_FOUND", "Process instance does not exist: " + processInstanceId);
             }
             
             BpmnModel bpmnModel = repositoryService.getBpmnModel(processInstance.getProcessDefinitionId());
             FlowElement flowElement = bpmnModel.getFlowElement(gatewayId);
             
             if (!(flowElement instanceof ParallelGateway)) {
-                throw new WorkflowBusinessException("INVALID_GATEWAY", "指定的元素不是并行网关: " + gatewayId);
+                throw new WorkflowBusinessException("INVALID_GATEWAY", "Specified element is not a parallel gateway: " + gatewayId);
             }
             
             ParallelGateway parallelGateway = (ParallelGateway) flowElement;
             
-            // 获取当前在该网关的执行实例
+            // Get current execution instances at this gateway
             List<Execution> gatewayExecutions = runtimeService.createExecutionQuery()
                     .processInstanceId(processInstanceId)
                     .activityId(gatewayId)
@@ -862,12 +861,12 @@ public class ProcessEngineComponent {
             
             List<ParallelGatewayResult.BranchInfo> branches = new ArrayList<>();
             
-            // 检查是否为分支网关（有多个出口）或合并网关（有多个入口）
+            // Check if fork gateway (multiple outgoing) or join gateway (multiple incoming)
             boolean isForkGateway = parallelGateway.getOutgoingFlows().size() > 1;
             boolean isJoinGateway = parallelGateway.getIncomingFlows().size() > 1;
             
             if (isForkGateway) {
-                // 分支网关：创建多个并行分支
+                // Fork gateway: create multiple parallel branches
                 for (SequenceFlow outgoingFlow : parallelGateway.getOutgoingFlows()) {
                     ParallelGatewayResult.BranchInfo branchInfo = ParallelGatewayResult.BranchInfo.builder()
                             .branchId(outgoingFlow.getId())
@@ -882,9 +881,9 @@ public class ProcessEngineComponent {
             }
             
             if (isJoinGateway) {
-                // 合并网关：等待所有分支完成
+                // Join gateway: wait for all branches to complete
                 for (SequenceFlow incomingFlow : parallelGateway.getIncomingFlows()) {
-                    // 检查该分支是否已到达合并点
+                    // Check if branch has reached join point
                     List<Execution> branchExecutions = runtimeService.createExecutionQuery()
                             .processInstanceId(processInstanceId)
                             .activityId(incomingFlow.getSourceRef())
@@ -904,7 +903,7 @@ public class ProcessEngineComponent {
                 }
             }
             
-            // 计算网关状态
+            // Calculate gateway status
             String gatewayStatus = "waiting";
             if (isForkGateway && !isJoinGateway) {
                 gatewayStatus = "forked";
@@ -930,23 +929,23 @@ public class ProcessEngineComponent {
                     .build();
             
         } catch (Exception e) {
-            throw new WorkflowBusinessException("PARALLEL_GATEWAY_ERROR", "并行网关处理失败: " + e.getMessage(), e);
+            throw new WorkflowBusinessException("PARALLEL_GATEWAY_ERROR", "Failed to handle parallel gateway: " + e.getMessage(), e);
         }
     }
     
     /**
-     * 触发流程事件
-     * 支持消息事件、信号事件等的触发和传播
+     * Trigger process event
+     * Supports triggering and propagation of message events, signal events, etc.
      */
     public EventTriggerResult triggerEvent(String processInstanceId, String eventId, String eventType, Map<String, Object> eventData) {
         try {
-            // 验证流程实例是否存在
+            // Verify process instance exists
             ProcessInstance processInstance = runtimeService.createProcessInstanceQuery()
                     .processInstanceId(processInstanceId)
                     .singleResult();
             
             if (processInstance == null) {
-                throw new WorkflowBusinessException("PROCESS_NOT_FOUND", "流程实例不存在: " + processInstanceId);
+                throw new WorkflowBusinessException("PROCESS_NOT_FOUND", "Process instance does not exist: " + processInstanceId);
             }
             
             List<String> triggeredExecutions = new ArrayList<>();
@@ -954,11 +953,11 @@ public class ProcessEngineComponent {
             
             switch (eventType.toLowerCase()) {
                 case "message" -> {
-                    // 触发消息事件
+                    // Trigger message event
                     if (eventData != null && eventData.containsKey("messageName")) {
                         String messageName = (String) eventData.get("messageName");
                         
-                        // 查找等待该消息的执行实例
+                        // Find execution instances waiting for this message
                         List<Execution> messageExecutions = runtimeService.createExecutionQuery()
                                 .processInstanceId(processInstanceId)
                                 .messageEventSubscriptionName(messageName)
@@ -969,17 +968,17 @@ public class ProcessEngineComponent {
                             triggeredExecutions.add(execution.getId());
                         }
                         
-                        resultMessage = "触发消息事件: " + messageName + ", 影响执行实例: " + triggeredExecutions.size();
+                        resultMessage = "Triggered message event: " + messageName + ", affected executions: " + triggeredExecutions.size();
                     } else {
-                        throw new WorkflowBusinessException("INVALID_EVENT_DATA", "消息事件需要提供messageName参数");
+                        throw new WorkflowBusinessException("INVALID_EVENT_DATA", "Message event requires messageName parameter");
                     }
                 }
                 case "signal" -> {
-                    // 触发信号事件
+                    // Trigger signal event
                     if (eventData != null && eventData.containsKey("signalName")) {
                         String signalName = (String) eventData.get("signalName");
                         
-                        // 查找等待该信号的执行实例
+                        // Find execution instances waiting for this signal
                         List<Execution> signalExecutions = runtimeService.createExecutionQuery()
                                 .processInstanceId(processInstanceId)
                                 .signalEventSubscriptionName(signalName)
@@ -990,28 +989,28 @@ public class ProcessEngineComponent {
                             triggeredExecutions.add(execution.getId());
                         }
                         
-                        resultMessage = "触发信号事件: " + signalName + ", 影响执行实例: " + triggeredExecutions.size();
+                        resultMessage = "Triggered signal event: " + signalName + ", affected executions: " + triggeredExecutions.size();
                     } else {
-                        throw new WorkflowBusinessException("INVALID_EVENT_DATA", "信号事件需要提供signalName参数");
+                        throw new WorkflowBusinessException("INVALID_EVENT_DATA", "Signal event requires signalName parameter");
                     }
                 }
                 case "timer" -> {
-                    // 触发定时器事件（通常由系统自动触发，这里提供手动触发能力）
+                    // Trigger timer event (usually auto-triggered by system, manual trigger provided here)
                     List<Execution> timerExecutions = runtimeService.createExecutionQuery()
                             .processInstanceId(processInstanceId)
                             .activityId(eventId)
                             .list();
                     
                     for (Execution execution : timerExecutions) {
-                        // 手动推进定时器事件
+                        // Manually advance timer event
                         runtimeService.trigger(execution.getId(), eventData);
                         triggeredExecutions.add(execution.getId());
                     }
                     
-                    resultMessage = "触发定时器事件: " + eventId + ", 影响执行实例: " + triggeredExecutions.size();
+                    resultMessage = "Triggered timer event: " + eventId + ", affected executions: " + triggeredExecutions.size();
                 }
                 default -> {
-                    throw new WorkflowBusinessException("UNSUPPORTED_EVENT_TYPE", "不支持的事件类型: " + eventType);
+                    throw new WorkflowBusinessException("UNSUPPORTED_EVENT_TYPE", "Unsupported event type: " + eventType);
                 }
             }
             
@@ -1035,35 +1034,35 @@ public class ProcessEngineComponent {
                     .eventData(eventData)
                     .triggerTime(LocalDateTime.now())
                     .success(false)
-                    .message("事件触发失败: " + e.getMessage())
+                    .message("Failed to trigger event: " + e.getMessage())
                     .build();
         }
     }
     
     /**
-     * 获取子流程信息
-     * 支持子流程和调用活动的嵌套执行查询
+     * Get sub-process information
+     * Supports nested execution queries for sub-processes and call activities
      */
     public List<SubProcessInfo> getSubProcesses(String processInstanceId) {
         try {
-            // 验证流程实例是否存在
+            // Verify process instance exists
             ProcessInstance processInstance = runtimeService.createProcessInstanceQuery()
                     .processInstanceId(processInstanceId)
                     .singleResult();
             
             if (processInstance == null) {
-                throw new WorkflowBusinessException("PROCESS_NOT_FOUND", "流程实例不存在: " + processInstanceId);
+                throw new WorkflowBusinessException("PROCESS_NOT_FOUND", "Process instance does not exist: " + processInstanceId);
             }
             
             List<SubProcessInfo> subProcesses = new ArrayList<>();
             
-            // 查找子流程实例
+            // Find sub-process instances
             List<ProcessInstance> childProcessInstances = runtimeService.createProcessInstanceQuery()
                     .superProcessInstanceId(processInstanceId)
                     .list();
             
             for (ProcessInstance childProcess : childProcessInstances) {
-                // 获取调用活动信息
+                // Get call activity info
                 Execution superExecution = runtimeService.createExecutionQuery()
                         .executionId(childProcess.getSuperExecutionId())
                         .singleResult();
@@ -1084,7 +1083,7 @@ public class ProcessEngineComponent {
                 subProcesses.add(subProcessInfo);
             }
             
-            // 查找嵌入式子流程（在同一流程实例内的子流程）
+            // Find embedded sub-processes (within same process instance)
             BpmnModel bpmnModel = repositoryService.getBpmnModel(processInstance.getProcessDefinitionId());
             List<Execution> executions = runtimeService.createExecutionQuery()
                     .processInstanceId(processInstanceId)
@@ -1101,9 +1100,9 @@ public class ProcessEngineComponent {
                                 .subProcessInstanceId(execution.getId())
                                 .subProcessDefinitionKey(subProcess.getId())
                                 .subProcessDefinitionName(subProcess.getName())
-                                .callActivityId(null) // 嵌入式子流程没有调用活动
+                                .callActivityId(null) // Embedded sub-process has no call activity
                                 .businessKey(null)
-                                .startTime(LocalDateTime.now()) // 嵌入式子流程的开始时间难以精确获取
+                                .startTime(LocalDateTime.now()) // Embedded sub-process start time is hard to determine precisely
                                 .startUserId(processInstance.getStartUserId())
                                 .isActive(!execution.isEnded())
                                 .isSuspended(false)
@@ -1118,11 +1117,11 @@ public class ProcessEngineComponent {
             return subProcesses;
             
         } catch (Exception e) {
-            throw new WorkflowBusinessException("SUBPROCESS_QUERY_ERROR", "查询子流程失败: " + e.getMessage(), e);
+            throw new WorkflowBusinessException("SUBPROCESS_QUERY_ERROR", "Failed to query sub-processes: " + e.getMessage(), e);
         }
     }
     
-    // 私有辅助方法
+    // Private helper methods
     
     private String getActivityType(FlowElement flowElement) {
         if (flowElement instanceof org.flowable.bpmn.model.UserTask) {
@@ -1155,7 +1154,7 @@ public class ProcessEngineComponent {
     }
     
     private boolean isWaitState(FlowElement flowElement) {
-        // 用户任务、接收任务、消息事件等是等待状态
+        // User tasks, receive tasks, message events, etc. are wait states
         return flowElement instanceof org.flowable.bpmn.model.UserTask ||
                flowElement instanceof org.flowable.bpmn.model.ReceiveTask ||
                flowElement instanceof IntermediateCatchEvent ||
@@ -1163,16 +1162,16 @@ public class ProcessEngineComponent {
     }
     
     private boolean evaluateSimpleCondition(String conditionExpression, Map<String, Object> variables) {
-        // 简化的条件评估逻辑
-        // 在实际项目中应该使用Flowable的表达式引擎
+        // Simplified condition evaluation logic
+        // Should use Flowable's expression engine in production
         
-        // 移除可能的表达式语法标记
+        // Remove potential expression syntax markers
         String expression = conditionExpression.trim();
         if (expression.startsWith("${") && expression.endsWith("}")) {
             expression = expression.substring(2, expression.length() - 1).trim();
         }
         
-        // 处理简单的比较表达式
+        // Handle simple comparison expressions
         if (expression.contains("==")) {
             String[] parts = expression.split("==");
             if (parts.length == 2) {
@@ -1195,8 +1194,8 @@ public class ProcessEngineComponent {
             }
         }
         
-        // 处理数值比较表达式: <=, >=, <, >
-        // 注意: 必须先检查 <= 和 >= 再检查 < 和 >，避免误匹配
+        // Handle numeric comparison expressions: <=, >=, <, >
+        // Note: must check <= and >= before < and >, to avoid false matches
         String[] numericOperators = {"<=", ">=", "<", ">"};
         for (String op : numericOperators) {
             if (expression.contains(op)) {
@@ -1227,18 +1226,18 @@ public class ProcessEngineComponent {
             }
         }
         
-        // 处理布尔变量
+        // Handle boolean variables
         Object varValue = variables.get(expression);
         if (varValue instanceof Boolean) {
             return (Boolean) varValue;
         }
         
-        // 默认返回true（作为默认流）
+        // Default return true (as default flow)
         return true;
     }
 
     /**
-     * 将变量值安全转换为 double，支持常见数值类型和字符串
+     * Safely convert variable value to double, supporting common numeric types and strings
      */
     private double toDouble(Object value) {
         if (value instanceof Number) {
@@ -1272,7 +1271,7 @@ public class ProcessEngineComponent {
             query.startedBefore(java.util.Date.from(request.getStartTimeTo().atZone(ZoneId.systemDefault()).toInstant()));
         }
         
-        // 处理状态过滤
+        // Handle state filtering
         if (StringUtils.hasText(request.getState())) {
             switch (request.getState().toLowerCase()) {
                 case "active" -> query.active();
@@ -1280,14 +1279,14 @@ public class ProcessEngineComponent {
             }
         }
         
-        // 处理变量过滤
+        // Handle variable filtering
         if (request.getVariables() != null && !request.getVariables().isEmpty()) {
             for (Map.Entry<String, Object> entry : request.getVariables().entrySet()) {
                 query.variableValueEquals(entry.getKey(), entry.getValue());
             }
         }
         
-        // 排序
+        // Sorting
         if ("startTime".equals(request.getSortBy())) {
             if ("asc".equals(request.getSortDirection())) {
                 query.orderByStartTime().asc();
@@ -1324,19 +1323,19 @@ public class ProcessEngineComponent {
             query.startedBefore(java.util.Date.from(request.getStartTimeTo().atZone(ZoneId.systemDefault()).toInstant()));
         }
         
-        // 历史查询只查询已完成的实例
+        // History query only queries completed instances
         if (request.getState() == null || "completed".equalsIgnoreCase(request.getState())) {
             query.finished();
         }
         
-        // 处理变量过滤
+        // Handle variable filtering
         if (request.getVariables() != null && !request.getVariables().isEmpty()) {
             for (Map.Entry<String, Object> entry : request.getVariables().entrySet()) {
                 query.variableValueEquals(entry.getKey(), entry.getValue());
             }
         }
         
-        // 排序
+        // Sorting
         if ("startTime".equals(request.getSortBy())) {
             if ("asc".equals(request.getSortDirection())) {
                 query.orderByProcessInstanceStartTime().asc();
@@ -1349,12 +1348,12 @@ public class ProcessEngineComponent {
     }
     
     private ProcessInstanceQueryResult.ProcessInstanceInfo convertToHistoricProcessInstanceInfo(org.flowable.engine.history.HistoricProcessInstance historicProcessInstance) {
-        // 获取流程定义信息
+        // Get process definition info
         ProcessDefinition processDefinition = repositoryService.createProcessDefinitionQuery()
                 .processDefinitionId(historicProcessInstance.getProcessDefinitionId())
                 .singleResult();
         
-        // 获取历史变量
+        // Get history variables
         Map<String, Object> variables = processEngine.getHistoryService()
                 .createHistoricVariableInstanceQuery()
                 .processInstanceId(historicProcessInstance.getId())
@@ -1388,40 +1387,40 @@ public class ProcessEngineComponent {
     private void validateDeploymentRequest(ProcessDefinitionRequest request) {
         if (!StringUtils.hasText(request.getName())) {
             throw new WorkflowValidationException(Collections.singletonList(
-                new WorkflowValidationException.ValidationError("name", "部署名称不能为空", request.getName())));
+                new WorkflowValidationException.ValidationError("name", "Deployment name must not be empty", request.getName())));
         }
         
         if (!StringUtils.hasText(request.getKey())) {
             throw new WorkflowValidationException(Collections.singletonList(
-                new WorkflowValidationException.ValidationError("key", "流程定义键不能为空", request.getKey())));
+                new WorkflowValidationException.ValidationError("key", "Process definition key must not be empty", request.getKey())));
         }
         
         if (!StringUtils.hasText(request.getBpmnXml())) {
             throw new WorkflowValidationException(Collections.singletonList(
-                new WorkflowValidationException.ValidationError("bpmnXml", "BPMN内容不能为空", request.getBpmnXml())));
+                new WorkflowValidationException.ValidationError("bpmnXml", "BPMN content must not be empty", request.getBpmnXml())));
         }
     }
     
     private void validateBpmnFile(String bpmnContent) {
-        // 首先进行基本的内容检查
+        // First perform basic content checks
         if (bpmnContent == null || bpmnContent.trim().isEmpty()) {
             throw new WorkflowValidationException(Collections.singletonList(
-                new WorkflowValidationException.ValidationError("bpmnXml", "BPMN内容不能为空", bpmnContent)));
+                new WorkflowValidationException.ValidationError("bpmnXml", "BPMN content must not be empty", bpmnContent)));
         }
         
-        // 检查是否为纯空白字符
+        // Check for whitespace-only content
         if (bpmnContent.trim().matches("^\\s*$")) {
             throw new WorkflowValidationException(Collections.singletonList(
-                new WorkflowValidationException.ValidationError("bpmnXml", "BPMN文件格式验证失败: 内容只包含空白字符", bpmnContent)));
+                new WorkflowValidationException.ValidationError("bpmnXml", "BPMN file format validation failed: content contains only whitespace", bpmnContent)));
         }
         
-        // 检查是否为有效的XML格式
+        // Check for valid XML format
         try {
             javax.xml.parsers.DocumentBuilderFactory factory = javax.xml.parsers.DocumentBuilderFactory.newInstance();
             factory.setNamespaceAware(true);
             javax.xml.parsers.DocumentBuilder builder = factory.newDocumentBuilder();
             
-            // 设置错误处理器来捕获XML解析错误
+            // Set error handler to capture XML parsing errors
             builder.setErrorHandler(new org.xml.sax.ErrorHandler() {
                 @Override
                 public void warning(org.xml.sax.SAXParseException exception) throws org.xml.sax.SAXException {
@@ -1441,33 +1440,33 @@ public class ProcessEngineComponent {
             
             org.w3c.dom.Document document = builder.parse(new ByteArrayInputStream(bpmnContent.getBytes()));
             
-            // 检查根元素是否为BPMN definitions
+            // Check if root element is BPMN definitions
             org.w3c.dom.Element rootElement = document.getDocumentElement();
             if (rootElement == null || !"definitions".equals(rootElement.getLocalName())) {
                 throw new WorkflowValidationException(Collections.singletonList(
-                    new WorkflowValidationException.ValidationError("bpmnXml", "BPMN文件格式验证失败: 根元素必须是definitions", bpmnContent)));
+                    new WorkflowValidationException.ValidationError("bpmnXml", "BPMN file format validation failed: root element must be definitions", bpmnContent)));
             }
             
-            // 检查是否包含BPMN命名空间
+            // Check for BPMN namespace
             String namespaceURI = rootElement.getNamespaceURI();
             if (namespaceURI == null || (!namespaceURI.contains("BPMN") && !namespaceURI.contains("bpmn"))) {
                 throw new WorkflowValidationException(Collections.singletonList(
-                    new WorkflowValidationException.ValidationError("bpmnXml", "BPMN文件格式验证失败: 缺少BPMN命名空间", bpmnContent)));
+                    new WorkflowValidationException.ValidationError("bpmnXml", "BPMN file format validation failed: missing BPMN namespace", bpmnContent)));
             }
             
-            // 检查是否包含至少一个process元素
+            // Check for at least one process element
             org.w3c.dom.NodeList processNodes = document.getElementsByTagNameNS("*", "process");
             if (processNodes.getLength() == 0) {
                 throw new WorkflowValidationException(Collections.singletonList(
-                    new WorkflowValidationException.ValidationError("bpmnXml", "BPMN文件格式验证失败: 必须包含至少一个process元素", bpmnContent)));
+                    new WorkflowValidationException.ValidationError("bpmnXml", "BPMN file format validation failed: must contain at least one process element", bpmnContent)));
             }
             
-            // 检查process元素是否有id属性
+            // Check if process elements have id attribute
             for (int i = 0; i < processNodes.getLength(); i++) {
                 org.w3c.dom.Element processElement = (org.w3c.dom.Element) processNodes.item(i);
                 if (!processElement.hasAttribute("id") || processElement.getAttribute("id").trim().isEmpty()) {
                     throw new WorkflowValidationException(Collections.singletonList(
-                        new WorkflowValidationException.ValidationError("bpmnXml", "BPMN文件格式验证失败: process元素必须有id属性", bpmnContent)));
+                        new WorkflowValidationException.ValidationError("bpmnXml", "BPMN file format validation failed: process element must have id attribute", bpmnContent)));
                 }
             }
             
@@ -1476,32 +1475,32 @@ public class ProcessEngineComponent {
             throw e;
         } catch (org.xml.sax.SAXParseException e) {
             throw new WorkflowValidationException(Collections.singletonList(
-                new WorkflowValidationException.ValidationError("bpmnXml", "BPMN文件格式验证失败: XML解析错误 - " + e.getMessage(), bpmnContent)));
+                new WorkflowValidationException.ValidationError("bpmnXml", "BPMN file format validation failed: XML parsing error - " + e.getMessage(), bpmnContent)));
         } catch (Exception e) {
             throw new WorkflowValidationException(Collections.singletonList(
-                new WorkflowValidationException.ValidationError("bpmnXml", "BPMN文件格式验证失败: " + e.getMessage(), bpmnContent)));
+                new WorkflowValidationException.ValidationError("bpmnXml", "BPMN file format validation failed: " + e.getMessage(), bpmnContent)));
         }
         
-        // 最后使用Flowable进行更深层的验证（但只在基本验证通过后）
+        // Finally use Flowable for deeper validation (only after basic validation passes)
         try {
             Deployment tempDeployment = repositoryService.createDeployment()
                 .name("temp-validation")
                 .addInputStream("temp.bpmn", new ByteArrayInputStream(bpmnContent.getBytes()))
                 .deploy();
                 
-            // 验证成功，删除临时部署
+            // Validation succeeded, delete temp deployment
             repositoryService.deleteDeployment(tempDeployment.getId(), true);
             
         } catch (Exception e) {
             throw new WorkflowValidationException(Collections.singletonList(
-                new WorkflowValidationException.ValidationError("bpmnXml", "BPMN文件格式验证失败: " + e.getMessage(), bpmnContent)));
+                new WorkflowValidationException.ValidationError("bpmnXml", "BPMN file format validation failed: " + e.getMessage(), bpmnContent)));
         }
     }
     
     private void validateStartProcessRequest(StartProcessRequest request) {
         if (!StringUtils.hasText(request.getProcessDefinitionKey())) {
             throw new WorkflowValidationException(Collections.singletonList(
-                new WorkflowValidationException.ValidationError("processDefinitionKey", "流程定义Key不能为空", request.getProcessDefinitionKey())));
+                new WorkflowValidationException.ValidationError("processDefinitionKey", "Process definition key must not be empty", request.getProcessDefinitionKey())));
         }
     }
     
@@ -1513,19 +1512,19 @@ public class ProcessEngineComponent {
         
         if (processDefinition == null) {
             throw new WorkflowValidationException(Collections.singletonList(
-                new WorkflowValidationException.ValidationError("processDefinitionKey", "流程定义不存在", processDefinitionKey)));
+                new WorkflowValidationException.ValidationError("processDefinitionKey", "Process definition does not exist", processDefinitionKey)));
         }
         
         if (processDefinition.isSuspended()) {
             throw new WorkflowValidationException(Collections.singletonList(
-                new WorkflowValidationException.ValidationError("processDefinitionKey", "流程定义已暂停，无法启动新实例", processDefinitionKey)));
+                new WorkflowValidationException.ValidationError("processDefinitionKey", "Process definition is suspended, cannot start new instance", processDefinitionKey)));
         }
         
         return processDefinition;
     }
     
     private ProcessDefinitionResult convertToProcessDefinitionResult(ProcessDefinition processDefinition) {
-        // 获取部署信息以获取部署时指定的类别和名称
+        // Get deployment info for deployment-specified category and name
         String deploymentCategory = null;
         String deploymentName = null;
         try {
@@ -1537,11 +1536,11 @@ public class ProcessEngineComponent {
                 deploymentName = deployment.getName();
             }
         } catch (Exception e) {
-            // 如果获取部署信息失败，使用流程定义的信息
+            // If deployment info retrieval fails, use process definition info
             deploymentCategory = processDefinition.getCategory();
         }
         
-        // 优先使用部署名称，如果没有则使用流程定义名称
+        // Prioritize deployment name, fall back to process definition name
         String finalName = (deploymentName != null && !deploymentName.equals("temp-validation")) 
             ? deploymentName 
             : processDefinition.getName();
@@ -1549,9 +1548,9 @@ public class ProcessEngineComponent {
         return ProcessDefinitionResult.builder()
             .id(processDefinition.getId())
             .key(processDefinition.getKey())
-            .name(finalName) // 使用部署名称或流程定义名称
+            .name(finalName) // Use deployment name or process definition name
             .version(processDefinition.getVersion())
-            .category(deploymentCategory) // 使用部署类别而不是BPMN命名空间
+            .category(deploymentCategory) // Use deployment category instead of BPMN namespace
             .deploymentId(processDefinition.getDeploymentId())
             .resourceName(processDefinition.getResourceName())
             .diagramResourceName(processDefinition.getDiagramResourceName())
@@ -1564,17 +1563,17 @@ public class ProcessEngineComponent {
     }
     
     private ProcessInstanceQueryResult.ProcessInstanceInfo convertToProcessInstanceInfo(ProcessInstance processInstance) {
-        // 获取流程定义信息
+        // Get process definition info
         ProcessDefinition processDefinition = repositoryService.createProcessDefinitionQuery()
                 .processDefinitionId(processInstance.getProcessDefinitionId())
                 .singleResult();
         
-        // 获取活动任务数
+        // Get active task count
         long activeTaskCount = taskService.createTaskQuery()
                 .processInstanceId(processInstance.getId())
                 .count();
         
-        // 获取流程变量
+        // Get process variables
         Map<String, Object> variables = runtimeService.getVariables(processInstance.getId());
         
         return ProcessInstanceQueryResult.ProcessInstanceInfo.builder()
@@ -1586,7 +1585,7 @@ public class ProcessEngineComponent {
                 .name(processInstance.getName())
                 .startTime(processInstance.getStartTime() != null ? 
                     LocalDateTime.ofInstant(processInstance.getStartTime().toInstant(), ZoneId.systemDefault()) : null)
-                .endTime(null) // 运行中的流程实例没有结束时间
+                .endTime(null) // Running process instances have no end time
                 .startUserId(processInstance.getStartUserId())
                 .state(processInstance.isSuspended() ? "suspended" : "active")
                 .suspended(processInstance.isSuspended())
@@ -1599,18 +1598,18 @@ public class ProcessEngineComponent {
     private void validateProcessInstanceControlRequest(ProcessInstanceControlRequest request) {
         if (!StringUtils.hasText(request.getProcessInstanceId())) {
             throw new WorkflowValidationException(Collections.singletonList(
-                new WorkflowValidationException.ValidationError("processInstanceId", "流程实例ID不能为空", request.getProcessInstanceId())));
+                new WorkflowValidationException.ValidationError("processInstanceId", "Process instance ID must not be empty", request.getProcessInstanceId())));
         }
         
         if (!StringUtils.hasText(request.getAction())) {
             throw new WorkflowValidationException(Collections.singletonList(
-                new WorkflowValidationException.ValidationError("action", "操作类型不能为空", request.getAction())));
+                new WorkflowValidationException.ValidationError("action", "Operation type must not be empty", request.getAction())));
         }
         
         String action = request.getAction().toLowerCase();
         if (!List.of("suspend", "activate", "terminate").contains(action)) {
             throw new WorkflowValidationException(Collections.singletonList(
-                new WorkflowValidationException.ValidationError("action", "不支持的操作类型", request.getAction())));
+                new WorkflowValidationException.ValidationError("action", "Unsupported operation type", request.getAction())));
         }
     }
 }

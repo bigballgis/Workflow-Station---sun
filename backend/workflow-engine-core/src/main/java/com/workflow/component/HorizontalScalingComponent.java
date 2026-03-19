@@ -21,10 +21,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * 水平扩展支持组件
+ * Horizontal Scaling Component
  * 
- * 负责多实例部署支持、负载均衡、节点发现和健康检查
- * 支持热部署和零停机升级
+ * Handles multi-instance deployment support, load balancing, node discovery and health checks
+ * Supports hot deployment and zero-downtime upgrades
  * 
  * @author Workflow Engine
  * @version 1.0
@@ -36,106 +36,106 @@ public class HorizontalScalingComponent {
 
     private final StringRedisTemplate stringRedisTemplate;
     
-    // 集群配置
+    // Cluster configuration
     private static final String CLUSTER_PREFIX = "workflow:cluster:";
     private static final String NODE_REGISTRY = CLUSTER_PREFIX + "nodes";
     private static final String NODE_HEARTBEAT = CLUSTER_PREFIX + "heartbeat:";
     private static final String LEADER_KEY = CLUSTER_PREFIX + "leader";
     private static final String TASK_LOCK_PREFIX = CLUSTER_PREFIX + "lock:task:";
     
-    // 节点配置
-    private static final long HEARTBEAT_INTERVAL_MS = 10000; // 10秒
-    private static final long NODE_TIMEOUT_MS = 30000; // 30秒
-    private static final long LEADER_LEASE_SECONDS = 30; // 领导者租约30秒
+    // Node configuration
+    private static final long HEARTBEAT_INTERVAL_MS = 10000; // 10 seconds
+    private static final long NODE_TIMEOUT_MS = 30000; // 30 seconds
+    private static final long LEADER_LEASE_SECONDS = 30; // Leader lease 30 seconds
     
-    // 当前节点信息
+    // Current node info
     private String nodeId;
     private String nodeHost;
     private int nodePort;
     private LocalDateTime startTime;
     private volatile boolean isLeader = false;
     
-    // 负载统计
+    // Load statistics
     private final AtomicLong processedTasks = new AtomicLong(0);
     private final AtomicLong activeConnections = new AtomicLong(0);
     private final ConcurrentHashMap<String, Long> taskProcessingTimes = new ConcurrentHashMap<>();
     
-    // 节点缓存
+    // Node cache
     private final ConcurrentHashMap<String, ClusterNodeInfo> nodeCache = new ConcurrentHashMap<>();
 
     @PostConstruct
     public void init() {
         try {
-            // 生成节点ID
+            // Generate node ID
             this.nodeId = generateNodeId();
             this.nodeHost = InetAddress.getLocalHost().getHostAddress();
-            this.nodePort = 8080; // 默认端口，可从配置读取
+            this.nodePort = 8080; // Default port, configurable
             this.startTime = LocalDateTime.now();
             
-            // 注册节点
+            // Register node
             registerNode();
             
-            log.info("水平扩展组件初始化完成: nodeId={}, host={}", nodeId, nodeHost);
+            log.info("Horizontal scaling component initialized: nodeId={}, host={}", nodeId, nodeHost);
             
         } catch (UnknownHostException e) {
-            log.error("获取主机地址失败", e);
+            log.error("Failed to get host address", e);
             this.nodeHost = "unknown";
         }
     }
 
     @PreDestroy
     public void shutdown() {
-        log.info("节点下线: nodeId={}", nodeId);
+        log.info("Node going offline: nodeId={}", nodeId);
         unregisterNode();
     }
 
-    // ==================== 节点注册和发现 ====================
+    // ==================== Node registration and discovery ====================
 
     /**
-     * 注册当前节点到集群
+     * Register current node to cluster
      */
     public void registerNode() {
         try {
             ClusterNodeInfo nodeInfo = buildCurrentNodeInfo();
             String nodeJson = serializeNodeInfo(nodeInfo);
             
-            // 注册到节点列表
+            // Register to node list
             stringRedisTemplate.opsForHash().put(NODE_REGISTRY, nodeId, nodeJson);
             
-            // 设置心跳
+            // Set heartbeat
             updateHeartbeat();
             
-            log.info("节点注册成功: nodeId={}", nodeId);
+            log.info("Node registered successfully: nodeId={}", nodeId);
             
         } catch (Exception e) {
-            log.warn("节点注册失败，将在心跳时重试: {}", e.getMessage());
+            log.warn("Node registration failed, will retry on heartbeat: {}", e.getMessage());
             // Don't throw exception - allow startup to continue
             // The scheduled heartbeat will retry registration
         }
     }
 
     /**
-     * 注销当前节点
+     * Unregister current node
      */
     public void unregisterNode() {
         try {
             stringRedisTemplate.opsForHash().delete(NODE_REGISTRY, nodeId);
             stringRedisTemplate.delete(NODE_HEARTBEAT + nodeId);
             
-            // 如果是领导者，释放领导权
+            // If leader, release leadership
             if (isLeader) {
                 releaseLeadership();
             }
             
-            log.info("节点注销成功: nodeId={}", nodeId);
+            log.info("Node unregistered successfully: nodeId={}", nodeId);
             
         } catch (Exception e) {
-            log.error("节点注销失败: {}", e.getMessage(), e);
+            log.error("Failed to unregister node: {}", e.getMessage(), e);
         }
     }
 
     /**
-     * 更新心跳
+     * Update heartbeat
      */
     @Scheduled(fixedRate = HEARTBEAT_INTERVAL_MS)
     public void updateHeartbeat() {
@@ -147,24 +147,24 @@ public class HorizontalScalingComponent {
                     Duration.ofMillis(NODE_TIMEOUT_MS * 2)
             );
             
-            // 更新节点信息
+            // Update node info
             ClusterNodeInfo nodeInfo = buildCurrentNodeInfo();
             String nodeJson = serializeNodeInfo(nodeInfo);
             stringRedisTemplate.opsForHash().put(NODE_REGISTRY, nodeId, nodeJson);
             
-            // 尝试获取领导权
+            // Try to acquire leadership
             tryAcquireLeadership();
             
-            // 清理过期节点
+            // Clean up expired nodes
             cleanupExpiredNodes();
             
         } catch (Exception e) {
-            log.error("心跳更新失败: {}", e.getMessage());
+            log.error("Heartbeat update failed: {}", e.getMessage());
         }
     }
 
     /**
-     * 获取所有活跃节点
+     * Get all active nodes
      */
     public List<ClusterNodeInfo> getActiveNodes() {
         try {
@@ -187,13 +187,13 @@ public class HorizontalScalingComponent {
             return activeNodes;
             
         } catch (Exception e) {
-            log.error("获取活跃节点失败: {}", e.getMessage(), e);
+            log.error("Failed to get active nodes: {}", e.getMessage(), e);
             return new ArrayList<>(nodeCache.values());
         }
     }
 
     /**
-     * 检查节点是否存活
+     * Check if node is alive
      */
     public boolean isNodeAlive(String targetNodeId) {
         try {
@@ -206,15 +206,15 @@ public class HorizontalScalingComponent {
             return System.currentTimeMillis() - lastHeartbeat < NODE_TIMEOUT_MS;
             
         } catch (Exception e) {
-            log.error("检查节点存活状态失败: nodeId={}, error={}", targetNodeId, e.getMessage());
+            log.error("Failed to check node alive status: nodeId={}, error={}", targetNodeId, e.getMessage());
             return false;
         }
     }
 
-    // ==================== 领导者选举 ====================
+    // ==================== Leader election ====================
 
     /**
-     * 尝试获取领导权
+     * Try to acquire leadership
      */
     public boolean tryAcquireLeadership() {
         try {
@@ -226,14 +226,14 @@ public class HorizontalScalingComponent {
             
             if (Boolean.TRUE.equals(acquired)) {
                 isLeader = true;
-                log.info("获取领导权成功: nodeId={}", nodeId);
+                log.info("Leadership acquired successfully: nodeId={}", nodeId);
                 return true;
             }
             
-            // 检查是否已经是领导者
+            // Check if already leader
             String currentLeader = stringRedisTemplate.opsForValue().get(LEADER_KEY);
             if (nodeId.equals(currentLeader)) {
-                // 续约
+                // Renew lease
                 stringRedisTemplate.expire(LEADER_KEY, Duration.ofSeconds(LEADER_LEASE_SECONDS));
                 isLeader = true;
                 return true;
@@ -243,13 +243,13 @@ public class HorizontalScalingComponent {
             return false;
             
         } catch (Exception e) {
-            log.error("获取领导权失败: {}", e.getMessage());
+            log.error("Failed to acquire leadership: {}", e.getMessage());
             return false;
         }
     }
 
     /**
-     * 释放领导权
+     * Release leadership
      */
     public void releaseLeadership() {
         try {
@@ -257,39 +257,39 @@ public class HorizontalScalingComponent {
             if (nodeId.equals(currentLeader)) {
                 stringRedisTemplate.delete(LEADER_KEY);
                 isLeader = false;
-                log.info("释放领导权: nodeId={}", nodeId);
+                log.info("Release leadership: nodeId={}", nodeId);
             }
         } catch (Exception e) {
-            log.error("释放领导权失败: {}", e.getMessage());
+            log.error("Failed to release leadership: {}", e.getMessage());
         }
     }
 
     /**
-     * 获取当前领导者
+     * Get current leader
      */
     public String getCurrentLeader() {
         try {
             return stringRedisTemplate.opsForValue().get(LEADER_KEY);
         } catch (Exception e) {
-            log.error("获取领导者失败: {}", e.getMessage());
+            log.error("Failed to get leader: {}", e.getMessage());
             return null;
         }
     }
 
     /**
-     * 检查当前节点是否是领导者
+     * Check if current node is leader
      */
     public boolean isCurrentNodeLeader() {
         return isLeader;
     }
 
-    // ==================== 负载均衡 ====================
+    // ==================== Load balancing ====================
 
     /**
-     * 选择最佳节点处理任务
+     * Select best node for task processing
      */
     public LoadBalancingResult selectBestNode(String taskType) {
-        log.debug("选择最佳节点: taskType={}", taskType);
+        log.debug("Selecting best node: taskType={}", taskType);
         
         try {
             List<ClusterNodeInfo> activeNodes = getActiveNodes();
@@ -297,11 +297,11 @@ public class HorizontalScalingComponent {
             if (activeNodes.isEmpty()) {
                 return LoadBalancingResult.builder()
                         .success(false)
-                        .message("没有可用的节点")
+                        .message("No available nodes")
                         .build();
             }
             
-            // 根据负载选择最佳节点（最小负载优先）
+            // Select best node by load (lowest load first)
             ClusterNodeInfo bestNode = activeNodes.stream()
                     .min(Comparator.comparingDouble(ClusterNodeInfo::getLoadScore))
                     .orElse(activeNodes.get(0));
@@ -313,20 +313,20 @@ public class HorizontalScalingComponent {
                     .selectedNodePort(bestNode.getPort())
                     .loadScore(bestNode.getLoadScore())
                     .totalNodes(activeNodes.size())
-                    .message("节点选择成功")
+                    .message("Node selected successfully")
                     .build();
                     
         } catch (Exception e) {
-            log.error("选择节点失败: {}", e.getMessage(), e);
+            log.error("Failed to select node: {}", e.getMessage(), e);
             return LoadBalancingResult.builder()
                     .success(false)
-                    .message("节点选择失败: " + e.getMessage())
+                    .message("Failed to select node: " + e.getMessage())
                     .build();
         }
     }
 
     /**
-     * 获取负载均衡统计
+     * Get load balancing statistics
      */
     public Map<String, Object> getLoadBalancingStatistics() {
         Map<String, Object> stats = new HashMap<>();
@@ -338,14 +338,14 @@ public class HorizontalScalingComponent {
         stats.put("isLeader", isLeader);
         stats.put("currentLeader", getCurrentLeader());
         
-        // 计算平均负载
+        // Calculate average load
         double avgLoad = activeNodes.stream()
                 .mapToDouble(ClusterNodeInfo::getLoadScore)
                 .average()
                 .orElse(0.0);
         stats.put("averageLoad", avgLoad);
         
-        // 节点负载分布
+        // Node load distribution
         Map<String, Double> nodeLoads = new HashMap<>();
         for (ClusterNodeInfo node : activeNodes) {
             nodeLoads.put(node.getNodeId(), node.getLoadScore());
@@ -355,10 +355,10 @@ public class HorizontalScalingComponent {
         return stats;
     }
 
-    // ==================== 分布式锁 ====================
+    // ==================== Distributed locks ====================
 
     /**
-     * 获取任务分布式锁
+     * Acquire task distributed lock
      */
     public boolean acquireTaskLock(String taskId, long timeoutMs) {
         try {
@@ -370,20 +370,20 @@ public class HorizontalScalingComponent {
             );
             
             if (Boolean.TRUE.equals(acquired)) {
-                log.debug("获取任务锁成功: taskId={}, nodeId={}", taskId, nodeId);
+                log.debug("Task lock acquired: taskId={}, nodeId={}", taskId, nodeId);
                 return true;
             }
             
             return false;
             
         } catch (Exception e) {
-            log.error("获取任务锁失败: taskId={}, error={}", taskId, e.getMessage());
+            log.error("Failed to acquire task lock: taskId={}, error={}", taskId, e.getMessage());
             return false;
         }
     }
 
     /**
-     * 释放任务分布式锁
+     * Release task distributed lock
      */
     public boolean releaseTaskLock(String taskId) {
         try {
@@ -392,47 +392,47 @@ public class HorizontalScalingComponent {
             
             if (nodeId.equals(lockHolder)) {
                 stringRedisTemplate.delete(lockKey);
-                log.debug("释放任务锁成功: taskId={}", taskId);
+                log.debug("Task lock released: taskId={}", taskId);
                 return true;
             }
             
             return false;
             
         } catch (Exception e) {
-            log.error("释放任务锁失败: taskId={}, error={}", taskId, e.getMessage());
+            log.error("Failed to release task lock: taskId={}, error={}", taskId, e.getMessage());
             return false;
         }
     }
 
     /**
-     * 检查任务是否被锁定
+     * Check if task is locked
      */
     public boolean isTaskLocked(String taskId) {
         try {
             String lockKey = TASK_LOCK_PREFIX + taskId;
             return Boolean.TRUE.equals(stringRedisTemplate.hasKey(lockKey));
         } catch (Exception e) {
-            log.error("检查任务锁状态失败: taskId={}, error={}", taskId, e.getMessage());
+            log.error("Failed to check task lock status: taskId={}, error={}", taskId, e.getMessage());
             return false;
         }
     }
 
-    // ==================== 扩展指标 ====================
+    // ==================== Scaling metrics ====================
 
     /**
-     * 获取扩展指标
+     * Get scaling metrics
      */
     public ScalingMetrics getScalingMetrics() {
         List<ClusterNodeInfo> activeNodes = getActiveNodes();
         
-        // 计算集群总负载
+        // Calculate total cluster load
         double totalLoad = activeNodes.stream()
                 .mapToDouble(ClusterNodeInfo::getLoadScore)
                 .sum();
         
         double avgLoad = activeNodes.isEmpty() ? 0 : totalLoad / activeNodes.size();
         
-        // 计算负载方差（用于判断负载是否均衡）
+        // Calculate load variance (to determine if load is balanced)
         double loadVariance = 0;
         if (!activeNodes.isEmpty()) {
             for (ClusterNodeInfo node : activeNodes) {
@@ -441,7 +441,7 @@ public class HorizontalScalingComponent {
             loadVariance /= activeNodes.size();
         }
         
-        // 判断是否需要扩展
+        // Determine if scaling is needed
         boolean needsScaleOut = avgLoad > 0.8;
         boolean needsScaleIn = avgLoad < 0.2 && activeNodes.size() > 1;
         
@@ -460,13 +460,13 @@ public class HorizontalScalingComponent {
     }
 
     /**
-     * 记录任务处理
+     * Record task processing
      */
     public void recordTaskProcessed(String taskId, long processingTimeMs) {
         processedTasks.incrementAndGet();
         taskProcessingTimes.put(taskId, processingTimeMs);
         
-        // 保持最近1000个任务的处理时间
+        // Keep processing times for the last 1000 tasks
         if (taskProcessingTimes.size() > 1000) {
             String oldestKey = taskProcessingTimes.keySet().iterator().next();
             taskProcessingTimes.remove(oldestKey);
@@ -474,59 +474,59 @@ public class HorizontalScalingComponent {
     }
 
     /**
-     * 增加活跃连接数
+     * Increment active connections
      */
     public void incrementActiveConnections() {
         activeConnections.incrementAndGet();
     }
 
     /**
-     * 减少活跃连接数
+     * Decrement active connections
      */
     public void decrementActiveConnections() {
         activeConnections.decrementAndGet();
     }
 
-    // ==================== 热部署支持 ====================
+    // ==================== Hot deployment support ====================
 
     /**
-     * 准备热部署（优雅下线）
+     * Prepare for hot deployment (graceful shutdown)
      */
     public void prepareForHotDeploy() {
-        log.info("准备热部署: nodeId={}", nodeId);
+        log.info("Preparing for hot deployment: nodeId={}", nodeId);
         
-        // 停止接收新任务
-        // 等待当前任务完成
-        // 释放领导权
+        // Stop accepting new tasks
+        // Wait for current tasks to complete
+        // Release leadership
         if (isLeader) {
             releaseLeadership();
         }
         
-        // 从节点列表中标记为下线中
+        // Mark as draining in node list
         try {
             ClusterNodeInfo nodeInfo = buildCurrentNodeInfo();
             nodeInfo.setStatus("DRAINING");
             String nodeJson = serializeNodeInfo(nodeInfo);
             stringRedisTemplate.opsForHash().put(NODE_REGISTRY, nodeId, nodeJson);
         } catch (Exception e) {
-            log.error("标记节点下线状态失败: {}", e.getMessage());
+            log.error("Failed to mark node draining status: {}", e.getMessage());
         }
     }
 
     /**
-     * 完成热部署（重新上线）
+     * Complete hot deployment (back online)
      */
     public void completeHotDeploy() {
-        log.info("完成热部署: nodeId={}", nodeId);
+        log.info("Hot deployment completed: nodeId={}", nodeId);
         
-        // 重新注册节点
+        // Re-register node
         registerNode();
     }
 
-    // ==================== 私有辅助方法 ====================
+    // ==================== Private helper methods ====================
 
     /**
-     * 生成节点ID
+     * Generate node ID
      */
     private String generateNodeId() {
         try {
@@ -538,7 +538,7 @@ public class HorizontalScalingComponent {
     }
 
     /**
-     * 构建当前节点信息
+     * Build current node info
      */
     private ClusterNodeInfo buildCurrentNodeInfo() {
         double loadScore = calculateCurrentLoadScore();
@@ -557,35 +557,35 @@ public class HorizontalScalingComponent {
     }
 
     /**
-     * 计算当前负载分数
+     * Calculate current load score
      */
     private double calculateCurrentLoadScore() {
-        // 基于活跃连接数和处理任务数计算负载分数
+        // Calculate load score based on active connections and processed tasks
         long connections = activeConnections.get();
         
-        // 简化的负载计算：连接数 / 100（假设最大100个连接）
+        // Simplified load calculation: connections / 100 (assuming max 100 connections)
         double connectionLoad = Math.min(1.0, connections / 100.0);
         
-        // 可以添加更多因素：CPU使用率、内存使用率等
+        // Can add more factors: CPU usage, memory usage, etc.
         return connectionLoad;
     }
 
     /**
-     * 计算推荐节点数
+     * Calculate recommended node count
      */
     private int calculateRecommendedNodeCount(double avgLoad, int currentNodes) {
         if (avgLoad > 0.8) {
-            // 负载过高，建议增加节点
+            // Load too high, recommend adding nodes
             return (int) Math.ceil(currentNodes * avgLoad / 0.6);
         } else if (avgLoad < 0.2 && currentNodes > 1) {
-            // 负载过低，建议减少节点
+            // Load too low, recommend removing nodes
             return Math.max(1, (int) Math.ceil(currentNodes * avgLoad / 0.4));
         }
         return currentNodes;
     }
 
     /**
-     * 清理过期节点
+     * Cleaned up expired node
      */
     private void cleanupExpiredNodes() {
         try {
@@ -596,19 +596,19 @@ public class HorizontalScalingComponent {
                 if (!isNodeAlive(targetNodeId)) {
                     stringRedisTemplate.opsForHash().delete(NODE_REGISTRY, targetNodeId);
                     nodeCache.remove(targetNodeId);
-                    log.info("清理过期节点: nodeId={}", targetNodeId);
+                    log.info("Cleaned up expired node: nodeId={}", targetNodeId);
                 }
             }
         } catch (Exception e) {
-            log.error("清理过期节点失败: {}", e.getMessage());
+            log.error("Failed to clean up expired nodes: {}", e.getMessage());
         }
     }
 
     /**
-     * 序列化节点信息
+     * Serialize node info
      */
     private String serializeNodeInfo(ClusterNodeInfo nodeInfo) {
-        // 简化的序列化，实际应使用JSON
+        // Simplified serialization; should use JSON in production
         return String.format("%s|%s|%d|%s|%.2f|%d|%d|%s|%s",
                 nodeInfo.getNodeId(),
                 nodeInfo.getHost(),
@@ -623,7 +623,7 @@ public class HorizontalScalingComponent {
     }
 
     /**
-     * 反序列化节点信息
+     * Deserialize node info
      */
     private ClusterNodeInfo deserializeNodeInfo(String nodeJson) {
         try {
@@ -645,12 +645,12 @@ public class HorizontalScalingComponent {
                     .build();
                     
         } catch (Exception e) {
-            log.error("反序列化节点信息失败: {}", e.getMessage());
+            log.error("Failed to deserialize node info: {}", e.getMessage());
             return null;
         }
     }
 
-    // ==================== Getter方法 ====================
+    // ==================== Getter methods ====================
 
     public String getNodeId() {
         return nodeId;

@@ -30,10 +30,10 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * 流程监控组件
+ * Process Monitor Component
  * 
- * 负责流程实例状态查询、任务统计、性能指标计算和可视化数据生成
- * 支持多维度条件过滤和分页查询
+ * Handles process instance status queries, task statistics, performance metrics calculation
+ * and visualization data generation. Supports multi-dimensional filtering and pagination.
  * 
  * @author Workflow Engine
  * @version 1.0
@@ -48,26 +48,26 @@ public class ProcessMonitorComponent {
     private final TaskService taskService;
 
     /**
-     * 查询流程实例监控信息
-     * 支持多维度条件过滤和分页查询
+     * Query process instance monitoring information.
+     * Supports multi-dimensional filtering and pagination.
      * 
-     * @param request 查询请求
-     * @return 监控结果
+     * @param request query request
+     * @return monitoring result
      */
     @Transactional(readOnly = true)
     public ProcessMonitorResult queryProcessInstances(ProcessMonitorQueryRequest request) {
-        log.info("查询流程实例监控信息: processDefinitionKey={}, status={}", 
+        log.info("Querying process instance monitoring info: processDefinitionKey={}, status={}", 
                 request.getProcessDefinitionKey(), request.getStatus());
         
         try {
-            // 验证请求参数
+            // Validate request parameters
             validateQueryRequest(request);
             
             List<Map<String, Object>> processInstances = new ArrayList<>();
             long totalCount = 0;
             
             if ("ACTIVE".equals(request.getStatus()) || request.getStatus() == null) {
-                // 查询运行中的流程实例
+                // Query running process instances
                 ProcessInstanceQuery query = buildRuntimeQuery(request);
                 List<ProcessInstance> activeInstances = query.listPage(
                         request.getOffset() != null ? request.getOffset() : 0,
@@ -82,7 +82,7 @@ public class ProcessMonitorComponent {
             }
             
             if ("COMPLETED".equals(request.getStatus()) || "TERMINATED".equals(request.getStatus()) || request.getStatus() == null) {
-                // 查询历史流程实例
+                // Query historic process instances
                 HistoricProcessInstanceQuery historyQuery = buildHistoryQuery(request);
                 List<HistoricProcessInstance> historicInstances = historyQuery.listPage(
                         request.getOffset() != null ? request.getOffset() : 0,
@@ -108,33 +108,33 @@ public class ProcessMonitorComponent {
         } catch (WorkflowValidationException e) {
             throw e;
         } catch (Exception e) {
-            log.error("查询流程实例监控信息失败: {}", e.getMessage(), e);
-            throw new WorkflowBusinessException("MONITOR_QUERY_FAILED", "查询流程实例监控信息失败: " + e.getMessage());
+            log.error("Failed to query process instance monitoring info: {}", e.getMessage(), e);
+            throw new WorkflowBusinessException("MONITOR_QUERY_FAILED", "Failed to query process instance monitoring info: " + e.getMessage());
         }
     }
 
     /**
-     * 获取流程统计信息
+     * Get process statistics
      * 
-     * @param processDefinitionKey 流程定义键（可选）
-     * @param startTime 开始时间（可选）
-     * @param endTime 结束时间（可选）
-     * @return 流程统计结果
+     * @param processDefinitionKey process definition key (optional)
+     * @param startTime start time (optional)
+     * @param endTime end time (optional)
+     * @return process statistics result
      */
     @Transactional(readOnly = true)
     public ProcessStatisticsResult getProcessStatistics(String processDefinitionKey, Date startTime, Date endTime) {
-        log.info("获取流程统计信息: processDefinitionKey={}, startTime={}, endTime={}", 
+        log.info("Getting process statistics: processDefinitionKey={}, startTime={}, endTime={}", 
                 processDefinitionKey, startTime, endTime);
         
         try {
-            // 运行中的流程实例数量
+            // Number of running process instances
             ProcessInstanceQuery activeQuery = runtimeService.createProcessInstanceQuery();
             if (StringUtils.hasText(processDefinitionKey)) {
                 activeQuery.processDefinitionKey(processDefinitionKey);
             }
             long activeCount = activeQuery.count();
             
-            // 已完成的流程实例数量
+            // Number of completed process instances
             HistoricProcessInstanceQuery completedQuery = historyService.createHistoricProcessInstanceQuery()
                     .finished();
             if (StringUtils.hasText(processDefinitionKey)) {
@@ -148,7 +148,7 @@ public class ProcessMonitorComponent {
             }
             long completedCount = completedQuery.count();
             
-            // 已终止的流程实例数量
+            // Number of terminated process instances
             HistoricProcessInstanceQuery terminatedQuery = historyService.createHistoricProcessInstanceQuery()
                     .unfinished();
             if (StringUtils.hasText(processDefinitionKey)) {
@@ -162,16 +162,16 @@ public class ProcessMonitorComponent {
             }
             long terminatedCount = terminatedQuery.count();
             
-            // 按状态分组统计
+            // Statistics grouped by status
             Map<String, Long> statusStatistics = new HashMap<>();
             statusStatistics.put("ACTIVE", activeCount);
             statusStatistics.put("COMPLETED", completedCount);
             statusStatistics.put("TERMINATED", terminatedCount);
             
-            // 按流程定义分组统计
+            // Statistics grouped by process definition
             Map<String, Long> processDefinitionStatistics = getProcessDefinitionStatistics(startTime, endTime);
             
-            // 按时间分组统计（最近7天）
+            // Statistics grouped by time (last 7 days)
             Map<String, Long> timeStatistics = getTimeStatistics(processDefinitionKey, startTime, endTime);
             
             return ProcessStatisticsResult.builder()
@@ -185,27 +185,27 @@ public class ProcessMonitorComponent {
                     .build();
                     
         } catch (Exception e) {
-            log.error("获取流程统计信息失败: {}", e.getMessage(), e);
-            throw new WorkflowBusinessException("STATISTICS_QUERY_FAILED", "获取流程统计信息失败: " + e.getMessage());
+            log.error("Failed to get process statistics: {}", e.getMessage(), e);
+            throw new WorkflowBusinessException("STATISTICS_QUERY_FAILED", "Failed to get process statistics: " + e.getMessage());
         }
     }
 
     /**
-     * 获取任务统计信息
+     * Get task statistics
      * 
-     * @param assignee 任务分配人（可选）
-     * @param processDefinitionKey 流程定义键（可选）
-     * @param startTime 开始时间（可选）
-     * @param endTime 结束时间（可选）
-     * @return 任务统计结果
+     * @param assignee task assignee (optional)
+     * @param processDefinitionKey process definition key (optional)
+     * @param startTime start time (optional)
+     * @param endTime end time (optional)
+     * @return task statistics result
      */
     @Transactional(readOnly = true)
     public TaskStatisticsResult getTaskStatistics(String assignee, String processDefinitionKey, Date startTime, Date endTime) {
-        log.info("获取任务统计信息: assignee={}, processDefinitionKey={}, startTime={}, endTime={}", 
+        log.info("Getting task statistics: assignee={}, processDefinitionKey={}, startTime={}, endTime={}", 
                 assignee, processDefinitionKey, startTime, endTime);
         
         try {
-            // 待办任务数量
+            // Number of pending tasks
             TaskQuery pendingQuery = taskService.createTaskQuery();
             if (StringUtils.hasText(assignee)) {
                 pendingQuery.taskAssignee(assignee);
@@ -215,7 +215,7 @@ public class ProcessMonitorComponent {
             }
             long pendingCount = pendingQuery.count();
             
-            // 已完成任务数量
+            // Number of completed tasks
             HistoricTaskInstanceQuery completedQuery = historyService.createHistoricTaskInstanceQuery()
                     .finished();
             if (StringUtils.hasText(assignee)) {
@@ -232,7 +232,7 @@ public class ProcessMonitorComponent {
             }
             long completedCount = completedQuery.count();
             
-            // 超时任务数量
+            // Number of overdue tasks
             TaskQuery overdueQuery = taskService.createTaskQuery()
                     .taskDueBefore(new Date());
             if (StringUtils.hasText(assignee)) {
@@ -243,13 +243,13 @@ public class ProcessMonitorComponent {
             }
             long overdueCount = overdueQuery.count();
             
-            // 按任务名称分组统计
+            // Statistics grouped by task name
             Map<String, Long> taskNameStatistics = getTaskNameStatistics(assignee, processDefinitionKey, startTime, endTime);
             
-            // 按分配人分组统计
+            // Statistics grouped by assignee
             Map<String, Long> assigneeStatistics = getAssigneeStatistics(processDefinitionKey, startTime, endTime);
             
-            // 平均处理时间统计
+            // Average processing time statistics
             Double averageProcessingTime = getAverageProcessingTime(assignee, processDefinitionKey, startTime, endTime);
             
             return TaskStatisticsResult.builder()
@@ -263,44 +263,44 @@ public class ProcessMonitorComponent {
                     .build();
                     
         } catch (Exception e) {
-            log.error("获取任务统计信息失败: {}", e.getMessage(), e);
-            throw new WorkflowBusinessException("TASK_STATISTICS_FAILED", "获取任务统计信息失败: " + e.getMessage());
+            log.error("Failed to get task statistics: {}", e.getMessage(), e);
+            throw new WorkflowBusinessException("TASK_STATISTICS_FAILED", "Failed to get task statistics: " + e.getMessage());
         }
     }
 
     /**
-     * 获取性能指标
+     * Get performance metrics
      * 
-     * @param processDefinitionKey 流程定义键（可选）
-     * @param startTime 开始时间（可选）
-     * @param endTime 结束时间（可选）
-     * @return 性能指标结果
+     * @param processDefinitionKey process definition key (optional)
+     * @param startTime start time (optional)
+     * @param endTime end time (optional)
+     * @return performance metrics result
      */
     @Transactional(readOnly = true)
     public PerformanceMetricsResult getPerformanceMetrics(String processDefinitionKey, Date startTime, Date endTime) {
-        log.info("获取性能指标: processDefinitionKey={}, startTime={}, endTime={}", 
+        log.info("Getting performance metrics: processDefinitionKey={}, startTime={}, endTime={}", 
                 processDefinitionKey, startTime, endTime);
         
         try {
-            // 平均流程执行时间
+            // Average process execution time
             Double averageProcessDuration = getAverageProcessDuration(processDefinitionKey, startTime, endTime);
             
-            // 最长流程执行时间
+            // Maximum process execution time
             Long maxProcessDuration = getMaxProcessDuration(processDefinitionKey, startTime, endTime);
             
-            // 最短流程执行时间
+            // Minimum process execution time
             Long minProcessDuration = getMinProcessDuration(processDefinitionKey, startTime, endTime);
             
-            // 流程成功率
+            // Process success rate
             Double processSuccessRate = getProcessSuccessRate(processDefinitionKey, startTime, endTime);
             
-            // 任务平均等待时间
+            // Average task wait time
             Double averageTaskWaitTime = getAverageTaskWaitTime(processDefinitionKey, startTime, endTime);
             
-            // 系统吞吐量（每小时处理的流程数）
+            // System throughput (processes per hour)
             Double throughputPerHour = getThroughputPerHour(processDefinitionKey, startTime, endTime);
             
-            // 资源利用率指标
+            // Resource utilization metrics
             Map<String, Double> resourceUtilization = getResourceUtilization();
             
             return PerformanceMetricsResult.builder()
@@ -314,25 +314,25 @@ public class ProcessMonitorComponent {
                     .build();
                     
         } catch (Exception e) {
-            log.error("获取性能指标失败: {}", e.getMessage(), e);
-            throw new WorkflowBusinessException("PERFORMANCE_METRICS_FAILED", "获取性能指标失败: " + e.getMessage());
+            log.error("Failed to get performance metrics: {}", e.getMessage(), e);
+            throw new WorkflowBusinessException("PERFORMANCE_METRICS_FAILED", "Failed to get performance metrics: " + e.getMessage());
         }
     }
 
     /**
-     * 获取流程执行可视化数据
+     * Get process execution visualization data
      * 
-     * @param processInstanceId 流程实例ID
-     * @return 可视化数据
+     * @param processInstanceId process instance ID
+     * @return visualization data
      */
     @Transactional(readOnly = true)
     public Map<String, Object> getProcessVisualizationData(String processInstanceId) {
-        log.info("获取流程执行可视化数据: processInstanceId={}", processInstanceId);
+        log.info("Getting process execution visualization data: processInstanceId={}", processInstanceId);
         
         try {
             Map<String, Object> visualizationData = new HashMap<>();
             
-            // 获取流程实例信息
+            // Get process instance info
             ProcessInstance processInstance = runtimeService.createProcessInstanceQuery()
                     .processInstanceId(processInstanceId)
                     .singleResult();
@@ -346,11 +346,11 @@ public class ProcessMonitorComponent {
             
             if (processInstance == null && historicProcessInstance == null) {
                 throw new WorkflowValidationException(List.of(
-                    new WorkflowValidationException.ValidationError("processInstanceId", "流程实例不存在", processInstanceId)
+                    new WorkflowValidationException.ValidationError("processInstanceId", "Process instance does not exist", processInstanceId)
                 ));
             }
             
-            // 基本信息
+            // Basic info
             visualizationData.put("processInstanceId", processInstanceId);
             visualizationData.put("processDefinitionId", processInstance != null ? 
                     processInstance.getProcessDefinitionId() : historicProcessInstance.getProcessDefinitionId());
@@ -362,17 +362,17 @@ public class ProcessMonitorComponent {
                     historicProcessInstance.getEndTime() : null);
             visualizationData.put("isActive", processInstance != null);
             
-            // 当前活动节点
+            // Current active nodes
             if (processInstance != null) {
                 List<String> activeActivityIds = runtimeService.getActiveActivityIds(processInstanceId);
                 visualizationData.put("activeActivityIds", activeActivityIds);
             }
             
-            // 已完成的活动节点
+            // Completed activity nodes
             List<Map<String, Object>> completedActivities = getCompletedActivities(processInstanceId);
             visualizationData.put("completedActivities", completedActivities);
             
-            // 流程变量
+            // Process variables
             Map<String, Object> variables = processInstance != null ?
                     runtimeService.getVariables(processInstanceId) :
                     historyService.createHistoricVariableInstanceQuery()
@@ -385,7 +385,7 @@ public class ProcessMonitorComponent {
                             ));
             visualizationData.put("variables", variables);
             
-            // 执行路径
+            // Execution path
             List<Map<String, Object>> executionPath = getExecutionPath(processInstanceId);
             visualizationData.put("executionPath", executionPath);
             
@@ -394,30 +394,30 @@ public class ProcessMonitorComponent {
         } catch (WorkflowValidationException e) {
             throw e;
         } catch (Exception e) {
-            log.error("获取流程执行可视化数据失败: {}", e.getMessage(), e);
-            throw new WorkflowBusinessException("VISUALIZATION_DATA_FAILED", "获取流程执行可视化数据失败: " + e.getMessage());
+            log.error("Failed to get process execution visualization data: {}", e.getMessage(), e);
+            throw new WorkflowBusinessException("VISUALIZATION_DATA_FAILED", "Failed to get process execution visualization data: " + e.getMessage());
         }
     }
 
-    // ==================== 私有辅助方法 ====================
+    // ==================== Private helper methods ====================
 
     /**
-     * 验证查询请求参数
+     * Validate query request parameters
      */
     private void validateQueryRequest(ProcessMonitorQueryRequest request) {
         List<WorkflowValidationException.ValidationError> errors = new ArrayList<>();
         
         if (request.getLimit() != null && request.getLimit() <= 0) {
-            errors.add(new WorkflowValidationException.ValidationError("limit", "分页大小必须大于0", request.getLimit()));
+            errors.add(new WorkflowValidationException.ValidationError("limit", "Page size must be greater than 0", request.getLimit()));
         }
         
         if (request.getOffset() != null && request.getOffset() < 0) {
-            errors.add(new WorkflowValidationException.ValidationError("offset", "偏移量不能为负数", request.getOffset()));
+            errors.add(new WorkflowValidationException.ValidationError("offset", "Offset must not be negative", request.getOffset()));
         }
         
         if (request.getStartTime() != null && request.getEndTime() != null && 
             request.getStartTime().after(request.getEndTime())) {
-            errors.add(new WorkflowValidationException.ValidationError("timeRange", "开始时间不能晚于结束时间", null));
+            errors.add(new WorkflowValidationException.ValidationError("timeRange", "Start time must not be after end time", null));
         }
         
         if (!errors.isEmpty()) {
@@ -426,7 +426,7 @@ public class ProcessMonitorComponent {
     }
 
     /**
-     * 构建运行时查询
+     * Build runtime query
      */
     private ProcessInstanceQuery buildRuntimeQuery(ProcessMonitorQueryRequest request) {
         ProcessInstanceQuery query = runtimeService.createProcessInstanceQuery();
@@ -447,7 +447,7 @@ public class ProcessMonitorComponent {
             query.startedBefore(request.getEndTime());
         }
         
-        // 排序 - 简化为只使用ID排序
+        // Sorting - simplified to use ID ordering only
         query.orderByProcessInstanceId();
         
         if ("DESC".equalsIgnoreCase(request.getOrderDirection())) {
@@ -460,7 +460,7 @@ public class ProcessMonitorComponent {
     }
 
     /**
-     * 构建历史查询
+     * Build history query
      */
     private HistoricProcessInstanceQuery buildHistoryQuery(ProcessMonitorQueryRequest request) {
         HistoricProcessInstanceQuery query = historyService.createHistoricProcessInstanceQuery();
@@ -487,7 +487,7 @@ public class ProcessMonitorComponent {
             query.startedBefore(request.getEndTime());
         }
         
-        // 排序 - 简化为只使用ID排序
+        // Sorting - simplified to use ID ordering only
         query.orderByProcessInstanceId();
         
         if ("DESC".equalsIgnoreCase(request.getOrderDirection())) {
@@ -500,7 +500,7 @@ public class ProcessMonitorComponent {
     }
 
     /**
-     * 转换流程实例信息
+     * Convert process instance info
      */
     private Map<String, Object> convertToProcessInstanceInfo(ProcessInstance instance) {
         Map<String, Object> info = new HashMap<>();
@@ -517,7 +517,7 @@ public class ProcessMonitorComponent {
     }
 
     /**
-     * 转换历史流程实例信息
+     * Convert historic process instance info
      */
     private Map<String, Object> convertToProcessInstanceInfo(HistoricProcessInstance instance) {
         Map<String, Object> info = new HashMap<>();
@@ -536,10 +536,10 @@ public class ProcessMonitorComponent {
     }
 
     /**
-     * 获取按流程定义分组的统计信息
+     * Get statistics grouped by process definition
      */
     private Map<String, Long> getProcessDefinitionStatistics(Date startTime, Date endTime) {
-        // 简化实现，实际应该使用数据库聚合查询
+        // Simplified implementation; should use database aggregate queries in production
         Map<String, Long> statistics = new HashMap<>();
         
         HistoricProcessInstanceQuery query = historyService.createHistoricProcessInstanceQuery();
@@ -562,12 +562,12 @@ public class ProcessMonitorComponent {
     }
 
     /**
-     * 获取按时间分组的统计信息
+     * Get statistics grouped by time
      */
     private Map<String, Long> getTimeStatistics(String processDefinitionKey, Date startTime, Date endTime) {
         Map<String, Long> statistics = new HashMap<>();
         
-        // 简化实现，按天统计最近7天
+        // Simplified implementation, daily stats for last 7 days
         LocalDateTime now = LocalDateTime.now();
         for (int i = 6; i >= 0; i--) {
             LocalDateTime dayStart = now.minusDays(i).withHour(0).withMinute(0).withSecond(0);
@@ -589,7 +589,7 @@ public class ProcessMonitorComponent {
     }
 
     /**
-     * 获取按任务名称分组的统计信息
+     * Get statistics grouped by task name
      */
     private Map<String, Long> getTaskNameStatistics(String assignee, String processDefinitionKey, Date startTime, Date endTime) {
         HistoricTaskInstanceQuery query = historyService.createHistoricTaskInstanceQuery();
@@ -616,7 +616,7 @@ public class ProcessMonitorComponent {
     }
 
     /**
-     * 获取按分配人分组的统计信息
+     * Get statistics grouped by assignee
      */
     private Map<String, Long> getAssigneeStatistics(String processDefinitionKey, Date startTime, Date endTime) {
         HistoricTaskInstanceQuery query = historyService.createHistoricTaskInstanceQuery()
@@ -642,7 +642,7 @@ public class ProcessMonitorComponent {
     }
 
     /**
-     * 获取平均任务处理时间
+     * Get average task processing time
      */
     private Double getAverageProcessingTime(String assignee, String processDefinitionKey, Date startTime, Date endTime) {
         HistoricTaskInstanceQuery query = historyService.createHistoricTaskInstanceQuery()
@@ -672,11 +672,11 @@ public class ProcessMonitorComponent {
                 .average()
                 .orElse(0.0);
         
-        return totalDuration / 1000.0; // 转换为秒
+        return totalDuration / 1000.0; // Convert to seconds
     }
 
     /**
-     * 获取平均流程执行时间
+     * Get average process execution time
      */
     private Double getAverageProcessDuration(String processDefinitionKey, Date startTime, Date endTime) {
         HistoricProcessInstanceQuery query = historyService.createHistoricProcessInstanceQuery()
@@ -703,11 +703,11 @@ public class ProcessMonitorComponent {
                 .average()
                 .orElse(0.0);
         
-        return avgDuration / 1000.0; // 转换为秒
+        return avgDuration / 1000.0; // Convert to seconds
     }
 
     /**
-     * 获取最长流程执行时间
+     * Get maximum process execution time
      */
     private Long getMaxProcessDuration(String processDefinitionKey, Date startTime, Date endTime) {
         HistoricProcessInstanceQuery query = historyService.createHistoricProcessInstanceQuery()
@@ -732,11 +732,11 @@ public class ProcessMonitorComponent {
                 .filter(instance -> instance.getDurationInMillis() != null)
                 .mapToLong(HistoricProcessInstance::getDurationInMillis)
                 .max()
-                .orElse(0L) / 1000; // 转换为秒
+                .orElse(0L) / 1000; // Convert to seconds
     }
 
     /**
-     * 获取最短流程执行时间
+     * Get minimum process execution time
      */
     private Long getMinProcessDuration(String processDefinitionKey, Date startTime, Date endTime) {
         HistoricProcessInstanceQuery query = historyService.createHistoricProcessInstanceQuery()
@@ -761,11 +761,11 @@ public class ProcessMonitorComponent {
                 .filter(instance -> instance.getDurationInMillis() != null)
                 .mapToLong(HistoricProcessInstance::getDurationInMillis)
                 .min()
-                .orElse(0L) / 1000; // 转换为秒
+                .orElse(0L) / 1000; // Convert to seconds
     }
 
     /**
-     * 获取流程成功率
+     * Get process success rate
      */
     private Double getProcessSuccessRate(String processDefinitionKey, Date startTime, Date endTime) {
         HistoricProcessInstanceQuery totalQuery = historyService.createHistoricProcessInstanceQuery();
@@ -796,15 +796,15 @@ public class ProcessMonitorComponent {
     }
 
     /**
-     * 获取任务平均等待时间
+     * Get average task wait time
      */
     private Double getAverageTaskWaitTime(String processDefinitionKey, Date startTime, Date endTime) {
-        // 简化实现，实际应该计算任务创建到开始处理的时间
+        // Simplified implementation; should calculate time from task creation to processing start
         return 0.0;
     }
 
     /**
-     * 获取系统吞吐量
+     * Get system throughput
      */
     private Double getThroughputPerHour(String processDefinitionKey, Date startTime, Date endTime) {
         if (startTime == null || endTime == null) {
@@ -830,12 +830,12 @@ public class ProcessMonitorComponent {
     }
 
     /**
-     * 获取资源利用率
+     * Get resource utilization
      */
     private Map<String, Double> getResourceUtilization() {
         Map<String, Double> utilization = new HashMap<>();
         
-        // 简化实现，实际应该从系统监控获取
+        // Simplified implementation; should get from system monitoring in production
         utilization.put("cpu", 65.5);
         utilization.put("memory", 72.3);
         utilization.put("disk", 45.8);
@@ -845,22 +845,22 @@ public class ProcessMonitorComponent {
     }
 
     /**
-     * 获取已完成的活动节点
+     * Get completed activity nodes
      */
     private List<Map<String, Object>> getCompletedActivities(String processInstanceId) {
         List<Map<String, Object>> activities = new ArrayList<>();
         
-        // 简化实现，实际应该查询历史活动实例
+        // Simplified implementation; should query historic activity instances
         return activities;
     }
 
     /**
-     * 获取执行路径
+     * Get execution path
      */
     private List<Map<String, Object>> getExecutionPath(String processInstanceId) {
         List<Map<String, Object>> path = new ArrayList<>();
         
-        // 简化实现，实际应该分析流程执行路径
+        // Simplified implementation; should analyze process execution path
         return path;
     }
 }

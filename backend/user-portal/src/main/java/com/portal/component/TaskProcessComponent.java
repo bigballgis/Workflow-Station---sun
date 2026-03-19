@@ -45,19 +45,19 @@ public class TaskProcessComponent {
     @Transactional
     public TaskInfo claimTask(String taskId, String userId) {
         if (!workflowEngineClient.isAvailable()) {
-            throw new IllegalStateException("Flowable 引擎不可用，请检查 workflow-engine-core 服务是否启动");
+            throw new IllegalStateException("Flowable engine unavailable, please check if workflow-engine-core service is running");
         }
         
         log.info("Using Flowable engine to claim task: {} by user: {}", taskId, userId);
         Optional<Map<String, Object>> result = workflowEngineClient.claimTask(taskId, userId);
         
         if (result.isEmpty()) {
-            throw new PortalException("500", "认领任务失败: " + taskId);
+            throw new PortalException("500", "Failed to claim task: " + taskId);
         }
         
         Map<String, Object> data = result.get();
         if (!Boolean.TRUE.equals(data.get("success"))) {
-            String message = data.get("message") != null ? (String) data.get("message") : "认领任务失败";
+            String message = data.get("message") != null ? (String) data.get("message") : "Failed to claim task";
             throw new PortalException("500", message);
         }
         
@@ -78,19 +78,19 @@ public class TaskProcessComponent {
     @Transactional
     public TaskInfo unclaimTask(String taskId, String userId, String originalAssignmentType, String originalAssignee) {
         if (!workflowEngineClient.isAvailable()) {
-            throw new IllegalStateException("Flowable 引擎不可用，请检查 workflow-engine-core 服务是否启动");
+            throw new IllegalStateException("Flowable engine unavailable, please check if workflow-engine-core service is running");
         }
         
         log.info("Using Flowable engine to unclaim task: {} by user: {}", taskId, userId);
         Optional<Map<String, Object>> result = workflowEngineClient.unclaimTask(taskId, userId);
         
         if (result.isEmpty()) {
-            throw new PortalException("500", "取消认领任务失败: " + taskId);
+            throw new PortalException("500", "Failed to unclaim task: " + taskId);
         }
         
         Map<String, Object> data = result.get();
         if (!Boolean.TRUE.equals(data.get("success"))) {
-            String message = data.get("message") != null ? (String) data.get("message") : "取消认领任务失败";
+            String message = data.get("message") != null ? (String) data.get("message") : "Failed to unclaim task";
             throw new PortalException("500", message);
         }
         
@@ -114,7 +114,7 @@ public class TaskProcessComponent {
 
         // 验证用户是否有权限处理任务
         if (!canProcessTask(task, userId)) {
-            throw new PortalException("403", "您没有权限处理此任务");
+            throw new PortalException("403", "You do not have permission to process this task");
         }
 
         // 自动认领虚拟组任务：如果任务属于虚拟组且未被认领，先自动认领再处理
@@ -131,7 +131,7 @@ public class TaskProcessComponent {
             case "TRANSFER" -> handleTransfer(task, request, userId);
             case "DELEGATE" -> handleDelegate(task, request, userId);
             case "RETURN" -> handleReturn(task, request, userId);
-            default -> throw new PortalException("400", "不支持的操作类型: " + action);
+            default -> throw new PortalException("400", "Unsupported action type: " + action);
         }
     }
 
@@ -142,19 +142,19 @@ public class TaskProcessComponent {
     @Transactional
     public void delegateTask(String taskId, String delegatorId, String delegateId, String reason) {
         if (!workflowEngineClient.isAvailable()) {
-            throw new IllegalStateException("Flowable 引擎不可用，请检查 workflow-engine-core 服务是否启动");
+            throw new IllegalStateException("Flowable engine unavailable, please check if workflow-engine-core service is running");
         }
         
         log.info("Using Flowable engine to delegate task: {} from {} to {}", taskId, delegatorId, delegateId);
         Optional<Map<String, Object>> result = workflowEngineClient.delegateTask(taskId, delegatorId, delegateId, reason);
         
         if (result.isEmpty()) {
-            throw new PortalException("500", "委托任务失败: " + taskId);
+            throw new PortalException("500", "Failed to delegate task: " + taskId);
         }
         
         Map<String, Object> data = result.get();
         if (!Boolean.TRUE.equals(data.get("success"))) {
-            String message = data.get("message") != null ? (String) data.get("message") : "委托任务失败";
+            String message = data.get("message") != null ? (String) data.get("message") : "Failed to delegate task";
             throw new PortalException("500", message);
         }
         
@@ -183,19 +183,19 @@ public class TaskProcessComponent {
     @Transactional
     public void transferTask(String taskId, String fromUserId, String toUserId, String reason) {
         if (!workflowEngineClient.isAvailable()) {
-            throw new IllegalStateException("Flowable 引擎不可用，请检查 workflow-engine-core 服务是否启动");
+            throw new IllegalStateException("Flowable engine unavailable, please check if workflow-engine-core service is running");
         }
         
         log.info("Using Flowable engine to transfer task: {} from {} to {}", taskId, fromUserId, toUserId);
         Optional<Map<String, Object>> result = workflowEngineClient.transferTask(taskId, fromUserId, toUserId, reason);
         
         if (result.isEmpty()) {
-            throw new PortalException("500", "转办任务失败: " + taskId);
+            throw new PortalException("500", "Failed to transfer task: " + taskId);
         }
         
         Map<String, Object> data = result.get();
         if (!Boolean.TRUE.equals(data.get("success"))) {
-            String message = data.get("message") != null ? (String) data.get("message") : "转办任务失败";
+            String message = data.get("message") != null ? (String) data.get("message") : "Failed to transfer task";
             throw new PortalException("500", message);
         }
         
@@ -289,7 +289,7 @@ public class TaskProcessComponent {
      */
     private TaskInfo getTaskOrThrow(String taskId) {
         return taskQueryComponent.getTaskById(taskId)
-                .orElseThrow(() -> new PortalException("404", "任务不存在: " + taskId));
+                .orElseThrow(() -> new PortalException("404", "Task not found: " + taskId));
     }
 
     /**
@@ -301,7 +301,7 @@ public class TaskProcessComponent {
         String action = request.getAction();
         
         if (!workflowEngineClient.isAvailable()) {
-            throw new IllegalStateException("Flowable 引擎不可用，请检查 workflow-engine-core 服务是否启动");
+            throw new IllegalStateException("Flowable engine unavailable, please check if workflow-engine-core service is running");
         }
         
         log.info("Using Flowable engine to complete task: {} with action: {}", taskId, action);
@@ -341,12 +341,12 @@ public class TaskProcessComponent {
         Optional<Map<String, Object>> result = workflowEngineClient.completeTask(taskId, userId, action, variables);
         
         if (result.isEmpty()) {
-            throw new PortalException("500", "完成任务失败: " + taskId);
+            throw new PortalException("500", "Failed to complete task: " + taskId);
         }
         
         Map<String, Object> data = result.get();
         if (!Boolean.TRUE.equals(data.get("success"))) {
-            String message = data.get("message") != null ? (String) data.get("message") : "完成任务失败";
+            String message = data.get("message") != null ? (String) data.get("message") : "Failed to complete task";
             throw new PortalException("500", message);
         }
         
@@ -400,7 +400,7 @@ public class TaskProcessComponent {
                         if ("RUNNING".equals(instance.getStatus())) {
                             instance.setStatus("COMPLETED");
                             instance.setEndTime(LocalDateTime.now());
-                            instance.setCurrentNode(lastActivityName != null ? lastActivityName : "已完成");
+                            instance.setCurrentNode(lastActivityName != null ? lastActivityName : "Completed");
                             instance.setCurrentAssignee(null);
                             processInstanceRepository.save(instance);
                             log.info("Process instance {} updated to COMPLETED with currentNode: {}", 
@@ -465,7 +465,7 @@ public class TaskProcessComponent {
     private void handleTransfer(TaskInfo task, TaskCompleteRequest request, String userId) {
         String targetUserId = request.getTargetUserId();
         if (targetUserId == null || targetUserId.isEmpty()) {
-            throw new PortalException("400", "转办目标用户不能为空");
+            throw new PortalException("400", "Transfer target user cannot be empty");
         }
         transferTask(task.getTaskId(), userId, targetUserId, request.getComment());
     }
@@ -476,7 +476,7 @@ public class TaskProcessComponent {
     private void handleDelegate(TaskInfo task, TaskCompleteRequest request, String userId) {
         String targetUserId = request.getTargetUserId();
         if (targetUserId == null || targetUserId.isEmpty()) {
-            throw new PortalException("400", "委托目标用户不能为空");
+            throw new PortalException("400", "Delegate target user cannot be empty");
         }
         delegateTask(task.getTaskId(), userId, targetUserId, request.getComment());
     }
@@ -490,11 +490,11 @@ public class TaskProcessComponent {
         String targetActivityId = request.getReturnActivityId();
         
         if (targetActivityId == null || targetActivityId.isEmpty()) {
-            throw new PortalException("400", "回退目标节点不能为空");
+            throw new PortalException("400", "Return target activity cannot be empty");
         }
         
         if (!workflowEngineClient.isAvailable()) {
-            throw new IllegalStateException("Flowable 引擎不可用，请检查 workflow-engine-core 服务是否启动");
+            throw new IllegalStateException("Flowable engine unavailable, please check if workflow-engine-core service is running");
         }
         
         log.info("Using Flowable engine to return task: {} to activity: {}", taskId, targetActivityId);
@@ -502,12 +502,12 @@ public class TaskProcessComponent {
             taskId, targetActivityId, userId, request.getComment());
         
         if (result.isEmpty()) {
-            throw new PortalException("500", "回退任务失败: " + taskId);
+            throw new PortalException("500", "Failed to return task: " + taskId);
         }
         
         Map<String, Object> data = result.get();
         if (!Boolean.TRUE.equals(data.get("success"))) {
-            String message = data.get("message") != null ? (String) data.get("message") : "回退任务失败";
+            String message = data.get("message") != null ? (String) data.get("message") : "Failed to return task";
             throw new PortalException("500", message);
         }
         
@@ -566,7 +566,7 @@ public class TaskProcessComponent {
 
         // 验证催办人是否有权限（通常是流程发起人或管理员）
         if (!canUrgeTask(task, urgerId)) {
-            throw new PortalException("403", "您没有权限催办此任务");
+            throw new PortalException("403", "You do not have permission to urge this task");
         }
 
         // 获取任务处理人
@@ -574,7 +574,7 @@ public class TaskProcessComponent {
         String assigneeName = task.getAssigneeName();
 
         // 发送催办通知（实际应调用消息服务）
-        String urgeMessage = message != null ? message : "请尽快处理任务：" + task.getTaskName();
+        String urgeMessage = message != null ? message : "Please process the task as soon as possible: " + task.getTaskName();
         sendUrgeNotification(taskId, assignee, urgerId, urgeMessage);
 
         // 记录催办日志
@@ -588,7 +588,7 @@ public class TaskProcessComponent {
                 .build();
         delegationAuditRepository.save(audit);
 
-        log.info("用户 {} 催办了任务 {}，处理人: {}", urgerId, taskId, assignee);
+        log.info("User {} urged task {}, assignee: {}", urgerId, taskId, assignee);
     }
 
     /**
@@ -600,7 +600,7 @@ public class TaskProcessComponent {
             try {
                 urgeTask(taskId, urgerId, message);
             } catch (Exception e) {
-                log.warn("催办任务 {} 失败: {}", taskId, e.getMessage());
+                log.warn("Failed to urge task {}: {}", taskId, e.getMessage());
             }
         }
     }
@@ -624,7 +624,7 @@ public class TaskProcessComponent {
     private void sendUrgeNotification(String taskId, String assignee, String urgerId, String message) {
         // 实际应调用消息服务发送通知
         // 这里只记录日志
-        log.info("发送催办通知: 任务={}, 处理人={}, 催办人={}, 消息={}", taskId, assignee, urgerId, message);
+        log.info("Sending urge notification: task={}, assignee={}, urger={}, message={}", taskId, assignee, urgerId, message);
     }
 
     /**

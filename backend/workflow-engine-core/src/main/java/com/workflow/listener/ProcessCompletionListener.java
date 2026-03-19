@@ -19,8 +19,8 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * 流程完成事件监听器
- * 监听流程完成事件，通知 user-portal 更新流程实例状态
+ * Process completion event listener.
+ * Listens for process completion events and notifies user-portal to update process instance status.
  */
 @Slf4j
 @Component
@@ -45,16 +45,16 @@ public class ProcessCompletionListener implements FlowableEventListener {
             log.info("Process completed event received for process instance: {}", processInstanceId);
             
             try {
-                // 获取最后一个活动节点的名称（在当前线程中获取，因为 HistoryService 需要在事务内）
+                // Get last activity node name in current thread since HistoryService needs to be within a transaction
                 String lastActivityName = getLastActivityName(processInstanceId);
                 
-                // 异步通知 user-portal 更新流程实例状态
-                // 必须异步，否则会导致死锁：completeTask(@Transactional) 持有 ProcessInstance 行锁
-                // → 同步调用 workflow-engine → listener 同步回调 user-portal markProcessAsCompleted
-                // → 等待同一行的行锁 → 死锁
+                // Async notify user-portal to update process instance status.
+                // Must be async to avoid deadlock: completeTask(@Transactional) holds ProcessInstance row lock
+                // -> sync call to workflow-engine -> listener sync callback to user-portal markProcessAsCompleted
+                // -> waits for same row lock -> deadlock
                 CompletableFuture.runAsync(() -> {
                     try {
-                        // 延迟一小段时间，确保 completeTask 事务已提交
+                        // Short delay to ensure completeTask transaction has committed
                         Thread.sleep(500);
                         
                         String url = userPortalUrl + "/api/portal/processes/" + processInstanceId + "/complete";
@@ -82,13 +82,13 @@ public class ProcessCompletionListener implements FlowableEventListener {
     }
     
     /**
-     * 获取流程的最后一个活动节点名称
-     * 优先返回结束事件的名称（如 "Approved"），如果没有则返回最后一个用户任务
+     * Get last activity node name of the process.
+     * Prioritizes returning end event name (e.g. "Approved"); falls back to last user task.
      */
     private String getLastActivityName(String processInstanceId) {
         try {
-            // 首先查询结束事件（endEvent），这是流程的真正最后节点
-            // 注意：不使用 .finished() 因为在 PROCESS_COMPLETED 事件触发时，endEvent 可能还没有被标记为 finished
+            // Query end events first (endEvent) - these are the actual last nodes of the process.
+            // Note: not using .finished() because at PROCESS_COMPLETED event time, endEvent may not yet be marked as finished
             List<HistoricActivityInstance> endEvents = historyService
                     .createHistoricActivityInstanceQuery()
                     .processInstanceId(processInstanceId)
@@ -99,7 +99,7 @@ public class ProcessCompletionListener implements FlowableEventListener {
             
             log.info("Found {} endEvents for process {}", endEvents.size(), processInstanceId);
             
-            // 如果有结束事件且有名称，优先返回结束事件的名称
+            // If there is an end event with a name, prioritize returning the end event name
             if (!endEvents.isEmpty()) {
                 HistoricActivityInstance endEvent = endEvents.get(0);
                 String activityName = endEvent.getActivityName();
@@ -107,14 +107,13 @@ public class ProcessCompletionListener implements FlowableEventListener {
                         activityName, endEvent.getStartTime(), endEvent.getEndTime());
                 
                 if (activityName != null && !activityName.isEmpty() && 
-                    !activityName.equalsIgnoreCase("End") && 
-                    !activityName.equalsIgnoreCase("结束")) {
+                    !activityName.equalsIgnoreCase("End")) {
                     log.info("Using endEvent for process {}: {}", processInstanceId, activityName);
                     return activityName;
                 }
             }
             
-            // 如果结束事件没有有意义的名称，查询最后一个用户任务
+            // If end event has no meaningful name, query the last user task
             List<HistoricActivityInstance> userTasks = historyService
                     .createHistoricActivityInstanceQuery()
                     .processInstanceId(processInstanceId)
@@ -132,7 +131,7 @@ public class ProcessCompletionListener implements FlowableEventListener {
                 return activityName != null ? activityName : "Completed";
             }
             
-            // 如果没有用户任务，查询服务任务
+            // If no user tasks, query service tasks
             List<HistoricActivityInstance> serviceTasks = historyService
                     .createHistoricActivityInstanceQuery()
                     .processInstanceId(processInstanceId)
@@ -150,7 +149,7 @@ public class ProcessCompletionListener implements FlowableEventListener {
                 return activityName != null ? activityName : "Completed";
             }
             
-            // 如果都没有找到，返回默认值
+            // If nothing found, return default value
             log.warn("No endEvent, userTask or serviceTask found for process {}", processInstanceId);
             return "Completed";
             
@@ -163,19 +162,19 @@ public class ProcessCompletionListener implements FlowableEventListener {
 
     @Override
     public boolean isFailOnException() {
-        // 不因异常而失败，避免影响流程执行
+        // Do not fail on exception to avoid affecting process execution
         return false;
     }
 
     @Override
     public boolean isFireOnTransactionLifecycleEvent() {
-        // 在事务提交后触发，确保所有历史数据（包括 endEvent）都已持久化
+        // Fire after transaction commit to ensure all history data (including endEvent) has been persisted
         return true;
     }
 
     @Override
     public String getOnTransaction() {
-        // 在事务提交后触发
+        // Fire after transaction commit
         return "COMMITTED";
     }
 }
