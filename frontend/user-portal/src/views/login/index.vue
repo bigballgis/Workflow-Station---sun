@@ -50,7 +50,7 @@
             />
           </el-form-item>
           <el-form-item prop="password">
-            <label class="field-label">{{ t('login.password') }}</label>
+            <label class="field-label" style="line-height: normal;">{{ t('login.password') }}</label>
             <el-input
               v-model="form.password"
               type="password"

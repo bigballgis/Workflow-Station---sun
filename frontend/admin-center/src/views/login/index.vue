@@ -50,7 +50,7 @@
             />
           </el-form-item>
           <el-form-item prop="password">
-            <label class="field-label">Password</label>
+            <label class="field-label" style="line-height: normal;" >Password</label>
             <el-input
               v-model="form.password"
               type="password"
