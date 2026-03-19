@@ -660,9 +660,11 @@ const formRules = computed<FormRules>(() => {
   return rules
 })
 
-// 监听表单数据变化 - 只在非内部更新时 emit
+// 监听表单数据变化 - 只在非内部更新且非只读时 emit
+// readonly 模式下绝不 emit，防止多个 FormRenderer 共享同一 v-model 时
+// 各自 initFormData 只含自身字段的子集，emit 回去会覆盖掉其他表单的数据
 watch(formData, (newVal) => {
-  if (!isInternalUpdate) {
+  if (!isInternalUpdate && !props.readonly) {
     emit('update:modelValue', { ...newVal })
   }
 }, { deep: true })

@@ -1258,6 +1258,13 @@ const submitApprove = async () => {
       }
     }
 
+    // 同时将表单数据合并进 variables，确保后端保存时不丢失
+    Object.assign(variables, currentFormData)
+
+    console.log('[submitApprove] formData.value keys:', Object.keys(formData.value))
+    console.log('[submitApprove] currentFormData:', JSON.stringify(currentFormData))
+    console.log('[submitApprove] variables:', JSON.stringify(variables))
+
     await completeTask(taskId, {
       taskId: taskId,
       action: currentApproveAction.value,

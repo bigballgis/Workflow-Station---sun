@@ -339,6 +339,7 @@ const loadProcessDetail = async () => {
     const data = res.data || res
     if (data) {
       processInfo.value = data
+      console.log('=== Process variables keys:', data.variables ? Object.keys(data.variables) : 'null')
       if (data.variables) formData.value = data.variables
       
       // 先加载流转历史

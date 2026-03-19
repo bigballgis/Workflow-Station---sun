@@ -354,20 +354,23 @@ public class TaskProcessComponent {
                 taskId, userId, action, variables.get("approvalStatus"));
         
         // 将审批变量同步回本地 ProcessInstance，确保 Completed Tasks / My Requests 能看到
+        // 注意：必须创建新的 HashMap 而非原地修改旧 Map，否则 Hibernate 对 JSON 列的脏检测
+        // 会因新旧引用相同而误判为"未变更"，导致 UPDATE 语句不被执行
         try {
             String syncProcessId = task.getProcessInstanceId();
             Optional<ProcessInstance> syncOpt = processInstanceRepository.findById(syncProcessId);
             if (syncOpt.isPresent()) {
                 ProcessInstance syncInstance = syncOpt.get();
                 Map<String, Object> existingVars = syncInstance.getVariables();
-                if (existingVars == null) {
-                    existingVars = new HashMap<>();
+                Map<String, Object> mergedVars = new HashMap<>();
+                if (existingVars != null) {
+                    mergedVars.putAll(existingVars);
                 }
-                existingVars.putAll(variables);
-                syncInstance.setVariables(existingVars);
+                mergedVars.putAll(variables);
+                syncInstance.setVariables(mergedVars);
                 processInstanceRepository.save(syncInstance);
                 log.info("Synced {} approval variables back to local ProcessInstance {}", 
-                        variables.size(), syncProcessId);
+                        mergedVars.size(), syncProcessId);
             }
         } catch (Exception e) {
             log.warn("Failed to sync approval variables to local ProcessInstance: {}", e.getMessage());
