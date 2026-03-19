@@ -40,7 +40,7 @@
 
         <el-form ref="formRef" class="login-form" :model="form" :rules="rules" @submit.prevent="handleLogin">
           <el-form-item prop="username">
-            <label class="field-label">{{ t('login.username') }}</label>
+            <label class="field-label" style="line-height: normal;">{{ t('login.username') }}</label>
             <el-input
               v-model="form.username"
               :placeholder="t('login.usernamePlaceholder')"
@@ -157,7 +157,7 @@ $placeholder-color: #969696;
   width: 54%;
   height: 100%;
   background: linear-gradient(90deg, #60050A 0%, #D82028 82.69%);
-  clip-path: polygon(59% 0, 100% 0, 100% 100%, 30% 100%, 0% 50%);
+  clip-path: polygon(59% 0, 100% 0, 100% 100%, 59% 100%, 0% 50%);
   z-index: 1;
 }
 

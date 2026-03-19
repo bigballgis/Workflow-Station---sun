@@ -41,7 +41,7 @@
 
         <el-form ref="formRef" :model="form" :rules="rules" @submit.prevent="handleLogin" class="login-form">
           <el-form-item prop="username">
-            <label class="field-label">Username</label>
+            <label class="field-label" style="line-height: normal;">Username</label>
             <el-input
               v-model="form.username"
               placeholder="Enter Your Username"
@@ -173,7 +173,7 @@ $placeholder-color: #969696;
   width: 54%;
   height: 100%;
   background: linear-gradient(90deg, #60050A 0%, #D82028 82.69%);
-  clip-path: polygon(59% 0, 100% 0, 100% 100%, 30% 100%, 0% 50%);
+  clip-path: polygon(59% 0, 100% 0, 100% 100%, 59% 100%, 0% 50%);
   z-index: 1;
 }
 
