@@ -139,8 +139,8 @@
     </div>
 
     <!-- 委托/转办/催办对话框 -->
-    <el-dialog v-model="actionDialogVisible" :title="actionDialogTitle" width="500px">
-      <el-form :model="actionForm" label-width="140px" label-position="left" class="task-action-form">
+    <el-dialog v-model="actionDialogVisible" :title="actionDialogTitle" width="500px" class="task-action-dialog">
+      <el-form :model="actionForm" label-width="120px" label-position="left" class="task-action-form">
         <el-form-item :label="t('task.targetUser')" v-if="currentAction !== 'urge' && currentAction !== 'batchUrge'">
           <el-select v-model="actionForm.targetUserId" filterable :placeholder="t('task.selectUser')" style="width: 100%;">
             <el-option label="Li Si" value="user_2" />
@@ -148,11 +148,11 @@
             <el-option label="Zhao Liu" value="user_4" />
           </el-select>
         </el-form-item>
-        <el-form-item :label="currentAction === 'urge' || currentAction === 'batchUrge' ? t('task.urgeMessage') : t('task.reasonDescription')">
+        <el-form-item :label="currentAction === 'urge' || currentAction === 'batchUrge' ? t('task.urgeMessage') : t('task.reasonDescription')" class="task-action-reason-item">
           <el-input 
             v-model="actionForm.reason" 
             type="textarea" 
-            :rows="3" 
+            :rows="5" 
             :placeholder="currentAction === 'urge' || currentAction === 'batchUrge' ? t('task.urgeMessagePlaceholder') : t('task.reasonPlaceholder')" 
           />
         </el-form-item>

@@ -231,8 +231,8 @@
     </el-dialog>
 
     <!-- 委托/转办对话框 -->
-    <el-dialog v-model="actionDialogVisible" :title="actionDialogTitle" width="500px" @opened="onActionDialogOpened">
-      <el-form :model="actionForm" label-width="80px">
+    <el-dialog v-model="actionDialogVisible" :title="actionDialogTitle" width="500px" @opened="onActionDialogOpened" class="task-action-dialog">
+      <el-form :model="actionForm" label-width="120px" label-position="left" class="task-action-form">
         <el-form-item :label="t('task.targetUser')" v-show="currentAction !== 'urge'">
           <el-select 
             v-model="actionForm.targetUserId" 
@@ -248,11 +248,11 @@
             />
           </el-select>
         </el-form-item>
-        <el-form-item :label="currentAction === 'urge' ? t('task.urgeMessage') : t('task.reasonDescription')">
+        <el-form-item :label="currentAction === 'urge' ? t('task.urgeMessage') : t('task.reasonDescription')" class="task-action-reason-item">
           <el-input 
             v-model="actionForm.reason" 
             type="textarea" 
-            :rows="3" 
+            :rows="5" 
             :placeholder="currentAction === 'urge' ? t('task.urgeMessagePlaceholder') : t('task.reasonPlaceholder')" 
           />
         </el-form-item>
@@ -1712,5 +1712,22 @@ onMounted(() => {
   .overdue {
     color: var(--error-red, #f56c6c);
   }
+}
+</style>
+
+<style lang="scss">
+/* Transfer/Delegate dialog: prevent label wrapping, left-align */
+.task-action-form .el-form-item__label {
+  white-space: nowrap;
+  text-align: left;
+}
+/* Reason Description: slightly larger label and textarea */
+.task-action-form .task-action-reason-item .el-form-item__label {
+  font-size: 14px;
+}
+.task-action-form .task-action-reason-item .el-textarea__inner {
+  min-height: 100px;
+  width: 100%;
+  font-size: 14px;
 }
 </style>
