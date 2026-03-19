@@ -1,69 +1,83 @@
 <template>
   <div class="login-container">
-    <div class="login-card">
-      <div class="login-header">
-        <h1>{{ t('login.title') }}</h1>
-        <p>{{ t('login.subtitle') }}</p>
-      </div>
-      
-      <!-- 测试用户快速选择 (仅开发环境) -->
-      <div v-if="isDev" class="test-user-section">
-        <el-divider content-position="center">
-          <span class="test-user-label">{{ t('login.testUserQuickLogin') }}</span>
-        </el-divider>
-        <el-select 
-          v-model="selectedTestUser" 
-          :placeholder="t('login.selectTestUser')" 
-          @change="onTestUserSelect"
-          size="large"
-          class="test-user-select"
-        >
-          <el-option
-            v-for="user in testUsers"
-            :key="user.username"
-            :label="`${user.name} (${user.role})`"
-            :value="user.username"
-          >
-            <div class="test-user-option">
-              <span class="user-name">{{ user.name }}</span>
-              <el-tag size="small" :type="user.tagType">{{ user.role }}</el-tag>
-            </div>
-          </el-option>
-        </el-select>
-      </div>
+    <!-- Right side dark red background shape (matches admin center logon.html) -->
+    <div class="bg-shape"></div>
 
-      <el-form ref="formRef" :model="form" :rules="rules" class="login-form">
-        <el-form-item prop="username">
-          <el-input
-            v-model="form.username"
-            :placeholder="t('login.username')"
-            :prefix-icon="User"
+    <!-- Right side login card -->
+    <div class="login-right">
+      <div class="login-card">
+        <div class="login-header">
+          <div class="brand-logo">
+            <img src="/hermes-logo.svg" alt="HerMes" class="brand-logo-img" />
+          </div>
+          <h2 class="login-title">{{ t('login.title') }}</h2>
+        </div>
+
+        <!-- Test user quick select (dev only) -->
+        <div v-if="isDev" class="test-user-section">
+          <el-divider content-position="center">
+            <span class="test-user-label">{{ t('login.testUserQuickLogin') }}</span>
+          </el-divider>
+          <el-select
+            v-model="selectedTestUser"
+            :placeholder="t('login.selectTestUser')"
+            @change="onTestUserSelect"
             size="large"
-          />
-        </el-form-item>
-        <el-form-item prop="password">
-          <el-input
-            v-model="form.password"
-            type="password"
-            :placeholder="t('login.password')"
-            :prefix-icon="Lock"
-            size="large"
-            show-password
-            @keyup.enter="handleLogin"
-          />
-        </el-form-item>
-        <el-form-item>
-          <el-button
-            type="primary"
-            size="large"
-            :loading="loading"
-            class="login-btn"
-            @click="handleLogin"
+            class="test-user-select"
           >
-            {{ t('login.login') }}
-          </el-button>
-        </el-form-item>
-      </el-form>
+            <el-option
+              v-for="user in testUsers"
+              :key="user.username"
+              :label="`${user.name} (${user.role})`"
+              :value="user.username"
+            >
+              <div class="test-user-option">
+                <span class="user-name">{{ user.name }}</span>
+                <el-tag size="small" :type="user.tagType">{{ user.role }}</el-tag>
+              </div>
+            </el-option>
+          </el-select>
+        </div>
+
+        <el-form ref="formRef" :model="form" :rules="rules" @submit.prevent="handleLogin" class="login-form">
+          <el-form-item prop="username">
+            <label class="field-label">{{ t('login.username') }}</label>
+            <el-input
+              v-model="form.username"
+              :placeholder="t('login.username')"
+              :prefix-icon="User"
+              size="large"
+            />
+          </el-form-item>
+          <el-form-item prop="password">
+            <label class="field-label">{{ t('login.password') }}</label>
+            <el-input
+              v-model="form.password"
+              type="password"
+              :placeholder="t('login.password')"
+              :prefix-icon="Lock"
+              size="large"
+              show-password
+              @keyup.enter="handleLogin"
+            />
+          </el-form-item>
+          <el-form-item class="btn-item">
+            <el-button
+              type="primary"
+              size="large"
+              :loading="loading"
+              class="login-btn"
+              @click="handleLogin"
+            >
+              {{ t('login.login') }}
+            </el-button>
+          </el-form-item>
+        </el-form>
+
+        <div class="login-footer">
+          <span>© 2026 HerMes</span>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -81,36 +95,26 @@ const router = useRouter()
 const formRef = ref<FormInstance>()
 const loading = ref(false)
 
-// 开发环境检测
 const isDev = import.meta.env.DEV
 
-// 测试用户数据 (仅开发环境使用) - 采购流程测试用户
 const testUsers = [
-  // Purchase Workflow Test Users
   { username: 'purchase.requester', password: 'admin123', name: 'Tom Wilson', role: 'Initiator (IT-DEV)', tagType: 'primary' as const },
   { username: 'dept.reviewer', password: 'admin123', name: 'Alice Johnson', role: 'Dept Reviewer (IT-DEV)', tagType: 'success' as const },
   { username: 'parent.reviewer', password: 'admin123', name: 'Bob Smith', role: 'Senior Approver (IT)', tagType: 'warning' as const },
   { username: 'finance.reviewer', password: 'admin123', name: 'Carol Davis', role: 'Finance Reviewer', tagType: 'danger' as const },
   { username: 'countersign.approver1', password: 'admin123', name: 'Daniel Brown', role: 'Countersign Approver', tagType: 'info' as const },
   { username: 'countersign.approver2', password: 'admin123', name: 'Eva Martinez', role: 'Countersign Approver', tagType: 'info' as const },
-  // Existing Manager Users
   { username: 'core.lead', password: 'admin123', name: 'Kevin Huang', role: 'Entity Manager', tagType: 'warning' as const },
   { username: 'tech.director', password: 'admin123', name: 'Robert Sun', role: 'Function Manager', tagType: 'danger' as const },
 ]
 
 const selectedTestUser = ref('')
-
-const form = reactive({
-  username: '',
-  password: ''
-})
-
+const form = reactive({ username: '', password: '' })
 const rules = computed(() => ({
   username: [{ required: true, message: t('login.usernameRequired'), trigger: 'blur' }],
   password: [{ required: true, message: t('login.passwordRequired'), trigger: 'blur' }]
 }))
 
-// 选择测试用户时自动填充
 const onTestUserSelect = (username: string) => {
   const user = testUsers.find(u => u.username === username)
   if (user) {
@@ -122,22 +126,14 @@ const onTestUserSelect = (username: string) => {
 
 const handleLogin = async () => {
   if (!formRef.value) return
-  
   await formRef.value.validate(async (valid) => {
     if (valid) {
       loading.value = true
       try {
-        // Call real login API
-        const response = await authLogin({
-          username: form.username,
-          password: form.password
-        })
-        
-        // Save tokens and user info
+        const response = await authLogin({ username: form.username, password: form.password })
         saveTokens(response.accessToken, response.refreshToken)
         saveUser(response.user)
         localStorage.setItem('userId', response.user.userId)
-        
         ElMessage.success(t('login.loginSuccess'))
         router.push('/dashboard')
       } catch (error: any) {
@@ -152,48 +148,168 @@ const handleLogin = async () => {
 </script>
 
 <style lang="scss" scoped>
+$primary: #C60C12;
+$primary-hover: #A00A0F;
+$bg-base: #D82028;
+$title-color: #2F2F2F;
+$label-color: #666666;
+$input-border: #E0E0E0;
+$placeholder-color: #969696;
+
 .login-container {
-  min-height: 100vh;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  background: linear-gradient(135deg, var(--hsbc-red) 0%, #8B0000 100%);
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background-color: $bg-base;
   position: relative;
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.bg-shape {
+  left: 5%;
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 54%;
+  height: 100%;
+  background: linear-gradient(90deg, #60050A 0%, #D82028 82.69%);
+  clip-path: polygon(59% 0, 100% 0, 100% 100%, 30% 100%, 0% 50%);
+  z-index: 1;
+}
+
+.login-right {
+  position: absolute;
+  top: 50%;
+  right: 20%;
+  transform: translateY(-50%);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
 }
 
 .login-card {
-  width: 400px;
-  padding: 40px;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  width: 120%;
+  padding: 40px 45px;
+  background: #FFFFFF;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  text-align: center;
 }
 
 .login-header {
   text-align: center;
-  margin-bottom: 30px;
-  
-  h1 {
-    font-size: 28px;
-    color: var(--hsbc-red);
-    margin: 0 0 8px 0;
-  }
-  
-  p {
-    font-size: 14px;
-    color: var(--text-secondary);
-    margin: 0;
-  }
+  margin-bottom: 20px;
+}
+
+.brand-logo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.brand-logo-img {
+  height: 48px;
+  width: auto;
+  object-fit: contain;
+}
+
+.login-title {
+  font-size: 36px;
+  font-weight: 800;
+  color: $title-color;
+  margin: 0 0 30px;
 }
 
 .login-form {
-  .login-btn {
+  .field-label {
+    display: block;
+    font-size: 16px;
+    font-weight: 600;
+    color: $label-color;
+    margin-bottom: 8px;
+    text-align: left;
+  }
+
+  :deep(.el-form-item) {
+    margin-bottom: 20px;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  :deep(.el-form-item__content) {
     width: 100%;
+  }
+
+  :deep(.el-input__wrapper) {
+    border-radius: 6px;
+    border: 1px solid $input-border;
+    box-shadow: none;
+    padding: 12px 15px;
+    font-size: 16px;
+    font-weight: 500;
+
+    &:hover, &.is-focus {
+      border-color: $primary;
+      box-shadow: none;
+    }
+  }
+
+  :deep(.el-input__inner) {
+    font-size: 16px;
+    font-weight: 500;
+
+    &::placeholder {
+      color: $placeholder-color;
+    }
+  }
+}
+
+.btn-item {
+  margin-top: 10px;
+  margin-bottom: 0 !important;
+}
+
+.login-btn {
+  width: 100%;
+  padding: 14px;
+  height: auto;
+  font-size: 18px;
+  font-weight: 600;
+  border-radius: 6px;
+  background: $primary;
+  border-color: $primary;
+
+  &:hover, &:focus {
+    background: $primary-hover;
+    border-color: $primary-hover;
+  }
+
+  &:active {
+    background: #8a080c;
+    border-color: #8a080c;
+  }
+}
+
+.login-footer {
+  text-align: center;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #f0f0f0;
+
+  span {
+    font-size: 12px;
+    color: #bbb;
   }
 }
 
 .test-user-section {
-  margin-bottom: 10px;
+  margin-bottom: 16px;
+
+  :deep(.el-divider__text) {
+    background: white;
+  }
 }
 
 .test-user-label {

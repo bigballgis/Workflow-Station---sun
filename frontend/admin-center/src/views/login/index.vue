@@ -1,17 +1,15 @@
 <template>
   <div class="login-container">
-    <!-- Left side arrow/chevron background decoration -->
-    <div class="login-bg-left">
-      <div class="chevron-shape"></div>
-    </div>
+    <!-- Right side dark red background shape (matches logon.html) -->
+    <div class="bg-shape"></div>
 
     <!-- Right side login card -->
     <div class="login-right">
       <div class="login-card">
         <div class="login-header">
-          <!-- H logo -->
+          <!-- HerMes H logo -->
           <div class="brand-logo">
-            <span class="brand-h">H</span>
+            <img src="/hermes-logo.svg" alt="HerMes" class="brand-logo-img" />
           </div>
           <h2 class="login-title">Admin Centre</h2>
         </div>
@@ -80,7 +78,7 @@
         </div>
 
         <div class="login-footer">
-          <span>@2026 HerMes</span>
+          <span>© 2026 HerMes</span>
         </div>
       </div>
     </div>
@@ -148,120 +146,98 @@ const handleLogin = async () => {
 </script>
 
 <style scoped lang="scss">
-$primary: #C8102E;
-$primary-dark: #9B0020;
-$primary-deeper: #7A0018;
+/* Match logon.html design - DM Sans, #D82028, #C60C12 */
+$primary: #C60C12;
+$primary-hover: #A00A0F;
+$bg-base: #D82028;
+$title-color: #2F2F2F;
+$label-color: #666666;
+$input-border: #E0E0E0;
+$placeholder-color: #969696;
 
 .login-container {
+  width: 100vw;
   height: 100vh;
-  display: flex;
-  background: $primary;
   overflow: hidden;
+  background-color: $bg-base;
   position: relative;
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
-/* Left decorative area with chevron — full screen background */
-.login-bg-left {
-  width: 100%;
-  position: relative;
-  background: $primary;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.chevron-shape {
+/* Right side dark red background shape (matches logon.html) */
+.bg-shape {
+  left: 5%;
   position: absolute;
-  left: 0;
   top: 0;
-  width: 100%;
+  right: 0;
+  width: 54%;
   height: 100%;
-
-  /* Large left-pointing arrow using clip-path on a darker overlay */
-  &::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.15);
-    clip-path: polygon(0 0, 60% 0, 100% 50%, 60% 100%, 0 100%);
-  }
-
-  /* Inner darker chevron pointing left */
-  &::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.12);
-    clip-path: polygon(0 0, 45% 0, 85% 50%, 45% 100%, 0 100%);
-  }
+  background: linear-gradient(90deg, #60050A 0%, #D82028 82.69%);
+  clip-path: polygon(59% 0, 100% 0, 100% 100%, 30% 100%, 0% 50%);
+  z-index: 1;
 }
 
-/* Right side with card — centered on screen */
+/* Login card - right: 20%, width: 380px */
 .login-right {
   position: absolute;
   top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 1;
+  right: 20%;
+  transform: translateY(-50%);
+  z-index: 10;
   display: flex;
   align-items: center;
-  justify-content: center;
-  padding: 40px 48px;
+  justify-content: flex-end;
 }
 
 .login-card {
-  width: 100%;
-  max-width: 360px;
-  padding: 40px 36px 28px;
-  background: #fff;
+  width: 120%;
+  padding: 40px 45px;
+  background: #FFFFFF;
   border-radius: 12px;
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  text-align: center;
 }
 
-/* Brand logo */
+/* Brand logo - HerMes SVG */
 .login-header {
   text-align: center;
-  margin-bottom: 28px;
+  margin-bottom: 20px;
 }
 
 .brand-logo {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 52px;
-  height: 52px;
-  background: $primary;
-  border-radius: 8px;
-  margin-bottom: 14px;
+  margin-bottom: 20px;
 }
 
-.brand-h {
-  color: #fff;
-  font-size: 28px;
-  font-weight: 800;
-  font-family: serif;
-  line-height: 1;
+.brand-logo-img {
+  height: 48px;
+  width: auto;
+  object-fit: contain;
 }
 
+/* Title - #2F2F2F, 36px, 800 weight */
 .login-title {
-  font-size: 22px;
-  font-weight: 700;
-  color: #1a1a1a;
-  margin: 0;
+  font-size: 36px;
+  font-weight: 800;
+  color: $title-color;
+  margin: 0 0 30px;
 }
 
-/* Form */
+/* Form - match logon.html labels & inputs */
 .login-form {
   .field-label {
     display: block;
-    font-size: 13px;
-    font-weight: 500;
-    color: #444;
-    margin-bottom: 6px;
+    font-size: 16px;
+    font-weight: 600;
+    color: $label-color;
+    margin-bottom: 8px;
+    text-align: left;
   }
 
   :deep(.el-form-item) {
-    margin-bottom: 18px;
+    margin-bottom: 20px;
     flex-direction: column;
     align-items: flex-start;
   }
@@ -272,8 +248,11 @@ $primary-deeper: #7A0018;
 
   :deep(.el-input__wrapper) {
     border-radius: 6px;
-    border: 1px solid #dcdfe6;
+    border: 1px solid $input-border;
     box-shadow: none;
+    padding: 12px 15px;
+    font-size: 16px;
+    font-weight: 500;
 
     &:hover, &.is-focus {
       border-color: $primary;
@@ -282,33 +261,39 @@ $primary-deeper: #7A0018;
   }
 
   :deep(.el-input__inner) {
-    font-size: 14px;
+    font-size: 16px;
+    font-weight: 500;
+
+    &::placeholder {
+      color: $placeholder-color;
+    }
   }
 }
 
 .btn-item {
-  margin-top: 8px;
+  margin-top: 10px;
   margin-bottom: 0 !important;
 }
 
+/* Login button - #C60C12, 18px, 600 weight */
 .login-btn {
   width: 100%;
-  height: 44px;
-  font-size: 15px;
+  padding: 14px;
+  height: auto;
+  font-size: 18px;
   font-weight: 600;
   border-radius: 6px;
   background: $primary;
   border-color: $primary;
-  letter-spacing: 0.3px;
 
   &:hover, &:focus {
-    background: $primary-dark;
-    border-color: $primary-dark;
+    background: $primary-hover;
+    border-color: $primary-hover;
   }
 
   &:active {
-    background: $primary-deeper;
-    border-color: $primary-deeper;
+    background: #8a080c;
+    border-color: #8a080c;
   }
 }
 
