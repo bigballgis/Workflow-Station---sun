@@ -293,21 +293,21 @@ BEGIN
     -- =========================================================================
     -- Update sequences
     -- =========================================================================
-    EXECUTE format('SELECT setval(''dw_data_%s_id_seq'', (SELECT MAX(id) FROM dw_data_%s))', 
+    EXECUTE format('SELECT setval(''dw_data_%s_id_seq'', GREATEST(COALESCE((SELECT MAX(id) FROM dw_data_%s), 0), 1))', 
         v_main_table_id, v_main_table_id);
     
     IF v_sub_table_id IS NOT NULL THEN
-        EXECUTE format('SELECT setval(''dw_data_%s_id_seq'', (SELECT MAX(id) FROM dw_data_%s))', 
+        EXECUTE format('SELECT setval(''dw_data_%s_id_seq'', GREATEST(COALESCE((SELECT MAX(id) FROM dw_data_%s), 0), 1))', 
             v_sub_table_id, v_sub_table_id);
     END IF;
     
     IF v_action_table_id IS NOT NULL THEN
-        EXECUTE format('SELECT setval(''dw_data_%s_id_seq'', (SELECT MAX(id) FROM dw_data_%s))', 
+        EXECUTE format('SELECT setval(''dw_data_%s_id_seq'', GREATEST(COALESCE((SELECT MAX(id) FROM dw_data_%s), 0), 1))', 
             v_action_table_id, v_action_table_id);
     END IF;
     
     IF v_relation_table_id IS NOT NULL THEN
-        EXECUTE format('SELECT setval(''dw_data_%s_id_seq'', (SELECT MAX(id) FROM dw_data_%s))', 
+        EXECUTE format('SELECT setval(''dw_data_%s_id_seq'', GREATEST(COALESCE((SELECT MAX(id) FROM dw_data_%s), 0), 1))', 
             v_relation_table_id, v_relation_table_id);
     END IF;
 
