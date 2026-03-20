@@ -59,6 +59,6 @@ public class DictionaryVersion {
     /**
      * 创建者
      */
-    @Column(length = 36)
+    @Column(length = 64)
     private String createdBy;
 }

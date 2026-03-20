@@ -29,7 +29,7 @@ import java.util.List;
 public class Dictionary {
     
     @Id
-    @Column(length = 36)
+    @Column(length = 64)
     private String id;
     
     /**
@@ -109,7 +109,7 @@ public class Dictionary {
     /**
      * 创建者
      */
-    @Column(length = 36)
+    @Column(length = 64)
     private String createdBy;
     
     /**
@@ -122,7 +122,7 @@ public class Dictionary {
     /**
      * 更新者
      */
-    @Column(length = 36)
+    @Column(length = 64)
     private String updatedBy;
     
     /**
