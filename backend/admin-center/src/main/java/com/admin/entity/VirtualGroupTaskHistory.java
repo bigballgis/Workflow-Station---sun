@@ -43,6 +43,18 @@ public class VirtualGroupTaskHistory {
     @Column(name = "to_user_id", length = 64)
     private String toUserId;
     
+    @Column(name = "assigned_user_id", length = 64)
+    private String assignedUserId;
+    
+    @Column(name = "assigned_at")
+    private Instant assignedAt;
+    
+    @Column(name = "completed_at")
+    private Instant completedAt;
+    
+    @Column(name = "status", length = 20)
+    private String status;
+    
     @Column(name = "reason", columnDefinition = "TEXT")
     private String reason;
     
