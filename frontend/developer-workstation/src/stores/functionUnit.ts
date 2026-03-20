@@ -204,6 +204,16 @@ export const useFunctionUnitStore = defineStore('functionUnit', () => {
     return res.data
   }
 
+  async function refreshAll(functionUnitId: number) {
+    await Promise.all([
+      fetchById(functionUnitId),
+      fetchTables(functionUnitId),
+      fetchForms(functionUnitId),
+      fetchActions(functionUnitId),
+      fetchProcess(functionUnitId)
+    ])
+  }
+
   return { 
     list, current, loading, total, tables, forms, actions, process, versions,
     fetchList, fetchById, create, update, remove, publish, clone, validate,
@@ -211,6 +221,6 @@ export const useFunctionUnitStore = defineStore('functionUnit', () => {
     fetchForms, createForm, updateForm, deleteForm,
     fetchActions, createAction, updateAction, deleteAction,
     fetchProcess, saveProcess,
-    fetchVersions, rollback
+    fetchVersions, rollback, refreshAll
   }
 })

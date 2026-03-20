@@ -22,6 +22,10 @@
           </span>
         </div>
         <div>
+          <el-button type="primary" @click="showAiPanel = true">
+            <el-icon><MagicStick /></el-icon>
+            {{ t('ai.panel.generateButton') }}
+          </el-button>
           <el-button @click="openEditDialog">
             <el-icon><Setting /></el-icon>
             {{ t('functionUnit.settings') }}
@@ -111,6 +115,13 @@
       :visible="showIconSelectorForEdit" 
       @update:visible="showIconSelectorForEdit = $event"
       @select="handleIconSelectForEdit"
+    />
+
+    <AiPanel
+      :function-unit-id="functionUnitId"
+      :visible="showAiPanel"
+      @update:visible="showAiPanel = $event"
+      @data-applied="handleAiDataApplied"
     />
 
     <!-- Deploy Dialog -->
@@ -206,7 +217,7 @@ import { ref, computed, reactive, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowLeft, Setting, Download, Upload, CircleCheck, CircleClose, Loading, Clock } from '@element-plus/icons-vue'
+import { ArrowLeft, Setting, Download, Upload, CircleCheck, CircleClose, Loading, Clock, MagicStick } from '@element-plus/icons-vue'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
 import type { ValidationResult, DeployRequest, DeployResponse } from '@/api/functionUnit'
 import { functionUnitApi } from '@/api/functionUnit'
@@ -217,6 +228,7 @@ import ActionDesigner from '@/components/designer/ActionDesigner.vue'
 import VersionManager from '@/components/version/VersionManager.vue'
 import IconPreview from '@/components/icon/IconPreview.vue'
 import IconSelector from '@/components/icon/IconSelector.vue'
+import AiPanel from '@/components/ai/AiPanel.vue'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -233,6 +245,7 @@ const showValidationDialog = ref(false)
 const showEditDialog = ref(false)
 const showDeployDialog = ref(false)
 const validationResult = ref<ValidationResult | null>(null)
+const showAiPanel = ref(false)
 const showIconSelectorForEdit = ref(false)
 const deployStatus = ref<DeployResponse | null>(null)
 const deployPollingTimer = ref<number | null>(null)
@@ -416,6 +429,10 @@ function closeDeployDialog() {
   deployStatus.value = null
   deployForm.changeLog = ''
   stopDeployPolling()
+}
+
+async function handleAiDataApplied() {
+  await store.refreshAll(functionUnitId.value)
 }
 
 onMounted(() => {
