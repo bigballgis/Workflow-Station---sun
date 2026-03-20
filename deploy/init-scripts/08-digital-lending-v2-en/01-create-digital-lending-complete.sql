@@ -42,7 +42,16 @@ BEGIN
         'Full-featured digital loan application and approval system with credit checks, risk assessment, collateral management, multi-level approval, and automated disbursement',
         'DRAFT', '1.0.0', true,
         CURRENT_TIMESTAMP, 'system', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-    ) RETURNING id INTO v_function_unit_id;
+    )
+    ON CONFLICT (code) DO UPDATE SET
+        name = EXCLUDED.name,
+        description = EXCLUDED.description,
+        status = EXCLUDED.status,
+        version = EXCLUDED.version,
+        is_active = EXCLUDED.is_active,
+        deployed_at = EXCLUDED.deployed_at,
+        updated_at = CURRENT_TIMESTAMP
+    RETURNING id INTO v_function_unit_id;
 
     RAISE NOTICE '========================================';
     RAISE NOTICE 'Created Function Unit: Digital Lending System V2';
@@ -254,12 +263,12 @@ BEGIN
         v_loan_application_table_id
     ) RETURNING id INTO v_application_form_id;
 
-    INSERT INTO dw_form_table_bindings (form_id, table_id, binding_type, binding_mode, sort_order) VALUES
-    (v_application_form_id, v_loan_application_table_id, 'PRIMARY', 'EDITABLE', 1),
-    (v_application_form_id, v_applicant_info_table_id, 'SUB', 'EDITABLE', 2),
-    (v_application_form_id, v_financial_info_table_id, 'SUB', 'EDITABLE', 3),
-    (v_application_form_id, v_collateral_table_id, 'SUB', 'EDITABLE', 4),
-    (v_application_form_id, v_documents_table_id, 'RELATED', 'EDITABLE', 5);
+    INSERT INTO dw_form_table_bindings (form_id, table_id, binding_type, binding_mode, foreign_key_field, sort_order) VALUES
+    (v_application_form_id, v_loan_application_table_id, 'PRIMARY', 'EDITABLE', NULL, 1),
+    (v_application_form_id, v_applicant_info_table_id, 'SUB', 'EDITABLE', 'loan_application_id', 2),
+    (v_application_form_id, v_financial_info_table_id, 'SUB', 'EDITABLE', 'loan_application_id', 3),
+    (v_application_form_id, v_collateral_table_id, 'SUB', 'EDITABLE', 'loan_application_id', 4),
+    (v_application_form_id, v_documents_table_id, 'RELATED', 'EDITABLE', 'loan_application_id', 5);
     RAISE NOTICE 'Created form: Loan Application Form (ID: %)', v_application_form_id;
 
     -- 3.2 Credit Check Form (Popup)
@@ -272,9 +281,9 @@ BEGIN
         v_credit_check_table_id
     ) RETURNING id INTO v_credit_check_form_id;
 
-    INSERT INTO dw_form_table_bindings (form_id, table_id, binding_type, binding_mode, sort_order) VALUES
-    (v_credit_check_form_id, v_loan_application_table_id, 'PRIMARY', 'READONLY', 1),
-    (v_credit_check_form_id, v_credit_check_table_id, 'RELATED', 'EDITABLE', 2);
+    INSERT INTO dw_form_table_bindings (form_id, table_id, binding_type, binding_mode, foreign_key_field, sort_order) VALUES
+    (v_credit_check_form_id, v_loan_application_table_id, 'PRIMARY', 'READONLY', NULL, 1),
+    (v_credit_check_form_id, v_credit_check_table_id, 'RELATED', 'EDITABLE', 'loan_application_id', 2);
     RAISE NOTICE 'Created form: Credit Check Form (ID: %)', v_credit_check_form_id;
 
     -- 3.3 Risk Assessment Form (Popup)
@@ -287,11 +296,11 @@ BEGIN
         v_loan_application_table_id
     ) RETURNING id INTO v_risk_assessment_form_id;
 
-    INSERT INTO dw_form_table_bindings (form_id, table_id, binding_type, binding_mode, sort_order) VALUES
-    (v_risk_assessment_form_id, v_loan_application_table_id, 'PRIMARY', 'EDITABLE', 1),
-    (v_risk_assessment_form_id, v_applicant_info_table_id, 'SUB', 'READONLY', 2),
-    (v_risk_assessment_form_id, v_financial_info_table_id, 'SUB', 'READONLY', 3),
-    (v_risk_assessment_form_id, v_credit_check_table_id, 'RELATED', 'READONLY', 4);
+    INSERT INTO dw_form_table_bindings (form_id, table_id, binding_type, binding_mode, foreign_key_field, sort_order) VALUES
+    (v_risk_assessment_form_id, v_loan_application_table_id, 'PRIMARY', 'EDITABLE', NULL, 1),
+    (v_risk_assessment_form_id, v_applicant_info_table_id, 'SUB', 'READONLY', 'loan_application_id', 2),
+    (v_risk_assessment_form_id, v_financial_info_table_id, 'SUB', 'READONLY', 'loan_application_id', 3),
+    (v_risk_assessment_form_id, v_credit_check_table_id, 'RELATED', 'READONLY', 'loan_application_id', 4);
     RAISE NOTICE 'Created form: Risk Assessment Form (ID: %)', v_risk_assessment_form_id;
 
     -- 3.4 Loan Approval Form (Main)
@@ -304,13 +313,13 @@ BEGIN
         v_loan_application_table_id
     ) RETURNING id INTO v_approval_form_id;
 
-    INSERT INTO dw_form_table_bindings (form_id, table_id, binding_type, binding_mode, sort_order) VALUES
-    (v_approval_form_id, v_loan_application_table_id, 'PRIMARY', 'READONLY', 1),
-    (v_approval_form_id, v_applicant_info_table_id, 'SUB', 'READONLY', 2),
-    (v_approval_form_id, v_financial_info_table_id, 'SUB', 'READONLY', 3),
-    (v_approval_form_id, v_collateral_table_id, 'SUB', 'READONLY', 4),
-    (v_approval_form_id, v_credit_check_table_id, 'RELATED', 'READONLY', 5),
-    (v_approval_form_id, v_approval_history_table_id, 'RELATED', 'EDITABLE', 6);
+    INSERT INTO dw_form_table_bindings (form_id, table_id, binding_type, binding_mode, foreign_key_field, sort_order) VALUES
+    (v_approval_form_id, v_loan_application_table_id, 'PRIMARY', 'READONLY', NULL, 1),
+    (v_approval_form_id, v_applicant_info_table_id, 'SUB', 'READONLY', 'loan_application_id', 2),
+    (v_approval_form_id, v_financial_info_table_id, 'SUB', 'READONLY', 'loan_application_id', 3),
+    (v_approval_form_id, v_collateral_table_id, 'SUB', 'READONLY', 'loan_application_id', 4),
+    (v_approval_form_id, v_credit_check_table_id, 'RELATED', 'READONLY', 'loan_application_id', 5),
+    (v_approval_form_id, v_approval_history_table_id, 'RELATED', 'EDITABLE', 'loan_application_id', 6);
     RAISE NOTICE 'Created form: Loan Approval Form (ID: %)', v_approval_form_id;
 
     -- 3.5 Loan Disbursement Form (Main)
@@ -323,10 +332,10 @@ BEGIN
         v_loan_application_table_id
     ) RETURNING id INTO v_disbursement_form_id;
 
-    INSERT INTO dw_form_table_bindings (form_id, table_id, binding_type, binding_mode, sort_order) VALUES
-    (v_disbursement_form_id, v_loan_application_table_id, 'PRIMARY', 'EDITABLE', 1),
-    (v_disbursement_form_id, v_applicant_info_table_id, 'SUB', 'READONLY', 2),
-    (v_disbursement_form_id, v_financial_info_table_id, 'SUB', 'READONLY', 3);
+    INSERT INTO dw_form_table_bindings (form_id, table_id, binding_type, binding_mode, foreign_key_field, sort_order) VALUES
+    (v_disbursement_form_id, v_loan_application_table_id, 'PRIMARY', 'EDITABLE', NULL, 1),
+    (v_disbursement_form_id, v_applicant_info_table_id, 'SUB', 'READONLY', 'loan_application_id', 2),
+    (v_disbursement_form_id, v_financial_info_table_id, 'SUB', 'READONLY', 'loan_application_id', 3);
     RAISE NOTICE 'Created form: Loan Disbursement Form (ID: %)', v_disbursement_form_id;
     -- =========================================================================
     -- Part 4: Create Action Definitions
