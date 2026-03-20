@@ -45,7 +45,7 @@ public class Icon {
     private String description;
     
     @CreatedBy
-    @Column(name = "created_by", length = 50, updatable = false)
+    @Column(name = "created_by", length = 64, updatable = false)
     private String createdBy;
     
     @CreatedDate
@@ -53,7 +53,7 @@ public class Icon {
     private LocalDateTime createdAt;
     
     @LastModifiedBy
-    @Column(name = "updated_by", length = 50)
+    @Column(name = "updated_by", length = 64)
     private String updatedBy;
     
     @LastModifiedDate

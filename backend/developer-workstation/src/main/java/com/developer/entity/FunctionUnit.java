@@ -93,7 +93,7 @@ public class FunctionUnit {
     private FunctionUnit previousVersion;
     
     @CreatedBy
-    @Column(name = "created_by", nullable = false, length = 50, updatable = false)
+    @Column(name = "created_by", nullable = false, length = 64, updatable = false)
     private String createdBy;
     
     @CreatedDate
@@ -101,7 +101,7 @@ public class FunctionUnit {
     private Instant createdAt;
     
     @LastModifiedBy
-    @Column(name = "updated_by", length = 50)
+    @Column(name = "updated_by", length = 64)
     private String updatedBy;
     
     @LastModifiedDate
