@@ -68,8 +68,8 @@ BEGIN
         <custom_1:properties>
           <custom_1:values name="actionIds" value="[{{ACTION_APPROVE}},{{ACTION_REJECT}}]" />
           <custom_1:values name="actionNames" value="[&#34;Approve&#34;,&#34;Reject&#34;]" />
-          <custom_1:values name="formId" value="{{REQUEST_FORM_ID}}" />
-          <custom_1:values name="formName" value="Request Form" />
+          <custom_1:values name="formId" value="{{APPROVAL_FORM_ID}}" />
+          <custom_1:values name="formName" value="Approval Form" />
           <custom_1:values name="formReadOnly" value="true" />
         </custom_1:properties>
       </bpmn:extensionElements>
@@ -232,8 +232,8 @@ BEGIN
         <custom_1:properties>
           <custom_1:values name="actionIds" value="[{{ACTION_APPROVE}},{{ACTION_REJECT}}]" />
           <custom_1:values name="actionNames" value="[&#34;Approve&#34;,&#34;Reject&#34;]" />
-          <custom_1:values name="formId" value="{{REQUEST_FORM_ID}}" />
-          <custom_1:values name="formName" value="Request Form" />
+          <custom_1:values name="formId" value="{{APPROVAL_FORM_ID}}" />
+          <custom_1:values name="formName" value="Approval Form" />
           <custom_1:values name="formReadOnly" value="true" />
         </custom_1:properties>
       </bpmn:extensionElements>

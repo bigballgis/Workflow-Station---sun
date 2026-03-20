@@ -1,8 +1,18 @@
--- Fix Task_ManagerApproval to use Approval Form (id=7) instead of Request Form (id=6)
--- The approval task should show the Approval Form which has ApprovalActions sub-table
-
--- Update: replace formId=6/formName=Request Form with formId=7/formName=Approval Form
--- for the Task_ManagerApproval node only (identified by formReadOnly=true pattern)
+-- =============================================================================
+-- NOTE: This script is NO LONGER NEEDED for fresh initialization environments.
+--
+-- The root cause (P02) has been fixed directly in 01-insert-bpmn-process.sql:
+-- Manager Approval node now correctly uses {{APPROVAL_FORM_ID}} instead of
+-- {{REQUEST_FORM_ID}}.
+--
+-- This script is kept for backward compatibility with already-deployed
+-- environments where sys_function_unit_contents may contain the old BPMN XML
+-- with hardcoded formId=6 (Request Form) for the approval task.
+--
+-- For fresh init: this UPDATE will match 0 rows (no-op) since
+-- sys_function_unit_contents won't have SIMPLE_APPROVAL data.
+-- For deployed environments: it will fix the approval form reference.
+-- =============================================================================
 UPDATE sys_function_unit_contents fuc
 SET content_data = REGEXP_REPLACE(
     content_data,
