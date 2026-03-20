@@ -38,6 +38,13 @@ public interface FunctionUnitRepository extends JpaRepository<FunctionUnit, Long
     @EntityGraph(attributePaths = {"icon", "tableDefinitions", "formDefinitions", "actionDefinitions", "processDefinition"})
     @Query("SELECT fu FROM FunctionUnit fu")
     Page<FunctionUnit> findAllWithRelations(Pageable pageable);
+
+    /**
+     * 根据 ID 加载功能单元及所有关联数据（用于 AI 上下文序列化）
+     */
+    @EntityGraph(attributePaths = {"icon", "tableDefinitions", "formDefinitions", "actionDefinitions", "processDefinition"})
+    @Query("SELECT fu FROM FunctionUnit fu WHERE fu.id = :id")
+    Optional<FunctionUnit> findByIdWithRelations(@Param("id") Long id);
     
     /**
      * Find active version by function unit name

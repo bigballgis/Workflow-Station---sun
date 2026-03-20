@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 /**
  * 图标仓库
@@ -21,4 +22,6 @@ public interface IconRepository extends JpaRepository<Icon, Long>, JpaSpecificat
     Page<Icon> findByCategory(IconCategory category, Pageable pageable);
     
     boolean existsByName(String name);
+
+    Optional<Icon> findByName(String name);
 }
