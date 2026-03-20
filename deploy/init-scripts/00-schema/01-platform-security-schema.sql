@@ -2,6 +2,12 @@
 -- Platform Security Schema - Core System Tables
 -- All sys_* tables for authentication and authorization
 -- Consolidated from backend/platform-security migration V100
+--
+-- TIMESTAMP CONVENTION:
+-- Most tables use TIMESTAMP (without time zone). A few tables
+-- (sys_business_units, sys_function_units, sys_virtual_group_task_history)
+-- use TIMESTAMP(6) WITH TIME ZONE. The application layer should
+-- always store and query timestamps in UTC to avoid conversion issues.
 -- =====================================================
 
 -- Enable extensions
@@ -241,7 +247,7 @@ CREATE TABLE IF NOT EXISTS sys_virtual_group_roles (
     created_by VARCHAR(64),
     CONSTRAINT fk_vgr_virtual_group FOREIGN KEY (virtual_group_id) REFERENCES sys_virtual_groups(id) ON DELETE CASCADE,
     CONSTRAINT fk_vgr_role FOREIGN KEY (role_id) REFERENCES sys_roles(id) ON DELETE CASCADE,
-    CONSTRAINT uk_virtual_group_role UNIQUE (virtual_group_id, role_id)
+    CONSTRAINT uk_virtual_group_role UNIQUE (virtual_group_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_vgr_virtual_group_id ON sys_virtual_group_roles(virtual_group_id);
@@ -420,11 +426,11 @@ CREATE TABLE IF NOT EXISTS sys_dictionaries (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     cache_ttl INTEGER,
-    created_by VARCHAR(36),
+    created_by VARCHAR(64),
     data_source_config TEXT,
     data_source_type VARCHAR(20),
     sort_order INTEGER,
-    updated_by VARCHAR(36),
+    updated_by VARCHAR(64),
     version INTEGER DEFAULT 0,
     CONSTRAINT chk_dict_data_source_type CHECK (data_source_type IN ('DATABASE', 'API', 'FILE', 'STATIC'))
 );
@@ -453,9 +459,9 @@ CREATE TABLE IF NOT EXISTS sys_dictionary_items (
     valid_to TIMESTAMP,
     ext_attributes TEXT,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    created_by VARCHAR(36),
+    created_by VARCHAR(64),
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_by VARCHAR(36),
+    updated_by VARCHAR(64),
     CONSTRAINT fk_dict_item FOREIGN KEY (dictionary_id) REFERENCES sys_dictionaries(id) ON DELETE CASCADE
 );
 
@@ -472,7 +478,7 @@ CREATE TABLE IF NOT EXISTS sys_dictionary_versions (
     snapshot_data TEXT NOT NULL,
     change_description VARCHAR(500),
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    created_by VARCHAR(36),
+    created_by VARCHAR(64),
     CONSTRAINT uk_dict_version UNIQUE (dictionary_id, version)
 );
 
@@ -526,7 +532,11 @@ CREATE TABLE IF NOT EXISTS sys_function_units (
     process_deployed BOOLEAN DEFAULT false,
     process_deployment_count INTEGER DEFAULT 0,
     icon_svg TEXT,
-    CONSTRAINT chk_func_unit_status CHECK (status IN ('DRAFT', 'VALIDATED', 'DEPLOYED', 'DEPRECATED'))
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    deployed_at TIMESTAMP,
+    previous_version_id VARCHAR(64),
+    CONSTRAINT chk_func_unit_status CHECK (status IN ('DRAFT', 'VALIDATED', 'DEPLOYED', 'DEPRECATED')),
+    CONSTRAINT fk_sys_function_unit_previous_version FOREIGN KEY (previous_version_id) REFERENCES sys_function_units(id) ON DELETE SET NULL
 );
 
 -- =====================================================
@@ -563,6 +573,7 @@ CREATE TABLE IF NOT EXISTS sys_function_unit_approvals (
     id VARCHAR(64) PRIMARY KEY,
     deployment_id VARCHAR(64) NOT NULL,
     approval_type VARCHAR(20) NOT NULL,
+    approval_order INTEGER DEFAULT 1,
     approver_id VARCHAR(64) NOT NULL,
     approver_name VARCHAR(100),
     status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
