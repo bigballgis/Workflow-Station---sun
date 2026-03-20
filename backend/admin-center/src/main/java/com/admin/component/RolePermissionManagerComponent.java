@@ -100,7 +100,7 @@ public class RolePermissionManagerComponent {
                     .permissionId(config.getPermissionId())
                     .conditionType(config.getConditionType())
                     .conditionValue(config.getConditionValue())
-                    .grantedAt(LocalDateTime.now())
+                    .grantedAt(Instant.now())
                     .build();
             
             rolePermissionRepository.save(rp);

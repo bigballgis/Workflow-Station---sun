@@ -4,7 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 /**
  * Role Permission association entity.
@@ -34,15 +34,18 @@ public class RolePermission {
     @Column(name = "permission_id", nullable = false, length = 64)
     private String permissionId;
     
+    @CreationTimestamp
+    @Column(name = "created_at", updatable = false)
+    private Instant createdAt;
+    
     @Column(name = "condition_type", length = 50)
     private String conditionType;
     
     @Column(name = "condition_value", columnDefinition = "JSONB")
     private String conditionValue;
     
-    @CreationTimestamp
     @Column(name = "granted_at")
-    private LocalDateTime grantedAt;
+    private Instant grantedAt;
     
     @Column(name = "granted_by", length = 64)
     private String grantedBy;
