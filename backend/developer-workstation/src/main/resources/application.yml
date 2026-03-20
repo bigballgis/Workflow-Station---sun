@@ -136,3 +136,17 @@ management:
   endpoint:
     health:
       show-details: when_authorized
+
+# N8N AI Generation Configuration
+n8n:
+  ai-generation:
+    webhook-url: ${N8N_AI_GENERATION_WEBHOOK_URL:http://localhost:5678/webhook/ai-function-unit-gen}
+    timeout-seconds: ${N8N_AI_GENERATION_TIMEOUT:120}
+
+# AI Generation Lock Configuration
+ai-generation:
+  lock:
+    ttl-seconds: ${AI_GENERATION_LOCK_TTL:1800}
+    force-unlock-timeout-seconds: ${AI_GENERATION_FORCE_UNLOCK_TIMEOUT:60}
+  context:
+    max-size-bytes: ${AI_GENERATION_CONTEXT_MAX_SIZE:102400}

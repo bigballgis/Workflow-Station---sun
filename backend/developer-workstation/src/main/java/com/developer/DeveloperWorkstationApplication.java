@@ -26,7 +26,7 @@ import java.util.Optional;
 @SpringBootApplication
 @EnableConfigurationProperties(com.developer.config.SecurityConfigurationProperties.class)
 @ComponentScan(
-    basePackages = {"com.developer", "com.platform.common", "com.platform.security.exception"},
+    basePackages = {"com.developer", "com.platform.common", "com.platform.cache", "com.platform.security.exception"},
     basePackageClasses = {TargetResolverFactory.class, UserRoleServiceImpl.class},
     excludeFilters = {
         @ComponentScan.Filter(type = FilterType.REGEX, pattern = "com\\.platform\\.security\\.repository\\..*"),

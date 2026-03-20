@@ -98,3 +98,8 @@ logging:
     root: INFO
     com.developer: INFO
     org.hibernate.SQL: WARN
+
+# N8N AI Generation Configuration (Docker)
+n8n:
+  ai-generation:
+    webhook-url: ${N8N_AI_GENERATION_WEBHOOK_URL:http://n8n:5678/webhook/ai-function-unit-gen}
