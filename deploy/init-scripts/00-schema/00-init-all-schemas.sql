@@ -1,8 +1,13 @@
 -- =====================================================
 -- All Schemas (Docker mount paths)
 -- =====================================================
--- Used by 00-init-all.sh via Docker entrypoint.
--- For standalone psql, use 00-init-all-schemas-standalone.sql
+-- NOTE: This file is for MANUAL psql usage only.
+-- It is NOT called by 00-init-all.sh or init-database.ps1.
+-- The automated scripts execute each SQL file individually
+-- using glob patterns.
+--
+-- To use manually:
+--   psql -U postgres -d your_db -f 00-init-all-schemas.sql
 -- =====================================================
 
 SET client_min_messages = WARNING;

@@ -46,6 +46,10 @@ Write-Host "=========================================" -ForegroundColor Yellow
 try { $null = Get-Command psql -ErrorAction Stop }
 catch { Write-Fail "psql not found."; exit 1 }
 
+if ([string]::IsNullOrEmpty($DbPassword)) {
+    Write-Host "  WARNING: No password provided. psql may prompt for password or use .pgpass file." -ForegroundColor Yellow
+}
+
 # Step 1: Base schemas
 Write-Step "Step 1/8: Creating base schemas..."
 $schemas = @(

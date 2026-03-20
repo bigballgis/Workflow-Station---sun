@@ -32,6 +32,7 @@ for f in /docker-entrypoint-initdb.d/00-schema/01-*.sql \
 done
 
 # --- Step 2: Incremental migrations ---
+# Note: Migration 09 was intentionally skipped (no 09-*.sql file exists)
 echo ""
 echo "[2/8] Applying incremental migrations..."
 for f in /docker-entrypoint-initdb.d/00-schema/06-*.sql \
@@ -65,6 +66,8 @@ for f in /docker-entrypoint-initdb.d/08-digital-lending-v2-en/00-*.sql \
 done
 
 # --- Step 5: Simple Approval Workflow ---
+# Note: 04-*.sql matches both 04-form-table-bindings.sql and 04-insert-sample-data.sql
+# Alphabetical order ensures bindings run before sample data (correct order)
 echo ""
 echo "[5/8] Loading Simple Approval Workflow..."
 for f in /docker-entrypoint-initdb.d/10-simple-approval/00-*.sql \
