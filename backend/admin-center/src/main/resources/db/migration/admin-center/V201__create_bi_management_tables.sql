@@ -87,6 +87,7 @@ CREATE TABLE IF NOT EXISTS bi_rbac_mapping (
     created_at          TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by          VARCHAR(64),
     UNIQUE(sys_role_id, superset_role_id),
+    FOREIGN KEY (sys_role_id) REFERENCES sys_roles(id),
     FOREIGN KEY (superset_role_id) REFERENCES bi_superset_role(superset_role_id)
 );
 
