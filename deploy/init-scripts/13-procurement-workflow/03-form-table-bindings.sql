@@ -44,18 +44,18 @@ BEGIN
     INSERT INTO dw_form_table_bindings (
         form_id, table_id, binding_type, binding_mode, foreign_key_field, sort_order, created_at, updated_at
     ) VALUES
-    (v_request_form_id, v_main_table_id, 'PRIMARY', 'EDITABLE', NULL, 1, NOW(), NOW());
+    (v_request_form_id, v_main_table_id, 'PRIMARY', 'EDITABLE', NULL, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
     INSERT INTO dw_form_table_bindings (
         form_id, table_id, binding_type, binding_mode, foreign_key_field, sort_order, created_at, updated_at
     ) VALUES
-    (v_request_form_id, v_items_table_id, 'SUB', 'EDITABLE', 'request_id', 2, NOW(), NOW())
+    (v_request_form_id, v_items_table_id, 'SUB', 'EDITABLE', 'request_id', 2, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     RETURNING id INTO v_binding_items_id;
 
     INSERT INTO dw_form_table_bindings (
         form_id, table_id, binding_type, binding_mode, foreign_key_field, sort_order, created_at, updated_at
     ) VALUES
-    (v_request_form_id, v_attach_table_id, 'SUB', 'EDITABLE', 'request_id', 3, NOW(), NOW())
+    (v_request_form_id, v_attach_table_id, 'SUB', 'EDITABLE', 'request_id', 3, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     RETURNING id INTO v_binding_attach_id;
 
     -- -------------------------------------------------------------------------
@@ -64,7 +64,7 @@ BEGIN
     INSERT INTO dw_form_table_bindings (
         form_id, table_id, binding_type, binding_mode, foreign_key_field, sort_order, created_at, updated_at
     ) VALUES
-    (v_approval_form_id, v_main_table_id, 'PRIMARY', 'READONLY', NULL, 1, NOW(), NOW());
+    (v_approval_form_id, v_main_table_id, 'PRIMARY', 'READONLY', NULL, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
     -- -------------------------------------------------------------------------
     -- Update subForms in Request Form config_json

@@ -11,7 +11,7 @@ DECLARE
     v_main_table_id       BIGINT;  -- Request (MAIN)
     v_items_table_id      BIGINT;  -- RequestItems (SUB)
     v_action_table_id     BIGINT;  -- ApprovalActions (ACTION)
-    v_attach_table_id     BIGINT;  -- RequestAttachments (SUB)
+    v_attach_table_id     BIGINT;  -- RequestAttachments (RELATION)
 BEGIN
     SELECT id INTO v_function_unit_id FROM dw_function_units WHERE code = 'PROCUREMENT_WORKFLOW';
     IF v_function_unit_id IS NULL THEN
@@ -49,7 +49,7 @@ BEGIN
     (v_main_table_id, 'created_by',             'VARCHAR',   100,  NULL, NULL, false, NULL, false, false, 'Created by',               8),
     (v_main_table_id, 'created_at',             'TIMESTAMP', NULL, NULL, NULL, false, NULL, false, false, 'Created at',               9),
     (v_main_table_id, 'updated_at',             'TIMESTAMP', NULL, NULL, NULL, true,  NULL, false, false, 'Updated at',               10),
-    (v_main_table_id, 'budget',                 'INTEGER',   NULL, NULL, NULL, true,  NULL, false, false, 'budget',                   10);
+    (v_main_table_id, 'budget',                 'INTEGER',   NULL, NULL, NULL, true,  NULL, false, false, 'budget',                   11);
 
     RAISE NOTICE 'Table Request (MAIN) created: id=%', v_main_table_id;
 
@@ -82,7 +82,7 @@ BEGIN
     (v_items_table_id, 'total_price', 'DECIMAL', NULL, 10,   2,    false, NULL, false, false, 'Total Price',                 6),
     (v_items_table_id, 'remarks',     'TEXT',    NULL, NULL, NULL, true,  NULL, false, false, 'Item Remarks',                7),
     (v_items_table_id, 'count',       'INTEGER', NULL, NULL, NULL, true,  NULL, false, false, 'Count',                       8),
-    (v_items_table_id, 'sort_order',  'INTEGER', NULL, NULL, NULL, false, NULL, false, false, 'Display Order',               8);
+    (v_items_table_id, 'sort_order',  'INTEGER', NULL, NULL, NULL, false, NULL, false, false, 'Display Order',               9);
 
     RAISE NOTICE 'Table RequestItems (SUB) created: id=%', v_items_table_id;
 
@@ -120,12 +120,12 @@ BEGIN
     RAISE NOTICE 'Table ApprovalActions (ACTION) created: id=%', v_action_table_id;
 
     -- =========================================================================
-    -- Table 4: RequestAttachments (SUB)
+    -- Table 4: RequestAttachments (RELATION)
     -- =========================================================================
     INSERT INTO dw_table_definitions (
         function_unit_id, table_name, table_display_name, table_type, description, created_at, updated_at
     ) VALUES (
-        v_function_unit_id, 'RequestAttachments', 'Request Attachments', 'SUB', 'Relation table for request attachments', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+        v_function_unit_id, 'RequestAttachments', 'Request Attachments', 'RELATION', 'Relation table for request attachments', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
     ON CONFLICT (function_unit_id, table_name) DO UPDATE SET
         table_display_name = EXCLUDED.table_display_name,
@@ -151,7 +151,7 @@ BEGIN
     (v_attach_table_id, 'uploaded_at', 'TIMESTAMP', NULL, NULL, NULL, false, NULL, false, false, 'Upload timestamp',             9),
     (v_attach_table_id, 'description', 'TEXT',      NULL, NULL, NULL, true,  NULL, false, false, 'Attachment description',       10);
 
-    RAISE NOTICE 'Table RequestAttachments (SUB) created: id=%', v_attach_table_id;
+    RAISE NOTICE 'Table RequestAttachments (RELATION) created: id=%', v_attach_table_id;
 
     -- =========================================================================
     -- Summary
@@ -161,7 +161,7 @@ BEGIN
     RAISE NOTICE 'Request (MAIN)           : id=%', v_main_table_id;
     RAISE NOTICE 'RequestItems (SUB)       : id=%', v_items_table_id;
     RAISE NOTICE 'ApprovalActions (ACTION)  : id=%', v_action_table_id;
-    RAISE NOTICE 'RequestAttachments (SUB) : id=%', v_attach_table_id;
+    RAISE NOTICE 'RequestAttachments (RELATION) : id=%', v_attach_table_id;
     RAISE NOTICE 'Next: run 02-create-bpmn-process.sql';
     RAISE NOTICE '========================================';
 
