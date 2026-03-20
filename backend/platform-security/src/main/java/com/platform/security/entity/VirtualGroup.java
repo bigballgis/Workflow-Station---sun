@@ -41,7 +41,7 @@ public class VirtualGroup {
     
     @Column(nullable = false, length = 20)
     @Builder.Default
-    private String type = "STANDARD";
+    private String type = "CUSTOM";
     
     @Column(columnDefinition = "TEXT")
     private String description;
