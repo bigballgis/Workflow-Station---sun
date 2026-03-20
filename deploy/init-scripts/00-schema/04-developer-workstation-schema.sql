@@ -2,6 +2,13 @@
 -- Developer Workstation Schema - Developer Tables
 -- All dw_* tables for developer workstation features
 -- Consolidated from backend/developer-workstation migration V300
+--
+-- ID CONVENTION:
+-- dw_* tables use BIGSERIAL (auto-increment integer) IDs.
+-- sys_* tables use VARCHAR(64) (UUID string) IDs.
+-- bi_* tables use VARCHAR(64) (UUID string) IDs.
+-- Cross-table ID type conversion is handled at the application
+-- layer during deployment (dw → sys).
 -- =====================================================
 
 -- =====================================================
@@ -14,9 +21,9 @@ CREATE TABLE IF NOT EXISTS dw_icons (
     svg_content TEXT NOT NULL,
     file_size INTEGER,
     description VARCHAR(500),
-    created_by VARCHAR(50),
+    created_by VARCHAR(64),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_by VARCHAR(50),
+    updated_by VARCHAR(64),
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -40,9 +47,9 @@ CREATE TABLE IF NOT EXISTS dw_function_units (
     deployed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     previous_version_id BIGINT,
     lock_version BIGINT DEFAULT 0,
-    created_by VARCHAR(50) NOT NULL,
+    created_by VARCHAR(64) NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_by VARCHAR(50),
+    updated_by VARCHAR(64),
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_function_unit_icon FOREIGN KEY (icon_id) REFERENCES dw_icons(id) ON DELETE SET NULL,
     CONSTRAINT fk_dw_function_unit_previous_version FOREIGN KEY (previous_version_id) REFERENCES dw_function_units(id) ON DELETE SET NULL,
@@ -236,7 +243,9 @@ CREATE INDEX IF NOT EXISTS idx_dw_operation_logs_time ON dw_operation_logs(opera
 -- Comments
 -- =====================================================
 COMMENT ON TABLE dw_icons IS 'Icon library for function units and actions';
-COMMENT ON TABLE dw_function_units IS 'Function unit definitions';
+COMMENT ON TABLE dw_function_units IS 'Function unit definitions (dw_* = developer workstation, uses BIGSERIAL IDs)';
+COMMENT ON COLUMN dw_function_units.status IS 'Developer status: DRAFT / PUBLISHED / ARCHIVED. Note: sys_function_units uses a different lifecycle: DRAFT / VALIDATED / DEPLOYED / DEPRECATED';
+COMMENT ON COLUMN dw_function_units.id IS 'BIGSERIAL auto-increment ID. Note: sys_function_units.id uses VARCHAR(64) UUID strings. ID type conversion is handled at the application layer during deployment.';
 COMMENT ON TABLE dw_process_definitions IS 'BPMN process definitions';
 COMMENT ON TABLE dw_table_definitions IS 'Data table definitions';
 COMMENT ON TABLE dw_field_definitions IS 'Table field definitions';
@@ -244,5 +253,94 @@ COMMENT ON TABLE dw_foreign_keys IS 'Foreign key relationships between tables';
 COMMENT ON TABLE dw_form_definitions IS 'Form definitions';
 COMMENT ON TABLE dw_form_table_bindings IS 'Form-table binding relationships';
 COMMENT ON TABLE dw_action_definitions IS 'Action/button definitions';
+COMMENT ON COLUMN dw_action_definitions.action_type IS 'Valid types: PROCESS_SUBMIT, APPROVE, REJECT, N8N_ACTION, FORM_POPUP, API_CALL';
 COMMENT ON TABLE dw_versions IS 'Function unit version history';
 COMMENT ON TABLE dw_operation_logs IS 'Operation audit logs';
+
+-- =====================================================
+-- 12. AI Sessions Table (dw_ai_sessions)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS dw_ai_sessions (
+    id BIGSERIAL PRIMARY KEY,
+    session_id UUID NOT NULL UNIQUE,
+    function_unit_id BIGINT NOT NULL,
+    user_id VARCHAR(50) NOT NULL,
+    current_phase VARCHAR(20) NOT NULL,
+    mode VARCHAR(10) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_ai_session_function_unit FOREIGN KEY (function_unit_id)
+        REFERENCES dw_function_units(id) ON DELETE CASCADE,
+    CONSTRAINT chk_ai_session_phase CHECK (current_phase IN ('REQUIREMENTS', 'DESIGN', 'GENERATION')),
+    CONSTRAINT chk_ai_session_mode CHECK (mode IN ('NEW', 'MODIFY')),
+    CONSTRAINT chk_ai_session_status CHECK (status IN ('ACTIVE', 'COMPLETED', 'CANCELLED'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_dw_ai_sessions_fu ON dw_ai_sessions(function_unit_id);
+CREATE INDEX IF NOT EXISTS idx_dw_ai_sessions_user ON dw_ai_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_dw_ai_sessions_status ON dw_ai_sessions(function_unit_id, user_id, status);
+
+COMMENT ON TABLE dw_ai_sessions IS 'AI generation sessions for function units';
+
+-- =====================================================
+-- 13. AI Messages Table (dw_ai_messages)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS dw_ai_messages (
+    id BIGSERIAL PRIMARY KEY,
+    session_id UUID NOT NULL,
+    role VARCHAR(20) NOT NULL,
+    content TEXT NOT NULL,
+    phase VARCHAR(20) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_ai_message_session FOREIGN KEY (session_id)
+        REFERENCES dw_ai_sessions(session_id) ON DELETE CASCADE,
+    CONSTRAINT chk_ai_message_role CHECK (role IN ('USER', 'ASSISTANT')),
+    CONSTRAINT chk_ai_message_phase CHECK (phase IN ('REQUIREMENTS', 'DESIGN', 'GENERATION'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_dw_ai_messages_session ON dw_ai_messages(session_id);
+CREATE INDEX IF NOT EXISTS idx_dw_ai_messages_session_time ON dw_ai_messages(session_id, created_at);
+
+COMMENT ON TABLE dw_ai_messages IS 'AI chat messages within sessions';
+
+-- =====================================================
+-- 14. AI Documents Table (dw_ai_documents)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS dw_ai_documents (
+    id BIGSERIAL PRIMARY KEY,
+    function_unit_id BIGINT NOT NULL,
+    document_type VARCHAR(20) NOT NULL,
+    version INTEGER NOT NULL,
+    content TEXT NOT NULL,
+    summary VARCHAR(500),
+    created_by VARCHAR(64) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_ai_document_function_unit FOREIGN KEY (function_unit_id)
+        REFERENCES dw_function_units(id) ON DELETE CASCADE,
+    CONSTRAINT uk_ai_document_version UNIQUE (function_unit_id, document_type, version),
+    CONSTRAINT chk_ai_document_type CHECK (document_type IN ('REQUIREMENTS', 'DESIGN'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_dw_ai_documents_fu ON dw_ai_documents(function_unit_id);
+CREATE INDEX IF NOT EXISTS idx_dw_ai_documents_fu_type ON dw_ai_documents(function_unit_id, document_type);
+
+COMMENT ON TABLE dw_ai_documents IS 'AI generated requirement and design documents with versioning';
+
+-- =====================================================
+-- 15. Function Unit Access Table (dw_function_unit_access)
+-- =====================================================
+CREATE TABLE IF NOT EXISTS dw_function_unit_access (
+    id BIGSERIAL PRIMARY KEY,
+    function_unit_id BIGINT NOT NULL,
+    access_type VARCHAR(20) NOT NULL,
+    target_type VARCHAR(20) NOT NULL,
+    target_id VARCHAR(64) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_by VARCHAR(64),
+    CONSTRAINT fk_dw_fu_access_func_unit FOREIGN KEY (function_unit_id) REFERENCES dw_function_units(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_dw_fu_access_func_unit ON dw_function_unit_access(function_unit_id);
+
+COMMENT ON TABLE dw_function_unit_access IS 'Function unit access permissions for developer workstation';
