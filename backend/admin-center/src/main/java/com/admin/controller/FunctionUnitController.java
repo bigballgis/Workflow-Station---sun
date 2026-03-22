@@ -15,6 +15,7 @@ import com.admin.enums.DeploymentEnvironment;
 import com.admin.enums.DeploymentStrategy;
 import com.admin.enums.FunctionUnitStatus;
 import com.admin.service.FunctionUnitAccessService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.jdbc.core.JdbcTemplate;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -45,6 +46,7 @@ public class FunctionUnitController {
     private final DeploymentManagerComponent deploymentManager;
     private final FunctionUnitAccessService accessService;
     private final JdbcTemplate jdbcTemplate;
+    private final ObjectMapper objectMapper;
     
     // ==================== 功能包导入 ====================
     
@@ -510,6 +512,21 @@ public class FunctionUnitController {
                         log.info("BPMN data is not Base64 encoded, using raw data");
                     }
                 }
+                // 对于表单，优先从 dw_form_definitions 读取最新的 config_json，
+                // 因为 content_data 是导入时的旧快照，可能缺少后续更新的 subForms 等数据
+                if (content.getContentType() == com.admin.enums.ContentType.FORM && content.getSourceId() != null) {
+                    try {
+                        String latestConfigJson = jdbcTemplate.queryForObject(
+                            "SELECT config_json::text FROM dw_form_definitions WHERE id = ?",
+                            String.class, Long.parseLong(content.getSourceId()));
+                        if (latestConfigJson != null) {
+                            data = latestConfigJson;
+                            log.info("Using latest config_json from dw_form_definitions for form sourceId={}", content.getSourceId());
+                        }
+                    } catch (Exception e) {
+                        log.warn("Could not fetch latest config_json for form sourceId={}, using content_data: {}", content.getSourceId(), e.getMessage());
+                    }
+                }
                 contentMap.put("data", data);
                 contentMap.put("type", content.getContentType().name());
                 
@@ -552,7 +569,8 @@ public class FunctionUnitController {
                     String bindingsSql =
                         "SELECT fd.id as form_id, ftb.id as binding_id, ftb.binding_type, ftb.binding_mode, " +
                         "       ftb.foreign_key_field, ftb.sort_order, " +
-                        "       td.id as table_id, td.table_name, td.table_display_name, td.table_type, td.description as table_description " +
+                        "       td.id as table_id, td.table_name, td.table_display_name, td.table_type, td.description as table_description, " +
+                        "       fd.config_json->'subForms'->(ftb.id::text) as sub_form_config " +
                         "FROM dw_form_definitions fd " +
                         "JOIN dw_form_table_bindings ftb ON ftb.form_id = fd.id " +
                         "JOIN dw_table_definitions td ON td.id = ftb.table_id " +
@@ -571,6 +589,14 @@ public class FunctionUnitController {
                         binding.put("tableDisplayName", rs.getString("table_display_name"));
                         binding.put("tableType", rs.getString("table_type"));
                         binding.put("tableDescription", rs.getString("table_description"));
+                        String subFormConfigJson = rs.getString("sub_form_config");
+                        if (subFormConfigJson != null) {
+                            try {
+                                binding.put("subFormConfig", objectMapper.readValue(subFormConfigJson, java.util.Map.class));
+                            } catch (Exception ex) {
+                                log.warn("Failed to parse subFormConfig for binding {}: {}", rs.getLong("binding_id"), ex.getMessage());
+                            }
+                        }
                         bindingsBySourceId.computeIfAbsent(formId, k -> new java.util.ArrayList<>()).add(binding);
                     }, formSourceIds.toArray());
                 }
@@ -581,8 +607,9 @@ public class FunctionUnitController {
                     String bindingsSql =
                         "SELECT latest.form_name, ftb.id as binding_id, ftb.binding_type, ftb.binding_mode, " +
                         "       ftb.foreign_key_field, ftb.sort_order, " +
-                        "       td.id as table_id, td.table_name, td.table_display_name, td.table_type, td.description as table_description " +
-                        "FROM (SELECT DISTINCT ON (form_name) id, form_name FROM dw_form_definitions " +
+                        "       td.id as table_id, td.table_name, td.table_display_name, td.table_type, td.description as table_description, " +
+                        "       latest.config_json->'subForms'->(ftb.id::text) as sub_form_config " +
+                        "FROM (SELECT DISTINCT ON (form_name) id, form_name, config_json FROM dw_form_definitions " +
                         "      WHERE form_name IN (" + placeholders + ") ORDER BY form_name, id DESC) latest " +
                         "JOIN dw_form_table_bindings ftb ON ftb.form_id = latest.id " +
                         "JOIN dw_table_definitions td ON td.id = ftb.table_id " +
@@ -600,6 +627,14 @@ public class FunctionUnitController {
                         binding.put("tableDisplayName", rs.getString("table_display_name"));
                         binding.put("tableType", rs.getString("table_type"));
                         binding.put("tableDescription", rs.getString("table_description"));
+                        String subFormConfigJson = rs.getString("sub_form_config");
+                        if (subFormConfigJson != null) {
+                            try {
+                                binding.put("subFormConfig", objectMapper.readValue(subFormConfigJson, java.util.Map.class));
+                            } catch (Exception ex) {
+                                log.warn("Failed to parse subFormConfig for binding {}: {}", rs.getLong("binding_id"), ex.getMessage());
+                            }
+                        }
                         bindingsByFormName.computeIfAbsent(formName, k -> new java.util.ArrayList<>()).add(binding);
                     }, formNamesForFallback.toArray());
                 }

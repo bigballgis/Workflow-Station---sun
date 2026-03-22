@@ -175,89 +175,37 @@
     <!-- Preview dialog -->
     <el-dialog v-model="showPreviewDialog" :title="t('form.previewTitle')" width="900px" destroy-on-close>
       <div class="preview-container">
-        <div class="form-preview-wrapper">
-          <form-create v-if="previewRule.length" v-model="previewData" :rule="previewRule" :option="previewOption" />
-          <el-empty v-else :description="t('form.noFormContent')" />
-        </div>
-        <!-- Sub/Relation table preview -->
-        <template v-if="previewSubBindings.length > 0">
-          <div
-            v-for="binding in previewSubBindings"
-            :key="binding.bindingId"
-            style="margin-top: 20px;"
-          >
-            <div class="sub-preview-header" style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-              <div>
-                <el-tag :type="binding.bindingType === 'SUB' ? 'success' : 'warning'" size="small">
-                  {{ binding.bindingType === 'SUB' ? t('tableBinding.subTableType') : t('tableBinding.relationTableType') }}
-                </el-tag>
-                <span style="margin-left: 8px; font-weight: 500;">{{ binding.tableName }}</span>
-              </div>
-              <el-button
-                type="primary"
-                size="small"
-                @click="previewTableRows[binding.bindingId].push({})"
-              >
-                + {{ t('common.add') }}
-              </el-button>
+        <template v-if="previewItems.length > 0">
+          <template v-for="(item, idx) in previewItems" :key="idx">
+            <!-- Normal form fields segment -->
+            <div v-if="item.kind === 'fields'" class="form-preview-wrapper">
+              <form-create
+                v-if="item.rule.length"
+                v-model="previewData"
+                :rule="item.rule"
+                :option="previewOption"
+              />
             </div>
-
-            <el-table
-              v-if="binding.rule && binding.rule.length"
-              :data="previewTableRows[binding.bindingId]"
-              border
-              size="small"
-              style="width: 100%;"
-            >
-              <el-table-column
-                v-for="col in binding.rule"
-                :key="col.field"
-                :prop="col.field"
-                :label="col.title || col.field"
-                min-width="140"
-              >
-                <template #default="{ row }">
-                  <div v-if="col.type === 'upload'" style="display:flex;flex-direction:column;gap:4px;">
-                    <el-upload
-                      :action="(col.props?.action && col.props.action !== '/') ? col.props.action : '/api/v1/upload'"
-                      :accept="col.props?.accept || '.jpg,.jpeg,.png,.pdf,.docx,.xlsx'"
-                      :limit="1"
-                      :show-file-list="false"
-                      :on-success="(res: any, file: any) => {
-                        row[col.field] = res?.data?.url || ''
-                        row[col.field + '__name'] = file.name
-                      }"
-                      :on-error="() => {}"
-                    >
-                      <el-button size="small" type="primary">{{ t('form.fileUpload') }}</el-button>
-                    </el-upload>
-                    <el-tag
-                      v-if="row[col.field + '__name']"
-                      size="small"
-                      type="success"
-                      closable
-                      @close="() => { row[col.field] = ''; row[col.field + '__name'] = '' }"
-                    >
-                      {{ row[col.field + '__name'] }}
-                    </el-tag>
-                  </div>
-                  <el-input v-else v-model="row[col.field]" size="small" />
-                </template>
-              </el-table-column>
-              <el-table-column :label="t('common.operation')" width="80" fixed="right">
-                <template #default="{ $index }">
-                  <el-button
-                    type="danger"
-                    size="small"
-                    link
-                    @click="previewTableRows[binding.bindingId].splice($index, 1)"
-                  >{{ t('common.delete') }}</el-button>
-                </template>
-              </el-table-column>
-            </el-table>
-            <el-empty v-else :description="t('form.noFormContent')" :image-size="40" style="border: 1px solid #e6e6e6; border-radius: 4px;" />
-          </div>
+            <!-- Inline sub-table -->
+            <div v-else-if="item.kind === 'subTable'" style="margin-top: 16px; margin-bottom: 8px;">
+              <div class="sub-preview-header" style="display: flex; align-items: center; margin-bottom: 8px;">
+                <el-tag :type="item.binding.bindingType === 'SUB' ? 'success' : 'warning'" size="small">
+                  {{ item.binding.bindingType === 'SUB' ? t('tableBinding.subTableType') : t('tableBinding.relationTableType') }}
+                </el-tag>
+                <span style="margin-left: 8px; font-weight: 500;">{{ item.binding.tableName }}</span>
+              </div>
+              <SubTableField
+                v-if="item.binding.columns && item.binding.columns.length"
+                :config="{ title: item.binding.tableName, columns: item.binding.columns }"
+                :modelValue="previewTableRows[item.binding.bindingId]"
+                :editable="true"
+                @update:modelValue="previewTableRows[item.binding.bindingId] = $event"
+              />
+              <el-empty v-else :description="t('form.noFormContent')" :image-size="40" style="border: 1px solid #e6e6e6; border-radius: 4px;" />
+            </div>
+          </template>
         </template>
+        <el-empty v-else :description="t('form.noFormContent')" />
       </div>
     </el-dialog>
 
@@ -411,7 +359,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, nextTick, computed } from 'vue'
+import { ref, reactive, onMounted, nextTick, computed, provide } from 'vue'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ArrowLeft, Plus, Refresh, Connection } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -420,8 +369,10 @@ import type { FormDefinition, FieldDefinition, TableBinding, BindingType } from 
 import { functionUnitApi } from '@/api/functionUnit'
 import TableBindingManager from './TableBindingManager.vue'
 import SubTableField from './SubTableField.vue'
+import api from '@/api'
 
 const { t } = useI18n()
+const router = useRouter()
 
 interface ProcessNode {
   id: string
@@ -448,9 +399,16 @@ const previewSubBindings = ref<Array<{
   tableType: string
   tableDescription: string
   rule: any[]
+  columns: any[]
 }>>([])
 const previewSubData = ref<Record<number, any>>({})
 const previewTableRows = ref<Record<number, any[]>>({})
+
+// Mixed preview items: alternating form-create rule segments and inline sub-tables
+const previewItems = ref<Array<
+  | { kind: 'fields'; rule: any[]; modelKey: string }
+  | { kind: 'subTable'; binding: { bindingId: number; bindingType: string; bindingMode: string; tableName: string; tableType: string; tableDescription: string; rule: any[]; columns: any[] } }
+>>([])
 
 // Sub-designer refs (one per non-PRIMARY binding)
 const subDesignerRefs = ref<any[]>([])
@@ -493,6 +451,15 @@ const designerSubBindings = computed(() => {
   }))
 })
 
+// Provide subBindings to SubTablePlaceholderWidget via inject
+// The widget uses inject('designerSubBindings') to get the current list
+provide('designerSubBindings', () => designerSubBindings.value.map(b => ({
+  id: b.bindingId,
+  tableName: b.tableName,
+  tableDescription: b.tableDescription,
+  bindingType: b.bindingType,
+})))
+
 const createForm = reactive({ formName: '', formType: 'MAIN', description: '', boundTableId: null as number | null })
 const bindingForm = ref<FormDefinition | null>(null)
 
@@ -534,11 +501,11 @@ const selectedBindNodes = ref<Array<{ nodeId: string; nodeName: string; readOnly
 const bindDialogKey = ref(0)
 
 // Form-create designer config
-const designerConfig = {
+const designerConfig = computed(() => ({
   showDevice: true,
   showSave: false, // Use custom save button
   fieldReadonly: false,
-}
+}))
 
 // Default form options — label left-aligned
 const defaultFormOption = { form: { labelPosition: 'left' } }
@@ -547,7 +514,14 @@ const defaultFormOption = { form: { labelPosition: 'left' } }
 const previewOption = ref({
   submitBtn: false,
   resetBtn: false,
-  form: { labelPosition: 'left' }
+  form: { labelPosition: 'left', labelWidth: '200px' },
+  // Use authenticated axios for effect.fetch so select options load correctly in preview
+  fetch: (opt: any) => {
+    const { action, method = 'get', data, headers, onSuccess, onError } = opt
+    api.request({ url: action, method, data, headers })
+      .then((res: any) => onSuccess(res))
+      .catch((err: any) => onError(err))
+  }
 })
 
 const formTypeLabel = (type: string) => {
@@ -586,6 +560,64 @@ const bindingTypeTag = (type: BindingType): 'primary' | 'success' | 'warning' | 
 function getImportTableBinding(): TableBinding | undefined {
   if (!importTableId.value) return undefined
   return formBindings.value.find(b => b.tableId === importTableId.value)
+}
+
+/**
+ * Derive columns from sub-form binding rule (supports all 15 field types)
+ */
+function deriveColumnsFromBinding(binding: any, subForms?: Record<string, any>) {
+  const subFormRule = subForms?.[binding.bindingId]?.rule
+  if (subFormRule && Array.isArray(subFormRule) && subFormRule.length > 0) {
+    return subFormRule.map((r: any) => {
+      const rProps = r.props || {}
+      let type: string | undefined
+      if (r.type === 'input') {
+        if (rProps.type === 'textarea') type = 'textarea'
+        else if (rProps.type === 'password') type = 'password'
+        else type = 'text'
+      }
+      else if (r.type === 'inputNumber') type = 'number'
+      else if (r.type === 'select') type = 'select'
+      else if (r.type === 'radio') type = 'radio'
+      else if (r.type === 'switch') type = 'switch'
+      else if (r.type === 'datePicker') type = rProps.type === 'datetime' ? 'datetime' : 'date'
+      else if (r.type === 'timePicker') type = rProps.isRange === true ? 'timerange' : 'time'
+      else if (r.type === 'treeSelect') type = 'treeselect'
+      else if (r.type === 'elTreeSelect') type = 'treeselect'
+      else if (r.type === 'tree') type = 'tree'
+      else if (r.type === 'upload') type = 'upload'
+      else if (r.type === 'userSelect' || r.type === 'user') type = 'user'
+      else if (r.type === 'departmentSelect' || r.type === 'department') type = 'department'
+      else if (r.type === 'colorPicker') type = 'colorPicker'
+      else if (r.type === 'rate') type = 'rate'
+      else if (r.type === 'slider') type = 'slider'
+      else type = r.type as any
+      const rawOptions = r.options || rProps.options
+      const options = rawOptions ? rawOptions.map((o: any) => ({ label: o.label ?? o.value, value: o.value })) : undefined
+      const passProps: Record<string, any> = {}
+      for (const key of [
+        'action', 'accept', 'multiple', 'precision', 'min', 'max', 'rows', 'maxlength', 'fileNameTargetField',
+        'isRange', 'valueFormat', 'startPlaceholder', 'endPlaceholder', 'treeData', 'checkStrictly',
+        'showAlpha', 'allowHalf', 'step',
+      ]) {
+        if (rProps[key] !== undefined) passProps[key] = rProps[key]
+      }
+      if (rProps.data !== undefined) passProps.treeData = rProps.data
+      if (rProps.nodeKey !== undefined) passProps.nodeKey = rProps.nodeKey
+      if (rProps.showCheckbox !== undefined) passProps.showCheckbox = rProps.showCheckbox
+      if (rProps.props !== undefined) passProps.labelProps = rProps.props
+      if (options) passProps.options = options
+      return {
+        field: r.field,
+        label: r.title || r.field,
+        type,
+        required: r.validate?.some((v: any) => v.required) || false,
+        ...(options ? { options } : {}),
+        ...(Object.keys(passProps).length > 0 ? { props: passProps } : {}),
+      }
+    })
+  }
+  return []
 }
 
 /**
@@ -1194,11 +1226,56 @@ async function handleCreateForm() {
   }
 }
 
+/**
+ * Check if a bindingId is already used by another subTable placeholder
+ * Returns true if duplicate found (warning should be shown)
+ */
+const checkDuplicateBinding = (selectedId: number, currentRuleIndex: number): boolean => {
+  if (!designerRef.value) return false
+  try {
+    const rule = designerRef.value.getRule()
+    return rule.some((r: any, idx: number) =>
+      idx !== currentRuleIndex && r.type === 'subTable' && r._bindingId === selectedId
+    )
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Handle sub-table binding selection change — check for duplicates and warn
+ */
+const handleSubTableBindingChange = (selectedId: number | null, ruleIndex: number) => {
+  if (selectedId == null) return
+  if (checkDuplicateBinding(selectedId, ruleIndex)) {
+    ElMessage.warning(t('form.duplicateSubTableBinding'))
+  }
+}
+
+/**
+ * Handle navigate event from SubTablePlaceholderWidget
+ * Navigates to the Sub Table form designer page for the given bindingId
+ */
+const handleSubTableNavigate = (bindingId: number) => {
+  if (!bindingId) return
+  router.push({
+    name: 'SubTableFormDesigner',
+    params: { bindingId: String(bindingId) }
+  })
+}
+
 async function handleSaveForm() {
   if (!selectedForm.value || !designerRef.value) return
   try {
     const rule = designerRef.value.getRule()
     const options = designerRef.value.getOption()
+
+    // Validate: all subTable placeholders must have a _bindingId selected
+    const invalidPlaceholders = rule.filter((r: any) => r.type === 'subTable' && !r._bindingId)
+    if (invalidPlaceholders.length > 0) {
+      ElMessage.error(t('form.subTableBindingRequired'))
+      return
+    }
 
     // Collect sub form rules — prefer live ref, then cache, then previously saved
     const subForms: Record<number, { rule: any[]; options: any }> = {}
@@ -1248,8 +1325,16 @@ async function handleDeleteForm(row: FormDefinition) {
 }
 
 function handlePreview() {
-  if (!designerRef.value || !selectedForm.value) return
-  previewRule.value = designerRef.value.getRule()
+  if (!selectedForm.value) return
+  // Always use live designer rule so unsaved reordering is reflected in preview.
+  // Fall back to saved configJson rule only when the designer ref is unavailable.
+  let rawRule: any[] = []
+  try {
+    rawRule = designerRef.value?.getRule() || []
+  } catch {}
+  if (!rawRule.length) {
+    rawRule = selectedForm.value.configJson?.rule || []
+  }
   previewData.value = {}
   previewSubData.value = {}
   previewTableRows.value = {}
@@ -1262,18 +1347,35 @@ function handlePreview() {
       resetBtn: false,
       form: {
         labelPosition: opt.form?.labelPosition || 'left',
-        labelWidth: 'auto'
+        labelWidth: '200px'
+      },
+      fetch: (opt: any) => {
+        const { action, method = 'get', data, headers, onSuccess, onError } = opt
+        api.request({ url: action, method, data, headers })
+          .then((res: any) => onSuccess(res))
+          .catch((err: any) => onError(err))
       }
     }
   } catch {
-    previewOption.value = { submitBtn: false, resetBtn: false, form: { labelPosition: 'left', labelWidth: 'auto' } }
+    previewOption.value = {
+      submitBtn: false, resetBtn: false,
+      form: { labelPosition: 'left', labelWidth: '200px' },
+      fetch: (opt: any) => {
+        const { action, method = 'get', data, headers, onSuccess, onError } = opt
+        api.request({ url: action, method, data, headers })
+          .then((res: any) => onSuccess(res))
+          .catch((err: any) => onError(err))
+      }
+    }
   }
 
   const config = selectedForm.value.configJson || {}
   const subForms = config.subForms || {}
   const nonPrimary = (selectedForm.value.tableBindings || []).filter((b: TableBinding) => b.bindingType !== 'PRIMARY')
 
-  previewSubBindings.value = nonPrimary.map((b: TableBinding) => {
+  // Build a map of bindingId -> binding info for quick lookup
+  const bindingMap = new Map<number, { bindingId: number; bindingType: string; bindingMode: string; tableName: string; tableType: string; tableDescription: string; rule: any[]; columns: any[] }>()
+  nonPrimary.forEach((b: TableBinding) => {
     const bindingId = b.id as number
     const index = designerSubBindings.value.findIndex(d => d.bindingId === bindingId)
     const subRef = subDesignerRefs.value[index]
@@ -1289,18 +1391,69 @@ function handlePreview() {
     } catch {
       rule = subFormCache.value[bindingId]?.rule || subForms[bindingId]?.rule || []
     }
-    // Initialize with one empty row
-    previewTableRows.value[bindingId] = [{}]
-    return {
+    previewTableRows.value[bindingId] = []
+    const columns = deriveColumnsFromBinding({ bindingId }, { [bindingId]: { rule } })
+    bindingMap.set(bindingId, {
       bindingId,
       bindingType: b.bindingType,
       bindingMode: b.bindingMode,
       tableName: getTableName(b.tableId) || b.tableName,
       tableType: (store.tables.find(t => t.id === b.tableId)?.tableType) || '',
       tableDescription: (store.tables.find(t => t.id === b.tableId)?.description) || '',
-      rule
-    }
+      rule,
+      columns
+    })
   })
+
+  // Debug
+  console.log('[Preview] rawRule types:', rawRule.map(r => `${r.type}(${r._bindingId ?? r.field})`))
+  console.log('[Preview] bindingMap keys:', [...bindingMap.keys()])
+  console.log('[Preview] nonPrimary bindings:', nonPrimary.map((b: TableBinding) => b.id))
+
+  // Build previewItems: split rawRule into segments separated by subTable placeholders
+  const items: typeof previewItems.value = []
+  let currentSegment: any[] = []
+  let segmentIndex = 0
+
+  // form-create proprietary types that should not be rendered in preview
+  const FC_SKIP_PREVIEW = new Set(['subForm', 'tableForm', 'tableFormColumn', 'group', 'el-row', 'el-col'])
+
+  for (const ruleItem of rawRule) {
+    // _bindingId may be at top-level (after parseRule) or still in props (if getRule skipped parseRule)
+    const itemBindingId = ruleItem._bindingId ?? ruleItem.props?._bindingId ?? null
+    if (ruleItem.type === 'subTable' && itemBindingId != null) {
+      // Flush current segment
+      if (currentSegment.length > 0) {
+        items.push({ kind: 'fields', rule: [...currentSegment], modelKey: `seg_${segmentIndex++}` })
+        currentSegment = []
+      }
+      // Add inline sub-table if binding exists
+      const binding = bindingMap.get(Number(itemBindingId))
+      if (binding) {
+        items.push({ kind: 'subTable', binding })
+        bindingMap.delete(Number(itemBindingId)) // mark as placed
+      }
+    } else if (FC_SKIP_PREVIEW.has(ruleItem.type)) {
+      // Skip form-create proprietary components in preview
+    } else {
+      currentSegment.push(ruleItem)
+    }
+  }
+  // Flush remaining fields
+  if (currentSegment.length > 0) {
+    items.push({ kind: 'fields', rule: [...currentSegment], modelKey: `seg_${segmentIndex++}` })
+  }
+  // Append any unplaced bindings at the bottom (backward compat)
+  for (const binding of bindingMap.values()) {
+    items.push({ kind: 'subTable', binding })
+  }
+
+  previewItems.value = items
+  // Keep previewRule for backward compat (used by previewSubBindings logic elsewhere if any)
+  previewRule.value = rawRule.filter(r => r.type !== 'subTable')
+  console.log('[Preview] previewItems:', items.map(i => i.kind === 'subTable' ? `subTable(${i.binding.bindingId})` : `fields(${i.rule.length})`))
+
+  previewSubBindings.value = [] // no longer used for bottom rendering
 
   showPreviewDialog.value = true
 }
@@ -1935,5 +2088,15 @@ onMounted(loadForms)
     background: #f5f7fa;
     border-radius: 4px;
   }
+}
+
+.sub-table-placeholder-widget {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  border: 1px dashed #c0c4cc;
+  border-radius: 4px;
+  background: #f5f7fa;
+  min-height: 36px;
 }
 </style>

@@ -292,7 +292,8 @@ export default {
     nodeTypeStartEvent: 'Start Event',
     nodeTypeEndEvent: 'End Event',
     // Other
-    unknownTable: 'Unknown Table'
+    unknownTable: 'Unknown Table',
+    subTableBindingRequired: 'All Sub-Table placeholders must have a binding selected before saving'
   },
   action: {
     title: 'Action Designer',

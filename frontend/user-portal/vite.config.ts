@@ -5,16 +5,18 @@ import AutoImport from 'unplugin-auto-import/vite'
 import Components from 'unplugin-vue-components/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 
+const isTest = process.env.VITEST === 'true'
+
 export default defineConfig({
   plugins: [
     vue(),
     AutoImport({
-      resolvers: [ElementPlusResolver()],
+      resolvers: [ElementPlusResolver({ importStyle: isTest ? false : 'css' })],
       imports: ['vue', 'vue-router', 'pinia'],
       dts: 'src/auto-imports.d.ts'
     }),
     Components({
-      resolvers: [ElementPlusResolver()],
+      resolvers: [ElementPlusResolver({ importStyle: isTest ? false : 'css' })],
       dts: 'src/components.d.ts'
     })
   ],
@@ -48,7 +50,8 @@ export default defineConfig({
   },
   test: {
     environment: 'happy-dom',
-    globals: true
+    globals: true,
+    css: true
   },
   build: {
     rollupOptions: {

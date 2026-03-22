@@ -324,7 +324,8 @@ export default {
     nodeTypeStartEvent: '開始事件',
     nodeTypeEndEvent: '結束事件',
     // Other
-    unknownTable: '未知表'
+    unknownTable: '未知表',
+    subTableBindingRequired: '儲存前，所有子表佔位符必須選擇綁定'
   },
   action: {
     title: '動作設計器',

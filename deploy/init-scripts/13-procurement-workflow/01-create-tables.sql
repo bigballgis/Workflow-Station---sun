@@ -1,8 +1,8 @@
 -- =============================================================================
 -- 13-procurement-workflow: Create Table Definitions & Field Definitions
--- 基于数据库实际数据生成 (source: Procurement Workflow)
+-- 基于数据库实际数据生成 (包含所有字段，含后续脚本 04-09 新增的字段)
 -- Tables: Request(MAIN), RequestItems(SUB), ApprovalActions(ACTION),
---         RequestAttachments(SUB)
+--         RequestAttachments(SUB), Review Table(SUB)
 -- =============================================================================
 
 DO $tables$
@@ -12,6 +12,7 @@ DECLARE
     v_items_table_id      BIGINT;  -- RequestItems (SUB)
     v_action_table_id     BIGINT;  -- ApprovalActions (ACTION)
     v_attach_table_id     BIGINT;  -- RequestAttachments (RELATION)
+    v_review_table_id     BIGINT;  -- Review Table (SUB)
 BEGIN
     SELECT id INTO v_function_unit_id FROM dw_function_units WHERE code = 'PROCUREMENT_WORKFLOW';
     IF v_function_unit_id IS NULL THEN
@@ -54,7 +55,7 @@ BEGIN
     RAISE NOTICE 'Table Request (MAIN) created: id=%', v_main_table_id;
 
     -- =========================================================================
-    -- Table 2: RequestItems (SUB)
+    -- Table 2: RequestItems (SUB) — 包含所有控件类型的完整字段
     -- =========================================================================
     INSERT INTO dw_table_definitions (
         function_unit_id, table_name, table_display_name, table_type, description, created_at, updated_at
@@ -74,15 +75,42 @@ BEGIN
         table_id, field_name, data_type, length, precision_value, scale,
         nullable, default_value, is_primary_key, is_unique, description, sort_order
     ) VALUES
-    (v_items_table_id, 'id',          'BIGINT',  NULL, NULL, NULL, false, NULL, false, false, 'Item ID',                     1),
-    (v_items_table_id, 'request_id',  'BIGINT',  NULL, NULL, NULL, false, NULL, false, false, 'Foreign key to Request table', 2),
-    (v_items_table_id, 'item_name',   'VARCHAR', 200,  NULL, NULL, false, NULL, false, false, 'Item Name',                   3),
-    (v_items_table_id, 'quantity',    'INTEGER', NULL, NULL, NULL, false, NULL, false, false, 'Quantity',                    4),
-    (v_items_table_id, 'unit_price',  'DECIMAL', NULL, 10,   2,    false, NULL, false, false, 'Unit Price',                  5),
-    (v_items_table_id, 'total_price', 'DECIMAL', NULL, 10,   2,    false, NULL, false, false, 'Total Price',                 6),
-    (v_items_table_id, 'remarks',     'TEXT',    NULL, NULL, NULL, true,  NULL, false, false, 'Item Remarks',                7),
-    (v_items_table_id, 'count',       'INTEGER', NULL, NULL, NULL, true,  NULL, false, false, 'Count',                       8),
-    (v_items_table_id, 'sort_order',  'INTEGER', NULL, NULL, NULL, false, NULL, false, false, 'Display Order',               9);
+    -- 基础字段
+    (v_items_table_id, 'id',              'BIGINT',    NULL, NULL, NULL, false, NULL, false, false, 'Item ID',                      1),
+    (v_items_table_id, 'request_id',      'BIGINT',    NULL, NULL, NULL, false, NULL, false, false, 'Foreign key to Request table', 2),
+    (v_items_table_id, 'item_name',       'VARCHAR',   200,  NULL, NULL, false, NULL, false, false, 'Item Name',                    3),
+    (v_items_table_id, 'quantity',        'INTEGER',   NULL, NULL, NULL, false, NULL, false, false, 'Quantity',                     4),
+    (v_items_table_id, 'unit_price',      'DECIMAL',   NULL, 10,   2,    false, NULL, false, false, 'Unit Price',                   5),
+    (v_items_table_id, 'total_price',     'DECIMAL',   NULL, 10,   2,    false, NULL, false, false, 'Total Price',                  6),
+    (v_items_table_id, 'remarks',         'TEXT',      NULL, NULL, NULL, true,  NULL, false, false, 'Item Remarks',                 7),
+    (v_items_table_id, 'count',           'INTEGER',   NULL, NULL, NULL, true,  NULL, false, false, 'Count',                        8),
+    (v_items_table_id, 'sort_order',      'INTEGER',   NULL, NULL, NULL, false, NULL, false, false, 'Display Order',                8),
+    -- 扩展字段 (input/textarea/number/select)
+    (v_items_table_id, 'item_code',       'VARCHAR',   255,  NULL, NULL, true,  NULL, false, false, 'Item Code (varchar 255)',      10),
+    (v_items_table_id, 'description',     'TEXT',      NULL, NULL, NULL, true,  NULL, false, false, 'Description (text)',           11),
+    (v_items_table_id, 'Procure_date',    'DATE',      NULL, NULL, NULL, true,  NULL, false, false, 'Procure_date(date)',           12),
+    (v_items_table_id, 'stock_qty',       'INTEGER',   NULL, NULL, NULL, true,  NULL, false, false, 'Stock Quantity (int4)',        13),
+    (v_items_table_id, 'discount_rate',   'NUMERIC',   NULL, 5,    2,    true,  NULL, false, false, 'Discount Rate (numeric)',      14),
+    (v_items_table_id, 'category',        'VARCHAR',   50,   NULL, NULL, true,  NULL, false, false, 'Category (single select varchar)', 15),
+    (v_items_table_id, 'priority',        'INTEGER',   NULL, NULL, NULL, true,  NULL, false, false, 'Priority (single select int4)', 16),
+    -- switch/date/datetime/upload/user/department
+    (v_items_table_id, 'is_urgent',       'BOOLEAN',   NULL, NULL, NULL, true,  NULL, false, false, 'Is Urgent (bool)',             17),
+    (v_items_table_id, 'delivery_date',   'DATE',      NULL, NULL, NULL, true,  NULL, false, false, 'Delivery Date (date)',         18),
+    (v_items_table_id, 'expected_at',     'TIMESTAMP', NULL, NULL, NULL, true,  NULL, false, false, 'Expected At (timestamp)',      19),
+    (v_items_table_id, 'item_image',      'VARCHAR',   500,  NULL, NULL, true,  NULL, false, false, 'Item Image URL (varchar)',     20),
+    (v_items_table_id, 'tags',            'VARCHAR',   500,  NULL, NULL, true,  NULL, false, false, 'Tags (multi-select, stored as JSON array string)', 21),
+    (v_items_table_id, 'pickup_time',     'VARCHAR',   20,   NULL, NULL, true,  NULL, false, false, 'Pickup Time (timePicker varchar)', 22),
+    (v_items_table_id, 'assigned_to',     'VARCHAR',   100,  NULL, NULL, true,  NULL, false, false, 'Assigned To (user varchar)',   23),
+    (v_items_table_id, 'department',      'VARCHAR',   100,  NULL, NULL, true,  NULL, false, false, 'Department (dept varchar)',    24),
+    -- slider/password/timerange/treeselect/radio/rate/colorPicker/tree/checkbox
+    (v_items_table_id, 'progress',        'INTEGER',   NULL, NULL, NULL, true,  NULL, false, false, 'Progress (slider int4)',       26),
+    (v_items_table_id, 'item_status',     'VARCHAR',   50,   NULL, NULL, true,  NULL, false, false, 'Item Status (radio)',          30),
+    (v_items_table_id, 'rating',          'INTEGER',   NULL, NULL, NULL, true,  NULL, false, false, 'Rating (rate)',                31),
+    (v_items_table_id, 'label_color',     'VARCHAR',   20,   NULL, NULL, true,  NULL, false, false, 'Label Color (colorPicker)',    32),
+    (v_items_table_id, 'work_time_range', 'VARCHAR',   50,   NULL, NULL, true,  NULL, false, false, 'Work Time Range (timePicker isRange)', 33),
+    (v_items_table_id, 'product_category','VARCHAR',   100,  NULL, NULL, true,  NULL, false, false, 'Product Category (treeselect)', 34),
+    (v_items_table_id, 'selected_nodes',  'VARCHAR',   500,  NULL, NULL, true,  NULL, false, false, 'Selected Nodes (tree, stored as JSON array)', 35),
+    (v_items_table_id, 'applicable_tags', 'VARCHAR',   200,  NULL, NULL, true,  NULL, false, false, 'Applicable Tags (checkbox, stored as JSON array)', 36);
 
     RAISE NOTICE 'Table RequestItems (SUB) created: id=%', v_items_table_id;
 
@@ -154,14 +182,37 @@ BEGIN
     RAISE NOTICE 'Table RequestAttachments (RELATION) created: id=%', v_attach_table_id;
 
     -- =========================================================================
-    -- Summary
+    -- Table 5: Review Table (SUB)
     -- =========================================================================
+    INSERT INTO dw_table_definitions (
+        function_unit_id, table_name, table_display_name, table_type, description, created_at, updated_at
+    ) VALUES (
+        v_function_unit_id, 'Review Table', '', 'SUB', '', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+    )
+    ON CONFLICT (function_unit_id, table_name) DO UPDATE SET
+        table_type  = EXCLUDED.table_type,
+        updated_at  = CURRENT_TIMESTAMP
+    RETURNING id INTO v_review_table_id;
+
+    DELETE FROM dw_field_definitions WHERE table_id = v_review_table_id;
+
+    INSERT INTO dw_field_definitions (
+        table_id, field_name, data_type, length, precision_value, scale,
+        nullable, default_value, is_primary_key, is_unique, description, sort_order
+    ) VALUES
+    (v_review_table_id, 'Item',    'TEXT',    255,  NULL, NULL, true,  NULL, false, false, 'item',    0),
+    (v_review_table_id, 'Comment', 'VARCHAR', 255,  NULL, NULL, true,  NULL, false, false, 'comment', 1),
+    (v_review_table_id, 'id',      'INTEGER', 255,  NULL, NULL, false, NULL, false, true,  'id',      2);
+
+    RAISE NOTICE 'Table Review Table (SUB) created: id=%', v_review_table_id;
+
     RAISE NOTICE '========================================';
     RAISE NOTICE 'Tables Setup Complete!';
     RAISE NOTICE 'Request (MAIN)           : id=%', v_main_table_id;
     RAISE NOTICE 'RequestItems (SUB)       : id=%', v_items_table_id;
     RAISE NOTICE 'ApprovalActions (ACTION)  : id=%', v_action_table_id;
     RAISE NOTICE 'RequestAttachments (RELATION) : id=%', v_attach_table_id;
+    RAISE NOTICE 'Review Table (SUB)       : id=%', v_review_table_id;
     RAISE NOTICE 'Next: run 02-create-bpmn-process.sql';
     RAISE NOTICE '========================================';
 

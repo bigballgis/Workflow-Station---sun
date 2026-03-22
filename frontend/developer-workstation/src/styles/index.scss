@@ -213,3 +213,9 @@ svg:empty {
 .el-input__inner::placeholder {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif !important;
 }
+
+// Fix: form-create designer drag mask needs a background to receive click events
+// Without a background, transparent divs don't receive pointer events in browsers
+._fd-drag-mask {
+  background: transparent;
+}

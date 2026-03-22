@@ -14,6 +14,8 @@ import App from './App.vue'
 import router from './router'
 import i18n from './i18n'
 import './styles/index.scss'
+import SubTablePlaceholderWidget from './components/designer/SubTablePlaceholderWidget.vue'
+import SubTableBindingSelect from './components/designer/SubTableBindingSelect.vue'
 
 // Force set HTML lang attribute to English
 document.documentElement.lang = 'en'
@@ -33,6 +35,70 @@ app.use(i18n)
 FcDesigner.useLocale(enLocale)
 app.use(FcDesigner)
 app.use(FcDesigner.formCreate)
+
+// Register SubTableBindingSelect into both designerForm (props panel) and formCreate (canvas)
+// FcDesigner.component() calls addComponent() which registers to both instances
+FcDesigner.component('SubTableBindingSelect', SubTableBindingSelect)
+
+// Register SubTablePlaceholderWidget as the canvas renderer for 'subTable' type
+FcDesigner.component('subTable', SubTablePlaceholderWidget)
+
+// Register the subTable drag rule so it appears in the designer left menu
+FcDesigner.addDragRule({
+  name: 'subTable',
+  label: 'Sub-Table',
+  icon: 'icon-table',
+  menu: 'main',
+  mask: true,
+  input: false,
+  drag: false,
+  dragBtn: true,
+  inside: false,
+  only: false,
+  handleBtn: true,
+  languageKey: [],
+  // When loading a saved rule, copy top-level _bindingId into props so the config panel can read it
+  loadRule(rule: any) {
+    rule.props = rule.props || {}
+    if (rule._bindingId !== undefined) {
+      rule.props._bindingId = rule._bindingId
+    }
+  },
+  // When saving/exporting, move props._bindingId back to top-level _bindingId
+  parseRule(rule: any) {
+    if (rule.props && rule.props._bindingId !== undefined) {
+      rule._bindingId = rule.props._bindingId
+      delete rule.props._bindingId
+    } else {
+      // Ensure _bindingId exists even if props was empty
+      if (rule._bindingId === undefined) rule._bindingId = null
+    }
+  },
+  // Keep top-level _bindingId in sync when the props panel changes props._bindingId
+  watch: {
+    _bindingId({ value, rule }: { value: any; rule: any }) {
+      rule._bindingId = value ?? null
+    }
+  },
+  rule() {
+    return {
+      type: 'subTable',
+      _bindingId: null,
+      title: 'Sub-Table',
+      props: { _bindingId: null }
+    }
+  },
+  props() {
+    return [
+      {
+        type: 'SubTableBindingSelect',
+        field: '_bindingId',
+        title: 'Sub Table Binding',
+        props: {}
+      }
+    ]
+  }
+})
 
 // Override global pseudo-element styles injected by form-create library
 // form-create uses fc-icon font and .icon-xxx:before pseudo-elements
