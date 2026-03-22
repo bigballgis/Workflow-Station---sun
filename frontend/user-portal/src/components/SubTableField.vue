@@ -7,87 +7,53 @@
       </el-button>
     </div>
 
-    <el-table :data="rows" size="small" border :max-height="400" v-loading="loading">
+    <div class="sub-table-scroll-wrapper">
+    <el-table :data="rows" size="small" border :max-height="400" v-loading="loading" style="width: 100%">
       <el-table-column
         v-for="col in columns"
         :key="col.field"
         :prop="col.field"
         :label="col.label"
-        :min-width="col.type === 'upload' ? 180 : (col.minWidth || 100)"
+        :min-width="columnMinWidth(col)"
+        :show-overflow-tooltip="false"
       >
         <template #default="scope">
-          <template v-if="editable && editingRow === scope.$index">
-            <el-input-number
-              v-if="col.type === 'number'"
-              v-model="scope.row[col.field]"
-              size="small"
-              :controls="false"
-              style="width:100%"
-            />
-            <el-date-picker
-              v-else-if="col.type === 'date'"
-              v-model="scope.row[col.field]"
-              type="date"
-              size="small"
-              value-format="YYYY-MM-DD"
-              style="width:100%"
-            />
-            <!-- 文件上传 -->
-            <div v-else-if="col.type === 'upload'" style="display:flex;flex-direction:column;gap:4px;">
-              <el-upload
-                :key="getUploadKey(scope.$index, col.field)"
-                :action="getUploadAction(col)"
-                :accept="col.props?.accept || '.jpg,.jpeg,.png,.pdf,.docx,.xlsx'"
-                :show-file-list="false"
-                :on-success="(res: any, file: any) => handleUploadSuccess(res, file, scope.$index, col.field)"
-                :on-error="(err: any, file: any) => handleUploadError(err, file, scope.$index, col.field)"
-              >
-                <el-button size="small" type="primary">
-                  <el-icon><Upload /></el-icon> Upload
-                </el-button>
-              </el-upload>
-              <el-tag
-                v-if="uploadNames[scope.$index + '_' + col.field]"
-                size="small"
-                type="success"
-                closable
-                @close="clearUpload(scope.$index, col.field)"
-              >
-                {{ uploadNames[scope.$index + '_' + col.field] }}
-              </el-tag>
-            </div>
-            <el-input v-else v-model="scope.row[col.field]" size="small" />
-          </template>
           <!-- 只读展示 -->
-          <template v-else>
-            <template v-if="col.type === 'upload'">
-              <span
-                v-if="scope.row[col.field]"
-                class="file-download-link"
-                :class="{ downloading: downloadingKeys[scope.$index + '_' + col.field] }"
-                @click="downloadFile(scope.row[col.field], uploadNames[scope.$index + '_' + col.field], scope.$index, col.field)"
-              >
-                <el-icon v-if="downloadingKeys[scope.$index + '_' + col.field]" class="is-loading"><Loading /></el-icon>
-                <el-icon v-else><Document /></el-icon>
-                {{ getFilenameFromUrl(scope.row[col.field], uploadNames[scope.$index + '_' + col.field]) }}
-              </span>
-              <span v-else class="no-file">-</span>
-            </template>
-            <span v-else>{{ scope.row[col.field] ?? '-' }}</span>
+          <template v-if="col.type === 'upload'">
+            <span
+              v-if="scope.row[col.field]"
+              class="file-download-link"
+              :class="{ downloading: downloadingKeys[scope.$index + '_' + col.field] }"
+              @click="downloadFile(scope.row[col.field], uploadNames[scope.$index + '_' + col.field], scope.$index, col.field)"
+            >
+              <el-icon v-if="downloadingKeys[scope.$index + '_' + col.field]" class="is-loading"><Loading /></el-icon>
+              <el-icon v-else><Document /></el-icon>
+              {{ getFilenameFromUrl(scope.row[col.field], uploadNames[scope.$index + '_' + col.field]) }}
+            </span>
+            <span v-else class="no-file">-</span>
           </template>
+          <template v-else-if="col.type === 'colorPicker'">
+            <span v-if="scope.row[col.field]" class="color-swatch" :style="{ backgroundColor: scope.row[col.field] }" :title="scope.row[col.field]" />
+            <span v-else>-</span>
+          </template>
+          <template v-else-if="col.type === 'rate'">
+            <el-rate
+              v-if="scope.row[col.field] != null"
+              :model-value="Number(scope.row[col.field])"
+              :max="col.props?.max || 5"
+              disabled
+              style="display: inline-flex;"
+            />
+            <span v-else>-</span>
+          </template>
+          <span v-else>{{ resolveDisplayValue(col, scope.row[col.field]) }}</span>
         </template>
       </el-table-column>
 
       <el-table-column v-if="editable" label="Actions" width="120">
         <template #default="scope">
-          <template v-if="editingRow === scope.$index">
-            <el-button link type="primary" size="small" @click="saveRow(scope.$index)">Save</el-button>
-            <el-button link size="small" @click="cancelEdit(scope.$index)">Cancel</el-button>
-          </template>
-          <template v-else>
-            <el-button link type="primary" size="small" @click="editRow(scope.$index)">Edit</el-button>
-            <el-button link type="danger" size="small" @click="deleteRow(scope.$index)">Delete</el-button>
-          </template>
+          <el-button link type="primary" size="small" @click="openEditDialog(scope.$index)">Edit</el-button>
+          <el-button link type="danger" size="small" @click="deleteRow(scope.$index)">Delete</el-button>
         </template>
       </el-table-column>
 
@@ -95,20 +61,44 @@
         <el-empty description="No Data" :image-size="40" />
       </template>
     </el-table>
+    </div>
+
+    <SubTableAddDialog
+      :visible="dialogVisible"
+      :columns="columns"
+      :mode="dialogMode"
+      :initialData="dialogInitialData"
+      @update:visible="dialogVisible = $event"
+      @save="handleDialogSave"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { Plus, Upload, Document, Loading } from '@element-plus/icons-vue'
+import { Plus, Document, Loading } from '@element-plus/icons-vue'
 import { ElMessageBox, ElMessage } from 'element-plus'
+import SubTableAddDialog from './SubTableAddDialog.vue'
+import { resolveDisplayValue } from './subTableAddDialogHelpers'
+import type { DialogColumn } from './subTableAddDialogHelpers'
 
-interface Column {
-  field: string
-  label: string
-  type?: 'text' | 'number' | 'date' | 'upload'
-  minWidth?: number
-  props?: Record<string, any>
+type Column = DialogColumn
+
+/** 根据字段类型返回合理的最小列宽 */
+function columnMinWidth(col: Column): number {
+  if (col.minWidth) return col.minWidth
+  switch (col.type) {
+    case 'upload':       return 180
+    case 'timerange':    return 200
+    case 'datetime':     return 180
+    case 'date':         return 130
+    case 'tree':         return 180
+    case 'checkbox':     return 160
+    case 'treeselect':   return 160
+    case 'colorPicker':  return 100
+    case 'rate':         return 140
+    default:             return 120
+  }
 }
 
 const props = defineProps<{
@@ -124,14 +114,16 @@ const emit = defineEmits<{
 }>()
 
 const rows = ref<any[]>([])
-const editingRow = ref<number | null>(null)
-const backup = ref<any>(null)
 // key = "{rowIndex}_{field}" → 原始文件名（本次会话上传时记录）
 const uploadNames = ref<Record<string, string>>({})
-// 每次清除文件时递增，强制 el-upload 重新挂载以重置内部文件计数
-const uploadResetKeys = ref<Record<string, number>>({})
 // 正在下载的 key 集合
 const downloadingKeys = ref<Record<string, boolean>>({})
+
+// Dialog state
+const dialogVisible = ref(false)
+const dialogMode = ref<'add' | 'edit'>('add')
+const editingRowIndex = ref<number | null>(null)
+const dialogInitialData = ref<Record<string, any> | undefined>(undefined)
 
 watch(() => props.modelValue, (v) => { rows.value = v ? [...v] : [] }, { immediate: true, deep: true })
 
@@ -180,69 +172,27 @@ async function downloadFile(url: string, savedName: string | undefined, rowIndex
   }
 }
 
-function getUploadAction(col: Column): string {
-  const action = col.props?.action
-  return (action && action !== '/') ? action : '/api/v1/upload'
-}
-
-function getUploadKey(rowIndex: number, field: string): string {
-  const n = uploadResetKeys.value[`${rowIndex}_${field}`] || 0
-  return `upload_${rowIndex}_${field}_${n}`
-}
-
-function handleUploadSuccess(res: any, file: any, rowIndex: number, field: string) {
-  const url = res?.data?.url || ''
-  rows.value[rowIndex][field] = url
-  uploadNames.value = { ...uploadNames.value, [`${rowIndex}_${field}`]: file.name }
-  // Auto-fill filename to the configured target column (if any)
-  const uploadCol = props.columns.find(c => c.field === field)
-  const fileNameTarget = uploadCol?.props?.fileNameTargetField
-  if (fileNameTarget && props.columns.some(c => c.field === fileNameTarget)) {
-    rows.value[rowIndex][fileNameTarget] = file.name
-  }
-}
-
-function handleUploadError(_err: any, _file: any, rowIndex: number, field: string) {
-  ElMessage.error(`File upload failed for row ${rowIndex + 1}, field "${field}"`)
-}
-
-function clearUpload(rowIndex: number, field: string) {
-  rows.value[rowIndex][field] = ''
-  const nextNames = { ...uploadNames.value }
-  delete nextNames[`${rowIndex}_${field}`]
-  uploadNames.value = nextNames
-  // 递增 key 强制 el-upload 重新挂载，重置其内部文件列表和计数
-  const k = `${rowIndex}_${field}`
-  uploadResetKeys.value = { ...uploadResetKeys.value, [k]: (uploadResetKeys.value[k] || 0) + 1 }
-}
-
 function handleAdd() {
-  const newRow: any = {}
-  props.columns.forEach(c => { newRow[c.field] = c.type === 'number' ? 0 : '' })
-  rows.value.push(newRow)
-  editingRow.value = rows.value.length - 1
-  backup.value = { ...newRow }
+  dialogMode.value = 'add'
+  dialogInitialData.value = undefined
+  editingRowIndex.value = null
+  dialogVisible.value = true
 }
 
-function editRow(i: number) {
-  editingRow.value = i
-  backup.value = { ...rows.value[i] }
+function openEditDialog(i: number) {
+  dialogMode.value = 'edit'
+  editingRowIndex.value = i
+  dialogInitialData.value = { ...rows.value[i] }
+  dialogVisible.value = true
 }
 
-function saveRow(i: number) {
-  editingRow.value = null
-  backup.value = null
-  emit('update:modelValue', [...rows.value])
-}
-
-function cancelEdit(i: number) {
-  if (backup.value !== null) {
-    const isNew = Object.values(backup.value).every(v => v === '' || v === 0)
-    if (isNew) rows.value.splice(i, 1)
-    else rows.value[i] = { ...backup.value }
+function handleDialogSave(rowData: Record<string, any>) {
+  if (dialogMode.value === 'add') {
+    rows.value.push(rowData)
+  } else if (dialogMode.value === 'edit' && editingRowIndex.value !== null) {
+    rows.value[editingRowIndex.value] = rowData
   }
-  editingRow.value = null
-  backup.value = null
+  emit('update:modelValue', [...rows.value])
 }
 
 async function deleteRow(i: number) {
@@ -258,6 +208,15 @@ async function deleteRow(i: number) {
   border-radius: 4px;
   padding: 12px;
   background: #fafafa;
+
+  .sub-table-scroll-wrapper {
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  :deep(.el-table .cell) {
+    white-space: nowrap;
+  }
 
   .sub-table-header {
     display: flex;
@@ -289,6 +248,15 @@ async function deleteRow(i: number) {
   .no-file {
     color: #909399;
     font-size: 12px;
+  }
+
+  .color-swatch {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border-radius: 3px;
+    border: 1px solid #dcdfe6;
+    vertical-align: middle;
   }
 }
 </style>

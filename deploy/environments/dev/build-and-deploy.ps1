@@ -90,14 +90,42 @@ if (-not $SkipImagePull) {
             continue
         }
 
-        Write-Host "  Pulling $($img.Target) from mirror..."
-        docker pull $img.Mirror
-        if ($LASTEXITCODE -ne 0) { throw "Failed to pull $($img.Mirror)" }
+        # Try mirror pull with up to 3 attempts (mirrors can be transiently unavailable)
+        $pulled = $false
+        for ($attempt = 1; $attempt -le 3; $attempt++) {
+            Write-Host "  Pulling $($img.Target) from mirror (attempt $attempt/3)..."
+            docker pull $img.Mirror 2>&1 | Out-Null
+            if ($LASTEXITCODE -eq 0) {
+                docker tag $img.Mirror $img.Target 2>&1 | Out-Null
+                Write-Host "  OK (mirror): $($img.Target)" -ForegroundColor Green
+                $pulled = $true
+                break
+            }
+            if ($attempt -lt 3) {
+                Write-Host "  Retrying in 5s..." -ForegroundColor DarkGray
+                Start-Sleep -Seconds 5
+            }
+        }
 
-        docker tag $img.Mirror $img.Target
-        if ($LASTEXITCODE -ne 0) { throw "Failed to tag $($img.Mirror) as $($img.Target)" }
+        if (-not $pulled) {
+            # Mirror unavailable — try to restore from BuildKit cache via a minimal build.
+            # This works when the image layers already exist in the local BuildKit cache
+            # from a previous build (even if the image manifest was removed from the store).
+            Write-Host "  Mirror unavailable. Restoring $($img.Target) from BuildKit cache..." -ForegroundColor Yellow
+            $tmpFile = [System.IO.Path]::GetTempFileName() + ".Dockerfile"
+            "FROM $($img.Target)" | Set-Content $tmpFile
+            docker build --quiet -t $img.Target -f $tmpFile "$PSScriptRoot" 2>&1 | Out-Null
+            Remove-Item $tmpFile -ErrorAction SilentlyContinue
 
-        Write-Host "  OK: $($img.Target)" -ForegroundColor Green
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host "  OK (BuildKit cache): $($img.Target)" -ForegroundColor Green
+            } else {
+                # Both mirror and cache failed — warn but do NOT abort.
+                # The subsequent docker build commands will attempt to use BuildKit cache
+                # on their own; if they also fail the real error will surface there.
+                Write-Host "  WARNING: Could not pull or restore $($img.Target). Continuing — actual builds may still succeed via BuildKit cache." -ForegroundColor Yellow
+            }
+        }
     }
 
     Write-Host "  Base images ready." -ForegroundColor Green
@@ -144,8 +172,14 @@ if (-not $SkipFrontend) {
         Write-Host "  npm install & build $($fe.Name)..."
         Push-Location $feDir
         try {
+            # Temporarily allow non-zero stderr from npm (warnings are printed to stderr
+            # and would cause PowerShell Stop mode to abort the script)
+            $prev = $ErrorActionPreference
+            $ErrorActionPreference = "Continue"
             npm install --prefer-offline --no-audit 2>&1 | Out-Null
-            if ($LASTEXITCODE -ne 0) { throw "npm install failed: $($fe.Name)" }
+            $npmExit = $LASTEXITCODE
+            $ErrorActionPreference = $prev
+            if ($npmExit -ne 0) { throw "npm install failed: $($fe.Name)" }
             npx vite build
             if ($LASTEXITCODE -ne 0) { throw "vite build failed: $($fe.Name)" }
         } finally {
@@ -201,7 +235,7 @@ if (-not $SkipInfra) {
     Write-Host "  Waiting for n8n..."
     $retries = 0
     while ($retries -lt 20) {
-        $health = docker inspect --format='{{.State.Health.Status}}' n8n 2>$null
+        $health = docker inspect --format='{{.State.Health.Status}}' platform-n8n-dev 2>$null
         if ($health -eq "healthy") { break }
         Start-Sleep -Seconds 3
         $retries++

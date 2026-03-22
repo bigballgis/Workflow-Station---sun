@@ -1,6 +1,16 @@
 # 13-procurement-workflow
 
-基于数据库实际数据生成的初始化脚本。状态为 PUBLISHED，版本从 1.0.0 开始。
+基于数据库实际数据生成的初始化脚本（已合并所有增量脚本 04-09）。
+状态为 PUBLISHED，版本 1.0.0。所有脚本均为幂等（ON CONFLICT / DELETE + INSERT）。
+
+## 脚本说明
+
+| 脚本 | 说明 |
+|------|------|
+| `00-create-function-unit.sql` | Function Unit + 4个 Forms + 8个 Actions |
+| `01-create-tables.sql` | 5个 Table Definitions + 所有 Field Definitions |
+| `02-create-bpmn-process.sql` | BPMN 流程定义（base64 XML） |
+| `03-form-table-bindings.sql` | Form-Table 绑定 + subForms rule（24个控件） |
 
 ## 执行顺序
 
@@ -18,30 +28,40 @@ EOF
 ### Function Unit
 - Code: `PROCUREMENT_WORKFLOW`
 - Name: `Procurement Workflow`
-- Status: `PUBLISHED`
-- Version: `1.0.0`
+- Status: `PUBLISHED`, Version: `1.0.0`
 
-### Forms (3个)
+### Forms (4个)
 | form_name | form_type | 说明 |
 |-----------|-----------|------|
-| Request Form | MAIN | 申请人填写（5个字段：request_number, request_date, title, description, budget） |
-| Approval Form | MAIN | 审批人操作（1个字段：additional_information） |
+| Request Form | MAIN | 申请表（5个主表字段 + 2个 subTable） |
+| Approval Form | MAIN | 审批表（1个字段：additional_information） |
+| Review Form | MAIN | 审核表（4个字段） |
 | sub form | SUB | 子表单 |
 
-### Actions (3个)
-| action_name | action_type | icon | button_color |
-|-------------|-------------|------|--------------|
-| Submit Request | PROCESS_SUBMIT | - | - |
-| Approve | APPROVE | Check | success |
-| Reject | REJECT | Close | danger |
+### Actions (8个)
+| action_name | action_type | icon | button_color | is_default |
+|-------------|-------------|------|--------------|------------|
+| Submit Request | PROCESS_SUBMIT | - | - | false |
+| Approve | APPROVE | Check | success | false |
+| Reject | REJECT | Close | danger | false |
+| Confirm | APPROVE | - | - | true |
+| Transfer | TRANSFER | Switch | - | false |
+| Delegate | DELEGATE | User | - | false |
+| Approve First | APPROVE | - | - | true |
+| Rejected First | REJECT | - | - | true |
 
-### Tables (4个)
+### Tables (5个)
 | table_name | table_type | fields |
 |------------|------------|--------|
-| Request | MAIN | 11 (含 budget) |
-| RequestItems | SUB | 9 (含 count) |
+| Request | MAIN | 11 |
+| RequestItems | SUB | 32（覆盖所有控件类型） |
 | ApprovalActions | ACTION | 9 |
-| RequestAttachments | SUB | 9 |
+| RequestAttachments | SUB | 10 |
+| Review Table | SUB | 3 |
+
+### RequestItems 控件类型覆盖
+input, inputNumber, textarea, select(单选/多选), switch, datePicker(date/datetime),
+upload, timePicker(单/范围), radio, rate, colorPicker, elTreeSelect, tree, checkbox
 
 ### Form Table Bindings
 | form | table | binding_type | binding_mode | fk | sort |
@@ -51,17 +71,19 @@ EOF
 | Request Form | RequestAttachments | SUB | EDITABLE | request_id | 3 |
 | Approval Form | Request | PRIMARY | READONLY | - | 1 |
 
-**注意**: Request Form 的 `config_json.subForms` 的 key 是 `dw_form_table_bindings.id`（即 binding ID），
-不是 `dw_table_definitions.id`（table ID）。这在 `03-form-table-bindings.sql` 中通过
-`INSERT ... RETURNING id` 动态获取。
+> **注意**: `config_json.subForms` 的 key 是 `dw_form_table_bindings.id`（binding ID），
+> 由 `03-form-table-bindings.sql` 通过 `INSERT ... RETURNING id` 动态获取。
 
 ### BPMN 流程
 ```
-Start → Submit Request → Total price > 10000?
-                           → Yes → Manager Review → Approved? → Yes → Approved (end)
-                           |                                   → No  → Rejected (end)
-                           → No  → Auto Approved (end)
+Start → Submit Request → First Review → Approve?
+  → Yes → Second Review → Total price > 10000?
+            → Yes → Manager Review → Approved? → Yes → Approved (end)
+            |                                   → No  → Rejected (end)
+            → No  → Auto Approved (end)
+  → No  → Rejected (end)
 ```
-- Process ID: `ProcurementWorkflowProcess`
 - Submit Request: formId=Request Form, actions=[Submit Request]
-- Manager Review: formId=Approval Form, actions=[Approve, Reject]
+- First Review: formId=Request Form, actions=[Approve First, Rejected First]
+- Second Review: formId=Request Form
+- Manager Review: formId=Approval Form, actions=[Approve, Reject, Transfer, Delegate]

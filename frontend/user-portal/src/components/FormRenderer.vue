@@ -19,16 +19,26 @@
             :name="tab.name"
           >
             <el-row :gutter="20">
-              <el-col
-                v-for="field in tab.fields"
-                :key="field.key"
-                :span="field.span || 24"
-              >
-                <el-form-item
-                  :label="field.label"
-                  :prop="field.key"
-                  :required="field.required"
-                >
+              <template v-for="field in tab.fields" :key="field.key">
+                <template v-if="field.type === 'subTable'">
+                  <el-col :span="24" style="padding: 0;">
+                  <SubTableField
+                    v-if="resolveBinding(field._bindingId)"
+                    :title="resolveBinding(field._bindingId)!.tableName"
+                    :columns="resolveBinding(field._bindingId)!.columns"
+                    :model-value="resolveBinding(field._bindingId)!.data"
+                    :editable="!readonly && resolveBinding(field._bindingId)!.bindingMode === 'EDITABLE'"
+                    @update:model-value="(rows: any[]) => emit('update:subTableData', field._bindingId!, rows)"
+                    style="margin-bottom: 16px;"
+                  />
+                  </el-col>
+                </template>
+                <el-col v-else :key="field.key" :span="field.span || 24">
+                  <el-form-item
+                    :label="field.label"
+                    :prop="field.key"
+                    :required="field.required"
+                  >
                   <!-- 渲染字段 -->
                   <template v-if="field.type === 'text' || field.type === 'input'">
                     <el-input
@@ -36,6 +46,15 @@
                       :placeholder="field.placeholder"
                       :maxlength="field.maxLength"
                       :show-word-limit="!!field.maxLength"
+                      clearable
+                    />
+                  </template>
+                  <template v-else-if="field.type === 'password'">
+                    <el-input
+                      v-model="formData[field.key]"
+                      type="password"
+                      show-password
+                      :placeholder="field.placeholder"
                       clearable
                     />
                   </template>
@@ -147,6 +166,17 @@
                       popper-class="form-renderer-popper"
                     />
                   </template>
+                  <template v-else-if="field.type === 'timerange'">
+                    <el-time-picker
+                      v-model="formData[field.key]"
+                      is-range
+                      value-format="HH:mm:ss"
+                      :start-placeholder="(field as any).startPlaceholder || t('common.startDate')"
+                      :end-placeholder="(field as any).endPlaceholder || t('common.endDate')"
+                      style="width: 100%"
+                      popper-class="form-renderer-popper"
+                    />
+                  </template>
                   <template v-else-if="field.type === 'cascader'">
                     <el-cascader
                       v-model="formData[field.key]"
@@ -190,6 +220,18 @@
                       popper-class="form-renderer-popper"
                     />
                   </template>
+                  <template v-else-if="field.type === 'treeselect'">
+                    <el-tree-select
+                      v-model="formData[field.key]"
+                      :data="(field as any).treeData || []"
+                      :multiple="field.multiple"
+                      :check-strictly="(field as any).checkStrictly !== false"
+                      :placeholder="field.placeholder"
+                      clearable
+                      style="width: 100%"
+                      popper-class="form-renderer-popper"
+                    />
+                  </template>
                   <template v-else-if="field.type === 'money'">
                     <el-input
                       v-model="formData[field.key]"
@@ -198,6 +240,15 @@
                     >
                       <template #prepend>{{ field.currency || '¥' }}</template>
                     </el-input>
+                  </template>
+                  <template v-else-if="field.type === 'rate'">
+                    <el-rate v-model="formData[field.key]" :max="field.max || 5" />
+                  </template>
+                  <template v-else-if="field.type === 'slider'">
+                    <el-slider v-model="formData[field.key]" :min="field.min || 0" :max="field.max || 100" :step="field.step || 1" style="width: 100%" />
+                  </template>
+                  <template v-else-if="field.type === 'colorPicker'">
+                    <el-color-picker v-model="formData[field.key]" />
                   </template>
                   <template v-else-if="field.type === 'readonly'">
                     <span class="readonly-text">{{ formData[field.key] || '-' }}</span>
@@ -245,7 +296,8 @@
                     />
                   </template>
                 </el-form-item>
-              </el-col>
+                </el-col>
+              </template>
             </el-row>
           </el-tab-pane>
         </el-tabs>
@@ -254,16 +306,26 @@
       <!-- 普通平铺模式 -->
       <template v-else>
         <el-row :gutter="20">
-          <el-col
-            v-for="field in fields"
-            :key="field.key"
-            :span="field.span || 24"
-          >
-            <el-form-item
-              :label="field.label"
-              :prop="field.key"
-              :required="field.required"
-            >
+          <template v-for="field in fields" :key="field.key">
+            <template v-if="field.type === 'subTable'">
+              <el-col :span="24" style="padding: 0;">
+              <SubTableField
+                v-if="resolveBinding(field._bindingId)"
+                :title="resolveBinding(field._bindingId)!.tableName"
+                :columns="resolveBinding(field._bindingId)!.columns"
+                :model-value="resolveBinding(field._bindingId)!.data"
+                :editable="!readonly && resolveBinding(field._bindingId)!.bindingMode === 'EDITABLE'"
+                @update:model-value="(rows: any[]) => emit('update:subTableData', field._bindingId!, rows)"
+                style="margin-bottom: 16px;"
+              />
+              </el-col>
+            </template>
+            <el-col v-else :key="field.key" :span="field.span || 24">
+              <el-form-item
+                :label="field.label"
+                :prop="field.key"
+                :required="field.required"
+              >
               <!-- 文本输入 -->
               <el-input
                 v-if="field.type === 'text' || field.type === 'input'"
@@ -271,6 +333,16 @@
                 :placeholder="field.placeholder"
                 :maxlength="field.maxLength"
                 :show-word-limit="!!field.maxLength"
+                clearable
+              />
+
+              <!-- 密码输入 -->
+              <el-input
+                v-else-if="field.type === 'password'"
+                v-model="formData[field.key]"
+                type="password"
+                show-password
+                :placeholder="field.placeholder"
                 clearable
               />
 
@@ -396,6 +468,18 @@
                 popper-class="form-renderer-popper"
               />
 
+              <!-- 时间范围 -->
+              <el-time-picker
+                v-else-if="field.type === 'timerange'"
+                v-model="formData[field.key]"
+                is-range
+                value-format="HH:mm:ss"
+                :start-placeholder="(field as any).startPlaceholder || t('common.startDate')"
+                :end-placeholder="(field as any).endPlaceholder || t('common.endDate')"
+                style="width: 100%"
+                popper-class="form-renderer-popper"
+              />
+
               <!-- 级联选择 -->
               <el-cascader
                 v-else-if="field.type === 'cascader'"
@@ -442,6 +526,19 @@
                 popper-class="form-renderer-popper"
               />
 
+              <!-- 树形下拉选择器 -->
+              <el-tree-select
+                v-else-if="field.type === 'treeselect'"
+                v-model="formData[field.key]"
+                :data="(field as any).treeData || []"
+                :multiple="field.multiple"
+                :check-strictly="(field as any).checkStrictly !== false"
+                :placeholder="field.placeholder"
+                clearable
+                style="width: 100%"
+                popper-class="form-renderer-popper"
+              />
+
               <!-- 金额输入 -->
               <el-input
                 v-else-if="field.type === 'money'"
@@ -451,6 +548,29 @@
               >
                 <template #prepend>{{ field.currency || '¥' }}</template>
               </el-input>
+
+              <!-- 评分 -->
+              <el-rate
+                v-else-if="field.type === 'rate'"
+                v-model="formData[field.key]"
+                :max="field.max || 5"
+              />
+
+              <!-- 滑块 -->
+              <el-slider
+                v-else-if="field.type === 'slider'"
+                v-model="formData[field.key]"
+                :min="field.min || 0"
+                :max="field.max || 100"
+                :step="field.step || 1"
+                style="width: 100%"
+              />
+
+              <!-- 颜色选择器 -->
+              <el-color-picker
+                v-else-if="field.type === 'colorPicker'"
+                v-model="formData[field.key]"
+              />
 
               <!-- 只读文本 -->
               <span v-else-if="field.type === 'readonly'" class="readonly-text">
@@ -506,7 +626,8 @@
                 clearable
               />
             </el-form-item>
-          </el-col>
+            </el-col>
+          </template>
         </el-row>
       </template>
     </el-form>
@@ -518,45 +639,23 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Upload } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
+import SubTableField from './SubTableField.vue'
+import type { FormField, FormTab } from './formRendererHelpers'
+import { extractFieldsRecursive } from './formRendererHelpers'
+
+export type { FormField, FormTab }
 
 const { t } = useI18n()
 
-export interface FormField {
-  key: string
-  label: string
-  type: string
-  required?: boolean
-  placeholder?: string
-  span?: number
-  options?: Array<{ label: string; value: any }>
-  multiple?: boolean
-  filterable?: boolean
-  maxLength?: number
-  min?: number
-  max?: number
-  step?: number
-  precision?: number
-  rows?: number
-  activeText?: string
-  inactiveText?: string
-  cascaderProps?: object
-  currency?: string
-  alertTitle?: string
-  alertType?: 'success' | 'warning' | 'info' | 'error'
-  userOptions?: Array<{ id: string; name: string }>
-  buOptions?: any[]
-  rules?: any[]
-  defaultValue?: any
-  tabName?: string  // 所属 Tab 名称
-  uploadUrl?: string
-  uploadAccept?: string
-  uploadLimit?: number
-}
-
-export interface FormTab {
-  name: string
-  label: string
-  fields: FormField[]
+interface SubTableBinding {
+  bindingId: number
+  bindingType: string
+  bindingMode: string
+  tableName: string
+  tableType: string
+  tableDescription: string
+  columns: Array<{ field: string; label: string; type?: string; [key: string]: any }>
+  data: any[]
 }
 
 interface Props {
@@ -567,6 +666,7 @@ interface Props {
   labelWidth?: string
   labelPosition?: 'left' | 'right' | 'top'
   size?: 'large' | 'default' | 'small'
+  subTableBindings?: SubTableBinding[]
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -575,7 +675,8 @@ const props = withDefaults(defineProps<Props>(), {
   readonly: false,
   labelWidth: '160px',
   labelPosition: 'left',
-  size: 'default'
+  size: 'default',
+  subTableBindings: () => []
 })
 
 // 是否有 Tab 布局
@@ -594,9 +695,18 @@ watch(() => props.tabs, (newTabs) => {
 const emit = defineEmits<{
   (e: 'update:modelValue', value: Record<string, any>): void
   (e: 'change', key: string, value: any): void
+  (e: 'update:subTableData', bindingId: number, rows: any[]): void
 }>()
 
 const formRef = ref<FormInstance>()
+
+const bindingMap = computed(() => {
+  const map = new Map<number, SubTableBinding>()
+  for (const b of (props.subTableBindings ?? [])) map.set(b.bindingId, b)
+  return map
+})
+const resolveBinding = (id?: number) => id != null ? bindingMap.value.get(id) : undefined
+
 const formData = ref<Record<string, any>>({})
 let isInternalUpdate = false
 

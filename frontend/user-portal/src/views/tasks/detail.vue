@@ -137,14 +137,16 @@
               @update:model-value="val => formData = { ...formData, ...val }"
               :label-width="formLabelWidth"
               :readonly="formReadOnly"
+              :subTableBindings="subTableBindings"
+              @update:subTableData="(id: number, rows: any[]) => { const b = subTableBindings.find(x => x.bindingId === id); if (b) b.data = rows }"
             />
           </div>
           <el-empty v-else :description="t('task.noFormData')" />
 
           <!-- Sub-tables (SUB / RELATED bindings) -->
-          <template v-if="subTableBindings.length > 0">
+          <template v-if="bottomSubTableBindings.length > 0">
             <div
-              v-for="binding in subTableBindings"
+              v-for="binding in bottomSubTableBindings"
               :key="binding.bindingId"
               class="sub-table-section"
             >
@@ -299,7 +301,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, nextTick, markRaw } from 'vue'
+import { ref, reactive, onMounted, nextTick, markRaw, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
@@ -406,6 +408,20 @@ const subTableBindings = ref<Array<{
   columns: Array<{ field: string; label: string; type?: string }>
   data: any[]
 }>>([])
+
+const placedBindingIds = computed((): Set<number> => {
+  const ids = new Set<number>()
+  const collect = (fields: any[]) => fields.forEach((f: any) => {
+    if (f.type === 'subTable' && f._bindingId != null) ids.add(f._bindingId)
+  })
+  collect(formFields.value)
+  formTabs.value.forEach((tab: any) => collect(tab.fields))
+  return ids
+})
+
+const bottomSubTableBindings = computed(() =>
+  subTableBindings.value.filter(b => !placedBindingIds.value.has(b.bindingId))
+)
 
 // 流转记录
 const historyRecords = ref<HistoryRecord[]>([])
@@ -1158,16 +1174,91 @@ const parseFormConfig = (configStr: string) => {
 }
 
 // Derive display columns for a sub-table binding based on table metadata
-const deriveColumnsFromBinding = (binding: any, subForms?: Record<string, any>): Array<{ field: string; label: string; type?: string; props?: Record<string, any> }> => {
+const deriveColumnsFromBinding = (binding: any, subForms?: Record<string, any>): Array<{ field: string; label: string; type?: string; required?: boolean; options?: Array<{ label: string; value: any }>; props?: Record<string, any> }> => {
   // First try to use designed fields from configJson.subForms
   const subFormRule = subForms?.[binding.bindingId]?.rule
   if (subFormRule && Array.isArray(subFormRule) && subFormRule.length > 0) {
     return subFormRule.map((r: any) => {
-      let type: 'text' | 'number' | 'date' | 'upload' | undefined
-      if (r.type === 'inputNumber') type = 'number'
-      else if (r.type === 'datePicker') type = 'date'
-      else if (r.type === 'upload') type = 'upload'
-      return { field: r.field, label: r.title || r.field, type, props: r.props }
+      const rProps = r.props || {}
+      let type: string | undefined
+
+      if (r.type === 'input') {
+        if (rProps.type === 'textarea') type = 'textarea'
+        else if (rProps.type === 'password') type = 'password'
+        else type = 'text'
+      } else if (r.type === 'inputNumber') {
+        type = 'number'
+      } else if (r.type === 'select') {
+        type = 'select'
+      } else if (r.type === 'radio') {
+        type = 'radio'
+      } else if (r.type === 'switch') {
+        type = 'switch'
+      } else if (r.type === 'datePicker') {
+        type = rProps.type === 'datetime' ? 'datetime' : 'date'
+      } else if (r.type === 'timePicker') {
+        type = rProps.isRange === true ? 'timerange' : 'time'
+      } else if (r.type === 'treeSelect') {
+        type = 'treeselect'
+      } else if (r.type === 'elTreeSelect') {
+        type = 'treeselect'
+      } else if (r.type === 'tree') {
+        type = 'tree'
+      } else if (r.type === 'upload') {
+        type = 'upload'
+      } else if (r.type === 'userSelect' || r.type === 'user') {
+        type = 'user'
+      } else if (r.type === 'departmentSelect' || r.type === 'department') {
+        type = 'department'
+      } else if (r.type === 'colorPicker') {
+        type = 'colorPicker'
+      } else if (r.type === 'rate') {
+        type = 'rate'
+      } else if (r.type === 'slider') {
+        type = 'slider'
+      } else {
+        // fallback: pass through unknown types directly so SubTableAddDialog can handle them
+        type = r.type as any
+      }
+
+      console.log(`[deriveColumns] field=${r.field} r.type=${r.type} → type=${type}`)
+
+      // Collect options from rule.options or rule.props.options
+      const rawOptions = r.options || rProps.options
+      const options = rawOptions
+        ? rawOptions.map((o: any) => ({ label: o.label ?? o.value, value: o.value }))
+        : undefined
+
+      // Pass through relevant props
+      const passProps: Record<string, any> = {}
+      const propKeys = [
+        'action', 'accept', 'multiple', 'precision', 'min', 'max', 'rows', 'maxlength', 'fileNameTargetField',
+        'isRange', 'valueFormat', 'startPlaceholder', 'endPlaceholder', 'treeData', 'checkStrictly',
+        'showAlpha', 'allowHalf', 'step',
+      ]
+      for (const key of propKeys) {
+        if (rProps[key] !== undefined) passProps[key] = rProps[key]
+      }
+      // 'tree' and 'elTreeSelect' store tree data in props.data — map to treeData
+      if (rProps.data !== undefined) passProps.treeData = rProps.data
+      // pass through nodeKey and showCheckbox for tree type
+      if (rProps.nodeKey !== undefined) passProps.nodeKey = rProps.nodeKey
+      if (rProps.showCheckbox !== undefined) passProps.showCheckbox = rProps.showCheckbox
+      if (rProps.props !== undefined) passProps.labelProps = rProps.props
+
+      // Sync options into props.options so SubTableAddDialog can read from col.props?.options
+      if (options) passProps.options = options
+
+      const required = r.validate?.some((v: any) => v.required) || false
+
+      return {
+        field: r.field,
+        label: r.title || r.field,
+        type,
+        required,
+        ...(options ? { options } : {}),
+        ...(Object.keys(passProps).length > 0 ? { props: passProps } : {}),
+      }
     })
   }
   return []
@@ -1194,13 +1285,18 @@ const convertFormCreateRule = (rule: any): FormField | null => {
   let dateType = 'date'
   if (rule.props?.type === 'datetime') dateType = 'datetime'
   else if (rule.props?.type === 'daterange') dateType = 'daterange'
-  const typeMap: Record<string, string> = { 'input': 'text', 'inputNumber': 'number', 'select': 'select', 'radio': 'radio', 'checkbox': 'checkbox', 'switch': 'switch', 'datePicker': dateType, 'DatePicker': dateType, 'date-picker': dateType, 'el-date-picker': dateType, 'timePicker': 'time', 'cascader': 'cascader', 'upload': 'upload' }
+  const typeMap: Record<string, string> = { 'input': 'text', 'inputNumber': 'number', 'select': 'select', 'radio': 'radio', 'checkbox': 'checkbox', 'switch': 'switch', 'datePicker': dateType, 'DatePicker': dateType, 'date-picker': dateType, 'el-date-picker': dateType, 'timePicker': 'time', 'cascader': 'cascader', 'rate': 'rate', 'slider': 'slider', 'colorPicker': 'colorPicker', 'treeSelect': 'treeselect', 'upload': 'upload' }
   const field: FormField = { key: rule.field, label: rule.title || rule.field, type: typeMap[rule.type] || 'text', required: rule.validate?.some((v: any) => v.required) || false, placeholder: rule.props?.placeholder || '', span: rule.col?.span || 24 }
-  if (rule.options) {
-    field.options = rule.options.map((opt: any) => ({ label: opt.label || opt.value, value: opt.value }))
+  const rawOptions = rule.options || rule.props?.options
+  if (rawOptions) {
+    field.options = rawOptions.map((opt: any) => ({ label: opt.label || opt.value, value: opt.value }))
     console.log(`Field ${rule.field} options:`, JSON.stringify(field.options))
   }
   if (rule.type === 'input' && rule.props?.type === 'textarea') { field.type = 'textarea'; field.rows = rule.props?.rows || 3 }
+  if (rule.type === 'input' && rule.props?.type === 'password') { field.type = 'password' }
+  if (rule.type === 'timePicker' && rule.props?.isRange === true) { field.type = 'timerange' }
+  if (rule.type === 'rate') { field.max = rule.props?.max || 5 }
+  if (rule.type === 'slider') { field.min = rule.props?.min ?? 0; field.max = rule.props?.max ?? 100; field.step = rule.props?.step || 1 }
   if (rule.type === 'upload') {
     const action = rule.props?.action
     field.uploadUrl = (action && action !== '/') ? action : '/api/v1/upload'

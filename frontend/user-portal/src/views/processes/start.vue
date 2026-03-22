@@ -87,14 +87,16 @@
               v-model="formData"
               :label-width="formLabelWidth"
               :label-position="formLabelPosition"
+              :subTableBindings="subTableBindings"
+              @update:subTableData="(id: number, rows: any[]) => { const b = subTableBindings.find(x => x.bindingId === id); if (b) b.data = rows }"
             />
           </div>
           <el-empty v-else :description="t('processStart.noFormConfig')" />
 
           <!-- Sub-tables (SUB / RELATED bindings) -->
-          <template v-if="subTableBindings.length > 0">
+          <template v-if="bottomSubTableBindings.length > 0">
             <div
-              v-for="binding in subTableBindings"
+              v-for="binding in bottomSubTableBindings"
               :key="binding.bindingId"
               class="sub-table-section"
             >
@@ -232,6 +234,20 @@ const subTableBindings = ref<Array<{
   data: any[]
 }>>([])
 
+const placedBindingIds = computed((): Set<number> => {
+  const ids = new Set<number>()
+  const collect = (fields: any[]) => fields.forEach((f: any) => {
+    if (f.type === 'subTable' && f._bindingId != null) ids.add(f._bindingId)
+  })
+  collect(formFields.value)
+  formTabs.value.forEach((tab: any) => collect(tab.fields))
+  return ids
+})
+
+const bottomSubTableBindings = computed(() =>
+  subTableBindings.value.filter(b => !placedBindingIds.value.has(b.bindingId))
+)
+
 // 流转记录
 const historyRecords = ref<HistoryRecord[]>([])
 
@@ -322,6 +338,8 @@ const loadFunctionUnitContent = async () => {
         subForms = cfg.subForms || {}
       } catch {}
 
+      console.log('[start] tableBindings:', selectedForm.tableBindings?.length, 'subForms keys:', Object.keys(subForms))
+
       // Load sub-table bindings (SUB / RELATED, skip PRIMARY)
       const bindings: typeof subTableBindings.value = []
       for (const b of (selectedForm.tableBindings || [])) {
@@ -337,7 +355,29 @@ const loadFunctionUnitContent = async () => {
           data: []
         })
       }
+
+      // Fallback: tableBindings 为空但 subForms 有数据时，直接从 subForms 构建
+      if (bindings.length === 0 && Object.keys(subForms).length > 0) {
+        console.log('[start] tableBindings empty, building from subForms fallback')
+        for (const [bindingIdStr, subForm] of Object.entries(subForms)) {
+          const bindingId = Number(bindingIdStr)
+          if (!subForm || !Array.isArray((subForm as any).rule)) continue
+          const fakeBinding = { bindingId, subFormConfig: subForm }
+          bindings.push({
+            bindingId,
+            bindingType: 'SUB',
+            bindingMode: 'EDITABLE',
+            tableName: 'Request Items',
+            tableType: 'SUB',
+            tableDescription: '',
+            columns: deriveColumnsFromBinding(fakeBinding, subForms),
+            data: []
+          })
+        }
+      }
+
       subTableBindings.value = bindings
+      console.log('[start] subTableBindings built:', bindings.map(b => ({ id: b.bindingId, cols: b.columns.length })))
     }
     
     // 初始化流转记录（新流程，只有开始节点）
@@ -692,16 +732,7 @@ const parseFormConfig = (configStr: string) => {
             // 提取该 Tab 下的字段
             const tabFields: FormField[] = []
             if (tabPane.children && Array.isArray(tabPane.children)) {
-              for (const item of tabPane.children) {
-                if (item.field) {
-                  const field = convertFormCreateRule(item)
-                  if (field) tabFields.push(field)
-                }
-                // 递归处理嵌套的 children
-                if (item.children && Array.isArray(item.children)) {
-                  tabFields.push(...extractFieldsRecursive(item.children))
-                }
-              }
+              tabFields.push(...extractFieldsRecursive(tabPane.children))
             }
             
             tabs.push({
@@ -728,14 +759,28 @@ const parseFormConfig = (configStr: string) => {
 }
 
 // 递归提取字段
+// form-create 专有组件类型，不应被平铺渲染，直接跳过（含其 children）
+const FC_SKIP_TYPES = new Set(['group', 'subForm', 'tableForm', 'tableFormColumn', 'el-row', 'el-col'])
+
 const extractFieldsRecursive = (items: any[]): FormField[] => {
   const fields: FormField[] = []
   for (const item of items) {
-    if (item.field) {
+    if (item.type === 'subTable' && item._bindingId != null) {
+      fields.push({
+        key: `__subTable_${item._bindingId}`,
+        label: '',
+        type: 'subTable',
+        _bindingId: item._bindingId,
+        span: 24
+      })
+    } else if (FC_SKIP_TYPES.has(item.type)) {
+      // form-create 专有组件，跳过，不递归其子字段
+      continue
+    } else if (item.field) {
       const field = convertFormCreateRule(item)
       if (field) fields.push(field)
-    }
-    if (item.children && Array.isArray(item.children)) {
+    } else if (item.children && Array.isArray(item.children)) {
+      // 布局容器（无 field）才递归
       fields.push(...extractFieldsRecursive(item.children))
     }
   }
@@ -770,8 +815,10 @@ const convertFormCreateRule = (rule: any): FormField | null => {
     'time-picker': 'time',
     'el-time-picker': 'time',
     'cascader': 'cascader',
-    'rate': 'number',
-    'slider': 'number',
+    'rate': 'rate',
+    'slider': 'slider',
+    'colorPicker': 'colorPicker',
+    'treeSelect': 'treeselect',
     'upload': 'upload'
   }
   
@@ -784,9 +831,10 @@ const convertFormCreateRule = (rule: any): FormField | null => {
     span: rule.col?.span || 24
   }
   
-  // 处理选项
-  if (rule.options) {
-    field.options = rule.options.map((opt: any) => ({
+  // 处理选项 (rule.options or rule.props.options)
+  const rawOptions = rule.options || rule.props?.options
+  if (rawOptions) {
+    field.options = rawOptions.map((opt: any) => ({
       label: opt.label || opt.value,
       value: opt.value
     }))
@@ -797,6 +845,16 @@ const convertFormCreateRule = (rule: any): FormField | null => {
     field.type = 'textarea'
     field.rows = rule.props?.rows || 3
   }
+
+  // 处理 password
+  if (rule.type === 'input' && rule.props?.type === 'password') {
+    field.type = 'password'
+  }
+
+  // 处理 timePicker isRange → timerange
+  if (rule.type === 'timePicker' && rule.props?.isRange === true) {
+    field.type = 'timerange'
+  }
   
   // 处理数字输入
   if (rule.type === 'inputNumber') {
@@ -805,6 +863,12 @@ const convertFormCreateRule = (rule: any): FormField | null => {
     field.step = rule.props?.step
     field.precision = rule.props?.precision
   }
+
+  // 处理评分
+  if (rule.type === 'rate') { field.max = rule.props?.max || 5 }
+
+  // 处理滑块
+  if (rule.type === 'slider') { field.min = rule.props?.min ?? 0; field.max = rule.props?.max ?? 100; field.step = rule.props?.step || 1 }
   
   // 处理默认值
   if (rule.value !== undefined) {
@@ -826,16 +890,96 @@ const convertFormCreateRule = (rule: any): FormField | null => {
 }
 
 // Derive display columns for a sub-table binding based on table type
-const deriveColumnsFromBinding = (binding: any, subForms?: Record<string, any>): Array<{ field: string; label: string; type?: string }> => {
-  // First try to use designed fields from configJson.subForms
-  const subFormRule = subForms?.[binding.bindingId]?.rule
+const deriveColumnsFromBinding = (binding: any, subForms?: Record<string, any>): Array<{ field: string; label: string; type?: string; required?: boolean; options?: Array<{ label: string; value: any }>; props?: Record<string, any> }> => {
+  // First try to use subFormConfig directly from the binding (provided by backend from dw_form_definitions.config_json)
+  // Fall back to subForms lookup from form config data
+  const subFormRule =
+    binding.subFormConfig?.rule ||
+    subForms?.[binding.bindingId]?.rule ||
+    subForms?.[String(binding.bindingId)]?.rule
+  console.log('[deriveColumns] bindingId:', binding.bindingId,
+    'subFormConfig rule len:', binding.subFormConfig?.rule?.length,
+    'subForms keys:', subForms ? Object.keys(subForms) : [],
+    'subFormRule len:', subFormRule?.length)
   if (subFormRule && Array.isArray(subFormRule) && subFormRule.length > 0) {
     return subFormRule.map((r: any) => {
-      let type: 'text' | 'number' | 'date' | 'upload' | undefined
-      if (r.type === 'inputNumber') type = 'number'
-      else if (r.type === 'datePicker') type = 'date'
-      else if (r.type === 'upload') type = 'upload'
-      return { field: r.field, label: r.title || r.field, type, props: r.props }
+      const rProps = r.props || {}
+      let type: string | undefined
+
+      if (r.type === 'input') {
+        if (rProps.type === 'textarea') type = 'textarea'
+        else if (rProps.type === 'password') type = 'password'
+        else type = 'text'
+      } else if (r.type === 'inputNumber') {
+        type = 'number'
+      } else if (r.type === 'select') {
+        type = 'select'
+      } else if (r.type === 'radio') {
+        type = 'radio'
+      } else if (r.type === 'switch') {
+        type = 'switch'
+      } else if (r.type === 'datePicker') {
+        type = rProps.type === 'datetime' ? 'datetime' : 'date'
+      } else if (r.type === 'timePicker') {
+        type = rProps.isRange === true ? 'timerange' : 'time'
+      } else if (r.type === 'treeSelect') {
+        type = 'treeselect'
+      } else if (r.type === 'elTreeSelect') {
+        type = 'treeselect'
+      } else if (r.type === 'tree') {
+        type = 'tree'
+      } else if (r.type === 'upload') {
+        type = 'upload'
+      } else if (r.type === 'userSelect' || r.type === 'user') {
+        type = 'user'
+      } else if (r.type === 'departmentSelect' || r.type === 'department') {
+        type = 'department'
+      } else if (r.type === 'colorPicker') {
+        type = 'colorPicker'
+      } else if (r.type === 'rate') {
+        type = 'rate'
+      } else if (r.type === 'slider') {
+        type = 'slider'
+      } else {
+        type = r.type as any
+      }
+
+      // Collect options from rule.options or rule.props.options
+      const rawOptions = r.options || rProps.options
+      const options = rawOptions
+        ? rawOptions.map((o: any) => ({ label: o.label ?? o.value, value: o.value }))
+        : undefined
+
+      // Pass through relevant props
+      const passProps: Record<string, any> = {}
+      const propKeys = [
+        'action', 'accept', 'multiple', 'precision', 'min', 'max', 'rows', 'maxlength', 'fileNameTargetField',
+        'isRange', 'valueFormat', 'startPlaceholder', 'endPlaceholder', 'treeData', 'checkStrictly',
+        'showAlpha', 'allowHalf', 'step',
+      ]
+      for (const key of propKeys) {
+        if (rProps[key] !== undefined) passProps[key] = rProps[key]
+      }
+      if (rProps.data !== undefined) passProps.treeData = rProps.data
+      if (rProps.nodeKey !== undefined) passProps.nodeKey = rProps.nodeKey
+      if (rProps.showCheckbox !== undefined) passProps.showCheckbox = rProps.showCheckbox
+      if (rProps.props !== undefined) passProps.labelProps = rProps.props
+
+      // Sync options into props.options so SubTableAddDialog can read from col.props?.options
+      if (options) passProps.options = options
+
+      const required = r.validate?.some((v: any) => v.required) || false
+
+      const col = {
+        field: r.field,
+        label: r.title || r.field,
+        type,
+        required,
+        ...(options ? { options } : {}),
+        ...(Object.keys(passProps).length > 0 ? { props: passProps } : {}),
+      }
+      console.log('[deriveColumns]', col.field, col.type, 'options:', col.options?.length, 'props.options:', col.props?.options?.length, 'props.treeData:', col.props?.treeData?.length)
+      return col
     })
   }
   return []

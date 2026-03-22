@@ -8,16 +8,16 @@
         </el-button>
       </div>
     </div>
-    
-    <el-table 
-      :data="tableData" 
-      size="small" 
+
+    <el-table
+      :data="tableData"
+      size="small"
       border
       v-loading="loading"
       :max-height="config.maxHeight || 300"
     >
-      <el-table-column 
-        v-for="col in displayColumns" 
+      <el-table-column
+        v-for="col in displayColumns"
         :key="col.field"
         :prop="col.field"
         :label="col.label"
@@ -25,53 +25,22 @@
         :min-width="col.minWidth || 100"
       >
         <template #default="scope">
-          <template v-if="editable && editingRow === scope.$index">
-            <el-input 
-              v-if="col.type === 'input'" 
-              v-model="scope.row[col.field]" 
-              size="small"
-            />
-            <el-input-number 
-              v-else-if="col.type === 'number'" 
-              v-model="scope.row[col.field]" 
-              size="small"
-              :controls="false"
-            />
-            <el-date-picker 
-              v-else-if="col.type === 'date'" 
-              v-model="scope.row[col.field]" 
-              type="date"
-              size="small"
-              value-format="YYYY-MM-DD"
-            />
-            <el-switch 
-              v-else-if="col.type === 'switch'" 
-              v-model="scope.row[col.field]"
-            />
-            <el-input v-else v-model="scope.row[col.field]" size="small" />
-          </template>
-          <span v-else>{{ scope.row[col.field] }}</span>
+          <span>{{ scope.row[col.field] ?? '-' }}</span>
         </template>
       </el-table-column>
-      
+
       <el-table-column :label="t('common.operation')" width="120" v-if="editable">
         <template #default="scope">
-          <template v-if="editingRow === scope.$index">
-            <el-button link type="primary" size="small" @click="handleSave(scope.$index)">{{ t('common.save') }}</el-button>
-            <el-button link type="info" size="small" @click="handleCancel">{{ t('common.cancel') }}</el-button>
-          </template>
-          <template v-else>
-            <el-button link type="primary" size="small" @click="handleEdit(scope.$index)">{{ t('common.edit') }}</el-button>
-            <el-button link type="danger" size="small" @click="handleDelete(scope.$index)">{{ t('common.delete') }}</el-button>
-          </template>
+          <el-button link type="primary" size="small" @click="openEditDialog(scope.$index)">{{ t('common.edit') }}</el-button>
+          <el-button link type="danger" size="small" @click="handleDelete(scope.$index)">{{ t('common.delete') }}</el-button>
         </template>
       </el-table-column>
-      
+
       <template #empty>
         <el-empty :description="t('common.noData')" :image-size="40" />
       </template>
     </el-table>
-    
+
     <!-- 分页 -->
     <div class="pagination-wrapper" v-if="config.pagination && total > (config.pageSize || 10)">
       <el-pagination
@@ -83,6 +52,15 @@
         @current-change="handlePageChange"
       />
     </div>
+
+    <SubTableAddDialog
+      :visible="dialogVisible"
+      :columns="dialogColumns"
+      :mode="dialogMode"
+      :initialData="dialogInitialData"
+      @update:visible="dialogVisible = $event"
+      @save="handleDialogSave"
+    />
   </div>
 </template>
 
@@ -90,7 +68,9 @@
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Plus } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessageBox, ElMessage } from 'element-plus'
+import SubTableAddDialog from './SubTableAddDialog.vue'
+import type { DialogColumn } from './subTableAddDialogHelpers'
 
 const { t } = useI18n()
 
@@ -98,9 +78,12 @@ const { t } = useI18n()
 interface ColumnConfig {
   field: string
   label: string
-  type?: 'input' | 'number' | 'date' | 'switch' | 'text'
+  type?: 'input' | 'number' | 'date' | 'switch' | 'text' | 'textarea' | 'select' | 'radio' | 'checkbox' | 'datetime' | 'upload' | 'user' | 'department'
   width?: number
   minWidth?: number
+  required?: boolean
+  placeholder?: string
+  props?: Record<string, any>
 }
 
 // 子表配置接口
@@ -130,17 +113,36 @@ const emit = defineEmits<{
 
 const loading = ref(false)
 const tableData = ref<any[]>([])
-const editingRow = ref<number | null>(null)
-const editingRowBackup = ref<any>(null)
 const currentPage = ref(1)
 const total = ref(0)
+
+// Dialog state
+const dialogVisible = ref(false)
+const dialogMode = ref<'add' | 'edit'>('add')
+const editingRowIndex = ref<number | null>(null)
+const dialogInitialData = ref<Record<string, any> | undefined>(undefined)
 
 // 计算属性：是否可编辑
 const editable = computed(() => props.editable !== false)
 
 // 计算属性：显示的列
-const displayColumns = computed(() => {
-  return props.config.columns || []
+const displayColumns = computed(() => props.config.columns || [])
+
+// 将 ColumnConfig 转换为 DialogColumn（兼容 SubTableAddDialog 的类型）
+const dialogColumns = computed<DialogColumn[]>(() => {
+  return displayColumns.value.map(col => {
+    // 将旧的 'input' type 映射到 'text'
+    const type = col.type === 'input' ? 'text' : (col.type as DialogColumn['type'])
+    return {
+      field: col.field,
+      label: col.label,
+      type,
+      required: col.required,
+      placeholder: col.placeholder,
+      minWidth: col.minWidth,
+      props: col.props,
+    }
+  })
 })
 
 // 监听 modelValue 变化
@@ -151,45 +153,33 @@ watch(() => props.modelValue, (newVal) => {
   }
 }, { immediate: true, deep: true })
 
-// 添加行
+// 添加行 — 打开 Dialog
 function handleAdd() {
-  const newRow: any = {}
-  displayColumns.value.forEach(col => {
-    newRow[col.field] = col.type === 'number' ? 0 : col.type === 'switch' ? false : ''
-  })
-  tableData.value.push(newRow)
-  editingRow.value = tableData.value.length - 1
-  editingRowBackup.value = { ...newRow }
+  dialogMode.value = 'add'
+  dialogInitialData.value = undefined
+  editingRowIndex.value = null
+  dialogVisible.value = true
 }
 
-// 编辑行
-function handleEdit(index: number) {
-  editingRow.value = index
-  editingRowBackup.value = { ...tableData.value[index] }
+// 编辑行 — 打开 Dialog 并预填数据
+function openEditDialog(index: number) {
+  dialogMode.value = 'edit'
+  editingRowIndex.value = index
+  dialogInitialData.value = { ...tableData.value[index] }
+  dialogVisible.value = true
 }
 
-// 保存行
-function handleSave(index: number) {
-  editingRow.value = null
-  editingRowBackup.value = null
-  emit('update:modelValue', [...tableData.value])
-  emit('edit', tableData.value[index], index)
-}
-
-// 取消编辑
-function handleCancel() {
-  if (editingRow.value !== null && editingRowBackup.value) {
-    // 如果是新添加的行，删除它
-    const isNewRow = Object.values(editingRowBackup.value).every(v => v === '' || v === 0 || v === false)
-    if (isNewRow) {
-      tableData.value.splice(editingRow.value, 1)
-    } else {
-      // 恢复原始数据
-      tableData.value[editingRow.value] = { ...editingRowBackup.value }
-    }
+// Dialog 保存回调
+function handleDialogSave(rowData: Record<string, any>) {
+  if (dialogMode.value === 'add') {
+    tableData.value.push(rowData)
+    emit('add', rowData)
+  } else if (dialogMode.value === 'edit' && editingRowIndex.value !== null) {
+    tableData.value[editingRowIndex.value] = rowData
+    emit('edit', rowData, editingRowIndex.value)
   }
-  editingRow.value = null
-  editingRowBackup.value = null
+  total.value = tableData.value.length
+  emit('update:modelValue', [...tableData.value])
 }
 
 // 删除行
@@ -197,6 +187,7 @@ async function handleDelete(index: number) {
   await ElMessageBox.confirm(t('subTable.deleteConfirm'), t('common.confirmTitle'), { type: 'warning' })
   const deletedRow = tableData.value[index]
   tableData.value.splice(index, 1)
+  total.value = tableData.value.length
   emit('update:modelValue', [...tableData.value])
   emit('delete', deletedRow, index)
   ElMessage.success(t('common.deleteSuccess'))
@@ -205,7 +196,6 @@ async function handleDelete(index: number) {
 // 分页变化
 function handlePageChange(page: number) {
   currentPage.value = page
-  // 如果需要从后端加载数据，在这里触发
 }
 
 // 暴露方法
@@ -215,9 +205,7 @@ defineExpose({
     tableData.value = [...data]
     total.value = data.length
   },
-  refresh: () => {
-    // 刷新数据
-  }
+  refresh: () => {}
 })
 </script>
 
@@ -227,20 +215,20 @@ defineExpose({
   border-radius: 4px;
   padding: 12px;
   background: #fafafa;
-  
+
   .sub-table-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 12px;
-    
+
     .title {
       font-weight: 500;
       font-size: 14px;
       color: #303133;
     }
   }
-  
+
   .pagination-wrapper {
     margin-top: 12px;
     display: flex;
