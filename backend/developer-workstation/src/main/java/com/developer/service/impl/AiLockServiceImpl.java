@@ -146,13 +146,13 @@ public class AiLockServiceImpl implements AiLockService {
 
         // Check if lock exists
         if (!cacheService.exists(lockKey)) {
-            throw new AiGenerationException("AI_LOCK_NOT_FOUND", "锁不存在");
+            throw new AiGenerationException("AI_LOCK_NOT_FOUND", "Lock does not exist");
         }
 
         // Check if requester is the lock holder
         LockInfoResponse currentLock = readLockInfo(functionUnitId);
         if (currentLock != null && requesterId.equals(currentLock.getUserId())) {
-            throw new AiGenerationException("AI_FORCE_UNLOCK_SELF", "不能对自己持有的锁发起强制解锁");
+            throw new AiGenerationException("AI_FORCE_UNLOCK_SELF", "Cannot force unlock your own lock");
         }
 
         // Create force unlock request

@@ -22,7 +22,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/function-units/{functionUnitId}/tables")
 @Slf4j
-@Tag(name = "表设计", description = "数据表设计相关操作")
+@Tag(name = "Table Design", description = "Table definition design operations")
 public class TableDesignController extends BaseController {
     
     private final TableDesignComponent tableDesignComponent;
@@ -32,13 +32,13 @@ public class TableDesignController extends BaseController {
     }
     
     @GetMapping
-    @Operation(summary = "获取功能单元的所有表")
+    @Operation(summary = "List all tables of a function unit")
     public ResponseEntity<ApiResponse<List<TableDefinition>>> list(@PathVariable Long functionUnitId) {
         return handleRequest(() -> tableDesignComponent.getByFunctionUnitId(functionUnitId));
     }
     
     @PostMapping
-    @Operation(summary = "创建表")
+    @Operation(summary = "Create table")
     public ResponseEntity<ApiResponse<TableDefinition>> create(
             @PathVariable Long functionUnitId,
             @Valid @RequestBody TableDefinitionRequest request) {
@@ -46,7 +46,7 @@ public class TableDesignController extends BaseController {
     }
     
     @PutMapping("/{tableId}")
-    @Operation(summary = "更新表")
+    @Operation(summary = "Update table")
     public ResponseEntity<ApiResponse<TableDefinition>> update(
             @PathVariable Long functionUnitId,
             @PathVariable Long tableId,
@@ -55,7 +55,7 @@ public class TableDesignController extends BaseController {
     }
     
     @DeleteMapping("/{tableId}")
-    @Operation(summary = "删除表")
+    @Operation(summary = "Delete table")
     public ResponseEntity<ApiResponse<Void>> delete(
             @PathVariable Long functionUnitId,
             @PathVariable Long tableId) {
@@ -66,7 +66,7 @@ public class TableDesignController extends BaseController {
     }
     
     @GetMapping("/{tableId}")
-    @Operation(summary = "获取表详情")
+    @Operation(summary = "Get table details")
     public ResponseEntity<ApiResponse<TableDefinition>> getById(
             @PathVariable Long functionUnitId,
             @PathVariable Long tableId) {
@@ -74,7 +74,7 @@ public class TableDesignController extends BaseController {
     }
     
     @GetMapping("/{tableId}/ddl")
-    @Operation(summary = "生成DDL")
+    @Operation(summary = "Generate DDL")
     public ResponseEntity<ApiResponse<String>> generateDDL(
             @PathVariable Long functionUnitId,
             @PathVariable Long tableId,
@@ -83,13 +83,13 @@ public class TableDesignController extends BaseController {
     }
     
     @GetMapping("/validate")
-    @Operation(summary = "验证表结构")
+    @Operation(summary = "Validate table structure")
     public ResponseEntity<ApiResponse<ValidationResult>> validate(@PathVariable Long functionUnitId) {
         return handleRequest(() -> tableDesignComponent.validateRelationships(functionUnitId));
     }
     
     @GetMapping("/foreign-keys")
-    @Operation(summary = "获取功能单元的所有外键关系")
+    @Operation(summary = "Get all foreign key relationships")
     public ResponseEntity<ApiResponse<List<ForeignKeyDTO>>> getForeignKeys(@PathVariable Long functionUnitId) {
         return handleRequest(() -> tableDesignComponent.getForeignKeys(functionUnitId));
     }

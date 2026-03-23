@@ -22,13 +22,13 @@ import java.util.List;
 @RestController
 @RequestMapping("/icons")
 @RequiredArgsConstructor
-@Tag(name = "图标库", description = "图标管理相关操作")
+@Tag(name = "Icon Library", description = "Icon management operations")
 public class IconLibraryController {
     
     private final IconLibraryComponent iconLibraryComponent;
     
     @GetMapping
-    @Operation(summary = "分页查询图标")
+    @Operation(summary = "List icons (paginated)")
     public ResponseEntity<ApiResponse<Page<IconDTO>>> list(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) IconCategory category,
@@ -40,19 +40,19 @@ public class IconLibraryController {
     }
     
     @GetMapping("/tags")
-    @Operation(summary = "获取所有标签")
+    @Operation(summary = "Get all tags")
     public ResponseEntity<ApiResponse<List<String>>> getTags() {
         return ResponseEntity.ok(ApiResponse.success(iconLibraryComponent.getAllTags()));
     }
     
     @GetMapping("/categories")
-    @Operation(summary = "获取所有图标分类")
+    @Operation(summary = "Get all icon categories")
     public ResponseEntity<ApiResponse<List<IconCategory>>> getCategories() {
         return ResponseEntity.ok(ApiResponse.success(List.of(IconCategory.values())));
     }
     
     @PostMapping
-    @Operation(summary = "上传图标")
+    @Operation(summary = "Upload icon")
     public ResponseEntity<ApiResponse<IconDTO>> upload(
             @RequestParam("file") MultipartFile file,
             @RequestParam String name,
@@ -63,21 +63,21 @@ public class IconLibraryController {
     }
     
     @DeleteMapping("/{id}")
-    @Operation(summary = "删除图标")
+    @Operation(summary = "Delete icon")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
         iconLibraryComponent.delete(id);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
     
     @GetMapping("/{id}")
-    @Operation(summary = "获取图标详情")
+    @Operation(summary = "Get icon details")
     public ResponseEntity<ApiResponse<IconDTO>> getById(@PathVariable Long id) {
         Icon result = iconLibraryComponent.getById(id);
         return ResponseEntity.ok(ApiResponse.success(IconDTO.fromEntity(result)));
     }
     
     @GetMapping("/{id}/usage")
-    @Operation(summary = "检查图标使用情况")
+    @Operation(summary = "Check icon usage")
     public ResponseEntity<ApiResponse<Boolean>> checkUsage(@PathVariable Long id) {
         boolean inUse = iconLibraryComponent.isIconInUse(id);
         return ResponseEntity.ok(ApiResponse.success(inUse));

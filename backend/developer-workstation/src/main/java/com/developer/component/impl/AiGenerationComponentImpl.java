@@ -119,7 +119,7 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
                 }
 
                 if (Boolean.TRUE.equals(n8nResponse.get("phaseComplete"))) {
-                    // 自动推进会话阶段（后端持久化，不依赖前端点击"下一阶段"按钮）
+                    // Auto-advance session phase (persisted in backend, not dependent on frontend "next phase" button)
                     AiPhase nextPhase = getNextPhase(request.getPhase());
                     if (nextPhase != null) {
                         try {

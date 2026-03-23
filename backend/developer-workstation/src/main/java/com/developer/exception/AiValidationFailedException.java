@@ -14,7 +14,7 @@ public class AiValidationFailedException extends AiGenerationException {
     private final List<AiValidationError> errors;
 
     public AiValidationFailedException(List<AiValidationError> errors) {
-        super("AI_VALIDATION_FAILED", "AI 生成数据校验失败");
+        super("AI_VALIDATION_FAILED", "AI generated data validation failed");
         this.errors = errors;
     }
 }

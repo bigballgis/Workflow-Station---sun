@@ -19,8 +19,8 @@ public class OpenApiConfig {
     public OpenAPI openAPI() {
         return new OpenAPI()
                 .info(new Info()
-                        .title("开发者工作站 API")
-                        .description("开发者工作站模块API文档")
+                        .title("Developer Workstation API")
+                        .description("Developer Workstation Module API Documentation")
                         .version("1.0.0")
                         .contact(new Contact()
                                 .name("Developer Team")

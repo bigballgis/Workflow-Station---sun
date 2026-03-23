@@ -25,7 +25,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/function-units")
 @Slf4j
-@Tag(name = "功能单元管理", description = "功能单元CRUD、发布、克隆等操作")
+@Tag(name = "Function Unit Management", description = "Function Unit CRUD, publish, clone operations")
 public class FunctionUnitController extends BaseController {
 
     private final FunctionUnitComponent functionUnitComponent;
@@ -35,14 +35,14 @@ public class FunctionUnitController extends BaseController {
     }
     
     @PostMapping
-    @Operation(summary = "创建功能单元")
+    @Operation(summary = "Create function unit")
     @RequireDeveloperPermission("FUNCTION_UNIT_CREATE")
     public ResponseEntity<ApiResponse<FunctionUnit>> create(@Valid @RequestBody FunctionUnitRequest request) {
         return handleRequest(() -> functionUnitComponent.create(request));
     }
     
     @PutMapping("/{id}")
-    @Operation(summary = "更新功能单元")
+    @Operation(summary = "Update function unit")
     @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
     public ResponseEntity<ApiResponse<FunctionUnit>> update(
             @PathVariable Long id, 
@@ -51,7 +51,7 @@ public class FunctionUnitController extends BaseController {
     }
     
     @DeleteMapping("/{id}")
-    @Operation(summary = "删除功能单元")
+    @Operation(summary = "Delete function unit")
     @RequireDeveloperPermission("FUNCTION_UNIT_DELETE")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
         return handleRequest(() -> {
@@ -61,14 +61,14 @@ public class FunctionUnitController extends BaseController {
     }
     
     @GetMapping("/{id}")
-    @Operation(summary = "获取功能单元详情")
+    @Operation(summary = "Get function unit details")
     @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<FunctionUnitResponse>> getById(@PathVariable Long id) {
         return handleRequest(() -> functionUnitComponent.getByIdAsResponse(id));
     }
     
     @GetMapping
-    @Operation(summary = "分页查询功能单元")
+    @Operation(summary = "List function units (paginated)")
     @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<Page<FunctionUnitResponse>>> list(
             @RequestParam(required = false) String name,
@@ -78,7 +78,7 @@ public class FunctionUnitController extends BaseController {
     }
     
     @PostMapping("/{id}/publish")
-    @Operation(summary = "发布功能单元")
+    @Operation(summary = "Publish function unit")
     @RequireDeveloperPermission("FUNCTION_UNIT_PUBLISH")
     public ResponseEntity<ApiResponse<FunctionUnit>> publish(
             @PathVariable Long id,
@@ -87,7 +87,7 @@ public class FunctionUnitController extends BaseController {
     }
     
     @PostMapping("/{id}/clone")
-    @Operation(summary = "克隆功能单元")
+    @Operation(summary = "Clone function unit")
     @RequireDeveloperPermission("FUNCTION_UNIT_CREATE")
     public ResponseEntity<ApiResponse<FunctionUnit>> clone(
             @PathVariable Long id,
@@ -96,14 +96,14 @@ public class FunctionUnitController extends BaseController {
     }
     
     @GetMapping("/{id}/validate")
-    @Operation(summary = "验证功能单元完整性")
+    @Operation(summary = "Validate function unit integrity")
     @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<ValidationResult>> validate(@PathVariable Long id) {
         return handleRequest(() -> functionUnitComponent.validate(id));
     }
     
     @GetMapping("/{id}/versions")
-    @Operation(summary = "获取版本历史")
+    @Operation(summary = "Get version history")
     @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<List<VersionResponse>>> getVersions(@PathVariable Long id) {
         return handleRequest(() -> functionUnitComponent.getVersionHistory(id));

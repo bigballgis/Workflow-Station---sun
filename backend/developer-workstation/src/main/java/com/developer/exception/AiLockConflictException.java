@@ -12,7 +12,7 @@ public class AiLockConflictException extends AiGenerationException {
     private final LockInfoResponse lockInfo;
 
     public AiLockConflictException(LockInfoResponse lockInfo) {
-        super("AI_LOCK_CONFLICT", "功能单元已被其他用户锁定");
+        super("AI_LOCK_CONFLICT", "Function unit is locked by another user");
         this.lockInfo = lockInfo;
     }
 }

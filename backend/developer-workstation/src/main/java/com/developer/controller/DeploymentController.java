@@ -22,14 +22,14 @@ import java.util.List;
 @RestController
 @RequestMapping("/function-units")
 @RequiredArgsConstructor
-@Tag(name = "功能单元部署", description = "功能单元导出和一键部署")
+@Tag(name = "Deployment", description = "Function unit export and one-click deployment")
 public class DeploymentController {
     
     private final ExportImportComponent exportImportComponent;
     private final DeploymentComponent deploymentComponent;
     
     @GetMapping("/{id}/export")
-    @Operation(summary = "导出功能单元", description = "将功能单元导出为ZIP包")
+    @Operation(summary = "Export function unit", description = "Export function unit as ZIP package")
     @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<byte[]> exportFunctionUnit(@PathVariable Long id) {
         byte[] data = exportImportComponent.exportFunctionUnit(id);
@@ -44,7 +44,7 @@ public class DeploymentController {
     }
     
     @PostMapping("/{id}/deploy")
-    @Operation(summary = "一键部署", description = "将功能单元一键部署到管理员中心")
+    @Operation(summary = "One-click deploy", description = "Deploy function unit to admin center")
     @RequireDeveloperPermission("FUNCTION_UNIT_PUBLISH")
     public ResponseEntity<ApiResponse<DeployResponse>> deploy(
             @PathVariable Long id,
@@ -54,7 +54,7 @@ public class DeploymentController {
     }
     
     @GetMapping("/deployments/{deploymentId}/status")
-    @Operation(summary = "获取部署状态")
+    @Operation(summary = "Get deployment status")
     @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<DeployResponse>> getDeploymentStatus(
             @PathVariable String deploymentId) {
@@ -63,7 +63,7 @@ public class DeploymentController {
     }
     
     @GetMapping("/{id}/deployments")
-    @Operation(summary = "获取部署历史")
+    @Operation(summary = "Get deployment history")
     @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<List<DeployResponse>>> getDeploymentHistory(
             @PathVariable Long id) {

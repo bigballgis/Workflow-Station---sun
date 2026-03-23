@@ -33,7 +33,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/ai-generation")
 @Slf4j
-@Tag(name = "AI 功能单元生成", description = "AI 驱动的功能单元生成相关接口")
+@Tag(name = "AI Function Unit Generation", description = "AI-driven function unit generation APIs")
 public class AiGenerationController extends BaseController {
 
     private final AiGenerationComponent aiGenerationComponent;
@@ -43,7 +43,7 @@ public class AiGenerationController extends BaseController {
     }
 
     @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    @Operation(summary = "SSE 对话流")
+    @Operation(summary = "SSE chat stream")
     @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
     public SseEmitter chatStream(@Valid @RequestBody AiChatRequest request,
                                  @RequestHeader(value = "X-User-Id", required = false) String userId) {
@@ -52,7 +52,7 @@ public class AiGenerationController extends BaseController {
     }
 
     @GetMapping(value = "/events/{functionUnitId}", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    @Operation(summary = "SSE 事件长连接")
+    @Operation(summary = "SSE event stream")
     @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public SseEmitter eventStream(@PathVariable Long functionUnitId,
                                   @RequestHeader(value = "X-User-Id", required = false) String userId) {
@@ -61,7 +61,7 @@ public class AiGenerationController extends BaseController {
     }
 
     @PostMapping("/lock/{functionUnitId}")
-    @Operation(summary = "获取编辑锁")
+    @Operation(summary = "Acquire edit lock")
     @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
     public ResponseEntity<ApiResponse<LockInfoResponse>> acquireLock(
             @PathVariable Long functionUnitId,
@@ -70,7 +70,7 @@ public class AiGenerationController extends BaseController {
     }
 
     @DeleteMapping("/lock/{functionUnitId}")
-    @Operation(summary = "释放编辑锁")
+    @Operation(summary = "Release edit lock")
     @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
     public ResponseEntity<ApiResponse<Void>> releaseLock(
             @PathVariable Long functionUnitId,
@@ -82,7 +82,7 @@ public class AiGenerationController extends BaseController {
     }
 
     @PostMapping("/lock/{functionUnitId}/force-unlock-request")
-    @Operation(summary = "请求强制解锁")
+    @Operation(summary = "Request force unlock")
     @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
     public ResponseEntity<ApiResponse<Void>> requestForceUnlock(
             @PathVariable Long functionUnitId,
@@ -94,7 +94,7 @@ public class AiGenerationController extends BaseController {
     }
 
     @PostMapping("/lock/{functionUnitId}/force-unlock-response")
-    @Operation(summary = "响应强制解锁请求")
+    @Operation(summary = "Respond to force unlock request")
     @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
     public ResponseEntity<ApiResponse<Void>> respondForceUnlock(
             @PathVariable Long functionUnitId,
@@ -107,7 +107,7 @@ public class AiGenerationController extends BaseController {
     }
 
     @GetMapping("/sessions")
-    @Operation(summary = "获取会话列表")
+    @Operation(summary = "List sessions")
     @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<List<AiSessionResponse>>> getSessions(
             @RequestParam Long functionUnitId) {
@@ -115,7 +115,7 @@ public class AiGenerationController extends BaseController {
     }
 
     @GetMapping("/sessions/{sessionId}/messages")
-    @Operation(summary = "分页获取消息")
+    @Operation(summary = "Get messages (paginated)")
     @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<Page<AiMessageResponse>>> getMessages(
             @PathVariable String sessionId, Pageable pageable) {
@@ -123,7 +123,7 @@ public class AiGenerationController extends BaseController {
     }
 
     @PutMapping("/sessions/{sessionId}/phase")
-    @Operation(summary = "更新会话阶段")
+    @Operation(summary = "Update session phase")
     @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
     public ResponseEntity<ApiResponse<Void>> updateSessionPhase(
             @PathVariable String sessionId,
@@ -135,7 +135,7 @@ public class AiGenerationController extends BaseController {
     }
 
     @GetMapping("/documents")
-    @Operation(summary = "获取文档版本列表")
+    @Operation(summary = "List document versions")
     @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<List<AiDocument>>> getDocumentVersions(
             @RequestParam Long functionUnitId,
@@ -149,7 +149,7 @@ public class AiGenerationController extends BaseController {
     }
 
     @GetMapping("/documents/version")
-    @Operation(summary = "按版本获取文档")
+    @Operation(summary = "Get document by version")
     @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<AiDocument>> getDocumentByVersion(
             @RequestParam Long functionUnitId,
@@ -159,7 +159,7 @@ public class AiGenerationController extends BaseController {
     }
 
     @PostMapping("/documents")
-    @Operation(summary = "保存用户编辑的文档")
+    @Operation(summary = "Save user-edited document")
     @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
     public ResponseEntity<ApiResponse<AiDocument>> saveDocument(
             @Valid @RequestBody SaveDocumentRequest request,
@@ -169,7 +169,7 @@ public class AiGenerationController extends BaseController {
     }
 
     @PostMapping("/{functionUnitId}/apply")
-    @Operation(summary = "应用 AI 生成的数据")
+    @Operation(summary = "Apply AI generated data")
     @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
     public ResponseEntity<ApiResponse<Void>> applyGeneratedData(
             @PathVariable Long functionUnitId,

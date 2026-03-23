@@ -20,20 +20,20 @@ import java.util.Map;
 @RestController
 @RequestMapping("/function-units/{functionUnitId}/actions")
 @RequiredArgsConstructor
-@Tag(name = "动作设计", description = "动作设计相关操作")
+@Tag(name = "Action Design", description = "Action design operations")
 public class ActionDesignController {
     
     private final ActionDesignComponent actionDesignComponent;
     
     @GetMapping
-    @Operation(summary = "获取功能单元的所有动作")
+    @Operation(summary = "List all actions of a function unit")
     public ResponseEntity<ApiResponse<List<ActionDefinition>>> list(@PathVariable Long functionUnitId) {
         List<ActionDefinition> result = actionDesignComponent.getByFunctionUnitId(functionUnitId);
         return ResponseEntity.ok(ApiResponse.success(result));
     }
     
     @PostMapping
-    @Operation(summary = "创建动作")
+    @Operation(summary = "Create action")
     public ResponseEntity<ApiResponse<ActionDefinition>> create(
             @PathVariable Long functionUnitId,
             @Valid @RequestBody ActionDefinitionRequest request) {
@@ -42,7 +42,7 @@ public class ActionDesignController {
     }
     
     @PutMapping("/{actionId}")
-    @Operation(summary = "更新动作")
+    @Operation(summary = "Update action")
     public ResponseEntity<ApiResponse<ActionDefinition>> update(
             @PathVariable Long functionUnitId,
             @PathVariable Long actionId,
@@ -52,7 +52,7 @@ public class ActionDesignController {
     }
     
     @DeleteMapping("/{actionId}")
-    @Operation(summary = "删除动作")
+    @Operation(summary = "Delete action")
     public ResponseEntity<ApiResponse<Void>> delete(
             @PathVariable Long functionUnitId,
             @PathVariable Long actionId) {
@@ -61,7 +61,7 @@ public class ActionDesignController {
     }
     
     @GetMapping("/{actionId}")
-    @Operation(summary = "获取动作详情")
+    @Operation(summary = "Get action details")
     public ResponseEntity<ApiResponse<ActionDefinition>> getById(
             @PathVariable Long functionUnitId,
             @PathVariable Long actionId) {
@@ -70,7 +70,7 @@ public class ActionDesignController {
     }
     
     @PostMapping("/{actionId}/test")
-    @Operation(summary = "测试动作执行")
+    @Operation(summary = "Test action execution")
     public ResponseEntity<ApiResponse<Map<String, Object>>> test(
             @PathVariable Long functionUnitId,
             @PathVariable Long actionId,

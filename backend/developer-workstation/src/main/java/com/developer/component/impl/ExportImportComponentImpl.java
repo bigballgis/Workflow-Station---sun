@@ -423,7 +423,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
             result.put("warnings", warnings);
         } catch (Exception e) {
             result.put("valid", false);
-            result.put("errors", List.of("解析导入包失败: " + e.getMessage()));
+            result.put("errors", List.of("Failed to parse import package: " + e.getMessage()));
         }
         
         return result;
@@ -444,14 +444,14 @@ public class ExportImportComponentImpl implements ExportImportComponent {
                 Map<String, Object> conflict = new HashMap<>();
                 conflict.put("type", "FUNCTION_UNIT");
                 conflict.put("name", name);
-                conflict.put("message", "功能单元名称已存在");
+                conflict.put("message", "Function unit name already exists");
                 conflicts.add(conflict);
             }
             
             result.put("hasConflicts", !conflicts.isEmpty());
             result.put("conflicts", conflicts);
         } catch (Exception e) {
-            result.put("error", "检查冲突失败: " + e.getMessage());
+            result.put("error", "Failed to check conflicts: " + e.getMessage());
         }
         
         return result;
@@ -480,7 +480,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
                 rawFiles.put(entry.getName(), baos.toByteArray());
             }
         } catch (IOException e) {
-            throw new BusinessException("SYS_IMPORT_ERROR", "解析导入包失败: " + e.getMessage());
+            throw new BusinessException("SYS_IMPORT_ERROR", "Failed to parse import package: " + e.getMessage());
         }
         
         try {
@@ -544,7 +544,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
             }
             
         } catch (IOException e) {
-            throw new BusinessException("SYS_IMPORT_ERROR", "解析导入包内容失败: " + e.getMessage());
+            throw new BusinessException("SYS_IMPORT_ERROR", "Failed to parse import package content: " + e.getMessage());
         }
         
         return result;

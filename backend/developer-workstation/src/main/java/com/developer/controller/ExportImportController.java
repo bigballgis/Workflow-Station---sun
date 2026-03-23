@@ -17,13 +17,13 @@ import java.util.Map;
 @RestController
 @RequestMapping("/export-import")
 @RequiredArgsConstructor
-@Tag(name = "导入导出", description = "功能单元导入导出操作")
+@Tag(name = "Export Import", description = "Function unit export and import operations")
 public class ExportImportController {
     
     private final ExportImportComponent exportImportComponent;
     
     @GetMapping("/function-units/{id}/export")
-    @Operation(summary = "导出功能单元")
+    @Operation(summary = "Export function unit")
     public ResponseEntity<byte[]> export(@PathVariable Long id) {
         byte[] data = exportImportComponent.exportFunctionUnit(id);
         return ResponseEntity.ok()
@@ -33,7 +33,7 @@ public class ExportImportController {
     }
     
     @PostMapping("/import")
-    @Operation(summary = "导入功能单元")
+    @Operation(summary = "Import function unit")
     public ResponseEntity<ApiResponse<Map<String, Object>>> importFunctionUnit(
             @RequestParam("file") MultipartFile file,
             @RequestParam(defaultValue = "SKIP") String conflictStrategy) {
@@ -42,7 +42,7 @@ public class ExportImportController {
     }
 
     @PostMapping("/validate")
-    @Operation(summary = "验证导入包")
+    @Operation(summary = "Validate import package")
     public ResponseEntity<ApiResponse<Map<String, Object>>> validate(
             @RequestParam("file") MultipartFile file) {
         Map<String, Object> result = exportImportComponent.validateImportPackage(file);
@@ -50,7 +50,7 @@ public class ExportImportController {
     }
     
     @PostMapping("/check-conflicts")
-    @Operation(summary = "检查导入冲突")
+    @Operation(summary = "Check import conflicts")
     public ResponseEntity<ApiResponse<Map<String, Object>>> checkConflicts(
             @RequestParam("file") MultipartFile file) {
         Map<String, Object> result = exportImportComponent.checkConflicts(file);

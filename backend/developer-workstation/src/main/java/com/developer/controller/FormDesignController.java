@@ -24,20 +24,20 @@ import java.util.Map;
 @RestController
 @RequestMapping("/function-units/{functionUnitId}/forms")
 @RequiredArgsConstructor
-@Tag(name = "表单设计", description = "表单设计相关操作")
+@Tag(name = "Form Design", description = "Form design operations")
 public class FormDesignController {
     
     private final FormDesignComponent formDesignComponent;
     
     @GetMapping
-    @Operation(summary = "获取功能单元的所有表单")
+    @Operation(summary = "List all forms of a function unit")
     public ResponseEntity<ApiResponse<List<FormDefinition>>> list(@PathVariable Long functionUnitId) {
         List<FormDefinition> result = formDesignComponent.getByFunctionUnitId(functionUnitId);
         return ResponseEntity.ok(ApiResponse.success(result));
     }
     
     @PostMapping
-    @Operation(summary = "创建表单")
+    @Operation(summary = "Create form")
     public ResponseEntity<ApiResponse<FormDefinition>> create(
             @PathVariable Long functionUnitId,
             @Valid @RequestBody FormDefinitionRequest request) {
@@ -46,7 +46,7 @@ public class FormDesignController {
     }
     
     @PutMapping("/{formId}")
-    @Operation(summary = "更新表单")
+    @Operation(summary = "Update form")
     public ResponseEntity<ApiResponse<FormDefinition>> update(
             @PathVariable Long functionUnitId,
             @PathVariable Long formId,
@@ -56,7 +56,7 @@ public class FormDesignController {
     }
     
     @DeleteMapping("/{formId}")
-    @Operation(summary = "删除表单")
+    @Operation(summary = "Delete form")
     public ResponseEntity<ApiResponse<Void>> delete(
             @PathVariable Long functionUnitId,
             @PathVariable Long formId) {
@@ -65,7 +65,7 @@ public class FormDesignController {
     }
     
     @GetMapping("/{formId}")
-    @Operation(summary = "获取表单详情")
+    @Operation(summary = "Get form details")
     public ResponseEntity<ApiResponse<FormDefinition>> getById(
             @PathVariable Long functionUnitId,
             @PathVariable Long formId) {
@@ -74,7 +74,7 @@ public class FormDesignController {
     }
     
     @GetMapping("/{formId}/form-create-config")
-    @Operation(summary = "生成Form-Create配置")
+    @Operation(summary = "Generate Form-Create config")
     public ResponseEntity<ApiResponse<String>> generateFormCreateConfig(
             @PathVariable Long functionUnitId,
             @PathVariable Long formId) {
@@ -83,7 +83,7 @@ public class FormDesignController {
     }
     
     @GetMapping("/{formId}/validate")
-    @Operation(summary = "验证表单配置")
+    @Operation(summary = "Validate form config")
     public ResponseEntity<ApiResponse<ValidationResult>> validate(
             @PathVariable Long functionUnitId,
             @PathVariable Long formId) {
@@ -94,7 +94,7 @@ public class FormDesignController {
     // ========== 表绑定管理端点 ==========
     
     @GetMapping("/{formId}/bindings")
-    @Operation(summary = "获取表单的所有表绑定")
+    @Operation(summary = "List form table bindings")
     public ResponseEntity<ApiResponse<List<FormTableBindingResponse>>> getBindings(
             @PathVariable Long functionUnitId,
             @PathVariable Long formId) {
@@ -106,7 +106,7 @@ public class FormDesignController {
     }
     
     @PostMapping("/{formId}/bindings")
-    @Operation(summary = "创建表绑定")
+    @Operation(summary = "Create table binding")
     public ResponseEntity<ApiResponse<FormTableBindingResponse>> createBinding(
             @PathVariable Long functionUnitId,
             @PathVariable Long formId,
@@ -116,7 +116,7 @@ public class FormDesignController {
     }
     
     @PutMapping("/{formId}/bindings/{bindingId}")
-    @Operation(summary = "更新表绑定")
+    @Operation(summary = "Update table binding")
     public ResponseEntity<ApiResponse<FormTableBindingResponse>> updateBinding(
             @PathVariable Long functionUnitId,
             @PathVariable Long formId,
@@ -127,7 +127,7 @@ public class FormDesignController {
     }
     
     @DeleteMapping("/{formId}/bindings/{bindingId}")
-    @Operation(summary = "删除表绑定")
+    @Operation(summary = "Delete table binding")
     public ResponseEntity<ApiResponse<Void>> deleteBinding(
             @PathVariable Long functionUnitId,
             @PathVariable Long formId,

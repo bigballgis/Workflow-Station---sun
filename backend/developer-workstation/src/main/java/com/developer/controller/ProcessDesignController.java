@@ -19,20 +19,20 @@ import java.util.Map;
 @RestController
 @RequestMapping("/function-units/{functionUnitId}/process")
 @RequiredArgsConstructor
-@Tag(name = "流程设计", description = "BPMN流程设计相关操作")
+@Tag(name = "Process Design", description = "BPMN process design operations")
 public class ProcessDesignController {
     
     private final ProcessDesignComponent processDesignComponent;
     
     @GetMapping
-    @Operation(summary = "获取流程定义")
+    @Operation(summary = "Get process definition")
     public ResponseEntity<ApiResponse<ProcessDefinition>> get(@PathVariable Long functionUnitId) {
         ProcessDefinition result = processDesignComponent.getByFunctionUnitId(functionUnitId);
         return ResponseEntity.ok(ApiResponse.success(result));
     }
     
     @PostMapping
-    @Operation(summary = "保存流程定义")
+    @Operation(summary = "Save process definition")
     public ResponseEntity<ApiResponse<ProcessDefinition>> save(
             @PathVariable Long functionUnitId,
             @RequestBody Map<String, String> request) {
@@ -49,7 +49,7 @@ public class ProcessDesignController {
     }
     
     @GetMapping("/validate")
-    @Operation(summary = "验证流程定义")
+    @Operation(summary = "Validate process definition")
     public ResponseEntity<ApiResponse<ValidationResult>> validate(
             @PathVariable Long functionUnitId) {
         ProcessDefinition process = processDesignComponent.getByFunctionUnitId(functionUnitId);
@@ -59,7 +59,7 @@ public class ProcessDesignController {
     }
     
     @PostMapping("/simulate")
-    @Operation(summary = "模拟流程执行")
+    @Operation(summary = "Simulate process execution")
     public ResponseEntity<ApiResponse<Map<String, Object>>> simulate(
             @PathVariable Long functionUnitId,
             @RequestBody Map<String, Object> variables) {

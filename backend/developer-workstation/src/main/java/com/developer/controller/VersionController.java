@@ -29,7 +29,7 @@ import java.util.List;
 @RequestMapping("/api/function-units")
 @RequiredArgsConstructor
 @Slf4j
-@Tag(name = "版本管理", description = "功能单元版本管理相关操作")
+@Tag(name = "Version Management", description = "Function unit version management operations")
 public class VersionController {
     
     private final DeploymentService deploymentService;
@@ -43,7 +43,7 @@ public class VersionController {
      * Requirements: 1.1, 7.1
      */
     @PostMapping("/{functionUnitName}/deploy")
-    @Operation(summary = "部署新版本", description = "部署功能单元的新版本")
+    @Operation(summary = "Deploy new version", description = "Deploy a new version of the function unit")
     public ResponseEntity<ApiResponse<DeploymentResult>> deploy(
             @PathVariable String functionUnitName,
             @Valid @RequestBody DeploymentRequest request) {
@@ -89,7 +89,7 @@ public class VersionController {
      * Requirements: 3.3
      */
     @GetMapping("/{functionUnitName}/versions")
-    @Operation(summary = "获取版本历史", description = "获取功能单元的所有版本历史")
+    @Operation(summary = "Get version history", description = "Get all version history of a function unit")
     public ResponseEntity<ApiResponse<List<FunctionUnit>>> getVersionHistory(
             @PathVariable String functionUnitName) {
         
@@ -116,7 +116,7 @@ public class VersionController {
      * Requirements: 2.5
      */
     @GetMapping("/{functionUnitName}/versions/active")
-    @Operation(summary = "获取活动版本", description = "获取功能单元的当前活动版本")
+    @Operation(summary = "Get active version", description = "Get the current active version of a function unit")
     public ResponseEntity<ApiResponse<FunctionUnit>> getActiveVersion(
             @PathVariable String functionUnitName) {
         
@@ -153,7 +153,7 @@ public class VersionController {
      * Requirements: 6.2
      */
     @PostMapping("/{functionUnitName}/rollback")
-    @Operation(summary = "回滚版本", description = "回滚到指定的历史版本")
+    @Operation(summary = "Rollback version", description = "Rollback to a specified historical version")
     public ResponseEntity<ApiResponse<RollbackResult>> rollback(
             @PathVariable String functionUnitName,
             @Valid @RequestBody RollbackRequest request) {
@@ -225,7 +225,7 @@ public class VersionController {
      * Requirements: 3.1, 3.2
      */
     @GetMapping
-    @Operation(summary = "获取功能单元列表", description = "获取所有功能单元的活动版本用于UI显示")
+    @Operation(summary = "List function units", description = "Get all active function unit versions for UI display")
     public ResponseEntity<ApiResponse<List<FunctionUnitDisplay>>> getFunctionUnitsForDisplay() {
         
         log.debug("Fetching function units for UI display");
@@ -251,7 +251,7 @@ public class VersionController {
      * Requirements: 3.3, 3.4, 3.5
      */
     @GetMapping("/{functionUnitName}/history")
-    @Operation(summary = "获取版本历史（UI）", description = "获取功能单元的版本历史用于UI显示")
+    @Operation(summary = "Get version history (UI)", description = "Get function unit version history for UI display")
     public ResponseEntity<ApiResponse<VersionHistoryDisplay>> getVersionHistoryForUI(
             @PathVariable String functionUnitName) {
         

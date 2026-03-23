@@ -601,15 +601,15 @@ public class AiGenerationServiceImpl implements AiGenerationService {
             ResponseEntity<Map> responseEntity = n8nClient.postForEntity(n8nWebhookUrl, entity, Map.class);
             Map<String, Object> responseBody = responseEntity.getBody();
             if (responseBody == null) {
-                throw new AiGenerationException("AI_N8N_EMPTY_RESPONSE", "N8N 返回空响应");
+                throw new AiGenerationException("AI_N8N_EMPTY_RESPONSE", "N8N returned empty response");
             }
             return responseBody;
         } catch (AiGenerationException e) {
             throw e;
         } catch (org.springframework.web.client.ResourceAccessException e) {
-            throw new AiGenerationException("AI_N8N_TIMEOUT", "N8N Webhook 调用超时: " + e.getMessage());
+            throw new AiGenerationException("AI_N8N_TIMEOUT", "N8N Webhook call timed out: " + e.getMessage());
         } catch (Exception e) {
-            throw new AiGenerationException("AI_N8N_CALL_FAILED", "N8N Webhook 调用失败: " + e.getMessage());
+            throw new AiGenerationException("AI_N8N_CALL_FAILED", "N8N Webhook call failed: " + e.getMessage());
         }
     }
 
@@ -858,7 +858,7 @@ public class AiGenerationServiceImpl implements AiGenerationService {
         try {
             return objectMapper.writeValueAsString(obj);
         } catch (JsonProcessingException e) {
-            log.error("JSON 序列化失败", e);
+            log.error("JSON serialization failed", e);
             return "{}";
         }
     }
@@ -876,7 +876,7 @@ public class AiGenerationServiceImpl implements AiGenerationService {
             if (i > 0) {
                 sb.append("\n\n");
             }
-            sb.append("【").append(docType).append(" 文档】\n");
+            sb.append("[").append(docType).append(" Document]\n");
             sb.append(content);
         }
         return sb.toString();
@@ -886,9 +886,9 @@ public class AiGenerationServiceImpl implements AiGenerationService {
         return documents.stream().map(doc -> {
             String content = doc.get("content");
             if (content != null && content.length() > MAX_DOCUMENT_CONTENT_LENGTH) {
-                log.warn("文档内容超过 {} 字符，执行截断: documentType={}",
+                log.warn("Document content exceeds {} chars, truncating: documentType={}",
                         MAX_DOCUMENT_CONTENT_LENGTH, doc.get("documentType"));
-                content = content.substring(0, MAX_DOCUMENT_CONTENT_LENGTH) + "[已截断]";
+                content = content.substring(0, MAX_DOCUMENT_CONTENT_LENGTH) + "[truncated]";
             }
             return Map.of(
                     "documentType", doc.getOrDefault("documentType", ""),

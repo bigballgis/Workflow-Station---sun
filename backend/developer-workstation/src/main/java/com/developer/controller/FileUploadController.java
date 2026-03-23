@@ -30,7 +30,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/upload")
 @Slf4j
-@Tag(name = "文件上传", description = "文件上传、下载相关操作")
+@Tag(name = "File Upload", description = "File upload and download operations")
 public class FileUploadController {
 
     private static final List<String> ALLOWED_EXTENSIONS =
@@ -48,27 +48,27 @@ public class FileUploadController {
      * 上传单个文件
      */
     @PostMapping
-    @Operation(summary = "上传文件", description = "支持 jpg/png/pdf/docx/xlsx 格式，最大 10MB")
+    @Operation(summary = "Upload file", description = "Supports jpg/png/pdf/docx/xlsx, max 10MB")
     public ResponseEntity<ApiResponse<Map<String, Object>>> upload(
             @RequestParam("file") MultipartFile file) {
 
         if (file.isEmpty()) {
-            return ResponseEntity.badRequest().body(errorResponse("FILE_EMPTY", "文件不能为空"));
+            return ResponseEntity.badRequest().body(errorResponse("FILE_EMPTY", "File must not be empty"));
         }
 
         if (file.getSize() > MAX_FILE_SIZE_BYTES) {
-            return ResponseEntity.badRequest().body(errorResponse("FILE_TOO_LARGE", "文件大小不能超过 10MB"));
+            return ResponseEntity.badRequest().body(errorResponse("FILE_TOO_LARGE", "File size must not exceed 10MB"));
         }
 
         String originalFilename = file.getOriginalFilename();
         if (originalFilename == null || originalFilename.isBlank()) {
-            return ResponseEntity.badRequest().body(errorResponse("INVALID_FILENAME", "文件名不合法"));
+            return ResponseEntity.badRequest().body(errorResponse("INVALID_FILENAME", "Invalid filename"));
         }
 
         String extension = getExtension(originalFilename).toLowerCase();
         if (!ALLOWED_EXTENSIONS.contains(extension)) {
             return ResponseEntity.badRequest().body(
-                    errorResponse("UNSUPPORTED_TYPE", "不支持的文件类型，仅允许：" + String.join(", ", ALLOWED_EXTENSIONS)));
+                    errorResponse("UNSUPPORTED_TYPE", "Unsupported file type, allowed: " + String.join(", ", ALLOWED_EXTENSIONS)));
         }
 
         try {
@@ -94,7 +94,7 @@ public class FileUploadController {
         } catch (IOException e) {
             log.error("File upload failed: {}", e.getMessage(), e);
             return ResponseEntity.internalServerError()
-                    .body(errorResponse("UPLOAD_FAILED", "文件上传失败，请重试"));
+                    .body(errorResponse("UPLOAD_FAILED", "File upload failed, please retry"));
         }
     }
 
@@ -102,7 +102,7 @@ public class FileUploadController {
      * 访问已上传的文件（支持内联预览）
      */
     @GetMapping("/files/{filename}")
-    @Operation(summary = "获取文件", description = "通过文件名访问已上传的文件，支持图片内联预览")
+    @Operation(summary = "Get file", description = "Access uploaded file by filename, supports inline preview")
     public ResponseEntity<org.springframework.core.io.Resource> getFile(
             @PathVariable String filename) {
 
@@ -140,7 +140,7 @@ public class FileUploadController {
      * 删除已上传的文件
      */
     @DeleteMapping("/files/{filename}")
-    @Operation(summary = "删除文件", description = "删除已上传的文件")
+    @Operation(summary = "Delete file", description = "Delete an uploaded file")
     public ResponseEntity<ApiResponse<Void>> deleteFile(@PathVariable String filename) {
         try {
             Path basePath = Paths.get(uploadDir).toAbsolutePath().normalize();
@@ -161,7 +161,7 @@ public class FileUploadController {
         } catch (IOException e) {
             log.error("File deletion failed: {}", e.getMessage(), e);
             return ResponseEntity.internalServerError()
-                    .body(errorResponse("DELETE_FAILED", "文件删除失败"));
+                    .body(errorResponse("DELETE_FAILED", "File deletion failed"));
         }
     }
 

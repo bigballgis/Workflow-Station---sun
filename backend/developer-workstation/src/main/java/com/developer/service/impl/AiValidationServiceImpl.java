@@ -31,7 +31,7 @@ public class AiValidationServiceImpl implements AiValidationService {
         AiValidationResult result = AiValidationResult.builder().build();
 
         if (generatedData == null) {
-            result.addError("NULL_DATA", "generatedData", "生成数据不能为空");
+            result.addError("NULL_DATA", "generatedData", "Generated data must not be null");
             return result;
         }
 
@@ -79,18 +79,18 @@ public class AiValidationServiceImpl implements AiValidationService {
                     if ("DECIMAL".equals(dataType)) {
                         if (field.get("precision") == null || toInt(field.get("precision")) <= 0) {
                             result.addError("FIELD_CONSTRAINT", fieldPath + ".precision",
-                                    "DECIMAL 类型必须指定 precision 且大于 0");
+                                    "DECIMAL type requires precision > 0");
                         }
                         if (field.get("scale") == null || toInt(field.get("scale")) < 0) {
                             result.addError("FIELD_CONSTRAINT", fieldPath + ".scale",
-                                    "DECIMAL 类型必须指定 scale 且不小于 0");
+                                    "DECIMAL type requires scale >= 0");
                         }
                     }
 
                     if ("VARCHAR".equals(dataType)) {
                         if (field.get("length") == null || toInt(field.get("length")) <= 0) {
                             result.addError("FIELD_CONSTRAINT", fieldPath + ".length",
-                                    "VARCHAR 类型必须指定 length 且大于 0");
+                                    "VARCHAR type requires length > 0");
                         }
                     }
 
@@ -104,7 +104,7 @@ public class AiValidationServiceImpl implements AiValidationService {
                 }
                 if (!hasPrimaryKey) {
                     result.addError("FIELD_CONSTRAINT", "tableDefinitions[" + i + "]",
-                            "表定义必须包含至少一个主键字段");
+                            "Table definition must contain at least one primary key field");
                 }
             }
         }
@@ -153,7 +153,7 @@ public class AiValidationServiceImpl implements AiValidationService {
         // Validate icon.name length
         String name = (String) icon.get("name");
         if (name != null && name.length() > 100) {
-            result.addError("SVG_VALIDATION", "icon.name", "图标名称长度不能超过 100 字符");
+            result.addError("SVG_VALIDATION", "icon.name", "Icon name must not exceed 100 characters");
         }
 
         String svgContent = (String) icon.get("svgContent");
@@ -161,7 +161,7 @@ public class AiValidationServiceImpl implements AiValidationService {
 
         // Check size ≤ 10KB
         if (svgContent.getBytes(StandardCharsets.UTF_8).length > 10240) {
-            result.addError("SVG_VALIDATION", "icon.svgContent", "SVG 内容大小不能超过 10KB");
+            result.addError("SVG_VALIDATION", "icon.svgContent", "SVG content must not exceed 10KB");
         }
 
         // Parse XML
@@ -175,14 +175,14 @@ public class AiValidationServiceImpl implements AiValidationService {
 
             // Root element must be <svg>
             if (!"svg".equals(doc.getDocumentElement().getTagName())) {
-                result.addError("SVG_VALIDATION", "icon.svgContent", "SVG 根元素必须为 <svg>");
+                result.addError("SVG_VALIDATION", "icon.svgContent", "SVG root element must be <svg>");
             }
 
             // Check for dangerous tags
             String[] dangerousTags = {"script", "iframe", "object", "embed"};
             for (String tag : dangerousTags) {
                 if (doc.getElementsByTagName(tag).getLength() > 0) {
-                    result.addError("SVG_VALIDATION", "icon.svgContent", "SVG 包含危险标签: <" + tag + ">");
+                    result.addError("SVG_VALIDATION", "icon.svgContent", "SVG contains dangerous tag: <" + tag + ">");
                 }
             }
 
@@ -190,7 +190,7 @@ public class AiValidationServiceImpl implements AiValidationService {
             checkDangerousAttributes(doc.getDocumentElement(), result);
 
         } catch (Exception e) {
-            result.addError("SVG_VALIDATION", "icon.svgContent", "SVG 不是合法的 XML: " + e.getMessage());
+            result.addError("SVG_VALIDATION", "icon.svgContent", "SVG is not valid XML: " + e.getMessage());
         }
     }
 
@@ -202,17 +202,17 @@ public class AiValidationServiceImpl implements AiValidationService {
             String attrValue = attr.getNodeValue().toLowerCase().trim();
 
             if (attrName.startsWith("on")) {
-                result.addError("SVG_VALIDATION", "icon.svgContent", "SVG 包含事件属性: " + attrName);
+                result.addError("SVG_VALIDATION", "icon.svgContent", "SVG contains event attribute: " + attrName);
             }
             if (attrValue.contains("javascript:")) {
-                result.addError("SVG_VALIDATION", "icon.svgContent", "SVG 包含 javascript: 协议引用");
+                result.addError("SVG_VALIDATION", "icon.svgContent", "SVG contains javascript: protocol reference");
             }
             if (attrValue.contains("url(") && (attrValue.contains("http:") || attrValue.contains("https:"))) {
-                result.addError("SVG_VALIDATION", "icon.svgContent", "SVG 包含外部资源引用");
+                result.addError("SVG_VALIDATION", "icon.svgContent", "SVG contains external resource reference");
             }
             // Check xlink:href with external URLs
             if (attrName.contains("href") && (attrValue.startsWith("http:") || attrValue.startsWith("https:"))) {
-                result.addError("SVG_VALIDATION", "icon.svgContent", "SVG 包含外部资源引用");
+                result.addError("SVG_VALIDATION", "icon.svgContent", "SVG contains external resource reference");
             }
         }
 
@@ -243,10 +243,10 @@ public class AiValidationServiceImpl implements AiValidationService {
             // Check for BPMN 2.0 namespace
             String namespaceURI = doc.getDocumentElement().getNamespaceURI();
             if (namespaceURI == null || !namespaceURI.contains("omg.org/spec/BPMN")) {
-                result.addError("BPMN_VALIDATION", "processDefinition.bpmnXml", "BPMN XML 缺少 BPMN 2.0 命名空间声明");
+                result.addError("BPMN_VALIDATION", "processDefinition.bpmnXml", "BPMN XML missing BPMN 2.0 namespace declaration");
             }
         } catch (Exception e) {
-            result.addError("BPMN_VALIDATION", "processDefinition.bpmnXml", "BPMN XML 格式不合法: " + e.getMessage());
+            result.addError("BPMN_VALIDATION", "processDefinition.bpmnXml", "BPMN XML is not valid: " + e.getMessage());
         }
     }
 
@@ -290,12 +290,12 @@ public class AiValidationServiceImpl implements AiValidationService {
 
                 if (refTableName != null && !tableMap.containsKey(refTableName)) {
                     result.addError("REFERENCE_INTEGRITY", fkPath + ".refTableName",
-                        "引用的表 '" + refTableName + "' 不存在");
+                        "Referenced table '" + refTableName + "' does not exist");
                 }
                 if (refTableName != null && refFieldName != null && tableFieldMap.containsKey(refTableName)) {
                     if (!tableFieldMap.get(refTableName).contains(refFieldName)) {
                         result.addError("REFERENCE_INTEGRITY", fkPath + ".refFieldName",
-                            "引用的字段 '" + refFieldName + "' 在表 '" + refTableName + "' 中不存在");
+                            "Referenced field '" + refFieldName + "' does not exist in table '" + refTableName + "'");
                     }
                 }
             }
@@ -312,7 +312,7 @@ public class AiValidationServiceImpl implements AiValidationService {
                         if (tableName != null && !tableMap.containsKey(tableName)) {
                             result.addError("REFERENCE_INTEGRITY",
                                 "formDefinitions[" + i + "].tableBindings[" + j + "].tableName",
-                                "引用的表 '" + tableName + "' 不存在");
+                                "Referenced table '" + tableName + "' does not exist");
                         }
                     }
                 } else {
@@ -321,7 +321,7 @@ public class AiValidationServiceImpl implements AiValidationService {
                     if (bindingTableId != null && !tableMap.containsKey(bindingTableId)) {
                         result.addError("REFERENCE_INTEGRITY",
                             "formDefinitions[" + i + "].bindingTableId",
-                            "引用的表 '" + bindingTableId + "' 不存在");
+                            "Referenced table '" + bindingTableId + "' does not exist");
                     }
                 }
             }
@@ -351,7 +351,7 @@ public class AiValidationServiceImpl implements AiValidationService {
                         String fieldName = (String) fields.get(j).get("fieldName");
                         if (fieldName != null && !seen.add(fieldName)) {
                             result.addError("UNIQUENESS", "tableDefinitions[" + i + "].fieldDefinitions[" + j + "].fieldName",
-                                "重复的字段名: " + fieldName);
+                                "Duplicate field name: " + fieldName);
                         }
                     }
                 }
@@ -365,7 +365,7 @@ public class AiValidationServiceImpl implements AiValidationService {
         for (int i = 0; i < items.size(); i++) {
             String name = (String) items.get(i).get(nameField);
             if (name != null && !seen.add(name)) {
-                result.addError("UNIQUENESS", arrayPath + "[" + i + "]." + nameField, "重复的名称: " + name);
+                result.addError("UNIQUENESS", arrayPath + "[" + i + "]." + nameField, "Duplicate name: " + name);
             }
         }
     }
@@ -377,7 +377,7 @@ public class AiValidationServiceImpl implements AiValidationService {
         try {
             Enum.valueOf(enumClass, strValue);
         } catch (IllegalArgumentException e) {
-            result.addError("INVALID_ENUM", fieldPath, "非法枚举值: " + strValue);
+            result.addError("INVALID_ENUM", fieldPath, "Invalid enum value: " + strValue);
         }
     }
 

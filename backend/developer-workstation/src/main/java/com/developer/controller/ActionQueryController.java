@@ -20,13 +20,13 @@ import java.util.stream.Collectors;
 @RestController
 @RequestMapping("/actions")
 @RequiredArgsConstructor
-@Tag(name = "动作查询", description = "动作查询相关操作")
+@Tag(name = "Action Query", description = "Action query operations")
 public class ActionQueryController {
     
     private final ActionDefinitionRepository actionDefinitionRepository;
     
     @GetMapping("/batch")
-    @Operation(summary = "批量获取动作定义", description = "根据动作ID列表批量获取动作定义信息")
+    @Operation(summary = "Batch get action definitions", description = "Get action definitions by a list of action IDs")
     public ResponseEntity<ApiResponse<List<ActionDefinition>>> batchGet(
             @RequestParam String ids) {
         
@@ -44,7 +44,7 @@ public class ActionQueryController {
     }
     
     @GetMapping("/{actionId}")
-    @Operation(summary = "获取单个动作定义")
+    @Operation(summary = "Get action definition by ID")
     public ResponseEntity<ApiResponse<ActionDefinition>> getById(@PathVariable Long actionId) {
         ActionDefinition action = actionDefinitionRepository.findById(actionId)
             .orElse(null);
