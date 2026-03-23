@@ -57,7 +57,7 @@ function deriveColumnsFromBinding(
 
     const rawOptions = r.options || rProps.options
     const options = rawOptions
-      ? rawOptions.map((o: any) => ({ label: o.label ?? o.value, value: o.value }))
+      ? (type === 'cascader' ? rawOptions : rawOptions.map((o: any) => ({ label: o.label ?? o.value, value: o.value })))
       : undefined
 
     const passProps: Record<string, any> = {}

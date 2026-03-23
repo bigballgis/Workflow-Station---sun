@@ -819,7 +819,10 @@ const convertFormCreateRule = (rule: any): FormField | null => {
     'slider': 'slider',
     'colorPicker': 'colorPicker',
     'treeSelect': 'treeselect',
-    'upload': 'upload'
+    'upload': 'upload',
+    'editor': 'editor',
+    'signature': 'signature',
+    'transfer': 'transfer'
   }
   
   const field: FormField = {
@@ -834,10 +837,20 @@ const convertFormCreateRule = (rule: any): FormField | null => {
   // 处理选项 (rule.options or rule.props.options)
   const rawOptions = rule.options || rule.props?.options
   if (rawOptions) {
-    field.options = rawOptions.map((opt: any) => ({
-      label: opt.label || opt.value,
-      value: opt.value
-    }))
+    if (rule.type === 'cascader') {
+      // Cascader needs full hierarchical options with children
+      field.options = rawOptions
+    } else {
+      field.options = rawOptions.map((opt: any) => ({
+        label: opt.label || opt.value,
+        value: opt.value
+      }))
+    }
+  }
+
+  // 处理级联选择器 props
+  if (rule.type === 'cascader') {
+    field.cascaderProps = rule.props?.props || rule.props?.cascaderProps
   }
   
   // 处理 textarea
@@ -940,6 +953,14 @@ const deriveColumnsFromBinding = (binding: any, subForms?: Record<string, any>):
         type = 'rate'
       } else if (r.type === 'slider') {
         type = 'slider'
+      } else if (r.type === 'editor') {
+        type = 'editor'
+      } else if (r.type === 'signature') {
+        type = 'signature'
+      } else if (r.type === 'transfer') {
+        type = 'transfer'
+      } else if (r.type === 'cascader') {
+        type = 'cascader'
       } else {
         type = r.type as any
       }
@@ -947,7 +968,7 @@ const deriveColumnsFromBinding = (binding: any, subForms?: Record<string, any>):
       // Collect options from rule.options or rule.props.options
       const rawOptions = r.options || rProps.options
       const options = rawOptions
-        ? rawOptions.map((o: any) => ({ label: o.label ?? o.value, value: o.value }))
+        ? (type === 'cascader' ? rawOptions : rawOptions.map((o: any) => ({ label: o.label ?? o.value, value: o.value })))
         : undefined
 
       // Pass through relevant props
@@ -955,7 +976,7 @@ const deriveColumnsFromBinding = (binding: any, subForms?: Record<string, any>):
       const propKeys = [
         'action', 'accept', 'multiple', 'precision', 'min', 'max', 'rows', 'maxlength', 'fileNameTargetField',
         'isRange', 'valueFormat', 'startPlaceholder', 'endPlaceholder', 'treeData', 'checkStrictly',
-        'showAlpha', 'allowHalf', 'step',
+        'showAlpha', 'allowHalf', 'step', 'cascaderProps', 'leftTitle', 'rightTitle',
       ]
       for (const key of propKeys) {
         if (rProps[key] !== undefined) passProps[key] = rProps[key]
@@ -964,6 +985,8 @@ const deriveColumnsFromBinding = (binding: any, subForms?: Record<string, any>):
       if (rProps.nodeKey !== undefined) passProps.nodeKey = rProps.nodeKey
       if (rProps.showCheckbox !== undefined) passProps.showCheckbox = rProps.showCheckbox
       if (rProps.props !== undefined) passProps.labelProps = rProps.props
+      // cascader: map props.props to cascaderProps if not already set
+      if (type === 'cascader' && rProps.props && !passProps.cascaderProps) passProps.cascaderProps = rProps.props
 
       // Sync options into props.options so SubTableAddDialog can read from col.props?.options
       if (options) passProps.options = options

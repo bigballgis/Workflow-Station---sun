@@ -36,6 +36,28 @@
             <span v-if="scope.row[col.field]" class="color-swatch" :style="{ backgroundColor: scope.row[col.field] }" :title="scope.row[col.field]" />
             <span v-else>-</span>
           </template>
+          <template v-else-if="col.type === 'editor'">
+            <span v-if="scope.row[col.field]" v-html="scope.row[col.field]" class="editor-preview" />
+            <span v-else>-</span>
+          </template>
+          <template v-else-if="col.type === 'signature'">
+            <img v-if="scope.row[col.field]" :src="scope.row[col.field]" class="signature-preview" alt="Signature" />
+            <span v-else>-</span>
+          </template>
+          <template v-else-if="col.type === 'slider'">
+            <el-slider
+              v-if="scope.row[col.field] != null"
+              :model-value="Number(scope.row[col.field])"
+              :min="col.props?.min ?? 0"
+              :max="col.props?.max ?? 100"
+              disabled
+              style="width: 100%; padding: 0 10px;"
+            />
+            <span v-else>-</span>
+          </template>
+          <template v-else-if="col.type === 'password'">
+            <span>••••••</span>
+          </template>
           <template v-else-if="col.type === 'rate'">
             <el-rate
               v-if="scope.row[col.field] != null"
@@ -97,6 +119,12 @@ function columnMinWidth(col: Column): number {
     case 'treeselect':   return 160
     case 'colorPicker':  return 100
     case 'rate':         return 140
+    case 'editor':       return 200
+    case 'signature':    return 150
+    case 'transfer':     return 180
+    case 'cascader':     return 180
+    case 'slider':       return 160
+    case 'password':     return 120
     default:             return 120
   }
 }
@@ -256,6 +284,23 @@ async function deleteRow(i: number) {
     height: 20px;
     border-radius: 3px;
     border: 1px solid #dcdfe6;
+    vertical-align: middle;
+  }
+
+  .editor-preview {
+    display: inline-block;
+    max-width: 200px;
+    max-height: 60px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  .signature-preview {
+    max-width: 120px;
+    max-height: 40px;
+    object-fit: contain;
     vertical-align: middle;
   }
 }

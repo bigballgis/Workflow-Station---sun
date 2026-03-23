@@ -1,7 +1,7 @@
 -- =============================================================================
 -- 13-procurement-workflow: Create Function Unit (all-in-one)
 -- 基于数据库实际数据生成 (source: Procurement Workflow, code PROCUREMENT_WORKFLOW)
--- 包含: Function Unit, Forms (Request/Approval/Review/sub), Actions (6个)
+-- 包含: Function Unit, Forms (Request/Approval/Review/sub), Actions (8个)
 -- =============================================================================
 
 DO $main$
@@ -24,7 +24,7 @@ BEGIN
         'Procurement Workflow',
         'Simple approval workflow with manager approval',
         'PUBLISHED',
-        '1.0.0', '1.0.0',
+        '1.0.6', '1.0.0',
         true, true,
         CURRENT_TIMESTAMP, 0,
         'system', CURRENT_TIMESTAMP, 'system', CURRENT_TIMESTAMP
@@ -44,7 +44,7 @@ BEGIN
     -- Step 2: Forms (config_json 中的 subForms 在 03 脚本中填充)
     -- =========================================================================
 
-    -- Request Form (MAIN) — rule 包含 5 个主表字段 + group/subForm/tableForm (fc专有组件)
+    -- Request Form (MAIN) — rule 包含 5 个主表字段
     -- subForms 和 subTable placeholder 在 03-form-table-bindings.sql 中填充
     INSERT INTO dw_form_definitions (
         function_unit_id, form_name, form_type, description, config_json, created_at, updated_at
@@ -120,7 +120,7 @@ BEGIN
     RAISE NOTICE 'sub form created/updated: id=%', v_sub_form_id;
 
     -- =========================================================================
-    -- Step 3: Actions (6个)
+    -- Step 3: Actions (8个)
     -- =========================================================================
 
     -- Submit Request

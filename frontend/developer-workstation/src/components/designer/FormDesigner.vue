@@ -591,14 +591,18 @@ function deriveColumnsFromBinding(binding: any, subForms?: Record<string, any>) 
       else if (r.type === 'colorPicker') type = 'colorPicker'
       else if (r.type === 'rate') type = 'rate'
       else if (r.type === 'slider') type = 'slider'
+      else if (r.type === 'editor') type = 'editor'
+      else if (r.type === 'signature') type = 'signature'
+      else if (r.type === 'transfer') type = 'transfer'
+      else if (r.type === 'cascader') type = 'cascader'
       else type = r.type as any
       const rawOptions = r.options || rProps.options
-      const options = rawOptions ? rawOptions.map((o: any) => ({ label: o.label ?? o.value, value: o.value })) : undefined
+      const options = rawOptions ? (type === 'cascader' ? rawOptions : rawOptions.map((o: any) => ({ label: o.label ?? o.value, value: o.value }))) : undefined
       const passProps: Record<string, any> = {}
       for (const key of [
         'action', 'accept', 'multiple', 'precision', 'min', 'max', 'rows', 'maxlength', 'fileNameTargetField',
         'isRange', 'valueFormat', 'startPlaceholder', 'endPlaceholder', 'treeData', 'checkStrictly',
-        'showAlpha', 'allowHalf', 'step',
+        'showAlpha', 'allowHalf', 'step', 'cascaderProps', 'leftTitle', 'rightTitle',
       ]) {
         if (rProps[key] !== undefined) passProps[key] = rProps[key]
       }
@@ -606,6 +610,8 @@ function deriveColumnsFromBinding(binding: any, subForms?: Record<string, any>) 
       if (rProps.nodeKey !== undefined) passProps.nodeKey = rProps.nodeKey
       if (rProps.showCheckbox !== undefined) passProps.showCheckbox = rProps.showCheckbox
       if (rProps.props !== undefined) passProps.labelProps = rProps.props
+      // cascader: map props.props to cascaderProps if not already set
+      if (type === 'cascader' && rProps.props && !passProps.cascaderProps) passProps.cascaderProps = rProps.props
       if (options) passProps.options = options
       return {
         field: r.field,
@@ -1409,6 +1415,38 @@ function handlePreview() {
   console.log('[Preview] rawRule types:', rawRule.map(r => `${r.type}(${r._bindingId ?? r.field})`))
   console.log('[Preview] bindingMap keys:', [...bindingMap.keys()])
   console.log('[Preview] nonPrimary bindings:', nonPrimary.map((b: TableBinding) => b.id))
+
+  // ── Normalize custom types for form-create preview ──────────────────────────
+  // form-create cannot pass nested options (with children) to custom components
+  // correctly, so we convert them to native element-plus tags that form-create
+  // renders via its built-in el-* passthrough.
+  rawRule = rawRule.map((r: any) => {
+    const rp = r.props || {}
+    if (r.type === 'transfer') {
+      return {
+        ...r,
+        type: 'el-transfer',
+        props: {
+          data: (rp.options ?? []).map((o: any) => ({ key: o.value, label: o.label })),
+          titles: [rp.leftTitle || 'Source', rp.rightTitle || 'Target'],
+          filterable: true,
+        },
+      }
+    }
+    if (r.type === 'cascader') {
+      return {
+        ...r,
+        type: 'el-cascader',
+        props: {
+          options: rp.options ?? [],
+          props: rp.cascaderProps || rp.props,
+          placeholder: rp.placeholder || 'Please select',
+          clearable: true,
+        },
+      }
+    }
+    return r
+  })
 
   // Build previewItems: split rawRule into segments separated by subTable placeholders
   const items: typeof previewItems.value = []

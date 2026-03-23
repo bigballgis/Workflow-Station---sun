@@ -252,6 +252,20 @@
                     <span v-else-if="readonly">-</span>
                     <el-color-picker v-else v-model="formData[field.key]" />
                   </template>
+                  <template v-else-if="field.type === 'editor'">
+                    <div v-if="readonly && formData[field.key]" v-html="formData[field.key]" class="editor-readonly" />
+                    <span v-else-if="readonly">-</span>
+                    <el-input v-else v-model="formData[field.key]" type="textarea" :rows="(field as any).rows || 5" :placeholder="field.placeholder" />
+                  </template>
+                  <template v-else-if="field.type === 'signature'">
+                    <img v-if="readonly && formData[field.key]" :src="formData[field.key]" class="signature-preview" alt="Signature" />
+                    <span v-else-if="readonly">-</span>
+                    <el-input v-else v-model="formData[field.key]" :placeholder="field.placeholder || 'Signature data'" />
+                  </template>
+                  <template v-else-if="field.type === 'transfer'">
+                    <span v-if="readonly">{{ Array.isArray(formData[field.key]) ? formData[field.key].join(', ') : (formData[field.key] || '-') }}</span>
+                    <el-transfer v-else v-model="formData[field.key]" :data="(field.options || []).map((o: any) => ({ key: o.value, label: o.label }))" filterable />
+                  </template>
                   <template v-else-if="field.type === 'readonly'">
                     <span class="readonly-text">{{ formData[field.key] || '-' }}</span>
                   </template>
@@ -573,6 +587,26 @@
                 <span v-if="readonly && formData[field.key]" class="color-swatch" :style="{ backgroundColor: formData[field.key] }" :title="formData[field.key]" />
                 <span v-else-if="readonly">-</span>
                 <el-color-picker v-else v-model="formData[field.key]" />
+              </template>
+
+              <!-- 富文本编辑器 -->
+              <template v-else-if="field.type === 'editor'">
+                <div v-if="readonly && formData[field.key]" v-html="formData[field.key]" class="editor-readonly" />
+                <span v-else-if="readonly">-</span>
+                <el-input v-else v-model="formData[field.key]" type="textarea" :rows="(field as any).rows || 5" :placeholder="field.placeholder" />
+              </template>
+
+              <!-- 签名 -->
+              <template v-else-if="field.type === 'signature'">
+                <img v-if="readonly && formData[field.key]" :src="formData[field.key]" class="signature-preview" alt="Signature" />
+                <span v-else-if="readonly">-</span>
+                <el-input v-else v-model="formData[field.key]" :placeholder="field.placeholder || 'Signature data'" />
+              </template>
+
+              <!-- 穿梭框 -->
+              <template v-else-if="field.type === 'transfer'">
+                <span v-if="readonly">{{ Array.isArray(formData[field.key]) ? formData[field.key].join(', ') : (formData[field.key] || '-') }}</span>
+                <el-transfer v-else v-model="formData[field.key]" :data="(field.options || []).map((o: any) => ({ key: o.value, label: o.label }))" filterable />
               </template>
 
               <!-- 只读文本 -->
@@ -900,12 +934,49 @@ defineExpose({
     border: 1px solid #dcdfe6;
     vertical-align: middle;
   }
+
+  .editor-readonly {
+    padding: 8px;
+    border: 1px solid #e4e7ed;
+    border-radius: 4px;
+    background: #f5f7fa;
+    min-height: 40px;
+    line-height: 1.5;
+    word-break: break-word;
+    width: 100%;
+  }
+
+  .signature-preview {
+    max-width: 200px;
+    max-height: 80px;
+    object-fit: contain;
+    border: 1px solid #e4e7ed;
+    border-radius: 4px;
+    background: #fff;
+  }
 }
 </style>
 
 <style lang="scss">
 /* 全局样式，确保弹出框正确显示（包括在 el-dialog 内） */
 .form-renderer-popper {
-  z-index: 9999 !important;
+  z-index: 99999 !important;
+}
+
+/* 确保 select 下拉菜单在 readonly 模式下也能正确显示 */
+:deep(.el-select__popper) {
+  z-index: 99999 !important;
+}
+
+:deep(.el-picker__popper) {
+  z-index: 99999 !important;
+}
+
+:deep(.el-cascader__dropdown) {
+  z-index: 99999 !important;
+}
+
+:deep(.el-tree-select__popper) {
+  z-index: 99999 !important;
 }
 </style>

@@ -16,6 +16,7 @@ import i18n from './i18n'
 import './styles/index.scss'
 import SubTablePlaceholderWidget from './components/designer/SubTablePlaceholderWidget.vue'
 import SubTableBindingSelect from './components/designer/SubTableBindingSelect.vue'
+import { FcEditor, FcSignature, FcTransfer, FcCascader, FcSlider } from './components/designer/fc-custom-fields'
 
 // Force set HTML lang attribute to English
 document.documentElement.lang = 'en'
@@ -42,6 +43,13 @@ FcDesigner.component('SubTableBindingSelect', SubTableBindingSelect)
 
 // Register SubTablePlaceholderWidget as the canvas renderer for 'subTable' type
 FcDesigner.component('subTable', SubTablePlaceholderWidget)
+
+// Register custom field components so form-create can render them in canvas & preview
+FcDesigner.component('editor', FcEditor)
+FcDesigner.component('signature', FcSignature)
+FcDesigner.component('transfer', FcTransfer)
+FcDesigner.component('cascader', FcCascader)
+FcDesigner.component('slider', FcSlider)
 
 // Register the subTable drag rule so it appears in the designer left menu
 FcDesigner.addDragRule({
@@ -96,6 +104,153 @@ FcDesigner.addDragRule({
         title: 'Sub Table Binding',
         props: {}
       }
+    ]
+  }
+})
+
+// ─── Register custom drag rules for new field types ──────────────────────────
+// These allow fc-designer to recognise and render editor/signature/transfer/cascader/slider
+// in the canvas and left-side menu.
+
+FcDesigner.addDragRule({
+  name: 'editor',
+  label: 'Editor',
+  icon: 'icon-editor',
+  menu: 'main',
+  mask: false,
+  input: true,
+  drag: false,
+  dragBtn: true,
+  inside: false,
+  only: false,
+  handleBtn: true,
+  languageKey: [],
+  rule() {
+    return {
+      type: 'editor',
+      field: 'editor',
+      title: 'Editor',
+      props: { rows: 5, placeholder: 'Please input content' }
+    }
+  },
+  props() {
+    return [
+      { type: 'inputNumber', field: 'rows', title: 'Rows', props: { min: 2, max: 20 } },
+      { type: 'input', field: 'placeholder', title: 'Placeholder' },
+      { type: 'inputNumber', field: 'maxlength', title: 'Max Length' }
+    ]
+  }
+})
+
+FcDesigner.addDragRule({
+  name: 'signature',
+  label: 'Signature',
+  icon: 'icon-input',
+  menu: 'main',
+  mask: false,
+  input: true,
+  drag: false,
+  dragBtn: true,
+  inside: false,
+  only: false,
+  handleBtn: true,
+  languageKey: [],
+  rule() {
+    return {
+      type: 'signature',
+      field: 'signature',
+      title: 'Signature',
+      props: {}
+    }
+  },
+  props() {
+    return []
+  }
+})
+
+FcDesigner.addDragRule({
+  name: 'transfer',
+  label: 'Transfer',
+  icon: 'icon-transfer',
+  menu: 'main',
+  mask: false,
+  input: true,
+  drag: false,
+  dragBtn: true,
+  inside: false,
+  only: false,
+  handleBtn: true,
+  languageKey: [],
+  rule() {
+    return {
+      type: 'transfer',
+      field: 'transfer',
+      title: 'Transfer',
+      props: { options: [], leftTitle: 'Source', rightTitle: 'Target' }
+    }
+  },
+  props() {
+    return [
+      { type: 'input', field: 'leftTitle', title: 'Left Title' },
+      { type: 'input', field: 'rightTitle', title: 'Right Title' }
+    ]
+  }
+})
+
+FcDesigner.addDragRule({
+  name: 'cascader',
+  label: 'Cascader',
+  icon: 'icon-cascader',
+  menu: 'main',
+  mask: false,
+  input: true,
+  drag: false,
+  dragBtn: true,
+  inside: false,
+  only: false,
+  handleBtn: true,
+  languageKey: [],
+  rule() {
+    return {
+      type: 'cascader',
+      field: 'cascader',
+      title: 'Cascader',
+      props: { options: [], placeholder: 'Please select' }
+    }
+  },
+  props() {
+    return [
+      { type: 'input', field: 'placeholder', title: 'Placeholder' }
+    ]
+  }
+})
+
+FcDesigner.addDragRule({
+  name: 'slider',
+  label: 'Slider',
+  icon: 'icon-slider',
+  menu: 'main',
+  mask: false,
+  input: true,
+  drag: false,
+  dragBtn: true,
+  inside: false,
+  only: false,
+  handleBtn: true,
+  languageKey: [],
+  rule() {
+    return {
+      type: 'slider',
+      field: 'slider',
+      title: 'Slider',
+      props: { min: 0, max: 100, step: 1 }
+    }
+  },
+  props() {
+    return [
+      { type: 'inputNumber', field: 'min', title: 'Min' },
+      { type: 'inputNumber', field: 'max', title: 'Max' },
+      { type: 'inputNumber', field: 'step', title: 'Step' }
     ]
   }
 })

@@ -1216,6 +1216,14 @@ const deriveColumnsFromBinding = (binding: any, subForms?: Record<string, any>):
         type = 'rate'
       } else if (r.type === 'slider') {
         type = 'slider'
+      } else if (r.type === 'editor') {
+        type = 'editor'
+      } else if (r.type === 'signature') {
+        type = 'signature'
+      } else if (r.type === 'transfer') {
+        type = 'transfer'
+      } else if (r.type === 'cascader') {
+        type = 'cascader'
       } else {
         // fallback: pass through unknown types directly so SubTableAddDialog can handle them
         type = r.type as any
@@ -1226,7 +1234,7 @@ const deriveColumnsFromBinding = (binding: any, subForms?: Record<string, any>):
       // Collect options from rule.options or rule.props.options
       const rawOptions = r.options || rProps.options
       const options = rawOptions
-        ? rawOptions.map((o: any) => ({ label: o.label ?? o.value, value: o.value }))
+        ? (type === 'cascader' ? rawOptions : rawOptions.map((o: any) => ({ label: o.label ?? o.value, value: o.value })))
         : undefined
 
       // Pass through relevant props
@@ -1234,7 +1242,7 @@ const deriveColumnsFromBinding = (binding: any, subForms?: Record<string, any>):
       const propKeys = [
         'action', 'accept', 'multiple', 'precision', 'min', 'max', 'rows', 'maxlength', 'fileNameTargetField',
         'isRange', 'valueFormat', 'startPlaceholder', 'endPlaceholder', 'treeData', 'checkStrictly',
-        'showAlpha', 'allowHalf', 'step',
+        'showAlpha', 'allowHalf', 'step', 'cascaderProps', 'leftTitle', 'rightTitle',
       ]
       for (const key of propKeys) {
         if (rProps[key] !== undefined) passProps[key] = rProps[key]
@@ -1245,6 +1253,8 @@ const deriveColumnsFromBinding = (binding: any, subForms?: Record<string, any>):
       if (rProps.nodeKey !== undefined) passProps.nodeKey = rProps.nodeKey
       if (rProps.showCheckbox !== undefined) passProps.showCheckbox = rProps.showCheckbox
       if (rProps.props !== undefined) passProps.labelProps = rProps.props
+      // cascader: map props.props to cascaderProps if not already set
+      if (type === 'cascader' && rProps.props && !passProps.cascaderProps) passProps.cascaderProps = rProps.props
 
       // Sync options into props.options so SubTableAddDialog can read from col.props?.options
       if (options) passProps.options = options
@@ -1285,13 +1295,18 @@ const convertFormCreateRule = (rule: any): FormField | null => {
   let dateType = 'date'
   if (rule.props?.type === 'datetime') dateType = 'datetime'
   else if (rule.props?.type === 'daterange') dateType = 'daterange'
-  const typeMap: Record<string, string> = { 'input': 'text', 'inputNumber': 'number', 'select': 'select', 'radio': 'radio', 'checkbox': 'checkbox', 'switch': 'switch', 'datePicker': dateType, 'DatePicker': dateType, 'date-picker': dateType, 'el-date-picker': dateType, 'timePicker': 'time', 'cascader': 'cascader', 'rate': 'rate', 'slider': 'slider', 'colorPicker': 'colorPicker', 'treeSelect': 'treeselect', 'upload': 'upload' }
+  const typeMap: Record<string, string> = { 'input': 'text', 'inputNumber': 'number', 'select': 'select', 'radio': 'radio', 'checkbox': 'checkbox', 'switch': 'switch', 'datePicker': dateType, 'DatePicker': dateType, 'date-picker': dateType, 'el-date-picker': dateType, 'timePicker': 'time', 'cascader': 'cascader', 'rate': 'rate', 'slider': 'slider', 'colorPicker': 'colorPicker', 'treeSelect': 'treeselect', 'upload': 'upload', 'editor': 'editor', 'signature': 'signature', 'transfer': 'transfer' }
   const field: FormField = { key: rule.field, label: rule.title || rule.field, type: typeMap[rule.type] || 'text', required: rule.validate?.some((v: any) => v.required) || false, placeholder: rule.props?.placeholder || '', span: rule.col?.span || 24 }
   const rawOptions = rule.options || rule.props?.options
   if (rawOptions) {
-    field.options = rawOptions.map((opt: any) => ({ label: opt.label || opt.value, value: opt.value }))
+    if (rule.type === 'cascader') {
+      field.options = rawOptions
+    } else {
+      field.options = rawOptions.map((opt: any) => ({ label: opt.label || opt.value, value: opt.value }))
+    }
     console.log(`Field ${rule.field} options:`, JSON.stringify(field.options))
   }
+  if (rule.type === 'cascader') { field.cascaderProps = rule.props?.props || rule.props?.cascaderProps }
   if (rule.type === 'input' && rule.props?.type === 'textarea') { field.type = 'textarea'; field.rows = rule.props?.rows || 3 }
   if (rule.type === 'input' && rule.props?.type === 'password') { field.type = 'password' }
   if (rule.type === 'timePicker' && rule.props?.isRange === true) { field.type = 'timerange' }

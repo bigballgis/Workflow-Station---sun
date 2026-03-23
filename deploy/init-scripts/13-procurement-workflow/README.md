@@ -1,7 +1,7 @@
 # 13-procurement-workflow
 
-基于数据库实际数据生成的初始化脚本（已合并所有增量脚本 04-09）。
-状态为 PUBLISHED，版本 1.0.0。所有脚本均为幂等（ON CONFLICT / DELETE + INSERT）。
+基于数据库实际数据生成的初始化脚本。
+状态为 PUBLISHED，current_version `1.0.6`。所有脚本均为幂等（ON CONFLICT / DELETE + INSERT）。
 
 ## 脚本说明
 
@@ -10,7 +10,8 @@
 | `00-create-function-unit.sql` | Function Unit + 4个 Forms + 8个 Actions |
 | `01-create-tables.sql` | 5个 Table Definitions + 所有 Field Definitions |
 | `02-create-bpmn-process.sql` | BPMN 流程定义（base64 XML） |
-| `03-form-table-bindings.sql` | Form-Table 绑定 + subForms rule（24个控件） |
+| `03-form-table-bindings.sql` | Form-Table 绑定 + subForms rule（30个控件） |
+| `04-add-new-subtable-fields.sql` | ~~已废弃~~ 仅旧数据库迁移用，新环境无需执行 |
 
 ## 执行顺序
 
@@ -28,7 +29,7 @@ EOF
 ### Function Unit
 - Code: `PROCUREMENT_WORKFLOW`
 - Name: `Procurement Workflow`
-- Status: `PUBLISHED`, Version: `1.0.0`
+- Status: `PUBLISHED`, current_version: `1.0.6`, version: `1.0.0`
 
 ### Forms (4个)
 | form_name | form_type | 说明 |
@@ -54,14 +55,15 @@ EOF
 | table_name | table_type | fields |
 |------------|------------|--------|
 | Request | MAIN | 11 |
-| RequestItems | SUB | 32（覆盖所有控件类型） |
+| RequestItems | SUB | 29（覆盖所有控件类型） |
 | ApprovalActions | ACTION | 9 |
 | RequestAttachments | SUB | 10 |
 | Review Table | SUB | 3 |
 
 ### RequestItems 控件类型覆盖
 input, inputNumber, textarea, select(单选/多选), switch, datePicker(date/datetime),
-upload, timePicker(单/范围), radio, rate, colorPicker, elTreeSelect, tree, checkbox
+upload, timePicker(单/范围), radio, rate, colorPicker, elTreeSelect, tree, checkbox,
+editor, signature, transfer, cascader, slider, password
 
 ### Form Table Bindings
 | form | table | binding_type | binding_mode | fk | sort |
@@ -83,7 +85,10 @@ Start → Submit Request → First Review → Approve?
             → No  → Auto Approved (end)
   → No  → Rejected (end)
 ```
-- Submit Request: formId=Request Form, actions=[Submit Request]
-- First Review: formId=Request Form, actions=[Approve First, Rejected First]
-- Second Review: formId=Request Form
-- Manager Review: formId=Approval Form, actions=[Approve, Reject, Transfer, Delegate]
+
+| 节点 | formId | actions |
+|------|--------|---------|
+| Submit Request | Request Form | Submit Request |
+| First Review | Request Form | Approve First, Rejected First |
+| Second Review | Request Form | (无) |
+| Manager Review | Approval Form | Approve, Reject, Transfer, Delegate |

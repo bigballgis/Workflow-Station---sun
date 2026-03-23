@@ -25,7 +25,45 @@
         :min-width="col.minWidth || 100"
       >
         <template #default="scope">
-          <span>{{ scope.row[col.field] ?? '-' }}</span>
+          <!-- colorPicker -->
+          <template v-if="col.type === 'colorPicker'">
+            <span v-if="scope.row[col.field]" class="color-swatch" :style="{ backgroundColor: scope.row[col.field] }" :title="scope.row[col.field]" />
+            <span v-else>-</span>
+          </template>
+          <!-- editor -->
+          <template v-else-if="col.type === 'editor'">
+            <span v-if="scope.row[col.field]" v-html="scope.row[col.field]" class="editor-preview" />
+            <span v-else>-</span>
+          </template>
+          <!-- signature -->
+          <template v-else-if="col.type === 'signature'">
+            <img v-if="scope.row[col.field]" :src="scope.row[col.field]" class="signature-preview" alt="Signature" />
+            <span v-else>-</span>
+          </template>
+          <!-- transfer -->
+          <template v-else-if="col.type === 'transfer'">
+            <span>{{ Array.isArray(scope.row[col.field]) ? scope.row[col.field].join(', ') : (scope.row[col.field] ?? '-') }}</span>
+          </template>
+          <!-- cascader -->
+          <template v-else-if="col.type === 'cascader'">
+            <span>{{ Array.isArray(scope.row[col.field]) ? scope.row[col.field].join(' / ') : (scope.row[col.field] ?? '-') }}</span>
+          </template>
+          <!-- rate -->
+          <template v-else-if="col.type === 'rate'">
+            <el-rate v-if="scope.row[col.field] != null" :model-value="Number(scope.row[col.field])" :max="col.props?.max || 5" disabled style="display: inline-flex;" />
+            <span v-else>-</span>
+          </template>
+          <!-- slider -->
+          <template v-else-if="col.type === 'slider'">
+            <el-slider v-if="scope.row[col.field] != null" :model-value="Number(scope.row[col.field])" :min="col.props?.min ?? 0" :max="col.props?.max ?? 100" disabled style="width: 100%; padding: 0 10px;" />
+            <span v-else>-</span>
+          </template>
+          <!-- password -->
+          <template v-else-if="col.type === 'password'">
+            <span>••••••</span>
+          </template>
+          <!-- default -->
+          <span v-else>{{ scope.row[col.field] ?? '-' }}</span>
         </template>
       </el-table-column>
 
@@ -78,11 +116,12 @@ const { t } = useI18n()
 interface ColumnConfig {
   field: string
   label: string
-  type?: 'input' | 'number' | 'date' | 'switch' | 'text' | 'textarea' | 'select' | 'radio' | 'checkbox' | 'datetime' | 'upload' | 'user' | 'department'
+  type?: 'input' | 'number' | 'date' | 'switch' | 'text' | 'textarea' | 'select' | 'radio' | 'checkbox' | 'datetime' | 'upload' | 'user' | 'department' | 'password' | 'timerange' | 'treeselect' | 'colorPicker' | 'rate' | 'slider' | 'tree' | 'editor' | 'signature' | 'transfer' | 'cascader'
   width?: number
   minWidth?: number
   required?: boolean
   placeholder?: string
+  options?: Array<{ label: string; value: any }>
   props?: Record<string, any>
 }
 
@@ -140,6 +179,7 @@ const dialogColumns = computed<DialogColumn[]>(() => {
       required: col.required,
       placeholder: col.placeholder,
       minWidth: col.minWidth,
+      options: col.options,
       props: col.props,
     }
   })
@@ -233,6 +273,32 @@ defineExpose({
     margin-top: 12px;
     display: flex;
     justify-content: flex-end;
+  }
+
+  .color-swatch {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border-radius: 3px;
+    border: 1px solid #dcdfe6;
+    vertical-align: middle;
+  }
+
+  .editor-preview {
+    display: inline-block;
+    max-width: 200px;
+    max-height: 60px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 12px;
+    line-height: 1.4;
+  }
+
+  .signature-preview {
+    max-width: 120px;
+    max-height: 40px;
+    object-fit: contain;
+    vertical-align: middle;
   }
 }
 </style>

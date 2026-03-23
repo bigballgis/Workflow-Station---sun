@@ -313,3 +313,4 @@ backend/workflow-engine-core/Dockerfile
 frontend/admin-center/package-lock.json
 frontend/developer-workstation/package-lock.json
 frontend/user-portal/package-lock.json
+*.MD

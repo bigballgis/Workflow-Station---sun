@@ -20,6 +20,10 @@ export type ColumnType =
   | 'rate'
   | 'slider'
   | 'tree'
+  | 'editor'
+  | 'signature'
+  | 'transfer'
+  | 'cascader'
 
 export interface DialogColumn {
   field: string
@@ -82,6 +86,18 @@ export function buildInitialRow(columns: DialogColumn[]): Record<string, any> {
       case 'tree':
         row[col.field] = []
         break
+      case 'transfer':
+        row[col.field] = []
+        break
+      case 'cascader':
+        row[col.field] = []
+        break
+      case 'editor':
+        row[col.field] = ''
+        break
+      case 'signature':
+        row[col.field] = ''
+        break
       default:
         row[col.field] = ''
     }
@@ -95,6 +111,7 @@ export function buildRules(columns: DialogColumn[]): FormRules {
     if (col.required) {
       const trigger =
         col.type === 'select' || col.type === 'date' || col.type === 'datetime' || col.type === 'checkbox' || col.type === 'timerange' || col.type === 'treeselect'
+        || col.type === 'cascader' || col.type === 'transfer'
           ? 'change'
           : 'blur'
       rules[col.field] = [{ required: true, message: `${col.label} is required`, trigger }]
@@ -123,6 +140,10 @@ export const CONTROL_TYPE_MAP: Record<NonNullable<ColumnType> | 'text', string> 
   rate: 'ElRate',
   slider: 'ElSlider',
   tree: 'ElTree',
+  editor: 'ElInput',
+  signature: 'ElInput',
+  transfer: 'ElTransfer',
+  cascader: 'ElCascader',
 }
 
 export function resolveControlComponent(col: DialogColumn): string {

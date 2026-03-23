@@ -210,6 +210,51 @@
           style="width: 100%"
         />
 
+        <!-- editor (rich text) -->
+        <el-input
+          v-else-if="col.type === 'editor'"
+          v-model="formData[col.field]"
+          type="textarea"
+          :rows="col.props?.rows || 5"
+          :placeholder="col.placeholder || col.label"
+          :maxlength="col.props?.maxlength"
+        />
+
+        <!-- signature (base64 image URL input) -->
+        <div v-else-if="col.type === 'signature'" style="width: 100%;">
+          <canvas
+            :ref="(el: any) => { if (el) signatureCanvasRefs[col.field] = el }"
+            class="signature-canvas"
+            @mousedown="startSign($event, col.field)"
+            @mousemove="drawSign($event, col.field)"
+            @mouseup="endSign(col.field)"
+            @mouseleave="endSign(col.field)"
+          />
+          <div style="margin-top: 4px;">
+            <el-button size="small" @click="clearSignature(col.field)">Clear</el-button>
+          </div>
+        </div>
+
+        <!-- transfer -->
+        <el-transfer
+          v-else-if="col.type === 'transfer'"
+          v-model="formData[col.field]"
+          :data="(col.props?.options ?? col.options ?? []).map((o: any) => ({ key: o.value, label: o.label }))"
+          :titles="[col.props?.leftTitle || 'Source', col.props?.rightTitle || 'Target']"
+          filterable
+        />
+
+        <!-- cascader -->
+        <el-cascader
+          v-else-if="col.type === 'cascader'"
+          v-model="formData[col.field]"
+          :options="col.props?.options ?? col.options ?? []"
+          :props="col.props?.cascaderProps"
+          :placeholder="col.placeholder || col.label"
+          clearable
+          style="width: 100%"
+        />
+
         <!-- user / department — rendered as plain input (placeholder) -->
         <el-input
           v-else-if="col.type === 'user' || col.type === 'department'"
@@ -261,6 +306,52 @@ const emit = defineEmits<{
 const formRef = ref<FormInstance>()
 const formData = ref<Record<string, any>>({})
 const uploadNames = ref<Record<string, string>>({})
+
+// ─── Signature canvas state ───────────────────────────────────────────────────
+const signatureCanvasRefs = ref<Record<string, HTMLCanvasElement>>({})
+const signingField = ref<string | null>(null)
+
+function startSign(e: MouseEvent, field: string) {
+  signingField.value = field
+  const canvas = signatureCanvasRefs.value[field]
+  if (!canvas) return
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+  const rect = canvas.getBoundingClientRect()
+  ctx.beginPath()
+  ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top)
+}
+
+function drawSign(e: MouseEvent, field: string) {
+  if (signingField.value !== field) return
+  const canvas = signatureCanvasRefs.value[field]
+  if (!canvas) return
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+  const rect = canvas.getBoundingClientRect()
+  ctx.lineWidth = 2
+  ctx.lineCap = 'round'
+  ctx.strokeStyle = '#000'
+  ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top)
+  ctx.stroke()
+}
+
+function endSign(field: string) {
+  if (signingField.value !== field) return
+  signingField.value = null
+  const canvas = signatureCanvasRefs.value[field]
+  if (!canvas) return
+  formData.value[field] = canvas.toDataURL('image/png')
+}
+
+function clearSignature(field: string) {
+  const canvas = signatureCanvasRefs.value[field]
+  if (!canvas) return
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
+  formData.value[field] = ''
+}
 
 const formRules = computed(() => buildRules(props.columns))
 
@@ -337,5 +428,14 @@ function clearUpload(col: DialogColumn) {
 /* 强制颜色选择器面板显示在 dialog 之上 */
 .sub-table-color-popper {
   z-index: 99999 !important;
+}
+
+.signature-canvas {
+  width: 100%;
+  height: 120px;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  cursor: crosshair;
+  background: #fff;
 }
 </style>
