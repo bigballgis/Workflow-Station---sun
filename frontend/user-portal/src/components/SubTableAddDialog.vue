@@ -202,6 +202,7 @@
           v-else-if="col.type === 'colorPicker'"
           v-model="formData[col.field]"
           :show-alpha="col.props?.showAlpha || false"
+          popper-class="sub-table-color-popper"
         />
 
         <!-- rate -->
@@ -365,6 +366,11 @@ function clearUpload(col: DialogColumn) {
 
 /* 强制日期/时间 picker popper 显示在 dialog 和遮罩之上 */
 .sub-table-date-popper {
+  z-index: 99999 !important;
+}
+
+/* 强制颜色选择器面板显示在 dialog 和遮罩之上 */
+.sub-table-color-popper {
   z-index: 99999 !important;
 }
 </style>
