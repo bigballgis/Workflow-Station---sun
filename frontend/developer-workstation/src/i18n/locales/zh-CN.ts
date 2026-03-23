@@ -979,7 +979,8 @@ export default {
       send: '发送',
       inputFeedback: '输入修改意见...',
       aiReplying: 'AI 正在回复中...',
-      inputMessage: '输入消息...'
+      inputMessage: '输入消息...',
+      autoGenerating: '正在基于已有文档自动生成，请稍候...'
     },
     doc: {
       requirements: '需求文档',

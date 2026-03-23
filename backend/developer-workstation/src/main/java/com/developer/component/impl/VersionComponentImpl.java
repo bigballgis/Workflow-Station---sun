@@ -90,8 +90,8 @@ public class VersionComponentImpl implements VersionComponent {
         } catch (BusinessException e) {
             throw e;
         } catch (Exception e) {
-            log.error("创建版本快照失败，functionUnitId={}, version={}: {}", functionUnitId, newVersion, e.getMessage(), e);
-            throw new BusinessException("SYS_SNAPSHOT_ERROR", "创建版本快照失败: " + e.getMessage());
+            log.error("Failed to create version snapshot, functionUnitId={}, version={}: {}", functionUnitId, newVersion, e.getMessage(), e);
+            throw new BusinessException("SYS_SNAPSHOT_ERROR", "Failed to create version snapshot: " + e.getMessage());
         }
     }
     
@@ -127,7 +127,7 @@ public class VersionComponentImpl implements VersionComponent {
             result.put("differences", differences);
         } catch (Exception e) {
             log.error("Failed to compare versions", e);
-            result.put("differences", Map.of("error", "无法比较版本"));
+            result.put("differences", Map.of("error", "Failed to compare versions"));
         }
         
         return result;
@@ -142,7 +142,7 @@ public class VersionComponentImpl implements VersionComponent {
         Version targetVersion = getById(versionId);
         
         if (!targetVersion.getFunctionUnit().getId().equals(functionUnitId)) {
-            throw new BusinessException("BIZ_VERSION_MISMATCH", "版本不属于该功能单元");
+            throw new BusinessException("BIZ_VERSION_MISMATCH", "Version does not belong to this function unit");
         }
         
         try {
@@ -151,7 +151,7 @@ public class VersionComponentImpl implements VersionComponent {
             Version backup = Version.builder()
                     .functionUnit(functionUnit)
                     .versionNumber(backupVersion)
-                    .changeLog("回滚前自动备份")
+                    .changeLog("Auto backup before rollback")
                     .snapshotData(createSnapshot(functionUnit))
                     .publishedBy(getCurrentOperator())
                     .build();
@@ -166,7 +166,7 @@ public class VersionComponentImpl implements VersionComponent {
             Version rollbackVersion = Version.builder()
                     .functionUnit(functionUnit)
                     .versionNumber(newVersion)
-                    .changeLog("回滚到版本 " + targetVersion.getVersionNumber())
+                    .changeLog("Rollback to version " + targetVersion.getVersionNumber())
                     .snapshotData(targetVersion.getSnapshotData())
                     .publishedBy(getCurrentOperator())
                     .build();
@@ -177,7 +177,7 @@ public class VersionComponentImpl implements VersionComponent {
             
             return functionUnitRepository.save(functionUnit);
         } catch (Exception e) {
-            throw new BusinessException("SYS_ROLLBACK_ERROR", "回滚失败: " + e.getMessage());
+            throw new BusinessException("SYS_ROLLBACK_ERROR", "Rollback failed: " + e.getMessage());
         }
     }
     

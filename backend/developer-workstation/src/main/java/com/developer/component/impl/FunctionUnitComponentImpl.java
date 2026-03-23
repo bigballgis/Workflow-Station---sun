@@ -564,7 +564,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         try {
             String[] parts = currentVersion.split("\\.");
             if (parts.length != 3) {
-                log.warn("版本号格式异常 '{}', 回退到 1.0.0", currentVersion);
+                log.warn("Malformed version string '{}', falling back to 1.0.0", currentVersion);
                 return "1.0.0";
             }
             int major = Integer.parseInt(parts[0]);
@@ -572,7 +572,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
             int patch = Integer.parseInt(parts[2]) + 1;
             return major + "." + minor + "." + patch;
         } catch (NumberFormatException e) {
-            log.warn("版本号解析失败 '{}': {}, 回退到 1.0.0", currentVersion, e.getMessage());
+            log.warn("Failed to parse version '{}': {}, falling back to 1.0.0", currentVersion, e.getMessage());
             return "1.0.0";
         }
     }

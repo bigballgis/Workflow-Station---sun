@@ -73,8 +73,8 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
                     existingDocuments.size(),
                     existingDocuments.stream().map(d -> d.get("documentType")).collect(java.util.stream.Collectors.joining(",")));
         } catch (Exception e) {
-            log.error("加载上下文/文档失败: functionUnitId={}", request.getFunctionUnitId(), e);
-            // 降级：context 和 documents 为空，不阻塞对话
+            log.error("Failed to load context/documents: functionUnitId={}", request.getFunctionUnitId(), e);
+            // Degrade gracefully: context and documents empty, don't block conversation
             context = null;
             existingDocuments = List.of();
         }
@@ -87,7 +87,7 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
         final List<Map<String, String>> finalExistingDocuments = existingDocuments;
         CompletableFuture.runAsync(() -> {
             try {
-                log.info("chatStream async: 开始 N8N 调用, functionUnitId={}, sessionId={}, contextPresent={}, docsCount={}",
+                log.info("chatStream async: starting N8N call, functionUnitId={}, sessionId={}, contextPresent={}, docsCount={}",
                         request.getFunctionUnitId(), session.getSessionId(),
                         finalContext != null, finalExistingDocuments.size());
 
@@ -109,7 +109,7 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
                     String documentTypeStr = (String) n8nResponse.get("documentType");
                     if (documentTypeStr != null) {
                         AiDocumentType documentType = AiDocumentType.valueOf(documentTypeStr);
-                        String summary = (String) n8nResponse.getOrDefault("documentSummary", "AI 生成文档");
+                        String summary = (String) n8nResponse.getOrDefault("documentSummary", "AI generated document");
 
                         aiGenerationService.saveDocument(request.getFunctionUnitId(), documentType, documentContent, summary, userId);
                         aiGenerationService.sendChatEvent(request.getFunctionUnitId(), userId,
@@ -152,13 +152,13 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
                 aiGenerationService.completeChatEmitter(request.getFunctionUnitId(), userId);
 
             } catch (Exception e) {
-                log.error("N8N 调用异常: functionUnitId={}, sessionId={}", request.getFunctionUnitId(), session.getSessionId(), e);
-                // 发送错误事件
+                log.error("N8N call failed: functionUnitId={}, sessionId={}", request.getFunctionUnitId(), session.getSessionId(), e);
+                // Send error event
                 try {
                     aiGenerationService.sendChatEvent(request.getFunctionUnitId(), userId,
                             AiChatSseEvent.builder().eventType("error").data(e.getMessage()).build());
                 } catch (Exception sendError) {
-                    log.error("发送错误事件失败", sendError);
+                    log.error("Failed to send error event", sendError);
                 }
                 // 完成 emitter
                 aiGenerationService.completeChatEmitter(request.getFunctionUnitId(), userId);
@@ -251,8 +251,8 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
         } catch (AiValidationFailedException e) {
             throw e;
         } catch (Exception e) {
-            log.error("应用生成数据失败: functionUnitId={}", functionUnitId, e);
-            // 发送写入错误事件
+            log.error("Failed to apply generated data: functionUnitId={}", functionUnitId, e);
+            // Send write error event
             aiGenerationService.sendEventNotification(functionUnitId,
                     AiChatSseEvent.builder().eventType("write_error").data(Map.of("error", e.getMessage())).build());
             throw e;

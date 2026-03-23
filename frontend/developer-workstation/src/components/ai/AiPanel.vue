@@ -479,8 +479,8 @@ function handlePhaseComplete(_phase: AiPhase) {
 
 async function autoTriggerPhase(phase: AiPhase) {
   const triggerMessages: Record<string, string> = {
-    DESIGN: '[AUTO_TRIGGER] 请基于已有的需求文档，直接生成完整的设计方案文档。',
-    GENERATION: '[AUTO_TRIGGER] 请基于已有的需求文档和设计文档，直接生成完整的功能单元组件数据。'
+    DESIGN: '[AUTO_TRIGGER] Please generate a complete design document based on the existing requirements document.',
+    GENERATION: '[AUTO_TRIGGER] Please generate complete function unit component data based on the existing requirements and design documents.'
   }
   const message = triggerMessages[phase]
   if (!message) return

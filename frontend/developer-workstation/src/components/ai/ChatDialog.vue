@@ -353,7 +353,7 @@ function autoSendMessage(message: string) {
     id: Date.now() - 1,
     sessionId: props.sessionId,
     role: 'ASSISTANT',
-    content: '正在基于已有文档自动生成，请稍候...',
+    content: t('ai.chat.autoGenerating'),
     phase: props.phase,
     createdAt: new Date().toISOString()
   }

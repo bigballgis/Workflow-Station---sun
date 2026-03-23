@@ -1011,7 +1011,8 @@ export default {
       send: 'Send',
       inputFeedback: 'Enter feedback...',
       aiReplying: 'AI is replying...',
-      inputMessage: 'Enter message...'
+      inputMessage: 'Enter message...',
+      autoGenerating: 'Auto-generating based on existing documents, please wait...'
     },
     doc: {
       requirements: 'Requirements',

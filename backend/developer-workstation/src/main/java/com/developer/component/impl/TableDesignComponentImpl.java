@@ -14,6 +14,7 @@ import com.developer.enums.DatabaseDialect;
 import com.developer.exception.BusinessException;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.*;
+import com.platform.common.i18n.I18nService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -36,6 +37,7 @@ public class TableDesignComponentImpl implements TableDesignComponent {
     private final FunctionUnitRepository functionUnitRepository;
     private final FormDefinitionRepository formDefinitionRepository;
     private final FormTableBindingRepository formTableBindingRepository;
+    private final I18nService i18nService;
     
     @Override
     @Transactional
@@ -45,8 +47,8 @@ public class TableDesignComponentImpl implements TableDesignComponent {
         
         if (tableDefinitionRepository.existsByFunctionUnitIdAndTableName(functionUnitId, request.getTableName())) {
             throw new BusinessException("CONFLICT_TABLE_NAME_EXISTS", 
-                    "表名已存在: " + request.getTableName(),
-                    "请使用其他表名");
+                    i18nService.getMessage("table.name_exists", request.getTableName()),
+                    i18nService.getMessage("table.use_other_name"));
         }
         
         TableDefinition tableDefinition = TableDefinition.builder()
@@ -79,8 +81,8 @@ public class TableDesignComponentImpl implements TableDesignComponent {
         if (tableDefinitionRepository.existsByFunctionUnitIdAndTableNameAndIdNot(
                 tableDefinition.getFunctionUnit().getId(), request.getTableName(), id)) {
             throw new BusinessException("CONFLICT_TABLE_NAME_EXISTS", 
-                    "表名已存在: " + request.getTableName(),
-                    "请使用其他表名");
+                    i18nService.getMessage("table.name_exists", request.getTableName()),
+                    i18nService.getMessage("table.use_other_name"));
         }
         
         // 更新表基本信息
@@ -92,92 +94,33 @@ public class TableDesignComponentImpl implements TableDesignComponent {
         // 更新字段定义
         // 由于使用了 cascade = CascadeType.ALL, orphanRemoval = true
         // 先清空内存中的集合，然后显式删除旧的字段记录，避免唯一约束冲突
-        // 注意：必须先清空集合，避免 Hibernate 尝试加载已删除的实体
         tableDefinition.getFieldDefinitions().clear();
-        // 使用 @Modifying 和 @Query 直接通过 SQL 删除，确保删除操作立即执行
-        log.info("Deleting existing fields for table {}", id);
         fieldDefinitionRepository.deleteByTableDefinitionId(id);
-        fieldDefinitionRepository.flush(); // 确保删除操作立即执行
+        fieldDefinitionRepository.flush();
         
         if (request.getFields() != null && !request.getFields().isEmpty()) {
-            log.info("Updating table {} with {} fields", id, request.getFields().size());
             int sortOrder = 0;
-            int skippedCount = 0;
             for (FieldDefinitionRequest fieldRequest : request.getFields()) {
-                log.debug("Processing field request: fieldName={}, dataType={}, nullable={}", 
-                    fieldRequest.getFieldName(), fieldRequest.getDataType(), fieldRequest.getNullable());
-                
-                // 验证字段名不为空
+                // Skip fields with empty name or null dataType
                 if (fieldRequest.getFieldName() == null || fieldRequest.getFieldName().trim().isEmpty()) {
-                    log.warn("Skipping field with empty name at index {}", sortOrder);
-                    skippedCount++;
-                    continue; // 跳过空字段名
+                    continue;
                 }
-                
-                // 验证数据类型不为空
                 if (fieldRequest.getDataType() == null) {
                     log.warn("Skipping field {} with null dataType", fieldRequest.getFieldName());
-                    skippedCount++;
                     continue;
                 }
                 
-                log.info("Creating field: name={}, type={}, sortOrder={}", 
-                    fieldRequest.getFieldName(), fieldRequest.getDataType(), sortOrder);
-                try {
-                    FieldDefinition field = createField(tableDefinition, fieldRequest, sortOrder++);
-                    tableDefinition.getFieldDefinitions().add(field);
-                    log.debug("Field added successfully: {}", field.getFieldName());
-                } catch (Exception e) {
-                    log.error("Failed to create field {}: {}", fieldRequest.getFieldName(), e.getMessage(), e);
-                    skippedCount++;
-                }
+                FieldDefinition field = createField(tableDefinition, fieldRequest, sortOrder++);
+                tableDefinition.getFieldDefinitions().add(field);
             }
-            log.info("Total fields processed: {}, added: {}, skipped: {}", 
-                request.getFields().size(), tableDefinition.getFieldDefinitions().size(), skippedCount);
-        } else {
-            log.warn("No fields in request for table {} (fields is null or empty)", id);
         }
         
         TableDefinition saved = tableDefinitionRepository.save(tableDefinition);
-        log.info("Table saved with {} fields in memory", saved.getFieldDefinitions().size());
-        
-        // 刷新EntityManager，确保字段被持久化
         tableDefinitionRepository.flush();
         
-        // 强制初始化字段集合，确保字段被加载（在事务内）
-        // 访问 size() 和遍历会触发懒加载
-        int fieldCount = saved.getFieldDefinitions().size();
-        log.info("Field count after flush: {}", fieldCount);
-        
-        // 遍历字段，强制加载所有字段数据
-        saved.getFieldDefinitions().forEach(field -> {
-            field.getFieldName(); // 访问字段属性，确保被加载
-            field.getDataType();
-        });
-        
-        // 重新加载包含字段的数据，确保返回的数据包含所有字段
-        // 因为保存后立即序列化时，懒加载的字段可能没有被加载
-        TableDefinition result = tableDefinitionRepository.findByIdWithFields(saved.getId())
+        // Reload with fields to ensure consistent state for serialization
+        return tableDefinitionRepository.findByIdWithFields(saved.getId())
                 .orElse(saved);
-        
-        // 再次强制初始化字段集合
-        int reloadedFieldCount = result.getFieldDefinitions().size();
-        log.info("Reloaded table {} with {} fields from database", result.getId(), reloadedFieldCount);
-        
-        // 遍历重新加载的字段，确保所有字段数据被加载
-        result.getFieldDefinitions().forEach(field -> {
-            field.getFieldName();
-            field.getDataType();
-        });
-        
-        // 如果重新加载后字段数量为0，但内存中有字段，说明可能是事务问题
-        if (reloadedFieldCount == 0 && fieldCount > 0) {
-            log.warn("Reloaded table has 0 fields but memory has {} fields. Using in-memory data.", fieldCount);
-            // 使用内存中的数据
-            result = saved;
-        }
-        
-        return result;
     }
     
     @Override
@@ -188,15 +131,15 @@ public class TableDesignComponentImpl implements TableDesignComponent {
         // 检查是否被表单引用（旧的单表绑定方式）
         if (formDefinitionRepository.existsByBoundTable_Id(id)) {
             throw new BusinessException("BIZ_TABLE_IN_USE", 
-                    "表被表单引用，无法删除",
-                    "请先解除表单绑定");
+                    i18nService.getMessage("table.in_use_by_form"),
+                    i18nService.getMessage("table.unbind_form_first"));
         }
         
         // 检查是否被表单多表绑定引用
         if (formTableBindingRepository.existsByTableId(id)) {
             throw new BusinessException("BIZ_TABLE_IN_USE", 
-                    "表被表单绑定引用，无法删除",
-                    "请先解除表单绑定");
+                    i18nService.getMessage("table.in_use_by_binding"),
+                    i18nService.getMessage("table.unbind_form_first"));
         }
         
         tableDefinitionRepository.delete(tableDefinition);
@@ -228,7 +171,7 @@ public class TableDesignComponentImpl implements TableDesignComponent {
         ValidationResult result = new ValidationResult();
         
         if (hasCircularDependency(functionUnitId)) {
-            result.addError("CIRCULAR_DEPENDENCY", "检测到循环依赖", null);
+            result.addError("CIRCULAR_DEPENDENCY", i18nService.getMessage("table.circular_dependency"), null);
         }
         
         return result;

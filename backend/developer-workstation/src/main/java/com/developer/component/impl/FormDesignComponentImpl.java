@@ -19,6 +19,7 @@ import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.TableDefinitionRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.platform.common.i18n.I18nService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -40,6 +41,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
     private final TableDefinitionRepository tableDefinitionRepository;
     private final FormTableBindingRepository formTableBindingRepository;
     private final ObjectMapper objectMapper;
+    private final I18nService i18nService;
     
     @Override
     @Transactional
@@ -49,8 +51,8 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         
         if (formDefinitionRepository.existsByFunctionUnitIdAndFormName(functionUnitId, request.getFormName())) {
             throw new BusinessException("CONFLICT_FORM_NAME_EXISTS", 
-                    "表单名已存在: " + request.getFormName(),
-                    "请使用其他表单名");
+                    i18nService.getMessage("form.name_exists", request.getFormName()),
+                    i18nService.getMessage("form.use_other_name"));
         }
         
         FormDefinition formDefinition = FormDefinition.builder()
@@ -78,8 +80,8 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         if (formDefinitionRepository.existsByFunctionUnitIdAndFormNameAndIdNot(
                 formDefinition.getFunctionUnit().getId(), request.getFormName(), id)) {
             throw new BusinessException("CONFLICT_FORM_NAME_EXISTS", 
-                    "表单名已存在: " + request.getFormName(),
-                    "请使用其他表单名");
+                    i18nService.getMessage("form.name_exists", request.getFormName()),
+                    i18nService.getMessage("form.use_other_name"));
         }
         
         formDefinition.setFormName(request.getFormName());
@@ -127,8 +129,8 @@ public class FormDesignComponentImpl implements FormDesignComponent {
             if (bpmnXml != null && bpmnXml.contains(form.getFormName())) {
                 throw new BusinessException(
                     "FORM_IN_USE",
-                    "无法删除表单：该表单正在被流程定义使用",
-                    "请先从流程定义中移除该表单的引用"
+                    i18nService.getMessage("form.in_use"),
+                    i18nService.getMessage("form.remove_reference_first")
                 );
             }
         }
@@ -156,7 +158,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         try {
             return objectMapper.writeValueAsString(formDefinition.getConfigJson());
         } catch (JsonProcessingException e) {
-            throw new BusinessException("SYS_JSON_ERROR", "生成表单配置失败");
+            throw new BusinessException("SYS_JSON_ERROR", i18nService.getMessage("form.config_generate_failed"));
         }
     }
     
@@ -165,7 +167,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         try {
             return objectMapper.readValue(configJson, Map.class);
         } catch (JsonProcessingException e) {
-            throw new BusinessException("VAL_INVALID_JSON", "无效的JSON配置");
+            throw new BusinessException("VAL_INVALID_JSON", i18nService.getMessage("form.invalid_json_config"));
         }
     }
     
@@ -177,7 +179,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         
         // 验证配置JSON
         if (formDefinition.getConfigJson() == null || formDefinition.getConfigJson().isEmpty()) {
-            result.addError("EMPTY_CONFIG", "表单配置为空", null);
+            result.addError("EMPTY_CONFIG", i18nService.getMessage("form.empty_config"), null);
         }
         
         // 验证数据绑定
@@ -202,16 +204,16 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         // 检查是否已绑定该表
         if (formTableBindingRepository.existsByFormIdAndTableId(formId, request.getTableId())) {
             throw new BusinessException("BINDING_EXISTS", 
-                    "该表已绑定到此表单",
-                    "请勿重复绑定");
+                    i18nService.getMessage("form.binding_exists"),
+                    i18nService.getMessage("form.no_duplicate_binding"));
         }
         
         // 检查主表绑定唯一性
         if (request.getBindingType() == BindingType.PRIMARY) {
             if (formTableBindingRepository.existsByFormIdAndBindingType(formId, BindingType.PRIMARY)) {
                 throw new BusinessException("PRIMARY_BINDING_EXISTS", 
-                        "此表单已有主表绑定",
-                        "请先删除现有主表绑定");
+                        i18nService.getMessage("form.primary_binding_exists"),
+                        i18nService.getMessage("form.remove_existing_primary"));
             }
         }
         
@@ -255,8 +257,8 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         if (request.getBindingType() == BindingType.PRIMARY && binding.getBindingType() != BindingType.PRIMARY) {
             if (formTableBindingRepository.existsByFormIdAndBindingType(binding.getFormId(), BindingType.PRIMARY)) {
                 throw new BusinessException("PRIMARY_BINDING_EXISTS", 
-                        "此表单已有主表绑定",
-                        "请先删除现有主表绑定");
+                        i18nService.getMessage("form.primary_binding_exists"),
+                        i18nService.getMessage("form.remove_existing_primary"));
             }
         }
         
@@ -300,8 +302,8 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         
         if (!fieldExists) {
             throw new BusinessException("INVALID_FOREIGN_KEY", 
-                    "指定的外键字段在表中不存在: " + foreignKeyField,
-                    "请检查字段名是否正确");
+                    i18nService.getMessage("form.foreign_key_not_found", foreignKeyField),
+                    i18nService.getMessage("form.check_field_name"));
         }
     }
 }
