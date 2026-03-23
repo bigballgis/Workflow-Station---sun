@@ -192,7 +192,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
             zos.finish();
             return baos.toByteArray();
         } catch (IOException e) {
-            throw new BusinessException("SYS_EXPORT_ERROR", "导出功能单元失败: " + e.getMessage());
+            throw new BusinessException("SYS_EXPORT_ERROR", "Failed to export function unit: " + e.getMessage());
         }
     }
     
@@ -212,7 +212,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
             
             return checksumBuilder.toString();
         } catch (NoSuchAlgorithmException e) {
-            throw new BusinessException("SYS_CHECKSUM_ERROR", "生成校验和失败: " + e.getMessage());
+            throw new BusinessException("SYS_CHECKSUM_ERROR", "Failed to generate checksum: " + e.getMessage());
         }
     }
     
@@ -251,7 +251,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
             switch (conflictStrategy) {
                 case "SKIP":
                     result.put("status", "SKIPPED");
-                    result.put("message", "功能单元已存在，已跳过");
+                    result.put("message", "Function unit already exists, skipped");
                     return result;
                 case "OVERWRITE":
                     FunctionUnit existing = functionUnitRepository.findByName(name).orElse(null);
@@ -263,7 +263,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
                     name = name + "_imported_" + System.currentTimeMillis();
                     break;
                 default:
-                    throw new BusinessException("BIZ_INVALID_STRATEGY", "无效的冲突策略");
+                    throw new BusinessException("BIZ_INVALID_STRATEGY", "Invalid conflict strategy");
             }
         }
         
@@ -402,20 +402,20 @@ public class ExportImportComponentImpl implements ExportImportComponent {
         try {
             Map<String, Object> packageData = parseImportPackage(file);
             
-            // 验证元数据
+            // Validate metadata
             if (!packageData.containsKey("metadata")) {
-                errors.add("缺少元数据文件 metadata.json");
+                errors.add("Missing metadata file metadata.json");
             } else {
                 @SuppressWarnings("unchecked")
                 Map<String, Object> metadata = (Map<String, Object>) packageData.get("metadata");
                 if (!metadata.containsKey("name")) {
-                    errors.add("元数据缺少 name 字段");
+                    errors.add("Metadata missing name field");
                 }
             }
             
-            // 验证流程
+            // Validate process
             if (!packageData.containsKey("process")) {
-                warnings.add("包中没有流程定义");
+                warnings.add("Package does not contain a process definition");
             }
             
             result.put("valid", errors.isEmpty());

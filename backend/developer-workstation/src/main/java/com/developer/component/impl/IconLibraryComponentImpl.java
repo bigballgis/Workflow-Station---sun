@@ -57,7 +57,7 @@ public class IconLibraryComponentImpl implements IconLibraryComponent {
             }
             svgContent = new String(fileData, StandardCharsets.UTF_8);
         } catch (IOException e) {
-            throw new BusinessException("SYS_FILE_READ_ERROR", "读取文件失败");
+            throw new BusinessException("SYS_FILE_READ_ERROR", "Failed to read file");
         }
         
         Icon icon = Icon.builder()
@@ -78,8 +78,8 @@ public class IconLibraryComponentImpl implements IconLibraryComponent {
         
         if (isIconInUse(id)) {
             throw new BusinessException("BIZ_ICON_IN_USE", 
-                    "图标正在被使用，无法删除",
-                    "请先解除图标的使用");
+                    "Icon is in use, cannot delete",
+                    "Please remove icon usage first");
         }
         
         iconRepository.delete(icon);
@@ -141,20 +141,20 @@ public class IconLibraryComponentImpl implements IconLibraryComponent {
     @Override
     public void validateFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {
-            throw new BusinessException("VAL_FILE_EMPTY", "文件不能为空");
+            throw new BusinessException("VAL_FILE_EMPTY", "File cannot be empty");
         }
         
         if (file.getSize() > MAX_FILE_SIZE) {
             throw new BusinessException("VAL_FILE_TOO_LARGE", 
-                    "文件大小超过限制（最大2MB）",
-                    "请上传小于2MB的文件");
+                    "File size exceeds limit (max 2MB)",
+                    "Please upload a file smaller than 2MB");
         }
         
         String fileType = getFileExtension(file.getOriginalFilename());
         if (!ALLOWED_FILE_TYPES.contains(fileType.toLowerCase())) {
             throw new BusinessException("VAL_INVALID_FILE_TYPE", 
-                    "不支持的文件格式: " + fileType,
-                    "支持的格式: SVG, PNG, ICO");
+                    "Unsupported file format: " + fileType,
+                    "Supported formats: SVG, PNG, ICO");
         }
     }
     

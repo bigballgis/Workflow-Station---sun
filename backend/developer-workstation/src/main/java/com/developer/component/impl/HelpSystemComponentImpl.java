@@ -25,13 +25,13 @@ public class HelpSystemComponentImpl implements HelpSystemComponent {
     
     static {
         HELP_DOCUMENTS.put("process-designer", Map.of(
-                "title", "流程设计器使用指南",
-                "content", "流程设计器用于创建和编辑BPMN流程...",
+                "title", "Process Designer Guide",
+                "content", "The process designer is used to create and edit BPMN processes...",
                 "category", "designer"
         ));
         HELP_DOCUMENTS.put("table-designer", Map.of(
-                "title", "表设计器使用指南",
-                "content", "表设计器用于定义数据表结构...",
+                "title", "Table Designer Guide",
+                "content", "The table designer is used to define data table structures...",
                 "category", "designer"
         ));
     }
@@ -91,18 +91,18 @@ public class HelpSystemComponentImpl implements HelpSystemComponent {
         
         switch (elementType) {
             case "userTask":
-                help.put("title", "用户任务");
-                help.put("description", "用户任务需要人工处理，可以配置分配方式和表单");
-                help.put("tips", List.of("配置任务分配人", "绑定表单", "设置动作按钮"));
+                help.put("title", "User Task");
+                help.put("description", "User tasks require manual processing, you can configure assignment and forms");
+                help.put("tips", List.of("Configure task assignee", "Bind form", "Set action buttons"));
                 break;
             case "exclusiveGateway":
-                help.put("title", "排他网关");
-                help.put("description", "排他网关用于条件分支，只有一个分支会被执行");
-                help.put("tips", List.of("配置条件表达式", "设置默认分支"));
+                help.put("title", "Exclusive Gateway");
+                help.put("description", "Exclusive gateway is used for conditional branching, only one branch will be executed");
+                help.put("tips", List.of("Configure condition expressions", "Set default branch"));
                 break;
             default:
                 help.put("title", elementType);
-                help.put("description", "暂无帮助信息");
+                help.put("description", "No help information available");
         }
         
         return help;
@@ -111,8 +111,8 @@ public class HelpSystemComponentImpl implements HelpSystemComponent {
     @Override
     public Map<String, Object> getHelpDocument(String documentId) {
         return HELP_DOCUMENTS.getOrDefault(documentId, Map.of(
-                "title", "文档未找到",
-                "content", "请求的帮助文档不存在"
+                "title", "Document not found",
+                "content", "The requested help document does not exist"
         ));
     }
     
@@ -121,12 +121,12 @@ public class HelpSystemComponentImpl implements HelpSystemComponent {
         List<Map<String, Object>> steps = new ArrayList<>();
         
         if ("process-designer-tour".equals(tourId)) {
-            steps.add(Map.of("target", ".toolbox", "title", "工具箱", 
-                    "content", "从这里拖拽元素到画布"));
-            steps.add(Map.of("target", ".canvas", "title", "画布", 
-                    "content", "在这里设计您的流程"));
-            steps.add(Map.of("target", ".properties-panel", "title", "属性面板", 
-                    "content", "选中元素后在这里配置属性"));
+            steps.add(Map.of("target", ".toolbox", "title", "Toolbox", 
+                    "content", "Drag elements from here to the canvas"));
+            steps.add(Map.of("target", ".canvas", "title", "Canvas", 
+                    "content", "Design your process here"));
+            steps.add(Map.of("target", ".properties-panel", "title", "Properties Panel", 
+                    "content", "Configure properties of selected elements here"));
         }
         
         return steps;
@@ -134,11 +134,11 @@ public class HelpSystemComponentImpl implements HelpSystemComponent {
     
     private String getKeywordDescription(String keyword) {
         return switch (keyword) {
-            case "${" -> "变量表达式开始符";
-            case "processInstance" -> "流程实例对象";
-            case "task" -> "当前任务对象";
-            case "now()" -> "获取当前时间";
-            case "currentUser()" -> "获取当前用户";
+            case "${" -> "Variable expression start marker";
+            case "processInstance" -> "Process instance object";
+            case "task" -> "Current task object";
+            case "now()" -> "Get current time";
+            case "currentUser()" -> "Get current user";
             default -> keyword;
         };
     }

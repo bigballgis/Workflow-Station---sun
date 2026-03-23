@@ -74,32 +74,32 @@ public class ProcessDesignComponentImpl implements ProcessDesignComponent {
         ValidationResult result = new ValidationResult();
         
         if (bpmnXml == null || bpmnXml.trim().isEmpty()) {
-            result.addError("EMPTY_BPMN", "BPMN XML不能为空", null);
+            result.addError("EMPTY_BPMN", "BPMN XML cannot be empty", null);
             return result;
         }
         
-        // 检查是否有开始事件
+        // Check for start event
         if (!bpmnXml.contains("startEvent")) {
-            result.addError("MISSING_START_EVENT", "流程缺少开始事件", null);
+            result.addError("MISSING_START_EVENT", "Process is missing a start event", null);
         }
         
-        // 检查是否有结束事件
+        // Check for end event
         if (!bpmnXml.contains("endEvent")) {
-            result.addError("MISSING_END_EVENT", "流程缺少结束事件", null);
+            result.addError("MISSING_END_EVENT", "Process is missing an end event", null);
         }
         
-        // 检查基本XML结构
+        // Check basic XML structure
         if (!bpmnXml.contains("<bpmn:process") && !bpmnXml.contains("<process")) {
-            result.addError("INVALID_BPMN_STRUCTURE", "无效的BPMN结构", null);
+            result.addError("INVALID_BPMN_STRUCTURE", "Invalid BPMN structure", null);
         }
         
-        // 检查孤立节点
+        // Check orphan nodes
         List<String> nodeIds = extractNodeIds(bpmnXml);
         List<String> connectedNodes = extractConnectedNodes(bpmnXml);
         
         for (String nodeId : nodeIds) {
             if (!connectedNodes.contains(nodeId) && !isStartOrEndEvent(bpmnXml, nodeId)) {
-                result.addWarning("ORPHAN_NODE", "节点 " + nodeId + " 可能是孤立的", nodeId);
+                result.addWarning("ORPHAN_NODE", "Node " + nodeId + " may be orphaned", nodeId);
             }
         }
         
