@@ -7,49 +7,38 @@ import com.developer.dto.FunctionUnitResponse;
 import com.developer.dto.ValidationResult;
 import com.developer.dto.VersionResponse;
 import com.developer.entity.FunctionUnit;
-import com.developer.repository.VersionRepository;
 import com.developer.security.RequireDeveloperPermission;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.client.RestTemplate;
 
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 功能单元控制器
  */
 @RestController
 @RequestMapping("/function-units")
-@RequiredArgsConstructor
 @Slf4j
 @Tag(name = "功能单元管理", description = "功能单元CRUD、发布、克隆等操作")
-public class FunctionUnitController {
-    
+public class FunctionUnitController extends BaseController {
+
     private final FunctionUnitComponent functionUnitComponent;
-    private final VersionRepository versionRepository;
-    private final RestTemplate restTemplate;
     
-    @Value("${admin-center.url:http://localhost:8090}")
-    private String adminCenterUrl;
-    
-    private final ConcurrentHashMap<String, String> userNameCache = new ConcurrentHashMap<>();
+    public FunctionUnitController(FunctionUnitComponent functionUnitComponent) {
+        this.functionUnitComponent = functionUnitComponent;
+    }
     
     @PostMapping
     @Operation(summary = "创建功能单元")
     @RequireDeveloperPermission("FUNCTION_UNIT_CREATE")
     public ResponseEntity<ApiResponse<FunctionUnit>> create(@Valid @RequestBody FunctionUnitRequest request) {
-        FunctionUnit result = functionUnitComponent.create(request);
-        return ResponseEntity.ok(ApiResponse.success(result));
+        return handleRequest(() -> functionUnitComponent.create(request));
     }
     
     @PutMapping("/{id}")
@@ -58,24 +47,24 @@ public class FunctionUnitController {
     public ResponseEntity<ApiResponse<FunctionUnit>> update(
             @PathVariable Long id, 
             @Valid @RequestBody FunctionUnitRequest request) {
-        FunctionUnit result = functionUnitComponent.update(id, request);
-        return ResponseEntity.ok(ApiResponse.success(result));
+        return handleRequest(() -> functionUnitComponent.update(id, request));
     }
     
     @DeleteMapping("/{id}")
     @Operation(summary = "删除功能单元")
     @RequireDeveloperPermission("FUNCTION_UNIT_DELETE")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable Long id) {
-        functionUnitComponent.delete(id);
-        return ResponseEntity.ok(ApiResponse.success(null));
+        return handleRequest(() -> {
+            functionUnitComponent.delete(id);
+            return null;
+        });
     }
     
     @GetMapping("/{id}")
     @Operation(summary = "获取功能单元详情")
     @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<FunctionUnitResponse>> getById(@PathVariable Long id) {
-        FunctionUnitResponse result = functionUnitComponent.getByIdAsResponse(id);
-        return ResponseEntity.ok(ApiResponse.success(result));
+        return handleRequest(() -> functionUnitComponent.getByIdAsResponse(id));
     }
     
     @GetMapping
@@ -85,8 +74,7 @@ public class FunctionUnitController {
             @RequestParam(required = false) String name,
             @RequestParam(required = false) String status,
             Pageable pageable) {
-        Page<FunctionUnitResponse> result = functionUnitComponent.list(name, status, pageable);
-        return ResponseEntity.ok(ApiResponse.success(result));
+        return handleRequest(() -> functionUnitComponent.list(name, status, pageable));
     }
     
     @PostMapping("/{id}/publish")
@@ -95,8 +83,7 @@ public class FunctionUnitController {
     public ResponseEntity<ApiResponse<FunctionUnit>> publish(
             @PathVariable Long id,
             @RequestParam(required = false) String changeLog) {
-        FunctionUnit result = functionUnitComponent.publish(id, changeLog);
-        return ResponseEntity.ok(ApiResponse.success(result));
+        return handleRequest(() -> functionUnitComponent.publish(id, changeLog));
     }
     
     @PostMapping("/{id}/clone")
@@ -105,55 +92,20 @@ public class FunctionUnitController {
     public ResponseEntity<ApiResponse<FunctionUnit>> clone(
             @PathVariable Long id,
             @RequestParam String newName) {
-        FunctionUnit result = functionUnitComponent.clone(id, newName);
-        return ResponseEntity.ok(ApiResponse.success(result));
+        return handleRequest(() -> functionUnitComponent.clone(id, newName));
     }
     
     @GetMapping("/{id}/validate")
     @Operation(summary = "验证功能单元完整性")
     @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<ValidationResult>> validate(@PathVariable Long id) {
-        ValidationResult result = functionUnitComponent.validate(id);
-        return ResponseEntity.ok(ApiResponse.success(result));
+        return handleRequest(() -> functionUnitComponent.validate(id));
     }
     
     @GetMapping("/{id}/versions")
     @Operation(summary = "获取版本历史")
     @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<List<VersionResponse>>> getVersions(@PathVariable Long id) {
-        List<VersionResponse> versions = versionRepository
-                .findByFunctionUnitIdOrderByPublishedAtDesc(id)
-                .stream()
-                .map(v -> {
-                    VersionResponse resp = VersionResponse.from(v);
-                    resp.setCreatedBy(resolveUserDisplayName(v.getPublishedBy()));
-                    return resp;
-                })
-                .toList();
-        return ResponseEntity.ok(ApiResponse.success(versions));
-    }
-    
-    @SuppressWarnings("unchecked")
-    private String resolveUserDisplayName(String userId) {
-        if (userId == null || userId.isEmpty()) {
-            return null;
-        }
-        return userNameCache.computeIfAbsent(userId, uid -> {
-            try {
-                String url = adminCenterUrl + "/api/v1/admin/users/" + uid;
-                Map<String, Object> userInfo = restTemplate.getForObject(url, Map.class);
-                if (userInfo != null) {
-                    String fullName = (String) userInfo.get("fullName");
-                    if (fullName != null && !fullName.isEmpty()) return fullName;
-                    String displayName = (String) userInfo.get("displayName");
-                    if (displayName != null && !displayName.isEmpty()) return displayName;
-                    String username = (String) userInfo.get("username");
-                    if (username != null && !username.isEmpty()) return username;
-                }
-            } catch (Exception e) {
-                log.warn("Failed to resolve user display name for {}: {}", uid, e.getMessage());
-            }
-            return uid;
-        });
+        return handleRequest(() -> functionUnitComponent.getVersionHistory(id));
     }
 }

@@ -13,7 +13,6 @@ import com.developer.security.RequireDeveloperPermission;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -33,12 +32,15 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/ai-generation")
-@RequiredArgsConstructor
 @Slf4j
 @Tag(name = "AI 功能单元生成", description = "AI 驱动的功能单元生成相关接口")
-public class AiGenerationController {
+public class AiGenerationController extends BaseController {
 
     private final AiGenerationComponent aiGenerationComponent;
+
+    public AiGenerationController(AiGenerationComponent aiGenerationComponent) {
+        this.aiGenerationComponent = aiGenerationComponent;
+    }
 
     @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @Operation(summary = "SSE 对话流")
@@ -64,9 +66,7 @@ public class AiGenerationController {
     public ResponseEntity<ApiResponse<LockInfoResponse>> acquireLock(
             @PathVariable Long functionUnitId,
             @RequestHeader(value = "X-User-Id", required = false) String userId) {
-        log.info("Acquire lock for functionUnitId={}, userId={}", functionUnitId, userId);
-        LockInfoResponse lockInfo = aiGenerationComponent.acquireLock(functionUnitId, userId);
-        return ResponseEntity.ok(ApiResponse.success(lockInfo));
+        return handleRequest(() -> aiGenerationComponent.acquireLock(functionUnitId, userId));
     }
 
     @DeleteMapping("/lock/{functionUnitId}")
@@ -75,9 +75,10 @@ public class AiGenerationController {
     public ResponseEntity<ApiResponse<Void>> releaseLock(
             @PathVariable Long functionUnitId,
             @RequestHeader(value = "X-User-Id", required = false) String userId) {
-        log.info("Release lock for functionUnitId={}, userId={}", functionUnitId, userId);
-        aiGenerationComponent.releaseLock(functionUnitId, userId);
-        return ResponseEntity.ok(ApiResponse.success(null));
+        return handleRequest(() -> {
+            aiGenerationComponent.releaseLock(functionUnitId, userId);
+            return null;
+        });
     }
 
     @PostMapping("/lock/{functionUnitId}/force-unlock-request")
@@ -86,9 +87,10 @@ public class AiGenerationController {
     public ResponseEntity<ApiResponse<Void>> requestForceUnlock(
             @PathVariable Long functionUnitId,
             @RequestHeader(value = "X-User-Id", required = false) String userId) {
-        log.info("Force unlock request for functionUnitId={}, requesterId={}", functionUnitId, userId);
-        aiGenerationComponent.requestForceUnlock(functionUnitId, userId);
-        return ResponseEntity.ok(ApiResponse.success(null));
+        return handleRequest(() -> {
+            aiGenerationComponent.requestForceUnlock(functionUnitId, userId);
+            return null;
+        });
     }
 
     @PostMapping("/lock/{functionUnitId}/force-unlock-response")
@@ -98,9 +100,10 @@ public class AiGenerationController {
             @PathVariable Long functionUnitId,
             @RequestBody ForceUnlockResponseRequest request,
             @RequestHeader(value = "X-User-Id", required = false) String userId) {
-        log.info("Force unlock response for functionUnitId={}, userId={}, accept={}", functionUnitId, userId, request.isAccept());
-        aiGenerationComponent.respondForceUnlock(functionUnitId, userId, request.isAccept());
-        return ResponseEntity.ok(ApiResponse.success(null));
+        return handleRequest(() -> {
+            aiGenerationComponent.respondForceUnlock(functionUnitId, userId, request.isAccept());
+            return null;
+        });
     }
 
     @GetMapping("/sessions")
@@ -108,8 +111,7 @@ public class AiGenerationController {
     @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<List<AiSessionResponse>>> getSessions(
             @RequestParam Long functionUnitId) {
-        List<AiSessionResponse> sessions = aiGenerationComponent.getSessions(functionUnitId);
-        return ResponseEntity.ok(ApiResponse.success(sessions));
+        return handleRequest(() -> aiGenerationComponent.getSessions(functionUnitId));
     }
 
     @GetMapping("/sessions/{sessionId}/messages")
@@ -117,8 +119,7 @@ public class AiGenerationController {
     @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<Page<AiMessageResponse>>> getMessages(
             @PathVariable String sessionId, Pageable pageable) {
-        Page<AiMessageResponse> messages = aiGenerationComponent.getMessages(sessionId, pageable);
-        return ResponseEntity.ok(ApiResponse.success(messages));
+        return handleRequest(() -> aiGenerationComponent.getMessages(sessionId, pageable));
     }
 
     @PutMapping("/sessions/{sessionId}/phase")
@@ -127,9 +128,10 @@ public class AiGenerationController {
     public ResponseEntity<ApiResponse<Void>> updateSessionPhase(
             @PathVariable String sessionId,
             @RequestParam AiPhase phase) {
-        log.info("Update session phase: sessionId={}, phase={}", sessionId, phase);
-        aiGenerationComponent.updateSessionPhase(sessionId, phase);
-        return ResponseEntity.ok(ApiResponse.success(null));
+        return handleRequest(() -> {
+            aiGenerationComponent.updateSessionPhase(sessionId, phase);
+            return null;
+        });
     }
 
     @GetMapping("/documents")
@@ -138,11 +140,12 @@ public class AiGenerationController {
     public ResponseEntity<ApiResponse<List<AiDocument>>> getDocumentVersions(
             @RequestParam Long functionUnitId,
             @RequestParam(required = false) AiDocumentType documentType) {
-        if (documentType == null) {
-            return ResponseEntity.ok(ApiResponse.success(List.of()));
-        }
-        List<AiDocument> documents = aiGenerationComponent.getDocumentVersions(functionUnitId, documentType);
-        return ResponseEntity.ok(ApiResponse.success(documents));
+        return handleRequest(() -> {
+            if (documentType == null) {
+                return List.of();
+            }
+            return aiGenerationComponent.getDocumentVersions(functionUnitId, documentType);
+        });
     }
 
     @GetMapping("/documents/version")
@@ -152,8 +155,7 @@ public class AiGenerationController {
             @RequestParam Long functionUnitId,
             @RequestParam AiDocumentType documentType,
             @RequestParam Integer version) {
-        AiDocument document = aiGenerationComponent.getDocumentByVersion(functionUnitId, documentType, version);
-        return ResponseEntity.ok(ApiResponse.success(document));
+        return handleRequest(() -> aiGenerationComponent.getDocumentByVersion(functionUnitId, documentType, version));
     }
 
     @PostMapping("/documents")
@@ -162,9 +164,8 @@ public class AiGenerationController {
     public ResponseEntity<ApiResponse<AiDocument>> saveDocument(
             @Valid @RequestBody SaveDocumentRequest request,
             @RequestHeader(value = "X-User-Id", required = false) String userId) {
-        AiDocument saved = aiGenerationComponent.saveDocument(
-                request.getFunctionUnitId(), request.getDocumentType(), request.getContent(), userId);
-        return ResponseEntity.ok(ApiResponse.success(saved));
+        return handleRequest(() -> aiGenerationComponent.saveDocument(
+                request.getFunctionUnitId(), request.getDocumentType(), request.getContent(), userId));
     }
 
     @PostMapping("/{functionUnitId}/apply")
@@ -174,8 +175,9 @@ public class AiGenerationController {
             @PathVariable Long functionUnitId,
             @RequestBody ApplyGeneratedDataRequest request,
             @RequestHeader(value = "X-User-Id", required = false) String userId) {
-        log.info("Apply generated data for functionUnitId={}, userId={}", functionUnitId, userId);
-        aiGenerationComponent.applyGeneratedData(functionUnitId, request, userId);
-        return ResponseEntity.ok(ApiResponse.success(null));
+        return handleRequest(() -> {
+            aiGenerationComponent.applyGeneratedData(functionUnitId, request, userId);
+            return null;
+        });
     }
 }

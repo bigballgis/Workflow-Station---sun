@@ -4,6 +4,7 @@ import com.developer.component.FunctionUnitComponent;
 import com.developer.dto.FunctionUnitRequest;
 import com.developer.dto.FunctionUnitResponse;
 import com.developer.dto.ValidationResult;
+import com.developer.dto.VersionResponse;
 import com.developer.entity.*;
 import com.developer.enums.FunctionUnitStatus;
 import com.developer.exception.BusinessException;
@@ -11,8 +12,8 @@ import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.criteria.Predicate;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
@@ -21,21 +22,18 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestTemplate;
 
 import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * 功能单元组件实现
  */
 @Component
 @Slf4j
-@RequiredArgsConstructor
 public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     
     private final FunctionUnitRepository functionUnitRepository;
@@ -46,6 +44,40 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     private final VersionRepository versionRepository;
     private final IconRepository iconRepository;
     private final ObjectMapper objectMapper;
+    private final RestTemplate restTemplate;
+    
+    @Value("${admin-center.url:http://localhost:8090}")
+    private String adminCenterUrl;
+    
+    /** Bounded LRU cache for user display names (max 200 entries) */
+    private final Map<String, String> userNameCache = Collections.synchronizedMap(
+            new LinkedHashMap<>(64, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, String> eldest) {
+                    return size() > 200;
+                }
+            });
+    
+    public FunctionUnitComponentImpl(
+            FunctionUnitRepository functionUnitRepository,
+            ProcessDefinitionRepository processDefinitionRepository,
+            TableDefinitionRepository tableDefinitionRepository,
+            FormDefinitionRepository formDefinitionRepository,
+            ActionDefinitionRepository actionDefinitionRepository,
+            VersionRepository versionRepository,
+            IconRepository iconRepository,
+            ObjectMapper objectMapper,
+            RestTemplate restTemplate) {
+        this.functionUnitRepository = functionUnitRepository;
+        this.processDefinitionRepository = processDefinitionRepository;
+        this.tableDefinitionRepository = tableDefinitionRepository;
+        this.formDefinitionRepository = formDefinitionRepository;
+        this.actionDefinitionRepository = actionDefinitionRepository;
+        this.versionRepository = versionRepository;
+        this.iconRepository = iconRepository;
+        this.objectMapper = objectMapper;
+        this.restTemplate = restTemplate;
+    }
     
     /**
      * 获取当前操作者
@@ -403,6 +435,55 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     @Override
     public boolean existsByNameAndIdNot(String name, Long id) {
         return functionUnitRepository.existsByNameAndIdNot(name, id);
+    }
+    
+    @Override
+    @Transactional(readOnly = true)
+    public List<VersionResponse> getVersionHistory(Long functionUnitId) {
+        return versionRepository.findByFunctionUnitIdOrderByPublishedAtDesc(functionUnitId)
+                .stream()
+                .map(v -> {
+                    VersionResponse resp = VersionResponse.from(v);
+                    resp.setCreatedBy(resolveUserDisplayName(v.getPublishedBy()));
+                    return resp;
+                })
+                .toList();
+    }
+    
+    @SuppressWarnings("unchecked")
+    private String resolveUserDisplayName(String userId) {
+        if (userId == null || userId.isEmpty()) {
+            return null;
+        }
+        String cached = userNameCache.get(userId);
+        if (cached != null) {
+            return cached;
+        }
+        try {
+            String url = adminCenterUrl + "/api/v1/admin/users/" + userId;
+            Map<String, Object> userInfo = restTemplate.getForObject(url, Map.class);
+            if (userInfo != null) {
+                String displayName = extractDisplayName(userInfo);
+                if (displayName != null) {
+                    userNameCache.put(userId, displayName);
+                    return displayName;
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to resolve user display name for {}: {}", userId, e.getMessage());
+        }
+        userNameCache.put(userId, userId);
+        return userId;
+    }
+    
+    private String extractDisplayName(Map<String, Object> userInfo) {
+        String fullName = (String) userInfo.get("fullName");
+        if (fullName != null && !fullName.isEmpty()) return fullName;
+        String displayName = (String) userInfo.get("displayName");
+        if (displayName != null && !displayName.isEmpty()) return displayName;
+        String username = (String) userInfo.get("username");
+        if (username != null && !username.isEmpty()) return username;
+        return null;
     }
     
     private FunctionUnitResponse toResponse(FunctionUnit entity) {

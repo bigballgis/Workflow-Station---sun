@@ -3,9 +3,12 @@ package com.developer.component;
 import com.developer.dto.FunctionUnitRequest;
 import com.developer.dto.FunctionUnitResponse;
 import com.developer.dto.ValidationResult;
+import com.developer.dto.VersionResponse;
 import com.developer.entity.FunctionUnit;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+
+import java.util.List;
 
 /**
  * 功能单元组件接口
@@ -56,6 +59,11 @@ public interface FunctionUnitComponent {
      * 验证功能单元完整性
      */
     ValidationResult validate(Long id);
+    
+    /**
+     * 获取版本历史
+     */
+    List<VersionResponse> getVersionHistory(Long functionUnitId);
     
     /**
      * 检查名称是否存在

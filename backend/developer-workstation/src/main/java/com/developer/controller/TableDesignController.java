@@ -10,7 +10,6 @@ import com.developer.enums.DatabaseDialect;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -22,18 +21,20 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/function-units/{functionUnitId}/tables")
-@RequiredArgsConstructor
 @Slf4j
 @Tag(name = "表设计", description = "数据表设计相关操作")
-public class TableDesignController {
+public class TableDesignController extends BaseController {
     
     private final TableDesignComponent tableDesignComponent;
+    
+    public TableDesignController(TableDesignComponent tableDesignComponent) {
+        this.tableDesignComponent = tableDesignComponent;
+    }
     
     @GetMapping
     @Operation(summary = "获取功能单元的所有表")
     public ResponseEntity<ApiResponse<List<TableDefinition>>> list(@PathVariable Long functionUnitId) {
-        List<TableDefinition> result = tableDesignComponent.getByFunctionUnitId(functionUnitId);
-        return ResponseEntity.ok(ApiResponse.success(result));
+        return handleRequest(() -> tableDesignComponent.getByFunctionUnitId(functionUnitId));
     }
     
     @PostMapping
@@ -41,8 +42,7 @@ public class TableDesignController {
     public ResponseEntity<ApiResponse<TableDefinition>> create(
             @PathVariable Long functionUnitId,
             @Valid @RequestBody TableDefinitionRequest request) {
-        TableDefinition result = tableDesignComponent.create(functionUnitId, request);
-        return ResponseEntity.ok(ApiResponse.success(result));
+        return handleRequest(() -> tableDesignComponent.create(functionUnitId, request));
     }
     
     @PutMapping("/{tableId}")
@@ -51,12 +51,7 @@ public class TableDesignController {
             @PathVariable Long functionUnitId,
             @PathVariable Long tableId,
             @Valid @RequestBody TableDefinitionRequest request) {
-        log.info("Received update request for table {}: fields count = {}", 
-            tableId, request.getFields() != null ? request.getFields().size() : 0);
-        TableDefinition result = tableDesignComponent.update(tableId, request);
-        log.info("Table updated successfully: {} fields in result", 
-            result.getFieldDefinitions() != null ? result.getFieldDefinitions().size() : 0);
-        return ResponseEntity.ok(ApiResponse.success(result));
+        return handleRequest(() -> tableDesignComponent.update(tableId, request));
     }
     
     @DeleteMapping("/{tableId}")
@@ -64,8 +59,10 @@ public class TableDesignController {
     public ResponseEntity<ApiResponse<Void>> delete(
             @PathVariable Long functionUnitId,
             @PathVariable Long tableId) {
-        tableDesignComponent.delete(tableId);
-        return ResponseEntity.ok(ApiResponse.success(null));
+        return handleRequest(() -> {
+            tableDesignComponent.delete(tableId);
+            return null;
+        });
     }
     
     @GetMapping("/{tableId}")
@@ -73,34 +70,27 @@ public class TableDesignController {
     public ResponseEntity<ApiResponse<TableDefinition>> getById(
             @PathVariable Long functionUnitId,
             @PathVariable Long tableId) {
-        TableDefinition result = tableDesignComponent.getById(tableId);
-        return ResponseEntity.ok(ApiResponse.success(result));
+        return handleRequest(() -> tableDesignComponent.getById(tableId));
     }
     
-    // DDL生成
     @GetMapping("/{tableId}/ddl")
     @Operation(summary = "生成DDL")
     public ResponseEntity<ApiResponse<String>> generateDDL(
             @PathVariable Long functionUnitId,
             @PathVariable Long tableId,
             @RequestParam(defaultValue = "POSTGRESQL") DatabaseDialect dialect) {
-        String result = tableDesignComponent.generateDDL(tableId, dialect);
-        return ResponseEntity.ok(ApiResponse.success(result));
+        return handleRequest(() -> tableDesignComponent.generateDDL(tableId, dialect));
     }
     
-    // 验证
     @GetMapping("/validate")
     @Operation(summary = "验证表结构")
     public ResponseEntity<ApiResponse<ValidationResult>> validate(@PathVariable Long functionUnitId) {
-        ValidationResult result = tableDesignComponent.validateRelationships(functionUnitId);
-        return ResponseEntity.ok(ApiResponse.success(result));
+        return handleRequest(() -> tableDesignComponent.validateRelationships(functionUnitId));
     }
     
-    // 获取外键关系
     @GetMapping("/foreign-keys")
     @Operation(summary = "获取功能单元的所有外键关系")
     public ResponseEntity<ApiResponse<List<ForeignKeyDTO>>> getForeignKeys(@PathVariable Long functionUnitId) {
-        List<ForeignKeyDTO> result = tableDesignComponent.getForeignKeys(functionUnitId);
-        return ResponseEntity.ok(ApiResponse.success(result));
+        return handleRequest(() -> tableDesignComponent.getForeignKeys(functionUnitId));
     }
 }
