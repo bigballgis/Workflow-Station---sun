@@ -1,19 +1,19 @@
 <template>
   <div class="process-debug-panel">
     <div class="debug-header">
-      <h3>流程调试</h3>
+      <h3>{{ t('process.processDebug') }}</h3>
       <div class="debug-actions">
         <el-button type="primary" @click="handleStartDebug" :loading="starting" :disabled="isDebugging">
-          <el-icon><VideoPlay /></el-icon> 开始调试
+          <el-icon><VideoPlay /></el-icon> {{ t('debug.startDebug') }}
         </el-button>
         <el-button @click="handleStepOver" :disabled="!isDebugging || !isPaused">
-          <el-icon><Right /></el-icon> 单步执行
+          <el-icon><Right /></el-icon> {{ t('debug.stepOver') }}
         </el-button>
         <el-button @click="handleContinue" :disabled="!isDebugging || !isPaused">
-          <el-icon><DArrowRight /></el-icon> 继续
+          <el-icon><DArrowRight /></el-icon> {{ t('debug.continue') }}
         </el-button>
         <el-button type="danger" @click="handleStopDebug" :disabled="!isDebugging">
-          <el-icon><VideoPause /></el-icon> 停止
+          <el-icon><VideoPause /></el-icon> {{ t('debug.stop') }}
         </el-button>
       </div>
     </div>
@@ -21,13 +21,13 @@
     <div class="debug-content">
       <div class="debug-left">
         <el-tabs v-model="activeTab">
-          <el-tab-pane label="变量监控" name="variables">
+          <el-tab-pane :label="t('debug.variableMonitor')" name="variables">
             <VariableMonitor :variables="currentVariables" :editable="isPaused" @update="handleVariableUpdate" />
           </el-tab-pane>
-          <el-tab-pane label="执行日志" name="logs">
+          <el-tab-pane :label="t('debug.executionLog')" name="logs">
             <ExecutionLogViewer :logs="executionLogs" />
           </el-tab-pane>
-          <el-tab-pane label="断点" name="breakpoints">
+          <el-tab-pane :label="t('debug.breakpoints')" name="breakpoints">
             <div class="breakpoint-list">
               <div v-for="bp in breakpoints" :key="bp.nodeId" class="breakpoint-item">
                 <el-checkbox v-model="bp.enabled" @change="handleBreakpointToggle(bp)" />
@@ -36,7 +36,7 @@
                   <el-icon><Delete /></el-icon>
                 </el-button>
               </div>
-              <el-empty v-if="!breakpoints.length" description="暂无断点" />
+              <el-empty v-if="!breakpoints.length" :description="t('debug.noBreakpoints')" />
             </div>
           </el-tab-pane>
         </el-tabs>
@@ -45,27 +45,27 @@
       <div class="debug-right">
         <div class="execution-status">
           <div class="status-item">
-            <span class="label">状态:</span>
+            <span class="label">{{ t('debug.statusLabel') }}:</span>
             <el-tag :type="statusTagType">{{ statusText }}</el-tag>
           </div>
           <div class="status-item" v-if="currentNode">
-            <span class="label">当前节点:</span>
+            <span class="label">{{ t('debug.currentNode') }}:</span>
             <span class="value">{{ currentNode.name }}</span>
           </div>
           <div class="status-item" v-if="executionTime">
-            <span class="label">执行时间:</span>
+            <span class="label">{{ t('debug.executionTime') }}:</span>
             <span class="value">{{ executionTime }}ms</span>
           </div>
         </div>
 
         <div class="input-variables" v-if="!isDebugging">
-          <h4>输入变量</h4>
+          <h4>{{ t('debug.inputVariables') }}</h4>
           <el-form label-position="top" size="small">
             <el-form-item v-for="(value, key) in inputVariables" :key="key" :label="key">
               <el-input v-model="inputVariables[key]" />
             </el-form-item>
           </el-form>
-          <el-button size="small" @click="addInputVariable">添加变量</el-button>
+          <el-button size="small" @click="addInputVariable">{{ t('debug.addVariable') }}</el-button>
         </div>
       </div>
     </div>
@@ -76,9 +76,12 @@
 import { ref, reactive, computed } from 'vue'
 import { VideoPlay, VideoPause, Right, DArrowRight, Delete } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { useI18n } from 'vue-i18n'
 import { functionUnitApi } from '@/api/functionUnit'
 import VariableMonitor from './VariableMonitor.vue'
 import ExecutionLogViewer from './ExecutionLogViewer.vue'
+
+const { t } = useI18n()
 
 interface Breakpoint {
   nodeId: string
@@ -110,9 +113,9 @@ const executionTime = ref<number | null>(null)
 const startTime = ref<number>(0)
 
 const statusText = computed(() => {
-  if (!isDebugging.value) return '未启动'
-  if (isPaused.value) return '已暂停'
-  return '运行中'
+  if (!isDebugging.value) return t('debug.notStarted')
+  if (isPaused.value) return t('debug.paused')
+  return t('debug.running')
 })
 
 const statusTagType = computed(() => {
@@ -133,14 +136,14 @@ async function handleStartDebug() {
     executionLogs.value = []
     
     // Add initial log
-    addLog('info', '流程调试已启动', undefined, variables)
+    addLog('info', t('debug.debugStarted'), undefined, variables)
     
     // Process simulation result
     if (res?.data) {
       processSimulationResult(res.data)
     }
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.message || '启动调试失败')
+    ElMessage.error(e.response?.data?.message || t('debug.startDebugFailed'))
   } finally {
     starting.value = false
   }
@@ -149,18 +152,18 @@ async function handleStartDebug() {
 function processSimulationResult(result: any) {
   if (result.steps) {
     result.steps.forEach((step: any) => {
-      addLog('info', `执行节点: ${step.nodeName}`, step.nodeId, step.variables)
+      addLog('info', `${t('debug.executeNode')}: ${step.nodeName}`, step.nodeId, step.variables)
     })
   }
   
   if (result.completed) {
     executionTime.value = Date.now() - startTime.value
-    addLog('success', '流程执行完成')
+    addLog('success', t('debug.processCompleted'))
     isDebugging.value = false
   }
   
   if (result.error) {
-    addLog('error', `执行错误: ${result.error}`)
+    addLog('error', `${t('debug.executionError')}: ${result.error}`)
     isDebugging.value = false
   }
   
@@ -168,30 +171,30 @@ function processSimulationResult(result: any) {
 }
 
 function handleStepOver() {
-  addLog('info', '单步执行...')
+  addLog('info', t('debug.steppingOver'))
   // Simulate step execution
   isPaused.value = true
 }
 
 function handleContinue() {
   isPaused.value = false
-  addLog('info', '继续执行...')
+  addLog('info', t('debug.continuing'))
 }
 
 function handleStopDebug() {
   isDebugging.value = false
   isPaused.value = false
   executionTime.value = Date.now() - startTime.value
-  addLog('warning', '调试已停止')
+  addLog('warning', t('debug.debugStopped'))
 }
 
 function handleVariableUpdate(key: string, value: any) {
   currentVariables.value[key] = value
-  addLog('info', `变量 ${key} 已更新为: ${JSON.stringify(value)}`)
+  addLog('info', `${t('debug.variableUpdatedLog', { key, value: JSON.stringify(value) })}`)
 }
 
 function handleBreakpointToggle(bp: Breakpoint) {
-  addLog('info', `断点 ${bp.nodeName} ${bp.enabled ? '已启用' : '已禁用'}`)
+  addLog('info', `${t('debug.breakpointToggled', { name: bp.nodeName, state: bp.enabled ? t('debug.enabled') : t('debug.disabled') })}`)
 }
 
 function removeBreakpoint(nodeId: string) {
@@ -202,9 +205,9 @@ function removeBreakpoint(nodeId: string) {
 }
 
 function addInputVariable() {
-  ElMessageBox.prompt('请输入变量名', '添加变量', {
-    confirmButtonText: '确定',
-    cancelButtonText: '取消'
+  ElMessageBox.prompt(t('debug.enterVariableName'), t('debug.addVariable'), {
+    confirmButtonText: t('common.confirm'),
+    cancelButtonText: t('common.cancel')
   }).then(({ value }) => {
     if (value) {
       inputVariables[value] = ''

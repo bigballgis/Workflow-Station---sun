@@ -81,8 +81,8 @@ export function deserializeN8nConfig(ext: Record<string, any>): N8nTaskConfig {
  */
 export function validateN8nConfig(config: N8nTaskConfig): N8nValidationErrors {
   return {
-    configId: config.configId ? '' : 'N8N 连接配置不能为空',
-    webhookUrl: config.webhookUrl ? '' : 'Webhook URL 不能为空',
+    configId: config.configId ? '' : 'N8N connection config is required',
+    webhookUrl: config.webhookUrl ? '' : 'Webhook URL is required',
   }
 }
 

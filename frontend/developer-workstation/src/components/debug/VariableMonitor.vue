@@ -1,43 +1,43 @@
 <template>
   <div class="variable-monitor">
     <div class="monitor-toolbar">
-      <el-input v-model="searchText" placeholder="搜索变量..." size="small" clearable style="width: 200px;">
+      <el-input v-model="searchText" :placeholder="t('debug.searchVariables')" size="small" clearable style="width: 200px;">
         <template #prefix>
           <el-icon><Search /></el-icon>
         </template>
       </el-input>
       <el-button size="small" @click="handleRefresh">
-        <el-icon><Refresh /></el-icon> 刷新
+        <el-icon><Refresh /></el-icon> {{ t('common.refresh') }}
       </el-button>
       <el-button size="small" @click="handleExport">
-        <el-icon><Download /></el-icon> 导出
+        <el-icon><Download /></el-icon> {{ t('common.export') }}
       </el-button>
     </div>
 
     <div class="variable-list">
       <el-table :data="filteredVariables" size="small" stripe max-height="400">
-        <el-table-column prop="name" label="变量名" width="150" />
-        <el-table-column prop="type" label="类型" width="100">
+        <el-table-column prop="name" :label="t('debug.variableName')" width="150" />
+        <el-table-column prop="type" :label="t('common.type')" width="100">
           <template #default="{ row }">
             <el-tag size="small" :type="typeTagType(row.type)">{{ row.type }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="value" label="值" min-width="200">
+        <el-table-column prop="value" :label="t('debug.value')" min-width="200">
           <template #default="{ row }">
             <div v-if="editingKey === row.name && editable" class="edit-value">
               <el-input v-model="editValue" size="small" @keyup.enter="saveEdit(row.name)" />
-              <el-button size="small" type="primary" @click="saveEdit(row.name)">保存</el-button>
-              <el-button size="small" @click="cancelEdit">取消</el-button>
+              <el-button size="small" type="primary" @click="saveEdit(row.name)">{{ t('common.save') }}</el-button>
+              <el-button size="small" @click="cancelEdit">{{ t('common.cancel') }}</el-button>
             </div>
             <div v-else class="value-display" @dblclick="startEdit(row)">
               <span v-if="row.type === 'object'" class="object-value">
                 <el-button link size="small" @click="expandObject(row)">
-                  {{ row.expanded ? '收起' : '展开' }} ({{ Object.keys(row.rawValue).length }} 项)
+                  {{ row.expanded ? t('debug.collapse') : t('debug.expand') }} ({{ Object.keys(row.rawValue).length }} {{ t('debug.items') }})
                 </el-button>
               </span>
               <span v-else-if="row.type === 'array'" class="array-value">
                 <el-button link size="small" @click="expandObject(row)">
-                  {{ row.expanded ? '收起' : '展开' }} [{{ row.rawValue.length }} 项]
+                  {{ row.expanded ? t('debug.collapse') : t('debug.expand') }} [{{ row.rawValue.length }} {{ t('debug.items') }}]
                 </el-button>
               </span>
               <span v-else :class="['value', row.type]">{{ row.value }}</span>
@@ -45,18 +45,18 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="80" v-if="editable">
+        <el-table-column :label="t('common.actions')" width="80" v-if="editable">
           <template #default="{ row }">
-            <el-button link type="primary" size="small" @click="startEdit(row)">编辑</el-button>
+            <el-button link type="primary" size="small" @click="startEdit(row)">{{ t('common.edit') }}</el-button>
           </template>
         </el-table-column>
       </el-table>
 
-      <el-empty v-if="!filteredVariables.length" description="暂无变量数据" />
+      <el-empty v-if="!filteredVariables.length" :description="t('debug.noVariableData')" />
     </div>
 
     <!-- Object/Array Detail Dialog -->
-    <el-dialog v-model="showDetailDialog" :title="`变量详情: ${detailVariable?.name}`" width="600px">
+    <el-dialog v-model="showDetailDialog" :title="t('debug.variableDetail', { name: detailVariable?.name })" width="600px">
       <pre class="json-preview">{{ JSON.stringify(detailVariable?.rawValue, null, 2) }}</pre>
     </el-dialog>
   </div>
@@ -64,8 +64,11 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Search, Refresh, Download, Edit } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
+
+const { t } = useI18n()
 
 interface VariableItem {
   name: string
@@ -159,9 +162,9 @@ function saveEdit(key: string) {
     }
     emit('update', key, value)
     editingKey.value = null
-    ElMessage.success('变量已更新')
+    ElMessage.success(t('debug.variableUpdated'))
   } catch (e) {
-    ElMessage.error('更新失败')
+    ElMessage.error(t('debug.updateFailed'))
   }
 }
 
@@ -188,7 +191,7 @@ function handleExport() {
   a.download = `variables_${Date.now()}.json`
   a.click()
   URL.revokeObjectURL(url)
-  ElMessage.success('导出成功')
+  ElMessage.success(t('debug.exportSuccess'))
 }
 </script>
 

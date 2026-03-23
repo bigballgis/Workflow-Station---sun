@@ -163,17 +163,9 @@ function sanitizeSvg(svg: string): string {
 }
 
 const categoryLabel = (cat: string) => {
-  const map: Record<string, string> = {
-    APPROVAL: '审批流程',
-    CREDIT: '信贷业务',
-    ACCOUNT: '账户服务',
-    PAYMENT: '支付结算',
-    CUSTOMER: '客户管理',
-    COMPLIANCE: '合规风控',
-    OPERATION: '运营管理',
-    GENERAL: '通用图标'
-  }
-  return map[cat] || cat
+  const key = `icon.category.${cat.toLowerCase()}`
+  const translated = t(key)
+  return translated !== key ? translated : cat
 }
 
 let searchTimer: ReturnType<typeof setTimeout> | null = null
