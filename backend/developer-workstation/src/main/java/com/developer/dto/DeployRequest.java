@@ -1,5 +1,6 @@
 package com.developer.dto;
 
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 import lombok.Builder;
 import lombok.NoArgsConstructor;
@@ -17,6 +18,7 @@ public class DeployRequest {
     /**
      * 目标管理员中心URL
      */
+    @Size(max = 500)
     private String targetUrl;
     
     /**
@@ -27,6 +29,7 @@ public class DeployRequest {
     /**
      * 冲突处理策略
      */
+    @Size(max = 50)
     private String conflictStrategy;
     
     /**
@@ -37,6 +40,7 @@ public class DeployRequest {
     /**
      * 版本变更日志（可选）
      */
+    @Size(max = 2000)
     private String changeLog;
     
     public enum DeployEnvironment {

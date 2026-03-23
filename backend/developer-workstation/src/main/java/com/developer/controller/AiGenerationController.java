@@ -173,7 +173,7 @@ public class AiGenerationController extends BaseController {
     @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
     public ResponseEntity<ApiResponse<Void>> applyGeneratedData(
             @PathVariable Long functionUnitId,
-            @RequestBody ApplyGeneratedDataRequest request,
+            @Valid @RequestBody ApplyGeneratedDataRequest request,
             @RequestHeader(value = "X-User-Id", required = false) String userId) {
         return handleRequest(() -> {
             aiGenerationComponent.applyGeneratedData(functionUnitId, request, userId);

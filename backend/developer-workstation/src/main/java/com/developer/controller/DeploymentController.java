@@ -8,6 +8,7 @@ import com.developer.dto.DeployResponse;
 import com.developer.security.RequireDeveloperPermission;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -48,7 +49,7 @@ public class DeploymentController {
     @RequireDeveloperPermission("FUNCTION_UNIT_PUBLISH")
     public ResponseEntity<ApiResponse<DeployResponse>> deploy(
             @PathVariable Long id,
-            @RequestBody DeployRequest request) {
+            @Valid @RequestBody DeployRequest request) {
         DeployResponse response = deploymentComponent.deployToAdminCenter(id, request);
         return ResponseEntity.ok(ApiResponse.success(response));
     }
