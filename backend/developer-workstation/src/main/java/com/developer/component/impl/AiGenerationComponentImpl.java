@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
 
 /**
  * AI 生成功能组件实现
@@ -38,6 +39,7 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
     private final AiLockService aiLockService;
     private final AiValidationService aiValidationService;
     private final AiWriteService aiWriteService;
+    private final Executor taskExecutor;
 
     @Override
     public SseEmitter chatStream(AiChatRequest request, String userId) {
@@ -82,7 +84,7 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
         // 5. 创建对话 SSE emitter
         SseEmitter emitter = aiGenerationService.createChatEmitter(request.getFunctionUnitId(), userId);
 
-        // 6. 异步调用 N8N（context 和 existingDocuments 已在主线程加载完毕）
+        // 6. Async N8N call (context and existingDocuments already loaded in main thread)
         final FunctionUnitContextDTO finalContext = context;
         final List<Map<String, String>> finalExistingDocuments = existingDocuments;
         CompletableFuture.runAsync(() -> {
@@ -160,12 +162,12 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
                 } catch (Exception sendError) {
                     log.error("Failed to send error event", sendError);
                 }
-                // 完成 emitter
+                // Complete emitter
                 aiGenerationService.completeChatEmitter(request.getFunctionUnitId(), userId);
             }
-        });
+        }, taskExecutor);
 
-        // 7. 立即返回 SseEmitter
+        // 7. Return SseEmitter immediately
         return emitter;
     }
 
