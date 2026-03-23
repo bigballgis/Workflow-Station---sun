@@ -248,7 +248,9 @@
                     <el-slider v-model="formData[field.key]" :min="field.min || 0" :max="field.max || 100" :step="field.step || 1" style="width: 100%" />
                   </template>
                   <template v-else-if="field.type === 'colorPicker'">
-                    <el-color-picker v-model="formData[field.key]" />
+                    <span v-if="readonly && formData[field.key]" class="color-swatch" :style="{ backgroundColor: formData[field.key] }" :title="formData[field.key]" />
+                    <span v-else-if="readonly">-</span>
+                    <el-color-picker v-else v-model="formData[field.key]" />
                   </template>
                   <template v-else-if="field.type === 'readonly'">
                     <span class="readonly-text">{{ formData[field.key] || '-' }}</span>
@@ -567,10 +569,11 @@
               />
 
               <!-- 颜色选择器 -->
-              <el-color-picker
-                v-else-if="field.type === 'colorPicker'"
-                v-model="formData[field.key]"
-              />
+              <template v-else-if="field.type === 'colorPicker'">
+                <span v-if="readonly && formData[field.key]" class="color-swatch" :style="{ backgroundColor: formData[field.key] }" :title="formData[field.key]" />
+                <span v-else-if="readonly">-</span>
+                <el-color-picker v-else v-model="formData[field.key]" />
+              </template>
 
               <!-- 只读文本 -->
               <span v-else-if="field.type === 'readonly'" class="readonly-text">
@@ -887,6 +890,15 @@ defineExpose({
   
   :deep(.el-form) {
     width: 100%;
+  }
+
+  .color-swatch {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border-radius: 3px;
+    border: 1px solid #dcdfe6;
+    vertical-align: middle;
   }
 }
 </style>
