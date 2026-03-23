@@ -74,6 +74,9 @@ public class AiGenerationServiceImpl implements AiGenerationService {
     @Value("${n8n.ai-generation.timeout-seconds:120}")
     private int n8nTimeoutSeconds;
 
+    /** Cached N8N RestTemplate (created lazily, timeout configured from properties) */
+    private volatile RestTemplate n8nRestTemplate;
+
     /** Chat SSE emitters: key = "functionUnitId:userId" → SseEmitter */
     private final ConcurrentHashMap<String, SseEmitter> chatEmitters = new ConcurrentHashMap<>();
 
@@ -590,12 +593,12 @@ public class AiGenerationServiceImpl implements AiGenerationService {
     @SuppressWarnings("unchecked")
     private Map<String, Object> doCallN8NWebhook(Map<String, Object> requestBody) {
         try {
-            RestTemplate n8nRestTemplate = createN8NRestTemplate();
+            RestTemplate n8nClient = getOrCreateN8NRestTemplate();
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
 
-            ResponseEntity<Map> responseEntity = n8nRestTemplate.postForEntity(n8nWebhookUrl, entity, Map.class);
+            ResponseEntity<Map> responseEntity = n8nClient.postForEntity(n8nWebhookUrl, entity, Map.class);
             Map<String, Object> responseBody = responseEntity.getBody();
             if (responseBody == null) {
                 throw new AiGenerationException("AI_N8N_EMPTY_RESPONSE", "N8N 返回空响应");
@@ -610,12 +613,20 @@ public class AiGenerationServiceImpl implements AiGenerationService {
         }
     }
 
-    private RestTemplate createN8NRestTemplate() {
-        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        int timeoutMs = n8nTimeoutSeconds * 1000;
-        factory.setConnectTimeout(timeoutMs);
-        factory.setReadTimeout(timeoutMs);
-        return new RestTemplate(factory);
+    private RestTemplate getOrCreateN8NRestTemplate() {
+        if (n8nRestTemplate == null) {
+            synchronized (this) {
+                if (n8nRestTemplate == null) {
+                    SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+                    int timeoutMs = n8nTimeoutSeconds * 1000;
+                    factory.setConnectTimeout(timeoutMs);
+                    factory.setReadTimeout(timeoutMs);
+                    n8nRestTemplate = new RestTemplate(factory);
+                    log.info("Created N8N RestTemplate with timeout={}ms", timeoutMs);
+                }
+            }
+        }
+        return n8nRestTemplate;
     }
 
     private boolean isSessionNotFoundError(Map<String, Object> response) {

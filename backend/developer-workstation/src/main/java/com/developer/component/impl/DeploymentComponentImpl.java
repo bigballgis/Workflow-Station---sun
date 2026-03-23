@@ -14,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.task.TaskExecutor;
 import org.springframework.http.*;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
@@ -33,7 +34,6 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 @Component
 @Slf4j
-@RequiredArgsConstructor
 public class DeploymentComponentImpl implements DeploymentComponent {
     
     private final FunctionUnitRepository functionUnitRepository;
@@ -41,6 +41,7 @@ public class DeploymentComponentImpl implements DeploymentComponent {
     private final RestTemplate restTemplate;
     private final FunctionUnitComponent functionUnitComponent;
     private final I18nService i18nService;
+    private final TaskExecutor taskExecutor;
     
     @Value("${admin-center.url:http://localhost:8090}")
     private String defaultAdminCenterUrl;
@@ -48,6 +49,25 @@ public class DeploymentComponentImpl implements DeploymentComponent {
     // 存储部署状态（生产环境应使用数据库或Redis）
     private final Map<String, DeployResponse> deploymentStatusMap = new ConcurrentHashMap<>();
     private final Map<Long, List<DeployResponse>> deploymentHistoryMap = new ConcurrentHashMap<>();
+    
+    public DeploymentComponentImpl(
+            FunctionUnitRepository functionUnitRepository,
+            ExportImportComponent exportImportComponent,
+            RestTemplate restTemplate,
+            FunctionUnitComponent functionUnitComponent,
+            I18nService i18nService,
+            @org.springframework.beans.factory.annotation.Qualifier("deploymentTaskExecutor") 
+            @org.springframework.beans.factory.annotation.Autowired(required = false)
+            TaskExecutor taskExecutor) {
+        this.functionUnitRepository = functionUnitRepository;
+        this.exportImportComponent = exportImportComponent;
+        this.restTemplate = restTemplate;
+        this.functionUnitComponent = functionUnitComponent;
+        this.i18nService = i18nService;
+        // Fallback to SimpleAsyncTaskExecutor if no dedicated executor is configured
+        this.taskExecutor = taskExecutor != null ? taskExecutor 
+                : new org.springframework.core.task.SimpleAsyncTaskExecutor("deploy-");
+    }
     
     @Override
     public DeployResponse deployToAdminCenter(Long functionUnitId, DeployRequest request) {
@@ -72,8 +92,8 @@ public class DeploymentComponentImpl implements DeploymentComponent {
         SecurityContext securityContext = SecurityContextHolder.getContext();
         Locale currentLocale = org.springframework.context.i18n.LocaleContextHolder.getLocale();
         
-        // 异步执行部署
-        new Thread(() -> {
+        // 异步执行部署（使用 Spring 管理的 TaskExecutor 替代裸线程）
+        taskExecutor.execute(() -> {
             SecurityContextHolder.setContext(securityContext);
             org.springframework.context.i18n.LocaleContextHolder.setLocale(currentLocale);
             try {
@@ -82,7 +102,7 @@ public class DeploymentComponentImpl implements DeploymentComponent {
                 SecurityContextHolder.clearContext();
                 org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
             }
-        }).start();
+        });
         
         return response;
     }
