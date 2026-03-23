@@ -31,17 +31,17 @@ public class AiWriteServiceImpl implements AiWriteService {
 
     @Override
     public void applyGeneratedData(Long functionUnitId, AiGeneratedData generatedData) {
-        log.info("开始写入 AI 生成数据到功能单元: {}", functionUnitId);
+        log.info("Applying AI generated data to function unit: {}", functionUnitId);
 
         FunctionUnit functionUnit = functionUnitRepository.findById(functionUnitId)
                 .orElseThrow(() -> new com.developer.exception.AiGenerationException(
-                        "AI_WRITE_NOT_FOUND", "功能单元不存在: " + functionUnitId));
+                        "AI_WRITE_NOT_FOUND", "Function unit not found: " + functionUnitId));
 
         // Determine mode: if FunctionUnit has existing component data, it's MODIFY mode
         boolean isModifyMode = hasExistingData(functionUnit);
 
         if (isModifyMode) {
-            log.info("MODIFY 模式：清除功能单元 {} 的现有组件数据", functionUnitId);
+            log.info("MODIFY mode: clearing existing component data for function unit {}", functionUnitId);
             clearExistingData(functionUnit);
             entityManager.flush();
         }
@@ -66,7 +66,7 @@ public class AiWriteServiceImpl implements AiWriteService {
 
         // Save — JPA cascades will persist all children
         functionUnitRepository.save(functionUnit);
-        log.info("AI 生成数据写入完成，功能单元: {}", functionUnitId);
+        log.info("AI generated data write complete, function unit: {}", functionUnitId);
     }
 
     private boolean hasExistingData(FunctionUnit functionUnit) {
@@ -95,7 +95,7 @@ public class AiWriteServiceImpl implements AiWriteService {
         Optional<Icon> existingIcon = iconRepository.findByName(name);
         if (existingIcon.isPresent()) {
             functionUnit.setIcon(existingIcon.get());
-            log.info("匹配到已有图标: {}", name);
+            log.info("Matched existing icon: {}", name);
         } else {
             String categoryStr = (String) iconData.get("category");
             String svgContent = (String) iconData.get("svgContent");
@@ -105,7 +105,7 @@ public class AiWriteServiceImpl implements AiWriteService {
             try {
                 category = IconCategory.valueOf(categoryStr);
             } catch (IllegalArgumentException | NullPointerException e) {
-                log.warn("无效的图标分类 '{}', 使用默认值 GENERAL", categoryStr);
+                log.warn("Invalid icon category '{}', using default GENERAL", categoryStr);
                 category = IconCategory.GENERAL;
             }
 
@@ -119,7 +119,7 @@ public class AiWriteServiceImpl implements AiWriteService {
 
             newIcon = iconRepository.save(newIcon);
             functionUnit.setIcon(newIcon);
-            log.info("创建新图标: {}", name);
+            log.info("Created new icon: {}", name);
         }
     }
 
@@ -135,7 +135,7 @@ public class AiWriteServiceImpl implements AiWriteService {
             try {
                 tableType = TableType.valueOf(tableTypeStr);
             } catch (IllegalArgumentException | NullPointerException e) {
-                log.warn("无效的表类型 '{}', 跳过该表", tableTypeStr);
+                log.warn("Invalid table type '{}', skipping table", tableTypeStr);
                 continue;
             }
 
@@ -158,7 +158,7 @@ public class AiWriteServiceImpl implements AiWriteService {
                     try {
                         dataType = DataType.valueOf((String) fieldData.get("dataType"));
                     } catch (IllegalArgumentException | NullPointerException e) {
-                        log.warn("无效的字段数据类型 '{}', 默认使用 VARCHAR", fieldData.get("dataType"));
+                        log.warn("Invalid field data type '{}', defaulting to VARCHAR", fieldData.get("dataType"));
                         dataType = DataType.VARCHAR;
                     }
 
@@ -214,7 +214,7 @@ public class AiWriteServiceImpl implements AiWriteService {
                 FieldDefinition refFieldDef = refTable != null ? findFieldByName(refTable, refFieldName) : null;
 
                 if (fieldDef == null || refTable == null || refFieldDef == null) {
-                    log.warn("跳过外键：无法解析引用 - table={}, field={}, refTable={}, refField={}",
+                    log.warn("Skipping foreign key: cannot resolve reference - table={}, field={}, refTable={}, refField={}",
                             tableName, fieldName, refTableName, refFieldName);
                     continue;
                 }
@@ -255,7 +255,7 @@ public class AiWriteServiceImpl implements AiWriteService {
             try {
                 formType = FormType.valueOf((String) formData.get("formType"));
             } catch (IllegalArgumentException | NullPointerException e) {
-                log.warn("无效的表单类型 '{}', 跳过该表单", formData.get("formType"));
+                log.warn("Invalid form type '{}', skipping form", formData.get("formType"));
                 continue;
             }
 
@@ -280,7 +280,7 @@ public class AiWriteServiceImpl implements AiWriteService {
                     try {
                         bindingType = BindingType.valueOf((String) bindingData.get("bindingType"));
                     } catch (IllegalArgumentException | NullPointerException e) {
-                        log.warn("无效的绑定类型 '{}', 默认使用 PRIMARY", bindingData.get("bindingType"));
+                        log.warn("Invalid binding type '{}', defaulting to PRIMARY", bindingData.get("bindingType"));
                         bindingType = BindingType.PRIMARY;
                     }
 
@@ -288,7 +288,7 @@ public class AiWriteServiceImpl implements AiWriteService {
                     try {
                         bindingMode = BindingMode.valueOf((String) bindingData.get("bindingMode"));
                     } catch (IllegalArgumentException | NullPointerException e) {
-                        log.warn("无效的绑定模式 '{}', 默认使用 EDITABLE", bindingData.get("bindingMode"));
+                        log.warn("Invalid binding mode '{}', defaulting to EDITABLE", bindingData.get("bindingMode"));
                         bindingMode = BindingMode.EDITABLE;
                     }
 
@@ -344,7 +344,7 @@ public class AiWriteServiceImpl implements AiWriteService {
             try {
                 actionType = ActionType.valueOf((String) actionData.get("actionType"));
             } catch (IllegalArgumentException | NullPointerException e) {
-                log.warn("无效的动作类型 '{}', 跳过该动作", actionData.get("actionType"));
+                log.warn("Invalid action type '{}', skipping action", actionData.get("actionType"));
                 continue;
             }
 

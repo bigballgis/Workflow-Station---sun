@@ -125,7 +125,7 @@ public class AiGenerationServiceImpl implements AiGenerationService {
     public AiSession restoreSession(String sessionId) {
         UUID uuid = parseSessionId(sessionId);
         return aiSessionRepository.findBySessionId(uuid)
-                .orElseThrow(() -> new AiGenerationException("AI_SESSION_NOT_FOUND", "会话不存在"));
+                .orElseThrow(() -> new AiGenerationException("AI_SESSION_NOT_FOUND", "Session not found"));
     }
 
     @Override
@@ -142,7 +142,7 @@ public class AiGenerationServiceImpl implements AiGenerationService {
     public void updateSessionPhase(String sessionId, AiPhase phase) {
         UUID uuid = parseSessionId(sessionId);
         AiSession session = aiSessionRepository.findBySessionId(uuid)
-                .orElseThrow(() -> new AiGenerationException("AI_SESSION_NOT_FOUND", "会话不存在"));
+                .orElseThrow(() -> new AiGenerationException("AI_SESSION_NOT_FOUND", "Session not found"));
 
         session.setCurrentPhase(phase);
         aiSessionRepository.save(session);
@@ -154,7 +154,7 @@ public class AiGenerationServiceImpl implements AiGenerationService {
     public void updateSessionStatus(String sessionId, AiSessionStatus status) {
         UUID uuid = parseSessionId(sessionId);
         AiSession session = aiSessionRepository.findBySessionId(uuid)
-                .orElseThrow(() -> new AiGenerationException("AI_SESSION_NOT_FOUND", "会话不存在"));
+                .orElseThrow(() -> new AiGenerationException("AI_SESSION_NOT_FOUND", "Session not found"));
 
         validateStatusTransition(session.getStatus(), status);
 
@@ -169,7 +169,7 @@ public class AiGenerationServiceImpl implements AiGenerationService {
     @Transactional(readOnly = true)
     public AiMode determineMode(Long functionUnitId) {
         FunctionUnit functionUnit = functionUnitRepository.findById(functionUnitId)
-                .orElseThrow(() -> new AiGenerationException("AI_FUNCTION_UNIT_NOT_FOUND", "功能单元不存在"));
+                .orElseThrow(() -> new AiGenerationException("AI_FUNCTION_UNIT_NOT_FOUND", "Function unit not found"));
 
         boolean hasProcessDefinition = functionUnit.getProcessDefinition() != null;
         boolean hasTableDefinitions = functionUnit.getTableDefinitions() != null && !functionUnit.getTableDefinitions().isEmpty();
@@ -253,7 +253,7 @@ public class AiGenerationServiceImpl implements AiGenerationService {
     public AiDocument getDocumentByVersion(Long functionUnitId, AiDocumentType documentType, Integer version) {
         return aiDocumentRepository.findByFunctionUnitIdAndDocumentTypeAndVersion(functionUnitId, documentType, version)
                 .orElseThrow(() -> new AiGenerationException("AI_DOCUMENT_NOT_FOUND",
-                        String.format("文档版本不存在: functionUnitId=%d, type=%s, version=%d", functionUnitId, documentType, version)));
+                        String.format("Document version not found: functionUnitId=%d, type=%s, version=%d", functionUnitId, documentType, version)));
     }
 
     // ==================== Context Serialization ====================
@@ -265,7 +265,7 @@ public class AiGenerationServiceImpl implements AiGenerationService {
         // （Hibernate 不允许同时 fetch 多个 List 类型的关联）
         // 在 @Transactional 事务内，lazy loading 会逐个加载关联集合
         FunctionUnit fu = functionUnitRepository.findById(functionUnitId)
-                .orElseThrow(() -> new AiGenerationException("AI_FUNCTION_UNIT_NOT_FOUND", "功能单元不存在"));
+                .orElseThrow(() -> new AiGenerationException("AI_FUNCTION_UNIT_NOT_FOUND", "Function unit not found"));
 
         FunctionUnitContextDTO dto = buildContextDTO(fu);
 
@@ -293,7 +293,7 @@ public class AiGenerationServiceImpl implements AiGenerationService {
         }
 
         throw new AiGenerationException("AI_CONTEXT_TOO_LARGE",
-                String.format("功能单元上下文序列化后大小 %dB 超过限制 %dB", jsonBytes.length, maxContextSizeBytes));
+                String.format("Serialized context size %dB exceeds limit %dB", jsonBytes.length, maxContextSizeBytes));
     }
 
     private FunctionUnitContextDTO buildContextDTO(FunctionUnit fu) {
@@ -443,7 +443,7 @@ public class AiGenerationServiceImpl implements AiGenerationService {
         try {
             return objectMapper.writeValueAsBytes(dto);
         } catch (JsonProcessingException e) {
-            throw new AiGenerationException("AI_CONTEXT_SERIALIZATION_ERROR", "功能单元上下文序列化失败: " + e.getMessage());
+            throw new AiGenerationException("AI_CONTEXT_SERIALIZATION_ERROR", "Function unit context serialization failed: " + e.getMessage());
         }
     }
 
@@ -851,7 +851,7 @@ public class AiGenerationServiceImpl implements AiGenerationService {
             return; // Valid transitions
         }
         throw new AiGenerationException("AI_SESSION_INVALID_STATUS_TRANSITION",
-                String.format("非法状态转换: %s → %s", currentStatus, newStatus));
+                String.format("Invalid status transition: %s -> %s", currentStatus, newStatus));
     }
 
     private String toJsonString(Object obj) {
@@ -900,7 +900,7 @@ public class AiGenerationServiceImpl implements AiGenerationService {
         try {
             return UUID.fromString(sessionId);
         } catch (IllegalArgumentException e) {
-            throw new AiGenerationException("AI_SESSION_INVALID_ID", "无效的会话 ID 格式");
+            throw new AiGenerationException("AI_SESSION_INVALID_ID", "Invalid session ID format");
         }
     }
 }

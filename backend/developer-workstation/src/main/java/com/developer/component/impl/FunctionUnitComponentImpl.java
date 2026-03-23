@@ -114,8 +114,8 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     public FunctionUnit create(FunctionUnitRequest request) {
         if (functionUnitRepository.existsByName(request.getName())) {
             throw new BusinessException("CONFLICT_NAME_EXISTS", 
-                    "功能单元名称已存在: " + request.getName(),
-                    "请使用其他名称");
+                    "Function unit name already exists: " + request.getName(),
+                    "Please use a different name");
         }
         
         // 生成唯一编码
@@ -168,8 +168,8 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         
         if (functionUnitRepository.existsByNameAndIdNot(request.getName(), id)) {
             throw new BusinessException("CONFLICT_NAME_EXISTS", 
-                    "功能单元名称已存在: " + request.getName(),
-                    "请使用其他名称");
+                    "Function unit name already exists: " + request.getName(),
+                    "Please use a different name");
         }
         
         functionUnit.setName(request.getName());
@@ -271,8 +271,8 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         ValidationResult validationResult = validate(id);
         if (!validationResult.isValid()) {
             throw new BusinessException("BIZ_INVALID_FUNCTION_UNIT", 
-                    "功能单元验证失败，无法发布",
-                    "请修复验证错误后重试");
+                    "Function unit validation failed, cannot publish",
+                    "Please fix validation errors before retrying");
         }
         
         // 计算新版本号
@@ -282,7 +282,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         boolean versionAlreadyExists = versionRepository.findByFunctionUnitIdAndVersionNumber(id, newVersion).isPresent();
         if (versionAlreadyExists) {
             // 版本快照已存在但 currentVersion 尚未更新，说明上次 deploy 中途失败，允许继续完成状态更新
-            log.warn("版本快照 {} 已存在但功能单元状态未更新，继续完成发布流程，functionUnitId={}", newVersion, id);
+            log.warn("Version snapshot {} already exists but function unit status not updated, continuing publish flow, functionUnitId={}", newVersion, id);
         } else {
             // 创建版本快照
             try {
@@ -298,8 +298,8 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
             } catch (BusinessException e) {
                 throw e;
             } catch (Exception e) {
-                log.error("创建版本快照失败，functionUnitId={}, version={}: {}", id, newVersion, e.getMessage(), e);
-                throw new BusinessException("SYS_SNAPSHOT_ERROR", "创建版本快照失败: " + e.getMessage());
+                log.error("Failed to create version snapshot, functionUnitId={}, version={}: {}", id, newVersion, e.getMessage(), e);
+                throw new BusinessException("SYS_SNAPSHOT_ERROR", "Failed to create version snapshot: " + e.getMessage());
             }
         }
         
@@ -316,8 +316,8 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     public FunctionUnit clone(Long id, String newName) {
         if (functionUnitRepository.existsByName(newName)) {
             throw new BusinessException("CONFLICT_NAME_EXISTS", 
-                    "功能单元名称已存在: " + newName,
-                    "请使用其他名称");
+                    "Function unit name already exists: " + newName,
+                    "Please use a different name");
         }
         
         FunctionUnit source = getById(id);
@@ -407,21 +407,21 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         
         // 检查是否有流程定义
         if (functionUnit.getProcessDefinition() == null) {
-            result.addWarning("MISSING_PROCESS", "功能单元没有流程定义", null);
+            result.addWarning("MISSING_PROCESS", "Function unit has no process definition", null);
         }
         
         // 检查是否有主表
         boolean hasMainTable = functionUnit.getTableDefinitions().stream()
                 .anyMatch(t -> t.getTableType() == com.developer.enums.TableType.MAIN);
         if (!hasMainTable) {
-            result.addWarning("MISSING_MAIN_TABLE", "功能单元没有主表", null);
+            result.addWarning("MISSING_MAIN_TABLE", "Function unit has no main table", null);
         }
         
         // 检查是否有主表单
         boolean hasMainForm = functionUnit.getFormDefinitions().stream()
                 .anyMatch(f -> f.getFormType() == com.developer.enums.FormType.MAIN);
         if (!hasMainForm) {
-            result.addWarning("MISSING_MAIN_FORM", "功能单元没有主表单", null);
+            result.addWarning("MISSING_MAIN_FORM", "Function unit has no main form", null);
         }
         
         return result;
