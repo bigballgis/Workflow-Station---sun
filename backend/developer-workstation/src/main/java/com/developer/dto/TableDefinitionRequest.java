@@ -20,14 +20,14 @@ import java.util.List;
 @AllArgsConstructor
 public class TableDefinitionRequest {
     
-    @NotBlank(message = "表名不能为空")
-    @Size(max = 100, message = "表名长度不能超过100个字符")
+    @NotBlank(message = "{validation.table_name_required}")
+    @Size(max = 100, message = "{validation.table_name_max_length}")
     private String tableName;
     
-    @NotNull(message = "表类型不能为空")
+    @NotNull(message = "{validation.table_type_required}")
     private TableType tableType;
     
-    @Size(max = 200, message = "表显示名称长度不能超过200个字符")
+    @Size(max = 200, message = "{validation.table_display_name_max_length}")
     private String tableDisplayName;
 
     private String description;

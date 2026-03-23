@@ -186,7 +186,12 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
             predicates.add(cb.equal(root.get("enabled"), true));
             
             if (name != null && !name.trim().isEmpty()) {
-                predicates.add(cb.like(cb.lower(root.get("name")), "%" + name.trim().toLowerCase() + "%"));
+                // Escape SQL LIKE special characters to prevent injection
+                String escapedName = name.trim().toLowerCase()
+                        .replace("\\", "\\\\")
+                        .replace("%", "\\%")
+                        .replace("_", "\\_");
+                predicates.add(cb.like(cb.lower(root.get("name")), "%" + escapedName + "%", '\\'));
             }
             
             if (status != null && !status.trim().isEmpty()) {
@@ -445,10 +450,70 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     private byte[] createSnapshot(FunctionUnit functionUnit) throws Exception {
         Map<String, Object> snapshot = new HashMap<>();
         snapshot.put("name", functionUnit.getName());
+        snapshot.put("code", functionUnit.getCode());
         snapshot.put("description", functionUnit.getDescription());
+        snapshot.put("status", functionUnit.getStatus() != null ? functionUnit.getStatus().name() : null);
         snapshot.put("processXml", functionUnit.getProcessDefinition() != null ? 
                 functionUnit.getProcessDefinition().getBpmnXml() : null);
-        // 添加更多快照数据...
+        
+        // Snapshot table definitions with fields
+        List<Map<String, Object>> tableSnapshots = new ArrayList<>();
+        for (TableDefinition table : functionUnit.getTableDefinitions()) {
+            Map<String, Object> tableSnap = new HashMap<>();
+            tableSnap.put("tableName", table.getTableName());
+            tableSnap.put("tableType", table.getTableType() != null ? table.getTableType().name() : null);
+            tableSnap.put("tableDisplayName", table.getTableDisplayName());
+            tableSnap.put("description", table.getDescription());
+            
+            List<Map<String, Object>> fieldSnapshots = new ArrayList<>();
+            for (FieldDefinition field : table.getFieldDefinitions()) {
+                Map<String, Object> fieldSnap = new HashMap<>();
+                fieldSnap.put("fieldName", field.getFieldName());
+                fieldSnap.put("dataType", field.getDataType() != null ? field.getDataType().name() : null);
+                fieldSnap.put("length", field.getLength());
+                fieldSnap.put("precision", field.getPrecision());
+                fieldSnap.put("scale", field.getScale());
+                fieldSnap.put("nullable", field.getNullable());
+                fieldSnap.put("defaultValue", field.getDefaultValue());
+                fieldSnap.put("isPrimaryKey", field.getIsPrimaryKey());
+                fieldSnap.put("isUnique", field.getIsUnique());
+                fieldSnap.put("description", field.getDescription());
+                fieldSnap.put("sortOrder", field.getSortOrder());
+                fieldSnapshots.add(fieldSnap);
+            }
+            tableSnap.put("fieldDefinitions", fieldSnapshots);
+            tableSnapshots.add(tableSnap);
+        }
+        snapshot.put("tableDefinitions", tableSnapshots);
+        
+        // Snapshot form definitions
+        List<Map<String, Object>> formSnapshots = new ArrayList<>();
+        for (FormDefinition form : functionUnit.getFormDefinitions()) {
+            Map<String, Object> formSnap = new HashMap<>();
+            formSnap.put("formName", form.getFormName());
+            formSnap.put("formType", form.getFormType() != null ? form.getFormType().name() : null);
+            formSnap.put("configJson", form.getConfigJson());
+            formSnap.put("description", form.getDescription());
+            formSnap.put("boundTableName", form.getBoundTableName());
+            formSnapshots.add(formSnap);
+        }
+        snapshot.put("formDefinitions", formSnapshots);
+        
+        // Snapshot action definitions
+        List<Map<String, Object>> actionSnapshots = new ArrayList<>();
+        for (ActionDefinition action : functionUnit.getActionDefinitions()) {
+            Map<String, Object> actionSnap = new HashMap<>();
+            actionSnap.put("actionName", action.getActionName());
+            actionSnap.put("actionType", action.getActionType() != null ? action.getActionType().name() : null);
+            actionSnap.put("configJson", action.getConfigJson());
+            actionSnap.put("icon", action.getIcon());
+            actionSnap.put("buttonColor", action.getButtonColor());
+            actionSnap.put("description", action.getDescription());
+            actionSnap.put("isDefault", action.getIsDefault());
+            actionSnapshots.add(actionSnap);
+        }
+        snapshot.put("actionDefinitions", actionSnapshots);
+        
         return objectMapper.writeValueAsBytes(snapshot);
     }
     
@@ -457,6 +522,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
                 .functionUnit(target)
                 .tableName(source.getTableName())
                 .tableType(source.getTableType())
+                .tableDisplayName(source.getTableDisplayName())
                 .description(source.getDescription())
                 .build();
         cloned = tableDefinitionRepository.save(cloned);

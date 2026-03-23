@@ -79,11 +79,11 @@ public class FunctionUnit {
     private Boolean enabled = true;
     
     /**
-     * Timestamp when this version was deployed
+     * Timestamp when this version was deployed.
+     * Null for DRAFT status; set when actually deployed.
      */
-    @Column(name = "deployed_at", nullable = false)
-    @Builder.Default
-    private Instant deployedAt = Instant.now();
+    @Column(name = "deployed_at")
+    private Instant deployedAt;
     
     /**
      * Reference to the previous version of this function unit
