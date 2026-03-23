@@ -81,9 +81,9 @@ public class AiValidationServiceImpl implements AiValidationService {
                             result.addError("FIELD_CONSTRAINT", fieldPath + ".precision",
                                     "DECIMAL 类型必须指定 precision 且大于 0");
                         }
-                        if (field.get("scale") == null || toInt(field.get("scale")) <= 0) {
+                        if (field.get("scale") == null || toInt(field.get("scale")) < 0) {
                             result.addError("FIELD_CONSTRAINT", fieldPath + ".scale",
-                                    "DECIMAL 类型必须指定 scale 且大于 0");
+                                    "DECIMAL 类型必须指定 scale 且不小于 0");
                         }
                     }
 

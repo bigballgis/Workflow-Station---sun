@@ -221,7 +221,7 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
 
     @Override
     public com.developer.entity.AiDocument saveDocument(Long functionUnitId, AiDocumentType documentType, String content, String userId) {
-        return aiGenerationService.saveDocument(functionUnitId, documentType, content, "用户手动编辑", userId);
+        return aiGenerationService.saveDocument(functionUnitId, documentType, content, "User manual edit", userId);
     }
 
     @Override

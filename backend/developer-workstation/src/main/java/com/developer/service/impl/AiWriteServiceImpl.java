@@ -90,7 +90,7 @@ public class AiWriteServiceImpl implements AiWriteService {
         if (iconData == null) return;
 
         String name = (String) iconData.get("name");
-        if (name == null) return;
+        if (name == null || name.isBlank()) return;
 
         Optional<Icon> existingIcon = iconRepository.findByName(name);
         if (existingIcon.isPresent()) {
@@ -101,9 +101,17 @@ public class AiWriteServiceImpl implements AiWriteService {
             String svgContent = (String) iconData.get("svgContent");
             String description = (String) iconData.get("description");
 
+            IconCategory category;
+            try {
+                category = IconCategory.valueOf(categoryStr);
+            } catch (IllegalArgumentException | NullPointerException e) {
+                log.warn("无效的图标分类 '{}', 使用默认值 GENERAL", categoryStr);
+                category = IconCategory.GENERAL;
+            }
+
             Icon newIcon = Icon.builder()
                     .name(name)
-                    .category(IconCategory.valueOf(categoryStr))
+                    .category(category)
                     .svgContent(svgContent)
                     .description(description)
                     .fileSize(svgContent != null ? svgContent.getBytes(StandardCharsets.UTF_8).length : 0)
@@ -122,10 +130,19 @@ public class AiWriteServiceImpl implements AiWriteService {
         if (tableDefs == null) return tableMap;
 
         for (Map<String, Object> tableData : tableDefs) {
+            String tableTypeStr = (String) tableData.get("tableType");
+            TableType tableType;
+            try {
+                tableType = TableType.valueOf(tableTypeStr);
+            } catch (IllegalArgumentException | NullPointerException e) {
+                log.warn("无效的表类型 '{}', 跳过该表", tableTypeStr);
+                continue;
+            }
+
             TableDefinition table = TableDefinition.builder()
                     .functionUnit(functionUnit)
                     .tableName((String) tableData.get("tableName"))
-                    .tableType(TableType.valueOf((String) tableData.get("tableType")))
+                    .tableType(tableType)
                     .tableDisplayName((String) (tableData.get("tableDisplayName") != null ? tableData.get("tableDisplayName") : tableData.get("displayName")))
                     .description((String) (tableData.get("description") != null ? tableData.get("description") : tableData.get("comment")))
                     .build();
@@ -137,10 +154,18 @@ public class AiWriteServiceImpl implements AiWriteService {
             }
             if (fieldDefs != null) {
                 for (Map<String, Object> fieldData : fieldDefs) {
+                    DataType dataType;
+                    try {
+                        dataType = DataType.valueOf((String) fieldData.get("dataType"));
+                    } catch (IllegalArgumentException | NullPointerException e) {
+                        log.warn("无效的字段数据类型 '{}', 默认使用 VARCHAR", fieldData.get("dataType"));
+                        dataType = DataType.VARCHAR;
+                    }
+
                     FieldDefinition field = FieldDefinition.builder()
                             .tableDefinition(table)
                             .fieldName((String) fieldData.get("fieldName"))
-                            .dataType(DataType.valueOf((String) fieldData.get("dataType")))
+                            .dataType(dataType)
                             .length(toInteger(fieldData.get("length")))
                             .precision(toInteger(fieldData.get("precision")))
                             .scale(toInteger(fieldData.get("scale")))
@@ -226,10 +251,18 @@ public class AiWriteServiceImpl implements AiWriteService {
             @SuppressWarnings("unchecked")
             Map<String, Object> configJson = (Map<String, Object>) formData.get("configJson");
 
+            FormType formType;
+            try {
+                formType = FormType.valueOf((String) formData.get("formType"));
+            } catch (IllegalArgumentException | NullPointerException e) {
+                log.warn("无效的表单类型 '{}', 跳过该表单", formData.get("formType"));
+                continue;
+            }
+
             FormDefinition form = FormDefinition.builder()
                     .functionUnit(functionUnit)
                     .formName((String) formData.get("formName"))
-                    .formType(FormType.valueOf((String) formData.get("formType")))
+                    .formType(formType)
                     .configJson(configJson)
                     .description((String) formData.get("description"))
                     .build();
@@ -243,13 +276,27 @@ public class AiWriteServiceImpl implements AiWriteService {
                     String tableName = (String) bindingData.get("tableName");
                     TableDefinition boundTable = tableMap.get(tableName);
 
-                    BindingType bindingType = BindingType.valueOf((String) bindingData.get("bindingType"));
+                    BindingType bindingType;
+                    try {
+                        bindingType = BindingType.valueOf((String) bindingData.get("bindingType"));
+                    } catch (IllegalArgumentException | NullPointerException e) {
+                        log.warn("无效的绑定类型 '{}', 默认使用 PRIMARY", bindingData.get("bindingType"));
+                        bindingType = BindingType.PRIMARY;
+                    }
+
+                    BindingMode bindingMode;
+                    try {
+                        bindingMode = BindingMode.valueOf((String) bindingData.get("bindingMode"));
+                    } catch (IllegalArgumentException | NullPointerException e) {
+                        log.warn("无效的绑定模式 '{}', 默认使用 EDITABLE", bindingData.get("bindingMode"));
+                        bindingMode = BindingMode.EDITABLE;
+                    }
 
                     FormTableBinding binding = FormTableBinding.builder()
                             .form(form)
                             .table(boundTable)
                             .bindingType(bindingType)
-                            .bindingMode(BindingMode.valueOf((String) bindingData.get("bindingMode")))
+                            .bindingMode(bindingMode)
                             .foreignKeyField((String) bindingData.get("foreignKeyField"))
                             .sortOrder(toInteger(bindingData.get("sortOrder")))
                             .build();
@@ -293,10 +340,18 @@ public class AiWriteServiceImpl implements AiWriteService {
         for (Map<String, Object> actionData : actionDefs) {
             Map<String, Object> configJson = (Map<String, Object>) actionData.get("configJson");
 
+            ActionType actionType;
+            try {
+                actionType = ActionType.valueOf((String) actionData.get("actionType"));
+            } catch (IllegalArgumentException | NullPointerException e) {
+                log.warn("无效的动作类型 '{}', 跳过该动作", actionData.get("actionType"));
+                continue;
+            }
+
             ActionDefinition action = ActionDefinition.builder()
                     .functionUnit(functionUnit)
                     .actionName((String) actionData.get("actionName"))
-                    .actionType(ActionType.valueOf((String) actionData.get("actionType")))
+                    .actionType(actionType)
                     .configJson(configJson)
                     .icon((String) actionData.get("icon"))
                     .buttonColor((String) actionData.get("buttonColor"))

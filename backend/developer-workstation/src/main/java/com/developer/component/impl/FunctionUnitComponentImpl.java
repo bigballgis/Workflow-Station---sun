@@ -316,7 +316,45 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
             tableMapping.put(sourceTable.getId(), clonedTable);
         }
         
-        // 克隆表单定义
+        // 克隆外键关系（需要在所有表克隆完成后处理，因为外键可能跨表引用）
+        Map<Long, Map<String, FieldDefinition>> clonedFieldLookup = new HashMap<>();
+        for (Map.Entry<Long, TableDefinition> entry : tableMapping.entrySet()) {
+            Map<String, FieldDefinition> fieldMap = new HashMap<>();
+            for (FieldDefinition field : entry.getValue().getFieldDefinitions()) {
+                fieldMap.put(field.getFieldName(), field);
+            }
+            clonedFieldLookup.put(entry.getKey(), fieldMap);
+        }
+        for (TableDefinition sourceTable : source.getTableDefinitions()) {
+            if (sourceTable.getForeignKeys() != null) {
+                TableDefinition clonedTable = tableMapping.get(sourceTable.getId());
+                for (ForeignKey sourceFk : sourceTable.getForeignKeys()) {
+                    TableDefinition clonedRefTable = sourceFk.getRefTableDefinition() != null
+                            ? tableMapping.get(sourceFk.getRefTableDefinition().getId()) : null;
+                    FieldDefinition clonedField = sourceFk.getFieldDefinition() != null
+                            ? clonedFieldLookup.getOrDefault(sourceTable.getId(), Map.of())
+                                .get(sourceFk.getFieldDefinition().getFieldName()) : null;
+                    FieldDefinition clonedRefField = sourceFk.getRefFieldDefinition() != null && clonedRefTable != null
+                            ? clonedFieldLookup.getOrDefault(sourceFk.getRefTableDefinition().getId(), Map.of())
+                                .get(sourceFk.getRefFieldDefinition().getFieldName()) : null;
+                    
+                    if (clonedField != null && clonedRefTable != null && clonedRefField != null) {
+                        ForeignKey clonedFk = ForeignKey.builder()
+                                .tableDefinition(clonedTable)
+                                .fieldDefinition(clonedField)
+                                .refTableDefinition(clonedRefTable)
+                                .refFieldDefinition(clonedRefField)
+                                .onDelete(sourceFk.getOnDelete())
+                                .onUpdate(sourceFk.getOnUpdate())
+                                .build();
+                        clonedTable.getForeignKeys().add(clonedFk);
+                    }
+                }
+                tableDefinitionRepository.save(clonedTable);
+            }
+        }
+        
+        // 克隆表单定义（包含 TableBindings）
         for (FormDefinition sourceForm : source.getFormDefinitions()) {
             cloneForm(sourceForm, cloned, tableMapping);
         }
@@ -442,9 +480,20 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         if (currentVersion == null || currentVersion.isEmpty()) {
             return "1.0.0";
         }
-        String[] parts = currentVersion.split("\\.");
-        int patch = Integer.parseInt(parts[2]) + 1;
-        return parts[0] + "." + parts[1] + "." + patch;
+        try {
+            String[] parts = currentVersion.split("\\.");
+            if (parts.length != 3) {
+                log.warn("版本号格式异常 '{}', 回退到 1.0.0", currentVersion);
+                return "1.0.0";
+            }
+            int major = Integer.parseInt(parts[0]);
+            int minor = Integer.parseInt(parts[1]);
+            int patch = Integer.parseInt(parts[2]) + 1;
+            return major + "." + minor + "." + patch;
+        } catch (NumberFormatException e) {
+            log.warn("版本号解析失败 '{}': {}, 回退到 1.0.0", currentVersion, e.getMessage());
+            return "1.0.0";
+        }
     }
     
     private byte[] createSnapshot(FunctionUnit functionUnit) throws Exception {
@@ -554,12 +603,29 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
                 .functionUnit(target)
                 .formName(source.getFormName())
                 .formType(source.getFormType())
-                .configJson(new HashMap<>(source.getConfigJson()))
+                .configJson(source.getConfigJson() != null ? new HashMap<>(source.getConfigJson()) : new HashMap<>())
                 .description(source.getDescription())
                 .build();
         
         if (source.getBoundTable() != null && tableMapping.containsKey(source.getBoundTable().getId())) {
             cloned.setBoundTable(tableMapping.get(source.getBoundTable().getId()));
+        }
+        
+        // 克隆 FormTableBindings
+        if (source.getTableBindings() != null) {
+            for (FormTableBinding sourceBinding : source.getTableBindings()) {
+                TableDefinition clonedTable = sourceBinding.getTable() != null
+                        ? tableMapping.get(sourceBinding.getTable().getId()) : null;
+                FormTableBinding clonedBinding = FormTableBinding.builder()
+                        .form(cloned)
+                        .table(clonedTable)
+                        .bindingType(sourceBinding.getBindingType())
+                        .bindingMode(sourceBinding.getBindingMode())
+                        .foreignKeyField(sourceBinding.getForeignKeyField())
+                        .sortOrder(sourceBinding.getSortOrder())
+                        .build();
+                cloned.getTableBindings().add(clonedBinding);
+            }
         }
         
         formDefinitionRepository.save(cloned);
