@@ -60,7 +60,11 @@ public class AiValidationServiceImpl implements AiValidationService {
             validateEnumValue(table.get("tableType"), TableType.class,
                     "tableDefinitions[" + i + "].tableType", result);
 
+            // Support both "fieldDefinitions" and "fields" key names
             List<Map<String, Object>> fields = (List<Map<String, Object>>) table.get("fieldDefinitions");
+            if (fields == null) {
+                fields = (List<Map<String, Object>>) table.get("fields");
+            }
             if (fields != null) {
                 boolean hasPrimaryKey = false;
                 for (int j = 0; j < fields.size(); j++) {
@@ -91,6 +95,9 @@ public class AiValidationServiceImpl implements AiValidationService {
                     }
 
                     Boolean isPrimaryKey = (Boolean) field.get("isPrimaryKey");
+                    if (isPrimaryKey == null) {
+                        isPrimaryKey = (Boolean) field.get("primaryKey");
+                    }
                     if (Boolean.TRUE.equals(isPrimaryKey)) {
                         hasPrimaryKey = true;
                     }
@@ -112,6 +119,7 @@ public class AiValidationServiceImpl implements AiValidationService {
                     "formDefinitions[" + i + "].formType", result);
 
             List<Map<String, Object>> bindings = (List<Map<String, Object>>) form.get("tableBindings");
+            // Skip binding validation if LLM used legacy format (bindingTableId)
             if (bindings != null) {
                 for (int j = 0; j < bindings.size(); j++) {
                     Map<String, Object> binding = bindings.get(j);
@@ -256,6 +264,9 @@ public class AiValidationServiceImpl implements AiValidationService {
                 tableMap.put(tableName, table);
                 Set<String> fieldNames = new HashSet<>();
                 List<Map<String, Object>> fields = (List<Map<String, Object>>) table.get("fieldDefinitions");
+                if (fields == null) {
+                    fields = (List<Map<String, Object>>) table.get("fields");
+                }
                 if (fields != null) {
                     for (Map<String, Object> field : fields) {
                         String fn = (String) field.get("fieldName");
@@ -295,13 +306,22 @@ public class AiValidationServiceImpl implements AiValidationService {
         if (forms != null) {
             for (int i = 0; i < forms.size(); i++) {
                 List<Map<String, Object>> bindings = (List<Map<String, Object>>) forms.get(i).get("tableBindings");
-                if (bindings == null) continue;
-                for (int j = 0; j < bindings.size(); j++) {
-                    String tableName = (String) bindings.get(j).get("tableName");
-                    if (tableName != null && !tableMap.containsKey(tableName)) {
+                if (bindings != null) {
+                    for (int j = 0; j < bindings.size(); j++) {
+                        String tableName = (String) bindings.get(j).get("tableName");
+                        if (tableName != null && !tableMap.containsKey(tableName)) {
+                            result.addError("REFERENCE_INTEGRITY",
+                                "formDefinitions[" + i + "].tableBindings[" + j + "].tableName",
+                                "引用的表 '" + tableName + "' 不存在");
+                        }
+                    }
+                } else {
+                    // Fallback: check "bindingTableId" at form level
+                    String bindingTableId = (String) forms.get(i).get("bindingTableId");
+                    if (bindingTableId != null && !tableMap.containsKey(bindingTableId)) {
                         result.addError("REFERENCE_INTEGRITY",
-                            "formDefinitions[" + i + "].tableBindings[" + j + "].tableName",
-                            "引用的表 '" + tableName + "' 不存在");
+                            "formDefinitions[" + i + "].bindingTableId",
+                            "引用的表 '" + bindingTableId + "' 不存在");
                     }
                 }
             }
@@ -322,6 +342,9 @@ public class AiValidationServiceImpl implements AiValidationService {
         if (tables != null) {
             for (int i = 0; i < tables.size(); i++) {
                 List<Map<String, Object>> fields = (List<Map<String, Object>>) tables.get(i).get("fieldDefinitions");
+                if (fields == null) {
+                    fields = (List<Map<String, Object>>) tables.get(i).get("fields");
+                }
                 if (fields != null) {
                     Set<String> seen = new HashSet<>();
                     for (int j = 0; j < fields.size(); j++) {

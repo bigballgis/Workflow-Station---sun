@@ -111,6 +111,7 @@ services:
       N8N_PORT: 5678
       N8N_RESTRICT_ENVIRONMENT_VARIABLES_ACCESS: "false"
       N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      NODE_FUNCTION_ALLOW_EXTERNAL: "pg"
       DOUBAO_MODEL_ID: ${DOUBAO_MODEL_ID:-doubao-1-5-vision-pro-32k-250115}
       DOUBAO_API_KEY: ${DOUBAO_API_KEY:-your-doubao-api-key-here}
     volumes:

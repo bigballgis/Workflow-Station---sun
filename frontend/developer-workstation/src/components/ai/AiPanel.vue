@@ -107,7 +107,8 @@ import type {
   AiMode,
   AiMessage,
   AiGeneratedData,
-  AiValidationError
+  AiValidationError,
+  AiDocumentType
 } from '@/types/aiGeneration'
 
 const { t } = useI18n()
@@ -288,7 +289,18 @@ async function openPanel() {
       const msgs = await sessionComposable.restoreSession(activeSession)
       currentMode.value = activeSession.mode
       initialMessages.value = [...msgs]
-      computeCompletedPhases(activeSession.currentPhase)
+
+      // 根据已有文档推断实际阶段（防止后端阶段未更新的情况）
+      const actualPhase = await detectPhaseFromDocuments(props.functionUnitId, activeSession.currentPhase)
+      if (actualPhase !== activeSession.currentPhase) {
+        sessionComposable.setPhase(actualPhase)
+        // 同步更新后端
+        if (activeSession.sessionId) {
+          aiGenerationApi.updateSessionPhase(activeSession.sessionId, actualPhase)
+            .catch(err => console.error('Failed to sync phase:', err))
+        }
+      }
+      computeCompletedPhases(sessionComposable.currentPhase.value)
       ready.value = true
       return
     }
@@ -346,6 +358,26 @@ function computeCompletedPhases(currentPhase: AiPhase) {
   const phases: AiPhase[] = ['REQUIREMENTS', 'DESIGN', 'GENERATION']
   const idx = phases.indexOf(currentPhase)
   completedPhases.value = phases.slice(0, idx)
+}
+
+/**
+ * 根据已有文档推断实际阶段。
+ * 如果 DESIGN 文档已存在但会话阶段仍为 REQUIREMENTS，说明后端阶段未同步，需要修正。
+ */
+async function detectPhaseFromDocuments(functionUnitId: number, dbPhase: AiPhase): Promise<AiPhase> {
+  try {
+    // 检查是否有 DESIGN 文档
+    const designRes = await aiGenerationApi.getDocumentVersions(functionUnitId, 'DESIGN' as AiDocumentType)
+    const hasDesign = designRes.data && designRes.data.length > 0
+
+    if (hasDesign && dbPhase === 'REQUIREMENTS') {
+      return 'DESIGN'
+    }
+    // 可以扩展：如果有 GENERATION 数据但阶段是 DESIGN，也可以修正
+  } catch {
+    // 查询失败不影响正常流程
+  }
+  return dbPhase
 }
 
 function handleClose() {
@@ -428,10 +460,32 @@ async function handleRequestForceUnlock() {
 }
 
 function handlePhaseComplete(_phase: AiPhase) {
+  // 后端已自动推进阶段，这里只更新前端状态
   const advanced = sessionComposable.advancePhase()
   if (advanced) {
     computeCompletedPhases(sessionComposable.currentPhase.value)
+    // Auto-trigger AI generation for the new phase
+    const newPhase = sessionComposable.currentPhase.value
+    if (newPhase === 'DESIGN' || newPhase === 'GENERATION') {
+      // 使用 guard 防止重复触发（如果已经在 streaming 则跳过）
+      if (!chatComposable.isStreaming.value) {
+        nextTick(() => {
+          autoTriggerPhase(newPhase)
+        })
+      }
+    }
   }
+}
+
+async function autoTriggerPhase(phase: AiPhase) {
+  const triggerMessages: Record<string, string> = {
+    DESIGN: '[AUTO_TRIGGER] 请基于已有的需求文档，直接生成完整的设计方案文档。',
+    GENERATION: '[AUTO_TRIGGER] 请基于已有的需求文档和设计文档，直接生成完整的功能单元组件数据。'
+  }
+  const message = triggerMessages[phase]
+  if (!message) return
+
+  chatDialogRef.value?.autoSendMessage(message)
 }
 
 async function handleApply(data: AiGeneratedData) {

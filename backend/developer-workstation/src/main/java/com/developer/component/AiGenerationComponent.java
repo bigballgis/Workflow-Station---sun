@@ -78,4 +78,9 @@ public interface AiGenerationComponent {
      * 保存用户手动编辑的文档为新版本
      */
     com.developer.entity.AiDocument saveDocument(Long functionUnitId, com.developer.enums.AiDocumentType documentType, String content, String userId);
+
+    /**
+     * 更新会话当前阶段
+     */
+    void updateSessionPhase(String sessionId, com.developer.enums.AiPhase phase);
 }

@@ -69,6 +69,7 @@ export function useAiSession() {
     const currentIndex = PHASE_ORDER.indexOf(currentPhase.value)
     if (currentIndex < PHASE_ORDER.length - 1) {
       currentPhase.value = PHASE_ORDER[currentIndex + 1]
+      // 注意：不再调用后端 updateSessionPhase，因为后端在 phaseComplete 时已自动推进
       return true
     }
     return false

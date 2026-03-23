@@ -126,12 +126,15 @@ public class AiWriteServiceImpl implements AiWriteService {
                     .functionUnit(functionUnit)
                     .tableName((String) tableData.get("tableName"))
                     .tableType(TableType.valueOf((String) tableData.get("tableType")))
-                    .tableDisplayName((String) tableData.get("tableDisplayName"))
-                    .description((String) tableData.get("description"))
+                    .tableDisplayName((String) (tableData.get("tableDisplayName") != null ? tableData.get("tableDisplayName") : tableData.get("displayName")))
+                    .description((String) (tableData.get("description") != null ? tableData.get("description") : tableData.get("comment")))
                     .build();
 
-            // Write field definitions
+            // Write field definitions — support both "fieldDefinitions" and "fields" key names
             List<Map<String, Object>> fieldDefs = (List<Map<String, Object>>) tableData.get("fieldDefinitions");
+            if (fieldDefs == null) {
+                fieldDefs = (List<Map<String, Object>>) tableData.get("fields");
+            }
             if (fieldDefs != null) {
                 for (Map<String, Object> fieldData : fieldDefs) {
                     FieldDefinition field = FieldDefinition.builder()
@@ -143,9 +146,11 @@ public class AiWriteServiceImpl implements AiWriteService {
                             .scale(toInteger(fieldData.get("scale")))
                             .nullable(toBoolean(fieldData.get("nullable"), true))
                             .defaultValue((String) fieldData.get("defaultValue"))
-                            .isPrimaryKey(toBoolean(fieldData.get("isPrimaryKey"), false))
+                            .isPrimaryKey(toBoolean(
+                                    fieldData.get("isPrimaryKey") != null ? fieldData.get("isPrimaryKey") : fieldData.get("primaryKey"),
+                                    false))
                             .isUnique(toBoolean(fieldData.get("isUnique"), false))
-                            .description((String) fieldData.get("description"))
+                            .description((String) (fieldData.get("description") != null ? fieldData.get("description") : fieldData.get("comment")))
                             .sortOrder(toInt(fieldData.get("sortOrder")))
                             .build();
                     table.getFieldDefinitions().add(field);
@@ -229,7 +234,7 @@ public class AiWriteServiceImpl implements AiWriteService {
                     .description((String) formData.get("description"))
                     .build();
 
-            // Write table bindings
+            // Write table bindings — support both "tableBindings" and legacy "fieldBindings"+"bindingTableId" format
             List<Map<String, Object>> bindings = (List<Map<String, Object>>) formData.get("tableBindings");
             TableDefinition primaryTable = null;
 
@@ -253,6 +258,22 @@ public class AiWriteServiceImpl implements AiWriteService {
 
                     // Track PRIMARY binding for backward compat boundTable field
                     if (bindingType == BindingType.PRIMARY && boundTable != null) {
+                        primaryTable = boundTable;
+                    }
+                }
+            } else {
+                // Fallback: LLM may generate "bindingTableId" at form level instead of "tableBindings" array
+                String bindingTableId = (String) formData.get("bindingTableId");
+                if (bindingTableId != null) {
+                    TableDefinition boundTable = tableMap.get(bindingTableId);
+                    if (boundTable != null) {
+                        FormTableBinding binding = FormTableBinding.builder()
+                                .form(form)
+                                .table(boundTable)
+                                .bindingType(BindingType.PRIMARY)
+                                .bindingMode(BindingMode.EDITABLE)
+                                .build();
+                        form.getTableBindings().add(binding);
                         primaryTable = boundTable;
                     }
                 }

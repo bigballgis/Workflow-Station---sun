@@ -221,8 +221,11 @@ onBeforeUnmount(() => {
 })
 
 // Register event callbacks
-onPhaseComplete((_phase: AiPhase) => {
-  showPhaseCompleteBtn.value = true
+onPhaseComplete((phase: AiPhase) => {
+  // DESIGN 和 REQUIREMENTS 阶段完成后会自动触发下一阶段，不需要显示按钮
+  // 只在 GENERATION 阶段完成时不显示按钮（因为没有下一阶段了）
+  // 但仍然 emit 事件让 AiPanel 处理阶段推进
+  emit('phaseComplete', phase)
 })
 
 onDocument((type: string, content: string) => {
@@ -340,8 +343,38 @@ function setValidationErrors(errors: AiValidationError[]) {
   scrollToBottom()
 }
 
+/**
+ * Auto-send a message programmatically (triggered by phase transition).
+ * Shows a brief system hint in the chat, then sends the trigger message to AI.
+ */
+function autoSendMessage(message: string) {
+  // Add a system-style hint so user knows what's happening
+  const hintMessage: AiMessage = {
+    id: Date.now() - 1,
+    sessionId: props.sessionId,
+    role: 'ASSISTANT',
+    content: '正在基于已有文档自动生成，请稍候...',
+    phase: props.phase,
+    createdAt: new Date().toISOString()
+  }
+  messages.value.push(hintMessage)
+
+  // Send the trigger message to AI backend
+  sendMessage({
+    functionUnitId: props.functionUnitId,
+    sessionId: props.sessionId,
+    message,
+    phase: props.phase,
+    mode: props.mode
+  })
+
+  emit('sendMessage')
+  scrollToBottom()
+}
+
 defineExpose({
-  setValidationErrors
+  setValidationErrors,
+  autoSendMessage
 })
 </script>
 

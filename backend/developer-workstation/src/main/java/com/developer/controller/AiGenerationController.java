@@ -24,6 +24,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import com.developer.entity.AiDocument;
 import com.developer.enums.AiDocumentType;
+import com.developer.enums.AiPhase;
 
 import java.util.List;
 
@@ -118,6 +119,17 @@ public class AiGenerationController {
             @PathVariable String sessionId, Pageable pageable) {
         Page<AiMessageResponse> messages = aiGenerationComponent.getMessages(sessionId, pageable);
         return ResponseEntity.ok(ApiResponse.success(messages));
+    }
+
+    @PutMapping("/sessions/{sessionId}/phase")
+    @Operation(summary = "更新会话阶段")
+    @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
+    public ResponseEntity<ApiResponse<Void>> updateSessionPhase(
+            @PathVariable String sessionId,
+            @RequestParam AiPhase phase) {
+        log.info("Update session phase: sessionId={}, phase={}", sessionId, phase);
+        aiGenerationComponent.updateSessionPhase(sessionId, phase);
+        return ResponseEntity.ok(ApiResponse.success(null));
     }
 
     @GetMapping("/documents")

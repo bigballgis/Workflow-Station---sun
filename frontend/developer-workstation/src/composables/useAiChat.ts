@@ -39,20 +39,30 @@ export function useAiChat() {
   }
 
   async function sendMessage(request: AiChatRequest): Promise<void> {
+    // 防止重复发送（如果已经在 streaming 中，忽略新请求）
+    if (isStreaming.value) {
+      console.warn('sendMessage ignored: already streaming')
+      return
+    }
+
     lastRequest = request
     error.value = null
     canRetry.value = false
 
-    // Add user message to local list
-    const userMessage: AiMessage = {
-      id: Date.now(),
-      sessionId: request.sessionId || '',
-      role: 'USER',
-      content: request.message,
-      phase: request.phase,
-      createdAt: new Date().toISOString()
+    const isAutoTrigger = request.message.startsWith('[AUTO_TRIGGER]')
+
+    // Add user message to local list (skip for auto-trigger messages)
+    if (!isAutoTrigger) {
+      const userMessage: AiMessage = {
+        id: Date.now(),
+        sessionId: request.sessionId || '',
+        role: 'USER',
+        content: request.message,
+        phase: request.phase,
+        createdAt: new Date().toISOString()
+      }
+      messages.value.push(userMessage)
     }
-    messages.value.push(userMessage)
 
     isStreaming.value = true
     streamingContent.value = ''

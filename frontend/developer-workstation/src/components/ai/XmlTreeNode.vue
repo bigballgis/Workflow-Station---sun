@@ -9,7 +9,7 @@
     </div>
     <template v-if="isParent && isExpanded">
       <div v-if="node.content" class="xml-tree-node__content" :style="{ paddingLeft: (depth + 1) * 16 + 'px' }">
-        <pre class="xml-tree-node__text">{{ node.content }}</pre>
+        <div class="xml-tree-node__rich-text" v-html="renderedContent"></div>
       </div>
       <XmlTreeNode
         v-for="child in node.children"
@@ -21,7 +21,7 @@
       />
     </template>
     <div v-else-if="!isParent && node.content" class="xml-tree-node__content" :style="{ paddingLeft: (depth + 1) * 16 + 'px' }">
-      <pre class="xml-tree-node__text">{{ node.content }}</pre>
+      <div class="xml-tree-node__rich-text" v-html="renderedContent"></div>
     </div>
   </div>
 </template>
@@ -29,6 +29,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { ArrowRight } from '@element-plus/icons-vue'
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import type { XmlNode } from '@/utils/markdownToXml'
 
 const props = defineProps<{
@@ -43,6 +45,12 @@ const emit = defineEmits<{
 
 const isParent = computed(() => props.node.children.length > 0)
 const isExpanded = computed(() => props.expandedKeys.has(props.node.key))
+
+const renderedContent = computed(() => {
+  if (!props.node.content) return ''
+  const rawHtml = marked.parse(props.node.content) as string
+  return DOMPurify.sanitize(rawHtml)
+})
 
 function handleClick() {
   if (isParent.value) {
@@ -92,13 +100,72 @@ function handleClick() {
   padding: 2px 0;
 }
 
-.xml-tree-node__text {
-  white-space: pre-wrap;
-  word-break: break-word;
+.xml-tree-node__rich-text {
   font-size: 12px;
   line-height: 1.6;
   color: #606266;
-  margin: 0;
-  font-family: inherit;
+
+  :deep(p) {
+    margin: 4px 0;
+  }
+
+  :deep(table) {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 6px 0;
+    font-size: 12px;
+
+    th, td {
+      border: 1px solid #dcdfe6;
+      padding: 5px 10px;
+      text-align: left;
+    }
+
+    th {
+      background: #f5f7fa;
+      font-weight: 600;
+      color: #303133;
+    }
+
+    tr:hover td {
+      background: #fafafa;
+    }
+  }
+
+  :deep(ul), :deep(ol) {
+    padding-left: 18px;
+    margin: 4px 0;
+  }
+
+  :deep(code) {
+    background: #f5f7fa;
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 11px;
+  }
+
+  :deep(pre) {
+    background: #f5f7fa;
+    padding: 8px;
+    border-radius: 4px;
+    overflow-x: auto;
+    margin: 4px 0;
+
+    code {
+      background: none;
+      padding: 0;
+    }
+  }
+
+  :deep(blockquote) {
+    border-left: 3px solid #dcdfe6;
+    padding-left: 10px;
+    margin: 4px 0;
+    color: #909399;
+  }
+
+  :deep(strong) {
+    color: #303133;
+  }
 }
 </style>

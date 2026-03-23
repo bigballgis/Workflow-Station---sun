@@ -45,6 +45,9 @@ export const aiGenerationApi = {
     api.post<any, { data: AiDocument }>('/ai-generation/documents', {
       functionUnitId, documentType, content
     }),
+
+  updateSessionPhase: (sessionId: string, phase: string) =>
+    api.put(`/ai-generation/sessions/${sessionId}/phase`, null, { params: { phase } }),
 }
 
 // SSE endpoint URLs (used by composables with fetch API, not axios)

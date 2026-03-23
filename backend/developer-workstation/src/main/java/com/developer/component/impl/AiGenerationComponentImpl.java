@@ -6,6 +6,7 @@ import com.developer.entity.AiSession;
 import com.developer.enums.AiDocumentType;
 import com.developer.enums.AiMessageRole;
 import com.developer.enums.AiMode;
+import com.developer.enums.AiPhase;
 import com.developer.enums.AiSessionStatus;
 import com.developer.exception.AiValidationFailedException;
 import com.developer.service.AiGenerationService;
@@ -118,6 +119,17 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
                 }
 
                 if (Boolean.TRUE.equals(n8nResponse.get("phaseComplete"))) {
+                    // 自动推进会话阶段（后端持久化，不依赖前端点击"下一阶段"按钮）
+                    AiPhase nextPhase = getNextPhase(request.getPhase());
+                    if (nextPhase != null) {
+                        try {
+                            aiGenerationService.updateSessionPhase(session.getSessionId().toString(), nextPhase);
+                            log.info("Auto-advanced session phase: sessionId={}, from={} to={}",
+                                    session.getSessionId(), request.getPhase(), nextPhase);
+                        } catch (Exception phaseErr) {
+                            log.error("Failed to auto-advance phase: sessionId={}", session.getSessionId(), phaseErr);
+                        }
+                    }
                     aiGenerationService.sendChatEvent(request.getFunctionUnitId(), userId,
                             AiChatSseEvent.builder().eventType("phase_complete").data(request.getPhase().name()).build());
                 }
@@ -245,5 +257,21 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
                     AiChatSseEvent.builder().eventType("write_error").data(Map.of("error", e.getMessage())).build());
             throw e;
         }
+    }
+
+    @Override
+    public void updateSessionPhase(String sessionId, com.developer.enums.AiPhase phase) {
+        aiGenerationService.updateSessionPhase(sessionId, phase);
+    }
+
+    /**
+     * 获取下一个阶段，如果已是最后阶段则返回 null
+     */
+    private AiPhase getNextPhase(AiPhase current) {
+        return switch (current) {
+            case REQUIREMENTS -> AiPhase.DESIGN;
+            case DESIGN -> AiPhase.GENERATION;
+            case GENERATION -> null;
+        };
     }
 }

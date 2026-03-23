@@ -532,7 +532,7 @@ public class AiGenerationServiceImpl implements AiGenerationService {
                                                FunctionUnitContextDTO context, Long functionUnitId,
                                                List<Map<String, String>> existingDocuments) {
         Map<String, Object> requestBody = buildN8NRequestBody(sessionId, message, phase, mode,
-                context, existingDocuments, null);
+                context, functionUnitId, existingDocuments, null);
 
         Map<String, Object> response = doCallN8NWebhook(requestBody);
 
@@ -545,7 +545,7 @@ public class AiGenerationServiceImpl implements AiGenerationService {
             List<Map<String, String>> rebuiltDocs = getLatestDocuments(functionUnitId, phase, mode);
 
             Map<String, Object> retryBody = buildN8NRequestBody(sessionId, message, phase, mode,
-                    rebuiltContext, rebuiltDocs, conversationHistory);
+                    rebuiltContext, functionUnitId, rebuiltDocs, conversationHistory);
             response = doCallN8NWebhook(retryBody);
         }
 
@@ -553,7 +553,7 @@ public class AiGenerationServiceImpl implements AiGenerationService {
     }
 
     private Map<String, Object> buildN8NRequestBody(UUID sessionId, String message, AiPhase phase, AiMode mode,
-                                                     FunctionUnitContextDTO context,
+                                                     FunctionUnitContextDTO context, Long functionUnitId,
                                                      List<Map<String, String>> existingDocuments,
                                                      List<Map<String, String>> conversationHistory) {
         Map<String, Object> body = new LinkedHashMap<>();
@@ -561,6 +561,14 @@ public class AiGenerationServiceImpl implements AiGenerationService {
         body.put("message", message);
         body.put("phase", phase.name());
         body.put("mode", mode.name());
+
+        // 始终传递 functionUnitId 给 N8N，供 Agent 工具节点查询数据库
+        // 即使 context 为 null（新功能单元尚未生成），也要传递 functionUnitId
+        if (functionUnitId != null) {
+            body.put("functionUnitId", functionUnitId);
+        } else if (context != null && context.getFunctionUnitId() != null) {
+            body.put("functionUnitId", context.getFunctionUnitId());
+        }
 
         if (context != null) {
             // 预序列化为 JSON 字符串，避免 N8N 表达式渲染为 [object Object]
@@ -636,7 +644,7 @@ public class AiGenerationServiceImpl implements AiGenerationService {
 
     // ==================== SSE Emitter Management ====================
 
-    private static final long CHAT_EMITTER_TIMEOUT = 120_000L; // 120 seconds
+    private static final long CHAT_EMITTER_TIMEOUT = 180_000L; // 180 seconds (buffer beyond N8N's 120s timeout)
     private static final long EVENT_EMITTER_TIMEOUT = 300_000L; // 300 seconds
     private static final int MAX_DOCUMENT_CONTENT_LENGTH = 50000;
 
@@ -644,6 +652,18 @@ public class AiGenerationServiceImpl implements AiGenerationService {
     public SseEmitter createChatEmitter(Long functionUnitId, String userId) {
         String key = buildChatEmitterKey(functionUnitId, userId);
         SseEmitter emitter = new SseEmitter(CHAT_EMITTER_TIMEOUT);
+
+        // 如果已有活跃的 emitter，先完成它，防止覆盖导致响应丢失
+        SseEmitter existingEmitter = chatEmitters.get(key);
+        if (existingEmitter != null) {
+            log.warn("Existing chat SSE emitter found for key={}, completing it before creating new one", key);
+            try {
+                existingEmitter.complete();
+            } catch (Exception e) {
+                log.debug("Failed to complete existing emitter: {}", e.getMessage());
+            }
+            chatEmitters.remove(key);
+        }
 
         emitter.onCompletion(() -> {
             chatEmitters.remove(key);
