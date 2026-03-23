@@ -1,0 +1,1467 @@
+# 功能单元 (Function Unit) 完整开发文档
+
+> 本文档面向 AI 助手和开发者，详尽描述功能单元模块的架构、实体关系、API、数据流、枚举、配置和约定。
+> 最后更新: 2026-03-24
+
+---
+
+## 目录
+
+1. [概述](#1-概述)
+2. [分层架构](#2-分层架构)
+3. [实体关系模型 (ERD)](#3-实体关系模型)
+4. [实体详解](#4-实体详解)
+5. [枚举类型](#5-枚举类型)
+6. [DTO 体系](#6-dto-体系)
+7. [API 端点](#7-api-端点)
+8. [核心数据流](#8-核心数据流)
+9. [版本管理与快照](#9-版本管理与快照)
+10. [部署流程](#10-部署流程)
+11. [AI 生成模块](#11-ai-生成模块)
+12. [导入导出](#12-导入导出)
+13. [安全模型](#13-安全模型)
+14. [国际化 (i18n)](#14-国际化)
+15. [配置属性](#15-配置属性)
+16. [数据库迁移 (Flyway)](#16-数据库迁移)
+17. [已知限制与技术债务](#17-已知限制与技术债务)
+
+---
+
+## 1. 概述
+
+功能单元 (Function Unit) 是低代码工作流平台的核心设计实体。一个功能单元封装了完整的业务流程定义，包含：
+
+- **表设计** (Table Design) — 数据模型定义
+- **表单设计** (Form Design) — 用户交互界面
+- **动作设计** (Action Design) — 按钮/操作行为
+- **流程设计** (Process Design) — BPMN 工作流
+- **版本管理** (Version) — 发布快照与历史
+- **图标** (Icon) — 可视化标识
+
+功能单元的生命周期: `DRAFT` → `PUBLISHED` → 可选 `ARCHIVED`。每次发布会创建版本快照，支持克隆、导出、一键部署到 admin-center。
+
+所属模块: `developer-workstation` (context-path: `/api/v1`)
+
+---
+
+## 2. 分层架构
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Controller 层                         │
+│  继承 BaseController，使用 handleRequest() 统一响应       │
+│  职责: 路由 + 参数校验 (@Valid) + 权限注解                │
+├─────────────────────────────────────────────────────────┤
+│                  Component 接口层                        │
+│  定义业务操作契约 (component/ 包)                         │
+├─────────────────────────────────────────────────────────┤
+│                Component Impl 实现层                     │
+│  业务编排逻辑 (component/impl/ 包)                       │
+│  注入 Service、Repository，处理事务                       │
+├─────────────────────────────────────────────────────────┤
+│                   Service 层                             │
+│  领域逻辑 (service/ + service/impl/)                     │
+├─────────────────────────────────────────────────────────┤
+│                  Repository 层                           │
+│  Spring Data JPA 接口 (repository/ 包)                   │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 包结构 (developer-workstation)
+
+```
+com.developer/
+├── client/          # 跨服务调用 (admin-center REST client)
+├── component/       # 业务组件接口
+│   └── impl/        # 业务组件实现
+├── config/          # Spring 配置 (CORS, Jackson, Async, OpenAPI)
+├── controller/      # REST 控制器 (16 个)
+├── dto/             # 请求/响应 DTO (40+ 个)
+├── entity/          # JPA 实体 (11 个)
+├── enums/           # 枚举类型 (14 个)
+├── exception/       # 自定义异常
+├── repository/      # JPA Repository (20 个)
+├── resilience/      # 弹性/重试逻辑
+├── security/        # JWT 认证、权限注解
+├── service/         # 服务接口
+│   └── impl/        # 服务实现
+├── util/            # 工具类
+└── validation/      # 自定义校验器
+```
+
+### BaseController 统一响应模式
+
+```java
+// 所有继承 BaseController 的控制器使用此模式:
+@PostMapping
+public ResponseEntity<ApiResponse<Entity>> create(@Valid @RequestBody Request req) {
+    return handleRequest(() -> component.create(req));
+}
+
+// BaseController 内部处理:
+// 1. 调用 processor.process()
+// 2. 成功 → ApiResponse.success(result)
+// 3. BusinessException → 400 + errorCode + message
+// 4. SecurityException → 403
+// 5. 其他异常 → 500 + generic message (不暴露内部细节)
+```
+
+### 统一响应格式 (ApiResponse)
+
+```json
+{
+  "success": true,
+  "data": { ... },
+  "error": null
+}
+
+// 错误时:
+{
+  "success": false,
+  "data": null,
+  "error": {
+    "code": "CONFLICT_NAME_EXISTS",
+    "message": "Function unit name already exists: xxx",
+    "suggestion": "Please use a different name"
+  }
+}
+```
+
+---
+
+## 3. 实体关系模型
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                        FunctionUnit                              │
+│  dw_function_units                                               │
+│  PK: id (BIGINT AUTO)                                           │
+│  code (VARCHAR 50, UNIQUE) — fu-{timestamp}-{random}            │
+│  name (VARCHAR 100, UNIQUE)                                      │
+│  status: DRAFT | PUBLISHED | ARCHIVED                            │
+│  version (VARCHAR 20, default "1.0.0")                           │
+│  currentVersion (VARCHAR 20)                                     │
+│  isActive, enabled (BOOLEAN)                                     │
+│  deployedAt (TIMESTAMP, nullable)                                │
+│  lockVersion (乐观锁)                                            │
+│  FK: icon_id → dw_icons(id)                                     │
+│  FK: previous_version_id → dw_function_units(id) (自引用)        │
+│  审计: createdBy, createdAt, updatedBy, updatedAt                │
+├──────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  ┌──── 1:N ────┐  ┌──── 1:N ────┐  ┌──── 1:N ────┐            │
+│  ▼              │  ▼              │  ▼              │            │
+│ TableDefinition │ FormDefinition  │ ActionDefinition│            │
+│ dw_table_defs   │ dw_form_defs    │ dw_action_defs  │            │
+│                 │                 │                  │            │
+│  ┌── 1:N ──┐   │  ┌── 1:N ──┐   │                  │            │
+│  ▼          │   │  ▼          │   │                  │            │
+│ FieldDef    │   │ FormTable   │   │                  │            │
+│ dw_field_   │   │ Binding     │   │                  │            │
+│ definitions │   │ dw_form_    │   │                  │            │
+│             │   │ table_      │   │                  │            │
+│  ┌── 1:N ──┘   │ bindings    │   │                  │            │
+│  ▼              │             │   │                  │            │
+│ ForeignKey      │             │   │                  │            │
+│ dw_foreign_keys │             │   │                  │            │
+└─────────────────┴─────────────┴───┴──────────────────┘            │
+                                                                    │
+│  ┌──── 1:1 ────┐  ┌──── 1:N ────┐  ┌──── N:1 ────┐             │
+│  ▼              │  ▼              │  ▼              │             │
+│ ProcessDef      │ Version         │ Icon            │             │
+│ dw_process_     │ dw_versions     │ dw_icons        │             │
+│ definitions     │                 │                  │             │
+└─────────────────┴─────────────────┴──────────────────┘
+```
+
+### 关系总结
+
+| 父实体 | 子实体 | 关系 | 级联 | 说明 |
+|--------|--------|------|------|------|
+| FunctionUnit | TableDefinition | 1:N | ALL + orphanRemoval | 表定义 |
+| FunctionUnit | FormDefinition | 1:N | ALL + orphanRemoval | 表单定义 |
+| FunctionUnit | ActionDefinition | 1:N | ALL + orphanRemoval | 动作定义 |
+| FunctionUnit | ProcessDefinition | 1:1 | ALL + orphanRemoval | 流程定义 |
+| FunctionUnit | Version | 1:N | ALL + orphanRemoval | 版本快照 |
+| FunctionUnit | Icon | N:1 | 无级联 | 图标引用 |
+| FunctionUnit | FunctionUnit | N:1 (自引用) | 无级联 | previousVersion |
+| TableDefinition | FieldDefinition | 1:N | ALL + orphanRemoval | 字段定义, OrderBy sortOrder |
+| TableDefinition | ForeignKey | 1:N | ALL + orphanRemoval | 外键关系 |
+| FormDefinition | FormTableBinding | 1:N | ALL + orphanRemoval | 表绑定, OrderBy sortOrder |
+| FormDefinition | TableDefinition | N:1 | 无级联 | boundTable (向后兼容) |
+| FormTableBinding | TableDefinition | N:1 | 无级联 | 绑定的目标表 |
+| ForeignKey | FieldDefinition | N:1 | 无级联 | 源字段 |
+| ForeignKey | TableDefinition | N:1 | 无级联 | 引用表 |
+| ForeignKey | FieldDefinition | N:1 | 无级联 | 引用字段 |
+
+---
+
+## 4. 实体详解
+
+### 4.1 FunctionUnit (功能单元)
+
+表名: `dw_function_units`
+
+| 字段 | 类型 | 约束 | 说明 |
+|------|------|------|------|
+| id | BIGINT | PK, AUTO | 主键 |
+| code | VARCHAR(50) | UNIQUE, NOT NULL | 唯一编码, 格式: `fu-{yyyyMMdd}-{6位随机}` |
+| name | VARCHAR(100) | UNIQUE, NOT NULL | 功能单元名称 |
+| description | TEXT | nullable | 描述 |
+| icon_id | BIGINT | FK → dw_icons | 图标引用 |
+| status | VARCHAR(20) | NOT NULL | DRAFT / PUBLISHED / ARCHIVED |
+| current_version | VARCHAR(20) | nullable | 当前已发布版本号 (如 "1.0.0") |
+| version | VARCHAR(20) | NOT NULL, default "1.0.0" | 语义版本号 |
+| is_active | BOOLEAN | NOT NULL, default true | 是否为活跃版本 |
+| enabled | BOOLEAN | NOT NULL, default true | 是否启用 (列表可见) |
+| deployed_at | TIMESTAMP | nullable | 部署时间, DRAFT 时为 null |
+| previous_version_id | BIGINT | FK → dw_function_units | 前一版本引用 (自引用) |
+| created_by | VARCHAR(64) | NOT NULL | 创建者 |
+| created_at | TIMESTAMP | NOT NULL | 创建时间 |
+| updated_by | VARCHAR(64) | nullable | 最后修改者 |
+| updated_at | TIMESTAMP | nullable | 最后修改时间 |
+| lock_version | BIGINT | 乐观锁 | JPA @Version |
+
+特殊行为:
+- `code` 由 `generateUniqueCode()` 自动生成，格式 `fu-{yyyyMMdd}-{6位随机hex}`
+- `@EqualsAndHashCode(of = "id")` — 仅用 id 判断相等
+- 所有子集合 (`tableDefinitions`, `formDefinitions`, `actionDefinitions`, `versions`) 使用 `@JsonIgnore` + `FetchType.LAZY`
+- 乐观锁通过 `@jakarta.persistence.Version` 实现并发控制
+
+### 4.2 TableDefinition (表定义)
+
+表名: `dw_table_definitions`
+
+| 字段 | 类型 | 约束 | 说明 |
+|------|------|------|------|
+| id | BIGINT | PK, AUTO | 主键 |
+| function_unit_id | BIGINT | FK, NOT NULL | 所属功能单元 |
+| table_name | VARCHAR(100) | NOT NULL | 表名 |
+| table_type | VARCHAR(20) | NOT NULL | MAIN / SUB / ACTION / RELATION |
+| table_display_name | VARCHAR(200) | nullable | 显示名称 |
+| description | TEXT | nullable | 描述 |
+| created_at | TIMESTAMP | NOT NULL | 创建时间 |
+| updated_at | TIMESTAMP | nullable | 修改时间 |
+
+子集合:
+- `fieldDefinitions` — 1:N, OrderBy `sortOrder ASC`, 级联 ALL + orphanRemoval
+- `foreignKeys` — 1:N, `@JsonIgnore`, 级联 ALL + orphanRemoval
+
+### 4.3 FieldDefinition (字段定义)
+
+表名: `dw_field_definitions`
+
+| 字段 | 类型 | 约束 | 说明 |
+|------|------|------|------|
+| id | BIGINT | PK, AUTO | 主键 |
+| table_id | BIGINT | FK, NOT NULL | 所属表 |
+| field_name | VARCHAR(100) | NOT NULL | 字段名 |
+| data_type | VARCHAR(50) | NOT NULL | 数据类型枚举 |
+| length | INTEGER | nullable | 长度 (VARCHAR) |
+| precision_value | INTEGER | nullable | 精度 (DECIMAL) |
+| scale | INTEGER | nullable | 小数位 (DECIMAL) |
+| nullable | BOOLEAN | default true | 是否可空 |
+| default_value | VARCHAR(500) | nullable | 默认值 |
+| is_primary_key | BOOLEAN | default false | 是否主键 |
+| is_unique | BOOLEAN | default false | 是否唯一 |
+| description | TEXT | nullable | 描述 |
+| sort_order | INTEGER | NOT NULL | 排序序号 |
+
+### 4.4 ForeignKey (外键定义)
+
+表名: `dw_foreign_keys`
+
+| 字段 | 类型 | 约束 | 说明 |
+|------|------|------|------|
+| id | BIGINT | PK, AUTO | 主键 |
+| table_id | BIGINT | FK, NOT NULL | 所属表 |
+| field_id | BIGINT | FK, NOT NULL | 源字段 |
+| ref_table_id | BIGINT | FK, NOT NULL | 引用表 |
+| ref_field_id | BIGINT | FK, NOT NULL | 引用字段 |
+| on_delete | VARCHAR(20) | default "NO ACTION" | 删除策略 |
+| on_update | VARCHAR(20) | default "NO ACTION" | 更新策略 |
+
+### 4.5 FormDefinition (表单定义)
+
+表名: `dw_form_definitions`
+
+| 字段 | 类型 | 约束 | 说明 |
+|------|------|------|------|
+| id | BIGINT | PK, AUTO | 主键 |
+| function_unit_id | BIGINT | FK, NOT NULL | 所属功能单元 |
+| form_name | VARCHAR(100) | NOT NULL | 表单名称 |
+| form_type | VARCHAR(20) | NOT NULL | MAIN / SUB / ACTION / POPUP |
+| config_json | JSONB | NOT NULL | 表单配置 (form-create 格式) |
+| description | TEXT | nullable | 描述 |
+| bound_table_id | BIGINT | FK, nullable | 绑定表 (向后兼容) |
+| created_at | TIMESTAMP | NOT NULL | 创建时间 |
+| updated_at | TIMESTAMP | nullable | 修改时间 |
+
+便捷方法:
+- `getBoundTableId()` — 返回绑定表 ID (JSON 序列化用)
+- `getBoundTableName()` — 返回绑定表名 (JSON 序列化用)
+
+子集合:
+- `tableBindings` — 1:N FormTableBinding, OrderBy `sortOrder ASC`
+
+### 4.6 FormTableBinding (表单表绑定)
+
+表名: `dw_form_table_bindings`
+唯一约束: `(form_id, table_id)`
+
+| 字段 | 类型 | 约束 | 说明 |
+|------|------|------|------|
+| id | BIGINT | PK, AUTO | 主键 |
+| form_id | BIGINT | FK, NOT NULL | 所属表单 |
+| table_id | BIGINT | FK, NOT NULL | 绑定表 |
+| binding_type | VARCHAR(20) | NOT NULL | PRIMARY / SUB / RELATED |
+| binding_mode | VARCHAR(20) | NOT NULL | EDITABLE / READONLY |
+| foreign_key_field | VARCHAR(100) | nullable | 子表/关联表的外键字段名 |
+| sort_order | INTEGER | nullable | 排序序号 |
+| created_at | TIMESTAMP | NOT NULL | 创建时间 |
+| updated_at | TIMESTAMP | nullable | 修改时间 |
+
+便捷方法: `getTableId()`, `getTableName()`, `getFormId()` — 用于 JSON 序列化
+
+### 4.7 ActionDefinition (动作定义)
+
+表名: `dw_action_definitions`
+
+| 字段 | 类型 | 约束 | 说明 |
+|------|------|------|------|
+| id | BIGINT | PK, AUTO | 主键 |
+| function_unit_id | BIGINT | FK, NOT NULL | 所属功能单元 |
+| action_name | VARCHAR(100) | NOT NULL | 动作名称 |
+| action_type | VARCHAR(20) | NOT NULL | 动作类型枚举 |
+| config_json | JSONB | NOT NULL | 动作配置 (类型相关) |
+| icon | VARCHAR(50) | nullable | 图标名 |
+| button_color | VARCHAR(20) | nullable | 按钮颜色 |
+| description | TEXT | nullable | 描述 |
+| is_default | BOOLEAN | default false | 是否默认动作 |
+| created_at | TIMESTAMP | NOT NULL | 创建时间 |
+| updated_at | TIMESTAMP | nullable | 修改时间 |
+
+### 4.8 ProcessDefinition (流程定义)
+
+表名: `dw_process_definitions`
+
+| 字段 | 类型 | 约束 | 说明 |
+|------|------|------|------|
+| id | BIGINT | PK, AUTO | 主键 |
+| function_unit_id | BIGINT | FK, NOT NULL, UNIQUE | 所属功能单元 (1:1) |
+| function_unit_version_id | BIGINT | NOT NULL | 引用 dw_function_units(id), 非 dw_versions(id) |
+| bpmn_xml | TEXT | NOT NULL | BPMN 2.0 XML 内容 |
+| created_at | TIMESTAMP | NOT NULL | 创建时间 |
+| updated_at | TIMESTAMP | nullable | 修改时间 |
+
+注意: `function_unit_version_id` 的 FK 指向 `dw_function_units(id)` 而非 `dw_versions(id)`，这是设计决策。
+
+### 4.9 Version (版本快照)
+
+表名: `dw_versions`
+
+| 字段 | 类型 | 约束 | 说明 |
+|------|------|------|------|
+| id | BIGINT | PK, AUTO | 主键 |
+| function_unit_id | BIGINT | FK, NOT NULL | 所属功能单元 |
+| version_number | VARCHAR(20) | NOT NULL | 版本号 (如 "1.0.0") |
+| change_log | TEXT | nullable | 变更日志 |
+| snapshot_data | BYTEA | NOT NULL | JSON 序列化的完整快照 |
+| published_by | VARCHAR(50) | NOT NULL | 发布者 |
+| published_at | TIMESTAMP | NOT NULL | 发布时间 |
+
+### 4.10 Icon (图标)
+
+表名: `dw_icons`
+
+| 字段 | 类型 | 约束 | 说明 |
+|------|------|------|------|
+| id | BIGINT | PK, AUTO | 主键 |
+| name | VARCHAR(100) | UNIQUE, NOT NULL | 图标名称 |
+| category | VARCHAR(30) | NOT NULL | 图标分类枚举 |
+| svg_content | TEXT | NOT NULL | SVG 内容 |
+| file_size | INTEGER | nullable | 文件大小 (bytes) |
+| description | VARCHAR(500) | nullable | 描述 |
+| created_by | VARCHAR(64) | nullable | 创建者 |
+| created_at | DATETIME | nullable | 创建时间 |
+| updated_by | VARCHAR(64) | nullable | 修改者 |
+| updated_at | DATETIME | nullable | 修改时间 |
+
+注意: Icon 使用 `LocalDateTime` 而非 `Instant` (历史原因)。
+
+---
+
+## 5. 枚举类型
+
+### 5.1 核心业务枚举
+
+#### FunctionUnitStatus (功能单元状态)
+| 值 | 说明 |
+|----|------|
+| `DRAFT` | 草稿状态 (默认) |
+| `PUBLISHED` | 已发布 |
+| `ARCHIVED` | 已归档 |
+
+#### TableType (表类型)
+| 值 | 说明 |
+|----|------|
+| `MAIN` | 主表 |
+| `SUB` | 子表 |
+| `ACTION` | 动作表 |
+| `RELATION` | 关联表 |
+
+#### FormType (表单类型)
+| 值 | 说明 |
+|----|------|
+| `MAIN` | 主表单 |
+| `SUB` | 子表单 |
+| `ACTION` | 动作表单 |
+| `POPUP` | 弹出表单 |
+
+#### DataType (数据类型)
+| 值 | 说明 | 对应 PostgreSQL |
+|----|------|----------------|
+| `VARCHAR` | 字符串 | VARCHAR(n) |
+| `TEXT` | 文本 | TEXT |
+| `INTEGER` | 整数 | INTEGER |
+| `BIGINT` | 长整数 | BIGINT |
+| `DECIMAL` | 小数 | DECIMAL(p,s) |
+| `BOOLEAN` | 布尔 | BOOLEAN |
+| `DATE` | 日期 | DATE |
+| `TIME` | 时间 | TIME |
+| `TIMESTAMP` | 日期时间 | TIMESTAMP |
+| `JSON` | JSON | JSONB |
+| `BYTEA` | 二进制 | BYTEA |
+| `FILE` | 文件上传 | VARCHAR (存路径/URL) |
+
+#### ActionType (动作类型)
+| 值 | 分组 | 说明 |
+|----|------|------|
+| `APPROVE` | 审批操作 | 同意 |
+| `REJECT` | 审批操作 | 拒绝 |
+| `TRANSFER` | 审批操作 | 转办 |
+| `DELEGATE` | 审批操作 | 委托 |
+| `ROLLBACK` | 审批操作 | 回退 |
+| `WITHDRAW` | 审批操作 | 撤回 |
+| `CANCEL` | 审批操作 | 取消 |
+| `SAVE` | 通用操作 | 保存草稿 |
+| `EXPORT` | 通用操作 | 导出数据 |
+| `PROCESS_SUBMIT` | 流程操作 | 流程提交 |
+| `PROCESS_REJECT` | 流程操作 | 流程驳回 |
+| `API_CALL` | 自定义 | API 调用 |
+| `FORM_POPUP` | 自定义 | 表单弹出 |
+| `SCRIPT` | 自定义 | 脚本执行 |
+| `CUSTOM_SCRIPT` | 自定义 | 自定义脚本 |
+| `N8N_ACTION` | 自定义 | N8N 工作流动作 |
+| `COMPOSITE` | 组合 | 组合动作 |
+
+### 5.2 表单绑定枚举
+
+#### BindingType (绑定类型)
+| 值 | 说明 |
+|----|------|
+| `PRIMARY` | 主表 — 表单主要数据源，支持完整 CRUD |
+| `SUB` | 子表 — 与主表一对多关系 |
+| `RELATED` | 关联表 — 多对多或引用关系 |
+
+#### BindingMode (绑定模式)
+| 值 | 说明 |
+|----|------|
+| `EDITABLE` | 可编辑 — 允许增删改 |
+| `READONLY` | 只读 — 仅查看 |
+
+### 5.3 图标分类枚举
+
+#### IconCategory
+| 值 | 说明 |
+|----|------|
+| `APPROVAL` | 审批流程 (请假、报销、采购) |
+| `CREDIT` | 信贷业务 (贷款、授信、风控) |
+| `ACCOUNT` | 账户服务 (开户、销户) |
+| `PAYMENT` | 支付结算 (转账、汇款) |
+| `CUSTOMER` | 客户管理 (KYC、尽调) |
+| `COMPLIANCE` | 合规风控 (反洗钱) |
+| `OPERATION` | 运营管理 (报表、监控) |
+| `GENERAL` | 通用图标 |
+
+### 5.4 AI 相关枚举
+
+#### AiMode
+| 值 | 说明 |
+|----|------|
+| `NEW` | 新建模式 — 功能单元无现有数据 |
+| `MODIFY` | 修改模式 — 功能单元已有数据 |
+
+#### AiPhase
+| 值 | 说明 |
+|----|------|
+| `REQUIREMENTS` | 需求收集阶段 |
+| `DESIGN` | 设计方案阶段 |
+| `GENERATION` | 生成预览与确认阶段 |
+
+#### AiSessionStatus
+| 值 | 说明 |
+|----|------|
+| `ACTIVE` | 活跃 |
+| `COMPLETED` | 已完成 |
+| `CANCELLED` | 已取消 |
+
+#### AiDocumentType
+| 值 | 说明 |
+|----|------|
+| `REQUIREMENTS` | 需求文档 |
+| `DESIGN` | 设计文档 |
+
+#### AiMessageRole
+| 值 | 说明 |
+|----|------|
+| `USER` | 用户消息 |
+| `ASSISTANT` | AI 助手消息 |
+
+### 5.5 其他枚举
+
+#### DatabaseDialect
+`POSTGRESQL` | `MYSQL` | `ORACLE` | `SQLSERVER` — 用于 DDL 生成
+
+---
+
+## 6. DTO 体系
+
+### 请求 DTO
+
+| DTO | 用途 | 关键字段 |
+|-----|------|----------|
+| `FunctionUnitRequest` | 创建/更新功能单元 | name, description, iconId |
+| `TableDefinitionRequest` | 创建/更新表 | tableName, tableType, tableDisplayName, fieldDefinitions[] |
+| `FieldDefinitionRequest` | 字段定义 (嵌套在 TableDefinitionRequest) | fieldName, dataType, length, nullable, isPrimaryKey |
+| `FormDefinitionRequest` | 创建/更新表单 | formName, formType, configJson, boundTableId |
+| `FormTableBindingRequest` | 创建/更新表绑定 | tableId, bindingType, bindingMode, foreignKeyField |
+| `ActionDefinitionRequest` | 创建/更新动作 | actionName, actionType, configJson, icon, buttonColor |
+| `DeployRequest` | 部署请求 | targetUrl, changeLog, conflictStrategy, environment, autoEnable |
+| `AiChatRequest` | AI 对话请求 | functionUnitId, message, sessionId |
+| `ApplyGeneratedDataRequest` | 应用 AI 生成数据 | sessionId, tables[], forms[], actions[], processXml |
+| `SaveDocumentRequest` | 保存 AI 文档 | functionUnitId, documentType, content |
+| `DeploymentRequest` | 版本部署请求 | bpmnXml, changeType, metadata |
+| `RollbackRequest` | 版本回滚请求 | targetVersion, confirmed |
+| `ForceUnlockResponseRequest` | 强制解锁响应 | accept (boolean) |
+
+### 响应 DTO
+
+| DTO | 用途 | 关键字段 |
+|-----|------|----------|
+| `FunctionUnitResponse` | 功能单元详情 | id, code, name, status, currentVersion, icon, tableCount, formCount, actionCount, hasProcess |
+| `DeployResponse` | 部署状态 | deploymentId, status, progress, steps[], versionNumber |
+| `VersionResponse` | 版本信息 | id, versionNumber, changeLog, publishedBy, publishedAt |
+| `FormTableBindingResponse` | 绑定详情 | id, formId, tableId, tableName, bindingType, bindingMode |
+| `ValidationResult` | 校验结果 | valid (boolean), errors[], warnings[] |
+| `AiSessionResponse` | AI 会话信息 | sessionId, functionUnitId, phase, status |
+| `AiMessageResponse` | AI 消息 | role, content, timestamp |
+| `LockInfoResponse` | 编辑锁信息 | locked, lockedBy, lockedAt |
+| `IconDTO` | 图标信息 | id, name, category, svgContent, fileSize |
+| `FunctionUnitDisplay` | UI 展示用 | 活跃版本的展示信息 |
+| `DeploymentResult` | 版本部署结果 | version, deployedAt |
+| `RollbackResult` | 回滚结果 | rolledBackToVersion |
+| `RollbackImpact` | 回滚影响评估 | versionsToDelete, totalProcessInstancesToDelete |
+
+---
+
+## 7. API 端点
+
+### 7.1 功能单元管理 — FunctionUnitController
+
+基础路径: `/function-units`
+继承: `BaseController` ✅
+
+| 方法 | 路径 | 权限 | 说明 |
+|------|------|------|------|
+| POST | `/function-units` | FUNCTION_UNIT_CREATE | 创建功能单元 |
+| PUT | `/function-units/{id}` | FUNCTION_UNIT_UPDATE | 更新功能单元 |
+| DELETE | `/function-units/{id}` | FUNCTION_UNIT_DELETE | 删除功能单元 |
+| GET | `/function-units/{id}` | FUNCTION_UNIT_VIEW | 获取详情 (返回 FunctionUnitResponse) |
+| GET | `/function-units?name=&status=` | FUNCTION_UNIT_VIEW | 分页列表 (Pageable) |
+| POST | `/function-units/{id}/publish?changeLog=` | FUNCTION_UNIT_PUBLISH | 发布版本 |
+| POST | `/function-units/{id}/clone?newName=` | FUNCTION_UNIT_CREATE | 克隆功能单元 |
+| GET | `/function-units/{id}/validate` | FUNCTION_UNIT_VIEW | 完整性校验 |
+| GET | `/function-units/{id}/versions` | FUNCTION_UNIT_VIEW | 版本历史 |
+
+### 7.2 表设计 — TableDesignController
+
+基础路径: `/function-units/{functionUnitId}/tables`
+继承: `BaseController` ✅
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/tables` | 列出所有表 |
+| POST | `/tables` | 创建表 |
+| PUT | `/tables/{tableId}` | 更新表 |
+| DELETE | `/tables/{tableId}` | 删除表 |
+| GET | `/tables/{tableId}` | 获取表详情 |
+| GET | `/tables/{tableId}/ddl?dialect=POSTGRESQL` | 生成 DDL |
+| GET | `/tables/validate` | 校验表结构 |
+| GET | `/tables/foreign-keys` | 获取所有外键关系 |
+
+### 7.3 表单设计 — FormDesignController
+
+基础路径: `/function-units/{functionUnitId}/forms`
+继承: `BaseController` ❌ (手动构建响应)
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/forms` | 列出所有表单 |
+| POST | `/forms` | 创建表单 |
+| PUT | `/forms/{formId}` | 更新表单 |
+| DELETE | `/forms/{formId}` | 删除表单 |
+| GET | `/forms/{formId}` | 获取表单详情 |
+| GET | `/forms/{formId}/form-create-config` | 生成 form-create 配置 |
+| GET | `/forms/{formId}/validate` | 校验表单配置 |
+| GET | `/forms/{formId}/bindings` | 列出表绑定 |
+| POST | `/forms/{formId}/bindings` | 创建表绑定 |
+| PUT | `/forms/{formId}/bindings/{bindingId}` | 更新表绑定 |
+| DELETE | `/forms/{formId}/bindings/{bindingId}` | 删除表绑定 |
+
+### 7.4 动作设计 — ActionDesignController
+
+基础路径: `/function-units/{functionUnitId}/actions`
+继承: `BaseController` ❌ (手动构建响应)
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/actions` | 列出所有动作 |
+| POST | `/actions` | 创建动作 |
+| PUT | `/actions/{actionId}` | 更新动作 |
+| DELETE | `/actions/{actionId}` | 删除动作 |
+| GET | `/actions/{actionId}` | 获取动作详情 |
+| POST | `/actions/{actionId}/test` | 测试动作执行 |
+
+### 7.5 动作查询 — ActionQueryController
+
+基础路径: `/actions` (跨功能单元)
+继承: `BaseController` ❌
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/actions/batch?ids=12,16,17` | 批量获取动作定义 |
+| GET | `/actions/{actionId}` | 按 ID 获取动作 |
+
+### 7.6 流程设计 — ProcessDesignController
+
+基础路径: `/function-units/{functionUnitId}/process`
+继承: `BaseController` ❌ (手动构建响应)
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/process` | 获取流程定义 |
+| POST | `/process` | 保存流程定义 (body: `{"bpmnXml": "..."}`) |
+| GET | `/process/validate` | 校验流程定义 |
+| POST | `/process/simulate` | 模拟流程执行 |
+
+### 7.7 部署 — DeploymentController
+
+基础路径: `/function-units`
+继承: `BaseController` ❌ (手动构建响应)
+
+| 方法 | 路径 | 权限 | 说明 |
+|------|------|------|------|
+| GET | `/function-units/{id}/export` | FUNCTION_UNIT_VIEW | 导出 ZIP 包 |
+| POST | `/function-units/{id}/deploy` | FUNCTION_UNIT_PUBLISH | 一键部署到 admin-center |
+| GET | `/function-units/deployments/{deploymentId}/status` | FUNCTION_UNIT_VIEW | 查询部署状态 |
+| GET | `/function-units/{id}/deployments` | FUNCTION_UNIT_VIEW | 部署历史 |
+
+### 7.8 版本管理 — VersionController
+
+基础路径: `/api/function-units` (注意: 不同于其他控制器的路径)
+继承: `BaseController` ❌
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/{functionUnitName}/deploy` | 部署新版本 |
+| GET | `/{functionUnitName}/versions` | 获取版本历史 |
+| GET | `/{functionUnitName}/versions/active` | 获取活跃版本 |
+| POST | `/{functionUnitName}/rollback` | 回滚到指定版本 (需确认) |
+| GET | `/` | 列出所有功能单元 (UI 展示) |
+| GET | `/{functionUnitName}/history` | 版本历史 (UI 展示) |
+
+### 7.9 导入导出 — ExportImportController
+
+基础路径: `/export-import`
+继承: `BaseController` ❌
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/function-units/{id}/export` | 导出功能单元 ZIP |
+| POST | `/import` | 导入功能单元 (multipart, conflictStrategy: SKIP/OVERWRITE) |
+| POST | `/validate` | 校验导入包 |
+| POST | `/check-conflicts` | 检查导入冲突 |
+
+### 7.10 图标库 — IconLibraryController
+
+基础路径: `/icons`
+继承: `BaseController` ❌
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/icons?keyword=&category=&tag=` | 分页搜索图标 |
+| GET | `/icons/tags` | 获取所有标签 |
+| GET | `/icons/categories` | 获取所有分类 |
+| POST | `/icons` | 上传图标 (multipart: file, name, category) |
+| DELETE | `/icons/{id}` | 删除图标 |
+| GET | `/icons/{id}` | 获取图标详情 |
+| GET | `/icons/{id}/usage` | 检查图标是否被使用 |
+
+### 7.11 AI 生成 — AiGenerationController
+
+基础路径: `/ai-generation`
+继承: `BaseController` ✅
+
+| 方法 | 路径 | 权限 | 说明 |
+|------|------|------|------|
+| POST | `/chat/stream` (SSE) | FUNCTION_UNIT_UPDATE | AI 对话流 |
+| GET | `/events/{functionUnitId}` (SSE) | FUNCTION_UNIT_VIEW | 事件流 |
+| POST | `/lock/{functionUnitId}` | FUNCTION_UNIT_UPDATE | 获取编辑锁 |
+| DELETE | `/lock/{functionUnitId}` | FUNCTION_UNIT_UPDATE | 释放编辑锁 |
+| POST | `/lock/{functionUnitId}/force-unlock-request` | FUNCTION_UNIT_UPDATE | 请求强制解锁 |
+| POST | `/lock/{functionUnitId}/force-unlock-response` | FUNCTION_UNIT_UPDATE | 响应强制解锁 |
+| GET | `/sessions?functionUnitId=` | FUNCTION_UNIT_VIEW | 列出会话 |
+| GET | `/sessions/{sessionId}/messages` | FUNCTION_UNIT_VIEW | 获取消息 (分页) |
+| PUT | `/sessions/{sessionId}/phase?phase=` | FUNCTION_UNIT_UPDATE | 更新会话阶段 |
+| GET | `/documents?functionUnitId=&documentType=` | FUNCTION_UNIT_VIEW | 列出文档版本 |
+| GET | `/documents/version?functionUnitId=&documentType=&version=` | FUNCTION_UNIT_VIEW | 获取指定版本文档 |
+| POST | `/documents` | FUNCTION_UNIT_UPDATE | 保存文档 |
+| POST | `/{functionUnitId}/apply` | FUNCTION_UNIT_UPDATE | 应用 AI 生成数据 |
+
+---
+
+## 8. 核心数据流
+
+### 8.1 创建功能单元
+
+```
+POST /function-units
+    │
+    ▼
+FunctionUnitController.create()
+    │ @Valid @RequestBody FunctionUnitRequest
+    │ @RequireDeveloperPermission("FUNCTION_UNIT_CREATE")
+    ▼
+handleRequest(() -> functionUnitComponent.create(request))
+    │
+    ▼
+FunctionUnitComponentImpl.create()
+    │ @Transactional
+    │ @PreAuthorize("hasAnyRole('TECH_LEAD', 'TEAM_LEAD')")
+    │
+    ├── 1. 检查名称唯一性 (existsByName)
+    │   └── 重复 → throw BusinessException("CONFLICT_NAME_EXISTS")
+    │
+    ├── 2. 生成唯一编码 generateUniqueCode()
+    │   └── 格式: fu-{yyyyMMdd}-{6位随机hex}
+    │
+    ├── 3. 构建 FunctionUnit 实体
+    │   └── status = DRAFT, version = "1.0.0"
+    │
+    ├── 4. 如果有 iconId → 查找 Icon 实体
+    │   └── 不存在 → throw ResourceNotFoundException
+    │
+    └── 5. functionUnitRepository.save()
+         └── 返回持久化的 FunctionUnit
+```
+
+### 8.2 发布版本
+
+```
+POST /function-units/{id}/publish?changeLog=xxx
+    │
+    ▼
+FunctionUnitComponentImpl.publish(id, changeLog)
+    │ @Transactional
+    │ @PreAuthorize("hasAnyRole('TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER')")
+    │
+    ├── 1. getById(id) → 加载功能单元
+    │
+    ├── 2. validate(id) → 完整性校验
+    │   ├── 检查是否有 ProcessDefinition
+    │   ├── 检查是否有 MAIN 类型的 TableDefinition
+    │   └── 检查是否有 MAIN 类型的 FormDefinition
+    │   └── 校验失败 → throw BusinessException("BIZ_INVALID_FUNCTION_UNIT")
+    │
+    ├── 3. calculateNextVersion(currentVersion)
+    │   └── null → "1.0.0", "1.0.0" → "1.0.1", ...
+    │
+    ├── 4. 检查版本号是否已存在 (幂等处理)
+    │   └── 已存在 → 跳过快照创建 (上次部署中途失败的恢复)
+    │
+    ├── 5. createSnapshot(functionUnit) → byte[]
+    │   ├── 序列化: name, code, description, status, processXml
+    │   ├── 序列化: tableDefinitions[] (含 fieldDefinitions[])
+    │   ├── 序列化: formDefinitions[] (含 configJson, boundTableName)
+    │   └── 序列化: actionDefinitions[] (含 configJson)
+    │
+    ├── 6. 创建 Version 实体并保存
+    │   └── versionNumber, changeLog, snapshotData, publishedBy
+    │
+    └── 7. 更新 FunctionUnit
+         ├── status = PUBLISHED
+         └── currentVersion = newVersion
+```
+
+### 8.3 克隆功能单元
+
+```
+POST /function-units/{id}/clone?newName=xxx
+    │
+    ▼
+FunctionUnitComponentImpl.clone(id, newName)
+    │ @Transactional
+    │ @PreAuthorize("hasAnyRole('TECH_LEAD', 'TEAM_LEAD')")
+    │
+    ├── 1. 检查新名称唯一性
+    │
+    ├── 2. 加载源功能单元
+    │
+    ├── 3. 创建新 FunctionUnit (新 code, status=DRAFT)
+    │
+    ├── 4. 克隆 ProcessDefinition (如果存在)
+    │
+    ├── 5. 克隆 TableDefinitions
+    │   ├── 逐表克隆 (cloneTable)
+    │   ├── 克隆每个表的 FieldDefinitions
+    │   └── 建立 tableMapping: sourceTableId → clonedTable
+    │
+    ├── 6. 克隆 ForeignKeys (所有表克隆完成后)
+    │   ├── 构建 clonedFieldLookup: tableId → {fieldName → FieldDefinition}
+    │   └── 通过 fieldName 匹配重建外键关系
+    │
+    ├── 7. 克隆 FormDefinitions (含 FormTableBindings)
+    │   ├── 通过 tableMapping 映射 boundTable
+    │   └── 通过 tableMapping 映射每个 binding 的 table
+    │
+    └── 8. 克隆 ActionDefinitions
+         └── 深拷贝 configJson (new HashMap<>)
+```
+
+### 8.4 完整性校验
+
+```
+GET /function-units/{id}/validate
+    │
+    ▼
+FunctionUnitComponentImpl.validate(id)
+    │ @Transactional(readOnly = true)
+    │
+    ├── 检查 ProcessDefinition 是否存在
+    │   └── 缺失 → warning "MISSING_PROCESS"
+    │
+    ├── 检查是否有 MAIN 类型的 TableDefinition
+    │   └── 缺失 → warning "MISSING_MAIN_TABLE"
+    │
+    └── 检查是否有 MAIN 类型的 FormDefinition
+        └── 缺失 → warning "MISSING_MAIN_FORM"
+    
+    返回 ValidationResult { valid, errors[], warnings[] }
+```
+
+---
+
+## 9. 版本管理与快照
+
+### 版本号规则
+
+- 格式: `MAJOR.MINOR.PATCH` (语义版本)
+- 自动递增: `calculateNextVersion()` 递增 PATCH
+  - `null` → `"1.0.0"`
+  - `"1.0.0"` → `"1.0.1"`
+  - `"1.0.9"` → `"1.0.10"`
+- 手动版本 (VersionController): 支持 `MAJOR`, `MINOR`, `PATCH` changeType
+
+### 快照数据结构
+
+`Version.snapshotData` 存储为 BYTEA (Jackson JSON 序列化的 byte[]):
+
+```json
+{
+  "name": "报销审批",
+  "code": "fu-20260112-a1b2c3",
+  "description": "...",
+  "status": "PUBLISHED",
+  "processXml": "<bpmn:definitions ...>...</bpmn:definitions>",
+  "tableDefinitions": [
+    {
+      "tableName": "expense_main",
+      "tableType": "MAIN",
+      "tableDisplayName": "报销主表",
+      "description": "...",
+      "fieldDefinitions": [
+        {
+          "fieldName": "id",
+          "dataType": "BIGINT",
+          "length": null,
+          "precision": null,
+          "scale": null,
+          "nullable": false,
+          "defaultValue": null,
+          "isPrimaryKey": true,
+          "isUnique": false,
+          "description": "主键",
+          "sortOrder": 0
+        }
+      ]
+    }
+  ],
+  "formDefinitions": [
+    {
+      "formName": "报销申请表",
+      "formType": "MAIN",
+      "configJson": { /* form-create 配置 */ },
+      "description": "...",
+      "boundTableName": "expense_main"
+    }
+  ],
+  "actionDefinitions": [
+    {
+      "actionName": "提交",
+      "actionType": "PROCESS_SUBMIT",
+      "configJson": { /* 动作配置 */ },
+      "icon": "el-icon-check",
+      "buttonColor": "#409EFF",
+      "description": "...",
+      "isDefault": true
+    }
+  ]
+}
+```
+
+### 版本比较 (前端)
+
+前端 `version` 模块支持两个版本的 JSON diff 比较，展示:
+- 表定义变更 (新增/修改/删除)
+- 表单定义变更
+- 流程定义变更
+
+---
+
+## 10. 部署流程
+
+### 一键部署 (DeploymentController → DeploymentComponentImpl)
+
+```
+POST /function-units/{id}/deploy
+    │
+    ▼
+DeploymentComponentImpl.deployToAdminCenter(id, request)
+    │
+    ├── 1. 加载 FunctionUnit
+    ├── 2. 生成 deploymentId (UUID)
+    ├── 3. 创建初始 DeployResponse (status=DEPLOYING, progress=0)
+    ├── 4. 捕获 SecurityContext + Locale (传递到异步线程)
+    └── 5. taskExecutor.execute(() -> executeDeployment(...))
+         │  (异步执行，使用 Spring TaskExecutor)
+         │
+         ├── Step 0: 自动创建版本 (5%→15%)
+         │   └── functionUnitComponent.publish(id, changeLog)
+         │
+         ├── Step 1: 导出功能单元 (20%→30%)
+         │   └── exportImportComponent.exportFunctionUnit(id) → byte[] ZIP
+         │
+         ├── Step 2: 上传到 admin-center (→60%)
+         │   ├── POST {targetUrl}/api/v1/admin/function-units-import/import
+         │   ├── Content-Type: multipart/form-data
+         │   ├── file: {name}.zip
+         │   └── conflictStrategy: OVERWRITE (默认)
+         │
+         └── Step 3: 触发部署 (→100%)
+             ├── POST {targetUrl}/api/v1/admin/function-units-import/{importedId}/deploy
+             ├── body: { environment, autoEnable }
+             └── 成功 → status=SUCCESS, progress=100
+
+异常处理:
+- 任何步骤失败 → status=FAILED, 标记当前步骤 FAILED
+- 部署历史保存到 deploymentHistoryMap (内存)
+```
+
+### 部署状态查询
+
+```
+GET /function-units/deployments/{deploymentId}/status
+    → 返回 DeployResponse { deploymentId, status, progress, steps[], versionNumber }
+
+DeployResponse.DeployStatus:
+  DEPLOYING | SUCCESS | FAILED | ROLLED_BACK
+```
+
+### 配置
+
+```yaml
+admin-center:
+  url: ${ADMIN_CENTER_URL:http://localhost:8090}
+```
+
+---
+
+## 11. AI 生成模块
+
+### 概述
+
+AI 生成模块通过 N8N 工作流与大语言模型交互，支持通过对话式交互自动生成功能单元的表、表单、动作和流程定义。
+
+### 核心流程
+
+```
+用户 → AiGenerationController → AiGenerationComponent → N8N Webhook (SSE)
+                                                              │
+                                                              ▼
+                                                         LLM 处理
+                                                              │
+                                                              ▼
+                                                     SSE 流式返回结果
+                                                              │
+                                                              ▼
+                                                   用户确认 → applyGeneratedData()
+```
+
+### 编辑锁机制
+
+- 同一功能单元同一时间只允许一个用户进行 AI 生成操作
+- 锁 TTL: 1800 秒 (30 分钟), 可配置
+- 支持强制解锁请求/响应流程 (通过 SSE 事件通知锁持有者)
+- 强制解锁超时: 60 秒
+
+### AI 会话阶段
+
+1. `REQUIREMENTS` — 需求收集: AI 引导用户描述业务需求
+2. `DESIGN` — 设计方案: AI 生成设计文档
+3. `GENERATION` — 生成预览: AI 生成具体的表/表单/动作/流程定义，用户确认后应用
+
+### AI 文档版本管理
+
+- 每个阶段的文档支持多版本存储
+- 用户可以手动编辑并保存文档
+- 文档类型: `REQUIREMENTS` (需求文档), `DESIGN` (设计文档)
+
+### 配置
+
+```yaml
+n8n:
+  ai-generation:
+    webhook-url: ${N8N_AI_GENERATION_WEBHOOK_URL:http://localhost:5678/webhook/ai-function-unit-gen}
+    timeout-seconds: ${N8N_AI_GENERATION_TIMEOUT:120}
+
+ai-generation:
+  lock:
+    ttl-seconds: ${AI_GENERATION_LOCK_TTL:1800}
+    force-unlock-timeout-seconds: ${AI_GENERATION_FORCE_UNLOCK_TIMEOUT:60}
+  context:
+    max-size-bytes: ${AI_GENERATION_CONTEXT_MAX_SIZE:102400}
+```
+
+---
+
+## 12. 导入导出
+
+### 导出格式
+
+导出为 ZIP 包，包含:
+- `manifest.json` — 元数据 (ExportManifest)
+- 功能单元完整数据的 JSON 序列化
+
+### 导入策略
+
+| 策略 | 说明 |
+|------|------|
+| `SKIP` | 遇到冲突跳过 |
+| `OVERWRITE` | 覆盖已有数据 |
+
+### 导入流程
+
+```
+1. POST /export-import/validate — 校验包格式
+2. POST /export-import/check-conflicts — 检查冲突
+3. POST /export-import/import?conflictStrategy=OVERWRITE — 执行导入
+```
+
+---
+
+## 13. 安全模型
+
+### 权限注解
+
+使用自定义注解 `@RequireDeveloperPermission`:
+
+```java
+@RequireDeveloperPermission("FUNCTION_UNIT_CREATE")   // 创建
+@RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")   // 更新
+@RequireDeveloperPermission("FUNCTION_UNIT_DELETE")   // 删除
+@RequireDeveloperPermission("FUNCTION_UNIT_VIEW")     // 查看
+@RequireDeveloperPermission("FUNCTION_UNIT_PUBLISH")  // 发布/部署
+```
+
+### 角色权限 (Spring Security @PreAuthorize)
+
+| 操作 | 允许角色 |
+|------|----------|
+| 创建功能单元 | TECH_LEAD, TEAM_LEAD |
+| 更新功能单元 | (由 @RequireDeveloperPermission 控制) |
+| 发布版本 | TECH_LEAD, TEAM_LEAD, DEVELOPER |
+| 克隆功能单元 | TECH_LEAD, TEAM_LEAD |
+
+### JWT 认证
+
+- Token 通过 `Authorization: Bearer {token}` 传递
+- 用户 ID 通过 `X-User-Id` 请求头传递 (AI 模块使用)
+- JWT secret 通过环境变量 `JWT_SECRET` 注入
+- Token 有效期: 24 小时 (可配置)
+
+### 乐观锁
+
+FunctionUnit 使用 `@jakarta.persistence.Version` + `lockVersion` 字段实现乐观锁，防止并发修改冲突。
+
+---
+
+## 14. 国际化
+
+### 后端 i18n
+
+- 框架: Spring MessageSource
+- 配置: `spring.messages.basename=i18n/messages`
+- 使用: `i18nService.getMessage("deploy.started")`
+- Bean Validation 消息: `ValidationMessages*.properties` (独立于 i18n/messages)
+
+### 前端 i18n
+
+- 框架: vue-i18n v11 (Composition API 模式, `legacy: false`)
+- 默认语言: `en`
+- 支持语言: `en`, `zh-CN`, `zh-TW`
+- 使用: `t('functionUnit.createSuccess')` 或 `$t('key')`
+
+### i18n Key 命名规范
+
+```
+模块.区域.键名
+
+functionUnit.title          → "Function Units"
+functionUnit.createSuccess  → "Created successfully"
+table.tableName             → "Table Name"
+form.bindTable              → "Bind Table"
+action.approve              → "Approve"
+process.save                → "Save"
+icon.upload                 → "Upload Icon"
+version.history             → "Version History"
+common.save                 → "Save"
+common.cancel               → "Cancel"
+```
+
+### 关键 i18n 模块
+
+| 模块 | 前缀 | 说明 |
+|------|------|------|
+| `functionUnit.*` | 功能单元管理 | CRUD、发布、克隆、部署 |
+| `table.*` | 表设计 | 表/字段/外键/DDL |
+| `form.*` | 表单设计 | 表单/绑定/导入字段 |
+| `action.*` | 动作设计 | 动作类型/配置/N8N |
+| `process.*` | 流程设计 | BPMN 设计器 |
+| `icon.*` | 图标库 | 上传/分类/搜索 |
+| `version.*` | 版本管理 | 历史/比较/回滚 |
+| `properties.*` | 流程属性 | 节点配置/分配/超时 |
+| `common.*` | 通用 | 保存/取消/删除/确认 |
+
+---
+
+## 15. 配置属性
+
+### application.yml (developer-workstation)
+
+```yaml
+# 服务端口与上下文路径
+server:
+  port: ${SERVER_PORT:8083}
+  servlet:
+    context-path: /api/v1
+
+# CORS 白名单
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:3002,http://localhost:5173}
+
+# Admin Center 地址 (部署目标)
+admin-center:
+  url: ${ADMIN_CENTER_URL:http://localhost:8090}
+
+# 数据源 (PostgreSQL)
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/workflow_platform}
+    username: ${SPRING_DATASOURCE_USERNAME:platform}
+    password: ${SPRING_DATASOURCE_PASSWORD:platform123}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+
+  # JPA
+  jpa:
+    hibernate:
+      ddl-auto: none          # 使用 Flyway 管理 schema
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc.time_zone: Asia/Shanghai
+
+  # Redis
+  data:
+    redis:
+      host: ${SPRING_REDIS_HOST:localhost}
+      port: ${SPRING_REDIS_PORT:6379}
+      password: ${SPRING_REDIS_PASSWORD:redis123}
+
+  # i18n
+  messages:
+    basename: i18n/messages
+    encoding: UTF-8
+
+  # 文件上传
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+
+# 文件上传目录
+file:
+  upload:
+    dir: ${FILE_UPLOAD_DIR:uploads}
+    base-url: ${FILE_UPLOAD_BASE_URL:/api/v1/upload/files}
+
+# JWT 安全
+security:
+  jwt:
+    secret: ${JWT_SECRET:...}           # 必须通过环境变量注入
+    expiration: ${JWT_EXPIRATION:86400000}  # 24 小时
+  max-login-attempts: 5
+  lock-duration-minutes: 30
+
+# 权限系统
+security:
+  permission:
+    resolution-strategy: DATABASE_FIRST
+    strict-checking: true
+    audit-logging: true
+
+# N8N AI 生成
+n8n:
+  ai-generation:
+    webhook-url: ${N8N_AI_GENERATION_WEBHOOK_URL:http://localhost:5678/webhook/ai-function-unit-gen}
+    timeout-seconds: ${N8N_AI_GENERATION_TIMEOUT:120}
+
+# AI 编辑锁
+ai-generation:
+  lock:
+    ttl-seconds: ${AI_GENERATION_LOCK_TTL:1800}
+    force-unlock-timeout-seconds: ${AI_GENERATION_FORCE_UNLOCK_TIMEOUT:60}
+  context:
+    max-size-bytes: ${AI_GENERATION_CONTEXT_MAX_SIZE:102400}
+
+# OpenAPI (生产环境禁用)
+springdoc:
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:true}
+
+# 日志
+logging:
+  level:
+    root: INFO
+    com.developer: DEBUG
+    org.hibernate.SQL: DEBUG
+```
+
+### 环境变量速查
+
+| 变量 | 说明 | 默认值 |
+|------|------|--------|
+| `SERVER_PORT` | 服务端口 | 8083 |
+| `ADMIN_CENTER_URL` | admin-center 地址 | http://localhost:8090 |
+| `SPRING_DATASOURCE_URL` | PostgreSQL 连接 | jdbc:postgresql://localhost:5432/workflow_platform |
+| `SPRING_DATASOURCE_USERNAME` | 数据库用户 | platform |
+| `SPRING_DATASOURCE_PASSWORD` | 数据库密码 | (环境变量注入) |
+| `SPRING_REDIS_HOST` | Redis 主机 | localhost |
+| `SPRING_REDIS_PORT` | Redis 端口 | 6379 |
+| `SPRING_REDIS_PASSWORD` | Redis 密码 | (环境变量注入) |
+| `JWT_SECRET` | JWT 签名密钥 | (必须环境变量注入) |
+| `JWT_EXPIRATION` | JWT 有效期 (ms) | 86400000 (24h) |
+| `ENCRYPTION_SECRET_KEY` | AES 加密密钥 | (必须环境变量注入) |
+| `CORS_ALLOWED_ORIGINS` | CORS 白名单 | http://localhost:3000,... |
+| `N8N_AI_GENERATION_WEBHOOK_URL` | N8N webhook | http://localhost:5678/webhook/... |
+| `N8N_AI_GENERATION_TIMEOUT` | N8N 超时 (秒) | 120 |
+| `AI_GENERATION_LOCK_TTL` | AI 编辑锁 TTL (秒) | 1800 |
+| `SWAGGER_ENABLED` | Swagger 开关 | true (生产环境设 false) |
+| `FILE_UPLOAD_DIR` | 文件上传目录 | uploads |
+
+---
+
+## 16. 数据库迁移
+
+### Flyway 约定
+
+- 路径: `src/main/resources/db/migration/{module}/`
+- 命名: `V{版本号}__{描述}.sql`
+- 版本号分段:
+  - admin-center: 200+
+  - developer-workstation: 300+
+  - workflow-engine: 100+
+- `.sql` 文件必须使用 LF 换行 (`.gitattributes` 已配置)
+
+### 核心表清单
+
+| 表名 | 实体 | 说明 |
+|------|------|------|
+| `dw_function_units` | FunctionUnit | 功能单元主表 |
+| `dw_table_definitions` | TableDefinition | 表定义 |
+| `dw_field_definitions` | FieldDefinition | 字段定义 |
+| `dw_foreign_keys` | ForeignKey | 外键关系 |
+| `dw_form_definitions` | FormDefinition | 表单定义 |
+| `dw_form_table_bindings` | FormTableBinding | 表单表绑定 |
+| `dw_action_definitions` | ActionDefinition | 动作定义 |
+| `dw_process_definitions` | ProcessDefinition | 流程定义 |
+| `dw_versions` | Version | 版本快照 |
+| `dw_icons` | Icon | 图标库 |
+
+表名前缀: `dw_` = developer-workstation
+
+---
+
+## 17. 已知限制与技术债务
+
+### 控制器层
+
+以下 10 个控制器未继承 `BaseController`，手动构建 `ResponseEntity.ok(ApiResponse.success(...))`:
+
+| 控制器 | 风险 | 说明 |
+|--------|------|------|
+| FormDesignController | 低 | 手动构建响应 |
+| ProcessDesignController | 低 | 手动构建响应 |
+| IconLibraryController | 低 | 手动构建响应 |
+| ActionDesignController | 低 | 手动构建响应 |
+| ActionQueryController | 低 | 直接注入 Repository (跳过 Component 层) |
+| DeploymentController | 低 | 手动构建响应 |
+| ExportImportController | 低 | 手动构建响应 |
+| FileUploadController | 低 | 手动构建响应 |
+| AuthController | 低 | 手动构建响应 |
+| VersionController | 低 | 手动构建响应, 路径前缀不同 (`/api/function-units`) |
+
+已继承 `BaseController` 的控制器:
+- FunctionUnitController ✅
+- TableDesignController ✅
+- AiGenerationController ✅
+- MemberController ✅
+- ResilienceController ✅
+
+### 安全相关
+
+- `SubTableField.vue` (developer-workstation 和 user-portal) 使用 `v-html="scope.row[col.field]"` 渲染富文本预览，未做 sanitize — 可接受 (企业内部应用，数据来源可信)
+- `ForceUnlockResponseRequest` 仅有 `boolean accept` 字段，无需额外校验注解
+
+### 类型安全
+
+- 部分前端 TS 文件使用 `any` 类型 — 已确认为合理场景:
+  - BPMN 类型定义 (bpmn-js 库无完整 TS 类型)
+  - 动态 JSON 解析
+  - Element Plus 事件回调
+
+### 部署状态存储
+
+- `DeploymentComponentImpl` 使用内存 `ConcurrentHashMap` 存储部署状态和历史
+- 服务重启后部署状态丢失
+- 未来可迁移到 Redis 或数据库持久化
+
+### VersionController 路径
+
+- `VersionController` 使用 `/api/function-units` 路径前缀，与其他控制器的 `/function-units` 不一致
+- 这是因为 VersionController 属于独立的版本管理 spec，有自己的 Service 层 (DeploymentService, VersionService, RollbackService, UIService)
+
+### ProcessDefinition.functionUnitVersionId
+
+- `function_unit_version_id` 的 FK 指向 `dw_function_units(id)` 而非 `dw_versions(id)` — 这是设计决策，非 bug
+
+---
+
+## 附录 A: Repository 清单
+
+| Repository | 实体 | 说明 |
+|------------|------|------|
+| FunctionUnitRepository | FunctionUnit | existsByName, findByName |
+| TableDefinitionRepository | TableDefinition | findByFunctionUnitId |
+| FieldDefinitionRepository | FieldDefinition | findByTableDefinitionId |
+| ForeignKeyRepository | ForeignKey | findByTableDefinitionId |
+| FormDefinitionRepository | FormDefinition | findByFunctionUnitId |
+| FormTableBindingRepository | FormTableBinding | findByFormId |
+| ActionDefinitionRepository | ActionDefinition | findByFunctionUnitId |
+| ProcessDefinitionRepository | ProcessDefinition | findByFunctionUnitId |
+| VersionRepository | Version | findByFunctionUnitIdAndVersionNumber |
+| IconRepository | Icon | findByName, search |
+| AiSessionRepository | AiSession | findByFunctionUnitId |
+| AiMessageRepository | AiMessage | findBySessionId |
+| AiDocumentRepository | AiDocument | findByFunctionUnitIdAndDocumentType |
+| FunctionUnitAccessRepository | FunctionUnitAccess | 访问控制 |
+| MemberRepository | Member | 成员管理 |
+| UserRepository | User | 用户查询 |
+| RoleRepository | Role | 角色查询 |
+| PermissionRepository | Permission | 权限查询 |
+| OperationLogRepository | OperationLog | 操作日志 |
+| ProcessInstanceRepository | ProcessInstance | 流程实例 |
+
+---
+
+## 附录 B: Component 接口清单
+
+| Component | 实现类 | 职责 |
+|-----------|--------|------|
+| FunctionUnitComponent | FunctionUnitComponentImpl | 功能单元 CRUD、发布、克隆、校验 |
+| TableDesignComponent | TableDesignComponentImpl | 表设计 CRUD、DDL 生成、关系校验 |
+| FormDesignComponent | FormDesignComponentImpl | 表单设计 CRUD、绑定管理、配置生成 |
+| ActionDesignComponent | ActionDesignComponentImpl | 动作设计 CRUD、测试执行 |
+| ProcessDesignComponent | ProcessDesignComponentImpl | 流程设计 CRUD、BPMN 校验、模拟 |
+| DeploymentComponent | DeploymentComponentImpl | 一键部署、状态查询、历史 |
+| ExportImportComponent | ExportImportComponentImpl | 导入导出、冲突检查 |
+| IconLibraryComponent | IconLibraryComponentImpl | 图标上传、搜索、使用检查 |
+| AiGenerationComponent | AiGenerationComponentImpl | AI 对话、锁管理、文档、数据应用 |
+| VersionComponent | VersionComponentImpl | 版本历史查询 |
+
+---
+
+## 附录 C: 前端视图结构 (developer-workstation)
+
+```
+frontend/developer-workstation/src/
+├── api/
+│   ├── functionUnit.ts      # 功能单元 API
+│   ├── tableDesign.ts       # 表设计 API
+│   ├── formDesign.ts        # 表单设计 API
+│   ├── actionDesign.ts      # 动作设计 API
+│   ├── processDesign.ts     # 流程设计 API
+│   ├── deployment.ts        # 部署 API
+│   ├── version.ts           # 版本 API
+│   ├── icon.ts              # 图标 API
+│   └── aiGeneration.ts      # AI 生成 API
+├── views/
+│   ├── function-unit/       # 功能单元列表/详情
+│   ├── table-design/        # 表设计器
+│   ├── form-design/         # 表单设计器
+│   ├── action-design/       # 动作设计器
+│   ├── process-design/      # 流程设计器 (BPMN)
+│   └── version/             # 版本管理
+├── components/
+│   ├── ai/                  # AI 对话面板
+│   ├── designer/            # 设计器公共组件
+│   └── icon/                # 图标选择器
+├── composables/
+│   ├── useAiSession.ts      # AI 会话管理
+│   ├── useAiChat.ts         # AI 对话
+│   └── useFunctionUnit.ts   # 功能单元状态
+├── stores/
+│   └── functionUnit.ts      # Pinia store
+└── i18n/
+    └── locales/
+        ├── en.ts            # 英文 (默认)
+        ├── zh-CN.ts         # 简体中文
+        └── zh-TW.ts         # 繁体中文
+```
+
+---
+
+> 文档结束。本文档覆盖了功能单元模块的完整架构、实体、API、数据流、配置和约定，可作为 AI 助手和开发者的权威参考。
