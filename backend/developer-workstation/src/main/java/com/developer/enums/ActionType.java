@@ -37,5 +37,7 @@ public enum ActionType {
     /** 流程驳回 */
     PROCESS_REJECT,
     /** 组合动作 */
-    COMPOSITE
+    COMPOSITE,
+    /** 决策表评估动作 */
+    DECISION_TABLE
 }

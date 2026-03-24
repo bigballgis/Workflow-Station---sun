@@ -32,6 +32,7 @@ public class FunctionUnitResponse {
     private int tableCount;
     private int formCount;
     private int actionCount;
+    private int decisionCount;
     private boolean hasProcess;
     
     /**

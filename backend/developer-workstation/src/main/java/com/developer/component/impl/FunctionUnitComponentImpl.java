@@ -10,6 +10,7 @@ import com.developer.enums.FunctionUnitStatus;
 import com.developer.exception.BusinessException;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.*;
+import com.developer.util.XmlEncodingUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.criteria.Predicate;
 import lombok.extern.slf4j.Slf4j;
@@ -23,7 +24,14 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.NodeList;
+import org.xml.sax.InputSource;
 
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import java.io.StringReader;
 import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -41,6 +49,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     private final TableDefinitionRepository tableDefinitionRepository;
     private final FormDefinitionRepository formDefinitionRepository;
     private final ActionDefinitionRepository actionDefinitionRepository;
+    private final DecisionDefinitionRepository decisionDefinitionRepository;
     private final VersionRepository versionRepository;
     private final IconRepository iconRepository;
     private final ObjectMapper objectMapper;
@@ -64,6 +73,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
             TableDefinitionRepository tableDefinitionRepository,
             FormDefinitionRepository formDefinitionRepository,
             ActionDefinitionRepository actionDefinitionRepository,
+            DecisionDefinitionRepository decisionDefinitionRepository,
             VersionRepository versionRepository,
             IconRepository iconRepository,
             ObjectMapper objectMapper,
@@ -73,6 +83,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         this.tableDefinitionRepository = tableDefinitionRepository;
         this.formDefinitionRepository = formDefinitionRepository;
         this.actionDefinitionRepository = actionDefinitionRepository;
+        this.decisionDefinitionRepository = decisionDefinitionRepository;
         this.versionRepository = versionRepository;
         this.iconRepository = iconRepository;
         this.objectMapper = objectMapper;
@@ -250,6 +261,9 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
                 if (entity.getActionDefinitions() != null) {
                     entity.getActionDefinitions().size();
                 }
+                if (entity.getDecisionDefinitions() != null) {
+                    entity.getDecisionDefinitions().size();
+                }
                 if (entity.getProcessDefinition() != null) {
                     entity.getProcessDefinition().getId();
                 }
@@ -396,6 +410,11 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
             cloneAction(sourceAction, cloned);
         }
         
+        // 克隆决策定义
+        for (DecisionDefinition sourceDecision : source.getDecisionDefinitions()) {
+            cloneDecision(sourceDecision, cloned);
+        }
+        
         return cloned;
     }
     
@@ -424,7 +443,251 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
             result.addWarning("MISSING_MAIN_FORM", "Function unit has no main form", null);
         }
         
+        // BPMN-DMN 交叉引用验证
+        validateBpmnDmnCrossReferences(functionUnit, result);
+        
+        // DECISION_TABLE 动作配置验证
+        validateDecisionTableActions(functionUnit, result);
+        
         return result;
+    }
+    
+    /**
+     * BPMN-DMN 交叉引用验证
+     * 检查 BPMN 流程中引用的决策键是否存在于同一功能单元的决策定义中
+     */
+    private void validateBpmnDmnCrossReferences(FunctionUnit functionUnit, ValidationResult result) {
+        List<DecisionDefinition> decisions = functionUnit.getDecisionDefinitions();
+        
+        // 无 DecisionDefinition 时不产生决策相关错误
+        if (decisions == null || decisions.isEmpty()) {
+            return;
+        }
+        
+        // 如果没有流程定义，无法进行交叉引用验证
+        if (functionUnit.getProcessDefinition() == null) {
+            return;
+        }
+        
+        String bpmnXml = functionUnit.getProcessDefinition().getBpmnXml();
+        if (bpmnXml == null || bpmnXml.isBlank()) {
+            return;
+        }
+        
+        // 解码 BPMN XML（可能是 Base64 编码）
+        String decodedBpmnXml = XmlEncodingUtil.smartDecode(bpmnXml);
+        
+        // 从 BPMN XML 中提取所有 DMN 服务任务引用的决策键
+        Set<String> referencedKeys = extractDmnReferenceKeys(decodedBpmnXml, functionUnit.getId());
+        
+        // 构建已有决策定义的 key 集合
+        Set<String> definedKeys = new HashSet<>();
+        for (DecisionDefinition decision : decisions) {
+            definedKeys.add(decision.getDecisionKey());
+        }
+        
+        // 检查 BPMN 引用的决策键是否存在于 DecisionDefinition 列表中
+        for (String referencedKey : referencedKeys) {
+            if (!definedKeys.contains(referencedKey)) {
+                result.addError("INVALID_DECISION_REFERENCE",
+                        "BPMN process references decision key '" + referencedKey + "' which does not exist in this function unit",
+                        referencedKey);
+            }
+        }
+        
+        // 检查是否有未被 BPMN 引用的 DecisionDefinition
+        for (String definedKey : definedKeys) {
+            if (!referencedKeys.contains(definedKey)) {
+                result.addWarning("UNREFERENCED_DECISION",
+                        "Decision definition '" + definedKey + "' is not referenced by any BPMN service task",
+                        definedKey);
+            }
+        }
+    }
+    
+    /**
+     * DECISION_TABLE 动作配置验证
+     * 当 ActionType 为 DECISION_TABLE 时，校验 config_json 包含 decisionKey、inputMappings、outputMappings，
+     * 并校验 decisionKey 引用同一功能单元内存在的 DecisionDefinition。
+     */
+    private void validateDecisionTableActions(FunctionUnit functionUnit, ValidationResult result) {
+        List<ActionDefinition> actions = functionUnit.getActionDefinitions();
+        if (actions == null || actions.isEmpty()) {
+            return;
+        }
+        
+        // 构建已有决策定义的 key 集合
+        Set<String> definedDecisionKeys = new HashSet<>();
+        List<DecisionDefinition> decisions = functionUnit.getDecisionDefinitions();
+        if (decisions != null) {
+            for (DecisionDefinition decision : decisions) {
+                definedDecisionKeys.add(decision.getDecisionKey());
+            }
+        }
+        
+        for (ActionDefinition action : actions) {
+            if (action.getActionType() != com.developer.enums.ActionType.DECISION_TABLE) {
+                continue;
+            }
+            
+            Map<String, Object> config = action.getConfigJson();
+            String actionName = action.getActionName();
+            
+            if (config == null || config.isEmpty()) {
+                result.addError("MISSING_DECISION_CONFIG",
+                        "DECISION_TABLE action '" + actionName + "' has empty config_json",
+                        actionName);
+                continue;
+            }
+            
+            // 校验必填字段: decisionKey
+            Object decisionKeyObj = config.get("decisionKey");
+            boolean hasDecisionKey = decisionKeyObj instanceof String dk && !dk.isBlank();
+            if (!hasDecisionKey) {
+                result.addError("MISSING_DECISION_KEY",
+                        "DECISION_TABLE action '" + actionName + "' config_json is missing required field 'decisionKey'",
+                        actionName);
+            }
+            
+            // 校验必填字段: inputMappings
+            if (!config.containsKey("inputMappings")) {
+                result.addError("MISSING_INPUT_MAPPINGS",
+                        "DECISION_TABLE action '" + actionName + "' config_json is missing required field 'inputMappings'",
+                        actionName);
+            }
+            
+            // 校验必填字段: outputMappings
+            if (!config.containsKey("outputMappings")) {
+                result.addError("MISSING_OUTPUT_MAPPINGS",
+                        "DECISION_TABLE action '" + actionName + "' config_json is missing required field 'outputMappings'",
+                        actionName);
+            }
+            
+            // 校验 decisionKey 引用同一功能单元内存在的 DecisionDefinition
+            if (hasDecisionKey) {
+                String decisionKey = (String) decisionKeyObj;
+                if (!definedDecisionKeys.contains(decisionKey)) {
+                    result.addError("INVALID_DECISION_REFERENCE",
+                            "DECISION_TABLE action '" + actionName + "' references decision key '" + decisionKey + "' which does not exist in this function unit",
+                            actionName);
+                }
+            }
+        }
+    }
+    
+    /**
+     * 从 BPMN XML 中提取所有 DMN 服务任务引用的 decisionTableReferenceKey
+     * 支持两种格式:
+     * 1. 属性格式: flowable:decisionTableReferenceKey="key"
+     * 2. 扩展元素格式: flowable:field name="decisionTableReferenceKey" > flowable:string
+     */
+    private Set<String> extractDmnReferenceKeys(String bpmnXml, Long functionUnitId) {
+        Set<String> keys = new HashSet<>();
+        try {
+            Document document = parseXmlSecurely(bpmnXml);
+            
+            // 查找所有 serviceTask 元素
+            NodeList serviceTasks = document.getElementsByTagNameNS("*", "serviceTask");
+            for (int i = 0; i < serviceTasks.getLength(); i++) {
+                Element serviceTask = (Element) serviceTasks.item(i);
+                
+                // 检查是否为 DMN 类型的服务任务 (flowable:type="dmn")
+                if (!isDmnServiceTask(serviceTask)) {
+                    continue;
+                }
+                
+                // 尝试从属性提取 decisionTableReferenceKey
+                String key = extractKeyFromAttribute(serviceTask);
+                if (key == null || key.isBlank()) {
+                    // 尝试从扩展元素提取
+                    key = extractKeyFromExtensionElements(serviceTask);
+                }
+                
+                if (key != null && !key.isBlank()) {
+                    keys.add(key.trim());
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to parse BPMN XML for DMN cross-reference validation, functionUnitId={}: {}",
+                    functionUnitId, e.getMessage());
+        }
+        return keys;
+    }
+    
+    /**
+     * 检查 serviceTask 元素是否为 DMN 类型
+     */
+    private boolean isDmnServiceTask(Element serviceTask) {
+        // 检查所有可能的命名空间前缀下的 type 属性
+        var attributes = serviceTask.getAttributes();
+        for (int i = 0; i < attributes.getLength(); i++) {
+            var attr = attributes.item(i);
+            if ("type".equals(attr.getLocalName()) && "dmn".equals(attr.getNodeValue())) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    /**
+     * 从 serviceTask 属性中提取 decisionTableReferenceKey
+     */
+    private String extractKeyFromAttribute(Element serviceTask) {
+        var attributes = serviceTask.getAttributes();
+        for (int i = 0; i < attributes.getLength(); i++) {
+            var attr = attributes.item(i);
+            if ("decisionTableReferenceKey".equals(attr.getLocalName())) {
+                return attr.getNodeValue();
+            }
+        }
+        return null;
+    }
+    
+    /**
+     * 从扩展元素中提取 decisionTableReferenceKey
+     * 格式: <flowable:field name="decisionTableReferenceKey"><flowable:string>key</flowable:string></flowable:field>
+     */
+    private String extractKeyFromExtensionElements(Element serviceTask) {
+        NodeList extensionElements = serviceTask.getElementsByTagNameNS("*", "extensionElements");
+        for (int i = 0; i < extensionElements.getLength(); i++) {
+            Element extElem = (Element) extensionElements.item(i);
+            NodeList fields = extElem.getElementsByTagNameNS("*", "field");
+            for (int j = 0; j < fields.getLength(); j++) {
+                Element field = (Element) fields.item(j);
+                if ("decisionTableReferenceKey".equals(field.getAttribute("name"))) {
+                    // 尝试从 flowable:string 子元素获取值
+                    NodeList stringElements = field.getElementsByTagNameNS("*", "string");
+                    if (stringElements.getLength() > 0) {
+                        return stringElements.item(0).getTextContent().trim();
+                    }
+                    // 尝试从 flowable:expression 子元素获取值
+                    NodeList exprElements = field.getElementsByTagNameNS("*", "expression");
+                    if (exprElements.getLength() > 0) {
+                        return exprElements.item(0).getTextContent().trim();
+                    }
+                }
+            }
+        }
+        return null;
+    }
+    
+    /**
+     * XXE 安全的 XML 解析
+     */
+    private Document parseXmlSecurely(String xml) throws Exception {
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        factory.setNamespaceAware(true);
+        
+        // XXE prevention
+        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+        factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
+        factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+        factory.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
+        factory.setXIncludeAware(false);
+        factory.setExpandEntityReferences(false);
+        
+        DocumentBuilder builder = factory.newDocumentBuilder();
+        return builder.parse(new InputSource(new StringReader(xml)));
     }
     
     @Override
@@ -531,6 +794,15 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
             log.warn("Failed to load action definitions for function unit {}: {}", entity.getId(), e.getMessage());
         }
         
+        int decisionCount = 0;
+        try {
+            if (entity.getDecisionDefinitions() != null) {
+                decisionCount = entity.getDecisionDefinitions().size();
+            }
+        } catch (Exception e) {
+            log.warn("Failed to load decision definitions for function unit {}: {}", entity.getId(), e.getMessage());
+        }
+        
         try {
             hasProcess = entity.getProcessDefinition() != null;
         } catch (Exception e) {
@@ -553,6 +825,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
                 .tableCount(tableCount)
                 .formCount(formCount)
                 .actionCount(actionCount)
+                .decisionCount(decisionCount)
                 .hasProcess(hasProcess)
                 .build();
     }
@@ -644,6 +917,19 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         }
         snapshot.put("actionDefinitions", actionSnapshots);
         
+        // Snapshot decision definitions
+        List<Map<String, Object>> decisionSnapshots = new ArrayList<>();
+        for (DecisionDefinition decision : functionUnit.getDecisionDefinitions()) {
+            Map<String, Object> decisionSnap = new HashMap<>();
+            decisionSnap.put("decisionKey", decision.getDecisionKey());
+            decisionSnap.put("decisionName", decision.getDecisionName());
+            decisionSnap.put("dmnXml", decision.getDmnXml());
+            decisionSnap.put("hitPolicy", decision.getHitPolicy());
+            decisionSnap.put("description", decision.getDescription());
+            decisionSnapshots.add(decisionSnap);
+        }
+        snapshot.put("decisionDefinitions", decisionSnapshots);
+        
         return objectMapper.writeValueAsBytes(snapshot);
     }
     
@@ -724,5 +1010,17 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
                 .isDefault(source.getIsDefault())
                 .build();
         actionDefinitionRepository.save(cloned);
+    }
+    
+    private void cloneDecision(DecisionDefinition source, FunctionUnit target) {
+        DecisionDefinition cloned = DecisionDefinition.builder()
+                .functionUnit(target)
+                .decisionKey(source.getDecisionKey())
+                .decisionName(source.getDecisionName())
+                .dmnXml(source.getDmnXml())
+                .hitPolicy(source.getHitPolicy())
+                .description(source.getDescription())
+                .build();
+        decisionDefinitionRepository.save(cloned);
     }
 }

@@ -75,9 +75,9 @@ com.developer/
 ├── component/       # 业务组件接口
 │   └── impl/        # 业务组件实现
 ├── config/          # Spring 配置 (CORS, Jackson, Async, OpenAPI)
-├── controller/      # REST 控制器 (16 个)
+├── controller/      # REST 控制器 (15 个, 另有 BaseController 基类)
 ├── dto/             # 请求/响应 DTO (40+ 个)
-├── entity/          # JPA 实体 (11 个)
+├── entity/          # JPA 实体 (18 个, 含 AI/安全/日志相关实体)
 ├── enums/           # 枚举类型 (14 个)
 ├── exception/       # 自定义异常
 ├── repository/      # JPA Repository (20 个)
@@ -101,9 +101,10 @@ public ResponseEntity<ApiResponse<Entity>> create(@Valid @RequestBody Request re
 // BaseController 内部处理:
 // 1. 调用 processor.process()
 // 2. 成功 → ApiResponse.success(result)
-// 3. BusinessException → 400 + errorCode + message
-// 4. SecurityException → 403
-// 5. 其他异常 → 500 + generic message (不暴露内部细节)
+// 3. IllegalArgumentException → 400 + VAL_INVALID_INPUT
+// 4. SecurityException → 403 + SEC_ACCESS_DENIED
+// 5. 其他异常 → 500 + SYS_REQUEST_PROCESSING_ERROR (不暴露内部细节)
+// 附加功能: SecurityInputValidator 输入校验, SecurityAuditLogger 审计日志
 ```
 
 ### 统一响应格式 (ApiResponse)
@@ -122,7 +123,11 @@ public ResponseEntity<ApiResponse<Entity>> create(@Valid @RequestBody Request re
   "error": {
     "code": "CONFLICT_NAME_EXISTS",
     "message": "Function unit name already exists: xxx",
-    "suggestion": "Please use a different name"
+    "details": [...],
+    "suggestion": "Please use a different name",
+    "timestamp": "2026-03-24T10:00:00Z",
+    "traceId": "uuid-string",
+    "path": "/function-units"
   }
 }
 ```
@@ -152,7 +157,8 @@ public ResponseEntity<ApiResponse<Entity>> create(@Valid @RequestBody Request re
 │  ┌──── 1:N ────┐  ┌──── 1:N ────┐  ┌──── 1:N ────┐            │
 │  ▼              │  ▼              │  ▼              │            │
 │ TableDefinition │ FormDefinition  │ ActionDefinition│            │
-│ dw_table_defs   │ dw_form_defs    │ dw_action_defs  │            │
+│ dw_table_       │ dw_form_        │ dw_action_      │            │
+│ definitions     │ definitions     │ definitions     │            │
 │                 │                 │                  │            │
 │  ┌── 1:N ──┐   │  ┌── 1:N ──┐   │                  │            │
 │  ▼          │   │  ▼          │   │                  │            │
@@ -532,36 +538,38 @@ public ResponseEntity<ApiResponse<Entity>> create(@Valid @RequestBody Request re
 | DTO | 用途 | 关键字段 |
 |-----|------|----------|
 | `FunctionUnitRequest` | 创建/更新功能单元 | name, description, iconId |
-| `TableDefinitionRequest` | 创建/更新表 | tableName, tableType, tableDisplayName, fieldDefinitions[] |
+| `TableDefinitionRequest` | 创建/更新表 | tableName, tableType, tableDisplayName, fields[] (注意: 字段名为 `fields` 而非 `fieldDefinitions`) |
 | `FieldDefinitionRequest` | 字段定义 (嵌套在 TableDefinitionRequest) | fieldName, dataType, length, nullable, isPrimaryKey |
 | `FormDefinitionRequest` | 创建/更新表单 | formName, formType, configJson, boundTableId |
 | `FormTableBindingRequest` | 创建/更新表绑定 | tableId, bindingType, bindingMode, foreignKeyField |
 | `ActionDefinitionRequest` | 创建/更新动作 | actionName, actionType, configJson, icon, buttonColor |
-| `DeployRequest` | 部署请求 | targetUrl, changeLog, conflictStrategy, environment, autoEnable |
-| `AiChatRequest` | AI 对话请求 | functionUnitId, message, sessionId |
+| `DeployRequest` | 部署请求 | targetUrl, changeLog, conflictStrategy, environment (DeployEnvironment 枚举: DEVELOPMENT/TESTING/PRODUCTION), autoEnable |
+| `AiChatRequest` | AI 对话请求 | functionUnitId, message, sessionId, phase (@NotNull AiPhase), mode (@NotNull AiMode) |
 | `ApplyGeneratedDataRequest` | 应用 AI 生成数据 | sessionId, tables[], forms[], actions[], processXml |
 | `SaveDocumentRequest` | 保存 AI 文档 | functionUnitId, documentType, content |
-| `DeploymentRequest` | 版本部署请求 | bpmnXml, changeType, metadata |
-| `RollbackRequest` | 版本回滚请求 | targetVersion, confirmed |
 | `ForceUnlockResponseRequest` | 强制解锁响应 | accept (boolean) |
+| `DeploymentRequest` | 版本部署请求 (VersionController) | bpmnXml, changeType, metadata |
+| `RollbackRequest` | 版本回滚请求 | targetVersion, confirmed |
 
 ### 响应 DTO
 
 | DTO | 用途 | 关键字段 |
 |-----|------|----------|
-| `FunctionUnitResponse` | 功能单元详情 | id, code, name, status, currentVersion, icon, tableCount, formCount, actionCount, hasProcess |
+| `FunctionUnitResponse` | 功能单元详情 | id, code, name, description, iconId, icon (IconInfo: id/name/svgContent), status, currentVersion, createdBy, createdAt, updatedBy, updatedAt, tableCount, formCount, actionCount, hasProcess |
 | `DeployResponse` | 部署状态 | deploymentId, status, progress, steps[], versionNumber |
-| `VersionResponse` | 版本信息 | id, versionNumber, changeLog, publishedBy, publishedAt |
-| `FormTableBindingResponse` | 绑定详情 | id, formId, tableId, tableName, bindingType, bindingMode |
+| `VersionResponse` | 版本信息 | id, versionNumber, changeLog, createdBy (映射自 publishedBy), createdAt (映射自 publishedAt) |
+| `FormTableBindingResponse` | 绑定详情 | id, formId, tableId, tableName, tableType, bindingType, bindingMode, foreignKeyField, sortOrder, createdAt, updatedAt |
 | `ValidationResult` | 校验结果 | valid (boolean), errors[], warnings[] |
 | `AiSessionResponse` | AI 会话信息 | sessionId, functionUnitId, phase, status |
 | `AiMessageResponse` | AI 消息 | role, content, timestamp |
-| `LockInfoResponse` | 编辑锁信息 | locked, lockedBy, lockedAt |
-| `IconDTO` | 图标信息 | id, name, category, svgContent, fileSize |
+| `LockInfoResponse` | 编辑锁信息 | functionUnitId, userId, userName, lockedAt, locked |
+| `IconDTO` | 图标信息 | id, name, category, svgContent, fileSize, description, createdBy, createdAt |
 | `FunctionUnitDisplay` | UI 展示用 | 活跃版本的展示信息 |
+| `VersionHistoryDisplay` | 版本历史 UI | 版本历史展示信息 |
 | `DeploymentResult` | 版本部署结果 | version, deployedAt |
 | `RollbackResult` | 回滚结果 | rolledBackToVersion |
 | `RollbackImpact` | 回滚影响评估 | versionsToDelete, totalProcessInstancesToDelete |
+| `ErrorResponse` | 错误响应 | code, message, details (List), suggestion, timestamp, traceId, path |
 
 ---
 
@@ -728,6 +736,57 @@ public ResponseEntity<ApiResponse<Entity>> create(@Valid @RequestBody Request re
 | GET | `/documents/version?functionUnitId=&documentType=&version=` | FUNCTION_UNIT_VIEW | 获取指定版本文档 |
 | POST | `/documents` | FUNCTION_UNIT_UPDATE | 保存文档 |
 | POST | `/{functionUnitId}/apply` | FUNCTION_UNIT_UPDATE | 应用 AI 生成数据 |
+
+### 7.12 文件上传 — FileUploadController
+
+基础路径: `/upload`
+继承: `BaseController` ❌ (手动构建响应)
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/upload` | 上传文件 (multipart, 支持 jpg/png/gif/pdf/doc/docx/xls/xlsx, 最大 10MB) |
+| GET | `/upload/files/{filename}` | 获取文件 (支持内联预览, 含路径遍历防护) |
+| DELETE | `/upload/files/{filename}` | 删除文件 |
+
+### 7.13 认证 — AuthController
+
+基础路径: `/auth`
+继承: `BaseController` ❌ (手动构建响应)
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/auth/login` | 用户登录 (返回 JWT token) |
+| POST | `/auth/logout` | 用户登出 |
+| GET | `/auth/me` | 获取当前用户信息 (需 Authorization header) |
+| GET | `/auth/validate` | 验证 token 有效性 |
+
+### 7.14 成员管理 — MemberController
+
+基础路径: `/members`
+继承: `BaseController` ✅
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/members` | 创建成员 |
+| GET | `/members/{id}` | 按 ID 获取成员 |
+| GET | `/members/username/{username}` | 按用户名获取成员 |
+| PUT | `/members/{id}` | 更新成员 |
+| DELETE | `/members/{id}` | 删除成员 (软删除) |
+| GET | `/members` | 分页列表 (支持搜索) |
+| GET | `/members/business-unit/{businessUnitId}` | 按业务单元获取成员 |
+
+### 7.15 弹性管理 — ResilienceController
+
+基础路径: `/api/resilience` (注意: 不同于其他控制器的路径)
+继承: `BaseController` ✅
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/resilience/health` | 获取弹性健康状态 (熔断器 + 降级) |
+| POST | `/api/resilience/health-check` | 手动触发健康检查 |
+| POST | `/api/resilience/circuit-breakers/reset` | 重置所有熔断器 |
+| POST | `/api/resilience/emergency-mode/enter` | 进入紧急模式 |
+| POST | `/api/resilience/emergency-mode/exit` | 退出紧急模式 |
 
 ---
 
@@ -985,7 +1044,7 @@ GET /function-units/deployments/{deploymentId}/status
     → 返回 DeployResponse { deploymentId, status, progress, steps[], versionNumber }
 
 DeployResponse.DeployStatus:
-  DEPLOYING | SUCCESS | FAILED | ROLLED_BACK
+  PENDING | DEPLOYING | SUCCESS | FAILED | ROLLED_BACK
 ```
 
 ### 配置
@@ -1184,15 +1243,24 @@ cors:
 admin-center:
   url: ${ADMIN_CENTER_URL:http://localhost:8090}
 
-# 数据源 (PostgreSQL)
 spring:
+  # 排除默认 UserDetailsService 自动配置
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
+  application:
+    name: developer-workstation
+
+  # 数据源 (PostgreSQL)
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/workflow_platform}
     username: ${SPRING_DATASOURCE_USERNAME:platform}
     password: ${SPRING_DATASOURCE_PASSWORD:platform123}
+    driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 10
       minimum-idle: 5
+      idle-timeout: 300000
+      connection-timeout: 20000
 
   # JPA
   jpa:
@@ -1202,7 +1270,16 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
-        jdbc.time_zone: Asia/Shanghai
+        format_sql: true
+        jdbc:
+          time_zone: Asia/Shanghai
+
+  # Jackson 序列化
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
 
   # Redis
   data:
@@ -1210,6 +1287,7 @@ spring:
       host: ${SPRING_REDIS_HOST:localhost}
       port: ${SPRING_REDIS_PORT:6379}
       password: ${SPRING_REDIS_PASSWORD:redis123}
+      timeout: 5000ms
 
   # i18n
   messages:
@@ -1228,20 +1306,47 @@ file:
     dir: ${FILE_UPLOAD_DIR:uploads}
     base-url: ${FILE_UPLOAD_BASE_URL:/api/v1/upload/files}
 
-# JWT 安全
+# 安全配置 (单一 security: 键，包含所有子配置)
 security:
   jwt:
     secret: ${JWT_SECRET:...}           # 必须通过环境变量注入
     expiration: ${JWT_EXPIRATION:86400000}  # 24 小时
-  max-login-attempts: 5
-  lock-duration-minutes: 30
-
-# 权限系统
-security:
+  max-login-attempts: ${MAX_LOGIN_ATTEMPTS:5}
+  lock-duration-minutes: ${LOCK_DURATION_MINUTES:30}
+  # 权限缓存
+  cache:
+    session-timeout-minutes: ${SECURITY_CACHE_SESSION_TIMEOUT:30}
+    max-size: ${SECURITY_CACHE_MAX_SIZE:1000}
+    enabled: ${SECURITY_CACHE_ENABLED:true}
+    cleanup-interval-minutes: ${SECURITY_CACHE_CLEANUP_INTERVAL:15}
+  # 安全数据库配置
+  database:
+    query-timeout-seconds: ${SECURITY_DB_QUERY_TIMEOUT:30}
+    retry-attempts: ${SECURITY_DB_RETRY_ATTEMPTS:2}
+    retry-delay-ms: ${SECURITY_DB_RETRY_DELAY:1000}
+    connection-pooling-enabled: ${SECURITY_DB_CONNECTION_POOLING:true}
+  # 权限系统
   permission:
-    resolution-strategy: DATABASE_FIRST
-    strict-checking: true
-    audit-logging: true
+    resolution-strategy: ${SECURITY_PERMISSION_STRATEGY:DATABASE_FIRST}
+    strict-checking: ${SECURITY_PERMISSION_STRICT:true}
+    audit-logging: ${SECURITY_PERMISSION_AUDIT:true}
+    max-permission-name-length: ${SECURITY_PERMISSION_MAX_NAME_LENGTH:100}
+    max-role-name-length: ${SECURITY_ROLE_MAX_NAME_LENGTH:100}
+  # 限流
+  rate-limit:
+    requests-per-minute: 100
+
+# 工作流引擎
+workflow-engine:
+  url: ${WORKFLOW_ENGINE_URL:http://localhost:8081}
+  enabled: true
+  jwt:
+    secret: ${JWT_SECRET:...}
+
+# JWT 配置 (顶层, AuthController 使用)
+jwt:
+  secret: ${JWT_SECRET:...}
+  expiration: ${JWT_EXPIRATION:86400000}
 
 # N8N AI 生成
 n8n:
@@ -1259,15 +1364,30 @@ ai-generation:
 
 # OpenAPI (生产环境禁用)
 springdoc:
+  api-docs:
+    path: /api-docs
+    enabled: ${SWAGGER_ENABLED:true}
   swagger-ui:
+    path: /swagger-ui.html
     enabled: ${SWAGGER_ENABLED:true}
 
 # 日志
 logging:
   level:
-    root: INFO
-    com.developer: DEBUG
-    org.hibernate.SQL: DEBUG
+    root: ${LOG_LEVEL_ROOT:INFO}
+    com.developer: ${LOG_LEVEL_PLATFORM:DEBUG}
+    org.springframework.security: INFO
+    org.hibernate.SQL: ${LOG_LEVEL_SQL:DEBUG}
+
+# Actuator 端点
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when_authorized
 ```
 
 ### 环境变量速查
@@ -1286,11 +1406,33 @@ logging:
 | `JWT_EXPIRATION` | JWT 有效期 (ms) | 86400000 (24h) |
 | `ENCRYPTION_SECRET_KEY` | AES 加密密钥 | (必须环境变量注入) |
 | `CORS_ALLOWED_ORIGINS` | CORS 白名单 | http://localhost:3000,... |
+| `MAX_LOGIN_ATTEMPTS` | 最大登录尝试次数 | 5 |
+| `LOCK_DURATION_MINUTES` | 登录锁定时长 (分钟) | 30 |
+| `SECURITY_CACHE_SESSION_TIMEOUT` | 权限缓存会话超时 (分钟) | 30 |
+| `SECURITY_CACHE_MAX_SIZE` | 权限缓存最大条目数 | 1000 |
+| `SECURITY_CACHE_ENABLED` | 权限缓存开关 | true |
+| `SECURITY_CACHE_CLEANUP_INTERVAL` | 缓存清理间隔 (分钟) | 15 |
+| `SECURITY_DB_QUERY_TIMEOUT` | 安全查询超时 (秒) | 30 |
+| `SECURITY_DB_RETRY_ATTEMPTS` | 安全查询重试次数 | 2 |
+| `SECURITY_DB_RETRY_DELAY` | 安全查询重试延迟 (ms) | 1000 |
+| `SECURITY_DB_CONNECTION_POOLING` | 安全连接池开关 | true |
+| `SECURITY_PERMISSION_STRATEGY` | 权限解析策略 | DATABASE_FIRST |
+| `SECURITY_PERMISSION_STRICT` | 严格权限检查 | true |
+| `SECURITY_PERMISSION_AUDIT` | 权限审计日志 | true |
+| `SECURITY_PERMISSION_MAX_NAME_LENGTH` | 权限名最大长度 | 100 |
+| `SECURITY_ROLE_MAX_NAME_LENGTH` | 角色名最大长度 | 100 |
+| `WORKFLOW_ENGINE_URL` | 工作流引擎地址 | http://localhost:8081 |
 | `N8N_AI_GENERATION_WEBHOOK_URL` | N8N webhook | http://localhost:5678/webhook/... |
 | `N8N_AI_GENERATION_TIMEOUT` | N8N 超时 (秒) | 120 |
 | `AI_GENERATION_LOCK_TTL` | AI 编辑锁 TTL (秒) | 1800 |
+| `AI_GENERATION_FORCE_UNLOCK_TIMEOUT` | AI 强制解锁超时 (秒) | 60 |
+| `AI_GENERATION_CONTEXT_MAX_SIZE` | AI 上下文最大字节数 | 102400 |
 | `SWAGGER_ENABLED` | Swagger 开关 | true (生产环境设 false) |
 | `FILE_UPLOAD_DIR` | 文件上传目录 | uploads |
+| `FILE_UPLOAD_BASE_URL` | 文件访问基础 URL | /api/v1/upload/files |
+| `LOG_LEVEL_ROOT` | 根日志级别 | INFO |
+| `LOG_LEVEL_PLATFORM` | 平台日志级别 | DEBUG |
+| `LOG_LEVEL_SQL` | SQL 日志级别 | DEBUG |
 
 ---
 
@@ -1320,8 +1462,18 @@ logging:
 | `dw_process_definitions` | ProcessDefinition | 流程定义 |
 | `dw_versions` | Version | 版本快照 |
 | `dw_icons` | Icon | 图标库 |
+| `dw_ai_sessions` | AiSession | AI 会话 |
+| `dw_ai_messages` | AiMessage | AI 对话消息 |
+| `dw_ai_documents` | AiDocument | AI 生成文档 |
+| `dw_operation_logs` | OperationLog | 操作日志 |
+| `dw_function_unit_access` | FunctionUnitAccess | 功能单元访问控制 |
+| `members` | Member | 成员管理 (非 dw_ 前缀) |
+| `sys_users` | User | 用户 (引用 platform-security 实体) |
+| `up_process_instance` | ProcessInstance | 流程实例 (跨模块引用) |
 
 表名前缀: `dw_` = developer-workstation
+
+注意: `Permission` 和 `Role` 实体来自 `platform-security` 模块 (`com.platform.security.entity`)，developer-workstation 通过 Repository 引用但不定义这些实体。
 
 ---
 
@@ -1329,7 +1481,7 @@ logging:
 
 ### 控制器层
 
-以下 10 个控制器未继承 `BaseController`，手动构建 `ResponseEntity.ok(ApiResponse.success(...))`:
+以下 10 个控制器未继承 `BaseController`，手动构建 `ResponseEntity.ok(ApiResponse.success(...))` (总计 15 个控制器，5 个继承 BaseController):
 
 | 控制器 | 风险 | 说明 |
 |--------|------|------|
@@ -1378,6 +1530,13 @@ logging:
 
 - `function_unit_version_id` 的 FK 指向 `dw_function_units(id)` 而非 `dw_versions(id)` — 这是设计决策，非 bug
 
+### ActionDefinition.action_type 列长度不一致
+
+- `developer-workstation` 中 `action_type` 为 `VARCHAR(20)`
+- `admin-center` 和 `user-portal` 中 `action_type` 为 `VARCHAR(50)`
+- 当前最长枚举值 `PROCESS_SUBMIT` (14 字符) 在 20 字符限制内，暂无问题
+- 建议统一为 `VARCHAR(50)` 以保持跨模块一致性
+
 ---
 
 ## 附录 A: Repository 清单
@@ -1399,9 +1558,9 @@ logging:
 | AiDocumentRepository | AiDocument | findByFunctionUnitIdAndDocumentType |
 | FunctionUnitAccessRepository | FunctionUnitAccess | 访问控制 |
 | MemberRepository | Member | 成员管理 |
-| UserRepository | User | 用户查询 |
-| RoleRepository | Role | 角色查询 |
-| PermissionRepository | Permission | 权限查询 |
+| UserRepository | User | 用户查询 (实体来自 platform-security) |
+| RoleRepository | Role | 角色查询 (实体来自 platform-security) |
+| PermissionRepository | Permission | 权限查询 (实体来自 platform-security) |
 | OperationLogRepository | OperationLog | 操作日志 |
 | ProcessInstanceRepository | ProcessInstance | 流程实例 |
 
@@ -1420,7 +1579,7 @@ logging:
 | ExportImportComponent | ExportImportComponentImpl | 导入导出、冲突检查 |
 | IconLibraryComponent | IconLibraryComponentImpl | 图标上传、搜索、使用检查 |
 | AiGenerationComponent | AiGenerationComponentImpl | AI 对话、锁管理、文档、数据应用 |
-| VersionComponent | VersionComponentImpl | 版本历史查询 |
+| VersionComponent | VersionComponentImpl | 版本历史查询 (注意: VersionController 不使用此 Component，而是直接注入 DeploymentService, VersionService, RollbackService, UIService) |
 
 ---
 
@@ -1429,30 +1588,33 @@ logging:
 ```
 frontend/developer-workstation/src/
 ├── api/
+│   ├── index.ts             # Axios 实例配置
 │   ├── functionUnit.ts      # 功能单元 API
-│   ├── tableDesign.ts       # 表设计 API
-│   ├── formDesign.ts        # 表单设计 API
-│   ├── actionDesign.ts      # 动作设计 API
-│   ├── processDesign.ts     # 流程设计 API
-│   ├── deployment.ts        # 部署 API
-│   ├── version.ts           # 版本 API
+│   ├── aiGeneration.ts      # AI 生成 API
 │   ├── icon.ts              # 图标 API
-│   └── aiGeneration.ts      # AI 生成 API
+│   ├── auth.ts              # 认证 API
+│   ├── adminCenter.ts       # admin-center 跨服务调用
+│   ├── n8n.ts               # N8N 工作流 API
+│   └── user.ts              # 用户 API
 ├── views/
 │   ├── function-unit/       # 功能单元列表/详情
-│   ├── table-design/        # 表设计器
-│   ├── form-design/         # 表单设计器
-│   ├── action-design/       # 动作设计器
-│   ├── process-design/      # 流程设计器 (BPMN)
-│   └── version/             # 版本管理
+│   ├── icon/                # 图标管理
+│   ├── profile/             # 用户资料
+│   └── Login.vue            # 登录页
 ├── components/
 │   ├── ai/                  # AI 对话面板
+│   ├── debug/               # 调试工具
 │   ├── designer/            # 设计器公共组件
-│   └── icon/                # 图标选择器
+│   ├── function-unit/       # 功能单元相关组件
+│   ├── icon/                # 图标选择器
+│   ├── version/             # 版本管理组件
+│   └── UserProfileDropdown.vue  # 用户下拉菜单
 ├── composables/
-│   ├── useAiSession.ts      # AI 会话管理
 │   ├── useAiChat.ts         # AI 对话
-│   └── useFunctionUnit.ts   # 功能单元状态
+│   ├── useAiEvents.ts       # AI SSE 事件
+│   ├── useAiLock.ts         # AI 编辑锁
+│   ├── useAiSession.ts      # AI 会话管理
+│   └── useSidebarState.ts   # 侧边栏状态
 ├── stores/
 │   └── functionUnit.ts      # Pinia store
 └── i18n/

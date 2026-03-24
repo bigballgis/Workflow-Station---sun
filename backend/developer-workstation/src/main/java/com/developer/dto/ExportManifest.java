@@ -81,6 +81,7 @@ public class ExportManifest {
         private List<String> tables;
         private List<String> forms;
         private List<String> actions;
+        private List<String> decisions;
     }
     
     @Data

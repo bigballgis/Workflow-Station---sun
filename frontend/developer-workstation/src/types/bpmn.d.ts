@@ -82,7 +82,7 @@ export interface UserTaskProperties {
 }
 
 export interface ServiceTaskProperties {
-  serviceType?: 'http' | 'script' | 'message' | 'n8n'
+  serviceType?: 'http' | 'script' | 'message' | 'n8n' | 'dmn'
   httpUrl?: string
   httpMethod?: 'GET' | 'POST' | 'PUT' | 'DELETE'
   httpHeaders?: Record<string, string>
@@ -93,6 +93,32 @@ export interface ServiceTaskProperties {
   retryEnabled?: boolean
   retryCount?: number
   retryInterval?: string
+  decisionTableReferenceKey?: string
+  fallbackToDefaultTenant?: boolean
+}
+
+// DMN 决策表类型定义
+export interface DecisionColumnDef {
+  id: string
+  label: string
+  expression?: string
+  typeRef?: string
+}
+
+export interface DecisionTableProperties {
+  decisionKey: string
+  decisionName: string
+  hitPolicy: 'FIRST' | 'UNIQUE' | 'ANY' | 'PRIORITY' | 'COLLECT' | 'RULE_ORDER' | 'OUTPUT_ORDER'
+  inputColumns: DecisionColumnDef[]
+  outputColumns: DecisionColumnDef[]
+  rules: DecisionRule[]
+}
+
+export interface DecisionRule {
+  id: string
+  inputEntries: string[]
+  outputEntries: string[]
+  description?: string
 }
 
 export interface GatewayProperties {

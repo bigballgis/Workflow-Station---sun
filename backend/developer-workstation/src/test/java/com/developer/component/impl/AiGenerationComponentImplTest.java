@@ -51,7 +51,7 @@ class AiGenerationComponentImplTest {
 
     @BeforeEach
     void setUp() {
-        component = new AiGenerationComponentImpl(aiGenerationService, aiLockService, aiValidationService, aiWriteService);
+        component = new AiGenerationComponentImpl(aiGenerationService, aiLockService, aiValidationService, aiWriteService, Runnable::run);
         sessionUuid = UUID.randomUUID();
         session = AiSession.builder()
                 .sessionId(sessionUuid).functionUnitId(1L).userId("user1")

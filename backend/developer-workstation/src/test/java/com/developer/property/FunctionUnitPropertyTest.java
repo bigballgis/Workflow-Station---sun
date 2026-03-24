@@ -30,11 +30,13 @@ public class FunctionUnitPropertyTest {
         TableDefinitionRepository tableRepo = mock(TableDefinitionRepository.class);
         FormDefinitionRepository formRepo = mock(FormDefinitionRepository.class);
         ActionDefinitionRepository actionRepo = mock(ActionDefinitionRepository.class);
+        DecisionDefinitionRepository decisionRepo = mock(DecisionDefinitionRepository.class);
         VersionRepository versionRepo = mock(VersionRepository.class);
         IconRepository iconRepo = mock(IconRepository.class);
         ObjectMapper objectMapper = new ObjectMapper();
+        org.springframework.web.client.RestTemplate restTemplate = mock(org.springframework.web.client.RestTemplate.class);
         return new FunctionUnitComponentImpl(
-                repository, processRepo, tableRepo, formRepo, actionRepo, versionRepo, iconRepo, objectMapper);
+                repository, processRepo, tableRepo, formRepo, actionRepo, decisionRepo, versionRepo, iconRepo, objectMapper, restTemplate);
     }
     
     /**

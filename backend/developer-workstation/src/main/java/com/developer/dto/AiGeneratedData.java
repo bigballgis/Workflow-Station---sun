@@ -23,6 +23,8 @@ public class AiGeneratedData {
 
     private List<Map<String, Object>> actionDefinitions;
 
+    private List<Map<String, Object>> decisionDefinitions;
+
     private Map<String, Object> processDefinition;
 
     private Map<String, Object> icon;

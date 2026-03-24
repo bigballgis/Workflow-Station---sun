@@ -80,9 +80,11 @@ public class FunctionUnitIconPropertyTest {
             return fu;
         });
         
+        DecisionDefinitionRepository decisionRepo = mock(DecisionDefinitionRepository.class);
+        org.springframework.web.client.RestTemplate restTemplate = mock(org.springframework.web.client.RestTemplate.class);
         FunctionUnitComponent component = new FunctionUnitComponentImpl(
                 functionUnitRepository, processRepo, tableRepo, formRepo, 
-                actionRepo, versionRepo, iconRepository, objectMapper);
+                actionRepo, decisionRepo, versionRepo, iconRepository, objectMapper, restTemplate);
         
         // Create function unit with icon
         FunctionUnitRequest request = new FunctionUnitRequest();
@@ -130,9 +132,11 @@ public class FunctionUnitIconPropertyTest {
             return fu;
         });
         
+        DecisionDefinitionRepository decisionRepo = mock(DecisionDefinitionRepository.class);
+        org.springframework.web.client.RestTemplate restTemplate = mock(org.springframework.web.client.RestTemplate.class);
         FunctionUnitComponent component = new FunctionUnitComponentImpl(
                 functionUnitRepository, processRepo, tableRepo, formRepo, 
-                actionRepo, versionRepo, iconRepository, objectMapper);
+                actionRepo, decisionRepo, versionRepo, iconRepository, objectMapper, restTemplate);
         
         // Create function unit without icon
         FunctionUnitRequest request = new FunctionUnitRequest();

@@ -74,6 +74,11 @@ flowable:
   database-schema-update: ${FLOWABLE_SCHEMA_UPDATE:true}
   async-executor-activate: true
   history-level: full
+  dmn:
+    enabled: true
+    resource-suffixes: .dmn
+    deployment-name: dmn-deployment
+    strict-mode: false
 
 # Admin Center Configuration
 admin-center:

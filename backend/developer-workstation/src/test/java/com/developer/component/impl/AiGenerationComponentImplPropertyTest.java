@@ -41,7 +41,7 @@ class AiGenerationComponentImplPropertyTest {
         AiWriteService aiWriteService = mock(AiWriteService.class);
 
         AiGenerationComponentImpl component = new AiGenerationComponentImpl(
-                aiGenerationService, aiLockService, aiValidationService, aiWriteService);
+                aiGenerationService, aiLockService, aiValidationService, aiWriteService, Runnable::run);
 
         UUID sessionUuid = UUID.randomUUID();
         AiSession session = AiSession.builder()
@@ -89,7 +89,7 @@ class AiGenerationComponentImplPropertyTest {
         AiWriteService aiWriteService = mock(AiWriteService.class);
 
         AiGenerationComponentImpl component = new AiGenerationComponentImpl(
-                aiGenerationService, aiLockService, aiValidationService, aiWriteService);
+                aiGenerationService, aiLockService, aiValidationService, aiWriteService, Runnable::run);
 
         UUID sessionUuid = UUID.randomUUID();
         AiSession session = AiSession.builder()
@@ -140,7 +140,7 @@ class AiGenerationComponentImplPropertyTest {
         AiWriteService aiWriteService = mock(AiWriteService.class);
 
         AiGenerationComponentImpl component = new AiGenerationComponentImpl(
-                aiGenerationService, aiLockService, aiValidationService, aiWriteService);
+                aiGenerationService, aiLockService, aiValidationService, aiWriteService, Runnable::run);
 
         UUID sessionUuid = UUID.randomUUID();
         AiSession session = AiSession.builder()

@@ -12,6 +12,8 @@ declare module 'vue' {
     ChatDialog: typeof import('./components/ai/ChatDialog.vue')['default']
     ChatMessage: typeof import('./components/ai/ChatMessage.vue')['default']
     ColorSwatchPreview: typeof import('./components/designer/ColorSwatchPreview.vue')['default']
+    DecisionDesigner: typeof import('./components/designer/DecisionDesigner.vue')['default']
+    DecisionList: typeof import('./components/designer/DecisionList.vue')['default']
     DocumentEditor: typeof import('./components/ai/DocumentEditor.vue')['default']
     DocumentPanel: typeof import('./components/ai/DocumentPanel.vue')['default']
     ElAlert: typeof import('element-plus/es')['ElAlert']

@@ -33,7 +33,8 @@ public class ExportImportPropertyTest {
         ActionDefinitionRepository actionRepo = mock(ActionDefinitionRepository.class);
         ObjectMapper objectMapper = new ObjectMapper();
         ExportImportComponent component = new ExportImportComponentImpl(
-                repository, processRepo, tableRepo, formRepo, actionRepo, objectMapper);
+                repository, processRepo, tableRepo, formRepo, actionRepo,
+                mock(DecisionDefinitionRepository.class), mock(com.developer.validation.DmnXmlParser.class), objectMapper);
         
         // 创建模拟功能单元
         FunctionUnit fu = new FunctionUnit();
@@ -63,7 +64,8 @@ public class ExportImportPropertyTest {
         ActionDefinitionRepository actionRepo = mock(ActionDefinitionRepository.class);
         ObjectMapper objectMapper = new ObjectMapper();
         ExportImportComponent component = new ExportImportComponentImpl(
-                repository, processRepo, tableRepo, formRepo, actionRepo, objectMapper);
+                repository, processRepo, tableRepo, formRepo, actionRepo,
+                mock(DecisionDefinitionRepository.class), mock(com.developer.validation.DmnXmlParser.class), objectMapper);
         
         // 模拟已存在同名功能单元
         when(repository.existsByName(name)).thenReturn(true);

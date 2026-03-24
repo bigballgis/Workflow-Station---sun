@@ -1,9 +1,12 @@
 package com.developer.component.impl;
 
 import com.developer.component.VersionComponent;
-import com.developer.entity.FunctionUnit;
-import com.developer.entity.Version;
+import com.developer.entity.*;
+import com.developer.enums.ActionType;
+import com.developer.enums.DataType;
+import com.developer.enums.FormType;
 import com.developer.enums.FunctionUnitStatus;
+import com.developer.enums.TableType;
 import com.developer.exception.BusinessException;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.FunctionUnitRepository;
@@ -17,6 +20,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -207,24 +211,198 @@ public class VersionComponentImpl implements VersionComponent {
     private byte[] createSnapshot(FunctionUnit functionUnit) throws Exception {
         Map<String, Object> snapshot = new HashMap<>();
         snapshot.put("name", functionUnit.getName());
+        snapshot.put("code", functionUnit.getCode());
         snapshot.put("description", functionUnit.getDescription());
-        snapshot.put("status", functionUnit.getStatus().name());
+        snapshot.put("status", functionUnit.getStatus() != null ? functionUnit.getStatus().name() : null);
         
         if (functionUnit.getProcessDefinition() != null) {
             snapshot.put("processXml", functionUnit.getProcessDefinition().getBpmnXml());
         }
         
-        // TODO: 添加表、表单、动作的快照
+        // Snapshot table definitions with fields
+        List<Map<String, Object>> tableSnapshots = new ArrayList<>();
+        for (TableDefinition table : functionUnit.getTableDefinitions()) {
+            Map<String, Object> tableSnap = new HashMap<>();
+            tableSnap.put("tableName", table.getTableName());
+            tableSnap.put("tableType", table.getTableType() != null ? table.getTableType().name() : null);
+            tableSnap.put("tableDisplayName", table.getTableDisplayName());
+            tableSnap.put("description", table.getDescription());
+            
+            List<Map<String, Object>> fieldSnapshots = new ArrayList<>();
+            for (FieldDefinition field : table.getFieldDefinitions()) {
+                Map<String, Object> fieldSnap = new HashMap<>();
+                fieldSnap.put("fieldName", field.getFieldName());
+                fieldSnap.put("dataType", field.getDataType() != null ? field.getDataType().name() : null);
+                fieldSnap.put("length", field.getLength());
+                fieldSnap.put("precision", field.getPrecision());
+                fieldSnap.put("scale", field.getScale());
+                fieldSnap.put("nullable", field.getNullable());
+                fieldSnap.put("defaultValue", field.getDefaultValue());
+                fieldSnap.put("isPrimaryKey", field.getIsPrimaryKey());
+                fieldSnap.put("isUnique", field.getIsUnique());
+                fieldSnap.put("description", field.getDescription());
+                fieldSnap.put("sortOrder", field.getSortOrder());
+                fieldSnapshots.add(fieldSnap);
+            }
+            tableSnap.put("fieldDefinitions", fieldSnapshots);
+            tableSnapshots.add(tableSnap);
+        }
+        snapshot.put("tableDefinitions", tableSnapshots);
+        
+        // Snapshot form definitions
+        List<Map<String, Object>> formSnapshots = new ArrayList<>();
+        for (FormDefinition form : functionUnit.getFormDefinitions()) {
+            Map<String, Object> formSnap = new HashMap<>();
+            formSnap.put("formName", form.getFormName());
+            formSnap.put("formType", form.getFormType() != null ? form.getFormType().name() : null);
+            formSnap.put("configJson", form.getConfigJson());
+            formSnap.put("description", form.getDescription());
+            formSnap.put("boundTableName", form.getBoundTableName());
+            formSnapshots.add(formSnap);
+        }
+        snapshot.put("formDefinitions", formSnapshots);
+        
+        // Snapshot action definitions
+        List<Map<String, Object>> actionSnapshots = new ArrayList<>();
+        for (ActionDefinition action : functionUnit.getActionDefinitions()) {
+            Map<String, Object> actionSnap = new HashMap<>();
+            actionSnap.put("actionName", action.getActionName());
+            actionSnap.put("actionType", action.getActionType() != null ? action.getActionType().name() : null);
+            actionSnap.put("configJson", action.getConfigJson());
+            actionSnap.put("icon", action.getIcon());
+            actionSnap.put("buttonColor", action.getButtonColor());
+            actionSnap.put("description", action.getDescription());
+            actionSnap.put("isDefault", action.getIsDefault());
+            actionSnapshots.add(actionSnap);
+        }
+        snapshot.put("actionDefinitions", actionSnapshots);
+        
+        // Snapshot decision definitions
+        List<Map<String, Object>> decisionSnapshots = new ArrayList<>();
+        for (DecisionDefinition decision : functionUnit.getDecisionDefinitions()) {
+            Map<String, Object> decisionSnap = new HashMap<>();
+            decisionSnap.put("decisionKey", decision.getDecisionKey());
+            decisionSnap.put("decisionName", decision.getDecisionName());
+            decisionSnap.put("dmnXml", decision.getDmnXml());
+            decisionSnap.put("hitPolicy", decision.getHitPolicy());
+            decisionSnap.put("description", decision.getDescription());
+            decisionSnapshots.add(decisionSnap);
+        }
+        snapshot.put("decisionDefinitions", decisionSnapshots);
         
         return objectMapper.writeValueAsBytes(snapshot);
     }
     
+    @SuppressWarnings("unchecked")
     private void restoreFromSnapshot(FunctionUnit functionUnit, Map<String, Object> snapshot) {
         if (snapshot.containsKey("description")) {
             functionUnit.setDescription((String) snapshot.get("description"));
         }
         
-        // TODO: 恢复表、表单、动作
+        // Restore process XML
+        if (snapshot.containsKey("processXml")) {
+            String processXml = (String) snapshot.get("processXml");
+            if (processXml != null && functionUnit.getProcessDefinition() != null) {
+                functionUnit.getProcessDefinition().setBpmnXml(processXml);
+            }
+        }
+        
+        // Restore table definitions
+        if (snapshot.containsKey("tableDefinitions")) {
+            functionUnit.getTableDefinitions().clear();
+            List<Map<String, Object>> tableSnapshots = (List<Map<String, Object>>) snapshot.get("tableDefinitions");
+            if (tableSnapshots != null) {
+                for (Map<String, Object> tableSnap : tableSnapshots) {
+                    TableDefinition table = TableDefinition.builder()
+                            .functionUnit(functionUnit)
+                            .tableName((String) tableSnap.get("tableName"))
+                            .tableType(tableSnap.get("tableType") != null ? TableType.valueOf((String) tableSnap.get("tableType")) : null)
+                            .tableDisplayName((String) tableSnap.get("tableDisplayName"))
+                            .description((String) tableSnap.get("description"))
+                            .build();
+                    
+                    List<Map<String, Object>> fieldSnapshots = (List<Map<String, Object>>) tableSnap.get("fieldDefinitions");
+                    if (fieldSnapshots != null) {
+                        for (Map<String, Object> fieldSnap : fieldSnapshots) {
+                            FieldDefinition field = FieldDefinition.builder()
+                                    .tableDefinition(table)
+                                    .fieldName((String) fieldSnap.get("fieldName"))
+                                    .dataType(fieldSnap.get("dataType") != null ? DataType.valueOf((String) fieldSnap.get("dataType")) : null)
+                                    .length(fieldSnap.get("length") != null ? ((Number) fieldSnap.get("length")).intValue() : null)
+                                    .precision(fieldSnap.get("precision") != null ? ((Number) fieldSnap.get("precision")).intValue() : null)
+                                    .scale(fieldSnap.get("scale") != null ? ((Number) fieldSnap.get("scale")).intValue() : null)
+                                    .nullable(fieldSnap.get("nullable") != null ? (Boolean) fieldSnap.get("nullable") : true)
+                                    .defaultValue((String) fieldSnap.get("defaultValue"))
+                                    .isPrimaryKey(fieldSnap.get("isPrimaryKey") != null ? (Boolean) fieldSnap.get("isPrimaryKey") : false)
+                                    .isUnique(fieldSnap.get("isUnique") != null ? (Boolean) fieldSnap.get("isUnique") : false)
+                                    .description((String) fieldSnap.get("description"))
+                                    .sortOrder(fieldSnap.get("sortOrder") != null ? ((Number) fieldSnap.get("sortOrder")).intValue() : 0)
+                                    .build();
+                            table.getFieldDefinitions().add(field);
+                        }
+                    }
+                    functionUnit.getTableDefinitions().add(table);
+                }
+            }
+        }
+        
+        // Restore form definitions
+        if (snapshot.containsKey("formDefinitions")) {
+            functionUnit.getFormDefinitions().clear();
+            List<Map<String, Object>> formSnapshots = (List<Map<String, Object>>) snapshot.get("formDefinitions");
+            if (formSnapshots != null) {
+                for (Map<String, Object> formSnap : formSnapshots) {
+                    FormDefinition form = FormDefinition.builder()
+                            .functionUnit(functionUnit)
+                            .formName((String) formSnap.get("formName"))
+                            .formType(formSnap.get("formType") != null ? FormType.valueOf((String) formSnap.get("formType")) : null)
+                            .configJson(formSnap.get("configJson") != null ? (Map<String, Object>) formSnap.get("configJson") : null)
+                            .description((String) formSnap.get("description"))
+                            .build();
+                    functionUnit.getFormDefinitions().add(form);
+                }
+            }
+        }
+        
+        // Restore action definitions
+        if (snapshot.containsKey("actionDefinitions")) {
+            functionUnit.getActionDefinitions().clear();
+            List<Map<String, Object>> actionSnapshots = (List<Map<String, Object>>) snapshot.get("actionDefinitions");
+            if (actionSnapshots != null) {
+                for (Map<String, Object> actionSnap : actionSnapshots) {
+                    ActionDefinition action = ActionDefinition.builder()
+                            .functionUnit(functionUnit)
+                            .actionName((String) actionSnap.get("actionName"))
+                            .actionType(actionSnap.get("actionType") != null ? ActionType.valueOf((String) actionSnap.get("actionType")) : null)
+                            .configJson(actionSnap.get("configJson") != null ? (Map<String, Object>) actionSnap.get("configJson") : null)
+                            .icon((String) actionSnap.get("icon"))
+                            .buttonColor((String) actionSnap.get("buttonColor"))
+                            .description((String) actionSnap.get("description"))
+                            .isDefault(actionSnap.get("isDefault") != null ? (Boolean) actionSnap.get("isDefault") : false)
+                            .build();
+                    functionUnit.getActionDefinitions().add(action);
+                }
+            }
+        }
+        
+        // Restore decision definitions
+        if (snapshot.containsKey("decisionDefinitions")) {
+            functionUnit.getDecisionDefinitions().clear();
+            List<Map<String, Object>> decisionSnapshots = (List<Map<String, Object>>) snapshot.get("decisionDefinitions");
+            if (decisionSnapshots != null) {
+                for (Map<String, Object> decisionSnap : decisionSnapshots) {
+                    DecisionDefinition decision = DecisionDefinition.builder()
+                            .functionUnit(functionUnit)
+                            .decisionKey((String) decisionSnap.get("decisionKey"))
+                            .decisionName((String) decisionSnap.get("decisionName"))
+                            .dmnXml((String) decisionSnap.get("dmnXml"))
+                            .hitPolicy((String) decisionSnap.get("hitPolicy"))
+                            .description((String) decisionSnap.get("description"))
+                            .build();
+                    functionUnit.getDecisionDefinitions().add(decision);
+                }
+            }
+        }
     }
     
     private Map<String, Object> findDifferences(Map<String, Object> map1, Map<String, Object> map2) {

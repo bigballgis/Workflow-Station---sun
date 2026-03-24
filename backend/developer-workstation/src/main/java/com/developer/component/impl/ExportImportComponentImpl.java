@@ -11,6 +11,7 @@ import com.developer.exception.BusinessException;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.*;
 import com.developer.util.XmlEncodingUtil;
+import com.developer.validation.DmnXmlParser;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
@@ -49,6 +50,8 @@ public class ExportImportComponentImpl implements ExportImportComponent {
     private final TableDefinitionRepository tableDefinitionRepository;
     private final FormDefinitionRepository formDefinitionRepository;
     private final ActionDefinitionRepository actionDefinitionRepository;
+    private final DecisionDefinitionRepository decisionDefinitionRepository;
+    private final DmnXmlParser dmnXmlParser;
     private final ObjectMapper objectMapper;
     
     @Value("${platform.version:1.0.0}")
@@ -144,6 +147,19 @@ public class ExportImportComponentImpl implements ExportImportComponent {
                 actionIndex++;
             }
             
+            // 导出决策定义（DMN XML 格式）
+            List<String> decisionFiles = new ArrayList<>();
+            int decisionIndex = 0;
+            for (DecisionDefinition decision : functionUnit.getDecisionDefinitions()) {
+                String fileName = "decisions/decision_" + decisionIndex + ".dmn";
+                byte[] data = decision.getDmnXml() != null ? 
+                        decision.getDmnXml().getBytes(StandardCharsets.UTF_8) : new byte[0];
+                fileContents.put(fileName, data);
+                addZipEntry(zos, fileName, data);
+                decisionFiles.add(fileName);
+                decisionIndex++;
+            }
+            
             // 构建 manifest
             ExportManifest.IconInfo iconInfo = null;
             if (functionUnit.getIcon() != null) {
@@ -170,6 +186,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
                             .tables(tableFiles)
                             .forms(formFiles)
                             .actions(actionFiles)
+                            .decisions(decisionFiles)
                             .build())
                     .dependencies(new ArrayList<>())
                     .icon(iconInfo)
@@ -314,6 +331,15 @@ public class ExportImportComponentImpl implements ExportImportComponent {
             }
         }
         
+        // 导入决策定义（DMN XML）
+        if (packageData.containsKey("decisions")) {
+            @SuppressWarnings("unchecked")
+            List<String> decisions = (List<String>) packageData.get("decisions");
+            for (String dmnXml : decisions) {
+                importDecision(functionUnit, dmnXml);
+            }
+        }
+        
         result.put("status", "SUCCESS");
         result.put("functionUnitId", functionUnit.getId());
         result.put("name", functionUnit.getName());
@@ -391,6 +417,53 @@ public class ExportImportComponentImpl implements ExportImportComponent {
                 .configJson(configJsonMap)
                 .build();
         actionDefinitionRepository.save(action);
+    }
+
+    /**
+     * 导入决策定义（从 DMN XML）
+     * 使用 DmnXmlParser 提取 decisionKey、hitPolicy，从 XML decision 元素提取 name
+     * 冲突策略: 同一 functionUnit 下相同 decisionKey 则覆盖
+     */
+    private void importDecision(FunctionUnit functionUnit, String dmnXml) {
+        if (dmnXml == null || dmnXml.isBlank()) {
+            log.warn("Skipping empty DMN XML during import");
+            return;
+        }
+
+        String decisionKey = dmnXmlParser.extractDecisionKey(dmnXml);
+        if (decisionKey == null || decisionKey.isBlank()) {
+            log.warn("Skipping DMN XML without decision key during import");
+            return;
+        }
+
+        String hitPolicy = dmnXmlParser.extractHitPolicy(dmnXml);
+
+        // Extract decision name from the model
+        String decisionName = null;
+        try {
+            var model = dmnXmlParser.parseToModel(dmnXml);
+            if (model != null && model.getDecisionName() != null) {
+                decisionName = model.getDecisionName();
+            }
+        } catch (Exception e) {
+            log.warn("Failed to parse decision name from DMN XML for key {}: {}", decisionKey, e.getMessage());
+        }
+
+        // Handle conflict: overwrite if same decisionKey exists in this functionUnit
+        List<DecisionDefinition> existing = decisionDefinitionRepository.findByFunctionUnitId(functionUnit.getId());
+        existing.stream()
+                .filter(d -> decisionKey.equals(d.getDecisionKey()))
+                .findFirst()
+                .ifPresent(d -> decisionDefinitionRepository.deleteById(d.getId()));
+
+        DecisionDefinition decision = DecisionDefinition.builder()
+                .functionUnit(functionUnit)
+                .decisionKey(decisionKey)
+                .decisionName(decisionName)
+                .dmnXml(dmnXml)
+                .hitPolicy(hitPolicy)
+                .build();
+        decisionDefinitionRepository.save(decision);
     }
 
     @Override
@@ -537,6 +610,15 @@ public class ExportImportComponentImpl implements ExportImportComponent {
                 }
             }
             result.put("actions", actions);
+            
+            // 解析决策定义（DMN XML 文件）
+            List<String> decisions = new ArrayList<>();
+            for (String fileName : rawFiles.keySet()) {
+                if (fileName.startsWith("decisions/") && fileName.endsWith(".dmn")) {
+                    decisions.add(new String(rawFiles.get(fileName), StandardCharsets.UTF_8));
+                }
+            }
+            result.put("decisions", decisions);
             
             // 保存校验和用于验证
             if (rawFiles.containsKey("checksum.sha256")) {

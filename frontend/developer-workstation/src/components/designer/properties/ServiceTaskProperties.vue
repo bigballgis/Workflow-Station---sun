@@ -25,6 +25,7 @@
               <el-option :label="t('properties.serviceTypeScript')" value="script" />
               <el-option :label="t('properties.serviceTypeMessage')" value="message" />
               <el-option :label="t('properties.serviceTypeN8n')" value="n8n" />
+              <el-option :label="t('properties.serviceTypeDmn')" value="dmn" />
             </el-select>
           </el-form-item>
           
@@ -93,6 +94,16 @@
               :element="element"
             />
           </template>
+
+          <!-- DMN config -->
+          <template v-if="serviceType === 'dmn'">
+            <el-form-item :label="t('properties.dmnDecisionKey')">
+              <el-input v-model="dmnDecisionKey" @change="updateExtProp('decisionTableReferenceKey', dmnDecisionKey)" :placeholder="t('properties.dmnDecisionKeyPlaceholder')" />
+            </el-form-item>
+            <el-form-item :label="t('properties.dmnFallbackToDefaultTenant')">
+              <el-switch v-model="dmnFallbackToDefaultTenant" @change="updateExtProp('fallbackToDefaultTenant', dmnFallbackToDefaultTenant)" />
+            </el-form-item>
+          </template>
         </el-form>
       </el-collapse-item>
       
@@ -143,7 +154,7 @@ const activeGroups = ref(['basic', 'service'])
 const taskName = ref('')
 const taskDescription = ref('')
 
-const serviceType = ref<'http' | 'script' | 'message' | 'n8n'>('http')
+const serviceType = ref<'http' | 'script' | 'message' | 'n8n' | 'dmn'>('http')
 
 const n8nPanelRef = ref<InstanceType<typeof N8nTaskPropertiesPanel> | null>(null)
 
@@ -162,6 +173,9 @@ const messagePayload = ref('')
 const retryEnabled = ref(false)
 const retryCount = ref(3)
 const retryInterval = ref('PT5M')
+
+const dmnDecisionKey = ref('')
+const dmnFallbackToDefaultTenant = ref(false)
 
 const basicProps = computed(() => getBasicProperties(props.element))
 
@@ -186,6 +200,8 @@ function loadProperties() {
   retryEnabled.value = ext.retryEnabled || false
   retryCount.value = ext.retryCount || 3
   retryInterval.value = ext.retryInterval || 'PT5M'
+  dmnDecisionKey.value = ext.decisionTableReferenceKey || ''
+  dmnFallbackToDefaultTenant.value = ext.fallbackToDefaultTenant || false
 }
 
 function updateBasicProp(name: string, value: any) {

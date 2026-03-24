@@ -32,7 +32,7 @@ public class FormDesignPropertyTest {
         FormTableBindingRepository formTableBindingRepository = mock(FormTableBindingRepository.class);
         ObjectMapper objectMapper = new ObjectMapper();
         FormDesignComponent component = new FormDesignComponentImpl(
-                repository, functionUnitRepository, tableDefinitionRepository, formTableBindingRepository, objectMapper);
+                repository, functionUnitRepository, tableDefinitionRepository, formTableBindingRepository, objectMapper, mock(com.platform.common.i18n.I18nService.class));
         
         assertThat(component).isNotNull();
         assertThat(config).isNotNull();

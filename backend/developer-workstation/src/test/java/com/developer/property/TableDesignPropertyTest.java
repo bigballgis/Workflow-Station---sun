@@ -34,7 +34,7 @@ public class TableDesignPropertyTest {
         FormTableBindingRepository formTableBindingRepo = mock(FormTableBindingRepository.class);
         
         TableDesignComponent component = new TableDesignComponentImpl(
-                tableRepo, fieldRepo, fkRepo, functionUnitRepo, formRepo, formTableBindingRepo);
+                tableRepo, fieldRepo, fkRepo, functionUnitRepo, formRepo, formTableBindingRepo, mock(com.platform.common.i18n.I18nService.class));
         
         assertThat(component).isNotNull();
         assertThat(tableName).matches("tbl_[a-z]+");
@@ -57,7 +57,7 @@ public class TableDesignPropertyTest {
         FormTableBindingRepository formTableBindingRepo = mock(FormTableBindingRepository.class);
         
         TableDesignComponent component = new TableDesignComponentImpl(
-                tableRepo, fieldRepo, fkRepo, functionUnitRepo, formRepo, formTableBindingRepo);
+                tableRepo, fieldRepo, fkRepo, functionUnitRepo, formRepo, formTableBindingRepo, mock(com.platform.common.i18n.I18nService.class));
         
         assertThat(component).isNotNull();
         assertThat(dialect).isNotNull();

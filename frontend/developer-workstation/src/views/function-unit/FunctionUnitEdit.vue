@@ -56,6 +56,9 @@
         <el-tab-pane :label="t('functionUnit.actionDesign')" name="actions">
           <ActionDesigner v-if="activeTab === 'actions'" :function-unit-id="functionUnitId" />
         </el-tab-pane>
+        <el-tab-pane :label="t('functionUnit.decisions')" name="decisions">
+          <DecisionList v-if="activeTab === 'decisions'" :function-unit-id="functionUnitId" />
+        </el-tab-pane>
         <el-tab-pane :label="t('version.title')" name="versions">
           <VersionManager v-if="activeTab === 'versions'" :function-unit-id="functionUnitId" />
         </el-tab-pane>
@@ -225,6 +228,7 @@ import ProcessDesigner from '@/components/designer/ProcessDesigner.vue'
 import TableDesigner from '@/components/designer/TableDesigner.vue'
 import FormDesigner from '@/components/designer/FormDesigner.vue'
 import ActionDesigner from '@/components/designer/ActionDesigner.vue'
+import DecisionList from '@/components/designer/DecisionList.vue'
 import VersionManager from '@/components/version/VersionManager.vue'
 import IconPreview from '@/components/icon/IconPreview.vue'
 import IconSelector from '@/components/icon/IconSelector.vue'

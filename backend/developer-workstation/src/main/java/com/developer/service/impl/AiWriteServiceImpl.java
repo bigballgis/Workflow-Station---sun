@@ -51,6 +51,7 @@ public class AiWriteServiceImpl implements AiWriteService {
         writeForeignKeys(generatedData, tableMap);
         writeFormDefinitions(functionUnit, generatedData, tableMap);
         writeActionDefinitions(functionUnit, generatedData);
+        writeDecisionDefinitions(functionUnit, generatedData);
         writeProcessDefinition(functionUnit, generatedData);
 
         // Handle icon matching/creation before saving
@@ -73,13 +74,15 @@ public class AiWriteServiceImpl implements AiWriteService {
         return functionUnit.getProcessDefinition() != null
                 || (functionUnit.getTableDefinitions() != null && !functionUnit.getTableDefinitions().isEmpty())
                 || (functionUnit.getFormDefinitions() != null && !functionUnit.getFormDefinitions().isEmpty())
-                || (functionUnit.getActionDefinitions() != null && !functionUnit.getActionDefinitions().isEmpty());
+                || (functionUnit.getActionDefinitions() != null && !functionUnit.getActionDefinitions().isEmpty())
+                || (functionUnit.getDecisionDefinitions() != null && !functionUnit.getDecisionDefinitions().isEmpty());
     }
 
     private void clearExistingData(FunctionUnit functionUnit) {
         functionUnit.getTableDefinitions().clear();
         functionUnit.getFormDefinitions().clear();
         functionUnit.getActionDefinitions().clear();
+        functionUnit.getDecisionDefinitions().clear();
         if (functionUnit.getProcessDefinition() != null) {
             functionUnit.setProcessDefinition(null);
         }
@@ -360,6 +363,30 @@ public class AiWriteServiceImpl implements AiWriteService {
                     .build();
 
             functionUnit.getActionDefinitions().add(action);
+        }
+    }
+
+    private void writeDecisionDefinitions(FunctionUnit functionUnit, AiGeneratedData generatedData) {
+        List<Map<String, Object>> decisionDefs = generatedData.getDecisionDefinitions();
+        if (decisionDefs == null) return;
+
+        for (Map<String, Object> decisionData : decisionDefs) {
+            String decisionKey = (String) decisionData.get("decisionKey");
+            if (decisionKey == null || decisionKey.isBlank()) {
+                log.warn("Skipping decision definition without decisionKey");
+                continue;
+            }
+
+            DecisionDefinition decision = DecisionDefinition.builder()
+                    .functionUnit(functionUnit)
+                    .decisionKey(decisionKey)
+                    .decisionName((String) decisionData.get("decisionName"))
+                    .dmnXml((String) decisionData.get("dmnXml"))
+                    .hitPolicy((String) decisionData.get("hitPolicy"))
+                    .description((String) decisionData.get("description"))
+                    .build();
+
+            functionUnit.getDecisionDefinitions().add(decision);
         }
     }
 
