@@ -36,12 +36,15 @@ public class ProcessComponent {
     private final ProcessHistoryRepository processHistoryRepository;
     private final FunctionUnitAccessComponent functionUnitAccessComponent;
     private final WorkflowEngineClient workflowEngineClient;
+    private final ProcessDraftComponent processDraftComponent;
 
     @jakarta.persistence.PersistenceContext
     private jakarta.persistence.EntityManager entityManager;
     
     @Value("${admin-center.url:http://localhost:8090}")
     private String adminCenterUrl;
+
+    // ==================== 流程定义与发起 ====================
 
     /**
      * 获取可发起的流程定义列表
@@ -801,6 +804,8 @@ public class ProcessComponent {
         return null;
     }
 
+    // ==================== 流程查询 ====================
+
     /**
      * 获取我的申请列表
      */
@@ -954,6 +959,8 @@ public class ProcessComponent {
         return info;
     }
 
+    // ==================== 流程操作（撤回、催办、收藏） ====================
+
     /**
      * 撤回流程
      */
@@ -1018,86 +1025,46 @@ public class ProcessComponent {
         }
     }
 
+    // ==================== 草稿管理（委托给 ProcessDraftComponent） ====================
+
     /**
      * 保存草稿
+     * @see ProcessDraftComponent#saveDraft(String, String, Map)
      */
     public ProcessDraft saveDraft(String userId, String processKey, Map<String, Object> formData) {
-        Optional<ProcessDraft> existing = processDraftRepository.findFirstByUserIdAndProcessDefinitionKeyOrderByUpdatedAtDesc(userId, processKey);
-        ProcessDraft draft;
-        if (existing.isPresent()) {
-            draft = existing.get();
-            draft.setFormData(formData);
-            draft.setUpdatedAt(LocalDateTime.now());
-        } else {
-            draft = new ProcessDraft();
-            draft.setUserId(userId);
-            draft.setProcessDefinitionKey(processKey);
-            draft.setFormData(formData);
-            draft.setCreatedAt(LocalDateTime.now());
-            draft.setUpdatedAt(LocalDateTime.now());
-        }
-        return processDraftRepository.save(draft);
+        return processDraftComponent.saveDraft(userId, processKey, formData);
     }
 
     /**
      * 获取草稿
+     * @see ProcessDraftComponent#getDraft(String, String)
      */
     public Optional<ProcessDraft> getDraft(String userId, String processKey) {
-        return processDraftRepository.findFirstByUserIdAndProcessDefinitionKeyOrderByUpdatedAtDesc(userId, processKey);
+        return processDraftComponent.getDraft(userId, processKey);
     }
 
     /**
      * 删除草稿
+     * @see ProcessDraftComponent#deleteDraft(String, String)
      */
     public void deleteDraft(String userId, String processKey) {
-        processDraftRepository.findFirstByUserIdAndProcessDefinitionKeyOrderByUpdatedAtDesc(userId, processKey)
-                .ifPresent(processDraftRepository::delete);
+        processDraftComponent.deleteDraft(userId, processKey);
     }
     
     /**
      * 获取用户的草稿列表
+     * @see ProcessDraftComponent#getDraftList(String)
      */
     public List<Map<String, Object>> getDraftList(String userId) {
-        log.info("Getting draft list for user: {}", userId);
-        List<ProcessDraft> drafts = processDraftRepository.findByUserIdOrderByUpdatedAtDesc(userId);
-        List<Map<String, Object>> result = new ArrayList<>();
-        
-        for (ProcessDraft draft : drafts) {
-            Map<String, Object> draftInfo = new HashMap<>();
-            draftInfo.put("id", draft.getId());
-            draftInfo.put("processDefinitionKey", draft.getProcessDefinitionKey());
-            draftInfo.put("formData", draft.getFormData());
-            draftInfo.put("createdAt", draft.getCreatedAt());
-            draftInfo.put("updatedAt", draft.getUpdatedAt());
-            
-            // 尝试获取功能单元名称
-            try {
-                Map<String, Object> content = getFunctionUnitContent(draft.getProcessDefinitionKey());
-                if (content != null && content.get("name") != null) {
-                    draftInfo.put("processDefinitionName", content.get("name"));
-                } else {
-                    draftInfo.put("processDefinitionName", draft.getProcessDefinitionKey());
-                }
-            } catch (Exception e) {
-                log.warn("Failed to get function unit name for {}: {}", draft.getProcessDefinitionKey(), e.getMessage());
-                draftInfo.put("processDefinitionName", draft.getProcessDefinitionKey());
-            }
-            
-            result.add(draftInfo);
-        }
-        
-        return result;
+        return processDraftComponent.getDraftList(userId);
     }
     
     /**
      * 根据ID删除草稿
+     * @see ProcessDraftComponent#deleteDraftById(String, Long)
      */
     public void deleteDraftById(String userId, Long draftId) {
-        processDraftRepository.findById(draftId).ifPresent(draft -> {
-            if (draft.getUserId().equals(userId)) {
-                processDraftRepository.delete(draft);
-            }
-        });
+        processDraftComponent.deleteDraftById(userId, draftId);
     }
     
     /**

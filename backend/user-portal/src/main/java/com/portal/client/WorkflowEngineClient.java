@@ -51,6 +51,8 @@ public class WorkflowEngineClient {
         }
     }
 
+    // ==================== 流程部署与启动 ====================
+
     /**
      * 部署流程定义
      */
@@ -118,6 +120,8 @@ public class WorkflowEngineClient {
         }
         return Optional.empty();
     }
+
+    // ==================== 任务查询 ====================
 
     /**
      * 查询用户待办任务
@@ -249,6 +253,8 @@ public class WorkflowEngineClient {
         }
         return Optional.empty();
     }
+
+    // ==================== 任务操作（完成、认领、委托、转办、回退） ====================
 
     /**
      * 完成任务
@@ -467,6 +473,8 @@ public class WorkflowEngineClient {
         return Optional.empty();
     }
 
+    // ==================== 流程状态与历史查询 ====================
+
     /**
      * 获取流程实例状态
      * 用于检查流程是否已完成以及获取最后一个活动节点
@@ -631,6 +639,8 @@ public class WorkflowEngineClient {
         return Optional.empty();
     }
     
+    // ==================== 用户权限查询 ====================
+
     /**
      * 获取用户的任务权限信息（虚拟组和部门角色）
      */

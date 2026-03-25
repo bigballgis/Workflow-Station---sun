@@ -3,6 +3,7 @@ package com.portal.properties;
 import com.portal.client.WorkflowEngineClient;
 import com.portal.component.FunctionUnitAccessComponent;
 import com.portal.component.ProcessComponent;
+import com.portal.component.ProcessDraftComponent;
 import com.portal.dto.ProcessDefinitionInfo;
 import com.portal.dto.ProcessInstanceInfo;
 import com.portal.dto.ProcessStartRequest;
@@ -32,6 +33,7 @@ class ProcessOperationProperties {
     private ProcessHistoryRepository processHistoryRepository;
     private FunctionUnitAccessComponent functionUnitAccessComponent;
     private WorkflowEngineClient workflowEngineClient;
+    private ProcessDraftComponent processDraftComponent;
 
     @BeforeTry
     void setUp() {
@@ -42,8 +44,11 @@ class ProcessOperationProperties {
         functionUnitAccessComponent = Mockito.mock(FunctionUnitAccessComponent.class);
         workflowEngineClient = Mockito.mock(WorkflowEngineClient.class);
         
+        // 创建 ProcessDraftComponent
+        processDraftComponent = new ProcessDraftComponent(processDraftRepository, functionUnitAccessComponent);
+        
         // 使用 Spy 来 mock getFunctionUnitContent 方法
-        processComponent = Mockito.spy(new ProcessComponent(favoriteProcessRepository, processDraftRepository, processInstanceRepository, processHistoryRepository, functionUnitAccessComponent, workflowEngineClient));
+        processComponent = Mockito.spy(new ProcessComponent(favoriteProcessRepository, processDraftRepository, processInstanceRepository, processHistoryRepository, functionUnitAccessComponent, workflowEngineClient, processDraftComponent));
         
         // Mock getFunctionUnitContent 返回包含 BPMN XML 的内容
         String mockBpmnXml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><bpmn:definitions></bpmn:definitions>";
