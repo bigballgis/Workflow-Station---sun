@@ -93,7 +93,8 @@ $deploymentFiles = @(
     "deployment-user-portal.yaml",
     "deployment-developer-workstation.yaml",
     "deployment-kong.yaml",
-    "deployment-frontend.yaml"
+    "deployment-frontend.yaml",
+    "pdb.yaml"
 )
 
 foreach ($file in $deploymentFiles) {

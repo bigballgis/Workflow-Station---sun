@@ -1,0 +1,65 @@
+# =====================================================
+# PodDisruptionBudget for all services
+# Ensures at least 1 pod is available during node maintenance
+# =====================================================
+
+# Backend Services
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: workflow-engine-pdb
+  namespace: workflow-platform-sit
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: workflow-engine
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: admin-center-pdb
+  namespace: workflow-platform-sit
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: admin-center
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: user-portal-pdb
+  namespace: workflow-platform-sit
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: user-portal
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: developer-workstation-pdb
+  namespace: workflow-platform-sit
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: developer-workstation
+
+---
+# Kong Gateway
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: kong-pdb
+  namespace: workflow-platform-sit
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: kong

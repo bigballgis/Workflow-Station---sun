@@ -30,5 +30,7 @@ resources:
   - deployment-kong.yaml
   # Frontend Deployments
   - deployment-frontend.yaml
+  # PodDisruptionBudget
+  - pdb.yaml
   # Ingress
   - ingress.yaml
