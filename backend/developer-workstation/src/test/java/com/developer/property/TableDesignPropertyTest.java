@@ -10,6 +10,7 @@ import com.developer.repository.FormTableBindingRepository;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.TableDefinitionRepository;
 import net.jqwik.api.*;
+import com.platform.common.i18n.I18nService;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -32,9 +33,10 @@ public class TableDesignPropertyTest {
         FunctionUnitRepository functionUnitRepo = mock(FunctionUnitRepository.class);
         FormDefinitionRepository formRepo = mock(FormDefinitionRepository.class);
         FormTableBindingRepository formTableBindingRepo = mock(FormTableBindingRepository.class);
+        I18nService i18nService = mock(I18nService.class);
         
         TableDesignComponent component = new TableDesignComponentImpl(
-                tableRepo, fieldRepo, fkRepo, functionUnitRepo, formRepo, formTableBindingRepo, mock(com.platform.common.i18n.I18nService.class));
+                tableRepo, fieldRepo, fkRepo, functionUnitRepo, formRepo, formTableBindingRepo, i18nService);
         
         assertThat(component).isNotNull();
         assertThat(tableName).matches("tbl_[a-z]+");
@@ -55,9 +57,10 @@ public class TableDesignPropertyTest {
         FunctionUnitRepository functionUnitRepo = mock(FunctionUnitRepository.class);
         FormDefinitionRepository formRepo = mock(FormDefinitionRepository.class);
         FormTableBindingRepository formTableBindingRepo = mock(FormTableBindingRepository.class);
+        I18nService i18nService = mock(I18nService.class);
         
         TableDesignComponent component = new TableDesignComponentImpl(
-                tableRepo, fieldRepo, fkRepo, functionUnitRepo, formRepo, formTableBindingRepo, mock(com.platform.common.i18n.I18nService.class));
+                tableRepo, fieldRepo, fkRepo, functionUnitRepo, formRepo, formTableBindingRepo, i18nService);
         
         assertThat(component).isNotNull();
         assertThat(dialect).isNotNull();

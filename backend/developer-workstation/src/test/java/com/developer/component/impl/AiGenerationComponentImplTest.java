@@ -20,6 +20,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -51,7 +52,9 @@ class AiGenerationComponentImplTest {
 
     @BeforeEach
     void setUp() {
-        component = new AiGenerationComponentImpl(aiGenerationService, aiLockService, aiValidationService, aiWriteService, Runnable::run);
+        // Use synchronous executor to make SSE orchestration deterministic in unit tests.
+        Executor executor = Runnable::run;
+        component = new AiGenerationComponentImpl(aiGenerationService, aiLockService, aiValidationService, aiWriteService, executor);
         sessionUuid = UUID.randomUUID();
         session = AiSession.builder()
                 .sessionId(sessionUuid).functionUnitId(1L).userId("user1")

@@ -6,6 +6,7 @@ import com.developer.repository.FormDefinitionRepository;
 import com.developer.repository.FormTableBindingRepository;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.TableDefinitionRepository;
+import com.platform.common.i18n.I18nService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import net.jqwik.api.*;
 
@@ -31,8 +32,9 @@ public class FormDesignPropertyTest {
         TableDefinitionRepository tableDefinitionRepository = mock(TableDefinitionRepository.class);
         FormTableBindingRepository formTableBindingRepository = mock(FormTableBindingRepository.class);
         ObjectMapper objectMapper = new ObjectMapper();
+        I18nService i18nService = mock(I18nService.class);
         FormDesignComponent component = new FormDesignComponentImpl(
-                repository, functionUnitRepository, tableDefinitionRepository, formTableBindingRepository, objectMapper, mock(com.platform.common.i18n.I18nService.class));
+                repository, functionUnitRepository, tableDefinitionRepository, formTableBindingRepository, objectMapper, i18nService);
         
         assertThat(component).isNotNull();
         assertThat(config).isNotNull();
