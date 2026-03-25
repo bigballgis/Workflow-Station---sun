@@ -44,6 +44,11 @@ public class SecurityConfig {
                 .requestMatchers(new AntPathRequestMatcher("/actuator/**")).permitAll()
                 .requestMatchers(new AntPathRequestMatcher("/swagger-ui/**")).permitAll()
                 .requestMatchers(new AntPathRequestMatcher("/v3/api-docs/**")).permitAll()
+                // Flowable management APIs — only accessible in non-production environments.
+                // In production, Kong Gateway does NOT route to these paths, so they are effectively blocked.
+                // These endpoints are kept permitAll for development/testing convenience.
+                // TODO: In production, consider disabling Flowable's built-in REST API entirely
+                //       via flowable.rest.app.enabled=false in application-prod.yml
                 .requestMatchers(new AntPathRequestMatcher("/process-api/**")).permitAll()
                 .requestMatchers(new AntPathRequestMatcher("/cmmn-api/**")).permitAll()
                 .requestMatchers(new AntPathRequestMatcher("/dmn-api/**")).permitAll()
