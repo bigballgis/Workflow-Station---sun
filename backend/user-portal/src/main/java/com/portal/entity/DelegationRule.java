@@ -69,4 +69,12 @@ public class DelegationRule {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    /**
+     * Version field for optimistic locking.
+     * JPA will automatically increment this on each update and check for concurrent modifications.
+     */
+    @jakarta.persistence.Version
+    @Column(name = "lock_version")
+    private Long lockVersion;
 }

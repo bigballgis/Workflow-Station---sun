@@ -70,4 +70,12 @@ public class Role implements Serializable {
     
     @Column(name = "updated_by", length = 64)
     private String updatedBy;
+
+    /**
+     * Version field for optimistic locking.
+     * JPA will automatically increment this on each update and check for concurrent modifications.
+     */
+    @jakarta.persistence.Version
+    @Column(name = "lock_version")
+    private Long lockVersion;
 }

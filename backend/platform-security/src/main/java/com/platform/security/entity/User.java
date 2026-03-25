@@ -117,6 +117,14 @@ public class User {
     private String deletedBy;
 
     /**
+     * Version field for optimistic locking.
+     * JPA will automatically increment this on each update and check for concurrent modifications.
+     */
+    @jakarta.persistence.Version
+    @Column(name = "lock_version")
+    private Long lockVersion;
+
+    /**
      * Check if user account is active and can login.
      */
     public boolean isActive() {
