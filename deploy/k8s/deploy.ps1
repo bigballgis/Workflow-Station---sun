@@ -68,6 +68,20 @@ kubectl apply -f $secretFile -n $Namespace $dryRunFlag
 if ($LASTEXITCODE -ne 0) { Write-Fail "Failed to apply Secrets" }
 Write-Ok "Secrets applied"
 
+# Step 3.5: Create Kong declarative config ConfigMap (from files)
+Write-Step "Creating Kong declarative config ConfigMap..."
+$kongDir = Join-Path (Split-Path $ScriptDir -Parent) "kong"
+$kongTemplate = Join-Path $kongDir "kong.yml.template"
+$kongEntrypoint = Join-Path $kongDir "docker-entrypoint-kong.sh"
+if (-not (Test-Path $kongTemplate)) { Write-Fail "Kong template not found: $kongTemplate" }
+if (-not (Test-Path $kongEntrypoint)) { Write-Fail "Kong entrypoint not found: $kongEntrypoint" }
+kubectl create configmap kong-declarative-config `
+    --from-file=kong.yml.template=$kongTemplate `
+    --from-file=docker-entrypoint-kong.sh=$kongEntrypoint `
+    -n $Namespace --dry-run=client -o yaml | kubectl apply -f - -n $Namespace $dryRunFlag
+if ($LASTEXITCODE -ne 0) { Write-Fail "Failed to create Kong ConfigMap" }
+Write-Ok "Kong declarative config ConfigMap created"
+
 # Step 4: Apply Deployments
 Write-Step "Applying Deployments..."
 $deploymentFiles = @(

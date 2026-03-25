@@ -29,6 +29,7 @@ spec:
           name: proxy
         - containerPort: 8001
           name: admin
+        command: ["/bin/sh", "/kong/docker-entrypoint-kong.sh"]
         env:
         - name: KONG_DATABASE
           value: "off"

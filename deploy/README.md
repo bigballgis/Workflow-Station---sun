@@ -17,6 +17,15 @@
 │  (nginx)    │ │  (nginx)   │ │   (nginx)        │
 └──────┬──────┘ └──┬────┬────┘ └────┬─────────────┘
        │           │    │           │
+       └───────────┼────┼───────────┘
+                   │    │
+            ┌──────▼────▼──────┐
+            │   Kong Gateway   │
+            │  (API 统一代理)   │
+            └──────┬───────────┘
+                   │
+       ┌───────────┼────┬───────────┐
+       │           │    │           │
 ┌──────▼──────┐ ┌──▼────▼────┐ ┌───▼──────────────┐
 │ Admin Center│ │ User Portal│ │ Dev Workstation   │
 │  Backend    │ │  Backend   │ │   Backend         │
@@ -37,13 +46,14 @@
 └─────────┘  └─────────┘  └──────────┘
 ```
 
-## Services (10 deployable)
+## Services (11 deployable)
 
 | Service | Type | K8S Manifest | Healthcheck |
 |---------|------|-------------|-------------|
 | redis | Infrastructure | `deployment-redis.yaml` | redis-cli ping |
 | kafka | Infrastructure | `deployment-kafka.yaml` | broker-api-versions |
 | n8n | Infrastructure | `deployment-n8n.yaml` | `/healthz` |
+| kong | Gateway | `deployment-kong.yaml` | `/status` |
 | workflow-engine | Backend | `deployment-workflow-engine.yaml` | `/actuator/health` |
 | admin-center | Backend | `deployment-admin-center.yaml` | `/api/v1/admin/actuator/health` |
 | user-portal | Backend | `deployment-user-portal.yaml` | `/api/portal/actuator/health` |
@@ -57,7 +67,6 @@
 | Component | Reason |
 |-----------|--------|
 | PostgreSQL | 使用公司现有数据库 |
-| API Gateway | 已架空，前端 nginx 直连后端 |
 
 ## Environments
 
@@ -99,7 +108,7 @@ cd deploy/init-scripts
 cd deploy/scripts
 .\build-and-push-k8s.ps1 -Registry harbor.company.com/workflow -Tag v1.0.0 -SkipTests
 
-# 4. Deploy (Redis + Kafka + N8N + 后端 + 前端，共 10 个服务)
+# 4. Deploy (Redis + Kafka + N8N + Kong + 后端 + 前端，共 11 个服务)
 cd deploy/k8s
 .\deploy.ps1 -Environment sit -Tag v1.0.0
 ```
@@ -115,6 +124,7 @@ cd deploy/k8s
 7. **`.sh`/`.sql` 文件必须 LF 换行** — `.gitattributes` 已配置
 8. **环境变量名是 `ENCRYPTION_SECRET_KEY`** — 不是 `ENCRYPTION_KEY`
 9. **统一 `*_URL` 命名** — 无 `*_BACKEND_URL` 变量
+10. **Kong Gateway 统一代理 API 流量** — 前端 nginx 通过 Kong 访问后端
 
 ## File Structure
 
@@ -138,10 +148,14 @@ deploy/
 │   ├── deployment-admin-center.yaml
 │   ├── deployment-user-portal.yaml
 │   ├── deployment-developer-workstation.yaml
+│   ├── deployment-kong.yaml        # Kong API Gateway
 │   ├── deployment-frontend.yaml    # 3 frontends combined
 │   ├── ingress.yaml
 │   ├── kustomization.yaml
 │   └── deploy.ps1                  # K8S deployment script
+├── kong/
+│   ├── kong.yml.template           # Kong declarative config template
+│   └── docker-entrypoint-kong.sh   # Kong entrypoint (env substitution)
 ├── scripts/
 │   └── build-and-push-k8s.ps1     # Build & push images
 ├── init-scripts/
