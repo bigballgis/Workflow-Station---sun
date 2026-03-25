@@ -74,9 +74,8 @@ export const logout = async (): Promise<void> => {
       await authRequest.post('/logout', null, {
         headers: { Authorization: `Bearer ${token}` }
       })
-    } catch (e) {
+    } catch {
       // Ignore logout errors, still clear local storage
-      console.warn('Logout request failed:', e)
     }
   }
 }

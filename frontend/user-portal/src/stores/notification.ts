@@ -21,8 +21,7 @@ export const useNotificationStore = defineStore('notification', () => {
       const data = res?.data ?? res
       notifications.value = data?.content ?? []
       total.value = data?.totalElements ?? 0
-    } catch (e) {
-      console.error('Failed to fetch notifications:', e)
+    } catch {
       notifications.value = []
       total.value = 0
     } finally {
@@ -34,8 +33,8 @@ export const useNotificationStore = defineStore('notification', () => {
     try {
       const res = await notificationApi.getUnreadCount() as any
       unreadCount.value = res.data ?? res ?? 0
-    } catch (e) {
-      console.error('Failed to fetch unread count:', e)
+    } catch {
+      // Silent fail — state is already initialized
     }
   }
 

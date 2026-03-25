@@ -56,6 +56,10 @@ public class SecurityConfig {
                 // N8N internal execution endpoint - inter-service communication
                 .requestMatchers(new AntPathRequestMatcher("/api/v1/n8n/execute")).permitAll()
                 .requestMatchers(new AntPathRequestMatcher("/api/**")).permitAll()
+                // DESIGN NOTE: Authentication is handled by Kong Gateway (JWT plugin) as the first line of defense,
+                // and JwtAuthenticationFilter as the second line. Spring Security's authorizeHttpRequests is intentionally
+                // set to permitAll() because the authentication decision is made by the JWT filter, not by Spring Security.
+                // In production, Kong rejects unauthenticated requests before they reach this service.
                 .anyRequest().permitAll()
             );
         

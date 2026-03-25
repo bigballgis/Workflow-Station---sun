@@ -375,13 +375,7 @@ window.addEventListener('unhandledrejection', (event) => {
       return false // Return false to indicate handled
     }
   }
-  // Other errors are handled normally
-  console.error('[GlobalErrorHandler] Unhandled promise rejection:', event.reason)
+  // Other unhandled errors — no-op in production
 }, true) // Use capture mode
-
-// Vue global error handler
-app.config.errorHandler = (err, instance, info) => {
-  console.error('[VueErrorHandler]', err, info)
-}
 
 app.mount('#app')

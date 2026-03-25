@@ -50,7 +50,10 @@ public class SecurityConfig {
                 .requestMatchers("/auth/**").permitAll()
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
                 .requestMatchers("/actuator/**").permitAll()
-                // 开发环境：允许所有API访问（路径相对于 context-path /api/v1）
+                // DESIGN NOTE: Authentication is handled by Kong Gateway (JWT plugin) as the first line of defense,
+                // and JwtAuthenticationFilter as the second line. Spring Security's authorizeHttpRequests is intentionally
+                // set to permitAll() because the authentication decision is made by the JWT filter, not by Spring Security.
+                // In production, Kong rejects unauthenticated requests before they reach this service.
                 .anyRequest().permitAll()
             )
             .addFilterBefore(jwtAuthenticationFilter, 

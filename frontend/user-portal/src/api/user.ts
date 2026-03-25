@@ -65,8 +65,7 @@ export const userApi = {
         name: u.displayName || u.fullName || u.username,
         username: u.username
       }))
-    } catch (err) {
-      console.error('[searchUsers] error:', err)
+    } catch {
       return []
     }
   },

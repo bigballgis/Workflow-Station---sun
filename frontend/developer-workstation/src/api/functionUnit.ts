@@ -25,7 +25,6 @@ functionUnitAxios.interceptors.request.use(config => {
 
 functionUnitAxios.interceptors.response.use(
   response => {
-    console.log('[FunctionUnitAPI] Response:', response.status, response.data)
     // Check the success field in the response body to ensure it's a successful response
     if (response.data && typeof response.data === 'object' && 'success' in response.data) {
       if (response.data.success === false) {
@@ -247,12 +246,8 @@ export const functionUnitApi = {
   createTable: (functionUnitId: number, data: Partial<TableDefinition>) =>
     functionUnitAxios.post<any, { data: TableDefinition }>(`/api/v1/function-units/${functionUnitId}/tables`, data),
   
-  updateTable: (functionUnitId: number, tableId: number, data: Partial<TableDefinition>) => {
-    console.log('[FunctionUnitAPI] Updating table:', { functionUnitId, tableId, data })
-    console.log('[FunctionUnitAPI] Request data fields:', data.fields)
-    console.log('[FunctionUnitAPI] Request data JSON:', JSON.stringify(data, null, 2))
-    return functionUnitAxios.put<any, { data: TableDefinition }>(`/api/v1/function-units/${functionUnitId}/tables/${tableId}`, data)
-  },
+  updateTable: (functionUnitId: number, tableId: number, data: Partial<TableDefinition>) =>
+    functionUnitAxios.put<any, { data: TableDefinition }>(`/api/v1/function-units/${functionUnitId}/tables/${tableId}`, data),
   
   deleteTable: (functionUnitId: number, tableId: number) =>
     functionUnitAxios.delete(`/api/v1/function-units/${functionUnitId}/tables/${tableId}`),
