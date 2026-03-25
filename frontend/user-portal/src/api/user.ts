@@ -57,10 +57,16 @@ export const userApi = {
   // 搜索用户（用于转办、委托等场景）- 通过 user-portal 后端代理
   searchUsers: async (keyword: string): Promise<UserOption[]> => {
     try {
-      const res: any = await portalRequest.get('/tasks/users/search', { params: { keyword } })
-      const data = res?.data || res
-      const users = Array.isArray(data) ? data : []
-      return users.map((u: any) => ({
+      interface SearchUserItem {
+        id: string
+        displayName?: string
+        fullName?: string
+        username: string
+      }
+      const res = await portalRequest.get<{ data?: SearchUserItem[] }>('/tasks/users/search', { params: { keyword } })
+      const data = (res as { data?: SearchUserItem[] })?.data ?? (res as unknown)
+      const users: SearchUserItem[] = Array.isArray(data) ? data : []
+      return users.map((u: SearchUserItem) => ({
         id: u.id,
         name: u.displayName || u.fullName || u.username,
         username: u.username

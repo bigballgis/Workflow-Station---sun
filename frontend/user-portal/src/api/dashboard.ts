@@ -28,12 +28,33 @@ export interface PerformanceOverview {
   totalUsers: number
 }
 
+export interface RecentTask {
+  id: string
+  name: string
+  processName?: string
+  assignee?: string
+  status: string
+  priority?: string
+  createdAt: string
+  dueDate?: string
+}
+
+export interface RecentProcess {
+  id: string
+  processDefinitionName: string
+  businessKey?: string
+  status: string
+  startTime: string
+  endTime?: string
+  currentNode?: string
+}
+
 export interface DashboardOverview {
   taskOverview: TaskOverview
   processOverview: ProcessOverview
   performanceOverview: PerformanceOverview
-  recentTasks: any[]
-  recentProcesses: any[]
+  recentTasks: RecentTask[]
+  recentProcesses: RecentProcess[]
 }
 
 // 获取Dashboard概览
@@ -56,12 +77,24 @@ export function getPerformanceOverview() {
   return request.get<{ data: PerformanceOverview }>('/dashboard/performance')
 }
 
+export interface TaskTrendData {
+  dates: string[]
+  completed: number[]
+  created: number[]
+}
+
+export interface ProcessStatisticsData {
+  byStatus: Record<string, number>
+  byType: Record<string, number>
+  completionRate: number
+}
+
 // 获取任务趋势数据
 export function getTaskTrendData(days: number = 30) {
-  return request.get<{ data: any }>('/dashboard/task-trend', { params: { days } })
+  return request.get<{ data: TaskTrendData }>('/dashboard/task-trend', { params: { days } })
 }
 
 // 获取流程统计数据
 export function getProcessStatisticsData() {
-  return request.get<{ data: any }>('/dashboard/process-statistics')
+  return request.get<{ data: ProcessStatisticsData }>('/dashboard/process-statistics')
 }

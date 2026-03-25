@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { roleApi, permissionApi, Role, Permission } from '@/api/role'
+import { roleApi, permissionApi, Role, Permission, type CreateRoleRequest, type UpdateRoleRequest, type RolePermission } from '@/api/role'
 
 export const useRoleStore = defineStore('role', () => {
   const roles = ref<Role[]>([])
@@ -21,12 +21,12 @@ export const useRoleStore = defineStore('role', () => {
     permissions.value = await permissionApi.getTree()
   }
 
-  const createRole = async (data: any) => {
+  const createRole = async (data: CreateRoleRequest) => {
     await roleApi.create(data)
     await fetchRoles()
   }
 
-  const updateRole = async (id: string, data: any) => {
+  const updateRole = async (id: string, data: UpdateRoleRequest) => {
     await roleApi.update(id, data)
     await fetchRoles()
   }
@@ -36,7 +36,7 @@ export const useRoleStore = defineStore('role', () => {
     await fetchRoles()
   }
 
-  const updateRolePermissions = async (id: string, permissions: any[]) => {
+  const updateRolePermissions = async (id: string, permissions: RolePermission[]) => {
     await roleApi.updatePermissions(id, permissions)
   }
 

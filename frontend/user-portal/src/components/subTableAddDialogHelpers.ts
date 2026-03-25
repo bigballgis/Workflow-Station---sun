@@ -25,6 +25,13 @@ export type ColumnType =
   | 'transfer'
   | 'cascader'
 
+export interface TreeNode {
+  label: string
+  value: string | number
+  children?: TreeNode[]
+  [key: string]: unknown
+}
+
 export interface DialogColumn {
   field: string
   label: string
@@ -32,12 +39,12 @@ export interface DialogColumn {
   required?: boolean
   placeholder?: string
   minWidth?: number
-  options?: Array<{ label: string; value: any }>
+  options?: Array<{ label: string; value: string | number }>
   props?: {
     action?: string
     accept?: string
     fileNameTargetField?: string
-    options?: Array<{ label: string; value: any }>
+    options?: Array<{ label: string; value: string | number }>
     multiple?: boolean
     precision?: number
     min?: number
@@ -45,18 +52,20 @@ export interface DialogColumn {
     rows?: number
     maxlength?: number
     userType?: 'user' | 'department'
-    treeData?: Array<{ label: string; value: any; children?: any[] }>
+    treeData?: TreeNode[]
     isRange?: boolean
     valueFormat?: string
     startPlaceholder?: string
     endPlaceholder?: string
     checkStrictly?: boolean
-    [key: string]: any
+    nodeKey?: string
+    labelProps?: { label?: string; children?: string }
+    [key: string]: unknown
   }
 }
 
-export function buildInitialRow(columns: DialogColumn[]): Record<string, any> {
-  const row: Record<string, any> = {}
+export function buildInitialRow(columns: DialogColumn[]): Record<string, unknown> {
+  const row: Record<string, unknown> = {}
   for (const col of columns) {
     switch (col.type) {
       case 'number':
@@ -159,7 +168,7 @@ export function resolveControlComponent(col: DialogColumn): string {
  * - timerange: formats [start, end] array as "start - end"
  * - others: converts to string
  */
-export function resolveDisplayValue(col: DialogColumn, rawValue: any): string {
+export function resolveDisplayValue(col: DialogColumn, rawValue: unknown): string {
   if (rawValue === null || rawValue === undefined) return '-'
 
   const options = col.props?.options ?? col.options
@@ -177,7 +186,7 @@ export function resolveDisplayValue(col: DialogColumn, rawValue: any): string {
   if (col.type === 'checkbox') {
     if (!Array.isArray(rawValue) || !options) return String(rawValue)
     return rawValue
-      .map((v: any) => options.find((o) => o.value === v)?.label ?? v)
+      .map((v: unknown) => options.find((o) => o.value === v)?.label ?? v)
       .join(', ')
   }
 
@@ -230,15 +239,20 @@ export function resolveDisplayValue(col: DialogColumn, rawValue: any): string {
     const labelKey = col.props?.labelProps?.label || 'label'
     const childrenKey = col.props?.labelProps?.children || 'children'
     // Flatten tree to build id→label map
-    const labelMap = new Map<any, string>()
-    const walk = (nodes: any[]) => {
+    const labelMap = new Map<string | number, string>()
+    const walk = (nodes: TreeNode[]) => {
       for (const n of nodes) {
-        labelMap.set(n[nodeKey], n[labelKey])
-        if (n[childrenKey]) walk(n[childrenKey])
+        const key = n[nodeKey]
+        const label = n[labelKey]
+        if (key != null && typeof label === 'string') {
+          labelMap.set(key as string | number, label)
+        }
+        const children = n[childrenKey]
+        if (Array.isArray(children)) walk(children as TreeNode[])
       }
     }
     walk(treeData)
-    return rawValue.map((v: any) => labelMap.get(v) ?? v).join(', ')
+    return rawValue.map((v: unknown) => labelMap.get(v as string | number) ?? v).join(', ')
   }
 
   return String(rawValue)

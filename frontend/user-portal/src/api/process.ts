@@ -25,12 +25,12 @@ export interface ProcessInstance {
   currentNode?: string
   currentAssignee?: string
   candidateUsers?: string
-  variables?: Record<string, any>
+  variables?: Record<string, unknown>
 }
 
 export interface ProcessStartRequest {
   businessKey?: string
-  formData?: Record<string, any>
+  formData?: Record<string, unknown>
   priority?: string
 }
 
@@ -99,7 +99,7 @@ export const processApi = {
   },
 
   // 保存草稿
-  saveDraft(processKey: string, formData: Record<string, any>) {
+  saveDraft(processKey: string, formData: Record<string, unknown>) {
     return request.post(`/processes/${processKey}/draft`, formData)
   },
 
@@ -119,7 +119,7 @@ export const processApi = {
       id: number
       processDefinitionKey: string
       processDefinitionName: string
-      formData: Record<string, any>
+      formData: Record<string, unknown>
       createdAt: string
       updatedAt: string
     }>>('/processes/drafts')
@@ -137,19 +137,25 @@ export const processApi = {
   
   // 获取功能单元特定类型的内容
   getFunctionUnitContents(functionUnitId: string, contentType: string) {
+    interface FunctionUnitContentItem {
+      id: string
+      name: string
+      data: string
+      sourceId?: string
+    }
     // 调用已经能正常工作的 /processes/function-units/{id}/content 端点
     // 然后在前端根据 contentType 过滤结果
-    return this.getFunctionUnitContent(functionUnitId).then((response: any) => {
+    return this.getFunctionUnitContent(functionUnitId).then((response: FunctionUnitContent | { data: FunctionUnitContent }) => {
       // response 是 ApiResponse 格式: {success, code, data: {forms, processes, dataTables, ...}}
-      const content = response.data || response
+      const content = ('data' in response ? response.data : response) as FunctionUnitContent
       const key = contentType.toUpperCase() === 'FORM' ? 'forms' :
                   contentType.toUpperCase() === 'PROCESS' ? 'processes' :
                   contentType.toUpperCase() === 'DATA_TABLE' ? 'dataTables' : null
       
-      const items = key ? (content[key] || []) : []
+      const items: FunctionUnitContentItem[] = key ? (content[key as keyof Pick<FunctionUnitContent, 'forms' | 'processes' | 'dataTables'>] || []) : []
       // 返回与原始 API 格式兼容的结构: { data: [...] }
       return {
-        data: items.map((item: any) => ({
+        data: items.map((item: FunctionUnitContentItem) => ({
           id: item.id,
           contentType: contentType,
           contentName: item.name,

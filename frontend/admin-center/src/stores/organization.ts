@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { organizationApi, BusinessUnit } from '@/api/organization'
+import { organizationApi, BusinessUnit, type CreateBusinessUnitRequest, type UpdateBusinessUnitRequest, type MoveBusinessUnitRequest } from '@/api/organization'
 
 export const useOrganizationStore = defineStore('organization', () => {
   const businessUnitTree = ref<BusinessUnit[]>([])
@@ -16,12 +16,12 @@ export const useOrganizationStore = defineStore('organization', () => {
     }
   }
 
-  const createBusinessUnit = async (data: any) => {
+  const createBusinessUnit = async (data: CreateBusinessUnitRequest) => {
     await organizationApi.create(data)
     await fetchTree()
   }
 
-  const updateBusinessUnit = async (id: string, data: any) => {
+  const updateBusinessUnit = async (id: string, data: UpdateBusinessUnitRequest) => {
     await organizationApi.update(id, data)
     await fetchTree()
   }
@@ -31,7 +31,7 @@ export const useOrganizationStore = defineStore('organization', () => {
     await fetchTree()
   }
 
-  const moveBusinessUnit = async (id: string, data: any) => {
+  const moveBusinessUnit = async (id: string, data: MoveBusinessUnitRequest) => {
     await organizationApi.move(id, data)
     await fetchTree()
   }

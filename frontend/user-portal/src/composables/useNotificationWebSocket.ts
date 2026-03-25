@@ -2,8 +2,9 @@ import { ref } from 'vue'
 import { Client } from '@stomp/stompjs'
 import SockJS from 'sockjs-client'
 import { TOKEN_KEY } from '@/api/auth'
+import type { NotificationData } from '@/api/notification'
 
-export function useNotificationWebSocket(onMessage: (notification: any) => void) {
+export function useNotificationWebSocket(onMessage: (notification: NotificationData) => void) {
   const connected = ref(false)
   let client: Client | null = null
 

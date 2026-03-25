@@ -34,15 +34,15 @@ export interface SubTableBinding {
   bindingId: number
   tableName: string
   columns: Array<{ field: string; label: string; type?: string }>
-  data: any[]
-  [key: string]: any
+  data: Record<string, unknown>[]
+  [key: string]: unknown
 }
 
 // ============ AutoFill result ============
 
 export interface AutoFillResult {
   updatedBindings: SubTableBinding[]
-  updatedFormData: Record<string, any>
+  updatedFormData: Record<string, unknown>
   filledCount: number
 }
 
@@ -52,13 +52,13 @@ export interface AutoFillResult {
  * Resolve a value from a nested object using dot notation path.
  * Returns null for missing intermediate keys or non-object nodes.
  */
-export function getByPath(obj: any, path: string): any {
+export function getByPath(obj: Record<string, unknown>, path: string): unknown {
   if (obj == null || typeof path !== 'string' || path === '') return null
   const keys = path.split('.')
-  let current: any = obj
+  let current: unknown = obj
   for (const key of keys) {
     if (current == null || typeof current !== 'object') return null
-    current = current[key]
+    current = (current as Record<string, unknown>)[key]
   }
   return current ?? null
 }
@@ -70,7 +70,7 @@ export function getByPath(obj: any, path: string): any {
  */
 export function applyFormatTemplate(
   template: string,
-  sourceItem: Record<string, any>,
+  sourceItem: Record<string, unknown>,
   separator: string = ' | '
 ): string {
   // Match segments: each segment is text that may contain one {placeholder}
@@ -112,8 +112,8 @@ export function applyFormatTemplate(
  */
 export function applyFieldMapping(
   mapping: FieldMapping,
-  sourceItem: Record<string, any>
-): any {
+  sourceItem: Record<string, unknown>
+): unknown {
   if (mapping.formatTemplate) {
     return applyFormatTemplate(
       mapping.formatTemplate,
@@ -154,9 +154,9 @@ export function parseAggregation(source: string): { func: string; arrayKey: stri
 /**
  * Compute aggregation over array items. Currently only supports 'sum'.
  */
-export function computeAggregation(func: string, items: any[], field: string): number | null {
+export function computeAggregation(func: string, items: Record<string, unknown>[], field: string): number | null {
   if (func === 'sum') {
-    return items.reduce((acc: number, item: any) => {
+    return items.reduce((acc: number, item: Record<string, unknown>) => {
       const val = Number(item?.[field])
       return acc + (isNaN(val) ? 0 : val)
     }, 0)
@@ -172,14 +172,14 @@ export function computeAggregation(func: string, items: any[], field: string): n
  * Skeleton: full sub-table and field logic will be added in Tasks 2 and 3.
  */
 export function applyAutoFill(
-  n8nOutput: Record<string, any>,
+  n8nOutput: Record<string, unknown>,
   outputMapping: OutputMappingEntry[],
   subTableBindings: SubTableBinding[],
-  formData: Record<string, any>
+  formData: Record<string, unknown>
 ): AutoFillResult {
   // Deep clone inputs to ensure immutability
   const updatedBindings: SubTableBinding[] = JSON.parse(JSON.stringify(subTableBindings))
-  const updatedFormData: Record<string, any> = JSON.parse(JSON.stringify(formData))
+  const updatedFormData: Record<string, unknown> = JSON.parse(JSON.stringify(formData))
   let filledCount = 0
 
   for (const entry of outputMapping) {
@@ -214,7 +214,7 @@ export function applyAutoFill(
       } else {
         // Append mode (default): create new rows and append
         for (const sourceItem of sourceData) {
-          const row: Record<string, any> = {}
+          const row: Record<string, unknown> = {}
           let hasNonNull = false
           for (const fm of entry.fieldMappings) {
             const value = applyFieldMapping(fm, sourceItem)

@@ -80,5 +80,5 @@ export function getProxyTasks() {
 
 // 获取委托审计记录
 export function getDelegationAuditRecords(page: number = 0, size: number = 20) {
-  return request.get<{ data: any }>('/delegations/audit', { params: { page, size } })
+  return request.get<{ data: { content: DelegationAudit[]; totalElements: number; totalPages: number } }>('/delegations/audit', { params: { page, size } })
 }

@@ -6,7 +6,7 @@ import i18n from '@/i18n'
 let isRefreshing = false
 let failedQueue: Array<{ resolve: Function; reject: Function }> = []
 
-const processQueue = (error: any, token: string | null = null) => {
+const processQueue = (error: unknown, token: string | null = null) => {
   failedQueue.forEach(prom => {
     if (error) {
       prom.reject(error)
@@ -162,19 +162,19 @@ service.interceptors.response.use(
 
 // 封装请求方法
 export const request = {
-  get<T = any>(url: string, config?: AxiosRequestConfig): Promise<T> {
+  get<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
     return service.get(url, config)
   },
   
-  post<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
+  post<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
     return service.post(url, data, config)
   },
   
-  put<T = any>(url: string, data?: any, config?: AxiosRequestConfig): Promise<T> {
+  put<T>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
     return service.put(url, data, config)
   },
   
-  delete<T = any>(url: string, config?: AxiosRequestConfig): Promise<T> {
+  delete<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
     return service.delete(url, config)
   }
 }

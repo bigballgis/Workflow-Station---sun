@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { userApi, type User, type UserQuery, type PageResult, type UserDetail } from '@/api/user'
+import { userApi, type User, type UserQuery, type PageResult, type UserDetail, type CreateUserRequest, type UpdateUserRequest } from '@/api/user'
 
 export const useUserStore = defineStore('user', () => {
   const users = ref<User[]>([])
@@ -28,11 +28,11 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
-  const createUser = async (data: any) => {
+  const createUser = async (data: CreateUserRequest) => {
     return await userApi.create(data)
   }
 
-  const updateUser = async (id: string, data: any) => {
+  const updateUser = async (id: string, data: UpdateUserRequest) => {
     await userApi.update(id, data)
   }
 

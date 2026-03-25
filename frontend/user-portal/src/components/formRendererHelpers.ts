@@ -10,7 +10,7 @@ export interface FormField {
   required?: boolean
   placeholder?: string
   span?: number
-  options?: Array<{ label: string; value: any }>
+  options?: Array<{ label: string; value: string | number }>
   multiple?: boolean
   filterable?: boolean
   maxLength?: number
@@ -26,9 +26,9 @@ export interface FormField {
   alertTitle?: string
   alertType?: 'success' | 'warning' | 'info' | 'error'
   userOptions?: Array<{ id: string; name: string }>
-  buOptions?: any[]
-  rules?: any[]
-  defaultValue?: any
+  buOptions?: Array<{ id: string; name: string; code?: string }>
+  rules?: Array<Record<string, unknown>>
+  defaultValue?: string | number | boolean | null
   tabName?: string
   uploadUrl?: string
   uploadAccept?: string
@@ -51,8 +51,8 @@ export interface FormTab {
  * @param converter - Function that converts a regular rule item to a FormField (or null to skip)
  */
 export function extractFieldsRecursive(
-  items: any[],
-  converter: (item: any) => FormField | null = () => null
+  items: Record<string, unknown>[],
+  converter: (item: Record<string, unknown>) => FormField | null = () => null
 ): FormField[] {
   const fields: FormField[] = []
   for (const item of items) {
@@ -61,7 +61,7 @@ export function extractFieldsRecursive(
         key: `__subTable_${item._bindingId}`,
         label: '',
         type: 'subTable',
-        _bindingId: item._bindingId,
+        _bindingId: item._bindingId as number,
         span: 24
       })
     } else if (item.field) {
@@ -69,7 +69,7 @@ export function extractFieldsRecursive(
       if (field) fields.push(field)
     }
     if (item.children && Array.isArray(item.children)) {
-      fields.push(...extractFieldsRecursive(item.children, converter))
+      fields.push(...extractFieldsRecursive(item.children as Record<string, unknown>[], converter))
     }
   }
   return fields
@@ -85,7 +85,7 @@ export function extractFieldsRecursive(
 export function parseFormConfigToTabs(configStr: string): FormTab[] {
   try {
     const config = typeof configStr === 'string' ? JSON.parse(configStr) : configStr
-    let rules: any[] | null = null
+    let rules: Record<string, unknown>[] | null = null
     if (config.rule && Array.isArray(config.rule)) {
       rules = config.rule
     } else if (Array.isArray(config)) {
@@ -93,7 +93,7 @@ export function parseFormConfigToTabs(configStr: string): FormTab[] {
     }
     if (!rules) return []
 
-    const tabsRule = rules.find((r: any) => r.type === 'el-tabs')
+    const tabsRule = rules.find((r: Record<string, unknown>) => r.type === 'el-tabs')
     if (!tabsRule || !Array.isArray(tabsRule.children)) return []
 
     const tabs: FormTab[] = []

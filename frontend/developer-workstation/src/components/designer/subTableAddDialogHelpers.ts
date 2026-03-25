@@ -25,6 +25,13 @@ export type ColumnType =
   | 'transfer'
   | 'cascader'
 
+export interface TreeNode {
+  label: string
+  value: string | number
+  children?: TreeNode[]
+  [key: string]: unknown
+}
+
 export interface DialogColumn {
   field: string
   label: string
@@ -32,12 +39,12 @@ export interface DialogColumn {
   required?: boolean
   placeholder?: string
   minWidth?: number
-  options?: Array<{ label: string; value: any }>
+  options?: Array<{ label: string; value: string | number }>
   props?: {
     action?: string
     accept?: string
     fileNameTargetField?: string
-    options?: Array<{ label: string; value: any }>
+    options?: Array<{ label: string; value: string | number }>
     multiple?: boolean
     precision?: number
     min?: number
@@ -45,18 +52,18 @@ export interface DialogColumn {
     rows?: number
     maxlength?: number
     userType?: 'user' | 'department'
-    treeData?: Array<{ label: string; value: any; children?: any[] }>
+    treeData?: TreeNode[]
     isRange?: boolean
     valueFormat?: string
     startPlaceholder?: string
     endPlaceholder?: string
     checkStrictly?: boolean
-    [key: string]: any
+    [key: string]: unknown
   }
 }
 
-export function buildInitialRow(columns: DialogColumn[]): Record<string, any> {
-  const row: Record<string, any> = {}
+export function buildInitialRow(columns: DialogColumn[]): Record<string, unknown> {
+  const row: Record<string, unknown> = {}
   for (const col of columns) {
     switch (col.type) {
       case 'number':
