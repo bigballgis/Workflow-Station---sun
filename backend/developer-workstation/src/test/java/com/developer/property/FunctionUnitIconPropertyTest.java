@@ -16,6 +16,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
+import org.springframework.web.client.RestTemplate;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -79,10 +80,12 @@ public class FunctionUnitIconPropertyTest {
             savedFunctionUnit[0] = fu;
             return fu;
         });
+
+        RestTemplate restTemplate = mock(RestTemplate.class);
         
         FunctionUnitComponent component = new FunctionUnitComponentImpl(
                 functionUnitRepository, processRepo, tableRepo, formRepo, 
-                actionRepo, versionRepo, iconRepository, objectMapper);
+                actionRepo, versionRepo, iconRepository, objectMapper, restTemplate);
         
         // Create function unit with icon
         FunctionUnitRequest request = new FunctionUnitRequest();
@@ -129,10 +132,12 @@ public class FunctionUnitIconPropertyTest {
             savedFunctionUnit[0] = fu;
             return fu;
         });
+
+        RestTemplate restTemplate = mock(RestTemplate.class);
         
         FunctionUnitComponent component = new FunctionUnitComponentImpl(
                 functionUnitRepository, processRepo, tableRepo, formRepo, 
-                actionRepo, versionRepo, iconRepository, objectMapper);
+                actionRepo, versionRepo, iconRepository, objectMapper, restTemplate);
         
         // Create function unit without icon
         FunctionUnitRequest request = new FunctionUnitRequest();

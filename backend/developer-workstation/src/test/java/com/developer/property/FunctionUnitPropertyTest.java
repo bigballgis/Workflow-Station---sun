@@ -13,6 +13,8 @@ import org.mockito.Mockito;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 
+import org.springframework.web.client.RestTemplate;
+
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -33,8 +35,9 @@ public class FunctionUnitPropertyTest {
         VersionRepository versionRepo = mock(VersionRepository.class);
         IconRepository iconRepo = mock(IconRepository.class);
         ObjectMapper objectMapper = new ObjectMapper();
+        RestTemplate restTemplate = mock(RestTemplate.class);
         return new FunctionUnitComponentImpl(
-                repository, processRepo, tableRepo, formRepo, actionRepo, versionRepo, iconRepo, objectMapper);
+                repository, processRepo, tableRepo, formRepo, actionRepo, versionRepo, iconRepo, objectMapper, restTemplate);
     }
     
     /**

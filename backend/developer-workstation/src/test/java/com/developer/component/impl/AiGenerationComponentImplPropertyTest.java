@@ -14,6 +14,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 
 import static org.mockito.ArgumentMatchers.*;
@@ -41,7 +42,7 @@ class AiGenerationComponentImplPropertyTest {
         AiWriteService aiWriteService = mock(AiWriteService.class);
 
         AiGenerationComponentImpl component = new AiGenerationComponentImpl(
-                aiGenerationService, aiLockService, aiValidationService, aiWriteService);
+                aiGenerationService, aiLockService, aiValidationService, aiWriteService, (Executor) Runnable::run);
 
         UUID sessionUuid = UUID.randomUUID();
         AiSession session = AiSession.builder()
@@ -89,7 +90,7 @@ class AiGenerationComponentImplPropertyTest {
         AiWriteService aiWriteService = mock(AiWriteService.class);
 
         AiGenerationComponentImpl component = new AiGenerationComponentImpl(
-                aiGenerationService, aiLockService, aiValidationService, aiWriteService);
+                aiGenerationService, aiLockService, aiValidationService, aiWriteService, (Executor) Runnable::run);
 
         UUID sessionUuid = UUID.randomUUID();
         AiSession session = AiSession.builder()
@@ -140,7 +141,7 @@ class AiGenerationComponentImplPropertyTest {
         AiWriteService aiWriteService = mock(AiWriteService.class);
 
         AiGenerationComponentImpl component = new AiGenerationComponentImpl(
-                aiGenerationService, aiLockService, aiValidationService, aiWriteService);
+                aiGenerationService, aiLockService, aiValidationService, aiWriteService, (Executor) Runnable::run);
 
         UUID sessionUuid = UUID.randomUUID();
         AiSession session = AiSession.builder()
