@@ -30,11 +30,11 @@ spec:
         - containerPort: 80
           name: http
         env:
-        - name: ADMIN_CENTER_URL
+        - name: KONG_PROXY_URL
           valueFrom:
             configMapKeyRef:
               name: workflow-platform-config
-              key: ADMIN_CENTER_URL
+              key: KONG_PROXY_URL
         resources:
           requests:
             memory: "128Mi"
@@ -101,21 +101,11 @@ spec:
         - containerPort: 80
           name: http
         env:
-        - name: USER_PORTAL_URL
+        - name: KONG_PROXY_URL
           valueFrom:
             configMapKeyRef:
               name: workflow-platform-config
-              key: USER_PORTAL_URL
-        - name: ADMIN_CENTER_URL
-          valueFrom:
-            configMapKeyRef:
-              name: workflow-platform-config
-              key: ADMIN_CENTER_URL
-        - name: DEVELOPER_WORKSTATION_URL
-          valueFrom:
-            configMapKeyRef:
-              name: workflow-platform-config
-              key: DEVELOPER_WORKSTATION_URL
+              key: KONG_PROXY_URL
         resources:
           requests:
             memory: "128Mi"
@@ -182,16 +172,11 @@ spec:
         - containerPort: 80
           name: http
         env:
-        - name: DEVELOPER_WORKSTATION_URL
+        - name: KONG_PROXY_URL
           valueFrom:
             configMapKeyRef:
               name: workflow-platform-config
-              key: DEVELOPER_WORKSTATION_URL
-        - name: ADMIN_CENTER_URL
-          valueFrom:
-            configMapKeyRef:
-              name: workflow-platform-config
-              key: ADMIN_CENTER_URL
+              key: KONG_PROXY_URL
         resources:
           requests:
             memory: "128Mi"

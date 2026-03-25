@@ -18,6 +18,7 @@
     
     <name>Platform API Gateway</name>
     <description>API Gateway for the low-code workflow platform</description>
+    <!-- DEPRECATED: 此模块已被 Kong Gateway 替代，参见 deploy/kong/。保留代码仅供参考，不再构建和部署。 -->
     
     <properties>
         <java.version>17</java.version>
@@ -116,6 +117,38 @@
             <groupId>net.jqwik</groupId>
             <artifactId>jqwik</artifactId>
             <version>1.8.2</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- Testcontainers for integration tests -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers</artifactId>
+            <version>2.0.3</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-lang3</artifactId>
+            <version>3.17.0</version>
+            <scope>test</scope>
+        </dependency>
+        <!-- JJWT for JWT token generation in tests -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>0.12.3</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>0.12.3</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>0.12.3</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
