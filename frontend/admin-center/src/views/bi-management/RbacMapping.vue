@@ -157,6 +157,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { Refresh, Search, Refresh as RefreshIcon, Plus } from '@element-plus/icons-vue'
 import {
@@ -166,6 +167,8 @@ import {
   type RbacMappingListParams,
   type RoleOptionResponse
 } from '@/api/biManagement'
+
+const { t } = useI18n()
 
 // State
 const loading = ref(false)
@@ -238,7 +241,7 @@ const handleSearch = async () => {
     }
     mappings.value = await biManagementApi.rbac.listMappings(params)
   } catch (error: any) {
-    ElMessage.error(error.message || 'Failed to query RBAC mapping list')
+    ElMessage.error(error.message || t('bi.rbac.queryFailed'))
   } finally {
     loading.value = false
   }
@@ -261,7 +264,7 @@ const handleSync = async () => {
     )
     handleSearch()
   } catch (error: any) {
-    ElMessage.error(error.message || 'Failed to sync Superset roles')
+    ElMessage.error(error.message || t('bi.rbac.syncFailed'))
   } finally {
     syncing.value = false
   }
@@ -273,7 +276,7 @@ const loadSupersetRoles = async () => {
   try {
     allSupersetRoles.value = await biManagementApi.rbac.listSupersetRoles()
   } catch (error: any) {
-    ElMessage.error(error.message || 'Failed to load Superset role list')
+    ElMessage.error(error.message || t('bi.rbac.loadSupersetRolesFailed'))
   } finally {
     supersetRolesLoading.value = false
   }
@@ -297,11 +300,11 @@ const handleEditSubmit = async () => {
     await biManagementApi.rbac.updateMapping(editForm.sysRoleId, {
       supersetRoleIds: editForm.selectedRoleIds
     })
-    ElMessage.success('Mapping updated successfully')
+    ElMessage.success(t('bi.rbac.updateSuccess'))
     editDialogVisible.value = false
     handleSearch()
   } catch (error: any) {
-    ElMessage.error(error.message || 'Failed to update mapping')
+    ElMessage.error(error.message || t('bi.rbac.updateFailed'))
   } finally {
     editLoading.value = false
   }
@@ -322,7 +325,7 @@ const loadUnmappedRoles = async () => {
   try {
     unmappedRoles.value = await biManagementApi.rbac.listUnmappedRoles()
   } catch (error: any) {
-    ElMessage.error(error.message || 'Failed to load unmapped roles')
+    ElMessage.error(error.message || t('bi.rbac.loadUnmappedRolesFailed'))
   } finally {
     unmappedRolesLoading.value = false
   }
@@ -334,7 +337,7 @@ const loadCreateSupersetRoles = async () => {
   try {
     createAllSupersetRoles.value = await biManagementApi.rbac.listSupersetRoles()
   } catch (error: any) {
-    ElMessage.error(error.message || 'Failed to load Superset role list')
+    ElMessage.error(error.message || t('bi.rbac.loadSupersetRolesFailed'))
   } finally {
     createSupersetRolesLoading.value = false
   }
@@ -351,11 +354,11 @@ const handleCreateSubmit = async () => {
       sysRoleId: createForm.sysRoleId,
       supersetRoleIds: createForm.supersetRoleIds
     })
-    ElMessage.success('Mapping created successfully')
+    ElMessage.success(t('bi.rbac.createSuccess'))
     createDialogVisible.value = false
     handleSearch()
   } catch (error: any) {
-    ElMessage.error(error.message || 'Failed to create mapping')
+    ElMessage.error(error.message || t('bi.rbac.createFailed'))
   } finally {
     createLoading.value = false
   }
@@ -374,11 +377,11 @@ const handleDelete = async (row: RbacMappingResponse) => {
       }
     )
     await biManagementApi.rbac.deleteMapping(row.sysRoleId)
-    ElMessage.success('Mapping deleted successfully')
+    ElMessage.success(t('bi.rbac.deleteSuccess'))
     handleSearch()
   } catch (error: any) {
     if (error === 'cancel' || error?.toString?.() === 'cancel') return
-    ElMessage.error(error.message || 'Failed to delete mapping')
+    ElMessage.error(error.message || t('bi.rbac.deleteFailed'))
   }
 }
 

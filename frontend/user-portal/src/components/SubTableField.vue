@@ -98,11 +98,14 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Plus, Document, Loading } from '@element-plus/icons-vue'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import SubTableAddDialog from './SubTableAddDialog.vue'
 import { resolveDisplayValue } from './subTableAddDialogHelpers'
 import type { DialogColumn } from './subTableAddDialogHelpers'
+
+const { t } = useI18n()
 
 type Column = DialogColumn
 
@@ -171,13 +174,13 @@ async function downloadFile(url: string, savedName: string | undefined, rowIndex
 
   const filename = getFilenameFromUrl(url, savedName)
   downloadingKeys.value = { ...downloadingKeys.value, [key]: true }
-  const msg = ElMessage({ message: '正在下载文件...', type: 'info', duration: 0 })
+  const msg = ElMessage({ message: t('common.downloading'), type: 'info', duration: 0 })
 
   try {
     const response = await fetch(url)
     if (!response.ok) {
       msg.close()
-      ElMessage.error(response.status === 404 ? '文件不存在，无法下载' : '文件下载失败，请重试')
+      ElMessage.error(response.status === 404 ? t('common.fileNotFound') : t('common.downloadFailed'))
       return
     }
     const blob = await response.blob()
@@ -192,7 +195,7 @@ async function downloadFile(url: string, savedName: string | undefined, rowIndex
     msg.close()
   } catch {
     msg.close()
-    ElMessage.error('文件下载失败，请重试')
+    ElMessage.error(t('common.downloadFailed'))
   } finally {
     const next = { ...downloadingKeys.value }
     delete next[key]

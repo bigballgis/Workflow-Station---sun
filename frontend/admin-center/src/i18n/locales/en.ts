@@ -582,6 +582,42 @@ export default {
     code: 'Business Unit Code',
     path: 'Path'
   },
+  bi: {
+    dashboard: {
+      queryFailed: 'Failed to query dashboard list',
+      syncSuccess: 'Sync completed: {created} created, {updated} updated, {autoInactivated} auto-inactivated',
+      syncFailed: 'Failed to sync dashboards',
+      updateSuccess: 'Updated successfully',
+      updateFailed: 'Update failed',
+      statusChangeSuccess: '{action}d successfully',
+      statusChangeFailed: 'Failed to {action}',
+      deleteSuccess: 'Deleted successfully',
+      deleteFailed: 'Delete failed'
+    },
+    rbac: {
+      queryFailed: 'Failed to query RBAC mapping list',
+      syncFailed: 'Failed to sync Superset roles',
+      loadSupersetRolesFailed: 'Failed to load Superset role list',
+      loadUnmappedRolesFailed: 'Failed to load unmapped roles',
+      updateSuccess: 'Mapping updated successfully',
+      updateFailed: 'Failed to update mapping',
+      createSuccess: 'Mapping created successfully',
+      createFailed: 'Failed to create mapping',
+      deleteSuccess: 'Mapping deleted successfully',
+      deleteFailed: 'Failed to delete mapping'
+    },
+    assignment: {
+      queryFailed: 'Failed to query assignment list',
+      loadDashboardsFailed: 'Failed to load dashboard list',
+      loadTargetsFailed: 'Failed to load target list',
+      updateSuccess: 'Updated successfully',
+      createSuccess: 'Created successfully',
+      submitFailed: 'Update failed',
+      createFailed: 'Create failed',
+      deleteSuccess: 'Deleted successfully',
+      deleteFailed: 'Delete failed'
+    }
+  },
   api: {
     requestFailed: 'Request failed',
     networkError: 'Network error, please check your connection',

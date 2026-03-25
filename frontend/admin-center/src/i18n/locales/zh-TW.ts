@@ -581,6 +581,42 @@ export default {
     code: '業務單元編碼',
     path: '路徑'
   },
+  bi: {
+    dashboard: {
+      queryFailed: '查詢儀表板列表失敗',
+      syncSuccess: '同步完成：新增 {created} 個，更新 {updated} 個，自動停用 {autoInactivated} 個',
+      syncFailed: '同步儀表板失敗',
+      updateSuccess: '更新成功',
+      updateFailed: '更新失敗',
+      statusChangeSuccess: '{action}成功',
+      statusChangeFailed: '{action}失敗',
+      deleteSuccess: '刪除成功',
+      deleteFailed: '刪除失敗'
+    },
+    rbac: {
+      queryFailed: '查詢 RBAC 對應列表失敗',
+      syncFailed: '同步 Superset 角色失敗',
+      loadSupersetRolesFailed: '載入 Superset 角色列表失敗',
+      loadUnmappedRolesFailed: '載入未對應角色失敗',
+      updateSuccess: '對應更新成功',
+      updateFailed: '更新對應失敗',
+      createSuccess: '對應建立成功',
+      createFailed: '建立對應失敗',
+      deleteSuccess: '對應刪除成功',
+      deleteFailed: '刪除對應失敗'
+    },
+    assignment: {
+      queryFailed: '查詢分配列表失敗',
+      loadDashboardsFailed: '載入儀表板列表失敗',
+      loadTargetsFailed: '載入目標列表失敗',
+      updateSuccess: '更新成功',
+      createSuccess: '建立成功',
+      submitFailed: '更新失敗',
+      createFailed: '建立失敗',
+      deleteSuccess: '刪除成功',
+      deleteFailed: '刪除失敗'
+    }
+  },
   api: {
     requestFailed: '請求失敗',
     networkError: '網路錯誤，請檢查網路連線',

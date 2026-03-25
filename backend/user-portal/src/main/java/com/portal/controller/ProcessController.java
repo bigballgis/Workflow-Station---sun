@@ -18,7 +18,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 @Slf4j
 @RestController
@@ -115,15 +114,12 @@ public class ProcessController {
 
     @GetMapping("/actions")
     @Operation(summary = "根据ID列表获取动作定义")
+    // TODO: 重构 — 将 repository 调用移至 Component 层，遵循 Controller → Component → Repository 分层架构
     public ApiResponse<List<ActionDefinition>> getActionsByIds(
             @RequestParam List<String> ids) {
-        log.info("getActionsByIds called with ids: {}", ids);
         List<ActionDefinition> actions = actionDefinitionRepository.findAllById(ids);
-        log.info("getActionsByIds found {} actions: {}", actions.size(), actions.stream().map(ActionDefinition::getId).collect(Collectors.toList()));
         if (actions.isEmpty()) {
-            // Debug: try to count total records
-            long total = actionDefinitionRepository.count();
-            log.warn("No actions found for ids {}. Total records in sys_action_definitions: {}", ids, total);
+            log.warn("No actions found for ids: {}", ids);
         }
         return ApiResponse.success(actions);
     }
@@ -241,9 +237,9 @@ public class ProcessController {
     @Operation(summary = "获取流程历史记录")
     public ApiResponse<List<Map<String, Object>>> getProcessHistory(
             @PathVariable String processId) {
-        log.info("=== ProcessController.getProcessHistory called with processId: {}", processId);
+        log.debug("ProcessController.getProcessHistory called with processId: {}", processId);
         List<Map<String, Object>> history = processComponent.getProcessHistory(processId);
-        log.info("=== ProcessController.getProcessHistory returning {} records", history.size());
+        log.debug("ProcessController.getProcessHistory returning {} records", history.size());
         return ApiResponse.success(history);
     }
     
@@ -252,7 +248,7 @@ public class ProcessController {
     public ApiResponse<Void> processCompleted(
             @PathVariable String processId,
             @RequestBody Map<String, Object> request) {
-        log.info("=== ProcessController.processCompleted called for processId: {}", processId);
+        log.debug("ProcessController.processCompleted called for processId: {}", processId);
         String lastActivityName = (String) request.get("lastActivityName");
         processComponent.markProcessAsCompleted(processId, lastActivityName);
         return ApiResponse.success(null);

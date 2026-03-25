@@ -581,6 +581,42 @@ export default {
     code: '业务单元编码',
     path: '路径'
   },
+  bi: {
+    dashboard: {
+      queryFailed: '查询仪表盘列表失败',
+      syncSuccess: '同步完成：新增 {created} 个，更新 {updated} 个，自动停用 {autoInactivated} 个',
+      syncFailed: '同步仪表盘失败',
+      updateSuccess: '更新成功',
+      updateFailed: '更新失败',
+      statusChangeSuccess: '{action}成功',
+      statusChangeFailed: '{action}失败',
+      deleteSuccess: '删除成功',
+      deleteFailed: '删除失败'
+    },
+    rbac: {
+      queryFailed: '查询 RBAC 映射列表失败',
+      syncFailed: '同步 Superset 角色失败',
+      loadSupersetRolesFailed: '加载 Superset 角色列表失败',
+      loadUnmappedRolesFailed: '加载未映射角色失败',
+      updateSuccess: '映射更新成功',
+      updateFailed: '更新映射失败',
+      createSuccess: '映射创建成功',
+      createFailed: '创建映射失败',
+      deleteSuccess: '映射删除成功',
+      deleteFailed: '删除映射失败'
+    },
+    assignment: {
+      queryFailed: '查询分配列表失败',
+      loadDashboardsFailed: '加载仪表盘列表失败',
+      loadTargetsFailed: '加载目标列表失败',
+      updateSuccess: '更新成功',
+      createSuccess: '创建成功',
+      submitFailed: '更新失败',
+      createFailed: '创建失败',
+      deleteSuccess: '删除成功',
+      deleteFailed: '删除失败'
+    }
+  },
   api: {
     requestFailed: '请求失败',
     networkError: '网络错误，请检查网络连接',

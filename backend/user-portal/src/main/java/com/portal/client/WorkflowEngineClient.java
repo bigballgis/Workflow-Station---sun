@@ -576,31 +576,31 @@ public class WorkflowEngineClient {
      * 获取流程实例流转历史（通过流程实例ID，包含用户名称解析）
      */
     public Optional<List<Map<String, Object>>> getProcessInstanceHistory(String processInstanceId) {
-        log.info("=== WorkflowEngineClient.getProcessInstanceHistory called for: {}", processInstanceId);
+        log.debug("WorkflowEngineClient.getProcessInstanceHistory called for: {}", processInstanceId);
         if (!isAvailable()) {
-            log.warn("=== Workflow engine not available");
+            log.warn("Workflow engine not available");
             return Optional.empty();
         }
         try {
             String url = workflowEngineUrl + "/api/v1/tasks/process/" + processInstanceId + "/history";
-            log.info("=== Calling workflow engine URL: {}", url);
+            log.debug("Calling workflow engine URL: {}", url);
             
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                 url, HttpMethod.GET, null,
                 new ParameterizedTypeReference<Map<String, Object>>() {});
             
-            log.info("=== Response status: {}", response.getStatusCode());
+            log.debug("Response status: {}", response.getStatusCode());
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                 Map<String, Object> body = response.getBody();
-                log.info("=== Response body keys: {}", body.keySet());
+                log.debug("Response body keys: {}", body.keySet());
                 @SuppressWarnings("unchecked")
                 List<Map<String, Object>> data = (List<Map<String, Object>>) body.get("data");
-                log.info("=== Extracted {} records from response", data != null ? data.size() : 0);
+                log.debug("Extracted {} records from response", data != null ? data.size() : 0);
                 return Optional.ofNullable(data);
             }
         } catch (Exception e) {
-            log.error("=== Failed to get process instance history from workflow engine: {}", e.getMessage(), e);
+            log.error("Failed to get process instance history from workflow engine: {}", e.getMessage(), e);
         }
         return Optional.empty();
     }

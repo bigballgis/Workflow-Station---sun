@@ -150,6 +150,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { Plus, Search, Refresh as RefreshIcon } from '@element-plus/icons-vue'
 import {
@@ -164,6 +165,8 @@ import {
 import { userApi } from '@/api/user'
 import { roleApi } from '@/api/role'
 import { businessUnitApi } from '@/api/businessUnit'
+
+const { t } = useI18n()
 
 // State
 const loading = ref(false)
@@ -256,7 +259,7 @@ const handleSearch = async () => {
     assignments.value = result.content
     total.value = result.totalElements
   } catch (error: any) {
-    ElMessage.error(error.message || 'Failed to query assignment list')
+    ElMessage.error(error.message || t('bi.assignment.queryFailed'))
   } finally {
     loading.value = false
   }
@@ -275,7 +278,7 @@ const loadActiveDashboards = async () => {
     const result = await biManagementApi.dashboard.list({ status: 'ACTIVE', size: 1000 })
     activeDashboards.value = result.content
   } catch (error: any) {
-    ElMessage.error(error.message || 'Failed to load dashboard list')
+    ElMessage.error(error.message || t('bi.assignment.loadDashboardsFailed'))
   } finally {
     dashboardsLoading.value = false
   }
@@ -309,7 +312,7 @@ const loadTargets = async (targetType: string) => {
       }))
     }
   } catch (error: any) {
-    ElMessage.error(error.message || 'Failed to load target list')
+    ElMessage.error(error.message || t('bi.assignment.loadTargetsFailed'))
   } finally {
     targetsLoading.value = false
   }
@@ -377,15 +380,15 @@ const handleSubmit = async () => {
 
     if (isEdit.value) {
       await biManagementApi.assignment.update(editingId.value, data)
-      ElMessage.success('Updated successfully')
+      ElMessage.success(t('bi.assignment.updateSuccess'))
     } else {
       await biManagementApi.assignment.create(data)
-      ElMessage.success('Created successfully')
+      ElMessage.success(t('bi.assignment.createSuccess'))
     }
     dialogVisible.value = false
     handleSearch()
   } catch (error: any) {
-    ElMessage.error(error.message || (isEdit.value ? 'Update failed' : 'Create failed'))
+    ElMessage.error(error.message || (isEdit.value ? t('bi.assignment.submitFailed') : t('bi.assignment.createFailed')))
   } finally {
     submitLoading.value = false
   }
@@ -400,11 +403,11 @@ const handleDelete = async (row: DashboardAssignmentResponse) => {
       { type: 'warning', confirmButtonText: 'Delete', confirmButtonClass: 'el-button--danger' }
     )
     await biManagementApi.assignment.delete(row.id)
-    ElMessage.success('Deleted successfully')
+    ElMessage.success(t('bi.assignment.deleteSuccess'))
     handleSearch()
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(error.message || 'Delete failed')
+      ElMessage.error(error.message || t('bi.assignment.deleteFailed'))
     }
   }
 }

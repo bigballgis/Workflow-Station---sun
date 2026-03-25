@@ -119,6 +119,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, Search, Refresh as RefreshIcon } from '@element-plus/icons-vue'
 import {
@@ -127,6 +128,8 @@ import {
   type DashboardStatus,
   type DashboardListParams
 } from '@/api/biManagement'
+
+const { t } = useI18n()
 
 // State
 const loading = ref(false)
@@ -187,7 +190,7 @@ const handleSearch = async () => {
     dashboards.value = result.content
     total.value = result.totalElements
   } catch (error: any) {
-    ElMessage.error(error.message || 'Failed to query dashboard list')
+    ElMessage.error(error.message || t('bi.dashboard.queryFailed'))
   } finally {
     loading.value = false
   }
@@ -205,11 +208,11 @@ const handleSync = async () => {
   try {
     const result = await biManagementApi.dashboard.sync()
     ElMessage.success(
-      `Sync completed: ${result.created} created, ${result.updated} updated, ${result.autoInactivated} auto-inactivated`
+      t('bi.dashboard.syncSuccess', { created: result.created, updated: result.updated, autoInactivated: result.autoInactivated })
     )
     handleSearch()
   } catch (error: any) {
-    ElMessage.error(error.message || 'Failed to sync dashboards')
+    ElMessage.error(error.message || t('bi.dashboard.syncFailed'))
   } finally {
     syncing.value = false
   }
@@ -231,11 +234,11 @@ const handleEditSubmit = async () => {
       tags: editForm.tags || undefined,
       isDefaultLanding: editForm.isDefaultLanding
     })
-    ElMessage.success('Updated successfully')
+    ElMessage.success(t('bi.dashboard.updateSuccess'))
     editDialogVisible.value = false
     handleSearch()
   } catch (error: any) {
-    ElMessage.error(error.message || 'Update failed')
+    ElMessage.error(error.message || t('bi.dashboard.updateFailed'))
   } finally {
     editLoading.value = false
   }
@@ -250,11 +253,11 @@ const handleToggleStatus = async (row: DashboardRegistryResponse) => {
   try {
     await ElMessageBox.confirm(`Are you sure you want to ${action} "${row.dashboardTitle}"?`, 'Confirm', { type: 'warning' })
     await biManagementApi.dashboard.updateStatus(row.id, { status: newStatus })
-    ElMessage.success(`${action.charAt(0).toUpperCase() + action.slice(1)}d successfully`)
+    ElMessage.success(t('bi.dashboard.statusChangeSuccess', { action: action.charAt(0).toUpperCase() + action.slice(1) }))
     handleSearch()
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(error.message || `Failed to ${action}`)
+      ElMessage.error(error.message || t('bi.dashboard.statusChangeFailed', { action }))
     }
   }
 }
@@ -268,11 +271,11 @@ const handleDelete = async (row: DashboardRegistryResponse) => {
       { type: 'warning', confirmButtonText: 'Delete', confirmButtonClass: 'el-button--danger' }
     )
     await biManagementApi.dashboard.delete(row.id)
-    ElMessage.success('Deleted successfully')
+    ElMessage.success(t('bi.dashboard.deleteSuccess'))
     handleSearch()
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(error.message || 'Delete failed')
+      ElMessage.error(error.message || t('bi.dashboard.deleteFailed'))
     }
   }
 }

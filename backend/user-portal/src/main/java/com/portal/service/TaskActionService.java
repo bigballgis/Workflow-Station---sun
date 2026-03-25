@@ -28,7 +28,7 @@ public class TaskActionService {
      * 通过 Workflow Engine API 获取任务的 actionIds，然后从数据库查询 action 定义
      */
     public List<TaskActionInfo> getTaskActions(String taskId) {
-        log.info("=== TaskActionService.getTaskActions called for taskId: {}", taskId);
+        log.debug("TaskActionService.getTaskActions called for taskId: {}", taskId);
         try {
             // 1. 从 Workflow Engine 获取任务的 actionIds
             Optional<Map<String, Object>> result = workflowEngineClient.getTaskById(taskId);
@@ -49,21 +49,6 @@ public class TaskActionService {
             
             // 2. 提取 actionIds（引擎 JSON 常为数字数组 [1,2,3]，反序列化为 List<Integer>，不能直接强转为 List<String>）
             List<String> actionIds = normalizeActionIdList(data.get("actionIds"));
-            // #region agent log
-            try {
-                String _logPath = System.getenv("DEBUG_LOG_PATH");
-                if (_logPath == null || _logPath.isEmpty()) {
-                    _logPath = "/Users/qiweige/Desktop/PROJECTXXXSUN/Workflow-Station---sun/.cursor/debug-8aa4e2.log";
-                }
-                Object raw = data.get("actionIds");
-                String rawCls = raw == null ? "null" : raw.getClass().getName();
-                java.nio.file.Files.writeString(java.nio.file.Paths.get(_logPath),
-                    String.format("{\"sessionId\":\"8aa4e2\",\"hypothesisId\":\"H3\",\"location\":\"TaskActionService.getTaskActions\",\"message\":\"after normalize\",\"data\":{\"taskId\":\"%s\",\"rawEngineType\":\"%s\",\"normalizedCount\":%d,\"normalizedIds\":\"%s\"},\"timestamp\":%d}\n",
-                        String.valueOf(taskId).replace("\"", "'"), rawCls, actionIds != null ? actionIds.size() : -1,
-                        actionIds == null || actionIds.isEmpty() ? "" : String.join(",", actionIds).replace("\"", "'"), System.currentTimeMillis()),
-                    java.nio.charset.StandardCharsets.UTF_8, java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
-            } catch (Exception _ignored) {}
-            // #endregion
             
             if (actionIds == null || actionIds.isEmpty()) {
                 log.info("No actions defined for task: {}", taskId);
@@ -114,20 +99,6 @@ public class TaskActionService {
             log.info("Fetching {} action definitions from database", actionIds.size());
             
             List<ActionDefinition> actions = actionDefinitionRepository.findAllById(actionIds);
-            // #region agent log
-            try {
-                String _logPath = System.getenv("DEBUG_LOG_PATH");
-                if (_logPath == null || _logPath.isEmpty()) {
-                    _logPath = "/Users/qiweige/Desktop/PROJECTXXXSUN/Workflow-Station---sun/.cursor/debug-8aa4e2.log";
-                }
-                java.nio.file.Files.writeString(java.nio.file.Paths.get(_logPath),
-                    String.format("{\"sessionId\":\"8aa4e2\",\"hypothesisId\":\"H2\",\"location\":\"TaskActionService.fetchActionDefinitions\",\"message\":\"db lookup\",\"data\":{\"requestedIdsCount\":%d,\"foundRows\":%d,\"requestedSample\":\"%s\"},\"timestamp\":%d}\n",
-                        actionIds.size(), actions.size(),
-                        actionIds.size() > 5 ? String.join(",", actionIds.subList(0, 5)).replace("\"", "'") : String.join(",", actionIds).replace("\"", "'"),
-                        System.currentTimeMillis()),
-                    java.nio.charset.StandardCharsets.UTF_8, java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
-            } catch (Exception _ignored) {}
-            // #endregion
             
             // Fallback 1: BPMN stores dw_action_definitions IDs (integers like 17,18,23),
             // but sys_action_definitions uses UUID IDs. When direct ID lookup fails,

@@ -349,25 +349,25 @@ public class TaskQueryComponent {
      * Get task details by ID.
      */
     public Optional<TaskInfo> getTaskById(String taskId) {
-        log.info("=== getTaskById called with taskId: {}", taskId);
+        log.debug("getTaskById called with taskId: {}", taskId);
         
         // Check if the Flowable engine is available
         if (!workflowEngineClient.isAvailable()) {
             throw new IllegalStateException("Flowable engine unavailable, please check if workflow-engine-core service is running");
         }
         
-        log.info("=== Workflow engine is available, calling getTaskById");
+        log.debug("Workflow engine is available, calling getTaskById");
         
         try {
             Optional<Map<String, Object>> result = workflowEngineClient.getTaskById(taskId);
-            log.info("=== Got result from workflow engine: {}", result.isPresent());
+            log.debug("Got result from workflow engine: {}", result.isPresent());
             
             if (result.isPresent()) {
                 Map<String, Object> responseBody = result.get();
                 @SuppressWarnings("unchecked")
                 Map<String, Object> data = (Map<String, Object>) responseBody.get("data");
                 if (data != null) {
-                    log.info("=== Converting task data to TaskInfo");
+                    log.debug("Converting task data to TaskInfo");
                     TaskInfo taskInfo = convertMapToTaskInfo(data);
                     
                     // Supplement variables from local ProcessInstance (Flowable may lose data when serializing complex nested objects)
@@ -383,7 +383,7 @@ public class TaskQueryComponent {
                                 // Override with local DB variables (more complete, includes __subTables__)
                                 merged.putAll(pi.getVariables());
                                 taskInfo.setVariables(merged);
-                                log.info("=== Merged variables from local DB for process {}, keys: {}", 
+                                log.debug("Merged variables from local DB for process {}, keys: {}", 
                                     processInstanceId, merged.keySet());
                             }
                         });
@@ -392,27 +392,10 @@ public class TaskQueryComponent {
                     // Get available task actions: only query DB and set actions when the engine returns actionIds (including empty array);
                     // if the engine did not return actionIds (node has no Actions configured), keep actions=null so the frontend does not show default Approve/Reject.
                     Object rawActionIds = data.get("actionIds");
-                    // #region agent log
-                    try {
-                        String _logPath = System.getenv("DEBUG_LOG_PATH");
-                        if (_logPath == null || _logPath.isEmpty()) {
-                            _logPath = "/Users/qiweige/Desktop/PROJECTXXXSUN/Workflow-Station---sun/.cursor/debug-8aa4e2.log";
-                        }
-                        String rc = rawActionIds == null ? "null" : rawActionIds.getClass().getSimpleName();
-                        String pv = rawActionIds == null ? "" : String.valueOf(rawActionIds).replace("\"", "'").replace("\n", " ");
-                        if (pv.length() > 400) {
-                            pv = pv.substring(0, 400);
-                        }
-                        java.nio.file.Files.writeString(java.nio.file.Paths.get(_logPath),
-                            String.format("{\"sessionId\":\"8aa4e2\",\"hypothesisId\":\"H1\",\"location\":\"TaskQueryComponent.getTaskById\",\"message\":\"engine actionIds at portal\",\"data\":{\"taskId\":\"%s\",\"rawClass\":\"%s\",\"preview\":\"%s\",\"willCallGetTaskActions\":%s},\"timestamp\":%d}\n",
-                                String.valueOf(taskId).replace("\"", "'"), rc, pv, Boolean.toString(rawActionIds != null), System.currentTimeMillis()),
-                            java.nio.charset.StandardCharsets.UTF_8, java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
-                    } catch (Exception _ignored) {}
-                    // #endregion
                     if (rawActionIds != null) {
                         try {
                             List<TaskActionInfo> actions = taskActionService.getTaskActions(taskId);
-                            log.info("=== Got {} actions from TaskActionService", actions != null ? actions.size() : 0);
+                            log.debug("Got {} actions from TaskActionService", actions != null ? actions.size() : 0);
                             taskInfo.setActions(actions != null ? actions : Collections.emptyList());
                         } catch (Exception e) {
                             log.warn("Failed to get actions for task {}: {}", taskId, e.getMessage(), e);

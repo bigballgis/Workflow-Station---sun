@@ -10,25 +10,17 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 import javax.sql.DataSource;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
 import java.util.HashMap;
 import java.util.Map;
 
 /**
  * Runs once at startup to log which database the app is actually connected to.
- * Writes NDJSON to debug log file for session bfd681.
  */
 @Component
 @Order(Integer.MAX_VALUE)
 @RequiredArgsConstructor
 @Slf4j
 public class DataSourceDiagnosticRunner implements ApplicationRunner {
-
-    private static final String DEBUG_LOG_PATH = "/Users/qiweige/Desktop/PROJECTXXXSUN/Workflow-Station---sun/.cursor/debug-bfd681.log";
 
     private final DataSource dataSource;
     private final JdbcTemplate jdbcTemplate;
@@ -81,23 +73,7 @@ public class DataSourceDiagnosticRunner implements ApplicationRunner {
             data.put("biDashboardRegistryExistsError", e.getMessage());
         }
 
-        // #region agent log
-        try {
-            String dataJson = objectMapper.writeValueAsString(data);
-            String ndjson = String.format("{\"sessionId\":\"bfd681\",\"runId\":\"startup\",\"hypothesisId\":\"A\",\"location\":\"DataSourceDiagnosticRunner.run\",\"message\":\"DB connection diagnostic\",\"data\":%s,\"timestamp\":%d}%n",
-                    dataJson, System.currentTimeMillis());
-            Path path = Paths.get(DEBUG_LOG_PATH);
-            Files.createDirectories(path.getParent());
-            Files.write(path, ndjson.getBytes(StandardCharsets.UTF_8), StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-        } catch (Exception e) {
-            log.warn("Could not write debug log file (e.g. when running in Docker): {}", e.getMessage());
-        }
-        // #endregion
-
         log.info("DataSource diagnostic: jdbcUrl={}, currentDatabase={}, serverAddr={}, serverPort={}, biDashboardRegistryExists={}",
                 jdbcUrl, data.get("currentDatabase"), data.get("serverAddr"), data.get("serverPort"), data.get("biDashboardRegistryExists"));
-        try {
-            log.info("DEBUG_DB_CONNECTION: {}", objectMapper.writeValueAsString(data));
-        } catch (Exception ignored) { }
     }
 }

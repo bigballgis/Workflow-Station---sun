@@ -828,7 +828,7 @@ public class ProcessComponent {
         String currentAssignee = instance.getCurrentAssignee();
         String currentAssigneeName = null;
         
-        log.debug("=== toProcessInstanceInfo: processId={}, status={}, currentAssignee from DB={}", 
+        log.debug("toProcessInstanceInfo: processId={}, status={}, currentAssignee from DB={}", 
                 instance.getId(), instance.getStatus(), currentAssignee);
         
         // 如果有当前处理人，尝试从 workflow-engine 获取任务信息以获取用户名称
@@ -869,7 +869,7 @@ public class ProcessComponent {
             currentAssigneeName = resolveUserDisplayName(currentAssignee);
         }
         
-        log.debug("=== toProcessInstanceInfo: final currentAssigneeName={}", currentAssigneeName);
+        log.debug("toProcessInstanceInfo: final currentAssigneeName={}", currentAssigneeName);
         
         return ProcessInstanceInfo.builder()
                 .id(instance.getId())
@@ -1227,14 +1227,14 @@ public class ProcessComponent {
      * 调用 workflow-engine 的流程历史接口，返回已解析用户名称的历史记录
      */
     public List<Map<String, Object>> getProcessHistory(String processId) {
-        log.info("=== ProcessComponent.getProcessHistory called for: {}", processId);
+        log.debug("ProcessComponent.getProcessHistory called for: {}", processId);
         
         if (!workflowEngineClient.isAvailable()) {
-            log.warn("=== Workflow engine not available, returning empty history");
+            log.warn("Workflow engine not available, returning empty history");
             return Collections.emptyList();
         }
         
-        log.info("=== Workflow engine is available, calling getProcessInstanceHistory");
+        log.debug("Workflow engine is available, calling getProcessInstanceHistory");
         
         try {
             // 直接调用 workflow-engine 的流程实例历史接口（通过 processInstanceId）
@@ -1243,15 +1243,15 @@ public class ProcessComponent {
             
             if (historyResult.isPresent()) {
                 List<Map<String, Object>> history = historyResult.get();
-                log.info("=== Got {} history records for process: {}", history.size(), processId);
+                log.debug("Got {} history records for process: {}", history.size(), processId);
                 return history;
             } else {
-                log.warn("=== Failed to get process history from workflow engine for process: {}", processId);
+                log.warn("Failed to get process history from workflow engine for process: {}", processId);
                 return Collections.emptyList();
             }
             
         } catch (Exception e) {
-            log.error("=== Failed to get process history for {}: {}", processId, e.getMessage(), e);
+            log.error("Failed to get process history for {}: {}", processId, e.getMessage(), e);
             return Collections.emptyList();
         }
     }
@@ -1261,7 +1261,7 @@ public class ProcessComponent {
      * 由 workflow-engine 的流程完成监听器调用
      */
     public void markProcessAsCompleted(String processId, String lastActivityName) {
-        log.info("=== ProcessComponent.markProcessAsCompleted called for: {} with lastActivity: {}", 
+        log.debug("ProcessComponent.markProcessAsCompleted called for: {} with lastActivity: {}", 
                 processId, lastActivityName);
         
         try {

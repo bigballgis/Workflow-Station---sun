@@ -277,7 +277,7 @@ public class TaskManagerComponent {
                 return processDefinition.getName();
             }
         } catch (Exception e) {
-            // 忽略异常，返回 null
+            log.warn("Failed to get process definition name for id: {}", processDefinitionId, e);
         }
         return extractProcessDefinitionKey(processDefinitionId);
     }
@@ -1089,21 +1089,6 @@ public class TaskManagerComponent {
         }
         
         List<String> extractedActionIds = extractActionIds(task);
-        // #region agent log
-        try {
-            String _logPath = System.getenv("DEBUG_LOG_PATH");
-            if (_logPath == null || _logPath.isEmpty()) {
-                _logPath = "/Users/qiweige/Desktop/PROJECTXXXSUN/Workflow-Station---sun/.cursor/debug-8aa4e2.log";
-            }
-            int _sz = extractedActionIds == null ? -1 : extractedActionIds.size();
-            String _ids = extractedActionIds == null ? "null" : String.join(",", extractedActionIds).replace("\\", "\\\\").replace("\"", "'");
-            String _tdk = task.getTaskDefinitionKey() != null ? task.getTaskDefinitionKey().replace("\"", "'") : "";
-            java.nio.file.Files.writeString(java.nio.file.Paths.get(_logPath),
-                String.format("{\"sessionId\":\"8aa4e2\",\"hypothesisId\":\"H4\",\"location\":\"TaskManagerComponent.buildTaskInfoFromFlowableTask\",\"message\":\"extractActionIds\",\"data\":{\"taskId\":\"%s\",\"taskDefKey\":\"%s\",\"size\":%d,\"ids\":\"%s\"},\"timestamp\":%d}\n",
-                    String.valueOf(task.getId()).replace("\"", "'"), _tdk, _sz, _ids, System.currentTimeMillis()),
-                StandardCharsets.UTF_8, java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
-        } catch (Exception _ignored) {}
-        // #endregion
         
         return TaskListResult.TaskInfo.builder()
             .taskId(task.getId())
