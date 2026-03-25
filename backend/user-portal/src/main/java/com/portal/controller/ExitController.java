@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -23,6 +24,7 @@ import java.util.Map;
 @RequestMapping("/exit")
 @RequiredArgsConstructor
 @Tag(name = "Exit Operations", description = "User self-exit operations")
+// NOTE: Stub implementation — all endpoints return 501 until admin-center REST client integration is complete
 public class ExitController {
     
     // TODO: Inject MemberManagementService from admin-center via REST client
@@ -42,9 +44,9 @@ public class ExitController {
         // 1. Remove user from virtual group
         // 2. Revoke the role bound to the virtual group
         
-        return ResponseEntity.ok(Map.of(
-            "success", true,
-            "message", "Successfully exited from virtual group"
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body(Map.of(
+            "success", false,
+            "message", "Feature under development: admin-center integration pending"
         ));
     }
     
@@ -63,9 +65,9 @@ public class ExitController {
         // 1. Remove user from business unit
         // 2. Deactivate all BU-Bounded roles for this business unit
         
-        return ResponseEntity.ok(Map.of(
-            "success", true,
-            "message", "Successfully exited from business unit"
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body(Map.of(
+            "success", false,
+            "message", "Feature under development: admin-center integration pending"
         ));
     }
     
@@ -78,9 +80,9 @@ public class ExitController {
         // TODO: Call admin-center API to get user's memberships
         // GET /api/v1/admin/users/{userId}/memberships
         
-        return ResponseEntity.ok(Map.of(
-            "virtualGroups", List.of(),
-            "businessUnits", List.of()
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body(Map.of(
+            "success", false,
+            "message", "Feature under development: admin-center integration pending"
         ));
     }
     
@@ -93,6 +95,6 @@ public class ExitController {
         // TODO: Call admin-center API to get user's exit history
         // GET /api/v1/admin/member-change-logs?userId={userId}&changeType=EXIT
         
-        return ResponseEntity.ok(List.of());
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body(List.of());
     }
 }

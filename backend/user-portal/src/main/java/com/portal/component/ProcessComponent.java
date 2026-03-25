@@ -1346,7 +1346,7 @@ public class ProcessComponent {
                     if (priceVal instanceof Number) {
                         price = ((Number) priceVal).doubleValue();
                     } else {
-                        try { price = Double.parseDouble(priceVal.toString()); } catch (Exception ignored) {}
+                        try { price = Double.parseDouble(priceVal.toString()); } catch (NumberFormatException e) { log.debug("Failed to parse price value: {}", priceVal); }
                     }
 
                     totalPrice += price;

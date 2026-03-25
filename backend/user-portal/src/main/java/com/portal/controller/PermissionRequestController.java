@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -23,6 +24,7 @@ import java.util.Map;
 @RequestMapping("/permission-requests")
 @RequiredArgsConstructor
 @Tag(name = "Permission Requests", description = "User permission request operations")
+// NOTE: Stub implementation — all endpoints return 501 until admin-center REST client integration is complete
 public class PermissionRequestController {
     
     // TODO: Inject PermissionRequestService from admin-center via REST client
@@ -37,9 +39,9 @@ public class PermissionRequestController {
         // TODO: Call admin-center API to create virtual group request
         // POST /api/v1/admin/permission-requests/virtual-group
         
-        return ResponseEntity.ok(Map.of(
-            "success", true,
-            "message", "Application submitted successfully"
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body(Map.of(
+            "success", false,
+            "message", "Feature under development: admin-center integration pending"
         ));
     }
     
@@ -61,9 +63,9 @@ public class PermissionRequestController {
         // Body: { businessUnitId, reason }
         // Note: No roleIds needed - user's BU-Bounded roles will be activated upon approval
         
-        return ResponseEntity.ok(Map.of(
-            "success", true,
-            "message", "Application submitted successfully"
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body(Map.of(
+            "success", false,
+            "message", "Feature under development: admin-center integration pending"
         ));
     }
     
@@ -77,9 +79,9 @@ public class PermissionRequestController {
         // TODO: Call admin-center API to cancel request
         // POST /api/v1/admin/permission-requests/{requestId}/cancel
         
-        return ResponseEntity.ok(Map.of(
-            "success", true,
-            "message", "Request cancelled successfully"
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body(Map.of(
+            "success", false,
+            "message", "Feature under development: admin-center integration pending"
         ));
     }
     
@@ -93,7 +95,7 @@ public class PermissionRequestController {
         // TODO: Call admin-center API to get user's requests
         // GET /api/v1/admin/permission-requests?applicantId={userId}&status={status}
         
-        return ResponseEntity.ok(List.of());
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body(List.of());
     }
     
     @GetMapping("/available-virtual-groups")
@@ -105,7 +107,7 @@ public class PermissionRequestController {
         // TODO: Call admin-center API to get virtual groups with approvers configured
         // GET /api/v1/admin/virtual-groups?hasApprovers=true
         
-        return ResponseEntity.ok(List.of());
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body(List.of());
     }
     
     @GetMapping("/applicable-business-units")
@@ -123,7 +125,7 @@ public class PermissionRequestController {
         // 2. Are associated with roles that user has (BU-Bounded roles from virtual groups)
         // 3. User is not already a member of
         
-        return ResponseEntity.ok(List.of());
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body(List.of());
     }
     
     @GetMapping("/business-units/{businessUnitId}/activatable-roles")
@@ -138,6 +140,6 @@ public class PermissionRequestController {
         // GET /api/v1/admin/permission-requests/business-units/{businessUnitId}/activatable-roles?userId={userId}
         // Returns user's BU-Bounded roles that are associated with this business unit
         
-        return ResponseEntity.ok(List.of());
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body(List.of());
     }
 }

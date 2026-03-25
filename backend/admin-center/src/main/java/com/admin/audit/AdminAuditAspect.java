@@ -428,7 +428,7 @@ public class AdminAuditAspect {
                 try {
                     if (sb.length() > 0) sb.append(", ");
                     sb.append(mapper.writeValueAsString(arg));
-                } catch (Exception ignored) {}
+                } catch (Exception e) { log.debug("Failed to serialize audit argument: {}", e.getMessage()); }
             }
         }
         return sb.length() > 0 ? sb.toString() : null;

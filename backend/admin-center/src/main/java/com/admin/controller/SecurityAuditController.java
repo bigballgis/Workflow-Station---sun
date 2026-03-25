@@ -119,7 +119,7 @@ public class SecurityAuditController {
             } else {
                 try {
                     req.setAction(AuditAction.valueOf(dto.getAction().toUpperCase().replace(" ", "_")));
-                } catch (IllegalArgumentException ignored) {}
+                } catch (IllegalArgumentException e) { log.debug("Unknown audit action: {}", dto.getAction()); }
             }
         }
         req.setUserId(dto.getUserId());

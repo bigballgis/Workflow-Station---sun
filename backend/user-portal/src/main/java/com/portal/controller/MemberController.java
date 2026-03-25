@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -19,6 +20,7 @@ import java.util.Map;
 @RequestMapping("/members")
 @RequiredArgsConstructor
 @Tag(name = "Member Management", description = "Member management operations for approvers")
+// NOTE: Stub implementation — all endpoints return 501 until admin-center REST client integration is complete
 public class MemberController {
     
     // TODO: Inject MemberManagementService from admin-center via REST client
@@ -34,7 +36,7 @@ public class MemberController {
         // TODO: Call admin-center API to get virtual group members
         // GET /api/v1/admin/virtual-groups/{groupId}/members
         
-        return ResponseEntity.ok(List.of());
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body(List.of());
     }
     
     @GetMapping("/business-units/{businessUnitId}")
@@ -48,7 +50,7 @@ public class MemberController {
         // TODO: Call admin-center API to get business unit members
         // GET /api/v1/admin/business-units/{businessUnitId}/members
         
-        return ResponseEntity.ok(List.of());
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body(List.of());
     }
     
     @DeleteMapping("/virtual-groups/{groupId}/users/{targetUserId}")
@@ -66,9 +68,9 @@ public class MemberController {
         // TODO: Call admin-center API to remove member
         // DELETE /api/v1/admin/virtual-groups/{groupId}/members/{targetUserId}
         
-        return ResponseEntity.ok(Map.of(
-            "success", true,
-            "message", "Member removed successfully"
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body(Map.of(
+            "success", false,
+            "message", "Feature under development: admin-center integration pending"
         ));
     }
     
@@ -89,9 +91,9 @@ public class MemberController {
         // TODO: Call admin-center API to remove role
         // DELETE /api/v1/admin/business-units/{businessUnitId}/members/{targetUserId}/roles/{roleId}
         
-        return ResponseEntity.ok(Map.of(
-            "success", true,
-            "message", "Role removed successfully"
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body(Map.of(
+            "success", false,
+            "message", "Feature under development: admin-center integration pending"
         ));
     }
     
@@ -104,9 +106,9 @@ public class MemberController {
         // TODO: Call admin-center API to get user's approval scope
         // GET /api/v1/admin/approvers/scope?userId={userId}
         
-        return ResponseEntity.ok(Map.of(
-            "virtualGroups", List.of(),
-            "businessUnits", List.of()
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body(Map.of(
+            "success", false,
+            "message", "Feature under development: admin-center integration pending"
         ));
     }
 }

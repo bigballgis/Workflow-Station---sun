@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -19,6 +20,7 @@ import java.util.Map;
 @RequestMapping("/approvals")
 @RequiredArgsConstructor
 @Tag(name = "Approvals", description = "Permission request approval operations")
+// NOTE: Stub implementation — all endpoints return 501 until admin-center REST client integration is complete
 public class ApprovalController {
     
     // TODO: Inject ApproverService from admin-center via REST client
@@ -32,7 +34,7 @@ public class ApprovalController {
         // TODO: Call admin-center API to get pending requests for this approver
         // GET /api/v1/admin/permission-requests?approverId={userId}&status=PENDING
         
-        return ResponseEntity.ok(List.of());
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body(List.of());
     }
     
     @PostMapping("/{requestId}/approve")
@@ -48,9 +50,9 @@ public class ApprovalController {
         // TODO: Call admin-center API to approve request
         // POST /api/v1/admin/permission-requests/{requestId}/approve
         
-        return ResponseEntity.ok(Map.of(
-            "success", true,
-            "message", "Request approved successfully"
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body(Map.of(
+            "success", false,
+            "message", "Feature under development: admin-center integration pending"
         ));
     }
     
@@ -73,9 +75,9 @@ public class ApprovalController {
         // TODO: Call admin-center API to reject request
         // POST /api/v1/admin/permission-requests/{requestId}/reject
         
-        return ResponseEntity.ok(Map.of(
-            "success", true,
-            "message", "Request rejected successfully"
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body(Map.of(
+            "success", false,
+            "message", "Feature under development: admin-center integration pending"
         ));
     }
     
@@ -88,10 +90,9 @@ public class ApprovalController {
         // TODO: Call admin-center API to check if user is any approver
         // GET /api/v1/admin/approvers/check?userId={userId}
         
-        return ResponseEntity.ok(Map.of(
-            "isApprover", false,
-            "virtualGroupCount", 0,
-            "businessUnitCount", 0
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body(Map.of(
+            "success", false,
+            "message", "Feature under development: admin-center integration pending"
         ));
     }
     
@@ -105,6 +106,6 @@ public class ApprovalController {
         // TODO: Call admin-center API to get approval history
         // GET /api/v1/admin/permission-requests?approverId={userId}&status={status}
         
-        return ResponseEntity.ok(List.of());
+        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body(List.of());
     }
 }
