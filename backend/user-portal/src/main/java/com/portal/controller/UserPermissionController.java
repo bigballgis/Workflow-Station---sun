@@ -32,7 +32,7 @@ public class UserPermissionController {
     @GetMapping
     @Operation(summary = "Get my permissions", 
                description = "Get current user's complete permission view including roles and business units")
-    public ResponseEntity<Map<String, Object>> getMyPermissions(
+    public ApiResponse<Map<String, Object>> getMyPermissions(
             @RequestHeader("X-User-Id") String userId) {
         log.info("Getting permissions for user: {}", userId);
         
