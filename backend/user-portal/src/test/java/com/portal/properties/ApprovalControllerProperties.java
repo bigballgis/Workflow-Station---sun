@@ -45,7 +45,7 @@ public class ApprovalControllerProperties {
             @ForAll("validUserIds") String userId) {
         
         // When: Get pending approvals
-        ResponseEntity<List<Map<String, Object>>> response = approvalController.getPendingApprovals(userId);
+        ResponseEntity<ApiResponse<List<Map<String, Object>>>> response = approvalController.getPendingApprovals(userId);
         
         // Then: Should return OK status
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -67,8 +67,8 @@ public class ApprovalControllerProperties {
             @ForAll("validUserIds") String userId2) {
         
         // When: Get pending approvals for both users
-        ResponseEntity<List<Map<String, Object>>> response1 = approvalController.getPendingApprovals(userId1);
-        ResponseEntity<List<Map<String, Object>>> response2 = approvalController.getPendingApprovals(userId2);
+        ResponseEntity<ApiResponse<List<Map<String, Object>>>> response1 = approvalController.getPendingApprovals(userId1);
+        ResponseEntity<ApiResponse<List<Map<String, Object>>>> response2 = approvalController.getPendingApprovals(userId2);
         
         // Then: Both should return OK status
         assertThat(response1.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -91,7 +91,7 @@ public class ApprovalControllerProperties {
             @ForAll("optionalStatuses") String status) {
         
         // When: Get approval history
-        ResponseEntity<List<Map<String, Object>>> response = approvalController.getApprovalHistory(userId, status);
+        ResponseEntity<ApiResponse<List<Map<String, Object>>>> response = approvalController.getApprovalHistory(userId, status);
         
         // Then: Should return OK status
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -127,7 +127,7 @@ public class ApprovalControllerProperties {
         
         // Then: Should contain success field
         assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody()).containsKey("success");
+        assertThat(response.getBody().getData()).containsKey("success");
         assertThat(response.getBody().getData().get("success")).isEqualTo(true);
     }
     
@@ -176,7 +176,7 @@ public class ApprovalControllerProperties {
         
         // Then: Should contain isApprover field
         assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody()).containsKey("isApprover");
+        assertThat(response.getBody().getData()).containsKey("isApprover");
         assertThat(response.getBody().getData().get("isApprover")).isInstanceOf(Boolean.class);
     }
     
@@ -198,8 +198,8 @@ public class ApprovalControllerProperties {
         
         // Then: Should contain count fields
         assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody()).containsKey("virtualGroupCount");
-        assertThat(response.getBody()).containsKey("businessUnitCount");
+        assertThat(response.getBody().getData()).containsKey("virtualGroupCount");
+        assertThat(response.getBody().getData()).containsKey("businessUnitCount");
         
         // Then: Counts should be non-negative integers
         Object vgCount = response.getBody().getData().get("virtualGroupCount");
@@ -241,7 +241,7 @@ public class ApprovalControllerProperties {
             @ForAll("validUserIds") String userId) {
         
         // When: Get pending approvals
-        ResponseEntity<List<Map<String, Object>>> response = approvalController.getPendingApprovals(userId);
+        ResponseEntity<ApiResponse<List<Map<String, Object>>>> response = approvalController.getPendingApprovals(userId);
         
         // Then: Should return OK status (access control is handled by service layer)
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
