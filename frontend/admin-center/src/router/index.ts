@@ -108,6 +108,31 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/bi-management/RbacMapping.vue'),
         meta: { title: 'RBAC Mapping', icon: 'Connection', requiresAuth: true, permissions: [] }
       },
+      // ==================== Relation Tables ====================
+      {
+        path: 'relation-tables/structure',
+        name: 'RelationTableStructure',
+        component: () => import('@/views/relation-table/structure/index.vue'),
+        meta: { titleKey: 'menu.relationTables', icon: 'Grid', permissions: [PERMISSIONS.SYSTEM_ADMIN] }
+      },
+      {
+        path: 'relation-tables/structure/create',
+        name: 'RelationTableStructureCreate',
+        component: () => import('@/views/relation-table/structure/form.vue'),
+        meta: { titleKey: 'menu.tableStructure', hidden: true, permissions: [PERMISSIONS.SYSTEM_ADMIN] }
+      },
+      {
+        path: 'relation-tables/structure/:id/edit',
+        name: 'RelationTableStructureEdit',
+        component: () => import('@/views/relation-table/structure/form.vue'),
+        meta: { titleKey: 'menu.tableStructure', hidden: true, permissions: [PERMISSIONS.SYSTEM_ADMIN] }
+      },
+      {
+        path: 'relation-tables/data',
+        name: 'RelationTableData',
+        component: () => import('@/views/relation-table/data/index.vue'),
+        meta: { titleKey: 'menu.tableData', icon: 'Coin', permissions: [PERMISSIONS.SYSTEM_ADMIN] }
+      },
       {
         path: '403',
         name: 'Forbidden',

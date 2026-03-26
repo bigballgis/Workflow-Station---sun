@@ -33,6 +33,25 @@
                   />
                   </el-col>
                 </template>
+                <template v-else-if="field.type === 'lookup'">
+                  <el-col :span="field.span || 24">
+                    <el-form-item :label="field.label" :prop="field.key">
+                      <LookupField
+                        v-model="formData[field.key]"
+                        :table-id="(field as any)._lookupTableId"
+                        :search-fields="(field as any)._lookupSearchFields || []"
+                        :display-field="(field as any)._lookupDisplayField || ''"
+                        :placeholder="field.placeholder"
+                        @select="(row: any) => handleLookupSelect(field.key, row)"
+                      />
+                      <LookupViewDisplay
+                        v-if="lookupSelectedData[field.key]"
+                        :selected-data="lookupSelectedData[field.key]"
+                        :view-fields="(field as any)._lookupViewFields || []"
+                      />
+                    </el-form-item>
+                  </el-col>
+                </template>
                 <el-col v-else :key="field.key" :span="field.span || 24">
                   <el-form-item
                     :label="field.label"
@@ -334,6 +353,25 @@
                 @update:model-value="(rows: any[]) => emit('update:subTableData', field._bindingId!, rows)"
                 style="margin-bottom: 16px;"
               />
+              </el-col>
+            </template>
+            <template v-else-if="field.type === 'lookup'">
+              <el-col :span="field.span || 24">
+                <el-form-item :label="field.label" :prop="field.key">
+                  <LookupField
+                    v-model="formData[field.key]"
+                    :table-id="(field as any)._lookupTableId"
+                    :search-fields="(field as any)._lookupSearchFields || []"
+                    :display-field="(field as any)._lookupDisplayField || ''"
+                    :placeholder="field.placeholder"
+                    @select="(row: any) => handleLookupSelect(field.key, row)"
+                  />
+                  <LookupViewDisplay
+                    v-if="lookupSelectedData[field.key]"
+                    :selected-data="lookupSelectedData[field.key]"
+                    :view-fields="(field as any)._lookupViewFields || []"
+                  />
+                </el-form-item>
               </el-col>
             </template>
             <el-col v-else :key="field.key" :span="field.span || 24">
@@ -677,6 +715,8 @@ import { useI18n } from 'vue-i18n'
 import { Upload } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import SubTableField from './SubTableField.vue'
+import LookupField from './lookup/LookupField.vue'
+import LookupViewDisplay from './lookup/LookupViewDisplay.vue'
 import type { FormField, FormTab } from './formRendererHelpers'
 import { extractFieldsRecursive } from './formRendererHelpers'
 
@@ -746,6 +786,12 @@ const resolveBinding = (id?: number) => id != null ? bindingMap.value.get(id) : 
 
 const formData = ref<Record<string, any>>({})
 let isInternalUpdate = false
+
+// Lookup selected data state
+const lookupSelectedData = ref<Record<string, Record<string, any>>>({})
+const handleLookupSelect = (fieldKey: string, row: Record<string, any>) => {
+  lookupSelectedData.value[fieldKey] = row
+}
 
 // 独立管理文件上传列表，避免从 formData 派生导致的重渲染问题
 const uploadFileLists = ref<Record<string, Array<{ name: string; url: string; uid?: number }>>>({})

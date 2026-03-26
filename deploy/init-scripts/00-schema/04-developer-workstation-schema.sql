@@ -166,6 +166,7 @@ CREATE TABLE IF NOT EXISTS dw_form_table_bindings (
     id BIGSERIAL PRIMARY KEY,
     form_id BIGINT NOT NULL,
     table_id BIGINT NOT NULL,
+    relation_table_id BIGINT,
     binding_type VARCHAR(20) NOT NULL,
     binding_mode VARCHAR(20) NOT NULL DEFAULT 'READONLY',
     foreign_key_field VARCHAR(100),

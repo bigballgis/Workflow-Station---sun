@@ -45,7 +45,10 @@ export const ROUTE_PERMISSIONS: Record<string, string[]> = {
   '/monitor': [PERMISSIONS.SYSTEM_ADMIN],
   '/audit': [PERMISSIONS.AUDIT_READ, PERMISSIONS.LOG_READ],
   '/config': [PERMISSIONS.SYSTEM_ADMIN, PERMISSIONS.SYSTEM_CONFIG],
-  '/profile': [] // Everyone can access their profile
+  '/profile': [], // Everyone can access their profile
+  '/relation-tables/structure': [PERMISSIONS.SYSTEM_ADMIN],
+  '/relation-tables/structure/create': [PERMISSIONS.SYSTEM_ADMIN],
+  '/relation-tables/data': [PERMISSIONS.SYSTEM_ADMIN]
 }
 
 // Hardcoded role -> permissions fallback for when sys_role_permissions is empty

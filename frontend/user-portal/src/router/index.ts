@@ -115,6 +115,18 @@ const routes: RouteRecordRaw[] = [
         name: 'BiDashboard',
         component: () => import('@/views/landing/DashboardLanding.vue'),
         meta: { title: 'BI Dashboard', icon: 'DataAnalysis', requiresAuth: true }
+      },
+      {
+        path: 'relation-tables',
+        name: 'RelationTables',
+        component: () => import('@/views/relation-tables/index.vue'),
+        meta: { titleKey: 'menu.relationTables', icon: 'Grid' }
+      },
+      {
+        path: 'relation-tables/:tableId',
+        name: 'RelationTableData',
+        component: () => import('@/views/relation-tables/data.vue'),
+        meta: { titleKey: 'menu.relationTableData', hidden: true }
       }
     ]
   },

@@ -69,6 +69,16 @@
               <el-icon><Document /></el-icon>
               <template #title>{{ t('menu.audit') }}</template>
             </el-menu-item>
+
+            <!-- Relation Tables - requires system:admin -->
+            <el-sub-menu index="relation-tables" v-if="isSystemAdmin">
+              <template #title>
+                <el-icon><Grid /></el-icon>
+                <span>{{ t('menu.relationTables') }}</span>
+              </template>
+              <el-menu-item index="/relation-tables/structure">{{ t('menu.tableStructure') }}</el-menu-item>
+              <el-menu-item index="/relation-tables/data">{{ t('menu.tableData') }}</el-menu-item>
+            </el-sub-menu>
           </el-menu>
         </el-scrollbar>
         <div class="collapse-btn" @click="toggleCollapse">
@@ -99,7 +109,7 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { 
   Fold, Expand,
-  Odometer, OfficeBuilding, Key, Connection, Box, User, Lock, Document, DataAnalysis
+  Odometer, OfficeBuilding, Key, Connection, Box, User, Lock, Document, DataAnalysis, Grid
 } from '@element-plus/icons-vue'
 import UserProfileDropdown from '@/components/UserProfileDropdown.vue'
 import { hasPermission, PERMISSIONS } from '@/utils/permission'
