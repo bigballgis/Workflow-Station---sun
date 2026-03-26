@@ -1,5 +1,7 @@
 package com.portal.controller;
 
+import com.portal.client.AdminCenterClient;
+import com.portal.dto.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -24,16 +26,16 @@ import java.util.Map;
 @RequestMapping("/exit")
 @RequiredArgsConstructor
 @Tag(name = "Exit Operations", description = "User self-exit operations")
-// NOTE: Stub implementation — all endpoints return 501 until admin-center REST client integration is complete
 public class ExitController {
     
     // TODO: Inject MemberManagementService from admin-center via REST client
+    private final AdminCenterClient adminCenterClient;
     
     @PostMapping("/virtual-group/{groupId}")
     @Operation(summary = "Exit virtual group", 
                description = "Exit from a virtual group (immediate effect, no approval needed). " +
                            "This will revoke the role associated with the virtual group.")
-    public ResponseEntity<Map<String, Object>> exitVirtualGroup(
+    public ResponseEntity<ApiResponse<Map<String, Object>>> exitVirtualGroup(
             @PathVariable String groupId,
             @RequestHeader("X-User-Id") String userId) {
         log.info("User {} exiting virtual group: {}", userId, groupId);
@@ -43,18 +45,18 @@ public class ExitController {
         // This will:
         // 1. Remove user from virtual group
         // 2. Revoke the role bound to the virtual group
-        
-        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body(Map.of(
-            "success", false,
-            "message", "Feature under development: admin-center integration pending"
-        ));
+
+        return adminCenterClient.exitVirtualGroup(groupId, userId)
+                .<ResponseEntity<ApiResponse<Map<String, Object>>>>map(data -> ResponseEntity.ok(ApiResponse.success(data)))
+                .orElse(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                        .body(ApiResponse.error("503", "Admin center service unavailable")));
     }
     
     @PostMapping("/business-unit/{businessUnitId}")
     @Operation(summary = "Exit business unit", 
                description = "Exit from a business unit (immediate effect, no approval needed). " +
                            "This will deactivate all BU-Bounded roles for this business unit.")
-    public ResponseEntity<Map<String, Object>> exitBusinessUnit(
+    public ResponseEntity<ApiResponse<Map<String, Object>>> exitBusinessUnit(
             @PathVariable String businessUnitId,
             @RequestHeader("X-User-Id") String userId) {
         log.info("User {} exiting business unit: {}", userId, businessUnitId);
@@ -65,36 +67,39 @@ public class ExitController {
         // 1. Remove user from business unit
         // 2. Deactivate all BU-Bounded roles for this business unit
         
-        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body(Map.of(
-            "success", false,
-            "message", "Feature under development: admin-center integration pending"
-        ));
+        return adminCenterClient.exitBusinessUnit(businessUnitId, userId)
+                .<ResponseEntity<ApiResponse<Map<String, Object>>>>map(data -> ResponseEntity.ok(ApiResponse.success(data)))
+                .orElse(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                        .body(ApiResponse.error("503", "Admin center service unavailable")));
     }
     
     @GetMapping("/my-memberships")
     @Operation(summary = "Get my memberships", description = "Get current user's virtual group and business unit memberships")
-    public ResponseEntity<Map<String, Object>> getMyMemberships(
+    public ResponseEntity<ApiResponse<Map<String, Object>>> getMyMemberships(
             @RequestHeader("X-User-Id") String userId) {
         log.info("Getting memberships for user: {}", userId);
         
         // TODO: Call admin-center API to get user's memberships
         // GET /api/v1/admin/users/{userId}/memberships
         
-        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body(Map.of(
-            "success", false,
-            "message", "Feature under development: admin-center integration pending"
-        ));
+        return adminCenterClient.getUserMemberships(userId)
+                .<ResponseEntity<ApiResponse<Map<String, Object>>>>map(data -> ResponseEntity.ok(ApiResponse.success(data)))
+                .orElse(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                        .body(ApiResponse.error("503", "Admin center service unavailable")));
     }
     
     @GetMapping("/exit-history")
     @Operation(summary = "Get exit history", description = "Get current user's exit history")
-    public ResponseEntity<List<Map<String, Object>>> getExitHistory(
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getExitHistory(
             @RequestHeader("X-User-Id") String userId) {
         log.info("Getting exit history for user: {}", userId);
         
         // TODO: Call admin-center API to get user's exit history
         // GET /api/v1/admin/member-change-logs?userId={userId}&changeType=EXIT
         
-        return ResponseEntity.status(HttpStatus.NOT_IMPLEMENTED).body(List.of());
+        return adminCenterClient.getExitHistory(userId)
+                .<ResponseEntity<ApiResponse<List<Map<String, Object>>>>>map(data -> ResponseEntity.ok(ApiResponse.success(data)))
+                .orElse(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                        .body(ApiResponse.error("503", "Admin center service unavailable")));
     }
 }
