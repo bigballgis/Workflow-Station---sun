@@ -5,7 +5,6 @@ import com.portal.component.ProcessComponent;
 import com.portal.dto.*;
 import com.portal.entity.ActionDefinition;
 import com.portal.entity.ProcessDraft;
-import com.portal.repository.ActionDefinitionRepository;
 import com.platform.common.i18n.I18nService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -28,7 +27,6 @@ public class ProcessController {
 
     private final ProcessComponent processComponent;
     private final I18nService i18nService;
-    private final ActionDefinitionRepository actionDefinitionRepository;
 
     @GetMapping("/definitions")
     @Operation(summary = "获取可发起的流程定义列表")
@@ -122,13 +120,9 @@ public class ProcessController {
 
     @GetMapping("/actions")
     @Operation(summary = "根据ID列表获取动作定义")
-    // TODO: 重构 — 将 repository 调用移至 Component 层，遵循 Controller → Component → Repository 分层架构
     public ApiResponse<List<ActionDefinition>> getActionsByIds(
             @RequestParam List<String> ids) {
-        List<ActionDefinition> actions = actionDefinitionRepository.findAllById(ids);
-        if (actions.isEmpty()) {
-            log.warn("No actions found for ids: {}", ids);
-        }
+        List<ActionDefinition> actions = processComponent.getActionsByIds(ids);
         return ApiResponse.success(actions);
     }
 

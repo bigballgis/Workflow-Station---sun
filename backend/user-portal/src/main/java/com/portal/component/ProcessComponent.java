@@ -8,10 +8,12 @@ import com.portal.entity.FavoriteProcess;
 import com.portal.entity.ProcessDraft;
 import com.portal.entity.ProcessHistory;
 import com.portal.entity.ProcessInstance;
+import com.portal.entity.ActionDefinition;
 import com.portal.repository.FavoriteProcessRepository;
 import com.portal.repository.ProcessDraftRepository;
 import com.portal.repository.ProcessHistoryRepository;
 import com.portal.repository.ProcessInstanceRepository;
+import com.portal.repository.ActionDefinitionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -34,6 +36,7 @@ public class ProcessComponent {
     private final ProcessDraftRepository processDraftRepository;
     private final ProcessInstanceRepository processInstanceRepository;
     private final ProcessHistoryRepository processHistoryRepository;
+    private final ActionDefinitionRepository actionDefinitionRepository;
     private final FunctionUnitAccessComponent functionUnitAccessComponent;
     private final WorkflowEngineClient workflowEngineClient;
     private final ProcessDraftComponent processDraftComponent;
@@ -1339,5 +1342,17 @@ public class ProcessComponent {
             variables.put("maxItemPrice", 0.0);
             variables.put("itemCount", 0);
         }
+    }
+
+    /**
+     * Get action definitions by IDs.
+     * Delegates to ActionDefinitionRepository.
+     */
+    public List<ActionDefinition> getActionsByIds(List<String> ids) {
+        List<ActionDefinition> actions = actionDefinitionRepository.findAllById(ids);
+        if (actions.isEmpty()) {
+            log.warn("No actions found for ids: {}", ids);
+        }
+        return actions;
     }
 }
