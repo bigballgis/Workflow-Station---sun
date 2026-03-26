@@ -317,6 +317,15 @@ cd deploy/environments/dev
 # 完整构建 + 部署（Maven + npm + Docker + 启动容器）
 .\build-and-deploy.ps1
 
+# 构建并部署单个服务（Maven + Docker，不影响其他服务）
+.\build-and-deploy.ps1 -Service admin-center
+
+# 单个服务跳过 Maven（只重建 Docker 镜像并重启）
+.\build-and-deploy.ps1 -Service admin-center -SkipMaven
+
+# 构建并部署单个前端
+.\build-and-deploy.ps1 -Service admin-center-frontend
+
 # 跳过 Maven（只重建 Docker 镜像并重启）
 .\build-and-deploy.ps1 -SkipMaven
 
@@ -329,6 +338,18 @@ cd deploy/environments/dev
 # 清除所有容器和数据卷，从零开始
 .\build-and-deploy.ps1 -Clean
 ```
+
+`-Service` 可选值：
+
+| 类型 | `-Service` 值 | 说明 | Maven 模块 / 前端目录 |
+|------|--------------|------|----------------------|
+| 后端 | `workflow-engine` | 工作流引擎 | `backend/workflow-engine-core` |
+| 后端 | `admin-center` | 管理后台 API | `backend/admin-center` |
+| 后端 | `user-portal` | 用户门户 API | `backend/user-portal` |
+| 后端 | `developer-workstation` | 开发者工作台 API | `backend/developer-workstation` |
+| 前端 | `admin-center-frontend` | 管理后台 UI | `frontend/admin-center` |
+| 前端 | `user-portal-frontend` | 用户门户 UI | `frontend/user-portal` |
+| 前端 | `developer-workstation-frontend` | 开发者工作台 UI | `frontend/developer-workstation` |
 
 ### 8.2 服务端口映射
 

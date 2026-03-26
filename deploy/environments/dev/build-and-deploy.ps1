@@ -4,14 +4,21 @@
 # =====================================================
 # Usage:
 #   .\build-and-deploy.ps1                    # Full build & deploy
+#   .\build-and-deploy.ps1 -Service admin-center  # Build & deploy only admin-center
+#   .\build-and-deploy.ps1 -Service admin-center -SkipMaven  # Redeploy without Maven rebuild
 #   .\build-and-deploy.ps1 -SkipMaven         # Skip Maven, rebuild Docker only
 #   .\build-and-deploy.ps1 -SkipFrontend      # Skip frontend image builds
 #   .\build-and-deploy.ps1 -SkipInfra         # Skip infra startup (PG/Redis already running)
 #   .\build-and-deploy.ps1 -SkipImagePull     # Skip pre-pulling base images (if already cached)
 #   .\build-and-deploy.ps1 -Clean             # Destroy everything and rebuild
 #   .\build-and-deploy.ps1 -ServicesOnly      # Only restart backend+frontend (no Maven, no infra)
+#
+# Valid -Service values:
+#   Backend:  workflow-engine, admin-center, user-portal, developer-workstation
+#   Frontend: admin-center-frontend, user-portal-frontend, developer-workstation-frontend
 
 param(
+    [string]$Service,
     [switch]$SkipMaven,
     [switch]$SkipFrontend,
     [switch]$SkipInfra,
@@ -25,40 +32,141 @@ $RootDir = Resolve-Path "$PSScriptRoot/../../.."
 $ComposeFile = "$PSScriptRoot/docker-compose.dev.yml"
 $EnvFile = "$PSScriptRoot/.env"
 
+# ==================== Service Registry ====================
+# Maps compose service name -> Maven module path, container name, type
+$ServiceRegistry = @{
+    "workflow-engine" = @{
+        Maven     = "backend/workflow-engine-core"
+        Container = "platform-workflow-engine-dev"
+        Type      = "backend"
+    }
+    "admin-center" = @{
+        Maven     = "backend/admin-center"
+        Container = "platform-admin-center-dev"
+        Type      = "backend"
+    }
+    "user-portal" = @{
+        Maven     = "backend/user-portal"
+        Container = "platform-user-portal-dev"
+        Type      = "backend"
+    }
+    "developer-workstation" = @{
+        Maven     = "backend/developer-workstation"
+        Container = "platform-developer-workstation-dev"
+        Type      = "backend"
+    }
+    "admin-center-frontend" = @{
+        FrontendDir = "frontend/admin-center"
+        Container   = "platform-admin-center-frontend-dev"
+        Type        = "frontend"
+    }
+    "user-portal-frontend" = @{
+        FrontendDir = "frontend/user-portal"
+        Container   = "platform-user-portal-frontend-dev"
+        Type        = "frontend"
+    }
+    "developer-workstation-frontend" = @{
+        FrontendDir = "frontend/developer-workstation"
+        Container   = "platform-developer-workstation-frontend-dev"
+        Type        = "frontend"
+    }
+}
+
+# Validate -Service parameter
+if ($Service -and -not $ServiceRegistry.ContainsKey($Service)) {
+    Write-Host "Unknown service: $Service" -ForegroundColor Red
+    Write-Host "Valid services: $($ServiceRegistry.Keys -join ', ')" -ForegroundColor Yellow
+    exit 1
+}
+
 function Wait-ForContainerHealth {
     param(
         [Parameter(Mandatory = $true)]
         [string]$ContainerName,
-
         [Parameter(Mandatory = $true)]
         [string]$DisplayName,
-
         [int]$MaxRetries = 60,
         [int]$SleepSeconds = 2
     )
 
     Write-Host "  Waiting for $DisplayName..."
-
     $attempt = 0
     while ($attempt -lt $MaxRetries) {
         $status = docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' $ContainerName 2>$null
-
         if ($status -eq "healthy") {
             Write-Host "    $DisplayName is healthy." -ForegroundColor Green
             return
         }
-
         if ($status -eq "exited" -or $status -eq "dead") {
             throw "$DisplayName container stopped unexpectedly"
         }
-
         Start-Sleep -Seconds $SleepSeconds
         $attempt++
     }
-
     throw "$DisplayName failed to become healthy in time"
 }
 
+# ==================== Single Service Mode ====================
+if ($Service) {
+    $svc = $ServiceRegistry[$Service]
+    Write-Host "========================================" -ForegroundColor Cyan
+    Write-Host " Single Service: $Service" -ForegroundColor Cyan
+    Write-Host "========================================" -ForegroundColor Cyan
+
+    if ($svc.Type -eq "backend" -and -not $SkipMaven) {
+        Write-Host "`n[1/2] Building $Service (Maven)..." -ForegroundColor Yellow
+        Push-Location $RootDir
+        try {
+            mvn clean package -DskipTests -pl $svc.Maven -am
+            if ($LASTEXITCODE -ne 0) { throw "Maven build failed for $Service" }
+            Write-Host "  Maven build complete." -ForegroundColor Green
+        } finally {
+            Pop-Location
+        }
+    } elseif ($svc.Type -eq "frontend" -and -not $SkipFrontend) {
+        Write-Host "`n[1/2] Building $Service (npm + Docker)..." -ForegroundColor Yellow
+        $feDir = "$RootDir/$($svc.FrontendDir)"
+        Push-Location $feDir
+        try {
+            $prev = $ErrorActionPreference
+            $ErrorActionPreference = "Continue"
+            npm install --prefer-offline --no-audit 2>&1 | Out-Null
+            $npmExit = $LASTEXITCODE
+            $ErrorActionPreference = $prev
+            if ($npmExit -ne 0) { throw "npm install failed: $Service" }
+            npx vite build
+            if ($LASTEXITCODE -ne 0) { throw "vite build failed: $Service" }
+        } finally {
+            Pop-Location
+        }
+    } else {
+        Write-Host "`n[1/2] Skipping build step" -ForegroundColor DarkGray
+    }
+
+    Write-Host "`n[2/2] Deploying $Service..." -ForegroundColor Yellow
+    docker compose -f $ComposeFile --env-file $EnvFile up -d --build --no-deps $Service
+    if ($LASTEXITCODE -ne 0) { throw "Failed to deploy $Service" }
+
+    if ($svc.Type -eq "backend") {
+        Wait-ForContainerHealth -ContainerName $svc.Container -DisplayName $Service
+    } else {
+        Start-Sleep -Seconds 3
+        $status = docker inspect --format='{{.State.Status}}' $svc.Container 2>$null
+        if ($status -eq "running") {
+            Write-Host "  $Service is running." -ForegroundColor Green
+        } else {
+            Write-Host "  WARNING: $Service status: $status" -ForegroundColor Yellow
+        }
+    }
+
+    Write-Host "`n========================================" -ForegroundColor Green
+    Write-Host " $Service deployed successfully!" -ForegroundColor Green
+    Write-Host "========================================" -ForegroundColor Green
+    docker compose -f $ComposeFile --env-file $EnvFile ps $Service
+    exit 0
+}
+
+# ==================== Full Deploy Mode ====================
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host " Dev Environment Build & Deploy" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
@@ -70,11 +178,10 @@ if ($ServicesOnly) {
     $SkipInfra = $true
 }
 
-# Step 0a: Pre-pull base images via domestic mirror (avoids Docker Hub connectivity issues)
+# Step 0a: Pre-pull base images via domestic mirror
 if (-not $SkipImagePull) {
     Write-Host "`n[0/4] Pre-pulling base images via domestic mirror..." -ForegroundColor Yellow
 
-    # Images required by this project, mapped to their domestic mirror equivalents
     $images = @(
         @{ Mirror = "docker.m.daocloud.io/library/eclipse-temurin:17-jre-alpine"; Target = "eclipse-temurin:17-jre-alpine" },
         @{ Mirror = "docker.m.daocloud.io/library/nginx:alpine";                  Target = "nginx:alpine"                  },
@@ -83,14 +190,12 @@ if (-not $SkipImagePull) {
     )
 
     foreach ($img in $images) {
-        # Skip if target image is already cached locally
         $exists = docker image inspect $img.Target 2>$null
         if ($LASTEXITCODE -eq 0) {
             Write-Host "  Already cached, skipping: $($img.Target)" -ForegroundColor DarkGray
             continue
         }
 
-        # Try mirror pull with up to 3 attempts (mirrors can be transiently unavailable)
         $pulled = $false
         for ($attempt = 1; $attempt -le 3; $attempt++) {
             Write-Host "  Pulling $($img.Target) from mirror (attempt $attempt/3)..."
@@ -108,9 +213,6 @@ if (-not $SkipImagePull) {
         }
 
         if (-not $pulled) {
-            # Mirror unavailable — try to restore from BuildKit cache via a minimal build.
-            # This works when the image layers already exist in the local BuildKit cache
-            # from a previous build (even if the image manifest was removed from the store).
             Write-Host "  Mirror unavailable. Restoring $($img.Target) from BuildKit cache..." -ForegroundColor Yellow
             $tmpFile = [System.IO.Path]::GetTempFileName() + ".Dockerfile"
             "FROM $($img.Target)" | Set-Content $tmpFile
@@ -120,9 +222,6 @@ if (-not $SkipImagePull) {
             if ($LASTEXITCODE -eq 0) {
                 Write-Host "  OK (BuildKit cache): $($img.Target)" -ForegroundColor Green
             } else {
-                # Both mirror and cache failed — warn but do NOT abort.
-                # The subsequent docker build commands will attempt to use BuildKit cache
-                # on their own; if they also fail the real error will surface there.
                 Write-Host "  WARNING: Could not pull or restore $($img.Target). Continuing — actual builds may still succeed via BuildKit cache." -ForegroundColor Yellow
             }
         }
@@ -155,7 +254,7 @@ if (-not $SkipMaven) {
     Write-Host "`n[1/4] Skipping Maven build" -ForegroundColor DarkGray
 }
 
-# Step 2: Build frontend (npm build locally, then Docker image with Dockerfile.local)
+# Step 2: Build frontend
 if (-not $SkipFrontend) {
     Write-Host "`n[2/4] Building frontend (local npm build + Docker)..." -ForegroundColor Yellow
     
@@ -168,12 +267,9 @@ if (-not $SkipFrontend) {
     foreach ($fe in $frontends) {
         $feDir = "$RootDir/$($fe.Dir)"
         
-        # npm install + build locally (Docker multi-stage build not used)
         Write-Host "  npm install & build $($fe.Name)..."
         Push-Location $feDir
         try {
-            # Temporarily allow non-zero stderr from npm (warnings are printed to stderr
-            # and would cause PowerShell Stop mode to abort the script)
             $prev = $ErrorActionPreference
             $ErrorActionPreference = "Continue"
             npm install --prefer-offline --no-audit 2>&1 | Out-Null
@@ -186,7 +282,6 @@ if (-not $SkipFrontend) {
             Pop-Location
         }
         
-        # Docker image copies pre-built dist/ only
         Write-Host "  Docker build $($fe.Name) (Dockerfile.local)..."
         docker build -f "$feDir/Dockerfile.local" -t "dev-$($fe.Name)" $feDir
         if ($LASTEXITCODE -ne 0) { throw "$($fe.Name) docker build failed" }
@@ -197,40 +292,14 @@ if (-not $SkipFrontend) {
     Write-Host "`n[2/4] Skipping frontend build" -ForegroundColor DarkGray
 }
 
-# Step 3: Start infrastructure (postgres, redis, kafka, n8n)
+# Step 3: Start infrastructure
 if (-not $SkipInfra) {
     Write-Host "`n[3/4] Starting infrastructure (postgres, redis, kafka, n8n)..." -ForegroundColor Yellow
     docker compose -f $ComposeFile --env-file $EnvFile up -d postgres redis kafka n8n
     
-    Write-Host "  Waiting for postgres..."
-    $retries = 0
-    while ($retries -lt 30) {
-        $health = docker inspect --format='{{.State.Health.Status}}' platform-postgres-dev 2>$null
-        if ($health -eq "healthy") { break }
-        Start-Sleep -Seconds 2
-        $retries++
-    }
-    if ($health -ne "healthy") { throw "Postgres failed to become healthy" }
-    
-    Write-Host "  Waiting for redis..."
-    $retries = 0
-    while ($retries -lt 20) {
-        $health = docker inspect --format='{{.State.Health.Status}}' platform-redis-dev 2>$null
-        if ($health -eq "healthy") { break }
-        Start-Sleep -Seconds 2
-        $retries++
-    }
-    if ($health -ne "healthy") { throw "Redis failed to become healthy" }
-    
-    Write-Host "  Waiting for kafka..."
-    $retries = 0
-    while ($retries -lt 30) {
-        $health = docker inspect --format='{{.State.Health.Status}}' platform-kafka-dev 2>$null
-        if ($health -eq "healthy") { break }
-        Start-Sleep -Seconds 3
-        $retries++
-    }
-    if ($health -ne "healthy") { throw "Kafka failed to become healthy" }
+    Wait-ForContainerHealth -ContainerName "platform-postgres-dev" -DisplayName "PostgreSQL" -MaxRetries 30
+    Wait-ForContainerHealth -ContainerName "platform-redis-dev" -DisplayName "Redis" -MaxRetries 20
+    Wait-ForContainerHealth -ContainerName "platform-kafka-dev" -DisplayName "Kafka" -MaxRetries 30 -SleepSeconds 3
     
     Write-Host "  Waiting for n8n..."
     $retries = 0
@@ -241,7 +310,7 @@ if (-not $SkipInfra) {
         $retries++
     }
     if ($health -ne "healthy") {
-        Write-Host "  ⚠️  N8N not healthy yet, continuing (it may take longer on first start)..." -ForegroundColor Yellow
+        Write-Host "  N8N not healthy yet, continuing (it may take longer on first start)..." -ForegroundColor Yellow
     }
     
     Write-Host "  Infrastructure ready." -ForegroundColor Green

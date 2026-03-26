@@ -51,7 +51,7 @@
         </template>
       </el-table-column>
       <el-table-column prop="updatedBy" label="Updated By" width="120" />
-      <el-table-column label="Actions" width="380" fixed="right">
+      <el-table-column label="Actions" width="450" fixed="right">
         <template #default="{ row }">
           <div style="display: flex; align-items: center; flex-wrap: nowrap; white-space: nowrap;">
             <el-button link type="warning" @click="handleEdit(row)">Edit</el-button>
@@ -59,6 +59,7 @@
             <el-button link type="primary" @click="handleDeploy(row)">Deploy</el-button>
             <el-button link type="danger" @click="handleRollback(row)">Rollback</el-button>
             <el-button link type="primary" @click="handleVersions(row)">Version</el-button>
+            <el-button link type="info" @click="handleCompare(row)">Compare</el-button>
             <el-button link type="primary" @click="handleAccess(row)">Access</el-button>
           </div>
         </template>
@@ -79,6 +80,13 @@
       :table-id="currentTable?.id"
       :table-name="currentTable?.tableName"
     />
+
+    <!-- Version Compare Dialog -->
+    <VersionCompareDialog
+      v-model="showCompareDialog"
+      :table-id="currentTable?.id"
+      :table-name="currentTable?.tableName"
+    />
   </div>
 </template>
 
@@ -94,6 +102,7 @@ import {
 } from '@/api/relationTable'
 import VersionDialog from './components/VersionDialog.vue'
 import AccessConfigDialog from './components/AccessConfigDialog.vue'
+import VersionCompareDialog from './components/VersionCompareDialog.vue'
 
 const router = useRouter()
 
@@ -102,6 +111,7 @@ const tableList = ref<(RelationTableResponse & { _enableLoading?: boolean; _port
 const currentTable = ref<RelationTableResponse | null>(null)
 const showVersionDialog = ref(false)
 const showAccessDialog = ref(false)
+const showCompareDialog = ref(false)
 
 type TagType = 'success' | 'warning' | 'danger' | 'info'
 const statusTagType = (status: RelationTableStatus): TagType => {
@@ -186,6 +196,11 @@ const handleEdit = (row: RelationTableResponse) => {
 const handleRollback = (row: RelationTableResponse) => {
   currentTable.value = row
   showVersionDialog.value = true
+}
+
+const handleCompare = (row: RelationTableResponse) => {
+  currentTable.value = row
+  showCompareDialog.value = true
 }
 
 const handleDelete = async (row: RelationTableResponse) => {

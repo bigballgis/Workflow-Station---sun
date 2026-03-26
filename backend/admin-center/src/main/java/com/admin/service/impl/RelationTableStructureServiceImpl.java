@@ -11,6 +11,7 @@ import com.admin.exception.RelationTableNotFoundException;
 import com.admin.repository.RelationFieldDefinitionRepository;
 import com.admin.repository.RelationTableDefinitionRepository;
 import com.admin.service.RelationTableStructureService;
+import com.platform.common.enums.RelationDataType;
 import com.platform.common.enums.RelationTableStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -78,6 +80,46 @@ public class RelationTableStructureServiceImpl implements RelationTableStructure
                 fieldDefinitions.add(field);
             }
         }
+
+        // 自动追加审计字段: created_at, created_by, updated_at, updated_by
+        int nextSortOrder = fieldDefinitions.size();
+        Set<String> existingFieldNames = fieldDefinitions.stream()
+                .map(RelationFieldDefinition::getFieldName)
+                .collect(Collectors.toSet());
+
+        if (!existingFieldNames.contains("created_at")) {
+            fieldDefinitions.add(RelationFieldDefinition.builder()
+                    .tableDefinition(tableDefinition)
+                    .fieldName("created_at").dataType(RelationDataType.TIMESTAMP)
+                    .nullable(true).isPrimaryKey(false)
+                    .comment("Created At").sortOrder(nextSortOrder++)
+                    .build());
+        }
+        if (!existingFieldNames.contains("created_by")) {
+            fieldDefinitions.add(RelationFieldDefinition.builder()
+                    .tableDefinition(tableDefinition)
+                    .fieldName("created_by").dataType(RelationDataType.VARCHAR).length(64)
+                    .nullable(true).isPrimaryKey(false)
+                    .comment("Created By").sortOrder(nextSortOrder++)
+                    .build());
+        }
+        if (!existingFieldNames.contains("updated_at")) {
+            fieldDefinitions.add(RelationFieldDefinition.builder()
+                    .tableDefinition(tableDefinition)
+                    .fieldName("updated_at").dataType(RelationDataType.TIMESTAMP)
+                    .nullable(true).isPrimaryKey(false)
+                    .comment("Updated At").sortOrder(nextSortOrder++)
+                    .build());
+        }
+        if (!existingFieldNames.contains("updated_by")) {
+            fieldDefinitions.add(RelationFieldDefinition.builder()
+                    .tableDefinition(tableDefinition)
+                    .fieldName("updated_by").dataType(RelationDataType.VARCHAR).length(64)
+                    .nullable(true).isPrimaryKey(false)
+                    .comment("Updated By").sortOrder(nextSortOrder++)
+                    .build());
+        }
+
         tableDefinition.setFieldDefinitions(fieldDefinitions);
 
         RelationTableDefinition saved = tableDefinitionRepository.save(tableDefinition);

@@ -31,44 +31,44 @@
         </el-table-column>
         <el-table-column label="Field Name" min-width="140">
           <template #default="{ row }">
-            <el-input v-model="row.fieldName" placeholder="field_name" size="small" />
+            <el-input v-model="row.fieldName" placeholder="field_name" size="small" :disabled="isAuditField(row)" />
           </template>
         </el-table-column>
         <el-table-column label="Data Type" width="140">
           <template #default="{ row }">
-            <el-select v-model="row.dataType" placeholder="Type" size="small" style="width: 100%;">
+            <el-select v-model="row.dataType" placeholder="Type" size="small" style="width: 100%;" :disabled="isAuditField(row)">
               <el-option v-for="dt in dataTypes" :key="dt" :label="dt" :value="dt" />
             </el-select>
           </template>
         </el-table-column>
         <el-table-column label="Length" width="90">
           <template #default="{ row }">
-            <el-input-number v-model="row.length" :min="0" size="small" controls-position="right" style="width: 100%;" />
+            <el-input-number v-model="row.length" :min="0" size="small" controls-position="right" style="width: 100%;" :disabled="isAuditField(row)" />
           </template>
         </el-table-column>
         <el-table-column label="Nullable" width="80" align="center">
           <template #default="{ row }">
-            <el-switch v-model="row.nullable" size="small" />
+            <el-switch v-model="row.nullable" size="small" :disabled="isAuditField(row)" />
           </template>
         </el-table-column>
         <el-table-column label="Primary Key" width="100" align="center">
           <template #default="{ row }">
-            <el-switch v-model="row.isPrimaryKey" size="small" />
+            <el-switch v-model="row.isPrimaryKey" size="small" :disabled="isAuditField(row)" />
           </template>
         </el-table-column>
         <el-table-column label="Default Value" width="130">
           <template #default="{ row }">
-            <el-input v-model="row.defaultValue" placeholder="" size="small" />
+            <el-input v-model="row.defaultValue" placeholder="" size="small" :disabled="isAuditField(row)" />
           </template>
         </el-table-column>
         <el-table-column label="Comment" min-width="140">
           <template #default="{ row }">
-            <el-input v-model="row.comment" placeholder="" size="small" />
+            <el-input v-model="row.comment" placeholder="" size="small" :disabled="isAuditField(row)" />
           </template>
         </el-table-column>
         <el-table-column label="" width="60" align="center">
-          <template #default="{ $index }">
-            <el-button link type="danger" size="small" @click="removeField($index)">
+          <template #default="{ row, $index }">
+            <el-button v-if="!isAuditField(row)" link type="danger" size="small" @click="removeField($index)">
               <el-icon><Delete /></el-icon>
             </el-button>
           </template>
@@ -134,6 +134,16 @@ const rules: FormRules = {
   tableName: [{ required: true, message: 'Table name is required', trigger: 'blur' }],
 }
 
+const AUDIT_FIELD_NAMES = new Set(['created_at', 'created_by', 'updated_at', 'updated_by'])
+
+const isAuditField = (row: FieldRow): boolean => AUDIT_FIELD_NAMES.has(row.fieldName)
+
+const sortFieldsAuditLast = () => {
+  const normal = form.fieldDefinitions.filter(f => !AUDIT_FIELD_NAMES.has(f.fieldName))
+  const audit = form.fieldDefinitions.filter(f => AUDIT_FIELD_NAMES.has(f.fieldName))
+  form.fieldDefinitions = [...normal, ...audit]
+}
+
 const createEmptyField = (): FieldRow => ({
   fieldName: '',
   dataType: 'VARCHAR',
@@ -144,8 +154,21 @@ const createEmptyField = (): FieldRow => ({
   comment: ''
 })
 
+const createAuditFields = (): FieldRow[] => [
+  { fieldName: 'created_at', dataType: 'TIMESTAMP', nullable: true, isPrimaryKey: false, comment: 'Created At' },
+  { fieldName: 'created_by', dataType: 'VARCHAR', length: 64, nullable: true, isPrimaryKey: false, comment: 'Created By' },
+  { fieldName: 'updated_at', dataType: 'TIMESTAMP', nullable: true, isPrimaryKey: false, comment: 'Updated At' },
+  { fieldName: 'updated_by', dataType: 'VARCHAR', length: 64, nullable: true, isPrimaryKey: false, comment: 'Updated By' },
+]
+
 const addField = () => {
-  form.fieldDefinitions.push(createEmptyField())
+  // Insert before audit fields
+  const firstAuditIdx = form.fieldDefinitions.findIndex(f => AUDIT_FIELD_NAMES.has(f.fieldName))
+  if (firstAuditIdx >= 0) {
+    form.fieldDefinitions.splice(firstAuditIdx, 0, createEmptyField())
+  } else {
+    form.fieldDefinitions.push(createEmptyField())
+  }
 }
 
 const removeField = (index: number) => {
@@ -170,6 +193,14 @@ const loadTableData = async () => {
       comment: f.comment || '',
       sortOrder: f.sortOrder
     }))
+    // 补齐缺失的审计字段
+    const existingNames = new Set(form.fieldDefinitions.map(f => f.fieldName))
+    for (const af of createAuditFields()) {
+      if (!existingNames.has(af.fieldName)) {
+        form.fieldDefinitions.push(af)
+      }
+    }
+    sortFieldsAuditLast()
   } catch (e) {
     console.error('Failed to load table:', e)
     ElMessage.error('Failed to load table data')
@@ -244,17 +275,30 @@ const handleSubmit = async () => {
   }
 }
 
+const resetForm = () => {
+  form.tableName = ''
+  form.displayName = ''
+  form.description = ''
+  form.fieldDefinitions = []
+}
+
 onMounted(() => {
   if (isEdit.value) {
     loadTableData()
   } else {
+    resetForm()
     addField()
+    form.fieldDefinitions.push(...createAuditFields())
   }
 })
 
 onActivated(() => {
   if (isEdit.value) {
     loadTableData()
+  } else {
+    resetForm()
+    addField()
+    form.fieldDefinitions.push(...createAuditFields())
   }
 })
 </script>

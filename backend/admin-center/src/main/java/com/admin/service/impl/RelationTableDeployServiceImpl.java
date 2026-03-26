@@ -15,6 +15,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.platform.common.dto.RelationFieldDTO;
+import com.platform.common.enums.RelationDataType;
 import com.platform.common.enums.RelationTableStatus;
 import com.platform.security.util.SecurityContextUtils;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -54,13 +56,27 @@ public class RelationTableDeployServiceImpl implements RelationTableDeployServic
             throw new RelationTableDeploymentException("表 '" + tableDefinition.getTableName() + "' 没有定义任何字段");
         }
 
+        // 自动补齐审计字段（如果尚未定义）
+        ensureAuditFields(tableDefinition, fields);
+
         boolean isFirstDeploy = tableDefinition.getCurrentVersion() == 0;
 
         try {
             if (isFirstDeploy) {
-                String createDdl = generateCreateTableDdl(tableDefinition.getTableName(), fields);
-                log.info("Executing CREATE TABLE DDL for table: {}", tableDefinition.getTableName());
-                jdbcTemplate.execute(createDdl);
+                // 检查物理表是否已存在（可能是上次部署失败后遗留的）
+                boolean tableExists = physicalTableExists(tableDefinition.getTableName());
+                if (!tableExists) {
+                    String createDdl = generateCreateTableDdl(tableDefinition.getTableName(), fields);
+                    log.info("Executing CREATE TABLE DDL for table: {}", tableDefinition.getTableName());
+                    jdbcTemplate.execute(createDdl);
+                } else {
+                    log.info("Physical table '{}' already exists, applying ALTER TABLE instead", tableDefinition.getTableName());
+                    List<String> alterDdls = generateAlterTableDdlFromPhysical(tableDefinition.getTableName(), fields);
+                    for (String ddl : alterDdls) {
+                        log.info("Executing ALTER TABLE DDL: {}", ddl);
+                        jdbcTemplate.execute(ddl);
+                    }
+                }
             } else {
                 List<String> alterDdls = generateAlterTableDdl(tableDefinition.getTableName(), fields);
                 for (String ddl : alterDdls) {
@@ -324,6 +340,93 @@ public class RelationTableDeployServiceImpl implements RelationTableDeployServic
         if (a == null && b == null) return true;
         if (a == null || b == null) return false;
         return a.equals(b);
+    }
+
+    /**
+     * 确保表定义中包含审计字段: created_at, created_by, updated_at, updated_by
+     * 如果缺少则自动追加并持久化
+     */
+    private void ensureAuditFields(RelationTableDefinition tableDefinition, List<RelationFieldDefinition> fields) {
+        Set<String> existingNames = fields.stream()
+                .map(RelationFieldDefinition::getFieldName)
+                .collect(Collectors.toSet());
+
+        int nextSortOrder = fields.stream()
+                .mapToInt(RelationFieldDefinition::getSortOrder)
+                .max().orElse(-1) + 1;
+
+        boolean added = false;
+
+        if (!existingNames.contains("created_at")) {
+            fields.add(RelationFieldDefinition.builder()
+                    .tableDefinition(tableDefinition).fieldName("created_at")
+                    .dataType(RelationDataType.TIMESTAMP).nullable(true).isPrimaryKey(false)
+                    .comment("Created At").sortOrder(nextSortOrder++).build());
+            added = true;
+        }
+        if (!existingNames.contains("created_by")) {
+            fields.add(RelationFieldDefinition.builder()
+                    .tableDefinition(tableDefinition).fieldName("created_by")
+                    .dataType(RelationDataType.VARCHAR).length(64).nullable(true).isPrimaryKey(false)
+                    .comment("Created By").sortOrder(nextSortOrder++).build());
+            added = true;
+        }
+        if (!existingNames.contains("updated_at")) {
+            fields.add(RelationFieldDefinition.builder()
+                    .tableDefinition(tableDefinition).fieldName("updated_at")
+                    .dataType(RelationDataType.TIMESTAMP).nullable(true).isPrimaryKey(false)
+                    .comment("Updated At").sortOrder(nextSortOrder++).build());
+            added = true;
+        }
+        if (!existingNames.contains("updated_by")) {
+            fields.add(RelationFieldDefinition.builder()
+                    .tableDefinition(tableDefinition).fieldName("updated_by")
+                    .dataType(RelationDataType.VARCHAR).length(64).nullable(true).isPrimaryKey(false)
+                    .comment("Updated By").sortOrder(nextSortOrder++).build());
+            added = true;
+        }
+
+        if (added) {
+            tableDefinitionRepository.save(tableDefinition);
+            log.info("Auto-added audit fields to table: {}", tableDefinition.getTableName());
+        }
+    }
+
+    /**
+     * 检查物理表是否已存在于数据库中
+     */
+    private boolean physicalTableExists(String tableName) {
+        String sql = "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = ? AND table_schema = 'public'";
+        Integer count = jdbcTemplate.queryForObject(sql, Integer.class, tableName);
+        return count != null && count > 0;
+    }
+
+    /**
+     * 根据物理表的实际列信息生成 ALTER TABLE DDL（用于首次部署但物理表已存在的场景）
+     */
+    List<String> generateAlterTableDdlFromPhysical(String tableName, List<RelationFieldDefinition> currentFields) {
+        List<String> ddls = new ArrayList<>();
+        String quotedTable = quoteIdentifier(tableName);
+
+        // 查询物理表已有的列名
+        String sql = "SELECT column_name FROM information_schema.columns WHERE table_name = ? AND table_schema = 'public'";
+        List<String> existingColumns = jdbcTemplate.queryForList(sql, String.class, tableName);
+        Set<String> existingColumnSet = existingColumns.stream()
+                .map(String::toLowerCase)
+                .collect(Collectors.toSet());
+
+        // 添加缺失的列
+        for (RelationFieldDefinition field : currentFields) {
+            if (!existingColumnSet.contains(field.getFieldName().toLowerCase())) {
+                ddls.add("ALTER TABLE " + quotedTable + " ADD COLUMN " +
+                        quoteIdentifier(field.getFieldName()) + " " + mapDataType(field) +
+                        (Boolean.FALSE.equals(field.getNullable()) ? " NOT NULL" : "") +
+                        (field.getDefaultValue() != null && !field.getDefaultValue().isEmpty()
+                                ? " DEFAULT " + field.getDefaultValue() : ""));
+            }
+        }
+
+        return ddls;
     }
 
     /**

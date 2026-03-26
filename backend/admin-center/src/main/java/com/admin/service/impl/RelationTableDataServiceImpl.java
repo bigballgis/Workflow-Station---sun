@@ -15,6 +15,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.platform.common.dto.RelationFieldDTO;
 import com.platform.common.dto.RelationTableDataRowDTO;
 import com.platform.common.enums.RelationTableStatus;
+import com.platform.security.util.SecurityContextUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -24,6 +25,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -46,9 +48,40 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
     @Transactional(readOnly = true)
     public List<RelationTableResponse> getDeployedTables() {
         return tableDefinitionRepository.findByStatusInAndEnabledTrue(
-                        List.of(RelationTableStatus.DEPLOYED, RelationTableStatus.UPDATED)).stream()
-                .map(RelationTableResponse::fromEntity)
+                        List.of(RelationTableStatus.DEPLOYED, RelationTableStatus.UPDATED, RelationTableStatus.ROLLBACK)).stream()
+                .map(this::toDeployedTableResponse)
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * 将表定义转换为响应 DTO，字段定义使用已部署版本的快照数据，
+     * 而非当前实体中可能已被修改但尚未部署的字段定义。
+     */
+    private RelationTableResponse toDeployedTableResponse(RelationTableDefinition entity) {
+        RelationTableResponse response = RelationTableResponse.fromEntity(entity);
+        // 用已部署版本快照中的字段覆盖，避免展示未部署的修改
+        try {
+            List<RelationFieldDTO> deployedFields = getDeployedFields(entity);
+            List<RelationTableResponse.FieldDefinitionResponse> fieldResponses = deployedFields.stream()
+                    .map(f -> RelationTableResponse.FieldDefinitionResponse.builder()
+                            .fieldName(f.getFieldName())
+                            .dataType(f.getDataType())
+                            .length(f.getLength())
+                            .precision(f.getPrecision())
+                            .scale(f.getScale())
+                            .nullable(f.getNullable())
+                            .isPrimaryKey(f.getIsPrimaryKey())
+                            .defaultValue(f.getDefaultValue())
+                            .comment(f.getComment())
+                            .sortOrder(f.getSortOrder())
+                            .build())
+                    .collect(Collectors.toList());
+            response.setFieldDefinitions(fieldResponses);
+        } catch (Exception e) {
+            log.warn("No deployed version found for table: {}, returning empty fields", entity.getId());
+            response.setFieldDefinitions(Collections.emptyList());
+        }
+        return response;
     }
 
     @Override
@@ -114,6 +147,30 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
                 .filter(e -> validFieldNames.contains(e.getKey()))
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
+        // 查询物理表实际存在的列，避免插入不存在的列
+        Set<String> physicalColumns = new HashSet<>(jdbcTemplate.queryForList(
+                "SELECT column_name FROM information_schema.columns WHERE table_name = ? AND table_schema = 'public'",
+                String.class, physicalTableName));
+
+        // 过滤掉物理表中不存在的列
+        filteredData.entrySet().removeIf(e -> !physicalColumns.contains(e.getKey()));
+
+        // 自动填充审计字段（仅当物理表存在对应列时）
+        String currentUser = SecurityContextUtils.getCurrentUsername().orElse("system");
+        java.sql.Timestamp now = java.sql.Timestamp.from(Instant.now());
+        if (physicalColumns.contains("created_at")) {
+            filteredData.put("created_at", now);
+        }
+        if (physicalColumns.contains("created_by")) {
+            filteredData.put("created_by", currentUser);
+        }
+        if (physicalColumns.contains("updated_at")) {
+            filteredData.put("updated_at", now);
+        }
+        if (physicalColumns.contains("updated_by")) {
+            filteredData.put("updated_by", currentUser);
+        }
+
         // Build INSERT SQL
         List<String> columns = new ArrayList<>(filteredData.keySet());
         String columnList = columns.stream().map(this::quoteIdentifier).collect(Collectors.joining(", "));
@@ -150,6 +207,11 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
             throw new RelationTableNotFoundException("Row not found: " + rowId);
         }
 
+        // 查询物理表实际存在的列
+        Set<String> physicalColumns = new HashSet<>(jdbcTemplate.queryForList(
+                "SELECT column_name FROM information_schema.columns WHERE table_name = ? AND table_schema = 'public'",
+                String.class, physicalTableName));
+
         // Filter data to only include valid field names (exclude PK)
         Set<String> validFieldNames = fields.stream()
                 .map(RelationFieldDTO::getFieldName)
@@ -157,7 +219,17 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
         Map<String, Object> filteredData = data.entrySet().stream()
                 .filter(e -> validFieldNames.contains(e.getKey()))
                 .filter(e -> !e.getKey().equals(pkField))
+                .filter(e -> physicalColumns.contains(e.getKey()))
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+
+        // 自动填充审计字段（仅当物理表存在对应列时）
+        String currentUser = SecurityContextUtils.getCurrentUsername().orElse("system");
+        if (physicalColumns.contains("updated_at")) {
+            filteredData.put("updated_at", java.sql.Timestamp.from(Instant.now()));
+        }
+        if (physicalColumns.contains("updated_by")) {
+            filteredData.put("updated_by", currentUser);
+        }
 
         if (filteredData.isEmpty()) {
             return RelationTableDataRowDTO.builder()
@@ -174,7 +246,7 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
             setClauses.add(quoteIdentifier(entry.getKey()) + " = ?");
             params.add(entry.getValue());
         }
-        params.add(rowId);
+        params.add(castRowId(rowId, fields));
 
         String sql = "UPDATE " + quoteIdentifier(physicalTableName) +
                 " SET " + String.join(", ", setClauses) +
@@ -210,7 +282,7 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
 
         String sql = "DELETE FROM " + quoteIdentifier(physicalTableName) +
                 " WHERE " + quoteIdentifier(pkField) + " = ?";
-        jdbcTemplate.update(sql, rowId);
+        jdbcTemplate.update(sql, castRowId(rowId, fields));
 
         // Audit log
         auditService.logDelete(tableId, physicalTableName, rowId, oldData);
@@ -238,7 +310,7 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
             oldStatus = oldData.get("status") != null ? oldData.get("status").toString() : "Unknown";
             String sql = "UPDATE " + quoteIdentifier(physicalTableName) +
                     " SET \"status\" = ? WHERE " + quoteIdentifier(pkField) + " = ?";
-            jdbcTemplate.update(sql, status, rowId);
+            jdbcTemplate.update(sql, status, castRowId(rowId, fields));
         } else {
             // If no status column, we still log the status change intent
             oldStatus = "Unknown";
@@ -265,7 +337,9 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
     private RelationTableDefinition getDeployedTableDefinition(Long tableId) {
         RelationTableDefinition tableDef = tableDefinitionRepository.findById(tableId)
                 .orElseThrow(() -> new RelationTableNotFoundException(tableId));
-        if (tableDef.getStatus() != RelationTableStatus.DEPLOYED && tableDef.getStatus() != RelationTableStatus.UPDATED) {
+        if (tableDef.getStatus() != RelationTableStatus.DEPLOYED
+                && tableDef.getStatus() != RelationTableStatus.UPDATED
+                && tableDef.getStatus() != RelationTableStatus.ROLLBACK) {
             throw new RelationTableNotFoundException("Table is not deployed: " + tableId);
         }
         return tableDef;
@@ -290,6 +364,21 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
                 .map(RelationFieldDTO::getFieldName)
                 .findFirst()
                 .orElse(fields.isEmpty() ? "id" : fields.get(0).getFieldName());
+    }
+
+    private Object castRowId(String rowId, List<RelationFieldDTO> fields) {
+        RelationFieldDTO pkField = fields.stream()
+                .filter(f -> Boolean.TRUE.equals(f.getIsPrimaryKey()))
+                .findFirst().orElse(null);
+        if (pkField != null && rowId != null) {
+            var dt = pkField.getDataType();
+            if (dt == com.platform.common.enums.RelationDataType.INTEGER) {
+                return Integer.valueOf(rowId);
+            } else if (dt == com.platform.common.enums.RelationDataType.BIGINT) {
+                return Long.valueOf(rowId);
+            }
+        }
+        return rowId;
     }
 
     /**
@@ -343,7 +432,8 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
         String sql = "SELECT " + columnList + " FROM " + quoteIdentifier(physicalTableName) +
                 " WHERE " + quoteIdentifier(pkField) + " = ?";
 
-        List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, rowId);
+        Object typedRowId = castRowId(rowId, fields);
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, typedRowId);
         return rows.isEmpty() ? null : rows.get(0);
     }
 
