@@ -1,5 +1,6 @@
 package com.portal.properties;
 
+import com.portal.dto.ApiResponse;
 import com.portal.controller.ApprovalController;
 import net.jqwik.api.*;
 import net.jqwik.api.lifecycle.BeforeTry;
@@ -119,7 +120,7 @@ public class ApprovalControllerProperties {
         request.put("comment", comment);
         
         // When: Approve request (assuming approver is not the applicant)
-        ResponseEntity<Map<String, Object>> response = approvalController.approveRequest(requestId, request, approverId);
+        ResponseEntity<ApiResponse<Map<String, Object>>> response = approvalController.approveRequest(requestId, request, approverId);
         
         // Then: Should return OK status
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -127,7 +128,7 @@ public class ApprovalControllerProperties {
         // Then: Should contain success field
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody()).containsKey("success");
-        assertThat(response.getBody().get("success")).isEqualTo(true);
+        assertThat(response.getBody().getData().get("success")).isEqualTo(true);
     }
     
     /**
@@ -147,8 +148,8 @@ public class ApprovalControllerProperties {
         request.put("comment", comment);
         
         // When: Approve request twice
-        ResponseEntity<Map<String, Object>> response1 = approvalController.approveRequest(requestId, request, approverId);
-        ResponseEntity<Map<String, Object>> response2 = approvalController.approveRequest(requestId, request, approverId);
+        ResponseEntity<ApiResponse<Map<String, Object>>> response1 = approvalController.approveRequest(requestId, request, approverId);
+        ResponseEntity<ApiResponse<Map<String, Object>>> response2 = approvalController.approveRequest(requestId, request, approverId);
         
         // Then: Both should return OK status (idempotent)
         assertThat(response1.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -168,7 +169,7 @@ public class ApprovalControllerProperties {
             @ForAll("validUserIds") String userId) {
         
         // When: Check if user is approver
-        ResponseEntity<Map<String, Object>> response = approvalController.isApprover(userId);
+        ResponseEntity<ApiResponse<Map<String, Object>>> response = approvalController.isApprover(userId);
         
         // Then: Should return OK status
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -176,7 +177,7 @@ public class ApprovalControllerProperties {
         // Then: Should contain isApprover field
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody()).containsKey("isApprover");
-        assertThat(response.getBody().get("isApprover")).isInstanceOf(Boolean.class);
+        assertThat(response.getBody().getData().get("isApprover")).isInstanceOf(Boolean.class);
     }
     
     /**
@@ -190,7 +191,7 @@ public class ApprovalControllerProperties {
             @ForAll("validUserIds") String userId) {
         
         // When: Check if user is approver
-        ResponseEntity<Map<String, Object>> response = approvalController.isApprover(userId);
+        ResponseEntity<ApiResponse<Map<String, Object>>> response = approvalController.isApprover(userId);
         
         // Then: Should return OK status
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -201,8 +202,8 @@ public class ApprovalControllerProperties {
         assertThat(response.getBody()).containsKey("businessUnitCount");
         
         // Then: Counts should be non-negative integers
-        Object vgCount = response.getBody().get("virtualGroupCount");
-        Object buCount = response.getBody().get("businessUnitCount");
+        Object vgCount = response.getBody().getData().get("virtualGroupCount");
+        Object buCount = response.getBody().getData().get("businessUnitCount");
         assertThat(vgCount).isInstanceOf(Integer.class);
         assertThat(buCount).isInstanceOf(Integer.class);
         assertThat((Integer) vgCount).isGreaterThanOrEqualTo(0);
@@ -220,8 +221,8 @@ public class ApprovalControllerProperties {
             @ForAll("validUserIds") String userId) {
         
         // When: Check if user is approver twice
-        ResponseEntity<Map<String, Object>> response1 = approvalController.isApprover(userId);
-        ResponseEntity<Map<String, Object>> response2 = approvalController.isApprover(userId);
+        ResponseEntity<ApiResponse<Map<String, Object>>> response1 = approvalController.isApprover(userId);
+        ResponseEntity<ApiResponse<Map<String, Object>>> response2 = approvalController.isApprover(userId);
         
         // Then: Both should return same result
         assertThat(response1.getBody()).isEqualTo(response2.getBody());
@@ -266,7 +267,7 @@ public class ApprovalControllerProperties {
         request.put("comment", comment);
         
         // When: Approve request
-        ResponseEntity<Map<String, Object>> response = approvalController.approveRequest(requestId, request, userId);
+        ResponseEntity<ApiResponse<Map<String, Object>>> response = approvalController.approveRequest(requestId, request, userId);
         
         // Then: Should return OK status (authorization is handled by service layer)
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
@@ -291,14 +292,14 @@ public class ApprovalControllerProperties {
         request.put("comment", comment);
         
         // When: Reject request
-        ResponseEntity<Map<String, Object>> response = approvalController.rejectRequest(requestId, request, userId);
+        ResponseEntity<ApiResponse<Map<String, Object>>> response = approvalController.rejectRequest(requestId, request, userId);
         
         // Then: Should return bad request status
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         
         // Then: Should contain success=false
         assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().get("success")).isEqualTo(false);
+        assertThat(response.getBody().getData().get("success")).isEqualTo(false);
     }
     
     /**
@@ -318,14 +319,14 @@ public class ApprovalControllerProperties {
         request.put("comment", comment);
         
         // When: Reject request
-        ResponseEntity<Map<String, Object>> response = approvalController.rejectRequest(requestId, request, userId);
+        ResponseEntity<ApiResponse<Map<String, Object>>> response = approvalController.rejectRequest(requestId, request, userId);
         
         // Then: Should return OK status
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         
         // Then: Should contain success=true
         assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().get("success")).isEqualTo(true);
+        assertThat(response.getBody().getData().get("success")).isEqualTo(true);
     }
     
     /**
@@ -345,14 +346,14 @@ public class ApprovalControllerProperties {
         request.put("comment", comment);
         
         // When: Reject request
-        ResponseEntity<Map<String, Object>> response = approvalController.rejectRequest(requestId, request, userId);
+        ResponseEntity<ApiResponse<Map<String, Object>>> response = approvalController.rejectRequest(requestId, request, userId);
         
         // Then: Should return bad request status
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         
         // Then: Should contain success=false
         assertThat(response.getBody()).isNotNull();
-        assertThat(response.getBody().get("success")).isEqualTo(false);
+        assertThat(response.getBody().getData().get("success")).isEqualTo(false);
     }
     
     // ==================== Data Generators ====================
