@@ -27,6 +27,7 @@ import org.flowable.task.api.history.HistoricTaskInstance;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import jakarta.validation.Valid;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -283,7 +284,7 @@ public class TaskController {
     public ResponseEntity<ApiResponse<TaskAssignmentResult>> assignTask(
             @Parameter(description = "任务ID", required = true)
             @PathVariable String taskId,
-            @RequestBody TaskAssignmentRequest request) {
+            @RequestBody @Valid TaskAssignmentRequest request) {
         
         log.info("Assigning task: {} to {} (type: {})", taskId, request.getAssignmentTarget(), request.getAssignmentType());
         TaskAssignmentResult result = taskManagerComponent.assignTask(taskId, request);
@@ -303,7 +304,7 @@ public class TaskController {
     public ResponseEntity<ApiResponse<TaskAssignmentResult>> claimTask(
             @Parameter(description = "任务ID", required = true)
             @PathVariable String taskId,
-            @RequestBody TaskClaimRequest request) {
+            @RequestBody @Valid TaskClaimRequest request) {
         
         // 设置 taskId（从路径参数获取）
         request.setTaskId(taskId);
@@ -326,7 +327,7 @@ public class TaskController {
     public ResponseEntity<ApiResponse<TaskAssignmentResult>> delegateTask(
             @Parameter(description = "任务ID", required = true)
             @PathVariable String taskId,
-            @RequestBody TaskDelegationRequest request) {
+            @RequestBody @Valid TaskDelegationRequest request) {
         
         log.info("Delegating task: {} from {} to {}", taskId, request.getDelegatedBy(), request.getDelegatedTo());
         TaskAssignmentResult result = taskManagerComponent.delegateTask(taskId, request);
@@ -418,7 +419,7 @@ public class TaskController {
     public ResponseEntity<ApiResponse<TaskAssignmentResult>> returnTask(
             @Parameter(description = "任务ID", required = true)
             @PathVariable String taskId,
-            @RequestBody TaskReturnRequest request) {
+            @RequestBody @Valid TaskReturnRequest request) {
         
         request.setTaskId(taskId);
         log.info("Returning task: {} to activity: {} by user: {}", 

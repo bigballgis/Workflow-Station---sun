@@ -17,6 +17,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import jakarta.validation.Valid;
 import java.time.Instant;
 import java.util.Map;
 
@@ -59,7 +60,7 @@ public class N8nCallbackHandler {
      */
     @PostMapping("/callback")
     @Operation(summary = "N8N 回调", description = "接收 N8N 工作流执行完成后的回调通知")
-    public ResponseEntity<ApiResponse<Void>> handleCallback(@RequestBody N8nCallbackRequest request) {
+    public ResponseEntity<ApiResponse<Void>> handleCallback(@RequestBody @Valid N8nCallbackRequest request) {
         String callbackToken = request.getCallbackToken();
         log.info("Received N8N callback: callbackToken={}, status={}", callbackToken, request.getStatus());
 

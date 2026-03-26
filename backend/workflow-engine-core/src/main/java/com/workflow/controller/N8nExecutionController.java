@@ -20,6 +20,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.persistence.criteria.Predicate;
+import jakarta.validation.Valid;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -104,7 +105,7 @@ public class N8nExecutionController {
     @PostMapping("/api/v1/n8n/execute")
     @Operation(summary = "N8N Action 同步执行", description = "内部 API：同步执行 N8N 工作流并返回结果")
     public ResponseEntity<ApiResponse<N8nExecutionResult>> executeSynchronous(
-            @RequestBody N8nActionRequest request) {
+            @RequestBody @Valid N8nActionRequest request) {
 
         log.info("N8N Action sync execution request: webhookUrl={}, processInstanceId={}, timeoutSeconds={}",
                 request.getWebhookUrl(), request.getProcessInstanceId(), request.getTimeoutSeconds());

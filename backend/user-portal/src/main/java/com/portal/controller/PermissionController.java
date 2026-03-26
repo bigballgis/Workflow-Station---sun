@@ -9,6 +9,7 @@ import com.portal.enums.PermissionRequestStatus;
 import com.platform.common.i18n.I18nService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -247,7 +248,7 @@ public class PermissionController {
     @Deprecated
     public ApiResponse<PermissionRequest> submitRequest(
             @RequestHeader("X-User-Id") String userId,
-            @RequestBody PermissionRequestDto dto) {
+            @RequestBody @Valid PermissionRequestDto dto) {
         PermissionRequest request = permissionComponent.submitRequest(userId, dto);
         return ApiResponse.success(request);
     }

@@ -8,6 +8,7 @@ import com.portal.entity.ProcessDraft;
 import com.platform.common.i18n.I18nService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -131,7 +132,7 @@ public class ProcessController {
     public ApiResponse<ProcessInstanceInfo> startProcess(
             @RequestHeader("X-User-Id") String userId,
             @PathVariable String processKey,
-            @RequestBody ProcessStartRequest request) {
+            @RequestBody @Valid ProcessStartRequest request) {
         ProcessInstanceInfo instance = processComponent.startProcess(userId, processKey, request);
         return ApiResponse.success(instance);
     }

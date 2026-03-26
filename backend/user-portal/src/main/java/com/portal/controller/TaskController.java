@@ -42,7 +42,7 @@ public class TaskController {
     @PostMapping("/query")
     public ApiResponse<PageResponse<TaskInfo>> queryTasks(
             @RequestHeader(value = "X-User-Id", required = false) String userId,
-            @RequestBody TaskQueryRequest request) {
+            @RequestBody @Valid TaskQueryRequest request) {
         // 如果请求中没有userId，使用header中的
         if (request.getUserId() == null && userId != null) {
             request.setUserId(userId);
@@ -133,7 +133,7 @@ public class TaskController {
     @PostMapping("/batch/urge")
     public ApiResponse<Void> batchUrgeTasks(
             @RequestHeader("X-User-Id") String userId,
-            @RequestBody TaskBatchUrgeRequest request) {
+            @RequestBody @Valid TaskBatchUrgeRequest request) {
         taskProcessComponent.batchUrgeTasks(request.getTaskIds(), userId, request.getMessage());
         return ApiResponse.success(i18nService.getMessage("portal.batch_urged"), null);
     }
@@ -150,7 +150,7 @@ public class TaskController {
     @PostMapping("/completed/query")
     public ApiResponse<PageResponse<TaskInfo>> queryCompletedTasks(
             @RequestHeader(value = "X-User-Id", required = false) String userId,
-            @RequestBody TaskQueryRequest request) {
+            @RequestBody @Valid TaskQueryRequest request) {
         // 如果请求中没有userId，使用header中的
         if (request.getUserId() == null && userId != null) {
             request.setUserId(userId);

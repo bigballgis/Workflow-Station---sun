@@ -68,11 +68,11 @@ public class UserPermissionController {
             result.put("businessUnits", businessUnits);
             result.put("virtualGroups", virtualGroups);
             
-            return ResponseEntity.ok(result);
+            return ApiResponse.success(result);
             
         } catch (Exception e) {
             log.error("Failed to get permissions for user {}: {}", userId, e.getMessage());
-            return ResponseEntity.ok(Map.of(
+            return ApiResponse.success(Map.of(
                 "buBoundedRoles", List.of(),
                 "buUnboundedRoles", List.of(),
                 "businessUnits", List.of(),
@@ -83,7 +83,7 @@ public class UserPermissionController {
     
     @GetMapping("/unactivated-roles")
     @Operation(summary = "Get unactivated BU-Bounded roles")
-    public ResponseEntity<List<Map<String, Object>>> getUnactivatedRoles(
+    public ApiResponse<List<Map<String, Object>>> getUnactivatedRoles(
             @RequestHeader("X-User-Id") String userId) {
         log.info("Getting unactivated roles for user: {}", userId);
         
@@ -104,26 +104,26 @@ public class UserPermissionController {
                 }
             }
             
-            return ResponseEntity.ok(unactivatedRoles);
+            return ApiResponse.success(unactivatedRoles);
             
         } catch (Exception e) {
             log.error("Failed to get unactivated roles for user {}: {}", userId, e.getMessage());
-            return ResponseEntity.ok(List.of());
+            return ApiResponse.success(List.of());
         }
     }
     
     @GetMapping("/should-show-reminder")
     @Operation(summary = "Check if should show reminder")
-    public ResponseEntity<Map<String, Object>> shouldShowReminder(
+    public ApiResponse<Map<String, Object>> shouldShowReminder(
             @RequestHeader("X-User-Id") String userId) {
         log.info("Checking reminder status for user: {}", userId);
         
         try {
             // Get unactivated roles
-            List<Map<String, Object>> unactivatedRoles = getUnactivatedRoles(userId).getBody();
+            List<Map<String, Object>> unactivatedRoles = fetchUnactivatedRoles(userId);
             
             if (unactivatedRoles == null || unactivatedRoles.isEmpty()) {
-                return ResponseEntity.ok(Map.of(
+                return ApiResponse.success(Map.of(
                     "shouldShow", false,
                     "unactivatedRoles", List.of()
                 ));
@@ -132,14 +132,14 @@ public class UserPermissionController {
             // Check user preference
             boolean dontRemind = getDontRemindPreference(userId);
             
-            return ResponseEntity.ok(Map.of(
+            return ApiResponse.success(Map.of(
                 "shouldShow", !dontRemind,
                 "unactivatedRoles", unactivatedRoles
             ));
             
         } catch (Exception e) {
             log.error("Failed to check reminder status for user {}: {}", userId, e.getMessage());
-            return ResponseEntity.ok(Map.of(
+            return ApiResponse.success(Map.of(
                 "shouldShow", false,
                 "unactivatedRoles", List.of()
             ));
@@ -148,7 +148,7 @@ public class UserPermissionController {
     
     @PostMapping("/dont-remind")
     @Operation(summary = "Set don't remind preference")
-    public ResponseEntity<Map<String, Object>> setDontRemind(
+    public ApiResponse<Map<String, Object>> setDontRemind(
             @RequestHeader("X-User-Id") String userId) {
         log.info("Setting don't remind preference for user: {}", userId);
         
@@ -166,14 +166,14 @@ public class UserPermissionController {
             restTemplate.exchange(url, HttpMethod.POST, entity, 
                 new ParameterizedTypeReference<Map<String, Object>>() {});
             
-            return ResponseEntity.ok(Map.of(
+            return ApiResponse.success(Map.of(
                 "success", true,
                 "message", "Preference saved successfully"
             ));
             
         } catch (Exception e) {
             log.error("Failed to set preference for user {}: {}", userId, e.getMessage());
-            return ResponseEntity.ok(Map.of(
+            return ApiResponse.success(Map.of(
                 "success", true,
                 "message", "Preference saved"
             ));
@@ -182,7 +182,7 @@ public class UserPermissionController {
     
     @GetMapping("/roles/{roleId}/status")
     @Operation(summary = "Get role status")
-    public ResponseEntity<Map<String, Object>> getRoleStatus(
+    public ApiResponse<Map<String, Object>> getRoleStatus(
             @PathVariable String roleId,
             @RequestHeader("X-User-Id") String userId) {
         log.info("Getting role {} status for user: {}", roleId, userId);
@@ -201,7 +201,7 @@ public class UserPermissionController {
             }
             
             if (targetRole == null) {
-                return ResponseEntity.ok(Map.of(
+                return ApiResponse.success(Map.of(
                     "roleId", roleId,
                     "roleName", "",
                     "roleType", "",
@@ -220,7 +220,7 @@ public class UserPermissionController {
                 activatedBus = businessUnits;
             }
             
-            return ResponseEntity.ok(Map.of(
+            return ApiResponse.success(Map.of(
                 "roleId", roleId,
                 "roleName", targetRole.get("name"),
                 "roleType", roleType,
@@ -230,7 +230,7 @@ public class UserPermissionController {
             
         } catch (Exception e) {
             log.error("Failed to get role status for user {}: {}", userId, e.getMessage());
-            return ResponseEntity.ok(Map.of(
+            return ApiResponse.success(Map.of(
                 "roleId", roleId,
                 "roleName", "",
                 "roleType", "",
@@ -302,3 +302,5 @@ public class UserPermissionController {
         }
     }
 }
+
+

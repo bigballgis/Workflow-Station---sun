@@ -15,6 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import jakarta.validation.Valid;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -43,7 +44,7 @@ public class ProcessController {
     @PostMapping("/definitions/deploy")
     @Operation(summary = "部署流程定义", description = "上传BPMN文件并部署流程定义")
     public ResponseEntity<ApiResponse<DeploymentResult>> deployProcessDefinition(
-            @RequestBody ProcessDefinitionRequest request) {
+            @RequestBody @Valid ProcessDefinitionRequest request) {
         
         log.info("Deploying process definition: key={}, name={}", request.getKey(), request.getName());
         DeploymentResult result = processEngineComponent.deployProcess(request);
@@ -85,7 +86,7 @@ public class ProcessController {
     @PostMapping("/instances")
     @Operation(summary = "启动流程实例", description = "根据流程定义启动新的流程实例")
     public ResponseEntity<ApiResponse<ProcessInstanceResult>> startProcessInstance(
-            @RequestBody StartProcessRequest request) {
+            @RequestBody @Valid StartProcessRequest request) {
         
         log.info("Starting process instance: processDefinitionKey={}, businessKey={}, startUserId={}", 
                 request.getProcessDefinitionKey(), request.getBusinessKey(), request.getStartUserId());

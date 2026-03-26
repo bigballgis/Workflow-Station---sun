@@ -7,6 +7,7 @@ import com.portal.entity.NotificationPreference;
 import com.portal.entity.UserPreference;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
@@ -35,7 +36,7 @@ public class PreferenceController {
     @PutMapping
     public ApiResponse<UserPreference> updateUserPreference(
             @RequestHeader("X-User-Id") String userId,
-            @RequestBody UserPreference preference) {
+            @RequestBody @Valid UserPreference preference) {
         UserPreference updated = userPreferenceComponent.updateUserPreference(userId, preference);
         return ApiResponse.success("偏好设置更新成功", updated);
     }
@@ -69,7 +70,7 @@ public class PreferenceController {
     @PutMapping("/notifications")
     public ApiResponse<NotificationPreference> updateNotificationPreference(
             @RequestHeader("X-User-Id") String userId,
-            @RequestBody NotificationPreference preference) {
+            @RequestBody @Valid NotificationPreference preference) {
         NotificationPreference updated = userPreferenceComponent.updateNotificationPreference(userId, preference);
         return ApiResponse.success("通知偏好更新成功", updated);
     }
