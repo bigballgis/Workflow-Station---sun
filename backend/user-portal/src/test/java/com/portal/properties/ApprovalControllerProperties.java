@@ -1,6 +1,7 @@
 package com.portal.properties;
 
 import com.portal.dto.ApiResponse;
+import org.mockito.Mockito;
 import com.portal.controller.ApprovalController;
 import net.jqwik.api.*;
 import net.jqwik.api.lifecycle.BeforeTry;
@@ -29,7 +30,7 @@ public class ApprovalControllerProperties {
     
     @BeforeTry
     void setUp() {
-        approvalController = new ApprovalController();
+        approvalController = new ApprovalController(Mockito.mock(com.portal.client.AdminCenterClient.class));
     }
     
     // ==================== Property 3: Approver Scope Filtering ====================
