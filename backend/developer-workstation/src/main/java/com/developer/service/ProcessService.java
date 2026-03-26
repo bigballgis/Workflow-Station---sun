@@ -129,16 +129,13 @@ public class ProcessService {
             String startUserId) {
         
         try {
-            // In a real implementation, this would call the workflow engine
-            // For now, we'll generate a UUID as the process instance ID
-            // The actual Flowable integration would be done through WorkflowEngineClient
-            
-            // TODO: Implement actual Flowable process start
-            // Optional<Map<String, Object>> result = workflowEngineClient.startProcess(
-            //     processDefinitionKey, processVariables, startUserId);
-            
+            // WorkflowEngineClient 目前仅支持 deployProcess，尚未提供 startProcess 方法。
+            // 当 WorkflowEngineClient.startProcess() 可用后，应替换为：
+            //   workflowEngineClient.startProcess(processDefinitionKey, processVariables, startUserId)
+            // 当前使用 UUID 作为 fallback，确保流程实例记录可以正常创建。
             String processInstanceId = UUID.randomUUID().toString();
-            log.debug("Generated process instance ID: {}", processInstanceId);
+            log.info("WorkflowEngineClient.startProcess not yet available, using generated ID: {}", 
+                    processInstanceId);
             
             return processInstanceId;
             

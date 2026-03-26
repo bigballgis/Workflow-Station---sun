@@ -266,7 +266,10 @@ public class TaskController {
                 item.put("operationTime", activity.getEndTime() != null ? 
                     activity.getEndTime().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime().toString() :
                     activity.getStartTime().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime().toString());
-                item.put("comment", null); // TODO: 从评论服务获取评论
+                // 获取评论：使用 deleteReason 作为审批意见
+                String taskId = activity.getTaskId();
+                String comment = taskId != null ? taskDeleteReasons.get(taskId) : null;
+                item.put("comment", comment);
                 item.put("duration", activity.getDurationInMillis());
                 
                 return item;
