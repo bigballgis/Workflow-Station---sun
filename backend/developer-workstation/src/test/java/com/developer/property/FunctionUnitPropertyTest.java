@@ -37,7 +37,7 @@ public class FunctionUnitPropertyTest {
         ObjectMapper objectMapper = new ObjectMapper();
         RestTemplate restTemplate = mock(RestTemplate.class);
         return new FunctionUnitComponentImpl(
-                repository, processRepo, tableRepo, formRepo, actionRepo, versionRepo, iconRepo, objectMapper, restTemplate);
+                repository, processRepo, tableRepo, formRepo, actionRepo, mock(com.developer.repository.DecisionDefinitionRepository.class), versionRepo, iconRepo, objectMapper, restTemplate);
     }
     
     /**
@@ -147,3 +147,4 @@ public class FunctionUnitPropertyTest {
                 .map(s -> "FU_" + s);
     }
 }
+
