@@ -241,6 +241,22 @@ public class UserPermissionController {
         }
     }
     
+
+    // Internal helper for fetching unactivated roles
+    private List<Map<String, Object>> fetchUnactivatedRoles(String userId) {
+        List<Map<String, Object>> roles = getUserRoles(userId);
+        List<Map<String, Object>> businessUnits = getUserBusinessUnits(userId);
+        List<Map<String, Object>> unactivatedRoles = new ArrayList<>();
+        if (businessUnits.isEmpty()) {
+            for (Map<String, Object> role : roles) {
+                if ("BU_BOUNDED".equals(role.get("type"))) {
+                    unactivatedRoles.add(role);
+                }
+            }
+        }
+        return unactivatedRoles;
+    }
+
     // Helper methods
     
     private List<Map<String, Object>> getUserRoles(String userId) {
