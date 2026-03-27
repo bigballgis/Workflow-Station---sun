@@ -17,6 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.util.List;
 
@@ -69,10 +70,14 @@ public class BiGuestTokenServiceImpl implements BiGuestTokenService {
                 userId, dashboardId, supersetRoleIds.size());
 
         // 6. Return response
+        String publicSupersetHost = StringUtils.hasText(biProperties.getSuperset().getPublicHost())
+                ? biProperties.getSuperset().getPublicHost()
+                : biProperties.getSuperset().getHost();
+
         return GuestTokenResponse.builder()
                 .token(token)
                 .dashboardEmbedId(embedId)
-                .supersetDomain(biProperties.getSuperset().getHost())
+                .supersetDomain(publicSupersetHost)
                 .build();
     }
 }

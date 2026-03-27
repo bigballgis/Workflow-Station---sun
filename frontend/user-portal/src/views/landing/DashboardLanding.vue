@@ -87,6 +87,7 @@ const activeTab = ref('')
 const fullscreenVisible = ref(false)
 const fullscreenDashboard = ref<UserDashboardResponse | null>(null)
 const supersetDomain = ref('')
+const currentUserId = ref('')
 
 // Track embedded dashboard instances for cleanup
 const embeddedInstances = new Map<string, { unmount?: () => void }>()
@@ -112,11 +113,17 @@ function getUserId(): string {
 
 async function fetchGuestTokenPayload(dashboardId: string): Promise<GuestTokenResponse> {
   try {
-    const res = await biDashboardApi.getGuestToken({ dashboardId })
+    const res = await biDashboardApi.getGuestToken({ dashboardId }, currentUserId.value || undefined)
     // The response interceptor unwraps the data, so res should be GuestTokenResponse directly
     return ((res as any).data || res) as GuestTokenResponse
-  } catch (err) {
+  } catch (err: any) {
+    const backendMsg =
+      err?.response?.data?.message ||
+      err?.response?.data?.details ||
+      err?.message ||
+      'Unknown error'
     console.error(`Failed to fetch guest token for dashboard ${dashboardId}:`, err)
+    console.error(`Guest token API error details: ${backendMsg}`)
     throw err
   }
 }
@@ -275,6 +282,7 @@ onMounted(async () => {
       loading.value = false
       return
     }
+    currentUserId.value = userId
 
     const res = await biDashboardApi.getUserDashboards(userId)
     // The response interceptor unwraps, so res could be the data directly or wrapped
