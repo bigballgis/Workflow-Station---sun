@@ -234,6 +234,7 @@ workflow-engine:
 bi:
   superset:
     host: ${SUPERSET_HOST:http://localhost:8088}
+    public-host: ${SUPERSET_PUBLIC_HOST:http://localhost:8088}
     admin-username: ${SUPERSET_ADMIN_USERNAME:admin}
     admin-password: ${SUPERSET_ADMIN_PASSWORD:admin}
     guest-token-timeout-seconds: 30
