@@ -20,7 +20,7 @@ import java.util.Map;
  * 提供只读数据查看接口
  */
 @RestController
-@RequestMapping("/api/portal/relation-tables")
+@RequestMapping("/relation-tables")
 @RequiredArgsConstructor
 @Tag(name = "Portal Relation Tables", description = "Portal 只读数据查看")
 public class PortalRelationTableController {
