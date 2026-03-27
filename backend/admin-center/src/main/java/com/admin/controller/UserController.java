@@ -2,7 +2,6 @@ package com.admin.controller;
 
 import com.admin.component.RolePermissionManagerComponent;
 import com.admin.component.UserManagerComponent;
-import com.admin.component.VirtualGroupManagerComponent;
 import com.admin.dto.request.StatusUpdateRequest;
 import com.admin.dto.request.UserCreateRequest;
 import com.admin.dto.request.UserQueryRequest;
@@ -14,7 +13,6 @@ import com.admin.dto.response.UserDetailInfo;
 import com.admin.dto.response.UserInfo;
 import com.platform.security.entity.BusinessUnit;
 import com.platform.security.entity.Role;
-import com.platform.security.entity.User;
 import com.platform.security.entity.VirtualGroup;
 import com.platform.security.entity.VirtualGroupMember;
 import com.admin.enums.RoleType;

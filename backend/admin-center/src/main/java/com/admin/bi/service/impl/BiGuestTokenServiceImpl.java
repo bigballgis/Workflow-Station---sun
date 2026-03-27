@@ -1,6 +1,7 @@
 package com.admin.bi.service.impl;
 
 import com.admin.bi.client.SupersetApiClient;
+import com.admin.bi.config.BiProperties;
 import com.admin.bi.dto.request.GuestTokenRequest;
 import com.admin.bi.dto.response.GuestTokenResponse;
 import com.admin.bi.dto.response.UserDashboardResponse;
@@ -33,6 +34,7 @@ public class BiGuestTokenServiceImpl implements BiGuestTokenService {
     private final BiRbacMappingService rbacMappingService;
     private final SupersetApiClient supersetApiClient;
     private final UserRoleRepository userRoleRepository;
+    private final BiProperties biProperties;
 
     @Override
     @Transactional(readOnly = true)
@@ -70,6 +72,7 @@ public class BiGuestTokenServiceImpl implements BiGuestTokenService {
         return GuestTokenResponse.builder()
                 .token(token)
                 .dashboardEmbedId(embedId)
+                .supersetDomain(biProperties.getSuperset().getHost())
                 .build();
     }
 }

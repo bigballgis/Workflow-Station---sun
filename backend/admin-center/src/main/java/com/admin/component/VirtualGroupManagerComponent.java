@@ -13,7 +13,6 @@ import com.platform.security.entity.VirtualGroupRole;
 import com.admin.enums.VirtualGroupType;
 import com.admin.exception.AdminBusinessException;
 import com.admin.util.EntityTypeConverter;
-import com.admin.exception.UserNotFoundException;
 import com.admin.exception.VirtualGroupNotFoundException;
 import com.admin.repository.RoleRepository;
 import com.admin.repository.UserRepository;
@@ -28,7 +27,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -50,7 +48,6 @@ public class VirtualGroupManagerComponent {
     private final UserRepository userRepository;
     private final JdbcTemplate jdbcTemplate;
     private final com.admin.repository.UserBusinessUnitRepository userBusinessUnitRepository;
-    private final com.admin.helper.VirtualGroupHelper virtualGroupHelper;
 
     
     /**
@@ -271,9 +268,6 @@ public class VirtualGroupManagerComponent {
         
         VirtualGroup group = virtualGroupRepository.findById(groupId)
                 .orElseThrow(() -> new VirtualGroupNotFoundException(groupId));
-        
-        User user = userRepository.findById(request.getUserId())
-                .orElseThrow(() -> new UserNotFoundException(request.getUserId()));
         
         // 检查是否已是成员
         if (virtualGroupMemberRepository.existsByGroupIdAndUserId(groupId, request.getUserId())) {

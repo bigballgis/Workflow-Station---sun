@@ -19,4 +19,7 @@ public class GuestTokenResponse {
 
     /** Dashboard Embed ID */
     private String dashboardEmbedId;
+
+    /** Superset domain for frontend embedding */
+    private String supersetDomain;
 }

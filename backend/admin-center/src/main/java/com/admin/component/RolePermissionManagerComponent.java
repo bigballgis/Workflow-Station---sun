@@ -2,7 +2,6 @@ package com.admin.component;
 
 import com.admin.dto.request.PermissionConfig;
 import com.admin.dto.response.PermissionCheckResult;
-import com.admin.entity.*;
 import com.admin.enums.RoleType;
 import com.admin.exception.AdminBusinessException;
 import com.admin.exception.RoleNotFoundException;
@@ -10,7 +9,6 @@ import com.admin.helper.PermissionHelper;
 import com.admin.helper.RoleHelper;
 import com.admin.repository.*;
 import com.admin.util.EntityTypeConverter;
-import com.platform.security.entity.User;
 import com.platform.security.entity.Role;
 import com.platform.security.entity.Permission;
 import com.platform.security.entity.UserRole;
@@ -23,7 +21,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.stream.Collectors;
 
 /**
  * 角色权限管理组件
@@ -39,7 +36,6 @@ public class RolePermissionManagerComponent {
     private final RolePermissionRepository rolePermissionRepository;
     private final UserRoleRepository userRoleRepository;
     private final PermissionDelegationComponent delegationComponent;
-    private final PermissionConflictComponent conflictComponent;
     private final RoleHelper roleHelper;
     private final PermissionHelper permissionHelper;
     
@@ -168,9 +164,6 @@ public class RolePermissionManagerComponent {
      * 获取角色的有效权限
      */
     public Set<Permission> getEffectivePermissions(String roleId) {
-        Role role = roleRepository.findById(roleId)
-                .orElseThrow(() -> new RoleNotFoundException(roleId));
-        
         return new HashSet<>(permissionRepository.findByRoleId(roleId));
     }
     

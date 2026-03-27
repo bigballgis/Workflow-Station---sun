@@ -14,6 +14,7 @@ export interface UserDashboardResponse {
 export interface GuestTokenResponse {
   token: string
   dashboardEmbedId: string
+  supersetDomain?: string
 }
 
 export interface GuestTokenRequest {

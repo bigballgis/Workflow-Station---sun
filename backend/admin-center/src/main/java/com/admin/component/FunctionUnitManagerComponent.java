@@ -12,7 +12,6 @@ import com.admin.enums.DependencyType;
 import com.admin.enums.FunctionUnitStatus;
 import com.admin.exception.AdminBusinessException;
 import com.admin.exception.FunctionUnitNotFoundException;
-import com.admin.exception.InvalidPackageException;
 import com.admin.repository.FunctionUnitAccessRepository;
 import com.admin.repository.FunctionUnitContentRepository;
 import com.admin.repository.FunctionUnitDependencyRepository;
@@ -31,7 +30,6 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.*;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 /**
  * 功能单元管理组件
@@ -49,10 +47,7 @@ public class FunctionUnitManagerComponent {
     
     // 版本号正则表达式（语义化版本）
     private static final Pattern VERSION_PATTERN = Pattern.compile("^\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9]+)?$");
-    
-    // 代码正则表达式
-    private static final Pattern CODE_PATTERN = Pattern.compile("^[a-zA-Z][a-zA-Z0-9_-]{2,49}$");
-    
+        
     /**
      * 导入功能包
      */

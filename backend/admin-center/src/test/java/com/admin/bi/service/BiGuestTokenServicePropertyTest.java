@@ -1,6 +1,7 @@
 package com.admin.bi.service;
 
 import com.admin.bi.client.SupersetApiClient;
+import com.admin.bi.config.BiProperties;
 import com.admin.bi.dto.request.GuestTokenRequest;
 import com.admin.bi.dto.response.GuestTokenResponse;
 import com.admin.bi.dto.response.UserDashboardResponse;
@@ -37,6 +38,7 @@ class BiGuestTokenServicePropertyTest {
     private BiRbacMappingService rbacMappingService;
     private SupersetApiClient supersetApiClient;
     private UserRoleRepository userRoleRepository;
+    private BiProperties biProperties;
     private BiGuestTokenServiceImpl service;
 
     @BeforeTry
@@ -46,12 +48,14 @@ class BiGuestTokenServicePropertyTest {
         rbacMappingService = mock(BiRbacMappingService.class);
         supersetApiClient = mock(SupersetApiClient.class);
         userRoleRepository = mock(UserRoleRepository.class);
+        biProperties = new BiProperties();
         service = new BiGuestTokenServiceImpl(
                 dashboardRegistryRepository,
                 assignmentService,
                 rbacMappingService,
                 supersetApiClient,
-                userRoleRepository
+                userRoleRepository,
+                biProperties
         );
     }
 

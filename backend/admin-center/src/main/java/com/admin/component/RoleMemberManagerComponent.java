@@ -47,11 +47,7 @@ public class RoleMemberManagerComponent {
         // 验证角色存在
         Role role = roleRepository.findById(roleId)
                 .orElseThrow(() -> new RoleNotFoundException(roleId));
-        
-        // 验证用户存在
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new AdminBusinessException("USER_NOT_FOUND", "用户不存在: " + userId));
-        
+                
         // 检查是否已分配
         if (userRoleRepository.existsByUserIdAndRoleId(userId, roleId)) {
             throw new AdminBusinessException("ROLE_ALREADY_ASSIGNED", "用户已拥有该角色");
