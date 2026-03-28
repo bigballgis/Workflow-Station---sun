@@ -162,6 +162,7 @@ export interface TableBinding {
 // Table binding request
 export interface TableBindingRequest {
   tableId: number
+  relationTableId?: number
   bindingType: BindingType
   bindingMode?: BindingMode
   foreignKeyField?: string

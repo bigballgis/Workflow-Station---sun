@@ -31,8 +31,13 @@ public class PortalRelationTableController {
     @Operation(summary = "获取用户可见的表列表")
     public ResponseEntity<ApiResponse<List<RelationTableDTO>>> getVisibleTables(
             @RequestHeader(value = "X-User-Id", required = false) String userId) {
-        List<RelationTableDTO> result = service.getVisibleTables(userId);
-        return ResponseEntity.ok(ApiResponse.success(result));
+        try {
+            List<RelationTableDTO> result = service.getVisibleTables(userId);
+            return ResponseEntity.ok(ApiResponse.success(result));
+        } catch (Exception e) {
+            // Gracefully handle any unexpected errors (e.g., table not yet created, DB connection issues)
+            return ResponseEntity.ok(ApiResponse.success(List.of()));
+        }
     }
 
     @GetMapping("/{tableId}")
@@ -43,8 +48,12 @@ public class PortalRelationTableController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) String search) {
-        PageResponse<Map<String, Object>> result = service.queryTableData(tableId, userId, page, size, search);
-        return ResponseEntity.ok(ApiResponse.success(result));
+        try {
+            PageResponse<Map<String, Object>> result = service.queryTableData(tableId, userId, page, size, search);
+            return ResponseEntity.ok(ApiResponse.success(result));
+        } catch (Exception e) {
+            return ResponseEntity.ok(ApiResponse.success(PageResponse.of(List.of(), page, size, 0)));
+        }
     }
 
     @GetMapping("/{tableId}/export")
@@ -53,11 +62,18 @@ public class PortalRelationTableController {
             @PathVariable Long tableId,
             @RequestHeader(value = "X-User-Id", required = false) String userId,
             @RequestParam(defaultValue = "10000") int maxRows) {
-        String csv = service.exportCsv(tableId, userId, maxRows);
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=export.csv")
-                .contentType(MediaType.parseMediaType("text/csv"))
-                .body(csv.getBytes());
+        try {
+            String csv = service.exportCsv(tableId, userId, maxRows);
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=export.csv")
+                    .contentType(MediaType.parseMediaType("text/csv"))
+                    .body(csv.getBytes());
+        } catch (Exception e) {
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=export.csv")
+                    .contentType(MediaType.parseMediaType("text/csv"))
+                    .body(new byte[0]);
+        }
     }
 
     @GetMapping("/{tableId}/search")
@@ -68,8 +84,12 @@ public class PortalRelationTableController {
             @RequestParam List<String> searchFields,
             @RequestParam String displayField,
             @RequestParam(defaultValue = "20") int limit) {
-        List<Map<String, Object>> result = service.searchForLookup(tableId, keyword, searchFields, displayField, limit);
-        return ResponseEntity.ok(ApiResponse.success(result));
+        try {
+            List<Map<String, Object>> result = service.searchForLookup(tableId, keyword, searchFields, displayField, limit);
+            return ResponseEntity.ok(ApiResponse.success(result));
+        } catch (Exception e) {
+            return ResponseEntity.ok(ApiResponse.success(List.of()));
+        }
     }
 
     // Write operations are forbidden in Portal

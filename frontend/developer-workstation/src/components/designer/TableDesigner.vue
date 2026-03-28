@@ -127,10 +127,10 @@
         </el-form-item>
         <el-form-item :label="t('table.tableType')">
           <el-select v-model="createForm.tableType">
-            <el-option :label="t('form.mainForm')" value="MAIN" />
-            <el-option :label="t('form.subForm')" value="SUB" />
-            <el-option :label="t('form.actionForm')" value="ACTION" />
-            <el-option :label="t('table.relations')" value="RELATION" />
+            <el-option :label="t('table.mainTable')" value="MAIN" />
+            <el-option :label="t('table.subTable')" value="SUB" />
+            <el-option :label="t('table.actionTable')" value="ACTION" />
+            <el-option :label="t('table.relationTable')" value="RELATION" />
           </el-select>
         </el-form-item>
         <el-form-item :label="t('table.description')">
@@ -239,7 +239,7 @@ const relations = ref<TableRelation[]>([])
 const foreignKeys = ref<ForeignKeyDTO[]>([])
 
 const tableTypeLabel = (type: string) => {
-  const map: Record<string, string> = { MAIN: t('form.mainForm'), SUB: t('form.subForm'), ACTION: t('form.actionForm'), RELATION: t('table.relations') }
+  const map: Record<string, string> = { MAIN: t('table.mainTable'), SUB: t('table.subTable'), ACTION: t('table.actionTable'), RELATION: t('table.relationTable') }
   return map[type] || type
 }
 

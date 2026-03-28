@@ -245,5 +245,12 @@ export const relationTableDataApi = {
     tableId: number,
     params?: { action?: string; operatorId?: string; startTime?: string; endTime?: string; page?: number; size?: number }
   ) =>
-    get<PageResult<RelationTableAuditLog>>(`/relation-tables/data/${tableId}/audit-logs`, { params })
+    get<PageResult<RelationTableAuditLog>>(`/relation-tables/data/${tableId}/audit-logs`, { params }),
+
+  /** 导出 CSV */
+  exportCsv: (tableId: number, maxRows = 10000) =>
+    get<Blob>(`/relation-tables/data/${tableId}/export`, {
+      params: { maxRows },
+      responseType: 'blob'
+    })
 }

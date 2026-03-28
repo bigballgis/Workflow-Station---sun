@@ -9,7 +9,9 @@ import com.developer.repository.FormDefinitionRepository;
 import com.developer.repository.FormTableBindingRepository;
 import com.developer.repository.RelationViewConfigRepository;
 import com.developer.service.RelationTableBindingService;
+import com.platform.common.dto.RelationFieldDTO;
 import com.platform.common.dto.RelationTableDTO;
+import com.platform.common.enums.RelationDataType;
 import com.platform.common.enums.RelationTableStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -35,7 +37,7 @@ public class RelationTableBindingServiceImpl implements RelationTableBindingServ
     public List<RelationTableDTO> getAvailableTables() {
         String sql = "SELECT id, table_name, display_name, description, status, enabled, "
                 + "portal_visible, current_version FROM rt_table_definitions WHERE status = ?";
-        return jdbcTemplate.query(sql, (rs, rowNum) -> RelationTableDTO.builder()
+        List<RelationTableDTO> tables = jdbcTemplate.query(sql, (rs, rowNum) -> RelationTableDTO.builder()
                 .id(rs.getLong("id"))
                 .tableName(rs.getString("table_name"))
                 .displayName(rs.getString("display_name"))
@@ -45,6 +47,29 @@ public class RelationTableBindingServiceImpl implements RelationTableBindingServ
                 .portalVisible(rs.getBoolean("portal_visible"))
                 .currentVersion(rs.getInt("current_version"))
                 .build(), RelationTableStatus.DEPLOYED.getCode());
+
+        // Load field definitions for each table
+        String fieldSql = "SELECT id, field_name, data_type, length, precision_value, scale, "
+                + "nullable, is_primary_key, default_value, comment, sort_order "
+                + "FROM rt_field_definitions WHERE table_id = ? ORDER BY sort_order ASC";
+        for (RelationTableDTO table : tables) {
+            List<RelationFieldDTO> fields = jdbcTemplate.query(fieldSql, (rs, rowNum) -> RelationFieldDTO.builder()
+                    .id(rs.getLong("id"))
+                    .fieldName(rs.getString("field_name"))
+                    .dataType(RelationDataType.valueOf(rs.getString("data_type")))
+                    .length(rs.getObject("length", Integer.class))
+                    .precision(rs.getObject("precision_value", Integer.class))
+                    .scale(rs.getObject("scale", Integer.class))
+                    .nullable(rs.getBoolean("nullable"))
+                    .isPrimaryKey(rs.getBoolean("is_primary_key"))
+                    .defaultValue(rs.getString("default_value"))
+                    .comment(rs.getString("comment"))
+                    .sortOrder(rs.getInt("sort_order"))
+                    .build(), table.getId());
+            table.setFieldDefinitions(fields);
+        }
+
+        return tables;
     }
 
     @Override

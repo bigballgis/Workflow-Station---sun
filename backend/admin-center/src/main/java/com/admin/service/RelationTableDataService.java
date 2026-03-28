@@ -43,4 +43,9 @@ public interface RelationTableDataService {
      * 变更数据状态（Active/Inactive）
      */
     RelationTableDataRowDTO changeStatus(Long tableId, String rowId, String status);
+
+    /**
+     * 导出表数据为 CSV
+     */
+    String exportCsv(Long tableId, int maxRows);
 }

@@ -3,7 +3,7 @@ import { TOKEN_KEY, getUser } from './auth'
 
 // Create axios instance for relation table API
 const relationTableAxios = axios.create({
-  baseURL: '',
+  baseURL: '/api/v1',
   timeout: 30000
 })
 
@@ -44,6 +44,7 @@ export interface RelationTableDTO {
   enabled: boolean
   portalVisible: boolean
   currentVersion: number
+  fieldDefinitions?: RelationFieldDTO[]
 }
 
 export interface RelationTableBindingDTO {

@@ -12,7 +12,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -44,6 +46,19 @@ public class RelationTableDataController {
     }
 
     // ==================== 表数据 CRUD ====================
+
+    @GetMapping("/{tableId}/export")
+    @Operation(summary = "导出表数据为 CSV", description = "导出指定表的数据为 CSV 文件")
+    public ResponseEntity<byte[]> exportCsv(
+            @Parameter(description = "表定义ID") @PathVariable Long tableId,
+            @Parameter(description = "最大行数") @RequestParam(defaultValue = "10000") int maxRows) {
+        log.info("Exporting CSV for table: tableId={}, maxRows={}", tableId, maxRows);
+        String csv = dataService.exportCsv(tableId, maxRows);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=export.csv")
+                .contentType(MediaType.parseMediaType("text/csv"))
+                .body(csv.getBytes());
+    }
 
     @GetMapping("/{tableId}")
     @Operation(summary = "分页查询表数据", description = "根据已部署的最新表结构动态查询物理表数据，支持搜索过滤")

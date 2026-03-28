@@ -121,12 +121,6 @@ const routes: RouteRecordRaw[] = [
         name: 'RelationTables',
         component: () => import('@/views/relation-tables/index.vue'),
         meta: { titleKey: 'menu.relationTables', icon: 'Grid' }
-      },
-      {
-        path: 'relation-tables/:tableId',
-        name: 'RelationTableData',
-        component: () => import('@/views/relation-tables/data.vue'),
-        meta: { titleKey: 'menu.relationTableData', hidden: true }
       }
     ]
   },

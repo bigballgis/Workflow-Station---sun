@@ -332,6 +332,47 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
     // ==================== 辅助方法 ====================
 
     /**
+     * 导出表数据为 CSV
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public String exportCsv(Long tableId, int maxRows) {
+        RelationTableDefinition tableDef = getDeployedTableDefinition(tableId);
+        List<RelationFieldDTO> fields = getDeployedFields(tableDef);
+        String physicalTableName = tableDef.getTableName();
+
+        List<String> columnNames = fields.stream()
+                .map(RelationFieldDTO::getFieldName)
+                .collect(Collectors.toList());
+
+        String columnList = columnNames.stream()
+                .map(this::quoteIdentifier)
+                .collect(Collectors.joining(", "));
+
+        String sql = "SELECT " + columnList + " FROM " + quoteIdentifier(physicalTableName) + " LIMIT ?";
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, maxRows);
+
+        StringBuilder csv = new StringBuilder();
+        csv.append(String.join(",", columnNames)).append("\n");
+        for (Map<String, Object> row : rows) {
+            csv.append(columnNames.stream()
+                    .map(f -> escapeCsvValue(row.get(f)))
+                    .collect(Collectors.joining(","))
+            ).append("\n");
+        }
+        return csv.toString();
+    }
+
+    private String escapeCsvValue(Object value) {
+        if (value == null) return "";
+        String str = value.toString();
+        if (str.contains(",") || str.contains("\"") || str.contains("\n")) {
+            return "\"" + str.replace("\"", "\"\"") + "\"";
+        }
+        return str;
+    }
+
+    /**
      * 获取已部署的表定义，验证状态为 DEPLOYED
      */
     private RelationTableDefinition getDeployedTableDefinition(Long tableId) {
