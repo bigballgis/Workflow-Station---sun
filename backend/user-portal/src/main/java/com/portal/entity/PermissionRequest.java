@@ -1,12 +1,17 @@
 package com.portal.entity;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.portal.enums.PermissionRequestStatus;
 import com.portal.enums.PermissionRequestType;
 import jakarta.persistence.*;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -20,10 +25,13 @@ import java.util.List;
  */
 @Entity
 @Table(name = "up_permission_request")
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@EqualsAndHashCode
+@ToString
 public class PermissionRequest {
 
     @Id
@@ -32,6 +40,18 @@ public class PermissionRequest {
 
     @Column(name = "applicant_id", nullable = false, length = 64)
     private String applicantId;
+
+    /** 登录名，审批列表展示用（不入库） */
+    @Transient
+    @EqualsAndHashCode.Exclude
+    @ToString.Exclude
+    private String applicantUsername;
+
+    /** 展示名（全名/显示名），不入库 */
+    @Transient
+    @EqualsAndHashCode.Exclude
+    @ToString.Exclude
+    private String applicantName;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "request_type", nullable = false, length = 30)
@@ -104,10 +124,16 @@ public class PermissionRequest {
     @Column(name = "approver_id", length = 64)
     private String approverId;
 
+    /** DB column approve_time; JSON field approvedAt for API/frontend alignment */
     @Column(name = "approve_time")
+    @Getter(AccessLevel.NONE)
+    @Setter(AccessLevel.NONE)
     private LocalDateTime approveTime;
 
+    /** DB column approve_comment; JSON field approverComment for API/frontend alignment */
     @Column(name = "approve_comment", columnDefinition = "TEXT")
+    @Getter(AccessLevel.NONE)
+    @Setter(AccessLevel.NONE)
     private String approveComment;
 
     @CreationTimestamp
@@ -117,4 +143,24 @@ public class PermissionRequest {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    @JsonProperty("approvedAt")
+    public LocalDateTime getApproveTime() {
+        return approveTime;
+    }
+
+    @JsonProperty("approvedAt")
+    public void setApproveTime(LocalDateTime approveTime) {
+        this.approveTime = approveTime;
+    }
+
+    @JsonProperty("approverComment")
+    public String getApproveComment() {
+        return approveComment;
+    }
+
+    @JsonProperty("approverComment")
+    public void setApproveComment(String approveComment) {
+        this.approveComment = approveComment;
+    }
 }
