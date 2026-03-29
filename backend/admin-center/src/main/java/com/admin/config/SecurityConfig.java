@@ -97,7 +97,7 @@ public class SecurityConfig {
 
                         UserPrincipal principal = UserPrincipal.builder()
                                 .userId(userId)
-                                .username(username)
+                                .username(username != null ? username : userId)
                                 .displayName(displayName)
                                 .roles(roles != null ? roles : Collections.emptyList())
                                 .permissions(permissions != null ? permissions : Collections.emptyList())
@@ -119,6 +119,26 @@ public class SecurityConfig {
                         // Log JWT parsing failures for debugging
                         org.slf4j.LoggerFactory.getLogger("JwtFilter")
                                 .warn("JWT auth failed: {}", e.getMessage());
+                    }
+                }
+                // Fallback: if no authentication set, try X-Username / X-User-Id headers
+                if (SecurityContextHolder.getContext().getAuthentication() == null) {
+                    String xUsername = request.getHeader("X-Username");
+                    String xUserId = request.getHeader("X-User-Id");
+                    String fallbackName = (xUsername != null && !xUsername.isEmpty()) ? xUsername
+                            : (xUserId != null && !"system".equals(xUserId)) ? xUserId : null;
+                    if (fallbackName != null) {
+                        UserPrincipal fallbackPrincipal = UserPrincipal.builder()
+                                .userId(xUserId != null ? xUserId : fallbackName)
+                                .username(fallbackName)
+                                .displayName(fallbackName)
+                                .roles(Collections.emptyList())
+                                .permissions(Collections.emptyList())
+                                .build();
+                        UsernamePasswordAuthenticationToken fallbackAuth =
+                                new UsernamePasswordAuthenticationToken(fallbackPrincipal, null, Collections.emptyList());
+                        fallbackAuth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                        SecurityContextHolder.getContext().setAuthentication(fallbackAuth);
                     }
                 }
                 filterChain.doFilter(request, response);

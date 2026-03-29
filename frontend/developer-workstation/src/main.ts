@@ -16,7 +16,8 @@ import i18n from './i18n'
 import './styles/index.scss'
 import SubTablePlaceholderWidget from './components/designer/SubTablePlaceholderWidget.vue'
 import SubTableBindingSelect from './components/designer/SubTableBindingSelect.vue'
-import { FcEditor, FcSignature, FcTransfer, FcCascader, FcSlider } from './components/designer/fc-custom-fields'
+import { FcEditor, FcTransfer, FcCascader, FcSlider } from './components/designer/fc-custom-fields'
+import LookupComponent from './components/designer/LookupComponent.vue'
 
 // Force set HTML lang attribute to English
 document.documentElement.lang = 'en'
@@ -46,10 +47,10 @@ FcDesigner.component('subTable', SubTablePlaceholderWidget)
 
 // Register custom field components so form-create can render them in canvas & preview
 FcDesigner.component('editor', FcEditor)
-FcDesigner.component('signature', FcSignature)
 FcDesigner.component('transfer', FcTransfer)
 FcDesigner.component('cascader', FcCascader)
 FcDesigner.component('slider', FcSlider)
+FcDesigner.component('lookup', LookupComponent)
 
 // Register the subTable drag rule so it appears in the designer left menu
 FcDesigner.addDragRule({
@@ -143,32 +144,6 @@ FcDesigner.addDragRule({
 })
 
 FcDesigner.addDragRule({
-  name: 'signature',
-  label: 'Signature',
-  icon: 'icon-input',
-  menu: 'main',
-  mask: false,
-  input: true,
-  drag: false,
-  dragBtn: true,
-  inside: false,
-  only: false,
-  handleBtn: true,
-  languageKey: [],
-  rule() {
-    return {
-      type: 'signature',
-      field: 'signature',
-      title: 'Signature',
-      props: {}
-    }
-  },
-  props() {
-    return []
-  }
-})
-
-FcDesigner.addDragRule({
   name: 'transfer',
   label: 'Transfer',
   icon: 'icon-transfer',
@@ -251,6 +226,34 @@ FcDesigner.addDragRule({
       { type: 'inputNumber', field: 'min', title: 'Min' },
       { type: 'inputNumber', field: 'max', title: 'Max' },
       { type: 'inputNumber', field: 'step', title: 'Step' }
+    ]
+  }
+})
+
+FcDesigner.addDragRule({
+  name: 'lookup',
+  label: 'Lookup',
+  icon: 'icon-select',
+  menu: 'main',
+  mask: false,
+  input: true,
+  drag: false,
+  dragBtn: true,
+  inside: false,
+  only: false,
+  handleBtn: true,
+  languageKey: [],
+  rule() {
+    return {
+      type: 'lookup',
+      field: 'lookup',
+      title: 'Lookup',
+      props: { placeholder: 'Click to search', displayFields: [] }
+    }
+  },
+  props() {
+    return [
+      { type: 'input', field: 'placeholder', title: 'Placeholder' }
     ]
   }
 })

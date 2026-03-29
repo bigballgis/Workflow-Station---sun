@@ -127,7 +127,19 @@
               {{ binding.tableName }}
             </span>
           </template>
-          <div class="fc-designer-wrapper">
+          <!-- Relation Table: show data view instead of form designer -->
+          <RelationTableView
+            v-if="binding.bindingType === 'RELATED'"
+            :ref="(el: any) => { if (el) relationTableViewRefs[binding.bindingId] = el }"
+            :binding="binding"
+            :function-unit-id="props.functionUnitId"
+            :form-id="selectedForm!.id"
+            :available-fields="relationViewState[binding.bindingId]?.allFields || []"
+            :model-value="relationViewState[binding.bindingId]?.viewFields || []"
+            @update:model-value="(val: any) => updateRelationViewFields(binding.bindingId, val)"
+          />
+          <!-- Sub Table: show form designer -->
+          <div v-else class="fc-designer-wrapper">
             <fc-designer
               :ref="(el: any) => setSubDesignerRef(el, index)"
               :config="designerConfig"
@@ -367,8 +379,10 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
 import type { FormDefinition, FieldDefinition, TableBinding, BindingType } from '@/api/functionUnit'
 import { functionUnitApi } from '@/api/functionUnit'
+import { relationTableBindingApi, type RelationFieldDTO } from '@/api/relationTable'
 import TableBindingManager from './TableBindingManager.vue'
 import SubTableField from './SubTableField.vue'
+import RelationTableView from './RelationTableView.vue'
 import api from '@/api'
 
 const { t } = useI18n()
@@ -412,6 +426,10 @@ const previewItems = ref<Array<
 
 // Sub-designer refs (one per non-PRIMARY binding)
 const subDesignerRefs = ref<any[]>([])
+// Relation table view refs (keyed by bindingId)
+const relationTableViewRefs = ref<Record<number, any>>({})
+// Relation table view state (keyed by bindingId)
+const relationViewState = ref<Record<number, { allFields: any[]; viewFields: any[] }>>({})
 // In-memory cache: persists sub form rules across tab switches (tabs unmount when not active)
 const subFormCache = ref<Record<number, { rule: any[]; options: any }>>({})
 
@@ -437,6 +455,11 @@ function setSubDesignerRef(el: any, index: number) {
 // Active tab: 'main' or bindingId string
 const activeDesignerTab = ref<string>('main')
 
+function updateRelationViewFields(bindingId: number, fields: any[]) {
+  const existing = relationViewState.value[bindingId] || { allFields: [], viewFields: [] }
+  relationViewState.value = { ...relationViewState.value, [bindingId]: { ...existing, viewFields: fields } }
+}
+
 // Non-PRIMARY bindings for tabs
 const designerSubBindings = computed(() => {
   if (!selectedForm.value) return []
@@ -446,6 +469,7 @@ const designerSubBindings = computed(() => {
     bindingType: b.bindingType,
     bindingMode: b.bindingMode,
     tableName: getTableName(b.tableId) || b.tableName,
+    tableId: b.tableId,
     tableType: (store.tables.find(t => t.id === b.tableId)?.tableType) || '',
     tableDescription: (store.tables.find(t => t.id === b.tableId)?.description) || '',
   }))
@@ -473,10 +497,23 @@ const showImportFieldsDialog = ref(false)
 const importTableId = ref<number | null>(null)
 const selectedImportFields = ref<FieldDefinition[]>([])
 const formBindings = ref<TableBinding[]>([])
+// Relation table fields loaded from API (for RELATION type table import)
+const relationTableFields = ref<FieldDefinition[]>([])
+
+// Check if the currently selected import table is a RELATION type table
+function isImportingRelationTable(): boolean {
+  if (!importTableId.value) return false
+  const table = store.tables.find(t => t.id === importTableId.value)
+  return table?.tableType === 'RELATION'
+}
 
 // Computed: available fields for selected table
 const availableFields = computed(() => {
   if (!importTableId.value) return []
+  // If importing from a relation table, use the fetched relation fields
+  if (isImportingRelationTable() && relationTableFields.value.length > 0) {
+    return relationTableFields.value
+  }
   const table = store.tables.find(t => t.id === importTableId.value)
   return table?.fieldDefinitions || []
 })
@@ -754,8 +791,36 @@ function handleSelectAllFields(checked: boolean) {
 /**
  * Reset selected fields when table changes
  */
-function handleTableChange() {
+async function handleTableChange() {
   selectedImportFields.value = []
+  relationTableFields.value = []
+  // If the selected table is a RELATION type, fetch its fields from the relation table API
+  if (isImportingRelationTable()) {
+    try {
+      const res = await relationTableBindingApi.getAvailableTables()
+      const tables = res.data || []
+      // Match by table name since the IDs are from different tables (dw vs rt)
+      const selectedTable = store.tables.find(t => t.id === importTableId.value)
+      if (selectedTable) {
+        const rtTable = tables.find((t: any) => t.tableName === selectedTable.tableName || t.displayName === selectedTable.tableName || t.displayName === selectedTable.tableDisplayName)
+        if (rtTable?.fieldDefinitions) {
+          relationTableFields.value = rtTable.fieldDefinitions.map((f: RelationFieldDTO) => ({
+            fieldName: f.fieldName,
+            dataType: f.dataType,
+            length: f.length,
+            precision: f.precision,
+            scale: f.scale,
+            nullable: f.nullable,
+            isPrimaryKey: f.isPrimaryKey,
+            defaultValue: f.defaultValue,
+            description: f.comment,
+          } as FieldDefinition))
+        }
+      }
+    } catch {
+      relationTableFields.value = []
+    }
+  }
 }
 
 /**
@@ -784,6 +849,25 @@ async function handleImportFieldsToDesigner() {
       formBindings.value = []
     }
     
+    // If active tab is a RELATED binding, auto-select its table from store.tables
+    if (activeDesignerTab.value !== 'main') {
+      const bindingId = Number(activeDesignerTab.value)
+      const subBinding = designerSubBindings.value.find(b => b.bindingId === bindingId && b.bindingType === 'RELATED')
+      if (subBinding) {
+        // Find the table in store.tables by name (since dw_table_definitions has RELATION type tables)
+        const dwTable = store.tables.find(t => t.tableName === subBinding.tableName || t.tableDisplayName === subBinding.tableName)
+        if (dwTable) {
+          importTableId.value = dwTable.id
+        }
+        selectedImportFields.value = []
+        relationTableFields.value = []
+        showImportFieldsDialog.value = true
+        // Fetch relation table fields
+        await handleTableChange()
+        return
+      }
+    }
+    
     // Auto-select primary table if bound
     const primaryBinding = formBindings.value.find(b => b.bindingType === 'PRIMARY')
     if (primaryBinding) {
@@ -799,6 +883,7 @@ async function handleImportFieldsToDesigner() {
   }
   
   selectedImportFields.value = []
+  relationTableFields.value = []
   showImportFieldsDialog.value = true
 }
 
@@ -916,13 +1001,56 @@ function fieldToFormRule(field: FieldDefinition): any {
 /**
  * Confirm importing fields to form designer
  */
-function handleConfirmImportFields() {
+async function handleConfirmImportFields() {
   if (selectedImportFields.value.length === 0) {
     ElMessage.warning(t('form.selectAtLeastOne'))
     return
   }
 
   if (selectedForm.value) {
+    // Check if importing into a relation table
+    if (isImportingRelationTable()) {
+      // Convert selected fields to RelationFieldDTO format and pass directly to the view
+      const relationFields = selectedImportFields.value.map((f, idx) => ({
+        id: idx,
+        fieldName: f.fieldName,
+        dataType: f.dataType || 'VARCHAR',
+        length: f.length,
+        precision: f.precision,
+        scale: f.scale,
+        nullable: f.nullable ?? true,
+        isPrimaryKey: f.isPrimaryKey ?? false,
+        defaultValue: f.defaultValue,
+        comment: f.description,
+        sortOrder: idx,
+      }))
+      // Convert ALL available fields (not just selected) for the left panel
+      const allRelationFields = availableFields.value.map((f, idx) => ({
+        id: idx,
+        fieldName: f.fieldName,
+        dataType: f.dataType || 'VARCHAR',
+        length: f.length,
+        precision: f.precision,
+        scale: f.scale,
+        nullable: f.nullable ?? true,
+        isPrimaryKey: f.isPrimaryKey ?? false,
+        defaultValue: f.defaultValue,
+        comment: f.description,
+        sortOrder: idx,
+      }))
+      // Update relation view state directly
+      if (activeDesignerTab.value !== 'main') {
+        const bindingId = Number(activeDesignerTab.value)
+        relationViewState.value = {
+          ...relationViewState.value,
+          [bindingId]: { allFields: allRelationFields, viewFields: relationFields }
+        }
+      }
+      ElMessage.success(t('form.importedSuccess', { count: selectedImportFields.value.length }))
+      showImportFieldsDialog.value = false
+      return
+    }
+
     const rules = selectedImportFields.value.map(fieldToFormRule)
 
     // Determine target designer: active sub tab or main
@@ -1188,7 +1316,24 @@ function handleTabChange(tabName: string) {
   const bindingId = Number(tabName)
   const index = designerSubBindings.value.findIndex(b => b.bindingId === bindingId)
   if (index < 0) return
+  const binding = designerSubBindings.value[index]
   const config = selectedForm.value?.configJson || {}
+
+  // For RELATED bindings, restore saved view fields
+  if (binding.bindingType === 'RELATED') {
+    // Restore saved relation view state if not already loaded
+    if (!relationViewState.value[bindingId]) {
+      const saved = (config.relationViews || {})[bindingId]
+      if (saved) {
+        relationViewState.value = {
+          ...relationViewState.value,
+          [bindingId]: { allFields: saved.allFields || [], viewFields: saved.viewFields || [] }
+        }
+      }
+    }
+    return
+  }
+
   const subForms = config.subForms || {}
   nextTick(() => {
     setTimeout(() => {
@@ -1306,11 +1451,26 @@ async function handleSaveForm() {
       }
     })
 
+    // Collect relation table view fields
+    const relationViews: Record<number, { viewFields: any[]; allFields: any[] }> = {}
+    designerSubBindings.value.forEach((binding) => {
+      if (binding.bindingType === 'RELATED') {
+        const state = relationViewState.value[binding.bindingId]
+        if (state && (state.viewFields.length > 0 || state.allFields.length > 0)) {
+          relationViews[binding.bindingId] = state
+        } else {
+          // Preserve previously saved data
+          const existing = (selectedForm.value!.configJson?.relationViews || {})[binding.bindingId]
+          if (existing) relationViews[binding.bindingId] = existing
+        }
+      }
+    })
+
     await store.updateForm(props.functionUnitId, selectedForm.value.id, {
       formName: selectedForm.value.formName,
       formType: selectedForm.value.formType,
       description: selectedForm.value.description,
-      configJson: { rule, options, subForms }
+      configJson: { rule, options, subForms, relationViews }
     })
     ElMessage.success(t('form.saveSuccess'))
     loadForms()

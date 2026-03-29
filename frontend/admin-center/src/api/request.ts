@@ -31,6 +31,8 @@ request.interceptors.request.use(
     }
     const userId = localStorage.getItem('userId') || 'system'
     config.headers['X-User-Id'] = userId
+    const username = localStorage.getItem('username') || userId
+    config.headers['X-Username'] = username
     return config
   },
   (error) => Promise.reject(error)

@@ -58,30 +58,7 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
      * 而非当前实体中可能已被修改但尚未部署的字段定义。
      */
     private RelationTableResponse toDeployedTableResponse(RelationTableDefinition entity) {
-        RelationTableResponse response = RelationTableResponse.fromEntity(entity);
-        // 用已部署版本快照中的字段覆盖，避免展示未部署的修改
-        try {
-            List<RelationFieldDTO> deployedFields = getDeployedFields(entity);
-            List<RelationTableResponse.FieldDefinitionResponse> fieldResponses = deployedFields.stream()
-                    .map(f -> RelationTableResponse.FieldDefinitionResponse.builder()
-                            .fieldName(f.getFieldName())
-                            .dataType(f.getDataType())
-                            .length(f.getLength())
-                            .precision(f.getPrecision())
-                            .scale(f.getScale())
-                            .nullable(f.getNullable())
-                            .isPrimaryKey(f.getIsPrimaryKey())
-                            .defaultValue(f.getDefaultValue())
-                            .comment(f.getComment())
-                            .sortOrder(f.getSortOrder())
-                            .build())
-                    .collect(Collectors.toList());
-            response.setFieldDefinitions(fieldResponses);
-        } catch (Exception e) {
-            log.warn("No deployed version found for table: {}, returning empty fields", entity.getId());
-            response.setFieldDefinitions(Collections.emptyList());
-        }
-        return response;
+        return RelationTableResponse.fromEntity(entity);
     }
 
     @Override
@@ -390,10 +367,29 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
      * 获取已部署的最新表结构字段列表（从版本快照中获取）
      */
     private List<RelationFieldDTO> getDeployedFields(RelationTableDefinition tableDef) {
-        RelationTableVersion latestVersion = versionRepository.findLatestVersion(tableDef.getId())
-                .orElseThrow(() -> new RelationTableNotFoundException(
-                        "No deployed version found for table: " + tableDef.getId()));
-        return parseSnapshotData(latestVersion.getSnapshotData());
+        // 直接从 rt_field_definitions 读取最新字段（和物理表一致）
+        List<RelationFieldDTO> fields = jdbcTemplate.query(
+                "SELECT id, field_name, data_type, length, precision_value, scale, nullable, is_primary_key, default_value, comment, sort_order "
+                + "FROM rt_field_definitions WHERE table_id = ? ORDER BY sort_order ASC",
+                (rs, rowNum) -> RelationFieldDTO.builder()
+                        .id(rs.getLong("id"))
+                        .fieldName(rs.getString("field_name"))
+                        .dataType(com.platform.common.enums.RelationDataType.valueOf(rs.getString("data_type")))
+                        .length(rs.getObject("length", Integer.class))
+                        .precision(rs.getObject("precision_value", Integer.class))
+                        .scale(rs.getObject("scale", Integer.class))
+                        .nullable(rs.getBoolean("nullable"))
+                        .isPrimaryKey(rs.getBoolean("is_primary_key"))
+                        .defaultValue(rs.getString("default_value"))
+                        .comment(rs.getString("comment"))
+                        .sortOrder(rs.getInt("sort_order"))
+                        .build(),
+                tableDef.getId());
+        if (fields.isEmpty()) {
+            throw new RelationTableNotFoundException(
+                    "No field definitions found for table: " + tableDef.getId());
+        }
+        return fields;
     }
 
     /**

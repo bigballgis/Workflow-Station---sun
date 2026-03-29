@@ -93,6 +93,7 @@ declare module 'vue' {
     ProcessDesigner: typeof import('./components/designer/ProcessDesigner.vue')['default']
     ProcessProperties: typeof import('./components/designer/properties/ProcessProperties.vue')['default']
     RelationBindingPanel: typeof import('./components/designer/RelationBindingPanel.vue')['default']
+    RelationTableView: typeof import('./components/designer/RelationTableView.vue')['default']
     RelationViewDesigner: typeof import('./components/designer/RelationViewDesigner.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']

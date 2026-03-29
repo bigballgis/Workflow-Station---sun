@@ -26,7 +26,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -258,26 +261,52 @@ public class RelationTableDeployServiceImpl implements RelationTableDeployServic
 
         List<RelationFieldDTO> previousFields = parseSnapshotData(latestVersion.getSnapshotData());
 
-        // 构建字段名映射
+        // Build maps by field name
         var previousFieldMap = previousFields.stream()
                 .collect(Collectors.toMap(RelationFieldDTO::getFieldName, f -> f));
         var currentFieldMap = currentFields.stream()
                 .collect(Collectors.toMap(RelationFieldDefinition::getFieldName, f -> f));
 
-        // 新增的字段
-        for (RelationFieldDefinition field : currentFields) {
-            if (!previousFieldMap.containsKey(field.getFieldName())) {
-                ddls.add("ALTER TABLE " + quotedTable + " ADD COLUMN " +
-                        quoteIdentifier(field.getFieldName()) + " " + mapDataType(field) +
-                        (Boolean.FALSE.equals(field.getNullable()) ? " NOT NULL" : "") +
-                        (field.getDefaultValue() != null && !field.getDefaultValue().isEmpty()
-                                ? " DEFAULT " + field.getDefaultValue() : ""));
+        // Detect renames: same id, different fieldName
+        Map<String, String> renamedFields = new HashMap<>(); // oldName -> newName
+        if (previousFields.stream().anyMatch(f -> f.getId() != null)) {
+            var previousById = previousFields.stream()
+                    .filter(f -> f.getId() != null)
+                    .collect(Collectors.toMap(RelationFieldDTO::getId, f -> f, (a, b) -> a));
+            for (RelationFieldDefinition current : currentFields) {
+                if (current.getId() != null && previousById.containsKey(current.getId())) {
+                    RelationFieldDTO prev = previousById.get(current.getId());
+                    if (!current.getFieldName().equals(prev.getFieldName())) {
+                        renamedFields.put(prev.getFieldName(), current.getFieldName());
+                        ddls.add("ALTER TABLE " + quotedTable + " RENAME COLUMN " +
+                                quoteIdentifier(prev.getFieldName()) + " TO " +
+                                quoteIdentifier(current.getFieldName()));
+                    }
+                }
             }
         }
 
-        // 删除的字段
+        // 新增的字段（排除重命名的）
+        for (RelationFieldDefinition field : currentFields) {
+            if (!previousFieldMap.containsKey(field.getFieldName()) && !renamedFields.containsValue(field.getFieldName())) {
+                String colDef = "ALTER TABLE " + quotedTable + " ADD COLUMN " +
+                        quoteIdentifier(field.getFieldName()) + " " + mapDataType(field);
+                // For NOT NULL columns on tables with existing data, must provide a DEFAULT
+                boolean isNotNull = Boolean.FALSE.equals(field.getNullable());
+                boolean hasDefault = field.getDefaultValue() != null && !field.getDefaultValue().isEmpty();
+                if (isNotNull && !hasDefault) {
+                    colDef += " DEFAULT " + getTypeDefault(field) + " NOT NULL";
+                } else {
+                    if (isNotNull) colDef += " NOT NULL";
+                    if (hasDefault) colDef += " DEFAULT " + field.getDefaultValue();
+                }
+                ddls.add(colDef);
+            }
+        }
+
+        // 删除的字段（排除重命名的）
         for (RelationFieldDTO prevField : previousFields) {
-            if (!currentFieldMap.containsKey(prevField.getFieldName())) {
+            if (!currentFieldMap.containsKey(prevField.getFieldName()) && !renamedFields.containsKey(prevField.getFieldName())) {
                 ddls.add("ALTER TABLE " + quotedTable + " DROP COLUMN " +
                         quoteIdentifier(prevField.getFieldName()));
             }
@@ -314,6 +343,19 @@ public class RelationTableDeployServiceImpl implements RelationTableDeployServic
             case DATE -> "DATE";
             case TIMESTAMP -> "TIMESTAMP";
             case TEXT -> "TEXT";
+        };
+    }
+
+    /**
+     * 获取数据类型的默认值（用于 NOT NULL 列添加到已有数据的表时）
+     */
+    private String getTypeDefault(RelationFieldDefinition field) {
+        return switch (field.getDataType()) {
+            case VARCHAR, TEXT -> "''";
+            case INTEGER, BIGINT, DECIMAL -> "0";
+            case BOOLEAN -> "false";
+            case DATE -> "CURRENT_DATE";
+            case TIMESTAMP -> "CURRENT_TIMESTAMP";
         };
     }
 
@@ -418,11 +460,17 @@ public class RelationTableDeployServiceImpl implements RelationTableDeployServic
         // 添加缺失的列
         for (RelationFieldDefinition field : currentFields) {
             if (!existingColumnSet.contains(field.getFieldName().toLowerCase())) {
-                ddls.add("ALTER TABLE " + quotedTable + " ADD COLUMN " +
-                        quoteIdentifier(field.getFieldName()) + " " + mapDataType(field) +
-                        (Boolean.FALSE.equals(field.getNullable()) ? " NOT NULL" : "") +
-                        (field.getDefaultValue() != null && !field.getDefaultValue().isEmpty()
-                                ? " DEFAULT " + field.getDefaultValue() : ""));
+                String colDef = "ALTER TABLE " + quotedTable + " ADD COLUMN " +
+                        quoteIdentifier(field.getFieldName()) + " " + mapDataType(field);
+                boolean isNotNull = Boolean.FALSE.equals(field.getNullable());
+                boolean hasDefault = field.getDefaultValue() != null && !field.getDefaultValue().isEmpty();
+                if (isNotNull && !hasDefault) {
+                    colDef += " DEFAULT " + getTypeDefault(field) + " NOT NULL";
+                } else {
+                    if (isNotNull) colDef += " NOT NULL";
+                    if (hasDefault) colDef += " DEFAULT " + field.getDefaultValue();
+                }
+                ddls.add(colDef);
             }
         }
 
@@ -442,6 +490,7 @@ public class RelationTableDeployServiceImpl implements RelationTableDeployServic
     String createSnapshotData(List<RelationFieldDefinition> fields) {
         List<RelationFieldDTO> fieldDtos = fields.stream()
                 .map(f -> RelationFieldDTO.builder()
+                        .id(f.getId())
                         .fieldName(f.getFieldName())
                         .dataType(f.getDataType())
                         .length(f.getLength())
