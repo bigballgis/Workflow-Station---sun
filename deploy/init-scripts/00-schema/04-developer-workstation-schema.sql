@@ -165,7 +165,7 @@ CREATE INDEX IF NOT EXISTS idx_dw_form_definitions_fu ON dw_form_definitions(fun
 CREATE TABLE IF NOT EXISTS dw_form_table_bindings (
     id BIGSERIAL PRIMARY KEY,
     form_id BIGINT NOT NULL,
-    table_id BIGINT NOT NULL,
+    table_id BIGINT,
     relation_table_id BIGINT,
     binding_type VARCHAR(20) NOT NULL,
     binding_mode VARCHAR(20) NOT NULL DEFAULT 'READONLY',
@@ -175,7 +175,6 @@ CREATE TABLE IF NOT EXISTS dw_form_table_bindings (
     updated_at TIMESTAMP,
     CONSTRAINT fk_binding_form FOREIGN KEY (form_id) REFERENCES dw_form_definitions(id) ON DELETE CASCADE,
     CONSTRAINT fk_binding_table FOREIGN KEY (table_id) REFERENCES dw_table_definitions(id),
-    CONSTRAINT uk_form_table_binding UNIQUE (form_id, table_id),
     CONSTRAINT chk_binding_type CHECK (binding_type IN ('PRIMARY', 'SUB', 'RELATED')),
     CONSTRAINT chk_binding_mode CHECK (binding_mode IN ('EDITABLE', 'READONLY'))
 );

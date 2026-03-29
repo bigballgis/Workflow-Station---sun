@@ -1,7 +1,9 @@
 package com.developer.controller;
 
 import com.developer.dto.ApiResponse;
+import com.developer.entity.FormTableBinding;
 import com.developer.entity.RelationViewConfig;
+import com.developer.repository.FormTableBindingRepository;
 import com.developer.service.RelationViewService;
 import com.developer.service.RelationViewService.ViewFieldDTO;
 import com.platform.common.dto.RelationFieldDTO;
@@ -23,6 +25,7 @@ import java.util.List;
 public class RelationTableViewController {
 
     private final RelationViewService viewService;
+    private final FormTableBindingRepository formTableBindingRepository;
 
     @GetMapping("/{bindingId}")
     @Operation(summary = "获取 View 配置")
@@ -48,8 +51,23 @@ public class RelationTableViewController {
     public ResponseEntity<ApiResponse<List<RelationFieldDTO>>> getAvailableFields(
             @PathVariable Long formId,
             @PathVariable Long bindingId) {
-        RelationViewConfig config = viewService.getViewConfig(bindingId);
-        List<RelationFieldDTO> fields = viewService.getAvailableFields(config.getTableId());
+        // Get tableId from binding directly (works even without view config)
+        FormTableBinding binding = formTableBindingRepository.findById(bindingId)
+                .orElseThrow(() -> new IllegalArgumentException("Binding not found: " + bindingId));
+        Long tableId = binding.getTableId();
+        if (tableId == null) {
+            throw new IllegalArgumentException("Binding has no associated table: " + bindingId);
+        }
+        List<RelationFieldDTO> fields = viewService.getAvailableFields(tableId);
+        return ResponseEntity.ok(ApiResponse.success(fields));
+    }
+
+    @GetMapping("/fields-by-table")
+    @Operation(summary = "通过 tableId 直接获取可用字段列表")
+    public ResponseEntity<ApiResponse<List<RelationFieldDTO>>> getFieldsByTableId(
+            @PathVariable Long formId,
+            @RequestParam Long tableId) {
+        List<RelationFieldDTO> fields = viewService.getAvailableFields(tableId);
         return ResponseEntity.ok(ApiResponse.success(fields));
     }
 }

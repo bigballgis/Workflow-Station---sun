@@ -83,6 +83,7 @@ declare module 'vue' {
     IconPreview: typeof import('./components/icon/IconPreview.vue')['default']
     IconSelector: typeof import('./components/icon/IconSelector.vue')['default']
     InlineDocumentViewer: typeof import('./components/ai/InlineDocumentViewer.vue')['default']
+    LookupBindingSelect: typeof import('./components/designer/LookupBindingSelect.vue')['default']
     LookupComponent: typeof import('./components/designer/LookupComponent.vue')['default']
     LookupConfigPanel: typeof import('./components/designer/LookupConfigPanel.vue')['default']
     MarkdownRenderer: typeof import('./components/ai/MarkdownRenderer.vue')['default']

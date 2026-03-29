@@ -18,6 +18,7 @@ import SubTablePlaceholderWidget from './components/designer/SubTablePlaceholder
 import SubTableBindingSelect from './components/designer/SubTableBindingSelect.vue'
 import { FcEditor, FcTransfer, FcCascader, FcSlider } from './components/designer/fc-custom-fields'
 import LookupComponent from './components/designer/LookupComponent.vue'
+import LookupBindingSelect from './components/designer/LookupBindingSelect.vue'
 
 // Force set HTML lang attribute to English
 document.documentElement.lang = 'en'
@@ -51,6 +52,7 @@ FcDesigner.component('transfer', FcTransfer)
 FcDesigner.component('cascader', FcCascader)
 FcDesigner.component('slider', FcSlider)
 FcDesigner.component('lookup', LookupComponent)
+FcDesigner.component('LookupBindingSelect', LookupBindingSelect)
 
 // Register the subTable drag rule so it appears in the designer left menu
 FcDesigner.addDragRule({
@@ -248,12 +250,33 @@ FcDesigner.addDragRule({
       type: 'lookup',
       field: 'lookup',
       title: 'Lookup',
-      props: { placeholder: 'Click to search', displayFields: [] }
+      prefix: {
+        type: 'i',
+        class: 'el-icon',
+        style: 'margin-right:4px;font-size:14px;color:#409eff;',
+        children: [{
+          type: 'svg',
+          attrs: {
+            viewBox: '0 0 1024 1024',
+            width: '1em',
+            height: '1em',
+            fill: 'currentColor'
+          },
+          children: [{
+            type: 'path',
+            attrs: {
+              d: 'M909.6 854.5L649.9 594.8C690.2 542.7 714 478.4 714 408c0-167.4-135.6-303-303-303S108 240.6 108 408s135.6 303 303 303c70.4 0 134.7-23.8 186.8-64.1l259.7 259.6c6.2 6.2 16.4 6.2 22.6 0l29.5-29.5c6.3-6.2 6.3-16.4 0-22.5zM411 680c-150.1 0-272-121.9-272-272s121.9-272 272-272 272 121.9 272 272-121.9 272-272 272z'
+            }
+          }]
+        }]
+      },
+      props: { placeholder: 'Click to search', lookupConfig: '{}' }
     }
   },
   props() {
     return [
-      { type: 'input', field: 'placeholder', title: 'Placeholder' }
+      { type: 'input', field: 'placeholder', title: 'Placeholder' },
+      { type: 'LookupBindingSelect', field: 'lookupConfig', title: 'Lookup Config', props: {} }
     ]
   }
 })

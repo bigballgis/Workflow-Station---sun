@@ -8,10 +8,12 @@ import com.developer.dto.FormTableBindingResponse;
 import com.developer.dto.ValidationResult;
 import com.developer.entity.FormDefinition;
 import com.developer.entity.FormTableBinding;
+import com.developer.enums.BindingType;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -28,6 +30,7 @@ import java.util.Map;
 public class FormDesignController {
     
     private final FormDesignComponent formDesignComponent;
+    private final JdbcTemplate jdbcTemplate;
     
     @GetMapping
     @Operation(summary = "List all forms of a function unit")
@@ -100,7 +103,7 @@ public class FormDesignController {
             @PathVariable Long formId) {
         List<FormTableBinding> bindings = formDesignComponent.getBindings(formId);
         List<FormTableBindingResponse> result = bindings.stream()
-                .map(FormTableBindingResponse::fromEntity)
+                .map(b -> FormTableBindingResponse.fromEntity(b, resolveRelationTableName(b)))
                 .toList();
         return ResponseEntity.ok(ApiResponse.success(result));
     }
@@ -112,7 +115,8 @@ public class FormDesignController {
             @PathVariable Long formId,
             @Valid @RequestBody FormTableBindingRequest request) {
         FormTableBinding binding = formDesignComponent.createBinding(formId, request);
-        return ResponseEntity.ok(ApiResponse.success(FormTableBindingResponse.fromEntity(binding)));
+        return ResponseEntity.ok(ApiResponse.success(
+                FormTableBindingResponse.fromEntity(binding, resolveRelationTableName(binding))));
     }
     
     @PutMapping("/{formId}/bindings/{bindingId}")
@@ -134,5 +138,21 @@ public class FormDesignController {
             @PathVariable Long bindingId) {
         formDesignComponent.deleteBinding(bindingId);
         return ResponseEntity.ok(ApiResponse.success(null));
+    }
+
+    /**
+     * Resolve relation table name from rt_table_definitions for RELATED bindings
+     */
+    private String resolveRelationTableName(FormTableBinding binding) {
+        if (binding.getBindingType() != BindingType.RELATED || binding.getRelationTableId() == null) {
+            return null;
+        }
+        try {
+            return jdbcTemplate.queryForObject(
+                    "SELECT table_name FROM rt_table_definitions WHERE id = ?",
+                    String.class, binding.getRelationTableId());
+        } catch (Exception e) {
+            return null;
+        }
     }
 }

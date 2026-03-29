@@ -92,7 +92,7 @@
         <el-form-item 
           :label="t('tableBinding.foreignKeyField')" 
           prop="foreignKeyField"
-          v-if="bindingForm.bindingType !== 'PRIMARY'"
+          v-if="bindingForm.bindingType === 'SUB'"
         >
           <el-select 
             v-model="bindingForm.foreignKeyField" 

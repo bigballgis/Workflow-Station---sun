@@ -157,6 +157,12 @@ export const relationTableViewApi = {
     relationTableAxios.get<any, { data: RelationFieldDTO[] }>(
       `/api/forms/${formId}/relation-views/${bindingId}/fields`
     ),
+
+  /** 通过 tableId 直接获取可用字段列表 */
+  getFieldsByTableId: (formId: number, tableId: number) =>
+    relationTableAxios.get<any, { data: RelationFieldDTO[] }>(
+      `/api/forms/${formId}/relation-views/fields-by-table?tableId=${tableId}`
+    ),
 }
 
 // ==================== Lookup API ====================

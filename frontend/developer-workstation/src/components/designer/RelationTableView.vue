@@ -85,14 +85,9 @@
 
     <!-- Preview dialog -->
     <el-dialog v-model="showPreview" title="Preview" width="800px" destroy-on-close>
-      <el-table :data="previewRows" stripe border style="width: 100%;">
-        <el-table-column
-          v-for="field in viewFields"
-          :key="field.fieldName"
-          :prop="field.fieldName"
-          :label="field.fieldName"
-          show-overflow-tooltip
-        />
+      <el-table :data="previewFieldRows" border style="width: 100%;">
+        <el-table-column prop="label" :label="' '" min-width="200" />
+        <el-table-column prop="value" :label="' '" min-width="200" />
       </el-table>
     </el-dialog>
   </div>
@@ -180,15 +175,18 @@ const getMockValue = (field: RelationFieldDTO): string => {
 
 const previewRows = computed(() => {
   if (viewFields.value.length === 0) return []
-  const rows = []
-  for (let i = 0; i < 3; i++) {
-    const row: Record<string, any> = {}
-    for (const f of viewFields.value) {
-      row[f.fieldName] = getMockValue(f)
-    }
-    rows.push(row)
+  const row: Record<string, any> = {}
+  for (const f of viewFields.value) {
+    row[f.fieldName] = getMockValue(f)
   }
-  return rows
+  return [row]
+})
+
+const previewFieldRows = computed(() => {
+  return viewFields.value.map(f => ({
+    label: f.comment || f.fieldName,
+    value: getMockValue(f)
+  }))
 })
 
 // --- Field operations ---
