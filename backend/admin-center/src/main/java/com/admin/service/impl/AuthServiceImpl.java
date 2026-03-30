@@ -229,6 +229,15 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
+    public String generateAccessTokenForUser(LoginResponse.UserLoginInfo userInfo) {
+        return generateToken(
+                userRepository.findById(userInfo.getUserId()).orElseThrow(() -> new RuntimeException("User not found")),
+                userInfo.getRoles(),
+                userInfo.getPermissions()
+        );
+    }
+
+    @Override
     public boolean validateToken(String token) {
         try {
             parseToken(token);

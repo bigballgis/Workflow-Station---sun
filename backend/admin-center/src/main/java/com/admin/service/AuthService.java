@@ -34,6 +34,11 @@ public interface AuthService {
     boolean validateToken(String token);
     
     /**
+     * 为用户信息生成新的 access token
+     */
+    String generateAccessTokenForUser(LoginResponse.UserLoginInfo userInfo);
+    
+    /**
      * 测试密码匹配（仅用于调试）
      */
     boolean testPasswordMatch(String plainPassword, String hash);

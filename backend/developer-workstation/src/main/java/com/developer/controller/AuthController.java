@@ -132,6 +132,34 @@ public class AuthController {
         return ResponseEntity.ok().build();
     }
 
+    @PostMapping("/refresh")
+    public ResponseEntity<Map<String, Object>> refresh(@RequestBody Map<String, String> request) {
+        String refreshToken = request.get("refreshToken");
+        if (refreshToken == null || refreshToken.isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
+        try {
+            Claims claims = parseToken(refreshToken);
+            String userId = claims.getSubject();
+            User user = userRepository.findById(userId)
+                    .orElseThrow(() -> new RuntimeException("User not found"));
+            
+            List<UserEffectiveRole> effectiveRoles = userRoleService.getEffectiveRolesForUser(userId);
+            List<String> roles = effectiveRoles.stream()
+                    .map(UserEffectiveRole::getRoleCode).distinct().collect(java.util.stream.Collectors.toList());
+            if (roles.isEmpty()) { roles = getRolesForUserLegacy(user.getId()); }
+            List<String> permissions = getPermissionsForRoles(roles);
+            
+            String newAccessToken = generateToken(user, roles, permissions);
+            return ResponseEntity.ok(Map.of(
+                    "accessToken", newAccessToken,
+                    "expiresIn", jwtExpiration / 1000
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.status(401).build();
+        }
+    }
+
     @GetMapping("/me")
     public ResponseEntity<LoginResponse.UserLoginInfo> getCurrentUser(@RequestHeader("Authorization") String authHeader) {
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {

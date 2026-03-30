@@ -246,7 +246,19 @@ public class JwtTokenServiceImpl implements JwtTokenService {
     }
 
     private String hashToken(String token) {
-        // Use a simple hash for the token to avoid storing the full token
-        return Integer.toHexString(token.hashCode());
+        try {
+            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(token.getBytes(StandardCharsets.UTF_8));
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : hash) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1) hexString.append('0');
+                hexString.append(hex);
+            }
+            return hexString.toString();
+        } catch (java.security.NoSuchAlgorithmException e) {
+            // SHA-256 is always available in Java
+            throw new RuntimeException("SHA-256 not available", e);
+        }
     }
 }
