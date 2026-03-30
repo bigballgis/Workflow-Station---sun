@@ -76,18 +76,17 @@ const effectiveViewFields = computed(() =>
 )
 
 const visibleColumns = computed(() => {
-  if (effectiveViewFields.value.length > 0) {
-    return effectiveViewFields.value
-      .filter(f => f.visible !== false)
-      .sort((a, b) => a.sortOrder - b.sortOrder)
-      .map(f => ({ prop: f.fieldName, label: f.displayLabel || f.fieldName, width: f.columnWidth }))
-  }
+  // 1. Use displayFields (from lookup config "Display Fields") — matches developer-workstation LookupPreview
   if (props.displayFields && props.displayFields.length > 0) {
     return props.displayFields.map(f => ({ prop: f, label: f, width: undefined as number | undefined }))
   }
+  // 2. Fallback: searchFields
+  if (props.searchFields?.length > 0) {
+    return props.searchFields.map(f => ({ prop: f, label: f, width: undefined as number | undefined }))
+  }
+  // 3. Fallback: displayField
   const cols = new Set<string>()
   if (props.displayField) cols.add(props.displayField)
-  props.searchFields?.forEach(f => cols.add(f))
   return Array.from(cols).map(f => ({ prop: f, label: f, width: undefined as number | undefined }))
 })
 
@@ -164,6 +163,9 @@ onMounted(() => {
         emit('viewFieldsLoaded', loadedViewFields.value)
       }
     }).catch(() => {})
+  } else if (effectiveViewFields.value.length) {
+    // Props already have view fields — emit them so FormRenderer's lookupLoadedViewFields is populated
+    emit('viewFieldsLoaded', effectiveViewFields.value as LookupViewField[])
   }
 })
 onBeforeUnmount(() => document.removeEventListener('mousedown', onClickOutside))

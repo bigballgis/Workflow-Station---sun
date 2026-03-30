@@ -37,10 +37,9 @@ const displayFields = computed(() => {
 
   if (configured.length > 0) return configured
 
+  // Fallback: show all fields from selectedData (matches developer-workstation preview behavior)
   if (!props.selectedData) return []
-  const skipKeys = new Set(['created_at', 'created_by', 'updated_at', 'updated_by'])
   return Object.keys(props.selectedData)
-    .filter(k => !skipKeys.has(k.toLowerCase()))
     .map((k, i) => ({ fieldName: k, displayLabel: k, sortOrder: i, visible: true } as ViewField))
 })
 </script>

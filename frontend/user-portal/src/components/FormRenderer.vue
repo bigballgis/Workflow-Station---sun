@@ -35,23 +35,31 @@
                 </template>
                 <template v-else-if="field.type === 'lookup'">
                   <el-col :span="field.span || 24">
-                    <el-form-item :label="field.label" :prop="field.key">
-                      <LookupField
-                        v-model="formData[field.key]"
-                        :table-id="(field as any)._lookupTableId"
-                        :search-fields="(field as any)._lookupSearchFields || []"
-                        :display-field="(field as any)._lookupDisplayField || ''"
-                        :display-fields="(field as any)._lookupDisplayFields || []"
-                        :view-fields="(field as any)._lookupViewFields || []"
-                        :placeholder="field.placeholder"
-                        @select="(row: any) => handleLookupSelect(field.key, row)"
-                        @view-fields-loaded="(fields: any[]) => lookupLoadedViewFields[field.key] = fields"
-                      />
-                      <LookupViewDisplay
-                        v-if="lookupSelectedData[field.key]"
-                        :selected-data="lookupSelectedData[field.key]"
-                        :view-fields="lookupLoadedViewFields[field.key] || (field as any)._lookupViewFields || []"
-                      />
+                    <el-form-item :prop="field.key" class="lookup-form-item">
+                      <template #label>
+                        <span class="lookup-label-text">
+                          <el-icon class="lookup-label-icon"><Search /></el-icon>
+                          {{ field.label }}
+                        </span>
+                      </template>
+                      <div class="lookup-field-wrapper">
+                        <LookupField
+                          v-model="formData[field.key]"
+                          :table-id="(field as any)._lookupTableId"
+                          :search-fields="(field as any)._lookupSearchFields || []"
+                          :display-field="(field as any)._lookupDisplayField || ''"
+                          :display-fields="(field as any)._lookupDisplayFields || []"
+                          :view-fields="(field as any)._lookupViewFields || []"
+                          :placeholder="field.placeholder"
+                          @select="(row: any) => handleLookupSelect(field.key, row)"
+                          @view-fields-loaded="(fields: any[]) => lookupLoadedViewFields[field.key] = fields"
+                        />
+                        <LookupViewDisplay
+                          v-if="lookupSelectedData[field.key]"
+                          :selected-data="lookupSelectedData[field.key]"
+                          :view-fields="(field as any)._lookupViewFields?.length ? (field as any)._lookupViewFields : (lookupLoadedViewFields[field.key] || [])"
+                        />
+                      </div>
                     </el-form-item>
                   </el-col>
                 </template>
@@ -360,23 +368,31 @@
             </template>
             <template v-else-if="field.type === 'lookup'">
               <el-col :span="field.span || 24">
-                <el-form-item :label="field.label" :prop="field.key">
-                  <LookupField
-                    v-model="formData[field.key]"
-                    :table-id="(field as any)._lookupTableId"
-                    :search-fields="(field as any)._lookupSearchFields || []"
-                    :display-field="(field as any)._lookupDisplayField || ''"
-                    :display-fields="(field as any)._lookupDisplayFields || []"
-                    :view-fields="(field as any)._lookupViewFields || []"
-                    :placeholder="field.placeholder"
-                    @select="(row: any) => handleLookupSelect(field.key, row)"
-                    @view-fields-loaded="(fields: any[]) => lookupLoadedViewFields[field.key] = fields"
-                  />
-                  <LookupViewDisplay
-                    v-if="lookupSelectedData[field.key]"
-                    :selected-data="lookupSelectedData[field.key]"
-                    :view-fields="lookupLoadedViewFields[field.key] || (field as any)._lookupViewFields || []"
-                  />
+                <el-form-item :prop="field.key" class="lookup-form-item">
+                  <template #label>
+                    <span class="lookup-label-text">
+                      <el-icon class="lookup-label-icon"><Search /></el-icon>
+                      {{ field.label }}
+                    </span>
+                  </template>
+                  <div class="lookup-field-wrapper">
+                    <LookupField
+                      v-model="formData[field.key]"
+                      :table-id="(field as any)._lookupTableId"
+                      :search-fields="(field as any)._lookupSearchFields || []"
+                      :display-field="(field as any)._lookupDisplayField || ''"
+                      :display-fields="(field as any)._lookupDisplayFields || []"
+                      :view-fields="(field as any)._lookupViewFields || []"
+                      :placeholder="field.placeholder"
+                      @select="(row: any) => handleLookupSelect(field.key, row)"
+                      @view-fields-loaded="(fields: any[]) => lookupLoadedViewFields[field.key] = fields"
+                    />
+                    <LookupViewDisplay
+                      v-if="lookupSelectedData[field.key]"
+                      :selected-data="lookupSelectedData[field.key]"
+                      :view-fields="(field as any)._lookupViewFields?.length ? (field as any)._lookupViewFields : (lookupLoadedViewFields[field.key] || [])"
+                    />
+                  </div>
                 </el-form-item>
               </el-col>
             </template>
@@ -718,7 +734,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Upload } from '@element-plus/icons-vue'
+import { Upload, Search } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import SubTableField from './SubTableField.vue'
 import LookupField from './lookup/LookupField.vue'
@@ -1006,6 +1022,32 @@ defineExpose({
     border: 1px solid #e4e7ed;
     border-radius: 4px;
     background: #fff;
+  }
+
+  .lookup-form-item {
+    margin-bottom: 18px;
+
+    :deep(.el-form-item__label) {
+      display: flex;
+      align-items: center;
+    }
+  }
+
+  .lookup-label-text {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 14px;
+    color: #606266;
+  }
+
+  .lookup-label-icon {
+    color: #409eff;
+    font-size: 14px;
+  }
+
+  .lookup-field-wrapper {
+    width: 100%;
   }
 }
 </style>
