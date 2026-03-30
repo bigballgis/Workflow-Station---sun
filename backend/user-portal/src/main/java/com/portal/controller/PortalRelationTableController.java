@@ -80,12 +80,36 @@ public class PortalRelationTableController {
     @Operation(summary = "Lookup 搜索")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> searchForLookup(
             @PathVariable Long tableId,
-            @RequestParam String keyword,
-            @RequestParam List<String> searchFields,
-            @RequestParam String displayField,
-            @RequestParam(defaultValue = "20") int limit) {
+            @RequestParam(required = false, defaultValue = "") String keyword,
+            @RequestParam(required = false) List<String> searchFields,
+            @RequestParam(required = false, defaultValue = "") String displayField,
+            @RequestParam(defaultValue = "50") int limit) {
         try {
             List<Map<String, Object>> result = service.searchForLookup(tableId, keyword, searchFields, displayField, limit);
+            return ResponseEntity.ok(ApiResponse.success(result));
+        } catch (Exception e) {
+            return ResponseEntity.ok(ApiResponse.success(List.of()));
+        }
+    }
+
+    @GetMapping("/lookup-configs/{formId}")
+    @Operation(summary = "获取表单的 Lookup 配置")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getLookupConfigs(
+            @PathVariable Long formId) {
+        try {
+            List<Map<String, Object>> result = service.getLookupConfigs(formId);
+            return ResponseEntity.ok(ApiResponse.success(result));
+        } catch (Exception e) {
+            return ResponseEntity.ok(ApiResponse.success(List.of()));
+        }
+    }
+
+    @GetMapping("/{tableId}/view-fields")
+    @Operation(summary = "获取 Relation Table 的 View 字段配置")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getViewFields(
+            @PathVariable Long tableId) {
+        try {
+            List<Map<String, Object>> result = service.getViewFieldsByTableId(tableId);
             return ResponseEntity.ok(ApiResponse.success(result));
         } catch (Exception e) {
             return ResponseEntity.ok(ApiResponse.success(List.of()));

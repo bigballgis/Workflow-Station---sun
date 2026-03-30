@@ -47,6 +47,26 @@ export const relationTableApi = {
     searchFields: string[]
     displayField: string
     limit?: number
-  }) =>
-    request.get<{ data: Record<string, any>[] }>(`/relation-tables/${tableId}/search`, { params }),
+  }) => {
+    const query = new URLSearchParams()
+    if (params.keyword) query.append('keyword', params.keyword)
+    if (params.displayField) query.append('displayField', params.displayField)
+    if (params.limit) query.append('limit', String(params.limit))
+    params.searchFields?.forEach(f => query.append('searchFields', f))
+    return request.get<{ data: Record<string, any>[] }>(`/relation-tables/${tableId}/search?${query.toString()}`)
+  },
+
+  /** 获取表单的 Lookup 配置 */
+  getLookupConfigs: (formId: number) =>
+    request.get<{ data: Array<{
+      componentId: string
+      tableId: number
+      searchFields: string
+      displayField: string
+      viewFields: Array<{ fieldName: string; displayLabel: string; columnWidth?: number; sortOrder: number; visible: boolean }>
+    }> }>(`/relation-tables/lookup-configs/${formId}`),
+
+  /** 获取 Relation Table 的 View 字段配置 */
+  getViewFields: (tableId: number) =>
+    request.get<{ data: Array<{ fieldName: string; displayLabel: string; columnWidth?: number; sortOrder: number; visible: boolean }> }>(`/relation-tables/${tableId}/view-fields`),
 }

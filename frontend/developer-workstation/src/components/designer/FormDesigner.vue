@@ -221,12 +221,22 @@
                 :data="item.fields"
                 border
                 size="small"
-                :show-header="false"
                 class="relation-preview-table"
               >
-                <el-table-column prop="label" min-width="150" />
-                <el-table-column prop="value" min-width="150" />
+                <el-table-column prop="label" :label="' '" min-width="200" />
+                <el-table-column prop="value" :label="' '" min-width="200" />
               </el-table>
+            </div>
+            <!-- Interactive lookup preview -->
+            <div v-else-if="item.kind === 'lookup'" class="lookup-preview-item">
+              <LookupPreview
+                :label="item.label"
+                :placeholder="item.placeholder"
+                :search-fields="item.searchFields"
+                :display-fields="item.displayFields"
+                :view-fields="item.viewFields"
+                :field-defs="item.fieldDefs"
+              />
             </div>
           </template>
         </template>
@@ -396,6 +406,7 @@ import { relationTableBindingApi, type RelationFieldDTO } from '@/api/relationTa
 import TableBindingManager from './TableBindingManager.vue'
 import SubTableField from './SubTableField.vue'
 import RelationTableView from './RelationTableView.vue'
+import LookupPreview from './LookupPreview.vue'
 import { lookupStore } from './lookupStore'
 import api from '@/api'
 
@@ -437,6 +448,7 @@ const previewItems = ref<Array<
   | { kind: 'fields'; rule: any[]; modelKey: string }
   | { kind: 'subTable'; binding: { bindingId: number; bindingType: string; bindingMode: string; tableName: string; tableType: string; tableDescription: string; rule: any[]; columns: any[] } }
   | { kind: 'relationTable'; tableName: string; fields: Array<{ label: string; value: string }> }
+  | { kind: 'lookup'; label: string; placeholder: string; searchFields: string[]; displayFields: string[]; viewFields: any[]; fieldDefs: any[]; bindingId?: number }
 >>([])
 
 // Sub-designer refs (one per non-PRIMARY binding)
@@ -1712,65 +1724,67 @@ function handlePreview() {
         bindingMap.delete(Number(itemBindingId)) // mark as placed
       }
     } else if (ruleItem.type === 'lookup') {
-      // Add lookup as readonly input
-      currentSegment.push({
-        ...ruleItem,
-        type: 'input',
-        prefix: undefined,
-        suffix: undefined,
-        props: { placeholder: ruleItem.props?.placeholder || 'Click to search', readonly: true }
-      })
-      // Queue relation table preview to appear right after this segment
+      // Flush current segment so lookup appears in its own section
+      flushSegment()
+
       try {
         const rawConfig = ruleItem.props?.lookupConfig
         const lookupCfg = typeof rawConfig === 'string' ? JSON.parse(rawConfig || '{}') : (rawConfig || {})
-        if (lookupCfg.bindingId || lookupCfg.tableId) {
-          // Flush now so the lookup field renders, then relation table appears right below
-          flushSegment()
 
-          // Get field definitions from multiple sources
-          let fieldDefs: any[] = []
+        // Resolve field definitions for this lookup
+        let fieldDefs: any[] = []
 
-          // 1. Try relation view state (fields loaded in the Relation Table tab)
-          if (lookupCfg.bindingId && relationViewState.value[lookupCfg.bindingId]) {
-            fieldDefs = relationViewState.value[lookupCfg.bindingId].allFields || []
-          }
-
-          // 2. Try local store tables (dw_table_definitions)
-          if (fieldDefs.length === 0 && lookupCfg.tableId) {
-            const table = store.tables.find(t => t.id === lookupCfg.tableId) as any
-            fieldDefs = table?.fieldDefinitions || table?.fields || []
-          }
-
-          // 3. Try rtFieldCache (deployed relation tables loaded by LookupBindingSelect)
-          if (fieldDefs.length === 0 && lookupCfg.tableId) {
-            fieldDefs = lookupStore.rtFieldCache[lookupCfg.tableId] || []
-          }
-
-          // Build preview fields: all user-defined fields + system fields (same as Relation Table Preview)
-          const previewFields: Array<{ label: string; value: string }> = []
-
-          // User-defined fields
-          for (const fd of fieldDefs) {
-            previewFields.push({
-              label: fd.comment || fd.description || fd.fieldName,
-              value: getMockValueForType(fd.dataType || 'VARCHAR'),
-            })
-          }
-
-          // System fields (always appended, matching Relation Table Preview)
-          previewFields.push(
-            { label: 'Created At', value: '2026-01-01 00:00:00' },
-            { label: 'Created By', value: 'Sample' },
-            { label: 'Updated At', value: '2026-01-01 00:00:00' },
-            { label: 'Updated By', value: 'Sample' },
-          )
-
-          if (previewFields.length > 0) {
-            items.push({ kind: 'relationTable', tableName: lookupCfg.tableName || 'Relation Table', fields: previewFields })
+        // Ensure relationViewState is loaded from saved config
+        if (lookupCfg.bindingId && !relationViewState.value[lookupCfg.bindingId]) {
+          const config = selectedForm.value?.configJson || {}
+          const saved = (config.relationViews || {})[lookupCfg.bindingId]
+          if (saved) {
+            relationViewState.value = {
+              ...relationViewState.value,
+              [lookupCfg.bindingId]: { allFields: saved.allFields || [], viewFields: saved.viewFields || [] }
+            }
           }
         }
-      } catch (e) { console.warn('[Preview] lookup config parse error:', e) }
+
+        // Collect allFields for column definitions
+        if (lookupCfg.bindingId && relationViewState.value[lookupCfg.bindingId]) {
+          fieldDefs = relationViewState.value[lookupCfg.bindingId].allFields || []
+        }
+        if (fieldDefs.length === 0 && lookupCfg.tableId) {
+          const table = store.tables.find(t => t.id === lookupCfg.tableId) as any
+          fieldDefs = table?.fieldDefinitions || table?.fields || []
+        }
+        if (fieldDefs.length === 0 && lookupCfg.tableId) {
+          fieldDefs = lookupStore.rtFieldCache[lookupCfg.tableId] || []
+        }
+
+        // Resolve viewFields for the view display after selection
+        let viewFields: any[] = []
+        if (lookupCfg.bindingId && relationViewState.value[lookupCfg.bindingId]) {
+          viewFields = relationViewState.value[lookupCfg.bindingId].viewFields || []
+        }
+
+        items.push({
+          kind: 'lookup',
+          label: ruleItem.title || ruleItem.field || 'Lookup',
+          placeholder: ruleItem.props?.placeholder || 'Click to search',
+          searchFields: lookupCfg.searchFields || [],
+          displayFields: lookupCfg.displayFields || [],
+          viewFields,
+          fieldDefs,
+          bindingId: lookupCfg.bindingId,
+        })
+      } catch (e) {
+        console.warn('[Preview] lookup config parse error:', e)
+        // Fallback: render as readonly input
+        currentSegment.push({
+          ...ruleItem,
+          type: 'input',
+          prefix: undefined,
+          suffix: undefined,
+          props: { placeholder: ruleItem.props?.placeholder || 'Click to search', readonly: true }
+        })
+      }
     } else if (FC_SKIP_PREVIEW.has(ruleItem.type)) {
       // Skip form-create proprietary components in preview
     } else {

@@ -35,4 +35,14 @@ public interface PortalRelationTableService {
     List<Map<String, Object>> searchForLookup(Long tableId, String keyword,
                                                List<String> searchFields, String displayField,
                                                int limit);
+
+    /**
+     * 获取表单的 Lookup 配置列表
+     */
+    List<Map<String, Object>> getLookupConfigs(Long formId);
+
+    /**
+     * 通过 tableId 获取 View 字段配置
+     */
+    List<Map<String, Object>> getViewFieldsByTableId(Long tableId);
 }

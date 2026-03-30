@@ -86,6 +86,7 @@ declare module 'vue' {
     LookupBindingSelect: typeof import('./components/designer/LookupBindingSelect.vue')['default']
     LookupComponent: typeof import('./components/designer/LookupComponent.vue')['default']
     LookupConfigPanel: typeof import('./components/designer/LookupConfigPanel.vue')['default']
+    LookupPreview: typeof import('./components/designer/LookupPreview.vue')['default']
     MarkdownRenderer: typeof import('./components/ai/MarkdownRenderer.vue')['default']
     N8nTaskPropertiesPanel: typeof import('./components/designer/properties/N8nTaskPropertiesPanel.vue')['default']
     NodePropertiesPanel: typeof import('./components/designer/properties/NodePropertiesPanel.vue')['default']

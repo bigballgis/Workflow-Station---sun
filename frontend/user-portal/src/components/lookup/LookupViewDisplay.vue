@@ -1,11 +1,12 @@
 <template>
-  <div class="lookup-view-display" v-if="selectedData && viewFields.length > 0">
-    <el-descriptions :column="2" border size="small">
+  <div class="lookup-view-display" v-if="selectedData && displayFields.length > 0">
+    <el-descriptions :column="1" border size="small" direction="horizontal">
       <el-descriptions-item
-        v-for="field in viewFields"
+        v-for="field in displayFields"
         :key="field.fieldName"
         :label="field.displayLabel || field.fieldName"
-        :span="field.columnWidth && field.columnWidth > 200 ? 2 : 1"
+        label-class-name="lookup-view-label"
+        class-name="lookup-view-value"
       >
         {{ selectedData[field.fieldName] ?? '-' }}
       </el-descriptions-item>
@@ -14,7 +15,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed } from 'vue'
 
 export interface ViewField {
   fieldName: string
@@ -29,21 +30,34 @@ const props = defineProps<{
   viewFields: ViewField[]
 }>()
 
-// Filter to only visible fields, sorted by sortOrder
-const visibleFields = ref<ViewField[]>([])
+const displayFields = computed(() => {
+  const configured = (props.viewFields || [])
+    .filter(f => f.visible !== false)
+    .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
 
-watch(() => props.viewFields, (fields) => {
-  visibleFields.value = (fields || [])
-    .filter(f => f.visible)
-    .sort((a, b) => a.sortOrder - b.sortOrder)
-}, { immediate: true })
+  if (configured.length > 0) return configured
+
+  if (!props.selectedData) return []
+  const skipKeys = new Set(['created_at', 'created_by', 'updated_at', 'updated_by'])
+  return Object.keys(props.selectedData)
+    .filter(k => !skipKeys.has(k.toLowerCase()))
+    .map((k, i) => ({ fieldName: k, displayLabel: k, sortOrder: i, visible: true } as ViewField))
+})
 </script>
 
 <style lang="scss" scoped>
 .lookup-view-display {
   margin-top: 8px;
-  padding: 8px;
-  background: #f5f7fa;
-  border-radius: 4px;
+
+  :deep(.lookup-view-label) {
+    width: 40%;
+    font-weight: 500;
+    color: #606266;
+    background: #fafafa;
+  }
+
+  :deep(.lookup-view-value) {
+    color: #303133;
+  }
 }
 </style>

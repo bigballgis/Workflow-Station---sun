@@ -41,13 +41,16 @@
                         :table-id="(field as any)._lookupTableId"
                         :search-fields="(field as any)._lookupSearchFields || []"
                         :display-field="(field as any)._lookupDisplayField || ''"
+                        :display-fields="(field as any)._lookupDisplayFields || []"
+                        :view-fields="(field as any)._lookupViewFields || []"
                         :placeholder="field.placeholder"
                         @select="(row: any) => handleLookupSelect(field.key, row)"
+                        @view-fields-loaded="(fields: any[]) => lookupLoadedViewFields[field.key] = fields"
                       />
                       <LookupViewDisplay
                         v-if="lookupSelectedData[field.key]"
                         :selected-data="lookupSelectedData[field.key]"
-                        :view-fields="(field as any)._lookupViewFields || []"
+                        :view-fields="lookupLoadedViewFields[field.key] || (field as any)._lookupViewFields || []"
                       />
                     </el-form-item>
                   </el-col>
@@ -363,13 +366,16 @@
                     :table-id="(field as any)._lookupTableId"
                     :search-fields="(field as any)._lookupSearchFields || []"
                     :display-field="(field as any)._lookupDisplayField || ''"
+                    :display-fields="(field as any)._lookupDisplayFields || []"
+                    :view-fields="(field as any)._lookupViewFields || []"
                     :placeholder="field.placeholder"
                     @select="(row: any) => handleLookupSelect(field.key, row)"
+                    @view-fields-loaded="(fields: any[]) => lookupLoadedViewFields[field.key] = fields"
                   />
                   <LookupViewDisplay
                     v-if="lookupSelectedData[field.key]"
                     :selected-data="lookupSelectedData[field.key]"
-                    :view-fields="(field as any)._lookupViewFields || []"
+                    :view-fields="lookupLoadedViewFields[field.key] || (field as any)._lookupViewFields || []"
                   />
                 </el-form-item>
               </el-col>
@@ -789,6 +795,7 @@ let isInternalUpdate = false
 
 // Lookup selected data state
 const lookupSelectedData = ref<Record<string, Record<string, any>>>({})
+const lookupLoadedViewFields = ref<Record<string, any[]>>({})
 const handleLookupSelect = (fieldKey: string, row: Record<string, any>) => {
   lookupSelectedData.value[fieldKey] = row
 }
