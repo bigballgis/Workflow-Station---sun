@@ -198,21 +198,22 @@ public class SecurityComponentImpl implements SecurityComponent {
                 return objectMapper.readValue(payload, Map.class);
             }
             
-            // 处理标准 JWT 格式 (3 部分) - 只解析 payload，不验证签名
-            // 因为 workflow-engine 可能使用不同的签名方式
+            // 处理标准 JWT 格式 (3 部分) - 必须验证签名
             if (parts.length == 3) {
-                String encodedPayload = parts[1];
-                
-                // 尝试解码 payload
-                String payload = new String(Base64.getUrlDecoder().decode(encodedPayload), 
-                        StandardCharsets.UTF_8);
-                
-                Map<String, Object> claims = objectMapper.readValue(payload, Map.class);
-                
-                // 检查是否包含必要的字段
-                if (claims.containsKey("sub")) {
-                    log.debug("Successfully parsed 3-part JWT token, sub: {}", claims.get("sub"));
-                    return claims;
+                try {
+                    Claims claims = Jwts.parser()
+                            .verifyWith(getSigningKey())
+                            .build()
+                            .parseSignedClaims(token)
+                            .getPayload();
+                    if (claims.containsKey("sub")) {
+                        Map<String, Object> claimsMap = new HashMap<>(claims);
+                        log.debug("Successfully parsed and verified 3-part JWT token, sub: {}", claims.getSubject());
+                        return claimsMap;
+                    }
+                } catch (Exception e) {
+                    log.debug("Failed to verify 3-part JWT token signature: {}", e.getMessage());
+                    return null;
                 }
             }
             

@@ -23,10 +23,10 @@ export interface GuestTokenRequest {
 
 /**
  * Dedicated axios instance for admin-center BI APIs.
- * Routes through /api/admin-center/ which proxies to admin-center backend at /api/v1/admin/.
+ * Routes through /api/v1/admin/ which is the Kong route to admin-center backend.
  */
 const adminCenterService = axios.create({
-  baseURL: '/api/admin-center',
+  baseURL: '/api/v1/admin',
   timeout: 60000,
   headers: {
     'Content-Type': 'application/json'
@@ -50,7 +50,9 @@ adminCenterService.interceptors.request.use((config) => {
       }
     }
   }
-  config.headers['X-User-Id'] = userId || 'user_1'
+  if (userId) {
+    config.headers['X-User-Id'] = userId
+  }
   return config
 })
 

@@ -5,6 +5,7 @@ import com.developer.repository.RoleRepository;
 import com.platform.common.security.SecurityAuditLogger;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import com.platform.security.util.SecurityContextUtils;
 import org.springframework.security.access.PermissionEvaluator;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
@@ -46,7 +47,7 @@ public class DatabasePermissionEvaluator implements PermissionEvaluator {
             return false;
         }
         
-        String username = authentication.getName();
+        String username = SecurityContextUtils.getCurrentUsername().orElse(null);
         String permissionStr = permission.toString();
         
         log.debug("Evaluating permission: user={}, permission={}, target={}", 
@@ -75,7 +76,7 @@ public class DatabasePermissionEvaluator implements PermissionEvaluator {
             return false;
         }
         
-        String username = authentication.getName();
+        String username = SecurityContextUtils.getCurrentUsername().orElse(null);
         String permissionStr = permission.toString();
         
         log.debug("Evaluating permission: user={}, permission={}, targetId={}, targetType={}", 

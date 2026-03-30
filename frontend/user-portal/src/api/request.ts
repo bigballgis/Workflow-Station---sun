@@ -48,7 +48,9 @@ service.interceptors.request.use(
         }
       }
     }
-    config.headers['X-User-Id'] = userId || 'user_1'
+    if (userId) {
+      config.headers['X-User-Id'] = userId
+    }
     
     return config
   },

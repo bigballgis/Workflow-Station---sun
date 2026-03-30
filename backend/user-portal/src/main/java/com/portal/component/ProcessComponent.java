@@ -66,26 +66,35 @@ public class ProcessComponent {
             @SuppressWarnings("unchecked")
             Map<String, Object> response = restTemplate.getForObject(url, Map.class);
             
-            if (response != null && response.containsKey("content")) {
+            if (response != null) {
                 @SuppressWarnings("unchecked")
-                List<Map<String, Object>> units = (List<Map<String, Object>>) response.get("content");
-                log.info("Got {} deployed function units", units.size());
+                List<Map<String, Object>> units = null;
+                // Support both ApiResponse format {data: [...]} and paginated format {content: [...]}
+                if (response.containsKey("data") && response.get("data") instanceof List) {
+                    units = (List<Map<String, Object>>) response.get("data");
+                } else if (response.containsKey("content")) {
+                    units = (List<Map<String, Object>>) response.get("content");
+                }
                 
-                // 根据用户的业务角色过滤可访问的功能单元
-                List<Map<String, Object>> accessibleUnits = functionUnitAccessComponent.filterAccessibleFunctionUnits(userId, units);
-                log.info("After filtering, {} function units are accessible to user {}", accessibleUnits.size(), userId);
+                if (units != null && !units.isEmpty()) {
+                    log.info("Got {} deployed function units", units.size());
                 
-                for (Map<String, Object> unit : accessibleUnits) {
-                    ProcessDefinitionInfo info = ProcessDefinitionInfo.builder()
-                            .id((String) unit.get("id"))
-                            .key((String) unit.get("code"))
-                            .name((String) unit.get("name"))
-                            .description((String) unit.get("description"))
-                            .category("业务流程")
-                            .version(unit.get("version") != null ? String.valueOf(unit.get("version")) : "1.0.0")
-                            .icon((String) unit.get("iconSvg"))
-                            .build();
-                    definitions.add(info);
+                    // 根据用户的业务角色过滤可访问的功能单元
+                    List<Map<String, Object>> accessibleUnits = functionUnitAccessComponent.filterAccessibleFunctionUnits(userId, units);
+                    log.info("After filtering, {} function units are accessible to user {}", accessibleUnits.size(), userId);
+                
+                    for (Map<String, Object> unit : accessibleUnits) {
+                        ProcessDefinitionInfo info = ProcessDefinitionInfo.builder()
+                                .id((String) unit.get("id"))
+                                .key((String) unit.get("code"))
+                                .name((String) unit.get("name"))
+                                .description((String) unit.get("description"))
+                                .category("业务流程")
+                                .version(unit.get("version") != null ? String.valueOf(unit.get("version")) : "1.0.0")
+                                .icon((String) unit.get("iconSvg"))
+                                .build();
+                        definitions.add(info);
+                    }
                 }
             }
         } catch (Exception e) {

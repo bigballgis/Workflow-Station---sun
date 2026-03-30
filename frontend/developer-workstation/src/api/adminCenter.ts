@@ -7,7 +7,7 @@ import { TOKEN_KEY, getUser } from './auth'
  */
 
 const adminCenterAxios = axios.create({
-  baseURL: '/api/admin-center',
+  baseURL: '/api/v1/admin',
   timeout: 30000
 })
 

@@ -3,6 +3,7 @@ package com.portal.controller;
 import com.platform.security.dto.UserEffectiveRole;
 import com.platform.security.entity.User;
 import com.platform.security.model.UserStatus;
+import com.platform.security.service.JwtTokenService;
 import com.platform.security.service.UserRoleService;
 import com.platform.common.i18n.I18nService;
 import com.portal.dto.LoginRequest;
@@ -38,6 +39,7 @@ public class AuthController {
     private final JdbcTemplate jdbcTemplate;
     private final UserRoleService userRoleService;
     private final I18nService i18nService;
+    private final JwtTokenService jwtTokenService;
     
     @Value("${jwt.secret:my-super-secret-jwt-key-for-development-only-32chars}")
     private String jwtSecret;
@@ -131,7 +133,11 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public ResponseEntity<Void> logout() {
+    public ResponseEntity<Void> logout(@RequestHeader(value = "Authorization", required = false) String authHeader) {
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            String token = authHeader.substring(7);
+            jwtTokenService.blacklistToken(token);
+        }
         return ResponseEntity.ok().build();
     }
 

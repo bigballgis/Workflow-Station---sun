@@ -126,8 +126,10 @@ const getRoleTagType = (type?: string) => {
 const loadUserPermissions = async () => {
   loading.value = true
   try {
-    // Note: axios interceptor already returns response.data, so use response directly
-    const data = await permissionApi.getMyPermissionView() as any
+    // Note: axios interceptor returns ApiResponse wrapper {success, data, message}
+    // The actual payload is in response.data
+    const response = await permissionApi.getMyPermissionView() as any
+    const data = response.data || response
     businessUnits.value = data.businessUnits || []
     virtualGroups.value = data.virtualGroups || []
     

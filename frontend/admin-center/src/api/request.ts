@@ -29,10 +29,14 @@ request.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
-    const userId = localStorage.getItem('userId') || 'system'
-    config.headers['X-User-Id'] = userId
+    const userId = localStorage.getItem('userId')
+    if (userId) {
+      config.headers['X-User-Id'] = userId
+    }
     const username = localStorage.getItem('username') || userId
-    config.headers['X-Username'] = username
+    if (username) {
+      config.headers['X-Username'] = username
+    }
     return config
   },
   (error) => Promise.reject(error)

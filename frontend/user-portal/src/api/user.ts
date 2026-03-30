@@ -26,9 +26,9 @@ export interface UserRole {
   type: string
 }
 
-// 创建独立的 axios 实例访问 admin-center
+// 创建独立的 axios 实例访问 admin-center（通过 /api/v1/admin 代理）
 const adminCenterAxios = axios.create({
-  baseURL: '/api/admin-center',
+  baseURL: '/api/v1/admin',
   timeout: 30000
 })
 
@@ -52,7 +52,7 @@ export interface UserOption {
   username: string
 }
 
-// 用户API - 通过 /api/admin-center 代理访问 admin-center 后端
+// 用户API - 通过 /api/v1/admin 代理访问 admin-center 后端
 export const userApi = {
   // 搜索用户（用于转办、委托等场景）- 通过 user-portal 后端代理
   searchUsers: async (keyword: string): Promise<UserOption[]> => {

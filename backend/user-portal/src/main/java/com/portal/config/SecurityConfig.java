@@ -1,5 +1,7 @@
 package com.portal.config;
 
+import com.platform.security.filter.JwtAuthenticationFilter;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -9,6 +11,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 /**
  * Security configuration for user-portal.
@@ -22,7 +25,10 @@ import org.springframework.security.web.SecurityFilterChain;
  */
 @Configuration
 @EnableWebSecurity
+@RequiredArgsConstructor
 public class SecurityConfig {
+    
+    private final JwtAuthenticationFilter jwtAuthenticationFilter;
     
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -39,7 +45,8 @@ public class SecurityConfig {
                 // and JwtAuthenticationFilter as the second line. Spring Security's authorizeHttpRequests is intentionally
                 // set to permitAll() because the authentication decision is made by the JWT filter, not by Spring Security.
                 // In production, Kong rejects unauthenticated requests before they reach this service.
-                anyRequest().permitAll());
+                anyRequest().permitAll())
+            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
 }

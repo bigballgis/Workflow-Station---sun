@@ -23,14 +23,14 @@ import com.platform.security.service.impl.UserRoleServiceImpl;
  */
 @SpringBootApplication
 @ComponentScan(
-    basePackages = {"com.admin", "com.platform.common"},
+    basePackages = {"com.admin", "com.platform.common", "com.platform.security.filter", "com.platform.security.config"},
     basePackageClasses = {TargetResolverFactory.class, UserRoleServiceImpl.class},
     excludeFilters = {
         // 排除platform-security中的repository，由单独的配置类处理
         @ComponentScan.Filter(type = FilterType.REGEX, pattern = "com\\.platform\\.security\\.repository\\..*"),
         // 排除platform-security中不需要的服务（它们依赖platform-security自己的repository和config）
-        @ComponentScan.Filter(type = FilterType.REGEX, pattern = "com\\.platform\\.security\\.service\\.impl\\.(?!UserRoleServiceImpl).*"),
-        @ComponentScan.Filter(type = FilterType.REGEX, pattern = "com\\.platform\\.security\\.config\\..*"),
+        @ComponentScan.Filter(type = FilterType.REGEX, pattern = "com\\.platform\\.security\\.service\\.impl\\.(?!UserRoleServiceImpl|JwtTokenServiceImpl).*"),
+        @ComponentScan.Filter(type = FilterType.REGEX, pattern = "com\\.platform\\.security\\.config\\.(?!JwtProperties).*"),
         @ComponentScan.Filter(type = FilterType.REGEX, pattern = "com\\.platform\\.security\\.controller\\..*"),
         // 排除 AuditAspect，由 PlatformCommonConfiguration 通过 @Bean 创建
         @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = com.platform.common.audit.AuditAspect.class)

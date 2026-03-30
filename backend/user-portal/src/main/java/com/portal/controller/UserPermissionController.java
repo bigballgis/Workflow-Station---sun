@@ -1,5 +1,6 @@
 package com.portal.controller;
 
+import com.platform.security.util.SecurityContextUtils;
 import com.portal.dto.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -33,18 +34,22 @@ public class UserPermissionController {
     @Operation(summary = "Get my permissions",
                description = "Get current user's complete permission view including roles and business units")
     public ApiResponse<Map<String, Object>> getMyPermissions(
-            @RequestHeader("X-User-Id") String userId) {
-        log.info("Getting permissions for user: {}", userId);
+            @RequestHeader(value = "X-User-Id", required = false) String userId) {
+        String effectiveUserId = SecurityContextUtils.getCurrentUserId().orElse(userId);
+        if (effectiveUserId == null || effectiveUserId.isEmpty()) {
+            return ApiResponse.error("UNAUTHORIZED", "User identity not available");
+        }
+        log.info("Getting permissions for user: {}", effectiveUserId);
 
         try {
             // Get user's roles
-            List<Map<String, Object>> roles = getUserRoles(userId);
+            List<Map<String, Object>> roles = getUserRoles(effectiveUserId);
 
             // Get user's virtual groups
-            List<Map<String, Object>> virtualGroups = getUserVirtualGroups(userId);
+            List<Map<String, Object>> virtualGroups = getUserVirtualGroups(effectiveUserId);
 
             // Get user's business units
-            List<Map<String, Object>> businessUnits = getUserBusinessUnits(userId);
+            List<Map<String, Object>> businessUnits = getUserBusinessUnits(effectiveUserId);
 
             // Separate roles by type
             List<Map<String, Object>> buBoundedRoles = new ArrayList<>();
@@ -71,7 +76,7 @@ public class UserPermissionController {
             return ApiResponse.success(result);
 
         } catch (Exception e) {
-            log.error("Failed to get permissions for user {}: {}", userId, e.getMessage());
+            log.error("Failed to get permissions for user {}: {}", effectiveUserId, e.getMessage());
             return ApiResponse.success(Map.of(
                 "buBoundedRoles", List.of(),
                 "buUnboundedRoles", List.of(),
@@ -84,19 +89,27 @@ public class UserPermissionController {
     @GetMapping("/unactivated-roles")
     @Operation(summary = "Get unactivated BU-Bounded roles")
     public ApiResponse<List<Map<String, Object>>> getUnactivatedRoles(
-            @RequestHeader("X-User-Id") String userId) {
-        log.info("Getting unactivated roles for user: {}", userId);
-        return ApiResponse.success(fetchUnactivatedRoles(userId));
+            @RequestHeader(value = "X-User-Id", required = false) String userId) {
+        String effectiveUserId = SecurityContextUtils.getCurrentUserId().orElse(userId);
+        if (effectiveUserId == null || effectiveUserId.isEmpty()) {
+            return ApiResponse.error("UNAUTHORIZED", "User identity not available");
+        }
+        log.info("Getting unactivated roles for user: {}", effectiveUserId);
+        return ApiResponse.success(fetchUnactivatedRoles(effectiveUserId));
     }
 
     @GetMapping("/should-show-reminder")
     @Operation(summary = "Check if should show reminder")
     public ApiResponse<Map<String, Object>> shouldShowReminder(
-            @RequestHeader("X-User-Id") String userId) {
-        log.info("Checking reminder status for user: {}", userId);
+            @RequestHeader(value = "X-User-Id", required = false) String userId) {
+        String effectiveUserId = SecurityContextUtils.getCurrentUserId().orElse(userId);
+        if (effectiveUserId == null || effectiveUserId.isEmpty()) {
+            return ApiResponse.error("UNAUTHORIZED", "User identity not available");
+        }
+        log.info("Checking reminder status for user: {}", effectiveUserId);
 
         try {
-            List<Map<String, Object>> unactivatedRoles = fetchUnactivatedRoles(userId);
+            List<Map<String, Object>> unactivatedRoles = fetchUnactivatedRoles(effectiveUserId);
 
             if (unactivatedRoles.isEmpty()) {
                 return ApiResponse.success(Map.of(
@@ -105,7 +118,7 @@ public class UserPermissionController {
                 ));
             }
 
-            boolean dontRemind = getDontRemindPreference(userId);
+            boolean dontRemind = getDontRemindPreference(effectiveUserId);
 
             return ApiResponse.success(Map.of(
                 "shouldShow", !dontRemind,
@@ -113,7 +126,7 @@ public class UserPermissionController {
             ));
 
         } catch (Exception e) {
-            log.error("Failed to check reminder status for user {}: {}", userId, e.getMessage());
+            log.error("Failed to check reminder status for user {}: {}", effectiveUserId, e.getMessage());
             return ApiResponse.success(Map.of(
                 "shouldShow", false,
                 "unactivatedRoles", List.of()
@@ -124,17 +137,21 @@ public class UserPermissionController {
     @PostMapping("/dont-remind")
     @Operation(summary = "Set don't remind preference")
     public ApiResponse<Map<String, Object>> setDontRemind(
-            @RequestHeader("X-User-Id") String userId) {
-        log.info("Setting don't remind preference for user: {}", userId);
+            @RequestHeader(value = "X-User-Id", required = false) String userId) {
+        String effectiveUserId = SecurityContextUtils.getCurrentUserId().orElse(userId);
+        if (effectiveUserId == null || effectiveUserId.isEmpty()) {
+            return ApiResponse.error("UNAUTHORIZED", "User identity not available");
+        }
+        log.info("Setting don't remind preference for user: {}", effectiveUserId);
 
         try {
-            String url = adminCenterUrl + "/api/v1/admin/users/" + userId + "/preferences";
+            String url = adminCenterUrl + "/api/v1/admin/users/" + effectiveUserId + "/preferences";
 
             Map<String, Object> requestBody = new HashMap<>();
             requestBody.put("key", "dont_remind_bu_application");
             requestBody.put("value", "true");
 
-            HttpHeaders headers = new HttpHeaders();
+            HttpHeaders headers = createAuthHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
 
@@ -147,7 +164,7 @@ public class UserPermissionController {
             ));
 
         } catch (Exception e) {
-            log.error("Failed to set preference for user {}: {}", userId, e.getMessage());
+            log.error("Failed to set preference for user {}: {}", effectiveUserId, e.getMessage());
             return ApiResponse.success(Map.of(
                 "success", true,
                 "message", "Preference saved"
@@ -159,11 +176,15 @@ public class UserPermissionController {
     @Operation(summary = "Get role status")
     public ApiResponse<Map<String, Object>> getRoleStatus(
             @PathVariable String roleId,
-            @RequestHeader("X-User-Id") String userId) {
-        log.info("Getting role {} status for user: {}", roleId, userId);
+            @RequestHeader(value = "X-User-Id", required = false) String userId) {
+        String effectiveUserId = SecurityContextUtils.getCurrentUserId().orElse(userId);
+        if (effectiveUserId == null || effectiveUserId.isEmpty()) {
+            return ApiResponse.error("UNAUTHORIZED", "User identity not available");
+        }
+        log.info("Getting role {} status for user: {}", roleId, effectiveUserId);
 
         try {
-            List<Map<String, Object>> roles = getUserRoles(userId);
+            List<Map<String, Object>> roles = getUserRoles(effectiveUserId);
 
             Map<String, Object> targetRole = null;
             for (Map<String, Object> role : roles) {
@@ -188,7 +209,7 @@ public class UserPermissionController {
             List<Map<String, Object>> activatedBus = List.of();
 
             if ("BU_BOUNDED".equals(roleType)) {
-                List<Map<String, Object>> businessUnits = getUserBusinessUnits(userId);
+                List<Map<String, Object>> businessUnits = getUserBusinessUnits(effectiveUserId);
                 isActive = !businessUnits.isEmpty();
                 activatedBus = businessUnits;
             }
@@ -202,7 +223,7 @@ public class UserPermissionController {
             ));
 
         } catch (Exception e) {
-            log.error("Failed to get role status for user {}: {}", userId, e.getMessage());
+            log.error("Failed to get role status for user {}: {}", effectiveUserId, e.getMessage());
             return ApiResponse.success(Map.of(
                 "roleId", roleId,
                 "roleName", "",
@@ -214,6 +235,17 @@ public class UserPermissionController {
     }
 
     // Helper methods
+
+    /**
+     * Create HttpHeaders with authentication information from SecurityContext
+     * for service-to-service RestTemplate calls to admin-center.
+     */
+    private HttpHeaders createAuthHeaders() {
+        HttpHeaders headers = new HttpHeaders();
+        SecurityContextUtils.getCurrentUserId().ifPresent(id -> headers.set("X-User-Id", id));
+        SecurityContextUtils.getCurrentUsername().ifPresent(name -> headers.set("X-Username", name));
+        return headers;
+    }
 
     private List<Map<String, Object>> fetchUnactivatedRoles(String userId) {
         try {
@@ -237,8 +269,9 @@ public class UserPermissionController {
     private List<Map<String, Object>> getUserRoles(String userId) {
         try {
             String url = adminCenterUrl + "/api/v1/admin/users/" + userId + "/roles";
+            HttpEntity<Void> entity = new HttpEntity<>(createAuthHeaders());
             ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
-                url, HttpMethod.GET, null,
+                url, HttpMethod.GET, entity,
                 new ParameterizedTypeReference<List<Map<String, Object>>>() {}
             );
             return response.getBody() != null ? response.getBody() : Collections.emptyList();
@@ -251,8 +284,9 @@ public class UserPermissionController {
     private List<Map<String, Object>> getUserVirtualGroups(String userId) {
         try {
             String url = adminCenterUrl + "/api/v1/admin/users/" + userId + "/virtual-groups";
+            HttpEntity<Void> entity = new HttpEntity<>(createAuthHeaders());
             ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
-                url, HttpMethod.GET, null,
+                url, HttpMethod.GET, entity,
                 new ParameterizedTypeReference<List<Map<String, Object>>>() {}
             );
             return response.getBody() != null ? response.getBody() : Collections.emptyList();
@@ -265,8 +299,9 @@ public class UserPermissionController {
     private List<Map<String, Object>> getUserBusinessUnits(String userId) {
         try {
             String url = adminCenterUrl + "/api/v1/admin/users/" + userId + "/business-units";
+            HttpEntity<Void> entity = new HttpEntity<>(createAuthHeaders());
             ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
-                url, HttpMethod.GET, null,
+                url, HttpMethod.GET, entity,
                 new ParameterizedTypeReference<List<Map<String, Object>>>() {}
             );
             return response.getBody() != null ? response.getBody() : Collections.emptyList();
@@ -279,8 +314,9 @@ public class UserPermissionController {
     private boolean getDontRemindPreference(String userId) {
         try {
             String url = adminCenterUrl + "/api/v1/admin/users/" + userId + "/preferences/dont_remind_bu_application";
+            HttpEntity<Void> entity = new HttpEntity<>(createAuthHeaders());
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                url, HttpMethod.GET, null,
+                url, HttpMethod.GET, entity,
                 new ParameterizedTypeReference<Map<String, Object>>() {}
             );
             Map<String, Object> body = response.getBody();

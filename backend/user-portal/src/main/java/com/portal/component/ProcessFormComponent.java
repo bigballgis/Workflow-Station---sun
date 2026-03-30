@@ -161,8 +161,14 @@ public class ProcessFormComponent {
             log.debug("Fetching PROCESS form definition from: {}", url);
 
             Map<String, Object> response = restTemplate.getForObject(url, Map.class);
-            if (response != null && response.containsKey("content")) {
-                List<Map<String, Object>> forms = (List<Map<String, Object>>) response.get("content");
+            if (response != null) {
+                // Support both ApiResponse format {data: [...]} and paginated format {content: [...]}
+                List<Map<String, Object>> forms = null;
+                if (response.containsKey("data") && response.get("data") instanceof List) {
+                    forms = (List<Map<String, Object>>) response.get("data");
+                } else if (response.containsKey("content")) {
+                    forms = (List<Map<String, Object>>) response.get("content");
+                }
                 if (forms != null && !forms.isEmpty()) {
                     return forms.get(0);
                 }
@@ -185,8 +191,14 @@ public class ProcessFormComponent {
             log.debug("Checking PROCESS form existence from: {}", url);
 
             Map<String, Object> response = restTemplate.getForObject(url, Map.class);
-            if (response != null && response.containsKey("content")) {
-                List<Map<String, Object>> forms = (List<Map<String, Object>>) response.get("content");
+            if (response != null) {
+                // Support both ApiResponse format {data: [...]} and paginated format {content: [...]}
+                List<Map<String, Object>> forms = null;
+                if (response.containsKey("data") && response.get("data") instanceof List) {
+                    forms = (List<Map<String, Object>>) response.get("data");
+                } else if (response.containsKey("content")) {
+                    forms = (List<Map<String, Object>>) response.get("content");
+                }
                 return forms != null && !forms.isEmpty();
             }
         } catch (Exception e) {

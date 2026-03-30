@@ -15,12 +15,10 @@ import com.developer.validation.DmnXmlParser;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.platform.security.util.SecurityContextUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.authentication.AnonymousAuthenticationToken;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -71,15 +69,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
      */
     private String getCurrentOperator() {
         try {
-            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-            if (authentication != null 
-                    && authentication.isAuthenticated() 
-                    && !(authentication instanceof AnonymousAuthenticationToken)) {
-                String username = authentication.getName();
-                if (username != null && !username.isEmpty()) {
-                    return username;
-                }
-            }
+            return SecurityContextUtils.getCurrentUsername().orElse("system");
         } catch (Exception e) {
             log.debug("Failed to get current operator from security context: {}", e.getMessage());
         }

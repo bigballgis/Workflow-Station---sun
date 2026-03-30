@@ -6,7 +6,7 @@ import axios from 'axios'
  */
 
 const authRequest = axios.create({
-  baseURL: '/api/v1/auth',
+  baseURL: '/api/portal/auth',
   timeout: 30000,
   headers: { 'Content-Type': 'application/json' }
 })

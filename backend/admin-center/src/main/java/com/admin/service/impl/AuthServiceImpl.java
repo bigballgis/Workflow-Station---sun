@@ -7,6 +7,7 @@ import com.platform.security.model.UserStatus;
 import com.admin.repository.UserRepository;
 import com.admin.service.AuthService;
 import com.platform.security.dto.UserEffectiveRole;
+import com.platform.security.service.JwtTokenService;
 import com.platform.security.service.UserRoleService;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
@@ -34,6 +35,7 @@ public class AuthServiceImpl implements AuthService {
     private final UserRoleService userRoleService;
     private final org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
     private final com.admin.service.TaskAssignmentQueryService taskAssignmentQueryService;
+    private final JwtTokenService jwtTokenService;
     
     @Value("${jwt.secret:my-super-secret-jwt-key-for-development-only-32chars}")
     private String jwtSecret;
@@ -146,6 +148,7 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public void logout(String token) {
+        jwtTokenService.blacklistToken(token);
         log.info("User logged out");
     }
 

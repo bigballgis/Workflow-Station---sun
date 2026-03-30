@@ -1,6 +1,7 @@
 package com.developer.security;
 
 import com.platform.common.security.SecurityAuditLogger;
+import com.platform.security.util.SecurityContextUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
@@ -53,7 +54,7 @@ public class UserContextService {
                 return Optional.empty();
             }
             
-            String username = authentication.getName();
+            String username = SecurityContextUtils.getCurrentUsername().orElse(null);
             if (username == null || username.trim().isEmpty()) {
                 if (auditLogger != null) {
                     Map<String, String> metadata = Map.of("issue", "username_null_or_empty");

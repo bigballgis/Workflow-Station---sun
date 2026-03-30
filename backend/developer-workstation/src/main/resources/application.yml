@@ -116,6 +116,16 @@ jwt:
   secret: ${JWT_SECRET:your-256-bit-secret-key-for-development-only}
   expiration: ${JWT_EXPIRATION:86400000}
 
+# Platform Security JWT Configuration (used by platform-security JwtProperties)
+platform:
+  security:
+    jwt:
+      secret: ${JWT_SECRET:your-256-bit-secret-key-for-development-only}
+      expiration-ms: ${JWT_EXPIRATION:86400000}
+      refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION:604800000}
+      issuer: platform
+      validate-issuer: false
+
 # OpenAPI
 springdoc:
   api-docs:

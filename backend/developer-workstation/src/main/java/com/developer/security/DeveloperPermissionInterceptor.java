@@ -1,6 +1,7 @@
 package com.developer.security;
 
 import com.platform.common.i18n.I18nService;
+import com.platform.security.util.SecurityContextUtils;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +14,7 @@ import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
 
 import java.util.Arrays;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -90,18 +92,16 @@ public class DeveloperPermissionInterceptor implements HandlerInterceptor {
     }
     
     private String getUserIdFromRequest(HttpServletRequest request) {
-        // 优先从请求头获取
+        // Priority 1: SecurityContext (JWT-parsed UserPrincipal)
+        Optional<String> securityContextUserId = SecurityContextUtils.getCurrentUserId();
+        if (securityContextUserId.isPresent()) {
+            return securityContextUserId.get();
+        }
+        // Priority 2: X-User-Id header (fallback for compatibility)
         String userId = request.getHeader("X-User-Id");
         if (userId != null && !userId.isEmpty()) {
             return userId;
         }
-        
-        // 从 SecurityContext 获取
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication != null && authentication.getPrincipal() != null) {
-            return authentication.getName();
-        }
-        
         return null;
     }
     
