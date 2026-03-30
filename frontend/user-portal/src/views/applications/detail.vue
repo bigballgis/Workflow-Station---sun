@@ -266,6 +266,9 @@ const bottomSubTableBindings = computed(() =>
 // Lookup config fallback map (from rt_lookup_configs)
 const lookupDbConfigs = ref<Record<string, { tableId: number; searchFields: string[]; displayField: string; viewFields: any[] }>>({})
 
+// Relation view configs from configJson (designed in developer-workstation)
+const relationViewConfigs = ref<Record<string, { viewFields: any[]; allFields: any[] }>>({})
+
 // 前置节点表单（只读展示，按顺序排列）
 interface PreviousFormEntry {
   formId: string
@@ -494,9 +497,15 @@ const loadFunctionUnitContent = async (processKey: string) => {
         } catch (e) { console.warn('[app] Failed to load lookup configs:', e) }
       }
 
+      // Parse relationViews from configJson BEFORE parseFormConfig so lookup view fields are available
+      try {
+        const cfg = typeof selectedForm.data === 'string' ? JSON.parse(selectedForm.data) : (selectedForm.data || {})
+        relationViewConfigs.value = cfg.relationViews || {}
+      } catch { relationViewConfigs.value = {} }
+
       parseFormConfig(selectedForm.data)
 
-      // Parse subForms from configJson for column definitions
+      // Parse subForms from configJson
       let subForms: Record<string, any> = {}
       try {
         const cfg = typeof selectedForm.data === 'string' ? JSON.parse(selectedForm.data) : (selectedForm.data || {})
@@ -1094,6 +1103,15 @@ const extractFieldsRecursive = (items: any[]): FormField[] => {
         lookupCfg = typeof raw === 'string' ? JSON.parse(raw || '{}') : (raw || {})
       } catch { lookupCfg = {} }
       const dbCfg = lookupDbConfigs.value[item.field]
+      // Resolve view fields: prefer configJson.relationViews (designed in developer-workstation),
+      // then fall back to rt_view_fields (from getLookupConfigs)
+      let resolvedViewFields: any[] = []
+      if (lookupCfg.bindingId && relationViewConfigs.value[lookupCfg.bindingId]) {
+        resolvedViewFields = relationViewConfigs.value[lookupCfg.bindingId].viewFields || []
+      }
+      if (!resolvedViewFields.length) {
+        resolvedViewFields = dbCfg?.viewFields || []
+      }
       const field: any = {
         key: item.field,
         label: item.title || item.field,
@@ -1104,7 +1122,7 @@ const extractFieldsRecursive = (items: any[]): FormField[] => {
         _lookupSearchFields: (lookupCfg.searchFields?.length ? lookupCfg.searchFields : null) || dbCfg?.searchFields || [],
         _lookupDisplayField: (lookupCfg.displayFields?.[0]) || dbCfg?.displayField || '',
         _lookupDisplayFields: lookupCfg.displayFields || [],
-        _lookupViewFields: dbCfg?.viewFields || []
+        _lookupViewFields: resolvedViewFields
       }
       fields.push(field)
     } else if (item.field) {

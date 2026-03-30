@@ -6,16 +6,20 @@
         {{ label }}
       </label>
       <div class="lookup-field" ref="wrapperRef">
+        <!-- Selected value: input container with inner tag -->
+        <div v-if="selectedRow" class="lookup-selected-wrapper">
+          <span class="lookup-selected-tag">
+            <span class="lookup-selected-text">{{ searchKeyword }}</span>
+            <el-icon class="lookup-selected-close" @click.stop="handleClear"><Close /></el-icon>
+          </span>
+        </div>
+        <!-- Search input (hidden when a value is selected) -->
         <el-input
+          v-else
           v-model="searchKeyword"
           :placeholder="placeholder"
-          clearable
           @focus="handleFocus"
-        >
-          <template #suffix>
-            <el-icon><Search /></el-icon>
-          </template>
-        </el-input>
+        />
 
         <div v-if="dropdownVisible" class="lookup-dropdown">
           <el-table
@@ -35,29 +39,29 @@
             />
           </el-table>
         </div>
-      </div>
-    </div>
 
-    <!-- View display after selection (matches user-portal LookupViewDisplay) -->
-    <div v-if="selectedRow && displayViewFields.length > 0" class="lookup-view-display">
-      <el-descriptions :column="1" border size="small" direction="horizontal">
-        <el-descriptions-item
-          v-for="field in displayViewFields"
-          :key="field.fieldName"
-          :label="field.displayLabel || field.fieldName"
-          label-class-name="lookup-view-label"
-          class-name="lookup-view-value"
-        >
-          {{ selectedRow[field.fieldName] ?? '-' }}
-        </el-descriptions-item>
-      </el-descriptions>
+        <!-- View display after selection -->
+        <div v-if="selectedRow && displayViewFields.length > 0" class="lookup-view-display">
+          <el-descriptions :column="1" border size="small" direction="horizontal">
+            <el-descriptions-item
+              v-for="field in displayViewFields"
+              :key="field.fieldName"
+              :label="field.displayLabel || field.fieldName"
+              label-class-name="lookup-view-label"
+              class-name="lookup-view-value"
+            >
+              {{ selectedRow[field.fieldName] ?? '-' }}
+            </el-descriptions-item>
+          </el-descriptions>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
-import { Search } from '@element-plus/icons-vue'
+import { Search, Close } from '@element-plus/icons-vue'
 
 interface ViewField {
   fieldName: string
@@ -175,6 +179,11 @@ function handleSelect(row: Record<string, any>) {
   dropdownVisible.value = false
 }
 
+function handleClear() {
+  searchKeyword.value = ''
+  selectedRow.value = null
+}
+
 function onClickOutside(e: MouseEvent) {
   if (wrapperRef.value && !wrapperRef.value.contains(e.target as Node)) {
     dropdownVisible.value = false
@@ -221,6 +230,47 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onClickOutside))
   flex: 1;
   min-width: 0;
   position: relative;
+
+  .lookup-selected-wrapper {
+    display: flex;
+    align-items: center;
+    min-height: 32px;
+    padding: 4px 8px;
+    border: 1px solid #dcdfe6;
+    border-radius: 4px;
+    background: #fff;
+  }
+
+  .lookup-selected-tag {
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    height: 24px;
+    padding: 0 8px;
+    border-radius: 4px;
+    background: #f0f2f5;
+    font-size: 13px;
+    color: #909399;
+    line-height: 24px;
+
+    .lookup-selected-text {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .lookup-selected-close {
+      flex-shrink: 0;
+      margin-left: 4px;
+      font-size: 13px;
+      color: #909399;
+      cursor: pointer;
+
+      &:hover {
+        color: #606266;
+      }
+    }
+  }
 
   .lookup-dropdown {
     position: absolute;
