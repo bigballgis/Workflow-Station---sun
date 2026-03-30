@@ -170,7 +170,7 @@ class AiFieldConstraintProperties {
 
         assertThat(result.getErrors().stream()
                 .anyMatch(e -> "FIELD_CONSTRAINT".equals(e.getErrorType())
-                        && e.getDescription().contains("主键")))
+                        && e.getDescription().contains("primary key")))
                 .isTrue();
     }
 
@@ -193,7 +193,7 @@ class AiFieldConstraintProperties {
 
         long pkErrors = result.getErrors().stream()
                 .filter(e -> "FIELD_CONSTRAINT".equals(e.getErrorType())
-                        && e.getDescription().contains("主键"))
+                        && e.getDescription().contains("primary key"))
                 .count();
         assertThat(pkErrors).isZero();
     }
@@ -208,6 +208,189 @@ class AiFieldConstraintProperties {
                         "fieldDefinitions", fields
                 )))
                 .build();
+    }
+
+    /**
+     * Property 5a: Formula with empty targetField should produce FIELD_CONSTRAINT error.
+     *
+     * <p><b>Validates: Requirements 7.2</b></p>
+     */
+    @Property(tries = 100)
+    void formulaWithEmptyTargetFieldShouldError(
+            @ForAll("fieldName") String expression) {
+
+        Map<String, Object> formula = new HashMap<>();
+        formula.put("targetField", "");
+        formula.put("expression", expression);
+        formula.put("dependsOn", List.of("field1"));
+
+        Map<String, Object> configJson = new HashMap<>();
+        configJson.put("formulas", List.of(formula));
+
+        AiGeneratedData data = AiGeneratedData.builder()
+                .formDefinitions(List.of(Map.of(
+                        "formName", "test_form",
+                        "formType", "PROCESS",
+                        "configJson", configJson
+                )))
+                .build();
+
+        AiValidationResult result = validationService.validate(data);
+
+        assertThat(result.getErrors().stream()
+                .anyMatch(e -> "FIELD_CONSTRAINT".equals(e.getErrorType())
+                        && e.getFieldPath().contains("formulas")
+                        && e.getFieldPath().contains("targetField")))
+                .isTrue();
+    }
+
+    /**
+     * Property 5b: Formula with empty dependsOn should produce FIELD_CONSTRAINT error.
+     *
+     * <p><b>Validates: Requirements 7.2</b></p>
+     */
+    @Property(tries = 100)
+    void formulaWithEmptyDependsOnShouldError(
+            @ForAll("fieldName") String targetField) {
+
+        Map<String, Object> formula = new HashMap<>();
+        formula.put("targetField", targetField);
+        formula.put("expression", "a + b");
+        formula.put("dependsOn", List.of());
+
+        Map<String, Object> configJson = new HashMap<>();
+        configJson.put("formulas", List.of(formula));
+
+        AiGeneratedData data = AiGeneratedData.builder()
+                .formDefinitions(List.of(Map.of(
+                        "formName", "test_form",
+                        "formType", "PROCESS",
+                        "configJson", configJson
+                )))
+                .build();
+
+        AiValidationResult result = validationService.validate(data);
+
+        assertThat(result.getErrors().stream()
+                .anyMatch(e -> "FIELD_CONSTRAINT".equals(e.getErrorType())
+                        && e.getFieldPath().contains("dependsOn")))
+                .isTrue();
+    }
+
+    /**
+     * Property 5c: Linkage with invalid linkageType should produce INVALID_ENUM error.
+     *
+     * <p><b>Validates: Requirements 7.3</b></p>
+     */
+    @Property(tries = 100)
+    void linkageWithInvalidTypeShouldError(
+            @ForAll("invalidLinkageType") String invalidType) {
+
+        Map<String, Object> linkage = new HashMap<>();
+        linkage.put("sourceField", "field_a");
+        linkage.put("targetField", "field_b");
+        linkage.put("linkageType", invalidType);
+
+        Map<String, Object> configJson = new HashMap<>();
+        configJson.put("linkages", List.of(linkage));
+
+        AiGeneratedData data = AiGeneratedData.builder()
+                .formDefinitions(List.of(Map.of(
+                        "formName", "test_form",
+                        "formType", "PROCESS",
+                        "configJson", configJson
+                )))
+                .build();
+
+        AiValidationResult result = validationService.validate(data);
+
+        assertThat(result.getErrors().stream()
+                .anyMatch(e -> "INVALID_ENUM".equals(e.getErrorType())
+                        && e.getFieldPath().contains("linkageType")))
+                .isTrue();
+    }
+
+    /**
+     * Property 5d: SummaryRule with invalid aggregation should produce INVALID_ENUM error.
+     *
+     * <p><b>Validates: Requirements 7.5</b></p>
+     */
+    @Property(tries = 100)
+    void summaryRuleWithInvalidAggregationShouldError(
+            @ForAll("invalidAggregation") String invalidAgg) {
+
+        Map<String, Object> rule = new HashMap<>();
+        rule.put("sourceColumn", "amount");
+        rule.put("targetField", "total");
+        rule.put("aggregation", invalidAgg);
+
+        Map<String, Object> configJson = new HashMap<>();
+        configJson.put("summaryRules", List.of(rule));
+
+        AiGeneratedData data = AiGeneratedData.builder()
+                .formDefinitions(List.of(Map.of(
+                        "formName", "test_form",
+                        "formType", "PROCESS",
+                        "configJson", configJson
+                )))
+                .build();
+
+        AiValidationResult result = validationService.validate(data);
+
+        assertThat(result.getErrors().stream()
+                .anyMatch(e -> "INVALID_ENUM".equals(e.getErrorType())
+                        && e.getFieldPath().contains("aggregation")))
+                .isTrue();
+    }
+
+    /**
+     * Property 5e: CrossFieldRule with empty fields should produce FIELD_CONSTRAINT error.
+     *
+     * <p><b>Validates: Requirements 7.4</b></p>
+     */
+    @Property(tries = 100)
+    void crossFieldRuleWithEmptyFieldsShouldError(
+            @ForAll("fieldName") String targetField) {
+
+        Map<String, Object> rule = new HashMap<>();
+        rule.put("fields", List.of());
+        rule.put("message", "validation error");
+        rule.put("targetField", targetField);
+
+        Map<String, Object> configJson = new HashMap<>();
+        configJson.put("crossFieldRules", List.of(rule));
+
+        AiGeneratedData data = AiGeneratedData.builder()
+                .formDefinitions(List.of(Map.of(
+                        "formName", "test_form",
+                        "formType", "PROCESS",
+                        "configJson", configJson
+                )))
+                .build();
+
+        AiValidationResult result = validationService.validate(data);
+
+        assertThat(result.getErrors().stream()
+                .anyMatch(e -> "FIELD_CONSTRAINT".equals(e.getErrorType())
+                        && e.getFieldPath().contains("crossFieldRules")
+                        && e.getFieldPath().contains("fields")))
+                .isTrue();
+    }
+
+    // --- Providers ---
+
+    @Provide
+    Arbitrary<String> invalidLinkageType() {
+        java.util.Set<String> valid = java.util.Set.of("option-filtering", "value-auto-fill", "field-state-change");
+        return Arbitraries.strings().alpha().ofMinLength(3).ofMaxLength(20)
+                .filter(s -> !valid.contains(s));
+    }
+
+    @Provide
+    Arbitrary<String> invalidAggregation() {
+        java.util.Set<String> valid = java.util.Set.of("SUM", "AVG", "COUNT", "MIN", "MAX");
+        return Arbitraries.strings().alpha().ofMinLength(1).ofMaxLength(10)
+                .filter(s -> !valid.contains(s));
     }
 
     // --- Providers ---

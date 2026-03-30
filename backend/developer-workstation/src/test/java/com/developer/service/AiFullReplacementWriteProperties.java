@@ -72,7 +72,7 @@ class AiFullReplacementWriteProperties {
                 new AiTransactionAtomicityProperties.NoOpEntityManager()
         );
 
-        writeService.applyGeneratedData(functionUnitId, newData);
+        writeService.applyGeneratedData(functionUnitId, newData, null);
 
         // Verify old data is gone and new data is present
         int expectedTableCount = newData.getTableDefinitions() != null ? newData.getTableDefinitions().size() : 0;
@@ -152,7 +152,7 @@ class AiFullReplacementWriteProperties {
                 new AiTransactionAtomicityProperties.NoOpEntityManager()
         );
 
-        writeService.applyGeneratedData(functionUnitId, newData);
+        writeService.applyGeneratedData(functionUnitId, newData, null);
 
         int expectedTableCount = newData.getTableDefinitions() != null ? newData.getTableDefinitions().size() : 0;
         int expectedFormCount = newData.getFormDefinitions() != null ? newData.getFormDefinitions().size() : 0;
@@ -212,7 +212,7 @@ class AiFullReplacementWriteProperties {
                 new AiTransactionAtomicityProperties.NoOpEntityManager()
         );
 
-        writeService.applyGeneratedData(functionUnitId, data);
+        writeService.applyGeneratedData(functionUnitId, data, null);
 
         // Find the sub table and verify its foreign key references
         TableDefinition subTable = fu.getTableDefinitions().stream()
@@ -268,7 +268,7 @@ class AiFullReplacementWriteProperties {
                 )))
                 .formDefinitions(List.of(Map.of(
                         "formName", "main_form",
-                        "formType", "MAIN",
+                        "formType", "PROCESS",
                         "configJson", Map.of("layout", "default"),
                         "tableBindings", List.of(Map.of(
                                 "tableName", tableName,
@@ -285,12 +285,400 @@ class AiFullReplacementWriteProperties {
                 new AiTransactionAtomicityProperties.NoOpEntityManager()
         );
 
-        writeService.applyGeneratedData(functionUnitId, data);
+        writeService.applyGeneratedData(functionUnitId, data, null);
 
         assertThat(fu.getFormDefinitions()).hasSize(1);
         FormDefinition form = fu.getFormDefinitions().get(0);
         assertThat(form.getBoundTable()).isNotNull();
         assertThat(form.getBoundTable().getTableName()).isEqualTo(tableName);
+    }
+
+    // --- Property 8-11: New write logic properties ---
+
+    /**
+     * Property 8: writeFormDefinitions correctly writes fieldPermissions, showLiveValues, and stageBindings.
+     *
+     * <p>For any AiGeneratedData with forms containing fieldPermissions, showLiveValues, and stageBindings,
+     * after applyGeneratedData, the FormDefinition entities should have these fields correctly set.</p>
+     *
+     * <p><b>Validates: Requirements 11.1, 11.2, 11.3, 11.4</b></p>
+     */
+    @Property(tries = 50)
+    void writeFormDefinitionsNewFields(
+            @ForAll @LongRange(min = 1, max = 1000) Long functionUnitId,
+            @ForAll("validTableName") String tableName) {
+
+        FunctionUnit fu = FunctionUnit.builder()
+                .id(functionUnitId)
+                .code("fu-fp-" + functionUnitId)
+                .name("FieldPerm Test FU")
+                .tableDefinitions(new ArrayList<>())
+                .formDefinitions(new ArrayList<>())
+                .actionDefinitions(new ArrayList<>())
+                .decisionDefinitions(new ArrayList<>())
+                .tableRelations(new ArrayList<>())
+                .versions(new ArrayList<>())
+                .build();
+
+        Map<String, String> permissions = new LinkedHashMap<>();
+        permissions.put("name", "READONLY");
+        permissions.put("email", "EDITABLE");
+
+        List<Map<String, Object>> stageBindings = List.of(
+                Map.of("stageId", "stage_1", "stageName", "Review"),
+                Map.of("stageId", "stage_2", "stageName", "Approve")
+        );
+
+        Map<String, Object> formData = new LinkedHashMap<>();
+        formData.put("formName", "task_form");
+        formData.put("formType", "TASK");
+        formData.put("configJson", Map.of("layout", "default"));
+        formData.put("fieldPermissions", permissions);
+        formData.put("showLiveValues", false);
+        formData.put("stageBindings", stageBindings);
+        formData.put("tableBindings", List.of(Map.of(
+                "tableName", tableName,
+                "bindingType", "PRIMARY",
+                "bindingMode", "EDITABLE"
+        )));
+
+        AiGeneratedData data = AiGeneratedData.builder()
+                .tableDefinitions(List.of(Map.of(
+                        "tableName", tableName,
+                        "tableType", "MAIN",
+                        "fieldDefinitions", List.of(Map.of(
+                                "fieldName", "id", "dataType", "INTEGER",
+                                "isPrimaryKey", true, "sortOrder", 1
+                        ))
+                )))
+                .formDefinitions(List.of(formData))
+                .build();
+
+        AiWriteServiceImpl writeService = new AiWriteServiceImpl(
+                new FixedFunctionUnitRepository(fu),
+                new AiTransactionAtomicityProperties.StubIconRepository(),
+                new AiTransactionAtomicityProperties.NoOpEntityManager()
+        );
+
+        writeService.applyGeneratedData(functionUnitId, data, null);
+
+        assertThat(fu.getFormDefinitions()).hasSize(1);
+        FormDefinition form = fu.getFormDefinitions().get(0);
+
+        // Verify fieldPermissions
+        assertThat(form.getFieldPermissions()).containsEntry("name", "READONLY");
+        assertThat(form.getFieldPermissions()).containsEntry("email", "EDITABLE");
+
+        // Verify showLiveValues
+        assertThat(form.getShowLiveValues()).isFalse();
+
+        // Verify stageBindings
+        assertThat(form.getStageBindings()).hasSize(2);
+        assertThat(form.getStageBindings().get(0).getStageId()).isEqualTo("stage_1");
+        assertThat(form.getStageBindings().get(0).getStageName()).isEqualTo("Review");
+        assertThat(form.getStageBindings().get(0).getForm()).isSameAs(form);
+        assertThat(form.getStageBindings().get(1).getStageId()).isEqualTo("stage_2");
+        assertThat(form.getStageBindings().get(1).getStageName()).isEqualTo("Approve");
+    }
+
+    /**
+     * Property 8b: showLiveValues defaults to true when not provided by AI.
+     *
+     * <p><b>Validates: Requirements 11.2</b></p>
+     */
+    @Property(tries = 50)
+    void showLiveValuesDefaultsToTrueWhenNotProvided(
+            @ForAll @LongRange(min = 1, max = 1000) Long functionUnitId) {
+
+        FunctionUnit fu = FunctionUnit.builder()
+                .id(functionUnitId)
+                .code("fu-slv-" + functionUnitId)
+                .name("SLV Test FU")
+                .tableDefinitions(new ArrayList<>())
+                .formDefinitions(new ArrayList<>())
+                .actionDefinitions(new ArrayList<>())
+                .decisionDefinitions(new ArrayList<>())
+                .tableRelations(new ArrayList<>())
+                .versions(new ArrayList<>())
+                .build();
+
+        // Form without showLiveValues field
+        Map<String, Object> formData = new LinkedHashMap<>();
+        formData.put("formName", "process_form");
+        formData.put("formType", "PROCESS");
+        formData.put("configJson", Map.of("layout", "default"));
+
+        AiGeneratedData data = AiGeneratedData.builder()
+                .formDefinitions(List.of(formData))
+                .build();
+
+        AiWriteServiceImpl writeService = new AiWriteServiceImpl(
+                new FixedFunctionUnitRepository(fu),
+                new AiTransactionAtomicityProperties.StubIconRepository(),
+                new AiTransactionAtomicityProperties.NoOpEntityManager()
+        );
+
+        writeService.applyGeneratedData(functionUnitId, data, null);
+
+        assertThat(fu.getFormDefinitions()).hasSize(1);
+        assertThat(fu.getFormDefinitions().get(0).getShowLiveValues()).isTrue();
+    }
+
+    /**
+     * Property 9: writeTableRelations correctly resolves table names to TableDefinition IDs.
+     *
+     * <p>For any AiGeneratedData with tableRelations referencing valid table names,
+     * after applyGeneratedData, the TableRelation entities should have correct sourceTableId/targetTableId.</p>
+     *
+     * <p><b>Validates: Requirements 12.2, 12.3, 12.4, 12.5</b></p>
+     */
+    @Property(tries = 50)
+    void writeTableRelationsResolvesTableNames(
+            @ForAll @LongRange(min = 1, max = 1000) Long functionUnitId) {
+
+        FunctionUnit fu = FunctionUnit.builder()
+                .id(functionUnitId)
+                .code("fu-tr-" + functionUnitId)
+                .name("TableRelation Test FU")
+                .tableDefinitions(new ArrayList<>())
+                .formDefinitions(new ArrayList<>())
+                .actionDefinitions(new ArrayList<>())
+                .decisionDefinitions(new ArrayList<>())
+                .tableRelations(new ArrayList<>())
+                .versions(new ArrayList<>())
+                .build();
+
+        AiGeneratedData data = AiGeneratedData.builder()
+                .tableDefinitions(List.of(
+                        Map.of("tableName", "orders", "tableType", "MAIN",
+                                "fieldDefinitions", List.of(Map.of(
+                                        "fieldName", "id", "dataType", "INTEGER",
+                                        "isPrimaryKey", true, "sortOrder", 1))),
+                        Map.of("tableName", "order_items", "tableType", "SUB",
+                                "fieldDefinitions", List.of(Map.of(
+                                        "fieldName", "id", "dataType", "INTEGER",
+                                        "isPrimaryKey", true, "sortOrder", 1)))
+                ))
+                .tableRelations(List.of(Map.of(
+                        "sourceTableName", "orders",
+                        "sourceFieldName", "id",
+                        "relationType", "ONE_TO_MANY",
+                        "targetTableName", "order_items",
+                        "targetFieldName", "order_id"
+                )))
+                .build();
+
+        AiWriteServiceImpl writeService = new AiWriteServiceImpl(
+                new FixedFunctionUnitRepository(fu),
+                new AiTransactionAtomicityProperties.StubIconRepository(),
+                new AiTransactionAtomicityProperties.NoOpEntityManager()
+        );
+
+        writeService.applyGeneratedData(functionUnitId, data, null);
+
+        assertThat(fu.getTableRelations()).hasSize(1);
+        TableRelation relation = fu.getTableRelations().get(0);
+        assertThat(relation.getFunctionUnit()).isSameAs(fu);
+        assertThat(relation.getSourceFieldName()).isEqualTo("id");
+        assertThat(relation.getRelationType()).isEqualTo("ONE_TO_MANY");
+        assertThat(relation.getTargetFieldName()).isEqualTo("order_id");
+    }
+
+    /**
+     * Property 9b: writeTableRelations skips relations with unknown table names.
+     *
+     * <p><b>Validates: Requirements 12.4</b></p>
+     */
+    @Property(tries = 50)
+    void writeTableRelationsSkipsUnknownTableNames(
+            @ForAll @LongRange(min = 1, max = 1000) Long functionUnitId) {
+
+        FunctionUnit fu = FunctionUnit.builder()
+                .id(functionUnitId)
+                .code("fu-tr-skip-" + functionUnitId)
+                .name("TR Skip Test FU")
+                .tableDefinitions(new ArrayList<>())
+                .formDefinitions(new ArrayList<>())
+                .actionDefinitions(new ArrayList<>())
+                .decisionDefinitions(new ArrayList<>())
+                .tableRelations(new ArrayList<>())
+                .versions(new ArrayList<>())
+                .build();
+
+        AiGeneratedData data = AiGeneratedData.builder()
+                .tableDefinitions(List.of(
+                        Map.of("tableName", "orders", "tableType", "MAIN",
+                                "fieldDefinitions", List.of(Map.of(
+                                        "fieldName", "id", "dataType", "INTEGER",
+                                        "isPrimaryKey", true, "sortOrder", 1)))
+                ))
+                .tableRelations(List.of(Map.of(
+                        "sourceTableName", "orders",
+                        "sourceFieldName", "id",
+                        "relationType", "ONE_TO_MANY",
+                        "targetTableName", "nonexistent_table",
+                        "targetFieldName", "order_id"
+                )))
+                .build();
+
+        AiWriteServiceImpl writeService = new AiWriteServiceImpl(
+                new FixedFunctionUnitRepository(fu),
+                new AiTransactionAtomicityProperties.StubIconRepository(),
+                new AiTransactionAtomicityProperties.NoOpEntityManager()
+        );
+
+        writeService.applyGeneratedData(functionUnitId, data, null);
+
+        // Relation should be skipped because target table doesn't exist
+        assertThat(fu.getTableRelations()).isEmpty();
+    }
+
+    /**
+     * Property 10: clearExistingData covers tableRelations.
+     *
+     * <p>For any FunctionUnit with pre-existing tableRelations, after applyGeneratedData in MODIFY mode,
+     * old tableRelations should be cleared.</p>
+     *
+     * <p><b>Validates: Requirements 13.1, 13.2</b></p>
+     */
+    @Property(tries = 50)
+    void clearExistingDataCoversTableRelations(
+            @ForAll @LongRange(min = 1, max = 1000) Long functionUnitId) {
+
+        FunctionUnit fu = FunctionUnit.builder()
+                .id(functionUnitId)
+                .code("fu-clear-tr-" + functionUnitId)
+                .name("Clear TR Test FU")
+                .tableDefinitions(new ArrayList<>())
+                .formDefinitions(new ArrayList<>())
+                .actionDefinitions(new ArrayList<>())
+                .decisionDefinitions(new ArrayList<>())
+                .tableRelations(new ArrayList<>())
+                .versions(new ArrayList<>())
+                .build();
+
+        // Add existing table relation to trigger MODIFY mode
+        TableRelation oldRelation = TableRelation.builder()
+                .functionUnit(fu)
+                .sourceTableId(100L)
+                .sourceFieldName("old_field")
+                .relationType("ONE_TO_ONE")
+                .targetTableId(200L)
+                .targetFieldName("old_target")
+                .build();
+        fu.getTableRelations().add(oldRelation);
+
+        // Also add an existing table to ensure MODIFY mode
+        TableDefinition oldTable = TableDefinition.builder()
+                .functionUnit(fu)
+                .tableName("old_table")
+                .tableType(TableType.MAIN)
+                .fieldDefinitions(new ArrayList<>())
+                .foreignKeys(new ArrayList<>())
+                .build();
+        fu.getTableDefinitions().add(oldTable);
+
+        // Apply empty data — MODIFY mode should clear everything
+        AiGeneratedData data = AiGeneratedData.builder().build();
+
+        AiWriteServiceImpl writeService = new AiWriteServiceImpl(
+                new FixedFunctionUnitRepository(fu),
+                new AiTransactionAtomicityProperties.StubIconRepository(),
+                new AiTransactionAtomicityProperties.NoOpEntityManager()
+        );
+
+        writeService.applyGeneratedData(functionUnitId, data, null);
+
+        assertThat(fu.getTableRelations()).isEmpty();
+        assertThat(fu.getTableDefinitions()).isEmpty();
+    }
+
+    /**
+     * Property 11: Legacy FormType auto-mapping (MAIN→PROCESS, SUB→TASK).
+     *
+     * <p>For any AiGeneratedData with forms using legacy formType values MAIN or SUB,
+     * after applyGeneratedData, the FormDefinition entities should have the mapped formType.</p>
+     *
+     * <p><b>Validates: Requirements 14.1, 14.2, 14.3</b></p>
+     */
+    @Property(tries = 50)
+    void legacyFormTypeAutoMapping(
+            @ForAll @LongRange(min = 1, max = 1000) Long functionUnitId,
+            @ForAll("legacyFormTypeMapping") java.util.Map.Entry<String, FormType> mapping) {
+
+        FunctionUnit fu = FunctionUnit.builder()
+                .id(functionUnitId)
+                .code("fu-legacy-" + functionUnitId)
+                .name("Legacy FT Test FU")
+                .tableDefinitions(new ArrayList<>())
+                .formDefinitions(new ArrayList<>())
+                .actionDefinitions(new ArrayList<>())
+                .decisionDefinitions(new ArrayList<>())
+                .tableRelations(new ArrayList<>())
+                .versions(new ArrayList<>())
+                .build();
+
+        Map<String, Object> formData = new LinkedHashMap<>();
+        formData.put("formName", "legacy_form");
+        formData.put("formType", mapping.getKey());
+        formData.put("configJson", Map.of("layout", "default"));
+
+        AiGeneratedData data = AiGeneratedData.builder()
+                .formDefinitions(List.of(formData))
+                .build();
+
+        AiWriteServiceImpl writeService = new AiWriteServiceImpl(
+                new FixedFunctionUnitRepository(fu),
+                new AiTransactionAtomicityProperties.StubIconRepository(),
+                new AiTransactionAtomicityProperties.NoOpEntityManager()
+        );
+
+        writeService.applyGeneratedData(functionUnitId, data, null);
+
+        assertThat(fu.getFormDefinitions()).hasSize(1);
+        assertThat(fu.getFormDefinitions().get(0).getFormType()).isEqualTo(mapping.getValue());
+    }
+
+    /**
+     * Property 11b: Unknown FormType values are skipped.
+     *
+     * <p><b>Validates: Requirements 14.3</b></p>
+     */
+    @Property(tries = 50)
+    void unknownFormTypeIsSkipped(
+            @ForAll @LongRange(min = 1, max = 1000) Long functionUnitId) {
+
+        FunctionUnit fu = FunctionUnit.builder()
+                .id(functionUnitId)
+                .code("fu-unknown-ft-" + functionUnitId)
+                .name("Unknown FT Test FU")
+                .tableDefinitions(new ArrayList<>())
+                .formDefinitions(new ArrayList<>())
+                .actionDefinitions(new ArrayList<>())
+                .decisionDefinitions(new ArrayList<>())
+                .tableRelations(new ArrayList<>())
+                .versions(new ArrayList<>())
+                .build();
+
+        Map<String, Object> formData = new LinkedHashMap<>();
+        formData.put("formName", "bad_form");
+        formData.put("formType", "INVALID_TYPE");
+        formData.put("configJson", Map.of("layout", "default"));
+
+        AiGeneratedData data = AiGeneratedData.builder()
+                .formDefinitions(List.of(formData))
+                .build();
+
+        AiWriteServiceImpl writeService = new AiWriteServiceImpl(
+                new FixedFunctionUnitRepository(fu),
+                new AiTransactionAtomicityProperties.StubIconRepository(),
+                new AiTransactionAtomicityProperties.NoOpEntityManager()
+        );
+
+        writeService.applyGeneratedData(functionUnitId, data, null);
+
+        // Unknown form type should be skipped
+        assertThat(fu.getFormDefinitions()).isEmpty();
     }
 
     // --- Helper Methods ---
@@ -329,7 +717,7 @@ class AiFullReplacementWriteProperties {
         FormDefinition oldForm = FormDefinition.builder()
                 .functionUnit(fu)
                 .formName("old_form")
-                .formType(FormType.MAIN)
+                .formType(FormType.PROCESS)
                 .configJson(Map.of("layout", "old"))
                 .tableBindings(new ArrayList<>())
                 .build();
@@ -392,7 +780,7 @@ class AiFullReplacementWriteProperties {
         Arbitrary<String> tableNames = Arbitraries.of("users", "products", "orders", "invoices", "tasks", "reports");
         Arbitrary<String> tableTypes = Arbitraries.of("MAIN", "SUB");
         Arbitrary<String> dataTypes = Arbitraries.of("VARCHAR", "INTEGER", "TEXT", "BOOLEAN", "DATE");
-        Arbitrary<String> formTypes = Arbitraries.of("MAIN", "SUB");
+        Arbitrary<String> formTypes = Arbitraries.of("PROCESS", "TASK");
         Arbitrary<String> actionTypes = Arbitraries.of("APPROVE", "REJECT", "SAVE", "CANCEL");
 
         // Generate 1-3 tables, each with 1-3 fields
@@ -476,5 +864,13 @@ class AiFullReplacementWriteProperties {
     Arbitrary<String> validTableName() {
         return Arbitraries.of("customers", "products", "orders", "invoices", "tasks",
                 "employees", "departments", "projects", "reports", "settings");
+    }
+
+    @Provide
+    Arbitrary<java.util.Map.Entry<String, FormType>> legacyFormTypeMapping() {
+        return Arbitraries.of(
+                Map.entry("MAIN", FormType.PROCESS),
+                Map.entry("SUB", FormType.TASK)
+        );
     }
 }

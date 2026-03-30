@@ -114,7 +114,7 @@
           <el-divider>{{ t('action.formConfig') }}</el-divider>
           <el-form-item :label="t('action.relatedForm')">
             <el-select v-model="actionConfig.formId">
-              <el-option v-for="form in store.forms" :key="form.id" 
+              <el-option v-for="form in actionFormOptions" :key="form.id" 
                          :label="form.formName" :value="form.id" />
             </el-select>
           </el-form-item>
@@ -364,6 +364,42 @@
           </el-button>
           <span class="binding-tip">{{ t('action.bindingWillUpdateProcess') }}</span>
         </el-form-item>
+
+        <!-- Visibility, Roles & Sort Order -->
+        <el-divider>{{ t('action.visibilityAndPermissions') }}</el-divider>
+        <el-form-item :label="t('action.visibilityCondition')">
+          <ConditionBuilder
+            :model-value="actionConfig.visibilityCondition ?? []"
+            :fields="availableFormFields"
+            :placeholder="t('action.visibilityConditionPlaceholder')"
+            @update:model-value="(val: ConditionExpression[]) => actionConfig.visibilityCondition = val.length > 0 ? val : null"
+          />
+        </el-form-item>
+        <el-form-item :label="t('action.allowedRoles')">
+          <el-select
+            v-model="actionConfig.allowedRoles"
+            multiple
+            filterable
+            allow-create
+            :placeholder="t('action.allowedRolesPlaceholder')"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="role in availableRoles"
+              :key="role"
+              :label="role"
+              :value="role"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item :label="t('action.sortOrder')">
+          <el-input-number
+            v-model="actionConfig.sortOrder"
+            :min="0"
+            :max="9999"
+            controls-position="right"
+          />
+        </el-form-item>
       </el-form>
     </div>
 
@@ -408,7 +444,38 @@
 
     <!-- Test Action Dialog -->
     <el-dialog v-model="showTestDialog" :title="t('action.testActionTitle')" width="600px">
-      <el-form label-width="120px" label-position="left">
+      <div v-if="testActionType === 'N8N_ACTION' && testInputMapping.length > 0" style="margin-bottom: 12px;">
+        <el-switch v-model="testRawJsonMode" :active-text="t('action.rawJson')" :inactive-text="t('action.structuredInput')" />
+      </div>
+      <el-form v-if="testActionType === 'N8N_ACTION' && testInputMapping.length > 0 && !testRawJsonMode" label-width="120px" label-position="left">
+        <el-form-item
+          v-for="param in testInputMapping"
+          :key="param.paramName"
+          :label="param.paramLabel || param.paramName"
+          :required="param.required"
+        >
+          <el-input
+            v-if="param.paramType === 'string' || !param.paramType"
+            v-model="testStructuredData[param.paramName]"
+            :placeholder="param.paramName"
+          />
+          <el-input-number
+            v-else-if="param.paramType === 'number'"
+            v-model="testStructuredData[param.paramName]"
+            controls-position="right"
+          />
+          <el-switch
+            v-else-if="param.paramType === 'boolean'"
+            v-model="testStructuredData[param.paramName]"
+          />
+          <el-input
+            v-else
+            v-model="testStructuredData[param.paramName]"
+            :placeholder="param.paramName"
+          />
+        </el-form-item>
+      </el-form>
+      <el-form v-else label-width="120px" label-position="left">
         <el-form-item :label="t('action.testData')">
           <el-input v-model="testData" type="textarea" :rows="5" :placeholder="t('action.testDataPlaceholder')" />
         </el-form-item>
@@ -424,13 +491,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, watch } from 'vue'
+import { ref, reactive, onMounted, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ArrowLeft, Refresh } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
 import { functionUnitApi, type ActionDefinition } from '@/api/functionUnit'
 import { n8nApi, type N8nConfig, type N8nWorkflow } from '@/api/n8n'
+import ConditionBuilder from './ConditionBuilder.vue'
+import type { ConditionExpression } from './formBusinessLogicTypes'
 
 const { t } = useI18n()
 
@@ -444,6 +513,10 @@ const showTestDialog = ref(false)
 const testData = ref('{}')
 const testResult = ref('')
 const testing = ref(false)
+const testRawJsonMode = ref(false)
+const testActionType = ref('')
+const testInputMapping = ref<Array<{ paramName: string; paramLabel: string; paramType: string; required: boolean }>>([])
+const testStructuredData = ref<Record<string, any>>({})
 const createForm = reactive({ actionName: '', actionType: 'APPROVE', description: '' })
 
 // N8N Action 相关状态
@@ -457,6 +530,24 @@ const actionNodeBindings = ref<Map<string | number, Array<{ id: string; name: st
 const bindingType = ref<'node' | 'global'>('node')
 const selectedNodeIds = ref<string[]>([])
 const availableNodes = ref<Array<{ id: string; name: string }>>([])
+
+// FORM_POPUP action: only show ACTION type forms
+const actionFormOptions = computed(() => store.forms.filter(f => f.formType === 'ACTION'))
+const availableFormFields = computed(() => {
+  const fields = new Set<string>()
+  for (const form of store.forms) {
+    const rule = form.configJson?.rule
+    if (Array.isArray(rule)) {
+      for (const r of rule) {
+        if (r.field && r.type !== 'subTable') {
+          fields.add(r.field)
+        }
+      }
+    }
+  }
+  return Array.from(fields)
+})
+const availableRoles = ref<string[]>([])
 const savingBinding = ref(false)
 
 const actionConfig = reactive<Record<string, any>>({
@@ -479,7 +570,11 @@ const actionConfig = reactive<Record<string, any>>({
   webhookUrl: '',
   timeoutSeconds: 120,
   inputMapping: [] as Array<{ paramName: string; paramLabel: string; paramType: string; required: boolean }>,
-  outputMapping: [] as Array<{ source: string; target: string }>
+  outputMapping: [] as Array<{ source: string; target: string }>,
+  // Visibility, roles & sort order
+  visibilityCondition: null as ConditionExpression[] | null,
+  allowedRoles: [] as string[],
+  sortOrder: 0
 })
 
 const actionTypeLabel = (type: string) => {
@@ -531,7 +626,11 @@ watch(selectedAction, (action) => {
       webhookUrl: '',
       timeoutSeconds: 120,
       inputMapping: [],
-      outputMapping: []
+      outputMapping: [],
+      // Visibility, roles & sort order
+      visibilityCondition: null as ConditionExpression[] | null,
+      allowedRoles: [] as string[],
+      sortOrder: 0
     })
   }
   
@@ -773,7 +872,7 @@ async function handleSaveBinding() {
 /**
  * 从所有节点中移除指定动作
  */
-function removeActionFromAllNodes(xmlDoc: Document, actionId: number) {
+function removeActionFromAllNodes(xmlDoc: Document, actionId: string | number) {
   // 从流程全局移除
   const processes = xmlDoc.querySelectorAll('process')
   processes.forEach(proc => {
@@ -784,27 +883,29 @@ function removeActionFromAllNodes(xmlDoc: Document, actionId: number) {
         const value = prop.getAttribute('value')
         if (value) {
           try {
-            let actionIds = JSON.parse(value) as number[]
-            actionIds = actionIds.filter(id => id !== actionId)
-            prop.setAttribute('value', JSON.stringify(actionIds))
+            const currentIds = parseActionIds(value)
+            const filteredIds = currentIds.filter(id => String(id) !== String(actionId))
+            prop.setAttribute('value', JSON.stringify(filteredIds))
             
             // 同步更新actionNames
             const namesProp = Array.from(properties).find(p => p.getAttribute('name') === 'globalActionNames')
             if (namesProp) {
               const namesValue = namesProp.getAttribute('value')
               if (namesValue) {
-                const names = JSON.parse(namesValue) as string[]
-                // 找到对应索引并移除
-                const originalIds = JSON.parse(value) as number[]
-                const idx = originalIds.indexOf(actionId)
-                if (idx > -1 && names.length > idx) {
-                  names.splice(idx, 1)
-                  namesProp.setAttribute('value', JSON.stringify(names))
+                try {
+                  const names = JSON.parse(namesValue) as string[]
+                  const idx = currentIds.findIndex(id => String(id) === String(actionId))
+                  if (idx > -1 && names.length > idx) {
+                    names.splice(idx, 1)
+                    namesProp.setAttribute('value', JSON.stringify(names))
+                  }
+                } catch (e) {
+                  console.warn('Failed to parse globalActionNames:', namesValue, e)
                 }
               }
             }
           } catch (e) {
-            console.warn('Failed to parse globalActionIds:', e)
+            console.warn('Failed to parse globalActionIds, skipping node:', value, e)
           }
         }
       }
@@ -821,28 +922,31 @@ function removeActionFromAllNodes(xmlDoc: Document, actionId: number) {
         const value = prop.getAttribute('value')
         if (value) {
           try {
-            const originalIds = JSON.parse(value) as number[]
-            let actionIds = [...originalIds]
-            const idx = actionIds.indexOf(actionId)
+            const currentIds = parseActionIds(value)
+            const idx = currentIds.findIndex(id => String(id) === String(actionId))
             if (idx > -1) {
-              actionIds.splice(idx, 1)
-              prop.setAttribute('value', JSON.stringify(actionIds))
+              const filteredIds = currentIds.filter(id => String(id) !== String(actionId))
+              prop.setAttribute('value', JSON.stringify(filteredIds))
               
               // 同步更新actionNames
               const namesProp = Array.from(properties).find(p => p.getAttribute('name') === 'actionNames')
               if (namesProp) {
                 const namesValue = namesProp.getAttribute('value')
                 if (namesValue) {
-                  const names = JSON.parse(namesValue) as string[]
-                  if (names.length > idx) {
-                    names.splice(idx, 1)
-                    namesProp.setAttribute('value', JSON.stringify(names))
+                  try {
+                    const names = JSON.parse(namesValue) as string[]
+                    if (names.length > idx) {
+                      names.splice(idx, 1)
+                      namesProp.setAttribute('value', JSON.stringify(names))
+                    }
+                  } catch (e) {
+                    console.warn('Failed to parse actionNames:', namesValue, e)
                   }
                 }
               }
             }
           } catch (e) {
-            console.warn('Failed to parse actionIds:', e)
+            console.warn('Failed to parse actionIds, skipping node:', value, e)
           }
         }
       }
@@ -1031,6 +1135,22 @@ function handleTestAction(row: ActionDefinition) {
   selectedAction.value = row
   testData.value = '{}'
   testResult.value = ''
+  testRawJsonMode.value = false
+  testActionType.value = row.actionType
+  // Auto-generate structured input fields for N8N_ACTION
+  if (row.actionType === 'N8N_ACTION' && row.configJson?.inputMapping) {
+    testInputMapping.value = row.configJson.inputMapping
+    const initial: Record<string, any> = {}
+    for (const param of row.configJson.inputMapping) {
+      if (param.paramType === 'number') initial[param.paramName] = 0
+      else if (param.paramType === 'boolean') initial[param.paramName] = false
+      else initial[param.paramName] = ''
+    }
+    testStructuredData.value = initial
+  } else {
+    testInputMapping.value = []
+    testStructuredData.value = {}
+  }
   showTestDialog.value = true
 }
 
@@ -1038,7 +1158,12 @@ async function executeTest() {
   if (!selectedAction.value) return
   testing.value = true
   try {
-    const data = JSON.parse(testData.value)
+    let data: Record<string, unknown>
+    if (testActionType.value === 'N8N_ACTION' && testInputMapping.value.length > 0 && !testRawJsonMode.value) {
+      data = { ...testStructuredData.value }
+    } else {
+      data = JSON.parse(testData.value)
+    }
     const res = await functionUnitApi.testAction?.(props.functionUnitId, selectedAction.value.id, data)
     testResult.value = JSON.stringify(res?.data || {}, null, 2)
   } catch (e: any) {

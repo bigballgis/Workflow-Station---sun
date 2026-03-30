@@ -135,4 +135,23 @@ public class FormDesignController {
         formDesignComponent.deleteBinding(bindingId);
         return ResponseEntity.ok(ApiResponse.success(null));
     }
+    
+    // ========== Process/Task Form 扩展端点 ==========
+    
+    @GetMapping("/data-table-columns")
+    @Operation(summary = "Get Data_Table column names for autocomplete")
+    public ResponseEntity<ApiResponse<List<String>>> getDataTableColumns(
+            @PathVariable Long functionUnitId) {
+        List<String> columns = formDesignComponent.getDataTableColumns(functionUnitId);
+        return ResponseEntity.ok(ApiResponse.success(columns));
+    }
+    
+    @PostMapping("/{formId}/copy")
+    @Operation(summary = "Copy a Task Form (without Stage bindings)")
+    public ResponseEntity<ApiResponse<FormDefinition>> copyTaskForm(
+            @PathVariable Long functionUnitId,
+            @PathVariable Long formId) {
+        FormDefinition copied = formDesignComponent.copyTaskForm(formId);
+        return ResponseEntity.ok(ApiResponse.success(copied));
+    }
 }

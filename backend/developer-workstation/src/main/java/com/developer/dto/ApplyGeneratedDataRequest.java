@@ -21,4 +21,10 @@ public class ApplyGeneratedDataRequest {
     private String sessionId;
 
     private AiGeneratedData generatedData;
+
+    /**
+     * 增量重新生成范围（可选，默认 null 等同于 ALL）
+     * 可选值：ALL / TABLES / FORMS / ACTIONS / DECISIONS / PROCESS / TABLE_RELATIONS
+     */
+    private String regenerateScope;
 }

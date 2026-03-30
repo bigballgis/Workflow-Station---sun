@@ -155,8 +155,8 @@ class AiContextAwarenessProperties {
         @SuppressWarnings("unchecked")
         Map<String, Object> body = (Map<String, Object>) ReflectionTestUtils.invokeMethod(
                 generationService, "buildN8NRequestBody",
-                sessionId, "test message", phase, mode, context, existingDocuments,
-                (List<Map<String, String>>) null);
+                sessionId, "test message", phase, mode, context, 1L, existingDocuments,
+                (List<Map<String, String>>) null, (String) null);
 
         assertNotNull(body);
         assertTrue(body.containsKey("existingDocuments"),
@@ -166,8 +166,8 @@ class AiContextAwarenessProperties {
         @SuppressWarnings("unchecked")
         Map<String, Object> bodyEmpty = (Map<String, Object>) ReflectionTestUtils.invokeMethod(
                 generationService, "buildN8NRequestBody",
-                sessionId, "test message", phase, mode, context, List.of(),
-                (List<Map<String, String>>) null);
+                sessionId, "test message", phase, mode, context, 1L, List.of(),
+                (List<Map<String, String>>) null, (String) null);
 
         assertNotNull(bodyEmpty);
         assertFalse(bodyEmpty.containsKey("existingDocuments"),
@@ -197,8 +197,8 @@ class AiContextAwarenessProperties {
         @SuppressWarnings("unchecked")
         Map<String, Object> body = (Map<String, Object>) ReflectionTestUtils.invokeMethod(
                 generationService, "buildN8NRequestBody",
-                sessionId, "test message", phase, mode, context, existingDocuments,
-                (List<Map<String, String>>) null);
+                sessionId, "test message", phase, mode, context, 1L, existingDocuments,
+                (List<Map<String, String>>) null, (String) null);
 
         assertNotNull(body);
 

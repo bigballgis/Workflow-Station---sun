@@ -40,7 +40,7 @@ CORS_YAML_LINES=$(build_cors_yaml)
 sed -e "s|__JWT_SECRET__|${JWT_SECRET}|g" \
     -e "s|__REDIS_HOST__|${REDIS_HOST:-redis}|g" \
     -e "s|__REDIS_PASSWORD__|${REDIS_PASSWORD}|g" \
-    /kong/kong.yml.template > /kong/kong.yml.tmp
+    /kong/kong.yml.template > /tmp/kong.yml.tmp
 
 # =====================================================
 # 第二步: 将 CORS origins 占位符行替换为多行 YAML 数组
@@ -48,9 +48,12 @@ sed -e "s|__JWT_SECRET__|${JWT_SECRET}|g" \
 awk -v origins="$CORS_YAML_LINES" '
   /- __CORS_ALLOWED_ORIGINS__/ { print origins; next }
   { print }
-' /kong/kong.yml.tmp > /kong/kong.yml
+' /tmp/kong.yml.tmp > /tmp/kong.yml
 
-rm -f /kong/kong.yml.tmp
+rm -f /tmp/kong.yml.tmp
+
+# 设置 Kong 使用生成的配置文件
+export KONG_DECLARATIVE_CONFIG=/tmp/kong.yml
 
 # 启动 Kong
 exec /docker-entrypoint.sh kong docker-start

@@ -101,8 +101,8 @@ class AiUniquenessValidationProperties {
 
         AiGeneratedData data = AiGeneratedData.builder()
                 .formDefinitions(List.of(
-                        Map.of("formName", formName, "formType", "MAIN"),
-                        Map.of("formName", formName, "formType", "SUB")
+                        Map.of("formName", formName, "formType", "PROCESS"),
+                        Map.of("formName", formName, "formType", "TASK")
                 ))
                 .build();
 
@@ -128,8 +128,8 @@ class AiUniquenessValidationProperties {
 
         AiGeneratedData data = AiGeneratedData.builder()
                 .formDefinitions(List.of(
-                        Map.of("formName", name1, "formType", "MAIN"),
-                        Map.of("formName", name2, "formType", "SUB")
+                        Map.of("formName", name1, "formType", "PROCESS"),
+                        Map.of("formName", name2, "formType", "TASK")
                 ))
                 .build();
 

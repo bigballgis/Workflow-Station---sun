@@ -83,4 +83,12 @@ public interface AiGenerationComponent {
      * 更新会话当前阶段
      */
     void updateSessionPhase(String sessionId, com.developer.enums.AiPhase phase);
+
+    /**
+     * 撤销上次应用操作
+     * 从内存快照缓存恢复数据，30 秒 TTL 过期后不可撤销
+     *
+     * @param functionUnitId 功能单元 ID
+     */
+    void undoLastApply(Long functionUnitId);
 }

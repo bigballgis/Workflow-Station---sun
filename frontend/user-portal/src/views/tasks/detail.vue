@@ -90,6 +90,31 @@
         </div>
       </div>
 
+      <!-- Task 17.1 / 17.4: 可折叠 Process Form 面板 -->
+      <div v-if="processFormData" class="section process-form-section">
+        <el-collapse v-model="processFormCollapse">
+          <el-collapse-item :title="isReturnToRequester ? t('process.processForm') : t('process.processFormReadonly')" name="processForm">
+            <div class="section-content">
+              <FormRenderer
+                v-if="processFormFields.length > 0 || processFormTabs.length > 0"
+                :fields="processFormFields"
+                :tabs="processFormTabs"
+                :model-value="processFormValues"
+                @update:model-value="val => processFormValues = { ...processFormValues, ...val }"
+                :label-width="formLabelWidth"
+                :readonly="!processFormEditable"
+              />
+              <el-empty v-else :description="t('task.noFormData')" />
+              <div v-if="processFormEditable" class="process-form-actions" style="margin-top: 16px; text-align: right;">
+                <el-button type="primary" @click="handleProcessFormSubmit" :loading="submitting">
+                  {{ t('common.submit') }}
+                </el-button>
+              </div>
+            </div>
+          </el-collapse-item>
+        </el-collapse>
+      </div>
+
       <!-- 第三部分：前置节点表单（只读，按顺序展示） -->
       <template v-for="prevForm in previousForms" :key="prevForm.formId">
         <div class="section form-section">
@@ -158,6 +183,33 @@
               />
             </div>
           </template>
+        </div>
+      </div>
+
+      <!-- Task 17.3: 已完成任务快照对比视图 -->
+      <div v-if="isCompletedTask && completedFormData?.snapshot" class="section snapshot-section">
+        <div class="section-header">
+          <el-icon><Document /></el-icon>
+          <span>{{ t('task.completedSnapshot') }}</span>
+        </div>
+        <div class="section-content">
+          <SnapshotDiffRenderer
+            :snapshot-values="completedFormData.snapshot.fieldValues || {}"
+            :live-values="completedFormData.liveValues || {}"
+            :fields="formFields.length > 0 ? formFields : (formTabs.flatMap(tab => tab.fields) || [])"
+            :show-live-values="completedFormData.showLiveValues ?? true"
+          />
+        </div>
+      </div>
+
+      <!-- Task 19.2: 变更历史面板 -->
+      <div v-if="taskInfo.processInstanceId" class="section change-history-section">
+        <div class="section-header">
+          <el-icon><Document /></el-icon>
+          <span>{{ t('changeHistory.title') }}</span>
+        </div>
+        <div class="section-content">
+          <ChangeHistoryPanel :process-instance-id="taskInfo.processInstanceId" />
         </div>
       </div>
 
@@ -344,6 +396,18 @@ import N8nActionDialog from '@/components/N8nActionDialog.vue'
 import type { ActionDefinition } from '@/components/N8nActionDialog.vue'
 import { applyAutoFill } from '@/utils/n8nAutoFillEngine'
 import dayjs from 'dayjs'
+import SnapshotDiffRenderer from '@/components/SnapshotDiffRenderer.vue'
+import ChangeHistoryPanel from '@/components/ChangeHistoryPanel.vue'
+import {
+  getProcessFormData,
+  submitProcessFormUpdate,
+  getTaskFormData as fetchTaskFormData,
+  submitTaskForm as apiSubmitTaskForm,
+  getCompletedTaskFormData,
+  type ProcessFormData,
+  type TaskFormData as TaskFormDataDTO,
+  type CompletedTaskFormData,
+} from '@/api/processForm'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -482,6 +546,24 @@ const n8nActionDialogVisible = ref(false)
 const n8nActionDefinition = ref<ActionDefinition>({ id: 0 })
 const n8nInitialData = ref<Record<string, any> | undefined>(undefined)
 
+// Task 17: Process Form / Task Form 分离状态
+const processFormData = ref<ProcessFormData | null>(null)
+const processFormCollapse = ref<string[]>([])  // empty = collapsed
+const processFormEditable = ref(false)
+const processFormFields = ref<FormField[]>([])
+const processFormTabs = ref<FormTab[]>([])
+const processFormValues = ref<Record<string, any>>({})
+
+// Task 17.2: Task Form 数据
+const taskFormDTO = ref<TaskFormDataDTO | null>(null)
+
+// Task 17.3: 已完成任务快照
+const completedFormData = ref<CompletedTaskFormData | null>(null)
+const isCompletedTask = ref(false)
+
+// Task 17.4: Return_To_Requester 状态
+const isReturnToRequester = ref(false)
+
 const loadTaskDetail = async () => {
   loading.value = true
   taskError.value = null
@@ -499,6 +581,9 @@ const loadTaskDetail = async () => {
       if (data.processDefinitionKey) {
         await loadFunctionUnitContent(data.processDefinitionKey)
       }
+
+      // Task 17: 加载 Process Form 和 Task Form 数据
+      await loadProcessAndTaskFormData(data)
     }
   } catch (error: any) {
     console.error('Failed to load task detail:', error)
@@ -744,6 +829,128 @@ const loadFunctionUnitContent = async (processKey: string) => {
     } else {
       processError.value = t('task.processLoadFailed')
     }
+  }
+}
+
+// Task 17: 加载 Process Form 和 Task Form 数据
+const loadProcessAndTaskFormData = async (taskData: any) => {
+  const processInstanceId = taskData.processInstanceId
+  const currentTaskId = taskData.id || taskId
+  const isCompleted = taskData.endTime != null || taskData.completed === true
+
+  // 17.1: 加载 Process Form 数据
+  if (processInstanceId) {
+    try {
+      const pfRes = await getProcessFormData(processInstanceId)
+      const pfData = (pfRes as any).data || pfRes
+      if (pfData) {
+        processFormData.value = pfData
+        processFormValues.value = pfData.fieldValues || {}
+
+        // 17.4: Return_To_Requester 状态检测
+        if (pfData.processState === 'Return_To_Requester' && pfData.editable) {
+          isReturnToRequester.value = true
+          processFormEditable.value = true
+          processFormCollapse.value = ['processForm'] // 自动展开
+        }
+
+        // 解析 Process Form 布局
+        if (pfData.configJson) {
+          parseProcessFormConfig(pfData.configJson)
+        }
+      }
+    } catch (e) {
+      console.warn('[detail] Failed to load process form data:', e)
+    }
+  }
+
+  // 17.2 / 17.3: 加载 Task Form 数据
+  if (currentTaskId) {
+    if (isCompleted) {
+      // 17.3: 已完成任务 — 加载快照
+      isCompletedTask.value = true
+      try {
+        const ctRes = await getCompletedTaskFormData(currentTaskId)
+        const ctData = (ctRes as any).data || ctRes
+        if (ctData) {
+          completedFormData.value = ctData
+        }
+      } catch (e) {
+        console.warn('[detail] Failed to load completed task form data:', e)
+      }
+    } else {
+      // 17.2: 活跃任务 — 加载 Task Form
+      try {
+        const tfRes = await fetchTaskFormData(currentTaskId)
+        const tfData = (tfRes as any).data || tfRes
+        if (tfData) {
+          taskFormDTO.value = tfData
+          // 如果有 Task Form 配置，用 fieldPermissions 控制字段可编辑性
+          if (tfData.configJson && tfData.fieldPermissions) {
+            // Task Form 的字段值来自流程变量
+            if (tfData.fieldValues) {
+              formData.value = { ...formData.value, ...tfData.fieldValues }
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('[detail] Failed to load task form data:', e)
+      }
+    }
+  }
+}
+
+// 解析 Process Form 配置为 FormRenderer 字段
+const parseProcessFormConfig = (configJson: Record<string, unknown>) => {
+  try {
+    const config = configJson
+    const rules = (config as any).rule && Array.isArray((config as any).rule)
+      ? (config as any).rule
+      : (Array.isArray(config) ? config : null)
+    if (!rules) return
+
+    const tabsRule = rules.find((r: any) => r.type === 'el-tabs')
+    if (tabsRule?.children && Array.isArray(tabsRule.children)) {
+      const tabs: FormTab[] = []
+      for (const tabPane of tabsRule.children) {
+        if (tabPane.type === 'el-tab-pane' && tabPane.props) {
+          const tabFields: FormField[] = []
+          if (tabPane.children) tabFields.push(...extractFieldsRecursive(tabPane.children))
+          tabs.push({
+            name: tabPane.props.name || `tab_${tabs.length}`,
+            label: tabPane.props.label || `Tab ${tabs.length + 1}`,
+            fields: tabFields,
+          })
+        }
+      }
+      processFormTabs.value = tabs
+      processFormFields.value = []
+    } else {
+      processFormTabs.value = []
+      processFormFields.value = extractFieldsRecursive(rules)
+    }
+  } catch (e) {
+    console.error('[detail] Failed to parse process form config:', e)
+  }
+}
+
+// Task 17.4: 提交 Process Form 更新（Return_To_Requester 状态）
+const handleProcessFormSubmit = async () => {
+  if (!taskInfo.value.processInstanceId) return
+  submitting.value = true
+  try {
+    await submitProcessFormUpdate(taskInfo.value.processInstanceId, processFormValues.value)
+    ElMessage.success(t('task.operationSuccess'))
+    // 刷新页面数据
+    await loadTaskDetail()
+  } catch (e: any) {
+    if (e.response?.status === 403) {
+      ElMessage.warning(t('process.notInReturnState'))
+    } else {
+      ElMessage.error(t('task.operationFailed'))
+    }
+  } finally {
+    submitting.value = false
   }
 }
 
@@ -1855,6 +2062,25 @@ onMounted(() => {
 
     .sub-table-section {
       margin-top: 16px;
+    }
+  }
+
+  .process-form-section {
+    :deep(.el-collapse-item__header) {
+      font-size: 16px;
+      font-weight: 500;
+      padding: 0 20px;
+      background: #fafafa;
+    }
+    :deep(.el-collapse-item__content) {
+      padding: 20px;
+    }
+  }
+
+  .snapshot-section,
+  .change-history-section {
+    .section-content {
+      padding: 20px;
     }
   }
   

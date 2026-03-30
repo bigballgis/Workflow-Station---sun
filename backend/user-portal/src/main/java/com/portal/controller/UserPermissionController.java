@@ -23,37 +23,36 @@ import java.util.*;
 @RequiredArgsConstructor
 @Tag(name = "User Permissions", description = "User permission view and role status")
 public class UserPermissionController {
-    
+
     private final RestTemplate restTemplate;
-    
+
     @Value("${admin-center.url:http://localhost:8090}")
     private String adminCenterUrl;
-    
+
     @GetMapping
-    @Operation(summary = "Get my permissions", 
+    @Operation(summary = "Get my permissions",
                description = "Get current user's complete permission view including roles and business units")
     public ApiResponse<Map<String, Object>> getMyPermissions(
             @RequestHeader("X-User-Id") String userId) {
         log.info("Getting permissions for user: {}", userId);
-        
+
         try {
             // Get user's roles
             List<Map<String, Object>> roles = getUserRoles(userId);
-            
+
             // Get user's virtual groups
             List<Map<String, Object>> virtualGroups = getUserVirtualGroups(userId);
-            
+
             // Get user's business units
             List<Map<String, Object>> businessUnits = getUserBusinessUnits(userId);
-            
+
             // Separate roles by type
             List<Map<String, Object>> buBoundedRoles = new ArrayList<>();
             List<Map<String, Object>> buUnboundedRoles = new ArrayList<>();
-            
+
             for (Map<String, Object> role : roles) {
                 String type = (String) role.get("type");
                 if ("BU_BOUNDED".equals(type)) {
-                    // For BU-Bounded roles, include activated business units
                     Map<String, Object> roleWithBu = new HashMap<>();
                     roleWithBu.put("role", role);
                     roleWithBu.put("activatedBusinessUnits", businessUnits);
@@ -62,15 +61,15 @@ public class UserPermissionController {
                     buUnboundedRoles.add(role);
                 }
             }
-            
+
             Map<String, Object> result = new HashMap<>();
             result.put("buBoundedRoles", buBoundedRoles);
             result.put("buUnboundedRoles", buUnboundedRoles);
             result.put("businessUnits", businessUnits);
             result.put("virtualGroups", virtualGroups);
-            
+
             return ApiResponse.success(result);
-            
+
         } catch (Exception e) {
             log.error("Failed to get permissions for user {}: {}", userId, e.getMessage());
             return ApiResponse.success(Map.of(
@@ -81,63 +80,38 @@ public class UserPermissionController {
             ));
         }
     }
-    
+
     @GetMapping("/unactivated-roles")
     @Operation(summary = "Get unactivated BU-Bounded roles")
     public ApiResponse<List<Map<String, Object>>> getUnactivatedRoles(
             @RequestHeader("X-User-Id") String userId) {
         log.info("Getting unactivated roles for user: {}", userId);
-        
-        try {
-            // Get user's roles
-            List<Map<String, Object>> roles = getUserRoles(userId);
-            
-            // Get user's business units
-            List<Map<String, Object>> businessUnits = getUserBusinessUnits(userId);
-            
-            // If user has no business units, all BU-Bounded roles are unactivated
-            List<Map<String, Object>> unactivatedRoles = new ArrayList<>();
-            if (businessUnits.isEmpty()) {
-                for (Map<String, Object> role : roles) {
-                    if ("BU_BOUNDED".equals(role.get("type"))) {
-                        unactivatedRoles.add(role);
-                    }
-                }
-            }
-            
-            return ApiResponse.success(unactivatedRoles);
-            
-        } catch (Exception e) {
-            log.error("Failed to get unactivated roles for user {}: {}", userId, e.getMessage());
-            return ApiResponse.success(List.of());
-        }
+        return ApiResponse.success(fetchUnactivatedRoles(userId));
     }
-    
+
     @GetMapping("/should-show-reminder")
     @Operation(summary = "Check if should show reminder")
     public ApiResponse<Map<String, Object>> shouldShowReminder(
             @RequestHeader("X-User-Id") String userId) {
         log.info("Checking reminder status for user: {}", userId);
-        
+
         try {
-            // Get unactivated roles
             List<Map<String, Object>> unactivatedRoles = fetchUnactivatedRoles(userId);
-            
-            if (unactivatedRoles == null || unactivatedRoles.isEmpty()) {
+
+            if (unactivatedRoles.isEmpty()) {
                 return ApiResponse.success(Map.of(
                     "shouldShow", false,
                     "unactivatedRoles", List.of()
                 ));
             }
-            
-            // Check user preference
+
             boolean dontRemind = getDontRemindPreference(userId);
-            
+
             return ApiResponse.success(Map.of(
                 "shouldShow", !dontRemind,
                 "unactivatedRoles", unactivatedRoles
             ));
-            
+
         } catch (Exception e) {
             log.error("Failed to check reminder status for user {}: {}", userId, e.getMessage());
             return ApiResponse.success(Map.of(
@@ -146,32 +120,32 @@ public class UserPermissionController {
             ));
         }
     }
-    
+
     @PostMapping("/dont-remind")
     @Operation(summary = "Set don't remind preference")
     public ApiResponse<Map<String, Object>> setDontRemind(
             @RequestHeader("X-User-Id") String userId) {
         log.info("Setting don't remind preference for user: {}", userId);
-        
+
         try {
             String url = adminCenterUrl + "/api/v1/admin/users/" + userId + "/preferences";
-            
+
             Map<String, Object> requestBody = new HashMap<>();
             requestBody.put("key", "dont_remind_bu_application");
             requestBody.put("value", "true");
-            
+
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
-            
-            restTemplate.exchange(url, HttpMethod.POST, entity, 
+
+            restTemplate.exchange(url, HttpMethod.POST, entity,
                 new ParameterizedTypeReference<Map<String, Object>>() {});
-            
+
             return ApiResponse.success(Map.of(
                 "success", true,
                 "message", "Preference saved successfully"
             ));
-            
+
         } catch (Exception e) {
             log.error("Failed to set preference for user {}: {}", userId, e.getMessage());
             return ApiResponse.success(Map.of(
@@ -180,19 +154,17 @@ public class UserPermissionController {
             ));
         }
     }
-    
+
     @GetMapping("/roles/{roleId}/status")
     @Operation(summary = "Get role status")
     public ApiResponse<Map<String, Object>> getRoleStatus(
             @PathVariable String roleId,
             @RequestHeader("X-User-Id") String userId) {
         log.info("Getting role {} status for user: {}", roleId, userId);
-        
+
         try {
-            // Get user's roles
             List<Map<String, Object>> roles = getUserRoles(userId);
-            
-            // Find the specific role
+
             Map<String, Object> targetRole = null;
             for (Map<String, Object> role : roles) {
                 if (roleId.equals(role.get("id"))) {
@@ -200,7 +172,7 @@ public class UserPermissionController {
                     break;
                 }
             }
-            
+
             if (targetRole == null) {
                 return ApiResponse.success(Map.of(
                     "roleId", roleId,
@@ -210,17 +182,17 @@ public class UserPermissionController {
                     "activatedInBusinessUnits", List.of()
                 ));
             }
-            
+
             String roleType = (String) targetRole.get("type");
             boolean isActive = !"BU_BOUNDED".equals(roleType);
             List<Map<String, Object>> activatedBus = List.of();
-            
+
             if ("BU_BOUNDED".equals(roleType)) {
                 List<Map<String, Object>> businessUnits = getUserBusinessUnits(userId);
                 isActive = !businessUnits.isEmpty();
                 activatedBus = businessUnits;
             }
-            
+
             return ApiResponse.success(Map.of(
                 "roleId", roleId,
                 "roleName", targetRole.get("name"),
@@ -228,7 +200,7 @@ public class UserPermissionController {
                 "isActive", isActive,
                 "activatedInBusinessUnits", activatedBus
             ));
-            
+
         } catch (Exception e) {
             log.error("Failed to get role status for user {}: {}", userId, e.getMessage());
             return ApiResponse.success(Map.of(
@@ -240,25 +212,28 @@ public class UserPermissionController {
             ));
         }
     }
-    
-
-    // Internal helper for fetching unactivated roles
-    private List<Map<String, Object>> fetchUnactivatedRoles(String userId) {
-        List<Map<String, Object>> roles = getUserRoles(userId);
-        List<Map<String, Object>> businessUnits = getUserBusinessUnits(userId);
-        List<Map<String, Object>> unactivatedRoles = new ArrayList<>();
-        if (businessUnits.isEmpty()) {
-            for (Map<String, Object> role : roles) {
-                if ("BU_BOUNDED".equals(role.get("type"))) {
-                    unactivatedRoles.add(role);
-                }
-            }
-        }
-        return unactivatedRoles;
-    }
 
     // Helper methods
-    
+
+    private List<Map<String, Object>> fetchUnactivatedRoles(String userId) {
+        try {
+            List<Map<String, Object>> roles = getUserRoles(userId);
+            List<Map<String, Object>> businessUnits = getUserBusinessUnits(userId);
+            List<Map<String, Object>> unactivatedRoles = new ArrayList<>();
+            if (businessUnits.isEmpty()) {
+                for (Map<String, Object> role : roles) {
+                    if ("BU_BOUNDED".equals(role.get("type"))) {
+                        unactivatedRoles.add(role);
+                    }
+                }
+            }
+            return unactivatedRoles;
+        } catch (Exception e) {
+            log.error("Failed to get unactivated roles for user {}: {}", userId, e.getMessage());
+            return List.of();
+        }
+    }
+
     private List<Map<String, Object>> getUserRoles(String userId) {
         try {
             String url = adminCenterUrl + "/api/v1/admin/users/" + userId + "/roles";
@@ -272,7 +247,7 @@ public class UserPermissionController {
             return Collections.emptyList();
         }
     }
-    
+
     private List<Map<String, Object>> getUserVirtualGroups(String userId) {
         try {
             String url = adminCenterUrl + "/api/v1/admin/users/" + userId + "/virtual-groups";
@@ -286,7 +261,7 @@ public class UserPermissionController {
             return Collections.emptyList();
         }
     }
-    
+
     private List<Map<String, Object>> getUserBusinessUnits(String userId) {
         try {
             String url = adminCenterUrl + "/api/v1/admin/users/" + userId + "/business-units";
@@ -300,7 +275,7 @@ public class UserPermissionController {
             return Collections.emptyList();
         }
     }
-    
+
     private boolean getDontRemindPreference(String userId) {
         try {
             String url = adminCenterUrl + "/api/v1/admin/users/" + userId + "/preferences/dont_remind_bu_application";
@@ -314,10 +289,7 @@ public class UserPermissionController {
             }
             return false;
         } catch (Exception e) {
-            // Preference not found, return false
             return false;
         }
     }
 }
-
-

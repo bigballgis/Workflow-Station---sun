@@ -147,6 +147,17 @@
         </div>
       </div>
 
+      <!-- Task 19.2: 变更历史面板 -->
+      <div class="section change-history-section">
+        <div class="section-header">
+          <el-icon><Document /></el-icon>
+          <span>{{ t('changeHistory.title') }}</span>
+        </div>
+        <div class="section-content">
+          <ChangeHistoryPanel :process-instance-id="processId" />
+        </div>
+      </div>
+
       <!-- 第四部分：流转记录 -->
       <div class="section history-section">
         <div class="section-header">
@@ -193,6 +204,7 @@ import ProcessDiagram, { type ProcessNode, type ProcessFlow } from '@/components
 import ProcessHistory, { type HistoryRecord } from '@/components/ProcessHistory.vue'
 import FormRenderer, { type FormField, type FormTab } from '@/components/FormRenderer.vue'
 import SubTableField from '@/components/SubTableField.vue'
+import ChangeHistoryPanel from '@/components/ChangeHistoryPanel.vue'
 import { formatDate } from '@/utils/dateFormat'
 
 const route = useRoute()
@@ -1323,6 +1335,7 @@ onMounted(() => { loadProcessDetail() })
   .workflow-section .section-content { min-height: 300px; }
   .form-section .form-container { width: 100%; }
   .form-section .sub-table-section { margin-top: 16px; }
+  .change-history-section .section-content { padding: 20px; }
   .history-section .section-content { min-height: 100px; }
   .action-section { position: sticky; bottom: 0; z-index: 10;
     .action-buttons { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; .left-actions, .right-actions { display: flex; gap: 12px; } }

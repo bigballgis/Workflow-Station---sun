@@ -416,7 +416,21 @@ export default {
     getDeletePreviewFailed: 'Failed to get delete preview',
     deleteSuccess: 'Deleted successfully',
     deleteFailed: 'Delete failed',
-    versionCount: '{name} has {count} versions'
+    versionCount: '{name} has {count} versions',
+    searchKeyword: 'Search',
+    searchPlaceholder: 'Search by name, code or description',
+    batchEnable: 'Batch Enable',
+    batchDisable: 'Batch Disable',
+    batchDelete: 'Batch Delete',
+    batchDeleteConfirm: 'Are you sure to delete the following {count} function unit(s)?',
+    batchDisableConfirm: 'Are you sure to batch disable the selected function units?',
+    selected: '{count} selected',
+    selectedCount: '{count} selected',
+    importSuccess: 'Import successful',
+    importFailed: 'Import failed',
+    deployProgress: 'Deploy Progress',
+    viewLogs: 'View Logs',
+    compareVersions: 'Compare Versions'
   },
   dictionary: {
     title: 'Data Dictionary',
@@ -630,5 +644,11 @@ export default {
     serviceUnavailable: 'Service temporarily unavailable, please try again later',
     serviceMaintenance: 'Service under maintenance, please try again later',
     configError: 'Request configuration error'
+  },
+  deployment: {
+    viewLog: 'View Log'
+  },
+  version: {
+    compare: 'Compare'
   }
 }

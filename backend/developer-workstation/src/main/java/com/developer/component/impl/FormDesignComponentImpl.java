@@ -11,6 +11,7 @@ import com.developer.entity.FunctionUnit;
 import com.developer.entity.TableDefinition;
 import com.developer.enums.BindingMode;
 import com.developer.enums.BindingType;
+import com.developer.enums.FormType;
 import com.developer.exception.BusinessException;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.FormDefinitionRepository;
@@ -25,8 +26,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * 表单设计组件实现
@@ -305,5 +306,69 @@ public class FormDesignComponentImpl implements FormDesignComponent {
                     i18nService.getMessage("form.foreign_key_not_found", foreignKeyField),
                     i18nService.getMessage("form.check_field_name"));
         }
+    }
+    
+    // ========== Process/Task Form 扩展方法实现 ==========
+    
+    @Override
+    @Transactional(readOnly = true)
+    public void validateProcessFormUniqueness(Long functionUnitId) {
+        long processFormCount = formDefinitionRepository.countByFunctionUnitIdAndFormType(functionUnitId, FormType.PROCESS);
+        if (processFormCount > 0) {
+            throw new BusinessException("PROCESS_FORM_ALREADY_EXISTS",
+                    i18nService.getMessage("form.process_form_already_exists"),
+                    i18nService.getMessage("form.only_one_process_form"));
+        }
+    }
+    
+    @Override
+    @Transactional(readOnly = true)
+    public void validateFieldNames(Long functionUnitId, List<String> fieldNames) {
+        List<String> dataTableColumns = getDataTableColumns(functionUnitId);
+        Set<String> columnSet = new HashSet<>(dataTableColumns);
+        
+        List<String> invalidFields = fieldNames.stream()
+                .filter(name -> !columnSet.contains(name))
+                .toList();
+        
+        if (!invalidFields.isEmpty()) {
+            throw new BusinessException("INVALID_FIELD_NAME",
+                    i18nService.getMessage("form.invalid_field_names", String.join(", ", invalidFields)),
+                    i18nService.getMessage("form.field_must_reference_data_table"));
+        }
+    }
+    
+    @Override
+    @Transactional
+    public FormDefinition copyTaskForm(Long sourceFormId) {
+        FormDefinition source = getById(sourceFormId);
+        
+        // Deep copy configJson
+        Map<String, Object> copiedConfig = new HashMap<>(source.getConfigJson());
+        
+        FormDefinition copy = FormDefinition.builder()
+                .functionUnit(source.getFunctionUnit())
+                .formName(source.getFormName() + "_copy")
+                .formType(source.getFormType())
+                .configJson(copiedConfig)
+                .description(source.getDescription())
+                .boundTable(source.getBoundTable())
+                .fieldPermissions(source.getFieldPermissions() != null ? new HashMap<>(source.getFieldPermissions()) : new HashMap<>())
+                .showLiveValues(source.getShowLiveValues())
+                .stageBindings(new ArrayList<>())  // Clear stage bindings
+                .build();
+        
+        return formDefinitionRepository.save(copy);
+    }
+    
+    @Override
+    @Transactional(readOnly = true)
+    public List<String> getDataTableColumns(Long functionUnitId) {
+        List<TableDefinition> tables = tableDefinitionRepository.findByFunctionUnitIdWithFields(functionUnitId);
+        return tables.stream()
+                .flatMap(table -> table.getFieldDefinitions().stream())
+                .map(FieldDefinition::getFieldName)
+                .distinct()
+                .collect(Collectors.toList());
     }
 }

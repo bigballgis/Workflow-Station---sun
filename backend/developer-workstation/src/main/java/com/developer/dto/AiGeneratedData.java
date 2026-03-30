@@ -25,6 +25,8 @@ public class AiGeneratedData {
 
     private List<Map<String, Object>> decisionDefinitions;
 
+    private List<Map<String, Object>> tableRelations;
+
     private Map<String, Object> processDefinition;
 
     private Map<String, Object> icon;
@@ -32,4 +34,6 @@ public class AiGeneratedData {
     private String name;
 
     private String description;
+
+    private Map<String, String> explanations;
 }

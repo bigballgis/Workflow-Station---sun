@@ -9,7 +9,22 @@
     
     <el-tabs v-model="activeTab">
       <el-tab-pane :label="t('functionUnit.list')" name="list">
-        <el-table :data="functionUnits" stripe v-loading="loading">
+        <div style="margin-bottom: 16px; display: flex; align-items: center; gap: 12px;">
+          <el-input
+            v-model="searchKeyword"
+            :placeholder="t('functionUnit.searchPlaceholder')"
+            clearable
+            style="width: 300px;"
+          />
+          <template v-if="selectedUnits.length > 0">
+            <span style="color: #909399; font-size: 13px;">{{ t('functionUnit.selected', { count: selectedUnits.length }) }}</span>
+            <el-button type="success" size="small" @click="handleBatchEnable">{{ t('functionUnit.batchEnable') }}</el-button>
+            <el-button type="warning" size="small" @click="handleBatchDisable">{{ t('functionUnit.batchDisable') }}</el-button>
+            <el-button type="danger" size="small" @click="handleBatchDelete">{{ t('functionUnit.batchDelete') }}</el-button>
+          </template>
+        </div>
+        <el-table :data="filteredFunctionUnits" stripe v-loading="loading" @selection-change="handleSelectionChange">
+          <el-table-column type="selection" width="50" />
           <el-table-column prop="name" :label="t('common.name')" />
           <el-table-column prop="code" :label="t('common.code')" />
           <el-table-column prop="version" :label="t('functionUnit.version')" />
@@ -55,12 +70,17 @@
           </el-table-column>
           <el-table-column prop="deployedAt" :label="t('functionUnit.deployedAt')" />
           <el-table-column prop="deployedBy" :label="t('functionUnit.deployedBy')" />
+          <el-table-column :label="t('common.actions')" width="120" fixed="right">
+            <template #default="{ row }">
+              <el-button link type="primary" @click="handleViewLog(row)">{{ t('deployment.viewLog') }}</el-button>
+            </template>
+          </el-table-column>
         </el-table>
       </el-tab-pane>
     </el-tabs>
     
     <el-dialog v-model="showImportDialog" :title="t('functionUnit.importPackage')" width="500px">
-      <el-upload drag :auto-upload="false" accept=".zip" :limit="1">
+      <el-upload drag :auto-upload="false" accept=".zip" :limit="1" ref="importUploadRef" :on-change="handleImportFileChange">
         <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
         <div class="el-upload__text">{{ t('functionUnit.dragPackageHere') }}<em>{{ t('functionUnit.clickToUpload') }}</em></div>
         <template #tip>
@@ -69,7 +89,7 @@
       </el-upload>
       <template #footer>
         <el-button @click="showImportDialog = false">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary">{{ t('functionUnit.startImport') }}</el-button>
+        <el-button type="primary" :loading="importLoading" :disabled="!importFile" @click="handleStartImport">{{ t('functionUnit.startImport') }}</el-button>
       </template>
     </el-dialog>
     
@@ -154,10 +174,15 @@
         </el-table-column>
         <el-table-column :label="t('common.enable')" width="80">
           <template #default="{ row }">
-            <el-tag :type="row.enabled ? 'success' : 'info'" size="small">{{ row.enabled ? 'Yes' : 'No' }}</el-tag>
+            <el-tag :type="row.enabled ? 'success' : 'info'" size="small">{{ row.enabled ? t('common.yes') : t('common.no') }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="updatedAt" :label="t('common.updateTime')" />
+        <el-table-column :label="t('common.actions')" width="100">
+          <template #default="{ row }">
+            <el-button link type="primary" @click="handleCompareVersion(row)">{{ t('version.compare') }}</el-button>
+          </template>
+        </el-table-column>
       </el-table>
       <template #footer>
         <el-button @click="showVersionsDialogVisible = false">{{ t('common.close') }}</el-button>
@@ -171,11 +196,46 @@
       :preview="deletePreview"
       @confirm="handleDeleteConfirm"
     />
+
+    <!-- Deployment Log Dialog -->
+    <el-dialog v-model="showLogDialogVisible" :title="t('deployment.viewLog')" width="600px">
+      <div v-if="logDeployment">
+        <el-descriptions :column="1" border>
+          <el-descriptions-item :label="t('menu.functionUnit')">{{ logDeployment.functionUnitName }}</el-descriptions-item>
+          <el-descriptions-item :label="t('functionUnit.environment')">{{ logDeployment.environment }}</el-descriptions-item>
+          <el-descriptions-item :label="t('common.status')">
+            <el-tag :type="deployStatusType(logDeployment.status)">{{ logDeployment.status }}</el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item :label="t('functionUnit.deployedAt')">{{ logDeployment.deployedAt || logDeployment.createdAt }}</el-descriptions-item>
+          <el-descriptions-item :label="t('functionUnit.deployedBy')">{{ logDeployment.deployedBy }}</el-descriptions-item>
+        </el-descriptions>
+      </div>
+      <template #footer>
+        <el-button @click="showLogDialogVisible = false">{{ t('common.close') }}</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- Version Compare Dialog -->
+    <el-dialog v-model="showCompareDialogVisible" :title="t('version.compare')" width="700px">
+      <div v-if="compareVersion">
+        <el-descriptions :column="2" border>
+          <el-descriptions-item :label="t('functionUnit.version')">{{ compareVersion.version }}</el-descriptions-item>
+          <el-descriptions-item :label="t('common.status')">
+            <el-tag :type="statusType(compareVersion.status)">{{ getStatusText(compareVersion.status) }}</el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item :label="t('common.updateTime')">{{ compareVersion.updatedAt }}</el-descriptions-item>
+          <el-descriptions-item :label="t('common.enable')">{{ compareVersion.enabled ? t('common.yes') : t('common.no') }}</el-descriptions-item>
+        </el-descriptions>
+      </div>
+      <template #footer>
+        <el-button @click="showCompareDialogVisible = false">{{ t('common.close') }}</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
@@ -186,6 +246,12 @@ import DeleteConfirmDialog from './components/DeleteConfirmDialog.vue'
 const { t } = useI18n()
 
 const activeTab = ref('list')
+
+watch(activeTab, (tab) => {
+  if (tab === 'deployments') {
+    fetchDeployments()
+  }
+})
 const showImportDialog = ref(false)
 const showDeployDialogVisible = ref(false)
 const showAccessDialogVisible = ref(false)
@@ -201,8 +267,32 @@ const deploymentsLoading = ref(false)
 const accessLoading = ref(false)
 const addAccessLoading = ref(false)
 const versionsLoading = ref(false)
+const importLoading = ref(false)
+const importFile = ref<File | null>(null)
+const importUploadRef = ref<any>(null)
+
+// Batch operation state
+const selectedUnits = ref<FunctionUnit[]>([])
+
+// Deployment log dialog
+const showLogDialogVisible = ref(false)
+const logDeployment = ref<Deployment | null>(null)
+
+// Version compare dialog
+const showCompareDialogVisible = ref(false)
+const compareVersion = ref<FunctionUnit | null>(null)
 
 const functionUnits = ref<FunctionUnit[]>([])
+const searchKeyword = ref('')
+const filteredFunctionUnits = computed(() => {
+  const keyword = searchKeyword.value.trim().toLowerCase()
+  if (!keyword) return functionUnits.value
+  return functionUnits.value.filter(unit =>
+    (unit.name?.toLowerCase().includes(keyword)) ||
+    (unit.code?.toLowerCase().includes(keyword)) ||
+    (unit.description?.toLowerCase().includes(keyword))
+  )
+})
 const deployments = ref<Deployment[]>([])
 const accessConfigs = ref<FunctionUnitAccess[]>([])
 const businessRoles = ref<Role[]>([])
@@ -280,10 +370,10 @@ const fetchFunctionUnits = async () => {
 }
 
 const fetchDeployments = async () => {
-  if (!currentUnit.value) return
   deploymentsLoading.value = true
   try {
-    deployments.value = await functionUnitApi.getDeploymentHistory(currentUnit.value.id)
+    const result = await functionUnitApi.getAllDeployments(0, 20)
+    deployments.value = result.content
   } catch (e) {
     console.error('Failed to load deployments:', e)
   } finally {
@@ -472,6 +562,100 @@ const handleDeleteConfirm = async () => {
   } catch (e: any) {
     console.error('Failed to delete:', e)
     ElMessage.error(e.response?.data?.message || t('functionUnit.deleteFailed'))
+  }
+}
+
+// ==================== Batch Operations (Req 20) ====================
+
+const handleSelectionChange = (selection: FunctionUnit[]) => {
+  selectedUnits.value = selection
+}
+
+const handleBatchEnable = async () => {
+  const ids = selectedUnits.value.map(u => u.id)
+  try {
+    await functionUnitApi.batchSetEnabled(ids, true)
+    ElMessage.success(t('functionUnit.enabledSuccess'))
+    fetchFunctionUnits()
+  } catch {
+    ElMessage.error(t('common.failed'))
+  }
+}
+
+const handleBatchDisable = async () => {
+  const ids = selectedUnits.value.map(u => u.id)
+  try {
+    await ElMessageBox.confirm(t('functionUnit.batchDisableConfirm'), t('common.confirm'), { type: 'warning' })
+    await functionUnitApi.batchSetEnabled(ids, false)
+    ElMessage.success(t('functionUnit.disabledSuccess'))
+    fetchFunctionUnits()
+  } catch (e) {
+    if ((e as string) !== 'cancel') ElMessage.error(t('common.failed'))
+  }
+}
+
+const handleBatchDelete = async () => {
+  const ids = selectedUnits.value.map(u => u.id)
+  try {
+    await ElMessageBox.confirm(t('functionUnit.batchDeleteConfirm', { count: ids.length }), t('common.confirm'), { type: 'warning' })
+    await functionUnitApi.batchDelete(ids)
+    ElMessage.success(t('functionUnit.deleteSuccess'))
+    fetchFunctionUnits()
+  } catch (e) {
+    if ((e as string) !== 'cancel') ElMessage.error(t('common.failed'))
+  }
+}
+
+// ==================== Deployment Log (Req 22) ====================
+
+const handleViewLog = async (deployment: Deployment) => {
+  try {
+    const detail = await functionUnitApi.getDeployment(deployment.id)
+    logDeployment.value = detail
+    showLogDialogVisible.value = true
+  } catch {
+    ElMessage.error(t('common.failed'))
+  }
+}
+
+// ==================== Version Compare (Req 23) ====================
+
+const handleCompareVersion = (version: FunctionUnit) => {
+  compareVersion.value = version
+  showCompareDialogVisible.value = true
+}
+
+// ==================== Import (Req 38) ====================
+
+const handleImportFileChange = (file: any) => {
+  importFile.value = file?.raw || null
+}
+
+const handleStartImport = async () => {
+  if (!importFile.value) return
+  importLoading.value = true
+  try {
+    const reader = new FileReader()
+    reader.onload = async () => {
+      const base64 = (reader.result as string).split(',')[1]
+      const result = await functionUnitApi.import({
+        fileName: importFile.value!.name,
+        fileContent: base64
+      })
+      if (result.success) {
+        ElMessage.success(t('functionUnit.importSuccess'))
+        showImportDialog.value = false
+        importFile.value = null
+        fetchFunctionUnits()
+      } else {
+        ElMessage.error(result.message || t('functionUnit.importFailed'))
+      }
+      importLoading.value = false
+    }
+    reader.readAsDataURL(importFile.value)
+  } catch {
+    ElMessage.error(t('functionUnit.importFailed'))
+    importLoading.value = false
   }
 }
 

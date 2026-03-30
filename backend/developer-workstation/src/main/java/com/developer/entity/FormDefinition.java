@@ -12,6 +12,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -63,6 +64,29 @@ public class FormDefinition {
     @OrderBy("sortOrder ASC")
     @Builder.Default
     private List<FormTableBinding> tableBindings = new ArrayList<>();
+
+    /**
+     * Task Form 字段权限配置
+     * key=fieldName, value=READONLY|EDITABLE
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "field_permissions", columnDefinition = "jsonb")
+    @Builder.Default
+    private Map<String, String> fieldPermissions = new HashMap<>();
+
+    /**
+     * 已完成任务是否显示实时值对比（默认 true）
+     */
+    @Column(name = "show_live_values", nullable = false)
+    @Builder.Default
+    private Boolean showLiveValues = true;
+
+    /**
+     * 阶段绑定列表（Task Form 绑定的 Stage）
+     */
+    @OneToMany(mappedBy = "form", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<FormStageBinding> stageBindings = new ArrayList<>();
     
     /**
      * 获取绑定表ID（用于JSON序列化，向后兼容）

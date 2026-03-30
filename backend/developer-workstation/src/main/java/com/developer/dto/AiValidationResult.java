@@ -23,8 +23,15 @@ public class AiValidationResult {
     @Builder.Default
     private List<AiValidationError> errors = new ArrayList<>();
 
+    @Builder.Default
+    private List<AiValidationError> warnings = new ArrayList<>();
+
     public void addError(String errorType, String fieldPath, String description) {
         this.valid = false;
         this.errors.add(new AiValidationError(errorType, fieldPath, description));
+    }
+
+    public void addWarning(String errorType, String fieldPath, String description) {
+        this.warnings.add(new AiValidationError(errorType, fieldPath, description));
     }
 }

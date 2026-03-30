@@ -3,8 +3,56 @@
     <!-- Top: Phase Indicator -->
     <PhaseIndicator :current-phase="phase" :completed-phases="completedPhases" />
 
+    <!-- Task 16.2: Multi-step generation progress indicator -->
+    <el-steps
+      v-if="isStreaming && generationStep > 0 && generationStep < 6"
+      :active="generationStep - 1"
+      finish-status="success"
+      simple
+      class="chat-dialog__progress"
+    >
+      <el-step :title="t('ai.progress.analyzing')" />
+      <el-step :title="t('ai.progress.designingTables')" />
+      <el-step :title="t('ai.progress.creatingForms')" />
+      <el-step :title="t('ai.progress.generatingProcess')" />
+      <el-step :title="t('ai.progress.validating')" />
+      <el-step :title="t('ai.progress.ready')" />
+    </el-steps>
+
     <!-- Middle: Message List -->
     <div class="chat-dialog__messages">
+      <!-- Template selection when no messages -->
+      <div v-if="messages.length === 0 && !isStreaming" class="chat-dialog__templates">
+        <p class="chat-dialog__templates-title">{{ t('ai.template.selectTitle') }}</p>
+        <el-row :gutter="12">
+          <el-col v-for="tpl in templates" :key="tpl.id" :span="12">
+            <el-card shadow="hover" class="chat-dialog__template-card" @click="applyTemplate(tpl)">
+              <template #header>
+                <div class="chat-dialog__template-header">
+                  <el-icon><component :is="tpl.icon" /></el-icon>
+                  <span>{{ t(tpl.nameKey) }}</span>
+                </div>
+              </template>
+              <p class="chat-dialog__template-desc">{{ t(tpl.descriptionKey) }}</p>
+            </el-card>
+          </el-col>
+        </el-row>
+      </div>
+
+      <!-- Task 16.4: Draft restoration alert -->
+      <el-alert v-if="hasDraft" type="info" :closable="false" class="chat-dialog__draft-alert">
+        {{ t('ai.draft.found') }}
+        <el-button size="small" type="primary" @click="restoreDraft">{{ t('ai.draft.restore') }}</el-button>
+        <el-button size="small" @click="dismissDraft">{{ t('ai.draft.dismiss') }}</el-button>
+      </el-alert>
+
+      <!-- Task 17.1: Generation draft restoration alert -->
+      <el-alert v-if="hasGenerationDraft" type="info" :closable="false" class="chat-dialog__draft-alert">
+        {{ t('ai.draft.found') }}
+        <el-button size="small" type="primary" @click="restoreGenerationDraft">{{ t('ai.draft.restore') }}</el-button>
+        <el-button size="small" @click="dismissGenerationDraft">{{ t('ai.draft.dismiss') }}</el-button>
+      </el-alert>
+
       <ChatMessage
         v-for="msg in messages"
         :key="msg.id"
@@ -31,9 +79,20 @@
         <GenerationPreview
           :preview-data="previewData"
           :generated-data="generatedData"
+          :is-generation-complete="isGenerationComplete"
+          :is-streaming="isStreaming"
+          :mode="props.mode"
+          :diff-result="diffResult"
           @apply="handleApply"
           @regenerate="handleRegenerate"
         />
+      </div>
+
+      <!-- Task 17.3: Undo button with countdown -->
+      <div v-if="showUndoButton" class="chat-dialog__undo">
+        <el-button type="warning" size="small" @click="handleUndo">
+          {{ t('ai.undo.button') }} ({{ undoCountdown }}s)
+        </el-button>
       </div>
 
       <!-- Validation Errors -->
@@ -54,10 +113,29 @@
         </el-alert>
       </div>
 
+      <!-- Validation Warnings -->
+      <div v-if="validationWarnings.length" class="chat-dialog__validation">
+        <el-alert
+          :title="t('ai.chat.validationWarnings')"
+          type="warning"
+          :closable="true"
+          show-icon
+          @close="validationWarnings = []"
+        >
+          <ul class="chat-dialog__error-list">
+            <li v-for="(warn, idx) in validationWarnings" :key="idx">
+              <span class="chat-dialog__error-type chat-dialog__error-type--warning">[{{ warn.errorType }}]</span>
+              <span class="chat-dialog__error-path">{{ warn.fieldPath }}</span>
+              {{ warn.description }}
+            </li>
+          </ul>
+        </el-alert>
+      </div>
+
       <!-- Error Alert with Retry -->
       <div v-if="error" class="chat-dialog__error">
         <el-alert
-          :title="error"
+          :title="errorMessage"
           type="warning"
           :closable="false"
           show-icon
@@ -66,6 +144,26 @@
             <el-button v-if="canRetry" size="small" type="primary" @click="handleRetry">
               {{ t('ai.chat.retry') }}
             </el-button>
+          </template>
+        </el-alert>
+      </div>
+
+      <!-- Task 16.4: N8N Degradation Panel -->
+      <div v-if="degradationInfo" class="chat-dialog__degradation">
+        <el-alert type="error" :closable="false" show-icon>
+          <template #title>{{ t('ai.degradation.title') }}</template>
+          <template #default>
+            <p v-if="degradationInfo.lastSuccessTime" class="chat-dialog__degradation-time">
+              {{ t('ai.degradation.lastSuccess', { time: formatRelativeTime(degradationInfo.lastSuccessTime) }) }}
+            </p>
+            <div class="chat-dialog__degradation-actions">
+              <el-button size="small" @click="saveDraftToLocalStorage">
+                {{ t('ai.degradation.saveDraft') }}
+              </el-button>
+              <el-button size="small" type="primary" @click="navigateToManualCreate">
+                {{ t('ai.degradation.manualCreate') }}
+              </el-button>
+            </div>
           </template>
         </el-alert>
       </div>
@@ -79,6 +177,19 @@
 
       <!-- Scroll anchor -->
       <div ref="scrollAnchorRef" />
+    </div>
+
+    <!-- Task 16.3: Regenerate scope selector (MODIFY mode only) -->
+    <div v-if="props.mode === 'MODIFY'" class="chat-dialog__scope">
+      <el-button text size="small" @click="showScopeSelector = !showScopeSelector">
+        {{ t('ai.chat.regenerateScope') }}
+        <el-icon><ArrowDown v-if="!showScopeSelector" /><ArrowUp v-else /></el-icon>
+      </el-button>
+      <el-checkbox-group v-if="showScopeSelector" v-model="selectedScopes" class="chat-dialog__scope-group">
+        <el-checkbox v-for="scope in SCOPE_OPTIONS" :key="scope" :value="scope" size="small">
+          {{ t(`ai.scope.${scopeKeyMap[scope]}`) }}
+        </el-checkbox>
+      </el-checkbox-group>
     </div>
 
     <!-- Bottom: Input Box + Send Button -->
@@ -108,12 +219,14 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount, provide } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Promotion } from '@element-plus/icons-vue'
+import { Promotion, Grid, Stamp, EditPen, DataAnalysis, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
 import PhaseIndicator from './PhaseIndicator.vue'
 import ChatMessage from './ChatMessage.vue'
 import GenerationPreview from './GenerationPreview.vue'
 import InlineDocumentViewer from './InlineDocumentViewer.vue'
 import { useAiChat } from '@/composables/useAiChat'
+import { loadDraft as loadGenerationDraft, clearDraft as clearGenerationDraft } from '@/composables/useAiChat'
+import { useAiTemplates } from '@/composables/useAiTemplates'
 import type {
   AiPhase,
   AiMode,
@@ -122,8 +235,13 @@ import type {
   GenerationPreviewData,
   AiValidationError,
   InlineDocument,
-  AiDocumentType
+  AiDocumentType,
+  DiffResult
 } from '@/types/aiGeneration'
+import { computeDiff } from '@/types/aiGeneration'
+import type { AiTemplate } from '@/composables/useAiTemplates'
+import { functionUnitApi } from '@/api/functionUnit'
+import { aiGenerationApi } from '@/api/aiGeneration'
 
 const props = withDefaults(defineProps<{
   functionUnitId: number
@@ -151,18 +269,28 @@ const {
   isStreaming,
   streamingContent,
   error,
+  errorCode,
   canRetry,
+  partialGeneratedData: _partialGeneratedData,
+  isGenerationComplete,
+  generationStep,
+  degradationInfo,
   sendMessage,
   retry,
   cancel: _cancel,
   onDocument,
   onPhaseComplete,
   onGeneratedData,
-  setMessages
+  onValidationWarning,
+  setMessages,
+  clearCurrentDraft
 } = useAiChat()
 
 // i18n
 const { t } = useI18n()
+
+// Templates
+const { templates } = useAiTemplates()
 
 // Local state
 const inputText = ref('')
@@ -171,10 +299,38 @@ const showPhaseCompleteBtn = ref(false)
 const generatedData = ref<AiGeneratedData | null>(null)
 const previewData = ref<GenerationPreviewData | null>(null)
 const validationErrors = ref<AiValidationError[]>([])
+const validationWarnings = ref<AiValidationError[]>([])
 
+// Task 17.2: Diff preview state
+const diffResult = ref<DiffResult | null>(null)
+const currentFunctionUnitData = ref<AiGeneratedData | null>(null)
+
+// Task 17.3: Undo state
+const showUndoButton = ref(false)
+const undoCountdown = ref(0)
+let undoTimer: ReturnType<typeof setInterval> | null = null
 // Inline documents state
 const inlineDocuments = ref<InlineDocument[]>([])
 let inlineDocIdCounter = 0
+
+// Task 16.3: Regenerate scope selection
+const SCOPE_OPTIONS = ['TABLES', 'FORMS', 'ACTIONS', 'DECISIONS', 'PROCESS', 'TABLE_RELATIONS'] as const
+const selectedScopes = ref<string[]>([...SCOPE_OPTIONS])
+const showScopeSelector = ref(false)
+
+const scopeKeyMap: Record<string, string> = {
+  TABLES: 'tables',
+  FORMS: 'forms',
+  ACTIONS: 'actions',
+  DECISIONS: 'decisions',
+  PROCESS: 'process',
+  TABLE_RELATIONS: 'tableRelations'
+}
+
+const regenerateScope = computed(() => {
+  if (selectedScopes.value.length === SCOPE_OPTIONS.length) return undefined // ALL
+  return selectedScopes.value.join(',')
+})
 
 // Messages container height for InlineDocumentViewer max-height
 const messagesHeight = ref(400)
@@ -192,6 +348,18 @@ const streamingMessage = computed<AiMessage>(() => ({
 
 const isSendDisabled = computed(() => isStreaming.value || !inputText.value.trim())
 
+// Compute i18n-aware error message based on errorCode
+const errorMessage = computed(() => {
+  if (!error.value) return ''
+  if (errorCode.value) {
+    const i18nKey = `ai.error.${errorCode.value}`
+    const translated = t(i18nKey)
+    // If translation key is not found, vue-i18n returns the key itself
+    if (translated !== i18nKey) return translated
+  }
+  return error.value
+})
+
 const inputPlaceholder = computed(() => {
   if (previewData.value) return t('ai.chat.inputFeedback')
   if (isStreaming.value) return t('ai.chat.aiReplying')
@@ -202,6 +370,12 @@ const inputPlaceholder = computed(() => {
 onMounted(() => {
   if (props.initialMessages.length) {
     setMessages([...props.initialMessages])
+  }
+  // Task 16.4: Check for saved draft on mount
+  checkForDraft()
+  // Task 17.2: Fetch current function unit data for diff in MODIFY mode
+  if (props.mode === 'MODIFY') {
+    fetchCurrentFunctionUnitData()
   }
   // Observe messages container height for InlineDocumentViewer
   const messagesEl = document.querySelector('.chat-dialog__messages')
@@ -218,7 +392,35 @@ onMounted(() => {
 onBeforeUnmount(() => {
   resizeObserver?.disconnect()
   resizeObserver = null
+  // Task 17.3: Clear undo timer
+  if (undoTimer) {
+    clearInterval(undoTimer)
+    undoTimer = null
+  }
 })
+
+/**
+ * Task 17.2: Fetch current function unit data for diff comparison in MODIFY mode.
+ */
+async function fetchCurrentFunctionUnitData() {
+  try {
+    const res = await functionUnitApi.getById(props.functionUnitId)
+    if (res.data) {
+      // Map the function unit response to AiGeneratedData-like structure for diff
+      const fu = res.data as Record<string, unknown>
+      currentFunctionUnitData.value = {
+        tableDefinitions: (fu.tableDefinitions || []) as any[],
+        formDefinitions: (fu.formDefinitions || []) as any[],
+        actionDefinitions: (fu.actionDefinitions || []) as any[],
+        decisionDefinitions: (fu.decisionDefinitions || []) as any[],
+        tableRelations: (fu.tableRelations || []) as any[],
+        processDefinition: fu.processDefinition as any
+      }
+    }
+  } catch {
+    // Silently ignore — diff is a nice-to-have feature
+  }
+}
 
 // Register event callbacks
 onPhaseComplete((phase: AiPhase) => {
@@ -241,6 +443,15 @@ onDocument((type: string, content: string) => {
 onGeneratedData((data: any) => {
   generatedData.value = data as AiGeneratedData
   previewData.value = computePreviewData(data as AiGeneratedData)
+  // Task 17.2: Compute diff in MODIFY mode
+  if (props.mode === 'MODIFY' && currentFunctionUnitData.value) {
+    diffResult.value = computeDiff(currentFunctionUnitData.value, data as AiGeneratedData)
+  }
+})
+
+onValidationWarning((warnings: any[]) => {
+  validationWarnings.value = warnings as AiValidationError[]
+  scrollToBottom()
 })
 
 // Compute GenerationPreviewData from AiGeneratedData
@@ -276,6 +487,8 @@ function computePreviewData(data: AiGeneratedData): GenerationPreviewData {
     actionTypes,
     processNodeCount,
     processGatewayCount,
+    decisionCount: data.decisionDefinitions?.length || 0,
+    tableRelationCount: data.tableRelations?.length || 0,
     iconSvg: data.icon?.svgContent
   }
 }
@@ -287,13 +500,15 @@ function handleSend() {
 
   inputText.value = ''
   validationErrors.value = []
+  validationWarnings.value = []
 
   sendMessage({
     functionUnitId: props.functionUnitId,
     sessionId: props.sessionId,
     message: text,
     phase: props.phase,
-    mode: props.mode
+    mode: props.mode,
+    regenerateScope: props.mode === 'MODIFY' ? regenerateScope.value : undefined
   })
 
   emit('sendMessage')
@@ -311,13 +526,151 @@ function handleNextPhase() {
 function handleApply() {
   if (generatedData.value) {
     emit('apply', generatedData.value)
+    // Clear generation draft after successful apply
+    clearCurrentDraft()
+    if (props.sessionId) {
+      clearGenerationDraft(props.functionUnitId, props.sessionId)
+    }
+    // Task 17.3: Start undo countdown
+    startUndoCountdown()
   }
 }
 
 function handleRegenerate() {
   generatedData.value = null
   previewData.value = null
+  diffResult.value = null
   emit('regenerate')
+}
+
+// Task 17.3: Undo countdown and handler
+function startUndoCountdown() {
+  showUndoButton.value = true
+  undoCountdown.value = 30
+  if (undoTimer) clearInterval(undoTimer)
+  undoTimer = setInterval(() => {
+    undoCountdown.value--
+    if (undoCountdown.value <= 0) {
+      showUndoButton.value = false
+      if (undoTimer) {
+        clearInterval(undoTimer)
+        undoTimer = null
+      }
+    }
+  }, 1000)
+}
+
+async function handleUndo() {
+  try {
+    await aiGenerationApi.undoLastApply(props.functionUnitId)
+    showUndoButton.value = false
+    if (undoTimer) {
+      clearInterval(undoTimer)
+      undoTimer = null
+    }
+    ElMessage.success(t('ai.undo.success'))
+    emit('regenerate') // Refresh data
+  } catch {
+    ElMessage.error(t('ai.error.AI_UNDO_EXPIRED'))
+  }
+}
+
+function applyTemplate(tpl: AiTemplate) {
+  inputText.value = tpl.promptTemplate
+}
+
+// Task 16.4: Degradation helpers
+function formatRelativeTime(isoTime: string): string {
+  try {
+    const diff = Date.now() - new Date(isoTime).getTime()
+    const minutes = Math.floor(diff / 60000)
+    if (minutes < 1) return '< 1 min ago'
+    if (minutes < 60) return `${minutes} min ago`
+    const hours = Math.floor(minutes / 60)
+    return `${hours}h ago`
+  } catch {
+    return isoTime
+  }
+}
+
+function saveDraftToLocalStorage() {
+  const draft = { prompt: inputText.value, timestamp: Date.now(), functionUnitId: props.functionUnitId }
+  localStorage.setItem(`ai_draft_${props.functionUnitId}`, JSON.stringify(draft))
+  ElMessage.success(t('ai.degradation.draftSaved'))
+}
+
+function navigateToManualCreate() {
+  // Navigate to the function unit designer manual edit mode
+  // This emits an event for the parent to handle navigation
+  emit('regenerate')
+}
+
+// Task 16.4 + 17.1: Draft state (degradation draft + generation draft)
+const hasDraft = ref(false)
+let draftData: { prompt: string; timestamp: number; functionUnitId: number } | null = null
+const hasGenerationDraft = ref(false)
+let generationDraftData: { generatedData: AiGeneratedData; previewData: GenerationPreviewData | null; timestamp: number; sessionId: string } | null = null
+
+function checkForDraft() {
+  // Check for degradation draft (ai_draft_{functionUnitId})
+  const draftKey = `ai_draft_${props.functionUnitId}`
+  const raw = localStorage.getItem(draftKey)
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw)
+      if (Date.now() - parsed.timestamp < 24 * 60 * 60 * 1000) {
+        draftData = parsed
+        hasDraft.value = true
+      } else {
+        localStorage.removeItem(draftKey)
+      }
+    } catch {
+      localStorage.removeItem(draftKey)
+    }
+  }
+
+  // Check for generation draft (ai_generation_draft_{functionUnitId}_{sessionId})
+  if (props.sessionId) {
+    const genDraft = loadGenerationDraft(props.functionUnitId, props.sessionId)
+    if (genDraft) {
+      generationDraftData = genDraft
+      hasGenerationDraft.value = true
+    }
+  }
+}
+
+function restoreDraft() {
+  if (draftData) {
+    inputText.value = draftData.prompt
+    ElMessage.info(t('ai.degradation.draftRestored'))
+  }
+  hasDraft.value = false
+  draftData = null
+  localStorage.removeItem(`ai_draft_${props.functionUnitId}`)
+}
+
+function restoreGenerationDraft() {
+  if (generationDraftData) {
+    generatedData.value = generationDraftData.generatedData
+    previewData.value = generationDraftData.previewData || computePreviewData(generationDraftData.generatedData)
+    ElMessage.info(t('ai.draft.restore'))
+  }
+  hasGenerationDraft.value = false
+  generationDraftData = null
+}
+
+function dismissDraft() {
+  hasDraft.value = false
+  draftData = null
+  localStorage.removeItem(`ai_draft_${props.functionUnitId}`)
+}
+
+function dismissGenerationDraft() {
+  hasGenerationDraft.value = false
+  if (generationDraftData && props.sessionId) {
+    clearGenerationDraft(props.functionUnitId, props.sessionId)
+  }
+  generationDraftData = null
 }
 
 // Auto-scroll to bottom
@@ -340,6 +693,11 @@ watch(streamingContent, () => {
 // Expose for parent to set validation errors
 function setValidationErrors(errors: AiValidationError[]) {
   validationErrors.value = errors
+  scrollToBottom()
+}
+
+function setValidationWarnings(warnings: AiValidationError[]) {
+  validationWarnings.value = warnings
   scrollToBottom()
 }
 
@@ -374,7 +732,9 @@ function autoSendMessage(message: string) {
 
 defineExpose({
   setValidationErrors,
-  autoSendMessage
+  setValidationWarnings,
+  autoSendMessage,
+  setMessages
 })
 </script>
 
@@ -411,6 +771,10 @@ defineExpose({
   font-weight: 600;
   color: #f56c6c;
   margin-right: 4px;
+
+  &--warning {
+    color: #e6a23c;
+  }
 }
 
 .chat-dialog__error-path {
@@ -435,5 +799,83 @@ defineExpose({
   padding: 12px 16px;
   border-top: 1px solid #ebeef5;
   background: #fff;
+}
+
+.chat-dialog__progress {
+  padding: 8px 16px;
+  border-bottom: 1px solid #ebeef5;
+}
+
+.chat-dialog__scope {
+  padding: 4px 16px;
+  border-top: 1px solid #ebeef5;
+}
+
+.chat-dialog__scope-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px 0;
+}
+
+.chat-dialog__degradation {
+  padding: 8px 16px;
+}
+
+.chat-dialog__degradation-time {
+  font-size: 13px;
+  color: #909399;
+  margin: 4px 0 8px;
+}
+
+.chat-dialog__degradation-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.chat-dialog__draft-alert {
+  margin: 8px 16px;
+}
+
+.chat-dialog__undo {
+  display: flex;
+  justify-content: center;
+  padding: 8px 16px;
+}
+
+.chat-dialog__templates {
+  padding: 16px;
+}
+
+.chat-dialog__templates-title {
+  font-size: 14px;
+  color: #606266;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.chat-dialog__template-card {
+  cursor: pointer;
+  margin-bottom: 12px;
+  transition: border-color 0.2s;
+
+  &:hover {
+    border-color: #409eff;
+  }
+}
+
+.chat-dialog__template-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.chat-dialog__template-desc {
+  font-size: 12px;
+  color: #909399;
+  margin: 0;
+  line-height: 1.5;
 }
 </style>

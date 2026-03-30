@@ -18,7 +18,7 @@
         <el-table-column prop="formName" :label="t('form.formName')" />
         <el-table-column prop="formType" :label="t('form.formType')" width="120">
           <template #default="{ row }">
-            <el-tag :type="row.formType === 'MAIN' ? 'primary' : 'info'">
+            <el-tag :type="row.formType === 'PROCESS' ? 'primary' : 'info'">
               {{ formTypeLabel(row.formType) }}
             </el-tag>
           </template>
@@ -62,6 +62,7 @@
           <template #default="{ row }">
             <div class="action-buttons">
               <el-button link type="primary" @click.stop="handleSelectForm(row)">{{ t('common.edit') }}</el-button>
+              <el-button v-if="row.formType === 'TASK'" link type="info" @click.stop="handleCopyForm(row)">{{ t('form.copyForm') }}</el-button>
               <el-button link type="warning" @click.stop="handleManageBindings(row)">{{ t('form.editBindings') }}</el-button>
               <el-button link type="success" @click.stop="handleBindNode(row)">{{ t('form.boundNode') }}</el-button>
               <el-button link type="danger" @click.stop="handleDeleteForm(row)">{{ t('common.delete') }}</el-button>
@@ -136,6 +137,28 @@
           </div>
         </el-tab-pane>
       </el-tabs>
+
+      <!-- Field Permission Configuration (TASK forms only) -->
+      <div v-if="selectedForm.formType === 'TASK'" class="field-permission-section" style="margin-top: 16px;">
+        <el-divider content-position="left">{{ t('form.fieldPermission') }}</el-divider>
+        <el-table :data="currentFormFields" size="small" max-height="300" border>
+          <el-table-column prop="field" :label="t('form.fieldName')" width="200" />
+          <el-table-column prop="title" label="Label" width="200" />
+          <el-table-column :label="t('form.fieldPermission')" width="180">
+            <template #default="{ row }">
+              <el-select
+                :model-value="getFieldPermission(row.field)"
+                @update:model-value="setFieldPermission(row.field, $event)"
+                size="small"
+                style="width: 100%"
+              >
+                <el-option :label="t('form.fieldPermissionEditable')" value="EDITABLE" />
+                <el-option :label="t('form.fieldPermissionReadonly')" value="READONLY" />
+              </el-select>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
     </div>
 
     <!-- Create form dialog -->
@@ -145,11 +168,27 @@
           <el-input v-model="createForm.formName" :placeholder="t('form.enterFormName')" />
         </el-form-item>
         <el-form-item :label="t('form.formTypeLabel')">
-          <el-select v-model="createForm.formType" style="width: 100%">
-            <el-option :label="t('form.mainForm')" value="MAIN" />
-            <el-option :label="t('form.subForm')" value="SUB" />
-            <el-option :label="t('form.popupForm')" value="POPUP" />
+          <el-select v-model="createForm.formType" style="width: 100%" @change="handleCreateFormTypeChange">
+            <el-option :label="t('form.processForm')" value="PROCESS" />
+            <el-option :label="t('form.taskForm')" value="TASK" />
+            <el-option :label="t('form.actionForm')" value="ACTION" />
           </el-select>
+        </el-form-item>
+        <el-form-item v-if="createForm.formType === 'TASK'" :label="t('form.stageBinding')" required>
+          <el-select
+            v-model="createFormStageIds"
+            multiple
+            :placeholder="t('form.stageBindingPlaceholder')"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="node in createDialogProcessNodes"
+              :key="node.id"
+              :label="node.name"
+              :value="node.id"
+            />
+          </el-select>
+          <div class="form-item-tip">{{ t('form.stageBindingHint') }}</div>
         </el-form-item>
         <el-form-item :label="t('form.bindTableLabel')">
           <el-select v-model="createForm.boundTableId" :placeholder="t('form.selectTableToBind')" style="width: 100%" clearable>
@@ -365,11 +404,12 @@ import { useI18n } from 'vue-i18n'
 import { ArrowLeft, Plus, Refresh, Connection } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
-import type { FormDefinition, FieldDefinition, TableBinding, BindingType } from '@/api/functionUnit'
+import type { FormDefinition, FieldDefinition, TableBinding, BindingType, FormType } from '@/api/functionUnit'
 import { functionUnitApi } from '@/api/functionUnit'
 import TableBindingManager from './TableBindingManager.vue'
 import SubTableField from './SubTableField.vue'
 import api from '@/api'
+import { BUILT_IN_TEMPLATES, type FormTemplate } from './formTemplates'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -460,8 +500,15 @@ provide('designerSubBindings', () => designerSubBindings.value.map(b => ({
   bindingType: b.bindingType,
 })))
 
-const createForm = reactive({ formName: '', formType: 'MAIN', description: '', boundTableId: null as number | null })
+const createForm = reactive({ formName: '', formType: 'PROCESS' as FormType, description: '', boundTableId: null as number | null })
 const bindingForm = ref<FormDefinition | null>(null)
+
+// Stage binding state for create dialog (TASK type)
+const createFormStageIds = ref<string[]>([])
+const createDialogProcessNodes = ref<ProcessNode[]>([])
+
+// Data_Table columns for field name autocomplete/validation
+const dataTableColumns = ref<string[]>([])
 
 // Table binding management state
 const showBindingManagerDialog = ref(false)
@@ -525,7 +572,7 @@ const previewOption = ref({
 })
 
 const formTypeLabel = (type: string) => {
-  const map: Record<string, string> = { MAIN: t('form.mainForm'), SUB: t('form.subForm'), POPUP: t('form.popupForm'), ACTION: t('form.actionForm') }
+  const map: Record<string, string> = { PROCESS: t('form.processForm'), TASK: t('form.taskForm'), ACTION: t('form.actionForm') }
   return map[type] || type
 }
 
@@ -540,7 +587,7 @@ const nodeTypeLabel = (type: string) => {
 }
 
 const tableTypeLabel = (type: string) => {
-  const map: Record<string, string> = { MAIN: t('form.mainForm'), SUB: t('form.subForm'), ACTION: t('form.actionForm'), RELATION: t('table.relations') }
+  const map: Record<string, string> = { MAIN: t('table.mainTable'), SUB: t('table.subTable'), ACTION: t('table.actionTable'), RELATION: t('table.relationTable') }
   return map[type] || type
 }
 
@@ -1215,17 +1262,40 @@ async function handleCreateForm() {
     ElMessage.warning(t('form.enterFormName'))
     return
   }
+  // PROCESS type: check uniqueness
+  if (createForm.formType === 'PROCESS') {
+    const existingProcess = store.forms.find(f => f.formType === 'PROCESS')
+    if (existingProcess) {
+      ElMessage.warning(t('form.processFormAlreadyExists'))
+      return
+    }
+  }
+  // TASK type: require stage binding
+  if (createForm.formType === 'TASK') {
+    if (createFormStageIds.value.length === 0) {
+      ElMessage.warning(t('form.stageBindingRequired'))
+      return
+    }
+  }
   try {
+    const stageBindings = createForm.formType === 'TASK'
+      ? createFormStageIds.value.map(id => {
+          const node = createDialogProcessNodes.value.find(n => n.id === id)
+          return { stageId: id, stageName: node?.name }
+        })
+      : undefined
     await store.createForm(props.functionUnitId, {
       formName: createForm.formName,
       formType: createForm.formType,
       description: createForm.description,
       boundTableId: createForm.boundTableId || undefined,
-      configJson: { rule: [], options: {} }
+      configJson: { rule: [], options: {} },
+      ...(stageBindings ? { stageBindings } : {})
     })
     ElMessage.success(t('form.createSuccess'))
     showCreateDialog.value = false
-    Object.assign(createForm, { formName: '', formType: 'MAIN', description: '', boundTableId: null })
+    Object.assign(createForm, { formName: '', formType: 'PROCESS', description: '', boundTableId: null })
+    createFormStageIds.value = []
     loadForms()
   } catch (e: any) {
     ElMessage.error(e.response?.data?.message || t('form.createFailed'))
@@ -1270,6 +1340,98 @@ const handleSubTableNavigate = (bindingId: number) => {
   })
 }
 
+/** Load process nodes for stage binding in create dialog */
+async function loadCreateDialogProcessNodes() {
+  try {
+    const processData = await functionUnitApi.getProcess(props.functionUnitId)
+    const bpmnXml = processData?.data?.bpmnXml
+    if (bpmnXml) {
+      const parser = new DOMParser()
+      const doc = parser.parseFromString(bpmnXml, 'text/xml')
+      const userTasks = doc.querySelectorAll('userTask')
+      createDialogProcessNodes.value = Array.from(userTasks).map(task => ({
+        id: task.getAttribute('id') || '',
+        name: task.getAttribute('name') || task.getAttribute('id') || '',
+        type: 'userTask'
+      }))
+    } else {
+      createDialogProcessNodes.value = []
+    }
+  } catch {
+    createDialogProcessNodes.value = []
+  }
+}
+
+/** Handle form type change in create dialog */
+function handleCreateFormTypeChange(type: FormType) {
+  if (type === 'TASK' && createDialogProcessNodes.value.length === 0) {
+    loadCreateDialogProcessNodes()
+  }
+  createFormStageIds.value = []
+}
+
+/** Load Data_Table columns for field name autocomplete */
+async function loadDataTableColumns() {
+  try {
+    const res = await functionUnitApi.getDataTableColumns(props.functionUnitId)
+    dataTableColumns.value = res?.data || []
+  } catch {
+    dataTableColumns.value = []
+  }
+}
+
+/** Validate field names against Data_Table columns */
+function validateFieldNames(fieldNames: string[]): string[] {
+  if (dataTableColumns.value.length === 0) return []
+  return fieldNames.filter(name => !dataTableColumns.value.includes(name))
+}
+
+/** Copy a TASK form */
+async function handleCopyForm(form: FormDefinition) {
+  try {
+    const res = await functionUnitApi.copyTaskForm(props.functionUnitId, form.id)
+    ElMessage.success(t('form.copyFormSuccess'))
+    await loadForms()
+    // Open the new form for editing
+    if (res?.data) {
+      selectedForm.value = res.data
+    }
+  } catch (e: any) {
+    ElMessage.error(e.response?.data?.message || t('form.copyFormFailed'))
+  }
+}
+
+/** Get current form fields from the designer for field permission config */
+const currentFormFields = computed(() => {
+  if (!designerRef.value || !selectedForm.value) return []
+  try {
+    const rule = designerRef.value.getRule() || []
+    return rule
+      .filter((r: any) => r.field && r.type !== 'subTable')
+      .map((r: any) => ({ field: r.field, title: r.title || r.field }))
+  } catch {
+    // Fallback to saved configJson
+    const rule = selectedForm.value.configJson?.rule || []
+    return rule
+      .filter((r: any) => r.field && r.type !== 'subTable')
+      .map((r: any) => ({ field: r.field, title: r.title || r.field }))
+  }
+})
+
+/** Get field permission value */
+function getFieldPermission(fieldName: string): string {
+  return selectedForm.value?.fieldPermissions?.[fieldName] || 'EDITABLE'
+}
+
+/** Set field permission value */
+function setFieldPermission(fieldName: string, value: string) {
+  if (!selectedForm.value) return
+  if (!selectedForm.value.fieldPermissions) {
+    selectedForm.value.fieldPermissions = {}
+  }
+  selectedForm.value.fieldPermissions[fieldName] = value
+}
+
 async function handleSaveForm() {
   if (!selectedForm.value || !designerRef.value) return
   try {
@@ -1281,6 +1443,18 @@ async function handleSaveForm() {
     if (invalidPlaceholders.length > 0) {
       ElMessage.error(t('form.subTableBindingRequired'))
       return
+    }
+
+    // Validate field names against Data_Table columns (for PROCESS and TASK forms)
+    if (selectedForm.value.formType === 'PROCESS' || selectedForm.value.formType === 'TASK') {
+      const fieldNames = rule
+        .filter((r: any) => r.field && r.type !== 'subTable')
+        .map((r: any) => r.field as string)
+      const invalidFields = validateFieldNames(fieldNames)
+      if (invalidFields.length > 0) {
+        ElMessage.error(t('form.fieldNameValidationFailed'))
+        return
+      }
     }
 
     // Collect sub form rules — prefer live ref, then cache, then previously saved
@@ -1310,7 +1484,10 @@ async function handleSaveForm() {
       formName: selectedForm.value.formName,
       formType: selectedForm.value.formType,
       description: selectedForm.value.description,
-      configJson: { rule, options, subForms }
+      configJson: { rule, options, subForms },
+      ...(selectedForm.value.formType === 'TASK' && selectedForm.value.fieldPermissions
+        ? { fieldPermissions: selectedForm.value.fieldPermissions }
+        : {})
     })
     ElMessage.success(t('form.saveSuccess'))
     loadForms()
@@ -1816,7 +1993,11 @@ async function updateBpmnFormBindings(
   console.log('[FormDesigner] Process saved successfully')
 }
 
-onMounted(loadForms)
+onMounted(() => {
+  loadForms()
+  loadDataTableColumns()
+  loadCreateDialogProcessNodes()
+})
 </script>
 
 

@@ -9,13 +9,16 @@ import com.developer.entity.AiMessage;
 import com.developer.entity.AiSession;
 import com.developer.entity.FunctionUnit;
 import com.developer.entity.ActionDefinition;
+import com.developer.entity.DecisionDefinition;
 import com.developer.entity.FieldDefinition;
 import com.developer.entity.ForeignKey;
 import com.developer.entity.FormDefinition;
+import com.developer.entity.FormStageBinding;
 import com.developer.entity.FormTableBinding;
 import com.developer.entity.Icon;
 import com.developer.entity.ProcessDefinition;
 import com.developer.entity.TableDefinition;
+import com.developer.entity.TableRelation;
 import com.developer.enums.AiDocumentType;
 import com.developer.enums.AiMessageRole;
 import com.developer.enums.AiMode;
@@ -29,6 +32,7 @@ import com.developer.repository.FunctionUnitRepository;
 import com.developer.service.AiGenerationService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
@@ -44,7 +48,9 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -74,14 +80,17 @@ public class AiGenerationServiceImpl implements AiGenerationService {
     @Value("${n8n.ai-generation.timeout-seconds:120}")
     private int n8nTimeoutSeconds;
 
-    /** Cached N8N RestTemplate (created lazily, timeout configured from properties) */
-    private volatile RestTemplate n8nRestTemplate;
+    /** Cached N8N RestTemplate (initialized at startup via @PostConstruct) */
+    private RestTemplate n8nRestTemplate;
 
     /** Chat SSE emitters: key = "functionUnitId:userId" → SseEmitter */
     private final ConcurrentHashMap<String, SseEmitter> chatEmitters = new ConcurrentHashMap<>();
 
     /** Event SSE emitters: key = functionUnitId → list of (userId, SseEmitter) pairs */
     private final ConcurrentHashMap<Long, CopyOnWriteArrayList<EventEmitterEntry>> eventEmitters = new ConcurrentHashMap<>();
+
+    /** 最近一次 N8N 调用成功的时间戳，用于降级信息（需求 45 联动） */
+    private volatile Instant lastN8NSuccessTime;
 
     public AiGenerationServiceImpl(
             AiSessionRepository aiSessionRepository,
@@ -96,6 +105,16 @@ public class AiGenerationServiceImpl implements AiGenerationService {
         this.functionUnitRepository = functionUnitRepository;
         this.objectMapper = objectMapper;
         this.maxContextSizeBytes = maxContextSizeBytes;
+    }
+
+    @PostConstruct
+    void initN8NRestTemplate() {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        int timeoutMs = n8nTimeoutSeconds * 1000;
+        factory.setConnectTimeout(timeoutMs);
+        factory.setReadTimeout(timeoutMs);
+        this.n8nRestTemplate = new RestTemplate(factory);
+        log.info("Initialized N8N RestTemplate with timeout={}ms", timeoutMs);
     }
 
     // ==================== Session Management ====================
@@ -175,8 +194,9 @@ public class AiGenerationServiceImpl implements AiGenerationService {
         boolean hasTableDefinitions = functionUnit.getTableDefinitions() != null && !functionUnit.getTableDefinitions().isEmpty();
         boolean hasFormDefinitions = functionUnit.getFormDefinitions() != null && !functionUnit.getFormDefinitions().isEmpty();
         boolean hasActionDefinitions = functionUnit.getActionDefinitions() != null && !functionUnit.getActionDefinitions().isEmpty();
+        boolean hasDecisionDefinitions = functionUnit.getDecisionDefinitions() != null && !functionUnit.getDecisionDefinitions().isEmpty();
 
-        if (hasProcessDefinition || hasTableDefinitions || hasFormDefinitions || hasActionDefinitions) {
+        if (hasProcessDefinition || hasTableDefinitions || hasFormDefinitions || hasActionDefinitions || hasDecisionDefinitions) {
             log.debug("FunctionUnit {} has existing component data, mode=MODIFY", functionUnitId);
             return AiMode.MODIFY;
         }
@@ -304,6 +324,10 @@ public class AiGenerationServiceImpl implements AiGenerationService {
         if (forms != null) forms.size();
         List<ActionDefinition> actions = fu.getActionDefinitions();
         if (actions != null) actions.size();
+        List<DecisionDefinition> decisions = fu.getDecisionDefinitions();
+        if (decisions != null) decisions.size();
+        List<TableRelation> relations = fu.getTableRelations();
+        if (relations != null) relations.size();
         ProcessDefinition pd = fu.getProcessDefinition();
         Icon icon = fu.getIcon();
 
@@ -314,6 +338,8 @@ public class AiGenerationServiceImpl implements AiGenerationService {
                 .tableDefinitions(serializeTableDefinitions(tables))
                 .formDefinitions(serializeFormDefinitions(forms))
                 .actionDefinitions(serializeActionDefinitions(actions))
+                .decisionDefinitions(serializeDecisionDefinitions(decisions))
+                .tableRelations(serializeTableRelations(relations, tables))
                 .processDefinition(serializeProcessDefinition(pd))
                 .icon(serializeIcon(icon))
                 .build();
@@ -382,6 +408,21 @@ public class AiGenerationServiceImpl implements AiGenerationService {
             map.put("configJson", f.getConfigJson());
             map.put("description", f.getDescription());
             map.put("tableBindings", serializeTableBindings(f.getTableBindings()));
+            map.put("fieldPermissions", f.getFieldPermissions() != null ? f.getFieldPermissions() : Map.of());
+            map.put("showLiveValues", f.getShowLiveValues());
+            map.put("stageBindings", serializeStageBindings(f.getStageBindings()));
+            return map;
+        }).collect(Collectors.toList());
+    }
+
+    private List<Map<String, Object>> serializeStageBindings(List<FormStageBinding> bindings) {
+        if (bindings == null || bindings.isEmpty()) {
+            return List.of();
+        }
+        return bindings.stream().map(b -> {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("stageId", b.getStageId());
+            map.put("stageName", b.getStageName());
             return map;
         }).collect(Collectors.toList());
     }
@@ -414,6 +455,51 @@ public class AiGenerationServiceImpl implements AiGenerationService {
             map.put("buttonColor", a.getButtonColor());
             map.put("description", a.getDescription());
             map.put("isDefault", a.getIsDefault());
+            return map;
+        }).collect(Collectors.toList());
+    }
+
+    private List<Map<String, Object>> serializeDecisionDefinitions(List<DecisionDefinition> decisions) {
+        if (decisions == null || decisions.isEmpty()) {
+            return List.of();
+        }
+        return decisions.stream().map(d -> {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("decisionKey", d.getDecisionKey());
+            map.put("decisionName", d.getDecisionName());
+            map.put("dmnXml", d.getDmnXml());
+            map.put("hitPolicy", d.getHitPolicy());
+            map.put("description", d.getDescription());
+            return map;
+        }).collect(Collectors.toList());
+    }
+
+    /**
+     * 序列化表关系，将 sourceTableId/targetTableId 解析为对应的 tableName（AI 不知道内部 ID）
+     */
+    private List<Map<String, Object>> serializeTableRelations(
+            List<TableRelation> relations, List<TableDefinition> tables) {
+        if (relations == null || relations.isEmpty()) {
+            return List.of();
+        }
+
+        // 构建 ID → tableName 查找表
+        Map<Long, String> idToName = new HashMap<>();
+        if (tables != null) {
+            for (TableDefinition t : tables) {
+                if (t.getId() != null) {
+                    idToName.put(t.getId(), t.getTableName());
+                }
+            }
+        }
+
+        return relations.stream().map(r -> {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("sourceTableName", idToName.getOrDefault(r.getSourceTableId(), "unknown_" + r.getSourceTableId()));
+            map.put("sourceFieldName", r.getSourceFieldName());
+            map.put("relationType", r.getRelationType());
+            map.put("targetTableName", idToName.getOrDefault(r.getTargetTableId(), "unknown_" + r.getTargetTableId()));
+            map.put("targetFieldName", r.getTargetFieldName());
             return map;
         }).collect(Collectors.toList());
     }
@@ -459,16 +545,36 @@ public class AiGenerationServiceImpl implements AiGenerationService {
 
     @SuppressWarnings("unchecked")
     private void truncateConfigJson(FunctionUnitContextDTO dto) {
-        Map<String, Object> truncatedConfig = Map.of("truncated", true);
-        if (dto.getFormDefinitions() != null) {
-            for (Map<String, Object> form : dto.getFormDefinitions()) {
-                form.put("configJson", truncatedConfig);
+        // 仅截断 formDefinitions 的 configJson，不截断 actionDefinitions
+        if (dto.getFormDefinitions() == null) return;
+
+        // 第一级截断：仅截断 configJson 中的 rule 数组，保留业务逻辑扩展字段
+        for (Map<String, Object> form : dto.getFormDefinitions()) {
+            Object configObj = form.get("configJson");
+            if (configObj instanceof Map) {
+                Map<String, Object> config = (Map<String, Object>) configObj;
+                if (config.containsKey("rule") && config.get("rule") instanceof List) {
+                    List<?> rules = (List<?>) config.get("rule");
+                    int originalCount = rules.size();
+                    Map<String, Object> truncatedConfig = new LinkedHashMap<>(config);
+                    truncatedConfig.put("rule", List.of(
+                            new LinkedHashMap<>(Map.of("truncated", true, "originalCount", originalCount))
+                    ));
+                    form.put("configJson", truncatedConfig);
+                    log.info("Tier-1 truncation: form '{}' rule array truncated ({} rules removed)",
+                            form.get("formName"), originalCount);
+                }
             }
         }
-        if (dto.getActionDefinitions() != null) {
-            for (Map<String, Object> action : dto.getActionDefinitions()) {
-                action.put("configJson", truncatedConfig);
-            }
+
+        // 检查是否仍超限
+        byte[] jsonBytes = toJsonBytes(dto);
+        if (jsonBytes.length <= maxContextSizeBytes) return;
+
+        // 第二级截断：替换整个 formDefinitions 的 configJson
+        for (Map<String, Object> form : dto.getFormDefinitions()) {
+            form.put("configJson", new LinkedHashMap<>(Map.of("truncated", true)));
+            log.info("Tier-2 truncation: form '{}' entire configJson truncated", form.get("formName"));
         }
     }
 
@@ -533,11 +639,12 @@ public class AiGenerationServiceImpl implements AiGenerationService {
     @SuppressWarnings("unchecked")
     public Map<String, Object> callN8NWebhook(UUID sessionId, String message, AiPhase phase, AiMode mode,
                                                FunctionUnitContextDTO context, Long functionUnitId,
-                                               List<Map<String, String>> existingDocuments) {
+                                               List<Map<String, String>> existingDocuments,
+                                               String regenerateScope) {
         Map<String, Object> requestBody = buildN8NRequestBody(sessionId, message, phase, mode,
-                context, functionUnitId, existingDocuments, null);
+                context, functionUnitId, existingDocuments, null, regenerateScope);
 
-        Map<String, Object> response = doCallN8NWebhook(requestBody);
+        Map<String, Object> response = doCallN8NWebhookWithRetry(requestBody);
 
         if (isSessionNotFoundError(response)) {
             log.warn("N8N session not found for sessionId={}, rebuilding", sessionId);
@@ -548,8 +655,8 @@ public class AiGenerationServiceImpl implements AiGenerationService {
             List<Map<String, String>> rebuiltDocs = getLatestDocuments(functionUnitId, phase, mode);
 
             Map<String, Object> retryBody = buildN8NRequestBody(sessionId, message, phase, mode,
-                    rebuiltContext, functionUnitId, rebuiltDocs, conversationHistory);
-            response = doCallN8NWebhook(retryBody);
+                    rebuiltContext, functionUnitId, rebuiltDocs, conversationHistory, regenerateScope);
+            response = doCallN8NWebhookWithRetry(retryBody);
         }
 
         return response;
@@ -558,7 +665,8 @@ public class AiGenerationServiceImpl implements AiGenerationService {
     private Map<String, Object> buildN8NRequestBody(UUID sessionId, String message, AiPhase phase, AiMode mode,
                                                      FunctionUnitContextDTO context, Long functionUnitId,
                                                      List<Map<String, String>> existingDocuments,
-                                                     List<Map<String, String>> conversationHistory) {
+                                                     List<Map<String, String>> conversationHistory,
+                                                     String regenerateScope) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("sessionId", sessionId.toString());
         body.put("message", message);
@@ -587,18 +695,105 @@ public class AiGenerationServiceImpl implements AiGenerationService {
             body.put("conversationHistory", conversationHistory);
         }
 
+        // 注入新架构元数据，帮助 AI 生成符合新架构的数据结构（需求 15）
+        body.put("schemaMetadata", buildSchemaMetadata());
+
+        // 指示 AI 在生成数据时附带解释（需求 50）
+        body.put("includeExplanations", true);
+
+        // 增量重新生成范围（需求 42）
+        body.put("regenerateScope", regenerateScope != null ? regenerateScope : "ALL");
+
         return body;
+    }
+
+    /**
+     * 构建新架构元数据，包含枚举值列表、configJson 扩展结构描述、
+     * ConditionExpression 格式和新增实体结构。
+     * 供 N8N/AI 理解当前系统架构并生成符合规范的数据。
+     */
+    private Map<String, Object> buildSchemaMetadata() {
+        Map<String, Object> metadata = new LinkedHashMap<>();
+
+        // 枚举值列表
+        metadata.put("formTypes", java.util.Arrays.stream(com.developer.enums.FormType.values())
+                .map(Enum::name).collect(Collectors.toList()));
+        metadata.put("tableTypes", java.util.Arrays.stream(com.developer.enums.TableType.values())
+                .map(Enum::name).collect(Collectors.toList()));
+        metadata.put("actionTypes", java.util.Arrays.stream(com.developer.enums.ActionType.values())
+                .map(Enum::name).collect(Collectors.toList()));
+
+        // configJson 扩展字段结构描述
+        Map<String, Object> configJsonExtensions = new LinkedHashMap<>();
+        configJsonExtensions.put("formulas", "Array of { targetField, expression, dependsOn[] }");
+        configJsonExtensions.put("linkages", "Array of { sourceField, targetField, linkageType: option-filtering|value-auto-fill|field-state-change }");
+        configJsonExtensions.put("crossFieldRules", "Array of { fields[], operator, message, targetField }");
+        configJsonExtensions.put("summaryRules", "Array of { sourceColumn, targetField, aggregation: SUM|AVG|COUNT|MIN|MAX }");
+        configJsonExtensions.put("subTableValidation", "Object with sub-table validation rules");
+        metadata.put("configJsonExtensions", configJsonExtensions);
+
+        // visibilityCondition 格式描述
+        Map<String, Object> visibilityConditionFormat = new LinkedHashMap<>();
+        visibilityConditionFormat.put("type", "ConditionExpression object (not a string)");
+        visibilityConditionFormat.put("structure", "{ field, operator, value }");
+        visibilityConditionFormat.put("validOperators", List.of(
+                "equals", "not-equals", "contains", "greater-than", "less-than", "is-empty", "is-not-empty"));
+        metadata.put("visibilityConditionFormat", visibilityConditionFormat);
+
+        // 新增实体结构
+        Map<String, Object> newEntities = new LinkedHashMap<>();
+        newEntities.put("decisionDefinitions", "Array of { decisionKey, decisionName, dmnXml, hitPolicy: FIRST|UNIQUE|PRIORITY|ANY|COLLECT|RULE_ORDER|OUTPUT_ORDER, description }");
+        newEntities.put("tableRelations", "Array of { sourceTableName, sourceFieldName, relationType: ONE_TO_ONE|ONE_TO_MANY|MANY_TO_MANY, targetTableName, targetFieldName }");
+        newEntities.put("formStageBindings", "Array of { stageId, stageName } within formDefinitions[].stageBindings");
+        metadata.put("newEntities", newEntities);
+
+        return metadata;
+    }
+
+    /**
+     * 包装 doCallN8NWebhook，对 AI_N8N_TIMEOUT 和 AI_N8N_CALL_FAILED 异常自动重试一次（2 秒延迟）。
+     * 重试失败时构建降级信息并通过 AiGenerationException extraData 传递给上层（需求 23 + 45 联动）。
+     */
+    private Map<String, Object> doCallN8NWebhookWithRetry(Map<String, Object> requestBody) {
+        try {
+            Map<String, Object> response = doCallN8NWebhook(requestBody);
+            lastN8NSuccessTime = Instant.now();
+            return response;
+        } catch (AiGenerationException e) {
+            if ("AI_N8N_TIMEOUT".equals(e.getErrorCode()) || "AI_N8N_CALL_FAILED".equals(e.getErrorCode())) {
+                log.warn("N8N call failed with {}, retrying in 2 seconds...", e.getErrorCode());
+                try {
+                    Thread.sleep(2000);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw e;
+                }
+                try {
+                    Map<String, Object> response = doCallN8NWebhook(requestBody);
+                    lastN8NSuccessTime = Instant.now();
+                    return response;
+                } catch (AiGenerationException retryEx) {
+                    log.warn("N8N retry also failed with {}: {}", retryEx.getErrorCode(), retryEx.getMessage());
+                    // 构建降级信息（需求 45 联动）
+                    Map<String, Object> degradationInfo = new LinkedHashMap<>();
+                    degradationInfo.put("lastSuccessTime",
+                            lastN8NSuccessTime != null ? lastN8NSuccessTime.toString() : null);
+                    degradationInfo.put("degradationOptions", List.of("SAVE_DRAFT", "MANUAL_CREATE"));
+                    throw new AiGenerationException(e.getErrorCode(), e.getMessage(), degradationInfo);
+                }
+            }
+            throw e;
+        }
     }
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> doCallN8NWebhook(Map<String, Object> requestBody) {
         try {
-            RestTemplate n8nClient = getOrCreateN8NRestTemplate();
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
 
-            ResponseEntity<Map> responseEntity = n8nClient.postForEntity(n8nWebhookUrl, entity, Map.class);
+            ResponseEntity<Map> responseEntity = n8nRestTemplate.postForEntity(n8nWebhookUrl, entity, Map.class);
             Map<String, Object> responseBody = responseEntity.getBody();
             if (responseBody == null) {
                 throw new AiGenerationException("AI_N8N_EMPTY_RESPONSE", "N8N returned empty response");
@@ -611,22 +806,6 @@ public class AiGenerationServiceImpl implements AiGenerationService {
         } catch (Exception e) {
             throw new AiGenerationException("AI_N8N_CALL_FAILED", "N8N Webhook call failed: " + e.getMessage());
         }
-    }
-
-    private RestTemplate getOrCreateN8NRestTemplate() {
-        if (n8nRestTemplate == null) {
-            synchronized (this) {
-                if (n8nRestTemplate == null) {
-                    SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-                    int timeoutMs = n8nTimeoutSeconds * 1000;
-                    factory.setConnectTimeout(timeoutMs);
-                    factory.setReadTimeout(timeoutMs);
-                    n8nRestTemplate = new RestTemplate(factory);
-                    log.info("Created N8N RestTemplate with timeout={}ms", timeoutMs);
-                }
-            }
-        }
-        return n8nRestTemplate;
     }
 
     private boolean isSessionNotFoundError(Map<String, Object> response) {
@@ -655,14 +834,14 @@ public class AiGenerationServiceImpl implements AiGenerationService {
 
     // ==================== SSE Emitter Management ====================
 
-    private static final long CHAT_EMITTER_TIMEOUT = 180_000L; // 180 seconds (buffer beyond N8N's 120s timeout)
     private static final long EVENT_EMITTER_TIMEOUT = 300_000L; // 300 seconds
     private static final int MAX_DOCUMENT_CONTENT_LENGTH = 50000;
 
     @Override
     public SseEmitter createChatEmitter(Long functionUnitId, String userId) {
         String key = buildChatEmitterKey(functionUnitId, userId);
-        SseEmitter emitter = new SseEmitter(CHAT_EMITTER_TIMEOUT);
+        long chatEmitterTimeout = (long) n8nTimeoutSeconds * 2 * 1000 + 60_000L;
+        SseEmitter emitter = new SseEmitter(chatEmitterTimeout);
 
         // 如果已有活跃的 emitter，先完成它，防止覆盖导致响应丢失
         SseEmitter existingEmitter = chatEmitters.get(key);

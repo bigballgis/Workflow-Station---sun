@@ -208,7 +208,17 @@ async function doCompare() {
 }
 
 async function handleRollback(row: any) {
-  await ElMessageBox.confirm(t('common.confirm'), t('common.confirm'), { type: 'warning' })
+  const targetVersion = row.versionNumber
+  const currentVersion = store.versions?.[0]?.versionNumber || '?'
+  await ElMessageBox.confirm(
+    t('version.rollbackConfirmDetail', { targetVersion, currentVersion }),
+    t('version.rollbackTitle'),
+    {
+      type: 'warning',
+      confirmButtonText: t('common.confirm'),
+      cancelButtonText: t('common.cancel')
+    }
+  )
   try {
     await store.rollback(props.functionUnitId, row.id)
     ElMessage.success(t('common.success'))

@@ -193,11 +193,13 @@ public interface AiGenerationService {
      * @param context            功能单元上下文（首次请求时提供，后续为 null）
      * @param functionUnitId     功能单元 ID（用于会话重建时重新加载上下文）
      * @param existingDocuments  前序文档列表（首次请求时提供，后续为空列表）
+     * @param regenerateScope    增量重新生成范围（ALL/TABLES/FORMS/ACTIONS/DECISIONS/PROCESS/TABLE_RELATIONS，null 等同于 ALL）
      * @return N8N 响应体（Map 格式）
      */
     Map<String, Object> callN8NWebhook(UUID sessionId, String message, AiPhase phase, AiMode mode,
                                         FunctionUnitContextDTO context, Long functionUnitId,
-                                        List<Map<String, String>> existingDocuments);
+                                        List<Map<String, String>> existingDocuments,
+                                        String regenerateScope);
 
     // ==================== SSE Emitter Management ====================
 

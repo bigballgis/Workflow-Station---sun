@@ -31,4 +31,6 @@ public class AiChatRequest {
 
     @NotNull
     private AiMode mode;
+
+    private String regenerateScope;
 }

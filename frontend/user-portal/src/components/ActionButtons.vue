@@ -86,7 +86,18 @@
         </el-form-item>
         <el-form-item v-if="showSignature" :label="$t('task.signature')">
           <div class="signature-area">
-            <canvas ref="signatureCanvas" width="400" height="150"></canvas>
+            <canvas
+              ref="signatureCanvas"
+              width="400"
+              height="150"
+              @mousedown="startDrawing"
+              @mousemove="draw"
+              @mouseup="stopDrawing"
+              @mouseleave="stopDrawing"
+              @touchstart="startDrawingTouch"
+              @touchmove="drawTouch"
+              @touchend="stopDrawing"
+            ></canvas>
             <el-button size="small" @click="clearSignature">
               {{ $t('common.clear') }}
             </el-button>
@@ -160,9 +171,12 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
+import { userApi } from '@/api/user'
+import { evaluateCondition } from './businessLogicEngine'
+import type { ConditionExpression } from './formRendererHelpers'
 
 export interface ActionButton {
   key: string
@@ -176,6 +190,9 @@ export interface ActionButton {
   needSignature?: boolean
   confirmMessage?: string
   category?: 'primary' | 'secondary' | 'more'
+  visibilityCondition?: Record<string, unknown>
+  allowedRoles?: string[]
+  sortOrder?: number
 }
 
 interface Props {
@@ -186,6 +203,8 @@ interface Props {
   showCancel?: boolean
   cancelText?: string
   showSignature?: boolean
+  formData?: Record<string, unknown>
+  userRoles?: string[]
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -194,7 +213,9 @@ const props = withDefaults(defineProps<Props>(), {
   fixed: false,
   align: 'right',
   showCancel: true,
-  showSignature: false
+  showSignature: false,
+  formData: () => ({}),
+  userRoles: () => []
 })
 
 const emit = defineEmits<{
@@ -207,15 +228,41 @@ const { t } = useI18n()
 const loadingKey = ref('')
 const submitting = ref(false)
 
+// Evaluate simple visibility condition — delegates to BusinessLogicEngine's evaluateCondition
+function evaluateVisibilityCondition(
+  condition: Record<string, unknown> | undefined,
+  formData: Record<string, unknown>
+): boolean {
+  if (!condition) return true
+  return evaluateCondition(condition as ConditionExpression, formData)
+}
+
+function checkRoleAccess(allowedRoles: string[] | undefined, userRoles: string[]): boolean {
+  if (!allowedRoles || allowedRoles.length === 0) return true
+  return userRoles.some(r => allowedRoles.includes(r))
+}
+
+// Filter and sort actions
+const visibleActions = computed(() => {
+  return props.actions
+    .filter(a => {
+      if (a.hidden) return false
+      if (!evaluateVisibilityCondition(a.visibilityCondition, props.formData)) return false
+      if (!checkRoleAccess(a.allowedRoles, props.userRoles)) return false
+      return true
+    })
+    .sort((a, b) => (a.sortOrder ?? 9999) - (b.sortOrder ?? 9999))
+})
+
 // 分类按钮
 const primaryActions = computed(() =>
-  props.actions.filter(a => a.category === 'primary' || (!a.category && a.type === 'primary'))
+  visibleActions.value.filter(a => a.category === 'primary' || (!a.category && a.type === 'primary'))
 )
 const secondaryActions = computed(() =>
-  props.actions.filter(a => a.category === 'secondary')
+  visibleActions.value.filter(a => a.category === 'secondary')
 )
 const moreActions = computed(() =>
-  props.actions.filter(a => a.category === 'more')
+  visibleActions.value.filter(a => a.category === 'more')
 )
 
 // 审批意见对话框
@@ -244,6 +291,59 @@ const userOptions = ref<Array<{ id: string; name: string }>>([])
 
 // 签名画布
 const signatureCanvas = ref<HTMLCanvasElement>()
+const isDrawing = ref(false)
+
+// 签名画布绘制事件
+const startDrawing = (e: MouseEvent) => {
+  if (!signatureCanvas.value) return
+  isDrawing.value = true
+  const ctx = signatureCanvas.value.getContext('2d')
+  if (!ctx) return
+  const rect = signatureCanvas.value.getBoundingClientRect()
+  ctx.beginPath()
+  ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top)
+  ctx.strokeStyle = '#000'
+  ctx.lineWidth = 2
+  ctx.lineCap = 'round'
+}
+
+const draw = (e: MouseEvent) => {
+  if (!isDrawing.value || !signatureCanvas.value) return
+  const ctx = signatureCanvas.value.getContext('2d')
+  if (!ctx) return
+  const rect = signatureCanvas.value.getBoundingClientRect()
+  ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top)
+  ctx.stroke()
+}
+
+const stopDrawing = () => {
+  isDrawing.value = false
+}
+
+// Touch events for mobile
+const startDrawingTouch = (e: TouchEvent) => {
+  e.preventDefault()
+  if (!signatureCanvas.value || !e.touches[0]) return
+  isDrawing.value = true
+  const ctx = signatureCanvas.value.getContext('2d')
+  if (!ctx) return
+  const rect = signatureCanvas.value.getBoundingClientRect()
+  ctx.beginPath()
+  ctx.moveTo(e.touches[0].clientX - rect.left, e.touches[0].clientY - rect.top)
+  ctx.strokeStyle = '#000'
+  ctx.lineWidth = 2
+  ctx.lineCap = 'round'
+}
+
+const drawTouch = (e: TouchEvent) => {
+  e.preventDefault()
+  if (!isDrawing.value || !signatureCanvas.value || !e.touches[0]) return
+  const ctx = signatureCanvas.value.getContext('2d')
+  if (!ctx) return
+  const rect = signatureCanvas.value.getBoundingClientRect()
+  ctx.lineTo(e.touches[0].clientX - rect.left, e.touches[0].clientY - rect.top)
+  ctx.stroke()
+}
 
 // 处理按钮点击
 const handleAction = async (action: ActionButton) => {
@@ -334,8 +434,12 @@ const submitTransfer = async () => {
 // 搜索用户
 const searchUsers = async (query: string) => {
   if (query.length < 2) return
-  // 调用API搜索用户
-  // userOptions.value = await userApi.search(query)
+  try {
+    userOptions.value = await userApi.searchUsers(query)
+  } catch {
+    ElMessage.error(t('task.searchUserFailed'))
+    userOptions.value = []
+  }
 }
 
 // 清除签名

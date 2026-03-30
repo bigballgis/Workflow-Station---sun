@@ -1,6 +1,7 @@
 package com.developer.service.impl;
 
 import com.developer.dto.AiGeneratedData;
+import com.developer.dto.AiQualityScore;
 import com.developer.dto.AiValidationResult;
 import com.developer.enums.*;
 import com.developer.service.AiValidationService;
@@ -13,6 +14,7 @@ import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -35,17 +37,19 @@ public class AiValidationServiceImpl implements AiValidationService {
             return result;
         }
 
-        // Task 4.1: Enum value and field constraint validation
+        // Enum value and field constraint validation
         validateTableDefinitions(generatedData.getTableDefinitions(), result);
         validateFormDefinitions(generatedData.getFormDefinitions(), result);
         validateActionDefinitions(generatedData.getActionDefinitions(), result);
+        validateDecisionDefinitions(generatedData.getDecisionDefinitions(), result);
+        validateTableRelations(generatedData, result);
         validateIcon(generatedData.getIcon(), result);
 
-        // Task 4.2: SVG security validation and BPMN XML validation
+        // SVG security validation and BPMN XML validation
         validateSvg(generatedData.getIcon(), result);
         validateBpmnXml(generatedData.getProcessDefinition(), result);
 
-        // Task 4.3: Reference integrity and uniqueness validation
+        // Reference integrity and uniqueness validation
         validateReferenceIntegrity(generatedData, result);
         validateUniqueness(generatedData, result);
 
@@ -115,20 +119,66 @@ public class AiValidationServiceImpl implements AiValidationService {
         if (formDefinitions == null) return;
         for (int i = 0; i < formDefinitions.size(); i++) {
             Map<String, Object> form = formDefinitions.get(i);
-            validateEnumValue(form.get("formType"), FormType.class,
-                    "formDefinitions[" + i + "].formType", result);
+            String formPath = "formDefinitions[" + i + "]";
+
+            // Task 4.6: 旧版 FormType 校验兼容（产生警告而非错误）
+            String formTypeStr = (String) form.get("formType");
+            if (formTypeStr != null) {
+                try {
+                    FormType.valueOf(formTypeStr);
+                } catch (IllegalArgumentException e) {
+                    if ("MAIN".equals(formTypeStr) || "SUB".equals(formTypeStr)) {
+                        String mapped = "MAIN".equals(formTypeStr) ? "PROCESS" : "TASK";
+                        result.addWarning("DEPRECATED_ENUM", formPath + ".formType",
+                                "Deprecated form type '" + formTypeStr + "', will be auto-mapped to '" + mapped + "'");
+                    } else {
+                        result.addError("INVALID_ENUM", formPath + ".formType",
+                                "Invalid enum value: " + formTypeStr);
+                    }
+                }
+            }
 
             List<Map<String, Object>> bindings = (List<Map<String, Object>>) form.get("tableBindings");
             // Skip binding validation if LLM used legacy format (bindingTableId)
             if (bindings != null) {
                 for (int j = 0; j < bindings.size(); j++) {
                     Map<String, Object> binding = bindings.get(j);
-                    String bindingPath = "formDefinitions[" + i + "].tableBindings[" + j + "]";
+                    String bindingPath = formPath + ".tableBindings[" + j + "]";
                     validateEnumValue(binding.get("bindingType"), BindingType.class,
                             bindingPath + ".bindingType", result);
                     validateEnumValue(binding.get("bindingMode"), BindingMode.class,
                             bindingPath + ".bindingMode", result);
                 }
+            }
+
+            // Task 4.2: configJson 扩展字段校验
+            Map<String, Object> configJson = (Map<String, Object>) form.get("configJson");
+            validateConfigJsonExtensions(configJson, formPath, result);
+
+            // Task 4.3: fieldPermissions 值校验
+            Map<String, String> fieldPermissions = (Map<String, String>) form.get("fieldPermissions");
+            if (fieldPermissions != null) {
+                Set<String> validPermissions = Set.of("READONLY", "EDITABLE");
+                for (Map.Entry<String, String> entry : fieldPermissions.entrySet()) {
+                    if (!validPermissions.contains(entry.getValue())) {
+                        result.addError("INVALID_ENUM",
+                                formPath + ".fieldPermissions." + entry.getKey(),
+                                "Invalid permission value: " + entry.getValue() + ", must be READONLY or EDITABLE");
+                    }
+                }
+            }
+
+            // Task 4.3: showLiveValues 类型校验
+            Object showLiveValues = form.get("showLiveValues");
+            if (showLiveValues != null && !(showLiveValues instanceof Boolean)) {
+                result.addError("FIELD_CONSTRAINT", formPath + ".showLiveValues",
+                        "showLiveValues must be a Boolean");
+            }
+
+            // Task 4.3: Task Form 缺少 fieldPermissions 警告
+            if ("TASK".equals(formTypeStr) && (fieldPermissions == null || fieldPermissions.isEmpty())) {
+                result.addWarning("BEST_PRACTICE", formPath + ".fieldPermissions",
+                        "Task Form typically requires fieldPermissions configuration");
             }
         }
     }
@@ -139,6 +189,231 @@ public class AiValidationServiceImpl implements AiValidationService {
             Map<String, Object> action = actionDefinitions.get(i);
             validateEnumValue(action.get("actionType"), ActionType.class,
                     "actionDefinitions[" + i + "].actionType", result);
+
+            // Task 4.4: visibilityCondition 格式校验
+            @SuppressWarnings("unchecked")
+            Map<String, Object> actionConfig = (Map<String, Object>) action.get("configJson");
+            if (actionConfig != null) {
+                Object visibilityCondition = actionConfig.get("visibilityCondition");
+                if (visibilityCondition != null) {
+                    if (visibilityCondition instanceof String) {
+                        result.addError("FORMAT_MISMATCH",
+                                "actionDefinitions[" + i + "].configJson.visibilityCondition",
+                                "visibilityCondition must be a ConditionExpression object {field, operator, value}, not a string");
+                    } else if (visibilityCondition instanceof Map) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> condition = (Map<String, Object>) visibilityCondition;
+                        Set<String> validOperators = Set.of("equals", "not-equals", "contains",
+                                "greater-than", "less-than", "is-empty", "is-not-empty");
+                        String operator = (String) condition.get("operator");
+                        if (operator != null && !validOperators.contains(operator)) {
+                            result.addError("INVALID_ENUM",
+                                    "actionDefinitions[" + i + "].configJson.visibilityCondition.operator",
+                                    "Invalid operator: " + operator);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * 校验 configJson 业务逻辑扩展字段
+     * 检查 formulas/linkages/crossFieldRules/summaryRules 结构
+     */
+    @SuppressWarnings("unchecked")
+    private void validateConfigJsonExtensions(Map<String, Object> configJson, String formPath, AiValidationResult result) {
+        if (configJson == null) return;
+
+        // formulas 校验
+        List<Map<String, Object>> formulas = (List<Map<String, Object>>) configJson.get("formulas");
+        if (formulas != null) {
+            for (int i = 0; i < formulas.size(); i++) {
+                Map<String, Object> formula = formulas.get(i);
+                String path = formPath + ".configJson.formulas[" + i + "]";
+                String targetField = (String) formula.get("targetField");
+                if (targetField == null || targetField.isBlank()) {
+                    result.addError("FIELD_CONSTRAINT", path + ".targetField", "Formula targetField must not be empty");
+                }
+                String expression = (String) formula.get("expression");
+                if (expression == null || expression.isBlank()) {
+                    result.addError("FIELD_CONSTRAINT", path + ".expression", "Formula expression must not be empty");
+                }
+                Object dependsOn = formula.get("dependsOn");
+                if (dependsOn == null || !(dependsOn instanceof List) || ((List<?>) dependsOn).isEmpty()) {
+                    result.addError("FIELD_CONSTRAINT", path + ".dependsOn", "Formula dependsOn must be a non-empty array");
+                }
+            }
+        }
+
+        // linkages 校验
+        Set<String> validLinkageTypes = Set.of("option-filtering", "value-auto-fill", "field-state-change");
+        List<Map<String, Object>> linkages = (List<Map<String, Object>>) configJson.get("linkages");
+        if (linkages != null) {
+            for (int i = 0; i < linkages.size(); i++) {
+                Map<String, Object> linkage = linkages.get(i);
+                String path = formPath + ".configJson.linkages[" + i + "]";
+                String sourceField = (String) linkage.get("sourceField");
+                if (sourceField == null || sourceField.isBlank()) {
+                    result.addError("FIELD_CONSTRAINT", path + ".sourceField", "Linkage sourceField must not be empty");
+                }
+                String targetField = (String) linkage.get("targetField");
+                if (targetField == null || targetField.isBlank()) {
+                    result.addError("FIELD_CONSTRAINT", path + ".targetField", "Linkage targetField must not be empty");
+                }
+                String linkageType = (String) linkage.get("linkageType");
+                if (linkageType != null && !validLinkageTypes.contains(linkageType)) {
+                    result.addError("INVALID_ENUM", path + ".linkageType", "Invalid linkage type: " + linkageType);
+                }
+            }
+        }
+
+        // crossFieldRules 校验
+        List<Map<String, Object>> crossFieldRules = (List<Map<String, Object>>) configJson.get("crossFieldRules");
+        if (crossFieldRules != null) {
+            for (int i = 0; i < crossFieldRules.size(); i++) {
+                Map<String, Object> rule = crossFieldRules.get(i);
+                String path = formPath + ".configJson.crossFieldRules[" + i + "]";
+                Object fields = rule.get("fields");
+                if (fields == null || !(fields instanceof List) || ((List<?>) fields).isEmpty()) {
+                    result.addError("FIELD_CONSTRAINT", path + ".fields", "CrossFieldRule fields must be a non-empty array");
+                }
+                String message = (String) rule.get("message");
+                if (message == null || message.isBlank()) {
+                    result.addError("FIELD_CONSTRAINT", path + ".message", "CrossFieldRule message must not be empty");
+                }
+                String targetField = (String) rule.get("targetField");
+                if (targetField == null || targetField.isBlank()) {
+                    result.addError("FIELD_CONSTRAINT", path + ".targetField", "CrossFieldRule targetField must not be empty");
+                }
+            }
+        }
+
+        // summaryRules 校验
+        Set<String> validAggregations = Set.of("SUM", "AVG", "COUNT", "MIN", "MAX");
+        List<Map<String, Object>> summaryRules = (List<Map<String, Object>>) configJson.get("summaryRules");
+        if (summaryRules != null) {
+            for (int i = 0; i < summaryRules.size(); i++) {
+                Map<String, Object> rule = summaryRules.get(i);
+                String path = formPath + ".configJson.summaryRules[" + i + "]";
+                String sourceColumn = (String) rule.get("sourceColumn");
+                if (sourceColumn == null || sourceColumn.isBlank()) {
+                    result.addError("FIELD_CONSTRAINT", path + ".sourceColumn", "SummaryRule sourceColumn must not be empty");
+                }
+                String targetField = (String) rule.get("targetField");
+                if (targetField == null || targetField.isBlank()) {
+                    result.addError("FIELD_CONSTRAINT", path + ".targetField", "SummaryRule targetField must not be empty");
+                }
+                String aggregation = (String) rule.get("aggregation");
+                if (aggregation != null && !validAggregations.contains(aggregation)) {
+                    result.addError("INVALID_ENUM", path + ".aggregation", "Invalid aggregation: " + aggregation);
+                }
+            }
+        }
+    }
+
+    /**
+     * 校验决策定义数据
+     * 检查 decisionKey 非空/长度、hitPolicy 合法值、dmnXml 安全性
+     */
+    private void validateDecisionDefinitions(List<Map<String, Object>> decisionDefinitions, AiValidationResult result) {
+        if (decisionDefinitions == null) return;
+
+        Set<String> validHitPolicies = Set.of("FIRST", "UNIQUE", "PRIORITY", "ANY", "COLLECT", "RULE_ORDER", "OUTPUT_ORDER");
+
+        for (int i = 0; i < decisionDefinitions.size(); i++) {
+            Map<String, Object> decision = decisionDefinitions.get(i);
+            String path = "decisionDefinitions[" + i + "]";
+
+            // decisionKey 非空且长度限制
+            String decisionKey = (String) decision.get("decisionKey");
+            if (decisionKey == null || decisionKey.isBlank()) {
+                result.addError("FIELD_CONSTRAINT", path + ".decisionKey", "decisionKey must not be empty");
+            } else if (decisionKey.length() > 100) {
+                result.addError("FIELD_CONSTRAINT", path + ".decisionKey", "decisionKey must not exceed 100 characters");
+            }
+
+            // hitPolicy 合法值
+            String hitPolicy = (String) decision.get("hitPolicy");
+            if (hitPolicy != null && !validHitPolicies.contains(hitPolicy)) {
+                result.addError("INVALID_ENUM", path + ".hitPolicy", "Invalid hit policy: " + hitPolicy);
+            }
+
+            // dmnXml 安全校验
+            String dmnXml = (String) decision.get("dmnXml");
+            if (dmnXml != null && !dmnXml.isBlank()) {
+                try {
+                    DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+                    factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+                    factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
+                    factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+                    DocumentBuilder builder = factory.newDocumentBuilder();
+                    Document doc = builder.parse(new InputSource(new StringReader(dmnXml)));
+                    // 检查危险标签
+                    for (String tag : new String[]{"script", "iframe"}) {
+                        if (doc.getElementsByTagName(tag).getLength() > 0) {
+                            result.addError("DMN_VALIDATION", path + ".dmnXml",
+                                    "DMN XML contains dangerous tag: <" + tag + ">");
+                        }
+                    }
+                } catch (Exception e) {
+                    result.addError("DMN_VALIDATION", path + ".dmnXml",
+                            "DMN XML is not valid: " + e.getMessage());
+                }
+            }
+        }
+    }
+
+    /**
+     * 校验表关系数据
+     * 检查 relationType 合法值、sourceFieldName/targetFieldName 非空、引用完整性
+     */
+    private void validateTableRelations(AiGeneratedData generatedData, AiValidationResult result) {
+        List<Map<String, Object>> tableRelations = generatedData.getTableRelations();
+        if (tableRelations == null) return;
+
+        Set<String> validRelationTypes = Set.of("ONE_TO_ONE", "ONE_TO_MANY", "MANY_TO_MANY");
+
+        // 构建表名集合用于引用完整性校验
+        Set<String> tableNames = new HashSet<>();
+        if (generatedData.getTableDefinitions() != null) {
+            for (Map<String, Object> table : generatedData.getTableDefinitions()) {
+                String name = (String) table.get("tableName");
+                if (name != null) tableNames.add(name);
+            }
+        }
+
+        for (int i = 0; i < tableRelations.size(); i++) {
+            Map<String, Object> relation = tableRelations.get(i);
+            String path = "tableRelations[" + i + "]";
+
+            // relationType 合法值
+            String relationType = (String) relation.get("relationType");
+            if (relationType != null && !validRelationTypes.contains(relationType)) {
+                result.addError("INVALID_ENUM", path + ".relationType", "Invalid relation type: " + relationType);
+            }
+
+            // sourceFieldName / targetFieldName 非空
+            String sourceFieldName = (String) relation.get("sourceFieldName");
+            if (sourceFieldName == null || sourceFieldName.isBlank()) {
+                result.addError("FIELD_CONSTRAINT", path + ".sourceFieldName", "sourceFieldName must not be empty");
+            }
+            String targetFieldName = (String) relation.get("targetFieldName");
+            if (targetFieldName == null || targetFieldName.isBlank()) {
+                result.addError("FIELD_CONSTRAINT", path + ".targetFieldName", "targetFieldName must not be empty");
+            }
+
+            // 引用完整性：sourceTableName / targetTableName 必须存在于 tableDefinitions
+            String sourceTableName = (String) relation.get("sourceTableName");
+            if (sourceTableName != null && !tableNames.contains(sourceTableName)) {
+                result.addError("REFERENCE_INTEGRITY", path + ".sourceTableName",
+                        "Referenced table '" + sourceTableName + "' does not exist in tableDefinitions");
+            }
+            String targetTableName = (String) relation.get("targetTableName");
+            if (targetTableName != null && !tableNames.contains(targetTableName)) {
+                result.addError("REFERENCE_INTEGRITY", path + ".targetTableName",
+                        "Referenced table '" + targetTableName + "' does not exist in tableDefinitions");
+            }
         }
     }
 
@@ -326,6 +601,26 @@ public class AiValidationServiceImpl implements AiValidationService {
                 }
             }
         }
+
+        // Validate TableRelation references
+        List<Map<String, Object>> tableRelations = generatedData.getTableRelations();
+        if (tableRelations != null) {
+            for (int i = 0; i < tableRelations.size(); i++) {
+                Map<String, Object> relation = tableRelations.get(i);
+                String sourceTableName = (String) relation.get("sourceTableName");
+                String targetTableName = (String) relation.get("targetTableName");
+                String relPath = "tableRelations[" + i + "]";
+
+                if (sourceTableName != null && !tableMap.containsKey(sourceTableName)) {
+                    result.addError("REFERENCE_INTEGRITY", relPath + ".sourceTableName",
+                            "Referenced table '" + sourceTableName + "' does not exist");
+                }
+                if (targetTableName != null && !tableMap.containsKey(targetTableName)) {
+                    result.addError("REFERENCE_INTEGRITY", relPath + ".targetTableName",
+                            "Referenced table '" + targetTableName + "' does not exist");
+                }
+            }
+        }
     }
 
     @SuppressWarnings("unchecked")
@@ -336,6 +631,8 @@ public class AiValidationServiceImpl implements AiValidationService {
         checkUniqueness(generatedData.getFormDefinitions(), "formName", "formDefinitions", result);
         // actionName uniqueness
         checkUniqueness(generatedData.getActionDefinitions(), "actionName", "actionDefinitions", result);
+        // decisionKey uniqueness
+        checkUniqueness(generatedData.getDecisionDefinitions(), "decisionKey", "decisionDefinitions", result);
 
         // fieldName uniqueness per table
         List<Map<String, Object>> tables = generatedData.getTableDefinitions();
@@ -388,5 +685,194 @@ public class AiValidationServiceImpl implements AiValidationService {
         } catch (Exception e) {
             return 0;
         }
+    }
+
+    // ==================== Quality Score ====================
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public AiQualityScore computeQualityScore(AiGeneratedData data) {
+        int completeness = computeCompleteness(data);
+        int consistency = computeConsistency(data);
+        int complexity = computeComplexity(data);
+        int naming = computeNaming(data);
+
+        List<String> suggestions = new ArrayList<>();
+        if (completeness < 20) {
+            suggestions.add("Consider adding more entity types for a complete function unit");
+        }
+        if (consistency < 20) {
+            suggestions.add("Some references are invalid, check table bindings and foreign keys");
+        }
+        if (complexity < 20) {
+            suggestions.add("Consider using more diverse field types (DECIMAL, DATE, BOOLEAN) for richer data modeling");
+        }
+        if (naming < 20) {
+            suggestions.add("Use snake_case for table names and camelCase for field names");
+        }
+
+        Map<String, Integer> dimensions = new java.util.LinkedHashMap<>();
+        dimensions.put("completeness", completeness);
+        dimensions.put("consistency", consistency);
+        dimensions.put("complexity", complexity);
+        dimensions.put("naming", naming);
+
+        return AiQualityScore.builder()
+                .totalScore(completeness + consistency + complexity + naming)
+                .dimensions(dimensions)
+                .suggestions(suggestions)
+                .build();
+    }
+
+    /**
+     * 完整性评分：是否包含所有实体类型（tables, forms, actions, process, decisions, tableRelations）
+     */
+    private int computeCompleteness(AiGeneratedData data) {
+        int score = 0;
+        int entityTypes = 6;
+        if (data.getTableDefinitions() != null && !data.getTableDefinitions().isEmpty()) score += 25 / entityTypes;
+        if (data.getFormDefinitions() != null && !data.getFormDefinitions().isEmpty()) score += 25 / entityTypes;
+        if (data.getActionDefinitions() != null && !data.getActionDefinitions().isEmpty()) score += 25 / entityTypes;
+        if (data.getProcessDefinition() != null) score += 25 / entityTypes;
+        if (data.getDecisionDefinitions() != null && !data.getDecisionDefinitions().isEmpty()) score += 25 / entityTypes;
+        if (data.getTableRelations() != null && !data.getTableRelations().isEmpty()) score += 25 / entityTypes;
+        return Math.min(score, 25);
+    }
+
+    /**
+     * 一致性评分：引用完整性得分（表绑定、外键引用是否指向已存在的表）
+     */
+    @SuppressWarnings("unchecked")
+    private int computeConsistency(AiGeneratedData data) {
+        Set<String> tableNames = new HashSet<>();
+        if (data.getTableDefinitions() != null) {
+            for (Map<String, Object> table : data.getTableDefinitions()) {
+                String name = (String) table.get("tableName");
+                if (name != null) tableNames.add(name);
+            }
+        }
+        if (tableNames.isEmpty()) return 25; // 无表定义时不扣分
+
+        int totalRefs = 0;
+        int validRefs = 0;
+
+        // 检查 formDefinitions 的 tableBindings 引用
+        if (data.getFormDefinitions() != null) {
+            for (Map<String, Object> form : data.getFormDefinitions()) {
+                List<Map<String, Object>> bindings = (List<Map<String, Object>>) form.get("tableBindings");
+                if (bindings != null) {
+                    for (Map<String, Object> binding : bindings) {
+                        String tableName = (String) binding.get("tableName");
+                        if (tableName != null) {
+                            totalRefs++;
+                            if (tableNames.contains(tableName)) validRefs++;
+                        }
+                    }
+                }
+            }
+        }
+
+        // 检查 tableRelations 引用
+        if (data.getTableRelations() != null) {
+            for (Map<String, Object> relation : data.getTableRelations()) {
+                String source = (String) relation.get("sourceTableName");
+                String target = (String) relation.get("targetTableName");
+                if (source != null) {
+                    totalRefs++;
+                    if (tableNames.contains(source)) validRefs++;
+                }
+                if (target != null) {
+                    totalRefs++;
+                    if (tableNames.contains(target)) validRefs++;
+                }
+            }
+        }
+
+        // 检查 foreignKeys 引用
+        if (data.getTableDefinitions() != null) {
+            for (Map<String, Object> table : data.getTableDefinitions()) {
+                List<Map<String, Object>> foreignKeys = (List<Map<String, Object>>) table.get("foreignKeys");
+                if (foreignKeys != null) {
+                    for (Map<String, Object> fk : foreignKeys) {
+                        String refTableName = (String) fk.get("refTableName");
+                        if (refTableName != null) {
+                            totalRefs++;
+                            if (tableNames.contains(refTableName)) validRefs++;
+                        }
+                    }
+                }
+            }
+        }
+
+        return totalRefs == 0 ? 25 : (int) (25.0 * validRefs / totalRefs);
+    }
+
+    /**
+     * 复杂度评分：字段类型多样性和合理性
+     */
+    @SuppressWarnings("unchecked")
+    private int computeComplexity(AiGeneratedData data) {
+        if (data.getTableDefinitions() == null || data.getTableDefinitions().isEmpty()) return 25;
+
+        Set<String> usedDataTypes = new HashSet<>();
+        int totalFields = 0;
+
+        for (Map<String, Object> table : data.getTableDefinitions()) {
+            List<Map<String, Object>> fields = (List<Map<String, Object>>) table.get("fieldDefinitions");
+            if (fields == null) {
+                fields = (List<Map<String, Object>>) table.get("fields");
+            }
+            if (fields != null) {
+                for (Map<String, Object> field : fields) {
+                    totalFields++;
+                    String dataType = (String) field.get("dataType");
+                    if (dataType != null) usedDataTypes.add(dataType);
+                }
+            }
+        }
+
+        if (totalFields == 0) return 25;
+
+        // 类型多样性：使用的不同数据类型数量越多越好（最多 8 种得满分）
+        int diversityScore = Math.min((int) (25.0 * usedDataTypes.size() / 8), 25);
+        return diversityScore;
+    }
+
+    /**
+     * 命名规范评分：表名 snake_case、字段名 snake_case 检查
+     */
+    @SuppressWarnings("unchecked")
+    private int computeNaming(AiGeneratedData data) {
+        if (data.getTableDefinitions() == null || data.getTableDefinitions().isEmpty()) return 25;
+
+        int total = 0;
+        int valid = 0;
+
+        for (Map<String, Object> table : data.getTableDefinitions()) {
+            String tableName = (String) table.get("tableName");
+            if (tableName != null) {
+                total++;
+                if (tableName.matches("^[a-z][a-z0-9_]*$")) valid++;
+            }
+
+            List<Map<String, Object>> fields = (List<Map<String, Object>>) table.get("fieldDefinitions");
+            if (fields == null) {
+                fields = (List<Map<String, Object>>) table.get("fields");
+            }
+            if (fields != null) {
+                for (Map<String, Object> field : fields) {
+                    String fieldName = (String) field.get("fieldName");
+                    if (fieldName != null) {
+                        total++;
+                        // 字段名允许 snake_case 或 camelCase
+                        if (fieldName.matches("^[a-z][a-zA-Z0-9]*$") || fieldName.matches("^[a-z][a-z0-9_]*$")) {
+                            valid++;
+                        }
+                    }
+                }
+            }
+        }
+
+        return total == 0 ? 25 : (int) (25.0 * valid / total);
     }
 }

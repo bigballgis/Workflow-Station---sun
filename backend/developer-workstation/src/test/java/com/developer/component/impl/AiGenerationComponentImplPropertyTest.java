@@ -42,7 +42,8 @@ class AiGenerationComponentImplPropertyTest {
         AiWriteService aiWriteService = mock(AiWriteService.class);
 
         AiGenerationComponentImpl component = new AiGenerationComponentImpl(
-                aiGenerationService, aiLockService, aiValidationService, aiWriteService, (Executor) Runnable::run);
+                aiGenerationService, aiLockService, aiValidationService, aiWriteService, (Executor) Runnable::run,
+                new com.fasterxml.jackson.databind.ObjectMapper());
 
         UUID sessionUuid = UUID.randomUUID();
         AiSession session = AiSession.builder()
@@ -61,7 +62,7 @@ class AiGenerationComponentImplPropertyTest {
                 .thenReturn(List.of());
 
         CountDownLatch latch = new CountDownLatch(1);
-        when(aiGenerationService.callN8NWebhook(any(), anyString(), any(), any(), any(), anyLong(), anyList()))
+        when(aiGenerationService.callN8NWebhook(any(), anyString(), any(), any(), any(), anyLong(), anyList(), any()))
                 .thenReturn(Map.of("reply", "ok"));
         doAnswer(inv -> { latch.countDown(); return null; })
                 .when(aiGenerationService).completeChatEmitter(anyLong(), anyString());
@@ -90,7 +91,8 @@ class AiGenerationComponentImplPropertyTest {
         AiWriteService aiWriteService = mock(AiWriteService.class);
 
         AiGenerationComponentImpl component = new AiGenerationComponentImpl(
-                aiGenerationService, aiLockService, aiValidationService, aiWriteService, (Executor) Runnable::run);
+                aiGenerationService, aiLockService, aiValidationService, aiWriteService, (Executor) Runnable::run,
+                new com.fasterxml.jackson.databind.ObjectMapper());
 
         UUID sessionUuid = UUID.randomUUID();
         AiSession session = AiSession.builder()
@@ -109,7 +111,7 @@ class AiGenerationComponentImplPropertyTest {
                 .thenReturn(List.of());
 
         CountDownLatch latch = new CountDownLatch(1);
-        when(aiGenerationService.callN8NWebhook(any(), anyString(), any(), any(), any(), anyLong(), anyList()))
+        when(aiGenerationService.callN8NWebhook(any(), anyString(), any(), any(), any(), anyLong(), anyList(), any()))
                 .thenReturn(Map.of("reply", "ok"));
         doAnswer(inv -> { latch.countDown(); return null; })
                 .when(aiGenerationService).completeChatEmitter(anyLong(), anyString());
@@ -141,7 +143,8 @@ class AiGenerationComponentImplPropertyTest {
         AiWriteService aiWriteService = mock(AiWriteService.class);
 
         AiGenerationComponentImpl component = new AiGenerationComponentImpl(
-                aiGenerationService, aiLockService, aiValidationService, aiWriteService, (Executor) Runnable::run);
+                aiGenerationService, aiLockService, aiValidationService, aiWriteService, (Executor) Runnable::run,
+                new com.fasterxml.jackson.databind.ObjectMapper());
 
         UUID sessionUuid = UUID.randomUUID();
         AiSession session = AiSession.builder()
@@ -160,7 +163,7 @@ class AiGenerationComponentImplPropertyTest {
                 .thenReturn(List.of());
 
         CountDownLatch latch = new CountDownLatch(1);
-        when(aiGenerationService.callN8NWebhook(any(), anyString(), any(), any(), any(), anyLong(), anyList()))
+        when(aiGenerationService.callN8NWebhook(any(), anyString(), any(), any(), any(), anyLong(), anyList(), any()))
                 .thenReturn(Map.of("reply", "ok"));
         doAnswer(inv -> { latch.countDown(); return null; })
                 .when(aiGenerationService).completeChatEmitter(anyLong(), anyString());

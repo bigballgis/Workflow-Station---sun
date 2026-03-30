@@ -8,6 +8,7 @@ import com.developer.entity.FormTableBinding;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 表单设计组件接口
@@ -75,4 +76,30 @@ public interface FormDesignComponent {
      * 获取表单的所有表绑定
      */
     List<FormTableBinding> getBindings(Long formId);
+    
+    // ========== Process/Task Form 扩展方法 ==========
+    
+    /**
+     * 校验 PROCESS form 唯一性
+     * 查询 FunctionUnit 下 PROCESS form 数量，>0 时抛出 409 BusinessException
+     */
+    void validateProcessFormUniqueness(Long functionUnitId);
+    
+    /**
+     * 校验字段名是否存在于 Data_Table 列中
+     * 对比字段名与 Data_Table 列名，不匹配时抛出 400 BusinessException
+     */
+    void validateFieldNames(Long functionUnitId, List<String> fieldNames);
+    
+    /**
+     * 复制 Task Form
+     * 深拷贝 configJson，清空 stageBindings，生成新 ID
+     */
+    FormDefinition copyTaskForm(Long sourceFormId);
+    
+    /**
+     * 获取 FunctionUnit 所有 Data_Table 列名
+     * 查询所有 TableDefinition → FieldDefinition 列名
+     */
+    List<String> getDataTableColumns(Long functionUnitId);
 }

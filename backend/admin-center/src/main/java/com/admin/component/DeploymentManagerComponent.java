@@ -384,6 +384,14 @@ public class DeploymentManagerComponent {
             DeploymentEnvironment environment, Pageable pageable) {
         return deploymentRepository.findByEnvironmentOrderByCreatedAtDesc(environment, pageable);
     }
+
+    /**
+     * 获取所有部署记录（全局分页查询，不限定功能单元）
+     * Req 15.2
+     */
+    public Page<FunctionUnitDeployment> listAllDeployments(Pageable pageable) {
+        return deploymentRepository.findByConditions(null, null, null, pageable);
+    }
     
     /**
      * 获取待审批的部署

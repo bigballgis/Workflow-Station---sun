@@ -151,8 +151,8 @@ class AiGenerationServiceTest {
         SseEmitter emitter = generationService.createChatEmitter(1L, "user1");
 
         assertNotNull(emitter);
-        // SseEmitter timeout is set to 120_000L in the implementation
-        assertEquals(120_000L, emitter.getTimeout());
+        // Dynamic timeout: n8nTimeoutSeconds(120) * 2 * 1000 + 60_000 = 300_000
+        assertEquals(300_000L, emitter.getTimeout());
     }
 
     // ==================== Conversation History ====================

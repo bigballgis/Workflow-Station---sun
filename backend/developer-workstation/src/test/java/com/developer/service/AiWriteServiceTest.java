@@ -82,7 +82,7 @@ class AiWriteServiceTest {
                 )))
                 .build();
 
-        writeService.applyGeneratedData(1L, data);
+        writeService.applyGeneratedData(1L, data, null);
 
         // Verify save was called
         ArgumentCaptor<FunctionUnit> captor = ArgumentCaptor.forClass(FunctionUnit.class);
@@ -94,8 +94,8 @@ class AiWriteServiceTest {
         assertFalse(saved.getTableDefinitions().isEmpty(), "Table definitions should be written");
         assertEquals("orders", saved.getTableDefinitions().get(0).getTableName());
 
-        // In NEW mode, entityManager.flush() should NOT be called (no clearExistingData)
-        verify(entityManager, never()).flush();
+        // In NEW mode, entityManager.flush() should be called after writeTableDefinitions
+        verify(entityManager).flush();
     }
 
     @Test
@@ -124,10 +124,10 @@ class AiWriteServiceTest {
                 )))
                 .build();
 
-        writeService.applyGeneratedData(1L, data);
+        writeService.applyGeneratedData(1L, data, null);
 
-        // In MODIFY mode, entityManager.flush() should be called after clearing
-        verify(entityManager).flush();
+        // In MODIFY mode, entityManager.flush() should be called after clearing and after writeTableDefinitions
+        verify(entityManager, atLeast(2)).flush();
 
         ArgumentCaptor<FunctionUnit> captor = ArgumentCaptor.forClass(FunctionUnit.class);
         verify(functionUnitRepository).save(captor.capture());
@@ -159,7 +159,7 @@ class AiWriteServiceTest {
                 ))
                 .build();
 
-        writeService.applyGeneratedData(1L, data);
+        writeService.applyGeneratedData(1L, data, null);
 
         // Should NOT create a new icon
         verify(iconRepository, never()).save(any(Icon.class));
@@ -193,7 +193,7 @@ class AiWriteServiceTest {
                 ))
                 .build();
 
-        writeService.applyGeneratedData(1L, data);
+        writeService.applyGeneratedData(1L, data, null);
 
         // Should create a new icon
         verify(iconRepository).save(any(Icon.class));

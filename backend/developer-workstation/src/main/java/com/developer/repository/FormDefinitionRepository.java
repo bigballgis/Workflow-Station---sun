@@ -52,4 +52,6 @@ public interface FormDefinitionRepository extends JpaRepository<FormDefinition, 
     boolean existsByFunctionUnitIdAndFormNameAndIdNot(Long functionUnitId, String formName, Long id);
     
     boolean existsByBoundTable_Id(Long tableId);
+    
+    long countByFunctionUnitIdAndFormType(Long functionUnitId, FormType formType);
 }

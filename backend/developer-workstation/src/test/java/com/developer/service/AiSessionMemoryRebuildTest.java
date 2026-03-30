@@ -93,7 +93,7 @@ class AiSessionMemoryRebuildTest {
         Map<String, Object> body = (Map<String, Object>) ReflectionTestUtils.invokeMethod(
                 generationService, "buildN8NRequestBody",
                 sessionId, "new message", AiPhase.DESIGN, AiMode.MODIFY,
-                context, existingDocuments, history);
+                context, functionUnitId, existingDocuments, history, (String) null);
 
         assertNotNull(body);
         // Verify all fields present

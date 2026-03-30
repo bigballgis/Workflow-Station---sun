@@ -3,10 +3,14 @@ package com.developer.component.impl;
 import com.developer.component.ActionDesignComponent;
 import com.developer.dto.ActionDefinitionRequest;
 import com.developer.entity.ActionDefinition;
+import com.developer.entity.FormDefinition;
 import com.developer.entity.FunctionUnit;
+import com.developer.enums.ActionType;
+import com.developer.enums.FormType;
 import com.developer.exception.BusinessException;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.ActionDefinitionRepository;
+import com.developer.repository.FormDefinitionRepository;
 import com.developer.repository.FunctionUnitRepository;
 import com.platform.common.i18n.I18nService;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +32,7 @@ public class ActionDesignComponentImpl implements ActionDesignComponent {
     
     private final ActionDefinitionRepository actionDefinitionRepository;
     private final FunctionUnitRepository functionUnitRepository;
+    private final FormDefinitionRepository formDefinitionRepository;
     private final I18nService i18nService;
     
     @Override
@@ -53,6 +58,8 @@ public class ActionDesignComponentImpl implements ActionDesignComponent {
                 .isDefault(isDefaultActionType(request.getActionType()))
                 .build();
         
+        validateFormPopupType(actionDefinition);
+        
         return actionDefinitionRepository.save(actionDefinition);
     }
     
@@ -74,6 +81,8 @@ public class ActionDesignComponentImpl implements ActionDesignComponent {
         actionDefinition.setIcon(request.getIcon());
         actionDefinition.setButtonColor(request.getButtonColor());
         actionDefinition.setDescription(request.getDescription());
+        
+        validateFormPopupType(actionDefinition);
         
         return actionDefinitionRepository.save(actionDefinition);
     }
@@ -163,5 +172,45 @@ public class ActionDesignComponentImpl implements ActionDesignComponent {
             case APPROVE, REJECT, TRANSFER, DELEGATE, ROLLBACK, WITHDRAW -> true;
             default -> false;
         };
+    }
+    
+    /**
+     * 校验 FORM_POPUP Action 引用的表单必须是 FormType.ACTION
+     * 如果引用 PROCESS 或 TASK 类型表单，抛出 400 BusinessException
+     */
+    private void validateFormPopupType(ActionDefinition actionDefinition) {
+        if (actionDefinition.getActionType() != ActionType.FORM_POPUP) {
+            return;
+        }
+        
+        Map<String, Object> config = actionDefinition.getConfigJson();
+        if (config == null) {
+            return;
+        }
+        
+        Object formIdObj = config.get("formId");
+        if (formIdObj == null) {
+            return;
+        }
+        
+        Long formId;
+        if (formIdObj instanceof Number) {
+            formId = ((Number) formIdObj).longValue();
+        } else {
+            try {
+                formId = Long.parseLong(formIdObj.toString());
+            } catch (NumberFormatException e) {
+                return;
+            }
+        }
+        
+        FormDefinition form = formDefinitionRepository.findById(formId)
+                .orElseThrow(() -> new ResourceNotFoundException("FormDefinition", formId));
+        
+        if (form.getFormType() != FormType.ACTION) {
+            throw new BusinessException("INVALID_POPUP_FORM_TYPE",
+                    i18nService.getMessage("action.invalid_popup_form_type"),
+                    i18nService.getMessage("action.popup_must_use_action_form"));
+        }
     }
 }

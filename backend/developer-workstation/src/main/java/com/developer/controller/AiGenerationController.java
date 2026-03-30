@@ -180,4 +180,14 @@ public class AiGenerationController extends BaseController {
             return null;
         });
     }
+
+    @PostMapping("/{functionUnitId}/undo")
+    @Operation(summary = "Undo last AI data apply (30s TTL)")
+    @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
+    public ResponseEntity<ApiResponse<Void>> undoLastApply(@PathVariable Long functionUnitId) {
+        return handleRequest(() -> {
+            aiGenerationComponent.undoLastApply(functionUnitId);
+            return null;
+        });
+    }
 }

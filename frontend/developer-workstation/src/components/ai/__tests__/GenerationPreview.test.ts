@@ -37,8 +37,8 @@ const globalStubs = {
   'el-descriptions-item': { template: '<div class="el-descriptions-item"><slot /></div>', props: ['label'] },
   'el-tag': { template: '<span class="el-tag"><slot /></span>', props: ['size', 'type'] },
   'el-button': {
-    template: '<button class="el-button" @click="$emit(\'click\')"><slot /></button>',
-    props: ['type'],
+    template: '<button class="el-button" :disabled="disabled" @click="!disabled && $emit(\'click\')"><slot /></button>',
+    props: ['type', 'disabled'],
     emits: ['click']
   }
 }
@@ -52,6 +52,8 @@ describe('GenerationPreview', () => {
     actionTypes: ['APPROVE', 'REJECT', 'SAVE'],
     processNodeCount: 5,
     processGatewayCount: 2,
+    decisionCount: 0,
+    tableRelationCount: 0,
     iconSvg: undefined
   }
 
@@ -125,7 +127,10 @@ describe('GenerationPreview', () => {
   })
 
   it('should emit apply when confirm button is clicked', async () => {
-    const wrapper = mountComponent()
+    const wrapper = shallowMount(GenerationPreview, {
+      props: { previewData: defaultPreviewData, generatedData: defaultGeneratedData, isGenerationComplete: true },
+      global: { stubs: globalStubs, plugins: [i18n] }
+    })
     const buttons = wrapper.findAll('.el-button')
     // First button is "确认应用"
     const applyBtn = buttons.find(b => b.text().includes('确认应用'))

@@ -14,6 +14,20 @@ import {
 } from 'element-plus'
 
 /* ── editor ─────────────────────────────────────────────────────────────────── */
+/**
+ * FcEditor — Rich text editor wrapper for form-create / fc-designer.
+ *
+ * Design-time upgrade note:
+ * This component uses a textarea as a lightweight stand-in for the designer
+ * canvas preview. The actual rich text editing experience is provided by
+ * @wangeditor/editor-for-vue in the user-portal FieldRenderer.vue at runtime.
+ *
+ * A full wangeditor integration here would require installing the package in
+ * developer-workstation and using an SFC (since wangeditor Vue components
+ * don't work well with h() render functions in defineComponent). If a richer
+ * designer preview is needed, convert FcEditor to an SFC and import
+ * { Editor, Toolbar } from '@wangeditor/editor-for-vue'.
+ */
 export const FcEditor = defineComponent({
   name: 'FcEditor',
   props: {
@@ -26,15 +40,25 @@ export const FcEditor = defineComponent({
   emits: ['update:modelValue'],
   setup(props, { emit }) {
     return () =>
-      h(ElInput, {
-        modelValue: props.modelValue,
-        type: 'textarea',
-        rows: props.rows,
-        placeholder: props.placeholder || 'Rich text editor',
-        maxlength: props.maxlength,
-        disabled: props.disabled,
-        'onUpdate:modelValue': (v: string) => emit('update:modelValue', v),
-      })
+      h('div', {
+        style: 'border:1px solid #dcdfe6;border-radius:4px;overflow:hidden',
+      }, [
+        // Simulated toolbar
+        h('div', {
+          style: 'padding:4px 8px;border-bottom:1px solid #e8e8e8;background:#f5f5f5;font-size:12px;color:#999;user-select:none',
+        }, 'B  I  U  S  H1  H2  ━  ☰  🔗  📷'),
+        // Editable area
+        h(ElInput, {
+          modelValue: props.modelValue,
+          type: 'textarea',
+          rows: props.rows,
+          placeholder: props.placeholder || 'Rich text editor',
+          maxlength: props.maxlength,
+          disabled: props.disabled,
+          style: 'border:none',
+          'onUpdate:modelValue': (v: string) => emit('update:modelValue', v),
+        }),
+      ])
   },
 })
 

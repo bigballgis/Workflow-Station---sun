@@ -6,6 +6,7 @@
         <el-icon><Refresh /></el-icon> {{ t('common.refresh') }}
       </el-button>
       <el-button @click="showRelationDialog = true" :disabled="store.tables.length < 2">{{ t('table.relations') }}</el-button>
+      <el-button @click="handleValidate">{{ t('table.validateTables') }}</el-button>
     </div>
     
     <div class="table-list" v-if="!selectedTable">
@@ -46,6 +47,7 @@
         </el-button>
         <span class="table-name">{{ selectedTable.tableName }}</span>
         <el-button type="primary" @click="handleSaveTable">{{ t('table.save') }}</el-button>
+        <el-button @click="handleGenerateDDL">{{ t('table.ddlPreview') }}</el-button>
       </div>
       
       <el-form :model="selectedTable" label-width="140px" label-position="left" style="max-width: 640px; margin-bottom: 20px;">
@@ -70,7 +72,16 @@
 
       <h4>{{ t('table.fields') }}</h4>
       <el-button size="small" @click="handleAddField" style="margin-top: 8px; margin-bottom: 10px;">{{ t('table.addField') }}</el-button>
-      <el-table :data="selectedTable.fieldDefinitions" size="small" border>
+      <el-table :data="selectedTable.fieldDefinitions" size="small" border row-key="fieldName">
+        <el-table-column width="50" align="center">
+          <template #header>⇅</template>
+          <template #default="{ $index }">
+            <div style="display: flex; flex-direction: column; align-items: center; gap: 2px;">
+              <el-button v-if="$index > 0" link size="small" @click="moveFieldUp($index)">↑</el-button>
+              <el-button v-if="$index < selectedTable.fieldDefinitions.length - 1" link size="small" @click="moveFieldDown($index)">↓</el-button>
+            </div>
+          </template>
+        </el-table-column>
         <el-table-column prop="fieldName" :label="t('table.fieldName')" min-width="120">
           <template #default="{ row }">
             <el-input v-model="row.fieldName" size="small" />
@@ -106,6 +117,28 @@
             <el-checkbox v-model="row.isPrimaryKey" />
           </template>
         </el-table-column>
+        <el-table-column prop="defaultValue" :label="t('table.defaultValue')" min-width="120">
+          <template #default="{ row }">
+            <el-input v-model="row.defaultValue" size="small" :placeholder="t('common.inputPlaceholder')" />
+          </template>
+        </el-table-column>
+        <el-table-column prop="isUnique" :label="t('table.isUnique')" min-width="68" align="center">
+          <template #default="{ row }">
+            <el-checkbox v-model="row.isUnique" />
+          </template>
+        </el-table-column>
+        <el-table-column v-if="hasDecimalFields" prop="precision" :label="t('table.precision')" min-width="92">
+          <template #default="{ row }">
+            <el-input-number v-if="row.dataType === 'DECIMAL'" v-model="row.precision" size="small" :min="1" :max="38" controls-position="right" />
+            <span v-else class="text-muted">-</span>
+          </template>
+        </el-table-column>
+        <el-table-column v-if="hasDecimalFields" prop="scale" :label="t('table.scale')" min-width="92">
+          <template #default="{ row }">
+            <el-input-number v-if="row.dataType === 'DECIMAL'" v-model="row.scale" size="small" :min="0" :max="20" controls-position="right" />
+            <span v-else class="text-muted">-</span>
+          </template>
+        </el-table-column>
         <el-table-column prop="description" :label="t('table.description')" min-width="270">
           <template #default="{ row }">
             <el-input v-model="row.description" size="small" />
@@ -127,10 +160,10 @@
         </el-form-item>
         <el-form-item :label="t('table.tableType')">
           <el-select v-model="createForm.tableType">
-            <el-option :label="t('form.mainForm')" value="MAIN" />
-            <el-option :label="t('form.subForm')" value="SUB" />
-            <el-option :label="t('form.actionForm')" value="ACTION" />
-            <el-option :label="t('table.relations')" value="RELATION" />
+            <el-option :label="t('table.mainTable')" value="MAIN" />
+            <el-option :label="t('table.subTable')" value="SUB" />
+            <el-option :label="t('table.actionTable')" value="ACTION" />
+            <el-option :label="t('table.relationTable')" value="RELATION" />
           </el-select>
         </el-form-item>
         <el-form-item :label="t('table.description')">
@@ -206,12 +239,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ArrowLeft, Delete, Plus, Refresh } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
 import { functionUnitApi, type TableDefinition, type FieldDefinition, type ForeignKeyDTO } from '@/api/functionUnit'
+import draggable from 'vuedraggable'
 
 const { t } = useI18n()
 
@@ -238,8 +272,18 @@ const createForm = reactive({ tableName: '', tableType: 'MAIN', description: '' 
 const relations = ref<TableRelation[]>([])
 const foreignKeys = ref<ForeignKeyDTO[]>([])
 
+const NAME_REGEX = /^[a-zA-Z][a-zA-Z0-9_]*$/
+
+const hasDecimalFields = computed(() => {
+  return selectedTable.value?.fieldDefinitions?.some(f => f.dataType === 'DECIMAL') ?? false
+})
+
+function validateName(name: string): boolean {
+  return NAME_REGEX.test(name)
+}
+
 const tableTypeLabel = (type: string) => {
-  const map: Record<string, string> = { MAIN: t('form.mainForm'), SUB: t('form.subForm'), ACTION: t('form.actionForm'), RELATION: t('table.relations') }
+  const map: Record<string, string> = { MAIN: t('table.mainTable'), SUB: t('table.subTable'), ACTION: t('table.actionTable'), RELATION: t('table.relationTable') }
   return map[type] || type
 }
 
@@ -282,17 +326,15 @@ async function loadTables() {
 }
 
 async function loadRelations() {
-  // Load from localStorage first — independent of API availability
-  const stored = localStorage.getItem(`table_relations_${props.functionUnitId}`)
-  if (stored) {
-    try {
-      relations.value = JSON.parse(stored)
-    } catch {
-      relations.value = []
-    }
+  // Load table relations from backend API
+  try {
+    const res = await functionUnitApi.getTableRelations(props.functionUnitId)
+    relations.value = res?.data || []
+  } catch {
+    relations.value = []
   }
 
-  // Load DB foreign keys from API — failure must not wipe localStorage relations
+  // Load DB foreign keys from API
   try {
     const res = await functionUnitApi.getForeignKeys(props.functionUnitId)
     foreignKeys.value = res?.data || []
@@ -313,6 +355,11 @@ function handleBackToList() {
 }
 
 async function handleCreateTable() {
+  // Validate table name
+  if (!validateName(createForm.tableName)) {
+    ElMessage.warning(t('table.invalidTableName'))
+    return
+  }
   try {
     await store.createTable(props.functionUnitId, createForm)
     ElMessage.success(t('functionUnit.createSuccess'))
@@ -326,6 +373,17 @@ async function handleCreateTable() {
 
 async function handleSaveTable() {
   if (!selectedTable.value) return
+  // Validate table name
+  if (!validateName(selectedTable.value.tableName)) {
+    ElMessage.warning(t('table.invalidTableName'))
+    return
+  }
+  // Validate field names
+  const invalidField = selectedTable.value.fieldDefinitions.find(f => f.fieldName && !validateName(f.fieldName))
+  if (invalidField) {
+    ElMessage.warning(t('table.invalidFieldName', { name: invalidField.fieldName }))
+    return
+  }
   try {
     // 转换数据格式：将 fieldDefinitions 转换为 fields
     // 后端期望的是 TableDefinitionRequest，包含 fields 而不是 fieldDefinitions
@@ -342,7 +400,7 @@ async function handleSaveTable() {
         isPrimaryKey: f.isPrimaryKey || false,
         isUnique: (f as any).isUnique || false,
         description: f.description,
-        sortOrder: (f as any).sortOrder !== undefined ? (f as any).sortOrder : index
+        sortOrder: index
       }))
     
     const requestData = {
@@ -418,6 +476,29 @@ function handleRemoveField(index: number) {
   selectedTable.value.fieldDefinitions.splice(index, 1)
 }
 
+/**
+ * Move a field up in the list (swap with previous).
+ * Exported for testing via assignSortOrder.
+ */
+function moveFieldUp(index: number) {
+  if (!selectedTable.value || index <= 0) return
+  const fields = selectedTable.value.fieldDefinitions
+  const temp = fields[index]
+  fields[index] = fields[index - 1]
+  fields[index - 1] = temp
+  // Trigger reactivity
+  selectedTable.value.fieldDefinitions = [...fields]
+}
+
+function moveFieldDown(index: number) {
+  if (!selectedTable.value || index >= selectedTable.value.fieldDefinitions.length - 1) return
+  const fields = selectedTable.value.fieldDefinitions
+  const temp = fields[index]
+  fields[index] = fields[index + 1]
+  fields[index + 1] = temp
+  selectedTable.value.fieldDefinitions = [...fields]
+}
+
 async function handleGenerateDDL() {
   if (!selectedTable.value) return
   try {
@@ -461,18 +542,21 @@ function removeRelation(index: number) {
   relations.value.splice(index, 1)
 }
 
-function handleSaveRelations() {
+async function handleSaveRelations() {
   // Validate relations
   const validRelations = relations.value.filter(r => 
     r.sourceTableId && r.sourceFieldName && r.relationType && r.targetTableId && r.targetFieldName
   )
   
-  // Save to localStorage (can be replaced with API call)
-  localStorage.setItem(`table_relations_${props.functionUnitId}`, JSON.stringify(validRelations))
-  relations.value = validRelations
-  
-  ElMessage.success(t('common.success'))
-  showRelationDialog.value = false
+  // Save to backend API
+  try {
+    const res = await functionUnitApi.saveTableRelations(props.functionUnitId, validRelations as any)
+    relations.value = res?.data || validRelations
+    ElMessage.success(t('common.success'))
+    showRelationDialog.value = false
+  } catch (e: any) {
+    ElMessage.error(e.response?.data?.message || t('common.error'))
+  }
 }
 
 onMounted(loadTables)

@@ -231,21 +231,21 @@ class AiTransactionAtomicityProperties {
                 new NoOpEntityManager()
         );
 
-        assertThatThrownBy(() -> writeService.applyGeneratedData(functionUnitId, generatedData))
+        assertThatThrownBy(() -> writeService.applyGeneratedData(functionUnitId, generatedData, null))
                 .isInstanceOf(AiGenerationException.class)
                 .hasMessageContaining(String.valueOf(functionUnitId));
     }
 
     /**
-     * Property 9b: Invalid enum values in generated data cause exception during write.
+     * Property 9b: Invalid enum values in generated data are gracefully skipped.
      *
      * <p>For any AiGeneratedData containing invalid enum strings (e.g., invalid TableType),
-     * the write should fail with an exception, not silently skip.</p>
+     * the write should skip the invalid entry and complete without exception.</p>
      *
      * <p><b>Validates: Requirements 10.5, 10.8</b></p>
      */
     @Property(tries = 100)
-    void invalidEnumValuesInGeneratedDataCauseException(
+    void invalidEnumValuesInGeneratedDataAreGracefullySkipped(
             @ForAll @LongRange(min = 1, max = 1000) Long functionUnitId,
             @ForAll("invalidEnumString") String invalidEnum) {
 
@@ -256,6 +256,8 @@ class AiTransactionAtomicityProperties {
                 .tableDefinitions(new ArrayList<>())
                 .formDefinitions(new ArrayList<>())
                 .actionDefinitions(new ArrayList<>())
+                .decisionDefinitions(new ArrayList<>())
+                .tableRelations(new ArrayList<>())
                 .versions(new ArrayList<>())
                 .build();
 
@@ -265,7 +267,7 @@ class AiTransactionAtomicityProperties {
                 new NoOpEntityManager()
         );
 
-        // Invalid tableType should cause IllegalArgumentException from TableType.valueOf()
+        // Invalid tableType should be skipped (logged as WARN), not throw
         AiGeneratedData dataWithInvalidTableType = AiGeneratedData.builder()
                 .tableDefinitions(List.of(Map.of(
                         "tableName", "bad_table",
@@ -279,8 +281,11 @@ class AiTransactionAtomicityProperties {
                 )))
                 .build();
 
-        assertThatThrownBy(() -> writeService.applyGeneratedData(functionUnitId, dataWithInvalidTableType))
-                .isInstanceOf(IllegalArgumentException.class);
+        // Should complete without exception — invalid table type is skipped
+        writeService.applyGeneratedData(functionUnitId, dataWithInvalidTableType, null);
+
+        // The invalid table should have been skipped
+        assertThat(fu.getTableDefinitions()).isEmpty();
     }
 
     /**
@@ -326,7 +331,7 @@ class AiTransactionAtomicityProperties {
                 .build();
 
         // Should complete without exception
-        writeService.applyGeneratedData(functionUnitId, emptyData);
+        writeService.applyGeneratedData(functionUnitId, emptyData, null);
 
         // FunctionUnit should still be valid (not corrupted)
         assertThat(fu.getId()).isEqualTo(functionUnitId);

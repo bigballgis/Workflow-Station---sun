@@ -11,15 +11,34 @@
       <el-table-column prop="decisionKey" :label="t('decision.key')" min-width="150" />
       <el-table-column prop="decisionName" :label="t('decision.name')" min-width="150" />
       <el-table-column prop="hitPolicy" :label="t('decision.hitPolicy')" width="120" />
+      <el-table-column :label="t('decision.boundNodes')" min-width="150">
+        <template #default="{ row }">
+          <template v-if="getBoundNodes(row.id).length > 0">
+            <el-tag
+              v-for="node in getBoundNodes(row.id)"
+              :key="node.nodeId"
+              size="small"
+              type="success"
+              style="margin-right: 4px;"
+            >
+              {{ node.nodeName }}
+            </el-tag>
+          </template>
+          <span v-else class="text-muted">{{ t('decision.notBound') }}</span>
+        </template>
+      </el-table-column>
       <el-table-column prop="updatedAt" :label="t('decision.lastUpdated')" width="180">
         <template #default="{ row }">
           {{ row.updatedAt || row.createdAt }}
         </template>
       </el-table-column>
-      <el-table-column :label="t('common.actions')" width="160" fixed="right">
+      <el-table-column :label="t('common.actions')" width="220" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" @click="handleEdit(row)">
             {{ t('common.edit') }}
+          </el-button>
+          <el-button link type="warning" @click="handleBindToNode(row)">
+            {{ t('decision.bindToNode') }}
           </el-button>
           <el-button link type="danger" @click="handleDelete(row)">
             {{ t('common.delete') }}
@@ -68,6 +87,26 @@
         :decision-id="editingDecisionId"
       />
     </el-dialog>
+
+    <!-- Bind to Node Dialog -->
+    <el-dialog v-model="showBindNodeDialog" :title="t('decision.bindToNode')" width="500px">
+      <div v-if="serviceTaskNodes.length > 0">
+        <el-radio-group v-model="selectedNodeId" style="display: flex; flex-direction: column; gap: 8px;">
+          <el-radio
+            v-for="node in serviceTaskNodes"
+            :key="node.id"
+            :value="node.id"
+          >
+            {{ node.name }}
+          </el-radio>
+        </el-radio-group>
+      </div>
+      <el-empty v-else :description="t('decision.noServiceTasks')" />
+      <template #footer>
+        <el-button @click="showBindNodeDialog = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="handleConfirmBind" :disabled="!selectedNodeId">{{ t('common.confirm') }}</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -79,9 +118,12 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { decisionApi } from '@/api/decision'
 import type { DecisionDefinition, DecisionDefinitionRequest } from '@/api/decision'
 import DecisionDesigner from './DecisionDesigner.vue'
+import { useFunctionUnitStore } from '@/stores/functionUnit'
+import { parseBpmnServiceTasks, bindDecisionToNode } from './decisionListHelpers'
 
 const { t } = useI18n()
 const props = defineProps<{ functionUnitId: number }>()
+const store = useFunctionUnitStore()
 
 const decisions = ref<DecisionDefinition[]>([])
 const loading = ref(false)
@@ -89,6 +131,14 @@ const creating = ref(false)
 const showCreateDialog = ref(false)
 const showDesigner = ref(false)
 const editingDecisionId = ref<number | null>(null)
+
+// Bind to Node state
+const showBindNodeDialog = ref(false)
+const bindingDecisionId = ref<number | null>(null)
+const selectedNodeId = ref<string>('')
+const serviceTaskNodes = ref<Array<{ id: string; name: string }>>([])
+// Map: decisionId -> bound nodes
+const decisionNodeBindings = ref<Map<number, Array<{ nodeId: string; nodeName: string }>>>(new Map())
 
 const createForm = ref<DecisionDefinitionRequest>({
   decisionKey: '',
@@ -145,8 +195,58 @@ async function handleDelete(row: DecisionDefinition) {
   }
 }
 
+// ─── Bind to Node ─────────────────────────────────────────────────────────────
+
+function getBoundNodes(decisionId: number): Array<{ nodeId: string; nodeName: string }> {
+  return decisionNodeBindings.value.get(decisionId) || []
+}
+
+/**
+ * Parse bindings from current BPMN XML in store.
+ */
+function parseBindingsFromBpmn() {
+  const bpmnXml = store.process?.bpmnXml
+  if (!bpmnXml) return
+
+  const { bindings } = parseBpmnServiceTasks(bpmnXml)
+  decisionNodeBindings.value = bindings
+}
+
+function handleBindToNode(row: DecisionDefinition) {
+  const bpmnXml = store.process?.bpmnXml
+  if (!bpmnXml) {
+    ElMessage.warning(t('decision.noProcessDefined'))
+    return
+  }
+
+  bindingDecisionId.value = row.id
+  selectedNodeId.value = ''
+
+  const { nodes } = parseBpmnServiceTasks(bpmnXml)
+  serviceTaskNodes.value = nodes
+  showBindNodeDialog.value = true
+}
+
+async function handleConfirmBind() {
+  if (!bindingDecisionId.value || !selectedNodeId.value || !store.process?.bpmnXml) return
+
+  try {
+    const newXml = bindDecisionToNode(store.process.bpmnXml, selectedNodeId.value, bindingDecisionId.value)
+    await store.saveProcess(props.functionUnitId, {
+      ...store.process,
+      bpmnXml: newXml
+    })
+    parseBindingsFromBpmn()
+    showBindNodeDialog.value = false
+    ElMessage.success(t('decision.bindSuccess'))
+  } catch {
+    ElMessage.error(t('common.error'))
+  }
+}
+
 onMounted(() => {
   loadDecisions()
+  parseBindingsFromBpmn()
 })
 </script>
 

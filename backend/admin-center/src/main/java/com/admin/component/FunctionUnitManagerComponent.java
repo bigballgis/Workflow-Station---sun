@@ -1,7 +1,13 @@
 package com.admin.component;
 
 import com.admin.dto.request.FunctionUnitImportRequest;
+import com.admin.dto.response.FunctionUnitContentResponse;
+import com.admin.dto.response.FunctionUnitContentItemDTO;
 import com.admin.dto.response.FunctionUnitInfo;
+import com.admin.dto.response.FormContentDTO;
+import com.admin.dto.response.ProcessContentDTO;
+import com.admin.dto.response.DataTableContentDTO;
+import com.admin.dto.response.TableBindingDTO;
 import com.admin.dto.response.ImportResult;
 import com.admin.dto.response.ValidationResult;
 import com.admin.entity.FunctionUnit;
@@ -46,6 +52,8 @@ public class FunctionUnitManagerComponent {
     private final FunctionUnitDependencyRepository dependencyRepository;
     private final FunctionUnitContentRepository contentRepository;
     private final FunctionUnitAccessRepository accessRepository;
+    private final org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
     
     // 版本号正则表达式（语义化版本）
     private static final Pattern VERSION_PATTERN = Pattern.compile("^\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9]+)?$");
@@ -594,6 +602,246 @@ public class FunctionUnitManagerComponent {
      */
     public List<FunctionUnitContent> getFunctionUnitContents(String functionUnitId) {
         return contentRepository.findByFunctionUnitId(functionUnitId);
+    }
+
+    /**
+     * 获取功能单元内容，按类型过滤。
+     * <p>type 为 null 时返回所有类型；type 有效时返回该类型；type 无效时抛出 AdminBusinessException。
+     *
+     * <p><b>Validates: Requirements 35.1, 35.2, 35.3</b>
+     *
+     * @param functionUnitId 功能单元 ID
+     * @param type           内容类型字符串（可选），如 "FORM", "PROCESS", "DATA_TABLE"
+     * @return 内容项 DTO 列表
+     */
+    @Transactional(readOnly = true)
+    public List<FunctionUnitContentItemDTO> getContentsByType(String functionUnitId, String type) {
+        List<FunctionUnitContent> contents;
+        if (type == null || type.isBlank()) {
+            contents = contentRepository.findByFunctionUnitId(functionUnitId);
+        } else {
+            ContentType requestedType;
+            try {
+                requestedType = ContentType.valueOf(type.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                throw new AdminBusinessException("INVALID_CONTENT_TYPE", "Invalid content type: " + type);
+            }
+            contents = contentRepository.findByFunctionUnitIdAndContentType(functionUnitId, requestedType);
+        }
+        return contents.stream()
+                .map(c -> FunctionUnitContentItemDTO.builder()
+                        .id(c.getId())
+                        .contentType(c.getContentType().name())
+                        .contentName(c.getContentName())
+                        .contentData(c.getContentData())
+                        .sourceId(c.getSourceId())
+                        .build())
+                .toList();
+    }
+
+    /**
+     * 组装功能单元完整内容（BPMN 流程、表单定义、数据表等）。
+     * <p>业务逻辑包括：Base64 解码 BPMN XML、从 dw_form_definitions 读取最新 config_json、
+     * 查询 tableBindings 并附加到表单内容。
+     *
+     * <p><b>Validates: Requirements 6.1, 6.2, 6.3</b>
+     *
+     * @param id 功能单元 ID
+     * @return 完整内容响应 DTO
+     */
+    @Transactional(readOnly = true)
+    public FunctionUnitContentResponse assembleFunctionUnitContent(String id) {
+        FunctionUnit unit = getFunctionUnitById(id);
+        List<FunctionUnitContent> contents = contentRepository.findByFunctionUnitId(id);
+
+        List<FormContentDTO> forms = new ArrayList<>();
+        List<ProcessContentDTO> processes = new ArrayList<>();
+        List<DataTableContentDTO> dataTables = new ArrayList<>();
+
+        for (FunctionUnitContent content : contents) {
+            String data = content.getContentData();
+
+            if (content.getContentType() == ContentType.PROCESS && data != null) {
+                data = decodeBase64IfNeeded(data);
+                processes.add(ProcessContentDTO.builder()
+                        .id(content.getId())
+                        .name(content.getContentName())
+                        .sourceId(content.getSourceId())
+                        .data(data)
+                        .type(ContentType.PROCESS.name())
+                        .build());
+            } else if (content.getContentType() == ContentType.FORM) {
+                data = fetchLatestConfigJsonOrFallback(content, data);
+                forms.add(FormContentDTO.builder()
+                        .id(content.getId())
+                        .name(content.getContentName())
+                        .sourceId(content.getSourceId())
+                        .data(data)
+                        .type(ContentType.FORM.name())
+                        .build());
+            } else if (content.getContentType() == ContentType.DATA_TABLE) {
+                dataTables.add(DataTableContentDTO.builder()
+                        .id(content.getId())
+                        .name(content.getContentName())
+                        .sourceId(content.getSourceId())
+                        .data(data)
+                        .type(ContentType.DATA_TABLE.name())
+                        .build());
+            }
+        }
+
+        // Attach tableBindings to each form
+        attachTableBindings(forms);
+
+        return FunctionUnitContentResponse.builder()
+                .id(unit.getId())
+                .name(unit.getName())
+                .code(unit.getCode())
+                .version(unit.getVersion())
+                .description(unit.getDescription())
+                .status(unit.getStatus().name())
+                .forms(forms)
+                .processes(processes)
+                .dataTables(dataTables)
+                .build();
+    }
+
+    /**
+     * Attempt Base64 decode; return raw data if not Base64 encoded.
+     */
+    private String decodeBase64IfNeeded(String data) {
+        try {
+            byte[] decoded = java.util.Base64.getDecoder().decode(data);
+            String result = new String(decoded, java.nio.charset.StandardCharsets.UTF_8);
+            log.info("Decoded BPMN XML, length: {}", result.length());
+            return result;
+        } catch (IllegalArgumentException e) {
+            log.info("BPMN data is not Base64 encoded, using raw data");
+            return data;
+        }
+    }
+
+    /**
+     * For FORM content, try to fetch the latest config_json from dw_form_definitions
+     * (the content_data may be a stale snapshot from import time).
+     */
+    private String fetchLatestConfigJsonOrFallback(FunctionUnitContent content, String fallbackData) {
+        if (content.getSourceId() == null) {
+            return fallbackData;
+        }
+        try {
+            Long sourceIdLong = Long.parseLong(content.getSourceId());
+            String latestConfigJson = jdbcTemplate.queryForObject(
+                    "SELECT config_json::text FROM dw_form_definitions WHERE id = ?",
+                    String.class, sourceIdLong);
+            if (latestConfigJson != null) {
+                log.info("Using latest config_json from dw_form_definitions for form sourceId={}", content.getSourceId());
+                return latestConfigJson;
+            }
+        } catch (NumberFormatException e) {
+            log.warn("Invalid sourceId format: {}", content.getSourceId());
+        } catch (Exception e) {
+            log.warn("Could not fetch latest config_json for form sourceId={}, using content_data: {}",
+                    content.getSourceId(), e.getMessage());
+        }
+        return fallbackData;
+    }
+
+    /**
+     * Attach tableBindings to each form DTO by querying dw_form_table_bindings.
+     * Prefers sourceId match; falls back to form_name match for forms without sourceId.
+     */
+    private void attachTableBindings(List<FormContentDTO> forms) {
+        if (forms.isEmpty()) return;
+
+        try {
+            List<String> formSourceIds = forms.stream()
+                    .map(FormContentDTO::getSourceId)
+                    .filter(sid -> sid != null && !sid.isBlank())
+                    .distinct()
+                    .toList();
+
+            List<String> formNamesForFallback = forms.stream()
+                    .filter(f -> f.getSourceId() == null || f.getSourceId().isBlank())
+                    .map(FormContentDTO::getName)
+                    .filter(Objects::nonNull)
+                    .distinct()
+                    .toList();
+
+            Map<String, List<TableBindingDTO>> bindingsBySourceId = new LinkedHashMap<>();
+            Map<String, List<TableBindingDTO>> bindingsByFormName = new LinkedHashMap<>();
+
+            if (!formSourceIds.isEmpty()) {
+                String placeholders = formSourceIds.stream().map(n -> "?").collect(Collectors.joining(","));
+                String sql =
+                        "SELECT fd.id as form_id, ftb.id as binding_id, ftb.binding_type, ftb.binding_mode, " +
+                        "       ftb.foreign_key_field, ftb.sort_order, " +
+                        "       td.table_name, td.table_type, td.description as table_description " +
+                        "FROM dw_form_definitions fd " +
+                        "JOIN dw_form_table_bindings ftb ON ftb.form_id = fd.id " +
+                        "JOIN dw_table_definitions td ON td.id = ftb.table_id " +
+                        "WHERE fd.id::text IN (" + placeholders + ") " +
+                        "ORDER BY fd.id, ftb.sort_order";
+                jdbcTemplate.query(sql, rs -> {
+                    String formId = rs.getString("form_id");
+                    TableBindingDTO binding = TableBindingDTO.builder()
+                            .bindingId(rs.getLong("binding_id"))
+                            .bindingType(rs.getString("binding_type"))
+                            .bindingMode(rs.getString("binding_mode"))
+                            .foreignKeyField(rs.getString("foreign_key_field"))
+                            .sortOrder(rs.getInt("sort_order"))
+                            .tableName(rs.getString("table_name"))
+                            .tableType(rs.getString("table_type"))
+                            .tableDescription(rs.getString("table_description"))
+                            .build();
+                    bindingsBySourceId.computeIfAbsent(formId, k -> new ArrayList<>()).add(binding);
+                }, formSourceIds.toArray());
+            }
+
+            if (!formNamesForFallback.isEmpty()) {
+                String placeholders = formNamesForFallback.stream().map(n -> "?").collect(Collectors.joining(","));
+                String sql =
+                        "SELECT latest.form_name, ftb.id as binding_id, ftb.binding_type, ftb.binding_mode, " +
+                        "       ftb.foreign_key_field, ftb.sort_order, " +
+                        "       td.table_name, td.table_type, td.description as table_description " +
+                        "FROM (SELECT DISTINCT ON (form_name) id, form_name, config_json FROM dw_form_definitions " +
+                        "      WHERE form_name IN (" + placeholders + ") ORDER BY form_name, id DESC) latest " +
+                        "JOIN dw_form_table_bindings ftb ON ftb.form_id = latest.id " +
+                        "JOIN dw_table_definitions td ON td.id = ftb.table_id " +
+                        "ORDER BY latest.form_name, ftb.sort_order";
+                jdbcTemplate.query(sql, rs -> {
+                    String formName = rs.getString("form_name");
+                    TableBindingDTO binding = TableBindingDTO.builder()
+                            .bindingId(rs.getLong("binding_id"))
+                            .bindingType(rs.getString("binding_type"))
+                            .bindingMode(rs.getString("binding_mode"))
+                            .foreignKeyField(rs.getString("foreign_key_field"))
+                            .sortOrder(rs.getInt("sort_order"))
+                            .tableName(rs.getString("table_name"))
+                            .tableType(rs.getString("table_type"))
+                            .tableDescription(rs.getString("table_description"))
+                            .build();
+                    bindingsByFormName.computeIfAbsent(formName, k -> new ArrayList<>()).add(binding);
+                }, formNamesForFallback.toArray());
+            }
+
+            // Attach bindings: prefer sourceId match, fallback to form_name
+            for (FormContentDTO form : forms) {
+                List<TableBindingDTO> bindings;
+                if (form.getSourceId() != null && !form.getSourceId().isBlank()) {
+                    bindings = bindingsBySourceId.getOrDefault(form.getSourceId(), Collections.emptyList());
+                } else {
+                    bindings = bindingsByFormName.getOrDefault(form.getName(), Collections.emptyList());
+                }
+                form.setTableBindings(bindings);
+            }
+            log.info("Attached tableBindings to {} forms", forms.size());
+        } catch (Exception e) {
+            log.warn("Failed to load tableBindings: {}", e.getMessage());
+            for (FormContentDTO form : forms) {
+                form.setTableBindings(Collections.emptyList());
+            }
+        }
     }
     
     /**

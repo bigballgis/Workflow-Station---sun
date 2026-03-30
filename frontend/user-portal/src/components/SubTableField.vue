@@ -3,12 +3,12 @@
     <div class="sub-table-header">
       <span class="title">{{ title }}</span>
       <el-button v-if="editable" type="primary" size="small" @click="handleAdd">
-        <el-icon><Plus /></el-icon> Add
+        <el-icon><Plus /></el-icon> {{ t('subTable.add') }}
       </el-button>
     </div>
 
     <div class="sub-table-scroll-wrapper">
-    <el-table :data="rows" size="small" border :max-height="400" v-loading="loading" style="width: 100%">
+    <el-table :data="rows" size="small" border :max-height="400" v-loading="loading" style="width: 100%" :show-summary="hasSummary" :summary-method="getSummaryMethod">
       <el-table-column
         v-for="col in columns"
         :key="col.field"
@@ -37,7 +37,7 @@
             <span v-else>-</span>
           </template>
           <template v-else-if="col.type === 'editor'">
-            <span v-if="scope.row[col.field]" v-html="scope.row[col.field]" class="editor-preview" />
+            <span v-if="scope.row[col.field]" v-html="sanitizeHtml(scope.row[col.field])" class="editor-preview" />
             <span v-else>-</span>
           </template>
           <template v-else-if="col.type === 'signature'">
@@ -72,15 +72,15 @@
         </template>
       </el-table-column>
 
-      <el-table-column v-if="editable" label="Actions" width="120">
+      <el-table-column v-if="editable" :label="t('subTable.actions')" width="120">
         <template #default="scope">
-          <el-button link type="primary" size="small" @click="openEditDialog(scope.$index)">Edit</el-button>
-          <el-button link type="danger" size="small" @click="deleteRow(scope.$index)">Delete</el-button>
+          <el-button link type="primary" size="small" @click="openEditDialog(scope.$index)">{{ t('subTable.edit') }}</el-button>
+          <el-button link type="danger" size="small" @click="deleteRow(scope.$index)">{{ t('subTable.delete') }}</el-button>
         </template>
       </el-table-column>
 
       <template #empty>
-        <el-empty description="No Data" :image-size="40" />
+        <el-empty :description="t('subTable.noData')" :image-size="40" />
       </template>
     </el-table>
     </div>
@@ -90,6 +90,9 @@
       :columns="columns"
       :mode="dialogMode"
       :initialData="dialogInitialData"
+      :row-formulas="rowFormulas"
+      :column-validation-rules="validationConfig?.columnRules"
+      :upload-url="uploadUrl"
       @update:visible="dialogVisible = $event"
       @save="handleDialogSave"
     />
@@ -97,15 +100,27 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Plus, Document, Loading } from '@element-plus/icons-vue'
 import { ElMessageBox, ElMessage } from 'element-plus'
+import DOMPurify from 'dompurify'
 import SubTableAddDialog from './SubTableAddDialog.vue'
 import { resolveDisplayValue } from './subTableAddDialogHelpers'
 import type { DialogColumn } from './subTableAddDialogHelpers'
+import type { RowFormulaRule, SubTableValidationConfig } from './formRendererHelpers'
+import { calculateSummary } from './businessLogicEngine'
 
 const { t } = useI18n()
+
+/** Sanitize HTML content to prevent XSS */
+function sanitizeHtml(html: string): string {
+  return DOMPurify.sanitize(html, {
+    ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 's', 'ol', 'ul', 'li',
+      'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'a', 'img', 'table', 'tr', 'td', 'th', 'span', 'div'],
+    ALLOWED_ATTR: ['href', 'src', 'alt', 'class', 'style', 'target', 'rel'],
+  })
+}
 
 type Column = DialogColumn
 
@@ -138,6 +153,11 @@ const props = defineProps<{
   modelValue?: any[]
   editable?: boolean
   loading?: boolean
+  rowFormulas?: RowFormulaRule[]
+  summaryColumns?: string[]
+  summaryAggregations?: Record<string, 'SUM' | 'AVG' | 'COUNT' | 'MIN' | 'MAX'>
+  validationConfig?: SubTableValidationConfig
+  uploadUrl?: string
 }>()
 
 const emit = defineEmits<{
@@ -155,6 +175,28 @@ const dialogVisible = ref(false)
 const dialogMode = ref<'add' | 'edit'>('add')
 const editingRowIndex = ref<number | null>(null)
 const dialogInitialData = ref<Record<string, any> | undefined>(undefined)
+
+// Summary row support
+const hasSummary = computed(() => (props.summaryColumns?.length ?? 0) > 0)
+
+function getSummaryMethod({ columns: tableCols }: { columns: any[] }) {
+  const sums: string[] = []
+  tableCols.forEach((col: any, index: number) => {
+    if (index === 0) {
+      sums[index] = t('subTable.summary')
+      return
+    }
+    const prop = col.property
+    if (!prop || !props.summaryColumns?.includes(prop) || !props.summaryAggregations?.[prop]) {
+      sums[index] = ''
+      return
+    }
+    const agg = props.summaryAggregations[prop]
+    const val = calculateSummary(rows.value, prop, agg)
+    sums[index] = `${val}`
+  })
+  return sums
+}
 
 watch(() => props.modelValue, (v) => { rows.value = v ? [...v] : [] }, { immediate: true, deep: true })
 
@@ -227,7 +269,7 @@ function handleDialogSave(rowData: Record<string, any>) {
 }
 
 async function deleteRow(i: number) {
-  await ElMessageBox.confirm('Are you sure to delete this record?', 'Confirm', { type: 'warning' })
+  await ElMessageBox.confirm(t('subTable.deleteConfirm'), t('common.confirm'), { type: 'warning' })
   rows.value.splice(i, 1)
   emit('update:modelValue', [...rows.value])
 }

@@ -182,7 +182,7 @@ class AiReferenceValidationProperties {
                 )))
                 .formDefinitions(List.of(Map.of(
                         "formName", "test_form",
-                        "formType", "MAIN",
+                        "formType", "PROCESS",
                         "tableBindings", List.of(Map.of(
                                 "tableName", nonExistentTable,
                                 "bindingType", "PRIMARY",
@@ -220,7 +220,7 @@ class AiReferenceValidationProperties {
                 )))
                 .formDefinitions(List.of(Map.of(
                         "formName", "test_form",
-                        "formType", "MAIN",
+                        "formType", "PROCESS",
                         "tableBindings", List.of(Map.of(
                                 "tableName", tableName,
                                 "bindingType", "PRIMARY",
@@ -237,7 +237,183 @@ class AiReferenceValidationProperties {
         assertThat(refErrors).isZero();
     }
 
+    /**
+     * Property 7f: tableRelation referencing a non-existent source table should produce REFERENCE_INTEGRITY error.
+     *
+     * <p><b>Validates: Requirements 10.3, 39.1</b></p>
+     */
+    @Property(tries = 100)
+    void tableRelationNonExistentSourceTableShouldError(
+            @ForAll("tableName") String existingTable,
+            @ForAll("tableName") String nonExistentTable) {
+
+        Assume.that(!existingTable.equals(nonExistentTable));
+
+        Map<String, Object> relation = new HashMap<>();
+        relation.put("sourceTableName", nonExistentTable);
+        relation.put("sourceFieldName", "id");
+        relation.put("relationType", "ONE_TO_MANY");
+        relation.put("targetTableName", existingTable);
+        relation.put("targetFieldName", "ref_id");
+
+        AiGeneratedData data = AiGeneratedData.builder()
+                .tableDefinitions(List.of(Map.of(
+                        "tableName", existingTable,
+                        "tableType", "MAIN",
+                        "fieldDefinitions", List.of(Map.of(
+                                "fieldName", "id",
+                                "dataType", "INTEGER",
+                                "isPrimaryKey", true
+                        ))
+                )))
+                .tableRelations(List.of(relation))
+                .build();
+
+        AiValidationResult result = validationService.validate(data);
+
+        assertThat(result.getErrors().stream()
+                .anyMatch(e -> "REFERENCE_INTEGRITY".equals(e.getErrorType())
+                        && e.getFieldPath().contains("sourceTableName")))
+                .isTrue();
+    }
+
+    /**
+     * Property 7g: tableRelation with invalid relationType should produce INVALID_ENUM error.
+     *
+     * <p><b>Validates: Requirements 10.2</b></p>
+     */
+    @Property(tries = 100)
+    void tableRelationInvalidRelationTypeShouldError(
+            @ForAll("tableName") String table,
+            @ForAll("invalidRelationType") String invalidType) {
+
+        Map<String, Object> relation = new HashMap<>();
+        relation.put("sourceTableName", table);
+        relation.put("sourceFieldName", "id");
+        relation.put("relationType", invalidType);
+        relation.put("targetTableName", table);
+        relation.put("targetFieldName", "ref_id");
+
+        AiGeneratedData data = AiGeneratedData.builder()
+                .tableDefinitions(List.of(Map.of(
+                        "tableName", table,
+                        "tableType", "MAIN",
+                        "fieldDefinitions", List.of(Map.of(
+                                "fieldName", "id",
+                                "dataType", "INTEGER",
+                                "isPrimaryKey", true
+                        ))
+                )))
+                .tableRelations(List.of(relation))
+                .build();
+
+        AiValidationResult result = validationService.validate(data);
+
+        assertThat(result.getErrors().stream()
+                .anyMatch(e -> "INVALID_ENUM".equals(e.getErrorType())
+                        && e.getFieldPath().contains("relationType")))
+                .isTrue();
+    }
+
+    /**
+     * Property 7h: tableRelation with empty sourceFieldName should produce FIELD_CONSTRAINT error.
+     *
+     * <p><b>Validates: Requirements 10.4</b></p>
+     */
+    @Property(tries = 100)
+    void tableRelationEmptySourceFieldShouldError(
+            @ForAll("tableName") String table) {
+
+        Map<String, Object> relation = new HashMap<>();
+        relation.put("sourceTableName", table);
+        relation.put("sourceFieldName", "");
+        relation.put("relationType", "ONE_TO_MANY");
+        relation.put("targetTableName", table);
+        relation.put("targetFieldName", "ref_id");
+
+        AiGeneratedData data = AiGeneratedData.builder()
+                .tableDefinitions(List.of(Map.of(
+                        "tableName", table,
+                        "tableType", "MAIN",
+                        "fieldDefinitions", List.of(Map.of(
+                                "fieldName", "id",
+                                "dataType", "INTEGER",
+                                "isPrimaryKey", true
+                        ))
+                )))
+                .tableRelations(List.of(relation))
+                .build();
+
+        AiValidationResult result = validationService.validate(data);
+
+        assertThat(result.getErrors().stream()
+                .anyMatch(e -> "FIELD_CONSTRAINT".equals(e.getErrorType())
+                        && e.getFieldPath().contains("sourceFieldName")))
+                .isTrue();
+    }
+
+    /**
+     * Property 7i: Valid tableRelation referencing existing tables should not produce errors.
+     *
+     * <p><b>Validates: Requirements 10.1, 10.3, 10.4, 10.5, 39.1, 39.2</b></p>
+     */
+    @Property(tries = 100)
+    void validTableRelationShouldPass(
+            @ForAll("tableName") String sourceTable,
+            @ForAll("tableName") String targetTable,
+            @ForAll("validRelationType") String relationType) {
+
+        Assume.that(!sourceTable.equals(targetTable));
+
+        Map<String, Object> relation = new HashMap<>();
+        relation.put("sourceTableName", sourceTable);
+        relation.put("sourceFieldName", "id");
+        relation.put("relationType", relationType);
+        relation.put("targetTableName", targetTable);
+        relation.put("targetFieldName", "ref_id");
+
+        AiGeneratedData data = AiGeneratedData.builder()
+                .tableDefinitions(List.of(
+                        Map.of("tableName", sourceTable, "tableType", "MAIN",
+                                "fieldDefinitions", List.of(Map.of(
+                                        "fieldName", "id", "dataType", "INTEGER", "isPrimaryKey", true))),
+                        Map.of("tableName", targetTable, "tableType", "SUB",
+                                "fieldDefinitions", List.of(Map.of(
+                                        "fieldName", "id", "dataType", "INTEGER", "isPrimaryKey", true)))
+                ))
+                .tableRelations(List.of(relation))
+                .build();
+
+        AiValidationResult result = validationService.validate(data);
+
+        long refErrors = result.getErrors().stream()
+                .filter(e -> "REFERENCE_INTEGRITY".equals(e.getErrorType())
+                        && e.getFieldPath().contains("tableRelations"))
+                .count();
+        long enumErrors = result.getErrors().stream()
+                .filter(e -> "INVALID_ENUM".equals(e.getErrorType())
+                        && e.getFieldPath().contains("relationType"))
+                .count();
+        long fieldErrors = result.getErrors().stream()
+                .filter(e -> "FIELD_CONSTRAINT".equals(e.getErrorType())
+                        && (e.getFieldPath().contains("sourceFieldName") || e.getFieldPath().contains("targetFieldName")))
+                .count();
+        assertThat(refErrors + enumErrors + fieldErrors).isZero();
+    }
+
     // --- Providers ---
+
+    @Provide
+    Arbitrary<String> invalidRelationType() {
+        java.util.Set<String> valid = java.util.Set.of("ONE_TO_ONE", "ONE_TO_MANY", "MANY_TO_MANY");
+        return Arbitraries.strings().alpha().ofMinLength(3).ofMaxLength(20)
+                .filter(s -> !valid.contains(s));
+    }
+
+    @Provide
+    Arbitrary<String> validRelationType() {
+        return Arbitraries.of("ONE_TO_ONE", "ONE_TO_MANY", "MANY_TO_MANY");
+    }
 
     @Provide
     Arbitrary<String> tableName() {

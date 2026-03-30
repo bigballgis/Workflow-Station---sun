@@ -22,12 +22,19 @@ const mockSetMessages = vi.fn()
 const mockOnDocument = vi.fn()
 const mockOnPhaseComplete = vi.fn()
 const mockOnGeneratedData = vi.fn()
+const mockOnValidationWarning = vi.fn()
 
 const mockMessages = ref<any[]>([])
 const mockIsStreaming = ref(false)
 const mockStreamingContent = ref('')
 const mockError = ref<string | null>(null)
+const mockErrorCode = ref<string | null>(null)
 const mockCanRetry = ref(false)
+const mockPartialGeneratedData = ref<any>({})
+const mockIsGenerationComplete = ref(false)
+const mockGenerationStep = ref(0)
+const mockDegradationInfo = ref<any>(null)
+const mockClearCurrentDraft = vi.fn()
 
 vi.mock('@/composables/useAiChat', () => ({
   useAiChat: () => ({
@@ -35,24 +42,52 @@ vi.mock('@/composables/useAiChat', () => ({
     isStreaming: mockIsStreaming,
     streamingContent: mockStreamingContent,
     error: mockError,
+    errorCode: mockErrorCode,
     canRetry: mockCanRetry,
+    partialGeneratedData: mockPartialGeneratedData,
+    isGenerationComplete: mockIsGenerationComplete,
+    generationStep: mockGenerationStep,
+    degradationInfo: mockDegradationInfo,
     sendMessage: mockSendMessage,
     retry: mockRetry,
     cancel: mockCancel,
     onDocument: mockOnDocument,
     onPhaseComplete: mockOnPhaseComplete,
     onGeneratedData: mockOnGeneratedData,
-    setMessages: mockSetMessages
-  })
+    onValidationWarning: mockOnValidationWarning,
+    setMessages: mockSetMessages,
+    clearCurrentDraft: mockClearCurrentDraft
+  }),
+  loadDraft: () => null,
+  clearDraft: vi.fn()
 }))
+
+vi.mock('@/composables/useAiTemplates', () => ({
+  useAiTemplates: () => ({ templates: [] })
+}))
+
+vi.mock('@/api/functionUnit', () => ({
+  functionUnitApi: { getById: vi.fn().mockResolvedValue({ data: null }) }
+}))
+
+vi.mock('@/api/aiGeneration', () => ({
+  aiGenerationApi: { undoLastApply: vi.fn().mockResolvedValue({}) },
+  AI_CHAT_STREAM_URL: '/api/v1/ai-generation/chat-stream'
+}))
+
+vi.mock('@/types/aiGeneration', async (importOriginal) => {
+  const actual = await importOriginal() as Record<string, unknown>
+  return { ...actual, computeDiff: vi.fn().mockReturnValue(null) }
+})
 
 // Stub Element Plus and child components
 const globalStubs = {
   PhaseIndicator: { template: '<div class="phase-indicator" />', props: ['currentPhase', 'completedPhases'] },
   ChatMessage: { template: '<div class="chat-message" />', props: ['message', 'isStreaming'] },
+  InlineDocumentViewer: { template: '<div class="inline-document-viewer" />', props: ['documentType', 'content'] },
   GenerationPreview: {
     template: '<div class="generation-preview" />',
-    props: ['previewData', 'generatedData'],
+    props: ['previewData', 'generatedData', 'isGenerationComplete', 'isStreaming', 'mode', 'diffResult'],
     emits: ['apply', 'regenerate']
   },
   'el-input': {
@@ -62,12 +97,25 @@ const globalStubs = {
   },
   'el-button': {
     template: '<button class="el-button" :disabled="disabled" @click="$emit(\'click\')"><slot /></button>',
-    props: ['type', 'icon', 'disabled', 'loading'],
+    props: ['type', 'icon', 'disabled', 'loading', 'text', 'size'],
     emits: ['click']
   },
   'el-alert': { template: '<div class="el-alert"><slot /></div>', props: ['title', 'type', 'closable', 'showIcon'] },
   'el-icon': { template: '<span class="el-icon"><slot /></span>' },
-  Promotion: { template: '<span />' }
+  'el-steps': { template: '<div class="el-steps"><slot /></div>', props: ['active', 'finishStatus', 'simple'] },
+  'el-step': { template: '<div class="el-step" />', props: ['title'] },
+  'el-card': { template: '<div class="el-card"><slot /><slot name="header" /></div>', props: ['shadow'] },
+  'el-row': { template: '<div class="el-row"><slot /></div>', props: ['gutter'] },
+  'el-col': { template: '<div class="el-col"><slot /></div>', props: ['span'] },
+  'el-checkbox-group': { template: '<div class="el-checkbox-group"><slot /></div>', props: ['modelValue'], emits: ['update:modelValue'] },
+  'el-checkbox': { template: '<div class="el-checkbox"><slot /></div>', props: ['value', 'size'] },
+  Promotion: { template: '<span />' },
+  Grid: { template: '<span />' },
+  Stamp: { template: '<span />' },
+  EditPen: { template: '<span />' },
+  DataAnalysis: { template: '<span />' },
+  ArrowDown: { template: '<span />' },
+  ArrowUp: { template: '<span />' }
 }
 
 describe('ChatDialog', () => {
@@ -86,7 +134,12 @@ describe('ChatDialog', () => {
     mockIsStreaming.value = false
     mockStreamingContent.value = ''
     mockError.value = null
+    mockErrorCode.value = null
     mockCanRetry.value = false
+    mockPartialGeneratedData.value = {}
+    mockIsGenerationComplete.value = false
+    mockGenerationStep.value = 0
+    mockDegradationInfo.value = null
   })
 
   function mountComponent(props = defaultProps) {

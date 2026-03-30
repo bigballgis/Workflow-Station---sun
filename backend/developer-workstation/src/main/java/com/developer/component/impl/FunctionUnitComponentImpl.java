@@ -436,11 +436,11 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
             result.addWarning("MISSING_MAIN_TABLE", "Function unit has no main table", null);
         }
         
-        // 检查是否有主表单
-        boolean hasMainForm = functionUnit.getFormDefinitions().stream()
-                .anyMatch(f -> f.getFormType() == com.developer.enums.FormType.MAIN);
-        if (!hasMainForm) {
-            result.addWarning("MISSING_MAIN_FORM", "Function unit has no main form", null);
+        // 检查是否有流程表单
+        boolean hasProcessForm = functionUnit.getFormDefinitions().stream()
+                .anyMatch(f -> f.getFormType() == com.developer.enums.FormType.PROCESS);
+        if (!hasProcessForm) {
+            result.addWarning("MISSING_PROCESS_FORM", "Function unit has no process form", null);
         }
         
         // BPMN-DMN 交叉引用验证

@@ -143,5 +143,10 @@ public class FunctionUnit {
     @JsonIgnore
     @OneToMany(mappedBy = "functionUnit", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
+    private List<TableRelation> tableRelations = new ArrayList<>();
+    
+    @JsonIgnore
+    @OneToMany(mappedBy = "functionUnit", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
     private List<Version> versions = new ArrayList<>();
 }

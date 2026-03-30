@@ -30,8 +30,9 @@ public class AiWriteServiceImpl implements AiWriteService {
     private final EntityManager entityManager;
 
     @Override
-    public void applyGeneratedData(Long functionUnitId, AiGeneratedData generatedData) {
-        log.info("Applying AI generated data to function unit: {}", functionUnitId);
+    public void applyGeneratedData(Long functionUnitId, AiGeneratedData generatedData, String regenerateScope) {
+        log.info("Applying AI generated data to function unit: {}, scope: {}", functionUnitId,
+                regenerateScope != null ? regenerateScope : "ALL");
 
         FunctionUnit functionUnit = functionUnitRepository.findById(functionUnitId)
                 .orElseThrow(() -> new com.developer.exception.AiGenerationException(
@@ -41,14 +42,21 @@ public class AiWriteServiceImpl implements AiWriteService {
         boolean isModifyMode = hasExistingData(functionUnit);
 
         if (isModifyMode) {
-            log.info("MODIFY mode: clearing existing component data for function unit {}", functionUnitId);
-            clearExistingData(functionUnit);
+            if (regenerateScope != null && !"ALL".equalsIgnoreCase(regenerateScope)) {
+                log.info("MODIFY mode (scoped): clearing '{}' data for function unit {}", regenerateScope, functionUnitId);
+                clearScopedData(functionUnit, regenerateScope);
+            } else {
+                log.info("MODIFY mode: clearing existing component data for function unit {}", functionUnitId);
+                clearExistingData(functionUnit);
+            }
             entityManager.flush();
         }
 
         // Write new data from AiGeneratedData
         Map<String, TableDefinition> tableMap = writeTableDefinitions(functionUnit, generatedData);
+        entityManager.flush(); // Ensure TableDefinitions get database IDs before writing relations
         writeForeignKeys(generatedData, tableMap);
+        writeTableRelations(functionUnit, generatedData, tableMap);
         writeFormDefinitions(functionUnit, generatedData, tableMap);
         writeActionDefinitions(functionUnit, generatedData);
         writeDecisionDefinitions(functionUnit, generatedData);
@@ -75,16 +83,38 @@ public class AiWriteServiceImpl implements AiWriteService {
                 || (functionUnit.getTableDefinitions() != null && !functionUnit.getTableDefinitions().isEmpty())
                 || (functionUnit.getFormDefinitions() != null && !functionUnit.getFormDefinitions().isEmpty())
                 || (functionUnit.getActionDefinitions() != null && !functionUnit.getActionDefinitions().isEmpty())
-                || (functionUnit.getDecisionDefinitions() != null && !functionUnit.getDecisionDefinitions().isEmpty());
+                || (functionUnit.getDecisionDefinitions() != null && !functionUnit.getDecisionDefinitions().isEmpty())
+                || (functionUnit.getTableRelations() != null && !functionUnit.getTableRelations().isEmpty());
     }
 
     private void clearExistingData(FunctionUnit functionUnit) {
+        // tableRelations must be cleared before tableDefinitions (dependency order)
+        functionUnit.getTableRelations().clear();
         functionUnit.getTableDefinitions().clear();
         functionUnit.getFormDefinitions().clear();
         functionUnit.getActionDefinitions().clear();
         functionUnit.getDecisionDefinitions().clear();
         if (functionUnit.getProcessDefinition() != null) {
             functionUnit.setProcessDefinition(null);
+        }
+    }
+
+    private void clearScopedData(FunctionUnit functionUnit, String scope) {
+        switch (scope.toUpperCase()) {
+            case "TABLES" -> {
+                // tableRelations depend on tableDefinitions, must clear both
+                functionUnit.getTableRelations().clear();
+                functionUnit.getTableDefinitions().clear();
+            }
+            case "FORMS" -> functionUnit.getFormDefinitions().clear();
+            case "ACTIONS" -> functionUnit.getActionDefinitions().clear();
+            case "DECISIONS" -> functionUnit.getDecisionDefinitions().clear();
+            case "PROCESS" -> functionUnit.setProcessDefinition(null);
+            case "TABLE_RELATIONS" -> functionUnit.getTableRelations().clear();
+            default -> {
+                log.warn("Unknown regenerate scope '{}', falling back to full clear", scope);
+                clearExistingData(functionUnit);
+            }
         }
     }
 
@@ -244,6 +274,40 @@ public class AiWriteServiceImpl implements AiWriteService {
                 .orElse(null);
     }
 
+    private void writeTableRelations(FunctionUnit functionUnit, AiGeneratedData generatedData,
+                                      Map<String, TableDefinition> tableMap) {
+        List<Map<String, Object>> relationDefs = generatedData.getTableRelations();
+        if (relationDefs == null) return;
+
+        for (Map<String, Object> relData : relationDefs) {
+            String sourceTableName = (String) relData.get("sourceTableName");
+            String targetTableName = (String) relData.get("targetTableName");
+
+            TableDefinition sourceTable = tableMap.get(sourceTableName);
+            TableDefinition targetTable = tableMap.get(targetTableName);
+
+            if (sourceTable == null) {
+                log.warn("writeTableRelations: source table '{}' not found in tableMap, skipping", sourceTableName);
+                continue;
+            }
+            if (targetTable == null) {
+                log.warn("writeTableRelations: target table '{}' not found in tableMap, skipping", targetTableName);
+                continue;
+            }
+
+            TableRelation relation = TableRelation.builder()
+                    .functionUnit(functionUnit)
+                    .sourceTableId(sourceTable.getId())
+                    .sourceFieldName((String) relData.get("sourceFieldName"))
+                    .relationType((String) relData.get("relationType"))
+                    .targetTableId(targetTable.getId())
+                    .targetFieldName((String) relData.get("targetFieldName"))
+                    .build();
+
+            functionUnit.getTableRelations().add(relation);
+        }
+    }
+
     @SuppressWarnings("unchecked")
     private void writeFormDefinitions(FunctionUnit functionUnit, AiGeneratedData generatedData,
                                        Map<String, TableDefinition> tableMap) {
@@ -258,8 +322,14 @@ public class AiWriteServiceImpl implements AiWriteService {
             try {
                 formType = FormType.valueOf((String) formData.get("formType"));
             } catch (IllegalArgumentException | NullPointerException e) {
-                log.warn("Invalid form type '{}', skipping form", formData.get("formType"));
-                continue;
+                String formTypeStr = (String) formData.get("formType");
+                formType = mapLegacyFormType(formTypeStr);
+                if (formType != null) {
+                    log.info("Auto-mapped deprecated form type '{}' to '{}'", formTypeStr, formType.name());
+                } else {
+                    log.warn("Invalid form type '{}', skipping form", formTypeStr);
+                    continue;
+                }
             }
 
             FormDefinition form = FormDefinition.builder()
@@ -326,6 +396,33 @@ public class AiWriteServiceImpl implements AiWriteService {
                         form.getTableBindings().add(binding);
                         primaryTable = boundTable;
                     }
+                }
+            }
+
+            // Write fieldPermissions
+            @SuppressWarnings("unchecked")
+            Map<String, String> fieldPermissions = (Map<String, String>) formData.get("fieldPermissions");
+            if (fieldPermissions != null) {
+                form.setFieldPermissions(new HashMap<>(fieldPermissions));
+            }
+
+            // Write showLiveValues (default true if not provided, handled by @Builder.Default)
+            Object showLiveValuesObj = formData.get("showLiveValues");
+            if (showLiveValuesObj instanceof Boolean) {
+                form.setShowLiveValues((Boolean) showLiveValuesObj);
+            }
+
+            // Write stageBindings
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> stageBindingsData = (List<Map<String, Object>>) formData.get("stageBindings");
+            if (stageBindingsData != null) {
+                for (Map<String, Object> sbData : stageBindingsData) {
+                    FormStageBinding stageBinding = FormStageBinding.builder()
+                            .form(form)
+                            .stageId((String) sbData.get("stageId"))
+                            .stageName((String) sbData.get("stageName"))
+                            .build();
+                    form.getStageBindings().add(stageBinding);
                 }
             }
 
@@ -425,5 +522,14 @@ public class AiWriteServiceImpl implements AiWriteService {
         if (value == null) return defaultValue;
         if (value instanceof Boolean) return (Boolean) value;
         return Boolean.parseBoolean(value.toString());
+    }
+
+    private FormType mapLegacyFormType(String formTypeStr) {
+        if (formTypeStr == null) return null;
+        return switch (formTypeStr.toUpperCase()) {
+            case "MAIN" -> FormType.PROCESS;
+            case "SUB" -> FormType.TASK;
+            default -> null;
+        };
     }
 }

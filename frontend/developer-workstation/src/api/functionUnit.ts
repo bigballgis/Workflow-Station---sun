@@ -129,16 +129,27 @@ export interface FieldDefinition {
   description?: string
 }
 
+export type FormType = 'PROCESS' | 'TASK' | 'ACTION'
+
+export interface StageBinding {
+  id?: number
+  stageId: string
+  stageName?: string
+}
+
 export interface FormDefinition {
   id: number
   formName: string
-  formType: string
+  formType: FormType
   description?: string
   configJson: Record<string, any>
   boundTableId?: number
   boundTableName?: string
   formSchema?: string // deprecated, use configJson instead
   tableBindings?: TableBinding[]
+  fieldPermissions?: Record<string, string>
+  showLiveValues?: boolean
+  stageBindings?: StageBinding[]
 }
 
 // Table binding type
@@ -182,6 +193,15 @@ export interface ProcessDefinition {
   processName: string
   bpmnXml?: string
   description?: string
+}
+
+export interface TableRelationDTO {
+  id?: number
+  sourceTableId: number
+  sourceFieldName: string
+  relationType: string
+  targetTableId: number
+  targetFieldName: string
 }
 
 export interface ForeignKeyDTO {
@@ -306,6 +326,13 @@ export const functionUnitApi = {
   validateTables: (functionUnitId: number) =>
     functionUnitAxios.get<any, { data: ValidationResult }>(`/api/v1/function-units/${functionUnitId}/tables/validate`),
 
+  // Table Relations
+  saveTableRelations: (functionUnitId: number, relations: TableRelationDTO[]) =>
+    functionUnitAxios.post<any, { data: TableRelationDTO[] }>(`/api/v1/function-units/${functionUnitId}/table-relations`, relations),
+
+  getTableRelations: (functionUnitId: number) =>
+    functionUnitAxios.get<any, { data: TableRelationDTO[] }>(`/api/v1/function-units/${functionUnitId}/table-relations`),
+
   // Foreign Keys
   getForeignKeys: (functionUnitId: number) =>
     functionUnitAxios.get<any, { data: ForeignKeyDTO[] }>(`/api/v1/function-units/${functionUnitId}/tables/foreign-keys`),
@@ -334,6 +361,13 @@ export const functionUnitApi = {
   
   deleteFormBinding: (functionUnitId: number, formId: number, bindingId: number) =>
     functionUnitAxios.delete(`/api/v1/function-units/${functionUnitId}/forms/${formId}/bindings/${bindingId}`),
+
+  // Form Design Helpers
+  getDataTableColumns: (functionUnitId: number) =>
+    functionUnitAxios.get<any, { data: string[] }>(`/api/v1/function-units/${functionUnitId}/forms/data-table-columns`),
+
+  copyTaskForm: (functionUnitId: number, formId: number) =>
+    functionUnitAxios.post<any, { data: FormDefinition }>(`/api/v1/function-units/${functionUnitId}/forms/${formId}/copy`),
 
   // Export and Deploy
   exportFunctionUnit: (functionUnitId: number) =>

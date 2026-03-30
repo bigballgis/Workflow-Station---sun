@@ -416,7 +416,21 @@ export default {
     getDeletePreviewFailed: '取得刪除預覽失敗',
     deleteSuccess: '刪除成功',
     deleteFailed: '刪除失敗',
-    versionCount: '{name} 共有 {count} 個版本'
+    versionCount: '{name} 共有 {count} 個版本',
+    searchKeyword: '搜尋',
+    searchPlaceholder: '按名稱、代碼或描述搜尋',
+    batchEnable: '批次啟用',
+    batchDisable: '批次停用',
+    batchDelete: '批次刪除',
+    batchDeleteConfirm: '確定要刪除以下 {count} 個功能單元嗎？',
+    batchDisableConfirm: '確定要批次停用選中的功能單元嗎？',
+    selected: '已選 {count} 項',
+    selectedCount: '已選 {count} 項',
+    importSuccess: '匯入成功',
+    importFailed: '匯入失敗',
+    deployProgress: '部署進度',
+    viewLogs: '查看日誌',
+    compareVersions: '版本對比'
   },
   dictionary: {
     title: '資料字典',
@@ -629,5 +643,11 @@ export default {
     serviceUnavailable: '服務暫時不可用，請稍後再試',
     serviceMaintenance: '服務維護中，請稍後再試',
     configError: '請求配置錯誤'
+  },
+  deployment: {
+    viewLog: '查看日誌'
+  },
+  version: {
+    compare: '對比'
   }
 }

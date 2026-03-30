@@ -1,7 +1,58 @@
 import { ref } from 'vue'
-import type { AiMessage, AiChatRequest, AiPhase } from '@/types/aiGeneration'
+import type { AiMessage, AiChatRequest, AiPhase, AiGeneratedData, GenerationPreviewData } from '@/types/aiGeneration'
 import { AI_CHAT_STREAM_URL } from '@/api/aiGeneration'
 import { getUser, TOKEN_KEY } from '@/api/auth'
+
+/** Draft data structure stored in localStorage */
+export interface AiGenerationDraft {
+  generatedData: AiGeneratedData
+  previewData: GenerationPreviewData | null
+  timestamp: number
+  sessionId: string
+}
+
+const DRAFT_EXPIRY_MS = 24 * 60 * 60 * 1000 // 24 hours
+
+/**
+ * Build the localStorage key for a generation draft.
+ */
+export function buildDraftKey(functionUnitId: number, sessionId: string): string {
+  return `ai_generation_draft_${functionUnitId}_${sessionId}`
+}
+
+/**
+ * Save a generation draft to localStorage.
+ */
+export function saveDraft(functionUnitId: number, sessionId: string, draft: AiGenerationDraft): void {
+  try {
+    localStorage.setItem(buildDraftKey(functionUnitId, sessionId), JSON.stringify(draft))
+  } catch { /* quota exceeded or other storage error — silently ignore */ }
+}
+
+/**
+ * Load a generation draft from localStorage. Returns null if not found or expired.
+ */
+export function loadDraft(functionUnitId: number, sessionId: string): AiGenerationDraft | null {
+  try {
+    const raw = localStorage.getItem(buildDraftKey(functionUnitId, sessionId))
+    if (!raw) return null
+    const draft: AiGenerationDraft = JSON.parse(raw)
+    if (Date.now() - draft.timestamp > DRAFT_EXPIRY_MS) {
+      localStorage.removeItem(buildDraftKey(functionUnitId, sessionId))
+      return null
+    }
+    return draft
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Clear a generation draft from localStorage.
+ */
+export function clearDraft(functionUnitId: number, sessionId: string): void {
+  localStorage.removeItem(buildDraftKey(functionUnitId, sessionId))
+}
 
 /**
  * Composable for managing AI chat SSE streaming.
@@ -14,6 +65,11 @@ export function useAiChat() {
   const streamingContent = ref('')
   const error = ref<string | null>(null)
   const canRetry = ref(false)
+  const errorCode = ref<string | null>(null)
+  const partialGeneratedData = ref<Partial<AiGeneratedData>>({})
+  const isGenerationComplete = ref(false)
+  const generationStep = ref(0) // 0=not started, 1-6=steps
+  const degradationInfo = ref<{ lastSuccessTime?: string; degradationOptions?: string[] } | null>(null)
 
   let lastRequest: AiChatRequest | null = null
   let abortController: AbortController | null = null
@@ -22,6 +78,7 @@ export function useAiChat() {
   let onDocumentCallback: ((type: string, content: string) => void) | null = null
   let onPhaseCompleteCallback: ((phase: AiPhase) => void) | null = null
   let onGeneratedDataCallback: ((data: any) => void) | null = null
+  let onValidationWarningCallback: ((warnings: any[]) => void) | null = null
 
   function getAuthHeaders(): Record<string, string> {
     const headers: Record<string, string> = {
@@ -48,6 +105,11 @@ export function useAiChat() {
     lastRequest = request
     error.value = null
     canRetry.value = false
+    errorCode.value = null
+    partialGeneratedData.value = {}
+    isGenerationComplete.value = false
+    generationStep.value = 0
+    degradationInfo.value = null
 
     const isAutoTrigger = request.message.startsWith('[AUTO_TRIGGER]')
 
@@ -65,6 +127,7 @@ export function useAiChat() {
     }
 
     isStreaming.value = true
+    // Clear residual streamingContent before new request
     streamingContent.value = ''
 
     abortController = new AbortController()
@@ -136,9 +199,11 @@ export function useAiChat() {
 
     switch (eventType) {
       case 'token':
+        if (generationStep.value < 1) generationStep.value = 1
         streamingContent.value += eventData
         break
       case 'document': {
+        if (generationStep.value < 2) generationStep.value = 2
         try {
           const parsed = JSON.parse(eventData)
           onDocumentCallback?.(parsed.documentType, parsed.content)
@@ -162,18 +227,69 @@ export function useAiChat() {
         break
       }
       case 'generated_data': {
+        if (generationStep.value < 5) generationStep.value = 5
         try {
           const parsed = JSON.parse(eventData)
-          onGeneratedDataCallback?.(parsed)
+          // Incremental merge: new data overwrites corresponding fields
+          partialGeneratedData.value = {
+            ...partialGeneratedData.value,
+            ...parsed
+          }
+          onGeneratedDataCallback?.(partialGeneratedData.value as AiGeneratedData)
+
+          // Auto-save draft to localStorage
+          if (lastRequest) {
+            saveDraft(lastRequest.functionUnitId, lastRequest.sessionId || '', {
+              generatedData: partialGeneratedData.value as AiGeneratedData,
+              previewData: null, // ChatDialog will compute this
+              timestamp: Date.now(),
+              sessionId: lastRequest.sessionId || ''
+            })
+          }
+        } catch { /* ignore parse errors */ }
+        break
+      }
+      case 'validation_warning': {
+        try {
+          const parsed = JSON.parse(eventData)
+          const warnings = Array.isArray(parsed) ? parsed : parsed.warnings || []
+          onValidationWarningCallback?.(warnings)
         } catch { /* ignore parse errors */ }
         break
       }
       case 'error': {
-        error.value = eventData
-        canRetry.value = true
+        generationStep.value = 0
+        try {
+          const parsed = JSON.parse(eventData)
+          if (parsed.errorCode) {
+            error.value = parsed.message || eventData
+            const retryableCodes = ['AI_N8N_TIMEOUT', 'AI_N8N_CALL_FAILED']
+            canRetry.value = retryableCodes.includes(parsed.errorCode)
+            // Store errorCode for i18n lookup
+            errorCode.value = parsed.errorCode
+            // Capture degradation info if present
+            if (parsed.degradationOptions) {
+              degradationInfo.value = {
+                lastSuccessTime: parsed.lastSuccessTime,
+                degradationOptions: parsed.degradationOptions
+              }
+            }
+          } else {
+            error.value = eventData
+            canRetry.value = true
+            errorCode.value = null
+          }
+        } catch {
+          // Backward compatible: plain string fallback
+          error.value = eventData
+          canRetry.value = true
+          errorCode.value = null
+        }
         break
       }
       case 'done': {
+        isGenerationComplete.value = true
+        generationStep.value = 6
         finalizeStream()
         break
       }
@@ -182,6 +298,13 @@ export function useAiChat() {
 
   function finalizeStream() {
     if (streamingContent.value) {
+      // Dedup check: skip if last ASSISTANT message has identical content
+      const lastMsg = messages.value[messages.value.length - 1]
+      if (lastMsg?.role === 'ASSISTANT' && lastMsg.content === streamingContent.value) {
+        streamingContent.value = ''
+        isStreaming.value = false
+        return
+      }
       const aiMessage: AiMessage = {
         id: Date.now(),
         sessionId: lastRequest?.sessionId || '',
@@ -225,8 +348,21 @@ export function useAiChat() {
     onGeneratedDataCallback = cb
   }
 
+  function onValidationWarning(cb: (warnings: any[]) => void) {
+    onValidationWarningCallback = cb
+  }
+
   function setMessages(msgs: AiMessage[]) {
     messages.value = msgs
+  }
+
+  /**
+   * Clear the generation draft for the current session after successful apply.
+   */
+  function clearCurrentDraft(): void {
+    if (lastRequest) {
+      clearDraft(lastRequest.functionUnitId, lastRequest.sessionId || '')
+    }
   }
 
   return {
@@ -234,13 +370,20 @@ export function useAiChat() {
     isStreaming,
     streamingContent,
     error,
+    errorCode,
     canRetry,
+    partialGeneratedData,
+    isGenerationComplete,
+    generationStep,
+    degradationInfo,
     sendMessage,
     retry,
     cancel,
     onDocument,
     onPhaseComplete,
     onGeneratedData,
-    setMessages
+    onValidationWarning,
+    setMessages,
+    clearCurrentDraft
   }
 }

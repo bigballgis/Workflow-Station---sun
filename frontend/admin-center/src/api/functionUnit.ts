@@ -202,6 +202,10 @@ export const functionUnitApi = {
   getDeploymentHistory: (id: string) =>
     get<Deployment[]>(`/function-units/${id}/deployments`),
 
+  // 获取所有部署记录（全局分页，不限定功能单元）— Req 15.2
+  getAllDeployments: (page = 0, size = 20) =>
+    get<PageResult<Deployment>>('/function-units/deployments', { params: { page, size } }),
+
   // 获取部署详情
   getDeployment: (deploymentId: string) =>
     get<Deployment>(`/function-units/deployments/${deploymentId}`),
@@ -298,5 +302,15 @@ export const functionUnitApi = {
 
   // 检查用户访问权限
   checkUserAccess: (id: string, userId: string) =>
-    get<boolean>(`/function-units/${id}/access/check`, { params: { userId } })
+    get<boolean>(`/function-units/${id}/access/check`, { params: { userId } }),
+
+  // ==================== 批量操作 API (Req 20) ====================
+
+  // 批量启用/禁用
+  batchSetEnabled: (ids: string[], enabled: boolean) =>
+    put<FunctionUnit[]>('/function-units/batch/enabled', { ids, enabled }),
+
+  // 批量删除
+  batchDelete: (ids: string[]) =>
+    del<void>('/function-units/batch', { data: { ids } }),
 }

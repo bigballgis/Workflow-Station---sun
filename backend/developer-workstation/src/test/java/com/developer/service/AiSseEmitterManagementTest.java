@@ -9,6 +9,7 @@ import com.developer.service.impl.AiGenerationServiceImpl;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -30,13 +31,15 @@ class AiSseEmitterManagementTest {
                 mock(FunctionUnitRepository.class),
                 new ObjectMapper(),
                 102400);
+        ReflectionTestUtils.setField(service, "n8nTimeoutSeconds", 120);
     }
 
     @Test
     void createChatEmitter_shouldReturnNonNullEmitter() {
         SseEmitter emitter = service.createChatEmitter(1L, "user1");
         assertThat(emitter).isNotNull();
-        assertThat(emitter.getTimeout()).isEqualTo(120_000L);
+        // Dynamic timeout: n8nTimeoutSeconds * 2 * 1000 + 60_000 = 120 * 2 * 1000 + 60_000 = 300_000
+        assertThat(emitter.getTimeout()).isEqualTo(300_000L);
     }
 
     @Test

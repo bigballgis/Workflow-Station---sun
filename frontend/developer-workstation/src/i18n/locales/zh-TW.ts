@@ -231,7 +231,14 @@ export default {
     oneToOne: '一對一',
     oneToMany: '一對多',
     manyToMany: '多對多',
-    addRelation: '新增關聯'
+    addRelation: '新增關聯',
+    validateTables: '驗證表',
+    defaultValue: '預設值',
+    isUnique: '唯一',
+    precision: '精度',
+    scale: '小數位',
+    invalidTableName: '表名必須以字母開頭，只能包含字母、數字和底線',
+    invalidFieldName: '欄位名 "{name}" 無效，必須以字母開頭，只能包含字母、數字和底線'
   },
   form: {
     title: '表單設計器',
@@ -250,6 +257,8 @@ export default {
     subForm: '子表單',
     popupForm: '彈出表單',
     actionForm: '動作表單',
+    processForm: '流程表單',
+    taskForm: '任務表單',
     notBound: '未綁定',
     importFields: '匯入欄位',
     selectTable: '選擇表',
@@ -326,7 +335,27 @@ export default {
     nodeTypeEndEvent: '結束事件',
     // Other
     unknownTable: '未知表',
-    subTableBindingRequired: '儲存前，所有子表佔位符必須選擇綁定'
+    subTableBindingRequired: '儲存前，所有子表佔位符必須選擇綁定',
+    // Stage binding (Task Form)
+    stageBinding: '階段綁定',
+    stageBindingPlaceholder: '選擇要綁定的階段',
+    stageBindingRequired: 'TASK 表單需要至少綁定一個階段',
+    stageBindingHint: '選擇一個或多個流程階段（userTask 節點）綁定到此任務表單',
+    // Process form uniqueness
+    processFormAlreadyExists: '該功能單元已存在 PROCESS 表單',
+    // Field name autocomplete & validation
+    fieldNameAutocomplete: '欄位名',
+    fieldNameNotInDataTable: '欄位名 "{name}" 不存在於 Data_Table 欄位中',
+    fieldNameValidationFailed: '部分欄位名不是有效的 Data_Table 欄位',
+    loadingDataTableColumns: '正在載入 Data_Table 欄位...',
+    // Field permissions
+    fieldPermission: '權限',
+    fieldPermissionReadonly: '唯讀',
+    fieldPermissionEditable: '可編輯',
+    // Copy task form
+    copyForm: '複製',
+    copyFormSuccess: '表單複製成功',
+    copyFormFailed: '表單複製失敗'
   },
   action: {
     title: '動作設計器',
@@ -462,7 +491,17 @@ export default {
     n8nParamNamePlaceholder: '請輸入參數名',
     n8nParamLabelPlaceholder: '請輸入參數標籤',
     n8nConfigRequired: '請選擇 N8N 連接配置',
-    n8nWebhookUrlRequired: '請填寫 Webhook URL'
+    n8nWebhookUrlRequired: '請填寫 Webhook URL',
+    // Visibility, roles & sort order
+    visibilityAndPermissions: '可見性與權限',
+    visibilityCondition: '可見性條件',
+    visibilityConditionPlaceholder: '例如 formData.amount > 10000',
+    allowedRoles: '允許角色',
+    allowedRolesPlaceholder: '選擇或輸入角色',
+    sortOrder: '排序',
+    // Test dialog enhancements
+    rawJson: '原始 JSON',
+    structuredInput: '結構化輸入'
   },
   icon: {
     title: '圖示庫',
@@ -527,7 +566,9 @@ export default {
     selectVersion2: '選擇版本2',
     tableDefinition: '表定義',
     formDefinition: '表單定義',
-    processDefinition: '流程定義'
+    processDefinition: '流程定義',
+    rollbackTitle: '回滾確認',
+    rollbackConfirmDetail: '確定要從版本 {currentVersion} 回滾到版本 {targetVersion} 嗎？此操作不可撤銷，可能影響現有資料。'
   },
   properties: {
     basic: '基本資訊',
@@ -1070,7 +1111,13 @@ export default {
     hitPolicyOutputOrder: 'OUTPUT ORDER',
     createSuccess: '決策新建成功',
     deleteSuccess: '決策刪除成功',
-    confirmTitle: '確認'
+    confirmTitle: '確認',
+    bindToNode: '綁定節點',
+    boundNodes: '已綁定節點',
+    notBound: '未綁定',
+    noServiceTasks: '流程中未找到服務任務節點',
+    noProcessDefined: '暫無流程定義',
+    bindSuccess: '決策表綁定節點成功'
   },
   ai: {
     panel: {
@@ -1099,10 +1146,13 @@ export default {
       applyFailed: '套用資料失敗',
       detach: '彈出視窗',
       attach: '收回面板',
-      generateButton: 'AI 生成'
+      generateButton: 'AI 生成',
+      sessionHistory: '會話歷史'
     },
     chat: {
       validationFailed: '資料校驗失敗',
+      validationWarnings: '校驗警告',
+      regenerateScope: '重新生成範圍',
       retry: '重試',
       nextPhase: '進入下一階段',
       send: '傳送',
@@ -1110,6 +1160,16 @@ export default {
       aiReplying: 'AI 正在回覆中...',
       inputMessage: '輸入訊息...',
       autoGenerating: '正在基於已有文件自動產生，請稍候...'
+    },
+    error: {
+      AI_SESSION_NOT_FOUND: 'AI 會話未找到，請重新開始',
+      AI_FUNCTION_UNIT_NOT_FOUND: '功能單元未找到',
+      AI_N8N_TIMEOUT: 'AI 服務逾時，請重試',
+      AI_N8N_CALL_FAILED: 'AI 服務呼叫失敗，請重試',
+      AI_WRITE_CONFLICT: '資料已被其他使用者修改，請重新整理後重試',
+      AI_CONTEXT_TOO_LARGE: '功能單元資料過大，無法進行 AI 處理',
+      AI_UNDO_EXPIRED: '復原視窗已過期',
+      AI_UNKNOWN_ERROR: '發生意外錯誤，請重試'
     },
     doc: {
       requirements: '需求文件',
@@ -1146,12 +1206,160 @@ export default {
       tablesSummary: '{count} 個表，共 {fields} 個欄位',
       formsSummary: '{count} 個表單',
       actionsSummary: '{count} 個動作',
-      processSummary: '{nodes} 個節點，{gateways} 個閘道'
+      processSummary: '{nodes} 個節點，{gateways} 個閘道',
+      decisions: '決策表',
+      decisionsSummary: '{count} 個決策表',
+      tableRelations: '表關係',
+      tableRelationsSummary: '{count} 個關係',
+      viewDetails: '檢視詳情',
+      generating: '生成中...',
+      summary: '摘要',
+      diff: '差異預覽'
     },
     phase: {
       requirements: '需求收集',
       design: '設計方案',
       generation: '生成預覽與確認'
+    },
+    quality: {
+      completeness: '完整性',
+      consistency: '一致性',
+      complexity: '複雜度',
+      naming: '命名規範',
+      lowScoreWarning: '品質評分較低，建議重新生成'
+    },
+    scope: {
+      tables: '資料表',
+      forms: '表單',
+      actions: '動作',
+      decisions: '決策表',
+      process: '流程',
+      tableRelations: '表關係'
+    },
+    template: {
+      selectTitle: '選擇範本',
+      crud: {
+        name: 'CRUD 應用',
+        description: '標準的增刪改查操作，包含資料表和表單'
+      },
+      approval: {
+        name: '審批流程',
+        description: '多級審批流程，包含審核表單和決策節點'
+      },
+      dataEntry: {
+        name: '資料錄入表單',
+        description: '帶校驗規則和子表的資料採集表單'
+      },
+      report: {
+        name: '報表儀表板',
+        description: '資料聚合與報表，包含彙總規則和圖表'
+      }
+    },
+    degradation: {
+      title: 'AI 服務不可用',
+      lastSuccess: '上次成功連線：{time}',
+      saveDraft: '儲存草稿稍後重試',
+      manualCreate: '手動建立',
+      draftSaved: '草稿儲存成功',
+      draftRestored: '草稿已恢復'
+    },
+    progress: {
+      analyzing: '正在分析需求...',
+      designingTables: '正在設計表結構...',
+      creatingForms: '正在建立表單...',
+      generatingProcess: '正在生成流程...',
+      validating: '正在校驗資料...',
+      ready: '準備就緒'
+    },
+    draft: {
+      found: '發現未儲存的草稿',
+      restore: '恢復草稿',
+      dismiss: '忽略'
+    },
+    diff: {
+      summary: '新增 {added} 項，修改 {modified} 項，刪除 {deleted} 項'
+    },
+    undo: {
+      button: '復原',
+      success: '已成功復原更改'
     }
+  },
+  businessLogic: {
+    // ConditionBuilder
+    selectField: '選擇欄位',
+    selectOperator: '選擇運算符',
+    enterValue: '輸入值',
+    addCondition: '新增條件',
+    opEquals: '等於',
+    opNotEquals: '不等於',
+    opContains: '包含',
+    opGreaterThan: '大於',
+    opLessThan: '小於',
+    opIsEmpty: '為空',
+    opIsNotEmpty: '不為空',
+    opDateAfter: '日期晚於',
+    opDateBefore: '日期早於',
+    // FormulaEditor
+    targetField: '目標欄位',
+    expression: '運算式',
+    expressionPlaceholder: '例如 quantity * unit_price',
+    addFormula: '新增公式',
+    dangerousExpression: '運算式包含危險關鍵字',
+    // LinkageConfigurator
+    sourceField: '來源欄位',
+    linkageType: '聯動類型',
+    optionFiltering: '選項過濾',
+    valueAutoFill: '值自動填充',
+    fieldStateChange: '欄位狀態變更',
+    filterField: '過濾欄位',
+    filterFieldPlaceholder: '目標選項中的欄位名',
+    filterOperator: '過濾運算符',
+    valueMapping: '值對應',
+    valueMappingPlaceholder: '{"key": "value"} JSON',
+    stateDisabled: '停用',
+    stateRequired: '必填',
+    addLinkage: '新增聯動',
+    // ValidationRuleList
+    ruleType: '規則類型',
+    regexPattern: '正規表達式',
+    minValue: '最小值',
+    maxValue: '最大值',
+    errorMessage: '錯誤訊息',
+    addRule: '新增規則',
+    ruleRequired: '必填',
+    rulePattern: '正規驗證',
+    ruleNumber: '數值範圍',
+    ruleEmail: '電子郵件',
+    rulePhone: '手機號碼',
+    ruleCustom: '自訂',
+    // CrossFieldRuleEditor
+    field1: '欄位1',
+    field2: '欄位2',
+    errorTarget: '錯誤顯示欄位',
+    addCrossFieldRule: '新增跨欄位規則',
+    // RowFormulaEditor
+    rowFormulas: '列內計算公式',
+    targetColumn: '目標欄',
+    addRowFormula: '新增列公式',
+    summaryRules: '彙總規則',
+    sourceColumn: '來源欄',
+    mainFormField: '主表欄位',
+    aggregation: '聚合函數',
+    addSummaryRule: '新增彙總規則',
+    // SubTableValidationEditor
+    minRows: '最少列數',
+    maxRows: '最多列數',
+    columnValidation: '欄驗證規則'
+  },
+  template: {
+    basicInfo: '基本資訊表單',
+    basicInfoDesc: '包含名稱、描述和日期欄位的簡單表單',
+    approvalForm: '審批表單',
+    approvalFormDesc: '包含申請人、部門、原因和金額欄位的審批表單',
+    dataEntry: '資料錄入表單',
+    dataEntryDesc: '包含多種輸入類型的多標籤頁資料錄入表單',
+    createFromTemplate: '從範本建立',
+    selectTemplate: '選擇範本',
+    blankForm: '空白表單',
   }
 }

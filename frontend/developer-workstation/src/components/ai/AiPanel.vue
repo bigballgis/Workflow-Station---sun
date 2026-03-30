@@ -19,6 +19,28 @@
             {{ t('ai.panel.title') }}
           </span>
           <div class="ai-panel__header-actions">
+            <!-- Task 17.4: Session history dropdown -->
+            <el-dropdown v-if="ready" trigger="click" @command="handleSessionSwitch">
+              <el-button :icon="Clock" circle size="small" :title="t('ai.panel.sessionHistory')" />
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item
+                    v-for="s in sortedSessions"
+                    :key="s.sessionId"
+                    :command="s.sessionId"
+                    :class="{ 'is-active': s.sessionId === currentSessionId }"
+                  >
+                    <span class="ai-panel__session-time">{{ formatTime(s.createdAt) }}</span>
+                    <el-tag size="small" :type="s.status === 'ACTIVE' ? 'success' : 'info'">{{ s.status }}</el-tag>
+                    <el-tag size="small">{{ s.mode }}</el-tag>
+                    <el-tag size="small" type="warning">{{ s.currentPhase }}</el-tag>
+                  </el-dropdown-item>
+                  <el-dropdown-item v-if="sortedSessions.length === 0" disabled>
+                    {{ t('ai.panel.sessionHistory') }}
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
             <el-tooltip :content="isDetached ? t('ai.panel.attach') : t('ai.panel.detach')">
               <el-button
                 :icon="isDetached ? ScaleToOriginal : FullScreen"
@@ -94,6 +116,7 @@ import { ref, computed, watch, nextTick, reactive } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Close, Lock, MagicStick, Loading, FullScreen, ScaleToOriginal } from '@element-plus/icons-vue'
+import { Clock } from '@element-plus/icons-vue'
 import dayjs from 'dayjs'
 import ChatDialog from './ChatDialog.vue'
 import DocumentPanel from './DocumentPanel.vue'
@@ -263,6 +286,13 @@ const currentSessionId = computed(() =>
   sessionComposable.currentSession.value?.sessionId || ''
 )
 
+// Task 17.4: Sorted sessions for history dropdown (desc by creation time)
+const sortedSessions = computed(() => {
+  return [...sessionComposable.sessions.value].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  )
+})
+
 // Format time helper
 function formatTime(time?: string) {
   return time ? dayjs(time).format('YYYY-MM-DD HH:mm:ss') : ''
@@ -380,6 +410,27 @@ async function detectPhaseFromDocuments(functionUnitId: number, dbPhase: AiPhase
   return dbPhase
 }
 
+/**
+ * Task 17.4: Switch to a historical session.
+ * COMPLETED sessions are loaded in read-only mode (no new messages allowed).
+ */
+async function handleSessionSwitch(sessionId: string) {
+  if (sessionId === currentSessionId.value) return
+  const session = sessionComposable.sessions.value.find(s => s.sessionId === sessionId)
+  if (!session) return
+
+  try {
+    const msgs = await sessionComposable.restoreSession(session)
+    currentMode.value = session.mode
+    initialMessages.value = [...msgs]
+    computeCompletedPhases(session.currentPhase)
+    // Force ChatDialog to re-render with new messages
+    chatDialogRef.value?.setMessages?.([...msgs])
+  } catch (err: any) {
+    ElMessage.error(err.message || t('ai.panel.initFailed'))
+  }
+}
+
 function handleClose() {
   closePanel()
 }
@@ -419,9 +470,13 @@ function registerEventHandlers() {
     }
   })
 
-  eventsComposable.onWriteSuccess((_data: any) => {
+  eventsComposable.onWriteSuccess((data: any) => {
     emit('dataApplied')
     ElMessage.success(t('ai.panel.dataApplied'))
+    // Pass warnings from write_success to ChatDialog if present
+    if (data?.warnings && data.warnings.length > 0) {
+      chatDialogRef.value?.setValidationWarnings(data.warnings)
+    }
   })
 
   eventsComposable.onWriteError((data: any) => {
@@ -629,6 +684,12 @@ watch(() => props.functionUnitId, (newVal) => {
   font-size: 14px;
   color: #606266;
   margin: 4px 0;
+}
+
+.ai-panel__session-time {
+  font-size: 12px;
+  color: #606266;
+  margin-right: 6px;
 }
 
 .ai-panel__resize-handle {

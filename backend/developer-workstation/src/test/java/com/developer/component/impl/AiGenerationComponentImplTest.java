@@ -54,7 +54,7 @@ class AiGenerationComponentImplTest {
     void setUp() {
         // Use synchronous executor to make SSE orchestration deterministic in unit tests.
         Executor executor = Runnable::run;
-        component = new AiGenerationComponentImpl(aiGenerationService, aiLockService, aiValidationService, aiWriteService, executor);
+        component = new AiGenerationComponentImpl(aiGenerationService, aiLockService, aiValidationService, aiWriteService, executor, new com.fasterxml.jackson.databind.ObjectMapper());
         sessionUuid = UUID.randomUUID();
         session = AiSession.builder()
                 .sessionId(sessionUuid).functionUnitId(1L).userId("user1")
@@ -74,7 +74,7 @@ class AiGenerationComponentImplTest {
         when(aiGenerationService.serializeFunctionUnitContext(1L))
                 .thenReturn(FunctionUnitContextDTO.builder().functionUnitId(1L).name("test").build());
         when(aiGenerationService.getLatestDocuments(1L, AiPhase.REQUIREMENTS, AiMode.NEW)).thenReturn(List.of());
-        when(aiGenerationService.callN8NWebhook(any(), anyString(), any(), any(), any(), anyLong(), anyList()))
+        when(aiGenerationService.callN8NWebhook(any(), anyString(), any(), any(), any(), anyLong(), anyList(), any()))
                 .thenReturn(Map.of("reply", "ok"));
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -104,7 +104,7 @@ class AiGenerationComponentImplTest {
                 .thenReturn(FunctionUnitContextDTO.builder().functionUnitId(1L).name("test").build());
         when(aiGenerationService.getLatestDocuments(1L, AiPhase.DESIGN, AiMode.MODIFY))
                 .thenReturn(List.of(Map.of("documentType", "REQUIREMENTS", "content", "req doc")));
-        when(aiGenerationService.callN8NWebhook(any(), anyString(), any(), any(), any(), anyLong(), anyList()))
+        when(aiGenerationService.callN8NWebhook(any(), anyString(), any(), any(), any(), anyLong(), anyList(), any()))
                 .thenReturn(Map.of("reply", "ok"));
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -134,7 +134,7 @@ class AiGenerationComponentImplTest {
                 .thenReturn(FunctionUnitContextDTO.builder().functionUnitId(1L).name("test").build());
         when(aiGenerationService.getLatestDocuments(1L, AiPhase.DESIGN, AiMode.NEW))
                 .thenReturn(List.of(Map.of("documentType", "REQUIREMENTS", "content", "req doc")));
-        when(aiGenerationService.callN8NWebhook(any(), anyString(), any(), any(), any(), anyLong(), anyList()))
+        when(aiGenerationService.callN8NWebhook(any(), anyString(), any(), any(), any(), anyLong(), anyList(), any()))
                 .thenReturn(Map.of("reply", "ok"));
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -163,7 +163,7 @@ class AiGenerationComponentImplTest {
         when(aiGenerationService.serializeFunctionUnitContext(1L))
                 .thenReturn(FunctionUnitContextDTO.builder().functionUnitId(1L).name("test").build());
         when(aiGenerationService.getLatestDocuments(1L, AiPhase.REQUIREMENTS, AiMode.NEW)).thenReturn(List.of());
-        when(aiGenerationService.callN8NWebhook(any(), anyString(), any(), any(), any(), anyLong(), anyList()))
+        when(aiGenerationService.callN8NWebhook(any(), anyString(), any(), any(), any(), anyLong(), anyList(), any()))
                 .thenReturn(Map.of("reply", "ok"));
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -191,7 +191,7 @@ class AiGenerationComponentImplTest {
         when(aiGenerationService.serializeFunctionUnitContext(1L))
                 .thenThrow(new AiGenerationException("AI_FUNCTION_UNIT_NOT_FOUND", "功能单元不存在"));
         // N8N should still be called with null context and empty documents
-        when(aiGenerationService.callN8NWebhook(any(), anyString(), any(), any(), isNull(), anyLong(), anyList()))
+        when(aiGenerationService.callN8NWebhook(any(), anyString(), any(), any(), isNull(), anyLong(), anyList(), any()))
                 .thenReturn(Map.of("reply", "ok"));
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -204,6 +204,6 @@ class AiGenerationComponentImplTest {
 
         // Verify N8N was still called (graceful degradation, not failure)
         verify(aiGenerationService).callN8NWebhook(any(), eq("hello"), eq(AiPhase.REQUIREMENTS), eq(AiMode.NEW),
-                isNull(), eq(1L), eq(List.of()));
+                isNull(), eq(1L), eq(List.of()), isNull());
     }
 }

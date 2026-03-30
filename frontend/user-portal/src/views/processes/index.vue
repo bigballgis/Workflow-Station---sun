@@ -65,7 +65,7 @@
                   class="process-card"
                   @click="startProcess(process)"
                 >
-                  <div v-if="process.icon" class="process-icon-svg" v-html="process.icon"></div>
+                  <div v-if="process.icon" class="process-icon-svg" v-html="sanitizeIcon(process.icon)"></div>
                   <el-icon v-else :size="32" :color="getProcessColor(process.category)">
                     <component :is="getProcessIcon(process.category)" />
                   </el-icon>
@@ -92,9 +92,20 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { Document, Search, Calendar, Money, ShoppingCart, Location, Clock, Files, Star, Tickets, Lock } from '@element-plus/icons-vue'
 import { processApi, type ProcessDefinition } from '@/api/process'
+import DOMPurify from 'dompurify'
 
 const { t } = useI18n()
 const router = useRouter()
+
+const SVG_PURIFY_CONFIG = {
+  ALLOWED_TAGS: ['svg', 'path', 'circle', 'rect', 'line', 'polyline', 'polygon', 'g', 'defs', 'use'],
+  ALLOWED_ATTR: ['viewBox', 'd', 'fill', 'stroke', 'stroke-width', 'cx', 'cy', 'r', 'x', 'y',
+    'width', 'height', 'points', 'transform', 'class', 'xmlns', 'xlink:href'],
+}
+
+function sanitizeIcon(icon: string): string {
+  return DOMPurify.sanitize(icon, SVG_PURIFY_CONFIG)
+}
 
 const searchKeyword = ref('')
 const loading = ref(false)

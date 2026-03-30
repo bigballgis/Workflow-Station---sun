@@ -4,6 +4,7 @@ import com.developer.component.ActionDesignComponent;
 import com.developer.component.impl.ActionDesignComponentImpl;
 import com.developer.enums.ActionType;
 import com.developer.repository.ActionDefinitionRepository;
+import com.developer.repository.FormDefinitionRepository;
 import com.developer.repository.FunctionUnitRepository;
 import com.platform.common.i18n.I18nService;
 import net.jqwik.api.*;
@@ -26,9 +27,10 @@ public class ActionDesignPropertyTest {
     void actionProcessStepBindingProperty(@ForAll("actionTypes") ActionType actionType) {
         ActionDefinitionRepository repository = mock(ActionDefinitionRepository.class);
         FunctionUnitRepository functionUnitRepository = mock(FunctionUnitRepository.class);
+        FormDefinitionRepository formDefinitionRepository = mock(FormDefinitionRepository.class);
         I18nService i18nService = mock(I18nService.class);
         when(i18nService.getMessage(any(String.class))).thenReturn("test message");
-        ActionDesignComponent component = new ActionDesignComponentImpl(repository, functionUnitRepository, i18nService);
+        ActionDesignComponent component = new ActionDesignComponentImpl(repository, functionUnitRepository, formDefinitionRepository, i18nService);
         
         assertThat(component).isNotNull();
         assertThat(actionType).isNotNull();

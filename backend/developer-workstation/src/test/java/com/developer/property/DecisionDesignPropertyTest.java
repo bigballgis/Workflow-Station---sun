@@ -1139,7 +1139,7 @@ public class DecisionDesignPropertyTest {
                 new com.developer.service.impl.AiWriteServiceImpl(aiFuRepo, aiIconRepo, aiEntityManager);
 
         // Apply AI generated data
-        aiWriteService.applyGeneratedData(functionUnitId, generatedData);
+        aiWriteService.applyGeneratedData(functionUnitId, generatedData, null);
 
         // Verify: FunctionUnit should contain exactly M decision definitions
         assertThat(functionUnit.getDecisionDefinitions())
@@ -1249,7 +1249,7 @@ public class DecisionDesignPropertyTest {
                 new com.developer.service.impl.AiWriteServiceImpl(modFuRepo, modIconRepo, modEntityManager);
 
         // Apply — MODIFY mode should clear existing and write new
-        aiWriteService.applyGeneratedData(functionUnitId, generatedData);
+        aiWriteService.applyGeneratedData(functionUnitId, generatedData, null);
 
         // Verify: only the new AI-generated decisions remain
         assertThat(functionUnit.getDecisionDefinitions())

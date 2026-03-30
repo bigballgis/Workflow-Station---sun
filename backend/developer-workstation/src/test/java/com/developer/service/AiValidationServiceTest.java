@@ -79,7 +79,7 @@ class AiValidationServiceTest {
                 )))
                 .formDefinitions(List.of(Map.of(
                         "formName", "test_form",
-                        "formType", "MAIN"
+                        "formType", "PROCESS"
                 )))
                 .actionDefinitions(List.of(Map.of(
                         "actionName", "test_action",

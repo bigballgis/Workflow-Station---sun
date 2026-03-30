@@ -35,6 +35,9 @@
             {{ t('common.export') }}
           </el-button>
           <el-button @click="handleValidate" :loading="validating">{{ t('functionUnit.validate') }}</el-button>
+          <el-button type="success" @click="handlePublish" :disabled="store.current?.status === 'PUBLISHED'">
+            {{ t('functionUnit.publish') }}
+          </el-button>
           <el-button type="warning" @click="showDeployDialog = true">
             <el-icon><Upload /></el-icon>
             {{ t('functionUnit.deploy') }}

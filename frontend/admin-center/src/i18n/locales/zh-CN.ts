@@ -416,7 +416,21 @@ export default {
     getDeletePreviewFailed: '获取删除预览失败',
     deleteSuccess: '删除成功',
     deleteFailed: '删除失败',
-    versionCount: '{name} 共有 {count} 个版本'
+    versionCount: '{name} 共有 {count} 个版本',
+    searchKeyword: '搜索',
+    searchPlaceholder: '按名称、代码或描述搜索',
+    batchEnable: '批量启用',
+    batchDisable: '批量禁用',
+    batchDelete: '批量删除',
+    batchDeleteConfirm: '确定要删除以下 {count} 个功能单元吗？',
+    batchDisableConfirm: '确定要批量禁用选中的功能单元吗？',
+    selected: '已选 {count} 项',
+    selectedCount: '已选 {count} 项',
+    importSuccess: '导入成功',
+    importFailed: '导入失败',
+    deployProgress: '部署进度',
+    viewLogs: '查看日志',
+    compareVersions: '版本对比'
   },
   dictionary: {
     title: '数据字典',
@@ -629,5 +643,11 @@ export default {
     serviceUnavailable: '服务暂时不可用，请稍后再试',
     serviceMaintenance: '服务维护中，请稍后再试',
     configError: '请求配置错误'
+  },
+  deployment: {
+    viewLog: '查看日志'
+  },
+  version: {
+    compare: '对比'
   }
 }

@@ -8,23 +8,29 @@ import com.developer.enums.AiMessageRole;
 import com.developer.enums.AiMode;
 import com.developer.enums.AiPhase;
 import com.developer.enums.AiSessionStatus;
+import com.developer.exception.AiGenerationException;
 import com.developer.exception.AiValidationFailedException;
 import com.developer.service.AiGenerationService;
 import com.developer.service.AiLockService;
 import com.developer.service.AiValidationService;
 import com.developer.service.AiWriteService;
-import lombok.RequiredArgsConstructor;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * AI 生成功能组件实现
@@ -32,7 +38,6 @@ import java.util.concurrent.Executor;
  */
 @Component
 @Slf4j
-@RequiredArgsConstructor
 public class AiGenerationComponentImpl implements AiGenerationComponent {
 
     private final AiGenerationService aiGenerationService;
@@ -40,6 +45,27 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
     private final AiValidationService aiValidationService;
     private final AiWriteService aiWriteService;
     private final Executor taskExecutor;
+    private final ObjectMapper objectMapper;
+
+    /** 撤销快照缓存：key = functionUnitId → 序列化的 AiGeneratedData JSON */
+    private final ConcurrentHashMap<Long, String> undoSnapshots = new ConcurrentHashMap<>();
+
+    /** 撤销快照 TTL 清理调度器 */
+    private final ScheduledExecutorService undoCleanupExecutor = Executors.newSingleThreadScheduledExecutor();
+
+    public AiGenerationComponentImpl(AiGenerationService aiGenerationService,
+                                     AiLockService aiLockService,
+                                     AiValidationService aiValidationService,
+                                     AiWriteService aiWriteService,
+                                     Executor taskExecutor,
+                                     ObjectMapper objectMapper) {
+        this.aiGenerationService = aiGenerationService;
+        this.aiLockService = aiLockService;
+        this.aiValidationService = aiValidationService;
+        this.aiWriteService = aiWriteService;
+        this.taskExecutor = taskExecutor;
+        this.objectMapper = objectMapper;
+    }
 
     @Override
     public SseEmitter chatStream(AiChatRequest request, String userId) {
@@ -96,7 +122,8 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
                 // 6a. 调用 N8N Webhook
                 Map<String, Object> n8nResponse = aiGenerationService.callN8NWebhook(
                         session.getSessionId(), request.getMessage(), request.getPhase(), request.getMode(),
-                        finalContext, request.getFunctionUnitId(), finalExistingDocuments);
+                        finalContext, request.getFunctionUnitId(), finalExistingDocuments,
+                        request.getRegenerateScope());
 
                 // 6b. 解析 N8N 响应并发送 SSE 事件
                 String reply = null;
@@ -137,6 +164,20 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
                 }
 
                 if (n8nResponse.containsKey("generatedData") && n8nResponse.get("generatedData") != null) {
+                    // Compute quality score and attach to generated_data event
+                    Object generatedDataObj = n8nResponse.get("generatedData");
+                    if (generatedDataObj instanceof Map) {
+                        try {
+                            @SuppressWarnings("unchecked")
+                            Map<String, Object> generatedDataMap = (Map<String, Object>) generatedDataObj;
+                            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                            AiGeneratedData parsedData = mapper.convertValue(generatedDataMap, AiGeneratedData.class);
+                            com.developer.dto.AiQualityScore qualityScore = aiValidationService.computeQualityScore(parsedData);
+                            generatedDataMap.put("qualityScore", mapper.convertValue(qualityScore, Map.class));
+                        } catch (Exception qsEx) {
+                            log.warn("Failed to compute quality score, skipping: {}", qsEx.getMessage());
+                        }
+                    }
                     aiGenerationService.sendChatEvent(request.getFunctionUnitId(), userId,
                             AiChatSseEvent.builder().eventType("generated_data").data(n8nResponse.get("generatedData")).build());
                 }
@@ -155,10 +196,30 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
 
             } catch (Exception e) {
                 log.error("N8N call failed: functionUnitId={}, sessionId={}", request.getFunctionUnitId(), session.getSessionId(), e);
-                // Send error event
+                // Send structured error event with errorCode and message
                 try {
+                    String errorCode = (e instanceof com.developer.exception.AiGenerationException aiEx)
+                            ? aiEx.getErrorCode()
+                            : "AI_UNKNOWN_ERROR";
+                    Map<String, Object> errorData = new java.util.LinkedHashMap<>();
+                    errorData.put("errorCode", errorCode);
+                    errorData.put("message", e.getMessage());
+
+                    // 检查异常是否携带降级信息（N8N 重试失败后的优雅降级）
+                    if (e instanceof com.developer.exception.AiGenerationException aiEx2
+                            && aiEx2.getExtraData() != null) {
+                        Object degradationOptions = aiEx2.getExtraData().get("degradationOptions");
+                        if (degradationOptions != null) {
+                            errorData.put("degradationOptions", degradationOptions);
+                        }
+                        Object lastSuccessTime = aiEx2.getExtraData().get("lastSuccessTime");
+                        if (lastSuccessTime != null) {
+                            errorData.put("lastSuccessTime", lastSuccessTime);
+                        }
+                    }
+
                     aiGenerationService.sendChatEvent(request.getFunctionUnitId(), userId,
-                            AiChatSseEvent.builder().eventType("error").data(e.getMessage()).build());
+                            AiChatSseEvent.builder().eventType("error").data(errorData).build());
                 } catch (Exception sendError) {
                     log.error("Failed to send error event", sendError);
                 }
@@ -240,18 +301,41 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
                 throw new AiValidationFailedException(validationResult.getErrors());
             }
 
-            // 4. 写入数据
-            aiWriteService.applyGeneratedData(functionUnitId, request.getGeneratedData());
+            // 4. 保存撤销快照（在清除旧数据前）
+            try {
+                String snapshot = buildSnapshotData(functionUnitId);
+                undoSnapshots.put(functionUnitId, snapshot);
+                undoCleanupExecutor.schedule(() -> undoSnapshots.remove(functionUnitId), 30, TimeUnit.SECONDS);
+                log.info("Saved undo snapshot for functionUnitId={}, TTL=30s", functionUnitId);
+            } catch (Exception snapshotEx) {
+                log.warn("Failed to save undo snapshot for functionUnitId={}, undo will not be available: {}",
+                        functionUnitId, snapshotEx.getMessage());
+            }
 
-            // 5. 更新会话状态
+            // 5. 写入数据
+            aiWriteService.applyGeneratedData(functionUnitId, request.getGeneratedData(),
+                    request.getRegenerateScope());
+
+            // 6. 更新会话状态
             aiGenerationService.updateSessionStatus(request.getSessionId(), AiSessionStatus.COMPLETED);
 
-            // 6. 发送写入成功事件
+            // 7. 发送写入成功事件（携带 warnings）
+            Map<String, Object> successData = new LinkedHashMap<>();
+            successData.put("functionUnitId", functionUnitId);
+            if (validationResult.getWarnings() != null && !validationResult.getWarnings().isEmpty()) {
+                successData.put("warnings", validationResult.getWarnings());
+            }
             aiGenerationService.sendEventNotification(functionUnitId,
-                    AiChatSseEvent.builder().eventType("write_success").data(Map.of("functionUnitId", functionUnitId)).build());
+                    AiChatSseEvent.builder().eventType("write_success").data(successData).build());
 
         } catch (AiValidationFailedException e) {
             throw e;
+        } catch (jakarta.persistence.OptimisticLockException e) {
+            log.warn("Optimistic lock conflict during apply: functionUnitId={}", functionUnitId, e);
+            aiGenerationService.sendEventNotification(functionUnitId,
+                    AiChatSseEvent.builder().eventType("write_error").data(Map.of("error", "AI_WRITE_CONFLICT")).build());
+            throw new AiGenerationException("AI_WRITE_CONFLICT",
+                    "Data was modified by another user, please retry");
         } catch (Exception e) {
             log.error("Failed to apply generated data: functionUnitId={}", functionUnitId, e);
             // Send write error event
@@ -259,6 +343,51 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
                     AiChatSseEvent.builder().eventType("write_error").data(Map.of("error", e.getMessage())).build());
             throw e;
         }
+    }
+
+    /**
+     * 撤销上次应用操作，从快照缓存恢复数据
+     *
+     * @param functionUnitId 功能单元 ID
+     * @throws AiGenerationException 如果撤销窗口已过期（30 秒 TTL）
+     */
+    @Override
+    public void undoLastApply(Long functionUnitId) {
+        String snapshot = undoSnapshots.remove(functionUnitId);
+        if (snapshot == null) {
+            throw new AiGenerationException("AI_UNDO_EXPIRED", "Undo window has expired (30 seconds)");
+        }
+        try {
+            AiGeneratedData snapshotData = objectMapper.readValue(snapshot, AiGeneratedData.class);
+            aiWriteService.applyGeneratedData(functionUnitId, snapshotData, "ALL");
+            log.info("Undo applied successfully for functionUnitId={}", functionUnitId);
+        } catch (AiGenerationException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Failed to undo apply for functionUnitId={}", functionUnitId, e);
+            throw new AiGenerationException("AI_UNDO_FAILED", "Failed to undo: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 将当前功能单元的所有实体数据序列化为 AiGeneratedData 格式的 JSON 字符串
+     */
+    private String buildSnapshotData(Long functionUnitId) throws Exception {
+        // 使用 serializeFunctionUnitContext 获取当前数据，然后转换为 AiGeneratedData 格式
+        FunctionUnitContextDTO context = aiGenerationService.serializeFunctionUnitContext(functionUnitId);
+        if (context == null) {
+            return objectMapper.writeValueAsString(AiGeneratedData.builder().build());
+        }
+        AiGeneratedData snapshotData = AiGeneratedData.builder()
+                .tableDefinitions(context.getTableDefinitions())
+                .formDefinitions(context.getFormDefinitions())
+                .actionDefinitions(context.getActionDefinitions())
+                .decisionDefinitions(context.getDecisionDefinitions())
+                .tableRelations(context.getTableRelations())
+                .processDefinition(context.getProcessDefinition())
+                .icon(context.getIcon())
+                .build();
+        return objectMapper.writeValueAsString(snapshotData);
     }
 
     @Override

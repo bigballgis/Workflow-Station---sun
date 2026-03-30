@@ -14,10 +14,11 @@ import com.admin.entity.FunctionUnitDeployment;
 import com.admin.enums.DeploymentEnvironment;
 import com.admin.enums.DeploymentStrategy;
 import com.admin.enums.FunctionUnitStatus;
+import com.admin.exception.AdminBusinessException;
 import com.admin.service.FunctionUnitAccessService;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.platform.common.dto.ApiResponse;
+import com.platform.common.resource.AbstractBaseController;
 import io.swagger.v3.oas.annotations.Operation;
-import org.springframework.jdbc.core.JdbcTemplate;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -34,19 +35,37 @@ import java.util.stream.Collectors;
 
 /**
  * 功能单元管理 RESTful API
+ *
+ * <p>Extends {@link AbstractBaseController} for unified {@link ApiResponse} wrapping
+ * and HTTP status code mapping. Overrides {@link #handleError(Exception)} to also
+ * handle admin-center specific {@link AdminBusinessException}.
+ *
+ * <p><b>Validates: Requirements 5.1, 5.2, 5.3, 5.4, 32.1, 32.2, 32.3</b>
  */
 @Slf4j
 @RestController
 @RequestMapping("/function-units")
 @RequiredArgsConstructor
 @Tag(name = "功能单元管理", description = "功能包导入、部署管理和版本查询接口")
-public class FunctionUnitController {
+public class FunctionUnitController extends AbstractBaseController {
     
     private final FunctionUnitManagerComponent functionUnitManager;
     private final DeploymentManagerComponent deploymentManager;
     private final FunctionUnitAccessService accessService;
-    private final JdbcTemplate jdbcTemplate;
-    private final ObjectMapper objectMapper;
+
+    /**
+     * Extends base error handling to also map {@link AdminBusinessException}
+     * (which does not extend platform-common's BusinessException) to HTTP 400.
+     */
+    @Override
+    protected <T> ResponseEntity<ApiResponse<T>> handleError(Exception e) {
+        if (e instanceof AdminBusinessException abe) {
+            log.warn("Admin business error [{}]: {}", abe.getErrorCode(), abe.getMessage());
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(ApiResponse.error(abe.getErrorCode(), abe.getMessage()));
+        }
+        return super.handleError(e);
+    }
     
     // ==================== 功能包导入 ====================
     
@@ -84,55 +103,28 @@ public class FunctionUnitController {
         return ResponseEntity.ok(units.map(FunctionUnitInfo::fromEntity));
     }
     
+    // TODO: [Req 28.2] Refactor to return ApiResponse<Page<FunctionUnitInfo>> instead of Map<String, Object>
     @GetMapping("/deployed")
     @Operation(summary = "获取已部署的功能单元", description = "获取所有已部署的功能单元列表（供用户门户使用）")
-    public ResponseEntity<java.util.Map<String, Object>> getDeployedFunctionUnits() {
+    public ResponseEntity<ApiResponse<List<FunctionUnitInfo>>> getDeployedFunctionUnits() {
         log.info("Getting deployed function units");
-        
-        java.util.Map<String, Object> result = new java.util.HashMap<>();
-        
-        try {
+        return handleRequest(() -> {
             var units = functionUnitManager.listFunctionUnitsByStatus(
-                    FunctionUnitStatus.DEPLOYED, 
+                    FunctionUnitStatus.DEPLOYED,
                     org.springframework.data.domain.Pageable.unpaged());
-            
-            result.put("content", units.map(FunctionUnitInfo::fromEntity).getContent());
-            result.put("totalElements", units.getTotalElements());
-            
-            return ResponseEntity.ok(result);
-            
-        } catch (Exception e) {
-            log.error("Failed to get deployed function units", e);
-            result.put("content", java.util.Collections.emptyList());
-            result.put("totalElements", 0);
-            result.put("error", e.getMessage());
-            return ResponseEntity.ok(result);
-        }
+            return units.map(FunctionUnitInfo::fromEntity).getContent();
+        });
     }
     
+    // TODO: [Req 28.3] Refactor to return ApiResponse<List<FunctionUnitInfo>> instead of Map<String, Object>
     @GetMapping("/deployed/latest")
     @Operation(summary = "获取每个功能单元的最新已部署版本", description = "每个 code 仅返回版本号最高的一条记录（供用户门户使用）")
-    public ResponseEntity<java.util.Map<String, Object>> getLatestDeployedFunctionUnits() {
+    public ResponseEntity<ApiResponse<List<FunctionUnitInfo>>> getLatestDeployedFunctionUnits() {
         log.info("Getting latest deployed function units (deduplicated by code)");
-        
-        java.util.Map<String, Object> result = new java.util.HashMap<>();
-        
-        try {
+        return handleRequest(() -> {
             var units = functionUnitManager.listLatestDeployedFunctionUnits();
-            var infos = units.stream().map(FunctionUnitInfo::fromEntity).toList();
-            
-            result.put("content", infos);
-            result.put("totalElements", infos.size());
-            
-            return ResponseEntity.ok(result);
-            
-        } catch (Exception e) {
-            log.error("Failed to get latest deployed function units", e);
-            result.put("content", java.util.Collections.emptyList());
-            result.put("totalElements", 0);
-            result.put("error", e.getMessage());
-            return ResponseEntity.ok(result);
-        }
+            return units.stream().map(FunctionUnitInfo::fromEntity).toList();
+        });
     }
     
     @GetMapping("/{id}")
@@ -170,20 +162,43 @@ public class FunctionUnitController {
     
     @PutMapping("/{id}/enabled")
     @Operation(summary = "切换启用状态", description = "切换功能单元的启用/禁用状态")
-    public ResponseEntity<java.util.Map<String, Object>> setEnabled(
+    public ResponseEntity<ApiResponse<FunctionUnitInfo>> setEnabled(
             @Parameter(description = "功能单元ID") @PathVariable String id,
-            @RequestBody java.util.Map<String, Boolean> request) {
-        log.info("Setting enabled status for function unit {}: {}", id, request.get("enabled"));
-        Boolean enabled = request.get("enabled");
-        if (enabled == null) {
-            return ResponseEntity.badRequest().build();
-        }
-        FunctionUnit unit = functionUnitManager.setEnabled(id, enabled);
-        java.util.Map<String, Object> response = new java.util.HashMap<>();
-        response.put("id", unit.getId());
-        response.put("enabled", unit.getEnabled());
-        response.put("updatedAt", unit.getUpdatedAt());
-        return ResponseEntity.ok(response);
+            @RequestBody @Valid com.admin.dto.request.SetEnabledRequest request) {
+        log.info("Setting enabled status for function unit {}: {}", id, request.getEnabled());
+        return handleRequest(() -> {
+            FunctionUnit unit = functionUnitManager.setEnabled(id, request.getEnabled());
+            return FunctionUnitInfo.fromEntity(unit);
+        });
+    }
+
+    // ==================== 批量操作 (Req 20) ====================
+
+    @PutMapping("/batch/enabled")
+    @Operation(summary = "批量启用/禁用", description = "批量切换功能单元的启用/禁用状态")
+    public ResponseEntity<ApiResponse<List<FunctionUnitInfo>>> batchSetEnabled(
+            @RequestBody @Valid com.admin.dto.request.BatchEnabledRequest request) {
+        log.info("Batch setting enabled={} for {} function units", request.getEnabled(), request.getIds().size());
+        return handleRequest(() -> request.getIds().stream()
+                .map(id -> {
+                    FunctionUnit unit = functionUnitManager.setEnabled(id, request.getEnabled());
+                    return FunctionUnitInfo.fromEntity(unit);
+                })
+                .collect(Collectors.toList()));
+    }
+
+    @DeleteMapping("/batch")
+    @Operation(summary = "批量删除", description = "批量删除功能单元及其关联内容")
+    public ResponseEntity<ApiResponse<Void>> batchDelete(
+            @RequestBody @Valid com.admin.dto.request.BatchDeleteRequest request) {
+        log.info("Batch deleting {} function units", request.getIds().size());
+        return handleRequest(() -> {
+            for (String id : request.getIds()) {
+                accessService.deleteAllAccessConfigs(id);
+                functionUnitManager.deleteFunctionUnitCascade(id);
+            }
+            return null;
+        });
     }
     
     @DeleteMapping("/{id}/legacy")
@@ -217,6 +232,17 @@ public class FunctionUnitController {
 
     
     // ==================== 部署管理 ====================
+
+    /**
+     * 获取所有部署记录（全局分页查询，不限定功能单元）
+     * Req 15.2
+     */
+    @GetMapping("/deployments")
+    @Operation(summary = "获取所有部署记录", description = "分页获取所有功能单元的部署记录")
+    public ResponseEntity<ApiResponse<Page<FunctionUnitDeployment>>> getAllDeployments(Pageable pageable) {
+        log.info("Getting all deployments, page: {}", pageable);
+        return handleRequest(() -> deploymentManager.listAllDeployments(pageable));
+    }
     
     @PostMapping("/{id}/deployments")
     @Operation(summary = "创建部署", description = "创建功能单元部署请求")
@@ -466,335 +492,52 @@ public class FunctionUnitController {
     
     @GetMapping("/{id}/content")
     @Operation(summary = "获取功能单元完整内容", description = "获取功能单元的BPMN流程、表单定义、动作绑定等完整内容（供用户门户使用）")
-    public ResponseEntity<java.util.Map<String, Object>> getFunctionUnitContent(
+    public ResponseEntity<ApiResponse<com.admin.dto.response.FunctionUnitContentResponse>> getFunctionUnitContent(
             @Parameter(description = "功能单元ID") @PathVariable String id) {
         log.info("Getting function unit content for: {}", id);
-        
-        java.util.Map<String, Object> result = new java.util.HashMap<>();
-        
-        try {
-            FunctionUnit unit = functionUnitManager.getFunctionUnitById(id);
-            
-            // 基本信息
-            result.put("id", unit.getId());
-            result.put("name", unit.getName());
-            result.put("code", unit.getCode());
-            result.put("version", unit.getVersion());
-            result.put("description", unit.getDescription());
-            result.put("status", unit.getStatus().name());
-            
-            // 获取内容
-            java.util.List<com.admin.entity.FunctionUnitContent> contents = 
-                    functionUnitManager.getFunctionUnitContents(id);
-            
-            // 没有过滤器，返回所有内容（按类型分类）
-            java.util.List<java.util.Map<String, Object>> forms = new java.util.ArrayList<>();
-            java.util.List<java.util.Map<String, Object>> processes = new java.util.ArrayList<>();
-            java.util.List<java.util.Map<String, Object>> dataTables = new java.util.ArrayList<>();
-            
-            for (com.admin.entity.FunctionUnitContent content : contents) {
-                java.util.Map<String, Object> contentMap = new java.util.HashMap<>();
-                contentMap.put("id", content.getId());
-                contentMap.put("name", content.getContentName());
-                // 添加原始ID（用于 BPMN 中的 formId 匹配）
-                contentMap.put("sourceId", content.getSourceId());
-                
-                // 对于流程定义，尝试解码 Base64
-                String data = content.getContentData();
-                if (content.getContentType() == com.admin.enums.ContentType.PROCESS && data != null) {
-                    try {
-                        // 尝试 Base64 解码
-                        byte[] decoded = java.util.Base64.getDecoder().decode(data);
-                        data = new String(decoded, java.nio.charset.StandardCharsets.UTF_8);
-                        log.info("Decoded BPMN XML, length: {}", data.length());
-                    } catch (IllegalArgumentException e) {
-                        // 不是 Base64 编码，使用原始数据
-                        log.info("BPMN data is not Base64 encoded, using raw data");
-                    }
-                }
-                // 对于表单，优先从 dw_form_definitions 读取最新的 config_json，
-                // 因为 content_data 是导入时的旧快照，可能缺少后续更新的 subForms 等数据
-                if (content.getContentType() == com.admin.enums.ContentType.FORM && content.getSourceId() != null) {
-                    try {
-                        String latestConfigJson = jdbcTemplate.queryForObject(
-                            "SELECT config_json::text FROM dw_form_definitions WHERE id = ?",
-                            String.class, Long.parseLong(content.getSourceId()));
-                        if (latestConfigJson != null) {
-                            data = latestConfigJson;
-                            log.info("Using latest config_json from dw_form_definitions for form sourceId={}", content.getSourceId());
-                        }
-                    } catch (Exception e) {
-                        log.warn("Could not fetch latest config_json for form sourceId={}, using content_data: {}", content.getSourceId(), e.getMessage());
-                    }
-                }
-                contentMap.put("data", data);
-                contentMap.put("type", content.getContentType().name());
-                
-                // 使用 if-else 替代 switch 避免 ClassNotFoundException
-                com.admin.enums.ContentType ct = content.getContentType();
-                if (ct == com.admin.enums.ContentType.FORM) {
-                    forms.add(contentMap);
-                } else if (ct == com.admin.enums.ContentType.PROCESS) {
-                    processes.add(contentMap);
-                } else if (ct == com.admin.enums.ContentType.DATA_TABLE) {
-                    dataTables.add(contentMap);
-                }
-            }
-            
-            // 为每个 form 附加 tableBindings
-            // 优先用 sourceId 精确匹配；sourceId 为 null 时回退到 form_name 匹配（取最新版本）
-            try {
-                java.util.List<String> formSourceIds = forms.stream()
-                    .map(f -> (String) f.get("sourceId"))
-                    .filter(sid -> sid != null && !sid.isBlank())
-                    .distinct()
-                    .toList();
-
-                java.util.List<String> formNamesForFallback = forms.stream()
-                    .filter(f -> {
-                        String sid = (String) f.get("sourceId");
-                        return sid == null || sid.isBlank();
-                    })
-                    .map(f -> (String) f.get("name"))
-                    .filter(n -> n != null)
-                    .distinct()
-                    .toList();
-
-                // key: form identifier (sourceId or form_name), value: list of bindings
-                java.util.Map<String, java.util.List<java.util.Map<String, Object>>> bindingsBySourceId = new java.util.LinkedHashMap<>();
-                java.util.Map<String, java.util.List<java.util.Map<String, Object>>> bindingsByFormName = new java.util.LinkedHashMap<>();
-
-                if (!formSourceIds.isEmpty()) {
-                    String placeholders = formSourceIds.stream().map(n -> "?").collect(java.util.stream.Collectors.joining(","));
-                    String bindingsSql =
-                        "SELECT fd.id as form_id, ftb.id as binding_id, ftb.binding_type, ftb.binding_mode, " +
-                        "       ftb.foreign_key_field, ftb.sort_order, " +
-                        "       td.id as table_id, td.table_name, td.table_display_name, td.table_type, td.description as table_description, " +
-                        "       fd.config_json->'subForms'->(ftb.id::text) as sub_form_config " +
-                        "FROM dw_form_definitions fd " +
-                        "JOIN dw_form_table_bindings ftb ON ftb.form_id = fd.id " +
-                        "JOIN dw_table_definitions td ON td.id = ftb.table_id " +
-                        "WHERE fd.id::text IN (" + placeholders + ") " +
-                        "ORDER BY fd.id, ftb.sort_order";
-                    jdbcTemplate.query(bindingsSql, rs -> {
-                        String formId = rs.getString("form_id");
-                        java.util.Map<String, Object> binding = new java.util.HashMap<>();
-                        binding.put("bindingId", rs.getLong("binding_id"));
-                        binding.put("bindingType", rs.getString("binding_type"));
-                        binding.put("bindingMode", rs.getString("binding_mode"));
-                        binding.put("foreignKeyField", rs.getString("foreign_key_field"));
-                        binding.put("sortOrder", rs.getInt("sort_order"));
-                        binding.put("tableId", rs.getLong("table_id"));
-                        binding.put("tableName", rs.getString("table_name"));
-                        binding.put("tableDisplayName", rs.getString("table_display_name"));
-                        binding.put("tableType", rs.getString("table_type"));
-                        binding.put("tableDescription", rs.getString("table_description"));
-                        String subFormConfigJson = rs.getString("sub_form_config");
-                        if (subFormConfigJson != null) {
-                            try {
-                                binding.put("subFormConfig", objectMapper.readValue(subFormConfigJson, java.util.Map.class));
-                            } catch (Exception ex) {
-                                log.warn("Failed to parse subFormConfig for binding {}: {}", rs.getLong("binding_id"), ex.getMessage());
-                            }
-                        }
-                        bindingsBySourceId.computeIfAbsent(formId, k -> new java.util.ArrayList<>()).add(binding);
-                    }, formSourceIds.toArray());
-                }
-
-                if (!formNamesForFallback.isEmpty()) {
-                    // 用 DISTINCT ON 取每个 form_name 最新（id 最大）的版本，避免同名表单重复
-                    String placeholders = formNamesForFallback.stream().map(n -> "?").collect(java.util.stream.Collectors.joining(","));
-                    String bindingsSql =
-                        "SELECT latest.form_name, ftb.id as binding_id, ftb.binding_type, ftb.binding_mode, " +
-                        "       ftb.foreign_key_field, ftb.sort_order, " +
-                        "       td.id as table_id, td.table_name, td.table_display_name, td.table_type, td.description as table_description, " +
-                        "       latest.config_json->'subForms'->(ftb.id::text) as sub_form_config " +
-                        "FROM (SELECT DISTINCT ON (form_name) id, form_name, config_json FROM dw_form_definitions " +
-                        "      WHERE form_name IN (" + placeholders + ") ORDER BY form_name, id DESC) latest " +
-                        "JOIN dw_form_table_bindings ftb ON ftb.form_id = latest.id " +
-                        "JOIN dw_table_definitions td ON td.id = ftb.table_id " +
-                        "ORDER BY latest.form_name, ftb.sort_order";
-                    jdbcTemplate.query(bindingsSql, rs -> {
-                        String formName = rs.getString("form_name");
-                        java.util.Map<String, Object> binding = new java.util.HashMap<>();
-                        binding.put("bindingId", rs.getLong("binding_id"));
-                        binding.put("bindingType", rs.getString("binding_type"));
-                        binding.put("bindingMode", rs.getString("binding_mode"));
-                        binding.put("foreignKeyField", rs.getString("foreign_key_field"));
-                        binding.put("sortOrder", rs.getInt("sort_order"));
-                        binding.put("tableId", rs.getLong("table_id"));
-                        binding.put("tableName", rs.getString("table_name"));
-                        binding.put("tableDisplayName", rs.getString("table_display_name"));
-                        binding.put("tableType", rs.getString("table_type"));
-                        binding.put("tableDescription", rs.getString("table_description"));
-                        String subFormConfigJson = rs.getString("sub_form_config");
-                        if (subFormConfigJson != null) {
-                            try {
-                                binding.put("subFormConfig", objectMapper.readValue(subFormConfigJson, java.util.Map.class));
-                            } catch (Exception ex) {
-                                log.warn("Failed to parse subFormConfig for binding {}: {}", rs.getLong("binding_id"), ex.getMessage());
-                            }
-                        }
-                        bindingsByFormName.computeIfAbsent(formName, k -> new java.util.ArrayList<>()).add(binding);
-                    }, formNamesForFallback.toArray());
-                }
-
-                // attach bindings to each form: prefer sourceId match, fallback to form_name
-                for (java.util.Map<String, Object> formMap : forms) {
-                    String sourceId = (String) formMap.get("sourceId");
-                    java.util.List<java.util.Map<String, Object>> bindings;
-                    if (sourceId != null && !sourceId.isBlank()) {
-                        bindings = bindingsBySourceId.getOrDefault(sourceId, java.util.Collections.emptyList());
-                    } else {
-                        String formName = (String) formMap.get("name");
-                        bindings = bindingsByFormName.getOrDefault(formName, java.util.Collections.emptyList());
-                    }
-                    formMap.put("tableBindings", bindings);
-                }
-                log.info("Attached tableBindings to {} forms for function unit {}", forms.size(), id);
-            } catch (Exception e) {
-                log.warn("Failed to load tableBindings for function unit {}: {}", id, e.getMessage());
-                for (java.util.Map<String, Object> formMap : forms) {
-                    formMap.put("tableBindings", java.util.Collections.emptyList());
-                }
-            }
-            
-            result.put("forms", forms);
-            result.put("processes", processes);
-            result.put("dataTables", dataTables);
-            
-            return ResponseEntity.ok(result);
-            
-        } catch (Exception e) {
-            log.error("Failed to get function unit content for {}: {}", id, e.getMessage(), e);
-            result.put("error", e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(result);
-        }
+        return handleRequest(() -> functionUnitManager.assembleFunctionUnitContent(id));
     }
     
+    // ==================== 合并内容端点 (Req 35) ====================
+
+    @GetMapping("/{id}/contents")
+    @Operation(summary = "获取功能单元内容", description = "获取功能单元的内容列表，可按类型过滤。type 为空时返回所有类型。")
+    public ResponseEntity<ApiResponse<java.util.List<com.admin.dto.response.FunctionUnitContentItemDTO>>> getContents(
+            @Parameter(description = "功能单元ID") @PathVariable String id,
+            @Parameter(description = "内容类型（可选）：FORM, PROCESS, DATA_TABLE, SCRIPT, ACTION") @RequestParam(required = false) String type) {
+        log.info("Getting function unit contents for: {}, type: {}", id, type);
+        return handleRequest(() -> functionUnitManager.getContentsByType(id, type));
+    }
+
+    // ==================== 旧端点（已废弃，下一版本移除） ====================
+
+    @Deprecated
     @PostMapping(value = "/formcontent", produces = "application/json")
-    @Operation(summary = "获取功能单元表单内容", description = "获取功能单元的表单定义内容，用于表单弹窗等场景")
-    public ResponseEntity<java.util.List<java.util.Map<String, Object>>> getFunctionUnitFormContent(
+    @Operation(summary = "获取功能单元表单内容（已废弃）", description = "已废弃，请使用 GET /{id}/contents?type=FORM")
+    public ResponseEntity<ApiResponse<java.util.List<com.admin.dto.response.FunctionUnitContentItemDTO>>> getFunctionUnitFormContent(
             @RequestBody java.util.Map<String, String> request) {
         String id = request.get("id");
-        log.info("Getting function unit form content for: {}", id);
-        
-        java.util.List<java.util.Map<String, Object>> result = new java.util.ArrayList<>();
-        
-        try {
-            // 获取所有内容
-            java.util.List<com.admin.entity.FunctionUnitContent> contents = 
-                    functionUnitManager.getFunctionUnitContents(id);
-            
-            // 过滤并返回 FORM 类型的内容
-            for (com.admin.entity.FunctionUnitContent content : contents) {
-                if (content.getContentType() == com.admin.enums.ContentType.FORM) {
-                    java.util.Map<String, Object> contentMap = new java.util.HashMap<>();
-                    contentMap.put("id", content.getId());
-                    contentMap.put("contentType", content.getContentType().name());
-                    contentMap.put("contentName", content.getContentName());
-                    contentMap.put("contentData", content.getContentData());
-                    contentMap.put("sourceId", content.getSourceId());
-                    result.add(contentMap);
-                }
-            }
-            
-            log.info("Returning {} form contents", result.size());
-            return ResponseEntity.ok(result);
-            
-        } catch (Exception e) {
-            log.error("Failed to get function unit form contents for {}: {}", id, e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(result);
-        }
+        log.info("[DEPRECATED] Getting function unit form content for: {}", id);
+        return handleRequest(() -> functionUnitManager.getContentsByType(id, "FORM"));
     }
     
+    @Deprecated
     @GetMapping(value = "/fu-content/{id}/type/{contentType}", produces = "application/json")
-    @Operation(summary = "获取功能单元特定类型的内容", description = "获取功能单元的特定类型内容（如表单、流程等），用于表单弹窗等场景")
-    public ResponseEntity<java.util.List<java.util.Map<String, Object>>> getFunctionUnitContentByType(
+    @Operation(summary = "获取功能单元特定类型的内容（已废弃）", description = "已废弃，请使用 GET /{id}/contents?type={contentType}")
+    public ResponseEntity<ApiResponse<java.util.List<com.admin.dto.response.FunctionUnitContentItemDTO>>> getFunctionUnitContentByType(
             @Parameter(description = "功能单元ID") @PathVariable String id,
             @Parameter(description = "内容类型：FORM, PROCESS, DATA_TABLE") @PathVariable String contentType) {
-        log.info("Getting function unit content by type for: {}, contentType: {}", id, contentType);
-        
-        java.util.List<java.util.Map<String, Object>> result = new java.util.ArrayList<>();
-        
-        try {
-            // 获取所有内容
-            java.util.List<com.admin.entity.FunctionUnitContent> contents = 
-                    functionUnitManager.getFunctionUnitContents(id);
-            
-            // 解析请求的内容类型
-            com.admin.enums.ContentType requestedType;
-            try {
-                requestedType = com.admin.enums.ContentType.valueOf(contentType.toUpperCase());
-            } catch (IllegalArgumentException e) {
-                log.error("Invalid content type: {}", contentType);
-                return ResponseEntity.badRequest().build();
-            }
-            
-            // 过滤并返回指定类型的内容
-            for (com.admin.entity.FunctionUnitContent content : contents) {
-                if (content.getContentType() == requestedType) {
-                    java.util.Map<String, Object> contentMap = new java.util.HashMap<>();
-                    contentMap.put("id", content.getId());
-                    contentMap.put("contentType", content.getContentType().name());
-                    contentMap.put("contentName", content.getContentName());
-                    contentMap.put("contentData", content.getContentData());
-                    contentMap.put("sourceId", content.getSourceId());
-                    result.add(contentMap);
-                }
-            }
-            
-            log.info("Returning {} contents of type {}", result.size(), contentType);
-            return ResponseEntity.ok(result);
-            
-        } catch (Exception e) {
-            log.error("Failed to get function unit contents for {}: {}", id, e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(result);
-        }
+        log.info("[DEPRECATED] Getting function unit content by type for: {}, contentType: {}", id, contentType);
+        return handleRequest(() -> functionUnitManager.getContentsByType(id, contentType));
     }
     
+    @Deprecated
     @GetMapping(value = "/{id}/content-items", produces = "application/json")
-    @Operation(summary = "获取功能单元特定类型的内容", description = "获取功能单元的特定类型内容（如表单、流程等），用于表单弹窗等场景")
-    public ResponseEntity<java.util.List<java.util.Map<String, Object>>> getFunctionUnitContents(
+    @Operation(summary = "获取功能单元特定类型的内容（已废弃）", description = "已废弃，请使用 GET /{id}/contents?type={contentType}")
+    public ResponseEntity<ApiResponse<java.util.List<com.admin.dto.response.FunctionUnitContentItemDTO>>> getFunctionUnitContents(
             @Parameter(description = "功能单元ID") @PathVariable String id,
             @Parameter(description = "内容类型") @RequestParam String contentType) {
-        log.info("Getting function unit content items for: {}, contentType: {}", id, contentType);
-        
-        java.util.List<java.util.Map<String, Object>> result = new java.util.ArrayList<>();
-        
-        try {
-            // 获取所有内容
-            java.util.List<com.admin.entity.FunctionUnitContent> contents = 
-                    functionUnitManager.getFunctionUnitContents(id);
-            
-            // 解析请求的内容类型
-            com.admin.enums.ContentType requestedType;
-            try {
-                requestedType = com.admin.enums.ContentType.valueOf(contentType.toUpperCase());
-            } catch (IllegalArgumentException e) {
-                log.error("Invalid content type: {}", contentType);
-                return ResponseEntity.badRequest().build();
-            }
-            
-            // 过滤指定类型的内容
-            for (com.admin.entity.FunctionUnitContent content : contents) {
-                if (content.getContentType() == requestedType) {
-                    java.util.Map<String, Object> contentMap = new java.util.HashMap<>();
-                    contentMap.put("id", content.getId());
-                    contentMap.put("contentType", content.getContentType().name());
-                    contentMap.put("contentName", content.getContentName());
-                    contentMap.put("contentData", content.getContentData());
-                    contentMap.put("sourceId", content.getSourceId());
-                    result.add(contentMap);
-                }
-            }
-            
-            log.info("Found {} contents of type {}", result.size(), contentType);
-            return ResponseEntity.ok(result);
-            
-        } catch (Exception e) {
-            log.error("Failed to get function unit contents for {}: {}", id, e.getMessage(), e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(result);
-        }
+        log.info("[DEPRECATED] Getting function unit content items for: {}, contentType: {}", id, contentType);
+        return handleRequest(() -> functionUnitManager.getContentsByType(id, contentType));
     }
 }

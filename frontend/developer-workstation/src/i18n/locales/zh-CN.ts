@@ -231,7 +231,14 @@ export default {
     oneToOne: '一对一',
     oneToMany: '一对多',
     manyToMany: '多对多',
-    addRelation: '添加关联'
+    addRelation: '添加关联',
+    validateTables: '验证表',
+    defaultValue: '默认值',
+    isUnique: '唯一',
+    precision: '精度',
+    scale: '小数位',
+    invalidTableName: '表名必须以字母开头，只能包含字母、数字和下划线',
+    invalidFieldName: '字段名 "{name}" 无效，必须以字母开头，只能包含字母、数字和下划线'
   },
   form: {
     title: '表单设计器',
@@ -250,6 +257,8 @@ export default {
     subForm: '子表单',
     popupForm: '弹出表单',
     actionForm: '动作表单',
+    processForm: '流程表单',
+    taskForm: '任务表单',
     notBound: '未绑定',
     importFields: '导入字段',
     selectTable: '选择表',
@@ -326,7 +335,27 @@ export default {
     nodeTypeEndEvent: '结束事件',
     // Other
     unknownTable: '未知表',
-    subTableBindingRequired: '保存前，所有子表占位符必须选择绑定'
+    subTableBindingRequired: '保存前，所有子表占位符必须选择绑定',
+    // Stage binding (Task Form)
+    stageBinding: '阶段绑定',
+    stageBindingPlaceholder: '选择要绑定的阶段',
+    stageBindingRequired: 'TASK 表单需要至少绑定一个阶段',
+    stageBindingHint: '选择一个或多个流程阶段（userTask 节点）绑定到此任务表单',
+    // Process form uniqueness
+    processFormAlreadyExists: '该功能单元已存在 PROCESS 表单',
+    // Field name autocomplete & validation
+    fieldNameAutocomplete: '字段名',
+    fieldNameNotInDataTable: '字段名 "{name}" 不存在于 Data_Table 列中',
+    fieldNameValidationFailed: '部分字段名不是有效的 Data_Table 列',
+    loadingDataTableColumns: '正在加载 Data_Table 列...',
+    // Field permissions
+    fieldPermission: '权限',
+    fieldPermissionReadonly: '只读',
+    fieldPermissionEditable: '可编辑',
+    // Copy task form
+    copyForm: '复制',
+    copyFormSuccess: '表单复制成功',
+    copyFormFailed: '表单复制失败'
   },
   action: {
     title: '动作设计器',
@@ -462,7 +491,17 @@ export default {
     n8nParamNamePlaceholder: '请输入参数名',
     n8nParamLabelPlaceholder: '请输入参数标签',
     n8nConfigRequired: '请选择 N8N 连接配置',
-    n8nWebhookUrlRequired: '请填写 Webhook URL'
+    n8nWebhookUrlRequired: '请填写 Webhook URL',
+    // Visibility, roles & sort order
+    visibilityAndPermissions: '可见性与权限',
+    visibilityCondition: '可见性条件',
+    visibilityConditionPlaceholder: '例如 formData.amount > 10000',
+    allowedRoles: '允许角色',
+    allowedRolesPlaceholder: '选择或输入角色',
+    sortOrder: '排序',
+    // Test dialog enhancements
+    rawJson: '原始 JSON',
+    structuredInput: '结构化输入'
   },
   icon: {
     title: '图标库',
@@ -527,7 +566,9 @@ export default {
     selectVersion2: '选择版本2',
     tableDefinition: '表定义',
     formDefinition: '表单定义',
-    processDefinition: '流程定义'
+    processDefinition: '流程定义',
+    rollbackTitle: '回滚确认',
+    rollbackConfirmDetail: '确定要从版本 {currentVersion} 回滚到版本 {targetVersion} 吗？此操作不可撤销，可能影响现有数据。'
   },
   properties: {
     basic: '基本信息',
@@ -998,6 +1039,38 @@ export default {
     failed: '部署失败',
     import_failed: '导入失败'
   },
+  commonTable: {
+    title: '公共表',
+    edit: '编辑公共表',
+    list: '公共表列表',
+    create: '创建公共表',
+    code: '表编码',
+    name: '表名称',
+    description: '描述',
+    status: '状态',
+    draft: '草稿',
+    published: '已发布',
+    archived: '已归档',
+    fields: '字段',
+    fieldName: '字段名',
+    displayName: '显示名称',
+    dataType: '数据类型',
+    isPrimaryKey: '主键',
+    nullable: '可空',
+    createSuccess: '公共表创建成功',
+    updateSuccess: '公共表更新成功',
+    deleteSuccess: '公共表删除成功',
+    deleteConfirm: '确定要删除此公共表吗？此操作不可撤销。',
+    noTables: '暂无公共表',
+    codePlaceholder: '输入表编码（字母开头，字母数字下划线）',
+    namePlaceholder: '输入表名称',
+    descriptionPlaceholder: '输入描述（可选）',
+    addField: '添加字段',
+    saveFields: '保存字段',
+    functionUnitTables: '功能单元表',
+    commonTables: '公共表',
+    tableSource: '表来源'
+  },
   decision: {
     title: '决策表',
     create: '新建决策',
@@ -1038,7 +1111,13 @@ export default {
     hitPolicyOutputOrder: 'OUTPUT ORDER',
     createSuccess: '决策新建成功',
     deleteSuccess: '决策删除成功',
-    confirmTitle: '确认'
+    confirmTitle: '确认',
+    bindToNode: '绑定节点',
+    boundNodes: '已绑定节点',
+    notBound: '未绑定',
+    noServiceTasks: '流程中未找到服务任务节点',
+    noProcessDefined: '暂无流程定义',
+    bindSuccess: '决策表绑定节点成功'
   },
   ai: {
     panel: {
@@ -1067,10 +1146,13 @@ export default {
       applyFailed: '应用数据失败',
       detach: '弹出窗口',
       attach: '收回面板',
-      generateButton: 'AI 生成'
+      generateButton: 'AI 生成',
+      sessionHistory: '会话历史'
     },
     chat: {
       validationFailed: '数据校验失败',
+      validationWarnings: '校验警告',
+      regenerateScope: '重新生成范围',
       retry: '重试',
       nextPhase: '进入下一阶段',
       send: '发送',
@@ -1078,6 +1160,16 @@ export default {
       aiReplying: 'AI 正在回复中...',
       inputMessage: '输入消息...',
       autoGenerating: '正在基于已有文档自动生成，请稍候...'
+    },
+    error: {
+      AI_SESSION_NOT_FOUND: 'AI 会话未找到，请重新开始',
+      AI_FUNCTION_UNIT_NOT_FOUND: '功能单元未找到',
+      AI_N8N_TIMEOUT: 'AI 服务超时，请重试',
+      AI_N8N_CALL_FAILED: 'AI 服务调用失败，请重试',
+      AI_WRITE_CONFLICT: '数据已被其他用户修改，请刷新后重试',
+      AI_CONTEXT_TOO_LARGE: '功能单元数据过大，无法进行 AI 处理',
+      AI_UNDO_EXPIRED: '撤销窗口已过期',
+      AI_UNKNOWN_ERROR: '发生意外错误，请重试'
     },
     doc: {
       requirements: '需求文档',
@@ -1114,12 +1206,160 @@ export default {
       tablesSummary: '{count} 个表，共 {fields} 个字段',
       formsSummary: '{count} 个表单',
       actionsSummary: '{count} 个动作',
-      processSummary: '{nodes} 个节点，{gateways} 个网关'
+      processSummary: '{nodes} 个节点，{gateways} 个网关',
+      decisions: '决策表',
+      decisionsSummary: '{count} 个决策表',
+      tableRelations: '表关系',
+      tableRelationsSummary: '{count} 个关系',
+      viewDetails: '查看详情',
+      generating: '生成中...',
+      summary: '摘要',
+      diff: '差异预览'
     },
     phase: {
       requirements: '需求收集',
       design: '设计方案',
       generation: '生成预览与确认'
+    },
+    quality: {
+      completeness: '完整性',
+      consistency: '一致性',
+      complexity: '复杂度',
+      naming: '命名规范',
+      lowScoreWarning: '质量评分较低，建议重新生成'
+    },
+    scope: {
+      tables: '数据表',
+      forms: '表单',
+      actions: '动作',
+      decisions: '决策表',
+      process: '流程',
+      tableRelations: '表关系'
+    },
+    template: {
+      selectTitle: '选择模板',
+      crud: {
+        name: 'CRUD 应用',
+        description: '标准的增删改查操作，包含数据表和表单'
+      },
+      approval: {
+        name: '审批流程',
+        description: '多级审批流程，包含审核表单和决策节点'
+      },
+      dataEntry: {
+        name: '数据录入表单',
+        description: '带校验规则和子表的数据采集表单'
+      },
+      report: {
+        name: '报表仪表板',
+        description: '数据聚合与报表，包含汇总规则和图表'
+      }
+    },
+    degradation: {
+      title: 'AI 服务不可用',
+      lastSuccess: '上次成功连接：{time}',
+      saveDraft: '保存草稿稍后重试',
+      manualCreate: '手动创建',
+      draftSaved: '草稿保存成功',
+      draftRestored: '草稿已恢复'
+    },
+    progress: {
+      analyzing: '正在分析需求...',
+      designingTables: '正在设计表结构...',
+      creatingForms: '正在创建表单...',
+      generatingProcess: '正在生成流程...',
+      validating: '正在校验数据...',
+      ready: '准备就绪'
+    },
+    draft: {
+      found: '发现未保存的草稿',
+      restore: '恢复草稿',
+      dismiss: '忽略'
+    },
+    diff: {
+      summary: '新增 {added} 项，修改 {modified} 项，删除 {deleted} 项'
+    },
+    undo: {
+      button: '撤销',
+      success: '已成功撤销更改'
     }
+  },
+  businessLogic: {
+    // ConditionBuilder
+    selectField: '选择字段',
+    selectOperator: '选择运算符',
+    enterValue: '输入值',
+    addCondition: '添加条件',
+    opEquals: '等于',
+    opNotEquals: '不等于',
+    opContains: '包含',
+    opGreaterThan: '大于',
+    opLessThan: '小于',
+    opIsEmpty: '为空',
+    opIsNotEmpty: '不为空',
+    opDateAfter: '日期晚于',
+    opDateBefore: '日期早于',
+    // FormulaEditor
+    targetField: '目标字段',
+    expression: '表达式',
+    expressionPlaceholder: '例如 quantity * unit_price',
+    addFormula: '添加公式',
+    dangerousExpression: '表达式包含危险关键字',
+    // LinkageConfigurator
+    sourceField: '源字段',
+    linkageType: '联动类型',
+    optionFiltering: '选项过滤',
+    valueAutoFill: '值自动填充',
+    fieldStateChange: '字段状态变更',
+    filterField: '过滤字段',
+    filterFieldPlaceholder: '目标选项中的字段名',
+    filterOperator: '过滤运算符',
+    valueMapping: '值映射',
+    valueMappingPlaceholder: '{"key": "value"} JSON',
+    stateDisabled: '禁用',
+    stateRequired: '必填',
+    addLinkage: '添加联动',
+    // ValidationRuleList
+    ruleType: '规则类型',
+    regexPattern: '正则表达式',
+    minValue: '最小值',
+    maxValue: '最大值',
+    errorMessage: '错误消息',
+    addRule: '添加规则',
+    ruleRequired: '必填',
+    rulePattern: '正则校验',
+    ruleNumber: '数值范围',
+    ruleEmail: '邮箱',
+    rulePhone: '手机号',
+    ruleCustom: '自定义',
+    // CrossFieldRuleEditor
+    field1: '字段1',
+    field2: '字段2',
+    errorTarget: '错误显示字段',
+    addCrossFieldRule: '添加跨字段规则',
+    // RowFormulaEditor
+    rowFormulas: '行内计算公式',
+    targetColumn: '目标列',
+    addRowFormula: '添加行公式',
+    summaryRules: '汇总规则',
+    sourceColumn: '源列',
+    mainFormField: '主表字段',
+    aggregation: '聚合函数',
+    addSummaryRule: '添加汇总规则',
+    // SubTableValidationEditor
+    minRows: '最少行数',
+    maxRows: '最多行数',
+    columnValidation: '列校验规则'
+  },
+  template: {
+    basicInfo: '基本信息表单',
+    basicInfoDesc: '包含名称、描述和日期字段的简单表单',
+    approvalForm: '审批表单',
+    approvalFormDesc: '包含申请人、部门、原因和金额字段的审批表单',
+    dataEntry: '数据录入表单',
+    dataEntryDesc: '包含多种输入类型的多标签页数据录入表单',
+    createFromTemplate: '从模板创建',
+    selectTemplate: '选择模板',
+    blankForm: '空白表单',
   }
 }

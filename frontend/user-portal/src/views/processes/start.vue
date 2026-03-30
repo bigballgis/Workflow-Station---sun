@@ -47,6 +47,16 @@
         </template>
       </el-result>
     </div>
+
+    <!-- 无 PROCESS form 警告状态 -->
+    <div v-else-if="noProcessForm" class="no-process-form-state">
+      <el-result icon="warning" :title="t('process.noProcessFormTitle')" :sub-title="t('process.noProcessForm')">
+        <template #extra>
+          <el-button type="primary" @click="$router.back()">{{ t('processStart.back') }}</el-button>
+          <el-button @click="$router.push('/processes')">{{ t('processStart.viewOtherProcesses') }}</el-button>
+        </template>
+      </el-result>
+    </div>
     
     <!-- 正常内容 -->
     <div v-else class="content-sections">
@@ -198,6 +208,7 @@ const loading = ref(true)
 const loadError = ref('')
 const isDisabled = ref(false)
 const isAccessDenied = ref(false)
+const noProcessForm = ref(false)
 const submitting = ref(false)
 const savingDraft = ref(false)
 const currentAction = ref('')
@@ -272,6 +283,7 @@ const loadFunctionUnitContent = async () => {
   loadError.value = ''
   isDisabled.value = false
   isAccessDenied.value = false
+  noProcessForm.value = false
   
   try {
     const response = await processApi.getFunctionUnitContent(functionUnitId.value)
@@ -300,6 +312,13 @@ const loadFunctionUnitContent = async () => {
     
     // 解析表单定义 - 根据开始节点的 formId 选择正确的表单
     if (content.forms && content.forms.length > 0) {
+      // Task 16.1: 校验 PROCESS form 存在
+      const hasProcessForm = content.forms.some((f: any) => f.formType === 'PROCESS')
+      if (!hasProcessForm) {
+        noProcessForm.value = true
+        return
+      }
+
       let selectedForm = content.forms[0] // 默认第一个
       
       // 优先使用 formId 匹配 sourceId（原始表单ID）
@@ -1206,6 +1225,12 @@ const handleSubmit = async () => {
     }
     
     ElMessage.success(t('processStart.processSubmitSuccess'))
+    
+    // Task 16.2: 提交成功后清除 FormRenderer 自动保存数据
+    if (formRendererRef.value) {
+      formRendererRef.value.clearAutoSave()
+    }
+    
     router.push('/my-applications')
     
   } catch (error: any) {
@@ -1250,7 +1275,8 @@ onMounted(() => {
   }
   
   .disabled-state,
-  .access-denied-state {
+  .access-denied-state,
+  .no-process-form-state {
     padding: 60px 0;
     background: white;
     border-radius: 8px;

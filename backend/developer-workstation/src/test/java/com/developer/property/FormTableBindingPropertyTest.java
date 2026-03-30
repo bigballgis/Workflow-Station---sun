@@ -231,7 +231,7 @@ public class FormTableBindingPropertyTest {
                 .id(1L)
                 .functionUnit(functionUnit)
                 .formName("TestForm")
-                .formType(FormType.MAIN)
+                .formType(FormType.PROCESS)
                 .configJson(new HashMap<>())
                 .build();
     }

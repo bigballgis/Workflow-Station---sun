@@ -23,11 +23,14 @@ import java.util.UUID;
 import java.util.function.Supplier;
 
 /**
- * Enhanced base controller class that provides common functionality for all API controllers.
- * This includes input validation, error handling, and security audit logging.
- * Integrated with the new technical debt remediation frameworks for comprehensive security management.
- * 
- * **Validates: Requirements 1.1, 3.1, 4.2, 7.5**
+ * Enhanced base controller class that provides common functionality for all API controllers
+ * in the developer-workstation module.
+ *
+ * <p>This module uses its own {@code com.developer.dto.ApiResponse} (not platform-common's),
+ * so it does NOT extend AbstractBaseController. admin-center extends AbstractBaseController
+ * directly since it uses platform-common's ApiResponse.
+ *
+ * <p><b>Validates: Requirements 1.1, 3.1, 4.2, 5.1, 7.5</b>
  */
 @Slf4j
 public abstract class BaseController {

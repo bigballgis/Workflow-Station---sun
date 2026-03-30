@@ -199,7 +199,14 @@ export default {
     oneToOne: 'One-to-One',
     oneToMany: 'One-to-Many',
     manyToMany: 'Many-to-Many',
-    addRelation: 'Add Relation'
+    addRelation: 'Add Relation',
+    validateTables: 'Validate Tables',
+    defaultValue: 'Default Value',
+    isUnique: 'Unique',
+    precision: 'Precision',
+    scale: 'Scale',
+    invalidTableName: 'Table name must start with a letter and contain only letters, digits, and underscores',
+    invalidFieldName: 'Field name "{name}" is invalid. Must start with a letter and contain only letters, digits, and underscores'
   },
   form: {
     title: 'Form Designer',
@@ -218,6 +225,8 @@ export default {
     subForm: 'Sub Form',
     popupForm: 'Popup Form',
     actionForm: 'Action Form',
+    processForm: 'Process Form',
+    taskForm: 'Task Form',
     notBound: 'Not Bound',
     importFields: 'Import Fields',
     selectTable: 'Select Table',
@@ -294,7 +303,27 @@ export default {
     nodeTypeEndEvent: 'End Event',
     // Other
     unknownTable: 'Unknown Table',
-    subTableBindingRequired: 'All Sub-Table placeholders must have a binding selected before saving'
+    subTableBindingRequired: 'All Sub-Table placeholders must have a binding selected before saving',
+    // Stage binding (Task Form)
+    stageBinding: 'Stage Binding',
+    stageBindingPlaceholder: 'Select stages to bind',
+    stageBindingRequired: 'TASK form requires at least one stage binding',
+    stageBindingHint: 'Select one or more process stages (userTask nodes) for this Task Form',
+    // Process form uniqueness
+    processFormAlreadyExists: 'A PROCESS form already exists for this FunctionUnit',
+    // Field name autocomplete & validation
+    fieldNameAutocomplete: 'Field Name',
+    fieldNameNotInDataTable: 'Field name "{name}" does not exist in Data_Table columns',
+    fieldNameValidationFailed: 'Some field names are not valid Data_Table columns',
+    loadingDataTableColumns: 'Loading Data_Table columns...',
+    // Field permissions
+    fieldPermission: 'Permission',
+    fieldPermissionReadonly: 'Read Only',
+    fieldPermissionEditable: 'Editable',
+    // Copy task form
+    copyForm: 'Copy',
+    copyFormSuccess: 'Form copied successfully',
+    copyFormFailed: 'Failed to copy form'
   },
   action: {
     title: 'Action Designer',
@@ -430,7 +459,17 @@ export default {
     n8nParamNamePlaceholder: 'Enter parameter name',
     n8nParamLabelPlaceholder: 'Enter parameter label',
     n8nConfigRequired: 'Please select N8N connection config',
-    n8nWebhookUrlRequired: 'Please enter Webhook URL'
+    n8nWebhookUrlRequired: 'Please enter Webhook URL',
+    // Visibility, roles & sort order
+    visibilityAndPermissions: 'Visibility & Permissions',
+    visibilityCondition: 'Visibility Condition',
+    visibilityConditionPlaceholder: 'e.g. formData.amount > 10000',
+    allowedRoles: 'Allowed Roles',
+    allowedRolesPlaceholder: 'Select or enter roles',
+    sortOrder: 'Sort Order',
+    // Test dialog enhancements
+    rawJson: 'Raw JSON',
+    structuredInput: 'Structured Input'
   },
   process: {
     title: 'Process Designer',
@@ -527,7 +566,9 @@ export default {
     selectVersion2: 'Select Version 2',
     tableDefinition: 'Table Definition',
     formDefinition: 'Form Definition',
-    processDefinition: 'Process Definition'
+    processDefinition: 'Process Definition',
+    rollbackTitle: 'Rollback Confirmation',
+    rollbackConfirmDetail: 'Are you sure you want to rollback from version {currentVersion} to version {targetVersion}? This operation cannot be undone and may affect existing data.'
   },
   properties: {
     basic: 'Basic Info',
@@ -1070,7 +1111,13 @@ export default {
     hitPolicyOutputOrder: 'OUTPUT ORDER',
     createSuccess: 'Decision created successfully',
     deleteSuccess: 'Decision deleted successfully',
-    confirmTitle: 'Confirm'
+    confirmTitle: 'Confirm',
+    bindToNode: 'Bind to Node',
+    boundNodes: 'Bound Nodes',
+    notBound: 'Not bound',
+    noServiceTasks: 'No service task nodes found in process',
+    noProcessDefined: 'No process definition available',
+    bindSuccess: 'Decision bound to node successfully'
   },
   ai: {
     panel: {
@@ -1099,10 +1146,13 @@ export default {
       applyFailed: 'Failed to apply data',
       detach: 'Pop Out',
       attach: 'Dock Panel',
-      generateButton: 'AI Generate'
+      generateButton: 'AI Generate',
+      sessionHistory: 'Session History'
     },
     chat: {
       validationFailed: 'Data validation failed',
+      validationWarnings: 'Validation warnings',
+      regenerateScope: 'Regenerate Scope',
       retry: 'Retry',
       nextPhase: 'Enter Next Phase',
       send: 'Send',
@@ -1110,6 +1160,16 @@ export default {
       aiReplying: 'AI is replying...',
       inputMessage: 'Enter message...',
       autoGenerating: 'Auto-generating based on existing documents, please wait...'
+    },
+    error: {
+      AI_SESSION_NOT_FOUND: 'AI session not found, please restart',
+      AI_FUNCTION_UNIT_NOT_FOUND: 'Function unit not found',
+      AI_N8N_TIMEOUT: 'AI service timed out, please retry',
+      AI_N8N_CALL_FAILED: 'AI service call failed, please retry',
+      AI_WRITE_CONFLICT: 'Data was modified by another user, please refresh and retry',
+      AI_CONTEXT_TOO_LARGE: 'Function unit data too large for AI processing',
+      AI_UNDO_EXPIRED: 'Undo window has expired',
+      AI_UNKNOWN_ERROR: 'An unexpected error occurred, please retry'
     },
     doc: {
       requirements: 'Requirements',
@@ -1146,12 +1206,160 @@ export default {
       tablesSummary: '{count} tables, {fields} fields',
       formsSummary: '{count} forms',
       actionsSummary: '{count} actions',
-      processSummary: '{nodes} nodes, {gateways} gateways'
+      processSummary: '{nodes} nodes, {gateways} gateways',
+      decisions: 'Decisions',
+      decisionsSummary: '{count} decision tables',
+      tableRelations: 'Table Relations',
+      tableRelationsSummary: '{count} relations',
+      viewDetails: 'View Details',
+      generating: 'Generating...',
+      summary: 'Summary',
+      diff: 'Diff Preview'
     },
     phase: {
       requirements: 'Requirements',
       design: 'Design',
       generation: 'Preview & Confirm'
+    },
+    quality: {
+      completeness: 'Completeness',
+      consistency: 'Consistency',
+      complexity: 'Complexity',
+      naming: 'Naming',
+      lowScoreWarning: 'Quality score is low, consider regenerating'
+    },
+    scope: {
+      tables: 'Tables',
+      forms: 'Forms',
+      actions: 'Actions',
+      decisions: 'Decisions',
+      process: 'Process',
+      tableRelations: 'Table Relations'
+    },
+    template: {
+      selectTitle: 'Select a Template',
+      crud: {
+        name: 'CRUD Application',
+        description: 'Standard create, read, update, delete operations with data tables and forms'
+      },
+      approval: {
+        name: 'Approval Workflow',
+        description: 'Multi-level approval process with review forms and decision nodes'
+      },
+      dataEntry: {
+        name: 'Data Entry Form',
+        description: 'Data collection form with validation rules and sub-tables'
+      },
+      report: {
+        name: 'Report Dashboard',
+        description: 'Data aggregation and reporting with summary rules and charts'
+      }
+    },
+    degradation: {
+      title: 'AI Service Unavailable',
+      lastSuccess: 'Last successful connection: {time}',
+      saveDraft: 'Save Draft for Later',
+      manualCreate: 'Create Manually',
+      draftSaved: 'Draft saved successfully',
+      draftRestored: 'Draft restored'
+    },
+    progress: {
+      analyzing: 'Analyzing requirements...',
+      designingTables: 'Designing table structure...',
+      creatingForms: 'Creating forms...',
+      generatingProcess: 'Generating process...',
+      validating: 'Validating data...',
+      ready: 'Ready to apply'
+    },
+    draft: {
+      found: 'Unsaved draft found',
+      restore: 'Restore Draft',
+      dismiss: 'Dismiss'
+    },
+    diff: {
+      summary: '{added} added, {modified} modified, {deleted} deleted'
+    },
+    undo: {
+      button: 'Undo',
+      success: 'Changes undone successfully'
     }
+  },
+  businessLogic: {
+    // ConditionBuilder
+    selectField: 'Select field',
+    selectOperator: 'Select operator',
+    enterValue: 'Enter value',
+    addCondition: 'Add Condition',
+    opEquals: 'Equals',
+    opNotEquals: 'Not Equals',
+    opContains: 'Contains',
+    opGreaterThan: 'Greater Than',
+    opLessThan: 'Less Than',
+    opIsEmpty: 'Is Empty',
+    opIsNotEmpty: 'Is Not Empty',
+    opDateAfter: 'Date After',
+    opDateBefore: 'Date Before',
+    // FormulaEditor
+    targetField: 'Target Field',
+    expression: 'Expression',
+    expressionPlaceholder: 'e.g. quantity * unit_price',
+    addFormula: 'Add Formula',
+    dangerousExpression: 'Expression contains dangerous keywords',
+    // LinkageConfigurator
+    sourceField: 'Source Field',
+    linkageType: 'Linkage Type',
+    optionFiltering: 'Option Filtering',
+    valueAutoFill: 'Value Auto-Fill',
+    fieldStateChange: 'Field State Change',
+    filterField: 'Filter Field',
+    filterFieldPlaceholder: 'Field name in target options',
+    filterOperator: 'Filter Operator',
+    valueMapping: 'Value Mapping',
+    valueMappingPlaceholder: '{"key": "value"} JSON',
+    stateDisabled: 'Disabled',
+    stateRequired: 'Required',
+    addLinkage: 'Add Linkage',
+    // ValidationRuleList
+    ruleType: 'Rule Type',
+    regexPattern: 'Regex pattern',
+    minValue: 'Min',
+    maxValue: 'Max',
+    errorMessage: 'Error message',
+    addRule: 'Add Rule',
+    ruleRequired: 'Required',
+    rulePattern: 'Pattern',
+    ruleNumber: 'Number Range',
+    ruleEmail: 'Email',
+    rulePhone: 'Phone',
+    ruleCustom: 'Custom',
+    // CrossFieldRuleEditor
+    field1: 'Field 1',
+    field2: 'Field 2',
+    errorTarget: 'Error Target Field',
+    addCrossFieldRule: 'Add Cross-Field Rule',
+    // RowFormulaEditor
+    rowFormulas: 'Row Formulas',
+    targetColumn: 'Target Column',
+    addRowFormula: 'Add Row Formula',
+    summaryRules: 'Summary Rules',
+    sourceColumn: 'Source Column',
+    mainFormField: 'Main Form Field',
+    aggregation: 'Aggregation',
+    addSummaryRule: 'Add Summary Rule',
+    // SubTableValidationEditor
+    minRows: 'Min Rows',
+    maxRows: 'Max Rows',
+    columnValidation: 'Column Validation Rules'
+  },
+  template: {
+    basicInfo: 'Basic Information Form',
+    basicInfoDesc: 'Simple form with name, description, and date fields',
+    approvalForm: 'Approval Form',
+    approvalFormDesc: 'Approval form with applicant, department, reason, and amount fields',
+    dataEntry: 'Data Entry Form',
+    dataEntryDesc: 'Multi-tab form with various input types for data entry',
+    createFromTemplate: 'Create from Template',
+    selectTemplate: 'Select Template',
+    blankForm: 'Blank Form',
   }
 }

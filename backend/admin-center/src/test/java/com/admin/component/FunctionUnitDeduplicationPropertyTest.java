@@ -40,7 +40,9 @@ class FunctionUnitDeduplicationPropertyTest {
                 repo,
                 dependencyRepository,
                 contentRepository,
-                accessRepository
+                accessRepository,
+                mock(org.springframework.jdbc.core.JdbcTemplate.class),
+                mock(com.fasterxml.jackson.databind.ObjectMapper.class)
         );
     }
 

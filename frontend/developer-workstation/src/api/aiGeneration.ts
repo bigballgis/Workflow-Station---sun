@@ -31,6 +31,9 @@ export const aiGenerationApi = {
   applyGeneratedData: (functionUnitId: number, data: ApplyGeneratedDataRequest) =>
     api.post(`/ai-generation/${functionUnitId}/apply`, data),
 
+  undoLastApply: (functionUnitId: number) =>
+    api.post(`/ai-generation/${functionUnitId}/undo`),
+
   getDocumentVersions: (functionUnitId: number, documentType: AiDocumentType) =>
     api.get<any, { data: AiDocument[] }>(`/ai-generation/documents`, {
       params: { functionUnitId, documentType }
