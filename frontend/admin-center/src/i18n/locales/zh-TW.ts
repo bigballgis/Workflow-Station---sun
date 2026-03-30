@@ -74,7 +74,10 @@ export default {
     monitor: '系統監控',
     audit: '稽核日誌',
     config: '系統配置',
-    permissionRequest: '申請記錄'
+    permissionRequest: '申請記錄',
+    relationTables: '關聯表',
+    tableStructure: '表結構管理',
+    tableData: '表資料管理'
   },
   dashboard: {
     totalUsers: '使用者總數',

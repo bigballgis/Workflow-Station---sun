@@ -71,12 +71,14 @@
 <script setup lang="ts">
 import { ref, onMounted, nextTick, onBeforeUnmount } from 'vue'
 import { DataAnalysis } from '@element-plus/icons-vue'
-import { biDashboardApi, type UserDashboardResponse } from '@/api/biDashboard'
+import {
+  biDashboardApi,
+  type UserDashboardResponse,
+  type GuestTokenResponse,
+} from '@/api/biDashboard'
 
 // NOTE: Install required package: npm install @superset-ui/embedded-sdk
 // import { embedDashboard } from '@superset-ui/embedded-sdk'
-
-const SUPERSET_DOMAIN = import.meta.env.VITE_SUPERSET_HOST || 'http://localhost:8088'
 
 const loading = ref(true)
 const dashboards = ref<UserDashboardResponse[]>([])
@@ -84,6 +86,8 @@ const layoutMode = ref<'SINGLE' | 'MULTI' | 'WIDGET'>('SINGLE')
 const activeTab = ref('')
 const fullscreenVisible = ref(false)
 const fullscreenDashboard = ref<UserDashboardResponse | null>(null)
+const supersetDomain = ref('')
+const currentUserId = ref('')
 
 // Track embedded dashboard instances for cleanup
 const embeddedInstances = new Map<string, { unmount?: () => void }>()
@@ -107,14 +111,19 @@ function getUserId(): string {
   return ''
 }
 
-async function fetchGuestToken(dashboardId: string): Promise<string> {
+async function fetchGuestTokenPayload(dashboardId: string): Promise<GuestTokenResponse> {
   try {
-    const res = await biDashboardApi.getGuestToken({ dashboardId })
+    const res = await biDashboardApi.getGuestToken({ dashboardId }, currentUserId.value || undefined)
     // The response interceptor unwraps the data, so res should be GuestTokenResponse directly
-    const tokenData = (res as any).data || res
-    return tokenData.token
-  } catch (err) {
+    return ((res as any).data || res) as GuestTokenResponse
+  } catch (err: any) {
+    const backendMsg =
+      err?.response?.data?.message ||
+      err?.response?.data?.details ||
+      err?.message ||
+      'Unknown error'
     console.error(`Failed to fetch guest token for dashboard ${dashboardId}:`, err)
+    console.error(`Guest token API error details: ${backendMsg}`)
     throw err
   }
 }
@@ -130,12 +139,29 @@ async function embedSupersetDashboard(
   try {
     // Dynamic import to handle case where package is not installed
     const { embedDashboard } = await import('@superset-ui/embedded-sdk')
+    const initialTokenPayload = await fetchGuestTokenPayload(dashboardId)
+    if (!supersetDomain.value && initialTokenPayload.supersetDomain) {
+      supersetDomain.value = initialTokenPayload.supersetDomain
+    }
+    const runtimeSupersetDomain =
+      initialTokenPayload.supersetDomain || supersetDomain.value || 'http://localhost:8088'
+    let isFirstTokenRequest = true
 
     const result = await embedDashboard({
       id: embedId,
-      supersetDomain: SUPERSET_DOMAIN,
+      supersetDomain: runtimeSupersetDomain,
       mountPoint,
-      fetchGuestToken: () => fetchGuestToken(dashboardId),
+      fetchGuestToken: async () => {
+        if (isFirstTokenRequest) {
+          isFirstTokenRequest = false
+          return initialTokenPayload.token
+        }
+        const tokenPayload = await fetchGuestTokenPayload(dashboardId)
+        if (!supersetDomain.value && tokenPayload.supersetDomain) {
+          supersetDomain.value = tokenPayload.supersetDomain
+        }
+        return tokenPayload.token
+      },
       dashboardUiConfig: {
         hideTitle: true,
         hideChartControls: false,
@@ -162,23 +188,27 @@ async function embedSupersetDashboard(
 }
 
 function determineLayoutMode(list: UserDashboardResponse[]): 'SINGLE' | 'MULTI' | 'WIDGET' {
+  type LayoutMode = UserDashboardResponse['layoutMode']
+
   if (list.length === 0) return 'SINGLE'
   if (list.length === 1) return 'SINGLE'
-  // Use the layout mode from the first dashboard (or most common)
-  const modes = list.map((d) => d.layoutMode)
-  const modeCount: Record<string, number> = {}
-  for (const m of modes) {
-    modeCount[m] = (modeCount[m] || 0) + 1
+
+  const modeCount: Record<LayoutMode, number> = { SINGLE: 0, MULTI: 0, WIDGET: 0 }
+  for (const m of list.map((d) => d.layoutMode)) {
+    modeCount[m] += 1
   }
-  let maxMode = modes[0] || 'MULTI'
-  let maxCount = 0
-  for (const [mode, count] of Object.entries(modeCount)) {
+
+  let maxMode: LayoutMode = 'SINGLE'
+  let maxCount = modeCount[maxMode]
+  for (const mode of ['SINGLE', 'MULTI', 'WIDGET'] as const) {
+    const count = modeCount[mode]
     if (count > maxCount) {
       maxCount = count
       maxMode = mode
     }
   }
-  return maxMode as 'SINGLE' | 'MULTI' | 'WIDGET'
+
+  return maxMode
 }
 
 async function renderDashboards(): Promise<void> {
@@ -252,6 +282,7 @@ onMounted(async () => {
       loading.value = false
       return
     }
+    currentUserId.value = userId
 
     const res = await biDashboardApi.getUserDashboards(userId)
     // The response interceptor unwraps, so res could be the data directly or wrapped

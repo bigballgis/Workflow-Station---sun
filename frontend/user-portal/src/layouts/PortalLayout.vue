@@ -59,6 +59,10 @@
             <el-icon><Checked /></el-icon>
             <template #title>{{ t('menu.approvals') }}</template>
           </el-menu-item>
+          <el-menu-item index="/relation-tables">
+            <el-icon><Grid /></el-icon>
+            <template #title>Relation Tables</template>
+          </el-menu-item>
         </el-menu>
         <div class="collapse-btn" @click="toggleCollapse">
           <el-icon :size="20">
@@ -88,7 +92,7 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
   HomeFilled, List, Plus, Document, Share, Key,
-  Fold, Expand, Checked, Finished, DataAnalysis
+  Fold, Expand, Checked, Finished, DataAnalysis, Grid
 } from '@element-plus/icons-vue'
 import UserProfileDropdown from '@/components/UserProfileDropdown.vue'
 import NotificationBadge from '@/components/NotificationBadge.vue'

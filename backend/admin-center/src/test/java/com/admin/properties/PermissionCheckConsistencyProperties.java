@@ -1,19 +1,15 @@
 package com.admin.properties;
 
-import com.admin.component.PermissionConflictComponent;
 import com.admin.component.PermissionDelegationComponent;
 import com.admin.component.RolePermissionManagerComponent;
 import com.admin.dto.response.PermissionCheckResult;
 import com.platform.security.entity.Permission;
 import com.platform.security.entity.Role;
-import com.platform.security.entity.UserRole;
-import com.platform.security.entity.User;
 import com.admin.enums.RoleType;
 import com.admin.util.EntityTypeConverter;
 import com.admin.repository.*;
 import net.jqwik.api.*;
 
-import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -269,7 +265,6 @@ public class PermissionCheckConsistencyProperties {
         RolePermissionRepository rolePermissionRepository;
         UserRoleRepository userRoleRepository;
         PermissionDelegationComponent delegationComponent;
-        PermissionConflictComponent conflictComponent;
         RolePermissionManagerComponent rolePermissionManager;
     }
     
@@ -280,7 +275,6 @@ public class PermissionCheckConsistencyProperties {
         ctx.rolePermissionRepository = mock(RolePermissionRepository.class);
         ctx.userRoleRepository = mock(UserRoleRepository.class);
         ctx.delegationComponent = mock(PermissionDelegationComponent.class);
-        ctx.conflictComponent = mock(PermissionConflictComponent.class);
         
         // 默认委托权限检查返回 false
         when(ctx.delegationComponent.hasDelegatedPermission(anyString(), anyString())).thenReturn(false);
@@ -294,7 +288,6 @@ public class PermissionCheckConsistencyProperties {
                 ctx.rolePermissionRepository,
                 ctx.userRoleRepository,
                 ctx.delegationComponent,
-                ctx.conflictComponent,
                 mock(com.admin.helper.RoleHelper.class),
                 permissionHelper);
         return ctx;

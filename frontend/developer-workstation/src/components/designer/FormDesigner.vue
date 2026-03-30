@@ -128,7 +128,19 @@
               {{ binding.tableName }}
             </span>
           </template>
-          <div class="fc-designer-wrapper">
+          <!-- Relation Table: show data view instead of form designer -->
+          <RelationTableView
+            v-if="binding.bindingType === 'RELATED'"
+            :ref="(el: any) => { if (el) relationTableViewRefs[binding.bindingId] = el }"
+            :binding="binding"
+            :function-unit-id="props.functionUnitId"
+            :form-id="selectedForm!.id"
+            :available-fields="relationViewState[binding.bindingId]?.allFields || []"
+            :model-value="relationViewState[binding.bindingId]?.viewFields || []"
+            @update:model-value="(val: any) => updateRelationViewFields(binding.bindingId, val)"
+          />
+          <!-- Sub Table: show form designer -->
+          <div v-else class="fc-designer-wrapper">
             <fc-designer
               :ref="(el: any) => setSubDesignerRef(el, index)"
               :config="designerConfig"
@@ -242,6 +254,29 @@
               />
               <el-empty v-else :description="t('form.noFormContent')" :image-size="40" style="border: 1px solid #e6e6e6; border-radius: 4px;" />
             </div>
+            <!-- Relation table preview (under lookup field) -->
+            <div v-else-if="item.kind === 'relationTable'" class="relation-preview-wrapper">
+              <el-table
+                :data="item.fields"
+                border
+                size="small"
+                class="relation-preview-table"
+              >
+                <el-table-column prop="label" :label="' '" min-width="200" />
+                <el-table-column prop="value" :label="' '" min-width="200" />
+              </el-table>
+            </div>
+            <!-- Interactive lookup preview -->
+            <div v-else-if="item.kind === 'lookup'" class="lookup-preview-item">
+              <LookupPreview
+                :label="item.label"
+                :placeholder="item.placeholder"
+                :search-fields="item.searchFields"
+                :display-fields="item.displayFields"
+                :view-fields="item.viewFields"
+                :field-defs="item.fieldDefs"
+              />
+            </div>
           </template>
         </template>
         <el-empty v-else :description="t('form.noFormContent')" />
@@ -300,11 +335,11 @@
                 <el-option 
                   v-for="binding in formBindings" 
                   :key="binding.tableId" 
-                  :label="`${getTableName(binding.tableId)} (${bindingTypeLabel(binding.bindingType)})`" 
+                  :label="`${binding.tableName || getTableName(binding.tableId)} (${bindingTypeLabel(binding.bindingType)})`" 
                   :value="binding.tableId"
                 >
                   <div class="table-option-with-binding">
-                    <span>{{ getTableName(binding.tableId) }}</span>
+                    <span>{{ binding.tableName || getTableName(binding.tableId) }}</span>
                     <el-tag size="small" :type="bindingTypeTag(binding.bindingType)">
                       {{ bindingTypeLabel(binding.bindingType) }}
                     </el-tag>
@@ -398,7 +433,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, nextTick, computed, provide } from 'vue'
+import { ref, reactive, onMounted, nextTick, computed, provide, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ArrowLeft, Plus, Refresh, Connection } from '@element-plus/icons-vue'
@@ -406,8 +441,12 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
 import type { FormDefinition, FieldDefinition, TableBinding, BindingType, FormType } from '@/api/functionUnit'
 import { functionUnitApi } from '@/api/functionUnit'
+import { relationTableBindingApi, type RelationFieldDTO } from '@/api/relationTable'
 import TableBindingManager from './TableBindingManager.vue'
 import SubTableField from './SubTableField.vue'
+import RelationTableView from './RelationTableView.vue'
+import LookupPreview from './LookupPreview.vue'
+import { lookupStore } from './lookupStore'
 import api from '@/api'
 import { BUILT_IN_TEMPLATES, type FormTemplate } from './formTemplates'
 
@@ -448,10 +487,16 @@ const previewTableRows = ref<Record<number, any[]>>({})
 const previewItems = ref<Array<
   | { kind: 'fields'; rule: any[]; modelKey: string }
   | { kind: 'subTable'; binding: { bindingId: number; bindingType: string; bindingMode: string; tableName: string; tableType: string; tableDescription: string; rule: any[]; columns: any[] } }
+  | { kind: 'relationTable'; tableName: string; fields: Array<{ label: string; value: string }> }
+  | { kind: 'lookup'; label: string; placeholder: string; searchFields: string[]; displayFields: string[]; viewFields: any[]; fieldDefs: any[]; bindingId?: number }
 >>([])
 
 // Sub-designer refs (one per non-PRIMARY binding)
 const subDesignerRefs = ref<any[]>([])
+// Relation table view refs (keyed by bindingId)
+const relationTableViewRefs = ref<Record<number, any>>({})
+// Relation table view state (keyed by bindingId)
+const relationViewState = ref<Record<number, { allFields: any[]; viewFields: any[] }>>({})
 // In-memory cache: persists sub form rules across tab switches (tabs unmount when not active)
 const subFormCache = ref<Record<number, { rule: any[]; options: any }>>({})
 
@@ -477,6 +522,11 @@ function setSubDesignerRef(el: any, index: number) {
 // Active tab: 'main' or bindingId string
 const activeDesignerTab = ref<string>('main')
 
+function updateRelationViewFields(bindingId: number, fields: any[]) {
+  const existing = relationViewState.value[bindingId] || { allFields: [], viewFields: [] }
+  relationViewState.value = { ...relationViewState.value, [bindingId]: { ...existing, viewFields: fields } }
+}
+
 // Non-PRIMARY bindings for tabs
 const designerSubBindings = computed(() => {
   if (!selectedForm.value) return []
@@ -485,8 +535,9 @@ const designerSubBindings = computed(() => {
     bindingId: b.id as number,
     bindingType: b.bindingType,
     bindingMode: b.bindingMode,
-    tableName: getTableName(b.tableId) || b.tableName,
-    tableType: (store.tables.find(t => t.id === b.tableId)?.tableType) || '',
+    tableName: b.tableName || getTableName(b.tableId),
+    tableId: b.tableId,
+    tableType: (store.tables.find(t => t.id === b.tableId)?.tableType) || (b.bindingType === 'RELATED' ? 'RELATION' : ''),
     tableDescription: (store.tables.find(t => t.id === b.tableId)?.description) || '',
   }))
 })
@@ -499,6 +550,34 @@ provide('designerSubBindings', () => designerSubBindings.value.map(b => ({
   tableDescription: b.tableDescription,
   bindingType: b.bindingType,
 })))
+
+// Provide relation bindings for LookupBindingSelect
+provide('designerRelationBindings', () => designerSubBindings.value
+  .filter(b => b.bindingType === 'RELATED')
+  .map(b => ({
+    bindingId: b.bindingId,
+    tableName: b.tableName,
+    tableDescription: b.tableDescription,
+    tableId: b.tableId,
+  }))
+)
+
+// Provide formId for lookup config components
+provide('designerFormId', () => selectedForm.value?.id ?? null)
+
+// Sync relation bindings and formId to lookupStore for fc-designer property panel components
+watch([() => selectedForm.value?.id, designerSubBindings, () => store.tables], () => {
+  lookupStore.formId = selectedForm.value?.id ?? null
+  lookupStore.relationBindings = designerSubBindings.value
+    .filter(b => b.bindingType === 'RELATED')
+    .map(b => ({
+      bindingId: b.bindingId,
+      tableName: b.tableName,
+      tableDescription: b.tableDescription,
+      tableId: b.tableId,
+    }))
+  lookupStore.tables = store.tables as any[]
+}, { immediate: true })
 
 const createForm = reactive({ formName: '', formType: 'PROCESS' as FormType, description: '', boundTableId: null as number | null })
 const bindingForm = ref<FormDefinition | null>(null)
@@ -520,10 +599,27 @@ const showImportFieldsDialog = ref(false)
 const importTableId = ref<number | null>(null)
 const selectedImportFields = ref<FieldDefinition[]>([])
 const formBindings = ref<TableBinding[]>([])
+// Relation table fields loaded from API (for RELATION type table import)
+const relationTableFields = ref<FieldDefinition[]>([])
+
+// Check if the currently selected import table is a RELATION type table
+function isImportingRelationTable(): boolean {
+  if (!importTableId.value) return false
+  // Check store.tables first (for local RELATION type tables)
+  const table = store.tables.find(t => t.id === importTableId.value)
+  if (table?.tableType === 'RELATION') return true
+  // Check formBindings (for deployed relation tables where tableId is from rt_table_definitions)
+  const binding = formBindings.value.find(b => b.tableId === importTableId.value)
+  return binding?.bindingType === 'RELATED'
+}
 
 // Computed: available fields for selected table
 const availableFields = computed(() => {
   if (!importTableId.value) return []
+  // If importing from a relation table, use the fetched relation fields
+  if (isImportingRelationTable() && relationTableFields.value.length > 0) {
+    return relationTableFields.value
+  }
   const table = store.tables.find(t => t.id === importTableId.value)
   return table?.fieldDefinitions || []
 })
@@ -607,6 +703,20 @@ const bindingTypeTag = (type: BindingType): 'primary' | 'success' | 'warning' | 
 function getImportTableBinding(): TableBinding | undefined {
   if (!importTableId.value) return undefined
   return formBindings.value.find(b => b.tableId === importTableId.value)
+}
+
+/**
+ * Generate mock value based on data type for relation table preview
+ */
+function getMockValueForType(dataType: string): string {
+  const type = (dataType || '').toUpperCase()
+  if (type.includes('INT') || type === 'BIGINT') return '1'
+  if (type.includes('DECIMAL') || type.includes('NUMERIC') || type.includes('FLOAT') || type.includes('DOUBLE')) return '100.00'
+  if (type === 'BOOLEAN' || type === 'BOOL') return 'true'
+  if (type === 'DATE') return '2026-01-01'
+  if (type.includes('TIMESTAMP') || type === 'DATETIME') return '2026-01-01 00:00:00'
+  if (type.includes('TIME')) return '00:00:00'
+  return 'Sample'
 }
 
 /**
@@ -801,8 +911,40 @@ function handleSelectAllFields(checked: boolean) {
 /**
  * Reset selected fields when table changes
  */
-function handleTableChange() {
+async function handleTableChange() {
   selectedImportFields.value = []
+  relationTableFields.value = []
+  // If the selected table is a RELATION type, fetch its fields from the relation table API
+  if (isImportingRelationTable()) {
+    try {
+      const res = await relationTableBindingApi.getAvailableTables()
+      const tables = res.data || []
+      // For deployed relation tables, importTableId is the rt_table_definitions ID
+      // Try direct ID match first, then fall back to name match
+      let rtTable = tables.find((t: any) => t.id === importTableId.value)
+      if (!rtTable) {
+        const selectedTable = store.tables.find(t => t.id === importTableId.value)
+        if (selectedTable) {
+          rtTable = tables.find((t: any) => t.tableName === selectedTable.tableName || t.displayName === selectedTable.tableName)
+        }
+      }
+      if (rtTable?.fieldDefinitions) {
+        relationTableFields.value = rtTable.fieldDefinitions.map((f: any) => ({
+          fieldName: f.fieldName,
+          dataType: f.dataType,
+          length: f.length,
+          precision: f.precision,
+          scale: f.scale,
+          nullable: f.nullable,
+          isPrimaryKey: f.isPrimaryKey,
+          defaultValue: f.defaultValue,
+          description: f.comment,
+        } as FieldDefinition))
+      }
+    } catch {
+      relationTableFields.value = []
+    }
+  }
 }
 
 /**
@@ -831,6 +973,25 @@ async function handleImportFieldsToDesigner() {
       formBindings.value = []
     }
     
+    // If active tab is a RELATED binding, auto-select its table from store.tables
+    if (activeDesignerTab.value !== 'main') {
+      const bindingId = Number(activeDesignerTab.value)
+      const subBinding = designerSubBindings.value.find(b => b.bindingId === bindingId && b.bindingType === 'RELATED')
+      if (subBinding) {
+        // Find the table in store.tables by name (since dw_table_definitions has RELATION type tables)
+        const dwTable = store.tables.find(t => t.tableName === subBinding.tableName || t.tableDisplayName === subBinding.tableName)
+        if (dwTable) {
+          importTableId.value = dwTable.id
+        }
+        selectedImportFields.value = []
+        relationTableFields.value = []
+        showImportFieldsDialog.value = true
+        // Fetch relation table fields
+        await handleTableChange()
+        return
+      }
+    }
+    
     // Auto-select primary table if bound
     const primaryBinding = formBindings.value.find(b => b.bindingType === 'PRIMARY')
     if (primaryBinding) {
@@ -846,6 +1007,7 @@ async function handleImportFieldsToDesigner() {
   }
   
   selectedImportFields.value = []
+  relationTableFields.value = []
   showImportFieldsDialog.value = true
 }
 
@@ -963,13 +1125,56 @@ function fieldToFormRule(field: FieldDefinition): any {
 /**
  * Confirm importing fields to form designer
  */
-function handleConfirmImportFields() {
+async function handleConfirmImportFields() {
   if (selectedImportFields.value.length === 0) {
     ElMessage.warning(t('form.selectAtLeastOne'))
     return
   }
 
   if (selectedForm.value) {
+    // Check if importing into a relation table
+    if (isImportingRelationTable()) {
+      // Convert selected fields to RelationFieldDTO format and pass directly to the view
+      const relationFields = selectedImportFields.value.map((f, idx) => ({
+        id: idx,
+        fieldName: f.fieldName,
+        dataType: f.dataType || 'VARCHAR',
+        length: f.length,
+        precision: f.precision,
+        scale: f.scale,
+        nullable: f.nullable ?? true,
+        isPrimaryKey: f.isPrimaryKey ?? false,
+        defaultValue: f.defaultValue,
+        comment: f.description,
+        sortOrder: idx,
+      }))
+      // Convert ALL available fields (not just selected) for the left panel
+      const allRelationFields = availableFields.value.map((f, idx) => ({
+        id: idx,
+        fieldName: f.fieldName,
+        dataType: f.dataType || 'VARCHAR',
+        length: f.length,
+        precision: f.precision,
+        scale: f.scale,
+        nullable: f.nullable ?? true,
+        isPrimaryKey: f.isPrimaryKey ?? false,
+        defaultValue: f.defaultValue,
+        comment: f.description,
+        sortOrder: idx,
+      }))
+      // Update relation view state directly
+      if (activeDesignerTab.value !== 'main') {
+        const bindingId = Number(activeDesignerTab.value)
+        relationViewState.value = {
+          ...relationViewState.value,
+          [bindingId]: { allFields: allRelationFields, viewFields: relationFields }
+        }
+      }
+      ElMessage.success(t('form.importedSuccess', { count: selectedImportFields.value.length }))
+      showImportFieldsDialog.value = false
+      return
+    }
+
     const rules = selectedImportFields.value.map(fieldToFormRule)
 
     // Determine target designer: active sub tab or main
@@ -1235,7 +1440,24 @@ function handleTabChange(tabName: string) {
   const bindingId = Number(tabName)
   const index = designerSubBindings.value.findIndex(b => b.bindingId === bindingId)
   if (index < 0) return
+  const binding = designerSubBindings.value[index]
   const config = selectedForm.value?.configJson || {}
+
+  // For RELATED bindings, restore saved view fields
+  if (binding.bindingType === 'RELATED') {
+    // Restore saved relation view state if not already loaded
+    if (!relationViewState.value[bindingId]) {
+      const saved = (config.relationViews || {})[bindingId]
+      if (saved) {
+        relationViewState.value = {
+          ...relationViewState.value,
+          [bindingId]: { allFields: saved.allFields || [], viewFields: saved.viewFields || [] }
+        }
+      }
+    }
+    return
+  }
+
   const subForms = config.subForms || {}
   nextTick(() => {
     setTimeout(() => {
@@ -1480,11 +1702,26 @@ async function handleSaveForm() {
       }
     })
 
+    // Collect relation table view fields
+    const relationViews: Record<number, { viewFields: any[]; allFields: any[] }> = {}
+    designerSubBindings.value.forEach((binding) => {
+      if (binding.bindingType === 'RELATED') {
+        const state = relationViewState.value[binding.bindingId]
+        if (state && (state.viewFields.length > 0 || state.allFields.length > 0)) {
+          relationViews[binding.bindingId] = state
+        } else {
+          // Preserve previously saved data
+          const existing = (selectedForm.value!.configJson?.relationViews || {})[binding.bindingId]
+          if (existing) relationViews[binding.bindingId] = existing
+        }
+      }
+    })
+
     await store.updateForm(props.functionUnitId, selectedForm.value.id, {
       formName: selectedForm.value.formName,
       formType: selectedForm.value.formType,
       description: selectedForm.value.description,
-      configJson: { rule, options, subForms },
+      configJson: { rule, options, subForms, relationViews },
       ...(selectedForm.value.formType === 'TASK' && selectedForm.value.fieldPermissions
         ? { fieldPermissions: selectedForm.value.fieldPermissions }
         : {})
@@ -1580,8 +1817,8 @@ function handlePreview() {
       bindingId,
       bindingType: b.bindingType,
       bindingMode: b.bindingMode,
-      tableName: getTableName(b.tableId) || b.tableName,
-      tableType: (store.tables.find(t => t.id === b.tableId)?.tableType) || '',
+      tableName: b.tableName || getTableName(b.tableId),
+      tableType: (store.tables.find(t => t.id === b.tableId)?.tableType) || (b.bindingType === 'RELATED' ? 'RELATION' : ''),
       tableDescription: (store.tables.find(t => t.id === b.tableId)?.description) || '',
       rule,
       columns
@@ -1622,6 +1859,11 @@ function handlePreview() {
         },
       }
     }
+    // Strip prefix/suffix virtual nodes that form-create can't render in preview
+    if (r.prefix || r.suffix) {
+      const { prefix, suffix, ...rest } = r
+      return rest
+    }
     return r
   })
 
@@ -1632,21 +1874,93 @@ function handlePreview() {
 
   // form-create proprietary types that should not be rendered in preview
   const FC_SKIP_PREVIEW = new Set(['subForm', 'tableForm', 'tableFormColumn', 'group', 'el-row', 'el-col'])
+  // Pending relation table previews to insert after the current segment flushes
+  let pendingRelationPreviews: Array<{ tableName: string; fields: Array<{ label: string; value: string }> }> = []
+
+  function flushSegment() {
+    if (currentSegment.length > 0) {
+      items.push({ kind: 'fields', rule: [...currentSegment], modelKey: `seg_${segmentIndex++}` })
+      currentSegment = []
+    }
+    // Append any pending relation table previews right after this segment
+    for (const rp of pendingRelationPreviews) {
+      items.push({ kind: 'relationTable', tableName: rp.tableName, fields: rp.fields })
+    }
+    pendingRelationPreviews = []
+  }
 
   for (const ruleItem of rawRule) {
     // _bindingId may be at top-level (after parseRule) or still in props (if getRule skipped parseRule)
     const itemBindingId = ruleItem._bindingId ?? ruleItem.props?._bindingId ?? null
     if (ruleItem.type === 'subTable' && itemBindingId != null) {
-      // Flush current segment
-      if (currentSegment.length > 0) {
-        items.push({ kind: 'fields', rule: [...currentSegment], modelKey: `seg_${segmentIndex++}` })
-        currentSegment = []
-      }
+      flushSegment()
       // Add inline sub-table if binding exists
       const binding = bindingMap.get(Number(itemBindingId))
       if (binding) {
         items.push({ kind: 'subTable', binding })
         bindingMap.delete(Number(itemBindingId)) // mark as placed
+      }
+    } else if (ruleItem.type === 'lookup') {
+      // Flush current segment so lookup appears in its own section
+      flushSegment()
+
+      try {
+        const rawConfig = ruleItem.props?.lookupConfig
+        const lookupCfg = typeof rawConfig === 'string' ? JSON.parse(rawConfig || '{}') : (rawConfig || {})
+
+        // Resolve field definitions for this lookup
+        let fieldDefs: any[] = []
+
+        // Ensure relationViewState is loaded from saved config
+        if (lookupCfg.bindingId && !relationViewState.value[lookupCfg.bindingId]) {
+          const config = selectedForm.value?.configJson || {}
+          const saved = (config.relationViews || {})[lookupCfg.bindingId]
+          if (saved) {
+            relationViewState.value = {
+              ...relationViewState.value,
+              [lookupCfg.bindingId]: { allFields: saved.allFields || [], viewFields: saved.viewFields || [] }
+            }
+          }
+        }
+
+        // Collect allFields for column definitions
+        if (lookupCfg.bindingId && relationViewState.value[lookupCfg.bindingId]) {
+          fieldDefs = relationViewState.value[lookupCfg.bindingId].allFields || []
+        }
+        if (fieldDefs.length === 0 && lookupCfg.tableId) {
+          const table = store.tables.find(t => t.id === lookupCfg.tableId) as any
+          fieldDefs = table?.fieldDefinitions || table?.fields || []
+        }
+        if (fieldDefs.length === 0 && lookupCfg.tableId) {
+          fieldDefs = lookupStore.rtFieldCache[lookupCfg.tableId] || []
+        }
+
+        // Resolve viewFields for the view display after selection
+        let viewFields: any[] = []
+        if (lookupCfg.bindingId && relationViewState.value[lookupCfg.bindingId]) {
+          viewFields = relationViewState.value[lookupCfg.bindingId].viewFields || []
+        }
+
+        items.push({
+          kind: 'lookup',
+          label: ruleItem.title || ruleItem.field || 'Lookup',
+          placeholder: ruleItem.props?.placeholder || 'Click to search',
+          searchFields: lookupCfg.searchFields || [],
+          displayFields: lookupCfg.displayFields || [],
+          viewFields,
+          fieldDefs,
+          bindingId: lookupCfg.bindingId,
+        })
+      } catch (e) {
+        console.warn('[Preview] lookup config parse error:', e)
+        // Fallback: render as readonly input
+        currentSegment.push({
+          ...ruleItem,
+          type: 'input',
+          prefix: undefined,
+          suffix: undefined,
+          props: { placeholder: ruleItem.props?.placeholder || 'Click to search', readonly: true }
+        })
       }
     } else if (FC_SKIP_PREVIEW.has(ruleItem.type)) {
       // Skip form-create proprietary components in preview
@@ -1655,19 +1969,16 @@ function handlePreview() {
     }
   }
   // Flush remaining fields
-  if (currentSegment.length > 0) {
-    items.push({ kind: 'fields', rule: [...currentSegment], modelKey: `seg_${segmentIndex++}` })
-  }
-  // Append any unplaced bindings at the bottom (backward compat)
-  for (const binding of bindingMap.values()) {
-    items.push({ kind: 'subTable', binding })
-  }
+  flushSegment()
+  // Append any unplaced bindings at the bottom (skip RELATED — already shown under lookup fields)
+  // Only SUB bindings that were explicitly placed via subTable component are shown;
+  // unplaced bindings (no component in the form) are not rendered.
+  // (placed bindings were already deleted from bindingMap above)
 
   previewItems.value = items
   // Keep previewRule for backward compat (used by previewSubBindings logic elsewhere if any)
   previewRule.value = rawRule.filter(r => r.type !== 'subTable')
-  console.log('[Preview] previewItems:', items.map(i => i.kind === 'subTable' ? `subTable(${i.binding.bindingId})` : `fields(${i.rule.length})`))
-
+  console.log('[Preview] previewItems:', items.map(i => i.kind === 'fields' ? `fields(${i.rule.length})` : i.kind))
   previewSubBindings.value = [] // no longer used for bottom rendering
 
   showPreviewDialog.value = true
@@ -2317,5 +2628,19 @@ onMounted(() => {
   border-radius: 4px;
   background: #f5f7fa;
   min-height: 36px;
+}
+
+.relation-preview-wrapper {
+  margin: -4px 0 16px 0;
+}
+
+.relation-preview-table {
+  width: 100%;
+  :deep(tr) {
+    background-color: #f5f7fa !important;
+  }
+  :deep(td.el-table__cell) {
+    background-color: #f5f7fa !important;
+  }
 }
 </style>

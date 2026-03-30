@@ -206,6 +206,7 @@ import FormRenderer, { type FormField, type FormTab } from '@/components/FormRen
 import SubTableField from '@/components/SubTableField.vue'
 import ChangeHistoryPanel from '@/components/ChangeHistoryPanel.vue'
 import { formatDate } from '@/utils/dateFormat'
+import { relationTableApi } from '@/api/relationTable'
 
 const route = useRoute()
 const router = useRouter()
@@ -261,6 +262,9 @@ const placedBindingIds = computed((): Set<number> => {
 const bottomSubTableBindings = computed(() =>
   subTableBindings.value.filter(b => !placedBindingIds.value.has(b.bindingId))
 )
+
+// Lookup config fallback map (from rt_lookup_configs)
+const lookupDbConfigs = ref<Record<string, { tableId: number; searchFields: string[]; displayField: string; viewFields: any[] }>>({})
 
 // 前置节点表单（只读展示，按顺序排列）
 interface PreviousFormEntry {
@@ -476,6 +480,20 @@ const loadFunctionUnitContent = async (processKey: string) => {
       }
       
       currentFormName.value = selectedForm.name
+
+      // Load lookup configs from rt_lookup_configs before parsing form
+      lookupDbConfigs.value = {}
+      if (selectedForm.sourceId) {
+        try {
+          const lcRes = await relationTableApi.getLookupConfigs(Number(selectedForm.sourceId))
+          for (const lc of (lcRes.data || [])) {
+            let sf: string[] = []
+            try { sf = typeof lc.searchFields === 'string' ? JSON.parse(lc.searchFields || '[]') : (lc.searchFields || []) } catch { sf = [] }
+            lookupDbConfigs.value[lc.componentId] = { tableId: lc.tableId, searchFields: sf, displayField: lc.displayField || '', viewFields: lc.viewFields || [] }
+          }
+        } catch (e) { console.warn('[app] Failed to load lookup configs:', e) }
+      }
+
       parseFormConfig(selectedForm.data)
 
       // Parse subForms from configJson for column definitions
@@ -1069,7 +1087,27 @@ const parseFormConfig = (configStr: string) => {
 const extractFieldsRecursive = (items: any[]): FormField[] => {
   const fields: FormField[] = []
   for (const item of items) {
-    if (item.field) {
+    if (item.type === 'lookup' && item.field) {
+      let lookupCfg: any = {}
+      try {
+        const raw = item.props?.lookupConfig
+        lookupCfg = typeof raw === 'string' ? JSON.parse(raw || '{}') : (raw || {})
+      } catch { lookupCfg = {} }
+      const dbCfg = lookupDbConfigs.value[item.field]
+      const field: any = {
+        key: item.field,
+        label: item.title || item.field,
+        type: 'lookup',
+        placeholder: item.props?.placeholder || 'Click to search',
+        span: item.col?.span || 24,
+        _lookupTableId: lookupCfg.tableId || dbCfg?.tableId || 0,
+        _lookupSearchFields: (lookupCfg.searchFields?.length ? lookupCfg.searchFields : null) || dbCfg?.searchFields || [],
+        _lookupDisplayField: (lookupCfg.displayFields?.[0]) || dbCfg?.displayField || '',
+        _lookupDisplayFields: lookupCfg.displayFields || [],
+        _lookupViewFields: dbCfg?.viewFields || []
+      }
+      fields.push(field)
+    } else if (item.field) {
       const field = convertFormCreateRule(item)
       if (field) fields.push(field)
     }

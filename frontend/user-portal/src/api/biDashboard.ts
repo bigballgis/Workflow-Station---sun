@@ -14,6 +14,7 @@ export interface UserDashboardResponse {
 export interface GuestTokenResponse {
   token: string
   dashboardEmbedId: string
+  supersetDomain?: string
 }
 
 export interface GuestTokenRequest {
@@ -62,6 +63,8 @@ export const biDashboardApi = {
   getUserDashboards: (userId: string) =>
     adminCenterService.get<any, UserDashboardResponse[]>(`/bi/assignments/user/${userId}`),
 
-  getGuestToken: (data: GuestTokenRequest) =>
-    adminCenterService.post<any, GuestTokenResponse>('/bi/guest-token', data),
+  getGuestToken: (data: GuestTokenRequest, userId?: string) =>
+    adminCenterService.post<any, GuestTokenResponse>('/bi/guest-token', data, {
+      headers: userId ? { 'X-User-Id': userId } : undefined,
+    }),
 }

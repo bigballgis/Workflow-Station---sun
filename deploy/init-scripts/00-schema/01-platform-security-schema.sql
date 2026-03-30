@@ -247,7 +247,7 @@ CREATE TABLE IF NOT EXISTS sys_virtual_group_roles (
     created_by VARCHAR(64),
     CONSTRAINT fk_vgr_virtual_group FOREIGN KEY (virtual_group_id) REFERENCES sys_virtual_groups(id) ON DELETE CASCADE,
     CONSTRAINT fk_vgr_role FOREIGN KEY (role_id) REFERENCES sys_roles(id) ON DELETE CASCADE,
-    CONSTRAINT uk_virtual_group_role UNIQUE (virtual_group_id)
+    CONSTRAINT uk_virtual_group_role UNIQUE (virtual_group_id, role_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_vgr_virtual_group_id ON sys_virtual_group_roles(virtual_group_id);

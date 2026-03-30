@@ -56,6 +56,14 @@
       @close="resetForm"
     >
       <el-form :model="bindingForm" :rules="formRules" ref="formRef" label-width="120px" label-position="left">
+        <el-form-item :label="t('tableBinding.bindingType')" prop="bindingType">
+          <el-select v-model="bindingForm.bindingType" style="width: 100%" :disabled="!!editingBinding && editingBinding.bindingType === 'PRIMARY'" @change="handleBindingTypeChange">
+            <el-option :label="t('tableBinding.primaryTable')" value="PRIMARY" :disabled="hasPrimaryBinding && bindingForm.bindingType !== 'PRIMARY'" />
+            <el-option :label="t('tableBinding.subTable')" value="SUB" />
+            <el-option :label="t('tableBinding.relatedTable')" value="RELATED" />
+          </el-select>
+        </el-form-item>
+
         <el-form-item :label="t('tableBinding.selectTable')" prop="tableId">
           <el-select 
             v-model="bindingForm.tableId" 
@@ -65,20 +73,12 @@
             @change="handleTableSelect"
           >
             <el-option 
-              v-for="table in availableTables" 
+              v-for="table in filteredAvailableTables" 
               :key="table.id" 
-              :label="`${table.tableName} (${tableTypeLabel(table.tableType)})`" 
+              :label="table.displayLabel" 
               :value="table.id"
               :disabled="isTableBound(table.id)"
             />
-          </el-select>
-        </el-form-item>
-        
-        <el-form-item :label="t('tableBinding.bindingType')" prop="bindingType">
-          <el-select v-model="bindingForm.bindingType" style="width: 100%" :disabled="!!editingBinding && editingBinding.bindingType === 'PRIMARY'">
-            <el-option :label="t('tableBinding.primaryTable')" value="PRIMARY" :disabled="hasPrimaryBinding && bindingForm.bindingType !== 'PRIMARY'" />
-            <el-option :label="t('tableBinding.subTable')" value="SUB" />
-            <el-option :label="t('tableBinding.relatedTable')" value="RELATED" />
           </el-select>
         </el-form-item>
         
@@ -92,7 +92,7 @@
         <el-form-item 
           :label="t('tableBinding.foreignKeyField')" 
           prop="foreignKeyField"
-          v-if="bindingForm.bindingType !== 'PRIMARY'"
+          v-if="bindingForm.bindingType === 'SUB'"
         >
           <el-select 
             v-model="bindingForm.foreignKeyField" 
@@ -127,6 +127,7 @@ import { Plus } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import { functionUnitApi, type TableBinding, type TableBindingRequest, type TableDefinition, type BindingType } from '@/api/functionUnit'
+import { relationTableBindingApi, type RelationTableDTO } from '@/api/relationTable'
 
 const { t } = useI18n()
 
@@ -146,6 +147,7 @@ const bindings = ref<TableBinding[]>([])
 const showAddDialog = ref(false)
 const editingBinding = ref<TableBinding | null>(null)
 const formRef = ref<FormInstance>()
+const deployedRelationTables = ref<RelationTableDTO[]>([])
 
 const bindingForm = ref<TableBindingRequest>({
   tableId: 0,
@@ -170,10 +172,38 @@ const availableTables = computed(() => {
   return props.tables
 })
 
+// Filtered tables based on binding type
+const filteredAvailableTables = computed(() => {
+  const bt = bindingForm.value.bindingType
+  if (bt === 'PRIMARY' || bt === 'SUB') {
+    // Show only function unit's main table and sub tables
+    return props.tables
+      .filter(t => t.tableType === 'MAIN' || t.tableType === 'SUB')
+      .map(t => ({ id: t.id, displayLabel: `${t.tableName} (${tableTypeLabel(t.tableType)})`, fieldDefinitions: t.fieldDefinitions }))
+  } else {
+    // RELATED: show function unit's relation tables + admin center deployed relation tables
+    const localRelation = props.tables
+      .filter(t => t.tableType === 'RELATION')
+      .map(t => ({ id: t.id, displayLabel: `${t.tableName} (${tableTypeLabel(t.tableType)})`, fieldDefinitions: t.fieldDefinitions }))
+    const remote = deployedRelationTables.value.map(t => ({
+      id: -t.id, // negative ID to distinguish from local tables
+      displayLabel: `${t.displayName || t.tableName} (Deployed Relation Table)`,
+      fieldDefinitions: t.fieldDefinitions || []
+    }))
+    return [...localRelation, ...remote]
+  }
+})
+
 // Fields of the selected table
 const selectedTableFields = computed(() => {
   if (!bindingForm.value.tableId) return []
-  const table = props.tables.find(t => t.id === bindingForm.value.tableId)
+  if (bindingForm.value.tableId > 0) {
+    const table = props.tables.find(t => t.id === bindingForm.value.tableId)
+    return table?.fieldDefinitions || []
+  }
+  // For deployed relation tables (negative ID), look up from loaded data
+  const realId = -bindingForm.value.tableId
+  const table = deployedRelationTables.value.find(t => t.id === realId)
   return table?.fieldDefinitions || []
 })
 
@@ -227,6 +257,26 @@ async function loadBindings() {
     bindings.value = []
   } finally {
     loading.value = false
+  }
+}
+
+// Handle binding type change - reset table selection
+function handleBindingTypeChange() {
+  bindingForm.value.tableId = 0
+  bindingForm.value.foreignKeyField = undefined
+  if (bindingForm.value.bindingType === 'RELATED' && deployedRelationTables.value.length === 0) {
+    loadDeployedRelationTables()
+  }
+}
+
+// Load deployed relation tables from admin center
+async function loadDeployedRelationTables() {
+  try {
+    const res = await relationTableBindingApi.getAvailableTables()
+    deployedRelationTables.value = res.data || []
+  } catch (e: any) {
+    console.error('Failed to load deployed relation tables:', e)
+    deployedRelationTables.value = []
   }
 }
 
@@ -287,16 +337,23 @@ async function handleSubmit() {
   
   submitting.value = true
   try {
+    // For deployed relation tables (negative ID), convert to relationTableId
+    const requestData = { ...bindingForm.value }
+    if (requestData.tableId < 0) {
+      requestData.relationTableId = -requestData.tableId
+      requestData.tableId = 0
+    }
+    
     if (editingBinding.value) {
       await functionUnitApi.updateFormBinding(
         props.functionUnitId, 
         props.formId, 
         editingBinding.value.id!, 
-        bindingForm.value
+        requestData
       )
       ElMessage.success(t('tableBinding.updateSuccess'))
     } else {
-      await functionUnitApi.createFormBinding(props.functionUnitId, props.formId, bindingForm.value)
+      await functionUnitApi.createFormBinding(props.functionUnitId, props.formId, requestData)
       ElMessage.success(t('tableBinding.addSuccess'))
     }
     showAddDialog.value = false

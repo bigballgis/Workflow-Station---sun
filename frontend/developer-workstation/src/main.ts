@@ -16,7 +16,9 @@ import i18n from './i18n'
 import './styles/index.scss'
 import SubTablePlaceholderWidget from './components/designer/SubTablePlaceholderWidget.vue'
 import SubTableBindingSelect from './components/designer/SubTableBindingSelect.vue'
-import { FcEditor, FcSignature, FcTransfer, FcCascader, FcSlider } from './components/designer/fc-custom-fields'
+import { FcEditor, FcTransfer, FcCascader, FcSlider } from './components/designer/fc-custom-fields'
+import LookupComponent from './components/designer/LookupComponent.vue'
+import LookupBindingSelect from './components/designer/LookupBindingSelect.vue'
 
 // Force set HTML lang attribute to English
 document.documentElement.lang = 'en'
@@ -46,10 +48,11 @@ FcDesigner.component('subTable', SubTablePlaceholderWidget)
 
 // Register custom field components so form-create can render them in canvas & preview
 FcDesigner.component('editor', FcEditor)
-FcDesigner.component('signature', FcSignature)
 FcDesigner.component('transfer', FcTransfer)
 FcDesigner.component('cascader', FcCascader)
 FcDesigner.component('slider', FcSlider)
+FcDesigner.component('lookup', LookupComponent)
+FcDesigner.component('LookupBindingSelect', LookupBindingSelect)
 
 // Register the subTable drag rule so it appears in the designer left menu
 FcDesigner.addDragRule({
@@ -143,32 +146,6 @@ FcDesigner.addDragRule({
 })
 
 FcDesigner.addDragRule({
-  name: 'signature',
-  label: 'Signature',
-  icon: 'icon-input',
-  menu: 'main',
-  mask: false,
-  input: true,
-  drag: false,
-  dragBtn: true,
-  inside: false,
-  only: false,
-  handleBtn: true,
-  languageKey: [],
-  rule() {
-    return {
-      type: 'signature',
-      field: 'signature',
-      title: 'Signature',
-      props: {}
-    }
-  },
-  props() {
-    return []
-  }
-})
-
-FcDesigner.addDragRule({
   name: 'transfer',
   label: 'Transfer',
   icon: 'icon-transfer',
@@ -255,6 +232,62 @@ FcDesigner.addDragRule({
   }
 })
 
+FcDesigner.addDragRule({
+  name: 'lookup',
+  label: 'Lookup',
+  icon: 'icon-select',
+  menu: 'main',
+  mask: false,
+  input: true,
+  drag: false,
+  dragBtn: true,
+  inside: false,
+  only: false,
+  handleBtn: true,
+  languageKey: [],
+  loadRule(rule: any) {
+    rule.wrap = rule.wrap || {}
+    rule.wrap.class = rule.wrap.class || 'fc-lookup-wrap'
+  },
+  rule() {
+    return {
+      type: 'lookup',
+      field: 'lookup',
+      title: 'Lookup',
+      wrap: {
+        class: 'fc-lookup-wrap'
+      },
+      prefix: {
+        type: 'i',
+        class: 'el-icon',
+        style: 'margin-right:4px;font-size:14px;color:#409eff;',
+        children: [{
+          type: 'svg',
+          attrs: {
+            viewBox: '0 0 1024 1024',
+            width: '1em',
+            height: '1em',
+            fill: 'currentColor'
+          },
+          children: [{
+            type: 'path',
+            attrs: {
+              d: 'M909.6 854.5L649.9 594.8C690.2 542.7 714 478.4 714 408c0-167.4-135.6-303-303-303S108 240.6 108 408s135.6 303 303 303c70.4 0 134.7-23.8 186.8-64.1l259.7 259.6c6.2 6.2 16.4 6.2 22.6 0l29.5-29.5c6.3-6.2 6.3-16.4 0-22.5zM411 680c-150.1 0-272-121.9-272-272s121.9-272 272-272 272 121.9 272 272-121.9 272-272 272z'
+            }
+          }]
+        }]
+      },
+      props: { placeholder: 'Click to search', lookupConfig: '{}' }
+    }
+  },
+  props() {
+    return [
+      { type: 'input', field: 'placeholder', title: 'Placeholder' },
+      { type: 'LookupBindingSelect', field: 'lookupConfig', title: 'Lookup Config', props: {} }
+    ]
+  }
+})
+
 // Override global pseudo-element styles injected by form-create library
 // form-create uses fc-icon font and .icon-xxx:before pseudo-elements
 const overrideStyle = document.createElement('style')
@@ -337,6 +370,21 @@ overrideStyle.textContent = `
   [class^="_fd-"] i::before,
   [class*=" _fd-"] i::before {
     font-family: 'fc-icon' !important;
+  }
+
+  /* Lookup field label icon */
+  .fc-lookup-wrap > .el-form-item__label > .fc-form-title::before,
+  .fc-lookup-wrap > label > .fc-form-title::before,
+  .fc-lookup-wrap .el-form-item__label::before {
+    content: '';
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    margin-right: 4px;
+    vertical-align: middle;
+    background-color: #409eff;
+    -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1024 1024'%3E%3Cpath d='M909.6 854.5L649.9 594.8C690.2 542.7 714 478.4 714 408c0-167.4-135.6-303-303-303S108 240.6 108 408s135.6 303 303 303c70.4 0 134.7-23.8 186.8-64.1l259.7 259.6c6.2 6.2 16.4 6.2 22.6 0l29.5-29.5c6.3-6.2 6.3-16.4 0-22.5zM411 680c-150.1 0-272-121.9-272-272s121.9-272 272-272 272 121.9 272 272-121.9 272-272 272z'/%3E%3C/svg%3E") no-repeat center / contain;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1024 1024'%3E%3Cpath d='M909.6 854.5L649.9 594.8C690.2 542.7 714 478.4 714 408c0-167.4-135.6-303-303-303S108 240.6 108 408s135.6 303 303 303c70.4 0 134.7-23.8 186.8-64.1l259.7 259.6c6.2 6.2 16.4 6.2 22.6 0l29.5-29.5c6.3-6.2 6.3-16.4 0-22.5zM411 680c-150.1 0-272-121.9-272-272s121.9-272 272-272 272 121.9 272 272-121.9 272-272 272z'/%3E%3C/svg%3E") no-repeat center / contain;
   }
 `
 document.head.appendChild(overrideStyle)

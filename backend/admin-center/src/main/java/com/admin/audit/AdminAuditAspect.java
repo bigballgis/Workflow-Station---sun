@@ -354,8 +354,18 @@ public class AdminAuditAspect {
             action = AuditAction.USER_LOGIN_FAILED;
         }
         AuditContextHolder.AuditContext ctx = AuditContextHolder.get();
-        String userId   = ctx != null ? ctx.getUserId()   : "unknown";
-        String userName = ctx != null ? ctx.getUserName() : "unknown";
+        String userId   = ctx != null && ctx.getUserId() != null ? ctx.getUserId() : "unknown";
+        String userName = ctx != null && ctx.getUserName() != null ? ctx.getUserName() : "unknown";
+
+        // For login/logout, the user is not yet authenticated so AuditContext has no userId.
+        // Fall back to the username from the login request (stored as resourceId).
+        if ((action == AuditAction.USER_LOGIN || action == AuditAction.USER_LOGIN_FAILED
+                || action == AuditAction.USER_LOGOUT) && "unknown".equals(userId)) {
+            userId = meta.resourceId != null ? meta.resourceId : "unknown";
+            if ("unknown".equals(userName) && meta.resourceId != null) {
+                userName = meta.resourceId;
+            }
+        }
         String ip       = ctx != null ? ctx.getIpAddress() : null;
         String ua       = ctx != null ? ctx.getUserAgent() : null;
 

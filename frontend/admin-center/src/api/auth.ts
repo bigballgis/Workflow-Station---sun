@@ -150,6 +150,7 @@ export const clearAuth = () => {
   localStorage.removeItem(REFRESH_TOKEN_KEY)
   localStorage.removeItem(USER_KEY)
   localStorage.removeItem('userId')
+  localStorage.removeItem('username')
 }
 
 export const isAuthenticated = (): boolean => {

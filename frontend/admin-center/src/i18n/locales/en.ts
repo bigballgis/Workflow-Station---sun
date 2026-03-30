@@ -74,7 +74,10 @@ export default {
     monitor: 'System Monitor',
     audit: 'Audit Log',
     config: 'System Config',
-    permissionRequest: 'Permission Requests'
+    permissionRequest: 'Permission Requests',
+    relationTables: 'Relation Tables',
+    tableStructure: 'Table Structure',
+    tableData: 'Table Data'
   },
   dashboard: {
     totalUsers: 'Total Users',

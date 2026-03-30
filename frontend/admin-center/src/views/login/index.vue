@@ -133,6 +133,7 @@ const handleLogin = async () => {
     saveTokens(response.accessToken, response.refreshToken)
     saveUser(response.user)
     localStorage.setItem('userId', response.user.userId)
+    localStorage.setItem('username', response.user.username || response.user.displayName || response.user.userId)
 
     ElMessage.success(t('common.success'))
     router.push('/dashboard')

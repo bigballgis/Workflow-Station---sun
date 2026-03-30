@@ -16,8 +16,7 @@ import java.time.Instant;
  * 管理表单与数据表的多对多绑定关系
  */
 @Entity
-@Table(name = "dw_form_table_bindings", 
-       uniqueConstraints = @UniqueConstraint(columnNames = {"form_id", "table_id"}))
+@Table(name = "dw_form_table_bindings")
 @EntityListeners(AuditingEntityListener.class)
 @Data
 @Builder
@@ -37,8 +36,15 @@ public class FormTableBinding {
     
     @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "table_id", nullable = false)
+    @JoinColumn(name = "table_id")
     private TableDefinition table;
+    
+    /**
+     * Relation Table ID（来自 rt_table_definitions）
+     * 仅当 bindingType 为 RELATED 时使用
+     */
+    @Column(name = "relation_table_id")
+    private Long relationTableId;
     
     @Enumerated(EnumType.STRING)
     @Column(name = "binding_type", nullable = false, length = 20)
@@ -71,8 +77,12 @@ public class FormTableBinding {
     
     /**
      * 获取绑定表ID（用于JSON序列化）
+     * RELATED 类型返回 relationTableId，其他类型返回 table.id
      */
     public Long getTableId() {
+        if (bindingType == BindingType.RELATED && relationTableId != null) {
+            return relationTableId;
+        }
         return table != null ? table.getId() : null;
     }
     

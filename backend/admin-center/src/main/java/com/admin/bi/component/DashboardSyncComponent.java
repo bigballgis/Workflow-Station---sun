@@ -133,7 +133,7 @@ public class DashboardSyncComponent {
                     }
                 } else if (existing.getStatus() == DashboardStatus.AUTO_INACTIVE) {
                     // AUTO_INACTIVE 恢复为 ACTIVE
-                    boolean fieldsChanged = updateSupersetFields(existing, dashboardTitle, description, embedId);
+                    updateSupersetFields(existing, dashboardTitle, description, embedId);
                     existing.setStatus(DashboardStatus.ACTIVE);
                     existing.setLastSyncedAt(syncTime);
                     registryRepository.save(existing);

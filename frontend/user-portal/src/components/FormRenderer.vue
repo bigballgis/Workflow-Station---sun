@@ -38,6 +38,28 @@
                     />
                   </el-col>
                 </template>
+                <template v-else-if="field.type === 'lookup'">
+                  <el-col :span="field.span || 24">
+                    <el-form-item :label="field.label" :prop="field.key">
+                      <LookupField
+                        v-model="formData[field.key]"
+                        :table-id="(field as any)._lookupTableId"
+                        :search-fields="(field as any)._lookupSearchFields || []"
+                        :display-field="(field as any)._lookupDisplayField || ''"
+                        :display-fields="(field as any)._lookupDisplayFields || []"
+                        :view-fields="(field as any)._lookupViewFields || []"
+                        :placeholder="field.placeholder"
+                        @select="(row: any) => handleLookupSelect(field.key, row)"
+                        @view-fields-loaded="(fields: any[]) => lookupLoadedViewFields[field.key] = fields"
+                      />
+                      <LookupViewDisplay
+                        v-if="lookupSelectedData[field.key]"
+                        :selected-data="lookupSelectedData[field.key]"
+                        :view-fields="lookupLoadedViewFields[field.key] || (field as any)._lookupViewFields || []"
+                      />
+                    </el-form-item>
+                  </el-col>
+                </template>
                 <el-col v-else :span="field.span || 24" v-show="engineVisibility.get(field.key) ?? true">
                   <el-form-item
                     :label="field.label"
@@ -88,6 +110,28 @@
                 />
               </el-col>
             </template>
+            <template v-else-if="field.type === 'lookup'">
+              <el-col :span="field.span || 24">
+                <el-form-item :label="field.label" :prop="field.key">
+                  <LookupField
+                    v-model="formData[field.key]"
+                    :table-id="(field as any)._lookupTableId"
+                    :search-fields="(field as any)._lookupSearchFields || []"
+                    :display-field="(field as any)._lookupDisplayField || ''"
+                    :display-fields="(field as any)._lookupDisplayFields || []"
+                    :view-fields="(field as any)._lookupViewFields || []"
+                    :placeholder="field.placeholder"
+                    @select="(row: any) => handleLookupSelect(field.key, row)"
+                    @view-fields-loaded="(fields: any[]) => lookupLoadedViewFields[field.key] = fields"
+                  />
+                  <LookupViewDisplay
+                    v-if="lookupSelectedData[field.key]"
+                    :selected-data="lookupSelectedData[field.key]"
+                    :view-fields="lookupLoadedViewFields[field.key] || (field as any)._lookupViewFields || []"
+                  />
+                </el-form-item>
+              </el-col>
+            </template>
             <el-col v-else :span="field.span || 24" v-show="engineVisibility.get(field.key) ?? true">
               <el-form-item
                 :label="field.label"
@@ -124,10 +168,13 @@ import { isEqual } from 'lodash-es'
 import { ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import SubTableField from './SubTableField.vue'
+import LookupField from './lookup/LookupField.vue'
+import LookupViewDisplay from './lookup/LookupViewDisplay.vue'
 import FieldRenderer from './FieldRenderer.vue'
 import { BusinessLogicEngine } from './businessLogicEngine'
 import { userApi } from '@/api/user'
 import type { FormField, FormTab, FormBusinessLogicConfig } from './formRendererHelpers'
+import { extractFieldsRecursive } from './formRendererHelpers'
 
 export type { FormField, FormTab }
 
@@ -209,6 +256,18 @@ const bindingMap = computed(() => {
 })
 const resolveBinding = (id?: number) => id != null ? bindingMap.value.get(id) : undefined
 
+
+// Lookup selected data state
+const lookupSelectedData = ref<Record<string, Record<string, any>>>({})
+const lookupLoadedViewFields = ref<Record<string, any[]>>({})
+const handleLookupSelect = (fieldKey: string, row: Record<string, any>) => {
+  lookupSelectedData.value[fieldKey] = row
+}
+
+// 独立管理文件上传列表，避免从 formData 派生导致的重渲染问题
+const uploadFileLists = ref<Record<string, Array<{ name: string; url: string; uid?: number }>>>({})
+
+// 获取所有字段（包括 tabs 中的字段）
 const allFields = computed(() => {
   if (hasTabs.value && props.tabs) {
     return props.tabs.flatMap(tab => tab.fields)

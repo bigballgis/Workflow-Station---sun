@@ -199,14 +199,29 @@ public class FormDesignComponentImpl implements FormDesignComponent {
     @Transactional
     public FormTableBinding createBinding(Long formId, FormTableBindingRequest request) {
         FormDefinition form = getById(formId);
-        TableDefinition table = tableDefinitionRepository.findById(request.getTableId())
-                .orElseThrow(() -> new ResourceNotFoundException("TableDefinition", request.getTableId()));
         
-        // 检查是否已绑定该表
-        if (formTableBindingRepository.existsByFormIdAndTableId(formId, request.getTableId())) {
-            throw new BusinessException("BINDING_EXISTS", 
-                    i18nService.getMessage("form.binding_exists"),
-                    i18nService.getMessage("form.no_duplicate_binding"));
+        // Deployed Relation Table binding (RELATED type with relationTableId)
+        boolean isRelationTable = request.getBindingType() == BindingType.RELATED 
+                && request.getRelationTableId() != null;
+        
+        TableDefinition table = null;
+        if (!isRelationTable) {
+            table = tableDefinitionRepository.findById(request.getTableId())
+                    .orElseThrow(() -> new ResourceNotFoundException("TableDefinition", request.getTableId()));
+            
+            // 检查是否已绑定该表
+            if (formTableBindingRepository.existsByFormIdAndTableId(formId, request.getTableId())) {
+                throw new BusinessException("BINDING_EXISTS", 
+                        i18nService.getMessage("form.binding_exists"),
+                        i18nService.getMessage("form.no_duplicate_binding"));
+            }
+        } else {
+            // 检查是否已绑定该 Relation Table
+            if (formTableBindingRepository.existsByFormIdAndRelationTableId(formId, request.getRelationTableId())) {
+                throw new BusinessException("BINDING_EXISTS", 
+                        i18nService.getMessage("form.binding_exists"),
+                        i18nService.getMessage("form.no_duplicate_binding"));
+            }
         }
         
         // 检查主表绑定唯一性
@@ -218,8 +233,8 @@ public class FormDesignComponentImpl implements FormDesignComponent {
             }
         }
         
-        // 验证外键字段（子表和关联表需要）
-        if (request.getBindingType() != BindingType.PRIMARY && request.getForeignKeyField() != null) {
+        // 验证外键字段（子表需要，关联表的本地表也需要）
+        if (request.getBindingType() != BindingType.PRIMARY && request.getForeignKeyField() != null && table != null) {
             validateForeignKeyField(table, request.getForeignKeyField());
         }
         
@@ -239,6 +254,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         FormTableBinding binding = FormTableBinding.builder()
                 .form(form)
                 .table(table)
+                .relationTableId(isRelationTable ? request.getRelationTableId() : null)
                 .bindingType(request.getBindingType())
                 .bindingMode(bindingMode)
                 .foreignKeyField(request.getForeignKeyField())
@@ -264,7 +280,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         }
         
         // 验证外键字段
-        if (request.getBindingType() != BindingType.PRIMARY && request.getForeignKeyField() != null) {
+        if (request.getBindingType() != BindingType.PRIMARY && request.getForeignKeyField() != null && binding.getTable() != null) {
             validateForeignKeyField(binding.getTable(), request.getForeignKeyField());
         }
         

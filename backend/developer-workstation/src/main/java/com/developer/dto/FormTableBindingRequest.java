@@ -20,8 +20,12 @@ public class FormTableBindingRequest {
     /**
      * 要绑定的表ID
      */
-    @NotNull(message = "{validation.table_id_required}")
     private Long tableId;
+    
+    /**
+     * Relation Table ID（来自 rt_table_definitions，RELATED 类型使用）
+     */
+    private Long relationTableId;
     
     /**
      * 绑定类型

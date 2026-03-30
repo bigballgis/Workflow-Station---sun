@@ -250,7 +250,8 @@ public class PermissionComponent {
                     return false;
                 })
                 .collect(Collectors.toList());
-        
+
+        enrichApplicantFields(filteredList);
         return new PageImpl<>(filteredList, pageable, filteredList.size());
     }
 
@@ -286,7 +287,8 @@ public class PermissionComponent {
                     return false;
                 })
                 .collect(Collectors.toList());
-        
+
+        enrichApplicantFields(filteredList);
         return new PageImpl<>(filteredList, pageable, filteredList.size());
     }
 
@@ -434,6 +436,62 @@ public class PermissionComponent {
             fallback.put("username", applicantId);
             return fallback;
         }
+    }
+
+    /**
+     * 为审批列表填充申请人登录名等信息（供前端展示，避免只显示 applicantId UUID）
+     */
+    private void enrichApplicantFields(List<PermissionRequest> requests) {
+        if (requests == null || requests.isEmpty()) {
+            return;
+        }
+        LinkedHashSet<String> ids = requests.stream()
+                .map(PermissionRequest::getApplicantId)
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        Map<String, Map<String, Object>> userById = new HashMap<>();
+        for (String id : ids) {
+            Map<String, Object> info = roleAccessComponent.getUserById(id);
+            if (info != null) {
+                userById.put(id, info);
+            }
+        }
+        for (PermissionRequest r : requests) {
+            Map<String, Object> info = userById.get(r.getApplicantId());
+            if (info == null) {
+                continue;
+            }
+            String username = nonBlankString(info.get("username"));
+            String fullName = nonBlankString(info.get("fullName"));
+            String displayName = nonBlankString(info.get("displayName"));
+            // 优先登录名；缺失时用姓名兜底，避免仍显示 UUID
+            String shown = firstNonBlank(username, fullName, displayName);
+            if (shown != null) {
+                r.setApplicantUsername(shown);
+            }
+        }
+    }
+
+    private static String nonBlankString(Object v) {
+        if (v == null) {
+            return null;
+        }
+        String s = String.valueOf(v).trim();
+        return s.isEmpty() ? null : s;
+    }
+
+    private static String firstNonBlank(String... parts) {
+        if (parts == null) {
+            return null;
+        }
+        for (String p : parts) {
+            if (p != null && !p.isBlank()) {
+                return p;
+            }
+        }
+        return null;
     }
 
     /**

@@ -30,7 +30,6 @@ import org.springframework.web.multipart.MultipartFile;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
@@ -118,12 +117,6 @@ public class UserManagerComponent {
         
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException(userId));
-        
-        User oldUser = User.builder()
-                .email(user.getEmail())
-                .fullName(user.getFullName())
-                .position(user.getPosition())
-                .build();
         
         if (request.getEmail() != null && !request.getEmail().equals(user.getEmail())) {
             validateEmailFormat(request.getEmail());

@@ -71,4 +71,16 @@ public interface FormTableBindingRepository extends JpaRepository<FormTableBindi
      */
     @Query("SELECT b FROM FormTableBinding b WHERE b.table.id = :tableId")
     List<FormTableBinding> findByTableId(@Param("tableId") Long tableId);
+
+    /**
+     * 检查表单是否已绑定指定 Relation Table
+     */
+    @Query("SELECT COUNT(b) > 0 FROM FormTableBinding b WHERE b.form.id = :formId AND b.relationTableId = :relationTableId")
+    boolean existsByFormIdAndRelationTableId(@Param("formId") Long formId, @Param("relationTableId") Long relationTableId);
+
+    /**
+     * 按表单ID和绑定类型查询所有绑定
+     */
+    @Query("SELECT b FROM FormTableBinding b WHERE b.form.id = :formId AND b.bindingType = :type ORDER BY b.sortOrder")
+    List<FormTableBinding> findByFormIdAndBindingTypeList(@Param("formId") Long formId, @Param("type") BindingType type);
 }

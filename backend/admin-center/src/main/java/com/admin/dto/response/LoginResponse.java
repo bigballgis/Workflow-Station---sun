@@ -1,6 +1,5 @@
 package com.admin.dto.response;
 
-import com.platform.security.dto.RoleSource;
 import com.platform.security.enums.AssignmentTargetType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;

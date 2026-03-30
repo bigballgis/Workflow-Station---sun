@@ -1,12 +1,10 @@
 package com.developer.service;
 
-import com.developer.dto.RollbackImpact;
 import com.developer.dto.RollbackResult;
 import com.developer.entity.FunctionUnit;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.ProcessInstanceRepository;
 import com.platform.common.exception.TransactionError;
-import com.platform.common.exception.VersionValidationError;
 import net.jqwik.api.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.mockito.Mock;

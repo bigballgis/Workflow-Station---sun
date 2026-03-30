@@ -21,6 +21,8 @@ public class BiProperties {
     public static class Superset {
         /** Superset 服务地址 */
         private String host = "http://localhost:8088";
+        /** 前端嵌入 Superset 使用的公开地址（可选） */
+        private String publicHost = "http://localhost:8088";
         /** Superset 管理员用户名 */
         private String adminUsername = "admin";
         /** Superset 管理员密码 */

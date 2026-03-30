@@ -1,0 +1,89 @@
+package com.platform.common.dto;
+
+import com.platform.common.enums.RelationTableStatus;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.io.Serializable;
+import java.time.Instant;
+import java.util.List;
+
+/**
+ * Shared DTO for Relation Table definition data.
+ * Used across Admin Center, Developer Workstation, and User Portal.
+ */
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class RelationTableDTO implements Serializable {
+
+    private static final long serialVersionUID = 1L;
+
+    /**
+     * Table definition ID
+     */
+    private Long id;
+
+    /**
+     * Physical table name (unique)
+     */
+    private String tableName;
+
+    /**
+     * Display name for UI
+     */
+    private String displayName;
+
+    /**
+     * Table description
+     */
+    private String description;
+
+    /**
+     * Table status: DRAFT, DEPLOYED, ROLLBACK
+     */
+    private RelationTableStatus status;
+
+    /**
+     * Whether the table is enabled
+     */
+    private Boolean enabled;
+
+    /**
+     * Whether the table is visible in User Portal
+     */
+    private Boolean portalVisible;
+
+    /**
+     * Current deployed version number
+     */
+    private Integer currentVersion;
+
+    /**
+     * Field definitions of this table
+     */
+    private List<RelationFieldDTO> fieldDefinitions;
+
+    /**
+     * Record creation timestamp
+     */
+    private Instant createdAt;
+
+    /**
+     * Creator user ID
+     */
+    private String createdBy;
+
+    /**
+     * Last update timestamp
+     */
+    private Instant updatedAt;
+
+    /**
+     * Last updater user ID
+     */
+    private String updatedBy;
+}
