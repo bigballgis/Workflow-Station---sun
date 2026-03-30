@@ -1,15 +1,21 @@
 <template>
   <div class="lookup-field" ref="wrapperRef">
+    <!-- Selected value: input container with inner tag -->
+    <div v-if="selectedRow" class="lookup-selected-wrapper" :class="{ 'is-readonly': readonly }">
+      <span class="lookup-selected-tag">
+        <span class="lookup-selected-text">{{ searchKeyword }}</span>
+        <el-icon v-if="!readonly" class="lookup-selected-close" @click.stop="handleClear"><Close /></el-icon>
+      </span>
+    </div>
+    <!-- Search input (hidden when a value is selected or in readonly mode) -->
     <el-input
+      v-else-if="!readonly"
       v-model="searchKeyword"
       :placeholder="placeholder || 'Click to search'"
-      clearable
       @focus="handleFocus"
-    >
-      <template #suffix>
-        <el-icon><Search /></el-icon>
-      </template>
-    </el-input>
+    />
+    <!-- Readonly empty state -->
+    <span v-else class="lookup-readonly-empty">-</span>
 
     <div v-if="dropdownVisible" class="lookup-dropdown">
       <el-table
@@ -34,8 +40,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
-import { Search } from '@element-plus/icons-vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { Search, Close } from '@element-plus/icons-vue'
 import { relationTableApi } from '@/api/relationTable'
 
 export interface LookupViewField {
@@ -54,17 +60,20 @@ const props = defineProps<{
   displayFields?: string[]
   viewFields?: LookupViewField[]
   placeholder?: string
+  readonly?: boolean
 }>()
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: any): void
   (e: 'select', row: Record<string, any>): void
+  (e: 'clear'): void
   (e: 'viewFieldsLoaded', fields: LookupViewField[]): void
 }>()
 
 const wrapperRef = ref<HTMLElement>()
 const dropdownVisible = ref(false)
 const searchKeyword = ref('')
+const selectedRow = ref<Record<string, any> | null>(null)
 const allRows = ref<Record<string, any>[]>([])
 const loading = ref(false)
 const dataLoaded = ref(false)
@@ -135,6 +144,7 @@ async function loadAllData() {
 }
 
 function handleFocus() {
+  if (props.readonly) return
   dropdownVisible.value = true
   loadAllData()
 }
@@ -142,10 +152,39 @@ function handleFocus() {
 function handleSelect(row: Record<string, any>) {
   const displayVal = props.displayField ? row[props.displayField] : Object.values(row)[0]
   searchKeyword.value = String(displayVal ?? '')
+  selectedRow.value = row
   emit('update:modelValue', row)
   emit('select', row)
   dropdownVisible.value = false
 }
+
+function handleClear() {
+  searchKeyword.value = ''
+  selectedRow.value = null
+  emit('update:modelValue', null)
+  emit('clear')
+}
+
+// Initialize selectedRow and searchKeyword from modelValue (for saved form data)
+function initFromModelValue(val: any) {
+  if (val && typeof val === 'object' && Object.keys(val).length > 0) {
+    selectedRow.value = val
+    const displayVal = props.displayField ? val[props.displayField] : Object.values(val)[0]
+    searchKeyword.value = String(displayVal ?? '')
+    // Also emit select so FormRenderer populates lookupSelectedData for the view display
+    emit('select', val)
+  } else if (!val) {
+    selectedRow.value = null
+    searchKeyword.value = ''
+  }
+}
+
+// Watch for external modelValue changes (e.g. form data loaded after mount)
+watch(() => props.modelValue, (val) => {
+  if (!selectedRow.value && val && typeof val === 'object' && Object.keys(val).length > 0) {
+    initFromModelValue(val)
+  }
+})
 
 function onClickOutside(e: MouseEvent) {
   if (wrapperRef.value && !wrapperRef.value.contains(e.target as Node)) {
@@ -155,6 +194,10 @@ function onClickOutside(e: MouseEvent) {
 
 onMounted(() => {
   document.addEventListener('mousedown', onClickOutside)
+
+  // Initialize from existing modelValue (e.g. when loading saved form data)
+  initFromModelValue(props.modelValue)
+
   // Eagerly load view fields so LookupViewDisplay can show them after selection
   if (props.tableId && !effectiveViewFields.value.length) {
     relationTableApi.getViewFields(props.tableId).then(res => {
@@ -177,6 +220,56 @@ defineExpose({ effectiveViewFields })
 .lookup-field {
   width: 100%;
   position: relative;
+
+  .lookup-selected-wrapper {
+    display: flex;
+    align-items: center;
+    min-height: 32px;
+    padding: 4px 8px;
+    border: 1px solid #dcdfe6;
+    border-radius: 4px;
+    background: #fff;
+
+    &.is-readonly {
+      background: #f5f7fa;
+    }
+  }
+
+  .lookup-selected-tag {
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    height: 24px;
+    padding: 0 8px;
+    border-radius: 4px;
+    background: #f0f2f5;
+    font-size: 13px;
+    color: #909399;
+    line-height: 24px;
+
+    .lookup-selected-text {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .lookup-selected-close {
+      flex-shrink: 0;
+      margin-left: 4px;
+      font-size: 13px;
+      color: #909399;
+      cursor: pointer;
+
+      &:hover {
+        color: #606266;
+      }
+    }
+  }
+
+  .lookup-readonly-empty {
+    color: #606266;
+    line-height: 32px;
+  }
 
   .lookup-dropdown {
     position: absolute;

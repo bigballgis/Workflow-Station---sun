@@ -51,7 +51,9 @@
                           :display-fields="(field as any)._lookupDisplayFields || []"
                           :view-fields="(field as any)._lookupViewFields || []"
                           :placeholder="field.placeholder"
+                          :readonly="readonly"
                           @select="(row: any) => handleLookupSelect(field.key, row)"
+                          @clear="() => handleLookupClear(field.key)"
                           @view-fields-loaded="(fields: any[]) => lookupLoadedViewFields[field.key] = fields"
                         />
                         <LookupViewDisplay
@@ -384,7 +386,9 @@
                       :display-fields="(field as any)._lookupDisplayFields || []"
                       :view-fields="(field as any)._lookupViewFields || []"
                       :placeholder="field.placeholder"
+                      :readonly="readonly"
                       @select="(row: any) => handleLookupSelect(field.key, row)"
+                      @clear="() => handleLookupClear(field.key)"
                       @view-fields-loaded="(fields: any[]) => lookupLoadedViewFields[field.key] = fields"
                     />
                     <LookupViewDisplay
@@ -814,6 +818,9 @@ const lookupSelectedData = ref<Record<string, Record<string, any>>>({})
 const lookupLoadedViewFields = ref<Record<string, any[]>>({})
 const handleLookupSelect = (fieldKey: string, row: Record<string, any>) => {
   lookupSelectedData.value[fieldKey] = row
+}
+const handleLookupClear = (fieldKey: string) => {
+  delete lookupSelectedData.value[fieldKey]
 }
 
 // 独立管理文件上传列表，避免从 formData 派生导致的重渲染问题

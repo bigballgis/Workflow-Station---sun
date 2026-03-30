@@ -257,26 +257,6 @@ FcDesigner.addDragRule({
       wrap: {
         class: 'fc-lookup-wrap'
       },
-      prefix: {
-        type: 'i',
-        class: 'el-icon',
-        style: 'margin-right:4px;font-size:14px;color:#409eff;',
-        children: [{
-          type: 'svg',
-          attrs: {
-            viewBox: '0 0 1024 1024',
-            width: '1em',
-            height: '1em',
-            fill: 'currentColor'
-          },
-          children: [{
-            type: 'path',
-            attrs: {
-              d: 'M909.6 854.5L649.9 594.8C690.2 542.7 714 478.4 714 408c0-167.4-135.6-303-303-303S108 240.6 108 408s135.6 303 303 303c70.4 0 134.7-23.8 186.8-64.1l259.7 259.6c6.2 6.2 16.4 6.2 22.6 0l29.5-29.5c6.3-6.2 6.3-16.4 0-22.5zM411 680c-150.1 0-272-121.9-272-272s121.9-272 272-272 272 121.9 272 272-121.9 272-272 272z'
-            }
-          }]
-        }]
-      },
       props: { placeholder: 'Click to search', lookupConfig: '{}' }
     }
   },
@@ -372,10 +352,33 @@ overrideStyle.textContent = `
     font-family: 'fc-icon' !important;
   }
 
+  /* Lookup field: ensure label and input are horizontally aligned in designer canvas */
+  .fc-lookup-wrap {
+    .el-form-item {
+      display: flex !important;
+      align-items: flex-start !important;
+      flex-direction: row !important;
+      flex-wrap: nowrap !important;
+    }
+    .el-form-item__label {
+      flex-shrink: 0 !important;
+      width: auto !important;
+      max-width: 200px !important;
+      padding-top: 6px !important;
+      padding-right: 12px !important;
+      text-align: left !important;
+      display: inline-flex !important;
+      align-items: center !important;
+    }
+    .el-form-item__content {
+      flex: 1 !important;
+      min-width: 0 !important;
+      margin-left: 0 !important;
+    }
+  }
+
   /* Lookup field label icon */
-  .fc-lookup-wrap > .el-form-item__label > .fc-form-title::before,
-  .fc-lookup-wrap > label > .fc-form-title::before,
-  .fc-lookup-wrap .el-form-item__label::before {
+  .fc-lookup-wrap .el-form-item__label > .fc-form-title::before {
     content: '';
     display: inline-block;
     width: 14px;
