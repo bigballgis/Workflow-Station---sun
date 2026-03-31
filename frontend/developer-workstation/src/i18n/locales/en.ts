@@ -1117,7 +1117,8 @@ export default {
     notBound: 'Not bound',
     noServiceTasks: 'No service task nodes found in process',
     noProcessDefined: 'No process definition available',
-    bindSuccess: 'Decision bound to node successfully'
+    bindSuccess: 'Decision bound to node successfully',
+    backToList: 'Back to decision list'
   },
   ai: {
     panel: {
@@ -1361,5 +1362,11 @@ export default {
     createFromTemplate: 'Create from Template',
     selectTemplate: 'Select Template',
     blankForm: 'Blank Form',
+  },
+  error: {
+    forbidden: 'Access Denied',
+    forbiddenDesc: 'Sorry, you do not have permission to access this page',
+    goBack: 'Go Back',
+    backHome: 'Back to Home'
   }
 }

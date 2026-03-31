@@ -1117,7 +1117,8 @@ export default {
     notBound: '未绑定',
     noServiceTasks: '流程中未找到服务任务节点',
     noProcessDefined: '暂无流程定义',
-    bindSuccess: '决策表绑定节点成功'
+    bindSuccess: '决策表绑定节点成功',
+    backToList: '返回决策列表'
   },
   ai: {
     panel: {
@@ -1361,5 +1362,11 @@ export default {
     createFromTemplate: '从模板创建',
     selectTemplate: '选择模板',
     blankForm: '空白表单',
+  },
+  error: {
+    forbidden: '无权限访问',
+    forbiddenDesc: '抱歉，您没有权限访问此页面',
+    goBack: '返回上一页',
+    backHome: '返回首页'
   }
 }

@@ -1117,7 +1117,8 @@ export default {
     notBound: '未綁定',
     noServiceTasks: '流程中未找到服務任務節點',
     noProcessDefined: '暫無流程定義',
-    bindSuccess: '決策表綁定節點成功'
+    bindSuccess: '決策表綁定節點成功',
+    backToList: '返回決策列表'
   },
   ai: {
     panel: {
@@ -1361,5 +1362,11 @@ export default {
     createFromTemplate: '從範本建立',
     selectTemplate: '選擇範本',
     blankForm: '空白表單',
+  },
+  error: {
+    forbidden: '無權限存取',
+    forbiddenDesc: '抱歉，您沒有權限存取此頁面',
+    goBack: '返回上一頁',
+    backHome: '返回首頁'
   }
 }

@@ -58,7 +58,13 @@
           </template>
         </el-table-column>
         <el-table-column prop="description" :label="t('table.description')" show-overflow-tooltip />
-        <el-table-column :label="t('common.actions')" width="320" fixed="right">
+        <el-table-column
+          :label="t('common.actions')"
+          min-width="400"
+          fixed="right"
+          align="left"
+          class-name="form-designer-actions-cell"
+        >
           <template #default="{ row }">
             <div class="action-buttons">
               <el-button link type="primary" @click.stop="handleSelectForm(row)">{{ t('common.edit') }}</el-button>
@@ -2596,11 +2602,21 @@ onMounted(() => {
   margin-left: 8px;
 }
 
+/* 操作列：避免 el-table .cell 默认 overflow:hidden 裁掉换行后的按钮 */
+:deep(.form-designer-actions-cell) {
+  overflow: visible;
+}
+:deep(.form-designer-actions-cell .cell) {
+  overflow: visible;
+  white-space: normal;
+}
+
 .action-buttons {
   display: flex;
-  flex-wrap: nowrap;
-  gap: 4px;
-  white-space: nowrap;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  line-height: 1.5;
 }
 
 .bind-table-dialog {
