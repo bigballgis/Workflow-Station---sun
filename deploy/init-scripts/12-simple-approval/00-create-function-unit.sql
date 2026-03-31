@@ -52,7 +52,7 @@ BEGIN
     ) VALUES (
         v_function_unit_id,
         'Request Form',
-        'MAIN',
+        'PROCESS',
         'Request submission form',
         '{"rule":[{"name":"ref_Fvsumlhl019tacc","type":"inputNumber","field":"id","props":{"precision":0,"placeholder":"Please input Primary key"},"title":"Primary key","_fc_id":"id_Fky5mlhl019tabc","hidden":false,"display":true,"validate":[{"message":"Primary key required","trigger":"blur","required":true}],"_fc_drag_tag":"inputNumber"},{"name":"ref_Fi0smlhl019taec","type":"input","field":"request_number","props":{"maxlength":50,"placeholder":"Please input Request number (unique)","showWordLimit":true},"title":"Request number","_fc_id":"id_Fw4kmlhl019tadc","hidden":false,"display":true,"validate":[{"message":"Request number required","trigger":"blur","required":true}],"_fc_drag_tag":"input"},{"name":"ref_F4zmmlhl019tagc","type":"datePicker","field":"request_date","props":{"type":"datetime","placeholder":"Please input Request date","valueFormat":"YYYY-MM-DD HH:mm:ss"},"title":"Request date","_fc_id":"id_Favemlhl019tafc","hidden":false,"display":true,"validate":[{"message":"Request date required","trigger":"blur","required":true}],"_fc_drag_tag":"datePicker"},{"name":"ref_Fuzcmlhl019taic","type":"input","field":"title","props":{"maxlength":200,"placeholder":"Please input Request title","showWordLimit":true},"title":"Request title","_fc_id":"id_Fzvrmlhl019tahc","hidden":false,"display":true,"validate":[{"message":"Request title required","trigger":"blur","required":true}],"_fc_drag_tag":"input"},{"name":"ref_F606mlhl019takc","type":"input","field":"description","props":{"rows":3,"type":"textarea","placeholder":"Please input Request description"},"title":"Request description","_fc_id":"id_Ffgkmlhl019tajc","hidden":false,"display":true,"validate":[{"message":"Request description required","trigger":"blur","required":true}],"_fc_drag_tag":"input"},{"name":"ref_Fbqemlhl019tamc","type":"input","field":"status","props":{"maxlength":30,"placeholder":"Please input Request status","showWordLimit":true},"title":"Request status","_fc_id":"id_Fno2mlhl019talc","hidden":false,"display":true,"validate":[{"message":"Request status required","trigger":"blur","required":true}],"_fc_drag_tag":"input"}],"options":{"form":{"size":"default","inline":false,"labelWidth":"125px","labelPosition":"right","hideRequiredAsterisk":false},"resetBtn":{"show":false,"innerText":"Reset"},"submitBtn":{"show":true,"innerText":"Submit"}},"subForms":{}}',
         CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
@@ -71,7 +71,7 @@ BEGIN
     ) VALUES (
         v_function_unit_id,
         'Approval Form',
-        'MAIN',
+        'PROCESS',
         'Manager approval form',
         '{"rule":[{"name":"ref_F4wwmlhl2zozawc","type":"input","field":"approval_comments","props":{"rows":3,"type":"textarea","placeholder":"Please input Approval comments"},"title":"Approval comments","_fc_id":"id_Fbdgmlhl2zozavc","hidden":false,"display":true,"_fc_drag_tag":"input"},{"name":"ref_Fmb1mlhl2zozayc","type":"input","field":"status","props":{"maxlength":30,"placeholder":"Please input Request status","showWordLimit":true},"title":"Request status","_fc_id":"id_Fjtlmlhl2zozaxc","hidden":false,"display":true,"validate":[{"mode":"required","message":"Request status required","trigger":"blur","required":true}],"_fc_drag_tag":"input"}],"options":{"form":{"size":"default","inline":false,"labelWidth":"125px","labelPosition":"right","hideRequiredAsterisk":false},"resetBtn":{"show":false,"innerText":"Reset"},"submitBtn":{"show":true,"innerText":"Submit"}},"subForms":{}}',
         CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
@@ -90,7 +90,7 @@ BEGIN
     ) VALUES (
         v_function_unit_id,
         'sub form',
-        'SUB',
+        'TASK',
         NULL,
         '{"rule":[{"info":"","name":"ref_F7simlyllz9dadc","type":"input","field":"Fayjmlyllz9dabc","title":"Input","_fc_id":"id_Fd7gmlyllz9dacc","hidden":false,"display":true,"$required":false,"_fc_drag_tag":"input"}],"options":{"form":{"size":"default","inline":false,"labelWidth":"125px","labelPosition":"right","hideRequiredAsterisk":false},"resetBtn":{"show":false,"innerText":"Reset"},"submitBtn":{"show":true,"innerText":"Submit"}},"subForms":{}}',
         CURRENT_TIMESTAMP, CURRENT_TIMESTAMP

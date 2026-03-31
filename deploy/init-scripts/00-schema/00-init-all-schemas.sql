@@ -41,6 +41,13 @@ COMMIT;
 \i /docker-entrypoint-initdb.d/00-schema/12-add-enabled-field-to-dw-function-units.sql
 \i /docker-entrypoint-initdb.d/00-schema/13-add-notification-table.sql
 \i /docker-entrypoint-initdb.d/00-schema/15-bi-management-schema.sql
-
+\i /docker-entrypoint-initdb.d/00-schema/16-add-decision-and-relations-tables.sql
+\i /docker-entrypoint-initdb.d/00-schema/17-add-lock-version-to-user-portal-tables.sql
+\i /docker-entrypoint-initdb.d/00-schema/18-add-lock-version-to-form-definitions.sql
+\i /docker-entrypoint-initdb.d/00-schema/19-add-up-change-history.sql
+\i /docker-entrypoint-initdb.d/00-schema/20-add-members-table.sql
+\i /docker-entrypoint-initdb.d/00-schema/21-add-rt-relation-tables.sql
+\i /docker-entrypoint-initdb.d/00-schema/22-add-lock-version-to-sys-roles.sql
+\i /docker-entrypoint-initdb.d/00-schema/23-widen-up-process-instance-business-key.sql
 
 \echo 'All schemas created successfully.'

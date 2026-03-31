@@ -17,3 +17,9 @@ ADD COLUMN IF NOT EXISTS lock_version BIGINT DEFAULT 0;
 COMMENT ON COLUMN up_process_instance.lock_version IS 'Optimistic locking version';
 COMMENT ON COLUMN up_delegation_rule.lock_version IS 'Optimistic locking version';
 COMMENT ON COLUMN up_process_draft.lock_version IS 'Optimistic locking version';
+
+-- sys_users also uses @Version with lock_version for optimistic locking
+ALTER TABLE sys_users
+ADD COLUMN IF NOT EXISTS lock_version BIGINT DEFAULT 0;
+
+COMMENT ON COLUMN sys_users.lock_version IS 'Optimistic locking version';

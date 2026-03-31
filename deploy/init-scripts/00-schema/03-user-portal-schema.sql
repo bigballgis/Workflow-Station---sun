@@ -175,11 +175,11 @@ CREATE INDEX IF NOT EXISTS idx_up_delegation_audit_created_at ON up_delegation_a
 -- =====================================================
 CREATE TABLE IF NOT EXISTS up_process_instance (
     id VARCHAR(64) PRIMARY KEY,
-    process_definition_key VARCHAR(100) NOT NULL,
+    process_definition_key VARCHAR(255) NOT NULL,
     process_definition_id VARCHAR(64),
     process_definition_name VARCHAR(255),
     process_instance_id VARCHAR(64),
-    business_key VARCHAR(100),
+    business_key VARCHAR(255),
     initiator_id VARCHAR(64),
     start_user_id VARCHAR(64) NOT NULL,
     start_user_name VARCHAR(100),

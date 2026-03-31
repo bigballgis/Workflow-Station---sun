@@ -51,7 +51,7 @@ BEGIN
     ) VALUES (
         v_function_unit_id,
         'Request Form',
-        'MAIN',
+        'PROCESS',
         'Request submission form',
         '{"rule": [{"name": "ref_Fw7smm1s0a5gacc", "type": "input", "field": "request_number", "props": {"maxlength": 50, "placeholder": "Please input Request Number", "showWordLimit": true}, "title": "Request Number", "_fc_id": "id_Fkbfmm1s0a5gabc", "hidden": false, "display": true, "validate": [{"mode": "required", "message": "Request Number required", "trigger": "blur", "required": true}], "_fc_drag_tag": "input"}, {"name": "ref_Ftvqmm1s0a5gaec", "type": "datePicker", "field": "request_date", "props": {"type": "datetime", "placeholder": "Please input Request Date", "valueFormat": "YYYY-MM-DD HH:mm:ss"}, "title": "Request Date", "_fc_id": "id_Fjwimm1s0a5gadc", "hidden": false, "display": true, "validate": [{"message": "Request Date required", "trigger": "blur", "required": true}], "_fc_drag_tag": "datePicker"}, {"name": "ref_Fqk8mm1s0a5gagc", "type": "input", "field": "title", "props": {"maxlength": 200, "placeholder": "Please input Request Title", "showWordLimit": true}, "title": "Request Title", "_fc_id": "id_Faqomm1s0a5gafc", "hidden": false, "display": true, "validate": [{"message": "Request Title required", "trigger": "blur", "required": true}], "_fc_drag_tag": "input"}, {"name": "ref_Fjowmm1s0a5haic", "type": "input", "field": "description", "props": {"rows": 3, "type": "textarea", "placeholder": "Please input Request Description"}, "title": "Request Description", "_fc_id": "id_Ffhjmm1s0a5hahc", "hidden": false, "display": true, "validate": [{"mode": "required", "message": "Request Description required", "trigger": "blur", "required": true}], "_fc_drag_tag": "input"}, {"name": "ref_Fdsjmm3a7ibxacc", "type": "inputNumber", "field": "budget", "props": {"precision": 0, "placeholder": "Please input budget"}, "title": "budget", "_fc_id": "id_Ftbumm3a7ibxabc", "hidden": false, "display": true, "_fc_drag_tag": "inputNumber"}], "options": {"form": {"size": "default", "inline": false, "labelWidth": "125px", "labelPosition": "left", "hideRequiredAsterisk": false}, "resetBtn": {"show": false, "innerText": "Reset"}, "submitBtn": {"show": true, "innerText": "Submit"}}, "subForms": {}}',
         CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
@@ -70,7 +70,7 @@ BEGIN
     ) VALUES (
         v_function_unit_id,
         'Approval Form',
-        'MAIN',
+        'PROCESS',
         'Manager approval form',
         '{"rule": [{"name": "ref_Flhmmm2udhnkaec", "type": "input", "field": "additional_information", "props": {"rows": 3, "type": "textarea", "placeholder": "Please input Additional Inforrmation"}, "title": "Additional Inforrmation", "_fc_id": "id_F59nmm2udhnkadc", "hidden": false, "display": true, "_fc_drag_tag": "input"}], "options": {"form": {"size": "default", "inline": false, "labelWidth": "125px", "labelPosition": "right", "hideRequiredAsterisk": false}, "resetBtn": {"show": false, "innerText": "Reset"}, "submitBtn": {"show": true, "innerText": "Submit"}}, "subForms": {}}',
         CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
@@ -89,7 +89,7 @@ BEGIN
     ) VALUES (
         v_function_unit_id,
         'Review Form',
-        'MAIN',
+        'PROCESS',
         NULL,
         '{"rule": [{"name": "ref_Ftv7mmyxh928agc", "type": "inputNumber", "field": "id", "props": {"precision": 0, "placeholder": "Please input id"}, "title": "id", "_fc_id": "id_F913mmyxh928afc", "hidden": false, "display": true, "validate": [{"message": "id required", "trigger": "blur", "required": true}], "_fc_drag_tag": "inputNumber"}, {"name": "ref_Fx6tmmyxh928acc", "type": "input", "field": "Item", "props": {"rows": 3, "type": "textarea", "placeholder": "Please input item"}, "title": "item", "_fc_id": "id_F2z0mmyxh928abc", "hidden": false, "display": true, "_fc_drag_tag": "input"}, {"name": "ref_Fwdvmmyxh928aec", "type": "input", "field": "Comment", "props": {"maxlength": 255, "placeholder": "Please input comment", "showWordLimit": true}, "title": "comment", "_fc_id": "id_Fhhymmyxh928adc", "hidden": false, "display": true, "_fc_drag_tag": "input"}, {"info": "", "name": "ref_F5q1mmyxiftrajc", "type": "input", "field": "Fessmmyxiftrahc", "title": "Input", "_fc_id": "id_F4q8mmyxiftraic", "hidden": false, "display": true, "$required": false, "_fc_drag_tag": "input"}], "options": {"form": {"size": "default", "inline": false, "labelWidth": "125px", "labelPosition": "left", "hideRequiredAsterisk": false}, "resetBtn": {"show": false, "innerText": "Reset"}, "submitBtn": {"show": true, "innerText": "Submit"}}, "subForms": {}}',
         CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
@@ -107,7 +107,7 @@ BEGIN
     ) VALUES (
         v_function_unit_id,
         'sub form',
-        'SUB',
+        'TASK',
         NULL,
         '{"rule": [{"info": "", "name": "ref_F7simlyllz9dadc", "type": "input", "field": "Fayjmlyllz9dabc", "title": "Input", "_fc_id": "id_Fd7gmlyllz9dacc", "hidden": false, "display": true, "$required": false, "_fc_drag_tag": "input"}], "options": {"form": {"size": "default", "inline": false, "labelWidth": "125px", "labelPosition": "right", "hideRequiredAsterisk": false}, "resetBtn": {"show": false, "innerText": "Reset"}, "submitBtn": {"show": true, "innerText": "Submit"}}, "subForms": {}}',
         CURRENT_TIMESTAMP, CURRENT_TIMESTAMP

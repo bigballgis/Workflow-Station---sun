@@ -19,12 +19,29 @@ services:
         preserve_host: false
 
   # --- developer-workstation ---
+  # 同一路径前缀的多条路由：具体路径必须列在 /api/v1 通配之前，保证 /api/v1/auth/* 等到正确上游
   - name: developer-workstation-service
     url: http://developer-workstation:8080
     connect_timeout: 60000
     write_timeout: 60000
     read_timeout: 60000
     routes:
+      - name: dw-auth-login-route
+        paths:
+          - /api/v1/auth/login
+        strip_path: false
+        preserve_host: false
+      - name: dw-auth-refresh-route
+        paths:
+          - /api/v1/auth/refresh
+        strip_path: false
+        preserve_host: false
+      - name: upload-route
+        paths:
+          - /api/v1/upload
+          - /api/v1/import
+        strip_path: false
+        preserve_host: false
       - name: developer-workstation-route
         paths:
           - /api/v1
@@ -86,20 +103,6 @@ services:
         strip_path: false
         preserve_host: false
 
-  # --- 文件上传专用 ---
-  - name: developer-workstation-upload-service
-    url: http://developer-workstation:8080
-    connect_timeout: 60000
-    write_timeout: 60000
-    read_timeout: 60000
-    routes:
-      - name: upload-route
-        paths:
-          - /api/v1/upload
-          - /api/v1/import
-        strip_path: false
-        preserve_host: false
-
   # --- 公开路由 (不启用 JWT 插件) ---
   # admin-center 登录
   - name: admin-center-auth-service
@@ -116,24 +119,6 @@ services:
       - name: admin-auth-refresh-route
         paths:
           - /api/v1/admin/auth/refresh
-        strip_path: false
-        preserve_host: false
-
-  # developer-workstation 登录
-  - name: developer-workstation-auth-service
-    url: http://developer-workstation:8080
-    connect_timeout: 60000
-    write_timeout: 60000
-    read_timeout: 60000
-    routes:
-      - name: dw-auth-login-route
-        paths:
-          - /api/v1/auth/login
-        strip_path: false
-        preserve_host: false
-      - name: dw-auth-refresh-route
-        paths:
-          - /api/v1/auth/refresh
         strip_path: false
         preserve_host: false
 
@@ -307,61 +292,9 @@ plugins:
       limit_by: ip
 
 # ============================================================
-# Upstreams (被动健康检查)
+# Upstreams — removed (not referenced by services)
 # ============================================================
-upstreams:
-  - name: admin-center-upstream
-    targets:
-      - target: admin-center:8080
-        weight: 100
-    healthchecks:
-      passive:
-        type: http
-        unhealthy:
-          http_failures: 3
-          tcp_failures: 3
-          timeouts: 3
-        healthy:
-          successes: 1
-
-  - name: developer-workstation-upstream
-    targets:
-      - target: developer-workstation:8080
-        weight: 100
-    healthchecks:
-      passive:
-        type: http
-        unhealthy:
-          http_failures: 3
-          tcp_failures: 3
-          timeouts: 3
-        healthy:
-          successes: 1
-
-  - name: user-portal-upstream
-    targets:
-      - target: user-portal:8080
-        weight: 100
-    healthchecks:
-      passive:
-        type: http
-        unhealthy:
-          http_failures: 3
-          tcp_failures: 3
-          timeouts: 3
-        healthy:
-          successes: 1
-
-  - name: workflow-engine-upstream
-    targets:
-      - target: workflow-engine:8080
-        weight: 100
-    healthchecks:
-      passive:
-        type: http
-        unhealthy:
-          http_failures: 3
-          tcp_failures: 3
-          timeouts: 3
-        healthy:
-          successes: 1
+# Services use direct URLs (e.g. http://admin-center:8080).
+# To enable health checks, change service URLs to upstream names
+# and uncomment the upstream definitions.
+# See: https://docs.konghq.com/gateway/latest/how-kong-works/load-balancing/

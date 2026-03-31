@@ -38,6 +38,26 @@ CREATE INDEX IF NOT EXISTS idx_table_relations_fu_id ON dw_table_relations(funct
 CREATE INDEX IF NOT EXISTS idx_table_relations_source ON dw_table_relations(source_table_id);
 CREATE INDEX IF NOT EXISTS idx_table_relations_target ON dw_table_relations(target_table_id);
 
+-- Form type rename (V306)
+-- Rename MAIN→PROCESS, SUB→TASK, remove POPUP; align with Java FormType enum
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'chk_form_type'
+          AND conrelid = 'dw_form_definitions'::regclass
+    ) THEN
+        ALTER TABLE dw_form_definitions DROP CONSTRAINT chk_form_type;
+    END IF;
+
+    UPDATE dw_form_definitions SET form_type = 'PROCESS' WHERE form_type = 'MAIN';
+    UPDATE dw_form_definitions SET form_type = 'TASK'    WHERE form_type = 'SUB';
+    UPDATE dw_form_definitions SET form_type = 'ACTION'  WHERE form_type = 'POPUP';
+
+    ALTER TABLE dw_form_definitions
+        ADD CONSTRAINT chk_form_type CHECK (form_type IN ('PROCESS', 'TASK', 'ACTION'));
+END $$;
+
 -- Task form fields (V307)
 DO $$
 BEGIN
