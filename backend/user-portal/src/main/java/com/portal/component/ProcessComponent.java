@@ -40,6 +40,7 @@ public class ProcessComponent {
     private final FunctionUnitAccessComponent functionUnitAccessComponent;
     private final WorkflowEngineClient workflowEngineClient;
     private final ProcessDraftComponent processDraftComponent;
+    private final RestTemplate restTemplate;
 
     @jakarta.persistence.PersistenceContext
     private jakarta.persistence.EntityManager entityManager;
@@ -59,7 +60,6 @@ public class ProcessComponent {
         
         try {
             // 尝试从管理员中心获取已部署的功能单元
-            RestTemplate restTemplate = new RestTemplate();
             String url = adminCenterUrl + "/api/v1/admin/function-units/deployed/latest";
             log.info("Fetching latest deployed function units from: {}", url);
             
@@ -215,10 +215,12 @@ public class ProcessComponent {
         String startUserDisplayName = resolveUserDisplayName(userId);
         ProcessInstance processInstance = ProcessInstance.builder()
                 .id(flowableProcessInstanceId)
+                .processInstanceId(flowableProcessInstanceId)
                 .processDefinitionId((String) data.get("processDefinitionId"))
                 .processDefinitionKey(processKey)
                 .processDefinitionName(processName)
                 .businessKey(request.getBusinessKey())
+                .initiatorId(userId)
                 .startUserId(userId)
                 .startUserName(startUserDisplayName)
                 .status("RUNNING")
@@ -634,8 +636,6 @@ public class ProcessComponent {
      */
     private String getEntityManager(String initiatorId) {
         try {
-            RestTemplate restTemplate = new RestTemplate();
-            
             // 首先尝试通过用户ID查询
             String userUrl = adminCenterUrl + "/api/v1/admin/users/" + initiatorId;
             log.info("Fetching user info for entity manager from: {}", userUrl);
@@ -693,8 +693,6 @@ public class ProcessComponent {
      */
     private String getFunctionManager(String initiatorId) {
         try {
-            RestTemplate restTemplate = new RestTemplate();
-            
             // 首先尝试通过用户ID查询
             String userUrl = adminCenterUrl + "/api/v1/admin/users/" + initiatorId;
             log.info("Fetching user info for function manager from: {}", userUrl);
@@ -748,6 +746,16 @@ public class ProcessComponent {
     }
     
     /**
+     * 带缓存的用户显示名称解析，避免同一批次内重复 HTTP 调用
+     */
+    private String resolveUserDisplayNameCached(String userId, Map<String, String> cache) {
+        if (userId == null || userId.isEmpty()) {
+            return null;
+        }
+        return cache.computeIfAbsent(userId, this::resolveUserDisplayName);
+    }
+    
+    /**
      * 解析用户显示名称
      * 优先级: fullName > displayName > username > userId
      */
@@ -757,7 +765,6 @@ public class ProcessComponent {
         }
         
         try {
-            RestTemplate restTemplate = new RestTemplate();
             String userUrl = adminCenterUrl + "/api/v1/admin/users/" + userId;
             
             @SuppressWarnings("unchecked")
@@ -831,24 +838,31 @@ public class ProcessComponent {
             instancePage = processInstanceRepository.findByStartUserIdOrderByStartTimeDesc(userId, pageable);
         }
 
+        Map<String, String> userNameCache = new HashMap<>();
         List<ProcessInstanceInfo> instances = instancePage.getContent().stream()
-                .map(this::toProcessInstanceInfo)
+                .map(inst -> toProcessInstanceInfo(inst, userNameCache))
                 .toList();
 
         return new PageImpl<>(instances, pageable, instancePage.getTotalElements());
     }
     
     /**
-     * 转换实体到DTO
+     * 转换实体到DTO（无缓存版本，用于单个流程查询）
      */
     private ProcessInstanceInfo toProcessInstanceInfo(ProcessInstance instance) {
+        return toProcessInstanceInfo(instance, new HashMap<>());
+    }
+    
+    /**
+     * 转换实体到DTO（带方法级用户名缓存，避免列表查询 N+1）
+     */
+    private ProcessInstanceInfo toProcessInstanceInfo(ProcessInstance instance, Map<String, String> userNameCache) {
         String currentAssignee = instance.getCurrentAssignee();
         String currentAssigneeName = null;
         
         log.debug("toProcessInstanceInfo: processId={}, status={}, currentAssignee from DB={}", 
                 instance.getId(), instance.getStatus(), currentAssignee);
         
-        // 如果有当前处理人，尝试从 workflow-engine 获取任务信息以获取用户名称
         if (currentAssignee != null && !currentAssignee.isEmpty() && "RUNNING".equals(instance.getStatus())) {
             try {
                 if (workflowEngineClient.isAvailable()) {
@@ -862,12 +876,10 @@ public class ProcessComponent {
                             if (tasks != null && !tasks.isEmpty()) {
                                 Map<String, Object> currentTask = tasks.get(0);
                                 currentAssigneeName = (String) currentTask.get("currentAssigneeName");
-                                // 如果 workflow-engine 没有返回名称，直接解析用户ID
                                 if (currentAssigneeName == null || currentAssigneeName.isEmpty()) {
-                                    currentAssigneeName = resolveUserDisplayName(currentAssignee);
+                                    currentAssigneeName = resolveUserDisplayNameCached(currentAssignee, userNameCache);
                                 }
                             } else {
-                                // 任务列表为空，说明流程没有活动任务（可能已完成或在过渡状态）
                                 log.debug("No active tasks found for process instance {}, clearing current assignee", instance.getId());
                                 currentAssigneeName = null;
                                 currentAssignee = null;
@@ -877,13 +889,12 @@ public class ProcessComponent {
                 }
             } catch (Exception e) {
                 log.warn("Failed to get current assignee name for process {}: {}", instance.getId(), e.getMessage());
-                currentAssigneeName = resolveUserDisplayName(currentAssignee);
+                currentAssigneeName = resolveUserDisplayNameCached(currentAssignee, userNameCache);
             }
         }
         
-        // 如果没有获取到名称，尝试解析用户ID
         if (currentAssigneeName == null && currentAssignee != null) {
-            currentAssigneeName = resolveUserDisplayName(currentAssignee);
+            currentAssigneeName = resolveUserDisplayNameCached(currentAssignee, userNameCache);
         }
         
         log.debug("toProcessInstanceInfo: final currentAssigneeName={}", currentAssigneeName);
@@ -896,11 +907,13 @@ public class ProcessComponent {
                 .businessKey(instance.getBusinessKey())
                 .startTime(instance.getStartTime())
                 .endTime(instance.getEndTime())
+                .completedAt(instance.getCompletedAt())
+                .title(instance.getTitle())
                 .status(instance.getStatus())
                 .startUserId(instance.getStartUserId())
                 .startUserName(instance.getStartUserName())
                 .currentNode(instance.getCurrentNode())
-                .currentAssignee(currentAssigneeName)  // 使用解析后的名称，如果没有活动任务则为null
+                .currentAssignee(currentAssigneeName)
                 .candidateUsers(instance.getCandidateUsers())
                 .variables(instance.getVariables())
                 .build();
@@ -994,6 +1007,23 @@ public class ProcessComponent {
         instance.setStatus("WITHDRAWN");
         instance.setEndTime(LocalDateTime.now());
         processInstanceRepository.save(instance);
+        
+        // 调用 Flowable 引擎取消流程实例
+        try {
+            if (workflowEngineClient.isAvailable()) {
+                Optional<Map<String, Object>> cancelResult = workflowEngineClient
+                        .cancelProcessInstance(processId, reason != null ? reason : "用户撤回");
+                if (cancelResult.isPresent()) {
+                    log.info("Flowable process instance cancelled: {}", processId);
+                } else {
+                    log.warn("Failed to cancel Flowable process instance: {}, local status already updated", processId);
+                }
+            } else {
+                log.warn("Workflow engine not available, skipped Flowable cancellation for process: {}", processId);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to cancel Flowable process instance {}: {}", processId, e.getMessage());
+        }
         
         return true;
     }
@@ -1094,7 +1124,6 @@ public class ProcessComponent {
         functionUnitAccessComponent.checkFunctionUnitAccess(userId, functionUnitId);
         
         try {
-            RestTemplate restTemplate = new RestTemplate();
             String url = adminCenterUrl + "/api/v1/admin/function-units/" + functionUnitId + "/content";
             log.info("Fetching function unit content from: {}", url);
             
@@ -1130,7 +1159,6 @@ public class ProcessComponent {
             String functionUnitId = functionUnitAccessComponent.resolveFunctionUnitId(functionUnitIdOrCode);
             log.info("Resolved function unit ID: {}", functionUnitId);
             
-            RestTemplate restTemplate = new RestTemplate();
             String url = adminCenterUrl + "/api/v1/admin/function-units/" + functionUnitId + "/content";
             log.info("Fetching function unit content from: {}", url);
             
@@ -1165,8 +1193,6 @@ public class ProcessComponent {
             // 先解析功能单元 ID（支持 code 或名称）
             String functionUnitId = functionUnitAccessComponent.resolveFunctionUnitId(functionUnitIdOrCode);
             log.info("Resolved function unit ID: {}", functionUnitId);
-            
-            RestTemplate restTemplate = new RestTemplate();
             
             // 使用通用的 /content 端点获取所有内容
             String url = adminCenterUrl + "/api/v1/admin/function-units/" + functionUnitId + "/content";
@@ -1255,7 +1281,9 @@ public class ProcessComponent {
             // 只更新状态为 RUNNING 的流程
             if ("RUNNING".equals(instance.getStatus())) {
                 instance.setStatus("COMPLETED");
-                instance.setEndTime(LocalDateTime.now());
+                LocalDateTime finishedAt = LocalDateTime.now();
+                instance.setEndTime(finishedAt);
+                instance.setCompletedAt(finishedAt);
                 // 保存最后一个节点名称，而不是清空
                 if (lastActivityName != null && !lastActivityName.isEmpty()) {
                     instance.setCurrentNode(lastActivityName);

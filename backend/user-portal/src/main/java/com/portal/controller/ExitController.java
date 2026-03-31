@@ -2,6 +2,7 @@ package com.portal.controller;
 
 import com.portal.client.AdminCenterClient;
 import com.portal.dto.ApiResponse;
+import com.portal.security.CurrentUserId;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -37,7 +38,7 @@ public class ExitController {
                            "This will revoke the role associated with the virtual group.")
     public ResponseEntity<ApiResponse<Map<String, Object>>> exitVirtualGroup(
             @PathVariable String groupId,
-            @RequestHeader("X-User-Id") String userId) {
+            @CurrentUserId String userId) {
         log.info("User {} exiting virtual group: {}", userId, groupId);
         
         // TODO: Call admin-center API to exit virtual group
@@ -46,10 +47,11 @@ public class ExitController {
         // 1. Remove user from virtual group
         // 2. Revoke the role bound to the virtual group
 
-        return adminCenterClient.exitVirtualGroup(groupId, userId)
-                .<ResponseEntity<ApiResponse<Map<String, Object>>>>map(data -> ResponseEntity.ok(ApiResponse.success(data)))
-                .orElse(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                        .body(ApiResponse.error("503", "Admin center service unavailable")));
+        if (adminCenterClient.exitVirtualGroup(groupId, userId)) {
+            return ResponseEntity.ok(ApiResponse.success(Map.of()));
+        }
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ApiResponse.error("503", "Admin center service unavailable"));
     }
     
     @PostMapping("/business-unit/{businessUnitId}")
@@ -58,7 +60,7 @@ public class ExitController {
                            "This will deactivate all BU-Bounded roles for this business unit.")
     public ResponseEntity<ApiResponse<Map<String, Object>>> exitBusinessUnit(
             @PathVariable String businessUnitId,
-            @RequestHeader("X-User-Id") String userId) {
+            @CurrentUserId String userId) {
         log.info("User {} exiting business unit: {}", userId, businessUnitId);
         
         // TODO: Call admin-center API to exit business unit
@@ -67,16 +69,17 @@ public class ExitController {
         // 1. Remove user from business unit
         // 2. Deactivate all BU-Bounded roles for this business unit
         
-        return adminCenterClient.exitBusinessUnit(businessUnitId, userId)
-                .<ResponseEntity<ApiResponse<Map<String, Object>>>>map(data -> ResponseEntity.ok(ApiResponse.success(data)))
-                .orElse(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                        .body(ApiResponse.error("503", "Admin center service unavailable")));
+        if (adminCenterClient.exitBusinessUnit(businessUnitId, userId)) {
+            return ResponseEntity.ok(ApiResponse.success(Map.of()));
+        }
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ApiResponse.error("503", "Admin center service unavailable"));
     }
     
     @GetMapping("/my-memberships")
     @Operation(summary = "Get my memberships", description = "Get current user's virtual group and business unit memberships")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getMyMemberships(
-            @RequestHeader("X-User-Id") String userId) {
+            @CurrentUserId String userId) {
         log.info("Getting memberships for user: {}", userId);
         
         // TODO: Call admin-center API to get user's memberships
@@ -91,7 +94,7 @@ public class ExitController {
     @GetMapping("/exit-history")
     @Operation(summary = "Get exit history", description = "Get current user's exit history")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getExitHistory(
-            @RequestHeader("X-User-Id") String userId) {
+            @CurrentUserId String userId) {
         log.info("Getting exit history for user: {}", userId);
         
         // TODO: Call admin-center API to get user's exit history

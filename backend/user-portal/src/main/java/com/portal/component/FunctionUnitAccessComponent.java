@@ -10,7 +10,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -27,14 +26,31 @@ public class FunctionUnitAccessComponent {
     @Value("${admin-center.url:http://localhost:8090}")
     private String adminCenterUrl;
     
-    // 缓存用户的业务角色ID
-    private final ConcurrentHashMap<String, CachedData<Set<String>>> userRolesCache = new ConcurrentHashMap<>();
+    private static final int MAX_CACHE_SIZE = 500;
+
+    private final Map<String, CachedData<Set<String>>> userRolesCache = Collections.synchronizedMap(
+            new LinkedHashMap<>(64, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, CachedData<Set<String>>> eldest) {
+                    return size() > MAX_CACHE_SIZE;
+                }
+            });
     
-    // 缓存功能单元的访问配置
-    private final ConcurrentHashMap<String, CachedData<Set<String>>> functionUnitAccessCache = new ConcurrentHashMap<>();
+    private final Map<String, CachedData<Set<String>>> functionUnitAccessCache = Collections.synchronizedMap(
+            new LinkedHashMap<>(64, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, CachedData<Set<String>>> eldest) {
+                    return size() > MAX_CACHE_SIZE;
+                }
+            });
     
-    // 缓存 process key → function unit ID 映射
-    private final ConcurrentHashMap<String, CachedData<String>> processKeyCache = new ConcurrentHashMap<>();
+    private final Map<String, CachedData<String>> processKeyCache = Collections.synchronizedMap(
+            new LinkedHashMap<>(64, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(Map.Entry<String, CachedData<String>> eldest) {
+                    return size() > MAX_CACHE_SIZE;
+                }
+            });
     
     private static final long CACHE_TTL = TimeUnit.MINUTES.toMillis(5);
     

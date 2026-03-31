@@ -1,5 +1,6 @@
 package com.portal.property;
 
+import com.portal.client.WorkflowEngineClient;
 import com.portal.component.ChangeHistoryComponent;
 import com.portal.component.ProcessFormComponent;
 import com.portal.component.TaskFormComponent;
@@ -10,6 +11,7 @@ import com.portal.repository.ProcessInstanceRepository;
 import net.jqwik.api.*;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.client.RestTemplate;
 
 import java.time.Instant;
 import java.util.*;
@@ -44,7 +46,8 @@ public class TaskSnapshotIsolationPropertyTest {
         ProcessFormComponent processFormComponent = mock(ProcessFormComponent.class);
 
         TaskFormComponent component = new TaskFormComponent(
-                processFormComponent, changeHistoryComponent, processInstanceRepository) {
+                processFormComponent, changeHistoryComponent, processInstanceRepository,
+                mock(WorkflowEngineClient.class), mock(RestTemplate.class)) {
             @Override
             protected TaskInfo getTaskInfo(String taskId) {
                 if (taskId.equals(config.taskAId)) {

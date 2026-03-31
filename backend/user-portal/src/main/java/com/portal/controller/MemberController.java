@@ -2,6 +2,7 @@ package com.portal.controller;
 
 import com.portal.client.AdminCenterClient;
 import com.portal.dto.ApiResponse;
+import com.portal.security.CurrentUserId;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -31,7 +32,7 @@ public class MemberController {
     @Operation(summary = "Get virtual group members", description = "Get members of a virtual group (approver only)")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getVirtualGroupMembers(
             @PathVariable String groupId,
-            @RequestHeader("X-User-Id") String userId) {
+            @CurrentUserId String userId) {
         log.info("Approver {} getting members of virtual group: {}", userId, groupId);
         
         // TODO: Verify user is approver for this virtual group
@@ -48,7 +49,7 @@ public class MemberController {
     @Operation(summary = "Get business unit members", description = "Get members of a business unit (approver only)")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getBusinessUnitMembers(
             @PathVariable String businessUnitId,
-            @RequestHeader("X-User-Id") String userId) {
+            @CurrentUserId String userId) {
         log.info("Approver {} getting members of business unit: {}", userId, businessUnitId);
         
         // TODO: Verify user is approver for this business unit
@@ -67,15 +68,16 @@ public class MemberController {
             @PathVariable String groupId,
             @PathVariable String targetUserId,
             @RequestBody(required = false) Map<String, Object> request,
-            @RequestHeader("X-User-Id") String userId) {
+            @CurrentUserId String userId) {
         log.info("Approver {} removing user {} from virtual group: {}", userId, targetUserId, groupId);
         
-        String reason = request != null ? (String) request.get("reason") : null;
-        
-        // TODO: Verify user is approver for this virtual group
-        // TODO: Call admin-center API to remove member
-        // DELETE /api/v1/admin/virtual-groups/{groupId}/members/{targetUserId}
-        
+        if (request != null && request.get("reason") != null) {
+            log.debug("Remove VG member reason (not forwarded to admin): {}", request.get("reason"));
+        }
+
+        if (adminCenterClient.removeVirtualGroupMember(groupId, targetUserId)) {
+            return ResponseEntity.ok(ApiResponse.success(Map.of("removed", true)));
+        }
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                 .body(ApiResponse.error("503", "Admin center service unavailable"));
     }
@@ -87,16 +89,37 @@ public class MemberController {
             @PathVariable String targetUserId,
             @PathVariable String roleId,
             @RequestBody(required = false) Map<String, Object> request,
-            @RequestHeader("X-User-Id") String userId) {
+            @CurrentUserId String userId) {
         log.info("Approver {} removing role {} from user {} in business unit: {}", 
                 userId, roleId, targetUserId, businessUnitId);
         
-        String reason = request != null ? (String) request.get("reason") : null;
-        
-        // TODO: Verify user is approver for this business unit
-        // TODO: Call admin-center API to remove role
-        // DELETE /api/v1/admin/business-units/{businessUnitId}/members/{targetUserId}/roles/{roleId}
-        
+        if (request != null && request.get("reason") != null) {
+            log.debug("Remove BU role reason (not forwarded to admin): {}", request.get("reason"));
+        }
+
+        if (adminCenterClient.removeUserBusinessUnitRole(targetUserId, businessUnitId, roleId)) {
+            return ResponseEntity.ok(ApiResponse.success(Map.of("removed", true)));
+        }
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ApiResponse.error("503", "Admin center service unavailable"));
+    }
+
+    @DeleteMapping("/business-units/{businessUnitId}/users/{targetUserId}")
+    @Operation(summary = "Remove business unit member", description = "Remove a user from business unit (approver only)")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> removeBusinessUnitMember(
+            @PathVariable String businessUnitId,
+            @PathVariable String targetUserId,
+            @RequestBody(required = false) Map<String, Object> request,
+            @CurrentUserId String userId) {
+        log.info("Approver {} removing user {} from business unit: {}", userId, targetUserId, businessUnitId);
+
+        if (request != null && request.get("reason") != null) {
+            log.debug("Remove BU member reason (not forwarded to admin): {}", request.get("reason"));
+        }
+
+        if (adminCenterClient.removeBusinessUnitMember(businessUnitId, targetUserId)) {
+            return ResponseEntity.ok(ApiResponse.success(Map.of("removed", true)));
+        }
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                 .body(ApiResponse.error("503", "Admin center service unavailable"));
     }
@@ -104,7 +127,7 @@ public class MemberController {
     @GetMapping("/my-approval-scope")
     @Operation(summary = "Get approval scope", description = "Get virtual groups and business units where user is approver")
     public ResponseEntity<ApiResponse<Map<String, Object>>> getApprovalScope(
-            @RequestHeader("X-User-Id") String userId) {
+            @CurrentUserId String userId) {
         log.info("Getting approval scope for user: {}", userId);
         
         // TODO: Call admin-center API to get user's approval scope

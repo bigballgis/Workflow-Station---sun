@@ -34,21 +34,31 @@ public class WorkflowEngineClient {
     @Value("${workflow-engine.enabled:false}")
     private boolean workflowEngineEnabled;
 
+    private static final long HEALTH_CHECK_CACHE_TTL_MS = 30_000;
+    private volatile boolean cachedAvailable = false;
+    private volatile long lastHealthCheckTime = 0;
+
     /**
-     * 检查 workflow-engine-core 是否可用
+     * 检查 workflow-engine-core 是否可用（带 30 秒缓存）
      */
     public boolean isAvailable() {
         if (!workflowEngineEnabled) {
             return false;
         }
+        long now = System.currentTimeMillis();
+        if (now - lastHealthCheckTime < HEALTH_CHECK_CACHE_TTL_MS) {
+            return cachedAvailable;
+        }
         try {
             String healthUrl = workflowEngineUrl + "/actuator/health";
             ResponseEntity<Map> response = restTemplate.getForEntity(healthUrl, Map.class);
-            return response.getStatusCode().is2xxSuccessful();
+            cachedAvailable = response.getStatusCode().is2xxSuccessful();
         } catch (Exception e) {
             log.debug("Workflow engine not available: {}", e.getMessage());
-            return false;
+            cachedAvailable = false;
         }
+        lastHealthCheckTime = now;
+        return cachedAvailable;
     }
 
     // ==================== 流程部署与启动 ====================
@@ -771,6 +781,36 @@ public class WorkflowEngineClient {
             }
         } catch (Exception e) {
             log.warn("Failed to get process statistics from workflow engine: {}", e.getMessage());
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * 取消（终止）流程实例
+     */
+    public Optional<Map<String, Object>> cancelProcessInstance(String processInstanceId, String reason) {
+        if (!isAvailable()) {
+            return Optional.empty();
+        }
+        try {
+            String url = workflowEngineUrl + "/api/v1/processes/instances/" + processInstanceId;
+            
+            Map<String, Object> request = new HashMap<>();
+            request.put("reason", reason != null ? reason : "User withdrawn");
+            
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
+            
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                url, HttpMethod.DELETE, entity,
+                new ParameterizedTypeReference<Map<String, Object>>() {});
+            
+            if (response.getStatusCode().is2xxSuccessful()) {
+                return Optional.ofNullable(response.getBody());
+            }
+        } catch (Exception e) {
+            log.warn("Failed to cancel process instance in workflow engine: {}", e.getMessage());
         }
         return Optional.empty();
     }

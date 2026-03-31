@@ -2,6 +2,7 @@ package com.portal.controller;
 
 import com.portal.client.AdminCenterClient;
 import com.portal.dto.ApiResponse;
+import com.portal.security.CurrentUserId;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -30,7 +31,7 @@ public class ApprovalController {
     @GetMapping("/pending")
     @Operation(summary = "Get pending approvals", description = "Get pending approval list for current approver")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getPendingApprovals(
-            @RequestHeader("X-User-Id") String userId) {
+            @CurrentUserId String userId) {
         log.info("Getting pending approvals for approver: {}", userId);
         
         // TODO: Call admin-center API to get pending requests for this approver
@@ -47,7 +48,7 @@ public class ApprovalController {
     public ResponseEntity<ApiResponse<Map<String, Object>>> approveRequest(
             @PathVariable String requestId,
             @RequestBody Map<String, Object> request,
-            @RequestHeader("X-User-Id") String userId) {
+            @CurrentUserId String userId) {
         log.info("Approver {} approving request: {}", userId, requestId);
         
         String comment = (String) request.get("comment");
@@ -66,7 +67,7 @@ public class ApprovalController {
     public ResponseEntity<ApiResponse<Map<String, Object>>> rejectRequest(
             @PathVariable String requestId,
             @RequestBody Map<String, Object> request,
-            @RequestHeader("X-User-Id") String userId) {
+            @CurrentUserId String userId) {
         log.info("Approver {} rejecting request: {}", userId, requestId);
         
         String comment = (String) request.get("comment");
@@ -86,7 +87,7 @@ public class ApprovalController {
     @GetMapping("/is-approver")
     @Operation(summary = "Check if user is approver", description = "Check if current user is an approver for any target")
     public ResponseEntity<ApiResponse<Map<String, Object>>> isApprover(
-            @RequestHeader("X-User-Id") String userId) {
+            @CurrentUserId String userId) {
         log.info("Checking if user {} is an approver", userId);
         
         // TODO: Call admin-center API to check if user is any approver
@@ -101,7 +102,7 @@ public class ApprovalController {
     @GetMapping("/history")
     @Operation(summary = "Get approval history", description = "Get approval history for current approver")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getApprovalHistory(
-            @RequestHeader("X-User-Id") String userId,
+            @CurrentUserId String userId,
             @RequestParam(required = false) String status) {
         log.info("Getting approval history for approver: {}, status: {}", userId, status);
         

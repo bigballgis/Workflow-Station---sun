@@ -7,6 +7,7 @@ import com.portal.exception.PortalException;
 import com.portal.repository.ProcessInstanceRepository;
 import net.jqwik.api.*;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.client.RestTemplate;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -44,7 +45,7 @@ public class ProcessFormUpdateRejectionPropertyTest {
         ChangeHistoryComponent changeHistoryComponent = mock(ChangeHistoryComponent.class);
 
         ProcessFormComponent component = new ProcessFormComponent(
-                processInstanceRepository, changeHistoryComponent);
+                processInstanceRepository, changeHistoryComponent, mock(RestTemplate.class));
         ReflectionTestUtils.setField(component, "adminCenterUrl", "http://mock-admin:8090");
 
         ProcessInstance processInstance = ProcessInstance.builder()
@@ -89,7 +90,7 @@ public class ProcessFormUpdateRejectionPropertyTest {
         ChangeHistoryComponent changeHistoryComponent = mock(ChangeHistoryComponent.class);
 
         ProcessFormComponent component = new ProcessFormComponent(
-                processInstanceRepository, changeHistoryComponent);
+                processInstanceRepository, changeHistoryComponent, mock(RestTemplate.class));
         ReflectionTestUtils.setField(component, "adminCenterUrl", "http://mock-admin:8090");
 
         ProcessInstance processInstance = ProcessInstance.builder()

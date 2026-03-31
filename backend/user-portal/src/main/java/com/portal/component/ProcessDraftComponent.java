@@ -25,6 +25,7 @@ public class ProcessDraftComponent {
 
     private final ProcessDraftRepository processDraftRepository;
     private final FunctionUnitAccessComponent functionUnitAccessComponent;
+    private final RestTemplate restTemplate;
 
     @Value("${admin-center.url:http://localhost:8090}")
     private String adminCenterUrl;
@@ -119,7 +120,6 @@ public class ProcessDraftComponent {
     private String resolveFunctionUnitName(String processDefinitionKey) {
         try {
             String functionUnitId = functionUnitAccessComponent.resolveFunctionUnitId(processDefinitionKey);
-            RestTemplate restTemplate = new RestTemplate();
             String url = adminCenterUrl + "/api/v1/admin/function-units/" + functionUnitId + "/content";
 
             @SuppressWarnings("unchecked")

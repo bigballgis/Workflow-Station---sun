@@ -106,12 +106,33 @@ public class AdminCenterClient {
 
     // ==================== Exit ====================
 
-    public Optional<Map<String, Object>> exitVirtualGroup(String groupId, String userId) {
-        return post("/api/v1/admin/members/exit/virtual-group/" + groupId + "?userId=" + userId, Map.of());
+    /**
+     * 用户退出虚拟组（admin 返回 200 且无 body，须用 void 判断成功）。
+     */
+    public boolean exitVirtualGroup(String groupId, String userId) {
+        return postVoid("/api/v1/admin/exit/virtual-groups/" + groupId + "/users/" + userId, Map.of());
     }
 
-    public Optional<Map<String, Object>> exitBusinessUnit(String businessUnitId, String userId) {
-        return post("/api/v1/admin/members/exit/business-unit/" + businessUnitId + "?userId=" + userId, Map.of());
+    /**
+     * 用户退出业务单元（同上）。
+     */
+    public boolean exitBusinessUnit(String businessUnitId, String userId) {
+        return postVoid("/api/v1/admin/exit/business-units/" + businessUnitId + "/users/" + userId, Map.of());
+    }
+
+    /** 审批人从虚拟组移除成员 */
+    public boolean removeVirtualGroupMember(String groupId, String targetUserId) {
+        return deleteVoid("/api/v1/admin/virtual-groups/" + groupId + "/members/" + targetUserId);
+    }
+
+    /** 审批人从业务单元移除成员（整单元） */
+    public boolean removeBusinessUnitMember(String unitId, String targetUserId) {
+        return deleteVoid("/api/v1/admin/business-units/" + unitId + "/members/" + targetUserId);
+    }
+
+    /** 移除用户在业务单元下的某一角色绑定 */
+    public boolean removeUserBusinessUnitRole(String userId, String businessUnitId, String roleId) {
+        return deleteVoid("/api/v1/admin/users/" + userId + "/business-unit-roles/" + businessUnitId + "/" + roleId);
     }
 
     public Optional<Map<String, Object>> getUserMemberships(String userId) {
@@ -174,6 +195,31 @@ public class AdminCenterClient {
         } catch (Exception e) {
             log.warn("Admin center POST {} failed: {}", path, e.getMessage());
             return Optional.empty();
+        }
+    }
+
+    private boolean postVoid(String path, Map<String, Object> body) {
+        try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(body, headers);
+            ResponseEntity<Void> response = restTemplate.exchange(
+                    adminCenterUrl + path, HttpMethod.POST, entity, Void.class);
+            return response.getStatusCode().is2xxSuccessful();
+        } catch (Exception e) {
+            log.warn("Admin center POST {} failed: {}", path, e.getMessage());
+            return false;
+        }
+    }
+
+    private boolean deleteVoid(String path) {
+        try {
+            ResponseEntity<Void> response = restTemplate.exchange(
+                    adminCenterUrl + path, HttpMethod.DELETE, null, Void.class);
+            return response.getStatusCode().is2xxSuccessful();
+        } catch (Exception e) {
+            log.warn("Admin center DELETE {} failed: {}", path, e.getMessage());
+            return false;
         }
     }
 }

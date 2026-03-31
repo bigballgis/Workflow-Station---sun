@@ -244,6 +244,25 @@ public class VirtualGroupAccessComponent {
             return null;
         }
     }
+
+    /**
+     * 业务单元已绑定的业务角色（与 admin {@code GET /business-units/{unitId}/roles} 对齐）
+     */
+    public List<Map<String, Object>> getBusinessUnitBoundRoles(String businessUnitId) {
+        try {
+            String url = adminCenterUrl + "/api/v1/admin/business-units/" + businessUnitId + "/roles";
+            ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<List<Map<String, Object>>>() {}
+            );
+            return response.getBody() != null ? response.getBody() : Collections.emptyList();
+        } catch (Exception e) {
+            log.error("Failed to get bound roles for business unit {}: {}", businessUnitId, e.getMessage());
+            return Collections.emptyList();
+        }
+    }
     
     /**
      * 获取用户当前的业务单元成员身份

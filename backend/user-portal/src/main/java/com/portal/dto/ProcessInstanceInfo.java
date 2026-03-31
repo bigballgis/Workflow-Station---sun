@@ -20,6 +20,9 @@ public class ProcessInstanceInfo {
     private String businessKey;
     private LocalDateTime startTime;
     private LocalDateTime endTime;
+    /** 流程完成时间（库列 completed_at，与 endTime 同步维护时语义一致） */
+    private LocalDateTime completedAt;
+    private String title;
     private String status;
     private String startUserId;
     private String startUserName;

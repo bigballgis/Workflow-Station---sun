@@ -4,9 +4,11 @@ import com.portal.component.ChangeHistoryComponent;
 import com.portal.component.ProcessFormComponent;
 import com.portal.component.TaskFormComponent;
 import com.portal.exception.PortalException;
+import com.portal.client.WorkflowEngineClient;
 import com.portal.repository.ProcessInstanceRepository;
 import net.jqwik.api.*;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.client.RestTemplate;
 
 import java.util.Optional;
 
@@ -37,7 +39,7 @@ public class ResourceNotFoundPropertyTest {
         ChangeHistoryComponent changeHistoryComponent = mock(ChangeHistoryComponent.class);
 
         ProcessFormComponent component = new ProcessFormComponent(
-                processInstanceRepository, changeHistoryComponent);
+                processInstanceRepository, changeHistoryComponent, mock(RestTemplate.class));
         ReflectionTestUtils.setField(component, "adminCenterUrl", "http://mock-admin:8090");
 
         // Process instance does not exist
@@ -69,7 +71,7 @@ public class ResourceNotFoundPropertyTest {
         ChangeHistoryComponent changeHistoryComponent = mock(ChangeHistoryComponent.class);
 
         ProcessFormComponent component = new ProcessFormComponent(
-                processInstanceRepository, changeHistoryComponent);
+                processInstanceRepository, changeHistoryComponent, mock(RestTemplate.class));
         ReflectionTestUtils.setField(component, "adminCenterUrl", "http://mock-admin:8090");
 
         when(processInstanceRepository.findById(processInstanceId))
@@ -102,7 +104,8 @@ public class ResourceNotFoundPropertyTest {
         ProcessInstanceRepository processInstanceRepository = mock(ProcessInstanceRepository.class);
 
         TaskFormComponent component = new TaskFormComponent(
-                processFormComponent, changeHistoryComponent, processInstanceRepository);
+                processFormComponent, changeHistoryComponent, processInstanceRepository,
+                mock(WorkflowEngineClient.class), mock(RestTemplate.class));
         ReflectionTestUtils.setField(component, "developerWorkstationUrl", "http://mock-dw:8091");
 
         // TaskFormComponent.getTaskInfo throws 404 for unknown tasks (Flowable integration pending)
@@ -130,7 +133,8 @@ public class ResourceNotFoundPropertyTest {
         ProcessInstanceRepository processInstanceRepository = mock(ProcessInstanceRepository.class);
 
         TaskFormComponent component = new TaskFormComponent(
-                processFormComponent, changeHistoryComponent, processInstanceRepository);
+                processFormComponent, changeHistoryComponent, processInstanceRepository,
+                mock(WorkflowEngineClient.class), mock(RestTemplate.class));
         ReflectionTestUtils.setField(component, "developerWorkstationUrl", "http://mock-dw:8091");
 
         assertThatThrownBy(() -> component.getCompletedTaskFormData(taskId))

@@ -108,7 +108,7 @@ public class ConcurrentModificationFlagPropertyTest {
     private TaskFormComponent createMinimalComponent() {
         // TaskFormComponent constructor requires dependencies, but detectConcurrentModifications
         // is a pure function that doesn't use them
-        return new TaskFormComponent(null, null, null);
+        return new TaskFormComponent(null, null, null, null, null);
     }
 
     // ========== Data classes ==========

@@ -46,7 +46,10 @@ public class N8nActionController {
      */
     @Operation(summary = "执行 N8N Action", description = "触发 N8N 工作流执行并同步等待结果")
     @PostMapping("/execute")
-    public ApiResponse<Map<String, Object>> executeAction(@RequestBody Map<String, Object> requestBody) {
+    public ApiResponse<Map<String, Object>> executeAction(
+            @RequestHeader("X-User-Id") String userId,
+            @RequestBody Map<String, Object> requestBody) {
+        log.info("N8N action executed by user: {}", userId);
         String actionDefinitionId = String.valueOf(requestBody.get("actionDefinitionId"));
         String taskId = String.valueOf(requestBody.getOrDefault("taskId", ""));
         String processInstanceId = String.valueOf(requestBody.getOrDefault("processInstanceId", ""));

@@ -2,6 +2,7 @@ package com.portal.controller;
 
 import com.portal.component.DelegationComponent;
 import com.portal.dto.ApiResponse;
+import com.portal.security.CurrentUserId;
 import com.portal.dto.DelegationRuleRequest;
 import com.portal.dto.PageResponse;
 import com.portal.entity.DelegationAudit;
@@ -32,7 +33,7 @@ public class DelegationController {
     @Operation(summary = "获取委托规则列表")
     @GetMapping
     public ApiResponse<List<DelegationRule>> getDelegationRules(
-            @RequestHeader("X-User-Id") String userId) {
+            @CurrentUserId String userId) {
         List<DelegationRule> rules = delegationComponent.getDelegationRules(userId);
         return ApiResponse.success(rules);
     }
@@ -40,7 +41,7 @@ public class DelegationController {
     @Operation(summary = "获取有效委托规则")
     @GetMapping("/active")
     public ApiResponse<List<DelegationRule>> getActiveDelegationRules(
-            @RequestHeader("X-User-Id") String userId) {
+            @CurrentUserId String userId) {
         List<DelegationRule> rules = delegationComponent.getActiveDelegationRules(userId);
         return ApiResponse.success(rules);
     }
@@ -48,7 +49,7 @@ public class DelegationController {
     @Operation(summary = "创建委托规则")
     @PostMapping
     public ApiResponse<DelegationRule> createDelegationRule(
-            @RequestHeader("X-User-Id") String userId,
+            @CurrentUserId String userId,
             @Valid @RequestBody DelegationRuleRequest request) {
         DelegationRule rule = delegationComponent.createDelegationRule(userId, request);
         return ApiResponse.success(i18nService.getMessage("portal.delegation_created"), rule);
@@ -58,7 +59,7 @@ public class DelegationController {
     @PutMapping("/{ruleId}")
     public ApiResponse<DelegationRule> updateDelegationRule(
             @PathVariable Long ruleId,
-            @RequestHeader("X-User-Id") String userId,
+            @CurrentUserId String userId,
             @Valid @RequestBody DelegationRuleRequest request) {
         DelegationRule rule = delegationComponent.updateDelegationRule(ruleId, userId, request);
         return ApiResponse.success(i18nService.getMessage("portal.delegation_updated"), rule);
@@ -68,7 +69,7 @@ public class DelegationController {
     @DeleteMapping("/{ruleId}")
     public ApiResponse<Void> deleteDelegationRule(
             @PathVariable Long ruleId,
-            @RequestHeader("X-User-Id") String userId) {
+            @CurrentUserId String userId) {
         delegationComponent.deleteDelegationRule(ruleId, userId);
         return ApiResponse.success(i18nService.getMessage("portal.delegation_deleted"), null);
     }
@@ -77,7 +78,7 @@ public class DelegationController {
     @PostMapping("/{ruleId}/suspend")
     public ApiResponse<DelegationRule> suspendDelegationRule(
             @PathVariable Long ruleId,
-            @RequestHeader("X-User-Id") String userId) {
+            @CurrentUserId String userId) {
         DelegationRule rule = delegationComponent.suspendDelegationRule(ruleId, userId);
         return ApiResponse.success(i18nService.getMessage("portal.delegation_suspended"), rule);
     }
@@ -86,7 +87,7 @@ public class DelegationController {
     @PostMapping("/{ruleId}/resume")
     public ApiResponse<DelegationRule> resumeDelegationRule(
             @PathVariable Long ruleId,
-            @RequestHeader("X-User-Id") String userId) {
+            @CurrentUserId String userId) {
         DelegationRule rule = delegationComponent.resumeDelegationRule(ruleId, userId);
         return ApiResponse.success(i18nService.getMessage("portal.delegation_resumed"), rule);
     }
@@ -94,7 +95,7 @@ public class DelegationController {
     @Operation(summary = "获取代理任务（委托给我的）")
     @GetMapping("/proxy-tasks")
     public ApiResponse<List<DelegationRule>> getProxyTasks(
-            @RequestHeader("X-User-Id") String userId) {
+            @CurrentUserId String userId) {
         List<DelegationRule> delegations = delegationComponent.getDelegationsForDelegate(userId);
         return ApiResponse.success(delegations);
     }
@@ -102,7 +103,7 @@ public class DelegationController {
     @Operation(summary = "获取委托人ID列表")
     @GetMapping("/delegators")
     public ApiResponse<List<String>> getDelegatorIds(
-            @RequestHeader("X-User-Id") String userId) {
+            @CurrentUserId String userId) {
         List<String> delegatorIds = delegationComponent.getDelegatorIds(userId);
         return ApiResponse.success(delegatorIds);
     }
@@ -110,7 +111,7 @@ public class DelegationController {
     @Operation(summary = "检查代理权限")
     @GetMapping("/check-proxy")
     public ApiResponse<Boolean> checkProxyPermission(
-            @RequestHeader("X-User-Id") String userId,
+            @CurrentUserId String userId,
             @RequestParam String delegatorId,
             @RequestParam(required = false) String processType,
             @RequestParam(required = false) String priority) {
@@ -122,7 +123,7 @@ public class DelegationController {
     @Operation(summary = "获取委托审计记录")
     @GetMapping("/audit")
     public ApiResponse<PageResponse<DelegationAudit>> getDelegationAuditRecords(
-            @RequestHeader("X-User-Id") String userId,
+            @CurrentUserId String userId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         Page<DelegationAudit> auditPage = delegationComponent.getDelegationAuditRecords(

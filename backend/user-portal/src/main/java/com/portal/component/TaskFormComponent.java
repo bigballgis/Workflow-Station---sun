@@ -1,5 +1,6 @@
 package com.portal.component;
 
+import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.*;
 import com.portal.entity.ProcessInstance;
 import com.portal.exception.PortalException;
@@ -27,6 +28,8 @@ public class TaskFormComponent {
     private final ProcessFormComponent processFormComponent;
     private final ChangeHistoryComponent changeHistoryComponent;
     private final ProcessInstanceRepository processInstanceRepository;
+    private final WorkflowEngineClient workflowEngineClient;
+    private final RestTemplate restTemplate;
 
     @Value("${developer-workstation.url:http://localhost:8091}")
     private String developerWorkstationUrl;
@@ -409,18 +412,27 @@ public class TaskFormComponent {
 
     /**
      * 获取任务信息（taskDefinitionKey, processInstanceId）
-     * TODO: 实际集成时从 Flowable TaskService 获取
+     * 通过 WorkflowEngineClient 从 Flowable 获取任务详情
      */
+    @SuppressWarnings("unchecked")
     protected TaskInfo getTaskInfo(String taskId) {
-        // TODO: Replace with actual Flowable integration
-        // org.flowable.task.api.Task task = taskService.createTaskQuery()
-        //     .taskId(taskId).singleResult();
-        // return new TaskInfo(task.getTaskDefinitionKey(), task.getProcessInstanceId());
-
-        // For now, parse taskId or use a lookup mechanism
-        // In tests, this will be overridden or mocked
-        throw new PortalException("404", "Task not found: " + taskId
-                + " (Flowable integration pending)");
+        if (workflowEngineClient.isAvailable()) {
+            Optional<Map<String, Object>> result = workflowEngineClient.getTaskById(taskId);
+            if (result.isPresent()) {
+                Map<String, Object> body = result.get();
+                Map<String, Object> data = body.containsKey("data") 
+                        ? (Map<String, Object>) body.get("data") : body;
+                
+                String taskDefinitionKey = (String) data.get("taskDefinitionKey");
+                String processInstanceId = (String) data.get("processInstanceId");
+                
+                if (taskDefinitionKey != null && processInstanceId != null) {
+                    return new TaskInfo(taskDefinitionKey, processInstanceId);
+                }
+            }
+        }
+        
+        throw new PortalException("404", "Task not found: " + taskId);
     }
 
     /**
@@ -430,7 +442,6 @@ public class TaskFormComponent {
     @SuppressWarnings("unchecked")
     private Map<String, Object> fetchTaskFormByStageId(String stageId) {
         try {
-            RestTemplate restTemplate = new RestTemplate();
             String url = developerWorkstationUrl + "/api/v1/form-stage-bindings?stageId=" + stageId;
             log.debug("Fetching Task Form definition from: {}", url);
 

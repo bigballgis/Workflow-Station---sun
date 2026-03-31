@@ -3,6 +3,7 @@ package com.portal.controller;
 import com.portal.component.TaskProcessComponent;
 import com.portal.component.TaskQueryComponent;
 import com.portal.dto.*;
+import com.portal.security.CurrentUserId;
 import com.platform.common.i18n.I18nService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -41,7 +42,7 @@ public class TaskController {
     @Operation(summary = "查询待办任务列表")
     @PostMapping("/query")
     public ApiResponse<PageResponse<TaskInfo>> queryTasks(
-            @RequestHeader(value = "X-User-Id", required = false) String userId,
+            @CurrentUserId String userId,
             @RequestBody @Valid TaskQueryRequest request) {
         // 如果请求中没有userId，使用header中的
         if (request.getUserId() == null && userId != null) {
@@ -53,9 +54,15 @@ public class TaskController {
 
     @Operation(summary = "获取任务详情")
     @GetMapping("/{taskId}")
-    public ApiResponse<TaskInfo> getTaskDetail(@PathVariable String taskId) {
+    public ApiResponse<TaskInfo> getTaskDetail(
+            @CurrentUserId String userId,
+            @PathVariable String taskId) {
         TaskInfo task = taskQueryComponent.getTaskById(taskId)
                 .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
+        if (userId != null && task.getAssignee() != null && !userId.equals(task.getAssignee())) {
+            log.warn("User {} attempted to access task {} assigned to {}", userId, taskId, task.getAssignee());
+            return ApiResponse.error("403", "You are not the assignee of this task");
+        }
         return ApiResponse.success(task);
     }
 
@@ -70,7 +77,7 @@ public class TaskController {
     @PostMapping("/{taskId}/claim")
     public ApiResponse<TaskInfo> claimTask(
             @PathVariable String taskId,
-            @RequestHeader("X-User-Id") String userId) {
+            @CurrentUserId String userId) {
         TaskInfo task = taskProcessComponent.claimTask(taskId, userId);
         return ApiResponse.success(i18nService.getMessage("portal.task_claimed"), task);
     }
@@ -79,7 +86,7 @@ public class TaskController {
     @PostMapping("/{taskId}/unclaim")
     public ApiResponse<TaskInfo> unclaimTask(
             @PathVariable String taskId,
-            @RequestHeader("X-User-Id") String userId,
+            @CurrentUserId String userId,
             @RequestParam String originalAssignmentType,
             @RequestParam String originalAssignee) {
         TaskInfo task = taskProcessComponent.unclaimTask(taskId, userId, originalAssignmentType, originalAssignee);
@@ -90,7 +97,7 @@ public class TaskController {
     @PostMapping("/{taskId}/complete")
     public ApiResponse<Void> completeTask(
             @PathVariable String taskId,
-            @RequestHeader("X-User-Id") String userId,
+            @CurrentUserId String userId,
             @Valid @RequestBody TaskCompleteRequest request) {
         request.setTaskId(taskId);
         taskProcessComponent.completeTask(request, userId);
@@ -101,7 +108,7 @@ public class TaskController {
     @PostMapping("/{taskId}/delegate")
     public ApiResponse<Void> delegateTask(
             @PathVariable String taskId,
-            @RequestHeader("X-User-Id") String userId,
+            @CurrentUserId String userId,
             @RequestParam String delegateId,
             @RequestParam(required = false) String reason) {
         taskProcessComponent.delegateTask(taskId, userId, delegateId, reason);
@@ -112,7 +119,7 @@ public class TaskController {
     @PostMapping("/{taskId}/transfer")
     public ApiResponse<Void> transferTask(
             @PathVariable String taskId,
-            @RequestHeader("X-User-Id") String userId,
+            @CurrentUserId String userId,
             @RequestParam String toUserId,
             @RequestParam(required = false) String reason) {
         taskProcessComponent.transferTask(taskId, userId, toUserId, reason);
@@ -123,7 +130,7 @@ public class TaskController {
     @PostMapping("/{taskId}/urge")
     public ApiResponse<Void> urgeTask(
             @PathVariable String taskId,
-            @RequestHeader("X-User-Id") String userId,
+            @CurrentUserId String userId,
             @RequestParam(required = false) String message) {
         taskProcessComponent.urgeTask(taskId, userId, message);
         return ApiResponse.success(i18nService.getMessage("portal.task_urged"), null);
@@ -132,7 +139,7 @@ public class TaskController {
     @Operation(summary = "批量催办任务")
     @PostMapping("/batch/urge")
     public ApiResponse<Void> batchUrgeTasks(
-            @RequestHeader("X-User-Id") String userId,
+            @CurrentUserId String userId,
             @RequestBody @Valid TaskBatchUrgeRequest request) {
         taskProcessComponent.batchUrgeTasks(request.getTaskIds(), userId, request.getMessage());
         return ApiResponse.success(i18nService.getMessage("portal.batch_urged"), null);
@@ -141,7 +148,7 @@ public class TaskController {
     @Operation(summary = "获取任务统计")
     @GetMapping("/statistics")
     public ApiResponse<TaskStatistics> getTaskStatistics(
-            @RequestHeader("X-User-Id") String userId) {
+            @CurrentUserId String userId) {
         TaskStatistics statistics = taskQueryComponent.getTaskStatistics(userId);
         return ApiResponse.success(statistics);
     }
@@ -149,7 +156,7 @@ public class TaskController {
     @Operation(summary = "查询已处理任务列表")
     @PostMapping("/completed/query")
     public ApiResponse<PageResponse<TaskInfo>> queryCompletedTasks(
-            @RequestHeader(value = "X-User-Id", required = false) String userId,
+            @CurrentUserId String userId,
             @RequestBody @Valid TaskQueryRequest request) {
         // 如果请求中没有userId，使用header中的
         if (request.getUserId() == null && userId != null) {

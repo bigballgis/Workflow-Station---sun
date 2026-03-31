@@ -5,6 +5,7 @@ import com.portal.component.ProcessComponent;
 import com.portal.dto.*;
 import com.portal.entity.ActionDefinition;
 import com.portal.entity.ProcessDraft;
+import com.portal.security.CurrentUserId;
 import com.platform.common.i18n.I18nService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -32,7 +33,7 @@ public class ProcessController {
     @GetMapping("/definitions")
     @Operation(summary = "获取可发起的流程定义列表")
     public ApiResponse<List<ProcessDefinitionInfo>> getDefinitions(
-            @RequestHeader("X-User-Id") String userId,
+            @CurrentUserId String userId,
             @RequestParam(required = false) String category,
             @RequestParam(required = false) String keyword) {
         List<ProcessDefinitionInfo> definitions = processComponent.getAvailableProcessDefinitions(userId, category, keyword);
@@ -42,7 +43,7 @@ public class ProcessController {
     @GetMapping("/startable")
     @Operation(summary = "获取可发起的流程列表", description = "获取所有已部署且启用的流程")
     public ApiResponse<List<ProcessDefinitionInfo>> getStartableProcesses(
-            @RequestHeader(value = "X-User-Id", required = false) String userId,
+            @CurrentUserId String userId,
             @RequestParam(required = false) String category,
             @RequestParam(required = false) String keyword) {
         String effectiveUserId = userId != null ? userId : "anonymous";
@@ -53,7 +54,7 @@ public class ProcessController {
     @GetMapping("/function-units/{functionUnitId}/content")
     @Operation(summary = "获取功能单元完整内容", description = "获取功能单元的BPMN流程、表单定义等完整内容。注意：此端点不检查功能单元访问权限，因为任务处理权限由任务分配机制控制")
     public ApiResponse<Map<String, Object>> getFunctionUnitContent(
-            @RequestHeader(value = "X-User-Id", required = false) String userId,
+            @CurrentUserId String userId,
             @PathVariable String functionUnitId) {
         // 不检查功能单元访问权限，因为：
         // 1. 任务处理权限由 Flowable 的任务分配机制控制（assignee、候选人、候选组）
@@ -66,7 +67,7 @@ public class ProcessController {
     @GetMapping("/function-units/{functionUnitId}/contents")
     @Operation(summary = "获取功能单元特定类型的内容", description = "获取功能单元的特定类型内容（如表单、流程等），用于表单弹窗等场景")
     public ApiResponse<List<Map<String, Object>>> getFunctionUnitContentsByType(
-            @RequestHeader(value = "X-User-Id", required = false) String userId,
+            @CurrentUserId String userId,
             @PathVariable String functionUnitId,
             @RequestParam String contentType) {
         List<Map<String, Object>> contents = processComponent.getFunctionUnitContents(functionUnitId, contentType);
@@ -80,7 +81,7 @@ public class ProcessController {
     @GetMapping("/fu-data/{functionUnitId}")
     @Operation(summary = "获取功能单元特定类型的内容", description = "获取功能单元的特定类型内容（如表单、流程等），用于表单弹窗等场景")
     public ApiResponse<List<Map<String, Object>>> getFunctionUnitData(
-            @RequestHeader(value = "X-User-Id", required = false) String userId,
+            @CurrentUserId String userId,
             @PathVariable String functionUnitId,
             @RequestParam String contentType) {
         List<Map<String, Object>> contents = processComponent.getFunctionUnitContents(functionUnitId, contentType);
@@ -94,7 +95,7 @@ public class ProcessController {
     @GetMapping("/function-unit-contents/{functionUnitId}")
     @Operation(summary = "获取功能单元特定类型的内容", description = "获取功能单元的特定类型内容（如表单、流程等），用于表单弹窗等场景")
     public ApiResponse<List<Map<String, Object>>> getFunctionUnitContents(
-            @RequestHeader(value = "X-User-Id", required = false) String userId,
+            @CurrentUserId String userId,
             @PathVariable String functionUnitId,
             @RequestParam String contentType) {
         List<Map<String, Object>> contents = processComponent.getFunctionUnitContents(functionUnitId, contentType);
@@ -130,7 +131,7 @@ public class ProcessController {
     @PostMapping("/{processKey}/start")
     @Operation(summary = "发起流程")
     public ApiResponse<ProcessInstanceInfo> startProcess(
-            @RequestHeader("X-User-Id") String userId,
+            @CurrentUserId String userId,
             @PathVariable String processKey,
             @RequestBody @Valid ProcessStartRequest request) {
         ProcessInstanceInfo instance = processComponent.startProcess(userId, processKey, request);
@@ -140,7 +141,7 @@ public class ProcessController {
     @GetMapping("/my-applications")
     @Operation(summary = "获取我的申请列表")
     public ApiResponse<PageResponse<ProcessInstanceInfo>> getMyApplications(
-            @RequestHeader("X-User-Id") String userId,
+            @CurrentUserId String userId,
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
@@ -150,15 +151,25 @@ public class ProcessController {
 
     @GetMapping("/{processId}")
     @Operation(summary = "获取流程详情")
-    public ApiResponse<ProcessInstanceInfo> getProcessDetail(@PathVariable String processId) {
+    public ApiResponse<ProcessInstanceInfo> getProcessDetail(
+            @CurrentUserId String userId,
+            @PathVariable String processId) {
         ProcessInstanceInfo detail = processComponent.getProcessDetail(processId);
+        if (detail != null && userId != null) {
+            boolean isParticipant = userId.equals(detail.getStartUserId())
+                    || userId.equals(detail.getCurrentAssignee());
+            if (!isParticipant) {
+                log.warn("User {} attempted to access process {} without being a participant", userId, processId);
+                return ApiResponse.error("403", "You are not a participant of this process");
+            }
+        }
         return ApiResponse.success(detail);
     }
 
     @PostMapping("/{processId}/withdraw")
     @Operation(summary = "撤回流程")
     public ApiResponse<Void> withdrawProcess(
-            @RequestHeader("X-User-Id") String userId,
+            @CurrentUserId String userId,
             @PathVariable String processId,
             @RequestBody Map<String, String> body) {
         String reason = body.get("reason");
@@ -172,7 +183,7 @@ public class ProcessController {
     @PostMapping("/{processId}/urge")
     @Operation(summary = "催办流程")
     public ApiResponse<Void> urgeProcess(
-            @RequestHeader("X-User-Id") String userId,
+            @CurrentUserId String userId,
             @PathVariable String processId) {
         boolean success = processComponent.urgeProcess(userId, processId);
         if (success) {
@@ -184,7 +195,7 @@ public class ProcessController {
     @PostMapping("/{processKey}/favorite")
     @Operation(summary = "切换收藏状态")
     public ApiResponse<Boolean> toggleFavorite(
-            @RequestHeader("X-User-Id") String userId,
+            @CurrentUserId String userId,
             @PathVariable String processKey) {
         boolean isFavorite = processComponent.toggleFavorite(userId, processKey);
         return ApiResponse.success(isFavorite);
@@ -193,7 +204,7 @@ public class ProcessController {
     @PostMapping("/{processKey}/draft")
     @Operation(summary = "保存草稿")
     public ApiResponse<ProcessDraft> saveDraft(
-            @RequestHeader("X-User-Id") String userId,
+            @CurrentUserId String userId,
             @PathVariable String processKey,
             @RequestBody Map<String, Object> formData) {
         ProcessDraft draft = processComponent.saveDraft(userId, processKey, formData);
@@ -203,7 +214,7 @@ public class ProcessController {
     @GetMapping("/{processKey}/draft")
     @Operation(summary = "获取草稿")
     public ApiResponse<ProcessDraft> getDraft(
-            @RequestHeader("X-User-Id") String userId,
+            @CurrentUserId String userId,
             @PathVariable String processKey) {
         return processComponent.getDraft(userId, processKey)
                 .map(ApiResponse::success)
@@ -213,7 +224,7 @@ public class ProcessController {
     @DeleteMapping("/{processKey}/draft")
     @Operation(summary = "删除草稿")
     public ApiResponse<Void> deleteDraft(
-            @RequestHeader("X-User-Id") String userId,
+            @CurrentUserId String userId,
             @PathVariable String processKey) {
         processComponent.deleteDraft(userId, processKey);
         return ApiResponse.success(null);
@@ -222,7 +233,7 @@ public class ProcessController {
     @GetMapping("/drafts")
     @Operation(summary = "获取草稿列表")
     public ApiResponse<List<Map<String, Object>>> getDraftList(
-            @RequestHeader("X-User-Id") String userId) {
+            @CurrentUserId String userId) {
         List<Map<String, Object>> drafts = processComponent.getDraftList(userId);
         return ApiResponse.success(drafts);
     }
@@ -230,7 +241,7 @@ public class ProcessController {
     @DeleteMapping("/drafts/{draftId}")
     @Operation(summary = "根据ID删除草稿")
     public ApiResponse<Void> deleteDraftById(
-            @RequestHeader("X-User-Id") String userId,
+            @CurrentUserId String userId,
             @PathVariable Long draftId) {
         processComponent.deleteDraftById(userId, draftId);
         return ApiResponse.success(null);
@@ -239,7 +250,19 @@ public class ProcessController {
     @GetMapping("/{processId}/history")
     @Operation(summary = "获取流程历史记录")
     public ApiResponse<List<Map<String, Object>>> getProcessHistory(
+            @CurrentUserId String userId,
             @PathVariable String processId) {
+        if (userId != null) {
+            ProcessInstanceInfo detail = processComponent.getProcessDetail(processId);
+            if (detail != null) {
+                boolean isParticipant = userId.equals(detail.getStartUserId())
+                        || userId.equals(detail.getCurrentAssignee());
+                if (!isParticipant) {
+                    log.warn("User {} attempted to access process history {} without being a participant", userId, processId);
+                    return ApiResponse.error("403", "You are not a participant of this process");
+                }
+            }
+        }
         log.debug("ProcessController.getProcessHistory called with processId: {}", processId);
         List<Map<String, Object>> history = processComponent.getProcessHistory(processId);
         log.debug("ProcessController.getProcessHistory returning {} records", history.size());
@@ -250,7 +273,12 @@ public class ProcessController {
     @Operation(summary = "流程完成通知", description = "由 workflow-engine 调用，通知流程已完成")
     public ApiResponse<Void> processCompleted(
             @PathVariable String processId,
+            @RequestHeader(value = "X-Internal-Service-Token", required = false) String serviceToken,
             @RequestBody Map<String, Object> request) {
+        if (serviceToken == null || serviceToken.isBlank()) {
+            log.warn("processCompleted called without X-Internal-Service-Token for processId: {}", processId);
+            return ApiResponse.error("403", "Forbidden: missing internal service token");
+        }
         log.debug("ProcessController.processCompleted called for processId: {}", processId);
         String lastActivityName = (String) request.get("lastActivityName");
         processComponent.markProcessAsCompleted(processId, lastActivityName);

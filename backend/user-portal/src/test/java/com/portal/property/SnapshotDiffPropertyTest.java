@@ -1,10 +1,12 @@
 package com.portal.property;
 
+import com.portal.client.WorkflowEngineClient;
 import com.portal.component.ChangeHistoryComponent;
 import com.portal.component.ProcessFormComponent;
 import com.portal.component.TaskFormComponent;
 import com.portal.repository.ProcessInstanceRepository;
 import net.jqwik.api.*;
+import org.springframework.web.client.RestTemplate;
 
 import java.util.*;
 
@@ -38,7 +40,8 @@ public class SnapshotDiffPropertyTest {
         ProcessFormComponent processFormComponent = mock(ProcessFormComponent.class);
 
         TaskFormComponent component = new TaskFormComponent(
-                processFormComponent, changeHistoryComponent, processInstanceRepository);
+                processFormComponent, changeHistoryComponent, processInstanceRepository,
+                mock(WorkflowEngineClient.class), mock(RestTemplate.class));
 
         // Calculate expected diff count manually
         int expectedDiffs = 0;
@@ -74,7 +77,8 @@ public class SnapshotDiffPropertyTest {
         ProcessFormComponent processFormComponent = mock(ProcessFormComponent.class);
 
         TaskFormComponent component = new TaskFormComponent(
-                processFormComponent, changeHistoryComponent, processInstanceRepository);
+                processFormComponent, changeHistoryComponent, processInstanceRepository,
+                mock(WorkflowEngineClient.class), mock(RestTemplate.class));
 
         // Same values for snapshot and live
         int diffs = component.countSnapshotDiffs(values, new HashMap<>(values));
@@ -99,7 +103,8 @@ public class SnapshotDiffPropertyTest {
         ProcessFormComponent processFormComponent = mock(ProcessFormComponent.class);
 
         TaskFormComponent component = new TaskFormComponent(
-                processFormComponent, changeHistoryComponent, processInstanceRepository);
+                processFormComponent, changeHistoryComponent, processInstanceRepository,
+                mock(WorkflowEngineClient.class), mock(RestTemplate.class));
 
         int diffs = component.countSnapshotDiffs(config.snapshotValues, config.liveValues);
 

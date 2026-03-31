@@ -16,7 +16,7 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.stream.Collectors;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Dashboard组件
@@ -123,10 +123,11 @@ public class DashboardComponent {
         long teamOverdueCount = overdueCount;
         long teamCompletedTodayCount = completedTodayCount;
 
+        final int MAX_TEAM_MEMBERS = 20;
+        
         try {
             List<UserBusinessUnit> userBUs = userBusinessUnitRepository.findByUserId(userId);
             if (!userBUs.isEmpty()) {
-                // Collect all BU IDs (user's BUs + recursive children)
                 Set<String> allBuIds = new HashSet<>();
                 for (UserBusinessUnit ubu : userBUs) {
                     String buId = ubu.getBusinessUnitId();
@@ -134,43 +135,61 @@ public class DashboardComponent {
                     collectChildBuIds(buId, allBuIds);
                 }
 
-                // Collect all team member userIds (deduplicated)
                 List<UserBusinessUnit> allMembers = userBusinessUnitRepository
                         .findByBusinessUnitIdIn(new ArrayList<>(allBuIds));
-                Set<String> teamMemberIds = allMembers.stream()
+                List<String> teamMemberIds = allMembers.stream()
                         .map(UserBusinessUnit::getUserId)
-                        .collect(Collectors.toSet());
+                        .distinct()
+                        .limit(MAX_TEAM_MEMBERS)
+                        .toList();
 
-                // Aggregate team pending and overdue counts
+                String todayStart = LocalDate.now().atStartOfDay().toString();
+                String now = LocalDateTime.now().toString();
+
+                List<CompletableFuture<long[]>> futures = teamMemberIds.stream()
+                        .map(memberId -> CompletableFuture.supplyAsync(() -> {
+                            long memberPending = 0;
+                            long memberOverdue = 0;
+                            long memberCompleted = 0;
+                            try {
+                                TaskQueryRequest memberRequest = TaskQueryRequest.builder()
+                                        .userId(memberId)
+                                        .build();
+                                var memberTasks = taskQueryComponent.queryTasks(memberRequest).getContent();
+                                memberPending = memberTasks.size();
+                                memberOverdue = memberTasks.stream()
+                                        .filter(t -> Boolean.TRUE.equals(t.getIsOverdue()))
+                                        .count();
+                            } catch (Exception e) {
+                                log.warn("Failed to get tasks for team member {}: {}", memberId, e.getMessage());
+                            }
+                            try {
+                                Optional<Map<String, Object>> memberResult = workflowEngineClient.getCompletedTasks(
+                                        memberId, 0, 1000, null, todayStart, now);
+                                if (memberResult.isPresent()) {
+                                    Object totalElements = memberResult.get().get("totalElements");
+                                    if (totalElements instanceof Number) {
+                                        memberCompleted = ((Number) totalElements).longValue();
+                                    }
+                                }
+                            } catch (Exception e) {
+                                log.warn("Failed to get completed tasks for team member {}: {}", memberId, e.getMessage());
+                            }
+                            return new long[]{memberPending, memberOverdue, memberCompleted};
+                        }))
+                        .toList();
+
                 long aggregatedPending = 0;
                 long aggregatedOverdue = 0;
                 long aggregatedCompletedToday = 0;
-
-                for (String memberId : teamMemberIds) {
-                    // Query pending tasks for each team member
-                    TaskQueryRequest memberRequest = TaskQueryRequest.builder()
-                            .userId(memberId)
-                            .build();
-                    var memberTasks = taskQueryComponent.queryTasks(memberRequest).getContent();
-                    aggregatedPending += memberTasks.size();
-                    aggregatedOverdue += memberTasks.stream()
-                            .filter(t -> Boolean.TRUE.equals(t.getIsOverdue()))
-                            .count();
-
-                    // Query Flowable completed tasks for each team member
+                for (CompletableFuture<long[]> f : futures) {
                     try {
-                        Optional<Map<String, Object>> memberResult = workflowEngineClient.getCompletedTasks(
-                                memberId, 0, 1000, null,
-                                LocalDate.now().atStartOfDay().toString(),
-                                LocalDateTime.now().toString());
-                        if (memberResult.isPresent()) {
-                            Object totalElements = memberResult.get().get("totalElements");
-                            if (totalElements instanceof Number) {
-                                aggregatedCompletedToday += ((Number) totalElements).longValue();
-                            }
-                        }
+                        long[] counts = f.join();
+                        aggregatedPending += counts[0];
+                        aggregatedOverdue += counts[1];
+                        aggregatedCompletedToday += counts[2];
                     } catch (Exception e) {
-                        log.warn("Failed to get completed tasks for team member {}: {}", memberId, e.getMessage());
+                        log.warn("Failed to aggregate team member metrics: {}", e.getMessage());
                     }
                 }
 
@@ -178,7 +197,6 @@ public class DashboardComponent {
                 teamOverdueCount = aggregatedOverdue;
                 teamCompletedTodayCount = aggregatedCompletedToday;
             }
-            // When user doesn't belong to any BU, team metrics fall back to personal values (already set above)
         } catch (Exception e) {
             log.warn("Failed to aggregate team metrics, falling back to personal values: {}", e.getMessage());
             teamPendingCount = pendingCount;

@@ -87,9 +87,11 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
             if (tableName == null) {
                 return PageResponse.of(Collections.emptyList(), page, size, 0);
             }
+            tableName = sanitizeIdentifier(tableName);
 
             // Get field names for the table
-            List<String> fieldNames = getFieldNames(tableId);
+            List<String> fieldNames = getFieldNames(tableId).stream()
+                    .map(this::sanitizeIdentifier).toList();
             if (fieldNames.isEmpty()) {
                 return PageResponse.of(Collections.emptyList(), page, size, 0);
             }
@@ -127,8 +129,10 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
             log.warn("Export CSV table not found: {}", tableId);
             return "";
         }
+        tableName = sanitizeIdentifier(tableName);
 
-        List<String> fieldNames = getFieldNames(tableId);
+        List<String> fieldNames = getFieldNames(tableId).stream()
+                .map(this::sanitizeIdentifier).toList();
         if (fieldNames.isEmpty()) {
             return "";
         }
@@ -165,6 +169,7 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
             if (tableName == null) {
                 return Collections.emptyList();
             }
+            tableName = sanitizeIdentifier(tableName);
 
             // If keyword is empty or no search fields configured, return all rows (up to limit)
             if (keyword == null || keyword.isBlank() || searchFields == null || searchFields.isEmpty()) {
@@ -173,7 +178,9 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
             }
 
             // Build WHERE clause with ILIKE for each search field
-            String whereClause = searchFields.stream()
+            List<String> sanitizedFields = searchFields.stream()
+                    .map(this::sanitizeIdentifier).toList();
+            String whereClause = sanitizedFields.stream()
                     .map(f -> f + " ILIKE ?")
                     .collect(Collectors.joining(" OR "));
 
@@ -320,6 +327,13 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
     private List<String> getFieldNames(Long tableId) {
         String sql = "SELECT field_name FROM rt_field_definitions WHERE table_id = ? ORDER BY sort_order ASC";
         return jdbcTemplate.query(sql, (rs, rowNum) -> rs.getString("field_name"), tableId);
+    }
+
+    private String sanitizeIdentifier(String identifier) {
+        if (identifier == null || !identifier.matches("^[a-zA-Z_][a-zA-Z0-9_]*$")) {
+            throw new IllegalArgumentException("Invalid SQL identifier: " + identifier);
+        }
+        return identifier;
     }
 
     private String escapeCsvValue(Object value) {

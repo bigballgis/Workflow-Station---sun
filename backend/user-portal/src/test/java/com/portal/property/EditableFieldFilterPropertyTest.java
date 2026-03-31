@@ -1,10 +1,12 @@
 package com.portal.property;
 
+import com.portal.client.WorkflowEngineClient;
 import com.portal.component.ChangeHistoryComponent;
 import com.portal.component.ProcessFormComponent;
 import com.portal.component.TaskFormComponent;
 import com.portal.repository.ProcessInstanceRepository;
 import net.jqwik.api.*;
+import org.springframework.web.client.RestTemplate;
 
 import java.util.*;
 
@@ -38,7 +40,8 @@ public class EditableFieldFilterPropertyTest {
         ProcessFormComponent processFormComponent = mock(ProcessFormComponent.class);
 
         TaskFormComponent component = new TaskFormComponent(
-                processFormComponent, changeHistoryComponent, processInstanceRepository);
+                processFormComponent, changeHistoryComponent, processInstanceRepository,
+                mock(WorkflowEngineClient.class), mock(RestTemplate.class));
 
         // Call filterEditableFields
         Map<String, Object> result = component.filterEditableFields(
@@ -97,7 +100,8 @@ public class EditableFieldFilterPropertyTest {
         ProcessFormComponent processFormComponent = mock(ProcessFormComponent.class);
 
         TaskFormComponent component = new TaskFormComponent(
-                processFormComponent, changeHistoryComponent, processInstanceRepository);
+                processFormComponent, changeHistoryComponent, processInstanceRepository,
+                mock(WorkflowEngineClient.class), mock(RestTemplate.class));
 
         // Empty permissions = accept all
         Map<String, Object> result = component.filterEditableFields(formData, Collections.emptyMap());

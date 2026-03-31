@@ -2,6 +2,7 @@ package com.portal.controller;
 
 import com.portal.component.UserPreferenceComponent;
 import com.portal.dto.ApiResponse;
+import com.portal.security.CurrentUserId;
 import com.portal.entity.DashboardLayout;
 import com.portal.entity.NotificationPreference;
 import com.portal.entity.UserPreference;
@@ -27,7 +28,7 @@ public class PreferenceController {
     @Operation(summary = "获取用户偏好设置")
     @GetMapping
     public ApiResponse<UserPreference> getUserPreference(
-            @RequestHeader("X-User-Id") String userId) {
+            @CurrentUserId String userId) {
         UserPreference preference = userPreferenceComponent.getUserPreference(userId);
         return ApiResponse.success(preference);
     }
@@ -35,7 +36,7 @@ public class PreferenceController {
     @Operation(summary = "更新用户偏好设置")
     @PutMapping
     public ApiResponse<UserPreference> updateUserPreference(
-            @RequestHeader("X-User-Id") String userId,
+            @CurrentUserId String userId,
             @RequestBody @Valid UserPreference preference) {
         UserPreference updated = userPreferenceComponent.updateUserPreference(userId, preference);
         return ApiResponse.success("偏好设置更新成功", updated);
@@ -44,7 +45,7 @@ public class PreferenceController {
     @Operation(summary = "获取工作台布局")
     @GetMapping("/dashboard-layout")
     public ApiResponse<List<DashboardLayout>> getDashboardLayout(
-            @RequestHeader("X-User-Id") String userId) {
+            @CurrentUserId String userId) {
         List<DashboardLayout> layouts = userPreferenceComponent.getDashboardLayout(userId);
         return ApiResponse.success(layouts);
     }
@@ -52,7 +53,7 @@ public class PreferenceController {
     @Operation(summary = "保存工作台布局")
     @PutMapping("/dashboard-layout")
     public ApiResponse<List<DashboardLayout>> saveDashboardLayout(
-            @RequestHeader("X-User-Id") String userId,
+            @CurrentUserId String userId,
             @RequestBody List<DashboardLayout> layouts) {
         List<DashboardLayout> saved = userPreferenceComponent.saveDashboardLayout(userId, layouts);
         return ApiResponse.success("工作台布局保存成功", saved);
@@ -61,7 +62,7 @@ public class PreferenceController {
     @Operation(summary = "获取通知偏好")
     @GetMapping("/notifications")
     public ApiResponse<List<NotificationPreference>> getNotificationPreferences(
-            @RequestHeader("X-User-Id") String userId) {
+            @CurrentUserId String userId) {
         List<NotificationPreference> preferences = userPreferenceComponent.getNotificationPreferences(userId);
         return ApiResponse.success(preferences);
     }
@@ -69,7 +70,7 @@ public class PreferenceController {
     @Operation(summary = "更新通知偏好")
     @PutMapping("/notifications")
     public ApiResponse<NotificationPreference> updateNotificationPreference(
-            @RequestHeader("X-User-Id") String userId,
+            @CurrentUserId String userId,
             @RequestBody @Valid NotificationPreference preference) {
         NotificationPreference updated = userPreferenceComponent.updateNotificationPreference(userId, preference);
         return ApiResponse.success("通知偏好更新成功", updated);

@@ -70,6 +70,34 @@ public class ProcessInstance {
     @Column(length = 32)
     private String priority;
 
+    /**
+     * 引擎侧实例标识（与 {@link #id} 一致时常见于门户发起流程；列可为空以兼容历史数据）
+     */
+    @Column(name = "process_instance_id", length = 64)
+    private String processInstanceId;
+
+    @Column(name = "initiator_id", length = 64)
+    private String initiatorId;
+
+    @Column(length = 200)
+    private String title;
+
+    @Column(name = "variables_json", columnDefinition = "TEXT")
+    private String variablesJson;
+
+    /**
+     * 库表默认值维护；不显式写入以免覆盖 PostgreSQL DEFAULT。
+     */
+    @Column(name = "started_at", insertable = false, updatable = false)
+    private LocalDateTime startedAt;
+
+    @Column(name = "completed_at")
+    private LocalDateTime completedAt;
+
+    /** 绑定的功能单元版本（dw_function_units.id），与 developer 侧共用表时可空 */
+    @Column(name = "function_unit_version_id")
+    private Long functionUnitVersionId;
+
     @CreationTimestamp
     @Column(name = "start_time", updatable = false)
     private LocalDateTime startTime;

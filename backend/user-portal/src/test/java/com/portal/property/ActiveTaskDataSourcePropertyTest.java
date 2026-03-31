@@ -1,5 +1,6 @@
 package com.portal.property;
 
+import com.portal.client.WorkflowEngineClient;
 import com.portal.component.ChangeHistoryComponent;
 import com.portal.component.ProcessFormComponent;
 import com.portal.component.TaskFormComponent;
@@ -10,6 +11,7 @@ import com.portal.entity.ProcessInstance;
 import com.portal.repository.ProcessInstanceRepository;
 import net.jqwik.api.*;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.client.RestTemplate;
 
 import java.util.*;
 
@@ -42,7 +44,8 @@ public class ActiveTaskDataSourcePropertyTest {
         ProcessFormComponent processFormComponent = mock(ProcessFormComponent.class);
 
         TaskFormComponent component = new TaskFormComponent(
-                processFormComponent, changeHistoryComponent, processInstanceRepository) {
+                processFormComponent, changeHistoryComponent, processInstanceRepository,
+                mock(WorkflowEngineClient.class), mock(RestTemplate.class)) {
             @Override
             protected TaskInfo getTaskInfo(String taskId) {
                 return new TaskInfo(config.taskDefinitionKey, config.processInstanceId);
