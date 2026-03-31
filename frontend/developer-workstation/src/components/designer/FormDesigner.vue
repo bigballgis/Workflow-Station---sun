@@ -60,17 +60,28 @@
         <el-table-column prop="description" :label="t('table.description')" show-overflow-tooltip />
         <el-table-column
           :label="t('common.actions')"
-          min-width="400"
+          min-width="200"
           fixed="right"
           align="left"
-          class-name="form-designer-actions-cell"
         >
           <template #default="{ row }">
             <div class="action-buttons">
               <el-button link type="primary" @click.stop="handleSelectForm(row)">{{ t('common.edit') }}</el-button>
-              <el-button v-if="row.formType === 'TASK'" link type="info" @click.stop="handleCopyForm(row)">{{ t('form.copyForm') }}</el-button>
-              <el-button link type="warning" @click.stop="handleManageBindings(row)">{{ t('form.editBindings') }}</el-button>
-              <el-button link type="success" @click.stop="handleBindNode(row)">{{ t('form.boundNode') }}</el-button>
+              <el-dropdown trigger="click" @command="(cmd) => onFormListMoreAction(cmd, row)">
+                <el-button link type="primary" @click.stop>
+                  {{ t('common.more') }}
+                  <el-icon class="action-more-icon"><ArrowDown /></el-icon>
+                </el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item v-if="row.formType === 'TASK'" command="copy">
+                      {{ t('form.copyForm') }}
+                    </el-dropdown-item>
+                    <el-dropdown-item command="bindings">{{ t('form.editBindings') }}</el-dropdown-item>
+                    <el-dropdown-item command="bindNode">{{ t('form.boundNode') }}</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
               <el-button link type="danger" @click.stop="handleDeleteForm(row)">{{ t('common.delete') }}</el-button>
             </div>
           </template>
@@ -442,7 +453,7 @@
 import { ref, reactive, onMounted, nextTick, computed, provide, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, Plus, Refresh, Connection } from '@element-plus/icons-vue'
+import { ArrowLeft, ArrowDown, Plus, Refresh, Connection } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
 import type { FormDefinition, FieldDefinition, TableBinding, BindingType, FormType } from '@/api/functionUnit'
@@ -1614,6 +1625,23 @@ function validateFieldNames(fieldNames: string[]): string[] {
   return fieldNames.filter(name => !dataTableColumns.value.includes(name))
 }
 
+/** 列表「更多」：复制 / 表绑定 / 绑定节点 */
+function onFormListMoreAction(command: string, row: FormDefinition) {
+  switch (command) {
+    case 'copy':
+      void handleCopyForm(row)
+      break
+    case 'bindings':
+      handleManageBindings(row)
+      break
+    case 'bindNode':
+      handleBindNode(row)
+      break
+    default:
+      break
+  }
+}
+
 /** Copy a TASK form */
 async function handleCopyForm(form: FormDefinition) {
   try {
@@ -2602,21 +2630,17 @@ onMounted(() => {
   margin-left: 8px;
 }
 
-/* 操作列：避免 el-table .cell 默认 overflow:hidden 裁掉换行后的按钮 */
-:deep(.form-designer-actions-cell) {
-  overflow: visible;
-}
-:deep(.form-designer-actions-cell .cell) {
-  overflow: visible;
-  white-space: normal;
+.action-buttons {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
 }
 
-.action-buttons {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 8px;
-  line-height: 1.5;
+.action-more-icon {
+  margin-left: 2px;
+  vertical-align: middle;
 }
 
 .bind-table-dialog {

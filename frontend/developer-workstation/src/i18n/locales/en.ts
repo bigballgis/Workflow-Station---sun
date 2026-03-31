@@ -56,7 +56,8 @@ export default {
     add: 'Add',
     operation: 'Operation',
     deleteSuccess: 'Deleted successfully',
-    confirmTitle: 'Confirm'
+    confirmTitle: 'Confirm',
+    more: 'More'
   },
   sidebar: {
     collapse: 'Collapse sidebar',

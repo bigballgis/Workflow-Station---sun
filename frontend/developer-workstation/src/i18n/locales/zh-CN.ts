@@ -56,7 +56,8 @@ export default {
     add: '添加',
     operation: '操作',
     deleteSuccess: '删除成功',
-    confirmTitle: '提示'
+    confirmTitle: '提示',
+    more: '更多'
   },
   sidebar: {
     collapse: '收起侧边栏',
