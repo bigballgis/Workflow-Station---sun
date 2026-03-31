@@ -1,0 +1,52 @@
+---
+description: Docker 构建、部署脚本与基础设施配置规范
+globs: "deploy/**,**/Dockerfile*,**/docker-compose*,**/*.yaml,**/nginx.conf"
+alwaysApply: false
+---
+
+# 部署与基础设施规范
+
+## Docker 构建红线
+
+| 规则 | 说明 |
+|------|------|
+| 不使用多阶段构建 | 本地构建 + 复制产物到镜像 |
+| 前端用 `Dockerfile.local` | 不是默认 `Dockerfile` |
+| `.dockerignore` 不含 `dist` | 否则前端产物被忽略 |
+| 后端基础镜像 | `eclipse-temurin:17-jre-alpine` |
+| 非 root 运行 | 容器用户: `platform` |
+| 文件换行 | `.sh` 和 `.sql` 必须 LF（非 CRLF） |
+
+## nginx envsubst 陷阱
+
+```sh
+# 正确 — 显式指定变量列表
+envsubst '${ADMIN_CENTER_URL} ${USER_PORTAL_URL}' < template > default.conf
+
+# 错误 — 会替换 nginx 内置的 $host, $uri 导致 502
+envsubst < template > default.conf
+```
+
+## 服务 Healthcheck
+
+| 服务 | context-path | Healthcheck 路径 |
+|------|-------------|-----------------|
+| workflow-engine | `/` | `/actuator/health` |
+| admin-center | `/api/v1/admin` | `/api/v1/admin/actuator/health` |
+| developer-workstation | `/api/v1` | `/api/v1/actuator/health` |
+| user-portal | `/api/portal` | `/api/portal/actuator/health` |
+
+## 不部署的组件
+
+- API Gateway — 前端 nginx 直连后端
+- PostgreSQL — SIT/UAT/PROD 使用公司现有数据库
+
+## 构建部署流程
+
+1. `mvn clean package -DskipTests`（8 模块全部 BUILD SUCCESS）
+2. 每个前端: `npm install && npx vite build`
+3. `docker compose up -d --build`
+4. 等待所有容器 `healthy`
+5. 冒烟验证核心功能
+
+任何步骤失败必须立即修复，不允许跳过。

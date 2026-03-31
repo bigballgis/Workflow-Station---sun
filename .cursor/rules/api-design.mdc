@@ -1,0 +1,46 @@
+---
+description: REST API 设计标准 — URL 规范、响应格式、分页与错误处理
+globs: backend/**/controller/**/*.java
+alwaysApply: false
+---
+
+# REST API 设计标准
+
+## URL 设计
+
+- 小写 kebab-case: `/function-units/{id}/tables`
+- 复数名词表示集合: `/users`, `/roles`, `/forms`
+- 嵌套资源最多两层: `/function-units/{id}/actions/{actionId}`
+
+## 统一响应
+
+所有接口使用 `ApiResponse<T>` 包装，通过 `handleRequest()` 自动处理:
+
+```java
+@GetMapping("/{id}")
+public ResponseEntity<ApiResponse<FunctionUnitResponse>> getById(
+        @PathVariable Long id) {
+    return handleRequest(() -> component.getById(id));
+}
+```
+
+错误响应自动由 `@ControllerAdvice` 生成:
+```json
+{"success": false, "error": {"code": "BUSINESS_ERROR", "message": "..."}}
+```
+
+## 分页
+
+- 使用 Spring Data `Pageable` 参数，返回 `Page<T>`
+- 前端: `?page=0&size=20&sort=createdAt,desc`
+
+## SSE 流式接口
+
+- `produces = MediaType.TEXT_EVENT_STREAM_VALUE`
+- 返回 `SseEmitter`，设置合理超时
+
+## 校验
+
+- `@Valid` / `@Validated` 触发 Jakarta Validation
+- 带校验请求用 `handleRequestWithValidation()`
+- 校验消息放 `ValidationMessages*.properties`（支持 zh_CN, zh_TW）

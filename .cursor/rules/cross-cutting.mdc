@@ -1,0 +1,61 @@
+---
+description: 变更影响分析协议 — 系统化爆炸半径评估与关联文件追踪
+alwaysApply: true
+---
+
+# 变更影响分析协议
+
+每次修改前，执行爆炸半径评估。修改后，执行关联检查。
+
+## Step 1: 爆炸半径评估（修改前）
+
+```
+我要改的东西 →
+├─ platform-common 中的类？ → 影响所有 4 个业务服务 [CRITICAL]
+├─ Component/Service 接口签名？ → 影响所有实现类 + 调用方 [HIGH]
+├─ JPA Entity 字段？ → 影响 SQL + Mapper + DTO + 前端类型 [HIGH]
+├─ 后端 DTO 字段？ → 影响前端 TypeScript 接口 + 表单绑定 [MEDIUM]
+├─ i18n key？ → 影响 3 个 locale 文件 [MEDIUM]
+├─ 配置/环境变量？ → 影响 docker-compose + K8s + BUILD_GUIDE [MEDIUM]
+└─ 模块内部私有方法？ → 仅影响本文件调用方 [LOW]
+```
+
+**修改前必做**: 用 Grep 搜索被改动符号的所有引用，列出受影响文件清单。
+
+## Step 2: 关联文件追踪（修改后）
+
+### 后端 DTO ↔ 前端类型（双向同步链）
+
+```
+后端 {Entity}Request.java  ←→  前端 types/{entity}.ts
+后端 {Entity}Response.java ←→  前端 types/{entity}.ts
+后端 Controller URL/方法   ←→  前端 api/{module}.ts
+```
+
+修改任意一端时，搜索另一端确认同步。
+
+### Entity ↔ 数据库（全链路）
+
+```
+Entity 字段 → SQL 脚本(deploy/init-scripts/) → MapStruct Mapper → DTO → 前端类型
+```
+
+新增/修改字段时，沿这条链路逐一检查。
+
+### 接口 ↔ 实现（契约一致性）
+
+修改接口方法签名时：Grep 搜索方法名，确认所有 `impl/` 和调用方都同步。
+
+### i18n（三语言原子性）
+
+修改/新增 key 时，`zh-CN` + `zh-TW` + `en` 三个文件必须在同一次变更中全部更新。
+
+### 配置 ↔ 文档
+
+修改环境变量、端口、context-path、Docker/K8s 配置时 → 更新 `BUILD_GUIDE.md`。
+
+## Step 3: 验证（修改后）
+
+1. `ReadLints` 检查每个被修改文件
+2. 跨模块影响超出当前任务范围 → 记录到 `.kiro/issues.md`
+3. 对自己说："如果我遗漏了一个关联文件，会导致什么？" — 如果答案是运行时错误，再搜一遍
