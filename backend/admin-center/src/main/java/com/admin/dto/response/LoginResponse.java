@@ -21,6 +21,7 @@ public class LoginResponse {
     private String refreshToken;
     private long expiresIn;
     private UserLoginInfo user;
+    private String error;
     
     @Data
     @Builder

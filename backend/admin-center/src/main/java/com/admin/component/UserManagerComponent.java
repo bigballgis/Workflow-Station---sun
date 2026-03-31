@@ -29,9 +29,10 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
+import java.util.function.Function;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * 用户管理组件
@@ -371,28 +372,61 @@ public class UserManagerComponent {
                 request.getKeyword(),
                 pageable);
         
+        List<User> userList = users.getContent();
+        if (userList.isEmpty()) {
+            return users.map(UserInfo::fromEntity);
+        }
+        
+        List<String> userIds = userList.stream().map(User::getId).toList();
+        
+        Map<String, UserBusinessUnit> userBuMap = new HashMap<>();
+        List<UserBusinessUnit> allUserBus = userBusinessUnitRepository.findByUserIdIn(userIds);
+        for (UserBusinessUnit ubu : allUserBus) {
+            userBuMap.putIfAbsent(ubu.getUserId(), ubu);
+        }
+        
+        Set<String> buIds = allUserBus.stream()
+                .map(UserBusinessUnit::getBusinessUnitId)
+                .collect(Collectors.toSet());
+        Map<String, com.platform.security.entity.BusinessUnit> buMap = buIds.isEmpty() 
+                ? Collections.emptyMap()
+                : businessUnitRepository.findAllById(buIds).stream()
+                    .collect(Collectors.toMap(com.platform.security.entity.BusinessUnit::getId, Function.identity()));
+        
+        Set<String> managerIds = new HashSet<>();
+        for (User u : userList) {
+            if (u.getEntityManagerId() != null) managerIds.add(u.getEntityManagerId());
+            if (u.getFunctionManagerId() != null) managerIds.add(u.getFunctionManagerId());
+        }
+        Map<String, User> managerMap = managerIds.isEmpty()
+                ? Collections.emptyMap()
+                : userRepository.findAllById(managerIds).stream()
+                    .collect(Collectors.toMap(User::getId, Function.identity()));
+        
         return users.map(user -> {
             UserInfo info = UserInfo.fromEntity(user);
             
-            // 通过关联表获取用户的业务单元
-            List<UserBusinessUnit> userBusinessUnits = userBusinessUnitRepository.findByUserId(user.getId());
-            if (!userBusinessUnits.isEmpty()) {
-                String businessUnitId = userBusinessUnits.get(0).getBusinessUnitId();
-                info.setBusinessUnitId(businessUnitId);
-                businessUnitRepository.findById(businessUnitId)
-                        .ifPresent(unit -> info.setBusinessUnitName(unit.getName()));
+            UserBusinessUnit ubu = userBuMap.get(user.getId());
+            if (ubu != null) {
+                info.setBusinessUnitId(ubu.getBusinessUnitId());
+                com.platform.security.entity.BusinessUnit bu = buMap.get(ubu.getBusinessUnitId());
+                if (bu != null) {
+                    info.setBusinessUnitName(bu.getName());
+                }
             }
             
-            // 填充实体管理者名称
             if (user.getEntityManagerId() != null) {
-                userRepository.findById(user.getEntityManagerId())
-                        .ifPresent(manager -> info.setEntityManagerName(manager.getFullName()));
+                User manager = managerMap.get(user.getEntityManagerId());
+                if (manager != null) {
+                    info.setEntityManagerName(manager.getFullName());
+                }
             }
             
-            // 填充职能管理者名称
             if (user.getFunctionManagerId() != null) {
-                userRepository.findById(user.getFunctionManagerId())
-                        .ifPresent(manager -> info.setFunctionManagerName(manager.getFullName()));
+                User manager = managerMap.get(user.getFunctionManagerId());
+                if (manager != null) {
+                    info.setFunctionManagerName(manager.getFullName());
+                }
             }
             
             return info;
@@ -504,7 +538,7 @@ public class UserManagerComponent {
     private String generateRandomPassword() {
         String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
         StringBuilder password = new StringBuilder();
-        java.util.Random random = new java.util.Random();
+        java.security.SecureRandom random = new java.security.SecureRandom();
         for (int i = 0; i < 12; i++) {
             password.append(chars.charAt(random.nextInt(chars.length())));
         }

@@ -11,7 +11,7 @@ import org.springframework.context.annotation.Configuration;
  * admin-center 的 @ComponentScan 未扫描 com.platform.security.encryption 包，
  * 因此需要通过 @Bean 手动注册 AesEncryptionService。
  * 
- * 注意：AesEncryptionService 使用 @Value 注入 encryption.key 和 @PostConstruct 初始化，
+ * 注意：AesEncryptionService 使用 @Value 注入 platform.encryption.secret-key 和 @PostConstruct 初始化，
  * Spring 会对 @Bean 方法返回的对象正确处理这些注解（通过 BeanPostProcessor）。
  */
 @Configuration

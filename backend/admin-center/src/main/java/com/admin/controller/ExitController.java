@@ -1,5 +1,6 @@
 package com.admin.controller;
 
+import com.admin.dto.response.BatchExitResult;
 import com.admin.dto.response.ErrorResponse;
 import com.admin.service.MemberManagementService;
 import com.platform.common.security.SecurityIntegrationService;
@@ -15,6 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -238,7 +240,7 @@ public class ExitController {
             content = @Content(schema = @Schema(implementation = ErrorResponse.class))
         )
     })
-    public ResponseEntity<Void> batchExitVirtualGroups(
+    public ResponseEntity<BatchExitResult> batchExitVirtualGroups(
             @Parameter(description = "用户ID", required = true)
             @PathVariable String userId,
             @Parameter(description = "要退出的虚拟组ID列表", required = true)
@@ -247,14 +249,12 @@ public class ExitController {
         log.info("Processing batch virtual group exit: userId={}, virtualGroupIds={}", 
                 userId, virtualGroupIds);
         
-        // Validate input
         if (virtualGroupIds == null || virtualGroupIds.isEmpty()) {
             throw new IllegalArgumentException("虚拟组列表不能为空");
         }
         
-        // Execute batch exit with proper cleanup logic
         int successCount = 0;
-        int failureCount = 0;
+        List<BatchExitResult.FailureDetail> failures = new ArrayList<>();
         
         for (String virtualGroupId : virtualGroupIds) {
             try {
@@ -262,23 +262,26 @@ public class ExitController {
                 successCount++;
                 log.debug("Successfully exited virtual group: {}", virtualGroupId);
             } catch (Exception e) {
-                failureCount++;
+                failures.add(BatchExitResult.FailureDetail.builder()
+                        .targetId(virtualGroupId)
+                        .errorMessage(e.getMessage())
+                        .build());
                 log.warn("Failed to exit virtual group {}: {}", virtualGroupId, e.getMessage());
             }
         }
         
+        BatchExitResult result = BatchExitResult.builder()
+                .totalCount(virtualGroupIds.size())
+                .successCount(successCount)
+                .failureCount(failures.size())
+                .failures(failures)
+                .build();
+        
         log.info("Batch virtual group exit completed: userId={}, success={}, failures={}", 
-                userId, successCount, failureCount);
+                userId, successCount, failures.size());
         
-        if (failureCount > 0 && successCount > 0) {
-            // Partial success - return 207 Multi-Status
-            return ResponseEntity.status(207).build();
-        } else if (failureCount > 0) {
-            // All failed - this would be handled by exception handler
-            throw new RuntimeException("所有虚拟组退出操作均失败");
-        }
-        
-        return ResponseEntity.ok().build();
+        int status = failures.isEmpty() ? 200 : (successCount > 0 ? 207 : 400);
+        return ResponseEntity.status(status).body(result);
     }
     
     /**
@@ -315,7 +318,7 @@ public class ExitController {
             content = @Content(schema = @Schema(implementation = ErrorResponse.class))
         )
     })
-    public ResponseEntity<Void> batchExitBusinessUnits(
+    public ResponseEntity<BatchExitResult> batchExitBusinessUnits(
             @Parameter(description = "用户ID", required = true)
             @PathVariable String userId,
             @Parameter(description = "要退出的业务单元ID列表", required = true)
@@ -324,14 +327,12 @@ public class ExitController {
         log.info("Processing batch business unit exit: userId={}, businessUnitIds={}", 
                 userId, businessUnitIds);
         
-        // Validate input
         if (businessUnitIds == null || businessUnitIds.isEmpty()) {
             throw new IllegalArgumentException("业务单元列表不能为空");
         }
         
-        // Execute batch exit with proper cleanup logic
         int successCount = 0;
-        int failureCount = 0;
+        List<BatchExitResult.FailureDetail> failures = new ArrayList<>();
         
         for (String businessUnitId : businessUnitIds) {
             try {
@@ -339,22 +340,25 @@ public class ExitController {
                 successCount++;
                 log.debug("Successfully exited business unit: {}", businessUnitId);
             } catch (Exception e) {
-                failureCount++;
+                failures.add(BatchExitResult.FailureDetail.builder()
+                        .targetId(businessUnitId)
+                        .errorMessage(e.getMessage())
+                        .build());
                 log.warn("Failed to exit business unit {}: {}", businessUnitId, e.getMessage());
             }
         }
         
+        BatchExitResult result = BatchExitResult.builder()
+                .totalCount(businessUnitIds.size())
+                .successCount(successCount)
+                .failureCount(failures.size())
+                .failures(failures)
+                .build();
+        
         log.info("Batch business unit exit completed: userId={}, success={}, failures={}", 
-                userId, successCount, failureCount);
+                userId, successCount, failures.size());
         
-        if (failureCount > 0 && successCount > 0) {
-            // Partial success - return 207 Multi-Status
-            return ResponseEntity.status(207).build();
-        } else if (failureCount > 0) {
-            // All failed - this would be handled by exception handler
-            throw new RuntimeException("所有业务单元退出操作均失败");
-        }
-        
-        return ResponseEntity.ok().build();
+        int status = failures.isEmpty() ? 200 : (successCount > 0 ? 207 : 400);
+        return ResponseEntity.status(status).body(result);
     }
 }

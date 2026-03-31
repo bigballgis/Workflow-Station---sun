@@ -23,6 +23,11 @@ public interface MemberChangeLogRepository extends JpaRepository<MemberChangeLog
      * 根据用户ID查找变更记录
      */
     List<MemberChangeLog> findByUserId(String userId);
+
+    /**
+     * 某用户全部变更记录（按时间倒序）
+     */
+    List<MemberChangeLog> findByUserIdOrderByCreatedAtDesc(String userId);
     
     /**
      * 根据用户ID分页查找变更记录
@@ -38,6 +43,11 @@ public interface MemberChangeLogRepository extends JpaRepository<MemberChangeLog
      * 根据变更类型查找记录
      */
     List<MemberChangeLog> findByChangeType(MemberChangeType changeType);
+
+    /**
+     * 某用户的指定类型变更记录（按时间倒序）
+     */
+    List<MemberChangeLog> findByUserIdAndChangeTypeOrderByCreatedAtDesc(String userId, MemberChangeType changeType);
     
     /**
      * 根据操作人ID查找变更记录

@@ -54,23 +54,26 @@ public class SystemMonitorComponent {
                 .build();
     }
     
+    // TODO: Replace mock data with real metrics collection
     public BusinessMetrics collectBusinessMetrics() {
-        // 模拟业务指标收集
         return BusinessMetrics.builder()
                 .onlineUsers(new Random().nextInt(1000))
                 .activeProcesses(new Random().nextInt(500))
                 .pendingTasks(new Random().nextInt(200))
                 .completedTasksToday(new Random().nextInt(1000))
+                .mock(true)
                 .timestamp(Instant.now())
                 .build();
     }
     
+    // TODO: Replace mock data with real metrics collection
     public ApplicationMetrics collectApplicationMetrics() {
         return ApplicationMetrics.builder()
                 .avgResponseTime(50 + new Random().nextInt(100))
                 .requestsPerSecond(100 + new Random().nextInt(200))
                 .errorRate(new Random().nextDouble() * 5)
                 .cacheHitRate(80 + new Random().nextDouble() * 20)
+                .mock(true)
                 .timestamp(Instant.now())
                 .build();
     }
@@ -184,6 +187,7 @@ public class SystemMonitorComponent {
         private int activeProcesses;
         private int pendingTasks;
         private int completedTasksToday;
+        private boolean mock;
         private Instant timestamp;
     }
     
@@ -196,6 +200,7 @@ public class SystemMonitorComponent {
         private double requestsPerSecond;
         private double errorRate;
         private double cacheHitRate;
+        private boolean mock;
         private Instant timestamp;
     }
     

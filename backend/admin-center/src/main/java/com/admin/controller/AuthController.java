@@ -40,11 +40,10 @@ public class AuthController {
             LoginResponse response = authService.login(request, ipAddress, userAgent);
             return ResponseEntity.ok(response);
         } catch (RuntimeException e) {
-            log.warn("Login failed: {}", e.getMessage());
+            log.warn("Login failed for user {}: {}", request.getUsername(), e.getMessage());
             return ResponseEntity.badRequest().body(
                     LoginResponse.builder()
-                            .accessToken(null)
-                            .user(null)
+                            .error(e.getMessage())
                             .build()
             );
         }
