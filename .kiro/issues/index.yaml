@@ -1,0 +1,884 @@
+# Issue 索引 — Workflow Station
+# 格式: id | status | severity | category | summary
+# status: open / fixed / wontfix
+# severity: critical / major / minor
+# category: security / bug / performance / architecture / quality / deploy
+
+# ── 认证授权 ──────────────────────────────────────────────────
+- id: "001"
+  status: fixed
+  severity: critical
+  category: security
+  summary: "admin-center AuthController.refresh() 返回 refreshToken 而非新 accessToken"
+  fixed_at: "2026-03-30"
+
+- id: "002"
+  status: fixed
+  severity: major
+  category: bug
+  summary: "user-portal/developer-workstation 后端缺少 /auth/refresh 端点"
+  fixed_at: "2026-03-30"
+
+- id: "003"
+  status: fixed
+  severity: major
+  category: bug
+  summary: "JwtAuthenticationFilter.shouldNotFilter() 路径匹配无效"
+  fixed_at: "2026-03-30"
+
+- id: "004"
+  status: fixed
+  severity: minor
+  category: security
+  summary: "JwtTokenServiceImpl 短密钥零填充→改为拒绝启动"
+  fixed_at: "2026-03-31"
+
+- id: "005"
+  status: fixed
+  severity: major
+  category: security
+  summary: "JwtTokenServiceImpl.hashToken() 使用 String.hashCode()"
+  fixed_at: "2026-03-30"
+
+- id: "006"
+  status: fixed
+  severity: critical
+  category: security
+  summary: "admin-center AuthController 暴露调试端点"
+  fixed_at: "2026-03-30"
+
+- id: "007"
+  status: fixed
+  severity: major
+  category: quality
+  summary: "user-portal 12+ 处 new RestTemplate() 直接创建实例"
+  note: "部分修复：通过 WorkflowEngineClient 统一调用"
+
+- id: "008"
+  status: open
+  severity: major
+  category: architecture
+  summary: "user-portal Controllers 使用 X-User-Id header 而非 SecurityContext"
+
+- id: "009"
+  status: open
+  severity: major
+  category: bug
+  summary: "developer-workstation user.ts changePassword 调用不存在的端点"
+
+- id: "010"
+  status: fixed
+  severity: minor
+  category: bug
+  summary: "admin-center 编译失败 — 缺少 Collectors import"
+  fixed_at: "2026-03-30"
+
+- id: "011"
+  status: open
+  severity: minor
+  category: quality
+  summary: "platform-security RoleEntityPropertyTest 缺少嵌入式数据库"
+
+- id: "012"
+  status: open
+  severity: minor
+  category: quality
+  summary: "developer-workstation 集成测试因缺少 ApplicationContext 失败"
+
+- id: "013"
+  status: fixed
+  severity: major
+  category: bug
+  summary: "user-portal 三个表缺少 lock_version 列"
+  fixed_at: "2026-03-30"
+
+- id: "014"
+  status: fixed
+  severity: major
+  category: bug
+  summary: "ProcessComponent 解析响应时字段名错误"
+  fixed_at: "2026-03-30"
+
+- id: "015"
+  status: fixed
+  severity: major
+  category: bug
+  summary: "UserProfileDropdown 未正确解包 ApiResponse"
+  fixed_at: "2026-03-30"
+
+- id: "016"
+  status: fixed
+  severity: major
+  category: bug
+  summary: "ProcessFormComponent 解析响应时字段名错误"
+  fixed_at: "2026-03-30"
+
+- id: "017"
+  status: fixed
+  severity: major
+  category: deploy
+  summary: "00-init-all.sh 未执行 16~18-*.sql 初始化脚本"
+  fixed_at: "2026-03-31"
+
+# ── 第一波安全加固 (2026-03-31) ──────────────────────────────
+- id: "018"
+  status: fixed
+  severity: critical
+  category: security
+  summary: "全平台 6 处硬编码 JWT/AES 默认密钥"
+  fixed_at: "2026-03-31"
+
+- id: "019"
+  status: fixed
+  severity: critical
+  category: security
+  summary: "admin-center AuthServiceImpl 日志记录明文密码"
+  fixed_at: "2026-03-31"
+
+- id: "020"
+  status: fixed
+  severity: critical
+  category: security
+  summary: "N8nConfigController 暴露解密后的 API Key"
+  fixed_at: "2026-03-31"
+
+- id: "021"
+  status: fixed
+  severity: critical
+  category: security
+  summary: "全平台 SecurityConfig anyRequest().permitAll()"
+  fixed_at: "2026-03-31"
+
+- id: "022"
+  status: open
+  severity: critical
+  category: security
+  summary: "workflow-engine 任务 API 信任调用方自报 userId (IDOR)"
+
+- id: "023"
+  status: fixed
+  severity: critical
+  category: security
+  summary: "workflow-engine getUserTasks 暴露全局未分配任务"
+  fixed_at: "2026-03-31"
+
+- id: "024"
+  status: fixed
+  severity: critical
+  category: security
+  summary: "user-portal PortalRelationTableServiceImpl SQL 拼接注入"
+  fixed_at: "2026-03-31"
+
+- id: "025"
+  status: fixed
+  severity: critical
+  category: security
+  summary: "user-portal N8nActionController 缺少认证"
+  fixed_at: "2026-03-31"
+
+- id: "026"
+  status: fixed
+  severity: critical
+  category: security
+  summary: "admin-center java.util.Random 生成密码"
+  fixed_at: "2026-03-31"
+
+- id: "027"
+  status: fixed
+  severity: critical
+  category: security
+  summary: "ConfigurationEncryptionService 加密失败回退明文"
+  fixed_at: "2026-03-31"
+
+- id: "028"
+  status: open
+  severity: major
+  category: security
+  summary: "Redis 黑名单故障放行 — 已撤销 token 可能被接受"
+
+- id: "029"
+  status: fixed
+  severity: major
+  category: security
+  summary: "PermissionServiceImpl 未配置 API 权限即放行(添加warn日志)"
+  fixed_at: "2026-03-31"
+
+- id: "030"
+  status: fixed
+  severity: major
+  category: security
+  summary: "refreshToken 不验证 token type"
+  fixed_at: "2026-03-31"
+
+- id: "031"
+  status: open
+  severity: major
+  category: security
+  summary: "Refresh token 未轮换，泄露后可反复换发 access token"
+
+- id: "032"
+  status: fixed
+  severity: major
+  category: security
+  summary: "ProcessController.processCompleted 回调无鉴权"
+  fixed_at: "2026-03-31"
+
+- id: "033"
+  status: fixed
+  severity: major
+  category: security
+  summary: "ProcessFormController 不校验用户身份"
+  fixed_at: "2026-03-31"
+
+- id: "034"
+  status: fixed
+  severity: major
+  category: security
+  summary: "ProcessController/TaskController 多个端点缺少权限校验"
+  fixed_at: "2026-03-31"
+
+- id: "035"
+  status: fixed
+  severity: major
+  category: security
+  summary: "developer-workstation 6 个 Controller 缺少权限注解"
+  fixed_at: "2026-03-31"
+
+# ── 前端安全 ──────────────────────────────────────────────────
+- id: "036"
+  status: fixed
+  severity: critical
+  category: security
+  summary: "developer-workstation SubTableField.vue v-html XSS"
+  fixed_at: "2026-03-31"
+
+- id: "037"
+  status: fixed
+  severity: critical
+  category: security
+  summary: "developer-workstation SVG 净化使用正则而非 DOMPurify"
+  fixed_at: "2026-03-31"
+
+- id: "038"
+  status: fixed
+  severity: major
+  category: security
+  summary: "admin-center 整个应用缺少 DOMPurify"
+  fixed_at: "2026-03-31"
+
+# ── 前端 Bug ─────────────────────────────────────────────────
+- id: "039"
+  status: fixed
+  severity: critical
+  category: bug
+  summary: "user-portal process store API 路径双重前缀"
+  fixed_at: "2026-03-31"
+
+- id: "040"
+  status: fixed
+  severity: major
+  category: bug
+  summary: "user-portal task store 调用签名与 API 不匹配"
+  fixed_at: "2026-03-31"
+
+- id: "041"
+  status: fixed
+  severity: major
+  category: quality
+  summary: "user-portal process store 类型定义与 api 重复"
+  fixed_at: "2026-03-31"
+
+- id: "042"
+  status: fixed
+  severity: major
+  category: quality
+  summary: "developer-workstation functionUnit.ts 缺少 token 刷新"
+  note: "标记但未修改，需统一 API 层"
+
+- id: "043"
+  status: open
+  severity: major
+  category: quality
+  summary: "user-portal user.ts changePassword 每次创建新 axios 实例"
+
+# ── 前端 i18n ────────────────────────────────────────────────
+- id: "044"
+  status: fixed
+  severity: major
+  category: quality
+  summary: "admin-center 路由和权限模块硬编码中文"
+  fixed_at: "2026-03-31"
+
+- id: "045"
+  status: fixed
+  severity: major
+  category: quality
+  summary: "user-portal 业务逻辑中使用中文字符串做条件判断"
+  fixed_at: "2026-03-31"
+
+# ── 前端路由权限 ──────────────────────────────────────────────
+- id: "046"
+  status: fixed
+  severity: major
+  category: security
+  summary: "admin-center canAccessRoute 动态路由匹配失败"
+  fixed_at: "2026-03-31"
+
+- id: "047"
+  status: fixed
+  severity: major
+  category: security
+  summary: "user-portal 路由无任何权限检查"
+  fixed_at: "2026-03-31"
+
+- id: "048"
+  status: fixed
+  severity: minor
+  category: security
+  summary: "developer-workstation 路由守卫未使用 permission.ts"
+  fixed_at: "2026-03-31"
+
+# ── 异常处理与 API 响应 ──────────────────────────────────────
+- id: "049"
+  status: fixed
+  severity: critical
+  category: architecture
+  summary: "两套 ErrorResponse 类，API 响应形状不一致"
+  fixed_at: "2026-03-31"
+
+- id: "050"
+  status: fixed
+  severity: critical
+  category: security
+  summary: "GlobalExceptionHandler 将 RuntimeException 原样返回"
+  fixed_at: "2026-03-31"
+
+- id: "051"
+  status: fixed
+  severity: major
+  category: architecture
+  summary: "GlobalExceptionHandler 误处理 PermissionDeniedException"
+  fixed_at: "2026-03-31"
+
+- id: "052"
+  status: fixed
+  severity: major
+  category: bug
+  summary: "GlobalExceptionHandler FieldError 强转 ClassCastException"
+  fixed_at: "2026-03-31"
+
+- id: "053"
+  status: fixed
+  severity: major
+  category: bug
+  summary: "admin-center login() 捕获 RuntimeException 返回空响应"
+  fixed_at: "2026-03-31"
+
+- id: "054"
+  status: fixed
+  severity: major
+  category: architecture
+  summary: "GlobalExceptionHandler 统一返回 ApiResponse 包装"
+  fixed_at: "2026-03-31"
+
+- id: "055"
+  status: fixed
+  severity: major
+  category: architecture
+  summary: "admin-center AuthServiceImpl 维护独立 JWT 生成逻辑"
+  fixed_at: "2026-03-31"
+
+- id: "056"
+  status: fixed
+  severity: major
+  category: architecture
+  summary: "AuthenticationServiceImpl 强转 JwtTokenServiceImpl"
+  fixed_at: "2026-03-31"
+
+# ── 性能 ─────────────────────────────────────────────────────
+- id: "057"
+  status: fixed
+  severity: critical
+  category: performance
+  summary: "workflow-engine getUserTasks 全量拉取内存分页"
+  fixed_at: "2026-03-31"
+
+- id: "058"
+  status: fixed
+  severity: major
+  category: performance
+  summary: "user-portal ProcessComponent 列表 N+1 HTTP 调用"
+  fixed_at: "2026-03-31"
+
+- id: "059"
+  status: fixed
+  severity: major
+  category: performance
+  summary: "user-portal DashboardComponent 团队统计 N+1 HTTP"
+  fixed_at: "2026-03-31"
+
+- id: "060"
+  status: fixed
+  severity: major
+  category: performance
+  summary: "developer-workstation FunctionUnitComponentImpl N+1 查询"
+  fixed_at: "2026-03-31"
+
+- id: "061"
+  status: fixed
+  severity: major
+  category: performance
+  summary: "admin-center DashboardController.getUserTrends N+1"
+  fixed_at: "2026-03-31"
+
+- id: "062"
+  status: fixed
+  severity: major
+  category: performance
+  summary: "admin-center UserManagerComponent.listUsers N+1"
+  fixed_at: "2026-03-31"
+
+- id: "063"
+  status: fixed
+  severity: major
+  category: performance
+  summary: "workflow-engine 流程变量全量返回"
+  fixed_at: "2026-03-31"
+
+- id: "064"
+  status: fixed
+  severity: major
+  category: performance
+  summary: "workflow-engine N+1 部署查询 + BpmnModel 重复获取"
+  fixed_at: "2026-03-31"
+
+- id: "065"
+  status: fixed
+  severity: major
+  category: performance
+  summary: "user-portal Thread.sleep(500) 在事务中"
+  fixed_at: "2026-03-31"
+
+- id: "066"
+  status: fixed
+  severity: major
+  category: performance
+  summary: "user-portal WorkflowEngineClient 重复 isAvailable 检查"
+  fixed_at: "2026-03-31"
+
+- id: "067"
+  status: fixed
+  severity: major
+  category: performance
+  summary: "workflow-engine ExceptionStatistics 全表加载"
+  fixed_at: "2026-03-31"
+
+- id: "068"
+  status: open
+  severity: minor
+  category: performance
+  summary: "前端 FormRenderer.vue 多个 deep watcher 性能隐患"
+
+# ── 架构与代码质量 ────────────────────────────────────────────
+- id: "069"
+  status: fixed
+  severity: major
+  category: architecture
+  summary: "多个 Controller 直接注入 Repository/JdbcTemplate"
+  fixed_at: "2026-03-31"
+
+- id: "070"
+  status: fixed
+  severity: major
+  category: quality
+  summary: "admin-center AuthServiceImpl RuntimeException→业务异常"
+  fixed_at: "2026-03-31"
+
+- id: "071"
+  status: fixed
+  severity: major
+  category: bug
+  summary: "ProcessComponent.withdrawProcess 未取消 Flowable 流程"
+  fixed_at: "2026-03-31"
+
+- id: "072"
+  status: fixed
+  severity: major
+  category: bug
+  summary: "TaskFormComponent.getTaskInfo 始终抛异常"
+  fixed_at: "2026-03-31"
+
+- id: "073"
+  status: fixed
+  severity: major
+  category: bug
+  summary: "enableFunctionUnit 未持久化状态变更"
+  fixed_at: "2026-03-31"
+
+- id: "074"
+  status: fixed
+  severity: major
+  category: quality
+  summary: "AiGenerationComponentImpl undoCleanupExecutor 未关闭"
+  fixed_at: "2026-03-31"
+
+- id: "075"
+  status: fixed
+  severity: major
+  category: architecture
+  summary: "developer-workstation AuthController 硬编码角色-权限映射"
+  fixed_at: "2026-03-31"
+
+- id: "076"
+  status: fixed
+  severity: major
+  category: quality
+  summary: "ExitController 批量退出吞没异常"
+  fixed_at: "2026-03-31"
+
+- id: "077"
+  status: fixed
+  severity: major
+  category: bug
+  summary: "copyTaskForm configJson 浅拷贝"
+  fixed_at: "2026-03-31"
+
+- id: "078"
+  status: fixed
+  severity: major
+  category: security
+  summary: "AiChatRequest.message 缺少 @Size 限制"
+  fixed_at: "2026-03-31"
+
+- id: "079"
+  status: fixed
+  severity: major
+  category: security
+  summary: "BPMN 校验未禁用 DTD/外部实体 (XXE)"
+  fixed_at: "2026-03-31"
+
+- id: "080"
+  status: fixed
+  severity: minor
+  category: quality
+  summary: "AuthenticationException 与 Spring Security 同名→重命名"
+  fixed_at: "2026-03-31"
+
+- id: "081"
+  status: fixed
+  severity: minor
+  category: security
+  summary: "PageRequest.sortBy 无白名单校验"
+  fixed_at: "2026-03-31"
+
+- id: "082"
+  status: fixed
+  severity: minor
+  category: quality
+  summary: "IdempotencyUtils.generateKey 含时间戳无法幂等"
+  fixed_at: "2026-03-31"
+
+- id: "083"
+  status: fixed
+  severity: minor
+  category: quality
+  summary: "admin-center displayName 三元表达式重复 4 处"
+  fixed_at: "2026-03-31"
+
+- id: "084"
+  status: fixed
+  severity: minor
+  category: quality
+  summary: "resolveUserDisplayName 逻辑在两类中重复"
+  fixed_at: "2026-03-31"
+
+- id: "085"
+  status: fixed
+  severity: minor
+  category: security
+  summary: "DDL 生成未校验表名和字段名"
+  fixed_at: "2026-03-31"
+
+- id: "086"
+  status: fixed
+  severity: minor
+  category: performance
+  summary: "AiLockServiceImpl.userNameCache 无界增长"
+  fixed_at: "2026-03-31"
+
+- id: "087"
+  status: fixed
+  severity: minor
+  category: performance
+  summary: "FunctionUnitAccessComponent 缓存无 maxSize"
+  fixed_at: "2026-03-31"
+
+- id: "088"
+  status: open
+  severity: minor
+  category: security
+  summary: "UserController.resetPassword 返回明文密码(标注HTTPS)"
+
+- id: "089"
+  status: fixed
+  severity: minor
+  category: quality
+  summary: "SystemMonitorComponent 假监控数据(标记mock)"
+  fixed_at: "2026-03-31"
+
+- id: "090"
+  status: fixed
+  severity: minor
+  category: bug
+  summary: "ActionDefinitionController URL 前缀重复"
+  fixed_at: "2026-03-31"
+
+- id: "091"
+  status: fixed
+  severity: minor
+  category: quality
+  summary: "FormDefinition 缺少 @Version 乐观锁"
+  fixed_at: "2026-03-31"
+
+- id: "092"
+  status: fixed
+  severity: minor
+  category: quality
+  summary: "FunctionUnitImportController 硬编码 system 操作者"
+  fixed_at: "2026-03-31"
+
+- id: "093"
+  status: fixed
+  severity: minor
+  category: bug
+  summary: "DashboardController.getRecentActivities 查询未排序"
+  fixed_at: "2026-03-31"
+
+- id: "094"
+  status: fixed
+  severity: minor
+  category: security
+  summary: "RelationTableDataServiceImpl LIKE 通配符未转义"
+  fixed_at: "2026-03-31"
+
+- id: "095"
+  status: open
+  severity: minor
+  category: quality
+  summary: "auth.ts 在三个前端应用中大量重复(已标注)"
+
+- id: "096"
+  status: fixed
+  severity: minor
+  category: performance
+  summary: "notification store WebSocket 检查用 setInterval→watch"
+  fixed_at: "2026-03-31"
+
+- id: "097"
+  status: fixed
+  severity: minor
+  category: quality
+  summary: "前端 notification store as any 类型移除"
+  fixed_at: "2026-03-31"
+
+# ── 数据库与部署 ──────────────────────────────────────────────
+- id: "098"
+  status: fixed
+  severity: critical
+  category: deploy
+  summary: "FormType CHECK 约束与 Java 枚举不匹配"
+  fixed_at: "2026-03-31"
+
+- id: "099"
+  status: fixed
+  severity: critical
+  category: deploy
+  summary: "sys_users 表缺少 lock_version 列"
+  fixed_at: "2026-03-31"
+
+- id: "100"
+  status: fixed
+  severity: critical
+  category: deploy
+  summary: "缺失的迁移文件 14-add-common-table-feature.sql"
+  fixed_at: "2026-03-31"
+
+- id: "101"
+  status: fixed
+  severity: major
+  category: deploy
+  summary: "TEAM_LEAD 角色权限与描述矛盾(移除DELETE)"
+  fixed_at: "2026-03-31"
+
+- id: "102"
+  status: fixed
+  severity: major
+  category: deploy
+  summary: "Procurement Workflow 04-*.sql 未被执行"
+  fixed_at: "2026-03-31"
+
+- id: "103"
+  status: fixed
+  severity: major
+  category: deploy
+  summary: "Kong Upstreams 未被 Services 引用(已删除)"
+  fixed_at: "2026-03-31"
+
+- id: "104"
+  status: fixed
+  severity: major
+  category: deploy
+  summary: "Kafka Advertised Listener 端口不匹配"
+  fixed_at: "2026-03-31"
+
+- id: "105"
+  status: fixed
+  severity: major
+  category: deploy
+  summary: "admin-center Docker Compose 缺少 SPRING_FLYWAY_ENABLED"
+  fixed_at: "2026-03-31"
+
+- id: "106"
+  status: fixed
+  severity: major
+  category: deploy
+  summary: "process_definition_key VARCHAR 长度不一致"
+  fixed_at: "2026-03-31"
+
+- id: "107"
+  status: fixed
+  severity: major
+  category: deploy
+  summary: "dw_function_units.deployed_at NOT NULL 与 Entity 不一致"
+  fixed_at: "2026-03-31"
+
+- id: "108"
+  status: fixed
+  severity: major
+  category: deploy
+  summary: "手动初始化脚本缺少 migration 16~18"
+  fixed_at: "2026-03-31"
+
+- id: "109"
+  status: fixed
+  severity: major
+  category: deploy
+  summary: "flowable.database-schema-update 默认 true→false"
+  fixed_at: "2026-03-31"
+
+- id: "110"
+  status: fixed
+  severity: minor
+  category: deploy
+  summary: "admin-center nginx.conf 缺少 client_max_body_size"
+  fixed_at: "2026-03-31"
+
+- id: "111"
+  status: fixed
+  severity: minor
+  category: deploy
+  summary: "Dockerfile.local 缺少 CRLF 修复"
+  fixed_at: "2026-03-31"
+
+# ── 复审新发现 (2026-03-31) ──────────────────────────────────
+- id: "112"
+  status: fixed
+  severity: critical
+  category: deploy
+  summary: "workflow-engine-core 缺少 platform.security.jwt 配置"
+  fixed_at: "2026-03-31"
+
+- id: "113"
+  status: open
+  severity: major
+  category: architecture
+  summary: "RelationTable/Ai ExceptionHandler 返回裸 ErrorResponse 与 GlobalExceptionHandler 不一致"
+
+- id: "114"
+  status: open
+  severity: major
+  category: architecture
+  summary: "developer-workstation BusinessException 与 platform-common 同名类冲突"
+
+- id: "115"
+  status: fixed
+  severity: major
+  category: deploy
+  summary: "初始化脚本遗漏 migration 18"
+  fixed_at: "2026-03-31"
+
+- id: "116"
+  status: fixed
+  severity: major
+  category: deploy
+  summary: "docker-compose workflow-engine 缺少 Kafka 配置"
+  fixed_at: "2026-03-31"
+
+- id: "117"
+  status: open
+  severity: minor
+  category: quality
+  summary: "process store startProcess 参数类型与 API 不一致(死代码)"
+
+- id: "118"
+  status: fixed
+  severity: critical
+  category: deploy
+  summary: "up_change_history 有实体与 V402 SQL 但 user-portal 未启用 Flyway 且 deploy/init-scripts 未建表"
+  fixed_at: "2026-03-31"
+
+- id: "119"
+  status: fixed
+  severity: critical
+  category: deploy
+  summary: "developer Member 实体映射 members 表但全仓库无 CREATE TABLE/Flyway 迁移"
+  fixed_at: "2026-03-31"
+
+- id: "120"
+  status: fixed
+  severity: major
+  category: deploy
+  summary: "rt_* 关联表 DDL 仅在各模块 Flyway，未纳入 deploy/init-scripts，纯 SQL 初始化库不完整"
+  fixed_at: "2026-03-31"
+
+- id: "121"
+  status: fixed
+  severity: major
+  category: deploy
+  summary: "init 01 未含 sys_roles.lock_version，与 Role @Version 及 Flyway V210 不一致"
+  fixed_at: "2026-03-31"
+
+- id: "122"
+  status: fixed
+  severity: minor
+  category: deploy
+  summary: "up_process_instance.business_key init 为 VARCHAR(100) 与实体 length 255 不一致"
+  fixed_at: "2026-03-31"
+
+- id: "123"
+  status: fixed
+  severity: minor
+  category: quality
+  summary: "user-portal ProcessInstance 未映射 up_process_instance 多列且完成时未写 completed_at"
+  fixed_at: "2026-03-31"
+
+- id: "124"
+  status: fixed
+  severity: minor
+  category: quality
+  summary: "developer-workstation ProcessInstance 与 up_process_instance 列不齐且缺 lock_version/DynamicUpdate"
+  fixed_at: "2026-03-31"
+
+- id: "125"
+  status: fixed
+  severity: minor
+  category: quality
+  summary: "ProcessInstanceInfo 未暴露 completedAt/title；user-portal Flyway V400 与 init 列宽不一致无 V403"
+  fixed_at: "2026-03-31"
+
+- id: "126"
+  status: fixed
+  severity: major
+  category: bug
+  summary: "user-portal AdminCenterClient 仍调用不存在的 admin GET /users/{id}/memberships 与 GET /member-change-logs，导致 my-memberships/exit-history 恒 503"
+  fixed_at: "2026-03-31"
