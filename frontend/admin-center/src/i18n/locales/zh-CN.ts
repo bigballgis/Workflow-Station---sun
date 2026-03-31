@@ -294,7 +294,12 @@ export default {
     selectRoleType: '请选择角色类型',
     buBoundedDesc: '需要配合业务单元使用',
     buUnboundedDesc: '独立生效，无需业务单元',
-    confirmDeleteRole: '确定要删除该角色吗？'
+    confirmDeleteRole: '确定要删除该角色吗？',
+    unknown: '未知角色',
+    sysAdmin: '系统管理员',
+    superAdmin: '超级管理员',
+    auditor: '审计员',
+    tenantAdmin: '租户管理员'
   },
   permission: {
     permissionName: '权限名称',
@@ -633,6 +638,10 @@ export default {
       deleteSuccess: '删除成功',
       deleteFailed: '删除失败'
     }
+  },
+  error: {
+    forbidden: '无权限',
+    noPermission: '您没有权限访问该页面'
   },
   api: {
     requestFailed: '请求失败',

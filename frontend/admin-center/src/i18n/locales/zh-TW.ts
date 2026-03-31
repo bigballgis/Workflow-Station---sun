@@ -294,7 +294,12 @@ export default {
     selectRoleType: '請選擇角色類型',
     buBoundedDesc: '需要配合業務單元使用',
     buUnboundedDesc: '獨立生效，無需業務單元',
-    confirmDeleteRole: '確定要刪除該角色嗎？'
+    confirmDeleteRole: '確定要刪除該角色嗎？',
+    unknown: '未知角色',
+    sysAdmin: '系統管理員',
+    superAdmin: '超級管理員',
+    auditor: '稽核員',
+    tenantAdmin: '租戶管理員'
   },
   permission: {
     permissionName: '權限名稱',
@@ -633,6 +638,10 @@ export default {
       deleteSuccess: '刪除成功',
       deleteFailed: '刪除失敗'
     }
+  },
+  error: {
+    forbidden: '無權限',
+    noPermission: '您沒有權限存取該頁面'
   },
   api: {
     requestFailed: '請求失敗',

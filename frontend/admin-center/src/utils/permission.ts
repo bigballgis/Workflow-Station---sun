@@ -1,4 +1,5 @@
 import { getUser } from '@/api/auth'
+import i18n from '@/i18n'
 
 /**
  * Permission utility functions for Admin Center
@@ -97,11 +98,22 @@ export function hasAllPermissions(permissions: string[]): boolean {
   return permissions.every(p => hasPermission(p))
 }
 
+function findRoutePermissions(path: string): string[] | undefined {
+  if (ROUTE_PERMISSIONS[path]) return ROUTE_PERMISSIONS[path]
+  const segments = path.split('/')
+  while (segments.length > 1) {
+    segments.pop()
+    const prefix = segments.join('/')
+    if (ROUTE_PERMISSIONS[prefix]) return ROUTE_PERMISSIONS[prefix]
+  }
+  return undefined
+}
+
 /**
  * Check if user can access a specific route
  */
 export function canAccessRoute(path: string): boolean {
-  const permissions = ROUTE_PERMISSIONS[path]
+  const permissions = findRoutePermissions(path)
   if (!permissions || permissions.length === 0) return true
   return hasAnyPermission(permissions)
 }
@@ -140,15 +152,16 @@ export function canDelete(feature: 'user' | 'role'): boolean {
  * Get user's role display name
  */
 export function getUserRoleDisplay(): string {
+  const t = i18n.global.t
   const user = getUser()
-  if (!user?.roles?.length) return '未知角色'
+  if (!user?.roles?.length) return t('role.unknown')
   
-  const roleNames: Record<string, string> = {
-    'SYS_ADMIN': '系统管理员',
-    'SUPER_ADMIN': '超级管理员',
-    'AUDITOR': '审计员',
-    'TENANT_ADMIN': '租户管理员'
+  const roleNameKeys: Record<string, string> = {
+    'SYS_ADMIN': 'role.sysAdmin',
+    'SUPER_ADMIN': 'role.superAdmin',
+    'AUDITOR': 'role.auditor',
+    'TENANT_ADMIN': 'role.tenantAdmin'
   }
   
-  return user.roles.map(r => roleNames[r] || r).join(', ')
+  return user.roles.map(r => roleNameKeys[r] ? t(roleNameKeys[r]) : r).join(', ')
 }

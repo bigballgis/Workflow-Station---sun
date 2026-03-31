@@ -294,7 +294,12 @@ export default {
     selectRoleType: 'Select role type',
     buBoundedDesc: 'Requires business unit association',
     buUnboundedDesc: 'Takes effect immediately, no business unit required',
-    confirmDeleteRole: 'Are you sure to delete this role?'
+    confirmDeleteRole: 'Are you sure to delete this role?',
+    unknown: 'Unknown Role',
+    sysAdmin: 'System Admin',
+    superAdmin: 'Super Admin',
+    auditor: 'Auditor',
+    tenantAdmin: 'Tenant Admin'
   },
   permission: {
     permissionName: 'Permission Name',
@@ -634,6 +639,10 @@ export default {
       deleteSuccess: 'Deleted successfully',
       deleteFailed: 'Delete failed'
     }
+  },
+  error: {
+    forbidden: 'Forbidden',
+    noPermission: 'You do not have permission to access this page'
   },
   api: {
     requestFailed: 'Request failed',

@@ -1,3 +1,5 @@
+// NOTE: This file is duplicated across admin-center, developer-workstation, user-portal.
+// Consider extracting to a shared package. See ISSUE-095.
 import axios from 'axios'
 
 /**
