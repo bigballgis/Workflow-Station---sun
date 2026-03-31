@@ -596,6 +596,9 @@ export default {
   error: {
     notFound: '页面不存在',
     notFoundDesc: '抱歉，您访问的页面不存在',
+    forbidden: '无权限访问',
+    forbiddenDesc: '抱歉，您没有权限访问此页面',
+    goBack: '返回上一页',
     backHome: '返回首页'
   },
   settings: {

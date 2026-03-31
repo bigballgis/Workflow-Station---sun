@@ -195,6 +195,7 @@ import N8nActionDialog from '@/components/N8nActionDialog.vue'
 import type { ActionDefinition } from '@/components/N8nActionDialog.vue'
 import { applyAutoFill } from '@/utils/n8nAutoFillEngine'
 import { relationTableApi } from '@/api/relationTable'
+import { isDisabledMessage } from '@/utils/statusMatcher'
 
 const route = useRoute()
 const router = useRouter()
@@ -443,7 +444,7 @@ const loadFunctionUnitContent = async () => {
     // 检查是否是 403 错误（禁用或无权限）
     if (error.response?.status === 403) {
       const message = error.response?.data?.message || ''
-      if (message.includes('disabled') || message.includes('禁用')) {
+      if (isDisabledMessage(message)) {
         isDisabled.value = true
       } else {
         isAccessDenied.value = true

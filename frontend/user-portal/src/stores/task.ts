@@ -1,6 +1,16 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { taskApi, type TaskInfo, type TaskQueryRequest } from '@/api/task'
+import {
+  queryTasks,
+  getTaskDetail,
+  claimTask as claimTaskApi,
+  completeTask as completeTaskApi,
+  transferTask as transferTaskApi,
+  delegateTask as delegateTaskApi,
+  type TaskInfo,
+  type TaskQueryRequest,
+  type TaskCompleteRequest
+} from '@/api/task'
 
 export const useTaskStore = defineStore('task', () => {
   const tasks = ref<TaskInfo[]>([])
@@ -11,7 +21,7 @@ export const useTaskStore = defineStore('task', () => {
   const fetchTasks = async (params: TaskQueryRequest) => {
     loading.value = true
     try {
-      const res = await taskApi.getMyTasks(params)
+      const res = await queryTasks(params)
       tasks.value = res.data.content
       total.value = res.data.totalElements
     } finally {
@@ -22,7 +32,7 @@ export const useTaskStore = defineStore('task', () => {
   const fetchTaskDetail = async (taskId: string) => {
     loading.value = true
     try {
-      const res = await taskApi.getTaskDetail(taskId)
+      const res = await getTaskDetail(taskId)
       currentTask.value = res.data
     } finally {
       loading.value = false
@@ -30,19 +40,19 @@ export const useTaskStore = defineStore('task', () => {
   }
 
   const claimTask = async (taskId: string) => {
-    await taskApi.claimTask(taskId)
+    await claimTaskApi(taskId)
   }
 
-  const completeTask = async (taskId: string, data: { variables?: Record<string, any>; comment?: string }) => {
-    await taskApi.completeTask(taskId, data)
+  const completeTask = async (taskId: string, data: TaskCompleteRequest) => {
+    await completeTaskApi(taskId, data)
   }
 
-  const transferTask = async (taskId: string, targetUserId: string, reason: string) => {
-    await taskApi.transferTask(taskId, { targetUserId, reason })
+  const transferTask = async (taskId: string, toUserId: string, reason?: string) => {
+    await transferTaskApi(taskId, toUserId, reason)
   }
 
-  const delegateTask = async (taskId: string, targetUserId: string, reason: string) => {
-    await taskApi.delegateTask(taskId, { targetUserId, reason })
+  const delegateTask = async (taskId: string, delegateId: string, reason?: string) => {
+    await delegateTaskApi(taskId, delegateId, reason)
   }
 
   return {

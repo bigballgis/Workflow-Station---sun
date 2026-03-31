@@ -557,6 +557,9 @@ export default {
   error: {
     notFound: '頁面不存在',
     notFoundDesc: '抱歉，您存取的頁面不存在',
+    forbidden: '無權限存取',
+    forbiddenDesc: '抱歉，您沒有權限存取此頁面',
+    goBack: '返回上一頁',
     backHome: '返回首頁'
   },
   settings: {

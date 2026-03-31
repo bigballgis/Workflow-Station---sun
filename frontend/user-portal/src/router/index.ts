@@ -1,5 +1,17 @@
 import { createRouter, createWebHistory, RouteRecordRaw } from 'vue-router'
+import { getStoredUser } from '@/api/auth'
 import i18n from '@/i18n'
+
+declare module 'vue-router' {
+  interface RouteMeta {
+    titleKey?: string
+    title?: string
+    icon?: string
+    hidden?: boolean
+    requiresAuth?: boolean
+    requiredRoles?: string[]
+  }
+}
 
 const routes: RouteRecordRaw[] = [
   {
@@ -125,6 +137,12 @@ const routes: RouteRecordRaw[] = [
     ]
   },
   {
+    path: '/403',
+    name: 'Forbidden',
+    component: () => import('@/views/error/403.vue'),
+    meta: { titleKey: 'error.forbidden', requiresAuth: false }
+  },
+  {
     path: '/:pathMatch(.*)*',
     name: 'NotFound',
     component: () => import('@/views/error/404.vue')
@@ -137,20 +155,28 @@ const router = createRouter({
 })
 
 // 路由守卫
-router.beforeEach((to, from, next) => {
-  // 设置页面标题
+router.beforeEach((to, _from, next) => {
   const t = i18n.global.t
   const titleKey = to.meta.titleKey as string
   const pageTitle = titleKey ? t(titleKey) : t('app.name')
   document.title = `${pageTitle} - ${t('app.title')}`
   
-  // 检查登录状态
   const token = localStorage.getItem('token')
   if (to.meta.requiresAuth !== false && !token && to.path !== '/login') {
     next('/login')
-  } else {
-    next()
+    return
   }
+
+  const requiredRoles = to.meta.requiredRoles
+  if (requiredRoles && requiredRoles.length > 0) {
+    const user = getStoredUser()
+    if (!user?.roles || !requiredRoles.some(role => user.roles.includes(role))) {
+      next('/403')
+      return
+    }
+  }
+
+  next()
 })
 
 export default router
