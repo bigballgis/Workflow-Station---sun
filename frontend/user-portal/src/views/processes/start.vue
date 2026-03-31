@@ -1309,8 +1309,10 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .process-start-page {
-  max-width: 1200px;
-  margin: 0 auto;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  box-sizing: border-box;
   
   .page-header {
     display: flex;
