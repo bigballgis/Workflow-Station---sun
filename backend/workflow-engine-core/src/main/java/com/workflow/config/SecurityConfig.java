@@ -1,13 +1,17 @@
 package com.workflow.config;
 
+import com.platform.security.filter.JwtAuthenticationFilter;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 
 /**
@@ -28,7 +32,10 @@ import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
  */
 @Configuration
 @EnableWebSecurity
+@RequiredArgsConstructor
 public class SecurityConfig {
+
+    private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -40,15 +47,14 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
             .csrf(csrf -> csrf.disable())
+            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
+                .requestMatchers(new AntPathRequestMatcher("/auth/**")).permitAll()
                 .requestMatchers(new AntPathRequestMatcher("/actuator/**")).permitAll()
                 .requestMatchers(new AntPathRequestMatcher("/swagger-ui/**")).permitAll()
                 .requestMatchers(new AntPathRequestMatcher("/v3/api-docs/**")).permitAll()
-                // Flowable management APIs — only accessible in non-production environments.
-                // In production, Kong Gateway does NOT route to these paths, so they are effectively blocked.
-                // These endpoints are kept permitAll for development/testing convenience.
-                // TODO: In production, consider disabling Flowable's built-in REST API entirely
-                //       via flowable.rest.app.enabled=false in application-prod.yml
+                // Flowable management APIs — in production, Kong Gateway does NOT route to these paths.
+                // TODO: In production, disable via flowable.rest.app.enabled=false in application-prod.yml
                 .requestMatchers(new AntPathRequestMatcher("/process-api/**")).permitAll()
                 .requestMatchers(new AntPathRequestMatcher("/cmmn-api/**")).permitAll()
                 .requestMatchers(new AntPathRequestMatcher("/dmn-api/**")).permitAll()
@@ -60,13 +66,9 @@ public class SecurityConfig {
                 .requestMatchers(new AntPathRequestMatcher("/api/workflow/n8n/callback")).permitAll()
                 // N8N internal execution endpoint - inter-service communication
                 .requestMatchers(new AntPathRequestMatcher("/api/v1/n8n/execute")).permitAll()
-                .requestMatchers(new AntPathRequestMatcher("/api/**")).permitAll()
-                // DESIGN NOTE: Authentication is handled by Kong Gateway (JWT plugin) as the first line of defense,
-                // and JwtAuthenticationFilter as the second line. Spring Security's authorizeHttpRequests is intentionally
-                // set to permitAll() because the authentication decision is made by the JWT filter, not by Spring Security.
-                // In production, Kong rejects unauthenticated requests before they reach this service.
-                .anyRequest().permitAll()
-            );
+                .anyRequest().authenticated()
+            )
+            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         
         return http.build();
     }

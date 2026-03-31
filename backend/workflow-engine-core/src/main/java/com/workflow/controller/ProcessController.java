@@ -137,6 +137,38 @@ public class ProcessController {
     }
 
     /**
+     * 取消（终止）流程实例
+     */
+    @DeleteMapping("/instances/{processInstanceId}")
+    @Operation(summary = "取消流程实例", description = "终止运行中的流程实例")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> cancelProcessInstance(
+            @Parameter(description = "流程实例ID", required = true)
+            @PathVariable String processInstanceId,
+            @RequestBody(required = false) Map<String, Object> body) {
+        
+        String reason = body != null && body.get("reason") != null 
+                ? (String) body.get("reason") : "User cancelled";
+        log.info("Cancelling process instance: {}, reason: {}", processInstanceId, reason);
+        
+        var request = new com.workflow.dto.request.ProcessInstanceControlRequest();
+        request.setProcessInstanceId(processInstanceId);
+        request.setAction("terminate");
+        request.setReason(reason);
+        
+        var result = processEngineComponent.controlProcessInstance(request);
+        
+        if (result.isSuccess()) {
+            Map<String, Object> data = Map.of(
+                    "processInstanceId", processInstanceId, 
+                    "cancelled", true);
+            return ResponseEntity.ok(ApiResponse.success(data));
+        } else {
+            return ResponseEntity.badRequest().body(
+                    ApiResponse.error("CANCEL_FAILED", result.getMessage()));
+        }
+    }
+
+    /**
      * 删除流程定义
      */
     @DeleteMapping("/definitions/deployments/{deploymentId}")
