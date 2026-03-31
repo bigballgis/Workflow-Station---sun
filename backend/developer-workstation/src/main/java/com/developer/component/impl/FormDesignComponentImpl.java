@@ -19,10 +19,12 @@ import com.developer.repository.FormTableBindingRepository;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.TableDefinitionRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.platform.common.i18n.I18nService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,6 +45,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
     private final FormTableBindingRepository formTableBindingRepository;
     private final ObjectMapper objectMapper;
     private final I18nService i18nService;
+    private final JdbcTemplate jdbcTemplate;
     
     @Override
     @Transactional
@@ -359,8 +362,9 @@ public class FormDesignComponentImpl implements FormDesignComponent {
     public FormDefinition copyTaskForm(Long sourceFormId) {
         FormDefinition source = getById(sourceFormId);
         
-        // Deep copy configJson
-        Map<String, Object> copiedConfig = new HashMap<>(source.getConfigJson());
+        Map<String, Object> copiedConfig = deepCopyMap(source.getConfigJson());
+        Map<String, String> copiedFieldPermissions = source.getFieldPermissions() != null
+                ? new HashMap<>(source.getFieldPermissions()) : new HashMap<>();
         
         FormDefinition copy = FormDefinition.builder()
                 .functionUnit(source.getFunctionUnit())
@@ -369,12 +373,25 @@ public class FormDesignComponentImpl implements FormDesignComponent {
                 .configJson(copiedConfig)
                 .description(source.getDescription())
                 .boundTable(source.getBoundTable())
-                .fieldPermissions(source.getFieldPermissions() != null ? new HashMap<>(source.getFieldPermissions()) : new HashMap<>())
+                .fieldPermissions(copiedFieldPermissions)
                 .showLiveValues(source.getShowLiveValues())
-                .stageBindings(new ArrayList<>())  // Clear stage bindings
+                .stageBindings(new ArrayList<>())
                 .build();
         
         return formDefinitionRepository.save(copy);
+    }
+
+    private Map<String, Object> deepCopyMap(Map<String, Object> source) {
+        if (source == null) {
+            return null;
+        }
+        try {
+            return objectMapper.readValue(
+                    objectMapper.writeValueAsString(source),
+                    new TypeReference<Map<String, Object>>() {});
+        } catch (JsonProcessingException e) {
+            throw new BusinessException("SYS_JSON_ERROR", i18nService.getMessage("form.config_generate_failed"));
+        }
     }
     
     @Override
@@ -386,5 +403,20 @@ public class FormDesignComponentImpl implements FormDesignComponent {
                 .map(FieldDefinition::getFieldName)
                 .distinct()
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public String resolveRelationTableName(FormTableBinding binding) {
+        if (binding.getBindingType() != BindingType.RELATED || binding.getRelationTableId() == null) {
+            return null;
+        }
+        try {
+            return jdbcTemplate.queryForObject(
+                    "SELECT table_name FROM rt_table_definitions WHERE id = ?",
+                    String.class, binding.getRelationTableId());
+        } catch (Exception e) {
+            return null;
+        }
     }
 }

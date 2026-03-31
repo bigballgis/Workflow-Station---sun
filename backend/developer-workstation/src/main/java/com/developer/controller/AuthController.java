@@ -40,7 +40,7 @@ public class AuthController {
     private final I18nService i18nService;
     private final JwtTokenService jwtTokenService;
     
-    @Value("${jwt.secret:my-super-secret-jwt-key-for-development-only-32chars}")
+    @Value("${jwt.secret}")
     private String jwtSecret;
     
     @Value("${jwt.expiration:86400000}")
@@ -308,20 +308,11 @@ public class AuthController {
     }
 
     private List<String> getPermissionsForRoles(List<String> roles) {
-        List<String> permissions = new ArrayList<>();
-        for (String role : roles) {
-            switch (role) {
-                case "TECH_DIRECTOR", "DEV_LEAD" -> permissions.addAll(List.of(
-                        "process:read", "process:write", "process:deploy",
-                        "form:read", "form:write", "function:read", "function:write", "team:manage"));
-                case "TEAM_LEADER", "SENIOR_DEV" -> permissions.addAll(List.of(
-                        "process:read", "process:write", "form:read", "form:write", "function:read"));
-                case "DEVELOPER" -> permissions.addAll(List.of(
-                        "process:read", "process:write", "form:read", "form:write"));
-                default -> permissions.add("basic:access");
-            }
+        List<String> permissions = userRoleService.getPermissionsForRoleCodes(roles);
+        if (permissions.isEmpty()) {
+            return List.of("basic:access");
         }
-        return permissions.stream().distinct().toList();
+        return permissions;
     }
 
     private String getClientIpAddress(HttpServletRequest request) {

@@ -102,6 +102,10 @@ public class FormDefinition {
         return boundTable != null ? boundTable.getTableName() : null;
     }
     
+    @jakarta.persistence.Version
+    @Column(name = "lock_version")
+    private Long lockVersion;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;

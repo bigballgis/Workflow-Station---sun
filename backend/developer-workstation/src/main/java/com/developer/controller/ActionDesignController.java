@@ -4,6 +4,7 @@ import com.developer.component.ActionDesignComponent;
 import com.developer.dto.ActionDefinitionRequest;
 import com.developer.dto.ApiResponse;
 import com.developer.entity.ActionDefinition;
+import com.developer.security.RequireDeveloperPermission;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -27,6 +28,7 @@ public class ActionDesignController {
     
     @GetMapping
     @Operation(summary = "List all actions of a function unit")
+    @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<List<ActionDefinition>>> list(@PathVariable Long functionUnitId) {
         List<ActionDefinition> result = actionDesignComponent.getByFunctionUnitId(functionUnitId);
         return ResponseEntity.ok(ApiResponse.success(result));
@@ -34,6 +36,7 @@ public class ActionDesignController {
     
     @PostMapping
     @Operation(summary = "Create action")
+    @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
     public ResponseEntity<ApiResponse<ActionDefinition>> create(
             @PathVariable Long functionUnitId,
             @Valid @RequestBody ActionDefinitionRequest request) {
@@ -43,6 +46,7 @@ public class ActionDesignController {
     
     @PutMapping("/{actionId}")
     @Operation(summary = "Update action")
+    @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
     public ResponseEntity<ApiResponse<ActionDefinition>> update(
             @PathVariable Long functionUnitId,
             @PathVariable Long actionId,
@@ -53,6 +57,7 @@ public class ActionDesignController {
     
     @DeleteMapping("/{actionId}")
     @Operation(summary = "Delete action")
+    @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
     public ResponseEntity<ApiResponse<Void>> delete(
             @PathVariable Long functionUnitId,
             @PathVariable Long actionId) {
@@ -62,6 +67,7 @@ public class ActionDesignController {
     
     @GetMapping("/{actionId}")
     @Operation(summary = "Get action details")
+    @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<ActionDefinition>> getById(
             @PathVariable Long functionUnitId,
             @PathVariable Long actionId) {
@@ -71,6 +77,7 @@ public class ActionDesignController {
     
     @PostMapping("/{actionId}/test")
     @Operation(summary = "Test action execution")
+    @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
     public ResponseEntity<ApiResponse<Map<String, Object>>> test(
             @PathVariable Long functionUnitId,
             @PathVariable Long actionId,

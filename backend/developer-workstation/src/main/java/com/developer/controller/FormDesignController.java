@@ -8,17 +8,15 @@ import com.developer.dto.FormTableBindingResponse;
 import com.developer.dto.ValidationResult;
 import com.developer.entity.FormDefinition;
 import com.developer.entity.FormTableBinding;
-import com.developer.enums.BindingType;
+import com.developer.security.RequireDeveloperPermission;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * 表单设计控制器
@@ -30,10 +28,10 @@ import java.util.Map;
 public class FormDesignController {
     
     private final FormDesignComponent formDesignComponent;
-    private final JdbcTemplate jdbcTemplate;
     
     @GetMapping
     @Operation(summary = "List all forms of a function unit")
+    @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<List<FormDefinition>>> list(@PathVariable Long functionUnitId) {
         List<FormDefinition> result = formDesignComponent.getByFunctionUnitId(functionUnitId);
         return ResponseEntity.ok(ApiResponse.success(result));
@@ -41,6 +39,7 @@ public class FormDesignController {
     
     @PostMapping
     @Operation(summary = "Create form")
+    @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
     public ResponseEntity<ApiResponse<FormDefinition>> create(
             @PathVariable Long functionUnitId,
             @Valid @RequestBody FormDefinitionRequest request) {
@@ -50,6 +49,7 @@ public class FormDesignController {
     
     @PutMapping("/{formId}")
     @Operation(summary = "Update form")
+    @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
     public ResponseEntity<ApiResponse<FormDefinition>> update(
             @PathVariable Long functionUnitId,
             @PathVariable Long formId,
@@ -60,6 +60,7 @@ public class FormDesignController {
     
     @DeleteMapping("/{formId}")
     @Operation(summary = "Delete form")
+    @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
     public ResponseEntity<ApiResponse<Void>> delete(
             @PathVariable Long functionUnitId,
             @PathVariable Long formId) {
@@ -69,6 +70,7 @@ public class FormDesignController {
     
     @GetMapping("/{formId}")
     @Operation(summary = "Get form details")
+    @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<FormDefinition>> getById(
             @PathVariable Long functionUnitId,
             @PathVariable Long formId) {
@@ -78,6 +80,7 @@ public class FormDesignController {
     
     @GetMapping("/{formId}/form-create-config")
     @Operation(summary = "Generate Form-Create config")
+    @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<String>> generateFormCreateConfig(
             @PathVariable Long functionUnitId,
             @PathVariable Long formId) {
@@ -87,6 +90,7 @@ public class FormDesignController {
     
     @GetMapping("/{formId}/validate")
     @Operation(summary = "Validate form config")
+    @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<ValidationResult>> validate(
             @PathVariable Long functionUnitId,
             @PathVariable Long formId) {
@@ -98,29 +102,32 @@ public class FormDesignController {
     
     @GetMapping("/{formId}/bindings")
     @Operation(summary = "List form table bindings")
+    @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<List<FormTableBindingResponse>>> getBindings(
             @PathVariable Long functionUnitId,
             @PathVariable Long formId) {
         List<FormTableBinding> bindings = formDesignComponent.getBindings(formId);
         List<FormTableBindingResponse> result = bindings.stream()
-                .map(b -> FormTableBindingResponse.fromEntity(b, resolveRelationTableName(b)))
+                .map(b -> FormTableBindingResponse.fromEntity(b, formDesignComponent.resolveRelationTableName(b)))
                 .toList();
         return ResponseEntity.ok(ApiResponse.success(result));
     }
     
     @PostMapping("/{formId}/bindings")
     @Operation(summary = "Create table binding")
+    @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
     public ResponseEntity<ApiResponse<FormTableBindingResponse>> createBinding(
             @PathVariable Long functionUnitId,
             @PathVariable Long formId,
             @Valid @RequestBody FormTableBindingRequest request) {
         FormTableBinding binding = formDesignComponent.createBinding(formId, request);
         return ResponseEntity.ok(ApiResponse.success(
-                FormTableBindingResponse.fromEntity(binding, resolveRelationTableName(binding))));
+                FormTableBindingResponse.fromEntity(binding, formDesignComponent.resolveRelationTableName(binding))));
     }
     
     @PutMapping("/{formId}/bindings/{bindingId}")
     @Operation(summary = "Update table binding")
+    @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
     public ResponseEntity<ApiResponse<FormTableBindingResponse>> updateBinding(
             @PathVariable Long functionUnitId,
             @PathVariable Long formId,
@@ -132,6 +139,7 @@ public class FormDesignController {
     
     @DeleteMapping("/{formId}/bindings/{bindingId}")
     @Operation(summary = "Delete table binding")
+    @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
     public ResponseEntity<ApiResponse<Void>> deleteBinding(
             @PathVariable Long functionUnitId,
             @PathVariable Long formId,
@@ -144,6 +152,7 @@ public class FormDesignController {
     
     @GetMapping("/data-table-columns")
     @Operation(summary = "Get Data_Table column names for autocomplete")
+    @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<List<String>>> getDataTableColumns(
             @PathVariable Long functionUnitId) {
         List<String> columns = formDesignComponent.getDataTableColumns(functionUnitId);
@@ -152,6 +161,7 @@ public class FormDesignController {
     
     @PostMapping("/{formId}/copy")
     @Operation(summary = "Copy a Task Form (without Stage bindings)")
+    @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
     public ResponseEntity<ApiResponse<FormDefinition>> copyTaskForm(
             @PathVariable Long functionUnitId,
             @PathVariable Long formId) {
@@ -159,19 +169,4 @@ public class FormDesignController {
         return ResponseEntity.ok(ApiResponse.success(copied));
     }
 
-    /**
-     * Resolve relation table name from rt_table_definitions for RELATED bindings
-     */
-    private String resolveRelationTableName(FormTableBinding binding) {
-        if (binding.getBindingType() != BindingType.RELATED || binding.getRelationTableId() == null) {
-            return null;
-        }
-        try {
-            return jdbcTemplate.queryForObject(
-                    "SELECT table_name FROM rt_table_definitions WHERE id = ?",
-                    String.class, binding.getRelationTableId());
-        } catch (Exception e) {
-            return null;
-        }
-    }
 }

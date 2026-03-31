@@ -4,17 +4,16 @@ import com.developer.dto.LockInfoResponse;
 import com.developer.exception.AiGenerationException;
 import com.developer.exception.AiLockConflictException;
 import com.developer.service.AiLockService;
+import com.developer.service.UserDisplayNameService;
 import com.platform.cache.service.CacheService;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
@@ -34,20 +33,15 @@ public class AiLockServiceImpl implements AiLockService {
     private static final String FORCE_UNLOCK_KEY_PREFIX = "ai-gen-force-unlock:";
 
     private final CacheService cacheService;
-    private final RestTemplate restTemplate;
+    private final UserDisplayNameService userDisplayNameService;
     private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
     private final ConcurrentHashMap<Long, ScheduledFuture<?>> pendingForceUnlocks = new ConcurrentHashMap<>();
-
-    @Value("${admin-center.url:http://localhost:8090}")
-    private String adminCenterUrl;
 
     @Value("${ai-generation.lock.ttl-seconds:1800}")
     private long ttlSeconds;
 
     @Value("${ai-generation.lock.force-unlock-timeout-seconds:60}")
     private long forceUnlockTimeoutSeconds;
-
-    private final ConcurrentHashMap<String, String> userNameCache = new ConcurrentHashMap<>();
 
     @Override
     public LockInfoResponse tryAcquire(Long functionUnitId, String userId) {
@@ -251,28 +245,8 @@ public class AiLockServiceImpl implements AiLockService {
                 .build();
     }
 
-    @SuppressWarnings("unchecked")
     private String resolveUserDisplayName(String userId) {
-        if (userId == null || userId.isEmpty()) {
-            return null;
-        }
-        return userNameCache.computeIfAbsent(userId, uid -> {
-            try {
-                String url = adminCenterUrl + "/api/v1/admin/users/" + uid;
-                Map<String, Object> userInfo = restTemplate.getForObject(url, Map.class);
-                if (userInfo != null) {
-                    String fullName = (String) userInfo.get("fullName");
-                    if (fullName != null && !fullName.isEmpty()) return fullName;
-                    String displayName = (String) userInfo.get("displayName");
-                    if (displayName != null && !displayName.isEmpty()) return displayName;
-                    String username = (String) userInfo.get("username");
-                    if (username != null && !username.isEmpty()) return username;
-                }
-            } catch (Exception e) {
-                log.warn("Failed to resolve user display name for {}: {}", uid, e.getMessage());
-            }
-            return uid;
-        });
+        return userDisplayNameService.resolve(userId);
     }
 
     /**

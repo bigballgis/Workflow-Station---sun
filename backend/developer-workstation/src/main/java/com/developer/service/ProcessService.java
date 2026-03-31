@@ -85,8 +85,10 @@ public class ProcessService {
             // Step 4: Create process instance record bound to active version
             ProcessInstance processInstance = ProcessInstance.builder()
                     .id(processInstanceId)
+                    .processInstanceId(processInstanceId)
                     .processDefinitionKey(processDefinitionKey)
                     .processDefinitionName(activeVersion.getName())
+                    .initiatorId(startUserId)
                     .startUserId(startUserId)
                     .startUserName(startUserName)
                     .status("RUNNING")

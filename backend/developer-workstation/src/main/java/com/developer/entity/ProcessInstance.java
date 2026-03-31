@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.DynamicUpdate;
 import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
@@ -19,6 +20,7 @@ import java.util.Map;
  */
 @Entity
 @Table(name = "up_process_instance")
+@DynamicUpdate
 @Data
 @Builder
 @NoArgsConstructor
@@ -70,6 +72,25 @@ public class ProcessInstance {
     @Column(length = 32)
     private String priority;
 
+    /** 与 {@link #id} 一致时常用于与引擎/历史表对齐 */
+    @Column(name = "process_instance_id", length = 64)
+    private String processInstanceId;
+
+    @Column(name = "initiator_id", length = 64)
+    private String initiatorId;
+
+    @Column(length = 200)
+    private String title;
+
+    @Column(name = "variables_json", columnDefinition = "TEXT")
+    private String variablesJson;
+
+    @Column(name = "started_at", insertable = false, updatable = false)
+    private LocalDateTime startedAt;
+
+    @Column(name = "completed_at")
+    private LocalDateTime completedAt;
+
     @CreationTimestamp
     @Column(name = "start_time", updatable = false)
     private LocalDateTime startTime;
@@ -80,6 +101,10 @@ public class ProcessInstance {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    @jakarta.persistence.Version
+    @Column(name = "lock_version")
+    private Long lockVersion;
 
     /**
      * Reference to the specific version of the function unit this process instance is bound to.

@@ -1,6 +1,7 @@
 package com.developer.controller;
 
 import com.developer.dto.ApiResponse;
+import com.developer.security.RequireDeveloperPermission;
 import com.developer.service.RelationTableBindingService;
 import com.developer.service.RelationTableBindingService.RelationTableBindingDTO;
 import com.platform.common.dto.RelationTableDTO;
@@ -25,6 +26,7 @@ public class RelationTableBindingController {
 
     @GetMapping("/api/relation-tables/available")
     @Operation(summary = "获取可绑定的 Relation Table 列表")
+    @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<List<RelationTableDTO>>> getAvailableTables() {
         List<RelationTableDTO> result = bindingService.getAvailableTables();
         return ResponseEntity.ok(ApiResponse.success(result));
@@ -32,6 +34,7 @@ public class RelationTableBindingController {
 
     @PostMapping("/api/forms/{formId}/relation-bindings")
     @Operation(summary = "绑定 Relation Table")
+    @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
     public ResponseEntity<ApiResponse<Map<String, Long>>> bindRelationTable(
             @PathVariable Long formId,
             @RequestBody Map<String, Long> request) {
@@ -42,6 +45,7 @@ public class RelationTableBindingController {
 
     @DeleteMapping("/api/forms/{formId}/relation-bindings/{bindingId}")
     @Operation(summary = "解除绑定")
+    @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
     public ResponseEntity<ApiResponse<Void>> unbindRelationTable(
             @PathVariable Long formId,
             @PathVariable Long bindingId) {
@@ -51,6 +55,7 @@ public class RelationTableBindingController {
 
     @GetMapping("/api/forms/{formId}/relation-bindings")
     @Operation(summary = "获取绑定列表")
+    @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<List<RelationTableBindingDTO>>> getBindings(
             @PathVariable Long formId) {
         List<RelationTableBindingDTO> result = bindingService.getBindings(formId);

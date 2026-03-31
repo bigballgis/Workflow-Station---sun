@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.web.client.RestTemplate;
+import com.developer.service.UserDisplayNameService;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -47,7 +47,7 @@ class BpmnDmnCrossReferenceValidationTest {
     @Mock
     private ObjectMapper objectMapper;
     @Mock
-    private RestTemplate restTemplate;
+    private UserDisplayNameService userDisplayNameService;
 
     private FunctionUnitComponentImpl functionUnitComponent;
 
@@ -133,7 +133,7 @@ class BpmnDmnCrossReferenceValidationTest {
                 versionRepository,
                 iconRepository,
                 objectMapper,
-                restTemplate
+                userDisplayNameService
         );
     }
 

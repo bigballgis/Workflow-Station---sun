@@ -16,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.util.List;
 
@@ -42,23 +43,25 @@ public class DecisionDesignComponentImpl implements DecisionDesignComponent {
                     "Decision key '" + request.getDecisionKey() + "' already exists in this function unit");
         }
 
-        // Validate DMN XML before persisting
-        ValidationResult validationResult = dmnXmlValidator.validate(request.getDmnXml());
-        if (!validationResult.isValid()) {
-            throw new BusinessException("INVALID_DMN_XML",
-                    "DMN XML validation failed: " + validationResult.getErrors());
+        String dmnXml = normalizeDmnXml(request.getDmnXml());
+        if (dmnXml != null) {
+            ValidationResult validationResult = dmnXmlValidator.validate(dmnXml);
+            if (!validationResult.isValid()) {
+                throw new BusinessException("INVALID_DMN_XML",
+                        "DMN XML validation failed: " + validationResult.getErrors());
+            }
         }
 
-        String hitPolicy = request.getHitPolicy();
-        if (hitPolicy == null || hitPolicy.isBlank()) {
-            hitPolicy = dmnXmlParser.extractHitPolicy(request.getDmnXml());
+        String hitPolicy = normalizeHitPolicy(request.getHitPolicy());
+        if (hitPolicy == null && dmnXml != null) {
+            hitPolicy = dmnXmlParser.extractHitPolicy(dmnXml);
         }
 
         DecisionDefinition decisionDefinition = DecisionDefinition.builder()
                 .functionUnit(functionUnit)
                 .decisionKey(request.getDecisionKey())
                 .decisionName(request.getDecisionName())
-                .dmnXml(request.getDmnXml())
+                .dmnXml(dmnXml)
                 .hitPolicy(hitPolicy)
                 .description(request.getDescription())
                 .build();
@@ -99,21 +102,23 @@ public class DecisionDesignComponentImpl implements DecisionDesignComponent {
                     "Decision key '" + request.getDecisionKey() + "' already exists in this function unit");
         }
 
-        // Validate DMN XML before persisting
-        ValidationResult validationResult = dmnXmlValidator.validate(request.getDmnXml());
-        if (!validationResult.isValid()) {
-            throw new BusinessException("INVALID_DMN_XML",
-                    "DMN XML validation failed: " + validationResult.getErrors());
+        String dmnXml = normalizeDmnXml(request.getDmnXml());
+        if (dmnXml != null) {
+            ValidationResult validationResult = dmnXmlValidator.validate(dmnXml);
+            if (!validationResult.isValid()) {
+                throw new BusinessException("INVALID_DMN_XML",
+                        "DMN XML validation failed: " + validationResult.getErrors());
+            }
         }
 
-        String hitPolicy = request.getHitPolicy();
-        if (hitPolicy == null || hitPolicy.isBlank()) {
-            hitPolicy = dmnXmlParser.extractHitPolicy(request.getDmnXml());
+        String hitPolicy = normalizeHitPolicy(request.getHitPolicy());
+        if (hitPolicy == null && dmnXml != null) {
+            hitPolicy = dmnXmlParser.extractHitPolicy(dmnXml);
         }
 
         existing.setDecisionKey(request.getDecisionKey());
         existing.setDecisionName(request.getDecisionName());
-        existing.setDmnXml(request.getDmnXml());
+        existing.setDmnXml(dmnXml);
         existing.setHitPolicy(hitPolicy);
         existing.setDescription(request.getDescription());
 
@@ -147,7 +152,22 @@ public class DecisionDesignComponentImpl implements DecisionDesignComponent {
         DecisionDefinition existing = decisionDefinitionService.findById(decisionId)
                 .orElseThrow(() -> new ResourceNotFoundException("DecisionDefinition", decisionId));
 
+        if (!StringUtils.hasText(existing.getDmnXml())) {
+            throw new BusinessException("EMPTY_DMN_XML",
+                    "DMN XML is empty; save decision table content before opening the model editor");
+        }
         return dmnXmlParser.parseToModel(existing.getDmnXml());
+    }
+
+    private static String normalizeDmnXml(String raw) {
+        return StringUtils.hasText(raw) ? raw.trim() : null;
+    }
+
+    private static String normalizeHitPolicy(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        return raw.trim();
     }
 
     @Override

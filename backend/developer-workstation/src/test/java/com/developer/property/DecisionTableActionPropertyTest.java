@@ -10,7 +10,7 @@ import com.developer.repository.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import net.jqwik.api.*;
 import net.jqwik.api.lifecycle.BeforeProperty;
-import org.springframework.web.client.RestTemplate;
+import com.developer.service.UserDisplayNameService;
 
 import java.util.*;
 import java.util.concurrent.atomic.AtomicLong;
@@ -46,7 +46,7 @@ public class DecisionTableActionPropertyTest {
                 mock(VersionRepository.class),
                 mock(IconRepository.class),
                 new ObjectMapper(),
-                mock(RestTemplate.class)
+                mock(UserDisplayNameService.class)
         );
         idGenerator = new AtomicLong(1L);
     }
