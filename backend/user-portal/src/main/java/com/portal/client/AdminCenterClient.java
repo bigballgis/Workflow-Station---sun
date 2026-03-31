@@ -8,6 +8,8 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
+import com.platform.common.util.ApiResponseBodyUnwrap;
+
 import java.util.*;
 
 /**
@@ -164,7 +166,11 @@ public class AdminCenterClient {
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                     adminCenterUrl + path, HttpMethod.GET, null,
                     new ParameterizedTypeReference<>() {});
-            return Optional.ofNullable(response.getBody());
+            Map<String, Object> raw = response.getBody();
+            if (raw == null) {
+                return Optional.empty();
+            }
+            return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(raw));
         } catch (Exception e) {
             log.warn("Admin center GET {} failed: {}", path, e.getMessage());
             return Optional.empty();
@@ -173,10 +179,14 @@ public class AdminCenterClient {
 
     private Optional<List<Map<String, Object>>> getList(String path) {
         try {
-            ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                     adminCenterUrl + path, HttpMethod.GET, null,
                     new ParameterizedTypeReference<>() {});
-            return Optional.ofNullable(response.getBody());
+            Map<String, Object> raw = response.getBody();
+            if (raw == null) {
+                return Optional.empty();
+            }
+            return Optional.of(ApiResponseBodyUnwrap.normalizeToListOfMaps(raw));
         } catch (Exception e) {
             log.warn("Admin center GET {} failed: {}", path, e.getMessage());
             return Optional.empty();
@@ -191,7 +201,11 @@ public class AdminCenterClient {
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                     adminCenterUrl + path, HttpMethod.POST, entity,
                     new ParameterizedTypeReference<>() {});
-            return Optional.ofNullable(response.getBody());
+            Map<String, Object> raw = response.getBody();
+            if (raw == null) {
+                return Optional.empty();
+            }
+            return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(raw));
         } catch (Exception e) {
             log.warn("Admin center POST {} failed: {}", path, e.getMessage());
             return Optional.empty();

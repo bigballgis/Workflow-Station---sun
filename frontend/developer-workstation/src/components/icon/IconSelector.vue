@@ -149,9 +149,17 @@ const uploadForm = reactive({
 const categories = ['APPROVAL', 'CREDIT', 'ACCOUNT', 'PAYMENT', 'CUSTOMER', 'COMPLIANCE', 'OPERATION', 'GENERAL']
 
 const categoryLabel = (cat: string) => {
-  const key = `icon.category.${cat.toLowerCase()}`
-  const translated = t(key)
-  return translated !== key ? translated : cat
+  const map: Record<string, string> = {
+    APPROVAL: t('icon.categoryApproval'),
+    CREDIT: t('icon.categoryCredit'),
+    ACCOUNT: t('icon.categoryAccount'),
+    PAYMENT: t('icon.categoryPayment'),
+    CUSTOMER: t('icon.categoryCustomer'),
+    COMPLIANCE: t('icon.categoryCompliance'),
+    OPERATION: t('icon.categoryOperation'),
+    GENERAL: t('icon.categoryGeneral')
+  }
+  return map[cat] || cat
 }
 
 let searchTimer: ReturnType<typeof setTimeout> | null = null

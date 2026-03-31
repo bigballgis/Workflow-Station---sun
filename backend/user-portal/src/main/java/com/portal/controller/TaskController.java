@@ -1,6 +1,7 @@
 package com.portal.controller;
 
 import com.portal.component.TaskProcessComponent;
+import com.platform.common.util.ApiResponseBodyUnwrap;
 import com.portal.component.TaskQueryComponent;
 import com.portal.dto.*;
 import com.portal.security.CurrentUserId;
@@ -177,11 +178,10 @@ public class TaskController {
                     url, HttpMethod.GET, null,
                     new ParameterizedTypeReference<Map<String, Object>>() {});
             Map<String, Object> body = response.getBody();
-            if (body != null && body.get("content") != null) {
-                List<Map<String, Object>> users = (List<Map<String, Object>>) body.get("content");
-                return ApiResponse.success(users);
-            }
-            return ApiResponse.success(Collections.emptyList());
+            List<Map<String, Object>> users = body != null
+                    ? ApiResponseBodyUnwrap.normalizeToListOfMaps(body)
+                    : Collections.emptyList();
+            return ApiResponse.success(users);
         } catch (Exception e) {
             log.error("Failed to search users from admin-center: {}", e.getMessage());
             return ApiResponse.success(Collections.emptyList());

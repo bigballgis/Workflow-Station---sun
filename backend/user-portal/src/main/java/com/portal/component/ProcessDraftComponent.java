@@ -2,6 +2,7 @@ package com.portal.component;
 
 import com.portal.entity.ProcessDraft;
 import com.portal.repository.ProcessDraftRepository;
+import com.platform.common.util.ApiResponseBodyUnwrap;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -124,8 +125,9 @@ public class ProcessDraftComponent {
 
             @SuppressWarnings("unchecked")
             Map<String, Object> response = restTemplate.getForObject(url, Map.class);
-            if (response != null && response.get("name") != null) {
-                return (String) response.get("name");
+            Map<String, Object> payload = ApiResponseBodyUnwrap.unwrapDataMap(response);
+            if (!payload.isEmpty() && payload.get("name") != null) {
+                return (String) payload.get("name");
             }
         } catch (Exception e) {
             log.debug("Failed to resolve function unit name for {}: {}", processDefinitionKey, e.getMessage());

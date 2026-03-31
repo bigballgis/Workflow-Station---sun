@@ -5,6 +5,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import com.platform.common.util.ApiResponseBodyUnwrap;
+
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -45,8 +47,9 @@ public class UserDisplayNameService {
         }
         try {
             String url = adminCenterUrl + "/api/v1/admin/users/" + userId;
-            Map<String, Object> userInfo = restTemplate.getForObject(url, Map.class);
-            if (userInfo != null) {
+            Map<String, Object> raw = restTemplate.getForObject(url, Map.class);
+            Map<String, Object> userInfo = raw != null ? ApiResponseBodyUnwrap.unwrapDataMap(raw) : null;
+            if (userInfo != null && !userInfo.isEmpty()) {
                 String displayName = extractDisplayName(userInfo);
                 if (displayName != null) {
                     cache.put(userId, displayName);

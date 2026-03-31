@@ -542,17 +542,7 @@ export default {
     categoryCompliance: '合规风控',
     categoryOperation: '运营管理',
     categoryGeneral: '通用图标',
-    loadFailed: '加载失败',
-    category: {
-      approval: '审批流程',
-      credit: '信贷业务',
-      account: '账户服务',
-      payment: '支付结算',
-      customer: '客户管理',
-      compliance: '合规风控',
-      operation: '运营管理',
-      general: '通用图标'
-    }
+    loadFailed: '加载失败'
   },
   version: {
     title: '版本管理',

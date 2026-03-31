@@ -1,5 +1,6 @@
 package com.portal.controller;
 
+import com.platform.common.util.ApiResponseBodyUnwrap;
 import com.platform.security.util.SecurityContextUtils;
 import com.portal.dto.ApiResponse;
 import com.portal.security.CurrentUserId;
@@ -320,9 +321,11 @@ public class UserPermissionController {
                 url, HttpMethod.GET, entity,
                 new ParameterizedTypeReference<Map<String, Object>>() {}
             );
-            Map<String, Object> body = response.getBody();
-            if (body != null && body.containsKey("value")) {
-                return "true".equals(body.get("value"));
+            Map<String, Object> body = response.getBody() != null
+                    ? ApiResponseBodyUnwrap.unwrapDataMap(response.getBody())
+                    : Collections.emptyMap();
+            if (!body.isEmpty() && body.containsKey("value")) {
+                return "true".equals(String.valueOf(body.get("value")));
             }
             return false;
         } catch (Exception e) {

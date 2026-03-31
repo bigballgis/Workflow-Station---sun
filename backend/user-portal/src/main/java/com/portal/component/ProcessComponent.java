@@ -14,6 +14,7 @@ import com.portal.repository.ProcessDraftRepository;
 import com.portal.repository.ProcessHistoryRepository;
 import com.portal.repository.ProcessInstanceRepository;
 import com.portal.repository.ActionDefinitionRepository;
+import com.platform.common.util.ApiResponseBodyUnwrap;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -67,16 +68,9 @@ public class ProcessComponent {
             Map<String, Object> response = restTemplate.getForObject(url, Map.class);
             
             if (response != null) {
-                @SuppressWarnings("unchecked")
-                List<Map<String, Object>> units = null;
-                // Support both ApiResponse format {data: [...]} and paginated format {content: [...]}
-                if (response.containsKey("data") && response.get("data") instanceof List) {
-                    units = (List<Map<String, Object>>) response.get("data");
-                } else if (response.containsKey("content")) {
-                    units = (List<Map<String, Object>>) response.get("content");
-                }
+                List<Map<String, Object>> units = ApiResponseBodyUnwrap.normalizeToListOfMaps(response);
                 
-                if (units != null && !units.isEmpty()) {
+                if (!units.isEmpty()) {
                     log.info("Got {} deployed function units", units.size());
                 
                     // 根据用户的业务角色过滤可访问的功能单元
@@ -644,7 +638,7 @@ public class ProcessComponent {
             try {
                 @SuppressWarnings("unchecked")
                 Map<String, Object> response = restTemplate.getForObject(userUrl, Map.class);
-                userInfo = response;
+                userInfo = ApiResponseBodyUnwrap.unwrapDataMap(response);
             } catch (Exception e) {
                 log.warn("Failed to get user by ID {}, trying by username: {}", initiatorId, e.getMessage());
             }
@@ -656,17 +650,15 @@ public class ProcessComponent {
                 try {
                     @SuppressWarnings("unchecked")
                     Map<String, Object> searchResponse = restTemplate.getForObject(searchUrl, Map.class);
-                    if (searchResponse != null && searchResponse.get("content") != null) {
+                    List<Map<String, Object>> users = searchResponse != null
+                            ? ApiResponseBodyUnwrap.normalizeToListOfMaps(searchResponse)
+                            : Collections.emptyList();
+                    if (!users.isEmpty()) {
+                        String foundUserId = (String) users.get(0).get("id");
+                        String detailUrl = adminCenterUrl + "/api/v1/admin/users/" + foundUserId;
                         @SuppressWarnings("unchecked")
-                        List<Map<String, Object>> users = (List<Map<String, Object>>) searchResponse.get("content");
-                        if (!users.isEmpty()) {
-                            // 找到用户后，获取详细信息
-                            String foundUserId = (String) users.get(0).get("id");
-                            String detailUrl = adminCenterUrl + "/api/v1/admin/users/" + foundUserId;
-                            @SuppressWarnings("unchecked")
-                            Map<String, Object> detailResponse = restTemplate.getForObject(detailUrl, Map.class);
-                            userInfo = detailResponse;
-                        }
+                        Map<String, Object> detailResponse = restTemplate.getForObject(detailUrl, Map.class);
+                        userInfo = ApiResponseBodyUnwrap.unwrapDataMap(detailResponse);
                     }
                 } catch (Exception e) {
                     log.warn("Failed to search user by username {}: {}", initiatorId, e.getMessage());
@@ -701,7 +693,7 @@ public class ProcessComponent {
             try {
                 @SuppressWarnings("unchecked")
                 Map<String, Object> response = restTemplate.getForObject(userUrl, Map.class);
-                userInfo = response;
+                userInfo = ApiResponseBodyUnwrap.unwrapDataMap(response);
             } catch (Exception e) {
                 log.warn("Failed to get user by ID {}, trying by username: {}", initiatorId, e.getMessage());
             }
@@ -713,17 +705,15 @@ public class ProcessComponent {
                 try {
                     @SuppressWarnings("unchecked")
                     Map<String, Object> searchResponse = restTemplate.getForObject(searchUrl, Map.class);
-                    if (searchResponse != null && searchResponse.get("content") != null) {
+                    List<Map<String, Object>> users = searchResponse != null
+                            ? ApiResponseBodyUnwrap.normalizeToListOfMaps(searchResponse)
+                            : Collections.emptyList();
+                    if (!users.isEmpty()) {
+                        String foundUserId = (String) users.get(0).get("id");
+                        String detailUrl = adminCenterUrl + "/api/v1/admin/users/" + foundUserId;
                         @SuppressWarnings("unchecked")
-                        List<Map<String, Object>> users = (List<Map<String, Object>>) searchResponse.get("content");
-                        if (!users.isEmpty()) {
-                            // 找到用户后，获取详细信息
-                            String foundUserId = (String) users.get(0).get("id");
-                            String detailUrl = adminCenterUrl + "/api/v1/admin/users/" + foundUserId;
-                            @SuppressWarnings("unchecked")
-                            Map<String, Object> detailResponse = restTemplate.getForObject(detailUrl, Map.class);
-                            userInfo = detailResponse;
-                        }
+                        Map<String, Object> detailResponse = restTemplate.getForObject(detailUrl, Map.class);
+                        userInfo = ApiResponseBodyUnwrap.unwrapDataMap(detailResponse);
                     }
                 } catch (Exception e) {
                     log.warn("Failed to search user by username {}: {}", initiatorId, e.getMessage());
@@ -768,9 +758,10 @@ public class ProcessComponent {
             String userUrl = adminCenterUrl + "/api/v1/admin/users/" + userId;
             
             @SuppressWarnings("unchecked")
-            Map<String, Object> userInfo = restTemplate.getForObject(userUrl, Map.class);
+            Map<String, Object> rawUser = restTemplate.getForObject(userUrl, Map.class);
+            Map<String, Object> userInfo = ApiResponseBodyUnwrap.unwrapDataMap(rawUser);
             
-            if (userInfo != null) {
+            if (userInfo != null && !userInfo.isEmpty()) {
                 // 优先使用 fullName
                 String fullName = (String) userInfo.get("fullName");
                 if (fullName != null && !fullName.isEmpty()) {
@@ -1130,9 +1121,10 @@ public class ProcessComponent {
             @SuppressWarnings("unchecked")
             Map<String, Object> response = restTemplate.getForObject(url, Map.class);
             
-            if (response != null) {
-                log.info("Got function unit content: name={}", response.get("name"));
-                return response;
+            Map<String, Object> payload = ApiResponseBodyUnwrap.unwrapDataMap(response);
+            if (!payload.isEmpty()) {
+                log.info("Got function unit content: name={}", payload.get("name"));
+                return payload;
             }
             
             return Collections.emptyMap();
@@ -1165,9 +1157,10 @@ public class ProcessComponent {
             @SuppressWarnings("unchecked")
             Map<String, Object> response = restTemplate.getForObject(url, Map.class);
             
-            if (response != null) {
-                log.info("Got function unit content: name={}", response.get("name"));
-                return response;
+            Map<String, Object> payload = ApiResponseBodyUnwrap.unwrapDataMap(response);
+            if (!payload.isEmpty()) {
+                log.info("Got function unit content: name={}", payload.get("name"));
+                return payload;
             }
             
             return Collections.emptyMap();
@@ -1200,23 +1193,24 @@ public class ProcessComponent {
             
             @SuppressWarnings("unchecked")
             Map<String, Object> response = restTemplate.getForObject(url, Map.class);
+            Map<String, Object> payload = ApiResponseBodyUnwrap.unwrapDataMap(response);
             
-            if (response != null) {
+            if (!payload.isEmpty()) {
                 // 根据内容类型提取对应的数组
                 String key = contentType.equalsIgnoreCase("FORM") ? "forms" :
                             contentType.equalsIgnoreCase("PROCESS") ? "processes" :
                             contentType.equalsIgnoreCase("DATA_TABLE") ? "dataTables" : null;
                 
-                if (key != null && response.containsKey(key)) {
+                if (key != null && payload.containsKey(key)) {
                     @SuppressWarnings("unchecked")
-                    List<Map<String, Object>> contents = (List<Map<String, Object>>) response.get(key);
+                    List<Map<String, Object>> contents = (List<Map<String, Object>>) payload.get(key);
                     log.info("Got {} contents of type {} from key '{}'", contents.size(), contentType, key);
                     return contents;
                 } else {
-                    log.warn("Response does not contain key '{}' for contentType '{}'", key, contentType);
+                    log.warn("Payload does not contain key '{}' for contentType '{}'", key, contentType);
                 }
             } else {
-                log.warn("Got null response from admin center");
+                log.warn("Got empty payload from admin center (unwrap)");
             }
             
             return Collections.emptyList();

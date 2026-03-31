@@ -320,8 +320,10 @@ const loadFunctionUnitContent = async () => {
     
     // 解析表单定义 - 根据开始节点的 formId 选择正确的表单
     if (content.forms && content.forms.length > 0) {
-      // Task 16.1: 校验 PROCESS form 存在
-      const hasProcessForm = content.forms.some((f: any) => f.formType === 'PROCESS')
+      // 功能单元内容中的表单来自 admin-center FormContentDTO：字段为 type（如 "FORM"），无 formType
+      const hasProcessForm = content.forms.some(
+        (f: any) => f.formType === 'PROCESS' || f.type === 'FORM' || f.type === 'PROCESS'
+      )
       if (!hasProcessForm) {
         noProcessForm.value = true
         return

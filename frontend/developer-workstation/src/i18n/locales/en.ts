@@ -542,17 +542,7 @@ export default {
     categoryCompliance: 'Compliance & Risk',
     categoryOperation: 'Operation Management',
     categoryGeneral: 'General Icons',
-    loadFailed: 'Load failed',
-    category: {
-      approval: 'Approval Process',
-      credit: 'Credit Business',
-      account: 'Account Service',
-      payment: 'Payment Settlement',
-      customer: 'Customer Management',
-      compliance: 'Compliance & Risk',
-      operation: 'Operation Management',
-      general: 'General Icons'
-    }
+    loadFailed: 'Load failed'
   },
   version: {
     title: 'Version Management',

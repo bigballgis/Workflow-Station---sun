@@ -8,6 +8,8 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
+import com.platform.common.util.ApiResponseBodyUnwrap;
+
 import java.util.*;
 
 /**
@@ -58,7 +60,7 @@ public class VirtualGroupAccessComponent {
                     new ParameterizedTypeReference<Map<String, Object>>() {}
             );
             
-            return response.getBody();
+            return response.getBody() != null ? ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()) : null;
             
         } catch (Exception e) {
             log.error("Failed to get virtual group {}: {}", groupId, e.getMessage());
@@ -237,7 +239,7 @@ public class VirtualGroupAccessComponent {
                     new ParameterizedTypeReference<Map<String, Object>>() {}
             );
             
-            return response.getBody();
+            return response.getBody() != null ? ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()) : null;
             
         } catch (Exception e) {
             log.error("Failed to get business unit {}: {}", businessUnitId, e.getMessage());

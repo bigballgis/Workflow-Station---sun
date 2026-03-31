@@ -542,17 +542,7 @@ export default {
     categoryCompliance: '合規風控',
     categoryOperation: '營運管理',
     categoryGeneral: '通用圖示',
-    loadFailed: '載入失敗',
-    category: {
-      approval: '審批流程',
-      credit: '信貸業務',
-      account: '帳戶服務',
-      payment: '支付結算',
-      customer: '客戶管理',
-      compliance: '合規風控',
-      operation: '營運管理',
-      general: '通用圖示'
-    }
+    loadFailed: '載入失敗'
   },
   version: {
     title: '版本管理',

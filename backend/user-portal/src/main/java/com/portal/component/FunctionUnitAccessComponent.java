@@ -9,6 +9,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
+import com.platform.common.util.ApiResponseBodyUnwrap;
+
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
@@ -99,7 +101,8 @@ public class FunctionUnitAccessComponent {
             );
             
             if (response.getBody() != null) {
-                Boolean enabled = (Boolean) response.getBody().get("enabled");
+                Map<String, Object> payload = ApiResponseBodyUnwrap.unwrapDataMap(response.getBody());
+                Boolean enabled = (Boolean) payload.get("enabled");
                 log.info("Function unit {} enabled status: {}", functionUnitIdOrCode, enabled);
                 // 默认为 true（如果字段不存在）
                 return enabled == null || enabled;
@@ -129,7 +132,9 @@ public class FunctionUnitAccessComponent {
                         verifyUrl, HttpMethod.GET, null,
                         new ParameterizedTypeReference<Map<String, Object>>() {}
                 );
-                if (response.getBody() != null && response.getBody().get("id") != null) {
+                Map<String, Object> verifyPayload = response.getBody() != null
+                        ? ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()) : Collections.emptyMap();
+                if (!verifyPayload.isEmpty() && verifyPayload.get("id") != null) {
                     log.info("UUID {} verified as valid function unit ID", functionUnitIdOrCode);
                     return functionUnitIdOrCode;
                 }
@@ -166,7 +171,8 @@ public class FunctionUnitAccessComponent {
                 );
                 
                 if (response.getBody() != null) {
-                    String id = (String) response.getBody().get("id");
+                    Map<String, Object> payload = ApiResponseBodyUnwrap.unwrapDataMap(response.getBody());
+                    String id = (String) payload.get("id");
                     log.info("Resolved function unit code {} to ID {}", functionUnitIdOrCode, id);
                     return id;
                 }
@@ -187,7 +193,8 @@ public class FunctionUnitAccessComponent {
                 );
                 
                 if (response.getBody() != null) {
-                    String id = (String) response.getBody().get("id");
+                    Map<String, Object> payload = ApiResponseBodyUnwrap.unwrapDataMap(response.getBody());
+                    String id = (String) payload.get("id");
                     log.info("Resolved function unit by process key {} to ID {}", functionUnitIdOrCode, id);
                     // 缓存 process key → function unit ID 映射
                     processKeyCache.put(functionUnitIdOrCode, new CachedData<>(id));
@@ -209,9 +216,8 @@ public class FunctionUnitAccessComponent {
             );
             
             if (searchResponse.getBody() != null) {
-                @SuppressWarnings("unchecked")
-                java.util.List<Map<String, Object>> content = (java.util.List<Map<String, Object>>) searchResponse.getBody().get("content");
-                if (content != null && !content.isEmpty()) {
+                java.util.List<Map<String, Object>> content = ApiResponseBodyUnwrap.normalizeToListOfMaps(searchResponse.getBody());
+                if (!content.isEmpty()) {
                     // 只返回精确匹配名称的功能单元，避免模糊匹配返回错误结果
                     for (Map<String, Object> unit : content) {
                         String name = (String) unit.get("name");

@@ -1,5 +1,7 @@
 package com.portal.client;
 
+import com.platform.common.util.ApiResponseBodyUnwrap;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -87,7 +89,7 @@ public class WorkflowEngineClient {
                 new ParameterizedTypeReference<Map<String, Object>>() {});
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                return Optional.of(response.getBody());
+                return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()));
             }
         } catch (Exception e) {
             log.warn("Failed to deploy process to workflow engine: {}", e.getMessage());
@@ -121,7 +123,7 @@ public class WorkflowEngineClient {
                 new ParameterizedTypeReference<Map<String, Object>>() {});
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                return Optional.of(response.getBody());
+                return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()));
             }
         } catch (org.springframework.web.client.HttpClientErrorException e) {
             log.error("Failed to start process in workflow engine (HTTP {}): {}", e.getStatusCode(), e.getResponseBodyAsString());
@@ -148,7 +150,7 @@ public class WorkflowEngineClient {
                 new ParameterizedTypeReference<Map<String, Object>>() {});
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                return Optional.of(response.getBody());
+                return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()));
             }
         } catch (Exception e) {
             log.warn("Failed to get user tasks from workflow engine: {}", e.getMessage());
@@ -171,7 +173,7 @@ public class WorkflowEngineClient {
                 new ParameterizedTypeReference<Map<String, Object>>() {});
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                return Optional.of(response.getBody());
+                return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()));
             }
         } catch (Exception e) {
             log.warn("Failed to get process instance tasks from workflow engine: {}", e.getMessage());
@@ -210,7 +212,7 @@ public class WorkflowEngineClient {
                 new ParameterizedTypeReference<Map<String, Object>>() {});
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                return Optional.of(response.getBody());
+                return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()));
             }
         } catch (Exception e) {
             log.warn("Failed to get user all visible tasks from workflow engine: {}", e.getMessage());
@@ -233,7 +235,7 @@ public class WorkflowEngineClient {
                 new ParameterizedTypeReference<Map<String, Object>>() {});
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                return Optional.of(response.getBody());
+                return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()));
             }
         } catch (Exception e) {
             log.warn("Failed to get task by id from workflow engine: {}", e.getMessage());
@@ -256,7 +258,7 @@ public class WorkflowEngineClient {
                 new ParameterizedTypeReference<Map<String, Object>>() {});
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                return Optional.of(response.getBody());
+                return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()));
             }
         } catch (Exception e) {
             log.warn("Failed to count user tasks from workflow engine: {}", e.getMessage());
@@ -291,7 +293,7 @@ public class WorkflowEngineClient {
                 new ParameterizedTypeReference<Map<String, Object>>() {});
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                return Optional.of(response.getBody());
+                return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()));
             }
         } catch (Exception e) {
             log.warn("Failed to complete task in workflow engine: {}", e.getMessage());
@@ -321,7 +323,7 @@ public class WorkflowEngineClient {
                 new ParameterizedTypeReference<Map<String, Object>>() {});
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                return Optional.of(response.getBody());
+                return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()));
             }
         } catch (Exception e) {
             log.warn("Failed to claim task in workflow engine: {}", e.getMessage());
@@ -354,7 +356,7 @@ public class WorkflowEngineClient {
                 new ParameterizedTypeReference<Map<String, Object>>() {});
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                return Optional.of(response.getBody());
+                return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()));
             }
         } catch (Exception e) {
             log.warn("Failed to delegate task in workflow engine: {}", e.getMessage());
@@ -384,7 +386,7 @@ public class WorkflowEngineClient {
                 new ParameterizedTypeReference<Map<String, Object>>() {});
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                return Optional.of(response.getBody());
+                return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()));
             }
         } catch (Exception e) {
             log.warn("Failed to unclaim task in workflow engine: {}", e.getMessage());
@@ -417,7 +419,7 @@ public class WorkflowEngineClient {
                 new ParameterizedTypeReference<Map<String, Object>>() {});
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                return Optional.of(response.getBody());
+                return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()));
             }
         } catch (Exception e) {
             log.warn("Failed to transfer task in workflow engine: {}", e.getMessage());
@@ -450,7 +452,7 @@ public class WorkflowEngineClient {
                 new ParameterizedTypeReference<Map<String, Object>>() {});
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                return Optional.of(response.getBody());
+                return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()));
             }
         } catch (Exception e) {
             log.warn("Failed to return task in workflow engine: {}", e.getMessage());
@@ -473,9 +475,8 @@ public class WorkflowEngineClient {
                 new ParameterizedTypeReference<Map<String, Object>>() {});
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                @SuppressWarnings("unchecked")
-                List<Map<String, Object>> activities = (List<Map<String, Object>>) response.getBody().get("data");
-                return Optional.ofNullable(activities);
+                List<Map<String, Object>> activities = ApiResponseBodyUnwrap.normalizeToListOfMaps(response.getBody());
+                return Optional.of(activities);
             }
         } catch (Exception e) {
             log.warn("Failed to get returnable activities from workflow engine: {}", e.getMessage());
@@ -501,7 +502,7 @@ public class WorkflowEngineClient {
                 new ParameterizedTypeReference<Map<String, Object>>() {});
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                return Optional.of(response.getBody());
+                return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()));
             }
         } catch (Exception e) {
             log.warn("Failed to get process instance status from workflow engine: {}", e.getMessage());
@@ -524,9 +525,8 @@ public class WorkflowEngineClient {
                 new ParameterizedTypeReference<Map<String, Object>>() {});
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                @SuppressWarnings("unchecked")
-                Map<String, Object> body = (Map<String, Object>) response.getBody().get("data");
-                return Optional.ofNullable(body);
+                Map<String, Object> body = ApiResponseBodyUnwrap.unwrapDataMap(response.getBody());
+                return body.isEmpty() ? Optional.empty() : Optional.of(body);
             }
         } catch (Exception e) {
             log.warn("Failed to get current activity from workflow engine: {}", e.getMessage());
@@ -549,7 +549,7 @@ public class WorkflowEngineClient {
                 new ParameterizedTypeReference<Map<String, Object>>() {});
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                return Optional.of(response.getBody());
+                return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()));
             }
         } catch (Exception e) {
             log.warn("Failed to get process history from workflow engine: {}", e.getMessage());
@@ -574,14 +574,12 @@ public class WorkflowEngineClient {
                 new ParameterizedTypeReference<Map<String, Object>>() {});
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                Map<String, Object> body = response.getBody();
-                // 响应格式: { success: true, data: { taskInstances: [...] } }
-                @SuppressWarnings("unchecked")
-                Map<String, Object> data = (Map<String, Object>) body.get("data");
-                if (data != null) {
+                Map<String, Object> data = ApiResponseBodyUnwrap.unwrapDataMap(response.getBody());
+                Object taskInstances = data.get("taskInstances");
+                if (taskInstances instanceof List<?>) {
                     @SuppressWarnings("unchecked")
-                    List<Map<String, Object>> tasks = (List<Map<String, Object>>) data.get("taskInstances");
-                    return Optional.ofNullable(tasks);
+                    List<Map<String, Object>> tasks = (List<Map<String, Object>>) taskInstances;
+                    return Optional.of(tasks);
                 }
             }
         } catch (Exception e) {
@@ -610,12 +608,9 @@ public class WorkflowEngineClient {
             log.debug("Response status: {}", response.getStatusCode());
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                Map<String, Object> body = response.getBody();
-                log.debug("Response body keys: {}", body.keySet());
-                @SuppressWarnings("unchecked")
-                List<Map<String, Object>> data = (List<Map<String, Object>>) body.get("data");
-                log.debug("Extracted {} records from response", data != null ? data.size() : 0);
-                return Optional.ofNullable(data);
+                List<Map<String, Object>> data = ApiResponseBodyUnwrap.normalizeToListOfMaps(response.getBody());
+                log.debug("Extracted {} records from response", data.size());
+                return Optional.of(data);
             }
         } catch (Exception e) {
             log.error("Failed to get process instance history from workflow engine: {}", e.getMessage(), e);
@@ -638,10 +633,8 @@ public class WorkflowEngineClient {
                 new ParameterizedTypeReference<Map<String, Object>>() {});
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                Map<String, Object> body = response.getBody();
-                @SuppressWarnings("unchecked")
-                List<Map<String, Object>> data = (List<Map<String, Object>>) body.get("data");
-                return Optional.ofNullable(data);
+                List<Map<String, Object>> data = ApiResponseBodyUnwrap.normalizeToListOfMaps(response.getBody());
+                return Optional.of(data);
             }
         } catch (Exception e) {
             log.warn("Failed to get task history by taskId from workflow engine: {}", e.getMessage());
@@ -654,7 +647,6 @@ public class WorkflowEngineClient {
     /**
      * 获取用户的任务权限信息（虚拟组和部门角色）
      */
-    @SuppressWarnings("unchecked")
     public Optional<Map<String, Object>> getUserTaskPermissions(String userId) {
         if (!isAvailable()) {
             return Optional.empty();
@@ -667,12 +659,7 @@ public class WorkflowEngineClient {
                 new ParameterizedTypeReference<Map<String, Object>>() {});
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                Map<String, Object> body = response.getBody();
-                // 从 ApiResponse 中提取 data
-                if (body.containsKey("data")) {
-                    return Optional.of((Map<String, Object>) body.get("data"));
-                }
-                return Optional.of(body);
+                return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()));
             }
         } catch (Exception e) {
             log.warn("Failed to get user task permissions from workflow engine: {}", e.getMessage());
@@ -696,12 +683,7 @@ public class WorkflowEngineClient {
                 new ParameterizedTypeReference<Map<String, Object>>() {});
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                Map<String, Object> body = response.getBody();
-                // 从 ApiResponse 中提取 data
-                Map<String, Object> data = body.containsKey("data") 
-                    ? (Map<String, Object>) body.get("data") 
-                    : body;
-                
+                Map<String, Object> data = ApiResponseBodyUnwrap.unwrapDataMap(response.getBody());
                 Object hasPermission = data.get("hasPermission");
                 if (hasPermission instanceof Boolean) {
                     return Optional.of((Boolean) hasPermission);
@@ -743,12 +725,7 @@ public class WorkflowEngineClient {
                 new ParameterizedTypeReference<Map<String, Object>>() {});
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                Map<String, Object> body = response.getBody();
-                // 从 ApiResponse 中提取 data
-                if (body.containsKey("data")) {
-                    return Optional.of((Map<String, Object>) body.get("data"));
-                }
-                return Optional.of(body);
+                return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()));
             }
         } catch (Exception e) {
             log.warn("Failed to get completed tasks from workflow engine: {}", e.getMessage());
@@ -772,12 +749,7 @@ public class WorkflowEngineClient {
                 new ParameterizedTypeReference<Map<String, Object>>() {});
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                Map<String, Object> body = response.getBody();
-                // 从 ApiResponse 中提取 data
-                if (body.containsKey("data")) {
-                    return Optional.of((Map<String, Object>) body.get("data"));
-                }
-                return Optional.of(body);
+                return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()));
             }
         } catch (Exception e) {
             log.warn("Failed to get process statistics from workflow engine: {}", e.getMessage());
@@ -807,7 +779,7 @@ public class WorkflowEngineClient {
                 new ParameterizedTypeReference<Map<String, Object>>() {});
             
             if (response.getStatusCode().is2xxSuccessful()) {
-                return Optional.ofNullable(response.getBody());
+                return Optional.ofNullable(response.getBody()).map(ApiResponseBodyUnwrap::unwrapDataMap);
             }
         } catch (Exception e) {
             log.warn("Failed to cancel process instance in workflow engine: {}", e.getMessage());
@@ -838,7 +810,7 @@ public class WorkflowEngineClient {
                 new ParameterizedTypeReference<Map<String, Object>>() {});
 
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                return Optional.of(response.getBody());
+                return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()));
             }
         } catch (Exception e) {
             log.warn("Failed to execute N8N action via workflow engine: {}", e.getMessage());

@@ -12,6 +12,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
+import com.platform.common.util.ApiResponseBodyUnwrap;
+
 import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -446,7 +448,14 @@ public class TaskFormComponent {
             log.debug("Fetching Task Form definition from: {}", url);
 
             Map<String, Object> response = restTemplate.getForObject(url, Map.class);
-            if (response != null && response.containsKey("form")) {
+            if (response == null) {
+                return null;
+            }
+            Map<String, Object> payload = ApiResponseBodyUnwrap.unwrapDataMap(response);
+            if (payload.containsKey("form")) {
+                return (Map<String, Object>) payload.get("form");
+            }
+            if (response.containsKey("form")) {
                 return (Map<String, Object>) response.get("form");
             }
         } catch (Exception e) {
