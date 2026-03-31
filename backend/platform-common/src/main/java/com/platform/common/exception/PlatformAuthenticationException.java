@@ -5,25 +5,25 @@ import com.platform.common.enums.ErrorCode;
 /**
  * Exception for authentication failures.
  */
-public class AuthenticationException extends PlatformException {
+public class PlatformAuthenticationException extends PlatformException {
     
-    public AuthenticationException() {
+    public PlatformAuthenticationException() {
         super(ErrorCode.AUTH_TOKEN_INVALID);
     }
     
-    public AuthenticationException(ErrorCode errorCode) {
+    public PlatformAuthenticationException(ErrorCode errorCode) {
         super(errorCode);
     }
     
-    public AuthenticationException(ErrorCode errorCode, String message) {
+    public PlatformAuthenticationException(ErrorCode errorCode, String message) {
         super(errorCode, message);
     }
     
-    public AuthenticationException(String message) {
+    public PlatformAuthenticationException(String message) {
         super(ErrorCode.AUTH_TOKEN_INVALID, message);
     }
     
-    public AuthenticationException(String message, Throwable cause) {
+    public PlatformAuthenticationException(String message, Throwable cause) {
         super(ErrorCode.AUTH_TOKEN_INVALID, message, cause);
     }
 }

@@ -27,7 +27,7 @@ public class AesEncryptionService implements EncryptionService {
     private static final int GCM_TAG_LENGTH = 128;
     private static final String ENCRYPTED_PREFIX = "ENC:";
     
-    @Value("${encryption.key:default-256-bit-key-for-dev-only!}")
+    @Value("${platform.encryption.secret-key}")
     private String encryptionKey;
     
     private SecretKey secretKey;
@@ -35,10 +35,17 @@ public class AesEncryptionService implements EncryptionService {
     
     @PostConstruct
     public void init() {
-        // Ensure key is 32 bytes (256 bits)
-        byte[] keyBytes = new byte[32];
+        if (encryptionKey == null || encryptionKey.isBlank()) {
+            throw new IllegalStateException(
+                    "Encryption key is not configured. Set ENCRYPTION_SECRET_KEY / platform.encryption.secret-key (at least 32 bytes).");
+        }
         byte[] providedKey = encryptionKey.getBytes(StandardCharsets.UTF_8);
-        System.arraycopy(providedKey, 0, keyBytes, 0, Math.min(providedKey.length, 32));
+        if (providedKey.length < 32) {
+            throw new IllegalStateException(
+                    "Encryption key is only " + providedKey.length + " bytes. Minimum 32 bytes required.");
+        }
+        byte[] keyBytes = new byte[32];
+        System.arraycopy(providedKey, 0, keyBytes, 0, 32);
         this.secretKey = new SecretKeySpec(keyBytes, "AES");
     }
     

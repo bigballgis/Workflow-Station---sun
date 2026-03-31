@@ -32,7 +32,7 @@ public class ApiResponse<T> {
     /**
      * Error information (null for success responses)
      */
-    private ErrorResponse error;
+    private com.platform.common.exception.ErrorResponse error;
     
     /**
      * Response timestamp
@@ -80,7 +80,7 @@ public class ApiResponse<T> {
     /**
      * Create an error response
      */
-    public static <T> ApiResponse<T> error(ErrorResponse errorResponse) {
+    public static <T> ApiResponse<T> error(com.platform.common.exception.ErrorResponse errorResponse) {
         return ApiResponse.<T>builder()
                 .success(false)
                 .error(errorResponse)
@@ -95,7 +95,7 @@ public class ApiResponse<T> {
     public static <T> ApiResponse<T> error(String errorCode, String message) {
         return ApiResponse.<T>builder()
                 .success(false)
-                .error(ErrorResponse.of(errorCode, message))
+                .error(com.platform.common.exception.ErrorResponse.of(errorCode, message))
                 .timestamp(LocalDateTime.now())
                 .build();
     }
@@ -106,7 +106,7 @@ public class ApiResponse<T> {
     public static <T> ApiResponse<T> error(String errorCode, String message, String traceId) {
         return ApiResponse.<T>builder()
                 .success(false)
-                .error(ErrorResponse.of(errorCode, message, traceId))
+                .error(com.platform.common.exception.ErrorResponse.of(errorCode, message, traceId))
                 .traceId(traceId)
                 .timestamp(LocalDateTime.now())
                 .build();

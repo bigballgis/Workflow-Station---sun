@@ -41,9 +41,17 @@ public class JwtTokenServiceImpl implements JwtTokenService {
     public JwtTokenServiceImpl(JwtProperties jwtProperties, StringRedisTemplate redisTemplate) {
         this.jwtProperties = jwtProperties;
         this.redisTemplate = redisTemplate;
-        this.secretKey = Keys.hmacShaKeyFor(
-            jwtProperties.getSecret().getBytes(StandardCharsets.UTF_8)
-        );
+        String secret = jwtProperties.getSecret();
+        if (secret == null || secret.isBlank()) {
+            throw new IllegalStateException(
+                    "JWT secret is not configured. Set platform.security.jwt.secret (at least 32 bytes).");
+        }
+        byte[] keyBytes = secret.getBytes(StandardCharsets.UTF_8);
+        if (keyBytes.length < 32) {
+            throw new IllegalStateException(
+                    "JWT secret is only " + keyBytes.length + " bytes. Minimum 32 bytes required.");
+        }
+        this.secretKey = Keys.hmacShaKeyFor(keyBytes);
     }
 
     @Override
@@ -52,6 +60,7 @@ public class JwtTokenServiceImpl implements JwtTokenService {
         return generateToken(userId, username, null, null, roles, permissions, language);
     }
 
+    @Override
     public String generateToken(String userId, String username, String email, String displayName,
                                 List<String> roles, List<String> permissions, String language) {
         Date now = new Date();

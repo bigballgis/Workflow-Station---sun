@@ -1,3 +1,16 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+
 platform:
   security:
     jwt:
@@ -6,6 +19,8 @@ platform:
       refresh-expiration-ms: 604800000
       issuer: test-platform
       validate-issuer: true
+  encryption:
+    secret-key: test-encryption-key-32-bytes-long!!
 
 logging:
   level:

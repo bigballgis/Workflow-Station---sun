@@ -43,16 +43,18 @@ public class ConfigurationEncryptionService {
     private final String encryptionKey;
     private final SecureRandom secureRandom;
     
-    public ConfigurationEncryptionService(@Value("${platform.config.encryption.key:default-config-encryption-key-32bytes}") String encryptionKey) {
+    public ConfigurationEncryptionService(@Value("${platform.config.encryption.key}") String encryptionKey) {
+        if (encryptionKey == null || encryptionKey.isBlank()) {
+            throw new IllegalStateException(
+                    "Configuration encryption key is not configured. Set platform.config.encryption.key (at least 32 bytes).");
+        }
+        if (encryptionKey.length() < 32) {
+            throw new IllegalStateException(
+                    "Configuration encryption key is only " + encryptionKey.length()
+                    + " characters. Minimum 32 characters required.");
+        }
         this.encryptionKey = encryptionKey;
         this.secureRandom = new SecureRandom();
-        
-        // Validate encryption key length
-        if (encryptionKey.length() < 32) {
-            logger.warn("Configuration encryption key length is less than 32 characters. " +
-                       "Consider using a longer key for better security.");
-        }
-        
         logger.info("Configuration encryption service initialized");
     }
     
@@ -96,9 +98,7 @@ public class ConfigurationEncryptionService {
             return ENCRYPTED_PREFIX + encryptedValue;
             
         } catch (Exception e) {
-            logger.error("Failed to encrypt configuration value", e);
-            // Return original value if encryption fails to avoid breaking the application
-            return plainValue;
+            throw new RuntimeException("Failed to encrypt configuration value", e);
         }
     }
     
