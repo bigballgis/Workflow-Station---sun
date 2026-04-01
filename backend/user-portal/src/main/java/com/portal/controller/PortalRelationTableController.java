@@ -2,6 +2,7 @@ package com.portal.controller;
 
 import com.platform.common.dto.RelationTableDTO;
 import com.portal.dto.ApiResponse;
+import com.portal.security.CurrentUserId;
 import com.portal.dto.PageResponse;
 import com.portal.service.PortalRelationTableService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -30,7 +31,7 @@ public class PortalRelationTableController {
     @GetMapping
     @Operation(summary = "获取用户可见的表列表")
     public ResponseEntity<ApiResponse<List<RelationTableDTO>>> getVisibleTables(
-            @RequestHeader(value = "X-User-Id", required = false) String userId) {
+            @CurrentUserId String userId) {
         try {
             List<RelationTableDTO> result = service.getVisibleTables(userId);
             return ResponseEntity.ok(ApiResponse.success(result));
@@ -44,7 +45,7 @@ public class PortalRelationTableController {
     @Operation(summary = "分页查询表数据（只读）")
     public ResponseEntity<ApiResponse<PageResponse<Map<String, Object>>>> queryTableData(
             @PathVariable Long tableId,
-            @RequestHeader(value = "X-User-Id", required = false) String userId,
+            @CurrentUserId String userId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) String search) {
@@ -60,7 +61,7 @@ public class PortalRelationTableController {
     @Operation(summary = "导出 CSV")
     public ResponseEntity<byte[]> exportCsv(
             @PathVariable Long tableId,
-            @RequestHeader(value = "X-User-Id", required = false) String userId,
+            @CurrentUserId String userId,
             @RequestParam(defaultValue = "10000") int maxRows) {
         try {
             String csv = service.exportCsv(tableId, userId, maxRows);

@@ -1,6 +1,18 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
+import { hasAnyRole } from '@/utils/permission'
 import i18n from '@/i18n'
+
+declare module 'vue-router' {
+  interface RouteMeta {
+    titleKey?: string
+    title?: string
+    icon?: string
+    hidden?: boolean
+    requiresAuth?: boolean
+    requiredRoles?: string[]
+  }
+}
 
 const routes: RouteRecordRaw[] = [
   {
@@ -19,13 +31,13 @@ const routes: RouteRecordRaw[] = [
         path: 'function-units',
         name: 'FunctionUnits',
         component: () => import('@/views/function-unit/FunctionUnitList.vue'),
-        meta: { titleKey: 'functionUnit.title' }
+        meta: { titleKey: 'functionUnit.title', requiredRoles: ['TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER'] }
       },
       {
         path: 'function-units/:id',
         name: 'FunctionUnitEdit',
         component: () => import('@/views/function-unit/FunctionUnitEdit.vue'),
-        meta: { titleKey: 'functionUnit.edit' }
+        meta: { titleKey: 'functionUnit.edit', requiredRoles: ['TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER'] }
       },
       {
         path: 'icons',
@@ -38,6 +50,12 @@ const routes: RouteRecordRaw[] = [
         name: 'Profile',
         component: () => import('@/views/profile/index.vue'),
         meta: { titleKey: 'profile.title', hidden: true }
+      },
+      {
+        path: '403',
+        name: 'Forbidden',
+        component: () => import('@/views/error/403.vue'),
+        meta: { titleKey: 'error.forbidden', hidden: true }
       }
     ]
   }
@@ -90,6 +108,14 @@ router.beforeEach(async (to, _from, next) => {
         path: '/login',
         query: { redirect: to.fullPath }
       })
+      return
+    }
+  }
+
+  const requiredRoles = to.meta.requiredRoles as string[] | undefined
+  if (requiredRoles && requiredRoles.length > 0) {
+    if (!hasAnyRole(requiredRoles)) {
+      next('/403')
       return
     }
   }

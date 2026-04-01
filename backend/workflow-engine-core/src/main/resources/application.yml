@@ -71,7 +71,7 @@ spring:
 flowable:
   # For development: create schema automatically
   # For production: set to false and use manual schema initialization
-  database-schema-update: ${FLOWABLE_SCHEMA_UPDATE:true}
+  database-schema-update: ${FLOWABLE_SCHEMA_UPDATE:false}
   async-executor-activate: true
   history-level: full
   dmn:
@@ -100,6 +100,13 @@ jwt:
 
 # Platform Configuration
 platform:
+  security:
+    jwt:
+      secret: ${JWT_SECRET:your-256-bit-secret-key-for-development-only}
+      expiration-ms: ${JWT_EXPIRATION:86400000}
+      refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION:604800000}
+      issuer: platform
+      validate-issuer: false
   encryption:
     secret-key: ${ENCRYPTION_SECRET_KEY:your-32-byte-aes-256-secret-key!!}
   workflow-engine:

@@ -2,7 +2,7 @@ package com.platform.gateway.handler;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.platform.common.dto.ErrorResponse;
+import com.platform.common.exception.ErrorResponse;
 import com.platform.common.enums.ErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,7 +17,7 @@ import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 /**
  * Global error handler for consistent error responses.
@@ -44,10 +44,11 @@ public class GlobalErrorHandler implements ErrorWebExceptionHandler {
         String traceId = exchange.getRequest().getHeaders().getFirst("X-Trace-Id");
         
         ErrorResponse errorResponse = ErrorResponse.builder()
+                .code(errorCode.getCode())
                 .errorCode(errorCode.getCode())
                 .message(ex.getMessage() != null ? ex.getMessage() : errorCode.getMessage())
                 .traceId(traceId)
-                .timestamp(LocalDateTime.now())
+                .timestamp(Instant.now())
                 .path(exchange.getRequest().getPath().value())
                 .build();
         

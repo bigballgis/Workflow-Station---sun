@@ -1,5 +1,25 @@
 <template>
   <div class="decision-list">
+    <!-- 内嵌画布：与流程/表单等页一致，留在功能单元框架与 Tab 内 -->
+    <template v-if="editingDecisionId !== null">
+      <div class="decision-editor-frame">
+        <div class="decision-editor-nav">
+          <el-button text @click="closeDesigner">
+            <el-icon><ArrowLeft /></el-icon>
+            {{ t('decision.backToList') }}
+          </el-button>
+          <span class="decision-editor-title">{{ editingDecisionTitle }}</span>
+        </div>
+        <DecisionDesigner
+          :key="editingDecisionId"
+          :function-unit-id="functionUnitId"
+          :decision-id="editingDecisionId"
+          @saved="loadDecisions"
+        />
+      </div>
+    </template>
+
+    <template v-else>
     <div class="decision-list-header">
       <el-button type="primary" @click="showCreateDialog = true">
         <el-icon><Plus /></el-icon>
@@ -48,10 +68,11 @@
     </el-table>
 
     <el-empty v-else-if="!loading" :description="t('decision.noDecisions')" />
+    </template>
 
     <!-- Create Decision Dialog -->
-    <el-dialog v-model="showCreateDialog" :title="t('decision.create')" width="500px">
-      <el-form :model="createForm" label-width="100px">
+    <el-dialog v-model="showCreateDialog" :title="t('decision.create')" width="560px">
+      <el-form :model="createForm" label-width="auto" label-position="right">
         <el-form-item :label="t('decision.key')" required>
           <el-input v-model="createForm.decisionKey" :placeholder="t('decision.keyPlaceholder')" />
         </el-form-item>
@@ -79,15 +100,6 @@
       </template>
     </el-dialog>
 
-    <!-- Decision Designer Dialog -->
-    <el-dialog v-model="showDesigner" :title="t('decision.edit')" fullscreen destroy-on-close>
-      <DecisionDesigner
-        v-if="editingDecisionId !== null"
-        :function-unit-id="functionUnitId"
-        :decision-id="editingDecisionId"
-      />
-    </el-dialog>
-
     <!-- Bind to Node Dialog -->
     <el-dialog v-model="showBindNodeDialog" :title="t('decision.bindToNode')" width="500px">
       <div v-if="serviceTaskNodes.length > 0">
@@ -111,9 +123,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Plus } from '@element-plus/icons-vue'
+import { Plus, ArrowLeft } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { decisionApi } from '@/api/decision'
 import type { DecisionDefinition, DecisionDefinitionRequest } from '@/api/decision'
@@ -129,8 +141,17 @@ const decisions = ref<DecisionDefinition[]>([])
 const loading = ref(false)
 const creating = ref(false)
 const showCreateDialog = ref(false)
-const showDesigner = ref(false)
 const editingDecisionId = ref<number | null>(null)
+
+const editingDecisionTitle = computed(() => {
+  if (editingDecisionId.value == null) return ''
+  const d = decisions.value.find((x) => x.id === editingDecisionId.value)
+  return d?.decisionName || d?.decisionKey || t('decision.edit')
+})
+
+function closeDesigner() {
+  editingDecisionId.value = null
+}
 
 // Bind to Node state
 const showBindNodeDialog = ref(false)
@@ -178,12 +199,14 @@ async function handleCreate() {
 
 function handleEdit(row: DecisionDefinition) {
   editingDecisionId.value = row.id
-  showDesigner.value = true
 }
 
 async function handleDelete(row: DecisionDefinition) {
   try {
     await ElMessageBox.confirm(t('decision.deleteConfirm'), t('decision.confirmTitle'), { type: 'warning' })
+    if (editingDecisionId.value === row.id) {
+      editingDecisionId.value = null
+    }
     await decisionApi.delete(props.functionUnitId, row.id)
     ElMessage.success(t('decision.deleteSuccess'))
     await loadDecisions()
@@ -251,6 +274,41 @@ onMounted(() => {
 </script>
 
 <style scoped lang="scss">
+.decision-list {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.decision-editor-frame {
+  display: flex;
+  flex-direction: column;
+  /* 与 ProcessDesigner 画布区域一致，留在页面主卡片内 */
+  height: calc(100vh - 280px);
+  min-height: 500px;
+}
+
+.decision-editor-nav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+.decision-editor-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
+}
+
+.decision-editor-frame :deep(.decision-designer) {
+  flex: 1;
+  min-height: 0;
+}
+
 .decision-list-header {
   display: flex;
   justify-content: flex-end;

@@ -28,7 +28,7 @@ ON CONFLICT (role_id, permission) DO NOTHING;
 
 \echo '✓ Initialized permissions for TECH_LEAD role (22 permissions)'
 
--- TEAM_LEAD: Create, update, view, develop, publish permissions (22 permissions)
+-- TEAM_LEAD: Create, update, view, develop, publish permissions (cannot delete) (17 permissions)
 INSERT INTO sys_developer_role_permissions (id, role_id, permission, created_at)
 SELECT 
     gen_random_uuid()::varchar,
@@ -36,16 +36,16 @@ SELECT
     p.permission,
     CURRENT_TIMESTAMP
 FROM (VALUES 
-    ('FUNCTION_UNIT_CREATE'), ('FUNCTION_UNIT_UPDATE'), ('FUNCTION_UNIT_DELETE'), ('FUNCTION_UNIT_VIEW'),
+    ('FUNCTION_UNIT_CREATE'), ('FUNCTION_UNIT_UPDATE'), ('FUNCTION_UNIT_VIEW'),
     ('FUNCTION_UNIT_DEVELOP'), ('FUNCTION_UNIT_PUBLISH'),
-    ('FORM_CREATE'), ('FORM_UPDATE'), ('FORM_DELETE'), ('FORM_VIEW'),
-    ('PROCESS_CREATE'), ('PROCESS_UPDATE'), ('PROCESS_DELETE'), ('PROCESS_VIEW'),
-    ('TABLE_CREATE'), ('TABLE_UPDATE'), ('TABLE_DELETE'), ('TABLE_VIEW'),
-    ('ACTION_CREATE'), ('ACTION_UPDATE'), ('ACTION_DELETE'), ('ACTION_VIEW')
+    ('FORM_CREATE'), ('FORM_UPDATE'), ('FORM_VIEW'),
+    ('PROCESS_CREATE'), ('PROCESS_UPDATE'), ('PROCESS_VIEW'),
+    ('TABLE_CREATE'), ('TABLE_UPDATE'), ('TABLE_VIEW'),
+    ('ACTION_CREATE'), ('ACTION_UPDATE'), ('ACTION_VIEW')
 ) AS p(permission)
 ON CONFLICT (role_id, permission) DO NOTHING;
 
-\echo '✓ Initialized permissions for TEAM_LEAD role (22 permissions)'
+\echo '✓ Initialized permissions for TEAM_LEAD role (17 permissions)'
 
 -- DEVELOPER: View, update, develop permissions (no create or delete) (10 permissions)
 INSERT INTO sys_developer_role_permissions (id, role_id, permission, created_at)

@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Pattern;
 
 /**
  * Pagination request parameters.
@@ -35,6 +36,7 @@ public class PageRequest {
     /**
      * Sort field
      */
+    @Pattern(regexp = "^[a-zA-Z_][a-zA-Z0-9_.]*$", message = "Invalid sort field")
     private String sortBy;
     
     /**

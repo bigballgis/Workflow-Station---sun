@@ -232,24 +232,31 @@ public class ProcessEngineComponent {
             
             List<ProcessDefinition> processDefinitions = query.list();
             
-            // If category specified, filter manually since Flowable has no direct deployment category query
+            List<String> deploymentIds = processDefinitions.stream()
+                .map(ProcessDefinition::getDeploymentId)
+                .distinct()
+                .toList();
+            
+            Map<String, Deployment> deploymentMap = new HashMap<>();
+            if (!deploymentIds.isEmpty()) {
+                List<Deployment> deployments = repositoryService.createDeploymentQuery()
+                    .list();
+                for (Deployment d : deployments) {
+                    deploymentMap.put(d.getId(), d);
+                }
+            }
+            
             if (StringUtils.hasText(category)) {
                 processDefinitions = processDefinitions.stream()
                     .filter(pd -> {
-                        try {
-                            var deployment = repositoryService.createDeploymentQuery()
-                                .deploymentId(pd.getDeploymentId())
-                                .singleResult();
-                            return deployment != null && category.equals(deployment.getCategory());
-                        } catch (Exception e) {
-                            return false;
-                        }
+                        Deployment deployment = deploymentMap.get(pd.getDeploymentId());
+                        return deployment != null && category.equals(deployment.getCategory());
                     })
                     .collect(Collectors.toList());
             }
             
             return processDefinitions.stream()
-                .map(this::convertToProcessDefinitionResult)
+                .map(pd -> convertToProcessDefinitionResult(pd, deploymentMap.get(pd.getDeploymentId())))
                 .collect(Collectors.toList());
                 
         } catch (Exception e) {
@@ -708,17 +715,15 @@ public class ProcessEngineComponent {
                 throw new WorkflowBusinessException("PROCESS_NOT_FOUND", "Process instance does not exist: " + processInstanceId);
             }
             
-            // Get current active execution instances
             List<Execution> executions = runtimeService.createExecutionQuery()
                     .processInstanceId(processInstanceId)
                     .list();
             
+            BpmnModel bpmnModel = repositoryService.getBpmnModel(processInstance.getProcessDefinitionId());
             List<ActivityInfo> activities = new ArrayList<>();
             
             for (Execution execution : executions) {
                 if (execution.getActivityId() != null) {
-                    // Get BPMN model for activity details
-                    BpmnModel bpmnModel = repositoryService.getBpmnModel(processInstance.getProcessDefinitionId());
                     FlowElement flowElement = bpmnModel.getFlowElement(execution.getActivityId());
                     
                     if (flowElement != null) {
@@ -1417,6 +1422,11 @@ public class ProcessEngineComponent {
         // Check for valid XML format
         try {
             javax.xml.parsers.DocumentBuilderFactory factory = javax.xml.parsers.DocumentBuilderFactory.newInstance();
+            factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+            factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
+            factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+            factory.setAttribute(javax.xml.XMLConstants.ACCESS_EXTERNAL_DTD, "");
+            factory.setAttribute(javax.xml.XMLConstants.ACCESS_EXTERNAL_SCHEMA, "");
             factory.setNamespaceAware(true);
             javax.xml.parsers.DocumentBuilder builder = factory.newDocumentBuilder();
             
@@ -1523,24 +1533,14 @@ public class ProcessEngineComponent {
         return processDefinition;
     }
     
-    private ProcessDefinitionResult convertToProcessDefinitionResult(ProcessDefinition processDefinition) {
-        // Get deployment info for deployment-specified category and name
-        String deploymentCategory = null;
+    private ProcessDefinitionResult convertToProcessDefinitionResult(ProcessDefinition processDefinition, Deployment deployment) {
+        String deploymentCategory = processDefinition.getCategory();
         String deploymentName = null;
-        try {
-            var deployment = repositoryService.createDeploymentQuery()
-                .deploymentId(processDefinition.getDeploymentId())
-                .singleResult();
-            if (deployment != null) {
-                deploymentCategory = deployment.getCategory();
-                deploymentName = deployment.getName();
-            }
-        } catch (Exception e) {
-            // If deployment info retrieval fails, use process definition info
-            deploymentCategory = processDefinition.getCategory();
+        if (deployment != null) {
+            deploymentCategory = deployment.getCategory();
+            deploymentName = deployment.getName();
         }
         
-        // Prioritize deployment name, fall back to process definition name
         String finalName = (deploymentName != null && !deploymentName.equals("temp-validation")) 
             ? deploymentName 
             : processDefinition.getName();
@@ -1548,9 +1548,9 @@ public class ProcessEngineComponent {
         return ProcessDefinitionResult.builder()
             .id(processDefinition.getId())
             .key(processDefinition.getKey())
-            .name(finalName) // Use deployment name or process definition name
+            .name(finalName)
             .version(processDefinition.getVersion())
-            .category(deploymentCategory) // Use deployment category instead of BPMN namespace
+            .category(deploymentCategory)
             .deploymentId(processDefinition.getDeploymentId())
             .resourceName(processDefinition.getResourceName())
             .diagramResourceName(processDefinition.getDiagramResourceName())
@@ -1562,19 +1562,22 @@ public class ProcessEngineComponent {
             .build();
     }
     
+    private static final List<String> KEY_PROCESS_VARIABLES = List.of(
+        "processTitle", "initiator", "initiatorName", "formDataId", "businessKey",
+        "functionUnitId", "functionUnitKey"
+    );
+
     private ProcessInstanceQueryResult.ProcessInstanceInfo convertToProcessInstanceInfo(ProcessInstance processInstance) {
-        // Get process definition info
         ProcessDefinition processDefinition = repositoryService.createProcessDefinitionQuery()
                 .processDefinitionId(processInstance.getProcessDefinitionId())
                 .singleResult();
         
-        // Get active task count
         long activeTaskCount = taskService.createTaskQuery()
                 .processInstanceId(processInstance.getId())
                 .count();
         
-        // Get process variables
-        Map<String, Object> variables = runtimeService.getVariables(processInstance.getId());
+        Map<String, Object> variables = runtimeService.getVariables(
+                processInstance.getId(), KEY_PROCESS_VARIABLES);
         
         return ProcessInstanceQueryResult.ProcessInstanceInfo.builder()
                 .processInstanceId(processInstance.getId())
@@ -1585,7 +1588,7 @@ public class ProcessEngineComponent {
                 .name(processInstance.getName())
                 .startTime(processInstance.getStartTime() != null ? 
                     LocalDateTime.ofInstant(processInstance.getStartTime().toInstant(), ZoneId.systemDefault()) : null)
-                .endTime(null) // Running process instances have no end time
+                .endTime(null)
                 .startUserId(processInstance.getStartUserId())
                 .state(processInstance.isSuspended() ? "suspended" : "active")
                 .suspended(processInstance.isSuspended())

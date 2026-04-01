@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS sys_users (
     deleted BOOLEAN NOT NULL DEFAULT false,
     deleted_at TIMESTAMP,
     deleted_by VARCHAR(64),
+    lock_version BIGINT DEFAULT 0,
     CONSTRAINT chk_sys_user_status CHECK (status IN ('ACTIVE', 'INACTIVE', 'DISABLED', 'LOCKED', 'PENDING'))
 );
 
@@ -73,11 +74,14 @@ CREATE TABLE IF NOT EXISTS sys_roles (
     created_by VARCHAR(64),
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_by VARCHAR(64),
+    lock_version BIGINT NOT NULL DEFAULT 0,
     CONSTRAINT chk_role_type CHECK (type IN ('ADMIN', 'DEVELOPER', 'BU_BOUNDED', 'BU_UNBOUNDED'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_sys_roles_code ON sys_roles(code);
 CREATE INDEX IF NOT EXISTS idx_sys_roles_type ON sys_roles(type);
+
+COMMENT ON COLUMN sys_roles.lock_version IS 'Optimistic locking version';
 
 -- =====================================================
 -- 3. Business Units Table (sys_business_units)

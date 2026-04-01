@@ -257,3 +257,5 @@ platform:
       refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION:604800000}
       issuer: platform
       validate-issuer: false
+  encryption:
+    secret-key: ${ENCRYPTION_SECRET_KEY:your-32-byte-aes-256-secret-key!!}

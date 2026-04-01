@@ -274,6 +274,7 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import type { TableInstance } from 'element-plus'
 import { Download, Search, InfoFilled } from '@element-plus/icons-vue'
+import DOMPurify from 'dompurify'
 import { queryAuditLogs, exportAuditLogs, type AuditLog, type AuditQueryRequest } from '@/api/audit'
 
 const { t } = useI18n()
@@ -694,7 +695,7 @@ const getDiffJson = (
 const formatJsonHighlight = (obj: Record<string, unknown>): string => {
   if (!obj || Object.keys(obj).length === 0) return '{}'
   const json = JSON.stringify(obj, null, 2)
-  return json
+  const highlighted = json
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -712,6 +713,10 @@ const formatJsonHighlight = (obj: Record<string, unknown>): string => {
         return `<span class="${cls}">${match}</span>`
       }
     )
+  return DOMPurify.sanitize(highlighted, {
+    ALLOWED_TAGS: ['span'],
+    ALLOWED_ATTR: ['class'],
+  })
 }
 
 const showDetail = (log: AuditLog) => {

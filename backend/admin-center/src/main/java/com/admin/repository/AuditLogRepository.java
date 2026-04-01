@@ -42,4 +42,11 @@ public interface AuditLogRepository extends JpaRepository<AuditLog, String>, Jpa
      */
     @Query("SELECT COUNT(DISTINCT a.userId) FROM AuditLog a WHERE a.action = :action AND a.timestamp >= :start AND a.timestamp < :end")
     long countDistinctUsersByActionAndTimestampBetween(@Param("action") AuditAction action, @Param("start") Instant start, @Param("end") Instant end);
+
+    long countByActionAndTimestampBetween(AuditAction action, Instant start, Instant end);
+
+    @Query("SELECT CAST(a.timestamp AS DATE) as day, COUNT(DISTINCT a.userId), COUNT(a) " +
+           "FROM AuditLog a WHERE a.action = :action AND a.timestamp >= :start AND a.timestamp < :end " +
+           "GROUP BY CAST(a.timestamp AS DATE)")
+    List<Object[]> countDailyLoginStats(@Param("action") AuditAction action, @Param("start") Instant start, @Param("end") Instant end);
 }

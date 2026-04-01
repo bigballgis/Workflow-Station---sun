@@ -26,11 +26,10 @@ export default defineConfig({
   server: {
     port: 3002,
     proxy: {
-      // Auth API routes to developer-workstation
+      // Auth：保留完整路径 /api/v1/auth/*（与 Spring context-path 一致）
       '/api/v1/auth': {
         target: 'http://localhost:8083',
-        changeOrigin: true,
-        rewrite: (path) => '/auth' + path.substring('/api/v1/auth'.length)
+        changeOrigin: true
       },
       // Admin Center API (departments, virtual-groups)
       '/api/admin-center': {

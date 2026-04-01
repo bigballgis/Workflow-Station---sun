@@ -109,6 +109,7 @@ import { ElMessage, type UploadFile } from 'element-plus'
 import { Search, Upload } from '@element-plus/icons-vue'
 import { iconApi, type Icon } from '@/api/icon'
 import { useI18n } from 'vue-i18n'
+import { sanitizeSvg } from '@/utils/svgSanitizer'
 
 const { t } = useI18n()
 
@@ -147,25 +148,18 @@ const uploadForm = reactive({
 
 const categories = ['APPROVAL', 'CREDIT', 'ACCOUNT', 'PAYMENT', 'CUSTOMER', 'COMPLIANCE', 'OPERATION', 'GENERAL']
 
-// 清理 SVG 内容，移除可能导致显示问题的元素
-function sanitizeSvg(svg: string): string {
-  if (!svg) return ''
-  let result = svg
-  // 移除 <title> 元素
-  result = result.replace(/<title[^>]*>[\s\S]*?<\/title>/gi, '')
-  // 移除 <style> 元素（防止样式泄漏到全局）
-  result = result.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-  // 移除 <defs> 元素（包含 <style> 定义，防止样式泄漏）
-  result = result.replace(/<defs[\s\S]*?<\/defs>/gi, '')
-  // 移除所有 class 属性，防止样式冲突
-  result = result.replace(/\s+class="[^"]*"/gi, '')
-  return result
-}
-
 const categoryLabel = (cat: string) => {
-  const key = `icon.category.${cat.toLowerCase()}`
-  const translated = t(key)
-  return translated !== key ? translated : cat
+  const map: Record<string, string> = {
+    APPROVAL: t('icon.categoryApproval'),
+    CREDIT: t('icon.categoryCredit'),
+    ACCOUNT: t('icon.categoryAccount'),
+    PAYMENT: t('icon.categoryPayment'),
+    CUSTOMER: t('icon.categoryCustomer'),
+    COMPLIANCE: t('icon.categoryCompliance'),
+    OPERATION: t('icon.categoryOperation'),
+    GENERAL: t('icon.categoryGeneral')
+  }
+  return map[cat] || cat
 }
 
 let searchTimer: ReturnType<typeof setTimeout> | null = null

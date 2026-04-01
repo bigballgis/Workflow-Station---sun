@@ -94,6 +94,20 @@ public class PermissionComponent {
     }
 
     /**
+     * 业务单元全量目录（扁平列表，供成员管理等场景下拉）
+     */
+    public List<Map<String, Object>> getBusinessUnitsCatalog() {
+        return virtualGroupAccessComponent.getBusinessUnits();
+    }
+
+    /**
+     * 指定业务单元已绑定的业务角色
+     */
+    public List<Map<String, Object>> getBusinessUnitRoles(String businessUnitId) {
+        return virtualGroupAccessComponent.getBusinessUnitBoundRoles(businessUnitId);
+    }
+
+    /**
      * 申请角色分配（自动批准）
      */
     public PermissionRequest requestRoleAssignment(String userId, String roleId, String organizationUnitId, String reason) {

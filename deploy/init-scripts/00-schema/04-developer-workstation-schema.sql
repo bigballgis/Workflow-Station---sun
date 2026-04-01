@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS dw_function_units (
     version VARCHAR(20) NOT NULL DEFAULT '1.0.0',
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     enabled BOOLEAN NOT NULL DEFAULT TRUE,
-    deployed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deployed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     previous_version_id BIGINT,
     lock_version BIGINT DEFAULT 0,
     created_by VARCHAR(64) NOT NULL,
@@ -149,12 +149,13 @@ CREATE TABLE IF NOT EXISTS dw_form_definitions (
     config_json JSONB NOT NULL DEFAULT '{}',
     description TEXT,
     bound_table_id BIGINT,
+    lock_version BIGINT NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_form_function_unit FOREIGN KEY (function_unit_id) REFERENCES dw_function_units(id) ON DELETE CASCADE,
     CONSTRAINT fk_form_bound_table FOREIGN KEY (bound_table_id) REFERENCES dw_table_definitions(id) ON DELETE SET NULL,
     CONSTRAINT uk_form_name_fu UNIQUE (function_unit_id, form_name),
-    CONSTRAINT chk_form_type CHECK (form_type IN ('MAIN', 'SUB', 'ACTION', 'POPUP'))
+    CONSTRAINT chk_form_type CHECK (form_type IN ('PROCESS', 'TASK', 'ACTION'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_dw_form_definitions_fu ON dw_form_definitions(function_unit_id);

@@ -17,6 +17,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { iconApi } from '@/api/icon'
+import { sanitizeSvg } from '@/utils/svgSanitizer'
 
 const props = withDefaults(defineProps<{
   iconId?: number | null
@@ -59,24 +60,6 @@ async function loadIcon() {
   } else {
     iconContent.value = ''
   }
-}
-
-// Sanitize SVG content, remove elements that may cause display issues
-function sanitizeSvg(svg: string): string {
-  let result = svg
-  // Remove <title> elements
-  result = result.replace(/<title[^>]*>[\s\S]*?<\/title>/gi, '')
-  // Remove <style> elements (prevent style leaking to global scope)
-  result = result.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-  // Remove <defs> elements (contains <style> definitions, prevent style leaking)
-  result = result.replace(/<defs[\s\S]*?<\/defs>/gi, '')
-  // Replace class="cls-1" with inline style fill="#fff"
-  result = result.replace(/class="cls-1"/gi, 'fill="#fff"')
-  // Replace class="cls-2" with inline style fill="#db0011"
-  result = result.replace(/class="cls-2"/gi, 'fill="#db0011"')
-  // Remove all class attributes to prevent style conflicts
-  result = result.replace(/\s+class="[^"]*"/gi, '')
-  return result
 }
 
 function handleClick() {

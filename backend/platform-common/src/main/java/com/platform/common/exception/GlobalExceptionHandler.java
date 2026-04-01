@@ -1,5 +1,7 @@
 package com.platform.common.exception;
 
+import com.platform.common.dto.ApiResponse;
+import com.platform.common.enums.ErrorCode;
 import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.http.HttpStatus;
@@ -30,12 +32,12 @@ public class GlobalExceptionHandler {
     // ==================== 认证和授权异常 ====================
     
     @ExceptionHandler(AuthenticationException.class)
-    public ResponseEntity<ErrorResponse> handleAuthenticationException(
+    public ResponseEntity<ApiResponse<?>> handleAuthenticationException(
             AuthenticationException ex, WebRequest request) {
         String traceId = generateTraceId();
         log.warn("Authentication failed [{}]: {}", traceId, ex.getMessage());
         
-        ErrorResponse response = ErrorResponse.builder()
+        ErrorResponse errorResponse = ErrorResponse.builder()
                 .code("AUTH_FAILED")
                 .message("Authentication failed")
                 .timestamp(Instant.now())
@@ -43,16 +45,16 @@ public class GlobalExceptionHandler {
                 .path(getPath(request))
                 .build();
         
-        return new ResponseEntity<>(response, HttpStatus.UNAUTHORIZED);
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error(errorResponse));
     }
 
     @ExceptionHandler(BadCredentialsException.class)
-    public ResponseEntity<ErrorResponse> handleBadCredentials(
+    public ResponseEntity<ApiResponse<?>> handleBadCredentials(
             BadCredentialsException ex, WebRequest request) {
         String traceId = generateTraceId();
         log.warn("Bad credentials [{}]: {}", traceId, ex.getMessage());
         
-        ErrorResponse response = ErrorResponse.builder()
+        ErrorResponse errorResponse = ErrorResponse.builder()
                 .code("AUTH_INVALID_CREDENTIALS")
                 .message("Invalid username or password")
                 .timestamp(Instant.now())
@@ -60,16 +62,16 @@ public class GlobalExceptionHandler {
                 .path(getPath(request))
                 .build();
         
-        return new ResponseEntity<>(response, HttpStatus.UNAUTHORIZED);
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.error(errorResponse));
     }
 
     @ExceptionHandler(AccessDeniedException.class)
-    public ResponseEntity<ErrorResponse> handleAccessDenied(
+    public ResponseEntity<ApiResponse<?>> handleAccessDenied(
             AccessDeniedException ex, WebRequest request) {
         String traceId = generateTraceId();
         log.warn("Access denied [{}]: {}", traceId, ex.getMessage());
         
-        ErrorResponse response = ErrorResponse.builder()
+        ErrorResponse errorResponse = ErrorResponse.builder()
                 .code("PERM_ACCESS_DENIED")
                 .message("Access denied")
                 .timestamp(Instant.now())
@@ -77,26 +79,49 @@ public class GlobalExceptionHandler {
                 .path(getPath(request))
                 .build();
         
-        return new ResponseEntity<>(response, HttpStatus.FORBIDDEN);
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error(errorResponse));
+    }
+
+    // ==================== 权限异常 ====================
+
+    @ExceptionHandler(PermissionDeniedException.class)
+    public ResponseEntity<ApiResponse<?>> handlePermissionDeniedException(
+            PermissionDeniedException ex, WebRequest request) {
+        String traceId = generateTraceId();
+        ErrorCode errorCode = ex.getErrorCode();
+        log.warn("Permission denied [{}]: {}", traceId, ex.getMessage());
+        
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .code(errorCode.getCode())
+                .message(ex.getMessage())
+                .details(ex.getDetails())
+                .timestamp(Instant.now())
+                .traceId(traceId)
+                .path(getPath(request))
+                .build();
+        
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error(errorResponse));
     }
 
     // ==================== 验证异常 ====================
     
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<ErrorResponse> handleValidationException(
+    public ResponseEntity<ApiResponse<?>> handleValidationException(
             MethodArgumentNotValidException ex, WebRequest request) {
         String traceId = generateTraceId();
         Map<String, Object> errors = new HashMap<>();
         
         ex.getBindingResult().getAllErrors().forEach(error -> {
-            String fieldName = ((FieldError) error).getField();
-            String errorMessage = error.getDefaultMessage();
-            errors.put(fieldName, errorMessage);
+            if (error instanceof FieldError fieldError) {
+                errors.put(fieldError.getField(), fieldError.getDefaultMessage());
+            } else {
+                errors.put(error.getObjectName(), error.getDefaultMessage());
+            }
         });
         
         log.warn("Validation failed [{}]: {}", traceId, errors);
         
-        ErrorResponse response = ErrorResponse.builder()
+        ErrorResponse errorResponse = ErrorResponse.builder()
                 .code("VAL_INVALID_INPUT")
                 .message("Validation failed")
                 .details(errors)
@@ -105,11 +130,11 @@ public class GlobalExceptionHandler {
                 .path(getPath(request))
                 .build();
         
-        return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.error(errorResponse));
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
-    public ResponseEntity<ErrorResponse> handleConstraintViolationException(
+    public ResponseEntity<ApiResponse<?>> handleConstraintViolationException(
             ConstraintViolationException ex, WebRequest request) {
         String traceId = generateTraceId();
         Map<String, Object> errors = new HashMap<>();
@@ -122,7 +147,7 @@ public class GlobalExceptionHandler {
         
         log.warn("Constraint violation [{}]: {}", traceId, errors);
         
-        ErrorResponse response = ErrorResponse.builder()
+        ErrorResponse errorResponse = ErrorResponse.builder()
                 .code("VAL_CONSTRAINT_VIOLATION")
                 .message("Constraint violation")
                 .details(errors)
@@ -131,57 +156,74 @@ public class GlobalExceptionHandler {
                 .path(getPath(request))
                 .build();
         
-        return new ResponseEntity<>(response, HttpStatus.BAD_REQUEST);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.error(errorResponse));
     }
 
-    // ==================== 业务异常 ====================
-    
-    @ExceptionHandler(RuntimeException.class)
-    public ResponseEntity<ErrorResponse> handleBusinessException(RuntimeException ex, WebRequest request) {
+    // ==================== 平台/业务异常 ====================
+
+    @ExceptionHandler(PlatformException.class)
+    public ResponseEntity<ApiResponse<?>> handlePlatformException(
+            PlatformException ex, WebRequest request) {
         String traceId = generateTraceId();
+        ErrorCode errorCode = ex.getErrorCode();
+        log.warn("Platform exception [{}]: {} - {}", traceId, errorCode.getCode(), ex.getMessage());
         
-        // 检查是否是已知的业务异常类型
-        String errorCode = "BIZ_ERROR";
-        String message = ex.getMessage() != null ? ex.getMessage() : "Business logic error occurred";
-        HttpStatus status = HttpStatus.UNPROCESSABLE_ENTITY;
-        
-        // 根据异常类名判断类型
-        String exceptionName = ex.getClass().getSimpleName();
-        if (exceptionName.contains("Business")) {
-            errorCode = "BIZ_BUSINESS_ERROR";
-            message = ex.getMessage() != null ? ex.getMessage() : "Business rule violation";
-        } else if (exceptionName.contains("Validation")) {
-            errorCode = "VAL_VALIDATION_ERROR";
-            message = ex.getMessage() != null ? ex.getMessage() : "Validation error";
-            status = HttpStatus.BAD_REQUEST;
-        } else if (exceptionName.contains("NotFound") || exceptionName.contains("Resource")) {
-            errorCode = "RES_NOT_FOUND";
-            message = ex.getMessage() != null ? ex.getMessage() : "Resource not found";
-            status = HttpStatus.NOT_FOUND;
-        }
-        
-        log.warn("Business exception [{}]: {} - {}", traceId, exceptionName, ex.getMessage(), ex);
-        
-        ErrorResponse response = ErrorResponse.builder()
-                .code(errorCode)
-                .message(message)
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .code(errorCode.getCode())
+                .message(ex.getMessage())
+                .details(ex.getDetails())
                 .timestamp(Instant.now())
                 .traceId(traceId)
                 .path(getPath(request))
                 .build();
         
-        return new ResponseEntity<>(response, status);
+        return ResponseEntity.status(errorCode.getHttpStatus()).body(ApiResponse.error(errorResponse));
     }
 
-    // ==================== 系统异常 ====================
-    
+    @ExceptionHandler(BusinessException.class)
+    public ResponseEntity<ApiResponse<?>> handleBusinessException(
+            BusinessException ex, WebRequest request) {
+        String traceId = generateTraceId();
+        ErrorCode errorCode = ex.getErrorCode();
+        log.warn("Business exception [{}]: {} - {}", traceId, errorCode.getCode(), ex.getMessage());
+        
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .code(errorCode.getCode())
+                .message(ex.getMessage())
+                .timestamp(Instant.now())
+                .traceId(traceId)
+                .path(getPath(request))
+                .build();
+        
+        return ResponseEntity.status(errorCode.getHttpStatus()).body(ApiResponse.error(errorResponse));
+    }
+
+    // ==================== 兜底异常 ====================
+
+    @ExceptionHandler(RuntimeException.class)
+    public ResponseEntity<ApiResponse<?>> handleRuntimeException(
+            RuntimeException ex, WebRequest request) {
+        String traceId = generateTraceId();
+        log.error("Unhandled RuntimeException [{}]: {}", traceId, ex.getMessage(), ex);
+        
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .code("SYS_INTERNAL_ERROR")
+                .message("Internal server error")
+                .timestamp(Instant.now())
+                .traceId(traceId)
+                .path(getPath(request))
+                .build();
+        
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(errorResponse));
+    }
+
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<ErrorResponse> handleGenericException(
+    public ResponseEntity<ApiResponse<?>> handleGenericException(
             Exception ex, WebRequest request) {
         String traceId = generateTraceId();
         log.error("Unexpected error [{}]: {}", traceId, ex.getMessage(), ex);
         
-        ErrorResponse response = ErrorResponse.builder()
+        ErrorResponse errorResponse = ErrorResponse.builder()
                 .code("SYS_INTERNAL_ERROR")
                 .message("An unexpected error occurred")
                 .suggestion("Please try again later or contact support")
@@ -190,7 +232,7 @@ public class GlobalExceptionHandler {
                 .path(getPath(request))
                 .build();
         
-        return new ResponseEntity<>(response, HttpStatus.INTERNAL_SERVER_ERROR);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ApiResponse.error(errorResponse));
     }
 
     // ==================== 工具方法 ====================

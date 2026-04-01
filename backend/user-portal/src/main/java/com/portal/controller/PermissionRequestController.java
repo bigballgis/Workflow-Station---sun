@@ -2,6 +2,7 @@ package com.portal.controller;
 
 import com.portal.client.AdminCenterClient;
 import com.portal.dto.ApiResponse;
+import com.portal.security.CurrentUserId;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -35,7 +36,7 @@ public class PermissionRequestController {
     @Operation(summary = "Apply to join virtual group", description = "Submit application to join a virtual group")
     public ResponseEntity<ApiResponse<Map<String, Object>>> applyForVirtualGroup(
             @RequestBody Map<String, Object> request,
-            @RequestHeader("X-User-Id") String userId) {
+            @CurrentUserId String userId) {
         log.info("User {} applying for virtual group: {}", userId, request.get("virtualGroupId"));
         
         // TODO: Call admin-center API to create virtual group request
@@ -57,7 +58,7 @@ public class PermissionRequestController {
                            "No role selection needed - joining activates user's BU-Bounded roles.")
     public ResponseEntity<ApiResponse<Map<String, Object>>> applyForBusinessUnit(
             @RequestBody Map<String, Object> request,
-            @RequestHeader("X-User-Id") String userId) {
+            @CurrentUserId String userId) {
         String businessUnitId = (String) request.get("businessUnitId");
         String reason = (String) request.get("reason");
         
@@ -78,7 +79,7 @@ public class PermissionRequestController {
     @Operation(summary = "Cancel request", description = "Cancel a pending permission request")
     public ResponseEntity<ApiResponse<Map<String, Object>>> cancelRequest(
             @PathVariable String requestId,
-            @RequestHeader("X-User-Id") String userId) {
+            @CurrentUserId String userId) {
         log.info("User {} cancelling request: {}", userId, requestId);
         
         // TODO: Call admin-center API to cancel request
@@ -93,7 +94,7 @@ public class PermissionRequestController {
     @GetMapping("/my")
     @Operation(summary = "Get my requests", description = "Get current user's permission request history")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getMyRequests(
-            @RequestHeader("X-User-Id") String userId,
+            @CurrentUserId String userId,
             @RequestParam(required = false) String status) {
         log.info("Getting requests for user: {}, status: {}", userId, status);
         
@@ -109,7 +110,7 @@ public class PermissionRequestController {
     @GetMapping("/available-virtual-groups")
     @Operation(summary = "Get available virtual groups", description = "Get virtual groups that user can apply to join")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getAvailableVirtualGroups(
-            @RequestHeader("X-User-Id") String userId) {
+            @CurrentUserId String userId) {
         log.info("Getting available virtual groups for user: {}", userId);
         
         // TODO: Call admin-center API to get virtual groups with approvers configured
@@ -126,7 +127,7 @@ public class PermissionRequestController {
                description = "Get business units that user can apply to join. " +
                            "Only returns business units associated with user's BU-Bounded roles.")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getApplicableBusinessUnits(
-            @RequestHeader("X-User-Id") String userId) {
+            @CurrentUserId String userId) {
         log.info("Getting applicable business units for user: {}", userId);
         
         // TODO: Call admin-center API to get applicable business units
@@ -147,7 +148,7 @@ public class PermissionRequestController {
                description = "Get BU-Bounded roles that will be activated when user joins this business unit")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getActivatableRoles(
             @PathVariable String businessUnitId,
-            @RequestHeader("X-User-Id") String userId) {
+            @CurrentUserId String userId) {
         log.info("Getting activatable roles for user {} in business unit: {}", userId, businessUnitId);
         
         // TODO: Call admin-center API to get activatable roles

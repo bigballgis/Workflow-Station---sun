@@ -18,7 +18,7 @@ import java.util.Map;
  */
 @Slf4j
 @RestController
-@RequestMapping("/api/v1/admin/actions")
+@RequestMapping("/actions")
 @RequiredArgsConstructor
 public class ActionDefinitionController {
     

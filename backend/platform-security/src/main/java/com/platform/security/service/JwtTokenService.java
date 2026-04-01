@@ -22,6 +22,21 @@ public interface JwtTokenService {
      */
     String generateToken(String userId, String username, List<String> roles, 
                          List<String> permissions, String language);
+
+    /**
+     * Generate a JWT access token with full user profile claims.
+     * 
+     * @param userId User's unique identifier
+     * @param username User's username
+     * @param email User's email address
+     * @param displayName User's display name
+     * @param roles List of role identifiers
+     * @param permissions List of permission identifiers
+     * @param language User's preferred language
+     * @return JWT token string
+     */
+    String generateToken(String userId, String username, String email, String displayName,
+                         List<String> roles, List<String> permissions, String language);
     
     /**
      * Generate a JWT access token from UserPrincipal.

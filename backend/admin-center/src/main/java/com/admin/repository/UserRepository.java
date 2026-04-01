@@ -124,6 +124,12 @@ public interface UserRepository extends JpaRepository<User, String> {
      * 统计指定时间范围内创建的用户数
      */
     long countByCreatedAtBetween(LocalDateTime start, LocalDateTime end);
+
+    @Query("SELECT CAST(u.createdAt AS DATE), COUNT(u) FROM User u " +
+           "WHERE u.createdAt >= :start AND u.createdAt < :end " +
+           "AND (u.deleted = false OR u.deleted IS NULL) " +
+           "GROUP BY CAST(u.createdAt AS DATE)")
+    List<Object[]> countDailyNewUsers(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
     
     /**
      * 通过关联表查询业务单元成员（多对多关系）

@@ -1,5 +1,6 @@
 package com.portal.property;
 
+import com.portal.client.WorkflowEngineClient;
 import com.portal.component.ChangeHistoryComponent;
 import com.portal.component.ProcessFormComponent;
 import com.portal.component.TaskFormComponent;
@@ -9,6 +10,7 @@ import com.portal.repository.ProcessInstanceRepository;
 import net.jqwik.api.*;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.client.RestTemplate;
 
 import java.util.*;
 
@@ -42,7 +44,8 @@ public class SubTableDataSharingPropertyTest {
         ProcessFormComponent processFormComponent = mock(ProcessFormComponent.class);
 
         TaskFormComponent taskFormComponent = new TaskFormComponent(
-                processFormComponent, changeHistoryComponent, processInstanceRepository) {
+                processFormComponent, changeHistoryComponent, processInstanceRepository,
+                mock(WorkflowEngineClient.class), mock(RestTemplate.class)) {
             @Override
             protected TaskInfo getTaskInfo(String taskId) {
                 return new TaskInfo(config.taskDefinitionKey, config.processInstanceId);
@@ -127,7 +130,7 @@ public class SubTableDataSharingPropertyTest {
         ChangeHistoryComponent changeHistoryComponent = mock(ChangeHistoryComponent.class);
 
         ProcessFormComponent processFormComponent = new ProcessFormComponent(
-                processInstanceRepository, changeHistoryComponent);
+                processInstanceRepository, changeHistoryComponent, mock(RestTemplate.class));
         ReflectionTestUtils.setField(processFormComponent, "adminCenterUrl", "http://mock-admin:8090");
 
         // Process instance in RETURN_TO_REQUESTER state (so Process Form submit is allowed)
@@ -167,7 +170,8 @@ public class SubTableDataSharingPropertyTest {
 
         // Task Form would read from the same savedVariables
         TaskFormComponent taskFormComponent = new TaskFormComponent(
-                processFormComponent, changeHistoryComponent, processInstanceRepository);
+                processFormComponent, changeHistoryComponent, processInstanceRepository,
+                mock(WorkflowEngineClient.class), mock(RestTemplate.class));
         Map<String, Object> taskView = taskFormComponent.extractFieldSubset(
                 savedVariables, Set.of(subTableKey));
 

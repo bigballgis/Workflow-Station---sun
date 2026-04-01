@@ -32,7 +32,7 @@
           </template>
           <!-- editor -->
           <template v-else-if="col.type === 'editor'">
-            <span v-if="scope.row[col.field]" v-html="scope.row[col.field]" class="editor-preview" />
+            <span v-if="scope.row[col.field]" v-html="sanitizeHtml(scope.row[col.field])" class="editor-preview" />
             <span v-else>-</span>
           </template>
           <!-- signature -->
@@ -107,10 +107,20 @@ import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Plus } from '@element-plus/icons-vue'
 import { ElMessageBox, ElMessage } from 'element-plus'
+import DOMPurify from 'dompurify'
 import SubTableAddDialog from './SubTableAddDialog.vue'
 import type { DialogColumn } from './subTableAddDialogHelpers'
 
 const { t } = useI18n()
+
+function sanitizeHtml(html: string): string {
+  if (!html) return ''
+  return DOMPurify.sanitize(html, {
+    ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'u', 's', 'ol', 'ul', 'li',
+      'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'a', 'img', 'table', 'tr', 'td', 'th', 'span', 'div'],
+    ALLOWED_ATTR: ['href', 'src', 'alt', 'class', 'style', 'target', 'rel'],
+  })
+}
 
 // 列配置接口
 interface ColumnConfig {

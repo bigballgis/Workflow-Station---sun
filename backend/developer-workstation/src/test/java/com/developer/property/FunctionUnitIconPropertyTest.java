@@ -16,7 +16,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.web.client.RestTemplate;
+import com.developer.service.UserDisplayNameService;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -81,11 +81,11 @@ public class FunctionUnitIconPropertyTest {
             return fu;
         });
 
-        RestTemplate restTemplate = mock(RestTemplate.class);
+        UserDisplayNameService userDisplayNameService = mock(UserDisplayNameService.class);
         
         FunctionUnitComponent component = new FunctionUnitComponentImpl(
                 functionUnitRepository, processRepo, tableRepo, formRepo, 
-                actionRepo, mock(com.developer.repository.DecisionDefinitionRepository.class), versionRepo, iconRepository, objectMapper, restTemplate);
+                actionRepo, mock(com.developer.repository.DecisionDefinitionRepository.class), versionRepo, iconRepository, objectMapper, userDisplayNameService);
         
         // Create function unit with icon
         FunctionUnitRequest request = new FunctionUnitRequest();
@@ -133,11 +133,11 @@ public class FunctionUnitIconPropertyTest {
             return fu;
         });
 
-        RestTemplate restTemplate = mock(RestTemplate.class);
+        UserDisplayNameService userDisplayNameService = mock(UserDisplayNameService.class);
         
         FunctionUnitComponent component = new FunctionUnitComponentImpl(
                 functionUnitRepository, processRepo, tableRepo, formRepo, 
-                actionRepo, mock(com.developer.repository.DecisionDefinitionRepository.class), versionRepo, iconRepository, objectMapper, restTemplate);
+                actionRepo, mock(com.developer.repository.DecisionDefinitionRepository.class), versionRepo, iconRepository, objectMapper, userDisplayNameService);
         
         // Create function unit without icon
         FunctionUnitRequest request = new FunctionUnitRequest();

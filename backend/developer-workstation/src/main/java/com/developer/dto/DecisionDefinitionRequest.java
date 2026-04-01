@@ -25,7 +25,9 @@ public class DecisionDefinitionRequest {
     @Size(max = 200, message = "{validation.decision_name_max_length}")
     private String decisionName;
 
-    @NotBlank(message = "{validation.decision_xml_required}")
+    /**
+     * DMN XML；可空（草稿）。若 BPMN 或 DECISION_TABLE 动作引用该 decisionKey，则发布前须补全有效 DMN。
+     */
     private String dmnXml;
 
     @Size(max = 20)

@@ -9,7 +9,6 @@ import net.jqwik.api.constraints.LongRange;
 import net.jqwik.api.constraints.StringLength;
 import org.junit.jupiter.api.Tag;
 import org.springframework.test.util.ReflectionTestUtils;
-import org.springframework.web.client.RestTemplate;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -28,19 +27,17 @@ import static org.mockito.Mockito.*;
 class AiForceUnlockTimeoutProperties {
 
     private AiLockServiceImpl createService(CacheService cacheService) {
-        RestTemplate restTemplate = mock(RestTemplate.class);
+        UserDisplayNameService userDisplayNameService = mock(UserDisplayNameService.class);
         ObjectMapper objectMapper = new ObjectMapper();
         objectMapper.registerModule(new JavaTimeModule());
 
-        when(restTemplate.getForObject(anyString(), eq(Map.class)))
+        when(userDisplayNameService.resolve(anyString()))
                 .thenAnswer(invocation -> {
-                    String url = invocation.getArgument(0);
-                    String uid = url.substring(url.lastIndexOf('/') + 1);
-                    return Map.of("fullName", "User_" + uid);
+                    String uid = invocation.getArgument(0);
+                    return "User_" + uid;
                 });
 
-        AiLockServiceImpl lockService = new AiLockServiceImpl(cacheService, restTemplate);
-        ReflectionTestUtils.setField(lockService, "adminCenterUrl", "http://localhost:8090");
+        AiLockServiceImpl lockService = new AiLockServiceImpl(cacheService, userDisplayNameService);
         ReflectionTestUtils.setField(lockService, "ttlSeconds", 1800L);
         ReflectionTestUtils.setField(lockService, "forceUnlockTimeoutSeconds", 60L);
         return lockService;

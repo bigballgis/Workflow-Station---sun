@@ -281,42 +281,40 @@ public class ExceptionHandlerComponent {
         LocalDateTime weekStart = now.minusDays(7).truncatedTo(ChronoUnit.DAYS);
         LocalDateTime monthStart = now.minusDays(30).truncatedTo(ChronoUnit.DAYS);
         
-        List<ExceptionRecord> allRecords = exceptionRecordRepository.findAll();
-        
-        long totalCount = allRecords.size();
-        long unresolvedCount = allRecords.stream().filter(r -> !r.getResolved()).count();
+        long totalCount = exceptionRecordRepository.count();
+        long unresolvedCount = exceptionRecordRepository.countByResolvedFalse();
         long resolvedCount = totalCount - unresolvedCount;
         
-        long criticalCount = allRecords.stream()
-                .filter(r -> r.getSeverity() == ExceptionSeverity.CRITICAL && !r.getResolved()).count();
-        long highCount = allRecords.stream()
-                .filter(r -> r.getSeverity() == ExceptionSeverity.HIGH && !r.getResolved()).count();
-        long mediumCount = allRecords.stream()
-                .filter(r -> r.getSeverity() == ExceptionSeverity.MEDIUM && !r.getResolved()).count();
-        long lowCount = allRecords.stream()
-                .filter(r -> r.getSeverity() == ExceptionSeverity.LOW && !r.getResolved()).count();
+        Map<ExceptionSeverity, Long> severityMap = new HashMap<>();
+        for (Object[] row : exceptionRecordRepository.countUnresolvedBySeverity()) {
+            severityMap.put((ExceptionSeverity) row[0], (Long) row[1]);
+        }
+        long criticalCount = severityMap.getOrDefault(ExceptionSeverity.CRITICAL, 0L);
+        long highCount = severityMap.getOrDefault(ExceptionSeverity.HIGH, 0L);
+        long mediumCount = severityMap.getOrDefault(ExceptionSeverity.MEDIUM, 0L);
+        long lowCount = severityMap.getOrDefault(ExceptionSeverity.LOW, 0L);
         
-        long pendingCount = allRecords.stream()
-                .filter(r -> r.getStatus() == ExceptionStatus.PENDING).count();
-        long processingCount = allRecords.stream()
-                .filter(r -> r.getStatus() == ExceptionStatus.PROCESSING).count();
-        long ignoredCount = allRecords.stream()
-                .filter(r -> r.getStatus() == ExceptionStatus.IGNORED).count();
+        Map<ExceptionStatus, Long> statusMap = new HashMap<>();
+        for (Object[] row : exceptionRecordRepository.countByStatus()) {
+            statusMap.put((ExceptionStatus) row[0], (Long) row[1]);
+        }
+        long pendingCount = statusMap.getOrDefault(ExceptionStatus.PENDING, 0L);
+        long processingCount = statusMap.getOrDefault(ExceptionStatus.PROCESSING, 0L);
+        long ignoredCount = statusMap.getOrDefault(ExceptionStatus.IGNORED, 0L);
         
-        long todayCount = allRecords.stream()
-                .filter(r -> r.getOccurredTime().isAfter(todayStart)).count();
-        long thisWeekCount = allRecords.stream()
-                .filter(r -> r.getOccurredTime().isAfter(weekStart)).count();
-        long thisMonthCount = allRecords.stream()
-                .filter(r -> r.getOccurredTime().isAfter(monthStart)).count();
+        long todayCount = exceptionRecordRepository.countSince(todayStart);
+        long thisWeekCount = exceptionRecordRepository.countSince(weekStart);
+        long thisMonthCount = exceptionRecordRepository.countSince(monthStart);
         
         Map<String, Long> countByProcessDefinition = new HashMap<>();
-        allRecords.stream()
-                .filter(r -> r.getProcessDefinitionKey() != null)
-                .forEach(r -> countByProcessDefinition.merge(r.getProcessDefinitionKey(), 1L, Long::sum));
+        for (Object[] row : exceptionRecordRepository.countGroupByProcessDefinitionKey()) {
+            countByProcessDefinition.put((String) row[0], (Long) row[1]);
+        }
         
         Map<String, Long> countByExceptionType = new HashMap<>();
-        allRecords.forEach(r -> countByExceptionType.merge(r.getExceptionType(), 1L, Long::sum));
+        for (Object[] row : exceptionRecordRepository.countByExceptionType()) {
+            countByExceptionType.put((String) row[0], (Long) row[1]);
+        }
         
         return ExceptionStatisticsResult.builder()
                 .totalCount(totalCount)

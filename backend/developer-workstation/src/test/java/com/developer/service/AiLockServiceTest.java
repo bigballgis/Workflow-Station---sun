@@ -11,8 +11,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
-import org.springframework.web.client.RestTemplate;
-
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
@@ -33,7 +31,7 @@ class AiLockServiceTest {
     private CacheService cacheService;
 
     @Mock
-    private RestTemplate restTemplate;
+    private UserDisplayNameService userDisplayNameService;
 
     private ObjectMapper objectMapper;
 
@@ -42,10 +40,9 @@ class AiLockServiceTest {
     @BeforeEach
     void setUp() {
         objectMapper = new ObjectMapper();
-        lockService = new AiLockServiceImpl(cacheService, restTemplate);
+        lockService = new AiLockServiceImpl(cacheService, userDisplayNameService);
         ReflectionTestUtils.setField(lockService, "ttlSeconds", 1800L);
         ReflectionTestUtils.setField(lockService, "forceUnlockTimeoutSeconds", 60L);
-        ReflectionTestUtils.setField(lockService, "adminCenterUrl", "http://localhost:8090");
     }
 
     @Test
@@ -53,9 +50,7 @@ class AiLockServiceTest {
         // setIfAbsent returns true → lock acquired
         when(cacheService.setIfAbsent(eq("ai-gen-lock:1"), anyString(), eq(Duration.ofSeconds(1800))))
                 .thenReturn(true);
-        // RestTemplate call for user name resolution
-        when(restTemplate.getForObject(anyString(), eq(Map.class)))
-                .thenReturn(Map.of("fullName", "Test User"));
+        when(userDisplayNameService.resolve("user1")).thenReturn("Test User");
 
         LockInfoResponse response = lockService.tryAcquire(1L, "user1");
 
@@ -71,9 +66,7 @@ class AiLockServiceTest {
         // setIfAbsent returns false → lock already held
         when(cacheService.setIfAbsent(eq("ai-gen-lock:1"), anyString(), any(Duration.class)))
                 .thenReturn(false);
-        // RestTemplate call for user name resolution
-        when(restTemplate.getForObject(anyString(), eq(Map.class)))
-                .thenReturn(Map.of("fullName", "User One"));
+        when(userDisplayNameService.resolve("user1")).thenReturn("User One");
 
         // Existing lock held by different user
         String lockJson = objectMapper.writeValueAsString(

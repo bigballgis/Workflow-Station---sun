@@ -1,12 +1,12 @@
 package com.platform.gateway.property;
 
-import com.platform.common.dto.ErrorResponse;
+import com.platform.common.exception.ErrorResponse;
 import com.platform.common.enums.ErrorCode;
 import net.jqwik.api.*;
 import net.jqwik.api.constraints.AlphaChars;
 import net.jqwik.api.constraints.Size;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -27,13 +27,15 @@ class ErrorResponsePropertyTest {
             @ForAll @AlphaChars @Size(min = 1, max = 50) String path) {
         
         ErrorResponse response = ErrorResponse.builder()
+                .code(errorCode.getCode())
                 .errorCode(errorCode.getCode())
                 .message(message)
-                .timestamp(LocalDateTime.now())
+                .timestamp(Instant.now())
                 .path(path)
                 .build();
         
         // Required fields should be present
+        assertThat(response.getCode()).isNotNull().isNotBlank();
         assertThat(response.getErrorCode()).isNotNull().isNotBlank();
         assertThat(response.getMessage()).isNotNull().isNotBlank();
         assertThat(response.getTimestamp()).isNotNull();
@@ -60,10 +62,11 @@ class ErrorResponsePropertyTest {
             @ForAll @AlphaChars @Size(min = 32, max = 32) String traceId) {
         
         ErrorResponse response = ErrorResponse.builder()
+                .code(errorCode.getCode())
                 .errorCode(errorCode.getCode())
                 .message(errorCode.getMessage())
                 .traceId(traceId)
-                .timestamp(LocalDateTime.now())
+                .timestamp(Instant.now())
                 .path("/api/test")
                 .build();
         
@@ -74,16 +77,17 @@ class ErrorResponsePropertyTest {
     void timestampShouldBeRecentPast(
             @ForAll("errorCodes") ErrorCode errorCode) {
         
-        LocalDateTime before = LocalDateTime.now();
+        Instant before = Instant.now();
         
         ErrorResponse response = ErrorResponse.builder()
+                .code(errorCode.getCode())
                 .errorCode(errorCode.getCode())
                 .message(errorCode.getMessage())
-                .timestamp(LocalDateTime.now())
+                .timestamp(Instant.now())
                 .path("/api/test")
                 .build();
         
-        LocalDateTime after = LocalDateTime.now();
+        Instant after = Instant.now();
         
         // Timestamp should be between before and after
         assertThat(response.getTimestamp())

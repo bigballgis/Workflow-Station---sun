@@ -6,21 +6,16 @@ import com.platform.security.entity.User;
 import com.platform.security.model.UserStatus;
 import com.admin.repository.UserRepository;
 import com.admin.service.AuthService;
+import com.platform.security.config.JwtProperties;
 import com.platform.security.dto.UserEffectiveRole;
 import com.platform.security.service.JwtTokenService;
 import com.platform.security.service.UserRoleService;
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.security.Keys;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
 
-import javax.crypto.SecretKey;
-import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -36,15 +31,7 @@ public class AuthServiceImpl implements AuthService {
     private final org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
     private final com.admin.service.TaskAssignmentQueryService taskAssignmentQueryService;
     private final JwtTokenService jwtTokenService;
-    
-    @Value("${jwt.secret:my-super-secret-jwt-key-for-development-only-32chars}")
-    private String jwtSecret;
-    
-    @Value("${jwt.expiration:86400000}")
-    private long jwtExpiration;
-    
-    @Value("${jwt.refresh-expiration:604800000}")
-    private long refreshExpiration;
+    private final JwtProperties jwtProperties;
 
     @Override
     @Transactional
@@ -69,9 +56,6 @@ public class AuthServiceImpl implements AuthService {
         
         if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
             log.warn("Invalid password for user: {}", request.getUsername());
-            log.debug("Password from request: {}", request.getPassword());
-            log.debug("Password hash from DB: {}", user.getPasswordHash());
-            log.debug("Hash length: {}", user.getPasswordHash() != null ? user.getPasswordHash().length() : 0);
             user.incrementFailedLoginCount();
             
             if (user.getFailedLoginCount() >= 5) {
@@ -106,7 +90,6 @@ public class AuthServiceImpl implements AuthService {
         List<String> roles = userRoleCodes;
         List<String> permissions = getPermissionsForRoles(roles);
         
-        // Get role names from database
         Map<String, String> roleCodeToName = getRoleNames(roles);
         
         List<LoginResponse.RoleWithSource> rolesWithSources = roles.stream()
@@ -119,23 +102,22 @@ public class AuthServiceImpl implements AuthService {
                         .build())
                 .collect(Collectors.toList());
         
-        String accessToken = generateToken(user, roles, permissions);
-        String refreshToken = generateRefreshToken(user.getId());
+        String displayName = resolveDisplayName(user);
+        String accessToken = jwtTokenService.generateToken(
+                user.getId(), user.getUsername(), user.getEmail(), displayName,
+                roles, permissions, user.getLanguage());
+        String refreshToken = jwtTokenService.generateRefreshToken(user.getId());
         
         log.info("User {} logged in successfully from {}", request.getUsername(), ipAddress);
         
         return LoginResponse.builder()
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
-                .expiresIn(jwtExpiration / 1000)
+                .expiresIn(jwtProperties.getExpirationMs() / 1000)
                 .user(LoginResponse.UserLoginInfo.builder()
                         .userId(user.getId())
                         .username(user.getUsername())
-                        .displayName(user.getFullName() != null && !user.getFullName().isEmpty() 
-                            ? user.getFullName() 
-                            : (user.getDisplayName() != null && !user.getDisplayName().isEmpty() 
-                                ? user.getDisplayName() 
-                                : user.getUsername()))
+                        .displayName(displayName)
                         .email(user.getEmail())
                         .roles(roles)
                         .permissions(permissions)
@@ -155,8 +137,11 @@ public class AuthServiceImpl implements AuthService {
     @Override
     public LoginResponse.UserLoginInfo refreshToken(String refreshToken) {
         try {
-            Claims claims = parseToken(refreshToken);
-            String userId = claims.getSubject();
+            if (!jwtTokenService.validateToken(refreshToken)) {
+                throw new RuntimeException("Invalid or expired refresh token");
+            }
+            
+            String userId = jwtTokenService.extractUserId(refreshToken);
             
             User user = userRepository.findById(userId)
                     .orElseThrow(() -> new RuntimeException("User not found"));
@@ -172,11 +157,7 @@ public class AuthServiceImpl implements AuthService {
             return LoginResponse.UserLoginInfo.builder()
                     .userId(user.getId())
                     .username(user.getUsername())
-                    .displayName(user.getFullName() != null && !user.getFullName().isEmpty() 
-                        ? user.getFullName() 
-                        : (user.getDisplayName() != null && !user.getDisplayName().isEmpty() 
-                            ? user.getDisplayName() 
-                            : user.getUsername()))
+                    .displayName(resolveDisplayName(user))
                     .email(user.getEmail())
                     .roles(roles)
                     .permissions(getPermissionsForRoles(roles))
@@ -193,8 +174,7 @@ public class AuthServiceImpl implements AuthService {
     @Override
     public LoginResponse.UserLoginInfo getCurrentUser(String token) {
         try {
-            Claims claims = parseToken(token);
-            String userId = claims.getSubject();
+            String userId = jwtTokenService.extractUserId(token);
             
             User user = userRepository.findById(userId)
                     .orElseThrow(() -> new RuntimeException("User not found"));
@@ -210,11 +190,7 @@ public class AuthServiceImpl implements AuthService {
             return LoginResponse.UserLoginInfo.builder()
                     .userId(user.getId())
                     .username(user.getUsername())
-                    .displayName(user.getFullName() != null && !user.getFullName().isEmpty() 
-                        ? user.getFullName() 
-                        : (user.getDisplayName() != null && !user.getDisplayName().isEmpty() 
-                            ? user.getDisplayName() 
-                            : user.getUsername()))
+                    .displayName(resolveDisplayName(user))
                     .email(user.getEmail())
                     .roles(roles)
                     .permissions(getPermissionsForRoles(roles))
@@ -230,21 +206,17 @@ public class AuthServiceImpl implements AuthService {
 
     @Override
     public String generateAccessTokenForUser(LoginResponse.UserLoginInfo userInfo) {
-        return generateToken(
-                userRepository.findById(userInfo.getUserId()).orElseThrow(() -> new RuntimeException("User not found")),
-                userInfo.getRoles(),
-                userInfo.getPermissions()
-        );
+        User user = userRepository.findById(userInfo.getUserId())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        String displayName = resolveDisplayName(user);
+        return jwtTokenService.generateToken(
+                user.getId(), user.getUsername(), user.getEmail(), displayName,
+                userInfo.getRoles(), userInfo.getPermissions(), user.getLanguage());
     }
 
     @Override
     public boolean validateToken(String token) {
-        try {
-            parseToken(token);
-            return true;
-        } catch (Exception e) {
-            return false;
-        }
+        return jwtTokenService.validateToken(token);
     }
     
     private List<LoginResponse.RoleWithSource> buildRolesWithSources(List<UserEffectiveRole> effectiveRoles) {
@@ -265,56 +237,14 @@ public class AuthServiceImpl implements AuthService {
         return result;
     }
 
-    private String generateToken(User user, List<String> roles, List<String> permissions) {
-        Date now = new Date();
-        Date expiry = new Date(now.getTime() + jwtExpiration);
-        
-        return Jwts.builder()
-                .subject(user.getId())
-                .claim("username", user.getUsername())
-                .claim("email", user.getEmail())
-                .claim("displayName", user.getFullName() != null && !user.getFullName().isEmpty() 
-                    ? user.getFullName() 
-                    : (user.getDisplayName() != null && !user.getDisplayName().isEmpty() 
-                        ? user.getDisplayName() 
-                        : user.getUsername()))
-                .claim("roles", roles)
-                .claim("permissions", permissions)
-                .claim("businessUnitId", taskAssignmentQueryService.getUserBusinessUnitId(user.getId()))
-                .claim("language", user.getLanguage())
-                .issuedAt(now)
-                .expiration(expiry)
-                .signWith(getSigningKey())
-                .compact();
-    }
-
-    private String generateRefreshToken(String userId) {
-        Date now = new Date();
-        Date expiry = new Date(now.getTime() + refreshExpiration);
-        
-        return Jwts.builder()
-                .subject(userId)
-                .claim("type", "refresh")
-                .issuedAt(now)
-                .expiration(expiry)
-                .signWith(getSigningKey())
-                .compact();
-    }
-
-    private Claims parseToken(String token) {
-        return Jwts.parser()
-                .verifyWith(getSigningKey())
-                .build()
-                .parseSignedClaims(token)
-                .getPayload();
-    }
-
-    private SecretKey getSigningKey() {
-        byte[] keyBytes = jwtSecret.getBytes(StandardCharsets.UTF_8);
-        if (keyBytes.length < 32) {
-            keyBytes = Arrays.copyOf(keyBytes, 32);
+    private String resolveDisplayName(User user) {
+        if (user.getFullName() != null && !user.getFullName().isEmpty()) {
+            return user.getFullName();
         }
-        return Keys.hmacShaKeyFor(keyBytes);
+        if (user.getDisplayName() != null && !user.getDisplayName().isEmpty()) {
+            return user.getDisplayName();
+        }
+        return user.getUsername();
     }
 
     private List<String> getPermissionsForRoles(List<String> roles) {
@@ -326,8 +256,6 @@ public class AuthServiceImpl implements AuthService {
         
         for (String roleCode : roles) {
             try {
-                // 从数据库查询角色对应的权限
-                // 通过 sys_roles -> sys_role_permissions -> sys_permissions 关联查询
                 List<String> rolePermissions = jdbcTemplate.queryForList(
                     "SELECT p.code FROM sys_permissions p " +
                     "JOIN sys_role_permissions rp ON p.id = rp.permission_id " +
@@ -355,24 +283,17 @@ public class AuthServiceImpl implements AuthService {
     
     private List<String> getUserRoleCodes(String userId) {
         try {
-            // Query roles from multiple sources:
-            // 1. Direct role assignments (sys_role_assignments with target_type='USER')
-            // 2. Virtual group memberships (sys_virtual_group_members -> sys_virtual_group_roles)
-            // 3. Role assignments to virtual groups (sys_role_assignments with target_type='VIRTUAL_GROUP')
             return jdbcTemplate.queryForList(
                     "SELECT DISTINCT r.code FROM sys_roles r WHERE r.status = 'ACTIVE' AND r.id IN (" +
-                    // Direct user role assignments
                     "  SELECT ra.role_id FROM sys_role_assignments ra " +
                     "  WHERE ra.target_type = 'USER' AND ra.target_id = ? " +
                     "  AND (ra.valid_from IS NULL OR ra.valid_from <= NOW()) " +
                     "  AND (ra.valid_to IS NULL OR ra.valid_to >= NOW()) " +
                     "  UNION " +
-                    // Roles from virtual group memberships
                     "  SELECT vgr.role_id FROM sys_virtual_group_roles vgr " +
                     "  JOIN sys_virtual_group_members vgm ON vgr.virtual_group_id = vgm.group_id " +
                     "  WHERE vgm.user_id = ? " +
                     "  UNION " +
-                    // Roles assigned to virtual groups the user belongs to
                     "  SELECT ra.role_id FROM sys_role_assignments ra " +
                     "  JOIN sys_virtual_group_members vgm ON ra.target_id = vgm.group_id " +
                     "  WHERE ra.target_type = 'VIRTUAL_GROUP' AND vgm.user_id = ? " +
@@ -388,34 +309,12 @@ public class AuthServiceImpl implements AuthService {
         }
     }
     
-    @Override
-    public boolean testPasswordMatch(String plainPassword, String hash) {
-        log.info("Testing password match");
-        log.info("Plain password: {}", plainPassword);
-        log.info("Hash: {}", hash);
-        log.info("PasswordEncoder class: {}", passwordEncoder.getClass().getName());
-        
-        boolean matches = passwordEncoder.matches(plainPassword, hash);
-        log.info("Match result: {}", matches);
-        
-        return matches;
-    }
-    
-    @Override
-    public String generatePasswordHash(String plainPassword) {
-        log.info("Generating password hash for: {}", plainPassword);
-        String hash = passwordEncoder.encode(plainPassword);
-        log.info("Generated hash: {}", hash);
-        return hash;
-    }
-    
     private Map<String, String> getRoleNames(List<String> roleCodes) {
         if (roleCodes == null || roleCodes.isEmpty()) {
             return Map.of();
         }
         
         try {
-            // Build placeholders for IN clause
             String placeholders = roleCodes.stream()
                     .map(code -> "?")
                     .collect(Collectors.joining(","));

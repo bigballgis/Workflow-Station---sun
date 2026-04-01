@@ -11,18 +11,16 @@ import com.developer.exception.BusinessException;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.*;
 import com.developer.util.XmlEncodingUtil;
+import com.developer.service.UserDisplayNameService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.criteria.Predicate;
 import com.platform.security.util.SecurityContextUtils;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Component;
-import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.client.RestTemplate;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
@@ -52,19 +50,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     private final VersionRepository versionRepository;
     private final IconRepository iconRepository;
     private final ObjectMapper objectMapper;
-    private final RestTemplate restTemplate;
-    
-    @Value("${admin-center.url:http://localhost:8090}")
-    private String adminCenterUrl;
-    
-    /** Bounded LRU cache for user display names (max 200 entries) */
-    private final Map<String, String> userNameCache = Collections.synchronizedMap(
-            new LinkedHashMap<>(64, 0.75f, true) {
-                @Override
-                protected boolean removeEldestEntry(Map.Entry<String, String> eldest) {
-                    return size() > 200;
-                }
-            });
+    private final UserDisplayNameService userDisplayNameService;
     
     public FunctionUnitComponentImpl(
             FunctionUnitRepository functionUnitRepository,
@@ -76,7 +62,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
             VersionRepository versionRepository,
             IconRepository iconRepository,
             ObjectMapper objectMapper,
-            RestTemplate restTemplate) {
+            UserDisplayNameService userDisplayNameService) {
         this.functionUnitRepository = functionUnitRepository;
         this.processDefinitionRepository = processDefinitionRepository;
         this.tableDefinitionRepository = tableDefinitionRepository;
@@ -86,7 +72,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         this.versionRepository = versionRepository;
         this.iconRepository = iconRepository;
         this.objectMapper = objectMapper;
-        this.restTemplate = restTemplate;
+        this.userDisplayNameService = userDisplayNameService;
     }
     
     /**
@@ -483,6 +469,17 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
                 result.addError("INVALID_DECISION_REFERENCE",
                         "BPMN process references decision key '" + referencedKey + "' which does not exist in this function unit",
                         referencedKey);
+            } else {
+                decisions.stream()
+                        .filter(d -> referencedKey.equals(d.getDecisionKey()))
+                        .findFirst()
+                        .ifPresent(d -> {
+                            if (d.getDmnXml() == null || d.getDmnXml().isBlank()) {
+                                result.addError("EMPTY_DMN_XML",
+                                        "BPMN references decision key '" + referencedKey + "' but its DMN XML is empty",
+                                        referencedKey);
+                            }
+                        });
             }
         }
         
@@ -561,6 +558,17 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
                     result.addError("INVALID_DECISION_REFERENCE",
                             "DECISION_TABLE action '" + actionName + "' references decision key '" + decisionKey + "' which does not exist in this function unit",
                             actionName);
+                } else if (decisions != null) {
+                    decisions.stream()
+                            .filter(d -> decisionKey.equals(d.getDecisionKey()))
+                            .findFirst()
+                            .ifPresent(d -> {
+                                if (d.getDmnXml() == null || d.getDmnXml().isBlank()) {
+                                    result.addError("EMPTY_DMN_XML",
+                                            "DECISION_TABLE action '" + actionName + "' references decision '" + decisionKey + "' which has no DMN XML content",
+                                            actionName);
+                                }
+                            });
                 }
             }
         }
@@ -704,40 +712,8 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
                 .toList();
     }
     
-    @SuppressWarnings("unchecked")
     private String resolveUserDisplayName(String userId) {
-        if (userId == null || userId.isEmpty()) {
-            return null;
-        }
-        String cached = userNameCache.get(userId);
-        if (cached != null) {
-            return cached;
-        }
-        try {
-            String url = adminCenterUrl + "/api/v1/admin/users/" + userId;
-            Map<String, Object> userInfo = restTemplate.getForObject(url, Map.class);
-            if (userInfo != null) {
-                String displayName = extractDisplayName(userInfo);
-                if (displayName != null) {
-                    userNameCache.put(userId, displayName);
-                    return displayName;
-                }
-            }
-        } catch (Exception e) {
-            log.warn("Failed to resolve user display name for {}: {}", userId, e.getMessage());
-        }
-        userNameCache.put(userId, userId);
-        return userId;
-    }
-    
-    private String extractDisplayName(Map<String, Object> userInfo) {
-        String fullName = (String) userInfo.get("fullName");
-        if (fullName != null && !fullName.isEmpty()) return fullName;
-        String displayName = (String) userInfo.get("displayName");
-        if (displayName != null && !displayName.isEmpty()) return displayName;
-        String username = (String) userInfo.get("username");
-        if (username != null && !username.isEmpty()) return username;
-        return null;
+        return userDisplayNameService.resolve(userId);
     }
     
     private FunctionUnitResponse toResponse(FunctionUnit entity) {

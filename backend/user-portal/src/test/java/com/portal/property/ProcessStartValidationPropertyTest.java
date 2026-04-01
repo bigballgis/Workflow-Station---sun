@@ -42,7 +42,7 @@ public class ProcessStartValidationPropertyTest {
         ChangeHistoryComponent changeHistoryComponent = mock(ChangeHistoryComponent.class);
 
         ProcessFormComponent component = new ProcessFormComponent(
-                processInstanceRepository, changeHistoryComponent);
+                processInstanceRepository, changeHistoryComponent, mock(RestTemplate.class));
         ReflectionTestUtils.setField(component, "adminCenterUrl", "http://mock-admin:8090");
 
         // Mock the REST call for form existence check
@@ -107,7 +107,7 @@ public class ProcessStartValidationPropertyTest {
         ChangeHistoryComponent changeHistoryComponent = mock(ChangeHistoryComponent.class);
 
         ProcessFormComponent component = new ProcessFormComponent(
-                processInstanceRepository, changeHistoryComponent);
+                processInstanceRepository, changeHistoryComponent, mock(RestTemplate.class));
 
         // Mock admin-center URL to a controlled value
         ReflectionTestUtils.setField(component, "adminCenterUrl", "http://mock-admin:8090");
@@ -116,7 +116,7 @@ public class ProcessStartValidationPropertyTest {
         // and admin-center is not available in tests, checkProcessFormExists returns false.
         // To test the positive case, we create a testable subclass that overrides the check.
         ProcessFormComponent testableComponent = new ProcessFormComponent(
-                processInstanceRepository, changeHistoryComponent) {
+                processInstanceRepository, changeHistoryComponent, mock(RestTemplate.class)) {
             @Override
             public void validateProcessFormExists(String fuId) {
                 // Simulate: PROCESS form exists for this function unit

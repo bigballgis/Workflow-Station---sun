@@ -14,6 +14,7 @@ import com.portal.repository.ProcessDraftRepository;
 import com.portal.repository.ProcessHistoryRepository;
 import com.portal.repository.ProcessInstanceRepository;
 import com.portal.repository.ActionDefinitionRepository;
+import com.platform.common.util.ApiResponseBodyUnwrap;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -40,6 +41,7 @@ public class ProcessComponent {
     private final FunctionUnitAccessComponent functionUnitAccessComponent;
     private final WorkflowEngineClient workflowEngineClient;
     private final ProcessDraftComponent processDraftComponent;
+    private final RestTemplate restTemplate;
 
     @jakarta.persistence.PersistenceContext
     private jakarta.persistence.EntityManager entityManager;
@@ -59,7 +61,6 @@ public class ProcessComponent {
         
         try {
             // 尝试从管理员中心获取已部署的功能单元
-            RestTemplate restTemplate = new RestTemplate();
             String url = adminCenterUrl + "/api/v1/admin/function-units/deployed/latest";
             log.info("Fetching latest deployed function units from: {}", url);
             
@@ -67,16 +68,9 @@ public class ProcessComponent {
             Map<String, Object> response = restTemplate.getForObject(url, Map.class);
             
             if (response != null) {
-                @SuppressWarnings("unchecked")
-                List<Map<String, Object>> units = null;
-                // Support both ApiResponse format {data: [...]} and paginated format {content: [...]}
-                if (response.containsKey("data") && response.get("data") instanceof List) {
-                    units = (List<Map<String, Object>>) response.get("data");
-                } else if (response.containsKey("content")) {
-                    units = (List<Map<String, Object>>) response.get("content");
-                }
+                List<Map<String, Object>> units = ApiResponseBodyUnwrap.normalizeToListOfMaps(response);
                 
-                if (units != null && !units.isEmpty()) {
+                if (!units.isEmpty()) {
                     log.info("Got {} deployed function units", units.size());
                 
                     // 根据用户的业务角色过滤可访问的功能单元
@@ -215,10 +209,12 @@ public class ProcessComponent {
         String startUserDisplayName = resolveUserDisplayName(userId);
         ProcessInstance processInstance = ProcessInstance.builder()
                 .id(flowableProcessInstanceId)
+                .processInstanceId(flowableProcessInstanceId)
                 .processDefinitionId((String) data.get("processDefinitionId"))
                 .processDefinitionKey(processKey)
                 .processDefinitionName(processName)
                 .businessKey(request.getBusinessKey())
+                .initiatorId(userId)
                 .startUserId(userId)
                 .startUserName(startUserDisplayName)
                 .status("RUNNING")
@@ -634,8 +630,6 @@ public class ProcessComponent {
      */
     private String getEntityManager(String initiatorId) {
         try {
-            RestTemplate restTemplate = new RestTemplate();
-            
             // 首先尝试通过用户ID查询
             String userUrl = adminCenterUrl + "/api/v1/admin/users/" + initiatorId;
             log.info("Fetching user info for entity manager from: {}", userUrl);
@@ -644,7 +638,7 @@ public class ProcessComponent {
             try {
                 @SuppressWarnings("unchecked")
                 Map<String, Object> response = restTemplate.getForObject(userUrl, Map.class);
-                userInfo = response;
+                userInfo = ApiResponseBodyUnwrap.unwrapDataMap(response);
             } catch (Exception e) {
                 log.warn("Failed to get user by ID {}, trying by username: {}", initiatorId, e.getMessage());
             }
@@ -656,17 +650,15 @@ public class ProcessComponent {
                 try {
                     @SuppressWarnings("unchecked")
                     Map<String, Object> searchResponse = restTemplate.getForObject(searchUrl, Map.class);
-                    if (searchResponse != null && searchResponse.get("content") != null) {
+                    List<Map<String, Object>> users = searchResponse != null
+                            ? ApiResponseBodyUnwrap.normalizeToListOfMaps(searchResponse)
+                            : Collections.emptyList();
+                    if (!users.isEmpty()) {
+                        String foundUserId = (String) users.get(0).get("id");
+                        String detailUrl = adminCenterUrl + "/api/v1/admin/users/" + foundUserId;
                         @SuppressWarnings("unchecked")
-                        List<Map<String, Object>> users = (List<Map<String, Object>>) searchResponse.get("content");
-                        if (!users.isEmpty()) {
-                            // 找到用户后，获取详细信息
-                            String foundUserId = (String) users.get(0).get("id");
-                            String detailUrl = adminCenterUrl + "/api/v1/admin/users/" + foundUserId;
-                            @SuppressWarnings("unchecked")
-                            Map<String, Object> detailResponse = restTemplate.getForObject(detailUrl, Map.class);
-                            userInfo = detailResponse;
-                        }
+                        Map<String, Object> detailResponse = restTemplate.getForObject(detailUrl, Map.class);
+                        userInfo = ApiResponseBodyUnwrap.unwrapDataMap(detailResponse);
                     }
                 } catch (Exception e) {
                     log.warn("Failed to search user by username {}: {}", initiatorId, e.getMessage());
@@ -693,8 +685,6 @@ public class ProcessComponent {
      */
     private String getFunctionManager(String initiatorId) {
         try {
-            RestTemplate restTemplate = new RestTemplate();
-            
             // 首先尝试通过用户ID查询
             String userUrl = adminCenterUrl + "/api/v1/admin/users/" + initiatorId;
             log.info("Fetching user info for function manager from: {}", userUrl);
@@ -703,7 +693,7 @@ public class ProcessComponent {
             try {
                 @SuppressWarnings("unchecked")
                 Map<String, Object> response = restTemplate.getForObject(userUrl, Map.class);
-                userInfo = response;
+                userInfo = ApiResponseBodyUnwrap.unwrapDataMap(response);
             } catch (Exception e) {
                 log.warn("Failed to get user by ID {}, trying by username: {}", initiatorId, e.getMessage());
             }
@@ -715,17 +705,15 @@ public class ProcessComponent {
                 try {
                     @SuppressWarnings("unchecked")
                     Map<String, Object> searchResponse = restTemplate.getForObject(searchUrl, Map.class);
-                    if (searchResponse != null && searchResponse.get("content") != null) {
+                    List<Map<String, Object>> users = searchResponse != null
+                            ? ApiResponseBodyUnwrap.normalizeToListOfMaps(searchResponse)
+                            : Collections.emptyList();
+                    if (!users.isEmpty()) {
+                        String foundUserId = (String) users.get(0).get("id");
+                        String detailUrl = adminCenterUrl + "/api/v1/admin/users/" + foundUserId;
                         @SuppressWarnings("unchecked")
-                        List<Map<String, Object>> users = (List<Map<String, Object>>) searchResponse.get("content");
-                        if (!users.isEmpty()) {
-                            // 找到用户后，获取详细信息
-                            String foundUserId = (String) users.get(0).get("id");
-                            String detailUrl = adminCenterUrl + "/api/v1/admin/users/" + foundUserId;
-                            @SuppressWarnings("unchecked")
-                            Map<String, Object> detailResponse = restTemplate.getForObject(detailUrl, Map.class);
-                            userInfo = detailResponse;
-                        }
+                        Map<String, Object> detailResponse = restTemplate.getForObject(detailUrl, Map.class);
+                        userInfo = ApiResponseBodyUnwrap.unwrapDataMap(detailResponse);
                     }
                 } catch (Exception e) {
                     log.warn("Failed to search user by username {}: {}", initiatorId, e.getMessage());
@@ -748,6 +736,16 @@ public class ProcessComponent {
     }
     
     /**
+     * 带缓存的用户显示名称解析，避免同一批次内重复 HTTP 调用
+     */
+    private String resolveUserDisplayNameCached(String userId, Map<String, String> cache) {
+        if (userId == null || userId.isEmpty()) {
+            return null;
+        }
+        return cache.computeIfAbsent(userId, this::resolveUserDisplayName);
+    }
+    
+    /**
      * 解析用户显示名称
      * 优先级: fullName > displayName > username > userId
      */
@@ -757,13 +755,13 @@ public class ProcessComponent {
         }
         
         try {
-            RestTemplate restTemplate = new RestTemplate();
             String userUrl = adminCenterUrl + "/api/v1/admin/users/" + userId;
             
             @SuppressWarnings("unchecked")
-            Map<String, Object> userInfo = restTemplate.getForObject(userUrl, Map.class);
+            Map<String, Object> rawUser = restTemplate.getForObject(userUrl, Map.class);
+            Map<String, Object> userInfo = ApiResponseBodyUnwrap.unwrapDataMap(rawUser);
             
-            if (userInfo != null) {
+            if (userInfo != null && !userInfo.isEmpty()) {
                 // 优先使用 fullName
                 String fullName = (String) userInfo.get("fullName");
                 if (fullName != null && !fullName.isEmpty()) {
@@ -831,24 +829,31 @@ public class ProcessComponent {
             instancePage = processInstanceRepository.findByStartUserIdOrderByStartTimeDesc(userId, pageable);
         }
 
+        Map<String, String> userNameCache = new HashMap<>();
         List<ProcessInstanceInfo> instances = instancePage.getContent().stream()
-                .map(this::toProcessInstanceInfo)
+                .map(inst -> toProcessInstanceInfo(inst, userNameCache))
                 .toList();
 
         return new PageImpl<>(instances, pageable, instancePage.getTotalElements());
     }
     
     /**
-     * 转换实体到DTO
+     * 转换实体到DTO（无缓存版本，用于单个流程查询）
      */
     private ProcessInstanceInfo toProcessInstanceInfo(ProcessInstance instance) {
+        return toProcessInstanceInfo(instance, new HashMap<>());
+    }
+    
+    /**
+     * 转换实体到DTO（带方法级用户名缓存，避免列表查询 N+1）
+     */
+    private ProcessInstanceInfo toProcessInstanceInfo(ProcessInstance instance, Map<String, String> userNameCache) {
         String currentAssignee = instance.getCurrentAssignee();
         String currentAssigneeName = null;
         
         log.debug("toProcessInstanceInfo: processId={}, status={}, currentAssignee from DB={}", 
                 instance.getId(), instance.getStatus(), currentAssignee);
         
-        // 如果有当前处理人，尝试从 workflow-engine 获取任务信息以获取用户名称
         if (currentAssignee != null && !currentAssignee.isEmpty() && "RUNNING".equals(instance.getStatus())) {
             try {
                 if (workflowEngineClient.isAvailable()) {
@@ -862,12 +867,10 @@ public class ProcessComponent {
                             if (tasks != null && !tasks.isEmpty()) {
                                 Map<String, Object> currentTask = tasks.get(0);
                                 currentAssigneeName = (String) currentTask.get("currentAssigneeName");
-                                // 如果 workflow-engine 没有返回名称，直接解析用户ID
                                 if (currentAssigneeName == null || currentAssigneeName.isEmpty()) {
-                                    currentAssigneeName = resolveUserDisplayName(currentAssignee);
+                                    currentAssigneeName = resolveUserDisplayNameCached(currentAssignee, userNameCache);
                                 }
                             } else {
-                                // 任务列表为空，说明流程没有活动任务（可能已完成或在过渡状态）
                                 log.debug("No active tasks found for process instance {}, clearing current assignee", instance.getId());
                                 currentAssigneeName = null;
                                 currentAssignee = null;
@@ -877,13 +880,12 @@ public class ProcessComponent {
                 }
             } catch (Exception e) {
                 log.warn("Failed to get current assignee name for process {}: {}", instance.getId(), e.getMessage());
-                currentAssigneeName = resolveUserDisplayName(currentAssignee);
+                currentAssigneeName = resolveUserDisplayNameCached(currentAssignee, userNameCache);
             }
         }
         
-        // 如果没有获取到名称，尝试解析用户ID
         if (currentAssigneeName == null && currentAssignee != null) {
-            currentAssigneeName = resolveUserDisplayName(currentAssignee);
+            currentAssigneeName = resolveUserDisplayNameCached(currentAssignee, userNameCache);
         }
         
         log.debug("toProcessInstanceInfo: final currentAssigneeName={}", currentAssigneeName);
@@ -896,11 +898,13 @@ public class ProcessComponent {
                 .businessKey(instance.getBusinessKey())
                 .startTime(instance.getStartTime())
                 .endTime(instance.getEndTime())
+                .completedAt(instance.getCompletedAt())
+                .title(instance.getTitle())
                 .status(instance.getStatus())
                 .startUserId(instance.getStartUserId())
                 .startUserName(instance.getStartUserName())
                 .currentNode(instance.getCurrentNode())
-                .currentAssignee(currentAssigneeName)  // 使用解析后的名称，如果没有活动任务则为null
+                .currentAssignee(currentAssigneeName)
                 .candidateUsers(instance.getCandidateUsers())
                 .variables(instance.getVariables())
                 .build();
@@ -994,6 +998,23 @@ public class ProcessComponent {
         instance.setStatus("WITHDRAWN");
         instance.setEndTime(LocalDateTime.now());
         processInstanceRepository.save(instance);
+        
+        // 调用 Flowable 引擎取消流程实例
+        try {
+            if (workflowEngineClient.isAvailable()) {
+                Optional<Map<String, Object>> cancelResult = workflowEngineClient
+                        .cancelProcessInstance(processId, reason != null ? reason : "用户撤回");
+                if (cancelResult.isPresent()) {
+                    log.info("Flowable process instance cancelled: {}", processId);
+                } else {
+                    log.warn("Failed to cancel Flowable process instance: {}, local status already updated", processId);
+                }
+            } else {
+                log.warn("Workflow engine not available, skipped Flowable cancellation for process: {}", processId);
+            }
+        } catch (Exception e) {
+            log.warn("Failed to cancel Flowable process instance {}: {}", processId, e.getMessage());
+        }
         
         return true;
     }
@@ -1094,16 +1115,16 @@ public class ProcessComponent {
         functionUnitAccessComponent.checkFunctionUnitAccess(userId, functionUnitId);
         
         try {
-            RestTemplate restTemplate = new RestTemplate();
             String url = adminCenterUrl + "/api/v1/admin/function-units/" + functionUnitId + "/content";
             log.info("Fetching function unit content from: {}", url);
             
             @SuppressWarnings("unchecked")
             Map<String, Object> response = restTemplate.getForObject(url, Map.class);
             
-            if (response != null) {
-                log.info("Got function unit content: name={}", response.get("name"));
-                return response;
+            Map<String, Object> payload = ApiResponseBodyUnwrap.unwrapDataMap(response);
+            if (!payload.isEmpty()) {
+                log.info("Got function unit content: name={}", payload.get("name"));
+                return payload;
             }
             
             return Collections.emptyMap();
@@ -1130,16 +1151,16 @@ public class ProcessComponent {
             String functionUnitId = functionUnitAccessComponent.resolveFunctionUnitId(functionUnitIdOrCode);
             log.info("Resolved function unit ID: {}", functionUnitId);
             
-            RestTemplate restTemplate = new RestTemplate();
             String url = adminCenterUrl + "/api/v1/admin/function-units/" + functionUnitId + "/content";
             log.info("Fetching function unit content from: {}", url);
             
             @SuppressWarnings("unchecked")
             Map<String, Object> response = restTemplate.getForObject(url, Map.class);
             
-            if (response != null) {
-                log.info("Got function unit content: name={}", response.get("name"));
-                return response;
+            Map<String, Object> payload = ApiResponseBodyUnwrap.unwrapDataMap(response);
+            if (!payload.isEmpty()) {
+                log.info("Got function unit content: name={}", payload.get("name"));
+                return payload;
             }
             
             return Collections.emptyMap();
@@ -1166,31 +1187,30 @@ public class ProcessComponent {
             String functionUnitId = functionUnitAccessComponent.resolveFunctionUnitId(functionUnitIdOrCode);
             log.info("Resolved function unit ID: {}", functionUnitId);
             
-            RestTemplate restTemplate = new RestTemplate();
-            
             // 使用通用的 /content 端点获取所有内容
             String url = adminCenterUrl + "/api/v1/admin/function-units/" + functionUnitId + "/content";
             log.info("Fetching function unit content from: {}", url);
             
             @SuppressWarnings("unchecked")
             Map<String, Object> response = restTemplate.getForObject(url, Map.class);
+            Map<String, Object> payload = ApiResponseBodyUnwrap.unwrapDataMap(response);
             
-            if (response != null) {
+            if (!payload.isEmpty()) {
                 // 根据内容类型提取对应的数组
                 String key = contentType.equalsIgnoreCase("FORM") ? "forms" :
                             contentType.equalsIgnoreCase("PROCESS") ? "processes" :
                             contentType.equalsIgnoreCase("DATA_TABLE") ? "dataTables" : null;
                 
-                if (key != null && response.containsKey(key)) {
+                if (key != null && payload.containsKey(key)) {
                     @SuppressWarnings("unchecked")
-                    List<Map<String, Object>> contents = (List<Map<String, Object>>) response.get(key);
+                    List<Map<String, Object>> contents = (List<Map<String, Object>>) payload.get(key);
                     log.info("Got {} contents of type {} from key '{}'", contents.size(), contentType, key);
                     return contents;
                 } else {
-                    log.warn("Response does not contain key '{}' for contentType '{}'", key, contentType);
+                    log.warn("Payload does not contain key '{}' for contentType '{}'", key, contentType);
                 }
             } else {
-                log.warn("Got null response from admin center");
+                log.warn("Got empty payload from admin center (unwrap)");
             }
             
             return Collections.emptyList();
@@ -1255,7 +1275,9 @@ public class ProcessComponent {
             // 只更新状态为 RUNNING 的流程
             if ("RUNNING".equals(instance.getStatus())) {
                 instance.setStatus("COMPLETED");
-                instance.setEndTime(LocalDateTime.now());
+                LocalDateTime finishedAt = LocalDateTime.now();
+                instance.setEndTime(finishedAt);
+                instance.setCompletedAt(finishedAt);
                 // 保存最后一个节点名称，而不是清空
                 if (lastActivityName != null && !lastActivityName.isEmpty()) {
                     instance.setCurrentNode(lastActivityName);

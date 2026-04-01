@@ -7,11 +7,11 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.Instant;
-import java.util.List;
 import java.util.Map;
 
 /**
- * 统一错误响应格式
+ * 统一错误响应格式（标准版）。
+ * 所有模块的异常处理应使用此类，而非 {@code com.platform.common.dto.ErrorResponse}。
  */
 @Data
 @Builder
@@ -20,43 +20,54 @@ import java.util.Map;
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class ErrorResponse {
     
-    /**
-     * 错误代码
-     */
     private String code;
     
-    /**
-     * 错误消息
-     */
     private String message;
     
-    /**
-     * 错误详情
-     */
     private Object details;
     
-    /**
-     * 建议
-     */
     private String suggestion;
     
-    /**
-     * 时间戳
-     */
     private Instant timestamp;
     
-    /**
-     * 请求路径
-     */
     private String path;
     
-    /**
-     * 跟踪ID
-     */
     private String traceId;
-    
+
     /**
-     * 错误代码（兼容性）
+     * 兼容 dto.ErrorResponse 的字段名。新代码请使用 {@link #code}。
      */
     private String errorCode;
+
+    public static ErrorResponse of(String errorCode, String message) {
+        return ErrorResponse.builder()
+                .code(errorCode)
+                .errorCode(errorCode)
+                .message(message)
+                .timestamp(Instant.now())
+                .build();
+    }
+
+    public static ErrorResponse of(String errorCode, String message, String traceId) {
+        return ErrorResponse.builder()
+                .code(errorCode)
+                .errorCode(errorCode)
+                .message(message)
+                .traceId(traceId)
+                .timestamp(Instant.now())
+                .build();
+    }
+
+    public static ErrorResponse of(String errorCode, String message, String traceId,
+                                   String path, Map<String, Object> details) {
+        return ErrorResponse.builder()
+                .code(errorCode)
+                .errorCode(errorCode)
+                .message(message)
+                .traceId(traceId)
+                .timestamp(Instant.now())
+                .path(path)
+                .details(details)
+                .build();
+    }
 }

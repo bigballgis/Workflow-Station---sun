@@ -59,9 +59,5 @@ export const userApi = {
 
   /** Get user roles (via virtual groups) */
   getRoles: (userId: string): Promise<UserRole[]> =>
-    adminCenterAxios.get(`/users/${userId}/roles`),
-
-  /** Change password */
-  changePassword: (data: { oldPassword: string; newPassword: string }): Promise<void> =>
-    adminCenterAxios.post('/auth/change-password', data)
+    adminCenterAxios.get(`/users/${userId}/roles`)
 }

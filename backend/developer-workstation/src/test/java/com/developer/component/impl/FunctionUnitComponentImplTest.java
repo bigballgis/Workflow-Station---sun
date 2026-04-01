@@ -5,6 +5,7 @@ import com.developer.entity.FunctionUnit;
 import com.developer.entity.Version;
 import com.developer.enums.FunctionUnitStatus;
 import com.developer.repository.*;
+import com.developer.service.UserDisplayNameService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -57,6 +58,9 @@ class FunctionUnitComponentImplTest {
     
     @Mock
     private ObjectMapper objectMapper;
+
+    @Mock
+    private UserDisplayNameService userDisplayNameService;
     
     @InjectMocks
     private FunctionUnitComponentImpl functionUnitComponent;

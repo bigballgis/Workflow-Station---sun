@@ -11,7 +11,6 @@ import net.jqwik.api.constraints.LongRange;
 import net.jqwik.api.constraints.StringLength;
 import org.junit.jupiter.api.Tag;
 import org.springframework.test.util.ReflectionTestUtils;
-import org.springframework.web.client.RestTemplate;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -51,26 +50,23 @@ class AiLockExclusivityProperties {
 
         // Setup mocks
         CacheService cacheService = mock(CacheService.class);
-        RestTemplate restTemplate = mock(RestTemplate.class);
+        UserDisplayNameService userDisplayNameService = mock(UserDisplayNameService.class);
         ObjectMapper objectMapper = new ObjectMapper();
         objectMapper.registerModule(new JavaTimeModule());
 
         // Create service instance via constructor
-        AiLockServiceImpl lockService = new AiLockServiceImpl(cacheService, restTemplate);
+        AiLockServiceImpl lockService = new AiLockServiceImpl(cacheService, userDisplayNameService);
 
         // Set @Value fields via reflection
-        ReflectionTestUtils.setField(lockService, "adminCenterUrl", "http://localhost:8090");
         ReflectionTestUtils.setField(lockService, "ttlSeconds", 1800L);
         ReflectionTestUtils.setField(lockService, "forceUnlockTimeoutSeconds", 60L);
 
         String lockKey = "ai-gen-lock:" + functionUnitId;
 
-        // Mock RestTemplate to resolve user display names
-        when(restTemplate.getForObject(anyString(), eq(Map.class)))
+        when(userDisplayNameService.resolve(anyString()))
                 .thenAnswer(invocation -> {
-                    String url = invocation.getArgument(0);
-                    String uid = url.substring(url.lastIndexOf('/') + 1);
-                    return Map.of("fullName", "User_" + uid);
+                    String uid = invocation.getArgument(0);
+                    return "User_" + uid;
                 });
 
         // --- First user acquires the lock successfully ---

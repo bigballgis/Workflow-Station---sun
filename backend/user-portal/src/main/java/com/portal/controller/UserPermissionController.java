@@ -1,7 +1,9 @@
 package com.portal.controller;
 
+import com.platform.common.util.ApiResponseBodyUnwrap;
 import com.platform.security.util.SecurityContextUtils;
 import com.portal.dto.ApiResponse;
+import com.portal.security.CurrentUserId;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -34,7 +36,7 @@ public class UserPermissionController {
     @Operation(summary = "Get my permissions",
                description = "Get current user's complete permission view including roles and business units")
     public ApiResponse<Map<String, Object>> getMyPermissions(
-            @RequestHeader(value = "X-User-Id", required = false) String userId) {
+            @CurrentUserId String userId) {
         String effectiveUserId = SecurityContextUtils.getCurrentUserId().orElse(userId);
         if (effectiveUserId == null || effectiveUserId.isEmpty()) {
             return ApiResponse.error("UNAUTHORIZED", "User identity not available");
@@ -89,7 +91,7 @@ public class UserPermissionController {
     @GetMapping("/unactivated-roles")
     @Operation(summary = "Get unactivated BU-Bounded roles")
     public ApiResponse<List<Map<String, Object>>> getUnactivatedRoles(
-            @RequestHeader(value = "X-User-Id", required = false) String userId) {
+            @CurrentUserId String userId) {
         String effectiveUserId = SecurityContextUtils.getCurrentUserId().orElse(userId);
         if (effectiveUserId == null || effectiveUserId.isEmpty()) {
             return ApiResponse.error("UNAUTHORIZED", "User identity not available");
@@ -101,7 +103,7 @@ public class UserPermissionController {
     @GetMapping("/should-show-reminder")
     @Operation(summary = "Check if should show reminder")
     public ApiResponse<Map<String, Object>> shouldShowReminder(
-            @RequestHeader(value = "X-User-Id", required = false) String userId) {
+            @CurrentUserId String userId) {
         String effectiveUserId = SecurityContextUtils.getCurrentUserId().orElse(userId);
         if (effectiveUserId == null || effectiveUserId.isEmpty()) {
             return ApiResponse.error("UNAUTHORIZED", "User identity not available");
@@ -137,7 +139,7 @@ public class UserPermissionController {
     @PostMapping("/dont-remind")
     @Operation(summary = "Set don't remind preference")
     public ApiResponse<Map<String, Object>> setDontRemind(
-            @RequestHeader(value = "X-User-Id", required = false) String userId) {
+            @CurrentUserId String userId) {
         String effectiveUserId = SecurityContextUtils.getCurrentUserId().orElse(userId);
         if (effectiveUserId == null || effectiveUserId.isEmpty()) {
             return ApiResponse.error("UNAUTHORIZED", "User identity not available");
@@ -176,7 +178,7 @@ public class UserPermissionController {
     @Operation(summary = "Get role status")
     public ApiResponse<Map<String, Object>> getRoleStatus(
             @PathVariable String roleId,
-            @RequestHeader(value = "X-User-Id", required = false) String userId) {
+            @CurrentUserId String userId) {
         String effectiveUserId = SecurityContextUtils.getCurrentUserId().orElse(userId);
         if (effectiveUserId == null || effectiveUserId.isEmpty()) {
             return ApiResponse.error("UNAUTHORIZED", "User identity not available");
@@ -319,9 +321,11 @@ public class UserPermissionController {
                 url, HttpMethod.GET, entity,
                 new ParameterizedTypeReference<Map<String, Object>>() {}
             );
-            Map<String, Object> body = response.getBody();
-            if (body != null && body.containsKey("value")) {
-                return "true".equals(body.get("value"));
+            Map<String, Object> body = response.getBody() != null
+                    ? ApiResponseBodyUnwrap.unwrapDataMap(response.getBody())
+                    : Collections.emptyMap();
+            if (!body.isEmpty() && body.containsKey("value")) {
+                return "true".equals(String.valueOf(body.get("value")));
             }
             return false;
         } catch (Exception e) {

@@ -380,8 +380,6 @@ public class TaskProcessComponent {
         // 这是一个补偿机制，防止 ProcessCompletionListener 通知失败导致状态不同步
         try {
             String processInstanceId = task.getProcessInstanceId();
-            // 延迟一小段时间，让 Flowable 完成流程状态更新
-            Thread.sleep(500);
             
             // 通过 workflowEngineClient 检查流程状态
             Optional<Map<String, Object>> processStatus = workflowEngineClient.getProcessInstanceStatus(processInstanceId);
@@ -399,7 +397,9 @@ public class TaskProcessComponent {
                         ProcessInstance instance = optInstance.get();
                         if ("RUNNING".equals(instance.getStatus())) {
                             instance.setStatus("COMPLETED");
-                            instance.setEndTime(LocalDateTime.now());
+                            LocalDateTime finishedAt = LocalDateTime.now();
+                            instance.setEndTime(finishedAt);
+                            instance.setCompletedAt(finishedAt);
                             instance.setCurrentNode(lastActivityName != null ? lastActivityName : "Completed");
                             instance.setCurrentAssignee(null);
                             processInstanceRepository.save(instance);
@@ -441,7 +441,9 @@ public class TaskProcessComponent {
                                     if ("endEvent".equals(currentActivityType) || "EndEvent".equals(currentActivityType)) {
                                         log.info("Current activity is end event, marking process {} as COMPLETED", processInstanceId);
                                         instance.setStatus("COMPLETED");
-                                        instance.setEndTime(LocalDateTime.now());
+                                        LocalDateTime finishedAt = LocalDateTime.now();
+                                        instance.setEndTime(finishedAt);
+                                        instance.setCompletedAt(finishedAt);
                                     }
                                     
                                     processInstanceRepository.save(instance);

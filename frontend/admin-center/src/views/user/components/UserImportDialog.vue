@@ -26,7 +26,7 @@
           drag
         >
           <el-icon class="el-icon--upload"><Upload /></el-icon>
-          <div class="el-upload__text" v-html="t('user.dragFileOrClick')"></div>
+          <div class="el-upload__text" v-html="DOMPurify.sanitize(t('user.dragFileOrClick'))"></div>
           <template #tip>
             <div class="el-upload__tip">{{ t('user.uploadFileLimitTip') }}</div>
           </template>
@@ -73,6 +73,7 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, type UploadInstance, type UploadFile, type UploadRawFile } from 'element-plus'
 import { Upload, Download } from '@element-plus/icons-vue'
+import DOMPurify from 'dompurify'
 import { userApi, type ImportResult } from '@/api/user'
 
 const { t } = useI18n()

@@ -69,8 +69,9 @@ public class PermissionServiceImpl implements PermissionService {
         
         Optional<ApiPermission> apiPermOpt = permissionRepository.findApiPermission(apiPath, method);
         if (apiPermOpt.isEmpty()) {
-            // No specific permission configured, allow by default
-            log.debug("No API permission configured for {} {}, allowing access", method, apiPath);
+            // Default-allow: APIs not registered in permission table are accessible to authenticated users
+            // TODO: Consider switching to default-deny for sensitive paths
+            log.warn("No API permission configured for: {} {}, defaulting to allow", method, apiPath);
             return true;
         }
         

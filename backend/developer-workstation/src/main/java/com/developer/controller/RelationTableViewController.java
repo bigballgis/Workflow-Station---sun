@@ -4,6 +4,7 @@ import com.developer.dto.ApiResponse;
 import com.developer.entity.FormTableBinding;
 import com.developer.entity.RelationViewConfig;
 import com.developer.repository.FormTableBindingRepository;
+import com.developer.security.RequireDeveloperPermission;
 import com.developer.service.RelationViewService;
 import com.developer.service.RelationViewService.ViewFieldDTO;
 import com.platform.common.dto.RelationFieldDTO;
@@ -29,6 +30,7 @@ public class RelationTableViewController {
 
     @GetMapping("/{bindingId}")
     @Operation(summary = "获取 View 配置")
+    @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<RelationViewConfig>> getViewConfig(
             @PathVariable Long formId,
             @PathVariable Long bindingId) {
@@ -38,6 +40,7 @@ public class RelationTableViewController {
 
     @PutMapping("/{bindingId}")
     @Operation(summary = "保存 View 字段配置")
+    @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
     public ResponseEntity<ApiResponse<RelationViewConfig>> saveViewConfig(
             @PathVariable Long formId,
             @PathVariable Long bindingId,
@@ -48,6 +51,7 @@ public class RelationTableViewController {
 
     @GetMapping("/{bindingId}/fields")
     @Operation(summary = "获取可用字段列表")
+    @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<List<RelationFieldDTO>>> getAvailableFields(
             @PathVariable Long formId,
             @PathVariable Long bindingId) {
@@ -64,6 +68,7 @@ public class RelationTableViewController {
 
     @GetMapping("/fields-by-table")
     @Operation(summary = "通过 tableId 直接获取可用字段列表")
+    @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<List<RelationFieldDTO>>> getFieldsByTableId(
             @PathVariable Long formId,
             @RequestParam Long tableId) {

@@ -15,6 +15,7 @@ import com.developer.service.AiLockService;
 import com.developer.service.AiValidationService;
 import com.developer.service.AiWriteService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -52,6 +53,13 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
 
     /** 撤销快照 TTL 清理调度器 */
     private final ScheduledExecutorService undoCleanupExecutor = Executors.newSingleThreadScheduledExecutor();
+
+    @PreDestroy
+    public void destroy() {
+        if (undoCleanupExecutor != null) {
+            undoCleanupExecutor.shutdownNow();
+        }
+    }
 
     public AiGenerationComponentImpl(AiGenerationService aiGenerationService,
                                      AiLockService aiLockService,

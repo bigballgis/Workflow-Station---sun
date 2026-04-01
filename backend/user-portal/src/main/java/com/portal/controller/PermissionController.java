@@ -2,6 +2,7 @@ package com.portal.controller;
 
 import com.portal.component.PermissionComponent;
 import com.portal.dto.ApiResponse;
+import com.portal.security.CurrentUserId;
 import com.portal.dto.PageResponse;
 import com.portal.dto.PermissionRequestDto;
 import com.portal.entity.PermissionRequest;
@@ -11,6 +12,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.web.bind.annotation.*;
@@ -23,6 +25,7 @@ import java.util.Map;
 @RestController
 @RequestMapping("/permissions")
 @RequiredArgsConstructor
+@Slf4j
 @Tag(name = "权限管理", description = "权限申请和管理相关接口")
 public class PermissionController {
 
@@ -34,7 +37,7 @@ public class PermissionController {
     @GetMapping("/available-roles")
     @Operation(summary = "获取可申请的业务角色", description = "获取用户可以申请的业务角色列表（排除已拥有的）")
     public ApiResponse<List<Map<String, Object>>> getAvailableRoles(
-            @RequestHeader("X-User-Id") String userId) {
+            @CurrentUserId String userId) {
         List<Map<String, Object>> roles = permissionComponent.getAvailableRoles(userId);
         return ApiResponse.success(roles);
     }
@@ -42,7 +45,7 @@ public class PermissionController {
     @GetMapping("/available-virtual-groups")
     @Operation(summary = "获取可加入的虚拟组", description = "获取用户可以加入的虚拟组列表（排除已加入的）")
     public ApiResponse<List<Map<String, Object>>> getAvailableVirtualGroups(
-            @RequestHeader("X-User-Id") String userId) {
+            @CurrentUserId String userId) {
         List<Map<String, Object>> groups = permissionComponent.getAvailableVirtualGroups(userId);
         return ApiResponse.success(groups);
     }
@@ -50,15 +53,31 @@ public class PermissionController {
     @GetMapping("/available-business-units")
     @Operation(summary = "获取可加入的业务单元", description = "获取用户可以加入的业务单元列表（排除已加入的）")
     public ApiResponse<List<Map<String, Object>>> getAvailableBusinessUnits(
-            @RequestHeader("X-User-Id") String userId) {
+            @CurrentUserId String userId) {
         List<Map<String, Object>> businessUnits = permissionComponent.getAvailableBusinessUnits(userId);
         return ApiResponse.success(businessUnits);
+    }
+
+    @GetMapping("/business-units")
+    @Operation(summary = "获取业务单元目录", description = "获取平台业务单元扁平列表（成员管理等下拉）")
+    public ApiResponse<List<Map<String, Object>>> getBusinessUnitsCatalog(@CurrentUserId String userId) {
+        log.debug("Business units catalog requested by user {}", userId);
+        return ApiResponse.success(permissionComponent.getBusinessUnitsCatalog());
+    }
+
+    @GetMapping("/business-units/{businessUnitId}/roles")
+    @Operation(summary = "获取业务单元绑定角色", description = "获取业务单元已绑定的业务角色列表")
+    public ApiResponse<List<Map<String, Object>>> getBusinessUnitRoles(
+            @CurrentUserId String userId,
+            @PathVariable String businessUnitId) {
+        log.debug("Business unit roles requested by user {} for unit {}", userId, businessUnitId);
+        return ApiResponse.success(permissionComponent.getBusinessUnitRoles(businessUnitId));
     }
 
     @PostMapping("/request-role")
     @Operation(summary = "申请角色", description = "申请某个组织单元的业务角色（自动批准）")
     public ApiResponse<PermissionRequest> requestRole(
-            @RequestHeader("X-User-Id") String userId,
+            @CurrentUserId String userId,
             @RequestBody Map<String, String> body) {
         String roleId = body.get("roleId");
         String organizationUnitId = body.get("organizationUnitId");
@@ -85,7 +104,7 @@ public class PermissionController {
     @PostMapping("/request-virtual-group")
     @Operation(summary = "申请加入虚拟组", description = "申请加入虚拟组（自动批准）")
     public ApiResponse<PermissionRequest> requestVirtualGroup(
-            @RequestHeader("X-User-Id") String userId,
+            @CurrentUserId String userId,
             @RequestBody Map<String, String> body) {
         String virtualGroupId = body.get("virtualGroupId");
         String reason = body.get("reason");
@@ -108,7 +127,7 @@ public class PermissionController {
     @PostMapping("/request-business-unit")
     @Operation(summary = "申请加入业务单元", description = "申请加入业务单元（自动批准）")
     public ApiResponse<PermissionRequest> requestBusinessUnit(
-            @RequestHeader("X-User-Id") String userId,
+            @CurrentUserId String userId,
             @RequestBody Map<String, String> body) {
         String businessUnitId = body.get("businessUnitId");
         String reason = body.get("reason");
@@ -131,7 +150,7 @@ public class PermissionController {
     @GetMapping("/my-roles")
     @Operation(summary = "获取我的角色", description = "获取用户当前拥有的业务角色列表")
     public ApiResponse<List<Map<String, Object>>> getMyRoles(
-            @RequestHeader("X-User-Id") String userId) {
+            @CurrentUserId String userId) {
         List<Map<String, Object>> roles = permissionComponent.getUserCurrentRoles(userId);
         return ApiResponse.success(roles);
     }
@@ -139,7 +158,7 @@ public class PermissionController {
     @GetMapping("/my-virtual-groups")
     @Operation(summary = "获取我的虚拟组", description = "获取用户当前加入的虚拟组列表")
     public ApiResponse<List<Map<String, Object>>> getMyVirtualGroups(
-            @RequestHeader("X-User-Id") String userId) {
+            @CurrentUserId String userId) {
         List<Map<String, Object>> groups = permissionComponent.getUserCurrentVirtualGroups(userId);
         return ApiResponse.success(groups);
     }
@@ -149,7 +168,7 @@ public class PermissionController {
     @GetMapping("/approvals/pending")
     @Operation(summary = "获取待审批列表", description = "获取当前用户可以审批的权限申请")
     public ApiResponse<PageResponse<PermissionRequest>> getPendingApprovals(
-            @RequestHeader("X-User-Id") String userId,
+            @CurrentUserId String userId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         // 检查审批权限
@@ -165,7 +184,7 @@ public class PermissionController {
     @PostMapping("/approvals/{requestId}/approve")
     @Operation(summary = "批准申请", description = "批准权限申请")
     public ApiResponse<PermissionRequest> approveRequest(
-            @RequestHeader("X-User-Id") String userId,
+            @CurrentUserId String userId,
             @PathVariable Long requestId,
             @RequestBody(required = false) Map<String, String> body) {
         // 检查审批权限
@@ -186,7 +205,7 @@ public class PermissionController {
     @PostMapping("/approvals/{requestId}/reject")
     @Operation(summary = "拒绝申请", description = "拒绝权限申请（必须填写原因）")
     public ApiResponse<PermissionRequest> rejectRequest(
-            @RequestHeader("X-User-Id") String userId,
+            @CurrentUserId String userId,
             @PathVariable Long requestId,
             @RequestBody Map<String, String> body) {
         // 检查审批权限
@@ -210,7 +229,7 @@ public class PermissionController {
     @GetMapping("/approvals/is-approver")
     @Operation(summary = "检查审批权限", description = "检查当前用户是否有审批权限")
     public ApiResponse<Map<String, Object>> isApprover(
-            @RequestHeader("X-User-Id") String userId) {
+            @CurrentUserId String userId) {
         boolean isApprover = permissionComponent.isApprover(userId);
         Map<String, Object> result = new HashMap<>();
         result.put("isApprover", isApprover);
@@ -220,7 +239,7 @@ public class PermissionController {
     @GetMapping("/approvals/history")
     @Operation(summary = "获取审批历史", description = "获取当前用户的审批历史记录")
     public ApiResponse<PageResponse<PermissionRequest>> getApprovalHistory(
-            @RequestHeader("X-User-Id") String userId,
+            @CurrentUserId String userId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         // 检查审批权限
@@ -238,7 +257,7 @@ public class PermissionController {
     @Operation(summary = "获取我的权限列表")
     @Deprecated
     public ApiResponse<List<Map<String, Object>>> getMyPermissions(
-            @RequestHeader("X-User-Id") String userId) {
+            @CurrentUserId String userId) {
         List<Map<String, Object>> permissions = permissionComponent.getUserPermissions(userId);
         return ApiResponse.success(permissions);
     }
@@ -247,7 +266,7 @@ public class PermissionController {
     @Operation(summary = "提交权限申请")
     @Deprecated
     public ApiResponse<PermissionRequest> submitRequest(
-            @RequestHeader("X-User-Id") String userId,
+            @CurrentUserId String userId,
             @RequestBody @Valid PermissionRequestDto dto) {
         PermissionRequest request = permissionComponent.submitRequest(userId, dto);
         return ApiResponse.success(request);
@@ -256,7 +275,7 @@ public class PermissionController {
     @GetMapping("/requests")
     @Operation(summary = "获取我的申请记录")
     public ApiResponse<PageResponse<PermissionRequest>> getMyRequests(
-            @RequestHeader("X-User-Id") String userId,
+            @CurrentUserId String userId,
             @RequestParam(required = false) PermissionRequestStatus status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
@@ -275,7 +294,7 @@ public class PermissionController {
     @DeleteMapping("/requests/{requestId}")
     @Operation(summary = "取消申请")
     public ApiResponse<Void> cancelRequest(
-            @RequestHeader("X-User-Id") String userId,
+            @CurrentUserId String userId,
             @PathVariable Long requestId) {
         boolean success = permissionComponent.cancelRequest(userId, requestId);
         if (success) {
@@ -288,7 +307,7 @@ public class PermissionController {
     @Operation(summary = "续期申请")
     @Deprecated
     public ApiResponse<PermissionRequest> renewPermission(
-            @RequestHeader("X-User-Id") String userId,
+            @CurrentUserId String userId,
             @RequestBody Map<String, Object> body) {
         String permissionId = (String) body.get("permissionId");
         String validToStr = (String) body.get("validTo");
@@ -303,7 +322,7 @@ public class PermissionController {
     @Operation(summary = "获取即将过期的权限")
     @Deprecated
     public ApiResponse<List<Map<String, Object>>> getExpiringPermissions(
-            @RequestHeader("X-User-Id") String userId,
+            @CurrentUserId String userId,
             @RequestParam(defaultValue = "30") int days) {
         List<Map<String, Object>> expiring = permissionComponent.getExpiringPermissions(userId, days);
         return ApiResponse.success(expiring);

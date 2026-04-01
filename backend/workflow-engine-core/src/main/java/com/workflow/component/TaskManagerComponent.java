@@ -77,58 +77,49 @@ public class TaskManagerComponent {
     // ==================== 任务查询 ====================
 
     /**
-     * 查询用户的待办任务（包括直接分配、委托、认领的任务）
+     * 查询用户的待办任务（包括直接分配、候选人任务）
      * 支持多维度任务分配类型
-     * 
-     * 直接从 Flowable TaskService 查询任务，确保能看到所有任务
-     * 包括未分配的任务（可以被任何人认领）
      */
     public TaskListResult getUserTasks(String userId, int page, int size) {
         try {
-            // 验证参数
             validateUserId(userId);
             
-            List<Task> allTasks = new ArrayList<>();
+            int fetchLimit = (page + 1) * size;
             
-            // 1. 查询直接分配给用户的任务
             List<Task> assignedTasks = taskService.createTaskQuery()
                 .taskAssignee(userId)
-                .list();
-            allTasks.addAll(assignedTasks);
+                .orderByTaskCreateTime().desc()
+                .listPage(0, fetchLimit);
             
-            // 2. 查询用户是候选人的任务
             List<Task> candidateTasks = taskService.createTaskQuery()
                 .taskCandidateUser(userId)
-                .list();
-            allTasks.addAll(candidateTasks);
+                .orderByTaskCreateTime().desc()
+                .listPage(0, fetchLimit);
             
-            // 3. 查询未分配的任务（可以被任何人认领）
-            List<Task> unassignedTasks = taskService.createTaskQuery()
-                .taskUnassigned()
-                .list();
-            allTasks.addAll(unassignedTasks);
+            java.util.LinkedHashMap<String, Task> taskMap = new java.util.LinkedHashMap<>();
+            for (Task t : assignedTasks) taskMap.putIfAbsent(t.getId(), t);
+            for (Task t : candidateTasks) taskMap.putIfAbsent(t.getId(), t);
             
-            // 去重并排序
-            List<Task> uniqueTasks = allTasks.stream()
-                .collect(java.util.stream.Collectors.toMap(
-                    Task::getId, 
-                    t -> t, 
-                    (t1, t2) -> t1))
-                .values()
-                .stream()
-                .sorted((t1, t2) -> t2.getCreateTime().compareTo(t1.getCreateTime()))
-                .toList();
+            List<Task> uniqueTasks = new ArrayList<>(taskMap.values());
+            uniqueTasks.sort((t1, t2) -> t2.getCreateTime().compareTo(t1.getCreateTime()));
             
-            long totalCount = uniqueTasks.size();
+            long totalCount;
+            if (uniqueTasks.size() < fetchLimit) {
+                totalCount = uniqueTasks.size();
+            } else {
+                long assignedCount = taskService.createTaskQuery()
+                    .taskAssignee(userId).count();
+                long candidateCount = taskService.createTaskQuery()
+                    .taskCandidateUser(userId).count();
+                totalCount = assignedCount + candidateCount;
+            }
             
-            // 分页
             int start = page * size;
             int end = Math.min(start + size, uniqueTasks.size());
             List<Task> pagedTasks = start < uniqueTasks.size() 
                 ? uniqueTasks.subList(start, end) 
                 : Collections.emptyList();
             
-            // 转换为结果对象
             List<TaskListResult.TaskInfo> taskInfos = pagedTasks.stream()
                 .map(this::convertFlowableTaskToTaskInfo)
                 .toList();
@@ -350,60 +341,56 @@ public class TaskManagerComponent {
     public TaskListResult getUserAllVisibleTasks(String userId, List<String> groupIds, 
                                                List<String> deptRoles, int page, int size) {
         try {
-            // 验证参数
             validateUserId(userId);
             
-            List<Task> allTasks = new ArrayList<>();
+            int fetchLimit = (page + 1) * size;
             
-            // 1. 查询直接分配给用户的任务
             List<Task> assignedTasks = taskService.createTaskQuery()
                 .taskAssignee(userId)
-                .list();
-            allTasks.addAll(assignedTasks);
+                .orderByTaskCreateTime().desc()
+                .listPage(0, fetchLimit);
             
-            // 2. 查询用户是候选人的任务
             List<Task> candidateTasks = taskService.createTaskQuery()
                 .taskCandidateUser(userId)
-                .list();
-            allTasks.addAll(candidateTasks);
+                .orderByTaskCreateTime().desc()
+                .listPage(0, fetchLimit);
             
-            // 3. 查询用户所属组的任务
+            java.util.LinkedHashMap<String, Task> taskMap = new java.util.LinkedHashMap<>();
+            for (Task t : assignedTasks) taskMap.putIfAbsent(t.getId(), t);
+            for (Task t : candidateTasks) taskMap.putIfAbsent(t.getId(), t);
+            
             if (groupIds != null && !groupIds.isEmpty()) {
-                for (String groupId : groupIds) {
-                    List<Task> groupTasks = taskService.createTaskQuery()
-                        .taskCandidateGroup(groupId)
-                        .list();
-                    allTasks.addAll(groupTasks);
+                List<Task> groupTasks = taskService.createTaskQuery()
+                    .taskCandidateGroupIn(groupIds)
+                    .orderByTaskCreateTime().desc()
+                    .listPage(0, fetchLimit);
+                for (Task t : groupTasks) taskMap.putIfAbsent(t.getId(), t);
+            }
+            
+            List<Task> uniqueTasks = new ArrayList<>(taskMap.values());
+            uniqueTasks.sort((t1, t2) -> t2.getCreateTime().compareTo(t1.getCreateTime()));
+            
+            long totalCount;
+            if (uniqueTasks.size() < fetchLimit) {
+                totalCount = uniqueTasks.size();
+            } else {
+                long assignedCount = taskService.createTaskQuery()
+                    .taskAssignee(userId).count();
+                long candidateCount = taskService.createTaskQuery()
+                    .taskCandidateUser(userId).count();
+                totalCount = assignedCount + candidateCount;
+                if (groupIds != null && !groupIds.isEmpty()) {
+                    totalCount += taskService.createTaskQuery()
+                        .taskCandidateGroupIn(groupIds).count();
                 }
             }
             
-            // 4. 查询未分配的任务（没有 assignee 的任务）
-            List<Task> unassignedTasks = taskService.createTaskQuery()
-                .taskUnassigned()
-                .list();
-            allTasks.addAll(unassignedTasks);
-            
-            // 去重
-            List<Task> uniqueTasks = allTasks.stream()
-                .collect(java.util.stream.Collectors.toMap(
-                    Task::getId, 
-                    t -> t, 
-                    (t1, t2) -> t1))
-                .values()
-                .stream()
-                .sorted((t1, t2) -> t2.getCreateTime().compareTo(t1.getCreateTime()))
-                .toList();
-            
-            long totalCount = uniqueTasks.size();
-            
-            // 分页
             int start = page * size;
             int end = Math.min(start + size, uniqueTasks.size());
             List<Task> pagedTasks = start < uniqueTasks.size() 
                 ? uniqueTasks.subList(start, end) 
                 : Collections.emptyList();
             
-            // 转换为结果对象
             List<TaskListResult.TaskInfo> taskInfos = pagedTasks.stream()
                 .map(this::convertFlowableTaskToTaskInfo)
                 .toList();

@@ -13,11 +13,11 @@ public final class IdempotencyUtils {
     private IdempotencyUtils() {}
     
     /**
-     * Generate a unique idempotency key based on operation context.
-     * Format: {operation}:{entityId}:{timestamp}
+     * Generate a deterministic idempotency key based on operation context.
+     * Format: {operation}:{entityId}
      */
     public static String generateKey(String operation, String entityId) {
-        return operation + ":" + entityId + ":" + System.currentTimeMillis();
+        return operation + ":" + entityId;
     }
     
     /**

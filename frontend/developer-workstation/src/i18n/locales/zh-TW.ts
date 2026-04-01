@@ -56,7 +56,8 @@ export default {
     add: '新增',
     operation: '操作',
     deleteSuccess: '刪除成功',
-    confirmTitle: '提示'
+    confirmTitle: '提示',
+    more: '更多'
   },
   sidebar: {
     collapse: '收起側邊欄',
@@ -541,17 +542,7 @@ export default {
     categoryCompliance: '合規風控',
     categoryOperation: '營運管理',
     categoryGeneral: '通用圖示',
-    loadFailed: '載入失敗',
-    category: {
-      approval: '審批流程',
-      credit: '信貸業務',
-      account: '帳戶服務',
-      payment: '支付結算',
-      customer: '客戶管理',
-      compliance: '合規風控',
-      operation: '營運管理',
-      general: '通用圖示'
-    }
+    loadFailed: '載入失敗'
   },
   version: {
     title: '版本管理',
@@ -1117,7 +1108,8 @@ export default {
     notBound: '未綁定',
     noServiceTasks: '流程中未找到服務任務節點',
     noProcessDefined: '暫無流程定義',
-    bindSuccess: '決策表綁定節點成功'
+    bindSuccess: '決策表綁定節點成功',
+    backToList: '返回決策列表'
   },
   ai: {
     panel: {
@@ -1361,5 +1353,11 @@ export default {
     createFromTemplate: '從範本建立',
     selectTemplate: '選擇範本',
     blankForm: '空白表單',
+  },
+  error: {
+    forbidden: '無權限存取',
+    forbiddenDesc: '抱歉，您沒有權限存取此頁面',
+    goBack: '返回上一頁',
+    backHome: '返回首頁'
   }
 }

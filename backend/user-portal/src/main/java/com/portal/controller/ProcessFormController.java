@@ -2,6 +2,7 @@ package com.portal.controller;
 
 import com.portal.component.ProcessFormComponent;
 import com.portal.dto.ApiResponse;
+import com.portal.security.CurrentUserId;
 import com.portal.dto.ProcessFormData;
 import com.portal.exception.PortalException;
 import io.swagger.v3.oas.annotations.Operation;
@@ -39,7 +40,7 @@ public class ProcessFormController {
     @Operation(summary = "提交 Process Form 更新（仅 Return_To_Requester 状态）")
     public ApiResponse<Void> submitProcessFormUpdate(
             @PathVariable String processInstanceId,
-            @RequestHeader("X-User-Id") String userId,
+            @CurrentUserId String userId,
             @RequestBody Map<String, Object> formData) {
         log.debug("PUT /processes/{}/form by user {}", processInstanceId, userId);
         processFormComponent.submitProcessFormUpdate(processInstanceId, userId, formData);

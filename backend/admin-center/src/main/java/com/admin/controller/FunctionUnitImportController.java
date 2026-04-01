@@ -59,7 +59,8 @@ public class FunctionUnitImportController {
     @Operation(summary = "导入功能单元", description = "上传ZIP文件导入功能单元")
     public ResponseEntity<Map<String, Object>> importFunctionUnit(
             @Parameter(description = "功能单元ZIP包") @RequestParam("file") MultipartFile file,
-            @Parameter(description = "冲突处理策略") @RequestParam(defaultValue = "OVERWRITE") String conflictStrategy) {
+            @Parameter(description = "冲突处理策略") @RequestParam(defaultValue = "OVERWRITE") String conflictStrategy,
+            @RequestHeader(value = "X-User-Id", defaultValue = "system") String userId) {
         
         log.info("Importing function unit from file: {}", file.getOriginalFilename());
         
@@ -100,7 +101,7 @@ public class FunctionUnitImportController {
                     .build();
             
             // 执行导入
-            ImportResult importResult = functionUnitManager.importFunctionPackage(importRequest, "system");
+            ImportResult importResult = functionUnitManager.importFunctionPackage(importRequest, userId);
             
             if (importResult.isSuccess()) {
                 // 保存表单内容
@@ -206,7 +207,8 @@ public class FunctionUnitImportController {
     @Operation(summary = "部署功能单元", description = "将功能单元部署到指定环境，并将流程定义部署到 Flowable 引擎")
     public ResponseEntity<Map<String, Object>> deployFunctionUnit(
             @Parameter(description = "功能单元ID") @PathVariable String id,
-            @RequestBody Map<String, Object> request) {
+            @RequestBody Map<String, Object> request,
+            @RequestHeader(value = "X-User-Id", defaultValue = "system") String userId) {
         
         log.info("Deploying function unit: {}", id);
         
@@ -218,7 +220,7 @@ public class FunctionUnitImportController {
             
             // 如果是草稿状态，先验证
             if (functionUnit.getStatus() == FunctionUnitStatus.DRAFT) {
-                functionUnit = functionUnitManager.validateFunctionUnit(id, "system");
+                functionUnit = functionUnitManager.validateFunctionUnit(id, userId);
             }
             
             // 获取部署参数
@@ -259,7 +261,7 @@ public class FunctionUnitImportController {
                 List<String> disabledVersions = functionUnitManager.disableOtherVersions(
                         functionUnit.getCode(), 
                         functionUnit.getVersion(), 
-                        "system");
+                        userId);
                 
                 if (!disabledVersions.isEmpty()) {
                     result.put("disabledVersions", disabledVersions);
@@ -274,9 +276,8 @@ public class FunctionUnitImportController {
                     
                     // 创建部署记录
                     FunctionUnitDeployment deployment = deploymentManager.createDeployment(
-                            id, environment, DeploymentStrategy.FULL, "system");
+                            id, environment, DeploymentStrategy.FULL, userId);
                     
-                    // 对于不需要审批的环境（如DEVELOPMENT），直接执行
                     if (!deploymentManager.requiresApproval(environment)) {
                         deployment = deploymentManager.executeDeployment(deployment.getId());
                         result.put("deploymentId", deployment.getId());
@@ -300,7 +301,7 @@ public class FunctionUnitImportController {
             
             // 创建部署
             FunctionUnitDeployment deployment = deploymentManager.createDeployment(
-                    id, environment, DeploymentStrategy.FULL, "system");
+                    id, environment, DeploymentStrategy.FULL, userId);
             
             // 如果不需要审批，直接执行部署
             if (!deploymentManager.requiresApproval(environment)) {
@@ -444,7 +445,9 @@ public class FunctionUnitImportController {
      */
     @PostMapping("/{id}/enable")
     @Operation(summary = "启用功能单元")
-    public ResponseEntity<Map<String, Object>> enableFunctionUnit(@PathVariable String id) {
+    public ResponseEntity<Map<String, Object>> enableFunctionUnit(
+            @PathVariable String id,
+            @RequestHeader(value = "X-User-Id", defaultValue = "system") String userId) {
         log.info("Enabling function unit: {}", id);
         
         Map<String, Object> result = new HashMap<>();
@@ -454,7 +457,7 @@ public class FunctionUnitImportController {
             
             if (functionUnit.getStatus() == FunctionUnitStatus.VALIDATED) {
                 functionUnit.markAsDeployed();
-                // 需要保存，但这里简化处理
+                functionUnitManager.saveFunctionUnit(functionUnit);
             }
             
             result.put("status", "SUCCESS");
@@ -594,14 +597,15 @@ public class FunctionUnitImportController {
     @Operation(summary = "激活指定版本", description = "激活功能单元的指定版本，禁用其他版本（用于回滚）")
     public ResponseEntity<Map<String, Object>> activateVersion(
             @Parameter(description = "功能单元代码") @PathVariable String code,
-            @Parameter(description = "目标版本号") @PathVariable String version) {
+            @Parameter(description = "目标版本号") @PathVariable String version,
+            @RequestHeader(value = "X-User-Id", defaultValue = "system") String userId) {
         
         log.info("Activating version {} for function unit code: {}", version, code);
         
         Map<String, Object> result = new HashMap<>();
         
         try {
-            FunctionUnit activated = functionUnitManager.activateVersion(code, version, "system");
+            FunctionUnit activated = functionUnitManager.activateVersion(code, version, userId);
             
             result.put("status", "SUCCESS");
             result.put("functionUnitId", activated.getId());

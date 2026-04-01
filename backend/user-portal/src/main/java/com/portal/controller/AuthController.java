@@ -41,7 +41,7 @@ public class AuthController {
     private final I18nService i18nService;
     private final JwtTokenService jwtTokenService;
     
-    @Value("${jwt.secret:my-super-secret-jwt-key-for-development-only-32chars}")
+    @Value("${jwt.secret}")
     private String jwtSecret;
     
     @Value("${jwt.expiration:86400000}")

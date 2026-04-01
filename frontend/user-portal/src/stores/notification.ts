@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { notificationApi, type NotificationData, type NotificationParams } from '@/api/notification'
 import { useNotificationWebSocket } from '@/composables/useNotificationWebSocket'
 
@@ -17,10 +17,9 @@ export const useNotificationStore = defineStore('notification', () => {
   const fetchNotifications = async (params?: NotificationParams) => {
     loading.value = true
     try {
-      const res = await notificationApi.getNotifications(params) as any
-      const data = res?.data ?? res
-      notifications.value = data?.content ?? []
-      total.value = data?.totalElements ?? 0
+      const res = await notificationApi.getNotifications(params)
+      notifications.value = res?.data?.content ?? []
+      total.value = res?.data?.totalElements ?? 0
     } catch {
       notifications.value = []
       total.value = 0
@@ -31,8 +30,8 @@ export const useNotificationStore = defineStore('notification', () => {
 
   const fetchUnreadCount = async () => {
     try {
-      const res = await notificationApi.getUnreadCount() as any
-      unreadCount.value = res.data ?? res ?? 0
+      const res = await notificationApi.getUnreadCount()
+      unreadCount.value = res?.data ?? 0
     } catch {
       // Silent fail — state is already initialized
     }
@@ -84,22 +83,19 @@ export const useNotificationStore = defineStore('notification', () => {
     }
   }
 
-  // Watch WebSocket connection state for fallback polling
   const initWebSocket = () => {
     connect()
-    // Check connection periodically and fallback to polling
-    const checkInterval = setInterval(() => {
-      wsConnected.value = connected.value
-      if (!connected.value) {
-        startPolling()
-      } else {
-        stopPolling()
-      }
-    }, 5000)
 
-    // Cleanup on store disposal
+    watch(connected, (isConnected) => {
+      wsConnected.value = isConnected
+      if (isConnected) {
+        stopPolling()
+      } else {
+        startPolling()
+      }
+    }, { immediate: true })
+
     const cleanup = () => {
-      clearInterval(checkInterval)
       stopPolling()
       disconnect()
     }

@@ -107,6 +107,18 @@ public interface ExceptionRecordRepository extends JpaRepository<ExceptionRecord
             @Param("startTime") LocalDateTime startTime, 
             @Param("endTime") LocalDateTime endTime);
     
+    long countByResolvedFalse();
+
+    @Query("SELECT e.exceptionType, COUNT(e) FROM ExceptionRecord e GROUP BY e.exceptionType")
+    List<Object[]> countByExceptionType();
+
+    @Query("SELECT e.processDefinitionKey, COUNT(e) FROM ExceptionRecord e " +
+           "WHERE e.processDefinitionKey IS NOT NULL GROUP BY e.processDefinitionKey ORDER BY COUNT(e) DESC")
+    List<Object[]> countGroupByProcessDefinitionKey();
+
+    @Query("SELECT COUNT(e) FROM ExceptionRecord e WHERE e.occurredTime >= :since")
+    long countSince(@Param("since") LocalDateTime since);
+
     /**
      * 查询中断的流程实例（有未解决异常的流程）
      */

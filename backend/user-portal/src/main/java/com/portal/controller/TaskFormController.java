@@ -2,6 +2,7 @@ package com.portal.controller;
 
 import com.portal.component.TaskFormComponent;
 import com.portal.dto.ApiResponse;
+import com.portal.security.CurrentUserId;
 import com.portal.dto.CompletedTaskFormData;
 import com.portal.dto.TaskFormData;
 import com.portal.dto.TaskFormSubmitRequest;
@@ -40,7 +41,7 @@ public class TaskFormController {
     @Operation(summary = "提交 Task Form 数据")
     public ApiResponse<Void> submitTaskForm(
             @PathVariable String taskId,
-            @RequestHeader("X-User-Id") String userId,
+            @CurrentUserId String userId,
             @Valid @RequestBody TaskFormSubmitRequest request) {
         log.debug("POST /tasks/{}/submit by user {}", taskId, userId);
         taskFormComponent.submitTaskForm(taskId, userId, request.getFormData(), request.getBaselineValues());

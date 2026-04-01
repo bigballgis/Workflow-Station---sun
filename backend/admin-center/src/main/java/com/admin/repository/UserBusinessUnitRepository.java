@@ -55,4 +55,6 @@ public interface UserBusinessUnitRepository extends JpaRepository<UserBusinessUn
      * 统计用户加入的业务单元数量
      */
     long countByUserId(String userId);
+
+    List<UserBusinessUnit> findByUserIdIn(List<String> userIds);
 }

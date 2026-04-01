@@ -195,6 +195,7 @@ import N8nActionDialog from '@/components/N8nActionDialog.vue'
 import type { ActionDefinition } from '@/components/N8nActionDialog.vue'
 import { applyAutoFill } from '@/utils/n8nAutoFillEngine'
 import { relationTableApi } from '@/api/relationTable'
+import { isDisabledMessage } from '@/utils/statusMatcher'
 
 const route = useRoute()
 const router = useRouter()
@@ -319,8 +320,10 @@ const loadFunctionUnitContent = async () => {
     
     // 解析表单定义 - 根据开始节点的 formId 选择正确的表单
     if (content.forms && content.forms.length > 0) {
-      // Task 16.1: 校验 PROCESS form 存在
-      const hasProcessForm = content.forms.some((f: any) => f.formType === 'PROCESS')
+      // 功能单元内容中的表单来自 admin-center FormContentDTO：字段为 type（如 "FORM"），无 formType
+      const hasProcessForm = content.forms.some(
+        (f: any) => f.formType === 'PROCESS' || f.type === 'FORM' || f.type === 'PROCESS'
+      )
       if (!hasProcessForm) {
         noProcessForm.value = true
         return
@@ -443,7 +446,7 @@ const loadFunctionUnitContent = async () => {
     // 检查是否是 403 错误（禁用或无权限）
     if (error.response?.status === 403) {
       const message = error.response?.data?.message || ''
-      if (message.includes('disabled') || message.includes('禁用')) {
+      if (isDisabledMessage(message)) {
         isDisabled.value = true
       } else {
         isAccessDenied.value = true
@@ -1306,8 +1309,10 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .process-start-page {
-  max-width: 1200px;
-  margin: 0 auto;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  box-sizing: border-box;
   
   .page-header {
     display: flex;

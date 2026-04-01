@@ -68,9 +68,15 @@ public class N8nConfigController {
         return ResponseEntity.ok(n8nConfigService.testConnection(id));
     }
 
+    // 内部服务间调用，需携带 X-Internal-Service-Token header
     @GetMapping("/{id}/internal")
     @Operation(summary = "内部 API：获取含解密 apiKey 的完整 N8N 连接配置")
-    public ResponseEntity<N8nConfig> getByIdInternal(@PathVariable String id) {
+    public ResponseEntity<N8nConfig> getByIdInternal(
+            @PathVariable String id,
+            @RequestHeader(value = "X-Internal-Service-Token", required = false) String serviceToken) {
+        if (serviceToken == null || serviceToken.isBlank()) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
         return ResponseEntity.ok(n8nConfigService.getByIdInternal(id));
     }
 

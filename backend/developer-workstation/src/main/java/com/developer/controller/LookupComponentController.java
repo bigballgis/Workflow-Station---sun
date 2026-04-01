@@ -2,6 +2,7 @@ package com.developer.controller;
 
 import com.developer.dto.ApiResponse;
 import com.developer.entity.RelationLookupConfig;
+import com.developer.security.RequireDeveloperPermission;
 import com.developer.service.RelationLookupService;
 import com.developer.service.RelationLookupService.BoundViewDTO;
 import com.developer.service.RelationLookupService.LookupConfigDTO;
@@ -26,6 +27,7 @@ public class LookupComponentController {
 
     @GetMapping("/{componentId}")
     @Operation(summary = "获取 Lookup 配置")
+    @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<RelationLookupConfig>> getLookupConfig(
             @PathVariable Long formId,
             @PathVariable String componentId) {
@@ -35,6 +37,7 @@ public class LookupComponentController {
 
     @PutMapping("/{componentId}")
     @Operation(summary = "保存 Lookup 配置")
+    @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
     public ResponseEntity<ApiResponse<RelationLookupConfig>> saveLookupConfig(
             @PathVariable Long formId,
             @PathVariable String componentId,
@@ -45,6 +48,7 @@ public class LookupComponentController {
 
     @GetMapping("/{componentId}/bound-views")
     @Operation(summary = "获取已绑定的 View 列表")
+    @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<List<BoundViewDTO>>> getBoundViews(
             @PathVariable Long formId,
             @PathVariable String componentId) {

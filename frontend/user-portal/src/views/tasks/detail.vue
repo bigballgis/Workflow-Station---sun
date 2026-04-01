@@ -409,6 +409,7 @@ import {
   type CompletedTaskFormData,
 } from '@/api/processForm'
 import { relationTableApi } from '@/api/relationTable'
+import { isRejectedName } from '@/utils/statusMatcher'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -1288,7 +1289,7 @@ const parseBpmnXml = (xml: string) => {
       
       // 检查结束节点是否应该标记为已完成
       let status: 'completed' | 'pending' | 'rejected' = 'pending'
-      const isRejectedEnd = name.toLowerCase().includes('rejected') || name.toLowerCase().includes('拒绝')
+      const isRejectedEnd = isRejectedName(name)
       
       if (completedNodeIds.has(id) || completedNodeNames.has(name)) {
         // Rejected 结束节点用红色，其他用绿色
@@ -2041,8 +2042,10 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .task-detail-page {
-  max-width: 1200px;
-  margin: 0 auto;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  box-sizing: border-box;
   
   .page-header {
     display: flex;

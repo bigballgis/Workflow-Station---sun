@@ -22,6 +22,7 @@ import com.admin.repository.VirtualGroupRepository;
 import com.admin.service.UserBusinessUnitService;
 import com.admin.service.UserImportService;
 import com.admin.service.UserPermissionService;
+import com.admin.service.UserPortalMembershipService;
 import com.admin.util.EntityTypeConverter;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -54,6 +55,7 @@ public class UserController {
     private final UserBusinessUnitService userBusinessUnitService;
     private final UserPermissionService userPermissionService;
     private final RoleHelper roleHelper;
+    private final UserPortalMembershipService userPortalMembershipService;
     
     @PostMapping
     @Operation(summary = "创建用户", description = "创建新用户，立即激活")
@@ -123,8 +125,10 @@ public class UserController {
         return ResponseEntity.ok().build();
     }
     
+    // SECURITY: Response contains plaintext password — must only be served over HTTPS.
+    // The password is displayed once to the admin and not logged.
     @PostMapping("/{userId}/reset-password")
-    @Operation(summary = "重置用户密码", description = "重置用户密码并返回新密码")
+    @Operation(summary = "重置用户密码", description = "重置用户密码并返回新密码（仅通过 HTTPS 传输）")
     public ResponseEntity<String> resetPassword(@PathVariable String userId) {
         String newPassword = userManager.resetPassword(userId);
         return ResponseEntity.ok(newPassword);
@@ -239,5 +243,11 @@ public class UserController {
                 .collect(Collectors.toList());
         
         return ResponseEntity.ok(result);
+    }
+
+    @GetMapping("/{userId}/memberships")
+    @Operation(summary = "聚合成员身份（portal）", description = "虚拟组、业务单元角色与业务单元成员关系，供 user-portal 退出角色页使用")
+    public ResponseEntity<Map<String, Object>> getUserMembershipsForPortal(@PathVariable String userId) {
+        return ResponseEntity.ok(userPortalMembershipService.buildMembershipPayload(userId));
     }
 }

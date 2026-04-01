@@ -62,6 +62,10 @@ import 'dmn-js/dist/assets/dmn-js-literal-expression.css'
 import 'dmn-js/dist/assets/dmn-font/css/dmn.css'
 
 const { t } = useI18n()
+const emit = defineEmits<{
+  saved: []
+}>()
+
 const props = defineProps<{
   functionUnitId: number
   decisionId: number
@@ -176,6 +180,7 @@ async function handleSave() {
       description: decisionData.value.description
     })
     ElMessage.success(t('decision.saveSuccess'))
+    emit('saved')
   } catch (err) {
     ElMessage.error(t('decision.saveFailed'))
   } finally {

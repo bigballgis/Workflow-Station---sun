@@ -596,6 +596,9 @@ export default {
   error: {
     notFound: 'Page Not Found',
     notFoundDesc: 'Sorry, the page you visited does not exist',
+    forbidden: 'Access Denied',
+    forbiddenDesc: 'Sorry, you do not have permission to access this page',
+    goBack: 'Go Back',
     backHome: 'Back to Home'
   },
   settings: {

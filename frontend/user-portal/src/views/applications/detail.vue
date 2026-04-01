@@ -207,6 +207,7 @@ import SubTableField from '@/components/SubTableField.vue'
 import ChangeHistoryPanel from '@/components/ChangeHistoryPanel.vue'
 import { formatDate } from '@/utils/dateFormat'
 import { relationTableApi } from '@/api/relationTable'
+import { isRejectedName } from '@/utils/statusMatcher'
 
 const route = useRoute()
 const router = useRouter()
@@ -399,7 +400,7 @@ const loadProcessDetail = async () => {
           const nextNode = processNodes.value.find(n => n.name === nextNodeName)
           if (nextNode) {
             if (nextNode.type === 'end') {
-              if (nextNodeName.toLowerCase().includes('rejected') || nextNodeName.toLowerCase().includes('拒绝')) {
+              if (isRejectedName(nextNodeName)) {
                 nextNode.status = 'rejected'
               } else {
                 nextNode.status = 'completed'
@@ -982,28 +983,15 @@ const parseBpmnXml = (xml: string) => {
       
       // 优先从历史记录中获取状态
       if (completedNodeNames.has(name)) {
-        // Rejected 结束节点用红色，其他用绿色
-        if (name.toLowerCase().includes('rejected') || name.toLowerCase().includes('拒绝')) {
-          status = 'rejected'
-        } else {
-          status = 'completed'
-        }
+        status = isRejectedName(name) ? 'rejected' : 'completed'
       } else if (snapshotActive) {
-        // 快照模式：结束节点保持 pending，除非在历史记录中
         status = 'pending'
       } else if (processInfo.value.status === 'COMPLETED') {
-        // 流程已完成，标记实际到达的结束节点
         if (name === currentNodeName) {
-          // Rejected 结束节点用红色，其他用绿色
-          if (name.toLowerCase().includes('rejected') || name.toLowerCase().includes('拒绝')) {
-            status = 'rejected'
-          } else {
-            status = 'completed'
-          }
+          status = isRejectedName(name) ? 'rejected' : 'completed'
         }
       } else if (processInfo.value.status === 'REJECTED') {
-        // 流程被拒绝，只标记 Rejected 结束节点
-        if (name.toLowerCase().includes('rejected') || name.toLowerCase().includes('拒绝')) {
+        if (isRejectedName(name)) {
           status = 'rejected'
         }
       }
@@ -1360,8 +1348,10 @@ onMounted(() => { loadProcessDetail() })
 
 <style lang="scss" scoped>
 .application-detail-page {
-  max-width: 1200px;
-  margin: 0 auto;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  box-sizing: border-box;
   .page-header { 
     display: flex; 
     align-items: center; 

@@ -15,7 +15,7 @@ public class JwtProperties {
     /**
      * Secret key for signing JWT tokens (minimum 256 bits / 32 characters)
      */
-    private String secret = "platform-default-secret-key-change-in-production-minimum-256-bits";
+    private String secret = "";
     
     /**
      * Token expiration time in milliseconds (default: 1 hour)

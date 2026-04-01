@@ -72,7 +72,7 @@ public class SecurityConfig {
     private boolean enableSecurityEventNotification = true;
     
     @NotNull
-    private String jwtSecretKey = "default-jwt-secret-key-change-in-production";
+    private String jwtSecretKey;
     
     @Min(value = 300, message = "JWT expiration must be at least 5 minutes")
     @Max(value = 86400, message = "JWT expiration cannot exceed 24 hours")

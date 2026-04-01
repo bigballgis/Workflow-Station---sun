@@ -28,7 +28,7 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.IntStream;
 
-import org.springframework.web.client.RestTemplate;
+import com.developer.service.UserDisplayNameService;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -86,7 +86,7 @@ public class DecisionDesignPropertyTest {
                 mock(VersionRepository.class),
                 mock(IconRepository.class),
                 new ObjectMapper(),
-                mock(RestTemplate.class)
+                mock(UserDisplayNameService.class)
         );
 
         idGenerator = new AtomicLong(1L);
@@ -698,7 +698,7 @@ public class DecisionDesignPropertyTest {
                 mock(VersionRepository.class),
                 mock(IconRepository.class),
                 new ObjectMapper(),
-                mock(RestTemplate.class)
+                mock(UserDisplayNameService.class)
         );
 
         // Mock: functionUnitRepository.save returns the entity with an ID

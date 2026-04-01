@@ -69,7 +69,7 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         List<String> roles = userRoleService.getEffectiveRoleCodesForUser(user.getId());
         List<String> permissions = getPermissionsForRoles(roles);
 
-        String accessToken = ((JwtTokenServiceImpl) jwtTokenService).generateToken(
+        String accessToken = jwtTokenService.generateToken(
                 user.getId().toString(),
                 user.getUsername(),
                 user.getEmail(),

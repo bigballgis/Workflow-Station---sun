@@ -436,15 +436,19 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
         }
 
         String conditions = searchableFields.stream()
-                .map(f -> "CAST(" + quoteIdentifier(f) + " AS TEXT) ILIKE ?")
+                .map(f -> "CAST(" + quoteIdentifier(f) + " AS TEXT) ILIKE ? ESCAPE '\\'")
                 .collect(Collectors.joining(" OR "));
 
-        String searchPattern = "%" + search + "%";
+        String searchPattern = "%" + escapeLikePattern(search) + "%";
         for (int i = 0; i < searchableFields.size(); i++) {
             params.add(searchPattern);
         }
 
         return " WHERE (" + conditions + ")";
+    }
+
+    private String escapeLikePattern(String input) {
+        return input.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
     }
 
     /**

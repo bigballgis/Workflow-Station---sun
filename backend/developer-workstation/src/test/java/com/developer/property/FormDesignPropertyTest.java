@@ -9,6 +9,7 @@ import com.developer.repository.TableDefinitionRepository;
 import com.platform.common.i18n.I18nService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import net.jqwik.api.*;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.util.Map;
 
@@ -33,8 +34,9 @@ public class FormDesignPropertyTest {
         FormTableBindingRepository formTableBindingRepository = mock(FormTableBindingRepository.class);
         ObjectMapper objectMapper = new ObjectMapper();
         I18nService i18nService = mock(I18nService.class);
+        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
         FormDesignComponent component = new FormDesignComponentImpl(
-                repository, functionUnitRepository, tableDefinitionRepository, formTableBindingRepository, objectMapper, i18nService);
+                repository, functionUnitRepository, tableDefinitionRepository, formTableBindingRepository, objectMapper, i18nService, jdbcTemplate);
         
         assertThat(component).isNotNull();
         assertThat(config).isNotNull();

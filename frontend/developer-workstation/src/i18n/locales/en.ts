@@ -56,7 +56,8 @@ export default {
     add: 'Add',
     operation: 'Operation',
     deleteSuccess: 'Deleted successfully',
-    confirmTitle: 'Confirm'
+    confirmTitle: 'Confirm',
+    more: 'More'
   },
   sidebar: {
     collapse: 'Collapse sidebar',
@@ -541,17 +542,7 @@ export default {
     categoryCompliance: 'Compliance & Risk',
     categoryOperation: 'Operation Management',
     categoryGeneral: 'General Icons',
-    loadFailed: 'Load failed',
-    category: {
-      approval: 'Approval Process',
-      credit: 'Credit Business',
-      account: 'Account Service',
-      payment: 'Payment Settlement',
-      customer: 'Customer Management',
-      compliance: 'Compliance & Risk',
-      operation: 'Operation Management',
-      general: 'General Icons'
-    }
+    loadFailed: 'Load failed'
   },
   version: {
     title: 'Version Management',
@@ -1117,7 +1108,8 @@ export default {
     notBound: 'Not bound',
     noServiceTasks: 'No service task nodes found in process',
     noProcessDefined: 'No process definition available',
-    bindSuccess: 'Decision bound to node successfully'
+    bindSuccess: 'Decision bound to node successfully',
+    backToList: 'Back to decision list'
   },
   ai: {
     panel: {
@@ -1361,5 +1353,11 @@ export default {
     createFromTemplate: 'Create from Template',
     selectTemplate: 'Select Template',
     blankForm: 'Blank Form',
+  },
+  error: {
+    forbidden: 'Access Denied',
+    forbiddenDesc: 'Sorry, you do not have permission to access this page',
+    goBack: 'Go Back',
+    backHome: 'Back to Home'
   }
 }

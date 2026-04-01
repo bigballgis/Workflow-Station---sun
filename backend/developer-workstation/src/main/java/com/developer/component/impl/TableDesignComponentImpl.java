@@ -253,9 +253,16 @@ public class TableDesignComponentImpl implements TableDesignComponent {
                 .build();
     }
     
+    private void validateIdentifier(String name) {
+        if (name == null || !name.matches("^[a-zA-Z_][a-zA-Z0-9_]*$")) {
+            throw new BusinessException("INVALID_IDENTIFIER", "Invalid identifier: " + name);
+        }
+    }
+
     private String generateDDLForDialect(TableDefinition table, DatabaseDialect dialect) {
         StringBuilder ddl = new StringBuilder();
         String tableName = table.getTableName();
+        validateIdentifier(tableName);
         
         ddl.append("CREATE TABLE ").append(tableName).append(" (\n");
         
@@ -263,6 +270,7 @@ public class TableDesignComponentImpl implements TableDesignComponent {
         List<String> primaryKeys = new ArrayList<>();
         
         for (FieldDefinition field : table.getFieldDefinitions()) {
+            validateIdentifier(field.getFieldName());
             String columnDef = "    " + field.getFieldName() + " " + 
                     mapDataType(field.getDataType(), field.getLength(), field.getPrecision(), field.getScale(), dialect);
             

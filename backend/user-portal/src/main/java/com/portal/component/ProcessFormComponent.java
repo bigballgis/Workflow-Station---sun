@@ -13,6 +13,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
+import com.platform.common.util.ApiResponseBodyUnwrap;
+
 import java.util.*;
 
 /**
@@ -26,6 +28,7 @@ public class ProcessFormComponent {
 
     private final ProcessInstanceRepository processInstanceRepository;
     private final ChangeHistoryComponent changeHistoryComponent;
+    private final RestTemplate restTemplate;
 
     @Value("${admin-center.url:http://localhost:8090}")
     private String adminCenterUrl;
@@ -93,6 +96,11 @@ public class ProcessFormComponent {
         ProcessInstance processInstance = processInstanceRepository.findById(processInstanceId)
                 .orElseThrow(() -> new PortalException("404", "Process instance not found: " + processInstanceId));
 
+        if (!userId.equals(processInstance.getStartUserId())) {
+            log.warn("User {} attempted to update process form for process {} owned by {}", userId, processInstanceId, processInstance.getStartUserId());
+            throw new PortalException("403", "Only the process initiator can update the process form");
+        }
+
         // Verify process is in Return_To_Requester state
         if (!RETURN_TO_REQUESTER.equals(processInstance.getStatus())) {
             throw new PortalException("403", "Process form can only be updated in Return_To_Requester state. Current state: " + processInstance.getStatus());
@@ -156,20 +164,13 @@ public class ProcessFormComponent {
     @SuppressWarnings("unchecked")
     private Map<String, Object> fetchProcessFormDefinition(String processDefinitionKey) {
         try {
-            RestTemplate restTemplate = new RestTemplate();
             String url = adminCenterUrl + "/api/v1/admin/function-units/" + processDefinitionKey + "/forms?formType=PROCESS";
             log.debug("Fetching PROCESS form definition from: {}", url);
 
             Map<String, Object> response = restTemplate.getForObject(url, Map.class);
             if (response != null) {
-                // Support both ApiResponse format {data: [...]} and paginated format {content: [...]}
-                List<Map<String, Object>> forms = null;
-                if (response.containsKey("data") && response.get("data") instanceof List) {
-                    forms = (List<Map<String, Object>>) response.get("data");
-                } else if (response.containsKey("content")) {
-                    forms = (List<Map<String, Object>>) response.get("content");
-                }
-                if (forms != null && !forms.isEmpty()) {
+                List<Map<String, Object>> forms = ApiResponseBodyUnwrap.normalizeToListOfMaps(response);
+                if (!forms.isEmpty()) {
                     return forms.get(0);
                 }
             }
@@ -186,20 +187,13 @@ public class ProcessFormComponent {
     @SuppressWarnings("unchecked")
     private boolean checkProcessFormExists(String functionUnitId) {
         try {
-            RestTemplate restTemplate = new RestTemplate();
             String url = adminCenterUrl + "/api/v1/admin/function-units/" + functionUnitId + "/forms?formType=PROCESS";
             log.debug("Checking PROCESS form existence from: {}", url);
 
             Map<String, Object> response = restTemplate.getForObject(url, Map.class);
             if (response != null) {
-                // Support both ApiResponse format {data: [...]} and paginated format {content: [...]}
-                List<Map<String, Object>> forms = null;
-                if (response.containsKey("data") && response.get("data") instanceof List) {
-                    forms = (List<Map<String, Object>>) response.get("data");
-                } else if (response.containsKey("content")) {
-                    forms = (List<Map<String, Object>>) response.get("content");
-                }
-                return forms != null && !forms.isEmpty();
+                List<Map<String, Object>> forms = ApiResponseBodyUnwrap.normalizeToListOfMaps(response);
+                return !forms.isEmpty();
             }
         } catch (Exception e) {
             log.warn("Failed to check PROCESS form existence for {}: {}", functionUnitId, e.getMessage());

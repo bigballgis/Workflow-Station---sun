@@ -102,4 +102,11 @@ public interface FormDesignComponent {
      * 查询所有 TableDefinition → FieldDefinition 列名
      */
     List<String> getDataTableColumns(Long functionUnitId);
+
+    /**
+     * 解析 RELATED 类型绑定对应的 Relation Table 名称
+     * @param binding 表单表绑定
+     * @return 关联表名称，非 RELATED 类型或不存在时返回 null
+     */
+    String resolveRelationTableName(FormTableBinding binding);
 }

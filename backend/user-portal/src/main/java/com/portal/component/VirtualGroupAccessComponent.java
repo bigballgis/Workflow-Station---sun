@@ -8,6 +8,8 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
+import com.platform.common.util.ApiResponseBodyUnwrap;
+
 import java.util.*;
 
 /**
@@ -58,7 +60,7 @@ public class VirtualGroupAccessComponent {
                     new ParameterizedTypeReference<Map<String, Object>>() {}
             );
             
-            return response.getBody();
+            return response.getBody() != null ? ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()) : null;
             
         } catch (Exception e) {
             log.error("Failed to get virtual group {}: {}", groupId, e.getMessage());
@@ -237,11 +239,30 @@ public class VirtualGroupAccessComponent {
                     new ParameterizedTypeReference<Map<String, Object>>() {}
             );
             
-            return response.getBody();
+            return response.getBody() != null ? ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()) : null;
             
         } catch (Exception e) {
             log.error("Failed to get business unit {}: {}", businessUnitId, e.getMessage());
             return null;
+        }
+    }
+
+    /**
+     * 业务单元已绑定的业务角色（与 admin {@code GET /business-units/{unitId}/roles} 对齐）
+     */
+    public List<Map<String, Object>> getBusinessUnitBoundRoles(String businessUnitId) {
+        try {
+            String url = adminCenterUrl + "/api/v1/admin/business-units/" + businessUnitId + "/roles";
+            ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<List<Map<String, Object>>>() {}
+            );
+            return response.getBody() != null ? response.getBody() : Collections.emptyList();
+        } catch (Exception e) {
+            log.error("Failed to get bound roles for business unit {}: {}", businessUnitId, e.getMessage());
+            return Collections.emptyList();
         }
     }
     

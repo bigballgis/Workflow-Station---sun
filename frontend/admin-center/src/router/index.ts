@@ -137,7 +137,7 @@ const routes: RouteRecordRaw[] = [
         path: '403',
         name: 'Forbidden',
         component: () => import('@/views/error/403.vue'),
-        meta: { title: '无权限', hidden: true }
+        meta: { titleKey: 'error.forbidden', hidden: true }
       }
     ]
   }
@@ -168,7 +168,7 @@ router.beforeEach((to, _from, next) => {
   
   // Check route permissions
   if (!canAccessRoute(to.path)) {
-    ElMessage.warning('您没有权限访问该页面')
+    ElMessage.warning(t('error.noPermission'))
     next('/403')
     return
   }

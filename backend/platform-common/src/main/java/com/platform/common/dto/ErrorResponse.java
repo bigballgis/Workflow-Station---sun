@@ -10,9 +10,10 @@ import java.time.LocalDateTime;
 import java.util.Map;
 
 /**
- * Unified error response format for all platform APIs.
- * Validates: Requirements 5.4
+ * @deprecated 使用 {@link com.platform.common.exception.ErrorResponse} 代替。
+ * 此类将在后续版本中移除。
  */
+@Deprecated
 @Data
 @Builder
 @NoArgsConstructor
