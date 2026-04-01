@@ -312,6 +312,9 @@ export default {
     stageBindingHint: 'Select one or more process stages (userTask nodes) for this Task Form',
     // Process form uniqueness
     processFormAlreadyExists: 'A PROCESS form already exists for this FunctionUnit',
+    processFormLimitHint: 'Only one PROCESS form is allowed per function unit. Adjust or remove the existing one first.',
+    subTableOnlySubBinding:
+      'Sub-table widgets must bind to a SUB table binding only. Add PRIMARY then SUB bindings (with FK) in Table Bindings, then select them on the canvas.',
     // Field name autocomplete & validation
     fieldNameAutocomplete: 'Field Name',
     fieldNameNotInDataTable: 'Field name "{name}" does not exist in Data_Table columns',
@@ -988,7 +991,10 @@ export default {
     deleteFailed: 'Delete failed',
     updateSuccess: 'Updated successfully',
     addSuccess: 'Added successfully',
-    operationFailed: 'Operation failed'
+    operationFailed: 'Operation failed',
+    primarySubOnlyHint:
+      'Process/Task forms support one primary (MAIN) and multiple sub (SUB) tables with a foreign key to the main row. Use the Sub-Table widget on the canvas and pick a SUB binding. RELATED bindings are not allowed.',
+    foreignKeyRequired: 'Sub-table binding requires a foreign key field'
   },
   user: {
     username: 'Username',

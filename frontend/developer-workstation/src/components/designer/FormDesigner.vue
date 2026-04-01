@@ -60,13 +60,14 @@
         <el-table-column prop="description" :label="t('table.description')" show-overflow-tooltip />
         <el-table-column
           :label="t('common.actions')"
-          min-width="200"
+          width="200"
           fixed="right"
           align="left"
         >
           <template #default="{ row }">
             <div class="action-buttons">
               <el-button link type="primary" @click.stop="handleSelectForm(row)">{{ t('common.edit') }}</el-button>
+              <el-button link type="danger" @click.stop="handleDeleteForm(row)">{{ t('common.delete') }}</el-button>
               <el-dropdown trigger="click" @command="(cmd) => onFormListMoreAction(cmd, row)">
                 <el-button link type="primary" @click.stop>
                   {{ t('common.more') }}
@@ -82,7 +83,6 @@
                   </el-dropdown-menu>
                 </template>
               </el-dropdown>
-              <el-button link type="danger" @click.stop="handleDeleteForm(row)">{{ t('common.delete') }}</el-button>
             </div>
           </template>
         </el-table-column>
@@ -197,8 +197,15 @@
           <el-input v-model="createForm.formName" :placeholder="t('form.enterFormName')" />
         </el-form-item>
         <el-form-item :label="t('form.formTypeLabel')">
+          <div v-if="store.forms.some((f) => f.formType === 'PROCESS')" class="form-item-tip" style="margin-bottom: 8px;">
+            {{ t('form.processFormLimitHint') }}
+          </div>
           <el-select v-model="createForm.formType" style="width: 100%" @change="handleCreateFormTypeChange">
-            <el-option :label="t('form.processForm')" value="PROCESS" />
+            <el-option
+              :label="t('form.processForm')"
+              value="PROCESS"
+              :disabled="store.forms.some((f) => f.formType === 'PROCESS')"
+            />
             <el-option :label="t('form.taskForm')" value="TASK" />
             <el-option :label="t('form.actionForm')" value="ACTION" />
           </el-select>
@@ -439,6 +446,7 @@
         ref="bindingManagerRef"
         :function-unit-id="props.functionUnitId"
         :form-id="bindingManagerForm.id"
+        :form-type="bindingManagerForm.formType"
         :tables="store.tables"
         @update="handleBindingUpdate"
       />
@@ -544,10 +552,13 @@ function updateRelationViewFields(bindingId: number, fields: any[]) {
   relationViewState.value = { ...relationViewState.value, [bindingId]: { ...existing, viewFields: fields } }
 }
 
-// Non-PRIMARY bindings for tabs
+// Non-PRIMARY bindings for tabs（流程/任务表单仅展示 SUB，与「一主多子 + 子表组件」模型一致）
 const designerSubBindings = computed(() => {
   if (!selectedForm.value) return []
-  const nonPrimary = (selectedForm.value.tableBindings || []).filter((b: TableBinding) => b.bindingType !== 'PRIMARY')
+  let nonPrimary = (selectedForm.value.tableBindings || []).filter((b: TableBinding) => b.bindingType !== 'PRIMARY')
+  if (selectedForm.value.formType === 'PROCESS' || selectedForm.value.formType === 'TASK') {
+    nonPrimary = nonPrimary.filter((b: TableBinding) => b.bindingType === 'SUB')
+  }
   return nonPrimary.map((b: TableBinding) => ({
     bindingId: b.id as number,
     bindingType: b.bindingType,
@@ -1699,6 +1710,18 @@ async function handleSaveForm() {
     if (invalidPlaceholders.length > 0) {
       ElMessage.error(t('form.subTableBindingRequired'))
       return
+    }
+
+    // 子表占位符必须绑定 SUB 类型表绑定（流程/任务表单下一主多子，数据走子表单增删改）
+    if (selectedForm.value.formType === 'PROCESS' || selectedForm.value.formType === 'TASK') {
+      const subTableRules = rule.filter((r: any) => r.type === 'subTable' && r._bindingId)
+      for (const st of subTableRules) {
+        const b = selectedForm.value.tableBindings?.find((x: TableBinding) => x.id === st._bindingId)
+        if (!b || b.bindingType !== 'SUB') {
+          ElMessage.error(t('form.subTableOnlySubBinding'))
+          return
+        }
+      }
     }
 
     // Validate field names against Data_Table columns (for PROCESS and TASK forms)
