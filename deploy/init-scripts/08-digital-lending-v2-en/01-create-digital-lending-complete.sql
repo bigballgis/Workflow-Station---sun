@@ -1,14 +1,13 @@
 -- =============================================================================
--- Digital Lending System - Complete Setup
--- Created using the AI Function Unit Generation Framework
+-- Digital Lending System - Complete Setup (EN)
 --
--- Features:
--- 1. Complete data model (7 tables)
--- 2. Multiple form types (main forms, popup forms)
--- 3. Complex approval workflow (8 nodes)
--- 4. Rich business actions (15 actions)
--- 5. Multiple task assignment methods
--- 6. Form popup operations
+-- Conventions (current platform):
+-- - Single PROCESS form per function unit: Loan Application (multi-tab el-tabs + subTable).
+--   Sub designer tabs load from config_json.subForms[bindingId] — applied in 04-merge-loan-application-subforms.sql.
+-- - PROCESS/TASK bindings: PRIMARY + SUB only (no RELATED on process/task forms).
+-- - Underwriting steps share one TASK form + dw_form_stage_bindings (BPMN taskDefinitionKey).
+-- - Disbursement uses a separate TASK form. ACTION popups may still use RELATED/SUB.
+-- - Sample DMN (dw_decision_definitions) + dw_table_relations for capability demo.
 -- =============================================================================
 
 DO $$
@@ -26,7 +25,13 @@ DECLARE
     v_risk_assessment_form_id BIGINT;
     v_approval_form_id BIGINT;
     v_disbursement_form_id BIGINT;
-    v_process_id BIGINT;
+    v_bind_applicant BIGINT;
+    v_bind_financial BIGINT;
+    v_bind_collateral BIGINT;
+    v_bind_documents BIGINT;
+    v_bind_credit BIGINT;
+    v_bind_approval_hist BIGINT;
+    v_proc_form_cfg TEXT;
 BEGIN
 
     -- =========================================================================
@@ -173,11 +178,11 @@ BEGIN
     (v_collateral_table_id, 'encumbrance_status', 'VARCHAR', 50, NULL, TRUE, 'Encumbrance status', 9);
 
     RAISE NOTICE 'Created sub table: Collateral Details (ID: %)', v_collateral_table_id;
-    -- 2.5 Relation Table: Credit Check Results
+    -- 2.5 Sub Table: Credit Check Results (SUB for PROCESS/TASK bindings; no RELATED on process forms)
     INSERT INTO dw_table_definitions (
         function_unit_id, table_name, table_type, description
     ) VALUES (
-        v_function_unit_id, 'Credit Check Results', 'RELATION',
+        v_function_unit_id, 'Credit Check Results', 'SUB',
         'Credit bureau check result records'
     ) RETURNING id INTO v_credit_check_table_id;
 
@@ -199,13 +204,13 @@ BEGIN
     (v_credit_check_table_id, 'payment_history', 'VARCHAR', 20, NULL, TRUE, 'Payment history rating', 13),
     (v_credit_check_table_id, 'remarks', 'TEXT', NULL, NULL, TRUE, 'Remarks', 14);
 
-    RAISE NOTICE 'Created relation table: Credit Check Results (ID: %)', v_credit_check_table_id;
+    RAISE NOTICE 'Created sub table: Credit Check Results (ID: %)', v_credit_check_table_id;
 
-    -- 2.6 Relation Table: Approval History
+    -- 2.6 Sub Table: Approval History
     INSERT INTO dw_table_definitions (
         function_unit_id, table_name, table_type, description
     ) VALUES (
-        v_function_unit_id, 'Approval History', 'RELATION',
+        v_function_unit_id, 'Approval History', 'SUB',
         'Historical records of all approval operations'
     ) RETURNING id INTO v_approval_history_table_id;
 
@@ -223,13 +228,13 @@ BEGIN
     (v_approval_history_table_id, 'comments', 'TEXT', NULL, NULL, TRUE, 'Approval comments', 9),
     (v_approval_history_table_id, 'conditions', 'TEXT', NULL, NULL, TRUE, 'Approval conditions', 10);
 
-    RAISE NOTICE 'Created relation table: Approval History (ID: %)', v_approval_history_table_id;
+    RAISE NOTICE 'Created sub table: Approval History (ID: %)', v_approval_history_table_id;
 
-    -- 2.7 Relation Table: Documents
+    -- 2.7 Sub Table: Documents
     INSERT INTO dw_table_definitions (
         function_unit_id, table_name, table_type, description
     ) VALUES (
-        v_function_unit_id, 'Documents', 'RELATION',
+        v_function_unit_id, 'Documents', 'SUB',
         'Supporting documents and attachments for loan applications'
     ) RETURNING id INTO v_documents_table_id;
 
@@ -248,18 +253,18 @@ BEGIN
     (v_documents_table_id, 'verified_by', 'VARCHAR', 100, NULL, TRUE, 'Verified by', 10),
     (v_documents_table_id, 'verification_date', 'TIMESTAMP', NULL, NULL, TRUE, 'Verification date', 11);
 
-    RAISE NOTICE 'Created relation table: Documents (ID: %)', v_documents_table_id;
+    RAISE NOTICE 'Created sub table: Documents (ID: %)', v_documents_table_id;
     -- =========================================================================
     -- Part 3: Create Form Definitions
     -- =========================================================================
 
-    -- 3.1 Loan Application Form (Main Form)
+    -- 3.1 Loan Application Form (PROCESS, multi-tab el-tabs + subTable)
     INSERT INTO dw_form_definitions (
         function_unit_id, form_name, form_type, config_json, description, bound_table_id
     ) VALUES (
         v_function_unit_id, 'Loan Application Form', 'PROCESS',
-        '{"rule":[{"type":"h4","children":["Loan Application Information"],"native":true},{"type":"input","field":"application_number","title":"Application Number","props":{"placeholder":"Enter application number","maxlength":50,"showWordLimit":true},"validate":[{"required":true,"message":"Application number is required","trigger":"blur"}]},{"type":"datePicker","field":"application_date","title":"Application Date","props":{"type":"datetime","placeholder":"Select application date","valueFormat":"YYYY-MM-DD HH:mm:ss"},"validate":[{"required":true,"message":"Application date is required","trigger":"blur"}]},{"type":"select","field":"loan_type","title":"Loan Type","props":{"placeholder":"Select loan type"},"options":[{"value":"Personal","label":"Personal"},{"value":"Mortgage","label":"Mortgage"},{"value":"Auto","label":"Auto"},{"value":"Business","label":"Business"}],"validate":[{"required":true,"message":"Loan type is required","trigger":"change"}]},{"type":"inputNumber","field":"loan_amount","title":"Requested Amount","props":{"placeholder":"Enter loan amount","precision":2,"min":0},"validate":[{"required":true,"message":"Loan amount is required","trigger":"blur"}]},{"type":"inputNumber","field":"loan_tenure_months","title":"Loan Tenure (months)","props":{"placeholder":"Enter tenure in months","precision":0,"min":1},"validate":[{"required":true,"message":"Loan tenure is required","trigger":"blur"}]},{"type":"inputNumber","field":"interest_rate","title":"Annual Interest Rate (%)","props":{"placeholder":"Enter interest rate","precision":2,"min":0,"max":100}},{"type":"inputNumber","field":"emi_amount","title":"Monthly Installment (EMI)","props":{"placeholder":"Auto-calculated","precision":2,"disabled":true}},{"type":"input","field":"loan_purpose","title":"Loan Purpose","props":{"type":"textarea","placeholder":"Describe the purpose of the loan","rows":3},"validate":[{"required":true,"message":"Loan purpose is required","trigger":"blur"}]},{"type":"h4","children":["Applicant Information"],"native":true},{"type":"select","field":"applicant_type","title":"Applicant Type","props":{"placeholder":"Select applicant type"},"options":[{"value":"Primary","label":"Primary"},{"value":"Co-applicant","label":"Co-applicant"}],"validate":[{"required":true,"message":"Applicant type is required","trigger":"change"}]},{"type":"input","field":"full_name","title":"Full Name","props":{"placeholder":"Enter full name","maxlength":200},"validate":[{"required":true,"message":"Full name is required","trigger":"blur"}]},{"type":"datePicker","field":"date_of_birth","title":"Date of Birth","props":{"type":"date","placeholder":"Select date of birth","valueFormat":"YYYY-MM-DD"},"validate":[{"required":true,"message":"Date of birth is required","trigger":"blur"}]},{"type":"select","field":"gender","title":"Gender","props":{"placeholder":"Select gender"},"options":[{"value":"Male","label":"Male"},{"value":"Female","label":"Female"},{"value":"Other","label":"Other"}],"validate":[{"required":true,"message":"Gender is required","trigger":"change"}]},{"type":"select","field":"marital_status","title":"Marital Status","props":{"placeholder":"Select marital status"},"options":[{"value":"Single","label":"Single"},{"value":"Married","label":"Married"},{"value":"Divorced","label":"Divorced"},{"value":"Widowed","label":"Widowed"}],"validate":[{"required":true,"message":"Marital status is required","trigger":"change"}]},{"type":"input","field":"nationality","title":"Nationality","props":{"placeholder":"Enter nationality","maxlength":50},"validate":[{"required":true,"message":"Nationality is required","trigger":"blur"}]},{"type":"input","field":"id_type","title":"ID Document Type","props":{"placeholder":"Enter ID type","maxlength":50},"validate":[{"required":true,"message":"ID type is required","trigger":"blur"}]},{"type":"input","field":"id_number","title":"ID Document Number","props":{"placeholder":"Enter ID number","maxlength":50},"validate":[{"required":true,"message":"ID number is required","trigger":"blur"}]},{"type":"input","field":"mobile_number","title":"Mobile Number","props":{"placeholder":"Enter mobile number","maxlength":20},"validate":[{"required":true,"message":"Mobile number is required","trigger":"blur"}]},{"type":"input","field":"email","title":"Email Address","props":{"placeholder":"Enter email address","maxlength":100},"validate":[{"required":true,"message":"Email is required","trigger":"blur"}]},{"type":"input","field":"current_address","title":"Current Address","props":{"type":"textarea","placeholder":"Enter current address","rows":2},"validate":[{"required":true,"message":"Current address is required","trigger":"blur"}]},{"type":"input","field":"permanent_address","title":"Permanent Address","props":{"type":"textarea","placeholder":"Enter permanent address","rows":2}},{"type":"h4","children":["Financial Information"],"native":true},{"type":"select","field":"employment_type","title":"Employment Type","props":{"placeholder":"Select employment type"},"options":[{"value":"Salaried","label":"Salaried"},{"value":"Self-employed","label":"Self-employed"},{"value":"Business owner","label":"Business owner"}],"validate":[{"required":true,"message":"Employment type is required","trigger":"change"}]},{"type":"input","field":"employer_name","title":"Employer/Company Name","props":{"placeholder":"Enter employer name","maxlength":200}},{"type":"input","field":"occupation","title":"Occupation","props":{"placeholder":"Enter occupation","maxlength":100},"validate":[{"required":true,"message":"Occupation is required","trigger":"blur"}]},{"type":"inputNumber","field":"monthly_income","title":"Monthly Income","props":{"placeholder":"Enter monthly income","precision":2,"min":0},"validate":[{"required":true,"message":"Monthly income is required","trigger":"blur"}]},{"type":"inputNumber","field":"other_income","title":"Other Income","props":{"placeholder":"Enter other income","precision":2,"min":0}},{"type":"inputNumber","field":"monthly_expenses","title":"Monthly Expenses","props":{"placeholder":"Enter monthly expenses","precision":2,"min":0},"validate":[{"required":true,"message":"Monthly expenses is required","trigger":"blur"}]},{"type":"inputNumber","field":"existing_loans","title":"Total Existing Loans","props":{"placeholder":"Enter existing loan amount","precision":2,"min":0}},{"type":"inputNumber","field":"existing_emi","title":"Total Existing EMI","props":{"placeholder":"Enter existing EMI","precision":2,"min":0}},{"type":"input","field":"bank_name","title":"Primary Bank","props":{"placeholder":"Enter bank name","maxlength":100},"validate":[{"required":true,"message":"Bank name is required","trigger":"blur"}]},{"type":"input","field":"account_number","title":"Account Number","props":{"placeholder":"Enter account number","maxlength":50},"validate":[{"required":true,"message":"Account number is required","trigger":"blur"}]},{"type":"select","field":"account_type","title":"Account Type","props":{"placeholder":"Select account type"},"options":[{"value":"Savings","label":"Savings"},{"value":"Current","label":"Current"}],"validate":[{"required":true,"message":"Account type is required","trigger":"change"}]},{"type":"h4","children":["Collateral Details"],"native":true},{"type":"select","field":"collateral_type","title":"Collateral Type","props":{"placeholder":"Select collateral type"},"options":[{"value":"Property","label":"Property"},{"value":"Vehicle","label":"Vehicle"},{"value":"Securities","label":"Securities"},{"value":"Fixed Deposit","label":"Fixed Deposit"}],"validate":[{"required":true,"message":"Collateral type is required","trigger":"change"}]},{"type":"input","field":"collateral_description","title":"Collateral Description","props":{"type":"textarea","placeholder":"Describe the collateral","rows":3},"validate":[{"required":true,"message":"Description is required","trigger":"blur"}]},{"type":"inputNumber","field":"estimated_value","title":"Estimated Value","props":{"placeholder":"Enter estimated value","precision":2,"min":0},"validate":[{"required":true,"message":"Estimated value is required","trigger":"blur"}]},{"type":"datePicker","field":"valuation_date","title":"Valuation Date","props":{"type":"date","placeholder":"Select valuation date","valueFormat":"YYYY-MM-DD"}},{"type":"input","field":"valuer_name","title":"Valuer Name","props":{"placeholder":"Enter valuer name","maxlength":100}},{"type":"input","field":"ownership_proof","title":"Ownership Proof","props":{"placeholder":"Enter ownership proof document","maxlength":200}}],"options":{"form":{"labelWidth":"250px","size":"default","labelPosition":"right"},"submitBtn":{"show":true,"innerText":"Submit Application"}}}'::jsonb,
-        'Complete loan application form for customers to fill out',
+        '{"rule":[],"options":{"form":{"labelWidth":"240px","size":"default","labelPosition":"right"},"submitBtn":{"show":true,"innerText":"Submit application"}}}'::jsonb,
+        'Complete loan application form (multi-tab PROCESS: primary + SUB tables only)',
         v_loan_application_table_id
     ) RETURNING id INTO v_application_form_id;
 
@@ -268,7 +273,27 @@ BEGIN
     (v_application_form_id, v_applicant_info_table_id, 'SUB', 'EDITABLE', 'loan_application_id', 2),
     (v_application_form_id, v_financial_info_table_id, 'SUB', 'EDITABLE', 'loan_application_id', 3),
     (v_application_form_id, v_collateral_table_id, 'SUB', 'EDITABLE', 'loan_application_id', 4),
-    (v_application_form_id, v_documents_table_id, 'RELATED', 'EDITABLE', 'loan_application_id', 5);
+    (v_application_form_id, v_documents_table_id, 'SUB', 'EDITABLE', 'loan_application_id', 5),
+    (v_application_form_id, v_credit_check_table_id, 'SUB', 'EDITABLE', 'loan_application_id', 6),
+    (v_application_form_id, v_approval_history_table_id, 'SUB', 'EDITABLE', 'loan_application_id', 7);
+
+    SELECT id INTO v_bind_applicant FROM dw_form_table_bindings WHERE form_id = v_application_form_id AND table_id = v_applicant_info_table_id;
+    SELECT id INTO v_bind_financial FROM dw_form_table_bindings WHERE form_id = v_application_form_id AND table_id = v_financial_info_table_id;
+    SELECT id INTO v_bind_collateral FROM dw_form_table_bindings WHERE form_id = v_application_form_id AND table_id = v_collateral_table_id;
+    SELECT id INTO v_bind_documents FROM dw_form_table_bindings WHERE form_id = v_application_form_id AND table_id = v_documents_table_id;
+    SELECT id INTO v_bind_credit FROM dw_form_table_bindings WHERE form_id = v_application_form_id AND table_id = v_credit_check_table_id;
+    SELECT id INTO v_bind_approval_hist FROM dw_form_table_bindings WHERE form_id = v_application_form_id AND table_id = v_approval_history_table_id;
+
+    v_proc_form_cfg := $dlProcCfg${"rule":[{"type":"el-tabs","props":{"type":"border-card"},"children":[{"type":"el-tab-pane","props":{"label":"Application","name":"tab_application"},"children":[{"type":"h4","children":["Loan application"],"native":true},{"type":"input","field":"application_number","title":"Application number","props":{"placeholder":"Enter application number","maxlength":50,"showWordLimit":true},"validate":[{"required":true,"message":"Application number is required","trigger":"blur"}]},{"type":"datePicker","field":"application_date","title":"Application date","props":{"type":"datetime","placeholder":"Select application date","valueFormat":"YYYY-MM-DD HH:mm:ss"},"validate":[{"required":true,"message":"Application date is required","trigger":"blur"}]},{"type":"select","field":"loan_type","title":"Loan type","props":{"placeholder":"Select loan type"},"options":[{"value":"Personal","label":"Personal"},{"value":"Mortgage","label":"Mortgage"},{"value":"Auto","label":"Auto"},{"value":"Business","label":"Business"}],"validate":[{"required":true,"message":"Loan type is required","trigger":"change"}]},{"type":"inputNumber","field":"loan_amount","title":"Requested amount","props":{"placeholder":"Enter loan amount","precision":2,"min":0},"validate":[{"required":true,"message":"Loan amount is required","trigger":"blur"}]},{"type":"inputNumber","field":"loan_tenure_months","title":"Tenure (months)","props":{"placeholder":"Months","precision":0,"min":1},"validate":[{"required":true,"message":"Tenure is required","trigger":"blur"}]},{"type":"inputNumber","field":"interest_rate","title":"Annual interest (%)","props":{"placeholder":"Rate","precision":2,"min":0,"max":100}},{"type":"inputNumber","field":"emi_amount","title":"Monthly EMI","props":{"placeholder":"Calculated","precision":2,"disabled":true}},{"type":"input","field":"loan_purpose","title":"Loan purpose","props":{"type":"textarea","placeholder":"Describe purpose","rows":3},"validate":[{"required":true,"message":"Purpose is required","trigger":"blur"}]},{"type":"h4","children":["Status (after submit)"],"native":true},{"type":"input","field":"status","title":"Status","props":{"disabled":true}},{"type":"input","field":"current_stage","title":"Current stage","props":{"disabled":true}},{"type":"input","field":"risk_rating","title":"Risk rating","props":{"disabled":true}},{"type":"inputNumber","field":"credit_score","title":"Credit score","props":{"disabled":true,"precision":0}}]},{"type":"el-tab-pane","props":{"label":"Parties & finance","name":"tab_parties"},"children":[{"type":"h4","children":["Applicants"],"native":true},{"type":"subTable","_bindingId":BIND_APPLICANT},{"type":"h4","children":["Financial profile"],"native":true},{"type":"subTable","_bindingId":BIND_FINANCIAL}]},{"type":"el-tab-pane","props":{"label":"Collateral & documents","name":"tab_security"},"children":[{"type":"h4","children":["Collateral"],"native":true},{"type":"subTable","_bindingId":BIND_COLLATERAL},{"type":"h4","children":["Supporting documents"],"native":true},{"type":"subTable","_bindingId":BIND_DOCUMENTS}]},{"type":"el-tab-pane","props":{"label":"Credit & decisions","name":"tab_credit"},"children":[{"type":"h4","children":["Credit bureau results"],"native":true},{"type":"subTable","_bindingId":BIND_CREDIT},{"type":"h4","children":["Approval trail"],"native":true},{"type":"subTable","_bindingId":BIND_APPROVAL_HIST}]}]}],"options":{"form":{"labelWidth":"240px","size":"default","labelPosition":"right"},"submitBtn":{"show":true,"innerText":"Submit application"}}}$dlProcCfg$;
+    v_proc_form_cfg := replace(v_proc_form_cfg, 'BIND_APPLICANT', v_bind_applicant::text);
+    v_proc_form_cfg := replace(v_proc_form_cfg, 'BIND_FINANCIAL', v_bind_financial::text);
+    v_proc_form_cfg := replace(v_proc_form_cfg, 'BIND_COLLATERAL', v_bind_collateral::text);
+    v_proc_form_cfg := replace(v_proc_form_cfg, 'BIND_DOCUMENTS', v_bind_documents::text);
+    v_proc_form_cfg := replace(v_proc_form_cfg, 'BIND_CREDIT', v_bind_credit::text);
+    v_proc_form_cfg := replace(v_proc_form_cfg, 'BIND_APPROVAL_HIST', v_bind_approval_hist::text);
+
+    UPDATE dw_form_definitions SET config_json = v_proc_form_cfg::jsonb WHERE id = v_application_form_id;
+
     RAISE NOTICE 'Created form: Loan Application Form (ID: %)', v_application_form_id;
 
     -- 3.2 Credit Check Form (Popup)
@@ -300,14 +325,14 @@ BEGIN
     (v_risk_assessment_form_id, v_loan_application_table_id, 'PRIMARY', 'EDITABLE', NULL, 1),
     (v_risk_assessment_form_id, v_applicant_info_table_id, 'SUB', 'READONLY', 'loan_application_id', 2),
     (v_risk_assessment_form_id, v_financial_info_table_id, 'SUB', 'READONLY', 'loan_application_id', 3),
-    (v_risk_assessment_form_id, v_credit_check_table_id, 'RELATED', 'READONLY', 'loan_application_id', 4);
+    (v_risk_assessment_form_id, v_credit_check_table_id, 'SUB', 'READONLY', 'loan_application_id', 4);
     RAISE NOTICE 'Created form: Risk Assessment Form (ID: %)', v_risk_assessment_form_id;
 
-    -- 3.4 Loan Approval Form (Main)
+    -- 3.4 Loan Underwriting Task Form (TASK — bound to BPMN userTask ids via dw_form_stage_bindings)
     INSERT INTO dw_form_definitions (
         function_unit_id, form_name, form_type, config_json, description, bound_table_id
     ) VALUES (
-        v_function_unit_id, 'Loan Approval Form', 'PROCESS',
+        v_function_unit_id, 'Loan Underwriting Task Form', 'TASK',
         '{"rule":[{"type":"h4","children":["Loan Application Summary"],"native":true},{"type":"input","field":"application_number","title":"Application Number","props":{"disabled":true}},{"type":"input","field":"loan_type","title":"Loan Type","props":{"disabled":true}},{"type":"inputNumber","field":"loan_amount","title":"Loan Amount","props":{"disabled":true,"precision":2}},{"type":"inputNumber","field":"loan_tenure_months","title":"Tenure (months)","props":{"disabled":true,"precision":0}},{"type":"inputNumber","field":"interest_rate","title":"Interest Rate (%)","props":{"disabled":true,"precision":2}},{"type":"inputNumber","field":"emi_amount","title":"EMI Amount","props":{"disabled":true,"precision":2}},{"type":"input","field":"loan_purpose","title":"Loan Purpose","props":{"type":"textarea","disabled":true,"rows":2}},{"type":"input","field":"status","title":"Current Status","props":{"disabled":true}},{"type":"input","field":"risk_rating","title":"Risk Rating","props":{"disabled":true}},{"type":"inputNumber","field":"credit_score","title":"Credit Score","props":{"disabled":true,"precision":0}},{"type":"h4","children":["Applicant Information"],"native":true},{"type":"input","field":"full_name","title":"Full Name","props":{"disabled":true}},{"type":"input","field":"id_number","title":"ID Number","props":{"disabled":true}},{"type":"input","field":"mobile_number","title":"Mobile","props":{"disabled":true}},{"type":"input","field":"email","title":"Email","props":{"disabled":true}},{"type":"h4","children":["Financial Summary"],"native":true},{"type":"input","field":"employment_type","title":"Employment Type","props":{"disabled":true}},{"type":"inputNumber","field":"monthly_income","title":"Monthly Income","props":{"disabled":true,"precision":2}},{"type":"inputNumber","field":"monthly_expenses","title":"Monthly Expenses","props":{"disabled":true,"precision":2}},{"type":"inputNumber","field":"existing_emi","title":"Existing EMI","props":{"disabled":true,"precision":2}},{"type":"h4","children":["Approval Decision"],"native":true},{"type":"input","field":"stage_name","title":"Approval Stage","props":{"placeholder":"Enter stage name","maxlength":100},"validate":[{"required":true,"message":"Stage name is required","trigger":"blur"}]},{"type":"input","field":"approver_name","title":"Approver Name","props":{"placeholder":"Enter approver name","maxlength":100},"validate":[{"required":true,"message":"Approver name is required","trigger":"blur"}]},{"type":"input","field":"approver_role","title":"Approver Role","props":{"placeholder":"Enter role","maxlength":50},"validate":[{"required":true,"message":"Role is required","trigger":"blur"}]},{"type":"select","field":"decision","title":"Decision","props":{"placeholder":"Select decision"},"options":[{"value":"Approve","label":"Approve"},{"value":"Reject","label":"Reject"},{"value":"Return","label":"Return for Revision"}],"validate":[{"required":true,"message":"Decision is required","trigger":"change"}]},{"type":"input","field":"comments","title":"Comments","props":{"type":"textarea","placeholder":"Enter approval comments","rows":3}},{"type":"input","field":"conditions","title":"Conditions","props":{"type":"textarea","placeholder":"Enter any conditions","rows":2}}],"options":{"form":{"labelWidth":"250px","size":"default","labelPosition":"right"},"submitBtn":{"show":true,"innerText":"Submit Decision"}}}'::jsonb,
         'Form for managers to approve loan applications',
         v_loan_application_table_id
@@ -318,15 +343,15 @@ BEGIN
     (v_approval_form_id, v_applicant_info_table_id, 'SUB', 'READONLY', 'loan_application_id', 2),
     (v_approval_form_id, v_financial_info_table_id, 'SUB', 'READONLY', 'loan_application_id', 3),
     (v_approval_form_id, v_collateral_table_id, 'SUB', 'READONLY', 'loan_application_id', 4),
-    (v_approval_form_id, v_credit_check_table_id, 'RELATED', 'READONLY', 'loan_application_id', 5),
-    (v_approval_form_id, v_approval_history_table_id, 'RELATED', 'EDITABLE', 'loan_application_id', 6);
-    RAISE NOTICE 'Created form: Loan Approval Form (ID: %)', v_approval_form_id;
+    (v_approval_form_id, v_credit_check_table_id, 'SUB', 'READONLY', 'loan_application_id', 5),
+    (v_approval_form_id, v_approval_history_table_id, 'SUB', 'EDITABLE', 'loan_application_id', 6);
+    RAISE NOTICE 'Created form: Loan Underwriting Task Form (ID: %)', v_approval_form_id;
 
-    -- 3.5 Loan Disbursement Form (Main)
+    -- 3.5 Loan Disbursement Task Form
     INSERT INTO dw_form_definitions (
         function_unit_id, form_name, form_type, config_json, description, bound_table_id
     ) VALUES (
-        v_function_unit_id, 'Loan Disbursement Form', 'PROCESS',
+        v_function_unit_id, 'Loan Disbursement Form', 'TASK',
         '{"rule":[{"type":"h4","children":["Loan Details"],"native":true},{"type":"input","field":"application_number","title":"Application Number","props":{"placeholder":"Application number","maxlength":50}},{"type":"input","field":"loan_type","title":"Loan Type","props":{"disabled":true}},{"type":"inputNumber","field":"loan_amount","title":"Approved Amount","props":{"precision":2}},{"type":"inputNumber","field":"interest_rate","title":"Interest Rate (%)","props":{"precision":2}},{"type":"inputNumber","field":"emi_amount","title":"EMI Amount","props":{"precision":2}},{"type":"inputNumber","field":"loan_tenure_months","title":"Tenure (months)","props":{"precision":0}},{"type":"datePicker","field":"disbursement_date","title":"Disbursement Date","props":{"type":"datetime","placeholder":"Select disbursement date","valueFormat":"YYYY-MM-DD HH:mm:ss"},"validate":[{"required":true,"message":"Disbursement date is required","trigger":"blur"}]},{"type":"h4","children":["Applicant Info (Read-only)"],"native":true},{"type":"input","field":"full_name","title":"Full Name","props":{"disabled":true}},{"type":"input","field":"mobile_number","title":"Mobile","props":{"disabled":true}},{"type":"input","field":"email","title":"Email","props":{"disabled":true}},{"type":"h4","children":["Bank Account (Read-only)"],"native":true},{"type":"input","field":"bank_name","title":"Bank Name","props":{"disabled":true}},{"type":"input","field":"account_number","title":"Account Number","props":{"disabled":true}},{"type":"input","field":"account_type","title":"Account Type","props":{"disabled":true}}],"options":{"form":{"labelWidth":"250px","size":"default","labelPosition":"right"},"submitBtn":{"show":true,"innerText":"Process Disbursement"}}}'::jsonb,
         'Form for finance team to process loan disbursement',
         v_loan_application_table_id
@@ -337,6 +362,53 @@ BEGIN
     (v_disbursement_form_id, v_applicant_info_table_id, 'SUB', 'READONLY', 'loan_application_id', 2),
     (v_disbursement_form_id, v_financial_info_table_id, 'SUB', 'READONLY', 'loan_application_id', 3);
     RAISE NOTICE 'Created form: Loan Disbursement Form (ID: %)', v_disbursement_form_id;
+
+    -- =========================================================================
+    -- Part 3b: Decision (DMN), table relation metadata, task–form stage bindings
+    -- =========================================================================
+
+    INSERT INTO dw_decision_definitions (
+        function_unit_id, decision_key, decision_name, dmn_xml, hit_policy, description
+    ) VALUES (
+        v_function_unit_id,
+        'loan_risk_tier_en',
+        'Loan risk tier (sample)',
+        $dmn$
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="https://www.omg.org/spec/DMN/20191111/MODEL/" id="dl_en_dmn" name="LoanRiskTier" namespace="http://workflow.platform/dmn">
+  <decision id="dec_loan_risk_tier" name="Risk tier from credit score">
+    <decisionTable id="dt1" hitPolicy="FIRST">
+      <input id="in_score" label="Credit score">
+        <inputExpression typeRef="number"><text>credit_score</text></inputExpression>
+      </input>
+      <output id="out_tier" label="Tier" name="riskTier" typeRef="string"/>
+      <rule><inputEntry><text>&gt;= 750</text></inputEntry><outputEntry><text>"LOW"</text></outputEntry></rule>
+      <rule><inputEntry><text>&gt;= 650</text></inputEntry><outputEntry><text>"MEDIUM"</text></outputEntry></rule>
+      <rule><inputEntry><text>&lt; 650</text></inputEntry><outputEntry><text>"HIGH"</text></outputEntry></rule>
+    </decisionTable>
+  </decision>
+</definitions>
+$dmn$,
+        'FIRST',
+        'Sample DMN for capability showcase; integrate in service layer as needed'
+    );
+
+    INSERT INTO dw_table_relations (
+        function_unit_id, source_table_id, source_field_name, relation_type, target_table_id, target_field_name
+    ) VALUES
+    (v_function_unit_id, v_loan_application_table_id, 'id', 'ONE_TO_MANY', v_applicant_info_table_id, 'loan_application_id'),
+    (v_function_unit_id, v_loan_application_table_id, 'id', 'ONE_TO_MANY', v_documents_table_id, 'loan_application_id');
+
+    INSERT INTO dw_form_stage_bindings (form_id, stage_id, stage_name) VALUES
+    (v_approval_form_id, 'Task_DocumentVerification', 'Document verification'),
+    (v_approval_form_id, 'Task_CreditCheck', 'Credit check'),
+    (v_approval_form_id, 'Task_RiskAssessment', 'Risk assessment'),
+    (v_approval_form_id, 'Task_ManagerApproval', 'Manager approval'),
+    (v_approval_form_id, 'Task_SeniorManagerApproval', 'Senior manager approval'),
+    (v_disbursement_form_id, 'Task_Disbursement', 'Process disbursement');
+
+    RAISE NOTICE 'Inserted decision definition, table relations, and form stage bindings';
+
     -- =========================================================================
     -- Part 4: Create Action Definitions
     -- =========================================================================
@@ -433,16 +505,16 @@ BEGIN
     RAISE NOTICE '  - Applicant Information (sub): %', v_applicant_info_table_id;
     RAISE NOTICE '  - Financial Information (sub): %', v_financial_info_table_id;
     RAISE NOTICE '  - Collateral Details (sub): %', v_collateral_table_id;
-    RAISE NOTICE '  - Credit Check Results (relation): %', v_credit_check_table_id;
-    RAISE NOTICE '  - Approval History (relation): %', v_approval_history_table_id;
-    RAISE NOTICE '  - Documents (relation): %', v_documents_table_id;
+    RAISE NOTICE '  - Credit Check Results (sub): %', v_credit_check_table_id;
+    RAISE NOTICE '  - Approval History (sub): %', v_approval_history_table_id;
+    RAISE NOTICE '  - Documents (sub): %', v_documents_table_id;
     RAISE NOTICE '';
     RAISE NOTICE 'Form Definitions:';
     RAISE NOTICE '  - Loan Application Form: %', v_application_form_id;
     RAISE NOTICE '  - Credit Check Form (popup): %', v_credit_check_form_id;
     RAISE NOTICE '  - Risk Assessment Form (popup): %', v_risk_assessment_form_id;
-    RAISE NOTICE '  - Loan Approval Form: %', v_approval_form_id;
-    RAISE NOTICE '  - Loan Disbursement Form: %', v_disbursement_form_id;
+    RAISE NOTICE '  - Loan Underwriting Task Form: %', v_approval_form_id;
+    RAISE NOTICE '  - Loan Disbursement Form (TASK): %', v_disbursement_form_id;
     RAISE NOTICE '';
     RAISE NOTICE 'Action Definitions: 15 (including popup form actions and API calls)';
     RAISE NOTICE '';

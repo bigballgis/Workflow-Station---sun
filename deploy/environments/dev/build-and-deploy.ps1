@@ -144,7 +144,14 @@ if ($Service) {
     }
 
     Write-Host "`n[2/2] Deploying $Service..." -ForegroundColor Yellow
-    docker compose -f $ComposeFile --env-file $EnvFile up -d --build --no-deps $Service
+    # 前端 Dockerfile.local 仅 COPY dist；compose 单独 --build 时常命中缓存层，容器内仍是旧资源，表现为「部署了但页面没变」
+    if ($svc.Type -eq "frontend") {
+        docker compose -f $ComposeFile --env-file $EnvFile build --no-cache $Service
+        if ($LASTEXITCODE -ne 0) { throw "Docker build failed for $Service" }
+        docker compose -f $ComposeFile --env-file $EnvFile up -d --no-deps $Service
+    } else {
+        docker compose -f $ComposeFile --env-file $EnvFile up -d --build --no-deps $Service
+    }
     if ($LASTEXITCODE -ne 0) { throw "Failed to deploy $Service" }
 
     if ($svc.Type -eq "backend") {
@@ -282,8 +289,8 @@ if (-not $SkipFrontend) {
             Pop-Location
         }
         
-        Write-Host "  Docker build $($fe.Name) (Dockerfile.local)..."
-        docker build -f "$feDir/Dockerfile.local" -t "dev-$($fe.Name)" $feDir
+        Write-Host "  Docker build $($fe.Name) (Dockerfile.local, --no-cache)..."
+        docker build --no-cache -f "$feDir/Dockerfile.local" -t "dev-$($fe.Name)" $feDir
         if ($LASTEXITCODE -ne 0) { throw "$($fe.Name) docker build failed" }
     }
     

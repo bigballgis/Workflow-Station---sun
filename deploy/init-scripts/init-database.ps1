@@ -51,7 +51,7 @@ if ([string]::IsNullOrEmpty($DbPassword)) {
 }
 
 # Step 1: Base schemas
-Write-Step "Step 1/9: Creating base schemas..."
+Write-Step "Step 1/6: Creating base schemas..."
 $schemas = @(
     "00-schema/01-platform-security-schema.sql",
     "00-schema/02-workflow-engine-schema.sql",
@@ -64,7 +64,7 @@ foreach ($s in $schemas) {
 }
 
 # Step 2: Incremental migrations
-Write-Step "Step 2/9: Applying incremental migrations..."
+Write-Step "Step 2/6: Applying incremental migrations..."
 $migrations = @(
     "00-schema/06-add-deployment-rollback-columns.sql",
     "00-schema/07-add-action-definitions-table.sql",
@@ -89,95 +89,39 @@ foreach ($m in $migrations) {
 }
 
 # Step 3: Roles, groups, admin user
-Write-Step "Step 3/9: Creating roles, groups, and admin user..."
+Write-Step "Step 3/6: Creating roles, groups, and admin user..."
 Exec-Sql -File (Join-Path $ScriptDir "01-admin/01-create-roles-and-groups.sql") -Desc "Roles and virtual groups" | Out-Null
 Exec-Sql -File (Join-Path $ScriptDir "01-admin/01-create-admin-only.sql") -Desc "Admin user" | Out-Null
 Exec-Sql -File (Join-Path $ScriptDir "01-admin/02-init-developer-permissions.sql") -Desc "Developer permissions" | Out-Null
 Exec-Sql -File (Join-Path $ScriptDir "01-admin/03-sync-role-tables.sql") -Desc "Sync role tables" | Out-Null
 Exec-Sql -File (Join-Path $ScriptDir "01-admin/04-admin-permissions.sql") -Desc "Admin permissions" | Out-Null
 
-# Step 4: Test function unit
-Write-Step "Step 4/9: Loading test function unit (Digital Lending V2 EN)..."
+# Step 4: Wipe all function units (matches Docker init path)
+Write-Step "Step 4/6: Wiping all function units (developer + deployed catalog)..."
+$wipePath = Join-Path $ScriptDir "99-maintenance/00-wipe-all-function-units.sql"
+if (Test-Path $wipePath) {
+    if (-not (Exec-Sql -File $wipePath -Desc "Wipe function units")) { exit 1 }
+} else {
+    Write-Host "  SKIP: wipe script not found at $wipePath" -ForegroundColor Yellow
+}
+
+# Step 5: Digital Lending V2 EN only
+Write-Step "Step 5/6: Loading Digital Lending V2 EN..."
 $fuScripts = @(
     "08-digital-lending-v2-en/00-create-virtual-groups.sql",
     "08-digital-lending-v2-en/01-create-digital-lending-complete.sql",
     "08-digital-lending-v2-en/02-insert-bpmn-process.sql",
-    "08-digital-lending-v2-en/03-bind-actions.sql"
+    "08-digital-lending-v2-en/03-bind-actions.sql",
+    "08-digital-lending-v2-en/04-merge-loan-application-subforms.sql"
 )
 foreach ($f in $fuScripts) {
     $path = Join-Path $ScriptDir $f
-    if (Test-Path $path) { Exec-Sql -File $path -Desc (Split-Path $f -Leaf) | Out-Null }
+    if (Test-Path $path) {
+        if (-not (Exec-Sql -File $path -Desc (Split-Path $f -Leaf))) { exit 1 }
+    }
 }
 
-# Step 5: Simple Approval Workflow
-Write-Step "Step 5/9: Loading Simple Approval Workflow..."
-$saScripts = @(
-    "10-simple-approval/00-create-simple-approval.sql",
-    "10-simple-approval/01-insert-bpmn-process.sql",
-    "10-simple-approval/02-insert-table-design.sql",
-    "10-simple-approval/03-insert-additional-tables.sql",
-    "10-simple-approval/04-form-table-bindings.sql",
-    "10-simple-approval/04-insert-sample-data.sql",
-    "10-simple-approval/05-fix-bpmn-approval-form.sql"
-)
-foreach ($f in $saScripts) {
-    $path = Join-Path $ScriptDir $f
-    if (Test-Path $path) { Exec-Sql -File $path -Desc (Split-Path $f -Leaf) | Out-Null }
-}
-
-# Step 6: Simple Approval 12
-Write-Step "Step 6/9: Loading Simple Approval 12..."
-$sa12Scripts = @(
-    "12-simple-approval/00-create-function-unit.sql",
-    "12-simple-approval/01-create-tables.sql",
-    "12-simple-approval/02-create-bpmn-process.sql",
-    "12-simple-approval/03-form-table-bindings.sql"
-)
-foreach ($f in $sa12Scripts) {
-    $path = Join-Path $ScriptDir $f
-    if (Test-Path $path) { Exec-Sql -File $path -Desc (Split-Path $f -Leaf) | Out-Null }
-}
-
-# Step 7: Procurement Workflow
-Write-Step "Step 7/9: Loading Procurement Workflow..."
-$pwScripts = @(
-    "13-procurement-workflow/00-create-function-unit.sql",
-    "13-procurement-workflow/01-create-tables.sql",
-    "13-procurement-workflow/02-create-bpmn-process.sql",
-    "13-procurement-workflow/03-form-table-bindings.sql"
-)
-foreach ($f in $pwScripts) {
-    $path = Join-Path $ScriptDir $f
-    if (Test-Path $path) { Exec-Sql -File $path -Desc (Split-Path $f -Leaf) | Out-Null }
-}
-
-# Step 8: Travel Expense Reimbursement
-Write-Step "Step 8/9: Loading Travel Expense Reimbursement..."
-$teScripts = @(
-    "14-travel-expense-reimbursement/00-create-function-unit.sql",
-    "14-travel-expense-reimbursement/01-create-tables.sql",
-    "14-travel-expense-reimbursement/02-create-bpmn-process.sql",
-    "14-travel-expense-reimbursement/03-form-table-bindings.sql",
-    "14-travel-expense-reimbursement/04-update-n8n-action-config.sql"
-)
-foreach ($f in $teScripts) {
-    $path = Join-Path $ScriptDir $f
-    if (Test-Path $path) { Exec-Sql -File $path -Desc (Split-Path $f -Leaf) | Out-Null }
-}
-
-# Step 9: Platform showcase function unit
-Write-Step "Step 9/9: Loading Platform Showcase function unit..."
-$showcaseScripts = @(
-    "15-platform-showcase/00-create-function-unit.sql",
-    "15-platform-showcase/01-create-tables.sql",
-    "15-platform-showcase/02-create-bpmn-process.sql",
-    "15-platform-showcase/03-form-table-bindings.sql",
-    "15-platform-showcase/04-table-relations.sql"
-)
-foreach ($f in $showcaseScripts) {
-    $path = Join-Path $ScriptDir $f
-    if (Test-Path $path) { Exec-Sql -File $path -Desc (Split-Path $f -Leaf) | Out-Null }
-}
+Write-Step "Step 6/6: Finished."
 
 Write-Host ""
 Write-Host "=========================================" -ForegroundColor Green
@@ -185,4 +129,5 @@ Write-Host "  Database Initialization Complete!" -ForegroundColor Green
 Write-Host "=========================================" -ForegroundColor Green
 Write-Host "  Login: admin / password" -ForegroundColor White
 Write-Host "  Change password after first login!" -ForegroundColor Yellow
+Write-Host "  Demo function unit: Digital Lending V2 (EN) only." -ForegroundColor White
 Write-Host "=========================================" -ForegroundColor Green

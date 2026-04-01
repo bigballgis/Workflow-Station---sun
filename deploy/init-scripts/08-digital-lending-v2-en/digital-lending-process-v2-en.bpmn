@@ -39,7 +39,7 @@
           <custom:property name="assigneeType" value="VIRTUAL_GROUP" />
           <custom:property name="assigneeValue" value="DOCUMENT_VERIFIERS" />
           <custom:property name="formId" value="{{APPROVAL_FORM_ID}}" />
-          <custom:property name="formName" value="Loan Approval Form" />
+          <custom:property name="formName" value="Loan Underwriting Task Form" />
           <custom:property name="formReadOnly" value="false" />
           <custom:property name="actionIds" value="[{{ACTION_VERIFY_DOCS}},{{ACTION_APPROVE}},{{ACTION_REJECT}}]" />
           <custom:property name="actionNames" value="[&quot;Verify Documents&quot;,&quot;Approve&quot;,&quot;Reject&quot;]" />
@@ -63,7 +63,7 @@
           <custom:property name="assigneeType" value="VIRTUAL_GROUP" />
           <custom:property name="assigneeValue" value="CREDIT_OFFICERS" />
           <custom:property name="formId" value="{{APPROVAL_FORM_ID}}" />
-          <custom:property name="formName" value="Loan Approval Form" />
+          <custom:property name="formName" value="Loan Underwriting Task Form" />
           <custom:property name="formReadOnly" value="false" />
           <custom:property name="actionIds" value="[{{ACTION_CREDIT_CHECK}},{{ACTION_VIEW_CREDIT}},{{ACTION_APPROVE}},{{ACTION_REJECT}}]" />
           <custom:property name="actionNames" value="[&quot;Perform Credit Check&quot;,&quot;View Credit Report&quot;,&quot;Approve&quot;,&quot;Reject&quot;]" />
@@ -80,7 +80,7 @@
           <custom:property name="assigneeType" value="VIRTUAL_GROUP" />
           <custom:property name="assigneeValue" value="RISK_OFFICERS" />
           <custom:property name="formId" value="{{APPROVAL_FORM_ID}}" />
-          <custom:property name="formName" value="Loan Approval Form" />
+          <custom:property name="formName" value="Loan Underwriting Task Form" />
           <custom:property name="formReadOnly" value="false" />
           <custom:property name="actionIds" value="[{{ACTION_ASSESS_RISK}},{{ACTION_LOW_RISK}},{{ACTION_HIGH_RISK}},{{ACTION_REQUEST_INFO}}]" />
           <custom:property name="actionNames" value="[&quot;Assess Risk&quot;,&quot;Mark as Low Risk&quot;,&quot;Mark as High Risk&quot;,&quot;Request Additional Info&quot;]" />
@@ -104,7 +104,7 @@
         <custom:properties>
           <custom:property name="assigneeType" value="ENTITY_MANAGER" />
           <custom:property name="formId" value="{{APPROVAL_FORM_ID}}" />
-          <custom:property name="formName" value="Loan Approval Form" />
+          <custom:property name="formName" value="Loan Underwriting Task Form" />
           <custom:property name="formReadOnly" value="false" />
           <custom:property name="actionIds" value="[{{ACTION_APPROVE}},{{ACTION_REJECT}},{{ACTION_REQUEST_INFO}}]" />
           <custom:property name="actionNames" value="[&quot;Approve&quot;,&quot;Reject&quot;,&quot;Request Additional Info&quot;]" />
@@ -127,7 +127,7 @@
         <custom:properties>
           <custom:property name="assigneeType" value="FUNCTION_MANAGER" />
           <custom:property name="formId" value="{{APPROVAL_FORM_ID}}" />
-          <custom:property name="formName" value="Loan Approval Form" />
+          <custom:property name="formName" value="Loan Underwriting Task Form" />
           <custom:property name="formReadOnly" value="false" />
           <custom:property name="actionIds" value="[{{ACTION_APPROVE}},{{ACTION_REJECT}}]" />
           <custom:property name="actionNames" value="[&quot;Approve&quot;,&quot;Reject&quot;]" />
