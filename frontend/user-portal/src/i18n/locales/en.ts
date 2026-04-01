@@ -451,6 +451,7 @@ export default {
     selectVirtualGroup: 'Please select virtual group',
     businessUnit: 'Business Unit',
     selectBusinessUnit: 'Please select business unit',
+    noApplicableBusinessUnits: 'No applicable business units available',
     enterReason: 'Please enter reason',
     roleRequestSuccess: 'Role request submitted successfully',
     virtualGroupRequestSuccess: 'Virtual group request submitted successfully',

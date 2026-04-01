@@ -451,6 +451,7 @@ export default {
     selectVirtualGroup: '请选择虚拟组',
     businessUnit: '业务单元',
     selectBusinessUnit: '请选择业务单元',
+    noApplicableBusinessUnits: '当前没有可申请的业务单元',
     enterReason: '请输入申请理由',
     roleRequestSuccess: '角色申请成功',
     virtualGroupRequestSuccess: '虚拟组申请成功',
