@@ -79,7 +79,8 @@ CREATE TABLE IF NOT EXISTS up_delegation_rule (
     status VARCHAR(20) DEFAULT 'ACTIVE',
     reason TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    lock_version BIGINT NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS idx_up_delegation_rule_delegator_id ON up_delegation_rule(delegator_id);
@@ -143,7 +144,8 @@ CREATE TABLE IF NOT EXISTS up_process_draft (
     form_data JSONB NOT NULL,
     attachments JSONB,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    lock_version BIGINT NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS idx_up_process_draft_user_id ON up_process_draft(user_id);
@@ -195,7 +197,8 @@ CREATE TABLE IF NOT EXISTS up_process_instance (
     end_time TIMESTAMP(6),
     started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     completed_at TIMESTAMP,
-    updated_at TIMESTAMP(6)
+    updated_at TIMESTAMP(6),
+    lock_version BIGINT NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS idx_up_process_instance_user ON up_process_instance(start_user_id);
