@@ -452,6 +452,7 @@ export default {
     businessUnit: '业务单元',
     selectBusinessUnit: '请选择业务单元',
     noApplicableBusinessUnits: '当前没有可申请的业务单元',
+    noEligibleRoles: '该业务单元暂无可申请角色',
     enterReason: '请输入申请理由',
     roleRequestSuccess: '角色申请成功',
     virtualGroupRequestSuccess: '虚拟组申请成功',

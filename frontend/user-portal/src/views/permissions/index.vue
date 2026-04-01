@@ -102,6 +102,7 @@
             filterable 
             :loading="loadingBusinessUnits"
             :disabled="!loadingBusinessUnits && applicableBusinessUnits.length === 0"
+            @change="onBusinessUnitChange"
             :teleported="false"
           >
             <el-option
@@ -113,6 +114,28 @@
           </el-select>
           <div v-if="!loadingBusinessUnits && applicableBusinessUnits.length === 0" class="form-hint">
             {{ t('permission.noApplicableBusinessUnits') }}
+          </div>
+        </el-form-item>
+
+        <el-form-item :label="t('permission.role')" required>
+          <el-select
+            v-model="applyForm.roleId"
+            :placeholder="t('permission.selectRole')"
+            style="width: 100%;"
+            filterable
+            :loading="loadingRoles"
+            :disabled="!applyForm.businessUnitId || (!loadingRoles && eligibleRoles.length === 0)"
+            :teleported="false"
+          >
+            <el-option
+              v-for="role in eligibleRoles"
+              :key="role.id"
+              :label="role.name"
+              :value="role.id"
+            />
+          </el-select>
+          <div v-if="applyForm.businessUnitId && !loadingRoles && eligibleRoles.length === 0" class="form-hint">
+            {{ t('permission.noEligibleRoles') }}
           </div>
         </el-form-item>
 
@@ -132,7 +155,7 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { permissionApi, type BusinessUnit, type PermissionRequestRecord } from '@/api/permission'
+import { permissionApi, type BusinessUnit, type PermissionRequestRecord, type RoleInfo } from '@/api/permission'
 
 const { t } = useI18n()
 
@@ -142,11 +165,13 @@ const submitting = ref(false)
 const loadingPending = ref(false)
 const loadingHistory = ref(false)
 const loadingBusinessUnits = ref(false)
+const loadingRoles = ref(false)
 
 // 数据
 const pendingList = ref<PermissionRequestRecord[]>([])
 const historyList = ref<PermissionRequestRecord[]>([])
 const applicableBusinessUnits = ref<BusinessUnit[]>([])
+const eligibleRoles = ref<RoleInfo[]>([])
 
 // 待处理数量
 const pendingCount = computed(() => pendingList.value.length)
@@ -154,6 +179,7 @@ const pendingCount = computed(() => pendingList.value.length)
 // 申请表单
 const applyForm = reactive({
   businessUnitId: '',
+  roleId: '',
   reason: ''
 })
 
@@ -224,6 +250,29 @@ const loadApplicableBusinessUnits = async () => {
   }
 }
 
+const loadEligibleRoles = async (businessUnitId: string) => {
+  if (!businessUnitId) {
+    eligibleRoles.value = []
+    return
+  }
+  loadingRoles.value = true
+  try {
+    const res = await permissionApi.getBusinessUnitRoles(businessUnitId) as any
+    if (res?.data && Array.isArray(res.data)) {
+      eligibleRoles.value = res.data
+    } else if (Array.isArray(res)) {
+      eligibleRoles.value = res
+    } else {
+      eligibleRoles.value = []
+    }
+  } catch (e) {
+    console.error('Failed to load eligible roles:', e)
+    eligibleRoles.value = []
+  } finally {
+    loadingRoles.value = false
+  }
+}
+
 // 状态和类型处理
 type TagType = 'primary' | 'success' | 'warning' | 'info' | 'danger'
 
@@ -253,6 +302,7 @@ const getRequestTypeTag = (type: string): TagType => {
     VIRTUAL_GROUP_JOIN: 'success',
     BUSINESS_UNIT: 'primary',
     BUSINESS_UNIT_JOIN: 'primary',
+    BUSINESS_UNIT_ROLE: 'primary',
     ROLE_ASSIGNMENT: 'info'
   }
   return map[type] || 'info'
@@ -264,6 +314,7 @@ const getRequestTypeLabel = (type: string) => {
     VIRTUAL_GROUP_JOIN: t('permission.virtualGroupJoin'),
     BUSINESS_UNIT: t('permission.businessUnitJoin'),
     BUSINESS_UNIT_JOIN: t('permission.businessUnitJoin'),
+    BUSINESS_UNIT_ROLE: t('permission.businessUnitRole'),
     ROLE_ASSIGNMENT: t('permission.roleAssignment')
   }
   return map[type] || type
@@ -323,15 +374,27 @@ const cancelRequest = async (row: PermissionRequestRecord) => {
 // 对话框操作
 const showApplyDialog = () => {
   applyForm.businessUnitId = ''
+  applyForm.roleId = ''
   applyForm.reason = ''
+  eligibleRoles.value = []
   applyDialogVisible.value = true
   
   loadApplicableBusinessUnits()
 }
 
+const onBusinessUnitChange = async (businessUnitId: string) => {
+  applyForm.roleId = ''
+  await loadEligibleRoles(businessUnitId)
+}
+
 const submitApply = async () => {
   if (!applyForm.businessUnitId) {
     ElMessage.warning(t('permission.selectBusinessUnit'))
+    return
+  }
+
+  if (!applyForm.roleId) {
+    ElMessage.warning(t('permission.selectRole'))
     return
   }
   
@@ -342,8 +405,9 @@ const submitApply = async () => {
 
   submitting.value = true
   try {
-    await permissionApi.requestBusinessUnit({
+    await permissionApi.requestBusinessUnitRole({
       businessUnitId: applyForm.businessUnitId,
+      roleIds: [applyForm.roleId],
       reason: applyForm.reason
     })
     ElMessage.success(t('permission.businessUnitRequestSuccess'))
@@ -391,6 +455,13 @@ onMounted(() => {
 :deep(.apply-form) {
   .el-form-item__label {
     white-space: nowrap;
+  }
+
+  .form-hint {
+    margin-top: 6px;
+    color: var(--el-text-color-secondary);
+    font-size: 12px;
+    line-height: 1.4;
   }
 }
 </style>

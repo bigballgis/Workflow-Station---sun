@@ -413,6 +413,7 @@ export default {
     businessUnit: '業務單元',
     selectBusinessUnit: '請選擇業務單元',
     noApplicableBusinessUnits: '目前沒有可申請的業務單元',
+    noEligibleRoles: '此業務單元目前沒有可申請角色',
     enterReason: '請輸入申請理由',
     roleRequestSuccess: '角色申請成功',
     virtualGroupRequestSuccess: '虛擬群組申請成功',
