@@ -1268,7 +1268,9 @@ const handleSubmit = async () => {
   currentAction.value = 'submit'
   
   try {
-    await processApi.startProcess(functionUnitCode.value || functionUnitId.value, {
+    const procKey = functionUnitCode.value || functionUnitId.value
+    await processApi.startProcess(procKey, {
+      processDefinitionKey: procKey,
       formData: {
         ...formData.value,
         __subTables__: Object.fromEntries(

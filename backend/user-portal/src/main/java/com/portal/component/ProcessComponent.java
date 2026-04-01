@@ -1,6 +1,7 @@
 package com.portal.component;
 
 import com.portal.client.WorkflowEngineClient;
+import com.portal.dto.ChangeHistoryContext;
 import com.portal.dto.ProcessDefinitionInfo;
 import com.portal.dto.ProcessInstanceInfo;
 import com.portal.dto.ProcessStartRequest;
@@ -41,6 +42,7 @@ public class ProcessComponent {
     private final FunctionUnitAccessComponent functionUnitAccessComponent;
     private final WorkflowEngineClient workflowEngineClient;
     private final ProcessDraftComponent processDraftComponent;
+    private final ChangeHistoryComponent changeHistoryComponent;
     private final RestTemplate restTemplate;
 
     @jakarta.persistence.PersistenceContext
@@ -230,7 +232,9 @@ public class ProcessComponent {
         String currentNodeName = null;
         String currentAssigneeId = null;
         String currentAssigneeName = null;
-        
+        String initiatorTaskIdForHistory = null;
+        String initiatorTaskDefKeyForHistory = null;
+
         try {
             // 查询流程实例的任务
             Optional<Map<String, Object>> tasksResult = workflowEngineClient.getProcessInstanceTasks(flowableProcessInstanceId);
@@ -244,6 +248,9 @@ public class ProcessComponent {
                         // 获取第一个任务
                         Map<String, Object> firstTask = tasks.get(0);
                         String taskId = (String) firstTask.get("taskId");
+                        initiatorTaskIdForHistory = taskId;
+                        Object taskDefKey = firstTask.get("taskDefinitionKey");
+                        initiatorTaskDefKeyForHistory = taskDefKey != null ? taskDefKey.toString() : null;
                         log.info("Auto-completing first task: {} for process: {}", taskId, flowableProcessInstanceId);
                         
                         // 先认领任务（设置 assignee）
@@ -307,7 +314,15 @@ public class ProcessComponent {
             log.warn("Failed to auto-complete first task: {}", e.getMessage());
             // 不抛出异常，流程已经启动成功
         }
-        
+
+        // 首任务由引擎 API 直接完成，不经过 TaskFormComponent，在此补写字段级变更历史（与待办提交路径一致）
+        recordInitialSubmitChangeHistory(
+                flowableProcessInstanceId,
+                initiatorTaskIdForHistory,
+                initiatorTaskDefKeyForHistory,
+                userId,
+                variables);
+
         // 更新流程实例（补充当前节点和处理人信息）
         // 使用条件 UPDATE 避免覆盖 ProcessCompletionListener 回调已设置的 COMPLETED 状态（竞态条件）
         // JPA 一级缓存会导致 findById 返回旧对象，所以必须用 @Modifying 原生更新绕过缓存
@@ -1308,6 +1323,43 @@ public class ProcessComponent {
      *   itemCount                — 子表记录总数（Integer）
      */
     @SuppressWarnings("unchecked")
+    /**
+     * 发起流程时提交的表单变量写入 up_change_history，便于申请单详情「变更历史」展示。
+     * 排除引擎/快照内部键，避免噪声。
+     */
+    private void recordInitialSubmitChangeHistory(String processInstanceId,
+                                                String taskInstanceId,
+                                                String taskDefinitionKey,
+                                                String userId,
+                                                Map<String, Object> variables) {
+        if (variables == null || variables.isEmpty()) {
+            return;
+        }
+        Map<String, Object> filtered = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> e : variables.entrySet()) {
+            String k = e.getKey();
+            if ("initiator".equals(k) || k.startsWith("_snapshot_")) {
+                continue;
+            }
+            filtered.put(k, e.getValue());
+        }
+        if (filtered.isEmpty()) {
+            return;
+        }
+        try {
+            ChangeHistoryContext context = ChangeHistoryContext.builder()
+                    .processInstanceId(processInstanceId)
+                    .taskInstanceId(taskInstanceId)
+                    .stageId(taskDefinitionKey)
+                    .userId(userId)
+                    .build();
+            changeHistoryComponent.recordFieldChanges(context, Collections.emptyMap(), filtered);
+        } catch (Exception e) {
+            log.warn("Failed to record initial submit change history for process {}: {}",
+                    processInstanceId, e.getMessage());
+        }
+    }
+
     private void computeSubTableConditionVariables(Map<String, Object> variables) {
         try {
             Object subTablesObj = variables.get("__subTables__");

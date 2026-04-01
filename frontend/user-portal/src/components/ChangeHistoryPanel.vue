@@ -82,8 +82,9 @@ async function loadHistory() {
   loading.value = true
   error.value = null
   try {
-    const res = await getChangeHistory(props.processInstanceId)
-    records.value = (res as any).data || res || []
+    const res = await getChangeHistory(props.processInstanceId) as Record<string, unknown>
+    const raw = res?.data ?? res
+    records.value = Array.isArray(raw) ? raw : []
   } catch (e: any) {
     console.error('Failed to load change history:', e)
     error.value = t('changeHistory.loadFailed')

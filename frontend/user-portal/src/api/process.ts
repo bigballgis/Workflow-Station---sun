@@ -29,6 +29,8 @@ export interface ProcessInstance {
 }
 
 export interface ProcessStartRequest {
+  /** 与路径 /processes/{processKey}/start 一致；省略时由后端用路径参数补全 */
+  processDefinitionKey?: string
   businessKey?: string
   formData?: Record<string, unknown>
   priority?: string
