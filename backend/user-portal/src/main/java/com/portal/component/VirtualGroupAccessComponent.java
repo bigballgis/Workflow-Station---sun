@@ -175,6 +175,28 @@ public class VirtualGroupAccessComponent {
         }
         return Collections.emptyList();
     }
+
+    /**
+     * Find the virtual group bound to the given roleId.
+     * Admin-center virtual group list responses typically expose `boundRoleId` and `id`.
+     */
+    public String getVirtualGroupIdByBoundRoleId(String roleId) {
+        if (roleId == null || roleId.isBlank()) return null;
+        try {
+            List<Map<String, Object>> groups = getVirtualGroups();
+            for (Map<String, Object> g : groups) {
+                Object boundRoleId = g.get("boundRoleId");
+                if (boundRoleId != null && roleId.equals(String.valueOf(boundRoleId))) {
+                    Object groupId = g.get("id");
+                    return groupId != null ? String.valueOf(groupId) : null;
+                }
+            }
+            return null;
+        } catch (Exception e) {
+            log.error("Failed to find virtual group by boundRoleId {}: {}", roleId, e.getMessage());
+            return null;
+        }
+    }
     
     // ========== 业务单元相关方法 ==========
     

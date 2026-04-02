@@ -379,6 +379,18 @@ public class PermissionComponent {
                             request.getRoleId());
                     if (!roleOk) {
                         errorMessage = "用户已加入业务单元，但分配业务单元角色失败";
+                    } else {
+                        // Role Members page在 admin-center 里是按“角色绑定的虚拟组成员”展示。
+                        // 为了让 BU join + 选角后的结果在该页面可见，同步把用户加入该虚拟组。
+                        String boundVirtualGroupId = virtualGroupAccessComponent
+                                .getVirtualGroupIdByBoundRoleId(request.getRoleId());
+                        if (boundVirtualGroupId != null && !boundVirtualGroupId.isBlank()) {
+                            virtualGroupAccessComponent.addUserToVirtualGroup(
+                                    request.getApplicantId(),
+                                    boundVirtualGroupId,
+                                    "审批通过: " + (comment != null ? comment : "")
+                            );
+                        }
                     }
                 }
             } else if (request.getRequestType() == PermissionRequestType.ROLE_ASSIGNMENT) {
