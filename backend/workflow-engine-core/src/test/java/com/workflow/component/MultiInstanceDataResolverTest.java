@@ -1,0 +1,378 @@
+package com.workflow.component;
+
+import com.workflow.component.MultiInstanceDataResolver.OptimisticLockException;
+import com.workflow.entity.ExtendedTaskInfo;
+import com.workflow.exception.WorkflowBusinessException;
+import com.workflow.exception.WorkflowValidationException;
+import com.workflow.repository.ExtendedTaskInfoRepository;
+import org.flowable.engine.RuntimeService;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.EmptyResultDataAccessException;
+import org.springframework.jdbc.core.JdbcTemplate;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
+
+import static org.assertj.core.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+
+/**
+ * MultiInstanceDataResolver 单元测试
+ * 
+ * 测试范围：
+ * 1. 加载子任务表单数据（主表单数据 + 子表数据行）
+ * 2. 数据隔离验证
+ * 3. 乐观锁回写机制
+ * 4. 错误场景处理（数据行删除、版本冲突）
+ */
+@ExtendWith(MockitoExtension.class)
+@DisplayName("MultiInstanceDataResolver 单元测试")
+class MultiInstanceDataResolverTest {
+    
+    @Mock
+    private RuntimeService runtimeService;
+    
+    @Mock
+    private JdbcTemplate jdbcTemplate;
+    
+    @Mock
+    private ExtendedTaskInfoRepository extendedTaskInfoRepository;
+    
+    @InjectMocks
+    private MultiInstanceDataResolver resolver;
+    
+    private static final String TASK_ID = "task-001";
+    private static final String PROCESS_INSTANCE_ID = "proc-001";
+    private static final Long SUB_TABLE_ROW_ID = 101L;
+    private static final String SUB_TABLE_NAME = "fu_participants";
+    
+    @Nested
+    @DisplayName("loadSubTaskFormData 测试")
+    class LoadSubTaskFormDataTests {
+        
+        @Test
+        @DisplayName("正常加载子任务表单数据")
+        void shouldLoadSubTaskFormDataSuccessfully() {
+            // Given: 准备 ExtendedTaskInfo
+            ExtendedTaskInfo extInfo = createExtendedTaskInfo();
+            when(extendedTaskInfoRepository.findByTaskIdAndIsDeletedFalse(TASK_ID))
+                .thenReturn(Optional.of(extInfo));
+            
+            // 准备流程变量（主表单数据）
+            Map<String, Object> processVariables = new HashMap<>();
+            processVariables.put("meetingTitle", "2026 Q2 产品规划会议");
+            processVariables.put("meetingTime", "2026-04-15T14:00:00");
+            processVariables.put("meetingLocation", "3 楼会议室");
+            processVariables.put("multiInstance_participants_collection", new Object()); // 应被过滤
+            processVariables.put("currentItem", new Object()); // 应被过滤
+            processVariables.put("nrOfInstances", 5); // 系统变量，应被过滤
+            when(runtimeService.getVariables(PROCESS_INSTANCE_ID)).thenReturn(processVariables);
+            
+            // 准备子表数据行
+            Map<String, Object> subTableRow = new HashMap<>();
+            subTableRow.put("id", SUB_TABLE_ROW_ID);
+            subTableRow.put("name", "张三");
+            subTableRow.put("department", "技术部");
+            subTableRow.put("email", "zhang@example.com");
+            subTableRow.put("row_version", 1L);
+            when(jdbcTemplate.queryForMap(anyString(), eq(SUB_TABLE_ROW_ID)))
+                .thenReturn(subTableRow);
+            
+            // When: 加载子任务表单数据
+            MultiInstanceDataResolver.SubTaskFormData result = resolver.loadSubTaskFormData(TASK_ID);
+            
+            // Then: 验证返回数据
+            assertThat(result).isNotNull();
+            assertThat(result.getTaskId()).isEqualTo(TASK_ID);
+            assertThat(result.getRowVersion()).isEqualTo(1L);
+            
+            // 验证主表单数据（应排除系统变量和集合变量）
+            assertThat(result.getMainFormData()).hasSize(3);
+            assertThat(result.getMainFormData()).containsEntry("meetingTitle", "2026 Q2 产品规划会议");
+            assertThat(result.getMainFormData()).containsEntry("meetingTime", "2026-04-15T14:00:00");
+            assertThat(result.getMainFormData()).containsEntry("meetingLocation", "3 楼会议室");
+            assertThat(result.getMainFormData()).doesNotContainKey("multiInstance_participants_collection");
+            assertThat(result.getMainFormData()).doesNotContainKey("currentItem");
+            assertThat(result.getMainFormData()).doesNotContainKey("nrOfInstances");
+            
+            // 验证子表数据行
+            assertThat(result.getSubTableRowData()).hasSize(5);
+            assertThat(result.getSubTableRowData()).containsEntry("name", "张三");
+            assertThat(result.getSubTableRowData()).containsEntry("department", "技术部");
+        }
+        
+        @Test
+        @DisplayName("任务不存在时抛出异常")
+        void shouldThrowExceptionWhenTaskNotFound() {
+            // Given: 任务不存在
+            when(extendedTaskInfoRepository.findByTaskIdAndIsDeletedFalse(TASK_ID))
+                .thenReturn(Optional.empty());
+            
+            // When & Then: 抛出异常
+            assertThatThrownBy(() -> resolver.loadSubTaskFormData(TASK_ID))
+                .isInstanceOf(WorkflowValidationException.class)
+                .hasMessage("任务不存在");
+        }
+        
+        @Test
+        @DisplayName("子表数据行不存在时抛出异常")
+        void shouldThrowExceptionWhenSubTableRowNotFound() {
+            // Given: ExtendedTaskInfo 存在
+            ExtendedTaskInfo extInfo = createExtendedTaskInfo();
+            when(extendedTaskInfoRepository.findByTaskIdAndIsDeletedFalse(TASK_ID))
+                .thenReturn(Optional.of(extInfo));
+            
+            when(runtimeService.getVariables(PROCESS_INSTANCE_ID)).thenReturn(new HashMap<>());
+            
+            // 子表数据行不存在
+            when(jdbcTemplate.queryForMap(anyString(), eq(SUB_TABLE_ROW_ID)))
+                .thenThrow(new EmptyResultDataAccessException(1));
+            
+            // When & Then: 抛出异常
+            assertThatThrownBy(() -> resolver.loadSubTaskFormData(TASK_ID))
+                .isInstanceOf(WorkflowValidationException.class)
+                .hasMessage("关联的数据行已不存在");
+        }
+    }
+    
+    @Nested
+    @DisplayName("loadMainFormData 测试")
+    class LoadMainFormDataTests {
+        
+        @Test
+        @DisplayName("正确过滤系统变量和集合变量")
+        void shouldFilterSystemAndCollectionVariables() {
+            // Given: 准备流程变量
+            Map<String, Object> processVariables = new HashMap<>();
+            processVariables.put("businessField1", "value1");
+            processVariables.put("businessField2", "value2");
+            processVariables.put("multiInstance_participants_collection", new Object());
+            processVariables.put("currentItem", new Object());
+            processVariables.put("nrOfInstances", 5);
+            processVariables.put("nrOfActiveInstances", 3);
+            processVariables.put("nrOfCompletedInstances", 2);
+            processVariables.put("loopCounter", 1);
+            processVariables.put("_internalVar", "internal");
+            
+            when(runtimeService.getVariables(PROCESS_INSTANCE_ID)).thenReturn(processVariables);
+            
+            // When: 加载主表单数据
+            Map<String, Object> result = resolver.loadMainFormData(PROCESS_INSTANCE_ID);
+            
+            // Then: 只包含业务字段
+            assertThat(result).hasSize(2);
+            assertThat(result).containsEntry("businessField1", "value1");
+            assertThat(result).containsEntry("businessField2", "value2");
+            assertThat(result).doesNotContainKeys(
+                "multiInstance_participants_collection",
+                "currentItem",
+                "nrOfInstances",
+                "nrOfActiveInstances",
+                "nrOfCompletedInstances",
+                "loopCounter",
+                "_internalVar"
+            );
+        }
+    }
+    
+    @Nested
+    @DisplayName("loadSubTableRow 测试")
+    class LoadSubTableRowTests {
+        
+        @Test
+        @DisplayName("正常加载子表数据行")
+        void shouldLoadSubTableRowSuccessfully() {
+            // Given: 准备子表数据行
+            Map<String, Object> subTableRow = new HashMap<>();
+            subTableRow.put("id", SUB_TABLE_ROW_ID);
+            subTableRow.put("name", "张三");
+            subTableRow.put("row_version", 1L);
+            
+            when(jdbcTemplate.queryForMap(anyString(), eq(SUB_TABLE_ROW_ID)))
+                .thenReturn(subTableRow);
+            
+            // When: 加载子表数据行
+            Map<String, Object> result = resolver.loadSubTableRow(SUB_TABLE_NAME, SUB_TABLE_ROW_ID);
+            
+            // Then: 验证返回数据
+            assertThat(result).hasSize(3);
+            assertThat(result).containsEntry("id", SUB_TABLE_ROW_ID);
+            assertThat(result).containsEntry("name", "张三");
+            assertThat(result).containsEntry("row_version", 1L);
+        }
+        
+        @Test
+        @DisplayName("数据行不存在时抛出异常")
+        void shouldThrowExceptionWhenRowNotFound() {
+            // Given: 数据行不存在
+            when(jdbcTemplate.queryForMap(anyString(), eq(SUB_TABLE_ROW_ID)))
+                .thenThrow(new EmptyResultDataAccessException(1));
+            
+            // When & Then: 抛出异常
+            assertThatThrownBy(() -> resolver.loadSubTableRow(SUB_TABLE_NAME, SUB_TABLE_ROW_ID))
+                .isInstanceOf(WorkflowValidationException.class)
+                .hasMessage("关联的数据行已不存在");
+        }
+    }
+    
+    @Nested
+    @DisplayName("writeBackSubTableRow 测试")
+    class WriteBackSubTableRowTests {
+        
+        @Test
+        @DisplayName("正常回写数据并递增 row_version")
+        void shouldWriteBackDataSuccessfully() {
+            // Given: 准备 ExtendedTaskInfo
+            ExtendedTaskInfo extInfo = createExtendedTaskInfo();
+            when(extendedTaskInfoRepository.findByTaskIdAndIsDeletedFalse(TASK_ID))
+                .thenReturn(Optional.of(extInfo));
+            
+            // 当前 row_version 为 1
+            when(jdbcTemplate.queryForObject(anyString(), eq(Long.class), eq(SUB_TABLE_ROW_ID)))
+                .thenReturn(1L);
+            
+            // UPDATE 成功
+            when(jdbcTemplate.update(anyString(), any(Object[].class)))
+                .thenReturn(1);
+            
+            // 准备表单数据
+            Map<String, Object> formData = new HashMap<>();
+            formData.put("name", "张三");
+            formData.put("phone", "138xxxx1234");
+            formData.put("willAttend", true);
+            
+            // When: 回写数据
+            assertThatCode(() -> resolver.writeBackSubTableRow(TASK_ID, formData, 1L))
+                .doesNotThrowAnyException();
+            
+            // Then: 验证 UPDATE 被调用
+            verify(jdbcTemplate).update(
+                contains("UPDATE " + SUB_TABLE_NAME),
+                any(Object[].class)
+            );
+        }
+        
+        @Test
+        @DisplayName("row_version 不一致时抛出 OptimisticLockException")
+        void shouldThrowOptimisticLockExceptionWhenVersionMismatch() {
+            // Given: 准备 ExtendedTaskInfo
+            ExtendedTaskInfo extInfo = createExtendedTaskInfo();
+            when(extendedTaskInfoRepository.findByTaskIdAndIsDeletedFalse(TASK_ID))
+                .thenReturn(Optional.of(extInfo));
+            
+            // 当前 row_version 为 2（与期望的 1 不一致）
+            when(jdbcTemplate.queryForObject(anyString(), eq(Long.class), eq(SUB_TABLE_ROW_ID)))
+                .thenReturn(2L);
+            
+            Map<String, Object> formData = new HashMap<>();
+            formData.put("name", "张三");
+            
+            // When & Then: 抛出乐观锁异常
+            assertThatThrownBy(() -> resolver.writeBackSubTableRow(TASK_ID, formData, 1L))
+                .isInstanceOf(OptimisticLockException.class)
+                .hasMessage("数据已被修改，请刷新后重试");
+        }
+        
+        @Test
+        @DisplayName("数据行被删除时抛出 WorkflowValidationException")
+        void shouldThrowValidationExceptionWhenRowDeleted() {
+            // Given: 准备 ExtendedTaskInfo
+            ExtendedTaskInfo extInfo = createExtendedTaskInfo();
+            when(extendedTaskInfoRepository.findByTaskIdAndIsDeletedFalse(TASK_ID))
+                .thenReturn(Optional.of(extInfo));
+            
+            // 数据行不存在
+            when(jdbcTemplate.queryForObject(anyString(), eq(Long.class), eq(SUB_TABLE_ROW_ID)))
+                .thenThrow(new EmptyResultDataAccessException(1));
+            
+            Map<String, Object> formData = new HashMap<>();
+            formData.put("name", "张三");
+            
+            // When & Then: 抛出验证异常
+            assertThatThrownBy(() -> resolver.writeBackSubTableRow(TASK_ID, formData, 1L))
+                .isInstanceOf(WorkflowValidationException.class)
+                .hasMessage("关联的数据行已不存在");
+        }
+        
+        @Test
+        @DisplayName("UPDATE 影响行数为 0 时区分删除和版本冲突")
+        void shouldDistinguishBetweenDeletionAndVersionConflict() {
+            // Given: 准备 ExtendedTaskInfo
+            ExtendedTaskInfo extInfo = createExtendedTaskInfo();
+            when(extendedTaskInfoRepository.findByTaskIdAndIsDeletedFalse(TASK_ID))
+                .thenReturn(Optional.of(extInfo));
+            
+            // 第一次查询：row_version 为 1（匹配）
+            // 第二次查询（UPDATE 后）：row_version 为 2（说明被其他事务修改）
+            when(jdbcTemplate.queryForObject(anyString(), eq(Long.class), eq(SUB_TABLE_ROW_ID)))
+                .thenReturn(1L)  // 第一次查询
+                .thenReturn(2L); // 第二次查询（UPDATE 失败后）
+            
+            // UPDATE 影响行数为 0
+            when(jdbcTemplate.update(anyString(), any(Object[].class)))
+                .thenReturn(0);
+            
+            Map<String, Object> formData = new HashMap<>();
+            formData.put("name", "张三");
+            
+            // When & Then: 抛出乐观锁异常（而不是数据行删除异常）
+            assertThatThrownBy(() -> resolver.writeBackSubTableRow(TASK_ID, formData, 1L))
+                .isInstanceOf(OptimisticLockException.class)
+                .hasMessage("数据已被修改，请刷新后重试");
+        }
+    }
+    
+    @Nested
+    @DisplayName("isSystemVariable 测试")
+    class IsSystemVariableTests {
+        
+        @Test
+        @DisplayName("正确识别系统变量")
+        void shouldIdentifySystemVariables() {
+            assertThat(resolver.isSystemVariable("nrOfInstances")).isTrue();
+            assertThat(resolver.isSystemVariable("nrOfActiveInstances")).isTrue();
+            assertThat(resolver.isSystemVariable("nrOfCompletedInstances")).isTrue();
+            assertThat(resolver.isSystemVariable("loopCounter")).isTrue();
+            assertThat(resolver.isSystemVariable("_internalVar")).isTrue();
+        }
+        
+        @Test
+        @DisplayName("正确识别非系统变量")
+        void shouldIdentifyNonSystemVariables() {
+            assertThat(resolver.isSystemVariable("businessField")).isFalse();
+            assertThat(resolver.isSystemVariable("meetingTitle")).isFalse();
+            assertThat(resolver.isSystemVariable("multiInstance_participants_collection")).isFalse();
+            assertThat(resolver.isSystemVariable("currentItem")).isFalse();
+        }
+    }
+    
+    // ==================== 辅助方法 ====================
+    
+    private ExtendedTaskInfo createExtendedTaskInfo() {
+        String extendedProperties = String.format(
+            "{\"multiInstance\":true,\"subTableRowId\":%d,\"subTableName\":\"%s\",\"subTableRowVersion\":1}",
+            SUB_TABLE_ROW_ID, SUB_TABLE_NAME
+        );
+        
+        return ExtendedTaskInfo.builder()
+            .taskId(TASK_ID)
+            .processInstanceId(PROCESS_INSTANCE_ID)
+            .processDefinitionId("proc-def-001")
+            .taskDefinitionKey("userTask1")
+            .taskName("填写参会信息")
+            .assignmentType(com.workflow.enums.AssignmentType.USER)
+            .assignmentTarget("user-001")
+            .status("ASSIGNED")
+            .extendedProperties(extendedProperties)
+            .build();
+    }
+}
