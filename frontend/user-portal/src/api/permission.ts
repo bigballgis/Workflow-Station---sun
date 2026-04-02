@@ -194,9 +194,9 @@ export const permissionApi = {
     return request.post<PermissionRequestRecord>('/permissions/request-business-unit', data)
   },
 
-  /** 申请业务单元角色（旧API - 保留兼容） */
+  /** 申请加入业务单元并指定 Eligible Role（走 portal 本地 PermissionController） */
   requestBusinessUnitRole(data: BusinessUnitRoleRequestDto) {
-    return request.post<PermissionRequestRecord>('/permission-requests/business-unit-role', data)
+    return request.post<PermissionRequestRecord>('/permissions/request-business-unit-role', data)
   },
 
   /** 获取用户可申请的业务单元（基于用户的 BU_BOUNDED 角色） */

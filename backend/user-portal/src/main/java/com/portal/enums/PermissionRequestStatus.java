@@ -9,5 +9,7 @@ public enum PermissionRequestStatus {
     /** 已批准 */
     APPROVED,
     /** 已拒绝 */
-    REJECTED
+    REJECTED,
+    /** 已取消 */
+    CANCELLED
 }

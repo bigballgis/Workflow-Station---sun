@@ -131,6 +131,31 @@ class TaskAssignmentListenerTest {
         }
         
         @Test
+        @DisplayName("Should map legacy expression ${initiator} to INITIATOR and assign")
+        void shouldMapLegacyExpressionInitiatorToInitiatorType() {
+            TaskEntity task = createMockTask();
+            when(task.getAssignee()).thenReturn(null);
+
+            BpmnModel bpmnModel = createBpmnModelWithLegacyExpressionInitiator();
+            when(repositoryService.getBpmnModel(PROCESS_DEFINITION_ID)).thenReturn(bpmnModel);
+
+            Map<String, Object> variables = new HashMap<>();
+            variables.put("initiator", INITIATOR_ID);
+            when(runtimeService.getVariables(PROCESS_INSTANCE_ID)).thenReturn(variables);
+
+            TaskAssigneeResolver.ResolveResult result = TaskAssigneeResolver.ResolveResult.builder()
+                    .assignee(INITIATOR_ID)
+                    .requiresClaim(false)
+                    .build();
+            when(taskAssigneeResolver.resolve(eq("INITIATOR"), isNull(), eq(INITIATOR_ID))).thenReturn(result);
+
+            FlowableEntityEventImpl event = createTaskCreatedEvent(task);
+            listener.onEvent(event);
+
+            verify(taskService).setAssignee(TASK_ID, INITIATOR_ID);
+        }
+
+        @Test
         @DisplayName("Should handle direct assignment types")
         void shouldHandleDirectAssignmentTypes() {
             TaskEntity task = createMockTask();
@@ -293,6 +318,51 @@ class TaskAssignmentListenerTest {
         return event;
     }
     
+    /** assigneeType=expression + assigneeValue=${initiator}（旧版 TaskProperties） */
+    private BpmnModel createBpmnModelWithLegacyExpressionInitiator() {
+        BpmnModel bpmnModel = new BpmnModel();
+        org.flowable.bpmn.model.Process process = new org.flowable.bpmn.model.Process();
+        process.setId("Process_1");
+
+        UserTask userTask = new UserTask();
+        userTask.setId(TASK_DEFINITION_KEY);
+        userTask.setName("Test Task");
+
+        Map<String, List<ExtensionElement>> extensionElements = new HashMap<>();
+
+        ExtensionElement propertiesElement = new ExtensionElement();
+        propertiesElement.setName("properties");
+        propertiesElement.setNamespace("http://custom.bpmn.io/schema");
+
+        Map<String, List<ExtensionElement>> childElements = new HashMap<>();
+        List<ExtensionElement> propertyElements = new ArrayList<>();
+
+        ExtensionElement typeProp = new ExtensionElement();
+        typeProp.setName("property");
+        typeProp.setNamespace("http://custom.bpmn.io/schema");
+        typeProp.addAttribute(createAttribute("name", "assigneeType"));
+        typeProp.addAttribute(createAttribute("value", "expression"));
+        propertyElements.add(typeProp);
+
+        ExtensionElement valueProp = new ExtensionElement();
+        valueProp.setName("property");
+        valueProp.setNamespace("http://custom.bpmn.io/schema");
+        valueProp.addAttribute(createAttribute("name", "assigneeValue"));
+        valueProp.addAttribute(createAttribute("value", "${initiator}"));
+        propertyElements.add(valueProp);
+
+        childElements.put("property", propertyElements);
+        propertiesElement.setChildElements(childElements);
+
+        extensionElements.put("properties", Arrays.asList(propertiesElement));
+        userTask.setExtensionElements(extensionElements);
+
+        process.addFlowElement(userTask);
+        bpmnModel.addProcess(process);
+
+        return bpmnModel;
+    }
+
     private BpmnModel createBpmnModelWithExtensions(String assigneeType, String roleId, String businessUnitId) {
         BpmnModel bpmnModel = new BpmnModel();
         org.flowable.bpmn.model.Process process = new org.flowable.bpmn.model.Process();

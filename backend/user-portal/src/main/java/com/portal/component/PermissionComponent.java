@@ -194,32 +194,56 @@ public class PermissionComponent {
      * 申请加入业务单元（需要审批）
      */
     public PermissionRequest requestBusinessUnitJoin(String userId, String businessUnitId, String reason) {
+        return requestBusinessUnitJoinWithRole(userId, businessUnitId, null, reason);
+    }
+
+    /**
+     * 申请加入业务单元，并指定该业务单元下的一条 Eligible Role（与 admin 中 BU 绑定角色一致）
+     */
+    public PermissionRequest requestBusinessUnitJoinWithRole(String userId, String businessUnitId, String roleId, String reason) {
         // 获取业务单元信息
         Map<String, Object> businessUnit = virtualGroupAccessComponent.getBusinessUnitById(businessUnitId);
         if (businessUnit == null) {
             throw new IllegalArgumentException("业务单元不存在: " + businessUnitId);
         }
-        
+
         // 检查是否已是成员
         if (virtualGroupAccessComponent.isUserInBusinessUnit(userId, businessUnitId)) {
             throw new IllegalArgumentException("您已是该业务单元成员");
         }
-        
+
+        String roleName = null;
+        if (roleId != null && !roleId.isBlank()) {
+            List<Map<String, Object>> bound = virtualGroupAccessComponent.getBusinessUnitBoundRoles(businessUnitId);
+            boolean eligible = bound.stream().anyMatch(r -> roleId.equals(String.valueOf(r.get("id"))));
+            if (!eligible) {
+                throw new IllegalArgumentException("所选角色不在该业务单元的可申请角色列表中");
+            }
+            roleName = bound.stream()
+                    .filter(r -> roleId.equals(String.valueOf(r.get("id"))))
+                    .map(r -> Objects.toString(r.get("name"), null))
+                    .findFirst()
+                    .orElse(null);
+        }
+
         // 创建申请记录 - 状态为 PENDING，等待审批
         PermissionRequest request = PermissionRequest.builder()
                 .applicantId(userId)
                 .requestType(PermissionRequestType.BUSINESS_UNIT_JOIN)
                 .businessUnitId(businessUnitId)
                 .businessUnitName((String) businessUnit.get("name"))
+                .roleId(roleId != null && !roleId.isBlank() ? roleId : null)
+                .roleName(roleName)
                 .reason(reason)
                 .status(PermissionRequestStatus.PENDING)
                 .createdAt(LocalDateTime.now())
                 .build();
-        
+
         // 保存申请记录
         request = permissionRequestRepository.save(request);
-        log.info("Business unit join request created: user={}, businessUnit={}, requestId={}", userId, businessUnitId, request.getId());
-        
+        log.info("Business unit join request created: user={}, businessUnit={}, roleId={}, requestId={}",
+                userId, businessUnitId, roleId, request.getId());
+
         return request;
     }
 
@@ -278,10 +302,11 @@ public class PermissionComponent {
         List<String> approverVgIds = virtualGroupAccessComponent.getApproverVirtualGroupIds(userId);
         List<String> approverBuIds = virtualGroupAccessComponent.getApproverBusinessUnitIds(userId);
         
-        // 获取所有已处理的申请（APPROVED 或 REJECTED）
+        // 获取所有已处理的申请（APPROVED / REJECTED / CANCELLED）
         List<PermissionRequestStatus> processedStatuses = Arrays.asList(
                 PermissionRequestStatus.APPROVED, 
-                PermissionRequestStatus.REJECTED
+                PermissionRequestStatus.REJECTED,
+                PermissionRequestStatus.CANCELLED
         );
         Page<PermissionRequest> allProcessed = permissionRequestRepository.findByStatusIn(processedStatuses, pageable);
         
@@ -347,6 +372,26 @@ public class PermissionComponent {
                 );
                 if (!success) {
                     errorMessage = "添加用户到业务单元失败";
+                } else if (request.getRoleId() != null && !request.getRoleId().isBlank()) {
+                    boolean roleOk = virtualGroupAccessComponent.assignUserBusinessUnitRole(
+                            request.getApplicantId(),
+                            request.getBusinessUnitId(),
+                            request.getRoleId());
+                    if (!roleOk) {
+                        errorMessage = "用户已加入业务单元，但分配业务单元角色失败";
+                    } else {
+                        // Role Members page在 admin-center 里是按“角色绑定的虚拟组成员”展示。
+                        // 为了让 BU join + 选角后的结果在该页面可见，同步把用户加入该虚拟组。
+                        String boundVirtualGroupId = virtualGroupAccessComponent
+                                .getVirtualGroupIdByBoundRoleId(request.getRoleId());
+                        if (boundVirtualGroupId != null && !boundVirtualGroupId.isBlank()) {
+                            virtualGroupAccessComponent.addUserToVirtualGroup(
+                                    request.getApplicantId(),
+                                    boundVirtualGroupId,
+                                    "审批通过: " + (comment != null ? comment : "")
+                            );
+                        }
+                    }
                 }
             } else if (request.getRequestType() == PermissionRequestType.ROLE_ASSIGNMENT) {
                 success = roleAccessComponent.assignRoleToUser(
@@ -610,7 +655,9 @@ public class PermissionComponent {
         if (request.getStatus() != PermissionRequestStatus.PENDING) {
             return false;
         }
-        permissionRequestRepository.delete(request);
+        // Keep request record for history view.
+        request.setStatus(PermissionRequestStatus.CANCELLED);
+        permissionRequestRepository.save(request);
         return true;
     }
 

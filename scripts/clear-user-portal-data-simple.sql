@@ -1,5 +1,9 @@
 -- 清理 User Portal 数据（简化版）
 -- 执行前请确保已备份数据库！
+--
+-- 注意：本脚本仅 TRUNCATE 部分 Flowable 表。若曾对整个 act_* / flw_* 做过 TRUNCATE
+-- 导致 workflow-engine 启动报 ProcessDbSchemaManager / dbVersionProperty NPE，请执行
+-- deploy/init-scripts/99-maintenance/01-repair-flowable-schema.sql 后重启引擎。
 
 BEGIN;
 

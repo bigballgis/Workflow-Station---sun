@@ -56,7 +56,7 @@ BEGIN
     WHERE function_unit_id = v_function_unit_id AND form_name = 'Loan Application Form';
 
     SELECT id INTO v_approval_form_id FROM dw_form_definitions
-    WHERE function_unit_id = v_function_unit_id AND form_name = 'Loan Approval Form';
+    WHERE function_unit_id = v_function_unit_id AND form_name = 'Loan Underwriting Task Form';
 
     SELECT id INTO v_credit_check_form_id FROM dw_form_definitions
     WHERE function_unit_id = v_function_unit_id AND form_name = 'Credit Check Form';
@@ -171,7 +171,7 @@ BEGIN
           <custom:property name="assigneeType" value="VIRTUAL_GROUP" />
           <custom:property name="assigneeValue" value="DOCUMENT_VERIFIERS" />
           <custom:property name="formId" value="{{APPROVAL_FORM_ID}}" />
-          <custom:property name="formName" value="Loan Approval Form" />
+          <custom:property name="formName" value="Loan Underwriting Task Form" />
           <custom:property name="formReadOnly" value="false" />
           <custom:property name="actionIds" value="[{{ACTION_VERIFY_DOCS}},{{ACTION_APPROVE}},{{ACTION_REJECT}}]" />
           <custom:property name="actionNames" value="[&quot;Verify Documents&quot;,&quot;Approve&quot;,&quot;Reject&quot;]" />
@@ -195,7 +195,7 @@ BEGIN
           <custom:property name="assigneeType" value="VIRTUAL_GROUP" />
           <custom:property name="assigneeValue" value="CREDIT_OFFICERS" />
           <custom:property name="formId" value="{{APPROVAL_FORM_ID}}" />
-          <custom:property name="formName" value="Loan Approval Form" />
+          <custom:property name="formName" value="Loan Underwriting Task Form" />
           <custom:property name="formReadOnly" value="false" />
           <custom:property name="actionIds" value="[{{ACTION_CREDIT_CHECK}},{{ACTION_VIEW_CREDIT}},{{ACTION_APPROVE}},{{ACTION_REJECT}}]" />
           <custom:property name="actionNames" value="[&quot;Perform Credit Check&quot;,&quot;View Credit Report&quot;,&quot;Approve&quot;,&quot;Reject&quot;]" />
@@ -212,7 +212,7 @@ BEGIN
           <custom:property name="assigneeType" value="VIRTUAL_GROUP" />
           <custom:property name="assigneeValue" value="RISK_OFFICERS" />
           <custom:property name="formId" value="{{APPROVAL_FORM_ID}}" />
-          <custom:property name="formName" value="Loan Approval Form" />
+          <custom:property name="formName" value="Loan Underwriting Task Form" />
           <custom:property name="formReadOnly" value="false" />
           <custom:property name="actionIds" value="[{{ACTION_ASSESS_RISK}},{{ACTION_LOW_RISK}},{{ACTION_HIGH_RISK}},{{ACTION_REQUEST_INFO}}]" />
           <custom:property name="actionNames" value="[&quot;Assess Risk&quot;,&quot;Mark as Low Risk&quot;,&quot;Mark as High Risk&quot;,&quot;Request Additional Info&quot;]" />
@@ -236,7 +236,7 @@ BEGIN
         <custom:properties>
           <custom:property name="assigneeType" value="ENTITY_MANAGER" />
           <custom:property name="formId" value="{{APPROVAL_FORM_ID}}" />
-          <custom:property name="formName" value="Loan Approval Form" />
+          <custom:property name="formName" value="Loan Underwriting Task Form" />
           <custom:property name="formReadOnly" value="false" />
           <custom:property name="actionIds" value="[{{ACTION_APPROVE}},{{ACTION_REJECT}},{{ACTION_REQUEST_INFO}}]" />
           <custom:property name="actionNames" value="[&quot;Approve&quot;,&quot;Reject&quot;,&quot;Request Additional Info&quot;]" />
@@ -259,7 +259,7 @@ BEGIN
         <custom:properties>
           <custom:property name="assigneeType" value="FUNCTION_MANAGER" />
           <custom:property name="formId" value="{{APPROVAL_FORM_ID}}" />
-          <custom:property name="formName" value="Loan Approval Form" />
+          <custom:property name="formName" value="Loan Underwriting Task Form" />
           <custom:property name="formReadOnly" value="false" />
           <custom:property name="actionIds" value="[{{ACTION_APPROVE}},{{ACTION_REJECT}}]" />
           <custom:property name="actionNames" value="[&quot;Approve&quot;,&quot;Reject&quot;]" />
@@ -518,7 +518,7 @@ BEGIN
     RAISE NOTICE 'Function Unit ID: %', v_function_unit_id;
     RAISE NOTICE 'Form IDs used:';
     RAISE NOTICE '  APPLICATION_FORM_ID: %', v_application_form_id;
-    RAISE NOTICE '  APPROVAL_FORM_ID: %', v_approval_form_id;
+    RAISE NOTICE '  UNDERWRITING_TASK_FORM_ID (Loan Underwriting Task Form): %', v_approval_form_id;
     RAISE NOTICE '  CREDIT_CHECK_FORM_ID: %', v_credit_check_form_id;
     RAISE NOTICE '  RISK_ASSESSMENT_FORM_ID: %', v_risk_assessment_form_id;
     RAISE NOTICE '  DISBURSEMENT_FORM_ID: %', v_disbursement_form_id;

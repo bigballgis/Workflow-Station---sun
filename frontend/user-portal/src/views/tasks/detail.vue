@@ -202,15 +202,9 @@
         </div>
       </div>
 
-      <!-- Task 19.2: 变更历史面板 -->
+      <!-- Task 19.2: 变更历史面板（标题与折叠由 ChangeHistoryPanel 内部处理） -->
       <div v-if="taskInfo.processInstanceId" class="section change-history-section">
-        <div class="section-header">
-          <el-icon><Document /></el-icon>
-          <span>{{ t('changeHistory.title') }}</span>
-        </div>
-        <div class="section-content">
-          <ChangeHistoryPanel :process-instance-id="taskInfo.processInstanceId" />
-        </div>
+        <ChangeHistoryPanel :process-instance-id="taskInfo.processInstanceId" />
       </div>
 
       <!-- 第四部分：流转记录 -->

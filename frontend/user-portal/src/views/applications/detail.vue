@@ -118,6 +118,7 @@
         <div class="section-content">
           <div v-if="formFields.length > 0 || formTabs.length > 0" class="form-container">
             <FormRenderer
+              :key="`app-form-${processId}`"
               :fields="formFields"
               :tabs="formTabs"
               v-model="formData"
@@ -147,15 +148,9 @@
         </div>
       </div>
 
-      <!-- Task 19.2: 变更历史面板 -->
+      <!-- Task 19.2: 变更历史面板（标题与折叠由 ChangeHistoryPanel 内部处理） -->
       <div class="section change-history-section">
-        <div class="section-header">
-          <el-icon><Document /></el-icon>
-          <span>{{ t('changeHistory.title') }}</span>
-        </div>
-        <div class="section-content">
-          <ChangeHistoryPanel :process-instance-id="processId" />
-        </div>
+        <ChangeHistoryPanel :process-instance-id="processId" />
       </div>
 
       <!-- 第四部分：流转记录 -->
@@ -217,6 +212,23 @@ const processId = route.params.id as string
 const snapshotTime = route.query.snapshotTime as string | undefined
 // 从 completed tasks 进来时携带的任务名称，用于高亮该节点为 current
 const snapshotTaskName = route.query.snapshotTaskName as string | undefined
+
+/** 与 request 拦截器一致，用于判断是否为「发起人查看自己的申请」 */
+function getPortalUserId(): string | null {
+  let userId = localStorage.getItem('userId')
+  if (!userId) {
+    const userStr = localStorage.getItem('user')
+    if (userStr) {
+      try {
+        const user = JSON.parse(userStr)
+        userId = user.userId || user.id
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+  return userId || null
+}
 
 const loading = ref(true)
 const urging = ref(false)
@@ -449,12 +461,28 @@ const loadFunctionUnitContent = async (processKey: string) => {
     }
     
     let currentFormInfo: { formId: string | null, formName: string | null } = { formId: null, formName: null }
-    
+    /** 发起人查看自己的申请（非任务快照）：只展示流程上第一个 userTask 的表单，避免把审批节点表单当成「申请单」 */
+    let useInitiatorFormOnly = false
+
     if (content.processes?.length > 0) {
-      // 解析 BPMN 并获取当前节点的 formId 和 formName
-      currentFormInfo = parseBpmnXmlAndGetFormId(content.processes[0].data)
-      bpmnXml.value = content.processes[0].data
-      parseBpmnXml(content.processes[0].data)
+      const xml = content.processes[0].data
+      const viewerId = getPortalUserId()
+      const initiatorId = (processInfo.value.startUserId || '').trim()
+      useInitiatorFormOnly =
+        !!viewerId &&
+        !!initiatorId &&
+        viewerId.trim() === initiatorId &&
+        !snapshotTaskName &&
+        !snapshotTime
+
+      if (useInitiatorFormOnly) {
+        currentFormInfo = parseBpmnXmlAndGetFirstUserTaskFormInfo(xml)
+        // 解析不到时保持空，由下方默认选中 forms[0]，避免回退到「当前节点」又选中审批表单
+      } else {
+        currentFormInfo = parseBpmnXmlAndGetFormId(xml)
+      }
+      bpmnXml.value = xml
+      parseBpmnXml(xml)
     }
     
     if (content.forms?.length > 0) {      // 根据当前节点的 formId 选择正确的表单
@@ -544,8 +572,8 @@ const loadFunctionUnitContent = async (processKey: string) => {
       }
       subTableBindings.value = bindings
 
-      // 收集当前节点之前所有节点绑定的不同表单（只读展示）
-      if (content.processes?.length > 0) {
+      // 收集当前节点之前所有节点绑定的不同表单（只读展示）；发起人看自己的申请时不展示「前置」块（避免申请单 + 审批表单双显）
+      if (content.processes?.length > 0 && !useInitiatorFormOnly) {
         const prevFormIds = parseBpmnXmlAndGetPreviousFormIds(content.processes[0].data)
         const collectedPrevForms: PreviousFormEntry[] = []
         const savedSubTables = formData.value.__subTables__
@@ -689,6 +717,81 @@ const parseBpmnXmlAndGetFormId = (xml: string): { formId: string | null, formNam
     console.error('Failed to parse BPMN for formId:', error)
   }
   
+  return { formId: null, formName: null }
+}
+
+/** 从 startEvent 起 BFS，取流程中第一个 userTask 绑定的表单（发起人申请内容） */
+const parseBpmnXmlAndGetFirstUserTaskFormInfo = (xml: string): { formId: string | null, formName: string | null } => {
+  if (!xml) return { formId: null, formName: null }
+  try {
+    const parser = new DOMParser()
+    const doc = parser.parseFromString(xml, 'text/xml')
+    const allElements = doc.getElementsByTagName('*')
+    const tasks = new Map<string, { name: string; formId: string | null; formName: string | null }>()
+    const flows: Array<{ source: string; target: string }> = []
+
+    for (let i = 0; i < allElements.length; i++) {
+      const el = allElements[i]
+      const localName = el.localName || el.nodeName.split(':').pop()
+      if (localName === 'userTask') {
+        const id = el.getAttribute('id') || ''
+        const name = el.getAttribute('name') || ''
+        let formId: string | null = null
+        let formName: string | null = null
+        const props = el.getElementsByTagName('*')
+        for (let j = 0; j < props.length; j++) {
+          const p = props[j]
+          const ln = p.localName || p.nodeName.split(':').pop()
+          if (ln === 'property' || ln === 'values') {
+            const n = p.getAttribute('name')
+            const v = p.getAttribute('value')
+            if (n === 'formId' && v) formId = v
+            if (n === 'formName' && v) formName = v
+          }
+        }
+        tasks.set(id, { name, formId, formName })
+      } else if (localName === 'sequenceFlow') {
+        flows.push({ source: el.getAttribute('sourceRef') || '', target: el.getAttribute('targetRef') || '' })
+      }
+    }
+
+    let startId = ''
+    for (let i = 0; i < allElements.length; i++) {
+      const el = allElements[i]
+      if ((el.localName || el.nodeName.split(':').pop()) === 'startEvent') {
+        startId = el.getAttribute('id') || ''
+        break
+      }
+    }
+
+    const forwardAdj = new Map<string, string[]>()
+    for (const f of flows) {
+      if (!forwardAdj.has(f.source)) forwardAdj.set(f.source, [])
+      forwardAdj.get(f.source)!.push(f.target)
+    }
+
+    if (!startId) return { formId: null, formName: null }
+
+    const visited = new Set<string>()
+    const queue: string[] = [startId]
+    visited.add(startId)
+
+    while (queue.length > 0) {
+      const node = queue.shift()!
+      if (tasks.has(node)) {
+        const info = tasks.get(node)!
+        return { formId: info.formId, formName: info.formName }
+      }
+      for (const next of forwardAdj.get(node) || []) {
+        if (!visited.has(next)) {
+          visited.add(next)
+          queue.push(next)
+        }
+      }
+    }
+  } catch (e) {
+    console.error('Failed to parse BPMN for first user task form:', e)
+  }
   return { formId: null, formName: null }
 }
 
@@ -1042,26 +1145,30 @@ const parseFormConfig = (configStr: string) => {
       const tabsRule = rules.find((r: any) => r.type === 'el-tabs')
       
       if (tabsRule && tabsRule.children && Array.isArray(tabsRule.children)) {
-        // 有 Tab 布局
+        // 有 Tab 布局（与 processes/start.vue 一致：整棵 tabPane.children 交给 extractFieldsRecursive，避免重复/串 tab）
         const tabs: FormTab[] = []
         
         for (const tabPane of tabsRule.children) {
           if (tabPane.type === 'el-tab-pane' && tabPane.props) {
-            const tabName = tabPane.props.name || `tab_${tabs.length}`
-            const tabLabel = tabPane.props.label || `Tab ${tabs.length + 1}`
-            
-            const tabFields: FormField[] = []
-            if (tabPane.children && Array.isArray(tabPane.children)) {
-              for (const item of tabPane.children) {
-                if (item.field) {
-                  const field = convertFormCreateRule(item)
-                  if (field) tabFields.push(field)
-                }
-                if (item.children && Array.isArray(item.children)) {
-                  tabFields.push(...extractFieldsRecursive(item.children))
-                }
-              }
+            let tabName: string
+            const rawName = tabPane.props.name
+            if (rawName === undefined || rawName === null || rawName === '') {
+              tabName = `tab_${tabs.length}`
+            } else {
+              tabName = String(rawName)
             }
+            let uniqueName = tabName
+            let dup = 0
+            while (tabs.some(t => t.name === uniqueName)) {
+              uniqueName = `${tabName}__${++dup}`
+            }
+            tabName = uniqueName
+
+            const tabLabel = tabPane.props.label || `Tab ${tabs.length + 1}`
+            const tabFields: FormField[] =
+              tabPane.children && Array.isArray(tabPane.children)
+                ? extractFieldsRecursive(tabPane.children)
+                : []
             
             tabs.push({ name: tabName, label: tabLabel, fields: tabFields })
           }
@@ -1080,11 +1187,22 @@ const parseFormConfig = (configStr: string) => {
   }
 }
 
+// form-create 专有容器：不递归其子树（与 start.vue 一致）
+const FC_SKIP_TYPES = new Set(['group', 'subForm', 'tableForm', 'tableFormColumn'])
+
 // 递归提取字段
 const extractFieldsRecursive = (items: any[]): FormField[] => {
   const fields: FormField[] = []
   for (const item of items) {
-    if (item.type === 'lookup' && item.field) {
+    if (item.type === 'subTable' && item._bindingId != null) {
+      fields.push({
+        key: `__subTable_${item._bindingId}`,
+        label: '',
+        type: 'subTable',
+        _bindingId: item._bindingId,
+        span: 24,
+      })
+    } else if (item.type === 'lookup' && item.field) {
       let lookupCfg: any = {}
       try {
         const raw = item.props?.lookupConfig
@@ -1113,11 +1231,16 @@ const extractFieldsRecursive = (items: any[]): FormField[] => {
         _lookupViewFields: resolvedViewFields
       }
       fields.push(field)
+    } else if (FC_SKIP_TYPES.has(item.type)) {
+      continue
+    } else if (item.type === 'el-row' || item.type === 'el-col') {
+      if (item.children && Array.isArray(item.children)) {
+        fields.push(...extractFieldsRecursive(item.children))
+      }
     } else if (item.field) {
       const field = convertFormCreateRule(item)
       if (field) fields.push(field)
-    }
-    if (item.children && Array.isArray(item.children)) {
+    } else if (item.children && Array.isArray(item.children)) {
       fields.push(...extractFieldsRecursive(item.children))
     }
   }

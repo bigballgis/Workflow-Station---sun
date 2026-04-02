@@ -5,7 +5,6 @@ import lombok.Builder;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 
-import jakarta.validation.constraints.NotBlank;
 import java.util.List;
 import java.util.Map;
 
@@ -18,8 +17,10 @@ import java.util.Map;
 @AllArgsConstructor
 public class ProcessStartRequest {
 
-    /** 流程定义Key */
-    @NotBlank(message = "{validation.process_definition_key_required}")
+    /**
+     * 流程定义 Key（与路径 {@code POST /processes/{processKey}/start} 通常一致）。
+     * 可省略：缺省时由网关/控制器使用路径变量 {@code processKey} 填充。
+     */
     private String processDefinitionKey;
 
     /** 业务Key */

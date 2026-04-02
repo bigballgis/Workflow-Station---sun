@@ -344,6 +344,9 @@ export default {
     stageBindingHint: '選擇一個或多個流程階段（userTask 節點）綁定到此任務表單',
     // Process form uniqueness
     processFormAlreadyExists: '該功能單元已存在 PROCESS 表單',
+    processFormLimitHint: '每個功能單元只能有一個流程表單。新建前請調整或刪除既有流程表單。',
+    subTableOnlySubBinding:
+      '子表佔位只能綁定「子表（SUB）」類型的表綁定；請先在表綁定管理中新增主表與子表（含外鍵），再在畫布中選擇對應子表綁定。',
     // Field name autocomplete & validation
     fieldNameAutocomplete: '欄位名',
     fieldNameNotInDataTable: '欄位名 "{name}" 不存在於 Data_Table 欄位中',
@@ -988,7 +991,10 @@ export default {
     deleteFailed: '刪除失敗',
     updateSuccess: '更新成功',
     addSuccess: '新增成功',
-    operationFailed: '操作失敗'
+    operationFailed: '操作失敗',
+    primarySubOnlyHint:
+      '流程/任務表單僅支援「一主多子」：先綁定主表（MAIN），再綁定子表（SUB）並填寫指向主表的外鍵；子表區塊請從左側拖入「子表」元件並在屬性中選擇子表綁定。不支援關聯表（RELATED）綁定。',
+    foreignKeyRequired: '子表綁定必須選擇外鍵欄位'
   },
   subTable: {
     defaultTitle: '子表資料',

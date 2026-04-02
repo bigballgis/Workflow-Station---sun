@@ -15,6 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -134,6 +135,9 @@ public class ProcessController {
             @CurrentUserId String userId,
             @PathVariable String processKey,
             @RequestBody @Valid ProcessStartRequest request) {
+        if (!StringUtils.hasText(request.getProcessDefinitionKey())) {
+            request.setProcessDefinitionKey(processKey);
+        }
         ProcessInstanceInfo instance = processComponent.startProcess(userId, processKey, request);
         return ApiResponse.success(instance);
     }

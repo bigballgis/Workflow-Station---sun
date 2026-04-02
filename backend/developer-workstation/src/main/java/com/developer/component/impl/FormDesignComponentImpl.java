@@ -12,6 +12,7 @@ import com.developer.entity.TableDefinition;
 import com.developer.enums.BindingMode;
 import com.developer.enums.BindingType;
 import com.developer.enums.FormType;
+import com.developer.enums.TableType;
 import com.developer.exception.BusinessException;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.FormDefinitionRepository;
@@ -58,6 +59,10 @@ public class FormDesignComponentImpl implements FormDesignComponent {
                     i18nService.getMessage("form.name_exists", request.getFormName()),
                     i18nService.getMessage("form.use_other_name"));
         }
+
+        if (request.getFormType() == FormType.PROCESS) {
+            validateProcessFormUniqueness(functionUnitId);
+        }
         
         FormDefinition formDefinition = FormDefinition.builder()
                 .functionUnit(functionUnit)
@@ -86,6 +91,16 @@ public class FormDesignComponentImpl implements FormDesignComponent {
             throw new BusinessException("CONFLICT_FORM_NAME_EXISTS", 
                     i18nService.getMessage("form.name_exists", request.getFormName()),
                     i18nService.getMessage("form.use_other_name"));
+        }
+
+        if (request.getFormType() == FormType.PROCESS) {
+            long fuId = formDefinition.getFunctionUnit().getId();
+            long processCount = formDefinitionRepository.countByFunctionUnitIdAndFormType(fuId, FormType.PROCESS);
+            if (formDefinition.getFormType() != FormType.PROCESS && processCount > 0) {
+                throw new BusinessException("PROCESS_FORM_ALREADY_EXISTS",
+                        i18nService.getMessage("form.process_form_already_exists"),
+                        i18nService.getMessage("form.only_one_process_form"));
+            }
         }
         
         formDefinition.setFormName(request.getFormName());
@@ -235,6 +250,8 @@ public class FormDesignComponentImpl implements FormDesignComponent {
                         i18nService.getMessage("form.remove_existing_primary"));
             }
         }
+
+        enforcePrimarySubBindingRules(form, request, table, isRelationTable);
         
         // 验证外键字段（子表需要，关联表的本地表也需要）
         if (request.getBindingType() != BindingType.PRIMARY && request.getForeignKeyField() != null && table != null) {
@@ -272,6 +289,12 @@ public class FormDesignComponentImpl implements FormDesignComponent {
     public FormTableBinding updateBinding(Long bindingId, FormTableBindingRequest request) {
         FormTableBinding binding = formTableBindingRepository.findById(bindingId)
                 .orElseThrow(() -> new ResourceNotFoundException("FormTableBinding", bindingId));
+
+        FormDefinition form = getById(binding.getFormId());
+        boolean isRelationTable = request.getBindingType() == BindingType.RELATED
+                && request.getRelationTableId() != null;
+        TableDefinition tableForRules = binding.getTable();
+        enforcePrimarySubBindingRules(form, request, tableForRules, isRelationTable);
         
         // 如果更改了绑定类型为主表，检查唯一性
         if (request.getBindingType() == BindingType.PRIMARY && binding.getBindingType() != BindingType.PRIMARY) {
@@ -324,6 +347,47 @@ public class FormDesignComponentImpl implements FormDesignComponent {
             throw new BusinessException("INVALID_FOREIGN_KEY", 
                     i18nService.getMessage("form.foreign_key_not_found", foreignKeyField),
                     i18nService.getMessage("form.check_field_name"));
+        }
+    }
+
+    /**
+     * PROCESS / TASK 表单：仅允许主表 + 子表的一对多绑定；禁止 RELATED / 已发布关联表绑定；
+     * 主表绑定须对应 MAIN 物理表；子表绑定须对应 SUB 物理表、且须先存在主表绑定并填写外键字段。
+     */
+    private void enforcePrimarySubBindingRules(FormDefinition form, FormTableBindingRequest request,
+            TableDefinition table, boolean isDeployedRelationTableBinding) {
+        FormType ft = form.getFormType();
+        if (ft != FormType.PROCESS && ft != FormType.TASK) {
+            return;
+        }
+        if (request.getBindingType() == BindingType.RELATED || isDeployedRelationTableBinding) {
+            throw new BusinessException("RELATED_BINDING_NOT_ALLOWED",
+                    i18nService.getMessage("form.related_binding_not_allowed"),
+                    i18nService.getMessage("form.use_primary_sub_only"));
+        }
+        if (request.getBindingType() == BindingType.PRIMARY) {
+            if (table != null && table.getTableType() != TableType.MAIN) {
+                throw new BusinessException("PRIMARY_REQUIRES_MAIN_TABLE",
+                        i18nService.getMessage("form.primary_binding_requires_main_table"),
+                        i18nService.getMessage("form.choose_main_physics_table"));
+            }
+        }
+        if (request.getBindingType() == BindingType.SUB) {
+            if (!formTableBindingRepository.existsByFormIdAndBindingType(form.getId(), BindingType.PRIMARY)) {
+                throw new BusinessException("SUB_REQUIRES_PRIMARY",
+                        i18nService.getMessage("form.primary_binding_required_before_sub"),
+                        i18nService.getMessage("form.add_primary_binding_first"));
+            }
+            if (table != null && table.getTableType() != TableType.SUB) {
+                throw new BusinessException("SUB_BINDING_REQUIRES_SUB_TABLE",
+                        i18nService.getMessage("form.sub_binding_requires_sub_table"),
+                        i18nService.getMessage("form.choose_sub_physics_table"));
+            }
+            if (request.getForeignKeyField() == null || request.getForeignKeyField().isBlank()) {
+                throw new BusinessException("SUB_REQUIRES_FOREIGN_KEY",
+                        i18nService.getMessage("form.sub_binding_requires_foreign_key"),
+                        i18nService.getMessage("form.specify_fk_to_main"));
+            }
         }
     }
     

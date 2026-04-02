@@ -1,5 +1,6 @@
 <template>
-  <div v-show="visible">
+  <!-- 占满表单项内容区，否则 el-select 等 width:100% 会相对收缩父级计算，出现仅显示箭头 -->
+  <div v-show="visible" class="field-renderer-root">
     <!-- text / input -->
     <template v-if="field.type === 'text' || field.type === 'input'">
       <el-input
@@ -849,6 +850,12 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped lang="scss">
+.field-renderer-root {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
 .color-swatch {
   display: inline-block;
   width: 20px;

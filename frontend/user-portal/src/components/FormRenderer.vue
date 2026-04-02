@@ -13,8 +13,8 @@
       <template v-if="hasTabs">
         <el-tabs v-model="activeTab" type="border-card">
           <el-tab-pane
-            v-for="tab in tabs"
-            :key="tab.name"
+            v-for="(tab, tabIdx) in tabs"
+            :key="`tab-${tabIdx}-${String(tab.name)}`"
             :label="tab.label"
             :name="tab.name"
           >
@@ -264,11 +264,25 @@ provide('departmentTreeLoading', departmentTreeLoading)
 const hasTabs = computed(() => props.tabs && props.tabs.length > 0)
 const activeTab = ref('')
 
-watch(() => props.tabs, (newTabs) => {
-  if (newTabs && newTabs.length > 0 && !activeTab.value) {
-    activeTab.value = newTabs[0].name
-  }
-}, { immediate: true })
+watch(
+  () => props.tabs,
+  (newTabs) => {
+    if (!newTabs?.length) {
+      activeTab.value = ''
+      return
+    }
+    const names = newTabs.map(t => t.name)
+    const current = activeTab.value
+    const stillValid =
+      current !== '' &&
+      current !== undefined &&
+      names.some(n => String(n) === String(current))
+    if (!stillValid) {
+      activeTab.value = names[0]!
+    }
+  },
+  { immediate: true, deep: true },
+)
 
 const bindingMap = computed(() => {
   const map = new Map<number, SubTableBinding>()
@@ -737,6 +751,25 @@ defineExpose({
     font-weight: 500;
     white-space: nowrap;
     padding-right: 16px;
+  }
+
+  /* 表单项内容区在 flex 布局下需可收缩并占满剩余宽度，下拉/日期等才能正确 100% */
+  :deep(.el-form-item__content) {
+    flex: 1;
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  :deep(.el-form-item__content .el-select),
+  :deep(.el-form-item__content .el-tree-select),
+  :deep(.el-form-item__content .el-cascader),
+  :deep(.el-form-item__content .el-date-editor) {
+    width: 100% !important;
+  }
+
+  :deep(.el-form-item__content .el-select .el-select__wrapper),
+  :deep(.el-form-item__content .el-tree-select .el-select__wrapper) {
+    width: 100%;
   }
 
   :deep(.el-tabs--border-card) {

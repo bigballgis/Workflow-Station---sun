@@ -9,8 +9,11 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.*;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
-import java.util.ArrayList;
+import jakarta.servlet.http.HttpServletRequest;
+
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -63,6 +66,27 @@ public class WorkflowEngineClient {
         return cachedAvailable;
     }
 
+    /**
+     * workflow-engine 对 /api/v1/** 要求已认证 JWT（与门户共用 {@code JWT_SECRET}）。
+     * 将当前 HTTP 请求的 {@code Authorization} 原样转发；无请求上下文时不加头（如定时任务可能 403）。
+     */
+    private void forwardInboundAuthorization(HttpHeaders headers) {
+        var attrs = RequestContextHolder.getRequestAttributes();
+        if (attrs instanceof ServletRequestAttributes servletAttrs) {
+            HttpServletRequest request = servletAttrs.getRequest();
+            String auth = request.getHeader(HttpHeaders.AUTHORIZATION);
+            if (auth != null && !auth.isBlank()) {
+                headers.set(HttpHeaders.AUTHORIZATION, auth);
+            }
+        }
+    }
+
+    private HttpEntity<Void> authorizedGetEntity() {
+        HttpHeaders headers = new HttpHeaders();
+        forwardInboundAuthorization(headers);
+        return new HttpEntity<>(headers);
+    }
+
     // ==================== 流程部署与启动 ====================
 
     /**
@@ -82,6 +106,7 @@ public class WorkflowEngineClient {
             
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
+            forwardInboundAuthorization(headers);
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
             
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
@@ -116,6 +141,7 @@ public class WorkflowEngineClient {
             
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
+            forwardInboundAuthorization(headers);
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
             
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
@@ -146,7 +172,7 @@ public class WorkflowEngineClient {
             String url = workflowEngineUrl + "/api/v1/tasks?userId=" + userId + "&page=" + page + "&size=" + size;
             
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                url, HttpMethod.GET, null,
+                url, HttpMethod.GET, authorizedGetEntity(),
                 new ParameterizedTypeReference<Map<String, Object>>() {});
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
@@ -169,7 +195,7 @@ public class WorkflowEngineClient {
             String url = workflowEngineUrl + "/api/v1/tasks?processInstanceId=" + processInstanceId + "&page=0&size=100";
             
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                url, HttpMethod.GET, null,
+                url, HttpMethod.GET, authorizedGetEntity(),
                 new ParameterizedTypeReference<Map<String, Object>>() {});
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
@@ -208,7 +234,7 @@ public class WorkflowEngineClient {
             }
             
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                urlBuilder.toString(), HttpMethod.GET, null,
+                urlBuilder.toString(), HttpMethod.GET, authorizedGetEntity(),
                 new ParameterizedTypeReference<Map<String, Object>>() {});
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
@@ -231,7 +257,7 @@ public class WorkflowEngineClient {
             String url = workflowEngineUrl + "/api/v1/tasks/" + taskId;
             
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                url, HttpMethod.GET, null,
+                url, HttpMethod.GET, authorizedGetEntity(),
                 new ParameterizedTypeReference<Map<String, Object>>() {});
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
@@ -254,7 +280,7 @@ public class WorkflowEngineClient {
             String url = workflowEngineUrl + "/api/v1/tasks/count?userId=" + userId;
             
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                url, HttpMethod.GET, null,
+                url, HttpMethod.GET, authorizedGetEntity(),
                 new ParameterizedTypeReference<Map<String, Object>>() {});
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
@@ -286,6 +312,7 @@ public class WorkflowEngineClient {
             
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
+            forwardInboundAuthorization(headers);
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
             
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
@@ -316,6 +343,7 @@ public class WorkflowEngineClient {
             
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
+            forwardInboundAuthorization(headers);
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
             
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
@@ -349,6 +377,7 @@ public class WorkflowEngineClient {
             
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
+            forwardInboundAuthorization(headers);
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
             
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
@@ -379,6 +408,7 @@ public class WorkflowEngineClient {
             
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
+            forwardInboundAuthorization(headers);
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
             
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
@@ -412,6 +442,7 @@ public class WorkflowEngineClient {
             
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
+            forwardInboundAuthorization(headers);
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
             
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
@@ -445,6 +476,7 @@ public class WorkflowEngineClient {
             
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
+            forwardInboundAuthorization(headers);
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
             
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
@@ -471,7 +503,7 @@ public class WorkflowEngineClient {
             String url = workflowEngineUrl + "/api/v1/tasks/" + taskId + "/returnable-activities";
             
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                url, HttpMethod.GET, null,
+                url, HttpMethod.GET, authorizedGetEntity(),
                 new ParameterizedTypeReference<Map<String, Object>>() {});
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
@@ -498,7 +530,7 @@ public class WorkflowEngineClient {
             String url = workflowEngineUrl + "/api/v1/processes/" + processInstanceId + "/status";
             
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                url, HttpMethod.GET, null,
+                url, HttpMethod.GET, authorizedGetEntity(),
                 new ParameterizedTypeReference<Map<String, Object>>() {});
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
@@ -521,7 +553,7 @@ public class WorkflowEngineClient {
             String url = workflowEngineUrl + "/api/v1/monitoring/processes/" + processInstanceId + "/current-activity";
             
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                url, HttpMethod.GET, null,
+                url, HttpMethod.GET, authorizedGetEntity(),
                 new ParameterizedTypeReference<Map<String, Object>>() {});
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
@@ -545,7 +577,7 @@ public class WorkflowEngineClient {
             String url = workflowEngineUrl + "/api/v1/history/processes/" + processInstanceId;
             
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                url, HttpMethod.GET, null,
+                url, HttpMethod.GET, authorizedGetEntity(),
                 new ParameterizedTypeReference<Map<String, Object>>() {});
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
@@ -570,7 +602,7 @@ public class WorkflowEngineClient {
             String url = workflowEngineUrl + "/api/v1/history/tasks?processInstanceId=" + processInstanceId;
             
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                url, HttpMethod.GET, null,
+                url, HttpMethod.GET, authorizedGetEntity(),
                 new ParameterizedTypeReference<Map<String, Object>>() {});
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
@@ -602,7 +634,7 @@ public class WorkflowEngineClient {
             log.debug("Calling workflow engine URL: {}", url);
             
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                url, HttpMethod.GET, null,
+                url, HttpMethod.GET, authorizedGetEntity(),
                 new ParameterizedTypeReference<Map<String, Object>>() {});
             
             log.debug("Response status: {}", response.getStatusCode());
@@ -629,7 +661,7 @@ public class WorkflowEngineClient {
             String url = workflowEngineUrl + "/api/v1/tasks/" + taskId + "/history";
             
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                url, HttpMethod.GET, null,
+                url, HttpMethod.GET, authorizedGetEntity(),
                 new ParameterizedTypeReference<Map<String, Object>>() {});
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
@@ -655,7 +687,7 @@ public class WorkflowEngineClient {
             String url = workflowEngineUrl + "/api/v1/tasks/user-permissions?userId=" + userId;
             
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                url, HttpMethod.GET, null,
+                url, HttpMethod.GET, authorizedGetEntity(),
                 new ParameterizedTypeReference<Map<String, Object>>() {});
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
@@ -679,7 +711,7 @@ public class WorkflowEngineClient {
             String url = workflowEngineUrl + "/api/v1/tasks/" + taskId + "/check-permission?userId=" + userId;
             
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                url, HttpMethod.GET, null,
+                url, HttpMethod.GET, authorizedGetEntity(),
                 new ParameterizedTypeReference<Map<String, Object>>() {});
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
@@ -721,7 +753,7 @@ public class WorkflowEngineClient {
             }
             
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                urlBuilder.toString(), HttpMethod.GET, null,
+                urlBuilder.toString(), HttpMethod.GET, authorizedGetEntity(),
                 new ParameterizedTypeReference<Map<String, Object>>() {});
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
@@ -745,7 +777,7 @@ public class WorkflowEngineClient {
             String url = workflowEngineUrl + "/api/v1/history/process-statistics?userId=" + userId;
             
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                url, HttpMethod.GET, null,
+                url, HttpMethod.GET, authorizedGetEntity(),
                 new ParameterizedTypeReference<Map<String, Object>>() {});
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
@@ -772,6 +804,7 @@ public class WorkflowEngineClient {
             
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
+            forwardInboundAuthorization(headers);
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
             
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
@@ -803,6 +836,7 @@ public class WorkflowEngineClient {
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
+            forwardInboundAuthorization(headers);
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
 
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(

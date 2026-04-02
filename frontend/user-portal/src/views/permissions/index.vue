@@ -90,57 +90,54 @@
       <el-form :model="applyForm" label-width="120px" label-position="left" class="apply-form">
         <!-- 申请类型选择 -->
         <el-form-item :label="t('permission.applyType')">
-          <el-radio-group v-model="applyForm.applyType" @change="onApplyTypeChange">
-            <el-radio-button value="virtualGroup">{{ t('permission.joinVirtualGroup') }}</el-radio-button>
-            <el-radio-button value="businessUnit">{{ t('permission.joinBusinessUnit') }}</el-radio-button>
-          </el-radio-group>
+          <el-tag type="primary" size="large">{{ t('permission.joinBusinessUnit') }}</el-tag>
         </el-form-item>
 
-        <!-- 加入虚拟组模式 -->
-        <template v-if="applyForm.applyType === 'virtualGroup'">
-          <el-form-item :label="t('permission.virtualGroup')" required>
-            <el-select 
-              v-model="applyForm.virtualGroupId" 
-              :placeholder="t('permission.selectVirtualGroup')" 
-              style="width: 100%;" 
-              filterable
-              :teleported="false"
-            >
-              <el-option
-                v-for="group in availableVirtualGroups"
-                :key="group.id"
-                :label="group.name"
-                :value="group.id"
-              >
-                <div class="group-option">
-                  <span>{{ group.name }}</span>
-                  <span v-if="group.description" class="group-desc"> - {{ group.description }}</span>
-                </div>
-              </el-option>
-            </el-select>
-          </el-form-item>
-        </template>
+        <!-- 加入业务单元 -->
+        <el-form-item :label="t('permission.businessUnit')" required>
+          <el-select 
+            v-model="applyForm.businessUnitId" 
+            :placeholder="t('permission.selectBusinessUnit')" 
+            style="width: 100%;" 
+            filterable 
+            :loading="loadingBusinessUnits"
+            :disabled="!loadingBusinessUnits && applicableBusinessUnits.length === 0"
+            @change="onBusinessUnitChange"
+            :teleported="false"
+          >
+            <el-option
+              v-for="bu in applicableBusinessUnits"
+              :key="bu.id"
+              :label="bu.name"
+              :value="bu.id"
+            />
+          </el-select>
+          <div v-if="!loadingBusinessUnits && applicableBusinessUnits.length === 0" class="form-hint">
+            {{ t('permission.noApplicableBusinessUnits') }}
+          </div>
+        </el-form-item>
 
-        <!-- 加入业务单元模式 -->
-        <template v-else-if="applyForm.applyType === 'businessUnit'">
-          <el-form-item :label="t('permission.businessUnit')" required>
-            <el-select 
-              v-model="applyForm.businessUnitId" 
-              :placeholder="t('permission.selectBusinessUnit')" 
-              style="width: 100%;" 
-              filterable 
-              :loading="loadingBusinessUnits"
-              :teleported="false"
-            >
-              <el-option
-                v-for="bu in applicableBusinessUnits"
-                :key="bu.id"
-                :label="bu.name"
-                :value="bu.id"
-              />
-            </el-select>
-          </el-form-item>
-        </template>
+        <el-form-item :label="t('permission.role')" required>
+          <el-select
+            v-model="applyForm.roleId"
+            :placeholder="t('permission.selectRole')"
+            style="width: 100%;"
+            filterable
+            :loading="loadingRoles"
+            :disabled="!applyForm.businessUnitId || (!loadingRoles && eligibleRoles.length === 0)"
+            :teleported="false"
+          >
+            <el-option
+              v-for="role in eligibleRoles"
+              :key="role.id"
+              :label="role.name"
+              :value="role.id"
+            />
+          </el-select>
+          <div v-if="applyForm.businessUnitId && !loadingRoles && eligibleRoles.length === 0" class="form-hint">
+            {{ t('permission.noEligibleRoles') }}
+          </div>
+        </el-form-item>
 
         <el-form-item :label="t('permission.reason')" required>
           <el-input v-model="applyForm.reason" type="textarea" :rows="3" :placeholder="t('permission.reasonPlaceholder')" />
@@ -158,7 +155,7 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { permissionApi, type VirtualGroupInfo, type BusinessUnit, type PermissionRequestRecord } from '@/api/permission'
+import { permissionApi, type BusinessUnit, type PermissionRequestRecord, type RoleInfo } from '@/api/permission'
 
 const { t } = useI18n()
 
@@ -168,21 +165,21 @@ const submitting = ref(false)
 const loadingPending = ref(false)
 const loadingHistory = ref(false)
 const loadingBusinessUnits = ref(false)
+const loadingRoles = ref(false)
 
 // 数据
 const pendingList = ref<PermissionRequestRecord[]>([])
 const historyList = ref<PermissionRequestRecord[]>([])
-const availableVirtualGroups = ref<VirtualGroupInfo[]>([])
 const applicableBusinessUnits = ref<BusinessUnit[]>([])
+const eligibleRoles = ref<RoleInfo[]>([])
 
 // 待处理数量
 const pendingCount = computed(() => pendingList.value.length)
 
 // 申请表单
 const applyForm = reactive({
-  applyType: 'virtualGroup' as 'virtualGroup' | 'businessUnit',
-  virtualGroupId: '',
   businessUnitId: '',
+  roleId: '',
   reason: ''
 })
 
@@ -233,23 +230,6 @@ const loadHistoryRequests = async () => {
   }
 }
 
-const loadAvailableVirtualGroups = async () => {
-  try {
-    const res = await permissionApi.getAvailableVirtualGroups() as any
-    // axios 拦截器返回 response.data，即 ApiResponse { success, data: [...] }
-    if (res?.data && Array.isArray(res.data)) {
-      availableVirtualGroups.value = res.data
-    } else if (Array.isArray(res)) {
-      availableVirtualGroups.value = res
-    } else {
-      availableVirtualGroups.value = []
-    }
-  } catch (e) {
-    console.error('Failed to load available virtual groups:', e)
-    availableVirtualGroups.value = []
-  }
-}
-
 const loadApplicableBusinessUnits = async () => {
   loadingBusinessUnits.value = true
   try {
@@ -267,6 +247,29 @@ const loadApplicableBusinessUnits = async () => {
     applicableBusinessUnits.value = []
   } finally {
     loadingBusinessUnits.value = false
+  }
+}
+
+const loadEligibleRoles = async (businessUnitId: string) => {
+  if (!businessUnitId) {
+    eligibleRoles.value = []
+    return
+  }
+  loadingRoles.value = true
+  try {
+    const res = await permissionApi.getBusinessUnitRoles(businessUnitId) as any
+    if (res?.data && Array.isArray(res.data)) {
+      eligibleRoles.value = res.data
+    } else if (Array.isArray(res)) {
+      eligibleRoles.value = res
+    } else {
+      eligibleRoles.value = []
+    }
+  } catch (e) {
+    console.error('Failed to load eligible roles:', e)
+    eligibleRoles.value = []
+  } finally {
+    loadingRoles.value = false
   }
 }
 
@@ -299,6 +302,7 @@ const getRequestTypeTag = (type: string): TagType => {
     VIRTUAL_GROUP_JOIN: 'success',
     BUSINESS_UNIT: 'primary',
     BUSINESS_UNIT_JOIN: 'primary',
+    BUSINESS_UNIT_ROLE: 'primary',
     ROLE_ASSIGNMENT: 'info'
   }
   return map[type] || 'info'
@@ -310,6 +314,7 @@ const getRequestTypeLabel = (type: string) => {
     VIRTUAL_GROUP_JOIN: t('permission.virtualGroupJoin'),
     BUSINESS_UNIT: t('permission.businessUnitJoin'),
     BUSINESS_UNIT_JOIN: t('permission.businessUnitJoin'),
+    BUSINESS_UNIT_ROLE: t('permission.businessUnitRole'),
     ROLE_ASSIGNMENT: t('permission.roleAssignment')
   }
   return map[type] || type
@@ -349,8 +354,16 @@ const cancelRequest = async (row: PermissionRequestRecord) => {
     
     await permissionApi.cancelRequest(row.id)
     ElMessage.success(t('permission.cancelSuccess'))
+    // Keep UI consistent immediately even if history API is paginated/filtered.
+    const cancelledRecord: PermissionRequestRecord = {
+      ...row,
+      status: 'CANCELLED',
+      updatedAt: new Date().toISOString()
+    }
+    pendingList.value = pendingList.value.filter(item => item.id !== row.id)
+    historyList.value = [cancelledRecord, ...historyList.value.filter(item => item.id !== row.id)]
+    // Refresh pending from server, but keep cancelled item visible in history list.
     loadPendingRequests()
-    loadHistoryRequests()
   } catch (e: any) {
     if (e !== 'cancel') {
       ElMessage.error(t('permission.cancelFailed'))
@@ -360,32 +373,29 @@ const cancelRequest = async (row: PermissionRequestRecord) => {
 
 // 对话框操作
 const showApplyDialog = () => {
-  applyForm.applyType = 'virtualGroup'
-  applyForm.virtualGroupId = ''
   applyForm.businessUnitId = ''
+  applyForm.roleId = ''
   applyForm.reason = ''
+  eligibleRoles.value = []
   applyDialogVisible.value = true
   
-  loadAvailableVirtualGroups()
   loadApplicableBusinessUnits()
 }
 
-const onApplyTypeChange = () => {
-  applyForm.virtualGroupId = ''
-  applyForm.businessUnitId = ''
+const onBusinessUnitChange = async (businessUnitId: string) => {
+  applyForm.roleId = ''
+  await loadEligibleRoles(businessUnitId)
 }
 
 const submitApply = async () => {
-  if (applyForm.applyType === 'virtualGroup') {
-    if (!applyForm.virtualGroupId) {
-      ElMessage.warning(t('permission.selectVirtualGroup'))
-      return
-    }
-  } else if (applyForm.applyType === 'businessUnit') {
-    if (!applyForm.businessUnitId) {
-      ElMessage.warning(t('permission.selectBusinessUnit'))
-      return
-    }
+  if (!applyForm.businessUnitId) {
+    ElMessage.warning(t('permission.selectBusinessUnit'))
+    return
+  }
+
+  if (!applyForm.roleId) {
+    ElMessage.warning(t('permission.selectRole'))
+    return
   }
   
   if (!applyForm.reason.trim()) {
@@ -395,19 +405,12 @@ const submitApply = async () => {
 
   submitting.value = true
   try {
-    if (applyForm.applyType === 'virtualGroup') {
-      await permissionApi.requestVirtualGroup({
-        virtualGroupId: applyForm.virtualGroupId,
-        reason: applyForm.reason
-      })
-      ElMessage.success(t('permission.virtualGroupRequestSuccess'))
-    } else {
-      await permissionApi.requestBusinessUnit({
-        businessUnitId: applyForm.businessUnitId,
-        reason: applyForm.reason
-      })
-      ElMessage.success(t('permission.businessUnitRequestSuccess'))
-    }
+    await permissionApi.requestBusinessUnitRole({
+      businessUnitId: applyForm.businessUnitId,
+      roleIds: [applyForm.roleId],
+      reason: applyForm.reason
+    })
+    ElMessage.success(t('permission.businessUnitRequestSuccess'))
     
     applyDialogVisible.value = false
     loadPendingRequests()
@@ -447,17 +450,18 @@ onMounted(() => {
     margin-left: 6px;
   }
   
-  .group-option {
-    .group-desc {
-      color: var(--text-secondary);
-      font-size: 12px;
-    }
-  }
 }
 
 :deep(.apply-form) {
   .el-form-item__label {
     white-space: nowrap;
+  }
+
+  .form-hint {
+    margin-top: 6px;
+    color: var(--el-text-color-secondary);
+    font-size: 12px;
+    line-height: 1.4;
   }
 }
 </style>

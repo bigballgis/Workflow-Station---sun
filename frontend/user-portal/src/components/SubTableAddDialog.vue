@@ -1,6 +1,14 @@
 <template>
-  <!-- 自定义遮罩：z-index 固定低于 picker popper，点击关闭 dialog -->
-  <div v-if="visible" class="sub-table-backdrop" @click="handleClose" />
+  <!-- 遮罩必须挂到 body：dialog 已 append-to-body，若遮罩留在子表/Tab 内会因祖先 transform 导致 fixed 错位或裁剪 -->
+  <Teleport to="body">
+    <div
+      v-if="visible"
+      class="sub-table-backdrop"
+      role="presentation"
+      aria-hidden="true"
+      @click="handleClose"
+    />
+  </Teleport>
   <el-dialog
     :model-value="visible"
     :title="title || (mode === 'edit' ? t('subTable.editRecord') : t('subTable.addRecord'))"
@@ -338,7 +346,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed, nextTick, shallowRef, onBeforeUnmount, inject } from 'vue'
+import { ref, watch, computed, shallowRef, onBeforeUnmount, inject } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Upload } from '@element-plus/icons-vue'
 import type { FormInstance } from 'element-plus'
@@ -572,25 +580,11 @@ function validateColumns(): boolean {
   return allValid
 }
 
-// dialog 打开后，把它的 overlay z-index 降低到固定值，
-// 确保 picker popper（动态分配更高 z-index）能显示在 overlay 上面
-
-function fixOverlayZIndex() {
-  // 找到本 dialog 的 overlay（class 包含 el-overlay-dialog）并降低其 z-index
-  nextTick(() => {
-    const overlays = document.querySelectorAll('.el-overlay-dialog')
-    if (overlays.length > 0) {
-      const lastOverlay = overlays[overlays.length - 1] as HTMLElement
-      lastOverlay.style.setProperty('z-index', '2010', 'important')
-    }
-  })
-}
 // Initialise / reset form whenever dialog opens
 watch(
   () => props.visible,
   (open) => {
     if (!open) return
-    fixOverlayZIndex()
     uploadNames.value = {}
     columnErrors.value = {}
     // Fetch department tree if any column is of type 'department'
@@ -656,7 +650,7 @@ function clearUpload(col: DialogColumn) {
 </script>
 
 <style>
-/* 自定义遮罩，z-index 固定在 2009，低于 dialog(2010) 和 picker popper(动态更高) */
+/* 遮罩经 Teleport 挂 body；z-index 2009 低于 dialog(2010)，picker 用 popper-class 抬到 2050 */
 .sub-table-backdrop {
   position: fixed;
   top: 0;

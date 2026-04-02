@@ -175,6 +175,28 @@ public class VirtualGroupAccessComponent {
         }
         return Collections.emptyList();
     }
+
+    /**
+     * Find the virtual group bound to the given roleId.
+     * Admin-center virtual group list responses typically expose `boundRoleId` and `id`.
+     */
+    public String getVirtualGroupIdByBoundRoleId(String roleId) {
+        if (roleId == null || roleId.isBlank()) return null;
+        try {
+            List<Map<String, Object>> groups = getVirtualGroups();
+            for (Map<String, Object> g : groups) {
+                Object boundRoleId = g.get("boundRoleId");
+                if (boundRoleId != null && roleId.equals(String.valueOf(boundRoleId))) {
+                    Object groupId = g.get("id");
+                    return groupId != null ? String.valueOf(groupId) : null;
+                }
+            }
+            return null;
+        } catch (Exception e) {
+            log.error("Failed to find virtual group by boundRoleId {}: {}", roleId, e.getMessage());
+            return null;
+        }
+    }
     
     // ========== 业务单元相关方法 ==========
     
@@ -333,6 +355,34 @@ public class VirtualGroupAccessComponent {
             
         } catch (Exception e) {
             log.error("Failed to add user {} to business unit {}: {}", userId, businessUnitId, e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 为用户在指定业务单元下分配业务角色（Eligible Role 绑定）
+     */
+    public boolean assignUserBusinessUnitRole(String userId, String businessUnitId, String roleId) {
+        try {
+            String url = adminCenterUrl + "/api/v1/admin/users/" + userId + "/business-unit-roles";
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("businessUnitId", businessUnitId);
+            requestBody.put("roleId", roleId);
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
+
+            ResponseEntity<Void> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.POST,
+                    entity,
+                    Void.class
+            );
+            return response.getStatusCode().is2xxSuccessful();
+        } catch (Exception e) {
+            log.error("Failed to assign BU role: user={}, bu={}, role={}: {}",
+                    userId, businessUnitId, roleId, e.getMessage());
             return false;
         }
     }

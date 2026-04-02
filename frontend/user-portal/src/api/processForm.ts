@@ -59,6 +59,8 @@ export interface ChangeHistoryRecord {
   processInstanceId: string
   taskInstanceId: string | null
   stageId: string | null
+  /** BPMN 任务名称（后端由任务历史解析） */
+  stageName?: string | null
   userId: string
   userName: string
   timestamp: string

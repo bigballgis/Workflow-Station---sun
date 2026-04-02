@@ -1,5 +1,14 @@
 <template>
   <div class="table-binding-manager">
+    <el-alert
+      v-if="restrictPrimarySubOnly"
+      type="info"
+      :closable="false"
+      show-icon
+      class="binding-constraint-alert"
+    >
+      {{ t('tableBinding.primarySubOnlyHint') }}
+    </el-alert>
     <!-- Binding list -->
     <div class="binding-list">
       <div class="binding-header">
@@ -60,7 +69,11 @@
           <el-select v-model="bindingForm.bindingType" style="width: 100%" :disabled="!!editingBinding && editingBinding.bindingType === 'PRIMARY'" @change="handleBindingTypeChange">
             <el-option :label="t('tableBinding.primaryTable')" value="PRIMARY" :disabled="hasPrimaryBinding && bindingForm.bindingType !== 'PRIMARY'" />
             <el-option :label="t('tableBinding.subTable')" value="SUB" />
-            <el-option :label="t('tableBinding.relatedTable')" value="RELATED" />
+            <el-option
+              v-if="showRelatedBindingOption"
+              :label="t('tableBinding.relatedTable')"
+              value="RELATED"
+            />
           </el-select>
         </el-form-item>
 
@@ -134,8 +147,20 @@ const { t } = useI18n()
 const props = defineProps<{
   functionUnitId: number
   formId: number
+  /** PROCESS / TASK：仅允许主表+子表一对多绑定，子表数据通过表单内子表组件增删改 */
+  formType?: string
   tables: TableDefinition[]
 }>()
+
+const restrictPrimarySubOnly = computed(
+  () => props.formType === 'PROCESS' || props.formType === 'TASK'
+)
+
+/** 流程/任务表单不展示「关联表」绑定；若历史数据存在 RELATED，编辑时仍显示以便改为 SUB */
+const showRelatedBindingOption = computed(() => {
+  if (!restrictPrimarySubOnly.value) return true
+  return editingBinding.value?.bindingType === 'RELATED'
+})
 
 const emit = defineEmits<{
   (e: 'update'): void
@@ -156,11 +181,19 @@ const bindingForm = ref<TableBindingRequest>({
   foreignKeyField: undefined
 })
 
-const formRules = computed<FormRules>(() => ({
-  tableId: [{ required: true, message: t('tableBinding.selectTableRequired'), trigger: 'change' }],
-  bindingType: [{ required: true, message: t('tableBinding.selectBindingTypeRequired'), trigger: 'change' }],
-  bindingMode: [{ required: true, message: t('tableBinding.selectBindingModeRequired'), trigger: 'change' }]
-}))
+const formRules = computed<FormRules>(() => {
+  const base: FormRules = {
+    tableId: [{ required: true, message: t('tableBinding.selectTableRequired'), trigger: 'change' }],
+    bindingType: [{ required: true, message: t('tableBinding.selectBindingTypeRequired'), trigger: 'change' }],
+    bindingMode: [{ required: true, message: t('tableBinding.selectBindingModeRequired'), trigger: 'change' }]
+  }
+  if (restrictPrimarySubOnly.value && bindingForm.value.bindingType === 'SUB') {
+    base.foreignKeyField = [
+      { required: true, message: t('tableBinding.foreignKeyRequired'), trigger: 'change' }
+    ]
+  }
+  return base
+})
 
 // Whether a primary binding already exists
 const hasPrimaryBinding = computed(() => {
@@ -175,7 +208,8 @@ const availableTables = computed(() => {
 // Filtered tables based on binding type
 const filteredAvailableTables = computed(() => {
   const bt = bindingForm.value.bindingType
-  if (bt === 'PRIMARY' || bt === 'SUB') {
+  if (bt === 'PRIMARY' || bt === 'SUB' || (restrictPrimarySubOnly.value && bt === 'RELATED')) {
+    // 流程/任务：仅主表/子表；历史 RELATED 编辑时仍只列 MAIN/SUB 供改正
     // Show only function unit's main table and sub tables
     return props.tables
       .filter(t => t.tableType === 'MAIN' || t.tableType === 'SUB')
@@ -264,7 +298,11 @@ async function loadBindings() {
 function handleBindingTypeChange() {
   bindingForm.value.tableId = 0
   bindingForm.value.foreignKeyField = undefined
-  if (bindingForm.value.bindingType === 'RELATED' && deployedRelationTables.value.length === 0) {
+  if (
+    bindingForm.value.bindingType === 'RELATED'
+    && !restrictPrimarySubOnly.value
+    && deployedRelationTables.value.length === 0
+  ) {
     loadDeployedRelationTables()
   }
 }
@@ -290,8 +328,11 @@ function handleTableSelect(tableId: number) {
     } else if (table.tableType === 'SUB') {
       bindingForm.value.bindingType = 'SUB'
       bindingForm.value.bindingMode = 'READONLY'
-    } else {
+    } else if (!restrictPrimarySubOnly.value) {
       bindingForm.value.bindingType = 'RELATED'
+      bindingForm.value.bindingMode = 'READONLY'
+    } else {
+      bindingForm.value.bindingType = 'SUB'
       bindingForm.value.bindingMode = 'READONLY'
     }
   }
@@ -420,6 +461,10 @@ defineExpose({
     font-size: 12px;
     color: #909399;
     margin-top: 4px;
+  }
+
+  .binding-constraint-alert {
+    margin-bottom: 12px;
   }
 }
 </style>
