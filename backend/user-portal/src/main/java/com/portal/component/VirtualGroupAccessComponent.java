@@ -336,6 +336,34 @@ public class VirtualGroupAccessComponent {
             return false;
         }
     }
+
+    /**
+     * 为用户在指定业务单元下分配业务角色（Eligible Role 绑定）
+     */
+    public boolean assignUserBusinessUnitRole(String userId, String businessUnitId, String roleId) {
+        try {
+            String url = adminCenterUrl + "/api/v1/admin/users/" + userId + "/business-unit-roles";
+            Map<String, Object> requestBody = new HashMap<>();
+            requestBody.put("businessUnitId", businessUnitId);
+            requestBody.put("roleId", roleId);
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(requestBody, headers);
+
+            ResponseEntity<Void> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.POST,
+                    entity,
+                    Void.class
+            );
+            return response.getStatusCode().is2xxSuccessful();
+        } catch (Exception e) {
+            log.error("Failed to assign BU role: user={}, bu={}, role={}: {}",
+                    userId, businessUnitId, roleId, e.getMessage());
+            return false;
+        }
+    }
     
     // ========== 审批人相关方法 ==========
     

@@ -21,6 +21,7 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 @RestController
 @RequestMapping("/permissions")
@@ -141,6 +142,45 @@ public class PermissionController {
         
         try {
             PermissionRequest request = permissionComponent.requestBusinessUnitJoin(userId, businessUnitId, reason);
+            return ApiResponse.success(request);
+        } catch (IllegalArgumentException e) {
+            return ApiResponse.error(e.getMessage());
+        }
+    }
+
+    @PostMapping("/request-business-unit-role")
+    @Operation(summary = "申请加入业务单元并指定角色", description = "申请加入业务单元，并选择该业务单元下的一条 Eligible Role")
+    public ApiResponse<PermissionRequest> requestBusinessUnitWithRole(
+            @CurrentUserId String userId,
+            @RequestBody Map<String, Object> body) {
+        Object buIdObj = body.get("businessUnitId");
+        String businessUnitId = buIdObj != null ? buIdObj.toString() : null;
+        String reason = body.get("reason") != null ? body.get("reason").toString() : null;
+
+        String roleId = null;
+        Object roleIdsObj = body.get("roleIds");
+        if (roleIdsObj instanceof List<?> list && !list.isEmpty()) {
+            roleId = Objects.toString(list.get(0), null);
+        }
+        if (roleId == null || roleId.isBlank()) {
+            Object single = body.get("roleId");
+            if (single != null) {
+                roleId = single.toString();
+            }
+        }
+
+        if (businessUnitId == null || businessUnitId.isEmpty()) {
+            return ApiResponse.error(i18nService.getMessage("portal.bu_id_required"));
+        }
+        if (reason == null || reason.isEmpty()) {
+            return ApiResponse.error(i18nService.getMessage("portal.reason_required"));
+        }
+        if (roleId == null || roleId.isBlank()) {
+            return ApiResponse.error(i18nService.getMessage("validation.role_id_required"));
+        }
+
+        try {
+            PermissionRequest request = permissionComponent.requestBusinessUnitJoinWithRole(userId, businessUnitId, roleId, reason);
             return ApiResponse.success(request);
         } catch (IllegalArgumentException e) {
             return ApiResponse.error(e.getMessage());
