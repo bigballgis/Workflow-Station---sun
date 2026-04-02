@@ -15,6 +15,8 @@ public class ChangeHistoryRecord {
     private String processInstanceId;
     private String taskInstanceId;
     private String stageId;
+    /** BPMN 用户任务名称（来自任务历史）；无则前端可回落展示 stageId */
+    private String stageName;
     private String userId;
     private String userName;
     private Instant timestamp;

@@ -1,18 +1,24 @@
 package com.portal.property;
 
+import com.portal.client.WorkflowEngineClient;
 import com.portal.component.ChangeHistoryComponent;
 import com.portal.dto.ChangeHistoryRecord;
 import com.portal.entity.ChangeHistory;
 import com.portal.enums.ChangeType;
 import com.portal.repository.ChangeHistoryRepository;
+import com.platform.security.repository.UserRepository;
 import net.jqwik.api.*;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 /**
@@ -37,6 +43,10 @@ public class ChangeHistoryOrderPropertyTest {
             @ForAll("changeHistoryLists") TimestampedHistoryList historyList) {
 
         ChangeHistoryRepository repository = mock(ChangeHistoryRepository.class);
+        UserRepository userRepository = mock(UserRepository.class);
+        WorkflowEngineClient workflowEngineClient = mock(WorkflowEngineClient.class);
+        when(userRepository.findAllById(any())).thenReturn(Collections.emptyList());
+        when(workflowEngineClient.getTaskHistory(anyString())).thenReturn(Optional.empty());
 
         // Simulate the repository returning records sorted by timestamp (as the query does)
         List<ChangeHistory> sorted = new ArrayList<>(historyList.records);
@@ -45,7 +55,7 @@ public class ChangeHistoryOrderPropertyTest {
         when(repository.findByProcessInstanceIdOrderByTimestampAsc(historyList.processInstanceId))
                 .thenReturn(sorted);
 
-        ChangeHistoryComponent component = new ChangeHistoryComponent(repository);
+        ChangeHistoryComponent component = new ChangeHistoryComponent(repository, userRepository, workflowEngineClient);
         List<ChangeHistoryRecord> result = component.getChangeHistory(historyList.processInstanceId);
 
         // Verify chronological order

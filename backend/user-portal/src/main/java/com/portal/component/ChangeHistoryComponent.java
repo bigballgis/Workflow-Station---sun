@@ -1,11 +1,14 @@
 package com.portal.component;
 
+import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.ChangeHistoryContext;
 import com.portal.dto.ChangeHistoryRecord;
 import com.portal.dto.SubTableChange;
 import com.portal.entity.ChangeHistory;
 import com.portal.enums.ChangeType;
 import com.portal.repository.ChangeHistoryRepository;
+import com.platform.security.entity.User;
+import com.platform.security.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -14,9 +17,13 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * 变更历史组件
@@ -28,6 +35,8 @@ import java.util.Objects;
 public class ChangeHistoryComponent {
 
     private final ChangeHistoryRepository changeHistoryRepository;
+    private final UserRepository userRepository;
+    private final WorkflowEngineClient workflowEngineClient;
 
     /**
      * 记录字段变更
@@ -120,8 +129,11 @@ public class ChangeHistoryComponent {
         List<ChangeHistory> entities = changeHistoryRepository
                 .findByProcessInstanceIdOrderByTimestampAsc(processInstanceId);
 
+        Map<String, String> userDisplayById = resolveUserDisplayNames(entities);
+        StageNameMaps stageNames = resolveStageNames(processInstanceId);
+
         return entities.stream()
-                .map(this::toRecord)
+                .map(e -> toRecord(e, userDisplayById, stageNames))
                 .toList();
     }
 
@@ -160,13 +172,26 @@ public class ChangeHistoryComponent {
         };
     }
 
-    private ChangeHistoryRecord toRecord(ChangeHistory entity) {
+    private ChangeHistoryRecord toRecord(ChangeHistory entity,
+                                         Map<String, String> userDisplayById,
+                                         StageNameMaps stageNames) {
+        String userName = userDisplayById.get(entity.getUserId());
+        String stageName = null;
+        if (entity.getTaskInstanceId() != null && !entity.getTaskInstanceId().isBlank()) {
+            stageName = stageNames.taskInstanceIdToName().get(entity.getTaskInstanceId());
+        }
+        if (stageName == null && entity.getStageId() != null && !entity.getStageId().isBlank()) {
+            stageName = stageNames.taskDefinitionKeyToName().get(entity.getStageId());
+        }
+
         return ChangeHistoryRecord.builder()
                 .id(entity.getId())
                 .processInstanceId(entity.getProcessInstanceId())
                 .taskInstanceId(entity.getTaskInstanceId())
                 .stageId(entity.getStageId())
+                .stageName(stageName)
                 .userId(entity.getUserId())
+                .userName(userName)
                 .timestamp(entity.getTimestamp())
                 .fieldName(entity.getFieldName())
                 .oldValue(entity.getOldValue())
@@ -176,5 +201,68 @@ public class ChangeHistoryComponent {
                 .rowIdentifier(entity.getRowIdentifier())
                 .concurrent(Boolean.TRUE.equals(entity.getIsConcurrent()))
                 .build();
+    }
+
+    private Map<String, String> resolveUserDisplayNames(List<ChangeHistory> entities) {
+        Set<String> ids = entities.stream()
+                .map(ChangeHistory::getUserId)
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .collect(Collectors.toCollection(HashSet::new));
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, String> out = new HashMap<>();
+        for (User u : userRepository.findAllById(ids)) {
+            if (u != null && u.getId() != null) {
+                out.put(u.getId(), displayNameForUser(u));
+            }
+        }
+        return out;
+    }
+
+    private static String displayNameForUser(User u) {
+        if (u.getFullName() != null && !u.getFullName().isBlank()) {
+            return u.getFullName().trim();
+        }
+        if (u.getDisplayName() != null && !u.getDisplayName().isBlank()) {
+            return u.getDisplayName().trim();
+        }
+        return u.getUsername();
+    }
+
+    private StageNameMaps resolveStageNames(String processInstanceId) {
+        Map<String, String> byTaskId = new HashMap<>();
+        Map<String, String> byDefKey = new HashMap<>();
+        try {
+            workflowEngineClient.getTaskHistory(processInstanceId).ifPresent(tasks -> {
+                for (Map<String, Object> task : tasks) {
+                    String name = stringOrNull(task.get("name"));
+                    if (name == null || name.isBlank()) {
+                        continue;
+                    }
+                    String taskInstanceId = stringOrNull(task.get("id"));
+                    if (taskInstanceId != null && !taskInstanceId.isBlank()) {
+                        byTaskId.putIfAbsent(taskInstanceId, name.trim());
+                    }
+                    String defKey = stringOrNull(task.get("activityId"));
+                    if (defKey != null && !defKey.isBlank()) {
+                        byDefKey.putIfAbsent(defKey, name.trim());
+                    }
+                }
+            });
+        } catch (Exception e) {
+            log.debug("Could not enrich change history stage names for {}: {}", processInstanceId, e.getMessage());
+        }
+        return new StageNameMaps(byTaskId, byDefKey);
+    }
+
+    private static String stringOrNull(Object o) {
+        return o == null ? null : o.toString();
+    }
+
+    private record StageNameMaps(Map<String, String> taskInstanceIdToName,
+                                 Map<String, String> taskDefinitionKeyToName) {
     }
 }

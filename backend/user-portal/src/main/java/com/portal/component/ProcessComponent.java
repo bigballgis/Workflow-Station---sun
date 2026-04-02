@@ -176,12 +176,12 @@ public class ProcessComponent {
         String actualProcessKey = processKey; // 默认使用传入的 key
         Optional<Map<String, Object>> deployResult = workflowEngineClient.deployProcess(processKey, bpmnXml, processName);
         if (deployResult.isPresent()) {
-            log.info("Process definition deployed: {}", deployResult.get());
-            // 使用部署后返回的实际 processDefinitionKey
-            @SuppressWarnings("unchecked")
-            Map<String, Object> deployData = (Map<String, Object>) deployResult.get().get("data");
-            if (deployData != null && deployData.get("processDefinitionKey") != null) {
-                actualProcessKey = (String) deployData.get("processDefinitionKey");
+            Map<String, Object> deployed = deployResult.get();
+            log.info("Process definition deployed: {}", deployed);
+            // WorkflowEngineClient 已 unwrap ApiResponse.data，此处为部署结果顶层 Map（含 processDefinitionKey）
+            Object pdk = deployed.get("processDefinitionKey");
+            if (pdk != null && !pdk.toString().isEmpty()) {
+                actualProcessKey = pdk.toString();
                 log.info("Using actual process definition key from deployment: {}", actualProcessKey);
             }
         }
@@ -197,13 +197,12 @@ public class ProcessComponent {
             throw new IllegalStateException("启动流程失败: " + processKey);
         }
         
-        Map<String, Object> result = startResult.get();
-        @SuppressWarnings("unchecked")
-        Map<String, Object> data = (Map<String, Object>) result.get("data");
-        if (data == null) {
+        // startResult 已为 unwrap 后的 ProcessInstanceResult 字段 Map，无嵌套 data
+        Map<String, Object> data = startResult.get();
+        if (data == null || data.get("processInstanceId") == null) {
             throw new IllegalStateException("启动流程返回数据为空: " + processKey);
         }
-        
+
         String flowableProcessInstanceId = (String) data.get("processInstanceId");
         log.info("Process started via Flowable: {}", flowableProcessInstanceId);
         
@@ -239,8 +238,7 @@ public class ProcessComponent {
             // 查询流程实例的任务
             Optional<Map<String, Object>> tasksResult = workflowEngineClient.getProcessInstanceTasks(flowableProcessInstanceId);
             if (tasksResult.isPresent()) {
-                @SuppressWarnings("unchecked")
-                Map<String, Object> tasksData = (Map<String, Object>) tasksResult.get().get("data");
+                Map<String, Object> tasksData = tasksResult.get();
                 if (tasksData != null) {
                     @SuppressWarnings("unchecked")
                     List<Map<String, Object>> tasks = (List<Map<String, Object>>) tasksData.get("tasks");
@@ -273,8 +271,7 @@ public class ProcessComponent {
                             // 完成第一个任务后，查询当前任务（下一个审批节点）
                             Optional<Map<String, Object>> nextTasksResult = workflowEngineClient.getProcessInstanceTasks(flowableProcessInstanceId);
                             if (nextTasksResult.isPresent()) {
-                                @SuppressWarnings("unchecked")
-                                Map<String, Object> nextTasksData = (Map<String, Object>) nextTasksResult.get().get("data");
+                                Map<String, Object> nextTasksData = nextTasksResult.get();
                                 if (nextTasksData != null) {
                                     @SuppressWarnings("unchecked")
                                     List<Map<String, Object>> nextTasks = (List<Map<String, Object>>) nextTasksData.get("tasks");
@@ -874,8 +871,7 @@ public class ProcessComponent {
                 if (workflowEngineClient.isAvailable()) {
                     Optional<Map<String, Object>> tasksResult = workflowEngineClient.getProcessInstanceTasks(instance.getId());
                     if (tasksResult.isPresent()) {
-                        @SuppressWarnings("unchecked")
-                        Map<String, Object> tasksData = (Map<String, Object>) tasksResult.get().get("data");
+                        Map<String, Object> tasksData = tasksResult.get();
                         if (tasksData != null) {
                             @SuppressWarnings("unchecked")
                             List<Map<String, Object>> tasks = (List<Map<String, Object>>) tasksData.get("tasks");
@@ -945,8 +941,7 @@ public class ProcessComponent {
                 if (workflowEngineClient.isAvailable()) {
                     Optional<Map<String, Object>> tasksResult = workflowEngineClient.getProcessInstanceTasks(processId);
                     if (tasksResult.isPresent()) {
-                        @SuppressWarnings("unchecked")
-                        Map<String, Object> tasksData = (Map<String, Object>) tasksResult.get().get("data");
+                        Map<String, Object> tasksData = tasksResult.get();
                         if (tasksData != null) {
                             @SuppressWarnings("unchecked")
                             List<Map<String, Object>> tasks = (List<Map<String, Object>>) tasksData.get("tasks");

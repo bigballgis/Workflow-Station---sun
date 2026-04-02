@@ -117,8 +117,17 @@ public class TaskAssignmentListener implements FlowableEventListener {
                         roleId = getExtensionProperty(userTask, "roleId");
                         businessUnitId = getExtensionProperty(userTask, "businessUnitId");
                         assigneeValue = getExtensionProperty(userTask, "assigneeValue"); // 兼容旧版本
-                        
-                        log.info("Found BPMN extension properties: assigneeType={}, roleId={}, businessUnitId={}", 
+
+                        // 标准 BPMN/Flowable 上配置了 assignee 表达式，但扩展里未写 assigneeType（常见于旧导出）
+                        if ((assigneeType == null || assigneeType.isEmpty()) && userTask.getAssignee() != null
+                                && !userTask.getAssignee().isBlank()) {
+                            String ga = userTask.getAssignee().trim();
+                            if (isInitiatorExpression(ga)) {
+                                assigneeType = "INITIATOR";
+                            }
+                        }
+
+                        log.info("Found BPMN extension properties: assigneeType={}, roleId={}, businessUnitId={}",
                                 assigneeType, roleId, businessUnitId);
                     }
                 }
@@ -131,6 +140,13 @@ public class TaskAssignmentListener implements FlowableEventListener {
                 roleId = getStringVariable(variables, "roleId");
                 businessUnitId = getStringVariable(variables, "businessUnitId");
                 assigneeValue = getStringVariable(variables, "assigneeValue");
+            }
+
+            // 开发者工作站旧版 TaskProperties：assigneeType=expression + assigneeValue=${initiator} → 无法被 AssigneeType 识别
+            assigneeType = normalizeLegacyAssigneeType(assigneeType, assigneeValue);
+            if (assigneeType != null && "INITIATOR".equalsIgnoreCase(assigneeType.trim())) {
+                // 避免走 resolve(INITIATOR, "${initiator}", …) 导致三参解析失败
+                assigneeValue = null;
             }
 
             if (assigneeType == null || assigneeType.isEmpty()) {
@@ -195,34 +211,80 @@ public class TaskAssignmentListener implements FlowableEventListener {
     }
 
     /**
-     * 从 UserTask 的扩展元素中获取 custom:property 的值
+     * 旧版设计器：expression + ${initiator} / ${initiatorId} → 标准 INITIATOR
+     */
+    private static String normalizeLegacyAssigneeType(String assigneeType, String assigneeValue) {
+        if (assigneeType == null) {
+            return null;
+        }
+        String t = assigneeType.trim();
+        if ("initiator".equalsIgnoreCase(t)) {
+            return "INITIATOR";
+        }
+        if ("expression".equalsIgnoreCase(t) && assigneeValue != null) {
+            if (isInitiatorExpression(assigneeValue.trim())) {
+                return "INITIATOR";
+            }
+        }
+        return assigneeType;
+    }
+
+    private static boolean isInitiatorExpression(String expr) {
+        if (expr == null || expr.isEmpty()) {
+            return false;
+        }
+        String e = expr.trim();
+        if ("${initiator}".equals(e) || "${initiatorId}".equalsIgnoreCase(e)) {
+            return true;
+        }
+        return e.matches("(?i)^\\$\\{\\s*initiator\\s*}$") || e.matches("(?i)^\\$\\{\\s*initiatorId\\s*}$");
+    }
+
+    /**
+     * 从 UserTask 扩展中读取 custom:property；兼容 Flowable 解析后不同 namespace 下 key 不一致的情况
      */
     private String getExtensionProperty(UserTask userTask, String propertyName) {
-        if (userTask.getExtensionElements() == null) {
+        if (userTask.getExtensionElements() == null || userTask.getExtensionElements().isEmpty()) {
             return null;
         }
+        for (List<ExtensionElement> group : userTask.getExtensionElements().values()) {
+            if (group == null) {
+                continue;
+            }
+            for (ExtensionElement container : group) {
+                if (container == null || container.getName() == null) {
+                    continue;
+                }
+                if (!"properties".equalsIgnoreCase(container.getName())) {
+                    continue;
+                }
+                String v = findPropertyInPropertiesContainer(container, propertyName);
+                if (v != null) {
+                    return v;
+                }
+            }
+        }
+        return null;
+    }
 
-        // 查找 custom:properties 元素
-        List<ExtensionElement> propertiesElements = userTask.getExtensionElements().get("properties");
-        if (propertiesElements == null || propertiesElements.isEmpty()) {
+    private String findPropertyInPropertiesContainer(ExtensionElement propertiesElement, String propertyName) {
+        if (propertiesElement.getChildElements() == null) {
             return null;
         }
-
-        for (ExtensionElement propertiesElement : propertiesElements) {
-            // 查找 custom:property 子元素
-            List<ExtensionElement> propertyElements = propertiesElement.getChildElements().get("property");
+        for (List<ExtensionElement> propertyElements : propertiesElement.getChildElements().values()) {
             if (propertyElements == null) {
                 continue;
             }
-
             for (ExtensionElement propertyElement : propertyElements) {
+                if (propertyElement.getName() == null || !"property".equalsIgnoreCase(propertyElement.getName())) {
+                    continue;
+                }
                 String name = propertyElement.getAttributeValue(null, "name");
                 if (propertyName.equals(name)) {
                     return propertyElement.getAttributeValue(null, "value");
                 }
             }
         }
-
         return null;
     }
 

@@ -72,15 +72,13 @@ class ProcessOperationProperties {
                     String processKey = invocation.getArgument(0);
                     String businessKey = invocation.getArgument(1);
                     String startUserId = invocation.getArgument(2);
+                    // 与 ApiResponseBodyUnwrap.unwrapDataMap 后的结构一致（顶层即字段）
                     return Optional.of(Map.of(
-                            "success", true,
-                            "data", Map.of(
-                                    "processInstanceId", "pi-" + System.currentTimeMillis(),
-                                    "processDefinitionId", "pd-" + processKey,
-                                    "processDefinitionKey", processKey,
-                                    "businessKey", businessKey,
-                                    "startUserId", startUserId
-                            )
+                            "processInstanceId", "pi-" + System.currentTimeMillis(),
+                            "processDefinitionId", "pd-" + processKey,
+                            "processDefinitionKey", processKey,
+                            "businessKey", businessKey != null ? businessKey : "",
+                            "startUserId", startUserId
                     ));
                 });
         
