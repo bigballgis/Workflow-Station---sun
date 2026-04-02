@@ -174,3 +174,66 @@ export function batchUrgeTasks(taskIds: string[], message?: string) {
 export function queryCompletedTasks(params: TaskQueryRequest) {
   return request.post<{ data: PageResponse<TaskInfo> }>('/tasks/completed/query', params)
 }
+
+// 分配子表行处理人
+export interface AssignSubTableRowRequest {
+  assigneeId: string
+}
+
+export interface AssignSubTableRowResponse {
+  success: boolean
+  rowId: number
+  assigneeId: string
+  assigneeName: string
+}
+
+export function assignSubTableRow(taskId: string, rowId: number, assigneeId: string) {
+  return request.post<{ data: AssignSubTableRowResponse }>(
+    `/tasks/${taskId}/sub-table-rows/${rowId}/assign`,
+    { assigneeId }
+  )
+}
+
+// 获取子任务表单数据（包含主任务信息和子表数据行）
+export interface FormField {
+  name: string
+  label: string
+  type: string
+  required?: boolean
+  readonly?: boolean
+  span?: number
+  options?: any[]
+  [key: string]: any
+}
+
+export interface SubTaskFormData {
+  taskId: string
+  mainFormData: Record<string, any>
+  mainFormFields: FormField[]
+  subTableRowData: Record<string, any>
+  subFormFields: FormField[]
+  rowVersion: number
+}
+
+export function getSubTaskFormData(taskId: string) {
+  return request.get<{ data: SubTaskFormData }>(`/tasks/${taskId}/sub-task-form-data`)
+}
+
+// 获取主任务子表数据（用于实时同步）
+export interface SubTableRowStatus {
+  id: number
+  assignee?: string
+  assigneeName?: string
+  status?: string
+  [key: string]: any
+}
+
+export interface SubTableDataResponse {
+  taskId: string
+  subTableName: string
+  rows: SubTableRowStatus[]
+}
+
+export function getSubTableData(taskId: string) {
+  return request.get<{ data: SubTableDataResponse }>(`/tasks/${taskId}/sub-table-data/all`)
+}

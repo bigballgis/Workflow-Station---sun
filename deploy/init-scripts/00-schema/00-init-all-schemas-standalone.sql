@@ -45,5 +45,7 @@ COMMIT;
 \i 00-schema/21-add-rt-relation-tables.sql
 \i 00-schema/22-add-lock-version-to-sys-roles.sql
 \i 00-schema/23-widen-up-process-instance-business-key.sql
+\i 00-schema/24-add-multi-instance-execution-table.sql
+\i 00-schema/25-add-row-version-to-sub-tables.sql
 
 \echo '=== All schemas created successfully ==='

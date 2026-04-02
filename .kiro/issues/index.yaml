@@ -882,3 +882,13 @@
   category: bug
   summary: "user-portal AdminCenterClient 仍调用不存在的 admin GET /users/{id}/memberships 与 GET /member-change-logs，导致 my-memberships/exit-history 恒 503"
   fixed_at: "2026-03-31"
+
+- id: "126"
+  status: open
+  severity: major
+  category: bug
+  summary: "developer-workstation UserDisplayNameService 引用不存在的 ApiResponseBodyUnwrap 类"
+  file: "backend/developer-workstation/src/main/java/com/developer/service/UserDisplayNameService.java"
+  description: "UserDisplayNameService.java 第8行导入 com.platform.common.util.ApiResponseBodyUnwrap，但该类在 platform-common 模块中不存在，导致编译失败"
+  impact: "阻止 developer-workstation 模块编译，影响所有开发和测试"
+  discovered_at: "multi-instance-task-dispatch 任务 2.1 (2026-04-01)"

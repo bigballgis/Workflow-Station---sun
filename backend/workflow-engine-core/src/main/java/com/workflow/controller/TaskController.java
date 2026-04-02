@@ -10,10 +10,13 @@ import com.workflow.dto.request.TaskAssignmentRequest;
 import com.workflow.dto.request.TaskClaimRequest;
 import com.workflow.dto.request.TaskDelegationRequest;
 import com.workflow.dto.request.TaskReturnRequest;
+import com.workflow.dto.request.AssignSubTableRowRequest;
 import com.workflow.dto.response.ApiResponse;
 import com.workflow.dto.response.HistoryQueryResult;
 import com.workflow.dto.response.TaskAssignmentResult;
 import com.workflow.dto.response.TaskListResult;
+import com.workflow.dto.response.AssignSubTableRowResponse;
+import com.workflow.component.SubTableAssignmentHandler;
 import com.workflow.enums.AssignmentType;
 import com.workflow.service.UserPermissionService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -60,6 +63,8 @@ public class TaskController {
     private final ConfigurationManager configurationManager;
     private final SecurityIntegrationService securityIntegrationService;
     private final com.workflow.client.AdminCenterClient adminCenterClient;
+    private final SubTableAssignmentHandler subTableAssignmentHandler;
+    private final com.workflow.component.MultiInstanceDataResolver multiInstanceDataResolver;
 
     /**
      * 查询任务列表
@@ -565,5 +570,73 @@ public class TaskController {
         result.put("assignmentTarget", taskInfo.getAssignmentTarget());
         
         return ResponseEntity.ok(ApiResponse.success(result));
+    }
+    
+    /**
+     * 分配子表行处理人
+     * 
+     * 用于多实例子流程前置任务中，手动为子表行分配处理人。
+     * 这是多实例任务分发流程的第一步：前置任务处理人通过 Assign 按钮为每个子表行指定处理人。
+     */
+    @PostMapping("/{taskId}/sub-table-rows/{rowId}/assign")
+    @Operation(summary = "分配子表行处理人", description = "为多实例子流程的子表行分配处理人")
+    public ResponseEntity<ApiResponse<AssignSubTableRowResponse>> assignSubTableRow(
+            @Parameter(description = "任务ID", required = true)
+            @PathVariable String taskId,
+            @Parameter(description = "子表行ID", required = true)
+            @PathVariable Long rowId,
+            @RequestBody @Valid AssignSubTableRowRequest request) {
+        
+        log.info("分配子表行处理人: taskId={}, rowId={}, assigneeId={}", 
+            taskId, rowId, request.getAssigneeId());
+        
+        try {
+            SubTableAssignmentHandler.AssignmentResponse handlerResponse = 
+                subTableAssignmentHandler.assign(taskId, rowId, request.getAssigneeId());
+            
+            AssignSubTableRowResponse response = AssignSubTableRowResponse.builder()
+                .success(handlerResponse.isSuccess())
+                .rowId(handlerResponse.getRowId())
+                .assigneeId(handlerResponse.getAssigneeId())
+                .assigneeName(handlerResponse.getAssigneeName())
+                .build();
+            
+            return ResponseEntity.ok(ApiResponse.success(response));
+        } catch (Exception e) {
+            log.error("分配子表行处理人失败: taskId={}, rowId={}", taskId, rowId, e);
+            
+            return ResponseEntity.badRequest().body(
+                ApiResponse.error("ASSIGN_SUBTABLE_ROW_FAILED", e.getMessage())
+            );
+        }
+    }
+    
+    /**
+     * 加载子任务表单数据
+     * 
+     * 用于多实例子任务表单加载，返回主任务表单数据（只读）和子表数据行（可编辑）。
+     * 
+     * **Validates: Requirements 6.1**
+     */
+    @GetMapping("/{taskId}/sub-task-form-data")
+    @Operation(summary = "加载子任务表单数据", description = "加载多实例子任务的表单数据，包含主任务信息和子表数据行")
+    public ResponseEntity<ApiResponse<com.workflow.component.MultiInstanceDataResolver.SubTaskFormData>> getSubTaskFormData(
+            @Parameter(description = "任务ID", required = true)
+            @PathVariable String taskId) {
+        
+        log.info("加载子任务表单数据: taskId={}", taskId);
+        
+        try {
+            com.workflow.component.MultiInstanceDataResolver.SubTaskFormData formData = 
+                multiInstanceDataResolver.loadSubTaskFormData(taskId);
+            
+            return ResponseEntity.ok(ApiResponse.success(formData));
+        } catch (Exception e) {
+            log.error("加载子任务表单数据失败: taskId={}", taskId, e);
+            
+            return ResponseEntity.badRequest().body(
+                ApiResponse.error("LOAD_SUBTASK_FORM_DATA_FAILED", e.getMessage())
+            );
+        }
     }
 }

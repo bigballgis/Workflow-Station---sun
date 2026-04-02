@@ -2,11 +2,17 @@ package com.developer.component.impl;
 
 import com.developer.component.ProcessDesignComponent;
 import com.developer.dto.ValidationResult;
+import com.developer.entity.FieldDefinition;
+import com.developer.entity.FormDefinition;
 import com.developer.entity.FunctionUnit;
 import com.developer.entity.ProcessDefinition;
+import com.developer.entity.TableDefinition;
+import com.developer.enums.TableType;
 import com.developer.exception.ResourceNotFoundException;
+import com.developer.repository.FormDefinitionRepository;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.ProcessDefinitionRepository;
+import com.developer.repository.TableDefinitionRepository;
 import com.developer.util.XmlEncodingUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -27,6 +33,8 @@ public class ProcessDesignComponentImpl implements ProcessDesignComponent {
     
     private final ProcessDefinitionRepository processDefinitionRepository;
     private final FunctionUnitRepository functionUnitRepository;
+    private final TableDefinitionRepository tableDefinitionRepository;
+    private final FormDefinitionRepository formDefinitionRepository;
     
     @Override
     @Transactional
@@ -186,5 +194,210 @@ public class ProcessDesignComponentImpl implements ProcessDesignComponent {
     private boolean isStartOrEndEvent(String bpmnXml, String nodeId) {
         String pattern = String.format("(startEvent|endEvent)[^>]*id=\"%s\"", nodeId);
         return Pattern.compile(pattern).matcher(bpmnXml).find();
+    }
+    
+    @Override
+    public ValidationResult validateMultiInstance(String bpmnXml, Long functionUnitId) {
+        ValidationResult result = new ValidationResult();
+        
+        if (bpmnXml == null || bpmnXml.trim().isEmpty()) {
+            result.addError("EMPTY_BPMN", "BPMN XML cannot be empty", null);
+            return result;
+        }
+        
+        // 查找所有多实例子流程节点
+        Pattern subProcessPattern = Pattern.compile(
+            "<bpmn:subProcess[^>]*id=\"([^\"]+)\"[^>]*>.*?<bpmn:multiInstanceLoopCharacteristics",
+            Pattern.DOTALL
+        );
+        Matcher subProcessMatcher = subProcessPattern.matcher(bpmnXml);
+        
+        while (subProcessMatcher.find()) {
+            String subProcessId = subProcessMatcher.group(1);
+            
+            // 提取该子流程的完整内容
+            int startPos = subProcessMatcher.start();
+            int endPos = findMatchingSubProcessEnd(bpmnXml, startPos);
+            if (endPos == -1) {
+                result.addError("INVALID_SUBPROCESS_STRUCTURE", 
+                    "Invalid subProcess structure for " + subProcessId, subProcessId);
+                continue;
+            }
+            
+            String subProcessXml = bpmnXml.substring(startPos, endPos);
+            
+            // 验证 1: collection 变量名格式合法（字母、数字、下划线）
+            Pattern collectionPattern = Pattern.compile("<flowable:collection>([^<]+)</flowable:collection>");
+            Matcher collectionMatcher = collectionPattern.matcher(subProcessXml);
+            
+            if (collectionMatcher.find()) {
+                String collectionVar = collectionMatcher.group(1).trim();
+                if (!collectionVar.matches("^[a-zA-Z_][a-zA-Z0-9_]*$")) {
+                    result.addError("INVALID_COLLECTION_VARIABLE", 
+                        "Collection variable name '" + collectionVar + "' is invalid. Must contain only letters, numbers, and underscores.", 
+                        subProcessId);
+                }
+            } else {
+                result.addError("MISSING_COLLECTION_VARIABLE", 
+                    "Multi-instance subProcess is missing flowable:collection configuration", 
+                    subProcessId);
+            }
+            
+            // 验证 2: 子流程内部至少包含一个 userTask
+            Pattern userTaskPattern = Pattern.compile("<bpmn:userTask[^>]*id=\"([^\"]+)\"");
+            Matcher userTaskMatcher = userTaskPattern.matcher(subProcessXml);
+            
+            if (!userTaskMatcher.find()) {
+                result.addError("MISSING_USER_TASK", 
+                    "Multi-instance subProcess must contain at least one userTask", 
+                    subProcessId);
+                continue; // 没有 userTask，后续验证无意义
+            }
+            
+            // 提取 userTask 的扩展属性
+            String userTaskId = userTaskMatcher.group(1);
+            Map<String, String> userTaskProps = extractUserTaskProperties(subProcessXml, userTaskId);
+            
+            // 验证 3: subTableId 属于当前 FunctionUnit 且 table_type=SUB
+            String subTableIdStr = userTaskProps.get("subTableId");
+            if (subTableIdStr != null && !subTableIdStr.isEmpty()) {
+                try {
+                    Long subTableId = Long.parseLong(subTableIdStr);
+                    Optional<TableDefinition> tableOpt = tableDefinitionRepository.findByIdWithFields(subTableId);
+                    
+                    if (tableOpt.isEmpty()) {
+                        result.addError("SUBTABLE_NOT_FOUND", 
+                            "SubTable with id " + subTableId + " not found", 
+                            subProcessId);
+                    } else {
+                        TableDefinition table = tableOpt.get();
+                        
+                        // 验证归属
+                        if (!table.getFunctionUnit().getId().equals(functionUnitId)) {
+                            result.addError("SUBTABLE_WRONG_FUNCTION_UNIT", 
+                                "SubTable " + subTableId + " does not belong to the current FunctionUnit", 
+                                subProcessId);
+                        }
+                        
+                        // 验证 table_type
+                        if (table.getTableType() != TableType.SUB) {
+                            result.addError("INVALID_TABLE_TYPE", 
+                                "Table " + subTableId + " is not a SUB table (table_type=" + table.getTableType() + ")", 
+                                subProcessId);
+                        }
+                        
+                        // 验证 4: assigneeField 存在于子表的 FieldDefinition 列表中
+                        String assigneeField = userTaskProps.get("assigneeField");
+                        if (assigneeField != null && !assigneeField.isEmpty()) {
+                            boolean fieldExists = table.getFieldDefinitions().stream()
+                                .anyMatch(fd -> fd.getFieldName().equals(assigneeField));
+                            
+                            if (!fieldExists) {
+                                result.addError("ASSIGNEE_FIELD_NOT_FOUND", 
+                                    "AssigneeField '" + assigneeField + "' not found in SubTable " + subTableId, 
+                                    subProcessId);
+                            }
+                        } else {
+                            result.addError("MISSING_ASSIGNEE_FIELD", 
+                                "Multi-instance userTask is missing assigneeField configuration", 
+                                userTaskId);
+                        }
+                    }
+                } catch (NumberFormatException e) {
+                    result.addError("INVALID_SUBTABLE_ID", 
+                        "Invalid subTableId format: " + subTableIdStr, 
+                        subProcessId);
+                }
+            } else {
+                result.addError("MISSING_SUBTABLE_ID", 
+                    "Multi-instance userTask is missing subTableId configuration", 
+                    userTaskId);
+            }
+            
+            // 验证 5: formId（如配置）属于当前 FunctionUnit
+            String formIdStr = userTaskProps.get("formId");
+            if (formIdStr != null && !formIdStr.isEmpty()) {
+                try {
+                    Long formId = Long.parseLong(formIdStr);
+                    Optional<FormDefinition> formOpt = formDefinitionRepository.findById(formId);
+                    
+                    if (formOpt.isEmpty()) {
+                        result.addError("FORM_NOT_FOUND", 
+                            "Form with id " + formId + " not found", 
+                            userTaskId);
+                    } else {
+                        FormDefinition form = formOpt.get();
+                        if (!form.getFunctionUnit().getId().equals(functionUnitId)) {
+                            result.addError("FORM_WRONG_FUNCTION_UNIT", 
+                                "Form " + formId + " does not belong to the current FunctionUnit", 
+                                userTaskId);
+                        }
+                    }
+                } catch (NumberFormatException e) {
+                    result.addError("INVALID_FORM_ID", 
+                        "Invalid formId format: " + formIdStr, 
+                        userTaskId);
+                }
+            }
+        }
+        
+        return result;
+    }
+    
+    /**
+     * 查找匹配的 subProcess 结束标签位置
+     */
+    private int findMatchingSubProcessEnd(String bpmnXml, int startPos) {
+        int depth = 0;
+        int pos = startPos;
+        
+        while (pos < bpmnXml.length()) {
+            if (bpmnXml.startsWith("<bpmn:subProcess", pos)) {
+                depth++;
+                pos += 16;
+            } else if (bpmnXml.startsWith("</bpmn:subProcess>", pos)) {
+                depth--;
+                if (depth == 0) {
+                    return pos + 18; // 包含结束标签
+                }
+                pos += 18;
+            } else {
+                pos++;
+            }
+        }
+        
+        return -1; // 未找到匹配的结束标签
+    }
+    
+    /**
+     * 提取 userTask 的扩展属性
+     */
+    private Map<String, String> extractUserTaskProperties(String subProcessXml, String userTaskId) {
+        Map<String, String> properties = new HashMap<>();
+        
+        // 查找该 userTask 的扩展属性部分
+        Pattern userTaskBlockPattern = Pattern.compile(
+            "<bpmn:userTask[^>]*id=\"" + Pattern.quote(userTaskId) + "\"[^>]*>.*?</bpmn:userTask>",
+            Pattern.DOTALL
+        );
+        Matcher userTaskBlockMatcher = userTaskBlockPattern.matcher(subProcessXml);
+        
+        if (userTaskBlockMatcher.find()) {
+            String userTaskBlock = userTaskBlockMatcher.group();
+            
+            // 提取 custom:property 元素
+            Pattern propertyPattern = Pattern.compile(
+                "<custom:property[^>]*name=\"([^\"]+)\"[^>]*value=\"([^\"]+)\"[^>]*/>"
+            );
+            Matcher propertyMatcher = propertyPattern.matcher(userTaskBlock);
+            
+            while (propertyMatcher.find()) {
+                String name = propertyMatcher.group(1);
+                String value = propertyMatcher.group(2);
+                properties.put(name, value);
+            }
+        }
+        
+        return properties;
     }
 }

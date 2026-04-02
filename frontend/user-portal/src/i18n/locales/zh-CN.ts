@@ -52,7 +52,10 @@ export default {
     logout: '退出登录',
     logoutSuccess: '已退出登录',
     pleaseInput: '请输入{label}',
-    pleaseSelect: '请选择{label}'
+    pleaseSelect: '请选择{label}',
+    yes: '是',
+    no: '否',
+    submit: '提交'
   },
   menu: {
     dashboard: '首页',
@@ -203,6 +206,15 @@ export default {
     completedSnapshot: '已完成任务快照',
     noTaskForm: '当前阶段未绑定任务表单',
     submitTaskForm: '提交',
+    mainTaskInfo: '主任务信息',
+    yourTaskInfo: '您的任务信息',
+    loadingFormData: '正在加载表单数据...',
+    loadFormDataFailed: '加载表单数据失败',
+    confirmSubmit: '确定要提交此任务吗？',
+    submitSuccess: '任务提交成功',
+    submitFailed: '任务提交失败',
+    confirmCancel: '确定要取消吗？未保存的数据将丢失。',
+    dataModifiedPleaseRefresh: '数据已被修改，请刷新后重试',
   },
   process: {
     title: '新建申请',
@@ -742,6 +754,17 @@ export default {
     selectUser: '选择用户',
     selectDepartment: '选择部门',
     uploadFailed: '字段"{field}"上传失败',
+    // Multi-instance assignment
+    assignee: '处理人',
+    unassigned: '未分配',
+    assign: '分配',
+    reassign: '重新分配',
+    selectAssignee: '选择处理人',
+    user: '用户',
+    searchUser: '搜索用户',
+    pleaseSelectUser: '请选择用户',
+    assignmentSuccess: '分配成功',
+    assignmentFailed: '分配失败',
   },
   snapshotDiff: {
     snapshotValue: '快照值',
@@ -788,5 +811,8 @@ export default {
     serviceUnavailable: '服务暂时不可用，请稍后重试',
     serviceMaintenance: '服务维护中，请稍后重试',
     configError: '请求配置错误'
+  },
+  validation: {
+    required: '{field}不能为空'
   }
 }

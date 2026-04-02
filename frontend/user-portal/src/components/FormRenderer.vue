@@ -115,6 +115,9 @@
                   :summary-aggregations="getSummaryAggregations(field._bindingId)"
                   :validation-config="getSubTableValidation(field._bindingId)"
                   :upload-url="uploadUrl"
+                  :task-id="taskId"
+                  :enable-polling="enableSubTablePolling"
+                  :polling-interval="subTablePollingInterval"
                   @update:model-value="(rows: any[]) => handleSubTableUpdate(field._bindingId!, rows)"
                   style="margin-bottom: 16px;"
                 />
@@ -230,6 +233,10 @@ interface Props {
   // Task 7.5: Auto-save props
   functionUnitId?: string
   formId?: string
+  // Task 16: Real-time sync props
+  taskId?: string
+  enableSubTablePolling?: boolean
+  subTablePollingInterval?: number
 }
 
 const props = withDefaults(defineProps<Props>(), {

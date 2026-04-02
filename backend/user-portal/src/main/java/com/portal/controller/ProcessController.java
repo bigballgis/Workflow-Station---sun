@@ -121,6 +121,16 @@ public class ProcessController {
         return ApiResponse.error("403", e.getMessage());
     }
 
+    /**
+     * 处理流程发起业务异常（如 BPMN 获取失败、引擎不可用等）
+     */
+    @ExceptionHandler({IllegalStateException.class, IllegalArgumentException.class})
+    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+    public ApiResponse<Void> handleProcessException(RuntimeException e) {
+        log.error("Process operation failed: {}", e.getMessage(), e);
+        return ApiResponse.error("500", e.getMessage());
+    }
+
     @GetMapping("/actions")
     @Operation(summary = "根据ID列表获取动作定义")
     public ApiResponse<List<ActionDefinition>> getActionsByIds(

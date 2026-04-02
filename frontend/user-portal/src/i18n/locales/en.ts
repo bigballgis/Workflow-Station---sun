@@ -52,7 +52,10 @@ export default {
     logout: 'Logout',
     logoutSuccess: 'Logged out successfully',
     pleaseInput: 'Please input {label}',
-    pleaseSelect: 'Please select {label}'
+    pleaseSelect: 'Please select {label}',
+    yes: 'Yes',
+    no: 'No',
+    submit: 'Submit'
   },
   menu: {
     dashboard: 'Home',
@@ -203,6 +206,15 @@ export default {
     completedSnapshot: 'Completed Task Snapshot',
     noTaskForm: 'No Task Form bound to this stage',
     submitTaskForm: 'Submit',
+    mainTaskInfo: 'Main Task Information',
+    yourTaskInfo: 'Your Task Information',
+    loadingFormData: 'Loading form data...',
+    loadFormDataFailed: 'Failed to load form data',
+    confirmSubmit: 'Are you sure you want to submit this task?',
+    submitSuccess: 'Task submitted successfully',
+    submitFailed: 'Failed to submit task',
+    confirmCancel: 'Are you sure you want to cancel? Unsaved data will be lost.',
+    dataModifiedPleaseRefresh: 'Data has been modified, please refresh and try again',
   },
   process: {
     title: 'New Requests',
@@ -742,6 +754,17 @@ export default {
     selectUser: 'Select user',
     selectDepartment: 'Select department',
     uploadFailed: 'Upload failed: {field}',
+    // Multi-instance assignment
+    assignee: 'Assignee',
+    unassigned: 'Unassigned',
+    assign: 'Assign',
+    reassign: 'Reassign',
+    selectAssignee: 'Select Assignee',
+    user: 'User',
+    searchUser: 'Search user',
+    pleaseSelectUser: 'Please select a user',
+    assignmentSuccess: 'Assignment successful',
+    assignmentFailed: 'Assignment failed',
   },
   snapshotDiff: {
     snapshotValue: 'Snapshot Value',
@@ -788,5 +811,8 @@ export default {
     serviceUnavailable: 'Service temporarily unavailable, please try again later',
     serviceMaintenance: 'Service under maintenance, please try again later',
     configError: 'Request configuration error'
+  },
+  validation: {
+    required: '{field} is required'
   }
 }

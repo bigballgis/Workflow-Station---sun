@@ -3,9 +3,12 @@ package com.developer.component.impl;
 import com.developer.component.DeploymentComponent;
 import com.developer.component.ExportImportComponent;
 import com.developer.component.FunctionUnitComponent;
+import com.developer.component.ProcessDesignComponent;
 import com.developer.dto.DeployRequest;
 import com.developer.dto.DeployResponse;
+import com.developer.dto.ValidationResult;
 import com.developer.entity.FunctionUnit;
+import com.developer.entity.ProcessDefinition;
 import com.developer.exception.BusinessException;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.FunctionUnitRepository;
@@ -40,6 +43,7 @@ public class DeploymentComponentImpl implements DeploymentComponent {
     private final ExportImportComponent exportImportComponent;
     private final RestTemplate restTemplate;
     private final FunctionUnitComponent functionUnitComponent;
+    private final ProcessDesignComponent processDesignComponent;
     private final I18nService i18nService;
     private final TaskExecutor taskExecutor;
     
@@ -55,6 +59,7 @@ public class DeploymentComponentImpl implements DeploymentComponent {
             ExportImportComponent exportImportComponent,
             RestTemplate restTemplate,
             FunctionUnitComponent functionUnitComponent,
+            ProcessDesignComponent processDesignComponent,
             I18nService i18nService,
             @org.springframework.beans.factory.annotation.Qualifier("deploymentTaskExecutor") 
             @org.springframework.beans.factory.annotation.Autowired(required = false)
@@ -63,6 +68,7 @@ public class DeploymentComponentImpl implements DeploymentComponent {
         this.exportImportComponent = exportImportComponent;
         this.restTemplate = restTemplate;
         this.functionUnitComponent = functionUnitComponent;
+        this.processDesignComponent = processDesignComponent;
         this.i18nService = i18nService;
         // Fallback to SimpleAsyncTaskExecutor if no dedicated executor is configured
         this.taskExecutor = taskExecutor != null ? taskExecutor 
@@ -121,6 +127,20 @@ public class DeploymentComponentImpl implements DeploymentComponent {
             response.setChangeLog(request.getChangeLog());
             updateStep(steps, i18nService.getMessage("deploy.step.create_version"), "SUCCESS", i18nService.getMessage("deploy.version_created", updatedUnit.getCurrentVersion()));
             response.setProgress(15);
+            
+            // Step 0.5: Validate multi-instance configuration
+            updateStep(steps, "验证多实例配置", "RUNNING", null);
+            ProcessDefinition pd = processDesignComponent.getByFunctionUnitId(functionUnitId);
+            if (pd != null && pd.getBpmnXml() != null && !pd.getBpmnXml().trim().isEmpty()) {
+                ValidationResult miResult = processDesignComponent.validateMultiInstance(
+                    pd.getBpmnXml(), functionUnitId);
+                if (!miResult.isValid()) {
+                    throw new BusinessException("MULTI_INSTANCE_VALIDATION_FAILED", 
+                        "多实例配置验证失败: " + miResult.getErrors().toString());
+                }
+            }
+            updateStep(steps, "验证多实例配置", "SUCCESS", "多实例配置验证通过");
+            response.setProgress(18);
             
             // Step 1: Export function unit
             updateStep(steps, i18nService.getMessage("deploy.step.export"), "RUNNING", null);

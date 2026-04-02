@@ -7,13 +7,17 @@ import com.workflow.dto.response.ApiResponse;
 import com.workflow.dto.response.DeploymentResult;
 import com.workflow.dto.response.ProcessDefinitionResult;
 import com.workflow.dto.response.ProcessInstanceResult;
+import com.workflow.exception.WorkflowBusinessException;
+import com.workflow.exception.WorkflowValidationException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.context.request.WebRequest;
 
 import jakarta.validation.Valid;
 import java.util.HashMap;
@@ -231,5 +235,23 @@ public class ProcessController {
         log.info("Getting process instance status: {}", processInstanceId);
         Map<String, Object> status = processEngineComponent.getProcessInstanceStatus(processInstanceId);
         return ResponseEntity.ok(ApiResponse.success(status));
+    }
+
+    // ==================== 异常处理 ====================
+
+    @ExceptionHandler(WorkflowValidationException.class)
+    public ResponseEntity<ApiResponse<?>> handleValidationException(
+            WorkflowValidationException ex, WebRequest request) {
+        log.warn("Workflow validation error: {}", ex.getMessage());
+        return ResponseEntity.badRequest().body(
+                ApiResponse.error("VALIDATION_ERROR", ex.getMessage()));
+    }
+
+    @ExceptionHandler(WorkflowBusinessException.class)
+    public ResponseEntity<ApiResponse<?>> handleBusinessException(
+            WorkflowBusinessException ex, WebRequest request) {
+        log.error("Workflow business error [{}]: {}", ex.getErrorCode(), ex.getMessage(), ex.getCause());
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
+                ApiResponse.error(ex.getErrorCode(), ex.getMessage()));
     }
 }

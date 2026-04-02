@@ -92,6 +92,7 @@ declare module 'vue' {
     SnapshotDiffRenderer: typeof import('./components/SnapshotDiffRenderer.vue')['default']
     SubTableAddDialog: typeof import('./components/SubTableAddDialog.vue')['default']
     SubTableField: typeof import('./components/SubTableField.vue')['default']
+    SubTaskForm: typeof import('./components/SubTaskForm.vue')['default']
     TaskOverviewWidget: typeof import('./components/widgets/TaskOverviewWidget.vue')['default']
     UserProfileDropdown: typeof import('./components/UserProfileDropdown.vue')['default']
   }

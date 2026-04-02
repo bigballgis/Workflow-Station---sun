@@ -95,6 +95,9 @@ public class ProcessEngineComponent {
     @Autowired
     private HistoryService historyService;
     
+    @Autowired
+    private MultiInstanceCanceller multiInstanceCanceller;
+    
     /**
      * Deploy process definition
      * Supports BPMN 2.0 file validation and version management
@@ -665,6 +668,16 @@ public class ProcessEngineComponent {
                             request.getUserId(),
                             "Process instance has already ended");
                     }
+                    
+                    // Cancel multi-instance sub-tasks before terminating the process
+                    try {
+                        multiInstanceCanceller.cancelMultiInstanceTasks(request.getProcessInstanceId());
+                    } catch (Exception e) {
+                        log.error("Failed to cancel multi-instance tasks for process instance {}: {}", 
+                            request.getProcessInstanceId(), e.getMessage(), e);
+                        // Continue with termination even if cancellation fails
+                    }
+                    
                     runtimeService.deleteProcessInstance(
                         request.getProcessInstanceId(), 
                         request.getReason() != null ? request.getReason() : "Manually terminated");

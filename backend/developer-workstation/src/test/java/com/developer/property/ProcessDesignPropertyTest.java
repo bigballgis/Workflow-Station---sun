@@ -23,7 +23,12 @@ public class ProcessDesignPropertyTest {
     void bpmnValidationConsistencyProperty(@ForAll("validBpmnElements") String elementType) {
         ProcessDefinitionRepository repository = mock(ProcessDefinitionRepository.class);
         FunctionUnitRepository functionUnitRepository = mock(FunctionUnitRepository.class);
-        ProcessDesignComponent component = new ProcessDesignComponentImpl(repository, functionUnitRepository);
+        ProcessDesignComponent component = new ProcessDesignComponentImpl(
+            repository, 
+            functionUnitRepository, 
+            mock(com.developer.repository.TableDefinitionRepository.class),
+            mock(com.developer.repository.FormDefinitionRepository.class)
+        );
         
         assertThat(component).isNotNull();
         assertThat(elementType).isIn(

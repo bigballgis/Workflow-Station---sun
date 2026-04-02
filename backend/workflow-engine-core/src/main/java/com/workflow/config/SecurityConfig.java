@@ -66,6 +66,10 @@ public class SecurityConfig {
                 .requestMatchers(new AntPathRequestMatcher("/api/workflow/n8n/callback")).permitAll()
                 // N8N internal execution endpoint - inter-service communication
                 .requestMatchers(new AntPathRequestMatcher("/api/v1/n8n/execute")).permitAll()
+                // Process definition deploy/delete - internal service-to-service calls from admin-center
+                .requestMatchers(new AntPathRequestMatcher("/api/v1/processes/definitions/deploy")).permitAll()
+                .requestMatchers(new AntPathRequestMatcher("/api/v1/processes/definitions/deployments/**")).permitAll()
+                .requestMatchers(new AntPathRequestMatcher("/api/v1/processes/definitions/**")).permitAll()
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

@@ -1,5 +1,7 @@
 package com.workflow.component;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.workflow.aspect.WorkflowAuditAspect.Auditable;
 import com.workflow.client.AdminCenterClient;
 import com.workflow.dto.request.TaskAssignmentRequest;
@@ -73,6 +75,18 @@ public class TaskManagerComponent {
     
     @Autowired
     private BpmnActionParser bpmnActionParser;
+    
+    @Autowired
+    private SubTableDataInjector subTableDataInjector;
+    
+    @Autowired
+    private MultiInstanceDataResolver multiInstanceDataResolver;
+    
+    @Autowired
+    private MultiInstanceCanceller multiInstanceCanceller;
+    
+    @Autowired(required = false)
+    private com.workflow.messaging.SubTableUpdatePublisher updatePublisher;
     
     // ==================== 任务查询 ====================
 
@@ -783,6 +797,12 @@ public class TaskManagerComponent {
                         new WorkflowValidationException.ValidationError(
                             "taskId", "Task already completed", taskId)));
                 }
+                
+                // 【多实例扩展】检测当前任务是否为多实例子任务，如果是则回写数据到子表
+                if (isMultiInstanceSubTask(extendedTaskInfo)) {
+                    log.info("检测到多实例子任务，准备回写数据到子表: taskId={}", taskId);
+                    handleMultiInstanceSubTaskCompletion(taskId, variables, extendedTaskInfo);
+                }
             }
             
             // 设置流程变量到流程实例（在完成任务之前）
@@ -801,6 +821,13 @@ public class TaskManagerComponent {
             } else {
                 log.warn("No variables provided for task completion. TaskId: {}, UserId: {}", taskId, userId);
             }
+            
+            // 【多实例扩展】检测下一节点是否为多实例子流程，如果是则注入子表数据
+            String processInstanceId = flowableTask.getProcessInstanceId();
+            String processDefinitionId = flowableTask.getProcessDefinitionId();
+            String taskDefinitionKey = flowableTask.getTaskDefinitionKey();
+            
+            detectAndInjectMultiInstanceData(processInstanceId, processDefinitionId, taskDefinitionKey);
             
             // 完成Flowable任务
             if (variables != null && !variables.isEmpty()) {
@@ -834,6 +861,9 @@ public class TaskManagerComponent {
                 "Task completed successfully");
                 
         } catch (WorkflowValidationException e) {
+            throw e;
+        } catch (MultiInstanceDataResolver.OptimisticLockException e) {
+            // 直接抛出乐观锁异常，不包装
             throw e;
         } catch (Exception e) {
             throw new WorkflowBusinessException("TASK_COMPLETE_ERROR", 
@@ -888,6 +918,13 @@ public class TaskManagerComponent {
                         "targetActivityId", "Target activity is not a valid historic activity", targetActivityId)));
             }
             
+            // 检查回退目标是否在多实例子流程之前，如果是则级联取消多实例子任务
+            if (isReturnTargetBeforeMultiInstance(processInstanceId, currentActivityId, targetActivityId)) {
+                log.info("回退目标在多实例子流程之前，开始级联取消多实例子任务: processInstanceId={}, targetActivityId={}", 
+                    processInstanceId, targetActivityId);
+                multiInstanceCanceller.cancelMultiInstanceTasks(processInstanceId);
+            }
+            
             // 使用 Flowable 的 createChangeActivityStateBuilder 进行回退
             runtimeService.createChangeActivityStateBuilder()
                 .processInstanceId(processInstanceId)
@@ -920,6 +957,115 @@ public class TaskManagerComponent {
         } catch (Exception e) {
             throw new WorkflowBusinessException("TASK_RETURN_ERROR", 
                 "Task return failed: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * 检查回退目标是否在多实例子流程之前
+     * 
+     * 简化实现：通过历史执行时间判断
+     * - 如果存在活跃的多实例子任务
+     * - 且目标活动的最后完成时间早于多实例子任务的创建时间
+     * - 则认为回退目标在多实例子流程之前
+     * 
+     * @param processInstanceId 流程实例 ID
+     * @param currentActivityId 当前活动 ID
+     * @param targetActivityId 目标活动 ID
+     * @return 如果回退目标在多实例子流程之前返回 true
+     */
+    private boolean isReturnTargetBeforeMultiInstance(String processInstanceId, 
+                                                      String currentActivityId, 
+                                                      String targetActivityId) {
+        try {
+            // 查询流程实例中所有活跃的多实例子任务
+            List<ExtendedTaskInfo> activeMultiInstanceTasks = extendedTaskInfoRepository
+                .findByProcessInstanceIdAndIsDeletedFalse(processInstanceId)
+                .stream()
+                .filter(this::isMultiInstanceTask)
+                .filter(task -> !"COMPLETED".equals(task.getStatus()) && !"CANCELLED".equals(task.getStatus()))
+                .toList();
+            
+            if (activeMultiInstanceTasks.isEmpty()) {
+                log.debug("流程实例 {} 中没有活跃的多实例子任务", processInstanceId);
+                return false;
+            }
+            
+            // 获取最早的多实例子任务创建时间
+            LocalDateTime earliestMultiInstanceTaskTime = activeMultiInstanceTasks.stream()
+                .map(ExtendedTaskInfo::getCreatedTime)
+                .min(LocalDateTime::compareTo)
+                .orElse(null);
+            
+            if (earliestMultiInstanceTaskTime == null) {
+                log.warn("无法获取多实例子任务的创建时间");
+                return false;
+            }
+            
+            // 查询目标活动的最后完成时间
+            List<HistoricActivityInstance> targetActivities = historyService
+                .createHistoricActivityInstanceQuery()
+                .processInstanceId(processInstanceId)
+                .activityId(targetActivityId)
+                .finished()
+                .orderByHistoricActivityInstanceEndTime()
+                .desc()
+                .list();
+            
+            if (targetActivities.isEmpty()) {
+                log.warn("未找到目标活动的历史记录: {}", targetActivityId);
+                return false;
+            }
+            
+            // 获取目标活动的最后完成时间
+            java.util.Date targetEndDate = targetActivities.get(0).getEndTime();
+            if (targetEndDate == null) {
+                log.warn("目标活动 {} 的完成时间为空", targetActivityId);
+                return false;
+            }
+            
+            LocalDateTime targetEndTime = LocalDateTime.ofInstant(
+                targetEndDate.toInstant(), 
+                java.time.ZoneId.systemDefault()
+            );
+            
+            // 如果目标活动的完成时间早于多实例子任务的创建时间，则认为回退目标在多实例之前
+            boolean isBeforeMultiInstance = targetEndTime.isBefore(earliestMultiInstanceTaskTime);
+            
+            if (isBeforeMultiInstance) {
+                log.info("检测到回退目标 {} (完成时间: {}) 在多实例子流程 (创建时间: {}) 之前", 
+                    targetActivityId, targetEndTime, earliestMultiInstanceTaskTime);
+            }
+            
+            return isBeforeMultiInstance;
+            
+        } catch (Exception e) {
+            log.error("检查回退目标是否在多实例子流程之前时发生异常: processInstanceId={}", processInstanceId, e);
+            // 发生异常时保守处理，不执行级联取消
+            return false;
+        }
+    }
+    
+    /**
+     * 检查任务是否为多实例子任务
+     */
+    private boolean isMultiInstanceTask(ExtendedTaskInfo task) {
+        String extendedProperties = task.getExtendedProperties();
+        if (extendedProperties == null || extendedProperties.trim().isEmpty()) {
+            return false;
+        }
+        
+        try {
+            ObjectMapper objectMapper = new ObjectMapper();
+            Map<String, Object> properties = objectMapper.readValue(
+                extendedProperties, 
+                new TypeReference<Map<String, Object>>() {}
+            );
+            
+            Object multiInstance = properties.get("multiInstance");
+            return multiInstance != null && Boolean.TRUE.equals(multiInstance);
+        } catch (Exception e) {
+            log.warn("解析 extendedProperties 失败: taskId={}", task.getTaskId(), e);
+            return false;
         }
     }
     
@@ -1469,6 +1615,405 @@ public class TaskManagerComponent {
         } catch (Exception e) {
             throw new WorkflowBusinessException("TASK_QUERY_ERROR", 
                 "Failed to query high priority tasks: " + e.getMessage(), e);
+        }
+    }
+    
+    // ==================== 多实例子流程支持方法 ====================
+    
+    /**
+     * 检测当前任务是否为多实例子任务
+     * 通过 extendedProperties 中的 multiInstance 标记判断
+     */
+    private boolean isMultiInstanceSubTask(ExtendedTaskInfo extendedTaskInfo) {
+        String extendedProperties = extendedTaskInfo.getExtendedProperties();
+        if (extendedProperties == null || extendedProperties.trim().isEmpty()) {
+            return false;
+        }
+        
+        try {
+            com.fasterxml.jackson.databind.ObjectMapper objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            Map<String, Object> props = objectMapper.readValue(extendedProperties, Map.class);
+            Object multiInstance = props.get("multiInstance");
+            return multiInstance != null && Boolean.TRUE.equals(multiInstance);
+        } catch (Exception e) {
+            log.warn("解析 extendedProperties 失败: taskId={}", extendedTaskInfo.getTaskId(), e);
+            return false;
+        }
+    }
+    
+    /**
+     * 处理多实例子任务完成时的数据回写
+     * 调用 MultiInstanceDataResolver 将表单数据回写到子表
+     */
+    private void handleMultiInstanceSubTaskCompletion(String taskId, Map<String, Object> variables, 
+                                                      ExtendedTaskInfo extendedTaskInfo) {
+        try {
+            // 从 variables 中提取表单数据和 rowVersion
+            if (variables == null || variables.isEmpty()) {
+                log.warn("多实例子任务完成但未提供表单数据: taskId={}", taskId);
+                return;
+            }
+            
+            Object formDataObj = variables.get("formData");
+            Object rowVersionObj = variables.get("rowVersion");
+            
+            if (formDataObj == null) {
+                log.warn("多实例子任务完成但未提供 formData: taskId={}", taskId);
+                return;
+            }
+            
+            Map<String, Object> formData = (Map<String, Object>) formDataObj;
+            Long rowVersion = rowVersionObj != null ? 
+                ((Number) rowVersionObj).longValue() : 1L;
+            
+            log.info("调用 MultiInstanceDataResolver 回写数据: taskId={}, rowVersion={}", 
+                taskId, rowVersion);
+            
+            multiInstanceDataResolver.writeBackSubTableRow(taskId, formData, rowVersion);
+            
+            log.info("多实例子任务数据回写成功: taskId={}", taskId);
+            
+            // 发布 WebSocket 更新通知
+            publishMultiInstanceWebSocketUpdate(taskId, extendedTaskInfo);
+            
+        } catch (MultiInstanceDataResolver.OptimisticLockException e) {
+            log.error("多实例子任务数据回写失败（乐观锁冲突）: taskId={}", taskId, e);
+            // 直接抛出乐观锁异常，不包装
+            throw e;
+        } catch (WorkflowValidationException e) {
+            // 直接抛出验证异常，不包装
+            throw e;
+        } catch (Exception e) {
+            log.error("多实例子任务数据回写失败: taskId={}", taskId, e);
+            throw new WorkflowBusinessException("MULTI_INSTANCE_DATA_WRITEBACK_ERROR", 
+                "多实例子任务数据回写失败: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * 发布多实例子任务 WebSocket 更新通知
+     */
+    private void publishMultiInstanceWebSocketUpdate(String taskId, ExtendedTaskInfo extendedTaskInfo) {
+        if (updatePublisher == null) {
+            return;
+        }
+        
+        try {
+            // 从 extendedProperties 中提取 rowId 和主任务 ID
+            String extendedProperties = extendedTaskInfo.getExtendedProperties();
+            if (extendedProperties == null || extendedProperties.trim().isEmpty()) {
+                return;
+            }
+            
+            com.fasterxml.jackson.databind.ObjectMapper objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            Map<String, Object> props = objectMapper.readValue(extendedProperties, Map.class);
+            
+            Object rowIdObj = props.get("subTableRowId");
+            if (rowIdObj == null) {
+                log.warn("无法从 extendedProperties 中获取 subTableRowId: taskId={}", taskId);
+                return;
+            }
+            
+            Long rowId = ((Number) rowIdObj).longValue();
+            
+            // 获取主任务 ID（从流程实例中查找前置任务）
+            String processInstanceId = extendedTaskInfo.getProcessInstanceId();
+            String mainTaskId = findMainTaskIdForMultiInstance(processInstanceId);
+            
+            if (mainTaskId != null) {
+                updatePublisher.publishUpdate(mainTaskId, rowId, null, "COMPLETED");
+                log.debug("WebSocket 更新通知已发布: mainTaskId={}, rowId={}", mainTaskId, rowId);
+            }
+            
+        } catch (Exception e) {
+            // WebSocket 发布失败不应影响主流程
+            log.warn("发布 WebSocket 更新通知失败: taskId={}", taskId, e);
+        }
+    }
+    
+    /**
+     * 查找多实例子流程的主任务 ID
+     * 通过查询流程实例的历史任务，找到多实例子流程之前的任务
+     */
+    private String findMainTaskIdForMultiInstance(String processInstanceId) {
+        try {
+            // 查询流程实例的所有历史任务，按创建时间倒序
+            List<HistoricActivityInstance> activities = historyService
+                .createHistoricActivityInstanceQuery()
+                .processInstanceId(processInstanceId)
+                .activityType("userTask")
+                .orderByHistoricActivityInstanceStartTime()
+                .desc()
+                .list();
+            
+            // 找到第一个非多实例子任务（即主任务）
+            for (HistoricActivityInstance activity : activities) {
+                String taskId = activity.getTaskId();
+                if (taskId != null) {
+                    Optional<ExtendedTaskInfo> extInfoOpt = extendedTaskInfoRepository
+                        .findByTaskIdAndIsDeletedFalse(taskId);
+                    
+                    if (extInfoOpt.isPresent()) {
+                        ExtendedTaskInfo extInfo = extInfoOpt.get();
+                        if (!isMultiInstanceSubTask(extInfo)) {
+                            return taskId;
+                        }
+                    }
+                }
+            }
+            
+            return null;
+        } catch (Exception e) {
+            log.warn("查找主任务 ID 失败: processInstanceId={}", processInstanceId, e);
+            return null;
+        }
+    }
+    
+    /**
+     * 检测下一节点是否为多实例子流程，如果是则注入子表数据
+     * 
+     * 实现逻辑：
+     * 1. 获取当前任务的 BPMN 模型
+     * 2. 查找当前任务的出口连线（outgoing flows）
+     * 3. 遍历出口连线的目标节点，检测是否为多实例子流程
+     * 4. 如果是多实例子流程，从扩展属性中提取子表配置
+     * 5. 调用 SubTableDataInjector 注入子表数据
+     */
+    private void detectAndInjectMultiInstanceData(String processInstanceId, 
+                                                  String processDefinitionId, 
+                                                  String taskDefinitionKey) {
+        try {
+            log.debug("检测下一节点是否为多实例子流程: processInstanceId={}, taskDefinitionKey={}", 
+                processInstanceId, taskDefinitionKey);
+            
+            // 1. 获取 BPMN 模型
+            org.flowable.bpmn.model.BpmnModel bpmnModel = repositoryService.getBpmnModel(processDefinitionId);
+            if (bpmnModel == null) {
+                log.warn("无法获取 BPMN 模型: processDefinitionId={}", processDefinitionId);
+                return;
+            }
+            
+            // 2. 获取当前任务节点
+            org.flowable.bpmn.model.FlowElement currentElement = bpmnModel.getFlowElement(taskDefinitionKey);
+            if (currentElement == null) {
+                log.warn("无法找到当前任务节点: taskDefinitionKey={}", taskDefinitionKey);
+                return;
+            }
+            
+            if (!(currentElement instanceof org.flowable.bpmn.model.UserTask)) {
+                log.debug("当前节点不是 UserTask: taskDefinitionKey={}", taskDefinitionKey);
+                return;
+            }
+            
+            org.flowable.bpmn.model.UserTask userTask = (org.flowable.bpmn.model.UserTask) currentElement;
+            
+            // 3. 获取出口连线
+            List<org.flowable.bpmn.model.SequenceFlow> outgoingFlows = userTask.getOutgoingFlows();
+            if (outgoingFlows == null || outgoingFlows.isEmpty()) {
+                log.debug("当前任务没有出口连线: taskDefinitionKey={}", taskDefinitionKey);
+                return;
+            }
+            
+            // 4. 遍历出口连线，检测目标节点是否为多实例子流程
+            for (org.flowable.bpmn.model.SequenceFlow flow : outgoingFlows) {
+                String targetRef = flow.getTargetRef();
+                org.flowable.bpmn.model.FlowElement targetElement = bpmnModel.getFlowElement(targetRef);
+                
+                if (targetElement instanceof org.flowable.bpmn.model.SubProcess) {
+                    org.flowable.bpmn.model.SubProcess subProcess = 
+                        (org.flowable.bpmn.model.SubProcess) targetElement;
+                    
+                    // 检测是否为多实例子流程
+                    org.flowable.bpmn.model.MultiInstanceLoopCharacteristics loopCharacteristics = 
+                        subProcess.getLoopCharacteristics();
+                    
+                    if (loopCharacteristics != null) {
+                        log.info("检测到多实例子流程: subProcessId={}, processInstanceId={}", 
+                            subProcess.getId(), processInstanceId);
+                        
+                        // 5. 提取多实例配置并注入数据
+                        injectMultiInstanceSubTableData(processInstanceId, subProcess, loopCharacteristics);
+                        
+                        // 只处理第一个多实例子流程
+                        return;
+                    }
+                }
+            }
+            
+            log.debug("下一节点不是多实例子流程: taskDefinitionKey={}", taskDefinitionKey);
+            
+        } catch (Exception e) {
+            log.error("检测多实例子流程失败: processInstanceId={}, taskDefinitionKey={}", 
+                processInstanceId, taskDefinitionKey, e);
+            // 不抛出异常，避免影响任务完成流程
+        }
+    }
+    
+    /**
+     * 注入多实例子表数据
+     * 从子流程的扩展属性中提取子表配置，调用 SubTableDataInjector 注入数据
+     */
+    private void injectMultiInstanceSubTableData(String processInstanceId, 
+                                                 org.flowable.bpmn.model.SubProcess subProcess,
+                                                 org.flowable.bpmn.model.MultiInstanceLoopCharacteristics loopCharacteristics) {
+        try {
+            // 从 loopCharacteristics 的扩展元素中获取 collection 和 elementVariable
+            Map<String, List<org.flowable.bpmn.model.ExtensionElement>> extensionElements = 
+                loopCharacteristics.getExtensionElements();
+            
+            String collectionVariableName = null;
+            
+            if (extensionElements != null) {
+                List<org.flowable.bpmn.model.ExtensionElement> collectionElements = 
+                    extensionElements.get("collection");
+                if (collectionElements != null && !collectionElements.isEmpty()) {
+                    collectionVariableName = collectionElements.get(0).getElementText();
+                }
+            }
+            
+            if (collectionVariableName == null || collectionVariableName.trim().isEmpty()) {
+                log.warn("多实例子流程缺少 collection 配置: subProcessId={}", subProcess.getId());
+                return;
+            }
+            
+            log.info("多实例子流程 collection 变量名: {}", collectionVariableName);
+            
+            // 从子流程内部的 UserTask 中提取子表配置
+            List<org.flowable.bpmn.model.FlowElement> flowElements = 
+                (List<org.flowable.bpmn.model.FlowElement>) subProcess.getFlowElements();
+            
+            for (org.flowable.bpmn.model.FlowElement element : flowElements) {
+                if (element instanceof org.flowable.bpmn.model.UserTask) {
+                    org.flowable.bpmn.model.UserTask userTask = 
+                        (org.flowable.bpmn.model.UserTask) element;
+                    
+                    // 从 UserTask 的扩展属性中提取子表配置
+                    Map<String, Object> subTableConfig = extractSubTableConfig(userTask);
+                    
+                    if (subTableConfig != null && !subTableConfig.isEmpty()) {
+                        String subTableName = (String) subTableConfig.get("subTableName");
+                        String assigneeField = (String) subTableConfig.get("assigneeField");
+                        String foreignKeyField = (String) subTableConfig.get("foreignKeyField");
+                        Long mainRecordId = (Long) subTableConfig.get("mainRecordId");
+                        
+                        if (subTableName != null && assigneeField != null) {
+                            log.info("准备注入子表数据: subTableName={}, assigneeField={}, collectionVar={}", 
+                                subTableName, assigneeField, collectionVariableName);
+                            
+                            // 从流程变量中获取主表记录 ID（如果配置中没有）
+                            if (mainRecordId == null) {
+                                mainRecordId = getMainRecordIdFromProcessVariables(processInstanceId);
+                            }
+                            
+                            // 从流程变量中获取外键字段名（如果配置中没有）
+                            if (foreignKeyField == null) {
+                                foreignKeyField = "main_record_id"; // 默认外键字段名
+                            }
+                            
+                            // 调用 SubTableDataInjector 注入数据
+                            subTableDataInjector.injectSubTableData(
+                                processInstanceId,
+                                subTableName,
+                                foreignKeyField,
+                                mainRecordId,
+                                assigneeField,
+                                collectionVariableName
+                            );
+                            
+                            log.info("子表数据注入成功: processInstanceId={}, subTableName={}", 
+                                processInstanceId, subTableName);
+                            
+                            // 只处理第一个 UserTask 的配置
+                            return;
+                        }
+                    }
+                }
+            }
+            
+            log.warn("多实例子流程中未找到子表配置: subProcessId={}", subProcess.getId());
+            
+        } catch (Exception e) {
+            log.error("注入多实例子表数据失败: processInstanceId={}, subProcessId={}", 
+                processInstanceId, subProcess.getId(), e);
+            throw new WorkflowBusinessException("MULTI_INSTANCE_DATA_INJECTION_ERROR", 
+                "注入多实例子表数据失败: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * 从 UserTask 的扩展属性中提取子表配置
+     * 查找 custom:properties 中的 subTableName、assigneeField 等属性
+     */
+    private Map<String, Object> extractSubTableConfig(org.flowable.bpmn.model.UserTask userTask) {
+        Map<String, Object> config = new HashMap<>();
+        
+        Map<String, List<org.flowable.bpmn.model.ExtensionElement>> extensionElements = 
+            userTask.getExtensionElements();
+        
+        if (extensionElements == null || extensionElements.isEmpty()) {
+            return config;
+        }
+        
+        // 查找 custom:properties 元素
+        List<org.flowable.bpmn.model.ExtensionElement> propertiesElements = 
+            extensionElements.get("properties");
+        
+        if (propertiesElements == null || propertiesElements.isEmpty()) {
+            return config;
+        }
+        
+        for (org.flowable.bpmn.model.ExtensionElement propertiesElement : propertiesElements) {
+            List<org.flowable.bpmn.model.ExtensionElement> propertyElements = 
+                propertiesElement.getChildElements().get("property");
+            
+            if (propertyElements != null) {
+                for (org.flowable.bpmn.model.ExtensionElement propertyElement : propertyElements) {
+                    String name = propertyElement.getAttributeValue(null, "name");
+                    String value = propertyElement.getAttributeValue(null, "value");
+                    
+                    if (name != null && value != null) {
+                        config.put(name, value);
+                    }
+                }
+            }
+        }
+        
+        return config;
+    }
+    
+    /**
+     * 从流程变量中获取主表记录 ID
+     * 通常主表记录 ID 存储在流程变量 "mainRecordId" 或 "businessKey" 中
+     */
+    private Long getMainRecordIdFromProcessVariables(String processInstanceId) {
+        try {
+            Map<String, Object> variables = runtimeService.getVariables(processInstanceId);
+            
+            // 尝试从 mainRecordId 变量获取
+            Object mainRecordIdObj = variables.get("mainRecordId");
+            if (mainRecordIdObj != null) {
+                return ((Number) mainRecordIdObj).longValue();
+            }
+            
+            // 尝试从 businessKey 获取
+            ProcessInstance processInstance = runtimeService.createProcessInstanceQuery()
+                .processInstanceId(processInstanceId)
+                .singleResult();
+            
+            if (processInstance != null && processInstance.getBusinessKey() != null) {
+                try {
+                    return Long.parseLong(processInstance.getBusinessKey());
+                } catch (NumberFormatException e) {
+                    log.warn("无法将 businessKey 转换为 Long: {}", processInstance.getBusinessKey());
+                }
+            }
+            
+            log.warn("无法从流程变量中获取主表记录 ID: processInstanceId={}", processInstanceId);
+            return null;
+            
+        } catch (Exception e) {
+            log.error("获取主表记录 ID 失败: processInstanceId={}", processInstanceId, e);
+            return null;
         }
     }
 }

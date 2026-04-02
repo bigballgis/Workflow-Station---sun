@@ -79,6 +79,27 @@
         </template>
       </el-table-column>
 
+      <!-- Multi-instance assignment column -->
+      <el-table-column v-if="showAssignButton && assigneeField" :label="t('subTable.assignee')" width="180">
+        <template #default="scope">
+          <div class="assignee-cell">
+            <span v-if="scope.row[assigneeField]" class="assignee-name">
+              {{ getUserDisplayName(scope.row[assigneeField]) }}
+            </span>
+            <span v-else class="text-muted">{{ t('subTable.unassigned') }}</span>
+            <el-button 
+              v-if="canAssign"
+              link 
+              type="primary" 
+              size="small" 
+              @click="openAssignDialog(scope.row, scope.$index)"
+              class="assign-btn">
+              {{ scope.row[assigneeField] ? t('subTable.reassign') : t('subTable.assign') }}
+            </el-button>
+          </div>
+        </template>
+      </el-table-column>
+
       <template #empty>
         <el-empty :description="t('subTable.noData')" :image-size="40" />
       </template>
@@ -96,6 +117,39 @@
       @update:visible="dialogVisible = $event"
       @save="handleDialogSave"
     />
+
+    <!-- User picker dialog for assignment -->
+    <el-dialog 
+      v-model="assignDialogVisible" 
+      :title="t('subTable.selectAssignee')" 
+      width="500px"
+      @opened="onAssignDialogOpened">
+      <el-form label-width="100px">
+        <el-form-item :label="t('subTable.user')">
+          <el-select 
+            v-model="selectedAssigneeId" 
+            :placeholder="t('subTable.searchUser')" 
+            filterable
+            remote
+            :remote-method="searchUsers"
+            :loading="userSearchLoading"
+            style="width: 100%;">
+            <el-option
+              v-for="user in userOptions"
+              :key="user.id"
+              :label="`${user.name} (${user.username})`"
+              :value="user.id"
+            />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="assignDialogVisible = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="confirmAssignment" :loading="assigning">
+          {{ t('common.confirm') }}
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -110,6 +164,10 @@ import { resolveDisplayValue } from './subTableAddDialogHelpers'
 import type { DialogColumn } from './subTableAddDialogHelpers'
 import type { RowFormulaRule, SubTableValidationConfig } from './formRendererHelpers'
 import { calculateSummary } from './businessLogicEngine'
+import { assignSubTableRow, getSubTableData } from '@/api/task'
+import { userApi } from '@/api/user'
+import { onMounted, onBeforeUnmount } from 'vue'
+import { useSubTableWebSocket, type SubTableUpdateMessage } from '@/composables/useSubTableWebSocket'
 
 const { t } = useI18n()
 
@@ -158,10 +216,21 @@ const props = defineProps<{
   summaryAggregations?: Record<string, 'SUM' | 'AVG' | 'COUNT' | 'MIN' | 'MAX'>
   validationConfig?: SubTableValidationConfig
   uploadUrl?: string
+  // Multi-instance assignment props
+  taskId?: string
+  assigneeField?: string
+  canAssign?: boolean
+  showAssignButton?: boolean
+  // Real-time sync props
+  enablePolling?: boolean
+  pollingInterval?: number
+  enableWebSocket?: boolean
 }>()
 
 const emit = defineEmits<{
   (e: 'update:modelValue', val: any[]): void
+  (e: 'assignmentChanged'): void
+  (e: 'dataRefreshed', rows: any[]): void
 }>()
 
 const rows = ref<any[]>([])
@@ -273,6 +342,208 @@ async function deleteRow(i: number) {
   rows.value.splice(i, 1)
   emit('update:modelValue', [...rows.value])
 }
+
+// Assignment functionality
+const assignDialogVisible = ref(false)
+const selectedAssigneeId = ref('')
+const currentAssignRow = ref<any>(null)
+const currentAssignRowIndex = ref<number | null>(null)
+const assigning = ref(false)
+const userOptions = ref<any[]>([])
+const userSearchLoading = ref(false)
+const userNameCache = ref<Record<string, string>>({})
+
+function openAssignDialog(row: any, rowIndex: number) {
+  currentAssignRow.value = row
+  currentAssignRowIndex.value = rowIndex
+  selectedAssigneeId.value = row[props.assigneeField || ''] || ''
+  assignDialogVisible.value = true
+}
+
+function onAssignDialogOpened() {
+  searchUsers('')
+}
+
+async function searchUsers(keyword: string) {
+  userSearchLoading.value = true
+  try {
+    const result = await userApi.searchUsers(keyword || '')
+    userOptions.value = [...result]
+    // Cache user names
+    result.forEach((user: any) => {
+      userNameCache.value[user.id] = user.name
+    })
+  } catch (e) {
+    console.error('Failed to search users:', e)
+    userOptions.value = []
+  } finally {
+    userSearchLoading.value = false
+  }
+}
+
+function getUserDisplayName(userId: string): string {
+  return userNameCache.value[userId] || userId
+}
+
+async function confirmAssignment() {
+  if (!selectedAssigneeId.value) {
+    ElMessage.warning(t('subTable.pleaseSelectUser'))
+    return
+  }
+
+  if (!props.taskId || !currentAssignRow.value?.id) {
+    ElMessage.error(t('subTable.assignmentFailed'))
+    return
+  }
+
+  assigning.value = true
+  try {
+    const response = await assignSubTableRow(
+      props.taskId,
+      currentAssignRow.value.id,
+      selectedAssigneeId.value
+    )
+    
+    const result = response.data || response
+    if (result.success) {
+      // Update the row data
+      if (currentAssignRowIndex.value !== null && props.assigneeField) {
+        rows.value[currentAssignRowIndex.value][props.assigneeField] = result.assigneeId
+        // Cache the user name
+        userNameCache.value[result.assigneeId] = result.assigneeName
+        emit('update:modelValue', [...rows.value])
+        emit('assignmentChanged')
+      }
+      
+      ElMessage.success(t('subTable.assignmentSuccess'))
+      assignDialogVisible.value = false
+    } else {
+      ElMessage.error(t('subTable.assignmentFailed'))
+    }
+  } catch (error: any) {
+    console.error('Failed to assign sub-table row:', error)
+    ElMessage.error(error.response?.data?.message || t('subTable.assignmentFailed'))
+  } finally {
+    assigning.value = false
+  }
+}
+
+// Real-time polling functionality
+let pollingTimer: ReturnType<typeof setInterval> | null = null
+
+// WebSocket functionality
+const { connected: wsConnected, subscribe: wsSubscribe, unsubscribe: wsUnsubscribe } = useSubTableWebSocket()
+
+async function refreshSubTableData() {
+  if (!props.taskId) return
+  
+  try {
+    const response = await getSubTableData(props.taskId)
+    const result = response.data || response
+    
+    if (result.rows && Array.isArray(result.rows)) {
+      // Merge the refreshed data with existing rows
+      const updatedRows = rows.value.map(existingRow => {
+        const refreshedRow = result.rows.find((r: any) => r.id === existingRow.id)
+        if (refreshedRow) {
+          // Update assignee and status fields while preserving other data
+          return {
+            ...existingRow,
+            ...refreshedRow
+          }
+        }
+        return existingRow
+      })
+      
+      rows.value = updatedRows
+      emit('update:modelValue', [...rows.value])
+      emit('dataRefreshed', updatedRows)
+    }
+  } catch (error) {
+    console.error('Failed to refresh sub-table data:', error)
+    // Silently fail - don't show error message for background polling
+  }
+}
+
+function startPolling() {
+  if (!props.enablePolling || !props.taskId) return
+  
+  stopPolling()
+  
+  const interval = props.pollingInterval || 5000 // Default 5 seconds
+  pollingTimer = setInterval(() => {
+    refreshSubTableData()
+  }, interval)
+}
+
+function stopPolling() {
+  if (pollingTimer) {
+    clearInterval(pollingTimer)
+    pollingTimer = null
+  }
+}
+
+// WebSocket subscription management
+function startWebSocketSubscription() {
+  if (!props.enableWebSocket || !props.taskId) return
+  
+  stopWebSocketSubscription()
+  
+  wsSubscribe(props.taskId, (message: SubTableUpdateMessage) => {
+    console.log('[SubTableField] Received WebSocket update:', message)
+    // Refresh data when receiving update notification
+    refreshSubTableData()
+  })
+}
+
+function stopWebSocketSubscription() {
+  wsUnsubscribe()
+}
+
+// Lifecycle hooks for polling
+onMounted(() => {
+  if (props.enablePolling) {
+    startPolling()
+  }
+  if (props.enableWebSocket) {
+    startWebSocketSubscription()
+  }
+})
+
+onBeforeUnmount(() => {
+  stopPolling()
+  stopWebSocketSubscription()
+})
+
+// Watch for enablePolling changes
+watch(() => props.enablePolling, (enabled) => {
+  if (enabled) {
+    startPolling()
+  } else {
+    stopPolling()
+  }
+})
+
+// Watch for enableWebSocket changes
+watch(() => props.enableWebSocket, (enabled) => {
+  if (enabled) {
+    startWebSocketSubscription()
+  } else {
+    stopWebSocketSubscription()
+  }
+})
+
+// Watch for taskId changes
+watch(() => props.taskId, () => {
+  if (props.enablePolling) {
+    stopPolling()
+    startPolling()
+  }
+  if (props.enableWebSocket) {
+    stopWebSocketSubscription()
+    startWebSocketSubscription()
+  }
+})
 </script>
 
 <style scoped lang="scss">
@@ -347,6 +618,27 @@ async function deleteRow(i: number) {
     max-height: 40px;
     object-fit: contain;
     vertical-align: middle;
+  }
+
+  .assignee-cell {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+
+    .assignee-name {
+      font-size: 13px;
+      color: #303133;
+    }
+
+    .text-muted {
+      font-size: 13px;
+      color: #909399;
+    }
+
+    .assign-btn {
+      flex-shrink: 0;
+    }
   }
 }
 </style>

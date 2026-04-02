@@ -184,6 +184,13 @@ public class ProcessComponent {
                 actualProcessKey = pdk.toString();
                 log.info("Using actual process definition key from deployment: {}", actualProcessKey);
             }
+        } else {
+            // 部署失败或引擎返回空，尝试从 BPMN XML 中提取 process id 作为 key
+            String bpmnProcessId = extractProcessIdFromBpmn(bpmnXml);
+            if (bpmnProcessId != null && !bpmnProcessId.isEmpty()) {
+                actualProcessKey = bpmnProcessId;
+                log.info("Deploy returned empty, using BPMN process id as key: {}", actualProcessKey);
+            }
         }
         
         // 启动流程实例
@@ -362,6 +369,27 @@ public class ProcessComponent {
                 .build();
     }
     
+    /**
+     * 从 BPMN XML 中提取 <process id="..."> 属性值
+     */
+    private String extractProcessIdFromBpmn(String bpmnXml) {
+        if (bpmnXml == null) return null;
+        try {
+            int processTagIdx = bpmnXml.indexOf("<process ");
+            if (processTagIdx == -1) {
+                processTagIdx = bpmnXml.indexOf("<bpmn:process ");
+            }
+            if (processTagIdx == -1) return null;
+            int tagEnd = bpmnXml.indexOf('>', processTagIdx);
+            if (tagEnd == -1) return null;
+            String tag = bpmnXml.substring(processTagIdx, tagEnd + 1);
+            return extractAttribute(tag, "id");
+        } catch (Exception e) {
+            log.warn("Failed to extract process id from BPMN: {}", e.getMessage());
+            return null;
+        }
+    }
+
     /**
      * 解析 BPMN XML 获取第一个需要审批的用户任务信息（跳过发起人任务）
      */

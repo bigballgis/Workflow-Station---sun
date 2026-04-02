@@ -293,6 +293,17 @@ public class TableDesignComponentImpl implements TableDesignComponent {
             }
         }
         
+        // 为 SUB 类型的表自动添加 row_version 列（用于乐观锁）
+        if (table.getTableType() == com.developer.enums.TableType.SUB) {
+            String rowVersionType = switch (dialect) {
+                case POSTGRESQL -> "BIGINT";
+                case MYSQL -> "BIGINT";
+                case ORACLE -> "NUMBER(19)";
+                case SQLSERVER -> "BIGINT";
+            };
+            columnDefs.add("    row_version " + rowVersionType + " NOT NULL DEFAULT 1");
+        }
+        
         ddl.append(String.join(",\n", columnDefs));
         
         if (!primaryKeys.isEmpty()) {

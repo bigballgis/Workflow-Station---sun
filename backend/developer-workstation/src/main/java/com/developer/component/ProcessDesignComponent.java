@@ -34,4 +34,12 @@ public interface ProcessDesignComponent {
      * 解析BPMN XML获取流程结构
      */
     Map<String, Object> parseBpmnXml(String bpmnXml);
+    
+    /**
+     * 验证多实例子流程配置
+     * @param bpmnXml BPMN XML 内容
+     * @param functionUnitId 功能单元 ID（用于验证子表归属）
+     * @return 验证结果
+     */
+    ValidationResult validateMultiInstance(String bpmnXml, Long functionUnitId);
 }

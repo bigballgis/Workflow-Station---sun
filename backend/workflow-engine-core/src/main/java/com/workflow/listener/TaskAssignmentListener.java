@@ -1,5 +1,9 @@
 package com.workflow.listener;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.workflow.entity.ExtendedTaskInfo;
+import com.workflow.enums.AssignmentType;
+import com.workflow.repository.ExtendedTaskInfoRepository;
 import com.workflow.service.TaskAssigneeResolver;
 import lombok.extern.slf4j.Slf4j;
 import org.flowable.bpmn.model.BpmnModel;
@@ -18,6 +22,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -40,11 +46,18 @@ import java.util.Map;
  * 8. FIXED_BU_ROLE - 指定业务单元角色
  * 9. BU_UNBOUNDED_ROLE - BU无关型角色
  * 
+ * 多实例分配类型（1种）：
+ * 10. ELEMENT_VARIABLE - 从多实例元素变量中读取处理人
+ * 
  * BPMN 扩展属性：
  * - assigneeType: 分配类型代码
  * - roleId: 角色ID（6种角色类型需要）
  * - businessUnitId: 业务单元ID（FIXED_BU_ROLE需要）
  * - assigneeLabel: 显示标签
+ * - subTableId: 子表ID（ELEMENT_VARIABLE需要）
+ * - subTableName: 子表名称（ELEMENT_VARIABLE需要）
+ * - assigneeField: 处理人字段名（ELEMENT_VARIABLE需要）
+ * - rowIdVariable: 行ID变量名（ELEMENT_VARIABLE需要）
  */
 @Slf4j
 @Component
@@ -65,6 +78,12 @@ public class TaskAssignmentListener implements FlowableEventListener {
     @Autowired
     @Lazy
     private RepositoryService repositoryService;
+
+    @Autowired
+    @Lazy
+    private ExtendedTaskInfoRepository extendedTaskInfoRepository;
+
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
     public void onEvent(FlowableEvent event) {
@@ -154,6 +173,12 @@ public class TaskAssignmentListener implements FlowableEventListener {
                 return;
             }
 
+            // 处理 ELEMENT_VARIABLE 分配类型（多实例子流程）
+            if ("ELEMENT_VARIABLE".equals(assigneeType)) {
+                handleElementVariableAssignment(task, taskId, processInstanceId, processDefinitionId, taskDefinitionKey);
+                return;
+            }
+
             // 获取流程变量
             Map<String, Object> processVariables = runtimeService.getVariables(processInstanceId);
             
@@ -207,6 +232,160 @@ public class TaskAssignmentListener implements FlowableEventListener {
 
         } catch (Exception e) {
             log.error("Error handling task assignment for task {}: {}", taskId, e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 处理 ELEMENT_VARIABLE 分配类型（多实例子流程）
+     * 从 execution 变量中获取 currentItem（Map 类型），读取 assigneeId 并分配任务
+     * 创建 ExtendedTaskInfo 记录，包含多实例相关元数据
+     * 
+     * @param task 任务实体
+     * @param taskId 任务ID
+     * @param processInstanceId 流程实例ID
+     * @param processDefinitionId 流程定义ID
+     * @param taskDefinitionKey 任务定义键
+     */
+    private void handleElementVariableAssignment(TaskEntity task, String taskId, 
+                                                  String processInstanceId, 
+                                                  String processDefinitionId, 
+                                                  String taskDefinitionKey) {
+        try {
+            log.info("Handling ELEMENT_VARIABLE assignment for task {}", taskId);
+            
+            // 从 execution 变量中获取 currentItem（Map 类型）
+            String executionId = task.getExecutionId();
+            Object currentItemObj = runtimeService.getVariable(executionId, "currentItem");
+            
+            if (currentItemObj == null) {
+                log.warn("currentItem variable is null for task {}, task will remain CREATED", taskId);
+                return;
+            }
+            
+            if (!(currentItemObj instanceof Map)) {
+                log.warn("currentItem variable is not a Map for task {}, task will remain CREATED", taskId);
+                return;
+            }
+            
+            @SuppressWarnings("unchecked")
+            Map<String, Object> currentItem = (Map<String, Object>) currentItemObj;
+            
+            // 读取 assigneeId
+            Object assigneeIdObj = currentItem.get("assigneeId");
+            if (assigneeIdObj == null) {
+                log.warn("assigneeId not found in currentItem for task {}, task will remain CREATED", taskId);
+                return;
+            }
+            
+            String assigneeId = String.valueOf(assigneeIdObj);
+            
+            // 读取 rowId 和 rowVersion
+            Object rowIdObj = currentItem.get("rowId");
+            Object rowVersionObj = currentItem.get("rowVersion");
+            
+            Long subTableRowId = null;
+            Long subTableRowVersion = null;
+            
+            if (rowIdObj != null) {
+                if (rowIdObj instanceof Number) {
+                    subTableRowId = ((Number) rowIdObj).longValue();
+                } else {
+                    try {
+                        subTableRowId = Long.parseLong(String.valueOf(rowIdObj));
+                    } catch (NumberFormatException e) {
+                        log.warn("Invalid rowId format in currentItem for task {}: {}", taskId, rowIdObj);
+                    }
+                }
+            }
+            
+            if (rowVersionObj != null) {
+                if (rowVersionObj instanceof Number) {
+                    subTableRowVersion = ((Number) rowVersionObj).longValue();
+                } else {
+                    try {
+                        subTableRowVersion = Long.parseLong(String.valueOf(rowVersionObj));
+                    } catch (NumberFormatException e) {
+                        log.warn("Invalid rowVersion format in currentItem for task {}: {}", taskId, rowVersionObj);
+                    }
+                }
+            }
+            
+            // 从 BPMN 扩展属性中获取子表配置
+            String subTableId = null;
+            String subTableName = null;
+            
+            if (processDefinitionId != null && taskDefinitionKey != null) {
+                BpmnModel bpmnModel = repositoryService.getBpmnModel(processDefinitionId);
+                if (bpmnModel != null) {
+                    FlowElement flowElement = bpmnModel.getFlowElement(taskDefinitionKey);
+                    if (flowElement instanceof UserTask) {
+                        UserTask userTask = (UserTask) flowElement;
+                        subTableId = getExtensionProperty(userTask, "subTableId");
+                        subTableName = getExtensionProperty(userTask, "subTableName");
+                    }
+                }
+            }
+            
+            // 设置任务处理人
+            try {
+                taskService.setAssignee(taskId, assigneeId);
+                log.info("Task {} assigned to user {} via ELEMENT_VARIABLE", taskId, assigneeId);
+            } catch (Exception e) {
+                log.warn("Failed to set assignee {} for task {}: {}, task will remain CREATED", 
+                        assigneeId, taskId, e.getMessage());
+                // 处理人不存在/已禁用时记录 WARN 日志，任务状态保持 CREATED
+                return;
+            }
+            
+            // 构建 extendedProperties JSON
+            Map<String, Object> extendedProps = new HashMap<>();
+            extendedProps.put("multiInstance", true);
+            if (subTableRowId != null) {
+                extendedProps.put("subTableRowId", subTableRowId);
+            }
+            if (subTableRowVersion != null) {
+                extendedProps.put("subTableRowVersion", subTableRowVersion);
+            }
+            if (subTableId != null) {
+                extendedProps.put("subTableId", subTableId);
+            }
+            if (subTableName != null) {
+                extendedProps.put("subTableName", subTableName);
+            }
+            
+            String extendedPropertiesJson;
+            try {
+                extendedPropertiesJson = objectMapper.writeValueAsString(extendedProps);
+            } catch (Exception e) {
+                log.error("Failed to serialize extendedProperties for task {}: {}", taskId, e.getMessage());
+                extendedPropertiesJson = "{}";
+            }
+            
+            // 创建 ExtendedTaskInfo 记录
+            try {
+                ExtendedTaskInfo extInfo = ExtendedTaskInfo.builder()
+                        .taskId(taskId)
+                        .processInstanceId(processInstanceId)
+                        .processDefinitionId(processDefinitionId)
+                        .taskDefinitionKey(taskDefinitionKey)
+                        .taskName(task.getName())
+                        .assignmentType(AssignmentType.USER)
+                        .assignmentTarget(assigneeId)
+                        .status("ASSIGNED")
+                        .createdTime(LocalDateTime.now())
+                        .extendedProperties(extendedPropertiesJson)
+                        .build();
+                
+                extendedTaskInfoRepository.save(extInfo);
+                log.info("Created ExtendedTaskInfo for multi-instance task {}: assignee={}, rowId={}", 
+                        taskId, assigneeId, subTableRowId);
+            } catch (Exception e) {
+                // ExtendedTaskInfo 保存失败时记录 ERROR 日志，不影响 Flowable 任务创建
+                log.error("Failed to save ExtendedTaskInfo for task {}: {}", taskId, e.getMessage(), e);
+            }
+            
+        } catch (Exception e) {
+            log.error("Error handling ELEMENT_VARIABLE assignment for task {}: {}", taskId, e.getMessage(), e);
         }
     }
 
