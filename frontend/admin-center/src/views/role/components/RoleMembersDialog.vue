@@ -62,7 +62,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { type Role } from '@/api/role'
 import { virtualGroupApi, type VirtualGroup, type VirtualGroupMember } from '@/api/virtualGroup'
@@ -109,23 +109,43 @@ const getBoundVirtualGroup = async (roleId: string): Promise<VirtualGroup | null
   }
 }
 
-watch(() => props.modelValue, async (val) => {
-  if (val && props.role) {
-    loading.value = true
-    members.value = []
-    boundVirtualGroup.value = null
-    
-    try {
-      boundVirtualGroup.value = await getBoundVirtualGroup(props.role.id)
-      if (boundVirtualGroup.value) {
-        members.value = await virtualGroupApi.getMembers(boundVirtualGroup.value.id)
-      }
-    } catch (error) {
-      console.error('Failed to load role members:', error)
-    } finally {
-      loading.value = false
+const loadMembers = async () => {
+  if (!props.modelValue || !props.role) return
+  loading.value = true
+  members.value = []
+  boundVirtualGroup.value = null
+  try {
+    boundVirtualGroup.value = await getBoundVirtualGroup(props.role.id)
+    if (boundVirtualGroup.value) {
+      members.value = await virtualGroupApi.getMembers(boundVirtualGroup.value.id)
     }
+  } catch (error) {
+    console.error('Failed to load role members:', error)
+  } finally {
+    loading.value = false
   }
+}
+
+watch(() => props.modelValue, (val) => {
+  if (val) loadMembers()
+})
+
+watch(() => props.role, () => {
+  if (props.modelValue && props.role) loadMembers()
+})
+
+const onVisibilityRefresh = () => {
+  if (document.visibilityState === 'visible' && props.modelValue && props.role) {
+    loadMembers()
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('visibilitychange', onVisibilityRefresh)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('visibilitychange', onVisibilityRefresh)
 })
 </script>
 

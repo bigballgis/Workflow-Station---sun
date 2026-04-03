@@ -502,7 +502,17 @@ export default {
     buUnboundedHint: 'This is a BU-Unbounded role. It takes effect immediately after joining the virtual group.',
     noBuBoundedRolesHint: 'You do not have any BU-Bounded roles and cannot apply to join a business unit. Please first join a virtual group with BU-Bounded roles.',
     activatableRolesHint: 'The following BU-Bounded roles will be activated after joining this business unit',
-    noPendingRequests: 'No pending requests'
+    noPendingRequests: 'No pending requests',
+    myBuRoles: 'My roles in business units',
+    noMyBuRoles: 'No business unit role assignments',
+    assignedAt: 'Assigned at',
+    requestRemoveBuRole: 'Request removal',
+    requestRemoveBuRoleTitle: 'Request to remove business unit role',
+    requestRemoveBuRoleHint:
+      'Your request will be reviewed. The role assignment is removed only after a business unit approver approves it. If this is your last role in that BU, you will also leave the business unit once approved.',
+    requestRemoveBuRoleSuccess: 'Request submitted. Awaiting approval.',
+    requestRemoveBuRoleFailed: 'Failed to submit request',
+    businessUnitRoleRemoval: 'Remove BU role'
   },
   approval: {
     title: 'Permission Approval',

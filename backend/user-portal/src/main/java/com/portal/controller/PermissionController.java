@@ -187,6 +187,35 @@ public class PermissionController {
         }
     }
 
+    @PostMapping("/request-business-unit-role-removal")
+    @Operation(summary = "申请移除业务单元下的业务角色", description = "提交申请，经业务单元审批人批准后移除该角色绑定")
+    public ApiResponse<PermissionRequest> requestBusinessUnitRoleRemoval(
+            @CurrentUserId String userId,
+            @RequestBody Map<String, Object> body) {
+        Object buIdObj = body.get("businessUnitId");
+        String businessUnitId = buIdObj != null ? buIdObj.toString() : null;
+        Object roleIdObj = body.get("roleId");
+        String roleId = roleIdObj != null ? roleIdObj.toString() : null;
+        String reason = body.get("reason") != null ? body.get("reason").toString() : null;
+
+        if (businessUnitId == null || businessUnitId.isEmpty()) {
+            return ApiResponse.error(i18nService.getMessage("portal.bu_id_required"));
+        }
+        if (roleId == null || roleId.isBlank()) {
+            return ApiResponse.error(i18nService.getMessage("validation.role_id_required"));
+        }
+        if (reason == null || reason.isEmpty()) {
+            return ApiResponse.error(i18nService.getMessage("portal.reason_required"));
+        }
+
+        try {
+            PermissionRequest request = permissionComponent.requestBusinessUnitRoleRemoval(userId, businessUnitId, roleId, reason);
+            return ApiResponse.success(request);
+        } catch (IllegalArgumentException e) {
+            return ApiResponse.error(e.getMessage());
+        }
+    }
+
     @GetMapping("/my-roles")
     @Operation(summary = "获取我的角色", description = "获取用户当前拥有的业务角色列表")
     public ApiResponse<List<Map<String, Object>>> getMyRoles(

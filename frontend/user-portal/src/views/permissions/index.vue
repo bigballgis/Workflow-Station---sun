@@ -5,6 +5,45 @@
       <el-button type="primary" @click="showApplyDialog">{{ t('permission.applyPermission') }}</el-button>
     </div>
 
+    <div class="portal-card my-bu-roles-card">
+      <h2 class="section-title">{{ t('permission.myBuRoles') }}</h2>
+      <el-empty
+        v-if="myBuRoles.length === 0 && !loadingMyBuRoles"
+        :description="t('permission.noMyBuRoles')"
+      />
+      <el-table v-else :data="myBuRoles" stripe v-loading="loadingMyBuRoles">
+        <el-table-column :label="t('permission.businessUnit')" min-width="160">
+          <template #default="{ row }">
+            {{ row.businessUnitName || row.businessUnitId || '-' }}
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('permission.role')" min-width="140">
+          <template #default="{ row }">
+            {{ row.roleName || row.roleId || '-' }}
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('permission.assignedAt')" width="180">
+          <template #default="{ row }">
+            {{ formatDateTime(row.assignedAt || row.createdAt) }}
+          </template>
+        </el-table-column>
+        <el-table-column :label="t('common.actions')" width="140" fixed="right">
+          <template #default="{ row }">
+            <el-button
+              type="danger"
+              size="small"
+              text
+              :loading="submittingRemovalForId === row.id"
+              :disabled="!row.businessUnitId || !row.roleId"
+              @click="openRemoveRoleDialog(row)"
+            >
+              {{ t('permission.requestRemoveBuRole') }}
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </div>
+
     <el-tabs v-model="activeTab">
       <!-- 进行中 Tab -->
       <el-tab-pane name="pending">
@@ -148,6 +187,35 @@
         <el-button type="primary" @click="submitApply" :loading="submitting">{{ t('common.confirm') }}</el-button>
       </template>
     </el-dialog>
+
+    <!-- 申请移除 BU 角色（需审批） -->
+    <el-dialog v-model="removeRoleDialogVisible" :title="t('permission.requestRemoveBuRoleTitle')" width="560px">
+      <p class="remove-dialog-hint">{{ t('permission.requestRemoveBuRoleHint') }}</p>
+      <el-descriptions :column="1" border size="small" class="remove-desc">
+        <el-descriptions-item :label="t('permission.businessUnit')">
+          {{ removeRoleContext.businessUnitName || removeRoleContext.businessUnitId }}
+        </el-descriptions-item>
+        <el-descriptions-item :label="t('permission.role')">
+          {{ removeRoleContext.roleName || removeRoleContext.roleId }}
+        </el-descriptions-item>
+      </el-descriptions>
+      <el-form class="apply-form" style="margin-top: 12px">
+        <el-form-item :label="t('permission.reason')" required>
+          <el-input
+            v-model="removeRoleReason"
+            type="textarea"
+            :rows="3"
+            :placeholder="t('permission.reasonPlaceholder')"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="removeRoleDialogVisible = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="submitRemoveRoleRequest" :loading="submittingRemovalForId !== null">
+          {{ t('common.confirm') }}
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -155,7 +223,13 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { permissionApi, type BusinessUnit, type PermissionRequestRecord, type RoleInfo } from '@/api/permission'
+import {
+  permissionApi,
+  type BusinessUnit,
+  type PermissionRequestRecord,
+  type RoleInfo,
+  type UserBusinessUnitRole
+} from '@/api/permission'
 
 const { t } = useI18n()
 
@@ -166,8 +240,20 @@ const loadingPending = ref(false)
 const loadingHistory = ref(false)
 const loadingBusinessUnits = ref(false)
 const loadingRoles = ref(false)
+const loadingMyBuRoles = ref(false)
+const submittingRemovalForId = ref<string | null>(null)
+const removeRoleDialogVisible = ref(false)
+const removeRoleReason = ref('')
+const removeRoleContext = reactive({
+  assignmentId: '' as string,
+  businessUnitId: '',
+  businessUnitName: '',
+  roleId: '',
+  roleName: ''
+})
 
 // 数据
+const myBuRoles = ref<UserBusinessUnitRole[]>([])
 const pendingList = ref<PermissionRequestRecord[]>([])
 const historyList = ref<PermissionRequestRecord[]>([])
 const applicableBusinessUnits = ref<BusinessUnit[]>([])
@@ -227,6 +313,61 @@ const loadHistoryRequests = async () => {
     historyList.value = []
   } finally {
     loadingHistory.value = false
+  }
+}
+
+const loadMyBuRoles = async () => {
+  loadingMyBuRoles.value = true
+  try {
+    const res = (await permissionApi.getMyMemberships()) as any
+    const payload = res?.data ?? res
+    const raw = payload?.businessUnitRoles
+    if (Array.isArray(raw)) {
+      myBuRoles.value = raw as UserBusinessUnitRole[]
+    } else {
+      myBuRoles.value = []
+    }
+  } catch (e) {
+    console.error('Failed to load my BU roles:', e)
+    myBuRoles.value = []
+  } finally {
+    loadingMyBuRoles.value = false
+  }
+}
+
+const openRemoveRoleDialog = (row: UserBusinessUnitRole) => {
+  if (!row.businessUnitId || !row.roleId) return
+  removeRoleContext.assignmentId = row.id
+  removeRoleContext.businessUnitId = row.businessUnitId
+  removeRoleContext.businessUnitName = row.businessUnitName || ''
+  removeRoleContext.roleId = row.roleId
+  removeRoleContext.roleName = row.roleName || ''
+  removeRoleReason.value = ''
+  removeRoleDialogVisible.value = true
+}
+
+const submitRemoveRoleRequest = async () => {
+  if (!removeRoleReason.value.trim()) {
+    ElMessage.warning(t('permission.enterReason'))
+    return
+  }
+  const id = removeRoleContext.assignmentId
+  submittingRemovalForId.value = id
+  try {
+    await permissionApi.requestBusinessUnitRoleRemoval({
+      businessUnitId: removeRoleContext.businessUnitId,
+      roleId: removeRoleContext.roleId,
+      reason: removeRoleReason.value.trim()
+    })
+    ElMessage.success(t('permission.requestRemoveBuRoleSuccess'))
+    removeRoleDialogVisible.value = false
+    loadPendingRequests()
+    loadHistoryRequests()
+  } catch (e: any) {
+    const msg = e.response?.data?.message || e.message || t('permission.requestRemoveBuRoleFailed')
+    ElMessage.error(msg)
+  } finally {
+    submittingRemovalForId.value = null
   }
 }
 
@@ -303,6 +444,7 @@ const getRequestTypeTag = (type: string): TagType => {
     BUSINESS_UNIT: 'primary',
     BUSINESS_UNIT_JOIN: 'primary',
     BUSINESS_UNIT_ROLE: 'primary',
+    BUSINESS_UNIT_ROLE_REMOVAL: 'warning',
     ROLE_ASSIGNMENT: 'info'
   }
   return map[type] || 'info'
@@ -315,6 +457,7 @@ const getRequestTypeLabel = (type: string) => {
     BUSINESS_UNIT: t('permission.businessUnitJoin'),
     BUSINESS_UNIT_JOIN: t('permission.businessUnitJoin'),
     BUSINESS_UNIT_ROLE: t('permission.businessUnitRole'),
+    BUSINESS_UNIT_ROLE_REMOVAL: t('permission.businessUnitRoleRemoval'),
     ROLE_ASSIGNMENT: t('permission.roleAssignment')
   }
   return map[type] || type
@@ -322,6 +465,11 @@ const getRequestTypeLabel = (type: string) => {
 
 // 获取申请目标名称
 const getTargetName = (row: any) => {
+  if (row.requestType === 'BUSINESS_UNIT_ROLE_REMOVAL') {
+    const bu = row.businessUnitName || row.businessUnitId || ''
+    const role = row.roleName || row.roleId || ''
+    return [bu, role].filter(Boolean).join(' / ') || '-'
+  }
   if (row.targetName) return row.targetName
   if (row.virtualGroupName) return row.virtualGroupName
   if (row.businessUnitName) return row.businessUnitName
@@ -425,6 +573,7 @@ const submitApply = async () => {
 
 // 初始化
 onMounted(() => {
+  loadMyBuRoles()
   loadPendingRequests()
   loadHistoryRequests()
 })
@@ -449,7 +598,28 @@ onMounted(() => {
   .tab-badge {
     margin-left: 6px;
   }
-  
+
+  .my-bu-roles-card {
+    margin-bottom: 20px;
+  }
+
+  .section-title {
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin: 0 0 12px;
+  }
+
+  .remove-dialog-hint {
+    margin: 0 0 12px;
+    color: var(--el-text-color-secondary);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .remove-desc {
+    margin-top: 4px;
+  }
 }
 
 :deep(.apply-form) {

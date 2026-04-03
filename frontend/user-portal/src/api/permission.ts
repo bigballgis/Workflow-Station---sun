@@ -94,7 +94,7 @@ export interface PermissionRequestRecord {
   applicantId: string
   applicantName?: string
   applicantUsername?: string
-  requestType: 'VIRTUAL_GROUP' | 'BUSINESS_UNIT_ROLE'
+  requestType: 'VIRTUAL_GROUP' | 'BUSINESS_UNIT_ROLE' | 'BUSINESS_UNIT_JOIN' | 'BUSINESS_UNIT_ROLE_REMOVAL'
   targetId: string
   targetName?: string
   roleIds?: string
@@ -199,6 +199,11 @@ export const permissionApi = {
     return request.post<PermissionRequestRecord>('/permissions/request-business-unit-role', data)
   },
 
+  /** 申请移除某业务单元下的业务角色（待 BU 审批人批准后生效） */
+  requestBusinessUnitRoleRemoval(data: { businessUnitId: string; roleId: string; reason: string }) {
+    return request.post<PermissionRequestRecord>('/permissions/request-business-unit-role-removal', data)
+  },
+
   /** 获取用户可申请的业务单元（基于用户的 BU_BOUNDED 角色） */
   getApplicableBusinessUnits() {
     return request.get<BusinessUnit[]>('/permissions/available-business-units')
@@ -288,11 +293,6 @@ export const permissionApi = {
   /** 退出业务单元 */
   exitBusinessUnit(businessUnitId: string) {
     return request.post(`/exit/business-unit/${businessUnitId}`)
-  },
-
-  /** 退出业务单元角色（旧API - 保留兼容） */
-  exitBusinessUnitRoles(businessUnitId: string, roleIds: string[]) {
-    return request.post(`/exit/business-unit/${businessUnitId}/roles`, { roleIds })
   },
 
   // ==================== 用户权限视图 API ====================

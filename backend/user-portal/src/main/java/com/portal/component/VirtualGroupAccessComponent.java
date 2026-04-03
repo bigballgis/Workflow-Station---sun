@@ -466,6 +466,140 @@ public class VirtualGroupAccessComponent {
             return Collections.emptyList();
         }
     }
+
+    /**
+     * 用户全部业务单元角色分配（与 admin {@code GET /users/{userId}/business-unit-roles} 对齐）
+     */
+    public List<Map<String, Object>> listAllUserBusinessUnitRoles(String userId) {
+        try {
+            String url = adminCenterUrl + "/api/v1/admin/users/" + userId + "/business-unit-roles";
+            ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<List<Map<String, Object>>>() {});
+            return response.getBody() != null ? response.getBody() : Collections.emptyList();
+        } catch (Exception e) {
+            log.error("Failed to list all BU roles for user {}: {}", userId, e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    /**
+     * 用户是否在任意业务单元下仍持有指定角色
+     */
+    public boolean userHasBusinessUnitRoleAnywhere(String userId, String roleId) {
+        if (roleId == null || roleId.isBlank()) {
+            return false;
+        }
+        return listAllUserBusinessUnitRoles(userId).stream()
+                .anyMatch(m -> roleId.equals(String.valueOf(m.get("roleId"))));
+    }
+
+    /**
+     * 将用户从虚拟组移除（与 admin {@code DELETE /virtual-groups/{id}/members/{userId}} 对齐）
+     */
+    public boolean removeUserFromVirtualGroup(String userId, String groupId) {
+        try {
+            String url = adminCenterUrl + "/api/v1/admin/virtual-groups/" + groupId + "/members/" + userId;
+            ResponseEntity<Void> response = restTemplate.exchange(url, HttpMethod.DELETE, null, Void.class);
+            return response.getStatusCode().is2xxSuccessful();
+        } catch (Exception e) {
+            log.error("Failed to remove user {} from virtual group {}: {}", userId, groupId, e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 当用户在任何 BU 下都不再持有某角色时，从该角色绑定的虚拟组中移除，以便 admin 「角色 → Role Members」与 BU 角色分配一致。
+     */
+    public void removeFromBoundVirtualGroupIfNoBuRoleAssignmentRemaining(String userId, String roleId) {
+        if (roleId == null || roleId.isBlank()) {
+            return;
+        }
+        if (userHasBusinessUnitRoleAnywhere(userId, roleId)) {
+            return;
+        }
+        String vgId = getVirtualGroupIdByBoundRoleId(roleId);
+        if (vgId == null || vgId.isBlank()) {
+            return;
+        }
+        if (!isUserInVirtualGroup(userId, vgId)) {
+            return;
+        }
+        boolean ok = removeUserFromVirtualGroup(userId, vgId);
+        if (ok) {
+            log.info("Removed user {} from virtual group {} (no BU assignments left for role {})", userId, vgId, roleId);
+        } else {
+            log.warn("Failed to remove user {} from virtual group {} after role {} had no BU assignments left", userId, vgId, roleId);
+        }
+    }
+
+    /**
+     * 用户在指定业务单元下已分配的业务角色列表（与 admin {@code GET .../by-business-unit/{buId}} 对齐）
+     */
+    public List<Map<String, Object>> listUserBusinessUnitRolesInBusinessUnit(String userId, String businessUnitId) {
+        try {
+            String url = adminCenterUrl + "/api/v1/admin/users/" + userId
+                    + "/business-unit-roles/by-business-unit/" + businessUnitId;
+            ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<List<Map<String, Object>>>() {}
+            );
+            return response.getBody() != null ? response.getBody() : Collections.emptyList();
+        } catch (Exception e) {
+            log.error("Failed to list BU roles for user {} in unit {}: {}", userId, businessUnitId, e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    /**
+     * 用户是否拥有指定业务单元下的某业务角色
+     */
+    public boolean userHasBusinessUnitRole(String userId, String businessUnitId, String roleId) {
+        return listUserBusinessUnitRolesInBusinessUnit(userId, businessUnitId).stream()
+                .anyMatch(m -> roleId != null && roleId.equals(String.valueOf(m.get("roleId"))));
+    }
+
+    /**
+     * 移除用户在业务单元下的某一业务角色绑定（审批通过时调用，与 admin DELETE 对齐）
+     */
+    public boolean removeUserBusinessUnitRole(String userId, String businessUnitId, String roleId) {
+        try {
+            String url = adminCenterUrl + "/api/v1/admin/users/" + userId + "/business-unit-roles/"
+                    + businessUnitId + "/" + roleId;
+            ResponseEntity<Void> response = restTemplate.exchange(url, HttpMethod.DELETE, null, Void.class);
+            return response.getStatusCode().is2xxSuccessful();
+        } catch (Exception e) {
+            log.error("Failed to remove BU role: user={}, bu={}, role={}: {}",
+                    userId, businessUnitId, roleId, e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 用户退出业务单元（与 admin {@code POST /exit/business-units/{buId}/users/{userId}} 对齐）。
+     * 会移除成员关系并清理该 BU 下剩余的角色绑定。
+     */
+    public boolean exitBusinessUnit(String userId, String businessUnitId) {
+        try {
+            String url = adminCenterUrl + "/api/v1/admin/exit/business-units/" + businessUnitId + "/users/" + userId;
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(Map.of(), headers);
+            ResponseEntity<Void> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.POST,
+                    entity,
+                    Void.class);
+            return response.getStatusCode().is2xxSuccessful();
+        } catch (Exception e) {
+            log.error("Failed to exit business unit: user={}, bu={}: {}", userId, businessUnitId, e.getMessage());
+            return false;
+        }
+    }
     
     /**
      * 检查用户是否是任何目标的审批人

@@ -451,7 +451,17 @@ export default {
     buUnboundedHint: '此角色為BU無關型，加入虛擬群組後立即生效',
     noBuBoundedRolesHint: '您沒有BU綁定型角色，無法申請加入業務單元。請先加入包含BU綁定型角色的虛擬群組。',
     activatableRolesHint: '加入此業務單元後，以下BU綁定型角色將被啟用',
-    noPendingRequests: '暫無待處理申請'
+    noPendingRequests: '暫無待處理申請',
+    myBuRoles: '我的業務單元角色',
+    noMyBuRoles: '尚無已分配的業務單元角色',
+    assignedAt: '分配時間',
+    requestRemoveBuRole: '申請移除角色',
+    requestRemoveBuRoleTitle: '申請移除業務單元角色',
+    requestRemoveBuRoleHint:
+      '提交後將進入審批流程，由該業務單元審批人批准通過後，才會解除您在該 BU 下的此角色綁定。若這是您在該 BU 下的最後一個角色，審批通過後將同時退出該業務單元。',
+    requestRemoveBuRoleSuccess: '申請已提交，請等待審批',
+    requestRemoveBuRoleFailed: '提交申請失敗',
+    businessUnitRoleRemoval: '移除業務單元角色'
   },
   approval: {
     title: '權限審批',

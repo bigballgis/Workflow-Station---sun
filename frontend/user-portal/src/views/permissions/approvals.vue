@@ -288,6 +288,7 @@ const getRequestTypeTag = (type: string): TagType => {
     VIRTUAL_GROUP_JOIN: 'success',
     BUSINESS_UNIT: 'primary',
     BUSINESS_UNIT_JOIN: 'primary',
+    BUSINESS_UNIT_ROLE_REMOVAL: 'warning',
     ROLE_ASSIGNMENT: 'info'
   }
   return map[type] || 'info'
@@ -300,6 +301,7 @@ const getRequestTypeLabel = (type: string | undefined) => {
     VIRTUAL_GROUP_JOIN: t('permission.virtualGroupJoin'),
     BUSINESS_UNIT: t('permission.businessUnitJoin'),
     BUSINESS_UNIT_JOIN: t('permission.businessUnitJoin'),
+    BUSINESS_UNIT_ROLE_REMOVAL: t('permission.businessUnitRoleRemoval'),
     ROLE_ASSIGNMENT: t('permission.roleAssignment')
   }
   return map[type] || type
@@ -307,6 +309,11 @@ const getRequestTypeLabel = (type: string | undefined) => {
 
 const getTargetName = (row: any) => {
   if (!row) return '-'
+  if (row.requestType === 'BUSINESS_UNIT_ROLE_REMOVAL') {
+    const bu = row.businessUnitName || row.businessUnitId || ''
+    const role = row.roleName || row.roleId || ''
+    return [bu, role].filter(Boolean).join(' / ') || '-'
+  }
   if (row.targetName) return row.targetName
   if (row.virtualGroupName) return row.virtualGroupName
   if (row.businessUnitName) return row.businessUnitName
