@@ -171,6 +171,16 @@ public class TaskListResult {
          * 流程变量（用于表单数据绑定）
          */
         private java.util.Map<String, Object> variables;
+
+        /**
+         * Flowable 候选人用户 ID（运行时任务，无 assignee 时由 identity links 解析）
+         */
+        private java.util.List<String> candidateUserIds;
+
+        /**
+         * Flowable 候选组 ID
+         */
+        private java.util.List<String> candidateGroupIds;
         
         /**
          * 任务定义Key（BPMN元素ID，如 Activity_1abc）

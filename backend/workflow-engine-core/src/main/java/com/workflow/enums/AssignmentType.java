@@ -21,7 +21,13 @@ public enum AssignmentType {
      * 分配给虚拟组
      * 任务分配给虚拟组，虚拟组的所有成员都可以看到并认领处理
      */
-    VIRTUAL_GROUP("VIRTUAL_GROUP", "Virtual Group Assignment");
+    VIRTUAL_GROUP("VIRTUAL_GROUP", "Virtual Group Assignment"),
+
+    /**
+     * 候选人列表（Flowable candidate users）
+     * 仅列表内用户可认领；assignmentTarget 可为逗号分隔的用户 ID（用于权限校验）
+     */
+    CANDIDATE_USERS("CANDIDATE_USERS", "Candidate Users (claim pool)");
     
     private final String code;
     private final String description;

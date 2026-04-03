@@ -7,8 +7,13 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.*;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.UriComponentsBuilder;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Admin Center 客户端
@@ -293,6 +298,27 @@ public class AdminCenterClient {
             return Collections.emptyList();
         }
     }
+
+    /**
+     * 自某 BU 起沿父链向上，收集各层 BU 中拥有指定角色的用户 ID（并集、保序去重）。
+     */
+    public List<String> collectUserIdsForRoleInBusinessUnitHierarchy(String startBusinessUnitId, String roleId) {
+        if (startBusinessUnitId == null || startBusinessUnitId.isBlank() || roleId == null || roleId.isBlank()) {
+            return Collections.emptyList();
+        }
+        LinkedHashSet<String> union = new LinkedHashSet<>();
+        String bu = startBusinessUnitId.trim();
+        int guard = 0;
+        final int maxHops = 256;
+        while (bu != null && !bu.isEmpty() && guard++ < maxHops) {
+            List<String> chunk = getUsersByBusinessUnitAndRole(bu, roleId.trim());
+            if (chunk != null) {
+                union.addAll(chunk);
+            }
+            bu = getParentBusinessUnitId(bu);
+        }
+        return new ArrayList<>(union);
+    }
     
     /**
      * 获取拥有指定BU无关型角色的用户ID列表
@@ -314,6 +340,32 @@ public class AdminCenterClient {
             
         } catch (Exception e) {
             log.error("Failed to get users by unbounded role {}: {}", roleId, e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    /**
+     * 按虚拟组编码（BPMN VIRTUAL_GROUP 的 assigneeValue，如 DOCUMENT_VERIFIERS）获取成员用户 ID。
+     */
+    public List<String> getUsersByVirtualGroupCode(String code) {
+        if (code == null || code.isBlank()) {
+            return Collections.emptyList();
+        }
+        try {
+            String url = UriComponentsBuilder
+                    .fromUriString(adminCenterUrl + "/api/v1/admin/task-assignment/virtual-groups/by-code/{code}/users")
+                    .buildAndExpand(code.trim())
+                    .toUriString();
+            ResponseEntity<List<String>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<List<String>>() {}
+            );
+            List<String> userIds = response.getBody();
+            return userIds != null ? userIds : Collections.emptyList();
+        } catch (Exception e) {
+            log.error("Failed to get users by virtual group code {}: {}", code, e.getMessage());
             return Collections.emptyList();
         }
     }

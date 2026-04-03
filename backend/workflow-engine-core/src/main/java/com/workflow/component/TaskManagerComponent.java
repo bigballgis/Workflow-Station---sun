@@ -19,6 +19,8 @@ import com.workflow.exception.WorkflowValidationException;
 import com.workflow.repository.ExtendedTaskInfoRepository;
 import com.workflow.service.UserPermissionService;
 
+import com.platform.messaging.support.NotificationDispatchHelper;
+
 import org.flowable.engine.RepositoryService;
 import org.flowable.engine.RuntimeService;
 import org.flowable.engine.TaskService;
@@ -26,6 +28,7 @@ import org.flowable.engine.HistoryService;
 import org.flowable.engine.history.HistoricActivityInstance;
 import org.flowable.engine.repository.ProcessDefinition;
 import org.flowable.engine.runtime.ProcessInstance;
+import org.flowable.identitylink.api.IdentityLink;
 import org.flowable.task.api.Task;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -87,6 +90,9 @@ public class TaskManagerComponent {
     
     @Autowired(required = false)
     private com.workflow.messaging.SubTableUpdatePublisher updatePublisher;
+
+    @Autowired
+    private NotificationDispatchHelper notificationDispatchHelper;
     
     // ==================== 任务查询 ====================
 
@@ -155,77 +161,10 @@ public class TaskManagerComponent {
     }
     
     /**
-     * 将 Flowable Task 转换为 TaskInfo
+     * 将 Flowable Task 转换为 TaskInfo（与详情查询共用逻辑，含候选人/候选组）
      */
     private TaskListResult.TaskInfo convertFlowableTaskToTaskInfo(Task task) {
-        // 从 processDefinitionId 中提取 processDefinitionKey
-        // 格式: key:version:uuid (例如: Process_PurchaseRequest:2:b550b1fe-f0b0-11f0-b82f-00ff197375e0)
-        String processDefinitionId = task.getProcessDefinitionId();
-        String processDefinitionKey = extractProcessDefinitionKey(processDefinitionId);
-        
-        // 获取流程定义名称
-        String processDefinitionName = getProcessDefinitionName(processDefinitionId);
-        
-        // 获取流程发起人信息
-        String initiatorId = null;
-        String initiatorName = null;
-        if (task.getProcessInstanceId() != null) {
-            ProcessInstance processInstance = runtimeService.createProcessInstanceQuery()
-                .processInstanceId(task.getProcessInstanceId())
-                .singleResult();
-            if (processInstance != null) {
-                initiatorId = processInstance.getStartUserId();
-                if (initiatorId != null) {
-                    initiatorName = resolveUserDisplayName(initiatorId);
-                }
-            }
-        }
-        
-        // 获取当前处理人名称
-        String currentAssignee = task.getAssignee();
-        String currentAssigneeName = null;
-        if (currentAssignee != null && !currentAssignee.isEmpty()) {
-            currentAssigneeName = resolveUserDisplayName(currentAssignee);
-        }
-        
-        // 获取流程变量（用于表单数据绑定）
-        Map<String, Object> variables = null;
-        if (task.getProcessInstanceId() != null) {
-            try {
-                variables = runtimeService.getVariables(task.getProcessInstanceId());
-                log.debug("Retrieved {} variables for task {}", 
-                    variables != null ? variables.size() : 0, task.getId());
-            } catch (Exception e) {
-                log.warn("Failed to get variables for process instance {}: {}", 
-                    task.getProcessInstanceId(), e.getMessage());
-                variables = new HashMap<>();
-            }
-        }
-        
-        return TaskListResult.TaskInfo.builder()
-            .taskId(task.getId())
-            .taskName(task.getName())
-            .taskDescription(task.getDescription())
-            .processInstanceId(task.getProcessInstanceId())
-            .processDefinitionId(processDefinitionId)
-            .processDefinitionKey(processDefinitionKey)
-            .processDefinitionName(processDefinitionName)
-            .taskDefinitionKey(task.getTaskDefinitionKey())
-            .assignmentType(task.getAssignee() != null ? AssignmentType.USER : AssignmentType.VIRTUAL_GROUP)
-            .assignmentTarget(task.getAssignee())
-            .currentAssignee(currentAssignee)
-            .currentAssigneeName(currentAssigneeName)
-            .priority(task.getPriority())
-            .status("PENDING")
-            .createdTime(task.getCreateTime() != null ? 
-                LocalDateTime.ofInstant(task.getCreateTime().toInstant(), java.time.ZoneId.systemDefault()) : null)
-            .dueDate(task.getDueDate() != null ? 
-                LocalDateTime.ofInstant(task.getDueDate().toInstant(), java.time.ZoneId.systemDefault()) : null)
-            .formKey(task.getFormKey())
-            .initiatorId(initiatorId)
-            .initiatorName(initiatorName)
-            .variables(variables)
-            .build();
+        return buildTaskInfoFromFlowableTask(task);
     }
     
     /**
@@ -453,17 +392,6 @@ public class TaskManagerComponent {
                         "taskId", "Task not found", taskId)));
             }
             
-            // 检查任务是否已完成（通过查询历史任务）
-            boolean isCompleted = taskService.createTaskQuery()
-                .taskId(taskId)
-                .singleResult() == null; // 如果运行时任务不存在，说明已完成
-            
-            if (isCompleted) {
-                throw new WorkflowValidationException(Collections.singletonList(
-                    new WorkflowValidationException.ValidationError(
-                        "taskId", "Task already completed, cannot reassign", taskId)));
-            }
-            
             // 查找或创建扩展任务信息
             ExtendedTaskInfo extendedTaskInfo = extendedTaskInfoRepository
                 .findByTaskIdAndIsDeletedFalse(taskId)
@@ -491,12 +419,8 @@ public class TaskManagerComponent {
         } catch (WorkflowValidationException e) {
             throw e;
         } catch (Exception e) {
-            return TaskAssignmentResult.failure(
-                taskId, 
-                request.getAssignmentType(), 
-                request.getAssignmentTarget(),
-                request.getOperatorUserId(),
-                "Task assignment failed: " + e.getMessage());
+            throw new WorkflowBusinessException("TASK_ASSIGN_ERROR",
+                "Task assignment failed: " + e.getMessage(), e);
         }
     }
     
@@ -629,60 +553,74 @@ public class TaskManagerComponent {
     
     /**
      * 取消认领任务
+     * 与 {@link #claimTask} 对称：以 Flowable 运行时任务为准，扩展表为可选同步
      */
     public TaskAssignmentResult unclaimTask(String taskId, String userId) {
         try {
-            // 验证参数
             validateUserId(userId);
-            
-            // 查找扩展任务信息
-            ExtendedTaskInfo extendedTaskInfo = extendedTaskInfoRepository
-                .findByTaskIdAndIsDeletedFalse(taskId)
-                .orElseThrow(() -> new WorkflowValidationException(Collections.singletonList(
-                    new WorkflowValidationException.ValidationError(
-                        "taskId", "Task not found", taskId))));
-            
-            // 检查任务是否已完成
-            if (extendedTaskInfo.isCompleted()) {
+
+            Task flowableTask = taskService.createTaskQuery()
+                .taskId(taskId)
+                .singleResult();
+
+            if (flowableTask == null) {
                 throw new WorkflowValidationException(Collections.singletonList(
                     new WorkflowValidationException.ValidationError(
-                        "taskId", "Task already completed, cannot unclaim", taskId)));
+                        "taskId", "Task not found", taskId)));
             }
-            
-            // 检查任务是否已被认领
-            if (!extendedTaskInfo.isClaimed()) {
+
+            String assignee = flowableTask.getAssignee();
+            if (assignee == null || assignee.isEmpty()) {
                 throw new WorkflowValidationException(Collections.singletonList(
                     new WorkflowValidationException.ValidationError(
                         "taskId", "Task not claimed", taskId)));
             }
-            
-            // 验证是否是当前认领人
-            if (!userId.equals(extendedTaskInfo.getClaimedBy())) {
+            if (!userId.equals(assignee)) {
                 throw new WorkflowValidationException(Collections.singletonList(
                     new WorkflowValidationException.ValidationError(
-                        "userId", "Only the claimer can unclaim", userId)));
+                        "userId", "Only assignee can unclaim", userId)));
             }
-            
-            // 执行取消认领操作
-            extendedTaskInfo.unclaimTask();
-            
-            // 更新Flowable任务的分配人
+
+            Optional<ExtendedTaskInfo> extendedTaskInfoOpt = extendedTaskInfoRepository
+                .findByTaskIdAndIsDeletedFalse(taskId);
+
+            AssignmentType resultType = AssignmentType.CANDIDATE_USERS;
+            String resultTarget = null;
+
+            if (extendedTaskInfoOpt.isPresent()) {
+                ExtendedTaskInfo extendedTaskInfo = extendedTaskInfoOpt.get();
+                if (extendedTaskInfo.isCompleted()) {
+                    throw new WorkflowValidationException(Collections.singletonList(
+                        new WorkflowValidationException.ValidationError(
+                            "taskId", "Task already completed, cannot unclaim", taskId)));
+                }
+                if (extendedTaskInfo.isClaimed() && extendedTaskInfo.getClaimedBy() != null
+                        && !userId.equals(extendedTaskInfo.getClaimedBy())) {
+                    throw new WorkflowValidationException(Collections.singletonList(
+                        new WorkflowValidationException.ValidationError(
+                            "userId", "Only the claimer can unclaim", userId)));
+                }
+                if (extendedTaskInfo.isClaimed()) {
+                    extendedTaskInfo.unclaimTask();
+                    extendedTaskInfoRepository.save(extendedTaskInfo);
+                }
+                resultType = extendedTaskInfo.getAssignmentType();
+                resultTarget = extendedTaskInfo.getAssignmentTarget();
+            }
+
             taskService.unclaim(taskId);
-            
-            // 保存扩展任务信息
-            extendedTaskInfo = extendedTaskInfoRepository.save(extendedTaskInfo);
-            
+
             return TaskAssignmentResult.success(
-                taskId, 
-                extendedTaskInfo.getAssignmentType(),
-                extendedTaskInfo.getAssignmentTarget(),
+                taskId,
+                resultType,
+                resultTarget,
                 userId,
                 "Task unclaimed successfully");
-                
+
         } catch (WorkflowValidationException e) {
             throw e;
         } catch (Exception e) {
-            throw new WorkflowBusinessException("TASK_UNCLAIM_ERROR", 
+            throw new WorkflowBusinessException("TASK_UNCLAIM_ERROR",
                 "Task unclaim failed: " + e.getMessage(), e);
         }
     }
@@ -739,6 +677,18 @@ public class TaskManagerComponent {
             
             // 更新Flowable任务的分配人
             taskService.setAssignee(taskId, toUserId);
+
+            String taskLabel = flowableTask.getName() != null ? flowableTask.getName() : taskId;
+            notificationDispatchHelper.publishToUserAfterCommit(
+                    toUserId,
+                    "TASK",
+                    "任务已转办给您",
+                    String.format("用户 %s 将任务「%s」转办给您。%s",
+                            fromUserId,
+                            taskLabel,
+                            reason != null && !reason.isBlank() ? "原因：" + reason : "").trim(),
+                    taskLink(taskId),
+                    "workflow-engine");
             
             return TaskAssignmentResult.success(
                 taskId, 
@@ -763,8 +713,17 @@ public class TaskManagerComponent {
      * 优先从 Flowable TaskService 查询任务，确保能完成所有任务
      * 即使任务没有在 ExtendedTaskInfo 表中也能完成
      */
-    public TaskAssignmentResult completeTask(String taskId, String userId, 
+    public TaskAssignmentResult completeTask(String taskId, String userId,
                                            java.util.Map<String, Object> variables) {
+        return completeTask(taskId, userId, variables, true);
+    }
+
+    /**
+     * 完成任务，并可选择是否向流程发起人推送站内信。
+     */
+    public TaskAssignmentResult completeTask(String taskId, String userId,
+                                           java.util.Map<String, Object> variables,
+                                           boolean sendNotification) {
         try {
             // 验证参数
             validateUserId(userId);
@@ -779,6 +738,8 @@ public class TaskManagerComponent {
                     new WorkflowValidationException.ValidationError(
                         "taskId", "Task not found", taskId)));
             }
+
+            String taskDisplayName = flowableTask.getName() != null ? flowableTask.getName() : taskId;
             
             // 查找扩展任务信息（可选，用于记录额外信息）
             Optional<ExtendedTaskInfo> extendedTaskInfoOpt = extendedTaskInfoRepository
@@ -804,26 +765,26 @@ public class TaskManagerComponent {
                     handleMultiInstanceSubTaskCompletion(taskId, variables, extendedTaskInfo);
                 }
             }
+
+            String processInstanceId = flowableTask.getProcessInstanceId();
+            String initiatorUserId = resolveInitiatorUserId(processInstanceId);
+            if (processInstanceId != null) {
+                // 下一任务创建时 TaskAssignmentListener 读取，用于 CURRENT_BU_ROLE 等「当前处理人」语义
+                runtimeService.setVariable(processInstanceId, "currentUserId", userId);
+            }
             
             // 设置流程变量到流程实例（在完成任务之前）
             if (variables != null && !variables.isEmpty()) {
-                String processInstanceId = flowableTask.getProcessInstanceId();
                 if (processInstanceId != null) {
-                    log.info("Setting {} variables on process instance {} before completing task {}", 
+                    log.debug("Setting {} variable keys on process instance {} before completing task {}",
                         variables.size(), processInstanceId, taskId);
-                    log.info("Variables to set: {}", variables);
                     runtimeService.setVariables(processInstanceId, variables);
-                    
-                    // 验证变量是否已设置
-                    Map<String, Object> verifyVars = runtimeService.getVariables(processInstanceId);
-                    log.info("Variables after setting (verification): {}", verifyVars);
                 }
             } else {
-                log.warn("No variables provided for task completion. TaskId: {}, UserId: {}", taskId, userId);
+                log.debug("No variables provided for task completion. TaskId: {}, UserId: {}", taskId, userId);
             }
             
             // 【多实例扩展】检测下一节点是否为多实例子流程，如果是则注入子表数据
-            String processInstanceId = flowableTask.getProcessInstanceId();
             String processDefinitionId = flowableTask.getProcessDefinitionId();
             String taskDefinitionKey = flowableTask.getTaskDefinitionKey();
             
@@ -850,7 +811,11 @@ public class TaskManagerComponent {
                 currentAssignee = extendedTaskInfo.getCurrentAssignee();
                 
                 // 发布任务完成事件
-                publishTaskCompleteEvent(extendedTaskInfo, userId, variables);
+                publishTaskCompleteEvent(extendedTaskInfo, userId, variables, sendNotification,
+                        taskDisplayName, initiatorUserId, processInstanceId, taskId);
+            } else if (sendNotification) {
+                publishTaskCompleteEvent(null, userId, variables, true,
+                        taskDisplayName, initiatorUserId, processInstanceId, taskId);
             }
             
             return TaskAssignmentResult.success(
@@ -1173,12 +1138,32 @@ public class TaskManagerComponent {
         // 获取流程定义名称
         String processDefinitionName = getProcessDefinitionName(processDefinitionId);
         
-        // 确定分配类型：如果有 assignee，则为 USER 类型（包括认领后的任务）
-        AssignmentType assignmentType = AssignmentType.USER;
-        String assignmentTarget = task.getAssignee();
-        
-        if (task.getAssignee() == null || task.getAssignee().isEmpty()) {
-            // 没有直接分配，检查候选人/候选组
+        List<String> candidateUserIds = new ArrayList<>();
+        List<String> candidateGroupIds = new ArrayList<>();
+        for (IdentityLink link : taskService.getIdentityLinksForTask(task.getId())) {
+            if (!"candidate".equals(link.getType())) {
+                continue;
+            }
+            if (link.getUserId() != null && !link.getUserId().isBlank()) {
+                candidateUserIds.add(link.getUserId());
+            }
+            if (link.getGroupId() != null && !link.getGroupId().isBlank()) {
+                candidateGroupIds.add(link.getGroupId());
+            }
+        }
+
+        AssignmentType assignmentType;
+        String assignmentTarget;
+        if (task.getAssignee() != null && !task.getAssignee().isEmpty()) {
+            assignmentType = AssignmentType.USER;
+            assignmentTarget = task.getAssignee();
+        } else if (!candidateUserIds.isEmpty()) {
+            assignmentType = AssignmentType.CANDIDATE_USERS;
+            assignmentTarget = String.join(",", candidateUserIds);
+        } else if (!candidateGroupIds.isEmpty()) {
+            assignmentType = AssignmentType.VIRTUAL_GROUP;
+            assignmentTarget = String.join(",", candidateGroupIds);
+        } else {
             assignmentType = AssignmentType.VIRTUAL_GROUP;
             assignmentTarget = null;
         }
@@ -1240,10 +1225,12 @@ public class TaskManagerComponent {
             .dueDate(task.getDueDate() != null ? 
                 LocalDateTime.ofInstant(task.getDueDate().toInstant(), java.time.ZoneId.systemDefault()) : null)
             .formKey(task.getFormKey())
-            .status("ACTIVE")
+            .status("PENDING")
             .initiatorId(initiatorId)
             .initiatorName(initiatorName)
             .variables(variables)
+            .candidateUserIds(candidateUserIds.isEmpty() ? null : candidateUserIds)
+            .candidateGroupIds(candidateGroupIds.isEmpty() ? null : candidateGroupIds)
             .actionIds(extractedActionIds)
             .build();
     }
@@ -1390,10 +1377,9 @@ public class TaskManagerComponent {
                 taskService.setAssignee(flowableTask.getId(), request.getAssignmentTarget());
                 break;
             case VIRTUAL_GROUP:
-                // 分配给虚拟组，清除个人分配
+            case CANDIDATE_USERS:
+                // 分配给虚拟组或候选人池，清除个人分配
                 taskService.setAssignee(flowableTask.getId(), null);
-                // 这里可以设置候选组，但Flowable的候选组概念与我们的虚拟组不完全一致
-                // 我们主要通过扩展表来管理虚拟组分配
                 break;
         }
         
@@ -1504,54 +1490,122 @@ public class TaskManagerComponent {
             .businessKey(extendedTaskInfo.getBusinessKey())
             .build();
     }
-    // ==================== 事件发布方法 ====================
+    // ==================== 事件发布方法（Kafka 站内信 → user-portal）====================
     
-    /**
-     * 发布任务分配事件
-     */
+    private static String taskLink(String taskId) {
+        return "/tasks/" + taskId;
+    }
+
+    private String resolveInitiatorUserId(String processInstanceId) {
+        if (processInstanceId == null) {
+            return null;
+        }
+        try {
+            Object v = runtimeService.getVariable(processInstanceId, "initiator");
+            return v != null ? v.toString() : null;
+        } catch (Exception e) {
+            log.debug("Could not read initiator for process {}: {}", processInstanceId, e.getMessage());
+            return null;
+        }
+    }
+
     private void publishTaskAssignmentEvent(ExtendedTaskInfo task, TaskAssignmentRequest request) {
-        log.info("Task assignment event: taskId={}, assignmentTarget={}, assignmentType={}", 
+        log.info("Task assignment event: taskId={}, assignmentTarget={}, assignmentType={}",
                 task.getTaskId(), request.getAssignmentTarget(), request.getAssignmentType());
-        // 事件发布逻辑可以在此处集成消息队列或事件总线
+        if (!request.shouldSendNotification()) {
+            return;
+        }
+        if (request.getAssignmentType() != AssignmentType.USER) {
+            return;
+        }
+        String targetUser = request.getAssignmentTarget();
+        if (!StringUtils.hasText(targetUser)) {
+            return;
+        }
+        String label = task.getTaskName() != null ? task.getTaskName() : task.getTaskId();
+        notificationDispatchHelper.publishToUserAfterCommit(
+                targetUser.trim(),
+                "TASK",
+                "新任务分配",
+                String.format("您有新的待办任务「%s」。操作人：%s", label, request.getOperatorUserId()),
+                taskLink(task.getTaskId()),
+                "workflow-engine");
     }
     
-    /**
-     * 发布任务委托事件
-     */
     private void publishTaskDelegationEvent(ExtendedTaskInfo task, TaskDelegationRequest request) {
-        log.info("Task delegation event: taskId={}, delegatedTo={}, delegatedBy={}", 
+        log.info("Task delegation event: taskId={}, delegatedTo={}, delegatedBy={}",
                 task.getTaskId(), request.getDelegatedTo(), request.getDelegatedBy());
-        // 事件发布逻辑可以在此处集成消息队列或事件总线
+        if (!request.shouldSendNotification()) {
+            return;
+        }
+        String label = task.getTaskName() != null ? task.getTaskName() : task.getTaskId();
+        notificationDispatchHelper.publishToUserAfterCommit(
+                request.getDelegatedTo(),
+                "TASK",
+                "任务已委托给您",
+                String.format("用户 %s 将任务「%s」委托给您。%s",
+                        request.getDelegatedBy(),
+                        label,
+                        request.getEffectiveDelegationReason() != null
+                                ? "说明：" + request.getEffectiveDelegationReason()
+                                : "").trim(),
+                taskLink(task.getTaskId()),
+                "workflow-engine");
     }
     
-    /**
-     * 发布任务认领事件
-     */
     private void publishTaskClaimEvent(ExtendedTaskInfo task, TaskClaimRequest request) {
-        log.info("Task claim event: taskId={}, claimedBy={}", 
+        log.info("Task claim event: taskId={}, claimedBy={}",
                 task.getTaskId(), request.getClaimedBy());
-        // 事件发布逻辑可以在此处集成消息队列或事件总线
+        // 认领人即操作者本人，不向本人发站内信以免噪音
     }
     
-    /**
-     * 发布任务完成事件
-     */
-    private void publishTaskCompleteEvent(ExtendedTaskInfo task, String userId, 
-                                        java.util.Map<String, Object> variables) {
-        log.info("Task completion event: taskId={}, completedBy={}", 
-                task.getTaskId(), userId);
-        // 事件发布逻辑可以在此处集成消息队列或事件总线
+    private void publishTaskCompleteEvent(ExtendedTaskInfo task, String userId,
+                                        java.util.Map<String, Object> variables,
+                                        boolean sendNotification,
+                                        String taskDisplayName,
+                                        String initiatorUserId,
+                                        String processInstanceId,
+                                        String flowableTaskId) {
+        String tid = task != null ? task.getTaskId() : flowableTaskId;
+        log.info("Task completion event: taskId={}, completedBy={}", tid, userId);
+        if (!sendNotification || !StringUtils.hasText(initiatorUserId) || initiatorUserId.equals(userId)) {
+            return;
+        }
+        String label = taskDisplayName != null ? taskDisplayName : tid;
+        String link = StringUtils.hasText(tid) ? taskLink(tid) : "/tasks";
+        notificationDispatchHelper.publishToUserAfterCommit(
+                initiatorUserId,
+                "TASK",
+                "任务已处理",
+                String.format("用户 %s 已完成任务「%s」。", userId, label),
+                link,
+                "workflow-engine");
     }
     
-    /**
-     * 发布任务回退事件
-     */
-    private void publishTaskReturnEvent(String taskId, String processInstanceId, 
+    private void publishTaskReturnEvent(String taskId, String processInstanceId,
                                         String fromActivityId, String toActivityId,
                                         TaskReturnRequest request) {
-        log.info("Task return event: taskId={}, from={}, to={}, userId={}, reason={}", 
+        log.info("Task return event: taskId={}, from={}, to={}, userId={}, reason={}",
                 taskId, fromActivityId, toActivityId, request.getUserId(), request.getReason());
-        // 事件发布逻辑可以在此处集成消息队列或事件总线
+        if (!request.shouldSendNotification()) {
+            return;
+        }
+        String initiator = resolveInitiatorUserId(processInstanceId);
+        if (!StringUtils.hasText(initiator)) {
+            return;
+        }
+        notificationDispatchHelper.publishToUserAfterCommit(
+                initiator,
+                "PROCESS",
+                "流程已回退",
+                String.format("流程实例 %s 已由 %s 从节点 %s 回退至 %s。%s",
+                        processInstanceId,
+                        request.getUserId(),
+                        fromActivityId,
+                        toActivityId,
+                        request.getReason() != null ? "原因：" + request.getReason() : "").trim(),
+                "/tasks",
+                "workflow-engine");
     }
     
     // ==================== 统计查询方法 ====================

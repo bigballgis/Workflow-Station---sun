@@ -15,7 +15,7 @@ import org.springframework.transaction.annotation.EnableTransactionManagement;
  * 工作流引擎核心应用程序
  * 基于Flowable 7.0.0 + Spring Boot 3.x + PostgreSQL 16.5
  */
-@SpringBootApplication(scanBasePackages = {"com.workflow", "com.platform.cache", "com.platform.security", "com.platform.common"},
+@SpringBootApplication(scanBasePackages = {"com.workflow", "com.platform.cache", "com.platform.security", "com.platform.common", "com.platform.messaging"},
     exclude = {
         // 排除可能冲突的配置
     }

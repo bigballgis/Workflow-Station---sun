@@ -101,6 +101,7 @@ public class TaskAssignmentRequest {
 
         switch (assignmentType) {
             case USER:
+            case CANDIDATE_USERS:
                 // 用户ID格式验证（简单的非空验证）
                 return !assignmentTarget.trim().isEmpty();
             

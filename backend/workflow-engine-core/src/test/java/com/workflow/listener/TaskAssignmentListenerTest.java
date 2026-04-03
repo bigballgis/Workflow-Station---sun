@@ -1,6 +1,7 @@
 package com.workflow.listener;
 
 import com.workflow.repository.ExtendedTaskInfoRepository;
+import com.workflow.service.LastUserTaskAssigneeQuery;
 import com.workflow.service.TaskAssigneeResolver;
 import org.flowable.bpmn.model.BpmnModel;
 import org.flowable.bpmn.model.ExtensionAttribute;
@@ -37,6 +38,9 @@ class TaskAssignmentListenerTest {
     
     @Mock
     private TaskAssigneeResolver taskAssigneeResolver;
+
+    @Mock
+    private LastUserTaskAssigneeQuery lastUserTaskAssigneeQuery;
     
     @Mock
     private TaskService taskService;
@@ -117,14 +121,13 @@ class TaskAssignmentListenerTest {
                     .requiresClaim(true)
                     .build();
             when(taskAssigneeResolver.resolve(
-                    eq("FIXED_BU_ROLE"), eq(ROLE_ID), eq(BU_ID), eq(INITIATOR_ID), eq(CURRENT_USER_ID)))
+                    eq("FIXED_BU_ROLE"), eq(ROLE_ID), eq(BU_ID), eq(INITIATOR_ID), isNull()))
                     .thenReturn(result);
             
             FlowableEntityEventImpl event = createTaskCreatedEvent(task);
             listener.onEvent(event);
             
-            // Verify resolver was called with correct parameters
-            verify(taskAssigneeResolver).resolve("FIXED_BU_ROLE", ROLE_ID, BU_ID, INITIATOR_ID, CURRENT_USER_ID);
+            verify(taskAssigneeResolver).resolve("FIXED_BU_ROLE", ROLE_ID, BU_ID, INITIATOR_ID, null);
             
             // Verify candidate users were set
             verify(taskService).addCandidateUser(TASK_ID, "user-001");
@@ -148,7 +151,8 @@ class TaskAssignmentListenerTest {
                     .assignee(INITIATOR_ID)
                     .requiresClaim(false)
                     .build();
-            when(taskAssigneeResolver.resolve(eq("INITIATOR"), isNull(), eq(INITIATOR_ID))).thenReturn(result);
+            when(taskAssigneeResolver.resolve(eq("INITIATOR"), isNull(), isNull(), eq(INITIATOR_ID), isNull()))
+                    .thenReturn(result);
 
             FlowableEntityEventImpl event = createTaskCreatedEvent(task);
             listener.onEvent(event);
@@ -178,7 +182,7 @@ class TaskAssignmentListenerTest {
                     .requiresClaim(false)
                     .build();
             when(taskAssigneeResolver.resolve(
-                    eq("ENTITY_MANAGER"), isNull(), eq(INITIATOR_ID)))
+                    eq("ENTITY_MANAGER"), isNull(), isNull(), eq(INITIATOR_ID), eq(INITIATOR_ID)))
                     .thenReturn(result);
             
             FlowableEntityEventImpl event = createTaskCreatedEvent(task);
@@ -202,13 +206,15 @@ class TaskAssignmentListenerTest {
             variables.put("initiator", INITIATOR_ID);
             variables.put("currentUserId", CURRENT_USER_ID);
             when(runtimeService.getVariables(PROCESS_INSTANCE_ID)).thenReturn(variables);
+
+            when(lastUserTaskAssigneeQuery.findLastCompletedUserTaskAssignee(PROCESS_INSTANCE_ID))
+                    .thenReturn(Optional.of(CURRENT_USER_ID));
             
-            // Setup resolver to return error
             TaskAssigneeResolver.ResolveResult result = TaskAssigneeResolver.ResolveResult.builder()
                     .errorMessage("No users found with role")
                     .requiresClaim(true)
                     .build();
-            when(taskAssigneeResolver.resolve(anyString(), anyString(), any(), anyString(), anyString()))
+            when(taskAssigneeResolver.resolve(eq("CURRENT_BU_ROLE"), eq(ROLE_ID), isNull(), eq(INITIATOR_ID), eq(CURRENT_USER_ID)))
                     .thenReturn(result);
             
             FlowableEntityEventImpl event = createTaskCreatedEvent(task);
@@ -262,18 +268,20 @@ class TaskAssignmentListenerTest {
             when(runtimeService.getVariables(PROCESS_INSTANCE_ID)).thenReturn(variables);
             
             TaskAssigneeResolver.ResolveResult result = TaskAssigneeResolver.ResolveResult.builder()
-                    .candidateUsers(Arrays.asList("user-003"))
-                    .requiresClaim(true)
+                    .assignee("user-003")
+                    .requiresClaim(false)
                     .build();
             when(taskAssigneeResolver.resolve(
-                    eq("INITIATOR_BU_ROLE"), eq(ROLE_ID), isNull(), eq(INITIATOR_ID), eq(CURRENT_USER_ID)))
+                    eq("INITIATOR_BU_ROLE"), eq(ROLE_ID), isNull(), eq(INITIATOR_ID), eq(INITIATOR_ID)))
                     .thenReturn(result);
             
             FlowableEntityEventImpl event = createTaskCreatedEvent(task);
             listener.onEvent(event);
             
-            verify(taskAssigneeResolver).resolve("INITIATOR_BU_ROLE", ROLE_ID, null, INITIATOR_ID, CURRENT_USER_ID);
-            verify(taskService).addCandidateUser(TASK_ID, "user-003");
+            verify(taskAssigneeResolver).resolve("INITIATOR_BU_ROLE", ROLE_ID, null, INITIATOR_ID, INITIATOR_ID);
+            // 单人候选人池：直接 setAssignee，避免无意义认领步骤
+            verify(taskService).setAssignee(TASK_ID, "user-003");
+            verify(taskService, never()).addCandidateUser(anyString(), anyString());
         }
     }
     

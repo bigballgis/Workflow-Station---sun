@@ -173,6 +173,21 @@ public class ProcessController {
     }
 
     /**
+     * purge 运行中与历史流程实例（功能单元版本回滚等场景，由 user-portal / 管理端编排调用）
+     */
+    @PostMapping("/instances/{processInstanceId}/purge")
+    @Operation(summary = "purge 流程实例", description = "删除运行中实例（若存在）并删除历史记录")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> purgeProcessInstance(
+            @Parameter(description = "流程实例ID", required = true)
+            @PathVariable String processInstanceId) {
+        log.info("Purging process instance (runtime+history): {}", processInstanceId);
+        processEngineComponent.purgeProcessInstanceAndHistory(processInstanceId);
+        return ResponseEntity.ok(ApiResponse.success(Map.of(
+                "processInstanceId", processInstanceId,
+                "purged", true)));
+    }
+
+    /**
      * 删除流程定义
      */
     @DeleteMapping("/definitions/deployments/{deploymentId}")

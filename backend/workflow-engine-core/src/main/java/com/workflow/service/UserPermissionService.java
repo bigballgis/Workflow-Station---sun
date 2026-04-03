@@ -31,18 +31,38 @@ public class UserPermissionService {
      * @return 是否有权限
      */
     public boolean hasTaskPermission(String userId, AssignmentType assignmentType, String assignmentTarget) {
-        if (userId == null || assignmentTarget == null) {
+        if (userId == null) {
             return false;
         }
         
         switch (assignmentType) {
             case USER:
                 // 直接分配给用户的任务，只有该用户有权限
-                return userId.equals(assignmentTarget);
+                return assignmentTarget != null && userId.equals(assignmentTarget);
+
+            case CANDIDATE_USERS:
+                if (assignmentTarget == null || assignmentTarget.isBlank()) {
+                    return false;
+                }
+                for (String uid : assignmentTarget.split(",")) {
+                    if (userId.equals(uid.trim())) {
+                        return true;
+                    }
+                }
+                return false;
                 
             case VIRTUAL_GROUP:
-                // 分配给虚拟组的任务，虚拟组成员有权限
-                return isUserInVirtualGroup(userId, assignmentTarget);
+                // 分配给虚拟组的任务，虚拟组成员有权限（支持逗号分隔多组）
+                if (assignmentTarget == null || assignmentTarget.isBlank()) {
+                    return false;
+                }
+                for (String gid : assignmentTarget.split(",")) {
+                    String g = gid.trim();
+                    if (!g.isEmpty() && isUserInVirtualGroup(userId, g)) {
+                        return true;
+                    }
+                }
+                return false;
                 
             default:
                 log.warn("Unknown or unsupported assignment type: {}", assignmentType);

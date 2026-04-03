@@ -8,469 +8,245 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
 /**
- * 任务处理人解析服务
- * 根据 AssigneeType 解析实际的处理人或候选人列表
- * 
- * 支持9种标准分配类型：
- * - 直接分配（3种）：FUNCTION_MANAGER, ENTITY_MANAGER, INITIATOR
- * - 认领类型（6种）：CURRENT_BU_ROLE, CURRENT_PARENT_BU_ROLE, INITIATOR_BU_ROLE, 
- *                   INITIATOR_PARENT_BU_ROLE, FIXED_BU_ROLE, BU_UNBOUNDED_ROLE
+ * 任务处理人解析。收敛模型见 {@code .kiro/docs/assignee-type-convergence.md}。
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class TaskAssigneeResolver {
-    
+
     private final AdminCenterClient adminCenterClient;
-    
-    /**
-     * 解析结果
-     */
+
     @Data
     @Builder
     public static class ResolveResult {
-        /** 直接分配的处理人ID（如果是直接分配类型） */
         private String assignee;
-        /** 候选人ID列表（如果是认领类型） */
         private List<String> candidateUsers;
-        /** 是否需要认领 */
         private boolean requiresClaim;
-        /** 分配类型 */
         private AssigneeType assigneeType;
-        /** 错误信息（如果解析失败） */
         private String errorMessage;
     }
-    
+
     /**
-     * 解析任务处理人（新版本，支持9种分配类型）
-     * 
-     * @param assigneeTypeCode 分配类型代码
-     * @param roleId 角色ID（6种角色类型需要）
-     * @param businessUnitId 业务单元ID（FIXED_BU_ROLE需要）
-     * @param initiatorId 流程发起人ID
-     * @param currentUserId 当前处理人ID（用于基于当前人的分配）
-     * @return 解析结果
+     * @param anchorUserId 锚点用户（发起人或 LAST 解析结果）；PROCESS_INITIATOR / BU_ROLE 可传 null
      */
-    public ResolveResult resolve(String assigneeTypeCode, String roleId, 
-                                  String businessUnitId, String initiatorId, 
-                                  String currentUserId) {
+    public ResolveResult resolve(String assigneeTypeCode, String roleId, String businessUnitId,
+                                 String initiatorId, String anchorUserId) {
         AssigneeType assigneeType = AssigneeType.fromCode(assigneeTypeCode);
-        
         if (assigneeType == null) {
-            log.warn("Unknown assignee type: {}", assigneeTypeCode);
+            log.warn("Unknown or deprecated assignee type: {}", assigneeTypeCode);
             return ResolveResult.builder()
-                    .errorMessage("Unknown assignee type: " + assigneeTypeCode)
+                    .errorMessage("Unknown or deprecated assignee type: " + assigneeTypeCode)
                     .build();
         }
-        
-        return resolve(assigneeType, roleId, businessUnitId, initiatorId, currentUserId);
+        if (assigneeType.isListenerOnly()) {
+            return ResolveResult.builder()
+                    .assigneeType(assigneeType)
+                    .errorMessage("Assignee type " + assigneeType + " is resolved in TaskAssignmentListener")
+                    .build();
+        }
+        return resolve(assigneeType, roleId, businessUnitId, initiatorId, anchorUserId);
     }
-    
-    /**
-     * 解析任务处理人
-     */
-    public ResolveResult resolve(AssigneeType assigneeType, String roleId, 
-                                  String businessUnitId, String initiatorId, 
-                                  String currentUserId) {
-        log.info("Resolving assignee: type={}, roleId={}, businessUnitId={}, initiator={}, currentUser={}", 
-                assigneeType, roleId, businessUnitId, initiatorId, currentUserId);
-        
-        // 验证必需参数
-        String validationError = validateParameters(assigneeType, roleId, businessUnitId, initiatorId, currentUserId);
+
+    public ResolveResult resolve(AssigneeType assigneeType, String roleId, String businessUnitId,
+                               String initiatorId, String anchorUserId) {
+        log.info("Resolving assignee: type={}, roleId={}, businessUnitId={}, initiator={}, anchorUser={}",
+                assigneeType, roleId, businessUnitId, initiatorId, anchorUserId);
+
+        String validationError = validateParameters(assigneeType, roleId, businessUnitId, initiatorId, anchorUserId);
         if (validationError != null) {
             return ResolveResult.builder()
                     .assigneeType(assigneeType)
-                    .requiresClaim(assigneeType.requiresClaim())
                     .errorMessage(validationError)
                     .build();
         }
-        
+
         try {
             return switch (assigneeType) {
-                // 直接分配类型
-                case FUNCTION_MANAGER -> resolveFunctionManager(initiatorId);
-                case ENTITY_MANAGER -> resolveEntityManager(initiatorId);
-                case INITIATOR -> resolveInitiator(initiatorId);
-                // 基于当前人业务单元的角色分配
-                case CURRENT_BU_ROLE -> resolveCurrentBuRole(currentUserId, roleId);
-                case CURRENT_PARENT_BU_ROLE -> resolveCurrentParentBuRole(currentUserId, roleId);
-                // 基于发起人业务单元的角色分配
-                case INITIATOR_BU_ROLE -> resolveInitiatorBuRole(initiatorId, roleId);
-                case INITIATOR_PARENT_BU_ROLE -> resolveInitiatorParentBuRole(initiatorId, roleId);
-                // 指定业务单元角色分配
-                case FIXED_BU_ROLE -> resolveFixedBuRole(businessUnitId, roleId);
-                // BU无关型角色分配
-                case BU_UNBOUNDED_ROLE -> resolveBuUnboundedRole(roleId);
+                case PROCESS_INITIATOR -> resolveProcessInitiator(initiatorId);
+                case ENTITY_MANAGER -> resolveEntityManager(anchorUserId);
+                case FUNCTIONAL_MANAGER -> resolveFunctionalManager(anchorUserId);
+                case HIERARCHY_ROLE -> resolveHierarchyRole(anchorUserId, roleId);
+                case BU_ROLE -> resolveBuRole(businessUnitId, roleId);
+                default -> ResolveResult.builder()
+                        .assigneeType(assigneeType)
+                        .errorMessage("Unsupported assignee type in resolver: " + assigneeType)
+                        .build();
             };
         } catch (Exception e) {
             log.error("Failed to resolve assignee: type={}, error={}", assigneeType, e.getMessage());
             return ResolveResult.builder()
                     .assigneeType(assigneeType)
-                    .requiresClaim(assigneeType.requiresClaim())
                     .errorMessage("Failed to resolve assignee: " + e.getMessage())
                     .build();
         }
     }
-    
+
     /**
-     * 验证参数
+     * 按流程变量解析出的用户 ID 列表套用 0/1/多人规则（与 BU_ROLE / HIERARCHY 一致）。
      */
-    private String validateParameters(AssigneeType assigneeType, String roleId, 
-                                       String businessUnitId, String initiatorId, 
-                                       String currentUserId) {
-        // 验证 roleId
+    public ResolveResult resolveFromUserIdList(AssigneeType assigneeType, List<String> userIds) {
+        if (assigneeType != AssigneeType.ASSIGNEE_FROM_VARIABLE) {
+            return ResolveResult.builder()
+                    .assigneeType(assigneeType)
+                    .errorMessage("resolveFromUserIdList only for ASSIGNEE_FROM_VARIABLE")
+                    .build();
+        }
+        List<String> ids = userIds == null ? List.of() : userIds.stream()
+                .filter(s -> s != null && !s.isBlank())
+                .map(String::trim)
+                .distinct()
+                .toList();
+        if (ids.isEmpty()) {
+            return ResolveResult.builder()
+                    .assigneeType(assigneeType)
+                    .errorMessage("ASSIGNEE_FROM_VARIABLE: no user IDs resolved")
+                    .build();
+        }
+        if (ids.size() == 1) {
+            return ResolveResult.builder()
+                    .assignee(ids.get(0))
+                    .requiresClaim(false)
+                    .assigneeType(assigneeType)
+                    .build();
+        }
+        return ResolveResult.builder()
+                .candidateUsers(new ArrayList<>(ids))
+                .requiresClaim(true)
+                .assigneeType(assigneeType)
+                .build();
+    }
+
+    private String validateParameters(AssigneeType assigneeType, String roleId, String businessUnitId,
+                                      String initiatorId, String anchorUserId) {
         if (assigneeType.requiresRoleId() && (roleId == null || roleId.isEmpty())) {
             return "Assignee type " + assigneeType.getName() + " requires a role ID";
         }
-        
-        // 验证 businessUnitId
         if (assigneeType.requiresBusinessUnitId() && (businessUnitId == null || businessUnitId.isEmpty())) {
             return "Assignee type " + assigneeType.getName() + " requires a business unit ID";
         }
-        
-        // 验证 initiatorId（发起人相关类型需要）
-        if (assigneeType.isInitiatorBased() && (initiatorId == null || initiatorId.isEmpty())) {
-            return "Assignee type " + assigneeType.getName() + " requires process initiator ID";
+        if (assigneeType == AssigneeType.PROCESS_INITIATOR && (initiatorId == null || initiatorId.isEmpty())) {
+            return "PROCESS_INITIATOR requires process initiator ID";
         }
-        
-        // 验证 currentUserId（当前人相关类型需要）
-        if (assigneeType.isCurrentUserBased() && (currentUserId == null || currentUserId.isEmpty())) {
-            return "Assignee type " + assigneeType.getName() + " requires current user ID";
+        if (assigneeType.requiresAnchorUserId() && (anchorUserId == null || anchorUserId.isEmpty())) {
+            return "Assignee type " + assigneeType.getName() + " requires anchor user ID";
         }
-        
         return null;
     }
 
-    // ==================== 直接分配类型 ====================
-    
-    /**
-     * 1. 解析职能经理
-     */
-    private ResolveResult resolveFunctionManager(String initiatorId) {
-        Map<String, Object> userInfo = adminCenterClient.getUserInfo(initiatorId);
-        if (userInfo == null) {
-            return ResolveResult.builder()
-                    .assigneeType(AssigneeType.FUNCTION_MANAGER)
-                    .requiresClaim(false)
-                    .errorMessage("Cannot get user info: " + initiatorId)
-                    .build();
-        }
-        
-        String functionManagerId = (String) userInfo.get("functionManagerId");
-        if (functionManagerId == null || functionManagerId.isEmpty()) {
-            return ResolveResult.builder()
-                    .assigneeType(AssigneeType.FUNCTION_MANAGER)
-                    .requiresClaim(false)
-                    .errorMessage("User has no function manager set: " + initiatorId)
-                    .build();
-        }
-        
-        log.info("Resolved function manager: {} for user: {}", functionManagerId, initiatorId);
+    private ResolveResult resolveProcessInitiator(String initiatorId) {
         return ResolveResult.builder()
-                .assignee(functionManagerId)
-                .assigneeType(AssigneeType.FUNCTION_MANAGER)
+                .assignee(initiatorId)
+                .assigneeType(AssigneeType.PROCESS_INITIATOR)
                 .requiresClaim(false)
                 .build();
     }
-    
-    /**
-     * 2. 解析实体经理
-     */
-    private ResolveResult resolveEntityManager(String initiatorId) {
-        Map<String, Object> userInfo = adminCenterClient.getUserInfo(initiatorId);
+
+    private ResolveResult resolveFunctionalManager(String anchorUserId) {
+        Map<String, Object> userInfo = adminCenterClient.getUserInfo(anchorUserId);
         if (userInfo == null) {
-            return ResolveResult.builder()
-                    .assigneeType(AssigneeType.ENTITY_MANAGER)
-                    .requiresClaim(false)
-                    .errorMessage("Cannot get user info: " + initiatorId)
-                    .build();
+            return failedManager(AssigneeType.FUNCTIONAL_MANAGER, "Cannot get user info: " + anchorUserId);
         }
-        
-        String entityManagerId = (String) userInfo.get("entityManagerId");
-        if (entityManagerId == null || entityManagerId.isEmpty()) {
-            return ResolveResult.builder()
-                    .assigneeType(AssigneeType.ENTITY_MANAGER)
-                    .requiresClaim(false)
-                    .errorMessage("User has no entity manager set: " + initiatorId)
-                    .build();
+        String managerId = (String) userInfo.get("functionManagerId");
+        if (managerId == null || managerId.isEmpty()) {
+            return failedManager(AssigneeType.FUNCTIONAL_MANAGER, "User has no function manager: " + anchorUserId);
         }
-        
-        log.info("Resolved entity manager: {} for user: {}", entityManagerId, initiatorId);
         return ResolveResult.builder()
-                .assignee(entityManagerId)
+                .assignee(managerId)
+                .assigneeType(AssigneeType.FUNCTIONAL_MANAGER)
+                .requiresClaim(false)
+                .build();
+    }
+
+    private ResolveResult resolveEntityManager(String anchorUserId) {
+        Map<String, Object> userInfo = adminCenterClient.getUserInfo(anchorUserId);
+        if (userInfo == null) {
+            return failedManager(AssigneeType.ENTITY_MANAGER, "Cannot get user info: " + anchorUserId);
+        }
+        String managerId = (String) userInfo.get("entityManagerId");
+        if (managerId == null || managerId.isEmpty()) {
+            return failedManager(AssigneeType.ENTITY_MANAGER, "User has no entity manager: " + anchorUserId);
+        }
+        return ResolveResult.builder()
+                .assignee(managerId)
                 .assigneeType(AssigneeType.ENTITY_MANAGER)
                 .requiresClaim(false)
                 .build();
     }
-    
-    /**
-     * 3. 解析流程发起人
-     */
-    private ResolveResult resolveInitiator(String initiatorId) {
-        log.info("Resolved initiator: {}", initiatorId);
+
+    private static ResolveResult failedManager(AssigneeType type, String msg) {
         return ResolveResult.builder()
-                .assignee(initiatorId)
-                .assigneeType(AssigneeType.INITIATOR)
+                .assigneeType(type)
                 .requiresClaim(false)
+                .errorMessage(msg)
                 .build();
     }
 
-
-    // ==================== 基于当前人业务单元的角色分配 ====================
-    
-    /**
-     * 4. 解析当前人业务单元角色
-     * 分配给当前处理人所在业务单元中拥有指定角色的用户
-     */
-    private ResolveResult resolveCurrentBuRole(String currentUserId, String roleId) {
-        // 获取当前用户的业务单元
-        String businessUnitId = adminCenterClient.getUserBusinessUnitId(currentUserId);
-        if (businessUnitId == null || businessUnitId.isEmpty()) {
-            return ResolveResult.builder()
-                    .assigneeType(AssigneeType.CURRENT_BU_ROLE)
-                    .requiresClaim(true)
-                    .errorMessage("User has no business unit: " + currentUserId)
-                    .build();
+    private ResolveResult resolveHierarchyRole(String anchorUserId, String roleId) {
+        String startBu = adminCenterClient.getUserBusinessUnitId(anchorUserId);
+        if (startBu == null || startBu.isEmpty()) {
+            return failedPool(AssigneeType.HIERARCHY_ROLE, "Anchor user has no business unit: " + anchorUserId);
         }
-        
-        // 获取业务单元中拥有指定角色的用户
-        List<String> candidates = adminCenterClient.getUsersByBusinessUnitAndRole(businessUnitId, roleId);
-        if (candidates.isEmpty()) {
-            return ResolveResult.builder()
-                    .assigneeType(AssigneeType.CURRENT_BU_ROLE)
-                    .requiresClaim(true)
-                    .errorMessage("No users with role " + roleId + " in business unit " + businessUnitId)
-                    .build();
-        }
-        
-        log.info("Resolved current BU role: {} candidates for BU {} with role {}", 
-                candidates.size(), businessUnitId, roleId);
-        return ResolveResult.builder()
-                .candidateUsers(candidates)
-                .assigneeType(AssigneeType.CURRENT_BU_ROLE)
-                .requiresClaim(true)
-                .build();
-    }
-    
-    /**
-     * 5. 解析当前人上级业务单元角色
-     * 分配给当前处理人上级业务单元中拥有指定角色的用户
-     */
-    private ResolveResult resolveCurrentParentBuRole(String currentUserId, String roleId) {
-        // 获取当前用户的业务单元
-        String businessUnitId = adminCenterClient.getUserBusinessUnitId(currentUserId);
-        if (businessUnitId == null || businessUnitId.isEmpty()) {
-            return ResolveResult.builder()
-                    .assigneeType(AssigneeType.CURRENT_PARENT_BU_ROLE)
-                    .requiresClaim(true)
-                    .errorMessage("User has no business unit: " + currentUserId)
-                    .build();
-        }
-        
-        // 获取父业务单元
-        String parentBuId = adminCenterClient.getParentBusinessUnitId(businessUnitId);
-        if (parentBuId == null || parentBuId.isEmpty()) {
-            return ResolveResult.builder()
-                    .assigneeType(AssigneeType.CURRENT_PARENT_BU_ROLE)
-                    .requiresClaim(true)
-                    .errorMessage("Business unit " + businessUnitId + " has no parent unit")
-                    .build();
-        }
-        
-        // 获取父业务单元中拥有指定角色的用户
-        List<String> candidates = adminCenterClient.getUsersByBusinessUnitAndRole(parentBuId, roleId);
-        if (candidates.isEmpty()) {
-            return ResolveResult.builder()
-                    .assigneeType(AssigneeType.CURRENT_PARENT_BU_ROLE)
-                    .requiresClaim(true)
-                    .errorMessage("No users with role " + roleId + " in parent business unit " + parentBuId)
-                    .build();
-        }
-        
-        log.info("Resolved current parent BU role: {} candidates for parent BU {} with role {}", 
-                candidates.size(), parentBuId, roleId);
-        return ResolveResult.builder()
-                .candidateUsers(candidates)
-                .assigneeType(AssigneeType.CURRENT_PARENT_BU_ROLE)
-                .requiresClaim(true)
-                .build();
+        List<String> candidates = adminCenterClient.collectUserIdsForRoleInBusinessUnitHierarchy(startBu, roleId);
+        return toPoolResult(AssigneeType.HIERARCHY_ROLE, candidates, "No users with role " + roleId + " in BU hierarchy for " + anchorUserId);
     }
 
-    // ==================== 基于发起人业务单元的角色分配 ====================
-    
-    /**
-     * 6. 解析发起人业务单元角色
-     * 分配给流程发起人所在业务单元中拥有指定角色的用户
-     */
-    private ResolveResult resolveInitiatorBuRole(String initiatorId, String roleId) {
-        // 获取发起人的业务单元
-        String businessUnitId = adminCenterClient.getUserBusinessUnitId(initiatorId);
-        if (businessUnitId == null || businessUnitId.isEmpty()) {
-            return ResolveResult.builder()
-                    .assigneeType(AssigneeType.INITIATOR_BU_ROLE)
-                    .requiresClaim(true)
-                    .errorMessage("Initiator has no business unit: " + initiatorId)
-                    .build();
-        }
-        
-        // 获取业务单元中拥有指定角色的用户
-        List<String> candidates = adminCenterClient.getUsersByBusinessUnitAndRole(businessUnitId, roleId);
-        if (candidates.isEmpty()) {
-            return ResolveResult.builder()
-                    .assigneeType(AssigneeType.INITIATOR_BU_ROLE)
-                    .requiresClaim(true)
-                    .errorMessage("No users with role " + roleId + " in business unit " + businessUnitId)
-                    .build();
-        }
-        
-        log.info("Resolved initiator BU role: {} candidates for BU {} with role {}", 
-                candidates.size(), businessUnitId, roleId);
-        return ResolveResult.builder()
-                .candidateUsers(candidates)
-                .assigneeType(AssigneeType.INITIATOR_BU_ROLE)
-                .requiresClaim(true)
-                .build();
-    }
-    
-    /**
-     * 7. 解析发起人上级业务单元角色
-     * 分配给流程发起人上级业务单元中拥有指定角色的用户
-     */
-    private ResolveResult resolveInitiatorParentBuRole(String initiatorId, String roleId) {
-        // 获取发起人的业务单元
-        String businessUnitId = adminCenterClient.getUserBusinessUnitId(initiatorId);
-        if (businessUnitId == null || businessUnitId.isEmpty()) {
-            return ResolveResult.builder()
-                    .assigneeType(AssigneeType.INITIATOR_PARENT_BU_ROLE)
-                    .requiresClaim(true)
-                    .errorMessage("Initiator has no business unit: " + initiatorId)
-                    .build();
-        }
-        
-        // 获取父业务单元
-        String parentBuId = adminCenterClient.getParentBusinessUnitId(businessUnitId);
-        if (parentBuId == null || parentBuId.isEmpty()) {
-            return ResolveResult.builder()
-                    .assigneeType(AssigneeType.INITIATOR_PARENT_BU_ROLE)
-                    .requiresClaim(true)
-                    .errorMessage("Business unit " + businessUnitId + " has no parent unit")
-                    .build();
-        }
-        
-        // 获取父业务单元中拥有指定角色的用户
-        List<String> candidates = adminCenterClient.getUsersByBusinessUnitAndRole(parentBuId, roleId);
-        if (candidates.isEmpty()) {
-            return ResolveResult.builder()
-                    .assigneeType(AssigneeType.INITIATOR_PARENT_BU_ROLE)
-                    .requiresClaim(true)
-                    .errorMessage("No users with role " + roleId + " in parent business unit " + parentBuId)
-                    .build();
-        }
-        
-        log.info("Resolved initiator parent BU role: {} candidates for parent BU {} with role {}", 
-                candidates.size(), parentBuId, roleId);
-        return ResolveResult.builder()
-                .candidateUsers(candidates)
-                .assigneeType(AssigneeType.INITIATOR_PARENT_BU_ROLE)
-                .requiresClaim(true)
-                .build();
-    }
-
-    // ==================== 指定业务单元角色分配 ====================
-    
-    /**
-     * 8. 解析指定业务单元角色
-     * 分配给指定业务单元中拥有指定角色的用户
-     * 角色必须是该业务单元的准入角色
-     */
-    private ResolveResult resolveFixedBuRole(String businessUnitId, String roleId) {
-        // 验证角色是否是业务单元的准入角色
+    private ResolveResult resolveBuRole(String businessUnitId, String roleId) {
         if (!adminCenterClient.isEligibleRole(businessUnitId, roleId)) {
-            return ResolveResult.builder()
-                    .assigneeType(AssigneeType.FIXED_BU_ROLE)
-                    .requiresClaim(true)
-                    .errorMessage("Role " + roleId + " is not an eligible role for business unit " + businessUnitId)
-                    .build();
+            return failedPool(AssigneeType.BU_ROLE,
+                    "Role " + roleId + " is not eligible for business unit " + businessUnitId);
         }
-        
-        // 获取业务单元中拥有指定角色的用户
         List<String> candidates = adminCenterClient.getUsersByBusinessUnitAndRole(businessUnitId, roleId);
-        if (candidates.isEmpty()) {
+        return toPoolResult(AssigneeType.BU_ROLE, candidates,
+                "No users with role " + roleId + " in business unit " + businessUnitId);
+    }
+
+    private static ResolveResult failedPool(AssigneeType type, String msg) {
+        return ResolveResult.builder()
+                .assigneeType(type)
+                .errorMessage(msg)
+                .build();
+    }
+
+    private static ResolveResult toPoolResult(AssigneeType type, List<String> candidates, String emptyMsg) {
+        if (candidates == null || candidates.isEmpty()) {
             return ResolveResult.builder()
-                    .assigneeType(AssigneeType.FIXED_BU_ROLE)
-                    .requiresClaim(true)
-                    .errorMessage("No users with role " + roleId + " in business unit " + businessUnitId)
+                    .assigneeType(type)
+                    .errorMessage(emptyMsg)
                     .build();
         }
-        
-        log.info("Resolved fixed BU role: {} candidates for BU {} with role {}", 
-                candidates.size(), businessUnitId, roleId);
+        if (candidates.size() == 1) {
+            return ResolveResult.builder()
+                    .assignee(candidates.get(0))
+                    .assigneeType(type)
+                    .requiresClaim(false)
+                    .build();
+        }
         return ResolveResult.builder()
-                .candidateUsers(candidates)
-                .assigneeType(AssigneeType.FIXED_BU_ROLE)
+                .candidateUsers(new ArrayList<>(candidates))
+                .assigneeType(type)
                 .requiresClaim(true)
                 .build();
     }
 
-    // ==================== BU无关型角色分配 ====================
-    
     /**
-     * 9. 解析BU无关型角色
-     * 分配给拥有指定BU无关型角色的用户（通过虚拟组）
-     */
-    private ResolveResult resolveBuUnboundedRole(String roleId) {
-        // 获取拥有该角色的用户（通过虚拟组）
-        List<String> candidates = adminCenterClient.getUsersByUnboundedRole(roleId);
-        if (candidates.isEmpty()) {
-            return ResolveResult.builder()
-                    .assigneeType(AssigneeType.BU_UNBOUNDED_ROLE)
-                    .requiresClaim(true)
-                    .errorMessage("No users with role " + roleId + " (via virtual groups)")
-                    .build();
-        }
-        
-        log.info("Resolved BU unbounded role: {} candidates for role {}", candidates.size(), roleId);
-        return ResolveResult.builder()
-                .candidateUsers(candidates)
-                .assigneeType(AssigneeType.BU_UNBOUNDED_ROLE)
-                .requiresClaim(true)
-                .build();
-    }
-    
-    // ==================== 兼容旧版本的方法（已废弃） ====================
-    
-    /**
-     * 解析任务处理人（旧版本，仅用于向后兼容）
-     * @deprecated 使用 {@link #resolve(String, String, String, String, String)} 代替
+     * @deprecated 仅兼容旧三参调用；锚点用户固定为发起人。
      */
     @Deprecated
     public ResolveResult resolve(String assigneeTypeCode, String assigneeValue, String initiatorId) {
         AssigneeType assigneeType = AssigneeType.fromCode(assigneeTypeCode);
-        
         if (assigneeType == null) {
-            log.warn("Unknown assignee type: {}", assigneeTypeCode);
             return ResolveResult.builder()
                     .errorMessage("Unknown assignee type: " + assigneeTypeCode)
                     .build();
         }
-        
-        // 旧版本的 assigneeValue 可能是 roleId 或 businessUnitId
-        // 根据类型判断如何使用
-        String roleId = null;
-        String businessUnitId = null;
-        
-        if (assigneeType.requiresRoleId()) {
-            roleId = assigneeValue;
-        }
-        if (assigneeType.requiresBusinessUnitId()) {
-            businessUnitId = assigneeValue;
-        }
-        
-        // 对于旧类型，currentUserId 默认使用 initiatorId
+        String roleId = assigneeType.requiresRoleId() ? assigneeValue : null;
+        String businessUnitId = assigneeType.requiresBusinessUnitId() ? assigneeValue : null;
         return resolve(assigneeType, roleId, businessUnitId, initiatorId, initiatorId);
     }
 }

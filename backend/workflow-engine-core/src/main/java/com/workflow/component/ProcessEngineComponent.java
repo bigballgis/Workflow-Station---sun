@@ -20,6 +20,8 @@ import com.workflow.enums.AuditResourceType;
 import com.workflow.exception.WorkflowBusinessException;
 import com.workflow.exception.WorkflowValidationException;
 
+import com.platform.messaging.support.NotificationDispatchHelper;
+
 import lombok.extern.slf4j.Slf4j;
 
 import org.flowable.engine.ProcessEngine;
@@ -97,6 +99,9 @@ public class ProcessEngineComponent {
     
     @Autowired
     private MultiInstanceCanceller multiInstanceCanceller;
+
+    @Autowired
+    private NotificationDispatchHelper notificationDispatchHelper;
     
     /**
      * Deploy process definition
@@ -201,7 +206,7 @@ public class ProcessEngineComponent {
                     request.getVariables());
             }
             
-            return ProcessInstanceResult.builder()
+            ProcessInstanceResult result = ProcessInstanceResult.builder()
                 .processInstanceId(processInstance.getId())
                 .processDefinitionId(processInstance.getProcessDefinitionId())
                 .processDefinitionKey(processInstance.getProcessDefinitionKey())
@@ -214,6 +219,19 @@ public class ProcessEngineComponent {
                 .success(true)
                 .message("Process instance started successfully")
                 .build();
+
+            if (StringUtils.hasText(request.getStartUserId())) {
+                String key = request.getProcessDefinitionKey();
+                notificationDispatchHelper.publishToUserAfterCommit(
+                        request.getStartUserId(),
+                        "PROCESS",
+                        "流程已发起",
+                        String.format("流程「%s」已启动，实例编号 %s。", key, processInstance.getId()),
+                        "/tasks",
+                        "workflow-engine");
+            }
+
+            return result;
                 
         } catch (Exception e) {
             throw new WorkflowBusinessException("PROCESS_START_ERROR", "Failed to start process instance: " + e.getMessage(), e);
@@ -708,6 +726,39 @@ public class ProcessEngineComponent {
                 request.getAction(), 
                 request.getUserId(),
                 e.getMessage());
+        }
+    }
+
+    /**
+     * 删除运行中实例（若存在）并删除历史实例记录（含已结束），用于功能单元版本回滚后的门户数据清理。
+     */
+    public void purgeProcessInstanceAndHistory(String processInstanceId) {
+        if (!StringUtils.hasText(processInstanceId)) {
+            return;
+        }
+        try {
+            ProcessInstance runtimePi = runtimeService.createProcessInstanceQuery()
+                    .processInstanceId(processInstanceId)
+                    .singleResult();
+            if (runtimePi != null) {
+                try {
+                    multiInstanceCanceller.cancelMultiInstanceTasks(processInstanceId);
+                } catch (Exception e) {
+                    log.warn("cancelMultiInstanceTasks before purge: {}", e.getMessage());
+                }
+                runtimeService.deleteProcessInstance(processInstanceId, "PURGE_FUNCTION_UNIT_VERSION");
+            }
+        } catch (Exception e) {
+            log.warn("Runtime purge failed for {}: {}", processInstanceId, e.getMessage());
+        }
+        try {
+            if (historyService.createHistoricProcessInstanceQuery()
+                    .processInstanceId(processInstanceId)
+                    .count() > 0) {
+                historyService.deleteHistoricProcessInstance(processInstanceId);
+            }
+        } catch (Exception e) {
+            log.warn("Historic purge failed for {}: {}", processInstanceId, e.getMessage());
         }
     }
     

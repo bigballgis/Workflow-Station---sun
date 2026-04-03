@@ -126,6 +126,13 @@
             <version>1.0.0-SNAPSHOT</version>
         </dependency>
 
+        <!-- Kafka notification events (NotificationEvent → user-portal consumer) -->
+        <dependency>
+            <groupId>com.platform</groupId>
+            <artifactId>platform-messaging</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+        </dependency>
+
         <!-- Testing -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

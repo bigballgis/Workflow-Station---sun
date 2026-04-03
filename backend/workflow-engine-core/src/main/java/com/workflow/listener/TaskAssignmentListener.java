@@ -3,7 +3,11 @@ package com.workflow.listener;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.workflow.entity.ExtendedTaskInfo;
 import com.workflow.enums.AssignmentType;
+import com.workflow.enums.AssigneeAnchor;
+import com.workflow.enums.AssigneeType;
+import com.platform.messaging.support.NotificationDispatchHelper;
 import com.workflow.repository.ExtendedTaskInfoRepository;
+import com.workflow.service.LastUserTaskAssigneeQuery;
 import com.workflow.service.TaskAssigneeResolver;
 import lombok.extern.slf4j.Slf4j;
 import org.flowable.bpmn.model.BpmnModel;
@@ -23,41 +27,17 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
- * 任务分配监听器
- * 在任务创建时根据 BPMN 中定义的 assigneeType 自动分配处理人
- * 
- * 支持9种标准分配类型：
- * 
- * 直接分配类型（3种）：
- * 1. FUNCTION_MANAGER - 职能经理
- * 2. ENTITY_MANAGER - 实体经理
- * 3. INITIATOR - 流程发起人
- * 
- * 认领类型（6种）：
- * 4. CURRENT_BU_ROLE - 当前人业务单元角色
- * 5. CURRENT_PARENT_BU_ROLE - 当前人上级业务单元角色
- * 6. INITIATOR_BU_ROLE - 发起人业务单元角色
- * 7. INITIATOR_PARENT_BU_ROLE - 发起人上级业务单元角色
- * 8. FIXED_BU_ROLE - 指定业务单元角色
- * 9. BU_UNBOUNDED_ROLE - BU无关型角色
- * 
- * 多实例分配类型（1种）：
- * 10. ELEMENT_VARIABLE - 从多实例元素变量中读取处理人
- * 
- * BPMN 扩展属性：
- * - assigneeType: 分配类型代码
- * - roleId: 角色ID（6种角色类型需要）
- * - businessUnitId: 业务单元ID（FIXED_BU_ROLE需要）
- * - assigneeLabel: 显示标签
- * - subTableId: 子表ID（ELEMENT_VARIABLE需要）
- * - subTableName: 子表名称（ELEMENT_VARIABLE需要）
- * - assigneeField: 处理人字段名（ELEMENT_VARIABLE需要）
- * - rowIdVariable: 行ID变量名（ELEMENT_VARIABLE需要）
+ * 任务创建时按 BPMN 扩展属性 {@code assigneeType} 等解析处理人。
+ * <p>语义见 {@code .kiro/docs/assignee-type-convergence.md}。</p>
  */
 @Slf4j
 @Component
@@ -66,6 +46,10 @@ public class TaskAssignmentListener implements FlowableEventListener {
     @Autowired
     @Lazy
     private TaskAssigneeResolver taskAssigneeResolver;
+
+    @Autowired
+    @Lazy
+    private LastUserTaskAssigneeQuery lastUserTaskAssigneeQuery;
 
     @Autowired
     @Lazy
@@ -83,6 +67,10 @@ public class TaskAssignmentListener implements FlowableEventListener {
     @Lazy
     private ExtendedTaskInfoRepository extendedTaskInfoRepository;
 
+    @Autowired
+    @Lazy
+    private NotificationDispatchHelper notificationDispatchHelper;
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Override
@@ -99,7 +87,7 @@ public class TaskAssignmentListener implements FlowableEventListener {
 
         FlowableEntityEventImpl entityEvent = (FlowableEntityEventImpl) event;
         Object entity = entityEvent.getEntity();
-        
+
         if (!(entity instanceof TaskEntity)) {
             return;
         }
@@ -110,182 +98,318 @@ public class TaskAssignmentListener implements FlowableEventListener {
         String taskDefinitionKey = task.getTaskDefinitionKey();
         String processDefinitionId = task.getProcessDefinitionId();
 
-        log.info("Task created: taskId={}, taskName={}, taskDefKey={}, processInstanceId={}", 
+        log.info("Task created: taskId={}, taskName={}, taskDefKey={}, processInstanceId={}",
                 taskId, task.getName(), taskDefinitionKey, processInstanceId);
 
-        // 如果任务已经有 assignee，不需要再分配
         if (task.getAssignee() != null && !task.getAssignee().isEmpty()) {
             log.info("Task {} already has assignee: {}", taskId, task.getAssignee());
+            notifyNewTask(task.getAssignee(), taskId, task.getName(), processInstanceId);
             return;
         }
 
         try {
-            // 从 BPMN 模型中获取任务的扩展属性
-            String assigneeType = null;
+            String assigneeTypeRaw = null;
             String roleId = null;
             String businessUnitId = null;
-            String assigneeValue = null; // 兼容旧版本
-            
+            String assigneeValue = null;
+            String assigneeAnchorExt = null;
+            String manualAssignVariable = null;
+            String manualAssignBuVariable = null;
+            String manualAssignRoleVariable = null;
+            String assigneeVariable = null;
+            Map<String, Object> cachedVariables = null;
+
+            UserTask userTask = null;
             if (processDefinitionId != null && taskDefinitionKey != null) {
                 BpmnModel bpmnModel = repositoryService.getBpmnModel(processDefinitionId);
                 if (bpmnModel != null) {
                     FlowElement flowElement = bpmnModel.getFlowElement(taskDefinitionKey);
-                    if (flowElement instanceof UserTask) {
-                        UserTask userTask = (UserTask) flowElement;
-                        assigneeType = getExtensionProperty(userTask, "assigneeType");
-                        roleId = getExtensionProperty(userTask, "roleId");
-                        businessUnitId = getExtensionProperty(userTask, "businessUnitId");
-                        assigneeValue = getExtensionProperty(userTask, "assigneeValue"); // 兼容旧版本
+                    if (flowElement instanceof UserTask ut) {
+                        userTask = ut;
+                        assigneeTypeRaw = getExtensionProperty(ut, "assigneeType");
+                        roleId = getExtensionProperty(ut, "roleId");
+                        businessUnitId = getExtensionProperty(ut, "businessUnitId");
+                        assigneeValue = getExtensionProperty(ut, "assigneeValue");
+                        assigneeAnchorExt = getExtensionProperty(ut, "assigneeAnchor");
+                        manualAssignVariable = getExtensionProperty(ut, "manualAssignVariable");
+                        manualAssignBuVariable = getExtensionProperty(ut, "manualAssignBuVariable");
+                        manualAssignRoleVariable = getExtensionProperty(ut, "manualAssignRoleVariable");
+                        assigneeVariable = getExtensionProperty(ut, "assigneeVariable");
 
-                        // 标准 BPMN/Flowable 上配置了 assignee 表达式，但扩展里未写 assigneeType（常见于旧导出）
-                        if ((assigneeType == null || assigneeType.isEmpty()) && userTask.getAssignee() != null
-                                && !userTask.getAssignee().isBlank()) {
-                            String ga = userTask.getAssignee().trim();
+                        if ((assigneeTypeRaw == null || assigneeTypeRaw.isEmpty()) && ut.getAssignee() != null
+                                && !ut.getAssignee().isBlank()) {
+                            String ga = ut.getAssignee().trim();
                             if (isInitiatorExpression(ga)) {
-                                assigneeType = "INITIATOR";
+                                assigneeTypeRaw = "INITIATOR";
                             }
                         }
 
-                        log.info("Found BPMN extension properties: assigneeType={}, roleId={}, businessUnitId={}",
-                                assigneeType, roleId, businessUnitId);
+                        log.info("Found BPMN extension: assigneeType={}, roleId={}, businessUnitId={}, assigneeAnchor={}",
+                                assigneeTypeRaw, roleId, businessUnitId, assigneeAnchorExt);
                     }
                 }
             }
 
-            // 如果 BPMN 中没有定义，尝试从流程变量中获取
-            if (assigneeType == null || assigneeType.isEmpty()) {
-                Map<String, Object> variables = runtimeService.getVariables(processInstanceId);
-                assigneeType = getStringVariable(variables, "assigneeType");
-                roleId = getStringVariable(variables, "roleId");
-                businessUnitId = getStringVariable(variables, "businessUnitId");
-                assigneeValue = getStringVariable(variables, "assigneeValue");
+            if (assigneeTypeRaw == null || assigneeTypeRaw.isEmpty()) {
+                cachedVariables = runtimeService.getVariables(processInstanceId);
+                assigneeTypeRaw = getStringVariable(cachedVariables, "assigneeType");
+                roleId = firstNonBlank(roleId, getStringVariable(cachedVariables, "roleId"));
+                businessUnitId = firstNonBlank(businessUnitId, getStringVariable(cachedVariables, "businessUnitId"));
+                assigneeValue = firstNonBlank(assigneeValue, getStringVariable(cachedVariables, "assigneeValue"));
+                assigneeAnchorExt = firstNonBlank(assigneeAnchorExt, getStringVariable(cachedVariables, "assigneeAnchor"));
             }
 
-            // 开发者工作站旧版 TaskProperties：assigneeType=expression + assigneeValue=${initiator} → 无法被 AssigneeType 识别
-            assigneeType = normalizeLegacyAssigneeType(assigneeType, assigneeValue);
-            if (assigneeType != null && "INITIATOR".equalsIgnoreCase(assigneeType.trim())) {
-                // 避免走 resolve(INITIATOR, "${initiator}", …) 导致三参解析失败
+            assigneeTypeRaw = normalizeLegacyAssigneeType(assigneeTypeRaw, assigneeValue);
+            if (assigneeTypeRaw != null && "INITIATOR".equalsIgnoreCase(assigneeTypeRaw.trim())) {
                 assigneeValue = null;
             }
 
-            if (assigneeType == null || assigneeType.isEmpty()) {
+            if (assigneeTypeRaw == null || assigneeTypeRaw.isEmpty()) {
                 log.debug("No assigneeType defined for task {}", taskId);
                 return;
             }
 
-            // 处理 ELEMENT_VARIABLE 分配类型（多实例子流程）
-            if ("ELEMENT_VARIABLE".equals(assigneeType)) {
+            if ("ELEMENT_VARIABLE".equalsIgnoreCase(assigneeTypeRaw.trim())) {
                 handleElementVariableAssignment(task, taskId, processInstanceId, processDefinitionId, taskDefinitionKey);
                 return;
             }
 
-            // 获取流程变量
-            Map<String, Object> processVariables = runtimeService.getVariables(processInstanceId);
-            
-            // 获取流程发起人
+            Map<String, Object> processVariables = cachedVariables != null
+                    ? cachedVariables
+                    : runtimeService.getVariables(processInstanceId);
+
             String initiatorId = getStringVariable(processVariables, "initiator");
             if (initiatorId == null || initiatorId.isEmpty()) {
                 log.warn("No initiator found for process instance {}", processInstanceId);
                 return;
             }
-            
-            // 获取当前处理人（上一个任务的处理人）
-            // 对于第一个任务，currentUserId 等于 initiatorId
-            String currentUserId = getStringVariable(processVariables, "currentUserId");
-            if (currentUserId == null || currentUserId.isEmpty()) {
-                currentUserId = initiatorId;
-            }
 
-            log.info("Resolving assignee for task {}: type={}, roleId={}, businessUnitId={}, initiator={}, currentUser={}", 
-                    taskId, assigneeType, roleId, businessUnitId, initiatorId, currentUserId);
-
-            // 使用 TaskAssigneeResolver 解析处理人
-            TaskAssigneeResolver.ResolveResult result;
-            
-            // 如果有新版本的参数（roleId），使用新版本方法
-            if (roleId != null && !roleId.isEmpty()) {
-                result = taskAssigneeResolver.resolve(assigneeType, roleId, businessUnitId, initiatorId, currentUserId);
-            } else {
-                // 兼容旧版本：使用 assigneeValue
-                result = taskAssigneeResolver.resolve(assigneeType, assigneeValue, initiatorId);
-            }
-
-            if (result.getErrorMessage() != null) {
-                log.warn("Failed to resolve assignee for task {}: {}", taskId, result.getErrorMessage());
+            AssigneeType resolvedType = AssigneeType.fromCode(assigneeTypeRaw.trim());
+            if (resolvedType == null) {
+                log.error("Unknown or deprecated assigneeType '{}' for task {}", assigneeTypeRaw, taskId);
                 return;
             }
 
-            // 根据解析结果设置任务分配
-            if (!result.isRequiresClaim() && result.getAssignee() != null) {
-                // 直接分配类型：设置 assignee
-                taskService.setAssignee(taskId, result.getAssignee());
-                log.info("Task {} assigned to user: {}", taskId, result.getAssignee());
-            } else if (result.isRequiresClaim()) {
-                // 认领类型：设置候选人
-                if (result.getCandidateUsers() != null && !result.getCandidateUsers().isEmpty()) {
-                    for (String candidateUser : result.getCandidateUsers()) {
-                        taskService.addCandidateUser(taskId, candidateUser);
-                    }
-                    log.info("Task {} set candidate users: {}", taskId, result.getCandidateUsers());
-                }
+            if (resolvedType == AssigneeType.MANUAL_ASSIGN) {
+                applyResolveResult(taskId, task, processInstanceId,
+                        resolveManualAssign(taskDefinitionKey, manualAssignVariable, manualAssignBuVariable,
+                                manualAssignRoleVariable, processVariables, initiatorId),
+                        assigneeTypeRaw);
+                return;
             }
 
+            if (resolvedType == AssigneeType.ASSIGNEE_FROM_VARIABLE) {
+                String varName = firstNonBlank(assigneeVariable, assigneeValue);
+                TaskAssigneeResolver.ResolveResult vr = resolveAssigneeFromVariable(varName, processVariables);
+                applyResolveResult(taskId, task, processInstanceId, vr, assigneeTypeRaw);
+                return;
+            }
+
+            if (roleId == null || roleId.isEmpty()) {
+                roleId = assigneeValue;
+            }
+            if ((businessUnitId == null || businessUnitId.isEmpty()) && resolvedType == AssigneeType.BU_ROLE) {
+                businessUnitId = assigneeValue;
+            }
+
+            AssigneeAnchor anchor = computeAnchor(assigneeTypeRaw.trim(), resolvedType, assigneeAnchorExt);
+            String anchorUserId = null;
+            if (resolvedType.requiresAnchorUserId()) {
+                anchorUserId = resolveAnchorUserId(anchor, initiatorId, processInstanceId);
+            }
+
+            log.info("Resolving assignee for task {}: rawType={}, resolvedType={}, anchor={}, anchorUser={}, roleId={}, buId={}",
+                    taskId, assigneeTypeRaw, resolvedType, anchor, anchorUserId, roleId, businessUnitId);
+
+            TaskAssigneeResolver.ResolveResult result = taskAssigneeResolver.resolve(
+                    assigneeTypeRaw.trim(), roleId, businessUnitId, initiatorId, anchorUserId);
+
+            applyResolveResult(taskId, task, processInstanceId, result, assigneeTypeRaw);
         } catch (Exception e) {
             log.error("Error handling task assignment for task {}: {}", taskId, e.getMessage(), e);
         }
     }
 
-    /**
-     * 处理 ELEMENT_VARIABLE 分配类型（多实例子流程）
-     * 从 execution 变量中获取 currentItem（Map 类型），读取 assigneeId 并分配任务
-     * 创建 ExtendedTaskInfo 记录，包含多实例相关元数据
-     * 
-     * @param task 任务实体
-     * @param taskId 任务ID
-     * @param processInstanceId 流程实例ID
-     * @param processDefinitionId 流程定义ID
-     * @param taskDefinitionKey 任务定义键
-     */
-    private void handleElementVariableAssignment(TaskEntity task, String taskId, 
-                                                  String processInstanceId, 
-                                                  String processDefinitionId, 
-                                                  String taskDefinitionKey) {
+    private void applyResolveResult(String taskId, TaskEntity task, String processInstanceId,
+                                    TaskAssigneeResolver.ResolveResult result, String assigneeTypeRaw) {
+        if (result == null) {
+            return;
+        }
+        if (result.getErrorMessage() != null) {
+            log.error("Failed to resolve assignee for task {}: {}", taskId, result.getErrorMessage());
+            return;
+        }
+        if (result.getAssignee() != null && !result.getAssignee().isBlank()) {
+            taskService.setAssignee(taskId, result.getAssignee().trim());
+            log.info("Task {} assigned to user: {}", taskId, result.getAssignee());
+            notifyNewTask(result.getAssignee().trim(), taskId, task.getName(), processInstanceId);
+            return;
+        }
+        List<String> cands = result.getCandidateUsers();
+        if (cands != null && !cands.isEmpty()) {
+            for (String candidateUser : cands) {
+                if (candidateUser != null && !candidateUser.isBlank()) {
+                    taskService.addCandidateUser(taskId, candidateUser.trim());
+                }
+            }
+            log.info("Task {} set candidate users: {}", taskId, cands);
+            for (String candidateUser : cands) {
+                if (candidateUser != null && !candidateUser.isBlank()) {
+                    notifyCandidateTask(candidateUser.trim(), taskId, task.getName(), processInstanceId);
+                }
+            }
+        } else {
+            log.error("Task {}: no assignee and no candidates (assigneeType={})", taskId, assigneeTypeRaw);
+        }
+    }
+
+    private TaskAssigneeResolver.ResolveResult resolveManualAssign(String taskDefKey,
+                                                                   String manualAssignVariable,
+                                                                   String manualAssignBuVariable,
+                                                                   String manualAssignRoleVariable,
+                                                                   Map<String, Object> variables,
+                                                                   String initiatorId) {
+        String defKey = taskDefKey != null ? taskDefKey : "task";
+        String userVar = manualAssignVariable != null && !manualAssignVariable.isBlank()
+                ? manualAssignVariable.trim()
+                : "manualAssignee_" + defKey;
+        String uid = getStringVariable(variables, userVar);
+        if (uid != null && !uid.isBlank()) {
+            return TaskAssigneeResolver.ResolveResult.builder()
+                    .assignee(uid.trim())
+                    .assigneeType(AssigneeType.MANUAL_ASSIGN)
+                    .requiresClaim(false)
+                    .build();
+        }
+        String buVar = manualAssignBuVariable != null && !manualAssignBuVariable.isBlank()
+                ? manualAssignBuVariable.trim()
+                : "manualAssignBu_" + defKey;
+        String roleVar = manualAssignRoleVariable != null && !manualAssignRoleVariable.isBlank()
+                ? manualAssignRoleVariable.trim()
+                : "manualAssignRole_" + defKey;
+        String buId = getStringVariable(variables, buVar);
+        String rid = getStringVariable(variables, roleVar);
+        if (buId == null || buId.isBlank() || rid == null || rid.isBlank()) {
+            return TaskAssigneeResolver.ResolveResult.builder()
+                    .assigneeType(AssigneeType.MANUAL_ASSIGN)
+                    .errorMessage("MANUAL_ASSIGN: set variable " + userVar + " or both " + buVar + " and " + roleVar)
+                    .build();
+        }
+        return taskAssigneeResolver.resolve(AssigneeType.BU_ROLE, rid, buId, initiatorId, null);
+    }
+
+    private TaskAssigneeResolver.ResolveResult resolveAssigneeFromVariable(String varName,
+                                                                            Map<String, Object> variables) {
+        if (varName == null || varName.isBlank()) {
+            return TaskAssigneeResolver.ResolveResult.builder()
+                    .assigneeType(AssigneeType.ASSIGNEE_FROM_VARIABLE)
+                    .errorMessage("ASSIGNEE_FROM_VARIABLE requires assigneeVariable or assigneeValue")
+                    .build();
+        }
+        Object raw = variables != null ? variables.get(varName.trim()) : null;
+        List<String> ids = new ArrayList<>();
+        if (raw == null) {
+            return taskAssigneeResolver.resolveFromUserIdList(AssigneeType.ASSIGNEE_FROM_VARIABLE, ids);
+        }
+        if (raw instanceof Collection<?> col) {
+            for (Object o : col) {
+                if (o != null) {
+                    ids.addAll(splitUserList(o.toString()));
+                }
+            }
+        } else {
+            ids.addAll(splitUserList(raw.toString()));
+        }
+        return taskAssigneeResolver.resolveFromUserIdList(AssigneeType.ASSIGNEE_FROM_VARIABLE, ids);
+    }
+
+    private static List<String> splitUserList(String s) {
+        if (s == null || s.isBlank()) {
+            return List.of();
+        }
+        return Arrays.stream(s.split(","))
+                .map(String::trim)
+                .filter(t -> !t.isEmpty())
+                .collect(Collectors.toList());
+    }
+
+    private static String firstNonBlank(String a, String b) {
+        if (a != null && !a.isBlank()) {
+            return a;
+        }
+        return b;
+    }
+
+    private AssigneeAnchor computeAnchor(String assigneeTypeRaw, AssigneeType type, String extAnchor) {
+        if (extAnchor != null && !extAnchor.isBlank()) {
+            return AssigneeAnchor.fromCode(extAnchor);
+        }
+        if (type == AssigneeType.HIERARCHY_ROLE) {
+            return inferHierarchyAnchorFromRaw(assigneeTypeRaw);
+        }
+        return AssigneeAnchor.INITIATOR;
+    }
+
+    private static AssigneeAnchor inferHierarchyAnchorFromRaw(String raw) {
+        if (raw == null) {
+            return AssigneeAnchor.INITIATOR;
+        }
+        String u = raw.trim().toUpperCase();
+        if ("CURRENT_BU_ROLE".equals(u) || "CURRENT_PARENT_BU_ROLE".equals(u)) {
+            return AssigneeAnchor.LAST_TASK_ASSIGNEE;
+        }
+        if ("DEPT_OTHERS".equals(u) || "DEPTOTHERS".equals(u)
+                || "PARENT_DEPT".equals(u) || "PARENTDEPT".equals(u)) {
+            return AssigneeAnchor.LAST_TASK_ASSIGNEE;
+        }
+        return AssigneeAnchor.INITIATOR;
+    }
+
+    private String resolveAnchorUserId(AssigneeAnchor anchor, String initiatorId, String processInstanceId) {
+        if (anchor == AssigneeAnchor.INITIATOR) {
+            return initiatorId;
+        }
+        return lastUserTaskAssigneeQuery.findLastCompletedUserTaskAssignee(processInstanceId)
+                .orElse(initiatorId);
+    }
+
+    private void handleElementVariableAssignment(TaskEntity task, String taskId,
+                                                 String processInstanceId,
+                                                 String processDefinitionId,
+                                                 String taskDefinitionKey) {
         try {
             log.info("Handling ELEMENT_VARIABLE assignment for task {}", taskId);
-            
-            // 从 execution 变量中获取 currentItem（Map 类型）
+
             String executionId = task.getExecutionId();
             Object currentItemObj = runtimeService.getVariable(executionId, "currentItem");
-            
+
             if (currentItemObj == null) {
                 log.warn("currentItem variable is null for task {}, task will remain CREATED", taskId);
                 return;
             }
-            
+
             if (!(currentItemObj instanceof Map)) {
                 log.warn("currentItem variable is not a Map for task {}, task will remain CREATED", taskId);
                 return;
             }
-            
+
             @SuppressWarnings("unchecked")
             Map<String, Object> currentItem = (Map<String, Object>) currentItemObj;
-            
-            // 读取 assigneeId
+
             Object assigneeIdObj = currentItem.get("assigneeId");
             if (assigneeIdObj == null) {
                 log.warn("assigneeId not found in currentItem for task {}, task will remain CREATED", taskId);
                 return;
             }
-            
+
             String assigneeId = String.valueOf(assigneeIdObj);
-            
-            // 读取 rowId 和 rowVersion
+
             Object rowIdObj = currentItem.get("rowId");
             Object rowVersionObj = currentItem.get("rowVersion");
-            
+
             Long subTableRowId = null;
             Long subTableRowVersion = null;
-            
+
             if (rowIdObj != null) {
                 if (rowIdObj instanceof Number) {
                     subTableRowId = ((Number) rowIdObj).longValue();
@@ -297,7 +421,7 @@ public class TaskAssignmentListener implements FlowableEventListener {
                     }
                 }
             }
-            
+
             if (rowVersionObj != null) {
                 if (rowVersionObj instanceof Number) {
                     subTableRowVersion = ((Number) rowVersionObj).longValue();
@@ -309,35 +433,31 @@ public class TaskAssignmentListener implements FlowableEventListener {
                     }
                 }
             }
-            
-            // 从 BPMN 扩展属性中获取子表配置
+
             String subTableId = null;
             String subTableName = null;
-            
+
             if (processDefinitionId != null && taskDefinitionKey != null) {
                 BpmnModel bpmnModel = repositoryService.getBpmnModel(processDefinitionId);
                 if (bpmnModel != null) {
                     FlowElement flowElement = bpmnModel.getFlowElement(taskDefinitionKey);
-                    if (flowElement instanceof UserTask) {
-                        UserTask userTask = (UserTask) flowElement;
+                    if (flowElement instanceof UserTask userTask) {
                         subTableId = getExtensionProperty(userTask, "subTableId");
                         subTableName = getExtensionProperty(userTask, "subTableName");
                     }
                 }
             }
-            
-            // 设置任务处理人
+
             try {
                 taskService.setAssignee(taskId, assigneeId);
                 log.info("Task {} assigned to user {} via ELEMENT_VARIABLE", taskId, assigneeId);
+                notifyNewTask(assigneeId, taskId, task.getName(), processInstanceId);
             } catch (Exception e) {
-                log.warn("Failed to set assignee {} for task {}: {}, task will remain CREATED", 
+                log.warn("Failed to set assignee {} for task {}: {}, task will remain CREATED",
                         assigneeId, taskId, e.getMessage());
-                // 处理人不存在/已禁用时记录 WARN 日志，任务状态保持 CREATED
                 return;
             }
-            
-            // 构建 extendedProperties JSON
+
             Map<String, Object> extendedProps = new HashMap<>();
             extendedProps.put("multiInstance", true);
             if (subTableRowId != null) {
@@ -352,7 +472,7 @@ public class TaskAssignmentListener implements FlowableEventListener {
             if (subTableName != null) {
                 extendedProps.put("subTableName", subTableName);
             }
-            
+
             String extendedPropertiesJson;
             try {
                 extendedPropertiesJson = objectMapper.writeValueAsString(extendedProps);
@@ -360,8 +480,7 @@ public class TaskAssignmentListener implements FlowableEventListener {
                 log.error("Failed to serialize extendedProperties for task {}: {}", taskId, e.getMessage());
                 extendedPropertiesJson = "{}";
             }
-            
-            // 创建 ExtendedTaskInfo 记录
+
             try {
                 ExtendedTaskInfo extInfo = ExtendedTaskInfo.builder()
                         .taskId(taskId)
@@ -375,23 +494,19 @@ public class TaskAssignmentListener implements FlowableEventListener {
                         .createdTime(LocalDateTime.now())
                         .extendedProperties(extendedPropertiesJson)
                         .build();
-                
+
                 extendedTaskInfoRepository.save(extInfo);
-                log.info("Created ExtendedTaskInfo for multi-instance task {}: assignee={}, rowId={}", 
+                log.info("Created ExtendedTaskInfo for multi-instance task {}: assignee={}, rowId={}",
                         taskId, assigneeId, subTableRowId);
             } catch (Exception e) {
-                // ExtendedTaskInfo 保存失败时记录 ERROR 日志，不影响 Flowable 任务创建
                 log.error("Failed to save ExtendedTaskInfo for task {}: {}", taskId, e.getMessage(), e);
             }
-            
+
         } catch (Exception e) {
             log.error("Error handling ELEMENT_VARIABLE assignment for task {}: {}", taskId, e.getMessage(), e);
         }
     }
 
-    /**
-     * 旧版设计器：expression + ${initiator} / ${initiatorId} → 标准 INITIATOR
-     */
     private static String normalizeLegacyAssigneeType(String assigneeType, String assigneeValue) {
         if (assigneeType == null) {
             return null;
@@ -419,9 +534,6 @@ public class TaskAssignmentListener implements FlowableEventListener {
         return e.matches("(?i)^\\$\\{\\s*initiator\\s*}$") || e.matches("(?i)^\\$\\{\\s*initiatorId\\s*}$");
     }
 
-    /**
-     * 从 UserTask 扩展中读取 custom:property；兼容 Flowable 解析后不同 namespace 下 key 不一致的情况
-     */
     private String getExtensionProperty(UserTask userTask, String propertyName) {
         if (userTask.getExtensionElements() == null || userTask.getExtensionElements().isEmpty()) {
             return null;
@@ -468,14 +580,15 @@ public class TaskAssignmentListener implements FlowableEventListener {
     }
 
     private String getStringVariable(Map<String, Object> variables, String key) {
-        if (variables == null) return null;
+        if (variables == null) {
+            return null;
+        }
         Object value = variables.get(key);
         return value != null ? value.toString() : null;
     }
 
     @Override
     public boolean isFailOnException() {
-        // 不因为分配失败而导致流程失败
         return false;
     }
 
@@ -487,5 +600,34 @@ public class TaskAssignmentListener implements FlowableEventListener {
     @Override
     public String getOnTransaction() {
         return null;
+    }
+
+    private void notifyNewTask(String userId, String taskId, String taskName, String processInstanceId) {
+        if (userId == null || userId.isBlank() || notificationDispatchHelper == null) {
+            return;
+        }
+        String label = taskName != null && !taskName.isBlank() ? taskName : taskId;
+        notificationDispatchHelper.publishToUserAfterCommit(
+                userId.trim(),
+                "TASK",
+                "新任务待办",
+                String.format("您有新的待办任务「%s」。流程实例：%s", label, processInstanceId != null ? processInstanceId : "-"),
+                "/tasks/" + taskId,
+                "workflow-engine");
+    }
+
+    private void notifyCandidateTask(String userId, String taskId, String taskName, String processInstanceId) {
+        if (userId == null || userId.isBlank() || notificationDispatchHelper == null) {
+            return;
+        }
+        String label = taskName != null && !taskName.isBlank() ? taskName : taskId;
+        notificationDispatchHelper.publishToUserAfterCommit(
+                userId.trim(),
+                "TASK",
+                "新的候选任务",
+                String.format("您被加入任务「%s」的候选人列表，可前往待办认领。流程实例：%s",
+                        label, processInstanceId != null ? processInstanceId : "-"),
+                "/tasks/" + taskId,
+                "workflow-engine");
     }
 }

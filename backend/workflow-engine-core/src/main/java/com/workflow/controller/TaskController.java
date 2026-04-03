@@ -18,7 +18,9 @@ import com.workflow.dto.response.TaskListResult;
 import com.workflow.dto.response.AssignSubTableRowResponse;
 import com.workflow.component.SubTableAssignmentHandler;
 import com.workflow.enums.AssignmentType;
+import com.workflow.exception.WorkflowBusinessException;
 import com.workflow.service.UserPermissionService;
+import com.workflow.util.WorkflowActorResolver;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -27,6 +29,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.flowable.engine.HistoryService;
 import org.flowable.engine.history.HistoricActivityInstance;
 import org.flowable.task.api.history.HistoricTaskInstance;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -36,6 +39,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
@@ -100,6 +104,19 @@ public class TaskController {
         // Enforce maximum page size limit
         if (pageSize > workflowConfig.getMaxPageSize()) {
             pageSize = workflowConfig.getMaxPageSize();
+        }
+
+        Optional<String> actor = WorkflowActorResolver.currentUserId();
+        if (actor.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error("UNAUTHORIZED", "Authentication required"));
+        }
+        if (userId != null && !userId.isEmpty() && !actor.get().equals(userId)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error("FORBIDDEN", "userId must match the authenticated user"));
+        }
+        if (userId == null || userId.isEmpty()) {
+            userId = actor.get();
         }
         
         log.info("Querying tasks for user: {}, processInstanceId: {}, page: {}, size: {}", userId, processInstanceId, page, pageSize);
@@ -293,14 +310,20 @@ public class TaskController {
             @Parameter(description = "任务ID", required = true)
             @PathVariable String taskId,
             @RequestBody @Valid TaskAssignmentRequest request) {
-        
+
+        Optional<String> actor = WorkflowActorResolver.currentUserId();
+        if (actor.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error("UNAUTHORIZED", "Authentication required"));
+        }
+        request.setOperatorUserId(actor.get());
+
         log.info("Assigning task: {} to {} (type: {})", taskId, request.getAssignmentTarget(), request.getAssignmentType());
-        TaskAssignmentResult result = taskManagerComponent.assignTask(taskId, request);
-        
-        if (result.isSuccess()) {
+        try {
+            TaskAssignmentResult result = taskManagerComponent.assignTask(taskId, request);
             return ResponseEntity.ok(ApiResponse.success(result));
-        } else {
-            return ResponseEntity.badRequest().body(ApiResponse.error("ASSIGN_FAILED", result.getMessage()));
+        } catch (WorkflowBusinessException e) {
+            return ResponseEntity.badRequest().body(ApiResponse.error(e.getErrorCode(), e.getMessage()));
         }
     }
 
@@ -316,6 +339,13 @@ public class TaskController {
         
         // 设置 taskId（从路径参数获取）
         request.setTaskId(taskId);
+
+        Optional<String> actor = WorkflowActorResolver.currentUserId();
+        if (actor.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error("UNAUTHORIZED", "Authentication required"));
+        }
+        request.setClaimedBy(actor.get());
         
         log.info("Claiming task: {} by user: {}", taskId, request.getClaimedBy());
         TaskAssignmentResult result = taskManagerComponent.claimTask(taskId, request);
@@ -337,6 +367,13 @@ public class TaskController {
             @PathVariable String taskId,
             @RequestBody @Valid TaskDelegationRequest request) {
         
+        Optional<String> actor = WorkflowActorResolver.currentUserId();
+        if (actor.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error("UNAUTHORIZED", "Authentication required"));
+        }
+        request.setDelegatedBy(actor.get());
+
         log.info("Delegating task: {} from {} to {}", taskId, request.getDelegatedBy(), request.getDelegatedTo());
         TaskAssignmentResult result = taskManagerComponent.delegateTask(taskId, request);
         
@@ -357,9 +394,13 @@ public class TaskController {
             @PathVariable String taskId,
             @RequestBody Map<String, Object> request) {
         
-        String userId = (String) request.get("userId");
-        log.info("Unclaiming task: {} by user: {}", taskId, userId);
-        TaskAssignmentResult result = taskManagerComponent.unclaimTask(taskId, userId);
+        Optional<String> actor = WorkflowActorResolver.currentUserId();
+        if (actor.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error("UNAUTHORIZED", "Authentication required"));
+        }
+        log.info("Unclaiming task: {} by user: {}", taskId, actor.get());
+        TaskAssignmentResult result = taskManagerComponent.unclaimTask(taskId, actor.get());
         
         if (result.isSuccess()) {
             return ResponseEntity.ok(ApiResponse.success(result));
@@ -378,7 +419,12 @@ public class TaskController {
             @PathVariable String taskId,
             @RequestBody Map<String, Object> request) {
         
-        String fromUserId = (String) request.get("fromUserId");
+        Optional<String> actor = WorkflowActorResolver.currentUserId();
+        if (actor.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error("UNAUTHORIZED", "Authentication required"));
+        }
+        String fromUserId = actor.get();
         String toUserId = (String) request.get("toUserId");
         String reason = (String) request.get("reason");
         
@@ -402,15 +448,24 @@ public class TaskController {
             @PathVariable String taskId,
             @RequestBody Map<String, Object> request) {
         
-        String userId = (String) request.get("userId");
+        Optional<String> actor = WorkflowActorResolver.currentUserId();
+        if (actor.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error("UNAUTHORIZED", "Authentication required"));
+        }
+        String userId = actor.get();
         @SuppressWarnings("unchecked")
         Map<String, Object> variables = (Map<String, Object>) request.get("variables");
+        boolean sendNotification = true;
+        if (request.containsKey("sendNotification") && request.get("sendNotification") instanceof Boolean b) {
+            sendNotification = b;
+        }
         
         log.info("Completing task: {} by user: {}", taskId, userId);
-        log.info("Request body: {}", request);
-        log.info("Variables received: {}", variables);
+        log.debug("Variables received (keys only): {}",
+                variables != null ? variables.keySet() : null);
         
-        TaskAssignmentResult result = taskManagerComponent.completeTask(taskId, userId, variables);
+        TaskAssignmentResult result = taskManagerComponent.completeTask(taskId, userId, variables, sendNotification);
         
         if (result.isSuccess()) {
             return ResponseEntity.ok(ApiResponse.success(result));
@@ -430,7 +485,15 @@ public class TaskController {
             @RequestBody @Valid TaskReturnRequest request) {
         
         request.setTaskId(taskId);
-        log.info("Returning task: {} to activity: {} by user: {}", 
+
+        Optional<String> actor = WorkflowActorResolver.currentUserId();
+        if (actor.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error("UNAUTHORIZED", "Authentication required"));
+        }
+        request.setUserId(actor.get());
+
+        log.info("Returning task: {} to activity: {} by user: {}",
                 taskId, request.getTargetActivityId(), request.getUserId());
         
         TaskAssignmentResult result = taskManagerComponent.returnTask(taskId, request);
@@ -464,11 +527,24 @@ public class TaskController {
     public ResponseEntity<ApiResponse<Map<String, Object>>> batchCompleteTasks(
             @RequestBody Map<String, Object> request) {
         
+        Optional<String> actor = WorkflowActorResolver.currentUserId();
+        if (actor.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error("UNAUTHORIZED", "Authentication required"));
+        }
+        String userId = actor.get();
         @SuppressWarnings("unchecked")
         List<String> taskIds = (List<String>) request.get("taskIds");
-        String userId = (String) request.get("userId");
         @SuppressWarnings("unchecked")
         Map<String, Object> variables = (Map<String, Object>) request.get("variables");
+        boolean sendNotification = true;
+        if (request.containsKey("sendNotification") && request.get("sendNotification") instanceof Boolean b) {
+            sendNotification = b;
+        }
+
+        if (taskIds == null || taskIds.isEmpty()) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("INVALID_REQUEST", "taskIds is required"));
+        }
         
         log.info("Batch completing {} tasks by user: {}", taskIds.size(), userId);
         
@@ -477,7 +553,7 @@ public class TaskController {
         
         for (String taskId : taskIds) {
             try {
-                TaskAssignmentResult result = taskManagerComponent.completeTask(taskId, userId, variables);
+                TaskAssignmentResult result = taskManagerComponent.completeTask(taskId, userId, variables, sendNotification);
                 if (result.isSuccess()) {
                     successIds.add(taskId);
                 } else {
@@ -502,13 +578,18 @@ public class TaskController {
      * 统计用户任务数量
      */
     @GetMapping("/count")
-    @Operation(summary = "统计任务数量", description = "统计用户的待办任务数量")
-    public ResponseEntity<ApiResponse<Map<String, Object>>> countTasks(
-            @Parameter(description = "用户ID", required = true)
-            @RequestParam("userId") String userId) {
-        
+    @Operation(summary = "统计任务数量", description = "统计当前认证用户的待办任务数量（不信任查询参数中的 userId）")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> countTasks() {
+
+        Optional<String> actor = WorkflowActorResolver.currentUserId();
+        if (actor.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error("UNAUTHORIZED", "Authentication required"));
+        }
+        String userId = actor.get();
+
         log.info("Counting tasks for user: {}", userId);
-        
+
         long totalCount = taskManagerComponent.countUserTasks(userId);
         long overdueCount = taskManagerComponent.countUserOverdueTasks(userId);
         
@@ -529,6 +610,16 @@ public class TaskController {
             @Parameter(description = "用户ID", required = true)
             @RequestParam("userId") String userId) {
         
+        Optional<String> actor = WorkflowActorResolver.currentUserId();
+        if (actor.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error("UNAUTHORIZED", "Authentication required"));
+        }
+        if (!actor.get().equals(userId)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error("FORBIDDEN", "Can only query permissions for the authenticated user"));
+        }
+
         log.info("Getting task permissions for user: {}", userId);
         
         List<String> virtualGroupIds = userPermissionService.getUserVirtualGroupIds(userId);
@@ -553,6 +644,16 @@ public class TaskController {
             @Parameter(description = "用户ID", required = true)
             @RequestParam("userId") String userId) {
         
+        Optional<String> actor = WorkflowActorResolver.currentUserId();
+        if (actor.isEmpty()) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body(ApiResponse.error("UNAUTHORIZED", "Authentication required"));
+        }
+        if (!actor.get().equals(userId)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(ApiResponse.error("FORBIDDEN", "Can only check permissions for the authenticated user"));
+        }
+
         log.info("Checking task permission for user: {} on task: {}", userId, taskId);
         
         TaskListResult.TaskInfo taskInfo = taskManagerComponent.getTaskInfo(taskId);
