@@ -5,6 +5,11 @@ export default {
   },
   profile: {
     title: '個人中心',
+    sectionAccount: '帳戶資訊',
+    accountId: '帳戶編號',
+    interfaceLanguage: '介面語言',
+    studioIntro: '設計器使用您的平臺帳戶登入。功能單元、流程與表單的編輯權限以本應用內實際可用選單為準；業務單元與入口工作台情境不在此顯示。',
+    studioDropdownHint: '設計器帳戶：組織與入口工作台資訊請至使用者入口或管理端查看。',
     businessUnits: '業務單元',
     virtualGroups: '虛擬群組',
     roles: '角色',
@@ -19,8 +24,11 @@ export default {
     newPasswordPlaceholder: '請輸入新密碼',
     confirmPasswordPlaceholder: '請再次輸入新密碼',
     passwordMismatch: '兩次輸入的密碼不一致',
-    passwordChanged: '密碼修改成功',
-    passwordMinLength: '密碼長度不能少於6位'
+    passwordChanged: '密碼已更新，請重新登入',
+    passwordMinLength: '密碼長度不能少於6位',
+    newPasswordSameAsOld: '新密碼不能與目前密碼相同',
+    wrongCurrentPassword: '目前密碼不正確',
+    changePasswordUnauthorized: '登入已失效，請重新登入後再修改密碼'
   },
   common: {
     save: '儲存',
@@ -974,6 +982,12 @@ export default {
   api: {
     pleaseLogin: '請先登入',
     noPermission: '沒有權限執行此操作',
+    unauthorized: '登入已失效或憑證無效，請重新登入',
+    invalidParams: '請求參數無效',
+    notFound: '資源不存在',
+    businessError: '業務處理失敗',
+    serverError: '伺服器內部錯誤',
+    serviceUnavailable: '服務暫時無法使用，請稍後再試',
     tooManyRequests: '請求過於頻繁，請稍後重試',
     requestFailed: '請求失敗',
     networkError: '網路錯誤，請檢查網路連線',

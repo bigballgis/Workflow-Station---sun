@@ -3,6 +3,7 @@ import { ElMessage } from 'element-plus'
 import router from '@/router'
 import { refreshToken as refreshAuthToken, REFRESH_TOKEN_KEY, TOKEN_KEY, clearAuth, getUser } from './auth'
 import i18n from '@/i18n'
+import { pickHttpErrorBodyMessage } from '@/utils/httpErrorMessage'
 
 let isRefreshing = false
 let failedQueue: Array<{ resolve: Function; reject: Function }> = []
@@ -84,19 +85,19 @@ api.interceptors.response.use(
         }
       } else {
         clearAuth()
+        ElMessage.warning(i18n.global.t('api.unauthorized'))
         router.push('/login')
         return Promise.reject(error)
       }
     }
 
     if (response) {
-      const errorMsg = response.data?.message || (response.data?.details 
-        ? (typeof response.data.details === 'object' 
-          ? Object.values(response.data.details).join('; ') 
-          : response.data.details)
-        : null)
-      
+      const errorMsg = pickHttpErrorBodyMessage(response.data)
+
       switch (response.status) {
+        case 401:
+          ElMessage.error(errorMsg || i18n.global.t('api.unauthorized'))
+          break
         case 403:
           // 403 may indicate not logged in or insufficient permissions
           const token = localStorage.getItem(TOKEN_KEY)

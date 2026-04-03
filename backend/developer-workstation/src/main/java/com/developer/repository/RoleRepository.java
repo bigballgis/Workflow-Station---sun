@@ -10,8 +10,10 @@ import java.util.List;
 
 /**
  * Repository for role queries in the security permission system.
- * Provides database access for user role validation.
- * 
+ * userId 相关查询与 {@link com.platform.security.service.UserRoleService} 对齐：同时认
+ * {@code sys_user_roles}、{@code sys_virtual_group_roles} 以及 {@code sys_role_assignments}
+ *（USER / VIRTUAL_GROUP，含有效期）。
+ *
  * Requirements: 2.1, 4.4
  */
 @Repository
@@ -88,6 +90,19 @@ public interface RoleRepository extends JpaRepository<Role, String> {
            "  FROM sys_virtual_group_roles vgr " +
            "  JOIN sys_virtual_group_members vgm ON vgr.virtual_group_id = vgm.group_id " +
            "  WHERE vgm.user_id = :userId " +
+           "  UNION " +
+           "  SELECT ra.role_id " +
+           "  FROM sys_role_assignments ra " +
+           "  WHERE ra.target_type = 'USER' AND ra.target_id = :userId " +
+           "  AND (ra.valid_from IS NULL OR ra.valid_from <= CURRENT_TIMESTAMP) " +
+           "  AND (ra.valid_to IS NULL OR ra.valid_to >= CURRENT_TIMESTAMP) " +
+           "  UNION " +
+           "  SELECT ra.role_id " +
+           "  FROM sys_role_assignments ra " +
+           "  INNER JOIN sys_virtual_group_members vgm ON ra.target_type = 'VIRTUAL_GROUP' AND ra.target_id = vgm.group_id " +
+           "  WHERE vgm.user_id = :userId " +
+           "  AND (ra.valid_from IS NULL OR ra.valid_from <= CURRENT_TIMESTAMP) " +
+           "  AND (ra.valid_to IS NULL OR ra.valid_to >= CURRENT_TIMESTAMP) " +
            ") AND r.status = 'ACTIVE'",
            nativeQuery = true)
     List<Object[]> findRolesByUserId(@Param("userId") String userId);
@@ -113,6 +128,21 @@ public interface RoleRepository extends JpaRepository<Role, String> {
            "  JOIN sys_virtual_group_roles vgr ON r.id = vgr.role_id " +
            "  JOIN sys_virtual_group_members vgm ON vgr.virtual_group_id = vgm.group_id " +
            "  WHERE vgm.user_id = :userId AND r.code = :role AND r.status = 'ACTIVE' " +
+           "  UNION " +
+           "  SELECT r.id " +
+           "  FROM sys_roles r " +
+           "  INNER JOIN sys_role_assignments ra ON r.id = ra.role_id " +
+           "  WHERE ra.target_type = 'USER' AND ra.target_id = :userId AND r.code = :role AND r.status = 'ACTIVE' " +
+           "  AND (ra.valid_from IS NULL OR ra.valid_from <= CURRENT_TIMESTAMP) " +
+           "  AND (ra.valid_to IS NULL OR ra.valid_to >= CURRENT_TIMESTAMP) " +
+           "  UNION " +
+           "  SELECT r.id " +
+           "  FROM sys_roles r " +
+           "  INNER JOIN sys_role_assignments ra ON r.id = ra.role_id " +
+           "  INNER JOIN sys_virtual_group_members vgm ON ra.target_type = 'VIRTUAL_GROUP' AND ra.target_id = vgm.group_id " +
+           "  WHERE vgm.user_id = :userId AND r.code = :role AND r.status = 'ACTIVE' " +
+           "  AND (ra.valid_from IS NULL OR ra.valid_from <= CURRENT_TIMESTAMP) " +
+           "  AND (ra.valid_to IS NULL OR ra.valid_to >= CURRENT_TIMESTAMP) " +
            ") AS combined_roles",
            nativeQuery = true)
     boolean hasRoleByUserId(@Param("userId") String userId, @Param("role") String role);
@@ -126,6 +156,17 @@ public interface RoleRepository extends JpaRepository<Role, String> {
            "  SELECT vgr.role_id FROM sys_virtual_group_roles vgr " +
            "  JOIN sys_virtual_group_members vgm ON vgr.virtual_group_id = vgm.group_id " +
            "  WHERE vgm.user_id = :userId " +
+           "  UNION " +
+           "  SELECT ra.role_id FROM sys_role_assignments ra " +
+           "  WHERE ra.target_type = 'USER' AND ra.target_id = :userId " +
+           "  AND (ra.valid_from IS NULL OR ra.valid_from <= CURRENT_TIMESTAMP) " +
+           "  AND (ra.valid_to IS NULL OR ra.valid_to >= CURRENT_TIMESTAMP) " +
+           "  UNION " +
+           "  SELECT ra.role_id FROM sys_role_assignments ra " +
+           "  INNER JOIN sys_virtual_group_members vgm ON ra.target_type = 'VIRTUAL_GROUP' AND ra.target_id = vgm.group_id " +
+           "  WHERE vgm.user_id = :userId " +
+           "  AND (ra.valid_from IS NULL OR ra.valid_from <= CURRENT_TIMESTAMP) " +
+           "  AND (ra.valid_to IS NULL OR ra.valid_to >= CURRENT_TIMESTAMP) " +
            ") x " +
            "JOIN sys_roles r ON r.id = x.rid " +
            "WHERE r.type = 'ADMIN' AND r.status = 'ACTIVE'",

@@ -5,6 +5,11 @@ export default {
   },
   profile: {
     title: '个人中心',
+    sectionAccount: '账户信息',
+    accountId: '账户编号',
+    interfaceLanguage: '界面语言',
+    studioIntro: '设计器使用您的平台账户登录。功能单元、流程与表单的编辑权限以本应用内实际可用菜单为准；业务单元与门户工作台上下文不在此展示。',
+    studioDropdownHint: '设计器账户：组织与门户工作台信息请在用户门户或管理端查看。',
     businessUnits: '业务单元',
     virtualGroups: '虚拟组',
     roles: '角色',
@@ -19,8 +24,11 @@ export default {
     newPasswordPlaceholder: '请输入新密码',
     confirmPasswordPlaceholder: '请再次输入新密码',
     passwordMismatch: '两次输入的密码不一致',
-    passwordChanged: '密码修改成功',
-    passwordMinLength: '密码长度不能少于6位'
+    passwordChanged: '密码已更新，请重新登录',
+    passwordMinLength: '密码长度不能少于6位',
+    newPasswordSameAsOld: '新密码不能与当前密码相同',
+    wrongCurrentPassword: '当前密码不正确',
+    changePasswordUnauthorized: '登录已失效，请重新登录后再修改密码'
   },
   common: {
     save: '保存',
@@ -973,6 +981,12 @@ export default {
   api: {
     pleaseLogin: '请先登录',
     noPermission: '没有权限执行此操作',
+    unauthorized: '登录已失效或凭证无效，请重新登录',
+    invalidParams: '请求参数无效',
+    notFound: '资源不存在',
+    businessError: '业务处理失败',
+    serverError: '服务器内部错误',
+    serviceUnavailable: '服务暂时不可用，请稍后再试',
     tooManyRequests: '请求过于频繁，请稍后重试',
     requestFailed: '请求失败',
     networkError: '网络错误，请检查网络连接',

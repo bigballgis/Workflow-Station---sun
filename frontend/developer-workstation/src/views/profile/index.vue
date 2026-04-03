@@ -6,64 +6,50 @@
           <span>{{ t('profile.title') }}</span>
         </div>
       </template>
-      
+
       <div class="profile-content" v-loading="loading">
         <div class="avatar-section">
           <el-avatar :size="100">
             {{ (userInfo?.displayName || userInfo?.username || 'U').charAt(0).toUpperCase() }}
           </el-avatar>
           <h2>{{ userInfo?.displayName || userInfo?.username || t('user.username') }}</h2>
-          <p class="user-role">{{ roleNames }}</p>
         </div>
-        
+
+        <el-alert type="info" :closable="false" show-icon class="studio-alert">
+          {{ t('profile.studioIntro') }}
+        </el-alert>
+
         <el-divider />
-        
-        <el-descriptions :column="2" border>
+
+        <h4 class="subsection-title">{{ t('profile.sectionAccount') }}</h4>
+        <el-descriptions :column="2" border class="subsection-block">
           <el-descriptions-item :label="t('user.username')">
             {{ userInfo?.username || '-' }}
           </el-descriptions-item>
           <el-descriptions-item :label="t('user.email')">
             {{ userInfo?.email || '-' }}
           </el-descriptions-item>
-          <el-descriptions-item label="User ID">
+          <el-descriptions-item :label="t('profile.accountId')">
             {{ userInfo?.userId || '-' }}
           </el-descriptions-item>
-          <el-descriptions-item label="Language">
-            {{ userInfo?.language || 'zh-CN' }}
-          </el-descriptions-item>
-          <el-descriptions-item :label="t('profile.businessUnits')" :span="2">
-            <el-tag v-for="bu in businessUnits" :key="bu.id" size="small" type="info" class="item-tag">
-              {{ bu.name }}
-            </el-tag>
-            <span v-if="businessUnits.length === 0" class="empty-text">{{ t('profile.noBusinessUnits') }}</span>
-          </el-descriptions-item>
-          <el-descriptions-item :label="t('profile.virtualGroups')" :span="2">
-            <el-tag v-for="vg in virtualGroups" :key="vg.groupId" size="small" type="success" class="item-tag">
-              {{ vg.groupName }}
-            </el-tag>
-            <span v-if="virtualGroups.length === 0" class="empty-text">{{ t('profile.noVirtualGroups') }}</span>
-          </el-descriptions-item>
-          <el-descriptions-item :label="t('profile.roles')" :span="2">
-            <el-tag v-for="role in roles" :key="role.id" size="small" :type="getRoleTagType(role.type)" class="item-tag">
-              {{ role.name }}
-            </el-tag>
-            <span v-if="roles.length === 0" class="empty-text">{{ t('profile.noRoles') }}</span>
+          <el-descriptions-item :label="t('profile.interfaceLanguage')">
+            {{ languageLabel }}
           </el-descriptions-item>
         </el-descriptions>
       </div>
     </el-card>
-    
+
     <el-card class="password-card">
       <template #header>
         <div class="card-header">
           <span>{{ t('profile.changePassword') }}</span>
         </div>
       </template>
-      
-      <el-form 
-        ref="passwordFormRef" 
-        :model="passwordForm" 
-        :rules="passwordRules" 
+
+      <el-form
+        ref="passwordFormRef"
+        :model="passwordForm"
+        :rules="passwordRules"
         label-width="100px"
         label-position="left"
       >
@@ -73,6 +59,7 @@
             type="password" 
             show-password
             :placeholder="t('profile.currentPasswordPlaceholder')"
+            @blur="passwordFormRef?.validateField('newPassword')"
           />
         </el-form-item>
         <el-form-item :label="t('profile.newPassword')" prop="newPassword">
@@ -81,12 +68,13 @@
             type="password" 
             show-password
             :placeholder="t('profile.newPasswordPlaceholder')"
+            @input="passwordFormRef?.validateField('confirmPassword')"
           />
         </el-form-item>
         <el-form-item :label="t('profile.confirmPassword')" prop="confirmPassword">
-          <el-input 
-            v-model="passwordForm.confirmPassword" 
-            type="password" 
+          <el-input
+            v-model="passwordForm.confirmPassword"
+            type="password"
             show-password
             :placeholder="t('profile.confirmPasswordPlaceholder')"
           />
@@ -105,10 +93,41 @@
 import { ref, onMounted, reactive, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, FormInstance, FormRules } from 'element-plus'
-import { getUser } from '@/api/auth'
+import { getUser, clearAuth } from '@/api/auth'
+import { useRouter } from 'vue-router'
 import { userApi } from '@/api/user'
+import { getChangePasswordFailureMessage } from '@/utils/changePasswordError'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const router = useRouter()
+
+function languageLabelFor(code: string | undefined, loc: string): string {
+  const c = (code || 'zh-CN').replace('_', '-')
+  const en = loc.startsWith('en')
+  const tw = loc === 'zh-TW'
+  if (en) {
+    const m: Record<string, string> = {
+      'zh-CN': 'Simplified Chinese',
+      'zh-TW': 'Traditional Chinese',
+      en: 'English'
+    }
+    return m[c] || c
+  }
+  if (tw) {
+    const m: Record<string, string> = {
+      'zh-CN': '簡體中文',
+      'zh-TW': '繁體中文',
+      en: 'English'
+    }
+    return m[c] || c
+  }
+  const m: Record<string, string> = {
+    'zh-CN': '简体中文',
+    'zh-TW': '繁體中文',
+    en: 'English'
+  }
+  return m[c] || c
+}
 
 interface UserInfo {
   userId?: string
@@ -120,11 +139,10 @@ interface UserInfo {
 
 const loading = ref(false)
 const userInfo = ref<UserInfo | null>(null)
-const businessUnits = ref<{ id: string; name: string }[]>([])
-const virtualGroups = ref<{ groupId: string; groupName: string }[]>([])
-const roles = ref<{ id: string; name: string; type?: string }[]>([])
 const passwordFormRef = ref<FormInstance>()
 const changingPassword = ref(false)
+
+const languageLabel = computed(() => languageLabelFor(userInfo.value?.language, String(locale.value)))
 
 const passwordForm = reactive({
   oldPassword: '',
@@ -132,18 +150,7 @@ const passwordForm = reactive({
   confirmPassword: ''
 })
 
-const roleNames = computed(() => {
-  return roles.value.map(r => r.name).join(', ') || '-'
-})
-
-const getRoleTagType = (type?: string) => {
-  if (type === 'BU_BOUNDED') return 'warning'
-  if (type === 'BU_UNBOUNDED') return 'success'
-  if (type === 'ADMIN') return 'danger'
-  return 'primary'
-}
-
-const validateConfirmPassword = (_rule: any, value: string, callback: any) => {
+const validateConfirmPassword = (_rule: unknown, value: string, callback: (e?: Error) => void) => {
   if (value !== passwordForm.newPassword) {
     callback(new Error(t('profile.passwordMismatch')))
   } else {
@@ -151,13 +158,20 @@ const validateConfirmPassword = (_rule: any, value: string, callback: any) => {
   }
 }
 
+const validateNewPasswordDiffers = (_rule: unknown, value: string, callback: (e?: Error) => void) => {
+  if (value && value === passwordForm.oldPassword) {
+    callback(new Error(t('profile.newPasswordSameAsOld')))
+  } else {
+    callback()
+  }
+}
+
 const passwordRules = computed<FormRules>(() => ({
-  oldPassword: [
-    { required: true, message: t('profile.currentPasswordPlaceholder'), trigger: 'blur' }
-  ],
+  oldPassword: [{ required: true, message: t('profile.currentPasswordPlaceholder'), trigger: 'blur' }],
   newPassword: [
     { required: true, message: t('profile.newPasswordPlaceholder'), trigger: 'blur' },
-    { min: 6, message: t('profile.passwordMinLength'), trigger: 'blur' }
+    { min: 6, message: t('profile.passwordMinLength'), trigger: 'blur' },
+    { validator: validateNewPasswordDiffers, trigger: 'blur' }
   ],
   confirmPassword: [
     { required: true, message: t('profile.confirmPasswordPlaceholder'), trigger: 'blur' },
@@ -171,21 +185,6 @@ const loadUserInfo = async () => {
     const user = getUser()
     if (user) {
       userInfo.value = user
-      
-      if (user.userId) {
-        const [busResult, vgResult, rolesResult] = await Promise.all([
-          userApi.getBusinessUnits(user.userId),
-          userApi.getVirtualGroups(user.userId),
-          userApi.getRoles(user.userId)
-        ])
-        businessUnits.value = busResult || []
-        virtualGroups.value = vgResult || []
-        roles.value = (rolesResult || []).map((r: any) => ({
-          id: r.id,
-          name: r.name,
-          type: r.type
-        }))
-      }
     }
   } catch (error) {
     console.error('Failed to load user info:', error)
@@ -196,10 +195,10 @@ const loadUserInfo = async () => {
 
 const handleChangePassword = async () => {
   if (!passwordFormRef.value) return
-  
+
   await passwordFormRef.value.validate(async (valid) => {
     if (!valid) return
-    
+
     changingPassword.value = true
     try {
       await userApi.changePassword({
@@ -208,8 +207,10 @@ const handleChangePassword = async () => {
       })
       ElMessage.success(t('profile.passwordChanged'))
       passwordFormRef.value?.resetFields()
-    } catch (error: any) {
-      ElMessage.error(error.response?.data?.message || t('common.failed'))
+      clearAuth()
+      await router.replace('/login')
+    } catch (error: unknown) {
+      ElMessage.error(getChangePasswordFailureMessage(error, t))
     } finally {
       changingPassword.value = false
     }
@@ -256,18 +257,18 @@ onMounted(() => {
   font-size: 20px;
 }
 
-.user-role {
-  color: #909399;
-  font-size: 14px;
+.studio-alert {
+  margin-bottom: 8px;
 }
 
-.item-tag {
-  margin-right: 6px;
-  margin-bottom: 4px;
+.subsection-title {
+  margin: 0 0 12px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--el-text-color-primary);
 }
 
-.empty-text {
-  color: #909399;
-  font-size: 12px;
+.subsection-block {
+  margin-bottom: 8px;
 }
 </style>

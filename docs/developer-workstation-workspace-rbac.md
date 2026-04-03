@@ -17,7 +17,7 @@
 | Team Lead 删除 | 仅当 `createdBy` 等于当前 username 时允许删除（`WorkspaceAccessAction.DELETE`）。 |
 | Team Lead 分配组 | 仅创建者可 `PUT /function-units/{id}/dev-groups`（`ASSIGN_DEV_GROUPS`）；需同时具备 JWT 权限 `FUNCTION_UNIT_ASSIGN_DEV_GROUP`。 |
 | Developer 可见性 | 用户所属虚拟组 ID 来自 `sys_virtual_group_members`；功能单元侧映射表为 `dw_function_unit_dev_groups`（`virtual_group_id` 存 `sys_virtual_groups.id`）。 |
-| 平台管理员 | `RoleRepository.userHasActiveAdminTypeRole(userId)` 为真时，工作区规则全放行（与 developer 权限拦截器中对 ADMIN 的约定对齐）。 |
+| 平台管理员 | `RoleRepository.userHasActiveAdminTypeRole(userId)` 为真时，工作区规则全放行。判定与登录侧一致：除 `sys_user_roles`、`sys_virtual_group_roles` 外，包含 **`sys_role_assignments`**（`USER` 直接分配与 `VIRTUAL_GROUP` 经组成员展开，且尊重 `valid_from`/`valid_to`）。测试账号 `44027893` 等若仅有 `sys_role_assignments` 中的 `SYS_ADMIN`，此前未合并该表会导致列表为空。 |
 
 ## 数据模型
 
@@ -81,6 +81,10 @@
 | `WorkspaceAccessAction` | VIEW / MODIFY / DELETE / ASSIGN_DEV_GROUPS |
 | `FunctionUnitWorkspaceAccessInterceptor` | 按 URL 解析 ID 并断言 |
 | `WorkspaceExceptionHandler` | 403 统一格式 |
+
+## 相关文档
+
+- 门户终端用户的 **业务单元角色（UBR）、工作台上下文、BU_UNBOUNDED 仅虚拟组** 等规则见 [portal-bu-rbac.md](./portal-bu-rbac.md)（与本文 developer 工作区模型互补，不重复展开）。
 
 ---
 

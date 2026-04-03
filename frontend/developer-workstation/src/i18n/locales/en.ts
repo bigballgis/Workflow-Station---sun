@@ -5,6 +5,11 @@ export default {
   },
   profile: {
     title: 'Profile',
+    sectionAccount: 'Account',
+    accountId: 'Account ID',
+    interfaceLanguage: 'Interface language',
+    studioIntro: 'You are signed in with your platform account. What you can edit here depends on menus available in this app; business units and portal workspace are not shown in the studio.',
+    studioDropdownHint: 'Studio account: see User Portal or Admin for organization and workspace context.',
     businessUnits: 'Business Units',
     virtualGroups: 'Virtual Groups',
     roles: 'Roles',
@@ -19,8 +24,11 @@ export default {
     newPasswordPlaceholder: 'Enter new password',
     confirmPasswordPlaceholder: 'Enter new password again',
     passwordMismatch: 'Passwords do not match',
-    passwordChanged: 'Password changed successfully',
-    passwordMinLength: 'Password must be at least 6 characters'
+    passwordChanged: 'Password updated. Please sign in again.',
+    passwordMinLength: 'Password must be at least 6 characters',
+    newPasswordSameAsOld: 'New password must differ from your current password',
+    wrongCurrentPassword: 'Current password is incorrect',
+    changePasswordUnauthorized: 'Your session has expired. Please sign in again to change your password.'
   },
   common: {
     save: 'Save',
@@ -974,6 +982,12 @@ export default {
   api: {
     pleaseLogin: 'Please login first',
     noPermission: 'No permission to perform this action',
+    unauthorized: 'Your session has expired or credentials are invalid. Please sign in again.',
+    invalidParams: 'Invalid request parameters',
+    notFound: 'Resource not found',
+    businessError: 'Business rule violation',
+    serverError: 'Internal server error',
+    serviceUnavailable: 'Service temporarily unavailable, please try again later',
     tooManyRequests: 'Too many requests, please try again later',
     requestFailed: 'Request failed',
     networkError: 'Network error, please check your connection',

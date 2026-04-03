@@ -79,6 +79,7 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, type FormInstance } from 'element-plus'
 import { login as authLogin, saveTokens, saveUser } from '@/api/auth'
+import { resolveUserFacingHttpMessage } from '@/utils/httpErrorMessage'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -122,9 +123,8 @@ async function handleLogin() {
     localStorage.setItem('userId', response.user.userId)
     router.push('/')
     ElMessage.success(t('common.success'))
-  } catch (error: any) {
-    const message = error.response?.data?.message || error.message || t('common.error')
-    ElMessage.error(message)
+  } catch (error: unknown) {
+    ElMessage.error(resolveUserFacingHttpMessage(error, t))
   } finally {
     loading.value = false
   }
