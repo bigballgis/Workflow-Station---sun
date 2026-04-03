@@ -67,6 +67,9 @@ api.interceptors.response.use(
           const tokenResponse = await refreshAuthToken(storedRefreshToken)
           const newToken = tokenResponse.accessToken
           localStorage.setItem(TOKEN_KEY, newToken)
+          if (tokenResponse.refreshToken) {
+            localStorage.setItem(REFRESH_TOKEN_KEY, tokenResponse.refreshToken)
+          }
           
           processQueue(null, newToken)
           originalRequest.headers.Authorization = `Bearer ${newToken}`

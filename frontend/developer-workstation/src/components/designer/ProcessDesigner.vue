@@ -69,6 +69,7 @@ import ProcessDebugPanel from '@/components/debug/ProcessDebugPanel.vue'
 import NodePropertiesPanel from '@/components/designer/properties/NodePropertiesPanel.vue'
 import customModdleDescriptor from '@/utils/customModdle'
 import { customTranslateModule } from '@/utils/customTranslate'
+import { findLastTaskAssigneeTopologyViolations } from '@/utils/bpmnAssigneeTopology'
 
 // @ts-ignore - bpmn-js types
 import BpmnModeler from 'bpmn-js/lib/Modeler'
@@ -210,7 +211,21 @@ function handleRedo() {
   commandStack.redo()
 }
 
+function formatLastTaskTopologyViolations(): string {
+  if (!bpmnModeler) return ''
+  const violations = findLastTaskAssigneeTopologyViolations(bpmnModeler)
+  return violations
+    .map((v) => `${v.taskName || v.taskId} (${v.incomingCount})`)
+    .join('; ')
+}
+
 async function handleValidate() {
+  if (!bpmnModeler) return
+  const detail = formatLastTaskTopologyViolations()
+  if (detail) {
+    ElMessage.error(t('process.lastTaskAnchorBlocked', { detail }))
+    return
+  }
   try {
     const res = await functionUnitApi.validateProcess?.(props.functionUnitId)
     if (res?.data?.valid) {
@@ -275,6 +290,11 @@ async function handleImportXML() {
 
 async function handleSave() {
   if (!bpmnModeler) return
+  const detail = formatLastTaskTopologyViolations()
+  if (detail) {
+    ElMessage.error(t('process.lastTaskAnchorBlocked', { detail }))
+    return
+  }
   saving.value = true
   try {
     const { xml } = await bpmnModeler.saveXML({ format: true })

@@ -51,6 +51,7 @@ export interface UserInfo {
 export interface TokenResponse {
   accessToken: string
   expiresIn: number
+  refreshToken?: string
 }
 
 export const login = async (data: LoginRequest): Promise<LoginResponse> => {

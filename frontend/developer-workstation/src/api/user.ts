@@ -1,6 +1,23 @@
 import axios from 'axios'
 import { TOKEN_KEY } from './auth'
 
+const workstationAuthAxios = axios.create({
+  baseURL: '/api/v1/auth',
+  timeout: 30000,
+  headers: { 'Content-Type': 'application/json' }
+})
+workstationAuthAxios.interceptors.request.use(config => {
+  const token = localStorage.getItem(TOKEN_KEY)
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
+})
+workstationAuthAxios.interceptors.response.use(
+  response => response.data,
+  error => Promise.reject(error)
+)
+
 /**
  * User API module for developer-workstation
  * Provides access to user business units, virtual groups, and roles
@@ -59,5 +76,9 @@ export const userApi = {
 
   /** Get user roles (via virtual groups) */
   getRoles: (userId: string): Promise<UserRole[]> =>
-    adminCenterAxios.get(`/users/${userId}/roles`)
+    adminCenterAxios.get(`/users/${userId}/roles`),
+
+  /** Change password (developer-workstation auth service) */
+  changePassword: (data: { oldPassword: string; newPassword: string }): Promise<void> =>
+    workstationAuthAxios.post('/change-password', data)
 }

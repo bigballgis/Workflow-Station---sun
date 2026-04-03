@@ -26,28 +26,50 @@
                 <el-option :label="t('properties.entityManager')" value="ENTITY_MANAGER" />
                 <el-option :label="t('properties.functionManager')" value="FUNCTION_MANAGER" />
               </el-option-group>
-              <el-option-group :label="t('properties.currentUserBuRole')">
+              <el-option-group :label="t('properties.convergedAssignee')">
+                <el-option :label="t('properties.hierarchyRole')" value="HIERARCHY_ROLE" />
+                <el-option :label="t('properties.buRoleConverged')" value="BU_ROLE" />
+                <el-option :label="t('properties.manualAssignType')" value="MANUAL_ASSIGN" />
+                <el-option :label="t('properties.assigneeFromVariableType')" value="ASSIGNEE_FROM_VARIABLE" />
+                <el-option :label="t('properties.elementVariableType')" value="ELEMENT_VARIABLE" />
+              </el-option-group>
+              <el-option-group :label="t('properties.legacyBpmnAssignee')">
                 <el-option :label="t('properties.currentBuRole')" value="CURRENT_BU_ROLE" />
                 <el-option :label="t('properties.currentParentBuRole')" value="CURRENT_PARENT_BU_ROLE" />
-              </el-option-group>
-              <el-option-group :label="t('properties.initiatorBuRole')">
                 <el-option :label="t('properties.initiatorBuRoleOption')" value="INITIATOR_BU_ROLE" />
                 <el-option :label="t('properties.initiatorParentBuRole')" value="INITIATOR_PARENT_BU_ROLE" />
-              </el-option-group>
-              <el-option-group :label="t('properties.otherRoleTypes')">
                 <el-option :label="t('properties.fixedBuRole')" value="FIXED_BU_ROLE" />
-                <el-option :label="t('properties.buUnboundedRole')" value="BU_UNBOUNDED_ROLE" />
               </el-option-group>
             </el-select>
           </el-form-item>
+
+          <div v-if="assigneeType === 'BU_UNBOUNDED_ROLE'" class="claim-tip">
+            <el-alert type="warning" :closable="false" show-icon>
+              <template #title>{{ t('properties.buUnboundedDeprecated') }}</template>
+            </el-alert>
+          </div>
+
+          <el-form-item v-if="showAssigneeAnchor" :label="t('properties.assigneeAnchor')">
+            <el-select v-model="assigneeAnchor" @change="onAssigneeAnchorChange">
+              <el-option :label="t('properties.anchorInitiator')" value="INITIATOR" />
+              <el-option :label="t('properties.anchorLastCompleter')" value="LAST_TASK_ASSIGNEE" />
+            </el-select>
+            <div v-if="assigneeAnchor === 'LAST_TASK_ASSIGNEE'" class="form-tip">{{ t('properties.hierarchyRoleAnchorTip') }}</div>
+          </el-form-item>
+
+          <div v-if="lastTaskAnchorTopologyInvalid" class="claim-tip">
+            <el-alert type="error" :closable="false" show-icon>
+              <template #title>{{ t('properties.lastTaskAnchorIncomingBad', { count: incomingSequenceFlowCount }) }}</template>
+            </el-alert>
+          </div>
           
           <!-- Display current assignment label -->
           <div v-if="assigneeLabel" class="assignee-label">
             <el-tag type="info" size="small">{{ assigneeLabel }}</el-tag>
           </div>
           
-          <!-- Business unit selector (required for FIXED_BU_ROLE, placed above role selector) -->
-          <el-form-item v-if="assigneeType === 'FIXED_BU_ROLE'" :label="t('properties.selectBusinessUnit')">
+          <!-- Business unit selector (FIXED_BU_ROLE / BU_ROLE) -->
+          <el-form-item v-if="needsBuForRole" :label="t('properties.selectBusinessUnit')">
             <el-tree-select
               v-model="businessUnitId"
               :data="businessUnits"
@@ -69,7 +91,7 @@
               v-model="roleId"
               :loading="loadingRoles"
               :placeholder="roleSelectPlaceholder"
-              :disabled="assigneeType === 'FIXED_BU_ROLE' && !businessUnitId"
+              :disabled="needsBuForRole && !businessUnitId"
               filterable
               @change="handleRoleChange"
             >
@@ -85,6 +107,45 @@
             </el-select>
             <div class="form-tip">{{ roleSelectTip }}</div>
           </el-form-item>
+
+          <template v-if="assigneeType === 'MANUAL_ASSIGN'">
+            <el-form-item :label="t('properties.manualAssignVariable')">
+              <el-input
+                v-model="manualAssignVariable"
+                @change="updateExtProp('manualAssignVariable', manualAssignVariable)"
+                :placeholder="t('properties.manualAssignVariableHint')"
+              />
+            </el-form-item>
+            <el-form-item :label="t('properties.manualAssignBuVariable')">
+              <el-input
+                v-model="manualAssignBuVariable"
+                @change="updateExtProp('manualAssignBuVariable', manualAssignBuVariable)"
+              />
+            </el-form-item>
+            <el-form-item :label="t('properties.manualAssignRoleVariable')">
+              <el-input
+                v-model="manualAssignRoleVariable"
+                @change="updateExtProp('manualAssignRoleVariable', manualAssignRoleVariable)"
+              />
+            </el-form-item>
+          </template>
+
+          <el-form-item v-if="assigneeType === 'ASSIGNEE_FROM_VARIABLE'" :label="t('properties.assigneeVariableField')">
+            <el-input
+              v-model="assigneeVariableName"
+              @change="updateExtProp('assigneeVariable', assigneeVariableName)"
+              :placeholder="t('properties.assigneeVariableHint')"
+            />
+          </el-form-item>
+
+          <template v-if="assigneeType === 'ELEMENT_VARIABLE'">
+            <el-form-item :label="t('properties.subTableIdField')">
+              <el-input v-model="elementSubTableId" @change="updateExtProp('subTableId', elementSubTableId)" />
+            </el-form-item>
+            <el-form-item :label="t('properties.subTableNameField')">
+              <el-input v-model="elementSubTableName" @change="updateExtProp('subTableName', elementSubTableName)" />
+            </el-form-item>
+          </template>
           
           <!-- Claim type tip -->
           <div v-if="needsClaim" class="claim-tip">
@@ -193,8 +254,9 @@
 
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { ElMessage } from 'element-plus'
 import type { BpmnElement, BpmnModeler } from '@/types/bpmn'
 import type { FormDefinition, ActionDefinition } from '@/api/functionUnit'
 import { functionUnitApi } from '@/api/functionUnit'
@@ -205,6 +267,7 @@ import {
   getExtensionProperties,
   setExtensionProperty
 } from '@/utils/bpmnExtensions'
+import { countIncomingSequenceFlows } from '@/utils/bpmnAssigneeTopology'
 
 const { t } = useI18n()
 
@@ -220,25 +283,41 @@ const activeGroups = ref(['basic', 'assignee', 'form', 'actions'])
 const taskName = ref('')
 const taskDescription = ref('')
 
-// 9 standard assignment types
-type AssigneeTypeEnum = 
-  | 'FUNCTION_MANAGER' 
-  | 'ENTITY_MANAGER' 
-  | 'INITIATOR' 
-  | 'CURRENT_BU_ROLE' 
-  | 'CURRENT_PARENT_BU_ROLE' 
-  | 'INITIATOR_BU_ROLE' 
-  | 'INITIATOR_PARENT_BU_ROLE' 
-  | 'FIXED_BU_ROLE' 
+/** 与引擎 {@code AssigneeType.fromCode} / 旧版 BPMN 字符串对齐；BU_UNBOUNDED 仅历史加载 */
+type AssigneeTypeEnum =
+  | 'INITIATOR'
+  | 'ENTITY_MANAGER'
+  | 'FUNCTION_MANAGER'
+  | 'HIERARCHY_ROLE'
+  | 'BU_ROLE'
+  | 'MANUAL_ASSIGN'
+  | 'ASSIGNEE_FROM_VARIABLE'
+  | 'ELEMENT_VARIABLE'
+  | 'CURRENT_BU_ROLE'
+  | 'CURRENT_PARENT_BU_ROLE'
+  | 'INITIATOR_BU_ROLE'
+  | 'INITIATOR_PARENT_BU_ROLE'
+  | 'FIXED_BU_ROLE'
   | 'BU_UNBOUNDED_ROLE'
 
 // Assignee config
 const assigneeType = ref<AssigneeTypeEnum>('INITIATOR')
+const lastLoadedAssigneeType = ref<AssigneeTypeEnum>('INITIATOR')
+const assigneeAnchor = ref<'INITIATOR' | 'LAST_TASK_ASSIGNEE'>('INITIATOR')
 const roleId = ref('')
 const businessUnitId = ref('')
 const assigneeLabel = ref('')
 const candidateUsers = ref('')
 const candidateGroups = ref('')
+const manualAssignVariable = ref('')
+const manualAssignBuVariable = ref('')
+const manualAssignRoleVariable = ref('')
+const assigneeVariableName = ref('')
+const elementSubTableId = ref('')
+const elementSubTableName = ref('')
+
+/** 顺序流变化时递增，驱动「单入线」校验刷新 */
+const topologyTick = ref(0)
 
 // Business unit and role data
 const businessUnits = ref<BusinessUnitInfo[]>([])
@@ -269,11 +348,43 @@ const completionCondition = ref('')
 
 const basicProps = computed(() => getBasicProperties(props.element))
 
-// Whether role ID is needed
-const needsRoleId = computed(() => {
-  return ['CURRENT_BU_ROLE', 'CURRENT_PARENT_BU_ROLE', 'INITIATOR_BU_ROLE', 
-          'INITIATOR_PARENT_BU_ROLE', 'FIXED_BU_ROLE', 'BU_UNBOUNDED_ROLE'].includes(assigneeType.value)
+const ANCHORED_ASSIGNEE_TYPES: AssigneeTypeEnum[] = ['HIERARCHY_ROLE', 'ENTITY_MANAGER', 'FUNCTION_MANAGER']
+
+const ROLE_ID_ASSIGNEE_TYPES: AssigneeTypeEnum[] = [
+  'HIERARCHY_ROLE',
+  'BU_ROLE',
+  'CURRENT_BU_ROLE',
+  'CURRENT_PARENT_BU_ROLE',
+  'INITIATOR_BU_ROLE',
+  'INITIATOR_PARENT_BU_ROLE',
+  'FIXED_BU_ROLE',
+  'BU_UNBOUNDED_ROLE'
+]
+
+function assigneeTypeNeedsRoleId(t: AssigneeTypeEnum): boolean {
+  return ROLE_ID_ASSIGNEE_TYPES.includes(t)
+}
+
+const needsBuForRole = computed(
+  () => assigneeType.value === 'FIXED_BU_ROLE' || assigneeType.value === 'BU_ROLE'
+)
+
+const showAssigneeAnchor = computed(() => ANCHORED_ASSIGNEE_TYPES.includes(assigneeType.value))
+
+const incomingSequenceFlowCount = computed(() => {
+  topologyTick.value
+  return countIncomingSequenceFlows(props.element as any)
 })
+
+const lastTaskAnchorTopologyInvalid = computed(() => {
+  if (!showAssigneeAnchor.value || assigneeAnchor.value !== 'LAST_TASK_ASSIGNEE') {
+    return false
+  }
+  return incomingSequenceFlowCount.value !== 1
+})
+
+// Whether role ID is needed
+const needsRoleId = computed(() => assigneeTypeNeedsRoleId(assigneeType.value))
 
 // Whether to show role selector
 const showRoleSelector = computed(() => {
@@ -282,7 +393,7 @@ const showRoleSelector = computed(() => {
 
 // Role selector placeholder
 const roleSelectPlaceholder = computed(() => {
-  if (assigneeType.value === 'FIXED_BU_ROLE' && !businessUnitId.value) {
+  if (needsBuForRole.value && !businessUnitId.value) {
     return t('properties.selectBusinessUnitFirst')
   }
   return t('properties.selectRole')
@@ -290,32 +401,41 @@ const roleSelectPlaceholder = computed(() => {
 
 // Whether claim is needed
 const needsClaim = computed(() => {
-  return ['CURRENT_BU_ROLE', 'CURRENT_PARENT_BU_ROLE', 'INITIATOR_BU_ROLE', 
-          'INITIATOR_PARENT_BU_ROLE', 'FIXED_BU_ROLE', 'BU_UNBOUNDED_ROLE'].includes(assigneeType.value)
+  return [
+    'HIERARCHY_ROLE',
+    'BU_ROLE',
+    'MANUAL_ASSIGN',
+    'ASSIGNEE_FROM_VARIABLE',
+    'ELEMENT_VARIABLE',
+    'CURRENT_BU_ROLE',
+    'CURRENT_PARENT_BU_ROLE',
+    'INITIATOR_BU_ROLE',
+    'INITIATOR_PARENT_BU_ROLE',
+    'FIXED_BU_ROLE',
+    'BU_UNBOUNDED_ROLE'
+  ].includes(assigneeType.value)
 })
 
 // Filter roles by assignment type
 const filteredRoles = computed(() => {
   if (assigneeType.value === 'BU_UNBOUNDED_ROLE') {
     return buUnboundedRoles.value
-  } else if (assigneeType.value === 'FIXED_BU_ROLE' && businessUnitId.value) {
-    // FIXED_BU_ROLE only shows eligible roles for the business unit
-    return eligibleRoles.value
-  } else {
-    // Other BU role types show all BU bounded roles
-    return buBoundedRoles.value
   }
+  if ((assigneeType.value === 'FIXED_BU_ROLE' || assigneeType.value === 'BU_ROLE') && businessUnitId.value) {
+    return eligibleRoles.value
+  }
+  return buBoundedRoles.value
 })
 
 // Role selection tip
 const roleSelectTip = computed(() => {
   if (assigneeType.value === 'BU_UNBOUNDED_ROLE') {
     return t('properties.buUnboundedRoleTip')
-  } else if (assigneeType.value === 'FIXED_BU_ROLE') {
-    return t('properties.fixedBuRoleTip')
-  } else {
-    return t('properties.buBoundedRoleTip')
   }
+  if (assigneeType.value === 'FIXED_BU_ROLE' || assigneeType.value === 'BU_ROLE') {
+    return t('properties.fixedBuRoleTip')
+  }
+  return t('properties.buBoundedRoleTip')
 })
 
 function loadProperties() {
@@ -328,12 +448,26 @@ function loadProperties() {
   // Extension properties
   const ext = getExtensionProperties(props.element)
   taskDescription.value = ext.description || ''
-  assigneeType.value = ext.assigneeType || 'INITIATOR'
+  let rawType = (ext.assigneeType || 'INITIATOR') as string
+  if (rawType === 'PROCESS_INITIATOR') {
+    rawType = 'INITIATOR'
+  }
+  assigneeType.value = (rawType as AssigneeTypeEnum) || 'INITIATOR'
+  lastLoadedAssigneeType.value = assigneeType.value
+  const anchorRaw = (ext.assigneeAnchor as string) || 'INITIATOR'
+  assigneeAnchor.value =
+    anchorRaw.toUpperCase() === 'LAST_TASK_ASSIGNEE' ? 'LAST_TASK_ASSIGNEE' : 'INITIATOR'
   roleId.value = ext.roleId || ''
   businessUnitId.value = ext.businessUnitId || ''
   assigneeLabel.value = ext.assigneeLabel || ''
   candidateUsers.value = ext.candidateUsers || ''
   candidateGroups.value = ext.candidateGroups || ''
+  manualAssignVariable.value = ext.manualAssignVariable || ''
+  manualAssignBuVariable.value = ext.manualAssignBuVariable || ''
+  manualAssignRoleVariable.value = ext.manualAssignRoleVariable || ''
+  assigneeVariableName.value = ext.assigneeVariable || ''
+  elementSubTableId.value = ext.subTableId || ''
+  elementSubTableName.value = ext.subTableName || ''
   formId.value = ext.formId || null
   actionIds.value = ext.actionIds || []
   timeoutEnabled.value = ext.timeoutEnabled || false
@@ -348,7 +482,7 @@ function loadProperties() {
   if (needsRoleId.value) {
     loadRoles()
   }
-  if (assigneeType.value === 'FIXED_BU_ROLE') {
+  if (needsBuForRole.value) {
     loadBusinessUnits()
     if (businessUnitId.value) {
       loadEligibleRoles(businessUnitId.value)
@@ -374,14 +508,43 @@ function handleFormChange(id: number | null) {
   }
 }
 
+function onAssigneeAnchorChange(v: 'INITIATOR' | 'LAST_TASK_ASSIGNEE') {
+  if (v === 'LAST_TASK_ASSIGNEE') {
+    const n = countIncomingSequenceFlows(props.element as any)
+    if (n !== 1) {
+      ElMessage.error(t('properties.lastTaskAnchorSelectBlocked', { count: n }))
+      assigneeAnchor.value = 'INITIATOR'
+      updateExtProp('assigneeAnchor', 'INITIATOR')
+      return
+    }
+  }
+  updateExtProp('assigneeAnchor', v)
+}
+
 function handleAssigneeTypeChange(type: AssigneeTypeEnum) {
+  const prev = lastLoadedAssigneeType.value
+  lastLoadedAssigneeType.value = type
   updateExtProp('assigneeType', type)
-  
-  // Set default label based on type
+
+  const wasAnchored = ANCHORED_ASSIGNEE_TYPES.includes(prev)
+  const nowAnchored = ANCHORED_ASSIGNEE_TYPES.includes(type)
+  if (nowAnchored && !wasAnchored) {
+    assigneeAnchor.value = 'INITIATOR'
+    updateExtProp('assigneeAnchor', 'INITIATOR')
+  } else if (!nowAnchored) {
+    assigneeAnchor.value = 'INITIATOR'
+    updateExtProp('assigneeAnchor', '')
+  }
+
   const labelMap: Record<AssigneeTypeEnum, string> = {
     INITIATOR: t('properties.initiator'),
     ENTITY_MANAGER: t('properties.entityManager'),
     FUNCTION_MANAGER: t('properties.functionManager'),
+    HIERARCHY_ROLE: '',
+    BU_ROLE: '',
+    MANUAL_ASSIGN: '',
+    ASSIGNEE_FROM_VARIABLE: '',
+    ELEMENT_VARIABLE: '',
     CURRENT_BU_ROLE: '',
     CURRENT_PARENT_BU_ROLE: '',
     INITIATOR_BU_ROLE: '',
@@ -389,33 +552,28 @@ function handleAssigneeTypeChange(type: AssigneeTypeEnum) {
     FIXED_BU_ROLE: '',
     BU_UNBOUNDED_ROLE: ''
   }
-  
-  // Clear role and business unit
+
   roleId.value = ''
   businessUnitId.value = ''
   updateExtProp('roleId', '')
   updateExtProp('businessUnitId', '')
-  
-  // Set default label
-  if (!needsRoleId.value) {
+
+  if (!assigneeTypeNeedsRoleId(type)) {
     assigneeLabel.value = labelMap[type] || ''
     updateExtProp('assigneeLabel', assigneeLabel.value)
   } else {
     assigneeLabel.value = ''
     updateExtProp('assigneeLabel', '')
   }
-  
-  // Load role data
-  if (needsRoleId.value) {
+
+  if (assigneeTypeNeedsRoleId(type)) {
     loadRoles()
   }
-  
-  // Load business unit data
-  if (type === 'FIXED_BU_ROLE') {
+
+  if (type === 'FIXED_BU_ROLE' || type === 'BU_ROLE') {
     loadBusinessUnits()
   }
-  
-  // Clear candidate users/groups
+
   candidateUsers.value = ''
   candidateGroups.value = ''
   updateExtProp('candidateUsers', '')
@@ -461,6 +619,11 @@ function getAssigneeTypeLabel(type: AssigneeTypeEnum): string {
     INITIATOR: t('properties.initiator'),
     ENTITY_MANAGER: t('properties.entityManager'),
     FUNCTION_MANAGER: t('properties.functionManager'),
+    HIERARCHY_ROLE: t('properties.hierarchyRole'),
+    BU_ROLE: t('properties.buRoleConverged'),
+    MANUAL_ASSIGN: t('properties.manualAssignType'),
+    ASSIGNEE_FROM_VARIABLE: t('properties.assigneeFromVariableType'),
+    ELEMENT_VARIABLE: t('properties.elementVariableType'),
     CURRENT_BU_ROLE: t('properties.currentBuRole'),
     CURRENT_PARENT_BU_ROLE: t('properties.currentParentBuRole'),
     INITIATOR_BU_ROLE: t('properties.initiatorBuRoleOption'),
@@ -575,10 +738,19 @@ async function loadActions() {
 
 watch(() => props.element, loadProperties, { immediate: true })
 
+function bumpTopologyTick() {
+  topologyTick.value++
+}
+
 onMounted(() => {
+  props.modeler.on('commandStack.changed', bumpTopologyTick)
   loadProperties()
   loadForms()
   loadActions()
+})
+
+onUnmounted(() => {
+  props.modeler.off('commandStack.changed', bumpTopologyTick)
 })
 </script>
 
