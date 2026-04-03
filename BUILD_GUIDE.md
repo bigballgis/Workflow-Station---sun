@@ -377,6 +377,34 @@ cd deploy/init-scripts
 .\init-database.ps1 -DbHost localhost -DbPort 5432 -DbName workflow_platform_dev -DbUser platform_dev -DbPassword dev_password_123
 ```
 
+#### 8.3.1 开发者工作台：部署任务表 `dw_deployment_jobs`
+
+一键部署到 **admin-center** 的异步任务状态持久化在此表（支持多实例 `developer-workstation` 与进程重启后仍可查进度/历史）。与 Flyway **`V309__create_dw_deployment_jobs.sql`** 定义一致。
+
+| 列 | 说明 |
+|----|------|
+| `id` | 部署任务 UUID（与接口 `deploymentId` 一致） |
+| `function_unit_id` | 关联 `dw_function_units.id`，级联删除 |
+| `target_admin_url` | 本次调用的管理中心基址 |
+| `status` | `PENDING` / `DEPLOYING` / `SUCCESS` / `FAILED` / `ROLLED_BACK` |
+| `progress` | 0–100 |
+| `message` | 摘要信息 |
+| `version_number` / `change_log` | 发布版本与变更说明 |
+| `steps_json` | 步骤列表 JSON |
+| `started_at` / `completed_at` / `updated_at` | 时间戳（`TIMESTAMPTZ`） |
+
+**已有数据库增量执行**（未走完整 `init-database.ps1` 时）：
+
+```powershell
+cd deploy/init-scripts
+# 按实际连接修改 -h -p -U -d；密码可用环境变量 PGPASSWORD
+psql -h localhost -p 5432 -U platform -d workflow_platform -v ON_ERROR_STOP=1 -f 00-schema/26-add-dw-deployment-jobs.sql
+```
+
+新环境：`00-init-all.sh` / `init-database.ps1` 已包含 `26-add-dw-deployment-jobs.sql`，一般无需单独执行。
+
+**相关环境变量**见下文 **§12.2.1 developer-workstation 专项**。
+
 ### 8.4 默认登录账号
 
 ```
@@ -445,6 +473,13 @@ cd deploy/init-scripts
 # 使用 standalone schema 文件
 cd deploy/init-scripts
 psql -h {host} -p 5432 -U platform_{env} -d workflow_platform_{env} -f 00-schema/00-init-all-schemas-standalone.sql
+```
+
+若库已初始化、仅需补开发者部署任务表，可单独执行：
+
+```powershell
+cd deploy/init-scripts
+psql -h {host} -p 5432 -U platform_{env} -d workflow_platform_{env} -v ON_ERROR_STOP=1 -f 00-schema/26-add-dw-deployment-jobs.sql
 ```
 
 #### 9.1.3 更新 K8S 配置
@@ -627,6 +662,15 @@ PostgreSQL(公司) ── N8N(K8S) (独立数据库 n8n_{env})
 |--------|--------|------|
 | `ADMIN_CENTER_URL` | workflow-engine, user-portal, developer-workstation | 管理后台地址 |
 | `WORKFLOW_ENGINE_URL` | admin-center, user-portal, developer-workstation | 工作流引擎地址 |
+
+#### 12.2.1 developer-workstation 专项
+
+| 变量名 | 说明 | 示例值 |
+|--------|------|--------|
+| `DEVELOPER_DEPLOY_REQUIRE_ADMIN_AUTH` | 一键部署到 admin 前是否要求当前 HTTP 请求已带 `Authorization: Bearer …`（生产经 Kong 转发用户 JWT 时应为 `true`） | `true`（默认） |
+| `ADMIN_CENTER_URL` | 与 `application.yml` 中 `admin-center.url` 一致；部署目标非默认时需覆盖 | `http://admin-center:8080` |
+
+说明：`DEVELOPER_DEPLOY_REQUIRE_ADMIN_AUTH=false` 仅建议用于本地自动化或测试；生产环境应依赖 **Kong + JWT**，由前端/网关携带令牌，服务端再转发至 admin-center 的 `function-units-import` 接口。
 
 ### 12.3 前端 nginx 反向代理 URL 变量
 

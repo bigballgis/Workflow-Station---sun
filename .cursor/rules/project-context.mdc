@@ -38,6 +38,12 @@ platform-common ◄── platform-cache
 | `frontend/developer-workstation/` | developer-workstation + workflow-engine | nginx 直连 |
 | `frontend/user-portal/` | user-portal + workflow-engine | nginx 直连 |
 
+## 站内信（In-App Messaging）
+
+- **终端用户专用**：消息中心 UI、`up_notification` 持久化与 Kafka 消费仅在 **user-portal**。
+- **生产者**：可由 **workflow-engine-core**、**admin-center** 等向 `platform.notification.events` 发送 `NotificationEvent`，供门户用户接收。
+- **developer-workstation**：开发人员使用的设计器 **不** 接入站内信（不发 Kafka、不做消息中心）；设计器里的「通知配置」等仅为流程/表单元数据，与门户消息中心无关。
+
 ## 关键约定
 
 - 分层: `Controller → Component(接口) → ComponentImpl → Service / Repository`

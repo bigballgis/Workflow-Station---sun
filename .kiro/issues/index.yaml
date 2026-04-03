@@ -55,16 +55,18 @@
   note: "部分修复：通过 WorkflowEngineClient 统一调用"
 
 - id: "008"
-  status: open
+  status: fixed
   severity: major
   category: architecture
   summary: "user-portal Controllers 使用 X-User-Id header 而非 SecurityContext"
+  fixed_at: "2026-04-03"
 
 - id: "009"
-  status: open
+  status: fixed
   severity: major
   category: bug
   summary: "developer-workstation user.ts changePassword 调用不存在的端点"
+  fixed_at: "2026-04-03"
 
 - id: "010"
   status: fixed
@@ -74,16 +76,18 @@
   fixed_at: "2026-03-30"
 
 - id: "011"
-  status: open
+  status: fixed
   severity: minor
   category: quality
   summary: "platform-security RoleEntityPropertyTest 缺少嵌入式数据库"
+  fixed_at: "2026-04-03"
 
 - id: "012"
-  status: open
+  status: fixed
   severity: minor
   category: quality
   summary: "developer-workstation 集成测试因缺少 ApplicationContext 失败"
+  fixed_at: "2026-04-03"
 
 - id: "013"
   status: fixed
@@ -150,10 +154,11 @@
   fixed_at: "2026-03-31"
 
 - id: "022"
-  status: open
+  status: fixed
   severity: critical
   category: security
   summary: "workflow-engine 任务 API 信任调用方自报 userId (IDOR)"
+  fixed_at: "2026-04-03"
 
 - id: "023"
   status: fixed
@@ -191,10 +196,11 @@
   fixed_at: "2026-03-31"
 
 - id: "028"
-  status: open
+  status: fixed
   severity: major
   category: security
   summary: "Redis 黑名单故障放行 — 已撤销 token 可能被接受"
+  fixed_at: "2026-04-03"
 
 - id: "029"
   status: fixed
@@ -211,10 +217,11 @@
   fixed_at: "2026-03-31"
 
 - id: "031"
-  status: open
+  status: fixed
   severity: major
   category: security
   summary: "Refresh token 未轮换，泄露后可反复换发 access token"
+  fixed_at: "2026-04-03"
 
 - id: "032"
   status: fixed
@@ -296,10 +303,11 @@
   note: "标记但未修改，需统一 API 层"
 
 - id: "043"
-  status: open
+  status: fixed
   severity: major
   category: quality
   summary: "user-portal user.ts changePassword 每次创建新 axios 实例"
+  fixed_at: "2026-04-03"
 
 # ── 前端 i18n ────────────────────────────────────────────────
 - id: "044"
@@ -474,10 +482,11 @@
   fixed_at: "2026-03-31"
 
 - id: "068"
-  status: open
+  status: fixed
   severity: minor
   category: performance
   summary: "前端 FormRenderer.vue 多个 deep watcher 性能隐患"
+  fixed_at: "2026-04-03"
 
 # ── 架构与代码质量 ────────────────────────────────────────────
 - id: "069"
@@ -614,10 +623,11 @@
   fixed_at: "2026-03-31"
 
 - id: "088"
-  status: open
+  status: fixed
   severity: minor
   category: security
   summary: "UserController.resetPassword 返回明文密码(标注HTTPS)"
+  fixed_at: "2026-04-03"
 
 - id: "089"
   status: fixed
@@ -662,10 +672,11 @@
   fixed_at: "2026-03-31"
 
 - id: "095"
-  status: open
+  status: wontfix
   severity: minor
   category: quality
   summary: "auth.ts 在三个前端应用中大量重复(已标注)"
+  note: "三端独立构建、无共享 npm 包；抽公共包成本高，维持各应用内 auth 模块并保留 NOTE 说明"
 
 - id: "096"
   status: fixed
@@ -789,16 +800,18 @@
   fixed_at: "2026-03-31"
 
 - id: "113"
-  status: open
+  status: fixed
   severity: major
   category: architecture
   summary: "RelationTable/Ai ExceptionHandler 返回裸 ErrorResponse 与 GlobalExceptionHandler 不一致"
+  fixed_at: "2026-04-03"
 
 - id: "114"
-  status: open
+  status: fixed
   severity: major
   category: architecture
   summary: "developer-workstation BusinessException 与 platform-common 同名类冲突"
+  fixed_at: "2026-04-03"
 
 - id: "115"
   status: fixed
@@ -815,10 +828,11 @@
   fixed_at: "2026-03-31"
 
 - id: "117"
-  status: open
+  status: fixed
   severity: minor
   category: quality
   summary: "process store startProcess 参数类型与 API 不一致(死代码)"
+  fixed_at: "2026-04-03"
 
 - id: "118"
   status: fixed
@@ -883,12 +897,142 @@
   summary: "user-portal AdminCenterClient 仍调用不存在的 admin GET /users/{id}/memberships 与 GET /member-change-logs，导致 my-memberships/exit-history 恒 503"
   fixed_at: "2026-03-31"
 
-- id: "126"
-  status: open
+- id: "127"
+  status: fixed
   severity: major
   category: bug
   summary: "developer-workstation UserDisplayNameService 引用不存在的 ApiResponseBodyUnwrap 类"
   file: "backend/developer-workstation/src/main/java/com/developer/service/UserDisplayNameService.java"
-  description: "UserDisplayNameService.java 第8行导入 com.platform.common.util.ApiResponseBodyUnwrap，但该类在 platform-common 模块中不存在，导致编译失败"
+  description: "platform-common 已提供 ApiResponseBodyUnwrap；developer-workstation 依赖 platform-common，编译通过"
   impact: "阻止 developer-workstation 模块编译，影响所有开发和测试"
   discovered_at: "multi-instance-task-dispatch 任务 2.1 (2026-04-01)"
+  fixed_at: "2026-04-02"
+
+- id: "128"
+  status: fixed
+  severity: major
+  category: architecture
+  summary: "任务分配域：currentUserId 未随任务完成回写；assignTask 完成检查死代码；claim/unclaim 与 ExtendedTaskInfo 不对称；workflow 任务 API 请求体 userId 与 JWT 未强制一致等（详见团队审查清单）"
+  fixed_at: "2026-04-02"
+
+- id: "129"
+  status: fixed
+  severity: major
+  category: architecture
+  summary: "站内信 Kafka 链路缺生产者：无任何服务调用 publishNotificationEvent；workflow TaskManager 事件发布方法为空实现；引擎未接 portal 的 NotificationEvent"
+  discovered_at: "2026-04-03"
+  fixed_at: "2026-04-03"
+
+- id: "130"
+  status: fixed
+  severity: major
+  category: architecture
+  summary: "任务分配域深度重构：六类组织 AssigneeType + AssigneeAnchor + HIERARCHY 并集 + LAST_TASK_ASSIGNEE（History）+ MANUAL_ASSIGN / ASSIGNEE_FROM_VARIABLE；对齐 assignee-type-convergence.md"
+  file: "backend/workflow-engine-core"
+  description: "引擎侧已落地：TaskAssigneeResolver、TaskAssignmentListener、LastUserTaskAssigneeQuery、AdminCenterClient BU 链并集；BU_UNBOUNDED/VIRTUAL_GROUP 任务解析返回废弃；设计器单入线校验与 portal 文案需后续迭代"
+  fixed_at: "2026-04-03"
+
+- id: "131"
+  status: fixed
+  severity: critical
+  category: security
+  summary: "user-portal TaskForm：GET form-data / completed-form 与 POST submit 未校验当前用户是否为任务参与人，可 IDOR 读写流程变量与快照"
+  file: "backend/user-portal/src/main/java/com/portal/controller/TaskFormController.java"
+  fixed_at: "2026-04-03"
+
+- id: "132"
+  status: fixed
+  severity: major
+  category: security
+  summary: "user-portal TaskQueryRequest 允许 body 覆盖 userId；待办/已办查询可冒用他人身份（应强制使用 @CurrentUserId）"
+  file: "backend/user-portal/src/main/java/com/portal/controller/TaskController.java"
+  fixed_at: "2026-04-03"
+
+- id: "133"
+  status: fixed
+  severity: major
+  category: security
+  summary: "TaskProcessComponent.canUrgeTask 对非发起人仍返回 true（注释写应校验管理员），任意用户可催办他人任务"
+  file: "backend/user-portal/src/main/java/com/portal/component/TaskProcessComponent.java"
+  fixed_at: "2026-04-03"
+
+- id: "134"
+  status: fixed
+  severity: major
+  category: bug
+  summary: "isUserInVirtualGroup 将虚拟组 ID 传入 WorkflowEngineClient.checkTaskPermission（引擎按 taskId 查任务），首段校验无效，仅依赖 getUserTaskPermissions 列表"
+  file: "backend/user-portal/src/main/java/com/portal/component/TaskProcessComponent.java"
+  fixed_at: "2026-04-03"
+
+- id: "135"
+  status: fixed
+  severity: major
+  category: security
+  summary: "GET /processes/function-units/{id}/content 不校验功能单元访问权，可拉取任意功能单元 BPMN/表单设计（与「仅发起需鉴权」注释一致但造成设计资产泄露）"
+  file: "backend/user-portal/src/main/java/com/portal/controller/ProcessController.java"
+  fixed_at: "2026-04-03"
+
+- id: "136"
+  status: fixed
+  severity: minor
+  category: quality
+  summary: "user-portal BPMN 解析/流程预览中的分配类型标签与说明需与引擎收敛模型（HIERARCHY_ROLE、BU_ROLE、MANUAL_ASSIGN、ASSIGNEE_FROM_VARIABLE、assigneeAnchor 等）及开发者设计器一致"
+  file: "backend/user-portal/src/main/java/com/portal/service/BpmnParserService.java"
+  fixed_at: "2026-04-03"
+
+- id: "137"
+  status: open
+  severity: major
+  category: architecture
+  summary: "developer-workstation 功能单元版本/部署双轨：VersionController+DeploymentService（按 name 多行实体）与 publish+DeploymentComponentImpl→admin（单行+dw_versions 快照）并存，易混淆且与 admin 按 code+version 导入模型对齐成本高"
+  file: "backend/developer-workstation/src/main/java/com/developer/service/DeploymentService.java"
+
+- id: "138"
+  status: fixed
+  severity: minor
+  category: bug
+  summary: "ProcessComponent.getAvailableProcessDefinitions 关键词过滤对 description 未做空安全，description 为 null 时 NPE"
+  file: "backend/user-portal/src/main/java/com/portal/component/ProcessComponent.java"
+  fixed_at: "2026-04-03"
+
+- id: "139"
+  status: fixed
+  severity: major
+  category: deploy
+  summary: "DeploymentComponentImpl 异步部署状态与历史仅存内存 ConcurrentHashMap，多实例/重启丢失；调用 admin function-units-import 未携带服务间认证，依赖 SecurityConfig.permitAll"
+  file: "backend/developer-workstation/src/main/java/com/developer/component/impl/DeploymentComponentImpl.java"
+  fixed_at: "2026-04-03"
+  description: "已落地：入站 Authorization 解析后传入异步线程并写入 import/deploy 请求头；可选 X-User-Id；dw_deployment_jobs 持久化 + Flyway V309；developer.deployment.require-admin-authorization 可关闭用于测试"
+
+- id: "140"
+  status: fixed
+  severity: minor
+  category: quality
+  summary: "DeploymentComponentImpl 部署步骤「验证多实例配置」「验证上一任务锚点拓扑」等文案硬编码中文，未走 I18nService 与三语言 locale"
+  file: "backend/developer-workstation/src/main/java/com/developer/component/impl/DeploymentComponentImpl.java"
+  fixed_at: "2026-04-03"
+
+- id: "141"
+  status: open
+  severity: minor
+  category: quality
+  summary: "deploy/init-scripts 下 10/12/13/14 等 README 与 EXPORT_SUMMARY 仍写旧功能单元 code（SIMPLE_APPROVAL、PROCUREMENT_WORKFLOW 等），与 fu-{yyyyMMdd}-{hex} 种子数据不一致"
+  file: "deploy/init-scripts/10-simple-approval/README.md"
+
+- id: "142"
+  status: fixed
+  fixed_at: "2026-04-03"
+  severity: major
+  category: architecture
+  summary: "功能单元版本回滚（废弃某已部署版本）：按钉死版本删除该版本下全部流程数据（含已结束实例），因渲染依赖功能单元配置、版本不存在则业务数据无保留必要；主要场景为 live test / UAT test"
+  description: |
+    产品决策（方案 B，已确认）：
+    - 当某功能单元语义版本在 admin 侧被回滚/废弃后，清理所有「发起时钉死到该版本」的流程与附属数据，**包括 RUNNING 与 COMPLETED**。
+    - 理由：列表/详情渲染依赖功能单元与表单等配置；该版本目录与内容已不存在时，残留实例与任务无法一致展示，无业务保留必要。
+    - 适用范围声明：**主要发生在 live test、UAT test**；生产若启用需配套强审计与二次确认（另议）。
+    已实现（2026-04-03）：
+    - up_process_instance 钉死 function_unit_catalog_id / code / version_label；门户 startProcess 走 GET .../active-for-start 并与 resolve 结果校验。
+    - workflow-engine POST .../instances/{id}/purge；门户 internal purge-by-catalog + 删 up_change_history / up_process_history / up_process_instance。
+    - admin GET .../code/{code}/active-for-start、启用校验（仅 DEPLOYED 中最高 semver）、POST .../{id}/purge-runtime-data；配置 PORTAL_INTERNAL_API_TOKEN / USER_PORTAL_BASE_URL。
+    待加强：专用审计日志、其它 up_* 附属表若后续挂流程实例需纳入 purge。
+  file: "backend/admin-center; backend/user-portal; backend/workflow-engine-core"
