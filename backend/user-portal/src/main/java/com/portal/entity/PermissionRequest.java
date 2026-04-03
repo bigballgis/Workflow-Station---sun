@@ -1,6 +1,7 @@
 package com.portal.entity;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.portal.enums.PermissionRequestStatus;
 import com.portal.enums.PermissionRequestType;
 import jakarta.persistence.*;
@@ -18,7 +19,6 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
-import java.util.List;
 
 /**
  * 权限申请实体
@@ -109,11 +109,11 @@ public class PermissionRequest {
 
     // ========== 旧字段（已废弃，保留兼容） ==========
     
-    /** @deprecated 使用 roleId/virtualGroupId 替代 */
+    /** 旧版权限范围（JSONB）。用 JsonNode 承载，避免库内非字符串数组等 JSON 导致加载失败。 */
     @Deprecated
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "permissions", columnDefinition = "jsonb")
-    private List<String> permissions;
+    private JsonNode permissions;
 
     @Column(name = "reason", nullable = false, columnDefinition = "TEXT")
     private String reason;

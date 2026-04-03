@@ -6,6 +6,7 @@ import com.portal.dto.ApiResponse;
 import com.portal.security.CurrentUserId;
 import com.portal.dto.PageResponse;
 import com.portal.dto.PermissionRequestDto;
+import com.portal.dto.PermissionRequestListItem;
 import com.portal.entity.PermissionRequest;
 import com.portal.enums.PermissionRequestStatus;
 import com.platform.common.i18n.I18nService;
@@ -207,6 +208,21 @@ public class PermissionController {
         }
     }
 
+    @GetMapping("/removal-options-by-function-unit")
+    @Operation(summary = "按功能单元查看可移除的业务单元角色", description = "根据受益人当前 BU 角色与已部署功能单元的访问配置（角色门槛）聚合，供门户移除权限多选。")
+    public ApiResponse<Map<String, Object>> getRemovalOptionsByFunctionUnit(
+            @CurrentUserId String userId,
+            @RequestParam(required = false) String beneficiaryUserId) {
+        String beneficiary = (beneficiaryUserId == null || beneficiaryUserId.isBlank())
+                ? userId
+                : beneficiaryUserId.trim();
+        try {
+            return ApiResponse.success(permissionComponent.buildRoleRemovalOptionsByFunctionUnit(beneficiary));
+        } catch (IllegalArgumentException e) {
+            return ApiResponse.error(e.getMessage());
+        }
+    }
+
     @PostMapping("/request-business-unit-role-removal")
     @Operation(summary = "申请移除业务单元下的业务角色", description = "提交申请，经业务单元审批人批准后移除该角色绑定")
     public ApiResponse<PermissionRequest> requestBusinessUnitRoleRemoval(
@@ -264,9 +280,11 @@ public class PermissionController {
         if (!permissionComponent.isApprover(userId)) {
             return ApiResponse.error(i18nService.getMessage("portal.no_approval_permission"));
         }
-        
-        // 只返回用户可以审批的申请
-        Page<PermissionRequest> result = permissionComponent.getPendingApprovalsForUser(userId, PageRequest.of(page, size));
+
+        int safePage = Math.max(0, page);
+        int safeSize = Math.min(100, Math.max(1, size));
+        Page<PermissionRequest> result = permissionComponent.getPendingApprovalsForUser(
+                userId, PageRequest.of(safePage, safeSize));
         return ApiResponse.success(PageResponse.of(result));
     }
 
@@ -336,7 +354,10 @@ public class PermissionController {
             return ApiResponse.error(i18nService.getMessage("portal.no_approval_permission"));
         }
 
-        Page<PermissionRequest> result = permissionComponent.getApprovalHistoryForUser(userId, PageRequest.of(page, size));
+        int safePage = Math.max(0, page);
+        int safeSize = Math.min(100, Math.max(1, size));
+        Page<PermissionRequest> result = permissionComponent.getApprovalHistoryForUser(
+                userId, PageRequest.of(safePage, safeSize));
         return ApiResponse.success(PageResponse.of(result));
     }
 
@@ -363,12 +384,15 @@ public class PermissionController {
 
     @GetMapping("/requests")
     @Operation(summary = "获取我的申请记录")
-    public ApiResponse<PageResponse<PermissionRequest>> getMyRequests(
+    public ApiResponse<PageResponse<PermissionRequestListItem>> getMyRequests(
             @CurrentUserId String userId,
             @RequestParam(required = false) PermissionRequestStatus status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        Page<PermissionRequest> result = permissionComponent.getMyRequests(userId, status, PageRequest.of(page, size));
+        int safePage = Math.max(0, page);
+        int safeSize = Math.min(100, Math.max(1, size));
+        Page<PermissionRequestListItem> result = permissionComponent.getMyRequests(
+                userId, status, PageRequest.of(safePage, safeSize));
         return ApiResponse.success(PageResponse.of(result));
     }
 

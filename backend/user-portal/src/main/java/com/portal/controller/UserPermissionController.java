@@ -34,7 +34,8 @@ public class UserPermissionController {
 
     @GetMapping
     @Operation(summary = "Get my permissions",
-               description = "Get current user's complete permission view including roles and business units")
+               description = "门户权限摘要：UBR 来自 admin 业务单元角色接口（逐条 BU—角色）；无界角色来自业务角色列表；"
+                       + "不返回虚拟组（门户不提供虚拟组能力）。virtualGroups 恒为空数组以保持兼容。")
     public ApiResponse<Map<String, Object>> getMyPermissions(
             @CurrentUserId String userId) {
         String effectiveUserId = SecurityContextUtils.getCurrentUserId().orElse(userId);
@@ -44,27 +45,36 @@ public class UserPermissionController {
         log.info("Getting permissions for user: {}", effectiveUserId);
 
         try {
-            // Get user's roles
             List<Map<String, Object>> roles = getUserRoles(effectiveUserId);
-
-            // Get user's virtual groups
-            List<Map<String, Object>> virtualGroups = getUserVirtualGroups(effectiveUserId);
-
-            // Get user's business units
             List<Map<String, Object>> businessUnits = getUserBusinessUnits(effectiveUserId);
+            List<Map<String, Object>> ubrRows = fetchUserBusinessUnitRoles(effectiveUserId);
 
-            // Separate roles by type
             List<Map<String, Object>> buBoundedRoles = new ArrayList<>();
-            List<Map<String, Object>> buUnboundedRoles = new ArrayList<>();
+            for (Map<String, Object> ubr : ubrRows) {
+                Object roleId = ubr.get("roleId");
+                Object roleName = ubr.get("roleName");
+                Object roleCode = ubr.get("roleCode");
+                Object buId = ubr.get("businessUnitId");
+                Object buName = ubr.get("businessUnitName");
+                Map<String, Object> role = new HashMap<>();
+                role.put("id", roleId != null ? String.valueOf(roleId) : "");
+                role.put("name", roleName != null ? String.valueOf(roleName) : "");
+                if (roleCode != null) {
+                    role.put("code", String.valueOf(roleCode));
+                }
+                role.put("type", "BU_BOUNDED");
+                Map<String, Object> bu = new HashMap<>();
+                bu.put("id", buId != null ? String.valueOf(buId) : "");
+                bu.put("name", buName != null ? String.valueOf(buName) : "");
+                Map<String, Object> item = new HashMap<>();
+                item.put("role", role);
+                item.put("activatedBusinessUnits", List.of(bu));
+                buBoundedRoles.add(item);
+            }
 
+            List<Map<String, Object>> buUnboundedRoles = new ArrayList<>();
             for (Map<String, Object> role : roles) {
-                String type = (String) role.get("type");
-                if ("BU_BOUNDED".equals(type)) {
-                    Map<String, Object> roleWithBu = new HashMap<>();
-                    roleWithBu.put("role", role);
-                    roleWithBu.put("activatedBusinessUnits", businessUnits);
-                    buBoundedRoles.add(roleWithBu);
-                } else if ("BU_UNBOUNDED".equals(type)) {
+                if ("BU_UNBOUNDED".equals(role.get("type"))) {
                     buUnboundedRoles.add(role);
                 }
             }
@@ -73,7 +83,7 @@ public class UserPermissionController {
             result.put("buBoundedRoles", buBoundedRoles);
             result.put("buUnboundedRoles", buUnboundedRoles);
             result.put("businessUnits", businessUnits);
-            result.put("virtualGroups", virtualGroups);
+            result.put("virtualGroups", List.of());
 
             return ApiResponse.success(result);
 
@@ -270,7 +280,7 @@ public class UserPermissionController {
 
     private List<Map<String, Object>> getUserRoles(String userId) {
         try {
-            String url = adminCenterUrl + "/api/v1/admin/users/" + userId + "/roles";
+            String url = adminCenterUrl + "/api/v1/admin/users/" + userId + "/roles?profileContext=PORTAL";
             HttpEntity<Void> entity = new HttpEntity<>(createAuthHeaders());
             ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
                 url, HttpMethod.GET, entity,
@@ -283,24 +293,9 @@ public class UserPermissionController {
         }
     }
 
-    private List<Map<String, Object>> getUserVirtualGroups(String userId) {
-        try {
-            String url = adminCenterUrl + "/api/v1/admin/users/" + userId + "/virtual-groups";
-            HttpEntity<Void> entity = new HttpEntity<>(createAuthHeaders());
-            ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
-                url, HttpMethod.GET, entity,
-                new ParameterizedTypeReference<List<Map<String, Object>>>() {}
-            );
-            return response.getBody() != null ? response.getBody() : Collections.emptyList();
-        } catch (Exception e) {
-            log.error("Failed to get virtual groups for user {}: {}", userId, e.getMessage());
-            return Collections.emptyList();
-        }
-    }
-
     private List<Map<String, Object>> getUserBusinessUnits(String userId) {
         try {
-            String url = adminCenterUrl + "/api/v1/admin/users/" + userId + "/business-units";
+            String url = adminCenterUrl + "/api/v1/admin/users/" + userId + "/business-units?profileContext=PORTAL";
             HttpEntity<Void> entity = new HttpEntity<>(createAuthHeaders());
             ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
                 url, HttpMethod.GET, entity,
@@ -309,6 +304,24 @@ public class UserPermissionController {
             return response.getBody() != null ? response.getBody() : Collections.emptyList();
         } catch (Exception e) {
             log.error("Failed to get business units for user {}: {}", userId, e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    /**
+     * 用户在业务单元下的角色（UBR），与 admin {@code UserBusinessUnitRoleController} 一致。
+     */
+    private List<Map<String, Object>> fetchUserBusinessUnitRoles(String userId) {
+        try {
+            String url = adminCenterUrl + "/api/v1/admin/users/" + userId + "/business-unit-roles";
+            HttpEntity<Void> entity = new HttpEntity<>(createAuthHeaders());
+            ResponseEntity<List<Map<String, Object>>> response = restTemplate.exchange(
+                url, HttpMethod.GET, entity,
+                new ParameterizedTypeReference<List<Map<String, Object>>>() {}
+            );
+            return response.getBody() != null ? response.getBody() : Collections.emptyList();
+        } catch (Exception e) {
+            log.error("Failed to get business unit roles for user {}: {}", userId, e.getMessage());
             return Collections.emptyList();
         }
     }

@@ -312,6 +312,25 @@ public class FunctionUnitAccessComponent {
         
         return accessible;
     }
+
+    /**
+     * 拉取管理中心已部署功能单元最新版本列表（与流程发起列表同源），供权限移除等场景按功能单元聚合展示。
+     */
+    public List<Map<String, Object>> fetchLatestDeployedFunctionUnits() {
+        try {
+            String url = adminCenterUrl + "/api/v1/admin/function-units/deployed/latest";
+            log.debug("Fetching deployed function units from: {}", url);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> response = restTemplate.getForObject(url, Map.class);
+            if (response != null) {
+                List<Map<String, Object>> units = ApiResponseBodyUnwrap.normalizeToListOfMaps(response);
+                return units != null ? units : Collections.emptyList();
+            }
+        } catch (Exception e) {
+            log.error("Failed to fetch deployed function units: {}", e.getMessage());
+        }
+        return Collections.emptyList();
+    }
     
     /**
      * 获取用户的业务角色ID列表

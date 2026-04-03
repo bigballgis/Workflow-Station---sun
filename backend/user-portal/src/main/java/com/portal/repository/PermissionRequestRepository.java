@@ -71,39 +71,52 @@ public interface PermissionRequestRepository extends JpaRepository<PermissionReq
             Pageable pageable);
 
     /**
-     * 审批历史：本人作为 approver 处理的记录，或业务单元类且属于可审批 BU（不含虚拟组类）。
+     * 待审批：虚拟组加入申请，且 virtualGroupId 在当前用户可审批的虚拟组列表内。
+     */
+    @Query("""
+            SELECT p FROM PermissionRequest p
+            WHERE p.status = :status
+              AND p.requestType = :vgType
+              AND p.virtualGroupId IN :vgIds
+            ORDER BY p.createdAt DESC
+            """)
+    Page<PermissionRequest> findPendingForVirtualGroupJoinApprovers(
+            @Param("status") PermissionRequestStatus status,
+            @Param("vgType") PermissionRequestType vgType,
+            @Param("vgIds") List<String> vgIds,
+            Pageable pageable);
+
+    /**
+     * 待审批：业务单元类（加入 / 移除角色 / 退出成员）或虚拟组加入，OR 合并查询（审批人同时管 BU 与 VG 时使用）。
+     */
+    @Query("""
+            SELECT p FROM PermissionRequest p
+            WHERE p.status = :status
+              AND (
+                (p.requestType IN :buTypes AND p.businessUnitId IN :buIds)
+                OR (p.requestType = :vgType AND p.virtualGroupId IN :vgIds)
+              )
+            ORDER BY p.createdAt DESC
+            """)
+    Page<PermissionRequest> findPendingForBuOrVirtualGroupApprovers(
+            @Param("status") PermissionRequestStatus status,
+            @Param("buTypes") List<PermissionRequestType> buTypes,
+            @Param("buIds") List<String> buIds,
+            @Param("vgType") PermissionRequestType vgType,
+            @Param("vgIds") List<String> vgIds,
+            Pageable pageable);
+
+    /**
+     * 审批历史：仅本人作为 approver 处理过的记录（含业务单元类与虚拟组类等所有类型）。
      */
     @Query("""
             SELECT p FROM PermissionRequest p
             WHERE p.status IN :statuses
-              AND p.requestType <> :excludeVg
-              AND (
-                p.approverId = :userId
-                OR (
-                  p.businessUnitId IN :buIds
-                  AND p.requestType IN :buTypes
-                )
-              )
-            ORDER BY p.id DESC
-            """)
-    Page<PermissionRequest> findProcessedForApproverView(
-            @Param("userId") String userId,
-            @Param("buIds") List<String> buIds,
-            @Param("buTypes") List<PermissionRequestType> buTypes,
-            @Param("statuses") List<PermissionRequestStatus> statuses,
-            @Param("excludeVg") PermissionRequestType excludeVg,
-            Pageable pageable);
-
-    @Query("""
-            SELECT p FROM PermissionRequest p
-            WHERE p.status IN :statuses
-              AND p.requestType <> :excludeVg
               AND p.approverId = :userId
             ORDER BY p.id DESC
             """)
-    Page<PermissionRequest> findProcessedHistoryApproverOnly(
+    Page<PermissionRequest> findProcessedHistoryByApproverId(
             @Param("userId") String userId,
             @Param("statuses") List<PermissionRequestStatus> statuses,
-            @Param("excludeVg") PermissionRequestType excludeVg,
             Pageable pageable);
 }

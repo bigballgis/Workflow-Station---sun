@@ -10,7 +10,7 @@ import org.springframework.web.method.support.ModelAndViewContainer;
 
 /**
  * Resolves {@link CurrentUserId} annotated parameters from the JWT SecurityContext.
- * Falls back to "anonymous" if no authenticated user is present.
+ * Returns {@code null} if no authenticated user id is in the security context (caller should reject).
  */
 @Component
 public class CurrentUserIdArgumentResolver implements HandlerMethodArgumentResolver {

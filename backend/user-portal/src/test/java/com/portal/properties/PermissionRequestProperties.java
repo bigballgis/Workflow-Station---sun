@@ -1,14 +1,18 @@
 package com.portal.properties;
 
+import com.portal.component.FunctionUnitAccessComponent;
 import com.portal.component.PermissionComponent;
 import com.portal.component.RoleAccessComponent;
 import com.portal.component.VirtualGroupAccessComponent;
+import com.platform.common.i18n.I18nService;
 import com.portal.dto.PermissionRequestDto;
 import com.portal.entity.PermissionRequest;
 import com.portal.enums.PermissionRequestStatus;
 import com.portal.enums.PermissionRequestType;
 import com.portal.repository.PermissionRequestRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import net.jqwik.api.*;
+import org.springframework.jdbc.core.JdbcTemplate;
 import net.jqwik.api.lifecycle.BeforeTry;
 import org.mockito.Mockito;
 import net.jqwik.api.constraints.IntRange;
@@ -21,6 +25,7 @@ import java.util.*;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 /**
@@ -38,7 +43,16 @@ class PermissionRequestProperties {
         permissionRequestRepository = Mockito.mock(PermissionRequestRepository.class);
         roleAccessComponent = Mockito.mock(RoleAccessComponent.class);
         virtualGroupAccessComponent = Mockito.mock(VirtualGroupAccessComponent.class);
-        permissionComponent = new PermissionComponent(permissionRequestRepository, roleAccessComponent, virtualGroupAccessComponent);
+        I18nService i18nService = Mockito.mock(I18nService.class);
+        Mockito.when(i18nService.getMessage(anyString())).thenAnswer(invocation -> invocation.getArgument(0));
+        permissionComponent = new PermissionComponent(
+                permissionRequestRepository,
+                roleAccessComponent,
+                virtualGroupAccessComponent,
+                Mockito.mock(FunctionUnitAccessComponent.class),
+                new ObjectMapper(),
+                Mockito.mock(JdbcTemplate.class),
+                i18nService);
         
         // Mock default behavior for role and virtual group access
         when(roleAccessComponent.getUserBusinessRoles(any())).thenReturn(Collections.emptyList());
