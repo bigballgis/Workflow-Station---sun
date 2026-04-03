@@ -37,15 +37,15 @@ BEGIN
     -- =========================================================================
     SELECT id INTO v_function_unit_id
     FROM dw_function_units
-    WHERE code = 'DIGITAL_LENDING_V2_EN';
+    WHERE code = 'fu-20260403-a1b2c6';
 
     IF v_function_unit_id IS NULL THEN
-        RAISE EXCEPTION 'Function unit DIGITAL_LENDING_V2_EN not found. Run 01-create-digital-lending-complete.sql first.';
+        RAISE EXCEPTION 'Function unit fu-20260403-a1b2c6 not found. Run 01-create-digital-lending-complete.sql first.';
     END IF;
 
     -- Check if process definition already exists
     IF EXISTS (SELECT 1 FROM dw_process_definitions WHERE function_unit_id = v_function_unit_id) THEN
-        RAISE NOTICE 'Process definition already exists for DIGITAL_LENDING_V2_EN, skipping.';
+        RAISE NOTICE 'Process definition already exists for fu-20260403-a1b2c6, skipping.';
         RETURN;
     END IF;
 

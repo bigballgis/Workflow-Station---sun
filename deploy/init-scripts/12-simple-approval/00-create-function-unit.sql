@@ -1,7 +1,7 @@
 -- =============================================================================
 -- 12-simple-approval: Create Function Unit
 -- 基于数据库实际数据生成 (source: SIMPLE_APPROVAL, version 1.0.13)
--- 新 code: SIMPLE_APPROVAL_12
+-- code 符合规范: fu-{yyyyMMdd}-{6位hex}
 -- =============================================================================
 
 DO $main$
@@ -22,13 +22,13 @@ BEGIN
         current_version, version, is_active, enabled,
         deployed_at, lock_version, created_by, created_at, updated_by, updated_at
     ) VALUES (
-        'SIMPLE_APPROVAL_12',
+        'fu-20260403-a1b2c1',
         'Simple Approval Workflow 12',
         'Simple approval workflow with manager approval',
         'DRAFT',
         '1.0.0', '1.0.0',
         true, true,
-        CURRENT_TIMESTAMP, 0,
+        NULL, 0,
         'system', CURRENT_TIMESTAMP, 'system', CURRENT_TIMESTAMP
     )
     ON CONFLICT (code) DO UPDATE SET
@@ -40,7 +40,7 @@ BEGIN
         updated_at       = CURRENT_TIMESTAMP
     RETURNING id INTO v_function_unit_id;
 
-    RAISE NOTICE 'Function unit created/updated: id=%, code=SIMPLE_APPROVAL_12', v_function_unit_id;
+    RAISE NOTICE 'Function unit created/updated: id=%, code=fu-20260403-a1b2c1', v_function_unit_id;
 
     -- =========================================================================
     -- Step 2: Forms
@@ -71,7 +71,7 @@ BEGIN
     ) VALUES (
         v_function_unit_id,
         'Approval Form',
-        'PROCESS',
+        'TASK',
         'Manager approval form',
         '{"rule":[{"name":"ref_F4wwmlhl2zozawc","type":"input","field":"approval_comments","props":{"rows":3,"type":"textarea","placeholder":"Please input Approval comments"},"title":"Approval comments","_fc_id":"id_Fbdgmlhl2zozavc","hidden":false,"display":true,"_fc_drag_tag":"input"},{"name":"ref_Fmb1mlhl2zozayc","type":"input","field":"status","props":{"maxlength":30,"placeholder":"Please input Request status","showWordLimit":true},"title":"Request status","_fc_id":"id_Fjtlmlhl2zozaxc","hidden":false,"display":true,"validate":[{"mode":"required","message":"Request status required","trigger":"blur","required":true}],"_fc_drag_tag":"input"}],"options":{"form":{"size":"default","inline":false,"labelWidth":"125px","labelPosition":"right","hideRequiredAsterisk":false},"resetBtn":{"show":false,"innerText":"Reset"},"submitBtn":{"show":true,"innerText":"Submit"}},"subForms":{}}',
         CURRENT_TIMESTAMP, CURRENT_TIMESTAMP

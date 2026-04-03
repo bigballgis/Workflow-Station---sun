@@ -1,6 +1,6 @@
 -- =============================================================================
 -- 13-procurement-workflow: Create Function Unit (all-in-one)
--- 基于数据库实际数据生成 (source: Procurement Workflow, code PROCUREMENT_WORKFLOW)
+-- 基于数据库实际数据生成；code 符合 fu-{yyyyMMdd}-{6位hex}
 -- 包含: Function Unit, Forms (Request/Approval/Review/sub), Actions (8个)
 -- =============================================================================
 
@@ -20,7 +20,7 @@ BEGIN
         current_version, version, is_active, enabled,
         deployed_at, lock_version, created_by, created_at, updated_by, updated_at
     ) VALUES (
-        'PROCUREMENT_WORKFLOW',
+        'fu-20260403-a1b2c2',
         'Procurement Workflow',
         'Simple approval workflow with manager approval',
         'PUBLISHED',
@@ -38,7 +38,7 @@ BEGIN
         updated_at       = CURRENT_TIMESTAMP
     RETURNING id INTO v_function_unit_id;
 
-    RAISE NOTICE 'Function unit created/updated: id=%, code=PROCUREMENT_WORKFLOW', v_function_unit_id;
+    RAISE NOTICE 'Function unit created/updated: id=%, code=fu-20260403-a1b2c2', v_function_unit_id;
 
     -- =========================================================================
     -- Step 2: Forms (config_json 中的 subForms 在 03 脚本中填充)
@@ -64,13 +64,13 @@ BEGIN
 
     RAISE NOTICE 'Request Form created/updated: id=%', v_request_form_id;
 
-    -- Approval Form (MAIN)
+    -- Approval Form（任务节点表单 → TASK）
     INSERT INTO dw_form_definitions (
         function_unit_id, form_name, form_type, description, config_json, created_at, updated_at
     ) VALUES (
         v_function_unit_id,
         'Approval Form',
-        'PROCESS',
+        'TASK',
         'Manager approval form',
         '{"rule": [{"name": "ref_Flhmmm2udhnkaec", "type": "input", "field": "additional_information", "props": {"rows": 3, "type": "textarea", "placeholder": "Please input Additional Inforrmation"}, "title": "Additional Inforrmation", "_fc_id": "id_F59nmm2udhnkadc", "hidden": false, "display": true, "_fc_drag_tag": "input"}], "options": {"form": {"size": "default", "inline": false, "labelWidth": "125px", "labelPosition": "right", "hideRequiredAsterisk": false}, "resetBtn": {"show": false, "innerText": "Reset"}, "submitBtn": {"show": true, "innerText": "Submit"}}, "subForms": {}}',
         CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
@@ -83,13 +83,13 @@ BEGIN
 
     RAISE NOTICE 'Approval Form created/updated: id=%', v_approval_form_id;
 
-    -- Review Form (MAIN)
+    -- Review Form（任务节点表单 → TASK）
     INSERT INTO dw_form_definitions (
         function_unit_id, form_name, form_type, description, config_json, created_at, updated_at
     ) VALUES (
         v_function_unit_id,
         'Review Form',
-        'PROCESS',
+        'TASK',
         NULL,
         '{"rule": [{"name": "ref_Ftv7mmyxh928agc", "type": "inputNumber", "field": "id", "props": {"precision": 0, "placeholder": "Please input id"}, "title": "id", "_fc_id": "id_F913mmyxh928afc", "hidden": false, "display": true, "validate": [{"message": "id required", "trigger": "blur", "required": true}], "_fc_drag_tag": "inputNumber"}, {"name": "ref_Fx6tmmyxh928acc", "type": "input", "field": "Item", "props": {"rows": 3, "type": "textarea", "placeholder": "Please input item"}, "title": "item", "_fc_id": "id_F2z0mmyxh928abc", "hidden": false, "display": true, "_fc_drag_tag": "input"}, {"name": "ref_Fwdvmmyxh928aec", "type": "input", "field": "Comment", "props": {"maxlength": 255, "placeholder": "Please input comment", "showWordLimit": true}, "title": "comment", "_fc_id": "id_Fhhymmyxh928adc", "hidden": false, "display": true, "_fc_drag_tag": "input"}, {"info": "", "name": "ref_F5q1mmyxiftrajc", "type": "input", "field": "Fessmmyxiftrahc", "title": "Input", "_fc_id": "id_F4q8mmyxiftraic", "hidden": false, "display": true, "$required": false, "_fc_drag_tag": "input"}], "options": {"form": {"size": "default", "inline": false, "labelWidth": "125px", "labelPosition": "left", "hideRequiredAsterisk": false}, "resetBtn": {"show": false, "innerText": "Reset"}, "submitBtn": {"show": true, "innerText": "Submit"}}, "subForms": {}}',
         CURRENT_TIMESTAMP, CURRENT_TIMESTAMP

@@ -50,7 +50,11 @@ for f in /docker-entrypoint-initdb.d/00-schema/06-*.sql \
          /docker-entrypoint-initdb.d/00-schema/20-*.sql \
          /docker-entrypoint-initdb.d/00-schema/21-*.sql \
          /docker-entrypoint-initdb.d/00-schema/22-*.sql \
-         /docker-entrypoint-initdb.d/00-schema/23-*.sql; do
+         /docker-entrypoint-initdb.d/00-schema/23-*.sql \
+         /docker-entrypoint-initdb.d/00-schema/24-*.sql \
+         /docker-entrypoint-initdb.d/00-schema/25-*.sql \
+         /docker-entrypoint-initdb.d/00-schema/26-*.sql \
+         /docker-entrypoint-initdb.d/00-schema/27-*.sql; do
     [ -f "$f" ] && echo "  Running $(basename $f)..." && $PSQL -f "$f"
 done
 
@@ -62,6 +66,7 @@ $PSQL -f /docker-entrypoint-initdb.d/01-admin/01-create-admin-only.sql
 $PSQL -f /docker-entrypoint-initdb.d/01-admin/02-init-developer-permissions.sql
 $PSQL -f /docker-entrypoint-initdb.d/01-admin/03-sync-role-tables.sql
 $PSQL -f /docker-entrypoint-initdb.d/01-admin/04-admin-permissions.sql
+$PSQL -f /docker-entrypoint-initdb.d/01-admin/05-e2e-test-users-and-business-units.sql
 
 # --- Step 4: Wipe function units (dev catalog + deployed catalog), then seed Digital Lending EN only ---
 echo ""
@@ -82,6 +87,12 @@ for f in /docker-entrypoint-initdb.d/08-digital-lending-v2-en/00-*.sql \
     [ -f "$f" ] && echo "  Running $(basename $f)..." && $PSQL -f "$f"
 done
 
+if [ -f /docker-entrypoint-initdb.d/08-digital-lending-v2-en/05-e2e-virtual-group-members.sql ]; then
+  echo ""
+  echo "  Running 05-e2e-virtual-group-members.sql..."
+  $PSQL -f /docker-entrypoint-initdb.d/08-digital-lending-v2-en/05-e2e-virtual-group-members.sql
+fi
+
 echo ""
 echo "[6/6] Seed scripts finished."
 
@@ -89,8 +100,9 @@ echo ""
 echo "========================================="
 echo "  Database Initialization Complete!"
 echo "========================================="
-echo "  Login: admin / password"
+echo "  Login: admin / admin123  (test: 44027893 / admin123)"
 echo "  Change password after first login!"
-echo "  Demo function unit: Digital Lending System V2 (EN)"
+echo "  Demo function unit: Digital Lending System V2 (EN), code fu-20260403-a1b2c6"
+echo "  E2E users (password=password): e2e_zhangwei e2e_lina e2e_wangfang e2e_zhaomin e2e_sunqiang e2e_zhoujie e2e_wugang"
 echo "  (Other sample function units are not auto-loaded; use init-scripts/99-maintenance/00-wipe-all-function-units.sql before re-seed if needed.)"
 echo "========================================="

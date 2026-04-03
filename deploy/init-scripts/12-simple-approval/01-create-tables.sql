@@ -12,9 +12,9 @@ DECLARE
     v_relation_table_id BIGINT;  -- RequestAttachments (RELATION)
     v_test_table_id     BIGINT;  -- test (SUB)
 BEGIN
-    SELECT id INTO v_function_unit_id FROM dw_function_units WHERE code = 'SIMPLE_APPROVAL_12';
+    SELECT id INTO v_function_unit_id FROM dw_function_units WHERE code = 'fu-20260403-a1b2c1';
     IF v_function_unit_id IS NULL THEN
-        RAISE EXCEPTION 'Function unit SIMPLE_APPROVAL_12 not found. Run 00-create-function-unit.sql first.';
+        RAISE EXCEPTION 'Function unit fu-20260403-a1b2c1 not found. Run 00-create-function-unit.sql first.';
     END IF;
 
     -- =========================================================================

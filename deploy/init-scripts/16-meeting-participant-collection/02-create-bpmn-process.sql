@@ -21,9 +21,9 @@ DECLARE
     v_participant_table_id  BIGINT;
     v_bpmn_xml              TEXT;
 BEGIN
-    SELECT id INTO v_function_unit_id FROM dw_function_units WHERE code = 'MEETING_PARTICIPANT_COLLECTION';
+    SELECT id INTO v_function_unit_id FROM dw_function_units WHERE code = 'fu-20260403-a1b2c5';
     IF v_function_unit_id IS NULL THEN
-        RAISE EXCEPTION 'Function unit MEETING_PARTICIPANT_COLLECTION not found.';
+        RAISE EXCEPTION 'Function unit fu-20260403-a1b2c5 not found.';
     END IF;
 
     SELECT id INTO v_create_form_id FROM dw_form_definitions

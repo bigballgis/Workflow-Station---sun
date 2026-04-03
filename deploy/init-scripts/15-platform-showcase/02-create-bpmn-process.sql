@@ -16,9 +16,9 @@ DECLARE
     v_bpmn_xml         TEXT;
     v_bpmn_b64         TEXT;
 BEGIN
-    SELECT id INTO v_fu_id FROM dw_function_units WHERE code = 'PLATFORM_SHOWCASE';
+    SELECT id INTO v_fu_id FROM dw_function_units WHERE code = 'fu-20260403-a1b2c4';
     IF v_fu_id IS NULL THEN
-        RAISE EXCEPTION 'PLATFORM_SHOWCASE not found. Run 00-create-function-unit.sql first.';
+        RAISE EXCEPTION 'fu-20260403-a1b2c4 not found. Run 00-create-function-unit.sql first.';
     END IF;
 
     SELECT id INTO v_request_form_id FROM dw_form_definitions WHERE function_unit_id = v_fu_id AND form_name = 'Showcase Request Form';
@@ -172,6 +172,6 @@ $xml$,
         v_fu_id, v_fu_id, v_bpmn_b64, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     );
 
-    RAISE NOTICE 'PLATFORM_SHOWCASE BPMN written (base64). Next: 03-form-table-bindings.sql';
+    RAISE NOTICE 'fu-20260403-a1b2c4 BPMN written (base64). Next: 03-form-table-bindings.sql';
 
 END $bpmn$;

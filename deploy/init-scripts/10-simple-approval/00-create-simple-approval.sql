@@ -31,7 +31,7 @@ BEGIN
         updated_by,
         updated_at
     ) VALUES (
-        'SIMPLE_APPROVAL',
+        'fu-20260403-a1b2c0',
         'Simple Approval Workflow',
         'Simple approval workflow with manager approval',
         'PUBLISHED',
@@ -99,7 +99,7 @@ BEGIN
     ) VALUES (
         v_function_unit_id,
         'Approval Form',
-        'PROCESS',
+        'TASK',
         '{"rule": [{"name": "ref_F4wwmlhl2zozawc", "type": "input", "field": "approval_comments", "props": {"rows": 3, "type": "textarea", "placeholder": "Please input Approval comments"}, "title": "Approval comments", "_fc_id": "id_Fbdgmlhl2zozavc", "hidden": false, "display": true, "_fc_drag_tag": "input"}, {"name": "ref_Fmb1mlhl2zozayc", "type": "input", "field": "status", "props": {"maxlength": 30, "placeholder": "Please input Request status", "showWordLimit": true}, "title": "Request status", "_fc_id": "id_Fjtlmlhl2zozaxc", "hidden": false, "display": true, "validate": [{"mode": "required", "message": "Request status required", "trigger": "blur", "required": true}], "_fc_drag_tag": "input"}], "options": {"form": {"size": "default", "inline": false, "labelWidth": "125px", "labelPosition": "right", "hideRequiredAsterisk": false}, "resetBtn": {"show": false, "innerText": "Reset"}, "submitBtn": {"show": true, "innerText": "Submit"}}}',
         'Manager approval form',
         CURRENT_TIMESTAMP,

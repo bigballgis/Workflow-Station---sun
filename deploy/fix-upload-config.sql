@@ -6,7 +6,7 @@ DECLARE
     v_binding_attach_id BIGINT;
 BEGIN
     SELECT id INTO v_request_form_id FROM dw_form_definitions
-    WHERE function_unit_id = (SELECT id FROM dw_function_units WHERE code = 'PROCUREMENT_WORKFLOW')
+    WHERE function_unit_id = (SELECT id FROM dw_function_units WHERE code = 'fu-20260403-a1b2c2')
       AND form_name = 'Request Form';
 
     SELECT id INTO v_binding_items_id FROM dw_form_table_bindings

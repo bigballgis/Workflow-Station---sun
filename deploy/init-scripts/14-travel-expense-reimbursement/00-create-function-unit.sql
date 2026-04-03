@@ -24,7 +24,7 @@ BEGIN
         current_version, version, is_active, enabled,
         deployed_at, lock_version, created_by, created_at, updated_by, updated_at
     ) VALUES (
-        'TRAVEL_EXPENSE_REIMBURSEMENT',
+        'fu-20260403-a1b2c3',
         'Travel Expense Reimbursement',
         'Travel expense reimbursement workflow with AI invoice recognition via N8N',
         'PUBLISHED',
@@ -42,7 +42,7 @@ BEGIN
         updated_at       = CURRENT_TIMESTAMP
     RETURNING id INTO v_function_unit_id;
 
-    RAISE NOTICE 'Function unit created/updated: id=%, code=TRAVEL_EXPENSE_REIMBURSEMENT', v_function_unit_id;
+    RAISE NOTICE 'Function unit created/updated: id=%, code=fu-20260403-a1b2c3', v_function_unit_id;
 
     -- =========================================================================
     -- Step 2: Forms
@@ -70,13 +70,13 @@ BEGIN
 
     RAISE NOTICE 'Reimbursement Form created/updated: id=%', v_reimbursement_form_id;
 
-    -- Approval Form (MAIN)
+    -- Approval Form（任务节点 → TASK）
     INSERT INTO dw_form_definitions (
         function_unit_id, form_name, form_type, description, config_json, created_at, updated_at
     ) VALUES (
         v_function_unit_id,
         'Approval Form',
-        'PROCESS',
+        'TASK',
         'Manager approval form for travel expense reimbursement',
         '{"rule": [{"name": "ref_Fta1mm1s0b2gaec", "type": "input", "field": "approval_comment", "props": {"rows": 3, "type": "textarea", "placeholder": "Please input Approval Comment"}, "title": "Approval Comment", "_fc_id": "id_Fta1mm1s0b2gadc", "hidden": false, "display": true, "_fc_drag_tag": "input"}], "options": {"form": {"size": "default", "inline": false, "labelWidth": "125px", "labelPosition": "right", "hideRequiredAsterisk": false}, "resetBtn": {"show": false, "innerText": "Reset"}, "submitBtn": {"show": true, "innerText": "Submit"}}, "subForms": {}}',
         CURRENT_TIMESTAMP, CURRENT_TIMESTAMP

@@ -29,9 +29,9 @@ DECLARE
     v_binding_items_id      BIGINT;
     v_binding_invoices_id   BIGINT;
 BEGIN
-    SELECT id INTO v_function_unit_id FROM dw_function_units WHERE code = 'TRAVEL_EXPENSE_REIMBURSEMENT';
+    SELECT id INTO v_function_unit_id FROM dw_function_units WHERE code = 'fu-20260403-a1b2c3';
     IF v_function_unit_id IS NULL THEN
-        RAISE EXCEPTION 'Function unit TRAVEL_EXPENSE_REIMBURSEMENT not found. Run 00-create-function-unit.sql first.';
+        RAISE EXCEPTION 'Function unit fu-20260403-a1b2c3 not found. Run 00-create-function-unit.sql first.';
     END IF;
 
     SELECT id INTO v_reimbursement_form_id FROM dw_form_definitions  WHERE function_unit_id = v_function_unit_id AND form_name  = 'Reimbursement Form';

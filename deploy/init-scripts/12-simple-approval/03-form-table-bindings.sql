@@ -22,9 +22,9 @@ DECLARE
     v_binding_sub_id    BIGINT;
     v_binding_rel_id    BIGINT;
 BEGIN
-    SELECT id INTO v_function_unit_id FROM dw_function_units WHERE code = 'SIMPLE_APPROVAL_12';
+    SELECT id INTO v_function_unit_id FROM dw_function_units WHERE code = 'fu-20260403-a1b2c1';
     IF v_function_unit_id IS NULL THEN
-        RAISE EXCEPTION 'Function unit SIMPLE_APPROVAL_12 not found.';
+        RAISE EXCEPTION 'Function unit fu-20260403-a1b2c1 not found.';
     END IF;
 
     SELECT id INTO v_request_form_id   FROM dw_form_definitions  WHERE function_unit_id = v_function_unit_id AND form_name  = 'Request Form';

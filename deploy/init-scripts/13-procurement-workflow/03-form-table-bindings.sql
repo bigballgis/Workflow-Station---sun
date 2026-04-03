@@ -16,8 +16,8 @@ DECLARE
     v_items_rule        JSONB;
     v_attach_rule       JSONB;
 BEGIN
-    SELECT id INTO v_fu_id FROM dw_function_units WHERE code = 'PROCUREMENT_WORKFLOW';
-    IF v_fu_id IS NULL THEN RAISE EXCEPTION 'PROCUREMENT_WORKFLOW not found'; END IF;
+    SELECT id INTO v_fu_id FROM dw_function_units WHERE code = 'fu-20260403-a1b2c2';
+    IF v_fu_id IS NULL THEN RAISE EXCEPTION 'fu-20260403-a1b2c2 not found'; END IF;
 
     SELECT id INTO v_request_form_id  FROM dw_form_definitions  WHERE function_unit_id=v_fu_id AND form_name='Request Form';
     SELECT id INTO v_approval_form_id FROM dw_form_definitions  WHERE function_unit_id=v_fu_id AND form_name='Approval Form';

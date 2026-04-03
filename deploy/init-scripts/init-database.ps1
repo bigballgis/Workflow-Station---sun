@@ -81,7 +81,11 @@ $migrations = @(
     "00-schema/20-add-members-table.sql",
     "00-schema/21-add-rt-relation-tables.sql",
     "00-schema/22-add-lock-version-to-sys-roles.sql",
-    "00-schema/23-widen-up-process-instance-business-key.sql"
+    "00-schema/23-widen-up-process-instance-business-key.sql",
+    "00-schema/24-add-multi-instance-execution-table.sql",
+    "00-schema/25-add-row-version-to-sub-tables.sql",
+    "00-schema/26-add-dw-deployment-jobs.sql",
+    "00-schema/27-add-up-process-instance-catalog-pin.sql"
 )
 foreach ($m in $migrations) {
     $path = Join-Path $ScriptDir $m
@@ -95,6 +99,7 @@ Exec-Sql -File (Join-Path $ScriptDir "01-admin/01-create-admin-only.sql") -Desc 
 Exec-Sql -File (Join-Path $ScriptDir "01-admin/02-init-developer-permissions.sql") -Desc "Developer permissions" | Out-Null
 Exec-Sql -File (Join-Path $ScriptDir "01-admin/03-sync-role-tables.sql") -Desc "Sync role tables" | Out-Null
 Exec-Sql -File (Join-Path $ScriptDir "01-admin/04-admin-permissions.sql") -Desc "Admin permissions" | Out-Null
+Exec-Sql -File (Join-Path $ScriptDir "01-admin/05-e2e-test-users-and-business-units.sql") -Desc "E2E business units and users" | Out-Null
 
 # Step 4: Wipe all function units (matches Docker init path)
 Write-Step "Step 4/6: Wiping all function units (developer + deployed catalog)..."
@@ -120,6 +125,10 @@ foreach ($f in $fuScripts) {
         if (-not (Exec-Sql -File $path -Desc (Split-Path $f -Leaf))) { exit 1 }
     }
 }
+$e2eVg = Join-Path $ScriptDir "08-digital-lending-v2-en/05-e2e-virtual-group-members.sql"
+if (Test-Path $e2eVg) {
+    if (-not (Exec-Sql -File $e2eVg -Desc "E2E virtual group members (lending)")) { exit 1 }
+}
 
 Write-Step "Step 6/6: Finished."
 
@@ -127,7 +136,8 @@ Write-Host ""
 Write-Host "=========================================" -ForegroundColor Green
 Write-Host "  Database Initialization Complete!" -ForegroundColor Green
 Write-Host "=========================================" -ForegroundColor Green
-Write-Host "  Login: admin / password" -ForegroundColor White
+Write-Host "  Login: admin / admin123  (test: 44027893 / admin123)" -ForegroundColor White
 Write-Host "  Change password after first login!" -ForegroundColor Yellow
-Write-Host "  Demo function unit: Digital Lending V2 (EN) only." -ForegroundColor White
+Write-Host "  Demo function unit: Digital Lending V2 (EN), code fu-20260403-a1b2c6" -ForegroundColor White
+Write-Host "  E2E users (password=password): e2e_zhangwei e2e_lina e2e_wangfang e2e_zhaomin e2e_sunqiang e2e_zhoujie e2e_wugang" -ForegroundColor White
 Write-Host "=========================================" -ForegroundColor Green

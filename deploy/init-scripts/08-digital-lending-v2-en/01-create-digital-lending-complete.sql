@@ -42,7 +42,7 @@ BEGIN
         code, name, description, status, version, is_active,
         deployed_at, created_by, created_at, updated_at
     ) VALUES (
-        'DIGITAL_LENDING_V2_EN',
+        'fu-20260403-a1b2c6',
         'Digital Lending System V2 (EN)',
         'Full-featured digital loan application and approval system with credit checks, risk assessment, collateral management, multi-level approval, and automated disbursement',
         'DRAFT', '1.0.0', true,

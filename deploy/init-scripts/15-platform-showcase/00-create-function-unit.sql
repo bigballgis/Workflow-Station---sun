@@ -1,6 +1,6 @@
 -- =============================================================================
 -- 15-platform-showcase: 功能单元 + 表单 + 决策 + 动作（覆盖主要平台能力）
--- code: PLATFORM_SHOWCASE
+-- code: fu-20260403-a1b2c4（fu-{yyyyMMdd}-{6位hex}）
 -- 依赖: 无（首脚本）
 -- 顺序: 00 → 01 → 02 → 03 → 04
 -- =============================================================================
@@ -20,13 +20,13 @@ BEGIN
         current_version, version, is_active, enabled,
         deployed_at, lock_version, created_by, created_at, updated_by, updated_at
     ) VALUES (
-        'PLATFORM_SHOWCASE',
+        'fu-20260403-a1b2c4',
         '平台能力全功能演示',
         '演示：主/子/关联/动作表、流程/任务/弹窗表单、BPMN+DMN、多类动作与表关系，供开发与验收对照。',
         'DRAFT',
         '1.0.0', '1.0.0',
         true, true,
-        CURRENT_TIMESTAMP, 0,
+        NULL, 0,
         'system', CURRENT_TIMESTAMP, 'system', CURRENT_TIMESTAMP
     )
     ON CONFLICT (code) DO UPDATE SET
@@ -38,7 +38,7 @@ BEGIN
         updated_at      = CURRENT_TIMESTAMP
     RETURNING id INTO v_fu_id;
 
-    RAISE NOTICE 'Function unit PLATFORM_SHOWCASE id=%', v_fu_id;
+    RAISE NOTICE 'Function unit fu-20260403-a1b2c4 id=%', v_fu_id;
 
     -- 流程表单（每功能单元唯一）：仅发起人/Requestor 使用 PROCESS
     INSERT INTO dw_form_definitions (
@@ -382,7 +382,7 @@ BEGIN
     WHERE function_unit_id = v_fu_id
       AND action_name = '组合动作';
 
-    RAISE NOTICE 'PLATFORM_SHOWCASE forms: request=%, approval=%, task=%, popup=%',
+    RAISE NOTICE 'fu-20260403-a1b2c4 forms: request=%, approval=%, task=%, popup=%',
         v_request_form_id, v_approval_form_id, v_task_form_id, v_popup_form_id;
     RAISE NOTICE 'Next: 01-create-tables.sql';
 

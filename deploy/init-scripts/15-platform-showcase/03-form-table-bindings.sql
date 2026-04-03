@@ -13,9 +13,9 @@ DECLARE
     v_bind_sub_id     BIGINT;
     v_bind_rel_id     BIGINT;
 BEGIN
-    SELECT id INTO v_fu_id FROM dw_function_units WHERE code = 'PLATFORM_SHOWCASE';
+    SELECT id INTO v_fu_id FROM dw_function_units WHERE code = 'fu-20260403-a1b2c4';
     IF v_fu_id IS NULL THEN
-        RAISE EXCEPTION 'PLATFORM_SHOWCASE not found.';
+        RAISE EXCEPTION 'fu-20260403-a1b2c4 not found.';
     END IF;
 
     SELECT id INTO v_request_form_id FROM dw_form_definitions WHERE function_unit_id = v_fu_id AND form_name = 'Showcase Request Form';
@@ -67,6 +67,6 @@ BEGIN
         updated_at = CURRENT_TIMESTAMP
     WHERE id = v_request_form_id;
 
-    RAISE NOTICE 'PLATFORM_SHOWCASE bindings OK. Next: 04-table-relations.sql';
+    RAISE NOTICE 'fu-20260403-a1b2c4 bindings OK. Next: 04-table-relations.sql';
 
 END $bindings$;

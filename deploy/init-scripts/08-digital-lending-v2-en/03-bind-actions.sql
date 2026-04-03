@@ -14,10 +14,10 @@ BEGIN
     -- Get function unit ID
     SELECT id INTO v_function_unit_id 
     FROM dw_function_units 
-    WHERE code = 'DIGITAL_LENDING_V2_EN';
+    WHERE code = 'fu-20260403-a1b2c6';
 
     IF v_function_unit_id IS NULL THEN
-        RAISE EXCEPTION 'Function unit DIGITAL_LENDING_V2_EN does not exist';
+        RAISE EXCEPTION 'Function unit fu-20260403-a1b2c6 does not exist';
     END IF;
 
     -- Get process ID

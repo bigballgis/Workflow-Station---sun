@@ -27,7 +27,7 @@ BEGIN
         current_version, version, is_active, enabled,
         deployed_at, lock_version, created_by, created_at, updated_by, updated_at
     ) VALUES (
-        'MEETING_PARTICIPANT_COLLECTION',
+        'fu-20260403-a1b2c5',
         'Meeting Participant Info Collection',
         '会议参与人信息收集流程：演示多实例子流程动态任务分发。组织者创建会议并添加参与人，为每位参与人分配处理人后，系统自动创建并行子任务，各参与人独立填写参会信息，全部完成后流程自动推进。',
         'PUBLISHED',
@@ -45,7 +45,7 @@ BEGIN
         updated_at      = CURRENT_TIMESTAMP
     RETURNING id INTO v_function_unit_id;
 
-    RAISE NOTICE 'Function unit created/updated: id=%, code=MEETING_PARTICIPANT_COLLECTION', v_function_unit_id;
+    RAISE NOTICE 'Function unit created/updated: id=%, code=fu-20260403-a1b2c5', v_function_unit_id;
 
     -- =========================================================================
     -- Step 2: Forms
@@ -82,7 +82,7 @@ BEGIN
     ) VALUES (
         v_function_unit_id,
         'Assign Participants Form',
-        'PROCESS',
+        'TASK',
         '分配参与人表单：查看会议信息，为每位参与人分配处理人',
         '{"rule": [
             {"name":"ref_ap_topic","type":"input","field":"topic","props":{"maxlength":200,"placeholder":"会议主题"},"title":"会议主题","_fc_id":"id_ap_topic","hidden":false,"display":true,"_fc_drag_tag":"input"},
@@ -106,7 +106,7 @@ BEGIN
     ) VALUES (
         v_function_unit_id,
         'Participant Info Form',
-        'PROCESS',
+        'TASK',
         '参与人信息填写表单：子任务中参与人填写自己的参会信息（是否参会、饮食偏好、备注）',
         '{"rule": [
             {"name":"ref_pi_attend","type":"select","field":"attend_status","props":{"placeholder":"请选择是否参会","options":[{"label":"是","value":"YES"},{"label":"否","value":"NO"},{"label":"待定","value":"PENDING"}]},"title":"是否参会","_fc_id":"id_pi_attend","hidden":false,"display":true,"validate":[{"message":"请选择是否参会","trigger":"change","required":true}],"_fc_drag_tag":"select"},
@@ -201,7 +201,7 @@ BEGIN
     -- =========================================================================
     RAISE NOTICE '========================================';
     RAISE NOTICE 'Function Unit Setup Complete!';
-    RAISE NOTICE 'Function Unit : id=%, code=MEETING_PARTICIPANT_COLLECTION', v_function_unit_id;
+    RAISE NOTICE 'Function Unit : id=%, code=fu-20260403-a1b2c5', v_function_unit_id;
     RAISE NOTICE 'Forms: Create Meeting (id=%), Assign Participants (id=%), Participant Info (id=%)',
         v_create_meeting_form_id, v_assign_form_id, v_participant_form_id;
     RAISE NOTICE 'Actions: 提交会议 (id=%), 完成分配 (id=%), 提交参会信息 (id=%)',

@@ -51,5 +51,7 @@ COMMIT;
 \i /docker-entrypoint-initdb.d/00-schema/23-widen-up-process-instance-business-key.sql
 \i /docker-entrypoint-initdb.d/00-schema/24-add-multi-instance-execution-table.sql
 \i /docker-entrypoint-initdb.d/00-schema/25-add-row-version-to-sub-tables.sql
+\i /docker-entrypoint-initdb.d/00-schema/26-add-dw-deployment-jobs.sql
+\i /docker-entrypoint-initdb.d/00-schema/27-add-up-process-instance-catalog-pin.sql
 
 \echo 'All schemas created successfully.'

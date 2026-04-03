@@ -28,7 +28,7 @@ DECLARE
     v_binding_assign_sub_id  BIGINT;
 BEGIN
     SELECT id INTO v_function_unit_id FROM dw_function_units
-    WHERE code = 'MEETING_PARTICIPANT_COLLECTION';
+    WHERE code = 'fu-20260403-a1b2c5';
     IF v_function_unit_id IS NULL THEN
         RAISE EXCEPTION 'Function unit not found.';
     END IF;

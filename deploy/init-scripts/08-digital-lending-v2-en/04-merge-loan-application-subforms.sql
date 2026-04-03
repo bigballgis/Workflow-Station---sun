@@ -17,9 +17,9 @@ DECLARE
     v_ah BIGINT;
     v_sub TEXT;
 BEGIN
-    SELECT id INTO v_fu FROM dw_function_units WHERE code = 'DIGITAL_LENDING_V2_EN' LIMIT 1;
+    SELECT id INTO v_fu FROM dw_function_units WHERE code = 'fu-20260403-a1b2c6' LIMIT 1;
     IF v_fu IS NULL THEN
-        RAISE EXCEPTION 'Function unit DIGITAL_LENDING_V2_EN not found';
+        RAISE EXCEPTION 'Function unit fu-20260403-a1b2c6 not found';
     END IF;
 
     SELECT id INTO v_form FROM dw_form_definitions

@@ -10,7 +10,7 @@ DECLARE
     v_bpmn_xml             TEXT;
 BEGIN
     SELECT id INTO v_function_unit_id FROM dw_function_units
-    WHERE code = 'MEETING_PARTICIPANT_COLLECTION';
+    WHERE code = 'fu-20260403-a1b2c5';
 
     SELECT id INTO v_participant_table_id FROM dw_table_definitions
     WHERE function_unit_id = v_function_unit_id AND table_name = 'participants';
@@ -194,5 +194,5 @@ BEGIN
         CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     );
 
-    RAISE NOTICE 'BPMN XML updated with BPMNDiagram layout for MEETING_PARTICIPANT_COLLECTION';
+    RAISE NOTICE 'BPMN XML updated with BPMNDiagram layout for fu-20260403-a1b2c5';
 END $diagram$;

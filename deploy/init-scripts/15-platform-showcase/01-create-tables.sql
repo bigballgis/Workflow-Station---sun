@@ -10,9 +10,9 @@ DECLARE
     v_relation_id   BIGINT;
     v_action_tbl_id BIGINT;
 BEGIN
-    SELECT id INTO v_fu_id FROM dw_function_units WHERE code = 'PLATFORM_SHOWCASE';
+    SELECT id INTO v_fu_id FROM dw_function_units WHERE code = 'fu-20260403-a1b2c4';
     IF v_fu_id IS NULL THEN
-        RAISE EXCEPTION 'PLATFORM_SHOWCASE not found. Run 00-create-function-unit.sql first.';
+        RAISE EXCEPTION 'fu-20260403-a1b2c4 not found. Run 00-create-function-unit.sql first.';
     END IF;
 
     INSERT INTO dw_table_definitions (

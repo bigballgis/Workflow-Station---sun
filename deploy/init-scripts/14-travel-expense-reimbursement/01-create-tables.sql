@@ -4,7 +4,7 @@
 -- Tables: Reimbursement(MAIN), ExpenseItems(SUB), Invoices(SUB),
 --         ApprovalActions(ACTION)
 --
--- Dependencies: 00-create-function-unit.sql (requires TRAVEL_EXPENSE_REIMBURSEMENT function unit)
+-- Dependencies: 00-create-function-unit.sql (requires fu-20260403-a1b2c3 function unit)
 -- Execution order: 00 → 01 → 02 → 03
 -- =============================================================================
 
@@ -16,9 +16,9 @@ DECLARE
     v_invoices_table_id      BIGINT;  -- Invoices (SUB)
     v_action_table_id        BIGINT;  -- ApprovalActions (ACTION)
 BEGIN
-    SELECT id INTO v_function_unit_id FROM dw_function_units WHERE code = 'TRAVEL_EXPENSE_REIMBURSEMENT';
+    SELECT id INTO v_function_unit_id FROM dw_function_units WHERE code = 'fu-20260403-a1b2c3';
     IF v_function_unit_id IS NULL THEN
-        RAISE EXCEPTION 'Function unit TRAVEL_EXPENSE_REIMBURSEMENT not found. Run 00-create-function-unit.sql first.';
+        RAISE EXCEPTION 'Function unit fu-20260403-a1b2c3 not found. Run 00-create-function-unit.sql first.';
     END IF;
 
     -- =========================================================================

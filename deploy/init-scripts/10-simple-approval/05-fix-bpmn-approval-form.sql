@@ -10,7 +10,7 @@
 -- with hardcoded formId=6 (Request Form) for the approval task.
 --
 -- For fresh init: this UPDATE will match 0 rows (no-op) since
--- sys_function_unit_contents won't have SIMPLE_APPROVAL data.
+-- sys_function_unit_contents won't have fu-20260403-a1b2c0 data.
 -- For deployed environments: it will fix the approval form reference.
 -- =============================================================================
 UPDATE sys_function_unit_contents fuc
@@ -22,6 +22,6 @@ SET content_data = REGEXP_REPLACE(
 )
 FROM sys_function_units fu
 WHERE fuc.function_unit_id = fu.id
-  AND fu.code = 'SIMPLE_APPROVAL'
+  AND fu.code = 'fu-20260403-a1b2c0'
   AND fu.version = '1.0.8'
   AND fuc.content_type = 'PROCESS';

@@ -13,9 +13,9 @@ DECLARE
     v_meeting_table_id    BIGINT;  -- meeting (MAIN)
     v_participant_table_id BIGINT; -- participants (SUB)
 BEGIN
-    SELECT id INTO v_function_unit_id FROM dw_function_units WHERE code = 'MEETING_PARTICIPANT_COLLECTION';
+    SELECT id INTO v_function_unit_id FROM dw_function_units WHERE code = 'fu-20260403-a1b2c5';
     IF v_function_unit_id IS NULL THEN
-        RAISE EXCEPTION 'Function unit MEETING_PARTICIPANT_COLLECTION not found. Run 00-create-function-unit.sql first.';
+        RAISE EXCEPTION 'Function unit fu-20260403-a1b2c5 not found. Run 00-create-function-unit.sql first.';
     END IF;
 
     -- =========================================================================
