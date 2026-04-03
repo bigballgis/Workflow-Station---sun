@@ -166,6 +166,9 @@ public class JwtTokenServiceImpl implements JwtTokenService {
                 .roles(roles != null ? roles : Collections.emptyList())
                 .permissions(permissions != null ? permissions : Collections.emptyList())
                 .language(claims.get(CLAIM_LANGUAGE, String.class))
+                .activeBusinessUnitId(claims.get("activeBusinessUnitId", String.class))
+                .activeRoleId(claims.get("activeRoleId", String.class))
+                .portalAccessMode(claims.get("portalAccessMode", String.class))
                 .build();
     }
 

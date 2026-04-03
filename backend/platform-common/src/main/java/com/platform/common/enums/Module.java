@@ -12,7 +12,6 @@ public enum Module {
     ADMIN_CENTER("admin-center", "Admin Center"),
     USER_PORTAL("user-portal", "User Portal"),
     WORKFLOW_ENGINE("workflow-engine", "Workflow Engine Core"),
-    API_GATEWAY("api-gateway", "API Gateway"),
     AUTH_SERVICE("auth-service", "Authentication Service");
     
     private final String code;

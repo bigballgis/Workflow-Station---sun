@@ -118,7 +118,7 @@ public class DefaultAuditContextProvider implements AuditContextProvider {
         if (requestURI.startsWith("/portal")) return "user-portal";
         if (requestURI.startsWith("/developer")) return "developer-workstation";
         if (requestURI.startsWith("/workflow")) return "workflow-engine";
-        if (requestURI.startsWith("/api")) return "api-gateway";
+        if (requestURI.startsWith("/api")) return "platform";
         return "platform";
     }
 }

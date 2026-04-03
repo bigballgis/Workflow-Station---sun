@@ -136,7 +136,12 @@ public class UserRoleServiceImpl implements UserRoleService {
         String roleCode = (String) roleInfo.get("code");
         String roleName = (String) roleInfo.get("name");
         String roleType = (String) roleInfo.get("type");
-        
+
+        if (AssignmentTargetType.USER.equals(sourceType) && "BU_UNBOUNDED".equals(roleType)) {
+            log.debug("Skipping USER direct assignment for BU_UNBOUNDED role {} — use virtual group", roleId);
+            return;
+        }
+
         // 创建来源信息
         RoleSource source = RoleSource.builder()
                 .sourceType(sourceType)

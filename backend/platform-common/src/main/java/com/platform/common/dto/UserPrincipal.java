@@ -59,7 +59,22 @@ public class UserPrincipal implements Serializable {
      * Whether the user is a super admin
      */
     private boolean superAdmin;
-    
+
+    /**
+     * 门户当前工作台业务单元（JWT claim activeBusinessUnitId，可选）
+     */
+    private String activeBusinessUnitId;
+
+    /**
+     * 门户当前工作台角色主键（JWT claim activeRoleId，可选）
+     */
+    private String activeRoleId;
+
+    /**
+     * 门户访问模式：FULL 或 PERMISSION_SELF_SERVICE_ONLY（无 UBR 时由 user-portal 写入 JWT）
+     */
+    private String portalAccessMode;
+
     /**
      * Check if user has a specific role
      */

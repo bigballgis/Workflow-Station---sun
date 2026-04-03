@@ -51,6 +51,24 @@ public final class SecurityContextUtils {
     public static Optional<String> getCurrentUsername() {
         return getCurrentUser().map(UserPrincipal::getUsername);
     }
+
+    /**
+     * 门户 JWT 中的当前工作台业务单元（无则 empty）
+     */
+    public static Optional<String> getCurrentActiveBusinessUnitId() {
+        return getCurrentUser()
+                .map(UserPrincipal::getActiveBusinessUnitId)
+                .filter(id -> id != null && !id.isBlank());
+    }
+
+    /**
+     * 门户 JWT 中的当前工作台角色 ID（无则 empty）
+     */
+    public static Optional<String> getCurrentActiveRoleId() {
+        return getCurrentUser()
+                .map(UserPrincipal::getActiveRoleId)
+                .filter(id -> id != null && !id.isBlank());
+    }
     
     /**
      * Get the current user's preferred language.
