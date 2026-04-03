@@ -77,6 +77,9 @@ BEGIN
           <custom_1:values name="formId" value="' || v_create_form_id || '" />
           <custom_1:values name="formName" value="Create Meeting Form" />
         </custom_1:properties>
+        <custom:properties>
+          <custom:property name="assigneeType" value="INITIATOR" />
+        </custom:properties>
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_Start_Create</bpmn:incoming>
       <bpmn:outgoing>Flow_Create_Assign</bpmn:outgoing>
@@ -91,6 +94,9 @@ BEGIN
           <custom_1:values name="formId" value="' || v_assign_form_id || '" />
           <custom_1:values name="formName" value="Assign Participants Form" />
         </custom_1:properties>
+        <custom:properties>
+          <custom:property name="assigneeType" value="INITIATOR" />
+        </custom:properties>
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_Create_Assign</bpmn:incoming>
       <bpmn:outgoing>Flow_Assign_MI</bpmn:outgoing>
