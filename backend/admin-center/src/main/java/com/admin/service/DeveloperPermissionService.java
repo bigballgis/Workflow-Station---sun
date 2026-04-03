@@ -37,15 +37,16 @@ public class DeveloperPermissionService {
     static {
         // Technical Lead (技术主管)：所有权限
         DEFAULT_ROLE_PERMISSIONS.put("TECH_LEAD", EnumSet.allOf(DeveloperPermission.class));
-        
-        // Team Lead (团队组长)：创建、更新、删除、查看、开发权限
-        DEFAULT_ROLE_PERMISSIONS.put("TEAM_LEAD", EnumSet.of(
+
+        // Team Lead：与 Developer 同一套设计/发布能力 + 功能单元创建/删除/分配开发组
+        EnumSet<DeveloperPermission> teamLead = EnumSet.of(
             DeveloperPermission.FUNCTION_UNIT_CREATE,
             DeveloperPermission.FUNCTION_UNIT_UPDATE,
             DeveloperPermission.FUNCTION_UNIT_DELETE,
             DeveloperPermission.FUNCTION_UNIT_VIEW,
             DeveloperPermission.FUNCTION_UNIT_DEVELOP,
             DeveloperPermission.FUNCTION_UNIT_PUBLISH,
+            DeveloperPermission.FUNCTION_UNIT_ASSIGN_DEV_GROUP,
             DeveloperPermission.FORM_CREATE,
             DeveloperPermission.FORM_UPDATE,
             DeveloperPermission.FORM_DELETE,
@@ -62,20 +63,15 @@ public class DeveloperPermissionService {
             DeveloperPermission.ACTION_UPDATE,
             DeveloperPermission.ACTION_DELETE,
             DeveloperPermission.ACTION_VIEW
-        ));
-        
-        // 开发工程师：查看、开发权限（不能创建、删除功能单元）
-        DEFAULT_ROLE_PERMISSIONS.put("DEVELOPER", EnumSet.of(
-            DeveloperPermission.FUNCTION_UNIT_VIEW,
-            DeveloperPermission.FUNCTION_UNIT_DEVELOP,
-            DeveloperPermission.FORM_VIEW,
-            DeveloperPermission.FORM_UPDATE,
-            DeveloperPermission.PROCESS_VIEW,
-            DeveloperPermission.PROCESS_UPDATE,
-            DeveloperPermission.TABLE_VIEW,
-            DeveloperPermission.ACTION_VIEW,
-            DeveloperPermission.ACTION_UPDATE
-        ));
+        );
+        DEFAULT_ROLE_PERMISSIONS.put("TEAM_LEAD", teamLead);
+
+        // Developer：与 Team Lead 相同的设计站权限，但不能创建/删除功能单元、不能分配开发组
+        EnumSet<DeveloperPermission> developer = teamLead.clone();
+        developer.remove(DeveloperPermission.FUNCTION_UNIT_CREATE);
+        developer.remove(DeveloperPermission.FUNCTION_UNIT_DELETE);
+        developer.remove(DeveloperPermission.FUNCTION_UNIT_ASSIGN_DEV_GROUP);
+        DEFAULT_ROLE_PERMISSIONS.put("DEVELOPER", developer);
     }
     
     /**
