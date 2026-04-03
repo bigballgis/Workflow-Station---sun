@@ -102,12 +102,9 @@ BEGIN
     <!-- ===== 多实例子流程：填写参会信息 ===== -->
     <bpmn:subProcess id="MultiInstance_SubTable_' || v_participant_table_id || '"
         name="多实例-参与人列表">
-      <bpmn:multiInstanceLoopCharacteristics isSequential="false">
-        <bpmn:extensionElements>
-          <flowable:collection>multiInstance_participants_collection</flowable:collection>
-          <flowable:elementVariable>currentItem</flowable:elementVariable>
-        </bpmn:extensionElements>
-      </bpmn:multiInstanceLoopCharacteristics>
+      <bpmn:multiInstanceLoopCharacteristics isSequential="false"
+          flowable:collection="multiInstance_participants_collection"
+          flowable:elementVariable="currentItem" />
 
       <bpmn:startEvent id="MI_Start_' || v_participant_table_id || '" />
 

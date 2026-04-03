@@ -57,12 +57,9 @@ BEGIN
     </bpmn:userTask>
 
     <bpmn:subProcess id="MultiInstance_SubTable_31" name="多实例-参与人列表">
-      <bpmn:multiInstanceLoopCharacteristics isSequential="false">
-        <bpmn:extensionElements>
-          <flowable:collection>multiInstance_participants_collection</flowable:collection>
-          <flowable:elementVariable>currentItem</flowable:elementVariable>
-        </bpmn:extensionElements>
-      </bpmn:multiInstanceLoopCharacteristics>
+      <bpmn:multiInstanceLoopCharacteristics isSequential="false"
+          flowable:collection="multiInstance_participants_collection"
+          flowable:elementVariable="currentItem" />
       <bpmn:incoming>Flow_Assign_MI</bpmn:incoming>
       <bpmn:outgoing>Flow_MI_End</bpmn:outgoing>
 

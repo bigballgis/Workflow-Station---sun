@@ -191,10 +191,10 @@ plugins:
       max_age: 3600
       credentials: true
 
-  # --- 全局限流 (默认 100/分钟) ---
+  # --- 全局限流 (默认 600/分钟) ---
   - name: rate-limiting
     config:
-      minute: 100
+      minute: 600
       policy: redis
       redis:
         host: __REDIS_HOST__
