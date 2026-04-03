@@ -3,7 +3,7 @@
     :model-value="modelValue" 
     @update:model-value="$emit('update:modelValue', $event)" 
     :title="t('common.view')" 
-    width="750px"
+    width="820px"
     destroy-on-close
   >
     <div v-loading="loading" class="user-detail">
@@ -24,62 +24,83 @@
           <el-descriptions-item :label="t('user.lastLoginIp')" :span="2">{{ user.lastLoginIp || '-' }}</el-descriptions-item>
         </el-descriptions>
 
-        <!-- 虚拟组成员身份（角色通过虚拟组获取） -->
-        <div class="section-title">{{ t('user.virtualGroups') }}</div>
-        <el-table :data="virtualGroups" border size="small" v-if="virtualGroups.length">
-          <el-table-column prop="groupName" :label="t('virtualGroup.name')" />
-          <el-table-column prop="groupDescription" :label="t('common.description')" />
-          <el-table-column prop="joinedAt" :label="t('user.joinedAt')" width="170">
-            <template #default="{ row }">{{ formatDate(row.joinedAt) }}</template>
-          </el-table-column>
-        </el-table>
-        <el-empty v-else :description="t('user.noVirtualGroups')" :image-size="60" />
-        <div class="section-hint">{{ t('user.virtualGroupHint') }}</div>
+        <el-tabs v-model="detailActiveTab" class="detail-tabs">
+          <el-tab-pane :label="t('user.detailTabPortalOrg')" name="portal">
+            <p class="tab-lead">{{ t('user.portalOrgTabHint') }}</p>
 
-        <!-- 业务单元成员身份 -->
-        <div class="section-title">{{ t('user.businessUnits') }}</div>
-        <el-table :data="businessUnits" border size="small" v-if="businessUnits.length">
-          <el-table-column prop="name" :label="t('businessUnit.name')" />
-          <el-table-column prop="code" :label="t('businessUnit.code')" width="150" />
-          <el-table-column prop="path" :label="t('businessUnit.path')" show-overflow-tooltip />
-        </el-table>
-        <el-empty v-else :description="t('user.noBusinessUnits')" :image-size="60" />
-        <div class="section-hint">{{ t('user.businessUnitHint') }}</div>
+            <div class="section-title">{{ t('user.businessUnits') }}</div>
+            <el-table :data="businessUnits" border size="small" v-if="businessUnits.length">
+              <el-table-column prop="name" :label="t('businessUnit.name')" />
+              <el-table-column prop="code" :label="t('businessUnit.code')" width="150" />
+              <el-table-column prop="path" :label="t('businessUnit.path')" show-overflow-tooltip />
+            </el-table>
+            <el-empty v-else :description="t('user.noBusinessUnits')" :image-size="60" />
+            <div class="section-hint">{{ t('user.businessUnitHint') }}</div>
 
-        <!-- 业务单元角色 UBR（门户工作台 / activeBusinessUnitId） -->
-        <div class="section-title">{{ t('user.buRoleAssignments') }}</div>
-        <div class="ubr-toolbar">
-          <el-button type="primary" size="small" @click="openAssignBuRole">
-            {{ t('user.assignBuRole') }}
-          </el-button>
-        </div>
-        <template v-if="buRoleGroups.length">
-          <div v-for="g in buRoleGroups" :key="g.businessUnitId" class="ubr-group">
-            <div class="ubr-group-title">{{ g.businessUnitName }}</div>
-            <el-table :data="g.rows" border size="small">
-              <el-table-column prop="roleName" :label="t('user.roleName')" />
-              <el-table-column prop="roleCode" :label="t('user.roleCode')" width="160" />
-              <el-table-column :label="t('common.operation')" width="100" align="center">
+            <div class="section-title">{{ t('user.portalVirtualGroupsSection') }}</div>
+            <el-table :data="portalVirtualGroups" border size="small" v-if="portalVirtualGroups.length">
+              <el-table-column prop="groupName" :label="t('virtualGroup.name')" />
+              <el-table-column prop="groupDescription" :label="t('common.description')" />
+              <el-table-column prop="joinedAt" :label="t('user.joinedAt')" width="170">
+                <template #default="{ row }">{{ formatDate(row.joinedAt) }}</template>
+              </el-table-column>
+            </el-table>
+            <el-empty v-else :description="t('user.noPortalVirtualGroups')" :image-size="60" />
+            <div class="section-hint">{{ t('user.portalVirtualGroupHint') }}</div>
+
+            <div class="section-title">{{ t('user.buRoleAssignments') }}</div>
+            <div class="ubr-toolbar">
+              <el-button type="primary" size="small" @click="openAssignBuRole">
+                {{ t('user.assignBuRole') }}
+              </el-button>
+            </div>
+            <template v-if="buRoleGroups.length">
+              <div v-for="g in buRoleGroups" :key="g.businessUnitId" class="ubr-group">
+                <div class="ubr-group-title">{{ g.businessUnitName }}</div>
+                <el-table :data="g.rows" border size="small">
+                  <el-table-column prop="roleName" :label="t('user.roleName')" />
+                  <el-table-column prop="roleCode" :label="t('user.roleCode')" width="160" />
+                  <el-table-column :label="t('common.operation')" width="100" align="center">
+                    <template #default="{ row }">
+                      <el-button type="danger" link size="small" @click="handleRemoveBuRole(row)">
+                        {{ t('user.removeBuRole') }}
+                      </el-button>
+                    </template>
+                  </el-table-column>
+                </el-table>
+              </div>
+            </template>
+            <el-empty v-else :description="t('user.noBuRoles')" :image-size="60" />
+            <div class="section-hint">{{ t('user.buRoleHint') }}</div>
+          </el-tab-pane>
+
+          <el-tab-pane :label="t('user.detailTabPlatform')" name="platform">
+            <p class="tab-lead">{{ t('user.platformAccessTabHint') }}</p>
+
+            <div class="section-title">{{ t('user.platformVirtualGroupsSection') }}</div>
+            <el-table :data="platformVirtualGroups" border size="small" v-if="platformVirtualGroups.length">
+              <el-table-column prop="groupName" :label="t('virtualGroup.name')" />
+              <el-table-column prop="groupDescription" :label="t('common.description')" />
+              <el-table-column prop="joinedAt" :label="t('user.joinedAt')" width="170">
+                <template #default="{ row }">{{ formatDate(row.joinedAt) }}</template>
+              </el-table-column>
+            </el-table>
+            <el-empty v-else :description="t('user.noPlatformVirtualGroups')" :image-size="60" />
+            <div class="section-hint">{{ t('user.platformVirtualGroupHint') }}</div>
+
+            <div class="section-title">{{ t('user.platformRolesSection') }}</div>
+            <el-table :data="platformRoles" border size="small" v-if="platformRoles.length">
+              <el-table-column prop="name" :label="t('user.roleName')" />
+              <el-table-column prop="code" :label="t('user.roleCode')" width="160" />
+              <el-table-column prop="type" :label="t('user.roleTypeColumn')" width="130">
                 <template #default="{ row }">
-                  <el-button type="danger" link size="small" @click="handleRemoveBuRole(row)">
-                    {{ t('user.removeBuRole') }}
-                  </el-button>
+                  <el-tag size="small" :type="getPlatformRoleTagType(row.type)">{{ row.type || '—' }}</el-tag>
                 </template>
               </el-table-column>
             </el-table>
-          </div>
-        </template>
-        <el-empty v-else :description="t('user.noBuRoles')" :image-size="60" />
-        <div class="section-hint">{{ t('user.buRoleHint') }}</div>
-
-        <!-- 角色信息（通过虚拟组获取） -->
-        <div class="section-title">{{ t('user.roleInfo') }}</div>
-        <el-table :data="user.roles" border size="small" v-if="user.roles?.length">
-          <el-table-column prop="roleName" :label="t('user.roleName')" />
-          <el-table-column prop="roleCode" :label="t('user.roleCode')" />
-          <el-table-column prop="description" :label="t('common.description')" />
-        </el-table>
-        <el-empty v-else :description="t('user.noRoles')" :image-size="60" />
+            <el-empty v-else :description="t('user.noPlatformRoles')" :image-size="60" />
+          </el-tab-pane>
+        </el-tabs>
 
         <!-- 登录历史 -->
         <div class="section-title">{{ t('user.loginHistory') }}</div>
@@ -178,10 +199,21 @@ const props = defineProps<{ modelValue: boolean; userId: string }>()
 defineEmits(['update:modelValue'])
 
 const loading = ref(false)
+const detailActiveTab = ref<'portal' | 'platform'>('portal')
 const user = ref<UserDetail | null>(null)
 const businessUnits = ref<UserBusinessUnitMembership[]>([])
-const virtualGroups = ref<UserVirtualGroupMembership[]>([])
+const portalVirtualGroups = ref<UserVirtualGroupMembership[]>([])
+const platformVirtualGroups = ref<UserVirtualGroupMembership[]>([])
+const platformRoles = ref<{ id: string; name: string; code: string; type: string }[]>([])
 const buRoles = ref<UserBusinessUnitRole[]>([])
+
+const getPlatformRoleTagType = (type?: string) => {
+  if (type === 'BU_BOUNDED') return 'warning'
+  if (type === 'BU_UNBOUNDED') return 'success'
+  if (type === 'ADMIN') return 'danger'
+  if (type === 'DEVELOPER') return 'primary'
+  return 'info'
+}
 
 const assignDialogVisible = ref(false)
 const assignRoleLoading = ref(false)
@@ -309,17 +341,22 @@ const handleRemoveBuRole = async (row: UserBusinessUnitRole) => {
 
 watch(() => props.modelValue, async (val) => {
   if (val && props.userId) {
+    detailActiveTab.value = 'portal'
     loading.value = true
     try {
-      const [userData, buData, vgData, ubrData] = await Promise.all([
+      const [userData, buData, portalVg, platformVg, platRoles, ubrData] = await Promise.all([
         userApi.getById(props.userId),
         userApi.getBusinessUnits(props.userId),
-        userApi.getVirtualGroups(props.userId),
+        userApi.getVirtualGroups(props.userId, 'PORTAL'),
+        userApi.getVirtualGroups(props.userId, 'ADMIN'),
+        userApi.getRoles(props.userId, 'ADMIN'),
         userApi.getBusinessUnitRoles(props.userId)
       ])
       user.value = userData
       businessUnits.value = buData
-      virtualGroups.value = vgData
+      portalVirtualGroups.value = portalVg
+      platformVirtualGroups.value = platformVg
+      platformRoles.value = platRoles || []
       buRoles.value = ubrData
     } catch (error: any) {
       ElMessage.error(error.message || t('common.failed'))
@@ -344,6 +381,21 @@ const handleResetPassword = async () => {
 <style scoped lang="scss">
 .user-detail {
   min-height: 200px;
+
+  .detail-tabs {
+    margin-top: 8px;
+    :deep(.el-tabs__header) {
+      margin-bottom: 12px;
+    }
+  }
+
+  .tab-lead {
+    font-size: 12px;
+    color: #909399;
+    margin: 0 0 12px;
+    line-height: 1.5;
+  }
+
   .section-title {
     font-size: 14px;
     font-weight: 600;

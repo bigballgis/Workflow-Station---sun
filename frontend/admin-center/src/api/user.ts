@@ -160,17 +160,23 @@ export const userApi = {
   
   exportTemplate: () => get<Blob>('/users/export-template', { responseType: 'blob' }),
 
-  // 用户业务单元成员身份（门户工作台 / UBR 前提）
-  getBusinessUnits: (userId: string) =>
-    get<UserBusinessUnitMembership[]>(`/users/${userId}/business-units`),
+  /**
+   * profileContext 可选：顶栏等场景传 ADMIN 仅展示管理端相关身份；不传则全量（用户详情等）
+   */
+  getBusinessUnits: (userId: string, profileContext?: 'PORTAL' | 'ADMIN' | 'DEVELOPER') =>
+    get<UserBusinessUnitMembership[]>(`/users/${userId}/business-units`, {
+      params: profileContext ? { profileContext } : undefined
+    }),
 
-  // 用户虚拟组成员身份
-  getVirtualGroups: (userId: string) =>
-    get<UserVirtualGroupMembership[]>(`/users/${userId}/virtual-groups`),
+  getVirtualGroups: (userId: string, profileContext?: 'PORTAL' | 'ADMIN' | 'DEVELOPER') =>
+    get<UserVirtualGroupMembership[]>(`/users/${userId}/virtual-groups`, {
+      params: profileContext ? { profileContext } : undefined
+    }),
 
-  // 用户角色（通过虚拟组等聚合视图）
-  getRoles: (userId: string) =>
-    get<{ id: string; name: string; code: string; type: string }[]>(`/users/${userId}/roles`),
+  getRoles: (userId: string, profileContext?: 'PORTAL' | 'ADMIN' | 'DEVELOPER') =>
+    get<{ id: string; name: string; code: string; type: string }[]>(`/users/${userId}/roles`, {
+      params: profileContext ? { profileContext } : undefined
+    }),
 
   /** 用户在业务单元下的角色（UBR），与门户工作台上下文、流程 activeBusinessUnitId 对齐 */
   getBusinessUnitRoles: (userId: string) =>

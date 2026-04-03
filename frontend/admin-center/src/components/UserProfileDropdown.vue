@@ -133,9 +133,9 @@ const loadUserPermissions = async () => {
   loading.value = true
   try {
     const [busResult, vgResult, rolesResult] = await Promise.all([
-      userApi.getBusinessUnits(user.userId),
-      userApi.getVirtualGroups(user.userId),
-      userApi.getRoles(user.userId)
+      userApi.getBusinessUnits(user.userId, 'ADMIN'),
+      userApi.getVirtualGroups(user.userId, 'ADMIN'),
+      userApi.getRoles(user.userId, 'ADMIN')
     ])
     businessUnits.value = busResult || []
     virtualGroups.value = vgResult || []

@@ -88,12 +88,18 @@ public class UserPortalMembershipService {
                 if (r == null) {
                     continue;
                 }
+                if (!"BU_BOUNDED".equals(r.getType()) && !"BU_UNBOUNDED".equals(r.getType())) {
+                    continue;
+                }
                 Map<String, Object> rm = new LinkedHashMap<>();
                 rm.put("id", r.getId());
                 rm.put("name", r.getName());
                 rm.put("code", r.getCode());
                 rm.put("type", r.getType());
                 boundRoles.add(rm);
+            }
+            if (boundRoles.isEmpty()) {
+                continue;
             }
             row.put("boundRoles", boundRoles);
             out.add(row);

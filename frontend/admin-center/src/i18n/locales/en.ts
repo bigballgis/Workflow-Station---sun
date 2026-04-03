@@ -111,7 +111,8 @@ export default {
     permissionCodes: 'Granted permissions',
     permissionCodesHint: 'Operation codes granted to this session, typically aggregated from roles.',
     noPermissionsListed: 'No permission codes returned.',
-    adminDropdownSubtitle: 'Organization & membership (Admin)',
+    adminDropdownSubtitle:
+      'ADMIN-type roles and virtual groups bound to ADMIN roles only. Developer identity is in the design studio; portal business identity is in User Portal.',
     changePassword: 'Change Password',
     currentPassword: 'Current Password',
     newPassword: 'New Password',
@@ -190,6 +191,22 @@ export default {
     notSet: 'Not Set',
     unlock: 'Unlock',
     pending: 'Pending',
+    detailTabPortalOrg: 'Portal & organization',
+    detailTabPlatform: 'Platform access',
+    portalOrgTabHint:
+      'Business unit membership, business virtual groups, and UBR align with the user portal workspace; kept separate from Admin/Developer platform identity.',
+    platformAccessTabHint:
+      'ADMIN-type roles and related virtual groups only. Developer (DEVELOPER) identity is shown in the design studio header.',
+    portalVirtualGroupsSection: 'Business virtual groups',
+    portalVirtualGroupHint:
+      'Only groups bound to BU-bounded or BU-unbounded roles; unbounded business roles are effective only through these groups.',
+    noPortalVirtualGroups: 'No business virtual group memberships',
+    platformVirtualGroupsSection: 'Platform virtual groups',
+    platformVirtualGroupHint: 'Virtual groups bound to ADMIN-type roles.',
+    noPlatformVirtualGroups: 'No platform virtual group memberships',
+    platformRolesSection: 'Administrator roles (ADMIN, direct + virtual group)',
+    noPlatformRoles: 'No admin/developer roles',
+    roleTypeColumn: 'Type',
     virtualGroups: 'Virtual Group Memberships',
     businessUnits: 'Business Unit Memberships',
     noVirtualGroups: 'Not a member of any virtual group',

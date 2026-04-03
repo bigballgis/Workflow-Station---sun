@@ -32,6 +32,7 @@ public class UserPermissionService {
     private final VirtualGroupRoleRepository virtualGroupRoleRepository;
     private final UserBusinessUnitRepository userBusinessUnitRepository;
     private final RoleRepository roleRepository;
+    private final UserRoleRepository userRoleRepository;
     private final UserPreferenceRepository userPreferenceRepository;
     private final BusinessUnitRepository businessUnitRepository;
     private final RoleHelper roleHelper;
@@ -64,6 +65,88 @@ public class UserPermissionService {
         return roleRepository.findAllById(roleIds).stream()
                 .filter(role -> "ACTIVE".equals(role.getStatus()))
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * 顶栏 / 各前端「个人摘要」用的角色列表。
+     * <ul>
+     *     <li>{@code profileContext} 为空或未知：保持历史行为，仅返回经虚拟组继承的角色（与 {@link #getUserRoles(String)} 一致）。</li>
+     *     <li>否则：合并「用户直配 + 虚拟组展开」的有效角色（与 {@code UserRoleRepository#findAllRoleIdsByUserId} 一致），再按前端场景过滤类型。</li>
+     * </ul>
+     *
+     * @param profileContext {@code PORTAL} 仅业务角色；{@code ADMIN} 仅 {@code ADMIN} 类型；{@code DEVELOPER} 仅 {@code DEVELOPER}
+     */
+    public List<Role> getUserRolesForProfile(String userId, String profileContext) {
+        if (!isRecognizedProfileContext(profileContext)) {
+            return getUserRoles(userId);
+        }
+        String ctx = profileContext.trim();
+        return loadActiveRolesMerged(userId).stream()
+                .filter(r -> roleMatchesProfile(r, ctx))
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 是否应在该前端摘要中展示业务单元成员关系（门户工作台相关）；管理端与设计站顶栏不展示。
+     */
+    public boolean includeBusinessUnitsInProfile(String profileContext) {
+        if (profileContext == null || profileContext.isBlank()) {
+            return true;
+        }
+        return "PORTAL".equalsIgnoreCase(profileContext.trim());
+    }
+
+    /**
+     * 虚拟组是否属于指定前端上下文（按该组绑定的单一角色类型判断；无绑定则不展示）。
+     */
+    public boolean isVirtualGroupVisibleForProfile(String virtualGroupId, String profileContext) {
+        if (!isRecognizedProfileContext(profileContext)) {
+            return true;
+        }
+        String ctx = profileContext.trim();
+        return virtualGroupRoleRepository.findByVirtualGroupId(virtualGroupId)
+                .flatMap(b -> roleRepository.findById(b.getRoleId()))
+                .filter(r -> "ACTIVE".equals(r.getStatus()))
+                .map(r -> roleMatchesProfile(r, ctx))
+                .orElse(false);
+    }
+
+    private boolean isRecognizedProfileContext(String profileContext) {
+        if (profileContext == null || profileContext.isBlank()) {
+            return false;
+        }
+        String p = profileContext.trim();
+        return "PORTAL".equalsIgnoreCase(p)
+                || "ADMIN".equalsIgnoreCase(p)
+                || "DEVELOPER".equalsIgnoreCase(p);
+    }
+
+    private List<Role> loadActiveRolesMerged(String userId) {
+        List<String> roleIds = userRoleRepository.findAllRoleIdsByUserId(userId);
+        if (roleIds == null || roleIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+        Map<String, Role> byId = new LinkedHashMap<>();
+        for (Role r : roleRepository.findAllById(roleIds)) {
+            if (r != null && "ACTIVE".equals(r.getStatus())) {
+                byId.putIfAbsent(r.getId(), r);
+            }
+        }
+        return new ArrayList<>(byId.values());
+    }
+
+    private boolean roleMatchesProfile(Role r, String profileContext) {
+        String t = r.getType();
+        if ("PORTAL".equalsIgnoreCase(profileContext)) {
+            return roleHelper.isBusinessRole(t);
+        }
+        if ("ADMIN".equalsIgnoreCase(profileContext)) {
+            return roleHelper.isAdminRole(t);
+        }
+        if ("DEVELOPER".equalsIgnoreCase(profileContext)) {
+            return roleHelper.isDeveloperRole(t);
+        }
+        return true;
     }
     
     /**

@@ -150,12 +150,12 @@ public class UserController {
     }
     
     @GetMapping("/{userId}/roles")
-    @Operation(summary = "获取用户角色列表", description = "获取用户通过虚拟组继承的角色列表，可按类型筛选")
+    @Operation(summary = "获取用户角色列表", description = "获取用户角色列表；可选 profileContext：PORTAL=业务角色，ADMIN=仅ADMIN类型，DEVELOPER=仅DEVELOPER；未传时保持仅虚拟组继承的历史行为")
     public ResponseEntity<List<Map<String, Object>>> getUserRoles(
             @PathVariable String userId,
-            @RequestParam(required = false) String type) {
-        // 通过虚拟组获取用户角色（角色只能分配给虚拟组，不能直接分配给用户）
-        List<Role> roles = userPermissionService.getUserRoles(userId);
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) String profileContext) {
+        List<Role> roles = userPermissionService.getUserRolesForProfile(userId, profileContext);
         
         // 按类型筛选
         if (type != null && !type.isEmpty()) {
@@ -188,9 +188,10 @@ public class UserController {
     }
     
     @GetMapping("/{userId}/virtual-groups")
-    @Operation(summary = "获取用户虚拟组列表", description = "获取用户所属的虚拟组列表")
+    @Operation(summary = "获取用户虚拟组列表", description = "获取用户所属的虚拟组列表；可选 profileContext 仅返回该前端场景相关的组（按组绑定角色类型）")
     public ResponseEntity<List<Map<String, Object>>> getUserVirtualGroups(
-            @PathVariable String userId) {
+            @PathVariable String userId,
+            @RequestParam(required = false) String profileContext) {
         List<VirtualGroupMember> memberships = virtualGroupMemberRepository.findByUserId(userId);
         
         // 批量获取虚拟组
@@ -204,6 +205,7 @@ public class UserController {
         
         // 转换为简单的Map格式
         List<Map<String, Object>> result = memberships.stream()
+                .filter(m -> userPermissionService.isVirtualGroupVisibleForProfile(m.getGroupId(), profileContext))
                 .map(m -> {
                     VirtualGroup group = groupMap.get(m.getGroupId());
                     if (group == null) {
@@ -223,9 +225,13 @@ public class UserController {
     }
     
     @GetMapping("/{userId}/business-units")
-    @Operation(summary = "获取用户业务单元成员身份", description = "获取用户加入的所有业务单元")
+    @Operation(summary = "获取用户业务单元成员身份", description = "获取用户加入的业务单元；profileContext 非 PORTAL 时返回空列表（供管理端/设计站顶栏隐藏组织成员噪音）")
     public ResponseEntity<List<Map<String, Object>>> getUserBusinessUnits(
-            @PathVariable String userId) {
+            @PathVariable String userId,
+            @RequestParam(required = false) String profileContext) {
+        if (!userPermissionService.includeBusinessUnitsInProfile(profileContext)) {
+            return ResponseEntity.ok(List.of());
+        }
         List<BusinessUnit> businessUnits = userBusinessUnitService.getUserBusinessUnits(userId);
         
         // 转换为简单的Map格式
