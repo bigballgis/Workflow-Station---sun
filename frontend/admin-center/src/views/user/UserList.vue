@@ -279,14 +279,8 @@ const handleStatusChange = async (user: User, status: string, action: string) =>
 const handleResetPassword = async (user: User) => {
   try {
     await ElMessageBox.confirm(t('user.confirmResetPassword', { name: user.fullName }), t('user.hint'), { type: 'warning' })
-    const newPassword = await userApi.resetPassword(user.id)
-    ElMessageBox.alert(t('user.newPasswordLabel', { password: newPassword }), t('user.passwordReset'), {
-      confirmButtonText: t('user.copyPassword'),
-      callback: () => {
-        navigator.clipboard.writeText(newPassword)
-        ElMessage.success(t('user.passwordCopied'))
-      }
-    })
+    await userApi.resetPassword(user.id)
+    ElMessage.success(t('user.passwordResetNoPlaintext'))
   } catch (error: any) {
     if (error !== 'cancel') {
       ElMessage.error(error.message || t('user.resetPasswordFailed'))

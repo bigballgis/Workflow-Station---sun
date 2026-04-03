@@ -8,8 +8,10 @@ import axios from 'axios'
  */
 
 // Create a separate axios instance for auth to avoid circular dependencies
+// 必须与 Kong 中 admin-center-auth 路由一致：/api/v1/admin/auth/*
+// 若使用 /api/v1/auth/*，会被转发到 developer-workstation，导致管理端登录 400
 const authRequest = axios.create({
-  baseURL: '/api/v1/auth',
+  baseURL: '/api/v1/admin/auth',
   timeout: 30000,
   headers: { 'Content-Type': 'application/json' }
 })
@@ -52,6 +54,7 @@ export interface UserInfo {
 export interface TokenResponse {
   accessToken: string
   expiresIn: number
+  refreshToken?: string
 }
 
 export interface RefreshRequest {
@@ -85,8 +88,8 @@ export const logout = async (): Promise<void> => {
 /**
  * Refresh access token using refresh token.
  */
-export const refreshToken = async (refreshToken: string): Promise<TokenResponse> => {
-  const response = await authRequest.post<TokenResponse>('/refresh', { refreshToken })
+export const refreshToken = async (refreshToken: string): Promise<LoginResponse> => {
+  const response = await authRequest.post<LoginResponse>('/refresh', { refreshToken })
   return response.data
 }
 

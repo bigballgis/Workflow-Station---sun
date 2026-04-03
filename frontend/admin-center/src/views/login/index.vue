@@ -138,7 +138,13 @@ const handleLogin = async () => {
     ElMessage.success(t('common.success'))
     router.push('/dashboard')
   } catch (error: any) {
-    const message = error.response?.data?.message || error.message || t('common.failed')
+    const d = error.response?.data
+    const message =
+      d?.error ||
+      d?.message ||
+      (typeof d === 'string' ? d : null) ||
+      error.message ||
+      t('common.failed')
     ElMessage.error(message)
   } finally {
     loading.value = false

@@ -208,6 +208,7 @@ export default {
     confirmResetPassword: '確定要重置「{name}」的密碼嗎？',
     newPasswordLabel: '新密碼：{password}',
     passwordReset: '密碼已重置',
+    passwordResetNoPlaintext: '密碼已重置。基於安全，新密碼不會顯示於畫面；請以安全管道通知使用者，或引導其使用忘記密碼功能。',
     copyPassword: '複製密碼',
     passwordCopied: '密碼已複製到剪貼簿',
     resetPasswordFailed: '重置密碼失敗',

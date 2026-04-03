@@ -143,14 +143,8 @@ const handleResetPassword = async () => {
   if (!user.value) return
   try {
     await ElMessageBox.confirm(t('user.resetPassword') + ` - ${user.value.fullName}?`, t('common.confirm'), { type: 'warning' })
-    const newPassword = await userApi.resetPassword(user.value.id)
-    ElMessageBox.alert(`${t('user.initialPassword')}: ${newPassword}`, t('common.success'), {
-      confirmButtonText: t('common.confirm'),
-      callback: () => {
-        navigator.clipboard.writeText(newPassword)
-        ElMessage.success(t('common.success'))
-      }
-    })
+    await userApi.resetPassword(user.value.id)
+    ElMessage.success(t('user.passwordResetNoPlaintext'))
   } catch (error: any) {
     if (error !== 'cancel') ElMessage.error(error.message || t('common.failed'))
   }

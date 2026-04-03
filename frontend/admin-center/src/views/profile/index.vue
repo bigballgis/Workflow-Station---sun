@@ -160,7 +160,7 @@ const loadUserInfo = async () => {
     }
     
     // 从 API 获取用户信息
-    const response = await request.get('/api/v1/auth/me', { baseURL: '' })
+    const response = await request.get('/auth/me')
     userInfo.value = response.data || response
   } catch (error) {
     console.error('Failed to load user info:', error)
@@ -186,6 +186,7 @@ const handleChangePassword = async () => {
     
     changingPassword.value = true
     try {
+      // 管理端暂无自服务改密接口；此路径仍走 Kong → developer-workstation（与历史行为一致）
       await request.post('/api/v1/auth/change-password', {
         oldPassword: passwordForm.oldPassword,
         newPassword: passwordForm.newPassword

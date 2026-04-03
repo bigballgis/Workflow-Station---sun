@@ -208,6 +208,7 @@ export default {
     confirmResetPassword: 'Are you sure to reset password for "{name}"?',
     newPasswordLabel: 'New password: {password}',
     passwordReset: 'Password Reset',
+    passwordResetNoPlaintext: 'Password has been reset. For security, the new password is not shown in the UI; notify the user through a secure channel or ask them to use forgot-password.',
     copyPassword: 'Copy Password',
     passwordCopied: 'Password copied to clipboard',
     resetPasswordFailed: 'Reset password failed',
