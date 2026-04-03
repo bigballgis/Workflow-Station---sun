@@ -538,6 +538,8 @@ export default {
     system: '系統通知',
     task: '任務通知',
     process: '流程通知',
+    permission: '權限申請',
+    approval: '部署審批',
     markAsRead: '標記已讀',
     markAllAsRead: '全部已讀',
     delete: '刪除',

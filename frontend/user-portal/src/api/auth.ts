@@ -51,6 +51,8 @@ export interface UserInfo {
 export interface TokenResponse {
   accessToken: string
   expiresIn: number
+  /** 刷新轮换时返回；存在则应写入 localStorage */
+  refreshToken?: string
 }
 
 export const login = async (data: LoginRequest): Promise<LoginResponse> => {

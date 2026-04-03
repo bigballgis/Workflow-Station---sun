@@ -589,6 +589,8 @@ export default {
     system: 'System',
     task: 'Task',
     process: 'Process',
+    permission: 'Permission requests',
+    approval: 'Deployment approval',
     markAsRead: 'Mark as Read',
     markAllAsRead: 'Mark All as Read',
     delete: 'Delete',

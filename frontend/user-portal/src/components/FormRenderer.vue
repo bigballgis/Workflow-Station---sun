@@ -186,6 +186,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount, nextTick, provide } from 'vue'
+import { watchThrottled } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { isEqual } from 'lodash-es'
 import { ElMessageBox } from 'element-plus'
@@ -272,8 +273,9 @@ const hasTabs = computed(() => props.tabs && props.tabs.length > 0)
 const activeTab = ref('')
 
 watch(
-  () => props.tabs,
-  (newTabs) => {
+  () => props.tabs?.map(t => String(t.name)).join('\u0001') ?? '',
+  () => {
+    const newTabs = props.tabs
     if (!newTabs?.length) {
       activeTab.value = ''
       return
@@ -288,7 +290,7 @@ watch(
       activeTab.value = names[0]!
     }
   },
-  { immediate: true, deep: true },
+  { immediate: true },
 )
 
 const bindingMap = computed(() => {
@@ -504,11 +506,15 @@ function handleSubTableUpdate(bindingId: number, rows: any[]) {
 // ---------------------------------------------------------------------------
 // Watchers
 // ---------------------------------------------------------------------------
-watch(formData, (newVal) => {
-  if (!isInternalUpdate && !props.readonly) {
-    emit('update:modelValue', { ...newVal })
-  }
-}, { deep: true })
+watchThrottled(
+  formData,
+  (newVal) => {
+    if (!isInternalUpdate && !props.readonly) {
+      emit('update:modelValue', { ...newVal })
+    }
+  },
+  { deep: true, throttle: 150 },
+)
 
 watch(() => props.modelValue, (newVal, oldVal) => {
   if (!isEqual(newVal, oldVal)) {
@@ -524,9 +530,12 @@ watch(allFields, (newFields, oldFields) => {
   }
 })
 
-watch(() => props.config, () => {
-  initEngine()
-}, { deep: true })
+watch(
+  () => props.config,
+  () => {
+    initEngine()
+  },
+)
 
 // ---------------------------------------------------------------------------
 // Task 7.3: Form validation with engine integration

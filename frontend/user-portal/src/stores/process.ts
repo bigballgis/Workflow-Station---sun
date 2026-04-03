@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { processApi, type ProcessDefinition, type ProcessInstance } from '@/api/process'
+import { processApi, type ProcessDefinition, type ProcessInstance, type ProcessStartRequest } from '@/api/process'
 
 export const useProcessStore = defineStore('process', () => {
   const definitions = ref<ProcessDefinition[]>([])
@@ -30,7 +30,7 @@ export const useProcessStore = defineStore('process', () => {
     }
   }
 
-  const startProcess = async (processKey: string, data: { variables?: Record<string, any>; businessKey?: string }) => {
+  const startProcess = async (processKey: string, data: ProcessStartRequest) => {
     const res = await processApi.startProcess(processKey, data)
     return res.data
   }

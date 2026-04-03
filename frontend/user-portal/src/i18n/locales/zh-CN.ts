@@ -589,6 +589,8 @@ export default {
     system: '系统通知',
     task: '任务通知',
     process: '流程通知',
+    permission: '权限申请',
+    approval: '部署审批',
     markAsRead: '标记已读',
     markAllAsRead: '全部已读',
     delete: '删除',

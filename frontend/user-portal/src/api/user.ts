@@ -89,18 +89,6 @@ export const userApi = {
     adminCenterAxios.get(`/users/${userId}/roles`),
 
   // 修改密码
-  changePassword: async (data: { oldPassword: string; newPassword: string }): Promise<void> => {
-    const portalAxios = axios.create({
-      baseURL: '/api/portal',
-      timeout: 30000
-    })
-    portalAxios.interceptors.request.use(config => {
-      const token = localStorage.getItem(TOKEN_KEY)
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`
-      }
-      return config
-    })
-    await portalAxios.post('/auth/change-password', data)
-  }
+  changePassword: (data: { oldPassword: string; newPassword: string }): Promise<void> =>
+    portalRequest.post<void>('/auth/change-password', data)
 }

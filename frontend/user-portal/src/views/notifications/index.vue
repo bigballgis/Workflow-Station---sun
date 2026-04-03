@@ -12,6 +12,8 @@
         <el-tab-pane :label="t('notification.system')" name="system" />
         <el-tab-pane :label="t('notification.task')" name="task" />
         <el-tab-pane :label="t('notification.process')" name="process" />
+        <el-tab-pane :label="t('notification.permission')" name="permission" />
+        <el-tab-pane :label="t('notification.approval')" name="approval" />
       </el-tabs>
 
       <div v-loading="store.loading" class="notification-list">
@@ -61,7 +63,7 @@ import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Bell, Document, Setting, Warning } from '@element-plus/icons-vue'
+import { Bell, CircleCheck, Document, Key, Setting, Warning } from '@element-plus/icons-vue'
 import { useNotificationStore } from '@/stores/notification'
 import type { NotificationData } from '@/api/notification'
 import dayjs from 'dayjs'
@@ -84,6 +86,10 @@ const getQueryParams = () => {
     params.type = 'TASK'
   } else if (activeTab.value === 'process') {
     params.type = 'PROCESS'
+  } else if (activeTab.value === 'permission') {
+    params.type = 'PERMISSION'
+  } else if (activeTab.value === 'approval') {
+    params.type = 'APPROVAL'
   }
   return params
 }
@@ -158,7 +164,9 @@ const getIcon = (type: string) => {
     TASK: Document,
     PROCESS: Bell,
     SYSTEM: Setting,
-    REMINDER: Warning
+    REMINDER: Warning,
+    PERMISSION: Key,
+    APPROVAL: CircleCheck
   }
   return map[type] || Bell
 }
@@ -168,7 +176,9 @@ const getIconColor = (type: string) => {
     TASK: 'var(--success-green)',
     PROCESS: 'var(--warning-orange)',
     SYSTEM: 'var(--info-blue)',
-    REMINDER: 'var(--error-red)'
+    REMINDER: 'var(--error-red)',
+    PERMISSION: 'var(--info-blue)',
+    APPROVAL: 'var(--warning-orange)'
   }
   return map[type] || 'var(--text-secondary)'
 }

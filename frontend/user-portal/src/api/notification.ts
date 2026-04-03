@@ -9,7 +9,7 @@ export interface NotificationParams {
 
 export interface NotificationData {
   id: number
-  type: 'TASK' | 'PROCESS' | 'SYSTEM' | 'REMINDER'
+  type: 'TASK' | 'PROCESS' | 'SYSTEM' | 'REMINDER' | 'PERMISSION' | 'APPROVAL'
   title: string
   content: string
   link?: string
