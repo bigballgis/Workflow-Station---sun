@@ -157,9 +157,33 @@ class PermissionRequestProperties {
         when(permissionRequestRepository.findById(requestId)).thenReturn(Optional.of(request));
         
         boolean result = permissionComponent.cancelRequest(userId, requestId);
-        
+
         assertThat(result).isTrue();
-        verify(permissionRequestRepository).delete(request);
+        assertThat(request.getStatus()).isEqualTo(PermissionRequestStatus.CANCELLED);
+        verify(permissionRequestRepository).save(request);
+    }
+
+    @Property(tries = 20)
+    @Label("属性: 代办提交人可取消待审批申请")
+    void submitterMayCancelPendingOnBehalfRequest(
+            @ForAll("validUserIds") String submitterId,
+            @ForAll("validUserIds") String beneficiaryId,
+            @ForAll("requestIds") Long requestId) {
+        Assume.that(!submitterId.equals(beneficiaryId));
+
+        PermissionRequest request = new PermissionRequest();
+        request.setId(requestId);
+        request.setApplicantId(beneficiaryId);
+        request.setSubmittedByUserId(submitterId);
+        request.setStatus(PermissionRequestStatus.PENDING);
+
+        when(permissionRequestRepository.findById(requestId)).thenReturn(Optional.of(request));
+
+        boolean result = permissionComponent.cancelRequest(submitterId, requestId);
+
+        assertThat(result).isTrue();
+        assertThat(request.getStatus()).isEqualTo(PermissionRequestStatus.CANCELLED);
+        verify(permissionRequestRepository).save(request);
     }
 
     @Property(tries = 20)
