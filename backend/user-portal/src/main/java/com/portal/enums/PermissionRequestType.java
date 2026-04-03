@@ -10,6 +10,9 @@ public enum PermissionRequestType {
     VIRTUAL_GROUP_JOIN,
     /** 业务单元加入申请 - 申请加入业务单元 */
     BUSINESS_UNIT_JOIN,
+
+    /** 申请移除在指定业务单元下的某业务角色（需审批人批准后生效） */
+    BUSINESS_UNIT_ROLE_REMOVAL,
     
     // ========== 以下为旧类型，已废弃 ==========
     /** @deprecated 使用 ROLE_ASSIGNMENT 替代 */

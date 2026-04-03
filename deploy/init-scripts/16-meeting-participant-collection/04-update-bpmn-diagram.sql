@@ -40,6 +40,9 @@ BEGIN
           <custom_1:values name="formId" value="21" />
           <custom_1:values name="formName" value="Create Meeting Form" />
         </custom_1:properties>
+        <custom:properties>
+          <custom:property name="assigneeType" value="INITIATOR" />
+        </custom:properties>
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_Start_Create</bpmn:incoming>
       <bpmn:outgoing>Flow_Create_Assign</bpmn:outgoing>
@@ -51,18 +54,18 @@ BEGIN
           <custom_1:values name="formId" value="22" />
           <custom_1:values name="formName" value="Assign Participants Form" />
         </custom_1:properties>
+        <custom:properties>
+          <custom:property name="assigneeType" value="INITIATOR" />
+        </custom:properties>
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_Create_Assign</bpmn:incoming>
       <bpmn:outgoing>Flow_Assign_MI</bpmn:outgoing>
     </bpmn:userTask>
 
     <bpmn:subProcess id="MultiInstance_SubTable_31" name="多实例-参与人列表">
-      <bpmn:multiInstanceLoopCharacteristics isSequential="false">
-        <bpmn:extensionElements>
-          <flowable:collection>multiInstance_participants_collection</flowable:collection>
-          <flowable:elementVariable>currentItem</flowable:elementVariable>
-        </bpmn:extensionElements>
-      </bpmn:multiInstanceLoopCharacteristics>
+      <bpmn:multiInstanceLoopCharacteristics isSequential="false"
+          flowable:collection="multiInstance_participants_collection"
+          flowable:elementVariable="currentItem" />
       <bpmn:incoming>Flow_Assign_MI</bpmn:incoming>
       <bpmn:outgoing>Flow_MI_End</bpmn:outgoing>
 

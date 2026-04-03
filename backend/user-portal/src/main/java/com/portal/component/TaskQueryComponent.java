@@ -7,6 +7,7 @@ import com.portal.dto.TaskInfo;
 import com.portal.dto.TaskQueryRequest;
 import com.portal.dto.TaskStatistics;
 import com.portal.dto.TaskHistoryInfo;
+import com.portal.util.WorkflowEnginePayloadHelper;
 import com.portal.entity.DelegationRule;
 import com.portal.entity.ProcessHistory;
 import com.portal.entity.ProcessInstance;
@@ -86,28 +87,23 @@ public class TaskQueryComponent {
             
             if (result.isPresent()) {
                 Map<String, Object> responseBody = result.get();
-                @SuppressWarnings("unchecked")
-                Map<String, Object> data = (Map<String, Object>) responseBody.get("data");
-                if (data != null) {
-                    @SuppressWarnings("unchecked")
-                    List<Map<String, Object>> tasks = (List<Map<String, Object>>) data.get("tasks");
-                    if (tasks != null) {
-                        log.info("Processing {} tasks from Flowable", tasks.size());
-                        for (Map<String, Object> taskMap : tasks) {
-                            TaskInfo taskInfo = convertMapToTaskInfo(taskMap);
-                            log.info("Checking task {} from process {}", taskInfo.getTaskId(), taskInfo.getProcessInstanceId());
-                            // Filter out tasks from withdrawn processes
-                            if (!isProcessWithdrawn(taskInfo.getProcessInstanceId())) {
-                                allTasks.add(taskInfo);
-                                log.info("Task {} added to list", taskInfo.getTaskId());
-                            } else {
-                                log.info("Filtering out task {} from withdrawn process {}", 
-                                    taskInfo.getTaskId(), taskInfo.getProcessInstanceId());
-                            }
+                List<Map<String, Object>> tasks = WorkflowEnginePayloadHelper.taskListFromPayload(responseBody);
+                if (tasks != null) {
+                    log.info("Processing {} tasks from Flowable", tasks.size());
+                    for (Map<String, Object> taskMap : tasks) {
+                        TaskInfo taskInfo = convertMapToTaskInfo(taskMap);
+                        log.info("Checking task {} from process {}", taskInfo.getTaskId(), taskInfo.getProcessInstanceId());
+                        // Filter out tasks from withdrawn processes
+                        if (!isProcessWithdrawn(taskInfo.getProcessInstanceId())) {
+                            allTasks.add(taskInfo);
+                            log.info("Task {} added to list", taskInfo.getTaskId());
+                        } else {
+                            log.info("Filtering out task {} from withdrawn process {}",
+                                taskInfo.getTaskId(), taskInfo.getProcessInstanceId());
                         }
                     }
                 }
-                log.info("Found {} tasks from Flowable for user {} (after filtering withdrawn processes)", 
+                log.info("Found {} tasks from Flowable for user {} (after filtering withdrawn processes)",
                     allTasks.size(), userId);
             }
         } catch (Exception e) {
@@ -335,38 +331,33 @@ public class TaskQueryComponent {
                 Optional<Map<String, Object>> result = workflowEngineClient.getUserTasks(delegatorId, 0, 100);
                 if (result.isPresent()) {
                     Map<String, Object> responseBody = result.get();
-                    @SuppressWarnings("unchecked")
-                    Map<String, Object> data = (Map<String, Object>) responseBody.get("data");
-                    if (data != null) {
-                        @SuppressWarnings("unchecked")
-                        List<Map<String, Object>> tasks = (List<Map<String, Object>>) data.get("tasks");
-                        if (tasks != null) {
-                            for (Map<String, Object> taskMap : tasks) {
-                                TaskInfo taskInfo = convertMapToTaskInfo(taskMap);
-                                // Mark as delegated task
-                                TaskInfo delegatedTask = TaskInfo.builder()
-                                        .taskId(taskInfo.getTaskId())
-                                        .taskName(taskInfo.getTaskName())
-                                        .description(taskInfo.getDescription())
-                                        .processInstanceId(taskInfo.getProcessInstanceId())
-                                        .processDefinitionKey(taskInfo.getProcessDefinitionKey())
-                                        .processDefinitionName(taskInfo.getProcessDefinitionName())
-                                        .assignmentType("DELEGATED")
-                                        .assignee(userId)
-                                        .delegatorId(delegatorId)
-                                        .delegatorName(delegatorId)
-                                        .initiatorId(taskInfo.getInitiatorId())
-                                        .initiatorName(taskInfo.getInitiatorName())
-                                        .priority(taskInfo.getPriority())
-                                        .status(taskInfo.getStatus())
-                                        .createTime(taskInfo.getCreateTime())
-                                        .dueDate(taskInfo.getDueDate())
-                                        .isOverdue(taskInfo.getIsOverdue())
-                                        .formKey(taskInfo.getFormKey())
-                                        .variables(taskInfo.getVariables())
-                                        .build();
-                                delegatedTasks.add(delegatedTask);
-                            }
+                    List<Map<String, Object>> tasks = WorkflowEnginePayloadHelper.taskListFromPayload(responseBody);
+                    if (tasks != null) {
+                        for (Map<String, Object> taskMap : tasks) {
+                            TaskInfo taskInfo = convertMapToTaskInfo(taskMap);
+                            // Mark as delegated task
+                            TaskInfo delegatedTask = TaskInfo.builder()
+                                    .taskId(taskInfo.getTaskId())
+                                    .taskName(taskInfo.getTaskName())
+                                    .description(taskInfo.getDescription())
+                                    .processInstanceId(taskInfo.getProcessInstanceId())
+                                    .processDefinitionKey(taskInfo.getProcessDefinitionKey())
+                                    .processDefinitionName(taskInfo.getProcessDefinitionName())
+                                    .assignmentType("DELEGATED")
+                                    .assignee(userId)
+                                    .delegatorId(delegatorId)
+                                    .delegatorName(delegatorId)
+                                    .initiatorId(taskInfo.getInitiatorId())
+                                    .initiatorName(taskInfo.getInitiatorName())
+                                    .priority(taskInfo.getPriority())
+                                    .status(taskInfo.getStatus())
+                                    .createTime(taskInfo.getCreateTime())
+                                    .dueDate(taskInfo.getDueDate())
+                                    .isOverdue(taskInfo.getIsOverdue())
+                                    .formKey(taskInfo.getFormKey())
+                                    .variables(taskInfo.getVariables())
+                                    .build();
+                            delegatedTasks.add(delegatedTask);
                         }
                     }
                 }
@@ -397,8 +388,7 @@ public class TaskQueryComponent {
             
             if (result.isPresent()) {
                 Map<String, Object> responseBody = result.get();
-                @SuppressWarnings("unchecked")
-                Map<String, Object> data = (Map<String, Object>) responseBody.get("data");
+                Map<String, Object> data = WorkflowEnginePayloadHelper.singleTaskFromPayload(responseBody);
                 if (data != null) {
                     log.debug("Converting task data to TaskInfo");
                     TaskInfo taskInfo = convertMapToTaskInfo(data);
@@ -566,9 +556,7 @@ public class TaskQueryComponent {
         long overdueCount = 0;
         
         if (countResult.isPresent()) {
-            Map<String, Object> responseBody = countResult.get();
-            @SuppressWarnings("unchecked")
-            Map<String, Object> data = (Map<String, Object>) responseBody.get("data");
+            Map<String, Object> data = WorkflowEnginePayloadHelper.taskCountFromPayload(countResult.get());
             if (data != null) {
                 totalCount = data.get("totalCount") != null ? ((Number) data.get("totalCount")).longValue() : 0;
                 overdueCount = data.get("overdueCount") != null ? ((Number) data.get("overdueCount")).longValue() : 0;

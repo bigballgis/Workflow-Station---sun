@@ -67,7 +67,11 @@ import { useFunctionUnitStore } from '@/stores/functionUnit'
 import { functionUnitApi } from '@/api/functionUnit'
 import ProcessDebugPanel from '@/components/debug/ProcessDebugPanel.vue'
 import NodePropertiesPanel from '@/components/designer/properties/NodePropertiesPanel.vue'
-import customModdleDescriptor from '@/utils/customModdle'
+import {
+  bpmnIoCustomModdleDescriptor,
+  workflowPlatformModdleDescriptor,
+  flowableModdleDescriptor
+} from '@/utils/customModdle'
 import { customTranslateModule } from '@/utils/customTranslate'
 import { findLastTaskAssigneeTopologyViolations } from '@/utils/bpmnAssigneeTopology'
 
@@ -139,7 +143,9 @@ async function initModeler() {
         bindTo: document
       },
       moddleExtensions: {
-        custom: customModdleDescriptor
+        custom: workflowPlatformModdleDescriptor,
+        custom_1: bpmnIoCustomModdleDescriptor,
+        flowable: flowableModdleDescriptor
       },
       additionalModules: [
         customTranslateModule
@@ -301,7 +307,12 @@ async function handleSave() {
     await store.saveProcess(props.functionUnitId, { bpmnXml: xml })
     ElMessage.success(t('process.saveSuccess'))
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.message || t('process.saveFailed'))
+    const msg =
+      e?.message ||
+      e?.response?.data?.error?.message ||
+      e?.response?.data?.message ||
+      t('process.saveFailed')
+    ElMessage.error(msg)
   } finally {
     saving.value = false
   }

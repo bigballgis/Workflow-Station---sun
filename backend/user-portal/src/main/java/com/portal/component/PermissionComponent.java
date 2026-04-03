@@ -248,6 +248,59 @@ public class PermissionComponent {
     }
 
     /**
+     * 申请移除在指定业务单元下的业务角色（需该业务单元审批人批准后生效）
+     */
+    public PermissionRequest requestBusinessUnitRoleRemoval(String userId, String businessUnitId, String roleId, String reason) {
+        if (reason == null || reason.isBlank()) {
+            throw new IllegalArgumentException("请填写申请理由");
+        }
+        if (roleId == null || roleId.isBlank()) {
+            throw new IllegalArgumentException("角色不能为空");
+        }
+        Map<String, Object> businessUnit = virtualGroupAccessComponent.getBusinessUnitById(businessUnitId);
+        if (businessUnit == null) {
+            throw new IllegalArgumentException("业务单元不存在: " + businessUnitId);
+        }
+        if (!virtualGroupAccessComponent.userHasBusinessUnitRole(userId, businessUnitId, roleId)) {
+            throw new IllegalArgumentException("您在该业务单元下不拥有此角色，无法申请移除");
+        }
+        if (permissionRequestRepository.existsByApplicantIdAndBusinessUnitIdAndRoleIdAndRequestTypeAndStatus(
+                userId, businessUnitId, roleId,
+                PermissionRequestType.BUSINESS_UNIT_ROLE_REMOVAL,
+                PermissionRequestStatus.PENDING)) {
+            throw new IllegalArgumentException("已存在待审批的移除该角色的申请");
+        }
+        List<Map<String, Object>> bound = virtualGroupAccessComponent.getBusinessUnitBoundRoles(businessUnitId);
+        String roleName = bound.stream()
+                .filter(r -> roleId.equals(String.valueOf(r.get("id"))))
+                .map(r -> Objects.toString(r.get("name"), null))
+                .findFirst()
+                .orElse(null);
+        if (roleName == null) {
+            roleName = virtualGroupAccessComponent.listUserBusinessUnitRolesInBusinessUnit(userId, businessUnitId).stream()
+                    .filter(r -> roleId.equals(String.valueOf(r.get("roleId"))))
+                    .map(r -> Objects.toString(r.get("roleName"), null))
+                    .findFirst()
+                    .orElse(null);
+        }
+        PermissionRequest request = PermissionRequest.builder()
+                .applicantId(userId)
+                .requestType(PermissionRequestType.BUSINESS_UNIT_ROLE_REMOVAL)
+                .businessUnitId(businessUnitId)
+                .businessUnitName((String) businessUnit.get("name"))
+                .roleId(roleId)
+                .roleName(roleName)
+                .reason(reason)
+                .status(PermissionRequestStatus.PENDING)
+                .createdAt(LocalDateTime.now())
+                .build();
+        request = permissionRequestRepository.save(request);
+        log.info("BU role removal request created: user={}, bu={}, roleId={}, requestId={}",
+                userId, businessUnitId, roleId, request.getId());
+        return request;
+    }
+
+    /**
      * 获取用户当前的角色列表
      */
     public List<Map<String, Object>> getUserCurrentRoles(String userId) {
@@ -283,6 +336,8 @@ public class PermissionComponent {
                     if (request.getRequestType() == PermissionRequestType.VIRTUAL_GROUP_JOIN) {
                         return approverVgIds.contains(request.getVirtualGroupId());
                     } else if (request.getRequestType() == PermissionRequestType.BUSINESS_UNIT_JOIN) {
+                        return approverBuIds.contains(request.getBusinessUnitId());
+                    } else if (request.getRequestType() == PermissionRequestType.BUSINESS_UNIT_ROLE_REMOVAL) {
                         return approverBuIds.contains(request.getBusinessUnitId());
                     }
                     return false;
@@ -321,6 +376,8 @@ public class PermissionComponent {
                     if (request.getRequestType() == PermissionRequestType.VIRTUAL_GROUP_JOIN) {
                         return approverVgIds.contains(request.getVirtualGroupId());
                     } else if (request.getRequestType() == PermissionRequestType.BUSINESS_UNIT_JOIN) {
+                        return approverBuIds.contains(request.getBusinessUnitId());
+                    } else if (request.getRequestType() == PermissionRequestType.BUSINESS_UNIT_ROLE_REMOVAL) {
                         return approverBuIds.contains(request.getBusinessUnitId());
                     }
                     return false;
@@ -403,6 +460,35 @@ public class PermissionComponent {
                 if (!success) {
                     errorMessage = "分配角色失败";
                 }
+            } else if (request.getRequestType() == PermissionRequestType.BUSINESS_UNIT_ROLE_REMOVAL) {
+                success = virtualGroupAccessComponent.removeUserBusinessUnitRole(
+                        request.getApplicantId(),
+                        request.getBusinessUnitId(),
+                        request.getRoleId());
+                if (!success) {
+                    errorMessage = "移除业务单元角色失败";
+                } else {
+                    List<Map<String, Object>> remaining = virtualGroupAccessComponent
+                            .listUserBusinessUnitRolesInBusinessUnit(
+                                    request.getApplicantId(),
+                                    request.getBusinessUnitId());
+                    if (remaining.isEmpty()) {
+                        boolean exited = virtualGroupAccessComponent.exitBusinessUnit(
+                                request.getApplicantId(),
+                                request.getBusinessUnitId());
+                        if (!exited) {
+                            success = false;
+                            errorMessage = "已移除最后一个业务单元角色，但自动退出业务单元失败";
+                        } else {
+                            log.info("User {} left business unit {} after last BU role removed (request {})",
+                                    request.getApplicantId(), request.getBusinessUnitId(), requestId);
+                        }
+                    }
+                    // 加入 BU 角色时曾同步加入绑定虚拟组（供 admin 角色页「Role Members」展示）；全局无该角色分配时从 VG 移除
+                    virtualGroupAccessComponent.removeFromBoundVirtualGroupIfNoBuRoleAssignmentRemaining(
+                            request.getApplicantId(),
+                            request.getRoleId());
+                }
             } else {
                 errorMessage = "不支持的申请类型: " + request.getRequestType();
             }
@@ -476,6 +562,8 @@ public class PermissionComponent {
         if (request.getRequestType() == PermissionRequestType.VIRTUAL_GROUP_JOIN) {
             return virtualGroupAccessComponent.isApproverForVirtualGroup(userId, request.getVirtualGroupId());
         } else if (request.getRequestType() == PermissionRequestType.BUSINESS_UNIT_JOIN) {
+            return virtualGroupAccessComponent.isApproverForBusinessUnit(userId, request.getBusinessUnitId());
+        } else if (request.getRequestType() == PermissionRequestType.BUSINESS_UNIT_ROLE_REMOVAL) {
             return virtualGroupAccessComponent.isApproverForBusinessUnit(userId, request.getBusinessUnitId());
         }
         // 角色分配暂时不需要审批（自动批准）

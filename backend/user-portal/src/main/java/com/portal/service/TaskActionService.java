@@ -2,6 +2,7 @@ package com.portal.service;
 
 import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.TaskActionInfo;
+import com.portal.util.WorkflowEnginePayloadHelper;
 import com.portal.entity.ActionDefinition;
 import com.portal.repository.ActionDefinitionRepository;
 import lombok.RequiredArgsConstructor;
@@ -39,11 +40,10 @@ public class TaskActionService {
             }
             
             Map<String, Object> responseBody = result.get();
-            @SuppressWarnings("unchecked")
-            Map<String, Object> data = (Map<String, Object>) responseBody.get("data");
-            
+            Map<String, Object> data = WorkflowEnginePayloadHelper.singleTaskFromPayload(responseBody);
+
             if (data == null) {
-                log.warn("No data in workflow engine response for task: {}", taskId);
+                log.warn("No task payload in workflow engine response for task: {}", taskId);
                 return Collections.emptyList();
             }
             

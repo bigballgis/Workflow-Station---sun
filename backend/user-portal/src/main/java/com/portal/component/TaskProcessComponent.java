@@ -376,6 +376,11 @@ public class TaskProcessComponent {
         if (request.getFormData() != null) {
             variables.putAll(request.getFormData());
         }
+
+        // 如果是"分配参与人"任务，从子表数据构建多实例集合变量
+        if ("Task_AssignParticipants".equals(task.getTaskDefinitionKey())) {
+            buildParticipantsCollection(variables);
+        }
         
         log.info("Variables before calling workflowEngineClient: {}", variables);
         
@@ -702,6 +707,47 @@ public class TaskProcessComponent {
         } catch (Exception e) {
             log.warn("Failed to get current activity for process {}: {}", processInstanceId, e.getMessage());
             return Optional.empty();
+        }
+    }
+
+    /**
+     * 从 __subTables__.participants 构建多实例集合变量
+     * 每个元素包含 rowId 和 assignee_user_id，供多实例子流程使用
+     */
+    @SuppressWarnings("unchecked")
+    private void buildParticipantsCollection(Map<String, Object> variables) {
+        try {
+            Object subTablesObj = variables.get("__subTables__");
+            if (!(subTablesObj instanceof Map)) {
+                log.warn("[MultiInstance] No __subTables__ found, setting empty participants collection");
+                variables.put("multiInstance_participants_collection", List.of());
+                return;
+            }
+            Map<String, Object> subTables = (Map<String, Object>) subTablesObj;
+            Object participantsObj = subTables.get("participants");
+            if (!(participantsObj instanceof List)) {
+                log.warn("[MultiInstance] No participants sub-table found, setting empty collection");
+                variables.put("multiInstance_participants_collection", List.of());
+                return;
+            }
+            List<Object> rows = (List<Object>) participantsObj;
+            List<Map<String, Object>> collection = new java.util.ArrayList<>();
+            for (Object rowObj : rows) {
+                if (!(rowObj instanceof Map)) continue;
+                Map<String, Object> row = (Map<String, Object>) rowObj;
+                Map<String, Object> item = new HashMap<>();
+                // rowId is used by the sub-process to identify which row to update
+                Object rowId = row.get("rowId");
+                if (rowId == null) rowId = row.get("id");
+                item.put("rowId", rowId);
+                item.put("assignee_user_id", row.get("assignee_user_id"));
+                collection.add(item);
+            }
+            variables.put("multiInstance_participants_collection", collection);
+            log.info("[MultiInstance] Built participants collection with {} items", collection.size());
+        } catch (Exception e) {
+            log.warn("[MultiInstance] Failed to build participants collection: {}", e.getMessage());
+            variables.put("multiInstance_participants_collection", List.of());
         }
     }
 }

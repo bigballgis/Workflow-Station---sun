@@ -2,6 +2,7 @@ package com.portal.repository;
 
 import com.portal.entity.PermissionRequest;
 import com.portal.enums.PermissionRequestStatus;
+import com.portal.enums.PermissionRequestType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -26,4 +27,11 @@ public interface PermissionRequestRepository extends JpaRepository<PermissionReq
     Page<PermissionRequest> findByStatus(PermissionRequestStatus status, Pageable pageable);
 
     Page<PermissionRequest> findByStatusIn(List<PermissionRequestStatus> statuses, Pageable pageable);
+
+    boolean existsByApplicantIdAndBusinessUnitIdAndRoleIdAndRequestTypeAndStatus(
+            String applicantId,
+            String businessUnitId,
+            String roleId,
+            PermissionRequestType requestType,
+            PermissionRequestStatus status);
 }

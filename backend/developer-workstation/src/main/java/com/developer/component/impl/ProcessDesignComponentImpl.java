@@ -2,7 +2,6 @@ package com.developer.component.impl;
 
 import com.developer.component.ProcessDesignComponent;
 import com.developer.dto.ValidationResult;
-import com.developer.entity.FieldDefinition;
 import com.developer.entity.FormDefinition;
 import com.developer.entity.FunctionUnit;
 import com.developer.entity.ProcessDefinition;
@@ -243,11 +242,10 @@ public class ProcessDesignComponentImpl implements ProcessDesignComponent {
             String subProcessXml = bpmnXml.substring(startPos, endPos);
             
             // 验证 1: collection 变量名格式合法（字母、数字、下划线）
-            Pattern collectionPattern = Pattern.compile("<flowable:collection>([^<]+)</flowable:collection>");
-            Matcher collectionMatcher = collectionPattern.matcher(subProcessXml);
-            
-            if (collectionMatcher.find()) {
-                String collectionVar = collectionMatcher.group(1).trim();
+            // 支持 BpmnXmlGenerator 子元素写法，以及 Flowable 常见的 multiInstanceLoopCharacteristics 属性写法
+            Optional<String> collectionVarOpt = extractMultiInstanceCollectionVariable(subProcessXml);
+            if (collectionVarOpt.isPresent()) {
+                String collectionVar = collectionVarOpt.get();
                 if (!collectionVar.matches("^[a-zA-Z_][a-zA-Z0-9_]*$")) {
                     result.addError("INVALID_COLLECTION_VARIABLE", 
                         "Collection variable name '" + collectionVar + "' is invalid. Must contain only letters, numbers, and underscores.", 
@@ -363,6 +361,22 @@ public class ProcessDesignComponentImpl implements ProcessDesignComponent {
     @Override
     public ValidationResult validateLastTaskAssigneeTopology(String bpmnXml) {
         return BpmnLastTaskAssigneeTopologyValidator.validate(bpmnXml);
+    }
+
+    /**
+     * 从子流程 XML 中提取多实例集合变量名（与 BpmnXmlGenerator / Flowable 属性写法兼容）。
+     */
+    private Optional<String> extractMultiInstanceCollectionVariable(String subProcessXml) {
+        Matcher elementMatcher = Pattern.compile("<flowable:collection>([^<]+)</flowable:collection>")
+                .matcher(subProcessXml);
+        if (elementMatcher.find()) {
+            return Optional.of(elementMatcher.group(1).trim());
+        }
+        Matcher attrMatcher = Pattern.compile("\\sflowable:collection=\"([^\"]+)\"").matcher(subProcessXml);
+        if (attrMatcher.find()) {
+            return Optional.of(attrMatcher.group(1).trim());
+        }
+        return Optional.empty();
     }
 
     /**

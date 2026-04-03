@@ -132,7 +132,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, OfficeBuilding } from '@element-plus/icons-vue'
@@ -254,7 +254,28 @@ const showUserDetail = (userId: string) => {
   userDetailVisible.value = true
 }
 
-onMounted(() => orgStore.fetchTree())
+/** 从门户等其它页返回时刷新树与右侧成员，与后端成员/角色变更对齐 */
+const refreshWhenTabVisible = async () => {
+  if (document.visibilityState !== 'visible') return
+  await orgStore.fetchTree()
+  if (!selectedBusinessUnit.value?.id) return
+  await Promise.all([fetchMembers(), fetchApprovers()])
+  try {
+    const detail = await organizationApi.getById(selectedBusinessUnit.value.id)
+    selectedBusinessUnit.value = detail
+  } catch {
+    /* 保持当前选中 */
+  }
+}
+
+onMounted(() => {
+  orgStore.fetchTree()
+  document.addEventListener('visibilitychange', refreshWhenTabVisible)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('visibilitychange', refreshWhenTabVisible)
+})
 </script>
 
 <style scoped lang="scss">

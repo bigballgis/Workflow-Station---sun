@@ -65,7 +65,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Lock } from '@element-plus/icons-vue'
@@ -123,7 +123,18 @@ const handleDelete = async (role: Role) => {
   ElMessage.success(t('common.success'))
 }
 
-onMounted(handleSearch)
+const refreshWhenTabVisible = () => {
+  if (document.visibilityState === 'visible') handleSearch()
+}
+
+onMounted(() => {
+  handleSearch()
+  document.addEventListener('visibilitychange', refreshWhenTabVisible)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('visibilitychange', refreshWhenTabVisible)
+})
 </script>
 
 <style scoped>
