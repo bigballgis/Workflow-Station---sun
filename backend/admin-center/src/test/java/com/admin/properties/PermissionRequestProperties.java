@@ -67,7 +67,8 @@ public class PermissionRequestProperties {
                 approverService,
                 memberManagementService,
                 virtualGroupRoleService,
-                objectMapper);
+                objectMapper,
+                mock(com.platform.messaging.support.NotificationDispatchHelper.class));
     }
     
     // ==================== Property 5: Duplicate Request Prevention ====================

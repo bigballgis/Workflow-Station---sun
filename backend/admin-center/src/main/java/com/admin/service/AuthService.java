@@ -19,9 +19,9 @@ public interface AuthService {
     void logout(String token);
     
     /**
-     * 刷新令牌
+     * 刷新会话：吊销旧 refresh token 并签发新的 access + refresh（轮换）。
      */
-    LoginResponse.UserLoginInfo refreshToken(String refreshToken);
+    LoginResponse refreshLogin(String refreshToken);
     
     /**
      * 获取当前用户信息

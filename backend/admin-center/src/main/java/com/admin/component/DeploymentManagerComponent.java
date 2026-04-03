@@ -11,12 +11,14 @@ import com.admin.exception.FunctionUnitNotFoundException;
 import com.admin.repository.FunctionUnitApprovalRepository;
 import com.admin.repository.FunctionUnitDeploymentRepository;
 import com.admin.repository.FunctionUnitRepository;
+import com.platform.messaging.support.NotificationDispatchHelper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.time.Instant;
 import java.util.*;
@@ -33,6 +35,7 @@ public class DeploymentManagerComponent {
     private final FunctionUnitRepository functionUnitRepository;
     private final FunctionUnitDeploymentRepository deploymentRepository;
     private final FunctionUnitApprovalRepository approvalRepository;
+    private final NotificationDispatchHelper notificationDispatchHelper;
     
     // 需要审批的环境
     private static final Set<DeploymentEnvironment> APPROVAL_REQUIRED_ENVIRONMENTS = 
@@ -85,6 +88,18 @@ public class DeploymentManagerComponent {
         }
         
         log.info("Deployment created: {}", deployment.getId());
+
+        if (deployment.getStatus() == DeploymentStatus.PENDING_APPROVAL && StringUtils.hasText(deployerId)) {
+            notificationDispatchHelper.publishToUserAfterCommit(
+                    deployerId,
+                    "APPROVAL",
+                    "部署已提交审批",
+                    String.format("功能单元「%s」至环境 %s 的部署（编号 %s）已进入审批流程，请等待审批结果。",
+                            functionUnit.getName(), environment, deployment.getId()),
+                    null,
+                    "admin-center");
+        }
+
         return deployment;
     }
     
@@ -151,6 +166,21 @@ public class DeploymentManagerComponent {
         
         // 检查是否所有审批都已完成
         checkAndUpdateDeploymentStatus(deployment);
+
+        FunctionUnitDeployment dep = approval.getDeployment();
+        if (dep != null && StringUtils.hasText(dep.getDeployedBy())) {
+            String fuName = dep.getFunctionUnit() != null ? dep.getFunctionUnit().getName() : "";
+            notificationDispatchHelper.publishToUserAfterCommit(
+                    dep.getDeployedBy(),
+                    "APPROVAL",
+                    "部署审批进度",
+                    String.format("功能单元「%s」的部署审批（%s）已由审批人处理：通过。%s",
+                            fuName,
+                            approval.getApprovalType(),
+                            comment != null && !comment.isBlank() ? "意见：" + comment : "").trim(),
+                    null,
+                    "admin-center");
+        }
         
         return approval;
     }
@@ -177,6 +207,18 @@ public class DeploymentManagerComponent {
         deployment.setStatus(DeploymentStatus.FAILED);
         deployment.setErrorMessage("审批被拒绝: " + comment);
         deploymentRepository.save(deployment);
+
+        if (StringUtils.hasText(deployment.getDeployedBy())) {
+            String fuName = deployment.getFunctionUnit() != null ? deployment.getFunctionUnit().getName() : "";
+            notificationDispatchHelper.publishToUserAfterCommit(
+                    deployment.getDeployedBy(),
+                    "APPROVAL",
+                    "部署审批已拒绝",
+                    String.format("功能单元「%s」的部署（编号 %s）审批未通过。原因：%s",
+                            fuName, deployment.getId(), comment),
+                    null,
+                    "admin-center");
+        }
         
         return approval;
     }
@@ -194,6 +236,17 @@ public class DeploymentManagerComponent {
             deployment.setStatus(DeploymentStatus.APPROVED);
             deploymentRepository.save(deployment);
             log.info("All approvals completed for deployment: {}", deployment.getId());
+            if (StringUtils.hasText(deployment.getDeployedBy())) {
+                String fuName = deployment.getFunctionUnit() != null ? deployment.getFunctionUnit().getName() : "";
+                notificationDispatchHelper.publishToUserAfterCommit(
+                        deployment.getDeployedBy(),
+                        "APPROVAL",
+                        "部署审批全部通过",
+                        String.format("功能单元「%s」的部署（编号 %s）已完成全部审批，可继续后续发布步骤。",
+                                fuName, deployment.getId()),
+                        null,
+                        "admin-center");
+            }
         }
     }
     

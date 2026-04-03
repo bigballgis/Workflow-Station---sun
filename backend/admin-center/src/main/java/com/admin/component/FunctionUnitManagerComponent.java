@@ -22,12 +22,21 @@ import com.admin.repository.FunctionUnitAccessRepository;
 import com.admin.repository.FunctionUnitContentRepository;
 import com.admin.repository.FunctionUnitDependencyRepository;
 import com.admin.repository.FunctionUnitRepository;
+import com.platform.common.util.ApiResponseBodyUnwrap;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestTemplate;
 
 import com.platform.common.version.SemanticVersion;
 import java.nio.charset.StandardCharsets;
@@ -53,6 +62,13 @@ public class FunctionUnitManagerComponent {
     private final FunctionUnitAccessRepository accessRepository;
     private final org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    private final RestTemplate restTemplate;
+
+    @Value("${user-portal.base-url:http://localhost:8082/api/portal}")
+    private String userPortalBaseUrl;
+
+    @Value("${user-portal.internal-api-token:}")
+    private String userPortalInternalApiToken;
     
     // 版本号正则表达式（语义化版本）
     private static final Pattern VERSION_PATTERN = Pattern.compile("^\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9]+)?$");
@@ -1417,7 +1433,21 @@ public class FunctionUnitManagerComponent {
         FunctionUnit unit = getFunctionUnitById(functionUnitId);
         String oldStatus = unit.getEnabled() ? "enabled" : "disabled";
         String newStatus = enabled ? "enabled" : "disabled";
-        
+
+        if (enabled) {
+            if (unit.getStatus() != FunctionUnitStatus.DEPLOYED) {
+                throw new AdminBusinessException("INVALID_STATUS",
+                        "仅已部署（DEPLOYED）的版本可启用为门户可发起版本");
+            }
+            FunctionUnit maxDeployed = pickMaxSemverAmongDeployed(unit.getCode())
+                    .orElseThrow(() -> new AdminBusinessException("NO_DEPLOYED", "该代码下没有已部署版本"));
+            if (!maxDeployed.getId().equals(unit.getId())) {
+                throw new AdminBusinessException("NOT_MAX_DEPLOYED_VERSION",
+                        "只能启用该代码下已部署中的最高语义版本（当前最高为 " + maxDeployed.getVersion() + "）");
+            }
+            disableOtherVersions(unit.getCode(), unit.getVersion(), operatorId);
+        }
+
         unit.setEnabled(enabled);
         FunctionUnit saved = functionUnitRepository.save(unit);
         
@@ -1473,6 +1503,65 @@ public class FunctionUnitManagerComponent {
         
         return new ArrayList<>(latestByCode.values());
     }
+
+    /**
+     * 门户发起流程：当前 code 下「已部署 + 已启用」中语义版本最高的一条目录记录（若无则 empty）
+     */
+    public Optional<FunctionUnit> getActiveCatalogForPortalStart(String code) {
+        List<FunctionUnit> deployed = functionUnitRepository.findByCodeAndStatus(code, FunctionUnitStatus.DEPLOYED);
+        List<FunctionUnit> enabledDeployed = deployed.stream().filter(FunctionUnit::isEnabled).toList();
+        if (enabledDeployed.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(enabledDeployed.stream().max(this::compareBySemver).orElseThrow());
+    }
+
+    private int compareBySemver(FunctionUnit a, FunctionUnit b) {
+        try {
+            return SemanticVersion.parse(a.getVersion()).compareTo(SemanticVersion.parse(b.getVersion()));
+        } catch (IllegalArgumentException e) {
+            log.warn("Invalid semver {} / {}, using lexicographic order", a.getVersion(), b.getVersion());
+            return a.getVersion().compareTo(b.getVersion());
+        }
+    }
+
+    private Optional<FunctionUnit> pickMaxSemverAmongDeployed(String code) {
+        List<FunctionUnit> deployed = functionUnitRepository.findByCodeAndStatus(code, FunctionUnitStatus.DEPLOYED);
+        if (deployed.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(deployed.stream().max(this::compareBySemver).orElseThrow());
+    }
+
+    /**
+     * 按功能单元目录 ID 清理门户运行数据（并驱动引擎 purge），供回滚/废弃编排
+     */
+    public Map<String, Object> purgeRuntimeDataForCatalog(String catalogId) {
+        if (userPortalInternalApiToken == null || userPortalInternalApiToken.isBlank()) {
+            throw new AdminBusinessException("CONFIG", "user-portal.internal-api-token 未配置，无法调用门户清理运行数据");
+        }
+        String base = userPortalBaseUrl != null ? userPortalBaseUrl.replaceAll("/$", "") : "";
+        String url = base + "/internal/runtime/purge-by-catalog";
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("X-Internal-Token", userPortalInternalApiToken);
+        Map<String, String> body = Map.of("catalogId", catalogId);
+        try {
+            ResponseEntity<Map<String, Object>> resp = restTemplate.exchange(
+                    url,
+                    HttpMethod.POST,
+                    new HttpEntity<>(body, headers),
+                    new ParameterizedTypeReference<Map<String, Object>>() {});
+            if (!resp.getStatusCode().is2xxSuccessful() || resp.getBody() == null) {
+                throw new AdminBusinessException("PORTAL_PURGE_FAILED", "门户清理返回异常: " + resp.getStatusCode());
+            }
+            return ApiResponseBodyUnwrap.unwrapDataMap(resp.getBody());
+        } catch (AdminBusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new AdminBusinessException("PORTAL_PURGE_FAILED", "调用门户清理失败: " + e.getMessage(), e);
+        }
+    }
     
     // ==================== 新增版本管理方法 ====================
     
@@ -1522,46 +1611,42 @@ public class FunctionUnitManagerComponent {
     }
     
     /**
-     * 激活指定版本（用于回滚）
-     * @param code 功能单元代码
-     * @param targetVersion 目标版本号
-     * @param operatorId 操作人ID
-     * @return 激活的功能单元
+     * 激活指定版本（与 {@link #setEnabled(String, boolean, String, String)} 同一套规则）
+     * <ul>
+     *   <li>目标必须为 {@link FunctionUnitStatus#DEPLOYED}</li>
+     *   <li>目标必须为该 code 下全部已部署记录中语义版本最高者</li>
+     * </ul>
      */
     @Transactional
     public FunctionUnit activateVersion(String code, String targetVersion, String operatorId) {
         log.info("Activating version {} for code: {}, operator: {}", targetVersion, code, operatorId);
-        
-        // 1. 验证目标版本是否存在
+
         FunctionUnit targetUnit = functionUnitRepository.findByCodeAndVersion(code, targetVersion)
                 .orElseThrow(() -> new FunctionUnitNotFoundException(
                         "功能单元版本不存在: " + code + ":" + targetVersion));
-        
-        // 2. 验证目标版本状态
-        if (!targetUnit.isDeployable()) {
-            throw new AdminBusinessException("INVALID_STATUS", 
-                    "无法激活状态为 " + targetUnit.getStatus() + " 的版本。只能激活 VALIDATED 或 DEPLOYED 状态的版本。");
+
+        if (targetUnit.getStatus() != FunctionUnitStatus.DEPLOYED) {
+            throw new AdminBusinessException("INVALID_STATUS",
+                    "仅已部署（DEPLOYED）的版本可激活为门户可发起版本。当前状态: " + targetUnit.getStatus());
         }
-        
-        // 3. 获取当前启用的版本
-        Optional<FunctionUnit> currentEnabled = getEnabledVersion(code);
-        
-        // 4. 禁用当前启用的版本
-        if (currentEnabled.isPresent()) {
-            FunctionUnit current = currentEnabled.get();
-            if (!current.getVersion().equals(targetVersion)) {
-                current.setEnabled(false);
-                functionUnitRepository.save(current);
-                log.info("Disabled current version {} during activation", current.getVersion());
-            }
+
+        FunctionUnit maxDeployed = pickMaxSemverAmongDeployed(code)
+                .orElseThrow(() -> new AdminBusinessException("NO_DEPLOYED", "该代码下没有已部署版本"));
+        if (!maxDeployed.getId().equals(targetUnit.getId())) {
+            throw new AdminBusinessException("NOT_MAX_DEPLOYED_VERSION",
+                    "只能激活该代码下已部署中的最高语义版本（当前最高为 " + maxDeployed.getVersion() + "）");
         }
-        
-        // 5. 启用目标版本
-        targetUnit.setEnabled(true);
-        FunctionUnit activated = functionUnitRepository.save(targetUnit);
-        
+
+        disableOtherVersions(code, targetVersion, operatorId);
+
+        FunctionUnit fresh = functionUnitRepository.findByCodeAndVersion(code, targetVersion)
+                .orElseThrow(() -> new FunctionUnitNotFoundException(
+                        "功能单元版本不存在: " + code + ":" + targetVersion));
+        fresh.setEnabled(true);
+        FunctionUnit activated = functionUnitRepository.save(fresh);
+
         log.info("Successfully activated version {} for function unit {}", targetVersion, code);
-        
+
         return activated;
     }
     

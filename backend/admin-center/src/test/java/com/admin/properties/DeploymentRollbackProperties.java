@@ -39,7 +39,10 @@ class DeploymentRollbackProperties {
         deploymentRepository = Mockito.mock(FunctionUnitDeploymentRepository.class);
         approvalRepository = Mockito.mock(FunctionUnitApprovalRepository.class);
         component = new DeploymentManagerComponent(
-                functionUnitRepository, deploymentRepository, approvalRepository);
+                functionUnitRepository,
+                deploymentRepository,
+                approvalRepository,
+                Mockito.mock(com.platform.messaging.support.NotificationDispatchHelper.class));
     }
 
     // ==================== 属性 1: 只有成功或部署中的部署可以回滚 ====================

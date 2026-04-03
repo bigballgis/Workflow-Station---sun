@@ -10,6 +10,7 @@ import com.admin.repository.FunctionUnitAccessRepository;
 import com.admin.repository.FunctionUnitContentRepository;
 import com.admin.repository.FunctionUnitDependencyRepository;
 import com.admin.repository.FunctionUnitRepository;
+import com.platform.common.version.SemanticVersion;
 import net.jqwik.api.*;
 import net.jqwik.api.lifecycle.BeforeTry;
 import org.mockito.Mockito;
@@ -22,6 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 /**
@@ -61,7 +63,8 @@ class FunctionUnitVersionManagementProperties {
         component = new FunctionUnitManagerComponent(
                 functionUnitRepository, dependencyRepository, contentRepository, accessRepository,
                 Mockito.mock(org.springframework.jdbc.core.JdbcTemplate.class),
-                Mockito.mock(com.fasterxml.jackson.databind.ObjectMapper.class));
+                Mockito.mock(com.fasterxml.jackson.databind.ObjectMapper.class),
+                Mockito.mock(org.springframework.web.client.RestTemplate.class));
     }
 
     // ==================== Property 1: 单一启用版本不变性 ====================
@@ -168,7 +171,7 @@ class FunctionUnitVersionManagementProperties {
     }
 
     // ==================== Property 5: 激活禁用当前版本 ====================
-    // *对于任意* 当前启用的版本，激活另一个版本时应该被禁用
+    // 仅当目标为「已部署中的最高语义版本」时可激活；此时原启用版本被禁用
     // Validates: Requirements 2.1, 2.2, 6.2, 6.3
     
     @Property(tries = 100)
@@ -178,15 +181,18 @@ class FunctionUnitVersionManagementProperties {
             @ForAll("semanticVersions") String targetVersion) {
         
         Assume.that(!currentVersion.equals(targetVersion));
+        Assume.that(SemanticVersion.parse(targetVersion).compareTo(SemanticVersion.parse(currentVersion)) > 0);
         
-        // Given: 当前版本启用，目标版本禁用
+        // Given: 低版本启用，高版本（唯一可激活目标）禁用
         FunctionUnit currentUnit = createFunctionUnit(code, currentVersion, true, FunctionUnitStatus.DEPLOYED);
         FunctionUnit targetUnit = createFunctionUnit(code, targetVersion, false, FunctionUnitStatus.DEPLOYED);
         
         when(functionUnitRepository.findByCodeAndVersion(code, targetVersion))
                 .thenReturn(Optional.of(targetUnit));
-        when(functionUnitRepository.findByCodeAndEnabledTrue(code))
-                .thenReturn(Optional.of(currentUnit));
+        when(functionUnitRepository.findByCodeAndStatus(eq(code), eq(FunctionUnitStatus.DEPLOYED)))
+                .thenReturn(Arrays.asList(currentUnit, targetUnit));
+        when(functionUnitRepository.findAllByCodeOrderByVersionDesc(code))
+                .thenReturn(Arrays.asList(targetUnit, currentUnit));
         when(functionUnitRepository.save(any(FunctionUnit.class))).thenAnswer(invocation -> {
             FunctionUnit saved = invocation.getArgument(0);
             if (saved.getId().equals(currentUnit.getId())) {
@@ -197,7 +203,7 @@ class FunctionUnitVersionManagementProperties {
             return saved;
         });
         
-        // When: 激活目标版本
+        // When: 激活目标版本（已为 DEPLOYED 中最高）
         component.activateVersion(code, targetVersion, "test-operator");
         
         // Then: 当前版本应该被禁用
@@ -218,8 +224,10 @@ class FunctionUnitVersionManagementProperties {
         
         when(functionUnitRepository.findByCodeAndVersion(code, targetVersion))
                 .thenReturn(Optional.of(targetUnit));
-        when(functionUnitRepository.findByCodeAndEnabledTrue(code))
-                .thenReturn(Optional.empty());
+        when(functionUnitRepository.findByCodeAndStatus(eq(code), eq(FunctionUnitStatus.DEPLOYED)))
+                .thenReturn(Collections.singletonList(targetUnit));
+        when(functionUnitRepository.findAllByCodeOrderByVersionDesc(code))
+                .thenReturn(Collections.singletonList(targetUnit));
         when(functionUnitRepository.save(any(FunctionUnit.class))).thenAnswer(invocation -> {
             FunctionUnit saved = invocation.getArgument(0);
             targetUnit.setEnabled(saved.getEnabled());
@@ -235,7 +243,7 @@ class FunctionUnitVersionManagementProperties {
     }
 
     // ==================== Property 7: 激活状态验证 ====================
-    // *对于任意* 非 VALIDATED 或 DEPLOYED 状态的版本，激活应该失败
+    // 与 setEnabled 一致：仅 DEPLOYED 可激活；VALIDATED / DRAFT / DEPRECATED 等均失败
     // Validates: Requirements 2.3, 2.4, 6.1, 6.2
     
     @Property(tries = 50)
@@ -244,7 +252,7 @@ class FunctionUnitVersionManagementProperties {
             @ForAll("semanticVersions") String version,
             @ForAll("invalidStatuses") FunctionUnitStatus invalidStatus) {
         
-        // Given: 版本状态不可部署
+        // Given: 版本状态非 DEPLOYED
         FunctionUnit unit = createFunctionUnit(code, version, false, invalidStatus);
         
         when(functionUnitRepository.findByCodeAndVersion(code, version))
@@ -253,7 +261,33 @@ class FunctionUnitVersionManagementProperties {
         // When & Then: 激活应该失败
         assertThatThrownBy(() -> component.activateVersion(code, version, "test-operator"))
                 .isInstanceOf(AdminBusinessException.class)
-                .hasMessageContaining("无法激活状态为");
+                .hasMessageContaining("仅已部署");
+    }
+
+    // ==================== Property 7b: 非最高已部署版本不可激活 ====================
+    
+    @Property(tries = 80)
+    void activationFailsWhenTargetIsNotMaxAmongDeployed(
+            @ForAll("functionUnitCodes") String code,
+            @ForAll("semanticVersions") String higherVersion,
+            @ForAll("semanticVersions") String lowerVersion) {
+        
+        Assume.that(!higherVersion.equals(lowerVersion));
+        Assume.that(SemanticVersion.parse(higherVersion).compareTo(SemanticVersion.parse(lowerVersion)) > 0);
+        
+        FunctionUnit higherUnit = createFunctionUnit(code, higherVersion, false, FunctionUnitStatus.DEPLOYED);
+        FunctionUnit lowerUnit = createFunctionUnit(code, lowerVersion, false, FunctionUnitStatus.DEPLOYED);
+        
+        when(functionUnitRepository.findByCodeAndVersion(code, lowerVersion))
+                .thenReturn(Optional.of(lowerUnit));
+        when(functionUnitRepository.findByCodeAndStatus(eq(code), eq(FunctionUnitStatus.DEPLOYED)))
+                .thenReturn(Arrays.asList(higherUnit, lowerUnit));
+        
+        assertThatThrownBy(() -> component.activateVersion(code, lowerVersion, "test-operator"))
+                .isInstanceOf(AdminBusinessException.class)
+                .hasMessageContaining("最高语义版本");
+        
+        verify(functionUnitRepository, never()).save(any(FunctionUnit.class));
     }
 
     // ==================== Property 8: 激活失败保持状态 ====================
@@ -598,7 +632,7 @@ class FunctionUnitVersionManagementProperties {
     @Provide
     Arbitrary<String> functionUnitCodes() {
         return Arbitraries.of(
-                "DIGITAL_LENDING_V2_EN",
+                "fu-20260403-a1b2c6",
                 "LEAVE_MANAGEMENT",
                 "PURCHASE_REQUEST",
                 "EXPENSE_CLAIM",
@@ -633,7 +667,8 @@ class FunctionUnitVersionManagementProperties {
     Arbitrary<FunctionUnitStatus> invalidStatuses() {
         return Arbitraries.of(
                 FunctionUnitStatus.DRAFT,
-                FunctionUnitStatus.DEPRECATED
+                FunctionUnitStatus.DEPRECATED,
+                FunctionUnitStatus.VALIDATED
         );
     }
 }

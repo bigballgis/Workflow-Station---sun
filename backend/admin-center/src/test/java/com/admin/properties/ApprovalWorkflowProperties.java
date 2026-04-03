@@ -68,7 +68,8 @@ public class ApprovalWorkflowProperties {
                 approverService,
                 memberManagementService,
                 virtualGroupRoleService,
-                objectMapper);
+                objectMapper,
+                mock(com.platform.messaging.support.NotificationDispatchHelper.class));
     }
     
     // ==================== Property 6: Approval Workflow State Management ====================

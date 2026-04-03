@@ -15,6 +15,7 @@ import java.util.*;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 /**
@@ -43,7 +44,8 @@ class FunctionUnitEnabledProperties {
         component = new FunctionUnitManagerComponent(
                 functionUnitRepository, dependencyRepository, contentRepository, accessRepository,
                 Mockito.mock(org.springframework.jdbc.core.JdbcTemplate.class),
-                Mockito.mock(com.fasterxml.jackson.databind.ObjectMapper.class));
+                Mockito.mock(com.fasterxml.jackson.databind.ObjectMapper.class),
+                Mockito.mock(org.springframework.web.client.RestTemplate.class));
     }
 
     // ==================== Property 5: 启用状态切换正确性 ====================
@@ -64,6 +66,7 @@ class FunctionUnitEnabledProperties {
             FunctionUnit saved = invocation.getArgument(0);
             return saved;
         });
+        stubDeployedChainForUnit(unit);
         
         // When: 设置新的启用状态
         FunctionUnit result = component.setEnabled(functionUnitId, newEnabled);
@@ -85,6 +88,7 @@ class FunctionUnitEnabledProperties {
             FunctionUnit saved = invocation.getArgument(0);
             return saved;
         });
+        stubDeployedChainForUnit(unit);
         
         // When: 设置启用状态
         component.setEnabled(functionUnitId, newEnabled);
@@ -106,6 +110,7 @@ class FunctionUnitEnabledProperties {
             FunctionUnit saved = invocation.getArgument(0);
             return saved;
         });
+        stubDeployedChainForUnit(unit);
         
         // When: 设置相同的状态
         FunctionUnit result = component.setEnabled(functionUnitId, enabled);
@@ -129,6 +134,7 @@ class FunctionUnitEnabledProperties {
             unit.setEnabled(saved.getEnabled());
             return saved;
         });
+        stubDeployedChainForUnit(unit);
         
         // When: 切换状态两次（禁用再启用，或启用再禁用）
         component.setEnabled(functionUnitId, !initialEnabled);
@@ -156,6 +162,7 @@ class FunctionUnitEnabledProperties {
             FunctionUnit saved = invocation.getArgument(0);
             return saved;
         });
+        stubDeployedChainForUnit(unit);
         
         // When: 设置启用状态
         FunctionUnit result = component.setEnabled(functionUnitId, newEnabled);
@@ -169,6 +176,13 @@ class FunctionUnitEnabledProperties {
     }
 
     // ==================== 辅助方法 ====================
+
+    private void stubDeployedChainForUnit(FunctionUnit unit) {
+        when(functionUnitRepository.findByCodeAndStatus(eq(unit.getCode()), eq(FunctionUnitStatus.DEPLOYED)))
+                .thenReturn(Collections.singletonList(unit));
+        when(functionUnitRepository.findAllByCodeOrderByVersionDesc(eq(unit.getCode())))
+                .thenReturn(Collections.singletonList(unit));
+    }
     
     private FunctionUnit createFunctionUnit(String id, String name, boolean enabled) {
         return FunctionUnit.builder()

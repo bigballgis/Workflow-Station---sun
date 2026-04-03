@@ -66,7 +66,8 @@ public class BusinessUnitApprovalIntegrationProperties {
                 approverService,
                 memberManagementService,
                 virtualGroupRoleService,
-                objectMapper);
+                objectMapper,
+                mock(com.platform.messaging.support.NotificationDispatchHelper.class));
     }
 
     

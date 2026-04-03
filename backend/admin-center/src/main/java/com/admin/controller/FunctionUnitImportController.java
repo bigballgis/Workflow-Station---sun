@@ -594,7 +594,7 @@ public class FunctionUnitImportController {
      * 激活指定版本（回滚）
      */
     @PostMapping("/{code}/activate/{version}")
-    @Operation(summary = "激活指定版本", description = "激活功能单元的指定版本，禁用其他版本（用于回滚）")
+    @Operation(summary = "激活指定版本", description = "仅允许目标为已部署（DEPLOYED）且为该 code 下已部署中的最高语义版本；成功后禁用同 code 其他版本")
     public ResponseEntity<Map<String, Object>> activateVersion(
             @Parameter(description = "功能单元代码") @PathVariable String code,
             @Parameter(description = "目标版本号") @PathVariable String version,

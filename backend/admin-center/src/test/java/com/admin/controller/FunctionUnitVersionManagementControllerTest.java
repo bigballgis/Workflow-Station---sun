@@ -121,30 +121,30 @@ class FunctionUnitVersionManagementControllerTest {
     @DisplayName("激活 DRAFT 状态版本应该返回 400")
     void activateVersion_DraftStatus() throws Exception {
         when(functionUnitManager.activateVersion(eq(testCode), eq(testVersion), anyString()))
-                .thenThrow(new AdminBusinessException("INVALID_STATUS", 
-                        "无法激活状态为 DRAFT 的版本。只能激活 VALIDATED 或 DEPLOYED 状态的版本。"));
+                .thenThrow(new AdminBusinessException("INVALID_STATUS",
+                        "仅已部署（DEPLOYED）的版本可激活为门户可发起版本。当前状态: DRAFT"));
 
         mockMvc.perform(post("/function-units-import/{code}/activate/{version}", testCode, testVersion)
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value("FAILED"))
                 .andExpect(jsonPath("$.message").value(containsString("DRAFT")))
-                .andExpect(jsonPath("$.message").value(containsString("VALIDATED 或 DEPLOYED")));
+                .andExpect(jsonPath("$.message").value(containsString("仅已部署")));
     }
 
     @Test
     @DisplayName("激活 DEPRECATED 状态版本应该返回 400")
     void activateVersion_DeprecatedStatus() throws Exception {
         when(functionUnitManager.activateVersion(eq(testCode), eq(testVersion), anyString()))
-                .thenThrow(new AdminBusinessException("INVALID_STATUS", 
-                        "无法激活状态为 DEPRECATED 的版本。只能激活 VALIDATED 或 DEPLOYED 状态的版本。"));
+                .thenThrow(new AdminBusinessException("INVALID_STATUS",
+                        "仅已部署（DEPLOYED）的版本可激活为门户可发起版本。当前状态: DEPRECATED"));
 
         mockMvc.perform(post("/function-units-import/{code}/activate/{version}", testCode, testVersion)
                         .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value("FAILED"))
                 .andExpect(jsonPath("$.message").value(containsString("DEPRECATED")))
-                .andExpect(jsonPath("$.message").value(containsString("VALIDATED 或 DEPLOYED")));
+                .andExpect(jsonPath("$.message").value(containsString("仅已部署")));
     }
 
     // ==================== 版本历史端点测试 ====================

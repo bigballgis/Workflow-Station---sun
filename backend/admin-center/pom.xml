@@ -160,6 +160,13 @@
             <version>1.0.0-SNAPSHOT</version>
         </dependency>
 
+        <!-- In-app notifications (Kafka → user-portal) -->
+        <dependency>
+            <groupId>com.platform</groupId>
+            <artifactId>platform-messaging</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+        </dependency>
+
         <!-- Utilities -->
         <dependency>
             <groupId>org.apache.commons</groupId>

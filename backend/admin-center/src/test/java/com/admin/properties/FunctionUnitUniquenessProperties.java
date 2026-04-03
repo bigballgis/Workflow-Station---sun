@@ -49,7 +49,8 @@ class FunctionUnitUniquenessProperties {
         component = new FunctionUnitManagerComponent(
                 functionUnitRepository, dependencyRepository, contentRepository, accessRepository,
                 Mockito.mock(org.springframework.jdbc.core.JdbcTemplate.class),
-                Mockito.mock(com.fasterxml.jackson.databind.ObjectMapper.class));
+                Mockito.mock(com.fasterxml.jackson.databind.ObjectMapper.class),
+                Mockito.mock(org.springframework.web.client.RestTemplate.class));
     }
 
     /**

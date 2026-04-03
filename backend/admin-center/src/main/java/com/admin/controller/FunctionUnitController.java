@@ -31,6 +31,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -159,15 +160,25 @@ public class FunctionUnitController extends AbstractBaseController {
         functionUnitManager.deleteFunctionUnitCascade(id);
         return ResponseEntity.noContent().build();
     }
+
+    @PostMapping("/{id}/purge-runtime-data")
+    @Operation(summary = "清理门户运行数据", description = "按该目录行 ID 删除门户流程实例及变更/流程历史，并驱动引擎 purge（版本回滚等）")
+    public ResponseEntity<ApiResponse<Map<String, Object>>> purgeRuntimeData(
+            @Parameter(description = "功能单元目录 ID") @PathVariable String id) {
+        log.info("Purging portal runtime data for catalog id: {}", id);
+        return handleRequest(() -> functionUnitManager.purgeRuntimeDataForCatalog(id));
+    }
     
     @PutMapping("/{id}/enabled")
     @Operation(summary = "切换启用状态", description = "切换功能单元的启用/禁用状态")
     public ResponseEntity<ApiResponse<FunctionUnitInfo>> setEnabled(
             @Parameter(description = "功能单元ID") @PathVariable String id,
-            @RequestBody @Valid com.admin.dto.request.SetEnabledRequest request) {
+            @RequestBody @Valid com.admin.dto.request.SetEnabledRequest request,
+            @Parameter(description = "操作人ID") @RequestHeader(value = "X-User-Id", required = false) String operatorId) {
         log.info("Setting enabled status for function unit {}: {}", id, request.getEnabled());
         return handleRequest(() -> {
-            FunctionUnit unit = functionUnitManager.setEnabled(id, request.getEnabled());
+            String op = operatorId != null && !operatorId.isBlank() ? operatorId : "system";
+            FunctionUnit unit = functionUnitManager.setEnabled(id, request.getEnabled(), op, "Manual status change");
             return FunctionUnitInfo.fromEntity(unit);
         });
     }
@@ -177,11 +188,13 @@ public class FunctionUnitController extends AbstractBaseController {
     @PutMapping("/batch/enabled")
     @Operation(summary = "批量启用/禁用", description = "批量切换功能单元的启用/禁用状态")
     public ResponseEntity<ApiResponse<List<FunctionUnitInfo>>> batchSetEnabled(
-            @RequestBody @Valid com.admin.dto.request.BatchEnabledRequest request) {
+            @RequestBody @Valid com.admin.dto.request.BatchEnabledRequest request,
+            @Parameter(description = "操作人ID") @RequestHeader(value = "X-User-Id", required = false) String operatorId) {
         log.info("Batch setting enabled={} for {} function units", request.getEnabled(), request.getIds().size());
+        String op = operatorId != null && !operatorId.isBlank() ? operatorId : "system";
         return handleRequest(() -> request.getIds().stream()
                 .map(id -> {
-                    FunctionUnit unit = functionUnitManager.setEnabled(id, request.getEnabled());
+                    FunctionUnit unit = functionUnitManager.setEnabled(id, request.getEnabled(), op, "Batch status change");
                     return FunctionUnitInfo.fromEntity(unit);
                 })
                 .collect(Collectors.toList()));
@@ -377,6 +390,17 @@ public class FunctionUnitController extends AbstractBaseController {
         return functionUnitManager.getLatestVersion(code)
                 .map(unit -> ResponseEntity.ok(FunctionUnitInfo.fromEntity(unit)))
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    @GetMapping("/code/{code}/active-for-start")
+    @Operation(summary = "门户可发起版本", description = "已部署且已启用中语义版本最高的一条，供门户发起流程钉死目录行")
+    public ResponseEntity<ApiResponse<FunctionUnitInfo>> getActiveCatalogForPortalStart(
+            @Parameter(description = "功能单元代码") @PathVariable String code) {
+        log.info("Getting active catalog for portal start, code: {}", code);
+        return functionUnitManager.getActiveCatalogForPortalStart(code)
+                .map(u -> ResponseEntity.ok(ApiResponse.success(FunctionUnitInfo.fromEntity(u))))
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(ApiResponse.error("NO_ACTIVE_FOR_START", "无可用于发起的已部署且已启用版本")));
     }
     
     @GetMapping("/code/{code}/latest-stable")

@@ -6,6 +6,8 @@ import com.admin.util.EntityTypeConverter;
 import com.platform.security.entity.User;
 import com.platform.security.entity.Role;
 import com.platform.security.entity.BusinessUnit;
+import com.platform.security.entity.VirtualGroup;
+import com.platform.security.entity.VirtualGroupMember;
 import com.platform.security.entity.UserBusinessUnitRole;
 import com.platform.security.entity.BusinessUnitRole;
 import com.admin.exception.BusinessUnitNotFoundException;
@@ -27,6 +29,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.*;
 
@@ -54,6 +57,9 @@ class TaskAssignmentQueryServiceTest {
     
     @Mock
     private VirtualGroupMemberRepository virtualGroupMemberRepository;
+
+    @Mock
+    private VirtualGroupRepository virtualGroupRepository;
     
     @Mock
     private BusinessUnitRoleRepository businessUnitRoleRepository;
@@ -294,6 +300,52 @@ class TaskAssignmentQueryServiceTest {
             
             assertThatThrownBy(() -> service.getUsersByUnboundedRole(ROLE_ID))
                     .isInstanceOf(RoleNotFoundException.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("getUsersByVirtualGroupCode Tests")
+    class GetUsersByVirtualGroupCodeTests {
+
+        @Test
+        @DisplayName("Should return distinct user IDs for virtual group code")
+        void shouldReturnUserIdsForCode() {
+            VirtualGroup vg = new VirtualGroup();
+            vg.setId("vg-doc-verifiers");
+            vg.setCode("DOCUMENT_VERIFIERS");
+
+            VirtualGroupMember m1 = new VirtualGroupMember();
+            m1.setUserId("user-001");
+            m1.setGroupId(vg.getId());
+            VirtualGroupMember m2 = new VirtualGroupMember();
+            m2.setUserId("user-002");
+            m2.setGroupId(vg.getId());
+
+            when(virtualGroupRepository.findByCode("DOCUMENT_VERIFIERS")).thenReturn(Optional.of(vg));
+            when(virtualGroupMemberRepository.findByGroupId(vg.getId())).thenReturn(Arrays.asList(m1, m2));
+
+            List<String> result = service.getUsersByVirtualGroupCode("DOCUMENT_VERIFIERS");
+
+            assertThat(result).containsExactly("user-001", "user-002");
+        }
+
+        @Test
+        @DisplayName("Should return empty list when code unknown")
+        void shouldReturnEmptyWhenCodeUnknown() {
+            when(virtualGroupRepository.findByCode("UNKNOWN")).thenReturn(Optional.empty());
+
+            List<String> result = service.getUsersByVirtualGroupCode("UNKNOWN");
+
+            assertThat(result).isEmpty();
+            verify(virtualGroupMemberRepository, never()).findByGroupId(any());
+        }
+
+        @Test
+        @DisplayName("Should return empty for blank code")
+        void shouldReturnEmptyForBlankCode() {
+            assertThat(service.getUsersByVirtualGroupCode(" ")).isEmpty();
+            assertThat(service.getUsersByVirtualGroupCode(null)).isEmpty();
+            verifyNoInteractions(virtualGroupRepository);
         }
     }
     

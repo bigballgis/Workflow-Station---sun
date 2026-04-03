@@ -81,7 +81,8 @@ public class VirtualGroupApprovalIntegrationProperties {
                 approverService,
                 memberManagementService,
                 virtualGroupRoleService,
-                objectMapper);
+                objectMapper,
+                mock(com.platform.messaging.support.NotificationDispatchHelper.class));
     }
 
     

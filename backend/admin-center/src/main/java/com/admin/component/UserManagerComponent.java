@@ -214,13 +214,12 @@ public class UserManagerComponent {
      */
     @Transactional
     @Audited(action = "PASSWORD_RESET", resourceType = "USER", resourceId = "#userId")
-    public String resetPassword(String userId) {
+    public void resetPassword(String userId) {
         log.info("Resetting password for user: {}", userId);
         
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException(userId));
         
-        // 生成新密码
         String newPassword = generateRandomPassword();
         String encodedPassword = passwordEncoder.encode(newPassword);
         
@@ -230,11 +229,9 @@ public class UserManagerComponent {
         
         userRepository.save(user);
         
-        // 保存密码历史
         savePasswordHistory(userId, encodedPassword);
         
-        log.info("Password reset successfully for user: {}", userId);
-        return newPassword;
+        log.info("Password reset successfully for user: {} (plaintext not returned in API response)", userId);
     }
     
     /**

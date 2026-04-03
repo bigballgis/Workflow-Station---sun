@@ -66,13 +66,8 @@ public class AuthServiceImpl implements AuthService {
             throw new RuntimeException("Invalid username or password");
         }
         
-        List<String> userRoleCodes;
-        try {
-            userRoleCodes = getUserRoleCodes(user.getId());
-        } catch (Exception e) {
-            log.error("Failed to get user roles for {}: {}", request.getUsername(), e.getMessage());
-            throw new RuntimeException("Failed to get user roles");
-        }
+        // 与 refresh / platform-security 一致：走 UserRoleService（sys_role_assignments + 虚拟组成员）
+        List<String> userRoleCodes = userRoleService.getEffectiveRoleCodesForUser(user.getId());
         
         boolean hasAdminAccess = userRoleCodes.stream()
                 .anyMatch(code -> "SYS_ADMIN".equals(code) || "AUDITOR".equals(code));
@@ -135,35 +130,48 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    public LoginResponse.UserLoginInfo refreshToken(String refreshToken) {
+    public LoginResponse refreshLogin(String refreshToken) {
         try {
             if (!jwtTokenService.validateToken(refreshToken)) {
                 throw new RuntimeException("Invalid or expired refresh token");
             }
-            
+            jwtTokenService.blacklistToken(refreshToken);
+
             String userId = jwtTokenService.extractUserId(refreshToken);
-            
+
             User user = userRepository.findById(userId)
                     .orElseThrow(() -> new RuntimeException("User not found"));
-            
+
             List<UserEffectiveRole> effectiveRoles = userRoleService.getEffectiveRolesForUser(user.getId());
             List<String> roles = effectiveRoles.stream()
                     .map(UserEffectiveRole::getRoleCode)
                     .distinct()
                     .collect(Collectors.toList());
-            
+
             List<LoginResponse.RoleWithSource> rolesWithSources = buildRolesWithSources(effectiveRoles);
-            
-            return LoginResponse.UserLoginInfo.builder()
-                    .userId(user.getId())
-                    .username(user.getUsername())
-                    .displayName(resolveDisplayName(user))
-                    .email(user.getEmail())
-                    .roles(roles)
-                    .permissions(getPermissionsForRoles(roles))
-                    .rolesWithSources(rolesWithSources)
-                    .businessUnitId(taskAssignmentQueryService.getUserBusinessUnitId(user.getId()))
-                    .language(user.getLanguage())
+
+            List<String> permissions = getPermissionsForRoles(roles);
+            String displayName = resolveDisplayName(user);
+            String accessToken = jwtTokenService.generateToken(
+                    user.getId(), user.getUsername(), user.getEmail(), displayName,
+                    roles, permissions, user.getLanguage());
+            String newRefreshToken = jwtTokenService.generateRefreshToken(user.getId());
+
+            return LoginResponse.builder()
+                    .accessToken(accessToken)
+                    .refreshToken(newRefreshToken)
+                    .expiresIn(jwtProperties.getExpirationMs() / 1000)
+                    .user(LoginResponse.UserLoginInfo.builder()
+                            .userId(user.getId())
+                            .username(user.getUsername())
+                            .displayName(displayName)
+                            .email(user.getEmail())
+                            .roles(roles)
+                            .permissions(permissions)
+                            .rolesWithSources(rolesWithSources)
+                            .businessUnitId(taskAssignmentQueryService.getUserBusinessUnitId(user.getId()))
+                            .language(user.getLanguage())
+                            .build())
                     .build();
         } catch (Exception e) {
             log.error("Failed to refresh token", e);
@@ -279,34 +287,6 @@ public class AuthServiceImpl implements AuthService {
         }
         
         return permissions.stream().distinct().toList();
-    }
-    
-    private List<String> getUserRoleCodes(String userId) {
-        try {
-            return jdbcTemplate.queryForList(
-                    "SELECT DISTINCT r.code FROM sys_roles r WHERE r.status = 'ACTIVE' AND r.id IN (" +
-                    "  SELECT ra.role_id FROM sys_role_assignments ra " +
-                    "  WHERE ra.target_type = 'USER' AND ra.target_id = ? " +
-                    "  AND (ra.valid_from IS NULL OR ra.valid_from <= NOW()) " +
-                    "  AND (ra.valid_to IS NULL OR ra.valid_to >= NOW()) " +
-                    "  UNION " +
-                    "  SELECT vgr.role_id FROM sys_virtual_group_roles vgr " +
-                    "  JOIN sys_virtual_group_members vgm ON vgr.virtual_group_id = vgm.group_id " +
-                    "  WHERE vgm.user_id = ? " +
-                    "  UNION " +
-                    "  SELECT ra.role_id FROM sys_role_assignments ra " +
-                    "  JOIN sys_virtual_group_members vgm ON ra.target_id = vgm.group_id " +
-                    "  WHERE ra.target_type = 'VIRTUAL_GROUP' AND vgm.user_id = ? " +
-                    "  AND (ra.valid_from IS NULL OR ra.valid_from <= NOW()) " +
-                    "  AND (ra.valid_to IS NULL OR ra.valid_to >= NOW()) " +
-                    ")",
-                    String.class,
-                    userId, userId, userId
-            );
-        } catch (Exception e) {
-            log.warn("Failed to get role codes for user {}: {}", userId, e.getMessage());
-            return List.of();
-        }
     }
     
     private Map<String, String> getRoleNames(List<String> roleCodes) {

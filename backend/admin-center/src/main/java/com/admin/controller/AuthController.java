@@ -68,7 +68,7 @@ public class AuthController {
      * 刷新令牌
      */
     @PostMapping("/refresh")
-    public ResponseEntity<Map<String, Object>> refresh(
+    public ResponseEntity<LoginResponse> refresh(
             @RequestBody Map<String, String> request) {
         
         String refreshToken = request.get("refreshToken");
@@ -77,14 +77,7 @@ public class AuthController {
         }
         
         try {
-            LoginResponse.UserLoginInfo userInfo = authService.refreshToken(refreshToken);
-            // Generate a new access token using the refreshed user info
-            String newAccessToken = authService.generateAccessTokenForUser(userInfo);
-            return ResponseEntity.ok(Map.of(
-                    "accessToken", newAccessToken,
-                    "expiresIn", 86400,
-                    "user", userInfo
-            ));
+            return ResponseEntity.ok(authService.refreshLogin(refreshToken));
         } catch (RuntimeException e) {
             return ResponseEntity.status(401).build();
         }

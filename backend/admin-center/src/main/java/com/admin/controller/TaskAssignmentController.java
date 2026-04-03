@@ -59,6 +59,14 @@ public class TaskAssignmentController {
         List<String> userIds = taskAssignmentQueryService.getUsersByUnboundedRole(roleId);
         return ResponseEntity.ok(userIds);
     }
+
+    @GetMapping("/virtual-groups/by-code/{code}/users")
+    @Operation(summary = "按虚拟组编码获取成员用户ID列表",
+               description = "用于 BPMN 中 VIRTUAL_GROUP 的 assigneeValue（如 DOCUMENT_VERIFIERS）解析候选人")
+    public ResponseEntity<List<String>> getUsersByVirtualGroupCode(@PathVariable String code) {
+        List<String> userIds = taskAssignmentQueryService.getUsersByVirtualGroupCode(code);
+        return ResponseEntity.ok(userIds);
+    }
     
     // ==================== 业务单元准入角色查询 ====================
     

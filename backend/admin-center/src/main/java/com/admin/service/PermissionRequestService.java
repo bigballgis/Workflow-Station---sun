@@ -13,6 +13,8 @@ import com.admin.repository.BusinessUnitRepository;
 import com.admin.repository.PermissionRequestRepository;
 import com.admin.repository.VirtualGroupMemberRepository;
 import com.admin.repository.VirtualGroupRepository;
+import com.platform.messaging.support.NotificationDispatchHelper;
+import com.platform.security.entity.User;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -43,6 +45,7 @@ public class PermissionRequestService {
     private final MemberManagementService memberManagementService;
     private final VirtualGroupRoleService virtualGroupRoleService;
     private final ObjectMapper objectMapper;
+    private final NotificationDispatchHelper notificationDispatchHelper;
     
     /**
      * 创建虚拟组申请
@@ -78,6 +81,7 @@ public class PermissionRequestService {
         
         permissionRequestRepository.save(request);
         log.info("Virtual group request created: {}", request.getId());
+        notifyPermissionRequestSubmitted(request, ApproverTargetType.VIRTUAL_GROUP, virtualGroupId);
         return request;
     }
     
@@ -123,6 +127,7 @@ public class PermissionRequestService {
         
         permissionRequestRepository.save(request);
         log.info("Business unit request created: {}", request.getId());
+        notifyPermissionRequestSubmitted(request, ApproverTargetType.BUSINESS_UNIT, businessUnitId);
         return request;
     }
     
@@ -192,6 +197,15 @@ public class PermissionRequestService {
         memberManagementService.processApprovedRequest(request);
         
         log.info("Request {} approved by {}", requestId, approverId);
+
+        String commentLine = comment != null && !comment.isBlank() ? "审批意见：" + comment : "";
+        notificationDispatchHelper.publishToUserAfterCommit(
+                request.getApplicantId(),
+                "PERMISSION",
+                "权限申请已通过",
+                String.format("您的申请（编号 %s）已通过审批。%s", request.getId(), commentLine).trim(),
+                "/permissions/my-requests",
+                "admin-center");
     }
     
     /**
@@ -216,6 +230,14 @@ public class PermissionRequestService {
         permissionRequestRepository.save(request);
         
         log.info("Request {} rejected by {}", requestId, approverId);
+
+        notificationDispatchHelper.publishToUserAfterCommit(
+                request.getApplicantId(),
+                "PERMISSION",
+                "权限申请已拒绝",
+                String.format("您的申请（编号 %s）未通过审批。原因：%s", request.getId(), comment),
+                "/permissions/my-requests",
+                "admin-center");
     }
     
     /**
@@ -321,5 +343,35 @@ public class PermissionRequestService {
         }
         
         return request;
+    }
+
+    private void notifyPermissionRequestSubmitted(PermissionRequest request, ApproverTargetType targetType, String targetId) {
+        var approvers = approverService.getApprovers(targetType, targetId);
+        var approverIds = approvers.stream()
+                .map(User::getId)
+                .filter(id -> id != null && !id.isBlank() && !id.equals(request.getApplicantId()))
+                .distinct()
+                .toList();
+        String typeLabel = request.getRequestType() == PermissionRequestType.VIRTUAL_GROUP ? "虚拟组" : "业务单元";
+        String body = String.format("申请人：%s，目标（%s）：%s，申请编号：%s。%s",
+                request.getApplicantId(),
+                typeLabel,
+                request.getTargetId(),
+                request.getId(),
+                request.getReason() != null && !request.getReason().isBlank() ? "理由：" + request.getReason() : "").trim();
+        notificationDispatchHelper.publishToUsersAfterCommit(
+                approverIds,
+                "PERMISSION",
+                "新的权限申请待审批",
+                body,
+                "/permissions/approvals",
+                "admin-center");
+        notificationDispatchHelper.publishToUserAfterCommit(
+                request.getApplicantId(),
+                "PERMISSION",
+                "申请已提交",
+                String.format("您的权限申请已提交（编号 %s），请等待审批。", request.getId()),
+                "/permissions/my-requests",
+                "admin-center");
     }
 }

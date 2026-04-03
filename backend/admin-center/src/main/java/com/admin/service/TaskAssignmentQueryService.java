@@ -2,13 +2,13 @@ package com.admin.service;
 
 import com.platform.security.entity.BusinessUnit;
 import com.platform.security.entity.Role;
-import com.platform.security.entity.User;
+import com.platform.security.entity.VirtualGroup;
+import com.platform.security.entity.VirtualGroupMember;
 import com.platform.security.entity.UserBusinessUnitRole;
 import com.admin.enums.RoleType;
 import com.admin.util.EntityTypeConverter;
 import com.admin.exception.BusinessUnitNotFoundException;
 import com.admin.exception.RoleNotFoundException;
-import com.admin.exception.UserNotFoundException;
 import com.admin.repository.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,6 +35,7 @@ public class TaskAssignmentQueryService {
     private final UserBusinessUnitRoleRepository userBusinessUnitRoleRepository;
     private final VirtualGroupRoleRepository virtualGroupRoleRepository;
     private final VirtualGroupMemberRepository virtualGroupMemberRepository;
+    private final VirtualGroupRepository virtualGroupRepository;
     private final BusinessUnitRoleRepository businessUnitRoleRepository;
     
     /**
@@ -131,6 +132,32 @@ public class TaskAssignmentQueryService {
         List<String> userIds = virtualGroupMemberRepository.findUserIdsByVirtualGroupIds(virtualGroupIds);
         log.debug("Found {} users with unbounded role {} through {} virtual groups", 
                 userIds.size(), roleId, virtualGroupIds.size());
+        return userIds;
+    }
+
+    /**
+     * 按虚拟组 <strong>业务编码</strong>（如 BPMN 中 VIRTUAL_GROUP 的 assigneeValue：DOCUMENT_VERIFIERS）解析成员用户 ID。
+     * 与 {@link #getUsersByUnboundedRole(String)} 不同：后者参数为角色主键 ID。
+     */
+    public List<String> getUsersByVirtualGroupCode(String code) {
+        if (code == null || code.isBlank()) {
+            return Collections.emptyList();
+        }
+        String trimmed = code.trim();
+        log.debug("Getting users by virtual group code: {}", trimmed);
+
+        VirtualGroup group = virtualGroupRepository.findByCode(trimmed).orElse(null);
+        if (group == null) {
+            log.debug("No virtual group found for code {}", trimmed);
+            return Collections.emptyList();
+        }
+
+        List<VirtualGroupMember> members = virtualGroupMemberRepository.findByGroupId(group.getId());
+        List<String> userIds = members.stream()
+                .map(VirtualGroupMember::getUserId)
+                .distinct()
+                .collect(Collectors.toList());
+        log.debug("Found {} users in virtual group {} (code={})", userIds.size(), group.getId(), trimmed);
         return userIds;
     }
     
