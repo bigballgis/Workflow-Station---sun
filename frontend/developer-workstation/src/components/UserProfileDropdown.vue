@@ -18,6 +18,44 @@
 
         <el-divider />
 
+        <div class="profile-section">
+          <div class="section-title">
+            <el-icon><Connection /></el-icon>
+            {{ t('profile.virtualGroups') }}
+          </div>
+          <div v-if="loading" class="section-loading">
+            <el-icon class="is-loading"><Loading /></el-icon>
+          </div>
+          <div v-else-if="virtualGroups.length === 0" class="section-empty">
+            {{ t('profile.noVirtualGroups') }}
+          </div>
+          <div v-else class="section-content">
+            <el-tag v-for="vg in virtualGroups" :key="vg.groupId" size="small" type="success" class="item-tag">
+              {{ vg.groupName }}
+            </el-tag>
+          </div>
+        </div>
+
+        <div class="profile-section">
+          <div class="section-title">
+            <el-icon><Key /></el-icon>
+            {{ t('profile.roles') }}
+          </div>
+          <div v-if="loading" class="section-loading">
+            <el-icon class="is-loading"><Loading /></el-icon>
+          </div>
+          <div v-else-if="roles.length === 0" class="section-empty">
+            {{ t('profile.noRoles') }}
+          </div>
+          <div v-else class="section-content">
+            <el-tag v-for="role in roles" :key="role.id" size="small" type="warning" class="item-tag">
+              {{ role.name }}
+            </el-tag>
+          </div>
+        </div>
+
+        <el-divider />
+
         <el-dropdown-item command="profile">
           <el-icon><User /></el-icon>
           {{ t('profile.title') }}
@@ -32,19 +70,48 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
-import { ArrowDown, User, SwitchButton } from '@element-plus/icons-vue'
+import { ArrowDown, User, SwitchButton, Connection, Key, Loading } from '@element-plus/icons-vue'
 import { logout as authLogout, clearAuth, getUser } from '@/api/auth'
+import { userApi } from '@/api/user'
 
 const { t } = useI18n()
 const router = useRouter()
 
+const loading = ref(false)
+const virtualGroups = ref<{ groupId: string; groupName: string }[]>([])
+const roles = ref<{ id: string; name: string; type?: string }[]>([])
+
 const currentUser = computed(() => getUser())
 const userName = computed(() => currentUser.value?.displayName || currentUser.value?.username || 'Developer')
 const userEmail = computed(() => currentUser.value?.email || '')
+
+const loadUserPermissions = async () => {
+  const user = currentUser.value
+  if (!user?.userId) {
+    return
+  }
+  loading.value = true
+  try {
+    const [vgResult, rolesResult] = await Promise.all([
+      userApi.getVirtualGroups(user.userId, 'DEVELOPER'),
+      userApi.getRoles(user.userId, 'DEVELOPER')
+    ])
+    virtualGroups.value = vgResult || []
+    roles.value = (rolesResult || []).map((r: { id: string; name: string; type?: string }) => ({
+      id: r.id,
+      name: r.name,
+      type: r.type
+    }))
+  } catch (e) {
+    console.error('Failed to load user permissions:', e)
+  } finally {
+    loading.value = false
+  }
+}
 
 const handleCommand = async (command: string) => {
   if (command === 'profile') {
@@ -61,6 +128,10 @@ const handleCommand = async (command: string) => {
     }
   }
 }
+
+onMounted(() => {
+  loadUserPermissions()
+})
 </script>
 
 <style lang="scss" scoped>
@@ -87,7 +158,7 @@ const handleCommand = async (command: string) => {
 }
 
 .user-profile-dropdown {
-  width: 300px;
+  width: 320px;
   padding: 0;
 
   .profile-header {
@@ -116,6 +187,44 @@ const handleCommand = async (command: string) => {
         color: var(--el-text-color-placeholder);
         margin-top: 8px;
         line-height: 1.4;
+      }
+    }
+  }
+
+  .profile-section {
+    padding: 8px 16px;
+
+    .section-title {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--el-text-color-secondary);
+      margin-bottom: 8px;
+    }
+
+    .section-loading {
+      display: flex;
+      justify-content: center;
+      padding: 8px;
+    }
+
+    .section-empty {
+      font-size: 12px;
+      color: var(--el-text-color-placeholder);
+      padding: 4px 0;
+    }
+
+    .section-content {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+
+      .item-tag {
+        max-width: 140px;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
     }
   }

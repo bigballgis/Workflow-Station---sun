@@ -9,7 +9,8 @@ export default {
     accountId: '帳戶編號',
     interfaceLanguage: '介面語言',
     studioIntro: '設計器使用您的平臺帳戶登入。功能單元、流程與表單的編輯權限以本應用內實際可用選單為準；業務單元與入口工作台情境不在此顯示。',
-    studioDropdownHint: '設計器帳戶：組織與入口工作台資訊請至使用者入口或管理端查看。',
+    studioDropdownHint:
+      '下方僅展示開發類角色及綁定開發類角色之虛擬組；不含業務單位、UBR 或管理員身分（請至使用者入口或管理端查看）。',
     businessUnits: '業務單元',
     virtualGroups: '虛擬群組',
     roles: '角色',

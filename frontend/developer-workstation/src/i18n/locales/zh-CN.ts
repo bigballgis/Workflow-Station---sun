@@ -9,7 +9,8 @@ export default {
     accountId: '账户编号',
     interfaceLanguage: '界面语言',
     studioIntro: '设计器使用您的平台账户登录。功能单元、流程与表单的编辑权限以本应用内实际可用菜单为准；业务单元与门户工作台上下文不在此展示。',
-    studioDropdownHint: '设计器账户：组织与门户工作台信息请在用户门户或管理端查看。',
+    studioDropdownHint:
+      '下方仅展示开发类角色及绑定开发类角色的虚拟组；不包含业务单元、UBR 或管理员身份（请在用户门户或管理端查看）。',
     businessUnits: '业务单元',
     virtualGroups: '虚拟组',
     roles: '角色',

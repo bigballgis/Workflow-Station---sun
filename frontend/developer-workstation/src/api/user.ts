@@ -66,17 +66,27 @@ export interface UserRole {
 }
 
 export const userApi = {
-  /** Get user business unit memberships */
-  getBusinessUnits: (userId: string): Promise<UserBusinessUnitMembership[]> =>
-    adminCenterAxios.get(`/users/${userId}/business-units`),
+  /** 设计站顶栏传 DEVELOPER，仅展示开发类角色与对应虚拟组；不传则全量 */
+  getBusinessUnits: (
+    userId: string,
+    profileContext?: 'PORTAL' | 'ADMIN' | 'DEVELOPER'
+  ): Promise<UserBusinessUnitMembership[]> =>
+    adminCenterAxios.get(`/users/${userId}/business-units`, {
+      params: profileContext ? { profileContext } : undefined
+    }),
 
-  /** Get user virtual group memberships */
-  getVirtualGroups: (userId: string): Promise<UserVirtualGroupMembership[]> =>
-    adminCenterAxios.get(`/users/${userId}/virtual-groups`),
+  getVirtualGroups: (
+    userId: string,
+    profileContext?: 'PORTAL' | 'ADMIN' | 'DEVELOPER'
+  ): Promise<UserVirtualGroupMembership[]> =>
+    adminCenterAxios.get(`/users/${userId}/virtual-groups`, {
+      params: profileContext ? { profileContext } : undefined
+    }),
 
-  /** Get user roles (via virtual groups) */
-  getRoles: (userId: string): Promise<UserRole[]> =>
-    adminCenterAxios.get(`/users/${userId}/roles`),
+  getRoles: (userId: string, profileContext?: 'PORTAL' | 'ADMIN' | 'DEVELOPER'): Promise<UserRole[]> =>
+    adminCenterAxios.get(`/users/${userId}/roles`, {
+      params: profileContext ? { profileContext } : undefined
+    }),
 
   /** Change password (developer-workstation auth service) */
   changePassword: (data: { oldPassword: string; newPassword: string }): Promise<void> =>

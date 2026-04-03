@@ -9,7 +9,8 @@ export default {
     accountId: 'Account ID',
     interfaceLanguage: 'Interface language',
     studioIntro: 'You are signed in with your platform account. What you can edit here depends on menus available in this app; business units and portal workspace are not shown in the studio.',
-    studioDropdownHint: 'Studio account: see User Portal or Admin for organization and workspace context.',
+    studioDropdownHint:
+      'Below: developer roles and virtual groups bound to developer roles only. No business units or UBR; admin identity is in Admin Center.',
     businessUnits: 'Business Units',
     virtualGroups: 'Virtual Groups',
     roles: 'Roles',
