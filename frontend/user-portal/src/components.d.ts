@@ -89,12 +89,14 @@ declare module 'vue' {
     QuickActionsWidget: typeof import('./components/widgets/QuickActionsWidget.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    SelfServiceBanner: typeof import('./components/SelfServiceBanner.vue')['default']
     SnapshotDiffRenderer: typeof import('./components/SnapshotDiffRenderer.vue')['default']
     SubTableAddDialog: typeof import('./components/SubTableAddDialog.vue')['default']
     SubTableField: typeof import('./components/SubTableField.vue')['default']
     SubTaskForm: typeof import('./components/SubTaskForm.vue')['default']
     TaskOverviewWidget: typeof import('./components/widgets/TaskOverviewWidget.vue')['default']
     UserProfileDropdown: typeof import('./components/UserProfileDropdown.vue')['default']
+    WorkspaceContextBar: typeof import('./components/WorkspaceContextBar.vue')['default']
   }
   export interface ComponentCustomProperties {
     vLoading: typeof import('element-plus/es')['ElLoadingDirective']

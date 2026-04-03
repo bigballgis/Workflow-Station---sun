@@ -88,7 +88,7 @@ export const userApi = {
   getRoles: (userId: string): Promise<UserRole[]> =>
     adminCenterAxios.get(`/users/${userId}/roles`),
 
-  // 修改密码
+  // 修改密码（由页面展示业务文案，避免与全局 400 提示重复）
   changePassword: (data: { oldPassword: string; newPassword: string }): Promise<void> =>
-    portalRequest.post<void>('/auth/change-password', data)
+    portalRequest.post<void>('/auth/change-password', data, { skipGlobalErrorHandler: true })
 }

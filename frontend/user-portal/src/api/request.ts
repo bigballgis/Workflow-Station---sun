@@ -2,6 +2,7 @@ import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
 import { ElMessage } from 'element-plus'
 import { refreshToken as refreshAuthToken, REFRESH_TOKEN_KEY, TOKEN_KEY, clearAuth } from './auth'
 import i18n from '@/i18n'
+import { pickHttpErrorBodyMessage } from '@/utils/httpErrorMessage'
 
 let isRefreshing = false
 let failedQueue: Array<{ resolve: Function; reject: Function }> = []
@@ -66,8 +67,9 @@ service.interceptors.response.use(
     const res = response.data
     
     if (res.success === false) {
-      ElMessage.error(res.message || i18n.global.t('api.requestFailed'))
-      return Promise.reject(new Error(res.message || i18n.global.t('api.requestFailed')))
+      const msg = pickHttpErrorBodyMessage(res) || i18n.global.t('api.requestFailed')
+      ElMessage.error(msg)
+      return Promise.reject(new Error(msg))
     }
     
     return res
@@ -112,20 +114,25 @@ service.interceptors.response.use(
         }
       } else {
         clearAuth()
+        ElMessage.warning(i18n.global.t('api.unauthorized'))
         window.location.href = '/login'
         return Promise.reject(error)
       }
     }
     
     console.error('Response error:', error)
-    
+
+    const skipGlobal = (originalRequest as { skipGlobalErrorHandler?: boolean } | undefined)?.skipGlobalErrorHandler
+    if (skipGlobal) {
+      return Promise.reject(error)
+    }
+
     if (error.response) {
       const { status, data } = error.response
-      const errorMsg = data?.message || (data?.details 
-        ? (typeof data.details === 'object' 
-          ? Object.values(data.details).join('; ') 
-          : data.details)
-        : null)
+      const errorMsg = pickHttpErrorBodyMessage(data)
+      if (errorMsg && error instanceof Error) {
+        error.message = errorMsg
+      }
       
       switch (status) {
         case 400:

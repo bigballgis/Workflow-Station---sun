@@ -79,6 +79,31 @@
         </div>
       </div>
     </div>
+
+    <el-dialog
+      v-model="workspaceDialogVisible"
+      :title="t('login.selectWorkspaceTitle')"
+      width="480px"
+      :close-on-click-modal="false"
+      append-to-body
+    >
+      <p class="workspace-hint">{{ t('login.selectWorkspaceHint') }}</p>
+      <el-radio-group v-model="selectedWorkspaceIndex" class="workspace-radio-group">
+        <el-radio
+          v-for="(c, idx) in workspaceOptions"
+          :key="idx"
+          :label="idx"
+          class="workspace-radio"
+        >
+          {{ (c.businessUnitName || c.businessUnitId) + ' · ' + (c.roleName || c.roleCode || c.roleId) }}
+        </el-radio>
+      </el-radio-group>
+      <template #footer>
+        <el-button type="primary" :loading="loading" @click="confirmWorkspaceLogin">
+          {{ t('login.confirmWorkspace') }}
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -88,7 +113,8 @@ import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, FormInstance } from 'element-plus'
 import { User, Lock } from '@element-plus/icons-vue'
-import { login as authLogin, saveTokens, saveUser } from '@/api/auth'
+import { login as authLogin, saveTokens, saveUser, type LoginResponse, type WorkspaceContextOption } from '@/api/auth'
+import { resolveUserFacingHttpMessage } from '@/utils/httpErrorMessage'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -109,6 +135,11 @@ const testUsers = [
 ]
 
 const selectedTestUser = ref('')
+const workspaceDialogVisible = ref(false)
+const workspaceOptions = ref<WorkspaceContextOption[]>([])
+const selectedWorkspaceIndex = ref(0)
+const pendingCredentials = ref<{ username: string; password: string } | null>(null)
+
 const form = reactive({ username: '', password: '' })
 const rules = computed(() => ({
   username: [{ required: true, message: t('login.usernameRequired'), trigger: 'blur' }],
@@ -124,6 +155,41 @@ const onTestUserSelect = (username: string) => {
   }
 }
 
+const completeLogin = (response: LoginResponse) => {
+  if (!response.accessToken || !response.refreshToken || !response.user) return
+  saveTokens(response.accessToken, response.refreshToken)
+  saveUser(response.user)
+  localStorage.setItem('userId', response.user.userId)
+  ElMessage.success(t('login.loginSuccess'))
+  const dest =
+    response.user?.portalAccessMode === 'PERMISSION_SELF_SERVICE_ONLY' ? '/permissions' : '/dashboard'
+  router.push(dest)
+}
+
+const confirmWorkspaceLogin = async () => {
+  const cred = pendingCredentials.value
+  const opts = workspaceOptions.value
+  const idx = selectedWorkspaceIndex.value
+  if (!cred || !opts.length || idx < 0 || idx >= opts.length) return
+  loading.value = true
+  try {
+    const c = opts[idx]
+    const response = await authLogin({
+      username: cred.username,
+      password: cred.password,
+      workspaceBusinessUnitId: c.businessUnitId,
+      workspaceRoleId: c.roleId
+    })
+    workspaceDialogVisible.value = false
+    pendingCredentials.value = null
+    completeLogin(response)
+  } catch (error: unknown) {
+    ElMessage.error(resolveUserFacingHttpMessage(error, t))
+  } finally {
+    loading.value = false
+  }
+}
+
 const handleLogin = async () => {
   if (!formRef.value) return
   await formRef.value.validate(async (valid) => {
@@ -131,14 +197,19 @@ const handleLogin = async () => {
       loading.value = true
       try {
         const response = await authLogin({ username: form.username, password: form.password })
-        saveTokens(response.accessToken, response.refreshToken)
-        saveUser(response.user)
-        localStorage.setItem('userId', response.user.userId)
-        ElMessage.success(t('login.loginSuccess'))
-        router.push('/dashboard')
-      } catch (error: any) {
-        const message = error.response?.data?.message || error.message || t('login.loginFailed')
-        ElMessage.error(message)
+        completeLogin(response)
+      } catch (error: unknown) {
+        const ax = error as { response?: { status?: number; data?: LoginResponse } }
+        const status = ax.response?.status
+        const data = ax.response?.data
+        if (status === 400 && data?.loginErrorCode === 'WORKSPACE_CONTEXT_REQUIRED' && data.workspaceContexts?.length) {
+          workspaceOptions.value = data.workspaceContexts
+          selectedWorkspaceIndex.value = 0
+          pendingCredentials.value = { username: form.username, password: form.password }
+          workspaceDialogVisible.value = true
+        } else {
+          ElMessage.error(resolveUserFacingHttpMessage(error, t))
+        }
       } finally {
         loading.value = false
       }
@@ -331,5 +402,23 @@ $placeholder-color: #969696;
 
 .user-name {
   font-size: 14px;
+}
+
+.workspace-hint {
+  margin: 0 0 16px;
+  color: #606266;
+  font-size: 14px;
+}
+.workspace-radio-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+.workspace-radio {
+  margin-right: 0;
+  white-space: normal;
+  height: auto;
+  align-items: flex-start;
 }
 </style>

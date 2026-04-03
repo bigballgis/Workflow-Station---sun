@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory, RouteRecordRaw } from 'vue-router'
-import { getStoredUser } from '@/api/auth'
+import { getStoredUser, type UserInfo } from '@/api/auth'
 import i18n from '@/i18n'
 
 declare module 'vue-router' {
@@ -172,6 +172,25 @@ router.beforeEach((to, _from, next) => {
     const user = getStoredUser()
     if (!user?.roles || !requiredRoles.some(role => user.roles.includes(role))) {
       next('/403')
+      return
+    }
+  }
+
+  const user: UserInfo | null = getStoredUser()
+  if (user?.portalAccessMode === 'PERMISSION_SELF_SERVICE_ONLY' && to.path !== '/login' && to.path !== '/403') {
+    const allowed = new Set([
+      '/permissions',
+      '/my-requests',
+      '/exit-role',
+      '/approvals',
+      '/notifications',
+      '/profile'
+    ])
+    const ok =
+      allowed.has(to.path) ||
+      to.path.startsWith('/notifications/')
+    if (!ok) {
+      next('/permissions')
       return
     }
   }

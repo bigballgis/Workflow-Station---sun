@@ -66,6 +66,20 @@
                 {{ getTargetName(row) }}
               </template>
             </el-table-column>
+            <el-table-column :label="t('permission.beneficiaryColumn')" width="130" show-overflow-tooltip>
+              <template #default="{ row }">
+                {{ row.applicantUsername || row.applicantId || '-' }}
+              </template>
+            </el-table-column>
+            <el-table-column :label="t('permission.submittedByColumn')" width="120" show-overflow-tooltip>
+              <template #default="{ row }">
+                <span v-if="row.submittedByUserId && row.submittedByUserId !== row.applicantId">
+                  {{ row.submittedByUsername || row.submittedByUserId }}
+                  <el-tag size="small" type="info" class="proxy-tag">{{ t('permission.proxyBadge') }}</el-tag>
+                </span>
+                <span v-else>{{ t('permission.selfBeneficiary') }}</span>
+              </template>
+            </el-table-column>
             <el-table-column prop="reason" :label="t('permission.reason')" min-width="150" show-overflow-tooltip />
             <el-table-column prop="createdAt" :label="t('permission.applyTime')" width="160">
               <template #default="{ row }">
@@ -74,7 +88,13 @@
             </el-table-column>
             <el-table-column :label="t('common.actions')" width="150" fixed="right">
               <template #default="{ row }">
-                <el-button type="danger" size="small" text @click="cancelRequest(row)">
+                <el-button
+                  v-if="canCancelAsBeneficiary(row)"
+                  type="danger"
+                  size="small"
+                  text
+                  @click="cancelRequest(row)"
+                >
                   {{ t('permission.cancelRequest') }}
                 </el-button>
               </template>
@@ -98,6 +118,19 @@
             <el-table-column :label="t('permission.requestTarget')" min-width="180">
               <template #default="{ row }">
                 {{ getTargetName(row) }}
+              </template>
+            </el-table-column>
+            <el-table-column :label="t('permission.beneficiaryColumn')" width="120" show-overflow-tooltip>
+              <template #default="{ row }">
+                {{ row.applicantUsername || row.applicantId || '-' }}
+              </template>
+            </el-table-column>
+            <el-table-column :label="t('permission.submittedByColumn')" width="110" show-overflow-tooltip>
+              <template #default="{ row }">
+                <span v-if="row.submittedByUserId && row.submittedByUserId !== row.applicantId">
+                  {{ row.submittedByUsername || row.submittedByUserId }}
+                </span>
+                <span v-else>—</span>
               </template>
             </el-table-column>
             <el-table-column prop="reason" :label="t('permission.reason')" min-width="150" show-overflow-tooltip />
@@ -130,6 +163,29 @@
         <!-- 申请类型选择 -->
         <el-form-item :label="t('permission.applyType')">
           <el-tag type="primary" size="large">{{ t('permission.joinBusinessUnit') }}</el-tag>
+        </el-form-item>
+
+        <el-form-item :label="t('permission.beneficiary')">
+          <el-select
+            v-model="applyForm.beneficiaryUserId"
+            filterable
+            remote
+            clearable
+            reserve-keyword
+            :placeholder="t('permission.beneficiaryPlaceholder')"
+            :remote-method="searchBeneficiaryUsers"
+            :loading="loadingBeneficiarySearch"
+            style="width: 100%"
+            :teleported="false"
+          >
+            <el-option
+              v-for="u in beneficiaryOptions"
+              :key="u.userId"
+              :label="beneficiaryOptionLabel(u)"
+              :value="u.userId"
+            />
+          </el-select>
+          <div class="form-hint">{{ t('permission.beneficiaryHint') }}</div>
         </el-form-item>
 
         <!-- 加入业务单元 -->
@@ -230,6 +286,7 @@ import {
   type RoleInfo,
   type UserBusinessUnitRole
 } from '@/api/permission'
+import { getStoredUser } from '@/api/auth'
 
 const { t } = useI18n()
 
@@ -240,6 +297,8 @@ const loadingPending = ref(false)
 const loadingHistory = ref(false)
 const loadingBusinessUnits = ref(false)
 const loadingRoles = ref(false)
+const loadingBeneficiarySearch = ref(false)
+const beneficiaryOptions = ref<{ userId: string; username: string; displayName?: string }[]>([])
 const loadingMyBuRoles = ref(false)
 const submittingRemovalForId = ref<string | null>(null)
 const removeRoleDialogVisible = ref(false)
@@ -264,6 +323,7 @@ const pendingCount = computed(() => pendingList.value.length)
 
 // 申请表单
 const applyForm = reactive({
+  beneficiaryUserId: '' as string,
   businessUnitId: '',
   roleId: '',
   reason: ''
@@ -383,12 +443,49 @@ const loadApplicableBusinessUnits = async () => {
     } else {
       applicableBusinessUnits.value = []
     }
+    if (applicableBusinessUnits.value.length === 0) {
+      const cat = await permissionApi.getBusinessUnits() as any
+      const raw = cat?.data ?? cat
+      if (Array.isArray(raw)) {
+        applicableBusinessUnits.value = raw.map((b: BusinessUnit) => ({
+          id: b.id,
+          name: b.name || b.id
+        })) as BusinessUnit[]
+      }
+    }
   } catch (e) {
     console.error('Failed to load applicable business units:', e)
     applicableBusinessUnits.value = []
   } finally {
     loadingBusinessUnits.value = false
   }
+}
+
+const searchBeneficiaryUsers = async (query: string) => {
+  loadingBeneficiarySearch.value = true
+  try {
+    const res = (await permissionApi.searchUsersForDelegation({
+      keyword: query || undefined,
+      page: 0,
+      size: 20
+    })) as any
+    const payload = res?.data ?? res
+    beneficiaryOptions.value = Array.isArray(payload?.content) ? payload.content : []
+  } catch {
+    beneficiaryOptions.value = []
+  } finally {
+    loadingBeneficiarySearch.value = false
+  }
+}
+
+const beneficiaryOptionLabel = (u: { userId: string; username: string; displayName?: string }) => {
+  const name = u.displayName || u.username || u.userId
+  return `${u.username || u.userId}${name !== u.username ? ` · ${name}` : ''}`
+}
+
+const canCancelAsBeneficiary = (row: PermissionRequestRecord) => {
+  const me = getStoredUser()?.userId
+  return !!(me && row.applicantId === me)
 }
 
 const loadEligibleRoles = async (businessUnitId: string) => {
@@ -445,6 +542,7 @@ const getRequestTypeTag = (type: string): TagType => {
     BUSINESS_UNIT_JOIN: 'primary',
     BUSINESS_UNIT_ROLE: 'primary',
     BUSINESS_UNIT_ROLE_REMOVAL: 'warning',
+    BUSINESS_UNIT_EXIT: 'danger',
     ROLE_ASSIGNMENT: 'info'
   }
   return map[type] || 'info'
@@ -458,6 +556,7 @@ const getRequestTypeLabel = (type: string) => {
     BUSINESS_UNIT_JOIN: t('permission.businessUnitJoin'),
     BUSINESS_UNIT_ROLE: t('permission.businessUnitRole'),
     BUSINESS_UNIT_ROLE_REMOVAL: t('permission.businessUnitRoleRemoval'),
+    BUSINESS_UNIT_EXIT: t('permission.businessUnitExit'),
     ROLE_ASSIGNMENT: t('permission.roleAssignment')
   }
   return map[type] || type
@@ -465,6 +564,9 @@ const getRequestTypeLabel = (type: string) => {
 
 // 获取申请目标名称
 const getTargetName = (row: any) => {
+  if (row.requestType === 'BUSINESS_UNIT_EXIT') {
+    return row.businessUnitName || row.businessUnitId || '-'
+  }
   if (row.requestType === 'BUSINESS_UNIT_ROLE_REMOVAL') {
     const bu = row.businessUnitName || row.businessUnitId || ''
     const role = row.roleName || row.roleId || ''
@@ -521,12 +623,14 @@ const cancelRequest = async (row: PermissionRequestRecord) => {
 
 // 对话框操作
 const showApplyDialog = () => {
+  applyForm.beneficiaryUserId = ''
   applyForm.businessUnitId = ''
   applyForm.roleId = ''
   applyForm.reason = ''
+  beneficiaryOptions.value = []
   eligibleRoles.value = []
   applyDialogVisible.value = true
-  
+
   loadApplicableBusinessUnits()
 }
 
@@ -553,11 +657,15 @@ const submitApply = async () => {
 
   submitting.value = true
   try {
-    await permissionApi.requestBusinessUnitRole({
+    const payload: Record<string, unknown> = {
       businessUnitId: applyForm.businessUnitId,
       roleIds: [applyForm.roleId],
-      reason: applyForm.reason
-    })
+      reason: applyForm.reason.trim()
+    }
+    if (applyForm.beneficiaryUserId) {
+      payload.beneficiaryUserId = applyForm.beneficiaryUserId
+    }
+    await permissionApi.requestBusinessUnitRole(payload as any)
     ElMessage.success(t('permission.businessUnitRequestSuccess'))
     
     applyDialogVisible.value = false
@@ -620,6 +728,11 @@ onMounted(() => {
   .remove-desc {
     margin-top: 4px;
   }
+}
+
+.proxy-tag {
+  margin-left: 6px;
+  vertical-align: middle;
 }
 
 :deep(.apply-form) {

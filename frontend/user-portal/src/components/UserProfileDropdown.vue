@@ -13,6 +13,8 @@
           <div class="profile-info">
             <div class="profile-name">{{ userName }}</div>
             <div class="profile-email">{{ userEmail }}</div>
+            <div class="profile-workspace">{{ t('profile.dropdownWorkspace') }}：{{ workspaceSummary }}</div>
+            <div class="profile-hint">{{ t('profile.dropdownOrgHint') }}</div>
           </div>
         </div>
         
@@ -96,25 +98,50 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { ArrowDown, OfficeBuilding, Connection, Key, User, Setting, SwitchButton, Loading } from '@element-plus/icons-vue'
-import { logout as authLogout, clearAuth, getUser } from '@/api/auth'
+import { logout as authLogout, clearAuth, getCurrentUser, getUser, saveUser } from '@/api/auth'
 import { permissionApi } from '@/api/permission'
+import { parseMyPermissionViewPayload } from '@/utils/myPermissionView'
 
 const { t } = useI18n()
 const router = useRouter()
+const route = useRoute()
 
 const loading = ref(false)
 const businessUnits = ref<{ id: string; name: string }[]>([])
 const virtualGroups = ref<{ groupId: string; groupName: string }[]>([])
 const roles = ref<{ id: string; name: string; type?: string }[]>([])
 
-const currentUser = computed(() => getUser())
+/** localStorage 非响应式：用 ref + 路由切换时同步，避免从个人中心等页返回后顶栏仍显示旧用户/工作台 */
+const portalUser = ref(getUser())
+
+function syncPortalUserFromStorage() {
+  portalUser.value = getUser()
+}
+
+watch(
+  () => route.fullPath,
+  () => {
+    syncPortalUserFromStorage()
+  }
+)
+
+const currentUser = computed(() => portalUser.value)
 const userName = computed(() => currentUser.value?.displayName || currentUser.value?.username || 'User')
 const userEmail = computed(() => currentUser.value?.email || '')
+const workspaceSummary = computed(() => {
+  const u = currentUser.value
+  if (!u?.activeBusinessUnitName && !u?.activeRoleName) {
+    return t('profile.noWorkspaceSelected')
+  }
+  const bu = u.activeBusinessUnitName || '—'
+  const r = u.activeRoleName || '—'
+  return `${bu} · ${r}`
+})
 
 const getRoleTagType = (type?: string) => {
   if (type === 'BU_BOUNDED') return 'warning'
@@ -128,26 +155,12 @@ const loadUserPermissions = async () => {
   try {
     // Note: axios interceptor returns ApiResponse wrapper {success, data, message}
     // The actual payload is in response.data
-    const response = await permissionApi.getMyPermissionView() as any
-    const data = response.data || response
-    businessUnits.value = data.businessUnits || []
-    virtualGroups.value = data.virtualGroups || []
-    
-    // Combine BU-Bounded and BU-Unbounded roles
-    const allRoles: { id: string; name: string; type?: string }[] = []
-    if (data.buBoundedRoles) {
-      data.buBoundedRoles.forEach((r: { role: { id: string; name: string } }) => {
-        if (r.role) {
-          allRoles.push({ id: r.role.id, name: r.role.name, type: 'BU_BOUNDED' })
-        }
-      })
-    }
-    if (data.buUnboundedRoles) {
-      data.buUnboundedRoles.forEach((r: { id: string; name: string }) => {
-        allRoles.push({ id: r.id, name: r.name, type: 'BU_UNBOUNDED' })
-      })
-    }
-    roles.value = allRoles
+    const response = await permissionApi.getMyPermissionView() as { data?: Record<string, unknown> } & Record<string, unknown>
+    const data = (response.data || response) as Record<string, unknown>
+    const lists = parseMyPermissionViewPayload(data)
+    businessUnits.value = lists.businessUnits
+    virtualGroups.value = lists.virtualGroups
+    roles.value = lists.roles
   } catch (e) {
     console.error('Failed to load user permissions:', e)
   } finally {
@@ -168,12 +181,23 @@ const handleCommand = async (command: string) => {
       console.error('Logout API error:', error)
     } finally {
       clearAuth()
+      portalUser.value = null
       router.push('/login')
     }
   }
 }
 
 onMounted(() => {
+  syncPortalUserFromStorage()
+  void (async () => {
+    try {
+      const fresh = await getCurrentUser()
+      saveUser(fresh)
+      portalUser.value = fresh
+    } catch {
+      // 保持 storage 缓存
+    }
+  })()
   loadUserPermissions()
 })
 </script>
@@ -220,6 +244,20 @@ onMounted(() => {
         font-size: 12px;
         color: var(--el-text-color-secondary);
         margin-top: 4px;
+      }
+
+      .profile-workspace {
+        font-size: 12px;
+        color: var(--el-text-color-regular);
+        margin-top: 8px;
+        line-height: 1.4;
+      }
+
+      .profile-hint {
+        font-size: 11px;
+        color: var(--el-text-color-placeholder);
+        margin-top: 6px;
+        line-height: 1.35;
       }
     }
   }

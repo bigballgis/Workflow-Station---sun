@@ -13,16 +13,30 @@ const authRequest = axios.create({
   headers: { 'Content-Type': 'application/json' }
 })
 
+export interface WorkspaceContextOption {
+  businessUnitId: string
+  roleId: string
+  businessUnitName?: string
+  roleCode?: string
+  roleName?: string
+}
+
 export interface LoginRequest {
   username: string
   password: string
+  workspaceBusinessUnitId?: string
+  workspaceRoleId?: string
 }
 
 export interface LoginResponse {
-  accessToken: string
-  refreshToken: string
-  expiresIn: number
-  user: UserInfo
+  accessToken?: string
+  refreshToken?: string
+  expiresIn?: number
+  user?: UserInfo
+  loginErrorCode?: string
+  workspaceContexts?: WorkspaceContextOption[]
+  /** 失败时后端返回的说明文案 */
+  message?: string
 }
 
 /** 分配目标类型 */
@@ -46,6 +60,13 @@ export interface UserInfo {
   permissions: string[]
   rolesWithSources?: RoleWithSource[]
   language: string
+  activeBusinessUnitId?: string
+  activeBusinessUnitName?: string
+  activeRoleId?: string
+  activeRoleName?: string
+  workspaceSwitcherVisible?: boolean
+  /** FULL | PERMISSION_SELF_SERVICE_ONLY */
+  portalAccessMode?: string
 }
 
 export interface TokenResponse {
@@ -83,6 +104,24 @@ export const getCurrentUser = async (): Promise<UserInfo> => {
   const response = await authRequest.get<UserInfo>('/me', {
     headers: { Authorization: `Bearer ${token}` }
   })
+  return response.data
+}
+
+export const listWorkspaceContexts = async (): Promise<WorkspaceContextOption[]> => {
+  const token = localStorage.getItem('token')
+  const response = await authRequest.get<WorkspaceContextOption[]>('/workspace-contexts', {
+    headers: { Authorization: `Bearer ${token}` }
+  })
+  return response.data
+}
+
+export const switchWorkspace = async (businessUnitId: string, roleId: string): Promise<LoginResponse> => {
+  const token = localStorage.getItem('token')
+  const response = await authRequest.post<LoginResponse>(
+    '/switch-workspace',
+    { businessUnitId, roleId },
+    { headers: { Authorization: `Bearer ${token}` } }
+  )
   return response.data
 }
 

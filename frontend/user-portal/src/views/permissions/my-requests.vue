@@ -34,7 +34,13 @@
         </el-table-column>
         <el-table-column :label="t('common.actions')" width="100" fixed="right">
           <template #default="{ row }">
-            <el-button v-if="row.status === 'PENDING'" type="danger" link size="small" @click="handleCancel(row)">
+            <el-button
+              v-if="row.status === 'PENDING' && getStoredUser()?.userId === row.applicantId"
+              type="danger"
+              link
+              size="small"
+              @click="handleCancel(row)"
+            >
               {{ t('permission.cancelRequest') }}
             </el-button>
           </template>
@@ -61,6 +67,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { permissionApi, type PermissionRequestRecord } from '@/api/permission'
+import { getStoredUser } from '@/api/auth'
 
 const { t } = useI18n()
 
@@ -95,7 +102,8 @@ const loadRequests = async () => {
   loading.value = true
   try {
     const res = await permissionApi.getMyRequests({ page: query.page - 1, size: query.size })
-    const data = res.data?.data || res.data || res
+    const outer = res as any
+    const data = outer?.data ?? outer
     requests.value = data.content || []
     total.value = data.totalElements || 0
   } catch (e) {

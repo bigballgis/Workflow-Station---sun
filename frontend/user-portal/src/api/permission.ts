@@ -94,7 +94,16 @@ export interface PermissionRequestRecord {
   applicantId: string
   applicantName?: string
   applicantUsername?: string
-  requestType: 'VIRTUAL_GROUP' | 'BUSINESS_UNIT_ROLE' | 'BUSINESS_UNIT_JOIN' | 'BUSINESS_UNIT_ROLE_REMOVAL'
+  /** 实际提交人（代办时与 applicantId 不同） */
+  submittedByUserId?: string
+  submittedByUsername?: string
+  requestType:
+    | 'VIRTUAL_GROUP'
+    | 'VIRTUAL_GROUP_JOIN'
+    | 'BUSINESS_UNIT_ROLE'
+    | 'BUSINESS_UNIT_JOIN'
+    | 'BUSINESS_UNIT_ROLE_REMOVAL'
+    | 'BUSINESS_UNIT_EXIT'
   targetId: string
   targetName?: string
   roleIds?: string
@@ -190,18 +199,38 @@ export const permissionApi = {
   },
 
   /** 申请加入业务单元（新API - 不需要选择角色） */
-  requestBusinessUnit(data: { businessUnitId: string; reason: string }) {
+  requestBusinessUnit(data: { businessUnitId: string; reason: string; beneficiaryUserId?: string }) {
     return request.post<PermissionRequestRecord>('/permissions/request-business-unit', data)
   },
 
   /** 申请加入业务单元并指定 Eligible Role（走 portal 本地 PermissionController） */
-  requestBusinessUnitRole(data: BusinessUnitRoleRequestDto) {
+  requestBusinessUnitRole(data: BusinessUnitRoleRequestDto & { beneficiaryUserId?: string }) {
     return request.post<PermissionRequestRecord>('/permissions/request-business-unit-role', data)
   },
 
+  /** 申请退出业务单元成员（审批通过后生效）；可代办 */
+  requestBusinessUnitExit(data: { businessUnitId: string; reason: string; beneficiaryUserId?: string }) {
+    return request.post<PermissionRequestRecord>('/permissions/request-business-unit-exit', data)
+  },
+
   /** 申请移除某业务单元下的业务角色（待 BU 审批人批准后生效） */
-  requestBusinessUnitRoleRemoval(data: { businessUnitId: string; roleId: string; reason: string }) {
+  requestBusinessUnitRoleRemoval(data: {
+    businessUnitId: string
+    roleId: string
+    reason: string
+    beneficiaryUserId?: string
+  }) {
     return request.post<PermissionRequestRecord>('/permissions/request-business-unit-role-removal', data)
+  },
+
+  /** 搜索可申请的启用用户（代办选人） */
+  searchUsersForDelegation(params: { keyword?: string; page?: number; size?: number }) {
+    return request.get<{
+      content: { userId: string; username: string; displayName?: string; email?: string }[]
+      totalElements: number
+      page: number
+      size: number
+    }>('/permissions/users/search', { params })
   },
 
   /** 获取用户可申请的业务单元（基于用户的 BU_BOUNDED 角色） */
@@ -216,7 +245,7 @@ export const permissionApi = {
 
   /** 获取我的申请记录 */
   getMyRequests(params?: { page?: number; size?: number; status?: string }) {
-    return request.get<{ content: PermissionRequestRecord[]; totalElements: number }>('/permission-requests/my', { params })
+    return request.get<{ content: PermissionRequestRecord[]; totalElements: number }>('/permissions/requests', { params })
   },
 
   /** 取消申请 */

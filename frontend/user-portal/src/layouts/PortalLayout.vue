@@ -10,9 +10,12 @@
       </div>
       <div class="header-right">
         <NotificationBadge />
+        <WorkspaceContextBar />
         <UserProfileDropdown />
       </div>
     </el-header>
+
+    <SelfServiceBanner />
 
     <el-container class="portal-main">
       <!-- 左侧菜单 -->
@@ -23,31 +26,31 @@
           :router="true"
           class="portal-menu"
         >
-          <el-menu-item index="/dashboard">
+          <el-menu-item v-if="showFullPortal" index="/dashboard">
             <el-icon><HomeFilled /></el-icon>
             <template #title>{{ t('menu.dashboard') }}</template>
           </el-menu-item>
-          <el-menu-item v-if="hasBiDashboards" index="/bi-dashboard">
+          <el-menu-item v-if="showFullPortal && hasBiDashboards" index="/bi-dashboard">
             <el-icon><DataAnalysis /></el-icon>
             <template #title>BI Dashboard</template>
           </el-menu-item>
-          <el-menu-item index="/tasks">
+          <el-menu-item v-if="showFullPortal" index="/tasks">
             <el-icon><List /></el-icon>
             <template #title>{{ t('menu.tasks') }}</template>
           </el-menu-item>
-          <el-menu-item index="/tasks/completed">
+          <el-menu-item v-if="showFullPortal" index="/tasks/completed">
             <el-icon><Finished /></el-icon>
             <template #title>{{ t('menu.completedTasks') }}</template>
           </el-menu-item>
-          <el-menu-item index="/processes">
+          <el-menu-item v-if="showFullPortal" index="/processes">
             <el-icon><Plus /></el-icon>
             <template #title>{{ t('menu.processes') }}</template>
           </el-menu-item>
-          <el-menu-item index="/my-applications">
+          <el-menu-item v-if="showFullPortal" index="/my-applications">
             <el-icon><Document /></el-icon>
             <template #title>{{ t('menu.myApplications') }}</template>
           </el-menu-item>
-          <el-menu-item index="/delegations">
+          <el-menu-item v-if="showFullPortal" index="/delegations">
             <el-icon><Share /></el-icon>
             <template #title>{{ t('menu.delegations') }}</template>
           </el-menu-item>
@@ -55,11 +58,19 @@
             <el-icon><Key /></el-icon>
             <template #title>{{ t('menu.permissions') }}</template>
           </el-menu-item>
+          <el-menu-item index="/my-requests">
+            <el-icon><Document /></el-icon>
+            <template #title>{{ t('menu.myRequests') }}</template>
+          </el-menu-item>
+          <el-menu-item index="/exit-role">
+            <el-icon><SwitchButton /></el-icon>
+            <template #title>{{ t('menu.exitRole') }}</template>
+          </el-menu-item>
           <el-menu-item v-if="isApprover" index="/approvals">
             <el-icon><Checked /></el-icon>
             <template #title>{{ t('menu.approvals') }}</template>
           </el-menu-item>
-          <el-menu-item index="/relation-tables">
+          <el-menu-item v-if="showFullPortal" index="/relation-tables">
             <el-icon><Grid /></el-icon>
             <template #title>Relation Tables</template>
           </el-menu-item>
@@ -92,8 +103,11 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
   HomeFilled, List, Plus, Document, Share, Key,
-  Fold, Expand, Checked, Finished, DataAnalysis, Grid
+  Fold, Expand, Checked, Finished, DataAnalysis, Grid, SwitchButton
 } from '@element-plus/icons-vue'
+import SelfServiceBanner from '@/components/SelfServiceBanner.vue'
+import WorkspaceContextBar from '@/components/WorkspaceContextBar.vue'
+import { getStoredUser } from '@/api/auth'
 import UserProfileDropdown from '@/components/UserProfileDropdown.vue'
 import NotificationBadge from '@/components/NotificationBadge.vue'
 import { permissionApi } from '@/api/permission'
@@ -108,6 +122,11 @@ const isApprover = ref(false)
 const hasBiDashboards = ref(false)
 
 const activeMenu = computed(() => route.path)
+
+const isSelfServiceOnly = computed(
+  () => getStoredUser()?.portalAccessMode === 'PERMISSION_SELF_SERVICE_ONLY'
+)
+const showFullPortal = computed(() => !isSelfServiceOnly.value)
 
 // Check if user is an approver
 const checkApproverStatus = async () => {
@@ -149,7 +168,9 @@ const checkBiDashboards = async () => {
 
 onMounted(() => {
   checkApproverStatus()
-  checkBiDashboards()
+  if (!isSelfServiceOnly.value) {
+    checkBiDashboards()
+  }
 })
 
 const toggleCollapse = () => {

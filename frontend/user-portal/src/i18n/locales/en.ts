@@ -5,6 +5,17 @@ export default {
   },
   profile: {
     title: 'Profile',
+    sectionAccount: 'Account',
+    sectionWorkspace: 'Current workspace',
+    sectionMembership: 'Membership & roles',
+    accountId: 'Account ID',
+    interfaceLanguage: 'Interface language',
+    workspaceCurrent: 'Active context',
+    workspaceHint: 'Process starts and tasks use this business unit and role. Switch from the header.',
+    noWorkspaceSelected: 'No workspace selected. Choose a business unit and role in the header.',
+    membershipRolesHint: 'Summary of memberships and effective roles for portal access (BU-bound and platform roles).',
+    dropdownWorkspace: 'Workspace',
+    dropdownOrgHint: 'See Profile for business units, virtual groups, and roles.',
     businessUnits: 'Business Units',
     noBusinessUnits: 'No business units',
     virtualGroups: 'Virtual Groups',
@@ -19,8 +30,11 @@ export default {
     newPasswordPlaceholder: 'Enter new password',
     confirmPasswordPlaceholder: 'Enter new password again',
     passwordMismatch: 'Passwords do not match',
-    passwordChanged: 'Password changed successfully',
-    passwordMinLength: 'Password must be at least 6 characters'
+    passwordChanged: 'Password updated. Please sign in again.',
+    passwordMinLength: 'Password must be at least 6 characters',
+    newPasswordSameAsOld: 'New password must differ from your current password',
+    wrongCurrentPassword: 'Current password is incorrect',
+    changePasswordUnauthorized: 'Your session has expired. Please sign in again to change your password.'
   },
   common: {
     confirm: 'Confirm',
@@ -272,7 +286,11 @@ export default {
     processSubmitSuccess: 'Process submitted successfully',
     submitFailed: 'Submission failed',
     serviceFallbackName: 'Service {index}',
-    n8nAutoFillSuccess: 'Auto-filled {count} record(s) from recognition results'
+    n8nAutoFillSuccess: 'Auto-filled {count} record(s) from recognition results',
+    workspaceGuardTitle: 'Cannot submit: workspace identity incomplete',
+    workspaceGuardHint:
+      'Your account is tied to business-unit roles. Select your workspace (Business unit · Role) in the header, or sign out and sign in again. Saving drafts is still allowed.',
+    workspaceGuardToast: 'Select a workspace in the header or sign in again before submitting'
   },
   applicationDetail: {
     back: 'Back',
@@ -512,7 +530,21 @@ export default {
       'Your request will be reviewed. The role assignment is removed only after a business unit approver approves it. If this is your last role in that BU, you will also leave the business unit once approved.',
     requestRemoveBuRoleSuccess: 'Request submitted. Awaiting approval.',
     requestRemoveBuRoleFailed: 'Failed to submit request',
-    businessUnitRoleRemoval: 'Remove BU role'
+    businessUnitRoleRemoval: 'Remove BU role',
+    businessUnitExit: 'Exit business unit',
+    beneficiary: 'Beneficiary',
+    beneficiaryPlaceholder: 'Default yourself; search to apply on behalf of someone else',
+    beneficiaryHint: 'Leave empty to apply for yourself. Search active users to submit for others.',
+    beneficiaryColumn: 'Beneficiary',
+    submittedByColumn: 'Submitted by',
+    proxyBadge: 'On behalf',
+    selfBeneficiary: 'Self'
+  },
+  portalSelfService: {
+    bannerTitle: 'Permission self-service mode',
+    bannerDesc:
+      'You have no business-unit workspace context yet. Use this area to apply to join or leave BUs and roles, or track requests.',
+    goPermissions: 'Go to permissions'
   },
   approval: {
     title: 'Permission Approval',
@@ -567,7 +599,9 @@ export default {
     noPermission: 'You do not have permission to manage this organization'
   },
   exitRole: {
-    title: 'Exit Role',
+    title: 'Leave business unit',
+    subtitle:
+      'Submit a request for a business-unit approver. After approval, membership ends and BU roles in that unit are removed.',
     myMemberships: 'My Memberships',
     virtualGroups: 'Virtual Groups',
     businessUnitRoles: 'Business Unit Roles',
@@ -582,7 +616,13 @@ export default {
     exitConfirm: 'Are you sure to exit? You will lose related permissions.',
     exitSuccess: 'Exited successfully',
     exitFailed: 'Exit failed',
-    noMemberships: 'No memberships'
+    noMemberships: 'No memberships',
+    portalNoVirtualGroup:
+      'Virtual groups are not managed in the user portal; administrators maintain them in admin/developer tools.',
+    requestExitBu: 'Request exit',
+    requestExitBuTitle: 'Request to leave business unit',
+    exitBuConfirm: 'Submit a request to leave "{bu}" for the selected beneficiary? It applies after approval.',
+    exitRequestSuccess: 'Request submitted. Awaiting approval.'
   },
   reminder: {
     title: 'BU-Bounded Role Activation Reminder',
@@ -676,7 +716,15 @@ export default {
     passwordRequired: 'Please enter password',
     loginSuccess: 'Login successful',
     loginFailed: 'Login failed',
-    selected: 'Selected'
+    selected: 'Selected',
+    selectWorkspaceTitle: 'Select workspace identity',
+    selectWorkspaceHint: 'You have roles in multiple business units. Choose which identity to use for this session.',
+    confirmWorkspace: 'Continue'
+  },
+  workspace: {
+    switch: 'Switch',
+    switched: 'Workspace updated',
+    switchFailed: 'Failed to switch workspace'
   },
   status: {
     completed: 'Completed',
@@ -814,6 +862,7 @@ export default {
   api: {
     requestFailed: 'Request failed',
     networkError: 'Network error, please check your connection',
+    unauthorized: 'Your session has expired or credentials are invalid. Please sign in again.',
     invalidParams: 'Invalid request parameters',
     noPermission: 'Access denied',
     notFound: 'Resource not found',

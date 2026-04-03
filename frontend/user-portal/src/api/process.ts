@@ -34,6 +34,8 @@ export interface ProcessStartRequest {
   businessKey?: string
   formData?: Record<string, unknown>
   priority?: string
+  /** @deprecated 服务端已忽略；流程变量由 JWT 工作台上下文写入，勿在 formData 中传同名键 */
+  activeBusinessUnitId?: string
 }
 
 export interface FunctionUnitContent {

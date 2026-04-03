@@ -5,6 +5,17 @@ export default {
   },
   profile: {
     title: '个人中心',
+    sectionAccount: '账户信息',
+    sectionWorkspace: '当前工作台',
+    sectionMembership: '成员身份与角色',
+    accountId: '账户编号',
+    interfaceLanguage: '界面语言',
+    workspaceCurrent: '当前上下文',
+    workspaceHint: '流程发起与待办将使用该业务单元与角色。可在顶栏切换工作台。',
+    noWorkspaceSelected: '尚未选择工作台，请先在顶栏选择业务单元与角色。',
+    membershipRolesHint: '以下为与门户权限相关的成员身份与生效角色汇总（含业务单元绑定与平台级角色）。',
+    dropdownWorkspace: '当前工作台',
+    dropdownOrgHint: '业务单元、虚拟组与角色详情见「个人中心」。',
     businessUnits: '业务单元',
     noBusinessUnits: '暂无业务单元',
     virtualGroups: '虚拟组',
@@ -19,8 +30,11 @@ export default {
     newPasswordPlaceholder: '请输入新密码',
     confirmPasswordPlaceholder: '请再次输入新密码',
     passwordMismatch: '两次输入的密码不一致',
-    passwordChanged: '密码修改成功',
-    passwordMinLength: '密码长度不能少于6位'
+    passwordChanged: '密码已更新，请重新登录',
+    passwordMinLength: '密码长度不能少于6位',
+    newPasswordSameAsOld: '新密码不能与当前密码相同',
+    wrongCurrentPassword: '当前密码不正确',
+    changePasswordUnauthorized: '登录已失效，请重新登录后再修改密码'
   },
   common: {
     confirm: '确定',
@@ -272,7 +286,11 @@ export default {
     processSubmitSuccess: '流程提交成功',
     submitFailed: '提交失败',
     serviceFallbackName: '服务{index}',
-    n8nAutoFillSuccess: '已自动填充 {count} 条识别结果'
+    n8nAutoFillSuccess: '已自动填充 {count} 条识别结果',
+    workspaceGuardTitle: '无法提交：缺少完整工作台身份',
+    workspaceGuardHint:
+      '您的账号关联业务单元角色，发起流程前请在页面顶部选择「业务单元 · 角色」工作台，或退出后重新登录。仅保存草稿不受影响。',
+    workspaceGuardToast: '请先选择顶部工作台或重新登录后再提交'
   },
   applicationDetail: {
     back: '返回',
@@ -512,7 +530,20 @@ export default {
       '提交后将进入审批流程，由该业务单元审批人批准通过后，才会解除您在该 BU 下的此角色绑定。若这是您在该 BU 下的最后一个角色，审批通过后将同时退出该业务单元。',
     requestRemoveBuRoleSuccess: '申请已提交，请等待审批',
     requestRemoveBuRoleFailed: '提交申请失败',
-    businessUnitRoleRemoval: '移除业务单元角色'
+    businessUnitRoleRemoval: '移除业务单元角色',
+    businessUnitExit: '退出业务单元',
+    beneficiary: '受益人',
+    beneficiaryPlaceholder: '默认本人；可搜索选择为他人代办',
+    beneficiaryHint: '留空表示为本人申请。可搜索启用中的用户为他人提交。',
+    beneficiaryColumn: '受益人',
+    submittedByColumn: '提交人',
+    proxyBadge: '代办',
+    selfBeneficiary: '本人提交'
+  },
+  portalSelfService: {
+    bannerTitle: '当前为权限自助模式',
+    bannerDesc: '您尚未分配业务单元工作台上下文，可使用本页申请加入/退出业务单元与角色，或查看申请进度。',
+    goPermissions: '前往权限申请'
   },
   approval: {
     title: '权限审批',
@@ -567,7 +598,8 @@ export default {
     noPermission: '您没有管理此组织的权限'
   },
   exitRole: {
-    title: '退出角色',
+    title: '退出业务单元',
+    subtitle: '提交申请后由业务单元审批人审批，通过后将自动退出成员并清理该 BU 下全部业务角色。',
     myMemberships: '我的成员身份',
     virtualGroups: '虚拟组',
     businessUnitRoles: '业务单元角色',
@@ -582,7 +614,12 @@ export default {
     exitConfirm: '确定要退出吗？退出后将失去相关权限。',
     exitSuccess: '退出成功',
     exitFailed: '退出失败',
-    noMemberships: '暂无成员身份'
+    noMemberships: '暂无成员身份',
+    portalNoVirtualGroup: '用户门户不提供虚拟组的加入或退出；虚拟组由管理员在设计站/管理端维护。',
+    requestExitBu: '申请退出',
+    requestExitBuTitle: '申请退出业务单元',
+    exitBuConfirm: '确定要为所选受益人提交退出「{bu}」的申请吗？审批通过后生效。',
+    exitRequestSuccess: '申请已提交，请等待审批'
   },
   reminder: {
     title: 'BU绑定型角色未激活提醒',
@@ -707,7 +744,15 @@ export default {
     passwordRequired: '请输入密码',
     loginSuccess: '登录成功',
     loginFailed: '登录失败',
-    selected: '已选择'
+    selected: '已选择',
+    selectWorkspaceTitle: '选择工作台身份',
+    selectWorkspaceHint: '您在多个业务单元下拥有角色，请选择本次进入系统的身份。',
+    confirmWorkspace: '继续登录'
+  },
+  workspace: {
+    switch: '切换',
+    switched: '已切换工作台',
+    switchFailed: '切换失败'
   },
   user: {
     username: '用户名',
@@ -814,6 +859,7 @@ export default {
   api: {
     requestFailed: '请求失败',
     networkError: '网络错误，请检查网络连接',
+    unauthorized: '登录已失效或凭证无效，请重新登录',
     invalidParams: '请求参数错误',
     noPermission: '没有权限访问',
     notFound: '请求的资源不存在',

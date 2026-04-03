@@ -20,9 +20,14 @@
             <el-empty v-if="pendingList.length === 0 && !loading" :description="t('approval.noPendingApprovals')" />
             
             <el-table v-else :data="pendingList" stripe v-loading="loading">
-              <el-table-column prop="applicantId" :label="t('approval.applicant')" width="150">
+              <el-table-column prop="applicantId" :label="t('permission.beneficiaryColumn')" width="150">
                 <template #default="{ row }">
                   {{ getApplicantDisplay(row) }}
+                </template>
+              </el-table-column>
+              <el-table-column :label="t('permission.submittedByColumn')" width="130" show-overflow-tooltip>
+                <template #default="{ row }">
+                  {{ getSubmitterDisplay(row) }}
                 </template>
               </el-table-column>
               <el-table-column prop="requestType" :label="t('permission.requestType')" width="140">
@@ -60,9 +65,14 @@
             <el-empty v-if="historyList.length === 0 && !historyLoading" :description="t('approval.noApprovalHistory')" />
             
             <el-table v-else :data="historyList" stripe v-loading="historyLoading">
-              <el-table-column prop="applicantId" :label="t('approval.applicant')" width="150">
+              <el-table-column prop="applicantId" :label="t('permission.beneficiaryColumn')" width="150">
                 <template #default="{ row }">
                   {{ getApplicantDisplay(row) }}
+                </template>
+              </el-table-column>
+              <el-table-column :label="t('permission.submittedByColumn')" width="130" show-overflow-tooltip>
+                <template #default="{ row }">
+                  {{ getSubmitterDisplay(row) }}
                 </template>
               </el-table-column>
               <el-table-column prop="requestType" :label="t('permission.requestType')" width="140">
@@ -289,6 +299,7 @@ const getRequestTypeTag = (type: string): TagType => {
     BUSINESS_UNIT: 'primary',
     BUSINESS_UNIT_JOIN: 'primary',
     BUSINESS_UNIT_ROLE_REMOVAL: 'warning',
+    BUSINESS_UNIT_EXIT: 'danger',
     ROLE_ASSIGNMENT: 'info'
   }
   return map[type] || 'info'
@@ -302,6 +313,7 @@ const getRequestTypeLabel = (type: string | undefined) => {
     BUSINESS_UNIT: t('permission.businessUnitJoin'),
     BUSINESS_UNIT_JOIN: t('permission.businessUnitJoin'),
     BUSINESS_UNIT_ROLE_REMOVAL: t('permission.businessUnitRoleRemoval'),
+    BUSINESS_UNIT_EXIT: t('permission.businessUnitExit'),
     ROLE_ASSIGNMENT: t('permission.roleAssignment')
   }
   return map[type] || type
@@ -309,6 +321,9 @@ const getRequestTypeLabel = (type: string | undefined) => {
 
 const getTargetName = (row: any) => {
   if (!row) return '-'
+  if (row.requestType === 'BUSINESS_UNIT_EXIT') {
+    return row.businessUnitName || row.businessUnitId || '-'
+  }
   if (row.requestType === 'BUSINESS_UNIT_ROLE_REMOVAL') {
     const bu = row.businessUnitName || row.businessUnitId || ''
     const role = row.roleName || row.roleId || ''
@@ -324,6 +339,12 @@ const getTargetName = (row: any) => {
 const getApplicantDisplay = (row: any) => {
   if (!row) return '-'
   return row.applicantName || row.applicantUsername || row.applicantId || '-'
+}
+
+const getSubmitterDisplay = (row: any) => {
+  if (!row?.submittedByUserId) return '—'
+  if (row.submittedByUserId === row.applicantId) return t('permission.selfBeneficiary')
+  return row.submittedByUsername || row.submittedByUserId
 }
 
 const formatDateTime = (dateStr: string) => {

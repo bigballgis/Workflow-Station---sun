@@ -60,6 +60,16 @@
     
     <!-- 正常内容 -->
     <div v-else class="content-sections">
+      <el-alert
+        v-if="workspaceStartBlocked"
+        type="warning"
+        show-icon
+        :closable="false"
+        class="workspace-guard-alert"
+      >
+        <template #title>{{ t('processStart.workspaceGuardTitle') }}</template>
+        {{ t('processStart.workspaceGuardHint') }}
+      </el-alert>
       <!-- 第一部分：实时工作流程图 -->
       <div class="section workflow-section">
         <div class="section-header">
@@ -150,6 +160,7 @@
               v-for="action in availableActions" 
               :key="action.id"
               :type="action.type || 'default'"
+              :disabled="workspaceStartBlocked && isSubmitLikeAction(action)"
               @click="handleAction(action)"
               :loading="submitting && currentAction === action.id"
             >
@@ -158,6 +169,7 @@
             <el-button 
               v-if="availableActions.length === 0"
               type="primary" 
+              :disabled="workspaceStartBlocked"
               @click="handleSubmit"
               :loading="submitting"
             >
@@ -196,10 +208,19 @@ import type { ActionDefinition } from '@/components/N8nActionDialog.vue'
 import { applyAutoFill } from '@/utils/n8nAutoFillEngine'
 import { relationTableApi } from '@/api/relationTable'
 import { isDisabledMessage } from '@/utils/statusMatcher'
+import { getUser } from '@/api/auth'
+import { isProcessStartBlockedByWorkspace } from '@/utils/workspaceProcessGuard'
 
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
+
+/** 本地用户信息随页面加载读取；切换工作台后整页刷新会更新 */
+const workspaceStartBlocked = computed(() => isProcessStartBlockedByWorkspace(getUser()))
+
+function isSubmitLikeAction(action: { action?: string; actionType?: string }) {
+  return action.actionType === 'PROCESS_SUBMIT' || action.action === 'submit'
+}
 
 // 路由参数：key 是功能单元的 ID
 const functionUnitId = computed(() => route.params.key as string)
@@ -1169,6 +1190,10 @@ const handleSaveDraft = async () => {
 
 // 处理动作按钮点击
 const handleAction = async (action: { id: string; label: string; action?: string; actionType?: string; configJson?: string }) => {
+  if (workspaceStartBlocked.value && isSubmitLikeAction(action)) {
+    ElMessage.warning(t('processStart.workspaceGuardToast'))
+    return
+  }
   switch (action.actionType) {
     case 'PROCESS_SUBMIT':
       await handleSubmit()
@@ -1255,6 +1280,10 @@ const handleN8nActionExecuted = (data: Record<string, any> | null) => {
 
 // 提交流程
 const handleSubmit = async () => {
+  if (workspaceStartBlocked.value) {
+    ElMessage.warning(t('processStart.workspaceGuardToast'))
+    return
+  }
   // 验证表单
   if (formRendererRef.value) {
     const valid = await formRendererRef.value.validate()
@@ -1297,7 +1326,10 @@ const handleSubmit = async () => {
     router.push('/my-applications')
     
   } catch (error: any) {
-    ElMessage.error(error.message || t('processStart.submitFailed'))
+    // HTTP 错误已由 api/request 拦截器展示（含后端 error.message）
+    if (!error?.response) {
+      ElMessage.error(error?.message || t('processStart.submitFailed'))
+    }
   } finally {
     submitting.value = false
     currentAction.value = ''
@@ -1315,6 +1347,10 @@ onMounted(() => {
   max-width: 100%;
   margin: 0;
   box-sizing: border-box;
+
+  .workspace-guard-alert {
+    margin-bottom: 16px;
+  }
   
   .page-header {
     display: flex;
