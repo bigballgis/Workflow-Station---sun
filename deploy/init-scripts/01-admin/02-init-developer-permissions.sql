@@ -1,15 +1,13 @@
 -- =====================================================
 -- Initialize Developer Role Permissions
--- =====================================================
--- This script initializes the default permissions for developer roles
--- in the sys_developer_role_permissions table.
+-- 与 admin-center DeveloperPermissionService 默认映射对齐
 -- =====================================================
 
 \echo '========================================='
 \echo 'Initializing Developer Role Permissions...'
 \echo '========================================='
 
--- TECH_LEAD: All developer permissions (22 permissions)
+-- TECH_LEAD: 全部 DeveloperPermission 枚举
 INSERT INTO sys_developer_role_permissions (id, role_id, permission, created_at)
 SELECT 
     gen_random_uuid()::varchar,
@@ -18,6 +16,44 @@ SELECT
     CURRENT_TIMESTAMP
 FROM (VALUES 
     ('FUNCTION_UNIT_CREATE'), ('FUNCTION_UNIT_UPDATE'), ('FUNCTION_UNIT_DELETE'), ('FUNCTION_UNIT_VIEW'),
+    ('FUNCTION_UNIT_DEVELOP'), ('FUNCTION_UNIT_PUBLISH'), ('FUNCTION_UNIT_ASSIGN_DEV_GROUP'),
+    ('FORM_CREATE'), ('FORM_UPDATE'), ('FORM_DELETE'), ('FORM_VIEW'),
+    ('PROCESS_CREATE'), ('PROCESS_UPDATE'), ('PROCESS_DELETE'), ('PROCESS_VIEW'),
+    ('TABLE_CREATE'), ('TABLE_UPDATE'), ('TABLE_DELETE'), ('TABLE_VIEW'),
+    ('ACTION_CREATE'), ('ACTION_UPDATE'), ('ACTION_DELETE'), ('ACTION_VIEW')
+) AS p(permission)
+ON CONFLICT (role_id, permission) DO NOTHING;
+
+\echo '✓ Initialized permissions for TECH_LEAD role'
+
+-- TEAM_LEAD: 与 DEVELOPER 相同设计能力 + 功能单元创建/删除/分配开发组
+INSERT INTO sys_developer_role_permissions (id, role_id, permission, created_at)
+SELECT 
+    gen_random_uuid()::varchar,
+    'role-team-lead',
+    p.permission,
+    CURRENT_TIMESTAMP
+FROM (VALUES 
+    ('FUNCTION_UNIT_CREATE'), ('FUNCTION_UNIT_UPDATE'), ('FUNCTION_UNIT_DELETE'), ('FUNCTION_UNIT_VIEW'),
+    ('FUNCTION_UNIT_DEVELOP'), ('FUNCTION_UNIT_PUBLISH'), ('FUNCTION_UNIT_ASSIGN_DEV_GROUP'),
+    ('FORM_CREATE'), ('FORM_UPDATE'), ('FORM_DELETE'), ('FORM_VIEW'),
+    ('PROCESS_CREATE'), ('PROCESS_UPDATE'), ('PROCESS_DELETE'), ('PROCESS_VIEW'),
+    ('TABLE_CREATE'), ('TABLE_UPDATE'), ('TABLE_DELETE'), ('TABLE_VIEW'),
+    ('ACTION_CREATE'), ('ACTION_UPDATE'), ('ACTION_DELETE'), ('ACTION_VIEW')
+) AS p(permission)
+ON CONFLICT (role_id, permission) DO NOTHING;
+
+\echo '✓ Initialized permissions for TEAM_LEAD role'
+
+-- DEVELOPER: TEAM_LEAD 去掉功能单元创建/删除/分配开发组
+INSERT INTO sys_developer_role_permissions (id, role_id, permission, created_at)
+SELECT 
+    gen_random_uuid()::varchar,
+    'role-developer',
+    p.permission,
+    CURRENT_TIMESTAMP
+FROM (VALUES 
+    ('FUNCTION_UNIT_UPDATE'), ('FUNCTION_UNIT_VIEW'),
     ('FUNCTION_UNIT_DEVELOP'), ('FUNCTION_UNIT_PUBLISH'),
     ('FORM_CREATE'), ('FORM_UPDATE'), ('FORM_DELETE'), ('FORM_VIEW'),
     ('PROCESS_CREATE'), ('PROCESS_UPDATE'), ('PROCESS_DELETE'), ('PROCESS_VIEW'),
@@ -26,44 +62,7 @@ FROM (VALUES
 ) AS p(permission)
 ON CONFLICT (role_id, permission) DO NOTHING;
 
-\echo '✓ Initialized permissions for TECH_LEAD role (22 permissions)'
-
--- TEAM_LEAD: Create, update, view, develop, publish permissions (cannot delete) (17 permissions)
-INSERT INTO sys_developer_role_permissions (id, role_id, permission, created_at)
-SELECT 
-    gen_random_uuid()::varchar,
-    'role-team-lead',
-    p.permission,
-    CURRENT_TIMESTAMP
-FROM (VALUES 
-    ('FUNCTION_UNIT_CREATE'), ('FUNCTION_UNIT_UPDATE'), ('FUNCTION_UNIT_VIEW'),
-    ('FUNCTION_UNIT_DEVELOP'), ('FUNCTION_UNIT_PUBLISH'),
-    ('FORM_CREATE'), ('FORM_UPDATE'), ('FORM_VIEW'),
-    ('PROCESS_CREATE'), ('PROCESS_UPDATE'), ('PROCESS_VIEW'),
-    ('TABLE_CREATE'), ('TABLE_UPDATE'), ('TABLE_VIEW'),
-    ('ACTION_CREATE'), ('ACTION_UPDATE'), ('ACTION_VIEW')
-) AS p(permission)
-ON CONFLICT (role_id, permission) DO NOTHING;
-
-\echo '✓ Initialized permissions for TEAM_LEAD role (17 permissions)'
-
--- DEVELOPER: View, update, develop permissions (no create or delete) (10 permissions)
-INSERT INTO sys_developer_role_permissions (id, role_id, permission, created_at)
-SELECT 
-    gen_random_uuid()::varchar,
-    'role-developer',
-    p.permission,
-    CURRENT_TIMESTAMP
-FROM (VALUES 
-    ('FUNCTION_UNIT_VIEW'), ('FUNCTION_UNIT_DEVELOP'),
-    ('FORM_VIEW'), ('FORM_UPDATE'),
-    ('PROCESS_VIEW'), ('PROCESS_UPDATE'),
-    ('TABLE_VIEW'),
-    ('ACTION_VIEW'), ('ACTION_UPDATE')
-) AS p(permission)
-ON CONFLICT (role_id, permission) DO NOTHING;
-
-\echo '✓ Initialized permissions for DEVELOPER role (9 permissions)'
+\echo '✓ Initialized permissions for DEVELOPER role'
 \echo ''
 \echo 'Developer role permissions initialized successfully!'
 \echo '========================================='
