@@ -30,8 +30,12 @@ public class KafkaConfig {
     @Value("${spring.kafka.consumer.group-id:platform-group}")
     private String groupId;
     
+    /**
+     * Object/Object generics so Flowable Event Registry can inject {@code KafkaOperations<Object, Object>}
+     * (see {@code EventRegistryAutoConfiguration.EventRegistryKafkaConfiguration}); String keys/values still work at runtime.
+     */
     @Bean
-    public ProducerFactory<String, String> producerFactory() {
+    public ProducerFactory<Object, Object> producerFactory() {
         Map<String, Object> configProps = new HashMap<>();
         configProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         configProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
@@ -43,7 +47,7 @@ public class KafkaConfig {
     }
     
     @Bean
-    public KafkaTemplate<String, String> kafkaTemplate() {
+    public KafkaTemplate<Object, Object> kafkaTemplate() {
         return new KafkaTemplate<>(producerFactory());
     }
     

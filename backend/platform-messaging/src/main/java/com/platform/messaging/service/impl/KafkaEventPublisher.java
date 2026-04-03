@@ -21,7 +21,7 @@ import java.util.concurrent.CompletableFuture;
 @RequiredArgsConstructor
 public class KafkaEventPublisher implements EventPublisher {
     
-    private final KafkaTemplate<String, String> kafkaTemplate;
+    private final KafkaTemplate<Object, Object> kafkaTemplate;
     private final ObjectMapper objectMapper;
     
     @Override
@@ -61,7 +61,7 @@ public class KafkaEventPublisher implements EventPublisher {
             
             log.debug("Publishing event to topic {}: {}", topic, event.getEventId());
             
-            CompletableFuture<SendResult<String, String>> future = 
+            CompletableFuture<SendResult<Object, Object>> future =
                     kafkaTemplate.send(topic, key, payload);
             
             return future.thenAccept(result -> {

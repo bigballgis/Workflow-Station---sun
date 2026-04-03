@@ -53,7 +53,7 @@ class NotificationEventPropertyTest {
         // Use reflection to invoke the private getEventKey method
         // by creating a KafkaEventPublisher with mocked dependencies
         @SuppressWarnings("unchecked")
-        KafkaTemplate<String, String> mockTemplate = mock(KafkaTemplate.class);
+        KafkaTemplate<Object, Object> mockTemplate = mock(KafkaTemplate.class);
         ObjectMapper objectMapper = new ObjectMapper();
         objectMapper.registerModule(new JavaTimeModule());
 

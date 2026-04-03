@@ -6,5 +6,7 @@ package com.platform.security.dto;
  */
 public record TokenResponse(
     String accessToken,
-    long expiresIn
+    long expiresIn,
+    /** New refresh token when rotation is enabled; clients must persist it. */
+    String refreshToken
 ) {}

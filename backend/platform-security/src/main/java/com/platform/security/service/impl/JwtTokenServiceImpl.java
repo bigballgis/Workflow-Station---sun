@@ -238,8 +238,9 @@ public class JwtTokenServiceImpl implements JwtTokenService {
             String tokenHash = hashToken(token);
             return Boolean.TRUE.equals(redisTemplate.hasKey(BLACKLIST_PREFIX + tokenHash));
         } catch (Exception e) {
-            log.error("Failed to check token blacklist: {}", e.getMessage());
-            return false;
+            // Fail-closed: if Redis is unavailable, reject the token rather than accepting a possibly revoked JWT
+            log.error("Failed to check token blacklist, denying token: {}", e.getMessage());
+            return true;
         }
     }
 

@@ -135,6 +135,8 @@ public class AuthenticationServiceImpl implements AuthenticationService {
         List<String> roles = userRoleService.getEffectiveRoleCodesForUser(user.getId());
         List<String> permissions = getPermissionsForRoles(roles);
 
+        jwtTokenService.blacklistToken(refreshToken);
+
         String newAccessToken = jwtTokenService.generateToken(
                 user.getId().toString(),
                 user.getUsername(),
@@ -142,12 +144,14 @@ public class AuthenticationServiceImpl implements AuthenticationService {
                 permissions,
                 user.getLanguage()
         );
+        String newRefreshToken = jwtTokenService.generateRefreshToken(user.getId().toString());
 
         log.debug("Token refreshed for user: {}", user.getUsername());
 
         return new TokenResponse(
                 newAccessToken,
-                jwtProperties.getExpirationMs() / 1000
+                jwtProperties.getExpirationMs() / 1000,
+                newRefreshToken
         );
     }
 

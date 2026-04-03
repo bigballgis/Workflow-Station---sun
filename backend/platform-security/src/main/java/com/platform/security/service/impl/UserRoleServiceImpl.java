@@ -166,7 +166,8 @@ public class UserRoleServiceImpl implements UserRoleService {
     private Map<String, Object> getRoleInfo(String roleId) {
         try {
             return jdbcTemplate.queryForMap(
-                "SELECT id, code, name, type FROM sys_roles WHERE id = ? AND status = 'ACTIVE'",
+                "SELECT id, code, name, type FROM sys_roles WHERE id = ? "
+                    + "AND (status = 'ACTIVE' OR status IS NULL OR TRIM(COALESCE(status, '')) = '')",
                 roleId
             );
         } catch (Exception e) {
