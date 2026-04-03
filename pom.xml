@@ -17,7 +17,6 @@
         <module>backend/platform-cache</module>
         <module>backend/platform-security</module>
         <module>backend/platform-messaging</module>
-        <module>backend/api-gateway</module>
         <module>backend/workflow-engine-core</module>
         <module>backend/admin-center</module>
         <module>backend/developer-workstation</module>
