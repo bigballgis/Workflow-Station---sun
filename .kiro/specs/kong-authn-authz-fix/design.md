@@ -2,7 +2,7 @@
 
 ## Overview
 
-集成 Kong API Gateway 后，三个模块（admin-center、developer-workstation、user-portal）的认证授权链路存在系统性问题。经过对所有安全相关源文件的逐一审查和三模块横向对比，共识别出 **16 个独立的 bug 条件**，涵盖以下 6 个维度：
+集成 Kong Gateway 后，三个模块（admin-center、developer-workstation、user-portal）的认证授权链路存在系统性问题。经过对所有安全相关源文件的逐一审查和三模块横向对比，共识别出 **16 个独立的 bug 条件**，涵盖以下 6 个维度：
 
 1. **架构一致性缺陷**（C1–C4）：三个模块的 JWT 过滤器实现各不相同，违反统一架构原则
 2. **前端路由与 API 路径错误**（C5–C8）：前端 baseURL 与 Kong 路由不匹配，导致请求路由到错误后端
@@ -23,7 +23,7 @@
 - **JwtTokenServiceImpl**: `com.platform.security.service.impl.JwtTokenServiceImpl` — 标准实现，使用 `JwtProperties`（prefix: `platform.security.jwt`）配置，依赖 `StringRedisTemplate` 做 token 黑名单
 - **SecurityContextUtils**: `com.platform.security.util.SecurityContextUtils` — 从 `SecurityContextHolder` 获取 `UserPrincipal`，要求 principal 必须是 `UserPrincipal` 类型（非 String）
 - **UserPrincipal**: `com.platform.common.dto.UserPrincipal` — 统一用户身份 DTO，包含 userId、username、email、displayName、roles、permissions、language、superAdmin
-- **Kong**: API Gateway，负责路由转发、CORS、限流和追踪，不做 JWT 验证（JWT 验证由后端 JwtAuthenticationFilter 处理）
+- **Kong**: 边缘网关（路由、CORS、限流、追踪等）；JWT 与请求头传递行为以 `deploy/kong/` 声明式配置及各服务 `JwtAuthenticationFilter` 为准
 - **SecurityComponent**: `com.developer.component.SecurityComponent` — developer-workstation 自定义的安全组件接口，与 platform-security 的 `JwtTokenService` 功能重叠但 API 不同
 
 ## Bug Details

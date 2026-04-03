@@ -2,7 +2,7 @@
 
 ## Introduction
 
-集成 Kong API Gateway 后，user-portal 和 developer-workstation 的用户信息面板（Business Units、Virtual Groups、Roles）全部显示为空。根本原因涉及三个层面的问题：
+集成 Kong Gateway 后，user-portal 和 developer-workstation 的用户信息面板（Business Units、Virtual Groups、Roles）全部显示为空。根本原因涉及三个层面的问题：
 
 1. **Kong 路由缺失**：前端 `user.ts` 通过 `/api/admin-center/users/{userId}/...` 路径请求 admin-center 数据，但 Kong 没有配置 `/api/admin-center` 路由，导致请求无法到达后端。
 2. **user-portal 缺少 JWT 认证过滤器**：user-portal 的 `SecurityConfig` 没有注册 `JwtAuthenticationFilter`，导致所有请求在 Spring Security 层面都是未认证的，`SecurityContextUtils.getCurrentUser()` 始终返回空。

@@ -1036,3 +1036,58 @@
     - admin GET .../code/{code}/active-for-start、启用校验（仅 DEPLOYED 中最高 semver）、POST .../{id}/purge-runtime-data；配置 PORTAL_INTERNAL_API_TOKEN / USER_PORTAL_BASE_URL。
     待加强：专用审计日志、其它 up_* 附属表若后续挂流程实例需纳入 purge。
   file: "backend/admin-center; backend/user-portal; backend/workflow-engine-core"
+
+- id: "143"
+  status: fixed
+  fixed_at: "2026-04-04"
+  severity: minor
+  category: quality
+  summary: "admin-center 前端 userApi.removeBusinessUnitRole 仅传 roleId，与后端 DELETE /users/{userId}/business-unit-roles/{businessUnitId}/{roleId} 路径不一致，无法正确移除 BU 角色"
+  file: "frontend/admin-center/src/api/user.ts"
+
+- id: "144"
+  status: fixed
+  fixed_at: "2026-04-04"
+  severity: major
+  category: bug
+  summary: "user-portal GET /processes/my-applications 列表原样序列化 variables(JSONB)，异常嵌套类型可导致 Jackson 写响应失败→SYS_INTERNAL_ERROR"
+  file: "backend/user-portal/src/main/java/com/portal/component/ProcessComponent.java"
+
+- id: "145"
+  status: fixed
+  fixed_at: "2026-04-04"
+  severity: critical
+  category: security
+  summary: "门户发起流程时 activeBusinessUnitId 未与 JWT 工作台绑定：顶层字段或 formData 均可写入流程变量，多 BU 用户可篡改以影响 HIERARCHY 等解析范围"
+  file: "backend/user-portal/src/main/java/com/portal/component/ProcessComponent.java; ProcessController.java"
+
+- id: "146"
+  status: fixed
+  fixed_at: "2026-04-04"
+  severity: major
+  category: bug
+  summary: "DepartmentRoleTaskServiceImpl 等仍用 getUserBusinessUnitId(userId) 单参 + UserRole 校验 BU 角色，多 BU 或仅 UBR 无 UserRole 时行为错误或与门户模型不一致"
+  file: "backend/admin-center/src/main/java/com/admin/service/impl/DepartmentRoleTaskServiceImpl.java; AuthServiceImpl.java"
+
+- id: "147"
+  status: fixed
+  fixed_at: "2026-04-04"
+  severity: minor
+  category: quality
+  summary: "PortalWorkspaceAuthService.listWorkspaceContexts 过滤非 ACTIVE 角色，但 hasContext 仅数 UBR 行，角色停用后可能出现 refresh 仍过、列表已无上下文等不一致"
+  file: "backend/user-portal/src/main/java/com/portal/service/PortalWorkspaceAuthService.java"
+
+- id: "148"
+  status: open
+  severity: minor
+  category: quality
+  summary: "三端 profile 页重复实现 languageLabelFor（界面语言展示）；可抽到共享 util 或 i18n 嵌套表减少漂移"
+  file: "frontend/user-portal|admin-center|developer-workstation/src/views/profile/index.vue"
+
+- id: "149"
+  status: fixed
+  fixed_at: "2026-04-04"
+  severity: minor
+  category: quality
+  summary: "profile 改密失败时凡 HTTP 400 即提示「当前密码不正确」，若后端用 400 表达策略/复杂度等其它原因会误导用户；应按 error code 或 message 分支"
+  file: "frontend/user-portal/src/utils/changePasswordError.ts; frontend/admin-center/src/utils/changePasswordError.ts; frontend/developer-workstation/src/utils/changePasswordError.ts"

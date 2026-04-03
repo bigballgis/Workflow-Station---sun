@@ -17,12 +17,11 @@
 - **描述**: 
   - developer-workstation 硬编码 `http://localhost:3000,3002,3003,3004,5173`
   - admin-center WebMvcConfig 硬编码 `http://localhost:3001,3000`
-  - API Gateway 配置 `allowedOrigins: "*"`
+  - CORS：`allowedOrigins` 由各服务与 **Kong** 按环境配置，禁止生产使用 `*`
 - **影响**: 生产环境 CORS 不安全，开发环境地址不应出现在代码里。
 - **涉及文件**:
   - `backend/developer-workstation/src/main/java/com/developer/config/SecurityConfig.java`
   - `backend/admin-center/src/main/java/com/admin/config/WebMvcConfig.java`
-  - `backend/api-gateway/src/main/resources/application.yml`
 - **方案**: CORS allowedOrigins 提取到环境变量/配置文件，按环境区分。
 
 ### 3. ~~Swagger/API 文档在生产环境未禁用~~ ✅ 已修复
@@ -33,16 +32,9 @@
 
 ## 🟠 P1 — 架构
 
-### 4. API Gateway 被架空，无流量经过
-- **描述**: 前端 nginx 直接 proxy_pass 到各后端服务，完全绕过 API Gateway。Gateway 实现的统一鉴权（JWT AuthenticationFilter）、限流（Redis RateLimitFilter）、请求日志均未生效。
-- **涉及文件**:
-  - `frontend/admin-center/nginx.conf`
-  - `frontend/user-portal/nginx.conf`
-  - `frontend/developer-workstation/nginx.conf`
-  - `backend/api-gateway/` 整个模块
-- **方案**:
-  - A: 改 nginx 统一 proxy 到 API Gateway（标准微服务做法）
-  - B: 移除 API Gateway，保持 nginx 直连（更简单）
+### 4. ✅ API 统一入口（Kong）
+- **结论**: 统一 API 边缘由 **Kong** 承担；各前端 nginx 可按环境直连后端或经 Kong（见 `deploy/k8s/deployment-kong.yaml`、`deploy/README.md`）。
+- **涉及文件**: `frontend/*/nginx.conf`、`deploy/kong/`、Kong 与 Ingress 清单
 
 ### 5. User Portal 大量 Controller 只有 TODO 桩代码
 - **描述**: PermissionRequestController、MemberController、ExitController、ApprovalController 共 20+ 个 TODO，所有接口返回 mock 数据，未调用 admin-center API。
@@ -98,10 +90,8 @@
 - **影响**: 无法追踪 schema 变更历史，多环境 schema 可能不一致。
 - **方案**: 启用 Flyway，将现有 init-scripts 转为 migration 脚本。
 
-### 10. ~~API Gateway docker-compose 缺少路由所需的环境变量~~ ✅ 已修复
-- **描述**: API Gateway 的 `application.yml` 引用了 `WORKFLOW_ENGINE_URL`、`ADMIN_CENTER_URL`、`DEVELOPER_WORKSTATION_URL`、`USER_PORTAL_URL`，但 docker-compose 中 api-gateway 服务未传入这些变量。
-- **涉及文件**: 所有环境的 `docker-compose.*.yml` 中 api-gateway 服务定义
-- **方案**: 在 api-gateway 的 environment 中补充这些变量。
+### 10. ⏭️ 不适用 — 无独立 Java 边缘服务
+- **说明**: API 边缘为 Kong；环境变量与路由见 `deploy/kong/`、`docker-compose.dev.yml` 与 `deploy/k8s/deployment-kong.yaml`。
 
 ---
 
@@ -142,14 +132,14 @@
 | P0 | 1 | SecurityConfig permitAll | 🔲 待定 — SIT 后处理 (2-3天) |
 | P0 | 2 | CORS 硬编码 | ✅ 已修复 |
 | P0 | 3 | Swagger 生产禁用 | ✅ 已修复 |
-| P1 | 4 | API Gateway 架空 | 🔲 待定 — SIT 后处理 (2-3天) |
+| P1 | 4 | Kong 统一入口 | ✅ 已处理 |
 | P1 | 5 | User Portal TODO 桩代码 | 🔲 待定 — SIT 后处理 (3-5天) |
 | P1 | 6 | Admin Center 工作流集成 | 🔲 待定 — SIT 后处理 (2-3天) |
 | P1 | 7 | User Portal Mock 登录 | 🔲 待定 — SIT 后处理 (1天) |
 | P2 | 8a | Docker 多阶段构建不可用 | ⚠️ 已记录（使用本地构建+复制） |
 | P2 | 8 | 服务间 URL 默认值不一致 | ✅ 已修复 |
 | P2 | 9 | Flyway 迁移禁用 | 🔲 待定 — SIT 后处理 (2天) |
-| P2 | 10 | Gateway 缺环境变量 | ✅ 已修复 |
+| P2 | 10 | Java 边缘服务 env | ⏭️ 不适用（Kong） |
 | P3 | 11 | 前端残留中文硬编码 | ⏸️ 暂不处理 |
 | P3 | 12 | 后端测试中文硬编码 | ✅ 已修复 |
 | P3 | 13 | platform-common 配置类 | ✅ 已确认保留 |
