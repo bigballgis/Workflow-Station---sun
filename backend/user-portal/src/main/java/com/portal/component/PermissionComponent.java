@@ -462,6 +462,14 @@ public class PermissionComponent {
                     if (!roleOk) {
                         success = false;
                         errorMessage = "用户已加入业务单元，但分配业务单元角色失败";
+                        try {
+                            virtualGroupAccessComponent.exitBusinessUnit(
+                                    request.getApplicantId(), request.getBusinessUnitId());
+                        } catch (Exception rollbackEx) {
+                            log.error("Failed to roll back BU membership after role assignment failure for request {}: {}",
+                                    requestId, rollbackEx.getMessage());
+                            errorMessage = errorMessage + "（且自动撤销加入业务单元失败，请联系管理员）";
+                        }
                     } else {
                         // Role Members page在 admin-center 里是按“角色绑定的虚拟组成员”展示。
                         // 为了让 BU join + 选角后的结果在该页面可见，同步把用户加入该虚拟组。
@@ -537,14 +545,15 @@ public class PermissionComponent {
             request.setApproveComment(comment != null ? comment : "审批通过");
             log.info("Request {} approved by {}", requestId, approverId);
         } else {
-            // 如果执行失败，仍然标记为已批准但添加错误信息
-            request.setStatus(PermissionRequestStatus.APPROVED);
+            String detail = errorMessage != null ? errorMessage : "未知错误";
+            request.setStatus(PermissionRequestStatus.REJECTED);
             request.setApproverId(approverId);
             request.setApproveTime(LocalDateTime.now());
-            request.setApproveComment((comment != null ? comment + " - " : "") + "注意: " + errorMessage);
-            log.warn("Request {} approved but action failed: {}", requestId, errorMessage);
+            request.setApproveComment((comment != null ? comment + " — " : "")
+                    + "审批操作已尝试但执行未成功: " + detail);
+            log.warn("Request {} marked REJECTED after failed post-approval execution: {}", requestId, detail);
         }
-        
+
         return permissionRequestRepository.save(request);
     }
 
@@ -824,7 +833,10 @@ public class PermissionComponent {
             return false;
         }
         PermissionRequest request = requestOpt.get();
-        if (!request.getApplicantId().equals(userId)) {
+        boolean asApplicant = userId != null && userId.equals(request.getApplicantId());
+        boolean asSubmitter = userId != null && request.getSubmittedByUserId() != null
+                && userId.equals(request.getSubmittedByUserId());
+        if (!asApplicant && !asSubmitter) {
             return false;
         }
         if (request.getStatus() != PermissionRequestStatus.PENDING) {

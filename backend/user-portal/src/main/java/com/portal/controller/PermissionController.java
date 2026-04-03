@@ -333,9 +333,9 @@ public class PermissionController {
             @RequestParam(defaultValue = "20") int size) {
         // 检查审批权限
         if (!permissionComponent.isApprover(userId)) {
-            return ApiResponse.error("您没有审批权限");
+            return ApiResponse.error(i18nService.getMessage("portal.no_approval_permission"));
         }
-        
+
         Page<PermissionRequest> result = permissionComponent.getApprovalHistoryForUser(userId, PageRequest.of(page, size));
         return ApiResponse.success(PageResponse.of(result));
     }
@@ -391,7 +391,7 @@ public class PermissionController {
         if (success) {
             return ApiResponse.success(null);
         }
-        return ApiResponse.error("取消失败");
+        return ApiResponse.error(i18nService.getMessage("portal.cancel_request_failed"));
     }
 
     @PostMapping("/renew")
