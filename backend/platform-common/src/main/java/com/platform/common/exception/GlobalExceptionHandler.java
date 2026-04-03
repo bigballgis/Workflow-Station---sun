@@ -198,6 +198,25 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(errorCode.getHttpStatus()).body(ApiResponse.error(errorResponse));
     }
 
+    // ==================== 参数与非法状态（避免误报为 SYS_INTERNAL_ERROR）====================
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiResponse<?>> handleIllegalArgumentException(
+            IllegalArgumentException ex, WebRequest request) {
+        String traceId = generateTraceId();
+        log.warn("Bad request [{}]: {}", traceId, ex.getMessage());
+
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .code("VAL_INVALID_ARGUMENT")
+                .message(ex.getMessage() != null ? ex.getMessage() : "Invalid argument")
+                .timestamp(Instant.now())
+                .traceId(traceId)
+                .path(getPath(request))
+                .build();
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.error(errorResponse));
+    }
+
     // ==================== 兜底异常 ====================
 
     @ExceptionHandler(RuntimeException.class)
