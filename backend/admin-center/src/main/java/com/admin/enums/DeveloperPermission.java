@@ -15,6 +15,7 @@ public enum DeveloperPermission {
     FUNCTION_UNIT_VIEW("function_unit:view", "查看功能单元"),
     FUNCTION_UNIT_DEVELOP("function_unit:develop", "开发功能单元"),
     FUNCTION_UNIT_PUBLISH("function_unit:publish", "发布功能单元"),
+    FUNCTION_UNIT_ASSIGN_DEV_GROUP("function_unit:assign_dev_group", "分配功能单元到虚拟开发组"),
     
     // 表单设计权限
     FORM_CREATE("form:create", "创建表单"),
