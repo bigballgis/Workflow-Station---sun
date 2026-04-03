@@ -66,7 +66,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { permissionApi, type UserVirtualGroupMembership } from '@/api/permission'
+import { permissionApi } from '@/api/permission'
 import { getStoredUser } from '@/api/auth'
 
 const { t } = useI18n()

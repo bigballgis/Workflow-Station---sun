@@ -19,12 +19,57 @@
         </div>
         
         <el-divider />
-        
-        <!-- Business Units -->
+
+        <!-- UBR：业务单元 — 角色（工作台） -->
+        <div class="profile-section">
+          <div class="section-title">
+            <el-icon><Key /></el-icon>
+            {{ t('profile.sectionBuRolePairs') }}
+          </div>
+          <div v-if="loading" class="section-loading">
+            <el-icon class="is-loading"><Loading /></el-icon>
+          </div>
+          <div v-else-if="buBoundedRoles.length === 0" class="section-empty">
+            {{ t('profile.noBuRoleAssignments') }}
+          </div>
+          <ul v-else class="ubr-lines">
+            <li v-for="(row, idx) in buBoundedRoles" :key="`${row.role?.id}-${idx}`" class="ubr-line">
+              {{ formatUbrLine(row) }}
+            </li>
+          </ul>
+          <div class="section-hint-inline">{{ t('profile.sectionBuRolePairsHint') }}</div>
+        </div>
+
+        <!-- 无界业务角色（经管理端虚拟组授予，门户不展示组名） -->
+        <div class="profile-section">
+          <div class="section-title">
+            <el-icon><Key /></el-icon>
+            {{ t('profile.sectionBuUnboundedRoles') }}
+          </div>
+          <div v-if="loading" class="section-loading">
+            <el-icon class="is-loading"><Loading /></el-icon>
+          </div>
+          <div v-else-if="buUnboundedRoles.length === 0" class="section-empty">
+            {{ t('profile.noBuUnboundedRoles') }}
+          </div>
+          <div v-else class="section-content">
+            <el-tag
+              v-for="role in buUnboundedRoles"
+              :key="role.id"
+              size="small"
+              type="success"
+              class="item-tag"
+            >
+              {{ role.name }}
+            </el-tag>
+          </div>
+        </div>
+
+        <!-- 业务单元成员（可能与 UBR 重叠；无角色时仅成员） -->
         <div class="profile-section">
           <div class="section-title">
             <el-icon><OfficeBuilding /></el-icon>
-            {{ t('profile.businessUnits') }}
+            {{ t('profile.sectionBuMembership') }}
           </div>
           <div v-if="loading" class="section-loading">
             <el-icon class="is-loading"><Loading /></el-icon>
@@ -37,46 +82,9 @@
               {{ bu.name }}
             </el-tag>
           </div>
+          <div class="section-hint-inline">{{ t('profile.sectionBuMembershipHint') }}</div>
         </div>
-        
-        <!-- Virtual Groups -->
-        <div class="profile-section">
-          <div class="section-title">
-            <el-icon><Connection /></el-icon>
-            {{ t('profile.virtualGroups') }}
-          </div>
-          <div v-if="loading" class="section-loading">
-            <el-icon class="is-loading"><Loading /></el-icon>
-          </div>
-          <div v-else-if="virtualGroups.length === 0" class="section-empty">
-            {{ t('profile.noVirtualGroups') }}
-          </div>
-          <div v-else class="section-content">
-            <el-tag v-for="vg in virtualGroups" :key="vg.groupId" size="small" type="success" class="item-tag">
-              {{ vg.groupName }}
-            </el-tag>
-          </div>
-        </div>
-        
-        <!-- Roles -->
-        <div class="profile-section">
-          <div class="section-title">
-            <el-icon><Key /></el-icon>
-            {{ t('profile.roles') }}
-          </div>
-          <div v-if="loading" class="section-loading">
-            <el-icon class="is-loading"><Loading /></el-icon>
-          </div>
-          <div v-else-if="roles.length === 0" class="section-empty">
-            {{ t('profile.noRoles') }}
-          </div>
-          <div v-else class="section-content">
-            <el-tag v-for="role in roles" :key="role.id" size="small" :type="getRoleTagType(role.type)" class="item-tag">
-              {{ role.name }}
-            </el-tag>
-          </div>
-        </div>
-        
+
         <el-divider />
         
         <!-- Actions -->
@@ -102,10 +110,10 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
-import { ArrowDown, OfficeBuilding, Connection, Key, User, Setting, SwitchButton, Loading } from '@element-plus/icons-vue'
+import { ArrowDown, OfficeBuilding, Key, User, Setting, SwitchButton, Loading } from '@element-plus/icons-vue'
 import { logout as authLogout, clearAuth, getCurrentUser, getUser, saveUser } from '@/api/auth'
 import { permissionApi } from '@/api/permission'
-import { parseMyPermissionViewPayload } from '@/utils/myPermissionView'
+import { parseMyPermissionViewPayload, type PortalBuBoundedRow } from '@/utils/myPermissionView'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -113,8 +121,16 @@ const route = useRoute()
 
 const loading = ref(false)
 const businessUnits = ref<{ id: string; name: string }[]>([])
-const virtualGroups = ref<{ groupId: string; groupName: string }[]>([])
-const roles = ref<{ id: string; name: string; type?: string }[]>([])
+const buBoundedRoles = ref<PortalBuBoundedRow[]>([])
+const buUnboundedRoles = ref<{ id: string; name: string }[]>([])
+
+const formatUbrLine = (row: PortalBuBoundedRow) => {
+  const r = row.role
+  const bu = row.activatedBusinessUnits?.[0]
+  const buName = bu?.name || '—'
+  const roleName = r?.name || '—'
+  return `${buName} · ${roleName}`
+}
 
 /** localStorage 非响应式：用 ref + 路由切换时同步，避免从个人中心等页返回后顶栏仍显示旧用户/工作台 */
 const portalUser = ref(getUser())
@@ -143,24 +159,15 @@ const workspaceSummary = computed(() => {
   return `${bu} · ${r}`
 })
 
-const getRoleTagType = (type?: string) => {
-  if (type === 'BU_BOUNDED') return 'warning'
-  if (type === 'BU_UNBOUNDED') return 'success'
-  if (type === 'ADMIN') return 'danger'
-  return 'primary'
-}
-
 const loadUserPermissions = async () => {
   loading.value = true
   try {
-    // Note: axios interceptor returns ApiResponse wrapper {success, data, message}
-    // The actual payload is in response.data
     const response = await permissionApi.getMyPermissionView() as { data?: Record<string, unknown> } & Record<string, unknown>
     const data = (response.data || response) as Record<string, unknown>
     const lists = parseMyPermissionViewPayload(data)
     businessUnits.value = lists.businessUnits
-    virtualGroups.value = lists.virtualGroups
-    roles.value = lists.roles
+    buBoundedRoles.value = lists.buBoundedRoles
+    buUnboundedRoles.value = lists.buUnboundedRoles
   } catch (e) {
     console.error('Failed to load user permissions:', e)
   } finally {
@@ -222,7 +229,7 @@ onMounted(() => {
 }
 
 .user-profile-dropdown {
-  width: 320px;
+  width: 340px;
   padding: 0;
   
   .profile-header {
@@ -291,12 +298,31 @@ onMounted(() => {
       display: flex;
       flex-wrap: wrap;
       gap: 6px;
-      
+
       .item-tag {
-        max-width: 140px;
+        max-width: 200px;
         overflow: hidden;
         text-overflow: ellipsis;
       }
+    }
+
+    .section-hint-inline {
+      font-size: 11px;
+      color: var(--el-text-color-placeholder);
+      margin-top: 6px;
+      line-height: 1.35;
+    }
+
+    .ubr-lines {
+      margin: 0;
+      padding-left: 18px;
+      font-size: 12px;
+      color: var(--el-text-color-regular);
+      line-height: 1.5;
+    }
+
+    .ubr-line {
+      margin-bottom: 4px;
     }
   }
   

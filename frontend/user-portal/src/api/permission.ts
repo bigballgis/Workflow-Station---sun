@@ -133,6 +133,27 @@ export interface MyMembership {
   businessUnitRoles: UserBusinessUnitRole[]
 }
 
+/** 移除权限：按功能单元聚合的可选分配行 */
+export interface RemovalAssignmentRow {
+  assignmentId?: string
+  businessUnitId: string
+  businessUnitName?: string
+  roleId: string
+  roleName?: string
+}
+
+export interface FunctionUnitRemovalGroup {
+  functionUnitId: string
+  functionUnitName?: string
+  functionUnitCode?: string
+  assignments: RemovalAssignmentRow[]
+}
+
+export interface RemovalOptionsByFunctionUnitPayload {
+  functionUnitGroups: FunctionUnitRemovalGroup[]
+  otherAssignments: RemovalAssignmentRow[]
+}
+
 // ==================== 旧的类型定义（保留兼容） ====================
 
 /** @deprecated 使用 RoleInfo 或 VirtualGroupInfo 替代 */
@@ -221,6 +242,13 @@ export const permissionApi = {
     beneficiaryUserId?: string
   }) {
     return request.post<PermissionRequestRecord>('/permissions/request-business-unit-role-removal', data)
+  },
+
+  /** 按功能单元聚合受益人可移除的 BU 角色分配（依赖功能单元访问配置中的角色门槛） */
+  getRemovalOptionsByFunctionUnit(beneficiaryUserId?: string) {
+    return request.get<RemovalOptionsByFunctionUnitPayload>('/permissions/removal-options-by-function-unit', {
+      params: beneficiaryUserId ? { beneficiaryUserId } : {}
+    })
   },
 
   /** 搜索可申请的启用用户（代办选人） */

@@ -58,18 +58,6 @@
             <el-icon><Key /></el-icon>
             <template #title>{{ t('menu.permissions') }}</template>
           </el-menu-item>
-          <el-menu-item index="/my-requests">
-            <el-icon><Document /></el-icon>
-            <template #title>{{ t('menu.myRequests') }}</template>
-          </el-menu-item>
-          <el-menu-item index="/exit-role">
-            <el-icon><SwitchButton /></el-icon>
-            <template #title>{{ t('menu.exitRole') }}</template>
-          </el-menu-item>
-          <el-menu-item v-if="isApprover" index="/approvals">
-            <el-icon><Checked /></el-icon>
-            <template #title>{{ t('menu.approvals') }}</template>
-          </el-menu-item>
           <el-menu-item v-if="showFullPortal" index="/relation-tables">
             <el-icon><Grid /></el-icon>
             <template #title>Relation Tables</template>
@@ -103,14 +91,13 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
   HomeFilled, List, Plus, Document, Share, Key,
-  Fold, Expand, Checked, Finished, DataAnalysis, Grid, SwitchButton
+  Fold, Expand, Finished, DataAnalysis, Grid
 } from '@element-plus/icons-vue'
 import SelfServiceBanner from '@/components/SelfServiceBanner.vue'
 import WorkspaceContextBar from '@/components/WorkspaceContextBar.vue'
 import { getStoredUser } from '@/api/auth'
 import UserProfileDropdown from '@/components/UserProfileDropdown.vue'
 import NotificationBadge from '@/components/NotificationBadge.vue'
-import { permissionApi } from '@/api/permission'
 import { biDashboardApi } from '@/api/biDashboard'
 
 const { t } = useI18n()
@@ -118,7 +105,6 @@ const route = useRoute()
 
 const isCollapsed = ref(false)
 const cachedViews = ref(['Dashboard', 'Tasks', 'MyApplications'])
-const isApprover = ref(false)
 const hasBiDashboards = ref(false)
 
 const activeMenu = computed(() => route.path)
@@ -127,21 +113,6 @@ const isSelfServiceOnly = computed(
   () => getStoredUser()?.portalAccessMode === 'PERMISSION_SELF_SERVICE_ONLY'
 )
 const showFullPortal = computed(() => !isSelfServiceOnly.value)
-
-// Check if user is an approver
-const checkApproverStatus = async () => {
-  try {
-    const res = await permissionApi.isApprover() as any
-    if (res?.data?.isApprover !== undefined) {
-      isApprover.value = res.data.isApprover
-    } else if (res?.isApprover !== undefined) {
-      isApprover.value = res.isApprover
-    }
-  } catch (e) {
-    console.error('Failed to check approver status:', e)
-    isApprover.value = false
-  }
-}
 
 // Check if user has BI dashboards assigned
 const checkBiDashboards = async () => {
@@ -167,7 +138,6 @@ const checkBiDashboards = async () => {
 }
 
 onMounted(() => {
-  checkApproverStatus()
   if (!isSelfServiceOnly.value) {
     checkBiDashboards()
   }

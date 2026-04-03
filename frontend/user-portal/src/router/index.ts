@@ -88,15 +88,11 @@ const routes: RouteRecordRaw[] = [
       },
       {
         path: 'my-requests',
-        name: 'MyRequests',
-        component: () => import('@/views/permissions/my-requests.vue'),
-        meta: { titleKey: 'menu.myRequests', icon: 'Document' }
+        redirect: { path: '/permissions' }
       },
       {
         path: 'approvals',
-        name: 'Approvals',
-        component: () => import('@/views/permissions/approvals.vue'),
-        meta: { titleKey: 'menu.approvals', icon: 'Checked' }
+        redirect: { path: '/permissions' }
       },
       {
         path: 'member-management',
@@ -106,9 +102,7 @@ const routes: RouteRecordRaw[] = [
       },
       {
         path: 'exit-role',
-        name: 'ExitRole',
-        component: () => import('@/views/permissions/exit-role.vue'),
-        meta: { titleKey: 'menu.exitRole', icon: 'SwitchButton' }
+        redirect: { path: '/permissions' }
       },
       {
         path: 'notifications',
@@ -180,9 +174,6 @@ router.beforeEach((to, _from, next) => {
   if (user?.portalAccessMode === 'PERMISSION_SELF_SERVICE_ONLY' && to.path !== '/login' && to.path !== '/403') {
     const allowed = new Set([
       '/permissions',
-      '/my-requests',
-      '/exit-role',
-      '/approvals',
       '/notifications',
       '/profile'
     ])

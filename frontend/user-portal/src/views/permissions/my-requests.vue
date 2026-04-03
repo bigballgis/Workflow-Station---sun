@@ -35,7 +35,7 @@
         <el-table-column :label="t('common.actions')" width="100" fixed="right">
           <template #default="{ row }">
             <el-button
-              v-if="row.status === 'PENDING' && getStoredUser()?.userId === row.applicantId"
+              v-if="row.status === 'PENDING' && canCancelRow(row)"
               type="danger"
               link
               size="small"
@@ -89,6 +89,13 @@ const statusText = (status: string) => {
     REJECTED: t('permission.rejected'), CANCELLED: t('permission.cancelled')
   }
   return map[status] || status
+}
+
+/** 受益人或代办提交人均可取消（与后端 cancelRequest 一致） */
+const canCancelRow = (row: PermissionRequestRecord) => {
+  const uid = getStoredUser()?.userId
+  if (!uid) return false
+  return uid === row.applicantId || uid === row.submittedByUserId
 }
 
 const formatDate = (dateStr: string) => {

@@ -56,23 +56,34 @@
           {{ t('profile.membershipRolesHint') }}
         </el-alert>
         <el-descriptions :column="1" border class="subsection-block">
-          <el-descriptions-item :label="t('profile.businessUnits')">
+          <el-descriptions-item :label="t('profile.sectionBuRolePairs')">
+            <ul v-if="buBoundedRoles.length" class="ubr-list">
+              <li v-for="(row, idx) in buBoundedRoles" :key="`${row.role?.id}-${idx}`">
+                {{ formatUbrLine(row) }}
+              </li>
+            </ul>
+            <span v-else class="empty-text">{{ t('profile.noBuRoleAssignments') }}</span>
+          </el-descriptions-item>
+          <el-descriptions-item :label="t('profile.sectionBuUnboundedRoles')">
+            <template v-if="buUnboundedRoles.length">
+              <el-tag
+                v-for="role in buUnboundedRoles"
+                :key="role.id"
+                size="small"
+                type="success"
+                class="item-tag"
+              >
+                {{ role.name }}
+              </el-tag>
+            </template>
+            <span v-else class="empty-text">{{ t('profile.noBuUnboundedRoles') }}</span>
+          </el-descriptions-item>
+          <el-descriptions-item :label="t('profile.sectionBuMembership')">
             <el-tag v-for="bu in businessUnits" :key="bu.id" size="small" type="info" class="item-tag">
               {{ bu.name }}
             </el-tag>
             <span v-if="businessUnits.length === 0" class="empty-text">{{ t('profile.noBusinessUnits') }}</span>
-          </el-descriptions-item>
-          <el-descriptions-item :label="t('profile.virtualGroups')">
-            <el-tag v-for="vg in virtualGroups" :key="vg.groupId" size="small" type="success" class="item-tag">
-              {{ vg.groupName }}
-            </el-tag>
-            <span v-if="virtualGroups.length === 0" class="empty-text">{{ t('profile.noVirtualGroups') }}</span>
-          </el-descriptions-item>
-          <el-descriptions-item :label="t('profile.roles')">
-            <el-tag v-for="role in roles" :key="role.id" size="small" :type="getRoleTagType(role.type)" class="item-tag">
-              {{ role.name }}
-            </el-tag>
-            <span v-if="roles.length === 0" class="empty-text">{{ t('profile.noRoles') }}</span>
+            <div class="desc-hint">{{ t('profile.sectionBuMembershipHint') }}</div>
           </el-descriptions-item>
         </el-descriptions>
       </div>
@@ -135,7 +146,7 @@ import { getCurrentUser, getUser, saveUser, clearAuth, type UserInfo } from '@/a
 import { useRouter } from 'vue-router'
 import { userApi } from '@/api/user'
 import { permissionApi } from '@/api/permission'
-import { parseMyPermissionViewPayload } from '@/utils/myPermissionView'
+import { parseMyPermissionViewPayload, type PortalBuBoundedRow } from '@/utils/myPermissionView'
 import { getChangePasswordFailureMessage } from '@/utils/changePasswordError'
 
 const { t, locale } = useI18n()
@@ -172,8 +183,15 @@ function languageLabelFor(code: string | undefined, loc: string): string {
 const loading = ref(false)
 const userInfo = ref<UserInfo | null>(null)
 const businessUnits = ref<{ id: string; name: string }[]>([])
-const virtualGroups = ref<{ groupId: string; groupName: string }[]>([])
-const roles = ref<{ id: string; name: string; type?: string }[]>([])
+const buBoundedRoles = ref<PortalBuBoundedRow[]>([])
+const buUnboundedRoles = ref<{ id: string; name: string }[]>([])
+
+const formatUbrLine = (row: PortalBuBoundedRow) => {
+  const bu = row.activatedBusinessUnits?.[0]
+  const buName = bu?.name || '—'
+  const roleName = row.role?.name || '—'
+  return `${buName} · ${roleName}`
+}
 const passwordFormRef = ref<FormInstance>()
 const changingPassword = ref(false)
 
@@ -194,13 +212,6 @@ const workspaceContextText = computed(() => {
 })
 
 const workspaceLine = computed(() => workspaceContextText.value || t('profile.noWorkspaceSelected'))
-
-const getRoleTagType = (type?: string) => {
-  if (type === 'BU_BOUNDED') return 'warning'
-  if (type === 'BU_UNBOUNDED') return 'success'
-  if (type === 'ADMIN') return 'danger'
-  return 'primary'
-}
 
 const validateConfirmPassword = (_rule: unknown, value: string, callback: (e?: Error) => void) => {
   if (value !== passwordForm.newPassword) {
@@ -247,8 +258,8 @@ const loadUserInfo = async () => {
     const data = (response.data || response) as Record<string, unknown>
     const lists = parseMyPermissionViewPayload(data)
     businessUnits.value = lists.businessUnits
-    virtualGroups.value = lists.virtualGroups
-    roles.value = lists.roles
+    buBoundedRoles.value = lists.buBoundedRoles
+    buUnboundedRoles.value = lists.buUnboundedRoles
   } catch (error) {
     console.error('Failed to load user info:', error)
     userInfo.value = getUser()
@@ -350,5 +361,20 @@ onMounted(() => {
 .empty-text {
   color: #909399;
   font-size: 12px;
+}
+
+.ubr-list {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--el-text-color-regular);
+}
+
+.desc-hint {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 8px;
+  line-height: 1.4;
 }
 </style>
