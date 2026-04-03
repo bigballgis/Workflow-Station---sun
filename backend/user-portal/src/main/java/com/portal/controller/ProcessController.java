@@ -3,6 +3,7 @@ package com.portal.controller;
 import com.portal.component.FunctionUnitAccessComponent;
 import com.portal.component.ProcessComponent;
 import com.portal.dto.*;
+import com.portal.exception.PortalException;
 import com.portal.entity.ActionDefinition;
 import com.portal.entity.ProcessDraft;
 import com.portal.security.CurrentUserId;
@@ -139,6 +140,22 @@ public class ProcessController {
         return ApiResponse.error("500", e.getMessage());
     }
 
+    /**
+     * 流程相关 PortalException（如发起前工作台校验失败）— 按 code 返回 4xx，便于前端展示明确提示
+     */
+    @ExceptionHandler(PortalException.class)
+    public ApiResponse<Void> handlePortalException(PortalException e, jakarta.servlet.http.HttpServletResponse response) {
+        int statusCode = switch (e.getCode()) {
+            case "404" -> HttpStatus.NOT_FOUND.value();
+            case "403" -> HttpStatus.FORBIDDEN.value();
+            case "400" -> HttpStatus.BAD_REQUEST.value();
+            default -> HttpStatus.INTERNAL_SERVER_ERROR.value();
+        };
+        response.setStatus(statusCode);
+        log.warn("Process PortalException code={} message={}", e.getCode(), e.getMessage());
+        return ApiResponse.error(e.getCode(), e.getMessage());
+    }
+
     @GetMapping("/actions")
     @Operation(summary = "根据ID列表获取动作定义")
     public ApiResponse<List<ActionDefinition>> getActionsByIds(
@@ -167,7 +184,12 @@ public class ProcessController {
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        Page<ProcessInstanceInfo> result = processComponent.getMyApplications(userId, status, PageRequest.of(page, size));
+        if (userId == null || userId.isBlank()) {
+            throw new FunctionUnitAccessComponent.FunctionUnitAccessDeniedException("请先登录后再查看我的申请");
+        }
+        int safePage = Math.max(0, page);
+        int safeSize = size < 1 ? 20 : Math.min(size, 100);
+        Page<ProcessInstanceInfo> result = processComponent.getMyApplications(userId, status, PageRequest.of(safePage, safeSize));
         return ApiResponse.success(PageResponse.of(result));
     }
 

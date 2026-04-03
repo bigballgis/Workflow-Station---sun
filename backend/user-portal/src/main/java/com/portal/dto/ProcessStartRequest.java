@@ -39,6 +39,12 @@ public class ProcessStartRequest {
     /** 备注 */
     private String remark;
 
+    /**
+     * 已废弃：服务端不再读取。流程变量 {@code activeBusinessUnitId} 仅由当前访问令牌 JWT 中的工作台上下文写入，防止客户端伪造。
+     */
+    @Deprecated(forRemoval = false)
+    private String activeBusinessUnitId;
+
     @Data
     @Builder
     @NoArgsConstructor

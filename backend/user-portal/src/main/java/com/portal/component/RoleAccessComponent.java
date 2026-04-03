@@ -9,7 +9,10 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
 import com.platform.common.util.ApiResponseBodyUnwrap;
+import com.portal.dto.PageResponse;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 /**
@@ -165,5 +168,79 @@ public class RoleAccessComponent {
             log.error("Failed to get user {}: {}", userId, e.getMessage());
             return null;
         }
+    }
+
+    /**
+     * 门户选人：仅 ACTIVE 用户，供代办申请搜索（Admin GET /users）
+     */
+    @SuppressWarnings("unchecked")
+    public PageResponse<Map<String, Object>> searchActiveUsersForPortal(String keyword, int page, int size) {
+        int p = Math.max(0, page);
+        int s = Math.min(Math.max(1, size), 50);
+        try {
+            StringBuilder url = new StringBuilder(adminCenterUrl + "/api/v1/admin/users?status=ACTIVE&page=")
+                    .append(p).append("&size=").append(s);
+            if (keyword != null && !keyword.isBlank()) {
+                url.append("&keyword=").append(URLEncoder.encode(keyword.trim(), StandardCharsets.UTF_8));
+            }
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    url.toString(),
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<Map<String, Object>>() {}
+            );
+            Map<String, Object> body = response.getBody();
+            if (body == null) {
+                return PageResponse.of(List.of(), p, s, 0);
+            }
+            List<Map<String, Object>> raw = (List<Map<String, Object>>) body.get("content");
+            long total = body.get("totalElements") instanceof Number n ? n.longValue() : 0;
+            if (raw == null) {
+                return PageResponse.of(List.of(), p, s, total);
+            }
+            List<Map<String, Object>> slim = new ArrayList<>();
+            for (Map<String, Object> row : raw) {
+                if (row == null) {
+                    continue;
+                }
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("userId", Objects.toString(row.get("id"), null));
+                m.put("username", Objects.toString(row.get("username"), null));
+                m.put("displayName", firstNonBlank(
+                        Objects.toString(row.get("fullName"), null),
+                        Objects.toString(row.get("displayName"), null)));
+                m.put("email", Objects.toString(row.get("email"), null));
+                slim.add(m);
+            }
+            return PageResponse.of(slim, p, s, total);
+        } catch (Exception e) {
+            log.error("searchActiveUsersForPortal failed: {}", e.getMessage());
+            return PageResponse.of(List.of(), p, s, 0);
+        }
+    }
+
+    /**
+     * 受益人须为可登录的 ACTIVE 用户
+     */
+    public boolean isActivePortalUser(String userId) {
+        if (userId == null || userId.isBlank()) {
+            return false;
+        }
+        Map<String, Object> u = getUserById(userId.trim());
+        if (u == null || u.isEmpty()) {
+            return false;
+        }
+        Object st = u.get("status");
+        return st == null || "ACTIVE".equalsIgnoreCase(String.valueOf(st).trim());
+    }
+
+    private static String firstNonBlank(String a, String b) {
+        if (a != null && !a.isBlank()) {
+            return a;
+        }
+        if (b != null && !b.isBlank()) {
+            return b;
+        }
+        return null;
     }
 }

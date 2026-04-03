@@ -113,11 +113,13 @@ CREATE TABLE IF NOT EXISTS up_permission_request (
     -- Business unit request fields
     business_unit_id VARCHAR(64),
     business_unit_name VARCHAR(200),
+    submitted_by_user_id VARCHAR(64),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE INDEX IF NOT EXISTS idx_up_permission_request_applicant_id ON up_permission_request(applicant_id);
+CREATE INDEX IF NOT EXISTS idx_up_permission_request_submitted_by ON up_permission_request(submitted_by_user_id);
 CREATE INDEX IF NOT EXISTS idx_up_permission_request_status ON up_permission_request(status);
 
 -- =====================================================

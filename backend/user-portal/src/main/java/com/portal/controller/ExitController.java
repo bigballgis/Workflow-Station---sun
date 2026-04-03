@@ -1,5 +1,6 @@
 package com.portal.controller;
 
+import com.platform.common.i18n.I18nService;
 import com.portal.client.AdminCenterClient;
 import com.portal.dto.ApiResponse;
 import com.portal.security.CurrentUserId;
@@ -28,8 +29,8 @@ import java.util.Map;
 @RequiredArgsConstructor
 @Tag(name = "Exit Operations", description = "User self-exit operations")
 public class ExitController {
-    
-    // TODO: Inject MemberManagementService from admin-center via REST client
+
+    private final I18nService i18nService;
     private final AdminCenterClient adminCenterClient;
     
     @PostMapping("/virtual-group/{groupId}")
@@ -39,19 +40,9 @@ public class ExitController {
     public ResponseEntity<ApiResponse<Map<String, Object>>> exitVirtualGroup(
             @PathVariable String groupId,
             @CurrentUserId String userId) {
-        log.info("User {} exiting virtual group: {}", userId, groupId);
-        
-        // TODO: Call admin-center API to exit virtual group
-        // POST /api/v1/admin/members/exit/virtual-group/{groupId}?userId={userId}
-        // This will:
-        // 1. Remove user from virtual group
-        // 2. Revoke the role bound to the virtual group
-
-        if (adminCenterClient.exitVirtualGroup(groupId, userId)) {
-            return ResponseEntity.ok(ApiResponse.success(Map.of()));
-        }
-        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                .body(ApiResponse.error("503", "Admin center service unavailable"));
+        log.info("Blocked portal virtual group exit for user {} group {}", userId, groupId);
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiResponse.error("403", i18nService.getMessage("portal.virtual_group_not_in_portal")));
     }
     
     @PostMapping("/business-unit/{businessUnitId}")
@@ -61,19 +52,9 @@ public class ExitController {
     public ResponseEntity<ApiResponse<Map<String, Object>>> exitBusinessUnit(
             @PathVariable String businessUnitId,
             @CurrentUserId String userId) {
-        log.info("User {} exiting business unit: {}", userId, businessUnitId);
-        
-        // TODO: Call admin-center API to exit business unit
-        // POST /api/v1/admin/members/exit/business-unit/{businessUnitId}?userId={userId}
-        // This will:
-        // 1. Remove user from business unit
-        // 2. Deactivate all BU-Bounded roles for this business unit
-        
-        if (adminCenterClient.exitBusinessUnit(businessUnitId, userId)) {
-            return ResponseEntity.ok(ApiResponse.success(Map.of()));
-        }
-        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                .body(ApiResponse.error("503", "Admin center service unavailable"));
+        log.info("Blocked direct BU exit for user {} bu {} — use permission request flow", userId, businessUnitId);
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiResponse.error("403", i18nService.getMessage("portal.exit_use_permission_request")));
     }
     
     @GetMapping("/my-memberships")

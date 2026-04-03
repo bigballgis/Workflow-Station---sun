@@ -41,6 +41,18 @@ public class PermissionRequest {
     @Column(name = "applicant_id", nullable = false, length = 64)
     private String applicantId;
 
+    /**
+     * 实际提交申请的登录用户（代办时与 applicantId 不同）；历史数据可为 null（视同本人提交）
+     */
+    @Column(name = "submitted_by_user_id", length = 64)
+    private String submittedByUserId;
+
+    /** 提交人展示名，不入库 */
+    @Transient
+    @EqualsAndHashCode.Exclude
+    @ToString.Exclude
+    private String submittedByUsername;
+
     /** 登录名，审批列表展示用（不入库） */
     @Transient
     @EqualsAndHashCode.Exclude

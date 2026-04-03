@@ -29,6 +29,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
     
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final PortalSelfServiceAccessFilter portalSelfServiceAccessFilter;
     
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -46,7 +47,8 @@ public class SecurityConfig {
                 // set to permitAll() because the authentication decision is made by the JWT filter, not by Spring Security.
                 // In production, Kong rejects unauthenticated requests before they reach this service.
                 anyRequest().permitAll())
-            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+            .addFilterAfter(portalSelfServiceAccessFilter, JwtAuthenticationFilter.class);
         return http.build();
     }
 }

@@ -9,6 +9,8 @@ import com.platform.common.i18n.I18nService;
 import com.portal.dto.ChangePasswordRequest;
 import com.portal.dto.LoginRequest;
 import com.portal.dto.LoginResponse;
+import com.portal.dto.SwitchWorkspaceRequest;
+import com.portal.service.PortalWorkspaceAuthService;
 import com.platform.security.repository.UserRepository;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
@@ -27,7 +29,14 @@ import org.springframework.web.bind.annotation.*;
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Date;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -36,12 +45,21 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AuthController {
 
+    private static final String CLAIM_ACTIVE_BUSINESS_UNIT_ID = "activeBusinessUnitId";
+    private static final String CLAIM_ACTIVE_ROLE_ID = "activeRoleId";
+    private static final String CLAIM_PORTAL_ACCESS_MODE = "portalAccessMode";
+    /** 无 UBR（|C|=0）时门户仅开放权限自助等白名单接口 */
+    public static final String PORTAL_ACCESS_MODE_SELF_SERVICE = "PERMISSION_SELF_SERVICE_ONLY";
+    public static final String PORTAL_ACCESS_MODE_FULL = "FULL";
+    private static final String REFRESH_TYPE = "refresh";
+
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JdbcTemplate jdbcTemplate;
     private final UserRoleService userRoleService;
     private final I18nService i18nService;
     private final JwtTokenService jwtTokenService;
+    private final PortalWorkspaceAuthService portalWorkspaceAuthService;
     
     @Value("${jwt.secret}")
     private String jwtSecret;
@@ -88,49 +106,63 @@ public class AuthController {
             user.setLastLoginAt(LocalDateTime.now());
             user.setLastLoginIp(ipAddress);
             userRepository.save(user);
-            
-            // 使用 UserRoleService 获取用户有效角色
-            List<UserEffectiveRole> effectiveRoles = userRoleService.getEffectiveRolesForUser(user.getId().toString());
-            List<String> roles = effectiveRoles.stream()
-                    .map(UserEffectiveRole::getRoleCode)
-                    .distinct()
-                    .collect(Collectors.toList());
-            
-            // 如果没有从新系统获取到角色，回退到旧方式
-            if (roles.isEmpty()) {
-                roles = getRolesForUserLegacy(user.getId());
+
+            String userId = user.getId();
+            List<PortalWorkspaceAuthService.WorkspaceContextRow> wctx = portalWorkspaceAuthService.listWorkspaceContexts(userId);
+
+            if (wctx.size() > 1) {
+                boolean missingSelection = request.getWorkspaceBusinessUnitId() == null || request.getWorkspaceBusinessUnitId().isBlank()
+                        || request.getWorkspaceRoleId() == null || request.getWorkspaceRoleId().isBlank();
+                if (missingSelection) {
+                    List<LoginResponse.WorkspaceContextOption> options = wctx.stream()
+                            .map(r -> LoginResponse.WorkspaceContextOption.builder()
+                                    .businessUnitId(r.getBusinessUnitId())
+                                    .roleId(r.getRoleId())
+                                    .businessUnitName(r.getBusinessUnitName())
+                                    .roleCode(r.getRoleCode())
+                                    .roleName(r.getRoleName())
+                                    .build())
+                            .collect(Collectors.toList());
+                    return ResponseEntity.badRequest().body(LoginResponse.builder()
+                            .loginErrorCode("WORKSPACE_CONTEXT_REQUIRED")
+                            .workspaceContexts(options)
+                            .build());
+                }
             }
-            
-            List<String> permissions = getPermissionsForRoles(roles);
-            List<LoginResponse.RoleWithSource> rolesWithSources = buildRolesWithSources(effectiveRoles);
-            
-            String accessToken = generateToken(user, roles, permissions);
-            String refreshToken = generateRefreshToken(user.getId().toString());
-            
+
+            String activeBu = null;
+            String activeRoleId = null;
+            if (!wctx.isEmpty()) {
+                if (wctx.size() == 1) {
+                    activeBu = wctx.get(0).getBusinessUnitId();
+                    activeRoleId = wctx.get(0).getRoleId();
+                } else {
+                    activeBu = request.getWorkspaceBusinessUnitId().trim();
+                    activeRoleId = request.getWorkspaceRoleId().trim();
+                }
+                if (!portalWorkspaceAuthService.hasContext(userId, activeBu, activeRoleId)) {
+                    throw new RuntimeException(i18nService.getMessage("auth.invalid_credentials"));
+                }
+            }
+
+            LoginBundle bundle = buildRolesAndPermissions(user, activeBu, activeRoleId);
+            String portalAccessMode = portalAccessModeForWorkspace(wctx);
+            String accessToken = generateToken(user, bundle.roles, bundle.permissions, activeBu, activeRoleId, portalAccessMode);
+            String refreshToken = generateRefreshToken(userId, activeBu, activeRoleId, portalAccessMode);
+
             log.info("User {} logged in successfully", request.getUsername());
-            
+
             return ResponseEntity.ok(LoginResponse.builder()
                     .accessToken(accessToken)
                     .refreshToken(refreshToken)
                     .expiresIn(jwtExpiration / 1000)
-                    .user(LoginResponse.UserLoginInfo.builder()
-                            .userId(user.getId().toString())
-                            .username(user.getUsername())
-                            .displayName(user.getFullName() != null && !user.getFullName().isEmpty() 
-                                ? user.getFullName() 
-                                : (user.getDisplayName() != null && !user.getDisplayName().isEmpty() 
-                                    ? user.getDisplayName() 
-                                    : user.getUsername()))
-                            .email(user.getEmail())
-                            .roles(roles)
-                            .permissions(permissions)
-                            .rolesWithSources(rolesWithSources)
-                            .language(user.getLanguage())
-                            .build())
+                    .user(toUserLoginInfo(user, bundle, activeBu, activeRoleId, wctx.size() > 1, portalAccessMode))
                     .build());
         } catch (RuntimeException e) {
             log.warn("Login failed: {}", e.getMessage());
-            return ResponseEntity.badRequest().body(LoginResponse.builder().build());
+            return ResponseEntity.badRequest().body(LoginResponse.builder()
+                    .message(e.getMessage() != null ? e.getMessage() : "登录失败")
+                    .build());
         }
     }
 
@@ -159,17 +191,27 @@ public class AuthController {
             }
             jwtTokenService.blacklistToken(refreshToken);
             String userId = claims.getSubject();
+            if (!REFRESH_TYPE.equals(claims.get("type", String.class))) {
+                return ResponseEntity.status(401).build();
+            }
+            String activeBu = claims.get(CLAIM_ACTIVE_BUSINESS_UNIT_ID, String.class);
+            String activeRoleId = claims.get(CLAIM_ACTIVE_ROLE_ID, String.class);
+
             User user = userRepository.findById(userId)
                     .orElseThrow(() -> new RuntimeException("User not found"));
-            
-            List<UserEffectiveRole> effectiveRoles = userRoleService.getEffectiveRolesForUser(userId);
-            List<String> roles = effectiveRoles.stream()
-                    .map(UserEffectiveRole::getRoleCode).distinct().collect(java.util.stream.Collectors.toList());
-            if (roles.isEmpty()) { roles = getRolesForUserLegacy(user.getId().toString()); }
-            List<String> permissions = getPermissionsForRoles(roles);
-            
-            String newAccessToken = generateToken(user, roles, permissions);
-            String newRefreshToken = generateRefreshToken(user.getId().toString());
+
+            List<PortalWorkspaceAuthService.WorkspaceContextRow> wctx = portalWorkspaceAuthService.listWorkspaceContexts(userId);
+            if (!wctx.isEmpty()) {
+                if (activeBu == null || activeRoleId == null
+                        || !portalWorkspaceAuthService.hasContext(userId, activeBu, activeRoleId)) {
+                    return ResponseEntity.status(401).build();
+                }
+            }
+
+            String portalAccessMode = portalAccessModeForWorkspace(wctx);
+            LoginBundle bundle = buildRolesAndPermissions(user, activeBu, activeRoleId);
+            String newAccessToken = generateToken(user, bundle.roles, bundle.permissions, activeBu, activeRoleId, portalAccessMode);
+            String newRefreshToken = generateRefreshToken(userId, activeBu, activeRoleId, portalAccessMode);
             return ResponseEntity.ok(Map.of(
                     "accessToken", newAccessToken,
                     "refreshToken", newRefreshToken,
@@ -215,35 +257,83 @@ public class AuthController {
             String token = authHeader.substring(7);
             Claims claims = parseToken(token);
             String userId = claims.getSubject();
-            
+            String activeBu = claims.get(CLAIM_ACTIVE_BUSINESS_UNIT_ID, String.class);
+            String activeRoleId = claims.get(CLAIM_ACTIVE_ROLE_ID, String.class);
+
             User user = userRepository.findById(userId)
                     .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.user_not_found")));
-            
-            List<UserEffectiveRole> effectiveRoles = userRoleService.getEffectiveRolesForUser(userId);
-            List<String> roles = effectiveRoles.stream()
-                    .map(UserEffectiveRole::getRoleCode)
-                    .distinct()
-                    .collect(Collectors.toList());
-            
-            if (roles.isEmpty()) {
-                roles = getRolesForUserLegacy(user.getId());
+
+            List<PortalWorkspaceAuthService.WorkspaceContextRow> wctx = portalWorkspaceAuthService.listWorkspaceContexts(userId);
+            if (!wctx.isEmpty()) {
+                if (activeBu == null || activeRoleId == null
+                        || !portalWorkspaceAuthService.hasContext(userId, activeBu, activeRoleId)) {
+                    return ResponseEntity.status(401).build();
+                }
             }
-            
-            List<LoginResponse.RoleWithSource> rolesWithSources = buildRolesWithSources(effectiveRoles);
-            
-            return ResponseEntity.ok(LoginResponse.UserLoginInfo.builder()
-                    .userId(user.getId().toString())
-                    .username(user.getUsername())
-                    .displayName(user.getFullName() != null && !user.getFullName().isEmpty() 
-                        ? user.getFullName() 
-                        : (user.getDisplayName() != null && !user.getDisplayName().isEmpty() 
-                            ? user.getDisplayName() 
-                            : user.getUsername()))
-                    .email(user.getEmail())
-                    .roles(roles)
-                    .permissions(getPermissionsForRoles(roles))
-                    .rolesWithSources(rolesWithSources)
-                    .language(user.getLanguage())
+
+            String portalAccessMode = portalAccessModeForWorkspace(wctx);
+            LoginBundle bundle = buildRolesAndPermissions(user, activeBu, activeRoleId);
+            return ResponseEntity.ok(toUserLoginInfo(user, bundle, activeBu, activeRoleId, wctx.size() > 1, portalAccessMode));
+        } catch (Exception e) {
+            return ResponseEntity.status(401).build();
+        }
+    }
+
+    @GetMapping("/workspace-contexts")
+    public ResponseEntity<List<Map<String, String>>> listWorkspaceContexts(@RequestHeader("Authorization") String authHeader) {
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            return ResponseEntity.status(401).build();
+        }
+        try {
+            String token = authHeader.substring(7);
+            Claims claims = parseToken(token);
+            String userId = claims.getSubject();
+            List<Map<String, String>> out = portalWorkspaceAuthService.listWorkspaceContexts(userId).stream()
+                    .map(r -> {
+                        Map<String, String> m = new LinkedHashMap<>();
+                        m.put("businessUnitId", r.getBusinessUnitId());
+                        m.put("roleId", r.getRoleId());
+                        m.put("businessUnitName", r.getBusinessUnitName() != null ? r.getBusinessUnitName() : "");
+                        m.put("roleCode", r.getRoleCode() != null ? r.getRoleCode() : "");
+                        m.put("roleName", r.getRoleName() != null ? r.getRoleName() : "");
+                        return m;
+                    })
+                    .collect(Collectors.toList());
+            return ResponseEntity.ok(out);
+        } catch (Exception e) {
+            return ResponseEntity.status(401).build();
+        }
+    }
+
+    @PostMapping("/switch-workspace")
+    public ResponseEntity<LoginResponse> switchWorkspace(
+            @RequestHeader("Authorization") String authHeader,
+            @Valid @RequestBody SwitchWorkspaceRequest body) {
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            return ResponseEntity.status(401).build();
+        }
+        try {
+            String token = authHeader.substring(7);
+            Claims claims = parseToken(token);
+            String userId = claims.getSubject();
+            if (!portalWorkspaceAuthService.hasContext(userId, body.getBusinessUnitId(), body.getRoleId())) {
+                return ResponseEntity.status(403).build();
+            }
+            jwtTokenService.blacklistToken(token);
+            User user = userRepository.findById(userId)
+                    .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.user_not_found")));
+            String activeBu = body.getBusinessUnitId();
+            String activeRoleId = body.getRoleId();
+            List<PortalWorkspaceAuthService.WorkspaceContextRow> wctx = portalWorkspaceAuthService.listWorkspaceContexts(userId);
+            String portalAccessMode = portalAccessModeForWorkspace(wctx);
+            LoginBundle bundle = buildRolesAndPermissions(user, activeBu, activeRoleId);
+            String accessToken = generateToken(user, bundle.roles, bundle.permissions, activeBu, activeRoleId, portalAccessMode);
+            String refreshToken = generateRefreshToken(userId, activeBu, activeRoleId, portalAccessMode);
+            return ResponseEntity.ok(LoginResponse.builder()
+                    .accessToken(accessToken)
+                    .refreshToken(refreshToken)
+                    .expiresIn(jwtExpiration / 1000)
+                    .user(toUserLoginInfo(user, bundle, activeBu, activeRoleId, wctx.size() > 1, portalAccessMode))
                     .build());
         } catch (Exception e) {
             return ResponseEntity.status(401).build();
@@ -279,39 +369,136 @@ public class AuthController {
         return result;
     }
 
-    private String generateToken(User user, List<String> roles, List<String> permissions) {
+    private String generateToken(User user, List<String> roles, List<String> permissions,
+                                 String activeBusinessUnitId, String activeRoleId, String portalAccessMode) {
         Date now = new Date();
         Date expiry = new Date(now.getTime() + jwtExpiration);
-        
-        return Jwts.builder()
-                .subject(user.getId().toString())
+
+        var builder = Jwts.builder()
+                .subject(user.getId())
                 .claim("username", user.getUsername())
                 .claim("email", user.getEmail())
-                .claim("displayName", user.getFullName() != null && !user.getFullName().isEmpty() 
-                    ? user.getFullName() 
-                    : (user.getDisplayName() != null && !user.getDisplayName().isEmpty() 
-                        ? user.getDisplayName() 
+                .claim("displayName", user.getFullName() != null && !user.getFullName().isEmpty()
+                        ? user.getFullName()
+                        : (user.getDisplayName() != null && !user.getDisplayName().isEmpty()
+                        ? user.getDisplayName()
                         : user.getUsername()))
                 .claim("roles", roles)
                 .claim("permissions", permissions)
                 .claim("language", user.getLanguage())
+                .claim(CLAIM_PORTAL_ACCESS_MODE, portalAccessMode != null ? portalAccessMode : PORTAL_ACCESS_MODE_FULL)
                 .issuedAt(now)
-                .expiration(expiry)
-                .signWith(getSigningKey())
-                .compact();
+                .expiration(expiry);
+        if (activeBusinessUnitId != null && !activeBusinessUnitId.isBlank()) {
+            builder.claim(CLAIM_ACTIVE_BUSINESS_UNIT_ID, activeBusinessUnitId);
+        }
+        if (activeRoleId != null && !activeRoleId.isBlank()) {
+            builder.claim(CLAIM_ACTIVE_ROLE_ID, activeRoleId);
+        }
+        return builder.signWith(getSigningKey()).compact();
     }
 
-    private String generateRefreshToken(String userId) {
+    private String generateRefreshToken(String userId, String activeBusinessUnitId, String activeRoleId, String portalAccessMode) {
         Date now = new Date();
         Date expiry = new Date(now.getTime() + 604800000);
-        
-        return Jwts.builder()
+
+        var builder = Jwts.builder()
                 .subject(userId)
-                .claim("type", "refresh")
+                .claim("type", REFRESH_TYPE)
+                .claim(CLAIM_PORTAL_ACCESS_MODE, portalAccessMode != null ? portalAccessMode : PORTAL_ACCESS_MODE_FULL)
                 .issuedAt(now)
-                .expiration(expiry)
-                .signWith(getSigningKey())
-                .compact();
+                .expiration(expiry);
+        if (activeBusinessUnitId != null && !activeBusinessUnitId.isBlank()) {
+            builder.claim(CLAIM_ACTIVE_BUSINESS_UNIT_ID, activeBusinessUnitId);
+        }
+        if (activeRoleId != null && !activeRoleId.isBlank()) {
+            builder.claim(CLAIM_ACTIVE_ROLE_ID, activeRoleId);
+        }
+        return builder.signWith(getSigningKey()).compact();
+    }
+
+    private static String portalAccessModeForWorkspace(List<PortalWorkspaceAuthService.WorkspaceContextRow> wctx) {
+        if (wctx == null || wctx.isEmpty()) {
+            return PORTAL_ACCESS_MODE_SELF_SERVICE;
+        }
+        return PORTAL_ACCESS_MODE_FULL;
+    }
+
+    private record LoginBundle(List<String> roles, List<String> permissions,
+                              List<LoginResponse.RoleWithSource> rolesWithSources,
+                              String activeBusinessUnitName, String activeRoleName) {
+    }
+
+    private LoginBundle buildRolesAndPermissions(User user, String activeBusinessUnitId, String activeRoleId) {
+        String userId = user.getId();
+        List<PortalWorkspaceAuthService.WorkspaceContextRow> wctx = portalWorkspaceAuthService.listWorkspaceContexts(userId);
+        List<UserEffectiveRole> effectiveAll = userRoleService.getEffectiveRolesForUser(userId);
+
+        if (wctx.isEmpty()) {
+            List<String> roles = effectiveAll.stream()
+                    .map(UserEffectiveRole::getRoleCode)
+                    .distinct()
+                    .collect(Collectors.toList());
+            if (roles.isEmpty()) {
+                roles = new ArrayList<>(getRolesForUserLegacy(userId));
+            }
+            List<String> permissions = new ArrayList<>(userRoleService.getPermissionsForUser(userId));
+            if (permissions.isEmpty()) {
+                permissions = new ArrayList<>(getPermissionsForRoles(roles));
+            }
+            return new LoginBundle(roles, permissions, buildRolesWithSources(effectiveAll), null, null);
+        }
+
+        List<String> unboundedCodes = effectiveAll.stream()
+                .filter(r -> "BU_UNBOUNDED".equals(r.getRoleType()))
+                .map(UserEffectiveRole::getRoleCode)
+                .filter(Objects::nonNull)
+                .distinct()
+                .collect(Collectors.toList());
+
+        PortalWorkspaceAuthService.WorkspaceContextRow row = wctx.stream()
+                .filter(r -> activeBusinessUnitId != null && activeBusinessUnitId.equals(r.getBusinessUnitId())
+                        && activeRoleId != null && activeRoleId.equals(r.getRoleId()))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("workspace context not found"));
+
+        List<String> roles = new ArrayList<>();
+        if (row.getRoleCode() != null && !row.getRoleCode().isBlank()) {
+            roles.add(row.getRoleCode());
+        }
+        roles.addAll(unboundedCodes);
+        roles = roles.stream().distinct().collect(Collectors.toList());
+
+        LinkedHashSet<String> perms = new LinkedHashSet<>(portalWorkspaceAuthService.permissionsForRoleId(activeRoleId));
+        perms.addAll(userRoleService.getPermissionsForRoleCodes(unboundedCodes));
+
+        return new LoginBundle(new ArrayList<>(roles), new ArrayList<>(perms), buildRolesWithSources(effectiveAll),
+                row.getBusinessUnitName(), row.getRoleName());
+    }
+
+    private LoginResponse.UserLoginInfo toUserLoginInfo(User user, LoginBundle bundle,
+                                                        String activeBusinessUnitId, String activeRoleId,
+                                                        boolean workspaceSwitcherVisible, String portalAccessMode) {
+        return LoginResponse.UserLoginInfo.builder()
+                .userId(user.getId())
+                .username(user.getUsername())
+                .displayName(user.getFullName() != null && !user.getFullName().isEmpty()
+                        ? user.getFullName()
+                        : (user.getDisplayName() != null && !user.getDisplayName().isEmpty()
+                        ? user.getDisplayName()
+                        : user.getUsername()))
+                .email(user.getEmail())
+                .roles(bundle.roles)
+                .permissions(bundle.permissions)
+                .rolesWithSources(bundle.rolesWithSources)
+                .language(user.getLanguage())
+                .activeBusinessUnitId(activeBusinessUnitId)
+                .activeBusinessUnitName(bundle.activeBusinessUnitName)
+                .activeRoleId(activeRoleId)
+                .activeRoleName(bundle.activeRoleName)
+                .workspaceSwitcherVisible(workspaceSwitcherVisible)
+                .portalAccessMode(portalAccessMode != null ? portalAccessMode : PORTAL_ACCESS_MODE_FULL)
+                .build();
     }
 
     private Claims parseToken(String token) {

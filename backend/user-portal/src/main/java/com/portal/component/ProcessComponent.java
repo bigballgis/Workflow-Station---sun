@@ -2,6 +2,7 @@ package com.portal.component;
 
 import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.ChangeHistoryContext;
+import com.portal.exception.PortalException;
 import com.portal.dto.ProcessDefinitionInfo;
 import com.portal.dto.ProcessInstanceInfo;
 import com.portal.dto.ProcessStartRequest;
@@ -15,7 +16,9 @@ import com.portal.repository.ProcessDraftRepository;
 import com.portal.repository.ProcessHistoryRepository;
 import com.portal.repository.ProcessInstanceRepository;
 import com.portal.repository.ActionDefinitionRepository;
+import com.portal.service.PortalWorkspaceAuthService;
 import com.platform.common.util.ApiResponseBodyUnwrap;
+import com.platform.security.util.SecurityContextUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -48,6 +51,7 @@ public class ProcessComponent {
     private final WorkflowEngineClient workflowEngineClient;
     private final ProcessDraftComponent processDraftComponent;
     private final ChangeHistoryComponent changeHistoryComponent;
+    private final PortalWorkspaceAuthService portalWorkspaceAuthService;
     private final RestTemplate restTemplate;
 
     @jakarta.persistence.PersistenceContext
@@ -215,10 +219,44 @@ public class ProcessComponent {
             }
         }
         
-        // 启动流程实例
+        // 启动流程实例：剥离客户端伪造的工作台键；有 UBR 的用户必须携带有效 JWT 工作台上下文（与 hasContext 一致）
         Map<String, Object> variables = request.getFormData() != null ? new HashMap<>(request.getFormData()) : new HashMap<>();
+        variables.remove("activeBusinessUnitId");
+        variables.remove("activeRoleId");
         variables.put("initiator", userId);
-        
+
+        List<PortalWorkspaceAuthService.WorkspaceContextRow> wctx = portalWorkspaceAuthService.listWorkspaceContexts(userId);
+        boolean jwtUserMatches = SecurityContextUtils.getCurrentUserId().map(uid -> uid.equals(userId)).orElse(false);
+        if (!jwtUserMatches && userId != null && !userId.isEmpty()) {
+            log.warn("Process start: path userId={} does not match JWT subject={} — active BU will not be applied",
+                    userId, SecurityContextUtils.getCurrentUserId().orElse(null));
+        }
+
+        if (!wctx.isEmpty()) {
+            if (!jwtUserMatches) {
+                throw new PortalException("400",
+                        "无法校验登录身份与工作台，请重新登录后再发起流程");
+            }
+            String jwtBu = SecurityContextUtils.getCurrentActiveBusinessUnitId().orElse("").trim();
+            String jwtRole = SecurityContextUtils.getCurrentActiveRoleId().orElse("").trim();
+            if (jwtBu.isEmpty() || jwtRole.isEmpty()) {
+                throw new PortalException("400",
+                        "您的账号关联业务单元角色，发起流程前请先登录，并在顶部选择工作台，或重新登录后再试");
+            }
+            if (!portalWorkspaceAuthService.hasContext(userId, jwtBu, jwtRole)) {
+                throw new PortalException("400",
+                        "当前工作台身份已失效（权限可能已调整），请切换工作台或重新登录后再发起");
+            }
+            variables.put("activeBusinessUnitId", jwtBu);
+        } else {
+            if (jwtUserMatches) {
+                SecurityContextUtils.getCurrentActiveBusinessUnitId()
+                        .map(String::trim)
+                        .filter(bu -> !bu.isEmpty())
+                        .ifPresent(bu -> variables.put("activeBusinessUnitId", bu));
+            }
+        }
+
         Optional<Map<String, Object>> startResult = workflowEngineClient.startProcess(
                 actualProcessKey, request.getBusinessKey(), userId, variables);
         
@@ -1007,8 +1045,10 @@ public class ProcessComponent {
         }
 
         Map<String, String> userNameCache = new HashMap<>();
+        // 列表接口不返回 variables：库内 JSONB 可能含 Jackson 无法序列化的嵌套结构，会在写响应时触发 HttpMessageNotWritableException → SYS_INTERNAL_ERROR
         List<ProcessInstanceInfo> instances = instancePage.getContent().stream()
                 .map(inst -> toProcessInstanceInfo(inst, userNameCache))
+                .peek(info -> info.setVariables(null))
                 .toList();
 
         return new PageImpl<>(instances, pageable, instancePage.getTotalElements());

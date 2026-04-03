@@ -13,6 +13,9 @@ public enum PermissionRequestType {
 
     /** 申请移除在指定业务单元下的某业务角色（需审批人批准后生效） */
     BUSINESS_UNIT_ROLE_REMOVAL,
+
+    /** 申请退出业务单元成员（审批通过后移除成员及该 BU 下全部 UBR） */
+    BUSINESS_UNIT_EXIT,
     
     // ========== 以下为旧类型，已废弃 ==========
     /** @deprecated 使用 ROLE_ASSIGNMENT 替代 */

@@ -8,7 +8,6 @@ import com.portal.repository.PermissionRequestRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 
@@ -24,6 +23,12 @@ import java.util.stream.Collectors;
 @Component
 @RequiredArgsConstructor
 public class PermissionComponent {
+
+    /** 门户审批列表中展示的业务单元类申请（不含虚拟组） */
+    private static final List<PermissionRequestType> BU_APPROVER_REQUEST_TYPES = List.of(
+            PermissionRequestType.BUSINESS_UNIT_JOIN,
+            PermissionRequestType.BUSINESS_UNIT_ROLE_REMOVAL,
+            PermissionRequestType.BUSINESS_UNIT_EXIT);
 
     private final PermissionRequestRepository permissionRequestRepository;
     private final RoleAccessComponent roleAccessComponent;
@@ -126,6 +131,7 @@ public class PermissionComponent {
         // 创建申请记录
         PermissionRequest request = PermissionRequest.builder()
                 .applicantId(userId)
+                .submittedByUserId(userId)
                 .requestType(PermissionRequestType.ROLE_ASSIGNMENT)
                 .roleId(roleId)
                 .roleName((String) role.get("name"))
@@ -175,6 +181,7 @@ public class PermissionComponent {
         // 创建申请记录 - 状态为 PENDING，等待审批
         PermissionRequest request = PermissionRequest.builder()
                 .applicantId(userId)
+                .submittedByUserId(userId)
                 .requestType(PermissionRequestType.VIRTUAL_GROUP_JOIN)
                 .virtualGroupId(virtualGroupId)
                 .virtualGroupName((String) group.get("name"))
@@ -193,14 +200,23 @@ public class PermissionComponent {
     /**
      * 申请加入业务单元（需要审批）
      */
-    public PermissionRequest requestBusinessUnitJoin(String userId, String businessUnitId, String reason) {
-        return requestBusinessUnitJoinWithRole(userId, businessUnitId, null, reason);
+    public PermissionRequest requestBusinessUnitJoin(String submittedByUserId, String beneficiaryUserId,
+                                                     String businessUnitId, String reason) {
+        return requestBusinessUnitJoinWithRole(submittedByUserId, beneficiaryUserId, businessUnitId, null, reason);
     }
 
     /**
      * 申请加入业务单元，并指定该业务单元下的一条 Eligible Role（与 admin 中 BU 绑定角色一致）
+     *
+     * @param submittedByUserId 当前登录用户
+     * @param beneficiaryUserId 受益人（为空则与提交人相同）
      */
-    public PermissionRequest requestBusinessUnitJoinWithRole(String userId, String businessUnitId, String roleId, String reason) {
+    public PermissionRequest requestBusinessUnitJoinWithRole(String submittedByUserId, String beneficiaryUserId,
+                                                             String businessUnitId, String roleId, String reason) {
+        Objects.requireNonNull(submittedByUserId, "submittedByUserId");
+        String beneficiary = normalizeUserIdOrDefault(beneficiaryUserId, submittedByUserId);
+        assertActiveBeneficiary(beneficiary);
+
         // 获取业务单元信息
         Map<String, Object> businessUnit = virtualGroupAccessComponent.getBusinessUnitById(businessUnitId);
         if (businessUnit == null) {
@@ -208,8 +224,8 @@ public class PermissionComponent {
         }
 
         // 检查是否已是成员
-        if (virtualGroupAccessComponent.isUserInBusinessUnit(userId, businessUnitId)) {
-            throw new IllegalArgumentException("您已是该业务单元成员");
+        if (virtualGroupAccessComponent.isUserInBusinessUnit(beneficiary, businessUnitId)) {
+            throw new IllegalArgumentException("该用户已是该业务单元成员");
         }
 
         String roleName = null;
@@ -228,7 +244,8 @@ public class PermissionComponent {
 
         // 创建申请记录 - 状态为 PENDING，等待审批
         PermissionRequest request = PermissionRequest.builder()
-                .applicantId(userId)
+                .applicantId(beneficiary)
+                .submittedByUserId(submittedByUserId)
                 .requestType(PermissionRequestType.BUSINESS_UNIT_JOIN)
                 .businessUnitId(businessUnitId)
                 .businessUnitName((String) businessUnit.get("name"))
@@ -241,16 +258,54 @@ public class PermissionComponent {
 
         // 保存申请记录
         request = permissionRequestRepository.save(request);
-        log.info("Business unit join request created: user={}, businessUnit={}, roleId={}, requestId={}",
-                userId, businessUnitId, roleId, request.getId());
+        log.info("Business unit join request created: beneficiary={}, submittedBy={}, businessUnit={}, roleId={}, requestId={}",
+                beneficiary, submittedByUserId, businessUnitId, roleId, request.getId());
 
+        return request;
+    }
+
+    /**
+     * 申请退出业务单元（成员）：审批通过后移除成员及该 BU 下全部 UBR
+     */
+    public PermissionRequest requestBusinessUnitExit(String submittedByUserId, String beneficiaryUserId,
+                                                     String businessUnitId, String reason) {
+        Objects.requireNonNull(submittedByUserId, "submittedByUserId");
+        String beneficiary = normalizeUserIdOrDefault(beneficiaryUserId, submittedByUserId);
+        assertActiveBeneficiary(beneficiary);
+        if (reason == null || reason.isBlank()) {
+            throw new IllegalArgumentException("请填写申请理由");
+        }
+        Map<String, Object> businessUnit = virtualGroupAccessComponent.getBusinessUnitById(businessUnitId);
+        if (businessUnit == null) {
+            throw new IllegalArgumentException("业务单元不存在: " + businessUnitId);
+        }
+        if (!virtualGroupAccessComponent.isUserInBusinessUnit(beneficiary, businessUnitId)) {
+            throw new IllegalArgumentException("该用户不是此业务单元成员，无法申请退出");
+        }
+        PermissionRequest request = PermissionRequest.builder()
+                .applicantId(beneficiary)
+                .submittedByUserId(submittedByUserId)
+                .requestType(PermissionRequestType.BUSINESS_UNIT_EXIT)
+                .businessUnitId(businessUnitId)
+                .businessUnitName((String) businessUnit.get("name"))
+                .reason(reason)
+                .status(PermissionRequestStatus.PENDING)
+                .createdAt(LocalDateTime.now())
+                .build();
+        request = permissionRequestRepository.save(request);
+        log.info("Business unit exit request created: beneficiary={}, submittedBy={}, bu={}, requestId={}",
+                beneficiary, submittedByUserId, businessUnitId, request.getId());
         return request;
     }
 
     /**
      * 申请移除在指定业务单元下的业务角色（需该业务单元审批人批准后生效）
      */
-    public PermissionRequest requestBusinessUnitRoleRemoval(String userId, String businessUnitId, String roleId, String reason) {
+    public PermissionRequest requestBusinessUnitRoleRemoval(String submittedByUserId, String beneficiaryUserId,
+                                                            String businessUnitId, String roleId, String reason) {
+        Objects.requireNonNull(submittedByUserId, "submittedByUserId");
+        String beneficiary = normalizeUserIdOrDefault(beneficiaryUserId, submittedByUserId);
+        assertActiveBeneficiary(beneficiary);
         if (reason == null || reason.isBlank()) {
             throw new IllegalArgumentException("请填写申请理由");
         }
@@ -261,14 +316,8 @@ public class PermissionComponent {
         if (businessUnit == null) {
             throw new IllegalArgumentException("业务单元不存在: " + businessUnitId);
         }
-        if (!virtualGroupAccessComponent.userHasBusinessUnitRole(userId, businessUnitId, roleId)) {
-            throw new IllegalArgumentException("您在该业务单元下不拥有此角色，无法申请移除");
-        }
-        if (permissionRequestRepository.existsByApplicantIdAndBusinessUnitIdAndRoleIdAndRequestTypeAndStatus(
-                userId, businessUnitId, roleId,
-                PermissionRequestType.BUSINESS_UNIT_ROLE_REMOVAL,
-                PermissionRequestStatus.PENDING)) {
-            throw new IllegalArgumentException("已存在待审批的移除该角色的申请");
+        if (!virtualGroupAccessComponent.userHasBusinessUnitRole(beneficiary, businessUnitId, roleId)) {
+            throw new IllegalArgumentException("该用户在此业务单元下不拥有此角色，无法申请移除");
         }
         List<Map<String, Object>> bound = virtualGroupAccessComponent.getBusinessUnitBoundRoles(businessUnitId);
         String roleName = bound.stream()
@@ -277,14 +326,15 @@ public class PermissionComponent {
                 .findFirst()
                 .orElse(null);
         if (roleName == null) {
-            roleName = virtualGroupAccessComponent.listUserBusinessUnitRolesInBusinessUnit(userId, businessUnitId).stream()
+            roleName = virtualGroupAccessComponent.listUserBusinessUnitRolesInBusinessUnit(beneficiary, businessUnitId).stream()
                     .filter(r -> roleId.equals(String.valueOf(r.get("roleId"))))
                     .map(r -> Objects.toString(r.get("roleName"), null))
                     .findFirst()
                     .orElse(null);
         }
         PermissionRequest request = PermissionRequest.builder()
-                .applicantId(userId)
+                .applicantId(beneficiary)
+                .submittedByUserId(submittedByUserId)
                 .requestType(PermissionRequestType.BUSINESS_UNIT_ROLE_REMOVAL)
                 .businessUnitId(businessUnitId)
                 .businessUnitName((String) businessUnit.get("name"))
@@ -295,8 +345,8 @@ public class PermissionComponent {
                 .createdAt(LocalDateTime.now())
                 .build();
         request = permissionRequestRepository.save(request);
-        log.info("BU role removal request created: user={}, bu={}, roleId={}, requestId={}",
-                userId, businessUnitId, roleId, request.getId());
+        log.info("BU role removal request created: beneficiary={}, submittedBy={}, bu={}, roleId={}, requestId={}",
+                beneficiary, submittedByUserId, businessUnitId, roleId, request.getId());
         return request;
     }
 
@@ -323,29 +373,17 @@ public class PermissionComponent {
      * 只返回用户作为审批人的VG/BU的加入申请
      */
     public Page<PermissionRequest> getPendingApprovalsForUser(String userId, Pageable pageable) {
-        // 获取用户作为审批人的VG和BU ID列表
-        List<String> approverVgIds = virtualGroupAccessComponent.getApproverVirtualGroupIds(userId);
         List<String> approverBuIds = virtualGroupAccessComponent.getApproverBusinessUnitIds(userId);
-        
-        // 获取所有待审批的申请
-        Page<PermissionRequest> allPending = permissionRequestRepository.findByStatus(PermissionRequestStatus.PENDING, pageable);
-        
-        // 过滤出用户可以审批的申请
-        List<PermissionRequest> filteredList = allPending.getContent().stream()
-                .filter(request -> {
-                    if (request.getRequestType() == PermissionRequestType.VIRTUAL_GROUP_JOIN) {
-                        return approverVgIds.contains(request.getVirtualGroupId());
-                    } else if (request.getRequestType() == PermissionRequestType.BUSINESS_UNIT_JOIN) {
-                        return approverBuIds.contains(request.getBusinessUnitId());
-                    } else if (request.getRequestType() == PermissionRequestType.BUSINESS_UNIT_ROLE_REMOVAL) {
-                        return approverBuIds.contains(request.getBusinessUnitId());
-                    }
-                    return false;
-                })
-                .collect(Collectors.toList());
-
-        enrichApplicantFields(filteredList);
-        return new PageImpl<>(filteredList, pageable, filteredList.size());
+        if (approverBuIds == null || approverBuIds.isEmpty()) {
+            return Page.empty(pageable);
+        }
+        Page<PermissionRequest> page = permissionRequestRepository.findPendingForBusinessUnitApprovers(
+                PermissionRequestStatus.PENDING,
+                BU_APPROVER_REQUEST_TYPES,
+                approverBuIds,
+                pageable);
+        enrichDisplayFields(page.getContent());
+        return page;
     }
 
     /**
@@ -353,39 +391,26 @@ public class PermissionComponent {
      * 只返回用户作为审批人处理过的申请
      */
     public Page<PermissionRequest> getApprovalHistoryForUser(String userId, Pageable pageable) {
-        // 获取用户作为审批人的VG和BU ID列表
-        List<String> approverVgIds = virtualGroupAccessComponent.getApproverVirtualGroupIds(userId);
-        List<String> approverBuIds = virtualGroupAccessComponent.getApproverBusinessUnitIds(userId);
-        
-        // 获取所有已处理的申请（APPROVED / REJECTED / CANCELLED）
         List<PermissionRequestStatus> processedStatuses = Arrays.asList(
-                PermissionRequestStatus.APPROVED, 
+                PermissionRequestStatus.APPROVED,
                 PermissionRequestStatus.REJECTED,
-                PermissionRequestStatus.CANCELLED
-        );
-        Page<PermissionRequest> allProcessed = permissionRequestRepository.findByStatusIn(processedStatuses, pageable);
-        
-        // 过滤出用户可以看到的审批历史（用户是审批人的VG/BU的申请，或者用户亲自审批的）
-        List<PermissionRequest> filteredList = allProcessed.getContent().stream()
-                .filter(request -> {
-                    // 如果是用户亲自审批的，显示
-                    if (userId.equals(request.getApproverId())) {
-                        return true;
-                    }
-                    // 如果用户是该VG/BU的审批人，也显示
-                    if (request.getRequestType() == PermissionRequestType.VIRTUAL_GROUP_JOIN) {
-                        return approverVgIds.contains(request.getVirtualGroupId());
-                    } else if (request.getRequestType() == PermissionRequestType.BUSINESS_UNIT_JOIN) {
-                        return approverBuIds.contains(request.getBusinessUnitId());
-                    } else if (request.getRequestType() == PermissionRequestType.BUSINESS_UNIT_ROLE_REMOVAL) {
-                        return approverBuIds.contains(request.getBusinessUnitId());
-                    }
-                    return false;
-                })
-                .collect(Collectors.toList());
-
-        enrichApplicantFields(filteredList);
-        return new PageImpl<>(filteredList, pageable, filteredList.size());
+                PermissionRequestStatus.CANCELLED);
+        List<String> approverBuIds = virtualGroupAccessComponent.getApproverBusinessUnitIds(userId);
+        Page<PermissionRequest> page;
+        if (approverBuIds == null || approverBuIds.isEmpty()) {
+            page = permissionRequestRepository.findProcessedHistoryApproverOnly(
+                    userId, processedStatuses, PermissionRequestType.VIRTUAL_GROUP_JOIN, pageable);
+        } else {
+            page = permissionRequestRepository.findProcessedForApproverView(
+                    userId,
+                    approverBuIds,
+                    BU_APPROVER_REQUEST_TYPES,
+                    processedStatuses,
+                    PermissionRequestType.VIRTUAL_GROUP_JOIN,
+                    pageable);
+        }
+        enrichDisplayFields(page.getContent());
+        return page;
     }
 
     /**
@@ -435,6 +460,7 @@ public class PermissionComponent {
                             request.getBusinessUnitId(),
                             request.getRoleId());
                     if (!roleOk) {
+                        success = false;
                         errorMessage = "用户已加入业务单元，但分配业务单元角色失败";
                     } else {
                         // Role Members page在 admin-center 里是按“角色绑定的虚拟组成员”展示。
@@ -488,6 +514,13 @@ public class PermissionComponent {
                     virtualGroupAccessComponent.removeFromBoundVirtualGroupIfNoBuRoleAssignmentRemaining(
                             request.getApplicantId(),
                             request.getRoleId());
+                }
+            } else if (request.getRequestType() == PermissionRequestType.BUSINESS_UNIT_EXIT) {
+                success = virtualGroupAccessComponent.exitBusinessUnit(
+                        request.getApplicantId(),
+                        request.getBusinessUnitId());
+                if (!success) {
+                    errorMessage = "退出业务单元失败";
                 }
             } else {
                 errorMessage = "不支持的申请类型: " + request.getRequestType();
@@ -565,6 +598,8 @@ public class PermissionComponent {
             return virtualGroupAccessComponent.isApproverForBusinessUnit(userId, request.getBusinessUnitId());
         } else if (request.getRequestType() == PermissionRequestType.BUSINESS_UNIT_ROLE_REMOVAL) {
             return virtualGroupAccessComponent.isApproverForBusinessUnit(userId, request.getBusinessUnitId());
+        } else if (request.getRequestType() == PermissionRequestType.BUSINESS_UNIT_EXIT) {
+            return virtualGroupAccessComponent.isApproverForBusinessUnit(userId, request.getBusinessUnitId());
         }
         // 角色分配暂时不需要审批（自动批准）
         return false;
@@ -588,16 +623,19 @@ public class PermissionComponent {
     /**
      * 为审批列表填充申请人登录名等信息（供前端展示，避免只显示 applicantId UUID）
      */
-    private void enrichApplicantFields(List<PermissionRequest> requests) {
+    private void enrichDisplayFields(List<PermissionRequest> requests) {
         if (requests == null || requests.isEmpty()) {
             return;
         }
-        LinkedHashSet<String> ids = requests.stream()
-                .map(PermissionRequest::getApplicantId)
-                .filter(Objects::nonNull)
-                .map(String::trim)
-                .filter(s -> !s.isEmpty())
-                .collect(Collectors.toCollection(LinkedHashSet::new));
+        LinkedHashSet<String> ids = new LinkedHashSet<>();
+        for (PermissionRequest r : requests) {
+            if (r.getApplicantId() != null && !r.getApplicantId().isBlank()) {
+                ids.add(r.getApplicantId().trim());
+            }
+            if (r.getSubmittedByUserId() != null && !r.getSubmittedByUserId().isBlank()) {
+                ids.add(r.getSubmittedByUserId().trim());
+            }
+        }
         Map<String, Map<String, Object>> userById = new HashMap<>();
         for (String id : ids) {
             Map<String, Object> info = roleAccessComponent.getUserById(id);
@@ -606,18 +644,41 @@ public class PermissionComponent {
             }
         }
         for (PermissionRequest r : requests) {
-            Map<String, Object> info = userById.get(r.getApplicantId());
-            if (info == null) {
-                continue;
+            Map<String, Object> ainfo = userById.get(r.getApplicantId());
+            if (ainfo != null) {
+                String shown = firstNonBlank(
+                        nonBlankString(ainfo.get("username")),
+                        nonBlankString(ainfo.get("fullName")),
+                        nonBlankString(ainfo.get("displayName")));
+                if (shown != null) {
+                    r.setApplicantUsername(shown);
+                }
             }
-            String username = nonBlankString(info.get("username"));
-            String fullName = nonBlankString(info.get("fullName"));
-            String displayName = nonBlankString(info.get("displayName"));
-            // 优先登录名；缺失时用姓名兜底，避免仍显示 UUID
-            String shown = firstNonBlank(username, fullName, displayName);
-            if (shown != null) {
-                r.setApplicantUsername(shown);
+            if (r.getSubmittedByUserId() != null && !r.getSubmittedByUserId().isBlank()) {
+                Map<String, Object> sinfo = userById.get(r.getSubmittedByUserId().trim());
+                if (sinfo != null) {
+                    String subShown = firstNonBlank(
+                            nonBlankString(sinfo.get("username")),
+                            nonBlankString(sinfo.get("fullName")),
+                            nonBlankString(sinfo.get("displayName")));
+                    if (subShown != null) {
+                        r.setSubmittedByUsername(subShown);
+                    }
+                }
             }
+        }
+    }
+
+    private static String normalizeUserIdOrDefault(String beneficiaryUserId, String submittedByUserId) {
+        if (beneficiaryUserId == null || beneficiaryUserId.isBlank()) {
+            return submittedByUserId;
+        }
+        return beneficiaryUserId.trim();
+    }
+
+    private void assertActiveBeneficiary(String beneficiaryUserId) {
+        if (!roleAccessComponent.isActivePortalUser(beneficiaryUserId)) {
+            throw new IllegalArgumentException("受益人不存在或账户不可用");
         }
     }
 
@@ -699,6 +760,7 @@ public class PermissionComponent {
 
         PermissionRequest request = new PermissionRequest();
         request.setApplicantId(userId);
+        request.setSubmittedByUserId(userId);
         request.setRequestType(dto.getType());
         request.setPermissions(dto.getPermissions());
         request.setReason(dto.getReason());
@@ -714,16 +776,41 @@ public class PermissionComponent {
      * 获取用户的权限申请记录
      */
     public Page<PermissionRequest> getMyRequests(String userId, PermissionRequestStatus status, Pageable pageable) {
-        if (status != null) {
-            List<PermissionRequest> list = permissionRequestRepository.findByApplicantIdAndStatus(userId, status);
-            return new PageImpl<>(list, pageable, list.size());
-        }
-        return permissionRequestRepository.findByApplicantId(userId, pageable);
+        Page<PermissionRequest> page = status != null
+                ? permissionRequestRepository.findPortalVisibleForUserWithStatus(
+                userId, PermissionRequestType.VIRTUAL_GROUP_JOIN, status, pageable)
+                : permissionRequestRepository.findPortalVisibleForUser(
+                userId, PermissionRequestType.VIRTUAL_GROUP_JOIN, pageable);
+        enrichDisplayFields(page.getContent());
+        return page;
     }
 
     /**
-     * 获取申请详情
+     * 获取申请详情（受益人或提交人可见；虚拟组类对门户隐藏）
      */
+    public Optional<PermissionRequest> getRequestDetailForViewer(Long requestId, String viewerUserId) {
+        Optional<PermissionRequest> opt = permissionRequestRepository.findById(requestId);
+        if (opt.isEmpty()) {
+            return Optional.empty();
+        }
+        PermissionRequest r = opt.get();
+        if (r.getRequestType() == PermissionRequestType.VIRTUAL_GROUP_JOIN) {
+            return Optional.empty();
+        }
+        boolean beneficiary = viewerUserId != null && viewerUserId.equals(r.getApplicantId());
+        boolean submitter = viewerUserId != null && viewerUserId.equals(r.getSubmittedByUserId());
+        boolean legacySelf = r.getSubmittedByUserId() == null && beneficiary;
+        if (!beneficiary && !submitter && !legacySelf) {
+            return Optional.empty();
+        }
+        enrichDisplayFields(List.of(r));
+        return opt;
+    }
+
+    /**
+     * @deprecated 使用 {@link #getRequestDetailForViewer(Long, String)}
+     */
+    @Deprecated
     public Optional<PermissionRequest> getRequestDetail(Long requestId) {
         return permissionRequestRepository.findById(requestId);
     }

@@ -1,6 +1,7 @@
 package com.portal.controller;
 
 import com.portal.component.PermissionComponent;
+import com.portal.component.RoleAccessComponent;
 import com.portal.dto.ApiResponse;
 import com.portal.security.CurrentUserId;
 import com.portal.dto.PageResponse;
@@ -31,6 +32,7 @@ import java.util.Objects;
 public class PermissionController {
 
     private final PermissionComponent permissionComponent;
+    private final RoleAccessComponent roleAccessComponent;
     private final I18nService i18nService;
 
     // ==================== 新的 API 端点 ====================
@@ -44,11 +46,20 @@ public class PermissionController {
     }
 
     @GetMapping("/available-virtual-groups")
-    @Operation(summary = "获取可加入的虚拟组", description = "获取用户可以加入的虚拟组列表（排除已加入的）")
+    @Operation(summary = "获取可加入的虚拟组", description = "已禁用：虚拟组不在 User Portal 提供")
     public ApiResponse<List<Map<String, Object>>> getAvailableVirtualGroups(
             @CurrentUserId String userId) {
-        List<Map<String, Object>> groups = permissionComponent.getAvailableVirtualGroups(userId);
-        return ApiResponse.success(groups);
+        return ApiResponse.error(i18nService.getMessage("portal.virtual_group_not_in_portal"));
+    }
+
+    @GetMapping("/users/search")
+    @Operation(summary = "搜索启用用户", description = "代办选人：仅返回 ACTIVE 用户（分页）")
+    public ApiResponse<PageResponse<Map<String, Object>>> searchUsersForDelegation(
+            @CurrentUserId String userId,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ApiResponse.success(roleAccessComponent.searchActiveUsersForPortal(keyword, page, size));
     }
 
     @GetMapping("/available-business-units")
@@ -103,45 +114,31 @@ public class PermissionController {
     }
 
     @PostMapping("/request-virtual-group")
-    @Operation(summary = "申请加入虚拟组", description = "申请加入虚拟组（自动批准）")
+    @Operation(summary = "申请加入虚拟组", description = "已禁用：虚拟组不在 User Portal 提供")
     public ApiResponse<PermissionRequest> requestVirtualGroup(
             @CurrentUserId String userId,
             @RequestBody Map<String, String> body) {
-        String virtualGroupId = body.get("virtualGroupId");
-        String reason = body.get("reason");
-        
-        if (virtualGroupId == null || virtualGroupId.isEmpty()) {
-            return ApiResponse.error(i18nService.getMessage("portal.virtual_group_id_required"));
-        }
-        if (reason == null || reason.isEmpty()) {
-            return ApiResponse.error(i18nService.getMessage("portal.reason_required"));
-        }
-        
-        try {
-            PermissionRequest request = permissionComponent.requestVirtualGroupJoin(userId, virtualGroupId, reason);
-            return ApiResponse.success(request);
-        } catch (IllegalArgumentException e) {
-            return ApiResponse.error(e.getMessage());
-        }
+        return ApiResponse.error(i18nService.getMessage("portal.virtual_group_not_in_portal"));
     }
 
     @PostMapping("/request-business-unit")
-    @Operation(summary = "申请加入业务单元", description = "申请加入业务单元（自动批准）")
+    @Operation(summary = "申请加入业务单元", description = "可申请为他人代办（beneficiaryUserId，可选）")
     public ApiResponse<PermissionRequest> requestBusinessUnit(
             @CurrentUserId String userId,
-            @RequestBody Map<String, String> body) {
-        String businessUnitId = body.get("businessUnitId");
-        String reason = body.get("reason");
-        
+            @RequestBody Map<String, Object> body) {
+        String businessUnitId = body.get("businessUnitId") != null ? body.get("businessUnitId").toString() : null;
+        String reason = body.get("reason") != null ? body.get("reason").toString() : null;
+        String beneficiaryUserId = beneficiaryUserIdFromBody(body, userId);
+
         if (businessUnitId == null || businessUnitId.isEmpty()) {
             return ApiResponse.error(i18nService.getMessage("portal.bu_id_required"));
         }
         if (reason == null || reason.isEmpty()) {
             return ApiResponse.error(i18nService.getMessage("portal.reason_required"));
         }
-        
+
         try {
-            PermissionRequest request = permissionComponent.requestBusinessUnitJoin(userId, businessUnitId, reason);
+            PermissionRequest request = permissionComponent.requestBusinessUnitJoin(userId, beneficiaryUserId, businessUnitId, reason);
             return ApiResponse.success(request);
         } catch (IllegalArgumentException e) {
             return ApiResponse.error(e.getMessage());
@@ -156,6 +153,7 @@ public class PermissionController {
         Object buIdObj = body.get("businessUnitId");
         String businessUnitId = buIdObj != null ? buIdObj.toString() : null;
         String reason = body.get("reason") != null ? body.get("reason").toString() : null;
+        String beneficiaryUserId = beneficiaryUserIdFromBody(body, userId);
 
         String roleId = null;
         Object roleIdsObj = body.get("roleIds");
@@ -180,7 +178,29 @@ public class PermissionController {
         }
 
         try {
-            PermissionRequest request = permissionComponent.requestBusinessUnitJoinWithRole(userId, businessUnitId, roleId, reason);
+            PermissionRequest request = permissionComponent.requestBusinessUnitJoinWithRole(userId, beneficiaryUserId, businessUnitId, roleId, reason);
+            return ApiResponse.success(request);
+        } catch (IllegalArgumentException e) {
+            return ApiResponse.error(e.getMessage());
+        }
+    }
+
+    @PostMapping("/request-business-unit-exit")
+    @Operation(summary = "申请退出业务单元", description = "退出成员身份（审批通过后执行）；可代办 beneficiaryUserId")
+    public ApiResponse<PermissionRequest> requestBusinessUnitExit(
+            @CurrentUserId String userId,
+            @RequestBody Map<String, Object> body) {
+        String businessUnitId = body.get("businessUnitId") != null ? body.get("businessUnitId").toString() : null;
+        String reason = body.get("reason") != null ? body.get("reason").toString() : null;
+        String beneficiaryUserId = beneficiaryUserIdFromBody(body, userId);
+        if (businessUnitId == null || businessUnitId.isEmpty()) {
+            return ApiResponse.error(i18nService.getMessage("portal.bu_id_required"));
+        }
+        if (reason == null || reason.isEmpty()) {
+            return ApiResponse.error(i18nService.getMessage("portal.reason_required"));
+        }
+        try {
+            PermissionRequest request = permissionComponent.requestBusinessUnitExit(userId, beneficiaryUserId, businessUnitId, reason);
             return ApiResponse.success(request);
         } catch (IllegalArgumentException e) {
             return ApiResponse.error(e.getMessage());
@@ -197,6 +217,7 @@ public class PermissionController {
         Object roleIdObj = body.get("roleId");
         String roleId = roleIdObj != null ? roleIdObj.toString() : null;
         String reason = body.get("reason") != null ? body.get("reason").toString() : null;
+        String beneficiaryUserId = beneficiaryUserIdFromBody(body, userId);
 
         if (businessUnitId == null || businessUnitId.isEmpty()) {
             return ApiResponse.error(i18nService.getMessage("portal.bu_id_required"));
@@ -209,7 +230,7 @@ public class PermissionController {
         }
 
         try {
-            PermissionRequest request = permissionComponent.requestBusinessUnitRoleRemoval(userId, businessUnitId, roleId, reason);
+            PermissionRequest request = permissionComponent.requestBusinessUnitRoleRemoval(userId, beneficiaryUserId, businessUnitId, roleId, reason);
             return ApiResponse.success(request);
         } catch (IllegalArgumentException e) {
             return ApiResponse.error(e.getMessage());
@@ -225,11 +246,10 @@ public class PermissionController {
     }
 
     @GetMapping("/my-virtual-groups")
-    @Operation(summary = "获取我的虚拟组", description = "获取用户当前加入的虚拟组列表")
+    @Operation(summary = "获取我的虚拟组", description = "已禁用：虚拟组不在 User Portal 提供")
     public ApiResponse<List<Map<String, Object>>> getMyVirtualGroups(
             @CurrentUserId String userId) {
-        List<Map<String, Object>> groups = permissionComponent.getUserCurrentVirtualGroups(userId);
-        return ApiResponse.success(groups);
+        return ApiResponse.error(i18nService.getMessage("portal.virtual_group_not_in_portal"));
     }
 
     // ==================== 审批 API 端点 ====================
@@ -354,10 +374,12 @@ public class PermissionController {
 
     @GetMapping("/requests/{requestId}")
     @Operation(summary = "获取申请详情")
-    public ApiResponse<PermissionRequest> getRequestDetail(@PathVariable Long requestId) {
-        return permissionComponent.getRequestDetail(requestId)
+    public ApiResponse<PermissionRequest> getRequestDetail(
+            @CurrentUserId String userId,
+            @PathVariable Long requestId) {
+        return permissionComponent.getRequestDetailForViewer(requestId, userId)
                 .map(ApiResponse::success)
-                .orElse(ApiResponse.error("申请不存在"));
+                .orElse(ApiResponse.error(i18nService.getMessage("portal.request_not_found_or_forbidden")));
     }
 
     @DeleteMapping("/requests/{requestId}")
@@ -395,5 +417,16 @@ public class PermissionController {
             @RequestParam(defaultValue = "30") int days) {
         List<Map<String, Object>> expiring = permissionComponent.getExpiringPermissions(userId, days);
         return ApiResponse.success(expiring);
+    }
+
+    private static String beneficiaryUserIdFromBody(Map<String, Object> body, String currentUserId) {
+        if (body == null) {
+            return currentUserId;
+        }
+        Object o = body.get("beneficiaryUserId");
+        if (o == null || o.toString().isBlank()) {
+            return currentUserId;
+        }
+        return o.toString().trim();
     }
 }

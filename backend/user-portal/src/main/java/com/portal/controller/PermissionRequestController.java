@@ -1,5 +1,6 @@
 package com.portal.controller;
 
+import com.platform.common.i18n.I18nService;
 import com.portal.client.AdminCenterClient;
 import com.portal.dto.ApiResponse;
 import com.portal.security.CurrentUserId;
@@ -29,26 +30,17 @@ import java.util.Map;
 @Tag(name = "Permission Requests", description = "User permission request operations")
 public class PermissionRequestController {
     
-    // TODO: Inject PermissionRequestService from admin-center via REST client
     private final AdminCenterClient adminCenterClient;
+    private final I18nService i18nService;
     
     @PostMapping("/virtual-group")
     @Operation(summary = "Apply to join virtual group", description = "Submit application to join a virtual group")
     public ResponseEntity<ApiResponse<Map<String, Object>>> applyForVirtualGroup(
             @RequestBody Map<String, Object> request,
             @CurrentUserId String userId) {
-        log.info("User {} applying for virtual group: {}", userId, request.get("virtualGroupId"));
-        
-        // TODO: Call admin-center API to create virtual group request
-        // POST /api/v1/admin/permission-requests/virtual-group
-
-        String virtualGroupId = (String) request.get("virtualGroupId");
-        String reason = (String) request.get("reason");
-        
-        return adminCenterClient.createVirtualGroupRequest(userId, virtualGroupId, reason)
-                .<ResponseEntity<ApiResponse<Map<String, Object>>>>map(data -> ResponseEntity.ok(ApiResponse.success(data)))
-                .orElse(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                        .body(ApiResponse.error("503", "Admin center service unavailable")));
+        log.info("Blocked legacy permission-requests virtual group apply for user {}", userId);
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiResponse.error("403", i18nService.getMessage("portal.virtual_group_not_in_portal")));
     }
     
     @PostMapping("/business-unit")
@@ -59,20 +51,9 @@ public class PermissionRequestController {
     public ResponseEntity<ApiResponse<Map<String, Object>>> applyForBusinessUnit(
             @RequestBody Map<String, Object> request,
             @CurrentUserId String userId) {
-        String businessUnitId = (String) request.get("businessUnitId");
-        String reason = (String) request.get("reason");
-        
-        log.info("User {} applying for business unit: {}", userId, businessUnitId);
-        
-        // TODO: Call admin-center API to create business unit request
-        // POST /api/v1/admin/permission-requests/business-unit
-        // Body: { businessUnitId, reason }
-        // Note: No roleIds needed - user's BU-Bounded roles will be activated upon approval
-        
-        return adminCenterClient.createBusinessUnitRequest(userId, businessUnitId, reason)
-                .<ResponseEntity<ApiResponse<Map<String, Object>>>>map(data -> ResponseEntity.ok(ApiResponse.success(data)))
-                .orElse(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                        .body(ApiResponse.error("503", "Admin center service unavailable")));
+        log.info("Blocked legacy permission-requests BU apply for user {} — use /permissions/request-business-unit", userId);
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiResponse.error("403", i18nService.getMessage("portal.use_permissions_center_api")));
     }
     
     @PostMapping("/{requestId}/cancel")
@@ -80,15 +61,9 @@ public class PermissionRequestController {
     public ResponseEntity<ApiResponse<Map<String, Object>>> cancelRequest(
             @PathVariable String requestId,
             @CurrentUserId String userId) {
-        log.info("User {} cancelling request: {}", userId, requestId);
-        
-        // TODO: Call admin-center API to cancel request
-        // POST /api/v1/admin/permission-requests/{requestId}/cancel
-        
-        return adminCenterClient.cancelPermissionRequest(requestId, userId)
-                .<ResponseEntity<ApiResponse<Map<String, Object>>>>map(data -> ResponseEntity.ok(ApiResponse.success(data)))
-                .orElse(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                        .body(ApiResponse.error("503", "Admin center service unavailable")));
+        log.info("Blocked legacy cancel for user {} request {} — use DELETE /permissions/requests/{{id}}", userId, requestId);
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiResponse.error("403", i18nService.getMessage("portal.use_permissions_center_api")));
     }
     
     @GetMapping("/my")
@@ -111,15 +86,9 @@ public class PermissionRequestController {
     @Operation(summary = "Get available virtual groups", description = "Get virtual groups that user can apply to join")
     public ResponseEntity<ApiResponse<List<Map<String, Object>>>> getAvailableVirtualGroups(
             @CurrentUserId String userId) {
-        log.info("Getting available virtual groups for user: {}", userId);
-        
-        // TODO: Call admin-center API to get virtual groups with approvers configured
-        // GET /api/v1/admin/virtual-groups?hasApprovers=true
-        
-        return adminCenterClient.getAvailableVirtualGroups()
-                .<ResponseEntity<ApiResponse<List<Map<String, Object>>>>>map(data -> ResponseEntity.ok(ApiResponse.success(data)))
-                .orElse(ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-                        .body(ApiResponse.error("503", "Admin center service unavailable")));
+        log.info("Blocked available virtual groups list for user {}", userId);
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiResponse.error("403", i18nService.getMessage("portal.virtual_group_not_in_portal")));
     }
     
     @GetMapping("/applicable-business-units")
