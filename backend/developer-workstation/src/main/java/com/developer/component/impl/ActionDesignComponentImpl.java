@@ -7,7 +7,7 @@ import com.developer.entity.FormDefinition;
 import com.developer.entity.FunctionUnit;
 import com.developer.enums.ActionType;
 import com.developer.enums.FormType;
-import com.developer.exception.BusinessException;
+import com.developer.exception.DeveloperBusinessException;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.ActionDefinitionRepository;
 import com.developer.repository.FormDefinitionRepository;
@@ -42,7 +42,7 @@ public class ActionDesignComponentImpl implements ActionDesignComponent {
                 .orElseThrow(() -> new ResourceNotFoundException("FunctionUnit", functionUnitId));
         
         if (actionDefinitionRepository.existsByFunctionUnitIdAndActionName(functionUnitId, request.getActionName())) {
-            throw new BusinessException("CONFLICT_ACTION_NAME_EXISTS", 
+            throw new DeveloperBusinessException("CONFLICT_ACTION_NAME_EXISTS", 
                     i18nService.getMessage("action.name_exists", request.getActionName()),
                     i18nService.getMessage("action.use_other_name"));
         }
@@ -70,7 +70,7 @@ public class ActionDesignComponentImpl implements ActionDesignComponent {
         
         if (actionDefinitionRepository.existsByFunctionUnitIdAndActionNameAndIdNot(
                 actionDefinition.getFunctionUnit().getId(), request.getActionName(), id)) {
-            throw new BusinessException("CONFLICT_ACTION_NAME_EXISTS", 
+            throw new DeveloperBusinessException("CONFLICT_ACTION_NAME_EXISTS", 
                     i18nService.getMessage("action.name_exists", request.getActionName()),
                     i18nService.getMessage("action.use_other_name"));
         }
@@ -97,10 +97,10 @@ public class ActionDesignComponentImpl implements ActionDesignComponent {
     
     /**
      * 检查动作是否被流程步骤引用
-     * 如果被引用，抛出 BusinessException
+     * 如果被引用，抛出 DeveloperBusinessException
      * 
      * @param actionId 动作ID
-     * @throws BusinessException 如果动作正在被使用
+     * @throws DeveloperBusinessException 如果动作正在被使用
      */
     private void checkActionDependencies(Long actionId) {
         ActionDefinition action = actionDefinitionRepository.findById(actionId)
@@ -114,7 +114,7 @@ public class ActionDesignComponentImpl implements ActionDesignComponent {
             // 简化检查：在 BPMN XML 中搜索动作名称
             // 注意：这是简化实现，完整实现需要解析 BPMN XML
             if (bpmnXml != null && bpmnXml.contains(action.getActionName())) {
-                throw new BusinessException(
+                throw new DeveloperBusinessException(
                     "ACTION_IN_USE",
                     i18nService.getMessage("action.in_use"),
                     i18nService.getMessage("action.remove_reference_first")
@@ -176,7 +176,7 @@ public class ActionDesignComponentImpl implements ActionDesignComponent {
     
     /**
      * 校验 FORM_POPUP Action 引用的表单必须是 FormType.ACTION
-     * 如果引用 PROCESS 或 TASK 类型表单，抛出 400 BusinessException
+     * 如果引用 PROCESS 或 TASK 类型表单，抛出 400 DeveloperBusinessException
      */
     private void validateFormPopupType(ActionDefinition actionDefinition) {
         if (actionDefinition.getActionType() != ActionType.FORM_POPUP) {
@@ -208,7 +208,7 @@ public class ActionDesignComponentImpl implements ActionDesignComponent {
                 .orElseThrow(() -> new ResourceNotFoundException("FormDefinition", formId));
         
         if (form.getFormType() != FormType.ACTION) {
-            throw new BusinessException("INVALID_POPUP_FORM_TYPE",
+            throw new DeveloperBusinessException("INVALID_POPUP_FORM_TYPE",
                     i18nService.getMessage("action.invalid_popup_form_type"),
                     i18nService.getMessage("action.popup_must_use_action_form"));
         }

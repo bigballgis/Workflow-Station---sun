@@ -3,7 +3,7 @@ package com.developer.component.impl;
 import com.developer.component.IconLibraryComponent;
 import com.developer.entity.Icon;
 import com.developer.enums.IconCategory;
-import com.developer.exception.BusinessException;
+import com.developer.exception.DeveloperBusinessException;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.IconRepository;
@@ -57,7 +57,7 @@ public class IconLibraryComponentImpl implements IconLibraryComponent {
             }
             svgContent = new String(fileData, StandardCharsets.UTF_8);
         } catch (IOException e) {
-            throw new BusinessException("SYS_FILE_READ_ERROR", "Failed to read file");
+            throw new DeveloperBusinessException("SYS_FILE_READ_ERROR", "Failed to read file");
         }
         
         Icon icon = Icon.builder()
@@ -77,7 +77,7 @@ public class IconLibraryComponentImpl implements IconLibraryComponent {
         Icon icon = getById(id);
         
         if (isIconInUse(id)) {
-            throw new BusinessException("BIZ_ICON_IN_USE", 
+            throw new DeveloperBusinessException("BIZ_ICON_IN_USE", 
                     "Icon is in use, cannot delete",
                     "Please remove icon usage first");
         }
@@ -141,18 +141,18 @@ public class IconLibraryComponentImpl implements IconLibraryComponent {
     @Override
     public void validateFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {
-            throw new BusinessException("VAL_FILE_EMPTY", "File cannot be empty");
+            throw new DeveloperBusinessException("VAL_FILE_EMPTY", "File cannot be empty");
         }
         
         if (file.getSize() > MAX_FILE_SIZE) {
-            throw new BusinessException("VAL_FILE_TOO_LARGE", 
+            throw new DeveloperBusinessException("VAL_FILE_TOO_LARGE", 
                     "File size exceeds limit (max 2MB)",
                     "Please upload a file smaller than 2MB");
         }
         
         String fileType = getFileExtension(file.getOriginalFilename());
         if (!ALLOWED_FILE_TYPES.contains(fileType.toLowerCase())) {
-            throw new BusinessException("VAL_INVALID_FILE_TYPE", 
+            throw new DeveloperBusinessException("VAL_INVALID_FILE_TYPE", 
                     "Unsupported file format: " + fileType,
                     "Supported formats: SVG, PNG, ICO");
         }

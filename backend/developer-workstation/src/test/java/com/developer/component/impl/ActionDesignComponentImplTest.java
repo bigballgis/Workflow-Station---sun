@@ -4,7 +4,7 @@ import com.developer.entity.ActionDefinition;
 import com.developer.entity.FunctionUnit;
 import com.developer.entity.ProcessDefinition;
 import com.developer.enums.ActionType;
-import com.developer.exception.BusinessException;
+import com.developer.exception.DeveloperBusinessException;
 import com.developer.repository.ActionDefinitionRepository;
 import com.developer.repository.FunctionUnitRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -43,7 +43,7 @@ class ActionDesignComponentImplTest {
     }
     
     /**
-     * 测试用例 1: 删除被流程引用的动作时抛出 BusinessException
+     * 测试用例 1: 删除被流程引用的动作时抛出 DeveloperBusinessException
      * 验证属性 4: 删除保护 - 被引用的动作
      */
     @Test
@@ -79,7 +79,7 @@ class ActionDesignComponentImplTest {
         when(actionDefinitionRepository.findById(1L)).thenReturn(Optional.of(action));
         
         // When & Then: 删除应抛出异常
-        BusinessException exception = assertThrows(BusinessException.class, () -> {
+        DeveloperBusinessException exception = assertThrows(DeveloperBusinessException.class, () -> {
             actionDesignComponent.delete(1L);
         });
         

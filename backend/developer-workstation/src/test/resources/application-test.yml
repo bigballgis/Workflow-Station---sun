@@ -1,3 +1,59 @@
+# platform-common ConfigurationManager 启动校验所需（与主应用 docker 轮廓一致，数据源仍由下方 spring.datasource 使用 H2）
+app:
+  database:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+    username: sa
+    password: sa
+    driver-class-name: org.h2.Driver
+    max-pool-size: 5
+    min-idle: 1
+    connection-timeout: 20000
+  security:
+    jwt-secret-key: testSecretKeyForDeveloperWorkstationModule123456789012
+    jwt-expiration-ms: 86400000
+    jwt-refresh-expiration-ms: 604800000
+    password:
+      min-length: 8
+      max-length: 128
+      require-uppercase: false
+      require-lowercase: false
+      require-digit: false
+      require-special: false
+      history-count: 0
+      expiry-days: 365
+    login:
+      max-failed-attempts: 5
+      lockout-duration-minutes: 30
+    session:
+      timeout-minutes: 30
+      max-concurrent-sessions: 3
+  api:
+    workflow-engine-url: http://localhost:8081
+    admin-center-url: http://localhost:8090
+    timeout-seconds: 30
+    max-retries: 1
+  monitoring:
+    enabled: false
+    log-level: WARN
+    metrics-enabled: false
+    health-check-interval-seconds: 60
+  cache:
+    redis-host: localhost
+    redis-port: 6379
+    redis-password: ""
+    redis-database: 0
+    user-ttl-minutes: 5
+    permission-ttl-minutes: 5
+    dictionary-ttl-minutes: 5
+  messaging:
+    kafka-bootstrap-servers: localhost:9092
+    kafka-group-id: developer-workstation-test
+    enabled: false
+  workflow:
+    engine-url: http://localhost:8081
+    enabled: false
+    timeout-seconds: 30
+
 spring:
   datasource:
     url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
@@ -33,6 +89,10 @@ security:
 
 rate-limit:
   requests-per-minute: 1000
+
+developer:
+  deployment:
+    require-admin-authorization: false
 
 logging:
   level:

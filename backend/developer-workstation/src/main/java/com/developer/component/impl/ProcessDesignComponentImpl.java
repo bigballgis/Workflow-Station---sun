@@ -8,11 +8,13 @@ import com.developer.entity.FunctionUnit;
 import com.developer.entity.ProcessDefinition;
 import com.developer.entity.TableDefinition;
 import com.developer.enums.TableType;
+import com.developer.exception.DeveloperBusinessException;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.FormDefinitionRepository;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.ProcessDefinitionRepository;
 import com.developer.repository.TableDefinitionRepository;
+import com.developer.util.BpmnLastTaskAssigneeTopologyValidator;
 import com.developer.util.XmlEncodingUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * 流程设计组件实现
@@ -41,7 +44,15 @@ public class ProcessDesignComponentImpl implements ProcessDesignComponent {
     public ProcessDefinition save(Long functionUnitId, String bpmnXml) {
         FunctionUnit functionUnit = functionUnitRepository.findById(functionUnitId)
                 .orElseThrow(() -> new ResourceNotFoundException("FunctionUnit", functionUnitId));
-        
+
+        ValidationResult lastTaskTopo = validateLastTaskAssigneeTopology(bpmnXml);
+        if (!lastTaskTopo.isValid()) {
+            String detail = lastTaskTopo.getErrors().stream()
+                    .map(ValidationResult.ValidationError::getMessage)
+                    .collect(Collectors.joining("; "));
+            throw new DeveloperBusinessException("LAST_TASK_ANCHOR_TOPOLOGY", detail);
+        }
+
         ProcessDefinition processDefinition = processDefinitionRepository
                 .findByFunctionUnitId(functionUnitId)
                 .orElse(ProcessDefinition.builder()
@@ -110,7 +121,12 @@ public class ProcessDesignComponentImpl implements ProcessDesignComponent {
                 result.addWarning("ORPHAN_NODE", "Node " + nodeId + " may be orphaned", nodeId);
             }
         }
-        
+
+        ValidationResult lastTaskTopo = validateLastTaskAssigneeTopology(bpmnXml);
+        for (ValidationResult.ValidationError e : lastTaskTopo.getErrors()) {
+            result.addError(e.getCode(), e.getMessage(), e.getElementId());
+        }
+
         return result;
     }
     
@@ -343,7 +359,12 @@ public class ProcessDesignComponentImpl implements ProcessDesignComponent {
         
         return result;
     }
-    
+
+    @Override
+    public ValidationResult validateLastTaskAssigneeTopology(String bpmnXml) {
+        return BpmnLastTaskAssigneeTopologyValidator.validate(bpmnXml);
+    }
+
     /**
      * 查找匹配的 subProcess 结束标签位置
      */

@@ -7,7 +7,7 @@ import com.developer.entity.FormTableBinding;
 import com.developer.entity.FunctionUnit;
 import com.developer.entity.TableDefinition;
 import com.developer.enums.*;
-import com.developer.exception.BusinessException;
+import com.developer.exception.DeveloperBusinessException;
 import com.developer.repository.FormTableBindingRepository;
 import net.jqwik.api.*;
 import net.jqwik.api.constraints.IntRange;

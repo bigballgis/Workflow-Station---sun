@@ -2,14 +2,16 @@ package com.developer.component.impl;
 
 import com.developer.component.ExportImportComponent;
 import com.developer.dto.ExportManifest;
+import com.developer.dto.ValidationResult;
 import com.developer.entity.*;
 import com.developer.enums.ActionType;
 import com.developer.enums.DataType;
 import com.developer.enums.FormType;
 import com.developer.enums.TableType;
-import com.developer.exception.BusinessException;
+import com.developer.exception.DeveloperBusinessException;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.*;
+import com.developer.util.BpmnLastTaskAssigneeTopologyValidator;
 import com.developer.util.XmlEncodingUtil;
 import com.developer.validation.DmnXmlParser;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -33,6 +35,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.stream.Collectors;
 import java.util.zip.*;
 
 /**
@@ -199,7 +202,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
             zos.finish();
             return baos.toByteArray();
         } catch (IOException e) {
-            throw new BusinessException("SYS_EXPORT_ERROR", "Failed to export function unit: " + e.getMessage());
+            throw new DeveloperBusinessException("SYS_EXPORT_ERROR", "Failed to export function unit: " + e.getMessage());
         }
     }
     
@@ -219,7 +222,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
             
             return checksumBuilder.toString();
         } catch (NoSuchAlgorithmException e) {
-            throw new BusinessException("SYS_CHECKSUM_ERROR", "Failed to generate checksum: " + e.getMessage());
+            throw new DeveloperBusinessException("SYS_CHECKSUM_ERROR", "Failed to generate checksum: " + e.getMessage());
         }
     }
     
@@ -270,8 +273,13 @@ public class ExportImportComponentImpl implements ExportImportComponent {
                     name = name + "_imported_" + System.currentTimeMillis();
                     break;
                 default:
-                    throw new BusinessException("BIZ_INVALID_STRATEGY", "Invalid conflict strategy");
+                    throw new DeveloperBusinessException("BIZ_INVALID_STRATEGY", "Invalid conflict strategy");
             }
+        }
+
+        if (packageData.containsKey("process")) {
+            String bpmnXml = (String) packageData.get("process");
+            assertLastTaskAssigneeTopologyOrThrow(bpmnXml);
         }
         
         // 创建功能单元
@@ -465,20 +473,28 @@ public class ExportImportComponentImpl implements ExportImportComponent {
         try {
             Map<String, Object> packageData = parseImportPackage(file);
             
-            // Validate metadata
-            if (!packageData.containsKey("metadata")) {
-                errors.add("Missing metadata file metadata.json");
+            // 与导入一致：manifest.json（新）或 metadata.json（旧）
+            Map<String, Object> descriptor = resolvePackageDescriptor(packageData);
+            if (descriptor == null) {
+                errors.add("Missing manifest.json or metadata.json");
             } else {
-                @SuppressWarnings("unchecked")
-                Map<String, Object> metadata = (Map<String, Object>) packageData.get("metadata");
-                if (!metadata.containsKey("name")) {
-                    errors.add("Metadata missing name field");
+                Object nameVal = descriptor.get("name");
+                if (nameVal == null || (nameVal instanceof String s && s.isBlank())) {
+                    errors.add("Manifest or metadata missing name field");
                 }
             }
             
             // Validate process
             if (!packageData.containsKey("process")) {
                 warnings.add("Package does not contain a process definition");
+            } else {
+                String bpmnXml = (String) packageData.get("process");
+                if (bpmnXml != null && !bpmnXml.isBlank()) {
+                    ValidationResult topo = BpmnLastTaskAssigneeTopologyValidator.validate(bpmnXml);
+                    for (ValidationResult.ValidationError e : topo.getErrors()) {
+                        errors.add(e.getMessage());
+                    }
+                }
             }
             
             result.put("valid", errors.isEmpty());
@@ -499,10 +515,21 @@ public class ExportImportComponentImpl implements ExportImportComponent {
         
         try {
             Map<String, Object> packageData = parseImportPackage(file);
-            @SuppressWarnings("unchecked")
-            Map<String, Object> metadata = (Map<String, Object>) packageData.get("metadata");
-            String name = (String) metadata.get("name");
-            
+            Map<String, Object> descriptor = resolvePackageDescriptor(packageData);
+            if (descriptor == null) {
+                result.put("hasConflicts", false);
+                result.put("conflicts", conflicts);
+                result.put("error", "Missing manifest.json or metadata.json");
+                return result;
+            }
+            Object nameVal = descriptor.get("name");
+            if (!(nameVal instanceof String name) || name.isBlank()) {
+                result.put("hasConflicts", false);
+                result.put("conflicts", conflicts);
+                result.put("error", "Manifest or metadata missing name field");
+                return result;
+            }
+
             if (functionUnitRepository.existsByName(name)) {
                 Map<String, Object> conflict = new HashMap<>();
                 conflict.put("type", "FUNCTION_UNIT");
@@ -520,11 +547,41 @@ public class ExportImportComponentImpl implements ExportImportComponent {
         return result;
     }
 
+    /**
+     * 导入/预览与保存、部署一致：LAST_TASK_ASSIGNEE 锚点要求单入线。
+     */
+    private void assertLastTaskAssigneeTopologyOrThrow(String bpmnXml) {
+        if (bpmnXml == null || bpmnXml.isBlank()) {
+            return;
+        }
+        ValidationResult topo = BpmnLastTaskAssigneeTopologyValidator.validate(bpmnXml);
+        if (!topo.isValid()) {
+            String detail = topo.getErrors().stream()
+                    .map(ValidationResult.ValidationError::getMessage)
+                    .collect(Collectors.joining("; "));
+            throw new DeveloperBusinessException("LAST_TASK_ANCHOR_TOPOLOGY", detail);
+        }
+    }
+
     private void addZipEntry(ZipOutputStream zos, String name, byte[] data) throws IOException {
         ZipEntry entry = new ZipEntry(name);
         zos.putNextEntry(entry);
         zos.write(data);
         zos.closeEntry();
+    }
+
+    /**
+     * 与 {@link #importFunctionUnit} 一致：优先 manifest.json，兼容 metadata.json。
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> resolvePackageDescriptor(Map<String, Object> packageData) {
+        if (packageData.containsKey("manifest")) {
+            return (Map<String, Object>) packageData.get("manifest");
+        }
+        if (packageData.containsKey("metadata")) {
+            return (Map<String, Object>) packageData.get("metadata");
+        }
+        return null;
     }
     
     private Map<String, Object> parseImportPackage(MultipartFile file) {
@@ -543,7 +600,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
                 rawFiles.put(entry.getName(), baos.toByteArray());
             }
         } catch (IOException e) {
-            throw new BusinessException("SYS_IMPORT_ERROR", "Failed to parse import package: " + e.getMessage());
+            throw new DeveloperBusinessException("SYS_IMPORT_ERROR", "Failed to parse import package: " + e.getMessage());
         }
         
         try {
@@ -616,7 +673,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
             }
             
         } catch (IOException e) {
-            throw new BusinessException("SYS_IMPORT_ERROR", "Failed to parse import package content: " + e.getMessage());
+            throw new DeveloperBusinessException("SYS_IMPORT_ERROR", "Failed to parse import package content: " + e.getMessage());
         }
         
         return result;

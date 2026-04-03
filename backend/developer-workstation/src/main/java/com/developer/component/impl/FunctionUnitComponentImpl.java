@@ -7,7 +7,7 @@ import com.developer.dto.ValidationResult;
 import com.developer.dto.VersionResponse;
 import com.developer.entity.*;
 import com.developer.enums.FunctionUnitStatus;
-import com.developer.exception.BusinessException;
+import com.developer.exception.DeveloperBusinessException;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.*;
 import com.developer.util.XmlEncodingUtil;
@@ -101,7 +101,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('TECH_LEAD', 'TEAM_LEAD')")
     public FunctionUnit create(FunctionUnitRequest request) {
         if (functionUnitRepository.existsByName(request.getName())) {
-            throw new BusinessException("CONFLICT_NAME_EXISTS", 
+            throw new DeveloperBusinessException("CONFLICT_NAME_EXISTS", 
                     "Function unit name already exists: " + request.getName(),
                     "Please use a different name");
         }
@@ -155,7 +155,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         FunctionUnit functionUnit = getById(id);
         
         if (functionUnitRepository.existsByNameAndIdNot(request.getName(), id)) {
-            throw new BusinessException("CONFLICT_NAME_EXISTS", 
+            throw new DeveloperBusinessException("CONFLICT_NAME_EXISTS", 
                     "Function unit name already exists: " + request.getName(),
                     "Please use a different name");
         }
@@ -261,7 +261,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         // 验证功能单元完整性
         ValidationResult validationResult = validate(id);
         if (!validationResult.isValid()) {
-            throw new BusinessException("BIZ_INVALID_FUNCTION_UNIT", 
+            throw new DeveloperBusinessException("BIZ_INVALID_FUNCTION_UNIT", 
                     "Function unit validation failed, cannot publish",
                     "Please fix validation errors before retrying");
         }
@@ -286,11 +286,11 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
                         .publishedBy(getCurrentOperator())
                         .build();
                 versionRepository.save(version);
-            } catch (BusinessException e) {
+            } catch (DeveloperBusinessException e) {
                 throw e;
             } catch (Exception e) {
                 log.error("Failed to create version snapshot, functionUnitId={}, version={}: {}", id, newVersion, e.getMessage(), e);
-                throw new BusinessException("SYS_SNAPSHOT_ERROR", "Failed to create version snapshot: " + e.getMessage());
+                throw new DeveloperBusinessException("SYS_SNAPSHOT_ERROR", "Failed to create version snapshot: " + e.getMessage());
             }
         }
         
@@ -306,7 +306,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('TECH_LEAD', 'TEAM_LEAD')")
     public FunctionUnit clone(Long id, String newName) {
         if (functionUnitRepository.existsByName(newName)) {
-            throw new BusinessException("CONFLICT_NAME_EXISTS", 
+            throw new DeveloperBusinessException("CONFLICT_NAME_EXISTS", 
                     "Function unit name already exists: " + newName,
                     "Please use a different name");
         }

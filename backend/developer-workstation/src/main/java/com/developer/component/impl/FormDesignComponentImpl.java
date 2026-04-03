@@ -13,7 +13,7 @@ import com.developer.enums.BindingMode;
 import com.developer.enums.BindingType;
 import com.developer.enums.FormType;
 import com.developer.enums.TableType;
-import com.developer.exception.BusinessException;
+import com.developer.exception.DeveloperBusinessException;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.FormDefinitionRepository;
 import com.developer.repository.FormTableBindingRepository;
@@ -55,7 +55,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
                 .orElseThrow(() -> new ResourceNotFoundException("FunctionUnit", functionUnitId));
         
         if (formDefinitionRepository.existsByFunctionUnitIdAndFormName(functionUnitId, request.getFormName())) {
-            throw new BusinessException("CONFLICT_FORM_NAME_EXISTS", 
+            throw new DeveloperBusinessException("CONFLICT_FORM_NAME_EXISTS", 
                     i18nService.getMessage("form.name_exists", request.getFormName()),
                     i18nService.getMessage("form.use_other_name"));
         }
@@ -88,7 +88,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         
         if (formDefinitionRepository.existsByFunctionUnitIdAndFormNameAndIdNot(
                 formDefinition.getFunctionUnit().getId(), request.getFormName(), id)) {
-            throw new BusinessException("CONFLICT_FORM_NAME_EXISTS", 
+            throw new DeveloperBusinessException("CONFLICT_FORM_NAME_EXISTS", 
                     i18nService.getMessage("form.name_exists", request.getFormName()),
                     i18nService.getMessage("form.use_other_name"));
         }
@@ -97,7 +97,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
             long fuId = formDefinition.getFunctionUnit().getId();
             long processCount = formDefinitionRepository.countByFunctionUnitIdAndFormType(fuId, FormType.PROCESS);
             if (formDefinition.getFormType() != FormType.PROCESS && processCount > 0) {
-                throw new BusinessException("PROCESS_FORM_ALREADY_EXISTS",
+                throw new DeveloperBusinessException("PROCESS_FORM_ALREADY_EXISTS",
                         i18nService.getMessage("form.process_form_already_exists"),
                         i18nService.getMessage("form.only_one_process_form"));
             }
@@ -129,10 +129,10 @@ public class FormDesignComponentImpl implements FormDesignComponent {
     
     /**
      * 检查表单是否被流程步骤引用
-     * 如果被引用，抛出 BusinessException
+     * 如果被引用，抛出 DeveloperBusinessException
      * 
      * @param formId 表单ID
-     * @throws BusinessException 如果表单正在被使用
+     * @throws DeveloperBusinessException 如果表单正在被使用
      */
     private void checkFormDependencies(Long formId) {
         FormDefinition form = formDefinitionRepository.findById(formId)
@@ -146,7 +146,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
             // 简化检查：在 BPMN XML 中搜索表单名称
             // 注意：这是简化实现，完整实现需要解析 BPMN XML
             if (bpmnXml != null && bpmnXml.contains(form.getFormName())) {
-                throw new BusinessException(
+                throw new DeveloperBusinessException(
                     "FORM_IN_USE",
                     i18nService.getMessage("form.in_use"),
                     i18nService.getMessage("form.remove_reference_first")
@@ -177,7 +177,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         try {
             return objectMapper.writeValueAsString(formDefinition.getConfigJson());
         } catch (JsonProcessingException e) {
-            throw new BusinessException("SYS_JSON_ERROR", i18nService.getMessage("form.config_generate_failed"));
+            throw new DeveloperBusinessException("SYS_JSON_ERROR", i18nService.getMessage("form.config_generate_failed"));
         }
     }
     
@@ -186,7 +186,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         try {
             return objectMapper.readValue(configJson, Map.class);
         } catch (JsonProcessingException e) {
-            throw new BusinessException("VAL_INVALID_JSON", i18nService.getMessage("form.invalid_json_config"));
+            throw new DeveloperBusinessException("VAL_INVALID_JSON", i18nService.getMessage("form.invalid_json_config"));
         }
     }
     
@@ -229,14 +229,14 @@ public class FormDesignComponentImpl implements FormDesignComponent {
             
             // 检查是否已绑定该表
             if (formTableBindingRepository.existsByFormIdAndTableId(formId, request.getTableId())) {
-                throw new BusinessException("BINDING_EXISTS", 
+                throw new DeveloperBusinessException("BINDING_EXISTS", 
                         i18nService.getMessage("form.binding_exists"),
                         i18nService.getMessage("form.no_duplicate_binding"));
             }
         } else {
             // 检查是否已绑定该 Relation Table
             if (formTableBindingRepository.existsByFormIdAndRelationTableId(formId, request.getRelationTableId())) {
-                throw new BusinessException("BINDING_EXISTS", 
+                throw new DeveloperBusinessException("BINDING_EXISTS", 
                         i18nService.getMessage("form.binding_exists"),
                         i18nService.getMessage("form.no_duplicate_binding"));
             }
@@ -245,7 +245,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         // 检查主表绑定唯一性
         if (request.getBindingType() == BindingType.PRIMARY) {
             if (formTableBindingRepository.existsByFormIdAndBindingType(formId, BindingType.PRIMARY)) {
-                throw new BusinessException("PRIMARY_BINDING_EXISTS", 
+                throw new DeveloperBusinessException("PRIMARY_BINDING_EXISTS", 
                         i18nService.getMessage("form.primary_binding_exists"),
                         i18nService.getMessage("form.remove_existing_primary"));
             }
@@ -299,7 +299,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
         // 如果更改了绑定类型为主表，检查唯一性
         if (request.getBindingType() == BindingType.PRIMARY && binding.getBindingType() != BindingType.PRIMARY) {
             if (formTableBindingRepository.existsByFormIdAndBindingType(binding.getFormId(), BindingType.PRIMARY)) {
-                throw new BusinessException("PRIMARY_BINDING_EXISTS", 
+                throw new DeveloperBusinessException("PRIMARY_BINDING_EXISTS", 
                         i18nService.getMessage("form.primary_binding_exists"),
                         i18nService.getMessage("form.remove_existing_primary"));
             }
@@ -344,7 +344,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
                 .anyMatch(field -> field.getFieldName().equals(foreignKeyField));
         
         if (!fieldExists) {
-            throw new BusinessException("INVALID_FOREIGN_KEY", 
+            throw new DeveloperBusinessException("INVALID_FOREIGN_KEY", 
                     i18nService.getMessage("form.foreign_key_not_found", foreignKeyField),
                     i18nService.getMessage("form.check_field_name"));
         }
@@ -361,30 +361,30 @@ public class FormDesignComponentImpl implements FormDesignComponent {
             return;
         }
         if (request.getBindingType() == BindingType.RELATED || isDeployedRelationTableBinding) {
-            throw new BusinessException("RELATED_BINDING_NOT_ALLOWED",
+            throw new DeveloperBusinessException("RELATED_BINDING_NOT_ALLOWED",
                     i18nService.getMessage("form.related_binding_not_allowed"),
                     i18nService.getMessage("form.use_primary_sub_only"));
         }
         if (request.getBindingType() == BindingType.PRIMARY) {
             if (table != null && table.getTableType() != TableType.MAIN) {
-                throw new BusinessException("PRIMARY_REQUIRES_MAIN_TABLE",
+                throw new DeveloperBusinessException("PRIMARY_REQUIRES_MAIN_TABLE",
                         i18nService.getMessage("form.primary_binding_requires_main_table"),
                         i18nService.getMessage("form.choose_main_physics_table"));
             }
         }
         if (request.getBindingType() == BindingType.SUB) {
             if (!formTableBindingRepository.existsByFormIdAndBindingType(form.getId(), BindingType.PRIMARY)) {
-                throw new BusinessException("SUB_REQUIRES_PRIMARY",
+                throw new DeveloperBusinessException("SUB_REQUIRES_PRIMARY",
                         i18nService.getMessage("form.primary_binding_required_before_sub"),
                         i18nService.getMessage("form.add_primary_binding_first"));
             }
             if (table != null && table.getTableType() != TableType.SUB) {
-                throw new BusinessException("SUB_BINDING_REQUIRES_SUB_TABLE",
+                throw new DeveloperBusinessException("SUB_BINDING_REQUIRES_SUB_TABLE",
                         i18nService.getMessage("form.sub_binding_requires_sub_table"),
                         i18nService.getMessage("form.choose_sub_physics_table"));
             }
             if (request.getForeignKeyField() == null || request.getForeignKeyField().isBlank()) {
-                throw new BusinessException("SUB_REQUIRES_FOREIGN_KEY",
+                throw new DeveloperBusinessException("SUB_REQUIRES_FOREIGN_KEY",
                         i18nService.getMessage("form.sub_binding_requires_foreign_key"),
                         i18nService.getMessage("form.specify_fk_to_main"));
             }
@@ -398,7 +398,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
     public void validateProcessFormUniqueness(Long functionUnitId) {
         long processFormCount = formDefinitionRepository.countByFunctionUnitIdAndFormType(functionUnitId, FormType.PROCESS);
         if (processFormCount > 0) {
-            throw new BusinessException("PROCESS_FORM_ALREADY_EXISTS",
+            throw new DeveloperBusinessException("PROCESS_FORM_ALREADY_EXISTS",
                     i18nService.getMessage("form.process_form_already_exists"),
                     i18nService.getMessage("form.only_one_process_form"));
         }
@@ -415,7 +415,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
                 .toList();
         
         if (!invalidFields.isEmpty()) {
-            throw new BusinessException("INVALID_FIELD_NAME",
+            throw new DeveloperBusinessException("INVALID_FIELD_NAME",
                     i18nService.getMessage("form.invalid_field_names", String.join(", ", invalidFields)),
                     i18nService.getMessage("form.field_must_reference_data_table"));
         }
@@ -454,7 +454,7 @@ public class FormDesignComponentImpl implements FormDesignComponent {
                     objectMapper.writeValueAsString(source),
                     new TypeReference<Map<String, Object>>() {});
         } catch (JsonProcessingException e) {
-            throw new BusinessException("SYS_JSON_ERROR", i18nService.getMessage("form.config_generate_failed"));
+            throw new DeveloperBusinessException("SYS_JSON_ERROR", i18nService.getMessage("form.config_generate_failed"));
         }
     }
     

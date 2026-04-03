@@ -7,7 +7,7 @@ import com.developer.enums.DataType;
 import com.developer.enums.FormType;
 import com.developer.enums.FunctionUnitStatus;
 import com.developer.enums.TableType;
-import com.developer.exception.BusinessException;
+import com.developer.exception.DeveloperBusinessException;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.FunctionUnitRepository;
 import com.developer.repository.VersionRepository;
@@ -81,11 +81,11 @@ public class VersionComponentImpl implements VersionComponent {
             functionUnitRepository.save(functionUnit);
             
             return version;
-        } catch (BusinessException e) {
+        } catch (DeveloperBusinessException e) {
             throw e;
         } catch (Exception e) {
             log.error("Failed to create version snapshot, functionUnitId={}, version={}: {}", functionUnitId, newVersion, e.getMessage(), e);
-            throw new BusinessException("SYS_SNAPSHOT_ERROR", "Failed to create version snapshot: " + e.getMessage());
+            throw new DeveloperBusinessException("SYS_SNAPSHOT_ERROR", "Failed to create version snapshot: " + e.getMessage());
         }
     }
     
@@ -136,7 +136,7 @@ public class VersionComponentImpl implements VersionComponent {
         Version targetVersion = getById(versionId);
         
         if (!targetVersion.getFunctionUnit().getId().equals(functionUnitId)) {
-            throw new BusinessException("BIZ_VERSION_MISMATCH", "Version does not belong to this function unit");
+            throw new DeveloperBusinessException("BIZ_VERSION_MISMATCH", "Version does not belong to this function unit");
         }
         
         try {
@@ -171,7 +171,7 @@ public class VersionComponentImpl implements VersionComponent {
             
             return functionUnitRepository.save(functionUnit);
         } catch (Exception e) {
-            throw new BusinessException("SYS_ROLLBACK_ERROR", "Rollback failed: " + e.getMessage());
+            throw new DeveloperBusinessException("SYS_ROLLBACK_ERROR", "Rollback failed: " + e.getMessage());
         }
     }
     

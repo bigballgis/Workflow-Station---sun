@@ -9,7 +9,7 @@ import com.developer.dto.FunctionUnitResponse;
 import com.developer.dto.ValidationResult;
 import com.developer.entity.DecisionDefinition;
 import com.developer.entity.FunctionUnit;
-import com.developer.exception.BusinessException;
+import com.developer.exception.DeveloperBusinessException;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.*;
 import com.developer.service.DecisionDefinitionService;
@@ -165,7 +165,7 @@ public class DecisionDesignPropertyTest {
     /**
      * Property 3: For any FunctionUnit and any existing decisionKey, attempting to create
      * another DecisionDefinition with the same decisionKey in the same FunctionUnit
-     * should throw BusinessException with errorCode "CONFLICT_DECISION_KEY_EXISTS".
+     * should throw DeveloperBusinessException with errorCode "CONFLICT_DECISION_KEY_EXISTS".
      *
      * **Validates: Requirements 2.5, 3.8**
      */
@@ -182,9 +182,9 @@ public class DecisionDesignPropertyTest {
                 .thenReturn(true);
 
         assertThatThrownBy(() -> component.create(functionUnitId, request))
-                .isInstanceOf(BusinessException.class)
+                .isInstanceOf(DeveloperBusinessException.class)
                 .satisfies(ex -> {
-                    BusinessException bex = (BusinessException) ex;
+                    DeveloperBusinessException bex = (DeveloperBusinessException) ex;
                     assertThat(bex.getErrorCode()).isEqualTo("CONFLICT_DECISION_KEY_EXISTS");
                 });
 

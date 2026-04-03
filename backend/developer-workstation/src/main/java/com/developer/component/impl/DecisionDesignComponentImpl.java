@@ -7,7 +7,7 @@ import com.developer.dto.DecisionTableModel;
 import com.developer.dto.ValidationResult;
 import com.developer.entity.DecisionDefinition;
 import com.developer.entity.FunctionUnit;
-import com.developer.exception.BusinessException;
+import com.developer.exception.DeveloperBusinessException;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.service.DecisionDefinitionService;
 import com.developer.validation.DmnXmlParser;
@@ -39,7 +39,7 @@ public class DecisionDesignComponentImpl implements DecisionDesignComponent {
         FunctionUnit functionUnit = functionUnitComponent.getById(functionUnitId);
 
         if (decisionDefinitionService.existsByFunctionUnitIdAndDecisionKey(functionUnitId, request.getDecisionKey())) {
-            throw new BusinessException("CONFLICT_DECISION_KEY_EXISTS",
+            throw new DeveloperBusinessException("CONFLICT_DECISION_KEY_EXISTS",
                     "Decision key '" + request.getDecisionKey() + "' already exists in this function unit");
         }
 
@@ -47,7 +47,7 @@ public class DecisionDesignComponentImpl implements DecisionDesignComponent {
         if (dmnXml != null) {
             ValidationResult validationResult = dmnXmlValidator.validate(dmnXml);
             if (!validationResult.isValid()) {
-                throw new BusinessException("INVALID_DMN_XML",
+                throw new DeveloperBusinessException("INVALID_DMN_XML",
                         "DMN XML validation failed: " + validationResult.getErrors());
             }
         }
@@ -98,7 +98,7 @@ public class DecisionDesignComponentImpl implements DecisionDesignComponent {
         // Check for key conflict (excluding current record)
         if (decisionDefinitionService.existsByFunctionUnitIdAndDecisionKeyAndIdNot(
                 functionUnitId, request.getDecisionKey(), decisionId)) {
-            throw new BusinessException("CONFLICT_DECISION_KEY_EXISTS",
+            throw new DeveloperBusinessException("CONFLICT_DECISION_KEY_EXISTS",
                     "Decision key '" + request.getDecisionKey() + "' already exists in this function unit");
         }
 
@@ -106,7 +106,7 @@ public class DecisionDesignComponentImpl implements DecisionDesignComponent {
         if (dmnXml != null) {
             ValidationResult validationResult = dmnXmlValidator.validate(dmnXml);
             if (!validationResult.isValid()) {
-                throw new BusinessException("INVALID_DMN_XML",
+                throw new DeveloperBusinessException("INVALID_DMN_XML",
                         "DMN XML validation failed: " + validationResult.getErrors());
             }
         }
@@ -153,7 +153,7 @@ public class DecisionDesignComponentImpl implements DecisionDesignComponent {
                 .orElseThrow(() -> new ResourceNotFoundException("DecisionDefinition", decisionId));
 
         if (!StringUtils.hasText(existing.getDmnXml())) {
-            throw new BusinessException("EMPTY_DMN_XML",
+            throw new DeveloperBusinessException("EMPTY_DMN_XML",
                     "DMN XML is empty; save decision table content before opening the model editor");
         }
         return dmnXmlParser.parseToModel(existing.getDmnXml());
@@ -181,7 +181,7 @@ public class DecisionDesignComponentImpl implements DecisionDesignComponent {
         // Validate the generated XML
         ValidationResult validationResult = dmnXmlValidator.validate(newXml);
         if (!validationResult.isValid()) {
-            throw new BusinessException("INVALID_DMN_XML",
+            throw new DeveloperBusinessException("INVALID_DMN_XML",
                     "Generated DMN XML validation failed: " + validationResult.getErrors());
         }
 

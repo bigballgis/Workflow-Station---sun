@@ -75,4 +75,7 @@ public interface FunctionUnitRepository extends JpaRepository<FunctionUnit, Long
      * Requirements: 1.4 - Prevent deployment of duplicate versions
      */
     boolean existsByNameAndVersion(String name, String version);
+
+    @Query("SELECT fu.id FROM FunctionUnit fu WHERE fu.createdBy = :username")
+    List<Long> findIdsByCreatedBy(@Param("username") String username);
 }

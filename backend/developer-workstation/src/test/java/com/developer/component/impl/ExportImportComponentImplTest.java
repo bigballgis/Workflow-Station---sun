@@ -1,14 +1,16 @@
 package com.developer.component.impl;
 
-import com.developer.entity.FunctionUnit;
 import com.developer.repository.*;
+import com.developer.validation.DmnXmlParser;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.platform.common.dto.UserPrincipal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -17,9 +19,13 @@ import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import java.util.ArrayList;
+import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
-import java.util.Optional;
+import java.util.List;
+import java.util.Map;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -49,6 +55,12 @@ class ExportImportComponentImplTest {
     
     @Mock
     private ObjectMapper objectMapper;
+
+    @Mock
+    private DecisionDefinitionRepository decisionDefinitionRepository;
+
+    @Mock
+    private DmnXmlParser dmnXmlParser;
     
     @InjectMocks
     private ExportImportComponentImpl exportImportComponent;
@@ -60,13 +72,16 @@ class ExportImportComponentImplTest {
     }
     
     /**
-     * 测试用例 1: 有效的认证用户
-     * 验证当存在已认证用户时，getCurrentOperator() 返回用户名
+     * 测试用例 1: 有效的认证用户（principal 须为 UserPrincipal，与 SecurityContextUtils 一致）
      */
     @Test
     void testGetCurrentOperator_WithAuthenticatedUser() throws Exception {
-        // Given: 设置 SecurityContext 包含认证用户
-        Authentication auth = new UsernamePasswordAuthenticationToken("testuser", "password", Collections.emptyList());
+        // Given
+        UserPrincipal principal = UserPrincipal.builder()
+                .userId("u-1")
+                .username("testuser")
+                .build();
+        Authentication auth = new UsernamePasswordAuthenticationToken(principal, "n/a", Collections.emptyList());
         SecurityContext securityContext = mock(SecurityContext.class);
         when(securityContext.getAuthentication()).thenReturn(auth);
         SecurityContextHolder.setContext(securityContext);
@@ -131,5 +146,58 @@ class ExportImportComponentImplTest {
         
         // Then: 验证返回 "system"
         assertEquals("system", operator);
+    }
+
+    @Test
+    void validateImportPackage_acceptsManifestWithoutMetadata() throws Exception {
+        ObjectMapper om = new ObjectMapper();
+        ExportImportComponentImpl impl = new ExportImportComponentImpl(
+                functionUnitRepository,
+                processDefinitionRepository,
+                tableDefinitionRepository,
+                formDefinitionRepository,
+                actionDefinitionRepository,
+                decisionDefinitionRepository,
+                dmnXmlParser,
+                om);
+
+        byte[] zip = zipSingleEntry("manifest.json", "{\"name\":\"FU_ManifestOnly\",\"code\":\"c1\"}");
+        MockMultipartFile file = new MockMultipartFile("file", "fu.zip", "application/zip", zip);
+
+        Map<String, Object> res = impl.validateImportPackage(file);
+        assertTrue((Boolean) res.get("valid"), () -> String.valueOf(res.get("errors")));
+        @SuppressWarnings("unchecked")
+        List<String> errors = (List<String>) res.get("errors");
+        assertTrue(errors.isEmpty());
+    }
+
+    @Test
+    void validateImportPackage_stillAcceptsLegacyMetadataJson() throws Exception {
+        ObjectMapper om = new ObjectMapper();
+        ExportImportComponentImpl impl = new ExportImportComponentImpl(
+                functionUnitRepository,
+                processDefinitionRepository,
+                tableDefinitionRepository,
+                formDefinitionRepository,
+                actionDefinitionRepository,
+                decisionDefinitionRepository,
+                dmnXmlParser,
+                om);
+
+        byte[] zip = zipSingleEntry("metadata.json", "{\"name\":\"FU_LegacyMeta\"}");
+        MockMultipartFile file = new MockMultipartFile("file", "fu.zip", "application/zip", zip);
+
+        Map<String, Object> res = impl.validateImportPackage(file);
+        assertTrue((Boolean) res.get("valid"), () -> String.valueOf(res.get("errors")));
+    }
+
+    private static byte[] zipSingleEntry(String entryName, String utf8Content) throws Exception {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        try (ZipOutputStream zos = new ZipOutputStream(baos)) {
+            zos.putNextEntry(new ZipEntry(entryName));
+            zos.write(utf8Content.getBytes(StandardCharsets.UTF_8));
+            zos.closeEntry();
+        }
+        return baos.toByteArray();
     }
 }

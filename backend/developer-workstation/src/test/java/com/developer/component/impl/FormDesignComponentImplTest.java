@@ -3,7 +3,7 @@ package com.developer.component.impl;
 import com.developer.entity.FormDefinition;
 import com.developer.entity.FunctionUnit;
 import com.developer.entity.ProcessDefinition;
-import com.developer.exception.BusinessException;
+import com.developer.exception.DeveloperBusinessException;
 import com.developer.repository.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -51,7 +51,7 @@ class FormDesignComponentImplTest {
     }
     
     /**
-     * 测试用例 1: 删除被流程引用的表单时抛出 BusinessException
+     * 测试用例 1: 删除被流程引用的表单时抛出 DeveloperBusinessException
      * 验证属性 2: 删除保护 - 被引用的表单
      */
     @Test
@@ -87,7 +87,7 @@ class FormDesignComponentImplTest {
         when(formDefinitionRepository.findById(1L)).thenReturn(Optional.of(form));
         
         // When & Then: 删除应抛出异常
-        BusinessException exception = assertThrows(BusinessException.class, () -> {
+        DeveloperBusinessException exception = assertThrows(DeveloperBusinessException.class, () -> {
             formDesignComponent.delete(1L);
         });
         

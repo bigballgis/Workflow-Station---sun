@@ -230,8 +230,9 @@ class AiGenerationControllerTest {
         mockMvc.perform(post("/ai-generation/lock/1")
                         .header("X-User-Id", "user1"))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("AI_LOCK_CONFLICT"))
-                .andExpect(jsonPath("$.message").exists());
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("AI_LOCK_CONFLICT"))
+                .andExpect(jsonPath("$.error.message").exists());
     }
 
     @Test
@@ -258,7 +259,8 @@ class AiGenerationControllerTest {
                         .header("X-User-Id", "user1")
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isUnprocessableEntity())
-                .andExpect(jsonPath("$.code").value("AI_VALIDATION_FAILED"))
-                .andExpect(jsonPath("$.details.errors").isArray());
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("AI_VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.error.details.errors").isArray());
     }
 }

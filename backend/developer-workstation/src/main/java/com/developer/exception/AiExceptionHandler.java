@@ -1,5 +1,6 @@
 package com.developer.exception;
 
+import com.platform.common.dto.ApiResponse;
 import com.platform.common.exception.ErrorResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.Ordered;
@@ -26,7 +27,7 @@ import java.util.UUID;
 public class AiExceptionHandler {
 
     @ExceptionHandler(AiLockConflictException.class)
-    public ResponseEntity<ErrorResponse> handleAiLockConflict(
+    public ResponseEntity<ApiResponse<Void>> handleAiLockConflict(
             AiLockConflictException ex, WebRequest request) {
         String traceId = generateTraceId();
         log.warn("AI lock conflict [{}]: {}", traceId, ex.getMessage());
@@ -43,11 +44,11 @@ public class AiExceptionHandler {
                 .path(getPath(request))
                 .build();
 
-        return new ResponseEntity<>(response, HttpStatus.CONFLICT);
+        return new ResponseEntity<>(ApiResponse.error(response), HttpStatus.CONFLICT);
     }
 
     @ExceptionHandler(AiValidationFailedException.class)
-    public ResponseEntity<ErrorResponse> handleAiValidationFailed(
+    public ResponseEntity<ApiResponse<Void>> handleAiValidationFailed(
             AiValidationFailedException ex, WebRequest request) {
         String traceId = generateTraceId();
         log.warn("AI validation failed [{}]: {} errors", traceId, ex.getErrors().size());
@@ -64,11 +65,11 @@ public class AiExceptionHandler {
                 .path(getPath(request))
                 .build();
 
-        return new ResponseEntity<>(response, HttpStatus.UNPROCESSABLE_ENTITY);
+        return new ResponseEntity<>(ApiResponse.error(response), HttpStatus.UNPROCESSABLE_ENTITY);
     }
 
     @ExceptionHandler(AiGenerationException.class)
-    public ResponseEntity<ErrorResponse> handleAiGeneration(
+    public ResponseEntity<ApiResponse<Void>> handleAiGeneration(
             AiGenerationException ex, WebRequest request) {
         String traceId = generateTraceId();
         log.error("AI generation error [{}]: {}", traceId, ex.getMessage());
@@ -82,7 +83,7 @@ public class AiExceptionHandler {
                 .build();
 
         HttpStatus status = determineHttpStatus(ex.getErrorCode());
-        return new ResponseEntity<>(response, status);
+        return new ResponseEntity<>(ApiResponse.error(response), status);
     }
 
     private HttpStatus determineHttpStatus(String errorCode) {

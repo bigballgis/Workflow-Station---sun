@@ -11,6 +11,11 @@ cors:
 admin-center:
   url: ${ADMIN_CENTER_URL:http://localhost:8090}
 
+# 一键部署到管理中心：生产环境应要求 JWT（由 Kong 注入或浏览器转发）；本地/测试可关闭
+developer:
+  deployment:
+    require-admin-authorization: ${DEVELOPER_DEPLOY_REQUIRE_ADMIN_AUTH:true}
+
 spring:
   autoconfigure:
     exclude: org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration

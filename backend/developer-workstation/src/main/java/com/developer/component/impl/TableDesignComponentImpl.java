@@ -11,7 +11,7 @@ import com.developer.entity.FunctionUnit;
 import com.developer.entity.TableDefinition;
 import com.developer.enums.DataType;
 import com.developer.enums.DatabaseDialect;
-import com.developer.exception.BusinessException;
+import com.developer.exception.DeveloperBusinessException;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.*;
 import com.platform.common.i18n.I18nService;
@@ -46,7 +46,7 @@ public class TableDesignComponentImpl implements TableDesignComponent {
                 .orElseThrow(() -> new ResourceNotFoundException("FunctionUnit", functionUnitId));
         
         if (tableDefinitionRepository.existsByFunctionUnitIdAndTableName(functionUnitId, request.getTableName())) {
-            throw new BusinessException("CONFLICT_TABLE_NAME_EXISTS", 
+            throw new DeveloperBusinessException("CONFLICT_TABLE_NAME_EXISTS", 
                     i18nService.getMessage("table.name_exists", request.getTableName()),
                     i18nService.getMessage("table.use_other_name"));
         }
@@ -80,7 +80,7 @@ public class TableDesignComponentImpl implements TableDesignComponent {
         
         if (tableDefinitionRepository.existsByFunctionUnitIdAndTableNameAndIdNot(
                 tableDefinition.getFunctionUnit().getId(), request.getTableName(), id)) {
-            throw new BusinessException("CONFLICT_TABLE_NAME_EXISTS", 
+            throw new DeveloperBusinessException("CONFLICT_TABLE_NAME_EXISTS", 
                     i18nService.getMessage("table.name_exists", request.getTableName()),
                     i18nService.getMessage("table.use_other_name"));
         }
@@ -130,14 +130,14 @@ public class TableDesignComponentImpl implements TableDesignComponent {
         
         // 检查是否被表单引用（旧的单表绑定方式）
         if (formDefinitionRepository.existsByBoundTable_Id(id)) {
-            throw new BusinessException("BIZ_TABLE_IN_USE", 
+            throw new DeveloperBusinessException("BIZ_TABLE_IN_USE", 
                     i18nService.getMessage("table.in_use_by_form"),
                     i18nService.getMessage("table.unbind_form_first"));
         }
         
         // 检查是否被表单多表绑定引用
         if (formTableBindingRepository.existsByTableId(id)) {
-            throw new BusinessException("BIZ_TABLE_IN_USE", 
+            throw new DeveloperBusinessException("BIZ_TABLE_IN_USE", 
                     i18nService.getMessage("table.in_use_by_binding"),
                     i18nService.getMessage("table.unbind_form_first"));
         }
@@ -255,7 +255,7 @@ public class TableDesignComponentImpl implements TableDesignComponent {
     
     private void validateIdentifier(String name) {
         if (name == null || !name.matches("^[a-zA-Z_][a-zA-Z0-9_]*$")) {
-            throw new BusinessException("INVALID_IDENTIFIER", "Invalid identifier: " + name);
+            throw new DeveloperBusinessException("INVALID_IDENTIFIER", "Invalid identifier: " + name);
         }
     }
 

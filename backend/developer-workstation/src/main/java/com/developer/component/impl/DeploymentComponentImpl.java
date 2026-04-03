@@ -9,12 +9,16 @@ import com.developer.dto.DeployResponse;
 import com.developer.dto.ValidationResult;
 import com.developer.entity.FunctionUnit;
 import com.developer.entity.ProcessDefinition;
-import com.developer.exception.BusinessException;
+import com.developer.exception.DeveloperBusinessException;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.FunctionUnitRepository;
+import com.developer.service.DeploymentJobService;
+import com.platform.common.constant.PlatformConstants;
 import com.platform.common.i18n.I18nService;
-import lombok.RequiredArgsConstructor;
+import com.platform.security.util.SecurityContextUtils;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.task.TaskExecutor;
@@ -23,14 +27,14 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.Locale;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 部署组件实现
@@ -38,7 +42,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @Component
 @Slf4j
 public class DeploymentComponentImpl implements DeploymentComponent {
-    
+
     private final FunctionUnitRepository functionUnitRepository;
     private final ExportImportComponent exportImportComponent;
     private final RestTemplate restTemplate;
@@ -46,14 +50,17 @@ public class DeploymentComponentImpl implements DeploymentComponent {
     private final ProcessDesignComponent processDesignComponent;
     private final I18nService i18nService;
     private final TaskExecutor taskExecutor;
-    
+    private final DeploymentJobService deploymentJobService;
+
     @Value("${admin-center.url:http://localhost:8090}")
     private String defaultAdminCenterUrl;
-    
-    // 存储部署状态（生产环境应使用数据库或Redis）
-    private final Map<String, DeployResponse> deploymentStatusMap = new ConcurrentHashMap<>();
-    private final Map<Long, List<DeployResponse>> deploymentHistoryMap = new ConcurrentHashMap<>();
-    
+
+    /**
+     * 生产环境应由已登录用户携带 JWT；本地/自动化测试可设为 false。
+     */
+    @Value("${developer.deployment.require-admin-authorization:true}")
+    private boolean requireAdminAuthorization;
+
     public DeploymentComponentImpl(
             FunctionUnitRepository functionUnitRepository,
             ExportImportComponent exportImportComponent,
@@ -61,28 +68,39 @@ public class DeploymentComponentImpl implements DeploymentComponent {
             FunctionUnitComponent functionUnitComponent,
             ProcessDesignComponent processDesignComponent,
             I18nService i18nService,
-            @org.springframework.beans.factory.annotation.Qualifier("deploymentTaskExecutor") 
             @org.springframework.beans.factory.annotation.Autowired(required = false)
-            TaskExecutor taskExecutor) {
+            @Qualifier("deploymentTaskExecutor")
+            TaskExecutor taskExecutor,
+            DeploymentJobService deploymentJobService) {
         this.functionUnitRepository = functionUnitRepository;
         this.exportImportComponent = exportImportComponent;
         this.restTemplate = restTemplate;
         this.functionUnitComponent = functionUnitComponent;
         this.processDesignComponent = processDesignComponent;
         this.i18nService = i18nService;
-        // Fallback to SimpleAsyncTaskExecutor if no dedicated executor is configured
-        this.taskExecutor = taskExecutor != null ? taskExecutor 
+        this.taskExecutor = taskExecutor != null ? taskExecutor
                 : new org.springframework.core.task.SimpleAsyncTaskExecutor("deploy-");
+        this.deploymentJobService = deploymentJobService;
     }
-    
+
     @Override
     public DeployResponse deployToAdminCenter(Long functionUnitId, DeployRequest request) {
         FunctionUnit functionUnit = functionUnitRepository.findById(functionUnitId)
                 .orElseThrow(() -> new ResourceNotFoundException("FunctionUnit", functionUnitId));
-        
+
+        Optional<String> outboundAuth = resolveOutboundAuthorizationHeader();
+        Optional<String> adminUserId = SecurityContextUtils.getCurrentUserId();
+
+        if (requireAdminAuthorization && outboundAuth.isEmpty()) {
+            throw new DeveloperBusinessException(
+                    "DEPLOY_ADMIN_AUTH_REQUIRED",
+                    i18nService.getMessage("deploy.admin_authorization_required"),
+                    i18nService.getMessage("deploy.admin_authorization_required_hint"));
+        }
+
         String deploymentId = UUID.randomUUID().toString();
         String targetUrl = request.getTargetUrl() != null ? request.getTargetUrl() : defaultAdminCenterUrl;
-        
+
         DeployResponse response = DeployResponse.builder()
                 .deploymentId(deploymentId)
                 .status(DeployResponse.DeployStatus.DEPLOYING)
@@ -91,72 +109,89 @@ public class DeploymentComponentImpl implements DeploymentComponent {
                 .steps(new ArrayList<>())
                 .deployedAt(LocalDateTime.now())
                 .build();
-        
-        deploymentStatusMap.put(deploymentId, response);
-        
-        // 捕获当前线程的 SecurityContext，传递到异步线程
+
+        deploymentJobService.persistNew(deploymentId, functionUnitId, targetUrl, response);
+
         SecurityContext securityContext = SecurityContextHolder.getContext();
         Locale currentLocale = org.springframework.context.i18n.LocaleContextHolder.getLocale();
-        
-        // 异步执行部署（使用 Spring 管理的 TaskExecutor 替代裸线程）
+        final String authHeader = outboundAuth.orElse(null);
+
         taskExecutor.execute(() -> {
             SecurityContextHolder.setContext(securityContext);
             org.springframework.context.i18n.LocaleContextHolder.setLocale(currentLocale);
             try {
-                executeDeployment(functionUnitId, functionUnit, deploymentId, targetUrl, request);
+                executeDeployment(functionUnitId, functionUnit, targetUrl, request, response, authHeader, adminUserId);
             } finally {
+                deploymentJobService.persistUpdate(functionUnitId, targetUrl, response);
                 SecurityContextHolder.clearContext();
                 org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
             }
         });
-        
+
         return response;
     }
-    
-    private void executeDeployment(Long functionUnitId, FunctionUnit functionUnit, 
-                                   String deploymentId, String targetUrl, DeployRequest request) {
-        DeployResponse response = deploymentStatusMap.get(deploymentId);
+
+    private void executeDeployment(Long functionUnitId,
+                                   FunctionUnit functionUnit,
+                                   String targetUrl,
+                                   DeployRequest request,
+                                   DeployResponse response,
+                                   String authorizationHeader,
+                                   Optional<String> adminUserId) {
         List<DeployResponse.DeployStep> steps = response.getSteps();
-        
+
         try {
-            // Step 0: Auto create version
             updateStep(steps, i18nService.getMessage("deploy.step.create_version"), "RUNNING", null);
             response.setProgress(5);
             FunctionUnit updatedUnit = functionUnitComponent.publish(functionUnitId, request.getChangeLog());
             response.setVersionNumber(updatedUnit.getCurrentVersion());
             response.setChangeLog(request.getChangeLog());
-            updateStep(steps, i18nService.getMessage("deploy.step.create_version"), "SUCCESS", i18nService.getMessage("deploy.version_created", updatedUnit.getCurrentVersion()));
+            updateStep(steps, i18nService.getMessage("deploy.step.create_version"), "SUCCESS",
+                    i18nService.getMessage("deploy.version_created", updatedUnit.getCurrentVersion()));
             response.setProgress(15);
-            
-            // Step 0.5: Validate multi-instance configuration
-            updateStep(steps, "验证多实例配置", "RUNNING", null);
+            deploymentJobService.persistUpdate(functionUnitId, targetUrl, response);
+
+            String stepMultiInstance = i18nService.getMessage("deploy.step.multi_instance_validate");
+            updateStep(steps, stepMultiInstance, "RUNNING", null);
             ProcessDefinition pd = processDesignComponent.getByFunctionUnitId(functionUnitId);
             if (pd != null && pd.getBpmnXml() != null && !pd.getBpmnXml().trim().isEmpty()) {
                 ValidationResult miResult = processDesignComponent.validateMultiInstance(
-                    pd.getBpmnXml(), functionUnitId);
+                        pd.getBpmnXml(), functionUnitId);
                 if (!miResult.isValid()) {
-                    throw new BusinessException("MULTI_INSTANCE_VALIDATION_FAILED", 
-                        "多实例配置验证失败: " + miResult.getErrors().toString());
+                    throw new DeveloperBusinessException("MULTI_INSTANCE_VALIDATION_FAILED",
+                            "多实例配置验证失败: " + miResult.getErrors());
                 }
             }
-            updateStep(steps, "验证多实例配置", "SUCCESS", "多实例配置验证通过");
+            updateStep(steps, stepMultiInstance, "SUCCESS", i18nService.getMessage("deploy.multi_instance_validate_ok"));
             response.setProgress(18);
-            
-            // Step 1: Export function unit
+
+            String stepLastTaskTopo = i18nService.getMessage("deploy.step.last_task_assignee_topology");
+            updateStep(steps, stepLastTaskTopo, "RUNNING", null);
+            if (pd != null && pd.getBpmnXml() != null && !pd.getBpmnXml().trim().isEmpty()) {
+                ValidationResult lastTaskTopo = processDesignComponent.validateLastTaskAssigneeTopology(pd.getBpmnXml());
+                if (!lastTaskTopo.isValid()) {
+                    throw new DeveloperBusinessException("LAST_TASK_ANCHOR_TOPOLOGY_FAILED",
+                            "上一完成任务锚点拓扑校验失败: " + lastTaskTopo.getErrors());
+                }
+            }
+            updateStep(steps, stepLastTaskTopo, "SUCCESS", i18nService.getMessage("deploy.last_task_assignee_topology_ok"));
+            response.setProgress(19);
+            deploymentJobService.persistUpdate(functionUnitId, targetUrl, response);
+
             updateStep(steps, i18nService.getMessage("deploy.step.export"), "RUNNING", null);
             response.setProgress(20);
             byte[] exportData = exportImportComponent.exportFunctionUnit(functionUnitId);
             updateStep(steps, i18nService.getMessage("deploy.step.export"), "SUCCESS", i18nService.getMessage("deploy.export_success"));
             response.setProgress(30);
-            
-            // Step 2: Upload to admin center
+            deploymentJobService.persistUpdate(functionUnitId, targetUrl, response);
+
             updateStep(steps, i18nService.getMessage("deploy.step.upload"), "RUNNING", null);
-            // 使用 function-units-import 控制器的 API
             String importUrl = targetUrl + "/api/v1/admin/function-units-import/import";
-            
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.MULTIPART_FORM_DATA);
-            
+
+            HttpHeaders importHeaders = new HttpHeaders();
+            importHeaders.setContentType(MediaType.MULTIPART_FORM_DATA);
+            applyOutboundAdminHeaders(importHeaders, authorizationHeader, adminUserId);
+
             MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
             ByteArrayResource resource = new ByteArrayResource(exportData) {
                 @Override
@@ -165,61 +200,64 @@ public class DeploymentComponentImpl implements DeploymentComponent {
                 }
             };
             body.add("file", resource);
-            body.add("conflictStrategy", request.getConflictStrategy() != null ? 
-                    request.getConflictStrategy() : "OVERWRITE");
-            
-            HttpEntity<MultiValueMap<String, Object>> requestEntity = new HttpEntity<>(body, headers);
-            
+            body.add("conflictStrategy", request.getConflictStrategy() != null
+                    ? request.getConflictStrategy() : "OVERWRITE");
+
+            HttpEntity<MultiValueMap<String, Object>> requestEntity = new HttpEntity<>(body, importHeaders);
+
             ResponseEntity<Map> importResponse = restTemplate.exchange(
                     importUrl, HttpMethod.POST, requestEntity, Map.class);
-            
-            if (!importResponse.getStatusCode().is2xxSuccessful()) {
-                throw new BusinessException("DEPLOY_IMPORT_FAILED", i18nService.getMessage("deploy.import_failed"));
+
+            if (!importResponse.getStatusCode().is2xxSuccessful() || importResponse.getBody() == null) {
+                throw new DeveloperBusinessException("DEPLOY_IMPORT_FAILED", i18nService.getMessage("deploy.import_failed"));
             }
-            
+
+            Map<String, Object> importResult = importResponse.getBody();
+            Object idObj = importResult.get("functionUnitId");
+            if (idObj == null) {
+                throw new DeveloperBusinessException("DEPLOY_IMPORT_FAILED",
+                        i18nService.getMessage("deploy.import_failed") + ": missing functionUnitId");
+            }
+            String importedId = idObj.toString();
+
             updateStep(steps, i18nService.getMessage("deploy.step.upload"), "SUCCESS", i18nService.getMessage("deploy.upload_success"));
             response.setProgress(60);
-            
-            // Step 3: Trigger deploy
+            deploymentJobService.persistUpdate(functionUnitId, targetUrl, response);
+
             updateStep(steps, i18nService.getMessage("deploy.step.deploy"), "RUNNING", null);
-            Map<String, Object> importResult = importResponse.getBody();
-            String importedId = (String) importResult.get("functionUnitId");
-            
-            // 使用 function-units-import 控制器的部署 API
             String deployUrl = targetUrl + "/api/v1/admin/function-units-import/" + importedId + "/deploy";
             Map<String, Object> deployBody = new HashMap<>();
-            deployBody.put("environment", request.getEnvironment() != null ? 
-                    request.getEnvironment().name() : "PRODUCTION");
-            deployBody.put("autoEnable", request.getAutoEnable() != null ? 
-                    request.getAutoEnable() : true);
-            
+            deployBody.put("environment", request.getEnvironment() != null
+                    ? request.getEnvironment().name() : "PRODUCTION");
+            deployBody.put("autoEnable", request.getAutoEnable() != null
+                    ? request.getAutoEnable() : true);
+
             HttpHeaders deployHeaders = new HttpHeaders();
             deployHeaders.setContentType(MediaType.APPLICATION_JSON);
-            HttpEntity<Map<String, Object>> deployRequest = new HttpEntity<>(deployBody, deployHeaders);
-            
+            applyOutboundAdminHeaders(deployHeaders, authorizationHeader, adminUserId);
+            HttpEntity<Map<String, Object>> deployRequestEntity = new HttpEntity<>(deployBody, deployHeaders);
+
             ResponseEntity<Map> deployResponse = restTemplate.exchange(
-                    deployUrl, HttpMethod.POST, deployRequest, Map.class);
-            
+                    deployUrl, HttpMethod.POST, deployRequestEntity, Map.class);
+
             if (!deployResponse.getStatusCode().is2xxSuccessful()) {
-                throw new BusinessException("DEPLOY_FAILED", i18nService.getMessage("deploy.failed"));
+                throw new DeveloperBusinessException("DEPLOY_FAILED", i18nService.getMessage("deploy.failed"));
             }
-            
+
             updateStep(steps, i18nService.getMessage("deploy.step.deploy"), "SUCCESS", i18nService.getMessage("deploy.success"));
             response.setProgress(100);
             response.setStatus(DeployResponse.DeployStatus.SUCCESS);
             response.setMessage(i18nService.getMessage("deploy.success"));
-            
+
         } catch (Exception e) {
             log.error("Deploy failed for functionUnitId={}: {}", functionUnitId, e.getMessage(), e);
             response.setStatus(DeployResponse.DeployStatus.FAILED);
-            // 提取最有意义的错误信息
             String errorMsg = e.getMessage();
             if (e.getCause() != null && e.getCause().getMessage() != null) {
                 errorMsg = e.getCause().getMessage();
             }
             response.setMessage(i18nService.getMessage("deploy.failed") + ": " + errorMsg);
-            
-            // 标记当前步骤失败
+
             for (DeployResponse.DeployStep step : steps) {
                 if ("RUNNING".equals(step.getStatus())) {
                     step.setStatus("FAILED");
@@ -228,16 +266,42 @@ public class DeploymentComponentImpl implements DeploymentComponent {
                 }
             }
         }
-        
-        // 保存到历史记录
-        deploymentHistoryMap.computeIfAbsent(functionUnitId, k -> new ArrayList<>()).add(response);
     }
-    
+
+    private void applyOutboundAdminHeaders(HttpHeaders headers, String authorizationHeader, Optional<String> adminUserId) {
+        if (authorizationHeader != null && !authorizationHeader.isBlank()) {
+            String t = authorizationHeader.trim();
+            String prefix = PlatformConstants.HEADER_BEARER_PREFIX;
+            if (t.regionMatches(true, 0, prefix, 0, prefix.length())) {
+                headers.set(PlatformConstants.HEADER_AUTHORIZATION, t);
+            } else {
+                headers.set(PlatformConstants.HEADER_AUTHORIZATION, prefix + t);
+            }
+        }
+        adminUserId.filter(s -> !s.isBlank())
+                .ifPresent(uid -> headers.set(PlatformConstants.HEADER_USER_ID, uid));
+    }
+
+    /**
+     * 从当前 HTTP 请求解析出站 Authorization（异步线程中需在进入异步前由调用方传入，此处仅作兜底尝试）。
+     */
+    private Optional<String> resolveOutboundAuthorizationHeader() {
+        var attrs = RequestContextHolder.getRequestAttributes();
+        if (attrs instanceof ServletRequestAttributes servletAttrs) {
+            HttpServletRequest httpRequest = servletAttrs.getRequest();
+            String auth = httpRequest.getHeader(PlatformConstants.HEADER_AUTHORIZATION);
+            if (auth != null && !auth.isBlank()) {
+                return Optional.of(auth.trim());
+            }
+        }
+        return Optional.empty();
+    }
+
     private void updateStep(List<DeployResponse.DeployStep> steps, String name, String status, String message) {
         Optional<DeployResponse.DeployStep> existingStep = steps.stream()
                 .filter(s -> s.getName().equals(name))
                 .findFirst();
-        
+
         if (existingStep.isPresent()) {
             DeployResponse.DeployStep step = existingStep.get();
             step.setStatus(status);
@@ -254,18 +318,15 @@ public class DeploymentComponentImpl implements DeploymentComponent {
                     .build());
         }
     }
-    
+
     @Override
     public DeployResponse getDeploymentStatus(String deploymentId) {
-        DeployResponse response = deploymentStatusMap.get(deploymentId);
-        if (response == null) {
-            throw new ResourceNotFoundException("Deployment", deploymentId);
-        }
-        return response;
+        return deploymentJobService.findResponseById(deploymentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Deployment", deploymentId));
     }
-    
+
     @Override
     public List<DeployResponse> getDeploymentHistory(Long functionUnitId) {
-        return deploymentHistoryMap.getOrDefault(functionUnitId, new ArrayList<>());
+        return deploymentJobService.findResponsesByFunctionUnitId(functionUnitId);
     }
 }

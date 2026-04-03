@@ -6,8 +6,9 @@ import com.developer.dto.DeployResponse;
 import com.developer.dto.ValidationResult;
 import com.developer.entity.FunctionUnit;
 import com.developer.entity.ProcessDefinition;
-import com.developer.exception.BusinessException;
+import com.developer.exception.DeveloperBusinessException;
 import com.developer.repository.FunctionUnitRepository;
+import com.developer.service.DeploymentJobService;
 import com.platform.common.i18n.I18nService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -50,6 +51,9 @@ class DeploymentComponentMultiInstanceValidationTest {
     
     @Mock
     private I18nService i18nService;
+
+    @Mock
+    private DeploymentJobService deploymentJobService;
     
     private DeploymentComponentImpl deploymentComponent;
     
@@ -65,7 +69,8 @@ class DeploymentComponentMultiInstanceValidationTest {
             functionUnitComponent,
             processDesignComponent,
             i18nService,
-            new SyncTaskExecutor()
+            new SyncTaskExecutor(),
+            deploymentJobService
         );
         
         // Setup default i18n messages
@@ -94,6 +99,8 @@ class DeploymentComponentMultiInstanceValidationTest {
             .thenReturn(processDefinition);
         when(processDesignComponent.validateMultiInstance(anyString(), eq(FUNCTION_UNIT_ID)))
             .thenReturn(validResult);
+        when(processDesignComponent.validateLastTaskAssigneeTopology(anyString()))
+            .thenReturn(validResult);
         
         DeployRequest request = new DeployRequest();
         request.setChangeLog("Test deployment");
@@ -101,13 +108,15 @@ class DeploymentComponentMultiInstanceValidationTest {
         // When: 执行部署
         DeployResponse response = deploymentComponent.deployToAdminCenter(FUNCTION_UNIT_ID, request);
         
-        // Then: 应该调用 validateMultiInstance
+        // Then: 应该调用 validateMultiInstance 与 LAST_TASK 拓扑校验
         verify(processDesignComponent, timeout(2000).times(1))
             .validateMultiInstance(processDefinition.getBpmnXml(), FUNCTION_UNIT_ID);
+        verify(processDesignComponent, timeout(2000).times(1))
+            .validateLastTaskAssigneeTopology(processDefinition.getBpmnXml());
     }
     
     @Test
-    @DisplayName("当多实例配置验证失败时应抛出 BusinessException")
+    @DisplayName("当多实例配置验证失败时应抛出 DeveloperBusinessException")
     void shouldThrowBusinessExceptionWhenValidationFails() {
         // Given: 功能单元存在但多实例配置无效
         FunctionUnit functionUnit = new FunctionUnit();
@@ -170,9 +179,11 @@ class DeploymentComponentMultiInstanceValidationTest {
         // When: 执行部署
         DeployResponse response = deploymentComponent.deployToAdminCenter(FUNCTION_UNIT_ID, request);
         
-        // Then: 不应该调用 validateMultiInstance
+        // Then: 不应该调用 validateMultiInstance / LAST_TASK 拓扑
         verify(processDesignComponent, timeout(2000).times(0))
             .validateMultiInstance(anyString(), anyLong());
+        verify(processDesignComponent, timeout(2000).times(0))
+            .validateLastTaskAssigneeTopology(anyString());
     }
     
     @Test
@@ -199,8 +210,10 @@ class DeploymentComponentMultiInstanceValidationTest {
         // When: 执行部署
         DeployResponse response = deploymentComponent.deployToAdminCenter(FUNCTION_UNIT_ID, request);
         
-        // Then: 不应该调用 validateMultiInstance
+        // Then: 不应该调用 validateMultiInstance / LAST_TASK 拓扑
         verify(processDesignComponent, timeout(2000).times(0))
             .validateMultiInstance(anyString(), anyLong());
+        verify(processDesignComponent, timeout(2000).times(0))
+            .validateLastTaskAssigneeTopology(anyString());
     }
 }

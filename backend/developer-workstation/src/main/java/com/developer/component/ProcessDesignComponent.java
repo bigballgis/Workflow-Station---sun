@@ -42,4 +42,9 @@ public interface ProcessDesignComponent {
      * @return 验证结果
      */
     ValidationResult validateMultiInstance(String bpmnXml, Long functionUnitId);
+
+    /**
+     * 校验 LAST_TASK_ASSIGNEE 锚点与用户任务顺序流入线条数（必须恰好 1 条）。
+     */
+    ValidationResult validateLastTaskAssigneeTopology(String bpmnXml);
 }

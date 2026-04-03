@@ -81,13 +81,13 @@ public interface FormDesignComponent {
     
     /**
      * 校验 PROCESS form 唯一性
-     * 查询 FunctionUnit 下 PROCESS form 数量，>0 时抛出 409 BusinessException
+     * 查询 FunctionUnit 下 PROCESS form 数量，>0 时抛出 409 DeveloperBusinessException
      */
     void validateProcessFormUniqueness(Long functionUnitId);
     
     /**
      * 校验字段名是否存在于 Data_Table 列中
-     * 对比字段名与 Data_Table 列名，不匹配时抛出 400 BusinessException
+     * 对比字段名与 Data_Table 列名，不匹配时抛出 400 DeveloperBusinessException
      */
     void validateFieldNames(Long functionUnitId, List<String> fieldNames);
     
