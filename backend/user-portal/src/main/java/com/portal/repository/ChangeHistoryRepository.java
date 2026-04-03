@@ -2,6 +2,9 @@ package com.portal.repository;
 
 import com.portal.entity.ChangeHistory;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -15,4 +18,8 @@ public interface ChangeHistoryRepository extends JpaRepository<ChangeHistory, Lo
     List<ChangeHistory> findByProcessInstanceIdOrderByTimestampAsc(String processInstanceId);
 
     List<ChangeHistory> findByTaskInstanceId(String taskInstanceId);
+
+    @Modifying
+    @Query("DELETE FROM ChangeHistory c WHERE c.processInstanceId = :processInstanceId")
+    void deleteByProcessInstanceId(@Param("processInstanceId") String processInstanceId);
 }

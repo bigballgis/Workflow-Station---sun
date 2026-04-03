@@ -30,6 +30,7 @@ public class ProcessController {
 
     private final ProcessComponent processComponent;
     private final I18nService i18nService;
+    private final FunctionUnitAccessComponent functionUnitAccessComponent;
 
     @GetMapping("/definitions")
     @Operation(summary = "获取可发起的流程定义列表")
@@ -53,14 +54,11 @@ public class ProcessController {
     }
     
     @GetMapping("/function-units/{functionUnitId}/content")
-    @Operation(summary = "获取功能单元完整内容", description = "获取功能单元的BPMN流程、表单定义等完整内容。注意：此端点不检查功能单元访问权限，因为任务处理权限由任务分配机制控制")
+    @Operation(summary = "获取功能单元完整内容", description = "获取功能单元的 BPMN、表单等完整内容；需登录且满足功能单元业务角色访问策略（与可发起列表一致）")
     public ApiResponse<Map<String, Object>> getFunctionUnitContent(
             @CurrentUserId String userId,
             @PathVariable String functionUnitId) {
-        // 不检查功能单元访问权限，因为：
-        // 1. 任务处理权限由 Flowable 的任务分配机制控制（assignee、候选人、候选组）
-        // 2. 功能单元权限只应控制"谁可以发起流程"，而不是"谁可以处理任务"
-        // 3. 用户能看到任务，说明任务已经分配给他或他所在的组
+        requireFunctionUnitContentAccess(userId, functionUnitId);
         Map<String, Object> content = processComponent.getFunctionUnitContent(functionUnitId);
         return ApiResponse.success(content);
     }
@@ -71,6 +69,7 @@ public class ProcessController {
             @CurrentUserId String userId,
             @PathVariable String functionUnitId,
             @RequestParam String contentType) {
+        requireFunctionUnitContentAccess(userId, functionUnitId);
         List<Map<String, Object>> contents = processComponent.getFunctionUnitContents(functionUnitId, contentType);
         return ApiResponse.success(contents);
     }
@@ -85,6 +84,7 @@ public class ProcessController {
             @CurrentUserId String userId,
             @PathVariable String functionUnitId,
             @RequestParam String contentType) {
+        requireFunctionUnitContentAccess(userId, functionUnitId);
         List<Map<String, Object>> contents = processComponent.getFunctionUnitContents(functionUnitId, contentType);
         return ApiResponse.success(contents);
     }
@@ -99,8 +99,16 @@ public class ProcessController {
             @CurrentUserId String userId,
             @PathVariable String functionUnitId,
             @RequestParam String contentType) {
+        requireFunctionUnitContentAccess(userId, functionUnitId);
         List<Map<String, Object>> contents = processComponent.getFunctionUnitContents(functionUnitId, contentType);
         return ApiResponse.success(contents);
+    }
+
+    private void requireFunctionUnitContentAccess(String userId, String functionUnitIdOrCode) {
+        if (userId == null || userId.isBlank()) {
+            throw new FunctionUnitAccessComponent.FunctionUnitAccessDeniedException("请先登录后再访问功能单元内容");
+        }
+        functionUnitAccessComponent.checkFunctionUnitAccess(userId, functionUnitIdOrCode);
     }
     
     /**

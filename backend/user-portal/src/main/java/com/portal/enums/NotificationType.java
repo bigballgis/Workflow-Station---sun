@@ -11,5 +11,9 @@ public enum NotificationType {
     /** 系统通知 */
     SYSTEM,
     /** 提醒通知 */
-    REMINDER
+    REMINDER,
+    /** 权限 / 组织申请与审批 */
+    PERMISSION,
+    /** 功能单元部署等审批类通知 */
+    APPROVAL
 }

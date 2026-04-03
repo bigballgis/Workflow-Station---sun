@@ -98,6 +98,16 @@ public class ProcessInstance {
     @Column(name = "function_unit_version_id")
     private Long functionUnitVersionId;
 
+    /** 发起时钉死的 admin 功能单元目录行 ID（sys_function_units.id） */
+    @Column(name = "function_unit_catalog_id", length = 64)
+    private String functionUnitCatalogId;
+
+    @Column(name = "function_unit_code", length = 50)
+    private String functionUnitCode;
+
+    @Column(name = "function_unit_version_label", length = 32)
+    private String functionUnitVersionLabel;
+
     @CreationTimestamp
     @Column(name = "start_time", updatable = false)
     private LocalDateTime startTime;

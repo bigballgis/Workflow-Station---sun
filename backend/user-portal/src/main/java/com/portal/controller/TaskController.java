@@ -45,10 +45,8 @@ public class TaskController {
     public ApiResponse<PageResponse<TaskInfo>> queryTasks(
             @CurrentUserId String userId,
             @RequestBody @Valid TaskQueryRequest request) {
-        // 如果请求中没有userId，使用header中的
-        if (request.getUserId() == null && userId != null) {
-            request.setUserId(userId);
-        }
+        // 强制使用当前登录用户，禁止 body 伪造 userId（与 @CurrentUserId 一致）
+        request.setUserId(userId);
         PageResponse<TaskInfo> result = taskQueryComponent.queryTasks(request);
         return ApiResponse.success(result);
     }
@@ -60,9 +58,10 @@ public class TaskController {
             @PathVariable String taskId) {
         TaskInfo task = taskQueryComponent.getTaskById(taskId)
                 .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
-        if (userId != null && task.getAssignee() != null && !userId.equals(task.getAssignee())) {
-            log.warn("User {} attempted to access task {} assigned to {}", userId, taskId, task.getAssignee());
-            return ApiResponse.error("403", "You are not the assignee of this task");
+        if (userId != null && !taskProcessComponent.canProcessTask(task, userId)) {
+            log.warn("User {} denied access to task {} (assignee={}, assignmentType={})",
+                    userId, taskId, task.getAssignee(), task.getAssignmentType());
+            return ApiResponse.error("403", "You do not have permission to access this task");
         }
         return ApiResponse.success(task);
     }
@@ -159,10 +158,7 @@ public class TaskController {
     public ApiResponse<PageResponse<TaskInfo>> queryCompletedTasks(
             @CurrentUserId String userId,
             @RequestBody @Valid TaskQueryRequest request) {
-        // 如果请求中没有userId，使用header中的
-        if (request.getUserId() == null && userId != null) {
-            request.setUserId(userId);
-        }
+        request.setUserId(userId);
         PageResponse<TaskInfo> result = taskQueryComponent.queryCompletedTasks(request);
         return ApiResponse.success(result);
     }

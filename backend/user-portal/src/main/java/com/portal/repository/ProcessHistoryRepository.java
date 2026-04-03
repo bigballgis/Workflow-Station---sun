@@ -2,6 +2,9 @@ package com.portal.repository;
 
 import com.portal.entity.ProcessHistory;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -21,4 +24,8 @@ public interface ProcessHistoryRepository extends JpaRepository<ProcessHistory, 
      * 根据任务ID查询历史记录
      */
     List<ProcessHistory> findByTaskIdOrderByOperationTimeAsc(String taskId);
+
+    @Modifying
+    @Query("DELETE FROM ProcessHistory h WHERE h.processInstanceId = :processInstanceId")
+    void deleteByProcessInstanceId(@Param("processInstanceId") String processInstanceId);
 }

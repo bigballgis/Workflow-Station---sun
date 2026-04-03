@@ -91,7 +91,7 @@ public class TravelExpenseDependencyErrorPropertyTest {
         assertThat(contentUpper)
                 .as("Script '%s' must query function unit as dependency check",
                         scriptFile)
-                .contains("TRAVEL_EXPENSE_REIMBURSEMENT");
+                .contains("FU-20260403-A1B2C3");
     }
 
     // ==================== Providers ====================

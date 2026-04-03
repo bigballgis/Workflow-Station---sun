@@ -92,4 +92,10 @@ public class TaskInfo {
     
     /** 可用的操作列表 */
     private List<TaskActionInfo> actions;
+
+    /** Flowable 候选人用户 ID（引擎返回，用于权限与认领判断） */
+    private List<String> candidateUserIds;
+
+    /** Flowable 候选组 ID */
+    private List<String> candidateGroupIds;
 }

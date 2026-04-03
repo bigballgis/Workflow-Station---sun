@@ -196,14 +196,17 @@ public class TaskQueryComponent {
             currentAssigneeName = currentAssignee;
         }
         
-        // Determine assignment type: prefer returned assignmentType, otherwise infer from currentAssignee
+        List<String> candidateUserIds = parseStringIdList(taskMap.get("candidateUserIds"));
+        List<String> candidateGroupIds = parseStringIdList(taskMap.get("candidateGroupIds"));
+
+        // Determine assignment type: prefer engine value, otherwise infer
         String assignmentType = taskMap.get("assignmentType") != null ? taskMap.get("assignmentType").toString() : null;
         if (assignmentType == null || assignmentType.isEmpty()) {
             if (currentAssignee != null && !currentAssignee.isEmpty()) {
-                // Has assignee but no assignment type specified, default to USER
                 assignmentType = "USER";
+            } else if (candidateUserIds != null && !candidateUserIds.isEmpty()) {
+                assignmentType = "CANDIDATE_USERS";
             } else {
-                // No assignee and no assignment type, default to VIRTUAL_GROUP
                 assignmentType = "VIRTUAL_GROUP";
             }
         }
@@ -232,7 +235,37 @@ public class TaskQueryComponent {
                 .formKey((String) taskMap.get("formKey"))
                 .taskDefinitionKey((String) taskMap.get("taskDefinitionKey"))
                 .variables(variables)
+                .candidateUserIds(candidateUserIds)
+                .candidateGroupIds(candidateGroupIds)
                 .build();
+    }
+
+    /**
+     * 解析引擎返回的候选人/候选组列表（JSON 数组或逗号分隔字符串）
+     */
+    private List<String> parseStringIdList(Object raw) {
+        if (raw == null) {
+            return null;
+        }
+        if (raw instanceof List<?> list) {
+            List<String> out = new ArrayList<>();
+            for (Object o : list) {
+                if (o != null && !o.toString().isBlank()) {
+                    out.add(o.toString().trim());
+                }
+            }
+            return out.isEmpty() ? null : out;
+        }
+        if (raw instanceof String s && !s.isBlank()) {
+            List<String> out = new ArrayList<>();
+            for (String part : s.split(",")) {
+                if (!part.isBlank()) {
+                    out.add(part.trim());
+                }
+            }
+            return out.isEmpty() ? null : out;
+        }
+        return null;
     }
     
     /**
@@ -527,7 +560,7 @@ public class TaskQueryComponent {
         }
         
         // Get task statistics from Flowable
-        Optional<Map<String, Object>> countResult = workflowEngineClient.countUserTasks(userId);
+        Optional<Map<String, Object>> countResult = workflowEngineClient.countUserTasks();
         
         long totalCount = 0;
         long overdueCount = 0;

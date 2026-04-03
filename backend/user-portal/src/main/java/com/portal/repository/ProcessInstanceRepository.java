@@ -26,6 +26,8 @@ public interface ProcessInstanceRepository extends JpaRepository<ProcessInstance
 
     long countByStartUserIdAndStatus(String startUserId, String status);
 
+    List<ProcessInstance> findByFunctionUnitCatalogId(String functionUnitCatalogId);
+
     /**
      * 查询分配给指定用户的待办流程实例
      */

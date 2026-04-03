@@ -68,6 +68,11 @@ workflow-engine:
   url: ${WORKFLOW_ENGINE_URL:http://localhost:8081}
   enabled: true  # 启用 Flowable 集成，通过 workflow-engine-core 调用 Flowable 引擎
 
+# 管理端调用 /internal/runtime/* 时使用的共享密钥（与 admin-center user-portal.internal-api-token 一致）
+portal:
+  internal:
+    api-token: ${PORTAL_INTERNAL_API_TOKEN:}
+
 # JWT Configuration
 jwt:
   secret: ${JWT_SECRET:your-256-bit-secret-key-for-development-only}

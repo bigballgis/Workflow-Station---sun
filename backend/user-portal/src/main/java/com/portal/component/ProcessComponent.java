@@ -19,13 +19,18 @@ import com.platform.common.util.ApiResponseBodyUnwrap;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -108,7 +113,14 @@ public class ProcessComponent {
             definitions.removeIf(d -> !d.getCategory().equals(category));
         }
         if (keyword != null && !keyword.isEmpty()) {
-            definitions.removeIf(d -> !d.getName().contains(keyword) && !d.getDescription().contains(keyword));
+            final String kw = keyword;
+            definitions.removeIf(d -> {
+                String n = d.getName();
+                String desc = d.getDescription();
+                boolean nameMatch = n != null && n.contains(kw);
+                boolean descMatch = desc != null && desc.contains(kw);
+                return !nameMatch && !descMatch;
+            });
         }
 
         // 标记收藏
@@ -133,17 +145,27 @@ public class ProcessComponent {
             throw new IllegalArgumentException("用户ID不能为空");
         }
 
-        // 检查功能单元访问权限（发起流程时需要检查）
-        // 注意：任务处理不需要检查功能单元权限，因为任务分配机制已经控制了访问范围
-        String functionUnitId = functionUnitAccessComponent.resolveFunctionUnitId(processKey);
-        functionUnitAccessComponent.checkFunctionUnitAccess(userId, functionUnitId);
+        Optional<ActiveCatalogPin> activePinOpt = fetchActiveCatalogForStart(processKey);
+        if (activePinOpt.isEmpty()) {
+            throw new IllegalStateException(
+                    "当前没有可用于发起的已部署且已启用的功能单元版本，请在管理中心完成部署并激活: " + processKey);
+        }
+        ActiveCatalogPin pin = activePinOpt.get();
+
+        String resolvedFunctionUnitId = functionUnitAccessComponent.resolveFunctionUnitId(processKey);
+        if (!pin.catalogId().equals(resolvedFunctionUnitId)) {
+            throw new FunctionUnitAccessComponent.FunctionUnitAccessDeniedException(
+                    "与当前门户可发起版本不一致，请刷新流程列表后重试");
+        }
+
+        functionUnitAccessComponent.checkFunctionUnitAccess(userId, pin.catalogId());
 
         // 获取流程定义名称和 BPMN XML
         String processName = processKey;
         String bpmnXml = null;
         
         try {
-            Map<String, Object> content = getFunctionUnitContent(processKey);
+            Map<String, Object> content = getFunctionUnitContent(pin.catalogId());
             if (content != null) {
                 if (content.get("name") != null) {
                     processName = (String) content.get("name");
@@ -229,6 +251,9 @@ public class ProcessComponent {
                 .currentNode(null)
                 .currentAssignee(null)
                 .variables(variables)
+                .functionUnitCatalogId(pin.catalogId())
+                .functionUnitCode(pin.code())
+                .functionUnitVersionLabel(pin.versionLabel())
                 .build();
         processInstanceRepository.save(processInstance);
         log.info("Process instance pre-saved to local database: {}", flowableProcessInstanceId);
@@ -366,7 +391,48 @@ public class ProcessComponent {
                 .startUserName(startUserDisplayName)
                 .currentNode(currentNodeName)
                 .currentAssignee(currentAssigneeName != null ? currentAssigneeName : currentAssigneeId)
+                .functionUnitCatalogId(pin.catalogId())
+                .functionUnitCode(pin.code())
+                .functionUnitVersionLabel(pin.versionLabel())
                 .build();
+    }
+
+    private record ActiveCatalogPin(String catalogId, String code, String versionLabel) {}
+
+    /**
+     * 从 admin 获取当前 code 下「已部署+已启用」中语义版本最高的目录行（与 /deployed/latest 规则一致）
+     */
+    private Optional<ActiveCatalogPin> fetchActiveCatalogForStart(String code) {
+        try {
+            String enc = URLEncoder.encode(code, StandardCharsets.UTF_8);
+            String url = adminCenterUrl + "/api/v1/admin/function-units/code/" + enc + "/active-for-start";
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<Map<String, Object>>() {});
+            if (!response.getStatusCode().is2xxSuccessful() || response.getBody() == null) {
+                return Optional.empty();
+            }
+            Map<String, Object> payload = ApiResponseBodyUnwrap.unwrapDataMap(response.getBody());
+            String id = (String) payload.get("id");
+            if (id == null || id.isEmpty()) {
+                return Optional.empty();
+            }
+            Object ver = payload.get("version");
+            String versionLabel = ver != null ? String.valueOf(ver) : "";
+            String c = (String) payload.get("code");
+            return Optional.of(new ActiveCatalogPin(id, c != null ? c : code, versionLabel));
+        } catch (org.springframework.web.client.HttpClientErrorException e) {
+            if (e.getStatusCode().value() == 404) {
+                return Optional.empty();
+            }
+            log.warn("fetchActiveCatalogForStart HTTP error for {}: {}", code, e.getMessage());
+            return Optional.empty();
+        } catch (Exception e) {
+            log.warn("fetchActiveCatalogForStart failed for {}: {}", code, e.getMessage());
+            return Optional.empty();
+        }
     }
     
     /**
@@ -433,56 +499,109 @@ public class ProcessComponent {
                 // 提取任务名称
                 String name = extractAttribute(userTaskElement, "name");
                 
-                // 从 custom:properties 中解析 assigneeType（使用7种标准类型）
+                // 从 custom:properties 解析（与 developer-workstation 设计器、workflow-engine 监听器对齐）
+                String taskDefKey = extractAttribute(userTaskElement, "id");
                 String assigneeType = extractCustomProperty(userTaskElement, "assigneeType");
                 String assigneeValue = extractCustomProperty(userTaskElement, "assigneeValue");
+                String assigneeAnchor = extractCustomProperty(userTaskElement, "assigneeAnchor");
+                String assigneeVariableExt = extractCustomProperty(userTaskElement, "assigneeVariable");
+                String manualAssignVariable = extractCustomProperty(userTaskElement, "manualAssignVariable");
                 String assignee = null;
                 String candidateUsers = null;
                 
                 if (assigneeType != null) {
-                    // 根据新的7种标准 assigneeType 解析处理人
                     log.info("Found assigneeType: {} for task: {}", assigneeType, name);
                     
-                    String normalizedType = assigneeType.toUpperCase();
+                    String normalizedType = assigneeType.toUpperCase(Locale.ROOT);
                     switch (normalizedType) {
                         case "INITIATOR":
-                            // 流程发起人 - 直接分配
+                        case "PROCESS_INITIATOR":
                             assignee = initiatorId;
                             break;
                         case "ENTITY_MANAGER":
-                            // 实体经理 - 直接分配
-                            assignee = getEntityManager(initiatorId);
+                            if (isLastTaskAssigneeAnchor(assigneeAnchor)) {
+                                result.put("assigneeType", assigneeType);
+                                result.put("requiresClaim", "true");
+                            } else {
+                                assignee = getEntityManager(initiatorId);
+                            }
                             break;
                         case "FUNCTION_MANAGER":
-                            // 职能经理 - 直接分配
-                            assignee = getFunctionManager(initiatorId);
+                        case "FUNCTIONAL_MANAGER":
+                            if (isLastTaskAssigneeAnchor(assigneeAnchor)) {
+                                result.put("assigneeType", assigneeType);
+                                result.put("requiresClaim", "true");
+                            } else {
+                                assignee = getFunctionManager(initiatorId);
+                            }
+                            break;
+                        case "HIERARCHY_ROLE":
+                        case "BU_ROLE":
+                        case "FIXED_BU_ROLE":
+                        case "CURRENT_BU_ROLE":
+                        case "CURRENT_PARENT_BU_ROLE":
+                        case "INITIATOR_BU_ROLE":
+                        case "INITIATOR_PARENT_BU_ROLE":
+                            result.put("assigneeType", assigneeType);
+                            result.put("requiresClaim", "true");
+                            break;
+                        case "MANUAL_ASSIGN":
+                            result.put("assigneeType", assigneeType);
+                            String userVar = (manualAssignVariable != null && !manualAssignVariable.isBlank())
+                                    ? manualAssignVariable.trim()
+                                    : "manualAssignee_" + (taskDefKey != null ? taskDefKey : "");
+                            if (formData != null && formData.containsKey(userVar)) {
+                                Object v = formData.get(userVar);
+                                if (v != null) {
+                                    assignee = firstUserIdFromCommaList(String.valueOf(v).trim());
+                                }
+                            }
+                            if (assignee == null) {
+                                result.put("requiresClaim", "true");
+                            }
+                            break;
+                        case "ASSIGNEE_FROM_VARIABLE":
+                            result.put("assigneeType", assigneeType);
+                            if (assigneeVariableExt != null && !assigneeVariableExt.isBlank()
+                                    && formData != null && formData.containsKey(assigneeVariableExt.trim())) {
+                                Object v = formData.get(assigneeVariableExt.trim());
+                                if (v != null) {
+                                    assignee = firstUserIdFromCommaList(String.valueOf(v).trim());
+                                }
+                            }
+                            if (assignee == null) {
+                                result.put("requiresClaim", "true");
+                            }
+                            break;
+                        case "ELEMENT_VARIABLE":
+                            result.put("assigneeType", assigneeType);
+                            result.put("requiresClaim", "true");
+                            break;
+                        case "BU_UNBOUNDED_ROLE":
+                            result.put("assigneeType", assigneeType);
+                            result.put("requiresClaim", "true");
                             break;
                         case "DEPT_OTHERS":
-                            // 本部门其他人 - 需要认领（由 workflow-engine-core 处理）
                             result.put("assigneeType", "DEPT_OTHERS");
                             result.put("requiresClaim", "true");
                             break;
                         case "PARENT_DEPT":
-                            // 上级部门 - 需要认领（由 workflow-engine-core 处理）
                             result.put("assigneeType", "PARENT_DEPT");
                             result.put("requiresClaim", "true");
                             break;
                         case "FIXED_DEPT":
-                            // 指定部门 - 需要认领
                             result.put("assigneeType", "FIXED_DEPT");
                             result.put("assigneeValue", assigneeValue);
                             result.put("requiresClaim", "true");
                             break;
                         case "VIRTUAL_GROUP":
-                            // 虚拟组 - 需要认领
                             result.put("assigneeType", "VIRTUAL_GROUP");
                             result.put("assigneeValue", assigneeValue);
                             result.put("candidateGroups", assigneeValue);
                             result.put("requiresClaim", "true");
                             break;
                         default:
-                            log.warn("Unknown assigneeType: {}, treating as legacy type", assigneeType);
-                            // 兼容旧类型
+                            log.debug("assigneeType {} not in converged switch; trying legacy resolver", assigneeType);
                             assignee = resolveLegacyAssigneeType(assigneeType, assigneeValue, initiatorId);
                     }
                 } else {
@@ -497,8 +616,10 @@ public class ProcessComponent {
                 }
                 
                 // 跳过发起人任务（第一个任务通常是发起人填写表单）
-                boolean isInitiatorTask = "initiator".equals(assigneeType) || 
-                    (assignee != null && (assignee.equals("${initiator}") || assignee.equals(initiatorId)));
+                boolean isInitiatorTask = "initiator".equalsIgnoreCase(assigneeType)
+                    || "INITIATOR".equalsIgnoreCase(assigneeType)
+                    || "PROCESS_INITIATOR".equalsIgnoreCase(assigneeType)
+                    || (assignee != null && (assignee.equals("${initiator}") || assignee.equals(initiatorId)));
                 
                 if (!isInitiatorTask || taskCount > 1) {
                     // 这是需要审批的任务
@@ -603,6 +724,22 @@ public class ProcessComponent {
         return -1;
     }
     
+    private static boolean isLastTaskAssigneeAnchor(String anchor) {
+        if (anchor == null || anchor.isBlank()) {
+            return false;
+        }
+        String u = anchor.trim().toUpperCase(Locale.ROOT);
+        return "LAST_TASK_ASSIGNEE".equals(u) || "LAST".equals(u) || "CURRENT".equals(u);
+    }
+
+    private static String firstUserIdFromCommaList(String commaSeparated) {
+        if (commaSeparated == null || commaSeparated.isEmpty()) {
+            return null;
+        }
+        int idx = commaSeparated.indexOf(',');
+        return idx < 0 ? commaSeparated : commaSeparated.substring(0, idx).trim();
+    }
+
     /**
      * 解析旧版分配类型（向后兼容）
      */
@@ -946,6 +1083,9 @@ public class ProcessComponent {
                 .currentAssignee(currentAssigneeName)
                 .candidateUsers(instance.getCandidateUsers())
                 .variables(instance.getVariables())
+                .functionUnitCatalogId(instance.getFunctionUnitCatalogId())
+                .functionUnitCode(instance.getFunctionUnitCode())
+                .functionUnitVersionLabel(instance.getFunctionUnitVersionLabel())
                 .build();
     }
 

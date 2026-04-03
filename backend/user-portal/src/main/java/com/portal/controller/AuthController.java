@@ -6,6 +6,7 @@ import com.platform.security.model.UserStatus;
 import com.platform.security.service.JwtTokenService;
 import com.platform.security.service.UserRoleService;
 import com.platform.common.i18n.I18nService;
+import com.portal.dto.ChangePasswordRequest;
 import com.portal.dto.LoginRequest;
 import com.portal.dto.LoginResponse;
 import com.platform.security.repository.UserRepository;
@@ -14,6 +15,7 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -148,7 +150,14 @@ public class AuthController {
             return ResponseEntity.badRequest().build();
         }
         try {
+            if (jwtTokenService.isBlacklisted(refreshToken)) {
+                return ResponseEntity.status(401).build();
+            }
             Claims claims = parseToken(refreshToken);
+            if (claims.getExpiration().before(new Date())) {
+                return ResponseEntity.status(401).build();
+            }
+            jwtTokenService.blacklistToken(refreshToken);
             String userId = claims.getSubject();
             User user = userRepository.findById(userId)
                     .orElseThrow(() -> new RuntimeException("User not found"));
@@ -160,10 +169,38 @@ public class AuthController {
             List<String> permissions = getPermissionsForRoles(roles);
             
             String newAccessToken = generateToken(user, roles, permissions);
+            String newRefreshToken = generateRefreshToken(user.getId().toString());
             return ResponseEntity.ok(Map.of(
                     "accessToken", newAccessToken,
+                    "refreshToken", newRefreshToken,
                     "expiresIn", jwtExpiration / 1000
             ));
+        } catch (Exception e) {
+            return ResponseEntity.status(401).build();
+        }
+    }
+
+    @PostMapping("/change-password")
+    @Transactional
+    public ResponseEntity<Void> changePassword(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            @Valid @RequestBody ChangePasswordRequest body) {
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            return ResponseEntity.status(401).build();
+        }
+        String token = authHeader.substring(7);
+        try {
+            Claims claims = parseToken(token);
+            String userId = claims.getSubject();
+            User user = userRepository.findById(userId)
+                    .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.user_not_found")));
+            if (!passwordEncoder.matches(body.getOldPassword(), user.getPasswordHash())) {
+                return ResponseEntity.status(400).build();
+            }
+            user.setPasswordHash(passwordEncoder.encode(body.getNewPassword()));
+            userRepository.save(user);
+            jwtTokenService.blacklistToken(token);
+            return ResponseEntity.ok().build();
         } catch (Exception e) {
             return ResponseEntity.status(401).build();
         }

@@ -36,7 +36,8 @@ public class WorkflowEngineClient {
     @Value("${workflow-engine.url:http://localhost:8081}")
     private String workflowEngineUrl;
 
-    @Value("${workflow-engine.enabled:false}")
+    /** 与 application.yml 默认一致，避免未合并完整配置时静默关闭引擎集成 */
+    @Value("${workflow-engine.enabled:true}")
     private boolean workflowEngineEnabled;
 
     private static final long HEALTH_CHECK_CACHE_TTL_MS = 30_000;
@@ -161,6 +162,29 @@ public class WorkflowEngineClient {
         return Optional.empty();
     }
 
+    /**
+     * 删除引擎侧运行中与历史流程实例（内部清理；purge 路径在引擎侧 permitAll，无需 JWT）
+     */
+    public boolean purgeProcessInstance(String processInstanceId) {
+        if (!isAvailable() || processInstanceId == null || processInstanceId.isEmpty()) {
+            return false;
+        }
+        try {
+            String url = workflowEngineUrl + "/api/v1/processes/instances/" + processInstanceId + "/purge";
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.POST,
+                    new HttpEntity<>(Map.of(), headers),
+                    new ParameterizedTypeReference<Map<String, Object>>() {});
+            return response.getStatusCode().is2xxSuccessful();
+        } catch (Exception e) {
+            log.warn("Failed to purge process instance {} in workflow engine: {}", processInstanceId, e.getMessage());
+            return false;
+        }
+    }
+
     // ==================== 任务查询 ====================
 
     /**
@@ -274,12 +298,12 @@ public class WorkflowEngineClient {
     /**
      * 统计用户任务数量
      */
-    public Optional<Map<String, Object>> countUserTasks(String userId) {
+    public Optional<Map<String, Object>> countUserTasks() {
         if (!isAvailable()) {
             return Optional.empty();
         }
         try {
-            String url = workflowEngineUrl + "/api/v1/tasks/count?userId=" + userId;
+            String url = workflowEngineUrl + "/api/v1/tasks/count";
             
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                 url, HttpMethod.GET, authorizedGetEntity(),

@@ -6,6 +6,7 @@ import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.ApiResponse;
 import com.portal.entity.ActionDefinition;
 import com.portal.repository.ActionDefinitionRepository;
+import com.portal.security.CurrentUserId;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -47,7 +48,7 @@ public class N8nActionController {
     @Operation(summary = "执行 N8N Action", description = "触发 N8N 工作流执行并同步等待结果")
     @PostMapping("/execute")
     public ApiResponse<Map<String, Object>> executeAction(
-            @RequestHeader("X-User-Id") String userId,
+            @CurrentUserId String userId,
             @RequestBody Map<String, Object> requestBody) {
         log.info("N8N action executed by user: {}", userId);
         String actionDefinitionId = String.valueOf(requestBody.get("actionDefinitionId"));

@@ -30,4 +30,9 @@ public class ProcessInstanceInfo {
     private String currentAssignee;
     private String candidateUsers;
     private Map<String, Object> variables;
+
+    /** 发起时钉死的功能单元目录 ID（admin sys_function_units.id） */
+    private String functionUnitCatalogId;
+    private String functionUnitCode;
+    private String functionUnitVersionLabel;
 }

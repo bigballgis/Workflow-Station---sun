@@ -67,9 +67,9 @@ class TravelExpenseReimbursementUnitTest {
     class FunctionUnitAndFormDefinitionTest {
 
         @Test
-        @DisplayName("00-create-function-unit.sql contains TRAVEL_EXPENSE_REIMBURSEMENT code")
+        @DisplayName("00-create-function-unit.sql contains fu-{date}-{hex} function unit code")
         void containsFunctionUnitCode() {
-            assertThat(script00).contains("TRAVEL_EXPENSE_REIMBURSEMENT");
+            assertThat(script00).contains("fu-20260403-a1b2c3");
         }
 
         @Test

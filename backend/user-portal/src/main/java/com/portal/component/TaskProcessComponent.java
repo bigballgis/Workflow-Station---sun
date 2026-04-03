@@ -10,6 +10,7 @@ import com.portal.exception.PortalException;
 import com.portal.repository.DelegationAuditRepository;
 import com.portal.repository.DelegationRuleRepository;
 import com.portal.repository.ProcessInstanceRepository;
+import com.platform.security.util.SecurityContextUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -117,10 +118,10 @@ public class TaskProcessComponent {
             throw new PortalException("403", "You do not have permission to process this task");
         }
 
-        // 自动认领虚拟组任务：如果任务属于虚拟组且未被认领，先自动认领再处理
-        if ("VIRTUAL_GROUP".equals(task.getAssignmentType()) && 
-                (task.getAssignee() == null || task.getAssignee().isEmpty())) {
-            log.info("Auto-claiming virtual group task {} for user {}", taskId, userId);
+        // 自动认领：虚拟组或 Flowable 候选人池任务且尚未有 assignee
+        if (("VIRTUAL_GROUP".equals(task.getAssignmentType()) || "CANDIDATE_USERS".equals(task.getAssignmentType()))
+                && (task.getAssignee() == null || task.getAssignee().isEmpty())) {
+            log.info("Auto-claiming pool task {} (type {}) for user {}", taskId, task.getAssignmentType(), userId);
             claimTask(taskId, userId);
             task = getTaskOrThrow(taskId); // 认领后刷新任务状态
         }
@@ -224,8 +225,22 @@ public class TaskProcessComponent {
         String assignmentType = task.getAssignmentType();
         String assignee = task.getAssignee();
 
-        return switch (assignmentType) {
-            case "VIRTUAL_GROUP" -> isUserInVirtualGroup(userId, assignee);
+        return switch (assignmentType != null ? assignmentType : "") {
+            case "CANDIDATE_USERS" ->
+                    task.getCandidateUserIds() != null && task.getCandidateUserIds().contains(userId);
+            case "VIRTUAL_GROUP" -> {
+                if (assignee != null && !assignee.isEmpty()) {
+                    yield isUserInVirtualGroup(userId, assignee);
+                }
+                if (task.getCandidateGroupIds() != null) {
+                    for (String g : task.getCandidateGroupIds()) {
+                        if (isUserInVirtualGroup(userId, g)) {
+                            yield true;
+                        }
+                    }
+                }
+                yield false;
+            }
             default -> false;
         };
     }
@@ -238,49 +253,75 @@ public class TaskProcessComponent {
         String assignee = task.getAssignee();
 
         // 如果任务已分配给当前用户（包括认领后的任务），允许处理
-        // 这是最优先的检查，因为认领后 assignee 会被设置为认领人
-        if (userId.equals(assignee)) {
+        if (assignee != null && userId.equals(assignee)) {
             return true;
         }
 
         // 直接分配给用户
-        if ("USER".equals(assignmentType) && userId.equals(assignee)) {
+        if ("USER".equals(assignmentType) && assignee != null && userId.equals(assignee)) {
             return true;
         }
 
         // 委托任务
-        if ("DELEGATED".equals(assignmentType) && userId.equals(assignee)) {
+        if ("DELEGATED".equals(assignmentType) && assignee != null && userId.equals(assignee)) {
             return true;
         }
 
+        // Flowable 候选人池：必须在候选人列表中
+        if ("CANDIDATE_USERS".equals(assignmentType)) {
+            return task.getCandidateUserIds() != null && task.getCandidateUserIds().contains(userId);
+        }
+
         // 实体管理者任务（ENTITY_MANAGER）
-        // 这种类型的任务通常分配给特定角色或组，如果用户能查询到此任务，说明已通过权限验证
         if ("ENTITY_MANAGER".equals(assignmentType)) {
             log.info("Entity manager task {} for user {}, allowing process (permission verified by query)", task.getTaskId(), userId);
             return true;
         }
 
-        // 虚拟组任务（未认领的情况）
+        // 虚拟组：必须能证明组成员身份（assignee 存组 ID，或引擎返回 candidateGroupIds）
         if ("VIRTUAL_GROUP".equals(assignmentType)) {
-            // 如果 assignee 为 null，说明任务未认领，用户能查询到此任务说明 Flowable 已验证其组成员资格
-            if (assignee == null || assignee.isEmpty()) {
-                log.info("Virtual group task {} has no assignee, allowing user {} to process (group membership verified by Flowable query)", task.getTaskId(), userId);
+            if (assignee != null && !assignee.isEmpty() && isUserInVirtualGroup(userId, assignee)) {
                 return true;
             }
-            if (isUserInVirtualGroup(userId, assignee)) {
-                return true;
+            if (task.getCandidateGroupIds() != null) {
+                for (String g : task.getCandidateGroupIds()) {
+                    if (isUserInVirtualGroup(userId, g)) {
+                        return true;
+                    }
+                }
             }
         }
 
         // 检查是否有委托权限
-        List<DelegationRule> delegations = delegationRuleRepository
-                .findActiveDelegationsForDelegate(userId, LocalDateTime.now());
-        for (DelegationRule delegation : delegations) {
-            if (delegation.getDelegatorId().equals(assignee)) {
-                return true;
+        if (assignee != null) {
+            List<DelegationRule> delegations = delegationRuleRepository
+                    .findActiveDelegationsForDelegate(userId, LocalDateTime.now());
+            for (DelegationRule delegation : delegations) {
+                if (assignee.equals(delegation.getDelegatorId())) {
+                    return true;
+                }
             }
         }
 
+        return false;
+    }
+
+    /**
+     * 是否可查看任务表单（待办/已办快照）：处理人规则 + 发起人 + 当前 assignee（含已办仍带回 assignee 的场景）。
+     */
+    public boolean canViewTaskForm(TaskInfo task, String userId) {
+        if (userId == null || userId.isBlank()) {
+            return false;
+        }
+        if (canProcessTask(task, userId)) {
+            return true;
+        }
+        if (task.getInitiatorId() != null && userId.equals(task.getInitiatorId())) {
+            return true;
+        }
+        if (task.getAssignee() != null && userId.equals(task.getAssignee())) {
+            return true;
+        }
         return false;
     }
 
@@ -536,14 +577,8 @@ public class TaskProcessComponent {
             log.warn("Workflow engine not available, cannot verify virtual group membership");
             return false;
         }
-        
         try {
-            Optional<Boolean> result = workflowEngineClient.checkTaskPermission(groupId, userId);
-            if (result.isPresent()) {
-                return result.get();
-            }
-            
-            // 如果无法通过任务权限检查，尝试获取用户的虚拟组列表
+            // checkTaskPermission 的第一参数为 taskId，不可传入虚拟组 ID
             Optional<Map<String, Object>> permissions = workflowEngineClient.getUserTaskPermissions(userId);
             if (permissions.isPresent()) {
                 @SuppressWarnings("unchecked")
@@ -555,7 +590,6 @@ public class TaskProcessComponent {
         } catch (Exception e) {
             log.warn("Failed to check virtual group membership: {}", e.getMessage());
         }
-        
         return false;
     }
 
@@ -611,13 +645,13 @@ public class TaskProcessComponent {
      * 验证用户是否可以催办任务
      */
     private boolean canUrgeTask(TaskInfo task, String userId) {
-        // 流程发起人可以催办
-        if (userId.equals(task.getInitiatorId())) {
+        if (userId == null || userId.isBlank()) {
+            return false;
+        }
+        if (task.getInitiatorId() != null && userId.equals(task.getInitiatorId())) {
             return true;
         }
-        // 管理员可以催办（实际应检查用户角色）
-        // 这里简化处理，允许所有用户催办
-        return true;
+        return SecurityContextUtils.isSuperAdmin();
     }
 
     /**

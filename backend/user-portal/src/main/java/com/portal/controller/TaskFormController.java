@@ -1,7 +1,10 @@
 package com.portal.controller;
 
 import com.portal.component.TaskFormComponent;
+import com.portal.component.TaskProcessComponent;
+import com.portal.component.TaskQueryComponent;
 import com.portal.dto.ApiResponse;
+import com.portal.dto.TaskInfo;
 import com.portal.security.CurrentUserId;
 import com.portal.dto.CompletedTaskFormData;
 import com.portal.dto.TaskFormData;
@@ -27,12 +30,16 @@ import org.springframework.web.bind.annotation.*;
 public class TaskFormController {
 
     private final TaskFormComponent taskFormComponent;
+    private final TaskQueryComponent taskQueryComponent;
+    private final TaskProcessComponent taskProcessComponent;
 
     @GetMapping("/{taskId}/form-data")
     @Operation(summary = "获取 Task Form 布局 + 当前流程变量值（字段子集）")
     public ApiResponse<TaskFormData> getTaskFormData(
-            @PathVariable String taskId) {
+            @PathVariable String taskId,
+            @CurrentUserId String userId) {
         log.debug("GET /tasks/{}/form-data", taskId);
+        requireTaskFormAccess(taskId, userId);
         TaskFormData data = taskFormComponent.getTaskFormData(taskId);
         return ApiResponse.success(data);
     }
@@ -44,6 +51,10 @@ public class TaskFormController {
             @CurrentUserId String userId,
             @Valid @RequestBody TaskFormSubmitRequest request) {
         log.debug("POST /tasks/{}/submit by user {}", taskId, userId);
+        TaskInfo task = requireTaskFormAccess(taskId, userId);
+        if (!taskProcessComponent.canProcessTask(task, userId)) {
+            throw new PortalException("403", "You do not have permission to submit this task form");
+        }
         taskFormComponent.submitTaskForm(taskId, userId, request.getFormData(), request.getBaselineValues());
         return ApiResponse.success(null);
     }
@@ -51,10 +62,25 @@ public class TaskFormController {
     @GetMapping("/{taskId}/completed-form")
     @Operation(summary = "获取已完成 Task 的快照 + 实时值")
     public ApiResponse<CompletedTaskFormData> getCompletedTaskFormData(
-            @PathVariable String taskId) {
+            @PathVariable String taskId,
+            @CurrentUserId String userId) {
         log.debug("GET /tasks/{}/completed-form", taskId);
+        requireTaskFormAccess(taskId, userId);
         CompletedTaskFormData data = taskFormComponent.getCompletedTaskFormData(taskId);
         return ApiResponse.success(data);
+    }
+
+    /** 校验当前用户是否可查看该任务表单（含发起人/assignee/处理权限）。 */
+    private TaskInfo requireTaskFormAccess(String taskId, String userId) {
+        if (userId == null || userId.isBlank()) {
+            throw new PortalException("403", "Authentication required");
+        }
+        TaskInfo task = taskQueryComponent.getTaskById(taskId)
+                .orElseThrow(() -> new PortalException("404", "Task not found: " + taskId));
+        if (!taskProcessComponent.canViewTaskForm(task, userId)) {
+            throw new PortalException("403", "You do not have permission to access this task form");
+        }
+        return task;
     }
 
     /**

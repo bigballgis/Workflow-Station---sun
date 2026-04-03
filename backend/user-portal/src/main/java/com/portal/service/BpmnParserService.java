@@ -26,6 +26,16 @@ public class BpmnParserService {
         private String assigneeType;
         private String assigneeValue;
         private String assigneeLabel;
+        /** 与引擎 {@code AssigneeAnchor} 一致：INITIATOR / LAST_TASK_ASSIGNEE */
+        private String assigneeAnchor;
+        private String roleId;
+        private String businessUnitId;
+        private String assigneeVariable;
+        private String manualAssignVariable;
+        private String manualAssignBuVariable;
+        private String manualAssignRoleVariable;
+        private String subTableId;
+        private String subTableName;
         private String candidateUsers;
         private String candidateGroups;
         private String formId;
@@ -317,10 +327,19 @@ public class BpmnParserService {
 
         if (taskId == null) return null;
 
-        // 解析 custom:properties
+        // 解析 custom:properties（与 developer-workstation 设计器 / workflow-engine TaskAssignmentListener 对齐）
         String assigneeType = extractCustomProperty(userTaskElement, "assigneeType");
         String assigneeValue = extractCustomProperty(userTaskElement, "assigneeValue");
         String assigneeLabel = extractCustomProperty(userTaskElement, "assigneeLabel");
+        String assigneeAnchor = extractCustomProperty(userTaskElement, "assigneeAnchor");
+        String roleId = extractCustomProperty(userTaskElement, "roleId");
+        String businessUnitId = extractCustomProperty(userTaskElement, "businessUnitId");
+        String assigneeVariable = extractCustomProperty(userTaskElement, "assigneeVariable");
+        String manualAssignVariable = extractCustomProperty(userTaskElement, "manualAssignVariable");
+        String manualAssignBuVariable = extractCustomProperty(userTaskElement, "manualAssignBuVariable");
+        String manualAssignRoleVariable = extractCustomProperty(userTaskElement, "manualAssignRoleVariable");
+        String subTableId = extractCustomProperty(userTaskElement, "subTableId");
+        String subTableName = extractCustomProperty(userTaskElement, "subTableName");
         String formId = extractCustomProperty(userTaskElement, "formId");
         String formName = extractCustomProperty(userTaskElement, "formName");
         String formReadOnlyStr = extractCustomProperty(userTaskElement, "formReadOnly");
@@ -357,6 +376,15 @@ public class BpmnParserService {
                 .assigneeType(assigneeType)
                 .assigneeValue(assigneeValue)
                 .assigneeLabel(assigneeLabel)
+                .assigneeAnchor(assigneeAnchor)
+                .roleId(roleId)
+                .businessUnitId(businessUnitId)
+                .assigneeVariable(assigneeVariable)
+                .manualAssignVariable(manualAssignVariable)
+                .manualAssignBuVariable(manualAssignBuVariable)
+                .manualAssignRoleVariable(manualAssignRoleVariable)
+                .subTableId(subTableId)
+                .subTableName(subTableName)
                 .candidateUsers(candidateUsers)
                 .candidateGroups(candidateGroups)
                 .formId(formId)
@@ -369,51 +397,116 @@ public class BpmnParserService {
 
 
     /**
-     * 解析处理人信息
-     * 使用新的7种标准分配类型
+     * 门户侧对「下一任务处理人」的尽力预览：与 workflow-engine 收敛后的 AssigneeType 语义对齐；
+     * 需管理端/引擎完整解析的类型在此不填 assigneeValue（运行时由监听器处理）。
      */
     public void resolveAssignee(UserTaskInfo taskInfo, Map<String, Object> variables, String initiatorId) {
         if (taskInfo == null || taskInfo.getAssigneeType() == null) {
             return;
         }
 
-        String assigneeType = taskInfo.getAssigneeType().toUpperCase();
+        String raw = taskInfo.getAssigneeType().trim();
+        String assigneeType = raw.toUpperCase(Locale.ROOT);
 
         switch (assigneeType) {
-            // 1. 流程发起人 - 直接分配
             case "INITIATOR":
+            case "PROCESS_INITIATOR":
                 taskInfo.setAssigneeValue(initiatorId);
                 break;
-            // 2. 实体经理 - 直接分配（由 workflow-engine-core 的 TaskAssigneeResolver 解析）
             case "ENTITY_MANAGER":
-                // 标记需要由 workflow-engine-core 解析
-                break;
-            // 3. 职能经理 - 直接分配（由 workflow-engine-core 的 TaskAssigneeResolver 解析）
             case "FUNCTION_MANAGER":
-                // 标记需要由 workflow-engine-core 解析
+            case "FUNCTIONAL_MANAGER":
+                // 锚点为上一完成任务时门户无 History，无法预览
+                if (isLastTaskAssigneeAnchor(taskInfo.getAssigneeAnchor())) {
+                    break;
+                }
                 break;
-            // 4. 本部门其他人 - 需要认领（由 workflow-engine-core 的 TaskAssigneeResolver 解析）
+            case "HIERARCHY_ROLE":
+            case "BU_ROLE":
+            case "FIXED_BU_ROLE":
+            case "CURRENT_BU_ROLE":
+            case "CURRENT_PARENT_BU_ROLE":
+            case "INITIATOR_BU_ROLE":
+            case "INITIATOR_PARENT_BU_ROLE":
             case "DEPT_OTHERS":
-                // 标记需要认领
-                break;
-            // 5. 上级部门 - 需要认领（由 workflow-engine-core 的 TaskAssigneeResolver 解析）
             case "PARENT_DEPT":
-                // 标记需要认领
-                break;
-            // 6. 指定部门 - 需要认领
             case "FIXED_DEPT":
-                // assigneeValue 已经包含部门ID，标记需要认领
                 break;
-            // 7. 虚拟组 - 需要认领
+            case "MANUAL_ASSIGN":
+                applyManualAssignPreview(taskInfo, variables);
+                break;
+            case "ASSIGNEE_FROM_VARIABLE":
+                applyAssigneeFromVariablePreview(taskInfo, variables);
+                break;
+            case "ELEMENT_VARIABLE":
+                break;
             case "VIRTUAL_GROUP":
-                // assigneeValue 已经包含虚拟组ID，设置为候选组
-                if (taskInfo.getAssigneeValue() != null) {
+            case "BU_UNBOUNDED_ROLE":
+                if (taskInfo.getAssigneeValue() != null && !taskInfo.getAssigneeValue().isBlank()) {
                     taskInfo.setCandidateGroups(taskInfo.getAssigneeValue());
                 }
                 break;
             default:
-                log.warn("Unknown assignee type: {}", assigneeType);
+                log.debug("Portal assignee preview: no local resolution for type {}", assigneeType);
         }
+    }
+
+    private static boolean isLastTaskAssigneeAnchor(String anchor) {
+        if (anchor == null || anchor.isBlank()) {
+            return false;
+        }
+        String u = anchor.trim().toUpperCase(Locale.ROOT);
+        return "LAST_TASK_ASSIGNEE".equals(u) || "LAST".equals(u) || "CURRENT".equals(u);
+    }
+
+    private static void applyManualAssignPreview(UserTaskInfo taskInfo, Map<String, Object> variables) {
+        if (variables == null) {
+            return;
+        }
+        String defKey = taskInfo.getTaskId() != null ? taskInfo.getTaskId() : "";
+        String userVar = firstNonBlank(taskInfo.getManualAssignVariable(), "manualAssignee_" + defKey);
+        String resolved = firstString(variables.get(userVar));
+        if (resolved != null) {
+            taskInfo.setAssigneeValue(firstIdFromList(resolved));
+        }
+    }
+
+    private static void applyAssigneeFromVariablePreview(UserTaskInfo taskInfo, Map<String, Object> variables) {
+        if (variables == null) {
+            return;
+        }
+        String varName = taskInfo.getAssigneeVariable();
+        if (varName == null || varName.isBlank()) {
+            return;
+        }
+        String resolved = firstString(variables.get(varName.trim()));
+        if (resolved != null) {
+            taskInfo.setAssigneeValue(firstIdFromList(resolved));
+        }
+    }
+
+    private static String firstNonBlank(String a, String b) {
+        if (a != null && !a.isBlank()) {
+            return a.trim();
+        }
+        return b;
+    }
+
+    private static String firstString(Object o) {
+        if (o == null) {
+            return null;
+        }
+        String s = String.valueOf(o).trim();
+        return s.isEmpty() ? null : s;
+    }
+
+    /** 逗号分隔时取第一个 ID，供门户预览 */
+    private static String firstIdFromList(String commaSeparated) {
+        if (commaSeparated == null) {
+            return null;
+        }
+        int idx = commaSeparated.indexOf(',');
+        return idx < 0 ? commaSeparated.trim() : commaSeparated.substring(0, idx).trim();
     }
 
     // ==================== 辅助方法 ====================
@@ -525,7 +618,9 @@ public class BpmnParserService {
         if (taskInfo == null) return false;
         String type = taskInfo.getAssigneeType();
         if (type == null) return false;
-        return "INITIATOR".equalsIgnoreCase(type) || "initiator".equals(type);
+        return "INITIATOR".equalsIgnoreCase(type)
+                || "PROCESS_INITIATOR".equalsIgnoreCase(type)
+                || "initiator".equals(type);
     }
 
     /**
