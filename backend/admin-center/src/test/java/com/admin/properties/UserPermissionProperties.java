@@ -37,6 +37,7 @@ public class UserPermissionProperties {
     private VirtualGroupRoleRepository virtualGroupRoleRepository;
     private UserBusinessUnitRepository userBusinessUnitRepository;
     private RoleRepository roleRepository;
+    private UserRoleRepository userRoleRepository;
     private UserPreferenceRepository userPreferenceRepository;
     private BusinessUnitRepository businessUnitRepository;
     private com.admin.helper.RoleHelper roleHelper;
@@ -48,6 +49,7 @@ public class UserPermissionProperties {
         virtualGroupRoleRepository = mock(VirtualGroupRoleRepository.class);
         userBusinessUnitRepository = mock(UserBusinessUnitRepository.class);
         roleRepository = mock(RoleRepository.class);
+        userRoleRepository = mock(UserRoleRepository.class);
         userPreferenceRepository = mock(UserPreferenceRepository.class);
         businessUnitRepository = mock(BusinessUnitRepository.class);
         roleHelper = mock(com.admin.helper.RoleHelper.class);
@@ -57,6 +59,7 @@ public class UserPermissionProperties {
                 virtualGroupRoleRepository,
                 userBusinessUnitRepository,
                 roleRepository,
+                userRoleRepository,
                 userPreferenceRepository,
                 businessUnitRepository,
                 roleHelper);

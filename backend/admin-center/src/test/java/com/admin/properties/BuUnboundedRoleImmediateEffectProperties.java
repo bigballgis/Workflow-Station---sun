@@ -50,6 +50,7 @@ public class BuUnboundedRoleImmediateEffectProperties {
                 virtualGroupRoleRepository,
                 userBusinessUnitRepository,
                 roleRepository,
+                mock(UserRoleRepository.class),
                 mock(UserPreferenceRepository.class),
                 mock(BusinessUnitRepository.class),
                 roleHelper);
