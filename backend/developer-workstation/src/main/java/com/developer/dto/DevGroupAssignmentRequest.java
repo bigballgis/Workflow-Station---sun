@@ -1,6 +1,5 @@
 package com.developer.dto;
 
-import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 import java.util.ArrayList;
@@ -12,6 +11,5 @@ import java.util.List;
 @Data
 public class DevGroupAssignmentRequest {
 
-    @NotNull
     private List<String> virtualGroupIds = new ArrayList<>();
 }
