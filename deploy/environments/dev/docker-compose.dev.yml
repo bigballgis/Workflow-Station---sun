@@ -18,6 +18,10 @@
 #
 # Then start:
 #   docker compose -f docker-compose.dev.yml --env-file .env up -d --build
+#
+# Demo / 演示约定：界面与种子数据以英文为准（无单独的 LOCALE 环境变量；
+# 前端语言在 frontend/*/src/i18n/index.ts 固定为 en，需改语言请改源码后重建镜像）。
+# 详见仓库根目录 BUILD_GUIDE.md §2.5 与 docs/demo-data-requirements.md。
 # =====================================================
 
 services:
@@ -286,7 +290,7 @@ services:
       - platform-dev-network
     restart: unless-stopped
 
-  # ==================== Kong API Gateway ====================
+  # ==================== Kong Gateway ====================
 
   kong:
     image: kong:3.9

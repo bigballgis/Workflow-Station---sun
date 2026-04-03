@@ -13,11 +13,11 @@
 2. **前端必须使用 `Dockerfile.local`** — 前端目录下有两个 Dockerfile：`Dockerfile`（多阶段，不使用）和 `Dockerfile.local`（仅复制 dist/）。**永远使用 `Dockerfile.local`**。
 3. **`npm run build` = `vite build`** — 前端 `package.json` 中 `build` 脚本已改为 `vite build`（无 `vue-tsc` 类型检查）。
 4. **前端 `.dockerignore` 不能包含 `dist`** — 否则 `Dockerfile.local` 的 `COPY dist` 会失败。
-5. **nginx 环境变量替换机制** — 前端 nginx.conf 是模板文件，`docker-entrypoint.sh` 在容器启动时用 `envsubst` 替换 `${*_URL}` 变量。**必须在 `envsubst` 命令中显式列出变量名**，否则 nginx 自身的 `$host`、`$uri` 等也会被替换导致 502。
-6. **统一的 `*_URL` 变量命名** — 后端和前端 nginx 使用相同的 URL 变量名（如 `ADMIN_CENTER_URL`）。没有 `*_BACKEND_URL` 变量。
+5. **nginx 环境变量替换机制** — 前端 `nginx.conf` 为模板，`docker-entrypoint.sh` 用 `envsubst` 替换 **`${KONG_PROXY_URL}`**（以及模板中出现的其它占位符）。**必须在 `envsubst` 中显式列出变量名**，否则 nginx 的 `$host`、`$uri` 等也会被替换导致 502。
+6. **URL 变量分工** — 三个前端 nginx 使用 **`KONG_PROXY_URL`**（指向 Kong，代理 `/api/*`）。后端**服务间**调用仍用 `ADMIN_CENTER_URL`、`WORKFLOW_ENGINE_URL` 等（与各服务 `application*.yml` 一致）。没有 `*_BACKEND_URL` 变量。
 7. **`.sh` 和 `.sql` 文件必须是 LF 换行** — `.gitattributes` 已配置强制 LF。如果手动创建 `.sh` 文件，确保是 LF 而非 CRLF，否则容器内执行会报 `/bin/sh: bad interpreter`。
 8. **admin-center 有 context-path** — healthcheck 路径是 `/api/v1/admin/actuator/health`，不是 `/actuator/health`。
-9. **不部署 API Gateway** — 前端 nginx 直连后端。Kafka 使用 KRaft 模式（无 ZooKeeper），N8N 使用独立 PostgreSQL 数据库。
+9. **API 边缘为 Kong Gateway** — 与 Ingress 等入口协同；各前端 nginx 可按环境直连后端或经 Kong。Kafka 使用 KRaft 模式（无 ZooKeeper），N8N 使用独立 PostgreSQL 数据库。
 10. **环境变量名必须是 `ENCRYPTION_SECRET_KEY`** — 不是 `ENCRYPTION_KEY`。
 11. **PostgreSQL 不部署** — SIT/UAT/PROD 使用公司现有 PostgreSQL 数据库。Redis、Kafka、N8N 在 K8S 中自行部署。
 
@@ -37,7 +37,9 @@
 
 基础设施：PostgreSQL 16（公司现有）+ Redis 7（K8S 部署）+ Kafka 7.5（KRaft 模式，K8S 部署）+ N8N 自动化引擎（K8S 部署）。
 
-不部署的组件：API Gateway（已架空，前端 nginx 直连后端）、PostgreSQL（使用公司现有数据库）。
+不部署的组件：PostgreSQL（使用公司现有数据库）。API 路由与网关插件由 **Kong** 提供（见 `deploy/kong/`、`deploy/k8s/deployment-kong.yaml`）。
+
+> **与 `README.md` 分工**：根目录 README 侧重架构速览与文档索引；**BUILD_GUIDE.md**（本文）为可执行的构建/部署步骤。Kubernetes 以 `deploy/k8s/` 清单与 `deploy.ps1` 为主；**仓库不附带 Helm chart**（若需 Helm 请自建并与清单对齐）。
 
 ---
 
@@ -111,7 +113,21 @@ PostgreSQL ── N8N (独立数据库 n8n_{env})
 | 组件 | 原因 |
 |------|------|
 | PostgreSQL | 使用公司现有数据库 |
-| API Gateway | 已架空，前端 nginx 直连后端 |
+
+> **说明**：API 边缘由 **Kong**（`deploy/k8s/deployment-kong.yaml`、`deploy/kong/`）与各业务后端分离部署。
+
+### 2.5 Demo 数据与界面语言（固定英文）
+
+与 **`docs/demo-data-requirements.md`** 中的外资银行 Demo 约定一致，部署与演示时注意：
+
+| 层面 | 说明 |
+|------|------|
+| **种子数据 / 演示库** | 用户可见字段一律英文；细则见上述文档。 |
+| **三个前端（admin-center / user-portal / developer-workstation）** | 默认界面语言在源码中固定：`frontend/<app>/src/i18n/index.ts` 内 `locale` 与 `fallbackLocale` 均为 `'en'`。**不通过** Docker / K8s 环境变量切换 i18n；改语言需改源码并重新 `npm run build`。 |
+| **本地 Compose** | `deploy/environments/dev/docker-compose.dev.yml` 顶部注释标明本约定；Compose **无** `LOCALE` 类变量——避免误以为在 compose 里设变量即可改界面语言。 |
+| **K8S 前端** | `deploy/k8s/deployment-frontend.yaml` 清单头部注释同上；前端 Pod **无** `LOCALE` 环境变量。 |
+| **deploy 快速参考** | `deploy/README.md` 章节 **「Demo：界面语言与种子数据（英文）」** 汇总 Compose / K8S / 构建约定。 |
+| **演示账号与后端偏好** | 若库表或 JWT 中含用户 `language`（如 user-portal 用户偏好），Demo 种子建议设为 **`en`**，避免后端按中文偏好返回文案而与英文界面不一致。 |
 
 ---
 
@@ -209,13 +225,13 @@ ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
 
 ### 6.1 工作原理
 
-前端容器使用 nginx 反向代理到后端。nginx.conf 中包含 `${ADMIN_CENTER_URL}` 等变量占位符。
+前端容器内 **nginx** 将浏览器的 **`/api/*`** 代理到 **`KONG_PROXY_URL`（Kong）**，由 Kong 再转发到各后端。模板中主要占位符为 **`${KONG_PROXY_URL}`**（见各 `frontend/*/nginx.conf`）。
 
 流程：
 1. `Dockerfile.local` 将 `nginx.conf` 复制为 `/etc/nginx/conf.d/default.conf.template`（模板）
 2. 容器启动时执行 `docker-entrypoint.sh`
-3. `docker-entrypoint.sh` 先验证必需环境变量是否存在（缺失则 `exit 1`）
-4. 用 `envsubst` 将模板中的变量替换为实际值，输出到 `default.conf`
+3. `docker-entrypoint.sh` 校验 **`KONG_PROXY_URL`**（缺失则 `exit 1`）
+4. 用 `envsubst '${KONG_PROXY_URL}'` 生成 `default.conf`
 5. 启动 nginx
 
 ### 6.2 envsubst 的关键细节
@@ -223,8 +239,8 @@ ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
 `envsubst` 命令**必须显式指定要替换的变量列表**：
 
 ```sh
-# ✅ 正确 — 只替换指定变量
-envsubst '${ADMIN_CENTER_URL}' < template > default.conf
+# ✅ 正确 — 与 frontend/*/docker-entrypoint.sh 一致
+envsubst '${KONG_PROXY_URL}' < /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf
 
 # ❌ 错误 — 会替换所有 $xxx，包括 nginx 的 $host, $uri, $http_upgrade 等
 envsubst < template > default.conf
@@ -234,9 +250,11 @@ envsubst < template > default.conf
 
 | 前端服务 | 需要的环境变量 | envsubst 变量列表 |
 |---------|--------------|-----------------|
-| admin-center-frontend | `ADMIN_CENTER_URL` | `'${ADMIN_CENTER_URL}'` |
-| user-portal-frontend | `USER_PORTAL_URL`, `ADMIN_CENTER_URL`, `DEVELOPER_WORKSTATION_URL` | `'${USER_PORTAL_URL} ${ADMIN_CENTER_URL} ${DEVELOPER_WORKSTATION_URL}'` |
-| developer-workstation-frontend | `DEVELOPER_WORKSTATION_URL`, `ADMIN_CENTER_URL` | `'${DEVELOPER_WORKSTATION_URL} ${ADMIN_CENTER_URL}'` |
+| admin-center-frontend | `KONG_PROXY_URL` | `'${KONG_PROXY_URL}'` |
+| user-portal-frontend | `KONG_PROXY_URL` | `'${KONG_PROXY_URL}'` |
+| developer-workstation-frontend | `KONG_PROXY_URL` | `'${KONG_PROXY_URL}'` |
+
+Docker Compose / K8s 中典型值：`http://kong:8000`（开发）或 `http://kong-service:8000`（见 `deploy/k8s/configmap-sit.yaml` 等）。
 
 ---
 
@@ -672,13 +690,11 @@ PostgreSQL(公司) ── N8N(K8S) (独立数据库 n8n_{env})
 
 说明：`DEVELOPER_DEPLOY_REQUIRE_ADMIN_AUTH=false` 仅建议用于本地自动化或测试；生产环境应依赖 **Kong + JWT**，由前端/网关携带令牌，服务端再转发至 admin-center 的 `function-units-import` 接口。
 
-### 12.3 前端 nginx 反向代理 URL 变量
+### 12.3 前端 nginx → Kong
 
 | 变量名 | 使用者 | 说明 |
 |--------|--------|------|
-| `ADMIN_CENTER_URL` | admin-center-frontend, user-portal-frontend, developer-workstation-frontend | 管理后台 API 地址 |
-| `USER_PORTAL_URL` | user-portal-frontend | 用户门户 API 地址 |
-| `DEVELOPER_WORKSTATION_URL` | developer-workstation-frontend | 开发者工作台 API 地址 |
+| `KONG_PROXY_URL` | 三个前端容器 | Kong 代理入口（HTTP），用于 `proxy_pass` 目标；**不再**在各前端使用 `ADMIN_CENTER_URL` / `USER_PORTAL_URL` / `DEVELOPER_WORKSTATION_URL` 直连后端 API |
 
 ### 12.4 N8N 相关环境变量
 

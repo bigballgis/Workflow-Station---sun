@@ -1,6 +1,12 @@
 # =====================================================
 # Frontend Deployments (Admin Center, User Portal, Developer Workstation)
 # =====================================================
+#
+# Demo / presentation: UI and seed data are English-only by convention.
+# There is no LOCALE env var on these Pods — locale is fixed at build time
+# in frontend/*/src/i18n/index.ts (locale = en). Rebuild frontend images to change.
+# See BUILD_GUIDE.md §2.5 and docs/demo-data-requirements.md.
+# =====================================================
 
 # Admin Center Frontend
 apiVersion: apps/v1

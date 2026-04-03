@@ -1,5 +1,5 @@
 # =====================================================
-# Kong API Gateway Deployment + Service
+# Kong Gateway — Deployment + Service
 # =====================================================
 apiVersion: apps/v1
 kind: Deployment

@@ -1,9 +1,9 @@
 # =====================================================
 # Ingress Configuration
 # =====================================================
-# Routes external traffic to frontend services.
-# Backend APIs are accessed via frontend nginx reverse proxy,
-# NOT through a separate API Gateway service.
+# Routes external traffic to the three frontend Services (admin / portal / dev).
+# Browser calls to APIs typically go: frontend nginx -> Kong (deploy/k8s/deployment-kong.yaml)
+# -> backend Services. This Ingress does not replace Kong; it exposes the SPAs.
 #
 # Replace "your-domain.com" with your actual domain.
 # Namespace is replaced by deploy.ps1 based on -Environment flag.

@@ -262,8 +262,7 @@ function Start-Build {
         "admin-center",
         "user-portal", 
         "developer-workstation",
-        "workflow-engine-core",
-        "api-gateway"
+        "workflow-engine-core"
     )
     
     # 定义所有前端服务

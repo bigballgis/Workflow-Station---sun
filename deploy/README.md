@@ -77,6 +77,14 @@
 | uat | Company K8S | 公司现有 | K8S 自行部署 | `k8s/configmap-uat.yaml` + `secret-uat.yaml` |
 | prod | Company K8S | 公司现有 | K8S 自行部署 | `k8s/configmap-prod.yaml` + `secret-prod.yaml` |
 
+## Demo：界面语言与种子数据（英文）
+
+外资银行 Demo 约定：**用户可见的界面与种子数据统一英文**。细则见项目根目录 **`docs/demo-data-requirements.md`**。
+
+- **K8S 前端**（`k8s/deployment-frontend.yaml`）：清单顶部注释已标明；Pod **无** `LOCALE` 类环境变量，默认语言在 **`frontend/*/src/i18n/index.ts`** 构建进静态资源，改语言需改源码并重新构建/推送前端镜像。
+- **本地 Compose**：`environments/dev/docker-compose.dev.yml` 文件头有相同说明。
+- **完整部署说明**：根目录 **`BUILD_GUIDE.md` §2.5**。
+
 ## Quick Start
 
 ### Dev (Local Docker Desktop)
@@ -148,7 +156,7 @@ deploy/
 │   ├── deployment-admin-center.yaml
 │   ├── deployment-user-portal.yaml
 │   ├── deployment-developer-workstation.yaml
-│   ├── deployment-kong.yaml        # Kong API Gateway
+│   ├── deployment-kong.yaml        # Kong Gateway
 │   ├── deployment-frontend.yaml    # 3 frontends combined
 │   ├── ingress.yaml
 │   ├── kustomization.yaml
