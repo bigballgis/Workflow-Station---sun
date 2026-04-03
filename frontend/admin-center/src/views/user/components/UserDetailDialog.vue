@@ -46,6 +46,32 @@
         <el-empty v-else :description="t('user.noBusinessUnits')" :image-size="60" />
         <div class="section-hint">{{ t('user.businessUnitHint') }}</div>
 
+        <!-- 业务单元角色 UBR（门户工作台 / activeBusinessUnitId） -->
+        <div class="section-title">{{ t('user.buRoleAssignments') }}</div>
+        <div class="ubr-toolbar">
+          <el-button type="primary" size="small" @click="openAssignBuRole">
+            {{ t('user.assignBuRole') }}
+          </el-button>
+        </div>
+        <template v-if="buRoleGroups.length">
+          <div v-for="g in buRoleGroups" :key="g.businessUnitId" class="ubr-group">
+            <div class="ubr-group-title">{{ g.businessUnitName }}</div>
+            <el-table :data="g.rows" border size="small">
+              <el-table-column prop="roleName" :label="t('user.roleName')" />
+              <el-table-column prop="roleCode" :label="t('user.roleCode')" width="160" />
+              <el-table-column :label="t('common.operation')" width="100" align="center">
+                <template #default="{ row }">
+                  <el-button type="danger" link size="small" @click="handleRemoveBuRole(row)">
+                    {{ t('user.removeBuRole') }}
+                  </el-button>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+        </template>
+        <el-empty v-else :description="t('user.noBuRoles')" :image-size="60" />
+        <div class="section-hint">{{ t('user.buRoleHint') }}</div>
+
         <!-- 角色信息（通过虚拟组获取） -->
         <div class="section-title">{{ t('user.roleInfo') }}</div>
         <el-table :data="user.roles" border size="small" v-if="user.roles?.length">
@@ -78,24 +104,110 @@
       <el-button @click="$emit('update:modelValue', false)">{{ t('common.close') }}</el-button>
       <el-button type="warning" @click="handleResetPassword">{{ t('user.resetPassword') }}</el-button>
     </template>
+
+    <el-dialog
+      v-model="assignDialogVisible"
+      :title="t('user.assignBuRole')"
+      width="480px"
+      destroy-on-close
+      append-to-body
+      @closed="resetAssignDialog"
+    >
+      <el-form label-width="110px">
+        <el-form-item :label="t('user.businessUnit')">
+          <el-select
+            v-model="assignForm.businessUnitId"
+            filterable
+            class="ubr-select"
+            @change="onAssignBuChange"
+          >
+            <el-option
+              v-for="bu in businessUnits"
+              :key="bu.id"
+              :label="bu.name"
+              :value="bu.id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item :label="t('user.role')">
+          <el-select
+            v-model="assignForm.roleId"
+            filterable
+            class="ubr-select"
+            :loading="assignRoleLoading"
+            :placeholder="t('user.selectRoleForBu')"
+          >
+            <el-option
+              v-for="r in assignRoleOptions"
+              :key="r.id"
+              :label="`${r.name} (${r.code})`"
+              :value="r.id"
+            />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <p v-if="assignRoleLoaded && !assignRoleOptions.length" class="ubr-empty-hint">
+        {{ t('user.noEligibleRolesForBu') }}
+      </p>
+      <template #footer>
+        <el-button @click="assignDialogVisible = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" :loading="assignSubmitting" @click="submitAssignBuRole">
+          {{ t('common.confirm') }}
+        </el-button>
+      </template>
+    </el-dialog>
   </el-dialog>
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { userApi, type UserDetail, type UserBusinessUnitMembership, type UserVirtualGroupMembership } from '@/api/user'
+import {
+  userApi,
+  type UserDetail,
+  type UserBusinessUnitMembership,
+  type UserVirtualGroupMembership,
+  type UserBusinessUnitRole
+} from '@/api/user'
+import { listAssignableBuBoundedRoles, type BuBoundedRole } from '@/api/taskAssignment'
 
 const { t } = useI18n()
 
 const props = defineProps<{ modelValue: boolean; userId: string }>()
-const emit = defineEmits(['update:modelValue'])
+defineEmits(['update:modelValue'])
 
 const loading = ref(false)
 const user = ref<UserDetail | null>(null)
 const businessUnits = ref<UserBusinessUnitMembership[]>([])
 const virtualGroups = ref<UserVirtualGroupMembership[]>([])
+const buRoles = ref<UserBusinessUnitRole[]>([])
+
+const assignDialogVisible = ref(false)
+const assignRoleLoading = ref(false)
+const assignSubmitting = ref(false)
+const assignRoleOptions = ref<BuBoundedRole[]>([])
+const assignRoleLoaded = ref(false)
+const assignForm = reactive({ businessUnitId: '', roleId: '' })
+
+const buRoleGroups = computed(() => {
+  const map = new Map<
+    string,
+    { businessUnitId: string; businessUnitName: string; rows: UserBusinessUnitRole[] }
+  >()
+  for (const r of buRoles.value) {
+    const key = r.businessUnitId
+    if (!map.has(key)) {
+      map.set(key, {
+        businessUnitId: key,
+        businessUnitName: r.businessUnitName || key,
+        rows: []
+      })
+    }
+    map.get(key)!.rows.push(r)
+  }
+  return [...map.values()]
+})
 
 const statusType = (status: string): 'success' | 'info' | 'danger' | 'warning' => {
   const map: Record<string, 'success' | 'info' | 'danger' | 'warning'> = { ACTIVE: 'success', DISABLED: 'info', LOCKED: 'danger', PENDING: 'warning' }
@@ -119,18 +231,96 @@ const formatDate = (dateStr: string) => {
   })
 }
 
+const reloadBuRoles = async () => {
+  if (!props.userId) return
+  buRoles.value = await userApi.getBusinessUnitRoles(props.userId)
+}
+
+const resetAssignDialog = () => {
+  assignForm.businessUnitId = ''
+  assignForm.roleId = ''
+  assignRoleOptions.value = []
+  assignRoleLoaded.value = false
+}
+
+const onAssignBuChange = async () => {
+  const buId = assignForm.businessUnitId
+  assignForm.roleId = ''
+  assignRoleOptions.value = []
+  assignRoleLoaded.value = false
+  if (!buId) return
+  assignRoleLoading.value = true
+  try {
+    const assignable = await listAssignableBuBoundedRoles(buId)
+    const taken = new Set(
+      buRoles.value.filter((r) => r.businessUnitId === buId).map((r) => r.roleId)
+    )
+    assignRoleOptions.value = assignable.filter((r) => !taken.has(r.id))
+  } catch (error: any) {
+    ElMessage.error(error.message || t('common.failed'))
+  } finally {
+    assignRoleLoading.value = false
+    assignRoleLoaded.value = true
+  }
+}
+
+const openAssignBuRole = async () => {
+  if (!businessUnits.value.length) {
+    ElMessage.warning(t('user.assignBuRoleNeedMembership'))
+    return
+  }
+  resetAssignDialog()
+  assignForm.businessUnitId = businessUnits.value[0]!.id
+  assignDialogVisible.value = true
+  await onAssignBuChange()
+}
+
+const submitAssignBuRole = async () => {
+  if (!user.value || !assignForm.businessUnitId || !assignForm.roleId) return
+  assignSubmitting.value = true
+  try {
+    await userApi.assignBusinessUnitRole(user.value.id, assignForm.businessUnitId, assignForm.roleId)
+    ElMessage.success(t('common.success'))
+    assignDialogVisible.value = false
+    await reloadBuRoles()
+  } catch (error: any) {
+    ElMessage.error(error.message || t('common.failed'))
+  } finally {
+    assignSubmitting.value = false
+  }
+}
+
+const handleRemoveBuRole = async (row: UserBusinessUnitRole) => {
+  if (!user.value) return
+  const roleLabel = row.roleName || row.roleCode || row.roleId
+  try {
+    await ElMessageBox.confirm(
+      t('user.confirmRemoveBuRole', { role: roleLabel }),
+      t('common.confirm'),
+      { type: 'warning' }
+    )
+    await userApi.removeBusinessUnitRole(user.value.id, row.businessUnitId, row.roleId)
+    ElMessage.success(t('common.success'))
+    await reloadBuRoles()
+  } catch (error: any) {
+    if (error !== 'cancel') ElMessage.error(error.message || t('common.failed'))
+  }
+}
+
 watch(() => props.modelValue, async (val) => {
   if (val && props.userId) {
     loading.value = true
     try {
-      const [userData, buData, vgData] = await Promise.all([
+      const [userData, buData, vgData, ubrData] = await Promise.all([
         userApi.getById(props.userId),
         userApi.getBusinessUnits(props.userId),
-        userApi.getVirtualGroups(props.userId)
+        userApi.getVirtualGroups(props.userId),
+        userApi.getBusinessUnitRoles(props.userId)
       ])
       user.value = userData
       businessUnits.value = buData
       virtualGroups.value = vgData
+      buRoles.value = ubrData
     } catch (error: any) {
       ElMessage.error(error.message || t('common.failed'))
     } finally {
@@ -168,5 +358,27 @@ const handleResetPassword = async () => {
     margin-top: 8px;
     padding-left: 8px;
   }
+  .ubr-toolbar {
+    margin-bottom: 12px;
+    padding-left: 8px;
+  }
+  .ubr-group {
+    margin-bottom: 16px;
+    padding-left: 8px;
+  }
+  .ubr-group-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #606266;
+    margin-bottom: 8px;
+  }
+  .ubr-select {
+    width: 100%;
+  }
+}
+.ubr-empty-hint {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: #909399;
 }
 </style>

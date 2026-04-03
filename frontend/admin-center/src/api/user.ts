@@ -160,27 +160,25 @@ export const userApi = {
   
   exportTemplate: () => get<Blob>('/users/export-template', { responseType: 'blob' }),
 
-  // 用户业务单元成员身份（只读，角色通过虚拟组获取）
-  getBusinessUnits: (userId: string) => 
+  // 用户业务单元成员身份（门户工作台 / UBR 前提）
+  getBusinessUnits: (userId: string) =>
     get<UserBusinessUnitMembership[]>(`/users/${userId}/business-units`),
-  
+
   // 用户虚拟组成员身份
   getVirtualGroups: (userId: string) =>
     get<UserVirtualGroupMembership[]>(`/users/${userId}/virtual-groups`),
 
-  // 用户角色（通过虚拟组获取）
+  // 用户角色（通过虚拟组等聚合视图）
   getRoles: (userId: string) =>
     get<{ id: string; name: string; code: string; type: string }[]>(`/users/${userId}/roles`),
 
-  // @deprecated - 业务单元角色管理已移除，角色通过虚拟组获取
-  getBusinessUnitRoles: (userId: string) => 
+  /** 用户在业务单元下的角色（UBR），与门户工作台上下文、流程 activeBusinessUnitId 对齐 */
+  getBusinessUnitRoles: (userId: string) =>
     get<UserBusinessUnitRole[]>(`/users/${userId}/business-unit-roles`),
-  
-  // @deprecated - 业务单元角色分配已移除，角色通过虚拟组获取
+
   assignBusinessUnitRole: (userId: string, businessUnitId: string, roleId: string) =>
     post<void>(`/users/${userId}/business-unit-roles`, { businessUnitId, roleId }),
-  
-  // @deprecated - 业务单元角色移除已移除，角色通过虚拟组获取
-  removeBusinessUnitRole: (userId: string, roleId: string) =>
-    del<void>(`/users/${userId}/business-unit-roles/${roleId}`)
+
+  removeBusinessUnitRole: (userId: string, businessUnitId: string, roleId: string) =>
+    del<void>(`/users/${userId}/business-unit-roles/${businessUnitId}/${roleId}`)
 }

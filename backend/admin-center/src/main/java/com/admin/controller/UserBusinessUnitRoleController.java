@@ -1,5 +1,6 @@
 package com.admin.controller;
 
+import com.admin.component.UserBusinessUnitRoleManagerComponent;
 import com.admin.dto.request.UserBusinessUnitRoleAssignRequest;
 import com.admin.dto.response.UserBusinessUnitRoleInfo;
 import com.platform.security.entity.BusinessUnit;
@@ -12,14 +13,13 @@ import com.admin.repository.UserBusinessUnitRoleRepository;
 import com.admin.repository.UserRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -31,6 +31,7 @@ import java.util.stream.Collectors;
 @Tag(name = "用户业务单元角色", description = "用户在业务单元中的角色分配管理")
 public class UserBusinessUnitRoleController {
     
+    private final UserBusinessUnitRoleManagerComponent userBusinessUnitRoleManagerComponent;
     private final UserBusinessUnitRoleRepository userBusinessUnitRoleRepository;
     private final UserRepository userRepository;
     private final BusinessUnitRepository businessUnitRepository;
@@ -66,39 +67,23 @@ public class UserBusinessUnitRoleController {
     
     @PostMapping
     @Operation(summary = "分配业务单元角色给用户")
-    @Transactional
     public ResponseEntity<Void> assignRole(
             @PathVariable String userId,
-            @RequestBody UserBusinessUnitRoleAssignRequest request) {
-        
-        // 检查是否已存在
-        if (userBusinessUnitRoleRepository.existsByUserIdAndBusinessUnitIdAndRoleId(
-                userId, request.getBusinessUnitId(), request.getRoleId())) {
-            return ResponseEntity.ok().build();
-        }
-        
-        UserBusinessUnitRole assignment = UserBusinessUnitRole.builder()
-                .id(UUID.randomUUID().toString())
-                .userId(userId)
-                .businessUnitId(request.getBusinessUnitId())
-                .roleId(request.getRoleId())
-                .build();
-        
-        userBusinessUnitRoleRepository.save(assignment);
+            @RequestBody @Valid UserBusinessUnitRoleAssignRequest request,
+            @RequestHeader(value = "X-User-Id", required = false) String operatedBy) {
+        userBusinessUnitRoleManagerComponent.assign(
+                userId, request.getBusinessUnitId(), request.getRoleId(), operatedBy);
         return ResponseEntity.ok().build();
     }
     
     @DeleteMapping("/{businessUnitId}/{roleId}")
     @Operation(summary = "移除用户的业务单元角色")
-    @Transactional
     public ResponseEntity<Void> removeRole(
             @PathVariable String userId,
             @PathVariable String businessUnitId,
-            @PathVariable String roleId) {
-        
-        userBusinessUnitRoleRepository.findByUserIdAndBusinessUnitIdAndRoleId(userId, businessUnitId, roleId)
-                .ifPresent(userBusinessUnitRoleRepository::delete);
-        
+            @PathVariable String roleId,
+            @RequestHeader(value = "X-User-Id", required = false) String operatedBy) {
+        userBusinessUnitRoleManagerComponent.remove(userId, businessUnitId, roleId, operatedBy);
         return ResponseEntity.ok().build();
     }
     

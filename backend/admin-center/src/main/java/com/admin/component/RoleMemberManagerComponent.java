@@ -3,9 +3,11 @@ package com.admin.component;
 import com.admin.dto.request.BatchRoleMemberRequest;
 import com.admin.dto.response.BatchRoleMemberResult;
 import com.admin.entity.*;
+import com.admin.enums.RoleType;
 import com.admin.exception.AdminBusinessException;
 import com.admin.exception.RoleNotFoundException;
 import com.admin.repository.*;
+import com.admin.util.EntityTypeConverter;
 import com.platform.security.entity.User;
 import com.platform.security.entity.Role;
 import com.platform.security.entity.UserRole;
@@ -47,7 +49,8 @@ public class RoleMemberManagerComponent {
         // 验证角色存在
         Role role = roleRepository.findById(roleId)
                 .orElseThrow(() -> new RoleNotFoundException(roleId));
-                
+        assertNotBuUnboundedDirectUserAssignment(role);
+
         // 检查是否已分配
         if (userRoleRepository.existsByUserIdAndRoleId(userId, roleId)) {
             throw new AdminBusinessException("ROLE_ALREADY_ASSIGNED", "用户已拥有该角色");
@@ -105,7 +108,8 @@ public class RoleMemberManagerComponent {
         // 验证角色存在
         Role role = roleRepository.findById(request.getRoleId())
                 .orElseThrow(() -> new RoleNotFoundException(request.getRoleId()));
-        
+        assertNotBuUnboundedDirectUserAssignment(role);
+
         BatchRoleMemberResult result = BatchRoleMemberResult.builder()
                 .total(request.getUserIds().size())
                 .build();
@@ -265,6 +269,17 @@ public class RoleMemberManagerComponent {
     }
     
     /**
+     * BU_UNBOUNDED 仅可通过虚拟组获得，禁止写入 sys_user_roles 直配。
+     */
+    private static void assertNotBuUnboundedDirectUserAssignment(Role role) {
+        if (EntityTypeConverter.toRoleType(role.getType()) == RoleType.BU_UNBOUNDED) {
+            throw new AdminBusinessException(
+                    "BU_UNBOUNDED_REQUIRES_VIRTUAL_GROUP",
+                    "BU 无关型角色请通过虚拟组分配，不能直接分配给用户");
+        }
+    }
+
+    /**
      * 记录权限变更历史
      */
     private void recordChangeHistory(String changeType, String userId, String roleId, 
@@ -321,7 +336,8 @@ public class RoleMemberManagerComponent {
         for (String roleId : newRoleIds) {
             Role role = roleRepository.findById(roleId)
                     .orElseThrow(() -> new RoleNotFoundException(roleId));
-            
+            assertNotBuUnboundedDirectUserAssignment(role);
+
             UserRole userRole = UserRole.builder()
                     .id(UUID.randomUUID().toString())
                     .userId(userId)

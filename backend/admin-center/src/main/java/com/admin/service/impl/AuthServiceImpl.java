@@ -117,6 +117,7 @@ public class AuthServiceImpl implements AuthService {
                         .roles(roles)
                         .permissions(permissions)
                         .rolesWithSources(rolesWithSources)
+                        // 唯一 UBR 业务单元时有值；多 BU 无 preferred 时为 null（与 TaskAssignmentQueryService 一致）
                         .businessUnitId(taskAssignmentQueryService.getUserBusinessUnitId(user.getId()))
                         .language(user.getLanguage())
                         .build())
@@ -169,6 +170,7 @@ public class AuthServiceImpl implements AuthService {
                             .roles(roles)
                             .permissions(permissions)
                             .rolesWithSources(rolesWithSources)
+                            // 唯一 UBR 业务单元时有值；多 BU 无 preferred 时为 null
                             .businessUnitId(taskAssignmentQueryService.getUserBusinessUnitId(user.getId()))
                             .language(user.getLanguage())
                             .build())
@@ -203,6 +205,7 @@ public class AuthServiceImpl implements AuthService {
                     .roles(roles)
                     .permissions(getPermissionsForRoles(roles))
                     .rolesWithSources(rolesWithSources)
+                    // 唯一 UBR 业务单元时有值；多 BU 无 preferred 时为 null
                     .businessUnitId(taskAssignmentQueryService.getUserBusinessUnitId(user.getId()))
                     .language(user.getLanguage())
                     .build();
@@ -225,6 +228,24 @@ public class AuthServiceImpl implements AuthService {
     @Override
     public boolean validateToken(String token) {
         return jwtTokenService.validateToken(token);
+    }
+
+    @Override
+    @Transactional
+    public void changePassword(String accessToken, String oldPassword, String newPassword) {
+        if (!jwtTokenService.validateToken(accessToken)) {
+            throw new RuntimeException("INVALID_TOKEN");
+        }
+        String userId = jwtTokenService.extractUserId(accessToken);
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("USER_NOT_FOUND"));
+        if (!passwordEncoder.matches(oldPassword, user.getPasswordHash())) {
+            throw new RuntimeException("INVALID_OLD_PASSWORD");
+        }
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
+        userRepository.save(user);
+        jwtTokenService.blacklistToken(accessToken);
+        log.info("Password changed for user {}", user.getUsername());
     }
     
     private List<LoginResponse.RoleWithSource> buildRolesWithSources(List<UserEffectiveRole> effectiveRoles) {

@@ -32,6 +32,11 @@ public interface AuthService {
      * 验证令牌
      */
     boolean validateToken(String token);
+
+    /**
+     * 修改当前用户密码；成功后会使当前 access token 失效，需重新登录。
+     */
+    void changePassword(String accessToken, String oldPassword, String newPassword);
     
     /**
      * 为用户信息生成新的 access token

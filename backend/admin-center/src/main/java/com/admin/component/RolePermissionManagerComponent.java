@@ -193,11 +193,14 @@ public class RolePermissionManagerComponent {
             throw new AdminBusinessException("ROLE_ALREADY_ASSIGNED", "用户已拥有该角色");
         }
         
-        // 验证角色存在
-        roleRepository.findById(roleId)
+        Role role = roleRepository.findById(roleId)
                 .orElseThrow(() -> new RoleNotFoundException(roleId));
-        
-        // 使用ID字段构建
+        if (EntityTypeConverter.toRoleType(role.getType()) == RoleType.BU_UNBOUNDED) {
+            throw new AdminBusinessException(
+                    "BU_UNBOUNDED_REQUIRES_VIRTUAL_GROUP",
+                    "BU 无关型角色请通过虚拟组分配，不能直接分配给用户");
+        }
+
         UserRole userRole = UserRole.builder()
                 .id(UUID.randomUUID().toString())
                 .userId(userId)

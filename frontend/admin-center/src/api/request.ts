@@ -2,6 +2,7 @@ import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
 import { ElMessage } from 'element-plus'
 import { refreshToken as refreshAuthToken, REFRESH_TOKEN_KEY, TOKEN_KEY, clearAuth } from './auth'
 import i18n from '@/i18n'
+import { pickHttpErrorBodyMessage } from '@/utils/httpErrorMessage'
 
 let isRefreshing = false
 let failedQueue: Array<{ resolve: Function; reject: Function }> = []
@@ -86,20 +87,15 @@ request.interceptors.response.use(
         }
       } else {
         clearAuth()
+        ElMessage.warning(i18n.global.t('api.unauthorized'))
         window.location.href = '/login'
         return Promise.reject(error)
       }
     }
 
-    const message = error.response?.data?.message || error.response?.data?.details 
-      ? (typeof error.response?.data?.details === 'object' 
-        ? Object.values(error.response.data.details).join('; ') 
-        : error.response?.data?.details)
-      : null
-    
     if (error.response) {
       const { status, data } = error.response
-      const errorMsg = data?.message || message
+      const errorMsg = pickHttpErrorBodyMessage(data)
       
       switch (status) {
         case 400:
@@ -111,6 +107,12 @@ request.interceptors.response.use(
         case 404:
           ElMessage.error(errorMsg || i18n.global.t('api.notFound'))
           break
+        case 409: {
+          const apiErr = (data as any)?.error
+          const msg409 = apiErr?.message || apiErr?.code || errorMsg || i18n.global.t('api.conflict')
+          ElMessage.error(msg409)
+          break
+        }
         case 422:
           ElMessage.error(errorMsg || i18n.global.t('api.businessError'))
           break

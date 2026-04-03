@@ -13,6 +13,7 @@
           <div class="profile-info">
             <div class="profile-name">{{ userName }}</div>
             <div class="profile-email">{{ userEmail }}</div>
+            <div class="profile-context-hint">{{ t('profile.adminDropdownSubtitle') }}</div>
           </div>
         </div>
         
@@ -215,6 +216,13 @@ onMounted(() => {
         font-size: 12px;
         color: var(--el-text-color-secondary);
         margin-top: 4px;
+      }
+
+      .profile-context-hint {
+        font-size: 11px;
+        color: var(--el-text-color-placeholder);
+        margin-top: 8px;
+        line-height: 1.35;
       }
     }
   }

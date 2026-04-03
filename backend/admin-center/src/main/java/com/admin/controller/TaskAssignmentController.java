@@ -26,9 +26,12 @@ public class TaskAssignmentController {
     // ==================== 用户业务单元查询 ====================
     
     @GetMapping("/users/{userId}/business-unit")
-    @Operation(summary = "获取用户的业务单元ID")
-    public ResponseEntity<Map<String, String>> getUserBusinessUnitId(@PathVariable String userId) {
-        String businessUnitId = taskAssignmentQueryService.getUserBusinessUnitId(userId);
+    @Operation(summary = "获取用户的业务单元ID",
+            description = "多 BU 场景下可传 activeBusinessUnitId（须与用户 UBR 一致）；否则仅在唯一 BU 时返回")
+    public ResponseEntity<Map<String, String>> getUserBusinessUnitId(
+            @PathVariable String userId,
+            @RequestParam(required = false) String activeBusinessUnitId) {
+        String businessUnitId = taskAssignmentQueryService.getUserBusinessUnitId(userId, activeBusinessUnitId);
         return ResponseEntity.ok(Map.of("businessUnitId", businessUnitId != null ? businessUnitId : ""));
     }
     

@@ -1,5 +1,6 @@
 package com.admin.controller;
 
+import com.admin.dto.request.ChangePasswordRequest;
 import com.admin.dto.request.LoginRequest;
 import com.admin.dto.response.LoginResponse;
 import com.admin.service.AuthService;
@@ -120,7 +121,31 @@ public class AuthController {
         
         return ResponseEntity.ok(isValid);
     }
-    
+
+    /**
+     * 修改当前用户密码；成功后当前 access token 失效，需重新登录。
+     */
+    @PostMapping("/change-password")
+    public ResponseEntity<Void> changePassword(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            @Valid @RequestBody ChangePasswordRequest body) {
+
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            return ResponseEntity.status(401).build();
+        }
+        String token = authHeader.substring(7);
+        try {
+            authService.changePassword(token, body.getOldPassword(), body.getNewPassword());
+            return ResponseEntity.ok().build();
+        } catch (RuntimeException e) {
+            String msg = e.getMessage();
+            if ("INVALID_OLD_PASSWORD".equals(msg) || "USER_NOT_FOUND".equals(msg)) {
+                return ResponseEntity.badRequest().build();
+            }
+            return ResponseEntity.status(401).build();
+        }
+    }
+
     private String getClientIpAddress(HttpServletRequest request) {
         String xForwardedFor = request.getHeader("X-Forwarded-For");
         if (xForwardedFor != null && !xForwardedFor.isEmpty()) {

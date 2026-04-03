@@ -16,7 +16,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -39,24 +41,48 @@ public class TaskAssignmentQueryService {
     private final BusinessUnitRoleRepository businessUnitRoleRepository;
     
     /**
-     * 获取用户的业务单元ID
-     * @param userId 用户ID
-     * @return 业务单元ID，如果用户没有业务单元则返回null
+     * 获取用户的业务单元上下文（UBR）。
+     * <p>若用户在多个 BU 下有 UBR，须通过 {@code preferredBusinessUnitId}（流程变量 {@code activeBusinessUnitId} 或请求参数）指定，
+     * 否则返回 null，避免误用「首条」启发式。</p>
+     *
+     * @param preferredBusinessUnitId 须在用户 UBR 中存在；可为 null
      */
-    public String getUserBusinessUnitId(String userId) {
-        log.debug("Getting business unit ID for user: {}", userId);
-        
-        // 查找用户的业务单元角色分配，取第一个业务单元
+    public String getUserBusinessUnitId(String userId, String preferredBusinessUnitId) {
+        log.debug("Getting business unit ID for user: {}, preferred: {}", userId, preferredBusinessUnitId);
+
         List<UserBusinessUnitRole> assignments = userBusinessUnitRoleRepository.findByUserId(userId);
         if (assignments.isEmpty()) {
             log.debug("User {} has no business unit assignment", userId);
             return null;
         }
-        
-        // 返回第一个业务单元ID
-        String businessUnitId = assignments.get(0).getBusinessUnitId();
-        log.debug("User {} belongs to business unit: {}", userId, businessUnitId);
-        return businessUnitId;
+
+        if (preferredBusinessUnitId != null && !preferredBusinessUnitId.isBlank()) {
+            boolean ok = assignments.stream()
+                    .anyMatch(a -> preferredBusinessUnitId.equals(a.getBusinessUnitId()));
+            if (ok) {
+                return preferredBusinessUnitId;
+            }
+            log.warn("User {} has no UBR for preferred business unit {}", userId, preferredBusinessUnitId);
+            return null;
+        }
+
+        Set<String> distinct = assignments.stream()
+                .map(UserBusinessUnitRole::getBusinessUnitId)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (distinct.size() == 1) {
+            String bu = distinct.iterator().next();
+            log.debug("User {} has single UBR business unit: {}", userId, bu);
+            return bu;
+        }
+        log.warn("User {} has UBR in {} business units; pass activeBusinessUnitId — returning null", userId, distinct.size());
+        return null;
+    }
+
+    /**
+     * @see #getUserBusinessUnitId(String, String)
+     */
+    public String getUserBusinessUnitId(String userId) {
+        return getUserBusinessUnitId(userId, null);
     }
     
     /**

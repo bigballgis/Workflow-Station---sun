@@ -10,7 +10,7 @@ import com.platform.security.model.UserStatus;
 import com.platform.security.entity.User;
 import com.platform.security.entity.Role;
 import com.platform.security.entity.BusinessUnit;
-import com.platform.security.entity.UserRole;
+import com.platform.security.entity.UserBusinessUnitRole;
 import com.admin.exception.AdminBusinessException;
 import com.admin.exception.BusinessUnitNotFoundException;
 import com.admin.exception.RoleNotFoundException;
@@ -45,7 +45,7 @@ public class DepartmentRoleTaskServiceImpl implements DepartmentRoleTaskService 
     private final BusinessUnitRepository businessUnitRepository;
     private final RoleRepository roleRepository;
     private final UserRepository userRepository;
-    private final UserRoleRepository userRoleRepository;
+    private final UserBusinessUnitRoleRepository userBusinessUnitRoleRepository;
     private final VirtualGroupTaskHistoryRepository taskHistoryRepository;
     private final com.admin.service.TaskAssignmentQueryService taskAssignmentQueryService;
     private final RestTemplate restTemplate;
@@ -92,16 +92,8 @@ public class DepartmentRoleTaskServiceImpl implements DepartmentRoleTaskService 
             return false;
         }
         
-        // 检查用户是否属于该业务单元（通过关联表）
-        String userBusinessUnitId = taskAssignmentQueryService.getUserBusinessUnitId(userId);
-        if (!businessUnitId.equals(userBusinessUnitId)) {
-            return false;
-        }
-        
-        // 检查用户是否拥有该角色且角色分配有效
-        return userRoleRepository.findByUserIdAndRoleId(userId, roleId)
-                .map(UserRole::isValid)
-                .orElse(false);
+        // 以 UBR（sys_user_business_unit_roles）为权威来源，与门户工作台模型一致
+        return userBusinessUnitRoleRepository.existsByUserIdAndBusinessUnitIdAndRoleId(userId, businessUnitId, roleId);
     }
     
     @Override
@@ -139,25 +131,11 @@ public class DepartmentRoleTaskServiceImpl implements DepartmentRoleTaskService 
             return new ArrayList<>();
         }
         
-        // 通过关联表获取用户的业务单元
-        String businessUnitId = taskAssignmentQueryService.getUserBusinessUnitId(userId);
-        if (businessUnitId == null) {
-            return new ArrayList<>();
-        }
-        
-        // 获取用户的所有有效角色
-        List<UserRole> userRoles = userRoleRepository.findByUserId(userId);
-        List<String> validRoleIds = userRoles.stream()
-                .filter(UserRole::isValid)
-                .map(UserRole::getRoleId)
-                .collect(Collectors.toList());
-        
-        // 获取每个角色对应的业务单元角色任务
+        List<UserBusinessUnitRole> ubrList = userBusinessUnitRoleRepository.findByUserId(userId);
         List<GroupTaskInfo> allTasks = new ArrayList<>();
-        for (String roleId : validRoleIds) {
-            allTasks.addAll(getTasksAssignedToBusinessUnitRole(businessUnitId, roleId));
+        for (UserBusinessUnitRole ubr : ubrList) {
+            allTasks.addAll(getTasksAssignedToBusinessUnitRole(ubr.getBusinessUnitId(), ubr.getRoleId()));
         }
-        
         return allTasks;
     }
     

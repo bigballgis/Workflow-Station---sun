@@ -104,8 +104,8 @@ class TaskAssignmentQueryServiceTest {
         }
         
         @Test
-        @DisplayName("Should return first business unit when user has multiple assignments")
-        void shouldReturnFirstBusinessUnitWhenMultipleAssignments() {
+        @DisplayName("Should return null when user has multiple BU assignments without preferred")
+        void shouldReturnNullWhenMultipleAssignmentsWithoutPreferred() {
             UserBusinessUnitRole assignment1 = new UserBusinessUnitRole();
             assignment1.setUserId(USER_ID);
             assignment1.setBusinessUnitId(BU_ID);
@@ -119,7 +119,25 @@ class TaskAssignmentQueryServiceTest {
             
             String result = service.getUserBusinessUnitId(USER_ID);
             
-            assertThat(result).isEqualTo(BU_ID);
+            assertThat(result).isNull();
+        }
+
+        @Test
+        @DisplayName("Should return preferred business unit when user has UBR for it")
+        void shouldReturnPreferredWhenMultiBu() {
+            UserBusinessUnitRole assignment1 = new UserBusinessUnitRole();
+            assignment1.setUserId(USER_ID);
+            assignment1.setBusinessUnitId(BU_ID);
+
+            UserBusinessUnitRole assignment2 = new UserBusinessUnitRole();
+            assignment2.setUserId(USER_ID);
+            assignment2.setBusinessUnitId("bu-002");
+
+            when(userBusinessUnitRoleRepository.findByUserId(USER_ID))
+                    .thenReturn(Arrays.asList(assignment1, assignment2));
+
+            assertThat(service.getUserBusinessUnitId(USER_ID, "bu-002")).isEqualTo("bu-002");
+            assertThat(service.getUserBusinessUnitId(USER_ID, BU_ID)).isEqualTo(BU_ID);
         }
     }
     
