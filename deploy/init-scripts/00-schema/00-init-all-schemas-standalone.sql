@@ -49,5 +49,6 @@ COMMIT;
 \i 00-schema/25-add-row-version-to-sub-tables.sql
 \i 00-schema/26-add-dw-deployment-jobs.sql
 \i 00-schema/27-add-up-process-instance-catalog-pin.sql
+\i 00-schema/28-dw-function-unit-dev-groups.sql
 
 \echo '=== All schemas created successfully ==='

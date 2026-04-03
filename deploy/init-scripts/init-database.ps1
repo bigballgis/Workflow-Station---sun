@@ -85,7 +85,8 @@ $migrations = @(
     "00-schema/24-add-multi-instance-execution-table.sql",
     "00-schema/25-add-row-version-to-sub-tables.sql",
     "00-schema/26-add-dw-deployment-jobs.sql",
-    "00-schema/27-add-up-process-instance-catalog-pin.sql"
+    "00-schema/27-add-up-process-instance-catalog-pin.sql",
+    "00-schema/28-dw-function-unit-dev-groups.sql"
 )
 foreach ($m in $migrations) {
     $path = Join-Path $ScriptDir $m
