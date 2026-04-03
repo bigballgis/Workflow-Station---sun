@@ -19,6 +19,8 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -94,7 +96,7 @@ class TaskAssigneeResolverTest {
 
         @Test
         void unionMultipleCandidatesRequiresClaim() {
-            when(adminCenterClient.getUserBusinessUnitId(ANCHOR_USER_ID)).thenReturn(BU_ID);
+            when(adminCenterClient.getUserBusinessUnitId(eq(ANCHOR_USER_ID), isNull())).thenReturn(BU_ID);
             when(adminCenterClient.collectUserIdsForRoleInBusinessUnitHierarchy(BU_ID, ROLE_ID))
                     .thenReturn(Arrays.asList("u1", "u2"));
 
@@ -108,7 +110,7 @@ class TaskAssigneeResolverTest {
 
         @Test
         void singleCandidateAutoAssigns() {
-            when(adminCenterClient.getUserBusinessUnitId(ANCHOR_USER_ID)).thenReturn(BU_ID);
+            when(adminCenterClient.getUserBusinessUnitId(eq(ANCHOR_USER_ID), isNull())).thenReturn(BU_ID);
             when(adminCenterClient.collectUserIdsForRoleInBusinessUnitHierarchy(BU_ID, ROLE_ID))
                     .thenReturn(List.of("only-one"));
 
@@ -121,7 +123,7 @@ class TaskAssigneeResolverTest {
 
         @Test
         void zeroCandidatesError() {
-            when(adminCenterClient.getUserBusinessUnitId(ANCHOR_USER_ID)).thenReturn(BU_ID);
+            when(adminCenterClient.getUserBusinessUnitId(eq(ANCHOR_USER_ID), isNull())).thenReturn(BU_ID);
             when(adminCenterClient.collectUserIdsForRoleInBusinessUnitHierarchy(BU_ID, ROLE_ID))
                     .thenReturn(Collections.emptyList());
 

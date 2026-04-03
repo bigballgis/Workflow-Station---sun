@@ -34,9 +34,10 @@ public class TaskAssigneeResolver {
 
     /**
      * @param anchorUserId 锚点用户（发起人或 LAST 解析结果）；PROCESS_INITIATOR / BU_ROLE 可传 null
+     * @param anchorActiveBusinessUnitId 流程变量 activeBusinessUnitId，多 BU 下解析 HIERARCHY 等时需要
      */
     public ResolveResult resolve(String assigneeTypeCode, String roleId, String businessUnitId,
-                                 String initiatorId, String anchorUserId) {
+                                 String initiatorId, String anchorUserId, String anchorActiveBusinessUnitId) {
         AssigneeType assigneeType = AssigneeType.fromCode(assigneeTypeCode);
         if (assigneeType == null) {
             log.warn("Unknown or deprecated assignee type: {}", assigneeTypeCode);
@@ -50,13 +51,23 @@ public class TaskAssigneeResolver {
                     .errorMessage("Assignee type " + assigneeType + " is resolved in TaskAssignmentListener")
                     .build();
         }
-        return resolve(assigneeType, roleId, businessUnitId, initiatorId, anchorUserId);
+        return resolve(assigneeType, roleId, businessUnitId, initiatorId, anchorUserId, anchorActiveBusinessUnitId);
+    }
+
+    public ResolveResult resolve(String assigneeTypeCode, String roleId, String businessUnitId,
+                                 String initiatorId, String anchorUserId) {
+        return resolve(assigneeTypeCode, roleId, businessUnitId, initiatorId, anchorUserId, null);
     }
 
     public ResolveResult resolve(AssigneeType assigneeType, String roleId, String businessUnitId,
                                String initiatorId, String anchorUserId) {
-        log.info("Resolving assignee: type={}, roleId={}, businessUnitId={}, initiator={}, anchorUser={}",
-                assigneeType, roleId, businessUnitId, initiatorId, anchorUserId);
+        return resolve(assigneeType, roleId, businessUnitId, initiatorId, anchorUserId, null);
+    }
+
+    public ResolveResult resolve(AssigneeType assigneeType, String roleId, String businessUnitId,
+                               String initiatorId, String anchorUserId, String anchorActiveBusinessUnitId) {
+        log.info("Resolving assignee: type={}, roleId={}, businessUnitId={}, initiator={}, anchorUser={}, anchorActiveBu={}",
+                assigneeType, roleId, businessUnitId, initiatorId, anchorUserId, anchorActiveBusinessUnitId);
 
         String validationError = validateParameters(assigneeType, roleId, businessUnitId, initiatorId, anchorUserId);
         if (validationError != null) {
@@ -71,7 +82,7 @@ public class TaskAssigneeResolver {
                 case PROCESS_INITIATOR -> resolveProcessInitiator(initiatorId);
                 case ENTITY_MANAGER -> resolveEntityManager(anchorUserId);
                 case FUNCTIONAL_MANAGER -> resolveFunctionalManager(anchorUserId);
-                case HIERARCHY_ROLE -> resolveHierarchyRole(anchorUserId, roleId);
+                case HIERARCHY_ROLE -> resolveHierarchyRole(anchorUserId, roleId, anchorActiveBusinessUnitId);
                 case BU_ROLE -> resolveBuRole(businessUnitId, roleId);
                 default -> ResolveResult.builder()
                         .assigneeType(assigneeType)
@@ -187,10 +198,12 @@ public class TaskAssigneeResolver {
                 .build();
     }
 
-    private ResolveResult resolveHierarchyRole(String anchorUserId, String roleId) {
-        String startBu = adminCenterClient.getUserBusinessUnitId(anchorUserId);
+    private ResolveResult resolveHierarchyRole(String anchorUserId, String roleId, String anchorActiveBusinessUnitId) {
+        String startBu = adminCenterClient.getUserBusinessUnitId(anchorUserId, anchorActiveBusinessUnitId);
         if (startBu == null || startBu.isEmpty()) {
-            return failedPool(AssigneeType.HIERARCHY_ROLE, "Anchor user has no business unit: " + anchorUserId);
+            return failedPool(AssigneeType.HIERARCHY_ROLE,
+                    "Anchor user has no resolvable business unit (multi-BU requires process variable activeBusinessUnitId): "
+                            + anchorUserId);
         }
         List<String> candidates = adminCenterClient.collectUserIdsForRoleInBusinessUnitHierarchy(startBu, roleId);
         return toPoolResult(AssigneeType.HIERARCHY_ROLE, candidates, "No users with role " + roleId + " in BU hierarchy for " + anchorUserId);

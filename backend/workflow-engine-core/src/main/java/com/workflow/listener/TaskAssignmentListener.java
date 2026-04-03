@@ -218,11 +218,13 @@ public class TaskAssignmentListener implements FlowableEventListener {
                 anchorUserId = resolveAnchorUserId(anchor, initiatorId, processInstanceId);
             }
 
-            log.info("Resolving assignee for task {}: rawType={}, resolvedType={}, anchor={}, anchorUser={}, roleId={}, buId={}",
-                    taskId, assigneeTypeRaw, resolvedType, anchor, anchorUserId, roleId, businessUnitId);
+            String activeBusinessUnitId = getStringVariable(processVariables, "activeBusinessUnitId");
+
+            log.info("Resolving assignee for task {}: rawType={}, resolvedType={}, anchor={}, anchorUser={}, roleId={}, buId={}, activeBu={}",
+                    taskId, assigneeTypeRaw, resolvedType, anchor, anchorUserId, roleId, businessUnitId, activeBusinessUnitId);
 
             TaskAssigneeResolver.ResolveResult result = taskAssigneeResolver.resolve(
-                    assigneeTypeRaw.trim(), roleId, businessUnitId, initiatorId, anchorUserId);
+                    assigneeTypeRaw.trim(), roleId, businessUnitId, initiatorId, anchorUserId, activeBusinessUnitId);
 
             applyResolveResult(taskId, task, processInstanceId, result, assigneeTypeRaw);
         } catch (Exception e) {

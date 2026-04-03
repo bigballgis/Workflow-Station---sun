@@ -219,9 +219,16 @@ public class AdminCenterClient {
      * @param userId 用户ID
      * @return 业务单元ID，如果用户没有业务单元则返回null
      */
-    public String getUserBusinessUnitId(String userId) {
+    /**
+     * @param activeBusinessUnitId 可选；多 BU 时须传入与用户 UBR 一致的当前业务单元
+     */
+    public String getUserBusinessUnitId(String userId, String activeBusinessUnitId) {
         try {
-            String url = adminCenterUrl + "/api/v1/admin/task-assignment/users/" + userId + "/business-unit";
+            String base = adminCenterUrl + "/api/v1/admin/task-assignment/users/" + userId + "/business-unit";
+            String url = base;
+            if (activeBusinessUnitId != null && !activeBusinessUnitId.isBlank()) {
+                url = base + "?activeBusinessUnitId=" + java.net.URLEncoder.encode(activeBusinessUnitId, java.nio.charset.StandardCharsets.UTF_8);
+            }
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                     url,
                     HttpMethod.GET,
@@ -242,6 +249,10 @@ public class AdminCenterClient {
             log.error("Failed to get business unit ID for user {}: {}", userId, e.getMessage());
             return null;
         }
+    }
+
+    public String getUserBusinessUnitId(String userId) {
+        return getUserBusinessUnitId(userId, null);
     }
     
     /**
