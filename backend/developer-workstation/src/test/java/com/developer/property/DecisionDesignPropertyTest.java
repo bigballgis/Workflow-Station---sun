@@ -28,6 +28,7 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.IntStream;
 
+import com.developer.security.FunctionUnitWorkspaceAccessService;
 import com.developer.service.UserDisplayNameService;
 
 import static org.assertj.core.api.Assertions.*;
@@ -57,6 +58,7 @@ public class DecisionDesignPropertyTest {
     // For Property 4: FunctionUnitComponentImpl to test decisionCount in toResponse
     private FunctionUnitRepository functionUnitRepository;
     private FunctionUnitComponentImpl functionUnitComponentImpl;
+    private FunctionUnitDevGroupAssignmentRepository functionUnitDevGroupAssignmentRepository;
 
     private AtomicLong idGenerator;
 
@@ -76,6 +78,8 @@ public class DecisionDesignPropertyTest {
 
         // Set up FunctionUnitComponentImpl with mocked dependencies for Property 4
         functionUnitRepository = mock(FunctionUnitRepository.class);
+        functionUnitDevGroupAssignmentRepository = mock(FunctionUnitDevGroupAssignmentRepository.class);
+        when(functionUnitDevGroupAssignmentRepository.findByFunctionUnitId(anyLong())).thenReturn(List.of());
         functionUnitComponentImpl = new FunctionUnitComponentImpl(
                 functionUnitRepository,
                 mock(ProcessDefinitionRepository.class),
@@ -86,7 +90,9 @@ public class DecisionDesignPropertyTest {
                 mock(VersionRepository.class),
                 mock(IconRepository.class),
                 new ObjectMapper(),
-                mock(UserDisplayNameService.class)
+                mock(UserDisplayNameService.class),
+                mock(FunctionUnitWorkspaceAccessService.class),
+                functionUnitDevGroupAssignmentRepository
         );
 
         idGenerator = new AtomicLong(1L);
@@ -688,6 +694,8 @@ public class DecisionDesignPropertyTest {
         });
 
         // Build a FunctionUnitComponentImpl with the mocked decisionDefinitionRepository
+        FunctionUnitDevGroupAssignmentRepository cloneDevGroupRepo = mock(FunctionUnitDevGroupAssignmentRepository.class);
+        when(cloneDevGroupRepo.findByFunctionUnitId(anyLong())).thenReturn(List.of());
         FunctionUnitComponentImpl cloneComponent = new FunctionUnitComponentImpl(
                 functionUnitRepository,
                 mock(ProcessDefinitionRepository.class),
@@ -698,7 +706,9 @@ public class DecisionDesignPropertyTest {
                 mock(VersionRepository.class),
                 mock(IconRepository.class),
                 new ObjectMapper(),
-                mock(UserDisplayNameService.class)
+                mock(UserDisplayNameService.class),
+                mock(FunctionUnitWorkspaceAccessService.class),
+                cloneDevGroupRepo
         );
 
         // Mock: functionUnitRepository.save returns the entity with an ID
@@ -826,6 +836,7 @@ public class DecisionDesignPropertyTest {
                             mock(ActionDefinitionRepository.class),
                             exportDecisionRepo,
                             realParser,
+                            mock(FunctionUnitWorkspaceAccessService.class),
                             new ObjectMapper()
                     );
 
@@ -945,6 +956,7 @@ public class DecisionDesignPropertyTest {
                             mock(ActionDefinitionRepository.class),
                             skipDecisionRepo,
                             realParser,
+                            mock(FunctionUnitWorkspaceAccessService.class),
                             new ObjectMapper()
                     );
 
@@ -1011,6 +1023,7 @@ public class DecisionDesignPropertyTest {
                             mock(ActionDefinitionRepository.class),
                             overwriteDecisionRepo,
                             realParser,
+                            mock(FunctionUnitWorkspaceAccessService.class),
                             new ObjectMapper()
                     );
 

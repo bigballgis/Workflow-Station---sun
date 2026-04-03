@@ -286,6 +286,22 @@ public class RoleRepositoryPropertyTest {
                     Integer.class, userId, role);
             return count != null && count > 0;
         }
+
+        @Override
+        public boolean userHasActiveAdminTypeRole(String userId) {
+            Integer count = jdbcTemplate.queryForObject(
+                    "SELECT CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END FROM ( " +
+                    "  SELECT ur.role_id AS rid FROM sys_user_roles ur WHERE ur.user_id = ? " +
+                    "  UNION " +
+                    "  SELECT vgr.role_id FROM sys_virtual_group_roles vgr " +
+                    "  JOIN sys_virtual_group_members vgm ON vgr.virtual_group_id = vgm.group_id " +
+                    "  WHERE vgm.user_id = ? " +
+                    ") x " +
+                    "JOIN sys_roles r ON r.id = x.rid " +
+                    "WHERE r.type = 'ADMIN' AND r.status = 'ACTIVE'",
+                    Integer.class, userId, userId);
+            return count != null && count > 0;
+        }
         
         // JpaRepository methods - not implemented for testing
         @Override

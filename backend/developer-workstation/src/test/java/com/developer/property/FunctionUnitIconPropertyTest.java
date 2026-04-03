@@ -10,6 +10,7 @@ import com.developer.entity.Icon;
 import com.developer.enums.FunctionUnitStatus;
 import com.developer.enums.IconCategory;
 import com.developer.repository.*;
+import com.developer.security.FunctionUnitWorkspaceAccessService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import net.jqwik.api.*;
 import org.springframework.data.domain.Page;
@@ -82,10 +83,14 @@ public class FunctionUnitIconPropertyTest {
         });
 
         UserDisplayNameService userDisplayNameService = mock(UserDisplayNameService.class);
+        FunctionUnitWorkspaceAccessService workspaceAccessService = mock(FunctionUnitWorkspaceAccessService.class);
+        FunctionUnitDevGroupAssignmentRepository devGroupAssignmentRepository = mock(FunctionUnitDevGroupAssignmentRepository.class);
+        when(devGroupAssignmentRepository.findByFunctionUnitId(anyLong())).thenReturn(java.util.Collections.emptyList());
         
         FunctionUnitComponent component = new FunctionUnitComponentImpl(
                 functionUnitRepository, processRepo, tableRepo, formRepo, 
-                actionRepo, mock(com.developer.repository.DecisionDefinitionRepository.class), versionRepo, iconRepository, objectMapper, userDisplayNameService);
+                actionRepo, mock(com.developer.repository.DecisionDefinitionRepository.class), versionRepo, iconRepository, objectMapper, userDisplayNameService,
+                workspaceAccessService, devGroupAssignmentRepository);
         
         // Create function unit with icon
         FunctionUnitRequest request = new FunctionUnitRequest();
@@ -134,10 +139,14 @@ public class FunctionUnitIconPropertyTest {
         });
 
         UserDisplayNameService userDisplayNameService = mock(UserDisplayNameService.class);
+        FunctionUnitWorkspaceAccessService workspaceAccessService = mock(FunctionUnitWorkspaceAccessService.class);
+        FunctionUnitDevGroupAssignmentRepository devGroupAssignmentRepository = mock(FunctionUnitDevGroupAssignmentRepository.class);
+        when(devGroupAssignmentRepository.findByFunctionUnitId(anyLong())).thenReturn(java.util.Collections.emptyList());
         
         FunctionUnitComponent component = new FunctionUnitComponentImpl(
                 functionUnitRepository, processRepo, tableRepo, formRepo, 
-                actionRepo, mock(com.developer.repository.DecisionDefinitionRepository.class), versionRepo, iconRepository, objectMapper, userDisplayNameService);
+                actionRepo, mock(com.developer.repository.DecisionDefinitionRepository.class), versionRepo, iconRepository, objectMapper, userDisplayNameService,
+                workspaceAccessService, devGroupAssignmentRepository);
         
         // Create function unit without icon
         FunctionUnitRequest request = new FunctionUnitRequest();

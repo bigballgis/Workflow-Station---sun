@@ -6,6 +6,7 @@ import com.developer.entity.DecisionDefinition;
 import com.developer.entity.FunctionUnit;
 import com.developer.enums.ActionType;
 import com.developer.repository.*;
+import com.developer.security.FunctionUnitWorkspaceAccessService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -18,6 +19,8 @@ import com.developer.service.UserDisplayNameService;
 import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 /**
@@ -47,11 +50,16 @@ class DecisionTableActionValidationTest {
     private ObjectMapper objectMapper;
     @Mock
     private UserDisplayNameService userDisplayNameService;
+    @Mock
+    private FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService;
+    @Mock
+    private FunctionUnitDevGroupAssignmentRepository functionUnitDevGroupAssignmentRepository;
 
     private FunctionUnitComponentImpl functionUnitComponent;
 
     @BeforeEach
     void setUp() {
+        lenient().when(functionUnitDevGroupAssignmentRepository.findByFunctionUnitId(anyLong())).thenReturn(List.of());
         functionUnitComponent = new FunctionUnitComponentImpl(
                 functionUnitRepository,
                 processDefinitionRepository,
@@ -62,7 +70,9 @@ class DecisionTableActionValidationTest {
                 versionRepository,
                 iconRepository,
                 objectMapper,
-                userDisplayNameService
+                userDisplayNameService,
+                functionUnitWorkspaceAccessService,
+                functionUnitDevGroupAssignmentRepository
         );
     }
 

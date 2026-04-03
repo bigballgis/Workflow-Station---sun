@@ -8,6 +8,7 @@ import com.developer.enums.*;
 import com.developer.service.AiGenerationService;
 import com.developer.service.AiLockService;
 import com.developer.service.AiValidationService;
+import com.developer.security.FunctionUnitWorkspaceAccessService;
 import com.developer.service.AiWriteService;
 import net.jqwik.api.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -40,10 +41,11 @@ class AiGenerationComponentImplPropertyTest {
         AiLockService aiLockService = mock(AiLockService.class);
         AiValidationService aiValidationService = mock(AiValidationService.class);
         AiWriteService aiWriteService = mock(AiWriteService.class);
+        FunctionUnitWorkspaceAccessService workspaceAccessService = mock(FunctionUnitWorkspaceAccessService.class);
 
         AiGenerationComponentImpl component = new AiGenerationComponentImpl(
-                aiGenerationService, aiLockService, aiValidationService, aiWriteService, (Executor) Runnable::run,
-                new com.fasterxml.jackson.databind.ObjectMapper());
+                aiGenerationService, aiLockService, aiValidationService, aiWriteService, workspaceAccessService,
+                (Executor) Runnable::run, new com.fasterxml.jackson.databind.ObjectMapper());
 
         UUID sessionUuid = UUID.randomUUID();
         AiSession session = AiSession.builder()
@@ -89,10 +91,11 @@ class AiGenerationComponentImplPropertyTest {
         AiLockService aiLockService = mock(AiLockService.class);
         AiValidationService aiValidationService = mock(AiValidationService.class);
         AiWriteService aiWriteService = mock(AiWriteService.class);
+        FunctionUnitWorkspaceAccessService workspaceAccessService = mock(FunctionUnitWorkspaceAccessService.class);
 
         AiGenerationComponentImpl component = new AiGenerationComponentImpl(
-                aiGenerationService, aiLockService, aiValidationService, aiWriteService, (Executor) Runnable::run,
-                new com.fasterxml.jackson.databind.ObjectMapper());
+                aiGenerationService, aiLockService, aiValidationService, aiWriteService, workspaceAccessService,
+                (Executor) Runnable::run, new com.fasterxml.jackson.databind.ObjectMapper());
 
         UUID sessionUuid = UUID.randomUUID();
         AiSession session = AiSession.builder()
@@ -141,10 +144,11 @@ class AiGenerationComponentImplPropertyTest {
         AiLockService aiLockService = mock(AiLockService.class);
         AiValidationService aiValidationService = mock(AiValidationService.class);
         AiWriteService aiWriteService = mock(AiWriteService.class);
+        FunctionUnitWorkspaceAccessService workspaceAccessService = mock(FunctionUnitWorkspaceAccessService.class);
 
         AiGenerationComponentImpl component = new AiGenerationComponentImpl(
-                aiGenerationService, aiLockService, aiValidationService, aiWriteService, (Executor) Runnable::run,
-                new com.fasterxml.jackson.databind.ObjectMapper());
+                aiGenerationService, aiLockService, aiValidationService, aiWriteService, workspaceAccessService,
+                (Executor) Runnable::run, new com.fasterxml.jackson.databind.ObjectMapper());
 
         UUID sessionUuid = UUID.randomUUID();
         AiSession session = AiSession.builder()

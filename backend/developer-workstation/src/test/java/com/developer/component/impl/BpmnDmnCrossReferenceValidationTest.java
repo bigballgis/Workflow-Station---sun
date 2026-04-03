@@ -5,6 +5,7 @@ import com.developer.entity.DecisionDefinition;
 import com.developer.entity.FunctionUnit;
 import com.developer.entity.ProcessDefinition;
 import com.developer.repository.*;
+import com.developer.security.FunctionUnitWorkspaceAccessService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -19,6 +20,8 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 /**
@@ -48,6 +51,10 @@ class BpmnDmnCrossReferenceValidationTest {
     private ObjectMapper objectMapper;
     @Mock
     private UserDisplayNameService userDisplayNameService;
+    @Mock
+    private FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService;
+    @Mock
+    private FunctionUnitDevGroupAssignmentRepository functionUnitDevGroupAssignmentRepository;
 
     private FunctionUnitComponentImpl functionUnitComponent;
 
@@ -123,6 +130,7 @@ class BpmnDmnCrossReferenceValidationTest {
 
     @BeforeEach
     void setUp() {
+        lenient().when(functionUnitDevGroupAssignmentRepository.findByFunctionUnitId(anyLong())).thenReturn(List.of());
         functionUnitComponent = new FunctionUnitComponentImpl(
                 functionUnitRepository,
                 processDefinitionRepository,
@@ -133,7 +141,9 @@ class BpmnDmnCrossReferenceValidationTest {
                 versionRepository,
                 iconRepository,
                 objectMapper,
-                userDisplayNameService
+                userDisplayNameService,
+                functionUnitWorkspaceAccessService,
+                functionUnitDevGroupAssignmentRepository
         );
     }
 

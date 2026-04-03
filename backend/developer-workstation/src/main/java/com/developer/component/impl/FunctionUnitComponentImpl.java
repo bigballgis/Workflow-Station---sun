@@ -163,6 +163,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     @Transactional
     @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER')")
     public FunctionUnit update(Long id, FunctionUnitRequest request) {
+        functionUnitWorkspaceAccessService.assertCanAccess(id, WorkspaceAccessAction.MODIFY);
         FunctionUnit functionUnit = getById(id);
         
         if (functionUnitRepository.existsByNameAndIdNot(request.getName(), id)) {
@@ -187,8 +188,9 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     
     @Override
     @Transactional
-    @org.springframework.security.access.prepost.PreAuthorize("hasRole('TECH_LEAD')")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('TECH_LEAD', 'TEAM_LEAD')")
     public void delete(Long id) {
+        functionUnitWorkspaceAccessService.assertCanAccess(id, WorkspaceAccessAction.DELETE);
         FunctionUnit functionUnit = getById(id);
         functionUnitRepository.delete(functionUnit);
     }
@@ -203,6 +205,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     @Override
     @Transactional(readOnly = true)
     public FunctionUnitResponse getByIdAsResponse(Long id) {
+        functionUnitWorkspaceAccessService.assertCanAccess(id, WorkspaceAccessAction.VIEW);
         FunctionUnit entity = getById(id);
         return toResponse(entity);
     }
@@ -274,6 +277,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     @Transactional
     @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER')")
     public FunctionUnit publish(Long id, String changeLog) {
+        functionUnitWorkspaceAccessService.assertCanAccess(id, WorkspaceAccessAction.MODIFY);
         FunctionUnit functionUnit = getById(id);
         
         // 验证功能单元完整性
@@ -323,6 +327,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     @Transactional
     @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('TECH_LEAD', 'TEAM_LEAD')")
     public FunctionUnit clone(Long id, String newName) {
+        functionUnitWorkspaceAccessService.assertCanAccess(id, WorkspaceAccessAction.MODIFY);
         if (functionUnitRepository.existsByName(newName)) {
             throw new DeveloperBusinessException("CONFLICT_NAME_EXISTS", 
                     "Function unit name already exists: " + newName,
@@ -416,6 +421,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     @Override
     @Transactional(readOnly = true)
     public ValidationResult validate(Long id) {
+        functionUnitWorkspaceAccessService.assertCanAccess(id, WorkspaceAccessAction.VIEW);
         FunctionUnit functionUnit = getById(id);
         ValidationResult result = new ValidationResult();
         
@@ -720,6 +726,7 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     @Override
     @Transactional(readOnly = true)
     public List<VersionResponse> getVersionHistory(Long functionUnitId) {
+        functionUnitWorkspaceAccessService.assertCanAccess(functionUnitId, WorkspaceAccessAction.VIEW);
         return versionRepository.findByFunctionUnitIdOrderByPublishedAtDesc(functionUnitId)
                 .stream()
                 .map(v -> {
@@ -812,7 +819,44 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
                 .actionCount(actionCount)
                 .decisionCount(decisionCount)
                 .hasProcess(hasProcess)
+                .assignedVirtualGroupIds(functionUnitDevGroupAssignmentRepository.findByFunctionUnitId(entity.getId())
+                        .stream()
+                        .map(FunctionUnitDevGroupAssignment::getVirtualGroupId)
+                        .toList())
                 .build();
+    }
+
+    @Override
+    @Transactional
+    public void replaceDevGroupAssignments(Long functionUnitId, DevGroupAssignmentRequest request) {
+        functionUnitWorkspaceAccessService.assertCanAccess(functionUnitId, WorkspaceAccessAction.ASSIGN_DEV_GROUPS);
+        getById(functionUnitId);
+        functionUnitDevGroupAssignmentRepository.deleteByFunctionUnitId(functionUnitId);
+        String operator = getCurrentOperator();
+        if (request.getVirtualGroupIds() == null) {
+            return;
+        }
+        for (String gid : request.getVirtualGroupIds()) {
+            if (gid == null || gid.isBlank()) {
+                continue;
+            }
+            functionUnitDevGroupAssignmentRepository.save(FunctionUnitDevGroupAssignment.builder()
+                    .functionUnitId(functionUnitId)
+                    .virtualGroupId(gid.trim())
+                    .createdAt(Instant.now())
+                    .createdBy(operator)
+                    .build());
+        }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<String> getDevGroupAssignments(Long functionUnitId) {
+        functionUnitWorkspaceAccessService.assertCanAccess(functionUnitId, WorkspaceAccessAction.VIEW);
+        getById(functionUnitId);
+        return functionUnitDevGroupAssignmentRepository.findByFunctionUnitId(functionUnitId).stream()
+                .map(FunctionUnitDevGroupAssignment::getVirtualGroupId)
+                .toList();
     }
     
     private String calculateNextVersion(String currentVersion) {

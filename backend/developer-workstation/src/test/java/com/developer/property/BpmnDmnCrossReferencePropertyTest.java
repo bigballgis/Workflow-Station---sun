@@ -16,6 +16,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
 
 /**
@@ -35,6 +36,8 @@ public class BpmnDmnCrossReferencePropertyTest {
     @BeforeProperty
     void setUp() {
         functionUnitRepository = mock(FunctionUnitRepository.class);
+        FunctionUnitDevGroupAssignmentRepository devGroupAssignmentRepository = mock(FunctionUnitDevGroupAssignmentRepository.class);
+        when(devGroupAssignmentRepository.findByFunctionUnitId(anyLong())).thenReturn(List.of());
         functionUnitComponent = new FunctionUnitComponentImpl(
                 functionUnitRepository,
                 mock(ProcessDefinitionRepository.class),
@@ -45,7 +48,9 @@ public class BpmnDmnCrossReferencePropertyTest {
                 mock(VersionRepository.class),
                 mock(IconRepository.class),
                 new ObjectMapper(),
-                mock(UserDisplayNameService.class)
+                mock(UserDisplayNameService.class),
+                mock(com.developer.security.FunctionUnitWorkspaceAccessService.class),
+                devGroupAssignmentRepository
         );
         idGenerator = new AtomicLong(1L);
     }

@@ -66,7 +66,8 @@ public class AiGenerationController extends BaseController {
     public ResponseEntity<ApiResponse<LockInfoResponse>> acquireLock(
             @PathVariable Long functionUnitId,
             @RequestHeader(value = "X-User-Id", required = false) String userId) {
-        return handleRequest(() -> aiGenerationComponent.acquireLock(functionUnitId, userId));
+        // 不使用 handleRequest：AiLockConflictException 等需交由 AiExceptionHandler 映射 HTTP 状态码
+        return ResponseEntity.ok(ApiResponse.success(aiGenerationComponent.acquireLock(functionUnitId, userId)));
     }
 
     @DeleteMapping("/lock/{functionUnitId}")
@@ -175,19 +176,15 @@ public class AiGenerationController extends BaseController {
             @PathVariable Long functionUnitId,
             @Valid @RequestBody ApplyGeneratedDataRequest request,
             @RequestHeader(value = "X-User-Id", required = false) String userId) {
-        return handleRequest(() -> {
-            aiGenerationComponent.applyGeneratedData(functionUnitId, request, userId);
-            return null;
-        });
+        aiGenerationComponent.applyGeneratedData(functionUnitId, request, userId);
+        return ResponseEntity.ok(ApiResponse.success());
     }
 
     @PostMapping("/{functionUnitId}/undo")
     @Operation(summary = "Undo last AI data apply (30s TTL)")
     @RequireDeveloperPermission("FUNCTION_UNIT_UPDATE")
     public ResponseEntity<ApiResponse<Void>> undoLastApply(@PathVariable Long functionUnitId) {
-        return handleRequest(() -> {
-            aiGenerationComponent.undoLastApply(functionUnitId);
-            return null;
-        });
+        aiGenerationComponent.undoLastApply(functionUnitId);
+        return ResponseEntity.ok(ApiResponse.success());
     }
 }

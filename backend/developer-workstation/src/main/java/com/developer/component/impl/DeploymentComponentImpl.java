@@ -12,6 +12,8 @@ import com.developer.entity.ProcessDefinition;
 import com.developer.exception.DeveloperBusinessException;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.FunctionUnitRepository;
+import com.developer.security.FunctionUnitWorkspaceAccessService;
+import com.developer.security.WorkspaceAccessAction;
 import com.developer.service.DeploymentJobService;
 import com.platform.common.constant.PlatformConstants;
 import com.platform.common.i18n.I18nService;
@@ -51,6 +53,7 @@ public class DeploymentComponentImpl implements DeploymentComponent {
     private final I18nService i18nService;
     private final TaskExecutor taskExecutor;
     private final DeploymentJobService deploymentJobService;
+    private final FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService;
 
     @Value("${admin-center.url:http://localhost:8090}")
     private String defaultAdminCenterUrl;
@@ -71,7 +74,8 @@ public class DeploymentComponentImpl implements DeploymentComponent {
             @org.springframework.beans.factory.annotation.Autowired(required = false)
             @Qualifier("deploymentTaskExecutor")
             TaskExecutor taskExecutor,
-            DeploymentJobService deploymentJobService) {
+            DeploymentJobService deploymentJobService,
+            FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService) {
         this.functionUnitRepository = functionUnitRepository;
         this.exportImportComponent = exportImportComponent;
         this.restTemplate = restTemplate;
@@ -81,12 +85,14 @@ public class DeploymentComponentImpl implements DeploymentComponent {
         this.taskExecutor = taskExecutor != null ? taskExecutor
                 : new org.springframework.core.task.SimpleAsyncTaskExecutor("deploy-");
         this.deploymentJobService = deploymentJobService;
+        this.functionUnitWorkspaceAccessService = functionUnitWorkspaceAccessService;
     }
 
     @Override
     public DeployResponse deployToAdminCenter(Long functionUnitId, DeployRequest request) {
         FunctionUnit functionUnit = functionUnitRepository.findById(functionUnitId)
                 .orElseThrow(() -> new ResourceNotFoundException("FunctionUnit", functionUnitId));
+        functionUnitWorkspaceAccessService.assertCanAccess(functionUnitId, WorkspaceAccessAction.MODIFY);
 
         Optional<String> outboundAuth = resolveOutboundAuthorizationHeader();
         Optional<String> adminUserId = SecurityContextUtils.getCurrentUserId();

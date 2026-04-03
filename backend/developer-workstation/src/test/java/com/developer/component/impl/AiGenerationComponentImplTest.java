@@ -10,6 +10,7 @@ import com.developer.exception.AiGenerationException;
 import com.developer.service.AiGenerationService;
 import com.developer.service.AiLockService;
 import com.developer.service.AiValidationService;
+import com.developer.security.FunctionUnitWorkspaceAccessService;
 import com.developer.service.AiWriteService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -45,6 +46,7 @@ class AiGenerationComponentImplTest {
     @Mock private AiLockService aiLockService;
     @Mock private AiValidationService aiValidationService;
     @Mock private AiWriteService aiWriteService;
+    @Mock private FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService;
 
     private AiGenerationComponentImpl component;
     private UUID sessionUuid;
@@ -54,7 +56,8 @@ class AiGenerationComponentImplTest {
     void setUp() {
         // Use synchronous executor to make SSE orchestration deterministic in unit tests.
         Executor executor = Runnable::run;
-        component = new AiGenerationComponentImpl(aiGenerationService, aiLockService, aiValidationService, aiWriteService, executor, new com.fasterxml.jackson.databind.ObjectMapper());
+        component = new AiGenerationComponentImpl(aiGenerationService, aiLockService, aiValidationService, aiWriteService,
+                functionUnitWorkspaceAccessService, executor, new com.fasterxml.jackson.databind.ObjectMapper());
         sessionUuid = UUID.randomUUID();
         session = AiSession.builder()
                 .sessionId(sessionUuid).functionUnitId(1L).userId("user1")

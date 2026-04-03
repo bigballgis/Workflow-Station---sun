@@ -1,6 +1,7 @@
 package com.developer.service;
 
 import com.developer.component.impl.AiGenerationComponentImpl;
+import com.developer.security.FunctionUnitWorkspaceAccessService;
 import com.developer.dto.AiGeneratedData;
 import com.developer.dto.ApplyGeneratedDataRequest;
 import com.developer.dto.FunctionUnitContextDTO;
@@ -50,11 +51,12 @@ class AiUndoProperties {
         var aiLockService = mock(com.developer.service.AiLockService.class);
         var aiValidationService = new AiValidationServiceImpl();
         var aiWriteService = mock(com.developer.service.AiWriteService.class);
+        var workspaceAccessService = mock(FunctionUnitWorkspaceAccessService.class);
         var taskExecutor = mock(java.util.concurrent.Executor.class);
 
         AiGenerationComponentImpl component = new AiGenerationComponentImpl(
                 aiGenerationService, aiLockService, aiValidationService, aiWriteService,
-                taskExecutor, objectMapper);
+                workspaceAccessService, taskExecutor, objectMapper);
 
         // Build a valid context DTO that serializeFunctionUnitContext would return
         FunctionUnitContextDTO contextDTO = FunctionUnitContextDTO.builder()
@@ -117,11 +119,12 @@ class AiUndoProperties {
         var aiLockService = mock(com.developer.service.AiLockService.class);
         var aiValidationService = new AiValidationServiceImpl();
         var aiWriteService = mock(com.developer.service.AiWriteService.class);
+        var workspaceAccessService = mock(FunctionUnitWorkspaceAccessService.class);
         var taskExecutor = mock(java.util.concurrent.Executor.class);
 
         AiGenerationComponentImpl component = new AiGenerationComponentImpl(
                 aiGenerationService, aiLockService, aiValidationService, aiWriteService,
-                taskExecutor, objectMapper);
+                workspaceAccessService, taskExecutor, objectMapper);
 
         // Build context for snapshot
         FunctionUnitContextDTO contextDTO = FunctionUnitContextDTO.builder()

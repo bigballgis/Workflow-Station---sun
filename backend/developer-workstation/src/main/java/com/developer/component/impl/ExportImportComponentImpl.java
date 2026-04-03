@@ -11,6 +11,8 @@ import com.developer.enums.TableType;
 import com.developer.exception.DeveloperBusinessException;
 import com.developer.exception.ResourceNotFoundException;
 import com.developer.repository.*;
+import com.developer.security.FunctionUnitWorkspaceAccessService;
+import com.developer.security.WorkspaceAccessAction;
 import com.developer.util.BpmnLastTaskAssigneeTopologyValidator;
 import com.developer.util.XmlEncodingUtil;
 import com.developer.validation.DmnXmlParser;
@@ -53,6 +55,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
     private final ActionDefinitionRepository actionDefinitionRepository;
     private final DecisionDefinitionRepository decisionDefinitionRepository;
     private final DmnXmlParser dmnXmlParser;
+    private final FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService;
     private final ObjectMapper objectMapper;
     
     @Value("${platform.version:1.0.0}")
@@ -82,6 +85,7 @@ public class ExportImportComponentImpl implements ExportImportComponent {
     @Override
     @Transactional(readOnly = true)
     public byte[] exportFunctionUnit(Long functionUnitId) {
+        functionUnitWorkspaceAccessService.assertCanAccess(functionUnitId, WorkspaceAccessAction.VIEW);
         FunctionUnit functionUnit = functionUnitRepository.findById(functionUnitId)
                 .orElseThrow(() -> new ResourceNotFoundException("FunctionUnit", functionUnitId));
         

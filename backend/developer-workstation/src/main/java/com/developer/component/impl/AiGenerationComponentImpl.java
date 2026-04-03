@@ -10,6 +10,8 @@ import com.developer.enums.AiPhase;
 import com.developer.enums.AiSessionStatus;
 import com.developer.exception.AiGenerationException;
 import com.developer.exception.AiValidationFailedException;
+import com.developer.security.FunctionUnitWorkspaceAccessService;
+import com.developer.security.WorkspaceAccessAction;
 import com.developer.service.AiGenerationService;
 import com.developer.service.AiLockService;
 import com.developer.service.AiValidationService;
@@ -45,6 +47,7 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
     private final AiLockService aiLockService;
     private final AiValidationService aiValidationService;
     private final AiWriteService aiWriteService;
+    private final FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService;
     private final Executor taskExecutor;
     private final ObjectMapper objectMapper;
 
@@ -65,18 +68,21 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
                                      AiLockService aiLockService,
                                      AiValidationService aiValidationService,
                                      AiWriteService aiWriteService,
+                                     FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService,
                                      Executor taskExecutor,
                                      ObjectMapper objectMapper) {
         this.aiGenerationService = aiGenerationService;
         this.aiLockService = aiLockService;
         this.aiValidationService = aiValidationService;
         this.aiWriteService = aiWriteService;
+        this.functionUnitWorkspaceAccessService = functionUnitWorkspaceAccessService;
         this.taskExecutor = taskExecutor;
         this.objectMapper = objectMapper;
     }
 
     @Override
     public SseEmitter chatStream(AiChatRequest request, String userId) {
+        functionUnitWorkspaceAccessService.assertCanAccess(request.getFunctionUnitId(), WorkspaceAccessAction.MODIFY);
         // 1. 续期锁
         aiLockService.extendLock(request.getFunctionUnitId(), userId);
 
@@ -297,6 +303,7 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
 
     @Override
     public void applyGeneratedData(Long functionUnitId, ApplyGeneratedDataRequest request, String userId) {
+        functionUnitWorkspaceAccessService.assertCanAccess(functionUnitId, WorkspaceAccessAction.MODIFY);
         // 1. 续期锁
         aiLockService.extendLock(functionUnitId, userId);
 
@@ -361,6 +368,7 @@ public class AiGenerationComponentImpl implements AiGenerationComponent {
      */
     @Override
     public void undoLastApply(Long functionUnitId) {
+        functionUnitWorkspaceAccessService.assertCanAccess(functionUnitId, WorkspaceAccessAction.MODIFY);
         String snapshot = undoSnapshots.remove(functionUnitId);
         if (snapshot == null) {
             throw new AiGenerationException("AI_UNDO_EXPIRED", "Undo window has expired (30 seconds)");

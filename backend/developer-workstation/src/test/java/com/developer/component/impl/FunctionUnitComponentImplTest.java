@@ -5,6 +5,8 @@ import com.developer.entity.FunctionUnit;
 import com.developer.entity.Version;
 import com.developer.enums.FunctionUnitStatus;
 import com.developer.repository.*;
+import com.developer.security.FunctionUnitWorkspaceAccessService;
+import com.developer.security.WorkspaceAccessAction;
 import com.developer.service.UserDisplayNameService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -61,6 +63,12 @@ class FunctionUnitComponentImplTest {
 
     @Mock
     private UserDisplayNameService userDisplayNameService;
+
+    @Mock
+    private FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService;
+
+    @Mock
+    private FunctionUnitDevGroupAssignmentRepository functionUnitDevGroupAssignmentRepository;
     
     @InjectMocks
     private FunctionUnitComponentImpl functionUnitComponent;
@@ -69,6 +77,9 @@ class FunctionUnitComponentImplTest {
     void setUp() {
         // 清理 SecurityContext
         SecurityContextHolder.clearContext();
+        lenient().doNothing().when(functionUnitWorkspaceAccessService)
+                .assertCanAccess(any(Long.class), any(WorkspaceAccessAction.class));
+        lenient().when(functionUnitWorkspaceAccessService.visibleFunctionUnitIds()).thenReturn(null);
     }
     
     /**

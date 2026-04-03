@@ -1,6 +1,7 @@
 package com.developer.component.impl;
 
 import com.developer.repository.*;
+import com.developer.security.FunctionUnitWorkspaceAccessService;
 import com.developer.validation.DmnXmlParser;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.platform.common.dto.UserPrincipal;
@@ -61,6 +62,9 @@ class ExportImportComponentImplTest {
 
     @Mock
     private DmnXmlParser dmnXmlParser;
+
+    @Mock
+    private FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService;
     
     @InjectMocks
     private ExportImportComponentImpl exportImportComponent;
@@ -159,6 +163,7 @@ class ExportImportComponentImplTest {
                 actionDefinitionRepository,
                 decisionDefinitionRepository,
                 dmnXmlParser,
+                mock(FunctionUnitWorkspaceAccessService.class),
                 om);
 
         byte[] zip = zipSingleEntry("manifest.json", "{\"name\":\"FU_ManifestOnly\",\"code\":\"c1\"}");
@@ -182,6 +187,7 @@ class ExportImportComponentImplTest {
                 actionDefinitionRepository,
                 decisionDefinitionRepository,
                 dmnXmlParser,
+                mock(FunctionUnitWorkspaceAccessService.class),
                 om);
 
         byte[] zip = zipSingleEntry("metadata.json", "{\"name\":\"FU_LegacyMeta\"}");

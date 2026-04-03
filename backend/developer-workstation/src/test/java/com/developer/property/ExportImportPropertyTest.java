@@ -5,6 +5,7 @@ import com.developer.component.impl.ExportImportComponentImpl;
 import com.developer.entity.FunctionUnit;
 import com.developer.enums.FunctionUnitStatus;
 import com.developer.repository.*;
+import com.developer.security.FunctionUnitWorkspaceAccessService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import net.jqwik.api.*;
 
@@ -34,7 +35,8 @@ public class ExportImportPropertyTest {
         ObjectMapper objectMapper = new ObjectMapper();
         ExportImportComponent component = new ExportImportComponentImpl(
                 repository, processRepo, tableRepo, formRepo, actionRepo,
-                mock(DecisionDefinitionRepository.class), mock(com.developer.validation.DmnXmlParser.class), objectMapper);
+                mock(DecisionDefinitionRepository.class), mock(com.developer.validation.DmnXmlParser.class),
+                mock(FunctionUnitWorkspaceAccessService.class), objectMapper);
         
         // 创建模拟功能单元
         FunctionUnit fu = new FunctionUnit();
@@ -65,7 +67,8 @@ public class ExportImportPropertyTest {
         ObjectMapper objectMapper = new ObjectMapper();
         ExportImportComponent component = new ExportImportComponentImpl(
                 repository, processRepo, tableRepo, formRepo, actionRepo,
-                mock(DecisionDefinitionRepository.class), mock(com.developer.validation.DmnXmlParser.class), objectMapper);
+                mock(DecisionDefinitionRepository.class), mock(com.developer.validation.DmnXmlParser.class),
+                mock(FunctionUnitWorkspaceAccessService.class), objectMapper);
         
         // 模拟已存在同名功能单元
         when(repository.existsByName(name)).thenReturn(true);

@@ -18,6 +18,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -99,13 +100,13 @@ class FunctionUnitControllerPropertyTest {
     @Label("Property 4: FunctionUnitNotFoundException → HTTP 400 + success=false")
     void functionUnitNotFoundReturns400(@ForAll String unitId) {
         var mgr = mock(FunctionUnitManagerComponent.class);
-        when(mgr.setEnabled(anyString(), any(Boolean.class)))
+        when(mgr.setEnabled(anyString(), anyBoolean(), anyString(), anyString()))
                 .thenThrow(new FunctionUnitNotFoundException(unitId));
 
         var controller = createController(mgr);
         var request = new com.admin.dto.request.SetEnabledRequest(true);
         ResponseEntity<ApiResponse<FunctionUnitInfo>> response =
-                controller.setEnabled(unitId, request);
+                controller.setEnabled(unitId, request, "test-operator");
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getBody()).isNotNull();

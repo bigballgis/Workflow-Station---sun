@@ -6,6 +6,7 @@ import com.developer.dto.FunctionUnitRequest;
 import com.developer.entity.FunctionUnit;
 import com.developer.enums.FunctionUnitStatus;
 import com.developer.repository.*;
+import com.developer.security.FunctionUnitWorkspaceAccessService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import net.jqwik.api.*;
 import org.mockito.Mockito;
@@ -36,8 +37,12 @@ public class FunctionUnitPropertyTest {
         IconRepository iconRepo = mock(IconRepository.class);
         ObjectMapper objectMapper = new ObjectMapper();
         UserDisplayNameService userDisplayNameService = mock(UserDisplayNameService.class);
+        FunctionUnitWorkspaceAccessService workspaceAccessService = mock(FunctionUnitWorkspaceAccessService.class);
+        FunctionUnitDevGroupAssignmentRepository devGroupAssignmentRepository = mock(FunctionUnitDevGroupAssignmentRepository.class);
+        when(devGroupAssignmentRepository.findByFunctionUnitId(anyLong())).thenReturn(java.util.Collections.emptyList());
         return new FunctionUnitComponentImpl(
-                repository, processRepo, tableRepo, formRepo, actionRepo, mock(com.developer.repository.DecisionDefinitionRepository.class), versionRepo, iconRepo, objectMapper, userDisplayNameService);
+                repository, processRepo, tableRepo, formRepo, actionRepo, mock(com.developer.repository.DecisionDefinitionRepository.class), versionRepo, iconRepo, objectMapper, userDisplayNameService,
+                workspaceAccessService, devGroupAssignmentRepository);
     }
     
     /**

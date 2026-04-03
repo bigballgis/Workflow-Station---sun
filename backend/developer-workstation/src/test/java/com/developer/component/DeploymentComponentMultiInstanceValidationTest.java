@@ -8,6 +8,7 @@ import com.developer.entity.FunctionUnit;
 import com.developer.entity.ProcessDefinition;
 import com.developer.exception.DeveloperBusinessException;
 import com.developer.repository.FunctionUnitRepository;
+import com.developer.security.FunctionUnitWorkspaceAccessService;
 import com.developer.service.DeploymentJobService;
 import com.platform.common.i18n.I18nService;
 import org.junit.jupiter.api.BeforeEach;
@@ -54,6 +55,9 @@ class DeploymentComponentMultiInstanceValidationTest {
 
     @Mock
     private DeploymentJobService deploymentJobService;
+
+    @Mock
+    private FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService;
     
     private DeploymentComponentImpl deploymentComponent;
     
@@ -70,7 +74,8 @@ class DeploymentComponentMultiInstanceValidationTest {
             processDesignComponent,
             i18nService,
             new SyncTaskExecutor(),
-            deploymentJobService
+            deploymentJobService,
+            functionUnitWorkspaceAccessService
         );
         
         // Setup default i18n messages

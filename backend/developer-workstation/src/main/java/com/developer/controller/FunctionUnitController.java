@@ -2,6 +2,7 @@ package com.developer.controller;
 
 import com.developer.component.FunctionUnitComponent;
 import com.developer.dto.ApiResponse;
+import com.developer.dto.DevGroupAssignmentRequest;
 import com.developer.dto.FunctionUnitRequest;
 import com.developer.dto.FunctionUnitResponse;
 import com.developer.dto.ValidationResult;
@@ -107,5 +108,24 @@ public class FunctionUnitController extends BaseController {
     @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
     public ResponseEntity<ApiResponse<List<VersionResponse>>> getVersions(@PathVariable Long id) {
         return handleRequest(() -> functionUnitComponent.getVersionHistory(id));
+    }
+
+    @GetMapping("/{id}/dev-groups")
+    @Operation(summary = "List virtual development group ids assigned to this function unit")
+    @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")
+    public ResponseEntity<ApiResponse<List<String>>> getDevGroups(@PathVariable Long id) {
+        return handleRequest(() -> functionUnitComponent.getDevGroupAssignments(id));
+    }
+
+    @PutMapping("/{id}/dev-groups")
+    @Operation(summary = "Replace virtual development group assignments for this function unit")
+    @RequireDeveloperPermission("FUNCTION_UNIT_ASSIGN_DEV_GROUP")
+    public ResponseEntity<ApiResponse<Void>> replaceDevGroups(
+            @PathVariable Long id,
+            @Valid @RequestBody DevGroupAssignmentRequest request) {
+        return handleRequest(() -> {
+            functionUnitComponent.replaceDevGroupAssignments(id, request);
+            return null;
+        });
     }
 }

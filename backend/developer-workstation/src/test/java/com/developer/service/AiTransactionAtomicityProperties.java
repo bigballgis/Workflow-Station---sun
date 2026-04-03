@@ -38,6 +38,7 @@ class AiTransactionAtomicityProperties {
      */
     static class EmptyFunctionUnitRepository implements FunctionUnitRepository {
         @Override public Optional<FunctionUnit> findById(Long id) { return Optional.empty(); }
+        @Override public List<Long> findIdsByCreatedBy(String username) { return List.of(); }
 
         // --- Unused methods stubbed to satisfy interface ---
         @Override public boolean existsByName(String name) { return false; }
