@@ -1,6 +1,7 @@
 package com.developer.component.impl;
 
 import com.developer.component.FunctionUnitComponent;
+import com.developer.dto.DevGroupAssignmentRequest;
 import com.developer.dto.FunctionUnitRequest;
 import com.developer.dto.FunctionUnitResponse;
 import com.developer.dto.ValidationResult;
@@ -9,7 +10,10 @@ import com.developer.entity.*;
 import com.developer.enums.FunctionUnitStatus;
 import com.developer.exception.DeveloperBusinessException;
 import com.developer.exception.ResourceNotFoundException;
+import com.developer.entity.FunctionUnitDevGroupAssignment;
 import com.developer.repository.*;
+import com.developer.security.FunctionUnitWorkspaceAccessService;
+import com.developer.security.WorkspaceAccessAction;
 import com.developer.util.XmlEncodingUtil;
 import com.developer.service.UserDisplayNameService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -30,6 +34,7 @@ import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.StringReader;
 import java.security.SecureRandom;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -51,6 +56,8 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
     private final IconRepository iconRepository;
     private final ObjectMapper objectMapper;
     private final UserDisplayNameService userDisplayNameService;
+    private final FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService;
+    private final FunctionUnitDevGroupAssignmentRepository functionUnitDevGroupAssignmentRepository;
     
     public FunctionUnitComponentImpl(
             FunctionUnitRepository functionUnitRepository,
@@ -62,7 +69,9 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
             VersionRepository versionRepository,
             IconRepository iconRepository,
             ObjectMapper objectMapper,
-            UserDisplayNameService userDisplayNameService) {
+            UserDisplayNameService userDisplayNameService,
+            FunctionUnitWorkspaceAccessService functionUnitWorkspaceAccessService,
+            FunctionUnitDevGroupAssignmentRepository functionUnitDevGroupAssignmentRepository) {
         this.functionUnitRepository = functionUnitRepository;
         this.processDefinitionRepository = processDefinitionRepository;
         this.tableDefinitionRepository = tableDefinitionRepository;
@@ -73,6 +82,8 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
         this.iconRepository = iconRepository;
         this.objectMapper = objectMapper;
         this.userDisplayNameService = userDisplayNameService;
+        this.functionUnitWorkspaceAccessService = functionUnitWorkspaceAccessService;
+        this.functionUnitDevGroupAssignmentRepository = functionUnitDevGroupAssignmentRepository;
     }
     
     /**
@@ -216,6 +227,13 @@ public class FunctionUnitComponentImpl implements FunctionUnitComponent {
             
             if (status != null && !status.trim().isEmpty()) {
                 predicates.add(cb.equal(root.get("status"), FunctionUnitStatus.valueOf(status)));
+            }
+
+            java.util.Set<Long> visible = functionUnitWorkspaceAccessService.visibleFunctionUnitIds();
+            if (visible != null && visible.isEmpty()) {
+                predicates.add(cb.disjunction());
+            } else if (visible != null) {
+                predicates.add(root.get("id").in(visible));
             }
             
             return cb.and(predicates.toArray(new Predicate[0]));

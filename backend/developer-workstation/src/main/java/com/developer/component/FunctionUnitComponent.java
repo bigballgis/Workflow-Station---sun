@@ -1,5 +1,6 @@
 package com.developer.component;
 
+import com.developer.dto.DevGroupAssignmentRequest;
 import com.developer.dto.FunctionUnitRequest;
 import com.developer.dto.FunctionUnitResponse;
 import com.developer.dto.ValidationResult;
@@ -74,4 +75,14 @@ public interface FunctionUnitComponent {
      * 检查名称是否存在（排除指定ID）
      */
     boolean existsByNameAndIdNot(String name, Long id);
+
+    /**
+     * 替换虚拟开发组分配（仅 Team Lead 创建者或 Technical Lead）
+     */
+    void replaceDevGroupAssignments(Long functionUnitId, DevGroupAssignmentRequest request);
+
+    /**
+     * 当前功能单元已分配的 sys_virtual_groups.id 列表
+     */
+    java.util.List<String> getDevGroupAssignments(Long functionUnitId);
 }

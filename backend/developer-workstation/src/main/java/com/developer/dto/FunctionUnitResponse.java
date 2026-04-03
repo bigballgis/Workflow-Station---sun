@@ -7,6 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.Instant;
+import java.util.List;
 
 /**
  * 功能单元响应DTO
@@ -34,6 +35,9 @@ public class FunctionUnitResponse {
     private int actionCount;
     private int decisionCount;
     private boolean hasProcess;
+
+    /** 已分配的虚拟开发组 ID（sys_virtual_groups.id） */
+    private List<String> assignedVirtualGroupIds;
     
     /**
      * 图标信息内部类
