@@ -1091,3 +1091,11 @@
   category: quality
   summary: "profile 改密失败时凡 HTTP 400 即提示「当前密码不正确」，若后端用 400 表达策略/复杂度等其它原因会误导用户；应按 error code 或 message 分支"
   file: "frontend/user-portal/src/utils/changePasswordError.ts; frontend/admin-center/src/utils/changePasswordError.ts; frontend/developer-workstation/src/utils/changePasswordError.ts"
+
+- id: "150"
+  status: fixed
+  fixed_at: "2026-04-04"
+  severity: major
+  category: deploy
+  summary: "Flowable ACT_RU/HI_IDENTITYLINK 默认 VARCHAR(255) 过短，长 group/scope 等导致任务完成时 PSQL value too long → 迁移加宽至 4000"
+  file: "deploy/init-scripts/00-schema/30-widen-flowable-identitylink-columns.sql"

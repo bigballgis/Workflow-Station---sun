@@ -54,5 +54,6 @@ COMMIT;
 \i /docker-entrypoint-initdb.d/00-schema/26-add-dw-deployment-jobs.sql
 \i /docker-entrypoint-initdb.d/00-schema/27-add-up-process-instance-catalog-pin.sql
 \i /docker-entrypoint-initdb.d/00-schema/28-dw-function-unit-dev-groups.sql
+\i /docker-entrypoint-initdb.d/00-schema/30-widen-flowable-identitylink-columns.sql
 
 \echo 'All schemas created successfully.'
