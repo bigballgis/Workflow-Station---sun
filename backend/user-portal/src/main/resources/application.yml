@@ -24,6 +24,14 @@ spring:
         jdbc:
           time_zone: Asia/Shanghai
 
+  # 库表主要由 deploy/init-scripts 初始化；此处仅补齐与 JDBC 查询一致的增量（如 V405 submitted_by_user_id）。
+  # baseline-on-migrate + baseline-version=404：跳过 V400–V404，避免与已有 Docker 初始化脚本重复执行破坏性语句。
+  flyway:
+    enabled: true
+    locations: classpath:db/migration/user-portal
+    baseline-on-migrate: true
+    baseline-version: "404"
+
   
   jackson:
     serialization:

@@ -14,6 +14,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import jakarta.validation.ConstraintViolationException;
 
 import java.time.Instant;
@@ -199,6 +200,29 @@ public class GlobalExceptionHandler {
     }
 
     // ==================== 参数与非法状态（避免误报为 SYS_INTERNAL_ERROR）====================
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiResponse<?>> handleMethodArgumentTypeMismatch(
+            MethodArgumentTypeMismatchException ex, WebRequest request) {
+        String traceId = generateTraceId();
+        String param = ex.getName();
+        Object value = ex.getValue();
+        Class<?> requiredType = ex.getRequiredType();
+        String required = requiredType != null ? requiredType.getSimpleName() : "unknown";
+        String msg = String.format("Invalid value for parameter '%s': '%s' (expected %s)",
+                param, value, required);
+        log.warn("Type mismatch [{}]: {}", traceId, msg);
+
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .code("VAL_INVALID_PARAMETER")
+                .message(msg)
+                .timestamp(Instant.now())
+                .traceId(traceId)
+                .path(getPath(request))
+                .build();
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.error(errorResponse));
+    }
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ApiResponse<?>> handleIllegalArgumentException(
