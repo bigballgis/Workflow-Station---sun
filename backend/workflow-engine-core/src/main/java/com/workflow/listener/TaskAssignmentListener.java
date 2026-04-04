@@ -17,9 +17,12 @@ import org.flowable.bpmn.model.UserTask;
 import org.flowable.common.engine.api.delegate.event.FlowableEngineEventType;
 import org.flowable.common.engine.api.delegate.event.FlowableEvent;
 import org.flowable.common.engine.api.delegate.event.FlowableEventListener;
+import org.flowable.engine.HistoryService;
 import org.flowable.engine.RepositoryService;
 import org.flowable.engine.RuntimeService;
 import org.flowable.engine.TaskService;
+import org.flowable.engine.history.HistoricProcessInstance;
+import org.flowable.engine.runtime.ProcessInstance;
 import org.flowable.engine.delegate.event.impl.FlowableEntityEventImpl;
 import org.flowable.task.service.impl.persistence.entity.TaskEntity;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -58,6 +61,10 @@ public class TaskAssignmentListener implements FlowableEventListener {
     @Autowired
     @Lazy
     private RuntimeService runtimeService;
+
+    @Autowired
+    @Lazy
+    private HistoryService historyService;
 
     @Autowired
     @Lazy
@@ -180,7 +187,28 @@ public class TaskAssignmentListener implements FlowableEventListener {
 
             String initiatorId = getStringVariable(processVariables, "initiator");
             if (initiatorId == null || initiatorId.isEmpty()) {
-                log.warn("No initiator found for process instance {}", processInstanceId);
+                ProcessInstance pi = runtimeService.createProcessInstanceQuery()
+                        .processInstanceId(processInstanceId)
+                        .singleResult();
+                if (pi != null && pi.getStartUserId() != null && !pi.getStartUserId().isBlank()) {
+                    initiatorId = pi.getStartUserId().trim();
+                    log.info("Task {}: no initiator variable; using process startUserId as fallback: {}",
+                            taskId, initiatorId);
+                }
+            }
+            if (initiatorId == null || initiatorId.isEmpty()) {
+                HistoricProcessInstance hpi = historyService.createHistoricProcessInstanceQuery()
+                        .processInstanceId(processInstanceId)
+                        .singleResult();
+                if (hpi != null && hpi.getStartUserId() != null && !hpi.getStartUserId().isBlank()) {
+                    initiatorId = hpi.getStartUserId().trim();
+                    log.info("Task {}: no initiator variable; using historic startUserId as fallback: {}",
+                            taskId, initiatorId);
+                }
+            }
+            if (initiatorId == null || initiatorId.isEmpty()) {
+                log.warn("No initiator found for process instance {} (variable empty and no startUserId)",
+                        processInstanceId);
                 return;
             }
 

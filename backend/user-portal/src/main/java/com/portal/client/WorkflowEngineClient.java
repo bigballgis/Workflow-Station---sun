@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import jakarta.servlet.http.HttpServletRequest;
 
@@ -195,7 +196,13 @@ public class WorkflowEngineClient {
             return Optional.empty();
         }
         try {
-            String url = workflowEngineUrl + "/api/v1/tasks?userId=" + userId + "&page=" + page + "&size=" + size;
+            String url = UriComponentsBuilder.fromHttpUrl(workflowEngineUrl + "/api/v1/tasks")
+                    .queryParam("userId", userId)
+                    .queryParam("page", page)
+                    .queryParam("size", size)
+                    .encode()
+                    .build()
+                    .toUriString();
             
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                 url, HttpMethod.GET, authorizedGetEntity(),
@@ -218,7 +225,13 @@ public class WorkflowEngineClient {
             return Optional.empty();
         }
         try {
-            String url = workflowEngineUrl + "/api/v1/tasks?processInstanceId=" + processInstanceId + "&page=0&size=100";
+            String url = UriComponentsBuilder.fromHttpUrl(workflowEngineUrl + "/api/v1/tasks")
+                    .queryParam("processInstanceId", processInstanceId)
+                    .queryParam("page", 0)
+                    .queryParam("size", 100)
+                    .encode()
+                    .build()
+                    .toUriString();
             
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                 url, HttpMethod.GET, authorizedGetEntity(),
@@ -242,25 +255,24 @@ public class WorkflowEngineClient {
             return Optional.empty();
         }
         try {
-            StringBuilder urlBuilder = new StringBuilder(workflowEngineUrl)
-                .append("/api/v1/tasks?userId=").append(userId)
-                .append("&page=").append(page)
-                .append("&size=").append(size);
-            
-            if (groupIds != null && !groupIds.isEmpty()) {
+            UriComponentsBuilder ub = UriComponentsBuilder.fromHttpUrl(workflowEngineUrl + "/api/v1/tasks")
+                    .queryParam("userId", userId)
+                    .queryParam("page", page)
+                    .queryParam("size", size);
+            if (groupIds != null) {
                 for (String groupId : groupIds) {
-                    urlBuilder.append("&groupIds=").append(groupId);
+                    ub.queryParam("groupIds", groupId);
                 }
             }
-            
-            if (deptRoles != null && !deptRoles.isEmpty()) {
+            if (deptRoles != null) {
                 for (String deptRole : deptRoles) {
-                    urlBuilder.append("&deptRoles=").append(deptRole);
+                    ub.queryParam("deptRoles", deptRole);
                 }
             }
+            String url = ub.encode().build().toUriString();
             
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
-                urlBuilder.toString(), HttpMethod.GET, authorizedGetEntity(),
+                url, HttpMethod.GET, authorizedGetEntity(),
                 new ParameterizedTypeReference<Map<String, Object>>() {});
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {

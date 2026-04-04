@@ -119,6 +119,7 @@ public class TaskManagerComponent {
             java.util.LinkedHashMap<String, Task> taskMap = new java.util.LinkedHashMap<>();
             for (Task t : assignedTasks) taskMap.putIfAbsent(t.getId(), t);
             for (Task t : candidateTasks) taskMap.putIfAbsent(t.getId(), t);
+            mergeOrphanInitiatorTasksRepair(userId, fetchLimit, taskMap);
             
             List<Task> uniqueTasks = new ArrayList<>(taskMap.values());
             uniqueTasks.sort((t1, t2) -> t2.getCreateTime().compareTo(t1.getCreateTime()));
@@ -319,6 +320,7 @@ public class TaskManagerComponent {
                     .listPage(0, fetchLimit);
                 for (Task t : groupTasks) taskMap.putIfAbsent(t.getId(), t);
             }
+            mergeOrphanInitiatorTasksRepair(userId, fetchLimit, taskMap);
             
             List<Task> uniqueTasks = new ArrayList<>(taskMap.values());
             uniqueTasks.sort((t1, t2) -> t2.getCreateTime().compareTo(t1.getCreateTime()));
@@ -361,6 +363,51 @@ public class TaskManagerComponent {
         } catch (Exception e) {
             throw new WorkflowBusinessException("TASK_QUERY_ERROR", 
                 "Failed to query user visible tasks: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 合并「未指派但流程变量 initiator 为当前用户」的任务，并幂等写回 assignee。
+     * 覆盖监听器未执行、变量类型为 Long、或 assignee 未写入等导致 taskAssignee 查询不到的情况。
+     */
+    private void mergeOrphanInitiatorTasksRepair(String userId, int fetchLimit,
+            java.util.LinkedHashMap<String, Task> taskMap) {
+        if (!StringUtils.hasText(userId)) {
+            return;
+        }
+        String uid = userId.trim();
+        try {
+            appendUnassignedInitiatorTasks(uid, fetchLimit, taskMap, false);
+            if (uid.matches("^-?\\d+$")) {
+                appendUnassignedInitiatorTasks(uid, fetchLimit, taskMap, true);
+            }
+        } catch (Exception e) {
+            log.warn("mergeOrphanInitiatorTasksRepair for user {}: {}", uid, e.getMessage());
+        }
+    }
+
+    private void appendUnassignedInitiatorTasks(String userId, int fetchLimit,
+            java.util.LinkedHashMap<String, Task> taskMap, boolean initiatorVarAsLong) {
+        var query = taskService.createTaskQuery()
+                .taskUnassigned()
+                .orderByTaskCreateTime().desc();
+        if (initiatorVarAsLong) {
+            query.processVariableValueEquals("initiator", Long.parseLong(userId));
+        } else {
+            query.processVariableValueEquals("initiator", userId);
+        }
+        List<Task> orphans = query.listPage(0, fetchLimit);
+        for (Task t : orphans) {
+            try {
+                taskService.setAssignee(t.getId(), userId);
+                Task refreshed = taskService.createTaskQuery().taskId(t.getId()).singleResult();
+                if (refreshed != null) {
+                    taskMap.putIfAbsent(refreshed.getId(), refreshed);
+                }
+            } catch (Exception ex) {
+                log.warn("Could not repair assignee for orphan task {}: {}", t.getId(), ex.getMessage());
+                taskMap.putIfAbsent(t.getId(), t);
+            }
         }
     }
     
@@ -771,6 +818,16 @@ public class TaskManagerComponent {
             if (processInstanceId != null) {
                 // 下一任务创建时 TaskAssignmentListener 读取，用于 CURRENT_BU_ROLE 等「当前处理人」语义
                 runtimeService.setVariable(processInstanceId, "currentUserId", userId);
+            }
+
+            // 合并保留 initiator：门户完成首任务时传入的表单变量可能不含 initiator，避免后续 INITIATOR 节点无法解析受理人
+            if (variables != null && !variables.isEmpty() && processInstanceId != null) {
+                Object existingInitiator = runtimeService.getVariable(processInstanceId, "initiator");
+                if (existingInitiator != null
+                        && (variables.get("initiator") == null
+                        || variables.get("initiator").toString().isBlank())) {
+                    variables.put("initiator", existingInitiator);
+                }
             }
             
             // 设置流程变量到流程实例（在完成任务之前）

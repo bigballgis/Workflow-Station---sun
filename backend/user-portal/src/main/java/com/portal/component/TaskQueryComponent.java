@@ -16,6 +16,7 @@ import com.portal.repository.DelegationRuleRepository;
 import com.portal.repository.ProcessHistoryRepository;
 import com.portal.repository.ProcessInstanceRepository;
 import com.portal.service.TaskActionService;
+import com.portal.exception.PortalException;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -63,6 +64,9 @@ public class TaskQueryComponent {
         }
         
         String userId = request.getUserId();
+        if (userId == null || userId.isBlank()) {
+            throw new PortalException("401", "Authenticated user id is required for task query");
+        }
         List<String> assignmentTypes = request.getAssignmentTypes();
         int page = request.getPage() != null ? request.getPage() : 0;
         int size = request.getSize() != null ? request.getSize() : 20;
@@ -111,6 +115,11 @@ public class TaskQueryComponent {
             throw new IllegalStateException("Failed to query tasks from Flowable: " + e.getMessage(), e);
         }
 
+        // 1b. 若按用户聚合查询无结果（引擎异常被吞、assignee 未写入等），按本地 RUNNING 实例逐单拉取任务
+        if (allTasks.isEmpty()) {
+            mergeTasksFromRunningProcessInstancesForUser(userId, allTasks);
+        }
+
         // 2. Query delegated tasks (delegation info stored locally)
         if (assignmentTypes == null || assignmentTypes.isEmpty() || assignmentTypes.contains("DELEGATED")) {
             List<TaskInfo> delegatedTasks = queryDelegatedTasks(userId);
@@ -139,6 +148,52 @@ public class TaskQueryComponent {
                 : Collections.emptyList();
 
         return PageResponse.of(pagedTasks, page, size, allTasks.size());
+    }
+
+    /**
+     * 当 /api/v1/tasks?userId= 聚合结果为空时，根据门户库中「当前用户为发起人的 RUNNING 实例」按 processInstanceId 再拉引擎任务。
+     * 覆盖：assignee 未写入、userId 与引擎不一致、RestTemplate 静默失败等导致待办为空的场景。
+     */
+    private void mergeTasksFromRunningProcessInstancesForUser(String userId, List<TaskInfo> allTasks) {
+        List<ProcessInstance> running = processInstanceRepository.findByStartUserIdAndStatus(userId, "RUNNING");
+        if (running.isEmpty()) {
+            return;
+        }
+        log.info("Flowable user-task query was empty; merging from {} RUNNING process instance(s) for user {}",
+                running.size(), userId);
+        Set<String> seen = allTasks.stream()
+                .map(TaskInfo::getTaskId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(HashSet::new));
+        for (ProcessInstance pi : running) {
+            String pid = pi.getId();
+            if (pid == null || pid.isBlank()) {
+                continue;
+            }
+            try {
+                Optional<Map<String, Object>> tr = workflowEngineClient.getProcessInstanceTasks(pid);
+                if (tr.isEmpty()) {
+                    continue;
+                }
+                List<Map<String, Object>> tasks = WorkflowEnginePayloadHelper.taskListFromPayload(tr.get());
+                if (tasks == null || tasks.isEmpty()) {
+                    continue;
+                }
+                for (Map<String, Object> taskMap : tasks) {
+                    TaskInfo taskInfo = convertMapToTaskInfo(taskMap);
+                    if (taskInfo.getTaskId() == null || seen.contains(taskInfo.getTaskId())) {
+                        continue;
+                    }
+                    if (isProcessWithdrawn(taskInfo.getProcessInstanceId())) {
+                        continue;
+                    }
+                    seen.add(taskInfo.getTaskId());
+                    allTasks.add(taskInfo);
+                }
+            } catch (Exception e) {
+                log.warn("Fallback task query failed for processInstanceId={}: {}", pid, e.getMessage());
+            }
+        }
     }
     
     /**
