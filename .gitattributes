@@ -6,3 +6,8 @@
 
 # SQL scripts
 *.sql text eol=lf
+
+# TypeScript / Vue (frontend; consistent with CI/Linux and avoid CRLF noise on Windows)
+*.ts text eol=lf
+*.tsx text eol=lf
+*.vue text eol=lf
