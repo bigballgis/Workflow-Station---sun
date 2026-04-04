@@ -219,6 +219,29 @@ public class TaskProcessComponent {
     }
 
     /**
+     * JWT 与引擎侧用户 ID 比较：trim，避免首尾空格导致误判。
+     */
+    private static boolean samePortalUserId(String a, String b) {
+        if (a == null || b == null) {
+            return false;
+        }
+        return a.trim().equals(b.trim());
+    }
+
+    private static boolean candidateUserIdsContain(List<String> candidateUserIds, String userId) {
+        if (candidateUserIds == null || userId == null) {
+            return false;
+        }
+        String u = userId.trim();
+        for (String id : candidateUserIds) {
+            if (id != null && u.equals(id.trim())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * 验证用户是否可以认领任务
      */
     public boolean canClaimTask(TaskInfo task, String userId) {
@@ -227,7 +250,7 @@ public class TaskProcessComponent {
 
         return switch (assignmentType != null ? assignmentType : "") {
             case "CANDIDATE_USERS" ->
-                    task.getCandidateUserIds() != null && task.getCandidateUserIds().contains(userId);
+                    candidateUserIdsContain(task.getCandidateUserIds(), userId);
             case "VIRTUAL_GROUP" -> {
                 if (assignee != null && !assignee.isEmpty()) {
                     yield isUserInVirtualGroup(userId, assignee);
@@ -253,23 +276,23 @@ public class TaskProcessComponent {
         String assignee = task.getAssignee();
 
         // 如果任务已分配给当前用户（包括认领后的任务），允许处理
-        if (assignee != null && userId.equals(assignee)) {
+        if (assignee != null && samePortalUserId(userId, assignee)) {
             return true;
         }
 
         // 直接分配给用户
-        if ("USER".equals(assignmentType) && assignee != null && userId.equals(assignee)) {
+        if ("USER".equals(assignmentType) && assignee != null && samePortalUserId(userId, assignee)) {
             return true;
         }
 
         // 委托任务
-        if ("DELEGATED".equals(assignmentType) && assignee != null && userId.equals(assignee)) {
+        if ("DELEGATED".equals(assignmentType) && assignee != null && samePortalUserId(userId, assignee)) {
             return true;
         }
 
         // Flowable 候选人池：必须在候选人列表中
         if ("CANDIDATE_USERS".equals(assignmentType)) {
-            return task.getCandidateUserIds() != null && task.getCandidateUserIds().contains(userId);
+            return candidateUserIdsContain(task.getCandidateUserIds(), userId);
         }
 
         // 实体管理者任务（ENTITY_MANAGER）
@@ -297,7 +320,7 @@ public class TaskProcessComponent {
             List<DelegationRule> delegations = delegationRuleRepository
                     .findActiveDelegationsForDelegate(userId, LocalDateTime.now());
             for (DelegationRule delegation : delegations) {
-                if (assignee.equals(delegation.getDelegatorId())) {
+                if (samePortalUserId(assignee, delegation.getDelegatorId())) {
                     return true;
                 }
             }
@@ -316,10 +339,10 @@ public class TaskProcessComponent {
         if (canProcessTask(task, userId)) {
             return true;
         }
-        if (task.getInitiatorId() != null && userId.equals(task.getInitiatorId())) {
+        if (samePortalUserId(userId, task.getInitiatorId())) {
             return true;
         }
-        if (task.getAssignee() != null && userId.equals(task.getAssignee())) {
+        if (task.getAssignee() != null && samePortalUserId(userId, task.getAssignee())) {
             return true;
         }
         return false;

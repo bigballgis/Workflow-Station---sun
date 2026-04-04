@@ -58,9 +58,10 @@ public class TaskController {
             @PathVariable String taskId) {
         TaskInfo task = taskQueryComponent.getTaskById(taskId)
                 .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
-        if (userId != null && !taskProcessComponent.canProcessTask(task, userId)) {
-            log.warn("User {} denied access to task {} (assignee={}, assignmentType={})",
-                    userId, taskId, task.getAssignee(), task.getAssignmentType());
+        // 与 TaskFormController 一致：可查看详情 = canViewTaskForm（含发起人、处理人），非仅 canProcessTask
+        if (userId != null && !taskProcessComponent.canViewTaskForm(task, userId)) {
+            log.warn("User {} denied access to task {} (assignee={}, assignmentType={}, initiatorId={})",
+                    userId, taskId, task.getAssignee(), task.getAssignmentType(), task.getInitiatorId());
             return ApiResponse.error("403", "You do not have permission to access this task");
         }
         return ApiResponse.success(task);

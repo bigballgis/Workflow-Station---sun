@@ -217,6 +217,31 @@ public class TaskQueryComponent {
         log.debug("Process {} not found in database", processInstanceId);
         return false;
     }
+
+    /**
+     * 引擎 REST 经 Map 反序列化时，用户 ID 可能为 JSON 数字（Long），不能直接 (String) 强转，
+     * 否则运行时异常或字段丢失，门户会误认为 assignee 为空，权限校验失败。
+     */
+    private static String engineStringField(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof String s) {
+            return s.isBlank() ? null : s.trim();
+        }
+        if (value instanceof Number n) {
+            double d = n.doubleValue();
+            if (Double.isFinite(d) && Math.floor(d) == d) {
+                return String.valueOf(n.longValue());
+            }
+            return n.toString();
+        }
+        if (value instanceof Boolean b) {
+            return b.toString();
+        }
+        String t = value.toString().trim();
+        return t.isEmpty() ? null : t;
+    }
     
     /**
      * Convert a Map to TaskInfo.
@@ -225,7 +250,7 @@ public class TaskQueryComponent {
         // Prefer processDefinitionKey; extract from processDefinitionId if absent
         String processDefinitionKey = (String) taskMap.get("processDefinitionKey");
         if (processDefinitionKey == null || processDefinitionKey.isEmpty()) {
-            String processDefinitionId = (String) taskMap.get("processDefinitionId");
+            String processDefinitionId = engineStringField(taskMap.get("processDefinitionId"));
             processDefinitionKey = extractProcessDefinitionKey(processDefinitionId);
         }
         
@@ -236,13 +261,13 @@ public class TaskQueryComponent {
         }
         
         // Get initiator info
-        String initiatorId = (String) taskMap.get("initiatorId");
-        String initiatorName = (String) taskMap.get("initiatorName");
+        String initiatorId = engineStringField(taskMap.get("initiatorId"));
+        String initiatorName = engineStringField(taskMap.get("initiatorName"));
         
         // Get current assignee
-        String currentAssignee = (String) taskMap.get("currentAssignee");
+        String currentAssignee = engineStringField(taskMap.get("currentAssignee"));
         // Get current assignee name; fall back to currentAssignee if not available
-        String currentAssigneeName = (String) taskMap.get("currentAssigneeName");
+        String currentAssigneeName = engineStringField(taskMap.get("currentAssigneeName"));
         if (currentAssigneeName == null || currentAssigneeName.isEmpty()) {
             currentAssigneeName = currentAssignee;
         }
@@ -251,7 +276,13 @@ public class TaskQueryComponent {
         List<String> candidateGroupIds = parseStringIdList(taskMap.get("candidateGroupIds"));
 
         // Determine assignment type: prefer engine value, otherwise infer
-        String assignmentType = taskMap.get("assignmentType") != null ? taskMap.get("assignmentType").toString() : null;
+        String assignmentType = null;
+        Object atObj = taskMap.get("assignmentType");
+        if (atObj instanceof Enum<?> en) {
+            assignmentType = en.name();
+        } else if (atObj != null) {
+            assignmentType = atObj.toString().trim();
+        }
         if (assignmentType == null || assignmentType.isEmpty()) {
             if (currentAssignee != null && !currentAssignee.isEmpty()) {
                 assignmentType = "USER";
@@ -267,10 +298,10 @@ public class TaskQueryComponent {
         Map<String, Object> variables = (Map<String, Object>) taskMap.get("variables");
         
         return TaskInfo.builder()
-                .taskId((String) taskMap.get("taskId"))
+                .taskId(engineStringField(taskMap.get("taskId")))
                 .taskName((String) taskMap.get("taskName"))
                 .description((String) taskMap.get("taskDescription"))
-                .processInstanceId((String) taskMap.get("processInstanceId"))
+                .processInstanceId(engineStringField(taskMap.get("processInstanceId")))
                 .processDefinitionKey(processDefinitionKey)
                 .processDefinitionName(processDefinitionName)
                 .assignmentType(assignmentType)
@@ -791,7 +822,7 @@ public class TaskQueryComponent {
         }
 
         // Look up the actual function unit name from up_process_instance by processInstanceId, overriding the BPMN name returned by Flowable
-        String processInstanceId = (String) taskMap.get("processInstanceId");
+        String processInstanceId = engineStringField(taskMap.get("processInstanceId"));
         if (processInstanceId != null && !processInstanceId.isEmpty()) {
             try {
                 processInstanceRepository.findById(processInstanceId).ifPresent(instance -> {
@@ -808,13 +839,13 @@ public class TaskQueryComponent {
         }
         
         return TaskInfo.builder()
-                .taskId((String) taskMap.get("taskId"))
+                .taskId(engineStringField(taskMap.get("taskId")))
                 .taskName((String) taskMap.get("taskName"))
                 .description((String) taskMap.get("taskDescription"))
-                .processInstanceId((String) taskMap.get("processInstanceId"))
+                .processInstanceId(engineStringField(taskMap.get("processInstanceId")))
                 .processDefinitionKey(processDefinitionKey)
                 .processDefinitionName(processDefinitionName)
-                .assignee((String) taskMap.get("assignee"))
+                .assignee(engineStringField(taskMap.get("assignee")))
                 .status("COMPLETED")
                 .createTime(parseDateTime(taskMap.get("startTime")))
                 .completedTime(parseDateTime(taskMap.get("endTime")))
