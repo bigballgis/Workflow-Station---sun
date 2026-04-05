@@ -2,7 +2,6 @@ package com.workflow.component;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import com.workflow.component.DataAccessSecurityComponent.*;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -69,7 +68,7 @@ class DataAccessSecurityComponentTest {
         @DisplayName("定义行级权限策略成功")
         void defineRowLevelPolicy_Success() {
             // Given
-            DataAccessSecurityComponent.RowLevelPolicy policy = new DataAccessSecurityComponent.RowLevelPolicy();
+            RowLevelPolicy policy = new RowLevelPolicy();
             policy.setPolicyId("policy-001");
             policy.setTableName("orders");
             policy.setConditionExpression("owner_id = ${username}");
@@ -95,7 +94,7 @@ class DataAccessSecurityComponentTest {
             when(securityManagerComponent.getUserRoles(username)).thenReturn(Set.of("USER"));
 
             // When
-            DataAccessSecurityComponent.RowAccessResult result = 
+            RowAccessResult result = 
                     dataAccessSecurity.checkRowAccess(username, tableName, rowData);
 
             // Then
@@ -106,7 +105,7 @@ class DataAccessSecurityComponentTest {
         @DisplayName("允许列表中的用户可以访问")
         void checkRowAccess_AllowedUserCanAccess() {
             // Given
-            DataAccessSecurityComponent.RowLevelPolicy policy = new DataAccessSecurityComponent.RowLevelPolicy();
+            RowLevelPolicy policy = new RowLevelPolicy();
             policy.setPolicyId("policy-001");
             policy.setTableName("orders");
             policy.setConditionExpression("owner_id = ${username}");
@@ -117,7 +116,7 @@ class DataAccessSecurityComponentTest {
             when(securityManagerComponent.getUserRoles("admin")).thenReturn(Set.of("USER"));
 
             // When
-            DataAccessSecurityComponent.RowAccessResult result = 
+            RowAccessResult result = 
                     dataAccessSecurity.checkRowAccess("admin", "orders", Map.of("owner_id", "other"));
 
             // Then
@@ -128,7 +127,7 @@ class DataAccessSecurityComponentTest {
         @DisplayName("允许角色中的用户可以访问")
         void checkRowAccess_AllowedRoleCanAccess() {
             // Given
-            DataAccessSecurityComponent.RowLevelPolicy policy = new DataAccessSecurityComponent.RowLevelPolicy();
+            RowLevelPolicy policy = new RowLevelPolicy();
             policy.setPolicyId("policy-001");
             policy.setTableName("orders");
             policy.setConditionExpression("owner_id = ${username}");
@@ -139,7 +138,7 @@ class DataAccessSecurityComponentTest {
             when(securityManagerComponent.getUserRoles("user1")).thenReturn(Set.of("ADMIN"));
 
             // When
-            DataAccessSecurityComponent.RowAccessResult result = 
+            RowAccessResult result = 
                     dataAccessSecurity.checkRowAccess("user1", "orders", Map.of("owner_id", "other"));
 
             // Then
@@ -150,7 +149,7 @@ class DataAccessSecurityComponentTest {
         @DisplayName("条件满足时允许访问")
         void checkRowAccess_ConditionMetAllowsAccess() {
             // Given
-            DataAccessSecurityComponent.RowLevelPolicy policy = new DataAccessSecurityComponent.RowLevelPolicy();
+            RowLevelPolicy policy = new RowLevelPolicy();
             policy.setPolicyId("policy-001");
             policy.setTableName("orders");
             policy.setConditionExpression("owner_id = ${username}");
@@ -160,7 +159,7 @@ class DataAccessSecurityComponentTest {
             when(securityManagerComponent.getUserRoles("user1")).thenReturn(Set.of("USER"));
 
             // When
-            DataAccessSecurityComponent.RowAccessResult result = 
+            RowAccessResult result = 
                     dataAccessSecurity.checkRowAccess("user1", "orders", Map.of("owner_id", "user1"));
 
             // Then
@@ -171,7 +170,7 @@ class DataAccessSecurityComponentTest {
         @DisplayName("条件不满足时拒绝访问")
         void checkRowAccess_ConditionNotMetDeniesAccess() {
             // Given
-            DataAccessSecurityComponent.RowLevelPolicy policy = new DataAccessSecurityComponent.RowLevelPolicy();
+            RowLevelPolicy policy = new RowLevelPolicy();
             policy.setPolicyId("policy-001");
             policy.setTableName("orders");
             policy.setConditionExpression("owner_id = ${username}");
@@ -181,7 +180,7 @@ class DataAccessSecurityComponentTest {
             when(securityManagerComponent.getUserRoles("user1")).thenReturn(Set.of("USER"));
 
             // When
-            DataAccessSecurityComponent.RowAccessResult result = 
+            RowAccessResult result = 
                     dataAccessSecurity.checkRowAccess("user1", "orders", Map.of("owner_id", "other_user"));
 
             // Then
@@ -206,7 +205,7 @@ class DataAccessSecurityComponentTest {
         @DisplayName("生成行级过滤条件 - 有策略返回条件")
         void generateRowFilterCondition_WithPolicyReturnsCondition() {
             // Given
-            DataAccessSecurityComponent.RowLevelPolicy policy = new DataAccessSecurityComponent.RowLevelPolicy();
+            RowLevelPolicy policy = new RowLevelPolicy();
             policy.setPolicyId("policy-001");
             policy.setTableName("orders");
             policy.setConditionExpression("owner_id = ${username}");
@@ -233,7 +232,7 @@ class DataAccessSecurityComponentTest {
         @DisplayName("定义列级权限策略成功")
         void defineColumnLevelPolicy_Success() {
             // Given
-            DataAccessSecurityComponent.ColumnLevelPolicy policy = new DataAccessSecurityComponent.ColumnLevelPolicy();
+            ColumnLevelPolicy policy = new ColumnLevelPolicy();
             policy.setPolicyId("col-policy-001");
             policy.setTableName("users");
             policy.setHiddenColumns(Set.of("password", "secret_key"));
@@ -268,7 +267,7 @@ class DataAccessSecurityComponentTest {
         @DisplayName("隐藏列对普通用户不可见")
         void getVisibleColumns_HiddenColumnsNotVisible() {
             // Given
-            DataAccessSecurityComponent.ColumnLevelPolicy policy = new DataAccessSecurityComponent.ColumnLevelPolicy();
+            ColumnLevelPolicy policy = new ColumnLevelPolicy();
             policy.setPolicyId("col-policy-001");
             policy.setTableName("users");
             policy.setHiddenColumns(Set.of("password", "secret_key"));
@@ -291,7 +290,7 @@ class DataAccessSecurityComponentTest {
         @DisplayName("允许角色可以看到所有列")
         void getVisibleColumns_AllowedRoleSeesAllColumns() {
             // Given
-            DataAccessSecurityComponent.ColumnLevelPolicy policy = new DataAccessSecurityComponent.ColumnLevelPolicy();
+            ColumnLevelPolicy policy = new ColumnLevelPolicy();
             policy.setPolicyId("col-policy-001");
             policy.setTableName("users");
             policy.setHiddenColumns(Set.of("password", "secret_key"));
@@ -314,7 +313,7 @@ class DataAccessSecurityComponentTest {
         @DisplayName("获取需要脱敏的列")
         void getMaskedColumns_ReturnsMaskedColumns() {
             // Given
-            DataAccessSecurityComponent.ColumnLevelPolicy policy = new DataAccessSecurityComponent.ColumnLevelPolicy();
+            ColumnLevelPolicy policy = new ColumnLevelPolicy();
             policy.setPolicyId("col-policy-001");
             policy.setTableName("users");
             policy.setMaskedColumns(Set.of("phone", "email", "id_card"));
@@ -334,7 +333,7 @@ class DataAccessSecurityComponentTest {
         @DisplayName("允许角色不需要脱敏")
         void getMaskedColumns_AllowedRoleNoMasking() {
             // Given
-            DataAccessSecurityComponent.ColumnLevelPolicy policy = new DataAccessSecurityComponent.ColumnLevelPolicy();
+            ColumnLevelPolicy policy = new ColumnLevelPolicy();
             policy.setPolicyId("col-policy-001");
             policy.setTableName("users");
             policy.setMaskedColumns(Set.of("phone", "email"));
@@ -429,7 +428,7 @@ class DataAccessSecurityComponentTest {
         @DisplayName("自定义脱敏规则")
         void maskData_CustomRule() {
             // Given
-            DataAccessSecurityComponent.DataMaskRule rule = new DataAccessSecurityComponent.DataMaskRule();
+            DataMaskRule rule = new DataMaskRule();
             rule.setRuleId("custom-001");
             rule.setDataType("CUSTOM");
             rule.setKeepStart(2);
@@ -508,7 +507,7 @@ class DataAccessSecurityComponentTest {
         @DisplayName("定义告警规则成功")
         void defineAlertRule_Success() {
             // Given
-            DataAccessSecurityComponent.AlertRule rule = new DataAccessSecurityComponent.AlertRule();
+            AlertRule rule = new AlertRule();
             rule.setRuleId("alert-001");
             rule.setRuleName("登录失败告警");
             rule.setEventType("LOGIN_FAILED");
@@ -585,7 +584,7 @@ class DataAccessSecurityComponentTest {
             when(stringRedisTemplate.keys(anyString())).thenReturn(Collections.emptySet());
 
             // When
-            List<DataAccessSecurityComponent.SecurityEvent> events = 
+            List<SecurityEvent> events = 
                     dataAccessSecurity.querySecurityEvents("LOGIN_FAILED", null, null, null, 100);
 
             // Then
@@ -635,7 +634,7 @@ class DataAccessSecurityComponentTest {
         @DisplayName("创建允许结果")
         void allowed_Success() {
             // When
-            DataAccessSecurityComponent.RowAccessResult result = DataAccessSecurityComponent.RowAccessResult.allowed();
+            RowAccessResult result = RowAccessResult.allowed();
 
             // Then
             assertThat(result.isAllowed()).isTrue();
@@ -647,8 +646,8 @@ class DataAccessSecurityComponentTest {
         @DisplayName("创建拒绝结果")
         void denied_Success() {
             // When
-            DataAccessSecurityComponent.RowAccessResult result = 
-                    DataAccessSecurityComponent.RowAccessResult.denied("policy-001", "权限不足");
+            RowAccessResult result = 
+                    RowAccessResult.denied("policy-001", "权限不足");
 
             // Then
             assertThat(result.isAllowed()).isFalse();

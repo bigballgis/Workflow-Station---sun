@@ -1233,21 +1233,43 @@ const getRequestTypeLabel = (type: string | undefined) => {
   return map[type] || type
 }
 
+/** 「我的申请」列表接口返回 PermissionRequestListItem：仅有 targetId/targetName，无 businessUnit* 扁平字段 */
+const meaningfulListTargetName = (row: any): string | undefined => {
+  const n = row?.targetName
+  if (typeof n !== 'string') return undefined
+  const t = n.trim()
+  if (t && t !== '-') return t
+  return undefined
+}
+
 // 获取申请目标名称
 const getTargetName = (row: any) => {
+  if (!row) return '-'
+  const listTn = meaningfulListTargetName(row)
+  const listTid =
+    row.targetId != null && String(row.targetId).trim() !== '' ? String(row.targetId).trim() : undefined
+
   if (row.requestType === 'BUSINESS_UNIT_EXIT') {
-    return row.businessUnitName || row.businessUnitId || '-'
+    return row.businessUnitName || listTn || row.businessUnitId || listTid || '-'
   }
   if (row.requestType === 'BUSINESS_UNIT_ROLE_REMOVAL') {
-    const bu = row.businessUnitName || row.businessUnitId || ''
-    const role = row.roleName || row.roleId || ''
-    return [bu, role].filter(Boolean).join(' / ') || '-'
+    const bu = row.businessUnitName || listTn || row.businessUnitId || listTid || ''
+    const role =
+      row.roleName ||
+      row.roleId ||
+      (Array.isArray(row.roleNames)
+        ? row.roleNames.find((x: unknown) => x != null && String(x).trim() !== '')
+        : undefined)
+    const roleStr = role != null ? String(role).trim() : ''
+    const joined = [bu, roleStr].filter(Boolean).join(' / ')
+    return joined || '-'
   }
+  if (listTn) return listTn
   if (row.targetName) return row.targetName
   if (row.virtualGroupName) return row.virtualGroupName
   if (row.businessUnitName) return row.businessUnitName
   if (row.roleName) return row.roleName
-  return '-'
+  return listTid || '-'
 }
 
 const formatDateTime = (dateStr: string) => {

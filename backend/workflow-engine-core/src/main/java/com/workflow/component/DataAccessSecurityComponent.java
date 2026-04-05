@@ -64,38 +64,6 @@ public class DataAccessSecurityComponent {
     // ==================== 行级权限控制 ====================
 
     /**
-     * 行级权限策略
-     */
-    public static class RowLevelPolicy {
-        private String policyId;
-        private String tableName;
-        private String conditionExpression;
-        private Set<String> allowedRoles;
-        private Set<String> allowedUsers;
-        private String description;
-        private boolean enabled;
-        private LocalDateTime createdTime;
-        
-        // Getters and Setters
-        public String getPolicyId() { return policyId; }
-        public void setPolicyId(String policyId) { this.policyId = policyId; }
-        public String getTableName() { return tableName; }
-        public void setTableName(String tableName) { this.tableName = tableName; }
-        public String getConditionExpression() { return conditionExpression; }
-        public void setConditionExpression(String conditionExpression) { this.conditionExpression = conditionExpression; }
-        public Set<String> getAllowedRoles() { return allowedRoles; }
-        public void setAllowedRoles(Set<String> allowedRoles) { this.allowedRoles = allowedRoles; }
-        public Set<String> getAllowedUsers() { return allowedUsers; }
-        public void setAllowedUsers(Set<String> allowedUsers) { this.allowedUsers = allowedUsers; }
-        public String getDescription() { return description; }
-        public void setDescription(String description) { this.description = description; }
-        public boolean isEnabled() { return enabled; }
-        public void setEnabled(boolean enabled) { this.enabled = enabled; }
-        public LocalDateTime getCreatedTime() { return createdTime; }
-        public void setCreatedTime(LocalDateTime createdTime) { this.createdTime = createdTime; }
-    }
-
-    /**
      * 定义行级权限策略
      */
     public void defineRowLevelPolicy(RowLevelPolicy policy) {
@@ -223,44 +191,6 @@ public class DataAccessSecurityComponent {
     // ==================== 列级权限控制 ====================
 
     /**
-     * 列级权限策略
-     */
-    public static class ColumnLevelPolicy {
-        private String policyId;
-        private String tableName;
-        private Set<String> visibleColumns;
-        private Set<String> hiddenColumns;
-        private Set<String> maskedColumns;
-        private Set<String> allowedRoles;
-        private Set<String> allowedUsers;
-        private String description;
-        private boolean enabled;
-        private LocalDateTime createdTime;
-        
-        // Getters and Setters
-        public String getPolicyId() { return policyId; }
-        public void setPolicyId(String policyId) { this.policyId = policyId; }
-        public String getTableName() { return tableName; }
-        public void setTableName(String tableName) { this.tableName = tableName; }
-        public Set<String> getVisibleColumns() { return visibleColumns; }
-        public void setVisibleColumns(Set<String> visibleColumns) { this.visibleColumns = visibleColumns; }
-        public Set<String> getHiddenColumns() { return hiddenColumns; }
-        public void setHiddenColumns(Set<String> hiddenColumns) { this.hiddenColumns = hiddenColumns; }
-        public Set<String> getMaskedColumns() { return maskedColumns; }
-        public void setMaskedColumns(Set<String> maskedColumns) { this.maskedColumns = maskedColumns; }
-        public Set<String> getAllowedRoles() { return allowedRoles; }
-        public void setAllowedRoles(Set<String> allowedRoles) { this.allowedRoles = allowedRoles; }
-        public Set<String> getAllowedUsers() { return allowedUsers; }
-        public void setAllowedUsers(Set<String> allowedUsers) { this.allowedUsers = allowedUsers; }
-        public String getDescription() { return description; }
-        public void setDescription(String description) { this.description = description; }
-        public boolean isEnabled() { return enabled; }
-        public void setEnabled(boolean enabled) { this.enabled = enabled; }
-        public LocalDateTime getCreatedTime() { return createdTime; }
-        public void setCreatedTime(LocalDateTime createdTime) { this.createdTime = createdTime; }
-    }
-
-    /**
      * 定义列级权限策略
      */
     public void defineColumnLevelPolicy(ColumnLevelPolicy policy) {
@@ -369,38 +299,6 @@ public class DataAccessSecurityComponent {
     }
 
     // ==================== 数据脱敏和匿名化 ====================
-
-    /**
-     * 数据脱敏规则
-     */
-    public static class DataMaskRule {
-        private String ruleId;
-        private String ruleName;
-        private String dataType; // PHONE, ID_CARD, EMAIL, BANK_CARD, NAME, ADDRESS, CUSTOM
-        private String maskPattern; // 脱敏模式
-        private String replacement; // 替换字符
-        private int keepStart; // 保留开头字符数
-        private int keepEnd; // 保留结尾字符数
-        private boolean enabled;
-        
-        // Getters and Setters
-        public String getRuleId() { return ruleId; }
-        public void setRuleId(String ruleId) { this.ruleId = ruleId; }
-        public String getRuleName() { return ruleName; }
-        public void setRuleName(String ruleName) { this.ruleName = ruleName; }
-        public String getDataType() { return dataType; }
-        public void setDataType(String dataType) { this.dataType = dataType; }
-        public String getMaskPattern() { return maskPattern; }
-        public void setMaskPattern(String maskPattern) { this.maskPattern = maskPattern; }
-        public String getReplacement() { return replacement; }
-        public void setReplacement(String replacement) { this.replacement = replacement; }
-        public int getKeepStart() { return keepStart; }
-        public void setKeepStart(int keepStart) { this.keepStart = keepStart; }
-        public int getKeepEnd() { return keepEnd; }
-        public void setKeepEnd(int keepEnd) { this.keepEnd = keepEnd; }
-        public boolean isEnabled() { return enabled; }
-        public void setEnabled(boolean enabled) { this.enabled = enabled; }
-    }
 
     /**
      * 定义数据脱敏规则
@@ -592,79 +490,6 @@ public class DataAccessSecurityComponent {
     }
 
     // ==================== 安全事件监控和告警 ====================
-
-    /**
-     * 告警规则
-     */
-    public static class AlertRule {
-        private String ruleId;
-        private String ruleName;
-        private String eventType;
-        private int threshold; // 阈值
-        private int timeWindowMinutes; // 时间窗口（分钟）
-        private String severity; // HIGH, MEDIUM, LOW
-        private List<String> notifyChannels; // EMAIL, SMS, WEBHOOK
-        private List<String> notifyUsers;
-        private boolean enabled;
-        
-        // Getters and Setters
-        public String getRuleId() { return ruleId; }
-        public void setRuleId(String ruleId) { this.ruleId = ruleId; }
-        public String getRuleName() { return ruleName; }
-        public void setRuleName(String ruleName) { this.ruleName = ruleName; }
-        public String getEventType() { return eventType; }
-        public void setEventType(String eventType) { this.eventType = eventType; }
-        public int getThreshold() { return threshold; }
-        public void setThreshold(int threshold) { this.threshold = threshold; }
-        public int getTimeWindowMinutes() { return timeWindowMinutes; }
-        public void setTimeWindowMinutes(int timeWindowMinutes) { this.timeWindowMinutes = timeWindowMinutes; }
-        public String getSeverity() { return severity; }
-        public void setSeverity(String severity) { this.severity = severity; }
-        public List<String> getNotifyChannels() { return notifyChannels; }
-        public void setNotifyChannels(List<String> notifyChannels) { this.notifyChannels = notifyChannels; }
-        public List<String> getNotifyUsers() { return notifyUsers; }
-        public void setNotifyUsers(List<String> notifyUsers) { this.notifyUsers = notifyUsers; }
-        public boolean isEnabled() { return enabled; }
-        public void setEnabled(boolean enabled) { this.enabled = enabled; }
-    }
-
-    /**
-     * 安全事件
-     */
-    public static class SecurityEvent {
-        private String eventId;
-        private String eventType;
-        private String username;
-        private String ipAddress;
-        private String resource;
-        private String action;
-        private String result;
-        private String description;
-        private Map<String, Object> details;
-        private LocalDateTime eventTime;
-        
-        // Getters and Setters
-        public String getEventId() { return eventId; }
-        public void setEventId(String eventId) { this.eventId = eventId; }
-        public String getEventType() { return eventType; }
-        public void setEventType(String eventType) { this.eventType = eventType; }
-        public String getUsername() { return username; }
-        public void setUsername(String username) { this.username = username; }
-        public String getIpAddress() { return ipAddress; }
-        public void setIpAddress(String ipAddress) { this.ipAddress = ipAddress; }
-        public String getResource() { return resource; }
-        public void setResource(String resource) { this.resource = resource; }
-        public String getAction() { return action; }
-        public void setAction(String action) { this.action = action; }
-        public String getResult() { return result; }
-        public void setResult(String result) { this.result = result; }
-        public String getDescription() { return description; }
-        public void setDescription(String description) { this.description = description; }
-        public Map<String, Object> getDetails() { return details; }
-        public void setDetails(Map<String, Object> details) { this.details = details; }
-        public LocalDateTime getEventTime() { return eventTime; }
-        public void setEventTime(LocalDateTime eventTime) { this.eventTime = eventTime; }
-    }
 
     /**
      * 定义告警规则
@@ -1101,35 +926,5 @@ public class DataAccessSecurityComponent {
         defineAlertRule(permissionDeniedRule);
         
         log.info("默认告警规则初始化完成");
-    }
-
-    // ==================== 结果类 ====================
-
-    /**
-     * 行访问结果
-     */
-    public static class RowAccessResult {
-        private boolean allowed;
-        private String policyId;
-        private String message;
-        
-        public static RowAccessResult allowed() {
-            RowAccessResult result = new RowAccessResult();
-            result.allowed = true;
-            result.message = "访问允许";
-            return result;
-        }
-        
-        public static RowAccessResult denied(String policyId, String message) {
-            RowAccessResult result = new RowAccessResult();
-            result.allowed = false;
-            result.policyId = policyId;
-            result.message = message;
-            return result;
-        }
-        
-        public boolean isAllowed() { return allowed; }
-        public String getPolicyId() { return policyId; }
-        public String getMessage() { return message; }
     }
 }
