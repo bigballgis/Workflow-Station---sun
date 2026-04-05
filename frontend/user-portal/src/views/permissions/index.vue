@@ -579,8 +579,10 @@ import {
   type UserBusinessUnitRole
 } from '@/api/permission'
 import { getStoredUser } from '@/api/auth'
+import { usePendingApprovalStore } from '@/stores/pendingApproval'
 
 const { t } = useI18n()
+const pendingApprovalStore = usePendingApprovalStore()
 
 const myRequestTab = ref('inProgress')
 const approvalTab = ref('pendingApproval')
@@ -749,6 +751,7 @@ const handleApprove = async () => {
     ElMessage.success(t('approval.approveSuccess'))
     approveDialogVisible.value = false
     await loadApproverPending()
+    await pendingApprovalStore.fetchPendingCount()
     approverHistoryList.value = []
     loadPendingRequests()
     loadHistoryRequests()
@@ -772,6 +775,7 @@ const handleReject = async () => {
     ElMessage.success(t('approval.rejectSuccess'))
     rejectDialogVisible.value = false
     await loadApproverPending()
+    await pendingApprovalStore.fetchPendingCount()
     approverHistoryList.value = []
     loadPendingRequests()
     loadHistoryRequests()
@@ -1356,6 +1360,7 @@ onMounted(async () => {
   if (isApprover.value) {
     loadApproverPending()
   }
+  void pendingApprovalStore.fetchPendingCount()
 })
 </script>
 

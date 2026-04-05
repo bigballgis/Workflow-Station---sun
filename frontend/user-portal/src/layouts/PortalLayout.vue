@@ -54,9 +54,28 @@
             <el-icon><Share /></el-icon>
             <template #title>{{ t('menu.delegations') }}</template>
           </el-menu-item>
-          <el-menu-item index="/permissions">
-            <el-icon><Key /></el-icon>
-            <template #title>{{ t('menu.permissions') }}</template>
+          <el-menu-item index="/permissions" class="menu-item-permissions">
+            <el-badge
+              :value="pendingApprovalCount"
+              :max="99"
+              :hidden="pendingApprovalCount === 0"
+              type="danger"
+              class="perm-menu-badge-icon"
+            >
+              <el-icon><Key /></el-icon>
+            </el-badge>
+            <template #title>
+              <span class="perm-menu-title-with-badge">
+                <span class="perm-menu-title-text">{{ t('menu.permissions') }}</span>
+                <el-badge
+                  :value="pendingApprovalCount"
+                  :max="99"
+                  :hidden="pendingApprovalCount === 0"
+                  type="danger"
+                  class="perm-menu-badge-text"
+                />
+              </span>
+            </template>
           </el-menu-item>
           <el-menu-item v-if="showFullPortal" index="/relation-tables">
             <el-icon><Grid /></el-icon>
@@ -86,8 +105,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import {
   HomeFilled, List, Plus, Document, Share, Key,
@@ -99,9 +119,12 @@ import { getStoredUser } from '@/api/auth'
 import UserProfileDropdown from '@/components/UserProfileDropdown.vue'
 import NotificationBadge from '@/components/NotificationBadge.vue'
 import { biDashboardApi } from '@/api/biDashboard'
+import { usePendingApprovalStore } from '@/stores/pendingApproval'
 
 const { t } = useI18n()
 const route = useRoute()
+const pendingApprovalStore = usePendingApprovalStore()
+const { count: pendingApprovalCount } = storeToRefs(pendingApprovalStore)
 
 const isCollapsed = ref(false)
 const cachedViews = ref(['Dashboard', 'Tasks', 'MyApplications'])
@@ -141,7 +164,15 @@ onMounted(() => {
   if (!isSelfServiceOnly.value) {
     checkBiDashboards()
   }
+  void pendingApprovalStore.fetchPendingCount()
 })
+
+watch(
+  () => route.path,
+  () => {
+    void pendingApprovalStore.fetchPendingCount()
+  }
+)
 
 const toggleCollapse = () => {
   isCollapsed.value = !isCollapsed.value
@@ -203,6 +234,48 @@ const toggleCollapse = () => {
   .portal-menu {
     flex: 1;
     border-right: none;
+
+    /* 展开：徽标在菜单文字右侧；收起：徽标在图标上 */
+    &:not(.el-menu--collapse) .menu-item-permissions .perm-menu-badge-icon :deep(.el-badge__content) {
+      display: none !important;
+    }
+    &.el-menu--collapse .menu-item-permissions .perm-menu-badge-text {
+      display: none !important;
+    }
+
+    /* el-menu-item 全局有 * { vertical-align: bottom }，会把徽标压到偏下；此处拉回垂直居中 */
+    .menu-item-permissions {
+      .perm-menu-title-with-badge,
+      .perm-menu-title-with-badge :deep(*) {
+        vertical-align: middle !important;
+      }
+
+      .perm-menu-badge-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      /* 角标相对图标垂直居中（默认 top:0 + translateY(-50%) 会贴在图标上沿） */
+      .perm-menu-badge-icon :deep(.el-badge__content.is-fixed) {
+        top: 50%;
+        transform: translateY(-50%) translateX(100%);
+      }
+    }
+
+    .menu-item-permissions .perm-menu-title-with-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      min-width: 0;
+    }
+    .menu-item-permissions .perm-menu-title-text {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
     
     .el-menu-item.is-active {
       background-color: rgba(219, 0, 17, 0.1);
