@@ -161,6 +161,33 @@ class TaskAssignmentListenerTest {
         }
 
         @Test
+        @DisplayName("Should read assigneeType from custom:properties container name (Flowable XML import)")
+        void shouldParseAssigneeTypeWhenPropertiesContainerHasNamespacePrefix() {
+            TaskEntity task = createMockTask();
+            when(task.getAssignee()).thenReturn(null);
+
+            BpmnModel bpmnModel = createBpmnModelWithExtensionsAndPropertiesContainerName("INITIATOR", "custom:properties",
+                    "http://workflow.platform/schema/custom");
+            when(repositoryService.getBpmnModel(PROCESS_DEFINITION_ID)).thenReturn(bpmnModel);
+
+            Map<String, Object> variables = new HashMap<>();
+            variables.put("initiator", INITIATOR_ID);
+            when(runtimeService.getVariables(PROCESS_INSTANCE_ID)).thenReturn(variables);
+
+            TaskAssigneeResolver.ResolveResult result = TaskAssigneeResolver.ResolveResult.builder()
+                    .assignee(INITIATOR_ID)
+                    .requiresClaim(false)
+                    .build();
+            when(taskAssigneeResolver.resolve(eq("INITIATOR"), isNull(), isNull(), eq(INITIATOR_ID), isNull()))
+                    .thenReturn(result);
+
+            FlowableEntityEventImpl event = createTaskCreatedEvent(task);
+            listener.onEvent(event);
+
+            verify(taskService).setAssignee(TASK_ID, INITIATOR_ID);
+        }
+
+        @Test
         @DisplayName("Should handle direct assignment types")
         void shouldHandleDirectAssignmentTypes() {
             TaskEntity task = createMockTask();
@@ -623,6 +650,44 @@ class TaskAssignmentListenerTest {
         process.addFlowElement(userTask);
         bpmnModel.addProcess(process);
         
+        return bpmnModel;
+    }
+
+    private BpmnModel createBpmnModelWithExtensionsAndPropertiesContainerName(
+            String assigneeType, String propertiesElementName, String propertiesNamespace) {
+        BpmnModel bpmnModel = new BpmnModel();
+        org.flowable.bpmn.model.Process process = new org.flowable.bpmn.model.Process();
+        process.setId("Process_1");
+
+        UserTask userTask = new UserTask();
+        userTask.setId(TASK_DEFINITION_KEY);
+        userTask.setName("Test Task");
+
+        Map<String, List<ExtensionElement>> extensionElements = new HashMap<>();
+
+        ExtensionElement propertiesElement = new ExtensionElement();
+        propertiesElement.setName(propertiesElementName);
+        propertiesElement.setNamespace(propertiesNamespace);
+
+        Map<String, List<ExtensionElement>> childElements = new HashMap<>();
+        List<ExtensionElement> propertyElements = new ArrayList<>();
+
+        ExtensionElement assigneeTypeProperty = new ExtensionElement();
+        assigneeTypeProperty.setName("property");
+        assigneeTypeProperty.setNamespace(propertiesNamespace);
+        assigneeTypeProperty.addAttribute(createAttribute("name", "assigneeType"));
+        assigneeTypeProperty.addAttribute(createAttribute("value", assigneeType));
+        propertyElements.add(assigneeTypeProperty);
+
+        childElements.put("property", propertyElements);
+        propertiesElement.setChildElements(childElements);
+
+        extensionElements.put("extensionElements", Arrays.asList(propertiesElement));
+        userTask.setExtensionElements(extensionElements);
+
+        process.addFlowElement(userTask);
+        bpmnModel.addProcess(process);
+
         return bpmnModel;
     }
     

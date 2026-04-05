@@ -589,10 +589,66 @@ public class TaskAssignmentListener implements FlowableEventListener {
                 if (container == null || container.getName() == null) {
                     continue;
                 }
-                if (!"properties".equalsIgnoreCase(container.getName())) {
+                // Flowable 解析 designer 导出的 custom:properties 时，getName() 可能是 "properties"
+                // 或带前缀如 "custom:properties"，仅 equals "properties" 会漏读 assigneeType
+                if (!isExtensionPropertiesContainer(container.getName())) {
                     continue;
                 }
                 String v = findPropertyInPropertiesContainer(container, propertyName);
+                if (v != null) {
+                    return v;
+                }
+            }
+        }
+        // 兜底：任意层级下的 property（兼容非标准嵌套）
+        for (List<ExtensionElement> group : userTask.getExtensionElements().values()) {
+            if (group == null) {
+                continue;
+            }
+            for (ExtensionElement root : group) {
+                String v = findExtensionPropertyRecursive(root, propertyName);
+                if (v != null) {
+                    return v;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static boolean isExtensionPropertiesContainer(String elementName) {
+        if (elementName == null || elementName.isBlank()) {
+            return false;
+        }
+        String n = elementName.trim();
+        if ("properties".equalsIgnoreCase(n)) {
+            return true;
+        }
+        int colon = n.lastIndexOf(':');
+        if (colon >= 0 && colon < n.length() - 1) {
+            return "properties".equalsIgnoreCase(n.substring(colon + 1));
+        }
+        return false;
+    }
+
+    private static String findExtensionPropertyRecursive(ExtensionElement el, String propertyName) {
+        if (el == null) {
+            return null;
+        }
+        if (el.getName() != null && "property".equalsIgnoreCase(el.getName())) {
+            String name = el.getAttributeValue(null, "name");
+            if (propertyName.equals(name)) {
+                return el.getAttributeValue(null, "value");
+            }
+        }
+        if (el.getChildElements() == null) {
+            return null;
+        }
+        for (List<ExtensionElement> children : el.getChildElements().values()) {
+            if (children == null) {
+                continue;
+            }
+            for (ExtensionElement child : children) {
+                String v = findExtensionPropertyRecursive(child, propertyName);
                 if (v != null) {
                     return v;
                 }
