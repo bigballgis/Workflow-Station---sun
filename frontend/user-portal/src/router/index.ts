@@ -1,5 +1,11 @@
 import { createRouter, createWebHistory, RouteRecordRaw } from 'vue-router'
-import { getStoredUser, type UserInfo } from '@/api/auth'
+import {
+  getCurrentUser,
+  getStoredUser,
+  reconcilePortalWorkspaceSession,
+  saveUser,
+  type UserInfo
+} from '@/api/auth'
 import i18n from '@/i18n'
 
 declare module 'vue-router' {
@@ -149,7 +155,7 @@ const router = createRouter({
 })
 
 // 路由守卫
-router.beforeEach((to, _from, next) => {
+router.beforeEach(async (to, _from, next) => {
   const t = i18n.global.t
   const titleKey = to.meta.titleKey as string
   const pageTitle = titleKey ? t(titleKey) : t('app.name')
@@ -159,6 +165,21 @@ router.beforeEach((to, _from, next) => {
   if (to.meta.requiresAuth !== false && !token && to.path !== '/login') {
     next('/login')
     return
+  }
+
+  // 补录 UBR 后须换发 JWT（reconcile），否则仅改 localStorage 仍被 PortalSelfServiceAccessFilter 拦截
+  if (token && to.path !== '/login' && to.path !== '/403') {
+    await reconcilePortalWorkspaceSession()
+    const cached = getStoredUser()
+    if (cached?.portalAccessMode === 'PERMISSION_SELF_SERVICE_ONLY') {
+      try {
+        const fresh = await getCurrentUser()
+        saveUser(fresh)
+        localStorage.setItem('userId', fresh.userId)
+      } catch {
+        // 保持缓存
+      }
+    }
   }
 
   const requiredRoles = to.meta.requiredRoles

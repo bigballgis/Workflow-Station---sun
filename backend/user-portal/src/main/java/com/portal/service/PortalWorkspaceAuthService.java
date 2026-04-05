@@ -37,7 +37,8 @@ public class PortalWorkspaceAuthService {
                 LEFT JOIN sys_business_units bu ON bu.id = ubr.business_unit_id
                 LEFT JOIN sys_roles r ON r.id = ubr.role_id
                 WHERE ubr.user_id = ?
-                  AND (r.id IS NULL OR r.status IS NULL OR TRIM(COALESCE(r.status, '')) = '' OR r.status = 'ACTIVE')
+                  AND (r.id IS NULL OR r.status IS NULL OR TRIM(COALESCE(r.status, '')) = ''
+                       OR UPPER(TRIM(r.status)) = 'ACTIVE')
                 ORDER BY bu.name NULLS LAST, r.name NULLS LAST
                 """;
         return jdbcTemplate.query(sql, (rs, i) -> WorkspaceContextRow.builder()
@@ -58,7 +59,8 @@ public class PortalWorkspaceAuthService {
                         SELECT COUNT(*) FROM sys_user_business_unit_roles ubr
                         LEFT JOIN sys_roles r ON r.id = ubr.role_id
                         WHERE ubr.user_id = ? AND ubr.business_unit_id = ? AND ubr.role_id = ?
-                          AND (r.id IS NULL OR r.status IS NULL OR TRIM(COALESCE(r.status, '')) = '' OR r.status = 'ACTIVE')
+                          AND (r.id IS NULL OR r.status IS NULL OR TRIM(COALESCE(r.status, '')) = ''
+                               OR UPPER(TRIM(r.status)) = 'ACTIVE')
                         """,
                 Integer.class,
                 userId, businessUnitId, roleId);

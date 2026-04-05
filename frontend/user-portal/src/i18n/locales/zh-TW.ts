@@ -226,6 +226,7 @@ export default {
     completedSnapshot: '已完成任務快照',
     noTaskForm: '目前階段未綁定任務表單',
     submitTaskForm: '提交',
+    allParticipantsMustHaveAssignee: '請為子表中每一列點擊「分配」指定處理人後再完成。',
   },
   process: {
     title: '新建申請',

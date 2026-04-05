@@ -426,14 +426,6 @@ public class TaskAssignmentListener implements FlowableEventListener {
             @SuppressWarnings("unchecked")
             Map<String, Object> currentItem = (Map<String, Object>) currentItemObj;
 
-            Object assigneeIdObj = currentItem.get("assigneeId");
-            if (assigneeIdObj == null) {
-                log.warn("assigneeId not found in currentItem for task {}, task will remain CREATED", taskId);
-                return;
-            }
-
-            String assigneeId = String.valueOf(assigneeIdObj);
-
             Object rowIdObj = currentItem.get("rowId");
             Object rowVersionObj = currentItem.get("rowVersion");
 
@@ -466,6 +458,7 @@ public class TaskAssignmentListener implements FlowableEventListener {
 
             String subTableId = null;
             String subTableName = null;
+            String assigneeFieldFromBpmn = null;
 
             if (processDefinitionId != null && taskDefinitionKey != null) {
                 BpmnModel bpmnModel = repositoryService.getBpmnModel(processDefinitionId);
@@ -474,9 +467,29 @@ public class TaskAssignmentListener implements FlowableEventListener {
                     if (flowElement instanceof UserTask userTask) {
                         subTableId = getExtensionProperty(userTask, "subTableId");
                         subTableName = getExtensionProperty(userTask, "subTableName");
+                        assigneeFieldFromBpmn = getExtensionProperty(userTask, "assigneeField");
                     }
                 }
             }
+
+            // 与门户 buildParticipantsCollection、子表列名对齐：优先 BPMN assigneeField，其次 assigneeId，再次 assignee_user_id
+            Object assigneeIdObj = null;
+            if (assigneeFieldFromBpmn != null && !assigneeFieldFromBpmn.isBlank()) {
+                assigneeIdObj = currentItem.get(assigneeFieldFromBpmn.trim());
+            }
+            if (assigneeIdObj == null) {
+                assigneeIdObj = currentItem.get("assigneeId");
+            }
+            if (assigneeIdObj == null) {
+                assigneeIdObj = currentItem.get("assignee_user_id");
+            }
+            if (assigneeIdObj == null) {
+                log.warn("No assignee in currentItem for task {} (tried assigneeField={}, assigneeId, assignee_user_id); task will remain CREATED",
+                        taskId, assigneeFieldFromBpmn);
+                return;
+            }
+
+            String assigneeId = String.valueOf(assigneeIdObj);
 
             try {
                 taskService.setAssignee(taskId, assigneeId);

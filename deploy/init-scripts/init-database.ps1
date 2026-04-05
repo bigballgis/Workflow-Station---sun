@@ -131,6 +131,20 @@ if (Test-Path $e2eVg) {
     if (-not (Exec-Sql -File $e2eVg -Desc "E2E virtual group members (lending)")) { exit 1 }
 }
 
+Write-Step "Step 5b/6: Loading Meeting Participant Info Collection..."
+$meetingParticipantScripts = @(
+    "16-meeting-participant-collection/00-create-function-unit.sql",
+    "16-meeting-participant-collection/01-create-tables.sql",
+    "16-meeting-participant-collection/02-create-bpmn-process.sql",
+    "16-meeting-participant-collection/03-form-table-bindings.sql",
+    "16-meeting-participant-collection/04-update-bpmn-diagram.sql"
+)
+foreach ($f in $meetingParticipantScripts) {
+    $path = Join-Path $ScriptDir $f
+    if (-not (Test-Path $path)) { Write-Fail "Missing: $f"; exit 1 }
+    if (-not (Exec-Sql -File $path -Desc (Split-Path $f -Leaf))) { exit 1 }
+}
+
 Write-Step "Step 6/6: Finished."
 
 Write-Host ""
@@ -139,6 +153,6 @@ Write-Host "  Database Initialization Complete!" -ForegroundColor Green
 Write-Host "=========================================" -ForegroundColor Green
 Write-Host "  Login: admin / admin123  (test: 44027893 / admin123)" -ForegroundColor White
 Write-Host "  Change password after first login!" -ForegroundColor Yellow
-Write-Host "  Demo function unit: Digital Lending V2 (EN), code fu-20260403-a1b2c6" -ForegroundColor White
+Write-Host "  Demo function units: Digital Lending V2 (EN) fu-20260403-a1b2c6; Meeting Participant Info Collection fu-20260403-a1b2c5" -ForegroundColor White
 Write-Host "  E2E users (password=password): e2e_zhangwei e2e_lina e2e_wangfang e2e_zhaomin e2e_sunqiang e2e_zhoujie e2e_wugang" -ForegroundColor White
 Write-Host "=========================================" -ForegroundColor Green

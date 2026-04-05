@@ -1,5 +1,6 @@
 package com.admin.controller;
 
+import com.admin.debug.AgentNdjsonLog;
 import com.admin.component.UserBusinessUnitRoleManagerComponent;
 import com.admin.dto.request.UserBusinessUnitRoleAssignRequest;
 import com.admin.dto.response.UserBusinessUnitRoleInfo;
@@ -41,7 +42,10 @@ public class UserBusinessUnitRoleController {
     @Operation(summary = "获取用户的业务单元角色列表")
     public ResponseEntity<List<UserBusinessUnitRoleInfo>> getUserBusinessUnitRoles(@PathVariable String userId) {
         List<UserBusinessUnitRole> roles = userBusinessUnitRoleRepository.findByUserId(userId);
-        
+        // #region agent log
+        AgentNdjsonLog.append("H_get", "UserBusinessUnitRoleController.getUserBusinessUnitRoles",
+                "UBR list from DB", Map.of("userId", userId, "count", roles.size()));
+        // #endregion
         // Fetch related entities
         List<String> userIds = roles.stream().map(UserBusinessUnitRole::getUserId).distinct().collect(Collectors.toList());
         List<String> businessUnitIds = roles.stream().map(UserBusinessUnitRole::getBusinessUnitId).distinct().collect(Collectors.toList());

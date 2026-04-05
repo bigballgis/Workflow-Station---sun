@@ -13,7 +13,7 @@
 --     binding: table=participants,  PRIMARY, EDITABLE, fk=NULL,       sort=1
 --
 -- Dependencies: 00, 01
--- Execution order: 00 → 01 → 02 → 03
+-- Execution order: 00 → 01 → 02 → 03 → 04
 -- =============================================================================
 
 DO $bindings$

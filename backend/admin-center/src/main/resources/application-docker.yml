@@ -1,5 +1,8 @@
 # Docker profile configuration for admin-center
 # Overrides default settings for Docker environment
+#
+# Debug NDJSON (com.admin.debug.AgentNdjsonLog): set env WORKFLOW_DEBUG_NDJSON_PATH=/app/logs/debug-864cd4.log
+# so logs land on the host volume (compose maps ./logs:/app/logs). See AgentNdjsonLog javadoc.
 
 # Application Configuration (platform-common)
 app:

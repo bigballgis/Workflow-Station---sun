@@ -6,7 +6,7 @@
 --       系统自动为每位参与人创建子任务 → 参与人填写信息 → 流程完成
 --
 -- Dependencies: None (this is the first script)
--- Execution order: 00 → 01 → 02 → 03
+-- Execution order: 00 → 01 → 02 → 03 → 04
 -- =============================================================================
 
 DO $main$
@@ -31,7 +31,7 @@ BEGIN
         'Meeting Participant Info Collection',
         '会议参与人信息收集流程：演示多实例子流程动态任务分发。组织者创建会议并添加参与人，为每位参与人分配处理人后，系统自动创建并行子任务，各参与人独立填写参会信息，全部完成后流程自动推进。',
         'PUBLISHED',
-        '1.0.0', '1.0.0',
+        '1.0.2', '1.0.0',
         true, true,
         CURRENT_TIMESTAMP, 0,
         'system', CURRENT_TIMESTAMP, 'system', CURRENT_TIMESTAMP
@@ -41,6 +41,9 @@ BEGIN
         description     = EXCLUDED.description,
         status          = EXCLUDED.status,
         current_version = EXCLUDED.current_version,
+        version         = EXCLUDED.version,
+        is_active       = EXCLUDED.is_active,
+        enabled         = EXCLUDED.enabled,
         updated_by      = EXCLUDED.updated_by,
         updated_at      = CURRENT_TIMESTAMP
     RETURNING id INTO v_function_unit_id;
@@ -64,6 +67,7 @@ BEGIN
             {"name":"ref_mc_time","type":"datePicker","field":"meeting_time","props":{"type":"datetime","placeholder":"请选择会议时间","valueFormat":"YYYY-MM-DD HH:mm:ss"},"title":"会议时间","_fc_id":"id_mc_time","hidden":false,"display":true,"validate":[{"message":"会议时间必填","trigger":"blur","required":true}],"_fc_drag_tag":"datePicker"},
             {"name":"ref_mc_location","type":"input","field":"location","props":{"maxlength":200,"placeholder":"请输入会议地点","showWordLimit":true},"title":"会议地点","_fc_id":"id_mc_location","hidden":false,"display":true,"validate":[{"message":"会议地点必填","trigger":"blur","required":true}],"_fc_drag_tag":"input"},
             {"name":"ref_mc_organizer","type":"input","field":"organizer_name","props":{"maxlength":100,"placeholder":"请输入组织者姓名","showWordLimit":true},"title":"组织者","_fc_id":"id_mc_organizer","hidden":false,"display":true,"validate":[{"message":"组织者必填","trigger":"blur","required":true}],"_fc_drag_tag":"input"},
+            {"name":"ref_mc_assigner","type":"user","field":"participant_assigner_user_id","props":{"placeholder":"搜索并选择负责「分配参与人」任务的处理人"},"title":"参与人分配责任人","_fc_id":"id_mc_assigner","hidden":false,"display":true,"validate":[{"message":"请选择参与人分配责任人","trigger":"change","required":true}],"_fc_drag_tag":"user"},
             {"name":"ref_mc_desc","type":"input","field":"description","props":{"rows":3,"type":"textarea","placeholder":"请输入会议说明"},"title":"会议说明","_fc_id":"id_mc_desc","hidden":false,"display":true,"_fc_drag_tag":"input"}
         ],"options":{"form":{"size":"default","inline":false,"labelWidth":"125px","labelPosition":"left","hideRequiredAsterisk":false},"resetBtn":{"show":false,"innerText":"重置"},"submitBtn":{"show":true,"innerText":"提交"}},"subForms":{}}'::jsonb,
         CURRENT_TIMESTAMP, CURRENT_TIMESTAMP

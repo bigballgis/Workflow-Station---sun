@@ -1,6 +1,7 @@
 package com.portal.client;
 
 import com.platform.common.util.ApiResponseBodyUnwrap;
+import com.portal.debug.AgentDebugLog;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -8,12 +9,15 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.*;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import jakarta.servlet.http.HttpServletRequest;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.HashMap;
 import java.util.List;
@@ -130,6 +134,10 @@ public class WorkflowEngineClient {
     public Optional<Map<String, Object>> startProcess(String processDefinitionKey, String businessKey, 
                                                        String startUserId, Map<String, Object> variables) {
         if (!isAvailable()) {
+            // #region agent log
+            AgentDebugLog.fdc174("WorkflowEngineClient.java:startProcess", "H3", "engine unavailable",
+                    Map.of("processDefinitionKey", processDefinitionKey != null ? processDefinitionKey : ""));
+            // #endregion
             return Optional.empty();
         }
         try {
@@ -151,13 +159,38 @@ public class WorkflowEngineClient {
                 new ParameterizedTypeReference<Map<String, Object>>() {});
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()));
+                Map<String, Object> unwrapped = ApiResponseBodyUnwrap.unwrapDataMap(response.getBody());
+                // #region agent log
+                AgentDebugLog.fdc174("WorkflowEngineClient.java:startProcess", "H3", "engine start http ok",
+                        Map.of(
+                                "httpStatus", response.getStatusCode().value(),
+                                "hasInstanceId", unwrapped != null && unwrapped.get("processInstanceId") != null));
+                // #endregion
+                return Optional.of(unwrapped);
             }
+            // #region agent log
+            AgentDebugLog.fdc174("WorkflowEngineClient.java:startProcess", "H3", "engine start unexpected response",
+                    Map.of(
+                            "httpStatus", response.getStatusCode().value(),
+                            "bodyNull", response.getBody() == null));
+            // #endregion
         } catch (org.springframework.web.client.HttpClientErrorException e) {
+            // #region agent log
+            AgentDebugLog.fdc174("WorkflowEngineClient.java:startProcess", "H3", "engine start client error",
+                    Map.of("httpStatus", e.getStatusCode().value(), "kind", "HttpClientError"));
+            // #endregion
             log.error("Failed to start process in workflow engine (HTTP {}): {}", e.getStatusCode(), e.getResponseBodyAsString());
         } catch (org.springframework.web.client.HttpServerErrorException e) {
+            // #region agent log
+            AgentDebugLog.fdc174("WorkflowEngineClient.java:startProcess", "H3", "engine start server error",
+                    Map.of("httpStatus", e.getStatusCode().value(), "kind", "HttpServerError"));
+            // #endregion
             log.error("Failed to start process in workflow engine (HTTP {}): {}", e.getStatusCode(), e.getResponseBodyAsString());
         } catch (Exception e) {
+            // #region agent log
+            AgentDebugLog.fdc174("WorkflowEngineClient.java:startProcess", "H3", "engine start exception",
+                    Map.of("ex", e.getClass().getSimpleName()));
+            // #endregion
             log.error("Failed to start process in workflow engine: {}", e.getMessage(), e);
         }
         return Optional.empty();
@@ -492,6 +525,63 @@ public class WorkflowEngineClient {
             }
         } catch (Exception e) {
             log.warn("Failed to transfer task in workflow engine: {}", e.getMessage());
+        }
+        return Optional.empty();
+    }
+
+    private static final ObjectMapper ENGINE_ERROR_JSON = new ObjectMapper();
+
+    /**
+     * 解析 workflow-engine 返回的 ApiResponse 错误体中的 message。
+     */
+    @SuppressWarnings("unchecked")
+    private static String parseWorkflowEngineErrorMessage(String json) {
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+        try {
+            Map<String, Object> m = ENGINE_ERROR_JSON.readValue(json, Map.class);
+            Object msg = m.get("message");
+            return msg != null ? String.valueOf(msg) : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * 分配子表行处理人（多实例子流程前置任务）
+     */
+    public Optional<Map<String, Object>> assignSubTableRow(String taskId, long rowId, String assigneeId) {
+        if (!isAvailable()) {
+            return Optional.empty();
+        }
+        try {
+            String url = workflowEngineUrl + "/api/v1/tasks/" + taskId + "/sub-table-rows/" + rowId + "/assign";
+
+            Map<String, Object> request = new HashMap<>();
+            request.put("assigneeId", assigneeId);
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            forwardInboundAuthorization(headers);
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(request, headers);
+
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    url, HttpMethod.POST, entity,
+                    new ParameterizedTypeReference<Map<String, Object>>() {});
+
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()));
+            }
+        } catch (HttpClientErrorException e) {
+            String msg = parseWorkflowEngineErrorMessage(e.getResponseBodyAsString());
+            log.warn("assignSubTableRow client error: status={}, message={}", e.getStatusCode(), msg);
+            Map<String, Object> err = new HashMap<>();
+            err.put("success", false);
+            err.put("message", msg != null ? msg : "Assignment failed");
+            return Optional.of(err);
+        } catch (Exception e) {
+            log.warn("Failed to assign sub-table row in workflow engine: {}", e.getMessage());
         }
         return Optional.empty();
     }

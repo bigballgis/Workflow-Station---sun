@@ -33,6 +33,12 @@
                       :summary-aggregations="getSummaryAggregations(field._bindingId)"
                       :validation-config="getSubTableValidation(field._bindingId)"
                       :upload-url="uploadUrl"
+                      :task-id="taskId"
+                      :assignee-field="subTableAssigneeField(field._bindingId)"
+                      :show-assign-button="showSubTableAssignColumn(field._bindingId)"
+                      :can-assign="!readonly && showSubTableAssignColumn(field._bindingId)"
+                      :enable-polling="enableSubTablePolling"
+                      :polling-interval="subTablePollingInterval"
                       @update:model-value="(rows: any[]) => handleSubTableUpdate(field._bindingId!, rows)"
                       style="margin-bottom: 16px;"
                     />
@@ -116,6 +122,9 @@
                   :validation-config="getSubTableValidation(field._bindingId)"
                   :upload-url="uploadUrl"
                   :task-id="taskId"
+                  :assignee-field="subTableAssigneeField(field._bindingId)"
+                  :show-assign-button="showSubTableAssignColumn(field._bindingId)"
+                  :can-assign="!readonly && showSubTableAssignColumn(field._bindingId)"
                   :enable-polling="enableSubTablePolling"
                   :polling-interval="subTablePollingInterval"
                   @update:model-value="(rows: any[]) => handleSubTableUpdate(field._bindingId!, rows)"
@@ -198,6 +207,7 @@ import LookupViewDisplay from './lookup/LookupViewDisplay.vue'
 import FieldRenderer from './FieldRenderer.vue'
 import { BusinessLogicEngine } from './businessLogicEngine'
 import { userApi } from '@/api/user'
+import { resolveAssigneeFieldForBinding } from '@/utils/subTableAssignment'
 import type { FormField, FormTab, FormBusinessLogicConfig } from './formRendererHelpers'
 import { extractFieldsRecursive } from './formRendererHelpers'
 
@@ -238,6 +248,8 @@ interface Props {
   taskId?: string
   enableSubTablePolling?: boolean
   subTablePollingInterval?: number
+  /** 为 false 时不显示子表 Assign（例如仅「分配参与人」节点允许分配） */
+  allowSubTableAssign?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -248,6 +260,7 @@ const props = withDefaults(defineProps<Props>(), {
   labelPosition: 'left',
   size: 'default',
   subTableBindings: () => [],
+  allowSubTableAssign: true,
 })
 
 const emit = defineEmits<{
@@ -300,6 +313,21 @@ const bindingMap = computed(() => {
 })
 const resolveBinding = (id?: number) => id != null ? bindingMap.value.get(id) : undefined
 
+function subTableAssigneeField(bindingId?: number): string | undefined {
+  const b = resolveBinding(bindingId)
+  if (!b) return undefined
+  return resolveAssigneeFieldForBinding(
+    b.columns as Array<{ field?: string }>,
+    b.tableName
+  )
+}
+
+function showSubTableAssignColumn(bindingId?: number): boolean {
+  if (props.allowSubTableAssign === false) {
+    return false
+  }
+  return !!(props.taskId && subTableAssigneeField(bindingId))
+}
 
 // Lookup selected data state
 const lookupSelectedData = ref<Record<string, Record<string, any>>>({})

@@ -6,7 +6,7 @@
 --       收集完成 → EndEvent
 --
 -- Dependencies: 00-create-function-unit.sql, 01-create-tables.sql
--- Execution order: 00 → 01 → 02 → 03
+-- Execution order: 00 → 01 → 02 → 03 → 04
 -- =============================================================================
 
 DO $main$
@@ -95,7 +95,8 @@ BEGIN
           <custom_1:values name="formName" value="Assign Participants Form" />
         </custom_1:properties>
         <custom:properties>
-          <custom:property name="assigneeType" value="INITIATOR" />
+          <custom:property name="assigneeType" value="ASSIGNEE_FROM_VARIABLE" />
+          <custom:property name="assigneeVariable" value="participant_assigner_user_id" />
         </custom:properties>
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_Create_Assign</bpmn:incoming>

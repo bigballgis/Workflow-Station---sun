@@ -15,7 +15,10 @@
       </div>
     </el-header>
 
-    <SelfServiceBanner />
+    <SelfServiceBanner
+      :portal-access-mode="portalAccessMode"
+      :workspace-context-count="workspaceContextCount"
+    />
 
     <el-container class="portal-main">
       <!-- 左侧菜单 -->
@@ -115,7 +118,13 @@ import {
 } from '@element-plus/icons-vue'
 import SelfServiceBanner from '@/components/SelfServiceBanner.vue'
 import WorkspaceContextBar from '@/components/WorkspaceContextBar.vue'
-import { getStoredUser } from '@/api/auth'
+import {
+  getCurrentUser,
+  getStoredUser,
+  listWorkspaceContexts,
+  reconcilePortalWorkspaceSession,
+  saveUser
+} from '@/api/auth'
 import UserProfileDropdown from '@/components/UserProfileDropdown.vue'
 import NotificationBadge from '@/components/NotificationBadge.vue'
 import { biDashboardApi } from '@/api/biDashboard'
@@ -132,10 +141,13 @@ const hasBiDashboards = ref(false)
 
 const activeMenu = computed(() => route.path)
 
-const isSelfServiceOnly = computed(
-  () => getStoredUser()?.portalAccessMode === 'PERMISSION_SELF_SERVICE_ONLY'
+/** 与 localStorage 解耦：路由守卫 saveUser 后 computed(getStoredUser) 不会重算，需 ref + /me 显式同步 */
+const portalAccessMode = ref<string | undefined>(getStoredUser()?.portalAccessMode)
+/** null=未拉取；与 /workspace-contexts 一致，用于横幅：有 UBR 时不应仅因 portalAccessMode 滞后仍显示「无工作台」 */
+const workspaceContextCount = ref<number | null>(null)
+const showFullPortal = computed(
+  () => portalAccessMode.value !== 'PERMISSION_SELF_SERVICE_ONLY'
 )
-const showFullPortal = computed(() => !isSelfServiceOnly.value)
 
 // Check if user has BI dashboards assigned
 const checkBiDashboards = async () => {
@@ -160,11 +172,37 @@ const checkBiDashboards = async () => {
   }
 }
 
-onMounted(() => {
-  if (!isSelfServiceOnly.value) {
-    checkBiDashboards()
+async function syncPortalAccessFromServer() {
+  await reconcilePortalWorkspaceSession()
+  try {
+    const contexts = await listWorkspaceContexts()
+    workspaceContextCount.value = Array.isArray(contexts) ? contexts.length : 0
+  } catch {
+    workspaceContextCount.value = 0
   }
   void pendingApprovalStore.fetchPendingCount()
+  try {
+    const u = await getCurrentUser()
+    const hasCtx = (workspaceContextCount.value ?? 0) > 0
+    const merged =
+      hasCtx && u.portalAccessMode === 'PERMISSION_SELF_SERVICE_ONLY'
+        ? { ...u, portalAccessMode: 'FULL' as const }
+        : u
+    saveUser(merged)
+    localStorage.setItem('userId', merged.userId)
+    portalAccessMode.value = merged.portalAccessMode
+  } catch {
+    portalAccessMode.value = getStoredUser()?.portalAccessMode
+  }
+}
+
+onMounted(() => {
+  void (async () => {
+    await syncPortalAccessFromServer()
+    if (showFullPortal.value) {
+      await checkBiDashboards()
+    }
+  })()
 })
 
 watch(

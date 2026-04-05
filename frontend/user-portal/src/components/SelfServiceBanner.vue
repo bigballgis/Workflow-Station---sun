@@ -16,14 +16,25 @@ import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { InfoFilled } from '@element-plus/icons-vue'
-import { getStoredUser } from '@/api/auth'
+
+const props = defineProps<{
+  /** 由 PortalLayout 在 /me 同步后传入；勿仅用 getStoredUser（非响应式） */
+  portalAccessMode?: string
+  /** GET /auth/workspace-contexts 返回条数；与库中 UBR 一致，用于避免 portalAccessMode 滞后误报 */
+  workspaceContextCount?: number | null
+}>()
 
 const { t } = useI18n()
 const router = useRouter()
 
 const visible = computed(() => {
-  const u = getStoredUser()
-  return u?.portalAccessMode === 'PERMISSION_SELF_SERVICE_ONLY'
+  if (props.workspaceContextCount !== null && props.workspaceContextCount !== undefined && props.workspaceContextCount > 0) {
+    return false
+  }
+  if (props.workspaceContextCount === null) {
+    return false
+  }
+  return props.portalAccessMode === 'PERMISSION_SELF_SERVICE_ONLY'
 })
 
 function goPermissions() {

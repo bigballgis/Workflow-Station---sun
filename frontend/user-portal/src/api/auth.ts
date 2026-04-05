@@ -163,3 +163,39 @@ export const clearAuth = () => {
 export const isAuthenticated = (): boolean => {
   return !!localStorage.getItem(TOKEN_KEY)
 }
+
+/**
+ * 先以「无 UBR」登录时 JWT 为 PERMISSION_SELF_SERVICE_ONLY；管理员补录 UBR 后仍用旧 token，
+ * Security 仍按 JWT 拦截非白名单接口。若库中已有工作台，用第一条 UBR 调用 switch-workspace 换发 FULL token。
+ */
+export async function reconcilePortalWorkspaceSession(): Promise<boolean> {
+  if (!localStorage.getItem(TOKEN_KEY)) {
+    return false
+  }
+  const stored = getStoredUser()
+  const needReconcile =
+    stored?.portalAccessMode === 'PERMISSION_SELF_SERVICE_ONLY' ||
+    !stored?.activeBusinessUnitId?.trim() ||
+    !stored?.activeRoleId?.trim()
+  if (!needReconcile) return false
+  let contexts: WorkspaceContextOption[] = []
+  try {
+    contexts = await listWorkspaceContexts()
+  } catch {
+    return false
+  }
+  if (contexts.length === 0) return false
+  const c = contexts[0]!
+  try {
+    const resp = await switchWorkspace(c.businessUnitId, c.roleId)
+    if (resp.accessToken && resp.refreshToken && resp.user) {
+      saveTokens(resp.accessToken, resp.refreshToken)
+      saveUser(resp.user)
+      localStorage.setItem('userId', resp.user.userId)
+      return true
+    }
+  } catch {
+    // 保持旧会话
+  }
+  return false
+}

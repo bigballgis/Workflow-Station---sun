@@ -164,7 +164,9 @@ import { resolveDisplayValue } from './subTableAddDialogHelpers'
 import type { DialogColumn } from './subTableAddDialogHelpers'
 import type { RowFormulaRule, SubTableValidationConfig } from './formRendererHelpers'
 import { calculateSummary } from './businessLogicEngine'
+import type { AssignSubTableRowResponse } from '@/api/task'
 import { assignSubTableRow, getSubTableData } from '@/api/task'
+import { pickHttpErrorBodyMessage, unwrapPortalApiPayload } from '@/utils/httpErrorMessage'
 import { userApi } from '@/api/user'
 import { onMounted, onBeforeUnmount } from 'vue'
 import { useSubTableWebSocket, type SubTableUpdateMessage } from '@/composables/useSubTableWebSocket'
@@ -385,13 +387,27 @@ function getUserDisplayName(userId: string): string {
   return userNameCache.value[userId] || userId
 }
 
+function resolveSubTableRowPk(row: Record<string, unknown> | null | undefined): string | number | null {
+  if (!row) return null
+  const v =
+    row.id ??
+    row.rowId ??
+    (row as { ID?: unknown }).ID ??
+    (row as { RowId?: unknown }).RowId
+  if (v == null || v === '') return null
+  return v as string | number
+}
+
 async function confirmAssignment() {
   if (!selectedAssigneeId.value) {
     ElMessage.warning(t('subTable.pleaseSelectUser'))
     return
   }
 
-  if (!props.taskId || !currentAssignRow.value?.id) {
+  const row = currentAssignRow.value as Record<string, unknown> | null | undefined
+  const rowPk = resolveSubTableRowPk(row)
+  const rowIdNum = rowPk != null ? Number(rowPk) : NaN
+  if (!props.taskId || rowPk == null || Number.isNaN(rowIdNum)) {
     ElMessage.error(t('subTable.assignmentFailed'))
     return
   }
@@ -400,29 +416,39 @@ async function confirmAssignment() {
   try {
     const response = await assignSubTableRow(
       props.taskId,
-      currentAssignRow.value.id,
+      rowIdNum,
       selectedAssigneeId.value
     )
-    
-    const result = response.data || response
-    if (result.success) {
+
+    const result = unwrapPortalApiPayload<AssignSubTableRowResponse>(response)
+    const ok =
+      result != null &&
+      (result.success === true ||
+        (typeof result.assigneeId === 'string' && result.assigneeId.length > 0))
+
+    if (ok && result) {
       // Update the row data
       if (currentAssignRowIndex.value !== null && props.assigneeField) {
         rows.value[currentAssignRowIndex.value][props.assigneeField] = result.assigneeId
         // Cache the user name
-        userNameCache.value[result.assigneeId] = result.assigneeName
+        userNameCache.value[result.assigneeId] = result.assigneeName ?? result.assigneeId
         emit('update:modelValue', [...rows.value])
         emit('assignmentChanged')
       }
-      
+
       ElMessage.success(t('subTable.assignmentSuccess'))
       assignDialogVisible.value = false
     } else {
       ElMessage.error(t('subTable.assignmentFailed'))
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Failed to assign sub-table row:', error)
-    ElMessage.error(error.response?.data?.message || t('subTable.assignmentFailed'))
+    const ax = error as { response?: { status?: number; data?: unknown }; message?: string }
+    const msg =
+      pickHttpErrorBodyMessage(ax.response?.data) ||
+      (typeof ax.message === 'string' && ax.message.trim().length > 0 ? ax.message.trim() : undefined) ||
+      t('subTable.assignmentFailed')
+    ElMessage.error(msg)
   } finally {
     assigning.value = false
   }

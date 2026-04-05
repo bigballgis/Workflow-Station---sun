@@ -1,3 +1,4 @@
+import type { AxiosRequestConfig } from 'axios'
 import { request } from './request'
 
 export interface TaskQueryRequest {
@@ -188,9 +189,13 @@ export interface AssignSubTableRowResponse {
 }
 
 export function assignSubTableRow(taskId: string, rowId: number, assigneeId: string) {
-  return request.post<{ data: AssignSubTableRowResponse }>(
+  const config: AxiosRequestConfig & { skipGlobalErrorHandler?: boolean } = {
+    skipGlobalErrorHandler: true
+  }
+  return request.post<AssignSubTableRowResponse | { data: AssignSubTableRowResponse }>(
     `/tasks/${taskId}/sub-table-rows/${rowId}/assign`,
-    { assigneeId }
+    { assigneeId },
+    config
   )
 }
 

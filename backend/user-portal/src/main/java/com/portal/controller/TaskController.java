@@ -1,9 +1,11 @@
 package com.portal.controller;
 
+import com.portal.debug.AgentDebugLog;
 import com.portal.component.TaskProcessComponent;
 import com.platform.common.util.ApiResponseBodyUnwrap;
 import com.portal.component.TaskQueryComponent;
 import com.portal.dto.*;
+import com.portal.exception.PortalException;
 import com.portal.security.CurrentUserId;
 import com.platform.common.i18n.I18nService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -14,13 +16,17 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
+import jakarta.servlet.http.HttpServletResponse;
 
 /**
  * 任务管理API
@@ -183,5 +189,49 @@ public class TaskController {
             log.error("Failed to search users from admin-center: {}", e.getMessage());
             return ApiResponse.success(Collections.emptyList());
         }
+    }
+
+    @Operation(summary = "分配子表行处理人", description = "多实例子流程前置任务：为子表某行指定处理人（转发至 workflow-engine）")
+    @PostMapping("/{taskId}/sub-table-rows/{rowId}/assign")
+    public ApiResponse<Map<String, Object>> assignSubTableRow(
+            @PathVariable String taskId,
+            @PathVariable Long rowId,
+            @RequestBody @Valid SubTableRowAssignRequest request,
+            @CurrentUserId String userId) {
+        // #region agent log
+        {
+            Map<String, Object> d = new LinkedHashMap<>();
+            d.put("taskIdLen", taskId != null ? taskId.length() : 0);
+            d.put("rowId", rowId);
+            d.put("assigneeIdLen", request.getAssigneeId() != null ? request.getAssigneeId().length() : 0);
+            d.put("userIdLen", userId != null ? userId.length() : 0);
+            AgentDebugLog.ff0c74("TaskController.assignSubTableRow", "H4", "assign_entry", d);
+        }
+        // #endregion
+        Map<String, Object> data = taskProcessComponent.assignSubTableRow(taskId, rowId, request.getAssigneeId(), userId);
+        // #region agent log
+        {
+            Map<String, Object> d = new LinkedHashMap<>();
+            d.put("dataKeys", data != null ? data.keySet().toString() : "null");
+            d.put("innerSuccess", data != null ? data.get("success") : null);
+            AgentDebugLog.ff0c74("TaskController.assignSubTableRow", "H4", "assign_ok_before_response", d);
+        }
+        // #endregion
+        return ApiResponse.success(data);
+    }
+
+    /**
+     * 与 TaskFormController 一致：按 code 返回 HTTP 状态码，便于前端展示明确提示。
+     */
+    @ExceptionHandler(PortalException.class)
+    public ApiResponse<Void> handlePortalException(PortalException e, HttpServletResponse response) {
+        int statusCode = switch (e.getCode()) {
+            case "404" -> HttpStatus.NOT_FOUND.value();
+            case "403" -> HttpStatus.FORBIDDEN.value();
+            case "400" -> HttpStatus.BAD_REQUEST.value();
+            default -> HttpStatus.INTERNAL_SERVER_ERROR.value();
+        };
+        response.setStatus(statusCode);
+        return ApiResponse.error(e.getCode(), e.getMessage());
     }
 }

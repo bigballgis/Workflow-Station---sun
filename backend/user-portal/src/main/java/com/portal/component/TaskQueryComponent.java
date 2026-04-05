@@ -1,5 +1,6 @@
 package com.portal.component;
 
+import com.portal.debug.AgentDebugLog;
 import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.PageResponse;
 import com.portal.dto.TaskActionInfo;
@@ -23,6 +24,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
@@ -46,6 +48,7 @@ public class TaskQueryComponent {
     private final ProcessHistoryRepository processHistoryRepository;
     private final WorkflowEngineClient workflowEngineClient;
     private final TaskActionService taskActionService;
+    private final JdbcTemplate jdbcTemplate;
 
     @PostConstruct
     public void init() {
@@ -491,6 +494,7 @@ public class TaskQueryComponent {
                                 }
                                 // Override with local DB variables (more complete, includes __subTables__)
                                 merged.putAll(pi.getVariables());
+                                enrichMissingParticipantRowIdsInSubTables(merged);
                                 taskInfo.setVariables(merged);
                                 log.debug("Merged variables from local DB for process {}, keys: {}", 
                                     processInstanceId, merged.keySet());
@@ -853,5 +857,93 @@ public class TaskQueryComponent {
                     ? ((Number) taskMap.get("durationInMillis")).longValue() : null)
                 .action((String) taskMap.get("action"))
                 .build();
+    }
+
+    /**
+     * 流程变量中的 {@code __subTables__} 行可能仅含表单字段（无 {@code id}），门户 Assign 需要 rowId。
+     * 关系表已落库时，按 email（必要时结合 name 消歧）从 {@code participants} 表回补主键。
+     */
+    @SuppressWarnings("unchecked")
+    private void enrichMissingParticipantRowIdsInSubTables(Map<String, Object> variables) {
+        if (variables == null || variables.isEmpty()) {
+            return;
+        }
+        Object subTablesObj = variables.get("__subTables__");
+        if (!(subTablesObj instanceof Map<?, ?>)) {
+            return;
+        }
+        Map<String, Object> subTables = (Map<String, Object>) subTablesObj;
+        List<Map<String, Object>> pending = new ArrayList<>();
+        for (Object v : subTables.values()) {
+            if (!(v instanceof List<?> list)) {
+                continue;
+            }
+            for (Object rowObj : list) {
+                if (!(rowObj instanceof Map<?, ?>)) {
+                    continue;
+                }
+                Map<String, Object> row = (Map<String, Object>) rowObj;
+                if (row.get("id") != null || row.get("rowId") != null) {
+                    continue;
+                }
+                Object email = row.get("email");
+                if (email == null || String.valueOf(email).isBlank()) {
+                    continue;
+                }
+                pending.add(row);
+            }
+        }
+        if (pending.isEmpty()) {
+            return;
+        }
+        String table = "participants";
+        if (!table.matches("[a-zA-Z0-9_]+")) {
+            return;
+        }
+        LinkedHashSet<String> emails = new LinkedHashSet<>();
+        for (Map<String, Object> row : pending) {
+            emails.add(String.valueOf(row.get("email")).trim());
+        }
+        try {
+            String in = emails.stream().map(e -> "?").collect(Collectors.joining(","));
+            String sql = "SELECT id, email, name FROM " + table + " WHERE email IN (" + in + ")";
+            List<Map<String, Object>> dbRows = jdbcTemplate.queryForList(sql, emails.toArray());
+            int enriched = 0;
+            for (Map<String, Object> row : pending) {
+                String em = String.valueOf(row.get("email")).trim();
+                Object nameObj = row.get("name");
+                String name = nameObj == null ? "" : String.valueOf(nameObj).trim();
+                List<Map<String, Object>> matchEmail = dbRows.stream()
+                        .filter(d -> em.equalsIgnoreCase(String.valueOf(d.get("email")).trim()))
+                        .toList();
+                if (matchEmail.isEmpty()) {
+                    continue;
+                }
+                Map<String, Object> pick;
+                if (matchEmail.size() == 1) {
+                    pick = matchEmail.get(0);
+                } else {
+                    Optional<Map<String, Object>> byName = matchEmail.stream()
+                            .filter(d -> name.equalsIgnoreCase(
+                                    String.valueOf(d.get("name")).trim()))
+                            .findFirst();
+                    pick = byName.orElse(matchEmail.get(0));
+                }
+                Object id = pick.get("id");
+                if (id instanceof Number n) {
+                    row.put("id", n.longValue());
+                    enriched++;
+                }
+            }
+            if (enriched > 0) {
+                log.debug("Enriched {} sub-table rows with DB id from {}", enriched, table);
+                // #region agent log
+                AgentDebugLog.ff0c74("TaskQueryComponent.enrichMissingParticipantRowIdsInSubTables", "H1-fix",
+                        "enriched_row_ids", Map.of("enriched", enriched, "table", table));
+                // #endregion
+            }
+        } catch (Exception e) {
+            log.debug("enrichMissingParticipantRowIdsInSubTables skipped: {}", e.getMessage());
+        }
     }
 }

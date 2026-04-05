@@ -201,6 +201,9 @@ public class AuthController {
                     .orElseThrow(() -> new RuntimeException("User not found"));
 
             List<PortalWorkspaceAuthService.WorkspaceContextRow> wctx = portalWorkspaceAuthService.listWorkspaceContexts(userId);
+            String[] resolved = resolveActiveWorkspaceClaims(wctx, activeBu, activeRoleId);
+            activeBu = resolved[0];
+            activeRoleId = resolved[1];
             if (!wctx.isEmpty()) {
                 if (activeBu == null || activeRoleId == null
                         || !portalWorkspaceAuthService.hasContext(userId, activeBu, activeRoleId)) {
@@ -264,6 +267,9 @@ public class AuthController {
                     .orElseThrow(() -> new RuntimeException(i18nService.getMessage("auth.user_not_found")));
 
             List<PortalWorkspaceAuthService.WorkspaceContextRow> wctx = portalWorkspaceAuthService.listWorkspaceContexts(userId);
+            String[] resolved = resolveActiveWorkspaceClaims(wctx, activeBu, activeRoleId);
+            activeBu = resolved[0];
+            activeRoleId = resolved[1];
             if (!wctx.isEmpty()) {
                 if (activeBu == null || activeRoleId == null
                         || !portalWorkspaceAuthService.hasContext(userId, activeBu, activeRoleId)) {
@@ -415,6 +421,27 @@ public class AuthController {
             builder.claim(CLAIM_ACTIVE_ROLE_ID, activeRoleId);
         }
         return builder.signWith(getSigningKey()).compact();
+    }
+
+    /**
+     * JWT 可能在「尚无 UBR」时签发（claims 中无 active BU/Role）。管理员随后写入 UBR 后，
+     * 自动采用 {@link PortalWorkspaceAuthService#listWorkspaceContexts} 排序后的第一条，
+     * 与「仅一条 UBR 时登录」行为一致；多条 UBR 时用户仍可在顶栏切换工作台。
+     */
+    private static String[] resolveActiveWorkspaceClaims(
+            List<PortalWorkspaceAuthService.WorkspaceContextRow> wctx,
+            String activeBusinessUnitId,
+            String activeRoleId) {
+        if (wctx == null || wctx.isEmpty()) {
+            return new String[] { activeBusinessUnitId, activeRoleId };
+        }
+        boolean claimsMissing = activeBusinessUnitId == null || activeBusinessUnitId.isBlank()
+                || activeRoleId == null || activeRoleId.isBlank();
+        if (claimsMissing) {
+            PortalWorkspaceAuthService.WorkspaceContextRow row = wctx.get(0);
+            return new String[] { row.getBusinessUnitId(), row.getRoleId() };
+        }
+        return new String[] { activeBusinessUnitId, activeRoleId };
     }
 
     private static String portalAccessModeForWorkspace(List<PortalWorkspaceAuthService.WorkspaceContextRow> wctx) {

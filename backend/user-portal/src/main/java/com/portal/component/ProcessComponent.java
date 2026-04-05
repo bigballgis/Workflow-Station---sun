@@ -1,6 +1,7 @@
 package com.portal.component;
 
 import com.portal.client.WorkflowEngineClient;
+import com.portal.debug.AgentDebugLog;
 import com.portal.dto.ChangeHistoryContext;
 import com.portal.exception.PortalException;
 import com.portal.dto.ProcessDefinitionInfo;
@@ -53,6 +54,7 @@ public class ProcessComponent {
     private final ChangeHistoryComponent changeHistoryComponent;
     private final PortalWorkspaceAuthService portalWorkspaceAuthService;
     private final RestTemplate restTemplate;
+    private final MeetingParticipantVariablesPersistence meetingParticipantVariablesPersistence;
 
     @jakarta.persistence.PersistenceContext
     private jakarta.persistence.EntityManager entityManager;
@@ -156,6 +158,16 @@ public class ProcessComponent {
         }
         ActiveCatalogPin pin = activePinOpt.get();
 
+        // #region agent log
+        AgentDebugLog.fdc174("ProcessComponent.java:startProcess", "H1",
+                "active catalog pin for start",
+                Map.of(
+                        "processKey", processKey,
+                        "catalogId", pin.catalogId(),
+                        "code", pin.code() != null ? pin.code() : "",
+                        "versionLabel", pin.versionLabel() != null ? pin.versionLabel() : ""));
+        // #endregion
+
         String resolvedFunctionUnitId = functionUnitAccessComponent.resolveFunctionUnitId(processKey);
         if (!pin.catalogId().equals(resolvedFunctionUnitId)) {
             throw new FunctionUnitAccessComponent.FunctionUnitAccessDeniedException(
@@ -191,6 +203,11 @@ public class ProcessComponent {
             throw new IllegalStateException("无法获取流程定义 BPMN: " + processKey);
         }
 
+        // #region agent log
+        AgentDebugLog.fdc174("ProcessComponent.java:bpmn", "H1", "bpmn xml present",
+                Map.of("processKey", processKey, "bpmnLen", bpmnXml.length()));
+        // #endregion
+
         // 检查 Flowable 引擎是否可用
         if (!workflowEngineClient.isAvailable()) {
             throw new IllegalStateException("Flowable 引擎不可用，请检查 workflow-engine-core 服务是否启动");
@@ -218,6 +235,16 @@ public class ProcessComponent {
                 log.info("Deploy returned empty, using BPMN process id as key: {}", actualProcessKey);
             }
         }
+
+        // #region agent log
+        {
+            Map<String, Object> deployDbg = new HashMap<>();
+            deployDbg.put("processKey", processKey);
+            deployDbg.put("deployPresent", deployResult.isPresent());
+            deployDbg.put("actualProcessKey", actualProcessKey);
+            AgentDebugLog.fdc174("ProcessComponent.java:deploy", "H2", "after deploy resolution", deployDbg);
+        }
+        // #endregion
         
         // 启动流程实例：剥离客户端伪造的工作台键；有 UBR 的用户必须携带有效 JWT 工作台上下文（与 hasContext 一致）
         Map<String, Object> variables = request.getFormData() != null ? new HashMap<>(request.getFormData()) : new HashMap<>();
@@ -259,6 +286,18 @@ public class ProcessComponent {
 
         Optional<Map<String, Object>> startResult = workflowEngineClient.startProcess(
                 actualProcessKey, request.getBusinessKey(), userId, variables);
+
+        // #region agent log
+        {
+            Map<String, Object> sr = new HashMap<>();
+            sr.put("processKey", processKey);
+            sr.put("actualProcessKey", actualProcessKey);
+            sr.put("startEmpty", startResult.isEmpty());
+            startResult.ifPresent(m -> sr.put("hasInstanceId",
+                    m != null && m.get("processInstanceId") != null));
+            AgentDebugLog.fdc174("ProcessComponent.java:afterEngineStart", "H4", "workflow engine start result", sr);
+        }
+        // #endregion
         
         if (startResult.isEmpty()) {
             throw new IllegalStateException("启动流程失败: " + processKey);
@@ -327,6 +366,17 @@ public class ProcessComponent {
                             log.info("First task claimed successfully: {} by user: {}", taskId, userId);
                         } else {
                             log.warn("Failed to claim first task: {}, trying to complete anyway", taskId);
+                        }
+
+                        Object firstTaskDefKeyObj = firstTask.get("taskDefinitionKey");
+                        String firstTaskDefKey = firstTaskDefKeyObj != null ? firstTaskDefKeyObj.toString() : "";
+                        if ("Task_CreateMeeting".equals(firstTaskDefKey)) {
+                            meetingParticipantVariablesPersistence.persistIfApplicable(
+                                    flowableProcessInstanceId, variables, pin.code());
+                            processInstanceRepository.findById(flowableProcessInstanceId).ifPresent(pi -> {
+                                pi.setVariables(new HashMap<>(variables));
+                                processInstanceRepository.save(pi);
+                            });
                         }
                         
                         // 计算子表条件变量（如 requestItemsHasHighValue）并注入

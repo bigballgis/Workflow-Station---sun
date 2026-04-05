@@ -996,6 +996,10 @@ const convertFormCreateRule = (rule: any): FormField | null => {
     field.uploadAccept = rule.props?.accept || '.jpg,.jpeg,.png,.pdf,.docx,.xlsx'
     field.uploadLimit = rule.props?.limit || 1
   }
+
+  if (rule.type === 'userSelect' || rule.type === 'user') {
+    field.type = 'user'
+  }
   
   // 调试输出
   console.log('Converting rule:', rule.type, '->', field.type, rule)

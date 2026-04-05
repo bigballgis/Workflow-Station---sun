@@ -1,4 +1,33 @@
 /**
+ * 解包门户 {@code ApiResponse<T>}（axios 拦截器已返回 body 对象）：优先返回 {@code data}，否则返回原对象。
+ * 用于子表分配等接口，避免把外层 {@code success} 当成业务 {@code success} 或未解包导致误判失败。
+ */
+export function unwrapPortalApiPayload<T extends Record<string, unknown>>(
+  res: unknown
+): T | null {
+  if (res == null || typeof res !== 'object') {
+    return null
+  }
+  const r = res as Record<string, unknown>
+  if ('data' in r && r.data !== undefined && r.data !== null && typeof r.data === 'object') {
+    const inner = r.data as Record<string, unknown>
+    // 极少数情况下双重包装
+    if (
+      'data' in inner &&
+      inner.data !== undefined &&
+      inner.data !== null &&
+      typeof inner.data === 'object' &&
+      !Array.isArray(inner.data) &&
+      ('success' in (inner.data as object) || 'assigneeId' in (inner.data as object))
+    ) {
+      return inner.data as T
+    }
+    return r.data as T
+  }
+  return r as T
+}
+
+/**
  * 从 HTTP 错误响应体提取用户可读文案。
  * 兼容：ApiResponse.error、RFC 7807、校验 details、纯字符串 body。
  */

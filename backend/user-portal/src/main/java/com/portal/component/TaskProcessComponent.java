@@ -1,5 +1,6 @@
 package com.portal.component;
 
+import com.portal.debug.AgentDebugLog;
 import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.TaskCompleteRequest;
 import com.portal.dto.TaskInfo;
@@ -18,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -216,6 +218,49 @@ public class TaskProcessComponent {
         delegationAuditRepository.save(audit);
 
         log.info("Task {} transferred via Flowable from {} to {}", taskId, fromUserId, toUserId);
+    }
+
+    /**
+     * 为子表行分配处理人（多实例子流程前置任务），经 {@link WorkflowEngineClient} 调用引擎。
+     */
+    @Transactional
+    public Map<String, Object> assignSubTableRow(String taskId, Long rowId, String assigneeId, String userId) {
+        if (!workflowEngineClient.isAvailable()) {
+            throw new IllegalStateException("Flowable engine unavailable, please check if workflow-engine-core service is running");
+        }
+
+        TaskInfo task = getTaskOrThrow(taskId);
+        if (!canProcessTask(task, userId)) {
+            throw new PortalException("403", "You do not have permission to process this task");
+        }
+
+        if (("VIRTUAL_GROUP".equals(task.getAssignmentType()) || "CANDIDATE_USERS".equals(task.getAssignmentType()))
+                && (task.getAssignee() == null || task.getAssignee().isEmpty())) {
+            log.info("Auto-claiming pool task {} (type {}) for sub-table assign by user {}",
+                    taskId, task.getAssignmentType(), userId);
+            claimTask(taskId, userId);
+        }
+
+        Optional<Map<String, Object>> result = workflowEngineClient.assignSubTableRow(taskId, rowId, assigneeId);
+        // #region agent log
+        {
+            Map<String, Object> d = new LinkedHashMap<>();
+            d.put("engineResultEmpty", result.isEmpty());
+            result.ifPresent(m -> d.put("engineKeys", m.keySet().toString()));
+            result.ifPresent(m -> d.put("engineSuccess", m.get("success")));
+            AgentDebugLog.ff0c74("TaskProcessComponent.assignSubTableRow", "H4", "after_engine_client", d);
+        }
+        // #endregion
+        if (result.isEmpty()) {
+            throw new PortalException("500", "Failed to assign sub-table row: " + taskId);
+        }
+
+        Map<String, Object> data = result.get();
+        if (!Boolean.TRUE.equals(data.get("success"))) {
+            String message = data.get("message") != null ? String.valueOf(data.get("message")) : "Assignment failed";
+            throw new PortalException("400", message);
+        }
+        return data;
     }
 
     /**
@@ -734,6 +779,30 @@ public class TaskProcessComponent {
     }
 
     /**
+     * 从 __subTables__ 中解析 participants 行列表：优先表名 {@code participants}，否则取第一个「像子表行」的 List（含 id/rowId/assignee 等）。
+     */
+    @SuppressWarnings("unchecked")
+    private List<Object> resolveParticipantsRows(Map<String, Object> subTables) {
+        Object named = subTables.get("participants");
+        if (named instanceof List && !((List<?>) named).isEmpty()) {
+            return (List<Object>) named;
+        }
+        for (Object v : subTables.values()) {
+            if (!(v instanceof List<?> list) || list.isEmpty()) {
+                continue;
+            }
+            Object first = list.get(0);
+            if (first instanceof Map<?, ?> m) {
+                if (m.containsKey("assignee_user_id") || m.containsKey("assigneeId")
+                        || m.containsKey("id") || m.containsKey("rowId")) {
+                    return (List<Object>) v;
+                }
+            }
+        }
+        return List.of();
+    }
+
+    /**
      * 从 __subTables__.participants 构建多实例集合变量
      * 每个元素包含 rowId 和 assignee_user_id，供多实例子流程使用
      */
@@ -747,13 +816,13 @@ public class TaskProcessComponent {
                 return;
             }
             Map<String, Object> subTables = (Map<String, Object>) subTablesObj;
-            Object participantsObj = subTables.get("participants");
-            if (!(participantsObj instanceof List)) {
-                log.warn("[MultiInstance] No participants sub-table found, setting empty collection");
+            // 设计器/脚本可能用表名 participants；门户前端常以 bindingId 为 key，需兼容两种结构
+            List<Object> rows = resolveParticipantsRows(subTables);
+            if (rows.isEmpty()) {
+                log.warn("[MultiInstance] No participants sub-table rows found, setting empty collection");
                 variables.put("multiInstance_participants_collection", List.of());
                 return;
             }
-            List<Object> rows = (List<Object>) participantsObj;
             List<Map<String, Object>> collection = new java.util.ArrayList<>();
             for (Object rowObj : rows) {
                 if (!(rowObj instanceof Map)) continue;

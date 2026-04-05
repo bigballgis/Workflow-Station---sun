@@ -4,7 +4,7 @@
 -- Tables: meeting(MAIN), participants(SUB)
 --
 -- Dependencies: 00-create-function-unit.sql
--- Execution order: 00 → 01 → 02 → 03
+-- Execution order: 00 → 01 → 02 → 03 → 04
 -- =============================================================================
 
 DO $tables$

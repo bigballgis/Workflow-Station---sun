@@ -163,6 +163,8 @@
               :label-width="formLabelWidth"
               :readonly="formReadOnly"
               :subTableBindings="subTableBindings"
+              :task-id="taskId"
+              :allow-sub-table-assign="allowSubTableAssignForCurrentTask"
               @update:subTableData="(id: number, rows: any[]) => { const b = subTableBindings.find(x => x.bindingId === id); if (b) b.data = rows }"
             />
           </div>
@@ -180,6 +182,10 @@
                 :columns="binding.columns"
                 v-model="binding.data"
                 :editable="!formReadOnly && binding.bindingMode === 'EDITABLE'"
+                :task-id="taskId"
+                :assignee-field="resolveAssigneeFieldForBinding(binding.columns, binding.tableName)"
+                :show-assign-button="allowSubTableAssignForCurrentTask && !!taskId && !!resolveAssigneeFieldForBinding(binding.columns, binding.tableName)"
+                :can-assign="allowSubTableAssignForCurrentTask && !formReadOnly && binding.bindingMode === 'EDITABLE' && !!taskId && !!resolveAssigneeFieldForBinding(binding.columns, binding.tableName)"
               />
             </div>
           </template>
@@ -389,6 +395,10 @@ import SubTableField from '@/components/SubTableField.vue'
 import N8nActionDialog from '@/components/N8nActionDialog.vue'
 import type { ActionDefinition } from '@/components/N8nActionDialog.vue'
 import { applyAutoFill } from '@/utils/n8nAutoFillEngine'
+import {
+  resolveAssigneeFieldForBinding,
+  allSubTableRowsHaveAssignee
+} from '@/utils/subTableAssignment'
 import dayjs from 'dayjs'
 import SnapshotDiffRenderer from '@/components/SnapshotDiffRenderer.vue'
 import ChangeHistoryPanel from '@/components/ChangeHistoryPanel.vue'
@@ -482,6 +492,30 @@ const placedBindingIds = computed((): Set<number> => {
 const bottomSubTableBindings = computed(() =>
   subTableBindings.value.filter(b => !placedBindingIds.value.has(b.bindingId))
 )
+
+/** 仅 BPMN「分配参与人」用户任务显示子表 Assign；发起/其它任务不显示（发起人只填行，不逐行分配） */
+const allowSubTableAssignForCurrentTask = computed(() => {
+  const tdk = (taskInfo.value as { taskDefinitionKey?: string }).taskDefinitionKey || ''
+  return tdk === 'Task_AssignParticipants'
+})
+
+/** 仅在「分配参与人」节点校验：子表每行已点分配（与后端 Task_AssignParticipants + buildParticipantsCollection 一致） */
+function validateSubTableAssigneesForComplete(): boolean {
+  const tdk = (taskInfo.value as { taskDefinitionKey?: string }).taskDefinitionKey || ''
+  if (tdk !== 'Task_AssignParticipants') {
+    return true
+  }
+  for (const b of subTableBindings.value) {
+    const af = resolveAssigneeFieldForBinding(b.columns, b.tableName)
+    if (!af) continue
+    const rows = b.data || []
+    if (!allSubTableRowsHaveAssignee(rows, af)) {
+      ElMessage.warning(t('task.allParticipantsMustHaveAssignee'))
+      return false
+    }
+  }
+  return true
+}
 
 // Lookup config fallback map (from rt_lookup_configs)
 const lookupDbConfigs = ref<Record<string, { tableId: number; searchFields: string[]; displayField: string; viewFields: any[] }>>({})
@@ -756,6 +790,19 @@ const loadFunctionUnitContent = async (processKey: string) => {
       } else {
         console.warn('[SubTable] no __subTables__ found in formData.value')
       }
+      // subForms 未配置 rule 时 columns 为空，导致子表无列、无法推断 assignee；从已加载行数据推断列
+      bindings.forEach(binding => {
+        if ((!binding.columns || binding.columns.length === 0) && binding.data?.length) {
+          const row0 = binding.data[0]
+          if (row0 && typeof row0 === 'object') {
+            binding.columns = Object.keys(row0).map(k => ({
+              field: k,
+              label: k,
+              type: 'text' as const
+            }))
+          }
+        }
+      })
       subTableBindings.value = bindings
 
       // 收集当前节点之前所有节点绑定的不同表单（只读展示）
@@ -1404,8 +1451,11 @@ const parseFormConfig = (configStr: string) => {
 
 // Derive display columns for a sub-table binding based on table metadata
 const deriveColumnsFromBinding = (binding: any, subForms?: Record<string, any>): Array<{ field: string; label: string; type?: string; required?: boolean; options?: Array<{ label: string; value: any }>; props?: Record<string, any> }> => {
-  // First try to use designed fields from configJson.subForms
-  const subFormRule = subForms?.[binding.bindingId]?.rule
+  // 与 process/start 一致：优先 binding 上的 subFormConfig，再 configJson.subForms（支持 string/number key）
+  const subFormRule =
+    binding.subFormConfig?.rule ||
+    subForms?.[binding.bindingId]?.rule ||
+    subForms?.[String(binding.bindingId)]?.rule
   if (subFormRule && Array.isArray(subFormRule) && subFormRule.length > 0) {
     return subFormRule.map((r: any) => {
       const rProps = r.props || {}
@@ -1576,6 +1626,9 @@ const convertFormCreateRule = (rule: any): FormField | null => {
     field.uploadAccept = rule.props?.accept || '.jpg,.jpeg,.png,.pdf,.docx,.xlsx'
     field.uploadLimit = rule.props?.limit || 1
   }
+  if (rule.type === 'userSelect' || rule.type === 'user') {
+    field.type = 'user'
+  }
   console.log(`convertFormCreateRule: field=${rule.field}, type=${field.type}, hasOptions=${!!field.options}`)
   return field
 }
@@ -1642,6 +1695,7 @@ const getPriorityType = (priority?: string): 'danger' | 'warning' | 'info' | 'su
 }
 
 const handleApprove = () => {
+  if (!validateSubTableAssigneesForComplete()) return
   currentApproveAction.value = 'APPROVE'
   approveDialogTitle.value = t('task.approve')
   approveForm.comment = ''
@@ -1681,6 +1735,9 @@ const handleUrge = () => {
 }
 
 const submitApprove = async () => {
+  if (currentApproveAction.value === 'APPROVE' && !validateSubTableAssigneesForComplete()) {
+    return
+  }
   submitting.value = true
   try {
     // 根据审批动作设置流程变量
@@ -1707,6 +1764,20 @@ const submitApprove = async () => {
         currentFormData[key] = formData.value[key]
       }
     }
+
+    // 多实例：后端 buildParticipantsCollection 依赖 __subTables__（表名 participants 或 bindingId 键）
+    const mergedSub: Record<string, any> = { ...(formData.value.__subTables__ || {}) }
+    for (const b of subTableBindings.value) {
+      mergedSub[b.bindingId] = b.data
+      mergedSub[String(b.bindingId)] = b.data
+    }
+    const participantsBinding = subTableBindings.value.find(
+      b => b.tableName === 'participants' || resolveAssigneeFieldForBinding(b.columns, b.tableName)
+    )
+    if (participantsBinding) {
+      mergedSub.participants = participantsBinding.data
+    }
+    currentFormData.__subTables__ = mergedSub
 
     // 同时将表单数据合并进 variables，确保后端保存时不丢失
     Object.assign(variables, currentFormData)
@@ -1766,6 +1837,16 @@ const handleCustomAction = (action: TaskActionInfo) => {
   // 根据 actionType 处理不同类型的操作
   switch (action.actionType) {
     case 'APPROVE':
+      if (!validateSubTableAssigneesForComplete()) return
+      currentApproveAction.value = 'APPROVE'
+      approveDialogTitle.value = action.actionName
+      approveForm.comment = ''
+      approveDialogVisible.value = true
+      break
+
+    // 设计器中的「提交/完成」类动作（如「完成分配」「提交会议」在任务节点上）与 APPROVE 一样走完成流程
+    case 'PROCESS_SUBMIT':
+      if (!validateSubTableAssigneesForComplete()) return
       currentApproveAction.value = 'APPROVE'
       approveDialogTitle.value = action.actionName
       approveForm.comment = ''

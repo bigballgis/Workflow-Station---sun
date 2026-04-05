@@ -14,6 +14,7 @@ import com.portal.repository.DelegationRuleRepository;
 import com.portal.repository.ProcessHistoryRepository;
 import com.portal.repository.ProcessInstanceRepository;
 import org.junit.jupiter.api.BeforeEach;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
@@ -56,6 +57,9 @@ class TaskProcessProperties {
     @Mock
     private com.portal.service.TaskActionService taskActionService;
 
+    @Mock
+    private JdbcTemplate jdbcTemplate;
+
     private TaskQueryComponent taskQueryComponent;
     private TaskProcessComponent taskProcessComponent;
     private Random random;
@@ -68,7 +72,8 @@ class TaskProcessProperties {
             processInstanceRepository, 
             processHistoryRepository,
             workflowEngineClient,
-            taskActionService
+            taskActionService,
+            jdbcTemplate
         );
         taskProcessComponent = new TaskProcessComponent(
             taskQueryComponent, 
