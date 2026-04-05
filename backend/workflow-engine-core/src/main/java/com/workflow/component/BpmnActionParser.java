@@ -14,6 +14,7 @@ import org.w3c.dom.NodeList;
 import org.xml.sax.InputSource;
 
 import javax.xml.parsers.DocumentBuilderFactory;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
@@ -50,6 +51,67 @@ public class BpmnActionParser {
         "name\\s*=\\s*[\"']globalActionIds[\"'][^>]*?value\\s*=\\s*[\"']([^\"']*)[\"']|value\\s*=\\s*[\"']([^\"']*)[\"'][^>]*?name\\s*=\\s*[\"']globalActionIds[\"']",
         Pattern.DOTALL
     );
+
+    /**
+     * 从已部署 BPMN XML 读取指定 UserTask 上 custom:property（name / value）的值。
+     * <p>与 {@link #extractActionIds} 一致：Flowable 内存模型可能未载入完整 custom 扩展，需读原始 XML。</p>
+     *
+     * @param processDefinitionId Flowable 流程定义 id（含 version:uuid）
+     * @param userTaskElementId   BPMN 中 userTask 的 id（如 Task_SubmitApplication）
+     * @param propertyName        property 的 name 属性，如 assigneeType、roleId
+     * @return value 或 null
+     */
+    public String getUserTaskExtensionPropertyValue(String processDefinitionId, String userTaskElementId,
+                                                    String propertyName) {
+        if (processDefinitionId == null || processDefinitionId.isBlank()
+                || userTaskElementId == null || userTaskElementId.isBlank()
+                || propertyName == null || propertyName.isBlank()) {
+            return null;
+        }
+        try {
+            ProcessDefinition pd = repositoryService.createProcessDefinitionQuery()
+                    .processDefinitionId(processDefinitionId)
+                    .singleResult();
+            if (pd == null) {
+                return null;
+            }
+            String xml = readDeploymentBpmnXml(pd);
+            if (xml == null || xml.isBlank()) {
+                return null;
+            }
+            String v = findUserTaskPropertyValueDom(xml, userTaskElementId, propertyName.trim());
+            if (v != null && !v.isBlank()) {
+                return v.trim();
+            }
+            v = findUserTaskPropertyValueRegex(xml, userTaskElementId, propertyName.trim());
+            return v != null && !v.isBlank() ? v.trim() : null;
+        } catch (Exception e) {
+            log.debug("getUserTaskExtensionPropertyValue {} / {} failed: {}", userTaskElementId, propertyName,
+                    e.getMessage());
+            return null;
+        }
+    }
+
+    private String readDeploymentBpmnXml(ProcessDefinition pd) throws IOException {
+        String resourceName = pd.getResourceName();
+        String rn = resourceName != null ? resourceName.toLowerCase() : "";
+        if (resourceName == null || (!rn.endsWith(".bpmn20.xml") && !rn.endsWith(".bpmn"))) {
+            List<String> names = repositoryService.getDeploymentResourceNames(pd.getDeploymentId());
+            resourceName = names.stream()
+                    .filter(name -> name != null && (name.endsWith(".bpmn20.xml") || name.endsWith(".bpmn")))
+                    .findFirst()
+                    .orElse(resourceName);
+        }
+        if (resourceName == null) {
+            return null;
+        }
+        try (InputStream in = repositoryService.getResourceAsStream(pd.getDeploymentId(), resourceName)) {
+            if (in == null) {
+                return null;
+            }
+            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        }
+    }
 
     /**
      * 从任务的 BPMN 定义中提取 actionIds。
@@ -137,40 +199,26 @@ public class BpmnActionParser {
             if (pd == null) {
                 return null;
             }
-            String resourceName = pd.getResourceName();
-            String rn = resourceName != null ? resourceName.toLowerCase() : "";
-            if (resourceName == null || (!rn.endsWith(".bpmn20.xml") && !rn.endsWith(".bpmn"))) {
-                List<String> names = repositoryService.getDeploymentResourceNames(pd.getDeploymentId());
-                resourceName = names.stream()
-                    .filter(name -> name != null && (name.endsWith(".bpmn20.xml") || name.endsWith(".bpmn")))
-                    .findFirst()
-                    .orElse(resourceName);
-            }
-            if (resourceName == null) {
+            String xml = readDeploymentBpmnXml(pd);
+            if (xml == null || xml.isBlank()) {
                 return null;
             }
-            try (InputStream in = repositoryService.getResourceAsStream(pd.getDeploymentId(), resourceName)) {
-                if (in == null) {
-                    return null;
-                }
-                String xml = new String(in.readAllBytes(), StandardCharsets.UTF_8);
-                String key = userTaskElementId != null ? userTaskElementId : task.getTaskDefinitionKey();
-                // 1) DOM 解析（最稳：任意命名空间与属性顺序）
-                List<String> fromDom = parseActionIdsFromBpmnDom(xml, key, "actionIds");
-                if (fromDom != null && !fromDom.isEmpty()) {
-                    return fromDom;
-                }
-                // 2) 正则（双引号 / 单引号）
-                List<String> fromTask = parseActionIdsFromUserTaskXmlBlock(xml, key, "actionIds");
-                if (fromTask != null && !fromTask.isEmpty()) {
-                    return fromTask;
-                }
-                List<String> global = parseActionIdsFromProcessXmlBlock(xml, "globalActionIds");
-                if (global != null && !global.isEmpty()) {
-                    return global;
-                }
-                return parseActionIdsFromProcessXmlBlockDom(xml, "globalActionIds");
+            String key = userTaskElementId != null ? userTaskElementId : task.getTaskDefinitionKey();
+            // 1) DOM 解析（最稳：任意命名空间与属性顺序）
+            List<String> fromDom = parseActionIdsFromBpmnDom(xml, key, "actionIds");
+            if (fromDom != null && !fromDom.isEmpty()) {
+                return fromDom;
             }
+            // 2) 正则（双引号 / 单引号）
+            List<String> fromTask = parseActionIdsFromUserTaskXmlBlock(xml, key, "actionIds");
+            if (fromTask != null && !fromTask.isEmpty()) {
+                return fromTask;
+            }
+            List<String> global = parseActionIdsFromProcessXmlBlock(xml, "globalActionIds");
+            if (global != null && !global.isEmpty()) {
+                return global;
+            }
+            return parseActionIdsFromProcessXmlBlockDom(xml, "globalActionIds");
         } catch (Exception e) {
             log.debug("BPMN XML fallback for actionIds failed: {}", e.getMessage());
             return null;
@@ -183,21 +231,80 @@ public class BpmnActionParser {
         if (xml == null || taskDefinitionKey == null || !"actionIds".equals(propertyName)) {
             return null;
         }
+        String value = findUserTaskPropertyValueDom(xml, taskDefinitionKey, propertyName);
+        return value != null ? parseActionIds(value) : null;
+    }
+
+    /**
+     * 在 userTask 子树中查找第一个带 name/value 的扩展节点，且 name 等于 propertyName。
+     */
+    private String findUserTaskPropertyValueDom(String xml, String taskDefinitionKey, String propertyName) {
+        if (xml == null || taskDefinitionKey == null || propertyName == null) {
+            return null;
+        }
         try {
             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
             factory.setNamespaceAware(true);
             factory.setIgnoringElementContentWhitespace(false);
             Document doc = factory.newDocumentBuilder().parse(new InputSource(new StringReader(xml)));
             Element root = doc.getDocumentElement();
-            if (root == null) return null;
+            if (root == null) {
+                return null;
+            }
             Element userTask = findUserTaskById(root, taskDefinitionKey);
-            if (userTask == null) return null;
-            String value = findFirstAttributeInTree(userTask, "name", propertyName, "value");
-            return value != null ? parseActionIds(value) : null;
+            if (userTask == null) {
+                return null;
+            }
+            return findFirstAttributeInTree(userTask, "name", propertyName, "value");
         } catch (Exception e) {
-            log.trace("DOM parse for actionIds failed: {}", e.getMessage());
+            log.trace("DOM parse for property {} failed: {}", propertyName, e.getMessage());
             return null;
         }
+    }
+
+    private String findUserTaskPropertyValueRegex(String xml, String taskDefinitionKey, String propName) {
+        if (xml == null || taskDefinitionKey == null || propName == null) {
+            return null;
+        }
+        int idPos = xml.indexOf("id=\"" + taskDefinitionKey + "\"");
+        if (idPos < 0) {
+            return null;
+        }
+        int ut = xml.lastIndexOf("<userTask", idPos);
+        if (ut < 0) {
+            ut = xml.lastIndexOf("userTask ", idPos);
+        }
+        if (ut < 0) {
+            ut = xml.lastIndexOf("<bpmn:userTask", idPos);
+        }
+        if (ut < 0) {
+            return null;
+        }
+        int end = xml.indexOf("</userTask>", idPos);
+        if (end < 0) {
+            end = xml.indexOf("</bpmn:userTask>", idPos);
+        }
+        if (end < 0) {
+            return null;
+        }
+        String block = xml.substring(ut, Math.min(xml.length(), end + 20));
+        Pattern p = Pattern.compile(
+                "name\\s*=\\s*[\"']" + Pattern.quote(propName)
+                        + "[\"'][^>]*?value\\s*=\\s*[\"']([^\"']*)[\"']|value\\s*=\\s*[\"']([^\"']*)[\"'][^>]*?name\\s*=\\s*[\"']"
+                        + Pattern.quote(propName) + "[\"']",
+                Pattern.DOTALL);
+        Matcher m = p.matcher(block);
+        if (m.find()) {
+            String a = m.group(1);
+            String b = m.group(2);
+            if (a != null && !a.isEmpty()) {
+                return a;
+            }
+            if (b != null && !b.isEmpty()) {
+                return b;
+            }
+        }
+        return null;
     }
 
     private Element findUserTaskById(Element root, String id) {

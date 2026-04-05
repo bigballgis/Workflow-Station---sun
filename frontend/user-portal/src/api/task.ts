@@ -35,6 +35,8 @@ export interface TaskInfo {
   processDefinitionKey: string
   processDefinitionName: string
   assignmentType: string
+  /** 引擎分配目标（如 CANDIDATE_USERS 时候选人 ID 列表拼接） */
+  assignmentTarget?: string
   assignee: string
   assigneeName?: string
   delegatorId?: string
@@ -52,6 +54,9 @@ export interface TaskInfo {
   originalAssignmentType?: string
   originalAssignee?: string
   candidateUsers?: string
+  /** 引擎候选人用户 ID（与门户 TaskInfo.candidateUserIds 一致） */
+  candidateUserIds?: string[]
+  candidateGroupIds?: string[]
   // 已处理任务字段
   completedTime?: string
   durationInMillis?: number

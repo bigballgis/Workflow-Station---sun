@@ -39,6 +39,11 @@ public class TaskInfo {
     /** 分配类型：USER, VIRTUAL_GROUP, DEPT_ROLE, DELEGATED */
     private String assignmentType;
 
+    /**
+     * 引擎分配目标：USER 时为处理人 ID；CANDIDATE_USERS 时为候选人用户 ID 逗号拼接等（与 workflow-engine TaskListResult 一致）
+     */
+    private String assignmentTarget;
+
     /** 分配人/组ID */
     private String assignee;
 

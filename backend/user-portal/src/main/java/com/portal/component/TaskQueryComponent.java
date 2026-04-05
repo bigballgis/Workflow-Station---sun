@@ -277,6 +277,7 @@ public class TaskQueryComponent {
         
         List<String> candidateUserIds = parseStringIdList(taskMap.get("candidateUserIds"));
         List<String> candidateGroupIds = parseStringIdList(taskMap.get("candidateGroupIds"));
+        String assignmentTarget = engineStringField(taskMap.get("assignmentTarget"));
 
         // Determine assignment type: prefer engine value, otherwise infer
         String assignmentType = null;
@@ -308,6 +309,7 @@ public class TaskQueryComponent {
                 .processDefinitionKey(processDefinitionKey)
                 .processDefinitionName(processDefinitionName)
                 .assignmentType(assignmentType)
+                .assignmentTarget(assignmentTarget)
                 .assignee(currentAssignee)
                 .assigneeName(currentAssigneeName)
                 .initiatorId(initiatorId)

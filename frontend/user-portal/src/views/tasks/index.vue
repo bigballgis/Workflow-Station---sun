@@ -172,6 +172,7 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { Search, ArrowDown } from '@element-plus/icons-vue'
 import { queryTasks, claimTask, unclaimTask, delegateTask, transferTask, urgeTask, batchUrgeTasks, TaskInfo } from '@/api/task'
+import { getStoredUser } from '@/api/auth'
 import { formatDate } from '@/utils/dateFormat'
 
 const { t } = useI18n()
@@ -254,8 +255,71 @@ const viewTask = (task: TaskInfo) => {
   router.push(`/tasks/${task.taskId}`)
 }
 
+function portalIdentityMatches(a: string | null | undefined, b: string | null | undefined): boolean {
+  if (a == null || b == null) return false
+  const x = String(a).trim()
+  const y = String(b).trim()
+  if (!x || !y) return false
+  if (x === y) return true
+  return x.toLowerCase() === y.toLowerCase()
+}
+
+/** 发起人直办：引擎仍返回 CANDIDATE_USERS 且无 assignee 时，不展示认领（与 BPMN Process Initiator / INITIATOR 一致） */
+function shouldSuppressClaimAsInitiatorDirectTask(task: TaskInfo): boolean {
+  if (task.assignmentType !== 'CANDIDATE_USERS') return false
+  const me = getStoredUser()
+  if (!me) return false
+  const iAmInitiator =
+    portalIdentityMatches(task.initiatorId, me.userId) || portalIdentityMatches(task.initiatorId, me.username)
+  if (!iAmInitiator) return false
+
+  const av = task.variables?.assigneeType ?? task.variables?.assignee_type
+  if (av != null && String(av).trim() !== '') {
+    const u = String(av).trim().toUpperCase()
+    if (u === 'INITIATOR' || u === 'PROCESS_INITIATOR') return true
+  }
+
+  const cands = task.candidateUserIds
+  if (Array.isArray(cands) && cands.length === 1) {
+    const only = cands[0]
+    return portalIdentityMatches(only, me.userId) || portalIdentityMatches(only, me.username)
+  }
+
+  const rawTarget = task.assignmentTarget?.trim()
+  if (rawTarget) {
+    const parts = rawTarget.split(',').map((s) => s.trim()).filter(Boolean)
+    if (parts.length === 1) {
+      const one = parts[0]!
+      return portalIdentityMatches(one, me.userId) || portalIdentityMatches(one, me.username)
+    }
+  }
+  return false
+}
+
+/**
+ * 引擎在「无 assignee、无候选人/候选组 identity link」时会把 assignmentType 兜底成 VIRTUAL_GROUP（见 workflow-engine
+ * TaskManagerComponent.buildTaskInfoFromFlowableTask）。发起人节点若未写入 assignee 会出现此「空池」行，不应展示认领。
+ */
+function shouldSuppressClaimInitiatorOrphanVirtualGroup(task: TaskInfo): boolean {
+  if (task.assignmentType !== 'VIRTUAL_GROUP') return false
+  const me = getStoredUser()
+  if (!me) return false
+  const iAmInitiator =
+    portalIdentityMatches(task.initiatorId, me.userId) || portalIdentityMatches(task.initiatorId, me.username)
+  if (!iAmInitiator) return false
+  if (task.assignee && String(task.assignee).trim()) return false
+
+  const noUserCands = !task.candidateUserIds || task.candidateUserIds.length === 0
+  const noGroupCands = !task.candidateGroupIds || task.candidateGroupIds.length === 0
+  const noTarget = !task.assignmentTarget || !String(task.assignmentTarget).trim()
+  return noUserCands && noGroupCands && noTarget
+}
+
 /** 候选人池 / 组池：尚无个人 assignee 时可认领（与后端 TaskProcessComponent 一致） */
 const isClaimablePoolTask = (task: TaskInfo) => {
+  if (shouldSuppressClaimAsInitiatorDirectTask(task) || shouldSuppressClaimInitiatorOrphanVirtualGroup(task)) {
+    return false
+  }
   const at = task.assignmentType
   if (at !== 'VIRTUAL_GROUP' && at !== 'DEPT_ROLE' && at !== 'CANDIDATE_USERS') {
     return false

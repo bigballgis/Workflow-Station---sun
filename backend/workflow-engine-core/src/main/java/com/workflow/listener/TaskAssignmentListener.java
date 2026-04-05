@@ -1,6 +1,7 @@
 package com.workflow.listener;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.workflow.component.BpmnActionParser;
 import com.workflow.entity.ExtendedTaskInfo;
 import com.workflow.enums.AssignmentType;
 import com.workflow.enums.AssigneeAnchor;
@@ -72,6 +73,10 @@ public class TaskAssignmentListener implements FlowableEventListener {
 
     @Autowired
     @Lazy
+    private BpmnActionParser bpmnActionParser;
+
+    @Autowired
+    @Lazy
     private ExtendedTaskInfoRepository extendedTaskInfoRepository;
 
     @Autowired
@@ -126,13 +131,11 @@ public class TaskAssignmentListener implements FlowableEventListener {
             String assigneeVariable = null;
             Map<String, Object> cachedVariables = null;
 
-            UserTask userTask = null;
             if (processDefinitionId != null && taskDefinitionKey != null) {
                 BpmnModel bpmnModel = repositoryService.getBpmnModel(processDefinitionId);
                 if (bpmnModel != null) {
                     FlowElement flowElement = bpmnModel.getFlowElement(taskDefinitionKey);
                     if (flowElement instanceof UserTask ut) {
-                        userTask = ut;
                         assigneeTypeRaw = getExtensionProperty(ut, "assigneeType");
                         roleId = getExtensionProperty(ut, "roleId");
                         businessUnitId = getExtensionProperty(ut, "businessUnitId");
@@ -155,6 +158,37 @@ public class TaskAssignmentListener implements FlowableEventListener {
                                 assigneeTypeRaw, roleId, businessUnitId, assigneeAnchorExt);
                     }
                 }
+            }
+
+            // Flowable BpmnModel 常未载入 designer custom 命名空间扩展，与 actionIds 一致从已部署 XML 补读
+            if (processDefinitionId != null && taskDefinitionKey != null) {
+                assigneeTypeRaw = firstNonBlank(assigneeTypeRaw,
+                        bpmnActionParser.getUserTaskExtensionPropertyValue(processDefinitionId, taskDefinitionKey,
+                                "assigneeType"));
+                roleId = firstNonBlank(roleId,
+                        bpmnActionParser.getUserTaskExtensionPropertyValue(processDefinitionId, taskDefinitionKey,
+                                "roleId"));
+                businessUnitId = firstNonBlank(businessUnitId,
+                        bpmnActionParser.getUserTaskExtensionPropertyValue(processDefinitionId, taskDefinitionKey,
+                                "businessUnitId"));
+                assigneeValue = firstNonBlank(assigneeValue,
+                        bpmnActionParser.getUserTaskExtensionPropertyValue(processDefinitionId, taskDefinitionKey,
+                                "assigneeValue"));
+                assigneeAnchorExt = firstNonBlank(assigneeAnchorExt,
+                        bpmnActionParser.getUserTaskExtensionPropertyValue(processDefinitionId, taskDefinitionKey,
+                                "assigneeAnchor"));
+                manualAssignVariable = firstNonBlank(manualAssignVariable,
+                        bpmnActionParser.getUserTaskExtensionPropertyValue(processDefinitionId, taskDefinitionKey,
+                                "manualAssignVariable"));
+                manualAssignBuVariable = firstNonBlank(manualAssignBuVariable,
+                        bpmnActionParser.getUserTaskExtensionPropertyValue(processDefinitionId, taskDefinitionKey,
+                                "manualAssignBuVariable"));
+                manualAssignRoleVariable = firstNonBlank(manualAssignRoleVariable,
+                        bpmnActionParser.getUserTaskExtensionPropertyValue(processDefinitionId, taskDefinitionKey,
+                                "manualAssignRoleVariable"));
+                assigneeVariable = firstNonBlank(assigneeVariable,
+                        bpmnActionParser.getUserTaskExtensionPropertyValue(processDefinitionId, taskDefinitionKey,
+                                "assigneeVariable"));
             }
 
             if (assigneeTypeRaw == null || assigneeTypeRaw.isEmpty()) {
@@ -630,11 +664,26 @@ public class TaskAssignmentListener implements FlowableEventListener {
         return false;
     }
 
+    private static boolean isExtensionPropertyElementName(String elementName) {
+        if (elementName == null || elementName.isBlank()) {
+            return false;
+        }
+        String n = elementName.trim();
+        if ("property".equalsIgnoreCase(n)) {
+            return true;
+        }
+        int colon = n.lastIndexOf(':');
+        if (colon >= 0 && colon < n.length() - 1) {
+            return "property".equalsIgnoreCase(n.substring(colon + 1));
+        }
+        return false;
+    }
+
     private static String findExtensionPropertyRecursive(ExtensionElement el, String propertyName) {
         if (el == null) {
             return null;
         }
-        if (el.getName() != null && "property".equalsIgnoreCase(el.getName())) {
+        if (el.getName() != null && isExtensionPropertyElementName(el.getName())) {
             String name = el.getAttributeValue(null, "name");
             if (propertyName.equals(name)) {
                 return el.getAttributeValue(null, "value");
@@ -666,7 +715,8 @@ public class TaskAssignmentListener implements FlowableEventListener {
                 continue;
             }
             for (ExtensionElement propertyElement : propertyElements) {
-                if (propertyElement.getName() == null || !"property".equalsIgnoreCase(propertyElement.getName())) {
+                if (propertyElement.getName() == null
+                        || !isExtensionPropertyElementName(propertyElement.getName())) {
                     continue;
                 }
                 String name = propertyElement.getAttributeValue(null, "name");
