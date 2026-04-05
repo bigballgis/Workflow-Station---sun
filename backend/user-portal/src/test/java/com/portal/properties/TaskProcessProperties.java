@@ -363,7 +363,8 @@ class TaskProcessProperties {
         IllegalStateException exception = assertThrows(IllegalStateException.class, 
             () -> taskProcessComponent.claimTask(taskId, userId));
         
-        assertTrue(exception.getMessage().contains("Flowable 引擎不可用"));
+        assertTrue(exception.getMessage().contains("Flowable engine unavailable")
+                || exception.getMessage().contains("Flowable 引擎不可用"));
     }
 
     /**

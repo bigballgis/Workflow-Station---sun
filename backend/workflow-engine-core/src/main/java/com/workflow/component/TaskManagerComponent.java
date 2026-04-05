@@ -622,7 +622,7 @@ public class TaskManagerComponent {
                     new WorkflowValidationException.ValidationError(
                         "taskId", "Task not claimed", taskId)));
             }
-            if (!userId.equals(assignee)) {
+            if (!engineActorMatchesPortalUser(assignee, userId)) {
                 throw new WorkflowValidationException(Collections.singletonList(
                     new WorkflowValidationException.ValidationError(
                         "userId", "Only assignee can unclaim", userId)));
@@ -642,7 +642,7 @@ public class TaskManagerComponent {
                             "taskId", "Task already completed, cannot unclaim", taskId)));
                 }
                 if (extendedTaskInfo.isClaimed() && extendedTaskInfo.getClaimedBy() != null
-                        && !userId.equals(extendedTaskInfo.getClaimedBy())) {
+                        && !engineActorMatchesPortalUser(extendedTaskInfo.getClaimedBy(), userId)) {
                     throw new WorkflowValidationException(Collections.singletonList(
                         new WorkflowValidationException.ValidationError(
                             "userId", "Only the claimer can unclaim", userId)));
@@ -817,7 +817,8 @@ public class TaskManagerComponent {
             String initiatorUserId = resolveInitiatorUserId(processInstanceId);
             if (processInstanceId != null) {
                 // 下一任务创建时 TaskAssignmentListener 读取，用于 CURRENT_BU_ROLE 等「当前处理人」语义
-                runtimeService.setVariable(processInstanceId, "currentUserId", userId);
+                // 统一写入门户用户主键（UUID），避免 Flowable assignee 使用 username 时污染流程变量
+                runtimeService.setVariable(processInstanceId, "currentUserId", normalizePortalUserIdForVariable(userId));
             }
 
             // 合并保留 initiator：门户完成首任务时传入的表单变量可能不含 initiator，避免后续 INITIATOR 节点无法解析受理人
@@ -1491,14 +1492,62 @@ public class TaskManagerComponent {
     }
     
     /**
+     * 引擎侧 assignee / claimedBy 可能为历史数据中的 username，而门户 JWT subject 为用户主键 UUID。
+     */
+    private boolean engineActorMatchesPortalUser(String engineSideActor, String portalUserId) {
+        if (!StringUtils.hasText(engineSideActor) || !StringUtils.hasText(portalUserId)) {
+            return false;
+        }
+        String a = engineSideActor.trim();
+        String p = portalUserId.trim();
+        if (a.equals(p)) {
+            return true;
+        }
+        try {
+            Map<String, Object> info = adminCenterClient.getUserInfo(p);
+            if (info != null) {
+                Object id = info.get("id");
+                if (id != null && a.equals(id.toString().trim())) {
+                    return true;
+                }
+                Object username = info.get("username");
+                if (username != null && a.equals(username.toString().trim())) {
+                    return true;
+                }
+            }
+        } catch (Exception e) {
+            log.debug("engineActorMatchesPortalUser: {}", e.getMessage());
+        }
+        return false;
+    }
+
+    /**
+     * 将 username 或已是 UUID 的 actor 解析为 admin-center 用户主键，供流程变量使用。
+     */
+    private String normalizePortalUserIdForVariable(String actor) {
+        if (!StringUtils.hasText(actor)) {
+            return actor;
+        }
+        try {
+            Map<String, Object> info = adminCenterClient.getUserInfo(actor.trim());
+            if (info != null && info.get("id") != null) {
+                return info.get("id").toString().trim();
+            }
+        } catch (Exception e) {
+            log.debug("normalizePortalUserIdForVariable: {}", e.getMessage());
+        }
+        return actor.trim();
+    }
+
+    /**
      * 验证完成权限
      */
     private void validateCompletePermission(ExtendedTaskInfo task, String userId) {
         String currentAssignee = task.getCurrentAssignee();
         
         // 如果任务有明确的当前处理人（委托人或认领人），只有该用户可以完成
-        if (currentAssignee != null) {
-            if (!currentAssignee.equals(userId)) {
+        if (currentAssignee != null && !currentAssignee.isBlank()) {
+            if (!engineActorMatchesPortalUser(currentAssignee, userId)) {
                 throw new WorkflowValidationException(Collections.singletonList(
                     new WorkflowValidationException.ValidationError(
                         "userId", "User does not have permission to complete this task", userId)));

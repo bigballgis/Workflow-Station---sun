@@ -8,6 +8,7 @@ import com.portal.dto.*;
 import com.portal.exception.PortalException;
 import com.portal.security.CurrentUserId;
 import com.platform.common.i18n.I18nService;
+import com.platform.security.util.SecurityContextUtils;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -65,7 +66,8 @@ public class TaskController {
         TaskInfo task = taskQueryComponent.getTaskById(taskId)
                 .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
         // 与 TaskFormController 一致：可查看详情 = canViewTaskForm（含发起人、处理人），非仅 canProcessTask
-        if (userId != null && !taskProcessComponent.canViewTaskForm(task, userId)) {
+        if (userId != null && !taskProcessComponent.canViewTaskForm(task, userId,
+                SecurityContextUtils.getCurrentUsername().orElse(null))) {
             log.warn("User {} denied access to task {} (assignee={}, assignmentType={}, initiatorId={})",
                     userId, taskId, task.getAssignee(), task.getAssignmentType(), task.getInitiatorId());
             return ApiResponse.error("403", "You do not have permission to access this task");
@@ -85,7 +87,8 @@ public class TaskController {
     public ApiResponse<TaskInfo> claimTask(
             @PathVariable String taskId,
             @CurrentUserId String userId) {
-        TaskInfo task = taskProcessComponent.claimTask(taskId, userId);
+        TaskInfo task = taskProcessComponent.claimTask(taskId, userId,
+                SecurityContextUtils.getCurrentUsername().orElse(null));
         return ApiResponse.success(i18nService.getMessage("portal.task_claimed"), task);
     }
 
@@ -96,7 +99,8 @@ public class TaskController {
             @CurrentUserId String userId,
             @RequestParam String originalAssignmentType,
             @RequestParam String originalAssignee) {
-        TaskInfo task = taskProcessComponent.unclaimTask(taskId, userId, originalAssignmentType, originalAssignee);
+        TaskInfo task = taskProcessComponent.unclaimTask(taskId, userId, originalAssignmentType, originalAssignee,
+                SecurityContextUtils.getCurrentUsername().orElse(null));
         return ApiResponse.success(i18nService.getMessage("portal.task_unclaimed"), task);
     }
 
@@ -107,7 +111,8 @@ public class TaskController {
             @CurrentUserId String userId,
             @Valid @RequestBody TaskCompleteRequest request) {
         request.setTaskId(taskId);
-        taskProcessComponent.completeTask(request, userId);
+        taskProcessComponent.completeTask(request, userId,
+                SecurityContextUtils.getCurrentUsername().orElse(null));
         return ApiResponse.success(i18nService.getMessage("portal.task_completed"), null);
     }
 
@@ -208,7 +213,8 @@ public class TaskController {
             AgentDebugLog.ff0c74("TaskController.assignSubTableRow", "H4", "assign_entry", d);
         }
         // #endregion
-        Map<String, Object> data = taskProcessComponent.assignSubTableRow(taskId, rowId, request.getAssigneeId(), userId);
+        Map<String, Object> data = taskProcessComponent.assignSubTableRow(taskId, rowId, request.getAssigneeId(), userId,
+                SecurityContextUtils.getCurrentUsername().orElse(null));
         // #region agent log
         {
             Map<String, Object> d = new LinkedHashMap<>();

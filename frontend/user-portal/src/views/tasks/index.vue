@@ -254,13 +254,22 @@ const viewTask = (task: TaskInfo) => {
   router.push(`/tasks/${task.taskId}`)
 }
 
+/** 候选人池 / 组池：尚无个人 assignee 时可认领（与后端 TaskProcessComponent 一致） */
+const isClaimablePoolTask = (task: TaskInfo) => {
+  const at = task.assignmentType
+  if (at !== 'VIRTUAL_GROUP' && at !== 'DEPT_ROLE' && at !== 'CANDIDATE_USERS') {
+    return false
+  }
+  const hasAssignee = !!(task.assignee && String(task.assignee).trim())
+  return !hasAssignee
+}
+
 const canClaim = (task: TaskInfo) => {
-  // 只有虚拟组或部门角色任务且未被认领时才能认领
-  return (task.assignmentType === 'VIRTUAL_GROUP' || task.assignmentType === 'DEPT_ROLE') && !task.claimed
+  return isClaimablePoolTask(task) && task.claimed !== true
 }
 
 const canUnclaim = (task: TaskInfo) => {
-  // 已认领的任务可以取消认领
+  // 委托任务等场景下后端会设置 claimed；Flowable 直出列表可能无该字段，此时不展示 Unclaim 以免误点
   return task.claimed === true
 }
 
@@ -268,12 +277,10 @@ const handleClaim = async (task: TaskInfo) => {
   try {
     await claimTask(task.taskId)
     ElMessage.success(t('common.success'))
-    loadTasks()
-  } catch (error) {
-    // Mock success
-    ElMessage.success(t('common.success'))
-    task.claimed = true
-    task.assignmentType = 'USER'
+    await loadTasks()
+  } catch {
+    // 错误提示已由 api/request 响应拦截器统一弹出，此处勿再弹 Success 或伪造认领状态
+    await loadTasks()
   }
 }
 

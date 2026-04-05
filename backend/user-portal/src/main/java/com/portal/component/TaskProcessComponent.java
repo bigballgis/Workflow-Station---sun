@@ -47,12 +47,23 @@ public class TaskProcessComponent {
      */
     @Transactional
     public TaskInfo claimTask(String taskId, String userId) {
+        return claimTask(taskId, userId, null);
+    }
+
+    /**
+     * 认领任务（支持 JWT userId 与 Flowable 侧 assignee/候选人使用 username 时不一致的场景）
+     */
+    @Transactional
+    public TaskInfo claimTask(String taskId, String userId, String portalUsername) {
         if (!workflowEngineClient.isAvailable()) {
             throw new IllegalStateException("Flowable engine unavailable, please check if workflow-engine-core service is running");
         }
-        
-        log.info("Using Flowable engine to claim task: {} by user: {}", taskId, userId);
-        Optional<Map<String, Object>> result = workflowEngineClient.claimTask(taskId, userId);
+
+        TaskInfo taskBefore = getTaskOrThrow(taskId);
+        String enginePrincipal = resolveEnginePrincipalForWorkflow(taskBefore, userId, portalUsername);
+
+        log.info("Using Flowable engine to claim task: {} by engine principal: {} (portal userId: {})", taskId, enginePrincipal, userId);
+        Optional<Map<String, Object>> result = workflowEngineClient.claimTask(taskId, enginePrincipal);
         
         if (result.isEmpty()) {
             throw new PortalException("500", "Failed to claim task: " + taskId);
@@ -67,9 +78,9 @@ public class TaskProcessComponent {
         // 任务状态已在 Flowable 中更新，重新获取最新状态
         TaskInfo task = getTaskOrThrow(taskId);
         
-        // 更新流程实例的当前处理人
+        // 更新流程实例的当前处理人（门户侧统一记 JWT userId）
         updateProcessInstanceAssignee(task.getProcessInstanceId(), userId, task.getTaskName());
-        
+
         log.info("Task {} claimed via Flowable by user {}", taskId, userId);
         return task;
     }
@@ -80,12 +91,21 @@ public class TaskProcessComponent {
      */
     @Transactional
     public TaskInfo unclaimTask(String taskId, String userId, String originalAssignmentType, String originalAssignee) {
+        return unclaimTask(taskId, userId, originalAssignmentType, originalAssignee, null);
+    }
+
+    @Transactional
+    public TaskInfo unclaimTask(String taskId, String userId, String originalAssignmentType, String originalAssignee,
+                                String portalUsername) {
         if (!workflowEngineClient.isAvailable()) {
             throw new IllegalStateException("Flowable engine unavailable, please check if workflow-engine-core service is running");
         }
-        
-        log.info("Using Flowable engine to unclaim task: {} by user: {}", taskId, userId);
-        Optional<Map<String, Object>> result = workflowEngineClient.unclaimTask(taskId, userId);
+
+        TaskInfo taskBefore = getTaskOrThrow(taskId);
+        String enginePrincipal = resolveEnginePrincipalForWorkflow(taskBefore, userId, portalUsername);
+
+        log.info("Using Flowable engine to unclaim task: {} by engine principal: {} (portal userId: {})", taskId, enginePrincipal, userId);
+        Optional<Map<String, Object>> result = workflowEngineClient.unclaimTask(taskId, enginePrincipal);
         
         if (result.isEmpty()) {
             throw new PortalException("500", "Failed to unclaim task: " + taskId);
@@ -112,11 +132,16 @@ public class TaskProcessComponent {
      */
     @Transactional
     public void completeTask(TaskCompleteRequest request, String userId) {
+        completeTask(request, userId, null);
+    }
+
+    @Transactional
+    public void completeTask(TaskCompleteRequest request, String userId, String portalUsername) {
         String taskId = request.getTaskId();
         TaskInfo task = getTaskOrThrow(taskId);
 
         // 验证用户是否有权限处理任务
-        if (!canProcessTask(task, userId)) {
+        if (!canProcessTask(task, userId, portalUsername)) {
             throw new PortalException("403", "You do not have permission to process this task");
         }
 
@@ -124,7 +149,7 @@ public class TaskProcessComponent {
         if (("VIRTUAL_GROUP".equals(task.getAssignmentType()) || "CANDIDATE_USERS".equals(task.getAssignmentType()))
                 && (task.getAssignee() == null || task.getAssignee().isEmpty())) {
             log.info("Auto-claiming pool task {} (type {}) for user {}", taskId, task.getAssignmentType(), userId);
-            claimTask(taskId, userId);
+            claimTask(taskId, userId, portalUsername);
             task = getTaskOrThrow(taskId); // 认领后刷新任务状态
         }
 
@@ -147,7 +172,7 @@ public class TaskProcessComponent {
         if (!workflowEngineClient.isAvailable()) {
             throw new IllegalStateException("Flowable engine unavailable, please check if workflow-engine-core service is running");
         }
-        
+
         log.info("Using Flowable engine to delegate task: {} from {} to {}", taskId, delegatorId, delegateId);
         Optional<Map<String, Object>> result = workflowEngineClient.delegateTask(taskId, delegatorId, delegateId, reason);
         
@@ -175,7 +200,7 @@ public class TaskProcessComponent {
                 .operationDetail(reason)
                 .build();
         delegationAuditRepository.save(audit);
-        
+
         log.info("Task {} delegated via Flowable from {} to {}", taskId, delegatorId, delegateId);
     }
 
@@ -188,7 +213,7 @@ public class TaskProcessComponent {
         if (!workflowEngineClient.isAvailable()) {
             throw new IllegalStateException("Flowable engine unavailable, please check if workflow-engine-core service is running");
         }
-        
+
         log.info("Using Flowable engine to transfer task: {} from {} to {}", taskId, fromUserId, toUserId);
         Optional<Map<String, Object>> result = workflowEngineClient.transferTask(taskId, fromUserId, toUserId, reason);
         
@@ -225,12 +250,18 @@ public class TaskProcessComponent {
      */
     @Transactional
     public Map<String, Object> assignSubTableRow(String taskId, Long rowId, String assigneeId, String userId) {
+        return assignSubTableRow(taskId, rowId, assigneeId, userId, null);
+    }
+
+    @Transactional
+    public Map<String, Object> assignSubTableRow(String taskId, Long rowId, String assigneeId, String userId,
+                                                 String portalUsername) {
         if (!workflowEngineClient.isAvailable()) {
             throw new IllegalStateException("Flowable engine unavailable, please check if workflow-engine-core service is running");
         }
 
         TaskInfo task = getTaskOrThrow(taskId);
-        if (!canProcessTask(task, userId)) {
+        if (!canProcessTask(task, userId, portalUsername)) {
             throw new PortalException("403", "You do not have permission to process this task");
         }
 
@@ -238,7 +269,7 @@ public class TaskProcessComponent {
                 && (task.getAssignee() == null || task.getAssignee().isEmpty())) {
             log.info("Auto-claiming pool task {} (type {}) for sub-table assign by user {}",
                     taskId, task.getAssignmentType(), userId);
-            claimTask(taskId, userId);
+            claimTask(taskId, userId, portalUsername);
         }
 
         Optional<Map<String, Object>> result = workflowEngineClient.assignSubTableRow(taskId, rowId, assigneeId);
@@ -273,13 +304,67 @@ public class TaskProcessComponent {
         return a.trim().equals(b.trim());
     }
 
-    private static boolean candidateUserIdsContain(List<String> candidateUserIds, String userId) {
+    /**
+     * 引擎返回的 assignee / 候选人可能是 username，JWT {@code userId} 为用户主键 UUID。
+     */
+    private static boolean matchesPortalIdentity(String engineSideRef, String portalUserId, String portalUsername) {
+        if (engineSideRef == null || engineSideRef.isBlank() || portalUserId == null) {
+            return false;
+        }
+        if (samePortalUserId(portalUserId, engineSideRef)) {
+            return true;
+        }
+        if (portalUsername != null && !portalUsername.isBlank()
+                && portalUsername.trim().equals(engineSideRef.trim())) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * 认领 / 取消认领时须传入与 Flowable IdentityLink 一致的字符串（候选人常为 username）。
+     */
+    private static String resolveEnginePrincipalForWorkflow(TaskInfo task, String portalUserId, String portalUsername) {
+        if (portalUserId == null || portalUserId.isBlank()) {
+            return portalUserId != null ? portalUserId.trim() : "";
+        }
+        String pu = portalUserId.trim();
+        String puName = portalUsername != null ? portalUsername.trim() : "";
+
+        String assignee = task.getAssignee();
+        if (assignee != null && !assignee.isBlank() && matchesPortalIdentity(assignee, portalUserId, portalUsername)) {
+            return assignee.trim();
+        }
+        List<String> candidates = task.getCandidateUserIds();
+        if (candidates != null) {
+            for (String c : candidates) {
+                if (c == null || c.isBlank()) {
+                    continue;
+                }
+                if (pu.equals(c.trim())) {
+                    return c.trim();
+                }
+            }
+            if (!puName.isEmpty()) {
+                for (String c : candidates) {
+                    if (c != null && puName.equals(c.trim())) {
+                        return c.trim();
+                    }
+                }
+            }
+        }
+        return pu;
+    }
+
+    private static boolean candidateUserIdsContain(List<String> candidateUserIds, String userId, String portalUsername) {
         if (candidateUserIds == null || userId == null) {
             return false;
         }
-        String u = userId.trim();
         for (String id : candidateUserIds) {
-            if (id != null && u.equals(id.trim())) {
+            if (id == null || id.isBlank()) {
+                continue;
+            }
+            if (matchesPortalIdentity(id.trim(), userId, portalUsername)) {
                 return true;
             }
         }
@@ -290,12 +375,16 @@ public class TaskProcessComponent {
      * 验证用户是否可以认领任务
      */
     public boolean canClaimTask(TaskInfo task, String userId) {
+        return canClaimTask(task, userId, null);
+    }
+
+    public boolean canClaimTask(TaskInfo task, String userId, String portalUsername) {
         String assignmentType = task.getAssignmentType();
         String assignee = task.getAssignee();
 
         return switch (assignmentType != null ? assignmentType : "") {
             case "CANDIDATE_USERS" ->
-                    candidateUserIdsContain(task.getCandidateUserIds(), userId);
+                    candidateUserIdsContain(task.getCandidateUserIds(), userId, portalUsername);
             case "VIRTUAL_GROUP" -> {
                 if (assignee != null && !assignee.isEmpty()) {
                     yield isUserInVirtualGroup(userId, assignee);
@@ -317,27 +406,31 @@ public class TaskProcessComponent {
      * 验证用户是否可以处理任务
      */
     public boolean canProcessTask(TaskInfo task, String userId) {
+        return canProcessTask(task, userId, null);
+    }
+
+    public boolean canProcessTask(TaskInfo task, String userId, String portalUsername) {
         String assignmentType = task.getAssignmentType();
         String assignee = task.getAssignee();
 
         // 如果任务已分配给当前用户（包括认领后的任务），允许处理
-        if (assignee != null && samePortalUserId(userId, assignee)) {
+        if (assignee != null && matchesPortalIdentity(assignee, userId, portalUsername)) {
             return true;
         }
 
         // 直接分配给用户
-        if ("USER".equals(assignmentType) && assignee != null && samePortalUserId(userId, assignee)) {
+        if ("USER".equals(assignmentType) && assignee != null && matchesPortalIdentity(assignee, userId, portalUsername)) {
             return true;
         }
 
         // 委托任务
-        if ("DELEGATED".equals(assignmentType) && assignee != null && samePortalUserId(userId, assignee)) {
+        if ("DELEGATED".equals(assignmentType) && assignee != null && matchesPortalIdentity(assignee, userId, portalUsername)) {
             return true;
         }
 
         // Flowable 候选人池：必须在候选人列表中
         if ("CANDIDATE_USERS".equals(assignmentType)) {
-            return candidateUserIdsContain(task.getCandidateUserIds(), userId);
+            return candidateUserIdsContain(task.getCandidateUserIds(), userId, portalUsername);
         }
 
         // 实体管理者任务（ENTITY_MANAGER）
@@ -378,16 +471,20 @@ public class TaskProcessComponent {
      * 是否可查看任务表单（待办/已办快照）：处理人规则 + 发起人 + 当前 assignee（含已办仍带回 assignee 的场景）。
      */
     public boolean canViewTaskForm(TaskInfo task, String userId) {
+        return canViewTaskForm(task, userId, null);
+    }
+
+    public boolean canViewTaskForm(TaskInfo task, String userId, String portalUsername) {
         if (userId == null || userId.isBlank()) {
             return false;
         }
-        if (canProcessTask(task, userId)) {
+        if (canProcessTask(task, userId, portalUsername)) {
             return true;
         }
         if (samePortalUserId(userId, task.getInitiatorId())) {
             return true;
         }
-        if (task.getAssignee() != null && samePortalUserId(userId, task.getAssignee())) {
+        if (task.getAssignee() != null && matchesPortalIdentity(task.getAssignee(), userId, portalUsername)) {
             return true;
         }
         return false;

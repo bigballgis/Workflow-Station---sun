@@ -6,6 +6,7 @@ import com.portal.component.TaskQueryComponent;
 import com.portal.dto.ApiResponse;
 import com.portal.dto.TaskInfo;
 import com.portal.security.CurrentUserId;
+import com.platform.security.util.SecurityContextUtils;
 import com.portal.dto.CompletedTaskFormData;
 import com.portal.dto.TaskFormData;
 import com.portal.dto.TaskFormSubmitRequest;
@@ -52,7 +53,8 @@ public class TaskFormController {
             @Valid @RequestBody TaskFormSubmitRequest request) {
         log.debug("POST /tasks/{}/submit by user {}", taskId, userId);
         TaskInfo task = requireTaskFormAccess(taskId, userId);
-        if (!taskProcessComponent.canProcessTask(task, userId)) {
+        if (!taskProcessComponent.canProcessTask(task, userId,
+                SecurityContextUtils.getCurrentUsername().orElse(null))) {
             throw new PortalException("403", "You do not have permission to submit this task form");
         }
         taskFormComponent.submitTaskForm(taskId, userId, request.getFormData(), request.getBaselineValues());
@@ -77,7 +79,8 @@ public class TaskFormController {
         }
         TaskInfo task = taskQueryComponent.getTaskById(taskId)
                 .orElseThrow(() -> new PortalException("404", "Task not found: " + taskId));
-        if (!taskProcessComponent.canViewTaskForm(task, userId)) {
+        if (!taskProcessComponent.canViewTaskForm(task, userId,
+                SecurityContextUtils.getCurrentUsername().orElse(null))) {
             throw new PortalException("403", "You do not have permission to access this task form");
         }
         return task;
