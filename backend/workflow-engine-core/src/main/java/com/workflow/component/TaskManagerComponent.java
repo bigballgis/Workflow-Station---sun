@@ -26,6 +26,7 @@ import org.flowable.engine.RuntimeService;
 import org.flowable.engine.TaskService;
 import org.flowable.engine.HistoryService;
 import org.flowable.engine.history.HistoricActivityInstance;
+import org.flowable.common.engine.impl.identity.Authentication;
 import org.flowable.engine.repository.ProcessDefinition;
 import org.flowable.engine.runtime.ProcessInstance;
 import org.flowable.identitylink.api.IdentityLink;
@@ -42,6 +43,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
@@ -786,6 +788,27 @@ public class TaskManagerComponent {
                         "taskId", "Task not found", taskId)));
             }
 
+            ensureAssigneeForOrphanInitiatorTaskIfNeeded(flowableTask, userId);
+            flowableTask = taskService.createTaskQuery()
+                    .taskId(taskId)
+                    .singleResult();
+            if (flowableTask == null) {
+                throw new WorkflowValidationException(Collections.singletonList(
+                    new WorkflowValidationException.ValidationError(
+                            "taskId", "Task not found after assignee repair", taskId)));
+            }
+
+            // BPMN 为发起人节点但运行时仅有候选人链时，complete 前 claim/setAssignee，避免 API 展示已归一化为 USER 而库表仍无 assignee
+            ensureProcessInitiatorAssigneeFromBpmnIfNeeded(flowableTask, userId);
+            flowableTask = taskService.createTaskQuery()
+                    .taskId(taskId)
+                    .singleResult();
+            if (flowableTask == null) {
+                throw new WorkflowValidationException(Collections.singletonList(
+                    new WorkflowValidationException.ValidationError(
+                            "taskId", "Task not found after initiator assignee repair", taskId)));
+            }
+
             String taskDisplayName = flowableTask.getName() != null ? flowableTask.getName() : taskId;
             
             // 查找扩展任务信息（可选，用于记录额外信息）
@@ -795,10 +818,12 @@ public class TaskManagerComponent {
             // 如果有扩展任务信息，验证权限和状态
             if (extendedTaskInfoOpt.isPresent()) {
                 ExtendedTaskInfo extendedTaskInfo = extendedTaskInfoOpt.get();
-                
-                // 验证完成权限
-                validateCompletePermission(extendedTaskInfo, userId);
-                
+
+                // Flowable 运行时 assignee/候选人优先；扩展表可能滞后（如发起人节点仍记为 VIRTUAL_GROUP），避免误拒 complete
+                if (!flowableRuntimeAuthorizesComplete(flowableTask, userId)) {
+                    validateCompletePermission(extendedTaskInfo, userId);
+                }
+
                 // 检查任务是否已完成
                 if (extendedTaskInfo.isCompleted()) {
                     throw new WorkflowValidationException(Collections.singletonList(
@@ -811,6 +836,10 @@ public class TaskManagerComponent {
                     log.info("检测到多实例子任务，准备回写数据到子表: taskId={}", taskId);
                     handleMultiInstanceSubTaskCompletion(taskId, variables, extendedTaskInfo);
                 }
+            } else if (!flowableRuntimeAuthorizesComplete(flowableTask, userId)) {
+                throw new WorkflowValidationException(Collections.singletonList(
+                        new WorkflowValidationException.ValidationError(
+                                "userId", "User does not have permission to complete this task", userId)));
             }
 
             String processInstanceId = flowableTask.getProcessInstanceId();
@@ -847,14 +876,20 @@ public class TaskManagerComponent {
             String taskDefinitionKey = flowableTask.getTaskDefinitionKey();
             
             detectAndInjectMultiInstanceData(processInstanceId, processDefinitionId, taskDefinitionKey);
-            
-            // 完成Flowable任务
-            if (variables != null && !variables.isEmpty()) {
-                log.info("Completing task {} with variables: {}", taskId, variables);
-                taskService.complete(taskId, variables);
-            } else {
-                log.info("Completing task {} without variables", taskId);
-                taskService.complete(taskId);
+
+            // Flowable 完成权限默认依赖 authenticatedUserId（候选人任务尤甚）
+            String previousActor = Authentication.getAuthenticatedUserId();
+            try {
+                Authentication.setAuthenticatedUserId(userId);
+                if (variables != null && !variables.isEmpty()) {
+                    log.info("Completing task {} with variables: {}", taskId, variables);
+                    taskService.complete(taskId, variables);
+                } else {
+                    log.info("Completing task {} without variables", taskId);
+                    taskService.complete(taskId);
+                }
+            } finally {
+                Authentication.setAuthenticatedUserId(previousActor);
             }
             
             // 更新扩展任务信息（如果存在）
@@ -1225,7 +1260,21 @@ public class TaskManagerComponent {
             assignmentType = AssignmentType.VIRTUAL_GROUP;
             assignmentTarget = null;
         }
-        
+
+        // 获取流程变量（先于发起人解析，便于 startUserId 为空时用 variables.initiator 兜底）
+        Map<String, Object> variables = null;
+        if (task.getProcessInstanceId() != null) {
+            try {
+                variables = runtimeService.getVariables(task.getProcessInstanceId());
+                log.debug("Retrieved {} variables for task {}",
+                    variables != null ? variables.size() : 0, task.getId());
+            } catch (Exception e) {
+                log.warn("Failed to get variables for process instance {}: {}",
+                    task.getProcessInstanceId(), e.getMessage());
+                variables = new HashMap<>();
+            }
+        }
+
         // 获取流程发起人信息
         String initiatorId = null;
         String initiatorName = null;
@@ -1240,28 +1289,48 @@ public class TaskManagerComponent {
                 }
             }
         }
-        
+        if (!StringUtils.hasText(initiatorId) && variables != null && variables.get("initiator") != null) {
+            String iv = variables.get("initiator").toString().trim();
+            if (StringUtils.hasText(iv)) {
+                initiatorId = iv;
+                initiatorName = resolveUserDisplayName(initiatorId);
+            }
+        }
+
+        String bpmnAssigneeType = null;
+        if (processDefinitionId != null && task.getTaskDefinitionKey() != null) {
+            try {
+                bpmnAssigneeType = bpmnActionParser.getUserTaskExtensionPropertyValue(
+                        processDefinitionId, task.getTaskDefinitionKey(), "assigneeType");
+            } catch (Exception e) {
+                log.debug("Read bpmn assigneeType for task {}: {}", task.getId(), e.getMessage());
+            }
+        }
+        if (bpmnAssigneeType != null) {
+            bpmnAssigneeType = bpmnAssigneeType.trim();
+        }
+
         // 获取当前处理人名称
         String currentAssignee = task.getAssignee();
         String currentAssigneeName = null;
         if (currentAssignee != null && !currentAssignee.isEmpty()) {
             currentAssigneeName = resolveUserDisplayName(currentAssignee);
         }
-        
-        // 获取流程变量（用于表单数据绑定）
-        Map<String, Object> variables = null;
-        if (task.getProcessInstanceId() != null) {
-            try {
-                variables = runtimeService.getVariables(task.getProcessInstanceId());
-                log.debug("Retrieved {} variables for task {}", 
-                    variables != null ? variables.size() : 0, task.getId());
-            } catch (Exception e) {
-                log.warn("Failed to get variables for process instance {}: {}", 
-                    task.getProcessInstanceId(), e.getMessage());
-                variables = new HashMap<>();
-            }
+
+        // BPMN 为流程发起人直办而运行时未写 assignee 时，纠正 API：避免误报 VIRTUAL_GROUP 空池
+        if (isBpmnProcessInitiatorType(bpmnAssigneeType)
+                && StringUtils.hasText(initiatorId)
+                && !StringUtils.hasText(currentAssignee)) {
+            assignmentType = AssignmentType.USER;
+            assignmentTarget = initiatorId.trim();
+            currentAssignee = initiatorId.trim();
+            currentAssigneeName = initiatorName != null ? initiatorName : resolveUserDisplayName(initiatorId);
+            candidateUserIds.clear();
+            candidateGroupIds.clear();
+            log.info("Normalized task {} JSON to USER/initiator from BPMN assigneeType={} (runtime had no assignee)",
+                    task.getId(), bpmnAssigneeType);
         }
-        
+
         List<String> extractedActionIds = bpmnActionParser.extractActionIds(task);
         
         return TaskListResult.TaskInfo.builder()
@@ -1276,6 +1345,7 @@ public class TaskManagerComponent {
             .currentAssignee(currentAssignee)
             .currentAssigneeName(currentAssigneeName)
             .assignmentType(assignmentType)
+            .bpmnAssigneeType(StringUtils.hasText(bpmnAssigneeType) ? bpmnAssigneeType : null)
             .assignmentTarget(assignmentTarget)
             .priority(task.getPriority())
             .createdTime(task.getCreateTime() != null ? 
@@ -1295,6 +1365,14 @@ public class TaskManagerComponent {
     
     
     // ==================== 私有辅助方法 ====================
+
+    private static boolean isBpmnProcessInitiatorType(String bpmnAssigneeType) {
+        if (!StringUtils.hasText(bpmnAssigneeType)) {
+            return false;
+        }
+        String u = bpmnAssigneeType.trim().toUpperCase(Locale.ROOT);
+        return "INITIATOR".equals(u) || "PROCESS_INITIATOR".equals(u);
+    }
     
     /**
      * 验证用户ID
@@ -1540,6 +1618,116 @@ public class TaskManagerComponent {
     }
 
     /**
+     * 以 Flowable 运行时 assignee / 候选人（用户与候选组）判断当前用户是否可完成，避免仅依赖可能过期的 ExtendedTaskInfo。
+     */
+    private boolean flowableRuntimeAuthorizesComplete(Task task, String portalUserId) {
+        if (task == null || !StringUtils.hasText(portalUserId)) {
+            return false;
+        }
+        String uid = portalUserId.trim();
+        String assignee = task.getAssignee();
+        if (StringUtils.hasText(assignee) && engineActorMatchesPortalUser(assignee, uid)) {
+            return true;
+        }
+        for (IdentityLink link : taskService.getIdentityLinksForTask(task.getId())) {
+            if (!"candidate".equals(link.getType())) {
+                continue;
+            }
+            if (link.getUserId() != null && StringUtils.hasText(link.getUserId())
+                    && engineActorMatchesPortalUser(link.getUserId(), uid)) {
+                return true;
+            }
+            if (link.getGroupId() != null && StringUtils.hasText(link.getGroupId())
+                    && userPermissionService.isUserInVirtualGroup(uid, link.getGroupId().trim())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * BPMN assigneeType 为发起人节点且当前用户为发起人时，在仅有候选人、无 assignee 的情况下 claim/setAssignee，与 {@link #buildTaskInfoFromFlowableTask} 归一化语义一致。
+     */
+    private void ensureProcessInitiatorAssigneeFromBpmnIfNeeded(Task task, String portalUserId) {
+        if (task == null || !StringUtils.hasText(portalUserId)) {
+            return;
+        }
+        if (StringUtils.hasText(task.getAssignee())) {
+            return;
+        }
+        String pdId = task.getProcessDefinitionId();
+        String defKey = task.getTaskDefinitionKey();
+        if (!StringUtils.hasText(pdId) || !StringUtils.hasText(defKey)) {
+            return;
+        }
+        String bpmnAt = null;
+        try {
+            bpmnAt = bpmnActionParser.getUserTaskExtensionPropertyValue(pdId, defKey, "assigneeType");
+        } catch (Exception e) {
+            log.debug("ensureProcessInitiatorAssignee: read assigneeType: {}", e.getMessage());
+        }
+        if (!isBpmnProcessInitiatorType(bpmnAt)) {
+            return;
+        }
+        String piid = task.getProcessInstanceId();
+        if (!StringUtils.hasText(piid)) {
+            return;
+        }
+        String initiatorId = resolveInitiatorUserId(piid);
+        if (!StringUtils.hasText(initiatorId) || !engineActorMatchesPortalUser(initiatorId, portalUserId.trim())) {
+            return;
+        }
+        try {
+            taskService.claim(task.getId(), portalUserId.trim());
+            log.info("Claimed BPMN initiator task {} for user {} before complete", task.getId(), portalUserId);
+        } catch (Exception e) {
+            log.debug("Claim initiator task {} failed ({}), trying setAssignee", task.getId(), e.getMessage());
+            try {
+                taskService.setAssignee(task.getId(), portalUserId.trim());
+                log.info("Set assignee on BPMN initiator task {} for user {} before complete", task.getId(), portalUserId);
+            } catch (Exception e2) {
+                log.warn("Could not claim/setAssignee initiator task {} for user {}: {}",
+                        task.getId(), portalUserId, e2.getMessage());
+            }
+        }
+    }
+
+    /**
+     * 无 assignee、无候选人链路的「孤儿」用户任务：发起人完成前写入 assignee，否则 Flowable 往往无法 complete。
+     */
+    private void ensureAssigneeForOrphanInitiatorTaskIfNeeded(Task task, String portalUserId) {
+        if (task == null || !StringUtils.hasText(portalUserId)) {
+            return;
+        }
+        if (StringUtils.hasText(task.getAssignee())) {
+            return;
+        }
+        long candidateLinks = taskService.getIdentityLinksForTask(task.getId()).stream()
+                .filter(l -> "candidate".equals(l.getType()))
+                .count();
+        if (candidateLinks > 0) {
+            return;
+        }
+        String piid = task.getProcessInstanceId();
+        if (!StringUtils.hasText(piid)) {
+            return;
+        }
+        ProcessInstance pi = runtimeService.createProcessInstanceQuery()
+                .processInstanceId(piid)
+                .singleResult();
+        if (pi == null) {
+            return;
+        }
+        String startUser = pi.getStartUserId();
+        if (!StringUtils.hasText(startUser) || !engineActorMatchesPortalUser(startUser, portalUserId.trim())) {
+            return;
+        }
+        log.warn("Task {} has no assignee and no candidate links; setting assignee to portal user {} (process initiator) before complete",
+                task.getId(), portalUserId.trim());
+        taskService.setAssignee(task.getId(), portalUserId.trim());
+    }
+
+    /**
      * 验证完成权限
      */
     private void validateCompletePermission(ExtendedTaskInfo task, String userId) {
@@ -1608,11 +1796,23 @@ public class TaskManagerComponent {
         }
         try {
             Object v = runtimeService.getVariable(processInstanceId, "initiator");
-            return v != null ? v.toString() : null;
+            if (v != null && StringUtils.hasText(v.toString())) {
+                return v.toString().trim();
+            }
         } catch (Exception e) {
-            log.debug("Could not read initiator for process {}: {}", processInstanceId, e.getMessage());
-            return null;
+            log.debug("Could not read initiator variable for process {}: {}", processInstanceId, e.getMessage());
         }
+        try {
+            ProcessInstance pi = runtimeService.createProcessInstanceQuery()
+                    .processInstanceId(processInstanceId)
+                    .singleResult();
+            if (pi != null && StringUtils.hasText(pi.getStartUserId())) {
+                return pi.getStartUserId().trim();
+            }
+        } catch (Exception e) {
+            log.debug("Could not read startUserId for process {}: {}", processInstanceId, e.getMessage());
+        }
+        return null;
     }
 
     private void publishTaskAssignmentEvent(ExtendedTaskInfo task, TaskAssignmentRequest request) {

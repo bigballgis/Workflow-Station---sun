@@ -110,6 +110,9 @@ public class TaskController {
             @PathVariable String taskId,
             @CurrentUserId String userId,
             @Valid @RequestBody TaskCompleteRequest request) {
+        if (userId == null || userId.isBlank()) {
+            throw new PortalException("401", "Authentication required");
+        }
         request.setTaskId(taskId);
         taskProcessComponent.completeTask(request, userId,
                 SecurityContextUtils.getCurrentUsername().orElse(null));

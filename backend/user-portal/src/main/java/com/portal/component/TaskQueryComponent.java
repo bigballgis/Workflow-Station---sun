@@ -309,6 +309,7 @@ public class TaskQueryComponent {
                 .processDefinitionKey(processDefinitionKey)
                 .processDefinitionName(processDefinitionName)
                 .assignmentType(assignmentType)
+                .bpmnAssigneeType(engineStringField(taskMap.get("bpmnAssigneeType")))
                 .assignmentTarget(assignmentTarget)
                 .assignee(currentAssignee)
                 .assigneeName(currentAssigneeName)
@@ -434,6 +435,7 @@ public class TaskQueryComponent {
                                     .processInstanceId(taskInfo.getProcessInstanceId())
                                     .processDefinitionKey(taskInfo.getProcessDefinitionKey())
                                     .processDefinitionName(taskInfo.getProcessDefinitionName())
+                                    .bpmnAssigneeType(taskInfo.getBpmnAssigneeType())
                                     .assignmentType("DELEGATED")
                                     .assignee(userId)
                                     .delegatorId(delegatorId)
@@ -488,6 +490,18 @@ public class TaskQueryComponent {
                     String processInstanceId = taskInfo.getProcessInstanceId();
                     if (processInstanceId != null) {
                         processInstanceRepository.findById(processInstanceId).ifPresent(pi -> {
+                            if (taskInfo.getInitiatorId() == null || taskInfo.getInitiatorId().isBlank()) {
+                                if (pi.getInitiatorId() != null && !pi.getInitiatorId().isBlank()) {
+                                    taskInfo.setInitiatorId(pi.getInitiatorId().trim());
+                                } else if (pi.getStartUserId() != null && !pi.getStartUserId().isBlank()) {
+                                    taskInfo.setInitiatorId(pi.getStartUserId().trim());
+                                }
+                            }
+                            if (taskInfo.getInitiatorName() == null || taskInfo.getInitiatorName().isBlank()) {
+                                if (pi.getStartUserName() != null && !pi.getStartUserName().isBlank()) {
+                                    taskInfo.setInitiatorName(pi.getStartUserName().trim());
+                                }
+                            }
                             if (pi.getVariables() != null) {
                                 Map<String, Object> merged = new java.util.HashMap<>();
                                 // Start with Flowable variables (base fields)

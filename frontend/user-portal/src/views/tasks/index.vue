@@ -49,8 +49,8 @@
         <el-table-column prop="processDefinitionName" :label="t('task.processName')" min-width="140" show-overflow-tooltip />
         <el-table-column prop="assignmentType" :label="t('task.assignmentType')" width="130" :show-overflow-tooltip="false" class-name="no-wrap-header">
           <template #default="{ row }">
-            <el-tag :class="['assignment-tag', getAssignmentClass(row.assignmentType)]" size="small">
-              {{ t(`task.${getAssignmentKey(row.assignmentType)}`) }}
+            <el-tag :class="['assignment-tag', getAssignmentClass(row)]" size="small">
+              {{ t(`task.${getAssignmentKey(row)}`) }}
             </el-tag>
           </template>
         </el-table-column>
@@ -273,6 +273,11 @@ function shouldSuppressClaimAsInitiatorDirectTask(task: TaskInfo): boolean {
     portalIdentityMatches(task.initiatorId, me.userId) || portalIdentityMatches(task.initiatorId, me.username)
   if (!iAmInitiator) return false
 
+  const bpmnAt = task.bpmnAssigneeType?.trim().toUpperCase()
+  if (bpmnAt === 'INITIATOR' || bpmnAt === 'PROCESS_INITIATOR') {
+    return true
+  }
+
   const av = task.variables?.assigneeType ?? task.variables?.assignee_type
   if (av != null && String(av).trim() !== '') {
     const u = String(av).trim().toUpperCase()
@@ -297,15 +302,17 @@ function shouldSuppressClaimAsInitiatorDirectTask(task: TaskInfo): boolean {
 }
 
 /**
- * 引擎在「无 assignee、无候选人/候选组 identity link」时会把 assignmentType 兜底成 VIRTUAL_GROUP（见 workflow-engine
- * TaskManagerComponent.buildTaskInfoFromFlowableTask）。发起人节点若未写入 assignee 会出现此「空池」行，不应展示认领。
+ * 无 assignee、无候选人/组、无 assignmentTarget 的「空池」任务：发起人不展示认领（与门户 canProcessTask 空池发起人规则一致，不限定 assignmentType）。
  */
 function shouldSuppressClaimInitiatorOrphanVirtualGroup(task: TaskInfo): boolean {
-  if (task.assignmentType !== 'VIRTUAL_GROUP') return false
   const me = getStoredUser()
   if (!me) return false
+  const iv = task.variables?.initiator
   const iAmInitiator =
-    portalIdentityMatches(task.initiatorId, me.userId) || portalIdentityMatches(task.initiatorId, me.username)
+    portalIdentityMatches(task.initiatorId, me.userId) ||
+    portalIdentityMatches(task.initiatorId, me.username) ||
+    (iv != null && iv !== '' && portalIdentityMatches(String(iv), me.userId)) ||
+    (iv != null && iv !== '' && portalIdentityMatches(String(iv), me.username))
   if (!iAmInitiator) return false
   if (task.assignee && String(task.assignee).trim()) return false
 
@@ -413,24 +420,33 @@ const submitAction = async () => {
   }
 }
 
-const getAssignmentClass = (type: string) => {
-  const map: Record<string, string> = {
-    'USER': 'user',
-    'VIRTUAL_GROUP': 'virtual-group',
-    'DEPT_ROLE': 'dept-role',
-    'DELEGATED': 'delegated'
+const getAssignmentKey = (task: TaskInfo) => {
+  const bpmn = task.bpmnAssigneeType?.trim().toUpperCase()
+  if (bpmn === 'INITIATOR' || bpmn === 'PROCESS_INITIATOR') {
+    return 'processInitiator'
   }
-  return map[type] || 'user'
-}
-
-const getAssignmentKey = (type: string) => {
+  const type = task.assignmentType
   const map: Record<string, string> = {
     'USER': 'user',
     'VIRTUAL_GROUP': 'virtualGroup',
     'DEPT_ROLE': 'deptRole',
-    'DELEGATED': 'delegated'
+    'DELEGATED': 'delegated',
+    'CANDIDATE_USERS': 'candidateUsers'
   }
   return map[type] || 'user'
+}
+
+const getAssignmentClass = (task: TaskInfo) => {
+  const key = getAssignmentKey(task)
+  const map: Record<string, string> = {
+    user: 'user',
+    processInitiator: 'user',
+    virtualGroup: 'virtual-group',
+    deptRole: 'dept-role',
+    delegated: 'delegated',
+    candidateUsers: 'virtual-group'
+  }
+  return map[key] || 'user'
 }
 
 // 将优先级转换为翻译键

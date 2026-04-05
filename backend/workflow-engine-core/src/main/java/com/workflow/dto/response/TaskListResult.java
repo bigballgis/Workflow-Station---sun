@@ -96,6 +96,12 @@ public class TaskListResult {
          * 分配类型
          */
         private AssignmentType assignmentType;
+
+        /**
+         * BPMN 用户任务扩展属性 assigneeType 的原始值（从已部署 BPMN XML 读取，如 INITIATOR、ROLE）。
+         * 与运行时 {@link #assignmentType} 分离，用于展示设计器语义；若已规范化为发起人直办，{@link #assignmentType} 可能为 USER。
+         */
+        private String bpmnAssigneeType;
         
         /**
          * 分配目标

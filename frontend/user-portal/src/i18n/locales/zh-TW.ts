@@ -175,6 +175,8 @@ export default {
     normal: '普通',
     low: '低',
     user: '直接分配',
+    processInitiator: '流程發起人',
+    candidateUsers: '候選人',
     virtualGroup: '虛擬群組',
     deptRole: '部門角色',
     delegated: '委託任務',

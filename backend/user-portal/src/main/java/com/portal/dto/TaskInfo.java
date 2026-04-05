@@ -40,6 +40,11 @@ public class TaskInfo {
     private String assignmentType;
 
     /**
+     * BPMN 用户任务扩展 assigneeType（如 INITIATOR、PROCESS_INITIATOR），与运行时 assignmentType 分离。
+     */
+    private String bpmnAssigneeType;
+
+    /**
      * 引擎分配目标：USER 时为处理人 ID；CANDIDATE_USERS 时为候选人用户 ID 逗号拼接等（与 workflow-engine TaskListResult 一致）
      */
     private String assignmentTarget;

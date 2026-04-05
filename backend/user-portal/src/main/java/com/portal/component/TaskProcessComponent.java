@@ -145,12 +145,16 @@ public class TaskProcessComponent {
             throw new PortalException("403", "You do not have permission to process this task");
         }
 
-        // 自动认领：虚拟组或 Flowable 候选人池任务且尚未有 assignee
-        if (("VIRTUAL_GROUP".equals(task.getAssignmentType()) || "CANDIDATE_USERS".equals(task.getAssignmentType()))
-                && (task.getAssignee() == null || task.getAssignee().isEmpty())) {
+        // 自动认领：虚拟组或 Flowable 候选人池任务且尚未有 assignee（排除「空池」孤儿任务，无 identity link 时 claim 必失败）
+        boolean poolStyle = "VIRTUAL_GROUP".equals(task.getAssignmentType()) || "CANDIDATE_USERS".equals(task.getAssignmentType())
+                || "DEPT_ROLE".equals(task.getAssignmentType());
+        boolean noAssignee = task.getAssignee() == null || task.getAssignee().isEmpty();
+        if (poolStyle && noAssignee && !isEmptyAssignmentPool(task)) {
             log.info("Auto-claiming pool task {} (type {}) for user {}", taskId, task.getAssignmentType(), userId);
             claimTask(taskId, userId, portalUsername);
             task = getTaskOrThrow(taskId); // 认领后刷新任务状态
+        } else if (poolStyle && noAssignee && isEmptyAssignmentPool(task)) {
+            log.info("Skipping auto-claim for empty-pool task {} (no assignee/target/candidates); completing without claim", taskId);
         }
 
         String action = request.getAction();
@@ -265,8 +269,10 @@ public class TaskProcessComponent {
             throw new PortalException("403", "You do not have permission to process this task");
         }
 
-        if (("VIRTUAL_GROUP".equals(task.getAssignmentType()) || "CANDIDATE_USERS".equals(task.getAssignmentType()))
-                && (task.getAssignee() == null || task.getAssignee().isEmpty())) {
+        boolean poolStyleSt = "VIRTUAL_GROUP".equals(task.getAssignmentType()) || "CANDIDATE_USERS".equals(task.getAssignmentType())
+                || "DEPT_ROLE".equals(task.getAssignmentType());
+        boolean noAssigneeSt = task.getAssignee() == null || task.getAssignee().isEmpty();
+        if (poolStyleSt && noAssigneeSt && !isEmptyAssignmentPool(task)) {
             log.info("Auto-claiming pool task {} (type {}) for sub-table assign by user {}",
                     taskId, task.getAssignmentType(), userId);
             claimTask(taskId, userId, portalUsername);
@@ -292,6 +298,39 @@ public class TaskProcessComponent {
             throw new PortalException("400", message);
         }
         return data;
+    }
+
+    /**
+     * 运行时无处理人、无候选人用户/组、无 assignmentTarget（与 Flowable identity link 一致的空池），不因 assignmentType 字符串再收紧。
+     */
+    private static boolean isEmptyAssignmentPool(TaskInfo task) {
+        if (task == null) {
+            return false;
+        }
+        boolean noAssignee = task.getAssignee() == null || task.getAssignee().isBlank();
+        if (!noAssignee) {
+            return false;
+        }
+        boolean noUsers = task.getCandidateUserIds() == null || task.getCandidateUserIds().isEmpty();
+        boolean noGroups = task.getCandidateGroupIds() == null || task.getCandidateGroupIds().isEmpty();
+        boolean noTarget = task.getAssignmentTarget() == null || task.getAssignmentTarget().isBlank();
+        return noUsers && noGroups && noTarget;
+    }
+
+    private static boolean isInitiatorOfTask(TaskInfo task, String userId, String portalUsername) {
+        if (task == null || userId == null) {
+            return false;
+        }
+        if (samePortalUserId(userId, task.getInitiatorId())) {
+            return true;
+        }
+        if (task.getVariables() != null) {
+            Object iv = task.getVariables().get("initiator");
+            if (iv != null) {
+                return matchesPortalIdentity(iv.toString(), userId, portalUsername);
+            }
+        }
+        return false;
     }
 
     /**
@@ -462,6 +501,12 @@ public class TaskProcessComponent {
                     return true;
                 }
             }
+        }
+
+        // 无 assignee、无候选人/组、无 assignmentTarget 的「空池」任务：不依赖 assignmentType 字符串（反序列化/兜底异常时仍放行发起人）
+        if (isEmptyAssignmentPool(task) && isInitiatorOfTask(task, userId, portalUsername)) {
+            log.info("canProcessTask: allow process for initiator on empty-pool task {}", task.getTaskId());
+            return true;
         }
 
         return false;

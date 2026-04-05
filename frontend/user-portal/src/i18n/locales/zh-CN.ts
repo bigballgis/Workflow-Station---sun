@@ -178,6 +178,8 @@ export default {
     normal: '普通',
     low: '低',
     user: '直接分配',
+    processInitiator: '流程发起人',
+    candidateUsers: '候选人',
     virtualGroup: '虚拟组',
     deptRole: '部门角色',
     delegated: '委托任务',

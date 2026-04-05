@@ -178,6 +178,8 @@ export default {
     normal: 'Normal',
     low: 'Low',
     user: 'Direct Assignment',
+    processInitiator: 'Process initiator',
+    candidateUsers: 'Candidate users',
     virtualGroup: 'Virtual Group',
     deptRole: 'Dept Role',
     delegated: 'Delegated',

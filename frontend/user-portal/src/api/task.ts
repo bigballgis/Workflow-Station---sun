@@ -35,6 +35,8 @@ export interface TaskInfo {
   processDefinitionKey: string
   processDefinitionName: string
   assignmentType: string
+  /** BPMN 扩展 assigneeType（如 INITIATOR、PROCESS_INITIATOR） */
+  bpmnAssigneeType?: string
   /** 引擎分配目标（如 CANDIDATE_USERS 时候选人 ID 列表拼接） */
   assignmentTarget?: string
   assignee: string

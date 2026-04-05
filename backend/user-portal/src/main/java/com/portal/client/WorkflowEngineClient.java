@@ -10,6 +10,7 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.*;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
@@ -393,6 +394,13 @@ public class WorkflowEngineClient {
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                 return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()));
             }
+        } catch (HttpClientErrorException | HttpServerErrorException e) {
+            String msg = parseWorkflowEngineErrorMessage(e.getResponseBodyAsString());
+            log.warn("Failed to complete task in workflow engine: status={}, message={}", e.getStatusCode(), msg);
+            Map<String, Object> err = new HashMap<>();
+            err.put("success", false);
+            err.put("message", msg != null ? msg : e.getMessage());
+            return Optional.of(err);
         } catch (Exception e) {
             log.warn("Failed to complete task in workflow engine: {}", e.getMessage());
         }
@@ -542,10 +550,24 @@ public class WorkflowEngineClient {
         try {
             Map<String, Object> m = ENGINE_ERROR_JSON.readValue(json, Map.class);
             Object msg = m.get("message");
-            return msg != null ? String.valueOf(msg) : null;
+            if (msg != null && !String.valueOf(msg).isBlank()) {
+                return String.valueOf(msg);
+            }
+            Object err = m.get("error");
+            if (err instanceof Map<?, ?> errMap) {
+                Object nested = errMap.get("message");
+                if (nested != null && !String.valueOf(nested).isBlank()) {
+                    return String.valueOf(nested);
+                }
+                Object code = errMap.get("code");
+                if (code != null && !String.valueOf(code).isBlank()) {
+                    return String.valueOf(code);
+                }
+            }
         } catch (Exception e) {
             return null;
         }
+        return null;
     }
 
     /**
