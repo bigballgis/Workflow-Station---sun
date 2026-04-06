@@ -67,13 +67,17 @@ BEGIN
             {"name":"ref_mc_time","type":"datePicker","field":"meeting_time","props":{"type":"datetime","placeholder":"请选择会议时间","valueFormat":"YYYY-MM-DD HH:mm:ss"},"title":"会议时间","_fc_id":"id_mc_time","hidden":false,"display":true,"validate":[{"message":"会议时间必填","trigger":"blur","required":true}],"_fc_drag_tag":"datePicker"},
             {"name":"ref_mc_location","type":"input","field":"location","props":{"maxlength":200,"placeholder":"请输入会议地点","showWordLimit":true},"title":"会议地点","_fc_id":"id_mc_location","hidden":false,"display":true,"validate":[{"message":"会议地点必填","trigger":"blur","required":true}],"_fc_drag_tag":"input"},
             {"name":"ref_mc_organizer","type":"input","field":"organizer_name","props":{"maxlength":100,"placeholder":"请输入组织者姓名","showWordLimit":true},"title":"组织者","_fc_id":"id_mc_organizer","hidden":false,"display":true,"validate":[{"message":"组织者必填","trigger":"blur","required":true}],"_fc_drag_tag":"input"},
-            {"name":"ref_mc_assigner","type":"user","field":"participant_assigner_user_id","props":{"placeholder":"搜索并选择负责「分配参与人」任务的处理人"},"title":"参与人分配责任人","_fc_id":"id_mc_assigner","hidden":false,"display":true,"validate":[{"message":"请选择参与人分配责任人","trigger":"change","required":true}],"_fc_drag_tag":"user"},
             {"name":"ref_mc_desc","type":"input","field":"description","props":{"rows":3,"type":"textarea","placeholder":"请输入会议说明"},"title":"会议说明","_fc_id":"id_mc_desc","hidden":false,"display":true,"_fc_drag_tag":"input"}
         ],"options":{"form":{"size":"default","inline":false,"labelWidth":"125px","labelPosition":"left","hideRequiredAsterisk":false},"resetBtn":{"show":false,"innerText":"重置"},"submitBtn":{"show":true,"innerText":"提交"}},"subForms":{}}'::jsonb,
         CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
     ON CONFLICT (function_unit_id, form_name) DO UPDATE SET
-        config_json = EXCLUDED.config_json,
+        -- 保留 03-form-table-bindings.sql 写入的 subForms（participants 子表字段）；勿用 EXCLUDED 整包覆盖清空
+        config_json = jsonb_set(
+            EXCLUDED.config_json::jsonb,
+            '{subForms}',
+            COALESCE((dw_form_definitions.config_json::jsonb)->'subForms', '{}'::jsonb)
+        ),
         description = EXCLUDED.description,
         updated_at  = CURRENT_TIMESTAMP
     RETURNING id INTO v_create_meeting_form_id;
@@ -97,7 +101,11 @@ BEGIN
         CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
     ON CONFLICT (function_unit_id, form_name) DO UPDATE SET
-        config_json = EXCLUDED.config_json,
+        config_json = jsonb_set(
+            EXCLUDED.config_json::jsonb,
+            '{subForms}',
+            COALESCE((dw_form_definitions.config_json::jsonb)->'subForms', '{}'::jsonb)
+        ),
         description = EXCLUDED.description,
         updated_at  = CURRENT_TIMESTAMP
     RETURNING id INTO v_assign_form_id;

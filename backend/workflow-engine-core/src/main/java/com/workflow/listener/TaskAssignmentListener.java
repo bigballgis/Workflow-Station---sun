@@ -377,14 +377,71 @@ public class TaskAssignmentListener implements FlowableEventListener {
         }
         if (raw instanceof Collection<?> col) {
             for (Object o : col) {
-                if (o != null) {
+                if (o == null) {
+                    continue;
+                }
+                if (o instanceof Map<?, ?> m) {
+                    String uid = extractUserIdFromRefMap(m);
+                    if (uid != null) {
+                        ids.addAll(splitUserList(uid));
+                    } else {
+                        log.warn("ASSIGNEE_FROM_VARIABLE: collection element map has no id/userId/user_id/value; skip (avoid Map#toString)");
+                    }
+                } else {
                     ids.addAll(splitUserList(o.toString()));
                 }
+            }
+        } else if (raw instanceof Map<?, ?> map) {
+            String uid = extractUserIdFromRefMap(map);
+            if (uid != null) {
+                ids.addAll(splitUserList(uid));
+            } else {
+                log.warn("ASSIGNEE_FROM_VARIABLE: map has no id/userId/user_id/value; skip (avoid Map#toString length overflow in Flowable identity link)");
             }
         } else {
             ids.addAll(splitUserList(raw.toString()));
         }
+        ids = sanitizeFlowableUserIds(ids);
         return taskAssigneeResolver.resolveFromUserIdList(AssigneeType.ASSIGNEE_FROM_VARIABLE, ids);
+    }
+
+    /** Flowable ACT_RU/HI identity link USER_ID_/GROUP_ID_ columns are varchar(255). */
+    private static final int FLOWABLE_IDENTITY_USER_ID_MAX = 255;
+
+    private static String extractUserIdFromRefMap(Map<?, ?> map) {
+        if (map == null) {
+            return null;
+        }
+        for (String k : new String[]{"id", "userId", "user_id", "value"}) {
+            Object v = map.get(k);
+            if (v != null) {
+                String s = String.valueOf(v).trim();
+                if (!s.isEmpty()) {
+                    return s;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static List<String> sanitizeFlowableUserIds(List<String> ids) {
+        if (ids == null || ids.isEmpty()) {
+            return ids;
+        }
+        List<String> out = new ArrayList<>();
+        for (String id : ids) {
+            if (id == null || id.isBlank()) {
+                continue;
+            }
+            String t = id.trim();
+            if (t.length() > FLOWABLE_IDENTITY_USER_ID_MAX) {
+                log.warn("ASSIGNEE_FROM_VARIABLE: skip user id longer than {} chars (Flowable identity link limit)",
+                        FLOWABLE_IDENTITY_USER_ID_MAX);
+                continue;
+            }
+            out.add(t);
+        }
+        return out;
     }
 
     private static List<String> splitUserList(String s) {

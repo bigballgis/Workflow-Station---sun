@@ -95,8 +95,7 @@ BEGIN
           <custom_1:values name="formName" value="Assign Participants Form" />
         </custom_1:properties>
         <custom:properties>
-          <custom:property name="assigneeType" value="ASSIGNEE_FROM_VARIABLE" />
-          <custom:property name="assigneeVariable" value="participant_assigner_user_id" />
+          <custom:property name="assigneeType" value="INITIATOR" />
         </custom:properties>
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_Create_Assign</bpmn:incoming>

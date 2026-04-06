@@ -251,6 +251,10 @@ public class ProcessComponent {
         variables.remove("activeBusinessUnitId");
         variables.remove("activeRoleId");
         variables.put("initiator", userId);
+        // 会议参与人演示功能单元 fu-20260403-a1b2c5：「分配参与人」节点使用 INITIATOR；脚本/后续逻辑仍读取 participant_assigner_user_id
+        if ("fu-20260403-a1b2c5".equals(pin.code())) {
+            variables.put("participant_assigner_user_id", userId);
+        }
 
         List<PortalWorkspaceAuthService.WorkspaceContextRow> wctx = portalWorkspaceAuthService.listWorkspaceContexts(userId);
         boolean jwtUserMatches = SecurityContextUtils.getCurrentUserId().map(uid -> uid.equals(userId)).orElse(false);
@@ -346,11 +350,29 @@ public class ProcessComponent {
         try {
             // 查询流程实例的任务
             Optional<Map<String, Object>> tasksResult = workflowEngineClient.getProcessInstanceTasks(flowableProcessInstanceId);
+            // #region agent log
+            {
+                Map<String, Object> d = new HashMap<>();
+                d.put("tasksResultPresent", tasksResult.isPresent());
+                d.put("processInstanceId", flowableProcessInstanceId);
+                AgentDebugLog.ndjson97dc8c("ProcessComponent.java:autoComplete", "H1",
+                        "after getProcessInstanceTasks (initial)", d);
+            }
+            // #endregion
             if (tasksResult.isPresent()) {
                 Map<String, Object> tasksData = tasksResult.get();
                 if (tasksData != null) {
                     @SuppressWarnings("unchecked")
                     List<Map<String, Object>> tasks = (List<Map<String, Object>>) tasksData.get("tasks");
+                    // #region agent log
+                    {
+                        Map<String, Object> d = new HashMap<>();
+                        d.put("tasksNull", tasks == null);
+                        d.put("tasksSize", tasks != null ? tasks.size() : -1);
+                        AgentDebugLog.ndjson97dc8c("ProcessComponent.java:autoComplete", "H1",
+                                "tasks list snapshot", d);
+                    }
+                    // #endregion
                     if (tasks != null && !tasks.isEmpty()) {
                         // 获取第一个任务
                         Map<String, Object> firstTask = tasks.get(0);
@@ -359,9 +381,30 @@ public class ProcessComponent {
                         Object taskDefKey = firstTask.get("taskDefinitionKey");
                         initiatorTaskDefKeyForHistory = taskDefKey != null ? taskDefKey.toString() : null;
                         log.info("Auto-completing first task: {} for process: {}", taskId, flowableProcessInstanceId);
+                        // #region agent log
+                        {
+                            Map<String, Object> d = new HashMap<>();
+                            d.put("taskId", taskId != null ? taskId : "");
+                            d.put("taskDefinitionKey", initiatorTaskDefKeyForHistory);
+                            d.put("taskName", firstTask.get("taskName"));
+                            AgentDebugLog.ndjson97dc8c("ProcessComponent.java:autoComplete", "H2",
+                                    "first task identity", d);
+                        }
+                        // #endregion
                         
                         // 先认领任务（设置 assignee）
                         Optional<Map<String, Object>> claimResult = workflowEngineClient.claimTask(taskId, userId);
+                        // #region agent log
+                        {
+                            Map<String, Object> d = new HashMap<>();
+                            d.put("claimPresent", claimResult.isPresent());
+                            d.put("claimSuccess",
+                                    claimResult.map(m -> m.get("success")).orElse(null));
+                            d.put("taskId", taskId != null ? taskId : "");
+                            AgentDebugLog.ndjson97dc8c("ProcessComponent.java:autoComplete", "H3",
+                                    "after claimTask", d);
+                        }
+                        // #endregion
                         if (claimResult.isPresent()) {
                             log.info("First task claimed successfully: {} by user: {}", taskId, userId);
                         } else {
@@ -378,6 +421,9 @@ public class ProcessComponent {
                                 processInstanceRepository.save(pi);
                             });
                         }
+
+                        // 用户字段可能反序列化为 { userId } 而无 id，引擎侧若误用 Map#toString 会撑爆 Flowable varchar(255)
+                        coerceUserRefVariablesForEngine(variables);
                         
                         // 计算子表条件变量（如 requestItemsHasHighValue）并注入
                         computeSubTableConditionVariables(variables);
@@ -385,7 +431,28 @@ public class ProcessComponent {
                         // 完成第一个任务
                         Optional<Map<String, Object>> completeResult = workflowEngineClient.completeTask(
                                 taskId, userId, "SUBMIT", variables);
-                        if (completeResult.isPresent()) {
+                        // #region agent log
+                        {
+                            Map<String, Object> d = new HashMap<>();
+                            d.put("completePresent", completeResult.isPresent());
+                            d.put("taskId", taskId != null ? taskId : "");
+                            d.put("varKeysCount", variables != null ? variables.size() : 0);
+                            if (completeResult.isPresent()) {
+                                Map<String, Object> cr = completeResult.get();
+                                d.put("resultSuccessField", cr.get("success"));
+                                Object msg = cr.get("message");
+                                if (msg != null) {
+                                    String s = String.valueOf(msg);
+                                    d.put("resultMessageSnippet",
+                                            s.length() > 220 ? s.substring(0, 220) : s);
+                                }
+                            }
+                            AgentDebugLog.ndjson97dc8c("ProcessComponent.java:autoComplete", "H4",
+                                    "after completeTask (first)", d);
+                        }
+                        // #endregion
+                        if (completeResult.isPresent()
+                                && !Boolean.FALSE.equals(completeResult.get().get("success"))) {
                             log.info("First task completed successfully: {}", taskId);
                             
                             // 完成第一个任务后，查询当前任务（下一个审批节点）
@@ -395,6 +462,19 @@ public class ProcessComponent {
                                 if (nextTasksData != null) {
                                     @SuppressWarnings("unchecked")
                                     List<Map<String, Object>> nextTasks = (List<Map<String, Object>>) nextTasksData.get("tasks");
+                                    // #region agent log
+                                    {
+                                        Map<String, Object> d = new HashMap<>();
+                                        d.put("nextTasksSize", nextTasks != null ? nextTasks.size() : -1);
+                                        if (nextTasks != null && !nextTasks.isEmpty()) {
+                                            Map<String, Object> nt = nextTasks.get(0);
+                                            d.put("nextTaskName", nt.get("taskName"));
+                                            d.put("nextTaskDefKey", nt.get("taskDefinitionKey"));
+                                        }
+                                        AgentDebugLog.ndjson97dc8c("ProcessComponent.java:autoComplete", "H6",
+                                                "after complete: next tasks snapshot", d);
+                                    }
+                                    // #endregion
                                     if (nextTasks != null && !nextTasks.isEmpty()) {
                                         Map<String, Object> currentTask = nextTasks.get(0);
                                         currentNodeName = (String) currentTask.get("taskName");
@@ -418,17 +498,43 @@ public class ProcessComponent {
                                 }
                             }
                         } else {
-                            log.warn("Failed to complete first task: {}", taskId);
+                            if (completeResult.isPresent() && Boolean.FALSE.equals(completeResult.get().get("success"))) {
+                                Object em = completeResult.get().get("message");
+                                log.warn("Failed to complete first task (engine): {} — {}", taskId, em);
+                            } else {
+                                log.warn("Failed to complete first task: {}", taskId);
+                            }
+                            // #region agent log
+                            AgentDebugLog.ndjson97dc8c("ProcessComponent.java:autoComplete", "H4",
+                                    "completeTask failed or empty", Map.of("taskId", taskId != null ? taskId : ""));
+                            // #endregion
                         }
                     } else {
                         log.warn("No tasks found for process instance: {}", flowableProcessInstanceId);
+                        // #region agent log
+                        AgentDebugLog.ndjson97dc8c("ProcessComponent.java:autoComplete", "H1",
+                                "tasks list null or empty", Map.of("processInstanceId", flowableProcessInstanceId));
+                        // #endregion
                     }
                 }
             } else {
                 log.warn("Failed to get tasks for process instance: {}", flowableProcessInstanceId);
+                // #region agent log
+                AgentDebugLog.ndjson97dc8c("ProcessComponent.java:autoComplete", "H1",
+                        "getProcessInstanceTasks returned empty", Map.of("processInstanceId", flowableProcessInstanceId));
+                // #endregion
             }
         } catch (Exception e) {
             log.warn("Failed to auto-complete first task: {}", e.getMessage());
+            // #region agent log
+            {
+                Map<String, Object> d = new HashMap<>();
+                d.put("exceptionClass", e.getClass().getName());
+                d.put("exceptionMessage", e.getMessage() != null ? e.getMessage() : "");
+                AgentDebugLog.ndjson97dc8c("ProcessComponent.java:autoComplete", "H5",
+                        "exception in auto-complete block", d);
+            }
+            // #endregion
             // 不抛出异常，流程已经启动成功
         }
 
@@ -1610,6 +1716,41 @@ public class ProcessComponent {
         } catch (Exception e) {
             log.warn("Failed to record initial submit change history for process {}: {}",
                     processInstanceId, e.getMessage());
+        }
+    }
+
+    /**
+     * 将门户表单中的「用户」对象（id / userId / user_id / value）压成纯字符串，避免 workflow-engine
+     * ASSIGNEE_FROM_VARIABLE 解析失败或误写入超长标识。
+     */
+    private void coerceUserRefVariablesForEngine(Map<String, Object> variables) {
+        if (variables == null || variables.isEmpty()) {
+            return;
+        }
+        String[] keys = {"participant_assigner_user_id"};
+        for (String key : keys) {
+            Object v = variables.get(key);
+            if (!(v instanceof Map<?, ?> m)) {
+                continue;
+            }
+            String uid = null;
+            for (String k : new String[]{"id", "userId", "user_id", "value"}) {
+                Object part = m.get(k);
+                if (part != null) {
+                    String s = String.valueOf(part).trim();
+                    if (!s.isEmpty()) {
+                        uid = s;
+                        break;
+                    }
+                }
+            }
+            if (uid != null) {
+                if (uid.length() > 255) {
+                    log.warn("coerceUserRefVariablesForEngine: {} value longer than 255 chars, skip coerce", key);
+                } else {
+                    variables.put(key, uid);
+                }
+            }
         }
     }
 

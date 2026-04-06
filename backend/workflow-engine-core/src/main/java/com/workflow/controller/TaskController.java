@@ -335,9 +335,12 @@ public class TaskController {
     public ResponseEntity<ApiResponse<TaskAssignmentResult>> claimTask(
             @Parameter(description = "任务ID", required = true)
             @PathVariable String taskId,
-            @RequestBody @Valid TaskClaimRequest request) {
+            @RequestBody(required = false) TaskClaimRequest request) {
         
-        // 设置 taskId（从路径参数获取）
+        if (request == null) {
+            request = new TaskClaimRequest();
+        }
+        // 设置 taskId（从路径参数获取；勿对 body 使用 @Valid，否则在 setTaskId 之前校验会失败）
         request.setTaskId(taskId);
 
         Optional<String> actor = WorkflowActorResolver.currentUserId();

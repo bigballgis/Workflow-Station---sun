@@ -372,6 +372,10 @@ public class WorkflowEngineClient {
     public Optional<Map<String, Object>> completeTask(String taskId, String userId, 
                                                        String action, Map<String, Object> variables) {
         if (!isAvailable()) {
+            // #region agent log
+            AgentDebugLog.ndjson97dc8c("WorkflowEngineClient.completeTask", "H4",
+                    "engine not available", Map.of("taskId", taskId != null ? taskId : ""));
+            // #endregion
             return Optional.empty();
         }
         try {
@@ -394,17 +398,56 @@ public class WorkflowEngineClient {
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                 return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()));
             }
+            // #region agent log
+            {
+                Map<String, Object> d = new HashMap<>();
+                d.put("taskId", taskId != null ? taskId : "");
+                d.put("httpStatus", response.getStatusCode().value());
+                d.put("bodyNull", response.getBody() == null);
+                AgentDebugLog.ndjson97dc8c("WorkflowEngineClient.completeTask", "H4",
+                        "complete non-2xx or empty body", d);
+            }
+            // #endregion
+            return Optional.empty();
         } catch (HttpClientErrorException | HttpServerErrorException e) {
             String msg = parseWorkflowEngineErrorMessage(e.getResponseBodyAsString());
             log.warn("Failed to complete task in workflow engine: status={}, message={}", e.getStatusCode(), msg);
+            // #region agent log
+            {
+                Map<String, Object> d = new HashMap<>();
+                d.put("taskId", taskId != null ? taskId : "");
+                d.put("httpStatus", e.getStatusCode().value());
+                d.put("bodySnippet", truncateForDebug(e.getResponseBodyAsString(), 500));
+                AgentDebugLog.ndjson97dc8c("WorkflowEngineClient.completeTask", "H4",
+                        "complete HTTP error", d);
+            }
+            // #endregion
             Map<String, Object> err = new HashMap<>();
             err.put("success", false);
             err.put("message", msg != null ? msg : e.getMessage());
             return Optional.of(err);
         } catch (Exception e) {
             log.warn("Failed to complete task in workflow engine: {}", e.getMessage());
+            // #region agent log
+            {
+                Map<String, Object> d = new HashMap<>();
+                d.put("taskId", taskId != null ? taskId : "");
+                d.put("exceptionClass", e.getClass().getName());
+                d.put("exceptionMessage", truncateForDebug(e.getMessage(), 400));
+                AgentDebugLog.ndjson97dc8c("WorkflowEngineClient.completeTask", "H4",
+                        "complete unexpected exception", d);
+            }
+            // #endregion
+            return Optional.empty();
         }
-        return Optional.empty();
+    }
+
+    private static String truncateForDebug(String s, int max) {
+        if (s == null) {
+            return "";
+        }
+        String t = s.trim();
+        return t.length() <= max ? t : t.substring(0, max) + "...";
     }
 
     /**
