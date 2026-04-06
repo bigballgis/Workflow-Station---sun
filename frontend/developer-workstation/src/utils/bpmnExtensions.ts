@@ -7,6 +7,12 @@ import type { BpmnElement, BpmnModeler } from '@/types/bpmn'
 
 const CUSTOM_PREFIX = 'custom'
 
+/** custom:Properties 在 moddle 中的子项字段名（见 workflowPlatformModdleDescriptor.property） */
+function getCustomPropertyList(properties: any): any[] {
+  const list = properties?.property ?? properties?.values
+  return Array.isArray(list) ? list : []
+}
+
 /**
  * 解析属性值，支持 JSON 格式
  */
@@ -79,8 +85,8 @@ export function getExtensionProperties(element: BpmnElement): Record<string, any
     return {}
   }
   
-  // 获取属性值列表
-  const propValues = properties.values || []
+  // 获取属性值列表（moddle 使用 property；历史错误实现曾用 values）
+  const propValues = getCustomPropertyList(properties)
   
   const result: Record<string, any> = {}
   for (const prop of propValues) {
@@ -134,17 +140,23 @@ export function setExtensionProperty(
   )
   
   if (!properties) {
-    properties = moddle.create(`${CUSTOM_PREFIX}:Properties`, { values: [] })
+    properties = moddle.create(`${CUSTOM_PREFIX}:Properties`, { property: [] })
     extensionElements.values.push(properties)
   }
   
-  if (!properties.values) {
-    properties.values = []
+  if (!properties.property) {
+    // 兼容旧会话中误用的 values
+    if (Array.isArray(properties.values) && properties.values.length) {
+      properties.property = properties.values
+    } else {
+      properties.property = []
+    }
   }
   
   // 更新或添加属性
   const stringValue = stringifyPropertyValue(value)
-  const existingProp = properties.values.find((p: any) => p.name === name)
+  const list = getCustomPropertyList(properties)
+  const existingProp = list.find((p: any) => p.name === name)
   
   if (existingProp) {
     existingProp.value = stringValue
@@ -153,7 +165,7 @@ export function setExtensionProperty(
       name,
       value: stringValue
     })
-    properties.values.push(newProp)
+    properties.property.push(newProp)
   }
   
   // 触发更新
@@ -191,11 +203,12 @@ export function removeExtensionProperty(
     (ext: any) => ext.$type === `${CUSTOM_PREFIX}:Properties`
   )
   
-  if (!properties?.values) return
+  const list = getCustomPropertyList(properties)
+  if (!list.length) return
   
-  const index = properties.values.findIndex((p: any) => p.name === name)
+  const index = list.findIndex((p: any) => p.name === name)
   if (index > -1) {
-    properties.values.splice(index, 1)
+    list.splice(index, 1)
     modeling.updateProperties(element, { extensionElements })
   }
 }
