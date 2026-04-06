@@ -523,7 +523,8 @@ class TaskQueryProperties {
         IllegalStateException exception = assertThrows(IllegalStateException.class, 
             () -> taskQueryComponent.queryTasks(request));
         
-        assertTrue(exception.getMessage().contains("Flowable 引擎不可用"));
+        assertTrue(exception.getMessage().contains("Flowable engine unavailable"),
+                () -> "got: " + exception.getMessage());
     }
 
     /**

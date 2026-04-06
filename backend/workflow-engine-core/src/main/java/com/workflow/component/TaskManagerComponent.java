@@ -18,9 +18,13 @@ import com.workflow.exception.WorkflowBusinessException;
 import com.workflow.exception.WorkflowValidationException;
 import com.workflow.repository.ExtendedTaskInfoRepository;
 import com.workflow.service.UserPermissionService;
+import com.workflow.util.InitiatorOrphanRepairEligibility;
 
 import com.platform.messaging.support.NotificationDispatchHelper;
 
+import org.flowable.bpmn.model.BpmnModel;
+import org.flowable.bpmn.model.FlowElement;
+import org.flowable.bpmn.model.UserTask;
 import org.flowable.engine.RepositoryService;
 import org.flowable.engine.RuntimeService;
 import org.flowable.engine.TaskService;
@@ -300,6 +304,7 @@ public class TaskManagerComponent {
             validateUserId(userId);
             
             int fetchLimit = (page + 1) * size;
+            repairOrphanBuRolePoolTasks(fetchLimit);
             
             List<Task> assignedTasks = taskService.createTaskQuery()
                 .taskAssignee(userId)
@@ -317,9 +322,9 @@ public class TaskManagerComponent {
             
             if (groupIds != null && !groupIds.isEmpty()) {
                 List<Task> groupTasks = taskService.createTaskQuery()
-                    .taskCandidateGroupIn(groupIds)
-                    .orderByTaskCreateTime().desc()
-                    .listPage(0, fetchLimit);
+                        .taskCandidateGroupIn(groupIds)
+                        .orderByTaskCreateTime().desc()
+                        .listPage(0, fetchLimit);
                 for (Task t : groupTasks) taskMap.putIfAbsent(t.getId(), t);
             }
             mergeOrphanInitiatorTasksRepair(userId, fetchLimit, taskMap);
@@ -369,8 +374,81 @@ public class TaskManagerComponent {
     }
 
     /**
+     * Repair legacy orphan pool tasks:
+     * Some historical tasks were created before assignee listener fixes and ended up with
+     * no assignee + no candidate identity links, even though BPMN assigneeType is BU_ROLE.
+     * This method backfills candidate users/assignee from BPMN extension so task query works.
+     */
+    private void repairOrphanBuRolePoolTasks(int fetchLimit) {
+        List<Task> unassigned = taskService.createTaskQuery()
+                .taskUnassigned()
+                .orderByTaskCreateTime().desc()
+                .listPage(0, fetchLimit);
+        for (Task t : unassigned) {
+            try {
+                List<IdentityLink> links = taskService.getIdentityLinksForTask(t.getId());
+                boolean hasCandidate = false;
+                for (IdentityLink l : links) {
+                    if ("candidate".equals(l.getType())
+                            && ((l.getUserId() != null && !l.getUserId().isBlank())
+                            || (l.getGroupId() != null && !l.getGroupId().isBlank()))) {
+                        hasCandidate = true;
+                        break;
+                    }
+                }
+                if (hasCandidate) {
+                    continue;
+                }
+                String pdId = t.getProcessDefinitionId();
+                String defKey = t.getTaskDefinitionKey();
+                String at = bpmnActionParser.getUserTaskExtensionPropertyValue(pdId, defKey, "assigneeType");
+                if (at == null || at.isBlank()) {
+                    continue;
+                }
+                String u = at.trim().toUpperCase(java.util.Locale.ROOT);
+                if (!"BU_ROLE".equals(u) && !"FIXED_BU_ROLE".equals(u)) {
+                    continue;
+                }
+                String roleId = bpmnActionParser.getUserTaskExtensionPropertyValue(pdId, defKey, "roleId");
+                String buId = bpmnActionParser.getUserTaskExtensionPropertyValue(pdId, defKey, "businessUnitId");
+                if (roleId == null || roleId.isBlank() || buId == null || buId.isBlank()) {
+                    log.warn("Orphan BU_ROLE task {} has missing roleId/businessUnitId; skip repair", t.getId());
+                    continue;
+                }
+                if (!adminCenterClient.isEligibleRole(buId.trim(), roleId.trim())) {
+                    log.warn("Orphan BU_ROLE task {} role {} not eligible for bu {}; skip repair",
+                            t.getId(), roleId, buId);
+                    continue;
+                }
+                List<String> users = adminCenterClient.getUsersByBusinessUnitAndRole(buId.trim(), roleId.trim());
+                if (users == null || users.isEmpty()) {
+                    log.warn("Orphan BU_ROLE task {} resolved no users for bu={} role={}", t.getId(), buId, roleId);
+                    continue;
+                }
+                if (users.size() == 1) {
+                    taskService.setAssignee(t.getId(), users.get(0).trim());
+                    log.info("Repaired orphan BU_ROLE task {} with direct assignee {}", t.getId(), users.get(0));
+                } else {
+                    for (String uid : users) {
+                        if (uid != null && !uid.isBlank()) {
+                            taskService.addCandidateUser(t.getId(), uid.trim());
+                        }
+                    }
+                    log.info("Repaired orphan BU_ROLE task {} with {} candidate users", t.getId(), users.size());
+                }
+            } catch (Exception ex) {
+                log.warn("Repair orphan BU_ROLE task {} failed: {}", t.getId(), ex.getMessage());
+            }
+        }
+    }
+
+    /**
      * 合并「未指派但流程变量 initiator 为当前用户」的任务，并幂等写回 assignee。
      * 覆盖监听器未执行、变量类型为 Long、或 assignee 未写入等导致 taskAssignee 查询不到的情况。
+     * <p><b>仅限 BPMN 上本节点为发起人办理（INITIATOR / PROCESS_INITIATOR 或等价的 flowable:assignee）</b>；
+     * BU_ROLE 等非发起人节点不会在此写回发起人，避免误派。</p>
+     * <p>历史上若已通过旧逻辑把 assignee 误写给发起人，需转办、开发库 UPDATE 或 purge 后重跑实例；本方法不会自动纠正。</p>
+     * <p>BU_ROLE 解析仅 1 人时引擎侧为直派，无 Claim，与门户展示一致。</p>
      */
     private void mergeOrphanInitiatorTasksRepair(String userId, int fetchLimit,
             java.util.LinkedHashMap<String, Task> taskMap) {
@@ -401,6 +479,19 @@ public class TaskManagerComponent {
         List<Task> orphans = query.listPage(0, fetchLimit);
         for (Task t : orphans) {
             try {
+                String assigneeType = bpmnActionParser.getUserTaskExtensionPropertyValue(
+                        t.getProcessDefinitionId(), t.getTaskDefinitionKey(), "assigneeType");
+                String flowableAssignee = null;
+                if (!StringUtils.hasText(assigneeType)) {
+                    flowableAssignee = readUserTaskAssigneeExpression(
+                            t.getProcessDefinitionId(), t.getTaskDefinitionKey());
+                }
+                if (!InitiatorOrphanRepairEligibility.shouldRepair(assigneeType, flowableAssignee)) {
+                    log.debug(
+                            "Skip initiator orphan repair for task {} (not initiator user task per BPMN; assigneeType={}, flowableAssignee={})",
+                            t.getId(), assigneeType, flowableAssignee);
+                    continue;
+                }
                 taskService.setAssignee(t.getId(), userId);
                 Task refreshed = taskService.createTaskQuery().taskId(t.getId()).singleResult();
                 if (refreshed != null) {
@@ -410,6 +501,30 @@ public class TaskManagerComponent {
                 log.warn("Could not repair assignee for orphan task {}: {}", t.getId(), ex.getMessage());
                 taskMap.putIfAbsent(t.getId(), t);
             }
+        }
+    }
+
+    /**
+     * Flowable BpmnModel 中 UserTask 的标准 assignee 表达式（无扩展 assigneeType 时的兜底）。
+     */
+    private String readUserTaskAssigneeExpression(String processDefinitionId, String taskDefinitionKey) {
+        if (!StringUtils.hasText(processDefinitionId) || !StringUtils.hasText(taskDefinitionKey)) {
+            return null;
+        }
+        try {
+            BpmnModel model = repositoryService.getBpmnModel(processDefinitionId);
+            if (model == null) {
+                return null;
+            }
+            FlowElement el = model.getFlowElement(taskDefinitionKey);
+            if (!(el instanceof UserTask ut)) {
+                return null;
+            }
+            String a = ut.getAssignee();
+            return StringUtils.hasText(a) ? a.trim() : null;
+        } catch (Exception e) {
+            log.debug("readUserTaskAssigneeExpression: {}", e.getMessage());
+            return null;
         }
     }
     

@@ -425,6 +425,13 @@ const getAssignmentKey = (task: TaskInfo) => {
   if (bpmn === 'INITIATOR' || bpmn === 'PROCESS_INITIATOR') {
     return 'processInitiator'
   }
+  // 设计器 FIXED_BU_ROLE：引擎运行时多为 CANDIDATE_USERS，需用 BPMN 扩展区分「固定 BU+角色」池
+  if (bpmn === 'FIXED_BU_ROLE') {
+    return 'fixedBuRole'
+  }
+  if (bpmn === 'BU_ROLE') {
+    return 'buRole'
+  }
   const type = task.assignmentType
   const map: Record<string, string> = {
     'USER': 'user',
@@ -444,7 +451,9 @@ const getAssignmentClass = (task: TaskInfo) => {
     virtualGroup: 'virtual-group',
     deptRole: 'dept-role',
     delegated: 'delegated',
-    candidateUsers: 'virtual-group'
+    candidateUsers: 'virtual-group',
+    fixedBuRole: 'virtual-group',
+    buRole: 'virtual-group'
   }
   return map[key] || 'user'
 }

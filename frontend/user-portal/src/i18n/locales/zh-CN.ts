@@ -180,6 +180,8 @@ export default {
     user: '直接分配',
     processInitiator: '流程发起人',
     candidateUsers: '候选人',
+    fixedBuRole: '固定业务单元+角色',
+    buRole: '业务单元+角色',
     virtualGroup: '虚拟组',
     deptRole: '部门角色',
     delegated: '委托任务',

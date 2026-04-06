@@ -177,6 +177,8 @@ export default {
     user: '直接分配',
     processInitiator: '流程發起人',
     candidateUsers: '候選人',
+    fixedBuRole: '固定業務單元+角色',
+    buRole: '業務單元+角色',
     virtualGroup: '虛擬群組',
     deptRole: '部門角色',
     delegated: '委託任務',

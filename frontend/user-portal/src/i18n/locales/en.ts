@@ -180,6 +180,8 @@ export default {
     user: 'Direct Assignment',
     processInitiator: 'Process initiator',
     candidateUsers: 'Candidate users',
+    fixedBuRole: 'Fixed BU + role',
+    buRole: 'BU + role',
     virtualGroup: 'Virtual Group',
     deptRole: 'Dept Role',
     delegated: 'Delegated',

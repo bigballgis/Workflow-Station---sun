@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
@@ -492,13 +493,43 @@ public class TaskProcessComponent {
             }
         }
 
-        // 无 assignee、无候选人/组、无 assignmentTarget 的「空池」任务：不依赖 assignmentType 字符串（反序列化/兜底异常时仍放行发起人）
+        // 无 assignee、无候选人/组、无 assignmentTarget 的「空池」任务：仅当 BPMN 为发起人办理时放行发起人；
+        // BU_ROLE / HIERARCHY 等节点若误表现为空池，不得出现在发起人待办。
         if (isEmptyAssignmentPool(task) && isInitiatorOfTask(task, userId, portalUsername)) {
+            if (!allowsInitiatorEmptyPoolFallback(task.getBpmnAssigneeType())) {
+                log.debug("canProcessTask: deny initiator empty-pool for BPMN assigneeType={} task={}",
+                        task.getBpmnAssigneeType(), task.getTaskId());
+                return false;
+            }
             log.info("canProcessTask: allow process for initiator on empty-pool task {}", task.getTaskId());
             return true;
         }
 
         return false;
+    }
+
+    /**
+     * 空池发起人兜底：仅当 BPMN 明确为发起人节点时允许。
+     * 未配置 assigneeType 或后续节点（BU_ROLE 等）不得因「发起人是自己」出现在待办——发起人只应处理明确标成 INITIATOR 的空池任务。
+     */
+    private static boolean allowsInitiatorEmptyPoolFallback(String bpmnAssigneeType) {
+        if (bpmnAssigneeType == null || bpmnAssigneeType.isBlank()) {
+            return false;
+        }
+        String u = bpmnAssigneeType.trim().toUpperCase(Locale.ROOT);
+        return "INITIATOR".equals(u) || "PROCESS_INITIATOR".equals(u);
+    }
+
+    /**
+     * 待办列表专用过滤：仅隐藏「发起人对空池且 BPMN 非 INITIATOR/PROCESS_INITIATOR」的条目（如误展示的 BU_ROLE 节点）。
+     * <p>不要用完整 {@link #canProcessTask} 过滤整表：引擎已按 assignee/候选人/候选组聚合，二次过滤易因候选人 ID（UUID vs username）
+     * 与 JWT 字段不一致导致合法处理人（如 BU_ROLE 池成员）待办为空。</p>
+     */
+    public boolean shouldHideTaskInTodoList(TaskInfo task, String userId, String portalUsername) {
+        if (!isEmptyAssignmentPool(task) || !isInitiatorOfTask(task, userId, portalUsername)) {
+            return false;
+        }
+        return !allowsInitiatorEmptyPoolFallback(task.getBpmnAssigneeType());
     }
 
     /**

@@ -8,6 +8,7 @@ import com.portal.dto.TaskQueryRequest;
 import com.portal.dto.TaskStatistics;
 import com.portal.dto.TaskHistoryInfo;
 import com.portal.util.WorkflowEnginePayloadHelper;
+import com.platform.security.util.SecurityContextUtils;
 import com.portal.entity.DelegationRule;
 import com.portal.entity.ProcessHistory;
 import com.portal.entity.ProcessInstance;
@@ -22,6 +23,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -35,7 +38,11 @@ import java.util.stream.Collectors;
  * Task query component.
  * Supports multi-dimensional task queries: direct assignment, virtual groups, department roles, delegated tasks.
  * 
- * Note: All task queries must go through the Flowable engine; local fallback implementations are not allowed.
+ * Primary path queries the Flowable engine, then drops only {@link TaskProcessComponent#shouldHideTaskInTodoList}
+ * (发起人误占下游空池). Full {@link TaskProcessComponent#canProcessTask} is not applied to the list — engine
+ * membership is authoritative; complete/claim still enforce canProcessTask.
+ * When the engine returns an empty list, {@link #mergeTasksFromRunningProcessInstancesForUser} merges from
+ * RUNNING instances with {@code canProcessTask} (initiator fallback path only).
  */
 @Slf4j
 @Component
@@ -48,6 +55,11 @@ public class TaskQueryComponent {
     private final WorkflowEngineClient workflowEngineClient;
     private final TaskActionService taskActionService;
     private final JdbcTemplate jdbcTemplate;
+
+    /** Lazy: breaks cycle with {@link TaskProcessComponent} which depends on this component. */
+    @Lazy
+    @Autowired
+    private TaskProcessComponent taskProcessComponent;
 
     @PostConstruct
     public void init() {
@@ -83,14 +95,13 @@ public class TaskQueryComponent {
             // Determine query method based on assignment type filter
             boolean includeGroups = assignmentTypes == null || assignmentTypes.isEmpty() 
                 || assignmentTypes.contains("VIRTUAL_GROUP");
-            
             Optional<Map<String, Object>> result;
             if (includeGroups) {
                 result = workflowEngineClient.getUserAllVisibleTasks(userId, groupIds, Collections.emptyList(), 0, 1000);
             } else {
                 result = workflowEngineClient.getUserTasks(userId, 0, 1000);
             }
-            
+
             if (result.isPresent()) {
                 Map<String, Object> responseBody = result.get();
                 List<Map<String, Object>> tasks = WorkflowEnginePayloadHelper.taskListFromPayload(responseBody);
@@ -135,6 +146,14 @@ public class TaskQueryComponent {
                 .stream()
                 .collect(Collectors.toList());
 
+        // 仅去掉「发起人对空池且 BPMN 非发起人节点」；不用 canProcessTask 过滤整表（避免候选人 ID 与 JWT 不一致时全员空待办）
+        String portalUsername = SecurityContextUtils.getCurrentUsername().orElse(null);
+        if (taskProcessComponent != null) {
+            allTasks = allTasks.stream()
+                    .filter(t -> !taskProcessComponent.shouldHideTaskInTodoList(t, userId, portalUsername))
+                    .collect(Collectors.toList());
+        }
+
         // Apply filters
         allTasks = applyFilters(allTasks, request);
 
@@ -155,8 +174,10 @@ public class TaskQueryComponent {
     /**
      * 当 /api/v1/tasks?userId= 聚合结果为空时，根据门户库中「当前用户为发起人的 RUNNING 实例」按 processInstanceId 再拉引擎任务。
      * 覆盖：assignee 未写入、userId 与引擎不一致、RestTemplate 静默失败等导致待办为空的场景。
+     * <p>仅合并当前用户<strong>有权处理</strong>的任务（与引擎 assignee/候选人语义一致），避免把下一节点（如 BU_ROLE）误塞给发起人待办。</p>
      */
     private void mergeTasksFromRunningProcessInstancesForUser(String userId, List<TaskInfo> allTasks) {
+        String portalUsername = SecurityContextUtils.getCurrentUsername().orElse(null);
         List<ProcessInstance> running = processInstanceRepository.findByStartUserIdAndStatus(userId, "RUNNING");
         if (running.isEmpty()) {
             return;
@@ -187,6 +208,11 @@ public class TaskQueryComponent {
                         continue;
                     }
                     if (isProcessWithdrawn(taskInfo.getProcessInstanceId())) {
+                        continue;
+                    }
+                    if (taskProcessComponent != null && !taskProcessComponent.canProcessTask(taskInfo, userId, portalUsername)) {
+                        log.debug("Fallback merge: skip task {} for user {} (not assignee/candidate/delegation pool)",
+                                taskInfo.getTaskId(), userId);
                         continue;
                     }
                     seen.add(taskInfo.getTaskId());

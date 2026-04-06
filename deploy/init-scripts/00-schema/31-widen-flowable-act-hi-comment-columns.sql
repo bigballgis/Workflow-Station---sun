@@ -9,6 +9,8 @@
 -- Fix: Widen text columns; convert FULL_MSG_ to bytea when it is still a character type.
 --
 -- Re-run anytime (idempotent). If act_hi_comment does not exist yet, skip via IF EXISTS.
+-- Note: Flowable usually creates act_* tables after this init step; workflow-engine also applies
+--       the same widen on PostgreSQL startup (see FlowableActHiCommentSchemaRepair).
 -- =============================================================================
 
 -- String columns (split so one failure does not block the rest)
