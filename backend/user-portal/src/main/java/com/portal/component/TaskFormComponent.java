@@ -1,6 +1,5 @@
 package com.portal.component;
 
-import com.portal.debug.AgentDebugLog;
 import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.*;
 import com.portal.entity.ProcessInstance;
@@ -71,14 +70,6 @@ public class TaskFormComponent {
             // Fallback: no Task Form binding, return only ProcessFormData in read-only mode
             log.info("No Task Form binding found for stage '{}', falling back to Process Form",
                     taskInfo.taskDefinitionKey);
-            // #region agent log
-            {
-                Map<String, Object> d = new HashMap<>();
-                d.put("taskDefinitionKey", taskInfo.taskDefinitionKey);
-                d.put("taskIdLen", taskId != null ? taskId.length() : 0);
-                AgentDebugLog.ff0c74("TaskFormComponent.getTaskFormData", "H5", "no_task_form_binding_fallback", d);
-            }
-            // #endregion
             return TaskFormData.builder()
                     .taskId(taskId)
                     .taskDefinitionKey(taskInfo.taskDefinitionKey)

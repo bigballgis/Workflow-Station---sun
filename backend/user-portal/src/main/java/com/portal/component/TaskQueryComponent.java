@@ -1,6 +1,5 @@
 package com.portal.component;
 
-import com.portal.debug.AgentDebugLog;
 import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.PageResponse;
 import com.portal.dto.TaskActionInfo;
@@ -953,10 +952,6 @@ public class TaskQueryComponent {
             }
             if (enriched > 0) {
                 log.debug("Enriched {} sub-table rows with DB id from {}", enriched, table);
-                // #region agent log
-                AgentDebugLog.ff0c74("TaskQueryComponent.enrichMissingParticipantRowIdsInSubTables", "H1-fix",
-                        "enriched_row_ids", Map.of("enriched", enriched, "table", table));
-                // #endregion
             }
         } catch (Exception e) {
             log.debug("enrichMissingParticipantRowIdsInSubTables skipped: {}", e.getMessage());

@@ -1,6 +1,5 @@
 package com.portal.component;
 
-import com.portal.debug.AgentDebugLog;
 import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.TaskCompleteRequest;
 import com.portal.dto.TaskInfo;
@@ -19,7 +18,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -279,15 +277,6 @@ public class TaskProcessComponent {
         }
 
         Optional<Map<String, Object>> result = workflowEngineClient.assignSubTableRow(taskId, rowId, assigneeId);
-        // #region agent log
-        {
-            Map<String, Object> d = new LinkedHashMap<>();
-            d.put("engineResultEmpty", result.isEmpty());
-            result.ifPresent(m -> d.put("engineKeys", m.keySet().toString()));
-            result.ifPresent(m -> d.put("engineSuccess", m.get("success")));
-            AgentDebugLog.ff0c74("TaskProcessComponent.assignSubTableRow", "H4", "after_engine_client", d);
-        }
-        // #endregion
         if (result.isEmpty()) {
             throw new PortalException("500", "Failed to assign sub-table row: " + taskId);
         }

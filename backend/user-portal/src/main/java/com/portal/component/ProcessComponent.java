@@ -1,7 +1,6 @@
 package com.portal.component;
 
 import com.portal.client.WorkflowEngineClient;
-import com.portal.debug.AgentDebugLog;
 import com.portal.dto.ChangeHistoryContext;
 import com.portal.exception.PortalException;
 import com.portal.dto.ProcessDefinitionInfo;
@@ -158,16 +157,6 @@ public class ProcessComponent {
         }
         ActiveCatalogPin pin = activePinOpt.get();
 
-        // #region agent log
-        AgentDebugLog.fdc174("ProcessComponent.java:startProcess", "H1",
-                "active catalog pin for start",
-                Map.of(
-                        "processKey", processKey,
-                        "catalogId", pin.catalogId(),
-                        "code", pin.code() != null ? pin.code() : "",
-                        "versionLabel", pin.versionLabel() != null ? pin.versionLabel() : ""));
-        // #endregion
-
         String resolvedFunctionUnitId = functionUnitAccessComponent.resolveFunctionUnitId(processKey);
         if (!pin.catalogId().equals(resolvedFunctionUnitId)) {
             throw new FunctionUnitAccessComponent.FunctionUnitAccessDeniedException(
@@ -203,11 +192,6 @@ public class ProcessComponent {
             throw new IllegalStateException("无法获取流程定义 BPMN: " + processKey);
         }
 
-        // #region agent log
-        AgentDebugLog.fdc174("ProcessComponent.java:bpmn", "H1", "bpmn xml present",
-                Map.of("processKey", processKey, "bpmnLen", bpmnXml.length()));
-        // #endregion
-
         // 检查 Flowable 引擎是否可用
         if (!workflowEngineClient.isAvailable()) {
             throw new IllegalStateException("Flowable 引擎不可用，请检查 workflow-engine-core 服务是否启动");
@@ -236,16 +220,6 @@ public class ProcessComponent {
             }
         }
 
-        // #region agent log
-        {
-            Map<String, Object> deployDbg = new HashMap<>();
-            deployDbg.put("processKey", processKey);
-            deployDbg.put("deployPresent", deployResult.isPresent());
-            deployDbg.put("actualProcessKey", actualProcessKey);
-            AgentDebugLog.fdc174("ProcessComponent.java:deploy", "H2", "after deploy resolution", deployDbg);
-        }
-        // #endregion
-        
         // 启动流程实例：剥离客户端伪造的工作台键；有 UBR 的用户必须携带有效 JWT 工作台上下文（与 hasContext 一致）
         Map<String, Object> variables = request.getFormData() != null ? new HashMap<>(request.getFormData()) : new HashMap<>();
         variables.remove("activeBusinessUnitId");
@@ -291,18 +265,6 @@ public class ProcessComponent {
         Optional<Map<String, Object>> startResult = workflowEngineClient.startProcess(
                 actualProcessKey, request.getBusinessKey(), userId, variables);
 
-        // #region agent log
-        {
-            Map<String, Object> sr = new HashMap<>();
-            sr.put("processKey", processKey);
-            sr.put("actualProcessKey", actualProcessKey);
-            sr.put("startEmpty", startResult.isEmpty());
-            startResult.ifPresent(m -> sr.put("hasInstanceId",
-                    m != null && m.get("processInstanceId") != null));
-            AgentDebugLog.fdc174("ProcessComponent.java:afterEngineStart", "H4", "workflow engine start result", sr);
-        }
-        // #endregion
-        
         if (startResult.isEmpty()) {
             throw new IllegalStateException("启动流程失败: " + processKey);
         }
@@ -350,29 +312,11 @@ public class ProcessComponent {
         try {
             // 查询流程实例的任务
             Optional<Map<String, Object>> tasksResult = workflowEngineClient.getProcessInstanceTasks(flowableProcessInstanceId);
-            // #region agent log
-            {
-                Map<String, Object> d = new HashMap<>();
-                d.put("tasksResultPresent", tasksResult.isPresent());
-                d.put("processInstanceId", flowableProcessInstanceId);
-                AgentDebugLog.ndjson97dc8c("ProcessComponent.java:autoComplete", "H1",
-                        "after getProcessInstanceTasks (initial)", d);
-            }
-            // #endregion
             if (tasksResult.isPresent()) {
                 Map<String, Object> tasksData = tasksResult.get();
                 if (tasksData != null) {
                     @SuppressWarnings("unchecked")
                     List<Map<String, Object>> tasks = (List<Map<String, Object>>) tasksData.get("tasks");
-                    // #region agent log
-                    {
-                        Map<String, Object> d = new HashMap<>();
-                        d.put("tasksNull", tasks == null);
-                        d.put("tasksSize", tasks != null ? tasks.size() : -1);
-                        AgentDebugLog.ndjson97dc8c("ProcessComponent.java:autoComplete", "H1",
-                                "tasks list snapshot", d);
-                    }
-                    // #endregion
                     if (tasks != null && !tasks.isEmpty()) {
                         // 获取第一个任务
                         Map<String, Object> firstTask = tasks.get(0);
@@ -381,30 +325,9 @@ public class ProcessComponent {
                         Object taskDefKey = firstTask.get("taskDefinitionKey");
                         initiatorTaskDefKeyForHistory = taskDefKey != null ? taskDefKey.toString() : null;
                         log.info("Auto-completing first task: {} for process: {}", taskId, flowableProcessInstanceId);
-                        // #region agent log
-                        {
-                            Map<String, Object> d = new HashMap<>();
-                            d.put("taskId", taskId != null ? taskId : "");
-                            d.put("taskDefinitionKey", initiatorTaskDefKeyForHistory);
-                            d.put("taskName", firstTask.get("taskName"));
-                            AgentDebugLog.ndjson97dc8c("ProcessComponent.java:autoComplete", "H2",
-                                    "first task identity", d);
-                        }
-                        // #endregion
-                        
+
                         // 先认领任务（设置 assignee）
                         Optional<Map<String, Object>> claimResult = workflowEngineClient.claimTask(taskId, userId);
-                        // #region agent log
-                        {
-                            Map<String, Object> d = new HashMap<>();
-                            d.put("claimPresent", claimResult.isPresent());
-                            d.put("claimSuccess",
-                                    claimResult.map(m -> m.get("success")).orElse(null));
-                            d.put("taskId", taskId != null ? taskId : "");
-                            AgentDebugLog.ndjson97dc8c("ProcessComponent.java:autoComplete", "H3",
-                                    "after claimTask", d);
-                        }
-                        // #endregion
                         if (claimResult.isPresent()) {
                             log.info("First task claimed successfully: {} by user: {}", taskId, userId);
                         } else {
@@ -431,26 +354,6 @@ public class ProcessComponent {
                         // 完成第一个任务
                         Optional<Map<String, Object>> completeResult = workflowEngineClient.completeTask(
                                 taskId, userId, "SUBMIT", variables);
-                        // #region agent log
-                        {
-                            Map<String, Object> d = new HashMap<>();
-                            d.put("completePresent", completeResult.isPresent());
-                            d.put("taskId", taskId != null ? taskId : "");
-                            d.put("varKeysCount", variables != null ? variables.size() : 0);
-                            if (completeResult.isPresent()) {
-                                Map<String, Object> cr = completeResult.get();
-                                d.put("resultSuccessField", cr.get("success"));
-                                Object msg = cr.get("message");
-                                if (msg != null) {
-                                    String s = String.valueOf(msg);
-                                    d.put("resultMessageSnippet",
-                                            s.length() > 220 ? s.substring(0, 220) : s);
-                                }
-                            }
-                            AgentDebugLog.ndjson97dc8c("ProcessComponent.java:autoComplete", "H4",
-                                    "after completeTask (first)", d);
-                        }
-                        // #endregion
                         if (completeResult.isPresent()
                                 && !Boolean.FALSE.equals(completeResult.get().get("success"))) {
                             log.info("First task completed successfully: {}", taskId);
@@ -462,19 +365,6 @@ public class ProcessComponent {
                                 if (nextTasksData != null) {
                                     @SuppressWarnings("unchecked")
                                     List<Map<String, Object>> nextTasks = (List<Map<String, Object>>) nextTasksData.get("tasks");
-                                    // #region agent log
-                                    {
-                                        Map<String, Object> d = new HashMap<>();
-                                        d.put("nextTasksSize", nextTasks != null ? nextTasks.size() : -1);
-                                        if (nextTasks != null && !nextTasks.isEmpty()) {
-                                            Map<String, Object> nt = nextTasks.get(0);
-                                            d.put("nextTaskName", nt.get("taskName"));
-                                            d.put("nextTaskDefKey", nt.get("taskDefinitionKey"));
-                                        }
-                                        AgentDebugLog.ndjson97dc8c("ProcessComponent.java:autoComplete", "H6",
-                                                "after complete: next tasks snapshot", d);
-                                    }
-                                    // #endregion
                                     if (nextTasks != null && !nextTasks.isEmpty()) {
                                         Map<String, Object> currentTask = nextTasks.get(0);
                                         currentNodeName = (String) currentTask.get("taskName");
@@ -504,37 +394,16 @@ public class ProcessComponent {
                             } else {
                                 log.warn("Failed to complete first task: {}", taskId);
                             }
-                            // #region agent log
-                            AgentDebugLog.ndjson97dc8c("ProcessComponent.java:autoComplete", "H4",
-                                    "completeTask failed or empty", Map.of("taskId", taskId != null ? taskId : ""));
-                            // #endregion
                         }
                     } else {
                         log.warn("No tasks found for process instance: {}", flowableProcessInstanceId);
-                        // #region agent log
-                        AgentDebugLog.ndjson97dc8c("ProcessComponent.java:autoComplete", "H1",
-                                "tasks list null or empty", Map.of("processInstanceId", flowableProcessInstanceId));
-                        // #endregion
                     }
                 }
             } else {
                 log.warn("Failed to get tasks for process instance: {}", flowableProcessInstanceId);
-                // #region agent log
-                AgentDebugLog.ndjson97dc8c("ProcessComponent.java:autoComplete", "H1",
-                        "getProcessInstanceTasks returned empty", Map.of("processInstanceId", flowableProcessInstanceId));
-                // #endregion
             }
         } catch (Exception e) {
             log.warn("Failed to auto-complete first task: {}", e.getMessage());
-            // #region agent log
-            {
-                Map<String, Object> d = new HashMap<>();
-                d.put("exceptionClass", e.getClass().getName());
-                d.put("exceptionMessage", e.getMessage() != null ? e.getMessage() : "");
-                AgentDebugLog.ndjson97dc8c("ProcessComponent.java:autoComplete", "H5",
-                        "exception in auto-complete block", d);
-            }
-            // #endregion
             // 不抛出异常，流程已经启动成功
         }
 

@@ -1,6 +1,5 @@
 package com.portal.component;
 
-import com.portal.debug.AgentDebugLog;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
@@ -9,7 +8,6 @@ import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.sql.Timestamp;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -104,14 +102,6 @@ public class MeetingParticipantVariablesPersistence {
             variables.put("_meeting_participants_persisted", true);
             log.info("[MeetingParticipant] persisted meeting_id={} and {} participant row(s) for process {}",
                     meetingId, enriched, processInstanceId);
-            // #region agent log
-            Map<String, Object> dbg = new LinkedHashMap<>();
-            dbg.put("meetingId", meetingId);
-            dbg.put("enriched", enriched);
-            dbg.put("processInstanceId", processInstanceId != null ? processInstanceId : "");
-            AgentDebugLog.ff0c74("MeetingParticipantVariablesPersistence.persistIfApplicable", "H-persist",
-                    "participant_rows_backfilled", dbg);
-            // #endregion
         }
     }
 

@@ -1,6 +1,5 @@
 package com.portal.controller;
 
-import com.portal.debug.AgentDebugLog;
 import com.portal.component.TaskProcessComponent;
 import com.platform.common.util.ApiResponseBodyUnwrap;
 import com.portal.component.TaskQueryComponent;
@@ -23,7 +22,6 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -206,26 +204,8 @@ public class TaskController {
             @PathVariable Long rowId,
             @RequestBody @Valid SubTableRowAssignRequest request,
             @CurrentUserId String userId) {
-        // #region agent log
-        {
-            Map<String, Object> d = new LinkedHashMap<>();
-            d.put("taskIdLen", taskId != null ? taskId.length() : 0);
-            d.put("rowId", rowId);
-            d.put("assigneeIdLen", request.getAssigneeId() != null ? request.getAssigneeId().length() : 0);
-            d.put("userIdLen", userId != null ? userId.length() : 0);
-            AgentDebugLog.ff0c74("TaskController.assignSubTableRow", "H4", "assign_entry", d);
-        }
-        // #endregion
         Map<String, Object> data = taskProcessComponent.assignSubTableRow(taskId, rowId, request.getAssigneeId(), userId,
                 SecurityContextUtils.getCurrentUsername().orElse(null));
-        // #region agent log
-        {
-            Map<String, Object> d = new LinkedHashMap<>();
-            d.put("dataKeys", data != null ? data.keySet().toString() : "null");
-            d.put("innerSuccess", data != null ? data.get("success") : null);
-            AgentDebugLog.ff0c74("TaskController.assignSubTableRow", "H4", "assign_ok_before_response", d);
-        }
-        // #endregion
         return ApiResponse.success(data);
     }
 
