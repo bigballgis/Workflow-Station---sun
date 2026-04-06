@@ -165,8 +165,12 @@ import type { DialogColumn } from './subTableAddDialogHelpers'
 import type { RowFormulaRule, SubTableValidationConfig } from './formRendererHelpers'
 import { calculateSummary } from './businessLogicEngine'
 import type { AssignSubTableRowResponse } from '@/api/task'
-import { assignSubTableRow, getSubTableData } from '@/api/task'
-import { pickHttpErrorBodyMessage, unwrapPortalApiPayload } from '@/utils/httpErrorMessage'
+import { assignSubTableRow, assignSubTableRowByIdentity, getSubTableData, getTaskDetail } from '@/api/task'
+import {
+  pickHttpErrorBodyMessage,
+  unwrapPortalApiPayload,
+  resolveUserFacingHttpMessage
+} from '@/utils/httpErrorMessage'
 import { userApi } from '@/api/user'
 import { onMounted, onBeforeUnmount } from 'vue'
 import { useSubTableWebSocket, type SubTableUpdateMessage } from '@/composables/useSubTableWebSocket'
@@ -387,15 +391,184 @@ function getUserDisplayName(userId: string): string {
   return userNameCache.value[userId] || userId
 }
 
+/**
+ * 子表行主键：引擎分配 API 需要关系表数字主键（如 participants.id）。
+ * 兼容仅带 participant_id / 大小写变体、或表单序列化后的字段名。
+ */
 function resolveSubTableRowPk(row: Record<string, unknown> | null | undefined): string | number | null {
   if (!row) return null
-  const v =
-    row.id ??
-    row.rowId ??
-    (row as { ID?: unknown }).ID ??
-    (row as { RowId?: unknown }).RowId
-  if (v == null || v === '') return null
-  return v as string | number
+  const r = row as Record<string, unknown>
+  const candidates: unknown[] = [
+    r.id,
+    r.rowId,
+    r.participant_id,
+    r.participantId,
+    (r as { ID?: unknown }).ID,
+    (r as { RowId?: unknown }).RowId
+  ]
+  for (const v of candidates) {
+    if (v != null && v !== '') return v as string | number
+  }
+  return null
+}
+
+function sameValue(a: unknown, b: unknown): boolean {
+  const sa = a == null ? '' : String(a).trim().toLowerCase()
+  const sb = b == null ? '' : String(b).trim().toLowerCase()
+  return sa !== '' && sb !== '' && sa === sb
+}
+
+async function resolveMissingRowIdFromServer(
+  taskId: string,
+  localRow: Record<string, unknown>,
+  rowIndex: number | null
+): Promise<number | null> {
+  try {
+    const response = await getSubTableData(taskId)
+    const payload = (response as Record<string, unknown>).data as Record<string, unknown> | undefined
+    const rowsFromServer = Array.isArray(payload?.rows) ? (payload!.rows as Record<string, unknown>[]) : []
+    // #region agent log
+    fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '97dc8c' },
+      body: JSON.stringify({
+        sessionId: '97dc8c',
+        hypothesisId: 'H9-subtable-data-shape',
+        location: 'SubTableField.vue:resolveMissingRowIdFromServer',
+        message: 'loaded sub table rows for recovery',
+        data: {
+          rowsLen: rowsFromServer.length,
+          firstRowKeys: rowsFromServer.length ? Object.keys(rowsFromServer[0] || {}) : [],
+          rowIndex
+        },
+        timestamp: Date.now()
+      })
+    }).catch(() => {})
+    // #endregion
+    if (!rowsFromServer.length) return null
+
+    const byEmail = rowsFromServer.find(r => sameValue(r.email, localRow.email))
+    const byNameAndDept = rowsFromServer.find(
+      r => sameValue(r.name, localRow.name) && sameValue(r.department, localRow.department)
+    )
+    const byIndex =
+      rowIndex != null && rowIndex >= 0 && rowIndex < rowsFromServer.length
+        ? rowsFromServer[rowIndex]
+        : null
+    const match = byEmail || byNameAndDept || byIndex || null
+    if (!match) return null
+
+    const pk = resolveSubTableRowPk(match)
+    const rowId = pk != null ? Number(pk) : NaN
+    return Number.isNaN(rowId) ? null : rowId
+  } catch (error: unknown) {
+    const ax = error as { response?: { status?: number; data?: unknown }; message?: string }
+    // #region agent log
+    fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '97dc8c' },
+      body: JSON.stringify({
+        sessionId: '97dc8c',
+        hypothesisId: 'H10-recover-error',
+        location: 'SubTableField.vue:resolveMissingRowIdFromServer',
+        message: 'getSubTableData failed',
+        data: {
+          taskIdLen: taskId?.length ?? 0,
+          httpStatus: ax.response?.status,
+          picked: pickHttpErrorBodyMessage(ax.response?.data),
+          errMsg: typeof ax.message === 'string' ? ax.message : ''
+        },
+        timestamp: Date.now()
+      })
+    }).catch(() => {})
+    // #endregion
+    return null
+  }
+}
+
+async function resolveMissingRowIdFromTaskDetail(
+  taskId: string,
+  localRow: Record<string, unknown>,
+  rowIndex: number | null
+): Promise<{
+  rowId: number | null
+  effectiveTaskId?: string
+  meetingHints?: { topic?: string; location?: string; organizerName?: string }
+}> {
+  try {
+    const detailRes = await getTaskDetail(taskId)
+    const detail = (detailRes as Record<string, unknown>).data as Record<string, unknown> | undefined
+    const effectiveTaskId =
+      detail && typeof detail.taskId === 'string' && detail.taskId.trim().length > 0 ? detail.taskId : taskId
+    const vars = (detail?.variables as Record<string, unknown> | undefined) || {}
+    const subTables = (vars.__subTables__ as Record<string, unknown> | undefined) || {}
+    const allRows: Record<string, unknown>[] = []
+    Object.values(subTables).forEach(v => {
+      if (Array.isArray(v)) {
+        v.forEach(r => {
+          if (r && typeof r === 'object') allRows.push(r as Record<string, unknown>)
+        })
+      }
+    })
+    // #region agent log
+    fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '97dc8c' },
+      body: JSON.stringify({
+        sessionId: '97dc8c',
+        hypothesisId: 'H12-taskdetail-shape',
+        location: 'SubTableField.vue:resolveMissingRowIdFromTaskDetail',
+        message: 'loaded __subTables__ from task detail',
+        data: {
+          rowsLen: allRows.length,
+          firstRowKeys: allRows.length ? Object.keys(allRows[0] || {}) : [],
+          rowIndex
+        },
+        timestamp: Date.now()
+      })
+    }).catch(() => {})
+    // #endregion
+    // #region agent log
+    fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '97dc8c' },
+      body: JSON.stringify({
+        sessionId: '97dc8c',
+        runId: 'run-assign',
+        hypothesisId: 'H47-task-vars-shape',
+        location: 'SubTableField.vue:resolveMissingRowIdFromTaskDetail',
+        message: 'task detail variables keys and meeting candidates',
+        data: {
+          varKeys: Object.keys(vars),
+          hasMeetingId: vars.meeting_id != null,
+          hasMainRecordId: vars.mainRecordId != null,
+          hasMeetingIdCamel: (vars as Record<string, unknown>).meetingId != null,
+          hasRecordId: (vars as Record<string, unknown>).recordId != null,
+          hasId: (vars as Record<string, unknown>).id != null
+        },
+        timestamp: Date.now()
+      })
+    }).catch(() => {})
+    // #endregion
+    const meetingHints = {
+      topic: typeof vars.topic === 'string' ? vars.topic : undefined,
+      location: typeof vars.location === 'string' ? vars.location : undefined,
+      organizerName: typeof vars.organizer_name === 'string' ? vars.organizer_name : undefined
+    }
+    if (!allRows.length) return { rowId: null, effectiveTaskId, meetingHints }
+    const byEmail = allRows.find(r => sameValue(r.email, localRow.email))
+    const byNameAndDept = allRows.find(
+      r => sameValue(r.name, localRow.name) && sameValue(r.department, localRow.department)
+    )
+    const byIndex = rowIndex != null && rowIndex >= 0 && rowIndex < allRows.length ? allRows[rowIndex] : null
+    const match = byEmail || byNameAndDept || byIndex || null
+    if (!match) return { rowId: null, effectiveTaskId, meetingHints }
+    const pk = resolveSubTableRowPk(match)
+    const rowId = pk != null ? Number(pk) : NaN
+    return { rowId: Number.isNaN(rowId) ? null : rowId, effectiveTaskId, meetingHints }
+  } catch {
+    return { rowId: null, effectiveTaskId: taskId }
+  }
 }
 
 async function confirmAssignment() {
@@ -406,25 +579,247 @@ async function confirmAssignment() {
 
   const row = currentAssignRow.value as Record<string, unknown> | null | undefined
   const rowPk = resolveSubTableRowPk(row)
-  const rowIdNum = rowPk != null ? Number(rowPk) : NaN
-  if (!props.taskId || rowPk == null || Number.isNaN(rowIdNum)) {
+  let effectiveTaskId = props.taskId
+  let meetingHints: { topic?: string; location?: string; organizerName?: string } | undefined
+  let rowIdNum = rowPk != null ? Number(rowPk) : NaN
+  if (props.taskId && (rowPk == null || Number.isNaN(rowIdNum)) && row) {
+    let recovered = await resolveMissingRowIdFromServer(props.taskId, row, currentAssignRowIndex.value)
+    if (recovered == null) {
+      const fromDetail = await resolveMissingRowIdFromTaskDetail(props.taskId, row, currentAssignRowIndex.value)
+      recovered = fromDetail.rowId
+      meetingHints = fromDetail.meetingHints
+      if (fromDetail.effectiveTaskId && fromDetail.effectiveTaskId.trim()) {
+        effectiveTaskId = fromDetail.effectiveTaskId
+      }
+    }
+    if (recovered != null) {
+      rowIdNum = recovered
+    }
+    // #region agent log
+    fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '97dc8c' },
+      body: JSON.stringify({
+        sessionId: '97dc8c',
+        hypothesisId: 'H8-recover-rowid',
+        location: 'SubTableField.vue:confirmAssignment',
+        message: 'attempt recover rowId from getSubTableData',
+        data: {
+          recovered: recovered != null,
+          recoveredRowId: recovered,
+          localKeys: Object.keys(row)
+        },
+        timestamp: Date.now()
+      })
+    }).catch(() => {})
+    // #endregion
+  }
+  if (!props.taskId) {
+    // #region agent log
+    fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '97dc8c' },
+      body: JSON.stringify({
+        sessionId: '97dc8c',
+        hypothesisId: 'H1-pk-or-task',
+        location: 'SubTableField.vue:confirmAssignment',
+        message: 'early exit: missing taskId or row PK',
+        data: {
+          hasTaskId: !!props.taskId,
+          rowPk: rowPk == null ? null : String(rowPk),
+          rowIdNaN: Number.isNaN(rowIdNum),
+          rowKeys: row ? Object.keys(row) : []
+        },
+        timestamp: Date.now()
+      })
+    }).catch(() => {})
+    // #endregion
     ElMessage.error(t('subTable.assignmentFailed'))
     return
   }
 
   assigning.value = true
   try {
-    const response = await assignSubTableRow(
-      props.taskId,
-      rowIdNum,
-      selectedAssigneeId.value
-    )
+    let response: unknown
+    if (!Number.isNaN(rowIdNum)) {
+      response = await assignSubTableRow(
+        props.taskId,
+        rowIdNum,
+        selectedAssigneeId.value
+      )
+    } else {
+      const identityRow = row || {}
+      // #region agent log
+      fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '97dc8c' },
+        body: JSON.stringify({
+          sessionId: '97dc8c',
+          runId: 'run-assign',
+          hypothesisId: 'H31-taskid-selection',
+          location: 'SubTableField.vue:confirmAssignment',
+          message: 'resolved task id before assign-by-identity',
+          data: {
+            routeTaskId: props.taskId,
+            effectiveTaskId,
+            sameTaskId: effectiveTaskId === props.taskId
+          },
+          timestamp: Date.now()
+        })
+      }).catch(() => {})
+      // #endregion
+      // #region agent log
+      fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '97dc8c' },
+        body: JSON.stringify({
+          sessionId: '97dc8c',
+          hypothesisId: 'H18-fallback-identity-call',
+          location: 'SubTableField.vue:confirmAssignment',
+          message: 'calling assign-by-identity fallback',
+          data: {
+            hasEmail: !!(identityRow as Record<string, unknown>).email,
+            hasName: !!(identityRow as Record<string, unknown>).name,
+            hasDept: !!(identityRow as Record<string, unknown>).department
+          },
+          timestamp: Date.now()
+        })
+      }).catch(() => {})
+      // #endregion
+      // #region agent log
+      fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '97dc8c' },
+        body: JSON.stringify({
+          sessionId: '97dc8c',
+          runId: 'run-assign',
+          hypothesisId: 'H49-assign-payload-hints',
+          location: 'SubTableField.vue:confirmAssignment',
+          message: 'assign-by-identity payload meeting hints',
+          data: {
+            hasTopic: !!meetingHints?.topic,
+            hasLocation: !!meetingHints?.location,
+            hasOrganizerName: !!meetingHints?.organizerName
+          },
+          timestamp: Date.now()
+        })
+      }).catch(() => {})
+      // #endregion
+      // #region agent log
+      fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '97dc8c' },
+        body: JSON.stringify({
+          sessionId: '97dc8c',
+          runId: 'run-assign',
+          hypothesisId: 'H32-first-call-taskid',
+          location: 'SubTableField.vue:confirmAssignment',
+          message: 'calling assign-by-identity first attempt',
+          data: { callTaskId: props.taskId },
+          timestamp: Date.now()
+        })
+      }).catch(() => {})
+      // #endregion
+      response = await assignSubTableRowByIdentity(props.taskId, {
+        // taskId may differ from route param in some task detail payloads
+        assigneeId: selectedAssigneeId.value,
+        email: typeof (identityRow as Record<string, unknown>).email === 'string'
+          ? String((identityRow as Record<string, unknown>).email)
+          : undefined,
+        name: typeof (identityRow as Record<string, unknown>).name === 'string'
+          ? String((identityRow as Record<string, unknown>).name)
+          : undefined,
+        department: typeof (identityRow as Record<string, unknown>).department === 'string'
+          ? String((identityRow as Record<string, unknown>).department)
+          : undefined,
+        topic: meetingHints?.topic,
+        location: meetingHints?.location,
+        organizerName: meetingHints?.organizerName
+      })
+      // retry with effective task id from detail if route task id is stale
+      if (effectiveTaskId !== props.taskId) {
+        // #region agent log
+        fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '97dc8c' },
+          body: JSON.stringify({
+            sessionId: '97dc8c',
+            hypothesisId: 'H27-taskid-retry',
+            location: 'SubTableField.vue:confirmAssignment',
+            message: 'retry assign-by-identity with effective task id',
+            data: { routeTaskIdLen: props.taskId.length, effectiveTaskIdLen: effectiveTaskId.length },
+            timestamp: Date.now()
+          })
+        }).catch(() => {})
+        // #endregion
+        // #region agent log
+        fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '97dc8c' },
+          body: JSON.stringify({
+            sessionId: '97dc8c',
+            runId: 'run-assign',
+            hypothesisId: 'H33-retry-call-taskid',
+            location: 'SubTableField.vue:confirmAssignment',
+            message: 'calling assign-by-identity retry',
+            data: { callTaskId: effectiveTaskId },
+            timestamp: Date.now()
+          })
+        }).catch(() => {})
+        // #endregion
+        response = await assignSubTableRowByIdentity(effectiveTaskId, {
+          assigneeId: selectedAssigneeId.value,
+          email: typeof (identityRow as Record<string, unknown>).email === 'string'
+            ? String((identityRow as Record<string, unknown>).email)
+            : undefined,
+          name: typeof (identityRow as Record<string, unknown>).name === 'string'
+            ? String((identityRow as Record<string, unknown>).name)
+            : undefined,
+          department: typeof (identityRow as Record<string, unknown>).department === 'string'
+            ? String((identityRow as Record<string, unknown>).department)
+            : undefined,
+          topic: meetingHints?.topic,
+          location: meetingHints?.location,
+          organizerName: meetingHints?.organizerName
+        })
+      }
+    }
 
     const result = unwrapPortalApiPayload<AssignSubTableRowResponse>(response)
+    const assigneePresent =
+      result != null &&
+      result.assigneeId != null &&
+      String(result.assigneeId).trim().length > 0
+    // success 缺省但已带回 assigneeId 时仍视为成功（兼容序列化差异）；success===false 时走失败提示
     const ok =
       result != null &&
-      (result.success === true ||
-        (typeof result.assigneeId === 'string' && result.assigneeId.length > 0))
+      result.success !== false &&
+      (result.success === true || assigneePresent)
+
+    // #region agent log
+    {
+      const outer = response as Record<string, unknown>
+      const inner = result as Record<string, unknown> | null
+      fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '97dc8c' },
+        body: JSON.stringify({
+          sessionId: '97dc8c',
+          hypothesisId: 'H2-api-payload',
+          location: 'SubTableField.vue:confirmAssignment',
+          message: 'after assignSubTableRow',
+          data: {
+            outerSuccess: outer.success,
+            innerSuccess: inner?.success,
+            assigneePresent,
+            ok,
+            innerKeys: inner ? Object.keys(inner) : []
+          },
+          timestamp: Date.now()
+        })
+      }).catch(() => {})
+    }
+    // #endregion
 
     if (ok && result) {
       // Update the row data
@@ -439,13 +834,82 @@ async function confirmAssignment() {
       ElMessage.success(t('subTable.assignmentSuccess'))
       assignDialogVisible.value = false
     } else {
-      ElMessage.error(t('subTable.assignmentFailed'))
+      const r = result as Record<string, unknown> | null
+      const hint =
+        (r && typeof r.errorMessage === 'string' && r.errorMessage.trim()) ||
+        (r && typeof r.message === 'string' && r.message.trim()) ||
+        t('subTable.assignmentFailed')
+      ElMessage.error(hint)
     }
   } catch (error: unknown) {
     console.error('Failed to assign sub-table row:', error)
     const ax = error as { response?: { status?: number; data?: unknown }; message?: string }
+    try {
+      const probe = await getTaskDetail(effectiveTaskId || props.taskId)
+      const probeData = (probe as Record<string, unknown>).data as Record<string, unknown> | undefined
+      // #region agent log
+      fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '97dc8c' },
+        body: JSON.stringify({
+          sessionId: '97dc8c',
+          runId: 'run-assign',
+          hypothesisId: 'H34-post-error-task-probe',
+          location: 'SubTableField.vue:confirmAssignment',
+          message: 'task detail probe after assign error',
+          data: {
+            probeOk: true,
+            probeTaskId: probeData?.taskId ?? null,
+            probeStatus: probeData?.status ?? null
+          },
+          timestamp: Date.now()
+        })
+      }).catch(() => {})
+      // #endregion
+    } catch (probeError: unknown) {
+      const pax = probeError as { response?: { status?: number } }
+      // #region agent log
+      fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '97dc8c' },
+        body: JSON.stringify({
+          sessionId: '97dc8c',
+          runId: 'run-assign',
+          hypothesisId: 'H34-post-error-task-probe',
+          location: 'SubTableField.vue:confirmAssignment',
+          message: 'task detail probe failed after assign error',
+          data: {
+            probeOk: false,
+            probeHttpStatus: pax.response?.status ?? null
+          },
+          timestamp: Date.now()
+        })
+      }).catch(() => {})
+      // #endregion
+    }
+    // #region agent log
+    fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '97dc8c' },
+      body: JSON.stringify({
+        sessionId: '97dc8c',
+        hypothesisId: 'H3-http-error',
+        location: 'SubTableField.vue:confirmAssignment',
+        message: 'assign threw',
+        data: {
+          httpStatus: ax.response?.status,
+          pickedLen: pickHttpErrorBodyMessage(ax.response?.data)?.length ?? 0,
+          errMsgLen: typeof ax.message === 'string' ? ax.message.length : 0,
+          picked: pickHttpErrorBodyMessage(ax.response?.data) || '',
+          errMsg: typeof ax.message === 'string' ? ax.message : ''
+        },
+        timestamp: Date.now()
+      })
+    }).catch(() => {})
+    // #endregion
     const msg =
       pickHttpErrorBodyMessage(ax.response?.data) ||
+      resolveUserFacingHttpMessage(error, t) ||
       (typeof ax.message === 'string' && ax.message.trim().length > 0 ? ax.message.trim() : undefined) ||
       t('subTable.assignmentFailed')
     ElMessage.error(msg)

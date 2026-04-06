@@ -19,6 +19,7 @@ import com.portal.repository.ActionDefinitionRepository;
 import com.portal.service.PortalWorkspaceAuthService;
 import com.platform.common.util.ApiResponseBodyUnwrap;
 import com.platform.security.util.SecurityContextUtils;
+import com.portal.util.PortalUserSecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -242,8 +243,8 @@ public class ProcessComponent {
                 throw new PortalException("400",
                         "无法校验登录身份与工作台，请重新登录后再发起流程");
             }
-            String jwtBu = SecurityContextUtils.getCurrentActiveBusinessUnitId().orElse("").trim();
-            String jwtRole = SecurityContextUtils.getCurrentActiveRoleId().orElse("").trim();
+            String jwtBu = PortalUserSecurityUtils.getCurrentActiveBusinessUnitId().orElse("").trim();
+            String jwtRole = PortalUserSecurityUtils.getCurrentActiveRoleId().orElse("").trim();
             if (jwtBu.isEmpty() || jwtRole.isEmpty()) {
                 throw new PortalException("400",
                         "您的账号关联业务单元角色，发起流程前请先登录，并在顶部选择工作台，或重新登录后再试");
@@ -255,7 +256,7 @@ public class ProcessComponent {
             variables.put("activeBusinessUnitId", jwtBu);
         } else {
             if (jwtUserMatches) {
-                SecurityContextUtils.getCurrentActiveBusinessUnitId()
+                PortalUserSecurityUtils.getCurrentActiveBusinessUnitId()
                         .map(String::trim)
                         .filter(bu -> !bu.isEmpty())
                         .ifPresent(bu -> variables.put("activeBusinessUnitId", bu));

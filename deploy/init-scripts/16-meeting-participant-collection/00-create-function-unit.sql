@@ -6,14 +6,13 @@
 --       系统自动为每位参与人创建子任务 → 参与人填写信息 → 流程完成
 --
 -- Dependencies: None (this is the first script)
--- Execution order: 00 → 01 → 02 → 03 → 04
+-- Execution order: 00 → 01 → 02 → 03 → 04 → 05 (05 optional if 03 already wrote stage bindings)
 -- =============================================================================
 
 DO $main$
 DECLARE
     v_function_unit_id          BIGINT;
     v_create_meeting_form_id    BIGINT;
-    v_assign_form_id            BIGINT;
     v_participant_form_id       BIGINT;
     v_action_submit_id          BIGINT;
     v_action_complete_assign_id BIGINT;
@@ -31,7 +30,7 @@ BEGIN
         'Meeting Participant Info Collection',
         '会议参与人信息收集流程：演示多实例子流程动态任务分发。组织者创建会议并添加参与人，为每位参与人分配处理人后，系统自动创建并行子任务，各参与人独立填写参会信息，全部完成后流程自动推进。',
         'PUBLISHED',
-        '1.0.2', '1.0.0',
+        '1.0.4', '1.0.0',
         true, true,
         CURRENT_TIMESTAMP, 0,
         'system', CURRENT_TIMESTAMP, 'system', CURRENT_TIMESTAMP
@@ -50,11 +49,23 @@ BEGIN
 
     RAISE NOTICE 'Function unit created/updated: id=%, code=fu-20260403-a1b2c5', v_function_unit_id;
 
+    -- 迁移：旧版「分配参与人」独立表单已废弃；BPMN 与「创建会议」共用同一张 PROCESS 表单
+    DELETE FROM dw_form_stage_bindings WHERE form_id IN (
+        SELECT id FROM dw_form_definitions
+        WHERE function_unit_id = v_function_unit_id AND form_name = 'Assign Participants Form'
+    );
+    DELETE FROM dw_form_table_bindings WHERE form_id IN (
+        SELECT id FROM dw_form_definitions
+        WHERE function_unit_id = v_function_unit_id AND form_name = 'Assign Participants Form'
+    );
+    DELETE FROM dw_form_definitions
+    WHERE function_unit_id = v_function_unit_id AND form_name = 'Assign Participants Form';
+
     -- =========================================================================
     -- Step 2: Forms
     -- =========================================================================
 
-    -- 2.1 创建会议表单 (Create Meeting Form) - 主表单，用于填写会议信息和添加参与人
+    -- 2.1 创建会议表单 (Create Meeting Form) - 主表单：创建会议与分配参与人节点共用
     INSERT INTO dw_form_definitions (
         function_unit_id, form_name, form_type, description, config_json, created_at, updated_at
     ) VALUES (
@@ -84,35 +95,7 @@ BEGIN
 
     RAISE NOTICE 'Create Meeting Form created/updated: id=%', v_create_meeting_form_id;
 
-    -- 2.2 分配参与人表单 (Assign Participants Form) - 与创建会议表单相同，但子表有 Assign 按钮
-    INSERT INTO dw_form_definitions (
-        function_unit_id, form_name, form_type, description, config_json, created_at, updated_at
-    ) VALUES (
-        v_function_unit_id,
-        'Assign Participants Form',
-        'TASK',
-        '分配参与人表单：查看会议信息，为每位参与人分配处理人',
-        '{"rule": [
-            {"name":"ref_ap_topic","type":"input","field":"topic","props":{"maxlength":200,"placeholder":"会议主题"},"title":"会议主题","_fc_id":"id_ap_topic","hidden":false,"display":true,"_fc_drag_tag":"input"},
-            {"name":"ref_ap_time","type":"datePicker","field":"meeting_time","props":{"type":"datetime","placeholder":"会议时间","valueFormat":"YYYY-MM-DD HH:mm:ss"},"title":"会议时间","_fc_id":"id_ap_time","hidden":false,"display":true,"_fc_drag_tag":"datePicker"},
-            {"name":"ref_ap_location","type":"input","field":"location","props":{"maxlength":200,"placeholder":"会议地点"},"title":"会议地点","_fc_id":"id_ap_location","hidden":false,"display":true,"_fc_drag_tag":"input"},
-            {"name":"ref_ap_organizer","type":"input","field":"organizer_name","props":{"maxlength":100,"placeholder":"组织者"},"title":"组织者","_fc_id":"id_ap_organizer","hidden":false,"display":true,"_fc_drag_tag":"input"}
-        ],"options":{"form":{"size":"default","inline":false,"labelWidth":"125px","labelPosition":"left","hideRequiredAsterisk":false},"resetBtn":{"show":false,"innerText":"重置"},"submitBtn":{"show":true,"innerText":"完成分配"}},"subForms":{}}'::jsonb,
-        CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-    )
-    ON CONFLICT (function_unit_id, form_name) DO UPDATE SET
-        config_json = jsonb_set(
-            EXCLUDED.config_json::jsonb,
-            '{subForms}',
-            COALESCE((dw_form_definitions.config_json::jsonb)->'subForms', '{}'::jsonb)
-        ),
-        description = EXCLUDED.description,
-        updated_at  = CURRENT_TIMESTAMP
-    RETURNING id INTO v_assign_form_id;
-
-    RAISE NOTICE 'Assign Participants Form created/updated: id=%', v_assign_form_id;
-
-    -- 2.3 填写参会信息表单 (Participant Info Form) - 子任务表单，参与人填写自己的信息
+    -- 2.2 填写参会信息表单 (Participant Info Form) - 子任务表单，参与人填写自己的信息
     INSERT INTO dw_form_definitions (
         function_unit_id, form_name, form_type, description, config_json, created_at, updated_at
     ) VALUES (
@@ -120,11 +103,7 @@ BEGIN
         'Participant Info Form',
         'TASK',
         '参与人信息填写表单：子任务中参与人填写自己的参会信息（是否参会、饮食偏好、备注）',
-        '{"rule": [
-            {"name":"ref_pi_attend","type":"select","field":"attend_status","props":{"placeholder":"请选择是否参会","options":[{"label":"是","value":"YES"},{"label":"否","value":"NO"},{"label":"待定","value":"PENDING"}]},"title":"是否参会","_fc_id":"id_pi_attend","hidden":false,"display":true,"validate":[{"message":"请选择是否参会","trigger":"change","required":true}],"_fc_drag_tag":"select"},
-            {"name":"ref_pi_diet","type":"select","field":"dietary_preference","props":{"placeholder":"请选择饮食偏好","options":[{"label":"无特殊要求","value":"NONE"},{"label":"素食","value":"VEGETARIAN"},{"label":"清真","value":"HALAL"},{"label":"其他","value":"OTHER"}]},"title":"饮食偏好","_fc_id":"id_pi_diet","hidden":false,"display":true,"_fc_drag_tag":"select"},
-            {"name":"ref_pi_remark","type":"input","field":"remark","props":{"rows":3,"type":"textarea","placeholder":"请输入备注信息（如需要投影仪、特殊座位等）"},"title":"备注","_fc_id":"id_pi_remark","hidden":false,"display":true,"_fc_drag_tag":"input"}
-        ],"options":{"form":{"size":"default","inline":false,"labelWidth":"125px","labelPosition":"left","hideRequiredAsterisk":false},"resetBtn":{"show":false,"innerText":"重置"},"submitBtn":{"show":true,"innerText":"提交"}}}'::jsonb,
+        '{"rule": [{"name": "ref_pi_attend", "type": "select", "field": "attend_status", "props": {"options": [{"label": "是", "value": "YES"}, {"label": "否", "value": "NO"}, {"label": "待定", "value": "PENDING"}], "placeholder": "请选择是否参会"}, "title": "是否参会", "_fc_id": "id_pi_attend", "hidden": false, "display": true, "validate": [{"message": "请选择是否参会", "trigger": "change", "required": true}], "_fc_drag_tag": "select"}, {"name": "ref_pi_diet", "type": "select", "field": "dietary_preference", "props": {"options": [{"label": "无特殊要求", "value": "NONE"}, {"label": "素食", "value": "VEGETARIAN"}, {"label": "清真", "value": "HALAL"}, {"label": "其他", "value": "OTHER"}], "placeholder": "请选择饮食偏好"}, "title": "饮食偏好", "_fc_id": "id_pi_diet", "hidden": false, "display": true, "_fc_drag_tag": "select"}, {"name": "ref_pi_remark", "type": "input", "field": "remark", "props": {"rows": 3, "type": "textarea", "placeholder": "请输入备注信息（如需要投影仪、特殊座位等）"}, "title": "备注", "_fc_id": "id_pi_remark", "hidden": false, "display": true, "_fc_drag_tag": "input"}], "options": {"form": {"size": "default", "inline": false, "labelWidth": "125px", "labelPosition": "left", "hideRequiredAsterisk": false}, "resetBtn": {"show": false, "innerText": "重置"}, "submitBtn": {"show": true, "innerText": "提交"}}}'::jsonb,
         CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
     ON CONFLICT (function_unit_id, form_name) DO UPDATE SET
@@ -214,8 +193,8 @@ BEGIN
     RAISE NOTICE '========================================';
     RAISE NOTICE 'Function Unit Setup Complete!';
     RAISE NOTICE 'Function Unit : id=%, code=fu-20260403-a1b2c5', v_function_unit_id;
-    RAISE NOTICE 'Forms: Create Meeting (id=%), Assign Participants (id=%), Participant Info (id=%)',
-        v_create_meeting_form_id, v_assign_form_id, v_participant_form_id;
+    RAISE NOTICE 'Forms: Create Meeting (id=%), Participant Info (id=%)',
+        v_create_meeting_form_id, v_participant_form_id;
     RAISE NOTICE 'Actions: 提交会议 (id=%), 完成分配 (id=%), 提交参会信息 (id=%)',
         v_action_submit_id, v_action_complete_assign_id, v_action_submit_info_id;
     RAISE NOTICE 'Next: run 01-create-tables.sql';

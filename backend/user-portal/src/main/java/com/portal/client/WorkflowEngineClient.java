@@ -17,8 +17,12 @@ import org.springframework.web.util.UriComponentsBuilder;
 
 import jakarta.servlet.http.HttpServletRequest;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -294,20 +298,92 @@ public class WorkflowEngineClient {
      */
     public Optional<Map<String, Object>> getTaskById(String taskId) {
         if (!isAvailable()) {
+            // #region agent log
+            appendAgentDebugLog("H41-getTaskById-unavailable", "WorkflowEngineClient.getTaskById",
+                    String.format("\"taskId\":\"%s\",\"available\":false", safeJson(taskId)));
+            // #endregion
             return Optional.empty();
         }
         try {
             String url = workflowEngineUrl + "/api/v1/tasks/" + taskId;
+            // #region agent log
+            appendAgentDebugLog("H41-getTaskById-request", "WorkflowEngineClient.getTaskById",
+                    String.format("\"taskId\":\"%s\",\"url\":\"%s\"", safeJson(taskId), safeJson(url)));
+            // #endregion
             
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                 url, HttpMethod.GET, authorizedGetEntity(),
                 new ParameterizedTypeReference<Map<String, Object>>() {});
             
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                // #region agent log
+                appendAgentDebugLog("H42-getTaskById-2xx", "WorkflowEngineClient.getTaskById",
+                        String.format("\"taskId\":\"%s\",\"status\":%d,\"bodyKeys\":\"%s\"",
+                                safeJson(taskId),
+                                response.getStatusCode().value(),
+                                safeJson(String.join(",", response.getBody().keySet()))));
+                // #endregion
                 return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()));
             }
         } catch (Exception e) {
+            // #region agent log
+            String extra = "";
+            if (e instanceof HttpClientErrorException cex) {
+                extra = String.format(",\"httpStatus\":%d,\"respLen\":%d",
+                        cex.getStatusCode().value(), cex.getResponseBodyAsString() != null ? cex.getResponseBodyAsString().length() : 0);
+            } else if (e instanceof HttpServerErrorException sex) {
+                extra = String.format(",\"httpStatus\":%d,\"respLen\":%d",
+                        sex.getStatusCode().value(), sex.getResponseBodyAsString() != null ? sex.getResponseBodyAsString().length() : 0);
+            }
+            appendAgentDebugLog("H43-getTaskById-exception", "WorkflowEngineClient.getTaskById",
+                    String.format("\"taskId\":\"%s\",\"errorType\":\"%s\",\"error\":\"%s\"%s",
+                            safeJson(taskId),
+                            safeJson(e.getClass().getSimpleName()),
+                            safeJson(String.valueOf(e.getMessage())),
+                            extra));
+            // #endregion
             log.warn("Failed to get task by id from workflow engine: {}", e.getMessage());
+        }
+        return Optional.empty();
+    }
+
+    // #region agent log
+    private void appendAgentDebugLog(String hypothesisId, String location, String dataJson) {
+        try {
+            String line = String.format(
+                    "{\"sessionId\":\"97dc8c\",\"runId\":\"run-assign-backend\",\"hypothesisId\":\"%s\",\"location\":\"%s\",\"message\":\"workflow task lookup\",\"data\":{%s},\"timestamp\":%d}%n",
+                    hypothesisId, location, dataJson, System.currentTimeMillis());
+            Files.writeString(Path.of("d:\\Repos\\Workflow-Station---sun\\.cursor\\debug-97dc8c.log"), line,
+                    StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private String safeJson(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.replace("\\", "\\\\").replace("\"", "'").replace("\n", " ").replace("\r", " ");
+    }
+    // #endregion
+
+    /**
+     * 查询主任务子表数据（用于分配前回补 rowId / 实时同步）。
+     */
+    public Optional<Map<String, Object>> getSubTableDataAll(String taskId) {
+        if (!isAvailable()) {
+            return Optional.empty();
+        }
+        try {
+            String url = workflowEngineUrl + "/api/v1/workflow/multi-instance/tasks/" + taskId + "/sub-table-data/all";
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    url, HttpMethod.GET, authorizedGetEntity(),
+                    new ParameterizedTypeReference<Map<String, Object>>() {});
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()));
+            }
+        } catch (Exception e) {
+            log.warn("Failed to get sub-table-data/all from workflow engine: {}", e.getMessage());
         }
         return Optional.empty();
     }
@@ -512,28 +588,46 @@ public class WorkflowEngineClient {
     private static final ObjectMapper ENGINE_ERROR_JSON = new ObjectMapper();
 
     /**
-     * 解析 workflow-engine 返回的 ApiResponse 错误体中的 message。
+     * 解析 workflow-engine 返回的 ApiResponse 错误体中的可读说明。
+     * 兼容：顶层 {@code message}、{@code error.message} / {@code error.detail}、{@code errorMessage}（子表分配 DTO）。
      */
-    @SuppressWarnings("unchecked")
     private static String parseWorkflowEngineErrorMessage(String json) {
         if (json == null || json.isBlank()) {
             return null;
         }
         try {
-            Map<String, Object> m = ENGINE_ERROR_JSON.readValue(json, Map.class);
-            Object msg = m.get("message");
-            if (msg != null && !String.valueOf(msg).isBlank()) {
-                return String.valueOf(msg);
-            }
-            Object err = m.get("error");
-            if (err instanceof Map<?, ?> errMap) {
-                Object nested = errMap.get("message");
-                if (nested != null && !String.valueOf(nested).isBlank()) {
-                    return String.valueOf(nested);
+            JsonNode root = ENGINE_ERROR_JSON.readTree(json);
+            if (root.hasNonNull("message")) {
+                String m = root.get("message").asText("");
+                if (!m.isBlank()) {
+                    return m;
                 }
-                Object code = errMap.get("code");
-                if (code != null && !String.valueOf(code).isBlank()) {
-                    return String.valueOf(code);
+            }
+            JsonNode err = root.get("error");
+            if (err != null && err.isObject()) {
+                if (err.hasNonNull("message")) {
+                    String m = err.get("message").asText("");
+                    if (!m.isBlank()) {
+                        return m;
+                    }
+                }
+                if (err.hasNonNull("detail")) {
+                    String m = err.get("detail").asText("");
+                    if (!m.isBlank()) {
+                        return m;
+                    }
+                }
+                if (err.hasNonNull("code")) {
+                    String c = err.get("code").asText("");
+                    if (!c.isBlank()) {
+                        return c;
+                    }
+                }
+            }
+            if (root.hasNonNull("errorMessage")) {
+                String m = root.get("errorMessage").asText("");
+                if (!m.isBlank()) {
+                    return m;
                 }
             }
         } catch (Exception e) {
@@ -565,11 +659,21 @@ public class WorkflowEngineClient {
                     new ParameterizedTypeReference<Map<String, Object>>() {});
 
             if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                return Optional.of(ApiResponseBodyUnwrap.unwrapDataMap(response.getBody()));
+                Map<String, Object> unwrapped = ApiResponseBodyUnwrap.unwrapDataMap(response.getBody());
+                return Optional.of(unwrapped);
             }
         } catch (HttpClientErrorException e) {
-            String msg = parseWorkflowEngineErrorMessage(e.getResponseBodyAsString());
+            String raw = e.getResponseBodyAsString();
+            String msg = parseWorkflowEngineErrorMessage(raw);
             log.warn("assignSubTableRow client error: status={}, message={}", e.getStatusCode(), msg);
+            Map<String, Object> err = new HashMap<>();
+            err.put("success", false);
+            err.put("message", msg != null ? msg : "Assignment failed");
+            return Optional.of(err);
+        } catch (HttpServerErrorException e) {
+            String raw = e.getResponseBodyAsString();
+            String msg = parseWorkflowEngineErrorMessage(raw);
+            log.warn("assignSubTableRow server error: status={}, message={}", e.getStatusCode(), msg);
             Map<String, Object> err = new HashMap<>();
             err.put("success", false);
             err.put("message", msg != null ? msg : "Assignment failed");

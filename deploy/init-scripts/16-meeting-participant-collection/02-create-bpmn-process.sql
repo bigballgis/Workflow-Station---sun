@@ -13,7 +13,6 @@ DO $main$
 DECLARE
     v_function_unit_id      BIGINT;
     v_create_form_id        BIGINT;
-    v_assign_form_id        BIGINT;
     v_participant_form_id   BIGINT;
     v_action_submit         BIGINT;
     v_action_complete       BIGINT;
@@ -28,9 +27,6 @@ BEGIN
 
     SELECT id INTO v_create_form_id FROM dw_form_definitions
     WHERE function_unit_id = v_function_unit_id AND form_name = 'Create Meeting Form';
-
-    SELECT id INTO v_assign_form_id FROM dw_form_definitions
-    WHERE function_unit_id = v_function_unit_id AND form_name = 'Assign Participants Form';
 
     SELECT id INTO v_participant_form_id FROM dw_form_definitions
     WHERE function_unit_id = v_function_unit_id AND form_name = 'Participant Info Form';
@@ -91,11 +87,14 @@ BEGIN
         <custom_1:properties>
           <custom_1:values name="actionIds" value="[' || v_action_complete || ']" />
           <custom_1:values name="actionNames" value="[&quot;完成分配&quot;]" />
-          <custom_1:values name="formId" value="' || v_assign_form_id || '" />
-          <custom_1:values name="formName" value="Assign Participants Form" />
+          <custom_1:values name="formId" value="' || v_create_form_id || '" />
+          <custom_1:values name="formName" value="Create Meeting Form" />
         </custom_1:properties>
         <custom:properties>
           <custom:property name="assigneeType" value="INITIATOR" />
+          <custom:property name="subTableName" value="participants" />
+          <custom:property name="assigneeField" value="assignee_user_id" />
+          <custom:property name="foreignKey" value="meeting_id" />
         </custom:properties>
       </bpmn:extensionElements>
       <bpmn:incoming>Flow_Create_Assign</bpmn:incoming>

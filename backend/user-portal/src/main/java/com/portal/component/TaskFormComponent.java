@@ -1,5 +1,7 @@
 package com.portal.component;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.*;
 import com.portal.entity.ProcessInstance;
@@ -8,12 +10,17 @@ import com.portal.repository.ProcessInstanceRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.UriComponentsBuilder;
 
 import com.platform.common.util.ApiResponseBodyUnwrap;
 
+import java.nio.charset.StandardCharsets;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -32,6 +39,8 @@ public class TaskFormComponent {
     private final ProcessInstanceRepository processInstanceRepository;
     private final WorkflowEngineClient workflowEngineClient;
     private final RestTemplate restTemplate;
+    private final ObjectMapper objectMapper;
+    private final JdbcTemplate jdbcTemplate;
 
     @Value("${developer-workstation.url:http://localhost:8091}")
     private String developerWorkstationUrl;
@@ -438,13 +447,31 @@ public class TaskFormComponent {
     }
 
     /**
-     * 根据 stageId (taskDefinitionKey) 获取 Task Form 定义
-     * TODO: 实际集成时通过 REST 调用 developer-workstation 或使用缓存
+     * 根据 stageId (taskDefinitionKey) 获取 Task Form 定义。
+     * 优先请求 developer-workstation；Docker/网络不可达时从本库 {@code dw_form_stage_bindings} 回退（与 DW 共用同一 PostgreSQL）。
      */
     @SuppressWarnings("unchecked")
     private Map<String, Object> fetchTaskFormByStageId(String stageId) {
+        Map<String, Object> fromRemote = fetchTaskFormFromDeveloperWorkstation(stageId);
+        if (fromRemote != null) {
+            return fromRemote;
+        }
+        Map<String, Object> fromDb = fetchTaskFormFromLocalDw(stageId);
+        if (fromDb != null) {
+            log.debug("Resolved task form for stage '{}' from local dw_form_stage_bindings", stageId);
+        }
+        return fromDb;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> fetchTaskFormFromDeveloperWorkstation(String stageId) {
         try {
-            String url = developerWorkstationUrl + "/api/v1/form-stage-bindings?stageId=" + stageId;
+            String base = normalizeDeveloperWorkstationBase(developerWorkstationUrl);
+            String url = UriComponentsBuilder
+                    .fromHttpUrl(base + "/api/v1/form-stage-bindings")
+                    .queryParam("stageId", stageId)
+                    .encode(StandardCharsets.UTF_8)
+                    .toUriString();
             log.debug("Fetching Task Form definition from: {}", url);
 
             Map<String, Object> response = restTemplate.getForObject(url, Map.class);
@@ -462,6 +489,81 @@ public class TaskFormComponent {
             log.warn("Failed to fetch Task Form definition for stage {}: {}", stageId, e.getMessage());
         }
         return null;
+    }
+
+    /**
+     * 与 developer-workstation 共用库表时的本地解析（避免容器内 developer-workstation.url 误配为 localhost 导致始终失败）。
+     */
+    private Map<String, Object> fetchTaskFormFromLocalDw(String stageId) {
+        if (stageId == null || stageId.isBlank()) {
+            return null;
+        }
+        try {
+            List<Map<String, Object>> rows = jdbcTemplate.query(
+                    """
+                            SELECT fd.form_name, fd.config_json, fd.field_permissions
+                            FROM dw_form_stage_bindings b
+                            INNER JOIN dw_form_definitions fd ON fd.id = b.form_id
+                            WHERE b.stage_id = ?
+                            LIMIT 1
+                            """,
+                    (ResultSet rs, int rowNum) -> mapRowToTaskFormDefinition(rs),
+                    stageId.trim());
+            return rows.isEmpty() ? null : rows.get(0);
+        } catch (Exception e) {
+            log.debug("Local dw_form_stage_bindings lookup failed for stage {}: {}", stageId, e.getMessage());
+            return null;
+        }
+    }
+
+    private Map<String, Object> mapRowToTaskFormDefinition(ResultSet rs) throws SQLException {
+        Map<String, Object> form = new HashMap<>();
+        form.put("formName", rs.getString("form_name"));
+        form.put("configJson", readJsonObjectMap(rs, "config_json"));
+        form.put("fieldPermissions", readJsonStringMap(rs, "field_permissions"));
+        return form;
+    }
+
+    private Map<String, Object> readJsonObjectMap(ResultSet rs, String col) throws SQLException {
+        String raw = rs.getString(col);
+        if (raw == null || raw.isBlank()) {
+            return Collections.emptyMap();
+        }
+        try {
+            return objectMapper.readValue(raw, new TypeReference<Map<String, Object>>() {});
+        } catch (Exception e) {
+            log.debug("Could not parse JSON object column {}: {}", col, e.getMessage());
+            return Collections.emptyMap();
+        }
+    }
+
+    private Map<String, String> readJsonStringMap(ResultSet rs, String col) throws SQLException {
+        String raw = rs.getString(col);
+        if (raw == null || raw.isBlank()) {
+            return Collections.emptyMap();
+        }
+        try {
+            return objectMapper.readValue(raw, new TypeReference<Map<String, String>>() {});
+        } catch (Exception e) {
+            log.debug("Could not parse JSON string map column {}: {}", col, e.getMessage());
+            return Collections.emptyMap();
+        }
+    }
+
+    private static String trimTrailingSlash(String base) {
+        if (base == null || base.isEmpty()) {
+            return "";
+        }
+        return base.endsWith("/") ? base.substring(0, base.length() - 1) : base;
+    }
+
+    /** 支持 {@code DEVELOPER_WORKSTATION_URL} 仅含 host:port，或误带 {@code /api/v1} 后缀。 */
+    private static String normalizeDeveloperWorkstationBase(String url) {
+        String b = trimTrailingSlash(url != null ? url : "");
+        if (b.endsWith("/api/v1")) {
+            return trimTrailingSlash(b.substring(0, b.length() - "/api/v1".length()));
+        }
+        return b;
     }
 
     @SuppressWarnings("unchecked")

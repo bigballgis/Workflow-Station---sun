@@ -41,7 +41,7 @@ public class SnapshotDiffPropertyTest {
 
         TaskFormComponent component = new TaskFormComponent(
                 processFormComponent, changeHistoryComponent, processInstanceRepository,
-                mock(WorkflowEngineClient.class), mock(RestTemplate.class));
+                mock(WorkflowEngineClient.class), mock(RestTemplate.class), new com.fasterxml.jackson.databind.ObjectMapper(), mock(org.springframework.jdbc.core.JdbcTemplate.class));
 
         // Calculate expected diff count manually
         int expectedDiffs = 0;
@@ -78,7 +78,7 @@ public class SnapshotDiffPropertyTest {
 
         TaskFormComponent component = new TaskFormComponent(
                 processFormComponent, changeHistoryComponent, processInstanceRepository,
-                mock(WorkflowEngineClient.class), mock(RestTemplate.class));
+                mock(WorkflowEngineClient.class), mock(RestTemplate.class), new com.fasterxml.jackson.databind.ObjectMapper(), mock(org.springframework.jdbc.core.JdbcTemplate.class));
 
         // Same values for snapshot and live
         int diffs = component.countSnapshotDiffs(values, new HashMap<>(values));
@@ -104,7 +104,7 @@ public class SnapshotDiffPropertyTest {
 
         TaskFormComponent component = new TaskFormComponent(
                 processFormComponent, changeHistoryComponent, processInstanceRepository,
-                mock(WorkflowEngineClient.class), mock(RestTemplate.class));
+                mock(WorkflowEngineClient.class), mock(RestTemplate.class), new com.fasterxml.jackson.databind.ObjectMapper(), mock(org.springframework.jdbc.core.JdbcTemplate.class));
 
         int diffs = component.countSnapshotDiffs(config.snapshotValues, config.liveValues);
 

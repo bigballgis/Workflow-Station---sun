@@ -3,11 +3,8 @@
 -- 会议参与人信息收集：表单-表绑定关系和子表单配置
 --
 -- Bindings:
---   Create Meeting Form:
+--   Create Meeting Form（创建会议 + 分配参与人 BPMN 节点共用）:
 --     binding: table=meeting,       PRIMARY, EDITABLE, fk=NULL,       sort=1
---     binding: table=participants,  SUB,     EDITABLE, fk=meeting_id, sort=2
---   Assign Participants Form:
---     binding: table=meeting,       PRIMARY, READONLY, fk=NULL,       sort=1
 --     binding: table=participants,  SUB,     EDITABLE, fk=meeting_id, sort=2
 --   Participant Info Form:
 --     binding: table=participants,  PRIMARY, EDITABLE, fk=NULL,       sort=1
@@ -20,12 +17,10 @@ DO $bindings$
 DECLARE
     v_function_unit_id       BIGINT;
     v_create_form_id         BIGINT;
-    v_assign_form_id         BIGINT;
     v_participant_form_id    BIGINT;
     v_meeting_table_id       BIGINT;
     v_participant_table_id   BIGINT;
     v_binding_create_sub_id  BIGINT;
-    v_binding_assign_sub_id  BIGINT;
 BEGIN
     SELECT id INTO v_function_unit_id FROM dw_function_units
     WHERE code = 'fu-20260403-a1b2c5';
@@ -35,8 +30,6 @@ BEGIN
 
     SELECT id INTO v_create_form_id FROM dw_form_definitions
     WHERE function_unit_id = v_function_unit_id AND form_name = 'Create Meeting Form';
-    SELECT id INTO v_assign_form_id FROM dw_form_definitions
-    WHERE function_unit_id = v_function_unit_id AND form_name = 'Assign Participants Form';
     SELECT id INTO v_participant_form_id FROM dw_form_definitions
     WHERE function_unit_id = v_function_unit_id AND form_name = 'Participant Info Form';
 
@@ -47,7 +40,7 @@ BEGIN
 
     -- Clean existing bindings
     DELETE FROM dw_form_table_bindings
-    WHERE form_id IN (v_create_form_id, v_assign_form_id, v_participant_form_id);
+    WHERE form_id IN (v_create_form_id, v_participant_form_id);
 
     -- -------------------------------------------------------------------------
     -- Create Meeting Form bindings
@@ -62,20 +55,6 @@ BEGIN
     ) VALUES
     (v_create_form_id, v_participant_table_id, 'SUB', 'EDITABLE', 'meeting_id', 2, NOW(), NOW())
     RETURNING id INTO v_binding_create_sub_id;
-
-    -- -------------------------------------------------------------------------
-    -- Assign Participants Form bindings
-    -- -------------------------------------------------------------------------
-    INSERT INTO dw_form_table_bindings (
-        form_id, table_id, binding_type, binding_mode, foreign_key_field, sort_order, created_at, updated_at
-    ) VALUES
-    (v_assign_form_id, v_meeting_table_id, 'PRIMARY', 'READONLY', NULL, 1, NOW(), NOW());
-
-    INSERT INTO dw_form_table_bindings (
-        form_id, table_id, binding_type, binding_mode, foreign_key_field, sort_order, created_at, updated_at
-    ) VALUES
-    (v_assign_form_id, v_participant_table_id, 'SUB', 'EDITABLE', 'meeting_id', 2, NOW(), NOW())
-    RETURNING id INTO v_binding_assign_sub_id;
 
     -- -------------------------------------------------------------------------
     -- Participant Info Form bindings (子任务表单绑定参与人子表)
@@ -106,31 +85,22 @@ BEGIN
     WHERE id = v_create_form_id;
 
     -- -------------------------------------------------------------------------
-    -- Update subForms in Assign Participants Form config_json
+    -- 阶段绑定：门户 TaskFormComponent 请求 developer-workstation
+    -- GET /api/v1/form-stage-bindings?stageId=<taskDefinitionKey>
     -- -------------------------------------------------------------------------
-    UPDATE dw_form_definitions
-    SET config_json = jsonb_set(
-        config_json::jsonb,
-        '{subForms}',
-        jsonb_build_object(
-            v_binding_assign_sub_id::text, '{
-                "rule": [
-                    {"name":"ref_ap_name","type":"input","field":"name","props":{"placeholder":"姓名"},"title":"姓名","_fc_id":"id_ap_name","hidden":false,"display":true,"_fc_drag_tag":"input"},
-                    {"name":"ref_ap_dept","type":"input","field":"department","props":{"placeholder":"部门"},"title":"部门","_fc_id":"id_ap_dept","hidden":false,"display":true,"_fc_drag_tag":"input"},
-                    {"name":"ref_ap_email","type":"input","field":"email","props":{"placeholder":"邮箱"},"title":"邮箱","_fc_id":"id_ap_email","hidden":false,"display":true,"_fc_drag_tag":"input"}
-                ],
-                "options":{"form":{"size":"default","inline":false,"labelWidth":"100px","labelPosition":"left"},"resetBtn":{"show":false},"submitBtn":{"show":true,"innerText":"确认"}}
-            }'::jsonb
-        )
-    )
-    WHERE id = v_assign_form_id;
+    DELETE FROM dw_form_stage_bindings
+    WHERE form_id IN (
+        SELECT id FROM dw_form_definitions WHERE function_unit_id = v_function_unit_id
+    );
+
+    INSERT INTO dw_form_stage_bindings (form_id, stage_id, stage_name) VALUES
+    (v_create_form_id, 'Task_CreateMeeting', '创建会议'),
+    (v_create_form_id, 'Task_AssignParticipants', '分配参与人');
 
     RAISE NOTICE '========================================';
     RAISE NOTICE 'Form Table Bindings Complete!';
-    RAISE NOTICE 'Create Meeting Form (id=%): 2 bindings, subForms key: %',
+    RAISE NOTICE 'Create Meeting Form (id=%): 2 bindings, subForms key: %; stages: Task_CreateMeeting, Task_AssignParticipants',
         v_create_form_id, v_binding_create_sub_id;
-    RAISE NOTICE 'Assign Participants Form (id=%): 2 bindings, subForms key: %',
-        v_assign_form_id, v_binding_assign_sub_id;
     RAISE NOTICE 'Participant Info Form (id=%): 1 binding', v_participant_form_id;
     RAISE NOTICE '========================================';
 

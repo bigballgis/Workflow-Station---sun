@@ -117,6 +117,13 @@
             <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
 
+        <!-- 显式依赖 platform-common，避免仅用 ~/.m2 中旧 SNAPSHOT 导致与 portal 代码不同步 -->
+        <dependency>
+            <groupId>com.platform</groupId>
+            <artifactId>platform-common</artifactId>
+            <version>1.0.0-SNAPSHOT</version>
+        </dependency>
+
         <!-- Platform Security (shared module) -->
         <dependency>
             <groupId>com.platform</groupId>

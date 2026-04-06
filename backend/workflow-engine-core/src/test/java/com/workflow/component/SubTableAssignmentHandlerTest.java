@@ -55,6 +55,9 @@ class SubTableAssignmentHandlerTest {
     
     @Mock
     private ObjectMapper objectMapper;
+
+    @Mock
+    private BpmnActionParser bpmnActionParser;
     
     @Mock
     private TaskQuery taskQuery;

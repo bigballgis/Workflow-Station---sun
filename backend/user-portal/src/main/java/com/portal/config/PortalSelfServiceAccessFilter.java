@@ -3,6 +3,7 @@ package com.portal.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.platform.common.dto.UserPrincipal;
 import com.portal.controller.AuthController;
+import com.portal.util.PortalUserSecurityUtils;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -38,7 +39,7 @@ public class PortalSelfServiceAccessFilter extends OncePerRequestFilter {
             filterChain.doFilter(request, response);
             return;
         }
-        if (!AuthController.PORTAL_ACCESS_MODE_SELF_SERVICE.equals(principal.getPortalAccessMode())) {
+        if (!AuthController.PORTAL_ACCESS_MODE_SELF_SERVICE.equals(PortalUserSecurityUtils.getPortalAccessMode(principal))) {
             filterChain.doFilter(request, response);
             return;
         }

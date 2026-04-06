@@ -193,6 +193,9 @@ export interface AssignSubTableRowResponse {
   rowId: number
   assigneeId: string
   assigneeName: string
+  /** 引擎失败时可能带此字段（与 message 二选一） */
+  errorMessage?: string
+  message?: string
 }
 
 export function assignSubTableRow(taskId: string, rowId: number, assigneeId: string) {
@@ -202,6 +205,28 @@ export function assignSubTableRow(taskId: string, rowId: number, assigneeId: str
   return request.post<AssignSubTableRowResponse | { data: AssignSubTableRowResponse }>(
     `/tasks/${taskId}/sub-table-rows/${rowId}/assign`,
     { assigneeId },
+    config
+  )
+}
+
+export function assignSubTableRowByIdentity(
+  taskId: string,
+  payload: {
+    assigneeId: string
+    email?: string
+    name?: string
+    department?: string
+    topic?: string
+    location?: string
+    organizerName?: string
+  }
+) {
+  const config: AxiosRequestConfig & { skipGlobalErrorHandler?: boolean } = {
+    skipGlobalErrorHandler: true
+  }
+  return request.post<AssignSubTableRowResponse | { data: AssignSubTableRowResponse }>(
+    `/tasks/${taskId}/sub-table-rows/assign-by-identity`,
+    payload,
     config
   )
 }

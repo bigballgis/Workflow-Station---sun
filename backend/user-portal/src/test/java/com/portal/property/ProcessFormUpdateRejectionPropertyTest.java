@@ -5,7 +5,9 @@ import com.portal.component.ProcessFormComponent;
 import com.portal.entity.ProcessInstance;
 import com.portal.exception.PortalException;
 import com.portal.repository.ProcessInstanceRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import net.jqwik.api.*;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.client.RestTemplate;
 
@@ -45,7 +47,8 @@ public class ProcessFormUpdateRejectionPropertyTest {
         ChangeHistoryComponent changeHistoryComponent = mock(ChangeHistoryComponent.class);
 
         ProcessFormComponent component = new ProcessFormComponent(
-                processInstanceRepository, changeHistoryComponent, mock(RestTemplate.class));
+                processInstanceRepository, changeHistoryComponent, mock(RestTemplate.class),
+                new ObjectMapper(), mock(JdbcTemplate.class));
         ReflectionTestUtils.setField(component, "adminCenterUrl", "http://mock-admin:8090");
 
         ProcessInstance processInstance = ProcessInstance.builder()
@@ -90,7 +93,8 @@ public class ProcessFormUpdateRejectionPropertyTest {
         ChangeHistoryComponent changeHistoryComponent = mock(ChangeHistoryComponent.class);
 
         ProcessFormComponent component = new ProcessFormComponent(
-                processInstanceRepository, changeHistoryComponent, mock(RestTemplate.class));
+                processInstanceRepository, changeHistoryComponent, mock(RestTemplate.class),
+                new ObjectMapper(), mock(JdbcTemplate.class));
         ReflectionTestUtils.setField(component, "adminCenterUrl", "http://mock-admin:8090");
 
         ProcessInstance processInstance = ProcessInstance.builder()

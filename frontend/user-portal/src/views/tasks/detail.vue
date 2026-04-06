@@ -163,7 +163,7 @@
               :label-width="formLabelWidth"
               :readonly="formReadOnly"
               :subTableBindings="subTableBindings"
-              :task-id="taskId"
+              :task-id="effectiveTaskId"
               :allow-sub-table-assign="allowSubTableAssignForCurrentTask"
               @update:subTableData="(id: number, rows: any[]) => { const b = subTableBindings.find(x => x.bindingId === id); if (b) b.data = rows }"
             />
@@ -182,10 +182,10 @@
                 :columns="binding.columns"
                 v-model="binding.data"
                 :editable="!formReadOnly && binding.bindingMode === 'EDITABLE'"
-                :task-id="taskId"
+                :task-id="effectiveTaskId"
                 :assignee-field="resolveAssigneeFieldForBinding(binding.columns, binding.tableName)"
-                :show-assign-button="allowSubTableAssignForCurrentTask && !!taskId && !!resolveAssigneeFieldForBinding(binding.columns, binding.tableName)"
-                :can-assign="allowSubTableAssignForCurrentTask && !formReadOnly && binding.bindingMode === 'EDITABLE' && !!taskId && !!resolveAssigneeFieldForBinding(binding.columns, binding.tableName)"
+                :show-assign-button="allowSubTableAssignForCurrentTask && !!effectiveTaskId && !!resolveAssigneeFieldForBinding(binding.columns, binding.tableName)"
+                :can-assign="allowSubTableAssignForCurrentTask && !formReadOnly && binding.bindingMode === 'EDITABLE' && !!effectiveTaskId && !!resolveAssigneeFieldForBinding(binding.columns, binding.tableName)"
               />
             </div>
           </template>
@@ -324,7 +324,7 @@
     <N8nActionDialog
       v-model:visible="n8nActionDialogVisible"
       :action-definition="n8nActionDefinition"
-      :task-id="taskId"
+      :task-id="effectiveTaskId"
       :process-instance-id="taskInfo.processInstanceId || ''"
       :initial-data="n8nInitialData"
       @executed="handleN8nActionExecuted"
@@ -424,6 +424,10 @@ const taskId = route.params.id as string
 const loading = ref(true)
 const submitting = ref(false)
 const taskInfo = ref<Partial<TaskInfo>>({})
+const effectiveTaskId = computed(() => {
+  const currentTaskId = (taskInfo.value as Record<string, unknown>)?.taskId
+  return typeof currentTaskId === 'string' && currentTaskId.trim().length > 0 ? currentTaskId : taskId
+})
 
 // 错误状态
 const taskError = ref<string | null>(null)

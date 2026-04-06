@@ -73,6 +73,11 @@ public class MeetingParticipantVariablesPersistence {
             return;
         }
         variables.put("meeting_id", meetingId);
+        // 供 workflow-engine SubTableAssignmentHandler 从流程变量解析子表配置（与 BPMN custom:property 一致）
+        variables.put("subTableName", "participants");
+        variables.put("assigneeField", "assignee_user_id");
+        variables.put("foreignKey", "meeting_id");
+        variables.put("mainRecordId", meetingId);
 
         int enriched = 0;
         for (Object listObj : subTables.values()) {

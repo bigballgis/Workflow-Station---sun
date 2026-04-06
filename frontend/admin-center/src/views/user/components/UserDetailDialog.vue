@@ -309,80 +309,16 @@ const openAssignBuRole = async () => {
 
 const submitAssignBuRole = async () => {
   if (!user.value || !assignForm.businessUnitId || !assignForm.roleId) {
-    // #region agent log
-    fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '864cd4' },
-      body: JSON.stringify({
-        sessionId: '864cd4',
-        hypothesisId: 'H_silent_noop',
-        location: 'UserDetailDialog.vue:submitAssignBuRole',
-        message: 'early exit missing bu or role',
-        data: {
-          hasUser: !!user.value,
-          businessUnitId: assignForm.businessUnitId || '',
-          roleId: assignForm.roleId || ''
-        },
-        timestamp: Date.now()
-      })
-    }).catch(() => {})
-    // #endregion
     ElMessage.warning(t('user.selectRoleForBu'))
     return
   }
   assignSubmitting.value = true
   try {
-    // #region agent log
-    fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '864cd4' },
-      body: JSON.stringify({
-        sessionId: '864cd4',
-        hypothesisId: 'H_api_call',
-        location: 'UserDetailDialog.vue:submitAssignBuRole',
-        message: 'before assignBusinessUnitRole',
-        data: {
-          userId: user.value.id,
-          businessUnitId: assignForm.businessUnitId,
-          roleId: assignForm.roleId
-        },
-        timestamp: Date.now()
-      })
-    }).catch(() => {})
-    // #endregion
     await userApi.assignBusinessUnitRole(user.value.id, assignForm.businessUnitId, assignForm.roleId)
-    // #region agent log
-    fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '864cd4' },
-      body: JSON.stringify({
-        sessionId: '864cd4',
-        hypothesisId: 'H_api_ok',
-        location: 'UserDetailDialog.vue:submitAssignBuRole',
-        message: 'assignBusinessUnitRole resolved',
-        data: { userId: user.value.id },
-        timestamp: Date.now()
-      })
-    }).catch(() => {})
-    // #endregion
     ElMessage.success(t('common.success'))
     assignDialogVisible.value = false
     await reloadBuRoles()
   } catch (error: any) {
-    // #region agent log
-    fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '864cd4' },
-      body: JSON.stringify({
-        sessionId: '864cd4',
-        hypothesisId: 'H_api_err',
-        location: 'UserDetailDialog.vue:submitAssignBuRole',
-        message: 'assignBusinessUnitRole rejected',
-        data: { err: String(error?.message ?? error) },
-        timestamp: Date.now()
-      })
-    }).catch(() => {})
-    // #endregion
     ElMessage.error(error.message || t('common.failed'))
   } finally {
     assignSubmitting.value = false

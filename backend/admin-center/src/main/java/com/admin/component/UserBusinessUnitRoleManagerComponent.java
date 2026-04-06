@@ -1,6 +1,5 @@
 package com.admin.component;
 
-import com.admin.debug.AgentNdjsonLog;
 import com.admin.enums.RoleType;
 import com.admin.exception.AdminBusinessException;
 import com.admin.exception.AdminConflictException;
@@ -18,7 +17,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -37,43 +35,20 @@ public class UserBusinessUnitRoleManagerComponent {
     @Transactional
     @Audited(action = "UBR_ASSIGN", resourceType = "USER_BUSINESS_UNIT_ROLE", resourceId = "#userId")
     public void assign(String userId, String businessUnitId, String roleId, String operatedBy) {
-        // #region agent log
-        AgentNdjsonLog.append("H_entry", "UserBusinessUnitRoleManagerComponent.assign",
-                "assign invoked", Map.of(
-                "userId", String.valueOf(userId),
-                "businessUnitId", String.valueOf(businessUnitId),
-                "roleId", String.valueOf(roleId)));
-        // #endregion
         if (userBusinessUnitRoleRepository.existsByUserIdAndBusinessUnitIdAndRoleId(userId, businessUnitId, roleId)) {
-            // #region agent log
-            AgentNdjsonLog.append("H_conflict", "UserBusinessUnitRoleManagerComponent.assign",
-                    "reject USER_BU_ROLE_ALREADY_EXISTS", Map.of("userId", userId));
-            // #endregion
             throw new AdminConflictException("USER_BU_ROLE_ALREADY_EXISTS", "该用户在目标业务单元下已拥有该角色");
         }
         boolean inBu = userBusinessUnitRepository.existsByUserIdAndBusinessUnitId(userId, businessUnitId);
-        // #region agent log
-        AgentNdjsonLog.append("H_membership", "UserBusinessUnitRoleManagerComponent.assign",
-                "user BU membership check", Map.of("userId", userId, "businessUnitId", businessUnitId, "inBusinessUnit", inBu));
-        // #endregion
         if (!inBu) {
             throw new AdminBusinessException("USER_NOT_IN_BUSINESS_UNIT", "用户未加入该业务单元，无法分配 BU 绑定型角色");
         }
         Role role = roleRepository.findById(roleId)
                 .orElseThrow(() -> new RoleNotFoundException(roleId));
         RoleType roleType = EntityTypeConverter.toRoleType(role.getType());
-        // #region agent log
-        AgentNdjsonLog.append("H_role_type", "UserBusinessUnitRoleManagerComponent.assign",
-                "resolved role type", Map.of("roleId", roleId, "roleType", String.valueOf(roleType)));
-        // #endregion
         if (roleType != RoleType.BU_BOUNDED) {
             throw new AdminBusinessException("ROLE_NOT_BU_BOUNDED", "仅可为业务单元分配 BU 绑定型（BU_BOUNDED）角色");
         }
         boolean eligible = businessUnitRoleRepository.existsByBusinessUnitIdAndRoleId(businessUnitId, roleId);
-        // #region agent log
-        AgentNdjsonLog.append("H_bu_role", "UserBusinessUnitRoleManagerComponent.assign",
-                "BU eligible role check", Map.of("businessUnitId", businessUnitId, "roleId", roleId, "eligible", eligible));
-        // #endregion
         if (!eligible) {
             throw new AdminBusinessException("ROLE_NOT_ELIGIBLE_FOR_BUSINESS_UNIT", "该角色不在业务单元的准入角色列表中");
         }
@@ -87,10 +62,6 @@ public class UserBusinessUnitRoleManagerComponent {
                 .createdBy(by)
                 .build();
         userBusinessUnitRoleRepository.save(assignment);
-        // #region agent log
-        AgentNdjsonLog.append("H_saved", "UserBusinessUnitRoleManagerComponent.assign",
-                "UBR row persisted", Map.of("assignmentId", assignment.getId(), "userId", userId));
-        // #endregion
         log.info("UBR assigned: userId={}, businessUnitId={}, roleId={}, by={}", userId, businessUnitId, roleId, by);
     }
 

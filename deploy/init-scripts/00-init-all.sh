@@ -101,7 +101,8 @@ for f in /docker-entrypoint-initdb.d/16-meeting-participant-collection/00-*.sql 
          /docker-entrypoint-initdb.d/16-meeting-participant-collection/01-*.sql \
          /docker-entrypoint-initdb.d/16-meeting-participant-collection/02-*.sql \
          /docker-entrypoint-initdb.d/16-meeting-participant-collection/03-*.sql \
-         /docker-entrypoint-initdb.d/16-meeting-participant-collection/04-*.sql; do
+         /docker-entrypoint-initdb.d/16-meeting-participant-collection/04-*.sql \
+         /docker-entrypoint-initdb.d/16-meeting-participant-collection/05-*.sql; do
   [ -f "$f" ] && echo "  Running $(basename $f)..." && $PSQL -f "$f"
 done
 

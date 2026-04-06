@@ -29,6 +29,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -928,7 +931,9 @@ public class TaskQueryComponent {
                     continue;
                 }
                 Object email = row.get("email");
-                if (email == null || String.valueOf(email).isBlank()) {
+                Object name = row.get("name");
+                if ((email == null || String.valueOf(email).isBlank())
+                        && (name == null || String.valueOf(name).isBlank())) {
                     continue;
                 }
                 pending.add(row);
@@ -937,50 +942,120 @@ public class TaskQueryComponent {
         if (pending.isEmpty()) {
             return;
         }
+        // #region agent log
+        appendDebugLog("H13-enrich-pending", "TaskQueryComponent.enrichMissingParticipantRowIdsInSubTables",
+                String.format("\"pendingRows\":%d", pending.size()));
+        // #endregion
         String table = "participants";
         if (!table.matches("[a-zA-Z0-9_]+")) {
             return;
         }
-        LinkedHashSet<String> emails = new LinkedHashSet<>();
-        for (Map<String, Object> row : pending) {
-            emails.add(String.valueOf(row.get("email")).trim());
-        }
         try {
-            String in = emails.stream().map(e -> "?").collect(Collectors.joining(","));
-            String sql = "SELECT id, email, name FROM " + table + " WHERE email IN (" + in + ")";
-            List<Map<String, Object>> dbRows = jdbcTemplate.queryForList(sql, emails.toArray());
+            Long meetingId = null;
+            Object midObj = variables.get("meeting_id");
+            if (midObj == null) {
+                midObj = variables.get("mainRecordId");
+            }
+            if (midObj instanceof Number n) {
+                meetingId = n.longValue();
+            } else if (midObj != null) {
+                try {
+                    meetingId = Long.parseLong(String.valueOf(midObj).trim());
+                } catch (Exception ignored) {
+                    meetingId = null;
+                }
+            }
             int enriched = 0;
             for (Map<String, Object> row : pending) {
-                String em = String.valueOf(row.get("email")).trim();
-                Object nameObj = row.get("name");
-                String name = nameObj == null ? "" : String.valueOf(nameObj).trim();
-                List<Map<String, Object>> matchEmail = dbRows.stream()
-                        .filter(d -> em.equalsIgnoreCase(String.valueOf(d.get("email")).trim()))
-                        .toList();
-                if (matchEmail.isEmpty()) {
-                    continue;
+                String em = row.get("email") == null ? "" : String.valueOf(row.get("email")).trim();
+                String nm = row.get("name") == null ? "" : String.valueOf(row.get("name")).trim();
+                String dept = row.get("department") == null ? "" : String.valueOf(row.get("department")).trim();
+
+                Long id = null;
+                if (!em.isBlank()) {
+                    if (meetingId != null) {
+                        List<Long> ids = jdbcTemplate.query(
+                                "SELECT id FROM " + table + " WHERE meeting_id = ? AND lower(trim(email)) = lower(trim(?)) ORDER BY id LIMIT 1",
+                                (rs, i) -> rs.getLong("id"),
+                                meetingId, em);
+                        if (!ids.isEmpty()) id = ids.get(0);
+                    } else {
+                        List<Long> ids = jdbcTemplate.query(
+                                "SELECT id FROM " + table + " WHERE lower(trim(email)) = lower(trim(?)) ORDER BY id LIMIT 1",
+                                (rs, i) -> rs.getLong("id"),
+                                em);
+                        if (!ids.isEmpty()) id = ids.get(0);
+                    }
                 }
-                Map<String, Object> pick;
-                if (matchEmail.size() == 1) {
-                    pick = matchEmail.get(0);
-                } else {
-                    Optional<Map<String, Object>> byName = matchEmail.stream()
-                            .filter(d -> name.equalsIgnoreCase(
-                                    String.valueOf(d.get("name")).trim()))
-                            .findFirst();
-                    pick = byName.orElse(matchEmail.get(0));
+
+                if (id == null && !nm.isBlank() && !dept.isBlank()) {
+                    if (meetingId != null) {
+                        List<Long> ids = jdbcTemplate.query(
+                                "SELECT id FROM " + table + " WHERE meeting_id = ? AND lower(trim(name)) = lower(trim(?)) AND lower(trim(department)) = lower(trim(?)) ORDER BY id LIMIT 1",
+                                (rs, i) -> rs.getLong("id"),
+                                meetingId, nm, dept);
+                        if (!ids.isEmpty()) id = ids.get(0);
+                    } else {
+                        List<Long> ids = jdbcTemplate.query(
+                                "SELECT id FROM " + table + " WHERE lower(trim(name)) = lower(trim(?)) AND lower(trim(department)) = lower(trim(?)) ORDER BY id LIMIT 1",
+                                (rs, i) -> rs.getLong("id"),
+                                nm, dept);
+                        if (!ids.isEmpty()) id = ids.get(0);
+                    }
                 }
-                Object id = pick.get("id");
-                if (id instanceof Number n) {
-                    row.put("id", n.longValue());
+
+                if (id == null && !nm.isBlank()) {
+                    if (meetingId != null) {
+                        List<Long> ids = jdbcTemplate.query(
+                                "SELECT id FROM " + table + " WHERE meeting_id = ? AND lower(trim(name)) = lower(trim(?)) ORDER BY id LIMIT 1",
+                                (rs, i) -> rs.getLong("id"),
+                                meetingId, nm);
+                        if (!ids.isEmpty()) id = ids.get(0);
+                    } else {
+                        List<Long> ids = jdbcTemplate.query(
+                                "SELECT id FROM " + table + " WHERE lower(trim(name)) = lower(trim(?)) ORDER BY id LIMIT 1",
+                                (rs, i) -> rs.getLong("id"),
+                                nm);
+                        if (!ids.isEmpty()) id = ids.get(0);
+                    }
+                }
+
+                if (id != null) {
+                    row.put("id", id);
                     enriched++;
                 }
             }
+            // #region agent log
+            appendDebugLog("H14-enrich-dbrows", "TaskQueryComponent.enrichMissingParticipantRowIdsInSubTables",
+                    String.format("\"pendingRows\":%d,\"meetingId\":%s", pending.size(), String.valueOf(meetingId)));
+            // #endregion
             if (enriched > 0) {
                 log.debug("Enriched {} sub-table rows with DB id from {}", enriched, table);
+                } else {
+                log.debug("No participant row id enriched from {}", table);
             }
+            // #region agent log
+            appendDebugLog("H15-enrich-result", "TaskQueryComponent.enrichMissingParticipantRowIdsInSubTables",
+                    String.format("\"enriched\":%d", enriched));
+            // #endregion
         } catch (Exception e) {
             log.debug("enrichMissingParticipantRowIdsInSubTables skipped: {}", e.getMessage());
+            // #region agent log
+            appendDebugLog("H16-enrich-error", "TaskQueryComponent.enrichMissingParticipantRowIdsInSubTables",
+                    String.format("\"error\":\"%s\"", String.valueOf(e.getMessage()).replace("\"", "'")));
+            // #endregion
         }
+    }
+
+    private void appendDebugLog(String hypothesisId, String location, String dataJson) {
+        // #region agent log
+        try {
+            String line = String.format(
+                    "{\"sessionId\":\"97dc8c\",\"runId\":\"run1\",\"hypothesisId\":\"%s\",\"location\":\"%s\",\"message\":\"enrich rows\",\"data\":{%s},\"timestamp\":%d}%n",
+                    hypothesisId, location, dataJson, System.currentTimeMillis());
+            Files.writeString(Path.of(".cursor", "debug-97dc8c.log"), line, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        } catch (Exception ignored) {
+        }
+        // #endregion
     }
 }

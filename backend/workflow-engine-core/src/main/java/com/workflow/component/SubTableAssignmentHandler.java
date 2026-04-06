@@ -17,6 +17,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
@@ -55,6 +56,9 @@ public class SubTableAssignmentHandler {
     
     @Autowired(required = false)
     private SubTableUpdatePublisher updatePublisher;
+
+    @Autowired
+    private BpmnActionParser bpmnActionParser;
     
     /**
      * 分配子表行处理人
@@ -134,12 +138,16 @@ public class SubTableAssignmentHandler {
                 
                 // 检查是否包含子表配置
                 if (extProps.containsKey("subTableName") && extProps.containsKey("assigneeField")) {
+                    Map<String, Object> variables = safeTaskVariables(task.getId());
+                    Long mainFromExt = toLong(extProps.get("mainRecordId"));
+                    if (mainFromExt == null) {
+                        mainFromExt = resolveMainRecordId(variables);
+                    }
                     return SubTableConfig.builder()
                         .subTableName((String) extProps.get("subTableName"))
                         .assigneeField((String) extProps.get("assigneeField"))
                         .foreignKey((String) extProps.get("foreignKey"))
-                        .mainRecordId(extProps.get("mainRecordId") != null ? 
-                            Long.valueOf(extProps.get("mainRecordId").toString()) : null)
+                        .mainRecordId(mainFromExt)
                         .build();
                 }
             } catch (Exception e) {
@@ -155,15 +163,74 @@ public class SubTableAssignmentHandler {
                     .subTableName((String) variables.get("subTableName"))
                     .assigneeField((String) variables.get("assigneeField"))
                     .foreignKey((String) variables.get("foreignKey"))
-                    .mainRecordId(variables.get("mainRecordId") != null ? 
-                        Long.valueOf(variables.get("mainRecordId").toString()) : null)
+                    .mainRecordId(resolveMainRecordId(variables))
                     .build();
             }
         } catch (Exception e) {
             log.warn("从流程变量获取子表配置失败: taskId={}", task.getId(), e);
         }
-        
+
+        // 3) 多实例前置任务（如「分配参与人」）常在 BPMN 上声明 subTableName/assigneeField，但流程变量未注入 — 从已部署 BPMN XML 读取
+        try {
+            String pdId = task.getProcessDefinitionId();
+            String defKey = task.getTaskDefinitionKey();
+            if (pdId != null && !pdId.isBlank() && defKey != null && !defKey.isBlank()) {
+                String subTableName = bpmnActionParser.getUserTaskExtensionPropertyValue(pdId, defKey, "subTableName");
+                String assigneeField = bpmnActionParser.getUserTaskExtensionPropertyValue(pdId, defKey, "assigneeField");
+                if (subTableName != null && !subTableName.isBlank() && assigneeField != null && !assigneeField.isBlank()) {
+                    Map<String, Object> variables = safeTaskVariables(task.getId());
+                    String foreignKey = bpmnActionParser.getUserTaskExtensionPropertyValue(pdId, defKey, "foreignKey");
+                    return SubTableConfig.builder()
+                            .subTableName(subTableName.trim())
+                            .assigneeField(assigneeField.trim())
+                            .foreignKey(foreignKey != null && !foreignKey.isBlank() ? foreignKey.trim() : null)
+                            .mainRecordId(resolveMainRecordId(variables))
+                            .build();
+                }
+            }
+        } catch (Exception e) {
+            log.warn("从 BPMN 扩展读取子表配置失败: taskId={}", task.getId(), e);
+        }
+
         return null;
+    }
+
+    private Map<String, Object> safeTaskVariables(String taskId) {
+        try {
+            Map<String, Object> v = taskService.getVariables(taskId);
+            return v != null ? v : new HashMap<>();
+        } catch (Exception e) {
+            log.debug("getVariables failed for taskId={}: {}", taskId, e.getMessage());
+            return new HashMap<>();
+        }
+    }
+
+    /**
+     * 主表主键：优先 {@code mainRecordId}，其次会议演示流程的 {@code meeting_id}。
+     */
+    private static Long resolveMainRecordId(Map<String, Object> variables) {
+        if (variables == null || variables.isEmpty()) {
+            return null;
+        }
+        Object mr = variables.get("mainRecordId");
+        if (mr == null) {
+            mr = variables.get("meeting_id");
+        }
+        return toLong(mr);
+    }
+
+    private static Long toLong(Object o) {
+        if (o == null) {
+            return null;
+        }
+        if (o instanceof Number n) {
+            return n.longValue();
+        }
+        try {
+            return Long.parseLong(String.valueOf(o).trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
     
     /**

@@ -1,5 +1,7 @@
 package com.portal.component;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portal.dto.ChangeHistoryContext;
 import com.portal.dto.ProcessFormData;
 import com.portal.dto.SubTableBindingData;
@@ -9,12 +11,15 @@ import com.portal.repository.ProcessInstanceRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.UriUtils;
 
 import com.platform.common.util.ApiResponseBodyUnwrap;
 
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 /**
@@ -29,6 +34,8 @@ public class ProcessFormComponent {
     private final ProcessInstanceRepository processInstanceRepository;
     private final ChangeHistoryComponent changeHistoryComponent;
     private final RestTemplate restTemplate;
+    private final ObjectMapper objectMapper;
+    private final JdbcTemplate jdbcTemplate;
 
     @Value("${admin-center.url:http://localhost:8090}")
     private String adminCenterUrl;
@@ -158,21 +165,23 @@ public class ProcessFormComponent {
     // ==================== Private Helper Methods ====================
 
     /**
-     * 从 admin-center 获取 PROCESS 类型的表单定义
-     * TODO: 实际集成时需要通过 admin-center 或 developer-workstation API 获取表单定义
+     * 解析 PROCESS 表单定义：优先从与 developer-workstation 共用的 {@code dw_*} 表读取；
+     * 否则从 admin-center {@code GET /function-units/{id}/contents?type=FORM} 解析包内快照（含 formType）。
+     * <p>
+     * 历史实现误调用了不存在的 {@code /function-units/.../forms?formType=PROCESS}，导致 4xx/5xx。
      */
     @SuppressWarnings("unchecked")
     private Map<String, Object> fetchProcessFormDefinition(String processDefinitionKey) {
         try {
-            String url = adminCenterUrl + "/api/v1/admin/function-units/" + processDefinitionKey + "/forms?formType=PROCESS";
-            log.debug("Fetching PROCESS form definition from: {}", url);
-
-            Map<String, Object> response = restTemplate.getForObject(url, Map.class);
-            if (response != null) {
-                List<Map<String, Object>> forms = ApiResponseBodyUnwrap.normalizeToListOfMaps(response);
-                if (!forms.isEmpty()) {
-                    return forms.get(0);
-                }
+            Map<String, Object> fromDw = fetchProcessFormFromLocalDw(processDefinitionKey);
+            if (fromDw != null) {
+                log.debug("Resolved PROCESS form for {} from local dw_form_definitions", processDefinitionKey);
+                return fromDw;
+            }
+            Map<String, Object> fromAdmin = fetchProcessFormFromAdminCenter(processDefinitionKey);
+            if (fromAdmin != null) {
+                log.debug("Resolved PROCESS form for {} from admin-center contents", processDefinitionKey);
+                return fromAdmin;
             }
         } catch (Exception e) {
             log.warn("Failed to fetch PROCESS form definition for {}: {}", processDefinitionKey, e.getMessage());
@@ -180,21 +189,190 @@ public class ProcessFormComponent {
         return null;
     }
 
+    private Map<String, Object> fetchProcessFormFromLocalDw(String functionUnitCode) {
+        if (functionUnitCode == null || functionUnitCode.isBlank()) {
+            return null;
+        }
+        try {
+            List<Map<String, Object>> rows = jdbcTemplate.query(
+                    """
+                            SELECT fd.id AS form_id, fd.form_name, fd.config_json::text AS config_json
+                            FROM dw_form_definitions fd
+                            INNER JOIN dw_function_units fu ON fu.id = fd.function_unit_id
+                            WHERE fu.code = ? AND fd.form_type = 'PROCESS'
+                            LIMIT 1
+                            """,
+                    (rs, rowNum) -> {
+                        Map<String, Object> m = new HashMap<>();
+                        m.put("formId", rs.getLong("form_id"));
+                        m.put("formName", rs.getString("form_name"));
+                        m.put("configJsonRaw", rs.getString("config_json"));
+                        return m;
+                    },
+                    functionUnitCode.trim());
+            if (rows.isEmpty()) {
+                return null;
+            }
+            Map<String, Object> first = rows.get(0);
+            long formId = ((Number) first.get("formId")).longValue();
+            Map<String, Object> formDef = new HashMap<>();
+            formDef.put("name", first.get("formName"));
+            formDef.put("configJson", parseConfigJsonString((String) first.get("configJsonRaw")));
+            formDef.put("subTableBindings", loadSubTableBindingMapsForForm(formId));
+            return formDef;
+        } catch (Exception e) {
+            log.debug("Local dw PROCESS form lookup failed for {}: {}", functionUnitCode, e.getMessage());
+            return null;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> parseConfigJsonString(String raw) throws com.fasterxml.jackson.core.JsonProcessingException {
+        if (raw == null || raw.isBlank()) {
+            return Collections.emptyMap();
+        }
+        return objectMapper.readValue(raw, new TypeReference<Map<String, Object>>() {});
+    }
+
     /**
-     * 检查 FunctionUnit 是否存在 PROCESS 类型表单
-     * TODO: 实际集成时需要通过 admin-center 或 developer-workstation API 查询
+     * 与 admin-center attachTableBindings 对齐：优先 dw_table_definitions，RELATED 时回退 rt_table_definitions。
      */
+    private List<Map<String, Object>> loadSubTableBindingMapsForForm(long formId) {
+        try {
+            return jdbcTemplate.query(
+                    """
+                            SELECT ftb.id AS binding_id,
+                                   ftb.binding_type::text AS binding_type,
+                                   ftb.binding_mode::text AS binding_mode,
+                                   COALESCE(td.table_name, rt.table_name) AS table_name
+                            FROM dw_form_table_bindings ftb
+                            LEFT JOIN dw_table_definitions td ON td.id = ftb.table_id
+                            LEFT JOIN rt_table_definitions rt ON rt.id = ftb.relation_table_id
+                            WHERE ftb.form_id = ?
+                            ORDER BY ftb.sort_order NULLS LAST, ftb.id
+                            """,
+                    (rs, rowNum) -> {
+                        Map<String, Object> b = new LinkedHashMap<>();
+                        b.put("bindingId", rs.getLong("binding_id"));
+                        b.put("tableName", rs.getString("table_name"));
+                        b.put("bindingType", rs.getString("binding_type"));
+                        b.put("bindingMode", rs.getString("binding_mode"));
+                        b.put("columns", Collections.emptyList());
+                        b.put("data", Collections.emptyList());
+                        return b;
+                    },
+                    formId);
+        } catch (Exception e) {
+            log.debug("Could not load dw_form_table_bindings for formId={}: {}", formId, e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> fetchProcessFormFromAdminCenter(String processDefinitionKeyOrCatalogId) {
+        String base = normalizeBaseUrl(adminCenterUrl);
+        String functionUnitId = resolveAdminFunctionUnitId(base, processDefinitionKeyOrCatalogId);
+        if (functionUnitId == null || functionUnitId.isBlank()) {
+            functionUnitId = processDefinitionKeyOrCatalogId;
+        }
+        return fetchProcessFormFromAdminContents(base, functionUnitId);
+    }
+
+    @SuppressWarnings("unchecked")
+    private String resolveAdminFunctionUnitId(String base, String processKey) {
+        if (processKey == null || processKey.isBlank()) {
+            return null;
+        }
+        String byKeyUrl = base + "/api/v1/admin/function-units/by-process-key/"
+                + UriUtils.encodePathSegment(processKey, StandardCharsets.UTF_8);
+        try {
+            Map<String, Object> fu = restTemplate.getForObject(byKeyUrl, Map.class);
+            if (fu != null && fu.get("id") != null) {
+                return Objects.toString(fu.get("id"), null);
+            }
+        } catch (org.springframework.web.client.HttpClientErrorException.NotFound notFound) {
+            log.debug("admin-center by-process-key not found for {}: {}", processKey, notFound.getMessage());
+        } catch (Exception e) {
+            log.debug("admin-center by-process-key failed for {}: {}", processKey, e.getMessage());
+        }
+        return null;
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> fetchProcessFormFromAdminContents(String base, String functionUnitId) {
+        if (functionUnitId == null || functionUnitId.isBlank()) {
+            return null;
+        }
+        String contentsUrl = base + "/api/v1/admin/function-units/"
+                + UriUtils.encodePathSegment(functionUnitId, StandardCharsets.UTF_8)
+                + "/contents?type=FORM";
+        Map<String, Object> response;
+        try {
+            response = restTemplate.getForObject(contentsUrl, Map.class);
+        } catch (Exception e) {
+            log.debug("admin-center contents failed for fu {}: {}", functionUnitId, e.getMessage());
+            return null;
+        }
+        List<Map<String, Object>> items = ApiResponseBodyUnwrap.normalizeToListOfMaps(response);
+        for (Map<String, Object> item : items) {
+            Object rawData = item.get("contentData");
+            if (!(rawData instanceof String contentDataStr) || contentDataStr.isBlank()) {
+                continue;
+            }
+            try {
+                Map<String, Object> parsed = objectMapper.readValue(contentDataStr, new TypeReference<Map<String, Object>>() {});
+                Object ft = parsed.get("formType");
+                if (!"PROCESS".equals(ft instanceof String ? ft : Objects.toString(ft, null))) {
+                    continue;
+                }
+                Map<String, Object> formDef = new HashMap<>();
+                formDef.put("name", parsed.get("formName"));
+                Object cj = parsed.get("configJson");
+                if (cj instanceof Map<?, ?>) {
+                    formDef.put("configJson", new HashMap<>((Map<String, Object>) cj));
+                } else if (cj instanceof String s) {
+                    formDef.put("configJson", parseConfigJsonString(s));
+                } else {
+                    formDef.put("configJson", Collections.emptyMap());
+                }
+                Long formIdLong = null;
+                Object fid = parsed.get("formId");
+                if (fid instanceof Number n) {
+                    formIdLong = n.longValue();
+                } else if (fid != null) {
+                    try {
+                        formIdLong = Long.parseLong(fid.toString());
+                    } catch (NumberFormatException ignored) {
+                        // leave null
+                    }
+                }
+                if (formIdLong != null) {
+                    formDef.put("subTableBindings", loadSubTableBindingMapsForForm(formIdLong));
+                } else {
+                    formDef.put("subTableBindings", Collections.emptyList());
+                }
+                return formDef;
+            } catch (Exception parseEx) {
+                log.debug("Skip malformed FORM contentData for {}: {}", functionUnitId, parseEx.getMessage());
+            }
+        }
+        return null;
+    }
+
+    private static String normalizeBaseUrl(String url) {
+        if (url == null || url.isBlank()) {
+            return "http://localhost:8090";
+        }
+        return url.endsWith("/") ? url.substring(0, url.length() - 1) : url;
+    }
+
     @SuppressWarnings("unchecked")
     private boolean checkProcessFormExists(String functionUnitId) {
         try {
-            String url = adminCenterUrl + "/api/v1/admin/function-units/" + functionUnitId + "/forms?formType=PROCESS";
-            log.debug("Checking PROCESS form existence from: {}", url);
-
-            Map<String, Object> response = restTemplate.getForObject(url, Map.class);
-            if (response != null) {
-                List<Map<String, Object>> forms = ApiResponseBodyUnwrap.normalizeToListOfMaps(response);
-                return !forms.isEmpty();
+            if (fetchProcessFormFromLocalDw(functionUnitId) != null) {
+                return true;
             }
+            return fetchProcessFormFromAdminCenter(functionUnitId) != null;
         } catch (Exception e) {
             log.warn("Failed to check PROCESS form existence for {}: {}", functionUnitId, e.getMessage());
         }

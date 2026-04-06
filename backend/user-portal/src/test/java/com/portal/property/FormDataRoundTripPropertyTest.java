@@ -7,8 +7,10 @@ import com.portal.component.TaskFormComponent;
 import com.portal.component.TaskFormComponent.TaskInfo;
 import com.portal.entity.ProcessInstance;
 import com.portal.repository.ProcessInstanceRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import net.jqwik.api.*;
 import org.mockito.ArgumentCaptor;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.client.RestTemplate;
 
@@ -43,7 +45,8 @@ public class FormDataRoundTripPropertyTest {
         ChangeHistoryComponent changeHistoryComponent = mock(ChangeHistoryComponent.class);
 
         ProcessFormComponent component = new ProcessFormComponent(
-                processInstanceRepository, changeHistoryComponent, mock(RestTemplate.class));
+                processInstanceRepository, changeHistoryComponent, mock(RestTemplate.class),
+                new ObjectMapper(), mock(JdbcTemplate.class));
         ReflectionTestUtils.setField(component, "adminCenterUrl", "http://mock-admin:8090");
 
         // Create process instance in RETURN_TO_REQUESTER state (so submit is allowed)
@@ -96,7 +99,7 @@ public class FormDataRoundTripPropertyTest {
 
         TaskFormComponent component = new TaskFormComponent(
                 processFormComponent, changeHistoryComponent, processInstanceRepository,
-                mock(WorkflowEngineClient.class), mock(RestTemplate.class)) {
+                mock(WorkflowEngineClient.class), mock(RestTemplate.class), new com.fasterxml.jackson.databind.ObjectMapper(), mock(org.springframework.jdbc.core.JdbcTemplate.class)) {
             @Override
             protected TaskInfo getTaskInfo(String taskId) {
                 return new TaskInfo(config.taskDefinitionKey, config.processInstanceId);

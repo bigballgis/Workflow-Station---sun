@@ -1,5 +1,6 @@
 package com.portal.property;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portal.client.WorkflowEngineClient;
 import com.portal.component.ChangeHistoryComponent;
 import com.portal.component.ProcessFormComponent;
@@ -10,6 +11,7 @@ import com.portal.dto.TaskFormData;
 import com.portal.entity.ProcessInstance;
 import com.portal.repository.ProcessInstanceRepository;
 import net.jqwik.api.*;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.client.RestTemplate;
 
@@ -45,7 +47,7 @@ public class TaskFormFallbackPropertyTest {
         // Create a testable TaskFormComponent where fetchTaskFormByStageId returns null (no binding)
         TaskFormComponent component = new TaskFormComponent(
                 processFormComponent, changeHistoryComponent, processInstanceRepository,
-                mock(WorkflowEngineClient.class), mock(RestTemplate.class)) {
+                mock(WorkflowEngineClient.class), mock(RestTemplate.class), new ObjectMapper(), mock(JdbcTemplate.class)) {
             @Override
             protected TaskInfo getTaskInfo(String taskId) {
                 return new TaskInfo(config.taskDefinitionKey, config.processInstanceId);

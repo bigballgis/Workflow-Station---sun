@@ -63,6 +63,11 @@ app:
     enabled: true
     timeout-seconds: 30
 
+# 与 developer-workstation 共用同一 PostgreSQL 时，TaskFormComponent 可在 HTTP 失败时从 dw_form_stage_bindings 回退。
+# 基址仅 host:port，不要带 /api/v1（代码会拼接 /api/v1/form-stage-bindings）。
+developer-workstation:
+  url: ${DEVELOPER_WORKSTATION_URL:http://developer-workstation:8080}
+
 spring:
   datasource:
     url: jdbc:postgresql://postgres:5432/workflow_platform

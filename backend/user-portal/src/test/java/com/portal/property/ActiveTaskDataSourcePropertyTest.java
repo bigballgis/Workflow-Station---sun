@@ -45,7 +45,7 @@ public class ActiveTaskDataSourcePropertyTest {
 
         TaskFormComponent component = new TaskFormComponent(
                 processFormComponent, changeHistoryComponent, processInstanceRepository,
-                mock(WorkflowEngineClient.class), mock(RestTemplate.class)) {
+                mock(WorkflowEngineClient.class), mock(RestTemplate.class), new com.fasterxml.jackson.databind.ObjectMapper(), mock(org.springframework.jdbc.core.JdbcTemplate.class)) {
             @Override
             protected TaskInfo getTaskInfo(String taskId) {
                 return new TaskInfo(config.taskDefinitionKey, config.processInstanceId);

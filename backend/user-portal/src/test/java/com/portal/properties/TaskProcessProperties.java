@@ -80,7 +80,8 @@ class TaskProcessProperties {
             delegationRuleRepository, 
             delegationAuditRepository, 
             workflowEngineClient,
-            processInstanceRepository
+            processInstanceRepository,
+            jdbcTemplate
         );
         random = new Random();
 
