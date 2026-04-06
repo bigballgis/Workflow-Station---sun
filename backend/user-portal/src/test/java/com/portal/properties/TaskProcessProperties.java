@@ -3,6 +3,7 @@ package com.portal.properties;
 import com.portal.client.WorkflowEngineClient;
 import com.portal.component.TaskProcessComponent;
 import com.portal.component.TaskQueryComponent;
+import com.portal.component.VirtualGroupAccessComponent;
 import com.portal.dto.TaskCompleteRequest;
 import com.portal.dto.TaskInfo;
 import com.portal.entity.DelegationRule;
@@ -13,6 +14,7 @@ import com.portal.repository.DelegationAuditRepository;
 import com.portal.repository.DelegationRuleRepository;
 import com.portal.repository.ProcessHistoryRepository;
 import com.portal.repository.ProcessInstanceRepository;
+import com.portal.service.PortalWorkspaceAuthService;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.junit.jupiter.api.RepeatedTest;
@@ -60,6 +62,12 @@ class TaskProcessProperties {
     @Mock
     private JdbcTemplate jdbcTemplate;
 
+    @Mock
+    private VirtualGroupAccessComponent virtualGroupAccessComponent;
+
+    @Mock
+    private PortalWorkspaceAuthService portalWorkspaceAuthService;
+
     private TaskQueryComponent taskQueryComponent;
     private TaskProcessComponent taskProcessComponent;
     private Random random;
@@ -73,7 +81,9 @@ class TaskProcessProperties {
             processHistoryRepository,
             workflowEngineClient,
             taskActionService,
-            jdbcTemplate
+            jdbcTemplate,
+            virtualGroupAccessComponent,
+            portalWorkspaceAuthService
         );
         taskProcessComponent = new TaskProcessComponent(
             taskQueryComponent, 
@@ -88,6 +98,8 @@ class TaskProcessProperties {
         // 默认返回空委托列表
         when(delegationRuleRepository.findActiveDelegationsForDelegate(any(), any()))
                 .thenReturn(Collections.emptyList());
+
+        when(portalWorkspaceAuthService.listWorkspaceContexts(any())).thenReturn(Collections.emptyList());
         
         // Mock WorkflowEngineClient 为可用状态
         when(workflowEngineClient.isAvailable()).thenReturn(true);

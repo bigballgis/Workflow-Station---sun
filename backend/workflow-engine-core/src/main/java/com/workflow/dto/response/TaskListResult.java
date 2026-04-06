@@ -102,6 +102,11 @@ public class TaskListResult {
          * 与运行时 {@link #assignmentType} 分离，用于展示设计器语义；若已规范化为发起人直办，{@link #assignmentType} 可能为 USER。
          */
         private String bpmnAssigneeType;
+
+        /**
+         * BPMN 扩展 {@code businessUnitId}（如 FIXED_BU_ROLE 指定的固定 BU），供门户按当前工作台过滤待办。
+         */
+        private String bpmnBusinessUnitId;
         
         /**
          * 分配目标

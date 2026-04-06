@@ -17,6 +17,7 @@ import com.portal.repository.DelegationRuleRepository;
 import com.portal.repository.ProcessHistoryRepository;
 import com.portal.repository.ProcessInstanceRepository;
 import com.portal.service.TaskActionService;
+import com.portal.service.PortalWorkspaceAuthService;
 import com.portal.exception.PortalException;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -42,7 +43,8 @@ import java.util.stream.Collectors;
  * Supports multi-dimensional task queries: direct assignment, virtual groups, department roles, delegated tasks.
  * 
  * Primary path queries the Flowable engine, then drops only {@link TaskProcessComponent#shouldHideTaskInTodoList}
- * (发起人误占下游空池). Full {@link TaskProcessComponent#canProcessTask} is not applied to the list — engine
+ * (发起人误占下游空池), then {@link #filterFixedBuRoleTasksForActiveWorkspace} for FIXED_BU_ROLE vs JWT active BU.
+ * Full {@link TaskProcessComponent#canProcessTask} is not applied to the list — engine
  * membership is authoritative; complete/claim still enforce canProcessTask.
  * When the engine returns an empty list, {@link #mergeTasksFromRunningProcessInstancesForUser} merges from
  * RUNNING instances with {@code canProcessTask} (initiator fallback path only).
@@ -58,6 +60,8 @@ public class TaskQueryComponent {
     private final WorkflowEngineClient workflowEngineClient;
     private final TaskActionService taskActionService;
     private final JdbcTemplate jdbcTemplate;
+    private final VirtualGroupAccessComponent virtualGroupAccessComponent;
+    private final PortalWorkspaceAuthService portalWorkspaceAuthService;
 
     /** Lazy: breaks cycle with {@link TaskProcessComponent} which depends on this component. */
     @Lazy
@@ -94,7 +98,8 @@ public class TaskQueryComponent {
         try {
             // Get virtual groups the user belongs to
             List<String> groupIds = getUserVirtualGroups(userId);
-            
+            groupIds = filterVirtualGroupsForActiveWorkspace(userId, groupIds);
+
             // Determine query method based on assignment type filter
             boolean includeGroups = assignmentTypes == null || assignmentTypes.isEmpty() 
                 || assignmentTypes.contains("VIRTUAL_GROUP");
@@ -156,6 +161,8 @@ public class TaskQueryComponent {
                     .filter(t -> !taskProcessComponent.shouldHideTaskInTodoList(t, userId, portalUsername))
                     .collect(Collectors.toList());
         }
+
+        allTasks = filterFixedBuRoleTasksForActiveWorkspace(allTasks);
 
         // Apply filters
         allTasks = applyFilters(allTasks, request);
@@ -338,6 +345,7 @@ public class TaskQueryComponent {
                 .processDefinitionName(processDefinitionName)
                 .assignmentType(assignmentType)
                 .bpmnAssigneeType(engineStringField(taskMap.get("bpmnAssigneeType")))
+                .bpmnBusinessUnitId(engineStringField(taskMap.get("bpmnBusinessUnitId")))
                 .assignmentTarget(assignmentTarget)
                 .assignee(currentAssignee)
                 .assigneeName(currentAssigneeName)
@@ -464,6 +472,7 @@ public class TaskQueryComponent {
                                     .processDefinitionKey(taskInfo.getProcessDefinitionKey())
                                     .processDefinitionName(taskInfo.getProcessDefinitionName())
                                     .bpmnAssigneeType(taskInfo.getBpmnAssigneeType())
+                                    .bpmnBusinessUnitId(taskInfo.getBpmnBusinessUnitId())
                                     .assignmentType("DELEGATED")
                                     .assignee(userId)
                                     .delegatorId(delegatorId)
@@ -651,6 +660,144 @@ public class TaskQueryComponent {
     }
 
     /**
+     * 固定/指定 BU 角色池（BPMN FIXED_BU_ROLE，或 BU_ROLE 且扩展含 businessUnitId）：引擎会合并 taskCandidateUser，
+     * 与候选组过滤无关。只要 JWT 含 {@code activeBusinessUnitId}，池所属 BU 必须与当前工作台一致。
+     * <p>不再依赖 {@link PortalWorkspaceAuthService#listWorkspaceContexts} 非空：部分环境 UBR 数据与「切换 BU」不同步时，
+     * 仅靠 VG 过滤会误判为「非工作台模式」而跳过本过滤。</p>
+     */
+    private List<TaskInfo> filterFixedBuRoleTasksForActiveWorkspace(List<TaskInfo> tasks) {
+        Optional<String> activeBuOpt = SecurityContextUtils.getCurrentActiveBusinessUnitId();
+        if (activeBuOpt.isEmpty()) {
+            return tasks;
+        }
+        String activeBu = normalizeBuId(activeBuOpt.get());
+        List<TaskInfo> out = new ArrayList<>();
+        for (TaskInfo t : tasks) {
+            if (t == null) {
+                continue;
+            }
+            if (!isWorkspaceScopedBuPoolSemantics(t)) {
+                out.add(t);
+                continue;
+            }
+            String fixedBu = resolveFixedBusinessUnitForBpmnTask(t);
+            if (fixedBu == null || fixedBu.isBlank()) {
+                out.add(t);
+                continue;
+            }
+            if (equalsNormalizedBuId(activeBu, fixedBu)) {
+                out.add(t);
+            }
+        }
+        return out;
+    }
+
+    private static String normalizeBuId(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        return raw.trim();
+    }
+
+    /**
+     * FIXED_BU_ROLE，或 BPMN 为 BU_ROLE 且扩展中显式指定 businessUnitId（与引擎 {@code isWorkspaceScopedBuPoolSemantics} 对齐）。
+     */
+    private boolean isWorkspaceScopedBuPoolSemantics(TaskInfo t) {
+        String bpmn = t.getBpmnAssigneeType();
+        if (bpmn != null) {
+            String u = bpmn.trim().toUpperCase(java.util.Locale.ROOT);
+            if ("FIXED_BU_ROLE".equals(u)) {
+                return true;
+            }
+            if ("BU_ROLE".equals(u) && t.getBpmnBusinessUnitId() != null && !t.getBpmnBusinessUnitId().isBlank()) {
+                return true;
+            }
+        }
+        Map<String, Object> vars = t.getVariables();
+        if (vars != null) {
+            Object at = vars.get("assigneeType");
+            if (at != null) {
+                String av = String.valueOf(at).trim().toUpperCase(java.util.Locale.ROOT);
+                if ("FIXED_BU_ROLE".equals(av)) {
+                    return true;
+                }
+                if ("BU_ROLE".equals(av) && resolveFixedBusinessUnitForBpmnTask(t) != null) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean equalsNormalizedBuId(String a, String b) {
+        if (a == null || b == null) {
+            return false;
+        }
+        String x = a.trim();
+        String y = b.trim();
+        if (x.equals(y)) {
+            return true;
+        }
+        try {
+            if (x.matches("^-?\\d+$") && y.matches("^-?\\d+$")) {
+                return Long.parseLong(x) == Long.parseLong(y);
+            }
+        } catch (NumberFormatException ignored) {
+            // fall through
+        }
+        return false;
+    }
+
+    /**
+     * 固定业务单元：引擎 {@code bpmnBusinessUnitId}，否则流程变量 {@code businessUnitId}。
+     */
+    private String resolveFixedBusinessUnitForBpmnTask(TaskInfo t) {
+        String bu = t.getBpmnBusinessUnitId();
+        if (bu != null && !bu.isBlank()) {
+            return bu.trim();
+        }
+        Map<String, Object> vars = t.getVariables();
+        if (vars == null) {
+            return null;
+        }
+        Object v = vars.get("businessUnitId");
+        if (v == null) {
+            return null;
+        }
+        String s = engineStringField(v);
+        return s != null && !s.isBlank() ? s.trim() : null;
+    }
+
+    /**
+     * 工作台上下文下：仅保留「当前业务单元下对该虚拟组绑定角色拥有 UBR」的虚拟组，
+     * 避免多 BU 用户在其他 BU 工作台仍看到候选组任务（引擎 user-permissions 返回全量 virtualGroupIds）。
+     */
+    private List<String> filterVirtualGroupsForActiveWorkspace(String userId, List<String> groupIds) {
+        if (groupIds == null || groupIds.isEmpty()) {
+            return groupIds == null ? Collections.emptyList() : groupIds;
+        }
+        Optional<String> activeBu = SecurityContextUtils.getCurrentActiveBusinessUnitId();
+        if (activeBu.isEmpty()) {
+            return groupIds;
+        }
+        if (portalWorkspaceAuthService.listWorkspaceContexts(userId).isEmpty()) {
+            return groupIds;
+        }
+        List<String> kept = new ArrayList<>();
+        for (String gid : groupIds) {
+            Optional<String> boundRoleId = virtualGroupAccessComponent.getBoundRoleIdForVirtualGroup(gid);
+            if (boundRoleId.isEmpty()) {
+                log.debug("Workspace VG filter: group {} has no bound role; excluded from candidate-group query", gid);
+                continue;
+            }
+            if (portalWorkspaceAuthService.hasContext(userId, activeBu.get(), boundRoleId.get())) {
+                kept.add(gid);
+            }
+        }
+        return kept;
+    }
+
+    /**
      * Get virtual groups the user belongs to.
      * Retrieved via workflow-engine-core calling admin-center.
      */
@@ -671,8 +818,6 @@ public class TaskQueryComponent {
         // Return empty list; do not use mock data
         return Collections.emptyList();
     }
-
-
 
     /**
      * Get task statistics.

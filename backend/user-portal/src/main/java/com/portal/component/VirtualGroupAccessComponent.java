@@ -67,6 +67,37 @@ public class VirtualGroupAccessComponent {
             return null;
         }
     }
+
+    /**
+     * 虚拟组绑定的业务角色主键（admin-center {@code GET /virtual-groups/{groupId}/role}）。
+     */
+    public Optional<String> getBoundRoleIdForVirtualGroup(String groupId) {
+        if (groupId == null || groupId.isBlank()) {
+            return Optional.empty();
+        }
+        try {
+            String url = adminCenterUrl + "/api/v1/admin/virtual-groups/" + groupId + "/role";
+            ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    null,
+                    new ParameterizedTypeReference<Map<String, Object>>() {});
+            if (response.getStatusCode() == HttpStatus.NO_CONTENT || response.getBody() == null) {
+                return Optional.empty();
+            }
+            Object id = response.getBody().get("id");
+            return id != null ? Optional.of(String.valueOf(id)) : Optional.empty();
+        } catch (org.springframework.web.client.HttpStatusCodeException e) {
+            if (e.getStatusCode() == HttpStatus.NO_CONTENT) {
+                return Optional.empty();
+            }
+            log.debug("getBoundRoleIdForVirtualGroup: groupId={} status={}", groupId, e.getStatusCode());
+            return Optional.empty();
+        } catch (Exception e) {
+            log.warn("getBoundRoleIdForVirtualGroup failed for {}: {}", groupId, e.getMessage());
+            return Optional.empty();
+        }
+    }
     
     /**
      * 获取用户当前的虚拟组成员身份

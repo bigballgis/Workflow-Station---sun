@@ -45,6 +45,11 @@ public class TaskInfo {
     private String bpmnAssigneeType;
 
     /**
+     * BPMN 扩展 businessUnitId（如 FIXED_BU_ROLE 固定 BU），引擎任务列表/详情返回。
+     */
+    private String bpmnBusinessUnitId;
+
+    /**
      * 引擎分配目标：USER 时为处理人 ID；CANDIDATE_USERS 时为候选人用户 ID 逗号拼接等（与 workflow-engine TaskListResult 一致）
      */
     private String assignmentTarget;

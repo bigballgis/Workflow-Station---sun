@@ -107,6 +107,13 @@ public class TaskManagerComponent {
      * 支持多维度任务分配类型
      */
     public TaskListResult getUserTasks(String userId, int page, int size) {
+        return getUserTasks(userId, page, size, null);
+    }
+
+    /**
+     * @param activeBusinessUnitId 门户当前工作台 BU（可选）；非空时过滤 BPMN FIXED_BU_ROLE 与当前工作台不一致的待办
+     */
+    public TaskListResult getUserTasks(String userId, int page, int size, String activeBusinessUnitId) {
         try {
             validateUserId(userId);
             
@@ -129,6 +136,7 @@ public class TaskManagerComponent {
             
             List<Task> uniqueTasks = new ArrayList<>(taskMap.values());
             uniqueTasks.sort((t1, t2) -> t2.getCreateTime().compareTo(t1.getCreateTime()));
+            uniqueTasks = applyActiveWorkspaceBuTaskFilter(uniqueTasks, activeBusinessUnitId);
             
             long totalCount;
             if (uniqueTasks.size() < fetchLimit) {
@@ -300,6 +308,15 @@ public class TaskManagerComponent {
      */
     public TaskListResult getUserAllVisibleTasks(String userId, List<String> groupIds, 
                                                List<String> deptRoles, int page, int size) {
+        return getUserAllVisibleTasks(userId, groupIds, deptRoles, page, size, null);
+    }
+
+    /**
+     * @param activeBusinessUnitId 门户当前工作台 BU（可选）；非空时过滤 BPMN FIXED_BU_ROLE 与当前工作台不一致的待办
+     */
+    public TaskListResult getUserAllVisibleTasks(String userId, List<String> groupIds, 
+                                               List<String> deptRoles, int page, int size,
+                                               String activeBusinessUnitId) {
         try {
             validateUserId(userId);
             
@@ -331,6 +348,7 @@ public class TaskManagerComponent {
             
             List<Task> uniqueTasks = new ArrayList<>(taskMap.values());
             uniqueTasks.sort((t1, t2) -> t2.getCreateTime().compareTo(t1.getCreateTime()));
+            uniqueTasks = applyActiveWorkspaceBuTaskFilter(uniqueTasks, activeBusinessUnitId);
             
             long totalCount;
             if (uniqueTasks.size() < fetchLimit) {
@@ -1413,10 +1431,16 @@ public class TaskManagerComponent {
         }
 
         String bpmnAssigneeType = null;
+        String bpmnBusinessUnitId = null;
         if (processDefinitionId != null && task.getTaskDefinitionKey() != null) {
             try {
                 bpmnAssigneeType = bpmnActionParser.getUserTaskExtensionPropertyValue(
                         processDefinitionId, task.getTaskDefinitionKey(), "assigneeType");
+                String rawBu = bpmnActionParser.getUserTaskExtensionPropertyValue(
+                        processDefinitionId, task.getTaskDefinitionKey(), "businessUnitId");
+                if (StringUtils.hasText(rawBu)) {
+                    bpmnBusinessUnitId = rawBu.trim();
+                }
             } catch (Exception e) {
                 log.debug("Read bpmn assigneeType for task {}: {}", task.getId(), e.getMessage());
             }
@@ -1461,6 +1485,7 @@ public class TaskManagerComponent {
             .currentAssigneeName(currentAssigneeName)
             .assignmentType(assignmentType)
             .bpmnAssigneeType(StringUtils.hasText(bpmnAssigneeType) ? bpmnAssigneeType : null)
+            .bpmnBusinessUnitId(bpmnBusinessUnitId)
             .assignmentTarget(assignmentTarget)
             .priority(task.getPriority())
             .createdTime(task.getCreateTime() != null ? 
@@ -1476,6 +1501,106 @@ public class TaskManagerComponent {
             .candidateGroupIds(candidateGroupIds.isEmpty() ? null : candidateGroupIds)
             .actionIds(extractedActionIds)
             .build();
+    }
+
+    /**
+     * 门户传入当前工作台 BU 时，在分页前剔除 BPMN FIXED_BU_ROLE 固定 BU 与 JWT 工作台不一致的任务。
+     * 依赖 {@link #buildTaskInfoFromFlowableTask} 中的 bpmnAssigneeType / bpmnBusinessUnitId / variables。
+     */
+    private List<Task> applyActiveWorkspaceBuTaskFilter(List<Task> tasks, String activeBusinessUnitId) {
+        if (!StringUtils.hasText(activeBusinessUnitId) || tasks == null || tasks.isEmpty()) {
+            return tasks;
+        }
+        String activeBu = activeBusinessUnitId.trim();
+        List<Task> out = new ArrayList<>();
+        for (Task t : tasks) {
+            TaskListResult.TaskInfo info = buildTaskInfoFromFlowableTask(t);
+            if (fixedBuRoleVisibleForActiveWorkspace(info, activeBu)) {
+                out.add(t);
+            }
+        }
+        return out;
+    }
+
+    private boolean fixedBuRoleVisibleForActiveWorkspace(TaskListResult.TaskInfo info, String activeBu) {
+        if (info == null || !StringUtils.hasText(activeBu)) {
+            return true;
+        }
+        if (!isWorkspaceScopedBuPoolSemantics(info)) {
+            return true;
+        }
+        String fixed = resolveFixedBuIdFromTaskInfo(info);
+        if (!StringUtils.hasText(fixed)) {
+            return true;
+        }
+        return equalsNormalizedBuId(activeBu, fixed);
+    }
+
+    /**
+     * FIXED_BU_ROLE，或 BPMN 为 BU_ROLE 且扩展中显式指定 businessUnitId（设计器「指定业务单元角色」固定池）。
+     * 变量 assigneeType 兜底与 {@link com.workflow.listener.TaskAssignmentListener} 一致。
+     */
+    private static boolean isWorkspaceScopedBuPoolSemantics(TaskListResult.TaskInfo info) {
+        String bpmn = info.getBpmnAssigneeType();
+        if (bpmn != null) {
+            String u = bpmn.trim().toUpperCase(Locale.ROOT);
+            if ("FIXED_BU_ROLE".equals(u)) {
+                return true;
+            }
+            if ("BU_ROLE".equals(u) && StringUtils.hasText(info.getBpmnBusinessUnitId())) {
+                return true;
+            }
+        }
+        Map<String, Object> vars = info.getVariables();
+        if (vars != null) {
+            Object at = vars.get("assigneeType");
+            if (at != null) {
+                String av = String.valueOf(at).trim().toUpperCase(Locale.ROOT);
+                if ("FIXED_BU_ROLE".equals(av)) {
+                    return true;
+                }
+                if ("BU_ROLE".equals(av) && StringUtils.hasText(resolveFixedBuIdFromTaskInfo(info))) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /** 对齐 JWT 字符串与引擎变量中 Long/数字字符串形式的 BU id */
+    private static boolean equalsNormalizedBuId(String a, String b) {
+        if (a == null || b == null) {
+            return false;
+        }
+        String x = a.trim();
+        String y = b.trim();
+        if (x.equals(y)) {
+            return true;
+        }
+        try {
+            if (x.matches("^-?\\d+$") && y.matches("^-?\\d+$")) {
+                return Long.parseLong(x) == Long.parseLong(y);
+            }
+        } catch (NumberFormatException ignored) {
+            // fall through
+        }
+        return false;
+    }
+
+    private static String resolveFixedBuIdFromTaskInfo(TaskListResult.TaskInfo info) {
+        if (StringUtils.hasText(info.getBpmnBusinessUnitId())) {
+            return info.getBpmnBusinessUnitId().trim();
+        }
+        Map<String, Object> vars = info.getVariables();
+        if (vars == null) {
+            return null;
+        }
+        Object o = vars.get("businessUnitId");
+        if (o == null) {
+            return null;
+        }
+        String s = String.valueOf(o).trim();
+        return s.isEmpty() ? null : s;
     }
     
     

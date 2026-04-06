@@ -87,7 +87,9 @@ public class TaskController {
             @Parameter(description = "虚拟组ID列表")
             @RequestParam(value = "groupIds", required = false) List<String> groupIds,
             @Parameter(description = "部门角色列表")
-            @RequestParam(value = "deptRoles", required = false) List<String> deptRoles) {
+            @RequestParam(value = "deptRoles", required = false) List<String> deptRoles,
+            @Parameter(description = "门户当前工作台业务单元（可选；用于过滤 FIXED_BU_ROLE 与 JWT 不一致的待办）")
+            @RequestParam(value = "activeBusinessUnitId", required = false) String activeBusinessUnitId) {
         
         // Validate and sanitize inputs using security integration service
         if (userId != null) {
@@ -126,9 +128,10 @@ public class TaskController {
             // 按流程实例ID查询任务
             result = taskManagerComponent.getTasksByProcessInstance(processInstanceId, page, pageSize);
         } else if (groupIds != null || deptRoles != null) {
-            result = taskManagerComponent.getUserAllVisibleTasks(userId, groupIds, deptRoles, page, pageSize);
+            result = taskManagerComponent.getUserAllVisibleTasks(userId, groupIds, deptRoles, page, pageSize,
+                    activeBusinessUnitId);
         } else {
-            result = taskManagerComponent.getUserTasks(userId, page, pageSize);
+            result = taskManagerComponent.getUserTasks(userId, page, pageSize, activeBusinessUnitId);
         }
         
         return ResponseEntity.ok(ApiResponse.success(result));

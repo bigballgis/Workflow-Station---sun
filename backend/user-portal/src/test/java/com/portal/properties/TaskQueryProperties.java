@@ -2,6 +2,7 @@ package com.portal.properties;
 
 import com.portal.client.WorkflowEngineClient;
 import com.portal.component.TaskQueryComponent;
+import com.portal.component.VirtualGroupAccessComponent;
 import com.portal.dto.PageResponse;
 import com.portal.dto.TaskInfo;
 import com.portal.dto.TaskQueryRequest;
@@ -11,6 +12,7 @@ import com.portal.enums.DelegationType;
 import com.portal.repository.DelegationRuleRepository;
 import com.portal.repository.ProcessHistoryRepository;
 import com.portal.repository.ProcessInstanceRepository;
+import com.portal.service.PortalWorkspaceAuthService;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.junit.jupiter.api.RepeatedTest;
@@ -55,6 +57,12 @@ class TaskQueryProperties {
     @Mock
     private JdbcTemplate jdbcTemplate;
 
+    @Mock
+    private VirtualGroupAccessComponent virtualGroupAccessComponent;
+
+    @Mock
+    private PortalWorkspaceAuthService portalWorkspaceAuthService;
+
     private TaskQueryComponent taskQueryComponent;
     private Random random;
 
@@ -67,7 +75,9 @@ class TaskQueryProperties {
             processHistoryRepository,
             workflowEngineClient,
             taskActionService,
-            jdbcTemplate
+            jdbcTemplate,
+            virtualGroupAccessComponent,
+            portalWorkspaceAuthService
         );
         random = new Random();
         
@@ -77,6 +87,8 @@ class TaskQueryProperties {
         // 默认返回空委托列表
         when(delegationRuleRepository.findActiveDelegationsForDelegate(any(), any()))
                 .thenReturn(Collections.emptyList());
+
+        when(portalWorkspaceAuthService.listWorkspaceContexts(any())).thenReturn(Collections.emptyList());
         
         // Mock 用户权限查询 - 返回包含虚拟组的权限信息
         // 使用 Answer 动态生成权限数据，使虚拟组与用户ID关联

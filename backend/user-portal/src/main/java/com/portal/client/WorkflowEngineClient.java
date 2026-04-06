@@ -19,6 +19,7 @@ import jakarta.servlet.http.HttpServletRequest;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.platform.security.util.SecurityContextUtils;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -205,13 +206,14 @@ public class WorkflowEngineClient {
             return Optional.empty();
         }
         try {
-            String url = UriComponentsBuilder.fromHttpUrl(workflowEngineUrl + "/api/v1/tasks")
+            UriComponentsBuilder ub = UriComponentsBuilder.fromHttpUrl(workflowEngineUrl + "/api/v1/tasks")
                     .queryParam("userId", userId)
                     .queryParam("page", page)
-                    .queryParam("size", size)
-                    .encode()
-                    .build()
-                    .toUriString();
+                    .queryParam("size", size);
+            SecurityContextUtils.getCurrentActiveBusinessUnitId()
+                    .filter(id -> id != null && !id.isBlank())
+                    .ifPresent(bu -> ub.queryParam("activeBusinessUnitId", bu));
+            String url = ub.encode().build().toUriString();
             
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(
                 url, HttpMethod.GET, authorizedGetEntity(),
@@ -278,6 +280,9 @@ public class WorkflowEngineClient {
                     ub.queryParam("deptRoles", deptRole);
                 }
             }
+            SecurityContextUtils.getCurrentActiveBusinessUnitId()
+                    .filter(id -> id != null && !id.isBlank())
+                    .ifPresent(bu -> ub.queryParam("activeBusinessUnitId", bu));
             String url = ub.encode().build().toUriString();
             
             ResponseEntity<Map<String, Object>> response = restTemplate.exchange(

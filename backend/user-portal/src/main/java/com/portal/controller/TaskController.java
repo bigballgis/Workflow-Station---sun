@@ -40,7 +40,6 @@ import jakarta.servlet.http.HttpServletResponse;
 @RequestMapping("/tasks")
 @RequiredArgsConstructor
 public class TaskController {
-
     private final TaskQueryComponent taskQueryComponent;
     private final TaskProcessComponent taskProcessComponent;
     private final WorkflowEngineClient workflowEngineClient;
@@ -287,4 +286,5 @@ public class TaskController {
         response.setStatus(statusCode);
         return ApiResponse.error(e.getCode(), e.getMessage());
     }
+
 }

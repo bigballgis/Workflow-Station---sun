@@ -37,6 +37,8 @@ export interface TaskInfo {
   assignmentType: string
   /** BPMN 扩展 assigneeType（如 INITIATOR、PROCESS_INITIATOR） */
   bpmnAssigneeType?: string
+  /** BPMN 扩展 businessUnitId（如 FIXED_BU_ROLE 固定 BU） */
+  bpmnBusinessUnitId?: string
   /** 引擎分配目标（如 CANDIDATE_USERS 时候选人 ID 列表拼接） */
   assignmentTarget?: string
   assignee: string
