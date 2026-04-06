@@ -30,9 +30,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -701,6 +698,7 @@ public class TaskQueryComponent {
 
     /**
      * FIXED_BU_ROLE，或 BPMN 为 BU_ROLE 且扩展中显式指定 businessUnitId（与引擎 {@code isWorkspaceScopedBuPoolSemantics} 对齐）。
+     * <p>仅 BPMN 扩展；不读流程变量（避免跨节点残留变量误判）。</p>
      */
     private boolean isWorkspaceScopedBuPoolSemantics(TaskInfo t) {
         String bpmn = t.getBpmnAssigneeType();
@@ -711,19 +709,6 @@ public class TaskQueryComponent {
             }
             if ("BU_ROLE".equals(u) && t.getBpmnBusinessUnitId() != null && !t.getBpmnBusinessUnitId().isBlank()) {
                 return true;
-            }
-        }
-        Map<String, Object> vars = t.getVariables();
-        if (vars != null) {
-            Object at = vars.get("assigneeType");
-            if (at != null) {
-                String av = String.valueOf(at).trim().toUpperCase(java.util.Locale.ROOT);
-                if ("FIXED_BU_ROLE".equals(av)) {
-                    return true;
-                }
-                if ("BU_ROLE".equals(av) && resolveFixedBusinessUnitForBpmnTask(t) != null) {
-                    return true;
-                }
             }
         }
         return false;
@@ -749,23 +734,14 @@ public class TaskQueryComponent {
     }
 
     /**
-     * 固定业务单元：引擎 {@code bpmnBusinessUnitId}，否则流程变量 {@code businessUnitId}。
+     * 固定业务单元：仅 BPMN 扩展 {@code bpmnBusinessUnitId}（与 workflow-engine 任务列表过滤语义一致，不用流程变量）。
      */
     private String resolveFixedBusinessUnitForBpmnTask(TaskInfo t) {
         String bu = t.getBpmnBusinessUnitId();
         if (bu != null && !bu.isBlank()) {
             return bu.trim();
         }
-        Map<String, Object> vars = t.getVariables();
-        if (vars == null) {
-            return null;
-        }
-        Object v = vars.get("businessUnitId");
-        if (v == null) {
-            return null;
-        }
-        String s = engineStringField(v);
-        return s != null && !s.isBlank() ? s.trim() : null;
+        return null;
     }
 
     /**
@@ -1087,10 +1063,6 @@ public class TaskQueryComponent {
         if (pending.isEmpty()) {
             return;
         }
-        // #region agent log
-        appendDebugLog("H13-enrich-pending", "TaskQueryComponent.enrichMissingParticipantRowIdsInSubTables",
-                String.format("\"pendingRows\":%d", pending.size()));
-        // #endregion
         String table = "participants";
         if (!table.matches("[a-zA-Z0-9_]+")) {
             return;
@@ -1170,37 +1142,13 @@ public class TaskQueryComponent {
                     enriched++;
                 }
             }
-            // #region agent log
-            appendDebugLog("H14-enrich-dbrows", "TaskQueryComponent.enrichMissingParticipantRowIdsInSubTables",
-                    String.format("\"pendingRows\":%d,\"meetingId\":%s", pending.size(), String.valueOf(meetingId)));
-            // #endregion
             if (enriched > 0) {
                 log.debug("Enriched {} sub-table rows with DB id from {}", enriched, table);
-                } else {
+            } else {
                 log.debug("No participant row id enriched from {}", table);
             }
-            // #region agent log
-            appendDebugLog("H15-enrich-result", "TaskQueryComponent.enrichMissingParticipantRowIdsInSubTables",
-                    String.format("\"enriched\":%d", enriched));
-            // #endregion
         } catch (Exception e) {
             log.debug("enrichMissingParticipantRowIdsInSubTables skipped: {}", e.getMessage());
-            // #region agent log
-            appendDebugLog("H16-enrich-error", "TaskQueryComponent.enrichMissingParticipantRowIdsInSubTables",
-                    String.format("\"error\":\"%s\"", String.valueOf(e.getMessage()).replace("\"", "'")));
-            // #endregion
         }
-    }
-
-    private void appendDebugLog(String hypothesisId, String location, String dataJson) {
-        // #region agent log
-        try {
-            String line = String.format(
-                    "{\"sessionId\":\"97dc8c\",\"runId\":\"run1\",\"hypothesisId\":\"%s\",\"location\":\"%s\",\"message\":\"enrich rows\",\"data\":{%s},\"timestamp\":%d}%n",
-                    hypothesisId, location, dataJson, System.currentTimeMillis());
-            Files.writeString(Path.of(".cursor", "debug-97dc8c.log"), line, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-        } catch (Exception ignored) {
-        }
-        // #endregion
     }
 }

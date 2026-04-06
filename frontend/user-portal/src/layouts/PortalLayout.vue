@@ -119,6 +119,7 @@ import {
 import SelfServiceBanner from '@/components/SelfServiceBanner.vue'
 import WorkspaceContextBar from '@/components/WorkspaceContextBar.vue'
 import {
+  applyWorkspaceAwarePortalAccess,
   getCurrentUser,
   getStoredUser,
   listWorkspaceContexts,
@@ -184,10 +185,7 @@ async function syncPortalAccessFromServer() {
   try {
     const u = await getCurrentUser()
     const hasCtx = (workspaceContextCount.value ?? 0) > 0
-    const merged =
-      hasCtx && u.portalAccessMode === 'PERMISSION_SELF_SERVICE_ONLY'
-        ? { ...u, portalAccessMode: 'FULL' as const }
-        : u
+    const merged = applyWorkspaceAwarePortalAccess(u, hasCtx)
     saveUser(merged)
     localStorage.setItem('userId', merged.userId)
     portalAccessMode.value = merged.portalAccessMode

@@ -60,7 +60,7 @@ import java.util.Optional;
 @Component
 @Transactional
 public class TaskManagerComponent {
-    
+
     @Autowired
     private TaskService taskService;
     
@@ -99,7 +99,7 @@ public class TaskManagerComponent {
 
     @Autowired
     private NotificationDispatchHelper notificationDispatchHelper;
-    
+
     // ==================== 任务查询 ====================
 
     /**
@@ -1538,7 +1538,8 @@ public class TaskManagerComponent {
 
     /**
      * FIXED_BU_ROLE，或 BPMN 为 BU_ROLE 且扩展中显式指定 businessUnitId（设计器「指定业务单元角色」固定池）。
-     * 变量 assigneeType 兜底与 {@link com.workflow.listener.TaskAssignmentListener} 一致。
+     * <p>仅依据当前用户任务 BPMN 扩展判断，不使用流程实例级 {@code assigneeType}/{@code businessUnitId} 变量：
+     * 后者会跨节点残留，误把下游节点当「固定 BU 池」并在 {@link #applyActiveWorkspaceBuTaskFilter} 中全部剔除。</p>
      */
     private static boolean isWorkspaceScopedBuPoolSemantics(TaskListResult.TaskInfo info) {
         String bpmn = info.getBpmnAssigneeType();
@@ -1549,19 +1550,6 @@ public class TaskManagerComponent {
             }
             if ("BU_ROLE".equals(u) && StringUtils.hasText(info.getBpmnBusinessUnitId())) {
                 return true;
-            }
-        }
-        Map<String, Object> vars = info.getVariables();
-        if (vars != null) {
-            Object at = vars.get("assigneeType");
-            if (at != null) {
-                String av = String.valueOf(at).trim().toUpperCase(Locale.ROOT);
-                if ("FIXED_BU_ROLE".equals(av)) {
-                    return true;
-                }
-                if ("BU_ROLE".equals(av) && StringUtils.hasText(resolveFixedBuIdFromTaskInfo(info))) {
-                    return true;
-                }
             }
         }
         return false;
@@ -1591,16 +1579,7 @@ public class TaskManagerComponent {
         if (StringUtils.hasText(info.getBpmnBusinessUnitId())) {
             return info.getBpmnBusinessUnitId().trim();
         }
-        Map<String, Object> vars = info.getVariables();
-        if (vars == null) {
-            return null;
-        }
-        Object o = vars.get("businessUnitId");
-        if (o == null) {
-            return null;
-        }
-        String s = String.valueOf(o).trim();
-        return s.isEmpty() ? null : s;
+        return null;
     }
     
     

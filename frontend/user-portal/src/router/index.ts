@@ -1,7 +1,9 @@
 import { createRouter, createWebHistory, RouteRecordRaw } from 'vue-router'
 import {
+  applyWorkspaceAwarePortalAccess,
   getCurrentUser,
   getStoredUser,
+  listWorkspaceContexts,
   reconcilePortalWorkspaceSession,
   saveUser,
   type UserInfo
@@ -173,9 +175,16 @@ router.beforeEach(async (to, _from, next) => {
     const cached = getStoredUser()
     if (cached?.portalAccessMode === 'PERMISSION_SELF_SERVICE_ONLY') {
       try {
+        let contexts: Awaited<ReturnType<typeof listWorkspaceContexts>> = []
+        try {
+          contexts = await listWorkspaceContexts()
+        } catch {
+          contexts = []
+        }
         const fresh = await getCurrentUser()
-        saveUser(fresh)
-        localStorage.setItem('userId', fresh.userId)
+        const merged = applyWorkspaceAwarePortalAccess(fresh, contexts.length > 0)
+        saveUser(merged)
+        localStorage.setItem('userId', merged.userId)
       } catch {
         // 保持缓存
       }

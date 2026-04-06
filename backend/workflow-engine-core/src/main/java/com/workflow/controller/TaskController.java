@@ -36,6 +36,7 @@ import org.springframework.web.bind.annotation.*;
 import jakarta.validation.Valid;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -127,11 +128,14 @@ public class TaskController {
         if (processInstanceId != null && !processInstanceId.isEmpty()) {
             // 按流程实例ID查询任务
             result = taskManagerComponent.getTasksByProcessInstance(processInstanceId, page, pageSize);
-        } else if (groupIds != null || deptRoles != null) {
-            result = taskManagerComponent.getUserAllVisibleTasks(userId, groupIds, deptRoles, page, pageSize,
-                    activeBusinessUnitId);
         } else {
-            result = taskManagerComponent.getUserTasks(userId, page, pageSize, activeBusinessUnitId);
+            // 统一走 getUserAllVisibleTasks（含 repairOrphanBuRolePoolTasks）。
+            // 当请求未带 groupIds（门户 filterVirtualGroupsForActiveWorkspace 过滤掉全部 VG 后）时，
+            // 若误走 getUserTasks 会跳过 BU_ROLE 孤儿池修复，待办可能为空。
+            List<String> gids = groupIds != null ? groupIds : Collections.emptyList();
+            List<String> droles = deptRoles != null ? deptRoles : Collections.emptyList();
+            result = taskManagerComponent.getUserAllVisibleTasks(userId, gids, droles, page, pageSize,
+                    activeBusinessUnitId);
         }
         
         return ResponseEntity.ok(ApiResponse.success(result));

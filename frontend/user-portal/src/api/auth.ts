@@ -216,6 +216,21 @@ export const getStoredUser = (): UserInfo | null => {
 // Alias for getStoredUser
 export const getUser = getStoredUser
 
+/**
+ * 与 PortalLayout 同步逻辑一致：库中已有工作台（UBR）而 /me 仍为 PERMISSION_SELF_SERVICE_ONLY 时，
+ * 本地视为 FULL，避免路由守卫在布局挂载前把 /tasks 等重定向到 /permissions。
+ * 任务等接口仍须 JWT 非自助模式；依赖 reconcilePortalWorkspaceSession 换发令牌。
+ */
+export function applyWorkspaceAwarePortalAccess(
+  u: UserInfo,
+  hasWorkspaceContexts: boolean
+): UserInfo {
+  if (hasWorkspaceContexts && u.portalAccessMode === 'PERMISSION_SELF_SERVICE_ONLY') {
+    return { ...u, portalAccessMode: 'FULL' }
+  }
+  return u
+}
+
 export const clearAuth = () => {
   localStorage.removeItem(TOKEN_KEY)
   localStorage.removeItem(REFRESH_TOKEN_KEY)
