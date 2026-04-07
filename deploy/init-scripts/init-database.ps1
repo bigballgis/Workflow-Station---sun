@@ -141,7 +141,8 @@ $meetingParticipantScripts = @(
     "16-meeting-participant-collection/02-create-bpmn-process.sql",
     "16-meeting-participant-collection/03-form-table-bindings.sql",
     "16-meeting-participant-collection/04-update-bpmn-diagram.sql",
-    "16-meeting-participant-collection/05-form-stage-bindings.sql"
+    "16-meeting-participant-collection/05-form-stage-bindings.sql",
+    "16-meeting-participant-collection/06-create-physical-tables.sql"
 )
 foreach ($f in $meetingParticipantScripts) {
     $path = Join-Path $ScriptDir $f

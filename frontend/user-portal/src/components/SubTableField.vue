@@ -427,24 +427,6 @@ async function resolveMissingRowIdFromServer(
     const response = await getSubTableData(taskId)
     const payload = (response as Record<string, unknown>).data as Record<string, unknown> | undefined
     const rowsFromServer = Array.isArray(payload?.rows) ? (payload!.rows as Record<string, unknown>[]) : []
-    // #region agent log
-    fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '97dc8c' },
-      body: JSON.stringify({
-        sessionId: '97dc8c',
-        hypothesisId: 'H9-subtable-data-shape',
-        location: 'SubTableField.vue:resolveMissingRowIdFromServer',
-        message: 'loaded sub table rows for recovery',
-        data: {
-          rowsLen: rowsFromServer.length,
-          firstRowKeys: rowsFromServer.length ? Object.keys(rowsFromServer[0] || {}) : [],
-          rowIndex
-        },
-        timestamp: Date.now()
-      })
-    }).catch(() => {})
-    // #endregion
     if (!rowsFromServer.length) return null
 
     const byEmail = rowsFromServer.find(r => sameValue(r.email, localRow.email))
@@ -462,26 +444,6 @@ async function resolveMissingRowIdFromServer(
     const rowId = pk != null ? Number(pk) : NaN
     return Number.isNaN(rowId) ? null : rowId
   } catch (error: unknown) {
-    const ax = error as { response?: { status?: number; data?: unknown }; message?: string }
-    // #region agent log
-    fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '97dc8c' },
-      body: JSON.stringify({
-        sessionId: '97dc8c',
-        hypothesisId: 'H10-recover-error',
-        location: 'SubTableField.vue:resolveMissingRowIdFromServer',
-        message: 'getSubTableData failed',
-        data: {
-          taskIdLen: taskId?.length ?? 0,
-          httpStatus: ax.response?.status,
-          picked: pickHttpErrorBodyMessage(ax.response?.data),
-          errMsg: typeof ax.message === 'string' ? ax.message : ''
-        },
-        timestamp: Date.now()
-      })
-    }).catch(() => {})
-    // #endregion
     return null
   }
 }
@@ -510,46 +472,6 @@ async function resolveMissingRowIdFromTaskDetail(
         })
       }
     })
-    // #region agent log
-    fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '97dc8c' },
-      body: JSON.stringify({
-        sessionId: '97dc8c',
-        hypothesisId: 'H12-taskdetail-shape',
-        location: 'SubTableField.vue:resolveMissingRowIdFromTaskDetail',
-        message: 'loaded __subTables__ from task detail',
-        data: {
-          rowsLen: allRows.length,
-          firstRowKeys: allRows.length ? Object.keys(allRows[0] || {}) : [],
-          rowIndex
-        },
-        timestamp: Date.now()
-      })
-    }).catch(() => {})
-    // #endregion
-    // #region agent log
-    fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '97dc8c' },
-      body: JSON.stringify({
-        sessionId: '97dc8c',
-        runId: 'run-assign',
-        hypothesisId: 'H47-task-vars-shape',
-        location: 'SubTableField.vue:resolveMissingRowIdFromTaskDetail',
-        message: 'task detail variables keys and meeting candidates',
-        data: {
-          varKeys: Object.keys(vars),
-          hasMeetingId: vars.meeting_id != null,
-          hasMainRecordId: vars.mainRecordId != null,
-          hasMeetingIdCamel: (vars as Record<string, unknown>).meetingId != null,
-          hasRecordId: (vars as Record<string, unknown>).recordId != null,
-          hasId: (vars as Record<string, unknown>).id != null
-        },
-        timestamp: Date.now()
-      })
-    }).catch(() => {})
-    // #endregion
     const meetingHints = {
       topic: typeof vars.topic === 'string' ? vars.topic : undefined,
       location: typeof vars.location === 'string' ? vars.location : undefined,
@@ -595,45 +517,8 @@ async function confirmAssignment() {
     if (recovered != null) {
       rowIdNum = recovered
     }
-    // #region agent log
-    fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '97dc8c' },
-      body: JSON.stringify({
-        sessionId: '97dc8c',
-        hypothesisId: 'H8-recover-rowid',
-        location: 'SubTableField.vue:confirmAssignment',
-        message: 'attempt recover rowId from getSubTableData',
-        data: {
-          recovered: recovered != null,
-          recoveredRowId: recovered,
-          localKeys: Object.keys(row)
-        },
-        timestamp: Date.now()
-      })
-    }).catch(() => {})
-    // #endregion
   }
   if (!props.taskId) {
-    // #region agent log
-    fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '97dc8c' },
-      body: JSON.stringify({
-        sessionId: '97dc8c',
-        hypothesisId: 'H1-pk-or-task',
-        location: 'SubTableField.vue:confirmAssignment',
-        message: 'early exit: missing taskId or row PK',
-        data: {
-          hasTaskId: !!props.taskId,
-          rowPk: rowPk == null ? null : String(rowPk),
-          rowIdNaN: Number.isNaN(rowIdNum),
-          rowKeys: row ? Object.keys(row) : []
-        },
-        timestamp: Date.now()
-      })
-    }).catch(() => {})
-    // #endregion
     ElMessage.error(t('subTable.assignmentFailed'))
     return
   }

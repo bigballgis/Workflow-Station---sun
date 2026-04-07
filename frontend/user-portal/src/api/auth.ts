@@ -77,69 +77,12 @@ export interface TokenResponse {
 }
 
 export const login = async (data: LoginRequest): Promise<LoginResponse> => {
-  // #region agent log
-  fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '97dc8c' },
-    body: JSON.stringify({
-      sessionId: '97dc8c',
-      runId: 'run-login',
-      hypothesisId: 'L1-auth-request',
-      location: 'auth.ts:login',
-      message: 'sending /auth/login request',
-      data: {
-        hasWorkspaceBusinessUnitId: !!data.workspaceBusinessUnitId,
-        hasWorkspaceRoleId: !!data.workspaceRoleId,
-        usernameLen: data.username?.length ?? 0
-      },
-      timestamp: Date.now()
-    })
-  }).catch(() => {})
-  // #endregion
   try {
     const response = await authRequest.post<LoginResponse>('/login', data)
-    // #region agent log
-    fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '97dc8c' },
-      body: JSON.stringify({
-        sessionId: '97dc8c',
-        runId: 'run-login',
-        hypothesisId: 'L2-auth-response',
-        location: 'auth.ts:login',
-        message: 'received /auth/login response',
-        data: {
-          hasAccessToken: !!response.data?.accessToken,
-          hasRefreshToken: !!response.data?.refreshToken,
-          hasUser: !!response.data?.user
-        },
-        timestamp: Date.now()
-      })
-    }).catch(() => {})
-    // #endregion
     return response.data
   } catch (error: unknown) {
     const ax = error as { response?: { status?: number; data?: unknown }; message?: string }
     const body = ax.response?.data as Record<string, unknown> | undefined
-    // #region agent log
-    fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '97dc8c' },
-      body: JSON.stringify({
-        sessionId: '97dc8c',
-        runId: 'run-login',
-        hypothesisId: 'L3-auth-error',
-        location: 'auth.ts:login',
-        message: 'login request failed',
-        data: {
-          httpStatus: ax.response?.status,
-          errMsg: typeof ax.message === 'string' ? ax.message : '',
-          bodyKeys: body ? Object.keys(body) : []
-        },
-        timestamp: Date.now()
-      })
-    }).catch(() => {})
-    // #endregion
     throw error
   }
 }

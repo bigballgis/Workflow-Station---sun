@@ -17,9 +17,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
@@ -264,14 +261,6 @@ public class TaskProcessComponent {
     @Transactional
     public Map<String, Object> assignSubTableRow(String taskId, Long rowId, String assigneeId, String userId,
                                                  String portalUsername) {
-        // #region agent log
-        appendDebugLog("H5-component-entry", "TaskProcessComponent.assignSubTableRow", String.format(
-                "\"taskIdLen\":%d,\"rowId\":%d,\"assigneeIdLen\":%d,\"userIdLen\":%d",
-                taskId != null ? taskId.length() : 0,
-                rowId != null ? rowId : -1L,
-                assigneeId != null ? assigneeId.length() : 0,
-                userId != null ? userId.length() : 0));
-        // #endregion
         if (!workflowEngineClient.isAvailable()) {
             throw new IllegalStateException("Flowable engine unavailable, please check if workflow-engine-core service is running");
         }
@@ -292,21 +281,10 @@ public class TaskProcessComponent {
 
         Optional<Map<String, Object>> result = workflowEngineClient.assignSubTableRow(taskId, rowId, assigneeId);
         if (result.isEmpty()) {
-            // #region agent log
-            appendDebugLog("H6-client-empty", "TaskProcessComponent.assignSubTableRow",
-                    String.format("\"taskIdLen\":%d,\"rowId\":%d", taskId != null ? taskId.length() : 0, rowId != null ? rowId : -1L));
-            // #endregion
             throw new PortalException("500", "Failed to assign sub-table row: " + taskId);
         }
 
         Map<String, Object> data = result.get();
-        // #region agent log
-        appendDebugLog("H7-client-result", "TaskProcessComponent.assignSubTableRow", String.format(
-                "\"success\":%s,\"hasMessage\":%s,\"hasErrorMessage\":%s",
-                String.valueOf(data.get("success")),
-                String.valueOf(data.get("message") != null && !String.valueOf(data.get("message")).isBlank()),
-                String.valueOf(data.get("errorMessage") != null && !String.valueOf(data.get("errorMessage")).isBlank())));
-        // #endregion
         if (!Boolean.TRUE.equals(data.get("success"))) {
             // 引擎 AssignSubTableRowResponse 失败说明在 errorMessage；ApiResponse 错误在 message / error.message
             Object msgObj = data.get("message");
@@ -348,11 +326,6 @@ public class TaskProcessComponent {
         String nm = name != null ? name.trim() : "";
         String dept = department != null ? department.trim() : "";
         ensureParticipantsIdentityColumns(participantTable);
-        // #region agent log
-        appendDebugLog("H19-identity-input", "TaskProcessComponent.resolveParticipantRowIdByIdentity", String.format(
-                "\"hasEmail\":%s,\"hasName\":%s,\"hasDept\":%s",
-                String.valueOf(!em.isBlank()), String.valueOf(!nm.isBlank()), String.valueOf(!dept.isBlank())));
-        // #endregion
 
         try {
             if (!em.isBlank()) {
@@ -360,10 +333,6 @@ public class TaskProcessComponent {
                         "SELECT id FROM " + participantTable + " WHERE lower(trim(email)) = lower(trim(?)) ORDER BY id LIMIT 1",
                         (rs, i) -> rs.getLong("id"),
                         em);
-                // #region agent log
-                appendDebugLog("H20-identity-email", "TaskProcessComponent.resolveParticipantRowIdByIdentity",
-                        String.format("\"rows\":%d", rows.size()));
-                // #endregion
                 if (!rows.isEmpty()) {
                     return rows.get(0);
                 }
@@ -373,10 +342,6 @@ public class TaskProcessComponent {
                         "SELECT id FROM " + participantTable + " WHERE lower(trim(name)) = lower(trim(?)) AND lower(trim(department)) = lower(trim(?)) ORDER BY id LIMIT 1",
                         (rs, i) -> rs.getLong("id"),
                         nm, dept);
-                // #region agent log
-                appendDebugLog("H21-identity-name-dept", "TaskProcessComponent.resolveParticipantRowIdByIdentity",
-                        String.format("\"rows\":%d", rows.size()));
-                // #endregion
                 if (!rows.isEmpty()) {
                     return rows.get(0);
                 }
@@ -386,20 +351,12 @@ public class TaskProcessComponent {
                         "SELECT id FROM " + participantTable + " WHERE lower(trim(name)) = lower(trim(?)) ORDER BY id LIMIT 1",
                         (rs, i) -> rs.getLong("id"),
                         nm);
-                // #region agent log
-                appendDebugLog("H22-identity-name", "TaskProcessComponent.resolveParticipantRowIdByIdentity",
-                        String.format("\"rows\":%d", rows.size()));
-                // #endregion
                 if (!rows.isEmpty()) {
                     return rows.get(0);
                 }
             }
         } catch (Exception e) {
             log.debug("resolveParticipantRowIdByIdentity failed: {}", e.getMessage());
-            // #region agent log
-            appendDebugLog("H23-identity-error", "TaskProcessComponent.resolveParticipantRowIdByIdentity",
-                    String.format("\"error\":\"%s\"", String.valueOf(e.getMessage()).replace("\"", "'")));
-            // #endregion
             String detail = String.valueOf(e.getMessage());
             if (detail == null || detail.isBlank()) {
                 detail = e.getClass().getSimpleName();
@@ -420,6 +377,9 @@ public class TaskProcessComponent {
                                                String location,
                                                String organizerName) {
         Long meetingId = resolveMeetingId(task, topic, location, organizerName);
+        if (meetingId == null && columnExists(participantTable, "meeting_id")) {
+            meetingId = createMeetingRecordFromVariables(task, topic, location, organizerName);
+        }
         if (meetingId == null) {
             return createParticipantRowWithoutMeetingId(participantTable, name, email, department, assigneeId);
         }
@@ -443,17 +403,10 @@ public class TaskProcessComponent {
             Long newId = jdbcTemplate.queryForObject(
                     "INSERT INTO " + participantTable + " (meeting_id, name, department, email, assignee_user_id, sort_order) VALUES (?, ?, ?, ?, ?, 0) RETURNING id",
                     Long.class,
-                    meetingId, nm, dept.isBlank() ? null : dept, em.isBlank() ? null : em, assigneeId);
-            // #region agent log
-            appendDebugLog("H25-create-row-ok", "TaskProcessComponent.createParticipantRowIfMissing",
-                    String.format("\"meetingId\":%d,\"newRowId\":%d", meetingId, newId != null ? newId : -1L));
-            // #endregion
+                    meetingId, nm, dept.isBlank() ? null : dept, em, assigneeId);
             return newId;
         } catch (Exception e) {
-            // #region agent log
-            appendDebugLog("H26-create-row-error", "TaskProcessComponent.createParticipantRowIfMissing",
-                    String.format("\"error\":\"%s\"", String.valueOf(e.getMessage()).replace("\"", "'")));
-            // #endregion
+            log.warn("createParticipantRowIfMissing failed: meetingId={}, name={}, error={}", meetingId, nm, e.getMessage());
             return null;
         }
     }
@@ -504,12 +457,56 @@ public class TaskProcessComponent {
             hints.put("organizer_name", organizerName);
             fromPersisted = findMeetingIdFromMainTable(hints);
         }
-        // #region agent log
-        appendDebugLog("H46-meeting-id-fallback", "TaskProcessComponent.resolveMeetingId",
-                String.format("\"processInstanceIdLen\":%d,\"hit\":%s",
-                        processInstanceId.length(), String.valueOf(fromPersisted != null)));
-        // #endregion
         return fromPersisted;
+    }
+
+    private Long createMeetingRecordFromVariables(TaskInfo task, String topic, String location, String organizerName) {
+        Map<String, Object> vars = task != null ? task.getVariables() : null;
+        String tp = topic != null ? topic.trim() : (vars != null ? toNonBlankString(vars.get("topic")) : null);
+        String loc = location != null ? location.trim() : (vars != null ? toNonBlankString(vars.get("location")) : null);
+        String org = organizerName != null ? organizerName.trim() : (vars != null ? toNonBlankString(vars.get("organizer_name")) : null);
+        String mt = vars != null ? toNonBlankString(vars.get("meeting_time")) : null;
+        String desc = vars != null ? toNonBlankString(vars.get("description")) : null;
+        String initiator = vars != null ? toNonBlankString(vars.get("initiator")) : null;
+        if (tp == null || tp.isBlank()) {
+            return null;
+        }
+        String meetingTable = resolveTableAcrossSchemas("meeting");
+        if (meetingTable == null) {
+            return null;
+        }
+        try {
+            java.sql.Timestamp meetingTimestamp = null;
+            if (mt != null) {
+                try {
+                    meetingTimestamp = java.sql.Timestamp.valueOf(
+                            java.time.LocalDateTime.parse(mt, java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME));
+                } catch (Exception e1) {
+                    try {
+                        meetingTimestamp = java.sql.Timestamp.valueOf(mt);
+                    } catch (Exception ignored) {
+                        meetingTimestamp = java.sql.Timestamp.valueOf(java.time.LocalDateTime.now());
+                    }
+                }
+            } else {
+                meetingTimestamp = java.sql.Timestamp.valueOf(java.time.LocalDateTime.now());
+            }
+            Long newId = jdbcTemplate.queryForObject(
+                    "INSERT INTO " + meetingTable +
+                    " (topic, meeting_time, location, organizer_name, description, status, created_by, created_at, updated_at)" +
+                    " VALUES (?, ?, ?, ?, ?, 'DRAFT', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) RETURNING id",
+                    Long.class,
+                    tp,
+                    meetingTimestamp,
+                    loc != null ? loc : "",
+                    org != null ? org : "",
+                    desc,
+                    initiator);
+            return newId;
+        } catch (Exception e) {
+            log.warn("createMeetingRecordFromVariables failed: {}", e.getMessage());
+            return null;
+        }
     }
 
     private Long findMeetingIdFromMainTable(Map<String, Object> vars) {
@@ -583,13 +580,6 @@ public class TaskProcessComponent {
                 break;
             }
         }
-        // #region agent log
-        appendDebugLog("H48-meeting-id-by-main-table", "TaskProcessComponent.findMeetingIdFromMainTable",
-                String.format("\"hasTopic\":%s,\"hasMeetingTime\":%s,\"hasLocation\":%s,\"hasOrganizer\":%s,\"hit\":%s,\"table\":\"%s\"",
-                        String.valueOf(topic != null), String.valueOf(meetingTime != null),
-                        String.valueOf(location != null), String.valueOf(organizer != null),
-                        String.valueOf(found != null), hitTable != null ? hitTable : ""));
-        // #endregion
         return found;
     }
 
@@ -717,10 +707,6 @@ public class TaskProcessComponent {
         String em = email != null ? email.trim() : "";
         String dept = department != null ? department.trim() : "";
         if (nm.isBlank()) {
-            // #region agent log
-            appendDebugLog("H24-create-row-skip", "TaskProcessComponent.createParticipantRowWithoutMeetingId",
-                    "\"reason\":\"missing meeting_id and blank name\"");
-            // #endregion
             throw new PortalException("400", "Assignment failed: participant name is empty");
         }
         try {
@@ -750,28 +736,15 @@ public class TaskProcessComponent {
                 Long newIdWithMeeting = jdbcTemplate.queryForObject(
                         "INSERT INTO " + participantTable + " (meeting_id, name, department, email, assignee_user_id, sort_order) VALUES (?, ?, ?, ?, ?, 0) RETURNING id",
                         Long.class,
-                        fallbackMeetingId, nm, dept.isBlank() ? null : dept, em.isBlank() ? null : em, assigneeId);
-                // #region agent log
-                appendDebugLog("H25-create-row-ok", "TaskProcessComponent.createParticipantRowWithoutMeetingId",
-                        String.format("\"fallbackMeetingId\":%d,\"newRowId\":%d",
-                                fallbackMeetingId, newIdWithMeeting != null ? newIdWithMeeting : -1L));
-                // #endregion
+                        fallbackMeetingId, nm, dept.isBlank() ? null : dept, em, assigneeId);
                 return newIdWithMeeting;
             }
             Long newId = jdbcTemplate.queryForObject(
                     "INSERT INTO " + participantTable + " (name, department, email, assignee_user_id, sort_order) VALUES (?, ?, ?, ?, 0) RETURNING id",
                     Long.class,
-                    nm, dept.isBlank() ? null : dept, em.isBlank() ? null : em, assigneeId);
-            // #region agent log
-            appendDebugLog("H25-create-row-ok", "TaskProcessComponent.createParticipantRowWithoutMeetingId",
-                    String.format("\"newRowId\":%d", newId != null ? newId : -1L));
-            // #endregion
+                    nm, dept.isBlank() ? null : dept, em, assigneeId);
             return newId;
         } catch (Exception e) {
-            // #region agent log
-            appendDebugLog("H26-create-row-error", "TaskProcessComponent.createParticipantRowWithoutMeetingId",
-                    String.format("\"error\":\"%s\"", String.valueOf(e.getMessage()).replace("\"", "'")));
-            // #endregion
             String detail = String.valueOf(e.getMessage());
             if (detail == null || detail.isBlank()) {
                 detail = e.getClass().getSimpleName();
@@ -779,19 +752,6 @@ public class TaskProcessComponent {
             detail = detail.replace("\n", " ").replace("\r", " ");
             throw new PortalException("400", "Assignment failed: participant row create error: " + detail);
         }
-    }
-
-    private void appendDebugLog(String hypothesisId, String location, String dataJson) {
-        // #region agent log
-        try {
-            String line = String.format(
-                    "{\"sessionId\":\"97dc8c\",\"runId\":\"run1\",\"hypothesisId\":\"%s\",\"location\":\"%s\",\"message\":\"assign pipeline\",\"data\":{%s},\"timestamp\":%d}%n",
-                    hypothesisId, location, dataJson, System.currentTimeMillis());
-            Files.writeString(Path.of("d:\\Repos\\Workflow-Station---sun\\.cursor\\debug-97dc8c.log"), line,
-                    StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-        } catch (Exception ignored) {
-        }
-        // #endregion
     }
 
     /**
@@ -1067,25 +1027,10 @@ public class TaskProcessComponent {
         if (first.isPresent()) {
             return first.get();
         }
-        // #region agent log
-        appendDebugLog("H45-task-lookup-retry", "TaskProcessComponent.getTaskOrThrow",
-                String.format("\"taskId\":\"%s\",\"hit\":false,\"phase\":\"first-miss\"",
-                        taskId != null ? taskId.replace("\"", "'") : ""));
-        // #endregion
         Optional<TaskInfo> second = taskQueryComponent.getTaskById(taskId);
         if (second.isPresent()) {
-            // #region agent log
-            appendDebugLog("H45-task-lookup-retry", "TaskProcessComponent.getTaskOrThrow",
-                    String.format("\"taskId\":\"%s\",\"hit\":true,\"phase\":\"retry-hit\"",
-                            taskId != null ? taskId.replace("\"", "'") : ""));
-            // #endregion
             return second.get();
         }
-        // #region agent log
-        appendDebugLog("H45-task-lookup-retry", "TaskProcessComponent.getTaskOrThrow",
-                String.format("\"taskId\":\"%s\",\"hit\":false,\"phase\":\"retry-miss\"",
-                        taskId != null ? taskId.replace("\"", "'") : ""));
-        // #endregion
         throw new PortalException("404", "Task not found: " + taskId);
     }
 
