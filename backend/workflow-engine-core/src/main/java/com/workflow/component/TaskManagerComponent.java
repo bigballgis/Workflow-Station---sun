@@ -118,6 +118,7 @@ public class TaskManagerComponent {
             validateUserId(userId);
             
             int fetchLimit = (page + 1) * size;
+            repairOrphanMultiInstanceTasks(fetchLimit);
             
             List<Task> assignedTasks = taskService.createTaskQuery()
                 .taskAssignee(userId)
@@ -322,6 +323,7 @@ public class TaskManagerComponent {
             
             int fetchLimit = (page + 1) * size;
             repairOrphanBuRolePoolTasks(fetchLimit);
+            repairOrphanMultiInstanceTasks(fetchLimit);
             
             List<Task> assignedTasks = taskService.createTaskQuery()
                 .taskAssignee(userId)
@@ -456,6 +458,57 @@ public class TaskManagerComponent {
                 }
             } catch (Exception ex) {
                 log.warn("Repair orphan BU_ROLE task {} failed: {}", t.getId(), ex.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Repair multi-instance user tasks where TaskAssignmentListener failed to set the assignee.
+     * Reads the execution-scoped {@code currentItem} variable and extracts the assignee from the
+     * BPMN {@code assigneeField} (or falls back to {@code assignee_user_id}).
+     */
+    @SuppressWarnings("unchecked")
+    private void repairOrphanMultiInstanceTasks(int fetchLimit) {
+        List<Task> unassigned = taskService.createTaskQuery()
+                .taskUnassigned()
+                .orderByTaskCreateTime().desc()
+                .listPage(0, fetchLimit);
+        for (Task t : unassigned) {
+            try {
+                String pdId = t.getProcessDefinitionId();
+                String defKey = t.getTaskDefinitionKey();
+                String at = bpmnActionParser.getUserTaskExtensionPropertyValue(pdId, defKey, "assigneeType");
+                if (!"ELEMENT_VARIABLE".equalsIgnoreCase(at != null ? at.trim() : "")) {
+                    continue;
+                }
+                Object currentItemObj = runtimeService.getVariable(t.getExecutionId(), "currentItem");
+                if (!(currentItemObj instanceof Map)) {
+                    continue;
+                }
+                Map<String, Object> currentItem = (Map<String, Object>) currentItemObj;
+                String assigneeField = bpmnActionParser.getUserTaskExtensionPropertyValue(pdId, defKey, "assigneeField");
+                Object assigneeObj = null;
+                if (assigneeField != null && !assigneeField.isBlank()) {
+                    assigneeObj = currentItem.get(assigneeField.trim());
+                }
+                if (assigneeObj == null) {
+                    assigneeObj = currentItem.get("assigneeId");
+                }
+                if (assigneeObj == null) {
+                    assigneeObj = currentItem.get("assignee_user_id");
+                }
+                if (assigneeObj == null) {
+                    continue;
+                }
+                String assigneeId = String.valueOf(assigneeObj).trim();
+                if (assigneeId.isEmpty() || "null".equals(assigneeId)) {
+                    continue;
+                }
+                taskService.setAssignee(t.getId(), assigneeId);
+                log.info("Repaired orphan MI task {} assigned to {} (defKey={})",
+                        t.getId(), assigneeId, defKey);
+            } catch (Exception ex) {
+                log.warn("Repair orphan MI task {} failed: {}", t.getId(), ex.getMessage());
             }
         }
     }
