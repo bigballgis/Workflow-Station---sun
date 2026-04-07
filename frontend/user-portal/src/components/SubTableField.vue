@@ -534,77 +534,6 @@ async function confirmAssignment() {
       )
     } else {
       const identityRow = row || {}
-      // #region agent log
-      fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '97dc8c' },
-        body: JSON.stringify({
-          sessionId: '97dc8c',
-          runId: 'run-assign',
-          hypothesisId: 'H31-taskid-selection',
-          location: 'SubTableField.vue:confirmAssignment',
-          message: 'resolved task id before assign-by-identity',
-          data: {
-            routeTaskId: props.taskId,
-            effectiveTaskId,
-            sameTaskId: effectiveTaskId === props.taskId
-          },
-          timestamp: Date.now()
-        })
-      }).catch(() => {})
-      // #endregion
-      // #region agent log
-      fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '97dc8c' },
-        body: JSON.stringify({
-          sessionId: '97dc8c',
-          hypothesisId: 'H18-fallback-identity-call',
-          location: 'SubTableField.vue:confirmAssignment',
-          message: 'calling assign-by-identity fallback',
-          data: {
-            hasEmail: !!(identityRow as Record<string, unknown>).email,
-            hasName: !!(identityRow as Record<string, unknown>).name,
-            hasDept: !!(identityRow as Record<string, unknown>).department
-          },
-          timestamp: Date.now()
-        })
-      }).catch(() => {})
-      // #endregion
-      // #region agent log
-      fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '97dc8c' },
-        body: JSON.stringify({
-          sessionId: '97dc8c',
-          runId: 'run-assign',
-          hypothesisId: 'H49-assign-payload-hints',
-          location: 'SubTableField.vue:confirmAssignment',
-          message: 'assign-by-identity payload meeting hints',
-          data: {
-            hasTopic: !!meetingHints?.topic,
-            hasLocation: !!meetingHints?.location,
-            hasOrganizerName: !!meetingHints?.organizerName
-          },
-          timestamp: Date.now()
-        })
-      }).catch(() => {})
-      // #endregion
-      // #region agent log
-      fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '97dc8c' },
-        body: JSON.stringify({
-          sessionId: '97dc8c',
-          runId: 'run-assign',
-          hypothesisId: 'H32-first-call-taskid',
-          location: 'SubTableField.vue:confirmAssignment',
-          message: 'calling assign-by-identity first attempt',
-          data: { callTaskId: props.taskId },
-          timestamp: Date.now()
-        })
-      }).catch(() => {})
-      // #endregion
       response = await assignSubTableRowByIdentity(props.taskId, {
         // taskId may differ from route param in some task detail payloads
         assigneeId: selectedAssigneeId.value,
@@ -623,35 +552,6 @@ async function confirmAssignment() {
       })
       // retry with effective task id from detail if route task id is stale
       if (effectiveTaskId !== props.taskId) {
-        // #region agent log
-        fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '97dc8c' },
-          body: JSON.stringify({
-            sessionId: '97dc8c',
-            hypothesisId: 'H27-taskid-retry',
-            location: 'SubTableField.vue:confirmAssignment',
-            message: 'retry assign-by-identity with effective task id',
-            data: { routeTaskIdLen: props.taskId.length, effectiveTaskIdLen: effectiveTaskId.length },
-            timestamp: Date.now()
-          })
-        }).catch(() => {})
-        // #endregion
-        // #region agent log
-        fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '97dc8c' },
-          body: JSON.stringify({
-            sessionId: '97dc8c',
-            runId: 'run-assign',
-            hypothesisId: 'H33-retry-call-taskid',
-            location: 'SubTableField.vue:confirmAssignment',
-            message: 'calling assign-by-identity retry',
-            data: { callTaskId: effectiveTaskId },
-            timestamp: Date.now()
-          })
-        }).catch(() => {})
-        // #endregion
         response = await assignSubTableRowByIdentity(effectiveTaskId, {
           assigneeId: selectedAssigneeId.value,
           email: typeof (identityRow as Record<string, unknown>).email === 'string'
@@ -681,31 +581,6 @@ async function confirmAssignment() {
       result.success !== false &&
       (result.success === true || assigneePresent)
 
-    // #region agent log
-    {
-      const outer = response as Record<string, unknown>
-      const inner = result as Record<string, unknown> | null
-      fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '97dc8c' },
-        body: JSON.stringify({
-          sessionId: '97dc8c',
-          hypothesisId: 'H2-api-payload',
-          location: 'SubTableField.vue:confirmAssignment',
-          message: 'after assignSubTableRow',
-          data: {
-            outerSuccess: outer.success,
-            innerSuccess: inner?.success,
-            assigneePresent,
-            ok,
-            innerKeys: inner ? Object.keys(inner) : []
-          },
-          timestamp: Date.now()
-        })
-      }).catch(() => {})
-    }
-    // #endregion
-
     if (ok && result) {
       // Update the row data
       if (currentAssignRowIndex.value !== null && props.assigneeField) {
@@ -732,66 +607,10 @@ async function confirmAssignment() {
     try {
       const probe = await getTaskDetail(effectiveTaskId || props.taskId)
       const probeData = (probe as Record<string, unknown>).data as Record<string, unknown> | undefined
-      // #region agent log
-      fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '97dc8c' },
-        body: JSON.stringify({
-          sessionId: '97dc8c',
-          runId: 'run-assign',
-          hypothesisId: 'H34-post-error-task-probe',
-          location: 'SubTableField.vue:confirmAssignment',
-          message: 'task detail probe after assign error',
-          data: {
-            probeOk: true,
-            probeTaskId: probeData?.taskId ?? null,
-            probeStatus: probeData?.status ?? null
-          },
-          timestamp: Date.now()
-        })
-      }).catch(() => {})
-      // #endregion
+      void probeData
     } catch (probeError: unknown) {
-      const pax = probeError as { response?: { status?: number } }
-      // #region agent log
-      fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '97dc8c' },
-        body: JSON.stringify({
-          sessionId: '97dc8c',
-          runId: 'run-assign',
-          hypothesisId: 'H34-post-error-task-probe',
-          location: 'SubTableField.vue:confirmAssignment',
-          message: 'task detail probe failed after assign error',
-          data: {
-            probeOk: false,
-            probeHttpStatus: pax.response?.status ?? null
-          },
-          timestamp: Date.now()
-        })
-      }).catch(() => {})
-      // #endregion
+      void probeError
     }
-    // #region agent log
-    fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': '97dc8c' },
-      body: JSON.stringify({
-        sessionId: '97dc8c',
-        hypothesisId: 'H3-http-error',
-        location: 'SubTableField.vue:confirmAssignment',
-        message: 'assign threw',
-        data: {
-          httpStatus: ax.response?.status,
-          pickedLen: pickHttpErrorBodyMessage(ax.response?.data)?.length ?? 0,
-          errMsgLen: typeof ax.message === 'string' ? ax.message.length : 0,
-          picked: pickHttpErrorBodyMessage(ax.response?.data) || '',
-          errMsg: typeof ax.message === 'string' ? ax.message : ''
-        },
-        timestamp: Date.now()
-      })
-    }).catch(() => {})
-    // #endregion
     const msg =
       pickHttpErrorBodyMessage(ax.response?.data) ||
       resolveUserFacingHttpMessage(error, t) ||
