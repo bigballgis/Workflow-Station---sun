@@ -406,6 +406,35 @@ const loadProcessDetail = async () => {
         }
       }
 
+      // MI sub-task data isolation for completed task view:
+      // When a sub-task assignee views the process from Completed Tasks,
+      // filter sub-table rows to only show the row assigned to them.
+      if (snapshotTaskName) {
+        const viewerId = getPortalUserId()
+        const initiatorId = (data.startUserId || '').trim()
+        if (viewerId && viewerId !== initiatorId) {
+          const filterByAssignee = (bindings: typeof subTableBindings.value) => {
+            for (const binding of bindings) {
+              if (binding.data && binding.data.length > 0 && hasAssignmentData(binding.data)) {
+                const filtered = binding.data.filter(
+                  (row: any) => row.assignee_user_id === viewerId
+                )
+                if (filtered.length > 0) {
+                  binding.data = filtered
+                }
+              }
+            }
+          }
+          filterByAssignee(subTableBindings.value)
+          for (const prevForm of previousForms.value) {
+            filterByAssignee(prevForm.subTableBindings)
+          }
+          // #region agent log
+          fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cfebf0'},body:JSON.stringify({sessionId:'cfebf0',hypothesisId:'MI-filter',location:'applications/detail.vue:miFilter',message:'MI sub-table filtering applied',data:{viewerId,initiatorId,snapshotTaskName,subTableSummary:subTableBindings.value.map((b: any)=>({name:b.tableName,rows:b.data?.length||0})),prevFormSubTableSummary:previousForms.value.map((pf: any)=>({name:pf.formName,bindings:pf.subTableBindings.map((b: any)=>({name:b.tableName,rows:b.data?.length||0}))}))},timestamp:Date.now()})}).catch(()=>{});
+          // #endregion
+        }
+      }
+
       // 快照模式（仅进行中）：用 BPMN 计算 snapshotTaskName 之后的下一节点为 current；已结束不套用
       if (snapshotTaskName && data.status === 'RUNNING' && processNodes.value.length > 0 && processFlows.value.length > 0) {
         const nextNodeName = findNextNodeName(snapshotTaskName)
@@ -444,8 +473,11 @@ const loadProcessDetail = async () => {
         }
       }
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Failed to load process detail:', error)
+    // #region agent log
+    fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cfebf0'},body:JSON.stringify({sessionId:'cfebf0',hypothesisId:'A',location:'applications/detail.vue:loadProcessDetail:catch',message:'getProcessDetail failed',data:{processId,status:error.response?.status,errorMsg:error.response?.data?.message||error.message,url:error.config?.url},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     ElMessage.error(t('applicationDetail.loadFailed'))
   } finally {
     loading.value = false
@@ -1420,8 +1452,11 @@ const loadProcessHistory = async () => {
     } else {
       initHistoryRecords()
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Failed to load process history:', error)
+    // #region agent log
+    fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cfebf0'},body:JSON.stringify({sessionId:'cfebf0',hypothesisId:'B',location:'applications/detail.vue:loadProcessHistory:catch',message:'getProcessHistory failed',data:{processId,status:error.response?.status,errorMsg:error.response?.data?.message||error.message},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     initHistoryRecords()
   }
 }

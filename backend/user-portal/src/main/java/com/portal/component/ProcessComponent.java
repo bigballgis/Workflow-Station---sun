@@ -1223,6 +1223,59 @@ public class ProcessComponent {
         return info;
     }
 
+    /**
+     * Check whether a portal userId is a participant of the given process.
+     * Quick local checks first; falls back to querying the workflow-engine
+     * process history to see if the user was ever a task assignee.
+     */
+    public boolean isProcessParticipant(String userId, ProcessInstanceInfo detail) {
+        if (detail == null || userId == null) return false;
+
+        // 1. Process initiator
+        if (userId.equals(detail.getStartUserId())) return true;
+
+        // 2. Current assignee (may be display-name OR userId depending on data flow)
+        if (userId.equals(detail.getCurrentAssignee())) return true;
+
+        // 3. Candidate users (or-sign scenario, comma-separated)
+        String candidates = detail.getCandidateUsers();
+        if (candidates != null && !candidates.isBlank()) {
+            for (String c : candidates.split(",")) {
+                if (userId.equals(c.trim())) return true;
+            }
+        }
+
+        // 4. Resolve userId to display name and compare against currentAssignee
+        //    (currentAssignee is often stored as display name)
+        try {
+            String displayName = resolveUserDisplayName(userId);
+            if (displayName != null && displayName.equals(detail.getCurrentAssignee())) return true;
+        } catch (Exception e) {
+            log.debug("Could not resolve display name for user {}: {}", userId, e.getMessage());
+        }
+
+        // 5. Fall back: check workflow-engine process history for any task
+        //    where the user was ever an assignee (covers completed MI sub-tasks, etc.)
+        try {
+            if (workflowEngineClient.isAvailable()) {
+                var historyOpt = workflowEngineClient.getProcessInstanceHistory(detail.getId());
+                if (historyOpt.isPresent()) {
+                    for (Map<String, Object> record : historyOpt.get()) {
+                        Object operatorId = record.get("operatorId");
+                        if (operatorId != null && userId.equals(String.valueOf(operatorId).trim())) {
+                            return true;
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to check process history participation for user {} in process {}: {}",
+                    userId, detail.getId(), e.getMessage());
+        }
+
+        return false;
+    }
+
     @SuppressWarnings("unchecked")
     private void enrichSubTablesWithAssignmentData(ProcessInstanceInfo info) {
         Map<String, Object> variables = info.getVariables();

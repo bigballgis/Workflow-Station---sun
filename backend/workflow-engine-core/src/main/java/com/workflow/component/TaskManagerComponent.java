@@ -1461,6 +1461,20 @@ public class TaskManagerComponent {
             }
         }
 
+        // Multi-instance sub-task: include execution-scoped currentItem so the frontend
+        // can determine which sub-table row belongs to this specific sub-task instance.
+        if (task.getExecutionId() != null && variables != null) {
+            try {
+                Object currentItemObj = runtimeService.getVariable(task.getExecutionId(), "currentItem");
+                if (currentItemObj instanceof Map) {
+                    variables.put("_currentItem", currentItemObj);
+                    log.debug("Injected _currentItem for MI sub-task {}: {}", task.getId(), currentItemObj);
+                }
+            } catch (Exception e) {
+                log.debug("No currentItem for task {}: {}", task.getId(), e.getMessage());
+            }
+        }
+
         // 获取流程发起人信息
         String initiatorId = null;
         String initiatorName = null;
