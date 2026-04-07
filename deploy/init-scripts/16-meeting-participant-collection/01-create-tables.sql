@@ -83,10 +83,11 @@ BEGIN
     (v_participant_table_id, 'department',          'VARCHAR', 100,  NULL, NULL, true,  NULL, false, false, '部门',                                4),
     (v_participant_table_id, 'email',               'VARCHAR', 255,  NULL, NULL, true,  NULL, false, false, '邮箱',                                5),
     (v_participant_table_id, 'assignee_user_id',    'VARCHAR', 64,   NULL, NULL, true,  NULL, false, false, '处理人用户ID（多实例 assigneeField）', 6),
-    (v_participant_table_id, 'attend_status',       'VARCHAR', 20,   NULL, NULL, true,  NULL, false, false, '是否参会（YES/NO/PENDING）',          7),
-    (v_participant_table_id, 'dietary_preference',  'VARCHAR', 30,   NULL, NULL, true,  NULL, false, false, '饮食偏好（NONE/VEGETARIAN/HALAL/OTHER）', 8),
-    (v_participant_table_id, 'remark',              'TEXT',    NULL, NULL, NULL, true,  NULL, false, false, '备注',                                9),
-    (v_participant_table_id, 'sort_order',          'INTEGER', NULL, NULL, NULL, false, '0',  false, false, '排序',                                10);
+    (v_participant_table_id, 'assignee_display_name','VARCHAR', 200, NULL, NULL, true,  NULL, false, false, '处理人显示名',                        7),
+    (v_participant_table_id, 'attend_status',       'VARCHAR', 20,   NULL, NULL, true,  NULL, false, false, '是否参会（YES/NO/PENDING）',          8),
+    (v_participant_table_id, 'dietary_preference',  'VARCHAR', 30,   NULL, NULL, true,  NULL, false, false, '饮食偏好（NONE/VEGETARIAN/HALAL/OTHER）', 9),
+    (v_participant_table_id, 'remark',              'TEXT',    NULL, NULL, NULL, true,  NULL, false, false, '备注',                                10),
+    (v_participant_table_id, 'sort_order',          'INTEGER', NULL, NULL, NULL, false, '0',  false, false, '排序',                                11);
 
     -- 注意：row_version 列会由 TableDesignComponentImpl 在建表时自动添加（Task 1.2 实现）
 

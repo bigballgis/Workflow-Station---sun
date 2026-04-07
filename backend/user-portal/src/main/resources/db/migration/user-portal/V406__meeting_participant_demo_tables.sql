@@ -20,7 +20,13 @@ CREATE TABLE IF NOT EXISTS participants (
     name VARCHAR(500) NOT NULL DEFAULT '',
     department VARCHAR(500),
     email VARCHAR(500) NOT NULL DEFAULT '',
-    sort_order INTEGER NOT NULL DEFAULT 0
+    assignee_user_id VARCHAR(64),
+    assignee_display_name VARCHAR(200),
+    attend_status VARCHAR(20) DEFAULT 'PENDING',
+    dietary_preference VARCHAR(30),
+    remark TEXT,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    row_version INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS idx_participants_meeting_id ON participants (meeting_id);

@@ -545,6 +545,7 @@ public class TaskQueryComponent {
                                 // Override with local DB variables (more complete, includes __subTables__)
                                 merged.putAll(pi.getVariables());
                                 enrichMissingParticipantRowIdsInSubTables(merged);
+                                enrichParticipantAssignmentData(merged);
                                 taskInfo.setVariables(merged);
                                 log.debug("Merged variables from local DB for process {}, keys: {}", 
                                     processInstanceId, merged.keySet());
@@ -1149,6 +1150,102 @@ public class TaskQueryComponent {
             }
         } catch (Exception e) {
             log.debug("enrichMissingParticipantRowIdsInSubTables skipped: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * 从 participants 物理表回填 assignee_display_name 和 attend_status 到 __subTables__ 行，
+     * 使 completed tasks 视图能显示分配结果。
+     */
+    @SuppressWarnings("unchecked")
+    private void enrichParticipantAssignmentData(Map<String, Object> variables) {
+        if (variables == null || variables.isEmpty()) {
+            return;
+        }
+        Object subTablesObj = variables.get("__subTables__");
+        if (!(subTablesObj instanceof Map<?, ?>)) {
+            return;
+        }
+        Map<String, Object> subTables = (Map<String, Object>) subTablesObj;
+        List<Map<String, Object>> rowsWithId = new ArrayList<>();
+        for (Object v : subTables.values()) {
+            if (!(v instanceof List<?> list)) {
+                continue;
+            }
+            for (Object rowObj : list) {
+                if (!(rowObj instanceof Map<?, ?>)) {
+                    continue;
+                }
+                Map<String, Object> row = (Map<String, Object>) rowObj;
+                Object rowId = row.get("id");
+                if (rowId == null) {
+                    rowId = row.get("rowId");
+                }
+                if (rowId != null) {
+                    rowsWithId.add(row);
+                }
+            }
+        }
+        if (rowsWithId.isEmpty()) {
+            return;
+        }
+        try {
+            for (Map<String, Object> row : rowsWithId) {
+                Object rowId = row.get("id");
+                if (rowId == null) {
+                    rowId = row.get("rowId");
+                }
+                Long id;
+                if (rowId instanceof Number n) {
+                    id = n.longValue();
+                } else {
+                    try {
+                        id = Long.parseLong(String.valueOf(rowId).trim());
+                    } catch (Exception ignored) {
+                        continue;
+                    }
+                }
+                List<Map<String, Object>> dbRows = jdbcTemplate.query(
+                        "SELECT assignee_user_id, assignee_display_name, attend_status FROM participants WHERE id = ?",
+                        (rs, i) -> {
+                            Map<String, Object> m = new HashMap<>();
+                            m.put("assignee_user_id", rs.getString("assignee_user_id"));
+                            m.put("assignee_display_name", rs.getString("assignee_display_name"));
+                            m.put("attend_status", rs.getString("attend_status"));
+                            return m;
+                        },
+                        id);
+                if (!dbRows.isEmpty()) {
+                    Map<String, Object> dbRow = dbRows.get(0);
+                    String displayName = (String) dbRow.get("assignee_display_name");
+                    String assigneeUserId = (String) dbRow.get("assignee_user_id");
+                    if (displayName == null && assigneeUserId != null && !assigneeUserId.isBlank()) {
+                        displayName = resolveUsernameByUserId(assigneeUserId);
+                    }
+                    if (displayName != null) {
+                        row.put("assignee_display_name", displayName);
+                    }
+                    if (dbRow.get("attend_status") != null) {
+                        row.put("attend_status", dbRow.get("attend_status"));
+                    }
+                    if (assigneeUserId != null && row.get("assignee_user_id") == null) {
+                        row.put("assignee_user_id", assigneeUserId);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.debug("enrichParticipantAssignmentData skipped: {}", e.getMessage());
+        }
+    }
+
+    private String resolveUsernameByUserId(String userId) {
+        try {
+            List<String> names = jdbcTemplate.query(
+                    "SELECT COALESCE(username, display_name) FROM sys_users WHERE id = ? LIMIT 1",
+                    (rs, i) -> rs.getString(1), userId);
+            return names.isEmpty() ? userId : names.get(0);
+        } catch (Exception e) {
+            return userId;
         }
     }
 }

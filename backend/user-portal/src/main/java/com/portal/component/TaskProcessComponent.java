@@ -318,6 +318,7 @@ public class TaskProcessComponent {
                 throw new PortalException("400", "Assignment failed: participant row not found/created");
             }
         }
+        updateAssigneeDisplayName(participantTable, rowId, assigneeId);
         return assignSubTableRow(taskId, rowId, assigneeId, userId, portalUsername);
     }
 
@@ -681,6 +682,27 @@ public class TaskProcessComponent {
             }
             detail = detail.replace("\n", " ").replace("\r", " ");
             throw new PortalException("400", "Assignment failed: participant table discovery error: " + detail);
+        }
+    }
+
+    private void updateAssigneeDisplayName(String participantTable, Long rowId, String assigneeId) {
+        if (rowId == null || assigneeId == null || assigneeId.isBlank()) {
+            return;
+        }
+        if (!columnExists(participantTable, "assignee_display_name")) {
+            return;
+        }
+        try {
+            List<String> names = jdbcTemplate.query(
+                    "SELECT COALESCE(display_name, username) FROM sys_users WHERE id = ? LIMIT 1",
+                    (rs, i) -> rs.getString(1),
+                    assigneeId);
+            String displayName = names.isEmpty() ? assigneeId : names.get(0);
+            jdbcTemplate.update(
+                    "UPDATE " + participantTable + " SET assignee_display_name = ? WHERE id = ?",
+                    displayName, rowId);
+        } catch (Exception e) {
+            log.debug("updateAssigneeDisplayName failed: {}", e.getMessage());
         }
     }
 

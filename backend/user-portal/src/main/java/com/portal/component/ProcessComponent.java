@@ -29,6 +29,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
@@ -54,6 +55,7 @@ public class ProcessComponent {
     private final ChangeHistoryComponent changeHistoryComponent;
     private final PortalWorkspaceAuthService portalWorkspaceAuthService;
     private final RestTemplate restTemplate;
+    private final JdbcTemplate jdbcTemplate;
     private final MeetingParticipantVariablesPersistence meetingParticipantVariablesPersistence;
 
     @jakarta.persistence.PersistenceContext
@@ -1215,8 +1217,91 @@ public class ProcessComponent {
                 log.warn("Failed to get current task info from Flowable for process {}: {}", processId, e.getMessage());
             }
         }
+
+        enrichSubTablesWithAssignmentData(info);
         
         return info;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void enrichSubTablesWithAssignmentData(ProcessInstanceInfo info) {
+        Map<String, Object> variables = info.getVariables();
+        if (variables == null || variables.isEmpty()) {
+            return;
+        }
+        Object subTablesObj = variables.get("__subTables__");
+        if (!(subTablesObj instanceof Map<?, ?>)) {
+            return;
+        }
+        Map<String, Object> subTables = (Map<String, Object>) subTablesObj;
+        List<Map<String, Object>> rowsWithId = new ArrayList<>();
+        for (Object v : subTables.values()) {
+            if (!(v instanceof List<?> list)) {
+                continue;
+            }
+            for (Object rowObj : list) {
+                if (rowObj instanceof Map<?, ?> row) {
+                    Object rowId = row.get("id");
+                    if (rowId == null) rowId = ((Map<?, ?>) row).get("rowId");
+                    if (rowId != null) rowsWithId.add((Map<String, Object>) row);
+                }
+            }
+        }
+        if (rowsWithId.isEmpty()) {
+            return;
+        }
+        try {
+            for (Map<String, Object> row : rowsWithId) {
+                Object rowId = row.get("id");
+                if (rowId == null) rowId = row.get("rowId");
+                Long id;
+                if (rowId instanceof Number n) {
+                    id = n.longValue();
+                } else {
+                    try { id = Long.parseLong(String.valueOf(rowId).trim()); } catch (Exception ignored) { continue; }
+                }
+                List<Map<String, Object>> dbRows = jdbcTemplate.query(
+                        "SELECT assignee_user_id, assignee_display_name, attend_status FROM participants WHERE id = ?",
+                        (rs, i) -> {
+                            Map<String, Object> m = new HashMap<>();
+                            m.put("assignee_user_id", rs.getString("assignee_user_id"));
+                            m.put("assignee_display_name", rs.getString("assignee_display_name"));
+                            m.put("attend_status", rs.getString("attend_status"));
+                            return m;
+                        }, id);
+                if (!dbRows.isEmpty()) {
+                    Map<String, Object> dbRow = dbRows.get(0);
+                    String displayName = (String) dbRow.get("assignee_display_name");
+                    String userId = (String) dbRow.get("assignee_user_id");
+                    if (displayName == null && userId != null && !userId.isBlank()) {
+                        displayName = resolveUsernameById(userId);
+                    }
+                    if (displayName != null) {
+                        row.put("assignee_display_name", displayName);
+                    }
+                    if (dbRow.get("attend_status") != null) {
+                        row.put("attend_status", dbRow.get("attend_status"));
+                    }
+                    if (userId != null && row.get("assignee_user_id") == null) {
+                        row.put("assignee_user_id", userId);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.debug("enrichSubTablesWithAssignmentData skipped: {}", e.getMessage());
+        }
+    }
+
+    private String resolveUsernameById(String userId) {
+        try {
+            List<String> names = jdbcTemplate.query(
+                    "SELECT COALESCE(username, display_name) FROM sys_users WHERE id = ? LIMIT 1",
+                    (rs, i) -> rs.getString(1), userId);
+            return names.isEmpty() ? userId : names.get(0);
+        } catch (Exception e) {
+            log.debug("resolveUsernameById failed for {}: {}", userId, e.getMessage());
+            return userId;
+        }
     }
 
     // ==================== 流程操作（撤回、催办、收藏） ====================

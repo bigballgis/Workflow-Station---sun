@@ -80,10 +80,13 @@
       </el-table-column>
 
       <!-- Multi-instance assignment column -->
-      <el-table-column v-if="showAssignButton && assigneeField" :label="t('subTable.assignee')" width="180">
+      <el-table-column v-if="showAssigneeColumn" :label="t('subTable.assignee')" width="180">
         <template #default="scope">
           <div class="assignee-cell">
-            <span v-if="scope.row[assigneeField]" class="assignee-name">
+            <span v-if="scope.row.assignee_display_name" class="assignee-name">
+              {{ scope.row.assignee_display_name }}
+            </span>
+            <span v-else-if="assigneeField && scope.row[assigneeField]" class="assignee-name">
               {{ getUserDisplayName(scope.row[assigneeField]) }}
             </span>
             <span v-else class="text-muted">{{ t('subTable.unassigned') }}</span>
@@ -251,6 +254,15 @@ const dialogMode = ref<'add' | 'edit'>('add')
 const editingRowIndex = ref<number | null>(null)
 const dialogInitialData = ref<Record<string, any> | undefined>(undefined)
 
+// Assignee column: show when assign buttons are active, OR when data already has assignee values (read-only completed tasks)
+const showAssigneeColumn = computed(() => {
+  if (props.showAssignButton && props.assigneeField) return true
+  if (!props.assigneeField) return false
+  return rows.value.some(r =>
+    r && (r.assignee_display_name || r[props.assigneeField!])
+  )
+})
+
 // Summary row support
 const hasSummary = computed(() => (props.summaryColumns?.length ?? 0) > 0)
 
@@ -274,6 +286,16 @@ function getSummaryMethod({ columns: tableCols }: { columns: any[] }) {
 }
 
 watch(() => props.modelValue, (v) => { rows.value = v ? [...v] : [] }, { immediate: true, deep: true })
+
+watch(
+  () => [props.title, props.assigneeField, props.showAssignButton, props.canAssign, rows.value.length, showAssigneeColumn.value],
+  () => {
+    // #region agent log
+    fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'df05e9'},body:JSON.stringify({sessionId:'df05e9',runId:'run1',hypothesisId:'H1',location:'SubTableField.vue:watch-assignee-visibility',message:'SubTable assignee visibility state',data:{title:props.title,assigneeField:props.assigneeField,showAssignButton:props.showAssignButton,canAssign:props.canAssign,rowCount:rows.value.length,showAssigneeColumn:showAssigneeColumn.value,hasAssigneeDisplay:rows.value.some((r:any)=>!!r?.assignee_display_name),hasAssigneeUserId:!!props.assigneeField&&rows.value.some((r:any)=>!!r?.[props.assigneeField as string])},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+  },
+  { immediate: true, deep: true }
+)
 
 /** 从 URL 中提取文件名，优先使用本次会话记录的原始文件名 */
 function getFilenameFromUrl(url: string, savedName?: string): string {
@@ -388,7 +410,8 @@ async function searchUsers(keyword: string) {
 }
 
 function getUserDisplayName(userId: string): string {
-  return userNameCache.value[userId] || userId
+  if (userNameCache.value[userId]) return userNameCache.value[userId]
+  return userId.startsWith('user-') ? userId.substring(5) : userId
 }
 
 /**

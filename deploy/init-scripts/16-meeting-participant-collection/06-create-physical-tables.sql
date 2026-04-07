@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS participants (
     department VARCHAR(500),
     email VARCHAR(500) NOT NULL DEFAULT '',
     assignee_user_id VARCHAR(64),
+    assignee_display_name VARCHAR(200),
     attend_status VARCHAR(20) DEFAULT 'PENDING',
     dietary_preference VARCHAR(30),
     remark TEXT,
