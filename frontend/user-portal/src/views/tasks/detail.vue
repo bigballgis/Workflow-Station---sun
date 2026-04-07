@@ -613,9 +613,6 @@ const loadTaskDetail = async () => {
     if (data) {
       taskInfo.value = data
       if (data.variables) formData.value = data.variables
-      // #region agent log
-      fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'df05e9'},body:JSON.stringify({sessionId:'df05e9',runId:'run1',hypothesisId:'H2',location:'detail.vue:loadTaskDetail',message:'Task detail variables loaded',data:(()=>{const sub=(data as any)?.variables?.__subTables__||{};const rows=Object.values(sub).flatMap((v:any)=>Array.isArray(v)?v:[]);return{taskId:(data as any)?.taskId||taskId,subTableKeys:Object.keys(sub),rowCount:rows.length,hasAssigneeDisplay:rows.some((r:any)=>!!r?.assignee_display_name),hasAssigneeUserId:rows.some((r:any)=>!!r?.assignee_user_id)}})(),timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       
       // 先加载流转历史，因为解析流程图需要用到历史记录
       await loadTaskHistory()
@@ -879,9 +876,6 @@ const loadFunctionUnitContent = async (processKey: string) => {
               const saved = savedSubTables[b.bindingId] ?? savedSubTables[String(b.bindingId)]
               if (Array.isArray(saved)) binding.data = saved
             }
-            // #region agent log
-            fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'df05e9'},body:JSON.stringify({sessionId:'df05e9',runId:'run1',hypothesisId:'H3',location:'detail.vue:prevBindings',message:'Previous form subtable binding resolved',data:{tableName:binding.tableName,bindingId:binding.bindingId,columns:(binding.columns||[]).map((c:any)=>c.field),rowCount:(binding.data||[]).length,hasAssigneeDisplay:(binding.data||[]).some((r:any)=>!!r?.assignee_display_name),hasAssigneeUserId:(binding.data||[]).some((r:any)=>!!r?.assignee_user_id)},timestamp:Date.now()})}).catch(()=>{});
-            // #endregion
             prevBindings.push(binding)
           }
 

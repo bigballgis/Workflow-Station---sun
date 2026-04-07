@@ -287,15 +287,7 @@ function getSummaryMethod({ columns: tableCols }: { columns: any[] }) {
 
 watch(() => props.modelValue, (v) => { rows.value = v ? [...v] : [] }, { immediate: true, deep: true })
 
-watch(
-  () => [props.title, props.assigneeField, props.showAssignButton, props.canAssign, rows.value.length, showAssigneeColumn.value],
-  () => {
-    // #region agent log
-    fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'df05e9'},body:JSON.stringify({sessionId:'df05e9',runId:'run1',hypothesisId:'H1',location:'SubTableField.vue:watch-assignee-visibility',message:'SubTable assignee visibility state',data:{title:props.title,assigneeField:props.assigneeField,showAssignButton:props.showAssignButton,canAssign:props.canAssign,rowCount:rows.value.length,showAssigneeColumn:showAssigneeColumn.value,hasAssigneeDisplay:rows.value.some((r:any)=>!!r?.assignee_display_name),hasAssigneeUserId:!!props.assigneeField&&rows.value.some((r:any)=>!!r?.[props.assigneeField as string])},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-  },
-  { immediate: true, deep: true }
-)
+
 
 /** 从 URL 中提取文件名，优先使用本次会话记录的原始文件名 */
 function getFilenameFromUrl(url: string, savedName?: string): string {

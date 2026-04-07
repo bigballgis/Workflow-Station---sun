@@ -573,9 +573,6 @@ const loadFunctionUnitContent = async (processKey: string) => {
         })
       }
       subTableBindings.value = bindings
-      // #region agent log
-      fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'df05e9'},body:JSON.stringify({sessionId:'df05e9',runId:'post-fix',hypothesisId:'H4',location:'applications/detail.vue:subTableBindings',message:'SubTable bindings loaded in app detail',data:{bindingCount:bindings.length,bindings:bindings.map(b=>({id:b.bindingId,name:b.tableName,rowCount:b.data.length,hasAssigneeDisplay:b.data.some((r:any)=>!!r?.assignee_display_name),hasAssigneeUserId:b.data.some((r:any)=>!!r?.assignee_user_id),assigneeFieldPassed:hasAssignmentData(b.data)}))},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
 
       // 收集当前节点之前所有节点绑定的不同表单（只读展示）；发起人看自己的申请时不展示「前置」块（避免申请单 + 审批表单双显）
       if (content.processes?.length > 0 && !useInitiatorFormOnly) {
