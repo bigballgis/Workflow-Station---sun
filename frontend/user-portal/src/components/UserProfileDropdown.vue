@@ -40,50 +40,7 @@
           <div class="section-hint-inline">{{ t('profile.sectionBuRolePairsHint') }}</div>
         </div>
 
-        <!-- 无界业务角色（经管理端虚拟组授予，门户不展示组名） -->
-        <div class="profile-section">
-          <div class="section-title">
-            <el-icon><Key /></el-icon>
-            {{ t('profile.sectionBuUnboundedRoles') }}
-          </div>
-          <div v-if="loading" class="section-loading">
-            <el-icon class="is-loading"><Loading /></el-icon>
-          </div>
-          <div v-else-if="buUnboundedRoles.length === 0" class="section-empty">
-            {{ t('profile.noBuUnboundedRoles') }}
-          </div>
-          <div v-else class="section-content">
-            <el-tag
-              v-for="role in buUnboundedRoles"
-              :key="role.id"
-              size="small"
-              type="success"
-              class="item-tag"
-            >
-              {{ role.name }}
-            </el-tag>
-          </div>
-        </div>
-
-        <!-- 业务单元成员（可能与 UBR 重叠；无角色时仅成员） -->
-        <div class="profile-section">
-          <div class="section-title">
-            <el-icon><OfficeBuilding /></el-icon>
-            {{ t('profile.sectionBuMembership') }}
-          </div>
-          <div v-if="loading" class="section-loading">
-            <el-icon class="is-loading"><Loading /></el-icon>
-          </div>
-          <div v-else-if="businessUnits.length === 0" class="section-empty">
-            {{ t('profile.noBusinessUnits') }}
-          </div>
-          <div v-else class="section-content">
-            <el-tag v-for="bu in businessUnits" :key="bu.id" size="small" type="info" class="item-tag">
-              {{ bu.name }}
-            </el-tag>
-          </div>
-          <div class="section-hint-inline">{{ t('profile.sectionBuMembershipHint') }}</div>
-        </div>
+        <!-- 门户顶栏下拉仅展示“工作台(U BR)”信息，避免信息噪音；完整权限/成员详情见 Profile/Permissions 页面 -->
 
         <el-divider />
         

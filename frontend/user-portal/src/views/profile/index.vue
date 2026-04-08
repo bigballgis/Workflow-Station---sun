@@ -64,27 +64,6 @@
             </ul>
             <span v-else class="empty-text">{{ t('profile.noBuRoleAssignments') }}</span>
           </el-descriptions-item>
-          <el-descriptions-item :label="t('profile.sectionBuUnboundedRoles')">
-            <template v-if="buUnboundedRoles.length">
-              <el-tag
-                v-for="role in buUnboundedRoles"
-                :key="role.id"
-                size="small"
-                type="success"
-                class="item-tag"
-              >
-                {{ role.name }}
-              </el-tag>
-            </template>
-            <span v-else class="empty-text">{{ t('profile.noBuUnboundedRoles') }}</span>
-          </el-descriptions-item>
-          <el-descriptions-item :label="t('profile.sectionBuMembership')">
-            <el-tag v-for="bu in businessUnits" :key="bu.id" size="small" type="info" class="item-tag">
-              {{ bu.name }}
-            </el-tag>
-            <span v-if="businessUnits.length === 0" class="empty-text">{{ t('profile.noBusinessUnits') }}</span>
-            <div class="desc-hint">{{ t('profile.sectionBuMembershipHint') }}</div>
-          </el-descriptions-item>
         </el-descriptions>
       </div>
     </el-card>
@@ -181,9 +160,7 @@ function languageLabelFor(code: string | undefined, loc: string): string {
 
 const loading = ref(false)
 const userInfo = ref<UserInfo | null>(null)
-const businessUnits = ref<{ id: string; name: string }[]>([])
 const buBoundedRoles = ref<PortalBuBoundedRow[]>([])
-const buUnboundedRoles = ref<{ id: string; name: string }[]>([])
 
 const formatUbrLine = (row: PortalBuBoundedRow) => {
   const bu = row.activatedBusinessUnits?.[0]
@@ -256,9 +233,7 @@ const loadUserInfo = async () => {
     const response = (await permissionApi.getMyPermissionView()) as { data?: Record<string, unknown> } & Record<string, unknown>
     const data = (response.data || response) as Record<string, unknown>
     const lists = parseMyPermissionViewPayload(data)
-    businessUnits.value = lists.businessUnits
     buBoundedRoles.value = lists.buBoundedRoles
-    buUnboundedRoles.value = lists.buUnboundedRoles
   } catch (error) {
     console.error('Failed to load user info:', error)
     userInfo.value = getUser()

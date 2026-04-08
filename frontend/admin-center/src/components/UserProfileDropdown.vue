@@ -19,24 +19,7 @@
         
         <el-divider />
         
-        <!-- Business Units -->
-        <div class="profile-section">
-          <div class="section-title">
-            <el-icon><OfficeBuilding /></el-icon>
-            {{ t('profile.businessUnits') }}
-          </div>
-          <div v-if="loading" class="section-loading">
-            <el-icon class="is-loading"><Loading /></el-icon>
-          </div>
-          <div v-else-if="businessUnits.length === 0" class="section-empty">
-            {{ t('profile.noBusinessUnits') }}
-          </div>
-          <div v-else class="section-content">
-            <el-tag v-for="bu in businessUnits" :key="bu.id" size="small" type="info" class="item-tag">
-              {{ bu.name }}
-            </el-tag>
-          </div>
-        </div>
+        <!-- 管理端不展示 BU：管理员关注系统级能力与权限，BU/workspace 信息在门户侧展示 -->
         
         <!-- Virtual Groups -->
         <div class="profile-section">
@@ -101,7 +84,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
-import { ArrowDown, OfficeBuilding, Connection, Key, User, Setting, SwitchButton, Loading } from '@element-plus/icons-vue'
+import { ArrowDown, Connection, Key, User, Setting, SwitchButton, Loading } from '@element-plus/icons-vue'
 import { logout as authLogout, clearAuth, getUser } from '@/api/auth'
 import { userApi } from '@/api/user'
 import { redirectToUnifiedLogin } from '@/utils/sso'
@@ -110,7 +93,6 @@ const { t } = useI18n()
 const router = useRouter()
 
 const loading = ref(false)
-const businessUnits = ref<{ id: string; name: string }[]>([])
 const virtualGroups = ref<{ groupId: string; groupName: string }[]>([])
 const roles = ref<{ id: string; name: string; type?: string }[]>([])
 
@@ -133,12 +115,10 @@ const loadUserPermissions = async () => {
   
   loading.value = true
   try {
-    const [busResult, vgResult, rolesResult] = await Promise.all([
-      userApi.getBusinessUnits(user.userId, 'ADMIN'),
+    const [vgResult, rolesResult] = await Promise.all([
       userApi.getVirtualGroups(user.userId, 'ADMIN'),
       userApi.getRoles(user.userId, 'ADMIN')
     ])
-    businessUnits.value = busResult || []
     virtualGroups.value = vgResult || []
     roles.value = (rolesResult || []).map((r: any) => ({
       id: r.id,
