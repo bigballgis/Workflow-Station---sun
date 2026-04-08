@@ -56,7 +56,9 @@ for f in /docker-entrypoint-initdb.d/00-schema/06-*.sql \
          /docker-entrypoint-initdb.d/00-schema/26-*.sql \
          /docker-entrypoint-initdb.d/00-schema/27-*.sql \
          /docker-entrypoint-initdb.d/00-schema/28-*.sql \
-         /docker-entrypoint-initdb.d/00-schema/29-*.sql; do
+         /docker-entrypoint-initdb.d/00-schema/29-*.sql \
+         /docker-entrypoint-initdb.d/00-schema/30-*.sql \
+         /docker-entrypoint-initdb.d/00-schema/31-*.sql; do
     [ -f "$f" ] && echo "  Running $(basename $f)..." && $PSQL -f "$f"
 done
 

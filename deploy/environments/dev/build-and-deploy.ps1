@@ -12,6 +12,7 @@
 #   .\build-and-deploy.ps1 -SkipImagePull     # Skip pre-pulling base images (if already cached)
 #   .\build-and-deploy.ps1 -Clean             # Destroy everything and rebuild
 #   .\build-and-deploy.ps1 -ServicesOnly      # Only restart backend+frontend (no Maven, no infra)
+#   .\build-and-deploy.ps1 -SkipMavenClean    # Maven package without clean (avoids clean delete failures)
 #
 # Valid -Service values:
 #   Backend:  workflow-engine, admin-center, user-portal, developer-workstation
@@ -24,7 +25,9 @@ param(
     [switch]$SkipInfra,
     [switch]$SkipImagePull,
     [switch]$Clean,
-    [switch]$ServicesOnly
+    [switch]$ServicesOnly,
+    # Skip "mvn clean" only (still runs package). Use when clean fails on locked/corrupt target dirs.
+    [switch]$SkipMavenClean
 )
 
 $ErrorActionPreference = "Stop"
@@ -190,7 +193,7 @@ if (-not $SkipImagePull) {
     Write-Host "`n[0/4] Pre-pulling base images via domestic mirror..." -ForegroundColor Yellow
 
     $images = @(
-        @{ Mirror = "docker.m.daocloud.io/library/eclipse-temurin:17-jre-alpine"; Target = "eclipse-temurin:17-jre-alpine" },
+        @{ Mirror = "docker.m.daocloud.io/library/eclipse-temurin:17-jre"; Target = "eclipse-temurin:17-jre" },
         @{ Mirror = "docker.m.daocloud.io/library/nginx:alpine";                  Target = "nginx:alpine"                  },
         @{ Mirror = "docker.m.daocloud.io/library/postgres:16.5-alpine";          Target = "postgres:16.5-alpine"          },
         @{ Mirror = "docker.m.daocloud.io/library/redis:7.2-alpine";              Target = "redis:7.2-alpine"              }
@@ -251,7 +254,26 @@ if (-not $SkipMaven) {
     Write-Host "`n[1/4] Building backend JARs (Maven)..." -ForegroundColor Yellow
     Push-Location $RootDir
     try {
-        mvn clean package -DskipTests -pl backend/platform-common,backend/platform-cache,backend/platform-security,backend/platform-messaging,backend/workflow-engine-core,backend/admin-center,backend/developer-workstation,backend/user-portal -am
+        # Remove backend/*/target before Maven — avoids maven-clean-plugin "Failed to delete target"
+        # on macOS (IDE file locks, iCloud duplicates like "classes 2", odd permissions).
+        if (-not $SkipMavenClean) {
+            Write-Host "  Pre-clean: removing backend/*/target..." -ForegroundColor DarkGray
+            Get-ChildItem -Path (Join-Path $RootDir "backend") -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+                $targetDir = Join-Path $_.FullName "target"
+                if (Test-Path -LiteralPath $targetDir) {
+                    Remove-Item -LiteralPath $targetDir -Recurse -Force -ErrorAction SilentlyContinue
+                }
+            }
+        }
+
+        $pl = "backend/platform-common,backend/platform-cache,backend/platform-security,backend/platform-messaging,backend/workflow-engine-core,backend/admin-center,backend/developer-workstation,backend/user-portal"
+        # Quote -D... for PowerShell — unquoted `-Dmaven...` is split into a bogus lifecycle phase.
+        # maven.clean.failOnError=false: if clean still hits an undeletable file, continue (pre-clean usually fixes it).
+        if ($SkipMavenClean) {
+            mvn package '-DskipTests' '-Dmaven.clean.failOnError=false' -pl $pl -am
+        } else {
+            mvn clean package '-DskipTests' '-Dmaven.clean.failOnError=false' -pl $pl -am
+        }
         if ($LASTEXITCODE -ne 0) { throw "Maven build failed" }
         Write-Host "  Maven build complete." -ForegroundColor Green
     } finally {
