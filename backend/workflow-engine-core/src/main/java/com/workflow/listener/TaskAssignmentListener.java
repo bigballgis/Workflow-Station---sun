@@ -24,7 +24,7 @@ import org.flowable.engine.RuntimeService;
 import org.flowable.engine.TaskService;
 import org.flowable.engine.history.HistoricProcessInstance;
 import org.flowable.engine.runtime.ProcessInstance;
-import org.flowable.engine.delegate.event.impl.FlowableEntityEventImpl;
+import org.flowable.common.engine.api.delegate.event.FlowableEntityEvent;
 import org.flowable.task.service.impl.persistence.entity.TaskEntity;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
@@ -93,11 +93,11 @@ public class TaskAssignmentListener implements FlowableEventListener {
     }
 
     private void handleTaskCreated(FlowableEvent event) {
-        if (!(event instanceof FlowableEntityEventImpl)) {
+        if (!(event instanceof FlowableEntityEvent)) {
             return;
         }
 
-        FlowableEntityEventImpl entityEvent = (FlowableEntityEventImpl) event;
+        FlowableEntityEvent entityEvent = (FlowableEntityEvent) event;
         Object entity = entityEvent.getEntity();
 
         if (!(entity instanceof TaskEntity)) {

@@ -91,7 +91,7 @@
       </div>
 
       <!-- Task 17.1 / 17.4: 可折叠 Process Form 面板 -->
-      <div v-if="processFormData" class="section process-form-section">
+      <div v-if="showProcessFormPanel && processFormData" class="section process-form-section">
         <el-collapse v-model="processFormCollapse">
           <el-collapse-item :title="isReturnToRequester ? t('process.processForm') : t('process.processFormReadonly')" name="processForm">
             <div class="section-content">
@@ -231,8 +231,8 @@
         </div>
       </div>
 
-      <!-- 第五部分：操作按钮 -->
-      <div class="section action-section">
+      <!-- 第五部分：操作按钮（已完成任务不显示） -->
+      <div v-if="!isCompletedTask" class="section action-section">
         <div class="action-buttons">
           <div class="left-actions">
             <el-button @click="$router.back()">{{ t('task.backToList') }}</el-button>
@@ -588,6 +588,7 @@ const n8nInitialData = ref<Record<string, any> | undefined>(undefined)
 
 // Task 17: Process Form / Task Form 分离状态
 const processFormData = ref<ProcessFormData | null>(null)
+const showProcessFormPanel = ref(false)
 const processFormCollapse = ref<string[]>([])  // empty = collapsed
 const processFormEditable = ref(false)
 const processFormFields = ref<FormField[]>([])
@@ -613,7 +614,6 @@ const loadTaskDetail = async () => {
     if (data) {
       taskInfo.value = data
       if (data.variables) formData.value = data.variables
-      
       // 先加载流转历史，因为解析流程图需要用到历史记录
       await loadTaskHistory()
       
@@ -624,6 +624,67 @@ const loadTaskDetail = async () => {
 
       // Task 17: 加载 Process Form 和 Task Form 数据
       await loadProcessAndTaskFormData(data)
+
+      // Multi-instance sub-task data isolation:
+      // _currentItem (injected by workflow-engine for MI sub-tasks) contains { rowId, assigneeId }
+      // for the specific participant row assigned to THIS sub-task.
+      const currentItem = data.variables?._currentItem as { rowId?: number; assigneeId?: string } | undefined
+      if (currentItem?.rowId != null) {
+        const myRowId = Number(currentItem.rowId)
+
+        // Filter sub-table bindings: only show the row assigned to this sub-task
+        for (const binding of subTableBindings.value) {
+          if (binding.data && binding.data.length > 0) {
+            const filtered = binding.data.filter(
+              (row: any) => Number(row.id) === myRowId || Number(row.rowId) === myRowId
+            )
+            binding.data = filtered.length > 0 ? filtered : binding.data
+          }
+        }
+
+        // Also filter previous form sub-table bindings
+        for (const prevForm of previousForms.value) {
+          for (const binding of prevForm.subTableBindings) {
+            if (binding.data && binding.data.length > 0) {
+              const filtered = binding.data.filter(
+                (row: any) => Number(row.id) === myRowId || Number(row.rowId) === myRowId
+              )
+              binding.data = filtered.length > 0 ? filtered : binding.data
+            }
+          }
+        }
+
+        // Clear form field values for MI sub-tasks so that data entered by
+        // other sub-task assignees does not pre-fill this sub-task's form.
+        // Keep only system/meta fields and the current row's data.
+        const keysToKeep = new Set<string>()
+        // Keep system fields and main form data (meeting_title, etc.)
+        for (const key of Object.keys(formData.value)) {
+          if (key.startsWith('_') || key.startsWith('__') || key === 'initiator'
+              || key === 'meeting_id' || key === 'mainRecordId'
+              || key === 'approval_result' || key === 'approved') {
+            keysToKeep.add(key)
+          }
+        }
+        // Load the sub-table row's field values into formData for the form to display
+        const myRow = subTableBindings.value
+          .flatMap((b: any) => b.data || [])
+          .find((row: any) => Number(row.id) === myRowId || Number(row.rowId) === myRowId)
+        if (myRow) {
+          const cleanedFormData: Record<string, any> = {}
+          for (const key of keysToKeep) {
+            cleanedFormData[key] = formData.value[key]
+          }
+          // Merge sub-table row fields into form data (e.g. dietary_preference, attend_status)
+          for (const [k, v] of Object.entries(myRow)) {
+            if (k !== 'id' && k !== 'row_version' && k !== 'meeting_id') {
+              cleanedFormData[k] = v
+            }
+          }
+          formData.value = cleanedFormData
+        }
+
+      }
     }
   } catch (error: any) {
     console.error('Failed to load task detail:', error)
@@ -808,7 +869,6 @@ const loadFunctionUnitContent = async (processKey: string) => {
         }
       })
       subTableBindings.value = bindings
-
       // 收集当前节点之前所有节点绑定的不同表单（只读展示）
       // 只有当前节点成功匹配到了专属表单时才考虑
       if (content.processes?.length > 0 && (currentFormInfo.formId || currentFormInfo.formName)) {
@@ -942,6 +1002,7 @@ const loadProcessAndTaskFormData = async (taskData: any) => {
     if (isCompleted) {
       // 17.3: 已完成任务 — 加载快照
       isCompletedTask.value = true
+      formReadOnly.value = true
       try {
         const ctRes = await getCompletedTaskFormData(currentTaskId)
         const ctData = (ctRes as any).data || ctRes

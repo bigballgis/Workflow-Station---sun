@@ -1,10 +1,10 @@
 # Runtime image for User Portal
-FROM eclipse-temurin:17-jre-alpine
+FROM eclipse-temurin:17-jre
 
 WORKDIR /app
 
 # Add non-root user
-RUN addgroup -S platform && adduser -S platform -G platform
+RUN groupadd --system platform && useradd --system --gid platform --no-create-home platform
 
 # Copy the pre-built artifact
 COPY target/user-portal-*.jar app.jar
