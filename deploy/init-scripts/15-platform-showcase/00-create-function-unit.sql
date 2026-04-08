@@ -1,8 +1,9 @@
 -- =============================================================================
--- 15-platform-showcase: 功能单元 + 表单 + 决策 + 动作（覆盖主要平台能力）
+-- 15-platform-showcase: 公司推广 / 全栈能力演示功能单元（原「平台能力全功能演示」升级版）
 -- code: fu-20260403-a1b2c4（fu-{yyyyMMdd}-{6位hex}）
--- 依赖: 无（首脚本）
--- 顺序: 00 → 01 → 02 → 03 → 04
+-- 依赖: 无（首脚本）；开发组依赖 01-admin 已创建 sys_virtual_groups（vg-tech-leads）
+-- 顺序: 00 → 01 → 02 → 03 → 04 → 05
+-- 互补示例: fu-20260403-a1b2c5 会议多实例子流程、fu-20260403-a1b2c6 信贷长流程与阶段表单
 -- =============================================================================
 
 DO $main$
@@ -21,12 +22,18 @@ BEGIN
         deployed_at, lock_version, created_by, created_at, updated_by, updated_at
     ) VALUES (
         'fu-20260403-a1b2c4',
-        '平台能力全功能演示',
-        '演示：主/子/关联/动作表、流程/任务/弹窗表单、BPMN+DMN、多类动作与表关系，供开发与验收对照。',
-        'DRAFT',
-        '1.0.0', '1.0.0',
+        'Platform Showcase (Company Demo)',
+        'Company demo: ' ||
+        '1) Data: MAIN/SUB/RELATION/ACTION table types + dw_table_relations; ' ||
+        '2) Forms: PROCESS/TASK/ACTION, subForms editable sub-tables, and stage bindings (05) aligned with BPMN userTask id; ' ||
+        '3) Process: BPMN + Flowable DMN service task; ' ||
+        '4) Actions: approve/transfer/delegate/composite/decision-table/N8N (frontendOutputMapping placeholder) action matrix; ' ||
+        '5) Collaboration: assigned to TECH_LEADS (vg-tech-leads) for workspace permission demo. ' ||
+        'Complementary demos: fu-20260403-a1b2c5 (multi-instance), fu-20260403-a1b2c6 (lending).',
+        'PUBLISHED',
+        '1.1.0', '1.0.0',
         true, true,
-        NULL, 0,
+        CURRENT_TIMESTAMP, 0,
         'system', CURRENT_TIMESTAMP, 'system', CURRENT_TIMESTAMP
     )
     ON CONFLICT (code) DO UPDATE SET
@@ -34,6 +41,10 @@ BEGIN
         description     = EXCLUDED.description,
         status          = EXCLUDED.status,
         current_version = EXCLUDED.current_version,
+        version         = EXCLUDED.version,
+        is_active       = EXCLUDED.is_active,
+        enabled         = EXCLUDED.enabled,
+        deployed_at     = COALESCE(dw_function_units.deployed_at, EXCLUDED.deployed_at),
         updated_by      = EXCLUDED.updated_by,
         updated_at      = CURRENT_TIMESTAMP
     RETURNING id INTO v_fu_id;
@@ -305,8 +316,8 @@ BEGIN
         icon, button_color, description, is_default, created_at, updated_at
     ) VALUES (
         v_fu_id, '演示N8N', 'N8N_ACTION',
-        '{"n8nConfigId":"showcase-demo","n8nWorkflowId":"showcase-demo","webhookUrl":"","timeoutSeconds":60,"inputMapping":[],"outputMapping":[]}'::jsonb,
-        NULL, NULL, '需在管理端配置真实 N8N 后再使用', false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+        '{"n8nConfigId":"showcase-demo","n8nWorkflowId":"showcase-demo","webhookUrl":"","timeoutSeconds":60,"inputMapping":[],"outputMapping":[],"frontendOutputMapping":[]}'::jsonb,
+        NULL, NULL, '与差旅报销脚本一致的扩展位：outputMapping 供后端，frontendOutputMapping 供前端自动回填（演示为空数组）', false, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     ) ON CONFLICT (function_unit_id, action_name) DO UPDATE SET
         action_type = EXCLUDED.action_type, config_json = EXCLUDED.config_json,
         description = EXCLUDED.description, updated_at = CURRENT_TIMESTAMP;
@@ -381,6 +392,12 @@ BEGIN
         updated_at    = CURRENT_TIMESTAMP
     WHERE function_unit_id = v_fu_id
       AND action_name = '组合动作';
+
+    -- 开发组：技术负责人虚拟组（与 FunctionUnitDevGroupAssignment.virtualGroupId = sys_virtual_groups.id 一致）
+    DELETE FROM dw_function_unit_dev_groups WHERE function_unit_id = v_fu_id;
+    INSERT INTO dw_function_unit_dev_groups (function_unit_id, virtual_group_id, created_at, created_by)
+    VALUES (v_fu_id, 'vg-tech-leads', CURRENT_TIMESTAMP, 'system')
+    ON CONFLICT (function_unit_id, virtual_group_id) DO NOTHING;
 
     RAISE NOTICE 'fu-20260403-a1b2c4 forms: request=%, approval=%, task=%, popup=%',
         v_request_form_id, v_approval_form_id, v_task_form_id, v_popup_form_id;

@@ -36,7 +36,7 @@ const IN_SCOPE_FILES: string[] = [
   path.join(DEV_WORKSTATION_SRC, 'api', 'user.ts'),
   path.join(DEV_WORKSTATION_SRC, 'api', 'auth.ts'),
   path.join(DEV_WORKSTATION_SRC, 'main.ts'),
-  path.join(DEV_WORKSTATION_SRC, 'views', 'Login.vue'),
+  path.join(DEV_WORKSTATION_SRC, 'views', 'function-unit', 'FunctionUnitList.vue'),
   path.join(DEV_WORKSTATION_SRC, 'components', 'icon', 'IconPreview.vue'),
 ]
 

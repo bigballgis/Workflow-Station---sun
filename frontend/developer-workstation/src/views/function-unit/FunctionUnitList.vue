@@ -183,6 +183,7 @@ import FunctionUnitCard from '@/components/function-unit/FunctionUnitCard.vue'
 import { getTags, setTags, getAllAvailableTags, matchesTags } from '@/utils/tagStorage'
 import { isAuthenticated } from '@/api/auth'
 import { permissions } from '@/utils/permission'
+import { redirectToUnifiedLogin } from '@/utils/sso'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -295,7 +296,7 @@ onMounted(() => {
     loadData()
   } else {
     // Not logged in, route guard should have redirected, but just in case
-    router.push('/login')
+    redirectToUnifiedLogin('developer-workstation')
   }
 })
 </script>

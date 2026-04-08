@@ -90,6 +90,11 @@ management:
     redis:
       enabled: false
 
+# SSO redeem 调用 admin-center（容器内通常为 http://admin-center:8080）
+platform:
+  sso:
+    internal-token: ${SSO_INTERNAL_TOKEN:}
+
 # Logging - reduce verbosity in Docker
 logging:
   level:

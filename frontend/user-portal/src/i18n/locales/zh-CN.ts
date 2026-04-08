@@ -93,7 +93,8 @@ export default {
     memberManagement: '成员管理',
     exitRole: '退出角色',
     notifications: '消息中心',
-    settings: '个人设置'
+    settings: '个人设置',
+    relationTables: '关联表'
   },
   dashboard: {
     title: '首页',

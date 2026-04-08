@@ -124,10 +124,9 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage, FormInstance, FormRules } from 'element-plus'
 import { changePassword, clearAuth, getCurrentUser, getUser, saveUser } from '@/api/auth'
 import { getChangePasswordFailureMessage } from '@/utils/changePasswordError'
-import { useRouter } from 'vue-router'
+import { redirectToUnifiedLogin } from '@/utils/sso'
 
 const { t, locale } = useI18n()
-const router = useRouter()
 
 const defaultAvatar = 'https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png'
 
@@ -264,7 +263,7 @@ const handleChangePassword = async () => {
       ElMessage.success(t('profile.passwordChanged'))
       passwordFormRef.value?.resetFields()
       clearAuth()
-      await router.replace('/login')
+      redirectToUnifiedLogin('admin')
     } catch (error: unknown) {
       ElMessage.error(getChangePasswordFailureMessage(error, t))
     } finally {

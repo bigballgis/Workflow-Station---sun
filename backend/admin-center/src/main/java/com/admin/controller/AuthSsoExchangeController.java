@@ -1,0 +1,80 @@
+package com.admin.controller;
+
+import com.admin.dto.response.LoginResponse;
+import com.admin.service.AuthService;
+import com.admin.service.PlatformSsoService;
+import com.admin.dto.sso.SsoRedeemRequest;
+import com.admin.dto.sso.SsoRedeemResponse;
+import jakarta.servlet.http.HttpServletRequest;
+import lombok.Data;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+/**
+ * 管理端前端在统一 /login 回调后，将 code 换成本系统 JWT（与 portal / dw 的 exchange 对称）。
+ */
+@Slf4j
+@RestController
+@RequestMapping("/auth/sso")
+@RequiredArgsConstructor
+public class AuthSsoExchangeController {
+
+    private static final String ADMIN_CLIENT_ID = "admin";
+
+    private final PlatformSsoService platformSsoService;
+    private final AuthService authService;
+
+    @PostMapping("/exchange")
+    public ResponseEntity<LoginResponse> exchange(
+            @RequestBody SsoExchangeBody body,
+            HttpServletRequest httpRequest) {
+        if (body == null || body.getCode() == null || body.getCode().isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
+        try {
+            SsoRedeemResponse redeemed = platformSsoService.redeem(
+                    redeemRequest(body.getCode()));
+            String ip = getClientIpAddress(httpRequest);
+            String ua = httpRequest.getHeader("User-Agent");
+            LoginResponse session = authService.issueSsoSession(redeemed.getUserId(), ip, ua);
+            return ResponseEntity.ok(session);
+        } catch (IllegalArgumentException e) {
+            log.debug("Admin SSO exchange failed: {}", e.getMessage());
+            return ResponseEntity.badRequest().build();
+        } catch (RuntimeException e) {
+            log.warn("Admin SSO exchange error: {}", e.getMessage());
+            return ResponseEntity.badRequest().body(
+                    LoginResponse.builder().error(e.getMessage()).build());
+        }
+    }
+
+    private static SsoRedeemRequest redeemRequest(String code) {
+        SsoRedeemRequest r = new SsoRedeemRequest();
+        r.setCode(code);
+        r.setClientId(ADMIN_CLIENT_ID);
+        return r;
+    }
+
+    private String getClientIpAddress(HttpServletRequest request) {
+        String xForwardedFor = request.getHeader("X-Forwarded-For");
+        if (xForwardedFor != null && !xForwardedFor.isEmpty()) {
+            return xForwardedFor.split(",")[0].trim();
+        }
+        String xRealIp = request.getHeader("X-Real-IP");
+        if (xRealIp != null && !xRealIp.isEmpty()) {
+            return xRealIp;
+        }
+        return request.getRemoteAddr();
+    }
+
+    @Data
+    public static class SsoExchangeBody {
+        private String code;
+        private String state;
+    }
+}

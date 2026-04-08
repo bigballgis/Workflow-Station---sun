@@ -10,6 +10,7 @@ import com.portal.dto.ChangePasswordRequest;
 import com.portal.dto.LoginRequest;
 import com.portal.dto.LoginResponse;
 import com.portal.dto.SwitchWorkspaceRequest;
+import com.portal.service.PortalSessionIssuerService;
 import com.portal.service.PortalWorkspaceAuthService;
 import com.platform.security.repository.UserRepository;
 import io.jsonwebtoken.Claims;
@@ -60,6 +61,7 @@ public class AuthController {
     private final I18nService i18nService;
     private final JwtTokenService jwtTokenService;
     private final PortalWorkspaceAuthService portalWorkspaceAuthService;
+    private final PortalSessionIssuerService portalSessionIssuerService;
     
     @Value("${jwt.secret}")
     private String jwtSecret;
@@ -107,57 +109,7 @@ public class AuthController {
             user.setLastLoginIp(ipAddress);
             userRepository.save(user);
 
-            String userId = user.getId();
-            List<PortalWorkspaceAuthService.WorkspaceContextRow> wctx = portalWorkspaceAuthService.listWorkspaceContexts(userId);
-
-            if (wctx.size() > 1) {
-                boolean missingSelection = request.getWorkspaceBusinessUnitId() == null || request.getWorkspaceBusinessUnitId().isBlank()
-                        || request.getWorkspaceRoleId() == null || request.getWorkspaceRoleId().isBlank();
-                if (missingSelection) {
-                    List<LoginResponse.WorkspaceContextOption> options = wctx.stream()
-                            .map(r -> LoginResponse.WorkspaceContextOption.builder()
-                                    .businessUnitId(r.getBusinessUnitId())
-                                    .roleId(r.getRoleId())
-                                    .businessUnitName(r.getBusinessUnitName())
-                                    .roleCode(r.getRoleCode())
-                                    .roleName(r.getRoleName())
-                                    .build())
-                            .collect(Collectors.toList());
-                    return ResponseEntity.badRequest().body(LoginResponse.builder()
-                            .loginErrorCode("WORKSPACE_CONTEXT_REQUIRED")
-                            .workspaceContexts(options)
-                            .build());
-                }
-            }
-
-            String activeBu = null;
-            String activeRoleId = null;
-            if (!wctx.isEmpty()) {
-                if (wctx.size() == 1) {
-                    activeBu = wctx.get(0).getBusinessUnitId();
-                    activeRoleId = wctx.get(0).getRoleId();
-                } else {
-                    activeBu = request.getWorkspaceBusinessUnitId().trim();
-                    activeRoleId = request.getWorkspaceRoleId().trim();
-                }
-                if (!portalWorkspaceAuthService.hasContext(userId, activeBu, activeRoleId)) {
-                    throw new RuntimeException(i18nService.getMessage("auth.invalid_credentials"));
-                }
-            }
-
-            LoginBundle bundle = buildRolesAndPermissions(user, activeBu, activeRoleId);
-            String portalAccessMode = portalAccessModeForWorkspace(wctx);
-            String accessToken = generateToken(user, bundle.roles, bundle.permissions, activeBu, activeRoleId, portalAccessMode);
-            String refreshToken = generateRefreshToken(userId, activeBu, activeRoleId, portalAccessMode);
-
-            log.info("User {} logged in successfully", request.getUsername());
-
-            return ResponseEntity.ok(LoginResponse.builder()
-                    .accessToken(accessToken)
-                    .refreshToken(refreshToken)
-                    .expiresIn(jwtExpiration / 1000)
-                    .user(toUserLoginInfo(user, bundle, activeBu, activeRoleId, wctx.size() > 1, portalAccessMode))
-                    .build());
+            return portalSessionIssuerService.issuePortalSession(user, request, httpRequest);
         } catch (RuntimeException e) {
             log.warn("Login failed: {}", e.getMessage());
             return ResponseEntity.badRequest().body(LoginResponse.builder()

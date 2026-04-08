@@ -1,9 +1,9 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
-import router from '@/router'
 import { refreshToken as refreshAuthToken, REFRESH_TOKEN_KEY, TOKEN_KEY, clearAuth, getUser } from './auth'
 import i18n from '@/i18n'
 import { pickHttpErrorBodyMessage } from '@/utils/httpErrorMessage'
+import { redirectToUnifiedLogin, setSsoReturnPath } from '@/utils/sso'
 
 let isRefreshing = false
 let failedQueue: Array<{ resolve: Function; reject: Function }> = []
@@ -78,7 +78,8 @@ api.interceptors.response.use(
         } catch (refreshError) {
           processQueue(refreshError, null)
           clearAuth()
-          router.push('/login')
+          setSsoReturnPath(window.location.pathname + window.location.search)
+          redirectToUnifiedLogin('developer-workstation')
           return Promise.reject(refreshError)
         } finally {
           isRefreshing = false
@@ -86,7 +87,8 @@ api.interceptors.response.use(
       } else {
         clearAuth()
         ElMessage.warning(i18n.global.t('api.unauthorized'))
-        router.push('/login')
+        setSsoReturnPath(window.location.pathname + window.location.search)
+        redirectToUnifiedLogin('developer-workstation')
         return Promise.reject(error)
       }
     }
@@ -104,7 +106,8 @@ api.interceptors.response.use(
           if (!token) {
             // No token, clear auth and redirect to login page
             clearAuth()
-            router.push('/login')
+            setSsoReturnPath(window.location.pathname + window.location.search)
+            redirectToUnifiedLogin('developer-workstation')
             ElMessage.warning(i18n.global.t('api.pleaseLogin'))
           } else {
             ElMessage.error(errorMsg || i18n.global.t('api.noPermission'))

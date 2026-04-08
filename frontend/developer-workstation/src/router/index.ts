@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
 import { hasAnyRole } from '@/utils/permission'
 import i18n from '@/i18n'
+import { redirectToUnifiedLogin, setSsoReturnPath } from '@/utils/sso'
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -16,9 +17,9 @@ declare module 'vue-router' {
 
 const routes: RouteRecordRaw[] = [
   {
-    path: '/login',
-    name: 'Login',
-    component: () => import('@/views/Login.vue'),
+    path: '/sso/callback',
+    name: 'SsoCallback',
+    component: () => import('@/views/SsoCallback.vue'),
     meta: { titleKey: 'login.title' }
   },
   {
@@ -62,7 +63,7 @@ const routes: RouteRecordRaw[] = [
 ]
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHistory(import.meta.env.BASE_URL),
   routes
 })
 
@@ -71,9 +72,15 @@ router.beforeEach(async (to, _from, next) => {
   const t = i18n.global.t
   const pageTitle = (to.meta as any)?.titleKey ? t((to.meta as any).titleKey) : ((to.meta as any)?.title || t('app.name'))
   document.title = `${pageTitle} - ${t('app.title')}`
-  
-  // 如果是登录页，检查是否已登录
+
   if (to.path === '/login') {
+    const r = to.query.redirect
+    setSsoReturnPath(typeof r === 'string' ? r : '/')
+    redirectToUnifiedLogin('developer-workstation')
+    return next(false)
+  }
+
+  if (to.path === '/sso/callback') {
     const token = localStorage.getItem('token')
     if (token) {
       const { getUser } = await import('@/api/auth')
@@ -92,23 +99,19 @@ router.beforeEach(async (to, _from, next) => {
   if (requiresAuth) {
     const token = localStorage.getItem('token')
     if (!token) {
-      next({
-        path: '/login',
-        query: { redirect: to.fullPath }
-      })
-      return
+      setSsoReturnPath(to.fullPath)
+      redirectToUnifiedLogin('developer-workstation')
+      return next(false)
     }
-    
+
     const { getUser } = await import('@/api/auth')
     const user = getUser()
     if (!user) {
       const { clearAuth } = await import('@/api/auth')
       clearAuth()
-      next({
-        path: '/login',
-        query: { redirect: to.fullPath }
-      })
-      return
+      setSsoReturnPath(to.fullPath)
+      redirectToUnifiedLogin('developer-workstation')
+      return next(false)
     }
   }
 

@@ -88,7 +88,10 @@ jwt:
   refresh-expiration: ${JWT_REFRESH_EXPIRATION:604800000}
 
 # Platform Security JWT Configuration (used by platform-security JwtProperties)
+# SSO internal-token：与 admin-center 一致，用于 /internal/sso/redeem
 platform:
+  sso:
+    internal-token: ${SSO_INTERNAL_TOKEN:}
   security:
     jwt:
       secret: ${JWT_SECRET:your-256-bit-secret-key-for-development-only}

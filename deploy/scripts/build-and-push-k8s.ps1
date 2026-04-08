@@ -36,7 +36,8 @@ $BackendServices = @(
 $FrontendServices = @(
     @{ Name = "admin-center-frontend"; Dir = "frontend/admin-center" },
     @{ Name = "user-portal-frontend"; Dir = "frontend/user-portal" },
-    @{ Name = "developer-workstation-frontend"; Dir = "frontend/developer-workstation" }
+    @{ Name = "developer-workstation-frontend"; Dir = "frontend/developer-workstation" },
+    @{ Name = "platform-login-frontend"; Dir = "frontend/login" }
 )
 
 function Write-Step { param([string]$Msg) Write-Host "`n>> $Msg" -ForegroundColor Cyan }

@@ -143,14 +143,13 @@ import { ref, onMounted, reactive, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, FormInstance, FormRules } from 'element-plus'
 import { getCurrentUser, getUser, saveUser, clearAuth, type UserInfo } from '@/api/auth'
-import { useRouter } from 'vue-router'
+import { redirectToUnifiedLogin } from '@/utils/sso'
 import { userApi } from '@/api/user'
 import { permissionApi } from '@/api/permission'
 import { parseMyPermissionViewPayload, type PortalBuBoundedRow } from '@/utils/myPermissionView'
 import { getChangePasswordFailureMessage } from '@/utils/changePasswordError'
 
 const { t, locale } = useI18n()
-const router = useRouter()
 
 function languageLabelFor(code: string | undefined, loc: string): string {
   const c = (code || 'zh-CN').replace('_', '-')
@@ -283,7 +282,7 @@ const handleChangePassword = async () => {
       ElMessage.success(t('profile.passwordChanged'))
       passwordFormRef.value?.resetFields()
       clearAuth()
-      await router.replace('/login')
+      redirectToUnifiedLogin('portal')
     } catch (error: unknown) {
       ElMessage.error(getChangePasswordFailureMessage(error, t))
     } finally {

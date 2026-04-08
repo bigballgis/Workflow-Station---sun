@@ -1,3 +1,4 @@
+# OPTIONAL / DEV-only — 不再由 deploy.ps1（SIT/UAT/PROD）应用。仅作参考或与 deployment-developer-workstation-optional.yaml 联调。
 apiVersion: apps/v1
 kind: Deployment
 metadata:

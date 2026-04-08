@@ -40,18 +40,6 @@ spec:
       app: user-portal
 
 ---
-apiVersion: policy/v1
-kind: PodDisruptionBudget
-metadata:
-  name: developer-workstation-pdb
-  namespace: workflow-platform-sit
-spec:
-  minAvailable: 1
-  selector:
-    matchLabels:
-      app: developer-workstation
-
----
 # Kong Gateway
 apiVersion: policy/v1
 kind: PodDisruptionBudget

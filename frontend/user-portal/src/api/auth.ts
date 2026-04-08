@@ -13,6 +13,17 @@ const authRequest = axios.create({
   headers: { 'Content-Type': 'application/json' }
 })
 
+/** SSO exchange：不用带 token，单独走同 base 的 POST */
+export async function exchangeSsoCode(payload: {
+  code: string
+  state?: string
+  workspaceBusinessUnitId?: string
+  workspaceRoleId?: string
+}): Promise<LoginResponse> {
+  const response = await authRequest.post<LoginResponse>('/sso/exchange', payload)
+  return response.data
+}
+
 export interface WorkspaceContextOption {
   businessUnitId: string
   roleId: string

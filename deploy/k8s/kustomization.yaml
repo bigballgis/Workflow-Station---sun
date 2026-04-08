@@ -25,11 +25,12 @@ resources:
   - deployment-workflow-engine.yaml
   - deployment-admin-center.yaml
   - deployment-user-portal.yaml
-  - deployment-developer-workstation.yaml
+  # Developer Workstation is DEV-only: do not include in SIT/UAT/PROD base.
   # Kong Gateway
   - deployment-kong.yaml
   # Frontend Deployments
   - deployment-frontend.yaml
+  - deployment-platform-login-frontend.yaml
   # PodDisruptionBudget
   - pdb.yaml
   # Ingress

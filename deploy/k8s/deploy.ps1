@@ -6,6 +6,8 @@
 #   .\deploy.ps1 -Environment sit
 #   .\deploy.ps1 -Environment uat -Namespace workflow-platform-uat
 #   .\deploy.ps1 -Environment prod -Namespace workflow-platform-prod -DryRun
+#
+# Ingress host: set INGRESS_HOST in configmap-<env>.yaml, or override with -IngressHost.
 # =====================================================
 
 param(
@@ -16,11 +18,15 @@ param(
     [string]$Namespace = "workflow-platform-$Environment",
     [string]$Registry = "harbor.company.com/workflow",
     [string]$Tag = "latest",
+    # Ingress host override for single-domain multi-path deployments.
+    # Example: -IngressHost workflow.company.com
+    [string]$IngressHost = "",
     [switch]$DryRun = $false
 )
 
 $ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$runId = [guid]::NewGuid().ToString("N")
 
 function Write-Step { param([string]$Msg) Write-Host "`n>> $Msg" -ForegroundColor Cyan }
 function Write-Ok { param([string]$Msg) Write-Host "   OK: $Msg" -ForegroundColor Green }
@@ -33,8 +39,10 @@ Write-Host "=========================================" -ForegroundColor Yellow
 Write-Host "  Namespace: $Namespace"
 Write-Host "  Registry:  $Registry"
 Write-Host "  Tag:       $Tag"
+Write-Host "  IngressHost: $IngressHost"
 Write-Host "  DryRun:    $DryRun"
 Write-Host "=========================================" -ForegroundColor Yellow
+Write-Host "  Note: developer-workstation is DEV-only and is NOT deployed for SIT/UAT/PROD." -ForegroundColor DarkYellow
 
 # Check kubectl
 try { $null = Get-Command kubectl -ErrorAction Stop }
@@ -44,7 +52,7 @@ $dryRunFlag = if ($DryRun) { "--dry-run=client" } else { "" }
 
 # Step 1: Create namespace
 Write-Step "Ensuring namespace $Namespace exists..."
-$nsExists = kubectl get namespace $Namespace 2>&1
+$null = kubectl get namespace $Namespace 2>&1
 if ($LASTEXITCODE -ne 0) {
     kubectl create namespace $Namespace $dryRunFlag
     Write-Ok "Namespace created: $Namespace"
@@ -59,6 +67,22 @@ if (-not (Test-Path $configmapFile)) { Write-Fail "ConfigMap not found: $configm
 kubectl apply -f $configmapFile -n $Namespace $dryRunFlag
 if ($LASTEXITCODE -ne 0) { Write-Fail "Failed to apply ConfigMap" }
 Write-Ok "ConfigMap applied"
+
+# Try to read INGRESS_HOST from configmap-<env>.yaml if -IngressHost not provided.
+if (-not $IngressHost) {
+    try {
+        $cfg = Get-Content $configmapFile -Raw
+        $m = [regex]::Match($cfg, '^\s*INGRESS_HOST:\s*"?([^"\r\n]+)"?\s*$', [System.Text.RegularExpressions.RegexOptions]::Multiline)
+        if ($m.Success) {
+            $IngressHost = $m.Groups[1].Value.Trim()
+            Write-Ok "Ingress host from ConfigMap: $IngressHost"
+        } else {
+            Write-Host "   WARN: INGRESS_HOST not found in configmap-$Environment.yaml; using default template host." -ForegroundColor DarkYellow
+        }
+    } catch {
+        Write-Host "   WARN: Failed to read INGRESS_HOST from configmap-$Environment.yaml; using default template host." -ForegroundColor DarkYellow
+    }
+}
 
 # Step 3: Apply Secrets
 Write-Step "Applying Secrets for $Environment..."
@@ -91,9 +115,9 @@ $deploymentFiles = @(
     "deployment-workflow-engine.yaml",
     "deployment-admin-center.yaml",
     "deployment-user-portal.yaml",
-    "deployment-developer-workstation.yaml",
     "deployment-kong.yaml",
     "deployment-frontend.yaml",
+    "deployment-platform-login-frontend.yaml",
     "pdb.yaml"
 )
 
@@ -110,7 +134,7 @@ foreach ($file in $deploymentFiles) {
     $content = $content -replace "harbor\.company\.com/workflow", $Registry
     $content = $content -replace ":latest", ":$Tag"
 
-    $tempFile = Join-Path $env:TEMP "k8s-deploy-$file"
+    $tempFile = Join-Path $env:TEMP "k8s-deploy-$runId-$file"
     $content | Set-Content $tempFile -Encoding UTF8
 
     kubectl apply -f $tempFile -n $Namespace $dryRunFlag
@@ -125,9 +149,15 @@ $ingressFile = Join-Path $ScriptDir "ingress.yaml"
 if (Test-Path $ingressFile) {
     $content = Get-Content $ingressFile -Raw
     $content = $content -replace "namespace: workflow-platform-\w+", "namespace: $Namespace"
-    $content = $content -replace "-sit\.", "-$Environment."
+    if ($IngressHost) {
+        $content = $content -replace "__INGRESS_HOST__", $IngressHost
+    } else {
+        # Backward-compatible default: derive from the template's workflow-sit.* host.
+        $content = $content -replace "workflow-sit\.", "workflow-$Environment."
+        $content = $content -replace "__INGRESS_HOST__", "workflow-$Environment.your-domain.com"
+    }
 
-    $tempFile = Join-Path $env:TEMP "k8s-deploy-ingress.yaml"
+    $tempFile = Join-Path $env:TEMP "k8s-deploy-$runId-ingress.yaml"
     $content | Set-Content $tempFile -Encoding UTF8
 
     kubectl apply -f $tempFile -n $Namespace $dryRunFlag
@@ -144,6 +174,11 @@ Write-Host "=========================================" -ForegroundColor Green
 Write-Host "  Deployment Complete! ($Environment)" -ForegroundColor Green
 Write-Host "=========================================" -ForegroundColor Green
 Write-Host ""
+if ($IngressHost) {
+    Write-Host "Ingress host:" -ForegroundColor Yellow
+    Write-Host "  $IngressHost" -ForegroundColor Gray
+    Write-Host ""
+}
 Write-Host "Verify:" -ForegroundColor Yellow
 Write-Host "  kubectl get pods -n $Namespace" -ForegroundColor Gray
 Write-Host "  kubectl get svc -n $Namespace" -ForegroundColor Gray

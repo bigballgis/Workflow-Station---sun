@@ -114,8 +114,23 @@ if (Test-Path $wipePath) {
     Write-Host "  SKIP: wipe script not found at $wipePath" -ForegroundColor Yellow
 }
 
-# Step 5: Digital Lending V2 EN only
-Write-Step "Step 5/6: Loading Digital Lending V2 EN..."
+# Step 5: Demo function units — Platform Showcase (full-stack) then Lending then Meeting
+Write-Step "Step 5a/6: Loading Platform Showcase (company promo demo)..."
+$showcaseScripts = @(
+    "15-platform-showcase/00-create-function-unit.sql",
+    "15-platform-showcase/01-create-tables.sql",
+    "15-platform-showcase/02-create-bpmn-process.sql",
+    "15-platform-showcase/03-form-table-bindings.sql",
+    "15-platform-showcase/04-table-relations.sql",
+    "15-platform-showcase/05-form-stage-bindings.sql"
+)
+foreach ($f in $showcaseScripts) {
+    $path = Join-Path $ScriptDir $f
+    if (-not (Test-Path $path)) { Write-Fail "Missing: $f"; exit 1 }
+    if (-not (Exec-Sql -File $path -Desc (Split-Path $f -Leaf))) { exit 1 }
+}
+
+Write-Step "Step 5b/6: Loading Digital Lending V2 EN..."
 $fuScripts = @(
     "08-digital-lending-v2-en/00-create-virtual-groups.sql",
     "08-digital-lending-v2-en/01-create-digital-lending-complete.sql",
@@ -134,7 +149,7 @@ if (Test-Path $e2eVg) {
     if (-not (Exec-Sql -File $e2eVg -Desc "E2E virtual group members (lending)")) { exit 1 }
 }
 
-Write-Step "Step 5b/6: Loading Meeting Participant Info Collection..."
+Write-Step "Step 5c/6: Loading Meeting Participant Info Collection..."
 $meetingParticipantScripts = @(
     "16-meeting-participant-collection/00-create-function-unit.sql",
     "16-meeting-participant-collection/01-create-tables.sql",
@@ -158,6 +173,6 @@ Write-Host "  Database Initialization Complete!" -ForegroundColor Green
 Write-Host "=========================================" -ForegroundColor Green
 Write-Host "  Login: admin / admin123  (test: 44027893 / admin123)" -ForegroundColor White
 Write-Host "  Change password after first login!" -ForegroundColor Yellow
-Write-Host "  Demo function units: Digital Lending V2 (EN) fu-20260403-a1b2c6; Meeting Participant Info Collection fu-20260403-a1b2c5" -ForegroundColor White
+Write-Host "  Demo function units: Platform Showcase fu-20260403-a1b2c4; Digital Lending V2 (EN) fu-20260403-a1b2c6; Meeting Participant fu-20260403-a1b2c5" -ForegroundColor White
 Write-Host "  E2E users (password=password): e2e_zhangwei e2e_lina e2e_wangfang e2e_zhaomin e2e_sunqiang e2e_zhoujie e2e_wugang" -ForegroundColor White
 Write-Host "=========================================" -ForegroundColor Green

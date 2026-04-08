@@ -93,6 +93,12 @@ export const refreshToken = async (refreshToken: string): Promise<LoginResponse>
   return response.data
 }
 
+/** 统一 /login 回调后换发管理端 JWT */
+export const exchangeSsoCode = async (code: string, state?: string): Promise<LoginResponse> => {
+  const response = await authRequest.post<LoginResponse>('/sso/exchange', { code, state })
+  return response.data
+}
+
 /**
  * Get current user info.
  */

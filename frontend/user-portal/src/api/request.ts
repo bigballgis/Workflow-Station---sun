@@ -3,6 +3,7 @@ import { ElMessage } from 'element-plus'
 import { refreshToken as refreshAuthToken, REFRESH_TOKEN_KEY, TOKEN_KEY, clearAuth } from './auth'
 import i18n from '@/i18n'
 import { pickHttpErrorBodyMessage } from '@/utils/httpErrorMessage'
+import { redirectToUnifiedLogin, setSsoReturnPath } from '@/utils/sso'
 
 let isRefreshing = false
 let failedQueue: Array<{ resolve: Function; reject: Function }> = []
@@ -107,7 +108,8 @@ service.interceptors.response.use(
         } catch (refreshError) {
           processQueue(refreshError, null)
           clearAuth()
-          window.location.href = '/login'
+          setSsoReturnPath(window.location.pathname + window.location.search)
+          redirectToUnifiedLogin('portal')
           return Promise.reject(refreshError)
         } finally {
           isRefreshing = false
@@ -115,7 +117,8 @@ service.interceptors.response.use(
       } else {
         clearAuth()
         ElMessage.warning(i18n.global.t('api.unauthorized'))
-        window.location.href = '/login'
+        setSsoReturnPath(window.location.pathname + window.location.search)
+        redirectToUnifiedLogin('portal')
         return Promise.reject(error)
       }
     }

@@ -9,6 +9,7 @@ import {
   type UserInfo
 } from '@/api/auth'
 import i18n from '@/i18n'
+import { redirectToUnifiedLogin, setSsoReturnPath } from '@/utils/sso'
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -23,9 +24,9 @@ declare module 'vue-router' {
 
 const routes: RouteRecordRaw[] = [
   {
-    path: '/login',
-    name: 'Login',
-    component: () => import('@/views/login/index.vue'),
+    path: '/sso/callback',
+    name: 'SsoCallback',
+    component: () => import('@/views/sso/SsoCallback.vue'),
     meta: { titleKey: 'login.title', requiresAuth: false }
   },
   {
@@ -152,7 +153,7 @@ const routes: RouteRecordRaw[] = [
 ]
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHistory(import.meta.env.BASE_URL),
   routes
 })
 
@@ -163,14 +164,22 @@ router.beforeEach(async (to, _from, next) => {
   const pageTitle = titleKey ? t(titleKey) : t('app.name')
   document.title = `${pageTitle} - ${t('app.title')}`
   
+  if (to.path === '/login') {
+    const r = to.query.redirect
+    setSsoReturnPath(typeof r === 'string' ? r : '/dashboard')
+    redirectToUnifiedLogin('portal')
+    return next(false)
+  }
+
   const token = localStorage.getItem('token')
-  if (to.meta.requiresAuth !== false && !token && to.path !== '/login') {
-    next('/login')
-    return
+  if (to.meta.requiresAuth !== false && !token && to.path !== '/sso/callback') {
+    setSsoReturnPath(to.fullPath)
+    redirectToUnifiedLogin('portal')
+    return next(false)
   }
 
   // 补录 UBR 后须换发 JWT（reconcile），否则仅改 localStorage 仍被 PortalSelfServiceAccessFilter 拦截
-  if (token && to.path !== '/login' && to.path !== '/403') {
+  if (token && to.path !== '/sso/callback' && to.path !== '/403') {
     await reconcilePortalWorkspaceSession()
     const cached = getStoredUser()
     if (cached?.portalAccessMode === 'PERMISSION_SELF_SERVICE_ONLY') {
@@ -201,7 +210,7 @@ router.beforeEach(async (to, _from, next) => {
   }
 
   const user: UserInfo | null = getStoredUser()
-  if (user?.portalAccessMode === 'PERMISSION_SELF_SERVICE_ONLY' && to.path !== '/login' && to.path !== '/403') {
+  if (user?.portalAccessMode === 'PERMISSION_SELF_SERVICE_ONLY' && to.path !== '/403') {
     const allowed = new Set([
       '/permissions',
       '/notifications',

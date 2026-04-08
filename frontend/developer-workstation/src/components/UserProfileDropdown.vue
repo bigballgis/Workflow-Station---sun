@@ -77,6 +77,7 @@ import { ElMessage } from 'element-plus'
 import { ArrowDown, User, SwitchButton, Connection, Key, Loading } from '@element-plus/icons-vue'
 import { logout as authLogout, clearAuth, getUser } from '@/api/auth'
 import { userApi } from '@/api/user'
+import { redirectToUnifiedLogin } from '@/utils/sso'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -124,7 +125,7 @@ const handleCommand = async (command: string) => {
       console.error('Logout API error:', error)
     } finally {
       clearAuth()
-      router.push('/login')
+      redirectToUnifiedLogin('developer-workstation')
     }
   }
 }

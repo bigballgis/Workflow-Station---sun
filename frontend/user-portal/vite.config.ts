@@ -8,6 +8,7 @@ import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 const isTest = process.env.VITEST === 'true'
 
 export default defineConfig({
+  base: '/portal/',
   plugins: [
     vue(),
     AutoImport({

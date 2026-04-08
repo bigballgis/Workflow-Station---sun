@@ -90,7 +90,8 @@ export default {
     memberManagement: '成員管理',
     exitRole: '退出角色',
     notifications: '訊息中心',
-    settings: '個人設定'
+    settings: '個人設定',
+    relationTables: '關聯表'
   },
   dashboard: {
     title: '首頁',

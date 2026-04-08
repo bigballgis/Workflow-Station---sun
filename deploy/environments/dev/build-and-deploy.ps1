@@ -15,7 +15,7 @@
 #
 # Valid -Service values:
 #   Backend:  workflow-engine, admin-center, user-portal, developer-workstation
-#   Frontend: admin-center-frontend, user-portal-frontend, developer-workstation-frontend
+#   Frontend: admin-center-frontend, user-portal-frontend, developer-workstation-frontend, platform-login-frontend
 
 param(
     [string]$Service,
@@ -68,6 +68,11 @@ $ServiceRegistry = @{
     "developer-workstation-frontend" = @{
         FrontendDir = "frontend/developer-workstation"
         Container   = "platform-developer-workstation-frontend-dev"
+        Type        = "frontend"
+    }
+    "platform-login-frontend" = @{
+        FrontendDir = "frontend/login"
+        Container   = "platform-login-frontend-dev"
         Type        = "frontend"
     }
 }
@@ -268,7 +273,8 @@ if (-not $SkipFrontend) {
     $frontends = @(
         @{ Name = "admin-center-frontend"; Dir = "frontend/admin-center" },
         @{ Name = "user-portal-frontend"; Dir = "frontend/user-portal" },
-        @{ Name = "developer-workstation-frontend"; Dir = "frontend/developer-workstation" }
+        @{ Name = "developer-workstation-frontend"; Dir = "frontend/developer-workstation" },
+        @{ Name = "platform-login-frontend"; Dir = "frontend/login" }
     )
     
     foreach ($fe in $frontends) {

@@ -42,4 +42,9 @@ public interface AuthService {
      * 为用户信息生成新的 access token
      */
     String generateAccessTokenForUser(LoginResponse.UserLoginInfo userInfo);
+
+    /**
+     * 统一登录（SSO）已校验身份后，为本系统签发会话（须具备管理端访问角色）。
+     */
+    LoginResponse issueSsoSession(String userId, String ipAddress, String userAgent);
 }

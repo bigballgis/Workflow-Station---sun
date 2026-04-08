@@ -80,7 +80,18 @@ else
 fi
 
 echo ""
-echo "[5/6] Loading Digital Lending V2 EN..."
+echo "[5a/6] Loading Platform Showcase (company promo demo)..."
+for f in /docker-entrypoint-initdb.d/15-platform-showcase/00-*.sql \
+         /docker-entrypoint-initdb.d/15-platform-showcase/01-*.sql \
+         /docker-entrypoint-initdb.d/15-platform-showcase/02-*.sql \
+         /docker-entrypoint-initdb.d/15-platform-showcase/03-*.sql \
+         /docker-entrypoint-initdb.d/15-platform-showcase/04-*.sql \
+         /docker-entrypoint-initdb.d/15-platform-showcase/05-*.sql; do
+  [ -f "$f" ] && echo "  Running $(basename $f)..." && $PSQL -f "$f"
+done
+
+echo ""
+echo "[5b/6] Loading Digital Lending V2 EN..."
 for f in /docker-entrypoint-initdb.d/08-digital-lending-v2-en/00-*.sql \
          /docker-entrypoint-initdb.d/08-digital-lending-v2-en/01-*.sql \
          /docker-entrypoint-initdb.d/08-digital-lending-v2-en/02-*.sql \
@@ -96,7 +107,7 @@ if [ -f /docker-entrypoint-initdb.d/08-digital-lending-v2-en/05-e2e-virtual-grou
 fi
 
 echo ""
-echo "[5b/6] Loading Meeting Participant Info Collection..."
+echo "[5c/6] Loading Meeting Participant Info Collection..."
 for f in /docker-entrypoint-initdb.d/16-meeting-participant-collection/00-*.sql \
          /docker-entrypoint-initdb.d/16-meeting-participant-collection/01-*.sql \
          /docker-entrypoint-initdb.d/16-meeting-participant-collection/02-*.sql \
@@ -116,7 +127,7 @@ echo "  Database Initialization Complete!"
 echo "========================================="
 echo "  Login: admin / admin123  (test: 44027893 / admin123)"
 echo "  Change password after first login!"
-echo "  Demo function units: Digital Lending System V2 (EN) fu-20260403-a1b2c6; Meeting Participant Info Collection fu-20260403-a1b2c5"
+echo "  Demo function units: Platform Showcase fu-20260403-a1b2c4; Digital Lending System V2 (EN) fu-20260403-a1b2c6; Meeting Participant Info Collection fu-20260403-a1b2c5"
 echo "  E2E users (password=password): e2e_zhangwei e2e_lina e2e_wangfang e2e_zhaomin e2e_sunqiang e2e_zhoujie e2e_wugang"
 echo "  (Re-seed: run init-scripts/99-maintenance/00-wipe-all-function-units.sql then reload 08- and 16- scripts if needed.)"
 echo "========================================="

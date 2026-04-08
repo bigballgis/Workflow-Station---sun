@@ -2,6 +2,7 @@ import { createRouter, createWebHistory, RouteRecordRaw } from 'vue-router'
 import { canAccessRoute, PERMISSIONS } from '@/utils/permission'
 import { ElMessage } from 'element-plus'
 import i18n from '@/i18n'
+import { redirectToUnifiedLogin, setSsoReturnPath } from '@/utils/sso'
 
 // Extend route meta type
 declare module 'vue-router' {
@@ -17,9 +18,9 @@ declare module 'vue-router' {
 
 const routes: RouteRecordRaw[] = [
   {
-    path: '/login',
-    name: 'Login',
-    component: () => import('@/views/login/index.vue'),
+    path: '/sso/callback',
+    name: 'SsoCallback',
+    component: () => import('@/views/sso/SsoCallback.vue'),
     meta: { titleKey: 'login.title', hidden: true }
   },
   {
@@ -144,7 +145,7 @@ const routes: RouteRecordRaw[] = [
 ]
 
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHistory(import.meta.env.BASE_URL),
   routes
 })
 
@@ -152,16 +153,22 @@ router.beforeEach((to, _from, next) => {
   const t = i18n.global.t
   const pageTitle = to.meta.titleKey ? t(to.meta.titleKey) : (to.meta.title || t('app.name'))
   document.title = `${pageTitle} - ${t('app.title')}`
-  
-  // Check login status
-  const token = localStorage.getItem('token')
-  if (to.path !== '/login' && !token) {
-    next('/login')
-    return
-  }
-  
-  // Skip permission check for login page
+
   if (to.path === '/login') {
+    const r = to.query.redirect
+    setSsoReturnPath(typeof r === 'string' ? r : '/dashboard')
+    redirectToUnifiedLogin('admin')
+    return next(false)
+  }
+
+  const token = localStorage.getItem('token')
+  if (to.path !== '/sso/callback' && !token) {
+    setSsoReturnPath(to.fullPath)
+    redirectToUnifiedLogin('admin')
+    return next(false)
+  }
+
+  if (to.path === '/sso/callback') {
     next()
     return
   }

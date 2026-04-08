@@ -45,9 +45,9 @@ functionUnitAxios.interceptors.response.use(
     // Handle 401 Unauthorized
     if (response?.status === 401) {
       const { clearAuth } = await import('./auth')
-      const router = (await import('@/router')).default
+      const { redirectToUnifiedLogin } = await import('@/utils/sso')
       clearAuth()
-      router.push('/login')
+      redirectToUnifiedLogin('developer-workstation')
       return Promise.reject(error)
     }
     
@@ -56,10 +56,9 @@ functionUnitAxios.interceptors.response.use(
       const { TOKEN_KEY, clearAuth } = await import('./auth')
       const token = localStorage.getItem(TOKEN_KEY)
       if (!token) {
-        // No token, clear auth and redirect to login page
         clearAuth()
-        const router = (await import('@/router')).default
-        router.push('/login')
+        const { redirectToUnifiedLogin } = await import('@/utils/sso')
+        redirectToUnifiedLogin('developer-workstation')
       }
       return Promise.reject(error)
     }

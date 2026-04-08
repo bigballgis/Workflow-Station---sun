@@ -125,6 +125,71 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
+    @Transactional
+    public LoginResponse issueSsoSession(String userId, String ipAddress, String userAgent) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        if (user.getStatus() == UserStatus.LOCKED) {
+            throw new RuntimeException("Account is locked");
+        }
+        if (user.getStatus() == UserStatus.INACTIVE) {
+            throw new RuntimeException("Account is disabled");
+        }
+
+        List<String> userRoleCodes = userRoleService.getEffectiveRoleCodesForUser(user.getId());
+        boolean hasAdminAccess = userRoleCodes.stream()
+                .anyMatch(code -> "SYS_ADMIN".equals(code) || "AUDITOR".equals(code));
+        if (!hasAdminAccess) {
+            log.warn("User {} has no admin center access for SSO. Roles: {}", user.getUsername(), userRoleCodes);
+            throw new RuntimeException("You do not have access to Admin Center");
+        }
+
+        user.resetFailedLoginCount();
+        user.setLastLoginAt(LocalDateTime.now());
+        user.setLastLoginIp(ipAddress);
+        userRepository.save(user);
+
+        List<String> roles = userRoleCodes;
+        List<String> permissions = getPermissionsForRoles(roles);
+        Map<String, String> roleCodeToName = getRoleNames(roles);
+        List<LoginResponse.RoleWithSource> rolesWithSources = roles.stream()
+                .map(code -> LoginResponse.RoleWithSource.builder()
+                        .roleCode(code)
+                        .roleName(roleCodeToName.getOrDefault(code, code))
+                        .sourceType(null)
+                        .sourceId(user.getId())
+                        .sourceName("Direct Assignment")
+                        .build())
+                .collect(Collectors.toList());
+
+        String displayName = resolveDisplayName(user);
+        String accessToken = jwtTokenService.generateToken(
+                user.getId(), user.getUsername(), user.getEmail(), displayName,
+                roles, permissions, user.getLanguage());
+        String refreshToken = jwtTokenService.generateRefreshToken(user.getId());
+
+        log.info("User {} SSO session issued from {}", user.getUsername(), ipAddress);
+
+        return LoginResponse.builder()
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
+                .expiresIn(jwtProperties.getExpirationMs() / 1000)
+                .user(LoginResponse.UserLoginInfo.builder()
+                        .userId(user.getId())
+                        .username(user.getUsername())
+                        .displayName(displayName)
+                        .email(user.getEmail())
+                        .roles(roles)
+                        .permissions(permissions)
+                        .rolesWithSources(rolesWithSources)
+                        .businessUnitId(taskAssignmentQueryService.getUserBusinessUnitId(user.getId()))
+                        .language(user.getLanguage())
+                        .build())
+                .build();
+    }
+
+    @Override
     public void logout(String token) {
         jwtTokenService.blacklistToken(token);
         log.info("User logged out");

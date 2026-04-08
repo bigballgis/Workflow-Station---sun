@@ -93,7 +93,8 @@ export default {
     memberManagement: 'Member Management',
     exitRole: 'Exit Role',
     notifications: 'Notifications',
-    settings: 'Settings'
+    settings: 'Settings',
+    relationTables: 'Relation Tables'
   },
   dashboard: {
     title: 'Home',

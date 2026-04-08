@@ -114,6 +114,7 @@ import { ArrowDown, OfficeBuilding, Key, User, Setting, SwitchButton, Loading } 
 import { logout as authLogout, clearAuth, getCurrentUser, getUser, saveUser } from '@/api/auth'
 import { permissionApi } from '@/api/permission'
 import { parseMyPermissionViewPayload, type PortalBuBoundedRow } from '@/utils/myPermissionView'
+import { redirectToUnifiedLogin } from '@/utils/sso'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -189,7 +190,7 @@ const handleCommand = async (command: string) => {
     } finally {
       clearAuth()
       portalUser.value = null
-      router.push('/login')
+      redirectToUnifiedLogin('portal')
     }
   }
 }

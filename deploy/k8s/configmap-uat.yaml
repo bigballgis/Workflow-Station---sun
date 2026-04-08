@@ -27,6 +27,9 @@ data:
   USER_PORTAL_URL: "http://user-portal-service:8080"
   KONG_PROXY_URL: "http://kong-service:8000"
 
+  # Ingress (single domain + multi path)
+  INGRESS_HOST: "workflow-uat.your-domain.com"
+
   # JWT (non-sensitive)
   JWT_EXPIRATION: "43200000"
   JWT_REFRESH_EXPIRATION: "259200000"

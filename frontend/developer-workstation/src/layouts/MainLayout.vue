@@ -36,14 +36,14 @@
 
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { Folder, Picture, DArrowLeft, DArrowRight } from '@element-plus/icons-vue'
 import UserProfileDropdown from '@/components/UserProfileDropdown.vue'
 import { getUser, getCurrentUser, saveUser, clearAuth } from '@/api/auth'
+import { redirectToUnifiedLogin } from '@/utils/sso'
 
 const route = useRoute()
-const router = useRouter()
 const { t } = useI18n()
 
 const activeMenu = computed(() => route.path)
@@ -90,7 +90,7 @@ onMounted(async () => {
       console.error('Failed to get current user:', error)
       // If failed, token may be invalid, clear auth info
       clearAuth()
-      router.push('/login')
+      redirectToUnifiedLogin('developer-workstation')
     }
   }
 })

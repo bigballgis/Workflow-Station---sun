@@ -66,7 +66,7 @@ export interface UserRole {
 }
 
 export const userApi = {
-  /** 设计站顶栏传 DEVELOPER，仅展示开发类角色与对应虚拟组；不传则全量 */
+  /** Studio header passes DEVELOPER to show dev roles/virtual groups only; omit for full list */
   getBusinessUnits: (
     userId: string,
     profileContext?: 'PORTAL' | 'ADMIN' | 'DEVELOPER'

@@ -59,6 +59,11 @@ export const login = async (data: LoginRequest): Promise<LoginResponse> => {
   return response.data
 }
 
+export const exchangeSsoCode = async (code: string, state?: string): Promise<LoginResponse> => {
+  const response = await authRequest.post<LoginResponse>('/sso/exchange', { code, state })
+  return response.data
+}
+
 export const logout = async (): Promise<void> => {
   const token = localStorage.getItem('token')
   if (token) {

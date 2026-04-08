@@ -1,11 +1,16 @@
 # =====================================================
-# Ingress Configuration
+# Ingress Configuration (single domain + multi path)
 # =====================================================
-# Routes external traffic to the three frontend Services (admin / portal / dev).
+# /admin/  -> admin-center-frontend-service
+# /portal/ -> user-portal-frontend-service
+# /login/  -> platform-login-frontend-service
+# Note: developer-workstation (/dev/) is DEV-only and is NOT exposed here.
+#       Use ingress-developer-workstation-optional.yaml if you need it.
+#
 # Browser calls to APIs typically go: frontend nginx -> Kong (deploy/k8s/deployment-kong.yaml)
 # -> backend Services. This Ingress does not replace Kong; it exposes the SPAs.
 #
-# Replace "your-domain.com" with your actual domain.
+# Replace "__INGRESS_HOST__" with your actual domain (handled by deploy.ps1 -IngressHost).
 # Namespace is replaced by deploy.ps1 based on -Environment flag.
 # =====================================================
 apiVersion: networking.k8s.io/v1
@@ -22,55 +27,30 @@ spec:
   ingressClassName: nginx
   # tls:
   # - hosts:
-  #   - admin-sit.your-domain.com
-  #   - portal-sit.your-domain.com
-  #   - dev-sit.your-domain.com
+  #   - __INGRESS_HOST__
   #   secretName: workflow-platform-tls
   rules:
-  # Admin Center Frontend
-  - host: admin-sit.your-domain.com
+  - host: __INGRESS_HOST__
     http:
       paths:
-      - path: /
+      - path: /login
+        pathType: Prefix
+        backend:
+          service:
+            name: platform-login-frontend-service
+            port:
+              number: 80
+      - path: /admin
         pathType: Prefix
         backend:
           service:
             name: admin-center-frontend-service
             port:
               number: 80
-
-  # User Portal Frontend
-  - host: portal-sit.your-domain.com
-    http:
-      paths:
-      - path: /
+      - path: /portal
         pathType: Prefix
         backend:
           service:
             name: user-portal-frontend-service
             port:
               number: 80
-
-  # Developer Workstation Frontend
-  - host: dev-sit.your-domain.com
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: developer-workstation-frontend-service
-            port:
-              number: 80
-
-  # N8N Automation Engine (uncomment if N8N needs external webhook access)
-  # - host: n8n-sit.your-domain.com
-  #   http:
-  #     paths:
-  #     - path: /
-  #       pathType: Prefix
-  #       backend:
-  #         service:
-  #           name: n8n-service
-  #           port:
-  #             number: 5678
