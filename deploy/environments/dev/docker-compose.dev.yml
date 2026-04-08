@@ -204,10 +204,10 @@ services:
       SWAGGER_ENABLED: ${SWAGGER_ENABLED:-true}
       SPRING_FLYWAY_ENABLED: "false"
       SSO_INTERNAL_TOKEN: ${SSO_INTERNAL_TOKEN:-dev-sso-internal-token-change-me}
-      # 默认与 edge-frontend（EDGE_FRONTEND_PORT）单源路径一致；直连 3000/3001/3002 时见 application.yml 额外前缀
-      SSO_REDIRECT_ADMIN_PREFIX: ${SSO_REDIRECT_ADMIN_PREFIX:-http://localhost:3070/admin/sso/callback}
-      SSO_REDIRECT_PORTAL_PREFIX: ${SSO_REDIRECT_PORTAL_PREFIX:-http://localhost:3070/portal/sso/callback}
-      SSO_REDIRECT_DW_PREFIX: ${SSO_REDIRECT_DW_PREFIX:-http://localhost:3070/dev/sso/callback}
+      # 默认与 edge-frontend（EDGE_FRONTEND_PORT）单源路径一致；直连前端端口时见 application.yml 额外前缀
+      SSO_REDIRECT_ADMIN_PREFIX: ${SSO_REDIRECT_ADMIN_PREFIX:-http://localhost:3000/admin/sso/callback}
+      SSO_REDIRECT_PORTAL_PREFIX: ${SSO_REDIRECT_PORTAL_PREFIX:-http://localhost:3000/portal/sso/callback}
+      SSO_REDIRECT_DW_PREFIX: ${SSO_REDIRECT_DW_PREFIX:-http://localhost:3000/dev/sso/callback}
       SUPERSET_HOST: ${SUPERSET_HOST:-http://superset-final:8088}
       # AgentNdjsonLog：与下方 volumes 的 /app/logs 对齐，宿主机见 deploy/environments/dev/logs/debug-864cd4.log
       WORKFLOW_DEBUG_NDJSON_PATH: ${WORKFLOW_DEBUG_NDJSON_PATH:-/app/logs/debug-864cd4.log}
@@ -407,7 +407,7 @@ services:
     depends_on:
       - kong
     ports:
-      - "${PLATFORM_LOGIN_FRONTEND_PORT:-3010}:80"
+      - "${PLATFORM_LOGIN_FRONTEND_PORT:-3110}:80"
     environment:
       KONG_PROXY_URL: http://kong:8000
     networks:
@@ -430,11 +430,12 @@ services:
       - developer-workstation-frontend
       - platform-login-frontend
     ports:
-      - "${EDGE_FRONTEND_PORT:-3070}:80"
+      - "${EDGE_FRONTEND_PORT:-3000}:80"
     volumes:
       - ./nginx-edge.conf:/etc/nginx/conf.d/default.conf:ro
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"]
+      # edge-frontend 不提供根路径静态资源，探活走 /login/（由 platform-login-frontend 提供）
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/login/"]
       interval: 10s
       timeout: 3s
       retries: 3

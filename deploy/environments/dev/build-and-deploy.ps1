@@ -355,13 +355,20 @@ Write-Host " Deployment Complete!" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Green
 Write-Host ""
 
-$EdgePort = "3070"
+$EdgePort = "3000"
+$AdminFePort = "3100"
+$PortalFePort = "3101"
+$DevFePort = "3102"
+$LoginFePort = "3110"
 if (Test-Path $EnvFile) {
     foreach ($line in Get-Content $EnvFile) {
         if ($line -match '^\s*EDGE_FRONTEND_PORT\s*=\s*(\S+)') {
             $EdgePort = $Matches[1]
-            break
         }
+        if ($line -match '^\s*ADMIN_CENTER_FRONTEND_PORT\s*=\s*(\S+)') { $AdminFePort = $Matches[1] }
+        if ($line -match '^\s*USER_PORTAL_FRONTEND_PORT\s*=\s*(\S+)') { $PortalFePort = $Matches[1] }
+        if ($line -match '^\s*DEVELOPER_WORKSTATION_FRONTEND_PORT\s*=\s*(\S+)') { $DevFePort = $Matches[1] }
+        if ($line -match '^\s*PLATFORM_LOGIN_FRONTEND_PORT\s*=\s*(\S+)') { $LoginFePort = $Matches[1] }
     }
 }
 
@@ -381,10 +388,10 @@ Write-Host "  User Portal:            http://localhost:8082"
 Write-Host "  Developer Workstation:  http://localhost:8083"
 Write-Host ""
 Write-Host "Frontend (direct ports, optional / debugging):" -ForegroundColor DarkGray
-Write-Host "  Admin Center:           http://localhost:3000"
-Write-Host "  User Portal:            http://localhost:3001"
-Write-Host "  Developer Workstation:  http://localhost:3002"
-Write-Host "  Platform Login:         http://localhost:3010"
+Write-Host "  Admin Center:           http://localhost:$AdminFePort"
+Write-Host "  User Portal:            http://localhost:$PortalFePort"
+Write-Host "  Developer Workstation:  http://localhost:$DevFePort"
+Write-Host "  Platform Login:         http://localhost:$LoginFePort"
 Write-Host ""
 Write-Host "Infrastructure:" -ForegroundColor Cyan
 Write-Host "  PostgreSQL:             localhost:5432"
