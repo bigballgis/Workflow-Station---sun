@@ -56,7 +56,8 @@ data:
 
   # Features
   SWAGGER_ENABLED: "false"
-  CORS_ALLOWED_ORIGINS: "https://admin.company.com,https://portal.company.com,https://dev.company.com"
+  # 与 INGRESS_HOST 单域多路径一致；后者为旧版子域可选保留
+  CORS_ALLOWED_ORIGINS: "https://workflow.your-domain.com,https://admin.company.com,https://portal.company.com,https://dev.company.com"
 
   # Flowable
   FLOWABLE_SCHEMA_UPDATE: "false"

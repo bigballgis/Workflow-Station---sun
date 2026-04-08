@@ -56,7 +56,8 @@ data:
 
   # Features
   SWAGGER_ENABLED: "true"
-  CORS_ALLOWED_ORIGINS: "https://sit-admin.company.com,https://sit-portal.company.com,https://sit-dev.company.com"
+  # 与 INGRESS_HOST 单域多路径一致时浏览器源为该 https 主机；后者为旧版子域部署可选保留
+  CORS_ALLOWED_ORIGINS: "https://workflow-sit.your-domain.com,https://sit-admin.company.com,https://sit-portal.company.com,https://sit-dev.company.com"
 
   # Flowable
   FLOWABLE_SCHEMA_UPDATE: "true"

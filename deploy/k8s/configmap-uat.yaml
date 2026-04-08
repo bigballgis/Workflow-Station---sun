@@ -56,7 +56,8 @@ data:
 
   # Features
   SWAGGER_ENABLED: "false"
-  CORS_ALLOWED_ORIGINS: "https://uat-admin.company.com,https://uat-portal.company.com,https://uat-dev.company.com"
+  # 与 INGRESS_HOST 单域多路径一致；后者为旧版子域可选保留
+  CORS_ALLOWED_ORIGINS: "https://workflow-uat.your-domain.com,https://uat-admin.company.com,https://uat-portal.company.com,https://uat-dev.company.com"
 
   # Flowable
   FLOWABLE_SCHEMA_UPDATE: "false"

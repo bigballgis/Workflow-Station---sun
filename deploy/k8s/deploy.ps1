@@ -183,3 +183,8 @@ Write-Host "Verify:" -ForegroundColor Yellow
 Write-Host "  kubectl get pods -n $Namespace" -ForegroundColor Gray
 Write-Host "  kubectl get svc -n $Namespace" -ForegroundColor Gray
 Write-Host "  kubectl get ingress -n $Namespace" -ForegroundColor Gray
+Write-Host ""
+Write-Host "SSO / CORS (path-based ingress):" -ForegroundColor Yellow
+Write-Host "  ConfigMap SSO_REDIRECT_* must use https://<ingress-host>/admin|portal|dev/sso/callback" -ForegroundColor Gray
+Write-Host "  CORS_ALLOWED_ORIGINS should list that same https origin (see configmap-$Environment.yaml)" -ForegroundColor Gray
+Write-Host "  Secret SSO_INTERNAL_TOKEN must match across admin-center, user-portal, developer-workstation" -ForegroundColor Gray
