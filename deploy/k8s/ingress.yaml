@@ -10,6 +10,9 @@
 # Browser calls to APIs typically go: frontend nginx -> Kong (deploy/k8s/deployment-kong.yaml)
 # -> backend Services. This Ingress does not replace Kong; it exposes the SPAs.
 #
+# SSO: ConfigMap keys SSO_REDIRECT_* must use this host + paths /admin/sso/callback, /portal/sso/callback, /dev/sso/callback.
+# CORS_ALLOWED_ORIGINS on backends should include https://<same host> when browsers use this ingress.
+#
 # Replace "__INGRESS_HOST__" with your actual domain (handled by deploy.ps1 -IngressHost).
 # Namespace is replaced by deploy.ps1 based on -Environment flag.
 # =====================================================

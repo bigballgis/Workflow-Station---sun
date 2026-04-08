@@ -127,6 +127,11 @@ spec:
             secretKeyRef:
               name: workflow-platform-secrets
               key: ENCRYPTION_SECRET_KEY
+        - name: SSO_INTERNAL_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: workflow-platform-secrets
+              key: SSO_INTERNAL_TOKEN
         resources:
           requests:
             memory: "512Mi"

@@ -345,6 +345,7 @@ Wait-ForContainerHealth -ContainerName "platform-workflow-engine-dev" -DisplayNa
 Wait-ForContainerHealth -ContainerName "platform-admin-center-dev" -DisplayName "Admin Center"
 Wait-ForContainerHealth -ContainerName "platform-user-portal-dev" -DisplayName "User Portal"
 Wait-ForContainerHealth -ContainerName "platform-developer-workstation-dev" -DisplayName "Developer Workstation"
+Wait-ForContainerHealth -ContainerName "platform-edge-frontend-dev" -DisplayName "Edge frontend (single-origin)"
 
 Write-Host "  Current service status:" -ForegroundColor Cyan
 docker compose -f $ComposeFile --env-file $EnvFile ps
@@ -353,16 +354,37 @@ Write-Host "`n========================================" -ForegroundColor Green
 Write-Host " Deployment Complete!" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Green
 Write-Host ""
+
+$EdgePort = "3070"
+if (Test-Path $EnvFile) {
+    foreach ($line in Get-Content $EnvFile) {
+        if ($line -match '^\s*EDGE_FRONTEND_PORT\s*=\s*(\S+)') {
+            $EdgePort = $Matches[1]
+            break
+        }
+    }
+}
+
+Write-Host "Single-origin entry (SSO / daily use):" -ForegroundColor Yellow
+Write-Host "  Edge (all SPAs + API):  http://localhost:$EdgePort/"
+Write-Host "    Login:                http://localhost:$EdgePort/login/"
+Write-Host "    Admin:                http://localhost:$EdgePort/admin/"
+Write-Host "    Portal:               http://localhost:$EdgePort/portal/"
+Write-Host "    Developer:            http://localhost:$EdgePort/dev/"
+Write-Host "    API (via Kong):       http://localhost:$EdgePort/api/"
+Write-Host ""
+
 Write-Host "Backend:" -ForegroundColor Cyan
 Write-Host "  Workflow Engine:        http://localhost:8081"
 Write-Host "  Admin Center:           http://localhost:8090"
 Write-Host "  User Portal:            http://localhost:8082"
 Write-Host "  Developer Workstation:  http://localhost:8083"
 Write-Host ""
-Write-Host "Frontend:" -ForegroundColor Cyan
+Write-Host "Frontend (direct ports, optional / debugging):" -ForegroundColor DarkGray
 Write-Host "  Admin Center:           http://localhost:3000"
 Write-Host "  User Portal:            http://localhost:3001"
 Write-Host "  Developer Workstation:  http://localhost:3002"
+Write-Host "  Platform Login:         http://localhost:3010"
 Write-Host ""
 Write-Host "Infrastructure:" -ForegroundColor Cyan
 Write-Host "  PostgreSQL:             localhost:5432"

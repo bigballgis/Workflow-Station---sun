@@ -30,6 +30,11 @@ data:
   # Ingress (single domain + multi path)
   INGRESS_HOST: "workflow.your-domain.com"
 
+  # SSO — redirect URI prefixes (align with ingress /admin /portal /dev)
+  SSO_REDIRECT_ADMIN_PREFIX: "https://workflow.your-domain.com/admin/sso/callback"
+  SSO_REDIRECT_PORTAL_PREFIX: "https://workflow.your-domain.com/portal/sso/callback"
+  SSO_REDIRECT_DW_PREFIX: "https://workflow.your-domain.com/dev/sso/callback"
+
   # JWT (shorter expiration for production)
   JWT_EXPIRATION: "28800000"
   JWT_REFRESH_EXPIRATION: "86400000"

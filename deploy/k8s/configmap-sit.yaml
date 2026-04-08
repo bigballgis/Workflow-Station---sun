@@ -30,6 +30,11 @@ data:
   # Ingress (single domain + multi path)
   INGRESS_HOST: "workflow-sit.your-domain.com"
 
+  # SSO — redirect URI prefixes must match browser URL + Vite base (see ingress paths /admin /portal /dev)
+  SSO_REDIRECT_ADMIN_PREFIX: "https://workflow-sit.your-domain.com/admin/sso/callback"
+  SSO_REDIRECT_PORTAL_PREFIX: "https://workflow-sit.your-domain.com/portal/sso/callback"
+  SSO_REDIRECT_DW_PREFIX: "https://workflow-sit.your-domain.com/dev/sso/callback"
+
   # JWT (non-sensitive parts)
   JWT_EXPIRATION: "86400000"
   JWT_REFRESH_EXPIRATION: "604800000"

@@ -76,6 +76,21 @@ spec:
             configMapKeyRef:
               name: workflow-platform-config
               key: CORS_ALLOWED_ORIGINS
+        - name: SSO_REDIRECT_ADMIN_PREFIX
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: SSO_REDIRECT_ADMIN_PREFIX
+        - name: SSO_REDIRECT_PORTAL_PREFIX
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: SSO_REDIRECT_PORTAL_PREFIX
+        - name: SSO_REDIRECT_DW_PREFIX
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: SSO_REDIRECT_DW_PREFIX
         - name: SWAGGER_ENABLED
           valueFrom:
             configMapKeyRef:
@@ -122,6 +137,11 @@ spec:
             secretKeyRef:
               name: workflow-platform-secrets
               key: ENCRYPTION_SECRET_KEY
+        - name: SSO_INTERNAL_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: workflow-platform-secrets
+              key: SSO_INTERNAL_TOKEN
         resources:
           requests:
             memory: "512Mi"
