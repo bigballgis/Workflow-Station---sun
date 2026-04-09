@@ -42,9 +42,10 @@
         <el-table-column prop="processDefinitionName" :label="t('task.processName')" min-width="140" show-overflow-tooltip />
         <el-table-column prop="action" :label="t('task.action')" width="130">
           <template #default="{ row }">
-            <el-tag :type="getActionTagType(row.action)" size="small" style="white-space: nowrap;">
+            <el-tag v-if="!row.multiInstanceSubTask" :type="getActionTagType(row.action)" size="small" style="white-space: nowrap;">
               {{ t(`action.${row.action || 'completed'}`) }}
             </el-tag>
+            <span v-else>-</span>
           </template>
         </el-table-column>
         <el-table-column prop="createTime" :label="t('task.createTime')" width="160">

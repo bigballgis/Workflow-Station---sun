@@ -345,7 +345,8 @@ export default {
     withdrawSuccess: 'Withdrawn successfully',
     withdrawFailed: 'Withdraw failed',
     userWithdraw: 'User withdrawal',
-    serviceFallbackName: 'Service Task {index}'
+    serviceFallbackName: 'Service Task {index}',
+    close: 'Close'
   },
   diagram: {
     zoomIn: 'Zoom In',
@@ -872,6 +873,10 @@ export default {
     pleaseSelectUser: 'Please select a user',
     assignmentSuccess: 'Assignment successful',
     assignmentFailed: 'Assignment failed',
+    taskStatus: 'Status',
+    taskPending: 'Pending',
+    taskCompleted: 'Completed',
+    viewDetail: 'Detail',
   },
   snapshotDiff: {
     snapshotValue: 'Snapshot Value',

@@ -216,14 +216,15 @@ public class MultiInstanceDataResolver {
         List<Object> params = new ArrayList<>();
         
         for (Map.Entry<String, Object> entry : formData.entrySet()) {
-            // 跳过 id 和 row_version 字段
-            if ("id".equals(entry.getKey()) || "row_version".equals(entry.getKey())) {
+            if ("id".equals(entry.getKey()) || "row_version".equals(entry.getKey()) 
+                    || "task_status".equals(entry.getKey())) {
                 continue;
             }
             updateSql.append(entry.getKey()).append(" = ?, ");
             params.add(entry.getValue());
         }
         
+        updateSql.append("task_status = 'COMPLETED', ");
         updateSql.append("row_version = row_version + 1 ");
         updateSql.append("WHERE id = ? AND row_version = ?");
         params.add(subTableRowId);

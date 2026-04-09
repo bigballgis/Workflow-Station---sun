@@ -67,6 +67,8 @@ export interface TaskInfo {
   action?: string
   // 自定义操作按钮
   actions?: TaskActionInfo[]
+  /** 是否为多实例子任务 */
+  multiInstanceSubTask?: boolean
 }
 
 export interface PageResponse<T> {

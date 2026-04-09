@@ -345,7 +345,8 @@ export default {
     withdrawSuccess: '撤回成功',
     withdrawFailed: '撤回失败',
     userWithdraw: '用户主动撤回',
-    serviceFallbackName: '服务任务{index}'
+    serviceFallbackName: '服务任务{index}',
+    close: '关闭'
   },
   diagram: {
     zoomIn: '放大',
@@ -867,6 +868,10 @@ export default {
     pleaseSelectUser: '请选择用户',
     assignmentSuccess: '分配成功',
     assignmentFailed: '分配失败',
+    taskStatus: '状态',
+    taskPending: '待处理',
+    taskCompleted: '已完成',
+    viewDetail: '查看详情',
   },
   snapshotDiff: {
     snapshotValue: '快照值',

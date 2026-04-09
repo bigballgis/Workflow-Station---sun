@@ -2290,11 +2290,15 @@ public class TaskManagerComponent {
     /**
      * 处理多实例子任务完成时的数据回写
      * 调用 MultiInstanceDataResolver 将表单数据回写到子表
+     *
+     * 支持两种 variables 结构：
+     * 1. 嵌套模式 — variables 包含 "formData" / "rowVersion" 键
+     * 2. 扁平模式 — 门户将表单字段展开为 variables 顶层键（实际运行时路径）
      */
+    @SuppressWarnings("unchecked")
     private void handleMultiInstanceSubTaskCompletion(String taskId, Map<String, Object> variables, 
                                                       ExtendedTaskInfo extendedTaskInfo) {
         try {
-            // 从 variables 中提取表单数据和 rowVersion
             if (variables == null || variables.isEmpty()) {
                 log.warn("多实例子任务完成但未提供表单数据: taskId={}", taskId);
                 return;
@@ -2303,14 +2307,37 @@ public class TaskManagerComponent {
             Object formDataObj = variables.get("formData");
             Object rowVersionObj = variables.get("rowVersion");
             
-            if (formDataObj == null) {
-                log.warn("多实例子任务完成但未提供 formData: taskId={}", taskId);
-                return;
-            }
+            Map<String, Object> formData;
+            Long rowVersion;
             
-            Map<String, Object> formData = (Map<String, Object>) formDataObj;
-            Long rowVersion = rowVersionObj != null ? 
-                ((Number) rowVersionObj).longValue() : 1L;
+            if (formDataObj instanceof Map<?, ?>) {
+                formData = (Map<String, Object>) formDataObj;
+                rowVersion = rowVersionObj instanceof Number n ? n.longValue() : 1L;
+            } else {
+                // Portal merges request.getFormData() into variables as top-level keys.
+                // Resolve sub-table metadata to determine valid column names.
+                Map<String, Object> extProps = parseExtendedProps(extendedTaskInfo);
+                String subTableName = extProps.get("subTableName") != null
+                        ? String.valueOf(extProps.get("subTableName")) : null;
+                Long subTableRowId = toLong(extProps.get("subTableRowId"));
+                
+                if (subTableRowId == null || subTableName == null) {
+                    log.warn("多实例子任务缺少 subTableRowId/subTableName, 跳过回写: taskId={}", taskId);
+                    return;
+                }
+                
+                Map<String, Object> currentRow = multiInstanceDataResolver.loadSubTableRow(subTableName, subTableRowId);
+                rowVersion = currentRow.get("row_version") instanceof Number n ? n.longValue() : 0L;
+                
+                formData = new HashMap<>();
+                for (String col : currentRow.keySet()) {
+                    if (variables.containsKey(col)) {
+                        formData.put(col, variables.get(col));
+                    }
+                }
+                log.info("从 variables 顶层键提取子表列数据: taskId={}, columns={}, rowVersion={}",
+                        taskId, formData.keySet(), rowVersion);
+            }
             
             log.info("调用 MultiInstanceDataResolver 回写数据: taskId={}, rowVersion={}", 
                 taskId, rowVersion);
@@ -2324,16 +2351,32 @@ public class TaskManagerComponent {
             
         } catch (MultiInstanceDataResolver.OptimisticLockException e) {
             log.error("多实例子任务数据回写失败（乐观锁冲突）: taskId={}", taskId, e);
-            // 直接抛出乐观锁异常，不包装
             throw e;
         } catch (WorkflowValidationException e) {
-            // 直接抛出验证异常，不包装
             throw e;
         } catch (Exception e) {
             log.error("多实例子任务数据回写失败: taskId={}", taskId, e);
             throw new WorkflowBusinessException("MULTI_INSTANCE_DATA_WRITEBACK_ERROR", 
                 "多实例子任务数据回写失败: " + e.getMessage(), e);
         }
+    }
+    
+    private Map<String, Object> parseExtendedProps(ExtendedTaskInfo extendedTaskInfo) {
+        String json = extendedTaskInfo.getExtendedProperties();
+        if (json == null || json.isBlank()) return Collections.emptyMap();
+        try {
+            return new ObjectMapper().readValue(json, new TypeReference<Map<String, Object>>() {});
+        } catch (Exception e) {
+            log.warn("解析 extendedProperties 失败: taskId={}", extendedTaskInfo.getTaskId(), e);
+            return Collections.emptyMap();
+        }
+    }
+    
+    private static Long toLong(Object value) {
+        if (value == null) return null;
+        if (value instanceof Number n) return n.longValue();
+        try { return Long.parseLong(String.valueOf(value).trim()); }
+        catch (NumberFormatException e) { return null; }
     }
     
     /**

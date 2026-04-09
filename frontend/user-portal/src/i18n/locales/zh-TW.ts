@@ -333,7 +333,8 @@ export default {
     withdrawSuccess: '撤回成功',
     withdrawFailed: '撤回失敗',
     userWithdraw: '使用者主動撤回',
-    serviceFallbackName: '服務任務{index}'
+    serviceFallbackName: '服務任務{index}',
+    close: '關閉'
   },
   application: {
     title: '我的請求',
@@ -844,6 +845,10 @@ export default {
     selectUser: '選擇用戶',
     selectDepartment: '選擇部門',
     uploadFailed: '欄位"{field}"上傳失敗',
+    taskStatus: '狀態',
+    taskPending: '待處理',
+    taskCompleted: '已完成',
+    viewDetail: '查看詳情',
   },
   snapshotDiff: {
     snapshotValue: '快照值',

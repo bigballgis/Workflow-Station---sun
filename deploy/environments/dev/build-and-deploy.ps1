@@ -17,6 +17,7 @@
 # Valid -Service values:
 #   Backend:  workflow-engine, admin-center, user-portal, developer-workstation
 #   Frontend: admin-center-frontend, user-portal-frontend, developer-workstation-frontend, platform-login-frontend
+#   Edge:     edge-frontend (nginx single-origin — no Maven/npm; restarts container from compose)
 
 param(
     [string]$Service,
@@ -77,6 +78,10 @@ $ServiceRegistry = @{
         FrontendDir = "frontend/login"
         Container   = "platform-login-frontend-dev"
         Type        = "frontend"
+    }
+    "edge-frontend" = @{
+        Container = "platform-edge-frontend-dev"
+        Type      = "edge"
     }
 }
 
@@ -157,12 +162,15 @@ if ($Service) {
         docker compose -f $ComposeFile --env-file $EnvFile build --no-cache $Service
         if ($LASTEXITCODE -ne 0) { throw "Docker build failed for $Service" }
         docker compose -f $ComposeFile --env-file $EnvFile up -d --no-deps $Service
+    } elseif ($svc.Type -eq "edge") {
+        # 仅 nginx:alpine + 挂载 nginx-edge.conf；无镜像构建，改配置后 up 会按 compose 重建/重启
+        docker compose -f $ComposeFile --env-file $EnvFile up -d --no-deps --force-recreate $Service
     } else {
         docker compose -f $ComposeFile --env-file $EnvFile up -d --build --no-deps $Service
     }
     if ($LASTEXITCODE -ne 0) { throw "Failed to deploy $Service" }
 
-    if ($svc.Type -eq "backend") {
+    if ($svc.Type -eq "backend" -or $svc.Type -eq "edge") {
         Wait-ForContainerHealth -ContainerName $svc.Container -DisplayName $Service
     } else {
         Start-Sleep -Seconds 3

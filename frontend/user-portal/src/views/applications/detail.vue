@@ -103,6 +103,9 @@
                   v-model="binding.data"
                   :editable="false"
                   :assignee-field="hasAssignmentData(binding.data) ? 'assignee_user_id' : undefined"
+                  :show-task-status="hasTaskStatusData(binding.data)"
+                  :show-view-detail="hasSubTaskFormSchema && hasTaskStatusData(binding.data)"
+                  @viewDetail="(row: any) => openSubTaskDetailDialog(row)"
                 />
               </div>
             </template>
@@ -144,6 +147,9 @@
                 v-model="binding.data"
                 :editable="false"
                 :assignee-field="hasAssignmentData(binding.data) ? 'assignee_user_id' : undefined"
+                :show-task-status="hasTaskStatusData(binding.data)"
+                :show-view-detail="hasSubTaskFormSchema && hasTaskStatusData(binding.data)"
+                @viewDetail="(row: any) => openSubTaskDetailDialog(row)"
               />
             </div>
           </template>
@@ -169,6 +175,28 @@
           />
         </div>
       </div>
+
+      <!-- 子任务表单详情弹窗 -->
+      <el-dialog
+        v-model="subTaskDetailVisible"
+        :title="subTaskDetailTitle"
+        width="600px"
+        destroy-on-close
+      >
+        <div v-if="subTaskDetailFields.length > 0" class="form-container">
+          <FormRenderer
+            :fields="subTaskDetailFields"
+            :tabs="[]"
+            v-model="subTaskDetailData"
+            label-width="160px"
+            :readonly="true"
+          />
+        </div>
+        <el-empty v-else :description="t('applicationDetail.noFormData')" />
+        <template #footer>
+          <el-button @click="subTaskDetailVisible = false">{{ t('applicationDetail.close') }}</el-button>
+        </template>
+      </el-dialog>
 
       <!-- 第五部分：操作按钮 -->
       <div v-if="processInfo.status === 'RUNNING'" class="section action-section">
@@ -305,6 +333,38 @@ interface PreviousFormEntry {
 }
 const previousForms = ref<PreviousFormEntry[]>([])
 
+// 子任务表单详情弹窗
+const subTaskDetailVisible = ref(false)
+const subTaskDetailTitle = ref('')
+const subTaskDetailFields = ref<FormField[]>([])
+const subTaskDetailData = ref<Record<string, any>>({})
+const subTaskFormSchema = ref<any>(null)
+const subTaskFormId = ref<string | null>(null)
+
+const hasSubTaskFormSchema = computed(() => !!subTaskFormSchema.value)
+
+function hasTaskStatusData(rows: any[]): boolean {
+  if (!Array.isArray(rows) || rows.length === 0) return false
+  if (snapshotTaskName) {
+    return rows.some(r => r && r.task_status === 'COMPLETED')
+  }
+  return rows.some(r => r && r.task_status !== undefined)
+}
+
+function openSubTaskDetailDialog(row: any) {
+  if (!subTaskFormSchema.value) return
+  const schema = subTaskFormSchema.value
+  const fields = extractFieldsRecursive(
+    schema.rule && Array.isArray(schema.rule) ? schema.rule : (Array.isArray(schema) ? schema : [])
+  )
+  subTaskDetailFields.value = fields
+  subTaskDetailData.value = { ...row }
+  subTaskDetailTitle.value = row.assignee_display_name
+    ? `${subTaskFormSchema.value._formName || 'Participant Info Form'} — ${row.assignee_display_name}`
+    : subTaskFormSchema.value._formName || 'Participant Info Form'
+  subTaskDetailVisible.value = true
+}
+
 // 流转记录
 const historyRecords = ref<HistoryRecord[]>([])
 
@@ -429,9 +489,6 @@ const loadProcessDetail = async () => {
           for (const prevForm of previousForms.value) {
             filterByAssignee(prevForm.subTableBindings)
           }
-          // #region agent log
-          fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cfebf0'},body:JSON.stringify({sessionId:'cfebf0',hypothesisId:'MI-filter',location:'applications/detail.vue:miFilter',message:'MI sub-table filtering applied',data:{viewerId,initiatorId,snapshotTaskName,subTableSummary:subTableBindings.value.map((b: any)=>({name:b.tableName,rows:b.data?.length||0})),prevFormSubTableSummary:previousForms.value.map((pf: any)=>({name:pf.formName,bindings:pf.subTableBindings.map((b: any)=>({name:b.tableName,rows:b.data?.length||0}))}))},timestamp:Date.now()})}).catch(()=>{});
-          // #endregion
         }
       }
 
@@ -475,9 +532,6 @@ const loadProcessDetail = async () => {
     }
   } catch (error: any) {
     console.error('Failed to load process detail:', error)
-    // #region agent log
-    fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cfebf0'},body:JSON.stringify({sessionId:'cfebf0',hypothesisId:'A',location:'applications/detail.vue:loadProcessDetail:catch',message:'getProcessDetail failed',data:{processId,status:error.response?.status,errorMsg:error.response?.data?.message||error.message,url:error.config?.url},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     ElMessage.error(t('applicationDetail.loadFailed'))
   } finally {
     loading.value = false
@@ -606,6 +660,45 @@ const loadFunctionUnitContent = async (processKey: string) => {
       }
       subTableBindings.value = bindings
 
+      // Detect multi-instance subtask form.
+      // Primary: use BPMN (userTask with multiInstanceLoopCharacteristics) for accurate identification.
+      // Fallback: pick the form different from selectedForm (for Detail dialog only, not for filtering).
+      subTaskFormSchema.value = null
+      subTaskFormId.value = null
+      if (content.forms?.length > 1) {
+        let detected = false
+        if (content.processes?.length > 0) {
+          const miFormSourceId = findMiSubTaskFormIdFromBpmn(content.processes[0].data)
+          if (miFormSourceId) {
+            const taskForm = content.forms.find((f: any) => String(f.sourceId) === miFormSourceId)
+            if (taskForm) {
+              try {
+                const cfg = typeof taskForm.data === 'string' ? JSON.parse(taskForm.data) : (taskForm.data || {})
+                cfg._formName = taskForm.name
+                subTaskFormSchema.value = cfg
+                subTaskFormId.value = String(taskForm.id)
+                detected = true
+              } catch { /* ignore parse errors */ }
+            }
+          }
+        }
+        if (!detected) {
+          const taskForm = content.forms.find((f: any) =>
+            f.id !== selectedForm.id && f.name !== selectedForm.name
+          )
+          if (taskForm) {
+            try {
+              const cfg = typeof taskForm.data === 'string' ? JSON.parse(taskForm.data) : (taskForm.data || {})
+              cfg._formName = taskForm.name
+              subTaskFormSchema.value = cfg
+              // Do NOT set subTaskFormId here — the fallback detection can pick the
+              // wrong form (e.g. main form when selectedForm is already the subtask form),
+              // so we only use this for the Detail dialog, never for filtering previousForms.
+            } catch { /* ignore parse errors */ }
+          }
+        }
+      }
+
       // 收集当前节点之前所有节点绑定的不同表单（只读展示）；发起人看自己的申请时不展示「前置」块（避免申请单 + 审批表单双显）
       if (content.processes?.length > 0 && !useInitiatorFormOnly) {
         const prevFormIds = parseBpmnXmlAndGetPreviousFormIds(content.processes[0].data)
@@ -628,6 +721,15 @@ const loadFunctionUnitContent = async (processKey: string) => {
           }
           if (!prevForm || prevForm.id === selectedForm.id) continue
           if (collectedPrevForms.some(e => e.formId === String(prevForm.id))) continue
+          // Skip the subtask form — its content is shown via the Detail button
+          // in the participants sub-table. But never skip a form that has sub-table
+          // bindings (it carries the participants table needed for display).
+          if (subTaskFormId.value && String(prevForm.id) === subTaskFormId.value) {
+            const bindings = prevForm.tableBindings || []
+            if (!bindings.some((b: any) => b.bindingType !== 'PRIMARY')) {
+              continue
+            }
+          }
 
           const parsedFields: FormField[] = []
           const parsedTabs: FormTab[] = []
@@ -928,6 +1030,44 @@ const parseBpmnXmlAndGetPreviousFormIds = (xml: string): Array<{ formId: string 
     console.error('Failed to parse BPMN for previous formIds:', e)
   }
   return []
+}
+
+/** Find the formId (sourceId) of the MI subtask's userTask from BPMN XML. */
+const findMiSubTaskFormIdFromBpmn = (xml: string): string | null => {
+  if (!xml) return null
+  try {
+    const parser = new DOMParser()
+    const doc = parser.parseFromString(xml, 'text/xml')
+    const allElements = doc.getElementsByTagName('*')
+
+    for (let i = 0; i < allElements.length; i++) {
+      const el = allElements[i]
+      const localName = el.localName || el.nodeName.split(':').pop()
+      if (localName !== 'userTask') continue
+
+      const children = el.getElementsByTagName('*')
+      let isMultiInstance = false
+      for (let j = 0; j < children.length; j++) {
+        const childLocal = children[j].localName || children[j].nodeName.split(':').pop()
+        if (childLocal === 'multiInstanceLoopCharacteristics') {
+          isMultiInstance = true
+          break
+        }
+      }
+      if (!isMultiInstance) continue
+
+      for (let j = 0; j < children.length; j++) {
+        const p = children[j]
+        const ln = p.localName || p.nodeName.split(':').pop()
+        if ((ln === 'property' || ln === 'values') && p.getAttribute('name') === 'formId') {
+          return p.getAttribute('value')
+        }
+      }
+    }
+  } catch (e) {
+    console.error('Failed to find MI subtask formId from BPMN:', e)
+  }
+  return null
 }
 
 // 解析 BPMN XML
@@ -1454,9 +1594,6 @@ const loadProcessHistory = async () => {
     }
   } catch (error: any) {
     console.error('Failed to load process history:', error)
-    // #region agent log
-    fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cfebf0'},body:JSON.stringify({sessionId:'cfebf0',hypothesisId:'B',location:'applications/detail.vue:loadProcessHistory:catch',message:'getProcessHistory failed',data:{processId,status:error.response?.status,errorMsg:error.response?.data?.message||error.message},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     initHistoryRecords()
   }
 }

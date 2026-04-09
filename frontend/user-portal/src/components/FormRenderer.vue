@@ -8,6 +8,7 @@
       :label-position="labelPosition"
       :disabled="readonly"
       :size="size"
+      :validate-on-rule-change="false"
     >
       <!-- Tab 布局模式 -->
       <template v-if="hasTabs">
@@ -430,7 +431,9 @@ const initFormData = () => {
   isInternalUpdate = true
   formData.value = data
   setTimeout(() => { isInternalUpdate = false }, 0)
-  nextTick(() => formRef.value?.clearValidate())
+  // Element Plus AsyncValidator resolves as micro-tasks after nextTick;
+  // use setTimeout (macro-task) to guarantee clearValidate runs last.
+  setTimeout(() => formRef.value?.clearValidate(), 0)
 }
 
 // ---------------------------------------------------------------------------

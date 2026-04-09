@@ -113,4 +113,8 @@ public class TaskInfo {
 
     /** Flowable 候选组 ID */
     private List<String> candidateGroupIds;
+
+    /** 是否为多实例子任务（前端据此隐藏 Action 列和 Detail 链接） */
+    @Builder.Default
+    private boolean multiInstanceSubTask = false;
 }

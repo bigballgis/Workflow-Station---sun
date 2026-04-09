@@ -72,10 +72,51 @@
         </template>
       </el-table-column>
 
+      <!-- Task status column (multi-instance subtask completion) -->
+      <el-table-column v-if="showTaskStatus" :label="t('subTable.taskStatus')" width="120" align="center">
+        <template #default="scope">
+          <el-tag
+            :type="scope.row.task_status === 'COMPLETED' ? 'success' : 'warning'"
+            size="small"
+          >
+            {{ scope.row.task_status === 'COMPLETED' ? t('subTable.taskCompleted') : t('subTable.taskPending') }}
+          </el-tag>
+        </template>
+      </el-table-column>
+
       <el-table-column v-if="editable" :label="t('subTable.actions')" width="120">
         <template #default="scope">
           <el-button link type="primary" size="small" @click="openEditDialog(scope.$index)">{{ t('subTable.edit') }}</el-button>
           <el-button link type="danger" size="small" @click="deleteRow(scope.$index)">{{ t('subTable.delete') }}</el-button>
+        </template>
+      </el-table-column>
+
+      <!-- View subtask detail button (read-only mode) -->
+      <el-table-column v-if="showViewDetail" :label="t('subTable.actions')" width="100" align="center">
+        <template #default="scope">
+          <el-button
+            link
+            type="primary"
+            size="small"
+            :disabled="scope.row.task_status !== 'COMPLETED'"
+            @click="emit('viewDetail', scope.row, scope.$index)"
+          >
+            {{ t('subTable.viewDetail') }}
+          </el-button>
+        </template>
+      </el-table-column>
+
+      <!-- Fill form button for multi-instance subtask (todo mode) -->
+      <el-table-column v-if="showFillButton" :label="t('subTable.actions')" width="100" align="center">
+        <template #default="scope">
+          <el-button
+            link
+            type="primary"
+            size="small"
+            @click="emit('fillForm', scope.row, scope.$index)"
+          >
+            {{ t('subTable.add') }}
+          </el-button>
         </template>
       </el-table-column>
 
@@ -234,12 +275,19 @@ const props = defineProps<{
   enablePolling?: boolean
   pollingInterval?: number
   enableWebSocket?: boolean
+  // View detail props (application detail read-only mode)
+  showViewDetail?: boolean
+  showTaskStatus?: boolean
+  // Fill form button (todo detail for MI subtask)
+  showFillButton?: boolean
 }>()
 
 const emit = defineEmits<{
   (e: 'update:modelValue', val: any[]): void
   (e: 'assignmentChanged'): void
   (e: 'dataRefreshed', rows: any[]): void
+  (e: 'viewDetail', row: any, index: number): void
+  (e: 'fillForm', row: any, index: number): void
 }>()
 
 const rows = ref<any[]>([])

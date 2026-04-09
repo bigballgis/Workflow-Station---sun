@@ -154,21 +154,24 @@
           <span>{{ currentFormName || t('task.taskForm') }}</span>
         </div>
         <div class="section-content">
-          <div v-if="formFields.length > 0 || formTabs.length > 0" class="form-container">
-            <FormRenderer
-              :fields="formFields"
-              :tabs="formTabs"
-              :model-value="formData"
-              @update:model-value="val => formData = { ...formData, ...val }"
-              :label-width="formLabelWidth"
-              :readonly="formReadOnly"
-              :subTableBindings="subTableBindings"
-              :task-id="effectiveTaskId"
-              :allow-sub-table-assign="allowSubTableAssignForCurrentTask"
-              @update:subTableData="(id: number, rows: any[]) => { const b = subTableBindings.find(x => x.bindingId === id); if (b) b.data = rows }"
-            />
-          </div>
-          <el-empty v-else :description="t('task.noFormData')" />
+          <!-- MI subtask: form fields are shown via the 'Add' button dialog in the sub-table -->
+          <template v-if="!isMiSubTaskMode">
+            <div v-if="formFields.length > 0 || formTabs.length > 0" class="form-container">
+              <FormRenderer
+                :fields="formFields"
+                :tabs="formTabs"
+                :model-value="formData"
+                @update:model-value="val => formData = { ...formData, ...val }"
+                :label-width="formLabelWidth"
+                :readonly="formReadOnly"
+                :subTableBindings="subTableBindings"
+                :task-id="effectiveTaskId"
+                :allow-sub-table-assign="allowSubTableAssignForCurrentTask"
+                @update:subTableData="(id: number, rows: any[]) => { const b = subTableBindings.find(x => x.bindingId === id); if (b) b.data = rows }"
+              />
+            </div>
+            <el-empty v-else :description="t('task.noFormData')" />
+          </template>
 
           <!-- Sub-tables (SUB / RELATED bindings) -->
           <template v-if="bottomSubTableBindings.length > 0">
@@ -181,11 +184,13 @@
                 :title="binding.tableName"
                 :columns="binding.columns"
                 v-model="binding.data"
-                :editable="!formReadOnly && binding.bindingMode === 'EDITABLE'"
+                :editable="!isMiSubTaskMode && !formReadOnly && binding.bindingMode === 'EDITABLE'"
                 :task-id="effectiveTaskId"
                 :assignee-field="resolveAssigneeFieldForBinding(binding.columns, binding.tableName)"
                 :show-assign-button="allowSubTableAssignForCurrentTask && !!effectiveTaskId && !!resolveAssigneeFieldForBinding(binding.columns, binding.tableName)"
                 :can-assign="allowSubTableAssignForCurrentTask && !formReadOnly && binding.bindingMode === 'EDITABLE' && !!effectiveTaskId && !!resolveAssigneeFieldForBinding(binding.columns, binding.tableName)"
+                :show-fill-button="isMiSubTaskMode && !formReadOnly"
+                @fillForm="(row: any) => openMiFillDialog(row)"
               />
             </div>
           </template>
@@ -346,6 +351,31 @@
         <el-button @click="formPopupVisible = false">{{ t('common.cancel') }}</el-button>
         <el-button v-if="!formPopupReadOnly" type="primary" @click="submitFormPopup" :loading="submitting">
           {{ t('common.submit') }}
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- MI subtask fill-form dialog -->
+    <el-dialog
+      v-model="miFillDialogVisible"
+      :title="currentFormName || t('task.taskForm')"
+      width="600px"
+      destroy-on-close
+    >
+      <div v-if="formFields.length > 0 || formTabs.length > 0" class="form-popup-container">
+        <FormRenderer
+          :fields="formFields"
+          :tabs="formTabs"
+          v-model="miFillDialogData"
+          :label-width="formLabelWidth"
+          :readonly="formReadOnly"
+        />
+      </div>
+      <el-empty v-else :description="t('task.noFormData')" />
+      <template #footer>
+        <el-button @click="miFillDialogVisible = false">{{ t('common.cancel') }}</el-button>
+        <el-button v-if="!formReadOnly" type="primary" @click="saveMiFillDialog">
+          {{ t('common.confirm') }}
         </el-button>
       </template>
     </el-dialog>
@@ -512,6 +542,12 @@ const isMiSubTask = (taskData: any): boolean => {
   return !!(vars?._currentItem || vars?.currentItem)
 }
 
+const isMiSubTaskMode = ref(false)
+
+// MI subtask fill-form dialog state
+const miFillDialogVisible = ref(false)
+const miFillDialogData = ref<Record<string, any>>({})
+
 function getCurrentFormFieldKeys(): string[] {
   const keys = new Set<string>()
   formFields.value.forEach((f: any) => {
@@ -531,10 +567,6 @@ function isolateMiSubTaskData(taskData: any) {
 
   const myRowId = Number(currentItem.rowId)
   if (Number.isNaN(myRowId)) return
-
-  // #region agent log
-  console.warn('[DEBUG-6ce5f0] H2:isolateEntry', JSON.stringify({myRowId,currentItem,subTableBindingsCount:subTableBindings.value.length,subTableBindingNames:subTableBindings.value.map((b:any)=>b.tableName),subTableBindingRowCounts:subTableBindings.value.map((b:any)=>({name:b.tableName,rowCount:(b.data||[]).length}))}));
-  // #endregion
 
   // Multi-instance data isolation: each sub-task only sees its own participant row.
   for (const binding of subTableBindings.value) {
@@ -556,10 +588,6 @@ function isolateMiSubTaskData(taskData: any) {
     .flatMap((b: any) => b.data || [])
     .find((row: any) => Number(row?.id) === myRowId || Number(row?.rowId) === myRowId)
 
-  // #region agent log
-  console.warn('[DEBUG-6ce5f0] H3:myRow', JSON.stringify({myRowId,myRowFound:!!myRow,myRowKeys:myRow?Object.keys(myRow):[],myRowValues:myRow?Object.fromEntries(Object.entries(myRow).slice(0,20)):null}));
-  // #endregion
-
   const originalFormData = { ...formData.value }
   const cleanedFormData: Record<string, any> = {}
   const systemKeys = Object.keys(originalFormData).filter(
@@ -577,27 +605,13 @@ function isolateMiSubTaskData(taskData: any) {
   }
 
   const formKeys = getCurrentFormFieldKeys()
-  // #region agent log
-  const _fallbackKeys: string[] = [];
-  const _myRowKeys: string[] = [];
-  const _nullKeys: string[] = [];
-  // #endregion
   for (const key of formKeys) {
     if (myRow && Object.prototype.hasOwnProperty.call(myRow, key)) {
       cleanedFormData[key] = (myRow as Record<string, any>)[key]
-      // #region agent log
-      _myRowKeys.push(key);
-      // #endregion
     } else {
       cleanedFormData[key] = null
-      // #region agent log
-      _nullKeys.push(key);
-      // #endregion
     }
   }
-  // #region agent log
-  console.warn('[DEBUG-6ce5f0] H2+H3:fieldMapping', JSON.stringify({formKeys,myRowKeys:_myRowKeys,fallbackToProcessVarsKeys:_fallbackKeys,nullKeys:_nullKeys,fallbackValues:Object.fromEntries(_fallbackKeys.map(k=>[k,originalFormData[k]])),cleanedFormDataSample:Object.fromEntries(Object.entries(cleanedFormData).filter(([k])=>!k.startsWith('_')&&!k.startsWith('__')).slice(0,20))}));
-  // #endregion
 
   // Preserve previous form field values (readonly display of parent task data)
   const prevFormFieldKeys = new Set<string>()
@@ -614,6 +628,16 @@ function isolateMiSubTaskData(taskData: any) {
   }
 
   formData.value = cleanedFormData
+}
+
+function openMiFillDialog(row: any) {
+  miFillDialogData.value = { ...formData.value }
+  miFillDialogVisible.value = true
+}
+
+function saveMiFillDialog() {
+  formData.value = { ...formData.value, ...miFillDialogData.value }
+  miFillDialogVisible.value = false
 }
 
 /** 仅在「分配参与人」节点校验：子表每行已点分配（与后端 Task_AssignParticipants + buildParticipantsCollection 一致） */
@@ -726,9 +750,6 @@ const loadTaskDetail = async () => {
     const data = res.data || res
     if (data) {
       taskInfo.value = data
-      // #region agent log
-      console.warn('[DEBUG-6ce5f0] H1:loadTaskDetail', JSON.stringify({taskId,taskDefKey:data.taskDefinitionKey,variableKeys:Object.keys(data.variables||{}),_currentItem:data.variables?._currentItem,sampleFieldValues:Object.fromEntries(Object.entries(data.variables||{}).filter(([k])=>!k.startsWith('_')&&!k.startsWith('__')&&k!=='initiator'&&k!=='meeting_id'&&k!=='mainRecordId'&&k!=='approval_result'&&k!=='approved').slice(0,15))}));
-      // #endregion
       if (data.variables) formData.value = data.variables
       // 先加载流转历史，因为解析流程图需要用到历史记录
       await loadTaskHistory()
@@ -742,6 +763,7 @@ const loadTaskDetail = async () => {
       await loadProcessAndTaskFormData(data)
 
       if (isMiSubTask(data)) {
+        isMiSubTaskMode.value = true
         isolateMiSubTaskData(data)
       }
     }
@@ -1096,9 +1118,6 @@ const loadProcessAndTaskFormData = async (taskData: any) => {
             // 多实例子任务不直接合并流程变量字段值，避免不同子任务串值。
             // 行级数据会在 loadTaskDetail 中按 _currentItem.rowId 再合并。
             if (miSubTask) {
-              // #region agent log
-              console.warn('[DEBUG-6ce5f0] H1:miSkipFieldValues', JSON.stringify({taskId:currentTaskId,tfFieldValueKeys:Object.keys(tfData.fieldValues||{}),tfFieldValues:tfData.fieldValues}));
-              // #endregion
               return
             }
             // Task Form 的字段值来自流程变量
