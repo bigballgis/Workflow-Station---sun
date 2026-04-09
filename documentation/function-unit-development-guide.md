@@ -1,7 +1,8 @@
 # 功能单元 (Function Unit) 完整开发文档
 
-> 本文档面向 AI 助手和开发者，详尽描述功能单元模块的架构、实体关系、API、数据流、枚举、配置和约定。
-> 最后更新: 2026-03-24
+> 本文档面向 AI 助手和开发者，详尽描述功能单元模块的架构、实体关系、API、数据流、枚举、配置和约定。  
+> **关联**：工作区访问控制（拦截器 / 虚拟组）见仓库 [docs/developer-workstation-workspace-rbac.md](../docs/developer-workstation-workspace-rbac.md)；数据库 **init-scripts 与 Flyway** 及 **Dev Compose 关闭 Flyway** 见 [docs/schema-and-migration.md](../docs/schema-and-migration.md)。  
+> 最后更新: 2026-04-08（与 `backend/developer-workstation` 源码清点）
 
 ---
 
@@ -75,12 +76,12 @@ com.developer/
 ├── component/       # 业务组件接口
 │   └── impl/        # 业务组件实现
 ├── config/          # Spring 配置 (CORS, Jackson, Async, OpenAPI)
-├── controller/      # REST 控制器 (15 个, 另有 BaseController 基类)
-├── dto/             # 请求/响应 DTO (40+ 个)
-├── entity/          # JPA 实体 (18 个, 含 AI/安全/日志相关实体)
+├── controller/      # REST 控制器：22 个具体类 + BaseController（数量随迭代变化，以 controller/ 目录为准）
+├── dto/             # 请求/响应 DTO（约 48 个 Java 文件，含子包）
+├── entity/          # JPA 实体（约 26 个 Java 文件，含决策/关联表/部署任务等）
 ├── enums/           # 枚举类型 (14 个)
 ├── exception/       # 自定义异常
-├── repository/      # JPA Repository (20 个)
+├── repository/      # JPA Repository（约 29 个接口，见附录 A）
 ├── resilience/      # 弹性/重试逻辑
 ├── security/        # JWT 认证、权限注解
 ├── service/         # 服务接口
@@ -1442,10 +1443,12 @@ management:
 
 - 路径: `src/main/resources/db/migration/{module}/`
 - 命名: `V{版本号}__{描述}.sql`
-- 版本号分段:
+- 版本号分段（约定，非强制）:
   - admin-center: 200+
   - developer-workstation: 300+
-  - workflow-engine: 100+
+  - user-portal: 400+（示例：`V405__...`）
+- **本仓库** `workflow-engine-core` **未**使用 Flyway；引擎表结构依赖 `deploy/init-scripts` 等。
+- **Dev Docker Compose** 对 admin-center / user-portal / developer-workstation 常设置 **`SPRING_FLYWAY_ENABLED=false`**，与默认 `application.yml` 不同，见 [docs/schema-and-migration.md](../docs/schema-and-migration.md) §2.1。
 - `.sql` 文件必须使用 LF 换行 (`.gitattributes` 已配置)
 
 ### 核心表清单
@@ -1467,6 +1470,8 @@ management:
 | `dw_ai_documents` | AiDocument | AI 生成文档 |
 | `dw_operation_logs` | OperationLog | 操作日志 |
 | `dw_function_unit_access` | FunctionUnitAccess | 功能单元访问控制 |
+| `dw_deployment_jobs` | DeploymentJob | 一键部署到 admin-center 的异步任务状态（多实例/重启可恢复查询） |
+| `dw_function_unit_dev_groups` | FunctionUnitDevGroupAssignment | 功能单元与虚拟开发组映射（工作区 RBAC） |
 | `members` | Member | 成员管理 (非 dw_ 前缀) |
 | `sys_users` | User | 用户 (引用 platform-security 实体) |
 | `up_process_instance` | ProcessInstance | 流程实例 (跨模块引用) |
@@ -1481,27 +1486,19 @@ management:
 
 ### 控制器层
 
-以下 10 个控制器未继承 `BaseController`，手动构建 `ResponseEntity.ok(ApiResponse.success(...))` (总计 15 个控制器，5 个继承 BaseController):
+当前 `controller` 包共 **22 个具体控制器类** + **`BaseController` 抽象基类**（2026-04-08 清点）。其中 **7 个**继承 `BaseController`，**15 个**不继承；不继承者响应格式与异常处理各自实现，**并非**都是 `ApiResponse` 包装。
 
-| 控制器 | 风险 | 说明 |
-|--------|------|------|
-| FormDesignController | 低 | 手动构建响应 |
-| ProcessDesignController | 低 | 手动构建响应 |
-| IconLibraryController | 低 | 手动构建响应 |
-| ActionDesignController | 低 | 手动构建响应 |
-| ActionQueryController | 低 | 直接注入 Repository (跳过 Component 层) |
-| DeploymentController | 低 | 手动构建响应 |
-| ExportImportController | 低 | 手动构建响应 |
-| FileUploadController | 低 | 手动构建响应 |
-| AuthController | 低 | 手动构建响应 |
-| VersionController | 低 | 手动构建响应, 路径前缀不同 (`/api/function-units`) |
+**继承 `BaseController`（7）**  
+`FunctionUnitController`、`TableDesignController`、`TableRelationController`、`MemberController`、`DecisionDesignController`、`AiGenerationController`、`ResilienceController`。
 
-已继承 `BaseController` 的控制器:
-- FunctionUnitController ✅
-- TableDesignController ✅
-- AiGenerationController ✅
-- MemberController ✅
-- ResilienceController ✅
+**不继承 `BaseController`（15）**  
+`AuthController`、`AuthSsoExchangeController`、`FileUploadController`、`FormDesignController`、`FormStageBindingController`、`ProcessDesignController`、`ActionDesignController`、`ActionQueryController`、`DeploymentController`、`ExportImportController`、`IconLibraryController`、`LookupComponentController`、`RelationTableBindingController`、`RelationTableViewController`、`VersionController`。
+
+| 控制器 | 备注 |
+|--------|------|
+| `ActionQueryController` | 部分路径直接走 Repository / 查询，与典型 Component 分层不一致 |
+| `VersionController` | 路径前缀为 `/api/function-units`，与其余多数 `/function-units` 风格并存 |
+| `AuthController` / `AuthSsoExchangeController` | 认证与 SSO 兑换，响应模型与业务 API 不同 |
 
 ### 安全相关
 
@@ -1517,9 +1514,8 @@ management:
 
 ### 部署状态存储
 
-- `DeploymentComponentImpl` 使用内存 `ConcurrentHashMap` 存储部署状态和历史
-- 服务重启后部署状态丢失
-- 未来可迁移到 Redis 或数据库持久化
+- **已演进**：`DeploymentComponentImpl` 通过 **`DeploymentJobService`** 将部署任务写入表 **`dw_deployment_jobs`**（实体 `DeploymentJob`，Flyway **`V309__create_dw_deployment_jobs.sql`** 等），支持多实例与进程重启后仍可查进度/历史。
+- 若仍有少量仅内存的辅助状态（如 SSE、AI undo 快照等），见各 `*ServiceImpl` / `*ComponentImpl` 实现，**不等同于**部署任务主存储。
 
 ### VersionController 路径
 
@@ -1563,6 +1559,14 @@ management:
 | PermissionRepository | Permission | 权限查询 (实体来自 platform-security) |
 | OperationLogRepository | OperationLog | 操作日志 |
 | ProcessInstanceRepository | ProcessInstance | 流程实例 |
+| DeploymentJobRepository | DeploymentJob | 部署任务持久化 |
+| DecisionDefinitionRepository | DecisionDefinition | DMN / 决策定义 |
+| FormStageBindingRepository | FormStageBinding | 表单阶段绑定 |
+| FunctionUnitDevGroupAssignmentRepository | FunctionUnitDevGroupAssignment | 功能单元—虚拟开发组 |
+| TableRelationRepository | TableRelation | 表关系 |
+| RelationLookupConfigRepository | RelationLookupConfig | 关联表查找配置 |
+| RelationViewConfigRepository | RelationViewConfig | 关联视图配置 |
+| RelationViewFieldRepository | RelationViewField | 关联视图字段 |
 
 ---
 
@@ -1589,13 +1593,15 @@ management:
 frontend/developer-workstation/src/
 ├── api/
 │   ├── index.ts             # Axios 实例配置
-│   ├── functionUnit.ts      # 功能单元 API
-│   ├── aiGeneration.ts      # AI 生成 API
-│   ├── icon.ts              # 图标 API
-│   ├── auth.ts              # 认证 API
-│   ├── adminCenter.ts       # admin-center 跨服务调用
-│   ├── n8n.ts               # N8N 工作流 API
-│   └── user.ts              # 用户 API
+│   ├── functionUnit.ts    # 功能单元 API
+│   ├── aiGeneration.ts    # AI 生成 API
+│   ├── icon.ts            # 图标 API
+│   ├── auth.ts            # 认证 API
+│   ├── adminCenter.ts     # admin-center 跨服务调用
+│   ├── n8n.ts             # N8N 工作流 API
+│   ├── user.ts            # 用户 API
+│   ├── relationTable.ts   # 关联表（RelationTable）API
+│   └── decision.ts        # 决策（Decision）API
 ├── views/
 │   ├── function-unit/       # 功能单元列表/详情
 │   ├── icon/                # 图标管理

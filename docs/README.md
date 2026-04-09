@@ -23,6 +23,6 @@
 
 ## 其他成文资料
 
-- 功能单元（Function Unit）深度说明：[../documentation/function-unit-development-guide.md](../documentation/function-unit-development-guide.md)
+- 功能单元（Function Unit）深度说明（developer-workstation 权威长文，已与源码清点同步更新日期）：[../documentation/function-unit-development-guide.md](../documentation/function-unit-development-guide.md)
 - 部署目录速查：[../deploy/README.md](../deploy/README.md)
 - 设计规格示例：[../.kiro/specs/](../.kiro/specs/)
