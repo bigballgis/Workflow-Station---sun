@@ -2,7 +2,7 @@
 
 > 本文档面向 AI 助手和开发者，详尽描述功能单元模块的架构、实体关系、API、数据流、枚举、配置和约定。  
 > **关联**：工作区访问控制（拦截器 / 虚拟组）见仓库 [docs/developer-workstation-workspace-rbac.md](../docs/developer-workstation-workspace-rbac.md)；数据库 **init-scripts 与 Flyway** 及 **Dev Compose 关闭 Flyway** 见 [docs/schema-and-migration.md](../docs/schema-and-migration.md)。  
-> 最后更新: 2026-04-08（含 §7 API、§8–§10 与 `FunctionUnitComponentImpl` / 部署持久化对齐）
+> 最后更新: 2026-04-04（含 §7–§10、§11 AI、§12 导入导出、§13 安全与实现对齐）
 
 ---
 
@@ -1192,41 +1192,48 @@ admin-center:
 
 ### 概述
 
-AI 生成模块通过 N8N 工作流与大语言模型交互，支持通过对话式交互自动生成功能单元的表、表单、动作和流程定义。
+AI 生成模块通过 **N8N Webhook** 与大语言模型交互，在对话中辅助生成/调整功能单元的 **表、表单、动作、流程（BPMN）**；与 **决策（DMN）** 的落地配合见 `applyGeneratedData` / 设计器保存及 §8 校验链。
 
 ### 核心流程
 
 ```
-用户 → AiGenerationController → AiGenerationComponent → N8N Webhook (SSE)
+用户 → AiGenerationController → AiGenerationComponent → AiGenerationService
+                                                              │
+                    POST /ai-generation/chat/stream (SSE)      ▼
+                                              callN8NWebhook() → N8N (可配置 URL)
                                                               │
                                                               ▼
-                                                         LLM 处理
+                                                     SSE 流式返回 (含事件类型，如 phase_complete)
                                                               │
                                                               ▼
-                                                     SSE 流式返回结果
-                                                              │
-                                                              ▼
-                                                   用户确认 → applyGeneratedData()
+                              apply → POST /ai-generation/{functionUnitId}/apply
+                              撤销 → POST /ai-generation/{functionUnitId}/undo（apply 前 JSON 快照存内存，**约 30s** 过期，见 `AiGenerationComponentImpl`）
 ```
 
 ### 编辑锁机制
 
-- 同一功能单元同一时间只允许一个用户进行 AI 生成操作
-- 锁 TTL: 1800 秒 (30 分钟), 可配置
-- 支持强制解锁请求/响应流程 (通过 SSE 事件通知锁持有者)
-- 强制解锁超时: 60 秒
+- **`AiLockServiceImpl`**：通过 **`CacheService.setIfAbsent`** 实现 **分布式锁**（底层多为 Redis）；TTL、强制解锁窗口见 `ai-generation.lock.*`（默认 **1800s** / **60s**）。
+- 支持强制解锁 **请求/响应** 流程；具体 SSE 事件名以实现为准。
 
 ### AI 会话阶段
 
-1. `REQUIREMENTS` — 需求收集: AI 引导用户描述业务需求
-2. `DESIGN` — 设计方案: AI 生成设计文档
-3. `GENERATION` — 生成预览: AI 生成具体的表/表单/动作/流程定义，用户确认后应用
+枚举 **`AiPhase`**（与库表 `dw_ai_sessions.current_phase` 等一致）:
+
+1. `REQUIREMENTS` — 需求收集  
+2. `DESIGN` — 设计文档  
+3. `GENERATION` — 生成/预览与落库前确认  
+
+当 N8N 响应含 **`phaseComplete: true`** 时，`AiGenerationComponentImpl` 将会话阶段 **持久化** 推进到 `getNextPhase(当前请求 phase)`（`REQUIREMENTS`→`DESIGN`→`GENERATION`，`GENERATION` 后无下一阶），并发送 SSE **`phase_complete`**；事件 **data** 为 **当前请求阶段名**（即本轮标记完成的阶段，而非下一阶段）。
 
 ### AI 文档版本管理
 
-- 每个阶段的文档支持多版本存储
-- 用户可以手动编辑并保存文档
-- 文档类型: `REQUIREMENTS` (需求文档), `DESIGN` (设计文档)
+- 文档类型枚举 **`AiDocumentType`**: `REQUIREMENTS`, `DESIGN`（**无**单独的 GENERATION 文档类型；生成阶段内容多通过消息与 apply 落库）。
+- 多版本查询接口见 `AiGenerationService.getLatestDocuments`（按 phase/mode 组合返回最新内容）。
+
+### 其它端点提示
+
+- 事件订阅: `GET /ai-generation/events/{functionUnitId}` (SSE)。  
+- 若干 AI 接口支持可选请求头 **`X-User-Id`**（与 `DeveloperPermissionInterceptor` 的 fallback 一致）。
 
 ### 配置
 
@@ -1248,26 +1255,43 @@ ai-generation:
 
 ## 12. 导入导出
 
+实现类: **`ExportImportComponentImpl`**；导出前执行 **`functionUnitWorkspaceAccessService.assertCanAccess(..., VIEW)`**。
+
 ### 导出格式
 
-导出为 ZIP 包，包含:
-- `manifest.json` — 元数据 (ExportManifest)
-- 功能单元完整数据的 JSON 序列化
+ZIP 包典型结构（与 `exportFunctionUnit` 一致）:
+
+| 条目 | 说明 |
+|------|------|
+| `manifest.json` | `ExportManifest`：name, code, version, description, exportedAt, exportedBy, platformVersion, **components**（process / tables / forms / actions / **decisions** 文件路径列表）, icon 等 |
+| `process/process.bpmn` | BPMN（XML 为 **解码后**明文，非 Base64 包一层再导出） |
+| `tables/table_0.json`, … | 各表定义 JSON |
+| `forms/form_0.json`, … | 各表单定义 JSON |
+| `actions/action_0.json`, … | 各动作定义 JSON |
+| `decisions/decision_0.dmn`, … | DMN XML（无内容时可为空文件） |
+| `checksum.sha256` | 对上述条目内容的 **SHA-256** 清单（`hash  path` 行格式） |
+
+**两个 HTTP 导出入口**（均调用同一 `exportImportComponent.exportFunctionUnit`）:
+
+- `GET /export-import/function-units/{id}/export` — `Content-Disposition` 附件名为 `function-unit-{id}.zip`  
+- `GET /function-units/{id}/export` — `DeploymentController`，媒体类型 `APPLICATION_OCTET_STREAM`
 
 ### 导入策略
 
 | 策略 | 说明 |
 |------|------|
-| `SKIP` | 遇到冲突跳过 |
+| `SKIP` | 遇冲突跳过（**`ExportImportController` 默认 `conflictStrategy=SKIP`**） |
 | `OVERWRITE` | 覆盖已有数据 |
 
 ### 导入流程
 
 ```
-1. POST /export-import/validate — 校验包格式
-2. POST /export-import/check-conflicts — 检查冲突
-3. POST /export-import/import?conflictStrategy=OVERWRITE — 执行导入
+1. POST /export-import/validate   — multipart 字段名 file；校验包格式
+2. POST /export-import/check-conflicts — 同上，检查与现有库冲突
+3. POST /export-import/import?conflictStrategy=SKIP|OVERWRITE — multipart file
 ```
+
+**兼容**: 解析时 **优先 `manifest.json`**，兼容旧包 **`metadata.json`**（见 `importFunctionUnit` 实现）。
 
 ---
 
@@ -1283,7 +1307,10 @@ ai-generation:
 @RequireDeveloperPermission("FUNCTION_UNIT_DELETE")   // 删除
 @RequireDeveloperPermission("FUNCTION_UNIT_VIEW")     // 查看
 @RequireDeveloperPermission("FUNCTION_UNIT_PUBLISH")  // 发布/部署
+@RequireDeveloperPermission("FUNCTION_UNIT_ASSIGN_DEV_GROUP") // 维护功能单元—虚拟开发组
 ```
+
+并非所有控制器方法都带 `@RequireDeveloperPermission`（例如 **`DecisionDesignController`** 仅继承 `BaseController`），仍受 **Spring Security 过滤器链** 与 **`DeveloperPermissionInterceptor`** 等全局逻辑约束；以源码为准。
 
 ### 角色权限 (Spring Security @PreAuthorize)
 
@@ -1296,10 +1323,9 @@ ai-generation:
 
 ### JWT 认证
 
-- Token 通过 `Authorization: Bearer {token}` 传递
-- 用户 ID 通过 `X-User-Id` 请求头传递 (AI 模块使用)
-- JWT secret 通过环境变量 `JWT_SECRET` 注入
-- Token 有效期: 24 小时 (可配置)
+- Token 通过 `Authorization: Bearer {token}` 传递（生产路径常经 **Kong** 注入/校验，见部署文档）。
+- **`X-User-Id`**：在 **`AiGenerationController`** 多个方法上为可选头；**`DeveloperPermissionInterceptor`** 在无法从 SecurityContext 解析用户时亦可回退读取该头（测试与部分网关场景）。
+- JWT secret：`JWT_SECRET`；过期时间等见各环境 `application*.yml`（默认 24h 量级，非硬编码唯一值）。
 
 ### 乐观锁
 
