@@ -292,8 +292,7 @@ ai-logs/
 # =============================================================================
 # Project-specific exclusions
 # =============================================================================
-# AI-generated documentation noise
-docs/
+# 产品文档位于 docs/（已纳入版本库）；勿将临时 AI 输出写入该目录。
 
 # Extracted JAR build artifacts
 BOOT-INF/
@@ -313,3 +312,5 @@ frontend/developer-workstation/package-lock.json
 frontend/user-portal/package-lock.json
 *.MD
 !documentation/*.md
+# Windows 上 core.ignorecase 会导致 *.MD 误匹配小写 .md；显式放行版本库文档目录
+!docs/**/*.md

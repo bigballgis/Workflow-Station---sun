@@ -61,23 +61,30 @@
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                    Ingress (K8S) / Nginx                │
-│         admin.company.com  portal.company.com           │
+│         admin.company.com  portal.company.com         │
 │         dev.company.com    n8n.company.com              │
 └──────┬──────────────┬──────────────────┬────────────────┘
        │              │                  │
 ┌──────▼──────┐ ┌─────▼──────┐ ┌────────▼────────┐
-│ Admin Center│ │ User Portal│ │ Dev Workstation  │
-│  Frontend   │ │  Frontend  │ │   Frontend       │
-│  (nginx)    │ │  (nginx)   │ │   (nginx)        │
-└──────┬──────┘ └──┬────┬────┘ └────┬─────────────┘
-       │           │    │           │
+│ Admin Center│ │ User Portal│ │ Platform Login  │
+│  Frontend   │ │  Frontend  │ │  (nginx /login) │
+│  (nginx)    │ │  (nginx)   │ │                 │
+└──────┬──────┘ └──┬────┬────┘ └────────┬────────┘
+       │           │    │               │
+       └───────────┼────┼───────────────┘
+                   │    │
+            ┌──────▼────▼──────┐
+            │  Kong Gateway    │
+            │  /api → backends │
+            └──────┬───────────┘
+                   │
 ┌──────▼──────┐ ┌──▼────▼────┐ ┌───▼──────────────┐
 │ Admin Center│ │ User Portal│ │ Dev Workstation   │
-│  Backend    │ │  Backend   │ │   Backend         │
+│  Backend    │ │  Backend   │ │  Backend *        │
 └──────┬──────┘ └──┬────┬────┘ └───┬──────────────┘
        │           │    │           │
        └───────────┼────┼───────────┘
-                   │    │
+                   │
             ┌──────▼────▼──────┐
             │ Workflow Engine  │
             │   (Flowable)     │
@@ -90,23 +97,29 @@
 │(公司现有) │  │(K8S部署) │  │(K8S部署) │
 └─────────┘  └─────────┘  └──────────┘
 
+* K8S 默认清单不部署 developer-workstation；仅本地 Dev 或 optional YAML。
+
 PostgreSQL ── N8N (独立数据库 n8n_{env})
 ```
 
-### 2.3 需要部署的服务清单 (10 个)
+### 2.3 需要部署的服务清单（K8S 默认，`deploy.ps1`）
 
-| # | 服务 | 类型 | K8S 清单 | 镜像 |
-|---|------|------|---------|------|
+**不含** `developer-workstation`（设计器仅在本地 Dev Compose 或 `deployment-developer-workstation-optional.yaml` 中启用）。`deployment-frontend.yaml` 内包含 **admin-center-frontend** 与 **user-portal-frontend** 两个 Deployment。
+
+| # | 服务 | 类型 | K8S 清单 | 镜像 / 说明 |
+|---|------|------|---------|------------|
 | 1 | Redis | 基础设施 | `deployment-redis.yaml` | `redis:7.2-alpine` |
 | 2 | Kafka | 基础设施 | `deployment-kafka.yaml` | `confluentinc/cp-kafka:7.5.3` |
-| 3 | N8N | 基础设施 | `deployment-n8n.yaml` | `n8nio/n8n` (官方) |
-| 4 | workflow-engine | 后端 | `deployment-workflow-engine.yaml` | `workflow-engine-core` |
-| 5 | admin-center | 后端 | `deployment-admin-center.yaml` | `admin-center` |
-| 6 | user-portal | 后端 | `deployment-user-portal.yaml` | `user-portal` |
-| 7 | developer-workstation | 后端 | `deployment-developer-workstation.yaml` | `developer-workstation` |
-| 8 | admin-center-frontend | 前端 | `deployment-frontend.yaml` | `admin-center-frontend` |
-| 9 | user-portal-frontend | 前端 | `deployment-frontend.yaml` | `user-portal-frontend` |
-| 10 | developer-workstation-frontend | 前端 | `deployment-frontend.yaml` | `developer-workstation-frontend` |
+| 3 | N8N | 基础设施 | `deployment-n8n.yaml` | `n8nio/n8n`（官方） |
+| 4 | workflow-engine | 后端 | `deployment-workflow-engine.yaml` | 自建 JAR |
+| 5 | admin-center | 后端 | `deployment-admin-center.yaml` | 自建 JAR |
+| 6 | user-portal | 后端 | `deployment-user-portal.yaml` | 自建 JAR |
+| 7 | Kong | API 边缘 | `deployment-kong.yaml` | 见清单 |
+| 8 | admin-center-frontend | 前端 | `deployment-frontend.yaml` | `Dockerfile.local` 构建 |
+| 9 | user-portal-frontend | 前端 | `deployment-frontend.yaml` | 同上 |
+| 10 | platform-login-frontend | 前端（统一 `/login/`） | `deployment-platform-login-frontend.yaml` | `frontend/login` + `Dockerfile.local` |
+
+`deploy/scripts/build-and-push-k8s.ps1` 仍会构建 **developer-workstation** 与 **developer-workstation-frontend** 镜像，供本地或实验环境使用。
 
 ### 2.4 不部署的组件
 
@@ -150,6 +163,9 @@ kubectl           (SIT/UAT/PROD 部署需要)
 Workflow-Station---sun/
 ├── pom.xml                          # Maven 根 POM (多模块)
 ├── BUILD_GUIDE.md                   # 本文档
+├── README.md
+├── docs/                            # 产品文档索引（技术栈、架构、Schema/Flyway、RBAC 等）
+├── documentation/                   # 功能单元深度指南等
 ├── backend/
 │   ├── platform-common/             # 公共库 (jar, 不部署)
 │   ├── platform-cache/              # 缓存库 (jar, 不部署)
@@ -162,7 +178,8 @@ Workflow-Station---sun/
 ├── frontend/
 │   ├── admin-center/                # 管理后台前端 (Vue 3)
 │   ├── user-portal/                 # 用户门户前端 (Vue 3)
-│   └── developer-workstation/       # 开发者工作台前端 (Vue 3)
+│   ├── developer-workstation/       # 开发者工作台前端 (Vue 3)
+│   └── login/                       # 统一登录壳（K8S /login/，Dockerfile.local）
 ├── deploy/
 │   ├── environments/
 │   │   ├── dev/                     # 本地 Docker 开发环境
@@ -174,6 +191,7 @@ Workflow-Station---sun/
 │   │   └── prod/.env                # PROD 参考配置
 │   ├── scripts/
 │   │   └── build-and-push-k8s.ps1   # K8S 镜像构建推送脚本
+│   ├── kong/                        # Kong 声明式配置模板
 │   ├── k8s/                         # K8S 部署清单
 │   │   ├── configmap-{sit,uat,prod}.yaml
 │   │   ├── secret-{sit,uat,prod}.yaml
@@ -183,8 +201,10 @@ Workflow-Station---sun/
 │   │   ├── deployment-workflow-engine.yaml
 │   │   ├── deployment-admin-center.yaml
 │   │   ├── deployment-user-portal.yaml
-│   │   ├── deployment-developer-workstation.yaml
-│   │   ├── deployment-frontend.yaml     # 3 个前端合并
+│   │   ├── deployment-kong.yaml         # Kong Gateway
+│   │   ├── deployment-frontend.yaml     # admin + user-portal 前端
+│   │   ├── deployment-platform-login-frontend.yaml
+│   │   ├── deployment-developer-workstation-optional.yaml  # 勿用于生产租户 unless 允许
 │   │   ├── ingress.yaml
 │   │   ├── kustomization.yaml
 │   │   └── deploy.ps1               # K8S 一键部署脚本
@@ -291,6 +311,9 @@ Push-Location frontend/user-portal; npm install --prefer-offline --no-audit; npx
 
 # developer-workstation-frontend
 Push-Location frontend/developer-workstation; npm install --prefer-offline --no-audit; npx vite build; Pop-Location
+
+# platform-login-frontend（K8S 统一登录 /login/）
+Push-Location frontend/login; npm install --prefer-offline --no-audit; npx vite build; Pop-Location
 ```
 
 成功标志：每个前端输出 `✓ built in XXs`，`dist/` 目录生成。
@@ -309,16 +332,17 @@ docker build -t "${registry}/developer-workstation:${tag}" backend/developer-wor
 docker build -t "${registry}/user-portal:${tag}" backend/user-portal
 ```
 
-#### 前端镜像（3 个，必须使用 Dockerfile.local）
+#### 前端镜像（4 个，必须使用 Dockerfile.local）
 
 ```powershell
 # ⚠️ 注意 -f 参数指定 Dockerfile.local，不是默认的 Dockerfile
 docker build -f frontend/admin-center/Dockerfile.local -t "${registry}/admin-center-frontend:${tag}" frontend/admin-center
 docker build -f frontend/user-portal/Dockerfile.local -t "${registry}/user-portal-frontend:${tag}" frontend/user-portal
 docker build -f frontend/developer-workstation/Dockerfile.local -t "${registry}/developer-workstation-frontend:${tag}" frontend/developer-workstation
+docker build -f frontend/login/Dockerfile.local -t "${registry}/platform-login-frontend:${tag}" frontend/login
 ```
 
-验证（应看到 7 个镜像）：
+验证（自建业务镜像通常 **8** 个：4 后端 + 4 前端）：
 ```powershell
 docker images "${registry}/*" --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
 ```
@@ -553,15 +577,16 @@ cd deploy/k8s
 
 ### 9.4 部署顺序
 
-`deploy.ps1` 会按以下顺序部署：
+`deploy.ps1` 会按以下顺序部署（与 `deploy.ps1` 内 `$deploymentFiles` 一致）：
 
 1. 创建 Namespace
 2. 应用 ConfigMap
 3. 应用 Secret
-4. 部署基础设施：Redis → Kafka → N8N
-5. 部署后端：workflow-engine → admin-center → user-portal → developer-workstation
-6. 部署前端：admin-center-frontend → user-portal-frontend → developer-workstation-frontend
-7. 应用 Ingress
+4. 创建 Kong 声明式配置 ConfigMap（`deploy/kong/`）
+5. 依次 apply：`deployment-redis` → `deployment-kafka` → `deployment-n8n` → `deployment-workflow-engine` → `deployment-admin-center` → `deployment-user-portal` → `deployment-kong` → `deployment-frontend`（内含 admin + user-portal 前端）→ `deployment-platform-login-frontend` → `pdb.yaml`
+6. 应用 Ingress
+
+**说明**：默认清单 **不包含** `developer-workstation`；可选清单见 `deployment-developer-workstation-optional.yaml`。
 
 ### 9.5 验证部署
 
@@ -594,10 +619,12 @@ kubectl describe pod -l app=workflow-engine -n workflow-platform-{env}
 | `workflow-engine-service` | 8080 | 工作流引擎 |
 | `admin-center-service` | 8080 | 管理后台 API |
 | `user-portal-service` | 8080 | 用户门户 API |
-| `developer-workstation-service` | 8080 | 开发者工作台 API |
+| `developer-workstation-service` | 8080 | 开发者工作台 API（默认未部署） |
+| `kong-service` | 8000（proxy）、8001（admin） | Kong 代理入口 |
 | `admin-center-frontend-service` | 80 | 管理后台 UI |
 | `user-portal-frontend-service` | 80 | 用户门户 UI |
-| `developer-workstation-frontend-service` | 80 | 开发者工作台 UI |
+| `platform-login-frontend-service` | 80 | 统一登录 `/login/` |
+| `developer-workstation-frontend-service` | 80 | 开发者工作台 UI（默认未部署） |
 
 ### 9.7 镜像 Registry
 
@@ -609,7 +636,8 @@ harbor.company.com/workflow/
 ├── user-portal:latest                # 后端 (自建)
 ├── admin-center-frontend:latest      # 前端 (自建)
 ├── user-portal-frontend:latest       # 前端 (自建)
-└── developer-workstation-frontend:latest  # 前端 (自建)
+├── developer-workstation-frontend:latest  # 前端 (自建)
+└── platform-login-frontend:latest    # 统一登录 (自建)
 
 # 基础设施使用官方镜像（不推送到 Harbor）
 redis:7.2-alpine                      # Docker Hub
@@ -694,7 +722,7 @@ PostgreSQL(公司) ── N8N(K8S) (独立数据库 n8n_{env})
 
 | 变量名 | 使用者 | 说明 |
 |--------|--------|------|
-| `KONG_PROXY_URL` | 三个前端容器 | Kong 代理入口（HTTP），用于 `proxy_pass` 目标；**不再**在各前端使用 `ADMIN_CENTER_URL` / `USER_PORTAL_URL` / `DEVELOPER_WORKSTATION_URL` 直连后端 API |
+| `KONG_PROXY_URL` | 各前端 nginx 容器（含 `frontend/login`） | Kong 代理入口（HTTP），用于 `proxy_pass`；**不再**用 `*_BACKEND_URL` 直连后端 API |
 
 ### 12.4 N8N 相关环境变量
 
@@ -730,6 +758,7 @@ mvn clean package -DskipTests -pl backend/platform-common,backend/platform-cache
 Push-Location frontend/admin-center; npm install --prefer-offline --no-audit; npx vite build; Pop-Location
 Push-Location frontend/user-portal; npm install --prefer-offline --no-audit; npx vite build; Pop-Location
 Push-Location frontend/developer-workstation; npm install --prefer-offline --no-audit; npx vite build; Pop-Location
+Push-Location frontend/login; npm install --prefer-offline --no-audit; npx vite build; Pop-Location
 
 # 3. Docker 构建后端镜像
 $r = "harbor.company.com/workflow"; $t = "latest"
@@ -742,8 +771,9 @@ docker build -t "${r}/user-portal:${t}" backend/user-portal
 docker build -f frontend/admin-center/Dockerfile.local -t "${r}/admin-center-frontend:${t}" frontend/admin-center
 docker build -f frontend/user-portal/Dockerfile.local -t "${r}/user-portal-frontend:${t}" frontend/user-portal
 docker build -f frontend/developer-workstation/Dockerfile.local -t "${r}/developer-workstation-frontend:${t}" frontend/developer-workstation
+docker build -f frontend/login/Dockerfile.local -t "${r}/platform-login-frontend:${t}" frontend/login
 
-# 5. 验证（应看到 7 个镜像）
+# 5. 验证（自建镜像通常 8 个：4 后端 + 4 前端）
 docker images "${r}/*" --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
 
 # 6. 推送到 Harbor
@@ -755,6 +785,7 @@ docker push "${r}/user-portal:${t}"
 docker push "${r}/admin-center-frontend:${t}"
 docker push "${r}/user-portal-frontend:${t}"
 docker push "${r}/developer-workstation-frontend:${t}"
+docker push "${r}/platform-login-frontend:${t}"
 
 # 7. 部署到 K8S
 cd deploy/k8s

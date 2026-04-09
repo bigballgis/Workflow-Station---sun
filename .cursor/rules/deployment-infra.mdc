@@ -19,7 +19,7 @@ alwaysApply: false
 
 ## nginx envsubst 陷阱
 
-三个前端的 `docker-entrypoint.sh` 已统一为 **`KONG_PROXY_URL`**（代理 `/api/*` 至 Kong）。示例：
+各前端应用（`admin-center` / `user-portal` / `developer-workstation` / `login`）的 `docker-entrypoint.sh` 已统一为 **`KONG_PROXY_URL`**（代理 `/api/*` 至 Kong）。示例：
 
 ```sh
 # 正确 — 显式指定变量列表（与仓库 frontend/*/docker-entrypoint.sh 一致）

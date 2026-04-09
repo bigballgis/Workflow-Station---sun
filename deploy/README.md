@@ -12,12 +12,12 @@
 └──────┬──────────────┬──────────────────┬────────────────┘
        │              │                  │
 ┌──────▼──────┐ ┌─────▼──────┐ ┌────────▼────────┐
-│ Admin Center│ │ User Portal│ │ Dev Workstation  │
-│  Frontend   │ │  Frontend  │ │   Frontend       │
-│  (nginx)    │ │  (nginx)   │ │   (nginx)        │
-└──────┬──────┘ └──┬────┬────┘ └────┬─────────────┘
-       │           │    │           │
-       └───────────┼────┼───────────┘
+│ Admin Center│ │ User Portal│ │ Platform Login  │
+│  Frontend   │ │  Frontend  │ │  (nginx /login) │
+│  (nginx)    │ │  (nginx)   │ │                 │
+└──────┬──────┘ └──┬────┬────┘ └────────┬────────┘
+       │           │    │               │
+       └───────────┼────┼───────────────┘
                    │    │
             ┌──────▼────▼──────┐
             │   Kong Gateway   │
@@ -27,12 +27,12 @@
        ┌───────────┼────┬───────────┐
        │           │    │           │
 ┌──────▼──────┐ ┌──▼────▼────┐ ┌───▼──────────────┐
-│ Admin Center│ │ User Portal│ │ Dev Workstation   │
+│ Admin Center│ │ User Portal│ │ Dev Workstation * │
 │  Backend    │ │  Backend   │ │   Backend         │
 └──────┬──────┘ └──┬────┬────┘ └───┬──────────────┘
        │           │    │           │
        └───────────┼────┼───────────┘
-                   │    │
+                   │
             ┌──────▼────▼──────┐
             │ Workflow Engine  │
             │   (Flowable)     │
@@ -44,23 +44,30 @@
 │PostgreSQL│  │  Redis  │  │  Kafka   │
 │(公司现有) │  │(K8S部署) │  │(K8S部署) │
 └─────────┘  └─────────┘  └──────────┘
+
+* 默认 K8S 清单不部署 developer-workstation；见 optional YAML。
 ```
 
-## Services (11 deployable)
+## Services（K8S 默认，`deploy.ps1`）
+
+共 **10 个 Deployment**（另含 `pdb.yaml`）：**不含** `developer-workstation`。`deployment-frontend.yaml` 内含 admin-center 与 user-portal **两个**前端 Deployment。
 
 | Service | Type | K8S Manifest | Healthcheck |
 |---------|------|-------------|-------------|
 | redis | Infrastructure | `deployment-redis.yaml` | redis-cli ping |
 | kafka | Infrastructure | `deployment-kafka.yaml` | broker-api-versions |
 | n8n | Infrastructure | `deployment-n8n.yaml` | `/healthz` |
-| kong | Gateway | `deployment-kong.yaml` | `/status` |
 | workflow-engine | Backend | `deployment-workflow-engine.yaml` | `/actuator/health` |
 | admin-center | Backend | `deployment-admin-center.yaml` | `/api/v1/admin/actuator/health` |
 | user-portal | Backend | `deployment-user-portal.yaml` | `/api/portal/actuator/health` |
-| developer-workstation | Backend | `deployment-developer-workstation.yaml` | `/api/v1/actuator/health` |
-| admin-center-frontend | Frontend | `deployment-frontend.yaml` | `/` |
-| user-portal-frontend | Frontend | `deployment-frontend.yaml` | `/` |
-| developer-workstation-frontend | Frontend | `deployment-frontend.yaml` | `/` |
+| kong | Gateway | `deployment-kong.yaml` | `/status` |
+| admin-center-frontend | Frontend | `deployment-frontend.yaml` | `/admin/` |
+| user-portal-frontend | Frontend | `deployment-frontend.yaml` | `/portal/`（以探针为准） |
+| platform-login-frontend | Frontend | `deployment-platform-login-frontend.yaml` | `/login/` |
+
+**可选（勿用于生产租户 unless 政策允许）**：`deployment-developer-workstation-optional.yaml`、`ingress-developer-workstation-optional.yaml`。
+
+镜像构建脚本仍会打 **developer-workstation** 与 **developer-workstation-frontend** 镜像，供本地 Dev Compose 使用。
 
 ## NOT Deployed
 
@@ -116,7 +123,7 @@ cd deploy/init-scripts
 cd deploy/scripts
 .\build-and-push-k8s.ps1 -Registry harbor.company.com/workflow -Tag v1.0.0 -SkipTests
 
-# 4. Deploy (Redis + Kafka + N8N + Kong + 后端 + 前端，共 11 个服务)
+# 4. Deploy（Redis + Kafka + N8N + 三后端 + Kong + 三前端 Deployment + login，共 10 个 Deployment；见上文清单）
 cd deploy/k8s
 .\deploy.ps1 -Environment sit -Tag v1.0.0
 ```
@@ -155,9 +162,10 @@ deploy/
 │   ├── deployment-workflow-engine.yaml
 │   ├── deployment-admin-center.yaml
 │   ├── deployment-user-portal.yaml
-│   ├── deployment-developer-workstation.yaml
 │   ├── deployment-kong.yaml        # Kong Gateway
-│   ├── deployment-frontend.yaml    # 3 frontends combined
+│   ├── deployment-frontend.yaml    # admin + user-portal 前端
+│   ├── deployment-platform-login-frontend.yaml
+│   ├── deployment-developer-workstation-optional.yaml  # 勿默认上生产
 │   ├── ingress.yaml
 │   ├── kustomization.yaml
 │   └── deploy.ps1                  # K8S deployment script

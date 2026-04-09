@@ -49,6 +49,6 @@ platform-common ◄── platform-cache
 - 分层: `Controller → Component(接口) → ComponentImpl → Service / Repository`
 - 统一响应: `ApiResponse<T>` 包装所有接口返回
 - 表名前缀: `dw_`(developer), `ac_`(admin), `up_`(portal), `we_`(workflow)
-- Schema 管理: `deploy/init-scripts/` SQL 脚本，非 Flyway
+- Schema 管理: **双轨** — 新环境/全量基线以 `deploy/init-scripts/` 为主；**admin-center / user-portal / developer-workstation** 在运行时由 **Flyway** 执行各自 `src/main/resources/db/migration/{module}/`；新增表字段需同时考虑 init 脚本（新库）与 Flyway 版本脚本（已有库）
 - 环境变量: `ENCRYPTION_SECRET_KEY`（非 `ENCRYPTION_KEY`）
 - API 边缘由 **Kong Gateway** 提供；各前端 nginx 可按环境直连后端或经 Kong

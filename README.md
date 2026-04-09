@@ -76,32 +76,51 @@ Enterprise low-code workflow platform for HSBC, providing visual process design,
 
 ### Local Development
 
-1. Start infrastructure services:
-```bash
-docker-compose up -d postgres redis kafka zookeeper
+**推荐**：使用开发 Compose 一键构建并启动（含 PostgreSQL、Redis、Kafka、Kong、四后端、三业务前端 + 可选统一登录等），见 `BUILD_GUIDE.md` §8。
+
+```powershell
+cd deploy/environments/dev
+.\build-and-deploy.ps1
 ```
 
-2. Build backend:
+**仅基础设施（自行本地跑 JAR / Vite）**：
+
+```powershell
+cd deploy/environments/dev
+docker compose -f docker-compose.dev.yml --env-file .env up -d postgres redis kafka n8n
+```
+
+（Kafka 为 KRaft 模式，**不需要** ZooKeeper。）
+
+后端构建：
+
 ```bash
 mvn clean install -DskipTests
 ```
 
-3. Run services (each in its own terminal; ports depend on `application.yml`):
+各服务在独立终端启动（端口以各模块 `application.yml` 为准），例如：
+
 ```bash
 cd backend/workflow-engine-core && mvn spring-boot:run
 cd backend/admin-center && mvn spring-boot:run
-# … other services as needed
 ```
 
-4. Start frontend:
+前端（任选一应用）：
+
 ```bash
 cd frontend/user-portal && npm install && npm run dev
 ```
 
 ### Full Stack with Docker
-```bash
-docker-compose --profile full up -d
+
+完整栈请使用 **`deploy/environments/dev/docker-compose.dev.yml`**（勿使用已移除的仓库根目录 `docker-compose --profile full` 旧命令）。见上文 `.\build-and-deploy.ps1` 或：
+
+```powershell
+cd deploy/environments/dev
+docker compose -f docker-compose.dev.yml --env-file .env up -d --build
 ```
+
+（需已按 Compose 文件头说明在宿主机完成 `mvn package` / `npm run build`。）
 
 ## Configuration
 
@@ -146,9 +165,11 @@ cd deploy/k8s
 
 - [BUILD_GUIDE.md](BUILD_GUIDE.md) — 构建与多环境部署
 - [deploy/README.md](deploy/README.md) — `deploy/` 目录说明
+- [docs/README.md](docs/README.md) — **文档索引**（技术栈、架构、Schema/Flyway、Demo 约定、门户/设计器 RBAC）
 - [技术栈（中文）](docs/tech-stack.md) · [Tech stack (EN)](docs/tech-stack-en.md)
-- [架构示意](docs/architecture-diagram.md)
-- 设计规格目录：[.kiro/specs/](.kiro/specs/)（示例：Kong 集成 `kong-gateway-integration`）
+- [架构示意](docs/architecture-diagram.md) · [Schema 与迁移](docs/schema-and-migration.md) · [Demo 数据约定](docs/demo-data-requirements.md)
+- [功能单元开发指南](documentation/function-unit-development-guide.md)（深度）
+- 设计规格目录：[.kiro/specs/](.kiro/specs/)
 
 ## License
 
