@@ -2,7 +2,7 @@
 
 > 本文档面向 AI 助手和开发者，详尽描述功能单元模块的架构、实体关系、API、数据流、枚举、配置和约定。  
 > **关联**：工作区访问控制（拦截器 / 虚拟组）见仓库 [docs/developer-workstation-workspace-rbac.md](../docs/developer-workstation-workspace-rbac.md)；数据库 **init-scripts 与 Flyway** 及 **Dev Compose 关闭 Flyway** 见 [docs/schema-and-migration.md](../docs/schema-and-migration.md)。  
-> 最后更新: 2026-04-08（含包规模、§7 API 与 Controller 映射清点）
+> 最后更新: 2026-04-08（含 §7 API、§8–§10 与 `FunctionUnitComponentImpl` / 部署持久化对齐）
 
 ---
 
@@ -899,13 +899,13 @@ FunctionUnitComponentImpl.create()
     │ @PreAuthorize("hasAnyRole('TECH_LEAD', 'TEAM_LEAD')")
     │
     ├── 1. 检查名称唯一性 (existsByName)
-    │   └── 重复 → throw BusinessException("CONFLICT_NAME_EXISTS")
+    │   └── 重复 → throw DeveloperBusinessException("CONFLICT_NAME_EXISTS", ...)
     │
     ├── 2. 生成唯一编码 generateUniqueCode()
     │   └── 格式: fu-{yyyyMMdd}-{6位随机hex}
     │
     ├── 3. 构建 FunctionUnit 实体
-    │   └── status = DRAFT, version = "1.0.0"
+    │   └── status = DRAFT；`version` 使用实体 `@Builder.Default`（默认 `"1.0.0"`）；`currentVersion` 可为 null
     │
     ├── 4. 如果有 iconId → 查找 Icon 实体
     │   └── 不存在 → throw ResourceNotFoundException
@@ -924,13 +924,13 @@ FunctionUnitComponentImpl.publish(id, changeLog)
     │ @Transactional
     │ @PreAuthorize("hasAnyRole('TECH_LEAD', 'TEAM_LEAD', 'DEVELOPER')")
     │
+    ├── 0. functionUnitWorkspaceAccessService.assertCanAccess(id, MODIFY)
+    │
     ├── 1. getById(id) → 加载功能单元
     │
-    ├── 2. validate(id) → 完整性校验
-    │   ├── 检查是否有 ProcessDefinition
-    │   ├── 检查是否有 MAIN 类型的 TableDefinition
-    │   └── 检查是否有 MAIN 类型的 FormDefinition
-    │   └── 校验失败 → throw BusinessException("BIZ_INVALID_FUNCTION_UNIT")
+    ├── 2. validate(id) → 完整性校验（见 §8.4）
+    │   └── 若 validationResult.isValid() == false（存在 **error**）→ throw DeveloperBusinessException("BIZ_INVALID_FUNCTION_UNIT")
+    │   （**warning 不**使 valid=false，不单独阻止发布）
     │
     ├── 3. calculateNextVersion(currentVersion)
     │   └── null → "1.0.0", "1.0.0" → "1.0.1", ...
@@ -939,10 +939,11 @@ FunctionUnitComponentImpl.publish(id, changeLog)
     │   └── 已存在 → 跳过快照创建 (上次部署中途失败的恢复)
     │
     ├── 5. createSnapshot(functionUnit) → byte[]
-    │   ├── 序列化: name, code, description, status, processXml
+    │   ├── 序列化: name, code, description, status, processXml（BPMN）
     │   ├── 序列化: tableDefinitions[] (含 fieldDefinitions[])
-    │   ├── 序列化: formDefinitions[] (含 configJson, boundTableName)
-    │   └── 序列化: actionDefinitions[] (含 configJson)
+    │   ├── 序列化: formDefinitions[] (含 formType, configJson, boundTableName 等)
+    │   ├── 序列化: actionDefinitions[] (含 configJson)
+    │   └── 序列化: decisionDefinitions[] (decisionKey, decisionName, dmnXml, hitPolicy, description)
     │
     ├── 6. 创建 Version 实体并保存
     │   └── versionNumber, changeLog, snapshotData, publishedBy
@@ -961,6 +962,8 @@ POST /function-units/{id}/clone?newName=xxx
 FunctionUnitComponentImpl.clone(id, newName)
     │ @Transactional
     │ @PreAuthorize("hasAnyRole('TECH_LEAD', 'TEAM_LEAD')")
+    │
+    ├── 0. functionUnitWorkspaceAccessService.assertCanAccess(id, MODIFY)
     │
     ├── 1. 检查新名称唯一性
     │
@@ -984,7 +987,9 @@ FunctionUnitComponentImpl.clone(id, newName)
     │   └── 通过 tableMapping 映射每个 binding 的 table
     │
     └── 8. 克隆 ActionDefinitions
-         └── 深拷贝 configJson (new HashMap<>)
+         └── 深拷贝 configJson 等字段
+    │
+    └── 9. 克隆 DecisionDefinitions（`cloneDecision`：decisionKey / DMN XML 等）
 ```
 
 ### 8.4 完整性校验
@@ -996,17 +1001,45 @@ GET /function-units/{id}/validate
 FunctionUnitComponentImpl.validate(id)
     │ @Transactional(readOnly = true)
     │
+    ├── 0. functionUnitWorkspaceAccessService.assertCanAccess(id, VIEW)
+    │
     ├── 检查 ProcessDefinition 是否存在
-    │   └── 缺失 → warning "MISSING_PROCESS"
+    │   └── 缺失 → **warning** `MISSING_PROCESS`
     │
-    ├── 检查是否有 MAIN 类型的 TableDefinition
-    │   └── 缺失 → warning "MISSING_MAIN_TABLE"
+    ├── 检查是否存在 **TableType.MAIN** 的 TableDefinition
+    │   └── 缺失 → **warning** `MISSING_MAIN_TABLE`
     │
-    └── 检查是否有 MAIN 类型的 FormDefinition
-        └── 缺失 → warning "MISSING_MAIN_FORM"
-    
+    ├── 检查是否存在 **FormType.PROCESS** 的 FormDefinition（流程表单）
+    │   └── 缺失 → **warning** `MISSING_PROCESS_FORM`（非旧文档中的 MAIN 表单）
+    │
+    ├── validateBpmnDmnCrossReferences（当同时存在 BPMN 与 DecisionDefinition 时）
+    │   ├── BPMN 中 DMN 服务任务引用的 key 须在决策定义中存在 → 否则 **error**（如 `INVALID_DECISION_REFERENCE` / `EMPTY_DMN_XML`）
+    │   └── 已定义但未被 BPMN 引用的决策 → **warning** `UNREFERENCED_DECISION`
+    │
+    └── validateDecisionTableActions（`ActionType.DECISION_TABLE`）
+        └── config_json 缺字段或 decisionKey 不存在 / DMN 为空 → **error**（如 `MISSING_DECISION_KEY`、`INVALID_DECISION_REFERENCE` 等）
+
     返回 ValidationResult { valid, errors[], warnings[] }
+    （仅 **errors** 会令 valid=false；**warnings** 单独存在时仍可 valid=true，但发布前仍会再跑同一套 validate 并拒绝 valid=false）
 ```
+
+### 8.5 虚拟开发组分配（工作区）
+
+```
+PUT /function-units/{id}/dev-groups  + body DevGroupAssignmentRequest { virtualGroupIds }
+    │
+    ▼
+FunctionUnitComponentImpl.replaceDevGroupAssignments
+    ├── assertCanAccess(id, ASSIGN_DEV_GROUPS)
+    ├── 删除该功能单元既有 dw_function_unit_dev_groups 行
+    └── 按请求重建 FunctionUnitDevGroupAssignment（createdBy / createdAt 审计）
+
+GET /function-units/{id}/dev-groups
+    ├── assertCanAccess(id, VIEW)
+    └── 返回 virtualGroupId 列表
+```
+
+详见 [docs/developer-workstation-workspace-rbac.md](../docs/developer-workstation-workspace-rbac.md)。
 
 ---
 
@@ -1058,10 +1091,19 @@ FunctionUnitComponentImpl.validate(id)
   "formDefinitions": [
     {
       "formName": "报销申请表",
-      "formType": "MAIN",
+      "formType": "PROCESS",
       "configJson": { /* form-create 配置 */ },
       "description": "...",
       "boundTableName": "expense_main"
+    }
+  ],
+  "decisionDefinitions": [
+    {
+      "decisionKey": "loan_approval_rules",
+      "decisionName": "Loan approval",
+      "dmnXml": "<definitions ...>...</definitions>",
+      "hitPolicy": "FIRST",
+      "description": "..."
     }
   ],
   "actionDefinitions": [
@@ -1084,6 +1126,7 @@ FunctionUnitComponentImpl.validate(id)
 - 表定义变更 (新增/修改/删除)
 - 表单定义变更
 - 流程定义变更
+- （若 UI 已接入）**决策（DMN）**定义变更
 
 ---
 
@@ -1123,7 +1166,7 @@ DeploymentComponentImpl.deployToAdminCenter(id, request)
 
 异常处理:
 - 任何步骤失败 → status=FAILED, 标记当前步骤 FAILED
-- 部署历史保存到 deploymentHistoryMap (内存)
+- 任务状态与步骤持久化到 **`dw_deployment_jobs`**（`DeploymentJobService`）；**非**仅内存 Map（旧版描述已废弃）
 ```
 
 ### 部署状态查询
