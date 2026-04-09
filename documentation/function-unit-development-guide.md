@@ -2,7 +2,7 @@
 
 > 本文档面向 AI 助手和开发者，详尽描述功能单元模块的架构、实体关系、API、数据流、枚举、配置和约定。  
 > **关联**：工作区访问控制（拦截器 / 虚拟组）见仓库 [docs/developer-workstation-workspace-rbac.md](../docs/developer-workstation-workspace-rbac.md)；数据库 **init-scripts 与 Flyway** 及 **Dev Compose 关闭 Flyway** 见 [docs/schema-and-migration.md](../docs/schema-and-migration.md)。  
-> 最后更新: 2026-04-04（含 §7–§10、§11 AI、§12 导入导出、§13 安全与实现对齐）
+> 最后更新: 2026-04-04（含 §7–§16 与 `application.yml` / Flyway / i18n 资源位置对齐）
 
 ---
 
@@ -1337,10 +1337,14 @@ FunctionUnit 使用 `@jakarta.persistence.Version` + `lockVersion` 字段实现�
 
 ### 后端 i18n
 
-- 框架: Spring MessageSource
-- 配置: `spring.messages.basename=i18n/messages`
-- 使用: `i18nService.getMessage("deploy.started")`
-- Bean Validation 消息: `ValidationMessages*.properties` (独立于 i18n/messages)
+- 框架: Spring `MessageSource`
+- 配置: `spring.messages.basename=i18n/messages`、`encoding: UTF-8`（见 `developer-workstation` 的 `application.yml`）
+- **资源文件位置**: 业务文案主要在依赖模块 **`platform-common`** 的  
+  `backend/platform-common/src/main/resources/i18n/messages_en.properties`、  
+  `messages_zh_CN.properties`、`messages_zh_TW.properties`（basename `i18n/messages` + 语言后缀）。
+- 使用: `I18nService.getMessage("auth.no_permission")` 等（与 `platform-common` 中 key 一致）。
+- **Bean Validation**: `developer-workstation/src/main/resources/` 根目录下的  
+  `ValidationMessages.properties`、`ValidationMessages_zh_CN.properties`、`ValidationMessages_zh_TW.properties`（与 `i18n/messages` 分离）。
 
 ### 前端 i18n
 
@@ -1397,9 +1401,14 @@ server:
 cors:
   allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:3002,http://localhost:5173}
 
-# Admin Center 地址 (部署目标)
+# Admin Center（权限校验、一键部署、DEV SSO redeem 等）
 admin-center:
   url: ${ADMIN_CENTER_URL:http://localhost:8090}
+
+# 一键部署：生产应带 JWT（Kong 注入或浏览器转发）；本地/测试可关闭
+developer:
+  deployment:
+    require-admin-authorization: ${DEVELOPER_DEPLOY_REQUIRE_ADMIN_AUTH:true}
 
 spring:
   # 排除默认 UserDetailsService 自动配置
@@ -1407,6 +1416,13 @@ spring:
     exclude: org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration
   application:
     name: developer-workstation
+
+  # Flyway（默认开启；Dev Compose 常覆盖为 SPRING_FLYWAY_ENABLED=false，见 §16）
+  flyway:
+    enabled: true
+    locations: classpath:db/migration/developer-workstation
+    baseline-on-migrate: true
+    validate-on-migrate: false
 
   # 数据源 (PostgreSQL)
   datasource:
@@ -1467,8 +1483,8 @@ file:
 # 安全配置 (单一 security: 键，包含所有子配置)
 security:
   jwt:
-    secret: ${JWT_SECRET:...}           # 必须通过环境变量注入
-    expiration: ${JWT_EXPIRATION:86400000}  # 24 小时
+    secret: ${JWT_SECRET:your-256-bit-secret-key-for-development-only}  # 生产必须用环境变量覆盖
+    expiration: ${JWT_EXPIRATION:86400000}  # 24 小时（毫秒）
   max-login-attempts: ${MAX_LOGIN_ATTEMPTS:5}
   lock-duration-minutes: ${LOCK_DURATION_MINUTES:30}
   # 权限缓存
@@ -1499,12 +1515,27 @@ workflow-engine:
   url: ${WORKFLOW_ENGINE_URL:http://localhost:8081}
   enabled: true
   jwt:
-    secret: ${JWT_SECRET:...}
+    secret: ${JWT_SECRET:your-256-bit-secret-key-for-development-only}
 
 # JWT 配置 (顶层, AuthController 使用)
 jwt:
-  secret: ${JWT_SECRET:...}
+  secret: ${JWT_SECRET:your-256-bit-secret-key-for-development-only}
   expiration: ${JWT_EXPIRATION:86400000}
+
+# platform-security JwtProperties / SSO（误部署到共享环境时可关 developer exchange）
+platform:
+  sso:
+    developer-exchange-enabled: ${SSO_DEVELOPER_EXCHANGE_ENABLED:true}
+    internal-token: ${SSO_INTERNAL_TOKEN:}
+  security:
+    jwt:
+      secret: ${JWT_SECRET:your-256-bit-secret-key-for-development-only}
+      expiration-ms: ${JWT_EXPIRATION:86400000}
+      refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION:604800000}
+      issuer: platform
+      validate-issuer: false
+  encryption:
+    secret-key: ${ENCRYPTION_SECRET_KEY:your-32-byte-aes-256-secret-key!!}
 
 # N8N AI 生成
 n8n:
@@ -1542,7 +1573,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        include: health,info,metrics,prometheus
   endpoint:
     health:
       show-details: when_authorized
@@ -1560,9 +1591,14 @@ management:
 | `SPRING_REDIS_HOST` | Redis 主机 | localhost |
 | `SPRING_REDIS_PORT` | Redis 端口 | 6379 |
 | `SPRING_REDIS_PASSWORD` | Redis 密码 | (环境变量注入) |
-| `JWT_SECRET` | JWT 签名密钥 | (必须环境变量注入) |
+| `JWT_SECRET` | JWT 签名密钥 | 开发默认占位字符串；**生产须环境变量覆盖** |
 | `JWT_EXPIRATION` | JWT 有效期 (ms) | 86400000 (24h) |
-| `ENCRYPTION_SECRET_KEY` | AES 加密密钥 | (必须环境变量注入) |
+| `JWT_REFRESH_EXPIRATION` | Refresh 有效期 (ms)，`platform.security.jwt` | 604800000（约 7 天） |
+| `ENCRYPTION_SECRET_KEY` | AES 加密密钥（`platform.encryption`） | 开发默认占位；**生产须覆盖** |
+| `SPRING_FLYWAY_ENABLED` | 是否执行 Flyway | `application.yml` 默认 true；**Dev Compose 常为 false** |
+| `DEVELOPER_DEPLOY_REQUIRE_ADMIN_AUTH` | 部署到 admin-center 是否要求携带 admin JWT | true |
+| `SSO_DEVELOPER_EXCHANGE_ENABLED` | DEV SSO / developer exchange 是否启用 | true |
+| `SSO_INTERNAL_TOKEN` | 内部兑换用 token（可选） | 空 |
 | `CORS_ALLOWED_ORIGINS` | CORS 白名单 | http://localhost:3000,... |
 | `MAX_LOGIN_ATTEMPTS` | 最大登录尝试次数 | 5 |
 | `LOCK_DURATION_MINUTES` | 登录锁定时长 (分钟) | 30 |
@@ -1598,8 +1634,9 @@ management:
 
 ### Flyway 约定
 
-- 路径: `src/main/resources/db/migration/{module}/`
+- 路径: `src/main/resources/db/migration/{模块目录}/`（本服务为 **`developer-workstation`**）
 - 命名: `V{版本号}__{描述}.sql`
+- **本服务 Flyway 配置**（`application.yml`）: `enabled: true`、`baseline-on-migrate: true`、**`validate-on-migrate: false`**（与部分环境历史脚本共存时的取舍，以运维策略为准）。
 - 版本号分段（约定，非强制）:
   - admin-center: 200+
   - developer-workstation: 300+
@@ -1618,8 +1655,11 @@ management:
 | `dw_foreign_keys` | ForeignKey | 外键关系 |
 | `dw_form_definitions` | FormDefinition | 表单定义 |
 | `dw_form_table_bindings` | FormTableBinding | 表单表绑定 |
+| `dw_form_stage_bindings` | FormStageBinding | 表单—流程节点阶段绑定 |
 | `dw_action_definitions` | ActionDefinition | 动作定义 |
 | `dw_process_definitions` | ProcessDefinition | 流程定义 |
+| `dw_decision_definitions` | DecisionDefinition | 决策（DMN）定义 |
+| `dw_table_relations` | TableRelation | 表关系（关联设计） |
 | `dw_versions` | Version | 版本快照 |
 | `dw_icons` | Icon | 图标库 |
 | `dw_ai_sessions` | AiSession | AI 会话 |
@@ -1632,8 +1672,11 @@ management:
 | `members` | Member | 成员管理 (非 dw_ 前缀) |
 | `sys_users` | User | 用户 (引用 platform-security 实体) |
 | `up_process_instance` | ProcessInstance | 流程实例 (跨模块引用) |
+| `rt_lookup_configs` | RelationLookupConfig | 关联表查找配置（`rt_` 前缀） |
+| `rt_view_configs` | RelationViewConfig | 关联视图配置 |
+| `rt_view_fields` | RelationViewField | 关联视图字段 |
 
-表名前缀: `dw_` = developer-workstation
+表名前缀: `dw_` = developer-workstation 核心设计数据；**`rt_`** = 关联表/视图相关配置（与 `dw_` 并存）
 
 注意: `Permission` 和 `Role` 实体来自 `platform-security` 模块 (`com.platform.security.entity`)，developer-workstation 通过 Repository 引用但不定义这些实体。
 
