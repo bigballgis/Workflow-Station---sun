@@ -2,7 +2,7 @@
 
 > 本文档面向 AI 助手和开发者，详尽描述功能单元模块的架构、实体关系、API、数据流、枚举、配置和约定。  
 > **关联**：工作区访问控制（拦截器 / 虚拟组）见仓库 [docs/developer-workstation-workspace-rbac.md](../docs/developer-workstation-workspace-rbac.md)；数据库 **init-scripts 与 Flyway** 及 **Dev Compose 关闭 Flyway** 见 [docs/schema-and-migration.md](../docs/schema-and-migration.md)。  
-> 最后更新: 2026-04-08（与 `backend/developer-workstation` 源码清点）
+> 最后更新: 2026-04-08（含包规模、§7 API 与 Controller 映射清点）
 
 ---
 
@@ -576,6 +576,11 @@ public ResponseEntity<ApiResponse<Entity>> create(@Valid @RequestBody Request re
 
 ## 7. API 端点
 
+**路径前缀**：服务 `server.servlet.context-path=/api/v1`（见 `application.yml`）。下表「路径」均为 **该 context-path 之后**的片段，浏览器完整 URL 形如 `http://host:port/api/v1{路径}`。  
+**例外**：部分控制器使用以 **`/api/`** 开头的类级映射（如 `VersionController`、`ResilienceController`、若干 Relation/Lookup 接口），完整 URL 为 `http://host:port/api/v1/api/...`（即 context-path + 控制器映射拼接）。
+
+**核对方式**：以 `backend/developer-workstation/.../controller/*.java` 中 `@RequestMapping` / `@*Mapping` 为准；本节随 2026-04-08 代码清点更新。
+
 ### 7.1 功能单元管理 — FunctionUnitController
 
 基础路径: `/function-units`
@@ -592,6 +597,8 @@ public ResponseEntity<ApiResponse<Entity>> create(@Valid @RequestBody Request re
 | POST | `/function-units/{id}/clone?newName=` | FUNCTION_UNIT_CREATE | 克隆功能单元 |
 | GET | `/function-units/{id}/validate` | FUNCTION_UNIT_VIEW | 完整性校验 |
 | GET | `/function-units/{id}/versions` | FUNCTION_UNIT_VIEW | 版本历史 |
+| GET | `/function-units/{id}/dev-groups` | FUNCTION_UNIT_VIEW | 已分配虚拟开发组 ID 列表 |
+| PUT | `/function-units/{id}/dev-groups` | FUNCTION_UNIT_ASSIGN_DEV_GROUP | 替换功能单元—虚拟开发组映射 |
 
 ### 7.2 表设计 — TableDesignController
 
@@ -627,6 +634,8 @@ public ResponseEntity<ApiResponse<Entity>> create(@Valid @RequestBody Request re
 | POST | `/forms/{formId}/bindings` | 创建表绑定 |
 | PUT | `/forms/{formId}/bindings/{bindingId}` | 更新表绑定 |
 | DELETE | `/forms/{formId}/bindings/{bindingId}` | 删除表绑定 |
+| GET | `/forms/data-table-columns` | 数据表列元数据（设计器辅助） |
+| POST | `/forms/{formId}/copy` | 复制表单 |
 
 ### 7.4 动作设计 — ActionDesignController
 
@@ -737,6 +746,7 @@ public ResponseEntity<ApiResponse<Entity>> create(@Valid @RequestBody Request re
 | GET | `/documents/version?functionUnitId=&documentType=&version=` | FUNCTION_UNIT_VIEW | 获取指定版本文档 |
 | POST | `/documents` | FUNCTION_UNIT_UPDATE | 保存文档 |
 | POST | `/{functionUnitId}/apply` | FUNCTION_UNIT_UPDATE | 应用 AI 生成数据 |
+| POST | `/{functionUnitId}/undo` | FUNCTION_UNIT_UPDATE | 撤销最近一次 apply |
 
 ### 7.12 文件上传 — FileUploadController
 
@@ -758,6 +768,8 @@ public ResponseEntity<ApiResponse<Entity>> create(@Valid @RequestBody Request re
 |------|------|------|
 | POST | `/auth/login` | 用户登录 (返回 JWT token) |
 | POST | `/auth/logout` | 用户登出 |
+| POST | `/auth/refresh` | 刷新令牌 |
+| POST | `/auth/change-password` | 修改密码（需 Bearer） |
 | GET | `/auth/me` | 获取当前用户信息 (需 Authorization header) |
 | GET | `/auth/validate` | 验证 token 有效性 |
 
@@ -778,16 +790,92 @@ public ResponseEntity<ApiResponse<Entity>> create(@Valid @RequestBody Request re
 
 ### 7.15 弹性管理 — ResilienceController
 
-基础路径: `/api/resilience` (注意: 不同于其他控制器的路径)
+基础路径: `/api/resilience`（完整 URL 前缀：`/api/v1` + 本路径，见本节开头说明）
 继承: `BaseController` ✅
+
+| 方法 | 路径（接在 `/api/resilience` 后） | 说明 |
+|------|------|------|
+| GET | `/health` | 获取弹性健康状态 (熔断器 + 降级) |
+| POST | `/health-check` | 手动触发健康检查 |
+| POST | `/circuit-breakers/reset` | 重置所有熔断器 |
+| POST | `/emergency-mode/enter` | 进入紧急模式 |
+| POST | `/emergency-mode/exit` | 退出紧急模式 |
+
+### 7.16 决策（DMN）设计 — DecisionDesignController
+
+基础路径: `/function-units/{functionUnitId}/decisions`  
+继承: `BaseController` ✅
+
+| 方法 | 路径（接在基础路径后） | 说明 |
+|------|------|------|
+| GET | `/` | 列出决策定义 |
+| POST | `/` | 创建决策定义 |
+| GET | `/{decisionId}` | 详情 |
+| PUT | `/{decisionId}` | 更新 |
+| DELETE | `/{decisionId}` | 删除 |
+| GET | `/{decisionId}/validate` | 校验 |
+| GET | `/{decisionId}/model` | 获取 DMN XML/模型 |
+| POST | `/{decisionId}/model` | 保存 DMN 模型 |
+
+### 7.17 表关系 — TableRelationController
+
+基础路径: `/function-units/{functionUnitId}/table-relations`  
+继承: `BaseController` ✅
+
+| 方法 | 路径（接在基础路径后） | 说明 |
+|------|------|------|
+| GET | `/` | 列出功能单元下表关系 |
+| POST | `/` | 批量保存（替换已有） |
+| DELETE | `/` | 删除该功能单元下全部表关系 |
+
+### 7.18 Relation Table 绑定 — RelationTableBindingController
+
+无类级 `@RequestMapping`，路径均为自 context-path 起的绝对片段。
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/api/resilience/health` | 获取弹性健康状态 (熔断器 + 降级) |
-| POST | `/api/resilience/health-check` | 手动触发健康检查 |
-| POST | `/api/resilience/circuit-breakers/reset` | 重置所有熔断器 |
-| POST | `/api/resilience/emergency-mode/enter` | 进入紧急模式 |
-| POST | `/api/resilience/emergency-mode/exit` | 退出紧急模式 |
+| GET | `/api/relation-tables/available` | 可绑定的 Relation Table 列表 |
+| GET | `/api/forms/{formId}/relation-bindings` | 某表单的绑定列表 |
+| POST | `/api/forms/{formId}/relation-bindings` | 绑定（body 含 `tableId`） |
+| DELETE | `/api/forms/{formId}/relation-bindings/{bindingId}` | 解除绑定 |
+
+### 7.19 关联视图 — RelationTableViewController
+
+基础路径: `/api/forms/{formId}/relation-views`（见本节开头「双前缀」说明）
+
+| 方法 | 路径（接在基础路径后） | 说明 |
+|------|------|------|
+| GET | `/{bindingId}` | 视图配置 |
+| PUT | `/{bindingId}` | 更新视图配置 |
+| GET | `/{bindingId}/fields` | 视图字段 |
+| GET | `/fields-by-table` | 按表查询字段（query 参数见源码） |
+
+### 7.20 查找组件配置 — LookupComponentController
+
+基础路径: `/api/forms/{formId}/lookup-config`
+
+| 方法 | 路径（接在基础路径后） | 说明 |
+|------|------|------|
+| GET | `/{componentId}` | 读取配置 |
+| PUT | `/{componentId}` | 更新配置 |
+| GET | `/{componentId}/bound-views` | 已绑定的关联视图 |
+
+### 7.21 表单阶段绑定（BPMN userTask）— FormStageBindingController
+
+基础路径: `/form-stage-bindings`  
+供 user-portal 等按 BPMN **taskDefinitionKey** 解析任务表单。
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/form-stage-bindings?stageId=` | 按 `stageId` 返回表单定义摘要（无则空对象） |
+
+### 7.22 SSO 兑换 — AuthSsoExchangeController
+
+基础路径: `/auth/sso`
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/auth/sso/exchange` | SSO 兑换内部会话/JWT（见实现与网关约定） |
 
 ---
 
