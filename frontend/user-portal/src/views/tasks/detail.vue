@@ -503,6 +503,85 @@ const allowSubTableAssignForCurrentTask = computed(() => {
   return tdk === 'Task_AssignParticipants'
 })
 
+const isMiSubTask = (taskData: any): boolean => {
+  const defKey = String(taskData?.taskDefinitionKey || '')
+  if (defKey.startsWith('MI_UserTask_')) {
+    return true
+  }
+  const vars = taskData?.variables || {}
+  return !!(vars?._currentItem || vars?.currentItem)
+}
+
+function getCurrentFormFieldKeys(): string[] {
+  const keys = new Set<string>()
+  formFields.value.forEach((f: any) => {
+    if (f?.key) keys.add(String(f.key))
+  })
+  formTabs.value.forEach((tab: any) => {
+    ;(tab?.fields || []).forEach((f: any) => {
+      if (f?.key) keys.add(String(f.key))
+    })
+  })
+  return Array.from(keys)
+}
+
+function isolateMiSubTaskData(taskData: any) {
+  const currentItem = taskData?.variables?._currentItem as { rowId?: number; assigneeId?: string } | undefined
+  if (currentItem?.rowId == null) return
+
+  const myRowId = Number(currentItem.rowId)
+  if (Number.isNaN(myRowId)) return
+
+  // Multi-instance data isolation: each sub-task only sees its own participant row.
+  for (const binding of subTableBindings.value) {
+    const rows = Array.isArray(binding.data) ? binding.data : []
+    binding.data = rows.filter(
+      (row: any) => Number(row?.id) === myRowId || Number(row?.rowId) === myRowId
+    )
+  }
+  for (const prevForm of previousForms.value) {
+    for (const binding of prevForm.subTableBindings) {
+      const rows = Array.isArray(binding.data) ? binding.data : []
+      binding.data = rows.filter(
+        (row: any) => Number(row?.id) === myRowId || Number(row?.rowId) === myRowId
+      )
+    }
+  }
+
+  const myRow = subTableBindings.value
+    .flatMap((b: any) => b.data || [])
+    .find((row: any) => Number(row?.id) === myRowId || Number(row?.rowId) === myRowId)
+
+  const originalFormData = { ...formData.value }
+  const cleanedFormData: Record<string, any> = {}
+  const systemKeys = Object.keys(originalFormData).filter(
+    key =>
+      key.startsWith('_') ||
+      key.startsWith('__') ||
+      key === 'initiator' ||
+      key === 'meeting_id' ||
+      key === 'mainRecordId' ||
+      key === 'approval_result' ||
+      key === 'approved'
+  )
+  for (const key of systemKeys) {
+    cleanedFormData[key] = originalFormData[key]
+  }
+
+  const formKeys = getCurrentFormFieldKeys()
+  for (const key of formKeys) {
+    if (myRow && Object.prototype.hasOwnProperty.call(myRow, key)) {
+      cleanedFormData[key] = (myRow as Record<string, any>)[key]
+    } else if (Object.prototype.hasOwnProperty.call(originalFormData, key)) {
+      cleanedFormData[key] = originalFormData[key]
+    } else {
+      cleanedFormData[key] = null
+    }
+  }
+
+  formData.value = cleanedFormData
+}
+
 /** 仅在「分配参与人」节点校验：子表每行已点分配（与后端 Task_AssignParticipants + buildParticipantsCollection 一致） */
 function validateSubTableAssigneesForComplete(): boolean {
   const tdk = (taskInfo.value as { taskDefinitionKey?: string }).taskDefinitionKey || ''
@@ -625,65 +704,8 @@ const loadTaskDetail = async () => {
       // Task 17: 加载 Process Form 和 Task Form 数据
       await loadProcessAndTaskFormData(data)
 
-      // Multi-instance sub-task data isolation:
-      // _currentItem (injected by workflow-engine for MI sub-tasks) contains { rowId, assigneeId }
-      // for the specific participant row assigned to THIS sub-task.
-      const currentItem = data.variables?._currentItem as { rowId?: number; assigneeId?: string } | undefined
-      if (currentItem?.rowId != null) {
-        const myRowId = Number(currentItem.rowId)
-
-        // Filter sub-table bindings: only show the row assigned to this sub-task
-        for (const binding of subTableBindings.value) {
-          if (binding.data && binding.data.length > 0) {
-            const filtered = binding.data.filter(
-              (row: any) => Number(row.id) === myRowId || Number(row.rowId) === myRowId
-            )
-            binding.data = filtered.length > 0 ? filtered : binding.data
-          }
-        }
-
-        // Also filter previous form sub-table bindings
-        for (const prevForm of previousForms.value) {
-          for (const binding of prevForm.subTableBindings) {
-            if (binding.data && binding.data.length > 0) {
-              const filtered = binding.data.filter(
-                (row: any) => Number(row.id) === myRowId || Number(row.rowId) === myRowId
-              )
-              binding.data = filtered.length > 0 ? filtered : binding.data
-            }
-          }
-        }
-
-        // Clear form field values for MI sub-tasks so that data entered by
-        // other sub-task assignees does not pre-fill this sub-task's form.
-        // Keep only system/meta fields and the current row's data.
-        const keysToKeep = new Set<string>()
-        // Keep system fields and main form data (meeting_title, etc.)
-        for (const key of Object.keys(formData.value)) {
-          if (key.startsWith('_') || key.startsWith('__') || key === 'initiator'
-              || key === 'meeting_id' || key === 'mainRecordId'
-              || key === 'approval_result' || key === 'approved') {
-            keysToKeep.add(key)
-          }
-        }
-        // Load the sub-table row's field values into formData for the form to display
-        const myRow = subTableBindings.value
-          .flatMap((b: any) => b.data || [])
-          .find((row: any) => Number(row.id) === myRowId || Number(row.rowId) === myRowId)
-        if (myRow) {
-          const cleanedFormData: Record<string, any> = {}
-          for (const key of keysToKeep) {
-            cleanedFormData[key] = formData.value[key]
-          }
-          // Merge sub-table row fields into form data (e.g. dietary_preference, attend_status)
-          for (const [k, v] of Object.entries(myRow)) {
-            if (k !== 'id' && k !== 'row_version' && k !== 'meeting_id') {
-              cleanedFormData[k] = v
-            }
-          }
-          formData.value = cleanedFormData
-        }
-
+      if (isMiSubTask(data)) {
+        isolateMiSubTaskData(data)
       }
     }
   } catch (error: any) {
@@ -970,6 +992,7 @@ const loadProcessAndTaskFormData = async (taskData: any) => {
   const processInstanceId = taskData.processInstanceId
   const currentTaskId = taskData.id || taskId
   const isCompleted = taskData.endTime != null || taskData.completed === true
+  const miSubTask = isMiSubTask(taskData)
 
   // 17.1: 加载 Process Form 数据
   if (processInstanceId) {
@@ -1019,8 +1042,25 @@ const loadProcessAndTaskFormData = async (taskData: any) => {
         const tfData = (tfRes as any).data || tfRes
         if (tfData) {
           taskFormDTO.value = tfData
+          if (tfData.formName) {
+            currentFormName.value = tfData.formName
+          }
+          if (tfData.configJson) {
+            parseFormConfig(tfData.configJson as any)
+          }
           // 如果有 Task Form 配置，用 fieldPermissions 控制字段可编辑性
           if (tfData.configJson && tfData.fieldPermissions) {
+            // 当字段权限全部为 READONLY 时，强制整表单只读。
+            // 以前仅展示 "Read Only" 标识但没有真正禁用输入。
+            const perms = Object.values(tfData.fieldPermissions || {})
+            if (perms.length > 0 && perms.every((p: any) => String(p).toUpperCase() === 'READONLY')) {
+              formReadOnly.value = true
+            }
+            // 多实例子任务不直接合并流程变量字段值，避免不同子任务串值。
+            // 行级数据会在 loadTaskDetail 中按 _currentItem.rowId 再合并。
+            if (miSubTask) {
+              return
+            }
             // Task Form 的字段值来自流程变量
             if (tfData.fieldValues) {
               formData.value = { ...formData.value, ...tfData.fieldValues }
