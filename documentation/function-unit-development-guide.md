@@ -2,7 +2,7 @@
 
 > 本文档面向 AI 助手和开发者，详尽描述功能单元模块的架构、实体关系、API、数据流、枚举、配置和约定。  
 > **关联**：工作区访问控制（拦截器 / 虚拟组）见仓库 [docs/developer-workstation-workspace-rbac.md](../docs/developer-workstation-workspace-rbac.md)；数据库 **init-scripts 与 Flyway** 及 **Dev Compose 关闭 Flyway** 见 [docs/schema-and-migration.md](../docs/schema-and-migration.md)。  
-> 最后更新: 2026-04-04（含 §7–§16 与 `application.yml` / Flyway / i18n 资源位置对齐）
+> 最后更新: 2026-04-04（含 §7–§17、附录与 `controller`/`component` 包清点一致）
 
 ---
 
@@ -73,8 +73,8 @@
 ```
 com.developer/
 ├── client/          # 跨服务调用 (admin-center REST client)
-├── component/       # 业务组件接口
-│   └── impl/        # 业务组件实现
+├── component/       # 业务组件接口（当前 15 个，见附录 B）
+│   └── impl/        # 业务组件实现（15 个 *Impl）
 ├── config/          # Spring 配置 (CORS, Jackson, Async, OpenAPI)
 ├── controller/      # REST 控制器：22 个具体类 + BaseController（数量随迭代变化，以 controller/ 目录为准）
 ├── dto/             # 请求/响应 DTO（约 48 个 Java 文件，含子包）
@@ -1686,7 +1686,7 @@ management:
 
 ### 控制器层
 
-当前 `controller` 包共 **22 个具体控制器类** + **`BaseController` 抽象基类**（2026-04-08 清点）。其中 **7 个**继承 `BaseController`，**15 个**不继承；不继承者响应格式与异常处理各自实现，**并非**都是 `ApiResponse` 包装。
+当前 `controller` 包共 **22 个具体控制器类** + **`BaseController` 抽象基类**（**2026-04-04** 与 `*Controller.java` 目录复核）。其中 **7 个**继承 `BaseController`，**15 个**不继承；不继承者响应格式与异常处理各自实现，**并非**都是 `ApiResponse` 包装。
 
 **继承 `BaseController`（7）**  
 `FunctionUnitController`、`TableDesignController`、`TableRelationController`、`MemberController`、`DecisionDesignController`、`AiGenerationController`、`ResilienceController`。
@@ -1772,18 +1772,25 @@ management:
 
 ## 附录 B: Component 接口清单
 
+`com.developer.component` 包现有 **15** 个接口，与 `com.developer.component.impl` 下 **15** 个 `*Impl` 一一对应（数量以目录为准）。
+
 | Component | 实现类 | 职责 |
 |-----------|--------|------|
 | FunctionUnitComponent | FunctionUnitComponentImpl | 功能单元 CRUD、发布、克隆、校验 |
 | TableDesignComponent | TableDesignComponentImpl | 表设计 CRUD、DDL 生成、关系校验 |
+| TableRelationComponent | TableRelationComponentImpl | 功能单元级表关系批量查询/替换/删除 |
 | FormDesignComponent | FormDesignComponentImpl | 表单设计 CRUD、绑定管理、配置生成 |
 | ActionDesignComponent | ActionDesignComponentImpl | 动作设计 CRUD、测试执行 |
 | ProcessDesignComponent | ProcessDesignComponentImpl | 流程设计 CRUD、BPMN 校验、模拟 |
+| DecisionDesignComponent | DecisionDesignComponentImpl | 决策（DMN）CRUD、校验、结构化模型读写 |
 | DeploymentComponent | DeploymentComponentImpl | 一键部署、状态查询、历史 |
 | ExportImportComponent | ExportImportComponentImpl | 导入导出、冲突检查 |
 | IconLibraryComponent | IconLibraryComponentImpl | 图标上传、搜索、使用检查 |
-| AiGenerationComponent | AiGenerationComponentImpl | AI 对话、锁管理、文档、数据应用 |
-| VersionComponent | VersionComponentImpl | 版本历史查询 (注意: VersionController 不使用此 Component，而是直接注入 DeploymentService, VersionService, RollbackService, UIService) |
+| VersionComponent | VersionComponentImpl | 版本历史查询（**注意**：`VersionController` 主要直接注入 `DeploymentService` / `VersionService` / `RollbackService` / `UIService`，与此 Component 并存） |
+| AiGenerationComponent | AiGenerationComponentImpl | AI 对话、锁管理、文档、生成数据应用/撤销 |
+| SecurityComponent | SecurityComponentImpl | JWT 生成校验、登录失败/锁定等认证侧能力 |
+| AuditLogComponent | AuditLogComponentImpl | 操作日志写入与分页查询 |
+| HelpSystemComponent | HelpSystemComponentImpl | 帮助搜索、表达式建议、引导步骤等（多由设计器/辅助接口消费） |
 
 ---
 
