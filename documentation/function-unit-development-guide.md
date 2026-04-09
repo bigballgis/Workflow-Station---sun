@@ -2,7 +2,7 @@
 
 > 本文档面向 AI 助手和开发者，详尽描述功能单元模块的架构、实体关系、API、数据流、枚举、配置和约定。  
 > **关联**：工作区访问控制（拦截器 / 虚拟组）见仓库 [docs/developer-workstation-workspace-rbac.md](../docs/developer-workstation-workspace-rbac.md)；数据库 **init-scripts 与 Flyway** 及 **Dev Compose 关闭 Flyway** 见 [docs/schema-and-migration.md](../docs/schema-and-migration.md)。  
-> 最后更新: 2026-04-04（含 §7–§17、附录与 `controller`/`component` 包清点一致）
+> 最后更新: 2026-04-04（含 §7 API 路径与附录 A `VirtualGroupMembershipDao`、`controller`/`component` 清点一致）
 
 ---
 
@@ -77,11 +77,11 @@ com.developer/
 │   └── impl/        # 业务组件实现（15 个 *Impl）
 ├── config/          # Spring 配置 (CORS, Jackson, Async, OpenAPI)
 ├── controller/      # REST 控制器：22 个具体类 + BaseController（数量随迭代变化，以 controller/ 目录为准）
-├── dto/             # 请求/响应 DTO（约 48 个 Java 文件，含子包）
-├── entity/          # JPA 实体（约 26 个 Java 文件，含决策/关联表/部署任务等）
+├── dto/             # 请求/响应 DTO（**48** 个 `.java`，含子包）
+├── entity/          # JPA 实体（**26** 个 `.java`，含决策/关联表/部署任务等）
 ├── enums/           # 枚举类型 (14 个)
 ├── exception/       # 自定义异常
-├── repository/      # JPA Repository（约 29 个接口，见附录 A）
+├── repository/      # 数据访问：28 个 JPA Repository + `VirtualGroupMembershipDao`（JDBC），共 29 个 `.java`（见附录 A）
 ├── resilience/      # 弹性/重试逻辑
 ├── security/        # JWT 认证、权限注解
 ├── service/         # 服务接口
@@ -579,7 +579,7 @@ public ResponseEntity<ApiResponse<Entity>> create(@Valid @RequestBody Request re
 **路径前缀**：服务 `server.servlet.context-path=/api/v1`（见 `application.yml`）。下表「路径」均为 **该 context-path 之后**的片段，浏览器完整 URL 形如 `http://host:port/api/v1{路径}`。  
 **例外**：部分控制器使用以 **`/api/`** 开头的类级映射（如 `VersionController`、`ResilienceController`、若干 Relation/Lookup 接口），完整 URL 为 `http://host:port/api/v1/api/...`（即 context-path + 控制器映射拼接）。
 
-**核对方式**：以 `backend/developer-workstation/.../controller/*.java` 中 `@RequestMapping` / `@*Mapping` 为准；本节随 2026-04-08 代码清点更新。
+**核对方式**：以 `backend/developer-workstation/.../controller/*.java` 中 `@RequestMapping` / `@*Mapping` 为准；**2026-04-04** 与源码对照一致。§2 中 `dto` / `entity` / `repository` 文件数分别为 **48** / **26** / **29**（含 JDBC Dao，见附录 A）。
 
 ### 7.1 功能单元管理 — FunctionUnitController
 
@@ -753,25 +753,25 @@ public ResponseEntity<ApiResponse<Entity>> create(@Valid @RequestBody Request re
 基础路径: `/upload`
 继承: `BaseController` ❌ (手动构建响应)
 
-| 方法 | 路径 | 说明 |
+| 方法 | 路径（接在 `/upload` 后） | 说明 |
 |------|------|------|
-| POST | `/upload` | 上传文件 (multipart, 支持 jpg/png/gif/pdf/doc/docx/xls/xlsx, 最大 10MB) |
-| GET | `/upload/files/{filename}` | 获取文件 (支持内联预览, 含路径遍历防护) |
-| DELETE | `/upload/files/{filename}` | 删除文件 |
+| POST | `/` | `@PostMapping` 无子路径，即 POST `/upload` |
+| GET | `/files/{filename}` | 获取文件 (支持内联预览, 含路径遍历防护) |
+| DELETE | `/files/{filename}` | 删除文件 |
 
 ### 7.13 认证 — AuthController
 
 基础路径: `/auth`
 继承: `BaseController` ❌ (手动构建响应)
 
-| 方法 | 路径 | 说明 |
+| 方法 | 路径（接在 `/auth` 后） | 说明 |
 |------|------|------|
-| POST | `/auth/login` | 用户登录 (返回 JWT token) |
-| POST | `/auth/logout` | 用户登出 |
-| POST | `/auth/refresh` | 刷新令牌 |
-| POST | `/auth/change-password` | 修改密码（需 Bearer） |
-| GET | `/auth/me` | 获取当前用户信息 (需 Authorization header) |
-| GET | `/auth/validate` | 验证 token 有效性 |
+| POST | `/login` | 用户登录 (返回 JWT token) |
+| POST | `/logout` | 用户登出 |
+| POST | `/refresh` | 刷新令牌 |
+| POST | `/change-password` | 修改密码（需 Bearer） |
+| GET | `/me` | 获取当前用户信息 (需 Authorization header) |
+| GET | `/validate` | 验证 token 有效性 |
 
 ### 7.14 成员管理 — MemberController
 
@@ -813,9 +813,9 @@ public ResponseEntity<ApiResponse<Entity>> create(@Valid @RequestBody Request re
 | GET | `/{decisionId}` | 详情 |
 | PUT | `/{decisionId}` | 更新 |
 | DELETE | `/{decisionId}` | 删除 |
-| GET | `/{decisionId}/validate` | 校验 |
-| GET | `/{decisionId}/model` | 获取 DMN XML/模型 |
-| POST | `/{decisionId}/model` | 保存 DMN 模型 |
+| GET | `/{decisionId}/validate` | 校验已持久化 DMN XML |
+| GET | `/{decisionId}/model` | 结构化 **`DecisionTableModel`**（JSON） |
+| POST | `/{decisionId}/model` | 由模型回写 **`DecisionDefinition`**（`updateFromModel`） |
 
 ### 7.17 表关系 — TableRelationController
 
@@ -873,9 +873,9 @@ public ResponseEntity<ApiResponse<Entity>> create(@Valid @RequestBody Request re
 
 基础路径: `/auth/sso`
 
-| 方法 | 路径 | 说明 |
+| 方法 | 路径（接在 `/auth/sso` 后） | 说明 |
 |------|------|------|
-| POST | `/auth/sso/exchange` | SSO 兑换内部会话/JWT（见实现与网关约定） |
+| POST | `/exchange` | SSO 兑换内部会话/JWT（见实现与网关约定） |
 
 ---
 
@@ -1737,7 +1737,9 @@ management:
 
 ## 附录 A: Repository 清单
 
-| Repository | 实体 | 说明 |
+`repository` 包共 **29** 个 `.java`：下方 **28** 个为 Spring Data JPA 接口 + **`VirtualGroupMembershipDao`**（`JdbcTemplate` 查 `sys_virtual_group_members`）。
+
+| Repository / Dao | 实体 | 说明 |
 |------------|------|------|
 | FunctionUnitRepository | FunctionUnit | existsByName, findByName |
 | TableDefinitionRepository | TableDefinition | findByFunctionUnitId |
@@ -1767,6 +1769,7 @@ management:
 | RelationLookupConfigRepository | RelationLookupConfig | 关联表查找配置 |
 | RelationViewConfigRepository | RelationViewConfig | 关联视图配置 |
 | RelationViewFieldRepository | RelationViewField | 关联视图字段 |
+| VirtualGroupMembershipDao | —（查询 admin 库表） | 按 `user_id` 查所属虚拟组 ID 列表，供工作区 RBAC |
 
 ---
 
