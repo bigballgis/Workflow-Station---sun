@@ -54,13 +54,13 @@
 
 | Service | Type | K8S Manifest | Healthcheck |
 |---------|------|-------------|-------------|
-| redis | Infrastructure | `deployment-redis.yaml` | redis-cli ping |
-| kafka | Infrastructure | `deployment-kafka.yaml` | broker-api-versions |
-| n8n | Infrastructure | `deployment-n8n.yaml` | `/healthz` |
+| redis | Infrastructure | `deployment-redis.yaml` | exec：`redis-cli -a $REDIS_PASSWORD ping`（见清单） |
+| kafka | Infrastructure | `deployment-kafka.yaml` | 见清单内 `kafka-broker-api-versions` |
+| n8n | Infrastructure | `deployment-n8n.yaml` | HTTP `GET /healthz`（port 5678） |
 | workflow-engine | Backend | `deployment-workflow-engine.yaml` | `/actuator/health` |
 | admin-center | Backend | `deployment-admin-center.yaml` | `/api/v1/admin/actuator/health` |
 | user-portal | Backend | `deployment-user-portal.yaml` | `/api/portal/actuator/health` |
-| kong | Gateway | `deployment-kong.yaml` | `/status` |
+| kong | Gateway | `deployment-kong.yaml` | HTTP `GET /status` **:8001**（Kong Admin 端口） |
 | admin-center-frontend | Frontend | `deployment-frontend.yaml` | `/admin/` |
 | user-portal-frontend | Frontend | `deployment-frontend.yaml` | `/portal/`（以探针为准） |
 | platform-login-frontend | Frontend | `deployment-platform-login-frontend.yaml` | `/login/` |
@@ -183,6 +183,9 @@ deploy/
 │   ├── 10-simple-approval/        # Simple Approval
 │   ├── 12-simple-approval/        # Simple Approval 12
 │   ├── 13-procurement-workflow/   # Procurement Workflow
-│   └── 14-travel-expense-reimbursement/  # Travel Expense
+│   ├── 14-travel-expense-reimbursement/
+│   ├── 15-platform-showcase/ …
+│   ├── 16-meeting-participant-collection/ …
+│   └── 99-maintenance/ …          # 完整子目录以仓库 init-scripts/ 为准
 └── README.md                      # This file
 ```

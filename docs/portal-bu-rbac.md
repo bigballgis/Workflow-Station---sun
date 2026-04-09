@@ -6,7 +6,7 @@
 
 - 用户可持有 **绑定业务单元** 的角色（BU-bound / `BU_BOUNDED`）：权限在「某 BU + 某角色」上下文中解释。
 - 用户也可持有 **不绑定具体 BU** 的平台/业务角色（BU-unbounded / `BU_UNBOUNDED`）：由 admin 侧角色配置决定，门户在权限摘要中单独归类。
-- **工作台上下文**：登录后可在允许的 `(businessUnitId, roleId)` 组合之间切换，后续请求在该上下文中解析权限（JWT 中带 workspace 声明，具体字段以 `JwtTokenServiceImpl` / `LoginResponse` 为准）。
+- **工作台上下文**：登录后可在允许的 `(businessUnitId, roleId)` 组合之间切换，后续请求在该上下文中解析权限（JWT 中带 workspace 声明；签发与解析涉及 **`platform-security`** 的 `JwtTokenServiceImpl` 与 **`user-portal`** 的 `LoginResponse` / `AuthController`，以代码为准）。
 
 ## 后端落点（索引）
 

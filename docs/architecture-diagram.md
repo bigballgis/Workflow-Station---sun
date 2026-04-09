@@ -44,7 +44,7 @@ flowchart TB
 
 ## 与本地 Compose 的差异
 
-- **Dev**：`docker-compose.dev.yml` 可拉起 **developer-workstation** 前后端、Kong、中间件与业务后端；端口见 `BUILD_GUIDE.md` §8.2。
+- **Dev**：`docker-compose.dev.yml` 可拉起 **developer-workstation** 前后端、Kong、**edge-frontend**（默认 `EDGE_FRONTEND_PORT=3000`，单源路径 `/admin/`、`/portal/`、`/login/`、`/dev/`）、中间件与业务后端；各子应用也可直连各自 `*_FRONTEND_PORT`（如 3100–3110）。端口以 `deploy/environments/dev/.env` 为准，汇总表见 `BUILD_GUIDE.md` §8.2。
 - **SIT/UAT/PROD（默认清单）**：`deploy.ps1` **不**部署 `developer-workstation`；需要时在维护窗口手动应用 `deployment-developer-workstation-optional.yaml`（勿用于生产租户 unless 政策允许）。
 
 ## 数据与异步

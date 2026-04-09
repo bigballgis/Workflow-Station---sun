@@ -33,6 +33,8 @@ Enterprise low-code workflow platform for HSBC, providing visual process design,
                     └───────────┘
 ```
 
+浏览器访问 API 的推荐路径为 **前端 nginx → Kong → 后端**（见 [docs/architecture-diagram.md](docs/architecture-diagram.md)）；上图为逻辑组件关系，未画出 Kong 跳线。
+
 ## Tech Stack
 
 | Layer | Technology |
@@ -65,18 +67,19 @@ Enterprise low-code workflow platform for HSBC, providing visual process design,
 - `frontend/admin-center` - Admin management UI
 - `frontend/developer-workstation` - Developer tools UI
 - `frontend/user-portal` - End user portal UI
+- `frontend/login` - Unified login shell（`/login/`，与 K8S `deployment-platform-login-frontend.yaml`、本地 Compose `platform-login-frontend` 对应）
 
 ## Quick Start
 
 ### Prerequisites
 - Java 17+
-- Node.js 20+
+- Node.js 18+（推荐 20 LTS；与 `BUILD_GUIDE.md` §3 一致）
 - Docker & Docker Compose
 - Maven 3.9+
 
 ### Local Development
 
-**推荐**：使用开发 Compose 一键构建并启动（含 PostgreSQL、Redis、Kafka、Kong、四后端、三业务前端 + 可选统一登录等），见 `BUILD_GUIDE.md` §8。
+**推荐**：使用开发 Compose 一键构建并启动（含 PostgreSQL、Redis、Kafka、N8N、Kong、四后端、三业务前端、**platform-login**、**edge-nginx** 单源入口等），见 `BUILD_GUIDE.md` §8。
 
 ```powershell
 cd deploy/environments/dev
@@ -124,19 +127,13 @@ docker compose -f docker-compose.dev.yml --env-file .env up -d --build
 
 ## Configuration
 
-Environment variables:
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `POSTGRES_PASSWORD` | Database password | `platform_dev_password` |
-| `REDIS_PASSWORD` | Redis password | `redis_dev_password` |
-| `JWT_SECRET` | JWT signing key | (dev key) |
-| `ENCRYPTION_SECRET_KEY` | AES-256 encryption key | (dev key) |
+环境变量随部署方式变化；**本地 Docker Dev 以 `deploy/environments/dev/.env` 为单一事实来源**（示例：`POSTGRES_PASSWORD=dev_password_123`、`REDIS_PASSWORD=dev_redis_123`、`JWT_SECRET`、`ENCRYPTION_SECRET_KEY` 等）。K8S 见各环境 `deploy/k8s/configmap-*.yaml` 与 `secret-*.yaml`。
 
 ## API Documentation
 
-API documentation (per service, when enabled):
-- Workflow Engine: `http://localhost:8081/swagger-ui.html`
-- Other services: see each module’s `springdoc` / Swagger configuration
+API documentation (per service, when enabled; Springdoc 3.x 典型路径):
+- Workflow Engine（宿主机默认端口见 `.env` 中 `WORKFLOW_ENGINE_PORT`，常为 **8081**）: `http://localhost:8081/swagger-ui/index.html`，OpenAPI：`http://localhost:8081/v3/api-docs`
+- Other services: 见各模块 `springdoc` 配置与 context-path（如 admin-center 需带 `/api/v1/admin` 前缀）
 
 ## Testing
 
@@ -157,7 +154,9 @@ cd deploy/k8s
 .\deploy.ps1 -Environment sit
 ```
 
-完整流程见根目录 **BUILD_GUIDE.md** 与 **deploy/README.md**。也可在核对 `kustomization.yaml` 后使用 `kubectl apply -k deploy/k8s`（需自行处理环境相关的 ConfigMap/Secret 与镜像仓库）。
+完整流程见根目录 **BUILD_GUIDE.md** 与 **deploy/README.md**。
+
+`kubectl apply -k deploy/k8s`：**当前 `kustomization.yaml` 固定引用 `configmap-sit.yaml` / `secret-sit.yaml`**，仅适合作为 SIT 命名空间的手动基线；UAT/PROD 请优先使用 **`deploy/k8s/deploy.ps1`** 或自行改 `resources` 后再 apply，并替换镜像仓库与 Secret。
 
 本仓库**未**附带 Helm chart；若生产使用 Helm，需自建 chart 或与上述清单对齐。
 

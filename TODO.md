@@ -1,5 +1,7 @@
 # TODO / 待整改项
 
+> **与文档同步**：数据库迁移双轨（`init-scripts` + Flyway）以 [docs/schema-and-migration.md](docs/schema-and-migration.md) 与 `.cursor/rules/project-context.mdc` 为准；下列条目中若与当前代码不一致，以代码与上述文档为准。
+
 ---
 
 ## 🔴 P0 — 安全（上线前必须修复）
@@ -85,10 +87,10 @@
   - `backend/*/src/main/resources/application-docker.yml` (platform-xxx-xxx 容器名)
 - **方案**: 统一所有默认值；Docker profile 中容器名与 docker-compose service name 对齐。
 
-### 9. Flyway 数据库迁移全部禁用
-- **描述**: 所有服务 `flyway.enabled: false`，依赖手动 SQL 脚本初始化。
-- **影响**: 无法追踪 schema 变更历史，多环境 schema 可能不一致。
-- **方案**: 启用 Flyway，将现有 init-scripts 转为 migration 脚本。
+### 9. Flyway 与 init-scripts 双轨（注意 Dev Compose 关闭 Flyway）
+- **现状**: 三服务在 `application.yml` 中 **默认启用 Flyway**；但 **`docker-compose.dev.yml` 传入 `SPRING_FLYWAY_ENABLED=false`**，Dev 容器内 **不跑** Flyway，结构来自 `init-scripts`。K8S / 本地 `spring-boot:run` 若未覆盖该变量，则会跑 Flyway。**workflow-engine-core** 无 Flyway。
+- **文档**: [docs/schema-and-migration.md](docs/schema-and-migration.md) §2.1。
+- **残留风险**: 仅改 Flyway 不改 init（或反之）会导致「新 Docker 库」与「升级中的库」漂移；变更时按该文档检查清单执行。
 
 ### 10. ⏭️ 不适用 — 无独立 Java 边缘服务
 - **说明**: API 边缘为 Kong；环境变量与路由见 `deploy/kong/`、`docker-compose.dev.yml` 与 `deploy/k8s/deployment-kong.yaml`。

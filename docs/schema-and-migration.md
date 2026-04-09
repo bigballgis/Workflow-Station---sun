@@ -10,9 +10,9 @@
 
 新加表时：若希望 **全新 Docker 库** 自动具备该表，应在 `init-scripts` 中增加或更新对应 SQL（并与 Flyway 脚本语义一致）。
 
-## 2. Flyway（已部署环境增量）
+## 2. Flyway（增量迁移）
 
-以下服务在启动时执行 Flyway，路径为各自模块内：
+各模块 `application.yml` 中 **默认 `spring.flyway.enabled: true`**（admin-center / user-portal / developer-workstation）。路径为各自模块内：
 
 | 服务 | `spring.flyway.locations`（典型） |
 |------|----------------------------------|
@@ -22,6 +22,15 @@
 
 - **用途**：已有环境的 **版本化增量**（`Vxxx__description.sql`）。
 - **workflow-engine-core**：当前模块 **未** 引入 Flyway；表结构依赖 `deploy/init-scripts` 与 Flowable/配置中的 schema 策略（见该服务 `application.yml`）。
+
+### 2.1 与本地 Docker Compose 的关系（易错点）
+
+`deploy/environments/dev/docker-compose.dev.yml` 对 **admin-center、user-portal、developer-workstation** 设置了环境变量 **`SPRING_FLYWAY_ENABLED=false`**。因此：
+
+- 在 **Dev 容器** 内启动时 **不会** 跑 Flyway；数据库结构依赖 Postgres 首次挂载时执行的 **`deploy/init-scripts/`**。
+- 在宿主机 **`mvn spring-boot:run`**（未设置该变量）或 **K8S**（若未覆盖 Flyway 开关）时，通常 **会** 按 `application.yml` 执行 Flyway。
+
+若你希望 Dev 容器与 K8S 行为一致、在容器内也执行 Flyway，可去掉 compose 中的 `SPRING_FLYWAY_ENABLED` 或设为 `true`，并确认与 init 脚本无重复 DDL 冲突。
 
 ## 3. 变更检查清单（简）
 

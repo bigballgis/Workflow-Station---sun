@@ -149,7 +149,7 @@ PostgreSQL ── N8N (独立数据库 n8n_{env})
 ```
 Java 17+          (推荐 Eclipse Temurin / Microsoft OpenJDK)
 Maven 3.9+        (mvn --version)
-Node.js 18+       (node --version)
+Node.js 18+       (node --version；推荐 20 LTS，与仓库前端 toolchain 一致)
 npm 9+            (npm --version)
 Docker Desktop    (docker --version, docker compose version)
 kubectl           (SIT/UAT/PROD 部署需要)
@@ -392,22 +392,30 @@ cd deploy/environments/dev
 | 前端 | `admin-center-frontend` | 管理后台 UI | `frontend/admin-center` |
 | 前端 | `user-portal-frontend` | 用户门户 UI | `frontend/user-portal` |
 | 前端 | `developer-workstation-frontend` | 开发者工作台 UI | `frontend/developer-workstation` |
+| 前端 | `platform-login-frontend` | 统一登录 `/login/` | `frontend/login` |
 
 ### 8.2 服务端口映射
 
-| 服务 | 容器内端口 | 宿主机端口 | URL |
-|------|-----------|-----------|-----|
-| PostgreSQL | 5432 | 5432 | `localhost:5432` |
-| Redis | 6379 | 6379 | `localhost:6379` |
-| Kafka (KRaft) | 29092/9092 | 9092 | `localhost:9092` |
-| N8N | 5678 | 5678 | `http://localhost:5678` |
-| workflow-engine | 8080 | 8081 | `http://localhost:8081` |
-| admin-center | 8080 | 8090 | `http://localhost:8090` |
-| user-portal | 8080 | 8082 | `http://localhost:8082` |
-| developer-workstation | 8080 | 8083 | `http://localhost:8083` |
-| admin-center-frontend | 80 | 3000 | `http://localhost:3000` |
-| user-portal-frontend | 80 | 3001 | `http://localhost:3001` |
-| developer-workstation-frontend | 80 | 3002 | `http://localhost:3002` |
+以下宿主机端口以 **`deploy/environments/dev/.env`** 为准（表中为仓库当前默认值）；若你修改了 `.env`，以实际映射为准。
+
+| 服务 | 容器内端口 | 宿主机端口（默认） | URL / 说明 |
+|------|-----------|-------------------|------------|
+| PostgreSQL | 5432 | `POSTGRES_PORT`（5432） | `localhost:5432` |
+| Redis | 6379 | `REDIS_PORT`（6379） | `localhost:6379` |
+| Kafka (KRaft) | 容器内 9092 / 29092 | `KAFKA_PORT`（**19092** → 映射到容器 9092） | `localhost:19092`（宿主机客户端） |
+| N8N | 5678 | `N8N_PORT`（5678） | `http://localhost:5678` |
+| Kong proxy / admin | 8000 / 8001 | `KONG_PROXY_PORT` / `KONG_ADMIN_PORT`（8000 / 8001） | 例如 `http://localhost:8000` |
+| workflow-engine | 8080 | `WORKFLOW_ENGINE_PORT`（8081） | `http://localhost:8081` |
+| admin-center | 8080 | `ADMIN_CENTER_PORT`（8090） | `http://localhost:8090` |
+| user-portal | 8080 | `USER_PORTAL_PORT`（8082） | `http://localhost:8082` |
+| developer-workstation | 8080 | `DEVELOPER_WORKSTATION_PORT`（8083） | `http://localhost:8083` |
+| admin-center-frontend | 80 | `ADMIN_CENTER_FRONTEND_PORT`（**3100**） | 直连静态站：`http://localhost:3100` |
+| user-portal-frontend | 80 | `USER_PORTAL_FRONTEND_PORT`（**3101**） | `http://localhost:3101` |
+| developer-workstation-frontend | 80 | `DEVELOPER_WORKSTATION_FRONTEND_PORT`（**3102**） | `http://localhost:3102` |
+| platform-login-frontend | 80 | `PLATFORM_LOGIN_FRONTEND_PORT`（**3110**） | `http://localhost:3110` |
+| edge-frontend（nginx 聚合 `/admin` `/portal` `/login` `/dev`） | 80 | `EDGE_FRONTEND_PORT`（**3000**） | **推荐本地入口**：`http://localhost:3000` |
+
+> **Flyway**：`docker-compose.dev.yml` 对 admin-center / user-portal / developer-workstation 设置了 **`SPRING_FLYWAY_ENABLED=false`**，Dev 容器依赖 Postgres 首次初始化时的 **`deploy/init-scripts/`**；与默认 `application.yml`（Flyway 启用）及 K8S 行为可能不同，见 [docs/schema-and-migration.md](docs/schema-and-migration.md) §2.1。
 
 ### 8.3 数据库初始化
 
