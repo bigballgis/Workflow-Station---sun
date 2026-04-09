@@ -17,7 +17,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 统一 /login 回调：用 admin-center 签发的 code 换门户 JWT；工作台多选逻辑在本接口完成（与密码登录一致）。
@@ -28,17 +30,21 @@ import java.time.LocalDateTime;
 @RequiredArgsConstructor
 public class AuthSsoExchangeController {
 
+    private static final long PENDING_TTL_SECONDS = 300;
+
     private final AdminCenterSsoClient adminCenterSsoClient;
     private final UserRepository userRepository;
     private final PortalSessionIssuerService portalSessionIssuerService;
+
+    private final ConcurrentHashMap<String, PendingRedeem> pendingRedeems = new ConcurrentHashMap<>();
 
     @PostMapping("/exchange")
     public ResponseEntity<LoginResponse> exchange(
             @Valid @RequestBody SsoExchangeRequest body,
             HttpServletRequest httpRequest) {
         try {
-            AdminCenterSsoClient.SsoRedeemResult redeemed = adminCenterSsoClient.redeemPortalCode(body.getCode());
-            User user = userRepository.findById(redeemed.userId())
+            String userId = resolveUserId(body.getCode());
+            User user = userRepository.findById(userId)
                     .orElseThrow(() -> new IllegalArgumentException("User not found"));
             if (user.isLocked()) {
                 return ResponseEntity.badRequest().body(LoginResponse.builder()
@@ -56,17 +62,51 @@ public class AuthSsoExchangeController {
             user.setLastLoginIp(getClientIpAddress(httpRequest));
             userRepository.save(user);
 
-            return portalSessionIssuerService.issuePortalSession(
+            ResponseEntity<LoginResponse> response = portalSessionIssuerService.issuePortalSession(
                     user,
                     body.getWorkspaceBusinessUnitId(),
                     body.getWorkspaceRoleId(),
                     httpRequest,
                     user.getUsername());
+
+            LoginResponse responseBody = response.getBody();
+            if (responseBody != null && "WORKSPACE_CONTEXT_REQUIRED".equals(responseBody.getLoginErrorCode())) {
+                pendingRedeems.put(body.getCode(), new PendingRedeem(userId, Instant.now()));
+            } else {
+                pendingRedeems.remove(body.getCode());
+            }
+
+            return response;
         } catch (IllegalArgumentException | IllegalStateException e) {
             log.warn("Portal SSO exchange failed: {}", e.getMessage());
             return ResponseEntity.badRequest().body(LoginResponse.builder()
                     .message(e.getMessage())
                     .build());
+        }
+    }
+
+    /**
+     * 先从待定缓存（第一次 exchange 已 redeem 但需要选工作台）取 userId，
+     * 未命中时走 admin-center redeem。
+     */
+    private String resolveUserId(String code) {
+        evictExpired();
+        PendingRedeem cached = pendingRedeems.get(code);
+        if (cached != null && !cached.isExpired()) {
+            return cached.userId;
+        }
+        pendingRedeems.remove(code);
+        AdminCenterSsoClient.SsoRedeemResult redeemed = adminCenterSsoClient.redeemPortalCode(code);
+        return redeemed.userId();
+    }
+
+    private void evictExpired() {
+        pendingRedeems.entrySet().removeIf(e -> e.getValue().isExpired());
+    }
+
+    private record PendingRedeem(String userId, Instant createdAt) {
+        boolean isExpired() {
+            return Instant.now().getEpochSecond() - createdAt.getEpochSecond() > PENDING_TTL_SECONDS;
         }
     }
 
