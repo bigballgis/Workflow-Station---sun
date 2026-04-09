@@ -2,7 +2,7 @@
 
 > 本文档面向 AI 助手和开发者，详尽描述功能单元模块的架构、实体关系、API、数据流、枚举、配置和约定。  
 > **关联**：工作区访问控制（拦截器 / 虚拟组）见仓库 [docs/developer-workstation-workspace-rbac.md](../docs/developer-workstation-workspace-rbac.md)；数据库 **init-scripts 与 Flyway** 及 **Dev Compose 关闭 Flyway** 见 [docs/schema-and-migration.md](../docs/schema-and-migration.md)。  
-> 最后更新: 2026-04-04（含 §7 API 路径与附录 A `VirtualGroupMembershipDao`、`controller`/`component` 清点一致）
+> 最后更新: 2026-04-04（含 §7–§10 路径约定、`DeploymentController` 相对路径表、§10 部署历史与配置）
 
 ---
 
@@ -678,12 +678,12 @@ public ResponseEntity<ApiResponse<Entity>> create(@Valid @RequestBody Request re
 基础路径: `/function-units`
 继承: `BaseController` ❌ (手动构建响应)
 
-| 方法 | 路径 | 权限 | 说明 |
+| 方法 | 路径（接在 `/function-units` 后） | 权限 | 说明 |
 |------|------|------|------|
-| GET | `/function-units/{id}/export` | FUNCTION_UNIT_VIEW | 导出 ZIP 包 |
-| POST | `/function-units/{id}/deploy` | FUNCTION_UNIT_PUBLISH | 一键部署到 admin-center |
-| GET | `/function-units/deployments/{deploymentId}/status` | FUNCTION_UNIT_VIEW | 查询部署状态 |
-| GET | `/function-units/{id}/deployments` | FUNCTION_UNIT_VIEW | 部署历史 |
+| GET | `/{id}/export` | FUNCTION_UNIT_VIEW | 导出 ZIP 包 |
+| POST | `/{id}/deploy` | FUNCTION_UNIT_PUBLISH | 一键部署到 admin-center |
+| GET | `/deployments/{deploymentId}/status` | FUNCTION_UNIT_VIEW | 查询部署状态 |
+| GET | `/{id}/deployments` | FUNCTION_UNIT_VIEW | 部署历史 |
 
 ### 7.8 版本管理 — VersionController
 
@@ -880,6 +880,10 @@ public ResponseEntity<ApiResponse<Entity>> create(@Valid @RequestBody Request re
 ---
 
 ## 8. 核心数据流
+
+### 路径约定（与 §7 一致）
+
+本章节流程图中的 **`POST` / `GET` / `PUT` … 行**均指 **`server.servlet.context-path`（`/api/v1`）之后**的 Servlet 路径（写法与 §7「路径前缀」相同，**不**再重复写 `/api/v1`）。若控制器类级映射以 **`/api/`** 开头（如 `VersionController`），则完整片段形如 **`/api/function-units/{functionUnitName}/versions`**（即出现 §7 所述「双前缀」时的浏览器 pathname）。
 
 ### 8.1 创建功能单元
 
@@ -1120,6 +1124,10 @@ GET /function-units/{id}/dev-groups
 }
 ```
 
+### 与 `VersionController` 的关系
+
+按**功能单元名称**（`functionUnitName`）操作的部署、版本列表、回滚等 HTTP 接口在 **`/api/function-units/...`** 下（§7.8），与按**数值 `id`** 的 `FunctionUnitController` / `DeploymentController` 并存。`dw_versions` 与 `Version.snapshotData` 与两条链路均相关；快照 JSON 结构本节上文已述。
+
 ### 版本比较 (前端)
 
 前端 `version` 模块支持两个版本的 JSON diff 比较，展示:
@@ -1131,6 +1139,8 @@ GET /function-units/{id}/dev-groups
 ---
 
 ## 10. 部署流程
+
+**路径**：以下 `GET` / `POST` 均为 **`/api/v1` 之后**的片段（见 §8 路径约定）。出站调用 admin-center 时使用 **`{admin-center.url}` 根 URL + 其 `context-path`**（通常为 `/api/v1/admin/...`），见步骤内 URL。
 
 ### 一键部署 (DeploymentController → DeploymentComponentImpl)
 
@@ -1179,11 +1189,22 @@ DeployResponse.DeployStatus:
   PENDING | DEPLOYING | SUCCESS | FAILED | ROLLED_BACK
 ```
 
+### 部署历史
+
+```
+GET /function-units/{id}/deployments
+    → 返回 List<DeployResponse>（`DeploymentController.getDeploymentHistory`）
+```
+
 ### 配置
 
 ```yaml
 admin-center:
   url: ${ADMIN_CENTER_URL:http://localhost:8090}
+
+developer:
+  deployment:
+    require-admin-authorization: ${DEVELOPER_DEPLOY_REQUIRE_ADMIN_AUTH:true}
 ```
 
 ---
