@@ -532,6 +532,10 @@ function isolateMiSubTaskData(taskData: any) {
   const myRowId = Number(currentItem.rowId)
   if (Number.isNaN(myRowId)) return
 
+  // #region agent log
+  console.warn('[DEBUG-6ce5f0] H2:isolateEntry', JSON.stringify({myRowId,currentItem,subTableBindingsCount:subTableBindings.value.length,subTableBindingNames:subTableBindings.value.map((b:any)=>b.tableName),subTableBindingRowCounts:subTableBindings.value.map((b:any)=>({name:b.tableName,rowCount:(b.data||[]).length}))}));
+  // #endregion
+
   // Multi-instance data isolation: each sub-task only sees its own participant row.
   for (const binding of subTableBindings.value) {
     const rows = Array.isArray(binding.data) ? binding.data : []
@@ -552,6 +556,10 @@ function isolateMiSubTaskData(taskData: any) {
     .flatMap((b: any) => b.data || [])
     .find((row: any) => Number(row?.id) === myRowId || Number(row?.rowId) === myRowId)
 
+  // #region agent log
+  console.warn('[DEBUG-6ce5f0] H3:myRow', JSON.stringify({myRowId,myRowFound:!!myRow,myRowKeys:myRow?Object.keys(myRow):[],myRowValues:myRow?Object.fromEntries(Object.entries(myRow).slice(0,20)):null}));
+  // #endregion
+
   const originalFormData = { ...formData.value }
   const cleanedFormData: Record<string, any> = {}
   const systemKeys = Object.keys(originalFormData).filter(
@@ -569,13 +577,39 @@ function isolateMiSubTaskData(taskData: any) {
   }
 
   const formKeys = getCurrentFormFieldKeys()
+  // #region agent log
+  const _fallbackKeys: string[] = [];
+  const _myRowKeys: string[] = [];
+  const _nullKeys: string[] = [];
+  // #endregion
   for (const key of formKeys) {
     if (myRow && Object.prototype.hasOwnProperty.call(myRow, key)) {
       cleanedFormData[key] = (myRow as Record<string, any>)[key]
-    } else if (Object.prototype.hasOwnProperty.call(originalFormData, key)) {
-      cleanedFormData[key] = originalFormData[key]
+      // #region agent log
+      _myRowKeys.push(key);
+      // #endregion
     } else {
       cleanedFormData[key] = null
+      // #region agent log
+      _nullKeys.push(key);
+      // #endregion
+    }
+  }
+  // #region agent log
+  console.warn('[DEBUG-6ce5f0] H2+H3:fieldMapping', JSON.stringify({formKeys,myRowKeys:_myRowKeys,fallbackToProcessVarsKeys:_fallbackKeys,nullKeys:_nullKeys,fallbackValues:Object.fromEntries(_fallbackKeys.map(k=>[k,originalFormData[k]])),cleanedFormDataSample:Object.fromEntries(Object.entries(cleanedFormData).filter(([k])=>!k.startsWith('_')&&!k.startsWith('__')).slice(0,20))}));
+  // #endregion
+
+  // Preserve previous form field values (readonly display of parent task data)
+  const prevFormFieldKeys = new Set<string>()
+  previousForms.value.forEach((pf: any) => {
+    ;(pf.fields || []).forEach((f: any) => { if (f?.key) prevFormFieldKeys.add(String(f.key)) })
+    ;(pf.tabs || []).forEach((tab: any) => {
+      ;(tab?.fields || []).forEach((f: any) => { if (f?.key) prevFormFieldKeys.add(String(f.key)) })
+    })
+  })
+  for (const key of prevFormFieldKeys) {
+    if (!(key in cleanedFormData) && Object.prototype.hasOwnProperty.call(originalFormData, key)) {
+      cleanedFormData[key] = originalFormData[key]
     }
   }
 
@@ -692,6 +726,9 @@ const loadTaskDetail = async () => {
     const data = res.data || res
     if (data) {
       taskInfo.value = data
+      // #region agent log
+      console.warn('[DEBUG-6ce5f0] H1:loadTaskDetail', JSON.stringify({taskId,taskDefKey:data.taskDefinitionKey,variableKeys:Object.keys(data.variables||{}),_currentItem:data.variables?._currentItem,sampleFieldValues:Object.fromEntries(Object.entries(data.variables||{}).filter(([k])=>!k.startsWith('_')&&!k.startsWith('__')&&k!=='initiator'&&k!=='meeting_id'&&k!=='mainRecordId'&&k!=='approval_result'&&k!=='approved').slice(0,15))}));
+      // #endregion
       if (data.variables) formData.value = data.variables
       // 先加载流转历史，因为解析流程图需要用到历史记录
       await loadTaskHistory()
@@ -1059,6 +1096,9 @@ const loadProcessAndTaskFormData = async (taskData: any) => {
             // 多实例子任务不直接合并流程变量字段值，避免不同子任务串值。
             // 行级数据会在 loadTaskDetail 中按 _currentItem.rowId 再合并。
             if (miSubTask) {
+              // #region agent log
+              console.warn('[DEBUG-6ce5f0] H1:miSkipFieldValues', JSON.stringify({taskId:currentTaskId,tfFieldValueKeys:Object.keys(tfData.fieldValues||{}),tfFieldValues:tfData.fieldValues}));
+              // #endregion
               return
             }
             // Task Form 的字段值来自流程变量

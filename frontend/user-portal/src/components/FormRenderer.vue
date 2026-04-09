@@ -430,12 +430,14 @@ const initFormData = () => {
   isInternalUpdate = true
   formData.value = data
   setTimeout(() => { isInternalUpdate = false }, 0)
+  nextTick(() => formRef.value?.clearValidate())
 }
 
 // ---------------------------------------------------------------------------
 // Form rules
 // ---------------------------------------------------------------------------
 const formRules = computed<FormRules>(() => {
+  if (props.readonly) return {}
   const rules: FormRules = {}
   allFields.value.forEach(field => {
     if (field.required || field.rules) {
