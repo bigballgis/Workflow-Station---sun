@@ -232,6 +232,7 @@ export default {
     noTaskForm: '目前階段未綁定任務表單',
     submitTaskForm: '提交',
     allParticipantsMustHaveAssignee: '請為子表中每一列點擊「分配」指定處理人後再完成。',
+    addParticipantInfoForm: '新增參與者資訊表',
   },
   process: {
     title: '新建申請',

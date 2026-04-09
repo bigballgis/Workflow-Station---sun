@@ -107,7 +107,7 @@
       </el-table-column>
 
       <!-- Fill form button for multi-instance subtask (todo mode) -->
-      <el-table-column v-if="showFillButton" :label="t('subTable.actions')" width="100" align="center">
+      <el-table-column v-if="showFillButton" :label="t('subTable.actions')" :min-width="fillButtonLabel ? 200 : 100" align="center">
         <template #default="scope">
           <el-button
             link
@@ -115,7 +115,7 @@
             size="small"
             @click="emit('fillForm', scope.row, scope.$index)"
           >
-            {{ t('subTable.add') }}
+            {{ fillButtonLabel || t('subTable.add') }}
           </el-button>
         </template>
       </el-table-column>
@@ -280,6 +280,7 @@ const props = defineProps<{
   showTaskStatus?: boolean
   // Fill form button (todo detail for MI subtask)
   showFillButton?: boolean
+  fillButtonLabel?: string
 }>()
 
 const emit = defineEmits<{

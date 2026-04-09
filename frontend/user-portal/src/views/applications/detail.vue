@@ -79,7 +79,22 @@
 
       <!-- 第三部分：前置节点表单（只读，按顺序展示） -->
       <template v-for="prevForm in previousForms" :key="prevForm.formId">
-        <div class="section form-section">
+        <!-- MI subtask 表单不渲染 card，仅保留子表（participants 等） -->
+        <template v-if="prevForm.isMiSubTask">
+          <div v-for="binding in prevForm.subTableBindings" :key="binding.bindingId" class="sub-table-section">
+            <SubTableField
+              :title="binding.tableName"
+              :columns="binding.columns"
+              v-model="binding.data"
+              :editable="false"
+              :assignee-field="hasAssignmentData(binding.data) ? 'assignee_user_id' : undefined"
+              :show-task-status="hasTaskStatusData(binding.data)"
+              :show-view-detail="hasSubTaskFormSchema && hasTaskStatusData(binding.data)"
+              @viewDetail="(row: any) => openSubTaskDetailDialog(row)"
+            />
+          </div>
+        </template>
+        <div v-else class="section form-section">
           <div class="section-header">
             <el-icon><Document /></el-icon>
             <span>{{ prevForm.formName }}</span>
@@ -113,8 +128,8 @@
         </div>
       </template>
 
-      <!-- 表单数据 -->
-      <div class="section form-section">
+      <!-- 表单数据（MI subtask 时不渲染独立 card，表单字段通过子表 Detail 按钮弹窗展示） -->
+      <div v-if="!currentFormIsMiSubTask" class="section form-section">
         <div class="section-header">
           <el-icon><Document /></el-icon>
           <span>{{ currentFormName || t('applicationDetail.applicationForm') }}</span>
@@ -319,6 +334,7 @@ interface PreviousFormEntry {
   labelWidth: string
   fields: FormField[]
   tabs: FormTab[]
+  isMiSubTask: boolean
   subTableBindings: Array<{
     bindingId: number
     bindingType: string
@@ -340,6 +356,7 @@ const subTaskDetailFields = ref<FormField[]>([])
 const subTaskDetailData = ref<Record<string, any>>({})
 const subTaskFormSchema = ref<any>(null)
 const subTaskFormId = ref<string | null>(null)
+const currentFormIsMiSubTask = ref(false)
 
 const hasSubTaskFormSchema = computed(() => !!subTaskFormSchema.value)
 
@@ -358,7 +375,19 @@ function openSubTaskDetailDialog(row: any) {
     schema.rule && Array.isArray(schema.rule) ? schema.rule : (Array.isArray(schema) ? schema : [])
   )
   subTaskDetailFields.value = fields
-  subTaskDetailData.value = { ...row }
+
+  const mergedData: Record<string, any> = { ...row }
+  // Fallback: for MI form fields absent from the row, use process-level variables.
+  // This covers data saved before the row-level merge was introduced.
+  for (const f of fields) {
+    if (f.key && (mergedData[f.key] === undefined || mergedData[f.key] === null)) {
+      if (formData.value[f.key] !== undefined) {
+        mergedData[f.key] = formData.value[f.key]
+      }
+    }
+  }
+  subTaskDetailData.value = mergedData
+
   subTaskDetailTitle.value = row.assignee_display_name
     ? `${subTaskFormSchema.value._formName || 'Participant Info Form'} — ${row.assignee_display_name}`
     : subTaskFormSchema.value._formName || 'Participant Info Form'
@@ -699,6 +728,11 @@ const loadFunctionUnitContent = async (processKey: string) => {
         }
       }
 
+      currentFormIsMiSubTask.value = !!(
+        (subTaskFormId.value && String(selectedForm.id) === subTaskFormId.value) ||
+        (subTaskFormSchema.value && subTaskFormSchema.value._formName === selectedForm.name)
+      )
+
       // 收集当前节点之前所有节点绑定的不同表单（只读展示）；发起人看自己的申请时不展示「前置」块（避免申请单 + 审批表单双显）
       if (content.processes?.length > 0 && !useInitiatorFormOnly) {
         const prevFormIds = parseBpmnXmlAndGetPreviousFormIds(content.processes[0].data)
@@ -724,7 +758,10 @@ const loadFunctionUnitContent = async (processKey: string) => {
           // Skip the subtask form — its content is shown via the Detail button
           // in the participants sub-table. But never skip a form that has sub-table
           // bindings (it carries the participants table needed for display).
-          if (subTaskFormId.value && String(prevForm.id) === subTaskFormId.value) {
+          const isKnownMiSubTaskForm =
+            (subTaskFormId.value && String(prevForm.id) === subTaskFormId.value) ||
+            (subTaskFormSchema.value && prevForm.name === subTaskFormSchema.value._formName)
+          if (isKnownMiSubTaskForm) {
             const bindings = prevForm.tableBindings || []
             if (!bindings.some((b: any) => b.bindingType !== 'PRIMARY')) {
               continue
@@ -777,8 +814,9 @@ const loadFunctionUnitContent = async (processKey: string) => {
             formId: String(prevForm.id),
             formName: prevForm.name,
             labelWidth: formLabelWidth.value,
-            fields: parsedFields,
-            tabs: parsedTabs,
+            fields: isKnownMiSubTaskForm ? [] : parsedFields,
+            tabs: isKnownMiSubTaskForm ? [] : parsedTabs,
+            isMiSubTask: !!isKnownMiSubTaskForm,
             subTableBindings: prevBindings
           })
         }
@@ -1052,6 +1090,13 @@ const findMiSubTaskFormIdFromBpmn = (xml: string): string | null => {
         if (childLocal === 'multiInstanceLoopCharacteristics') {
           isMultiInstance = true
           break
+        }
+      }
+      // Fallback: developer-workstation uses "MI_" prefix convention for multi-instance tasks
+      if (!isMultiInstance) {
+        const taskId = el.getAttribute('id') || ''
+        if (taskId.startsWith('MI_')) {
+          isMultiInstance = true
         }
       }
       if (!isMultiInstance) continue

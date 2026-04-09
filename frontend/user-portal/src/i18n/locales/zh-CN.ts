@@ -244,6 +244,7 @@ export default {
     confirmCancel: '确定要取消吗？未保存的数据将丢失。',
     dataModifiedPleaseRefresh: '数据已被修改，请刷新后重试',
     allParticipantsMustHaveAssignee: '请为子表中每一行点击「分配」指定处理人后再完成。',
+    addParticipantInfoForm: '添加参与者信息表',
   },
   process: {
     title: '新建申请',

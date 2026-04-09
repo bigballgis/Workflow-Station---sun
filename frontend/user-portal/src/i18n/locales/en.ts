@@ -244,6 +244,7 @@ export default {
     confirmCancel: 'Are you sure you want to cancel? Unsaved data will be lost.',
     dataModifiedPleaseRefresh: 'Data has been modified, please refresh and try again',
     allParticipantsMustHaveAssignee: 'Assign a user to every sub-table row (use Assign) before completing.',
+    addParticipantInfoForm: 'Add Participant Info Form',
   },
   process: {
     title: 'New Requests',

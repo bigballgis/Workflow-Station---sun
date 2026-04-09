@@ -140,6 +140,9 @@
                   :columns="binding.columns"
                   v-model="binding.data"
                   :editable="false"
+                  :show-fill-button="isMiSubTaskMode && isParticipantsBinding(binding)"
+                  :fill-button-label="t('task.addParticipantInfoForm')"
+                  @fillForm="(row: any) => openMiFillDialog(row)"
                 />
               </div>
             </template>
@@ -147,14 +150,13 @@
         </div>
       </template>
 
-      <!-- 第三部分：表单数据 -->
-      <div class="section form-section">
+      <!-- 第三部分：表单数据（MI subtask 时表单字段通过子表 Add 按钮弹窗展示，无需独立 card） -->
+      <div v-if="!isMiSubTaskMode || bottomSubTableBindings.length > 0" class="section form-section">
         <div class="section-header">
           <el-icon><Document /></el-icon>
           <span>{{ currentFormName || t('task.taskForm') }}</span>
         </div>
         <div class="section-content">
-          <!-- MI subtask: form fields are shown via the 'Add' button dialog in the sub-table -->
           <template v-if="!isMiSubTaskMode">
             <div v-if="formFields.length > 0 || formTabs.length > 0" class="form-container">
               <FormRenderer
@@ -190,6 +192,7 @@
                 :show-assign-button="allowSubTableAssignForCurrentTask && !!effectiveTaskId && !!resolveAssigneeFieldForBinding(binding.columns, binding.tableName)"
                 :can-assign="allowSubTableAssignForCurrentTask && !formReadOnly && binding.bindingMode === 'EDITABLE' && !!effectiveTaskId && !!resolveAssigneeFieldForBinding(binding.columns, binding.tableName)"
                 :show-fill-button="isMiSubTaskMode && !formReadOnly"
+                :fill-button-label="isParticipantsBinding(binding) ? t('task.addParticipantInfoForm') : undefined"
                 @fillForm="(row: any) => openMiFillDialog(row)"
               />
             </div>
@@ -368,13 +371,13 @@
           :tabs="formTabs"
           v-model="miFillDialogData"
           :label-width="formLabelWidth"
-          :readonly="formReadOnly"
+          :readonly="formReadOnly || miFillDialogReadOnly"
         />
       </div>
       <el-empty v-else :description="t('task.noFormData')" />
       <template #footer>
         <el-button @click="miFillDialogVisible = false">{{ t('common.cancel') }}</el-button>
-        <el-button v-if="!formReadOnly" type="primary" @click="saveMiFillDialog">
+        <el-button v-if="!formReadOnly && !miFillDialogReadOnly" type="primary" @click="saveMiFillDialog">
           {{ t('common.confirm') }}
         </el-button>
       </template>
@@ -533,6 +536,11 @@ const allowSubTableAssignForCurrentTask = computed(() => {
   return tdk === 'Task_AssignParticipants'
 })
 
+function isParticipantsBinding(binding: { tableName: string }): boolean {
+  const tn = (binding.tableName || '').toLowerCase()
+  return tn === 'participants' || tn.endsWith('participants')
+}
+
 const isMiSubTask = (taskData: any): boolean => {
   const defKey = String(taskData?.taskDefinitionKey || '')
   if (defKey.startsWith('MI_UserTask_')) {
@@ -547,6 +555,8 @@ const isMiSubTaskMode = ref(false)
 // MI subtask fill-form dialog state
 const miFillDialogVisible = ref(false)
 const miFillDialogData = ref<Record<string, any>>({})
+const miFilled = ref(false)
+const miFillDialogReadOnly = ref(false)
 
 function getCurrentFormFieldKeys(): string[] {
   const keys = new Set<string>()
@@ -632,12 +642,35 @@ function isolateMiSubTaskData(taskData: any) {
 
 function openMiFillDialog(row: any) {
   miFillDialogData.value = { ...formData.value }
+  miFillDialogReadOnly.value = false
   miFillDialogVisible.value = true
 }
 
 function saveMiFillDialog() {
   formData.value = { ...formData.value, ...miFillDialogData.value }
+  miFilled.value = true
   miFillDialogVisible.value = false
+
+  // Persist MI form field values into the participant row so that
+  // the backend stores the complete row and the Detail dialog in
+  // completed-tasks view can render the filled data.
+  if (isMiSubTaskMode.value) {
+    const formKeys = getCurrentFormFieldKeys()
+    const miValues: Record<string, any> = {}
+    for (const key of formKeys) {
+      if (miFillDialogData.value[key] !== undefined) {
+        miValues[key] = miFillDialogData.value[key]
+      }
+    }
+    const mergeIntoRows = (rows: any[]) => {
+      if (!Array.isArray(rows)) return
+      for (const row of rows) Object.assign(row, miValues)
+    }
+    for (const b of subTableBindings.value) mergeIntoRows(b.data)
+    for (const pf of previousForms.value) {
+      for (const b of pf.subTableBindings) mergeIntoRows(b.data)
+    }
+  }
 }
 
 /** 仅在「分配参与人」节点校验：子表每行已点分配（与后端 Task_AssignParticipants + buildParticipantsCollection 一致） */
@@ -765,6 +798,11 @@ const loadTaskDetail = async () => {
       if (isMiSubTask(data)) {
         isMiSubTaskMode.value = true
         isolateMiSubTaskData(data)
+        const formKeys = getCurrentFormFieldKeys()
+        miFilled.value = formKeys.some(key => {
+          const val = formData.value[key]
+          return val != null && val !== '' && val !== false
+        })
       }
     }
   } catch (error: any) {
