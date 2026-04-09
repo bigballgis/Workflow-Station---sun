@@ -37,9 +37,28 @@
             <el-icon><DataAnalysis /></el-icon>
             <template #title>BI Dashboard</template>
           </el-menu-item>
-          <el-menu-item v-if="showFullPortal" index="/tasks">
-            <el-icon><List /></el-icon>
-            <template #title>{{ t('menu.tasks') }}</template>
+          <el-menu-item v-if="showFullPortal" index="/tasks" class="menu-item-tasks">
+            <el-badge
+              :value="pendingTaskCount"
+              :max="99"
+              :hidden="pendingTaskCount === 0"
+              type="danger"
+              class="task-menu-badge-icon"
+            >
+              <el-icon><List /></el-icon>
+            </el-badge>
+            <template #title>
+              <span class="task-menu-title-with-badge">
+                <span class="task-menu-title-text">{{ t('menu.tasks') }}</span>
+                <el-badge
+                  :value="pendingTaskCount"
+                  :max="99"
+                  :hidden="pendingTaskCount === 0"
+                  type="danger"
+                  class="task-menu-badge-text"
+                />
+              </span>
+            </template>
           </el-menu-item>
           <el-menu-item v-if="showFullPortal" index="/tasks/completed">
             <el-icon><Finished /></el-icon>
@@ -130,11 +149,14 @@ import UserProfileDropdown from '@/components/UserProfileDropdown.vue'
 import NotificationBadge from '@/components/NotificationBadge.vue'
 import { biDashboardApi } from '@/api/biDashboard'
 import { usePendingApprovalStore } from '@/stores/pendingApproval'
+import { usePendingTaskStore } from '@/stores/pendingTask'
 
 const { t } = useI18n()
 const route = useRoute()
 const pendingApprovalStore = usePendingApprovalStore()
 const { count: pendingApprovalCount } = storeToRefs(pendingApprovalStore)
+const pendingTaskStore = usePendingTaskStore()
+const { count: pendingTaskCount } = storeToRefs(pendingTaskStore)
 
 const isCollapsed = ref(false)
 const cachedViews = ref(['Dashboard', 'Tasks', 'MyApplications'])
@@ -182,6 +204,7 @@ async function syncPortalAccessFromServer() {
     workspaceContextCount.value = 0
   }
   void pendingApprovalStore.fetchPendingCount()
+  void pendingTaskStore.fetchPendingCount()
   try {
     const u = await getCurrentUser()
     const hasCtx = (workspaceContextCount.value ?? 0) > 0
@@ -207,6 +230,7 @@ watch(
   () => route.path,
   () => {
     void pendingApprovalStore.fetchPendingCount()
+    void pendingTaskStore.fetchPendingCount()
   }
 )
 
@@ -272,6 +296,13 @@ const toggleCollapse = () => {
     border-right: none;
 
     /* 展开：徽标在菜单文字右侧；收起：徽标在图标上 */
+    &:not(.el-menu--collapse) .menu-item-tasks .task-menu-badge-icon :deep(.el-badge__content) {
+      display: none !important;
+    }
+    &.el-menu--collapse .menu-item-tasks .task-menu-badge-text {
+      display: none !important;
+    }
+
     &:not(.el-menu--collapse) .menu-item-permissions .perm-menu-badge-icon :deep(.el-badge__content) {
       display: none !important;
     }
@@ -280,6 +311,38 @@ const toggleCollapse = () => {
     }
 
     /* el-menu-item 全局有 * { vertical-align: bottom }，会把徽标压到偏下；此处拉回垂直居中 */
+    .menu-item-tasks {
+      .task-menu-title-with-badge,
+      .task-menu-title-with-badge :deep(*) {
+        vertical-align: middle !important;
+      }
+
+      .task-menu-badge-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .task-menu-badge-icon :deep(.el-badge__content.is-fixed) {
+        top: 50%;
+        transform: translateY(-50%) translateX(100%);
+      }
+    }
+
+    .menu-item-tasks .task-menu-title-with-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      min-width: 0;
+    }
+    .menu-item-tasks .task-menu-title-text {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
     .menu-item-permissions {
       .perm-menu-title-with-badge,
       .perm-menu-title-with-badge :deep(*) {
