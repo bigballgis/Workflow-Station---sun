@@ -2,7 +2,7 @@
 
 > 本文档面向 AI 助手和开发者，详尽描述功能单元模块的架构、实体关系、API、数据流、枚举、配置和约定。  
 > **关联**：工作区访问控制（拦截器 / 虚拟组）见仓库 [docs/developer-workstation-workspace-rbac.md](../docs/developer-workstation-workspace-rbac.md)；数据库 **init-scripts 与 Flyway** 及 **Dev Compose 关闭 Flyway** 见 [docs/schema-and-migration.md](../docs/schema-and-migration.md)。  
-> 最后更新: 2026-04-04（含 §7–§10 路径约定、`DeploymentController` 相对路径表、§10 部署历史与配置）
+> 最后更新: 2026-04-10（含 §7 各控制器表格路径统一为“接在基础路径后”的相对片段）
 
 ---
 
@@ -586,92 +586,92 @@ public ResponseEntity<ApiResponse<Entity>> create(@Valid @RequestBody Request re
 基础路径: `/function-units`
 继承: `BaseController` ✅
 
-| 方法 | 路径 | 权限 | 说明 |
+| 方法 | 路径（接在基础路径后） | 权限 | 说明 |
 |------|------|------|------|
-| POST | `/function-units` | FUNCTION_UNIT_CREATE | 创建功能单元 |
-| PUT | `/function-units/{id}` | FUNCTION_UNIT_UPDATE | 更新功能单元 |
-| DELETE | `/function-units/{id}` | FUNCTION_UNIT_DELETE | 删除功能单元 |
-| GET | `/function-units/{id}` | FUNCTION_UNIT_VIEW | 获取详情 (返回 FunctionUnitResponse) |
-| GET | `/function-units?name=&status=` | FUNCTION_UNIT_VIEW | 分页列表 (Pageable) |
-| POST | `/function-units/{id}/publish?changeLog=` | FUNCTION_UNIT_PUBLISH | 发布版本 |
-| POST | `/function-units/{id}/clone?newName=` | FUNCTION_UNIT_CREATE | 克隆功能单元 |
-| GET | `/function-units/{id}/validate` | FUNCTION_UNIT_VIEW | 完整性校验 |
-| GET | `/function-units/{id}/versions` | FUNCTION_UNIT_VIEW | 版本历史 |
-| GET | `/function-units/{id}/dev-groups` | FUNCTION_UNIT_VIEW | 已分配虚拟开发组 ID 列表 |
-| PUT | `/function-units/{id}/dev-groups` | FUNCTION_UNIT_ASSIGN_DEV_GROUP | 替换功能单元—虚拟开发组映射 |
+| POST | `/` | FUNCTION_UNIT_CREATE | 创建功能单元 |
+| PUT | `/{id}` | FUNCTION_UNIT_UPDATE | 更新功能单元 |
+| DELETE | `/{id}` | FUNCTION_UNIT_DELETE | 删除功能单元 |
+| GET | `/{id}` | FUNCTION_UNIT_VIEW | 获取详情 (返回 FunctionUnitResponse) |
+| GET | `/` | FUNCTION_UNIT_VIEW | 分页列表 (Pageable)，query: `name` / `status` |
+| POST | `/{id}/publish` | FUNCTION_UNIT_PUBLISH | 发布版本，query: `changeLog` |
+| POST | `/{id}/clone` | FUNCTION_UNIT_CREATE | 克隆功能单元，query: `newName` |
+| GET | `/{id}/validate` | FUNCTION_UNIT_VIEW | 完整性校验 |
+| GET | `/{id}/versions` | FUNCTION_UNIT_VIEW | 版本历史 |
+| GET | `/{id}/dev-groups` | FUNCTION_UNIT_VIEW | 已分配虚拟开发组 ID 列表 |
+| PUT | `/{id}/dev-groups` | FUNCTION_UNIT_ASSIGN_DEV_GROUP | 替换功能单元—虚拟开发组映射 |
 
 ### 7.2 表设计 — TableDesignController
 
 基础路径: `/function-units/{functionUnitId}/tables`
 继承: `BaseController` ✅
 
-| 方法 | 路径 | 说明 |
+| 方法 | 路径（接在基础路径后） | 说明 |
 |------|------|------|
-| GET | `/tables` | 列出所有表 |
-| POST | `/tables` | 创建表 |
-| PUT | `/tables/{tableId}` | 更新表 |
-| DELETE | `/tables/{tableId}` | 删除表 |
-| GET | `/tables/{tableId}` | 获取表详情 |
-| GET | `/tables/{tableId}/ddl?dialect=POSTGRESQL` | 生成 DDL |
-| GET | `/tables/validate` | 校验表结构 |
-| GET | `/tables/foreign-keys` | 获取所有外键关系 |
+| GET | `/` | 列出所有表 |
+| POST | `/` | 创建表 |
+| PUT | `/{tableId}` | 更新表 |
+| DELETE | `/{tableId}` | 删除表 |
+| GET | `/{tableId}` | 获取表详情 |
+| GET | `/{tableId}/ddl` | 生成 DDL，query: `dialect`（如 `POSTGRESQL`） |
+| GET | `/validate` | 校验表结构 |
+| GET | `/foreign-keys` | 获取所有外键关系 |
 
 ### 7.3 表单设计 — FormDesignController
 
 基础路径: `/function-units/{functionUnitId}/forms`
 继承: `BaseController` ❌ (手动构建响应)
 
-| 方法 | 路径 | 说明 |
+| 方法 | 路径（接在基础路径后） | 说明 |
 |------|------|------|
-| GET | `/forms` | 列出所有表单 |
-| POST | `/forms` | 创建表单 |
-| PUT | `/forms/{formId}` | 更新表单 |
-| DELETE | `/forms/{formId}` | 删除表单 |
-| GET | `/forms/{formId}` | 获取表单详情 |
-| GET | `/forms/{formId}/form-create-config` | 生成 form-create 配置 |
-| GET | `/forms/{formId}/validate` | 校验表单配置 |
-| GET | `/forms/{formId}/bindings` | 列出表绑定 |
-| POST | `/forms/{formId}/bindings` | 创建表绑定 |
-| PUT | `/forms/{formId}/bindings/{bindingId}` | 更新表绑定 |
-| DELETE | `/forms/{formId}/bindings/{bindingId}` | 删除表绑定 |
-| GET | `/forms/data-table-columns` | 数据表列元数据（设计器辅助） |
-| POST | `/forms/{formId}/copy` | 复制表单 |
+| GET | `/` | 列出所有表单 |
+| POST | `/` | 创建表单 |
+| PUT | `/{formId}` | 更新表单 |
+| DELETE | `/{formId}` | 删除表单 |
+| GET | `/{formId}` | 获取表单详情 |
+| GET | `/{formId}/form-create-config` | 生成 form-create 配置 |
+| GET | `/{formId}/validate` | 校验表单配置 |
+| GET | `/{formId}/bindings` | 列出表绑定 |
+| POST | `/{formId}/bindings` | 创建表绑定 |
+| PUT | `/{formId}/bindings/{bindingId}` | 更新表绑定 |
+| DELETE | `/{formId}/bindings/{bindingId}` | 删除表绑定 |
+| GET | `/data-table-columns` | 数据表列元数据（设计器辅助） |
+| POST | `/{formId}/copy` | 复制表单 |
 
 ### 7.4 动作设计 — ActionDesignController
 
 基础路径: `/function-units/{functionUnitId}/actions`
 继承: `BaseController` ❌ (手动构建响应)
 
-| 方法 | 路径 | 说明 |
+| 方法 | 路径（接在基础路径后） | 说明 |
 |------|------|------|
-| GET | `/actions` | 列出所有动作 |
-| POST | `/actions` | 创建动作 |
-| PUT | `/actions/{actionId}` | 更新动作 |
-| DELETE | `/actions/{actionId}` | 删除动作 |
-| GET | `/actions/{actionId}` | 获取动作详情 |
-| POST | `/actions/{actionId}/test` | 测试动作执行 |
+| GET | `/` | 列出所有动作 |
+| POST | `/` | 创建动作 |
+| PUT | `/{actionId}` | 更新动作 |
+| DELETE | `/{actionId}` | 删除动作 |
+| GET | `/{actionId}` | 获取动作详情 |
+| POST | `/{actionId}/test` | 测试动作执行 |
 
 ### 7.5 动作查询 — ActionQueryController
 
 基础路径: `/actions` (跨功能单元)
 继承: `BaseController` ❌
 
-| 方法 | 路径 | 说明 |
+| 方法 | 路径（接在基础路径后） | 说明 |
 |------|------|------|
-| GET | `/actions/batch?ids=12,16,17` | 批量获取动作定义 |
-| GET | `/actions/{actionId}` | 按 ID 获取动作 |
+| GET | `/batch` | 批量获取动作定义，query: `ids`（如 `12,16,17`） |
+| GET | `/{actionId}` | 按 ID 获取动作 |
 
 ### 7.6 流程设计 — ProcessDesignController
 
 基础路径: `/function-units/{functionUnitId}/process`
 继承: `BaseController` ❌ (手动构建响应)
 
-| 方法 | 路径 | 说明 |
+| 方法 | 路径（接在基础路径后） | 说明 |
 |------|------|------|
-| GET | `/process` | 获取流程定义 |
-| POST | `/process` | 保存流程定义 (body: `{"bpmnXml": "..."}`) |
-| GET | `/process/validate` | 校验流程定义 |
-| POST | `/process/simulate` | 模拟流程执行 |
+| GET | `/` | 获取流程定义 |
+| POST | `/` | 保存流程定义 (body: `{"bpmnXml": "..."}`) |
+| GET | `/validate` | 校验流程定义 |
+| POST | `/simulate` | 模拟流程执行 |
 
 ### 7.7 部署 — DeploymentController
 
@@ -690,7 +690,7 @@ public ResponseEntity<ApiResponse<Entity>> create(@Valid @RequestBody Request re
 基础路径: `/api/function-units` (注意: 不同于其他控制器的路径)
 继承: `BaseController` ❌
 
-| 方法 | 路径 | 说明 |
+| 方法 | 路径（接在基础路径后） | 说明 |
 |------|------|------|
 | POST | `/{functionUnitName}/deploy` | 部署新版本 |
 | GET | `/{functionUnitName}/versions` | 获取版本历史 |
@@ -704,7 +704,7 @@ public ResponseEntity<ApiResponse<Entity>> create(@Valid @RequestBody Request re
 基础路径: `/export-import`
 继承: `BaseController` ❌
 
-| 方法 | 路径 | 说明 |
+| 方法 | 路径（接在基础路径后） | 说明 |
 |------|------|------|
 | GET | `/function-units/{id}/export` | 导出功能单元 ZIP |
 | POST | `/import` | 导入功能单元 (multipart, conflictStrategy: SKIP/OVERWRITE) |
@@ -716,22 +716,22 @@ public ResponseEntity<ApiResponse<Entity>> create(@Valid @RequestBody Request re
 基础路径: `/icons`
 继承: `BaseController` ❌
 
-| 方法 | 路径 | 说明 |
+| 方法 | 路径（接在基础路径后） | 说明 |
 |------|------|------|
-| GET | `/icons?keyword=&category=&tag=` | 分页搜索图标 |
-| GET | `/icons/tags` | 获取所有标签 |
-| GET | `/icons/categories` | 获取所有分类 |
-| POST | `/icons` | 上传图标 (multipart: file, name, category) |
-| DELETE | `/icons/{id}` | 删除图标 |
-| GET | `/icons/{id}` | 获取图标详情 |
-| GET | `/icons/{id}/usage` | 检查图标是否被使用 |
+| GET | `/` | 分页搜索图标，query: `keyword` / `category` / `tag` |
+| GET | `/tags` | 获取所有标签 |
+| GET | `/categories` | 获取所有分类 |
+| POST | `/` | 上传图标 (multipart: file, name, category) |
+| DELETE | `/{id}` | 删除图标 |
+| GET | `/{id}` | 获取图标详情 |
+| GET | `/{id}/usage` | 检查图标是否被使用 |
 
 ### 7.11 AI 生成 — AiGenerationController
 
 基础路径: `/ai-generation`
 继承: `BaseController` ✅
 
-| 方法 | 路径 | 权限 | 说明 |
+| 方法 | 路径（接在基础路径后） | 权限 | 说明 |
 |------|------|------|------|
 | POST | `/chat/stream` (SSE) | FUNCTION_UNIT_UPDATE | AI 对话流 |
 | GET | `/events/{functionUnitId}` (SSE) | FUNCTION_UNIT_VIEW | 事件流 |
@@ -739,11 +739,11 @@ public ResponseEntity<ApiResponse<Entity>> create(@Valid @RequestBody Request re
 | DELETE | `/lock/{functionUnitId}` | FUNCTION_UNIT_UPDATE | 释放编辑锁 |
 | POST | `/lock/{functionUnitId}/force-unlock-request` | FUNCTION_UNIT_UPDATE | 请求强制解锁 |
 | POST | `/lock/{functionUnitId}/force-unlock-response` | FUNCTION_UNIT_UPDATE | 响应强制解锁 |
-| GET | `/sessions?functionUnitId=` | FUNCTION_UNIT_VIEW | 列出会话 |
+| GET | `/sessions` | FUNCTION_UNIT_VIEW | 列出会话，query: `functionUnitId` |
 | GET | `/sessions/{sessionId}/messages` | FUNCTION_UNIT_VIEW | 获取消息 (分页) |
-| PUT | `/sessions/{sessionId}/phase?phase=` | FUNCTION_UNIT_UPDATE | 更新会话阶段 |
-| GET | `/documents?functionUnitId=&documentType=` | FUNCTION_UNIT_VIEW | 列出文档版本 |
-| GET | `/documents/version?functionUnitId=&documentType=&version=` | FUNCTION_UNIT_VIEW | 获取指定版本文档 |
+| PUT | `/sessions/{sessionId}/phase` | FUNCTION_UNIT_UPDATE | 更新会话阶段，query: `phase` |
+| GET | `/documents` | FUNCTION_UNIT_VIEW | 列出文档版本，query: `functionUnitId` / `documentType` |
+| GET | `/documents/version` | FUNCTION_UNIT_VIEW | 获取指定版本文档，query: `functionUnitId` / `documentType` / `version` |
 | POST | `/documents` | FUNCTION_UNIT_UPDATE | 保存文档 |
 | POST | `/{functionUnitId}/apply` | FUNCTION_UNIT_UPDATE | 应用 AI 生成数据 |
 | POST | `/{functionUnitId}/undo` | FUNCTION_UNIT_UPDATE | 撤销最近一次 apply |
@@ -778,15 +778,15 @@ public ResponseEntity<ApiResponse<Entity>> create(@Valid @RequestBody Request re
 基础路径: `/members`
 继承: `BaseController` ✅
 
-| 方法 | 路径 | 说明 |
+| 方法 | 路径（接在基础路径后） | 说明 |
 |------|------|------|
-| POST | `/members` | 创建成员 |
-| GET | `/members/{id}` | 按 ID 获取成员 |
-| GET | `/members/username/{username}` | 按用户名获取成员 |
-| PUT | `/members/{id}` | 更新成员 |
-| DELETE | `/members/{id}` | 删除成员 (软删除) |
-| GET | `/members` | 分页列表 (支持搜索) |
-| GET | `/members/business-unit/{businessUnitId}` | 按业务单元获取成员 |
+| POST | `/` | 创建成员 |
+| GET | `/{id}` | 按 ID 获取成员 |
+| GET | `/username/{username}` | 按用户名获取成员 |
+| PUT | `/{id}` | 更新成员 |
+| DELETE | `/{id}` | 删除成员 (软删除) |
+| GET | `/` | 分页列表 (支持搜索) |
+| GET | `/business-unit/{businessUnitId}` | 按业务单元获取成员 |
 
 ### 7.15 弹性管理 — ResilienceController
 
@@ -832,7 +832,7 @@ public ResponseEntity<ApiResponse<Entity>> create(@Valid @RequestBody Request re
 
 无类级 `@RequestMapping`，路径均为自 context-path 起的绝对片段。
 
-| 方法 | 路径 | 说明 |
+| 方法 | 路径（自 context-path 起） | 说明 |
 |------|------|------|
 | GET | `/api/relation-tables/available` | 可绑定的 Relation Table 列表 |
 | GET | `/api/forms/{formId}/relation-bindings` | 某表单的绑定列表 |
@@ -865,9 +865,9 @@ public ResponseEntity<ApiResponse<Entity>> create(@Valid @RequestBody Request re
 基础路径: `/form-stage-bindings`  
 供 user-portal 等按 BPMN **taskDefinitionKey** 解析任务表单。
 
-| 方法 | 路径 | 说明 |
+| 方法 | 路径（接在基础路径后） | 说明 |
 |------|------|------|
-| GET | `/form-stage-bindings?stageId=` | 按 `stageId` 返回表单定义摘要（无则空对象） |
+| GET | `/` | 按 `stageId` 返回表单定义摘要（无则空对象），query: `stageId` |
 
 ### 7.22 SSO 兑换 — AuthSsoExchangeController
 
@@ -921,7 +921,7 @@ FunctionUnitComponentImpl.create()
 ### 8.2 发布版本
 
 ```
-POST /function-units/{id}/publish?changeLog=xxx
+POST /function-units/{id}/publish  (query: changeLog=xxx)
     │
     ▼
 FunctionUnitComponentImpl.publish(id, changeLog)
@@ -960,7 +960,7 @@ FunctionUnitComponentImpl.publish(id, changeLog)
 ### 8.3 克隆功能单元
 
 ```
-POST /function-units/{id}/clone?newName=xxx
+POST /function-units/{id}/clone  (query: newName=xxx)
     │
     ▼
 FunctionUnitComponentImpl.clone(id, newName)
@@ -1309,7 +1309,7 @@ ZIP 包典型结构（与 `exportFunctionUnit` 一致）:
 ```
 1. POST /export-import/validate   — multipart 字段名 file；校验包格式
 2. POST /export-import/check-conflicts — 同上，检查与现有库冲突
-3. POST /export-import/import?conflictStrategy=SKIP|OVERWRITE — multipart file
+3. POST /export-import/import — multipart file，query: conflictStrategy=SKIP|OVERWRITE
 ```
 
 **兼容**: 解析时 **优先 `manifest.json`**，兼容旧包 **`metadata.json`**（见 `importFunctionUnit` 实现）。
