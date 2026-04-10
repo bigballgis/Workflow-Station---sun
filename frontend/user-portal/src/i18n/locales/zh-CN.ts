@@ -244,6 +244,7 @@ export default {
     confirmCancel: '确定要取消吗？未保存的数据将丢失。',
     dataModifiedPleaseRefresh: '数据已被修改，请刷新后重试',
     allParticipantsMustHaveAssignee: '请为子表中每一行点击「分配」指定处理人后再完成。',
+    addParticipantInfoForm: '添加参与者信息表',
   },
   process: {
     title: '新建申请',
@@ -345,7 +346,9 @@ export default {
     withdrawSuccess: '撤回成功',
     withdrawFailed: '撤回失败',
     userWithdraw: '用户主动撤回',
-    serviceFallbackName: '服务任务{index}'
+    serviceFallbackName: '服务任务{index}',
+    subTaskFormTitle: '参与者信息表',
+    close: '关闭'
   },
   diagram: {
     zoomIn: '放大',
@@ -372,6 +375,8 @@ export default {
     notificationsDesc: '最新通知消息',
     calendar: '日程安排',
     calendarDesc: '任务日历视图',
+    calendarTasksForDate: '{date} 的任务',
+    calendarTaskCount: '{count} 项',
     newProcess: '新建申请',
     myApplications: '我的请求',
     delegationMgmt: '委托管理',
@@ -867,6 +872,10 @@ export default {
     pleaseSelectUser: '请选择用户',
     assignmentSuccess: '分配成功',
     assignmentFailed: '分配失败',
+    taskStatus: '状态',
+    taskPending: '待处理',
+    taskCompleted: '已完成',
+    viewDetail: '查看详情',
   },
   snapshotDiff: {
     snapshotValue: '快照值',

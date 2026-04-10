@@ -939,10 +939,12 @@ public class TaskQueryComponent {
     
     /**
      * Query tasks completed by a user.
+     * Multi-instance subtasks are flagged so the frontend can hide
+     * the Action tag and Detail link (their detail is already visible
+     * in the Participant Info Form on the application detail page).
      */
     @SuppressWarnings("unchecked")
     public PageResponse<TaskInfo> queryCompletedTasks(TaskQueryRequest request) {
-        // Check if the Flowable engine is available
         if (!workflowEngineClient.isAvailable()) {
             throw new IllegalStateException("Flowable engine unavailable, please check if workflow-engine-core service is running");
         }
@@ -970,6 +972,18 @@ public class TaskQueryComponent {
                         tasks.add(convertCompletedTaskToTaskInfo(taskMap));
                     }
                 }
+
+                // Tag multi-instance subtasks so the frontend can suppress
+                // the Action column and Detail link for them.
+                Set<String> miTaskIds = findMultiInstanceTaskIds(
+                        tasks.stream().map(TaskInfo::getTaskId).filter(Objects::nonNull).toList());
+                if (!miTaskIds.isEmpty()) {
+                    for (TaskInfo t : tasks) {
+                        if (miTaskIds.contains(t.getTaskId())) {
+                            t.setMultiInstanceSubTask(true);
+                        }
+                    }
+                }
                 
                 return PageResponse.of(tasks, page, size, totalElements);
             }
@@ -979,6 +993,28 @@ public class TaskQueryComponent {
         }
         
         return PageResponse.of(Collections.emptyList(), page, size, 0);
+    }
+
+    /**
+     * Batch-check which of the given task IDs are multi-instance subtasks
+     * by looking at wf_extended_task_info.extended_properties.
+     */
+    private Set<String> findMultiInstanceTaskIds(List<String> taskIds) {
+        if (taskIds == null || taskIds.isEmpty()) return Collections.emptySet();
+        try {
+            String placeholders = String.join(",", Collections.nCopies(taskIds.size(), "?"));
+            String sql = "SELECT task_id FROM wf_extended_task_info "
+                    + "WHERE task_id IN (" + placeholders + ") "
+                    + "AND is_deleted = false "
+                    + "AND extended_properties LIKE '%\"multiInstance\":true%'";
+            List<String> ids = jdbcTemplate.query(sql,
+                    (rs, i) -> rs.getString("task_id"),
+                    taskIds.toArray());
+            return new HashSet<>(ids);
+        } catch (Exception e) {
+            log.debug("findMultiInstanceTaskIds skipped: {}", e.getMessage());
+            return Collections.emptySet();
+        }
     }
     
     /**

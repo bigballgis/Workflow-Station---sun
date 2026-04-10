@@ -314,6 +314,10 @@ export default {
     // Other
     unknownTable: 'Unknown Table',
     subTableBindingRequired: 'All Sub-Table placeholders must have a binding selected before saving',
+    subTableSelectPlaceholder: 'Select Sub Table',
+    subTableSelectEmpty: 'No Sub Tables available',
+    subTablePlaceholderUnconfigured: 'No Sub Table selected',
+    subTablePlaceholderStale: 'Binding stale',
     // Stage binding (Task Form)
     stageBinding: 'Stage Binding',
     stageBindingPlaceholder: 'Select stages to bind',

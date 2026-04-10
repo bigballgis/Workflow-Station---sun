@@ -1314,12 +1314,13 @@ public class ProcessComponent {
                     try { id = Long.parseLong(String.valueOf(rowId).trim()); } catch (Exception ignored) { continue; }
                 }
                 List<Map<String, Object>> dbRows = jdbcTemplate.query(
-                        "SELECT assignee_user_id, assignee_display_name, attend_status FROM participants WHERE id = ?",
+                        "SELECT * FROM participants WHERE id = ?",
                         (rs, i) -> {
+                            java.sql.ResultSetMetaData meta = rs.getMetaData();
                             Map<String, Object> m = new HashMap<>();
-                            m.put("assignee_user_id", rs.getString("assignee_user_id"));
-                            m.put("assignee_display_name", rs.getString("assignee_display_name"));
-                            m.put("attend_status", rs.getString("attend_status"));
+                            for (int c = 1; c <= meta.getColumnCount(); c++) {
+                                m.put(meta.getColumnName(c), rs.getObject(c));
+                            }
                             return m;
                         }, id);
                 if (!dbRows.isEmpty()) {
@@ -1328,20 +1329,120 @@ public class ProcessComponent {
                     String userId = (String) dbRow.get("assignee_user_id");
                     if (displayName == null && userId != null && !userId.isBlank()) {
                         displayName = resolveUsernameById(userId);
+                        dbRow.put("assignee_display_name", displayName);
                     }
-                    if (displayName != null) {
-                        row.put("assignee_display_name", displayName);
-                    }
-                    if (dbRow.get("attend_status") != null) {
-                        row.put("attend_status", dbRow.get("attend_status"));
-                    }
-                    if (userId != null && row.get("assignee_user_id") == null) {
-                        row.put("assignee_user_id", userId);
+                    // Self-heal: if DB row is still PENDING but engine task is COMPLETED,
+                    // repair the status so the initiator sees the correct state.
+                    repairStaleTaskStatus(dbRow, id);
+                    for (Map.Entry<String, Object> entry : dbRow.entrySet()) {
+                        if (entry.getValue() != null) {
+                            row.put(entry.getKey(), entry.getValue());
+                        }
                     }
                 }
             }
         } catch (Exception e) {
             log.debug("enrichSubTablesWithAssignmentData skipped: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * If participants.task_status is PENDING but the engine's wf_extended_task_info
+     * already records the task as COMPLETED, update the DB row to match AND recover
+     * the form field values from Flowable's historical execution variables.
+     * This self-heals rows that were stuck before the writeBack fix.
+     */
+    private void repairStaleTaskStatus(Map<String, Object> dbRow, Long participantId) {
+        Object ts = dbRow.get("task_status");
+        if (ts != null && !"PENDING".equals(String.valueOf(ts))) {
+            return;
+        }
+        try {
+            List<Map<String, Object>> taskEntries = jdbcTemplate.query(
+                    "SELECT e.task_id, e.status FROM wf_extended_task_info e "
+                    + "WHERE e.is_deleted = false "
+                    + "AND (e.extended_properties LIKE '%\"subTableRowId\":' || ? || ',%' "
+                    + "  OR e.extended_properties LIKE '%\"subTableRowId\":' || ? || '}%')",
+                    (rs, i) -> {
+                        Map<String, Object> m = new HashMap<>();
+                        m.put("task_id", rs.getString("task_id"));
+                        m.put("status", rs.getString("status"));
+                        return m;
+                    }, participantId, participantId);
+
+            String completedTaskId = taskEntries.stream()
+                    .filter(e -> "COMPLETED".equals(e.get("status")))
+                    .map(e -> (String) e.get("task_id"))
+                    .findFirst().orElse(null);
+
+            if (completedTaskId == null) {
+                return;
+            }
+
+            // 1. Fix task_status
+            jdbcTemplate.update(
+                    "UPDATE participants SET task_status = 'COMPLETED' WHERE id = ? AND task_status = 'PENDING'",
+                    participantId);
+            dbRow.put("task_status", "COMPLETED");
+
+            // 2. Recover form field values from Flowable execution history.
+            //    Cross-table access to ACT_HI_* is intentional — self-healing one-time
+            //    repair for rows where writeBackSubTableRow was never called.
+            recoverFormFieldsFromHistory(dbRow, participantId, completedTaskId);
+
+            log.info("repairStaleTaskStatus: fixed participant {} → COMPLETED (task {})", participantId, completedTaskId);
+        } catch (Exception e) {
+            log.debug("repairStaleTaskStatus skipped for {}: {}", participantId, e.getMessage());
+        }
+    }
+
+    /**
+     * Read the Flowable execution-scope variables that were saved when the subtask
+     * was completed, and write matching columns back to the participants table.
+     */
+    private void recoverFormFieldsFromHistory(Map<String, Object> dbRow, Long participantId, String taskId) {
+        try {
+            List<String> execIds = jdbcTemplate.query(
+                    "SELECT EXECUTION_ID_ FROM ACT_HI_TASKINST WHERE ID_ = ?",
+                    (rs, i) -> rs.getString(1), taskId);
+            if (execIds.isEmpty()) return;
+
+            List<Map<String, Object>> histVars = jdbcTemplate.query(
+                    "SELECT NAME_, TEXT_ FROM ACT_HI_VARINST WHERE EXECUTION_ID_ = ? AND TEXT_ IS NOT NULL",
+                    (rs, i) -> {
+                        Map<String, Object> m = new HashMap<>();
+                        m.put("name", rs.getString("NAME_"));
+                        m.put("value", rs.getString("TEXT_"));
+                        return m;
+                    }, execIds.get(0));
+
+            Set<String> validCols = dbRow.keySet();
+            Set<String> skipCols = Set.of("id", "row_version", "task_status", "meeting_id", "sort_order");
+            Map<String, Object> updates = new HashMap<>();
+            for (Map<String, Object> hv : histVars) {
+                String name = (String) hv.get("name");
+                Object value = hv.get("value");
+                if (name != null && value != null && validCols.contains(name) && !skipCols.contains(name)) {
+                    updates.put(name, value);
+                }
+            }
+            if (updates.isEmpty()) return;
+
+            StringBuilder sql = new StringBuilder("UPDATE participants SET ");
+            List<Object> params = new ArrayList<>();
+            for (Map.Entry<String, Object> entry : updates.entrySet()) {
+                sql.append(entry.getKey()).append(" = ?, ");
+                params.add(entry.getValue());
+            }
+            sql.setLength(sql.length() - 2);
+            sql.append(" WHERE id = ?");
+            params.add(participantId);
+
+            jdbcTemplate.update(sql.toString(), params.toArray());
+            dbRow.putAll(updates);
+            log.info("recoverFormFieldsFromHistory: recovered {} fields for participant {}", updates.size(), participantId);
+        } catch (Exception e) {
+            log.debug("recoverFormFieldsFromHistory skipped for participant {}: {}", participantId, e.getMessage());
         }
     }
 

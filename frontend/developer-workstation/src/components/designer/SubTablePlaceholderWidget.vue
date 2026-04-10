@@ -3,8 +3,8 @@
     <!-- 图标 + 状态文字 -->
     <el-icon><Grid /></el-icon>
     <span v-if="state === 'valid'" class="binding-name">{{ displayName }}</span>
-    <span v-else-if="state === 'unconfigured'" class="hint-text">未选择 Sub Table</span>
-    <el-tag v-else type="warning" size="small">绑定已失效</el-tag>
+    <span v-else-if="state === 'unconfigured'" class="hint-text">{{ t('designer.subTablePlaceholderUnconfigured') }}</span>
+    <el-tag v-else type="warning" size="small">{{ t('designer.subTablePlaceholderStale') }}</el-tag>
 
     <!-- 跳转按钮（仅 valid 状态显示） -->
     <el-button
@@ -23,6 +23,7 @@
 <script setup lang="ts">
 import { computed, inject, onMounted, getCurrentInstance } from 'vue'
 import { Grid, ArrowRight } from '@element-plus/icons-vue'
+import { useI18n } from 'vue-i18n'
 
 interface DesignerSubBinding {
   id: number
@@ -43,6 +44,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   'navigate': [bindingId: number]
 }>()
+const { t } = useI18n()
 
 // When clicked in designer, manually trigger DragTool selection
 // by finding the parent _fd-drag-tool and dispatching a click on it

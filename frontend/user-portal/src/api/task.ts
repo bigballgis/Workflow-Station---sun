@@ -35,11 +35,11 @@ export interface TaskInfo {
   processDefinitionKey: string
   processDefinitionName: string
   assignmentType: string
-  /** BPMN 扩展 assigneeType（如 INITIATOR、PROCESS_INITIATOR） */
+  /** BPMN extension assigneeType (e.g. INITIATOR, PROCESS_INITIATOR) */
   bpmnAssigneeType?: string
-  /** BPMN 扩展 businessUnitId（如 FIXED_BU_ROLE 固定 BU） */
+  /** BPMN extension businessUnitId (e.g. FIXED_BU_ROLE fixed BU) */
   bpmnBusinessUnitId?: string
-  /** 引擎分配目标（如 CANDIDATE_USERS 时候选人 ID 列表拼接） */
+  /** Engine assignment target (e.g. concatenated candidate user IDs for CANDIDATE_USERS) */
   assignmentTarget?: string
   assignee: string
   assigneeName?: string
@@ -58,15 +58,17 @@ export interface TaskInfo {
   originalAssignmentType?: string
   originalAssignee?: string
   candidateUsers?: string
-  /** 引擎候选人用户 ID（与门户 TaskInfo.candidateUserIds 一致） */
+  /** Engine candidate user IDs (consistent with portal TaskInfo.candidateUserIds) */
   candidateUserIds?: string[]
   candidateGroupIds?: string[]
-  // 已处理任务字段
+  // Completed task fields
   completedTime?: string
   durationInMillis?: number
   action?: string
-  // 自定义操作按钮
+  // Custom action buttons
   actions?: TaskActionInfo[]
+  /** Whether this is a multi-instance sub-task */
+  multiInstanceSubTask?: boolean
 }
 
 export interface PageResponse<T> {
@@ -117,75 +119,75 @@ export interface TaskStatistics {
   todayCompletedTasks: number
 }
 
-// 查询待办任务
+// Query pending tasks
 export function queryTasks(params: TaskQueryRequest) {
   return request.post<{ data: PageResponse<TaskInfo> }>('/tasks/query', params)
 }
 
-// 获取任务详情
+// Get task details
 export function getTaskDetail(taskId: string) {
   return request.get<{ data: TaskInfo }>(`/tasks/${taskId}`)
 }
 
-// 获取任务流转历史
+// Get task flow history
 export function getTaskHistory(taskId: string) {
   return request.get<{ data: TaskHistoryInfo[] }>(`/tasks/${taskId}/history`)
 }
 
-// 获取任务统计
+// Get task statistics
 export function getTaskStatistics() {
   return request.get<{ data: TaskStatistics }>('/tasks/statistics')
 }
 
-// 认领任务
+// Claim task
 export function claimTask(taskId: string) {
   return request.post<{ data: TaskInfo }>(`/tasks/${taskId}/claim`)
 }
 
-// 取消认领
+// Unclaim task
 export function unclaimTask(taskId: string, originalAssignmentType: string, originalAssignee: string) {
   return request.post<{ data: TaskInfo }>(`/tasks/${taskId}/unclaim`, null, {
     params: { originalAssignmentType, originalAssignee }
   })
 }
 
-// 完成任务
+// Complete task
 export function completeTask(taskId: string, data: TaskCompleteRequest) {
   return request.post(`/tasks/${taskId}/complete`, data)
 }
 
-// 委托任务
+// Delegate task
 export function delegateTask(taskId: string, delegateId: string, reason?: string) {
   return request.post(`/tasks/${taskId}/delegate`, null, {
     params: { delegateId, reason }
   })
 }
 
-// 转办任务
+// Transfer task
 export function transferTask(taskId: string, toUserId: string, reason?: string) {
   return request.post(`/tasks/${taskId}/transfer`, null, {
     params: { toUserId, reason }
   })
 }
 
-// 催办任务
+// Urge task
 export function urgeTask(taskId: string, message?: string) {
   return request.post(`/tasks/${taskId}/urge`, null, {
     params: { message }
   })
 }
 
-// 批量催办任务
+// Batch urge tasks
 export function batchUrgeTasks(taskIds: string[], message?: string) {
   return request.post('/tasks/batch/urge', { taskIds, message })
 }
 
-// 查询已处理任务
+// Query completed tasks
 export function queryCompletedTasks(params: TaskQueryRequest) {
   return request.post<{ data: PageResponse<TaskInfo> }>('/tasks/completed/query', params)
 }
 
-// 分配子表行处理人
+// Assign a user to a sub-table row
 export interface AssignSubTableRowRequest {
   assigneeId: string
 }
@@ -195,7 +197,7 @@ export interface AssignSubTableRowResponse {
   rowId: number
   assigneeId: string
   assigneeName: string
-  /** 引擎失败时可能带此字段（与 message 二选一） */
+  /** Present on engine failure (mutually exclusive with message) */
   errorMessage?: string
   message?: string
 }
@@ -233,7 +235,7 @@ export function assignSubTableRowByIdentity(
   )
 }
 
-// 获取子任务表单数据（包含主任务信息和子表数据行）
+// Get sub-task form data (includes main task info and sub-table row data)
 export interface FormField {
   name: string
   label: string
@@ -258,7 +260,7 @@ export function getSubTaskFormData(taskId: string) {
   return request.get<{ data: SubTaskFormData }>(`/tasks/${taskId}/sub-task-form-data`)
 }
 
-// 获取主任务子表数据（用于实时同步）
+// Get main task sub-table data (for real-time sync)
 export interface SubTableRowStatus {
   id: number
   assignee?: string

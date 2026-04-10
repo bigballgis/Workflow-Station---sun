@@ -8,7 +8,7 @@
         :placeholder="field.placeholder"
         :maxlength="field.maxLength"
         :show-word-limit="!!field.maxLength"
-        :disabled="disabled"
+        :disabled="isDisabled"
         clearable
         @update:model-value="onUpdate"
       />
@@ -21,7 +21,7 @@
         type="password"
         show-password
         :placeholder="field.placeholder"
-        :disabled="disabled"
+        :disabled="isDisabled"
         clearable
         @update:model-value="onUpdate"
       />
@@ -36,7 +36,7 @@
         :placeholder="field.placeholder"
         :maxlength="field.maxLength"
         :show-word-limit="!!field.maxLength"
-        :disabled="disabled"
+        :disabled="isDisabled"
         @update:model-value="onUpdate"
       />
     </template>
@@ -49,7 +49,7 @@
         :max="field.max"
         :step="field.step || 1"
         :precision="field.precision"
-        :disabled="disabled"
+        :disabled="isDisabled"
         style="width: 100%"
         @update:model-value="onUpdate"
       />
@@ -62,7 +62,7 @@
         :placeholder="field.placeholder"
         :multiple="field.multiple"
         :filterable="field.filterable"
-        :disabled="disabled"
+        :disabled="isDisabled"
         clearable
         style="width: 100%"
         popper-class="form-renderer-popper"
@@ -81,7 +81,7 @@
     <template v-else-if="field.type === 'radio'">
       <el-radio-group
         :model-value="modelValue"
-        :disabled="disabled"
+        :disabled="isDisabled"
         @update:model-value="onUpdate"
       >
         <el-radio
@@ -98,7 +98,7 @@
     <template v-else-if="field.type === 'checkbox'">
       <el-checkbox-group
         :model-value="modelValue"
-        :disabled="disabled"
+        :disabled="isDisabled"
         @update:model-value="onUpdate"
       >
         <el-checkbox
@@ -117,7 +117,7 @@
         :model-value="modelValue"
         :active-text="field.activeText"
         :inactive-text="field.inactiveText"
-        :disabled="disabled"
+        :disabled="isDisabled"
         @update:model-value="onUpdate"
       />
     </template>
@@ -128,7 +128,7 @@
         :model-value="modelValue"
         type="date"
         :placeholder="field.placeholder"
-        :disabled="disabled"
+        :disabled="isDisabled"
         value-format="YYYY-MM-DD"
         style="width: 100%"
         popper-class="form-renderer-popper"
@@ -142,7 +142,7 @@
         :model-value="modelValue"
         type="datetime"
         :placeholder="field.placeholder"
-        :disabled="disabled"
+        :disabled="isDisabled"
         value-format="YYYY-MM-DD HH:mm:ss"
         style="width: 100%"
         popper-class="form-renderer-popper"
@@ -158,7 +158,7 @@
         :range-separator="t('common.to')"
         :start-placeholder="t('common.startDate')"
         :end-placeholder="t('common.endDate')"
-        :disabled="disabled"
+        :disabled="isDisabled"
         value-format="YYYY-MM-DD"
         style="width: 100%"
         popper-class="form-renderer-popper"
@@ -171,7 +171,7 @@
       <el-time-picker
         :model-value="modelValue"
         :placeholder="field.placeholder"
-        :disabled="disabled"
+        :disabled="isDisabled"
         value-format="HH:mm:ss"
         style="width: 100%"
         popper-class="form-renderer-popper"
@@ -187,7 +187,7 @@
         value-format="HH:mm:ss"
         :start-placeholder="(field as any).startPlaceholder || t('common.startDate')"
         :end-placeholder="(field as any).endPlaceholder || t('common.endDate')"
-        :disabled="disabled"
+        :disabled="isDisabled"
         style="width: 100%"
         popper-class="form-renderer-popper"
         @update:model-value="onUpdate"
@@ -201,7 +201,7 @@
         :options="field.options"
         :props="field.cascaderProps"
         :placeholder="field.placeholder"
-        :disabled="disabled"
+        :disabled="isDisabled"
         clearable
         style="width: 100%"
         popper-class="form-renderer-popper"
@@ -215,7 +215,7 @@
         :model-value="modelValue"
         :placeholder="field.placeholder"
         :multiple="field.multiple"
-        :disabled="disabled"
+        :disabled="isDisabled"
         filterable
         remote
         :remote-method="(query: string) => searchUsers(query, field)"
@@ -240,7 +240,7 @@
         :data="field.buOptions || []"
         :props="({ label: 'name', value: 'id', children: 'children' } as any)"
         :placeholder="field.placeholder"
-        :disabled="disabled"
+        :disabled="isDisabled"
         check-strictly
         clearable
         style="width: 100%"
@@ -257,7 +257,7 @@
         :multiple="field.multiple"
         :check-strictly="(field as any).checkStrictly !== false"
         :placeholder="field.placeholder"
-        :disabled="disabled"
+        :disabled="isDisabled"
         clearable
         style="width: 100%"
         popper-class="form-renderer-popper"
@@ -270,7 +270,7 @@
       <el-input
         :model-value="modelValue"
         :placeholder="field.placeholder"
-        :disabled="disabled"
+        :disabled="isDisabled"
         clearable
         @update:model-value="onUpdate"
       >
@@ -283,7 +283,7 @@
       <el-rate
         :model-value="modelValue"
         :max="field.max || 5"
-        :disabled="disabled"
+        :disabled="isDisabled"
         @update:model-value="onUpdate"
       />
     </template>
@@ -295,7 +295,7 @@
         :min="field.min || 0"
         :max="field.max || 100"
         :step="field.step || 1"
-        :disabled="disabled"
+        :disabled="isDisabled"
         style="width: 100%"
         @update:model-value="onUpdate"
       />
@@ -313,7 +313,7 @@
       <el-color-picker
         v-else
         :model-value="modelValue"
-        :disabled="disabled"
+        :disabled="isDisabled"
         @update:model-value="onUpdate"
       />
     </template>
@@ -381,7 +381,7 @@
         v-else
         :model-value="modelValue"
         :data="(field.options || []).map((o: any) => ({ key: o.value, label: o.label }))"
-        :disabled="disabled"
+        :disabled="isDisabled"
         filterable
         @update:model-value="onUpdate"
       />
@@ -395,7 +395,7 @@
         :accept="field.uploadAccept || '.jpg,.jpeg,.png,.pdf,.docx,.xlsx'"
         :limit="field.uploadLimit || 1"
         :multiple="false"
-        :disabled="disabled"
+        :disabled="isDisabled"
         :file-list="fileList"
         :on-success="onUploadSuccess"
         :on-remove="onUploadRemove"
@@ -450,7 +450,7 @@
         :data="departmentTreeData"
         :props="({ label: 'name', value: 'id', children: 'children' } as any)"
         :placeholder="field.placeholder || t('fieldRenderer.selectDepartment')"
-        :disabled="disabled"
+        :disabled="isDisabled"
         :loading="departmentLoading"
         check-strictly
         clearable
@@ -466,7 +466,7 @@
       <el-input
         :model-value="modelValue"
         :placeholder="field.placeholder"
-        :disabled="disabled"
+        :disabled="isDisabled"
         clearable
         @update:model-value="onUpdate"
       />
@@ -525,7 +525,10 @@ const emit = defineEmits<{
   (e: 'search:users', query: string, fieldKey: string): void
 }>()
 
+const isDisabled = computed(() => props.readonly || props.disabled)
+
 function onUpdate(value: any) {
+  if (props.readonly) return
   emit('update:modelValue', value)
 }
 

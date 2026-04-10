@@ -31,11 +31,11 @@ BEGIN
     WHERE function_unit_id = v_function_unit_id AND form_name = 'Participant Info Form';
 
     SELECT id INTO v_action_submit FROM dw_action_definitions
-    WHERE function_unit_id = v_function_unit_id AND action_name = '提交会议';
+    WHERE function_unit_id = v_function_unit_id AND action_name = 'Submit Meeting';
     SELECT id INTO v_action_complete FROM dw_action_definitions
-    WHERE function_unit_id = v_function_unit_id AND action_name = '完成分配';
+    WHERE function_unit_id = v_function_unit_id AND action_name = 'Complete Assignment';
     SELECT id INTO v_action_submit_info FROM dw_action_definitions
-    WHERE function_unit_id = v_function_unit_id AND action_name = '提交参会信息';
+    WHERE function_unit_id = v_function_unit_id AND action_name = 'Submit Participant Info';
 
     SELECT id INTO v_participant_table_id FROM dw_table_definitions
     WHERE function_unit_id = v_function_unit_id AND table_name = 'participants';
@@ -59,16 +59,16 @@ BEGIN
       name="Meeting Participant Info Collection Process" isExecutable="true">
 
     <!-- ===== Start Event ===== -->
-    <bpmn:startEvent id="StartEvent_1" name="开始">
+    <bpmn:startEvent id="StartEvent_1" name="Start">
       <bpmn:outgoing>Flow_Start_Create</bpmn:outgoing>
     </bpmn:startEvent>
 
-    <!-- ===== Task 1: 创建会议 ===== -->
-    <bpmn:userTask id="Task_CreateMeeting" name="创建会议">
+    <!-- ===== Task 1: Create Meeting ===== -->
+    <bpmn:userTask id="Task_CreateMeeting" name="Create Meeting">
       <bpmn:extensionElements>
         <custom_1:properties>
           <custom_1:values name="actionIds" value="[' || v_action_submit || ']" />
-          <custom_1:values name="actionNames" value="[&quot;提交会议&quot;]" />
+          <custom_1:values name="actionNames" value="[&quot;Submit Meeting&quot;]" />
           <custom_1:values name="formId" value="' || v_create_form_id || '" />
           <custom_1:values name="formName" value="Create Meeting Form" />
         </custom_1:properties>
@@ -80,12 +80,12 @@ BEGIN
       <bpmn:outgoing>Flow_Create_Assign</bpmn:outgoing>
     </bpmn:userTask>
 
-    <!-- ===== Task 2: 分配参与人 ===== -->
-    <bpmn:userTask id="Task_AssignParticipants" name="分配参与人">
+    <!-- ===== Task 2: Assign Participants ===== -->
+    <bpmn:userTask id="Task_AssignParticipants" name="Assign Participants">
       <bpmn:extensionElements>
         <custom_1:properties>
           <custom_1:values name="actionIds" value="[' || v_action_complete || ']" />
-          <custom_1:values name="actionNames" value="[&quot;完成分配&quot;]" />
+          <custom_1:values name="actionNames" value="[&quot;Complete Assignment&quot;]" />
           <custom_1:values name="formId" value="' || v_create_form_id || '" />
           <custom_1:values name="formName" value="Create Meeting Form" />
         </custom_1:properties>
@@ -102,16 +102,16 @@ BEGIN
 
     v_bpmn_xml := v_bpmn_xml || '
 
-    <!-- ===== 多实例子流程：填写参会信息 ===== -->
+    <!-- ===== Multi-instance subprocess: Fill in Participant Info ===== -->
     <bpmn:subProcess id="MultiInstance_SubTable_' || v_participant_table_id || '"
-        name="多实例-参与人列表">
+        name="Multi-instance: Participants">
       <bpmn:multiInstanceLoopCharacteristics isSequential="false"
           flowable:collection="multiInstance_participants_collection"
           flowable:elementVariable="currentItem" />
 
       <bpmn:startEvent id="MI_Start_' || v_participant_table_id || '" />
 
-      <bpmn:userTask id="MI_UserTask_' || v_participant_table_id || '" name="填写参会信息">
+      <bpmn:userTask id="MI_UserTask_' || v_participant_table_id || '" name="Fill in Participant Info">
         <bpmn:extensionElements>
           <custom:properties>
             <custom:property name="assigneeType" value="ELEMENT_VARIABLE" />
@@ -123,7 +123,7 @@ BEGIN
           </custom:properties>
           <custom_1:properties>
             <custom_1:values name="actionIds" value="[' || v_action_submit_info || ']" />
-            <custom_1:values name="actionNames" value="[&quot;提交参会信息&quot;]" />
+            <custom_1:values name="actionNames" value="[&quot;Submit Participant Info&quot;]" />
             <custom_1:values name="formId" value="' || v_participant_form_id || '" />
             <custom_1:values name="formName" value="Participant Info Form" />
           </custom_1:properties>
@@ -143,7 +143,7 @@ BEGIN
     v_bpmn_xml := v_bpmn_xml || '
 
     <!-- ===== End Event ===== -->
-    <bpmn:endEvent id="EndEvent_Complete" name="收集完成" />
+    <bpmn:endEvent id="EndEvent_Complete" name="Collection Complete" />
 
     <!-- ===== Sequence Flows ===== -->
     <bpmn:sequenceFlow id="Flow_Start_Create"

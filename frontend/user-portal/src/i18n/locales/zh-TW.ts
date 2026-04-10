@@ -232,6 +232,7 @@ export default {
     noTaskForm: '目前階段未綁定任務表單',
     submitTaskForm: '提交',
     allParticipantsMustHaveAssignee: '請為子表中每一列點擊「分配」指定處理人後再完成。',
+    addParticipantInfoForm: '新增參與者資訊表',
   },
   process: {
     title: '新建申請',
@@ -333,7 +334,9 @@ export default {
     withdrawSuccess: '撤回成功',
     withdrawFailed: '撤回失敗',
     userWithdraw: '使用者主動撤回',
-    serviceFallbackName: '服務任務{index}'
+    serviceFallbackName: '服務任務{index}',
+    subTaskFormTitle: '參與者資訊表',
+    close: '關閉'
   },
   application: {
     title: '我的請求',
@@ -726,6 +729,8 @@ export default {
     notificationsDesc: '最新通知訊息',
     calendar: '日程安排',
     calendarDesc: '任務日曆視圖',
+    calendarTasksForDate: '{date} 的任務',
+    calendarTaskCount: '{count} 項',
     newProcess: '新建申請',
     myApplications: '我的請求',
     delegationMgmt: '委託管理',
@@ -844,6 +849,10 @@ export default {
     selectUser: '選擇用戶',
     selectDepartment: '選擇部門',
     uploadFailed: '欄位"{field}"上傳失敗',
+    taskStatus: '狀態',
+    taskPending: '待處理',
+    taskCompleted: '已完成',
+    viewDetail: '查看詳情',
   },
   snapshotDiff: {
     snapshotValue: '快照值',

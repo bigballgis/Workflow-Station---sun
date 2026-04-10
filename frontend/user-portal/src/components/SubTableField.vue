@@ -18,7 +18,7 @@
         :show-overflow-tooltip="false"
       >
         <template #default="scope">
-          <!-- 只读展示 -->
+          <!-- Read-only display -->
           <template v-if="col.type === 'upload'">
             <span
               v-if="scope.row[col.field]"
@@ -72,10 +72,51 @@
         </template>
       </el-table-column>
 
+      <!-- Task status column (multi-instance subtask completion) -->
+      <el-table-column v-if="showTaskStatus" :label="t('subTable.taskStatus')" width="120" align="center">
+        <template #default="scope">
+          <el-tag
+            :type="scope.row.task_status === 'COMPLETED' ? 'success' : 'warning'"
+            size="small"
+          >
+            {{ scope.row.task_status === 'COMPLETED' ? t('subTable.taskCompleted') : t('subTable.taskPending') }}
+          </el-tag>
+        </template>
+      </el-table-column>
+
       <el-table-column v-if="editable" :label="t('subTable.actions')" width="120">
         <template #default="scope">
           <el-button link type="primary" size="small" @click="openEditDialog(scope.$index)">{{ t('subTable.edit') }}</el-button>
           <el-button link type="danger" size="small" @click="deleteRow(scope.$index)">{{ t('subTable.delete') }}</el-button>
+        </template>
+      </el-table-column>
+
+      <!-- View subtask detail button (read-only mode) -->
+      <el-table-column v-if="showViewDetail" :label="t('subTable.actions')" width="100" align="center">
+        <template #default="scope">
+          <el-button
+            link
+            type="primary"
+            size="small"
+            :disabled="scope.row.task_status !== 'COMPLETED'"
+            @click="emit('viewDetail', scope.row, scope.$index)"
+          >
+            {{ t('subTable.viewDetail') }}
+          </el-button>
+        </template>
+      </el-table-column>
+
+      <!-- Fill form button for multi-instance subtask (todo mode) -->
+      <el-table-column v-if="showFillButton" :label="t('subTable.actions')" :min-width="fillButtonLabel ? 200 : 100" align="center">
+        <template #default="scope">
+          <el-button
+            link
+            type="primary"
+            size="small"
+            @click="emit('fillForm', scope.row, scope.$index)"
+          >
+            {{ fillButtonLabel || t('subTable.add') }}
+          </el-button>
         </template>
       </el-table-column>
 
@@ -191,7 +232,7 @@ function sanitizeHtml(html: string): string {
 
 type Column = DialogColumn
 
-/** 根据字段类型返回合理的最小列宽 */
+/** Return a reasonable minimum column width based on field type */
 function columnMinWidth(col: Column): number {
   if (col.minWidth) return col.minWidth
   switch (col.type) {
@@ -234,18 +275,26 @@ const props = defineProps<{
   enablePolling?: boolean
   pollingInterval?: number
   enableWebSocket?: boolean
+  // View detail props (application detail read-only mode)
+  showViewDetail?: boolean
+  showTaskStatus?: boolean
+  // Fill form button (todo detail for MI subtask)
+  showFillButton?: boolean
+  fillButtonLabel?: string
 }>()
 
 const emit = defineEmits<{
   (e: 'update:modelValue', val: any[]): void
   (e: 'assignmentChanged'): void
   (e: 'dataRefreshed', rows: any[]): void
+  (e: 'viewDetail', row: any, index: number): void
+  (e: 'fillForm', row: any, index: number): void
 }>()
 
 const rows = ref<any[]>([])
-// key = "{rowIndex}_{field}" → 原始文件名（本次会话上传时记录）
+// key = "{rowIndex}_{field}" -> original filename (recorded during current session upload)
 const uploadNames = ref<Record<string, string>>({})
-// 正在下载的 key 集合
+// Set of keys currently being downloaded
 const downloadingKeys = ref<Record<string, boolean>>({})
 
 // Dialog state
@@ -289,15 +338,15 @@ watch(() => props.modelValue, (v) => { rows.value = v ? [...v] : [] }, { immedia
 
 
 
-/** 从 URL 中提取文件名，优先使用本次会话记录的原始文件名 */
+/** Extract filename from URL, preferring the original filename recorded in this session */
 function getFilenameFromUrl(url: string, savedName?: string): string {
   if (savedName) return savedName
-  if (!url) return '未知文件'
+  if (!url) return 'unknown file'
   const last = url.split('/').pop()
-  return last || '未知文件'
+  return last || 'unknown file'
 }
 
-/** 点击文件名触发下载，使用 fetch+Blob 避免新标签页跳转 */
+/** Click filename to trigger download, using fetch+Blob to avoid new tab navigation */
 async function downloadFile(url: string, savedName: string | undefined, rowIndex: number, field: string) {
   if (!url) return
   const key = `${rowIndex}_${field}`
@@ -407,8 +456,9 @@ function getUserDisplayName(userId: string): string {
 }
 
 /**
- * 子表行主键：引擎分配 API 需要关系表数字主键（如 participants.id）。
- * 兼容仅带 participant_id / 大小写变体、或表单序列化后的字段名。
+ * Sub-table row primary key: the engine assignment API requires the relation table's
+ * numeric PK (e.g. participants.id). Also handles participant_id / case variants /
+ * field names after form serialization.
  */
 function resolveSubTableRowPk(row: Record<string, unknown> | null | undefined): string | number | null {
   if (!row) return null
@@ -590,7 +640,7 @@ async function confirmAssignment() {
       result != null &&
       result.assigneeId != null &&
       String(result.assigneeId).trim().length > 0
-    // success 缺省但已带回 assigneeId 时仍视为成功（兼容序列化差异）；success===false 时走失败提示
+    // When success is absent but assigneeId is returned, treat as success (serialization compat); success===false triggers error message
     const ok =
       result != null &&
       result.success !== false &&

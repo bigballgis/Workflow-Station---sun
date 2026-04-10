@@ -74,11 +74,11 @@ BEGIN
         jsonb_build_object(
             v_binding_create_sub_id::text, '{
                 "rule": [
-                    {"name":"ref_p_name","type":"input","field":"name","props":{"maxlength":100,"placeholder":"请输入参与人姓名","showWordLimit":true},"title":"姓名","_fc_id":"id_p_name","hidden":false,"display":true,"validate":[{"message":"姓名必填","trigger":"blur","required":true}],"_fc_drag_tag":"input"},
-                    {"name":"ref_p_dept","type":"input","field":"department","props":{"maxlength":100,"placeholder":"请输入部门","showWordLimit":true},"title":"部门","_fc_id":"id_p_dept","hidden":false,"display":true,"_fc_drag_tag":"input"},
-                    {"name":"ref_p_email","type":"input","field":"email","props":{"maxlength":255,"placeholder":"请输入邮箱"},"title":"邮箱","_fc_id":"id_p_email","hidden":false,"display":true,"_fc_drag_tag":"input"}
+                    {"name":"ref_p_name","type":"input","field":"name","props":{"maxlength":100,"placeholder":"Please enter participant name","showWordLimit":true},"title":"Name","_fc_id":"id_p_name","hidden":false,"display":true,"validate":[{"message":"Name is required","trigger":"blur","required":true}],"_fc_drag_tag":"input"},
+                    {"name":"ref_p_dept","type":"input","field":"department","props":{"maxlength":100,"placeholder":"Please enter department","showWordLimit":true},"title":"Department","_fc_id":"id_p_dept","hidden":false,"display":true,"_fc_drag_tag":"input"},
+                    {"name":"ref_p_email","type":"input","field":"email","props":{"maxlength":255,"placeholder":"Please enter email"},"title":"Email","_fc_id":"id_p_email","hidden":false,"display":true,"_fc_drag_tag":"input"}
                 ],
-                "options":{"form":{"size":"default","inline":false,"labelWidth":"100px","labelPosition":"left"},"resetBtn":{"show":false},"submitBtn":{"show":true,"innerText":"确认"}}
+                "options":{"form":{"size":"default","inline":false,"labelWidth":"100px","labelPosition":"left"},"resetBtn":{"show":false},"submitBtn":{"show":true,"innerText":"Confirm"}}
             }'::jsonb
         )
     )
@@ -94,14 +94,15 @@ BEGIN
     );
 
     INSERT INTO dw_form_stage_bindings (form_id, stage_id, stage_name) VALUES
-    (v_create_form_id, 'Task_CreateMeeting', '创建会议'),
-    (v_create_form_id, 'Task_AssignParticipants', '分配参与人');
+    (v_create_form_id, 'Task_CreateMeeting', 'Create Meeting'),
+    (v_create_form_id, 'Task_AssignParticipants', 'Assign Participants'),
+    (v_participant_form_id, 'MI_UserTask_' || v_participant_table_id, 'Fill in Participant Info');
 
     RAISE NOTICE '========================================';
     RAISE NOTICE 'Form Table Bindings Complete!';
     RAISE NOTICE 'Create Meeting Form (id=%): 2 bindings, subForms key: %; stages: Task_CreateMeeting, Task_AssignParticipants',
         v_create_form_id, v_binding_create_sub_id;
-    RAISE NOTICE 'Participant Info Form (id=%): 1 binding', v_participant_form_id;
+    RAISE NOTICE 'Participant Info Form (id=%): 1 binding; stage: MI_UserTask_%', v_participant_form_id, v_participant_table_id;
     RAISE NOTICE '========================================';
 
 END $bindings$;

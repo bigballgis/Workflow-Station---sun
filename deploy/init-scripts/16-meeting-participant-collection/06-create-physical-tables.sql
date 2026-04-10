@@ -33,8 +33,11 @@ CREATE TABLE IF NOT EXISTS participants (
     attend_status VARCHAR(20) DEFAULT 'PENDING',
     dietary_preference VARCHAR(30),
     remark TEXT,
+    task_status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
     sort_order INTEGER NOT NULL DEFAULT 0,
     row_version INTEGER NOT NULL DEFAULT 0
 );
+
+ALTER TABLE participants ADD COLUMN IF NOT EXISTS task_status VARCHAR(20) NOT NULL DEFAULT 'PENDING';
 
 CREATE INDEX IF NOT EXISTS idx_participants_meeting_id ON participants (meeting_id);

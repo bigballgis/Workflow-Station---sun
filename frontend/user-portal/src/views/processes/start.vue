@@ -1249,7 +1249,7 @@ const handleAction = async (action: { id: string; label: string; action?: string
       if (action.action === 'submit') {
         await handleSubmit()
       } else {
-        ElMessage.warning(`未知操作类型: ${action.actionType || action.action}`)
+        ElMessage.warning(t('process.unknownActionType', { type: action.actionType || action.action }))
       }
   }
 }

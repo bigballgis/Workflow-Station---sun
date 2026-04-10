@@ -244,6 +244,7 @@ export default {
     confirmCancel: 'Are you sure you want to cancel? Unsaved data will be lost.',
     dataModifiedPleaseRefresh: 'Data has been modified, please refresh and try again',
     allParticipantsMustHaveAssignee: 'Assign a user to every sub-table row (use Assign) before completing.',
+    addParticipantInfoForm: 'Add Participant Info Form',
   },
   process: {
     title: 'New Requests',
@@ -345,7 +346,9 @@ export default {
     withdrawSuccess: 'Withdrawn successfully',
     withdrawFailed: 'Withdraw failed',
     userWithdraw: 'User withdrawal',
-    serviceFallbackName: 'Service Task {index}'
+    serviceFallbackName: 'Service Task {index}',
+    subTaskFormTitle: 'Participant Info Form',
+    close: 'Close'
   },
   diagram: {
     zoomIn: 'Zoom In',
@@ -372,6 +375,8 @@ export default {
     notificationsDesc: 'Latest notification messages',
     calendar: 'Calendar',
     calendarDesc: 'Task calendar view',
+    calendarTasksForDate: 'Tasks for {date}',
+    calendarTaskCount: '{count} item(s)',
     newProcess: 'New Requests',
     myApplications: 'My Requests',
     delegationMgmt: 'Delegation',
@@ -872,6 +877,10 @@ export default {
     pleaseSelectUser: 'Please select a user',
     assignmentSuccess: 'Assignment successful',
     assignmentFailed: 'Assignment failed',
+    taskStatus: 'Status',
+    taskPending: 'Pending',
+    taskCompleted: 'Completed',
+    viewDetail: 'Detail',
   },
   snapshotDiff: {
     snapshotValue: 'Snapshot Value',

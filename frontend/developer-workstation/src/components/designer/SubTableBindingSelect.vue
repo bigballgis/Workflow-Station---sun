@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { inject, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 interface DesignerSubBinding {
   id: number
@@ -19,6 +20,7 @@ interface SubTableBindingSelectEmits {
 
 const props = defineProps<SubTableBindingSelectProps>()
 const emit = defineEmits<SubTableBindingSelectEmits>()
+const { t } = useI18n()
 
 // Get subBindings from inject (provided by FormDesigner) or fall back to prop
 const injectedSubBindings = inject<() => DesignerSubBinding[]>('designerSubBindings', () => [])
@@ -29,7 +31,7 @@ const subBindings = computed(() => props.subBindings?.length ? props.subBindings
   <el-select
     :model-value="modelValue"
     clearable
-    placeholder="请选择 Sub Table"
+    :placeholder="t('designer.subTableSelectPlaceholder')"
     @change="emit('update:modelValue', $event ?? null)"
   >
     <el-option
@@ -39,7 +41,7 @@ const subBindings = computed(() => props.subBindings?.length ? props.subBindings
       :label="b.tableDescription ? `${b.tableName}（${b.tableDescription}）` : b.tableName"
     />
     <template v-if="subBindings.length === 0" #empty>
-      <span class="el-select-dropdown__empty">暂无可用 Sub Table</span>
+      <span class="el-select-dropdown__empty">{{ t('designer.subTableSelectEmpty') }}</span>
     </template>
   </el-select>
 </template>
