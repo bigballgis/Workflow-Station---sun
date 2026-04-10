@@ -18,7 +18,7 @@
         :show-overflow-tooltip="false"
       >
         <template #default="scope">
-          <!-- 只读展示 -->
+          <!-- Read-only display -->
           <template v-if="col.type === 'upload'">
             <span
               v-if="scope.row[col.field]"
@@ -232,7 +232,7 @@ function sanitizeHtml(html: string): string {
 
 type Column = DialogColumn
 
-/** 根据字段类型返回合理的最小列宽 */
+/** Return a reasonable minimum column width based on field type */
 function columnMinWidth(col: Column): number {
   if (col.minWidth) return col.minWidth
   switch (col.type) {
@@ -292,9 +292,9 @@ const emit = defineEmits<{
 }>()
 
 const rows = ref<any[]>([])
-// key = "{rowIndex}_{field}" → 原始文件名（本次会话上传时记录）
+// key = "{rowIndex}_{field}" -> original filename (recorded during current session upload)
 const uploadNames = ref<Record<string, string>>({})
-// 正在下载的 key 集合
+// Set of keys currently being downloaded
 const downloadingKeys = ref<Record<string, boolean>>({})
 
 // Dialog state
@@ -338,15 +338,15 @@ watch(() => props.modelValue, (v) => { rows.value = v ? [...v] : [] }, { immedia
 
 
 
-/** 从 URL 中提取文件名，优先使用本次会话记录的原始文件名 */
+/** Extract filename from URL, preferring the original filename recorded in this session */
 function getFilenameFromUrl(url: string, savedName?: string): string {
   if (savedName) return savedName
-  if (!url) return '未知文件'
+  if (!url) return 'unknown file'
   const last = url.split('/').pop()
-  return last || '未知文件'
+  return last || 'unknown file'
 }
 
-/** 点击文件名触发下载，使用 fetch+Blob 避免新标签页跳转 */
+/** Click filename to trigger download, using fetch+Blob to avoid new tab navigation */
 async function downloadFile(url: string, savedName: string | undefined, rowIndex: number, field: string) {
   if (!url) return
   const key = `${rowIndex}_${field}`
@@ -456,8 +456,9 @@ function getUserDisplayName(userId: string): string {
 }
 
 /**
- * 子表行主键：引擎分配 API 需要关系表数字主键（如 participants.id）。
- * 兼容仅带 participant_id / 大小写变体、或表单序列化后的字段名。
+ * Sub-table row primary key: the engine assignment API requires the relation table's
+ * numeric PK (e.g. participants.id). Also handles participant_id / case variants /
+ * field names after form serialization.
  */
 function resolveSubTableRowPk(row: Record<string, unknown> | null | undefined): string | number | null {
   if (!row) return null
@@ -639,7 +640,7 @@ async function confirmAssignment() {
       result != null &&
       result.assigneeId != null &&
       String(result.assigneeId).trim().length > 0
-    // success 缺省但已带回 assigneeId 时仍视为成功（兼容序列化差异）；success===false 时走失败提示
+    // When success is absent but assigneeId is returned, treat as success (serialization compat); success===false triggers error message
     const ok =
       result != null &&
       result.success !== false &&

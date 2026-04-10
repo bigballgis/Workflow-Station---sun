@@ -1,6 +1,6 @@
 <template>
   <div class="application-detail-page">
-    <!-- 页面头部 -->
+    <!-- Page header -->
     <div class="page-header">
       <div class="header-left">
         <el-button :icon="ArrowLeft" @click="$router.back()">{{ t('applicationDetail.back') }}</el-button>
@@ -10,7 +10,7 @@
       <el-button :icon="Refresh" @click="loadProcessDetail" :loading="loading">{{ t('applicationDetail.refresh') }}</el-button>
     </div>
 
-    <!-- 加载状态 -->
+    <!-- Loading state -->
     <div v-if="loading" class="skeleton-content">
       <el-skeleton animated :count="3">
         <template #template>
@@ -21,9 +21,9 @@
       </el-skeleton>
     </div>
 
-    <!-- 正常内容 -->
+    <!-- Main content -->
     <div v-else class="content-sections">
-      <!-- 第一部分：基本信息 -->
+      <!-- Section 1: Basic info -->
       <div class="section info-section">
         <div class="section-header">
           <el-icon><InfoFilled /></el-icon>
@@ -53,7 +53,7 @@
         </div>
       </div>
 
-      <!-- 第二部分：流程图 -->
+      <!-- Section 2: Process diagram -->
       <div class="section workflow-section">
         <div class="section-header">
           <el-icon><Share /></el-icon>
@@ -77,9 +77,9 @@
         </div>
       </div>
 
-      <!-- 第三部分：前置节点表单（只读，按顺序展示） -->
+      <!-- Section 3: Previous node forms (read-only, displayed in order) -->
       <template v-for="prevForm in previousForms" :key="prevForm.formId">
-        <!-- MI subtask 表单不渲染 card，仅保留子表（participants 等） -->
+        <!-- MI subtask form: no card rendered, only sub-tables (participants etc.) -->
         <template v-if="prevForm.isMiSubTask">
           <div v-for="binding in prevForm.subTableBindings" :key="binding.bindingId" class="sub-table-section">
             <SubTableField
@@ -128,7 +128,7 @@
         </div>
       </template>
 
-      <!-- 表单数据（MI subtask 时不渲染独立 card，表单字段通过子表 Detail 按钮弹窗展示） -->
+      <!-- Form data (MI subtask skips the standalone card; form fields are shown via the sub-table Detail button dialog) -->
       <div v-if="!currentFormIsMiSubTask" class="section form-section">
         <div class="section-header">
           <el-icon><Document /></el-icon>
@@ -171,12 +171,12 @@
         </div>
       </div>
 
-      <!-- Task 19.2: 变更历史面板（标题与折叠由 ChangeHistoryPanel 内部处理） -->
+      <!-- Change history panel (title and collapse handled internally by ChangeHistoryPanel) -->
       <div class="section change-history-section">
         <ChangeHistoryPanel :process-instance-id="processId" />
       </div>
 
-      <!-- 第四部分：流转记录 -->
+      <!-- Section 4: Flow history -->
       <div class="section history-section">
         <div class="section-header">
           <el-icon><Clock /></el-icon>
@@ -191,7 +191,7 @@
         </div>
       </div>
 
-      <!-- 子任务表单详情弹窗 -->
+      <!-- Sub-task form detail dialog -->
       <el-dialog
         v-model="subTaskDetailVisible"
         :title="subTaskDetailTitle"
@@ -213,7 +213,7 @@
         </template>
       </el-dialog>
 
-      <!-- 第五部分：操作按钮 -->
+      <!-- Section 5: Action buttons -->
       <div v-if="processInfo.status === 'RUNNING'" class="section action-section">
         <div class="action-buttons">
           <div class="left-actions">
@@ -253,12 +253,12 @@ const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
 const processId = route.params.id as string
-// 从 completed tasks 进来时携带的快照时间，用于只展示该时刻之前的流程状态
+// Snapshot timestamp from completed tasks entry, used to only show process state up to that point
 const snapshotTime = route.query.snapshotTime as string | undefined
-// 从 completed tasks 进来时携带的任务名称，用于高亮该节点为 current
+// Snapshot task name from completed tasks entry, used to highlight that node as current
 const snapshotTaskName = route.query.snapshotTaskName as string | undefined
 
-/** 与 request 拦截器一致，用于判断是否为「发起人查看自己的申请」 */
+/** Consistent with request interceptor; used to determine if the initiator is viewing their own application */
 function getPortalUserId(): string | null {
   let userId = localStorage.getItem('userId')
   if (!userId) {
@@ -280,14 +280,14 @@ const urging = ref(false)
 const withdrawing = ref(false)
 const processInfo = ref<ProcessInstance>({} as ProcessInstance)
 
-// 流程图数据
+// Process diagram data
 const processNodes = ref<ProcessNode[]>([])
 const processFlows = ref<ProcessFlow[]>([])
 const currentNodeId = ref('')
 const completedNodeIds = ref<string[]>([])
 const bpmnXml = ref('')
 
-// 表单数据
+// Form data
 const formFields = ref<FormField[]>([])
 const formTabs = ref<FormTab[]>([])
 const formData = ref<Record<string, any>>({})
@@ -327,7 +327,7 @@ const lookupDbConfigs = ref<Record<string, { tableId: number; searchFields: stri
 // Relation view configs from configJson (designed in developer-workstation)
 const relationViewConfigs = ref<Record<string, { viewFields: any[]; allFields: any[] }>>({})
 
-// 前置节点表单（只读展示，按顺序排列）
+// Previous node forms (read-only display, ordered)
 interface PreviousFormEntry {
   formId: string
   formName: string
@@ -349,7 +349,7 @@ interface PreviousFormEntry {
 }
 const previousForms = ref<PreviousFormEntry[]>([])
 
-// 子任务表单详情弹窗
+// Sub-task form detail dialog
 const subTaskDetailVisible = ref(false)
 const subTaskDetailTitle = ref('')
 const subTaskDetailFields = ref<FormField[]>([])
@@ -388,21 +388,22 @@ function openSubTaskDetailDialog(row: any) {
   }
   subTaskDetailData.value = mergedData
 
+  const formTitle = subTaskFormSchema.value._formName || t('applicationDetail.subTaskFormTitle')
   subTaskDetailTitle.value = row.assignee_display_name
-    ? `${subTaskFormSchema.value._formName || 'Participant Info Form'} — ${row.assignee_display_name}`
-    : subTaskFormSchema.value._formName || 'Participant Info Form'
+    ? `${formTitle} — ${row.assignee_display_name}`
+    : formTitle
   subTaskDetailVisible.value = true
 }
 
-// 流转记录
+// Flow history records
 const historyRecords = ref<HistoryRecord[]>([])
 
 const getCurrentAssigneeDisplay = () => {
-  // 如果有直接分配的处理人
+  // Direct assignee
   if (processInfo.value.currentAssignee) {
     return processInfo.value.currentAssignee
   }
-  // 如果有候选用户（或签场景）
+  // Candidate users (counter-sign scenario)
   if (processInfo.value.candidateUsers) {
     const candidates = processInfo.value.candidateUsers.split(',')
     if (candidates.length === 1) {
@@ -429,14 +430,13 @@ const getNodeStatusType = (status?: string): 'success' | 'warning' | 'info' => {
   return 'info'
 }
 
-// 根据流转历史和 BPMN 流程图，找到指定任务完成后的下一个节点名称
+// Find the next node name after a completed task, using flow history and the BPMN diagram
 const findNextNodeName = (taskName: string): string | null => {
   const taskNode = processNodes.value.find(n => n.name === taskName)
   if (!taskNode) return null
 
-  // 对于 "Submit Request" 这种直接连接到下一个 userTask 的情况，直接返回
-  // 对于经过网关的情况，需要根据流程实际走过的路径来判断
-  // 我们可以利用原始的 processInfo.currentNode（数据库中的最终节点）来辅助判断
+  // For direct connections to the next userTask (e.g. "Submit Request"), return immediately.
+  // For gateway paths, use processInfo.currentNode (the DB-recorded final node) to resolve the branch.
   const originalCurrentNode = processInfo.value.currentNode || ''
 
   const visited = new Set<string>()
@@ -455,7 +455,7 @@ const findNextNodeName = (taskName: string): string | null => {
       if (target.type === 'gateway') {
         queue.push(target.id)
       } else {
-        // 非网关节点：如果只有一条出路，直接返回
+        // Non-gateway node: if there's only one outgoing path, return directly
         if (outFlows.length === 1 && candidates.length === 0) return target.name
         candidates.push(target.name)
       }
@@ -465,15 +465,15 @@ const findNextNodeName = (taskName: string): string | null => {
   if (candidates.length === 0) return null
   if (candidates.length === 1) return candidates[0]
 
-  // 多个候选（网关分支）：优先匹配数据库中记录的最终节点
+  // Multiple candidates (gateway branches): prefer the DB-recorded final node
   if (originalCurrentNode && candidates.includes(originalCurrentNode)) {
     return originalCurrentNode
   }
-  // 否则返回第一个
+  // Otherwise return the first candidate
   return candidates[0]
 }
 
-// 加载流程详情
+// Load process details
 const loadProcessDetail = async () => {
   loading.value = true
   try {
@@ -483,10 +483,10 @@ const loadProcessDetail = async () => {
       processInfo.value = data
       if (data.variables) formData.value = data.variables
       
-      // 先加载流转历史
+      // Load flow history first
       await loadProcessHistory()
       
-      // 然后加载功能单元内容（包括 BPMN 解析）
+      // Then load function unit content (including BPMN parsing)
       if (data.processDefinitionKey) {
         try {
           await loadFunctionUnitContent(data.processDefinitionKey)
@@ -521,7 +521,7 @@ const loadProcessDetail = async () => {
         }
       }
 
-      // 快照模式（仅进行中）：用 BPMN 计算 snapshotTaskName 之后的下一节点为 current；已结束不套用
+      // Snapshot mode (RUNNING only): compute the next node after snapshotTaskName via BPMN and mark it as current; skip for terminated processes
       if (snapshotTaskName && data.status === 'RUNNING' && processNodes.value.length > 0 && processFlows.value.length > 0) {
         const nextNodeName = findNextNodeName(snapshotTaskName)
         if (nextNodeName) {
@@ -538,11 +538,11 @@ const loadProcessDetail = async () => {
                 }
               }
             } else {
-              // 非结束事件（如下一个 userTask）：标记为 current（橘色）
+              // Non-end event (e.g. next userTask): mark as current (orange)
               nextNode.status = 'current'
-              // 从已完成列表移除，避免下游网关等因“前驱已完成”被错误标绿
+              // Remove from completed list to prevent downstream gateways from being incorrectly marked green
               completedNodeIds.value = completedNodeIds.value.filter(id => id !== nextNode.id)
-              // 仅因当前节点为前驱而被标为 completed 的下游节点改回 pending
+              // Reset downstream nodes that were only marked completed because the current node was their predecessor
               const downstreamIds = processFlows.value.filter(f => f.sourceRef === nextNode.id).map(f => f.targetRef)
               for (const targetId of downstreamIds) {
                 const targetNode = processNodes.value.find(n => n.id === targetId)
@@ -567,7 +567,7 @@ const loadProcessDetail = async () => {
   }
 }
 
-// 加载功能单元内容
+// Load function unit content
 const loadFunctionUnitContent = async (processKey: string) => {
   try {
     const response = await processApi.getFunctionUnitContent(processKey)
@@ -578,7 +578,7 @@ const loadFunctionUnitContent = async (processKey: string) => {
     }
     
     let currentFormInfo: { formId: string | null, formName: string | null } = { formId: null, formName: null }
-    /** 发起人查看自己的申请（非任务快照）：只展示流程上第一个 userTask 的表单，避免把审批节点表单当成「申请单」 */
+    /** Initiator viewing their own application (non-task snapshot): only show the first userTask form, avoiding showing approval node forms as the application form */
     let useInitiatorFormOnly = false
 
     if (content.processes?.length > 0) {
@@ -594,7 +594,7 @@ const loadFunctionUnitContent = async (processKey: string) => {
 
       if (useInitiatorFormOnly) {
         currentFormInfo = parseBpmnXmlAndGetFirstUserTaskFormInfo(xml)
-        // 解析不到时保持空，由下方默认选中 forms[0]，避免回退到「当前节点」又选中审批表单
+        // When parsing fails, keep empty; fall back to forms[0] below to avoid reverting to current node and selecting the approval form
       } else {
         currentFormInfo = parseBpmnXmlAndGetFormId(xml)
       }
@@ -602,10 +602,10 @@ const loadFunctionUnitContent = async (processKey: string) => {
       parseBpmnXml(xml)
     }
     
-    if (content.forms?.length > 0) {      // 根据当前节点的 formId 选择正确的表单
-      let selectedForm = content.forms[0] // 默认第一个
+    if (content.forms?.length > 0) {      // Select the correct form based on the current node formId
+      let selectedForm = content.forms[0] // Default to first
       
-      // 优先使用 formId 匹配 sourceId（原始表单ID）
+      // Prefer matching formId to sourceId (original form ID)
       if (currentFormInfo.formId) {
         const matchedForm = content.forms.find((f: any) => 
           String(f.sourceId) === currentFormInfo.formId
@@ -621,7 +621,7 @@ const loadFunctionUnitContent = async (processKey: string) => {
           }
         }
       } else if (currentFormInfo.formName) {
-        // 如果没有 formId，尝试用 formName 匹配
+        // If no formId, try matching by formName
         const matchedForm = content.forms.find((f: any) => f.name === currentFormInfo.formName)
         if (matchedForm) {
           selectedForm = matchedForm
@@ -676,8 +676,8 @@ const loadFunctionUnitContent = async (processKey: string) => {
           data: []
         })
       }
-      // 从 variables 中恢复子表数据
-      // 注意：JSON 序列化后 key 变为 string，需同时用 number 和 string 查找
+      // Restore sub-table data from variables
+      // Note: JSON serialization converts keys to string; search by both number and string
       const savedSubTables = formData.value.__subTables__
       if (savedSubTables && typeof savedSubTables === 'object') {
         bindings.forEach(binding => {
@@ -733,7 +733,7 @@ const loadFunctionUnitContent = async (processKey: string) => {
         (subTaskFormSchema.value && subTaskFormSchema.value._formName === selectedForm.name)
       )
 
-      // 收集当前节点之前所有节点绑定的不同表单（只读展示）；发起人看自己的申请时不展示「前置」块（避免申请单 + 审批表单双显）
+      // Collect forms bound to nodes before the current one (read-only display); skip when initiator views own application (avoid duplicate application + approval form display)
       if (content.processes?.length > 0 && !useInitiatorFormOnly) {
         const prevFormIds = parseBpmnXmlAndGetPreviousFormIds(content.processes[0].data)
         const collectedPrevForms: PreviousFormEntry[] = []
@@ -831,19 +831,19 @@ const loadFunctionUnitContent = async (processKey: string) => {
   }
 }
 
-// 解析 BPMN XML 并获取当前节点的 formId 和 formName
+// Parse BPMN XML and get the current node formId and formName
 const parseBpmnXmlAndGetFormId = (xml: string): { formId: string | null, formName: string | null } => {
   if (!xml) return { formId: null, formName: null }
   
   try {
     const parser = new DOMParser()
     const doc = parser.parseFromString(xml, 'text/xml')
-    // 快照模式（从 Completed Tasks 进来）用 snapshotTaskName；否则用 currentNode
+    // Snapshot mode (from Completed Tasks): use snapshotTaskName; otherwise use currentNode
     const currentNodeName = snapshotTaskName || processInfo.value.currentNode || ''
     
     const allElements = doc.getElementsByTagName('*')
 
-    // 收集所有 userTask 及 sequenceFlow
+    // Collect all userTasks and sequenceFlows
     const tasks = new Map<string, { name: string; formId: string | null; formName: string | null }>()
     const flows: Array<{ source: string; target: string }> = []
 
@@ -865,7 +865,7 @@ const parseBpmnXmlAndGetFormId = (xml: string): { formId: string | null, formNam
           }
         }
         tasks.set(id, { name, formId, formName })
-        // 直接匹配当前节点
+        // Direct match on current node
         if (name === currentNodeName || id === currentNodeName) {
           return { formId, formName }
         }
@@ -874,8 +874,8 @@ const parseBpmnXmlAndGetFormId = (xml: string): { formId: string | null, formNam
       }
     }
 
-    // 当前节点不是 userTask（如流程已完成，currentNode = "End"）
-    // 找流程中最后一个 userTask：出边不指向任何其他 userTask 的节点
+    // Current node is not a userTask (e.g. process completed, currentNode = "End")
+    // Find the last userTask: node whose outgoing edges do not point to any other userTask
     const taskIds = new Set(tasks.keys())
     for (const [id, info] of tasks) {
       const outTargets = flows.filter(f => f.source === id).map(f => f.target)
@@ -884,7 +884,7 @@ const parseBpmnXmlAndGetFormId = (xml: string): { formId: string | null, formNam
         return { formId: info.formId, formName: info.formName }
       }
     }
-    // 最终 fallback：取最后一个
+    // Final fallback: take the last one
     const last = [...tasks.values()].pop()
     if (last) return { formId: last.formId, formName: last.formName }
   } catch (error) {
@@ -894,7 +894,7 @@ const parseBpmnXmlAndGetFormId = (xml: string): { formId: string | null, formNam
   return { formId: null, formName: null }
 }
 
-/** 从 startEvent 起 BFS，取流程中第一个 userTask 绑定的表单（发起人申请内容） */
+/** BFS from startEvent to find the first userTask-bound form (initiator application content) */
 const parseBpmnXmlAndGetFirstUserTaskFormInfo = (xml: string): { formId: string | null, formName: string | null } => {
   if (!xml) return { formId: null, formName: null }
   try {
@@ -969,7 +969,7 @@ const parseBpmnXmlAndGetFirstUserTaskFormInfo = (xml: string): { formId: string 
   return { formId: null, formName: null }
 }
 
-// 解析 BPMN XML，按拓扑顺序返回当前节点之前所有节点绑定的表单信息（去重）
+// Parse BPMN XML: return form info bound to all nodes before the current node, in topological order (deduplicated)
 const parseBpmnXmlAndGetPreviousFormIds = (xml: string): Array<{ formId: string | null, formName: string | null, taskName: string | null }> => {
   if (!xml) return []
   try {
@@ -1008,21 +1008,21 @@ const parseBpmnXmlAndGetPreviousFormIds = (xml: string): Array<{ formId: string 
     for (const [id, info] of tasks) {
       if (info.name === currentNodeName || id === currentNodeName) { currentId = id; break }
     }
-    // 如果没匹配到（流程已完成，currentNode = "End"），找最后一个 userTask（出边不指向任何 userTask 的节点）
+    // If no match (process completed, currentNode = "End"), find the last userTask (no outgoing edges to other userTasks)
     if (!currentId) {
       const taskIds = new Set(tasks.keys())
-      // 找没有出边指向其他 userTask 的节点（即流程中最后一个 userTask）
+      // Find node with no outgoing edges to other userTasks (the last userTask in the process)
       for (const [id] of tasks) {
         const outTargets = flows.filter(f => f.source === id).map(f => f.target)
         const hasUserTaskSuccessor = outTargets.some(t => taskIds.has(t))
         if (!hasUserTaskSuccessor) { currentId = id; break }
       }
-      // 仍未找到则取最后一个
+      // Still not found, take the last one
       if (!currentId) currentId = [...tasks.keys()].pop() || ''
     }
     if (!currentId) return []
 
-    // 找 startEvent
+    // Find startEvent
     let startId = ''
     for (let i = 0; i < allElements.length; i++) {
       const el = allElements[i]
@@ -1037,7 +1037,7 @@ const parseBpmnXmlAndGetPreviousFormIds = (xml: string): Array<{ formId: string 
       forwardAdj.get(f.source)!.push(f.target)
     }
 
-    // BFS 从 start 出发，按顺序收集到达 currentId 之前经过的 userTask
+    // BFS from start, collecting userTasks encountered before reaching currentId
     const visited = new Set<string>()
     const queue: string[] = [startId]
     const orderedPrevTaskIds: string[] = []
@@ -1057,7 +1057,7 @@ const parseBpmnXmlAndGetPreviousFormIds = (xml: string): Array<{ formId: string 
     for (const taskId of orderedPrevTaskIds) {
       const info = tasks.get(taskId)
       if (!info) continue
-      // 优先用 formId，其次 formName，最后用 taskName 作为 fallback key
+      // Prefer formId, then formName, finally taskName as fallback key
       const key = info.formId || info.formName || info.name || ''
       if (!key || seenKeys.has(key)) continue
       seenKeys.add(key)
@@ -1115,7 +1115,7 @@ const findMiSubTaskFormIdFromBpmn = (xml: string): string | null => {
   return null
 }
 
-// 解析 BPMN XML
+// Parse BPMN XML
 const parseBpmnXml = (xml: string) => {
   if (!xml) return
   try {
@@ -1124,10 +1124,10 @@ const parseBpmnXml = (xml: string) => {
     const nodes: ProcessNode[] = []
     const flows: ProcessFlow[] = []
     const completed: string[] = []
-    // 仅流程进行中时启用快照视图；已结束则按真实完成态展示，避免仍显示橙色 Current Step
+    // Only enable snapshot view while process is RUNNING; show real completed state when ended (avoid orange Current Step)
     const snapshotActive = !!(snapshotTaskName && processInfo.value.status === 'RUNNING')
 
-    // 解析位置信息
+    // Parse position info
     const positionMap = new Map()
     doc.querySelectorAll('BPMNShape, bpmndi\\:BPMNShape').forEach(shape => {
       const bpmnElement = shape.getAttribute('bpmnElement')
@@ -1142,7 +1142,7 @@ const parseBpmnXml = (xml: string) => {
       }
     })
     
-    // 创建节点名称到历史记录状态的映射
+    // Create mapping from node name to history record status
     const nodeStatusMap = new Map<string, 'completed' | 'current' | 'pending' | 'rejected'>()
     const completedNodeNames = new Set<string>()
     historyRecords.value.forEach(record => {
@@ -1154,15 +1154,15 @@ const parseBpmnXml = (xml: string) => {
       }
     })
     
-    // 检查是否有批准或拒绝的操作
-    const hasApproval = historyRecords.value.some(h => h.status === 'completed' && (h.nodeName.includes('Approval') || h.nodeName.includes('审批')))
+    // Check for approval or rejection operations
+    const hasApproval = historyRecords.value.some(h => h.status === 'completed' && (h.nodeName.includes('Approval') || h.nodeName.includes('Approval')))
     const hasRejection = historyRecords.value.some(h => h.status === 'rejected')
     
-    // 获取当前节点名称
+    // Get current node name
     const currentNodeName = processInfo.value.currentNode || ''
     let foundCurrentNode = false
     
-    // 解析开始事件
+    // Parse start events
     doc.querySelectorAll('startEvent').forEach((event, index) => {
       const id = event.getAttribute('id') || `start_${index}`
       const pos = positionMap.get(id)
@@ -1170,7 +1170,7 @@ const parseBpmnXml = (xml: string) => {
       completed.push(id)
     })
     
-    // 解析用户任务
+    // Parse user tasks
     doc.querySelectorAll('userTask').forEach((task, index) => {
       const id = task.getAttribute('id') || `task_${index}`
       const name = task.getAttribute('name') || t('task.taskFallbackName', { index: index + 1 })
@@ -1178,16 +1178,16 @@ const parseBpmnXml = (xml: string) => {
       
       let status: 'completed' | 'current' | 'pending' | 'rejected' = 'pending'
       
-      // 优先从历史记录中获取状态
+      // Prefer status from history records
       const historyStatus = nodeStatusMap.get(name)
       if (snapshotActive) {
-        // 快照模式：只显示到 snapshotTaskName 为止的状态
+        // Snapshot mode: only show status up to snapshotTaskName
         if (name === snapshotTaskName || id === snapshotTaskName) {
           status = 'completed'
           completed.push(id)
           foundCurrentNode = true
         } else if (!foundCurrentNode) {
-          // snapshotTaskName 之前的节点：从历史记录判断，或视为已完成
+          // Nodes before snapshotTaskName: determine from history, or treat as completed
           if (historyStatus) {
             status = historyStatus
           } else {
@@ -1197,7 +1197,7 @@ const parseBpmnXml = (xml: string) => {
             completed.push(id)
           }
         } else {
-          // snapshotTaskName 之后的节点：保持 pending
+          // Nodes after snapshotTaskName: keep as pending
           status = 'pending'
         }
       } else if (historyStatus) {
@@ -1206,21 +1206,21 @@ const parseBpmnXml = (xml: string) => {
           completed.push(id)
         }
       } else if (processInfo.value.status === 'COMPLETED') {
-        // 流程已完成，只标记实际执行过的节点（通过历史记录匹配）
+        // Process completed: only mark nodes that were actually executed (matched via history records)
         const historyMatch = historyRecords.value.find(h => h.nodeName === name || h.nodeId === id)
         if (historyMatch) {
           status = historyMatch.status === 'rejected' ? 'rejected' : 'completed'
           completed.push(id)
         }
       } else if (processInfo.value.status === 'RUNNING') {
-        // 流程进行中，根据当前节点名称判断
+        // Process running: determine status based on current node name
         if (name === currentNodeName || id === currentNodeName) {
           status = 'current'
           currentNodeId.value = id
           foundCurrentNode = true
         } else if (!foundCurrentNode) {
-          // 当前节点之前的节点：仅当历史记录中有该节点时才标记为已完成
-          // 避免将被网关跳过的分支节点错误标记为已完成
+          // Nodes before current: only mark as completed if found in history records
+          // Avoid incorrectly marking gateway-skipped branch nodes as completed
           const historyMatch = historyRecords.value.find(h => h.nodeName === name || h.nodeId === id)
           if (historyMatch && (historyMatch.status === 'completed' || historyMatch.status === 'rejected')) {
             status = historyMatch.status
@@ -1232,7 +1232,7 @@ const parseBpmnXml = (xml: string) => {
       nodes.push({ id, name, type: 'task', status, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
     })
     
-    // 解析服务任务
+    // Parse service tasks
     doc.querySelectorAll('serviceTask').forEach((task, index) => {
       const id = task.getAttribute('id') || `service_${index}`
       const name = task.getAttribute('name') || t('applicationDetail.serviceFallbackName', { index: index + 1 })
@@ -1243,7 +1243,7 @@ const parseBpmnXml = (xml: string) => {
       if (status === 'completed') completed.push(id)
     })
     
-    // 提前解析顺序流（用于后续网关状态判断）
+    // Pre-parse sequence flows (used for subsequent gateway status determination)
     const earlyFlows: Array<{sourceRef: string, targetRef: string}> = []
     doc.querySelectorAll('sequenceFlow').forEach(flow => {
       earlyFlows.push({
@@ -1252,20 +1252,20 @@ const parseBpmnXml = (xml: string) => {
       })
     })
 
-    // 解析网关
+    // Parse gateways
     doc.querySelectorAll('exclusiveGateway, parallelGateway, inclusiveGateway').forEach((gateway, index) => {
       const id = gateway.getAttribute('id') || `gateway_${index}`
       const name = gateway.getAttribute('name') || ''
       const pos = positionMap.get(id)
       
-      // 根据历史记录判断网关状态
+      // Determine gateway status from history records
       let status: 'completed' | 'pending' = 'pending'
       if (snapshotActive) {
-        // 快照模式：检查网关的入口节点是否已完成
+        // Snapshot mode: check if the gateway incoming nodes are completed
         if (completedNodeNames.has(name)) {
           status = 'completed'
         } else {
-          // 检查是否有已完成的入口节点（通过 sequenceFlow）
+          // Check for completed incoming nodes (via sequenceFlow)
           const incomingSourceIds = earlyFlows.filter(f => f.targetRef === id).map(f => f.sourceRef)
           const hasCompletedSource = incomingSourceIds.some(srcId => completed.includes(srcId))
           if (hasCompletedSource) {
@@ -1275,14 +1275,14 @@ const parseBpmnXml = (xml: string) => {
       } else if (completedNodeNames.has(name)) {
         status = 'completed'
       } else if (processInfo.value.status === 'COMPLETED') {
-        // 流程已完成，只标记实际执行路径上的网关
+        // Process completed: only mark gateways on the actually executed path
         const incomingSourceIds = earlyFlows.filter(f => f.targetRef === id).map(f => f.sourceRef)
         const hasCompletedSource = incomingSourceIds.some(srcId => completed.includes(srcId))
         if (hasCompletedSource) {
           status = 'completed'
         }
       } else {
-        // 检查是否有已完成的入口节点（通过 sequenceFlow）
+        // Check for completed incoming nodes (via sequenceFlow)
         const incomingSourceIds = earlyFlows.filter(f => f.targetRef === id).map(f => f.sourceRef)
         const hasCompletedSource = incomingSourceIds.some(srcId => completed.includes(srcId))
         if (hasCompletedSource) {
@@ -1294,16 +1294,16 @@ const parseBpmnXml = (xml: string) => {
       if (status === 'completed') completed.push(id)
     })
     
-    // 解析结束事件
+    // Parse end events
     doc.querySelectorAll('endEvent').forEach((event, index) => {
       const id = event.getAttribute('id') || `end_${index}`
       const name = event.getAttribute('name') || t('task.endNode')
       const pos = positionMap.get(id)
       
-      // 检查结束节点是否应该标记为已完成
+      // Check if end node should be marked as completed
       let status: 'completed' | 'pending' | 'rejected' = 'pending'
       
-      // 优先从历史记录中获取状态
+      // Prefer status from history records
       if (completedNodeNames.has(name)) {
         status = isRejectedName(name) ? 'rejected' : 'completed'
       } else if (snapshotActive) {
@@ -1321,7 +1321,7 @@ const parseBpmnXml = (xml: string) => {
       if (status === 'completed' || status === 'rejected') completed.push(id)
     })
     
-    // 解析连线路径点
+    // Parse connector waypoints
     const waypointsMap = new Map()
     doc.querySelectorAll('BPMNEdge, bpmndi\\:BPMNEdge').forEach(edge => {
       const bpmnElement = edge.getAttribute('bpmnElement')
@@ -1334,7 +1334,7 @@ const parseBpmnXml = (xml: string) => {
       }
     })
     
-    // 解析顺序流
+    // Parse sequence flows
     doc.querySelectorAll('sequenceFlow').forEach((flow, index) => {
       const id = flow.getAttribute('id') || `flow_${index}`
       flows.push({ id, sourceRef: flow.getAttribute('sourceRef') || '', targetRef: flow.getAttribute('targetRef') || '', name: flow.getAttribute('name') || '', waypoints: waypointsMap.get(id) })
@@ -1348,23 +1348,23 @@ const parseBpmnXml = (xml: string) => {
   }
 }
 
-// 解析表单配置
+// Parse form configuration
 const parseFormConfig = (configStr: string) => {
   if (!configStr) return
   try {
     const config = typeof configStr === 'string' ? JSON.parse(configStr) : configStr
     const rules = config.rule && Array.isArray(config.rule) ? config.rule : (Array.isArray(config) ? config : null)
     if (rules) {
-      // 提取 labelWidth 配置（忽略后端配置，使用固定值避免 label 被截断）
+      // Extract labelWidth config (ignore backend config, use fixed value to prevent label truncation)
       // if (config.options?.form?.labelWidth) {
       //   formLabelWidth.value = config.options.form.labelWidth
       // }
       
-      // 检查是否有 el-tabs 结构
+      // Check for el-tabs structure
       const tabsRule = rules.find((r: any) => r.type === 'el-tabs')
       
       if (tabsRule && tabsRule.children && Array.isArray(tabsRule.children)) {
-        // 有 Tab 布局（与 processes/start.vue 一致：整棵 tabPane.children 交给 extractFieldsRecursive，避免重复/串 tab）
+        // Tab layout (consistent with processes/start.vue: pass entire tabPane.children to extractFieldsRecursive to avoid duplicate/mixed tabs)
         const tabs: FormTab[] = []
         
         for (const tabPane of tabsRule.children) {
@@ -1396,7 +1396,7 @@ const parseFormConfig = (configStr: string) => {
         formTabs.value = tabs
         formFields.value = []
       } else {
-        // 无 Tab 布局，使用平铺模式
+        // No tab layout, use flat mode
         formTabs.value = []
         formFields.value = extractFieldsRecursive(rules)
       }
@@ -1406,10 +1406,10 @@ const parseFormConfig = (configStr: string) => {
   }
 }
 
-// form-create 专有容器：不递归其子树（与 start.vue 一致）
+// form-create proprietary container: do not recurse into its subtree (consistent with start.vue)
 const FC_SKIP_TYPES = new Set(['group', 'subForm', 'tableForm', 'tableFormColumn'])
 
-// 递归提取字段
+// Recursively extract fields
 const extractFieldsRecursive = (items: any[]): FormField[] => {
   const fields: FormField[] = []
   for (const item of items) {
@@ -1466,7 +1466,7 @@ const extractFieldsRecursive = (items: any[]): FormField[] => {
   return fields
 }
 
-// 转换表单规则
+// Convert form rules
 const convertFormCreateRule = (rule: any): FormField | null => {
   if (!rule || !rule.field) return null
   let dateType = 'date'
@@ -1592,28 +1592,28 @@ const deriveColumnsFromBinding = (binding: any, subForms?: Record<string, any>):
   return []
 }
 
-// 加载流转历史
+// Load flow history
 const loadProcessHistory = async () => {
   try {
     const response = await processApi.getProcessHistory(processId)
     const historyData = response.data || response
     if (historyData && Array.isArray(historyData)) {
 
-      // 进行中 + 快照：只保留到该任务为止；已结束流程展示完整历史
+      // Running + snapshot: only keep records up to this task; completed processes show full history
       let filteredData = historyData
       if (snapshotTaskName && processInfo.value.status === 'RUNNING') {
-        // 找到 snapshotTaskName 在历史列表中最后一次出现的位置（按时间排序），截断到该位置
+        // Find the last occurrence of snapshotTaskName in the history list (sorted by time) and truncate there
         const snapshotIdx = historyData.map((item: any) => item.activityName || item.taskName).lastIndexOf(snapshotTaskName)
         if (snapshotIdx >= 0) {
           filteredData = historyData.slice(0, snapshotIdx + 1)
         } else if (snapshotTime) {
-          // activityName 匹配失败（可能是 BPMN element ID），改用时间截断
+          // activityName match failed (might be a BPMN element ID), fall back to time-based truncation
           const cutoff = new Date(snapshotTime).getTime()
           const timeIdx = historyData.map((item: any) => new Date(item.operationTime || 0).getTime()).lastIndexOf(cutoff)
           if (timeIdx >= 0) {
             filteredData = historyData.slice(0, timeIdx + 1)
           } else {
-            // 保留所有 operationTime <= snapshotTime 的记录
+            // Keep all records with operationTime <= snapshotTime
             filteredData = historyData.filter((item: any) => {
               const t = new Date(item.operationTime || 0).getTime()
               return t <= cutoff
@@ -1622,7 +1622,7 @@ const loadProcessHistory = async () => {
         }
       }
 
-      // 转换为 HistoryRecord 格式（保留 gateway 记录用于图表状态判断）
+      // Convert to HistoryRecord format (keep gateway records for diagram status determination)
       historyRecords.value = filteredData.map((item: any, index: number) => ({
         id: `history_${index}`,
         nodeId: item.activityId || `node_${index}`,
@@ -1656,7 +1656,7 @@ const getHistoryStatus = (operationType: string): 'completed' | 'current' | 'pen
   return map[operationType] || 'completed'
 }
 
-// 初始化流转记录
+// Initialize flow history records
 const initHistoryRecords = () => {
   const records: HistoryRecord[] = [{ id: 'submit', nodeId: 'start', nodeName: t('applicationDetail.submitApplication'), status: 'completed', assigneeName: processInfo.value.startUserName || processInfo.value.startUserId, createdTime: processInfo.value.startTime || '' }]
   if (processInfo.value.status === 'RUNNING') records.push({ id: 'current', nodeId: 'task', nodeName: processInfo.value.currentNode || t('applicationDetail.pendingApproval'), status: 'current', assigneeName: processInfo.value.currentAssignee || t('applicationDetail.unassigned'), createdTime: '' })
@@ -1665,7 +1665,7 @@ const initHistoryRecords = () => {
   historyRecords.value = records
 }
 
-// 催办
+// Urge
 const handleUrge = async () => {
   urging.value = true
   try { await processApi.urgeProcess(processId); ElMessage.success(t('applicationDetail.urgeSuccess')) }
@@ -1673,7 +1673,7 @@ const handleUrge = async () => {
   finally { urging.value = false }
 }
 
-// 撤回
+// Withdraw
 const handleWithdraw = async () => {
   try {
     await ElMessageBox.confirm(t('applicationDetail.withdrawConfirm'), t('applicationDetail.withdrawConfirmTitle'), { type: 'warning' })

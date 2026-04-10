@@ -1,6 +1,8 @@
 /**
- * 解包门户 {@code ApiResponse<T>}（axios 拦截器已返回 body 对象）：优先返回 {@code data}，否则返回原对象。
- * 用于子表分配等接口，避免把外层 {@code success} 当成业务 {@code success} 或未解包导致误判失败。
+ * Unwrap portal {@code ApiResponse<T>} (axios interceptor already returns the body object):
+ * prefer {@code data}, otherwise return the raw object.
+ * Used by sub-table assignment and similar APIs to avoid mistaking the outer {@code success}
+ * flag for the business-level {@code success}, or failing due to missing unwrap.
  */
 export function unwrapPortalApiPayload<T extends Record<string, unknown>>(
   res: unknown
@@ -11,7 +13,7 @@ export function unwrapPortalApiPayload<T extends Record<string, unknown>>(
   const r = res as Record<string, unknown>
   if ('data' in r && r.data !== undefined && r.data !== null && typeof r.data === 'object') {
     const inner = r.data as Record<string, unknown>
-    // 极少数情况下双重包装
+    // Rare case of double-wrapping
     if (
       'data' in inner &&
       inner.data !== undefined &&
@@ -28,8 +30,8 @@ export function unwrapPortalApiPayload<T extends Record<string, unknown>>(
 }
 
 /**
- * 从 HTTP 错误响应体提取用户可读文案。
- * 兼容：ApiResponse.error、RFC 7807、校验 details、纯字符串 body。
+ * Extract a user-readable message from an HTTP error response body.
+ * Compatible with: ApiResponse.error, RFC 7807, validation details, plain string body.
  */
 export function pickHttpErrorBodyMessage(data: unknown): string | undefined {
   if (data == null || data === '') return undefined
@@ -49,7 +51,7 @@ export function pickHttpErrorBodyMessage(data: unknown): string | undefined {
 
   if (typeof o.message === 'string' && o.message.trim().length > 0) return o.message.trim()
 
-  // 引擎/业务 DTO 常用字段（如 AssignSubTableRowResponse.errorMessage）
+  // Common field in engine/business DTOs (e.g. AssignSubTableRowResponse.errorMessage)
   if (typeof o.errorMessage === 'string' && o.errorMessage.trim().length > 0) {
     return o.errorMessage.trim()
   }

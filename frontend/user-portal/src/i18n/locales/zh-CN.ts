@@ -347,6 +347,7 @@ export default {
     withdrawFailed: '撤回失败',
     userWithdraw: '用户主动撤回',
     serviceFallbackName: '服务任务{index}',
+    subTaskFormTitle: '参与者信息表',
     close: '关闭'
   },
   diagram: {
@@ -374,6 +375,8 @@ export default {
     notificationsDesc: '最新通知消息',
     calendar: '日程安排',
     calendarDesc: '任务日历视图',
+    calendarTasksForDate: '{date} 的任务',
+    calendarTaskCount: '{count} 项',
     newProcess: '新建申请',
     myApplications: '我的请求',
     delegationMgmt: '委托管理',

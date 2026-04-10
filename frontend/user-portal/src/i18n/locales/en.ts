@@ -347,6 +347,7 @@ export default {
     withdrawFailed: 'Withdraw failed',
     userWithdraw: 'User withdrawal',
     serviceFallbackName: 'Service Task {index}',
+    subTaskFormTitle: 'Participant Info Form',
     close: 'Close'
   },
   diagram: {
@@ -374,6 +375,8 @@ export default {
     notificationsDesc: 'Latest notification messages',
     calendar: 'Calendar',
     calendarDesc: 'Task calendar view',
+    calendarTasksForDate: 'Tasks for {date}',
+    calendarTaskCount: '{count} item(s)',
     newProcess: 'New Requests',
     myApplications: 'My Requests',
     delegationMgmt: 'Delegation',

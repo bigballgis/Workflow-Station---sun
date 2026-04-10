@@ -37,9 +37,9 @@ BEGIN
     );
 
     INSERT INTO dw_form_stage_bindings (form_id, stage_id, stage_name) VALUES
-    (v_create_form_id, 'Task_CreateMeeting', '创建会议'),
-    (v_create_form_id, 'Task_AssignParticipants', '分配参与人'),
-    (v_participant_form_id, 'MI_UserTask_' || v_participant_table_id, '填写参会信息');
+    (v_create_form_id, 'Task_CreateMeeting', 'Create Meeting'),
+    (v_create_form_id, 'Task_AssignParticipants', 'Assign Participants'),
+    (v_participant_form_id, 'MI_UserTask_' || v_participant_table_id, 'Fill in Participant Info');
 
     RAISE NOTICE 'Form stage bindings: create_form_id=% + participant_form_id=% (Task_CreateMeeting, Task_AssignParticipants, MI_UserTask_%)',
         v_create_form_id, v_participant_form_id, v_participant_table_id;

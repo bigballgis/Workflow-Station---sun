@@ -1,5 +1,6 @@
 /**
- * 多实例子表行分配：从列定义推断「处理人」字段名（与 BPMN assigneeField 一致，如 assignee_user_id）。
+ * Multi-instance sub-table row assignment: infer the assignee field name from column
+ * definitions (aligns with BPMN assigneeField, e.g. assignee_user_id).
  */
 export function inferAssigneeFieldFromColumns(
   columns: Array<{ field?: string } | null | undefined>
@@ -19,7 +20,8 @@ export function inferAssigneeFieldFromColumns(
 }
 
 /**
- * 列定义为空时仍可根据表名解析多实例处理人字段（与 BPMN subTableName=participants、assigneeField=assignee_user_id 对齐）。
+ * Resolve multi-instance assignee field even when columns are empty, by falling back
+ * to table name convention (aligns with BPMN subTableName=participants, assigneeField=assignee_user_id).
  */
 export function resolveAssigneeFieldForBinding(
   columns: Array<{ field?: string } | null | undefined> | undefined,
@@ -34,7 +36,7 @@ export function resolveAssigneeFieldForBinding(
   return undefined
 }
 
-/** 子表存在多行且配置了处理人列时，每一行都必须已分配（非空）才能完成任务。 */
+/** When a sub-table has multiple rows with an assignee column, every row must be assigned (non-empty) before the task can be completed. */
 export function allSubTableRowsHaveAssignee(rows: any[], assigneeField: string): boolean {
   if (!rows?.length) return true
   return rows.every(

@@ -335,6 +335,7 @@ export default {
     withdrawFailed: '撤回失敗',
     userWithdraw: '使用者主動撤回',
     serviceFallbackName: '服務任務{index}',
+    subTaskFormTitle: '參與者資訊表',
     close: '關閉'
   },
   application: {
@@ -728,6 +729,8 @@ export default {
     notificationsDesc: '最新通知訊息',
     calendar: '日程安排',
     calendarDesc: '任務日曆視圖',
+    calendarTasksForDate: '{date} 的任務',
+    calendarTaskCount: '{count} 項',
     newProcess: '新建申請',
     myApplications: '我的請求',
     delegationMgmt: '委託管理',

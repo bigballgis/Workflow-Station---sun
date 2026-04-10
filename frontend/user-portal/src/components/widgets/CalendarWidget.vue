@@ -18,8 +18,8 @@
 
     <div class="selected-date-tasks" v-if="selectedDateTasks.length > 0">
       <div class="tasks-header">
-        <span>{{ formatSelectedDate }} 的任务</span>
-        <span class="task-count">{{ selectedDateTasks.length }} 项</span>
+        <span>{{ t('dashboard.calendarTasksForDate', { date: formatSelectedDate }) }}</span>
+        <span class="task-count">{{ t('dashboard.calendarTaskCount', { count: selectedDateTasks.length }) }}</span>
       </div>
       <div class="tasks-list">
         <div
@@ -40,6 +40,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useTaskStore } from '@/stores/task'
 
 interface CalendarTask {
@@ -51,6 +52,7 @@ interface CalendarTask {
 }
 
 const router = useRouter()
+const { t, locale } = useI18n()
 const taskStore = useTaskStore()
 
 const currentDate = ref(new Date())
@@ -74,7 +76,7 @@ const selectedDateTasks = computed(() => {
 
 // 格式化选中日期
 const formatSelectedDate = computed(() => {
-  return currentDate.value.toLocaleDateString('zh-CN', {
+  return currentDate.value.toLocaleDateString(locale.value, {
     month: 'long',
     day: 'numeric'
   })

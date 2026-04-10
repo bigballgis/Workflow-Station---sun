@@ -10,7 +10,7 @@
       :size="size"
       :validate-on-rule-change="false"
     >
-      <!-- Tab 布局模式 -->
+      <!-- Tab layout mode -->
       <template v-if="hasTabs">
         <el-tabs v-model="activeTab" type="border-card">
           <el-tab-pane
@@ -105,7 +105,7 @@
         </el-tabs>
       </template>
 
-      <!-- 普通平铺模式 -->
+      <!-- Flat layout mode -->
       <template v-else>
         <el-row :gutter="20">
           <template v-for="field in fields" :key="field.key">
@@ -249,7 +249,7 @@ interface Props {
   taskId?: string
   enableSubTablePolling?: boolean
   subTablePollingInterval?: number
-  /** 为 false 时不显示子表 Assign（例如仅「分配参与人」节点允许分配） */
+  /** When false, hides the sub-table Assign button (only the "Assign Participants" task node allows assignment) */
   allowSubTableAssign?: boolean
 }
 
@@ -340,10 +340,10 @@ const handleLookupClear = (fieldKey: string) => {
   delete lookupSelectedData.value[fieldKey]
 }
 
-// 独立管理文件上传列表，避免从 formData 派生导致的重渲染问题
+// Manage file upload lists independently to avoid re-render issues when deriving from formData
 const uploadFileLists = ref<Record<string, Array<{ name: string; url: string; uid?: number }>>>({})
 
-// 获取所有字段（包括 tabs 中的字段）
+// Get all fields (including fields in tabs)
 const allFields = computed(() => {
   if (hasTabs.value && props.tabs) {
     return props.tabs.flatMap(tab => tab.fields)
@@ -802,7 +802,7 @@ defineExpose({
     padding-right: 16px;
   }
 
-  /* 表单项内容区在 flex 布局下需可收缩并占满剩余宽度，下拉/日期等才能正确 100% */
+  /* Form item content in flex layout must be shrinkable and fill remaining width so dropdowns/date pickers render at 100% */
   :deep(.el-form-item__content) {
     flex: 1;
     min-width: 0;

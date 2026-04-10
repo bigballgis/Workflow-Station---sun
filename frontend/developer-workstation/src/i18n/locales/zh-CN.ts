@@ -347,6 +347,10 @@ export default {
     // Other
     unknownTable: '未知表',
     subTableBindingRequired: '保存前，所有子表占位符必须选择绑定',
+    subTableSelectPlaceholder: '请选择 Sub Table',
+    subTableSelectEmpty: '暂无可用 Sub Table',
+    subTablePlaceholderUnconfigured: '未选择 Sub Table',
+    subTablePlaceholderStale: '绑定已失效',
     // Stage binding (Task Form)
     stageBinding: '阶段绑定',
     stageBindingPlaceholder: '选择要绑定的阶段',
