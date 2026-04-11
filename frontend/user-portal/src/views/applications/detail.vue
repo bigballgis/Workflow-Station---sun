@@ -1161,13 +1161,65 @@ const parseBpmnXml = (xml: string) => {
     // Get current node name
     const currentNodeName = processInfo.value.currentNode || ''
     let foundCurrentNode = false
-    
-    // Parse start events
+
+    // Detect subProcess elements and determine which have been entered
+    const getParentSubProcessId = (element: Element): string | null => {
+      let node: Node | null = element.parentNode
+      while (node && node.nodeType === 1) {
+        const el = node as Element
+        const localName = el.localName || el.nodeName.split(':').pop()
+        if (localName === 'subProcess') return el.getAttribute('id')
+        if (localName === 'process' || localName === 'definitions') return null
+        node = el.parentNode
+      }
+      return null
+    }
+
+    // Build a map of subProcess ID → Element (handle both prefixed and unprefixed selectors)
+    const subProcessMap = new Map<string, Element>()
+    const allElements = doc.getElementsByTagName('*')
+    for (let i = 0; i < allElements.length; i++) {
+      const el = allElements[i]
+      const localName = el.localName || el.nodeName.split(':').pop()
+      if (localName === 'subProcess') {
+        const spId = el.getAttribute('id')
+        if (spId) subProcessMap.set(spId, el)
+      }
+    }
+
+    const enteredSubProcesses = new Set<string>()
+    for (const [spId, sp] of subProcessMap) {
+      const spName = sp.getAttribute('name') || ''
+      if (spName && historyRecords.value.some(h => h.nodeName === spName)) {
+        enteredSubProcesses.add(spId)
+        continue
+      }
+      const childElements = sp.getElementsByTagName('*')
+      for (let i = 0; i < childElements.length; i++) {
+        const childLocal = childElements[i].localName || childElements[i].nodeName.split(':').pop()
+        if (childLocal !== 'userTask' && childLocal !== 'serviceTask') continue
+        const taskName = childElements[i].getAttribute('name') || ''
+        const taskId = childElements[i].getAttribute('id') || ''
+        if (taskName === currentNodeName || historyRecords.value.some(h => h.nodeName === taskName || h.nodeId === taskId)) {
+          enteredSubProcesses.add(spId)
+          break
+        }
+      }
+    }
+
+    // Parse start events (subprocess-internal starts are pending until the subprocess is entered)
     doc.querySelectorAll('startEvent').forEach((event, index) => {
       const id = event.getAttribute('id') || `start_${index}`
       const pos = positionMap.get(id)
-      nodes.push({ id, name: event.getAttribute('name') || t('task.startNode'), type: 'start', status: 'completed', x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
-      completed.push(id)
+      const parentSpId = getParentSubProcessId(event)
+      let startStatus: 'completed' | 'pending' = 'completed'
+      if (parentSpId && !enteredSubProcesses.has(parentSpId)) {
+        startStatus = 'pending'
+      }
+      nodes.push({ id, name: event.getAttribute('name') || t('task.startNode'), type: 'start', status: startStatus, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
+      if (startStatus === 'completed') {
+        completed.push(id)
+      }
     })
     
     // Parse user tasks
@@ -1243,6 +1295,41 @@ const parseBpmnXml = (xml: string) => {
       if (status === 'completed') completed.push(id)
     })
     
+    // Parse subProcess elements
+    let spIdx = 0
+    for (const [spId, sp] of subProcessMap) {
+      const name = sp.getAttribute('name') || ''
+      const pos = positionMap.get(spId)
+
+      let spStatus: 'completed' | 'current' | 'pending' = 'pending'
+      if (enteredSubProcesses.has(spId)) {
+        const childElements = sp.getElementsByTagName('*')
+        let hasCurrentChild = false
+        let allChildrenDone = true
+        let userTaskCount = 0
+        for (let i = 0; i < childElements.length; i++) {
+          const childLocal = childElements[i].localName || childElements[i].nodeName.split(':').pop()
+          if (childLocal !== 'userTask') continue
+          userTaskCount++
+          const taskName = childElements[i].getAttribute('name') || ''
+          const taskId = childElements[i].getAttribute('id') || ''
+          if (taskName === currentNodeName || taskId === currentNodeName) {
+            hasCurrentChild = true
+            break
+          }
+          const historyMatch = historyRecords.value.find(h => h.nodeName === taskName || h.nodeId === taskId)
+          if (!historyMatch || (historyMatch.status !== 'completed' && historyMatch.status !== 'rejected')) {
+            allChildrenDone = false
+          }
+        }
+        if (!userTaskCount) allChildrenDone = false
+        spStatus = hasCurrentChild ? 'current' : allChildrenDone ? 'completed' : 'current'
+      }
+      nodes.push({ id: spId, name, type: 'subprocess', status: spStatus, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
+      if (spStatus === 'completed') completed.push(spId)
+      spIdx++
+    }
+
     // Pre-parse sequence flows (used for subsequent gateway status determination)
     const earlyFlows: Array<{sourceRef: string, targetRef: string}> = []
     doc.querySelectorAll('sequenceFlow').forEach(flow => {
@@ -1299,13 +1386,22 @@ const parseBpmnXml = (xml: string) => {
       const id = event.getAttribute('id') || `end_${index}`
       const name = event.getAttribute('name') || t('task.endNode')
       const pos = positionMap.get(id)
+      const parentSpId = getParentSubProcessId(event)
       
       // Check if end node should be marked as completed
       let status: 'completed' | 'pending' | 'rejected' = 'pending'
-      
-      // Prefer status from history records
-      if (completedNodeNames.has(name)) {
-        status = isRejectedName(name) ? 'rejected' : 'completed'
+
+      // SubProcess-internal endEvents stay pending when the subProcess hasn't been entered
+      if (parentSpId && !enteredSubProcesses.has(parentSpId)) {
+        status = 'pending'
+      } else if (completedNodeNames.has(name)) {
+        // Match by exact node ID first to avoid cross-process name collision
+        const idMatch = historyRecords.value.find(h => h.nodeId === id)
+        if (idMatch) {
+          status = isRejectedName(name) ? 'rejected' : 'completed'
+        } else if (!parentSpId) {
+          status = isRejectedName(name) ? 'rejected' : 'completed'
+        }
       } else if (snapshotActive) {
         status = 'pending'
       } else if (processInfo.value.status === 'COMPLETED') {

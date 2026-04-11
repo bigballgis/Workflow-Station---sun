@@ -649,9 +649,11 @@ async function confirmAssignment() {
     if (ok && result) {
       // Update the row data
       if (currentAssignRowIndex.value !== null && props.assigneeField) {
-        rows.value[currentAssignRowIndex.value][props.assigneeField] = result.assigneeId
-        // Cache the user name
-        userNameCache.value[result.assigneeId] = result.assigneeName ?? result.assigneeId
+        const targetRow = rows.value[currentAssignRowIndex.value]
+        targetRow[props.assigneeField] = result.assigneeId
+        const displayName = result.assigneeName || result.assigneeId
+        targetRow.assignee_display_name = displayName
+        userNameCache.value[result.assigneeId] = displayName
         emit('update:modelValue', [...rows.value])
         emit('assignmentChanged')
       }

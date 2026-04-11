@@ -1430,13 +1430,13 @@ const parseBpmnXml = (xml: string) => {
     })
     
     // Get completed node IDs from history records
-    const completedNodeIds = new Set<string>()
+    const completedHistoryIds = new Set<string>()
     const completedNodeNames = new Set<string>()
     
     // Collect all completed node IDs and names
     historyRecords.value.forEach(record => {
       if (record.nodeId && record.status === 'completed') {
-        completedNodeIds.add(record.nodeId)
+        completedHistoryIds.add(record.nodeId)
       }
       if (record.nodeName && record.status === 'completed') {
         completedNodeNames.add(record.nodeName)
@@ -1450,14 +1450,64 @@ const parseBpmnXml = (xml: string) => {
     // Get current task name
     const currentTaskName = taskInfo.value.taskName || ''
     let currentNodeFound = false
+
+    // Detect subProcess elements and determine which have been entered
+    const getParentSubProcessId = (element: Element): string | null => {
+      let node: Node | null = element.parentNode
+      while (node && node.nodeType === 1) {
+        const el = node as Element
+        const localName = el.localName || el.nodeName.split(':').pop()
+        if (localName === 'subProcess') return el.getAttribute('id')
+        if (localName === 'process' || localName === 'definitions') return null
+        node = el.parentNode
+      }
+      return null
+    }
+
+    const subProcessMap = new Map<string, Element>()
+    const allElements = doc.getElementsByTagName('*')
+    for (let i = 0; i < allElements.length; i++) {
+      const el = allElements[i]
+      const localName = el.localName || el.nodeName.split(':').pop()
+      if (localName === 'subProcess') {
+        const spId = el.getAttribute('id')
+        if (spId) subProcessMap.set(spId, el)
+      }
+    }
+
+    const enteredSubProcesses = new Set<string>()
+    for (const [spId, sp] of subProcessMap) {
+      const spName = sp.getAttribute('name') || ''
+      if (spName && historyRecords.value.some(h => h.nodeName === spName)) {
+        enteredSubProcesses.add(spId)
+        continue
+      }
+      const childElements = sp.getElementsByTagName('*')
+      for (let i = 0; i < childElements.length; i++) {
+        const childLocal = childElements[i].localName || childElements[i].nodeName.split(':').pop()
+        if (childLocal !== 'userTask' && childLocal !== 'serviceTask') continue
+        const taskName = childElements[i].getAttribute('name') || ''
+        const taskId = childElements[i].getAttribute('id') || ''
+        if (taskName === currentTaskName || historyRecords.value.some(h => h.nodeName === taskName || h.nodeId === taskId)) {
+          enteredSubProcesses.add(spId)
+          break
+        }
+      }
+    }
     
-    // Parse start events
+    // Parse start events (subprocess-internal starts are pending until the subprocess is entered)
     doc.querySelectorAll('startEvent').forEach((event, index) => {
       const id = event.getAttribute('id') || `start_${index}`
       const pos = positionMap.get(id)
-      // Start node is always completed
-      nodes.push({ id, name: event.getAttribute('name') || t('task.startNode'), type: 'start', status: 'completed', x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
-      completed.push(id)
+      const parentSpId = getParentSubProcessId(event)
+      let startStatus: 'completed' | 'pending' = 'completed'
+      if (parentSpId && !enteredSubProcesses.has(parentSpId)) {
+        startStatus = 'pending'
+      }
+      nodes.push({ id, name: event.getAttribute('name') || t('task.startNode'), type: 'start', status: startStatus, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
+      if (startStatus === 'completed') {
+        completed.push(id)
+      }
     })
     
     // Parse user tasks
@@ -1475,7 +1525,7 @@ const parseBpmnXml = (xml: string) => {
         currentNodeFound = true
       } 
       // Check if completed in history records
-      else if (completedNodeIds.has(id) || completedNodeNames.has(name)) {
+      else if (completedHistoryIds.has(id) || completedNodeNames.has(name)) {
         status = 'completed'
         completed.push(id)
       }
@@ -1491,6 +1541,39 @@ const parseBpmnXml = (xml: string) => {
       
       nodes.push({ id, name, type: 'task', status, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
     })
+
+    // Parse subProcess elements
+    for (const [spId, sp] of subProcessMap) {
+      const name = sp.getAttribute('name') || ''
+      const pos = positionMap.get(spId)
+
+      let spStatus: 'completed' | 'current' | 'pending' = 'pending'
+      if (enteredSubProcesses.has(spId)) {
+        const childElements = sp.getElementsByTagName('*')
+        let hasCurrentChild = false
+        let allChildrenDone = true
+        let userTaskCount = 0
+        for (let i = 0; i < childElements.length; i++) {
+          const childLocal = childElements[i].localName || childElements[i].nodeName.split(':').pop()
+          if (childLocal !== 'userTask') continue
+          userTaskCount++
+          const taskName = childElements[i].getAttribute('name') || ''
+          const taskId = childElements[i].getAttribute('id') || ''
+          if (taskName === currentTaskName || taskId === currentTaskName) {
+            hasCurrentChild = true
+            break
+          }
+          const historyMatch = historyRecords.value.find(h => h.nodeName === taskName || h.nodeId === taskId)
+          if (!historyMatch || (historyMatch.status !== 'completed' && historyMatch.status !== 'rejected')) {
+            allChildrenDone = false
+          }
+        }
+        if (!userTaskCount) allChildrenDone = false
+        spStatus = hasCurrentChild ? 'current' : allChildrenDone ? 'completed' : 'current'
+      }
+      nodes.push({ id: spId, name, type: 'subprocess', status: spStatus, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
+      if (spStatus === 'completed') completed.push(spId)
+    }
     
     // Pre-parse sequence flows (used for subsequent gateway status determination)
     const earlyFlows: Array<{sourceRef: string, targetRef: string}> = []
@@ -1508,7 +1591,7 @@ const parseBpmnXml = (xml: string) => {
       const pos = positionMap.get(id)
       
       let status: 'completed' | 'pending' = 'pending'
-      if (completedNodeIds.has(id) || completedNodeNames.has(name)) {
+      if (completedHistoryIds.has(id) || completedNodeNames.has(name)) {
         status = 'completed'
         completed.push(id)
       } else {
@@ -1529,12 +1612,16 @@ const parseBpmnXml = (xml: string) => {
       const id = event.getAttribute('id') || `end_${index}`
       const name = event.getAttribute('name') || t('task.endNode')
       const pos = positionMap.get(id)
+      const parentSpId = getParentSubProcessId(event)
       
       // Check if end node should be marked as completed
       let status: 'completed' | 'pending' | 'rejected' = 'pending'
       const isRejectedEnd = isRejectedName(name)
-      
-      if (completedNodeIds.has(id) || completedNodeNames.has(name)) {
+
+      // SubProcess-internal endEvents stay pending when the subProcess hasn't been entered
+      if (parentSpId && !enteredSubProcesses.has(parentSpId)) {
+        // keep 'pending'
+      } else if (completedHistoryIds.has(id) || completedNodeNames.has(name)) {
         // Rejected end nodes use red, others use green
         status = isRejectedEnd ? 'rejected' : 'completed'
         completed.push(id)
@@ -1585,11 +1672,6 @@ const parseBpmnXml = (xml: string) => {
     processFlows.value = flows
     completedNodeIds.value = completed
     
-    console.log('=== BPMN Parse Result ===')
-    console.log('Nodes:', nodes.map(n => ({ id: n.id, name: n.name, status: n.status })))
-    console.log('Completed IDs:', completed)
-    console.log('Current Node ID:', currentNodeId.value)
-    console.log('History Records:', historyRecords.value)
   } catch (error) {
     console.error('Failed to parse BPMN XML:', error)
   }
