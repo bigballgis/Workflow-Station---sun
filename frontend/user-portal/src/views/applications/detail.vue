@@ -497,7 +497,9 @@ const loadProcessDetail = async () => {
 
       // MI sub-task data isolation for completed task view:
       // When a sub-task assignee views the process from Completed Tasks,
-      // filter sub-table rows to only show the row assigned to them.
+      // filter sub-table rows to only show their COMPLETED row(s).
+      // This handles the case where the same person is assigned multiple sub-tasks:
+      // only the row whose task was actually completed is shown.
       if (snapshotTaskName) {
         const viewerId = getPortalUserId()
         const initiatorId = (data.startUserId || '').trim()
@@ -506,10 +508,17 @@ const loadProcessDetail = async () => {
             for (const binding of bindings) {
               if (binding.data && binding.data.length > 0 && hasAssignmentData(binding.data)) {
                 const filtered = binding.data.filter(
-                  (row: any) => row.assignee_user_id === viewerId
+                  (row: any) => row.assignee_user_id === viewerId && row.task_status === 'COMPLETED'
                 )
                 if (filtered.length > 0) {
                   binding.data = filtered
+                } else {
+                  const byAssignee = binding.data.filter(
+                    (row: any) => row.assignee_user_id === viewerId
+                  )
+                  if (byAssignee.length > 0) {
+                    binding.data = byAssignee
+                  }
                 }
               }
             }
@@ -1190,6 +1199,10 @@ const parseBpmnXml = (xml: string) => {
     const enteredSubProcesses = new Set<string>()
     for (const [spId, sp] of subProcessMap) {
       const spName = sp.getAttribute('name') || ''
+      if ((spName && spName === currentNodeName) || spId === currentNodeName) {
+        enteredSubProcesses.add(spId)
+        continue
+      }
       if (spName && historyRecords.value.some(h => h.nodeName === spName)) {
         enteredSubProcesses.add(spId)
         continue
@@ -1207,14 +1220,115 @@ const parseBpmnXml = (xml: string) => {
       }
     }
 
+    // Detect active multi-instance subprocesses whose child tasks are still running
+    const activeMultiInstanceSubProcesses = new Set<string>()
+    if (processInfo.value.status === 'RUNNING') {
+      for (const [spId, sp] of subProcessMap) {
+        if (!enteredSubProcesses.has(spId)) continue
+        const spChildren = sp.getElementsByTagName('*')
+        let isMultiInstance = false
+        for (let i = 0; i < spChildren.length; i++) {
+          const childLocal = spChildren[i].localName || spChildren[i].nodeName.split(':').pop()
+          if (childLocal === 'multiInstanceLoopCharacteristics') {
+            isMultiInstance = true
+            break
+          }
+        }
+        if (!isMultiInstance) continue
+        const spName = sp.getAttribute('name') || ''
+        if ((spName && spName === currentNodeName) || spId === currentNodeName) {
+          activeMultiInstanceSubProcesses.add(spId)
+          continue
+        }
+        for (let i = 0; i < spChildren.length; i++) {
+          const childLocal = spChildren[i].localName || spChildren[i].nodeName.split(':').pop()
+          if (childLocal !== 'userTask') continue
+          const taskName = spChildren[i].getAttribute('name') || ''
+          const taskId = spChildren[i].getAttribute('id') || ''
+          if (taskName === currentNodeName || taskId === currentNodeName ||
+              (taskName && nodeStatusMap.get(taskName) === 'current')) {
+            activeMultiInstanceSubProcesses.add(spId)
+            break
+          }
+        }
+      }
+    }
+
+    // Completed multi-instance subprocesses: entered MI subprocesses where all child userTasks are done
+    const completedMultiInstanceSubProcesses = new Set<string>()
+    for (const [spId, sp] of subProcessMap) {
+      if (!enteredSubProcesses.has(spId)) continue
+      if (activeMultiInstanceSubProcesses.has(spId)) continue
+      const spChildren = sp.getElementsByTagName('*')
+      let isMultiInstance = false
+      for (let i = 0; i < spChildren.length; i++) {
+        const childLocal = spChildren[i].localName || spChildren[i].nodeName.split(':').pop()
+        if (childLocal === 'multiInstanceLoopCharacteristics') {
+          isMultiInstance = true
+          break
+        }
+      }
+      if (!isMultiInstance) continue
+      let allDone = true
+      let userTaskCount = 0
+      for (let i = 0; i < spChildren.length; i++) {
+        const childLocal = spChildren[i].localName || spChildren[i].nodeName.split(':').pop()
+        if (childLocal !== 'userTask') continue
+        userTaskCount++
+        const taskName = spChildren[i].getAttribute('name') || ''
+        const taskId = spChildren[i].getAttribute('id') || ''
+        const historyMatch = historyRecords.value.find(h => h.nodeName === taskName || h.nodeId === taskId)
+        if (!historyMatch || (historyMatch.status !== 'completed' && historyMatch.status !== 'rejected')) {
+          allDone = false
+          break
+        }
+      }
+      if (userTaskCount > 0 && allDone) {
+        completedMultiInstanceSubProcesses.add(spId)
+      }
+    }
+
+    // Completed-task snapshot: multi-instance subprocess with a single userTask that matches snapshotTaskName
+    const completedSnapshotSingleTaskSubProcesses = new Set<string>()
+    if (snapshotTaskName) {
+      for (const [spId, sp] of subProcessMap) {
+        if (!enteredSubProcesses.has(spId)) continue
+        const spChildren = sp.getElementsByTagName('*')
+        let isMultiInstance = false
+        let userTaskCount = 0
+        let snapshotMatchesChild = false
+        for (let i = 0; i < spChildren.length; i++) {
+          const childLocal = spChildren[i].localName || spChildren[i].nodeName.split(':').pop()
+          if (childLocal === 'multiInstanceLoopCharacteristics') {
+            isMultiInstance = true
+          }
+          if (childLocal === 'userTask') {
+            userTaskCount++
+            const taskName = spChildren[i].getAttribute('name') || ''
+            const taskId = spChildren[i].getAttribute('id') || ''
+            if (taskName === snapshotTaskName || taskId === snapshotTaskName) {
+              snapshotMatchesChild = true
+            }
+          }
+        }
+        if (isMultiInstance && userTaskCount === 1 && snapshotMatchesChild) {
+          completedSnapshotSingleTaskSubProcesses.add(spId)
+        }
+      }
+    }
+
     // Parse start events (subprocess-internal starts are pending until the subprocess is entered)
     doc.querySelectorAll('startEvent').forEach((event, index) => {
       const id = event.getAttribute('id') || `start_${index}`
       const pos = positionMap.get(id)
       const parentSpId = getParentSubProcessId(event)
-      let startStatus: 'completed' | 'pending' = 'completed'
+      let startStatus: 'completed' | 'current' | 'pending' = 'completed'
       if (parentSpId && !enteredSubProcesses.has(parentSpId)) {
         startStatus = 'pending'
+      } else if (parentSpId && completedSnapshotSingleTaskSubProcesses.has(parentSpId)) {
+        startStatus = 'completed'
+      } else if (parentSpId && activeMultiInstanceSubProcesses.has(parentSpId)) {
+        startStatus = 'current'
       }
       nodes.push({ id, name: event.getAttribute('name') || t('task.startNode'), type: 'start', status: startStatus, x: pos?.x, y: pos?.y, width: pos?.width, height: pos?.height })
       if (startStatus === 'completed') {
@@ -1389,11 +1503,17 @@ const parseBpmnXml = (xml: string) => {
       const parentSpId = getParentSubProcessId(event)
       
       // Check if end node should be marked as completed
-      let status: 'completed' | 'pending' | 'rejected' = 'pending'
+      let status: 'completed' | 'current' | 'pending' | 'rejected' = 'pending'
 
       // SubProcess-internal endEvents stay pending when the subProcess hasn't been entered
       if (parentSpId && !enteredSubProcesses.has(parentSpId)) {
         status = 'pending'
+      } else if (parentSpId && completedSnapshotSingleTaskSubProcesses.has(parentSpId)) {
+        status = 'completed'
+      } else if (parentSpId && activeMultiInstanceSubProcesses.has(parentSpId)) {
+        status = 'current'
+      } else if (parentSpId && completedMultiInstanceSubProcesses.has(parentSpId)) {
+        status = 'completed'
       } else if (completedNodeNames.has(name)) {
         // Match by exact node ID first to avoid cross-process name collision
         const idMatch = historyRecords.value.find(h => h.nodeId === id)
