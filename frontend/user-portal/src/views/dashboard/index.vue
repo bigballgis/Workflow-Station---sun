@@ -28,7 +28,9 @@
             </el-col>
             <el-col :span="8">
               <div class="stat-item">
-                <div class="stat-number success">{{ taskOverview.completedTodayCount }}</div>
+                <div class="stat-number success">
+                  <router-link to="/tasks/completed" class="stat-link">{{ taskOverview.completedTodayCount }}</router-link>
+                </div>
                 <div class="stat-label">{{ t('dashboard.completedToday') }}</div>
               </div>
             </el-col>

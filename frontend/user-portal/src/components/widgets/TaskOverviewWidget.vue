@@ -10,7 +10,9 @@
         <div class="stat-label">{{ $t('dashboard.overdueTasks') }}</div>
       </div>
       <div class="stat-item completed">
-        <div class="stat-value">{{ stats.completedToday }}</div>
+        <div class="stat-value">
+          <router-link to="/tasks/completed" class="stat-link">{{ stats.completedToday }}</router-link>
+        </div>
         <div class="stat-label">{{ $t('dashboard.completedToday') }}</div>
       </div>
       <div class="stat-item urgent">
@@ -132,6 +134,15 @@ onMounted(async () => {
       .stat-value {
         font-size: 24px;
         font-weight: 700;
+      }
+
+      .stat-link {
+        color: inherit;
+        text-decoration: none;
+        &:hover {
+          text-decoration: underline;
+          cursor: pointer;
+        }
       }
 
       .stat-label {
