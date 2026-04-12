@@ -95,7 +95,8 @@ export default {
   },
   dashboard: {
     title: '首頁',
-    taskOverview: '任務概覽',
+    taskOverview: '我的任務概覽',
+    teamTaskOverview: '團隊任務概覽',
     processOverview: '流程概覽',
     performance: '個人績效',
     quickActions: '快捷操作',

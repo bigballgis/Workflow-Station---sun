@@ -36,6 +36,9 @@
             </el-col>
           </el-row>
           <el-divider />
+          <div class="card-header">
+            <span class="card-title">{{ t('dashboard.teamTaskOverview') }}</span>
+          </div>
           <el-row :gutter="16">
             <el-col :span="8">
               <div class="stat-item small">

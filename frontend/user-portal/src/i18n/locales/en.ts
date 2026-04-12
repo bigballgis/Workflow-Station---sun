@@ -98,7 +98,8 @@ export default {
   },
   dashboard: {
     title: 'Home',
-    taskOverview: 'Task Overview',
+    taskOverview: 'My Task Overview',
+    teamTaskOverview: 'Team Task Overview',
     processOverview: 'Process Overview',
     performance: 'Performance',
     quickActions: 'Quick Actions',

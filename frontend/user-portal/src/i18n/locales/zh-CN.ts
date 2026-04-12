@@ -98,7 +98,8 @@ export default {
   },
   dashboard: {
     title: '首页',
-    taskOverview: '任务概览',
+    taskOverview: '我的任务概览',
+    teamTaskOverview: '团队任务概览',
     processOverview: '流程概览',
     performance: '个人绩效',
     quickActions: '快捷操作',
