@@ -8,6 +8,7 @@ import com.portal.dto.PageResponse;
 import com.portal.dto.TaskInfo;
 import com.portal.dto.TaskQueryRequest;
 import com.portal.repository.BusinessUnitRepository;
+import com.portal.repository.ProcessInstanceRepository;
 import com.portal.repository.UserBusinessUnitRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -50,6 +51,9 @@ class DashboardTaskOverviewBugConditionProperties {
     @Mock
     private UserBusinessUnitRepository userBusinessUnitRepository;
 
+    @Mock
+    private ProcessInstanceRepository processInstanceRepository;
+
     private DashboardComponent dashboardComponent;
     private Random random;
 
@@ -57,7 +61,7 @@ class DashboardTaskOverviewBugConditionProperties {
     void setUp() {
         MockitoAnnotations.openMocks(this);
         dashboardComponent = new DashboardComponent(taskQueryComponent, workflowEngineClient,
-                businessUnitRepository, userBusinessUnitRepository);
+                businessUnitRepository, userBusinessUnitRepository, processInstanceRepository);
         random = new Random();
     }
 

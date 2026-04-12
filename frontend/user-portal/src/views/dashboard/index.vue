@@ -37,7 +37,7 @@
           </el-row>
           <el-divider />
           <div class="card-header">
-            <span class="card-title">{{ t('dashboard.teamTaskOverview') }}</span>
+            <span class="card-title team-title-link" @click="openTeamRequestsDialog">{{ t('dashboard.teamTaskOverview') }}</span>
           </div>
           <el-row :gutter="16">
             <el-col :span="8">
@@ -199,14 +199,93 @@
         </div>
       </el-col>
     </el-row>
+
+    <!-- Team Requests Dialog -->
+    <el-dialog
+      v-model="teamDialogVisible"
+      :title="t('dashboard.teamRequestsTitle')"
+      width="900px"
+      destroy-on-close
+    >
+      <div class="team-summary">
+        <div class="team-summary-item" @click="switchTeamTab('all')">
+          <div class="team-summary-value">{{ teamRequests.overallCount }}</div>
+          <div class="team-summary-label">{{ t('dashboard.overallRequests') }}</div>
+        </div>
+        <div class="team-summary-item running" @click="switchTeamTab('RUNNING')">
+          <div class="team-summary-value">{{ teamRequests.runningCount }}</div>
+          <div class="team-summary-label">{{ t('dashboard.runningRequests') }}</div>
+        </div>
+        <div class="team-summary-item completed" @click="switchTeamTab('COMPLETED')">
+          <div class="team-summary-value">{{ teamRequests.completedCount }}</div>
+          <div class="team-summary-label">{{ t('dashboard.completedRequests') }}</div>
+        </div>
+        <div class="team-summary-item withdrawn" @click="switchTeamTab('WITHDRAWN')">
+          <div class="team-summary-value">{{ teamRequests.withdrawnCount }}</div>
+          <div class="team-summary-label">{{ t('dashboard.withdrawnRequests') }}</div>
+        </div>
+      </div>
+
+      <el-tabs v-model="teamActiveTab" @tab-change="handleTeamTabChange">
+        <el-tab-pane :label="t('dashboard.overallRequests')" name="all" />
+        <el-tab-pane :label="t('dashboard.runningRequests')" name="RUNNING" />
+        <el-tab-pane :label="t('dashboard.completedRequests')" name="COMPLETED" />
+        <el-tab-pane :label="t('dashboard.withdrawnRequests')" name="WITHDRAWN" />
+      </el-tabs>
+
+      <el-table :data="teamRequests.content" v-loading="teamLoading" stripe table-layout="fixed">
+        <el-table-column prop="businessKey" :label="t('application.processTitle')" min-width="180" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ row.businessKey || row.processDefinitionName }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="startUserName" :label="t('dashboard.initiator')" min-width="100" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ row.startUserName || '-' }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="currentNode" :label="t('application.currentStep')" min-width="120" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ row.currentNode || '-' }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="currentAssignee" :label="t('application.currentAssignee')" min-width="100" show-overflow-tooltip>
+          <template #default="{ row }">
+            {{ row.currentAssignee || '-' }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="startTime" :label="t('application.startTime')" width="160">
+          <template #default="{ row }">
+            {{ formatDate(row.startTime) }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="status" :label="t('application.status')" width="90" align="center">
+          <template #default="{ row }">
+            <el-tag :type="getTeamStatusType(row.status)" size="small" effect="light">
+              {{ getTeamStatusLabel(row.status) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <el-pagination
+        v-model:current-page="teamPagination.page"
+        v-model:page-size="teamPagination.size"
+        :total="teamRequests.totalElements"
+        layout="total, prev, pager, next"
+        style="margin-top: 16px; justify-content: flex-end;"
+        @current-change="handleTeamPageChange"
+      />
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Plus, List, Document, Share, Key } from '@element-plus/icons-vue'
-import { getDashboardOverview, TaskOverview, ProcessOverview, PerformanceOverview } from '@/api/dashboard'
+import { getDashboardOverview, getTeamRequests, TaskOverview, ProcessOverview, PerformanceOverview, TeamRequestsResponse } from '@/api/dashboard'
+import { formatDate } from '@/utils/dateFormat'
 
 const { t } = useI18n()
 
@@ -239,6 +318,83 @@ const performanceOverview = ref<PerformanceOverview>({
 })
 
 const recentTasks = ref<any[]>([])
+
+// ── Team Requests Dialog ──
+const teamDialogVisible = ref(false)
+const teamLoading = ref(false)
+const teamActiveTab = ref('all')
+const teamPagination = reactive({ page: 1, size: 10 })
+const teamRequests = ref<TeamRequestsResponse>({
+  overallCount: 0,
+  runningCount: 0,
+  completedCount: 0,
+  withdrawnCount: 0,
+  content: [],
+  totalElements: 0,
+  totalPages: 0,
+  page: 0,
+  size: 10
+})
+
+const openTeamRequestsDialog = async () => {
+  teamActiveTab.value = 'all'
+  teamPagination.page = 1
+  teamDialogVisible.value = true
+  await loadTeamRequests()
+}
+
+const loadTeamRequests = async () => {
+  teamLoading.value = true
+  try {
+    const status = teamActiveTab.value === 'all' ? undefined : teamActiveTab.value
+    const res = await getTeamRequests({
+      status,
+      page: teamPagination.page - 1,
+      size: teamPagination.size
+    })
+    const data = res.data || res
+    if (data) {
+      teamRequests.value = data as unknown as TeamRequestsResponse
+    }
+  } catch (error) {
+    console.error('Failed to load team requests:', error)
+  } finally {
+    teamLoading.value = false
+  }
+}
+
+const switchTeamTab = (tab: string) => {
+  teamActiveTab.value = tab
+  teamPagination.page = 1
+  loadTeamRequests()
+}
+
+const handleTeamTabChange = () => {
+  teamPagination.page = 1
+  loadTeamRequests()
+}
+
+const handleTeamPageChange = () => {
+  loadTeamRequests()
+}
+
+const getTeamStatusType = (status: string): 'success' | 'warning' | 'info' | 'danger' | 'primary' => {
+  const map: Record<string, 'success' | 'warning' | 'info' | 'danger' | 'primary'> = {
+    RUNNING: 'warning',
+    COMPLETED: 'success',
+    WITHDRAWN: 'info'
+  }
+  return map[status] || 'info'
+}
+
+const getTeamStatusLabel = (status: string) => {
+  const map: Record<string, string> = {
+    RUNNING: t('application.running'),
+    COMPLETED: t('application.completed'),
+    WITHDRAWN: t('application.withdrawn')
+  }
+  return map[status] || status
+}
 
 const loadDashboardData = async () => {
   try {
@@ -349,6 +505,14 @@ onMounted(() => {
       }
     }
   }
+
+  .team-title-link {
+    cursor: pointer;
+    &:hover {
+      text-decoration: underline;
+      color: var(--el-color-primary);
+    }
+  }
   
   .approval-rate {
     display: flex;
@@ -445,6 +609,53 @@ onMounted(() => {
           color: var(--text-secondary);
         }
       }
+    }
+  }
+}
+</style>
+
+<style lang="scss">
+.team-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+
+  .team-summary-item {
+    text-align: center;
+    padding: 14px 8px;
+    border-radius: 8px;
+    background: #f5f7fa;
+    cursor: pointer;
+    transition: box-shadow 0.2s;
+
+    &:hover {
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    }
+
+    &.running {
+      background: #fdf6ec;
+      .team-summary-value { color: #e6a23c; }
+    }
+    &.completed {
+      background: #f0f9eb;
+      .team-summary-value { color: #00A651; }
+    }
+    &.withdrawn {
+      background: #f4f4f5;
+      .team-summary-value { color: #909399; }
+    }
+
+    .team-summary-value {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .team-summary-label {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-top: 4px;
     }
   }
 }

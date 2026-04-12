@@ -2,8 +2,9 @@ package com.portal.controller;
 
 import com.portal.component.DashboardComponent;
 import com.portal.dto.ApiResponse;
-import com.portal.security.CurrentUserId;
 import com.portal.dto.DashboardOverview;
+import com.portal.dto.TeamRequestsResponse;
+import com.portal.security.CurrentUserId;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -69,5 +70,16 @@ public class DashboardController {
             @CurrentUserId String userId) {
         Map<String, Object> data = dashboardComponent.getProcessStatisticsData(userId);
         return ApiResponse.success(data);
+    }
+
+    @Operation(summary = "获取团队申请列表")
+    @GetMapping("/team-requests")
+    public ApiResponse<TeamRequestsResponse> getTeamRequests(
+            @CurrentUserId String userId,
+            @RequestParam(required = false) String status,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        TeamRequestsResponse response = dashboardComponent.getTeamRequests(userId, status, page, size);
+        return ApiResponse.success(response);
     }
 }

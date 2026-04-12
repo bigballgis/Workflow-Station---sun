@@ -98,3 +98,31 @@ export function getTaskTrendData(days: number = 30) {
 export function getProcessStatisticsData() {
   return request.get<{ data: ProcessStatisticsData }>('/dashboard/process-statistics')
 }
+
+export interface TeamRequestItem {
+  id: string
+  processDefinitionName: string
+  businessKey?: string
+  startUserName: string
+  status: string
+  currentNode?: string
+  currentAssignee?: string
+  startTime: string
+  completedAt?: string
+}
+
+export interface TeamRequestsResponse {
+  overallCount: number
+  runningCount: number
+  completedCount: number
+  withdrawnCount: number
+  content: TeamRequestItem[]
+  totalElements: number
+  totalPages: number
+  page: number
+  size: number
+}
+
+export function getTeamRequests(params: { status?: string; page?: number; size?: number }) {
+  return request.get<{ data: TeamRequestsResponse }>('/dashboard/team-requests', { params })
+}

@@ -7,8 +7,14 @@ import com.portal.dto.DashboardOverview;
 import com.portal.dto.ProcessInfo;
 import com.portal.dto.TaskInfo;
 import com.portal.dto.TaskQueryRequest;
+import com.portal.dto.TeamRequestsResponse;
+import com.portal.entity.ProcessInstance;
 import com.portal.repository.BusinessUnitRepository;
+import com.portal.repository.ProcessInstanceRepository;
 import com.portal.repository.UserBusinessUnitRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -30,6 +36,7 @@ public class DashboardComponent {
     private final WorkflowEngineClient workflowEngineClient;
     private final BusinessUnitRepository businessUnitRepository;
     private final UserBusinessUnitRepository userBusinessUnitRepository;
+    private final ProcessInstanceRepository processInstanceRepository;
 
     /**
      * 获取Dashboard概览数据
@@ -227,6 +234,80 @@ public class DashboardComponent {
                 collectChildBuIds(child.getId(), allBuIds);
             }
         }
+    }
+
+    /**
+     * 获取团队申请列表（当前用户 BU 及其子 BU 所有成员发起的流程实例）
+     */
+    public TeamRequestsResponse getTeamRequests(String userId, String status, int page, int size) {
+        Set<String> teamMemberIds = resolveTeamMemberIds(userId);
+        if (teamMemberIds.isEmpty()) {
+            return TeamRequestsResponse.builder()
+                    .content(List.of())
+                    .build();
+        }
+
+        long overallCount = processInstanceRepository.countByStartUserIdIn(teamMemberIds);
+        long runningCount = processInstanceRepository.countByStartUserIdInAndStatus(teamMemberIds, "RUNNING");
+        long completedCount = processInstanceRepository.countByStartUserIdInAndStatus(teamMemberIds, "COMPLETED");
+        long withdrawnCount = processInstanceRepository.countByStartUserIdInAndStatus(teamMemberIds, "WITHDRAWN");
+
+        Pageable pageable = PageRequest.of(page, size);
+        Page<ProcessInstance> resultPage;
+        if (status == null || status.isBlank()) {
+            resultPage = processInstanceRepository.findByStartUserIdInOrderByStartTimeDesc(teamMemberIds, pageable);
+        } else {
+            resultPage = processInstanceRepository.findByStartUserIdInAndStatusOrderByStartTimeDesc(teamMemberIds, status, pageable);
+        }
+
+        List<TeamRequestsResponse.TeamRequestItem> items = resultPage.getContent().stream()
+                .map(pi -> TeamRequestsResponse.TeamRequestItem.builder()
+                        .id(pi.getId())
+                        .processDefinitionName(pi.getProcessDefinitionName())
+                        .businessKey(pi.getBusinessKey())
+                        .startUserName(pi.getStartUserName())
+                        .status(pi.getStatus())
+                        .currentNode(pi.getCurrentNode())
+                        .currentAssignee(pi.getCurrentAssignee())
+                        .startTime(pi.getStartTime())
+                        .completedAt(pi.getCompletedAt())
+                        .build())
+                .toList();
+
+        return TeamRequestsResponse.builder()
+                .overallCount(overallCount)
+                .runningCount(runningCount)
+                .completedCount(completedCount)
+                .withdrawnCount(withdrawnCount)
+                .content(items)
+                .totalElements(resultPage.getTotalElements())
+                .totalPages(resultPage.getTotalPages())
+                .page(resultPage.getNumber())
+                .size(resultPage.getSize())
+                .build();
+    }
+
+    /**
+     * 解析当前用户所属 BU 及子 BU 的全部成员 ID
+     */
+    private Set<String> resolveTeamMemberIds(String userId) {
+        List<UserBusinessUnit> userBUs = userBusinessUnitRepository.findByUserId(userId);
+        if (userBUs.isEmpty()) {
+            return Set.of();
+        }
+        Set<String> allBuIds = new HashSet<>();
+        for (UserBusinessUnit ubu : userBUs) {
+            String buId = ubu.getBusinessUnitId();
+            allBuIds.add(buId);
+            collectChildBuIds(buId, allBuIds);
+        }
+        List<UserBusinessUnit> allMembers = userBusinessUnitRepository
+                .findByBusinessUnitIdIn(new ArrayList<>(allBuIds));
+        Set<String> memberIds = new HashSet<>();
+        for (UserBusinessUnit m : allMembers) {
+            memberIds.add(m.getUserId());
+        }
+        return memberIds;
     }
 
     /**

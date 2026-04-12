@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 
 /**
@@ -27,6 +28,16 @@ public interface ProcessInstanceRepository extends JpaRepository<ProcessInstance
     long countByStartUserIdAndStatus(String startUserId, String status);
 
     List<ProcessInstance> findByFunctionUnitCatalogId(String functionUnitCatalogId);
+
+    // ── Team requests (by multiple start user IDs) ──
+
+    Page<ProcessInstance> findByStartUserIdInOrderByStartTimeDesc(Collection<String> startUserIds, Pageable pageable);
+
+    Page<ProcessInstance> findByStartUserIdInAndStatusOrderByStartTimeDesc(Collection<String> startUserIds, String status, Pageable pageable);
+
+    long countByStartUserIdIn(Collection<String> startUserIds);
+
+    long countByStartUserIdInAndStatus(Collection<String> startUserIds, String status);
 
     /**
      * 查询分配给指定用户的待办流程实例
