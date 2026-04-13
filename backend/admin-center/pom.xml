@@ -24,7 +24,7 @@
         <kafka.version>4.2.0</kafka.version>
         <postgresql.version>42.7.10</postgresql.version>
         <jqwik.version>1.8.2</jqwik.version>
-        <testcontainers.version>1.21.4</testcontainers.version>
+        <testcontainers.version>2.0.3</testcontainers.version>
         <poi.version>5.4.1</poi.version>
         <minio.version>8.6.0</minio.version>
     </properties>
@@ -205,13 +205,13 @@
         </dependency>
         <dependency>
             <groupId>org.testcontainers</groupId>
-            <artifactId>junit-jupiter</artifactId>
+            <artifactId>testcontainers-junit-jupiter</artifactId>
             <version>${testcontainers.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.testcontainers</groupId>
-            <artifactId>postgresql</artifactId>
+            <artifactId>testcontainers-postgresql</artifactId>
             <version>${testcontainers.version}</version>
             <scope>test</scope>
         </dependency>
