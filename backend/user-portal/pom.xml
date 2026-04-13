@@ -7,7 +7,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.2.0</version>
+        <version>3.2.1</version>
         <relativePath/>
     </parent>
 
@@ -21,6 +21,8 @@
     <properties>
         <java.version>17</java.version>
         <jqwik.version>1.8.2</jqwik.version>
+        <tomcat.version>10.1.54</tomcat.version>
+        <postgresql.version>42.7.10</postgresql.version>
     </properties>
 
     <dependencies>
