@@ -133,6 +133,13 @@
                 <version>${jjwt.version}</version>
             </dependency>
 
+            <!-- Kafka: pin kafka-clients to match ${kafka.version} (Spring Boot BOM may import an older client) -->
+            <dependency>
+                <groupId>org.apache.kafka</groupId>
+                <artifactId>kafka-clients</artifactId>
+                <version>${kafka.version}</version>
+            </dependency>
+
             <!-- Flowable -->
             <dependency>
                 <groupId>org.flowable</groupId>
