@@ -234,6 +234,8 @@
             :records="historyRecords.filter(r => !r.activityType?.includes('Gateway'))"
             :show-header="false"
             :show-refresh="false"
+            collapsible
+            :default-visible-count="1"
           />
           <el-empty v-else :description="t('task.noFlowHistory')" />
         </div>

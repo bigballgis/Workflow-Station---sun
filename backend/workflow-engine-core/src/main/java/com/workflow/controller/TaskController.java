@@ -27,7 +27,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.flowable.engine.HistoryService;
+import org.flowable.engine.TaskService;
 import org.flowable.engine.history.HistoricActivityInstance;
+import org.flowable.engine.task.Comment;
 import org.flowable.task.api.history.HistoricTaskInstance;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -65,6 +67,7 @@ public class TaskController {
     private final TaskManagerComponent taskManagerComponent;
     private final UserPermissionService userPermissionService;
     private final HistoryService historyService;
+    private final TaskService taskService;
     private final ConfigurationManager configurationManager;
     private final SecurityIntegrationService securityIntegrationService;
     private final com.workflow.client.AdminCenterClient adminCenterClient;
@@ -205,6 +208,22 @@ public class TaskController {
                 HistoricTaskInstance::getDeleteReason,
                 (existing, replacement) -> existing
             ));
+
+        // Build taskId → comment mapping from Flowable's native comment system (ACT_HI_COMMENT).
+        // For each task, take the latest comment message.
+        Map<String, String> taskComments = new HashMap<>();
+        try {
+            List<Comment> allComments = taskService.getProcessInstanceComments(processInstanceId);
+            if (allComments != null) {
+                for (Comment c : allComments) {
+                    if (c.getTaskId() != null && c.getFullMessage() != null && !c.getFullMessage().isBlank()) {
+                        taskComments.put(c.getTaskId(), c.getFullMessage());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to load Flowable comments for process {}: {}", processInstanceId, e.getMessage());
+        }
         
         // 转换为前端期望的格式
         List<Map<String, Object>> historyList = activities.stream()
@@ -295,9 +314,13 @@ public class TaskController {
                 item.put("operationTime", activity.getEndTime() != null ? 
                     activity.getEndTime().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime().toString() :
                     activity.getStartTime().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime().toString());
-                // 获取评论：使用 deleteReason 作为审批意见
+
+                // Prefer Flowable native comment; fall back to deleteReason for legacy data
                 String taskId = activity.getTaskId();
-                String comment = taskId != null ? taskDeleteReasons.get(taskId) : null;
+                String comment = taskId != null ? taskComments.get(taskId) : null;
+                if (comment == null && taskId != null) {
+                    comment = taskDeleteReasons.get(taskId);
+                }
                 item.put("comment", comment);
                 item.put("duration", activity.getDurationInMillis());
                 

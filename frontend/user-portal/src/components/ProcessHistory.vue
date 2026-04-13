@@ -13,7 +13,7 @@
 
     <el-timeline v-if="records.length > 0">
       <el-timeline-item
-        v-for="record in records"
+        v-for="record in visibleRecords"
         :key="record.id"
         :timestamp="formatTime(record.completedTime || record.createdTime)"
         :type="getTimelineType(record.status)"
@@ -82,14 +82,21 @@
       </el-timeline-item>
     </el-timeline>
 
-    <el-empty v-else :description="$t('common.noData')" />
+    <div v-if="canToggle" class="toggle-history">
+      <el-link type="primary" :underline="false" @click="expanded = !expanded">
+        <el-icon><ArrowDown v-if="!expanded" /><ArrowUp v-else /></el-icon>
+        {{ expanded ? t('process.collapseHistory') : t('process.expandHistory', { count: hiddenCount }) }}
+      </el-link>
+    </div>
+
+    <el-empty v-else-if="records.length === 0" :description="$t('common.noData')" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Refresh, Document } from '@element-plus/icons-vue'
+import { Refresh, Document, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
 
 export interface HistoryRecord {
   id: string
@@ -112,12 +119,31 @@ interface Props {
   records: HistoryRecord[]
   showHeader?: boolean
   showRefresh?: boolean
+  collapsible?: boolean
+  defaultVisibleCount?: number
 }
 
 const props = withDefaults(defineProps<Props>(), {
   records: () => [],
   showHeader: true,
-  showRefresh: true
+  showRefresh: true,
+  collapsible: false,
+  defaultVisibleCount: 1
+})
+
+const expanded = ref(false)
+
+const canToggle = computed(() =>
+  props.collapsible && props.records.length > props.defaultVisibleCount
+)
+
+const hiddenCount = computed(() =>
+  props.records.length - props.defaultVisibleCount
+)
+
+const visibleRecords = computed(() => {
+  if (!props.collapsible || expanded.value) return props.records
+  return props.records.slice(-props.defaultVisibleCount)
 })
 
 const emit = defineEmits<{
@@ -227,6 +253,16 @@ const handleDownload = (file: { id: string; name: string; url: string }) => {
 
 <style scoped lang="scss">
 .process-history {
+  .toggle-history {
+    text-align: center;
+    padding: 8px 0 4px;
+
+    .el-link {
+      font-size: 13px;
+      gap: 4px;
+    }
+  }
+
   .history-header {
     display: flex;
     justify-content: space-between;

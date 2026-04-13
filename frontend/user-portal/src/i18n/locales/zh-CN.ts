@@ -272,6 +272,8 @@ export default {
     urgent: '紧急',
     critical: '特急',
     history: '流转历史',
+    expandHistory: '展开全部历史（还有 {count} 条）',
+    collapseHistory: '收起历史',
     noAccessibleProcesses: '您暂无可发起的流程',
     contactAdminForAccess: '请加入对应的 AD Group 以获取功能单元的访问权限',
     noProcessForm: '该功能单元尚未配置流程表单（PROCESS 类型），请联系开发者配置后再发起流程。',

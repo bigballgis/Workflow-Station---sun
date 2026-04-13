@@ -12,6 +12,7 @@ import com.portal.entity.ProcessInstance;
 import com.portal.repository.BusinessUnitRepository;
 import com.portal.repository.ProcessInstanceRepository;
 import com.portal.repository.UserBusinessUnitRepository;
+import com.platform.security.util.SecurityContextUtils;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -133,14 +134,12 @@ public class DashboardComponent {
         final int MAX_TEAM_MEMBERS = 20;
         
         try {
-            List<UserBusinessUnit> userBUs = userBusinessUnitRepository.findByUserId(userId);
-            if (!userBUs.isEmpty()) {
+            Optional<String> activeBuOpt = SecurityContextUtils.getCurrentActiveBusinessUnitId();
+            String activeBuId = activeBuOpt.orElse(null);
+            if (activeBuId != null) {
                 Set<String> allBuIds = new HashSet<>();
-                for (UserBusinessUnit ubu : userBUs) {
-                    String buId = ubu.getBusinessUnitId();
-                    allBuIds.add(buId);
-                    collectChildBuIds(buId, allBuIds);
-                }
+                allBuIds.add(activeBuId);
+                collectChildBuIds(activeBuId, allBuIds);
 
                 List<UserBusinessUnit> allMembers = userBusinessUnitRepository
                         .findByBusinessUnitIdIn(new ArrayList<>(allBuIds));
@@ -288,19 +287,17 @@ public class DashboardComponent {
     }
 
     /**
-     * 解析当前用户所属 BU 及子 BU 的全部成员 ID
+     * 解析当前活动 BU 及其子 BU 的全部成员 ID（仅限 JWT 中的 activeBusinessUnitId）
      */
     private Set<String> resolveTeamMemberIds(String userId) {
-        List<UserBusinessUnit> userBUs = userBusinessUnitRepository.findByUserId(userId);
-        if (userBUs.isEmpty()) {
+        Optional<String> activeBuOpt = SecurityContextUtils.getCurrentActiveBusinessUnitId();
+        if (activeBuOpt.isEmpty()) {
             return Set.of();
         }
+        String activeBuId = activeBuOpt.get();
         Set<String> allBuIds = new HashSet<>();
-        for (UserBusinessUnit ubu : userBUs) {
-            String buId = ubu.getBusinessUnitId();
-            allBuIds.add(buId);
-            collectChildBuIds(buId, allBuIds);
-        }
+        allBuIds.add(activeBuId);
+        collectChildBuIds(activeBuId, allBuIds);
         List<UserBusinessUnit> allMembers = userBusinessUnitRepository
                 .findByBusinessUnitIdIn(new ArrayList<>(allBuIds));
         Set<String> memberIds = new HashSet<>();

@@ -1063,6 +1063,15 @@ public class TaskManagerComponent {
             
             detectAndInjectMultiInstanceData(processInstanceId, processDefinitionId, taskDefinitionKey);
 
+            // Persist approver comment via Flowable's native comment system so
+            // it shows up in flow history queries (ACT_HI_COMMENT).
+            if (variables != null) {
+                Object approverComment = variables.get("approverComments");
+                if (approverComment != null && !approverComment.toString().isBlank()) {
+                    taskService.addComment(taskId, processInstanceId, approverComment.toString());
+                }
+            }
+
             // Flowable 完成权限默认依赖 authenticatedUserId（候选人任务尤甚）
             String previousActor = Authentication.getAuthenticatedUserId();
             try {

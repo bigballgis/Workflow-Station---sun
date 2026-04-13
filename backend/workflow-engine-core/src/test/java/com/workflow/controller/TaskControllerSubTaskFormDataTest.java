@@ -39,6 +39,7 @@ class TaskControllerSubTaskFormDataTest {
             null, // taskManagerComponent
             null, // userPermissionService
             null, // historyService
+            null, // taskService
             null, // configurationManager
             null, // securityIntegrationService
             null, // adminCenterClient

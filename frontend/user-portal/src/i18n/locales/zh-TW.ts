@@ -260,6 +260,8 @@ export default {
     urgent: '緊急',
     critical: '特急',
     history: '流轉歷史',
+    expandHistory: '展開全部歷史（還有 {count} 條）',
+    collapseHistory: '收起歷史',
     noAccessibleProcesses: '您暫無可發起的流程',
     contactAdminForAccess: '請加入對應的 AD Group 以獲取功能單元的存取權限',
     noProcessForm: '該功能單元尚未配置流程表單（PROCESS 類型），請聯繫開發者配置後再發起流程。',

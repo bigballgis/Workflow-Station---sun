@@ -272,6 +272,8 @@ export default {
     urgent: 'Urgent',
     critical: 'Critical',
     history: 'Flow History',
+    expandHistory: 'Show all history ({count} more)',
+    collapseHistory: 'Collapse history',
     noAccessibleProcesses: 'No processes available',
     contactAdminForAccess: 'Please join the corresponding AD Group to access function units',
     noProcessForm: 'No Process Form has been configured for this function unit. Please contact the developer to set up a PROCESS type form before initiating a process.',
