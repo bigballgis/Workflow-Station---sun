@@ -691,7 +691,13 @@ public class TaskManagerComponent {
                 request.getEffectiveDelegationReason());
             
             // 更新Flowable任务的分配人
-            taskService.setAssignee(taskId, request.getDelegatedTo());
+            String previousActor = Authentication.getAuthenticatedUserId();
+            try {
+                Authentication.setAuthenticatedUserId(request.getDelegatedBy());
+                taskService.setAssignee(taskId, request.getDelegatedTo());
+            } finally {
+                Authentication.setAuthenticatedUserId(previousActor);
+            }
             
             // 保存扩展任务信息
             extendedTaskInfo = extendedTaskInfoRepository.save(extendedTaskInfo);
@@ -911,7 +917,13 @@ public class TaskManagerComponent {
             }
             
             // 更新Flowable任务的分配人
-            taskService.setAssignee(taskId, toUserId);
+            String previousActor = Authentication.getAuthenticatedUserId();
+            try {
+                Authentication.setAuthenticatedUserId(fromUserId);
+                taskService.setAssignee(taskId, toUserId);
+            } finally {
+                Authentication.setAuthenticatedUserId(previousActor);
+            }
 
             String taskLabel = flowableTask.getName() != null ? flowableTask.getName() : taskId;
             notificationDispatchHelper.publishToUserAfterCommit(

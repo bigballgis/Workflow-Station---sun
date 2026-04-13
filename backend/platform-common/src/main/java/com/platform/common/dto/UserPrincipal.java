@@ -6,17 +6,24 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.io.Serializable;
+import java.security.Principal;
 import java.util.List;
 
 /**
  * User principal containing authenticated user information.
  * Shared across all platform modules for unified authentication.
+ *
+ * Implements {@link Principal} so that
+ * {@code Authentication.getName()} returns the compact {@code userId}
+ * instead of Lombok's full {@code toString()}. Flowable's Spring Security
+ * integration stores this value in {@code ACT_HI_COMMENT.USER_ID_}
+ * (VARCHAR 255), which overflows with the default toString.
  */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class UserPrincipal implements Serializable {
+public class UserPrincipal implements Serializable, Principal {
     
     private static final long serialVersionUID = 1L;
     
@@ -74,6 +81,16 @@ public class UserPrincipal implements Serializable {
      * 门户访问模式：FULL 或 PERMISSION_SELF_SERVICE_ONLY（无 UBR 时由 user-portal 写入 JWT）
      */
     private String portalAccessMode;
+
+    /**
+     * {@link Principal#getName()} — returns the userId so that Spring Security's
+     * {@code authentication.getName()} yields a short identifier suitable for
+     * Flowable's VARCHAR(255) audit columns.
+     */
+    @Override
+    public String getName() {
+        return userId;
+    }
 
     /**
      * Check if user has a specific role
