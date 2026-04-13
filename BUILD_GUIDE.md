@@ -20,6 +20,7 @@
 9. **API 边缘为 Kong Gateway** — 与 Ingress 等入口协同；各前端 nginx 可按环境直连后端或经 Kong。Kafka 使用 KRaft 模式（无 ZooKeeper），N8N 使用独立 PostgreSQL 数据库。
 10. **环境变量名必须是 `ENCRYPTION_SECRET_KEY`** — 不是 `ENCRYPTION_KEY`。
 11. **PostgreSQL 不部署** — SIT/UAT/PROD 使用公司现有 PostgreSQL 数据库。Redis、Kafka、N8N 在 K8S 中自行部署。
+12. **后端运行时基础镜像可覆盖** — 各后端 `Dockerfile` 使用 `ARG JAVA_BASE_IMAGE`（默认 `eclipse-temurin:17-jre`）。`deploy/environments/dev/build-and-deploy.ps1` 与 `deploy/scripts/build-and-push-k8s.ps1` 支持 **`-JavaBaseImage`**，默认优先使用 **`docker.m.daocloud.io/library/eclipse-temurin:17-jre`**：构建前预拉取，并传 `--build-arg JAVA_BASE_IMAGE=...` 与 `docker build --pull=false`，减轻对 Docker Hub 元数据的依赖。
 
 ---
 
@@ -224,20 +225,23 @@ Workflow-Station---sun/
 | developer-workstation | `backend/developer-workstation` | `developer-workstation-*.jar` | `/api/v1` | `/api/v1/actuator/health` | 256m-512m |
 | user-portal | `backend/user-portal` | `user-portal-*.jar` | `/api/portal` | `/api/portal/actuator/health` | 256m-512m |
 
-所有后端 Dockerfile 结构相同：
+所有后端 Dockerfile 结构相同（**Temurin 17 JRE**，非 Alpine；用户与权限用 `groupadd` / `useradd`）：
 ```dockerfile
-FROM eclipse-temurin:17-jre-alpine
+ARG JAVA_BASE_IMAGE=eclipse-temurin:17-jre
+FROM ${JAVA_BASE_IMAGE}
 WORKDIR /app
-RUN addgroup -S platform && adduser -S platform -G platform
+RUN groupadd --system platform && useradd --system --gid platform --no-create-home platform
 COPY target/<service>-*.jar app.jar
 RUN chown -R platform:platform /app
 USER platform
-ENV JAVA_OPTS="-Xms256m -Xmx512m -XX:+UseG1GC"
+ENV JAVA_OPTS="-Xms256m -Xmx512m -XX:+UseG1GC -XX:MaxGCPauseMillis=100"
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD wget -q -T 5 -O /dev/null http://localhost:8080/<healthcheck-path> || exit 1
 EXPOSE 8080
 ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
 ```
+
+构建时可通过 **`--build-arg JAVA_BASE_IMAGE=<镜像名>`** 指定基础镜像（与 `build-and-deploy.ps1` / `build-and-push-k8s.ps1` 的 `-JavaBaseImage` 一致）。不传则使用 Dockerfile 内默认值 `eclipse-temurin:17-jre`。
 
 ---
 
@@ -322,15 +326,25 @@ Push-Location frontend/login; npm install --prefer-offline --no-audit; npx vite 
 
 #### 后端镜像（4 个）
 
+建议先拉取基础镜像（与脚本默认一致时可减少构建阶段访问 Docker Hub）：
+
+```powershell
+$javaBase = "docker.m.daocloud.io/library/eclipse-temurin:17-jre"
+docker pull $javaBase   # 可选；失败时可依赖本地已有层
+```
+
 ```powershell
 $registry = "harbor.company.com/workflow"
 $tag = "latest"
+$javaBase = "docker.m.daocloud.io/library/eclipse-temurin:17-jre"
 
-docker build -t "${registry}/workflow-engine-core:${tag}" backend/workflow-engine-core
-docker build -t "${registry}/admin-center:${tag}" backend/admin-center
-docker build -t "${registry}/developer-workstation:${tag}" backend/developer-workstation
-docker build -t "${registry}/user-portal:${tag}" backend/user-portal
+docker build --build-arg "JAVA_BASE_IMAGE=$javaBase" --pull=false -t "${registry}/workflow-engine-core:${tag}" backend/workflow-engine-core
+docker build --build-arg "JAVA_BASE_IMAGE=$javaBase" --pull=false -t "${registry}/admin-center:${tag}" backend/admin-center
+docker build --build-arg "JAVA_BASE_IMAGE=$javaBase" --pull=false -t "${registry}/developer-workstation:${tag}" backend/developer-workstation
+docker build --build-arg "JAVA_BASE_IMAGE=$javaBase" --pull=false -t "${registry}/user-portal:${tag}" backend/user-portal
 ```
+
+不传 `JAVA_BASE_IMAGE` 时，Dockerfile 内默认使用 **`eclipse-temurin:17-jre`**（需本机已存在或由 Docker 自行拉取）。生产/内网构建请优先与 **`deploy/scripts/build-and-push-k8s.ps1`** 使用相同的 `-JavaBaseImage` 与 `--pull=false` 策略。
 
 #### 前端镜像（4 个，必须使用 Dockerfile.local）
 
@@ -379,7 +393,15 @@ cd deploy/environments/dev
 
 # 清除所有容器和数据卷，从零开始
 .\build-and-deploy.ps1 -Clean
+
+# 指定后端运行时基础镜像（默认即为 DaoCloud 镜像；与预拉取、compose build 一致）
+.\build-and-deploy.ps1 -JavaBaseImage "docker.m.daocloud.io/library/eclipse-temurin:17-jre"
+
+# 跳过基础镜像预拉取（本地已缓存时使用）
+.\build-and-deploy.ps1 -SkipImagePull
 ```
+
+**`-JavaBaseImage`**：传给后端镜像的 `JAVA_BASE_IMAGE` 构建参数，并用于步骤 0 中 Temurin 的 mirror 预拉取（再 `docker tag` 为 `eclipse-temurin:17-jre` 供其它依赖短名的层使用）。省略时使用脚本内置默认（DaoCloud）。**`-SkipImagePull`**：跳过整段预拉取（不仅 Java，见脚本内镜像列表）。
 
 `-Service` 可选值：
 
@@ -563,7 +585,13 @@ cd deploy/scripts
 
 # 只推送（不重新构建）
 .\build-and-push-k8s.ps1 -Registry harbor.company.com/workflow -Tag v1.0.0 -PushOnly
+
+# 指定后端 Dockerfile 基础镜像（默认：docker.m.daocloud.io/library/eclipse-temurin:17-jre）
+# 脚本会在后端构建前 docker pull 该镜像，并在 docker build 时使用 --build-arg JAVA_BASE_IMAGE=... 与 --pull=false
+.\build-and-push-k8s.ps1 -Registry harbor.company.com/workflow -Tag v1.0.0 -SkipTests -JavaBaseImage "docker.m.daocloud.io/library/eclipse-temurin:17-jre"
 ```
+
+省略 **`-JavaBaseImage`** 时与显式传入上述默认值等价：仍使用 DaoCloud Temurin 镜像并完成预拉取。
 
 ### 9.3 K8S 部署
 
@@ -652,6 +680,8 @@ redis:7.2-alpine                      # Docker Hub
 confluentinc/cp-kafka:7.5.3           # Docker Hub
 n8nio/n8n                             # Docker Hub
 ```
+
+自建后端镜像的 **JRE 层** 可通过 `JAVA_BASE_IMAGE` / `-JavaBaseImage` 指向私有 Registry 或镜像加速地址，无需与上表基础设施镜像同源。
 
 ---
 

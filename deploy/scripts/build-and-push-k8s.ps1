@@ -6,6 +6,7 @@
 #   .\build-and-push-k8s.ps1 -Registry harbor.company.com/workflow -Tag v1.0.0
 #   .\build-and-push-k8s.ps1 -Registry harbor.company.com/workflow -Tag v1.0.0 -Services "workflow-engine,admin-center"
 #   .\build-and-push-k8s.ps1 -Registry harbor.company.com/workflow -Tag v1.0.0 -SkipTests -SkipFrontend
+#   .\build-and-push-k8s.ps1 -Registry harbor.company.com/workflow -Tag v1.0.0 -JavaBaseImage "docker.m.daocloud.io/library/eclipse-temurin:17-jre"
 # =====================================================
 
 param(
@@ -14,6 +15,8 @@ param(
 
     [string]$Tag = "latest",
     [string]$Services = "all",
+    # Prefer a domestic mirror so builds do not depend on Docker Hub metadata during docker build.
+    [string]$JavaBaseImage = "docker.m.daocloud.io/library/eclipse-temurin:17-jre",
     [switch]$SkipTests = $false,
     [switch]$SkipFrontend = $false,
     [switch]$SkipBackend = $false,
@@ -61,7 +64,30 @@ Write-Host "=========================================" -ForegroundColor Yellow
 Write-Host "  Registry: $Registry"
 Write-Host "  Tag: $Tag"
 Write-Host "  Services: $Services"
+Write-Host "  JavaBaseImage: $JavaBaseImage"
 Write-Host "=========================================" -ForegroundColor Yellow
+
+# 0. Pre-pull Java runtime base (avoids docker build hitting Docker Hub for FROM metadata)
+if (-not $SkipBackend -and -not $PushOnly) {
+    Write-Step "Pre-pulling Java base image..."
+    $pulled = $false
+    for ($attempt = 1; $attempt -le 3; $attempt++) {
+        Write-Host "   Pulling $JavaBaseImage (attempt $attempt/3)..." -ForegroundColor Gray
+        docker pull $JavaBaseImage 2>&1 | Out-Null
+        if ($LASTEXITCODE -eq 0) {
+            Write-Ok "Java base image present locally"
+            $pulled = $true
+            break
+        }
+        if ($attempt -lt 3) {
+            Write-Host "   Retrying in 5s..." -ForegroundColor DarkGray
+            Start-Sleep -Seconds 5
+        }
+    }
+    if (-not $pulled) {
+        Write-Host "   WARNING: Pre-pull failed; build may still use a cached base image." -ForegroundColor Yellow
+    }
+}
 
 # 1. Maven Build
 if (-not $SkipBackend -and -not $PushOnly) {
@@ -88,7 +114,10 @@ if (-not $SkipBackend) {
 
         if (-not $PushOnly) {
             Write-Host "   Building $($svc.Name)..." -ForegroundColor Gray
-            docker build -t $imageName $contextDir
+            docker build `
+                --build-arg "JAVA_BASE_IMAGE=$JavaBaseImage" `
+                --pull=false `
+                -t $imageName $contextDir
             if ($LASTEXITCODE -ne 0) { Write-Fail "Docker build failed: $($svc.Name)" }
             docker tag $imageName "$Registry/$($svc.Name):latest"
         }

@@ -10,6 +10,7 @@
 #   .\build-and-deploy.ps1 -SkipFrontend      # Skip frontend image builds
 #   .\build-and-deploy.ps1 -SkipInfra         # Skip infra startup (PG/Redis already running)
 #   .\build-and-deploy.ps1 -SkipImagePull     # Skip pre-pulling base images (if already cached)
+#   .\build-and-deploy.ps1 -JavaBaseImage "docker.m.daocloud.io/library/eclipse-temurin:17-jre"  # Backend FROM / compose build-arg
 #   .\build-and-deploy.ps1 -Clean             # Destroy everything and rebuild
 #   .\build-and-deploy.ps1 -ServicesOnly      # Only restart backend+frontend (no Maven, no infra)
 #   .\build-and-deploy.ps1 -SkipMavenClean    # Maven package without clean (avoids clean delete failures)
@@ -21,6 +22,8 @@
 
 param(
     [string]$Service,
+    # Passed to backend Docker builds (JAVA_BASE_IMAGE); default uses DaoCloud mirror to reduce Docker Hub dependency.
+    [string]$JavaBaseImage = "docker.m.daocloud.io/library/eclipse-temurin:17-jre",
     [switch]$SkipMaven,
     [switch]$SkipFrontend,
     [switch]$SkipInfra,
@@ -166,7 +169,9 @@ if ($Service) {
         # 仅 nginx:alpine + 挂载 nginx-edge.conf；无镜像构建，改配置后 up 会按 compose 重建/重启
         docker compose -f $ComposeFile --env-file $EnvFile up -d --no-deps --force-recreate $Service
     } else {
-        docker compose -f $ComposeFile --env-file $EnvFile up -d --build --no-deps $Service
+        docker compose -f $ComposeFile --env-file $EnvFile build --build-arg "JAVA_BASE_IMAGE=$JavaBaseImage" $Service
+        if ($LASTEXITCODE -ne 0) { throw "Docker compose build failed for $Service" }
+        docker compose -f $ComposeFile --env-file $EnvFile up -d --no-deps $Service
     }
     if ($LASTEXITCODE -ne 0) { throw "Failed to deploy $Service" }
 
@@ -206,7 +211,7 @@ if (-not $SkipImagePull) {
     Write-Host "`n[0/4] Pre-pulling base images via domestic mirror..." -ForegroundColor Yellow
 
     $images = @(
-        @{ Mirror = "docker.m.daocloud.io/library/eclipse-temurin:17-jre"; Target = "eclipse-temurin:17-jre" },
+        @{ Mirror = $JavaBaseImage; Target = "eclipse-temurin:17-jre" },
         @{ Mirror = "docker.m.daocloud.io/library/nginx:alpine";                  Target = "nginx:alpine"                  },
         @{ Mirror = "docker.m.daocloud.io/library/postgres:16.5-alpine";          Target = "postgres:16.5-alpine"          },
         @{ Mirror = "docker.m.daocloud.io/library/redis:7.2-alpine";              Target = "redis:7.2-alpine"              }
@@ -363,7 +368,13 @@ if (-not $SkipInfra) {
 
 # Step 4: Build and start all services
 Write-Host "`n[4/4] Starting all services..." -ForegroundColor Yellow
-docker compose -f $ComposeFile --env-file $EnvFile up -d --build
+docker compose -f $ComposeFile --env-file $EnvFile build --build-arg "JAVA_BASE_IMAGE=$JavaBaseImage"
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "  docker compose build failed." -ForegroundColor Red
+    docker compose -f $ComposeFile --env-file $EnvFile ps
+    throw "Docker compose image build failed"
+}
+docker compose -f $ComposeFile --env-file $EnvFile up -d
 if ($LASTEXITCODE -ne 0) {
     Write-Host "  docker compose failed. Current service status:" -ForegroundColor Red
     docker compose -f $ComposeFile --env-file $EnvFile ps

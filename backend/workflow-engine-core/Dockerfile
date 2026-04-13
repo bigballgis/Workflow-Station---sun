@@ -1,5 +1,6 @@
 # Runtime image for Workflow Engine Core (uses pre-built JAR)
-FROM eclipse-temurin:17-jre
+ARG JAVA_BASE_IMAGE=eclipse-temurin:17-jre
+FROM ${JAVA_BASE_IMAGE}
 
 WORKDIR /app
 
