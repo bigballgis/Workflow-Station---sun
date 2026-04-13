@@ -23,7 +23,19 @@
         <jqwik.version>1.8.2</jqwik.version>
         <tomcat.version>10.1.54</tomcat.version>
         <postgresql.version>42.7.10</postgresql.version>
+        <!-- Align with platform-messaging / root BOM when resolving transitive spring-kafka -->
+        <kafka.version>4.2.0</kafka.version>
     </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.apache.kafka</groupId>
+                <artifactId>kafka-clients</artifactId>
+                <version>${kafka.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <dependencies>
         <!-- Spring Boot Starters -->
