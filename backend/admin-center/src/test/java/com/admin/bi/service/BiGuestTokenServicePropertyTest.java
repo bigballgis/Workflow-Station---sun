@@ -154,7 +154,7 @@ class BiGuestTokenServicePropertyTest {
         List<UserDashboardResponse> unassignedList = otherDashboards.stream()
                 .filter(d -> !dashboardId.equals(d.getDashboardId()))
                 .collect(Collectors.toList());
-        when(assignmentService.getUserDashboards(userId)).thenReturn(unassignedList);
+        when(assignmentService.getUserDashboards(userId, null)).thenReturn(unassignedList);
 
         assertThatThrownBy(() -> service.getGuestToken(userId, request))
                 .isInstanceOf(AccessDeniedException.class);
@@ -168,7 +168,7 @@ class BiGuestTokenServicePropertyTest {
                 .displayOrder(0)
                 .isDefault(false)
                 .build());
-        when(assignmentService.getUserDashboards(userId)).thenReturn(assignedList);
+        when(assignmentService.getUserDashboards(userId, null)).thenReturn(assignedList);
 
         // Mock remaining dependencies for the success path
         List<String> roleIds = List.of("role-1", "role-2");
@@ -249,7 +249,7 @@ class BiGuestTokenServicePropertyTest {
                         .isDefault(false)
                         .build()
         );
-        when(assignmentService.getUserDashboards(userId)).thenReturn(assignedDashboards);
+        when(assignmentService.getUserDashboards(userId, null)).thenReturn(assignedDashboards);
 
         // Mock: user has the generated sys role IDs
         when(userRoleRepository.findAllRoleIdsByUserId(userId)).thenReturn(sysRoleIds);

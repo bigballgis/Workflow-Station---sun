@@ -35,6 +35,15 @@ public class BusinessUnitController {
     private final UserRepository userRepository;
     private final UserBusinessUnitService userBusinessUnitService;
     
+    @GetMapping
+    @Operation(summary = "获取业务单元列表", description = "获取业务单元平铺列表，可按 parentId 或 status 筛选")
+    public ResponseEntity<List<BusinessUnitTree>> listBusinessUnits(
+            @RequestParam(required = false) String parentId,
+            @RequestParam(required = false) String status) {
+        List<BusinessUnitTree> units = organizationManager.listBusinessUnits(parentId, status);
+        return ResponseEntity.ok(units);
+    }
+
     @GetMapping("/tree")
     @Operation(summary = "获取业务单元树", description = "获取完整的业务单元树形结构")
     public ResponseEntity<List<BusinessUnitTree>> getOrganizationTree() {

@@ -62,8 +62,10 @@ adminCenterService.interceptors.response.use(
 )
 
 export const biDashboardApi = {
-  getUserDashboards: (userId: string) =>
-    adminCenterService.get<any, UserDashboardResponse[]>(`/bi/assignments/user/${userId}`),
+  getUserDashboards: (userId: string, activeBusinessUnitId?: string) =>
+    adminCenterService.get<any, UserDashboardResponse[]>(`/bi/assignments/user/${userId}`, {
+      params: activeBusinessUnitId ? { activeBusinessUnitId } : undefined,
+    }),
 
   getGuestToken: (data: GuestTokenRequest, userId?: string) =>
     adminCenterService.post<any, GuestTokenResponse>('/bi/guest-token', data, {

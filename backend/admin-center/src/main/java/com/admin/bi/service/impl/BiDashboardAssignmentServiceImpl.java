@@ -130,7 +130,7 @@ public class BiDashboardAssignmentServiceImpl implements BiDashboardAssignmentSe
 
     @Override
     @Transactional(readOnly = true)
-    public List<UserDashboardResponse> getUserDashboards(String userId) {
+    public List<UserDashboardResponse> getUserDashboards(String userId, String activeBusinessUnitId) {
         // 1. Query USER dimension assignments
         List<BiDashboardAssignment> userAssignments =
                 assignmentRepository.findByTargetTypeAndTargetId(AssignmentTargetType.USER, userId);
@@ -141,8 +141,14 @@ public class BiDashboardAssignmentServiceImpl implements BiDashboardAssignmentSe
                 ? Collections.emptyList()
                 : assignmentRepository.findByTargetTypeAndTargetIdIn(AssignmentTargetType.ROLE, roleIds);
 
-        // 3. Get user's business unit IDs and query BU dimension assignments
-        List<String> buIds = userBusinessUnitService.getUserBusinessUnitIds(userId);
+        // 3. BU dimension: when an active BU context is provided, restrict to that BU only;
+        //    otherwise fall back to all BUs the user belongs to.
+        List<String> buIds;
+        if (activeBusinessUnitId != null && !activeBusinessUnitId.isBlank()) {
+            buIds = List.of(activeBusinessUnitId);
+        } else {
+            buIds = userBusinessUnitService.getUserBusinessUnitIds(userId);
+        }
         List<BiDashboardAssignment> buAssignments = buIds.isEmpty()
                 ? Collections.emptyList()
                 : assignmentRepository.findByTargetTypeAndTargetIdIn(AssignmentTargetType.BUSINESS_UNIT, buIds);

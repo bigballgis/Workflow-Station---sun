@@ -76,6 +76,7 @@ import {
   type UserDashboardResponse,
   type GuestTokenResponse,
 } from '@/api/biDashboard'
+import { getStoredUser } from '@/api/auth'
 
 // NOTE: Install required package: npm install @superset-ui/embedded-sdk
 // import { embedDashboard } from '@superset-ui/embedded-sdk'
@@ -276,7 +277,8 @@ function onFullscreenClosed(): void {
 
 onMounted(async () => {
   try {
-    const userId = getUserId()
+    const storedUser = getStoredUser()
+    const userId = storedUser?.userId || getUserId()
     if (!userId) {
       console.warn('No userId found, cannot load dashboards')
       loading.value = false
@@ -284,7 +286,7 @@ onMounted(async () => {
     }
     currentUserId.value = userId
 
-    const res = await biDashboardApi.getUserDashboards(userId)
+    const res = await biDashboardApi.getUserDashboards(userId, storedUser?.activeBusinessUnitId)
     // The response interceptor unwraps, so res could be the data directly or wrapped
     const list: UserDashboardResponse[] = (res as any).data || res || []
     dashboards.value = list

@@ -175,18 +175,13 @@ const showFullPortal = computed(
 // Check if user has BI dashboards assigned
 const checkBiDashboards = async () => {
   try {
-    let userId = localStorage.getItem('userId')
-    if (!userId) {
-      const userStr = localStorage.getItem('user')
-      if (userStr) {
-        try {
-          const user = JSON.parse(userStr)
-          userId = user.userId || user.id
-        } catch (e) { /* ignore */ }
-      }
-    }
+    const storedUser = getStoredUser()
+    const userId = storedUser?.userId || localStorage.getItem('userId')
     if (userId) {
-      const dashboards = await biDashboardApi.getUserDashboards(userId)
+      const dashboards = await biDashboardApi.getUserDashboards(
+        userId,
+        storedUser?.activeBusinessUnitId
+      )
       hasBiDashboards.value = Array.isArray(dashboards) && dashboards.length > 0
     }
   } catch (e) {

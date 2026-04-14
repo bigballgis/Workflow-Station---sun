@@ -240,6 +240,24 @@ public class OrganizationManagerComponent {
     }
     
     /**
+     * 获取业务单元平铺列表（供下拉框等场景使用）
+     */
+    @Transactional(readOnly = true)
+    public List<BusinessUnitTree> listBusinessUnits(String parentId, String status) {
+        List<BusinessUnit> units;
+        if (parentId != null && !parentId.isEmpty()) {
+            units = businessUnitRepository.findByParentIdOrderBySortOrder(parentId);
+        } else if (status != null && !status.isEmpty()) {
+            units = businessUnitRepository.findByStatus(status);
+        } else {
+            units = businessUnitRepository.findAllActive();
+        }
+        return units.stream()
+                .map(BusinessUnitTree::fromEntity)
+                .collect(Collectors.toList());
+    }
+
+    /**
      * 搜索业务单元
      */
     public List<BusinessUnitTree> searchBusinessUnits(String keyword) {

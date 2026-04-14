@@ -362,7 +362,7 @@ class BiDashboardAssignmentServicePropertyTest {
         }
 
         // Execute
-        List<UserDashboardResponse> result = service.getUserDashboards(userId);
+        List<UserDashboardResponse> result = service.getUserDashboards(userId, null);
 
         // Verify: only ACTIVE dashboards
         Set<String> activeDashboardIds = dashboards.stream()

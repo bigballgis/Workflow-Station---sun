@@ -47,7 +47,7 @@ public class BiGuestTokenServiceImpl implements BiGuestTokenService {
                 .orElseThrow(() -> new DashboardNotFoundException(dashboardId));
 
         // 2. Verify user is assigned this dashboard
-        List<UserDashboardResponse> userDashboards = assignmentService.getUserDashboards(userId);
+        List<UserDashboardResponse> userDashboards = assignmentService.getUserDashboards(userId, null);
         boolean isAssigned = userDashboards.stream()
                 .anyMatch(d -> dashboardId.equals(d.getDashboardId()));
 

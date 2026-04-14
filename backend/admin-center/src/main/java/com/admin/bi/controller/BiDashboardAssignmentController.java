@@ -71,10 +71,15 @@ public class BiDashboardAssignmentController {
     }
 
     @GetMapping("/user/{userId}")
-    @Operation(summary = "获取用户有效 Dashboard 列表", description = "合并 User/Role/BU 维度分配，去重后按 displayOrder 排序")
+    @Operation(
+        summary = "获取用户有效 Dashboard 列表",
+        description = "合并 User/Role/BU 维度分配，去重后按 displayOrder 排序。" +
+                      "传入 activeBusinessUnitId 时，BU 维度仅检索该 BU 的分配记录。"
+    )
     public ResponseEntity<List<UserDashboardResponse>> getUserDashboards(
-            @PathVariable String userId) {
-        List<UserDashboardResponse> dashboards = assignmentService.getUserDashboards(userId);
+            @PathVariable String userId,
+            @RequestParam(required = false) String activeBusinessUnitId) {
+        List<UserDashboardResponse> dashboards = assignmentService.getUserDashboards(userId, activeBusinessUnitId);
         return ResponseEntity.ok(dashboards);
     }
 }
