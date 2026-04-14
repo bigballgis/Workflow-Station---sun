@@ -1099,3 +1099,10 @@
   category: deploy
   summary: "Flowable ACT_RU/HI_IDENTITYLINK 默认 VARCHAR(255) 过短，长 group/scope 等导致任务完成时 PSQL value too long → 迁移加宽至 4000"
   file: "deploy/init-scripts/00-schema/30-widen-flowable-identitylink-columns.sql"
+- id: "151"
+  status: fixed
+  fixed_at: "2026-04-14"
+  severity: major
+  category: bug
+  summary: "BI Dashboard 角色分配不显示：findAllRoleIdsByUserId 漏查 sys_user_business_unit_roles，导致通过 BU 工作台分配角色的用户无法在门户看到已分配的 BI Dashboard"
+  file: "backend/admin-center/src/main/java/com/admin/repository/UserRoleRepository.java"

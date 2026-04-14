@@ -71,7 +71,7 @@ public class UserPermissionService {
      * 顶栏 / 各前端「个人摘要」用的角色列表。
      * <ul>
      *     <li>{@code profileContext} 为空或未知：保持历史行为，仅返回经虚拟组继承的角色（与 {@link #getUserRoles(String)} 一致）。</li>
-     *     <li>否则：合并「用户直配 + 虚拟组展开」的有效角色（与 {@code UserRoleRepository#findAllRoleIdsByUserId} 一致），再按前端场景过滤类型。</li>
+     *     <li>否则：合并「用户直配 + 虚拟组展开 + 业务单元工作台角色」的有效角色（与 {@code UserRoleRepository#findAllRoleIdsByUserId} 一致），再按前端场景过滤类型。</li>
      * </ul>
      *
      * @param profileContext {@code PORTAL} 仅业务角色；{@code ADMIN} 仅 {@code ADMIN} 类型；{@code DEVELOPER} 仅 {@code DEVELOPER}

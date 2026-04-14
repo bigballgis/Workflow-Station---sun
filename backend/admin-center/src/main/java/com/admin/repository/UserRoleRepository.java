@@ -75,10 +75,11 @@ public interface UserRoleRepository extends JpaRepository<UserRole, String> {
     List<String> findRoleIdsByUserId(@Param("userId") String userId);
     
     /**
-     * 获取用户的所有角色ID（包括通过虚拟组分配的）
+     * 获取用户的所有角色ID（包括通过虚拟组和业务单元工作台分配的）
      * 包括：
      * 1. 直接分配给用户的角色 (sys_user_roles)
      * 2. 通过虚拟组分配的角色 (sys_virtual_group_members + sys_virtual_group_roles)
+     * 3. 通过业务单元工作台分配的角色 (sys_user_business_unit_roles)
      */
     @Query("""
         SELECT DISTINCT r.id FROM Role r
@@ -89,6 +90,8 @@ public interface UserRoleRepository extends JpaRepository<UserRole, String> {
             WHERE vgr.virtualGroupId IN (
                 SELECT vgm.groupId FROM VirtualGroupMember vgm WHERE vgm.userId = :userId
             )
+            UNION
+            SELECT ubur.roleId FROM UserBusinessUnitRole ubur WHERE ubur.userId = :userId
         )
         """)
     List<String> findAllRoleIdsByUserId(@Param("userId") String userId);
