@@ -81,43 +81,6 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column :label="t('task.actions')" width="240" fixed="right">
-          <template #default="{ row }">
-            <div style="white-space: nowrap; display: flex; gap: 4px; align-items: center; flex-wrap: nowrap;">
-            <el-button
-              v-if="canClaim(row)"
-              type="primary"
-              size="small"
-              @click="handleClaim(row)"
-            >
-              {{ t('task.claim') }}
-            </el-button>
-            <el-button
-              v-if="canUnclaim(row)"
-              type="warning"
-              size="small"
-              @click="handleUnclaim(row)"
-            >
-              {{ t('task.unclaim') }}
-            </el-button>
-            <el-button type="primary" size="small" @click="handleProcess(row)">
-              {{ t('task.complete') }}
-            </el-button>
-            <el-dropdown trigger="click" @command="(cmd: string) => handleAction(cmd, row)">
-              <el-button size="small">
-                {{ t('common.more') }}<el-icon class="el-icon--right"><ArrowDown /></el-icon>
-              </el-button>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item command="delegate">{{ t('task.delegate') }}</el-dropdown-item>
-                  <el-dropdown-item command="transfer">{{ t('task.transfer') }}</el-dropdown-item>
-                  <el-dropdown-item command="urge">{{ t('task.urge') }}</el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
-            </div>
-          </template>
-        </el-table-column>
       </el-table>
 
       <!-- 批量操作 -->
@@ -170,9 +133,8 @@ import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
-import { Search, ArrowDown } from '@element-plus/icons-vue'
-import { queryTasks, claimTask, unclaimTask, delegateTask, transferTask, urgeTask, batchUrgeTasks, TaskInfo } from '@/api/task'
-import { getStoredUser } from '@/api/auth'
+import { Search } from '@element-plus/icons-vue'
+import { queryTasks, delegateTask, transferTask, urgeTask, batchUrgeTasks, TaskInfo } from '@/api/task'
 import { formatDate } from '@/utils/dateFormat'
 import { usePendingTaskStore } from '@/stores/pendingTask'
 
@@ -257,135 +219,6 @@ const handleSelectionChange = (selection: TaskInfo[]) => {
 
 const viewTask = (task: TaskInfo) => {
   router.push(`/tasks/${task.taskId}`)
-}
-
-function portalIdentityMatches(a: string | null | undefined, b: string | null | undefined): boolean {
-  if (a == null || b == null) return false
-  const x = String(a).trim()
-  const y = String(b).trim()
-  if (!x || !y) return false
-  if (x === y) return true
-  return x.toLowerCase() === y.toLowerCase()
-}
-
-/** 发起人直办：引擎仍返回 CANDIDATE_USERS 且无 assignee 时，不展示认领（与 BPMN Process Initiator / INITIATOR 一致） */
-function shouldSuppressClaimAsInitiatorDirectTask(task: TaskInfo): boolean {
-  if (task.assignmentType !== 'CANDIDATE_USERS') return false
-  const me = getStoredUser()
-  if (!me) return false
-  const iAmInitiator =
-    portalIdentityMatches(task.initiatorId, me.userId) || portalIdentityMatches(task.initiatorId, me.username)
-  if (!iAmInitiator) return false
-
-  const bpmnAt = task.bpmnAssigneeType?.trim().toUpperCase()
-  if (bpmnAt === 'INITIATOR' || bpmnAt === 'PROCESS_INITIATOR') {
-    return true
-  }
-
-  const av = task.variables?.assigneeType ?? task.variables?.assignee_type
-  if (av != null && String(av).trim() !== '') {
-    const u = String(av).trim().toUpperCase()
-    if (u === 'INITIATOR' || u === 'PROCESS_INITIATOR') return true
-  }
-
-  const cands = task.candidateUserIds
-  if (Array.isArray(cands) && cands.length === 1) {
-    const only = cands[0]
-    return portalIdentityMatches(only, me.userId) || portalIdentityMatches(only, me.username)
-  }
-
-  const rawTarget = task.assignmentTarget?.trim()
-  if (rawTarget) {
-    const parts = rawTarget.split(',').map((s) => s.trim()).filter(Boolean)
-    if (parts.length === 1) {
-      const one = parts[0]!
-      return portalIdentityMatches(one, me.userId) || portalIdentityMatches(one, me.username)
-    }
-  }
-  return false
-}
-
-/**
- * 无 assignee、无候选人/组、无 assignmentTarget 的「空池」任务：发起人不展示认领（与门户 canProcessTask 空池发起人规则一致，不限定 assignmentType）。
- */
-function shouldSuppressClaimInitiatorOrphanVirtualGroup(task: TaskInfo): boolean {
-  const me = getStoredUser()
-  if (!me) return false
-  const iv = task.variables?.initiator
-  const iAmInitiator =
-    portalIdentityMatches(task.initiatorId, me.userId) ||
-    portalIdentityMatches(task.initiatorId, me.username) ||
-    (iv != null && iv !== '' && portalIdentityMatches(String(iv), me.userId)) ||
-    (iv != null && iv !== '' && portalIdentityMatches(String(iv), me.username))
-  if (!iAmInitiator) return false
-  if (task.assignee && String(task.assignee).trim()) return false
-
-  const noUserCands = !task.candidateUserIds || task.candidateUserIds.length === 0
-  const noGroupCands = !task.candidateGroupIds || task.candidateGroupIds.length === 0
-  const noTarget = !task.assignmentTarget || !String(task.assignmentTarget).trim()
-  return noUserCands && noGroupCands && noTarget
-}
-
-/** 候选人池 / 组池：尚无个人 assignee 时可认领（与后端 TaskProcessComponent 一致） */
-const isClaimablePoolTask = (task: TaskInfo) => {
-  if (shouldSuppressClaimAsInitiatorDirectTask(task) || shouldSuppressClaimInitiatorOrphanVirtualGroup(task)) {
-    return false
-  }
-  const at = task.assignmentType
-  if (at !== 'VIRTUAL_GROUP' && at !== 'DEPT_ROLE' && at !== 'CANDIDATE_USERS') {
-    return false
-  }
-  const hasAssignee = !!(task.assignee && String(task.assignee).trim())
-  return !hasAssignee
-}
-
-const canClaim = (task: TaskInfo) => {
-  return isClaimablePoolTask(task) && task.claimed !== true
-}
-
-const canUnclaim = (task: TaskInfo) => {
-  // 委托任务等场景下后端会设置 claimed；Flowable 直出列表可能无该字段，此时不展示 Unclaim 以免误点
-  return task.claimed === true
-}
-
-const handleClaim = async (task: TaskInfo) => {
-  try {
-    await claimTask(task.taskId)
-    ElMessage.success(t('common.success'))
-    await loadTasks()
-  } catch {
-    // 错误提示已由 api/request 响应拦截器统一弹出，此处勿再弹 Success 或伪造认领状态
-    await loadTasks()
-  }
-}
-
-const handleUnclaim = async (task: TaskInfo) => {
-  try {
-    await unclaimTask(task.taskId, task.originalAssignmentType || task.assignmentType, task.originalAssignee || task.assignee)
-    ElMessage.success(t('common.success'))
-    loadTasks()
-  } catch (error) {
-    ElMessage.error(t('common.error'))
-  }
-}
-
-const handleProcess = (task: TaskInfo) => {
-  router.push(`/tasks/${task.taskId}`)
-}
-
-const handleAction = (action: string, task: TaskInfo) => {
-  currentAction.value = action
-  currentTask.value = task
-  
-  const titleMap: Record<string, string> = {
-    delegate: t('task.delegate'),
-    transfer: t('task.transfer'),
-    urge: t('task.urge')
-  }
-  actionDialogTitle.value = titleMap[action] || action
-  actionForm.targetUserId = ''
-  actionForm.reason = ''
-  actionDialogVisible.value = true
 }
 
 const handleBatchUrge = () => {

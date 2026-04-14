@@ -1106,3 +1106,10 @@
   category: bug
   summary: "BI Dashboard 角色分配不显示：findAllRoleIdsByUserId 漏查 sys_user_business_unit_roles，导致通过 BU 工作台分配角色的用户无法在门户看到已分配的 BI Dashboard"
   file: "backend/admin-center/src/main/java/com/admin/repository/UserRoleRepository.java"
+
+- id: "152"
+  status: open
+  severity: minor
+  category: bug
+  summary: "user-portal tasks 页 submitAction 捕获异常后仍弹 success，委托/转办/催办失败时会误导用户"
+  file: "frontend/user-portal/src/views/tasks/index.vue"
