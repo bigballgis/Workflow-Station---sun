@@ -15,7 +15,7 @@
 
     <el-container class="admin-body">
       <!-- Left sidebar menu -->
-      <el-aside :width="isCollapse ? '64px' : '240px'" class="admin-aside">
+      <el-aside :width="isCollapse ? '64px' : '260px'" class="admin-aside">
         <el-scrollbar>
           <el-menu
             :default-active="activeMenu"

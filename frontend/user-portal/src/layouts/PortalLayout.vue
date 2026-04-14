@@ -22,7 +22,7 @@
 
     <el-container class="portal-main">
       <!-- 左侧菜单 -->
-      <el-aside :width="isCollapsed ? '64px' : '240px'" class="portal-aside">
+      <el-aside :width="isCollapsed ? '64px' : '260px'" class="portal-aside">
         <el-menu
           :default-active="activeMenu"
           :collapse="isCollapsed"

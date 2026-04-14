@@ -21,9 +21,9 @@
           </el-menu-item>
         </el-menu>
         <div class="collapse-btn" @click="toggleSidebar">
-          <el-icon>
-            <DArrowLeft v-if="!isCollapsed" />
-            <DArrowRight v-else />
+          <el-icon :size="20">
+            <Fold v-if="!isCollapsed" />
+            <Expand v-else />
           </el-icon>
         </div>
       </el-aside>
@@ -38,7 +38,7 @@
 import { computed, ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { Folder, Picture, DArrowLeft, DArrowRight } from '@element-plus/icons-vue'
+import { Folder, Picture, Fold, Expand } from '@element-plus/icons-vue'
 import UserProfileDropdown from '@/components/UserProfileDropdown.vue'
 import { getUser, getCurrentUser, saveUser, clearAuth } from '@/api/auth'
 import { redirectToUnifiedLogin } from '@/utils/sso'
@@ -50,7 +50,7 @@ const activeMenu = computed(() => route.path)
 
 // Sidebar collapse state
 const isCollapsed = ref(false)
-const sidebarWidth = computed(() => isCollapsed.value ? '64px' : '240px')
+const sidebarWidth = computed(() => isCollapsed.value ? '64px' : '260px')
 
 // Get current user info
 const currentUser = computed(() => getUser())
