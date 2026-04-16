@@ -1,13 +1,16 @@
 package com.portal.property;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portal.client.WorkflowEngineClient;
 import com.portal.component.ChangeHistoryComponent;
 import com.portal.dto.ChangeHistoryRecord;
 import com.portal.entity.ChangeHistory;
 import com.portal.enums.ChangeType;
 import com.portal.repository.ChangeHistoryRepository;
+import com.portal.repository.ProcessInstanceRepository;
 import com.platform.security.repository.UserRepository;
 import net.jqwik.api.*;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -55,7 +58,13 @@ public class ChangeHistoryOrderPropertyTest {
         when(repository.findByProcessInstanceIdOrderByTimestampAsc(historyList.processInstanceId))
                 .thenReturn(sorted);
 
-        ChangeHistoryComponent component = new ChangeHistoryComponent(repository, userRepository, workflowEngineClient);
+        ChangeHistoryComponent component = new ChangeHistoryComponent(
+                repository,
+                mock(ProcessInstanceRepository.class),
+                userRepository,
+                workflowEngineClient,
+                mock(JdbcTemplate.class),
+                new ObjectMapper());
         List<ChangeHistoryRecord> result = component.getChangeHistory(historyList.processInstanceId);
 
         // Verify chronological order

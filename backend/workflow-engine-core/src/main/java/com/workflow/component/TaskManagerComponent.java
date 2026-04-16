@@ -916,11 +916,16 @@ public class TaskManagerComponent {
                 extendedTaskInfoRepository.save(extendedTaskInfo);
             }
             
-            // 更新Flowable任务的分配人
+            // 更新Flowable任务的分配人并记录转办原因到 ACT_HI_COMMENT
+            String processInstanceId = flowableTask.getProcessInstanceId();
             String previousActor = Authentication.getAuthenticatedUserId();
             try {
                 Authentication.setAuthenticatedUserId(fromUserId);
                 taskService.setAssignee(taskId, toUserId);
+                // Typed comment "transfer" — userId is captured from Authentication context,
+                // so flow-history can resolve the originating user via Comment.getUserId().
+                taskService.addComment(taskId, processInstanceId, "transfer",
+                        reason != null && !reason.isBlank() ? reason : "");
             } finally {
                 Authentication.setAuthenticatedUserId(previousActor);
             }

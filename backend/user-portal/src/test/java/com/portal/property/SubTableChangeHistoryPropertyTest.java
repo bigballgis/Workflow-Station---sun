@@ -1,5 +1,6 @@
 package com.portal.property;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portal.client.WorkflowEngineClient;
 import com.portal.component.ChangeHistoryComponent;
 import com.portal.dto.ChangeHistoryContext;
@@ -8,8 +9,10 @@ import com.portal.dto.SubTableChange;
 import com.portal.entity.ChangeHistory;
 import com.portal.enums.ChangeType;
 import com.portal.repository.ChangeHistoryRepository;
+import com.portal.repository.ProcessInstanceRepository;
 import net.jqwik.api.*;
 import org.mockito.ArgumentCaptor;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.util.*;
 
@@ -45,8 +48,11 @@ public class SubTableChangeHistoryPropertyTest {
                 .thenAnswer(invocation -> invocation.getArgument(0));
         changeHistoryComponent = new ChangeHistoryComponent(
                 changeHistoryRepository,
+                mock(ProcessInstanceRepository.class),
                 mock(UserRepository.class),
-                mock(WorkflowEngineClient.class));
+                mock(WorkflowEngineClient.class),
+                mock(JdbcTemplate.class),
+                new ObjectMapper());
     }
 
     /**

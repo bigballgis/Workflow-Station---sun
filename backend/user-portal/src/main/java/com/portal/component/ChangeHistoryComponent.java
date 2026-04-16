@@ -1,16 +1,21 @@
 package com.portal.component;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.ChangeHistoryContext;
 import com.portal.dto.ChangeHistoryRecord;
 import com.portal.dto.SubTableChange;
 import com.portal.entity.ChangeHistory;
+import com.portal.entity.ProcessInstance;
 import com.portal.enums.ChangeType;
 import com.portal.repository.ChangeHistoryRepository;
+import com.portal.repository.ProcessInstanceRepository;
 import com.platform.security.entity.User;
 import com.platform.security.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,8 +40,21 @@ import java.util.stream.Collectors;
 public class ChangeHistoryComponent {
 
     private final ChangeHistoryRepository changeHistoryRepository;
+    private final ProcessInstanceRepository processInstanceRepository;
     private final UserRepository userRepository;
     private final WorkflowEngineClient workflowEngineClient;
+    private final JdbcTemplate jdbcTemplate;
+    private final ObjectMapper objectMapper;
+
+    /**
+     * Internal/engine variable names that should never appear in user-visible change history.
+     */
+    private static final Set<String> INTERNAL_FIELD_BLACKLIST = Set.of(
+            "__subTables__", "subTableName", "foreignKey", "assigneeField",
+            "mainRecordId", "activeBusinessUnitId", "activeRoleId",
+            "requestItemsHasHighValue", "totalPrice", "maxItemPrice", "itemCount",
+            "initiator", "participant_assigner_user_id"
+    );
 
     /**
      * 记录字段变更
@@ -52,6 +70,9 @@ public class ChangeHistoryComponent {
 
             for (Map.Entry<String, Object> entry : newValues.entrySet()) {
                 String fieldName = entry.getKey();
+                if (isInternalField(fieldName)) {
+                    continue;
+                }
                 Object newValue = entry.getValue();
                 Object oldValue = oldValues.get(fieldName);
 
@@ -79,6 +100,12 @@ public class ChangeHistoryComponent {
             log.warn("Failed to record field changes for process {}: {}",
                     context.getProcessInstanceId(), e.getMessage());
         }
+    }
+
+    private static boolean isInternalField(String fieldName) {
+        if (fieldName == null) return true;
+        if (INTERNAL_FIELD_BLACKLIST.contains(fieldName)) return true;
+        return fieldName.startsWith("_snapshot_") || fieldName.startsWith("__");
     }
 
     /**
@@ -129,11 +156,17 @@ public class ChangeHistoryComponent {
         List<ChangeHistory> entities = changeHistoryRepository
                 .findByProcessInstanceIdOrderByTimestampAsc(processInstanceId);
 
+        // Filter out internal fields that were recorded before the blacklist was in place
+        entities = entities.stream()
+                .filter(e -> !isInternalField(e.getFieldName()))
+                .toList();
+
         Map<String, String> userDisplayById = resolveUserDisplayNames(entities);
         StageNameMaps stageNames = resolveStageNames(processInstanceId);
+        Map<String, String> fieldLabels = resolveFieldLabels(processInstanceId);
 
         return entities.stream()
-                .map(e -> toRecord(e, userDisplayById, stageNames))
+                .map(e -> toRecord(e, userDisplayById, stageNames, fieldLabels))
                 .toList();
     }
 
@@ -174,7 +207,8 @@ public class ChangeHistoryComponent {
 
     private ChangeHistoryRecord toRecord(ChangeHistory entity,
                                          Map<String, String> userDisplayById,
-                                         StageNameMaps stageNames) {
+                                         StageNameMaps stageNames,
+                                         Map<String, String> fieldLabels) {
         String userName = userDisplayById.get(entity.getUserId());
         String stageName = null;
         if (entity.getTaskInstanceId() != null && !entity.getTaskInstanceId().isBlank()) {
@@ -183,6 +217,8 @@ public class ChangeHistoryComponent {
         if (stageName == null && entity.getStageId() != null && !entity.getStageId().isBlank()) {
             stageName = stageNames.taskDefinitionKeyToName().get(entity.getStageId());
         }
+
+        String fieldLabel = fieldLabels.get(entity.getFieldName());
 
         return ChangeHistoryRecord.builder()
                 .id(entity.getId())
@@ -194,6 +230,7 @@ public class ChangeHistoryComponent {
                 .userName(userName)
                 .timestamp(entity.getTimestamp())
                 .fieldName(entity.getFieldName())
+                .fieldLabel(fieldLabel)
                 .oldValue(entity.getOldValue())
                 .newValue(entity.getNewValue())
                 .changeType(entity.getChangeType().name())
@@ -264,5 +301,68 @@ public class ChangeHistoryComponent {
 
     private record StageNameMaps(Map<String, String> taskInstanceIdToName,
                                  Map<String, String> taskDefinitionKeyToName) {
+    }
+
+    /**
+     * Resolve field labels from the PROCESS form configJson.
+     * Extracts field → title mappings from the form designer rule array,
+     * including sub-form fields.
+     */
+    private Map<String, String> resolveFieldLabels(String processInstanceId) {
+        Map<String, String> labels = new HashMap<>();
+        try {
+            ProcessInstance pi = processInstanceRepository.findById(processInstanceId).orElse(null);
+            if (pi == null || pi.getProcessDefinitionKey() == null) {
+                return labels;
+            }
+            String processDefKey = pi.getProcessDefinitionKey();
+
+            List<String> configJsonStrings = jdbcTemplate.query(
+                    """
+                    SELECT fd.config_json::text AS config_json
+                    FROM dw_form_definitions fd
+                    INNER JOIN dw_function_units fu ON fu.id = fd.function_unit_id
+                    WHERE fu.code = ?
+                    """,
+                    (rs, rowNum) -> rs.getString("config_json"),
+                    processDefKey.trim());
+
+            for (String raw : configJsonStrings) {
+                if (raw == null || raw.isBlank()) continue;
+                try {
+                    Map<String, Object> config = objectMapper.readValue(raw, new TypeReference<>() {});
+                    extractFieldLabelsFromConfig(config, labels);
+                } catch (Exception e) {
+                    log.debug("Could not parse configJson for field labels: {}", e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            log.debug("Could not resolve field labels for {}: {}", processInstanceId, e.getMessage());
+        }
+        return labels;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void extractFieldLabelsFromConfig(Map<String, Object> config, Map<String, String> labels) {
+        Object rule = config.get("rule");
+        if (rule instanceof List<?> rules) {
+            for (Object item : rules) {
+                if (item instanceof Map<?, ?> ruleItem) {
+                    Object field = ruleItem.get("field");
+                    Object title = ruleItem.get("title");
+                    if (field instanceof String f && title instanceof String t && !f.isBlank() && !t.isBlank()) {
+                        labels.putIfAbsent(f, t);
+                    }
+                }
+            }
+        }
+        Object subForms = config.get("subForms");
+        if (subForms instanceof Map<?, ?> subMap) {
+            for (Object subConfig : subMap.values()) {
+                if (subConfig instanceof Map<?, ?> sc) {
+                    extractFieldLabelsFromConfig((Map<String, Object>) sc, labels);
+                }
+            }
+        }
     }
 }

@@ -1,5 +1,7 @@
 package com.portal.component;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.portal.client.WorkflowEngineClient;
 import com.portal.dto.ChangeHistoryContext;
 import com.portal.exception.PortalException;
@@ -1790,10 +1792,9 @@ public class ProcessComponent {
      *   maxItemPrice             — 所有记录中最大的 total_price（Double）
      *   itemCount                — 子表记录总数（Integer）
      */
-    @SuppressWarnings("unchecked")
     /**
      * 发起流程时提交的表单变量写入 up_change_history，便于申请单详情「变更历史」展示。
-     * 排除引擎/快照内部键，避免噪声。
+     * 仅记录表单定义中的用户可见字段，排除引擎/快照内部键，避免噪声。
      */
     private void recordInitialSubmitChangeHistory(String processInstanceId,
                                                 String taskInstanceId,
@@ -1803,10 +1804,14 @@ public class ProcessComponent {
         if (variables == null || variables.isEmpty()) {
             return;
         }
+
+        // Resolve actual form field names from form definitions; only record those.
+        Set<String> formFieldNames = resolveFormFieldNames(variables);
+
         Map<String, Object> filtered = new LinkedHashMap<>();
         for (Map.Entry<String, Object> e : variables.entrySet()) {
             String k = e.getKey();
-            if ("initiator".equals(k) || k.startsWith("_snapshot_")) {
+            if (!formFieldNames.isEmpty() && !formFieldNames.contains(k)) {
                 continue;
             }
             filtered.put(k, e.getValue());
@@ -1825,6 +1830,56 @@ public class ProcessComponent {
         } catch (Exception e) {
             log.warn("Failed to record initial submit change history for process {}: {}",
                     processInstanceId, e.getMessage());
+        }
+    }
+
+    /**
+     * Extract user-visible form field names from the PROCESS form configJson for a given function unit code.
+     * Returns an empty set on failure (caller falls back to ChangeHistoryComponent blacklist).
+     */
+    private Set<String> resolveFormFieldNames(Map<String, Object> variables) {
+        Set<String> fields = new HashSet<>();
+        ObjectMapper mapper = new ObjectMapper();
+        try {
+            String sql = """
+                    SELECT fd.config_json::text AS config_json
+                    FROM dw_form_definitions fd
+                    WHERE fd.form_type = 'PROCESS'
+                    """;
+            List<String> configs = jdbcTemplate.query(sql, (rs, rowNum) -> rs.getString("config_json"));
+            for (String raw : configs) {
+                if (raw == null || raw.isBlank()) continue;
+                try {
+                    Map<String, Object> config = mapper.readValue(raw, new TypeReference<>() {});
+                    extractFieldNames(config, fields);
+                } catch (Exception ignored) { /* skip malformed */ }
+            }
+        } catch (Exception e) {
+            log.debug("resolveFormFieldNames failed: {}", e.getMessage());
+        }
+        return fields;
+    }
+
+    @SuppressWarnings("unchecked")
+    private void extractFieldNames(Map<String, Object> config, Set<String> fields) {
+        Object rule = config.get("rule");
+        if (rule instanceof List<?> rules) {
+            for (Object item : rules) {
+                if (item instanceof Map<?, ?> ruleItem) {
+                    Object field = ruleItem.get("field");
+                    if (field instanceof String f && !f.isBlank()) {
+                        fields.add(f);
+                    }
+                }
+            }
+        }
+        Object subForms = config.get("subForms");
+        if (subForms instanceof Map<?, ?> subMap) {
+            for (Object subConfig : subMap.values()) {
+                if (subConfig instanceof Map<?, ?> sc) {
+                    extractFieldNames((Map<String, Object>) sc, fields);
+                }
+            }
         }
     }
 

@@ -836,6 +836,7 @@ const loadTaskHistory = async () => {
         nodeId: item.activityId || `node_${index}`,
         nodeName: item.activityName || t('task.unknownNode'),
         status: getHistoryStatus(item.operationType),
+        action: getHistoryAction(item.operationType),
         assigneeName: item.operatorName || '-',
         comment: item.comment,
         createdTime: item.operationTime || '',
@@ -2007,6 +2008,17 @@ const getHistoryStatus = (operationType: string): 'completed' | 'current' | 'pen
     'PENDING': 'current'
   }
   return map[operationType] || 'completed'
+}
+
+const getHistoryAction = (operationType: string): 'approve' | 'reject' | 'transfer' | 'delegate' | 'withdraw' | 'submit' | undefined => {
+  const map: Record<string, 'approve' | 'reject' | 'transfer' | 'delegate' | 'withdraw' | 'submit'> = {
+    'SUBMIT': 'submit',
+    'APPROVE': 'approve',
+    'REJECT': 'reject',
+    'TRANSFER': 'transfer',
+    'DELEGATE': 'delegate',
+  }
+  return map[operationType]
 }
 
 const formatDate = (date?: string | number[]) => {
