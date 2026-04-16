@@ -97,6 +97,9 @@ onMounted(async () => {
 </script>
 
 <style lang="scss" scoped>
+$header-gradient-start: #DB0011;
+$header-gradient-end: #8B0000;
+
 .main-layout {
   height: 100vh;
 
@@ -110,15 +113,15 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background-color: #DB0011;
+  background: linear-gradient(135deg, $header-gradient-start 0%, $header-gradient-end 100%);
   color: white;
   padding: 0 20px;
   height: 60px;
 }
 
 .logo-text {
-  font-size: 20px;
-  font-weight: bold;
+  font-size: 18px;
+  font-weight: 600;
 }
 
 .header-right {

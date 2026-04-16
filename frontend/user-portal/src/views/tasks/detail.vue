@@ -2197,7 +2197,11 @@ const submitAction = async () => {
       ElMessage.success(t('task.urgeSuccess'))
     }
     actionDialogVisible.value = false
-    loadTaskDetail()
+    if (currentAction.value === 'transfer') {
+      router.push('/tasks')
+    } else {
+      loadTaskDetail()
+    }
   } catch (error) {
     ElMessage.error(t('task.operationFailed'))
   } finally {
