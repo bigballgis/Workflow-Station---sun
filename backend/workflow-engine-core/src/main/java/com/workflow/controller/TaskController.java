@@ -39,6 +39,7 @@ import jakarta.validation.Valid;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -213,17 +214,21 @@ public class TaskController {
         // For each task, take the latest comment message.
         // Transfer-typed comments are tracked separately so we can inject synthetic TRANSFER entries.
         Map<String, String> taskComments = new HashMap<>();
-        Map<String, Comment> taskTransferComments = new HashMap<>();
+        // Same runtime userTask keeps one taskId across multiple transfers; keep every transfer comment.
+        Map<String, List<Comment>> taskTransferCommentsByTaskId = new HashMap<>();
         try {
             List<Comment> allComments = taskService.getProcessInstanceComments(processInstanceId);
             if (allComments != null) {
                 for (Comment c : allComments) {
                     if (c.getTaskId() == null) continue;
                     if ("transfer".equals(c.getType())) {
-                        taskTransferComments.put(c.getTaskId(), c);
+                        taskTransferCommentsByTaskId.computeIfAbsent(c.getTaskId(), k -> new ArrayList<>()).add(c);
                     } else if (c.getFullMessage() != null && !c.getFullMessage().isBlank()) {
                         taskComments.put(c.getTaskId(), c.getFullMessage());
                     }
+                }
+                for (List<Comment> transferComments : taskTransferCommentsByTaskId.values()) {
+                    transferComments.sort(Comparator.comparing(Comment::getTime, Comparator.nullsLast(Comparator.naturalOrder())));
                 }
             }
         } catch (Exception e) {
@@ -336,53 +341,57 @@ public class TaskController {
         // Inject synthetic TRANSFER entries for tasks that have transfer comments.
         // Each transfer entry appears right before the corresponding task entry so the
         // timeline shows: ... → TRANSFER (by originator) → PENDING (current assignee).
-        if (!taskTransferComments.isEmpty()) {
-            List<Map<String, Object>> enrichedList = new ArrayList<>(historyList.size() + taskTransferComments.size());
+        int transferCommentCount = taskTransferCommentsByTaskId.values().stream().mapToInt(List::size).sum();
+        if (transferCommentCount > 0) {
+            List<Map<String, Object>> enrichedList = new ArrayList<>(historyList.size() + transferCommentCount);
             for (Map<String, Object> item : historyList) {
                 String tid = (String) item.get("taskId");
-                Comment tc = tid != null ? taskTransferComments.get(tid) : null;
-                if (tc != null) {
-                    Map<String, Object> transferItem = new HashMap<>();
-                    transferItem.put("id", item.get("id") + "_transfer");
-                    transferItem.put("taskId", tid);
-                    transferItem.put("taskName", item.get("taskName"));
-                    transferItem.put("activityId", item.get("activityId"));
-                    transferItem.put("activityName", item.get("activityName"));
-                    transferItem.put("activityType", "userTask");
-                    transferItem.put("operationType", "TRANSFER");
+                List<Comment> transferComments = tid != null ? taskTransferCommentsByTaskId.get(tid) : null;
+                if (transferComments != null) {
+                    for (Comment tc : transferComments) {
+                        Map<String, Object> transferItem = new HashMap<>();
+                        String commentId = tc.getId() != null ? tc.getId() : "noid";
+                        transferItem.put("id", item.get("id") + "_transfer_" + commentId);
+                        transferItem.put("taskId", tid);
+                        transferItem.put("taskName", item.get("taskName"));
+                        transferItem.put("activityId", item.get("activityId"));
+                        transferItem.put("activityName", item.get("activityName"));
+                        transferItem.put("activityType", "userTask");
+                        transferItem.put("operationType", "TRANSFER");
 
-                    String transferUserId = tc.getUserId();
-                    transferItem.put("operatorId", transferUserId);
-                    String transferOperatorName = transferUserId;
-                    if (transferUserId != null && !transferUserId.isEmpty()) {
-                        try {
-                            Map<String, Object> userInfo = adminCenterClient.getUserInfo(transferUserId);
-                            if (userInfo != null) {
-                                String fn = (String) userInfo.get("fullName");
-                                if (fn != null && !fn.isEmpty()) { transferOperatorName = fn; }
-                                else {
-                                    String dn = (String) userInfo.get("displayName");
-                                    if (dn != null && !dn.isEmpty()) { transferOperatorName = dn; }
+                        String transferUserId = tc.getUserId();
+                        transferItem.put("operatorId", transferUserId);
+                        String transferOperatorName = transferUserId;
+                        if (transferUserId != null && !transferUserId.isEmpty()) {
+                            try {
+                                Map<String, Object> userInfo = adminCenterClient.getUserInfo(transferUserId);
+                                if (userInfo != null) {
+                                    String fn = (String) userInfo.get("fullName");
+                                    if (fn != null && !fn.isEmpty()) { transferOperatorName = fn; }
                                     else {
-                                        String un = (String) userInfo.get("username");
-                                        if (un != null && !un.isEmpty()) { transferOperatorName = un; }
+                                        String dn = (String) userInfo.get("displayName");
+                                        if (dn != null && !dn.isEmpty()) { transferOperatorName = dn; }
+                                        else {
+                                            String un = (String) userInfo.get("username");
+                                            if (un != null && !un.isEmpty()) { transferOperatorName = un; }
+                                        }
                                     }
                                 }
+                            } catch (Exception e) {
+                                log.warn("Failed to resolve transfer user name for {}: {}", transferUserId, e.getMessage());
                             }
-                        } catch (Exception e) {
-                            log.warn("Failed to resolve transfer user name for {}: {}", transferUserId, e.getMessage());
                         }
+                        transferItem.put("operatorName", transferOperatorName);
+
+                        transferItem.put("operationTime", tc.getTime() != null
+                                ? tc.getTime().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime().toString()
+                                : item.get("operationTime"));
+                        String reason = tc.getFullMessage();
+                        transferItem.put("comment", reason != null && !reason.isBlank() ? reason : null);
+                        transferItem.put("duration", null);
+
+                        enrichedList.add(transferItem);
                     }
-                    transferItem.put("operatorName", transferOperatorName);
-
-                    transferItem.put("operationTime", tc.getTime() != null
-                            ? tc.getTime().toInstant().atZone(ZoneId.systemDefault()).toLocalDateTime().toString()
-                            : item.get("operationTime"));
-                    String reason = tc.getFullMessage();
-                    transferItem.put("comment", reason != null && !reason.isBlank() ? reason : null);
-                    transferItem.put("duration", null);
-
-                    enrichedList.add(transferItem);
                 }
                 enrichedList.add(item);
             }

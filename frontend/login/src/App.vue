@@ -2,14 +2,14 @@
   <div class="wrap">
     <div class="card">
       <h1>Workflow Platform</h1>
-      <p class="sub">统一登录</p>
+      <p class="sub">Unified Sign-In</p>
       <form @submit.prevent="onSubmit">
-        <label>用户名</label>
+        <label>Username</label>
         <input v-model="username" type="text" autocomplete="username" required />
-        <label>密码</label>
+        <label>Password</label>
         <input v-model="password" type="password" autocomplete="current-password" required />
         <p v-if="error" class="err">{{ error }}</p>
-        <button type="submit" :disabled="loading">{{ loading ? '登录中…' : '登录' }}</button>
+        <button type="submit" :disabled="loading">{{ loading ? 'Signing in...' : 'Sign In' }}</button>
       </form>
     </div>
   </div>
@@ -33,7 +33,7 @@ onMounted(() => {
   redirectUri = q.get('redirect_uri') || ''
   state = q.get('state') || ''
   if (!clientId || !redirectUri) {
-    error.value = '缺少 client_id 或 redirect_uri 参数'
+    error.value = 'Missing client_id or redirect_uri parameter.'
   }
 })
 
@@ -54,7 +54,7 @@ async function onSubmit() {
       })
     })
     if (!res.ok) {
-      error.value = '用户名或密码错误'
+      error.value = 'Invalid username or password.'
       return
     }
     const data = (await res.json()) as {
@@ -64,7 +64,7 @@ async function onSubmit() {
     }
     const code = data.authorizationCode
     if (!code || !data.redirectUri) {
-      error.value = '登录响应无效'
+      error.value = 'Invalid login response.'
       return
     }
     const u = new URL(data.redirectUri)
@@ -72,7 +72,7 @@ async function onSubmit() {
     if (data.state) u.searchParams.set('state', data.state)
     window.location.href = u.toString()
   } catch {
-    error.value = '网络错误'
+    error.value = 'Network error.'
   } finally {
     loading.value = false
   }

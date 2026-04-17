@@ -243,7 +243,7 @@ const toggleCollapse = () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background-color: var(--hsbc-red);
+  background: linear-gradient(135deg, var(--hsbc-red) 0%, #8B0000 100%);
   color: white;
   padding: 0 20px;
   height: var(--header-height);
