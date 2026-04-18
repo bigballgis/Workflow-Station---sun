@@ -206,7 +206,7 @@ Workflow-Station---sun/
 │   │   ├── *.yaml                   # 各服务（redis、kafka、n8n、kong、各后端与前端等）
 │   │   ├── config_map/<Environment>/  # 如 preprod；应用与 Kong 等配置
 │   │   ├── secret/<Environment>/
-│   │   ├── init-data/               # 数据库初始化 SQL（如 Flowable）
+│   │   ├── init-data/               # 离线 SQL：init-flowable、init-platform-schema（DDL）、init-platform-seed（种子）；见 README
 │   │   └── ps1/                     # apply-workflow-station-all.ps1 等
 │   ├── init-scripts/                # 数据库初始化 SQL
 │   └── README.md
@@ -554,6 +554,8 @@ cd deploy/init-scripts
 cd deploy/init-scripts
 psql -h {host} -p 5432 -U platform_{env} -d workflow_platform_{env} -f 00-schema/00-init-all-schemas-standalone.sql
 ```
+
+**无仓库工具链的新库**：`deploy/k8s/init-data/` 提供离线 SQL。**图形客户端**请按顺序执行 **`init-platform-schema/all-in-one-for-gui.sql`** → **`init-flowable/create/flowable.postgres.all.create.sql`** → **`init-platform-seed/all-in-one-for-gui.sql`**（纯 SQL；其中 seed **仅为 `01-admin`**，无 08/15/16 演示包）。需要完整演示数据时用 **`deploy/init-scripts/init-database.ps1`**。有 **`psql`** 时也可对上述三个文件执行 `psql -f`。详见 **`deploy/k8s/init-data/README.md`**。
 
 若库已初始化、仅需补开发者部署任务表，可单独执行：
 

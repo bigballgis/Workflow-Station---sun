@@ -206,6 +206,32 @@ spec:
           number: 8000
     timeout: 30s
 ---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: kong-shared-host-api-virtual-service
+  namespace: __NAMESPACE__
+spec:
+  hosts:
+  - __INGRESS_HOST__
+  gateways:
+  - workflow-platform-ingress-gateway
+  http:
+  - match:
+    - uri:
+        exact: /api
+    - uri:
+        prefix: /api/
+    retries:
+      attempts: 0
+    route:
+    - destination:
+        host: kong-service
+        subset: v1
+        port:
+          number: 8000
+    timeout: 30s
+---
 apiVersion: networking.istio.io/v1
 kind: Gateway
 metadata:
