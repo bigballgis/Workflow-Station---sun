@@ -40,7 +40,7 @@ envsubst < template > default.conf
 
 ## API 边缘与前端代理
 
-- **默认路径**：浏览器 → 前端 **nginx** → **`KONG_PROXY_URL`（Kong）** → 各后端（`deploy/kong/`、`deployment-kong.yaml`）。
+- **默认路径**：浏览器 → 前端 **nginx** → **`KONG_PROXY_URL`（Kong）** → 各后端（`deploy/kong/`、`deploy/k8s/kong.yaml`）。
 - **例外**：可按环境让 nginx **跳过 Kong、直连后端**（仅本地/特殊联调）；与 `project-context.mdc` 中「前端 ↔ 后端映射」表一致。
 
 ## 不部署的组件

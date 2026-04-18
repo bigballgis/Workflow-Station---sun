@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Apply manifests under deploy\k8s-istio-generated\secret\<Environment>\ with delete-before-apply.
+  Apply manifests under deploy\k8s\secret\<Environment>\ with delete-before-apply.
 .DESCRIPTION
   Secret files live per environment, e.g. secret\preprod\*.yml.
   - If -Select is omitted/empty: apply ALL secret manifests in that folder.

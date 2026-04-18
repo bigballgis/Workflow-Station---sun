@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Apply manifests under deploy\k8s-istio-generated\config_map\<Environment>\ with delete-before-apply.
+  Apply manifests under deploy\k8s\config_map\<Environment>\ with delete-before-apply.
 .DESCRIPTION
   Config files live per environment, e.g. config_map\preprod\*.yml.
   - If -Select is omitted/empty: apply ALL config_map manifests in that folder.

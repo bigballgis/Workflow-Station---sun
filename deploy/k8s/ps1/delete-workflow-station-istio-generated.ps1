@@ -2,7 +2,7 @@
 .SYNOPSIS
 	Render and delete manifests under .. with the same runtime overrides as apply-workflow-station-istio-generated.ps1.
 .DESCRIPTION
-	This script first renders the manifests from deploy\k8s-istio-generated using the same parameters
+	This script first renders the manifests from deploy\k8s using the same parameters
 	as apply-workflow-station-istio-generated.ps1, then deletes the rendered resources with kubectl.
 .PARAMETER Namespace
 	Target Kubernetes namespace.

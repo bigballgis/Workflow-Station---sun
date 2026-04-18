@@ -1,16 +1,16 @@
 # Istio 风格部署清单
 
-这组文件位于仓库路径 `deploy/k8s-istio-generated`，用于部署 Workflow Station 的 Istio 版本 Kubernetes 清单。
+这组文件位于仓库路径 `deploy/k8s`，用于部署 Workflow Station 的 Istio 版本 Kubernetes 清单。
 
 ## 推荐用法
 
-- 清单目录：本目录 [`deploy/k8s-istio-generated`](.)
+- 清单目录：本目录 [`deploy/k8s`](.)
 
-- 一键部署（推荐）：[deploy/k8s-istio-generated/ps1/apply-workflow-station-all.ps1](ps1/apply-workflow-station-all.ps1)（ConfigMap / Secret / Istio 按序执行；见 [ps1/README.md](ps1/README.md)）
+- 一键部署（推荐）：[deploy/k8s/ps1/apply-workflow-station-all.ps1](ps1/apply-workflow-station-all.ps1)（ConfigMap / Secret / Istio 按序执行；见 [ps1/README.md](ps1/README.md)）
 
-- 仅 Istio 清单：[deploy/k8s-istio-generated/ps1/apply-workflow-station-istio-generated.ps1](ps1/apply-workflow-station-istio-generated.ps1)
+- 仅 Istio 清单：[deploy/k8s/ps1/apply-workflow-station-istio-generated.ps1](ps1/apply-workflow-station-istio-generated.ps1)
 
-- 脚本说明：[deploy/k8s-istio-generated/ps1/README.md](ps1/README.md)
+- 脚本说明：[deploy/k8s/ps1/README.md](ps1/README.md)
 
 建议直接使用部署脚本，不要手工修改 YAML。
 
@@ -30,7 +30,7 @@
 
 6. 镜像仓库前缀
 
-其中前端入口已调整为与 [deploy/k8s/ingress.yaml](../k8s/ingress.yaml) 对齐的单域名多路径模式：
+其中前端入口已调整为与 [workflow-platform-ingress-gateway.yaml](workflow-platform-ingress-gateway.yaml) 对齐的单域名多路径模式：
 
 - `/login`
 
@@ -84,7 +84,7 @@
 
 如果需要：
 
-- 查看脚本参数、命令示例、常见问题，请看 [deploy/k8s-istio-generated/ps1/README.md](ps1/README.md)
+- 查看脚本参数、命令示例、常见问题，请看 [deploy/k8s/ps1/README.md](ps1/README.md)
 
 - **推荐**使用 [`apply-workflow-station-all.ps1`](ps1/apply-workflow-station-all.ps1) 一次部署（或 `-RenderOnly` 仅渲染到本地目录）。ConfigMap / Secret 源文件按环境分子目录：`config_map/<Environment>/`、`secret/<Environment>/`（默认 `preprod`）。分步执行或参数说明见 [ps1/README.md](ps1/README.md)。
 

@@ -2,7 +2,7 @@
 .SYNOPSIS
 	Render and deploy manifests under .. with runtime namespace and image overrides.
 .DESCRIPTION
-	This script reads YAML manifests from deploy\k8s-istio-generated, replaces:
+	This script reads YAML manifests from deploy\k8s, replaces:
 		- every `namespace:` value with `-Namespace`
 		- optional `__NAMESPACE__` placeholders with `-Namespace`
 		- every container image tag with `-ImageTag`
@@ -42,8 +42,8 @@
 .PARAMETER InitializeDatabase
 	Before applying Kubernetes manifests, initialize the external PostgreSQL database once.
 	When explicit DB parameters are omitted, the script derives them from
-	deploy/k8s-istio-generated/config_map/<Environment>/configmap-workflow-platform-config.yml and
-	deploy/k8s-istio-generated/secret/<Environment>/secret-workflow-paltform.yml (default Environment: preprod).
+	deploy/k8s/config_map/<Environment>/configmap-workflow-platform-config.yml and
+	deploy/k8s/secret/<Environment>/secret-workflow-paltform.yml (default Environment: preprod).
 .PARAMETER DbSchema
 	Target PostgreSQL schema for init-scripts. When omitted, the script tries to parse
 	`currentSchema` from `SPRING_DATASOURCE_URL`; otherwise defaults to `public`.
@@ -397,8 +397,8 @@ function Get-DatabaseSettings {
 		DbPassword = $DbPassword
 		DbSchema = $DbSchema
 	}
-	$configMapPath = Join-Path $baseDir (Join-Path 'k8s-istio-generated' (Join-Path 'config_map' (Join-Path $Environment 'configmap-workflow-platform-config.yml')))
-	$secretPath = Join-Path $baseDir (Join-Path 'k8s-istio-generated' (Join-Path 'secret' (Join-Path $Environment 'secret-workflow-paltform.yml')))
+	$configMapPath = Join-Path $baseDir (Join-Path 'k8s' (Join-Path 'config_map' (Join-Path $Environment 'configmap-workflow-platform-config.yml')))
+	$secretPath = Join-Path $baseDir (Join-Path 'k8s' (Join-Path 'secret' (Join-Path $Environment 'secret-workflow-paltform.yml')))
 	$jdbcUrl = Get-ConfigValueFromYaml -Path $configMapPath -Key 'SPRING_DATASOURCE_URL'
 	if (-not [string]::IsNullOrWhiteSpace($jdbcUrl)) {
 		$match = [regex]::Match($jdbcUrl, '^jdbc:postgresql://(?<host>[^:/?]+)(:(?<port>\d+))?/(?<db>[^?]+)(\?(?<query>.*))?$')
@@ -510,7 +510,7 @@ if (-not $RenderOnly) {
 	Assert-Kubectl
 }
 $baseDir = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
-$manifestDir = Join-Path $baseDir 'k8s-istio-generated'
+$manifestDir = Join-Path $baseDir 'k8s'
 Write-Host "Namespace:             $Namespace"
 Write-Host "ImageTag:              $ImageTag"
 Write-Host "Environment:           $Environment (config_map/secret paths for DB init)"

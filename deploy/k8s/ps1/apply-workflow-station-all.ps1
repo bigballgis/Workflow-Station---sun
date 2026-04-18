@@ -1,11 +1,11 @@
 <#
 .SYNOPSIS
-  One-shot: apply ConfigMap, Secret, then Istio manifests for deploy/k8s-istio-generated.
+  One-shot: apply ConfigMap, Secret, then Istio manifests for deploy/k8s.
 .DESCRIPTION
   Reads from:
-    deploy/k8s-istio-generated/config_map/<Environment>/
-    deploy/k8s-istio-generated/secret/<Environment>/
-    deploy/k8s-istio-generated/*.yaml (via apply-workflow-station-istio-generated.ps1)
+    deploy/k8s/config_map/<Environment>/
+    deploy/k8s/secret/<Environment>/
+    deploy/k8s/*.yaml (via apply-workflow-station-istio-generated.ps1)
 
   Order: config_map -> secret -> istio-generated.
 
