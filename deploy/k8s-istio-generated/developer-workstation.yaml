@@ -1,0 +1,172 @@
+# Replace __BASE_DOMAIN__ with your real domain suffix before applying.
+# This service is DEV-only in the original k8s folder; keep it isolated if you do not want it in SIT/UAT/PROD.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: developer-workstation
+  namespace: __NAMESPACE__
+  labels:
+    app: developer-workstation
+    component: backend
+    app.kubernetes.io/name: developer-workstation
+    app.kubernetes.io/instance: developer-workstation
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: developer-workstation
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/proxyCPU: 50m
+        sidecar.istio.io/proxyCPULimit: 200m
+        sidecar.istio.io/proxyMemory: 400Mi
+        sidecar.istio.io/proxyMemoryLimit: 400Mi
+        sidecar.istio.io/inject: "true"
+        sidecar.istio.io/rewriteAppHTTPProbers: "true"
+        proxy.istio.io/config: '{ "holdApplicationUntilProxyStarts": true }'
+      labels:
+        app: developer-workstation
+        component: backend
+        app.kubernetes.io/name: developer-workstation
+        app.kubernetes.io/instance: developer-workstation
+    spec:
+      imagePullSecrets:
+      - name: nexus3
+      containers:
+      - name: developer-workstation
+        image: nexus3.hk.hsbc:18080/hsbc-238092-cmbhase-bisp/workflow-station2/developer-workstation:__IMAGE_TAG__
+        imagePullPolicy: Always
+        envFrom:
+        - configMapRef:
+            name: workflow-platform-config
+        - secretRef:
+            name: workflow-platform-secrets
+        ports:
+        - containerPort: 8080
+          name: http
+        volumeMounts:
+        - name: uploads-storage
+          mountPath: /app/uploads
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /api/v1/actuator/health
+            port: 8080
+          initialDelaySeconds: 90
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /api/v1/actuator/health
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+      volumes:
+      - name: uploads-storage
+        persistentVolumeClaim:
+          claimName: developer-workstation-uploads-pvc
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: developer-workstation-uploads-pvc
+  namespace: __NAMESPACE__
+  labels:
+    app: developer-workstation
+spec:
+  storageClassName: pwx-standard
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: developer-workstation-service
+  namespace: __NAMESPACE__
+  labels:
+    app: developer-workstation
+spec:
+  selector:
+    app: developer-workstation
+  ports:
+  - name: http
+    protocol: TCP
+    port: 8080
+    targetPort: 8080
+  type: ClusterIP
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: developer-workstation-destination-rule
+  namespace: __NAMESPACE__
+spec:
+  host: developer-workstation-service
+  subsets:
+  - name: v1
+    labels:
+      app: developer-workstation
+---
+apiVersion: networking.istio.io/v1beta1
+kind: Sidecar
+metadata:
+  name: developer-workstation-sidecar
+  namespace: __NAMESPACE__
+spec:
+  workloadSelector:
+    labels:
+      app: developer-workstation
+  egress:
+  - hosts:
+    - ./*
+    - istio-system/*
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: developer-workstation-virtual-service
+  namespace: __NAMESPACE__
+spec:
+  hosts:
+  - workflow-station-backend-developer-workstation.__BASE_DOMAIN__
+  gateways:
+  - developer-workstation-gateway
+  http:
+  - retries:
+      attempts: 0
+    route:
+    - destination:
+        host: developer-workstation-service
+        subset: v1
+        port:
+          number: 8080
+    timeout: 30s
+---
+apiVersion: networking.istio.io/v1
+kind: Gateway
+metadata:
+  name: developer-workstation-gateway
+  namespace: __NAMESPACE__
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - workflow-station-backend-developer-workstation.__BASE_DOMAIN__

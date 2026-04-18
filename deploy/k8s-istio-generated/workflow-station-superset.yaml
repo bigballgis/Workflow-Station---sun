@@ -1,0 +1,142 @@
+# Replace __BASE_DOMAIN__ with your real domain suffix before applying.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hase-hermes-workflow-superset
+  namespace: __NAMESPACE__
+  labels:
+    app: hase-hermes-workflow-superset
+    component: analytics
+    app.kubernetes.io/name: hase-hermes-workflow-superset
+    app.kubernetes.io/instance: hase-hermes-workflow-superset
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: hase-hermes-workflow-superset
+      app.kubernetes.io/instance: hase-hermes-workflow-superset
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/proxyCPU: 50m
+        sidecar.istio.io/proxyCPULimit: 200m
+        sidecar.istio.io/proxyMemory: 400Mi
+        sidecar.istio.io/proxyMemoryLimit: 400Mi
+        sidecar.istio.io/inject: "true"
+        sidecar.istio.io/rewriteAppHTTPProbers: "true"
+        proxy.istio.io/config: '{ "holdApplicationUntilProxyStarts": true }'
+      labels:
+        app: hase-hermes-workflow-superset
+        component: analytics
+        app.kubernetes.io/name: hase-hermes-workflow-superset
+        app.kubernetes.io/instance: hase-hermes-workflow-superset
+    spec:
+      imagePullSecrets:
+      - name: nexus3
+      containers:
+      - name: hase-hermes-workflow-superset
+        image: nexus3.hk.hsbc:18080/hsbc-238092-cmbhase-bisp/workflow-station2/superset:6.0.0
+        imagePullPolicy: Always
+        envFrom:
+        - configMapRef:
+            name: workflow-platform-config
+        - secretRef:
+            name: workflow-platform-secrets
+        ports:
+        - containerPort: 8088
+          name: http
+        resources:
+          requests:
+            memory: "2000Mi"
+            cpu: "600m"
+          limits:
+            memory: "3600Mi"
+            cpu: "1000m"
+        volumeMounts:
+        - name: superset-config
+          mountPath: /app/pythonpath/superset_config.py
+          subPath: superset_config.py
+      volumes:
+      - name: superset-config
+        configMap:
+          name: hase-hermes-workflow-superset-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: hase-hermes-workflow-superset
+  namespace: __NAMESPACE__
+  labels:
+    app: hase-hermes-workflow-superset
+spec:
+  selector:
+    app: hase-hermes-workflow-superset
+  ports:
+  - name: http
+    protocol: TCP
+    port: 80
+    targetPort: 8088
+  type: ClusterIP
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: hase-hermes-workflow-superset-destination-rule
+  namespace: __NAMESPACE__
+spec:
+  host: hase-hermes-workflow-superset
+  subsets:
+  - name: v1
+    labels:
+      app: hase-hermes-workflow-superset
+---
+apiVersion: networking.istio.io/v1beta1
+kind: Sidecar
+metadata:
+  name: hase-hermes-workflow-superset-sidecar
+  namespace: __NAMESPACE__
+spec:
+  workloadSelector:
+    labels:
+      app: hase-hermes-workflow-superset
+  egress:
+  - hosts:
+    - ./*
+    - istio-system/*
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: hase-hermes-workflow-superset-virtual-service
+  namespace: __NAMESPACE__
+spec:
+  hosts:
+  - hermes-workflow-superset-internal-proxy.__BASE_DOMAIN__
+  gateways:
+  - hase-hermes-workflow-superset-gateway
+  http:
+  - retries:
+      attempts: 0
+    route:
+    - destination:
+        host: hase-hermes-workflow-superset
+        subset: v1
+        port:
+          number: 80
+    timeout: 30s
+---
+apiVersion: networking.istio.io/v1
+kind: Gateway
+metadata:
+  name: hase-hermes-workflow-superset-gateway
+  namespace: __NAMESPACE__
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - hermes-workflow-superset-internal-proxy.__BASE_DOMAIN__

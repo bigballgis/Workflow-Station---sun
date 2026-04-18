@@ -1,14 +1,14 @@
-# =====================================================
-# Redis Deployment
-# =====================================================
+# Replace __BASE_DOMAIN__ with your real domain suffix before applying.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: redis
-  namespace: workflow-platform-sit
+  namespace: __NAMESPACE__
   labels:
     app: redis
     component: infrastructure
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/instance: redis
 spec:
   replicas: 1
   selector:
@@ -19,20 +19,25 @@ spec:
       labels:
         app: redis
         component: infrastructure
+        app.kubernetes.io/name: redis
+        app.kubernetes.io/instance: redis
     spec:
+      imagePullSecrets:
+      - name: nexus3
       containers:
       - name: redis
-        image: redis:7.2-alpine
+        #image: nexus3.hk.hsbc:18080/hsbc-238092-cmbhase-bisp/workflow-station2/redis:__IMAGE_TAG__
+        image: nexus3.hk.hsbc:18080/hsbc-238092-cmbhase-bisp/workflow-station2/redis:7.2
         command: ["redis-server", "--appendonly", "yes", "--requirepass", "$(REDIS_PASSWORD)"]
-        ports:
-        - containerPort: 6379
-          name: redis
         env:
         - name: REDIS_PASSWORD
           valueFrom:
             secretKeyRef:
               name: workflow-platform-secrets
               key: SPRING_REDIS_PASSWORD
+        ports:
+        - containerPort: 6379
+          name: redis
         resources:
           requests:
             memory: "128Mi"
@@ -67,28 +72,27 @@ spec:
       - name: redis-data
         persistentVolumeClaim:
           claimName: redis-data-pvc
-
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: redis-data-pvc
-  namespace: workflow-platform-sit
+  namespace: __NAMESPACE__
   labels:
     app: redis
 spec:
+  storageClassName: pwx-standard
   accessModes:
   - ReadWriteOnce
   resources:
     requests:
       storage: 2Gi
-
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: redis-service
-  namespace: workflow-platform-sit
+  namespace: __NAMESPACE__
   labels:
     app: redis
 spec:
@@ -96,6 +100,72 @@ spec:
     app: redis
   ports:
   - name: redis
+    protocol: TCP
     port: 6379
     targetPort: 6379
   type: ClusterIP
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: redis-destination-rule
+  namespace: __NAMESPACE__
+spec:
+  host: redis-service
+  subsets:
+  - name: v1
+    labels:
+      app: redis
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 100
+        connectTimeout: 30s
+---
+apiVersion: networking.istio.io/v1beta1
+kind: Sidecar
+metadata:
+  name: redis-sidecar
+  namespace: __NAMESPACE__
+spec:
+  workloadSelector:
+    labels:
+      app: redis
+  egress:
+  - hosts:
+    - ./*
+    - istio-system/*
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: redis-virtual-service
+  namespace: __NAMESPACE__
+spec:
+  hosts:
+  - workflow-station-redis.__BASE_DOMAIN__
+  gateways:
+  - redis-gateway
+  tcp:
+  - route:
+    - destination:
+        host: redis-service
+        subset: v1
+        port:
+          number: 6379
+---
+apiVersion: networking.istio.io/v1
+kind: Gateway
+metadata:
+  name: redis-gateway
+  namespace: __NAMESPACE__
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 6379
+      name: redis-tcp
+      protocol: TCP
+    hosts:
+    - workflow-station-redis.__BASE_DOMAIN__

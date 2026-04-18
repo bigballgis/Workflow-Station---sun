@@ -1,14 +1,14 @@
-# =====================================================
-# Kafka Deployment (KRaft mode - no ZooKeeper)
-# =====================================================
+# Replace __BASE_DOMAIN__ with your real domain suffix before applying.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: kafka
-  namespace: workflow-platform-sit
+  namespace: __NAMESPACE__
   labels:
     app: kafka
     component: infrastructure
+    app.kubernetes.io/name: kafka
+    app.kubernetes.io/instance: kafka
 spec:
   replicas: 1
   selector:
@@ -19,10 +19,20 @@ spec:
       labels:
         app: kafka
         component: infrastructure
+        app.kubernetes.io/name: kafka
+        app.kubernetes.io/instance: kafka
     spec:
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+      imagePullSecrets:
+      - name: nexus3
       containers:
       - name: kafka
-        image: confluentinc/cp-kafka:7.5.3
+        #image: nexus3.hk.hsbc:18080/hsbc-238092-cmbhase-bisp/workflow-station2/cp-kafka:__IMAGE_TAG__
+        image: nexus3.hk.hsbc:18080/hsbc-238092-cmbhase-bisp/workflow-station2/kafka:3.6.2
         ports:
         - containerPort: 9092
           name: external
@@ -63,21 +73,15 @@ spec:
             memory: "1Gi"
             cpu: "1000m"
         readinessProbe:
-          exec:
-            command:
-            - /bin/sh
-            - -c
-            - kafka-broker-api-versions --bootstrap-server localhost:29092 > /dev/null 2>&1
+          tcpSocket:
+            port: 29092
           initialDelaySeconds: 30
           periodSeconds: 10
           timeoutSeconds: 10
           failureThreshold: 5
         livenessProbe:
-          exec:
-            command:
-            - /bin/sh
-            - -c
-            - kafka-broker-api-versions --bootstrap-server localhost:29092 > /dev/null 2>&1
+          tcpSocket:
+            port: 29092
           initialDelaySeconds: 60
           periodSeconds: 30
           timeoutSeconds: 10
@@ -89,28 +93,27 @@ spec:
       - name: kafka-data
         persistentVolumeClaim:
           claimName: kafka-data-pvc
-
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: kafka-data-pvc
-  namespace: workflow-platform-sit
+  namespace: __NAMESPACE__
   labels:
     app: kafka
 spec:
+  storageClassName: pwx-standard
   accessModes:
   - ReadWriteOnce
   resources:
     requests:
       storage: 5Gi
-
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: kafka-service
-  namespace: workflow-platform-sit
+  namespace: __NAMESPACE__
   labels:
     app: kafka
 spec:
@@ -118,9 +121,76 @@ spec:
     app: kafka
   ports:
   - name: external
+    protocol: TCP
     port: 9092
     targetPort: 9092
   - name: internal
+    protocol: TCP
     port: 29092
     targetPort: 29092
   type: ClusterIP
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: kafka-destination-rule
+  namespace: __NAMESPACE__
+spec:
+  host: kafka-service
+  subsets:
+  - name: v1
+    labels:
+      app: kafka
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: 100
+        connectTimeout: 30s
+---
+apiVersion: networking.istio.io/v1beta1
+kind: Sidecar
+metadata:
+  name: kafka-sidecar
+  namespace: __NAMESPACE__
+spec:
+  workloadSelector:
+    labels:
+      app: kafka
+  egress:
+  - hosts:
+    - ./*
+    - istio-system/*
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: kafka-virtual-service
+  namespace: __NAMESPACE__
+spec:
+  hosts:
+  - workflow-station-backend-kafka.__BASE_DOMAIN__
+  gateways:
+  - kafka-gateway
+  tcp:
+  - route:
+    - destination:
+        host: kafka-service
+        subset: v1
+        port:
+          number: 9092
+---
+apiVersion: networking.istio.io/v1
+kind: Gateway
+metadata:
+  name: kafka-gateway
+  namespace: __NAMESPACE__
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 9092
+      name: kafka-tcp
+      protocol: TCP
+    hosts:
+    - workflow-station-backend-kafka.__BASE_DOMAIN__

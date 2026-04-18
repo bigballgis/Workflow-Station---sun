@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: hase-hermes-workflow-superset-config
+  namespace: __NAMESPACE__
+data:
+  superset_config.py: |
+    import os
+    
+    FEATURE_FLAGS = {
+        "EMBEDDED_SUPERSET": True,
+    }
+
+    SECRET_KEY = os.getenv("SUPERSET_SECRET_KEY", "replace-this-with-a-real-secret-key")
+    GUEST_ROLE_NAME = os.getenv("SUPERSET_GUEST_ROLE_NAME", "Gamma")
+    ENABLE_PROXY_FIX = True
+    TALISMAN_ENABLED = False
+    WTF_CSRF_ENABLED = True
+
+    SESSION_COOKIE_SAMESITE = os.getenv("SUPERSET_SESSION_COOKIE_SAMESITE", "Lax")
+    SESSION_COOKIE_SECURE = os.getenv("SUPERSET_SESSION_COOKIE_SECURE", "false").lower() == "true"
+
+    SQLALCHEMY_DATABASE_URI = os.getenv(
+        "SUPERSET_DATABASE_URI",
+        "sqlite:////app/superset_home/superset.db",
+    )
+
+    MAPBOX_API_KEY = os.getenv("MAPBOX_API_KEY", "")

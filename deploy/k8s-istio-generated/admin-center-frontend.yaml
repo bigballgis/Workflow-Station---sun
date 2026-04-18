@@ -1,0 +1,135 @@
+# Replace __INGRESS_HOST__ with your real ingress host before applying.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: admin-center-frontend
+  namespace: __NAMESPACE__
+  labels:
+    app: admin-center-frontend
+    component: frontend
+    app.kubernetes.io/name: admin-center-frontend
+    app.kubernetes.io/instance: admin-center-frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: admin-center-frontend
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/proxyCPU: 50m
+        sidecar.istio.io/proxyCPULimit: 200m
+        sidecar.istio.io/proxyMemory: 400Mi
+        sidecar.istio.io/proxyMemoryLimit: 400Mi
+        sidecar.istio.io/inject: "true"
+        sidecar.istio.io/rewriteAppHTTPProbers: "true"
+        proxy.istio.io/config: '{ "holdApplicationUntilProxyStarts": true }'
+      labels:
+        app: admin-center-frontend
+        component: frontend
+        app.kubernetes.io/name: admin-center-frontend
+        app.kubernetes.io/instance: admin-center-frontend
+    spec:
+      imagePullSecrets:
+      - name: nexus3
+      containers:
+      - name: admin-center-frontend
+        image: nexus3.hk.hsbc:18080/hsbc-238092-cmbhase-bisp/workflow-station2/admin-center-frontend:__IMAGE_TAG__
+        imagePullPolicy: Always
+        env:
+        - name: KONG_PROXY_URL
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: KONG_PROXY_URL
+        ports:
+        - containerPort: 80
+          name: http
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /admin/
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /admin/
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: admin-center-frontend-service
+  namespace: __NAMESPACE__
+  labels:
+    app: admin-center-frontend
+spec:
+  selector:
+    app: admin-center-frontend
+  ports:
+  - name: http
+    protocol: TCP
+    port: 80
+    targetPort: 80
+  type: ClusterIP
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: admin-center-frontend-destination-rule
+  namespace: __NAMESPACE__
+spec:
+  host: admin-center-frontend-service
+  subsets:
+  - name: v1
+    labels:
+      app: admin-center-frontend
+---
+apiVersion: networking.istio.io/v1beta1
+kind: Sidecar
+metadata:
+  name: admin-center-frontend-sidecar
+  namespace: __NAMESPACE__
+spec:
+  workloadSelector:
+    labels:
+      app: admin-center-frontend
+  egress:
+  - hosts:
+    - ./*
+    - istio-system/*
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: admin-center-frontend-virtual-service
+  namespace: __NAMESPACE__
+spec:
+  hosts:
+  - __INGRESS_HOST__
+  gateways:
+  - workflow-platform-ingress-gateway
+  http:
+  - match:
+    - uri:
+        exact: /admin
+    - uri:
+        prefix: /admin/
+    retries:
+      attempts: 0
+    route:
+    - destination:
+        host: admin-center-frontend-service
+        subset: v1
+        port:
+          number: 80
+    timeout: 30s

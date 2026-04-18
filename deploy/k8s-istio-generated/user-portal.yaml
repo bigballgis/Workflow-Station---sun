@@ -1,0 +1,149 @@
+# Replace __BASE_DOMAIN__ with your real domain suffix before applying.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-portal
+  namespace: __NAMESPACE__
+  labels:
+    app: user-portal
+    component: backend
+    app.kubernetes.io/name: user-portal
+    app.kubernetes.io/instance: user-portal
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: user-portal
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/proxyCPU: 50m
+        sidecar.istio.io/proxyCPULimit: 200m
+        sidecar.istio.io/proxyMemory: 400Mi
+        sidecar.istio.io/proxyMemoryLimit: 400Mi
+        sidecar.istio.io/inject: "true"
+        sidecar.istio.io/rewriteAppHTTPProbers: "true"
+        proxy.istio.io/config: '{ "holdApplicationUntilProxyStarts": true }'
+      labels:
+        app: user-portal
+        component: backend
+        app.kubernetes.io/name: user-portal
+        app.kubernetes.io/instance: user-portal
+    spec:
+      imagePullSecrets:
+      - name: nexus3
+      containers:
+      - name: user-portal
+        image: nexus3.hk.hsbc:18080/hsbc-238092-cmbhase-bisp/workflow-station2/user-portal:__IMAGE_TAG__
+        imagePullPolicy: Always
+        envFrom:
+        - configMapRef:
+            name: workflow-platform-config
+        - secretRef:
+            name: workflow-platform-secrets
+        ports:
+        - containerPort: 8080
+          name: http
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /api/portal/actuator/health
+            port: 8080
+          initialDelaySeconds: 90
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /api/portal/actuator/health
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-portal-service
+  namespace: __NAMESPACE__
+  labels:
+    app: user-portal
+spec:
+  selector:
+    app: user-portal
+  ports:
+  - name: http
+    protocol: TCP
+    port: 8080
+    targetPort: 8080
+  type: ClusterIP
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: user-portal-destination-rule
+  namespace: __NAMESPACE__
+spec:
+  host: user-portal-service
+  subsets:
+  - name: v1
+    labels:
+      app: user-portal
+---
+apiVersion: networking.istio.io/v1beta1
+kind: Sidecar
+metadata:
+  name: user-portal-sidecar
+  namespace: __NAMESPACE__
+spec:
+  workloadSelector:
+    labels:
+      app: user-portal
+  egress:
+  - hosts:
+    - ./*
+    - istio-system/*
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: user-portal-virtual-service
+  namespace: __NAMESPACE__
+spec:
+  hosts:
+  - workflow-station-backend-user-portal.__BASE_DOMAIN__
+  gateways:
+  - user-portal-gateway
+  http:
+  - retries:
+      attempts: 0
+    route:
+    - destination:
+        host: user-portal-service
+        subset: v1
+        port:
+          number: 8080
+    timeout: 30s
+---
+apiVersion: networking.istio.io/v1
+kind: Gateway
+metadata:
+  name: user-portal-gateway
+  namespace: __NAMESPACE__
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - workflow-station-backend-user-portal.__BASE_DOMAIN__

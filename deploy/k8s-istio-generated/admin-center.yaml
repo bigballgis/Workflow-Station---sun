@@ -1,0 +1,164 @@
+# Replace __BASE_DOMAIN__ with your real domain suffix before applying.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: admin-center
+  namespace: __NAMESPACE__
+  labels:
+    app: admin-center
+    component: backend
+    app.kubernetes.io/name: admin-center
+    app.kubernetes.io/instance: admin-center
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: admin-center
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/proxyCPU: 50m
+        sidecar.istio.io/proxyCPULimit: 200m
+        sidecar.istio.io/proxyMemory: 400Mi
+        sidecar.istio.io/proxyMemoryLimit: 400Mi
+        sidecar.istio.io/inject: "true"
+        sidecar.istio.io/rewriteAppHTTPProbers: "true"
+        proxy.istio.io/config: '{ "holdApplicationUntilProxyStarts": true }'
+      labels:
+        app: admin-center
+        component: backend
+        app.kubernetes.io/name: admin-center
+        app.kubernetes.io/instance: admin-center
+    spec:
+      imagePullSecrets:
+      - name: nexus3
+      containers:
+      - name: admin-center
+        image: nexus3.hk.hsbc:18080/hsbc-238092-cmbhase-bisp/workflow-station2/admin-center:__IMAGE_TAG__
+        imagePullPolicy: Always
+        envFrom:
+        - configMapRef:
+            name: workflow-platform-config
+        - secretRef:
+            name: workflow-platform-secrets
+        env:
+        - name: MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED
+          value: "true"
+        - name: MANAGEMENT_HEALTH_LIVENESSSTATE_ENABLED
+          value: "true"
+        - name: MANAGEMENT_HEALTH_READINESSSTATE_ENABLED
+          value: "true"
+        ports:
+        - containerPort: 8080
+          name: http
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        startupProbe:
+          httpGet:
+            path: /api/v1/admin/actuator/health/liveness
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 18
+        livenessProbe:
+          httpGet:
+            path: /api/v1/admin/actuator/health/liveness
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 15
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /api/v1/admin/actuator/health/readiness
+            port: 8080
+          initialDelaySeconds: 45
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 6
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: admin-center-service
+  namespace: __NAMESPACE__
+  labels:
+    app: admin-center
+spec:
+  selector:
+    app: admin-center
+  ports:
+  - name: http
+    protocol: TCP
+    port: 8080
+    targetPort: 8080
+  type: ClusterIP
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: admin-center-destination-rule
+  namespace: __NAMESPACE__
+spec:
+  host: admin-center-service
+  subsets:
+  - name: v1
+    labels:
+      app: admin-center
+---
+apiVersion: networking.istio.io/v1beta1
+kind: Sidecar
+metadata:
+  name: admin-center-sidecar
+  namespace: __NAMESPACE__
+spec:
+  workloadSelector:
+    labels:
+      app: admin-center
+  egress:
+  - hosts:
+    - ./*
+    - istio-system/*
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: admin-center-virtual-service
+  namespace: __NAMESPACE__
+spec:
+  hosts:
+  - workflow-station-backend-admin-center.__BASE_DOMAIN__
+  gateways:
+  - admin-center-gateway
+  http:
+  - retries:
+      attempts: 0
+    route:
+    - destination:
+        host: admin-center-service
+        subset: v1
+        port:
+          number: 8080
+    timeout: 30s
+---
+apiVersion: networking.istio.io/v1
+kind: Gateway
+metadata:
+  name: admin-center-gateway
+  namespace: __NAMESPACE__
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - workflow-station-backend-admin-center.__BASE_DOMAIN__

@@ -1,0 +1,27 @@
+# Shared single-host gateway for frontend path-based routing.
+# Replace __INGRESS_HOST__ with your real ingress host before applying.
+# Replace __INGRESS_TLS_SECRET__ with the TLS secret on the Istio ingressgateway.
+apiVersion: networking.istio.io/v1
+kind: Gateway
+metadata:
+  name: workflow-platform-ingress-gateway
+  namespace: __NAMESPACE__
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - __INGRESS_HOST__
+  - port:
+      number: 443
+      name: https
+      protocol: HTTPS
+    tls:
+      mode: SIMPLE
+      credentialName: __INGRESS_TLS_SECRET__
+    hosts:
+    - __INGRESS_HOST__

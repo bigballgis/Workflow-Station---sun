@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - workflow-platform-ingress-gateway.yaml
+  - redis.yaml
+  - kafka.yaml
+  - n8n.yaml
+  - workflow-station-superset.yaml
+  - workflow-engine.yaml
+  - admin-center.yaml
+  - user-portal.yaml
+  - kong.yaml
+  - admin-center-frontend.yaml
+  - user-portal-frontend.yaml
+  - platform-login-frontend.yaml

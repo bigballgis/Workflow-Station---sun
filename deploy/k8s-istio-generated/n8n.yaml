@@ -1,0 +1,243 @@
+# Replace __BASE_DOMAIN__ with your real domain suffix before applying.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: n8n
+  namespace: __NAMESPACE__
+  labels:
+    app: n8n
+    component: automation
+    app.kubernetes.io/name: n8n
+    app.kubernetes.io/instance: n8n
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: n8n
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/proxyCPU: 50m
+        sidecar.istio.io/proxyCPULimit: 200m
+        sidecar.istio.io/proxyMemory: 400Mi
+        sidecar.istio.io/proxyMemoryLimit: 400Mi
+        sidecar.istio.io/inject: "true"
+        sidecar.istio.io/rewriteAppHTTPProbers: "true"
+        proxy.istio.io/config: '{ "holdApplicationUntilProxyStarts": true }'
+      labels:
+        app: n8n
+        component: automation
+        app.kubernetes.io/name: n8n
+        app.kubernetes.io/instance: n8n
+    spec:
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+      imagePullSecrets:
+      - name: nexus3
+      containers:
+      - name: n8n
+        #image: nexus3.hk.hsbc:18080/hsbc-238092-cmbhase-bisp/workflow-station2/n8n:__IMAGE_TAG__
+        image: nexus3.hk.hsbc:18080/hsbc-238092-cmbhase-bisp/workflow-station2/n8n:1.89.2
+        imagePullPolicy: Always
+        securityContext:
+          runAsUser: 1000
+          runAsGroup: 1000
+        env:
+        - name: DB_TYPE
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: N8N_DB_TYPE
+        - name: DB_POSTGRESDB_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: N8N_DB_POSTGRESDB_HOST
+        - name: DB_POSTGRESDB_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: N8N_DB_POSTGRESDB_PORT
+        - name: DB_POSTGRESDB_DATABASE
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: N8N_DB_POSTGRESDB_DATABASE
+        - name: DB_POSTGRESDB_SCHEMA
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: N8N_DB_POSTGRESDB_SCHEMA
+        - name: DB_POSTGRESDB_USER
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: N8N_DB_POSTGRESDB_USER
+        - name: DB_POSTGRESDB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: workflow-platform-secrets
+              key: N8N_DB_POSTGRESDB_PASSWORD
+        - name: N8N_ENCRYPTION_KEY
+          valueFrom:
+            secretKeyRef:
+              name: workflow-platform-secrets
+              key: N8N_ENCRYPTION_KEY
+        - name: WEBHOOK_URL
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: N8N_WEBHOOK_URL
+        - name: N8N_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: N8N_PORT
+        - name: N8N_RUNNERS_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: N8N_RUNNERS_ENABLED
+        - name: N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS
+        - name: N8N_DIAGNOSTICS_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: N8N_DIAGNOSTICS_ENABLED
+        - name: N8N_RESTRICT_ENVIRONMENT_VARIABLES_ACCESS
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: N8N_RESTRICT_ENVIRONMENT_VARIABLES_ACCESS
+        - name: N8N_BLOCK_ENV_ACCESS_IN_NODE
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: N8N_BLOCK_ENV_ACCESS_IN_NODE
+        - name: DOUBAO_MODEL_ID
+          valueFrom:
+            secretKeyRef:
+              name: workflow-platform-secrets
+              key: N8N_DOUBAO_MODEL_ID
+        - name: DOUBAO_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: workflow-platform-secrets
+              key: N8N_DOUBAO_API_KEY
+        ports:
+        - containerPort: 5678
+          name: http
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 5678
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 5678
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        volumeMounts:
+        - name: n8n-data
+          mountPath: /home/node/.n8n
+      volumes:
+      - name: n8n-data
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: n8n-service
+  namespace: __NAMESPACE__
+  labels:
+    app: n8n
+spec:
+  selector:
+    app: n8n
+  ports:
+  - name: http
+    protocol: TCP
+    port: 5678
+    targetPort: 5678
+  type: ClusterIP
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: n8n-destination-rule
+  namespace: __NAMESPACE__
+spec:
+  host: n8n-service
+  subsets:
+  - name: v1
+    labels:
+      app: n8n
+---
+apiVersion: networking.istio.io/v1beta1
+kind: Sidecar
+metadata:
+  name: n8n-sidecar
+  namespace: __NAMESPACE__
+spec:
+  workloadSelector:
+    labels:
+      app: n8n
+  egress:
+  - hosts:
+    - ./*
+    - istio-system/*
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: n8n-virtual-service
+  namespace: __NAMESPACE__
+spec:
+  hosts:
+  - n8n.__BASE_DOMAIN__
+  gateways:
+  - n8n-gateway
+  http:
+  - retries:
+      attempts: 0
+    route:
+    - destination:
+        host: n8n-service
+        subset: v1
+        port:
+          number: 5678
+    timeout: 30s
+---
+apiVersion: networking.istio.io/v1
+kind: Gateway
+metadata:
+  name: n8n-gateway
+  namespace: __NAMESPACE__
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - n8n.__BASE_DOMAIN__

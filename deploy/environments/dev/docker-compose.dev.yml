@@ -210,8 +210,11 @@ services:
       SSO_INTERNAL_TOKEN: ${SSO_INTERNAL_TOKEN:-dev-sso-internal-token-change-me}
       # 默认与 edge-frontend（EDGE_FRONTEND_PORT）单源路径一致；直连前端端口时见 application.yml 额外前缀
       SSO_REDIRECT_ADMIN_PREFIX: ${SSO_REDIRECT_ADMIN_PREFIX:-http://localhost:3000/admin/sso/callback}
+      SSO_REDIRECT_ADMIN_HTTP_PREFIX: ${SSO_REDIRECT_ADMIN_HTTP_PREFIX:-http://localhost:3000/admin/sso/callback}
       SSO_REDIRECT_PORTAL_PREFIX: ${SSO_REDIRECT_PORTAL_PREFIX:-http://localhost:3000/portal/sso/callback}
+      SSO_REDIRECT_PORTAL_HTTP_PREFIX: ${SSO_REDIRECT_PORTAL_HTTP_PREFIX:-http://localhost:3000/portal/sso/callback}
       SSO_REDIRECT_DW_PREFIX: ${SSO_REDIRECT_DW_PREFIX:-http://localhost:3000/dev/sso/callback}
+      SSO_REDIRECT_DW_HTTP_PREFIX: ${SSO_REDIRECT_DW_HTTP_PREFIX:-http://localhost:3000/dev/sso/callback}
       SUPERSET_HOST: ${SUPERSET_HOST:-http://superset-final:8088}
       # AgentNdjsonLog：与下方 volumes 的 /app/logs 对齐，宿主机见 deploy/environments/dev/logs/debug-864cd4.log
       WORKFLOW_DEBUG_NDJSON_PATH: ${WORKFLOW_DEBUG_NDJSON_PATH:-/app/logs/debug-864cd4.log}

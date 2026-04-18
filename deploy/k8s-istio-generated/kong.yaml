@@ -1,0 +1,223 @@
+# Replace __BASE_DOMAIN__ with your real domain suffix before applying.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kong
+  namespace: __NAMESPACE__
+  labels:
+    app: kong
+    component: gateway
+    app.kubernetes.io/name: kong
+    app.kubernetes.io/instance: kong
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 0
+  selector:
+    matchLabels:
+      app: kong
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/proxyCPU: 50m
+        sidecar.istio.io/proxyCPULimit: 200m
+        sidecar.istio.io/proxyMemory: 400Mi
+        sidecar.istio.io/proxyMemoryLimit: 400Mi
+        sidecar.istio.io/inject: "true"
+        sidecar.istio.io/rewriteAppHTTPProbers: "true"
+        proxy.istio.io/config: '{ "holdApplicationUntilProxyStarts": true }'
+      labels:
+        app: kong
+        component: gateway
+        app.kubernetes.io/name: kong
+        app.kubernetes.io/instance: kong
+    spec:
+      imagePullSecrets:
+      - name: nexus3
+      containers:
+      - name: kong
+        #image: nexus3.hk.hsbc:18080/hsbc-238092-cmbhase-bisp/workflow-station2/kong:__IMAGE_TAG__
+        image: nexus3.hk.hsbc:18080/hsbc-238092-cmbhase-bisp/workflow-station2/kong:3.7
+        imagePullPolicy: Always
+        command: ["/bin/sh", "/kong/docker-entrypoint-kong.sh"]
+        ports:
+        - containerPort: 8000
+          name: proxy
+        - containerPort: 8001
+          name: admin
+        - containerPort: 8100
+          name: status
+        env:
+        - name: KONG_DATABASE
+          value: "off"
+        - name: KONG_DECLARATIVE_CONFIG
+          value: /kong/kong.yml
+        - name: KONG_PROXY_ACCESS_LOG
+          value: /dev/stdout
+        - name: KONG_PROXY_ERROR_LOG
+          value: /dev/stderr
+        - name: KONG_ADMIN_LISTEN
+          value: "0.0.0.0:8001"
+        - name: KONG_STATUS_LISTEN
+          value: "0.0.0.0:8100"
+        - name: KONG_NGINX_PROXY_CLIENT_MAX_BODY_SIZE
+          value: "100m"
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: workflow-platform-secrets
+              key: JWT_SECRET
+        - name: REDIS_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: SPRING_REDIS_HOST
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: workflow-platform-secrets
+              key: SPRING_REDIS_PASSWORD
+        - name: CORS_ALLOWED_ORIGINS
+          valueFrom:
+            configMapKeyRef:
+              name: workflow-platform-config
+              key: CORS_ALLOWED_ORIGINS
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        startupProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - kong health
+          initialDelaySeconds: 20
+          periodSeconds: 10
+          timeoutSeconds: 15
+          failureThreshold: 30
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - kong health
+          initialDelaySeconds: 60
+          periodSeconds: 20
+          timeoutSeconds: 15
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -c
+            - kong health
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 15
+          failureThreshold: 6
+        volumeMounts:
+        - name: kong-config
+          mountPath: /kong/kong.yml.template
+          subPath: kong.yml.template
+        - name: kong-entrypoint
+          mountPath: /kong/docker-entrypoint-kong.sh
+          subPath: docker-entrypoint-kong.sh
+      volumes:
+      - name: kong-config
+        configMap:
+          name: kong-declarative-config
+      - name: kong-entrypoint
+        configMap:
+          name: kong-declarative-config
+          defaultMode: 0755
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kong-service
+  namespace: __NAMESPACE__
+  labels:
+    app: kong
+spec:
+  selector:
+    app: kong
+  ports:
+  - name: proxy
+    protocol: TCP
+    port: 8000
+    targetPort: 8000
+  - name: admin
+    protocol: TCP
+    port: 8001
+    targetPort: 8001
+  type: ClusterIP
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: kong-destination-rule
+  namespace: __NAMESPACE__
+spec:
+  host: kong-service
+  subsets:
+  - name: v1
+    labels:
+      app: kong
+---
+apiVersion: networking.istio.io/v1beta1
+kind: Sidecar
+metadata:
+  name: kong-sidecar
+  namespace: __NAMESPACE__
+spec:
+  workloadSelector:
+    labels:
+      app: kong
+  egress:
+  - hosts:
+    - ./*
+    - istio-system/*
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: kong-virtual-service
+  namespace: __NAMESPACE__
+spec:
+  hosts:
+  - kong.__BASE_DOMAIN__
+  gateways:
+  - kong-gateway
+  http:
+  - retries:
+      attempts: 0
+    route:
+    - destination:
+        host: kong-service
+        subset: v1
+        port:
+          number: 8000
+    timeout: 30s
+---
+apiVersion: networking.istio.io/v1
+kind: Gateway
+metadata:
+  name: kong-gateway
+  namespace: __NAMESPACE__
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - kong.__BASE_DOMAIN__
