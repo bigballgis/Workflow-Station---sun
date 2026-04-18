@@ -40,7 +40,9 @@
 
 不部署的组件：PostgreSQL（使用公司现有数据库）。API 路由与网关插件由 **Kong** 提供（见 `deploy/kong/`、`deploy/k8s/deployment-kong.yaml`）。
 
-> **与 `README.md` 分工**：根目录 README 侧重架构速览与文档索引；**BUILD_GUIDE.md**（本文）为可执行的构建/部署步骤。Kubernetes 以 `deploy/k8s/` 清单与 `deploy.ps1` 为主；**仓库不附带 Helm chart**（若需 Helm 请自建并与清单对齐）。
+> **与 `README.md` 分工**：根目录 README 侧重架构速览与文档索引；**BUILD_GUIDE.md**（本文）为可执行的构建/部署步骤。  
+> **Kubernetes 部署有两条路径**：（1）**Ingress 经典清单**：`deploy/k8s/` + `deploy.ps1`（按环境的 `configmap-{sit,uat,prod}.yaml`、`secret-*.yaml`）；（2）**Istio 生成清单（新，适用于已部署 Istio 的公司集群）**：`deploy/k8s-istio-generated/` + `ps1/apply-workflow-station-all.ps1` 等，经 **Istio Gateway** 暴露服务，前端入口为与 `deploy/k8s/ingress.yaml` 对齐的**单域名多路径**（`/login`、`/admin`、`/portal`，可选 `/dev`）。细则见 **§9.0 / §9.3.2** 与 `deploy/k8s-istio-generated/README.md`。  
+> **仓库不附带 Helm chart**（若需 Helm 请自建并与清单对齐）。
 
 ---
 
@@ -103,9 +105,13 @@
 PostgreSQL ── N8N (独立数据库 n8n_{env})
 ```
 
-### 2.3 需要部署的服务清单（K8S 默认，`deploy.ps1`）
+### 2.3 需要部署的服务清单（K8S 默认）
+
+**Ingress 经典路径**（`deploy/k8s/deploy.ps1`）：下表以 `deployment-*.yaml` 文件名为准。
 
 **不含** `developer-workstation`（设计器仅在本地 Dev Compose 或 `deployment-developer-workstation-optional.yaml` 中启用）。`deployment-frontend.yaml` 内包含 **admin-center-frontend** 与 **user-portal-frontend** 两个 Deployment。
+
+**Istio 路径**（`deploy/k8s-istio-generated`）：服务一一对应为同名风格的清单（如 `admin-center.yaml`、`workflow-engine.yaml`、`kong.yaml`），前端拆分为 `admin-center-frontend.yaml`、`user-portal-frontend.yaml`、`platform-login-frontend.yaml`，入口为 `workflow-platform-ingress-gateway.yaml`；另含 `workflow-station-superset.yaml` 等。`developer-workstation` 相关清单默认不随全套部署，需 `-IncludeDeveloperWorkstation` 或 `-Select`。部署命令见 **§9.3.2**。
 
 | # | 服务 | 类型 | K8S 清单 | 镜像 / 说明 |
 |---|------|------|---------|------------|
@@ -139,7 +145,7 @@ PostgreSQL ── N8N (独立数据库 n8n_{env})
 | **种子数据 / 演示库** | 用户可见字段一律英文；细则见上述文档。 |
 | **三个前端（admin-center / user-portal / developer-workstation）** | 默认界面语言在源码中固定：`frontend/<app>/src/i18n/index.ts` 内 `locale` 与 `fallbackLocale` 均为 `'en'`。**不通过** Docker / K8s 环境变量切换 i18n；改语言需改源码并重新 `npm run build`。 |
 | **本地 Compose** | `deploy/environments/dev/docker-compose.dev.yml` 顶部注释标明本约定；Compose **无** `LOCALE` 类变量——避免误以为在 compose 里设变量即可改界面语言。 |
-| **K8S 前端** | `deploy/k8s/deployment-frontend.yaml` 清单头部注释同上；前端 Pod **无** `LOCALE` 环境变量。 |
+| **K8S 前端** | Ingress 路径：`deploy/k8s/deployment-frontend.yaml` 清单头部注释同上；Istio 路径：`deploy/k8s-istio-generated/*-frontend.yaml`。前端 Pod **无** `LOCALE` 环境变量。 |
 | **deploy 快速参考** | `deploy/README.md` 章节 **「Demo：界面语言与种子数据（英文）」** 汇总 Compose / K8S / 构建约定。 |
 | **演示账号与后端偏好** | 若库表或 JWT 中含用户 `language`（如 user-portal 用户偏好），Demo 种子建议设为 **`en`**，避免后端按中文偏好返回文案而与英文界面不一致。 |
 
@@ -193,7 +199,7 @@ Workflow-Station---sun/
 │   ├── scripts/
 │   │   └── build-and-push-k8s.ps1   # K8S 镜像构建推送脚本
 │   ├── kong/                        # Kong 声明式配置模板
-│   ├── k8s/                         # K8S 部署清单
+│   ├── k8s/                         # K8S 部署清单（Ingress + deploy.ps1）
 │   │   ├── configmap-{sit,uat,prod}.yaml
 │   │   ├── secret-{sit,uat,prod}.yaml
 │   │   ├── deployment-redis.yaml        # Redis (自行部署)
@@ -209,6 +215,14 @@ Workflow-Station---sun/
 │   │   ├── ingress.yaml
 │   │   ├── kustomization.yaml
 │   │   └── deploy.ps1               # K8S 一键部署脚本
+│   ├── k8s-istio-generated/         # Istio 版 K8S 清单（新；Istio Gateway，脚本渲染占位符）
+│   │   ├── README.md
+│   │   ├── kustomization.yaml
+│   │   ├── workflow-platform-ingress-gateway.yaml
+│   │   ├── *.yaml                   # 各服务（与 k8s/deployment-*.yaml 对应，见目录内 README）
+│   │   ├── config_map/<Environment>/  # 如 preprod；Kong 声明式等
+│   │   ├── secret/<Environment>/
+│   │   └── ps1/                     # apply-workflow-station-all.ps1 等
 │   ├── init-scripts/                # 数据库初始化 SQL
 │   └── README.md
 └── TODO.md
@@ -510,6 +524,15 @@ docker compose -f $compose --env-file $env down -v
 
 ## 9. SIT/UAT/PROD 环境部署（公司 K8S）
 
+### 9.0 部署路径选择
+
+| 路径 | 目录与脚本 | 入口 | 说明 |
+|------|-----------|------|------|
+| Ingress 经典 | `deploy/k8s/`、`deploy.ps1` | `ingress.yaml`（Kubernetes Ingress） | 沿用历史流水线或未装 Istio 时 |
+| **Istio 生成清单（新）** | `deploy/k8s-istio-generated/`、`ps1/apply-workflow-station-all.ps1` 等 | `workflow-platform-ingress-gateway`（Istio Gateway，HTTP→HTTPS、TLS） | 集群已装 **Istio**；清单内 `__NAMESPACE__` / `__IMAGE_TAG__` 等由脚本渲染，**勿手写死** |
+
+镜像构建与推送两条路径共用 **`deploy/scripts/build-and-push-k8s.ps1`**。Istio 路径下应用配置来自 `config_map/<Environment>/`、`secret/<Environment>/`（默认 `preprod`），完整参数、分步顺序、`-InitializeDatabase`、`-RenderOnly` 见 **`deploy/k8s-istio-generated/ps1/README.md`**。
+
 ### 9.1 部署前准备
 
 #### 9.1.1 PostgreSQL 数据库准备（DBA 操作）
@@ -556,6 +579,10 @@ psql -h {host} -p 5432 -U platform_{env} -d workflow_platform_{env} -v ON_ERROR_
 
 #### 9.1.3 更新 K8S 配置
 
+**Ingress 经典路径**：按下面步骤编辑 `deploy/k8s/` 下按环境的 ConfigMap / Secret。
+
+**Istio 路径**：连接串与密钥通常在 `deploy/k8s-istio-generated/config_map/<Environment>/`、`secret/<Environment>/` 中维护（与 `-Environment` 一致）；勿与 `deploy/k8s/configmap-{sit,uat,prod}.yaml` 混用同一套文件。
+
 1. 修改 `deploy/k8s/configmap-{env}.yaml` 中的 PostgreSQL 连接地址：
    ```yaml
    SPRING_DATASOURCE_URL: "jdbc:postgresql://{your-postgres-host}:5432/workflow_platform_{env}"
@@ -595,6 +622,8 @@ cd deploy/scripts
 
 ### 9.3 K8S 部署
 
+#### 9.3.1 Ingress 经典（`deploy/k8s/deploy.ps1`）
+
 ```powershell
 cd deploy/k8s
 
@@ -611,9 +640,29 @@ cd deploy/k8s
 .\deploy.ps1 -Environment sit -Tag v1.0.0 -DryRun
 ```
 
+#### 9.3.2 Istio 生成清单（`deploy/k8s-istio-generated`，新）
+
+适用于集群已安装 **Istio**、且使用 **Istio ingressgateway** + TLS Secret 的场景。YAML 使用 `__NAMESPACE__`、`__IMAGE_TAG__`、`__BASE_DOMAIN__`、`__INGRESS_HOST__`、`__INGRESS_TLS_SECRET__` 等占位符，由 PowerShell 脚本按参数替换；**推荐**使用一键脚本（顺序：ConfigMap → Secret → 业务清单）：
+
+```powershell
+# 在仓库根目录执行；参数按实际 namespace、镜像 tag、域名与 TLS secret 名填写
+.\deploy\k8s-istio-generated\ps1\apply-workflow-station-all.ps1 `
+  -Namespace <your-namespace> `
+  -ImageTag <tag> `
+  -Environment preprod `
+  -NamespaceToken <namespace-token> `
+  -IngressHost <入口主机名> `
+  -IngressTlsSecret <tls-secret-name> `
+  -BaseDomain <base-domain>
+```
+
+- **仅渲染**到本地、不执行 `kubectl`：加 `-RenderOnly -OutputDir <目录>`（详见 `ps1/README.md`）。  
+- **分步**：`apply-workflow-station-configmap.ps1` → `apply-workflow-station-secret.ps1` → `apply-workflow-station-istio-generated.ps1`。  
+- **首批/分批**部署、`-Select`、`-InitializeDatabase`（可选先跑 `init-database.ps1`）、`-IncludeDeveloperWorkstation`、删除用 `delete-workflow-station-istio-generated.ps1` 等：**以 `deploy/k8s-istio-generated/ps1/README.md` 为准**。
+
 ### 9.4 部署顺序
 
-`deploy.ps1` 会按以下顺序部署（与 `deploy.ps1` 内 `$deploymentFiles` 一致）：
+**Ingress 经典**：`deploy.ps1` 会按以下顺序部署（与 `deploy.ps1` 内 `$deploymentFiles` 一致）：
 
 1. 创建 Namespace
 2. 应用 ConfigMap
@@ -623,6 +672,8 @@ cd deploy/k8s
 6. 应用 Ingress
 
 **说明**：默认清单 **不包含** `developer-workstation`；可选清单见 `deployment-developer-workstation-optional.yaml`。
+
+**Istio 路径**：无 `deploy.ps1` 的固定顺序；若需分阶段，建议按 `deploy/k8s-istio-generated/ps1/README.md` 中的批次（如 redis / n8n / kafka / superset → kong → workflow-engine → 其余后端 → 前端，Gateway 与前端同批时注意包含 `workflow-platform-ingress-gateway.yaml`）。
 
 ### 9.5 验证部署
 
@@ -825,9 +876,13 @@ docker push "${r}/user-portal-frontend:${t}"
 docker push "${r}/developer-workstation-frontend:${t}"
 docker push "${r}/platform-login-frontend:${t}"
 
-# 7. 部署到 K8S
+# 7. 部署到 K8S（二选一）
+# 7a. Ingress 经典
 cd deploy/k8s
 .\deploy.ps1 -Environment sit -Tag latest
+
+# 7b. Istio 集群（参数见 §9.3.2 与 deploy/k8s-istio-generated/ps1/README.md）
+# .\deploy\k8s-istio-generated\ps1\apply-workflow-station-all.ps1 -Namespace ... -ImageTag ... -Environment preprod ...
 ```
 
 ---
