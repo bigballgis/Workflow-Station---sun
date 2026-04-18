@@ -7,10 +7,27 @@ import type { BpmnElement, BpmnModeler } from '@/types/bpmn'
 
 const CUSTOM_PREFIX = 'custom'
 
-/** custom:Properties 在 moddle 中的子项字段名（见 workflowPlatformModdleDescriptor.property） */
+/** custom:Properties / custom_1:Properties 在 moddle 中的子项字段名（见 customModdle.ts） */
 function getCustomPropertyList(properties: any): any[] {
   const list = properties?.property ?? properties?.values
   return Array.isArray(list) ? list : []
+}
+
+/** 从单个 custom:Properties 或 custom_1:Properties 容器解析为键值表 */
+function collectExtensionPropsFromContainer(properties: any): Record<string, any> {
+  if (!properties) {
+    return {}
+  }
+  const propValues = getCustomPropertyList(properties)
+  const result: Record<string, any> = {}
+  for (const prop of propValues) {
+    const name = prop.name
+    const value = prop.value
+    if (name) {
+      result[name] = parsePropertyValue(value)
+    }
+  }
+  return result
 }
 
 /**
@@ -52,52 +69,42 @@ export function stringifyPropertyValue(value: any): string {
 
 /**
  * 获取元素的所有扩展属性
+ *
+ * 合并两处来源（见 `customModdle.ts` 中 custom / custom_1）：
+ * - **custom_1:Properties**（http://custom.bpmn.io/schema）：表单设计器「绑定流程节点」写入的 formId / formName 等
+ * - **custom:Properties**（http://workflow.platform/schema/custom）：流程属性面板写入的受理人、表单等
+ *
+ * 同名键以 **custom** 为准，避免面板修改被表单侧旧数据覆盖。
  */
 export function getExtensionProperties(element: BpmnElement): Record<string, any> {
   const businessObject = element?.businessObject
   if (!businessObject) {
     return {}
   }
-  
+
   const extensionElements = businessObject.extensionElements
   if (!extensionElements) {
     return {}
   }
-  
-  // 尝试从 values 获取扩展元素
+
   const values = extensionElements.values || []
-  
   if (!values || values.length === 0) {
     return {}
   }
-  
-  // 查找 custom:Properties 元素
-  let properties = null
+
+  let fromBpmnIo: Record<string, any> = {}
+  let fromPlatform: Record<string, any> = {}
+
   for (const ext of values) {
     const type = ext.$type || ''
-    if (type === 'custom:Properties') {
-      properties = ext
-      break
+    if (type === 'custom_1:Properties') {
+      fromBpmnIo = { ...fromBpmnIo, ...collectExtensionPropsFromContainer(ext) }
+    } else if (type === 'custom:Properties') {
+      fromPlatform = { ...fromPlatform, ...collectExtensionPropsFromContainer(ext) }
     }
   }
-  
-  if (!properties) {
-    return {}
-  }
-  
-  // 获取属性值列表（moddle 使用 property；历史错误实现曾用 values）
-  const propValues = getCustomPropertyList(properties)
-  
-  const result: Record<string, any> = {}
-  for (const prop of propValues) {
-    const name = prop.name
-    const value = prop.value
-    if (name) {
-      result[name] = parsePropertyValue(value)
-    }
-  }
-  
-  return result
+
+  return { ...fromBpmnIo, ...fromPlatform }
 }
 
 /**

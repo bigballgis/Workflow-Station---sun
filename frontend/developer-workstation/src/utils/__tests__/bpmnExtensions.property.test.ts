@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import * as fc from 'fast-check'
-import { parsePropertyValue, stringifyPropertyValue } from '../bpmnExtensions'
+import { parsePropertyValue, stringifyPropertyValue, getExtensionProperties } from '../bpmnExtensions'
+import type { BpmnElement } from '@/types/bpmn'
 
 describe('bpmnExtensions property tests', () => {
   describe('parsePropertyValue', () => {
@@ -179,6 +180,55 @@ describe('bpmnExtensions property tests', () => {
           }
         )
       )
+    })
+  })
+
+  describe('getExtensionProperties', () => {
+    it('merges custom_1:Properties (form bind from FormDesigner) with custom:Properties (panel)', () => {
+      const element = {
+        businessObject: {
+          extensionElements: {
+            values: [
+              {
+                $type: 'custom_1:Properties',
+                property: [
+                  { name: 'formId', value: '42' },
+                  { name: 'formName', value: 'Loan' }
+                ]
+              },
+              {
+                $type: 'custom:Properties',
+                property: [
+                  { name: 'assigneeType', value: 'INITIATOR' },
+                  { name: 'formId', value: '99' }
+                ]
+              }
+            ]
+          }
+        }
+      } as unknown as BpmnElement
+
+      const props = getExtensionProperties(element)
+      expect(props.formId).toBe(99)
+      expect(props.formName).toBe('Loan')
+      expect(props.assigneeType).toBe('INITIATOR')
+    })
+
+    it('reads formId from custom_1 when custom is absent', () => {
+      const element = {
+        businessObject: {
+          extensionElements: {
+            values: [
+              {
+                $type: 'custom_1:Properties',
+                property: [{ name: 'formId', value: '7' }]
+              }
+            ]
+          }
+        }
+      } as unknown as BpmnElement
+
+      expect(getExtensionProperties(element).formId).toBe(7)
     })
   })
 })
