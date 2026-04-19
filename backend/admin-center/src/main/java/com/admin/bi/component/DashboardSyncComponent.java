@@ -31,12 +31,14 @@ public class DashboardSyncComponent {
     private final BiDashboardRegistryRepository registryRepository;
     private final BiProperties biProperties;
 
-    private static final String SUPERSET_DASHBOARD_QUERY =
-            "SELECT d.id as superset_dashboard_id, d.dashboard_title, d.description, " +
-            "d.uuid as superset_dashboard_uuid, e.uuid as embed_id " +
-            "FROM public.dashboards d " +
-            "INNER JOIN public.embedded_dashboards e ON d.id = e.dashboard_id " +
-            "WHERE d.published = true";
+    private String supersetDashboardSyncSql() {
+        String schema = biProperties.getSuperset().resolveDbSchemaForSql();
+        return "SELECT d.id as superset_dashboard_id, d.dashboard_title, d.description, "
+                + "d.uuid as superset_dashboard_uuid, e.uuid as embed_id "
+                + "FROM " + schema + ".dashboards d "
+                + "INNER JOIN " + schema + ".embedded_dashboards e ON d.id = e.dashboard_id "
+                + "WHERE d.published = true";
+    }
 
     /**
      * 定时同步入口
@@ -70,11 +72,12 @@ public class DashboardSyncComponent {
         // 1. 查询 Superset 数据库中符合条件的 Dashboard
         List<Map<String, Object>> supersetDashboards;
         try {
-            supersetDashboards = jdbcTemplate.queryForList(SUPERSET_DASHBOARD_QUERY);
+            supersetDashboards = jdbcTemplate.queryForList(supersetDashboardSyncSql());
         } catch (Exception e) {
             log.error("Failed to query Superset database: {}", e.getMessage(), e);
             String msg = e.getMessage() != null && e.getMessage().contains("does not exist")
-                    ? "Superset tables (dashboards, embedded_dashboards) not found. Ensure Admin Center uses the same database as Superset (e.g. set SPRING_DATASOURCE_URL to workflow_platform_dev)."
+                    ? "Superset tables (dashboards, embedded_dashboards) not found. Ensure Admin Center uses the same database as Superset "
+                    + "(e.g. set SPRING_DATASOURCE_URL) and SUPERSET_DB_SCHEMA matches Superset's metadata schema (default: public)."
                     : "Failed to query Superset database: " + e.getMessage();
             throw new SupersetSyncException(msg, e);
         }

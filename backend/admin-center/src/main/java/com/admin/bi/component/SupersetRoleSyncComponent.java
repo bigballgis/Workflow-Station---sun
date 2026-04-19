@@ -31,8 +31,10 @@ public class SupersetRoleSyncComponent {
     private final BiSupersetRoleRepository roleRepository;
     private final BiProperties biProperties;
 
-    private static final String SUPERSET_ROLE_QUERY =
-            "SELECT id, name FROM public.ab_role";
+    private String supersetRoleSyncSql() {
+        String schema = biProperties.getSuperset().resolveDbSchemaForSql();
+        return "SELECT id, name FROM " + schema + ".ab_role";
+    }
 
     /**
      * 定时同步入口
@@ -66,7 +68,7 @@ public class SupersetRoleSyncComponent {
         // 1. 查询 Superset 数据库中的 ab_role 记录
         List<Map<String, Object>> supersetRoles;
         try {
-            supersetRoles = jdbcTemplate.queryForList(SUPERSET_ROLE_QUERY);
+            supersetRoles = jdbcTemplate.queryForList(supersetRoleSyncSql());
         } catch (Exception e) {
             log.error("Failed to query Superset ab_role table: {}", e.getMessage(), e);
             throw new SupersetSyncException("Failed to query Superset ab_role table: " + e.getMessage(), e);
