@@ -32,9 +32,18 @@
             <el-button @click="handleExport" :loading="exporting"><el-icon><Download /></el-icon> Export CSV</el-button>
           </div>
 
+          <el-alert
+            v-if="fetchDataError"
+            :title="fetchDataError"
+            type="error"
+            show-icon
+            :closable="false"
+            style="margin-bottom: 12px;"
+          />
+
           <el-table :data="dataRows" stripe v-loading="dataLoading" style="width: 100%;" border>
             <!-- Field columns from table structure -->
-            <el-table-column v-for="field in fieldColumns" :key="field.fieldName" :prop="'data.' + field.fieldName" :label="field.comment || field.fieldName" :min-width="120" sortable show-overflow-tooltip>
+            <el-table-column v-for="field in fieldColumns" :key="field.fieldName" :prop="'data.' + field.fieldName" :label="field.fieldName" :min-width="120" sortable show-overflow-tooltip>
               <template #default="{ row }">{{ row.data?.[field.fieldName] ?? '' }}</template>
             </el-table-column>
             <!-- System columns -->
@@ -88,7 +97,7 @@
     <!-- Add/Edit Dialog -->
     <el-dialog v-model="dialogVisible" :title="dialogMode === 'add' ? 'Add Record' : 'Edit Record'" width="600px" destroy-on-close>
       <el-form :model="formData" label-width="140px" label-position="left">
-        <el-form-item v-for="field in fieldColumns" :key="field.fieldName" :label="field.comment || field.fieldName" :required="!field.nullable">
+        <el-form-item v-for="field in fieldColumns" :key="field.fieldName" :label="field.fieldName" :required="!field.nullable">
           <el-switch v-if="field.dataType === 'BOOLEAN'" v-model="formData[field.fieldName]" :disabled="dialogMode === 'edit' && field.isPrimaryKey" />
           <el-input-number v-else-if="isNumericType(field.dataType)" v-model="formData[field.fieldName]" :precision="field.dataType === 'DECIMAL' ? (field.scale || 2) : 0" style="width: 100%;" :disabled="dialogMode === 'edit' && field.isPrimaryKey" />
           <el-date-picker v-else-if="field.dataType === 'DATE'" v-model="formData[field.fieldName]" type="date" value-format="YYYY-MM-DD" style="width: 100%;" :disabled="dialogMode === 'edit' && field.isPrimaryKey" />
@@ -106,7 +115,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onActivated } from 'vue'
+import { ref, computed, watch, onMounted, onActivated } from 'vue'
 import { Search, Download, Plus } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -178,6 +187,13 @@ const fetchTables = async () => {
   try {
     const res: any = await relationTableDataApi.getDeployedTables()
     tables.value = res?.data ?? res ?? []
+    console.debug('[fetchTables] deployed tables:', tables.value.map(t => ({
+      id: t.id,
+      tableName: t.tableName,
+      status: t.status,
+      fieldCount: t.fieldDefinitions?.length ?? 0,
+      fields: t.fieldDefinitions?.map((f: any) => f.fieldName) ?? []
+    })))
     if (!selectedTableId.value && tables.value.length > 0) {
       selectedTableId.value = tables.value[0].id
       fetchData()
@@ -189,9 +205,12 @@ const fetchTables = async () => {
   }
 }
 
+const fetchDataError = ref<string | null>(null)
+
 const fetchData = async () => {
   if (!selectedTableId.value) return
   dataLoading.value = true
+  fetchDataError.value = null
   try {
     const params: Record<string, any> = { page: currentPage.value - 1, size: pageSize.value }
     if (searchKeyword.value) params.search = searchKeyword.value
@@ -199,8 +218,15 @@ const fetchData = async () => {
     const pageData = res?.data ?? res
     dataRows.value = pageData?.content || []
     totalElements.value = pageData?.totalElements || 0
-  } catch {
+  } catch (e: any) {
     dataRows.value = []
+    const apiMsg = e?.response?.data?.error?.message || e?.response?.data?.message
+    const traceId = e?.response?.data?.error?.traceId || e?.response?.data?.traceId
+    const msg = apiMsg || e?.message || 'Failed to load data'
+    const display = traceId ? `${msg} (traceId: ${traceId})` : msg
+    fetchDataError.value = display
+    ElMessage.error(`Data load failed: ${msg}`)
+    console.error('[fetchData] error for tableId', selectedTableId.value, e)
   } finally {
     dataLoading.value = false
   }
@@ -211,6 +237,7 @@ const handleSelectTable = (index: string) => {
   searchKeyword.value = ''
   currentPage.value = 1
   localStatusMap.value = {}
+  fetchDataError.value = null
   fetchData()
 }
 
@@ -318,6 +345,19 @@ const handleExport = async () => {
   } catch { ElMessage.error('Export failed') }
   finally { exporting.value = false }
 }
+
+watch(selectedTable, (t) => {
+  if (!t) return
+  const allFields = t.fieldDefinitions ?? []
+  const systemFiltered = allFields.filter((f: any) => SYSTEM_COLUMNS.has(f.fieldName)).map((f: any) => f.fieldName)
+  const shown = allFields.filter((f: any) => !SYSTEM_COLUMNS.has(f.fieldName)).map((f: any) => f.fieldName)
+  console.debug(
+    `[selectedTable] id=${t.id} name=${t.tableName} status=${t.status}\n` +
+    `  all fields (${allFields.length}): ${allFields.map((f: any) => f.fieldName).join(', ')}\n` +
+    `  shown in grid (${shown.length}): ${shown.join(', ')}\n` +
+    `  hidden by SYSTEM_COLUMNS filter (${systemFiltered.length}): ${systemFiltered.join(', ')}`
+  )
+})
 
 onMounted(fetchTables)
 // Reload when navigating back to this page (e.g. after deploying in Table Structure)

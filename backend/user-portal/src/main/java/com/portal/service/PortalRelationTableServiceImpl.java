@@ -298,11 +298,25 @@ public class PortalRelationTableServiceImpl implements PortalRelationTableServic
     // ==================== Helper methods ====================
 
     private Set<String> getUserRoleIds(String userId) {
+        // Roles assigned directly or via virtual groups
         List<Map<String, Object>> roles = roleAccessComponent.getUserBusinessRoles(userId);
-        return roles.stream()
+        Set<String> roleIds = roles.stream()
                 .map(r -> String.valueOf(r.getOrDefault("id", r.getOrDefault("roleId", ""))))
                 .filter(id -> !id.isEmpty())
                 .collect(Collectors.toSet());
+
+        // Also include roles the user holds through BU membership (sys_user_business_unit_roles).
+        // The admin-center user-roles API may not include these when called without profileContext.
+        try {
+            List<String> buRoleIds = jdbcTemplate.queryForList(
+                    "SELECT DISTINCT role_id FROM sys_user_business_unit_roles WHERE user_id = ?",
+                    String.class, userId);
+            roleIds.addAll(buRoleIds);
+        } catch (Exception e) {
+            log.warn("Failed to fetch BU role IDs for user {}: {}", userId, e.getMessage());
+        }
+
+        return roleIds;
     }
 
     private boolean hasAccess(Long tableId, Set<String> userRoleIds) {

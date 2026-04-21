@@ -56,11 +56,63 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
     }
 
     /**
-     * 将表定义转换为响应 DTO，字段定义使用已部署版本的快照数据，
-     * 而非当前实体中可能已被修改但尚未部署的字段定义。
+     * 将表定义转换为响应 DTO。
+     * 对于 UPDATED / ROLLBACK 状态的表，字段列表取最新已部署版本的快照（与物理表一致），
+     * 而非 rt_field_definitions 中可能包含尚未部署的新字段。
      */
     private RelationTableResponse toDeployedTableResponse(RelationTableDefinition entity) {
+        if (entity.getStatus() == RelationTableStatus.UPDATED
+                || entity.getStatus() == RelationTableStatus.ROLLBACK) {
+            Optional<RelationTableVersion> latestVersion =
+                    versionRepository.findLatestVersion(entity.getId());
+            if (latestVersion.isPresent()) {
+                try {
+                    List<RelationFieldDTO> snapshotFields =
+                            parseSnapshotData(latestVersion.get().getSnapshotData());
+                    if (!snapshotFields.isEmpty()) {
+                        return buildResponseWithSnapshotFields(entity, snapshotFields);
+                    }
+                } catch (Exception e) {
+                    log.warn("Cannot parse snapshot for table {}, falling back to JPA fields",
+                            entity.getId());
+                }
+            }
+        }
         return RelationTableResponse.fromEntity(entity);
+    }
+
+    private RelationTableResponse buildResponseWithSnapshotFields(
+            RelationTableDefinition entity, List<RelationFieldDTO> snapshotFields) {
+        List<RelationTableResponse.FieldDefinitionResponse> fields = snapshotFields.stream()
+                .map(f -> RelationTableResponse.FieldDefinitionResponse.builder()
+                        .id(f.getId())
+                        .fieldName(f.getFieldName())
+                        .dataType(f.getDataType())
+                        .length(f.getLength())
+                        .precision(f.getPrecision())
+                        .scale(f.getScale())
+                        .nullable(f.getNullable())
+                        .isPrimaryKey(f.getIsPrimaryKey())
+                        .defaultValue(f.getDefaultValue())
+                        .comment(f.getComment())
+                        .sortOrder(f.getSortOrder())
+                        .build())
+                .collect(Collectors.toList());
+        return RelationTableResponse.builder()
+                .id(entity.getId())
+                .tableName(entity.getTableName())
+                .displayName(entity.getDisplayName())
+                .description(entity.getDescription())
+                .status(entity.getStatus())
+                .enabled(entity.getEnabled())
+                .portalVisible(entity.getPortalVisible())
+                .currentVersion(entity.getCurrentVersion())
+                .fieldDefinitions(fields)
+                .createdAt(entity.getCreatedAt())
+                .createdBy(entity.getCreatedBy())
+                .updatedAt(entity.getUpdatedAt())
+                .updatedBy(entity.getUpdatedBy())
+                .build();
     }
 
     @Override
@@ -366,10 +418,31 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
     }
 
     /**
-     * 获取已部署的最新表结构字段列表（从版本快照中获取）
+     * 获取用于 Data Management 查询的字段列表——必须与物理表实际已部署的列完全一致。
+     * <p>
+     * 对于 UPDATED / ROLLBACK 状态的表，rt_field_definitions 可能包含尚未执行 DDL 的新字段；
+     * 此时改用最新版本快照，避免 SELECT 中出现物理表不存在的列名导致 SQL 异常。
      */
     private List<RelationFieldDTO> getDeployedFields(RelationTableDefinition tableDef) {
-        // 直接从 rt_field_definitions 读取最新字段（和物理表一致）
+        if (tableDef.getStatus() == RelationTableStatus.UPDATED
+                || tableDef.getStatus() == RelationTableStatus.ROLLBACK) {
+            Optional<RelationTableVersion> latestVersion =
+                    versionRepository.findLatestVersion(tableDef.getId());
+            if (latestVersion.isPresent()) {
+                try {
+                    List<RelationFieldDTO> snapshotFields =
+                            parseSnapshotData(latestVersion.get().getSnapshotData());
+                    if (!snapshotFields.isEmpty()) {
+                        log.debug("Using snapshot fields for {}-status table '{}' to match physical schema",
+                                tableDef.getStatus(), tableDef.getTableName());
+                        return snapshotFields;
+                    }
+                } catch (Exception e) {
+                    log.warn("Cannot parse snapshot for table {}, falling back to rt_field_definitions",
+                            tableDef.getId());
+                }
+            }
+        }
         List<RelationFieldDTO> fields = jdbcTemplate.query(
                 "SELECT id, field_name, data_type, length, precision_value, scale, nullable, is_primary_key, default_value, comment, sort_order "
                 + "FROM rt_field_definitions WHERE table_id = ? ORDER BY sort_order ASC",
