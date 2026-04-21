@@ -1,6 +1,7 @@
 package com.admin.entity;
 
 import com.admin.enums.AuditAction;
+import com.admin.enums.AuditActionConverter;
 import com.fasterxml.jackson.annotation.JsonGetter;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
@@ -28,7 +29,7 @@ public class AuditLog {
     @Id
     private String id;
     
-    @Enumerated(EnumType.STRING)
+    @Convert(converter = AuditActionConverter.class)
     @Column(nullable = false)
     private AuditAction action;
     

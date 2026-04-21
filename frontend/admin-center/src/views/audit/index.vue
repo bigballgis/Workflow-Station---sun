@@ -8,20 +8,16 @@
     <div class="filter-card">
       <el-form :inline="true" :model="query" class="search-form">
         <el-form-item :label="t('audit.actionType')">
-          <el-select v-model="query.action" clearable :placeholder="t('common.selectPlaceholder')" style="width: 150px">
-            <el-option :label="t('audit.login')" value="USER_LOGIN" />
-            <el-option :label="t('audit.loginFailed')" value="USER_LOGIN_FAILED" />
-            <el-option :label="t('audit.logout')" value="USER_LOGOUT" />
-            <el-option :label="t('audit.userCreate')" value="USER_CREATED" />
-            <el-option :label="t('audit.userUpdate')" value="USER_UPDATED" />
-            <el-option :label="t('audit.userDelete')" value="USER_DELETED" />
-            <el-option :label="t('audit.roleCreate')" value="ROLE_CREATED" />
-            <el-option :label="t('audit.roleUpdate')" value="ROLE_UPDATED" />
-            <el-option :label="t('audit.roleDelete')" value="ROLE_DELETED" />
-            <el-option :label="t('audit.permissionChange')" value="PERMISSION_GRANTED" />
-            <el-option :label="t('audit.dataQuery')" value="DATA_QUERIED" />
-            <el-option :label="t('audit.passwordChange')" value="PASSWORD_CHANGED" />
-            <el-option :label="t('audit.passwordReset')" value="PASSWORD_RESET" />
+          <el-select v-model="query.action" clearable :placeholder="t('common.selectPlaceholder')" style="width: 120px">
+            <el-option label="Create" value="CREATE" />
+            <el-option label="Update" value="UPDATE" />
+            <el-option label="Delete" value="DELETE" />
+            <el-option label="Query"  value="QUERY"  />
+          </el-select>
+        </el-form-item>
+        <el-form-item :label="t('audit.resourceType')">
+          <el-select v-model="query.resourceType" clearable :placeholder="t('common.selectPlaceholder')" style="width: 180px">
+            <el-option v-for="rt in resourceTypes" :key="rt" :label="resourceTypeText(rt)" :value="rt" />
           </el-select>
         </el-form-item>
         <el-form-item :label="t('audit.operator')">
@@ -94,13 +90,13 @@
           <el-tooltip v-if="row.action === 'DATA_QUERIED' && (row.resourceType || row.resourceId)" placement="top" effect="light" :show-after="300" :enterable="false">
             <template #content>
               <div style="font-size:12px;max-width:220px">
-                <div><b>{{ t('audit.resourceType') }}:</b> {{ row.resourceType || '-' }}</div>
+                <div><b>{{ t('audit.resourceType') }}:</b> {{ resourceTypeText(row.resourceType) || '-' }}</div>
                 <div><b>{{ t('audit.resourceId') }}:</b> {{ row.resourceId || '-' }}</div>
               </div>
             </template>
-            <span style="cursor:default">{{ row.resourceType || '-' }} <el-icon style="font-size:11px;color:#409eff"><InfoFilled /></el-icon></span>
+            <span style="cursor:default">{{ resourceTypeText(row.resourceType) || '-' }} <el-icon style="font-size:11px;color:#409eff"><InfoFilled /></el-icon></span>
           </el-tooltip>
-          <span v-else>{{ row.resourceType || '' }}</span>
+          <span v-else>{{ resourceTypeText(row.resourceType) || '' }}</span>
         </template>
       </el-table-column>
       <el-table-column prop="username" :label="t('audit.operator')" min-width="130" sortable="custom" show-overflow-tooltip />
@@ -193,7 +189,7 @@
             </div>
             <div class="detail-row">
               <span class="detail-label">{{ t('audit.resourceType') }}</span>
-              <span class="detail-value">{{ currentLog.resourceType || '-' }}</span>
+              <span class="detail-value">{{ resourceTypeText(currentLog.resourceType) || '-' }}</span>
             </div>
             <div class="detail-row">
               <span class="detail-label">{{ t('audit.resourceId') }}</span>
@@ -275,7 +271,7 @@ import { ElMessage } from 'element-plus'
 import type { TableInstance } from 'element-plus'
 import { Download, Search, InfoFilled } from '@element-plus/icons-vue'
 import DOMPurify from 'dompurify'
-import { queryAuditLogs, exportAuditLogs, type AuditLog, type AuditQueryRequest } from '@/api/audit'
+import { queryAuditLogs, exportAuditLogs, getAuditResourceTypes, type AuditLog, type AuditQueryRequest } from '@/api/audit'
 
 const { t } = useI18n()
 
@@ -311,8 +307,11 @@ const ALL_EXPORT_FIELDS = computed(() => [
 ])
 const selectedExportFields = ref<string[]>([])
 
+const resourceTypes = ref<string[]>([])
+
 const query = reactive<AuditQueryRequest>({
   action: '',
+  resourceType: '',
   username: '',
   result: '',
   ipAddress: '',
@@ -366,37 +365,43 @@ const sortedLogs = computed(() => {
 })
 
 const actionType = (action: string): '' | 'success' | 'warning' | 'info' | 'primary' | 'danger' => {
-  const map: Record<string, '' | 'success' | 'warning' | 'info' | 'primary' | 'danger'> = {
-    USER_LOGIN: 'success', USER_LOGOUT: 'info', USER_LOGIN_FAILED: 'danger',
-    USER_CREATED: 'primary', USER_UPDATED: 'warning', USER_DELETED: 'danger',
-    USER_LOCKED: 'danger', USER_UNLOCKED: 'success',
-    PASSWORD_CHANGED: 'warning', PASSWORD_RESET: 'warning',
-    ROLE_CREATED: 'primary', ROLE_UPDATED: 'warning', ROLE_DELETED: 'danger',
-    PERMISSION_GRANTED: 'warning', PERMISSION_REVOKED: 'warning',
-    ROLE_ASSIGNED: 'primary', ROLE_UNASSIGNED: 'info',
-    DATA_CREATED: 'primary', DATA_UPDATED: 'warning', DATA_DELETED: 'danger',
-    DATA_QUERIED: 'info', DATA_EXPORTED: 'info', DATA_IMPORTED: 'primary',
-    CONFIG_CREATED: 'primary', CONFIG_UPDATED: 'warning', CONFIG_DELETED: 'danger',
-    SYSTEM_STARTUP: 'success', SYSTEM_SHUTDOWN: 'info',
+  switch ((action || '').toUpperCase()) {
+    case 'CREATE': return 'primary'
+    case 'UPDATE': return 'warning'
+    case 'DELETE': return 'danger'
+    case 'QUERY':  return 'info'
+    default:       return 'info'
   }
-  return map[action] || 'info'
 }
 
 const actionText = (action: string) => {
-  const map: Record<string, string> = {
-    USER_LOGIN: t('audit.login'), USER_LOGOUT: t('audit.logout'), USER_LOGIN_FAILED: t('audit.loginFailed'),
-    USER_CREATED: t('audit.userCreate'), USER_UPDATED: t('audit.userUpdate'), USER_DELETED: t('audit.userDelete'),
-    USER_LOCKED: t('audit.userLocked'), USER_UNLOCKED: t('audit.userUnlocked'),
-    PASSWORD_CHANGED: t('audit.passwordChange'), PASSWORD_RESET: t('audit.passwordReset'),
-    ROLE_CREATED: t('audit.roleCreate'), ROLE_UPDATED: t('audit.roleUpdate'), ROLE_DELETED: t('audit.roleDelete'),
-    PERMISSION_GRANTED: t('audit.permissionChange'), PERMISSION_REVOKED: t('audit.permissionRevoked'),
-    ROLE_ASSIGNED: t('audit.roleAssigned'), ROLE_UNASSIGNED: t('audit.roleUnassigned'),
-    DATA_CREATED: t('audit.create'), DATA_UPDATED: t('audit.update'), DATA_DELETED: t('audit.delete'),
-    DATA_QUERIED: t('audit.dataQuery'), DATA_EXPORTED: t('audit.dataExport'), DATA_IMPORTED: t('audit.dataImport'),
-    CONFIG_CREATED: t('audit.configCreate'), CONFIG_UPDATED: t('audit.configUpdate'), CONFIG_DELETED: t('audit.configDelete'),
-    SYSTEM_STARTUP: t('audit.systemStartup'), SYSTEM_SHUTDOWN: t('audit.systemShutdown'),
+  switch ((action || '').toUpperCase()) {
+    case 'CREATE': return 'Create'
+    case 'UPDATE': return 'Update'
+    case 'DELETE': return 'Delete'
+    case 'QUERY':  return 'Query'
+    default:       return action || '-'
   }
-  return map[action] || action
+}
+
+const resourceTypeText = (rt: string | null | undefined): string => {
+  const sep = ' - '
+  const EM  = t('menu.entitlementManagement')
+  const RT  = t('menu.relationTables')
+  switch ((rt || '').toUpperCase()) {
+    case 'USER':               return [t('menu.userManagement'), t('menu.userList')].join(sep)
+    case 'ROLE':               return [EM, t('menu.roleManagement')].join(sep)
+    case 'VIRTUAL_GROUP':      return [EM, t('menu.virtualGroup')].join(sep)
+    case 'TASK':               return [EM, t('menu.virtualGroup')].join(sep)
+    case 'BUSINESS_UNIT':      return [EM, t('menu.organization')].join(sep)
+    case 'RELATION_TABLE':     return [RT, t('menu.tableStructure')].join(sep)
+    case 'RELATION_TABLE_ROW': return [RT, t('menu.tableData')].join(sep)
+    case 'AUTH':               return 'Auth'
+    case 'BI_DASHBOARD':       return ['BI Management', 'Dashboard Registry'].join(sep)
+    case 'BI_ASSIGNMENT':      return ['BI Management', 'Dashboard Assignment'].join(sep)
+    case 'BI_RBAC':            return ['BI Management', 'RBAC Mapping'].join(sep)
+    default:                   return rt || ''
+  }
 }
 
 const buildQueryRequest = (): AuditQueryRequest => {
@@ -441,7 +446,7 @@ const handleSizeChange = () => {
 }
 
 const handleReset = () => {
-  Object.assign(query, { action: '', username: '', result: '', ipAddress: '', resourceId: '' })
+  Object.assign(query, { action: '', resourceType: '', username: '', result: '', ipAddress: '', resourceId: '' })
   const end = new Date()
   const start = new Date()
   start.setDate(start.getDate() - 6)
@@ -596,12 +601,13 @@ const formatTime = (isoStr: string | null | undefined): string => {
 }
 
 const actionCategory = (action: string): 'create' | 'update' | 'delete' | 'query' | 'other' => {
-  const a = (action || '').toUpperCase()
-  if (a.includes('CREAT')) return 'create'
-  if (a.includes('UPDAT')) return 'update'
-  if (a.includes('DELET')) return 'delete'
-  if (a.includes('QUER') || a.includes('EXPORT') || a.includes('IMPORT')) return 'query'
-  return 'other'
+  switch ((action || '').toUpperCase()) {
+    case 'CREATE': return 'create'
+    case 'UPDATE': return 'update'
+    case 'DELETE': return 'delete'
+    case 'QUERY':  return 'query'
+    default:       return 'other'
+  }
 }
 
 const parseJson = (s: string | null | undefined): Record<string, unknown> | null => {
@@ -726,12 +732,18 @@ const showDetail = (log: AuditLog) => {
   detailDialogVisible.value = true
 }
 
-onMounted(() => {
+onMounted(async () => {
   const end = new Date()
   const start = new Date()
   start.setDate(start.getDate() - 6)
   const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
   dateRange.value = [fmt(start), fmt(end)]
+  try {
+    const types = await getAuditResourceTypes()
+    resourceTypes.value = [...types].sort((a, b) => a.localeCompare(b))
+  } catch {
+    // fallback: leave empty; the dropdown will just be empty
+  }
   handleSearch()
 })
 </script>
@@ -772,12 +784,8 @@ onMounted(() => {
   padding: 20px 0;
 }
 
-/* Action Type tag: unified gray style */
-.action-tag {
-  background-color: #f4f4f5 !important;
-  border-color: #e9e9eb !important;
-  color: #606266 !important;
-}
+/* Action Type tag: keep default Element Plus color scheme from type prop */
+.action-tag { white-space: nowrap; }
 
 /* Log Detail Dialog */
 .log-detail {

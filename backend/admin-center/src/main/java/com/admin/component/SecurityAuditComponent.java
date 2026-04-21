@@ -125,8 +125,7 @@ public class SecurityAuditComponent {
     public boolean shouldLockAccount(String userId) {
         LoginPolicyConfig policy = getLoginPolicy();
         Instant since = Instant.now().minus(policy.getLockoutWindowMinutes(), ChronoUnit.MINUTES);
-        long failedAttempts = auditLogRepository.countByUserIdAndActionAndTimestampAfter(
-                userId, AuditAction.USER_LOGIN_FAILED, since);
+        long failedAttempts = auditLogRepository.countFailedLoginsSince(userId, since);
         return failedAttempts >= policy.getMaxFailedAttempts();
     }
     
@@ -237,31 +236,25 @@ public class SecurityAuditComponent {
                     .build());
         }
         
-        // 检测安全事件
-        List<AuditAction> securityActions = List.of(
-                AuditAction.USER_LOCKED,
-                AuditAction.PASSWORD_RESET,
-                AuditAction.PERMISSION_GRANTED,
-                AuditAction.PERMISSION_REVOKED
-        );
-        List<AuditLog> securityEvents = auditLogRepository.findSecurityEvents(securityActions, since);
-        
-        // 按用户分组检测异常权限变更
-        Map<String, Long> permissionChanges = new HashMap<>();
-        for (AuditLog event : securityEvents) {
-            if (event.getAction() == AuditAction.PERMISSION_GRANTED || 
-                event.getAction() == AuditAction.PERMISSION_REVOKED) {
-                permissionChanges.merge(event.getUserId(), 1L, Long::sum);
+        // 检测权限/配置类敏感操作（统一 Action 后，用 resourceType 做粗粒度判断）
+        List<AuditAction> writeActions = List.of(AuditAction.CREATE, AuditAction.UPDATE, AuditAction.DELETE);
+        List<AuditLog> recentWrites = auditLogRepository.findSecurityEvents(writeActions, since);
+        Map<String, Long> sensitiveWriteCount = new HashMap<>();
+        for (AuditLog event : recentWrites) {
+            String rt = event.getResourceType();
+            if (rt == null) continue;
+            // 对权限/配置影响较大的资源类型
+            if (rt.equals("ROLE") || rt.equals("RELATION_TABLE") || rt.equals("BUSINESS_UNIT") || rt.startsWith("BI_")) {
+                sensitiveWriteCount.merge(event.getUserId(), 1L, Long::sum);
             }
         }
-        
-        for (Map.Entry<String, Long> entry : permissionChanges.entrySet()) {
-            if (entry.getValue() > 10) {
+        for (Map.Entry<String, Long> entry : sensitiveWriteCount.entrySet()) {
+            if (entry.getValue() > 20) {
                 results.add(AnomalyDetectionResult.builder()
-                        .type("EXCESSIVE_PERMISSION_CHANGES")
+                        .type("EXCESSIVE_SENSITIVE_CHANGES")
                         .userId(entry.getKey())
                         .count(entry.getValue())
-                        .description("用户在" + days + "天内有" + entry.getValue() + "次权限变更")
+                        .description("用户在" + days + "天内对敏感资源有" + entry.getValue() + "次变更")
                         .severity("MEDIUM")
                         .build());
             }

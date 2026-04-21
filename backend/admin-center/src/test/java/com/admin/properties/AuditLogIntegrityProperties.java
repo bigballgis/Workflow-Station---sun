@@ -174,7 +174,7 @@ class AuditLogIntegrityProperties {
         Assume.that(oldValue != null && newValue != null);
         
         AuditLogRequest request = AuditLogRequest.builder()
-                .action(AuditAction.DATA_UPDATED)
+                .action(AuditAction.UPDATE)
                 .resourceType("DATA")
                 .resourceId("data-1")
                 .userId("user-1")

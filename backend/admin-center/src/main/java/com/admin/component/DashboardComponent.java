@@ -44,8 +44,7 @@ public class DashboardComponent {
         long onlineUsers = userRepository.countByLastLoginAtAfter(thirtyMinutesAgo);
 
         Instant todayStart = LocalDate.now().atStartOfDay(ZoneId.systemDefault()).toInstant();
-        long todayLogins = auditLogRepository.countByActionAndTimestampAfter(
-                com.admin.enums.AuditAction.USER_LOGIN, todayStart);
+        long todayLogins = auditLogRepository.countSuccessfulLoginsSince(todayStart);
 
         LocalDateTime todayStartLocal = LocalDate.now().atStartOfDay();
         long todayNewUsers = userRepository.countByCreatedAtAfter(todayStartLocal);
@@ -81,8 +80,7 @@ public class DashboardComponent {
         LocalDateTime rangeEndLocal = today.plusDays(1).atStartOfDay();
 
         Map<LocalDate, long[]> loginStatsMap = new HashMap<>();
-        List<Object[]> loginStats = auditLogRepository.countDailyLoginStats(
-                com.admin.enums.AuditAction.USER_LOGIN, rangeStart, rangeEnd);
+        List<Object[]> loginStats = auditLogRepository.countDailySuccessfulLoginStats(rangeStart, rangeEnd);
         for (Object[] row : loginStats) {
             LocalDate date = toLocalDate(row[0]);
             if (date != null) {

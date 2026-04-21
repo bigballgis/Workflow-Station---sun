@@ -143,6 +143,9 @@ export const validatePassword = (password: string): Promise<PasswordValidationRe
 
 // ==================== 审计日志 API ====================
 
+export const getAuditResourceTypes = (): Promise<string[]> =>
+  request.get('/security/audit-logs/resource-types')
+
 export const queryAuditLogs = (
   query: AuditQueryRequest,
   page: number = 0,

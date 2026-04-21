@@ -26,9 +26,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.io.ByteArrayOutputStream;
 import java.time.Instant;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 @Slf4j
 @RestController
@@ -87,16 +85,16 @@ public class SecurityAuditController {
     
     // ==================== 审计日志查询 ====================
     
-    /** 前端 action 简写到后端 AuditAction 的映射 */
-    private static final Map<String, AuditAction> ACTION_MAP = new HashMap<>();
-    static {
-        ACTION_MAP.put("LOGIN", AuditAction.USER_LOGIN);
-        ACTION_MAP.put("LOGOUT", AuditAction.USER_LOGOUT);
-        ACTION_MAP.put("CREATE", AuditAction.DATA_CREATED);
-        ACTION_MAP.put("UPDATE", AuditAction.DATA_UPDATED);
-        ACTION_MAP.put("DELETE", AuditAction.DATA_DELETED);
-        ACTION_MAP.put("PERMISSION_CHANGE", AuditAction.PERMISSION_GRANTED);
-    }
+    /** All known resource types produced by AdminAuditAspect, returned to the UI for the filter dropdown */
+    static final List<String> ALL_RESOURCE_TYPES = List.of(
+            "AUTH",
+            "BI_ASSIGNMENT", "BI_DASHBOARD", "BI_RBAC",
+            "BUSINESS_UNIT",
+            "RELATION_TABLE", "RELATION_TABLE_ROW",
+            "ROLE",
+            "TASK",
+            "USER", "VIRTUAL_GROUP"
+    );
     
     @PostMapping("/audit-logs/query")
     @Operation(summary = "查询审计日志")
@@ -110,16 +108,19 @@ public class SecurityAuditController {
         return ResponseEntity.ok(securityAuditComponent.queryAuditLogs(request, effective));
     }
     
+    @GetMapping("/audit-logs/resource-types")
+    @Operation(summary = "获取所有 Resource Type 枚举值（用于前端下拉过滤）")
+    public ResponseEntity<List<String>> getResourceTypes() {
+        return ResponseEntity.ok(ALL_RESOURCE_TYPES);
+    }
+
     private AuditQueryRequest toInternalRequest(AuditQueryRequestDto dto) {
         AuditQueryRequest req = new AuditQueryRequest();
         if (dto.getAction() != null && !dto.getAction().isBlank()) {
-            AuditAction mapped = ACTION_MAP.get(dto.getAction().toUpperCase());
-            if (mapped != null) {
-                req.setAction(mapped);
-            } else {
-                try {
-                    req.setAction(AuditAction.valueOf(dto.getAction().toUpperCase().replace(" ", "_")));
-                } catch (IllegalArgumentException e) { log.debug("Unknown audit action: {}", dto.getAction()); }
+            try {
+                req.setAction(AuditAction.valueOf(dto.getAction().toUpperCase()));
+            } catch (IllegalArgumentException e) {
+                log.debug("Unknown audit action: {}", dto.getAction());
             }
         }
         req.setUserId(dto.getUserId());
