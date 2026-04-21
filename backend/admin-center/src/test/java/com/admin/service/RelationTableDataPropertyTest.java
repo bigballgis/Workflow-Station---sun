@@ -5,6 +5,7 @@ import com.admin.entity.RelationTableDefinition;
 import com.admin.entity.RelationTableVersion;
 import com.admin.repository.RelationTableDefinitionRepository;
 import com.admin.repository.RelationTableVersionRepository;
+import com.admin.config.DatabaseSchemaResolver;
 import com.admin.service.impl.RelationTableDataServiceImpl;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -44,6 +45,7 @@ class RelationTableDataPropertyTest {
     private RelationTableAuditService auditService;
     private JdbcTemplate jdbcTemplate;
     private ObjectMapper objectMapper;
+    private DatabaseSchemaResolver schemaResolver;
     private RelationTableDataServiceImpl service;
 
     @BeforeTry
@@ -53,8 +55,10 @@ class RelationTableDataPropertyTest {
         auditService = mock(RelationTableAuditService.class);
         jdbcTemplate = mock(JdbcTemplate.class);
         objectMapper = new ObjectMapper();
+        schemaResolver = mock(DatabaseSchemaResolver.class);
+        when(schemaResolver.getSchema()).thenReturn("public");
         service = new RelationTableDataServiceImpl(
-                tableDefinitionRepository, versionRepository, auditService, jdbcTemplate, objectMapper);
+                tableDefinitionRepository, versionRepository, auditService, jdbcTemplate, objectMapper, schemaResolver);
     }
 
     // ==================== Arbitraries ====================

@@ -1,5 +1,6 @@
 package com.admin.service.impl;
 
+import com.admin.config.DatabaseSchemaResolver;
 import com.admin.dto.response.RelationTableResponse;
 import com.admin.entity.RelationFieldDefinition;
 import com.admin.entity.RelationTableDefinition;
@@ -43,6 +44,7 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
     private final RelationTableAuditService auditService;
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
+    private final DatabaseSchemaResolver schemaResolver;
 
     @Override
     @Transactional(readOnly = true)
@@ -126,8 +128,8 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
 
         // 查询物理表实际存在的列，避免插入不存在的列
         Set<String> physicalColumns = new HashSet<>(jdbcTemplate.queryForList(
-                "SELECT column_name FROM information_schema.columns WHERE table_name = ? AND table_schema = 'public'",
-                String.class, physicalTableName));
+                "SELECT column_name FROM information_schema.columns WHERE table_name = ? AND table_schema = ?",
+                String.class, physicalTableName, schemaResolver.getSchema()));
 
         // 过滤掉物理表中不存在的列
         filteredData.entrySet().removeIf(e -> !physicalColumns.contains(e.getKey()));
@@ -186,8 +188,8 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
 
         // 查询物理表实际存在的列
         Set<String> physicalColumns = new HashSet<>(jdbcTemplate.queryForList(
-                "SELECT column_name FROM information_schema.columns WHERE table_name = ? AND table_schema = 'public'",
-                String.class, physicalTableName));
+                "SELECT column_name FROM information_schema.columns WHERE table_name = ? AND table_schema = ?",
+                String.class, physicalTableName, schemaResolver.getSchema()));
 
         // Filter data to only include valid field names (exclude PK)
         Set<String> validFieldNames = fields.stream()

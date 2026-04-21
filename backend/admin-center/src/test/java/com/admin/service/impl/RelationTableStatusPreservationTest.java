@@ -63,6 +63,12 @@ class RelationTableStatusPreservationTest {
         return new ObjectMapper();
     }
 
+    private com.admin.config.DatabaseSchemaResolver mockSchemaResolver() {
+        com.admin.config.DatabaseSchemaResolver resolver = Mockito.mock(com.admin.config.DatabaseSchemaResolver.class);
+        Mockito.when(resolver.getSchema()).thenReturn("public");
+        return resolver;
+    }
+
     private RelationTableDefinition buildTableDefinition(Long id, String tableName,
                                                           RelationTableStatus status, boolean enabled) {
         return RelationTableDefinition.builder()
@@ -122,7 +128,7 @@ class RelationTableStatusPreservationTest {
         ObjectMapper objectMapper = realObjectMapper();
 
         RelationTableDataServiceImpl dataService = new RelationTableDataServiceImpl(
-                tableRepo, versionRepo, auditService, jdbcTemplate, objectMapper);
+                tableRepo, versionRepo, auditService, jdbcTemplate, objectMapper, mockSchemaResolver());
 
         // Build a DEPLOYED + enabled=true table
         RelationTableDefinition deployedEnabledTable = buildTableDefinition(
@@ -170,7 +176,7 @@ class RelationTableStatusPreservationTest {
         ObjectMapper objectMapper = realObjectMapper();
 
         RelationTableDataServiceImpl dataService = new RelationTableDataServiceImpl(
-                tableRepo, versionRepo, auditService, jdbcTemplate, objectMapper);
+                tableRepo, versionRepo, auditService, jdbcTemplate, objectMapper, mockSchemaResolver());
 
         // Build a DEPLOYED table
         RelationTableDefinition deployedTable = buildTableDefinition(

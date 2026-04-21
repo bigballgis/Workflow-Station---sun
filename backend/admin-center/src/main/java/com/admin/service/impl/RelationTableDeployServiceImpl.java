@@ -1,5 +1,6 @@
 package com.admin.service.impl;
 
+import com.admin.config.DatabaseSchemaResolver;
 import com.admin.dto.request.RollbackRequest;
 import com.admin.dto.response.RelationTableResponse;
 import com.admin.dto.response.RelationTableVersionResponse;
@@ -45,6 +46,7 @@ public class RelationTableDeployServiceImpl implements RelationTableDeployServic
     private final RelationTableVersionRepository versionRepository;
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
+    private final DatabaseSchemaResolver schemaResolver;
 
     @Override
     @Transactional
@@ -438,8 +440,8 @@ public class RelationTableDeployServiceImpl implements RelationTableDeployServic
      * 检查物理表是否已存在于数据库中
      */
     private boolean physicalTableExists(String tableName) {
-        String sql = "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = ? AND table_schema = 'public'";
-        Integer count = jdbcTemplate.queryForObject(sql, Integer.class, tableName);
+        String sql = "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = ? AND table_schema = ?";
+        Integer count = jdbcTemplate.queryForObject(sql, Integer.class, tableName, schemaResolver.getSchema());
         return count != null && count > 0;
     }
 
@@ -451,8 +453,8 @@ public class RelationTableDeployServiceImpl implements RelationTableDeployServic
         String quotedTable = quoteIdentifier(tableName);
 
         // 查询物理表已有的列名
-        String sql = "SELECT column_name FROM information_schema.columns WHERE table_name = ? AND table_schema = 'public'";
-        List<String> existingColumns = jdbcTemplate.queryForList(sql, String.class, tableName);
+        String sql = "SELECT column_name FROM information_schema.columns WHERE table_name = ? AND table_schema = ?";
+        List<String> existingColumns = jdbcTemplate.queryForList(sql, String.class, tableName, schemaResolver.getSchema());
         Set<String> existingColumnSet = existingColumns.stream()
                 .map(String::toLowerCase)
                 .collect(Collectors.toSet());

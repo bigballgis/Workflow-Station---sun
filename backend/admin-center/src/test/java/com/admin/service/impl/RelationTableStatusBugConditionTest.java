@@ -47,6 +47,7 @@ class RelationTableStatusBugConditionTest {
     @Mock private RelationTableAuditService auditService;
     @Mock private JdbcTemplate jdbcTemplate;
     @Mock private ObjectMapper objectMapper;
+    @Mock private com.admin.config.DatabaseSchemaResolver schemaResolver;
 
     private RelationTableStructureServiceImpl structureService;
     private RelationTableDataServiceImpl dataService;
@@ -56,7 +57,7 @@ class RelationTableStatusBugConditionTest {
         structureService = new RelationTableStructureServiceImpl(
                 tableDefinitionRepository, fieldDefinitionRepository, jdbcTemplate);
         dataService = new RelationTableDataServiceImpl(
-                tableDefinitionRepository, versionRepository, auditService, jdbcTemplate, objectMapper);
+                tableDefinitionRepository, versionRepository, auditService, jdbcTemplate, objectMapper, schemaResolver);
     }
 
     // ==================== Helper Methods ====================

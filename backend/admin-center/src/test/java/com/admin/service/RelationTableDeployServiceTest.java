@@ -10,6 +10,7 @@ import com.admin.exception.RelationTableDeploymentException;
 import com.admin.exception.RelationTableNotFoundException;
 import com.admin.repository.RelationTableDefinitionRepository;
 import com.admin.repository.RelationTableVersionRepository;
+import com.admin.config.DatabaseSchemaResolver;
 import com.admin.service.impl.RelationTableDeployServiceImpl;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -60,6 +61,9 @@ class RelationTableDeployServiceTest {
 
     @Mock
     private ObjectMapper objectMapper;
+
+    @Mock
+    private DatabaseSchemaResolver schemaResolver;
 
     @InjectMocks
     private RelationTableDeployServiceImpl service;
