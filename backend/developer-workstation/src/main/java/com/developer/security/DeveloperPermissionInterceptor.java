@@ -7,8 +7,6 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
@@ -60,9 +58,9 @@ public class DeveloperPermissionInterceptor implements HandlerInterceptor {
         
         log.debug("Required permissions: {}", Arrays.toString(annotation.value()));
         
-        // 获取当前用户
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null || !authentication.isAuthenticated()) {
+        // Only trust authenticated JWT principal from SecurityContext.
+        // Do not fallback to client-provided headers when auth context is missing.
+        if (!SecurityContextUtils.isAuthenticated()) {
             response.setStatus(HttpStatus.UNAUTHORIZED.value());
             response.getWriter().write("{\"error\":\"UNAUTHORIZED\",\"message\":\"" + i18nService.getMessage("auth.unauthorized") + "\"}");
             return false;
@@ -92,17 +90,9 @@ public class DeveloperPermissionInterceptor implements HandlerInterceptor {
     }
     
     private String getUserIdFromRequest(HttpServletRequest request) {
-        // Priority 1: SecurityContext (JWT-parsed UserPrincipal)
+        // Trust user identity from JWT-parsed SecurityContext only.
         Optional<String> securityContextUserId = SecurityContextUtils.getCurrentUserId();
-        if (securityContextUserId.isPresent()) {
-            return securityContextUserId.get();
-        }
-        // Priority 2: X-User-Id header (fallback for compatibility)
-        String userId = request.getHeader("X-User-Id");
-        if (userId != null && !userId.isEmpty()) {
-            return userId;
-        }
-        return null;
+        return securityContextUserId.orElse(null);
     }
     
     private boolean checkPermissions(String userId, String[] requiredPermissions, RequireDeveloperPermission.Mode mode) {
