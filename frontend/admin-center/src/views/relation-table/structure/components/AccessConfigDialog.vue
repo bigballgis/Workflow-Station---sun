@@ -54,21 +54,25 @@
 
         <!-- Tab 1: System / Unbounded roles -->
         <el-tab-pane label="System Role" name="system">
-          <p class="tab-hint">Select a system-level or unbounded business role to grant access.</p>
-          <el-select
-            v-model="selectedSystemRoleId"
-            filterable
-            placeholder="Select a role"
-            style="width: 100%; margin-top: 8px;"
-            :loading="rolesLoading"
-          >
-            <el-option
-              v-for="role in availableSystemRoles"
-              :key="role.id"
-              :label="`${role.name}  (${roleTypeDisplayLabel(role.type)})`"
-              :value="role.id"
-            />
-          </el-select>
+          <p class="tab-hint">
+            Roles marked with <el-tag size="small" type="danger" style="margin: 0 2px;">Default</el-tag>
+            are pre-selected and always granted access when Portal Visibility is enabled.
+          </p>
+          <div v-loading="rolesLoading" class="system-role-list">
+            <el-empty v-if="!rolesLoading && availableSystemRoles.length === 0" description="All system roles already have access" :image-size="40" />
+            <el-checkbox-group v-else v-model="selectedSystemRoleIds">
+              <div v-for="role in availableSystemRoles" :key="role.id" class="role-checkbox-item">
+                <el-checkbox
+                  :value="role.id"
+                  :disabled="isDefaultSystemRole(role.name)"
+                >
+                  <span class="role-checkbox-name">{{ role.name }}</span>
+                  <el-tag v-if="isDefaultSystemRole(role.name)" size="small" type="danger" style="margin-left: 6px;">Default</el-tag>
+                  <el-tag v-else size="small" type="info" style="margin-left: 6px;">{{ roleTypeDisplayLabel(role.type) }}</el-tag>
+                </el-checkbox>
+              </div>
+            </el-checkbox-group>
+          </div>
         </el-tab-pane>
 
         <!-- Tab 2: BU cascade + BU roles -->
@@ -98,9 +102,9 @@
               >
                 <el-option
                   v-for="item in availableBuRoles"
-                  :key="item.roleId"
-                  :label="item.roleName || item.roleCode || item.roleId"
-                  :value="item.roleId"
+                  :key="item.id"
+                  :label="item.name || item.code"
+                  :value="item.id"
                 />
               </el-select>
             </el-form-item>
@@ -118,12 +122,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, watchEffect } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { relationTableStructureApi, type RelationTableAccess } from '@/api/relationTable'
 import { roleApi, type Role, type RoleType } from '@/api/role'
-import { businessUnitApi, type BusinessUnit, type BusinessUnitRole } from '@/api/businessUnit'
+import { businessUnitApi, type BusinessUnit } from '@/api/businessUnit'
 
 const props = defineProps<{
   modelValue: boolean
@@ -154,13 +158,17 @@ const addLoading = ref(false)
 const addRoleTab = ref<'system' | 'bu'>('system')
 
 // system tab
-const selectedSystemRoleId = ref('')
+const DEFAULT_SYSTEM_ROLE_NAMES = ['System Administrator', 'Auditor', 'Technical Lead', 'Team Lead']
+
+const isDefaultSystemRole = (name: string) => DEFAULT_SYSTEM_ROLE_NAMES.includes(name)
+
+const selectedSystemRoleIds = ref<string[]>([])
 
 // BU tab
 const selectedBuId = ref<string | null>(null)
 const selectedBuRoleId = ref('')
 const buCascaderOptions = ref<BusinessUnit[]>([])
-const buRoles = ref<BusinessUnitRole[]>([])
+const buRoles = ref<Role[]>([])
 const buRolesLoading = ref(false)
 
 const buCascaderProps = {
@@ -175,12 +183,28 @@ const buCascaderProps = {
 const assignedIds = computed(() => new Set(accessList.value.map(a => a.targetId)))
 
 const availableSystemRoles = computed(() =>
-  allRoles.value.filter(r => r.status === 'ACTIVE' && !assignedIds.value.has(r.id))
+  allRoles.value.filter(r =>
+    r.status === 'ACTIVE' &&
+    r.type !== 'BU_BOUNDED' &&
+    !assignedIds.value.has(r.id)
+  )
 )
 
 const availableBuRoles = computed(() =>
-  buRoles.value.filter(r => !assignedIds.value.has(r.roleId))
+  buRoles.value.filter(r => !assignedIds.value.has(r.id))
 )
+
+// Keep default roles pre-selected whenever dialog is open or role list changes
+watchEffect(() => {
+  if (!showAddRole.value) return
+  const defaultIds = allRoles.value
+    .filter(r => isDefaultSystemRole(r.name) && !assignedIds.value.has(r.id))
+    .map(r => r.id)
+  // Merge: keep any manually checked extras + ensure defaults are always in the list
+  const current = new Set(selectedSystemRoleIds.value)
+  defaultIds.forEach(id => current.add(id))
+  selectedSystemRoleIds.value = [...current]
+})
 
 // ---- display helpers ----
 const ROLE_TYPE_LABELS: Record<string, string> = {
@@ -255,7 +279,7 @@ const openAddDialog = () => {
 
 const resetAddForm = () => {
   addRoleTab.value = 'system'
-  selectedSystemRoleId.value = ''
+  selectedSystemRoleIds.value = []  // watchEffect will re-populate defaults
   selectedBuId.value = null
   selectedBuRoleId.value = ''
   buRoles.value = []
@@ -277,21 +301,41 @@ const handleBuChange = async (buId: string | null) => {
 
 const handleAddRole = async () => {
   if (!props.tableId) return
-  const roleId = addRoleTab.value === 'system' ? selectedSystemRoleId.value : selectedBuRoleId.value
-  if (!roleId) {
-    ElMessage.warning('Please select a role')
-    return
-  }
-  addLoading.value = true
-  try {
-    await relationTableStructureApi.addAccess(props.tableId, roleId)
-    ElMessage.success('Access added')
-    showAddRole.value = false
-    await fetchAccessConfig()
-  } catch (e: any) {
-    ElMessage.error(e?.response?.data?.message || 'Failed to add access')
-  } finally {
-    addLoading.value = false
+
+  if (addRoleTab.value === 'system') {
+    const roleIds = selectedSystemRoleIds.value.filter(id => !assignedIds.value.has(id))
+    if (roleIds.length === 0) {
+      ElMessage.warning('Please select at least one role')
+      return
+    }
+    addLoading.value = true
+    try {
+      await Promise.all(roleIds.map(id => relationTableStructureApi.addAccess(props.tableId!, id)))
+      ElMessage.success(`Added ${roleIds.length} role(s)`)
+      showAddRole.value = false
+      await fetchAccessConfig()
+    } catch (e: any) {
+      ElMessage.error(e?.response?.data?.error?.message || e?.response?.data?.message || 'Failed to add access')
+    } finally {
+      addLoading.value = false
+    }
+  } else {
+    const roleId = selectedBuRoleId.value
+    if (!roleId) {
+      ElMessage.warning('Please select a role')
+      return
+    }
+    addLoading.value = true
+    try {
+      await relationTableStructureApi.addAccess(props.tableId, roleId)
+      ElMessage.success('Access added')
+      showAddRole.value = false
+      await fetchAccessConfig()
+    } catch (e: any) {
+      ElMessage.error(e?.response?.data?.error?.message || e?.response?.data?.message || 'Failed to add access')
+    } finally {
+      addLoading.value = false
+    }
   }
 }
 
@@ -328,7 +372,24 @@ watch(() => props.modelValue, val => {
 .tab-hint {
   font-size: 13px;
   color: #909399;
-  margin: 0 0 4px;
+  margin: 0 0 8px;
   line-height: 1.5;
+}
+.system-role-list {
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 4px;
+  padding: 8px 12px;
+}
+.role-checkbox-item {
+  padding: 5px 0;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+.role-checkbox-item:last-child {
+  border-bottom: none;
+}
+.role-checkbox-name {
+  font-size: 13px;
 }
 </style>

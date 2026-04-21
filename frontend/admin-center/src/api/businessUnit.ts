@@ -1,4 +1,5 @@
 import { get, post, put, del } from './request'
+import type { Role } from './role'
 
 export interface BusinessUnit {
   id: string
@@ -97,8 +98,8 @@ export const businessUnitApi = {
   search: (keyword: string) => get<BusinessUnit[]>('/business-units/search', { params: { keyword } }),
 
   // 角色绑定相关
-  // 获取业务单元绑定的角色
-  getBoundRoles: (id: string) => get<BusinessUnitRole[]>(`/business-units/${id}/roles`),
+  // 获取业务单元绑定的角色（后端直接返回 Role 列表）
+  getBoundRoles: (id: string) => get<Role[]>(`/business-units/${id}/roles`),
   
   // 绑定角色到业务单元
   bindRole: (id: string, roleId: string) => post<void>(`/business-units/${id}/roles`, { roleId }),
