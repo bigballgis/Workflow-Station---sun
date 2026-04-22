@@ -18,6 +18,16 @@
           <el-icon><RefreshRight /></el-icon>
         </el-button>
       </el-button-group>
+      <div class="auto-save-status">
+        <span v-if="autoSaving" class="auto-saving">
+          <el-icon class="is-loading"><Loading /></el-icon>
+          {{ t('process.autoSaving') }}
+        </span>
+        <span v-else-if="lastAutoSaveTime" class="auto-saved">
+          <el-icon><CircleCheck /></el-icon>
+          {{ t('process.autoSaved') }} {{ formatAutoSaveTime(lastAutoSaveTime) }}
+        </span>
+      </div>
       <el-button-group>
         <el-button @click="handleValidate" :disabled="!modelerReady">{{ t('process.validate') }}</el-button>
         <el-button @click="handleExportSVG" :disabled="!modelerReady">{{ t('process.exportSVG') }}</el-button>
@@ -61,7 +71,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, nextTick, shallowRef } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ZoomIn, ZoomOut, Monitor, RefreshLeft, RefreshRight } from '@element-plus/icons-vue'
+import { ZoomIn, ZoomOut, Monitor, RefreshLeft, RefreshRight, Loading, CircleCheck } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
 import { functionUnitApi } from '@/api/functionUnit'
@@ -89,9 +99,12 @@ const showDebugPanel = ref(false)
 const showImportDialog = ref(false)
 const importXml = ref('')
 const saving = ref(false)
+const autoSaving = ref(false)
+const lastAutoSaveTime = ref<Date | null>(null)
 const currentZoom = ref(1)
 
 let bpmnModeler: any = null
+let autoSaveTimer: ReturnType<typeof setTimeout> | null = null
 
 // Default empty BPMN diagram
 const defaultBpmnXml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -173,9 +186,9 @@ async function initModeler() {
     const canvas = bpmnModeler.get('canvas')
     canvas.zoom('fit-viewport')
     
-    // Listen for changes
+    // Listen for changes and trigger auto-save
     bpmnModeler.on('commandStack.changed', () => {
-      // Mark as dirty
+      scheduleAutoSave()
     })
     
   } catch (err: any) {
@@ -294,27 +307,72 @@ async function handleImportXML() {
   }
 }
 
-async function handleSave() {
+async function handleSave(isAutoSave = false) {
   if (!bpmnModeler) return
   const detail = formatLastTaskTopologyViolations()
   if (detail) {
-    ElMessage.error(t('process.lastTaskAnchorBlocked', { detail }))
+    if (!isAutoSave) {
+      ElMessage.error(t('process.lastTaskAnchorBlocked', { detail }))
+    }
     return
   }
-  saving.value = true
+  
+  if (isAutoSave) {
+    autoSaving.value = true
+  } else {
+    saving.value = true
+  }
+  
   try {
     const { xml } = await bpmnModeler.saveXML({ format: true })
     await store.saveProcess(props.functionUnitId, { bpmnXml: xml })
-    ElMessage.success(t('process.saveSuccess'))
+    
+    if (isAutoSave) {
+      lastAutoSaveTime.value = new Date()
+    } else {
+      ElMessage.success(t('process.saveSuccess'))
+    }
   } catch (e: any) {
     const msg =
       e?.message ||
       e?.response?.data?.error?.message ||
       e?.response?.data?.message ||
       t('process.saveFailed')
-    ElMessage.error(msg)
+    if (!isAutoSave) {
+      ElMessage.error(msg)
+    }
   } finally {
-    saving.value = false
+    if (isAutoSave) {
+      autoSaving.value = false
+    } else {
+      saving.value = false
+    }
+  }
+}
+
+function scheduleAutoSave() {
+  // Clear existing timer
+  if (autoSaveTimer) {
+    clearTimeout(autoSaveTimer)
+  }
+  
+  // Schedule auto-save after 2 seconds of inactivity
+  autoSaveTimer = setTimeout(() => {
+    handleSave(true)
+  }, 2000)
+}
+
+function formatAutoSaveTime(time: Date): string {
+  const now = new Date()
+  const diff = Math.floor((now.getTime() - time.getTime()) / 1000)
+  
+  if (diff < 60) {
+    return t('process.justNow')
+  } else if (diff < 3600) {
+    const minutes = Math.floor(diff / 60)
+    return t('process.minutesAgo', { count: minutes })
+  } else {
+    return time.toLocaleTimeString()
   }
 }
 
@@ -324,6 +382,12 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  // Clear auto-save timer
+  if (autoSaveTimer) {
+    clearTimeout(autoSaveTimer)
+    autoSaveTimer = null
+  }
+  
   if (bpmnModeler) {
     bpmnModeler.destroy()
     bpmnModeler = null
@@ -342,10 +406,34 @@ onUnmounted(() => {
 .designer-toolbar {
   display: flex;
   justify-content: space-between;
+  align-items: center;
+  gap: 16px;
   padding: 10px;
   border-bottom: 1px solid #e6e6e6;
   background: #fff;
   flex-shrink: 0;
+}
+
+.auto-save-status {
+  font-size: 14px;
+  color: #909399;
+  display: flex;
+  align-items: center;
+  min-width: 150px;
+  
+  .auto-saving {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #409eff;
+  }
+  
+  .auto-saved {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: #67c23a;
+  }
 }
 
 .designer-content {
