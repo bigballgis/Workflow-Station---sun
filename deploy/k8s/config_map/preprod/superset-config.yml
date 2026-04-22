@@ -22,7 +22,7 @@ data:
 
     SQLALCHEMY_DATABASE_URI = os.getenv(
         "SUPERSET_DATABASE_URI",
-        "sqlite:////app/superset_home/superset.db",
+        "postgresql+psycopg2://platform_dev:dev_password_123@host.docker.internal:5432/workflow_platform_dev?options=-csearch_path%3Dsuperset",
     )
 
     MAPBOX_API_KEY = os.getenv("MAPBOX_API_KEY", "")
