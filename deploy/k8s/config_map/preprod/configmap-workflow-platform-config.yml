@@ -30,7 +30,7 @@ data:
   SECURITY_PASSWORD_MIN_LENGTH: "8"
   SECURITY_SESSION_TIMEOUT_MINUTES: "30"
   SERVER_PORT: "8080"
-  SPRING_DATASOURCE_URL: "jdbc:postgresql://hkl25243602.hc.cloud.hk.hsbc:25011/hmhkdev?currentSchema=hmwfst"
+  SPRING_DATASOURCE_URL: "jdbc:postgresql://hkl25243602.hc.cloud.hk.hsbc:25011/hmhkdev"
   SPRING_DATASOURCE_USERNAME: "hmhkodev1"
   SPRING_KAFKA_BOOTSTRAP_SERVERS: "kafka-service.__NAMESPACE__:29092"
   SPRING_DATA_REDIS_HOST: "redis-service.__NAMESPACE__"
