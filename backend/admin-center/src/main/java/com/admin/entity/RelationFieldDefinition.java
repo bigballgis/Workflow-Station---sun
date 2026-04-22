@@ -1,5 +1,6 @@
 package com.admin.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.platform.common.enums.RelationDataType;
 import jakarta.persistence.*;
 import lombok.*;
@@ -23,6 +24,8 @@ public class RelationFieldDefinition {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "table_id", nullable = false)
+    @ToString.Exclude
+    @JsonIgnore
     private RelationTableDefinition tableDefinition;
 
     @Column(name = "field_name", nullable = false, length = 100)

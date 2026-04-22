@@ -1,7 +1,12 @@
 package com.admin.audit;
 
+import com.admin.bi.repository.BiDashboardAssignmentRepository;
+import com.admin.bi.repository.BiDashboardRegistryRepository;
+import com.admin.bi.repository.BiRbacMappingRepository;
 import com.admin.component.SecurityAuditComponent;
 import com.admin.enums.AuditAction;
+import com.admin.repository.BusinessUnitRepository;
+import com.admin.repository.RelationTableDefinitionRepository;
 import com.admin.repository.RoleRepository;
 import com.admin.repository.UserRepository;
 import com.admin.repository.VirtualGroupRepository;
@@ -12,7 +17,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import java.util.*;;
@@ -34,17 +43,41 @@ public class AdminAuditAspect {
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final VirtualGroupRepository virtualGroupRepository;
+    private final RelationTableDefinitionRepository relationTableDefinitionRepository;
+    private final BusinessUnitRepository businessUnitRepository;
+    private final BiDashboardRegistryRepository biDashboardRegistryRepository;
+    private final BiDashboardAssignmentRepository biDashboardAssignmentRepository;
+    private final BiRbacMappingRepository biRbacMappingRepository;
+    private final TransactionTemplate auditTxTemplate;
     private final ObjectMapper mapper;
 
     public AdminAuditAspect(SecurityAuditComponent securityAuditComponent,
                              UserRepository userRepository,
                              RoleRepository roleRepository,
                              VirtualGroupRepository virtualGroupRepository,
+                             RelationTableDefinitionRepository relationTableDefinitionRepository,
+                             BusinessUnitRepository businessUnitRepository,
+                             BiDashboardRegistryRepository biDashboardRegistryRepository,
+                             BiDashboardAssignmentRepository biDashboardAssignmentRepository,
+                             BiRbacMappingRepository biRbacMappingRepository,
+                             PlatformTransactionManager transactionManager,
                              ObjectMapper objectMapper) {
         this.securityAuditComponent = securityAuditComponent;
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.virtualGroupRepository = virtualGroupRepository;
+        this.relationTableDefinitionRepository = relationTableDefinitionRepository;
+        this.businessUnitRepository = businessUnitRepository;
+        this.biDashboardRegistryRepository = biDashboardRegistryRepository;
+        this.biDashboardAssignmentRepository = biDashboardAssignmentRepository;
+        this.biRbacMappingRepository = biRbacMappingRepository;
+        // REQUIRES_NEW + readOnly: isolate audit lookups from the controller's
+        // Hibernate session so eager-fetching lazy collections (for JSON
+        // serialisation) does not pollute the caller's persistence context.
+        TransactionTemplate tpl = new TransactionTemplate(transactionManager);
+        tpl.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        tpl.setReadOnly(true);
+        this.auditTxTemplate = tpl;
         this.mapper = objectMapper.copy()
                 .disable(SerializationFeature.FAIL_ON_EMPTY_BEANS);
     }
@@ -350,35 +383,50 @@ public class AdminAuditAspect {
         if (meta.action == AuditAction.CREATE || meta.action == AuditAction.QUERY) {
             return null;
         }
-        try {
-            Object entity = switch (meta.resourceType) {
-                case "USER"          -> userRepository.findById(meta.resourceId).orElse(null);
-                case "ROLE"          -> roleRepository.findById(meta.resourceId).orElse(null);
-                case "VIRTUAL_GROUP" -> virtualGroupRepository.findById(meta.resourceId).orElse(null);
-                default              -> null;
-            };
-            return entity != null ? toJson(entity) : null;
-        } catch (Exception e) {
-            log.debug("Could not fetch old value for audit (type={}, id={}): {}", meta.resourceType, meta.resourceId, e.getMessage());
-            return null;
-        }
+        return fetchEntityJson(meta.resourceType, meta.resourceId);
     }
 
     private String fetchCurrentEntityState(AuditMeta meta) {
         if (meta.resourceId == null) return null;
+        return fetchEntityJson(meta.resourceType, meta.resourceId);
+    }
+
+    /**
+     * Load an entity from its repository and serialise to JSON inside an
+     * isolated read-only transaction so that loading lazy associations (for
+     * JSON serialisation) does NOT pollute the caller's Hibernate session.
+     * Returns null if not found or not supported.
+     */
+    private String fetchEntityJson(String resourceType, String resourceId) {
         try {
-            Object entity = switch (meta.resourceType) {
-                case "USER"          -> userRepository.findById(meta.resourceId).orElse(null);
-                case "ROLE"          -> roleRepository.findById(meta.resourceId).orElse(null);
-                case "VIRTUAL_GROUP" -> virtualGroupRepository.findById(meta.resourceId).orElse(null);
-                default              -> null;
-            };
-            return entity != null ? toJson(entity) : null;
-        } catch (Exception e) {
-            log.debug("Could not fetch entity state after update (type={}, id={}): {}",
-                    meta.resourceType, meta.resourceId, e.getMessage());
+            return auditTxTemplate.execute(status -> {
+                Object entity = switch (resourceType) {
+                    case "USER"           -> userRepository.findById(resourceId).orElse(null);
+                    case "ROLE"           -> roleRepository.findById(resourceId).orElse(null);
+                    case "VIRTUAL_GROUP"  -> virtualGroupRepository.findById(resourceId).orElse(null);
+                    case "BUSINESS_UNIT"  -> businessUnitRepository.findById(resourceId).orElse(null);
+                    case "RELATION_TABLE" -> parseLong(resourceId)
+                            .flatMap(relationTableDefinitionRepository::findById)
+                            .orElse(null);
+                    case "BI_DASHBOARD"   -> biDashboardRegistryRepository.findById(resourceId).orElse(null);
+                    case "BI_ASSIGNMENT"  -> biDashboardAssignmentRepository.findById(resourceId).orElse(null);
+                    case "BI_RBAC"        -> biRbacMappingRepository.findById(resourceId).orElse(null);
+                    // RELATION_TABLE_ROW uses a composite id (tableId:rowId) and row data is
+                    // schema-less — skip DB lookup and rely on response body / request args.
+                    default               -> null;
+                };
+                return entity != null ? toJson(entity) : null;
+            });
+        } catch (Throwable e) {
+            log.debug("Could not fetch audit entity state (type={}, id={}): {}",
+                    resourceType, resourceId, e.getMessage());
             return null;
         }
+    }
+
+    private static java.util.Optional<Long> parseLong(String s) {
+        try { return java.util.Optional.of(Long.valueOf(s)); }
+        catch (NumberFormatException e) { return java.util.Optional.empty(); }
     }
 
     // =========================================================================
@@ -393,6 +441,13 @@ public class AdminAuditAspect {
         if (meta.action == AuditAction.DELETE) {
             return null;
         }
+        // For CREATE, prefer the controller's response body — it contains the full
+        // persisted entity (id, server-generated timestamps, audit fields, ...)
+        // which is more useful than the inbound request payload.
+        if (meta.action == AuditAction.CREATE) {
+            Object body = unwrapBody(result);
+            if (body != null) return toJsonMasked(body);
+        }
         for (Object arg : args) {
             if (arg != null && !(arg instanceof String) && !(arg instanceof Number) && !(arg instanceof Boolean)) {
                 return toJsonMasked(arg);
@@ -401,13 +456,37 @@ public class AdminAuditAspect {
         return null;
     }
 
+    /** Unwrap Spring {@link ResponseEntity#getBody()} if present; otherwise return the raw result. */
+    private Object unwrapBody(Object result) {
+        if (result == null) return null;
+        if (result instanceof ResponseEntity<?> re) {
+            return re.getBody();
+        }
+        return result;
+    }
+
     // =========================================================================
     // Persist
     // =========================================================================
 
+    /**
+     * Fields that are auto-managed by the framework (Spring Data JPA Auditing,
+     * Hibernate @Version, etc.) and therefore have no semantic meaning when
+     * comparing "before" vs "after". They are excluded from the diff so the
+     * audit detail view only shows the user-meaningful changes.
+     */
     private static final Set<String> METADATA_FIELDS = Set.of(
-            "updatedAt", "createdAt", "timestamp", "version",
-            "lastModifiedAt", "modifiedAt", "lastUpdatedAt", "updateTime", "createTime");
+            // timestamps
+            "updatedAt", "createdAt", "timestamp",
+            "lastModifiedAt", "lastModifiedDate", "modifiedAt",
+            "lastUpdatedAt", "updateTime", "createTime",
+            "createdDate",
+            // user trace
+            "updatedBy", "createdBy",
+            "lastModifiedBy", "modifiedBy",
+            "createBy", "updateBy",
+            // optimistic lock
+            "version");
 
     private boolean isUpdateAction(AuditAction action) {
         return action == AuditAction.UPDATE;
@@ -495,8 +574,14 @@ public class AdminAuditAspect {
         if (obj == null) return null;
         try {
             return mapper.writeValueAsString(obj);
-        } catch (Exception e) {
-            return String.valueOf(obj);
+        } catch (Throwable e) {
+            // NOTE: never fall back to obj.toString() here — Lombok @Data on
+            // bidirectional JPA entities (e.g. RelationTableDefinition <-> 
+            // RelationFieldDefinition) produces infinite-recursion toString
+            // which blows the stack.
+            log.debug("Failed to serialize audit payload ({}): {}",
+                    obj.getClass().getSimpleName(), e.getMessage());
+            return "{\"_class\":\"" + obj.getClass().getSimpleName() + "\",\"_error\":\"serialize_failed\"}";
         }
     }
 

@@ -1,5 +1,6 @@
 package com.admin.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -24,6 +25,8 @@ public class RelationTableVersion {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "table_id", nullable = false)
+    @ToString.Exclude
+    @JsonIgnore
     private RelationTableDefinition tableDefinition;
 
     @Column(name = "version_number", nullable = false)

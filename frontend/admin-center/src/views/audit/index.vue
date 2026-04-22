@@ -238,7 +238,7 @@
             <span class="section-badge badge-diff" v-if="actionCategory(currentLog.action) === 'update'">{{ t('audit.changedFieldsOnly') }}</span>
           </div>
           <div class="json-container">
-            <pre class="json-content" :class="{ collapsed: !beforeExpanded }" v-html="formatJsonHighlight(currentBeforeData)"></pre>
+            <pre class="json-content" :class="{ collapsed: !beforeExpanded }" v-html="formatJsonHighlight(currentBeforeData, currentBeforeCompare)"></pre>
             <el-button class="expand-btn" link type="primary" @click="beforeExpanded = !beforeExpanded">
               {{ beforeExpanded ? t('common.collapse') : t('common.expand') }}
             </el-button>
@@ -253,7 +253,7 @@
             <span class="section-badge badge-diff" v-if="actionCategory(currentLog.action) === 'update'">{{ t('audit.changedFieldsOnly') }}</span>
           </div>
           <div class="json-container">
-            <pre class="json-content" :class="{ collapsed: !afterExpanded }" v-html="formatJsonHighlight(currentAfterData)"></pre>
+            <pre class="json-content" :class="{ collapsed: !afterExpanded }" v-html="formatJsonHighlight(currentAfterData, currentAfterCompare)"></pre>
             <el-button class="expand-btn" link type="primary" @click="afterExpanded = !afterExpanded">
               {{ afterExpanded ? t('common.collapse') : t('common.expand') }}
             </el-button>
@@ -659,6 +659,17 @@ const getAfterData = (log: AuditLog): Record<string, unknown> | null => {
 const currentBeforeData = computed(() => currentLog.value ? getBeforeData(currentLog.value) : null)
 const currentAfterData  = computed(() => currentLog.value ? getAfterData(currentLog.value)  : null)
 
+// For UPDATE, pass the "other side" so the renderer can deep-diff and
+// highlight any key (at any nesting depth) whose value changed.
+const currentBeforeCompare = computed((): Record<string, unknown> | null => {
+  if (!currentLog.value) return null
+  return actionCategory(currentLog.value.action) === 'update' ? currentAfterData.value : null
+})
+const currentAfterCompare = computed((): Record<string, unknown> | null => {
+  if (!currentLog.value) return null
+  return actionCategory(currentLog.value.action) === 'update' ? currentBeforeData.value : null
+})
+
 const getDiffJson = (
   oldStr: string | null | undefined,
   newStr: string | null | undefined,
@@ -688,6 +699,9 @@ const getDiffJson = (
 
     const diff: Record<string, unknown> = {}
     for (const key of allKeys) {
+      // Drop framework-managed audit fields — they change on every save and
+      // would otherwise pollute the diff with noise.
+      if (SYSTEM_AUDIT_FIELDS.has(key)) continue
       if (JSON.stringify(oldObj[key]) !== JSON.stringify(newObj[key])) {
         diff[key] = side === 'before' ? oldObj[key] : newObj[key]
       }
@@ -698,28 +712,138 @@ const getDiffJson = (
   }
 }
 
-const formatJsonHighlight = (obj: Record<string, unknown>): string => {
-  if (!obj || Object.keys(obj).length === 0) return '{}'
-  const json = JSON.stringify(obj, null, 2)
-  const highlighted = json
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(
-      /("(?:\\u[a-fA-F0-9]{4}|\\[^u]|[^\\"])*"(?:\s*:)?|\b(?:true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
-      (match) => {
-        let cls = 'jn'
-        if (/^"/.test(match)) {
-          cls = /:$/.test(match) ? 'jk' : 'js'
-        } else if (/true|false/.test(match)) {
-          cls = 'jb'
-        } else if (/null/.test(match)) {
-          cls = 'jnull'
+// Auto-managed audit fields (timestamps, modifier id, version, etc.). They
+// change on every save without representing real user intent, so we always
+// hide them from the UPDATE diff view and never highlight them.
+const SYSTEM_AUDIT_FIELDS = new Set<string>([
+  'updatedAt', 'createdAt', 'timestamp',
+  'lastModifiedAt', 'lastModifiedDate', 'modifiedAt',
+  'lastUpdatedAt', 'updateTime', 'createTime', 'createdDate',
+  'updatedBy', 'createdBy',
+  'lastModifiedBy', 'modifiedBy',
+  'createBy', 'updateBy',
+  'version',
+])
+
+const escapeHtml = (s: string): string =>
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+// Common identity keys used by JPA / DTO objects to uniquely identify a
+// child record. Order matters — first hit wins.
+const IDENTITY_KEYS = ['id', 'uuid', 'code', 'key', 'name', 'fieldName'] as const
+
+const isPlainObject = (x: unknown): x is Record<string, unknown> =>
+  x !== null && typeof x === 'object' && !Array.isArray(x)
+
+const getIdentity = (x: unknown): { key: string; value: unknown } | null => {
+  if (!isPlainObject(x)) return null
+  for (const k of IDENTITY_KEYS) {
+    const v = x[k]
+    if (v !== undefined && v !== null && (typeof v === 'string' || typeof v === 'number')) {
+      return { key: k, value: v }
+    }
+  }
+  return null
+}
+
+const hasIdentityKey = (x: unknown): boolean => getIdentity(x) !== null
+
+// Find the element in `arr` that shares the same identity key/value as
+// `item`. Returns undefined when no match (caller treats as "new element").
+const findArrayMatch = (item: unknown, arr: unknown[]): unknown => {
+  const id = getIdentity(item)
+  if (!id) return undefined
+  return arr.find(c => {
+    const cid = getIdentity(c)
+    return cid !== null && cid.key === id.key && cid.value === id.value
+  })
+}
+
+// Recursively render a JSON value with syntax highlighting, and if a
+// `compare` value is provided, mark every key whose sub-value differs from
+// `compare`'s corresponding sub-value with the `jk-changed` class. This works
+// at any nesting depth (objects and arrays).
+//
+// `forceChanged` is set when we recurse into a subtree that is entirely new
+// (or entirely removed) relative to the other side — e.g. a freshly added
+// element in an array. In that case every key inside must be highlighted
+// regardless of per-key comparison, so the user sees exactly which JSON
+// object was added / deleted.
+const renderJsonValue = (
+  value: unknown,
+  compare: unknown,
+  depth: number,
+  forceChanged = false
+): string => {
+  const pad = '  '.repeat(depth)
+  const padInner = '  '.repeat(depth + 1)
+
+  if (value === null) return '<span class="jnull">null</span>'
+  if (typeof value === 'boolean') return `<span class="jb">${value}</span>`
+  if (typeof value === 'number') return `<span class="jn">${value}</span>`
+  if (typeof value === 'string') {
+    return `<span class="js">${escapeHtml(JSON.stringify(value))}</span>`
+  }
+  if (Array.isArray(value)) {
+    if (value.length === 0) return '[]'
+    const cmpArr = !forceChanged && Array.isArray(compare) ? compare : null
+    const items = value.map((item, idx) => {
+      let cmpItem: unknown = undefined
+      let itemForced = forceChanged
+      if (cmpArr !== null) {
+        // Prefer identity-based pairing for arrays of objects: an UPDATE that
+        // simply inserts/removes one element must not flag every shifted
+        // element as "changed". Try common identity keys before falling back
+        // to index alignment.
+        const matched = findArrayMatch(item, cmpArr)
+        if (matched !== undefined) {
+          cmpItem = matched
+        } else if (!hasIdentityKey(item)) {
+          // No identity key on the item → fall back to positional compare.
+          cmpItem = cmpArr[idx]
+        } else {
+          // Item has an id but no match → it's a brand-new (or removed)
+          // element. Force-highlight every key inside so the user sees the
+          // full JSON object that was added / deleted.
+          itemForced = true
         }
-        return `<span class="${cls}">${match}</span>`
       }
-    )
-  return DOMPurify.sanitize(highlighted, {
+      return `${padInner}${renderJsonValue(item, cmpItem, depth + 1, itemForced)}`
+    })
+    return `[\n${items.join(',\n')}\n${pad}]`
+  }
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>
+    const keys = Object.keys(record)
+    if (keys.length === 0) return '{}'
+    const cmpRecord =
+      !forceChanged && compare && typeof compare === 'object' && !Array.isArray(compare)
+        ? (compare as Record<string, unknown>)
+        : undefined
+    const entries = keys.map((k) => {
+      const v = record[k]
+      const cmpV = cmpRecord ? cmpRecord[k] : undefined
+      const changed =
+        !SYSTEM_AUDIT_FIELDS.has(k) &&
+        (forceChanged ||
+          (cmpRecord !== undefined &&
+            JSON.stringify(v) !== JSON.stringify(cmpV)))
+      const keyClass = changed ? 'jk jk-changed' : 'jk'
+      const keyJson = escapeHtml(JSON.stringify(k))
+      return `${padInner}<span class="${keyClass}">${keyJson}:</span> ${renderJsonValue(v, cmpV, depth + 1, forceChanged)}`
+    })
+    return `{\n${entries.join(',\n')}\n${pad}}`
+  }
+  return `<span class="jn">${escapeHtml(String(value))}</span>`
+}
+
+const formatJsonHighlight = (
+  obj: Record<string, unknown> | null,
+  compareAgainst?: Record<string, unknown> | null
+): string => {
+  if (!obj || Object.keys(obj).length === 0) return '{}'
+  const html = renderJsonValue(obj, compareAgainst ?? undefined, 0)
+  return DOMPurify.sanitize(html, {
     ALLOWED_TAGS: ['span'],
     ALLOWED_ATTR: ['class'],
   })
@@ -924,6 +1048,26 @@ onMounted(async () => {
 :deep(.jn)    { color: #fab387; }
 :deep(.jb)    { color: #cba6f7; }
 :deep(.jnull) { color: #6c7086; font-style: italic; }
+
+/* Amber pill highlight for top-level keys whose value changed in an UPDATE. */
+:deep(.jk-changed) {
+  background: rgba(250, 204, 21, 0.22);
+  color: #fde68a !important;
+  padding: 0 4px;
+  border-radius: 3px;
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px rgba(250, 204, 21, 0.45);
+}
+.section-after :deep(.jk-changed) {
+  background: rgba(34, 197, 94, 0.25);
+  color: #bbf7d0 !important;
+  box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.55);
+}
+.section-before :deep(.jk-changed) {
+  background: rgba(239, 68, 68, 0.22);
+  color: #fecaca !important;
+  box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.5);
+}
 
 /* Export Dialog */
 .export-dialog-body { display: flex; flex-direction: column; gap: 12px; }
