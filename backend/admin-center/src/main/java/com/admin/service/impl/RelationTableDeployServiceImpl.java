@@ -9,6 +9,7 @@ import com.admin.entity.RelationTableDefinition;
 import com.admin.entity.RelationTableVersion;
 import com.admin.exception.RelationTableDeploymentException;
 import com.admin.exception.RelationTableNotFoundException;
+import com.admin.repository.RelationFieldDefinitionRepository;
 import com.admin.repository.RelationTableDefinitionRepository;
 import com.admin.repository.RelationTableVersionRepository;
 import com.admin.service.RelationTableDeployService;
@@ -44,6 +45,7 @@ public class RelationTableDeployServiceImpl implements RelationTableDeployServic
 
     private final RelationTableDefinitionRepository tableDefinitionRepository;
     private final RelationTableVersionRepository versionRepository;
+    private final RelationFieldDefinitionRepository fieldDefinitionRepository;
     private final JdbcTemplate jdbcTemplate;
     private final ObjectMapper objectMapper;
     private final DatabaseSchemaResolver schemaResolver;
@@ -58,7 +60,20 @@ public class RelationTableDeployServiceImpl implements RelationTableDeployServic
 
         List<RelationFieldDefinition> fields = tableDefinition.getFieldDefinitions();
         if (fields == null || fields.isEmpty()) {
-            throw new RelationTableDeploymentException("表 '" + tableDefinition.getTableName() + "' 没有定义任何字段");
+            // Legacy table: was deployed before rt_field_definitions was introduced.
+            // Auto-repair by reconstructing field definitions from the physical table schema.
+            if (tableDefinition.getCurrentVersion() > 0 && physicalTableExists(tableDefinition.getTableName())) {
+                log.info("Legacy table '{}' has no rt_field_definitions; auto-repairing from physical schema",
+                        tableDefinition.getTableName());
+                fields = repairFieldDefinitionsFromPhysical(tableDefinition);
+                if (fields.isEmpty()) {
+                    throw new RelationTableDeploymentException(
+                            "表 '" + tableDefinition.getTableName() + "' 没有定义任何字段");
+                }
+            } else {
+                throw new RelationTableDeploymentException(
+                        "表 '" + tableDefinition.getTableName() + "' 没有定义任何字段");
+            }
         }
 
         // 自动补齐审计字段（如果尚未定义）
@@ -434,6 +449,85 @@ public class RelationTableDeployServiceImpl implements RelationTableDeployServic
             tableDefinitionRepository.save(tableDefinition);
             log.info("Auto-added audit fields to table: {}", tableDefinition.getTableName());
         }
+    }
+
+    /**
+     * Read column metadata from information_schema and create / persist
+     * RelationFieldDefinition records for a legacy table that has none.
+     * Returns the newly saved list so the caller can continue with deployment.
+     */
+    private List<RelationFieldDefinition> repairFieldDefinitionsFromPhysical(RelationTableDefinition tableDefinition) {
+        String tableName = tableDefinition.getTableName();
+        String schema    = schemaResolver.getSchema();
+
+        // Fetch PK columns
+        Set<String> pkColumns = new HashSet<>(jdbcTemplate.queryForList(
+                "SELECT kcu.column_name "
+                + "FROM information_schema.table_constraints tc "
+                + "JOIN information_schema.key_column_usage kcu "
+                + "  ON tc.constraint_name = kcu.constraint_name "
+                + "  AND tc.table_schema   = kcu.table_schema "
+                + "WHERE tc.table_name    = ? "
+                + "  AND tc.table_schema  = ? "
+                + "  AND tc.constraint_type = 'PRIMARY KEY'",
+                String.class, tableName, schema));
+
+        List<Map<String, Object>> cols = jdbcTemplate.queryForList(
+                "SELECT column_name, data_type, udt_name, "
+                + "character_maximum_length, numeric_precision, numeric_scale, "
+                + "ordinal_position "
+                + "FROM information_schema.columns "
+                + "WHERE table_name = ? AND table_schema = ? "
+                + "ORDER BY ordinal_position",
+                tableName, schema);
+
+        List<RelationFieldDefinition> repaired = new ArrayList<>();
+        for (Map<String, Object> col : cols) {
+            String colName  = (String) col.get("column_name");
+            String pgType   = col.get("udt_name") != null
+                    ? ((String) col.get("udt_name")).toLowerCase()
+                    : ((String) col.getOrDefault("data_type", "varchar")).toLowerCase();
+            RelationDataType dt = mapPostgresType(pgType);
+            int sortOrder = ((Number) col.get("ordinal_position")).intValue() - 1;
+
+            RelationFieldDefinition field = RelationFieldDefinition.builder()
+                    .tableDefinition(tableDefinition)
+                    .fieldName(colName)
+                    .dataType(dt)
+                    .length(col.get("character_maximum_length") != null
+                            ? ((Number) col.get("character_maximum_length")).intValue() : null)
+                    .precision(col.get("numeric_precision") != null
+                            ? ((Number) col.get("numeric_precision")).intValue() : null)
+                    .scale(col.get("numeric_scale") != null
+                            ? ((Number) col.get("numeric_scale")).intValue() : null)
+                    .nullable(true)
+                    .isPrimaryKey(pkColumns.contains(colName))
+                    .comment("(auto-recovered from physical schema)")
+                    .sortOrder(sortOrder)
+                    .build();
+            repaired.add(field);
+        }
+
+        tableDefinition.setFieldDefinitions(repaired);
+        tableDefinitionRepository.save(tableDefinition);
+        log.info("Auto-repaired {} field definitions for legacy table '{}'", repaired.size(), tableName);
+        return repaired;
+    }
+
+    /** Map a PostgreSQL udt_name / data_type string to the application enum. */
+    private static RelationDataType mapPostgresType(String pgType) {
+        return switch (pgType) {
+            case "int2", "int4", "integer"         -> RelationDataType.INTEGER;
+            case "int8", "bigint"                  -> RelationDataType.BIGINT;
+            case "numeric", "decimal"              -> RelationDataType.DECIMAL;
+            case "bool", "boolean"                 -> RelationDataType.BOOLEAN;
+            case "date"                            -> RelationDataType.DATE;
+            case "timestamp", "timestamptz",
+                 "timestamp without time zone",
+                 "timestamp with time zone"        -> RelationDataType.TIMESTAMP;
+            case "text", "json", "jsonb"           -> RelationDataType.TEXT;
+            default                                -> RelationDataType.VARCHAR;  // varchar, bpchar, unknown
+        };
     }
 
     /**

@@ -613,7 +613,11 @@ export default {
     exportEstimate: 'Estimated {n} records to export',
     exportSelectFields: 'Select fields to export',
     fullRecord: 'Full Record',
-    changedFieldsOnly: 'Changed Fields Only'
+    changedFieldsOnly: 'Changed Fields Only',
+    autoRefreshIn: 'Refresh in {n}s',
+    pauseAutoRefresh: 'Click to pause auto-refresh',
+    resumeAutoRefresh: 'Click to resume auto-refresh',
+    paused: 'Paused'
   },
 
   permissionRequest: {

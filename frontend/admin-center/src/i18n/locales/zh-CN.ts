@@ -609,7 +609,11 @@ export default {
     exportEstimate: '预计导出 {n} 条记录',
     exportSelectFields: '选择导出字段',
     fullRecord: '完整记录',
-    changedFieldsOnly: '仅变更字段'
+    changedFieldsOnly: '仅变更字段',
+    autoRefreshIn: '{n}s 后刷新',
+    pauseAutoRefresh: '点击暂停自动刷新',
+    resumeAutoRefresh: '点击恢复自动刷新',
+    paused: '已暂停'
   },
   permissionRequest: {
     title: '申请记录',

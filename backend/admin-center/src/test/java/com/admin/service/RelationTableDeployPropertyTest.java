@@ -45,6 +45,7 @@ class RelationTableDeployPropertyTest {
 
     private RelationTableDefinitionRepository tableDefinitionRepository;
     private RelationTableVersionRepository versionRepository;
+    private com.admin.repository.RelationFieldDefinitionRepository fieldDefinitionRepository;
     private JdbcTemplate jdbcTemplate;
     private ObjectMapper objectMapper;
     private com.admin.config.DatabaseSchemaResolver schemaResolver;
@@ -54,12 +55,13 @@ class RelationTableDeployPropertyTest {
     void setUp() {
         tableDefinitionRepository = mock(RelationTableDefinitionRepository.class);
         versionRepository = mock(RelationTableVersionRepository.class);
+        fieldDefinitionRepository = mock(com.admin.repository.RelationFieldDefinitionRepository.class);
         jdbcTemplate = mock(JdbcTemplate.class);
         objectMapper = new ObjectMapper();
         schemaResolver = mock(com.admin.config.DatabaseSchemaResolver.class);
         when(schemaResolver.getSchema()).thenReturn("public");
         service = new RelationTableDeployServiceImpl(
-                tableDefinitionRepository, versionRepository, jdbcTemplate, objectMapper, schemaResolver);
+                tableDefinitionRepository, versionRepository, fieldDefinitionRepository, jdbcTemplate, objectMapper, schemaResolver);
     }
 
     // ==================== Arbitraries ====================

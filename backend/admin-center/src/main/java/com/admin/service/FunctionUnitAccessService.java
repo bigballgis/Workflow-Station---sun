@@ -3,8 +3,6 @@ package com.admin.service;
 import com.admin.dto.request.FunctionUnitAccessRequest;
 import com.admin.dto.response.FunctionUnitAccessInfo;
 import com.admin.entity.*;
-import com.admin.enums.RoleType;
-import com.admin.helper.RoleHelper;
 import com.admin.repository.*;
 import com.platform.security.entity.Role;
 import jakarta.persistence.EntityNotFoundException;
@@ -29,7 +27,6 @@ public class FunctionUnitAccessService {
     private final FunctionUnitRepository functionUnitRepository;
     private final RoleRepository roleRepository;
     private final UserRoleRepository userRoleRepository;
-    private final RoleHelper roleHelper;
     
     /**
      * 获取功能单元的所有访问配置
@@ -53,20 +50,16 @@ public class FunctionUnitAccessService {
     }
     
     /**
-     * 添加访问配置（只允许业务角色）
+     * 添加访问配置（允许任意激活角色）
      */
     @Transactional
     public FunctionUnitAccessInfo addAccessConfig(String functionUnitId, FunctionUnitAccessRequest request) {
         FunctionUnit functionUnit = functionUnitRepository.findById(functionUnitId)
                 .orElseThrow(() -> new EntityNotFoundException("功能单元不存在: " + functionUnitId));
         
-        // 验证角色存在且为业务角色
-        Role role = roleRepository.findById(request.getRoleId())
+        // 验证角色存在（不限制角色类型，与 Relation Table 行为一致）
+        roleRepository.findById(request.getRoleId())
                 .orElseThrow(() -> new EntityNotFoundException("角色不存在: " + request.getRoleId()));
-        
-        if (!roleHelper.isBusinessRole(role)) {
-            throw new IllegalArgumentException("只能将功能单元分配给业务角色（BU-Bounded 或 BU-Unbounded），当前角色类型: " + role.getType());
-        }
         
         // 检查是否已存在相同配置
         if (accessRepository.existsByFunctionUnitIdAndRoleId(functionUnitId, request.getRoleId())) {
@@ -125,13 +118,9 @@ public class FunctionUnitAccessService {
         // 添加新配置
         List<FunctionUnitAccess> newConfigs = new ArrayList<>();
         for (FunctionUnitAccessRequest request : requests) {
-            // 验证角色存在且为业务角色
-            Role role = roleRepository.findById(request.getRoleId())
+            // 验证角色存在（不限制角色类型）
+            roleRepository.findById(request.getRoleId())
                     .orElseThrow(() -> new EntityNotFoundException("角色不存在: " + request.getRoleId()));
-            
-            if (!roleHelper.isBusinessRole(role)) {
-                throw new IllegalArgumentException("只能将功能单元分配给业务角色（BU-Bounded 或 BU-Unbounded）: " + role.getName());
-            }
             
             FunctionUnitAccess access = FunctionUnitAccess.builder()
                     .functionUnit(functionUnit)
@@ -162,13 +151,12 @@ public class FunctionUnitAccessService {
             return true;
         }
         
-        // 获取用户的业务角色ID列表
-        List<String> userBusinessRoleIds = getUserBusinessRoleIds(userId);
+        // 获取用户的所有角色ID列表（包含所有类型）
+        List<String> userRoleIds = getUserAllRoleIds(userId);
         
         // 检查用户是否有任何被分配的角色
         for (FunctionUnitAccess config : configs) {
-            // 只检查角色类型的访问配置
-            if ("ROLE".equals(config.getTargetType()) && userBusinessRoleIds.contains(config.getTargetId())) {
+            if ("ROLE".equals(config.getTargetType()) && userRoleIds.contains(config.getTargetId())) {
                 return true;
             }
         }
@@ -183,11 +171,11 @@ public class FunctionUnitAccessService {
     public Set<String> getAccessibleFunctionUnitIds(String userId) {
         Set<String> accessibleIds = new HashSet<>();
         
-        // 获取用户的业务角色ID列表
-        List<String> userBusinessRoleIds = getUserBusinessRoleIds(userId);
+        // 获取用户的所有角色ID列表（包含所有类型）
+        List<String> userRoleIds = getUserAllRoleIds(userId);
         
-        if (!userBusinessRoleIds.isEmpty()) {
-            accessibleIds.addAll(accessRepository.findAccessibleFunctionUnitIdsByRoles(userBusinessRoleIds));
+        if (!userRoleIds.isEmpty()) {
+            accessibleIds.addAll(accessRepository.findAccessibleFunctionUnitIdsByRoles(userRoleIds));
         }
         
         // 获取没有配置访问权限的功能单元（默认所有人可访问）
@@ -210,18 +198,10 @@ public class FunctionUnitAccessService {
     }
     
     /**
-     * 获取用户的业务角色ID列表（BU_BOUNDED 和 BU_UNBOUNDED）
+     * 获取用户的所有角色ID列表（包含所有类型）
      * 包括通过虚拟组分配的角色
      */
-    private List<String> getUserBusinessRoleIds(String userId) {
-        // 使用 findAllRoleIdsByUserId 来获取包括虚拟组分配的所有角色
-        List<String> allRoleIds = userRoleRepository.findAllRoleIdsByUserId(userId);
-        
-        return allRoleIds.stream()
-            .filter(roleId -> {
-                Role role = roleRepository.findById(roleId).orElse(null);
-                return role != null && roleHelper.isBusinessRole(role);
-            })
-            .collect(Collectors.toList());
+    private List<String> getUserAllRoleIds(String userId) {
+        return userRoleRepository.findAllRoleIdsByUserId(userId);
     }
 }

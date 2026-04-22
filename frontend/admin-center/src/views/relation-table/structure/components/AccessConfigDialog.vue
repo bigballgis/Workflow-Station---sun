@@ -52,30 +52,7 @@
     >
       <el-tabs v-model="addRoleTab" class="add-role-tabs">
 
-        <!-- Tab 1: System / Unbounded roles -->
-        <el-tab-pane label="System Role" name="system">
-          <p class="tab-hint">
-            Roles marked with <el-tag size="small" type="danger" style="margin: 0 2px;">Default</el-tag>
-            are pre-selected and always granted access when Portal Visibility is enabled.
-          </p>
-          <div v-loading="rolesLoading" class="system-role-list">
-            <el-empty v-if="!rolesLoading && availableSystemRoles.length === 0" description="All system roles already have access" :image-size="40" />
-            <el-checkbox-group v-else v-model="selectedSystemRoleIds">
-              <div v-for="role in availableSystemRoles" :key="role.id" class="role-checkbox-item">
-                <el-checkbox
-                  :value="role.id"
-                  :disabled="isDefaultSystemRole(role.name)"
-                >
-                  <span class="role-checkbox-name">{{ role.name }}</span>
-                  <el-tag v-if="isDefaultSystemRole(role.name)" size="small" type="danger" style="margin-left: 6px;">Default</el-tag>
-                  <el-tag v-else size="small" type="info" style="margin-left: 6px;">{{ roleTypeDisplayLabel(role.type) }}</el-tag>
-                </el-checkbox>
-              </div>
-            </el-checkbox-group>
-          </div>
-        </el-tab-pane>
-
-        <!-- Tab 2: BU cascade + BU roles -->
+        <!-- Tab 1: BU cascade + BU roles -->
         <el-tab-pane label="BU Role" name="bu">
           <p class="tab-hint">Select a Business Unit, then choose one of its bound roles.</p>
           <el-form label-width="110px" label-position="left" style="margin-top: 8px;">
@@ -111,6 +88,22 @@
           </el-form>
         </el-tab-pane>
 
+        <!-- Tab 2: System / Unbounded roles -->
+        <el-tab-pane label="System Role" name="system">
+          <p class="tab-hint">All available system roles are pre-selected. Uncheck any you do not want to grant.</p>
+          <div v-loading="rolesLoading" class="system-role-list">
+            <el-empty v-if="!rolesLoading && availableSystemRoles.length === 0" description="All system roles already have access" :image-size="40" />
+            <el-checkbox-group v-else v-model="selectedSystemRoleIds">
+              <div v-for="role in availableSystemRoles" :key="role.id" class="role-checkbox-item">
+                <el-checkbox :value="role.id">
+                  <span class="role-checkbox-name">{{ role.name }}</span>
+                  <el-tag size="small" type="info" style="margin-left: 6px;">{{ roleTypeDisplayLabel(role.type) }}</el-tag>
+                </el-checkbox>
+              </div>
+            </el-checkbox-group>
+          </div>
+        </el-tab-pane>
+
       </el-tabs>
 
       <template #footer>
@@ -122,7 +115,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, watchEffect } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { relationTableStructureApi, type RelationTableAccess } from '@/api/relationTable'
@@ -155,13 +148,9 @@ const allRolesMap = computed(() => {
 // ---- add role sub-dialog ----
 const showAddRole = ref(false)
 const addLoading = ref(false)
-const addRoleTab = ref<'system' | 'bu'>('system')
+const addRoleTab = ref<'system' | 'bu'>('bu')
 
 // system tab
-const DEFAULT_SYSTEM_ROLE_NAMES = ['System Administrator', 'Auditor', 'Technical Lead', 'Team Lead']
-
-const isDefaultSystemRole = (name: string) => DEFAULT_SYSTEM_ROLE_NAMES.includes(name)
-
 const selectedSystemRoleIds = ref<string[]>([])
 
 // BU tab
@@ -194,17 +183,6 @@ const availableBuRoles = computed(() =>
   buRoles.value.filter(r => !assignedIds.value.has(r.id))
 )
 
-// Keep default roles pre-selected whenever dialog is open or role list changes
-watchEffect(() => {
-  if (!showAddRole.value) return
-  const defaultIds = allRoles.value
-    .filter(r => isDefaultSystemRole(r.name) && !assignedIds.value.has(r.id))
-    .map(r => r.id)
-  // Merge: keep any manually checked extras + ensure defaults are always in the list
-  const current = new Set(selectedSystemRoleIds.value)
-  defaultIds.forEach(id => current.add(id))
-  selectedSystemRoleIds.value = [...current]
-})
 
 // ---- display helpers ----
 const ROLE_TYPE_LABELS: Record<string, string> = {
@@ -271,15 +249,19 @@ const fetchBuTree = async () => {
 }
 
 // ---- add role ----
-const openAddDialog = () => {
+const openAddDialog = async () => {
   resetAddForm()
   showAddRole.value = true
+  // Wait for roles so we can pre-select all of them once the list is ready.
+  // fetchAllRoles is idempotent (cache-guarded), so this is safe to call here.
+  await fetchAllRoles()
+  selectedSystemRoleIds.value = availableSystemRoles.value.map(r => r.id)
   fetchBuTree()
 }
 
 const resetAddForm = () => {
-  addRoleTab.value = 'system'
-  selectedSystemRoleIds.value = []  // watchEffect will re-populate defaults
+  addRoleTab.value = 'bu'
+  selectedSystemRoleIds.value = []  // watchEffect will re-populate all available roles
   selectedBuId.value = null
   selectedBuRoleId.value = ''
   buRoles.value = []

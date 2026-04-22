@@ -156,7 +156,12 @@ const fieldColumns = computed<FieldDefinitionResponse[]>(() => {
   if (!selectedTable.value?.fieldDefinitions) return []
   return selectedTable.value.fieldDefinitions
     .filter(f => !SYSTEM_COLUMNS.has(f.fieldName))
-    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .sort((a, b) => {
+      // Primary key always comes first
+      if (a.isPrimaryKey && !b.isPrimaryKey) return -1
+      if (!a.isPrimaryKey && b.isPrimaryKey) return 1
+      return a.sortOrder - b.sortOrder
+    })
 })
 
 const filteredTables = computed(() => {

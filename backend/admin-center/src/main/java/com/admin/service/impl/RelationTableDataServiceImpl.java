@@ -122,29 +122,32 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
         List<RelationFieldDTO> fields = getDeployedFields(tableDef);
         String physicalTableName = tableDef.getTableName();
 
-        // Find primary key field
+        // Find primary key field (may be CTID_PK when no field is marked as PK)
         String pkField = findPrimaryKeyField(fields);
+        boolean ctidMode = usesCtid(pkField);
 
-        // Build column list
+        // Build column list; include ctid when no real PK exists
         List<String> columnNames = fields.stream()
                 .map(RelationFieldDTO::getFieldName)
                 .collect(Collectors.toList());
 
-        String columnList = columnNames.stream()
+        String dataColumns = columnNames.stream()
                 .map(this::quoteIdentifier)
                 .collect(Collectors.joining(", "));
+        // When no PK: fetch ctid alongside the data columns so we can return a stable rowId
+        String selectColumns = ctidMode ? "ctid::text AS \"" + CTID_PK + "\", " + dataColumns : dataColumns;
 
         // Build WHERE clause for search
         List<Object> params = new ArrayList<>();
         String whereClause = buildSearchWhereClause(fields, search, params);
 
-        // Count query
+        // Count query (ctid alias not needed here)
         String countSql = "SELECT COUNT(*) FROM " + quoteIdentifier(physicalTableName) + whereClause;
         Long total = jdbcTemplate.queryForObject(countSql, Long.class, params.toArray());
         if (total == null) total = 0L;
 
         // Data query with pagination
-        String dataSql = "SELECT " + columnList + " FROM " + quoteIdentifier(physicalTableName) +
+        String dataSql = "SELECT " + selectColumns + " FROM " + quoteIdentifier(physicalTableName) +
                 whereClause + " LIMIT ? OFFSET ?";
         params.add(pageable.getPageSize());
         params.add(pageable.getOffset());
@@ -152,11 +155,19 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(dataSql, params.toArray());
 
         List<RelationTableDataRowDTO> dtoList = rows.stream()
-                .map(row -> RelationTableDataRowDTO.builder()
-                        .rowId(row.get(pkField) != null ? row.get(pkField).toString() : null)
-                        .tableId(tableId)
-                        .data(row)
-                        .build())
+                .map(row -> {
+                    // rowId: use ctid alias when no real PK, otherwise use PK column value
+                    String rowId = row.get(ctidMode ? CTID_PK : pkField) != null
+                            ? row.get(ctidMode ? CTID_PK : pkField).toString()
+                            : null;
+                    // Remove the synthetic ctid column from the data map before returning
+                    if (ctidMode) row.remove(CTID_PK);
+                    return RelationTableDataRowDTO.builder()
+                            .rowId(rowId)
+                            .tableId(tableId)
+                            .data(row)
+                            .build();
+                })
                 .collect(Collectors.toList());
 
         return new PageImpl<>(dtoList, pageable, total);
@@ -277,15 +288,24 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
             setClauses.add(quoteIdentifier(entry.getKey()) + " = ?");
             params.add(entry.getValue());
         }
-        params.add(castRowId(rowId, fields));
+        String pkWhere = usesCtid(pkField) ? "ctid = ?::tid" : quoteIdentifier(pkField) + " = ?";
+        params.add(usesCtid(pkField) ? rowId : castRowId(rowId, fields));
 
         String sql = "UPDATE " + quoteIdentifier(physicalTableName) +
                 " SET " + String.join(", ", setClauses) +
-                " WHERE " + quoteIdentifier(pkField) + " = ?";
+                " WHERE " + pkWhere;
         jdbcTemplate.update(sql, params.toArray());
 
-        // Get updated data
-        Map<String, Object> newData = getRowData(physicalTableName, fields, pkField, rowId);
+        // Get updated data.
+        // After a ctid-based UPDATE the row's physical location changes (MVCC), so the old
+        // ctid is no longer valid. Reconstruct newData by merging the applied changes into oldData.
+        Map<String, Object> newData;
+        if (usesCtid(pkField)) {
+            newData = new java.util.LinkedHashMap<>(oldData);
+            newData.putAll(filteredData);
+        } else {
+            newData = getRowData(physicalTableName, fields, pkField, rowId);
+        }
 
         // Audit log
         auditService.logUpdate(tableId, physicalTableName, rowId, oldData, newData);
@@ -311,9 +331,10 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
             throw new RelationTableNotFoundException("Row not found: " + rowId);
         }
 
-        String sql = "DELETE FROM " + quoteIdentifier(physicalTableName) +
-                " WHERE " + quoteIdentifier(pkField) + " = ?";
-        jdbcTemplate.update(sql, castRowId(rowId, fields));
+        String pkWhere = usesCtid(pkField) ? "ctid = ?::tid" : quoteIdentifier(pkField) + " = ?";
+        Object pkParam = usesCtid(pkField) ? rowId : castRowId(rowId, fields);
+        String sql = "DELETE FROM " + quoteIdentifier(physicalTableName) + " WHERE " + pkWhere;
+        jdbcTemplate.update(sql, pkParam);
 
         // Audit log
         auditService.logDelete(tableId, physicalTableName, rowId, oldData);
@@ -339,9 +360,11 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
         String oldStatus;
         if (hasStatusField) {
             oldStatus = oldData.get("status") != null ? oldData.get("status").toString() : "Unknown";
+            String pkWhere = usesCtid(pkField) ? "ctid = ?::tid" : quoteIdentifier(pkField) + " = ?";
+            Object pkParam = usesCtid(pkField) ? rowId : castRowId(rowId, fields);
             String sql = "UPDATE " + quoteIdentifier(physicalTableName) +
-                    " SET \"status\" = ? WHERE " + quoteIdentifier(pkField) + " = ?";
-            jdbcTemplate.update(sql, status, castRowId(rowId, fields));
+                    " SET \"status\" = ? WHERE " + pkWhere;
+            jdbcTemplate.update(sql, status, pkParam);
         } else {
             // If no status column, we still log the status change intent
             oldStatus = "Unknown";
@@ -351,7 +374,14 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
         // Audit log
         auditService.logStatusChange(tableId, physicalTableName, rowId, oldStatus, status);
 
-        Map<String, Object> newData = getRowData(physicalTableName, fields, pkField, rowId);
+        // For ctid-addressed rows the tuple moves after UPDATE; reconstruct instead of re-fetching.
+        Map<String, Object> newData;
+        if (usesCtid(pkField)) {
+            newData = new java.util.LinkedHashMap<>(oldData);
+            if (hasStatusField) newData.put("status", status);
+        } else {
+            newData = getRowData(physicalTableName, fields, pkField, rowId);
+        }
 
         return RelationTableDataRowDTO.builder()
                 .rowId(rowId)
@@ -461,29 +491,118 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
                         .build(),
                 tableDef.getId());
         if (fields.isEmpty()) {
-            throw new RelationTableNotFoundException(
-                    "No field definitions found for table: " + tableDef.getId());
+            // Legacy table: was deployed before rt_field_definitions existed.
+            // Fall back to inferring fields from the physical table schema.
+            List<RelationFieldDTO> inferred = inferFieldsFromPhysicalTable(tableDef.getTableName());
+            if (inferred.isEmpty()) {
+                throw new RelationTableNotFoundException(
+                        "No field definitions found for table: " + tableDef.getId());
+            }
+            log.info("Legacy table '{}': inferred {} fields from physical schema",
+                    tableDef.getTableName(), inferred.size());
+            return inferred;
         }
         return fields;
     }
 
     /**
-     * 查找主键字段名
+     * Reconstruct a field list by reading column metadata from information_schema.
+     * Used as a fallback for legacy tables that have no rt_field_definitions records.
+     */
+    private List<RelationFieldDTO> inferFieldsFromPhysicalTable(String tableName) {
+        String schema = schemaResolver.getSchema();
+        try {
+            Set<String> pkColumns = new HashSet<>(jdbcTemplate.queryForList(
+                    "SELECT kcu.column_name "
+                    + "FROM information_schema.table_constraints tc "
+                    + "JOIN information_schema.key_column_usage kcu "
+                    + "  ON tc.constraint_name = kcu.constraint_name "
+                    + "  AND tc.table_schema   = kcu.table_schema "
+                    + "WHERE tc.table_name    = ? "
+                    + "  AND tc.table_schema  = ? "
+                    + "  AND tc.constraint_type = 'PRIMARY KEY'",
+                    String.class, tableName, schema));
+
+            return jdbcTemplate.query(
+                    "SELECT column_name, udt_name, data_type, "
+                    + "character_maximum_length, numeric_precision, numeric_scale, "
+                    + "ordinal_position "
+                    + "FROM information_schema.columns "
+                    + "WHERE table_name = ? AND table_schema = ? "
+                    + "ORDER BY ordinal_position",
+                    (rs, rowNum) -> {
+                        String colName = rs.getString("column_name");
+                        String pgType  = rs.getString("udt_name") != null
+                                ? rs.getString("udt_name").toLowerCase()
+                                : rs.getString("data_type").toLowerCase();
+                        return RelationFieldDTO.builder()
+                                .id(null)
+                                .fieldName(colName)
+                                .dataType(mapPostgresType(pgType))
+                                .length(rs.getObject("character_maximum_length", Integer.class))
+                                .precision(rs.getObject("numeric_precision", Integer.class))
+                                .scale(rs.getObject("numeric_scale", Integer.class))
+                                .nullable(true)
+                                .isPrimaryKey(pkColumns.contains(colName))
+                                .sortOrder(rs.getInt("ordinal_position") - 1)
+                                .build();
+                    },
+                    tableName, schema);
+        } catch (Exception e) {
+            log.warn("Failed to infer fields from physical table '{}': {}", tableName, e.getMessage());
+            return List.of();
+        }
+    }
+
+    private static com.platform.common.enums.RelationDataType mapPostgresType(String pgType) {
+        return switch (pgType) {
+            case "int2", "int4", "integer"         -> com.platform.common.enums.RelationDataType.INTEGER;
+            case "int8", "bigint"                  -> com.platform.common.enums.RelationDataType.BIGINT;
+            case "numeric", "decimal"              -> com.platform.common.enums.RelationDataType.DECIMAL;
+            case "bool", "boolean"                 -> com.platform.common.enums.RelationDataType.BOOLEAN;
+            case "date"                            -> com.platform.common.enums.RelationDataType.DATE;
+            case "timestamp", "timestamptz",
+                 "timestamp without time zone",
+                 "timestamp with time zone"        -> com.platform.common.enums.RelationDataType.TIMESTAMP;
+            case "text", "json", "jsonb"           -> com.platform.common.enums.RelationDataType.TEXT;
+            default                                -> com.platform.common.enums.RelationDataType.VARCHAR;
+        };
+    }
+
+    /**
+     * Virtual PK name used when no field has isPrimaryKey=true.
+     * The actual identifier is the PostgreSQL ctid pseudo-column.
+     */
+    private static final String CTID_PK = "__ctid__";
+
+    /**
+     * Returns the name of the primary-key field, or {@link #CTID_PK} when no
+     * field is marked as a primary key (ctid-based addressing is used instead).
      */
     private String findPrimaryKeyField(List<RelationFieldDTO> fields) {
         return fields.stream()
                 .filter(f -> Boolean.TRUE.equals(f.getIsPrimaryKey()))
                 .map(RelationFieldDTO::getFieldName)
                 .findFirst()
-                .orElse(fields.isEmpty() ? "id" : fields.get(0).getFieldName());
+                .orElse(CTID_PK);
     }
 
+    /** Returns true when the table has no field marked isPrimaryKey. */
+    private boolean usesCtid(String pkField) {
+        return CTID_PK.equals(pkField);
+    }
+
+    /**
+     * Type-cast the rowId to the correct Java type for JDBC binding.
+     * When ctid is used the value is kept as a String and matched with
+     * {@code ctid = ?::tid} in the SQL.
+     */
     private Object castRowId(String rowId, List<RelationFieldDTO> fields) {
-        RelationFieldDTO pkField = fields.stream()
+        RelationFieldDTO pkFieldDef = fields.stream()
                 .filter(f -> Boolean.TRUE.equals(f.getIsPrimaryKey()))
                 .findFirst().orElse(null);
-        if (pkField != null && rowId != null) {
-            var dt = pkField.getDataType();
+        if (pkFieldDef != null && rowId != null) {
+            var dt = pkFieldDef.getDataType();
             if (dt == com.platform.common.enums.RelationDataType.INTEGER) {
                 return Integer.valueOf(rowId);
             } else if (dt == com.platform.common.enums.RelationDataType.BIGINT) {
@@ -545,11 +664,13 @@ public class RelationTableDataServiceImpl implements RelationTableDataService {
                 .map(f -> quoteIdentifier(f.getFieldName()))
                 .collect(Collectors.joining(", "));
 
-        String sql = "SELECT " + columnList + " FROM " + quoteIdentifier(physicalTableName) +
-                " WHERE " + quoteIdentifier(pkField) + " = ?";
+        String whereClause = usesCtid(pkField)
+                ? " WHERE ctid = ?::tid"
+                : " WHERE " + quoteIdentifier(pkField) + " = ?";
+        Object param = usesCtid(pkField) ? rowId : castRowId(rowId, fields);
 
-        Object typedRowId = castRowId(rowId, fields);
-        List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, typedRowId);
+        String sql = "SELECT " + columnList + " FROM " + quoteIdentifier(physicalTableName) + whereClause;
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, param);
         return rows.isEmpty() ? null : rows.get(0);
     }
 

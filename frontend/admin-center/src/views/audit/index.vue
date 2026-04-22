@@ -54,6 +54,23 @@
           <el-button type="primary" :loading="exporting" style="margin-left: 8px" @click="openExportDialog">
             <el-icon><Download /></el-icon>{{ t('common.export') }}
           </el-button>
+          <el-tooltip
+            :content="autoRefreshPaused ? t('audit.resumeAutoRefresh') : t('audit.pauseAutoRefresh')"
+            placement="top"
+            effect="light"
+          >
+            <span
+              class="auto-refresh-chip"
+              :class="{ 'is-paused': autoRefreshPaused }"
+              @click="toggleAutoRefresh"
+            >
+              <el-icon v-if="autoRefreshPaused"><VideoPause /></el-icon>
+              <el-icon v-else class="spin-icon"><RefreshRight /></el-icon>
+              <span class="auto-refresh-countdown">
+                {{ autoRefreshPaused ? t('audit.paused') : t('audit.autoRefreshIn', { n: refreshCountdown }) }}
+              </span>
+            </span>
+          </el-tooltip>
         </el-form-item>
       </el-form>
     </div>
@@ -80,12 +97,12 @@
       :header-cell-style="{ background: '#f5f7fa', whiteSpace: 'nowrap' }"
     >
       <el-table-column type="selection" width="40" />
-      <el-table-column prop="action" :label="t('audit.actionType')" min-width="150" sortable="custom" show-overflow-tooltip>
+      <el-table-column prop="action" :label="t('audit.actionType')" min-width="110" sortable="custom">
         <template #default="{ row }">
           <el-tag size="small" class="action-tag" style="white-space: nowrap">{{ actionText(row.action) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="resourceType" :label="t('audit.resourceType')" min-width="150" sortable="custom" show-overflow-tooltip>
+      <el-table-column prop="resourceType" :label="t('audit.resourceType')" min-width="220" sortable="custom" class-name="resource-type-cell">
         <template #default="{ row }">
           <el-tooltip v-if="row.action === 'DATA_QUERIED' && (row.resourceType || row.resourceId)" placement="top" effect="light" :show-after="300" :enterable="false">
             <template #content>
@@ -265,11 +282,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import type { TableInstance } from 'element-plus'
-import { Download, Search, InfoFilled } from '@element-plus/icons-vue'
+import { Download, Search, InfoFilled, RefreshRight, VideoPause } from '@element-plus/icons-vue'
 import DOMPurify from 'dompurify'
 import { queryAuditLogs, exportAuditLogs, getAuditResourceTypes, type AuditLog, type AuditQueryRequest } from '@/api/audit'
 
@@ -290,6 +307,45 @@ const tableRef = ref<TableInstance>()
 const selectedRows = ref<AuditLog[]>([])
 const sortField = ref('createdAt')
 const sortOrder = ref<'ascending' | 'descending'>('descending')
+
+// Auto-refresh
+const AUTO_REFRESH_SECONDS = 30
+const refreshCountdown = ref(AUTO_REFRESH_SECONDS)
+const autoRefreshPaused = ref(false)
+let refreshTimer: ReturnType<typeof setInterval> | null = null
+
+const stopAutoRefresh = () => {
+  if (refreshTimer !== null) {
+    clearInterval(refreshTimer)
+    refreshTimer = null
+  }
+}
+
+const startAutoRefresh = () => {
+  stopAutoRefresh()
+  refreshCountdown.value = AUTO_REFRESH_SECONDS
+  if (autoRefreshPaused.value) return
+  refreshTimer = setInterval(() => {
+    refreshCountdown.value -= 1
+    if (refreshCountdown.value <= 0) {
+      if (!detailDialogVisible.value) {
+        handleSearch()
+      } else {
+        // Detail dialog is open — reset the countdown and wait
+        refreshCountdown.value = AUTO_REFRESH_SECONDS
+      }
+    }
+  }, 1000)
+}
+
+const toggleAutoRefresh = () => {
+  autoRefreshPaused.value = !autoRefreshPaused.value
+  if (autoRefreshPaused.value) {
+    stopAutoRefresh()
+  } else {
+    startAutoRefresh()
+  }
+}
 
 // Export dialog
 const exportDialogVisible = ref(false)
@@ -427,6 +483,8 @@ const toEntityField = (field: string) => SORT_FIELD_MAP[field] ?? field
 
 const handleSearch = async () => {
   loading.value = true
+  // Reset the auto-refresh countdown so it doesn't fire immediately after a manual search
+  startAutoRefresh()
   try {
     const sortDir = sortOrder.value === 'ascending' ? 'asc' : 'desc'
     const entityField = toEntityField(sortField.value)
@@ -870,6 +928,10 @@ onMounted(async () => {
   }
   handleSearch()
 })
+
+onUnmounted(() => {
+  stopAutoRefresh()
+})
 </script>
 
 <style scoped>
@@ -910,6 +972,13 @@ onMounted(async () => {
 
 /* Action Type tag: keep default Element Plus color scheme from type prop */
 .action-tag { white-space: nowrap; }
+
+/* Resource Type cell: allow full text to wrap rather than truncate */
+:deep(.resource-type-cell .cell) {
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.5;
+}
 
 /* Log Detail Dialog */
 .log-detail {
@@ -1067,6 +1136,49 @@ onMounted(async () => {
   background: rgba(239, 68, 68, 0.22);
   color: #fecaca !important;
   box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.5);
+}
+
+/* Auto-refresh chip */
+.auto-refresh-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 10px;
+  padding: 3px 9px;
+  border-radius: 12px;
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+  background: #f0f9eb;
+  border: 1px solid #b3e19d;
+  color: #529b2e;
+  transition: background 0.2s, border-color 0.2s;
+}
+.auto-refresh-chip:hover {
+  background: #e1f3d8;
+  border-color: #95d475;
+}
+.auto-refresh-chip.is-paused {
+  background: #f5f5f5;
+  border-color: #d9d9d9;
+  color: #909399;
+}
+.auto-refresh-chip.is-paused:hover {
+  background: #ebebeb;
+}
+.auto-refresh-countdown {
+  white-space: nowrap;
+  min-width: 46px;
+  display: inline-block;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.spin-icon {
+  animation: spin 2s linear infinite;
+  display: inline-flex;
 }
 
 /* Export Dialog */

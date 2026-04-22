@@ -119,48 +119,11 @@
     </el-dialog>
     
     <!-- Access Config Dialog -->
-    <el-dialog v-model="showAccessDialogVisible" :title="t('functionUnit.accessConfig')" width="700px">
-      <div class="access-config-header">
-        <span>{{ t('menu.functionUnit') }}: {{ currentUnit?.name }}</span>
-        <el-button type="primary" size="small" @click="showAddAccessDialog">
-          <el-icon><Plus /></el-icon>{{ t('functionUnit.addBusinessRole') }}
-        </el-button>
-      </div>
-      <el-alert type="info" :closable="false" style="margin-bottom: 16px">
-        {{ t('functionUnit.accessConfigHint') }}
-      </el-alert>
-      <el-table :data="accessConfigs" stripe v-loading="accessLoading" :empty-text="t('functionUnit.noAccessConfig')">
-        <el-table-column prop="roleName" :label="t('functionUnit.businessRole')" />
-        <el-table-column prop="createdAt" :label="t('common.createTime')" width="180">
-          <template #default="{ row }">
-            {{ formatDate(row.createdAt) }}
-          </template>
-        </el-table-column>
-        <el-table-column :label="t('common.actions')" width="80">
-          <template #default="{ row }">
-            <el-button link type="danger" @click="handleRemoveAccess(row)">{{ t('common.delete') }}</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-      <template #footer>
-        <el-button @click="showAccessDialogVisible = false">{{ t('common.close') }}</el-button>
-      </template>
-    </el-dialog>
-    
-    <!-- Add Business Role Dialog -->
-    <el-dialog v-model="showAddAccessDialogVisible" :title="t('functionUnit.selectBusinessRole')" width="500px">
-      <el-form :model="accessForm" label-width="120px" label-position="left">
-        <el-form-item :label="t('functionUnit.businessRole')" required>
-          <el-select v-model="accessForm.roleId" filterable :placeholder="t('functionUnit.selectBusinessRole')" @change="handleRoleChange" style="width: 100%">
-            <el-option v-for="role in businessRoles" :key="role.id" :label="role.name" :value="role.id" />
-          </el-select>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showAddAccessDialogVisible = false">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary" @click="handleAddAccess" :loading="addAccessLoading">{{ t('common.confirm') }}</el-button>
-      </template>
-    </el-dialog>
+    <AccessConfigDialog
+      v-model="showAccessDialogVisible"
+      :function-unit-id="currentUnit?.id"
+      :function-unit-name="currentUnit?.name"
+    />
     
     <!-- Version History Dialog -->
     <el-dialog v-model="showVersionsDialogVisible" :title="t('functionUnit.versions') + ' - ' + (currentUnit?.name || '')" width="800px">
@@ -239,9 +202,9 @@ import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
-import { functionUnitApi, type FunctionUnit, type Deployment, type FunctionUnitAccess, type DeletePreviewResponse } from '@/api/functionUnit'
-import { roleApi, type Role } from '@/api/role'
+import { functionUnitApi, type FunctionUnit, type Deployment, type DeletePreviewResponse } from '@/api/functionUnit'
 import DeleteConfirmDialog from './components/DeleteConfirmDialog.vue'
+import AccessConfigDialog from './components/AccessConfigDialog.vue'
 
 const { t } = useI18n()
 
@@ -255,7 +218,6 @@ watch(activeTab, (tab) => {
 const showImportDialog = ref(false)
 const showDeployDialogVisible = ref(false)
 const showAccessDialogVisible = ref(false)
-const showAddAccessDialogVisible = ref(false)
 const showDeleteDialogVisible = ref(false)
 const showVersionsDialogVisible = ref(false)
 const currentUnit = ref<FunctionUnit | null>(null)
@@ -264,8 +226,6 @@ const deletePreview = ref<DeletePreviewResponse | null>(null)
 const deployForm = reactive({ environment: 'DEVELOPMENT' as const, strategy: 'FULL' as const })
 const loading = ref(false)
 const deploymentsLoading = ref(false)
-const accessLoading = ref(false)
-const addAccessLoading = ref(false)
 const versionsLoading = ref(false)
 const importLoading = ref(false)
 const importFile = ref<File | null>(null)
@@ -294,14 +254,7 @@ const filteredFunctionUnits = computed(() => {
   )
 })
 const deployments = ref<Deployment[]>([])
-const accessConfigs = ref<FunctionUnitAccess[]>([])
-const businessRoles = ref<Role[]>([])
 const versionList = ref<FunctionUnit[]>([])
-
-const accessForm = reactive({
-  roleId: '',
-  roleName: ''
-})
 
 type TagType = 'success' | 'warning' | 'danger' | 'info' | 'primary'
 const statusType = (status: string): TagType => ({ DEPLOYED: 'success', VALIDATED: 'primary', DRAFT: 'warning', DEPRECATED: 'info' }[status] as TagType || 'info')
@@ -381,19 +334,6 @@ const fetchDeployments = async () => {
   }
 }
 
-const fetchAccessConfigs = async () => {
-  if (!currentUnit.value) return
-  accessLoading.value = true
-  try {
-    accessConfigs.value = await functionUnitApi.getAccessConfigs(currentUnit.value.id)
-  } catch (e) {
-    console.error('Failed to load access configs:', e)
-    ElMessage.error(t('functionUnit.loadAccessFailed'))
-  } finally {
-    accessLoading.value = false
-  }
-}
-
 const showDeployDialog = (unit: FunctionUnit) => { currentUnit.value = unit; showDeployDialogVisible.value = true }
 const showVersions = async (unit: FunctionUnit) => {
   currentUnit.value = unit
@@ -409,68 +349,9 @@ const showVersions = async (unit: FunctionUnit) => {
   }
 }
 
-const showAccessDialog = async (unit: FunctionUnit) => {
+const showAccessDialog = (unit: FunctionUnit) => {
   currentUnit.value = unit
   showAccessDialogVisible.value = true
-  await fetchAccessConfigs()
-}
-
-const showAddAccessDialog = async () => {
-  accessForm.roleId = ''
-  accessForm.roleName = ''
-  showAddAccessDialogVisible.value = true
-  
-  // Load business roles list
-  try {
-    businessRoles.value = await roleApi.getBusinessRoles()
-  } catch (e) {
-    console.error('Failed to load business roles:', e)
-    ElMessage.error(t('functionUnit.loadRolesFailed'))
-  }
-}
-
-const handleRoleChange = (roleId: string) => {
-  const role = businessRoles.value.find(r => r.id === roleId)
-  accessForm.roleName = role?.name || ''
-}
-
-const handleAddAccess = async () => {
-  if (!accessForm.roleId) {
-    ElMessage.warning(t('functionUnit.selectBusinessRole'))
-    return
-  }
-  if (!currentUnit.value) return
-  
-  addAccessLoading.value = true
-  try {
-    await functionUnitApi.addAccessConfig(currentUnit.value.id, {
-      roleId: accessForm.roleId,
-      roleName: accessForm.roleName
-    })
-    ElMessage.success(t('common.success'))
-    showAddAccessDialogVisible.value = false
-    await fetchAccessConfigs()
-  } catch (e: any) {
-    console.error('Failed to add access config:', e)
-    ElMessage.error(e.response?.data?.message || t('common.failed'))
-  } finally {
-    addAccessLoading.value = false
-  }
-}
-
-const handleRemoveAccess = async (access: FunctionUnitAccess) => {
-  if (!currentUnit.value) return
-  
-  await ElMessageBox.confirm(t('functionUnit.removeAccessConfirm', { role: access.roleName }), t('common.confirm'), { type: 'warning' })
-  
-  try {
-    await functionUnitApi.removeAccessConfig(currentUnit.value.id, access.id)
-    ElMessage.success(t('common.success'))
-    await fetchAccessConfigs()
-  } catch (e) {
-    console.error('Failed to remove access config:', e)
-    ElMessage.error(t('common.failed'))
-  }
 }
 
 const handleDeploy = async () => {
@@ -665,10 +546,4 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.access-config-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-}
 </style>

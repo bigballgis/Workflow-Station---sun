@@ -109,8 +109,11 @@ export interface FunctionUnitAccess {
   id: string
   functionUnitId: string
   functionUnitName: string
-  roleId: string
-  roleName: string
+  targetType: string    // always 'ROLE' for now
+  targetId: string      // the role ID
+  targetName?: string   // resolved role name (may be null from server)
+  roleId: string        // same as targetId when targetType=ROLE (backward compat getter)
+  roleName: string      // same as targetName when targetType=ROLE
   createdAt: string
   createdBy: string
 }

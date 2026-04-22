@@ -611,7 +611,11 @@ export default {
     exportEstimate: '預計匯出 {n} 筆記錄',
     exportSelectFields: '選擇匯出欄位',
     fullRecord: '完整記錄',
-    changedFieldsOnly: '僅變更欄位'
+    changedFieldsOnly: '僅變更欄位',
+    autoRefreshIn: '{n}s 後重新整理',
+    pauseAutoRefresh: '點擊暫停自動重新整理',
+    resumeAutoRefresh: '點擊恢復自動重新整理',
+    paused: '已暫停'
   },
   permissionRequest: {
     title: '申請記錄',
