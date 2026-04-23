@@ -35,7 +35,7 @@ public class BiProperties {
         /** Superset 管理员用户名 */
         private String adminUsername = "admin";
         /** Superset 管理员密码 */
-        private String adminPassword = "admin";
+        private String adminPassword = "admin123";
         /** Guest Token 超时时间（秒） */
         private int guestTokenTimeoutSeconds = 30;
 
