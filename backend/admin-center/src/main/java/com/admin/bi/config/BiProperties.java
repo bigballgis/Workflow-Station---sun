@@ -32,10 +32,10 @@ public class BiProperties {
          * 默认 {@code public}；若 Superset 使用独立 schema（如 {@code superset}），通过环境变量 {@code SUPERSET_DB_SCHEMA} 覆盖。
          */
         private String dbSchema = "public";
-        /** Superset 管理员用户名 */
-        private String adminUsername = "admin";
-        /** Superset 管理员密码 */
-        private String adminPassword = "admin123";
+        /** Superset 管理员用户名（环境变量：BI_SUPERSET_ADMIN_USERNAME） */
+        private String adminUsername;
+        /** Superset 管理员密码（环境变量：BI_SUPERSET_ADMIN_PASSWORD） */
+        private String adminPassword;
         /** Guest Token 超时时间（秒） */
         private int guestTokenTimeoutSeconds = 30;
 
