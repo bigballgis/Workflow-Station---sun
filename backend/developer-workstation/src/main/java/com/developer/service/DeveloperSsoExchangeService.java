@@ -34,7 +34,7 @@ public class DeveloperSsoExchangeService {
     @Value("${jwt.secret}")
     private String jwtSecret;
 
-    @Value("${jwt.expiration:86400000}")
+    @Value("${jwt.expiration:2592000000}")
     private long jwtExpiration;
 
     public LoginResponse issueSession(User user) {

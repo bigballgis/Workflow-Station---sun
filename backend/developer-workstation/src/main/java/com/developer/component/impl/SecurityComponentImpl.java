@@ -48,7 +48,7 @@ public class SecurityComponentImpl implements SecurityComponent {
      * 默认构造函数，用于测试
      */
     public SecurityComponentImpl() {
-        this("your-256-bit-secret-key-for-development-only", 86400000L, 5, 30, 
+        this("your-256-bit-secret-key-for-development-only", 2592000000L, 5, 30, 
              "your-256-bit-secret-key-for-development-only", null, null, null, null);
     }
     
@@ -57,7 +57,7 @@ public class SecurityComponentImpl implements SecurityComponent {
      */
     public SecurityComponentImpl(
             @Value("${security.jwt.secret:your-256-bit-secret-key-for-development-only}") String jwtSecret,
-            @Value("${security.jwt.expiration:86400000}") long jwtExpiration,
+            @Value("${security.jwt.expiration:2592000000}") long jwtExpiration,
             @Value("${security.max-login-attempts:5}") int maxLoginAttempts,
             @Value("${security.lock-duration-minutes:30}") int lockDurationMinutes,
             @Value("${workflow-engine.jwt.secret:${security.jwt.secret}}") String workflowEngineJwtSecret,

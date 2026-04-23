@@ -14,7 +14,7 @@ app:
     
   security:
     jwt-secret-key: ${JWT_SECRET:dev-256-bit-secret-key-for-jwt-signing-development-environment-only}
-    jwt-expiration-ms: ${JWT_EXPIRATION:86400000}
+    jwt-expiration-ms: ${JWT_EXPIRATION:2592000000}
     jwt-refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION:604800000}
     password:
       min-length: ${SECURITY_PASSWORD_MIN_LENGTH:8}

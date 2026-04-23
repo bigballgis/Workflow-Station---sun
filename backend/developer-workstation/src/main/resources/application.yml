@@ -82,7 +82,7 @@ file:
 security:
   jwt:
     secret: ${JWT_SECRET:your-256-bit-secret-key-for-development-only}
-    expiration: ${JWT_EXPIRATION:86400000}  # 24 hours
+    expiration: ${JWT_EXPIRATION:2592000000}  # 30 days
   max-login-attempts: ${MAX_LOGIN_ATTEMPTS:5}
   lock-duration-minutes: ${LOCK_DURATION_MINUTES:30}
   
@@ -119,7 +119,7 @@ workflow-engine:
 # JWT Configuration (used by AuthController)
 jwt:
   secret: ${JWT_SECRET:your-256-bit-secret-key-for-development-only}
-  expiration: ${JWT_EXPIRATION:86400000}
+  expiration: ${JWT_EXPIRATION:2592000000}
 
 # Platform Security JWT Configuration (used by platform-security JwtProperties)
 # developer-exchange-enabled=false 可在误部署到共享环境时关闭 SSO exchange（SIT/UAT/PROD 不应部署本服务）
@@ -130,7 +130,7 @@ platform:
   security:
     jwt:
       secret: ${JWT_SECRET:your-256-bit-secret-key-for-development-only}
-      expiration-ms: ${JWT_EXPIRATION:86400000}
+      expiration-ms: ${JWT_EXPIRATION:2592000000}
       refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION:604800000}
       issuer: platform
       validate-issuer: false
