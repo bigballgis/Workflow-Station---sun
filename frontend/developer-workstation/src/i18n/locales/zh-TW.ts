@@ -301,6 +301,8 @@ export default {
     createFailed: '建立失敗',
     saveSuccess: '儲存成功',
     saveFailed: '儲存失敗',
+    autoSaving: '自動儲存中...',
+    autoSaved: '已自動儲存',
     deleteConfirm: '確定要刪除該表單嗎？',
     deleteTitle: '確認',
     deleteSuccess: '刪除成功',

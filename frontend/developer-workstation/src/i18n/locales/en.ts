@@ -268,6 +268,8 @@ export default {
     createFailed: 'Create failed',
     saveSuccess: 'Saved successfully',
     saveFailed: 'Save failed',
+    autoSaving: 'Auto-saving...',
+    autoSaved: 'Auto-saved',
     deleteConfirm: 'Are you sure to delete this form?',
     deleteTitle: 'Confirm',
     deleteSuccess: 'Deleted successfully',

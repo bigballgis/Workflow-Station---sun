@@ -110,13 +110,23 @@
           </el-tag>
         </div>
         <div class="header-actions">
+          <div class="auto-save-status">
+            <span v-if="autoSaving" class="auto-saving">
+              <el-icon class="is-loading"><Loading /></el-icon>
+              {{ t('form.autoSaving') }}
+            </span>
+            <span v-else-if="lastAutoSaveTime" class="auto-saved">
+              <el-icon><CircleCheck /></el-icon>
+              {{ t('form.autoSaved') }} {{ formatAutoSaveTime(lastAutoSaveTime) }}
+            </span>
+          </div>
           <el-button @click="handleImportFieldsToDesigner" :disabled="!selectedForm.boundTableId && (!selectedForm.tableBindings || selectedForm.tableBindings.length === 0)">
             <el-icon><Connection /></el-icon> {{ t('form.importTableFields') }}
           </el-button>
           <el-button @click="handleManageBindings(selectedForm)">{{ t('form.manageBindings') }}</el-button>
           <el-button @click="handleBindNode(selectedForm)">{{ t('form.bindProcessNode') }}</el-button>
           <el-button @click="handlePreview">{{ t('common.preview') }}</el-button>
-          <el-button type="primary" @click="handleSaveForm">{{ t('common.save') }}</el-button>
+          <el-button type="primary" @click="handleSaveForm(true)">{{ t('common.save') }}</el-button>
         </div>
       </div>
       
@@ -461,7 +471,7 @@
 import { ref, reactive, onMounted, nextTick, computed, provide, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { ArrowLeft, ArrowDown, Plus, Refresh, Connection } from '@element-plus/icons-vue'
+import { ArrowLeft, ArrowDown, Plus, Refresh, Connection, Loading, CircleCheck } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useFunctionUnitStore } from '@/stores/functionUnit'
 import type { FormDefinition, FieldDefinition, TableBinding, BindingType, FormType } from '@/api/functionUnit'
@@ -507,6 +517,9 @@ const previewSubBindings = ref<Array<{
 }>>([])
 const previewSubData = ref<Record<number, any>>({})
 const previewTableRows = ref<Record<number, any[]>>({})
+const autoSaving = ref(false)
+const lastAutoSaveTime = ref<Date | null>(null)
+let autoSaveTimer: ReturnType<typeof setTimeout> | null = null
 
 // Mixed preview items: alternating form-create rule segments and inline sub-tables
 const previewItems = ref<Array<
@@ -1411,6 +1424,9 @@ async function loadProcessNodes() {
 }
 
 function handleSelectForm(row: FormDefinition) {
+  // Clean up any existing polling before selecting new form
+  cleanupAutoSavePolling()
+
   selectedForm.value = { ...row }
   subDesignerRefs.value = []
   subFormCache.value = {}
@@ -1427,7 +1443,7 @@ function handleSelectForm(row: FormDefinition) {
     })
     .catch(() => {})
 
-  // Load main designer
+  // Load main designer and start auto-save polling
   nextTick(() => {
     setTimeout(() => {
       if (designerRef.value) {
@@ -1439,6 +1455,8 @@ function handleSelectForm(row: FormDefinition) {
           console.error('Failed to load main form config:', e)
           try { designerRef.value.setRule([]); designerRef.value.setOption(defaultFormOption) } catch {}
         }
+        // Start auto-save polling after designer is loaded
+        setupAutoSavePolling()
       }
     }, 100)
   })
@@ -1505,6 +1523,7 @@ function handleTabChange(tabName: string) {
 
 function handleBackToList() {
   selectedForm.value = null
+  cleanupAutoSavePolling()
 }
 
 async function handleCreateForm() {
@@ -1699,8 +1718,13 @@ function setFieldPermission(fieldName: string, value: string) {
   selectedForm.value.fieldPermissions[fieldName] = value
 }
 
-async function handleSaveForm() {
+async function handleSaveForm(isManual = false) {
   if (!selectedForm.value || !designerRef.value) return
+
+  if (!isManual) {
+    autoSaving.value = true
+  }
+
   try {
     const rule = designerRef.value.getRule()
     const options = designerRef.value.getOption()
@@ -1708,7 +1732,7 @@ async function handleSaveForm() {
     // Validate: all subTable placeholders must have a _bindingId selected
     const invalidPlaceholders = rule.filter((r: any) => r.type === 'subTable' && !r._bindingId)
     if (invalidPlaceholders.length > 0) {
-      ElMessage.error(t('form.subTableBindingRequired'))
+      if (isManual) ElMessage.error(t('form.subTableBindingRequired'))
       return
     }
 
@@ -1718,7 +1742,7 @@ async function handleSaveForm() {
       for (const st of subTableRules) {
         const b = selectedForm.value.tableBindings?.find((x: TableBinding) => x.id === st._bindingId)
         if (!b || b.bindingType !== 'SUB') {
-          ElMessage.error(t('form.subTableOnlySubBinding'))
+          if (isManual) ElMessage.error(t('form.subTableOnlySubBinding'))
           return
         }
       }
@@ -1731,7 +1755,7 @@ async function handleSaveForm() {
         .map((r: any) => r.field as string)
       const invalidFields = validateFieldNames(fieldNames)
       if (invalidFields.length > 0) {
-        ElMessage.error(t('form.fieldNameValidationFailed'))
+        if (isManual) ElMessage.error(t('form.fieldNameValidationFailed'))
         return
       }
     }
@@ -1783,10 +1807,44 @@ async function handleSaveForm() {
         ? { fieldPermissions: selectedForm.value.fieldPermissions }
         : {})
     })
-    ElMessage.success(t('form.saveSuccess'))
-    loadForms()
+
+    if (isManual) {
+      ElMessage.success(t('form.saveSuccess'))
+      loadForms()
+    } else {
+      lastAutoSaveTime.value = new Date()
+    }
   } catch (e: any) {
-    ElMessage.error(e.response?.data?.message || t('form.saveFailed'))
+    if (isManual) {
+      ElMessage.error(e.response?.data?.message || t('form.saveFailed'))
+    }
+  } finally {
+    if (!isManual) {
+      autoSaving.value = false
+    }
+  }
+}
+
+function scheduleAutoSave() {
+  if (autoSaveTimer) {
+    clearTimeout(autoSaveTimer)
+  }
+  autoSaveTimer = setTimeout(() => {
+    console.log('[FormDesigner] Auto-save triggered')
+    handleSaveForm(false)
+  }, 2000)
+}
+
+function formatAutoSaveTime(time: Date): string {
+  const now = new Date()
+  const diff = Math.floor((now.getTime() - time.getTime()) / 1000)
+  if (diff < 60) {
+    return t('process.justNow')
+  } else if (diff < 3600) {
+    const minutes = Math.floor(diff / 60)
+    return t('process.minutesAgo', { count: minutes })
+  } else {
+    return time.toLocaleTimeString()
   }
 }
 
@@ -2361,11 +2419,72 @@ async function updateBpmnFormBindings(
   console.log('[FormDesigner] Process saved successfully')
 }
 
+// Track last known designer state for change detection
+const lastDesignerState = ref<string>('')
+const pollTimerRef = ref<ReturnType<typeof setInterval> | null>(null)
+
+function cleanupAutoSavePolling() {
+  if (pollTimerRef.value) {
+    clearInterval(pollTimerRef.value)
+    pollTimerRef.value = null
+  }
+  lastDesignerState.value = ''
+}
+
+function setupAutoSavePolling() {
+  cleanupAutoSavePolling()
+
+  if (!selectedForm.value || !designerRef.value) {
+    console.log('[FormDesigner] Auto-save polling skipped: no form or designer ref')
+    return
+  }
+
+  // Initialize the state tracker with current rule
+  try {
+    lastDesignerState.value = JSON.stringify(designerRef.value.getRule() || [])
+    console.log('[FormDesigner] Auto-save polling started, initial state length:', lastDesignerState.value.length)
+  } catch {
+    lastDesignerState.value = ''
+  }
+
+  // Poll for changes every 1 second (faster detection than 2s)
+  pollTimerRef.value = setInterval(() => {
+    if (!selectedForm.value || autoSaving.value) return
+    try {
+      const currentRule = JSON.stringify(designerRef.value?.getRule() || [])
+      if (currentRule !== lastDesignerState.value) {
+        lastDesignerState.value = currentRule
+        console.log('[FormDesigner] Change detected, scheduling auto-save')
+        scheduleAutoSave()
+      }
+    } catch {}
+  }, 1000)
+}
+
 onMounted(() => {
   loadForms()
   loadDataTableColumns()
   loadCreateDialogProcessNodes()
 })
+
+onUnmounted(() => {
+  if (autoSaveTimer) {
+    clearTimeout(autoSaveTimer)
+    autoSaveTimer = null
+  }
+  cleanupAutoSavePolling()
+})
+
+// Watch relationViewState for changes (auto-save for relation table views)
+watch(
+  relationViewState,
+  () => {
+    if (selectedForm.value) {
+      scheduleAutoSave()
+    }
+  },
+  { deep: true }
+)
 </script>
 
 
@@ -2426,6 +2545,29 @@ onMounted(() => {
     margin-left: auto;
     display: flex;
     gap: 8px;
+    align-items: center;
+  }
+
+  .auto-save-status {
+    font-size: 14px;
+    color: #909399;
+    display: flex;
+    align-items: center;
+    min-width: 150px;
+
+    .auto-saving {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #409eff;
+    }
+
+    .auto-saved {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #67c23a;
+    }
   }
 }
 
