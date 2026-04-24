@@ -165,6 +165,7 @@
             :available-fields="relationViewState[binding.bindingId]?.allFields || []"
             :model-value="relationViewState[binding.bindingId]?.viewFields || []"
             @update:model-value="(val: any) => updateRelationViewFields(binding.bindingId, val)"
+            @update:available-fields="(val: any) => updateRelationViewAllFields(binding.bindingId, val)"
           />
           <!-- Sub Table: show form designer -->
           <div v-else class="fc-designer-wrapper">
@@ -529,6 +530,12 @@ const previewItems = ref<Array<
   | { kind: 'lookup'; label: string; placeholder: string; searchFields: string[]; displayFields: string[]; viewFields: any[]; fieldDefs: any[]; bindingId?: number }
 >>([])
 
+// #region debug watch previewItems
+watch(previewItems, (newVal) => {
+  fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9ec725'},body:JSON.stringify({sessionId:'9ec725',location:'FormDesigner.vue:watchPreviewItems',message:'H6: previewItems changed',data:{count:newVal.length,kinds:newVal.map(i=>i.kind),hasLookup:newVal.some(i=>i.kind==='lookup')},timestamp:Date.now(),runId:'debug',hypothesisId:'H6'})}).catch(()=>{});
+}, { immediate: true });
+// #endregion
+
 // Sub-designer refs (one per non-PRIMARY binding)
 const subDesignerRefs = ref<any[]>([])
 // Relation table view refs (keyed by bindingId)
@@ -565,13 +572,15 @@ function updateRelationViewFields(bindingId: number, fields: any[]) {
   relationViewState.value = { ...relationViewState.value, [bindingId]: { ...existing, viewFields: fields } }
 }
 
-// Non-PRIMARY bindings for tabs（流程/任务表单仅展示 SUB，与「一主多子 + 子表组件」模型一致）
+function updateRelationViewAllFields(bindingId: number, fields: any[]) {
+  const existing = relationViewState.value[bindingId] || { allFields: [], viewFields: [] }
+  relationViewState.value = { ...relationViewState.value, [bindingId]: { ...existing, allFields: fields } }
+}
+
+// Non-PRIMARY bindings for tabs（RELATED 用于 Lookup，也需要显示在设计器里配置视图字段）
 const designerSubBindings = computed(() => {
   if (!selectedForm.value) return []
-  let nonPrimary = (selectedForm.value.tableBindings || []).filter((b: TableBinding) => b.bindingType !== 'PRIMARY')
-  if (selectedForm.value.formType === 'PROCESS' || selectedForm.value.formType === 'TASK') {
-    nonPrimary = nonPrimary.filter((b: TableBinding) => b.bindingType === 'SUB')
-  }
+  const nonPrimary = (selectedForm.value.tableBindings || []).filter((b: TableBinding) => b.bindingType !== 'PRIMARY')
   return nonPrimary.map((b: TableBinding) => ({
     bindingId: b.id as number,
     bindingType: b.bindingType,
@@ -652,6 +661,25 @@ function isImportingRelationTable(): boolean {
   // Check formBindings (for deployed relation tables where tableId is from rt_table_definitions)
   const binding = formBindings.value.find(b => b.tableId === importTableId.value)
   return binding?.bindingType === 'RELATED'
+}
+
+// Get bindingId for a given tableId (for relation table imports)
+// Checks formBindings first, then designerSubBindings, then falls back to active tab
+function getBindingIdForTable(tableId: number): number | null {
+  // Check formBindings (populated in handleImportFieldsToDesigner)
+  const fromFormBindings = formBindings.value.find(b => b.tableId === tableId)
+  if (fromFormBindings) return fromFormBindings.id as number
+
+  // Check designerSubBindings (from selectedForm.tableBindings)
+  const fromSubBindings = designerSubBindings.value.find(b => b.tableId === tableId)
+  if (fromSubBindings) return fromSubBindings.bindingId
+
+  // Fallback: if importing from the active RELATED tab, use active tab's bindingId
+  if (activeDesignerTab.value !== 'main') {
+    return Number(activeDesignerTab.value)
+  }
+
+  return null
 }
 
 // Computed: available fields for selected table
@@ -897,6 +925,20 @@ async function handleBindingUpdate() {
       // Reset sub designer state so new tabs render cleanly
       subDesignerRefs.value = []
       subFormCache.value = {}
+      // relationViewState is keyed by bindingId — rebuild it for all RELATED bindings so
+      // newly added ones get initialised with empty state (rather than undefined → blank view)
+      const updated: Record<number, { allFields: any[]; viewFields: any[] }> = {}
+      const config = selectedForm.value.configJson || {}
+      for (const b of (selectedForm.value.tableBindings || [])) {
+        if (b.bindingType === 'RELATED') {
+          const id = b.id as number
+          const saved = (config.relationViews || {})[id]
+          updated[id] = saved
+            ? { allFields: saved.allFields || [], viewFields: saved.viewFields || [] }
+            : { allFields: [], viewFields: [] }
+        }
+      }
+      relationViewState.value = updated
     } catch {}
   }
 }
@@ -1204,8 +1246,11 @@ async function handleConfirmImportFields() {
         sortOrder: idx,
       }))
       // Update relation view state directly
-      if (activeDesignerTab.value !== 'main') {
-        const bindingId = Number(activeDesignerTab.value)
+      // Always update based on the imported table's binding, regardless of current tab
+      const bindingId = importTableId.value
+        ? getBindingIdForTable(importTableId.value)
+        : Number(activeDesignerTab.value)
+      if (bindingId) {
         relationViewState.value = {
           ...relationViewState.value,
           [bindingId]: { allFields: allRelationFields, viewFields: relationFields }
@@ -1438,6 +1483,19 @@ function handleSelectForm(row: FormDefinition) {
       if (selectedForm.value) {
         selectedForm.value = { ...selectedForm.value, tableBindings: res.data || [] }
       }
+      // Restore saved relationViewState for RELATED bindings so imported fields survive save
+      const config = row.configJson || {}
+      const savedViews = config.relationViews || {}
+      const initialState: Record<number, { allFields: any[]; viewFields: any[] }> = {}
+      for (const b of (res.data || [])) {
+        if (b.bindingType === 'RELATED') {
+          const id = b.id as number
+          initialState[id] = savedViews[id]
+            ? { allFields: savedViews[id].allFields || [], viewFields: savedViews[id].viewFields || [] }
+            : { allFields: [], viewFields: [] }
+        }
+      }
+      relationViewState.value = initialState
       // Load sub designers after bindings are known
       nextTick(() => setTimeout(() => loadSubDesigners(row), 200))
     })
@@ -1860,7 +1918,18 @@ async function handleDeleteForm(row: FormDefinition) {
 }
 
 function handlePreview() {
-  if (!selectedForm.value) return
+  console.log('[DEBUG] ==================== handlePreview START ====================')
+  // #region debug log handlePreview entry
+  fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9ec725'},body:JSON.stringify({sessionId:'9ec725',location:'FormDesigner.vue:handlePreview',message:'handlePreview called',data:{selectedFormId:selectedForm.value?.id,formName:selectedForm.value?.formName},timestamp:Date.now(),runId:'debug',hypothesisId:'H6'})}).catch(()=>{});
+  // #endregion
+  console.log('[DEBUG] after fetch')
+  if (!selectedForm.value) {
+    // #region debug log no form
+    fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9ec725'},body:JSON.stringify({sessionId:'9ec725',location:'FormDesigner.vue:handlePreview',message:'H6: no selectedForm, returning early',data:{},timestamp:Date.now(),runId:'debug',hypothesisId:'H6'})}).catch(()=>{});
+    // #endregion
+    console.log('[DEBUG] no selectedForm, returning early')
+    return
+  }
   // Always use live designer rule so unsaved reordering is reflected in preview.
   // Fall back to saved configJson rule only when the designer ref is unavailable.
   let rawRule: any[] = []
@@ -1870,6 +1939,59 @@ function handlePreview() {
   if (!rawRule.length) {
     rawRule = selectedForm.value.configJson?.rule || []
   }
+  console.log('[DEBUG] rawRule fetched, length:', rawRule.length, 'lookup items:', rawRule.filter(r => r?.type === 'lookup').length)
+  console.log('[DEBUG] rawRule items:', rawRule.map(r => ({ type: r?.type, field: r?.field, title: r?.title })))
+  console.log('[DEBUG] A: before deepScan')
+  // Deep scan for lookup inside elCard, groups, etc. (with depth limit to prevent stack overflow)
+  function deepScan(items: any[], depth = 0): any[] {
+    if (!items || !Array.isArray(items) || depth > 10) return []
+    const results: any[] = []
+    for (const item of items) {
+      if (!item) continue
+      results.push({ depth, type: item.type, field: item.field, title: item.title, hasChildren: !!(item.children || item.$el?.children) })
+      if (item.children && Array.isArray(item.children)) {
+        results.push(...deepScan(item.children, depth + 1))
+      }
+    }
+    return results
+  }
+  console.log('[DEBUG] A2: before deepScan call')
+  try {
+    const dsResult = deepScan(rawRule)
+    console.log('[DEBUG] deepScan result:', JSON.stringify(dsResult))
+  } catch (e) {
+    console.log('[DEBUG] deepScan error:', e)
+  }
+  console.log('[DEBUG] B: after deepScan')
+  console.log('[DEBUG] ========== START LAYOUT SCAN ==========')
+  console.log('[DEBUG] B1: before layout scan loop')
+  try {
+    // Scan all rule items for lookup fields inside layout containers
+    for (const r of rawRule) {
+      if (!r) continue
+      // Check various possible child locations
+      const directChildren = r.children
+      const propsChildren = r.props?.children
+      const propsList = r.props?.list
+      const propsItems = r.props?.items
+      const propsFields = r.props?.fields
+      console.log('[DEBUG] Checking rule item:', r.type, 'field:', r.field, 'directChildren:', !!directChildren, 'propsChildren:', !!propsChildren, 'propsList:', !!propsList)
+      
+      if (LOOKUP_EXTRACT_CONTAINERS.has(r.type)) {
+        // Try all possible child sources
+        const childrenSources = [directChildren, propsChildren, propsList, propsItems, propsFields].filter(c => c && Array.isArray(c))
+        for (const children of childrenSources) {
+          extractLookupsFromItems(children)
+        }
+      }
+    }
+  } catch (e) {
+    console.error('[DEBUG] Layout scan error:', e)
+    throw e  // Re-throw
+  }
+  console.log('[DEBUG] C: layout scan done')
+  console.log('[DEBUG] Extracted lookups from layout containers:', extractedLookups.length, extractedLookups.map(l => l.field))
+  console.log('[DEBUG] ========== END LAYOUT SCAN ==========')
   previewData.value = {}
   previewSubData.value = {}
   previewTableRows.value = {}
@@ -1982,6 +2104,52 @@ function handlePreview() {
     return r
   })
 
+  // ── Flatten rule: recursively extract lookup items from layout containers ───
+  // Layout components that can contain lookup fields: elCard, group, el-row, el-col, etc.
+  const LOOKUP_EXTRACT_CONTAINERS = new Set(['elCard', 'group', 'el-row', 'el-col', 'el-collapse', 'el-tabs', 'div', 'card', 'layout'])
+  const extractedLookups: any[] = []
+
+  function extractLookupsFromItems(items: any[]): void {
+    if (!items || !Array.isArray(items)) return
+    for (const item of items) {
+      if (!item) continue
+      try {
+        console.log('[DEBUG] extractLookupsFromItems - item:', item.type, 'field:', item.field, 'props lookupConfig:', !!item.props?.lookupConfig)
+        // Check for lookup: type === 'lookup' OR has lookupConfig in props
+        if (item.type === 'lookup' || item.props?.lookupConfig) {
+          // Only extract if not already at top level
+          extractedLookups.push(item)
+        }
+        if (item.children && Array.isArray(item.children)) {
+          extractLookupsFromItems(item.children)
+        }
+      } catch (e) {
+        console.error('[DEBUG] extractLookupsFromItems item error:', e)
+      }
+    }
+  }
+
+  // Scan all rule items for lookup fields inside layout containers
+  for (const r of rawRule) {
+    // Check various possible child locations
+    const directChildren = r.children
+    const propsChildren = r.props?.children
+    const propsList = r.props?.list
+    const propsItems = r.props?.items
+    const propsFields = r.props?.fields
+    console.log('[DEBUG] Checking rule item:', r.type, 'field:', r.field, 'directChildren:', !!directChildren, 'propsChildren:', !!propsChildren, 'propsList:', !!propsList)
+    
+    if (LOOKUP_EXTRACT_CONTAINERS.has(r.type)) {
+      // Try all possible child sources
+      const childrenSources = [directChildren, propsChildren, propsList, propsItems, propsFields].filter(c => c && Array.isArray(c))
+      for (const children of childrenSources) {
+        extractLookupsFromItems(children)
+      }
+    }
+  }
+  console.log('[DEBUG] Extracted lookups from layout containers:', extractedLookups.length, extractedLookups.map(l => l.field))
+  console.log('[DEBUG] ========== END LAYOUT SCAN ==========')
+
   // Build previewItems: split rawRule into segments separated by subTable placeholders
   const items: typeof previewItems.value = []
   let currentSegment: any[] = []
@@ -2004,7 +2172,17 @@ function handlePreview() {
     pendingRelationPreviews = []
   }
 
-  for (const ruleItem of rawRule) {
+  // ── Process all rule items (including extracted lookups from layout containers) ──
+  // Use a Set to track which lookups we've already processed to avoid duplicates
+  const processedLookupFields = new Set<string>()
+  const allRuleItems = [
+    ...rawRule,
+    ...extractedLookups.filter(l => !processedLookupFields.has(l.field) && (processedLookupFields.add(l.field), true))
+  ]
+  for (const ruleItem of allRuleItems) {
+    // #region debug log all rule items
+    fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9ec725'},body:JSON.stringify({sessionId:'9ec725',location:'FormDesigner.vue:ruleItemLoop',message:'Rule item in loop',data:{type:ruleItem.type,field:ruleItem.field,title:ruleItem.title,hasLookupConfig:!!ruleItem.props?.lookupConfig},timestamp:Date.now(),runId:'debug',hypothesisId:'H5'})}).catch(()=>{});
+    // #endregion
     // _bindingId may be at top-level (after parseRule) or still in props (if getRule skipped parseRule)
     const itemBindingId = ruleItem._bindingId ?? ruleItem.props?._bindingId ?? null
     if (ruleItem.type === 'subTable' && itemBindingId != null) {
@@ -2016,6 +2194,9 @@ function handlePreview() {
         bindingMap.delete(Number(itemBindingId)) // mark as placed
       }
     } else if (ruleItem.type === 'lookup') {
+      // #region debug log lookup type check
+      fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9ec725'},body:JSON.stringify({sessionId:'9ec725',location:'FormDesigner.vue:lookupTypeCheck',message:'ruleItem.type === lookup matched',data:{type:ruleItem.type,field:ruleItem.field,title:ruleItem.title},timestamp:Date.now(),runId:'debug',hypothesisId:'H5'})}).catch(()=>{});
+      // #endregion
       // Flush current segment so lookup appears in its own section
       flushSegment()
 
@@ -2066,8 +2247,15 @@ function handlePreview() {
           fieldDefs,
           bindingId: lookupCfg.bindingId,
         })
+        // #region debug log lookup item added
+        fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9ec725'},body:JSON.stringify({sessionId:'9ec725',location:'FormDesigner.vue:addLookupItem',message:'Lookup item added to previewItems',data:{label:ruleItem.title,searchFields:lookupCfg.searchFields,displayFields:lookupCfg.displayFields,fieldDefsCount:fieldDefs.length},timestamp:Date.now(),runId:'debug',hypothesisId:'H5'})}).catch(()=>{});
+        // #endregion
+        console.log('[DEBUG FormDesigner] Added lookup item to previewItems', { label: ruleItem.title, searchFields: lookupCfg.searchFields, displayFields: lookupCfg.displayFields })
       } catch (e) {
         console.warn('[Preview] lookup config parse error:', e)
+        // #region debug log lookup error
+        fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9ec725'},body:JSON.stringify({sessionId:'9ec725',location:'FormDesigner.vue:lookupParseError',message:'Lookup parse error',data:{error:String(e)},timestamp:Date.now(),runId:'debug',hypothesisId:'H5'})}).catch(()=>{});
+        // #endregion
         // Fallback: render as readonly input
         currentSegment.push({
           ...ruleItem,
@@ -2093,10 +2281,15 @@ function handlePreview() {
   previewItems.value = items
   // Keep previewRule for backward compat (used by previewSubBindings logic elsewhere if any)
   previewRule.value = rawRule.filter(r => r.type !== 'subTable')
+  // #region debug log FormDesigner preview
+  fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9ec725'},body:JSON.stringify({sessionId:'9ec725',location:'FormDesigner.vue:buildPreview',message:'Preview items built',data:{itemKinds:items.map(i=>i.kind),lookupCount:items.filter(i=>i.kind==='lookup').length},timestamp:Date.now(),runId:'debug',hypothesisId:'H5'})}).catch(()=>{});
+  // #endregion
   console.log('[Preview] previewItems:', items.map(i => i.kind === 'fields' ? `fields(${i.rule.length})` : i.kind))
+  console.log('[DEBUG FormDesigner] previewItems built', { itemKinds: items.map(i => i.kind), lookupCount: items.filter(i => i.kind === 'lookup').length })
   previewSubBindings.value = [] // no longer used for bottom rendering
 
   showPreviewDialog.value = true
+  console.log('[DEBUG] ==================== handlePreview END ====================')
 }
 
 async function handleBindNode(form: FormDefinition) {

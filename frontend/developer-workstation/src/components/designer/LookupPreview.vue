@@ -1,11 +1,11 @@
 <template>
-  <div class="lookup-preview-wrapper">
+  <div class="lookup-preview-wrapper" @click="handleWrapperClick">
     <div class="lookup-form-item">
       <label class="lookup-label-text">
         <el-icon class="lookup-label-icon"><Search /></el-icon>
         {{ label }}
       </label>
-      <div class="lookup-field" ref="wrapperRef">
+      <div class="lookup-field" @click="handleFieldClick" ref="fieldRef">
         <!-- Selected value: input container with inner tag -->
         <div v-if="selectedRow" class="lookup-selected-wrapper">
           <span class="lookup-selected-tag">
@@ -18,10 +18,15 @@
           v-else
           v-model="searchKeyword"
           :placeholder="placeholder"
-          @focus="handleFocus"
+          class="lookup-input"
+          @focus="onInputFocus"
         />
-
-        <div v-if="dropdownVisible" class="lookup-dropdown">
+        <!-- Dropdown: absolute-positioned inside .lookup-field for correct dialog context -->
+        <div
+          v-if="dropdownVisible"
+          class="lookup-dropdown-panel"
+          ref="dropdownRef"
+        >
           <el-table
             :data="filteredResults"
             size="small"
@@ -34,33 +39,33 @@
               :key="col.prop"
               :prop="col.prop"
               :label="col.label"
-              :min-width="col.width || 120"
-              show-overflow-tooltip
+              min-width="120"
             />
           </el-table>
-        </div>
-
-        <!-- View display after selection -->
-        <div v-if="selectedRow && displayViewFields.length > 0" class="lookup-view-display">
-          <el-descriptions :column="1" border size="small" direction="horizontal">
-            <el-descriptions-item
-              v-for="field in displayViewFields"
-              :key="field.fieldName"
-              :label="field.displayLabel || field.fieldName"
-              label-class-name="lookup-view-label"
-              class-name="lookup-view-value"
-            >
-              {{ selectedRow[field.fieldName] ?? '-' }}
-            </el-descriptions-item>
-          </el-descriptions>
+          <div v-if="filteredResults.length === 0" class="lookup-no-data">No data</div>
         </div>
       </div>
+    </div>
+
+    <!-- View display after selection -->
+    <div v-if="selectedRow && displayViewFields.length > 0" class="lookup-view-display">
+      <el-descriptions :column="1" border size="small" direction="horizontal">
+        <el-descriptions-item
+          v-for="field in displayViewFields"
+          :key="field.fieldName"
+          :label="field.displayLabel || field.fieldName"
+          label-class-name="lookup-view-label"
+          class-name="lookup-view-value"
+        >
+          {{ selectedRow[field.fieldName] ?? '-' }}
+        </el-descriptions-item>
+      </el-descriptions>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { Search, Close } from '@element-plus/icons-vue'
 
 interface ViewField {
@@ -87,25 +92,35 @@ const props = defineProps<{
   fieldDefs: FieldDef[]
 }>()
 
-const wrapperRef = ref<HTMLElement>()
+const dropdownRef = ref<HTMLElement>()
+const fieldRef = ref<HTMLElement>()
 const dropdownVisible = ref(false)
 const searchKeyword = ref('')
 const selectedRow = ref<Record<string, any> | null>(null)
 
+// #region debug log H4 - watch dropdownVisible
+watch(dropdownVisible, (newVal, oldVal) => {
+  fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9ec725'},body:JSON.stringify({sessionId:'9ec725',location:'LookupPreview.vue:watch',message:'H4: dropdownVisible changed',data:{oldVal,newVal},timestamp:Date.now(),runId:'debug',hypothesisId:'H4'})}).catch(()=>{});
+});
+// #endregion
+
+console.log('[DEBUG LookupPreview] Component mounted', { label: props.label, searchFields: props.searchFields, displayFields: props.displayFields })
+
 // Columns shown in the dropdown table: use displayFields from lookup config
 const visibleColumns = computed(() => {
-  // 1. Use displayFields (from lookup config "Display Fields")
+  // #region debug log H3
+  fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9ec725'},body:JSON.stringify({sessionId:'9ec725',location:'LookupPreview.vue:visibleColumns',message:'H3: visibleColumns computed',data:{displayFields:props.displayFields,searchFields:props.searchFields,fieldDefsCount:props.fieldDefs?.length},timestamp:Date.now(),runId:'debug',hypothesisId:'H3'})}).catch(()=>{});
+  // #endregion
   if (props.displayFields?.length > 0) {
     return props.displayFields.map(f => {
       const fd = props.fieldDefs.find(d => d.fieldName === f)
-      return { prop: f, label: fd?.comment || fd?.description || f, width: undefined as number | undefined }
+      return { prop: f, label: fd?.comment || fd?.description || f }
     })
   }
-  // 2. Fallback: searchFields
   if (props.searchFields?.length > 0) {
     return props.searchFields.map(f => {
       const fd = props.fieldDefs.find(d => d.fieldName === f)
-      return { prop: f, label: fd?.comment || fd?.description || f, width: undefined as number | undefined }
+      return { prop: f, label: fd?.comment || fd?.description || f }
     })
   }
   return []
@@ -132,7 +147,6 @@ const mockRows = computed(() => {
       const fd = props.fieldDefs.find(d => d.fieldName === col.prop)
       row[col.prop] = getMockValue(fd?.dataType || 'VARCHAR', i)
     }
-    // Also populate viewFields that may not be in visible columns
     if (props.viewFields?.length) {
       for (const vf of props.viewFields) {
         if (!(vf.fieldName in row)) {
@@ -149,7 +163,6 @@ const mockRows = computed(() => {
 const filteredResults = computed(() => {
   const kw = searchKeyword.value?.trim().toLowerCase()
   if (!kw) return mockRows.value
-  // Only search within configured searchFields
   const fields = props.searchFields?.length ? props.searchFields : []
   if (fields.length === 0) return mockRows.value
   return mockRows.value.filter(row =>
@@ -168,8 +181,29 @@ function getMockValue(dataType: string, index: number): string {
   return `Sample ${index}`
 }
 
-function handleFocus() {
+function showDropdown() {
+  // #region debug log H1
+  fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9ec725'},body:JSON.stringify({sessionId:'9ec725',location:'LookupPreview.vue:showDropdown',message:'H1: showDropdown called',data:{currentVisible:dropdownVisible.value},timestamp:Date.now(),runId:'debug',hypothesisId:'H1'})}).catch(()=>{});
+  // #endregion
+  console.log('[DEBUG LookupPreview] showDropdown called, current visible:', dropdownVisible.value)
+  if (dropdownVisible.value) return
   dropdownVisible.value = true
+  // #region debug log H1 result
+  fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9ec725'},body:JSON.stringify({sessionId:'9ec725',location:'LookupPreview.vue:showDropdown',message:'H1: dropdownVisible set to true',data:{newVisible:dropdownVisible.value},timestamp:Date.now(),runId:'debug',hypothesisId:'H1'})}).catch(()=>{});
+  // #endregion
+  console.log('[DEBUG LookupPreview] showDropdown, now visible:', dropdownVisible.value)
+}
+
+function handleWrapperClick(e: MouseEvent) {
+  console.log('[DEBUG LookupPreview] handleWrapperClick', { target: (e.target as HTMLElement).className, tag: (e.target as HTMLElement).tagName })
+  showDropdown()
+}
+
+function handleFieldClick(e: MouseEvent) {
+  console.log('[DEBUG LookupPreview] handleFieldClick', { target: (e.target as HTMLElement).className })
+  // Show dropdown when clicking on the lookup field area (but not on the clear button)
+  if ((e.target as HTMLElement).closest('.lookup-selected-close')) return
+  showDropdown()
 }
 
 function handleSelect(row: Record<string, any>) {
@@ -184,14 +218,38 @@ function handleClear() {
   selectedRow.value = null
 }
 
-function onClickOutside(e: MouseEvent) {
-  if (wrapperRef.value && !wrapperRef.value.contains(e.target as Node)) {
-    dropdownVisible.value = false
-  }
+function onInputFocus() {
+  // #region debug log H1 focus
+  fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9ec725'},body:JSON.stringify({sessionId:'9ec725',location:'LookupPreview.vue:onInputFocus',message:'H1: input focus event fired',data:{},timestamp:Date.now(),runId:'debug',hypothesisId:'H1'})}).catch(()=>{});
+  // #endregion
+  showDropdown()
 }
 
-onMounted(() => document.addEventListener('mousedown', onClickOutside))
-onBeforeUnmount(() => document.removeEventListener('mousedown', onClickOutside))
+// Close dropdown when clicking outside
+function onDocClick(e: MouseEvent) {
+  // #region debug log H2
+  fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9ec725'},body:JSON.stringify({sessionId:'9ec725',location:'LookupPreview.vue:onDocClick',message:'H2: onDocClick invoked',data:{dropdownVisible:dropdownVisible.value,targetClass:(e.target as HTMLElement).className,targetTag:(e.target as HTMLElement).tagName},timestamp:Date.now(),runId:'debug',hypothesisId:'H2'})}).catch(()=>{});
+  // #endregion
+  if (!dropdownVisible.value) return
+  const target = e.target as Node
+  // Also keep dropdown open when clicking inside the input/field container
+  const inField = fieldRef.value && fieldRef.value.contains(target)
+  const inDropdown = dropdownRef.value && dropdownRef.value.contains(target)
+  // #region debug log H2 result
+  fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9ec725'},body:JSON.stringify({sessionId:'9ec725',location:'LookupPreview.vue:onDocClick',message:'H2: checking click location',data:{inField,inFieldRefExists:!!fieldRef.value,inDropdown,willClose:!(inField||inDropdown)},timestamp:Date.now(),runId:'debug',hypothesisId:'H2'})}).catch(()=>{});
+  // #endregion
+  if (inField || inDropdown) return
+  dropdownVisible.value = false
+  // #region debug log H2 closed
+  fetch('http://127.0.0.1:7683/ingest/1fc88847-d32b-4694-9f56-a337ecc92dd3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'9ec725'},body:JSON.stringify({sessionId:'9ec725',location:'LookupPreview.vue:onDocClick',message:'H2: dropdown CLOSED by outside click',data:{},timestamp:Date.now(),runId:'debug',hypothesisId:'H2'})}).catch(()=>{});
+  // #endregion
+}
+
+document.addEventListener('mousedown', onDocClick)
+
+onBeforeUnmount(() => {
+  document.removeEventListener('mousedown', onDocClick)
+})
 </script>
 
 <style lang="scss" scoped>
@@ -230,6 +288,10 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onClickOutside))
   flex: 1;
   min-width: 0;
   position: relative;
+
+  .lookup-input {
+    width: 100%;
+  }
 
   .lookup-selected-wrapper {
     display: flex;
@@ -271,17 +333,25 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onClickOutside))
       }
     }
   }
+}
 
-  .lookup-dropdown {
-    position: absolute;
-    z-index: 2050;
-    left: 0;
-    right: 0;
-    margin-top: 4px;
-    background: #fff;
-    border: 1px solid #dcdfe6;
-    border-radius: 4px;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+.lookup-dropdown-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 10;
+  background: #fff;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+
+  .lookup-no-data {
+    padding: 16px;
+    text-align: center;
+    color: #909399;
+    font-size: 13px;
   }
 }
 
@@ -300,3 +370,4 @@ onBeforeUnmount(() => document.removeEventListener('mousedown', onClickOutside))
   }
 }
 </style>
+

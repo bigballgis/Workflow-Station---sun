@@ -15,8 +15,9 @@
           <template #prefix><el-icon><Search /></el-icon></template>
         </el-input>
       </div>
-      <div class="columns-field-list">
+      <div class="columns-field-list" v-loading="loadingFields">
         <div
+          v-if="!loadingFields"
           v-for="field in filteredAvailableFields"
           :key="field.fieldName"
           class="field-item"
@@ -29,7 +30,7 @@
           <el-icon class="field-icon"><component :is="getFieldIcon(field.dataType)" /></el-icon>
           <span class="field-name">{{ field.comment || field.fieldName }}</span>
         </div>
-        <el-empty v-if="filteredAvailableFields.length === 0" description="No fields" :image-size="40" />
+        <el-empty v-if="!loadingFields && filteredAvailableFields.length === 0" description="No fields" :image-size="40" />
       </div>
     </div>
 
@@ -94,9 +95,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { Search, Close, Menu, DArrowRight, EditPen, Calendar, Document, Coin, Switch as SwitchIcon } from '@element-plus/icons-vue'
-import type { RelationFieldDTO } from '@/api/relationTable'
+import { relationTableViewApi, type RelationFieldDTO } from '@/api/relationTable'
 
 const props = defineProps<{
   binding: {
@@ -118,14 +119,20 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'update:modelValue', fields: RelationFieldDTO[]): void
+  (e: 'update:availableFields', fields: RelationFieldDTO[]): void
 }>()
 
 const columnsPanelOpen = ref(true)
 const fieldSearchKeyword = ref('')
 const showPreview = ref(false)
+const loadingFields = ref(false)
 
-// All available fields from the relation table definition
-const allFields = computed(() => props.availableFields || [])
+// Local fallback: when parent doesn't yet have allFields, store the loaded value here
+// so the panel still renders while we propagate the update to the parent.
+const localAvailableFields = ref<RelationFieldDTO[]>([])
+
+// All available fields: prefer prop (parent-managed), fall back to locally loaded
+const allFields = computed(() => props.availableFields?.length ? props.availableFields : localAvailableFields.value)
 // Fields currently in the view (user-selected, ordered)
 const viewFields = computed({
   get: () => props.modelValue || [],
@@ -137,6 +144,28 @@ const dragSourceField = ref<string | null>(null)
 const dragColIndex = ref<number | null>(null)
 const dragOverIndex = ref<number | null>(null)
 const isDraggingFromPanel = ref(false)
+
+async function loadFields() {
+  if (!props.formId || !props.binding?.bindingId) return
+  loadingFields.value = true
+  try {
+    const res = await relationTableViewApi.getAvailableFields(props.formId, props.binding.bindingId)
+    const fields: RelationFieldDTO[] = res.data || []
+    localAvailableFields.value = fields
+    emit('update:availableFields', fields)
+  } catch (e) {
+    console.error('[RelationTableView] failed to load fields:', e)
+  } finally {
+    loadingFields.value = false
+  }
+}
+
+// If parent hasn't populated allFields yet, load from API on mount
+onMounted(() => {
+  if (!props.availableFields?.length) {
+    loadFields()
+  }
+})
 
 const filteredAvailableFields = computed(() => {
   const kw = fieldSearchKeyword.value.trim().toLowerCase()

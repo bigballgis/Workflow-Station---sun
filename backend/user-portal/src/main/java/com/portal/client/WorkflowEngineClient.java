@@ -122,6 +122,7 @@ public class WorkflowEngineClient {
         if (!isAvailable()) {
             return Optional.empty();
         }
+        log.info("=== [DIAG] deployProcess called: processKey=[{}], name=[{}], bpmnXml length={}", processKey, name, bpmnXml != null ? bpmnXml.length() : 0);
         try {
             String url = workflowEngineUrl + "/api/v1/processes/definitions/deploy";
             
@@ -162,6 +163,8 @@ public class WorkflowEngineClient {
         try {
             String url = workflowEngineUrl + "/api/v1/processes/instances";
 
+            log.info("=== [DIAG] startProcess sending request: processDefinitionKey=[{}], businessKey=[{}], startUserId=[{}]",
+                    processDefinitionKey, businessKey, startUserId);
             Map<String, Object> request = new HashMap<>();
             request.put("processDefinitionKey", processDefinitionKey);
             request.put("businessKey", businessKey);

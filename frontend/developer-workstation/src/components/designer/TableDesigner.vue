@@ -72,7 +72,7 @@
 
       <h4>{{ t('table.fields') }}</h4>
       <el-button size="small" @click="handleAddField" style="margin-top: 8px; margin-bottom: 10px;">{{ t('table.addField') }}</el-button>
-      <el-table :data="selectedTable.fieldDefinitions" size="small" border row-key="fieldName">
+      <el-table :data="selectedTable.fieldDefinitions" size="small" border row-key="__uid">
         <el-table-column width="50" align="center">
           <template #header>⇅</template>
           <template #default="{ $index }">
@@ -459,9 +459,11 @@ async function handleDeleteTable(row: TableDefinition) {
   }
 }
 
+let _fieldUid = 0
 function handleAddField() {
   if (!selectedTable.value) return
   selectedTable.value.fieldDefinitions.push({
+    __uid: ++_fieldUid,
     fieldName: '',
     dataType: 'VARCHAR',
     length: 255,
