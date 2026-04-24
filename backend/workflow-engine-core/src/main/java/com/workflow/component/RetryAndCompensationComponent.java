@@ -252,7 +252,7 @@ public class RetryAndCompensationComponent {
             
         } catch (Exception e) {
             log.error("执行重试失败: {}", e.getMessage(), e);
-            throw new RuntimeException("执行重试失败: " + e.getMessage(), e);
+            throw new RuntimeException("Retry execution failed: " + e.getMessage(), e);
         }
     }
 
@@ -276,7 +276,7 @@ public class RetryAndCompensationComponent {
                 } catch (Exception e) {
                     log.error("重试异常失败: id={}, error={}", record.getId(), e.getMessage());
                     results.add(new RetryResult(record.getId(), false, record.getRetryCount(),
-                            "重试执行异常: " + e.getMessage(), null, false));
+                            "Retry execution exception: " + e.getMessage(), null, false));
                 }
             }
             
@@ -285,7 +285,7 @@ public class RetryAndCompensationComponent {
             
         } catch (Exception e) {
             log.error("批量执行重试失败: {}", e.getMessage(), e);
-            throw new RuntimeException("批量执行重试失败: " + e.getMessage(), e);
+            throw new RuntimeException("Batch retry execution failed: " + e.getMessage(), e);
         }
     }
 

@@ -49,7 +49,7 @@ public class UserImportServiceImpl implements UserImportService {
             }
         } catch (IOException e) {
             log.error("Failed to parse Excel file", e);
-            throw new RuntimeException("Excel文件解析失败: " + e.getMessage());
+            throw new RuntimeException("Failed to parse Excel file: " + e.getMessage());
         }
         
         return users;
@@ -72,7 +72,7 @@ public class UserImportServiceImpl implements UserImportService {
             }
         } catch (IOException | CsvException e) {
             log.error("Failed to parse CSV file", e);
-            throw new RuntimeException("CSV文件解析失败: " + e.getMessage());
+            throw new RuntimeException("Failed to parse CSV file: " + e.getMessage());
         }
         
         return users;
@@ -263,7 +263,7 @@ public class UserImportServiceImpl implements UserImportService {
             
         } catch (IOException e) {
             log.error("Failed to generate import template", e);
-            throw new RuntimeException("生成导入模板失败: " + e.getMessage());
+            throw new RuntimeException("Failed to generate import template: " + e.getMessage());
         }
     }
 }

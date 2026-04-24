@@ -93,7 +93,7 @@ public class FunctionUnitManagerComponent {
             // 3. 检查版本是否已存在
             if (functionUnitRepository.existsByCodeAndVersion(packageContent.getCode(), packageContent.getVersion())) {
                 if (!request.isOverwrite()) {
-                    return ImportResult.failure("功能单元版本已存在: " + packageContent.getCode() + ":" + packageContent.getVersion());
+                    return ImportResult.failure("Function unit version already exists: " + packageContent.getCode() + ":" + packageContent.getVersion());
                 }
                 // 删除已存在的版本
                 deleteExistingVersion(packageContent.getCode(), packageContent.getVersion());
@@ -587,7 +587,7 @@ public class FunctionUnitManagerComponent {
     public FunctionUnit getFunctionUnitByProcessKey(String processKey) {
         List<com.admin.entity.FunctionUnitContent> results = contentRepository.findAllByProcessDefinitionKey(processKey);
         if (results.isEmpty()) {
-            throw new FunctionUnitNotFoundException("未找到流程定义Key对应的功能单元: " + processKey);
+            throw new FunctionUnitNotFoundException("Function unit not found for process definition key: " + processKey);
         }
         // 取最新部署的记录（列表已按 createdAt DESC 排序）
         return results.get(0).getFunctionUnit();
@@ -889,7 +889,7 @@ public class FunctionUnitManagerComponent {
         FunctionUnit functionUnit = getFunctionUnitById(id);
         
         if (functionUnit.getStatus() != FunctionUnitStatus.DRAFT) {
-            throw new AdminBusinessException("INVALID_STATUS", "只有草稿状态的功能单元可以验证");
+            throw new AdminBusinessException("INVALID_STATUS", "Only draft function units can be validated");
         }
         
         functionUnit.markAsValidated(validatorId);
@@ -1137,17 +1137,17 @@ public class FunctionUnitManagerComponent {
         
         // 验证新版本格式
         if (!isValidSemanticVersion(newVersion)) {
-            throw new AdminBusinessException("INVALID_VERSION", "无效的版本格式: " + newVersion);
+            throw new AdminBusinessException("INVALID_VERSION", "Invalid version format: " + newVersion);
         }
         
         // 检查新版本是否已存在
         if (functionUnitRepository.existsByCodeAndVersion(source.getCode(), newVersion)) {
-            throw new AdminBusinessException("VERSION_EXISTS", "版本已存在: " + source.getCode() + ":" + newVersion);
+            throw new AdminBusinessException("VERSION_EXISTS", "Version already exists: " + source.getCode() + ":" + newVersion);
         }
         
         // 检查版本顺序
         if (compareVersions(source.getVersion(), newVersion) >= 0) {
-            throw new AdminBusinessException("INVALID_VERSION", "新版本必须大于源版本");
+            throw new AdminBusinessException("INVALID_VERSION", "New version must be greater than source version");
         }
         
         // 创建新版本
@@ -1209,7 +1209,7 @@ public class FunctionUnitManagerComponent {
         
         // 检查目标版本状态
         if (!targetUnit.isDeployable()) {
-            throw new AdminBusinessException("INVALID_STATUS", "目标版本状态不允许回滚: " + targetUnit.getStatus());
+            throw new AdminBusinessException("INVALID_STATUS", "Target version status does not allow rollback: " + targetUnit.getStatus());
         }
         
         // 废弃所有比目标版本新的版本
@@ -1396,7 +1396,7 @@ public class FunctionUnitManagerComponent {
         // 检查是否有运行中的流程实例
         if (hasRunningInstances(functionUnitId)) {
             throw new AdminBusinessException("HAS_RUNNING_INSTANCES", 
-                    "无法删除：存在运行中的流程实例");
+                    "Cannot delete: there are running process instances");
         }
         
         log.info("Deleting function unit cascade: {} ({})", unit.getName(), functionUnitId);
@@ -1441,13 +1441,13 @@ public class FunctionUnitManagerComponent {
         if (enabled) {
             if (unit.getStatus() != FunctionUnitStatus.DEPLOYED) {
                 throw new AdminBusinessException("INVALID_STATUS",
-                        "仅已部署（DEPLOYED）的版本可启用为门户可发起版本");
+                        "Only DEPLOYED versions can be enabled for portal initiation");
             }
             FunctionUnit maxDeployed = pickMaxSemverAmongDeployed(unit.getCode())
-                    .orElseThrow(() -> new AdminBusinessException("NO_DEPLOYED", "该代码下没有已部署版本"));
+                    .orElseThrow(() -> new AdminBusinessException("NO_DEPLOYED", "No deployed version exists for this code"));
             if (!maxDeployed.getId().equals(unit.getId())) {
                 throw new AdminBusinessException("NOT_MAX_DEPLOYED_VERSION",
-                        "只能启用该代码下已部署中的最高语义版本（当前最高为 " + maxDeployed.getVersion() + "）");
+                        "Only the highest semantic version among deployed versions can be enabled (current highest is " + maxDeployed.getVersion() + ")");
             }
             disableOtherVersions(unit.getCode(), unit.getVersion(), operatorId);
         }
@@ -1542,7 +1542,7 @@ public class FunctionUnitManagerComponent {
      */
     public Map<String, Object> purgeRuntimeDataForCatalog(String catalogId) {
         if (userPortalInternalApiToken == null || userPortalInternalApiToken.isBlank()) {
-            throw new AdminBusinessException("CONFIG", "user-portal.internal-api-token 未配置，无法调用门户清理运行数据");
+            throw new AdminBusinessException("CONFIG", "user-portal.internal-api-token is not configured, cannot invoke portal cleanup for runtime data");
         }
         String base = userPortalBaseUrl != null ? userPortalBaseUrl.replaceAll("/$", "") : "";
         String url = base + "/internal/runtime/purge-by-catalog";
@@ -1557,13 +1557,13 @@ public class FunctionUnitManagerComponent {
                     new HttpEntity<>(body, headers),
                     new ParameterizedTypeReference<Map<String, Object>>() {});
             if (!resp.getStatusCode().is2xxSuccessful() || resp.getBody() == null) {
-                throw new AdminBusinessException("PORTAL_PURGE_FAILED", "门户清理返回异常: " + resp.getStatusCode());
+                throw new AdminBusinessException("PORTAL_PURGE_FAILED", "Portal cleanup returned error: " + resp.getStatusCode());
             }
             return ApiResponseBodyUnwrap.unwrapDataMap(resp.getBody());
         } catch (AdminBusinessException e) {
             throw e;
         } catch (Exception e) {
-            throw new AdminBusinessException("PORTAL_PURGE_FAILED", "调用门户清理失败: " + e.getMessage(), e);
+            throw new AdminBusinessException("PORTAL_PURGE_FAILED", "Failed to invoke portal cleanup: " + e.getMessage(), e);
         }
     }
     
@@ -1627,25 +1627,25 @@ public class FunctionUnitManagerComponent {
 
         FunctionUnit targetUnit = functionUnitRepository.findByCodeAndVersion(code, targetVersion)
                 .orElseThrow(() -> new FunctionUnitNotFoundException(
-                        "功能单元版本不存在: " + code + ":" + targetVersion));
+                        "Function unit version not found: " + code + ":" + targetVersion));
 
         if (targetUnit.getStatus() != FunctionUnitStatus.DEPLOYED) {
             throw new AdminBusinessException("INVALID_STATUS",
-                    "仅已部署（DEPLOYED）的版本可激活为门户可发起版本。当前状态: " + targetUnit.getStatus());
+                    "Only DEPLOYED versions can be activated for portal initiation. Current status: " + targetUnit.getStatus());
         }
 
         FunctionUnit maxDeployed = pickMaxSemverAmongDeployed(code)
-                .orElseThrow(() -> new AdminBusinessException("NO_DEPLOYED", "该代码下没有已部署版本"));
+                .orElseThrow(() -> new AdminBusinessException("NO_DEPLOYED", "No deployed version exists for this code"));
         if (!maxDeployed.getId().equals(targetUnit.getId())) {
             throw new AdminBusinessException("NOT_MAX_DEPLOYED_VERSION",
-                    "只能激活该代码下已部署中的最高语义版本（当前最高为 " + maxDeployed.getVersion() + "）");
+                    "Only the highest semantic version among deployed versions can be activated (current highest is " + maxDeployed.getVersion() + ")");
         }
 
         disableOtherVersions(code, targetVersion, operatorId);
 
         FunctionUnit fresh = functionUnitRepository.findByCodeAndVersion(code, targetVersion)
                 .orElseThrow(() -> new FunctionUnitNotFoundException(
-                        "功能单元版本不存在: " + code + ":" + targetVersion));
+                        "Function unit version not found: " + code + ":" + targetVersion));
         fresh.setEnabled(true);
         FunctionUnit activated = functionUnitRepository.save(fresh);
 

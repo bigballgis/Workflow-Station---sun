@@ -147,10 +147,10 @@ public class DeploymentManagerComponent {
         log.info("Approving deployment approval: {}", approvalId);
         
         FunctionUnitApproval approval = approvalRepository.findById(approvalId)
-                .orElseThrow(() -> new AdminBusinessException("APPROVAL_NOT_FOUND", "审批记录不存在: " + approvalId));
+                .orElseThrow(() -> new AdminBusinessException("APPROVAL_NOT_FOUND", "Approval record not found: " + approvalId));
         
         if (approval.getStatus() != ApprovalStatus.PENDING) {
-            throw new AdminBusinessException("INVALID_STATUS", "审批状态不允许操作: " + approval.getStatus());
+            throw new AdminBusinessException("INVALID_STATUS", "Approval status does not allow operation: " + approval.getStatus());
         }
         
         // 检查前置审批是否完成
@@ -158,7 +158,7 @@ public class DeploymentManagerComponent {
         List<FunctionUnitApproval> pendingApprovals = 
                 approvalRepository.findPendingApprovalsBefore(deployment.getId(), approval.getApprovalOrder());
         if (!pendingApprovals.isEmpty()) {
-            throw new AdminBusinessException("PENDING_APPROVAL", "存在未完成的前置审批");
+            throw new AdminBusinessException("PENDING_APPROVAL", "There are pending prerequisite approvals");
         }
         
         approval.approve(approverId, comment);
@@ -193,10 +193,10 @@ public class DeploymentManagerComponent {
         log.info("Rejecting deployment approval: {}", approvalId);
         
         FunctionUnitApproval approval = approvalRepository.findById(approvalId)
-                .orElseThrow(() -> new AdminBusinessException("APPROVAL_NOT_FOUND", "审批记录不存在: " + approvalId));
+                .orElseThrow(() -> new AdminBusinessException("APPROVAL_NOT_FOUND", "Approval record not found: " + approvalId));
         
         if (approval.getStatus() != ApprovalStatus.PENDING) {
-            throw new AdminBusinessException("INVALID_STATUS", "审批状态不允许操作: " + approval.getStatus());
+            throw new AdminBusinessException("INVALID_STATUS", "Approval status does not allow operation: " + approval.getStatus());
         }
         
         approval.reject(approverId, comment);
@@ -205,7 +205,7 @@ public class DeploymentManagerComponent {
         // 更新部署状态为失败
         FunctionUnitDeployment deployment = approval.getDeployment();
         deployment.setStatus(DeploymentStatus.FAILED);
-        deployment.setErrorMessage("审批被拒绝: " + comment);
+        deployment.setErrorMessage("Approval rejected: " + comment);
         deploymentRepository.save(deployment);
 
         if (StringUtils.hasText(deployment.getDeployedBy())) {
@@ -258,19 +258,19 @@ public class DeploymentManagerComponent {
         log.info("Executing deployment: {}", deploymentId);
         
         FunctionUnitDeployment deployment = deploymentRepository.findById(deploymentId)
-                .orElseThrow(() -> new DeploymentNotFoundException("部署记录不存在: " + deploymentId));
+                .orElseThrow(() -> new DeploymentNotFoundException("Deployment record not found: " + deploymentId));
         
         // 检查部署状态
         if (deployment.getStatus() != DeploymentStatus.PENDING && 
             deployment.getStatus() != DeploymentStatus.APPROVED) {
             throw new AdminBusinessException("INVALID_STATUS", 
-                    "部署状态不允许执行: " + deployment.getStatus());
+                    "Deployment status does not allow execution: " + deployment.getStatus());
         }
         
         // 如果需要审批但未完成
         if (requiresApproval(deployment.getEnvironment()) && 
             deployment.getStatus() != DeploymentStatus.APPROVED) {
-            throw new AdminBusinessException("APPROVAL_REQUIRED", "部署需要审批通过后才能执行");
+            throw new AdminBusinessException("APPROVAL_REQUIRED", "Deployment requires approval before execution");
         }
         
         try {
@@ -298,7 +298,7 @@ public class DeploymentManagerComponent {
             deployment.setErrorMessage(e.getMessage());
             deployment.setCompletedAt(Instant.now());
             deploymentRepository.save(deployment);
-            throw new DeploymentFailedException("部署执行失败: " + e.getMessage(), e);
+            throw new DeploymentFailedException("Deployment execution failed: " + e.getMessage(), e);
         }
         
         return deployment;
@@ -326,7 +326,7 @@ public class DeploymentManagerComponent {
                 break;
             default:
                 throw new AdminBusinessException("UNKNOWN_STRATEGY", 
-                        "未知的部署策略: " + deployment.getStrategy());
+                        "Unknown deployment strategy: " + deployment.getStrategy());
         }
     }
     
@@ -359,12 +359,12 @@ public class DeploymentManagerComponent {
         log.info("Rolling back deployment: {}", deploymentId);
         
         FunctionUnitDeployment deployment = deploymentRepository.findById(deploymentId)
-                .orElseThrow(() -> new DeploymentNotFoundException("部署记录不存在: " + deploymentId));
+                .orElseThrow(() -> new DeploymentNotFoundException("Deployment record not found: " + deploymentId));
         
         if (deployment.getStatus() != DeploymentStatus.SUCCESS && 
             deployment.getStatus() != DeploymentStatus.DEPLOYING) {
             throw new AdminBusinessException("INVALID_STATUS", 
-                    "部署状态不允许回滚: " + deployment.getStatus());
+                    "Deployment status does not allow rollback: " + deployment.getStatus());
         }
         
         // 查找上一个成功的部署
@@ -397,9 +397,9 @@ public class DeploymentManagerComponent {
         } catch (Exception e) {
             log.error("Rollback failed: {}", deploymentId, e);
             deployment.setStatus(DeploymentStatus.ROLLBACK_FAILED);
-            deployment.setErrorMessage("回滚失败: " + e.getMessage());
+            deployment.setErrorMessage("Rollback failed: " + e.getMessage());
             deploymentRepository.save(deployment);
-            throw new DeploymentFailedException("回滚执行失败: " + e.getMessage(), e);
+            throw new DeploymentFailedException("Rollback execution failed: " + e.getMessage(), e);
         }
         
         return deployment;
@@ -420,7 +420,7 @@ public class DeploymentManagerComponent {
      */
     public FunctionUnitDeployment getDeployment(String deploymentId) {
         return deploymentRepository.findById(deploymentId)
-                .orElseThrow(() -> new DeploymentNotFoundException("部署记录不存在: " + deploymentId));
+                .orElseThrow(() -> new DeploymentNotFoundException("Deployment record not found: " + deploymentId));
     }
     
     /**

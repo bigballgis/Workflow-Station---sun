@@ -63,7 +63,7 @@ public class FunctionUnitAccessService {
         
         // 检查是否已存在相同配置
         if (accessRepository.existsByFunctionUnitIdAndRoleId(functionUnitId, request.getRoleId())) {
-            throw new IllegalArgumentException("该角色已被分配访问权限");
+            throw new IllegalArgumentException("This role has already been assigned access permission");
         }
         
         FunctionUnitAccess access = FunctionUnitAccess.builder()
@@ -88,7 +88,7 @@ public class FunctionUnitAccessService {
                 .orElseThrow(() -> new EntityNotFoundException("访问配置不存在: " + accessId));
         
         if (!access.getFunctionUnit().getId().equals(functionUnitId)) {
-            throw new IllegalArgumentException("访问配置不属于该功能单元");
+            throw new IllegalArgumentException("Access config does not belong to this function unit");
         }
         
         accessRepository.delete(access);

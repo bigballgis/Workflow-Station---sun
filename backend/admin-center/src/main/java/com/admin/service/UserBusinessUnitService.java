@@ -53,7 +53,7 @@ public class UserBusinessUnitService {
         
         // 检查是否已经是成员
         if (userBusinessUnitRepository.existsByUserIdAndBusinessUnitId(userId, businessUnitId)) {
-            throw new AdminBusinessException("ALREADY_MEMBER", "用户已经是该业务单元的成员");
+            throw new AdminBusinessException("ALREADY_MEMBER", "User is already a member of this business unit");
         }
         
         UserBusinessUnit membership = UserBusinessUnit.builder()

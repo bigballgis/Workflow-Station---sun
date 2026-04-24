@@ -194,7 +194,7 @@ public class ExitController {
         
         // Validate input
         if (roleIds == null || roleIds.isEmpty()) {
-            throw new IllegalArgumentException("角色列表不能为空");
+            throw new IllegalArgumentException("Role list cannot be empty");
         }
         
         // Execute exit with proper cleanup logic
@@ -250,7 +250,7 @@ public class ExitController {
                 userId, virtualGroupIds);
         
         if (virtualGroupIds == null || virtualGroupIds.isEmpty()) {
-            throw new IllegalArgumentException("虚拟组列表不能为空");
+            throw new IllegalArgumentException("Virtual group list cannot be empty");
         }
         
         int successCount = 0;
@@ -328,7 +328,7 @@ public class ExitController {
                 userId, businessUnitIds);
         
         if (businessUnitIds == null || businessUnitIds.isEmpty()) {
-            throw new IllegalArgumentException("业务单元列表不能为空");
+            throw new IllegalArgumentException("Business unit list cannot be empty");
         }
         
         int successCount = 0;

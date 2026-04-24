@@ -149,23 +149,23 @@ public class ProcessComponent {
     @Transactional
     public ProcessInstanceInfo startProcess(String userId, String processKey, ProcessStartRequest request) {
         if (processKey == null || processKey.isEmpty()) {
-            throw new IllegalArgumentException("流程Key不能为空");
+            throw new IllegalArgumentException("Process key cannot be empty");
         }
         if (userId == null || userId.isEmpty()) {
-            throw new IllegalArgumentException("用户ID不能为空");
+            throw new IllegalArgumentException("User ID cannot be empty");
         }
 
         Optional<ActiveCatalogPin> activePinOpt = fetchActiveCatalogForStart(processKey);
         if (activePinOpt.isEmpty()) {
             throw new IllegalStateException(
-                    "当前没有可用于发起的已部署且已启用的功能单元版本，请在管理中心完成部署并激活: " + processKey);
+                    "No deployed and enabled function unit version available for this process. Please deploy and activate in Admin Center: " + processKey);
         }
         ActiveCatalogPin pin = activePinOpt.get();
 
         String resolvedFunctionUnitId = functionUnitAccessComponent.resolveFunctionUnitId(processKey);
         if (!pin.catalogId().equals(resolvedFunctionUnitId)) {
             throw new FunctionUnitAccessComponent.FunctionUnitAccessDeniedException(
-                    "与当前门户可发起版本不一致，请刷新流程列表后重试");
+                    "Portal startable version mismatch. Please refresh the process list and try again");
         }
 
         functionUnitAccessComponent.checkFunctionUnitAccess(userId, pin.catalogId());
@@ -194,12 +194,12 @@ public class ProcessComponent {
         }
 
         if (bpmnXml == null) {
-            throw new IllegalStateException("无法获取流程定义 BPMN: " + processKey);
+            throw new IllegalStateException("Cannot obtain process definition BPMN: " + processKey);
         }
 
         // 检查 Flowable 引擎是否可用
         if (!workflowEngineClient.isAvailable()) {
-            throw new IllegalStateException("Flowable 引擎不可用，请检查 workflow-engine-core 服务是否启动");
+            throw new IllegalStateException("Workflow engine unavailable, please check if workflow-engine-core service is running");
         }
 
         log.info("Using Flowable engine to start process: {}", processKey);
@@ -246,17 +246,17 @@ public class ProcessComponent {
         if (!wctx.isEmpty()) {
             if (!jwtUserMatches) {
                 throw new PortalException("400",
-                        "无法校验登录身份与工作台，请重新登录后再发起流程");
+                        "Cannot verify logged-in identity with workspace, please re-login to start process");
             }
             String jwtBu = PortalUserSecurityUtils.getCurrentActiveBusinessUnitId().orElse("").trim();
             String jwtRole = PortalUserSecurityUtils.getCurrentActiveRoleId().orElse("").trim();
             if (jwtBu.isEmpty() || jwtRole.isEmpty()) {
                 throw new PortalException("400",
-                        "您的账号关联业务单元角色，发起流程前请先登录，并在顶部选择工作台，或重新登录后再试");
+                        "Your account is associated with a business unit role. Please login first and select a workspace from the top, or re-login and try again");
             }
             if (!portalWorkspaceAuthService.hasContext(userId, jwtBu, jwtRole)) {
                 throw new PortalException("400",
-                        "当前工作台身份已失效（权限可能已调整），请切换工作台或重新登录后再发起");
+                        "Current workspace identity has expired (permissions may have been adjusted), please switch workspace or re-login and try again");
             }
             variables.put("activeBusinessUnitId", jwtBu);
         } else {
@@ -268,11 +268,17 @@ public class ProcessComponent {
             }
         }
 
-        Map<String, Object> data = workflowEngineClient.startProcess(
+        Optional<Map<String, Object>> startResult = workflowEngineClient.startProcess(
                 actualProcessKey, request.getBusinessKey(), userId, variables);
 
+        if (startResult.isEmpty()) {
+            throw new IllegalStateException("Failed to start process: " + processKey);
+        }
+        
+        // startResult 已为 unwrap 后的 ProcessInstanceResult 字段 Map，无嵌套 data
+        Map<String, Object> data = startResult.get();
         if (data == null || data.get("processInstanceId") == null) {
-            throw new IllegalStateException("启动流程返回数据为空: " + processKey);
+            throw new IllegalStateException("Process start returned empty data: " + processKey);
         }
 
         String flowableProcessInstanceId = (String) data.get("processInstanceId");

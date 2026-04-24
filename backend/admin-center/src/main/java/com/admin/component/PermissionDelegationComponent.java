@@ -47,12 +47,12 @@ public class PermissionDelegationComponent {
         
         // 验证委托人不能委托给自己
         if (request.getDelegatorId().equals(request.getDelegateeId())) {
-            throw new AdminBusinessException("SELF_DELEGATION_NOT_ALLOWED", "不能将权限委托给自己");
+            throw new AdminBusinessException("SELF_DELEGATION_NOT_ALLOWED", "Cannot delegate permission to yourself");
         }
         
         // 验证时间范围
         if (request.getValidTo() != null && request.getValidFrom().isAfter(request.getValidTo())) {
-            throw new AdminBusinessException("INVALID_TIME_RANGE", "生效时间不能晚于失效时间");
+            throw new AdminBusinessException("INVALID_TIME_RANGE", "Start time cannot be later than end time");
         }
         
         // 检查是否存在冲突的委托
@@ -100,7 +100,7 @@ public class PermissionDelegationComponent {
                         "权限委托不存在: " + delegationId));
         
         if (!"ACTIVE".equals(delegation.getStatus())) {
-            throw new AdminBusinessException("DELEGATION_NOT_ACTIVE", "权限委托已失效");
+            throw new AdminBusinessException("DELEGATION_NOT_ACTIVE", "Permission delegation has expired");
         }
         
         delegation.setStatus("REVOKED");

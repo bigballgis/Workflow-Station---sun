@@ -59,7 +59,7 @@ public class VirtualGroupManagerComponent {
         
         // 验证名称唯一性
         if (virtualGroupRepository.existsByName(request.getName())) {
-            throw new AdminBusinessException("NAME_EXISTS", "虚拟组名称已存在: " + request.getName());
+            throw new AdminBusinessException("NAME_EXISTS", "Virtual group name already exists: " + request.getName());
         }
         
         String groupId = UUID.randomUUID().toString();
@@ -72,7 +72,7 @@ public class VirtualGroupManagerComponent {
         
         // 验证代码唯一性
         if (virtualGroupRepository.existsByCode(code)) {
-            throw new AdminBusinessException("CODE_EXISTS", "虚拟组代码已存在: " + code);
+            throw new AdminBusinessException("CODE_EXISTS", "Virtual group code already exists: " + code);
         }
         
         VirtualGroup group = VirtualGroup.builder()
@@ -122,7 +122,7 @@ public class VirtualGroupManagerComponent {
         // 验证名称唯一性（排除自身）
         if (!group.getName().equals(request.getName()) && 
             virtualGroupRepository.existsByName(request.getName())) {
-            throw new AdminBusinessException("NAME_EXISTS", "虚拟组名称已存在: " + request.getName());
+            throw new AdminBusinessException("NAME_EXISTS", "Virtual group name already exists: " + request.getName());
         }
         
         group.setName(request.getName());
@@ -271,7 +271,7 @@ public class VirtualGroupManagerComponent {
         
         // 检查是否已是成员
         if (virtualGroupMemberRepository.existsByGroupIdAndUserId(groupId, request.getUserId())) {
-            throw new AdminBusinessException("MEMBER_EXISTS", "用户已是该虚拟组成员");
+            throw new AdminBusinessException("MEMBER_EXISTS", "User is already a member of this virtual group");
         }
         
         String memberId = UUID.randomUUID().toString();

@@ -163,7 +163,7 @@ public class MemberManagementService {
         
         // 验证审批人权限
         if (!approverService.isApprover(approverId, ApproverTargetType.VIRTUAL_GROUP, virtualGroupId)) {
-            throw new AdminBusinessException("NOT_APPROVER", "您不是该虚拟组的审批人");
+            throw new AdminBusinessException("NOT_APPROVER", "You are not an approver for this virtual group");
         }
         
         // 删除成员
@@ -186,7 +186,7 @@ public class MemberManagementService {
         
         // 验证审批人权限
         if (!approverService.isApprover(approverId, ApproverTargetType.BUSINESS_UNIT, businessUnitId)) {
-            throw new AdminBusinessException("NOT_APPROVER", "您不是该业务单元的审批人");
+            throw new AdminBusinessException("NOT_APPROVER", "You are not an approver for this business unit");
         }
         
         // 删除角色分配
@@ -211,7 +211,7 @@ public class MemberManagementService {
         
         // 验证审批人权限
         if (!approverService.isApprover(approverId, ApproverTargetType.BUSINESS_UNIT, businessUnitId)) {
-            throw new AdminBusinessException("NOT_APPROVER", "您不是该业务单元的审批人");
+            throw new AdminBusinessException("NOT_APPROVER", "You are not an approver for this business unit");
         }
         
         // 删除用户业务单元成员关系
@@ -413,7 +413,7 @@ public class MemberManagementService {
         try {
             return objectMapper.readValue(roleIdsJson, new TypeReference<List<String>>() {});
         } catch (JsonProcessingException e) {
-            throw new AdminBusinessException("JSON_ERROR", "角色ID解析失败");
+            throw new AdminBusinessException("JSON_ERROR", "Failed to parse role IDs");
         }
     }
     

@@ -559,7 +559,7 @@ public class SecurityManagerComponent {
      */
     public String getSsoLoginUrl(String callbackUrl) {
         if (ssoProvider == null) {
-            throw new WorkflowBusinessException("SSO_NOT_CONFIGURED", "SSO认证未配置");
+            throw new WorkflowBusinessException("SSO_NOT_CONFIGURED", "SSO authentication not configured");
         }
         return ssoProvider.getSsoLoginUrl(callbackUrl);
     }
@@ -643,7 +643,7 @@ public class SecurityManagerComponent {
             
         } catch (Exception e) {
             log.error("数据加密失败: {}", e.getMessage(), e);
-            throw new WorkflowBusinessException("ENCRYPTION_FAILED", "数据加密失败");
+            throw new WorkflowBusinessException("ENCRYPTION_FAILED", "Data encryption failed");
         }
     }
 
@@ -676,7 +676,7 @@ public class SecurityManagerComponent {
             
         } catch (Exception e) {
             log.error("数据解密失败: {}", e.getMessage(), e);
-            throw new WorkflowBusinessException("DECRYPTION_FAILED", "数据解密失败");
+            throw new WorkflowBusinessException("DECRYPTION_FAILED", "Data decryption failed");
         }
     }
 
@@ -701,7 +701,7 @@ public class SecurityManagerComponent {
             
         } catch (Exception e) {
             log.error("密码哈希失败: {}", e.getMessage(), e);
-            throw new WorkflowBusinessException("HASH_FAILED", "密码哈希失败");
+            throw new WorkflowBusinessException("HASH_FAILED", "Password hashing failed");
         }
     }
 
@@ -766,7 +766,7 @@ public class SecurityManagerComponent {
             
         } catch (Exception e) {
             log.error("生成安全审计报告失败: {}", e.getMessage(), e);
-            throw new WorkflowBusinessException("AUDIT_REPORT_FAILED", "生成安全审计报告失败");
+            throw new WorkflowBusinessException("AUDIT_REPORT_FAILED", "Failed to generate security audit report");
         }
     }
 
@@ -1037,7 +1037,7 @@ public class SecurityManagerComponent {
             return encodedPayload + "." + signature;
             
         } catch (JsonProcessingException e) {
-            throw new WorkflowBusinessException("TOKEN_GENERATION_FAILED", "令牌生成失败");
+            throw new WorkflowBusinessException("TOKEN_GENERATION_FAILED", "Token generation failed");
         }
     }
 
@@ -1065,7 +1065,7 @@ public class SecurityManagerComponent {
             return encodedPayload + "." + signature;
             
         } catch (JsonProcessingException e) {
-            throw new WorkflowBusinessException("TOKEN_GENERATION_FAILED", "刷新令牌生成失败");
+            throw new WorkflowBusinessException("TOKEN_GENERATION_FAILED", "Refresh token generation failed");
         }
     }
 

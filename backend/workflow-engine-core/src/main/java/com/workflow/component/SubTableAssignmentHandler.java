@@ -76,7 +76,7 @@ public class SubTableAssignmentHandler {
         // 1. 验证任务存在
         Task task = taskService.createTaskQuery().taskId(taskId).singleResult();
         if (task == null) {
-            throw new WorkflowValidationException("任务不存在: " + taskId);
+            throw new WorkflowValidationException("Task not found: " + taskId);
         }
         
         // 2. 从任务扩展属性或流程定义中获取子表配置
@@ -84,7 +84,7 @@ public class SubTableAssignmentHandler {
         if (config == null) {
             throw new WorkflowBusinessException(
                 "SUBTABLE_CONFIG_NOT_FOUND",
-                "任务未配置子表信息，无法进行处理人分配"
+                "Task is not configured with sub-table information, cannot assign handler"
             );
         }
         
@@ -94,7 +94,7 @@ public class SubTableAssignmentHandler {
         // 3. 验证 rowId 属于当前任务关联的主表记录
         if (!verifyRowBelongsToTask(config, rowId, task)) {
             throw new WorkflowValidationException(
-                String.format("子表行 %d 不属于当前任务关联的主表记录", rowId)
+                String.format("Sub-table row %d does not belong to the main table record associated with current task", rowId)
             );
         }
         

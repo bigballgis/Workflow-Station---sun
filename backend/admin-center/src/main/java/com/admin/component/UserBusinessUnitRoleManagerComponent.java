@@ -36,21 +36,21 @@ public class UserBusinessUnitRoleManagerComponent {
     @Audited(action = "UBR_ASSIGN", resourceType = "USER_BUSINESS_UNIT_ROLE", resourceId = "#userId")
     public void assign(String userId, String businessUnitId, String roleId, String operatedBy) {
         if (userBusinessUnitRoleRepository.existsByUserIdAndBusinessUnitIdAndRoleId(userId, businessUnitId, roleId)) {
-            throw new AdminConflictException("USER_BU_ROLE_ALREADY_EXISTS", "该用户在目标业务单元下已拥有该角色");
+            throw new AdminConflictException("USER_BU_ROLE_ALREADY_EXISTS", "User already has this role in the target business unit");
         }
         boolean inBu = userBusinessUnitRepository.existsByUserIdAndBusinessUnitId(userId, businessUnitId);
         if (!inBu) {
-            throw new AdminBusinessException("USER_NOT_IN_BUSINESS_UNIT", "用户未加入该业务单元，无法分配 BU 绑定型角色");
+            throw new AdminBusinessException("USER_NOT_IN_BUSINESS_UNIT", "User is not a member of this business unit and cannot be assigned BU-bounded role");
         }
         Role role = roleRepository.findById(roleId)
                 .orElseThrow(() -> new RoleNotFoundException(roleId));
         RoleType roleType = EntityTypeConverter.toRoleType(role.getType());
         if (roleType != RoleType.BU_BOUNDED) {
-            throw new AdminBusinessException("ROLE_NOT_BU_BOUNDED", "仅可为业务单元分配 BU 绑定型（BU_BOUNDED）角色");
+            throw new AdminBusinessException("ROLE_NOT_BU_BOUNDED", "Only BU-bounded (BU_BOUNDED) roles can be assigned to business units");
         }
         boolean eligible = businessUnitRoleRepository.existsByBusinessUnitIdAndRoleId(businessUnitId, roleId);
         if (!eligible) {
-            throw new AdminBusinessException("ROLE_NOT_ELIGIBLE_FOR_BUSINESS_UNIT", "该角色不在业务单元的准入角色列表中");
+            throw new AdminBusinessException("ROLE_NOT_ELIGIBLE_FOR_BUSINESS_UNIT", "This role is not in the eligible roles list for this business unit");
         }
 
         String by = (operatedBy == null || operatedBy.isBlank()) ? "system" : operatedBy;

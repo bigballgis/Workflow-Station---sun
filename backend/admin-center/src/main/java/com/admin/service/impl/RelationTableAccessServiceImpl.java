@@ -34,7 +34,7 @@ public class RelationTableAccessServiceImpl implements RelationTableAccessServic
         // Check if access already exists
         if (accessRepository.existsByTableIdAndTargetTypeAndTargetId(tableId, targetType, targetId)) {
             log.warn("Access config already exists for tableId={}, targetType={}, targetId={}", tableId, targetType, targetId);
-            throw new IllegalArgumentException("该角色已被分配访问权限");
+            throw new IllegalArgumentException("This role has already been assigned access permission");
         }
 
         RelationTableAccess access = RelationTableAccess.builder()

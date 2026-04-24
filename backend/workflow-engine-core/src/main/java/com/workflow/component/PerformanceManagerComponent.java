@@ -148,10 +148,10 @@ public class PerformanceManagerComponent {
             log.debug("缓存设置成功: key={}, ttl={}s", cacheKey, ttlSeconds);
         } catch (JsonProcessingException e) {
             log.error("缓存序列化失败: key={}, error={}", cacheKey, e.getMessage());
-            throw new WorkflowBusinessException("CACHE_SERIALIZATION_FAILED", "缓存序列化失败: " + e.getMessage());
+            throw new WorkflowBusinessException("CACHE_SERIALIZATION_FAILED", "Cache serialization failed: " + e.getMessage());
         } catch (Exception e) {
             log.error("缓存设置失败: key={}, error={}", cacheKey, e.getMessage());
-            throw new WorkflowBusinessException("CACHE_SET_FAILED", "缓存设置失败: " + e.getMessage());
+            throw new WorkflowBusinessException("CACHE_SET_FAILED", "Cache set failed: " + e.getMessage());
         }
     }
 
@@ -291,7 +291,7 @@ public class PerformanceManagerComponent {
                     
         } catch (Exception e) {
             log.error("获取缓存统计信息失败: {}", e.getMessage(), e);
-            throw new WorkflowBusinessException("CACHE_STATISTICS_FAILED", "获取缓存统计信息失败: " + e.getMessage());
+            throw new WorkflowBusinessException("CACHE_STATISTICS_FAILED", "Failed to get cache statistics: " + e.getMessage());
         }
     }
 

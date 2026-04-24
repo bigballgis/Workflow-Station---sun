@@ -603,7 +603,7 @@ public class RelationTableDeployServiceImpl implements RelationTableDeployServic
         try {
             return objectMapper.writeValueAsString(fieldDtos);
         } catch (JsonProcessingException e) {
-            throw new RelationTableDeploymentException("序列化快照数据失败", e);
+            throw new RelationTableDeploymentException("Failed to serialize snapshot data", e);
         }
     }
 
@@ -614,7 +614,7 @@ public class RelationTableDeployServiceImpl implements RelationTableDeployServic
         try {
             return objectMapper.readValue(snapshotData, new TypeReference<List<RelationFieldDTO>>() {});
         } catch (JsonProcessingException e) {
-            throw new RelationTableDeploymentException("解析快照数据失败", e);
+            throw new RelationTableDeploymentException("Failed to parse snapshot data", e);
         }
     }
 }

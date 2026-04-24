@@ -148,7 +148,7 @@ public class DepartmentRoleTaskServiceImpl implements DepartmentRoleTaskService 
         // 验证用户可以认领该任务
         if (!canUserClaimBusinessUnitRoleTask(userId, request.getTaskId(), 
                 request.getBusinessUnitId(), request.getRoleId())) {
-            throw new AdminBusinessException("CANNOT_CLAIM", "用户无法认领该业务单元角色任务");
+            throw new AdminBusinessException("CANNOT_CLAIM", "User cannot claim this business unit role task");
         }
         
         // 记录认领历史

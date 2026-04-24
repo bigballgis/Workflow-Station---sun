@@ -135,13 +135,13 @@ public class PermissionComponent {
         // 获取角色信息
         Map<String, Object> role = roleAccessComponent.getRoleById(roleId);
         if (role == null) {
-            throw new IllegalArgumentException("角色不存在: " + roleId);
+            throw new IllegalArgumentException("Role does not exist: " + roleId);
         }
         
         // 获取组织单元信息（使用 BusinessUnit API）
         Map<String, Object> orgUnit = virtualGroupAccessComponent.getBusinessUnitById(organizationUnitId);
         if (orgUnit == null) {
-            throw new IllegalArgumentException("组织单元不存在: " + organizationUnitId);
+            throw new IllegalArgumentException("Organization unit does not exist: " + organizationUnitId);
         }
         
         // 创建申请记录
@@ -167,12 +167,12 @@ public class PermissionComponent {
         if (success) {
             request.setStatus(PermissionRequestStatus.APPROVED);
             request.setApproveTime(LocalDateTime.now());
-            request.setApproveComment("系统自动批准");
+            request.setApproveComment("System auto-approved");
             log.info("Role assignment auto-approved: user={}, role={}", userId, roleId);
         } else {
             request.setStatus(PermissionRequestStatus.REJECTED);
             request.setApproveTime(LocalDateTime.now());
-            request.setApproveComment("角色分配失败");
+            request.setApproveComment("Role assignment failed");
             log.error("Role assignment failed: user={}, role={}", userId, roleId);
         }
         
@@ -186,12 +186,12 @@ public class PermissionComponent {
         // 获取虚拟组信息
         Map<String, Object> group = virtualGroupAccessComponent.getVirtualGroupById(virtualGroupId);
         if (group == null) {
-            throw new IllegalArgumentException("虚拟组不存在: " + virtualGroupId);
+            throw new IllegalArgumentException("Virtual group does not exist: " + virtualGroupId);
         }
         
         // 检查是否已是成员
         if (virtualGroupAccessComponent.isUserInVirtualGroup(userId, virtualGroupId)) {
-            throw new IllegalArgumentException("您已是该虚拟组成员");
+            throw new IllegalArgumentException("You are already a member of this virtual group");
         }
         
         // 创建申请记录 - 状态为 PENDING，等待审批
@@ -236,12 +236,12 @@ public class PermissionComponent {
         // 获取业务单元信息
         Map<String, Object> businessUnit = virtualGroupAccessComponent.getBusinessUnitById(businessUnitId);
         if (businessUnit == null) {
-            throw new IllegalArgumentException("业务单元不存在: " + businessUnitId);
+            throw new IllegalArgumentException("Business unit does not exist: " + businessUnitId);
         }
 
         // 检查是否已是成员
         if (virtualGroupAccessComponent.isUserInBusinessUnit(beneficiary, businessUnitId)) {
-            throw new IllegalArgumentException("该用户已是该业务单元成员");
+            throw new IllegalArgumentException("This user is already a member of this business unit");
         }
 
         String roleName = null;
@@ -249,7 +249,7 @@ public class PermissionComponent {
             List<Map<String, Object>> bound = virtualGroupAccessComponent.getBusinessUnitBoundRoles(businessUnitId);
             boolean eligible = bound.stream().anyMatch(r -> roleId.equals(String.valueOf(r.get("id"))));
             if (!eligible) {
-                throw new IllegalArgumentException("所选角色不在该业务单元的可申请角色列表中");
+                throw new IllegalArgumentException("Selected role is not in the available roles list for this business unit");
             }
             roleName = bound.stream()
                     .filter(r -> roleId.equals(String.valueOf(r.get("id"))))
@@ -289,14 +289,14 @@ public class PermissionComponent {
         String beneficiary = normalizeUserIdOrDefault(beneficiaryUserId, submittedByUserId);
         assertActiveBeneficiary(beneficiary);
         if (reason == null || reason.isBlank()) {
-            throw new IllegalArgumentException("请填写申请理由");
+            throw new IllegalArgumentException("Please provide a reason for the request");
         }
         Map<String, Object> businessUnit = virtualGroupAccessComponent.getBusinessUnitById(businessUnitId);
         if (businessUnit == null) {
-            throw new IllegalArgumentException("业务单元不存在: " + businessUnitId);
+            throw new IllegalArgumentException("Business unit does not exist: " + businessUnitId);
         }
         if (!virtualGroupAccessComponent.isUserInBusinessUnit(beneficiary, businessUnitId)) {
-            throw new IllegalArgumentException("该用户不是此业务单元成员，无法申请退出");
+            throw new IllegalArgumentException("This user is not a member of this business unit and cannot request exit");
         }
         PermissionRequest request = PermissionRequest.builder()
                 .applicantId(beneficiary)
@@ -323,17 +323,17 @@ public class PermissionComponent {
         String beneficiary = normalizeUserIdOrDefault(beneficiaryUserId, submittedByUserId);
         assertActiveBeneficiary(beneficiary);
         if (reason == null || reason.isBlank()) {
-            throw new IllegalArgumentException("请填写申请理由");
+            throw new IllegalArgumentException("Please provide a reason for the request");
         }
         if (roleId == null || roleId.isBlank()) {
-            throw new IllegalArgumentException("角色不能为空");
+            throw new IllegalArgumentException("Role cannot be empty");
         }
         Map<String, Object> businessUnit = virtualGroupAccessComponent.getBusinessUnitById(businessUnitId);
         if (businessUnit == null) {
-            throw new IllegalArgumentException("业务单元不存在: " + businessUnitId);
+            throw new IllegalArgumentException("Business unit does not exist: " + businessUnitId);
         }
         if (!virtualGroupAccessComponent.userHasBusinessUnitRole(beneficiary, businessUnitId, roleId)) {
-            throw new IllegalArgumentException("该用户在此业务单元下不拥有此角色，无法申请移除");
+            throw new IllegalArgumentException("This user does not have this role in this business unit, cannot request removal");
         }
         List<Map<String, Object>> bound = virtualGroupAccessComponent.getBusinessUnitBoundRoles(businessUnitId);
         String roleName = bound.stream()
@@ -524,19 +524,19 @@ public class PermissionComponent {
     public PermissionRequest approveRequest(Long requestId, String approverId, String comment) {
         Optional<PermissionRequest> requestOpt = permissionRequestRepository.findById(requestId);
         if (requestOpt.isEmpty()) {
-            throw new IllegalArgumentException("申请不存在: " + requestId);
+            throw new IllegalArgumentException("Request does not exist: " + requestId);
         }
         
         PermissionRequest request = requestOpt.get();
         if (request.getStatus() != PermissionRequestStatus.PENDING) {
-            throw new IllegalArgumentException("申请已处理，无法重复审批");
+            throw new IllegalArgumentException("Request has already been processed, cannot approve again");
         }
 
         assertApproverNotSameAsApplicant(approverId, request);
         
         // 验证审批人权限
         if (!canApproveRequest(approverId, request)) {
-            throw new IllegalArgumentException("您没有权限审批此申请");
+            throw new IllegalArgumentException("You do not have permission to approve this request");
         }
         
         // 执行实际的权限分配
@@ -548,19 +548,19 @@ public class PermissionComponent {
                 success = virtualGroupAccessComponent.addUserToVirtualGroup(
                         request.getApplicantId(), 
                         request.getVirtualGroupId(), 
-                        "审批通过: " + (comment != null ? comment : "")
+                        "Approved: " + (comment != null ? comment : "")
                 );
                 if (!success) {
-                    errorMessage = "添加用户到虚拟组失败";
+                    errorMessage = "Failed to add user to virtual group";
                 }
             } else if (request.getRequestType() == PermissionRequestType.BUSINESS_UNIT_JOIN) {
                 success = virtualGroupAccessComponent.addUserToBusinessUnit(
                         request.getApplicantId(), 
                         request.getBusinessUnitId(), 
-                        "审批通过: " + (comment != null ? comment : "")
+                        "Approved: " + (comment != null ? comment : "")
                 );
                 if (!success) {
-                    errorMessage = "添加用户到业务单元失败";
+                    errorMessage = "Failed to add user to business unit";
                 } else if (request.getRoleId() != null && !request.getRoleId().isBlank()) {
                     boolean roleOk = virtualGroupAccessComponent.assignUserBusinessUnitRole(
                             request.getApplicantId(),
@@ -568,14 +568,14 @@ public class PermissionComponent {
                             request.getRoleId());
                     if (!roleOk) {
                         success = false;
-                        errorMessage = "用户已加入业务单元，但分配业务单元角色失败";
+                        errorMessage = "User joined business unit, but failed to assign business unit role";
                         try {
                             virtualGroupAccessComponent.exitBusinessUnit(
                                     request.getApplicantId(), request.getBusinessUnitId());
                         } catch (Exception rollbackEx) {
                             log.error("Failed to roll back BU membership after role assignment failure for request {}: {}",
                                     requestId, rollbackEx.getMessage());
-                            errorMessage = errorMessage + "（且自动撤销加入业务单元失败，请联系管理员）";
+                            errorMessage = errorMessage + " (and automatic membership revocation failed, please contact administrator)";
                         }
                     } else {
                         // Role Members page在 admin-center 里是按“角色绑定的虚拟组成员”展示。
@@ -586,7 +586,7 @@ public class PermissionComponent {
                             virtualGroupAccessComponent.addUserToVirtualGroup(
                                     request.getApplicantId(),
                                     boundVirtualGroupId,
-                                    "审批通过: " + (comment != null ? comment : "")
+                                    "Approved: " + (comment != null ? comment : "")
                             );
                         }
                     }
@@ -596,10 +596,10 @@ public class PermissionComponent {
                         request.getApplicantId(),
                         request.getRoleId(),
                         approverId,
-                        "审批通过: " + (comment != null ? comment : "")
+                        "Approved: " + (comment != null ? comment : "")
                 );
                 if (!success) {
-                    errorMessage = "分配角色失败";
+                    errorMessage = "Failed to assign role";
                 }
             } else if (request.getRequestType() == PermissionRequestType.BUSINESS_UNIT_ROLE_REMOVAL) {
                 success = virtualGroupAccessComponent.removeUserBusinessUnitRole(
@@ -607,7 +607,7 @@ public class PermissionComponent {
                         request.getBusinessUnitId(),
                         request.getRoleId());
                 if (!success) {
-                    errorMessage = "移除业务单元角色失败";
+                    errorMessage = "Failed to remove business unit role";
                 } else {
                     List<Map<String, Object>> remaining = virtualGroupAccessComponent
                             .listUserBusinessUnitRolesInBusinessUnit(
@@ -619,7 +619,7 @@ public class PermissionComponent {
                                 request.getBusinessUnitId());
                         if (!exited) {
                             success = false;
-                            errorMessage = "已移除最后一个业务单元角色，但自动退出业务单元失败";
+                            errorMessage = "Last business unit role removed, but automatic exit from business unit failed";
                         } else {
                             log.info("User {} left business unit {} after last BU role removed (request {})",
                                     request.getApplicantId(), request.getBusinessUnitId(), requestId);
@@ -635,29 +635,29 @@ public class PermissionComponent {
                         request.getApplicantId(),
                         request.getBusinessUnitId());
                 if (!success) {
-                    errorMessage = "退出业务单元失败";
+                    errorMessage = "Failed to exit business unit";
                 }
             } else {
-                errorMessage = "不支持的申请类型: " + request.getRequestType();
+                errorMessage = "Unsupported request type: " + request.getRequestType();
             }
         } catch (Exception e) {
             log.error("Failed to execute approval action for request {}: {}", requestId, e.getMessage());
-            errorMessage = "执行审批操作失败: " + e.getMessage();
+            errorMessage = "Approval execution failed: " + e.getMessage();
         }
         
         if (success) {
             request.setStatus(PermissionRequestStatus.APPROVED);
             request.setApproverId(approverId);
             request.setApproveTime(LocalDateTime.now());
-            request.setApproveComment(comment != null ? comment : "审批通过");
+            request.setApproveComment(comment != null ? comment : "Approved");
             log.info("Request {} approved by {}", requestId, approverId);
         } else {
-            String detail = errorMessage != null ? errorMessage : "未知错误";
+            String detail = errorMessage != null ? errorMessage : "Unknown error";
             request.setStatus(PermissionRequestStatus.REJECTED);
             request.setApproverId(approverId);
             request.setApproveTime(LocalDateTime.now());
             request.setApproveComment((comment != null ? comment + " — " : "")
-                    + "审批操作已尝试但执行未成功: " + detail);
+                    + "Approval attempted but execution failed: " + detail);
             log.warn("Request {} marked REJECTED after failed post-approval execution: {}", requestId, detail);
         }
 
@@ -671,23 +671,23 @@ public class PermissionComponent {
     public PermissionRequest rejectRequest(Long requestId, String approverId, String comment) {
         Optional<PermissionRequest> requestOpt = permissionRequestRepository.findById(requestId);
         if (requestOpt.isEmpty()) {
-            throw new IllegalArgumentException("申请不存在: " + requestId);
+            throw new IllegalArgumentException("Request does not exist: " + requestId);
         }
         
         PermissionRequest request = requestOpt.get();
         if (request.getStatus() != PermissionRequestStatus.PENDING) {
-            throw new IllegalArgumentException("申请已处理，无法重复审批");
+            throw new IllegalArgumentException("Request has already been processed, cannot approve again");
         }
 
         assertApproverNotSameAsApplicant(approverId, request);
         
         // 验证审批人权限
         if (!canApproveRequest(approverId, request)) {
-            throw new IllegalArgumentException("您没有权限审批此申请");
+            throw new IllegalArgumentException("You do not have permission to approve this request");
         }
         
         if (comment == null || comment.trim().isEmpty()) {
-            throw new IllegalArgumentException("拒绝申请必须填写原因");
+            throw new IllegalArgumentException("Rejection must include a reason");
         }
         
         request.setStatus(PermissionRequestStatus.REJECTED);
@@ -843,7 +843,7 @@ public class PermissionComponent {
 
     private void assertActiveBeneficiary(String beneficiaryUserId) {
         if (!roleAccessComponent.isActivePortalUser(beneficiaryUserId)) {
-            throw new IllegalArgumentException("受益人不存在或账户不可用");
+            throw new IllegalArgumentException("Beneficiary does not exist or account is not available");
         }
     }
 
@@ -922,13 +922,13 @@ public class PermissionComponent {
     @Deprecated
     public PermissionRequest submitRequest(String userId, PermissionRequestDto dto) {
         if (dto.getType() == null) {
-            throw new IllegalArgumentException("权限类型不能为空");
+            throw new IllegalArgumentException("Permission type cannot be empty");
         }
         if (dto.getPermissions() == null || dto.getPermissions().isEmpty()) {
-            throw new IllegalArgumentException("权限范围不能为空");
+            throw new IllegalArgumentException("Permission scope cannot be empty");
         }
         if (dto.getReason() == null || dto.getReason().isEmpty()) {
-            throw new IllegalArgumentException("申请理由不能为空");
+            throw new IllegalArgumentException("Request reason cannot be empty");
         }
 
         PermissionRequest request = new PermissionRequest();

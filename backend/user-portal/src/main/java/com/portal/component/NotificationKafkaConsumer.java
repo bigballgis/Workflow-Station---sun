@@ -45,8 +45,8 @@ public class NotificationKafkaConsumer {
             ack.acknowledge();
 
         } catch (Exception e) {
-            log.error("处理通知事件失败: offset={}, error={}", record.offset(), e.getMessage(), e);
-            throw new RuntimeException("处理通知事件失败", e);
+            log.error("Failed to process notification event: offset={}, error={}", record.offset(), e.getMessage(), e);
+            throw new RuntimeException("Failed to process notification event", e);
         }
     }
 }

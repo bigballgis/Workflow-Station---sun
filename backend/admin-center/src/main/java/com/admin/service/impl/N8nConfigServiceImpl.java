@@ -77,7 +77,7 @@ public class N8nConfigServiceImpl implements N8nConfigService {
         log.info("Deleting N8N config: {}", id);
 
         if (!n8nConfigRepository.existsById(id)) {
-            throw new RuntimeException("N8N 配置不存在: " + id);
+            throw new RuntimeException("N8N configuration not found: " + id);
         }
         n8nConfigRepository.deleteById(id);
     }

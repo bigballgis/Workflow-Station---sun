@@ -255,7 +255,7 @@ public class PermissionConflictComponent {
                         "权限冲突不存在: " + request.getConflictId()));
         
         if (conflict.isResolved()) {
-            throw new AdminBusinessException("CONFLICT_ALREADY_RESOLVED", "权限冲突已解决");
+            throw new AdminBusinessException("CONFLICT_ALREADY_RESOLVED", "Permission conflict has already been resolved");
         }
         
         // 应用解决策略

@@ -37,7 +37,7 @@ public class FunctionUnitWorkspaceAccessService {
         if (!canAccess(functionUnitId, action)) {
             log.warn("Workspace denied: functionUnitId={}, action={}, userId={}",
                     functionUnitId, action, SecurityContextUtils.getCurrentUserId().orElse("?"));
-            throw new FunctionUnitWorkspaceAccessDeniedException("无权对该功能单元执行此操作");
+            throw new FunctionUnitWorkspaceAccessDeniedException("Not authorized to perform this operation on this function unit");
         }
     }
 

@@ -252,13 +252,13 @@ public class FunctionUnitAccessComponent {
         // 首先检查功能单元是否启用
         if (!isFunctionUnitEnabled(functionUnitId)) {
             log.warn("Function unit {} is disabled, access denied for user {}", functionUnitId, userId);
-            throw new FunctionUnitDisabledException("功能单元已禁用");
+            throw new FunctionUnitDisabledException("Function unit is disabled");
         }
         
         // 然后检查用户权限
         if (!canAccessFunctionUnit(userId, functionUnitId)) {
             log.warn("User {} does not have access to function unit {}", userId, functionUnitId);
-            throw new FunctionUnitAccessDeniedException("您没有访问此功能单元的权限");
+            throw new FunctionUnitAccessDeniedException("You do not have permission to access this function unit");
         }
     }
     

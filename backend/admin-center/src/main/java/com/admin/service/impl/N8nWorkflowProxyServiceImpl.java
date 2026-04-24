@@ -83,7 +83,7 @@ public class N8nWorkflowProxyServiceImpl implements N8nWorkflowProxyService {
 
         } catch (RuntimeException e) {
             log.error("Failed to fetch N8N workflows for configId {}: {}", configId, e.getMessage());
-            throw new RuntimeException("获取 N8N 工作流列表失败: " + e.getMessage(), e);
+            throw new RuntimeException("Failed to fetch N8N workflow list: " + e.getMessage(), e);
         }
     }
 

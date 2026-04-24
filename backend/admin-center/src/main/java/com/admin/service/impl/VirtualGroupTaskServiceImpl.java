@@ -50,12 +50,12 @@ public class VirtualGroupTaskServiceImpl implements VirtualGroupTaskService {
         
         // 验证用户是组成员
         if (!virtualGroupMemberRepository.existsByGroupIdAndUserId(groupId, userId)) {
-            throw new AdminBusinessException("NOT_GROUP_MEMBER", "用户不是该虚拟组成员");
+            throw new AdminBusinessException("NOT_GROUP_MEMBER", "User is not a member of this virtual group");
         }
         
         // 验证虚拟组有效
         if (!virtualGroupHelper.isValid(group)) {
-            throw new AdminBusinessException("GROUP_INVALID", "虚拟组已失效或过期");
+            throw new AdminBusinessException("GROUP_INVALID", "Virtual group is invalid or expired");
         }
         
         // 这里应该调用工作流引擎获取分配给该组的任务
@@ -88,7 +88,7 @@ public class VirtualGroupTaskServiceImpl implements VirtualGroupTaskService {
         
         // 验证用户可以认领该任务
         if (!canUserClaimTask(userId, request.getTaskId(), request.getGroupId())) {
-            throw new AdminBusinessException("CANNOT_CLAIM", "用户无法认领该任务");
+            throw new AdminBusinessException("CANNOT_CLAIM", "User cannot claim this task");
         }
         
         // 记录认领历史

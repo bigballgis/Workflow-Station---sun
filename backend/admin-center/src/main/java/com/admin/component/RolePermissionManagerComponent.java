@@ -48,7 +48,7 @@ public class RolePermissionManagerComponent {
         
         // 验证编码唯一性
         if (roleRepository.existsByCode(code)) {
-            throw new AdminBusinessException("CODE_EXISTS", "角色编码已存在: " + code);
+            throw new AdminBusinessException("CODE_EXISTS", "Role code already exists: " + code);
         }
         
         // 使用 EntityTypeConverter 转换类型
@@ -190,7 +190,7 @@ public class RolePermissionManagerComponent {
         
         // 检查是否已分配
         if (userRoleRepository.existsByUserIdAndRoleId(userId, roleId)) {
-            throw new AdminBusinessException("ROLE_ALREADY_ASSIGNED", "用户已拥有该角色");
+            throw new AdminBusinessException("ROLE_ALREADY_ASSIGNED", "User already has this role");
         }
         
         Role role = roleRepository.findById(roleId)
@@ -198,7 +198,7 @@ public class RolePermissionManagerComponent {
         if (EntityTypeConverter.toRoleType(role.getType()) == RoleType.BU_UNBOUNDED) {
             throw new AdminBusinessException(
                     "BU_UNBOUNDED_REQUIRES_VIRTUAL_GROUP",
-                    "BU 无关型角色请通过虚拟组分配，不能直接分配给用户");
+                    "BU-unbounded roles must be assigned through virtual groups, cannot be directly assigned to users");
         }
 
         UserRole userRole = UserRole.builder()
@@ -222,7 +222,7 @@ public class RolePermissionManagerComponent {
         log.info("Removing role {} from user {}", roleId, userId);
         
         UserRole userRole = userRoleRepository.findByUserIdAndRoleId(userId, roleId)
-                .orElseThrow(() -> new AdminBusinessException("ROLE_NOT_ASSIGNED", "用户没有该角色"));
+                .orElseThrow(() -> new AdminBusinessException("ROLE_NOT_ASSIGNED", "User does not have this role"));
         
         userRoleRepository.delete(userRole);
         
@@ -303,13 +303,13 @@ public class RolePermissionManagerComponent {
         
         // 使用 RoleHelper 检查系统角色
         if (roleHelper.isSystemRole(role)) {
-            throw new AdminBusinessException("CANNOT_DELETE_SYSTEM_ROLE", "系统角色不能删除");
+            throw new AdminBusinessException("CANNOT_DELETE_SYSTEM_ROLE", "System roles cannot be deleted");
         }
         
         // 检查是否有用户
         long memberCount = userRoleRepository.countByRoleId(roleId);
         if (memberCount > 0) {
-            throw new AdminBusinessException("ROLE_HAS_MEMBERS", "角色存在成员，无法删除");
+            throw new AdminBusinessException("ROLE_HAS_MEMBERS", "Role has members, cannot delete");
         }
         
         roleRepository.delete(role);
@@ -329,7 +329,7 @@ public class RolePermissionManagerComponent {
         
         // 使用 RoleHelper 检查系统角色
         if (roleHelper.isSystemRole(role)) {
-            throw new AdminBusinessException("CANNOT_UPDATE_SYSTEM_ROLE", "系统角色不能修改");
+            throw new AdminBusinessException("CANNOT_UPDATE_SYSTEM_ROLE", "System roles cannot be modified");
         }
         
         if (name != null) {

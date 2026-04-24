@@ -19,10 +19,10 @@ public class PortalInternalApiProperties {
 
     public void requireValidToken(String token) {
         if (apiToken == null || apiToken.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "portal.internal.api-token 未配置");
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "portal.internal.api-token is not configured");
         }
         if (token == null || !apiToken.equals(token)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "无效的 X-Internal-Token");
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Invalid X-Internal-Token");
         }
     }
 }

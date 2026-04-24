@@ -65,7 +65,7 @@ public class MultiInstanceDataResolver {
         String subTableName = getStringValue(extProps, "subTableName");
         
         if (subTableRowId == null || subTableName == null) {
-            throw new WorkflowValidationException("任务缺少多实例配置信息");
+            throw new WorkflowValidationException("Task is missing multi-instance configuration information");
         }
         
         // 2. 获取流程实例 ID，加载主表单数据
@@ -145,7 +145,7 @@ public class MultiInstanceDataResolver {
             return row;
         } catch (EmptyResultDataAccessException e) {
             log.warn("子表数据行不存在: subTableName={}, rowId={}", subTableName, rowId);
-            throw new WorkflowValidationException("关联的数据行已不存在");
+            throw new WorkflowValidationException("The associated data row no longer exists");
         } catch (Exception e) {
             log.error("加载子表数据行失败: subTableName={}, rowId={}", subTableName, rowId, e);
             throw new WorkflowBusinessException(
@@ -186,7 +186,7 @@ public class MultiInstanceDataResolver {
         String subTableName = getStringValue(extProps, "subTableName");
         
         if (subTableRowId == null || subTableName == null) {
-            throw new WorkflowValidationException("任务缺少多实例配置信息");
+            throw new WorkflowValidationException("Task is missing multi-instance configuration information");
         }
         
         // 2. 验证 row_version（先查询当前版本）
@@ -198,17 +198,17 @@ public class MultiInstanceDataResolver {
             currentRowVersion = jdbcTemplate.queryForObject(checkSql, Long.class, subTableRowId);
         } catch (EmptyResultDataAccessException e) {
             log.warn("数据行已被删除: subTableName={}, rowId={}", subTableName, subTableRowId);
-            throw new WorkflowValidationException("关联的数据行已不存在");
+            throw new WorkflowValidationException("The associated data row no longer exists");
         }
         
         if (currentRowVersion == null) {
-            throw new WorkflowValidationException("关联的数据行已不存在");
+            throw new WorkflowValidationException("The associated data row no longer exists");
         }
         
         if (!currentRowVersion.equals(expectedRowVersion)) {
             log.warn("乐观锁冲突: subTableName={}, rowId={}, expected={}, current={}", 
                 subTableName, subTableRowId, expectedRowVersion, currentRowVersion);
-            throw new OptimisticLockException("数据已被修改，请刷新后重试");
+            throw new OptimisticLockException("Data has been modified, please refresh and try again");
         }
         
         // 3. 构建 UPDATE SQL（含乐观锁）
@@ -239,14 +239,14 @@ public class MultiInstanceDataResolver {
             try {
                 Long latestRowVersion = jdbcTemplate.queryForObject(checkSql, Long.class, subTableRowId);
                 if (latestRowVersion == null) {
-                    throw new WorkflowValidationException("关联的数据行已不存在");
+                    throw new WorkflowValidationException("The associated data row no longer exists");
                 } else {
                     log.warn("乐观锁冲突（二次检查）: subTableName={}, rowId={}, expected={}, latest={}", 
                         subTableName, subTableRowId, expectedRowVersion, latestRowVersion);
-                    throw new OptimisticLockException("数据已被修改，请刷新后重试");
+                    throw new OptimisticLockException("Data has been modified, please refresh and try again");
                 }
             } catch (EmptyResultDataAccessException e) {
-                throw new WorkflowValidationException("关联的数据行已不存在");
+                throw new WorkflowValidationException("The associated data row no longer exists");
             }
         }
         

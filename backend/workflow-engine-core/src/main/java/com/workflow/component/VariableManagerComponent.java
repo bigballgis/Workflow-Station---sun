@@ -87,7 +87,7 @@ public class VariableManagerComponent {
             
         } catch (Exception e) {
             log.error("设置流程变量失败: {}", e.getMessage(), e);
-            throw new WorkflowBusinessException("VARIABLE_SET_FAILED", "设置流程变量失败: " + e.getMessage());
+            throw new WorkflowBusinessException("VARIABLE_SET_FAILED", "Failed to set process variable: " + e.getMessage());
         }
     }
 
@@ -135,7 +135,7 @@ public class VariableManagerComponent {
                     
         } catch (Exception e) {
             log.error("获取流程变量失败: {}", e.getMessage(), e);
-            throw new WorkflowBusinessException("VARIABLE_GET_FAILED", "获取流程变量失败: " + e.getMessage());
+            throw new WorkflowBusinessException("VARIABLE_GET_FAILED", "Failed to get process variable: " + e.getMessage());
         }
     }
 
@@ -155,7 +155,7 @@ public class VariableManagerComponent {
             
         } catch (Exception e) {
             log.error("获取流程实例所有变量失败: {}", e.getMessage(), e);
-            throw new WorkflowBusinessException("VARIABLES_GET_FAILED", "获取流程实例所有变量失败: " + e.getMessage());
+            throw new WorkflowBusinessException("VARIABLES_GET_FAILED", "Failed to get all process variables: " + e.getMessage());
         }
     }
 
@@ -186,7 +186,7 @@ public class VariableManagerComponent {
             
         } catch (Exception e) {
             log.error("删除流程变量失败: {}", e.getMessage(), e);
-            throw new WorkflowBusinessException("VARIABLE_REMOVE_FAILED", "删除流程变量失败: " + e.getMessage());
+            throw new WorkflowBusinessException("VARIABLE_REMOVE_FAILED", "Failed to remove process variable: " + e.getMessage());
         }
     }
 
@@ -537,7 +537,7 @@ public class VariableManagerComponent {
         DataTableQueryResult queryResult = dataTableManagerComponent.queryTable(queryRequest);
         
         if (!queryResult.isSuccess()) {
-            throw new WorkflowBusinessException("QUERY_FAILED", "数据表查询失败: " + queryResult.getErrorMessage());
+            throw new WorkflowBusinessException("QUERY_FAILED", "Data table query failed: " + queryResult.getErrorMessage());
         }
         
         // 将查询结果存储为流程变量
@@ -572,7 +572,7 @@ public class VariableManagerComponent {
         VariableGetResult variableResult = getVariable(processInstanceId, variableName, "PROCESS_INSTANCE");
         
         if (!variableResult.getFound()) {
-            throw new WorkflowBusinessException("VARIABLE_NOT_FOUND", "流程变量不存在: " + variableName);
+            throw new WorkflowBusinessException("VARIABLE_NOT_FOUND", "Process variable not found: " + variableName);
         }
         
         // 将变量值转换为Map
@@ -586,10 +586,10 @@ public class VariableManagerComponent {
                 // 尝试解析JSON字符串
                 data = objectMapper.readValue((String) variableResult.getValue(), Map.class);
             } else {
-                throw new WorkflowBusinessException("TYPE_CONVERSION_ERROR", "变量值类型不支持插入操作: " + variableResult.getType());
+                throw new WorkflowBusinessException("TYPE_CONVERSION_ERROR", "Variable value type not supported for insert operation: " + variableResult.getType());
             }
         } catch (Exception e) {
-            throw new WorkflowBusinessException("VALUE_CONVERSION_ERROR", "变量值转换失败: " + e.getMessage(), e);
+            throw new WorkflowBusinessException("VALUE_CONVERSION_ERROR", "Variable value conversion failed: " + e.getMessage(), e);
         }
         
         // 构建插入请求

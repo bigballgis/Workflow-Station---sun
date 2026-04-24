@@ -61,13 +61,13 @@ public class PermissionRequestService {
         
         // 验证虚拟组有审批人
         if (!approverService.hasApprover(ApproverTargetType.VIRTUAL_GROUP, virtualGroupId)) {
-            throw new AdminBusinessException("NO_APPROVER", "该虚拟组未配置审批人，无法申请");
+            throw new AdminBusinessException("NO_APPROVER", "No approver configured for this virtual group, cannot apply");
         }
         
         // 检查是否存在待审批的申请
         if (permissionRequestRepository.existsByApplicantIdAndTargetIdAndRequestTypeAndStatus(
                 applicantId, virtualGroupId, PermissionRequestType.VIRTUAL_GROUP, PermissionRequestStatus.PENDING)) {
-            throw new AdminBusinessException("DUPLICATE_REQUEST", "已存在待审批的虚拟组申请");
+            throw new AdminBusinessException("DUPLICATE_REQUEST", "A pending virtual group request already exists");
         }
         
         PermissionRequest request = PermissionRequest.builder()
@@ -100,20 +100,20 @@ public class PermissionRequestService {
         
         // 验证业务单元有审批人
         if (!approverService.hasApprover(ApproverTargetType.BUSINESS_UNIT, businessUnitId)) {
-            throw new AdminBusinessException("NO_APPROVER", "该业务单元未配置审批人，无法申请");
+            throw new AdminBusinessException("NO_APPROVER", "No approver configured for this business unit, cannot apply");
         }
         
         // 验证用户是否有 BU_BOUNDED 角色（通过虚拟组获取）
         List<Role> userBuBoundedRoles = getUserBuBoundedRoles(applicantId);
         if (userBuBoundedRoles.isEmpty()) {
             throw new AdminBusinessException("NO_BU_BOUNDED_ROLE", 
-                    "您没有 BU-Bounded 类型的角色，请先申请加入包含 BU-Bounded 角色的虚拟组");
+                    "You do not have any BU-Bounded type roles. Please apply to join a virtual group that contains BU-Bounded roles first");
         }
         
         // 检查是否存在待审批的申请
         if (permissionRequestRepository.existsByApplicantIdAndTargetIdAndRequestTypeAndStatus(
                 applicantId, businessUnitId, PermissionRequestType.BUSINESS_UNIT, PermissionRequestStatus.PENDING)) {
-            throw new AdminBusinessException("DUPLICATE_REQUEST", "已存在待审批的业务单元申请");
+            throw new AdminBusinessException("DUPLICATE_REQUEST", "A pending business unit request already exists");
         }
         
         PermissionRequest request = PermissionRequest.builder()
@@ -217,7 +217,7 @@ public class PermissionRequestService {
         
         // 验证拒绝时必须提供意见
         if (comment == null || comment.trim().isEmpty()) {
-            throw new AdminBusinessException("COMMENT_REQUIRED", "拒绝时必须提供审批意见");
+            throw new AdminBusinessException("COMMENT_REQUIRED", "Rejection must include a comment");
         }
         
         PermissionRequest request = getAndValidateRequest(requestId, approverId);
@@ -248,16 +248,16 @@ public class PermissionRequestService {
         log.info("Cancelling request: requestId={}, userId={}", requestId, userId);
         
         PermissionRequest request = permissionRequestRepository.findById(requestId)
-                .orElseThrow(() -> new AdminBusinessException("REQUEST_NOT_FOUND", "申请不存在"));
+                .orElseThrow(() -> new AdminBusinessException("REQUEST_NOT_FOUND", "Request not found"));
         
         // 验证是申请人本人
         if (!request.getApplicantId().equals(userId)) {
-            throw new AdminBusinessException("NOT_APPLICANT", "只能取消自己的申请");
+            throw new AdminBusinessException("NOT_APPLICANT", "Only the applicant can cancel their own request");
         }
         
         // 验证申请状态
         if (request.getStatus() != PermissionRequestStatus.PENDING) {
-            throw new AdminBusinessException("INVALID_STATUS", "只能取消待审批的申请");
+            throw new AdminBusinessException("INVALID_STATUS", "Only pending requests can be cancelled");
         }
         
         request.setStatus(PermissionRequestStatus.CANCELLED);
@@ -309,7 +309,7 @@ public class PermissionRequestService {
      */
     public PermissionRequest getRequestDetail(String requestId) {
         return permissionRequestRepository.findByIdWithDetails(requestId)
-                .orElseThrow(() -> new AdminBusinessException("REQUEST_NOT_FOUND", "申请不存在"));
+                .orElseThrow(() -> new AdminBusinessException("REQUEST_NOT_FOUND", "Request not found"));
     }
     
     /**
@@ -317,16 +317,16 @@ public class PermissionRequestService {
      */
     private PermissionRequest getAndValidateRequest(String requestId, String approverId) {
         PermissionRequest request = permissionRequestRepository.findById(requestId)
-                .orElseThrow(() -> new AdminBusinessException("REQUEST_NOT_FOUND", "申请不存在"));
+                .orElseThrow(() -> new AdminBusinessException("REQUEST_NOT_FOUND", "Request not found"));
         
         // 验证申请状态
         if (request.getStatus() != PermissionRequestStatus.PENDING) {
-            throw new AdminBusinessException("INVALID_STATUS", "该申请已处理，无法再次审批");
+            throw new AdminBusinessException("INVALID_STATUS", "Request has already been processed, cannot approve again");
         }
         
         // 验证不能审批自己的申请
         if (request.getApplicantId().equals(approverId)) {
-            throw new AdminBusinessException("SELF_APPROVAL", "不能审批自己的申请");
+            throw new AdminBusinessException("SELF_APPROVAL", "Cannot approve your own request");
         }
         
         // 验证审批人权限
@@ -339,7 +339,7 @@ public class PermissionRequestService {
         }
         
         if (!approverService.isApprover(approverId, targetType, request.getTargetId())) {
-            throw new AdminBusinessException("NOT_APPROVER", "您不是该目标的审批人");
+            throw new AdminBusinessException("NOT_APPROVER", "You are not an approver for this target");
         }
         
         return request;

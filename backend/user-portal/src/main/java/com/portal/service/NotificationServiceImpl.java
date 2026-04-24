@@ -112,10 +112,10 @@ public class NotificationServiceImpl implements NotificationService {
     @Transactional
     public void markAsRead(String userId, Long notificationId) {
         Notification notification = notificationRepository.findById(notificationId)
-                .orElseThrow(() -> new PortalException("404", "通知不存在"));
+                .orElseThrow(() -> new PortalException("404", "Notification not found"));
 
         if (!notification.getUserId().equals(userId)) {
-            throw new PortalException("403", "无权操作此通知");
+            throw new PortalException("403", "You do not have permission to operate on this notification");
         }
 
         notification.setIsRead(true);
@@ -132,10 +132,10 @@ public class NotificationServiceImpl implements NotificationService {
     @Transactional
     public void deleteNotification(String userId, Long notificationId) {
         Notification notification = notificationRepository.findById(notificationId)
-                .orElseThrow(() -> new PortalException("404", "通知不存在"));
+                .orElseThrow(() -> new PortalException("404", "Notification not found"));
 
         if (!notification.getUserId().equals(userId)) {
-            throw new PortalException("403", "无权操作此通知");
+            throw new PortalException("403", "You do not have permission to operate on this notification");
         }
 
         notificationRepository.delete(notification);

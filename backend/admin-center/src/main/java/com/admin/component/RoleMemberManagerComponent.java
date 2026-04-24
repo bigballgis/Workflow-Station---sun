@@ -53,7 +53,7 @@ public class RoleMemberManagerComponent {
 
         // 检查是否已分配
         if (userRoleRepository.existsByUserIdAndRoleId(userId, roleId)) {
-            throw new AdminBusinessException("ROLE_ALREADY_ASSIGNED", "用户已拥有该角色");
+            throw new AdminBusinessException("ROLE_ALREADY_ASSIGNED", "User already has this role");
         }
         
         // 创建用户角色关联
@@ -82,7 +82,7 @@ public class RoleMemberManagerComponent {
         log.info("Removing role {} from user {} by {}", roleId, userId, removedBy);
         
         UserRole userRole = userRoleRepository.findByUserIdAndRoleId(userId, roleId)
-                .orElseThrow(() -> new AdminBusinessException("ROLE_NOT_ASSIGNED", "用户没有该角色"));
+                .orElseThrow(() -> new AdminBusinessException("ROLE_NOT_ASSIGNED", "User does not have this role"));
         
         // Fetch role to get name
         Role role = roleRepository.findById(roleId)

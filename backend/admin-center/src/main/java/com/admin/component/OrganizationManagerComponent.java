@@ -45,7 +45,7 @@ public class OrganizationManagerComponent {
         
         // 验证业务单元编码唯一性
         if (businessUnitRepository.existsByCode(request.getCode())) {
-            throw new AdminBusinessException("CODE_EXISTS", "业务单元编码已存在: " + request.getCode());
+            throw new AdminBusinessException("CODE_EXISTS", "Business unit code already exists: " + request.getCode());
         }
         
         // 验证同级业务单元名称唯一性

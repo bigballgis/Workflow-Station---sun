@@ -112,7 +112,7 @@ public class ProcessController {
 
     private void requireFunctionUnitContentAccess(String userId, String functionUnitIdOrCode) {
         if (userId == null || userId.isBlank()) {
-            throw new FunctionUnitAccessComponent.FunctionUnitAccessDeniedException("请先登录后再访问功能单元内容");
+            throw new FunctionUnitAccessComponent.FunctionUnitAccessDeniedException("Please login first before accessing function unit content");
         }
         functionUnitAccessComponent.checkFunctionUnitAccess(userId, functionUnitIdOrCode);
     }
@@ -190,7 +190,7 @@ public class ProcessController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         if (userId == null || userId.isBlank()) {
-            throw new FunctionUnitAccessComponent.FunctionUnitAccessDeniedException("请先登录后再查看我的申请");
+            throw new FunctionUnitAccessComponent.FunctionUnitAccessDeniedException("Please login first before viewing your applications");
         }
         int safePage = Math.max(0, page);
         int safeSize = size < 1 ? 20 : Math.min(size, 100);

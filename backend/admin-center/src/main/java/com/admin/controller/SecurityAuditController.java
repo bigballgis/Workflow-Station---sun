@@ -192,7 +192,7 @@ public class SecurityAuditController {
             wb.write(out);
             return out.toByteArray();
         } catch (Exception e) {
-            throw new RuntimeException("导出审计日志失败", e);
+            throw new RuntimeException("Failed to export audit log", e);
         }
     }
     

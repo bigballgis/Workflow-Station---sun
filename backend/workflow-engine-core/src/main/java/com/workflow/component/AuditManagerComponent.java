@@ -116,7 +116,7 @@ public class AuditManagerComponent {
         } catch (Exception e) {
             logger.error("记录审计日志失败: operationType={}, resourceType={}, resourceId={}, userId={}", 
                         operationType, resourceType, resourceId, userId, e);
-            throw new RuntimeException("记录审计日志失败", e);
+            throw new RuntimeException("Failed to record audit log", e);
         }
     }
     
@@ -163,7 +163,7 @@ public class AuditManagerComponent {
             
         } catch (Exception e) {
             logger.error("查询审计日志失败", e);
-            throw new RuntimeException("查询审计日志失败", e);
+            throw new RuntimeException("Failed to query audit logs", e);
         }
     }
     
@@ -228,7 +228,7 @@ public class AuditManagerComponent {
             
         } catch (Exception e) {
             logger.error("获取审计统计信息失败: startTime={}, endTime={}", startTime, endTime, e);
-            throw new RuntimeException("获取审计统计信息失败", e);
+            throw new RuntimeException("Failed to get audit statistics", e);
         }
     }
     
@@ -240,7 +240,7 @@ public class AuditManagerComponent {
             return auditLogRepository.findBySessionIdOrderByTimestampDesc(sessionId);
         } catch (Exception e) {
             logger.error("获取用户操作轨迹失败: sessionId={}", sessionId, e);
-            throw new RuntimeException("获取用户操作轨迹失败", e);
+            throw new RuntimeException("Failed to get user operation trace", e);
         }
     }
     
@@ -252,7 +252,7 @@ public class AuditManagerComponent {
             return auditLogRepository.findByRequestIdOrderByTimestampDesc(requestId);
         } catch (Exception e) {
             logger.error("获取关联操作失败: requestId={}", requestId, e);
-            throw new RuntimeException("获取关联操作失败", e);
+            throw new RuntimeException("Failed to get related operations", e);
         }
     }
     
@@ -269,7 +269,7 @@ public class AuditManagerComponent {
             
         } catch (Exception e) {
             logger.error("清理过期审计日志失败: retentionDays={}", retentionDays, e);
-            throw new RuntimeException("清理过期审计日志失败", e);
+            throw new RuntimeException("Failed to clean up expired audit logs", e);
         }
     }
     

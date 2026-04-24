@@ -142,7 +142,7 @@ public class HistoryManagerComponent {
      */
     public HistoryQueryResult getCompleteProcessHistory(String processInstanceId) {
         if (!StringUtils.hasText(processInstanceId)) {
-            throw new WorkflowValidationException("流程实例ID不能为空");
+            throw new WorkflowValidationException("Process instance ID cannot be empty");
         }
 
         // 获取流程实例历史
@@ -152,7 +152,7 @@ public class HistoryManagerComponent {
             .singleResult();
 
         if (processInstance == null) {
-            throw new WorkflowValidationException("未找到指定的历史流程实例: " + processInstanceId);
+            throw new WorkflowValidationException("Historical process instance not found: " + processInstanceId);
         }
 
         // 获取活动历史
@@ -200,7 +200,7 @@ public class HistoryManagerComponent {
      */
     public HistoryQueryResult performFullTextSearch(String searchText, HistoryQueryRequest request) {
         if (!StringUtils.hasText(searchText)) {
-            throw new WorkflowValidationException("搜索关键词不能为空");
+            throw new WorkflowValidationException("Search keyword cannot be empty");
         }
 
         validateHistoryQueryRequest(request);
@@ -416,13 +416,13 @@ public class HistoryManagerComponent {
 
     private void validateHistoryQueryRequest(HistoryQueryRequest request) {
         if (request == null) {
-            throw new WorkflowValidationException("查询请求不能为空");
+            throw new WorkflowValidationException("Query request cannot be empty");
         }
         if (request.getPageSize() <= 0 || request.getPageSize() > 1000) {
-            throw new WorkflowValidationException("页面大小必须在1-1000之间");
+            throw new WorkflowValidationException("Page size must be between 1 and 1000");
         }
         if (request.getPage() < 1) {
-            throw new WorkflowValidationException("页码必须大于0");
+            throw new WorkflowValidationException("Page number must be greater than 0");
         }
     }
 

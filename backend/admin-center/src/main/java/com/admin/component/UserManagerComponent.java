@@ -68,7 +68,7 @@ public class UserManagerComponent {
         
         // 验证邮箱唯一性
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new AdminBusinessException("EMAIL_EXISTS", "邮箱已被使用: " + request.getEmail());
+            throw new AdminBusinessException("EMAIL_EXISTS", "Email already in use: " + request.getEmail());
         }
         
         // 创建用户 - 使用 String 类型 ID
@@ -122,7 +122,7 @@ public class UserManagerComponent {
         if (request.getEmail() != null && !request.getEmail().equals(user.getEmail())) {
             validateEmailFormat(request.getEmail());
             if (userRepository.existsByEmail(request.getEmail())) {
-                throw new AdminBusinessException("EMAIL_EXISTS", "邮箱已被使用: " + request.getEmail());
+                throw new AdminBusinessException("EMAIL_EXISTS", "Email already in use: " + request.getEmail());
             }
             user.setEmail(request.getEmail());
         }
@@ -154,7 +154,7 @@ public class UserManagerComponent {
             if (!request.getEntityManagerId().isEmpty()) {
                 // 验证实体管理者存在
                 if (!userRepository.existsById(request.getEntityManagerId())) {
-                    throw new AdminBusinessException("ENTITY_MANAGER_NOT_FOUND", "实体管理者不存在");
+                    throw new AdminBusinessException("ENTITY_MANAGER_NOT_FOUND", "Entity manager not found");
                 }
                 user.setEntityManagerId(request.getEntityManagerId());
             } else {
@@ -167,7 +167,7 @@ public class UserManagerComponent {
             if (!request.getFunctionManagerId().isEmpty()) {
                 // 验证职能管理者存在
                 if (!userRepository.existsById(request.getFunctionManagerId())) {
-                    throw new AdminBusinessException("FUNCTION_MANAGER_NOT_FOUND", "职能管理者不存在");
+                    throw new AdminBusinessException("FUNCTION_MANAGER_NOT_FOUND", "Function manager not found");
                 }
                 user.setFunctionManagerId(request.getFunctionManagerId());
             } else {
@@ -249,7 +249,7 @@ public class UserManagerComponent {
             
             // 检查是否是最后一个管理员
             if (isLastActiveAdmin(user)) {
-                throw new AdminBusinessException("USER_005", "不能删除最后一个管理员");
+                throw new AdminBusinessException("USER_005", "Cannot delete the last administrator");
             }
             
             // 软删除 - 不改变状态，只设置删除标记
@@ -269,7 +269,7 @@ public class UserManagerComponent {
             throw e;
         } catch (Exception e) {
             log.error("Failed to delete user: {}", userId, e);
-            throw new AdminBusinessException("USER_DELETE_FAILED", "删除用户失败: " + e.getMessage());
+            throw new AdminBusinessException("USER_DELETE_FAILED", "Failed to delete user: " + e.getMessage());
         }
     }
     
